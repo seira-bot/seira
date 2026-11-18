@@ -140,8 +140,8 @@ export function SidebarTileGrid({ primary, pinned, row, onAdd }: { primary: Bot 
   const order = usePinnedCircleDrag(pinned);
   if (!primary && order.ranked.length === 0) return null;
   return (
-    <section data-sidebar-tiles="" aria-label={t("sidebar.section.team")} className="px-3 pb-2 pt-1">
-      <SimpleSectionLabel name={t("sidebar.section.team")} addLabel={onAdd ? t("sidebar.newBotSimple") : undefined} onAdd={onAdd} />
+    <section data-sidebar-tiles="" aria-label={t("sidebar.section.bots")} className="px-3 pb-2 pt-1">
+      <SimpleSectionLabel name={t("sidebar.section.bots")} addLabel={onAdd ? t("sidebar.newBotSimple") : undefined} onAdd={onAdd} />
       <div className="grid max-h-[40vh] grid-cols-4 gap-0.5 overflow-y-auto py-0.5" {...order.frameProps}>
         {primary && <SidebarBotTile {...row(primary)} primary />}
         {order.ranked.map((bot) => <SidebarBotTile key={bot.id} {...row(bot)} {...order.dragProps(bot)} />)}

@@ -2221,7 +2221,6 @@
   "sidebar.preview.noMessages": "No messages yet",
   "sidebar.preview.signedOut": "{name} isn't signed in",
   "sidebar.preview.you": "You: {text}",
-  "sidebar.section.team": "Team",
   "sidebar.section.pinned": "Pinned",
   "sidebar.section.channels": "Group chats",
   "sidebar.section.botChats": "Bot threads",

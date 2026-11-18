@@ -123,11 +123,11 @@ describe("the tile grid", () => {
 
   afterEach(() => setPinnedCircleOrder([]));
 
-  it.each([0, 1, 2, 3, 5])("puts the main bot first, then %i pinned bots, as same-size tiles in one four-column grid under a Team label", (count) => {
+  it.each([0, 1, 2, 3, 5])("puts the main bot first, then %i pinned bots, as same-size tiles in one four-column grid under a Bots label", (count) => {
     const html = grid(main, pins(count));
     const drag = count > 1 ? ":drag" : "";
     expect(tiles(html)).toEqual(["primary:mausbot", ...pins(count).map((pin) => `pinned:${pin.id}${drag}`)]);
-    expect(html).toMatch(/^<section data-sidebar-tiles="" aria-label="Team"/);
+    expect(html).toMatch(/^<section data-sidebar-tiles="" aria-label="Bots"/);
     expect(html).toContain("grid max-h-[40vh] grid-cols-4");
     expect(html).toContain('data-sidebar-section-label=""');
     expect(html.match(/width="48px" height="48px"/g)).toHaveLength(count + 1);
@@ -144,7 +144,7 @@ describe("the tile grid", () => {
     expect(grid(null, [])).toBe("");
   });
 
-  it("adds a Team plus button only when it is given something to do", () => {
+  it("adds a plus button only when it is given something to do", () => {
     const row = (candidate: Bot) => botRowProps({ ...initialState, bots: [main], selectedId: "", activeView: "chat" }, dispatch, candidate, { density: "comfortable", query: "", onMenu });
     expect(renderToStaticMarkup(createElement(SidebarTileGrid, { primary: main, pinned: [], row }))).not.toContain("<svg class=\"lucide lucide-plus");
     expect(renderToStaticMarkup(createElement(SidebarTileGrid, { primary: main, pinned: [], row, onAdd: vi.fn() }))).toMatch(/aria-label="[^"]+"[^>]*title="[^"]+"[^>]*class="[^"]*opacity-0/);
