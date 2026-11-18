@@ -9,7 +9,7 @@ import { SIMPLE_MODE_PROMPT_KEY } from "@/lib/simple-mode-prompt";
 
 const analytics = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock("@/lib/analytics", () => analytics);
-vi.mock("@/lib/brand", async (importOriginal) => ({ ...await importOriginal<typeof import("@/lib/brand")>(), productName: () => "MausBot" }));
+vi.mock("@/lib/brand", async (importOriginal) => ({ ...await importOriginal<typeof import("@/lib/brand")>(), productName: () => "Seira" }));
 const { NewLookNotice } = await import("./NewLookNotice");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

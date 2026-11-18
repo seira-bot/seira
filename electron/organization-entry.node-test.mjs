@@ -5,6 +5,7 @@ import { runInNewContext } from "node:vm";
 import { patchOrganizationUpdater } from "../scripts/patch-organization-updater.mjs";
 import environments from "./environments.cjs";
 import localOrigin from "./local-origin.cjs";
+import restart from "./relaunch-after-exit.cjs";
 import { createOrganizationEntry, isOrganizationDeepLink, takeOrganizationDeepLink, organizationRestartIntent, withOrganizationRestartIntent, withoutOrganizationRestartIntent } from "./organization-entry.mjs";
 
 const remote = { id: "old", name: "Old cloud", origin: "https://old.example" };
@@ -64,6 +65,7 @@ test("desktop relaunch accepts every platform once, guards its sender, and prese
       BrowserWindow: { fromWebContents: sender => sender === contents ? mainWindow : null },
       process: { platform, argv },
       app: { relaunch: options => calls.push(Array.from(options.args)), quit: () => calls.push("quit") },
+      relaunchAfterExit: (app, args, options) => restart.relaunchAfterExit(app, args, { ...options, env: {} }),
       setTimeout: (callback, delay) => { assert.equal(delay, 250); timers.push(callback); return { unref() {} }; },
     });
     const relaunch = handlers.get("desktop:relaunch");

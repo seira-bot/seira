@@ -28,19 +28,14 @@ const ATOMIC_MOVE = [
 
 // BaseUpdater starts doInstall before it asks Electron to quit, so an immediate
 // spawn can reach the data-directory lease while the old desktop is still
-// cleaning up. Electron's relauncher waits for this process to exit instead.
+// cleaning up. The replacement must start only after this process exits, and
+// Electron's app.relaunch() cannot start an AppImage.
 const IMMEDIATE_RELAUNCH = /this\.spawnLog\(destination, \[\], env\);/g;
 const QUEUED_RELAUNCH = [
-  'const previousSilentInstall = process.env.APPIMAGE_SILENT_INSTALL;',
-  'try {',
-  '  process.env.APPIMAGE_SILENT_INSTALL = env.APPIMAGE_SILENT_INSTALL;',
-  '  if (require("electron").app.relaunch({ execPath: destination, args: [] }) === false) {',
-  '    throw new Error("Could not schedule the updated AppImage to restart");',
-  '  }',
-  '} finally {',
-  '  if (previousSilentInstall === undefined) delete process.env.APPIMAGE_SILENT_INSTALL;',
-  '  else process.env.APPIMAGE_SILENT_INSTALL = previousSilentInstall;',
-  '}',
+  'require("../relaunch-after-exit.cjs").relaunchAppImageAfterExit(destination, [], {',
+  "  env,",
+  "  onError: (error) => this._logger.error(`Cannot restart the updated AppImage: ${error.stack || error}`)",
+  "});",
 ].join("\n          ");
 
 const REPLACEMENTS = [
@@ -66,7 +61,8 @@ export function patchAppImageUpdater(source) {
           "scripts/patch-appimage-updater.mjs before releasing.",
       );
     }
-    patched = patched.replace(pattern, replacement);
+    // A replacement function keeps every "$" in the replacement literal.
+    patched = patched.replace(pattern, () => replacement);
   }
   return patched;
 }

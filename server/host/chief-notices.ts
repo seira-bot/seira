@@ -3,7 +3,7 @@ import { admit } from "../admission.ts";
 import { engineMemory, memoryStopped } from "../engine-memory.ts";
 import { outOfProcesses } from "../process-shortage.ts";
 import {
-  AUTO_RETRY_LEAD, ChiefIncidentBudget, chiefForBot, INCIDENTS_THREAD_TITLE, OLD_INCIDENTS_THREAD_TITLE, IncidentLedger, incidentChip, incidentContext, incidentText, RETRY_BLOCKED, RETRY_LEAD,
+  AUTO_RETRY_LEAD, OLD_AUTO_RETRY_LEAD, OLD_RETRY_LEAD, ChiefIncidentBudget, chiefForBot, INCIDENTS_THREAD_TITLE, OLD_INCIDENTS_THREAD_TITLE, IncidentLedger, incidentChip, incidentContext, incidentText, RETRY_BLOCKED, RETRY_LEAD,
   type Incident, type IncidentKind, type IncidentRetry,
 } from "../incidents.ts";
 import { buildNotification, type Notification } from "../notify.ts";
@@ -267,8 +267,8 @@ export function createChiefNotices(deps: ChiefNoticeDeps) {
     if (input.kind === "failed" && !group && !chiefRetries && memoryStopped(input.detail) && retryForRoom(bot, threadId, report)) return;
     if (!chief || !chiefRetries) return report();
     const answered = store.activePath(threadId).findLast((line) => line.role === "user")?.text ?? "";
-    if (answered.startsWith(AUTO_RETRY_LEAD)) return report({ retried: true });
-    if (input.kind !== "failed" || answered.startsWith(RETRY_LEAD) || !count.mayRetry || !retriesTeammateThread(input.detail, input.facts)) return report();
+    if (answered.startsWith(AUTO_RETRY_LEAD) || answered.startsWith(OLD_AUTO_RETRY_LEAD)) return report({ retried: true });
+    if (input.kind !== "failed" || answered.startsWith(RETRY_LEAD) || answered.startsWith(OLD_RETRY_LEAD) || !count.mayRetry || !retriesTeammateThread(input.detail, input.facts)) return report();
     const failedAt = Date.now();
     schedule(() => {
       if (!store.bot(bot.id) || !store.taskByThread(bot.id, threadId)) return;

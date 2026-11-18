@@ -23,6 +23,7 @@ describe("PageBoundary", () => {
     const root = createRoot(host);
     flushSync(() => root.render(createElement(PageBoundary, null, createElement(Broken))));
     await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(host.querySelector("[data-seira-state='sad']"), "Seira is sad when the page broke").not.toBeNull();
     expect(host.textContent).toContain("This page hit an error.");
     expect(host.textContent).toContain("desktop.shown is not a function");
     expect(host.querySelector("button")?.textContent).toBe("Reload");

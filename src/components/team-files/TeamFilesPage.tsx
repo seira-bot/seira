@@ -8,6 +8,7 @@ import { relativeTime } from "@/lib/memory";
 import type { LocaleKey } from "@/locales";
 import { api, ApiError } from "@/state/api";
 import { useStore } from "@/state/store";
+import { SeiraCharacter } from "../seira-character";
 import { TOOL_PAGE_TITLE, ToolPage, ToolPageActions, ToolPageHeader } from "../ToolPageShell";
 
 // Team files: the Team Cloud's one shared folder (server/routes/team-files.ts), for every teammate and bot. A folder list
@@ -198,7 +199,7 @@ export function TeamFilesPage() {
             </section>
           ) : listing && listing.entries.length === 0 ? (
             <section aria-label={t("teamFiles.empty.title")} className="rounded-xl border border-dashed border-hairline px-6 py-12 text-center">
-              <div className="mx-auto mb-3 flex size-11 items-center justify-center rounded-2xl bg-accent/10 text-accent"><Folder size={20} /></div>
+              <SeiraCharacter state="sleep" size={96} className="mx-auto mb-2" />
               <h2 className="text-[16px] font-semibold text-ink">{t("teamFiles.empty.title")}</h2>
               <p className="mx-auto mt-1 max-w-sm text-[13px] leading-relaxed text-ink-secondary">{t("teamFiles.empty.body")}</p>
             </section>

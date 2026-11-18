@@ -7,6 +7,7 @@ import path from "node:path";
 import nativeText from "./native-text.cjs";
 import { onboardingHints } from "./onboarding-record.mjs";
 import { DEFAULT_TALK_KEY, isTalkKey } from "./talk-keys.mjs";
+import { createUpdatesList, updatesListOrigin, withUpstreamFallback } from "./updates-list.mjs";
 import { createUpdatesConsent, parseUpdatesConsent, registerUpdatesConsent } from "./updates-consent.mjs";
 import { accountFullName } from "./system-name.mjs";
 
@@ -173,7 +174,7 @@ export function createDesktopPrefs({ read, write }) {
  * `onLanguage(language)`: tells main, which draws its menus, tray and dialogs in it. `onShown(language, sender)`: the
  * language a page of the window shows, which main's words follow while nothing is picked. `prefs`: the record main reads too.
  */
-export function registerDesktopPrefs({ prefs: given, ipcMain, read, write, page, cloudOffered, cloudAccount, localConfig = () => null, languageChanged = () => {}, onLanguage = () => {}, onShown = () => {}, frame = null, now = Date.now, systemName = accountFullName }) {
+export function registerDesktopPrefs({ prefs: given, ipcMain, read, write, page, cloudOffered, cloudAccount, localConfig = () => null, languageChanged = () => {}, onLanguage = () => {}, onShown = () => {}, frame = null, updatesList = null, now = Date.now, systemName = accountFullName }) {
   let prefs = given ?? null;
   const store = () => prefs ??= createDesktopPrefs({ read, write });
   const from = (channel, pages, handler) => (event, ...args) => {
@@ -229,8 +230,16 @@ export function registerDesktopPrefs({ prefs: given, ipcMain, read, write, page,
     return frameState();
   }));
   if (!cloudAccount) return null;
+  const list = updatesList ?? createUpdatesList({ origin: updatesListOrigin() });
   const consent = createUpdatesConsent({ prefs: { installId: () => store().installId(), updatesConsent: () => store().updatesConsent(), setUpdatesConsent: value => store().setUpdatesConsent(value) },
-    account: cloudAccount, available: cloudOffered, now });
+    emailOnly: true, available: cloudOffered, now,
+    account: () => ({ state: () => cloudAccount()?.state() ?? null, updatesConsentByEmail: list.updatesConsentByEmail,
+      withdrawUpdatesConsent: withUpstreamFallback(list, cloudAccount),
+      recordUpdatesConsent: (status, version) => {
+        const upstream = cloudAccount();
+        if (!upstream) throw new Error("Sign in to Seira Cloud first.");
+        return upstream.recordUpdatesConsent(status, version);
+      } }) });
   registerUpdatesConsent({ ipcMain, page, consent });
   void cloudOffered().then(offered => offered && consent.sync()).catch(() => {});
   return consent;

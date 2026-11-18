@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { patchOrganizationUpdater } from "../scripts/patch-organization-updater.mjs";
 import { CLOUD_DEEP_LINK, createCloudEntry, isCloudDeepLink, takeCloudDeepLink } from "./cloud-entry.mjs";
+import restart from "./relaunch-after-exit.cjs";
 
 const main = readFileSync(new URL("./main.mjs", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const between = (start, end) => {
@@ -116,6 +117,7 @@ test("a consumed launch link is not replayed by the companion or updater relaunc
   runInNewContext(`${between("function relaunchAfterDesktopRemoteChange()", 'ipcMain.handle("desktop-remote:state"')}\nrelaunchAfterDesktopRemoteChange();`, {
     desktopShutdownStarted: false, process: { argv }, setTimeout: callback => { callback(); return {}; },
     app: { relaunch: options => calls.push(options.args), quit: () => {} },
+    relaunchAfterExit: (app, args, options) => restart.relaunchAfterExit(app, args, { ...options, env: {} }),
   });
   const patched = patchOrganizationUpdater("      relaunch() {\n        this.app.relaunch();\n      }");
   runInNewContext(`({ app, ${patched} }).relaunch();`, { process: { argv }, app: { relaunch: options => calls.push(options.args) } });
