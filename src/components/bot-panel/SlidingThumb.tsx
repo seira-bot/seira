@@ -1,6 +1,5 @@
 import { cn } from "@/lib/cn";
 
-/** The pill behind the chosen segment of an equal-width segmented control. It slides by transform, so it costs no layout. */
 export function SlidingThumb({ index, count, className }: { index: number; count: number; className?: string }) {
   if (index < 0 || count < 1) return null;
   return (

@@ -42,6 +42,8 @@ describe("PanelQuickActions", () => {
     expect(tiles.map((tile) => tile.dataset.panelQuickAction)).toEqual(["message", "computer", "routines", "settings"]);
     flushSync(() => tiles[2]!.click());
     expect(onAction).toHaveBeenCalledWith("routines");
+    flushSync(() => root!.render(createElement(PanelQuickActions, { onAction, canMessage: false })));
+    expect(document.querySelector('[data-panel-quick-action="message"]')).toBeNull();
   });
 });
 
@@ -55,7 +57,10 @@ describe("PanelTabs", () => {
     expect(onSelect).toHaveBeenLastCalledWith("library");
     press("End");
     expect(onSelect).toHaveBeenLastCalledWith("computer");
-    expect(document.querySelector('[data-panel-tab="details"]')?.getAttribute("tabindex")).toBe("0");
+    flushSync(() => root!.render(createElement(PanelTabs, { tab: "computer", onSelect })));
+    press("ArrowRight");
+    expect(onSelect).toHaveBeenCalledTimes(2);
+    expect(document.querySelector('[data-panel-tab="computer"]')?.getAttribute("tabindex")).toBe("0");
     expect(document.querySelector('[data-panel-tab="library"]')?.getAttribute("tabindex")).toBe("-1");
   });
 });

@@ -6,7 +6,6 @@ import { t } from "@/lib/i18n";
 import { imeComposing } from "@/lib/send-key";
 import type { MausState } from "@/lib/mascot";
 import type { Bot } from "@/state/store";
-import { MAUS_COLORS } from "@/lib/mascot";
 import { PanelStatePill } from "./PanelStatePill";
 import { BOT_PROFILE_LIMITS } from "../../../shared/bot-profile";
 import { BotAvatar } from "../Avatar";
@@ -76,12 +75,12 @@ export function PanelHero({ bot, activeState, patch, editorOpen, onToggleEditor 
   const title = bot.title.trim();
 
   return (
-    <div className="group/hero relative flex flex-col items-center text-center">
+    <div className="group/hero relative isolate flex flex-col items-center text-center">
       <span
         aria-hidden="true"
         data-panel-glow
-        className="pointer-events-none absolute -top-10 start-1/2 h-[200px] w-[280px] -translate-x-1/2 blur-[8px] rtl:translate-x-1/2"
-        style={{ background: `radial-gradient(closest-side, color-mix(in oklab, ${MAUS_COLORS[bot.color] ?? MAUS_COLORS.blue} 22%, transparent), transparent)` }}
+        className="pointer-events-none absolute -top-10 start-1/2 -z-10 h-[200px] w-[280px] -translate-x-1/2 blur-[8px] rtl:translate-x-1/2"
+        style={{ background: `radial-gradient(closest-side, color-mix(in oklab, var(--identity-${bot.color}) 22%, transparent), transparent)` }}
       />
       <button
         type="button"

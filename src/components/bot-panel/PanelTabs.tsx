@@ -5,7 +5,6 @@ import { t } from "@/lib/i18n";
 import { PANEL_TABS, TAB_LABEL, type PanelTab } from "./page-registry";
 import { SlidingThumb } from "./SlidingThumb";
 
-/** The panel's tabs. Arrow keys, Home and End move between them, as a tab list does. */
 export function PanelTabs({ tab, onSelect }: { tab: PanelTab; onSelect: (tab: PanelTab) => void }) {
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const last = PANEL_TABS.length - 1;
@@ -16,7 +15,7 @@ export function PanelTabs({ tab, onSelect }: { tab: PanelTab; onSelect: (tab: Pa
     const next = event.key === forward ? Math.min(at + 1, last) : event.key === backward ? Math.max(at - 1, 0) : event.key === "Home" ? 0 : event.key === "End" ? last : null;
     if (next === null) return;
     event.preventDefault();
-    onSelect(PANEL_TABS[next]!);
+    if (next !== at) onSelect(PANEL_TABS[next]!);
     event.currentTarget.querySelector<HTMLElement>(`[data-panel-tab="${PANEL_TABS[next]}"]`)?.focus();
   };
   return (

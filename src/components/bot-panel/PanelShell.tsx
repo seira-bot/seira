@@ -3,7 +3,8 @@ import { Settings, X } from "lucide-react";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
-import { useStore, type Bot, type BotSettingsSection } from "@/state/store";
+import { PHONE_LAYOUT, useMediaQuery } from "@/lib/use-media-query";
+import type { Bot, BotSettingsSection } from "@/state/store";
 import { ChatShareMenu } from "@/components/ChatMoreMenu";
 import { useCaptionChrome } from "../DesktopCapabilities";
 import type { useBotSettingsDerived } from "../bot-settings/useBotSettingsDerived";
@@ -30,7 +31,7 @@ export function BotPanel({ bot, derived, linkedSection, onClose }: {
   onClose: () => void;
 }) {
   const { dragProps } = useCaptionChrome();
-  const { dispatch } = useStore();
+  const phone = useMediaQuery(PHONE_LAYOUT);
   const link = usePanelLink();
   const [tab, setTab] = useState<PanelTab>(() => initialTarget(linkedSection, link).tab);
   const [stack, setStack] = useState<SimplePageId[]>(() => {
@@ -96,7 +97,10 @@ export function BotPanel({ bot, derived, linkedSection, onClose }: {
   };
 
   const quick = (action: QuickAction) => {
-    if (action === "message") dispatch({ type: "newTask", botId: bot.id });
+    if (action === "message") {
+      if (phone) onClose();
+      requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('[data-tour="composer"] textarea')?.focus());
+    }
     else if (action === "computer") openTab("computer");
     else if (action === "routines") go({ tab: "details", page: "routines" });
     else go({ tab: "details", page: "settings" });
@@ -142,7 +146,7 @@ export function BotPanel({ bot, derived, linkedSection, onClose }: {
                 </>
               )}
             </div>
-            <PanelQuickActions onAction={quick} />
+            <PanelQuickActions onAction={quick} canMessage={bot.yourAccess !== "view"} />
             <PanelTabs tab={tab} onSelect={openTab} />
             <div role="tabpanel">
               {tab === "details" && <DetailsTab bot={bot} derived={derived} onOpen={openPage} />}

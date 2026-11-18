@@ -5,7 +5,6 @@ import { cn } from "@/lib/cn";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { MAUS_COLORS, type MausColor } from "@/lib/mascot";
 import { Switch } from "../SettingsPrimitives";
-import { SlidingThumb } from "./SlidingThumb";
 
 export const rowCls = "flex min-h-[46px] items-center gap-2.5 px-3.5 py-[11px]";
 export const roundButtonCls = "flex size-[34px] shrink-0 items-center justify-center rounded-full text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus";
@@ -203,8 +202,7 @@ export function Segmented<V extends string>({ options, value, onChange, label, a
   attr: string;
 }) {
   return (
-    <div role="group" aria-label={label} className="relative grid w-full auto-cols-fr grid-flow-col rounded-full bg-ink/[0.05] p-[3px]">
-      <SlidingThumb index={options.findIndex((option) => option.value === value)} count={options.length} />
+    <div role="group" aria-label={label} className="flex w-full rounded-full bg-ink/[0.05] p-[3px]">
       {options.map((option) => (
         <button
           key={option.value}
@@ -215,8 +213,8 @@ export function Segmented<V extends string>({ options, value, onChange, label, a
           title={option.tooltip}
           onClick={() => onChange(option.value)}
           className={cn(
-            "relative min-w-0 truncate whitespace-nowrap rounded-full px-1.5 py-1.5 text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-            value === option.value ? "font-medium text-ink" : "text-ink-secondary enabled:hover:text-ink",
+            "min-w-0 flex-auto truncate whitespace-nowrap rounded-full px-1.5 py-1.5 text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+            value === option.value ? "bg-ink/[0.14] text-ink" : "text-ink-secondary enabled:hover:text-ink",
           )}
         >
           {option.label}

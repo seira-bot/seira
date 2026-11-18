@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, CornerUpLeft, ExternalLink, Split, X, type LucideIcon } from "lucide-react";
 import type { InboxRow } from "../../../shared/inbox";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { settleInboxRow } from "@/state/inbox";
 import type { LocaleKey } from "@/locales";
 import { InboxSender } from "../InboxLine";
 import { threadUpdatedLabel } from "../SidebarThreadRow";
@@ -18,13 +19,15 @@ const ACTION_LOOK: Record<QuickAction, { Icon: LucideIcon; label: LocaleKey }> =
   open: { Icon: ExternalLink, label: "inbox.action.openInChat" },
 };
 
+const EXIT_MS = 200;
+
 const ROW_ACTION = "flex size-7 shrink-0 items-center justify-center rounded-full text-ink-secondary transition-colors hover:bg-ink/[0.07] hover:text-ink active:bg-ink/[0.11] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus pointer-coarse:size-9";
 
 export function InboxRowItem({ row, now, onOpen, onAction, inCard = false }: {
   row: InboxRow;
   now: number;
   onOpen(row: InboxRow): void;
-  onAction(row: InboxRow, action: QuickAction): void;
+  onAction(row: InboxRow, action: QuickAction, failed?: () => void): void;
   /** On the inbox's card in the chat, which is wider than the panel and draws its own dividers. */
   inCard?: boolean;
 }) {
@@ -37,22 +40,23 @@ export function InboxRowItem({ row, now, onOpen, onAction, inCard = false }: {
   const snippet = inCard || choices ? null : snippetOf(row);
   const unreadish = row.unread || row.tab === "needs-you";
   const [leaving, setLeaving] = useState(false);
-  // A card that did not leave after its action (the answer failed) comes back.
-  useEffect(() => {
-    if (!leaving) return;
-    const timer = setTimeout(() => setLeaving(false), 2000);
-    return () => clearTimeout(timer);
-  }, [leaving]);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
   const act = (action: QuickAction) => {
-    if (action !== "open" && action !== "reply") setLeaving(true);
-    onAction(row, action);
+    if (inCard || action === "open" || action === "reply") { onAction(row, action); return; }
+    setLeaving(true);
+    timer.current = setTimeout(() => {
+      onAction(row, action, () => setLeaving(false));
+      if (action === "allow" || action === "deny" || action === "close") settleInboxRow(row);
+    }, EXIT_MS);
   };
   return (
     <div data-inbox-row={row.id} data-tab={row.tab} data-unread={row.unread ? "" : undefined}
       className={cn("group relative flex min-w-0 pr-1.5 focus-within:bg-raised/70 hover:bg-raised/70",
         inCard ? cn("items-center gap-2", row.unread ? "bg-raised/45" : "bg-transparent")
-          : cn("flex-col gap-2.5 rounded-[14px] p-3 pr-3 ring-1 ring-inset ring-ink/[0.07] transition-[opacity,transform,background-color] duration-200 motion-reduce:transition-none",
-            leaving && "translate-x-4 opacity-0 rtl:-translate-x-4"))}>
+          : cn("flex-col gap-2.5 rounded-xl p-3 pr-3 ring-1 ring-inset ring-ink/[0.07] transition-[translate,opacity,background-color] duration-200 motion-reduce:transition-none",
+            leaving && "translate-x-4 opacity-0 rtl:-translate-x-4"))}
+      inert={leaving || undefined}>
       <button type="button" onClick={() => onOpen(row)} title={[sender, inCard ? subject : headline, place].filter(Boolean).join(" · ")}
         className={cn("flex min-w-0 flex-1 gap-2 pl-2.5 text-left text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60", inCard ? "items-center py-1.5" : "items-start gap-3 pl-0",
           row.unread ? "font-semibold text-ink" : "font-normal text-ink-secondary")}>
@@ -102,8 +106,7 @@ export function InboxRowItem({ row, now, onOpen, onAction, inCard = false }: {
             const { Icon, label } = ACTION_LOOK[action];
             return (
               <button key={action} type="button" data-inbox-action={action} onClick={() => act(action)}
-                className={cn("inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
-                  index === 0 ? "bg-accent text-accent-ink hover:opacity-90" : "bg-ink/[0.05] text-ink-secondary hover:bg-ink/[0.09] hover:text-ink")}>
+                className={cn("ui-button ui-button-md ui-button-pill", index === 0 && "ui-button-primary")}>
                 <Icon size={13} aria-hidden="true" />{t(label)}
               </button>
             );

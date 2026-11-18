@@ -2,7 +2,6 @@ import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import type { Bot } from "@/state/store";
 
-/** What the bot is doing right now. Nothing shows while it is idle. */
 export function PanelStatePill({ bot }: { bot: Pick<Bot, "busy" | "activity"> }) {
   const waiting = bot.activity === "waiting-on-you";
   const working = !waiting && (bot.busy || bot.activity === "working");

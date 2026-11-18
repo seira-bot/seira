@@ -70,13 +70,18 @@ describe("the inbox panel", () => {
   it("answers an ask from its row through the copy's own card, as the chat's buttons do, and marks news done", async () => {
     openInbox();
     await mount(createElement(InboxPanel));
+    const exit = () => new Promise((resolve) => setTimeout(resolve, 260));
     await click(`[data-inbox-row="${approvalRow.id}"] [data-inbox-action="allow"]`);
+    await exit();
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "decideRequest", threadId: "inbox", requestId: "req-approval", behavior: "allow" }));
     await click(`[data-inbox-row="${questionRow.id}"] [data-inbox-action="close"]`);
+    await exit();
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "decideRequest", threadId: "inbox", requestId: "req-question", behavior: "answer" }));
     await click(`[data-inbox-row="${reportRow.id}"] [data-inbox-action="done"]`);
+    expect(document.querySelector(`[data-inbox-row="${reportRow.id}"]`)?.hasAttribute("inert"), "it slides out first").toBe(true);
+    await exit();
     expect(server.calls).toContainEqual({ path: `/api/inbox/${reportRow.id}/done`, method: "POST" });
-    expect(document.querySelector(`[data-inbox-row="${reportRow.id}"]`), "it leaves the list at once").toBeNull();
+    expect(document.querySelector(`[data-inbox-row="${reportRow.id}"]`), "it leaves the list after its exit").toBeNull();
   });
 
   it("marks every unread line read from one control that only shows while something is unread, and answers no ask", async () => {
