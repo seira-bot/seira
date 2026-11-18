@@ -148,7 +148,7 @@ describe.skipIf(!posix)("deploy/podman/install.sh", () => {
     expect(stable.unit()).toContain(`Image=${STABLE}\n`);
 
     for (const [env, words] of [
-      [{ FAKE_STABLE_CODE: "500" }, "The stable channel could not be read (https://raw.githubusercontent.com/milind-soni/OpenMausBot/channels/stable.json answered 500)."],
+      [{ FAKE_STABLE_CODE: "500" }, "The stable channel could not be read (https://raw.githubusercontent.com/seira-bot/seira/channels/stable.json answered 500)."],
       [{ FAKE_STABLE_CODE: "000" }, "answered 000"],
       [{ FAKE_STABLE_CODE: "200", FAKE_STABLE_BODY: `{"image": "${REPO}:stable"}` }, "names no image this installer accepts"],
     ] as const) {
