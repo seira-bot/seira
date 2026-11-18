@@ -59,16 +59,18 @@ export function parseAccountConsent(result) {
 
 /**
  * `account()`: the Cloud account client (cloud-account.mjs), or null where there is none. `available()`: this app may
- * ask at all (the installed app, not a branded build). A failure to reach the Admin never loses an answer: it stays
+ * ask at all (the installed app, not a branded build). `emailOnly`: every answer goes to the list by email through the
+ * receipt path, never recorded on an account; a signed-in account only supplies the address. A failure to reach the Admin never loses an answer: it stays
  * `pending` and is sent again on the next launch, sign-in or look at Settings.
  */
-export function createUpdatesConsent({ prefs, account, available, now = Date.now, onChange = () => {} }) {
+export function createUpdatesConsent({ prefs, account, available, emailOnly = false, now = Date.now, onChange = () => {} }) {
   let running = null, choices = 0;
   const client = () => account();
   const signedIn = () => {
     const current = client()?.state();
     return current?.status === "connected" && current.account ? current.account : null;
   };
+  const owner = () => emailOnly ? null : signedIn();
   const save = (record, recorded = null) => {
     const previous = prefs.updatesConsent();
     const pendingAccounts = new Map((previous?.pendingAccounts ?? []).map(choice => [choice.account, choice]));
@@ -86,17 +88,21 @@ export function createUpdatesConsent({ prefs, account, available, now = Date.now
     onChange();
   };
 
-  async function signedOutSync(local, sameAnswer) {
-    if (!local?.pending || local.account) return;
-    if (local.status === "opted_in" && local.email) {
-      const receipt = await client().updatesConsentByEmail({ email: local.email, installId: prefs.installId(), textVersion: local.version });
-      if (sameAnswer()) return save(withReplacedReceipts({ ...local, receipt, pending: false }, [], receipt));
+  async function signedOutSync(stored, sameAnswer) {
+    const local = emailOnly && stored ? Object.fromEntries(Object.entries(stored).filter(([key]) => key !== "account")) : stored;
+    if (!local?.pending || (!emailOnly && local.account)) return;
+    const address = local.email ?? (emailOnly && local.status === "opted_in" ? cleanEmail(signedIn()?.email) : null);
+    if (emailOnly && local.status === "opted_in" && !address) return;
+    if (local.status === "opted_in" && address) {
+      const receipt = await client().updatesConsentByEmail({ email: address, installId: prefs.installId(), textVersion: local.version });
+      if (sameAnswer()) return save(withReplacedReceipts({ ...local, email: address, receipt, pending: false }, [], receipt));
       const latest = prefs.updatesConsent();
       if (!latest) return;
-      if (!latest.account && latest.email === local.email && (latest.status === "opted_in" || !latest.receipt)) save(withReplacedReceipts({ ...latest, receipt }, [], receipt));
-      else save(withReplacedReceipts(latest, [receipt], null, local.email));
+      if (!latest.account && latest.email === address && (latest.status === "opted_in" || !latest.receipt)) save(withReplacedReceipts({ ...latest, receipt }, [], receipt));
+      else save(withReplacedReceipts(latest, [receipt], null, address));
     } else if (local.status !== "opted_in" && local.receipt) {
-      await client().withdrawUpdatesConsent({ status: local.status, receipt: local.receipt });
+      try { await client().withdrawUpdatesConsent({ status: local.status, receipt: local.receipt }); }
+      catch (error) { if (!emailOnly || error?.code !== "unknown_receipt") throw error; }
       if (sameAnswer()) save({ ...local, pending: false });
     } else save({ ...local, pending: false });
   }
@@ -114,7 +120,7 @@ export function createUpdatesConsent({ prefs, account, available, now = Date.now
   async function reconcile(sameAnswer, fresh) {
     if (!client() || !await available()) return;
     const local = prefs.updatesConsent();
-    if (!signedIn() && local?.pending && local.status === "opted_in" && local.email &&
+    if (!owner() && local?.pending && local.status === "opted_in" && local.email &&
       local.replacedReceipts?.some(receipt => !local.receiptEmails?.[receipt])) {
       await send(sameAnswer, fresh);
       if (fresh()) await withdrawReplaced();
@@ -127,7 +133,7 @@ export function createUpdatesConsent({ prefs, account, available, now = Date.now
 
   async function send(sameAnswer, fresh) {
     let local = prefs.updatesConsent();
-    const who = signedIn();
+    const who = owner();
     if (!who) return signedOutSync(local, sameAnswer);
     const pending = local?.pendingAccounts?.find(choice => choice.account === who.id);
     if (pending) {
@@ -171,9 +177,10 @@ export function createUpdatesConsent({ prefs, account, available, now = Date.now
 
   const snapshot = () => {
     const saved = prefs.updatesConsent(), who = signedIn();
-    const local = who && saved?.account && saved.account !== who.id ? null : saved;
-    return { available: true, due: !local, status: local?.status ?? null, signedIn: Boolean(who),
-      email: who?.email ?? (local?.status === "opted_in" ? local.email ?? null : null), version: UPDATES_CONSENT_VERSION };
+    const local = !emailOnly && who && saved?.account && saved.account !== who.id ? null : saved;
+    const email = emailOnly ? (local?.status === "opted_in" ? local.email ?? who?.email ?? null : null)
+      : who?.email ?? (local?.status === "opted_in" ? local.email ?? null : null);
+    return { available: true, due: !local, status: local?.status ?? null, signedIn: Boolean(who), email, version: UPDATES_CONSENT_VERSION };
   };
 
   async function state() {
@@ -188,8 +195,9 @@ export function createUpdatesConsent({ prefs, account, available, now = Date.now
     if (!client() || !await available()) throw new Error("Product updates are not available in this app.");
     const typed = input.email === undefined || input.email === null || input.email === "" ? null : cleanEmail(input.email);
     if (input.email && !typed) throw new Error("Enter a valid email address.");
-    const who = signedIn(), previous = prefs.updatesConsent();
-    const email = !who && status === "opted_in" ? typed ?? previous?.email ?? null : previous?.email ?? null;
+    const who = owner(), previous = prefs.updatesConsent();
+    const fallback = emailOnly ? cleanEmail(signedIn()?.email) : null;
+    const email = !who && status === "opted_in" ? typed ?? fallback ?? previous?.email ?? null : previous?.email ?? null;
     const returningReceipt = !who && status === "opted_in" && email
       ? previous?.replacedReceipts?.find(receipt => previous.receiptEmails?.[receipt] === email) : null;
     const sameReceipt = !who && (status !== "opted_in" || email === null ||

@@ -34,10 +34,13 @@ export interface UpdatesConsent extends UpdatesConsentBridge {
   accountChanged(state: import("./cloud-account.mjs").CloudAccountState | null | undefined): void;
 }
 export type UpdatesConsentClient = Pick<import("./cloud-account.mjs").CloudAccountClient, "state" | "updatesConsent" | "recordUpdatesConsent" | "updatesConsentByEmail" | "withdrawUpdatesConsent">;
+export type UpdatesConsentEmailClient = Pick<UpdatesConsentClient, "state" | "updatesConsentByEmail" | "withdrawUpdatesConsent">;
 export declare function createUpdatesConsent(options: {
   prefs: { installId(): string; updatesConsent(): UpdatesConsentRecord | null; setUpdatesConsent(value: unknown): boolean };
-  account(): UpdatesConsentClient | null;
+  account(): UpdatesConsentClient | UpdatesConsentEmailClient | null;
   available(): boolean | Promise<boolean>;
+  /** Send every answer to the updates list by email; the signed-in account only supplies the address. */
+  emailOnly?: boolean;
   now?: () => number;
   onChange?: () => void;
 }): UpdatesConsent;
