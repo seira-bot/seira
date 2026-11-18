@@ -13,6 +13,7 @@ import {
 import { productName } from "@/lib/brand";
 import { t } from "@/lib/i18n";
 import { useOtherServerName } from "@/lib/other-server";
+import { SeiraCharacter } from "./seira-character";
 
 /** The app's own version first; `server` (useOtherServerName: set only when the app's window shows another server) adds a
  * line naming it with the version its page runs. A browser, or an app too old to say, keeps the page's version on one line. */
@@ -59,7 +60,7 @@ export function AboutDialog({ open, onClose }: { open: boolean; onClose: () => v
         aria-labelledby="about-dialog-title"
         className="w-full max-w-[360px] rounded-2xl border border-hairline/50 bg-panel p-6 text-center shadow-2xl"
       >
-        <img src="/app-icon.svg" alt="" width={56} height={56} className="mx-auto size-14" />
+        <SeiraCharacter state="greet" size={96} className="mx-auto" />
         <h2 id="about-dialog-title" className="mt-3 text-[17px] font-semibold text-ink">
           {productName()}
         </h2>

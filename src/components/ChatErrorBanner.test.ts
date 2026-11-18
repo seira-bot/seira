@@ -22,6 +22,10 @@ describe("ChatErrorBanner", () => {
     expect(markup).toContain("border-danger/30");
   });
 
+  it("shows Seira sad beside the error", () => {
+    expect(renderToStaticMarkup(createElement(ChatErrorBanner, { message: "Clipboard has no image", onDismiss: () => undefined }))).toContain('data-seira-state="sad"');
+  });
+
   it("reads a machine's words as one plain line and keeps them under Details", () => {
     const markup = renderToStaticMarkup(createElement(ChatErrorBanner, { message: "502 Bad Gateway", onDismiss: () => undefined }));
     expect(markup).toContain("Something went wrong on the other end. Try again.");

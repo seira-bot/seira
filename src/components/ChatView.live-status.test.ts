@@ -89,13 +89,13 @@ afterEach(() => {
 });
 
 describe("Simple mode's working line", () => {
-  it("is the bot's 28px avatar and one quiet friendly phrase, with the timer and size kept in its tooltip", () => {
+  it("is Seira's 32px character and one quiet friendly phrase, with the timer and size kept in its tooltip", () => {
     mode.advanced = false;
     engine({ type: "turn.started" });
     render(busyBot([ask]));
     expect(mascot()).not.toBeNull();
     expect(statusLine()).toBe("Thinking it through");
-    expect(mascot()!.innerHTML).toContain('width="28px"');
+    expect(mascot()!.querySelector("canvas[data-seira-state='thinking']")).not.toBeNull();
     const row = mascot()!.firstElementChild as HTMLElement;
     expect([...row.classList]).toEqual(expect.arrayContaining(["h-9", "ps-2", "gap-2"]));
     expect(row.title).toMatch(/^Working · /);

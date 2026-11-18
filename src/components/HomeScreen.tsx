@@ -3,6 +3,7 @@ import { activeLocale, t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import type { HomeView, HomeBridge } from "../../electron/home-window.mjs";
 import { CloudSetupSteps } from "./CloudSetupSteps";
+import { SeiraCharacter, type SeiraState } from "./seira-character";
 
 const MACHINE: Record<string, LocaleKey> = {
   stopped: "cloudHome.stopped",
@@ -39,6 +40,13 @@ export function homeScreenText(view: HomeView | null, now = Date.now()): { title
   if (view?.screen === "waking") return { title: t("homeScreen.waking"), body: null, reason: null, action: null, busy: true };
   if (view?.screen === "moving") return { title: named("homeScreen.moving", "homeScreen.movingNamed"), body: null, reason: null, action: null, busy: true };
   return { title: named("homeScreen.opening", "homeScreen.openingNamed"), body: null, reason: null, action: null, busy: true };
+}
+
+/** How Seira looks while the screen waits on something, can't be reached, or needs the person to press a button. */
+export function homeCharacterState(view: HomeView | null, text: Pick<ReturnType<typeof homeScreenText>, "action" | "busy">): SeiraState {
+  if (view?.screen === "offline") return "sad";
+  if (text.busy) return "working";
+  return text.action ? "attention" : "idle";
 }
 
 const BUTTON: Record<Exclude<HomeAction, "sign-in" | "manage">, LocaleKey> = {
@@ -102,10 +110,8 @@ export function HomeScreen({ bridge, manage }: { bridge: HomeBridge; manage?: ()
   return (
     <main data-home-screen={view?.screen ?? "opening"} className="flex min-h-screen items-center justify-center bg-app px-6 text-ink" style={{ WebkitAppRegion: "drag" } as React.CSSProperties}>
       <div className="flex w-full max-w-[420px] flex-col items-start gap-3" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
-        <p role="status" className="flex items-center gap-2 text-[20px] font-semibold">
-          {text.busy && <span aria-hidden="true" className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-hairline border-t-accent" />}
-          {text.title}
-        </p>
+        <SeiraCharacter state={homeCharacterState(view, text)} size={96} />
+        <p role="status" className="text-[20px] font-semibold">{text.title}</p>
         {text.body && <p className="text-[14px] leading-relaxed text-ink-secondary">{text.body}</p>}
         {view?.screen === "setup" && <CloudSetupSteps step={view.step ?? "reserving"} />}
         {text.reason && <p data-home-reason className="text-[13px] leading-relaxed text-ink-secondary">{text.reason}</p>}
@@ -128,7 +134,10 @@ export function SignedOutAtHome({ bridge, fallback }: { bridge: Pick<HomeBridge,
   if (refused) return <>{fallback}</>;
   return (
     <main data-home-screen="opening" className="flex min-h-screen items-center justify-center bg-app px-6 text-ink">
-      <p role="status" className="w-full max-w-[420px] text-[20px] font-semibold">{t("homeScreen.opening")}</p>
+      <div className="flex w-full max-w-[420px] flex-col items-start gap-3">
+        <SeiraCharacter state="working" size={96} />
+        <p role="status" className="text-[20px] font-semibold">{t("homeScreen.opening")}</p>
+      </div>
     </main>
   );
 }

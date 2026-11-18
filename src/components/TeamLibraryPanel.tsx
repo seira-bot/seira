@@ -15,6 +15,7 @@ import { catalogCopy, catalogMatches, type TeamCatalog, type TeamCatalogEntry } 
 
 import { ReadyBotGallery } from "./ReadyBotGallery";
 import { OrgLibraryTab } from "./TeamLibraryPanelOrg";
+import { SeiraCharacter } from "./seira-character";
 import { TemplateDetailsBody } from "./TemplateCard";
 
 export interface TeamImportResult {
@@ -377,6 +378,7 @@ export function TeamLibraryPanel({
               )}
               {!catalogLoading && catalog && visibleTeams.length === 0 && (
                 <div className="flex min-h-56 flex-col items-center justify-center text-center">
+                  <SeiraCharacter state="idle" size={64} className="mb-2" />
                   <div className="text-[13px] font-medium text-ink">{t("templates.noneFound")}</div>
                   <div className="mt-1 text-[13px] text-ink-secondary">{t("templates.tryDifferentSearch")}</div>
                 </div>
