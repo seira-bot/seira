@@ -1,0 +1,501 @@
+{
+  "version": 2,
+  "hands": {
+    "open": {
+      "file": "out/hands/open.png",
+      "pivot": [127, 291],
+      "side": "right",
+      "width": 0.92
+    },
+    "wave": {
+      "file": "out/hands/wave.png",
+      "pivot": [160, 291],
+      "side": "right",
+      "width": 0.973
+    },
+    "fist": {
+      "file": "out/hands/fist.png",
+      "pivot": [111, 232],
+      "side": "right",
+      "width": 0.73
+    },
+    "point": {
+      "file": "out/hands/point.png",
+      "pivot": [91, 308],
+      "side": "right",
+      "width": 0.663
+    },
+    "peace": {
+      "file": "out/hands/peace.png",
+      "pivot": [90, 307],
+      "side": "right",
+      "width": 0.65
+    },
+    "thumbs-up": {
+      "file": "out/hands/thumbs-up.png",
+      "pivot": [93, 299],
+      "side": "right",
+      "width": 0.697
+    },
+    "ok": {
+      "file": "out/hands/ok.png",
+      "pivot": [124, 272],
+      "side": "right",
+      "width": 0.72
+    },
+    "chin": {
+      "file": "out/hands/chin.png",
+      "pivot": [68, 194],
+      "side": "right",
+      "width": 0.677
+    },
+    "fan": {
+      "file": "out/hands/fan.png",
+      "pivot": [90, 272],
+      "side": "right",
+      "width": 0.84
+    },
+    "hold": {
+      "file": "out/hands/hold.png",
+      "pivot": [135, 219],
+      "side": "right",
+      "width": 0.833
+    },
+    "pat": {
+      "file": "out/hands/pat.png",
+      "pivot": [11, 85],
+      "side": "right",
+      "width": 1.033
+    }
+  },
+  "accessories": {
+    "earring": {
+      "label": "Earring",
+      "slot": "ear",
+      "file": "out/acc/earring.png",
+      "pivot": [40, 10],
+      "anchor": "earR",
+      "width": 0.22,
+      "views": [
+        "front",
+        "yaw20",
+        "up",
+        "down"
+      ]
+    },
+    "glasses": {
+      "label": "Glasses",
+      "slot": "face",
+      "file": "out/acc/glasses.png",
+      "pivot": [217, 95],
+      "anchor": "eyes",
+      "width": 1.75,
+      "views": [
+        "front",
+        "yaw20",
+        "yaw45",
+        "up",
+        "down"
+      ],
+      "files": {
+        "yaw45": "out/acc/glasses.yaw45.png"
+      },
+      "pivots": {
+        "yaw45": [345, 118]
+      },
+      "widths": {
+        "yaw45": 1.626
+      }
+    },
+    "sunglasses": {
+      "label": "Sunglasses",
+      "slot": "face",
+      "file": "out/acc/sunglasses.png",
+      "pivot": [227, 100],
+      "anchor": "eyes",
+      "width": 1.75,
+      "views": [
+        "front",
+        "yaw20",
+        "yaw45",
+        "up",
+        "down"
+      ],
+      "files": {
+        "yaw45": "out/acc/sunglasses.yaw45.png"
+      },
+      "pivots": {
+        "yaw45": [348, 110]
+      },
+      "widths": {
+        "yaw45": 1.741
+      }
+    },
+    "headphones": {
+      "label": "Headphones",
+      "slot": "ear",
+      "file": "out/acc/headphones.png",
+      "pivot": [194, 29],
+      "anchor": "top",
+      "width": 2.3,
+      "views": [
+        "front",
+        "yaw20",
+        "yaw45",
+        "up",
+        "down"
+      ],
+      "files": {
+        "yaw45": "out/acc/headphones.yaw45.png"
+      },
+      "pivots": {
+        "yaw45": [256, 34]
+      },
+      "widths": {
+        "yaw45": 2.016
+      }
+    },
+    "ribbon": {
+      "label": "Ribbon",
+      "slot": "hair",
+      "file": "out/acc/ribbon.png",
+      "pivot": [190, 108],
+      "anchor": "top",
+      "width": 0.9,
+      "views": [
+        "front",
+        "yaw20",
+        "up",
+        "down"
+      ]
+    },
+    "hairpin": {
+      "label": "Hairpin",
+      "slot": "hair",
+      "file": "out/acc/hairpin.png",
+      "pivot": [154, 62],
+      "anchor": "templeR",
+      "width": 0.4,
+      "views": [
+        "front",
+        "yaw20",
+        "up",
+        "down"
+      ]
+    },
+    "tiara": {
+      "label": "Tiara",
+      "slot": "hair",
+      "file": "out/acc/tiara.png",
+      "pivot": [211, 198],
+      "anchor": "top",
+      "width": 1.1,
+      "views": [
+        "front",
+        "yaw20",
+        "up",
+        "down"
+      ]
+    },
+    "cap": {
+      "label": "Cap",
+      "slot": "top",
+      "file": "out/acc/cap.png",
+      "pivot": [208, 39],
+      "anchor": "top",
+      "width": 2.1,
+      "views": [
+        "front",
+        "yaw20",
+        "yaw45",
+        "up",
+        "down"
+      ],
+      "files": {
+        "yaw45": "out/acc/cap.yaw45.png"
+      },
+      "pivots": {
+        "yaw45": [256, 41]
+      },
+      "widths": {
+        "yaw45": 2.451
+      }
+    },
+    "antenna": {
+      "label": "Antenna",
+      "slot": "top",
+      "file": "out/acc/antenna.png",
+      "pivot": [74, 400],
+      "anchor": "top",
+      "width": 0.35,
+      "views": [
+        "front",
+        "yaw20",
+        "up",
+        "down"
+      ]
+    },
+    "scarf": {
+      "label": "Scarf",
+      "slot": "neck",
+      "file": "out/acc/scarf.png",
+      "pivot": [255, 148],
+      "anchor": "neck",
+      "width": 1.9,
+      "views": [
+        "front",
+        "yaw20",
+        "up",
+        "down"
+      ]
+    },
+    "bowtie": {
+      "label": "Bow tie",
+      "slot": "neck",
+      "file": "out/acc/bowtie.png",
+      "pivot": [168, 92],
+      "anchor": "neck",
+      "width": 0.8,
+      "views": [
+        "front",
+        "yaw20",
+        "up",
+        "down"
+      ]
+    },
+    "headset-mic": {
+      "label": "Headset with microphone",
+      "slot": "ear",
+      "file": "out/acc/headset-mic.png",
+      "pivot": [228, 20],
+      "anchor": "top",
+      "width": 2.3,
+      "views": [
+        "front",
+        "yaw20",
+        "up",
+        "down"
+      ]
+    }
+  },
+  "fx": {
+    "snowflake": {
+      "label": "Snowflake",
+      "frames": [
+        "out/fx/snowflake-1.png",
+        "out/fx/snowflake-2.png",
+        "out/fx/snowflake-3.png"
+      ],
+      "pivot": [59, 64],
+      "mode": "variants"
+    },
+    "raindrop": {
+      "label": "Raindrop",
+      "frames": [
+        "out/fx/raindrop.png"
+      ],
+      "pivot": [46, 64],
+      "mode": "single"
+    },
+    "splash": {
+      "label": "Water splash",
+      "frames": [
+        "out/fx/splash-1.png",
+        "out/fx/splash-2.png",
+        "out/fx/splash-3.png"
+      ],
+      "pivot": [64, 95],
+      "mode": "sequence"
+    },
+    "sweat-drop": {
+      "label": "Sweat drop",
+      "frames": [
+        "out/fx/sweat-drop.png"
+      ],
+      "pivot": [46, 64],
+      "mode": "single"
+    },
+    "frost": {
+      "label": "Frost",
+      "frames": [
+        "out/fx/frost.png"
+      ],
+      "pivot": [80, 74],
+      "mode": "single"
+    },
+    "breath-puff": {
+      "label": "Breath puff",
+      "frames": [
+        "out/fx/breath-puff.png"
+      ],
+      "pivot": [96, 74],
+      "mode": "single"
+    },
+    "steam-puff": {
+      "label": "Steam puff",
+      "frames": [
+        "out/fx/steam-puff.png"
+      ],
+      "pivot": [62, 96],
+      "mode": "single"
+    },
+    "heat-wave": {
+      "label": "Heat wave",
+      "frames": [
+        "out/fx/heat-wave.png"
+      ],
+      "pivot": [91, 96],
+      "mode": "single"
+    },
+    "sun-sparkle": {
+      "label": "Sun sparkle",
+      "frames": [
+        "out/fx/sun-sparkle.png"
+      ],
+      "pivot": [64, 63],
+      "mode": "single"
+    },
+    "lightning": {
+      "label": "Lightning bolt",
+      "frames": [
+        "out/fx/lightning.png"
+      ],
+      "pivot": [118, 10],
+      "mode": "single"
+    },
+    "fog-puff": {
+      "label": "Fog puff",
+      "frames": [
+        "out/fx/fog-puff.png"
+      ],
+      "pivot": [128, 89],
+      "mode": "single"
+    },
+    "umbrella": {
+      "label": "Umbrella",
+      "frames": [
+        "out/fx/umbrella.png"
+      ],
+      "pivot": [129, 186],
+      "mode": "single"
+    },
+    "heart": {
+      "label": "Heart",
+      "frames": [
+        "out/fx/heart-1.png",
+        "out/fx/heart-2.png"
+      ],
+      "pivot": [64, 56],
+      "mode": "variants"
+    },
+    "zzz": {
+      "label": "Sleep Z",
+      "frames": [
+        "out/fx/zzz.png"
+      ],
+      "pivot": [80, 64],
+      "mode": "single"
+    },
+    "note": {
+      "label": "Music note",
+      "frames": [
+        "out/fx/note-1.png",
+        "out/fx/note-2.png"
+      ],
+      "pivot": [64, 61],
+      "mode": "variants"
+    },
+    "confetti": {
+      "label": "Confetti piece",
+      "frames": [
+        "out/fx/confetti-1.png",
+        "out/fx/confetti-2.png",
+        "out/fx/confetti-3.png",
+        "out/fx/confetti-4.png",
+        "out/fx/confetti-5.png"
+      ],
+      "pivot": [48, 44],
+      "mode": "variants"
+    },
+    "star": {
+      "label": "Star",
+      "frames": [
+        "out/fx/star.png"
+      ],
+      "pivot": [64, 61],
+      "mode": "single"
+    },
+    "idea-bulb": {
+      "label": "Idea light bulb",
+      "frames": [
+        "out/fx/idea-bulb.png"
+      ],
+      "pivot": [51, 80],
+      "mode": "single"
+    },
+    "question": {
+      "label": "Question mark",
+      "frames": [
+        "out/fx/question.png"
+      ],
+      "pivot": [59, 80],
+      "mode": "single"
+    },
+    "exclaim": {
+      "label": "Exclamation mark",
+      "frames": [
+        "out/fx/exclaim.png"
+      ],
+      "pivot": [35, 80],
+      "mode": "single"
+    },
+    "anger-mark": {
+      "label": "Anger mark",
+      "frames": [
+        "out/fx/anger-mark.png"
+      ],
+      "pivot": [64, 61],
+      "mode": "single"
+    },
+    "tear": {
+      "label": "Tear",
+      "frames": [
+        "out/fx/tear.png"
+      ],
+      "pivot": [49, 64],
+      "mode": "single"
+    },
+    "dizzy-star": {
+      "label": "Dizzy star",
+      "frames": [
+        "out/fx/dizzy-star.png"
+      ],
+      "pivot": [64, 60],
+      "mode": "single"
+    },
+    "tickle-sparkle": {
+      "label": "Tickle sparkle",
+      "frames": [
+        "out/fx/tickle-sparkle.png"
+      ],
+      "pivot": [63, 64],
+      "mode": "single"
+    },
+    "sneeze-cloud": {
+      "label": "Sneeze cloud",
+      "frames": [
+        "out/fx/sneeze-cloud.png"
+      ],
+      "pivot": [128, 83],
+      "mode": "single"
+    },
+    "blush": {
+      "label": "Blush patch",
+      "frames": [
+        "out/fx/blush.png"
+      ],
+      "pivot": [64, 47],
+      "mode": "single"
+    }
+  }
+}

@@ -1,0 +1,15 @@
+2026-11-18T04:24:58Z acc-a ok try=1 secs=32 bytes=1314402
+2026-11-18T04:26:01Z hands-a ok try=1 secs=95 bytes=1334390
+2026-11-18T04:26:42Z hands-b ok try=1 secs=36 bytes=1364638
+2026-11-18T04:27:51Z acc-b ok try=1 secs=105 bytes=1464555
+2026-11-18T04:30:02Z fx-a ok try=1 secs=113 bytes=1411705
+2026-11-18T04:30:14Z acc-yaw45 ok try=1 secs=125 bytes=1451373
+2026-11-18T04:30:59Z fx-b ok try=1 secs=41 bytes=1363212
+2026-11-18T04:32:37Z acc-fix ok try=1 secs=139 bytes=2114544
+2026-11-18T04:32:45Z acc-yaw45 previous-raw-rejected
+2026-11-18T04:34:34Z fx-c ok try=1 secs=109 bytes=1397039
+2026-11-18T04:34:35Z acc-yaw45 ok try=1 secs=110 bytes=1447009
+2026-11-18T04:35:17Z acc-fix previous-raw-rejected
+2026-11-18T04:36:44Z acc-fix ok try=1 secs=87 bytes=1234320
+2026-11-18T05:20:04Z acc-yaw45 previous-raw-rejected
+2026-11-18T05:21:48Z acc-yaw45 ok try=1 secs=104 bytes=1464170

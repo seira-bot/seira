@@ -4,7 +4,7 @@
 # - the trigger is `pull_request`, never `pull_request_target`, so a fork run gets a read-only token and no secrets;
 # - the token can only read the repository, and no job asks for more;
 # - no step reads a secret, every checkout drops its credentials, and every action is pinned to a full commit SHA.
-# No workflow in this repository builds a release, creates a tag, or publishes a package (docs/releasing.md).
+# No workflow in this repository creates a tag or publishes a release or a package (docs/releasing.md).
 # scripts/ci-workflow.test.ts holds these rules.
 name: CI
 

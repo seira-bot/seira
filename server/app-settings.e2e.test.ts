@@ -171,7 +171,7 @@ it("a key is never taken as a value: set with a value is refused, set without on
   const turn = await finished("SECRET");
   const [refused, carded] = results(turn);
   expect(refused).toMatchObject({ isError: true, text: expect.stringMatching(/^Never send a key or token as a value\./) });
-  expect(carded).toMatchObject({ isError: false, text: expect.stringMatching(/^A secure card for xAI API key is ready in MausBot\./) });
+  expect(carded).toMatchObject({ isError: false, text: expect.stringMatching(/^A secure card for xAI API key is ready in Seira\./) });
   const added = (await messages(bot.threadId)).slice(before);
   expect(added.filter((message) => message.kind === "secret").map((message) => message.secret), "one secure card").toEqual([expect.objectContaining({ label: "xAI API key" })]);
   const everything = JSON.stringify({ results: results(turn).map((result: any) => result.text), messages: await messages(bot.threadId), decisions: (await api("GET", "/api/decisions")).decisions, config: config() });

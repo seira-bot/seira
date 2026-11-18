@@ -2,8 +2,8 @@
 
 import { z } from "zod";
 
-import { DEFAULT_MASCOT_BODY, MASCOT_BODY_IDS } from "./mascot-bodies.ts";
-import { CARVED_BODY_IDS, DIWALI_BODY_IDS, HALLOWEEN_BODY_IDS, type CarvedBodyId } from "./carved-bodies.ts";
+import { MASCOT_BODY_IDS } from "./mascot-bodies.ts";
+import { BRAND_BODY_IDS, CARVED_BODY_IDS, DIWALI_BODY_IDS, HALLOWEEN_BODY_IDS, type CarvedBodyId } from "./carved-bodies.ts";
 import type { MausColor } from "./wire.ts";
 
 export const BOT_BODY_IDS = [...MASCOT_BODY_IDS, ...CARVED_BODY_IDS] as const;
@@ -12,13 +12,27 @@ export type BotBodyId = (typeof BOT_BODY_IDS)[number];
 
 export const botBodySchema = z.enum(BOT_BODY_IDS);
 
+/** The shipped mascot: a new bot's body, and the fallback for any unrecognised value. */
+export const DEFAULT_BOT_BODY: BotBodyId = "seira";
+
+/** The bodies a picker shows outside a festival, in order. */
+export const PICKER_BODY_IDS = [...BRAND_BODY_IDS, ...MASCOT_BODY_IDS] as const;
+
 /** Runtime-safe read of an untrusted persisted or streamed body id. */
 export function botBodyId(value: unknown): BotBodyId {
-  return botBodySchema.safeParse(value).data ?? DEFAULT_MASCOT_BODY;
+  return botBodySchema.safeParse(value).data ?? DEFAULT_BOT_BODY;
 }
 
 export function isCarvedBody(value: unknown): value is CarvedBodyId {
   return (CARVED_BODY_IDS as readonly unknown[]).includes(value);
+}
+
+export function isBrandBody(value: unknown): value is (typeof BRAND_BODY_IDS)[number] {
+  return (BRAND_BODY_IDS as readonly unknown[]).includes(value);
+}
+
+export function isFestivalBody(value: unknown): value is (typeof HALLOWEEN_BODY_IDS | typeof DIWALI_BODY_IDS)[number] {
+  return [...HALLOWEEN_BODY_IDS, ...DIWALI_BODY_IDS].includes(value as never);
 }
 
 export type CostumeColor = Exclude<MausColor, "silver" | "chrome">;

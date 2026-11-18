@@ -26,7 +26,6 @@ import { freePortBlock, withFreeSignInPort } from "./testing/ports.ts";
 import { openSse } from "./testing/sse.ts";
 import { STARTER_COLORS } from "./bot-look.ts";
 import { createTeamManifest } from "./team-manifest.ts";
-import { DEFAULT_MASCOT_BODY } from "../shared/mascot-bodies.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 import { FILE_MAX_BYTES, IMAGE_MAX_BYTES } from "./attachments.ts";
 import { computerPrompt, SIGN_IN_PROMPT } from "./system-prompt.ts";
@@ -8026,7 +8025,7 @@ describe("harness HTTP API", () => {
       const plain = (await api("POST", "/api/bots", { name: "Wren", useDefaults: false })).body.bot;
       await api("DELETE", `/api/bots/${plain.id}`);
       const fresh = (await stream.until((frame) => frame.kind === "bot" && frame.bot?.id === plain.id)).bot;
-      expect(fresh.mascotBody).toBe(DEFAULT_MASCOT_BODY);
+      expect(fresh.mascotBody).toBe("seira");
       expect(STARTER_COLORS).toContain(fresh.color);
     } finally {
       stream.close();
@@ -14137,7 +14136,7 @@ describe("bot memory API", () => {
         id: "persona",
         label: "Identity",
         text: "You are Kiwi, a personal bot in Seira. Role: Tracker. About: Files bugs.",
-        bytes: 78,
+        bytes: 72,
       });
       expect(before.body.sections.map((s: { id: string }) => s.id)).not.toContain("soul");
       // A new bot has no memory yet: the preview shows how memory works, and the notes section once there is something in it.

@@ -35,7 +35,8 @@ export interface Eyes {
 export interface Def {
   id: string
   name: string
-  paint: "bot" | "pale" | "bone"
+  /** "hair" is the bot's colour, or `bone` for the grey colours. */
+  paint: "bot" | "pale" | "bone" | "hair"
   bone: string | null
   face: Field
   eyes: Omit<Eyes, "mouth" | "mouthInk" | "mouthY"> & Partial<Pick<Eyes, "mouth" | "mouthInk" | "mouthY">>

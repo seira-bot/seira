@@ -1,0 +1,184 @@
+# Seira Windows x64 installer, built on a GitHub-hosted Windows runner (docs/releasing.md).
+#
+# This workflow only builds. It cannot publish:
+# - only a person with write access can start it (`workflow_dispatch`), so a fork pull request never runs it;
+# - the token can only read the repository, and no step reads a secret;
+# - it uses no dependency cache, so no other run can change what the package contains;
+# - it uploads the installer as a workflow artifact. A maintainer attaches the artifact to the release by hand.
+# scripts/ci-workflow.test.ts holds these rules.
+name: Package Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Tag, branch, or commit to build. A v* tag must match the version in package.json.
+        required: true
+        default: v0.1.170
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Windows x64 installer
+    runs-on: windows-2025
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          # A release package must not read a dependency cache that another run wrote.
+          package-manager-cache: false
+      - name: Check the version
+        id: version
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "ref:     $REF"
+          echo "version: $version"
+          echo "commit:  $(git rev-parse HEAD)"
+          case "$REF" in
+            v[0-9]*)
+              [ "$REF" = "v$version" ] || { echo "::error::tag $REF holds package.json version $version"; exit 1; } ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - run: pnpm install --frozen-lockfile
+      - name: Clean generated output
+        # The package copies these folders as they are, so stale files would ship.
+        run: rm -rf dist dist-server dist-companion dist-native release
+      - name: Package the installer
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: pnpm package:win
+      - name: "Gate: the bundled browser works with an empty home"
+        run: node scripts/smoke-browser-bundle.mjs --resources "$GITHUB_WORKSPACE/release/win-unpacked/resources"
+      - name: "Gate: the packaged server finds its browser"
+        run: |
+          OMB_SMOKE_DIST="$GITHUB_WORKSPACE/release/win-unpacked/resources/server" \
+            node scripts/smoke-packaged-server.mjs --browser-bundle "$GITHUB_WORKSPACE/release/win-unpacked/resources/browser-engine"
+      - name: Verify the packaged tree
+        run: |
+          res=release/win-unpacked/resources
+          fail=0
+          need() { [ -f "$1" ] || { echo "::error::missing $1"; fail=1; }; }
+          need release/win-unpacked/Seira.exe
+          # Without the server the app shows the "Couldn't start the bot server" page.
+          need "$res/server/index.js"
+          need "$res/server/desktop-entry.mjs"
+          # Without the UI the window stays black.
+          need "$res/ui/index.html"
+          need "$res/cloudflared/cloudflared.exe"
+          need "$res/licenses/cloudflared-LICENSE.txt"
+          need "$res/licenses/cloudflared-README.md"
+          need "$res/app-update.yml"
+          node scripts/check-module-scopes.mjs "$res" || fail=1
+          if [ -f "$res/cloudflared/cloudflared.exe" ]; then
+            expected=$(node --input-type=module -e "import { CLOUDFLARED_ASSETS } from './scripts/prepare-cloudflared.mjs'; console.log(Object.values(CLOUDFLARED_ASSETS).find((asset) => asset.name === 'cloudflared-windows-amd64.exe').binarySha256)")
+            pinned=$(node --input-type=module -e "import { CLOUDFLARED_VERSION } from './scripts/prepare-cloudflared.mjs'; console.log(CLOUDFLARED_VERSION)")
+            actual=$(sha256sum "$res/cloudflared/cloudflared.exe" | cut -d' ' -f1)
+            [ "$actual" = "$expected" ] || { echo "::error::cloudflared.exe has SHA-256 $actual, not $expected"; fail=1; }
+            "$res/cloudflared/cloudflared.exe" version | grep -Fq "cloudflared version $pinned " || {
+              echo "::error::cloudflared.exe is not version $pinned"; fail=1; }
+          fi
+          if [ -f "$res/app-update.yml" ]; then
+            update=$(tr -d '\r' < "$res/app-update.yml")
+            echo "--- app-update.yml ---"; echo "$update"
+            # Installed apps look for updates where this file points.
+            grep -Eq '^provider: github$' <<< "$update" || { echo "::error::app-update.yml does not use the github provider"; fail=1; }
+            grep -Eq '^owner: seira-bot$' <<< "$update" || { echo "::error::app-update.yml does not name owner seira-bot"; fail=1; }
+            grep -Eq '^repo: seira$' <<< "$update" || { echo "::error::app-update.yml does not name repo seira"; fail=1; }
+            # electron-updater checks the signature only when publisherName is set. The build is unsigned,
+            # so a publisherName makes every installed app reject every update.
+            if grep -q publisherName <<< "$update"; then
+              echo "::error::app-update.yml has publisherName, but the build is unsigned"; fail=1
+            fi
+          fi
+          exit $fail
+      - name: Start the packaged server in place
+        # The smoke above runs a copy. This runs the packaged folder itself, where no node_modules exists.
+        run: |
+          res=release/win-unpacked/resources
+          HOME="$RUNNER_TEMP/seira-smoke" USERPROFILE="$RUNNER_TEMP/seira-smoke" OMB_PORT=21987 \
+            node "$res/server/index.js" > "$RUNNER_TEMP/server.log" 2>&1 &
+          pid=$!
+          for _ in $(seq 1 90); do
+            if curl -fsS --max-time 2 http://127.0.0.1:21987/api/health > /dev/null 2>&1; then
+              echo "The packaged server answered /api/health."
+              kill "$pid" 2> /dev/null || true
+              exit 0
+            fi
+            kill -0 "$pid" 2> /dev/null || break
+            sleep 1
+          done
+          echo "::error::the packaged server did not answer /api/health"
+          cat "$RUNNER_TEMP/server.log" || true
+          kill "$pid" 2> /dev/null || true
+          exit 1
+      - name: Stage and verify the release files
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          STAGE: ${{ runner.temp }}/seira-windows-x64
+        run: |
+          node --input-type=module - <<'EOF'
+          import { createHash } from "node:crypto";
+          import { appendFileSync, copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+          import { join } from "node:path";
+
+          const { VERSION: version, STAGE: stage } = process.env;
+          const installer = `Seira-${version}-setup.exe`;
+          const built = [installer, `${installer}.blockmap`, "latest.yml"];
+          const stable = "Seira-setup.exe";
+          const sums = "SHA256SUMS-windows-x64.txt";
+          const hash = (algorithm, file, encoding) => createHash(algorithm).update(readFileSync(join(stage, file))).digest(encoding);
+          const fail = (message) => { console.error(`::error::${message}`); process.exit(1); };
+
+          rmSync(stage, { recursive: true, force: true });
+          mkdirSync(stage, { recursive: true });
+          for (const file of built) {
+            try { copyFileSync(join("release", file), join(stage, file)); } catch { fail(`the build did not write release/${file}`); }
+          }
+          copyFileSync(join(stage, installer), join(stage, stable));
+
+          // The installed app downloads the file that latest.yml names and rejects it unless the SHA-512 and size match.
+          const feed = readFileSync(join(stage, "latest.yml"), "utf8").replace(/\r/g, "");
+          const field = (name) => feed.match(new RegExp(`^${name}:\\s+['"]?([^'"\\n]+)['"]?$`, "m"))?.[1];
+          if (field("version") !== version) fail(`latest.yml names version ${field("version")}, not ${version}`);
+          if (field("path") !== installer) fail(`latest.yml names path ${field("path")}, not ${installer}`);
+          const entries = [...feed.matchAll(/url:\s+(\S+)[\s\S]*?sha512:\s+(\S+)\n\s+size:\s+(\d+)/g)];
+          if (entries.length !== 1 || entries[0][1] !== installer) {
+            fail(`latest.yml lists ${entries.map(([, url]) => url).join(", ") || "no file"}, not ${installer}`);
+          }
+          const [, , sha512, size] = entries[0];
+          if (hash("sha512", installer, "base64") !== sha512) fail(`the SHA-512 in latest.yml does not match ${installer}`);
+          if (field("sha512") !== sha512) fail("the two SHA-512 values in latest.yml are not equal");
+          if (statSync(join(stage, installer)).size !== Number(size)) fail(`the size in latest.yml does not match ${installer}`);
+          if (!readFileSync(join(stage, installer)).equals(readFileSync(join(stage, stable)))) fail(`${stable} is not a byte-identical copy`);
+
+          const lines = [installer, stable].map((file) => `${hash("sha256", file, "hex")}  ${file}\n`).join("");
+          writeFileSync(join(stage, sums), lines);
+
+          const staged = readdirSync(stage).sort();
+          const expected = [...built, stable, sums].sort();
+          if (JSON.stringify(staged) !== JSON.stringify(expected)) fail(`unexpected file set: ${staged.join(", ")}`);
+          const table = staged.map((file) => `| \`${file}\` | ${statSync(join(stage, file)).size} |`).join("\n");
+          console.log(staged.join("\n"));
+          process.stdout.write(lines);
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Seira ${version} for Windows x64\n\n| File | Bytes |\n| --- | --- |\n${table}\n\n\`\`\`\n${lines}\`\`\`\n`);
+          EOF
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: seira-${{ steps.version.outputs.version }}-windows-x64
+          path: ${{ runner.temp }}/seira-windows-x64/
+          if-no-files-found: error
+          retention-days: 14
