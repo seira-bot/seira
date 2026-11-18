@@ -3,7 +3,7 @@ import { homedir, tmpdir } from "node:os";
 import { basename, join, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { TEST_HOME_PREFIX, TEST_TMP_PREFIX, useTestTmp } from "./test-tmp.ts";
+import { TEST_HOME_PREFIX, TEST_RUN_ID_VARIABLE, TEST_TMP_PREFIX, testTmpPrefix, useTestTmp } from "./test-tmp.ts";
 
 describe("the temp folder of a test file", () => {
   it("is a folder that the setup file made for this file", () => {
@@ -13,6 +13,12 @@ describe("the temp folder of a test file", () => {
 
   it("is the folder on every variable that tmpdir() reads", () => {
     for (const name of ["TMPDIR", "TEMP", "TMP"]) expect(process.env[name]).toBe(tmpdir());
+  });
+
+  it("carries the id that global setup gave to this run", () => {
+    expect(process.env[TEST_RUN_ID_VARIABLE]).toMatch(/^[0-9a-f]{6}$/);
+    expect(basename(tmpdir()).startsWith(testTmpPrefix())).toBe(true);
+    expect(basename(tmpdir())).toMatch(new RegExp(`^${TEST_TMP_PREFIX}${process.env[TEST_RUN_ID_VARIABLE]}-`));
   });
 
   it("holds the throwaway home, and is not inside it", () => {
@@ -60,5 +66,37 @@ describe("useTestTmp", () => {
     }
     // Checked after remove(): the variable is gone again, not set to the string "undefined".
     if (saved === undefined) expect(process.env.TMP).toBeUndefined();
+  });
+});
+
+describe("testTmpPrefix", () => {
+  it("adds the id of the run to the prefix, and uses the plain prefix without one", () => {
+    expect(testTmpPrefix("a1b2c3")).toBe(`${TEST_TMP_PREFIX}a1b2c3-`);
+    expect(testTmpPrefix("")).toBe(TEST_TMP_PREFIX);
+  });
+
+  it("names the folder of useTestTmp with the id of the run", async () => {
+    const saved = process.env[TEST_RUN_ID_VARIABLE];
+    process.env[TEST_RUN_ID_VARIABLE] = "a1b2c3";
+    const scratch = useTestTmp();
+    try {
+      expect(basename(scratch.path).startsWith(`${TEST_TMP_PREFIX}a1b2c3-`)).toBe(true);
+    } finally {
+      await scratch.remove();
+      if (saved === undefined) delete process.env[TEST_RUN_ID_VARIABLE];
+      else process.env[TEST_RUN_ID_VARIABLE] = saved;
+    }
+  });
+
+  it("names the folder with the plain prefix when no run id is set", async () => {
+    const saved = process.env[TEST_RUN_ID_VARIABLE];
+    delete process.env[TEST_RUN_ID_VARIABLE];
+    const scratch = useTestTmp();
+    try {
+      expect(basename(scratch.path)).toMatch(new RegExp(`^${TEST_TMP_PREFIX}[A-Za-z0-9]{6}$`));
+    } finally {
+      await scratch.remove();
+      if (saved !== undefined) process.env[TEST_RUN_ID_VARIABLE] = saved;
+    }
   });
 });

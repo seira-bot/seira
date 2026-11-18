@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { STALE_TEST_DIR_MS, sweepStaleTestDirs } from "./stale-test-dirs.ts";
+import { STALE_TEST_DIR_MS, removeRunTestDirs, sweepStaleTestDirs } from "./stale-test-dirs.ts";
 import { TEST_HOME_PREFIX, TEST_TMP_PREFIX } from "./test-tmp.ts";
 
 const HOUR = 60 * 60 * 1000;
@@ -134,5 +134,80 @@ describe("sweepStaleTestDirs", () => {
   it("returns nothing for a folder that does not exist", () => {
     const { base } = fixture();
     expect(sweepStaleTestDirs(join(base, "missing"))).toEqual({ removed: [], failed: [] });
+  });
+});
+
+describe("removeRunTestDirs", () => {
+  it("deletes the folders of the run, new or old, with their content", () => {
+    const { base, now } = fixture();
+    const fresh = folder(base, `${TEST_TMP_PREFIX}a1b2c3-fresh1`, now, 0);
+    const old = folder(base, `${TEST_TMP_PREFIX}a1b2c3-old001`, now, 9 * HOUR);
+    mkdirSync(join(fresh, `${TEST_HOME_PREFIX}inner`, ".openmausbot"), { recursive: true });
+    writeFileSync(join(fresh, `${TEST_HOME_PREFIX}inner`, ".openmausbot", "file.txt"), "x");
+
+    const result = removeRunTestDirs("a1b2c3", base);
+
+    expect(result.removed.sort()).toEqual([fresh, old].sort());
+    expect(result.failed).toEqual([]);
+    expect(existsSync(fresh)).toBe(false);
+    expect(existsSync(old)).toBe(false);
+  });
+
+  it("keeps the folders of another run, a folder without a run id, and other omb-* folders", () => {
+    const { base, now } = fixture();
+    const kept = [
+      folder(base, `${TEST_TMP_PREFIX}d4e5f6-other1`, now, 0),
+      folder(base, `${TEST_TMP_PREFIX}a1b2c3d-longer`, now, 0),
+      folder(base, `${TEST_TMP_PREFIX}plain1`, now, 0),
+      folder(base, `${TEST_HOME_PREFIX}a1b2c3-home01`, now, 0),
+      folder(base, "omb-ssh-1000-0123456789ab", now, 0),
+    ];
+
+    expect(removeRunTestDirs("a1b2c3", base)).toEqual({ removed: [], failed: [] });
+    for (const path of kept) expect(existsSync(path)).toBe(true);
+  });
+
+  it("keeps a file or a link with the name of a folder of the run", () => {
+    const { base, now } = fixture();
+    const target = folder(base, "target", now, 0);
+    const file = join(base, `${TEST_TMP_PREFIX}a1b2c3-file01`);
+    const link = join(base, `${TEST_TMP_PREFIX}a1b2c3-link01`);
+    writeFileSync(file, "x");
+    symlinkSync(target, link);
+
+    expect(removeRunTestDirs("a1b2c3", base).removed).toEqual([]);
+    expect(existsSync(file)).toBe(true);
+    expect(existsSync(target)).toBe(true);
+    expect(existsSync(link)).toBe(true);
+  });
+
+  it("keeps a folder of another user", () => {
+    const { base, now } = fixture();
+    const other = folder(base, `${TEST_TMP_PREFIX}a1b2c3-other2`, now, 0);
+
+    const result = removeRunTestDirs("a1b2c3", base, { uid: (process.getuid?.() ?? 0) + 1 });
+
+    expect(result.removed).toEqual([]);
+    expect(existsSync(other)).toBe(true);
+  });
+
+  it("reports a folder that it cannot delete and still deletes the others", () => {
+    const { base, now } = fixture();
+    const stuck = folder(base, `${TEST_TMP_PREFIX}a1b2c3-stuck1`, now, 0);
+    const free = folder(base, `${TEST_TMP_PREFIX}a1b2c3-free01`, now, 0);
+
+    const result = removeRunTestDirs("a1b2c3", base, {
+      remove: (path) => {
+        if (path === stuck) throw new Error("EBUSY: resource busy");
+      },
+    });
+
+    expect(result.removed).toEqual([free]);
+    expect(result.failed).toEqual([{ path: stuck, reason: "EBUSY: resource busy" }]);
+  });
+
+  it("returns nothing for a folder that does not exist", () => {
+    const { base } = fixture();
+    expect(removeRunTestDirs("a1b2c3", join(base, "missing"))).toEqual({ removed: [], failed: [] });
   });
 });
