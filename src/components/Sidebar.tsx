@@ -24,6 +24,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { BulkSelectFilters, ThreadListFooter, deleteThreadsInBulk, retitleThreadsInBulk, useBulkSelect } from "./BulkSelectBar";
 import { SidebarBotThreadsPeek } from "./SidebarBotThreadsPeek";
 import { RoomMark, StackedMauses } from "./StackedMauses";
+import { SimpleRoomStack } from "./SidebarSimpleRoom";
 import { LocalComputerAutoWarning } from "./LocalComputerAutoWarning";
 import { nextRename } from "@/lib/rename";
 import { useDesktopCapabilities, windowFramed } from "./DesktopCapabilities";
@@ -81,7 +82,8 @@ import { MENU_ITEM, MENU_ITEM_SEPARATOR, MENU_SHEET } from "./menu-recipe";
 import { ELEVATED_CONTROL } from "./elevated";
 export { TeamMenuItems };
 import { SidebarResizeHandle, useSidebarWidth } from "./SidebarResizeHandle";
-import { PHONE_TOP_BUTTON, SIMPLE_CORNER_BUTTON, SIMPLE_ROW_FOCUS, SIMPLE_TOP_BUTTON, SidebarSearchPill, SidebarSearchToggle } from "./SidebarSimpleTop";
+import { PHONE_TOP_BUTTON, SIMPLE_ROW_FOCUS, SIMPLE_TOP_BUTTON, SidebarSearchPill } from "./SidebarSimpleTop";
+import { SIMPLE_NEW_BUTTON, SimpleAutomationsRow, SimpleSearchPill } from "./SidebarSimpleNav";
 import { isSidebarToggle } from "@/lib/keyboard-shortcuts";
 import { SidebarRailSeparator, SimpleRailFooter } from "./SidebarSimpleRail";
 import { useShowThreads } from "@/lib/thread-preferences";
@@ -187,23 +189,24 @@ export const GroupListItem = memo(function GroupListItem({
       className={cn(
         "relative flex w-full items-center rounded-md text-left", SIMPLE_ROW_FOCUS,
         density === "icons" ? (railTile ? "h-[54px] justify-center" : "justify-center px-1 py-1.5") : simpleRow
-          ? cn("gap-2 rounded-[8px] py-2 pr-2 group-hover:pr-9 group-focus-within:pr-9 max-md:pr-9 touch:pr-9 md:h-[54px] md:py-0", !group.dm && hasThreadList ? "pl-6" : "pl-2") : "gap-2 py-1.5 pl-6 pr-9",
+          ? cn("gap-2.5 rounded-lg py-2 pr-2 group-hover:pr-9 group-focus-within:pr-9 max-md:pr-9 touch:pr-9 md:h-[52px] md:py-0", !group.dm && hasThreadList ? "pl-6" : "pl-2", rowSurface(selected && !expanded)) : "gap-2 py-1.5 pl-6 pr-9",
         selected && !expanded ? rowSelectedSurface : "hover:bg-raised/50",
       )}
       title={density === "icons" ? group.name : undefined}
       aria-label={density === "icons" ? group.name : undefined}
     >
-      {group.dm ? <StackedMauses members={members} density={railTile ? "comfortable" : density} large={simpleRow || railTile} /> : <RoomMark density={railTile ? "comfortable" : density} large={simpleRow || railTile} />}
+      {simpleRow ? <SimpleRoomStack members={members} /> : group.dm ? <StackedMauses members={members} density={railTile ? "comfortable" : density} large={railTile} /> : <RoomMark density={railTile ? "comfortable" : density} large={simpleRow || railTile} />}
       <div className={cn("min-w-0 flex-1", density === "icons" && "hidden")}>
         <div className={cn("flex items-baseline justify-between gap-2", simpleRow && "pr-7")}>
-          <span className={cn("truncate text-[14px] text-ink", simpleRow ? "font-medium leading-5" : "font-semibold")}>{group.name}</span>
+          <span className={cn("truncate text-ink", simpleRow ? cn("text-[13px] leading-5", group.unread ? "font-semibold" : "font-medium") : "text-[14px] font-semibold")}>{group.name}</span>
+          {simpleRow && last && <span className="shrink-0 text-[12px] tabular-nums text-ink-tertiary">{formatTime(last.at)}</span>}
           {advanced && selected && last && !expanded && <span className="shrink-0 text-[10px] text-ink-secondary">{formatTime(last.at)}</span>}
           {!simpleRow && expanded && group.unread && <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-label={t("task.unreadMany")} />}
-          {simpleRow && !expanded && group.unread && <RowDot />}
+          
         </div>
         {!expanded && <div className="flex items-center justify-between gap-2">
-          <span className={cn("truncate text-ink-secondary", simpleRow ? "text-[13px] leading-[18px]" : "text-[11px]")}>{group.description || groupPreview(group, bots, instances, advanced)}</span>
-          {!simpleRow && group.unread && <span className="size-2 shrink-0 rounded-full bg-accent" />}
+          <span className={cn("truncate", simpleRow ? cn("text-[12px] leading-4", group.unread ? "text-ink-secondary" : "text-ink-tertiary") : "text-[11px] text-ink-secondary")}>{group.description || groupPreview(group, bots, instances, advanced)}</span>
+          {group.unread && <span data-testid="unread-dot" title={t("task.unread")} className="size-2 shrink-0 rounded-full bg-accent" />}
         </div>}
         {simpleRow && <RowStatusText unread={group.unread} />}
       </div>
@@ -990,8 +993,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
   const sizing = useSidebarWidth({ simple: !advanced, sidePanelOpen, sidebarRef });
   const [searchOpen, setSearchOpen] = useState(false);
   const searchShown = searchOpen || query !== "";
-  const searchToggleRef = useRef<HTMLButtonElement>(null);
-  const closeSearch = () => { setSearchOpen(false); setQuery(""); searchToggleRef.current?.focus(); };
+  const closeSearch = () => { setSearchOpen(false); setQuery(""); };
   const pinnedCircles = usePinnedCircles();
   const universalPins = useUniversalPins();
   const [pinnedCircleThreadsCollapsed, setPinnedCircleThreadsCollapsed] = useState(true);
@@ -1062,9 +1064,8 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
   };
 
   // A framed window (WindowFrameBar) holds the traffic lights and the rail's button in its top bar, so the top row keeps
-  // no room for them; in Simple it is only the corner holding Search and New, with the bot tiles beside it. With the
-  // frame off on macOS, the traffic lights sit in the top row's corner.
-  const framed = windowFramed(capabilities), corner = framed && simpleDesk;
+  // no room for them. With the frame off on macOS, the traffic lights sit in the top row's corner.
+  const framed = windowFramed(capabilities);
   const lights = capabilities.windowChrome === "mac-inset" && !framed;
   const draggableChrome = capabilities.windowChrome !== "native";
   // SAFETY: Electron's -webkit-app-region is not in React's CSSProperties type; the renderer accepts it as an inline
@@ -1119,13 +1120,13 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
     ...(pinnedBots.length > 0 && !universalPins && !simpleDesk ? [PINNED_SECTION_ID] : []),
     ...(unsectionedRooms.length > 0 ? [CHANNELS_SECTION_ID] : []),
     ...(botChats.length > 0 ? [BOT_CHATS_SECTION_ID] : []),
-    ...(unsectionedBots.length > 0 || drops.slot ? [BOTS_SECTION_ID] : []),
+    ...((simpleDesk ? false : unsectionedBots.length > 0) || drops.slot ? [BOTS_SECTION_ID] : []),
     ...sectionNames.map(userSectionId),
   ];
   const layout = sections.arrange(naturalSectionIds);
   const sectionIds = layout.sectionIds;
   const showPinnedCircleThreads = !simpleDesk && pinnedCircleThreadListVisible(pinnedCircles, density, pinnedBots.length);
-  const tiles = simpleDesk && (primary !== null || pinnedBots.length > 0);
+  const tiles = simpleDesk && (primary !== null || pinnedBots.length > 0 || unsectionedBots.length > 0);
   const { interactive: layoutInteractive, collapsed: sectionCollapsed, toggle: toggleSection } = sections;
   const archivedBots = state.bots.filter((bot) => bot.hidden && !bot.movedTo);
   const archivedEntry = remoteClient ? undefined : { count: archivedBots.length, open: () => setArchivedBotsOpen(true) };
@@ -1145,13 +1146,13 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
       ref={importReturnRef}
       onClick={() => setPlusOpen((o) => !o)}
       aria-label={remoteClient ? t("sidebar.new") : t("sidebar.newOrShare")}
-      className={phone ? PHONE_TOP_BUTTON : corner ? SIMPLE_CORNER_BUTTON : rail || simple ? SIMPLE_TOP_BUTTON : cn(
+      className={phone ? PHONE_TOP_BUTTON : simpleDesk ? SIMPLE_NEW_BUTTON : rail || simple ? SIMPLE_TOP_BUTTON : cn(
         "flex items-center justify-center text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
         density === "icons" ? "size-[46px] shrink-0 rounded-xl" : "size-8 rounded-full",
       )}
       title={remoteClient ? t("sidebar.new") : t("sidebar.newOrShare")}
     >
-      <Plus size={corner ? 18 : phone || simple || density === "icons" ? 20 : 18} strokeWidth={phone ? 2 : 1.5} />
+      <Plus size={simpleDesk ? 18 : phone || simple || density === "icons" ? 20 : 18} strokeWidth={phone ? 2 : 1.5} />
     </button>
     {plusMotion.shown && (
       <>
@@ -1252,14 +1253,13 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
       <GlassScrollFrame className="flex-1" fade><PlaceTint />
       <GlassBar edge="top">
       <div
-        data-sidebar-top-row={corner ? "corner" : true}
+        data-sidebar-top-row
         className={cn(
           "flex items-center",
-          // The corner is no drag region and takes no clicks but its buttons': the tiles rise into the rest of it.
-          density === "icons" ? "flex-col gap-1 px-2 pt-3.5 pb-1" : corner ? "pointer-events-none relative h-[34px] items-start justify-end px-1.5 pt-1.5" : simpleDesk ? "relative h-[60px] items-start pl-4 pr-4 pt-3" : "relative pl-4 pr-2",
+          density === "icons" ? "flex-col gap-1 px-2 pt-3.5 pb-1" : simpleDesk ? "relative h-[52px] ps-3 pe-3" : "relative pl-4 pr-2",
           density !== "icons" && !simpleDesk && !lights && "h-12 max-md:h-16",
         )}
-        style={corner ? undefined : density !== "icons" && lights && !simpleDesk ? { ...windowDragStyle, height: MAC_TRAFFIC_LIGHT_CENTER_Y * 2 } : windowDragStyle}
+        style={density !== "icons" && lights && !simpleDesk ? { ...windowDragStyle, height: MAC_TRAFFIC_LIGHT_CENTER_Y * 2 } : windowDragStyle}
       >
         {phone ? (
           <div className="shrink-0" style={windowNoDragStyle}><SidebarProfileMenu iconOnly circle /></div>
@@ -1274,7 +1274,13 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
           </button>
           <div className="relative flex">{plusControl}</div>
         </div>}
-        {density !== "icons" && (simpleDesk ? <div data-sidebar-top-slot className="min-w-0 flex-1" /> : (
+        {density !== "icons" && (simpleDesk ? (
+          <div data-sidebar-top-slot className="@container/sidebar-top flex min-w-0 flex-1 items-center" style={windowNoDragStyle}>
+            <div data-sidebar-top-switcher className="flex min-w-0 items-center [&_button]:h-8 [&_button]:rounded-lg [&_button]:bg-transparent [&_button]:ps-2 [&_button]:pe-1.5 [&_button]:hover:bg-ink/[0.06] [&_button]:aria-expanded:bg-ink/[0.06]">
+              <DesktopWorkspaceSwitcher inline pill cloudHome={state.config?.cloudHome === true} place={state.config?.team?.name} owner={cloudOwner} howTo={state.cloudHowTo} onMenuClosed={endHowTo} />
+            </div>
+          </div>
+        ) : (
           <div data-sidebar-top-slot className={cn("@container/sidebar-top flex min-w-0 flex-1 items-center", simple && "justify-end")}>
             {!simple && <div data-sidebar-top-spacer className="min-w-0 flex-1 @min-[96px]/sidebar-top:min-w-6" />}
             <div data-sidebar-top-switcher className={simple ? "flex min-w-0 items-center" : "flex min-w-0 max-w-[140px] items-center"}>
@@ -1284,10 +1290,9 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
         ))}
         {!rail && <div
           data-sidebar-top-buttons
-          className={cn("relative flex shrink-0 items-center", density === "icons" ? "flex-col gap-1" : corner ? "pointer-events-auto" : simpleDesk ? "gap-2" : simple ? "gap-1 pl-0.5" : "ml-0.5 gap-0.5")}
+          className={cn("relative flex shrink-0 items-center", density === "icons" ? "flex-col gap-1" : simpleDesk ? "gap-1" : simple ? "gap-1 pl-0.5" : "ml-0.5 gap-0.5")}
           style={windowNoDragStyle}
         >
-          {simpleDesk && <SidebarSearchToggle ref={searchToggleRef} corner={corner} open={searchShown} onToggle={() => (searchShown ? closeSearch() : setSearchOpen(true))} />}
           {density === "icons" && <button
             type="button"
             onClick={openCommandPalette}
@@ -1304,7 +1309,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
 
       {density === "icons" && !rail && <DesktopWorkspaceSwitcher compact cloudHome={state.config?.cloudHome === true} place={state.config?.team?.name} owner={cloudOwner} howTo={state.cloudHowTo} onMenuClosed={endHowTo} />}
       <OrganizationIdentity compact={density === "icons"} />
-      {phone ? null : simple ? searchShown && <SidebarSearchPill query={query} onQuery={setQuery} onClose={closeSearch} /> : <div className={cn("pt-1 pb-3", density === "icons" ? "hidden" : "px-3")}>
+      {phone ? null : simpleDesk ? <SimpleSearchPill /> : simple ? searchShown && <SidebarSearchPill query={query} onQuery={setQuery} onClose={closeSearch} /> : <div className={cn("pt-1 pb-3", density === "icons" ? "hidden" : "px-3")}>
         <div className={cn("flex h-8 items-center gap-2 rounded-full px-3 focus-within:ring-focus", ELEVATED_CONTROL)}>
           <Search size={15} className="shrink-0 text-ink-secondary" />
           <input
@@ -1317,7 +1322,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
           />
         </div>
       </div>}
-      {!q && <TeamSideSwitch compact={density === "icons"} listOnly={phone} />}{!q && <SidebarInboxRow icons={density === "icons"} large={!advanced} running={attentionHasRunningWork(attention)} onOpened={phone ? onClose : undefined} />}
+      {!q && <TeamSideSwitch compact={density === "icons"} listOnly={phone} />}{!q && <SidebarInboxRow icons={density === "icons"} large={!advanced} running={attentionHasRunningWork(attention)} onOpened={phone ? onClose : undefined} />}{!q && simpleDesk && <SimpleAutomationsRow />}
       {universalPins && pinnedBots.length > 0 && !simpleDesk && (
         <div
           data-sidebar-universal-pins=""
@@ -1359,7 +1364,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
           onToggle={layoutInteractive ? () => toggleSection(PINNED_THREADS_SECTION_ID) : undefined}
         />
       )}
-      {tiles && <SidebarTileGrid primary={primary} pinned={pinnedBots} row={botRow} corner={corner} />}
+      {tiles && <SidebarTileGrid primary={primary} pinned={pinnedBots} others={unsectionedBots} row={botRow} onAdd={teamSettingsAllowed !== false || state.config?.team ? () => dispatch({ type: "newBot" }) : undefined} />}
       {simpleDesk && !tiles && <SidebarNoBots />}
       </GlassBar>
 
@@ -1395,7 +1400,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
               id === PINNED_SECTION_ID
                 ? pinnedBots
                 : id === BOTS_SECTION_ID
-                  ? unsectionedBots
+                  ? simpleDesk ? [] : unsectionedBots
                   : sectionName
                     ? sectionedBots.filter((bot) => bot.section === sectionName)
                     : [];
@@ -1440,6 +1445,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
                     onToggle={layoutInteractive ? () => toggleSection(id) : undefined}
                     {...layout.header(id)} naming={drops.naming(sectionName)} dropInto={drops.into(sectionName)}
                     onDelete={!simple && !remoteClient && sectionName ? () => setDeletingTeam(sectionName) : undefined}
+                    onAdd={simpleDesk && id === CHANNELS_SECTION_ID ? () => setNewRoom(true) : undefined} addLabel={t("sidebar.newChannel.title")}
                   />
                 )}
                 {collapsed && queued.length > 0 && <button type="button" onClick={() => toggleSection(id)}
