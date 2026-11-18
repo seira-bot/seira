@@ -68,7 +68,7 @@ describe("sweepOrphanedTempFolders", () => {
 
   it("removes the content of the folder, not only the folder", () => {
     const { base, now } = fixture();
-    const old = folder(base, `${PREFIX}${DEAD}-full123`, now, 2 * ORPHAN_MIN_AGE_MS);
+    const old = folder(base, `${PREFIX}${DEAD}-full12`, now, 2 * ORPHAN_MIN_AGE_MS);
     mkdirSync(join(old, "deep"));
     writeFileSync(join(old, "deep", "file.json"), "{}");
     const when = new Date(now - 2 * ORPHAN_MIN_AGE_MS);
@@ -91,8 +91,8 @@ describe("sweepOrphanedTempFolders", () => {
 
   it("uses an age of 10 minutes: 1 ms short stays, exactly 10 minutes goes", () => {
     const { base, now } = fixture();
-    const shortOfIt = folder(base, `${PREFIX}${DEAD}-short12`, now, ORPHAN_MIN_AGE_MS - 1);
-    const exact = folder(base, `${PREFIX}${DEAD}-exact12`, now, ORPHAN_MIN_AGE_MS);
+    const shortOfIt = folder(base, `${PREFIX}${DEAD}-short1`, now, ORPHAN_MIN_AGE_MS - 1);
+    const exact = folder(base, `${PREFIX}${DEAD}-exact1`, now, ORPHAN_MIN_AGE_MS);
 
     const result = sweepOrphanedTempFolders(PREFIX, { dir: base, now, isAlive: dead });
 
@@ -103,9 +103,9 @@ describe("sweepOrphanedTempFolders", () => {
   it("keeps what is not a folder of this kind, however old", () => {
     const { base, now } = fixture();
     const target = folder(base, "target-dir", now, 48 * 60 * MINUTE);
-    const file = join(base, `${PREFIX}${DEAD}-file123`);
+    const file = join(base, `${PREFIX}${DEAD}-file12`);
     writeFileSync(file, "x");
-    const link = join(base, `${PREFIX}${DEAD}-link123`);
+    const link = join(base, `${PREFIX}${DEAD}-link12`);
     symlinkSync(target, link);
     const old = new Date(now - 48 * 60 * MINUTE);
     utimesSync(file, old, old);
@@ -124,7 +124,7 @@ describe("sweepOrphanedTempFolders", () => {
 
   it("keeps a folder of another user", () => {
     const { base, now } = fixture();
-    const theirs = folder(base, `${PREFIX}${DEAD}-theirs1`, now, 48 * 60 * MINUTE);
+    const theirs = folder(base, `${PREFIX}${DEAD}-theirs`, now, 48 * 60 * MINUTE);
     const owner = process.getuid?.();
     // A host without user ids (Windows) skips the owner check by design.
     if (owner === undefined) return;
@@ -137,8 +137,8 @@ describe("sweepOrphanedTempFolders", () => {
 
   it("reports a folder that it cannot remove, and still removes the others", () => {
     const { base, now } = fixture();
-    const stuck = folder(base, `${PREFIX}${DEAD}-stuck12`, now, 2 * ORPHAN_MIN_AGE_MS);
-    const free = folder(base, `${PREFIX}${DEAD}-free123`, now, 2 * ORPHAN_MIN_AGE_MS);
+    const stuck = folder(base, `${PREFIX}${DEAD}-stuck1`, now, 2 * ORPHAN_MIN_AGE_MS);
+    const free = folder(base, `${PREFIX}${DEAD}-free12`, now, 2 * ORPHAN_MIN_AGE_MS);
 
     const result = sweepOrphanedTempFolders(PREFIX, {
       dir: base,
@@ -156,8 +156,8 @@ describe("sweepOrphanedTempFolders", () => {
   it.skipIf(process.platform === "win32")("treats a process that it cannot signal as running, and one that does not exist as gone", () => {
     const { base, now } = fixture();
     // Process 1 exists on every host that has one; a refused signal (EPERM) must not make it look gone.
-    const init = folder(base, `${PREFIX}1-init123`, now, 2 * ORPHAN_MIN_AGE_MS);
-    const none = folder(base, `${PREFIX}${DEAD}-none123`, now, 2 * ORPHAN_MIN_AGE_MS);
+    const init = folder(base, `${PREFIX}1-init12`, now, 2 * ORPHAN_MIN_AGE_MS);
+    const none = folder(base, `${PREFIX}${DEAD}-none12`, now, 2 * ORPHAN_MIN_AGE_MS);
 
     sweepOrphanedTempFolders(PREFIX, { dir: base, now });
 
