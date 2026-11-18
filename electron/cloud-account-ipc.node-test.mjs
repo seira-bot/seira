@@ -90,7 +90,7 @@ test("main opens a checkout only for a plan the offer sells now and one of this 
   const offer = { plans: [{ tier: "starter", amount: 1500 }, { tier: "pro", amount: 4900, trialDays: 7 }], recommended: "pro" };
   const context = vm.createContext({ ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
     localOnly: localOrigin.localOnly, workspaceSenderAllowed: environments.workspaceSenderAllowed, mainWindow: { webContents: contents },
-    rendererOrigin: () => origin, environmentsState: { environments: [], activeId: "local" }, CHECKOUT_SOURCES, cloudOffersReady: async () => allowed,
+    rendererOrigin: () => origin, environmentsState: { environments: [], activeId: "local" }, CHECKOUT_SOURCES, cloudSalesReady: async () => allowed,
     ensureCloudAccount: () => ({ offer: async () => offer, checkout: async (...args) => { calls.push(args); return { outcome: "opened", state: { status: "connected" } }; } }),
     connectCloudHome: () => ({ status: "connected" }),
   });

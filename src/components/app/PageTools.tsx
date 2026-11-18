@@ -20,6 +20,7 @@ import { appDownloadPath, publishAppPage, unpublishPage } from "./app-api";
 import { AppFrame, type AppFrameHandle } from "./AppFrame";
 import type { AppSelection } from "./app-frame-host";
 import { ASK_CHIP, ASK_CHIP_IDLE, ASK_CHIP_PICKED, ASK_PRIMARY_BUTTON } from "../AskCard";
+import { cloudSells } from "@/lib/cloud-sale";
 
 /** A page starts at this height in the chat and grows to its content up to the cap, then scrolls inside. */
 export const PAGE_HEIGHT = { start: 520, cap: 560 } as const;
@@ -295,7 +296,7 @@ export function PageNotes({ version, point, share, save, room, className }: Pick
     rows.push(
       <div key="refused" role="alert" className="flex items-center gap-2 rounded-2xl bg-inset px-3 py-2 text-[13px] text-ink-secondary">
         <span dir="auto" className="min-w-0 flex-1">{state.text}</span>
-        {state.card?.upgrade && window.ogb?.cloudAccount && !window.ogb.remoteClient?.active && (
+        {state.card?.upgrade && cloudSells() && window.ogb?.cloudAccount && !window.ogb.remoteClient?.active && (
           <button type="button" className={ASK_PRIMARY_BUTTON} onClick={() => dispatch({ type: "openCloudAdd", source: "app_pages" })}>{t("chat.page.morePages")}</button>
         )}
       </div>,

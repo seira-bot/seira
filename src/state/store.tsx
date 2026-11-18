@@ -405,6 +405,7 @@ import type { BrowserEngineSummary, BrowserProfile, ConfigStatus, ManagedPolicyS
 export type { BrowserEngineSummary, BrowserProfile, ConfigStatus, ManagedPolicySummary };
 
 import { configStatusFromFrame, type ConfigStatusFrame } from "@/lib/config-status-frame";
+import { cloudSells } from "@/lib/cloud-sale";
 export { configStatusFromFrame, type ConfigStatusFrame };
 
 export type { EngineInstall } from "./engine-install";
@@ -1502,10 +1503,13 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     }
     case "openCloudAdd":
+      // Sign-in stays for an account that has a Cloud; nothing starts a purchase until Seira's Cloud sells a plan.
+      if (!action.signIn && !cloudSells()) return state;
       return { ...state, cloudAdd: state.cloudAdd ?? { source: action.source, ...(action.signIn ? { signIn: true as const } : {}) }, cloudHowTo: false };
     case "closeCloudAdd":
       return state.cloudAdd ? { ...state, cloudAdd: null } : state;
     case "cloudHowTo":
+      if (action.open && !cloudSells()) return state;
       return state.cloudHowTo === action.open ? state : { ...state, cloudHowTo: action.open };
     case "toggleTour": {
       const open = action.open ?? !state.tourOpen;
