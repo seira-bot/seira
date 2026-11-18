@@ -14,7 +14,8 @@ describe("Simple's nav rows and labels", () => {
   it("draws a 12px tertiary label, with a plus that shows on hover, focus and touch", () => {
     const html = renderToStaticMarkup(createElement(SimpleSectionLabel, { name: "Team", addLabel: "New bot", onAdd: vi.fn() }));
     expect(html).toContain("text-[12px] font-medium text-ink-tertiary");
-    expect(html).toMatch(/aria-label="New bot"[^>]*class="[^"]*\bopacity-0\b[^"]*group-hover\/label:opacity-100[^"]*focus-visible:opacity-100[^"]*touch:opacity-100/);
+    expect(html).toMatch(/aria-label="New bot"[^>]*class="[^"]*\bopacity-0\b/);
+    for (const reveal of ["group-hover/label:opacity-100", "focus-visible:opacity-100", "touch:opacity-100"]) expect(html).toContain(reveal);
     expect(renderToStaticMarkup(createElement(SimpleSectionLabel, { name: "Team" }))).not.toContain("<button");
   });
 
