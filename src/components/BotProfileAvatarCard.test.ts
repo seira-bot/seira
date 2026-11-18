@@ -60,9 +60,9 @@ describe("BotProfileAvatarCard hair picker", () => {
     expect(markup).not.toContain(">Diwali<");
   });
 
-  it("hides the facial features row on Seira and keeps it on other bodies", () => {
+  it("offers no facial features row", () => {
     expect(renderCard(makeBot())).not.toContain("data-avatar-face-color");
-    expect(renderCard(makeBot({ mascotBody: "cursor" }))).toContain("data-avatar-face-color");
+    expect(renderCard(makeBot({ mascotBody: "cursor" }))).not.toContain("data-avatar-face-color");
   });
 
   it("marks the current hair pressed, defaulting to Seira", () => {
