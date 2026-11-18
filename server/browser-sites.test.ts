@@ -271,7 +271,7 @@ describe("importing cookies into a bot browser", () => {
       imported("a", ".shop.test", { sameSite: "Lax", expires: 1_900_000_000 }),
       imported("b", "app.shop.test", { sameSite: "None" }),
     ], { engine: chrome.engine });
-    expect(result).toEqual({ running: true, sites: [{ site: "shop.test", cookies: 1, storage: 0 }, { site: "app.shop.test", cookies: 1, storage: 0 }, { site: "www.example.com", cookies: 1, storage: 0 }].sort((a, b) => a.site.localeCompare(b.site)) });
+    expect(result).toEqual({ running: true, sites: [{ site: "shop.test", cookies: 2, storage: 0 }, { site: "www.example.com", cookies: 1, storage: 0 }] });
     const call = chrome.calls.find((entry) => entry.method === "Network.setCookies")!;
     expect(call.sessionId).toBe("on-page-1");
     expect(call.params.cookies).toEqual([
