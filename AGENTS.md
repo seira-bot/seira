@@ -27,3 +27,22 @@ name, a type, an extracted function, one shared helper. A rule ("never X",
 rule that guards correctness; fix the code.
 
 More specific `AGENTS.md` files override this note within their directories.
+
+## Local details stay local
+
+This repository is public. A committed file must work on any machine and must not
+describe one person's machine or private workflow.
+
+- Never commit an absolute home path, a path to a personal tool, a host name, an
+  SSH alias, a private IP address, a user name, `ls -l` output, or a secret.
+- Read such values from environment variables. Document each variable in an
+  `.env.example`, and keep your own values in a `*.local` file (gitignored).
+- Keep specs, plans, done notes, research and business notes in `internal/`
+  (gitignored). Publish a note under `docs/` only when contributors need it, and
+  never link a public file to `internal/`.
+- Put notes for your own machine in `AGENTS.local.md` (gitignored). Read it when
+  it exists.
+- `node scripts/check-local-leaks.mjs` finds these details in the lines you add.
+  The pre-commit hook in `scripts/git-hooks/` runs it on the staged lines. Put
+  your own user name, host aliases and LAN addresses in `.leakcheck.local`, one
+  regular expression per line.

@@ -254,14 +254,14 @@ They still say OpenMausBot in some places.
 
 ## Contributing
 
-Pull requests are welcome.
-[CONTRIBUTING.md](CONTRIBUTING.md) holds the code rules, and [DESIGN.md](DESIGN.md) holds the design rules.
-Both files come from upstream, so read "OpenMausBot" as "Seira".
+Issues and pull requests are welcome.
+[CONTRIBUTING.md](CONTRIBUTING.md) explains how a change lands, the [code guide](docs/contributing.md) holds the code rules,
+and [DESIGN.md](DESIGN.md) holds the design rules. The last two come from upstream, so read "OpenMausBot" as "Seira".
 
 The driver contract in [`server/contracts.ts`](server/contracts.ts) is small.
 To add a provider, add one file in [`server/drivers/`](server/drivers/) and register it with one line.
 
-Do not post a security problem in public. Report it in private to the maintainers of [seira-bot](https://github.com/seira-bot).
+Do not post a security problem in public. Report it through [private vulnerability reporting](https://github.com/seira-bot/seira/security/advisories/new).
 If the problem is also in OpenMausBot, report it upstream too, as [SECURITY.md](SECURITY.md) describes.
 
 ## License and credits
