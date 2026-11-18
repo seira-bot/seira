@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 // The Simple bot panel in a real DOM, where effects run and focus moves: named links, Escape and focus, and the chat
 // header's pill that opens it.
+import { PICKER_BODY_IDS } from "../../../shared/bot-body";
 import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -403,7 +404,7 @@ describe("one body for every bot", () => {
     await settle();
   };
 
-  it("gives this bot's body to every other bot that wears another one", async () => {
+  it.skipIf(PICKER_BODY_IDS.length < 2)("gives this bot's body to every other bot that wears another one", async () => {
     fixture.bots = [roundBot, { ...bot, id: "ada", mascotBody: "cursor" }, { ...bot, id: "bob" }, { ...bot, id: "cara", mascotBody: "circle" }];
     await openEditor(roundBot);
     expect(everywhere()?.textContent).toBe("Give this body to the other bots (2)");
@@ -414,7 +415,7 @@ describe("one body for every bot", () => {
     ]);
   });
 
-  it("on a Team Cloud, leaves out the bots this person may not restyle", async () => {
+  it.skipIf(PICKER_BODY_IDS.length < 2)("on a Team Cloud, leaves out the bots this person may not restyle", async () => {
     fixture.team = { admin: false, me: { email: "me@example.test" } };
     fixture.bots = [
       roundBot,
