@@ -26,7 +26,7 @@ vi.mock("@/lib/analytics", () => ({ emailGateDone: () => false }));
 // The gate's job is choosing; the flow itself has its own recipe.
 vi.mock("./WelcomeFlow", () => ({ WelcomeFlow: () => null }));
 vi.mock("@/components/Avatar", () => ({ MausAvatar: () => null }));
-import { SharedWorkspaceHint } from "./SharedWorkspaceHint";
+import { resetSharedHint, SharedWorkspaceHint } from "./SharedWorkspaceHint";
 import { useWelcomeViewer, WelcomeGate } from "./WelcomeGate";
 import { WelcomeFlow } from "./WelcomeFlow";
 
@@ -72,6 +72,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());
   setLocale("en");
   resetTeamWelcome();
+  resetSharedHint();
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -146,6 +147,8 @@ describe("who gets the welcome flow", () => {
     expect(tree?.type).toBe(SharedWorkspaceHint);
     expect(html).toContain("Your team&#x27;s shared Seira");
     expect(html).not.toContain("role=\"dialog\"");
+    expect(html, "the notice cards' corner, below the chat and its header").toMatch(/class="fixed bottom-4 left-\[calc\(var\(--rail-beside,0px\)_\+_1rem\)\] [^"]*w-\[300px\]/);
+    expect(html).not.toMatch(/\btop-/);
     fixture.values = [];
     const hint = render(() => SharedWorkspaceHint({ replay: false, onClose: vi.fn() }));
     const gotIt = (hint.tree!.props.children as Node[]).flatMap(function all(node): Node[] {
@@ -160,9 +163,11 @@ describe("who gets the welcome flow", () => {
     expect(localStorage.getItem("omb.onboarding.sharedWorkspaceHint")).toBe("1");
     fixture.values = [];
     expect(render(() => SharedWorkspaceHint({ replay: false, onClose: vi.fn() })).html).toBe("");
+    expect(gate({ hosted: true, canSave: false }).tree, "closed for the gate too").toBeNull();
     fixture.values = [];
     expect(render(() => SharedWorkspaceHint({ replay: true, onClose: vi.fn() })).html).toContain("shared Seira");
     vi.stubGlobal("localStorage", { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } });
+    resetSharedHint();
     fixture.values = [];
     expect(render(() => SharedWorkspaceHint({ replay: false, onClose: vi.fn() })).html).toContain("shared Seira");
   });
