@@ -17,7 +17,7 @@ export function useWearsSeira(bot: BotAvatarProps["bot"]): boolean {
 }
 
 /** The bot's live face for one moment: Seira's character, with the bot's hair style, hair colour and accessories, when the
- * bot wears her. A bot with its own picture or another body keeps `fallback`, so the face a person chose never turns into someone else's. */
+ * bot wears her. A bot with its own picture keeps `fallback`, so the picture a person chose never turns into someone else's face. */
 export function BotCharacter({ bot, state, size, fallback }: {
   bot: CharacterBot;
   state: SeiraState;

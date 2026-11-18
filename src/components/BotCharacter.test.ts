@@ -24,15 +24,16 @@ describe("BotCharacter", () => {
     expect(markup).not.toContain("data-fallback");
   });
 
-  it("keeps the bot's own face when it has an uploaded picture or another body", () => {
+  it("keeps the bot's own face when it has an uploaded picture", () => {
     expect(render({ color: "blue", avatarUrl: "/api/attachments/b.png", avatarCrop: "circle" })).toContain("data-fallback");
-    expect(render({ color: "blue", mascotBody: "cursor" })).toContain("data-fallback");
   });
 
   it("draws every Seira hair style, and reads an unknown body as Seira", () => {
     expect(render({ color: "blue", mascotBody: "bob" })).toContain('data-seira-state="idle"');
     expect(render({ color: "blue", mascotBody: "none" })).toContain('data-seira-state="idle"');
-    expect(render({ color: "blue", mascotBody: "cursor" })).toContain("data-fallback");
+    const old = render({ color: "blue", mascotBody: "cursor" });
+    expect(old).toContain('data-hair-style="seira"');
+    expect(old).not.toContain("data-fallback");
   });
 
   it("passes the hair style and the accessories of the bot to the character", () => {

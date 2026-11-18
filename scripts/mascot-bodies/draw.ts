@@ -233,6 +233,13 @@ const d1 = (q: Cubic, t: number): Point => {
   const u = 1 - t
   return add(add(mul(sub(q[1], q[0]), 3 * u * u), mul(sub(q[2], q[1]), 6 * u * t)), mul(sub(q[3], q[2]), 3 * t * t))
 }
+// The error is measured at the samples only. A near-singular fit can loop far out between two samples and still pass,
+// with handles much longer than the run. Such a cubic is not a fit.
+const MAX_HANDLE = 10
+const runaway = (q: Cubic): boolean => {
+  const chord = Math.hypot(...sub(q[3], q[0]))
+  return Math.hypot(...sub(q[1], q[0])) > MAX_HANDLE * chord || Math.hypot(...sub(q[2], q[3])) > MAX_HANDLE * chord
+}
 const d2 = (q: Cubic, t: number): Point =>
   add(mul(add(sub(q[2], mul(q[1], 2)), q[0]), 6 * (1 - t)), mul(add(sub(q[3], mul(q[2], 2)), q[1]), 6 * t))
 
@@ -282,6 +289,7 @@ function fitCubic(d: Point[], t1: Point, t2: Point, err: number, out: Cubic[]): 
         split = i
       }
     }
+    if (runaway(q)) worst = Infinity
   }
   measure()
   if (worst < err * err) {

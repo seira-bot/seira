@@ -9,7 +9,7 @@ import { isBrandBody } from "../../shared/bot-body";
 import { MAUS_COLORS } from "@/lib/mascot";
 import { hairGradientMap } from "@/lib/seira-hair";
 import { accessorySprites } from "@/lib/seira-accessories";
-import type { MascotAccessoryId } from "../../shared/mascot-accessories";
+import { MASCOT_ACCESSORY_IDS, type MascotAccessoryId } from "../../shared/mascot-accessories";
 
 const STYLE_IDS = BRAND_BODY_IDS.filter((id) => id !== "seira");
 
@@ -96,9 +96,11 @@ describe("CarvedAvatar", () => {
   it("places every accessory on every hair style, and glasses on the eyes", () => {
     for (const id of BRAND_BODY_IDS) {
       const eyes = CARVED_BODIES[id].eyes;
-      const sprites = accessorySprites(id, ["glasses", "earring", "cap", "scarf"], eyes);
-      expect(sprites.map((sprite) => sprite.id), id).toEqual(["glasses", "earring", "cap", "scarf"]);
-      const glasses = sprites[0]!;
+      for (const accessory of MASCOT_ACCESSORY_IDS) {
+        expect(accessorySprites(id, [accessory], eyes).map((sprite) => sprite.id), `${id} ${accessory}`).toEqual([accessory]);
+      }
+      const [glasses] = accessorySprites(id, ["glasses"], eyes);
+      if (!glasses) throw new Error(`${id} has no glasses`);
       expect(Math.abs(glasses.x + glasses.width / 2 - eyes.cx), id).toBeLessThan(3);
       expect(glasses.y, id).toBeLessThan(eyes.cy);
       expect(glasses.y + glasses.height, id).toBeGreaterThan(eyes.cy);
@@ -126,7 +128,7 @@ describe("CarvedAvatar", () => {
     expect(red![12]).toBeGreaterThan(red![10]!);
   });
 
-  it.each(["pumpkin", "laddu", "bob"] as const)("is what MausAvatar wears for the %s body", (bodyId) => {
+  it.each(["seira-long", "bob", "none"] as const)("is what MausAvatar wears for the %s body", (bodyId) => {
     const markup = renderToStaticMarkup(createElement(MausAvatar, { color: "orange", bodyId, animated: false }));
     expect(markup).toContain(`data-carved-body="${bodyId}"`);
     expect(markup).not.toContain("linearGradient");
