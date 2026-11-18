@@ -2,7 +2,7 @@
 # Seira on a server of your own: checks the server, then installs the Seira server with HTTPS on your domain.
 # Running it again repairs or updates the install and never touches your data.
 #
-#   curl -fsSL https://raw.githubusercontent.com/milind-soni/OpenMausBot/main/deploy/install.sh | sudo sh -s -- --domain maus.example.com
+#   curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh | sudo sh -s -- --domain maus.example.com
 #   ... | sudo sh -s -- --check --domain maus.example.com    only checks the server; changes nothing
 #   ... | sudo sh -s -- --uninstall                          stops the server; keeps your data
 #   ... | sudo sh -s -- --domain maus.example.com <code>     also connects the server to Seira with a one-time code
@@ -15,13 +15,13 @@ set -eu
 settings() {
   SYSROOT="${OMB_INSTALL_SYSROOT:-}"
   INSTALL_DIR="${OMB_INSTALL_DIR:-/opt/openmausbot}"
-  IMAGE_REPO=milind-soni/openmausbot
-  RELEASES_URL=https://api.github.com/repos/milind-soni/OpenMausBot/releases/latest
+  IMAGE_REPO=seira-bot/seira
+  RELEASES_URL=https://api.github.com/repos/seira-bot/seira/releases/latest
   ADMIN_URL="${MAUSBOT_ADMIN_URL:-https://cloud.openmausbot.com}"
-  SCRIPT_URL=https://raw.githubusercontent.com/milind-soni/OpenMausBot/main/deploy/install.sh
+  SCRIPT_URL=https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh
   # Where the files this installer places come from: this repository at the tag of the version it installs, and at
   # main when that tag does not have them. OMB_INSTALL_SOURCE names one copy to use instead (https://… or file:///…).
-  REPOSITORY_FILES=https://raw.githubusercontent.com/milind-soni/OpenMausBot
+  REPOSITORY_FILES=https://raw.githubusercontent.com/seira-bot/seira
   SOURCE_ASKED="${OMB_INSTALL_SOURCE:-}"
   SOURCE=""
   SOURCE_NAME=""
