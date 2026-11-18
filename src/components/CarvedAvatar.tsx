@@ -324,7 +324,7 @@ function CarvedAvatarComponent(
           )}
           {seira && tint && (
             <mask id={`hair-${uid}`} maskUnits="userSpaceOnUse" x="0" y="0" width="240" height="240">
-              <image href={pictures.hair} x="0" y="0" width="240" height="240" />
+              <image href={seira.hair} x="0" y="0" width="240" height="240" />
             </mask>
           )}
         </defs>
