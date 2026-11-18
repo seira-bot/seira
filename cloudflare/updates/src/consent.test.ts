@@ -143,9 +143,8 @@ describe("opt-in", () => {
 });
 
 describe("withdraw", () => {
-  it.each(["withdrawn", "declined"])("marks a known receipt withdrawn on %s (AC-04)", async (status) => {
+  it.each(["withdrawn", "declined"])("unsubscribes a pending address on %s (AC-04)", async (status) => {
     const h = updatesHarness();
-    await h.confirmed("ana@example.test");
     const { body } = await h.optIn("ana@example.test");
     const response = await h.consent({ status, receipt: body.receipt });
     expect(response.status).toBe(200);
@@ -153,11 +152,44 @@ describe("withdraw", () => {
     const subscriber = h.subscriber("ana@example.test")!;
     expect(subscriber.status).toBe("unsubscribed");
     expect(subscriber.unsubscribed_at).not.toBeNull();
-    expect(h.receipts("ana@example.test").some((row) => row.withdrawn_at !== null)).toBe(true);
+    expect(h.receipts("ana@example.test")[0]!.withdrawn_at).not.toBeNull();
 
     const again = await h.consent({ status, receipt: body.receipt });
     expect(again.status).toBe(200);
     expect(await again.json()).toEqual({ ok: true });
+  });
+
+  it.each(["withdrawn", "declined"])("unsubscribes a confirmed address when the receipt came before the confirmation on %s", async (status) => {
+    const h = updatesHarness();
+    const { body } = await h.optIn("ana@example.test");
+    await h.postForm("/confirm", { t: h.confirmToken() });
+    h.d1.db.exec("UPDATE receipts SET created_at = created_at - 5");
+    const response = await h.consent({ status, receipt: body.receipt });
+    expect(await response.json()).toEqual({ ok: true });
+    expect(h.subscriber("ana@example.test")?.status).toBe("unsubscribed");
+    expect(h.receipts("ana@example.test")[0]!.withdrawn_at).not.toBeNull();
+  });
+
+  it.each(["withdrawn", "declined"])("keeps a confirmed address when the receipt came after the confirmation on %s", async (status) => {
+    const h = updatesHarness();
+    await h.confirmed("ana@example.test");
+    const { body } = await h.optIn("ana@example.test");
+    h.d1.db.exec("UPDATE receipts SET created_at = created_at + 5 WHERE withdrawn_at IS NULL AND receipt_hash = (SELECT receipt_hash FROM receipts ORDER BY rowid DESC LIMIT 1)");
+    const response = await h.consent({ status, receipt: body.receipt });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+    expect(h.subscriber("ana@example.test")?.status).toBe("confirmed");
+    expect(h.receipts("ana@example.test").filter((row) => row.withdrawn_at !== null)).toHaveLength(1);
+  });
+
+  it("answers 200 and changes nothing for an unsubscribed address", async () => {
+    const h = updatesHarness();
+    const { body } = await h.optIn("ana@example.test");
+    await h.consent({ status: "withdrawn", receipt: body.receipt });
+    const before = h.subscriber("ana@example.test");
+    const response = await h.consent({ status: "declined", receipt: body.receipt });
+    expect(await response.json()).toEqual({ ok: true });
+    expect(h.subscriber("ana@example.test")).toEqual(before);
   });
 
   it("answers 404 unknown_receipt for an unknown receipt (AC-05)", async () => {

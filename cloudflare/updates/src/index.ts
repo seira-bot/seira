@@ -96,12 +96,14 @@ async function withdraw(body: Record<string, unknown>, env: AppEnv) {
   const receipt = body.receipt;
   if (typeof receipt !== "string" || !TOKEN_PATTERN.test(receipt)) return invalidRequest();
   const hash = await sha256(receipt);
-  const row = await env.DB.prepare("SELECT email FROM receipts WHERE receipt_hash = ?").bind(hash).first<{ email: string }>();
+  const row = await env.DB.prepare("SELECT email, created_at FROM receipts WHERE receipt_hash = ?").bind(hash).first<{ email: string; created_at: number }>();
   if (!row) return json({ error: "unknown_receipt" }, 404);
   const now = nowSeconds();
   await env.DB.batch([
     env.DB.prepare("UPDATE receipts SET withdrawn_at = COALESCE(withdrawn_at, ?) WHERE receipt_hash = ?").bind(now, hash),
-    unsubscribeStatement(env, "email", row.email, now),
+    env.DB.prepare(
+      "UPDATE subscribers SET status = 'unsubscribed', unsubscribed_at = ?, updated_at = ? WHERE email = ? AND (status = 'pending' OR (status = 'confirmed' AND confirmed_at >= ?))",
+    ).bind(now, now, row.email, row.created_at),
   ]);
   return json({ ok: true });
 }
