@@ -681,9 +681,9 @@ const MessagesList = memo(function MessagesList({
             <div key={item.id} className="contents">
               {newDay && <DaySeparator at={first.at} today={today} simple={simple} />}
               {divider}
-              {item.kind === "turn"
+              {item.kind === "turn" && !simple
                 ? <TurnNarrationRun label={item.label} title={t("chat.run.showSteps")} forceOpen={forceOpen}>{steps}</TurnNarrationRun>
-                : <ActivityRun messages={item.messages} forceOpen={forceOpen}>{steps}</ActivityRun>}
+                : <ActivityRun messages={item.messages} label={item.kind === "turn" ? item.label : undefined} forceOpen={forceOpen}>{steps}</ActivityRun>}
             </div>
           );
         }

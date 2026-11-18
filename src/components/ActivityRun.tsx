@@ -11,17 +11,20 @@ import { BOT_TURN_INDENT } from "./chat-bubble";
 /** One card for a run of tool steps: the summary and a check, with the steps listed under a thin line once opened. */
 export function ActivityRun({
   messages,
+  label,
   forceOpen = false,
   children,
 }: {
   messages: Message[];
+  /** A turn's own headline ("Worked for 29s") in place of the sum of its steps. */
+  label?: string;
   forceOpen?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(forceOpen);
   const bodyId = useId();
   const advanced = useAdvancedMode();
-  const summary = advanced ? describeRun(messages) : describeRun(messages, toolStepLabel);
+  const summary = label ?? (advanced ? describeRun(messages) : describeRun(messages, toolStepLabel));
   useEffect(() => {
     if (forceOpen) setOpen(true);
   }, [forceOpen]);
