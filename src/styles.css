@@ -1260,11 +1260,6 @@
 [data-chat-bubble="simple"] .chat-md > .md-heading:first-child {
   margin-top: 0;
 }
-/* A short line keeps the tight chat bubble; a structured reply gets room to breathe. */
-[data-chat-bubble="simple"]:has(> .chat-md > :is(.md-heading, ul, ol, blockquote), > .chat-md pre),
-[data-reply-bubble] {
-  padding: 12px 16px;
-}
 /* A table inside a reply is drawn in lines on the bubble, not as another grey box: a hairline edge, a faint header. */
 [data-reply-bubble] [data-table-card] {
   width: 100%;
@@ -1291,6 +1286,17 @@
 }
 [data-reply-bubble] [data-table-card] thead {
   background: color-mix(in srgb, var(--color-card), var(--color-ink) 4%);
+}
+/* A header names its column quietly; a header or a number stays on one line so its column keeps its width. */
+[data-reply-bubble] [data-table-card] th,
+[data-reply-bubble] [data-table-card] th button {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-ink-tertiary);
+  white-space: nowrap;
+}
+[data-reply-bubble] [data-table-card] td[style*="text-align: right"] > div {
+  white-space: nowrap;
 }
 :root[data-skin="daylight"] [data-reply-bubble] [data-table-card] thead {
   background: color-mix(in srgb, var(--color-card), var(--color-ink) 3%);

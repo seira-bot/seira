@@ -13,14 +13,20 @@ export const SIMPLE_BUBBLE_TEXT = "text-[15px] leading-[22px]";
 
 const SIMPLE_BUBBLE_SHAPE = `min-w-9 rounded-[18px] px-3 py-[7px] ${SIMPLE_BUBBLE_TEXT}`;
 
-/** Simple mode's bot bubble: the one surface tone. */
-export const SIMPLE_BOT_BUBBLE = `${SIMPLE_BUBBLE_SHAPE} bg-card text-ink`;
+/** Simple mode's bot reply: prose on the canvas, with no fill, so a long answer reads as a page. */
+export const SIMPLE_BOT_BUBBLE = `min-w-0 ${SIMPLE_BUBBLE_TEXT} text-ink`;
+
+/** The room a bot turn leaves on its start side for the 32px avatar and its 14px gap. */
+export const BOT_TURN_INDENT = "ps-[46px]";
 
 /** Simple mode's own bubble; the bot's colour, when on, comes from its inline style. */
 export const SIMPLE_USER_BUBBLE = `${SIMPLE_BUBBLE_SHAPE} bg-bubble-user font-normal`;
 
-/** At most 560 wide, 80% of the column, and always 82px short of it, so a reply never meets the far edge. */
-export const SIMPLE_BUBBLE_MAX = "max-w-[min(var(--chat-bubble-max),var(--chat-bubble-pct),calc(100%-82px))]";
+/** A bot reply runs at most 44rem wide, a comfortable line length for prose. */
+export const SIMPLE_BUBBLE_MAX = "max-w-[min(44rem,100%)]";
+
+/** The person's own bubble: at most 560 wide, 80% of the column, and always 82px short of it. */
+export const SIMPLE_USER_MAX = "max-w-[min(var(--chat-bubble-max),var(--chat-bubble-pct),calc(100%-82px))]";
 
 /** A plain-text bot bubble drawn outside the transcript's own Bubble: a widget's text fallback or a row that failed. */
 export function plainBotBubble(simple: boolean): string {
@@ -31,6 +37,9 @@ export function plainBotBubble(simple: boolean): string {
 
 /** Simple mode's transcript spaces rows 16px apart (ChatView's data-simple-rows); a row in the same group pulls up 12px, to 4px. */
 export const SIMPLE_STACKED = "-mt-3";
+
+/** Paragraphs of one bot turn sit 8px apart: more air than joined bubbles, because prose has no fill to hold it together. */
+export const BOT_STACKED = "-mt-2";
 
 /** Where a Simple bubble meets its group's neighbours: those corners tighten to 6px on the bubble's own side. */
 export interface BubbleJoin {

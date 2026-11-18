@@ -1,16 +1,18 @@
 import { Fragment } from "react";
 
 import { BotAvatar } from "./Avatar";
+import { BotTurnHead } from "./BotTurnHead";
+import { BOT_TURN_INDENT } from "./chat-bubble";
 import { cn } from "@/lib/cn";
 import { MAUS_COLOR_NAMES, normalizeState, type MausColor } from "@/lib/mascot";
 import type { RoomAddressee } from "@/lib/room-addressees";
 import type { Bot } from "@/state/store";
 
-function isPaletteColor(color: string | undefined): color is MausColor {
+export function isPaletteColor(color: string | undefined): color is MausColor {
   return (MAUS_COLOR_NAMES as readonly string[]).includes(color ?? "");
 }
 
-function Name({ name, color }: { name: string; color?: string }) {
+export function SpeakerName({ name, color }: { name: string; color?: string }) {
   const known = isPaletteColor(color);
   return (
     <span
@@ -20,7 +22,19 @@ function Name({ name, color }: { name: string; color?: string }) {
   );
 }
 
-export function ClusterLabel({ bot, name, color, to = [] }: { bot?: Bot; name: string; color: string; to?: readonly RoomAddressee[] }) {
+export function ClusterLabel({ bot, name, color, to = [], time, onOpen }: { bot?: Bot; name: string; color: string; to?: readonly RoomAddressee[]; time?: string; onOpen?: () => void }) {
+  const addressees = to.length > 0 && (
+    <>
+      <span className="inline-block text-[13px] text-ink-tertiary rtl:-scale-x-100">→</span>
+      {to.map((addressee, index) => (
+        <Fragment key={addressee.key}>
+          <SpeakerName name={addressee.name} color={addressee.color} />
+          {index < to.length - 1 && <span className="-ms-1 text-[13px] text-ink-tertiary">,</span>}
+        </Fragment>
+      ))}
+    </>
+  );
+  if (time !== undefined) return <div className={`mt-3 ${BOT_TURN_INDENT}`}><BotTurnHead bot={bot} name={name} color={color} time={time} onOpen={onOpen}>{addressees}</BotTurnHead></div>;
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-0.5">
       <BotAvatar
@@ -32,18 +46,8 @@ export function ClusterLabel({ bot, name, color, to = [] }: { bot?: Bot; name: s
         animated={false}
         readable={isPaletteColor(color)}
       />
-      <Name name={name} color={color} />
-      {to.length > 0 && (
-        <>
-          <span className="inline-block text-[13px] text-ink-tertiary rtl:-scale-x-100">→</span>
-          {to.map((addressee, index) => (
-            <Fragment key={addressee.key}>
-              <Name name={addressee.name} color={addressee.color} />
-              {index < to.length - 1 && <span className="-ms-1 text-[13px] text-ink-tertiary">,</span>}
-            </Fragment>
-          ))}
-        </>
-      )}
+      <SpeakerName name={name} color={color} />
+      {addressees}
     </div>
   );
 }
