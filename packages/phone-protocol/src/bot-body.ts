@@ -15,12 +15,12 @@ export const botBodySchema = z.enum(BOT_BODY_IDS);
 /** The shipped mascot: a new bot's body, and the fallback for any unrecognised value. */
 export const DEFAULT_BOT_BODY: BotBodyId = "seira";
 
-/** The bodies a picker shows outside a festival, in order. */
-export const PICKER_BODY_IDS = [...BRAND_BODY_IDS, ...MASCOT_BODY_IDS] as const;
+/** The Seira looks a picker shows, in order. */
+export const PICKER_BODY_IDS = BRAND_BODY_IDS;
 
-/** Runtime-safe read of an untrusted persisted or streamed body id. */
+/** Runtime-safe read of an untrusted persisted or streamed body id. A body that no picker offers reads as the default. */
 export function botBodyId(value: unknown): BotBodyId {
-  return botBodySchema.safeParse(value).data ?? DEFAULT_BOT_BODY;
+  return isBrandBody(value) ? value : DEFAULT_BOT_BODY;
 }
 
 export function isCarvedBody(value: unknown): value is CarvedBodyId {
