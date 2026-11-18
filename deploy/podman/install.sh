@@ -1,5 +1,5 @@
 #!/bin/sh
-# MausBot's server as your own user's service, with rootless Podman: no root, no Docker. One line, run as yourself:
+# Seira's server as your own user's service, with rootless Podman: no root, no Docker. One line, run as yourself:
 #
 #   curl -fsSL https://raw.githubusercontent.com/milind-soni/OpenMausBot/main/deploy/podman/install.sh | sh
 #   ... | sh -s -- --lan                 also answer other devices on this network (private addresses only)
@@ -309,7 +309,7 @@ image_user() {
   RUN_UID=$(podman run --rm --network none --entrypoint id "$IMAGE" -u 2>/dev/null || true)
   RUN_GID=$(podman run --rm --network none --entrypoint id "$IMAGE" -g 2>/dev/null || true)
   case "$RUN_UID:$RUN_GID" in
-    *[!0-9:]* | : | :* | *:) fail "The MausBot image did not say which user it runs as. Run this again; if it still fails, send us this line." ;;
+    *[!0-9:]* | : | :* | *:) fail "The Seira image did not say which user it runs as. Run this again; if it still fails, send us this line." ;;
   esac
 }
 
@@ -364,7 +364,7 @@ unit_text() {
   label=""
   if selinux_on; then label=":Z"; fi
   cat <<UNIT
-# Written by MausBot's Podman installer (deploy/podman/install.sh), and written again each time it runs. The server's
+# Written by Seira's Podman installer (deploy/podman/install.sh), and written again each time it runs. The server's
 # settings are in $INSTALL_DIR/server.env; update.sh changes Image= below.
 [Unit]
 Description=Seira server (rootless Podman)
