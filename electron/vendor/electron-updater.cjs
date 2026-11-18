@@ -14962,16 +14962,18 @@ var require_AppImageUpdater = __commonJS({
           APPIMAGE_SILENT_INSTALL: "true"
         };
         if (options.isForceRunAfter) {
-          const previousSilentInstall = process.env.APPIMAGE_SILENT_INSTALL;
-          try {
-            process.env.APPIMAGE_SILENT_INSTALL = env.APPIMAGE_SILENT_INSTALL;
-            if (require("electron").app.relaunch({ execPath: destination, args: [] }) === false) {
-              throw new Error("Could not schedule the updated AppImage to restart");
-            }
-          } finally {
-            if (previousSilentInstall === undefined) delete process.env.APPIMAGE_SILENT_INSTALL;
-            else process.env.APPIMAGE_SILENT_INSTALL = previousSilentInstall;
+          const relaunch = (0, child_process_1.spawn)("bash", ["-c", "read -r ignored\nfor fd in /proc/$$/fd/*; do fd=${fd##*/}; case $fd in 0|1|2) ;; *) exec {fd}>&- ;; esac; done\nexec \"$1\" </dev/null", "appimage-relaunch", destination], {
+            detached: true,
+            stdio: ["pipe", "ignore", "ignore"],
+            env
+          });
+          relaunch.on("error", (error) => this._logger.error(`Cannot restart the updated AppImage: ${error.stack || error}`));
+          if (relaunch.pid === undefined) {
+            throw new Error("Could not schedule the updated AppImage to restart");
           }
+          relaunch.stdin.on("error", () => {});
+          relaunch.stdin.unref();
+          relaunch.unref();
         } else {
           env.APPIMAGE_EXIT_AFTER_INSTALL = "true";
           (0, child_process_1.execFileSync)(destination, [], { env });
