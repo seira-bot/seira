@@ -449,7 +449,7 @@ function drawBrow(c, f, i, x, top, w, tilt, style) {
   c.restore();
 }
 
-function drawBlush(c, f, x, y, out) {
+function drawBlush(c, f, x, y) {
   const k = f.blush;
   c.save();
   c.globalAlpha = Math.min(1, k);
@@ -562,7 +562,7 @@ export function drawFace(c, f) {
     const w = (SHAPES[mode] ? SHAPES[mode].w : L.ew) * s;
     const style = f.brows !== 'none' ? f.brows : (f.brow ? 'thin' : null);
     if (style) drawBrow(c, f, i, x, tops[i].top, w, f.brow + (f.brows === 'angled' ? 0.4 : 0), style);
-    if (f.blush > 0.02) drawBlush(c, f, L.cx[i] + out * L.ew * 0.25 + ex * 0.5, L.cy + L.eh * 0.56 + ey * 0.5, out);
+    if (f.blush > 0.02) drawBlush(c, f, L.cx[i] + out * L.ew * 0.25 + ex * 0.5, L.cy + L.eh * 0.56 + ey * 0.5);
     if (f.tears > 0.02) drawTears(c, f, x, L.cy + L.eh * 0.12 + ey, out);
     if (f.marks === 'tremble') {
       c.save();
