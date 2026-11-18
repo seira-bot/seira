@@ -116,13 +116,17 @@ async function main() {
   console.log("[smoke-linux-update] downloading…");
   await updater.downloadUpdate(result.cancellationToken);
 
-  // Record the queued relaunch instead of starting a second app. The native
-  // relauncher would otherwise run it when this fixture exits.
+  // Record the queued restart instead of starting a second app. The restart
+  // shell would otherwise run it when this fixture exits.
+  const childProcess = require("node:child_process");
+  const spawn = childProcess.spawn;
   let relaunched = null;
-  app.relaunch = (options) => {
-    relaunched = options.execPath;
-    return true;
+  childProcess.spawn = (command, args, options) => {
+    if (command !== "bash") return spawn(command, args, options);
+    relaunched = args.at(-1);
+    return spawn(command, ["-c", "exit 0"], options);
   };
+  app.relaunch = () => { throw new Error("Electron's relauncher cannot mount an AppImage"); };
   updater.spawnLog = () => { throw new Error("AppImage relaunch bypassed Electron's exit ordering"); };
   updater.quitAndInstall(true, true);
 
