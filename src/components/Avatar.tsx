@@ -114,6 +114,7 @@ function MausAvatarComponent(props: MausAvatarProps, ref: React.Ref<MausAvatarHa
         body={body}
         color={color}
         faceColor={props.faceColor}
+        accessories={props.accessories}
         size={size}
         state={state}
         motion={motion}
