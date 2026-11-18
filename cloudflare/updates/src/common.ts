@@ -19,7 +19,7 @@ export interface AppEnv {
 }
 
 export const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
-const CONTROL = /[\u0000-\u001f\u007f]/;
+const hasControl = (value: string) => Array.from(value).some(char => char.charCodeAt(0) < 0x20 || char.charCodeAt(0) === 0x7f);
 
 export const nowSeconds = () => Math.floor(Date.now() / 1000);
 
@@ -51,7 +51,7 @@ export async function sameSecret(given: string, expected: string) {
 export function normalizeEmail(value: unknown) {
   if (typeof value !== "string") return null;
   const email = value.trim().toLowerCase();
-  if (email.length > 254 || /\s/.test(email) || CONTROL.test(email)) return null;
+  if (email.length > 254 || /\s/.test(email) || hasControl(email)) return null;
   const parts = email.split("@");
   if (parts.length !== 2) return null;
   const [local, domain] = parts as [string, string];
@@ -61,7 +61,7 @@ export function normalizeEmail(value: unknown) {
 
 export function cleanInstallId(value: unknown) {
   if (value === undefined) return { ok: true as const, value: null };
-  if (typeof value !== "string" || value.length > 128 || CONTROL.test(value)) return { ok: false as const };
+  if (typeof value !== "string" || value.length > 128 || hasControl(value)) return { ok: false as const };
   return { ok: true as const, value: value || null };
 }
 
