@@ -21,7 +21,7 @@ interface Job {
   uses?: string;
   environment?: unknown;
   permissions?: Record<string, string> | string;
-  strategy?: { matrix?: { shard?: number[] } };
+  strategy?: { matrix?: { shard?: number[]; include?: Record<string, string>[] } };
   steps?: Step[];
 }
 
@@ -136,51 +136,88 @@ describe("CI workflows", () => {
     for (const run of allRuns()) expect(run).not.toMatch(/\$\{\{[^}]*\b(github\.event|github\.head_ref|inputs\.)/);
   });
 
-  it("never creates a tag or publishes a release or a package from a command line", () => {
-    for (const run of allRuns()) {
-      for (const forbidden of ["gh release", "git tag", "git push", "npm publish", "docker push"]) {
-        expect(run).not.toContain(forbidden);
+  it("never creates a tag or publishes a release or a package from a command line, except the server image publish job", () => {
+    for (const [file, flow] of workflows) {
+      for (const [id, job] of Object.entries(flow.jobs)) {
+        const publishes = file === IMAGE && id === "publish";
+        for (const run of runs(job)) {
+          for (const forbidden of ["gh release", "git tag", "git push", "npm publish"]) expect(run).not.toContain(forbidden);
+          if (!publishes) {
+            expect(run, `${file} job ${id}`).not.toContain("docker push");
+            expect(run, `${file} job ${id}`).not.toContain("imagetools create");
+          }
+          expect(run).not.toMatch(/--publish(?!\s+never\b)/);
+        }
       }
-      expect(run).not.toMatch(/--publish(?!\s+never\b)/);
     }
   });
 });
 
 describe("Server image workflow", () => {
-  const smoke = image.jobs.smoke!;
+  const build = image.jobs.image!;
   const publish = image.jobs.publish!;
+  const ON_MAIN = "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'";
 
   it("starts on a pull request that changes the image, or by hand", () => {
     expect(Object.keys(image.on).sort()).toEqual(["pull_request", "workflow_dispatch"]);
   });
 
-  it("smoke-tests without permissions, secrets or an environment", () => {
-    expect(smoke.permissions).toBeUndefined();
-    expect(smoke.environment).toBeUndefined();
-    expect(JSON.stringify(smoke)).not.toContain("secrets.");
-    expect(stepsOf(smoke).some((step) => step.uses?.startsWith("docker/build-push-action@"))).toBe(false);
+  it("uses GitHub's own actions only", () => {
+    const uses = Object.values(image.jobs).flatMap(stepsOf).flatMap((step) => (step.uses === undefined ? [] : [step.uses]));
+    for (const value of uses) expect(value).toMatch(/^actions\//);
   });
 
-  it("publishes only from a manual run on main, after the smoke test, behind the release environment", () => {
-    expect(publish.needs).toBe("smoke");
-    expect(publish.if).toBe("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'");
+  it("builds and smoke-tests each platform on its own GitHub-hosted runner, without permissions, secrets or an environment", () => {
+    expect(build.strategy?.matrix?.include).toEqual([
+      { arch: "amd64", runner: "ubuntu-24.04" },
+      { arch: "arm64", runner: "ubuntu-24.04-arm" },
+    ]);
+    expect(build["runs-on"]).toBe("${{ matrix.runner }}");
+    expect(build.permissions).toBeUndefined();
+    expect(build.environment).toBeUndefined();
+    expect(JSON.stringify(build)).not.toContain("secrets.");
+    expect(runs(build).join("\n")).not.toMatch(/docker (login|push)/);
+  });
+
+  it("hands the image to the publish job only from a manual run on main", () => {
+    const uploads = stepsOf(build).filter((step) => step.uses?.startsWith("actions/upload-artifact@"));
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]!.if).toBe(ON_MAIN);
+    expect(uploads[0]!.with?.["if-no-files-found"]).toBe("error");
+  });
+
+  it("publishes only from a manual run on main, after the build, behind the release environment", () => {
+    expect(publish.needs).toBe("image");
+    expect(publish.if).toBe(ON_MAIN);
     expect(publish.environment).toBe("release");
     expect(publish.permissions).toEqual({ contents: "read", packages: "write" });
-    const pushes = stepsOf(publish).filter((step) => step.uses?.startsWith("docker/build-push-action@"));
-    expect(pushes).toHaveLength(1);
-    expect(pushes[0]!.with?.push).toBe(true);
-    expect(stepsOf(publish).some((step) => step.uses?.startsWith("actions/cache") || /\bcache-(from|to)\b/.test(JSON.stringify(step.with ?? {})))).toBe(false);
+    expect(publish["runs-on"]).toBe("ubuntu-24.04");
+  });
+
+  it("runs no code of the repository in the publish job, and uses no build cache", () => {
+    expect(stepsOf(publish).some((step) => step.uses?.startsWith("actions/checkout@"))).toBe(false);
+    const steps = Object.values(image.jobs).flatMap(stepsOf);
+    expect(steps.some((step) => step.uses?.startsWith("actions/cache"))).toBe(false);
+    expect(Object.values(image.jobs).flatMap(runs).join("\n")).not.toMatch(/--cache-(from|to)\b/);
   });
 
   it("checks out a release tag only by its full tag name", () => {
     const checkouts = Object.values(image.jobs).flatMap(stepsOf).filter((step) => step.uses?.startsWith("actions/checkout@"));
-    expect(checkouts).toHaveLength(2);
-    for (const step of checkouts) expect(step.with?.ref).toBe("${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}");
+    expect(checkouts).toHaveLength(1);
+    expect(checkouts[0]!.with?.ref).toBe("${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}");
+  });
+
+  it("labels the image with the release tag, or main when there is none", () => {
+    expect(runs(build).join("\n")).toContain('--label "org.opencontainers.image.version=${TAG:-main}"');
   });
 
   it("publishes to this repository's own package only", () => {
-    const meta = stepsOf(publish).find((step) => step.uses?.startsWith("docker/metadata-action@"));
-    expect(meta?.with?.images).toBe("ghcr.io/${{ github.repository }}");
+    const step = stepsOf(publish).find((each) => each.run?.includes("imagetools create"));
+    expect(step?.env?.REPOSITORY).toBe("${{ github.repository }}");
+    expect(step?.run).toContain('image="ghcr.io/${REPOSITORY,,}"');
+    for (const run of runs(publish)) {
+      for (const [name] of run.matchAll(/ghcr\.io\S*/g)) expect(["ghcr.io", 'ghcr.io/${REPOSITORY,,}"']).toContain(name);
+    }
   });
 });
 

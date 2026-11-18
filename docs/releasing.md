@@ -258,9 +258,9 @@ builds, so a missing secret never gives an unsigned build by mistake.
 ### 7. Publish the server image
 
 The `Server image` workflow (`.github/workflows/server-image.yml`) builds the
-server image from the tag for `linux/amd64` and `linux/arm64`. The scripts in
-`deploy/` install the image of the newest release, so publish it for every
-release.
+server image from the tag for `linux/amd64` and `linux/arm64`, each on its own
+runner (see [CI](ci.md#server-image-workflow)). The scripts in `deploy/`
+install the image of the newest release, so publish it for every release.
 
 ```sh
 gh workflow run server-image.yml --repo seira-bot/seira --ref main -f tag=v<version>
@@ -271,6 +271,8 @@ docker buildx imagetools inspect ghcr.io/seira-bot/seira:v<version>
 ```
 
 - Start the run from `main`. The `release` environment refuses other branches.
+- The approval request shows after both builds pass. Approve it within 7 days,
+  or the saved images expire. Then start a new run.
 - Publish the GitHub release first. The workflow refuses a tag that is not a
   published release, and it builds the tag only, never a branch of that name.
 - The image must show both platforms, and the label

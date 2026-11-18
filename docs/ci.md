@@ -86,20 +86,36 @@ and update that image.
 
 | Start | What it does |
 | --- | --- |
-| A pull request that changes `Dockerfile`, `.dockerignore`, or the workflow | The `smoke` job only: build, start, and check the server |
+| A pull request that changes `Dockerfile`, `.dockerignore`, or the workflow | The `image` job only: build, start, and check the server on each platform |
 | Run by hand from `main`, with `tag` set to a release tag | Publishes that tag's code as `ghcr.io/seira-bot/seira:<tag>` |
 | Run by hand from `main`, with no `tag` | Publishes `main` as `latest` and `sha-<commit>` |
 
+The repository allows only GitHub's own actions, so the workflow uses the
+runner's `docker` CLI and no `docker/*` action. The `image` job builds each
+platform on its own runner: `linux/amd64` on `ubuntu-24.04`, `linux/arm64` on
+`ubuntu-24.04-arm`. It sets the label `org.opencontainers.image.version` to
+the tag, or to `main` when there is no tag. On a run by hand from `main`, it
+saves each image as a workflow artifact for 7 days.
+
+The `publish` job loads the two images and pushes each one to the tag
+`build-amd64` or `build-arm64`. It reads each pushed image back from the
+registry and checks its platform, version label, and commit. Then it joins the
+two digests under the final tags with `docker buildx imagetools create`. Approve the run within 7 days, or the
+artifacts expire and the job fails. Then start a new run.
+
 `scripts/ci-workflow.test.ts` holds these rules for it:
 
-- The `smoke` job has no permission, no secret, and no environment, and it
+- The workflow uses only `actions/*` actions.
+- The `image` job has no permission, no secret, and no environment, and it
   pushes nothing.
-- The `publish` job runs only by hand from `main`, after `smoke`. It uses the
+- The `publish` job runs only by hand from `main`, after `image`. It uses the
   `release` environment, so each run waits until a maintainer approves it.
-- Only the `publish` job gets `packages: write`. The workflow token goes only
-  into the `env` of its sign-in step.
-- It publishes only to this repository's own package, for `linux/amd64` and
-  `linux/arm64`, with no build cache, so another run cannot change the image.
+- Only the `publish` job gets `packages: write`, and only it can run
+  `docker push` or `imagetools create`. The workflow token goes only into the
+  `env` of its sign-in step.
+- The `publish` job does no checkout, so it runs no code of the repository.
+- It publishes only to this repository's own package, with no build cache, so
+  another run cannot change the image.
 
 ## Required check
 
