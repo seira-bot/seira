@@ -93,6 +93,21 @@ describe("CI workflows", () => {
     }
   });
 
+  it("puts a secret only into a step's env, never into a command line or an action input", () => {
+    for (const [file, flow] of workflows) {
+      for (const [id, job] of Object.entries(flow.jobs)) {
+        expect(JSON.stringify({ ...job, steps: undefined }), `${file} job ${id}`).not.toContain("secrets.");
+        for (const step of stepsOf(job)) {
+          const where = `${file} job ${id} step ${step.name ?? step.uses}`;
+          expect(JSON.stringify({ ...step, env: undefined }), where).not.toContain("secrets.");
+          for (const value of Object.values(step.env ?? {})) {
+            if (String(value).includes("secrets.")) expect(value, where).toMatch(/^\$\{\{ secrets\.[A-Z][A-Z0-9_]* \}\}$/);
+          }
+        }
+      }
+    }
+  });
+
   it("reads a secret only in the macOS package workflow, for the Apple signature", () => {
     expect(files.filter((file) => texts.get(file)!.includes("secrets."))).toEqual(["package-macos.yml"]);
   });

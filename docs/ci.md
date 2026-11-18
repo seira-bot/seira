@@ -64,6 +64,8 @@ holds these rules for every `package-*.yml` file:
 - No job asks for a permission, so the token can only read the repository.
 - A job uses an environment only to read the signing secrets, and only the
   `release` environment. Today only `package-macos.yml` does this.
+- A secret goes only into a step's `env`, as `${{ secrets.NAME }}`. It never
+  goes into a `run` command, an action input, or a job setting.
 - Every job runs on a GitHub-hosted runner (`ubuntu-*`, `windows-*`, or
   `macos-*`), never on a self-hosted runner.
 - No step uses a dependency cache (`package-manager-cache: false`), so another
