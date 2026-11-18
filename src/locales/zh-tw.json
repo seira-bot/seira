@@ -7938,7 +7938,6 @@
   "mascot.expression.proud": "得意",
   "mascot.useExpression": "使用「{expression}」表情",
   "mascot.useColor": "使用{color}吉祥物顏色",
-  "mascot.label": "{name} 吉祥物",
   "avatar.alt": "{name} 的頭像",
   "avatar.altFallback": "機器人頭像",
   "botIdentity.framing.preview": "{name} 頭像預覽",

@@ -84,7 +84,7 @@ export function AvatarEditorCard({ bot, activeState, onPatch, onClose }: {
         !showsImage && body === id ? "bg-ink/[0.08] ring-[1.5px] ring-inset ring-ink/25" : "hover:bg-ink/[0.05]",
       )}
     >
-      <MausAvatar color={bot.color} faceColor={bot.mascotFaceColor} bodyId={id} size={40} animated={false} trackPointer={false} />
+      <MausAvatar color={bot.color} bodyId={id} size={40} animated={false} trackPointer={false} />
     </button>
   );
 

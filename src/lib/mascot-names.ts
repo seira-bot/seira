@@ -16,10 +16,3 @@ export const accessoryName = (id: MascotAccessoryId): string =>
   named(`mascot.accessory.${id}`, id.replace(/-/g, " ").replace(/^./, (first) => first.toUpperCase()));
 export const colorName = (color: MausColor): string => named(`mascot.color.${color}`, color);
 export const expressionName = (state: string): string => named(`mascot.expression.${state}`, state);
-
-export function silhouetteName(name: string): string {
-  const body = BODIES.find((candidate) => candidate.name === name);
-  return body ? bodyName(body.id) : name;
-}
-
-export const mascotLabel = (silhouette: string): string => t("mascot.label", { name: silhouetteName(silhouette) });

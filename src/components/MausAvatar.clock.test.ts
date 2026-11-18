@@ -63,10 +63,17 @@ const render = (avatars: Array<Partial<MausAvatarProps> & { ref?: React.Ref<Maus
   act(() => root.render(avatars.map((props, key) => createElement(MausAvatar, { key, color: "green", ...props }))));
 const run = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
 
+const startleAll = (refs: Array<React.RefObject<MausAvatarHandle | null>>) =>
+  act(() => { for (const ref of refs) ref.current!.spin(); });
+
+const eyeHeight = () => Number(host.querySelector("g[clip-path] > rect")!.getAttribute("height"));
+
 describe("MausAvatar on the shared clock", () => {
-  it("draws every animated mascot from one animation frame", () => {
-    render(Array.from({ length: 12 }, () => ({ state: "working" as const, size: 96 })));
+  it("draws every moving mascot from one animation frame", () => {
+    const refs = Array.from({ length: 12 }, () => createRef<MausAvatarHandle>());
+    render(refs.map((ref) => ({ state: "working" as const, size: 96, ref })));
     run(100);
+    startleAll(refs);
     frameRequests = 0;
     run(1000);
     expect(frameRequests).toBeGreaterThan(30);
@@ -74,25 +81,27 @@ describe("MausAvatar on the shared clock", () => {
     expect(mascotClock().pending()).toBe(12);
   });
 
-  it("draws a sidebar full of working mascots 20 times a second", () => {
-    render(Array.from({ length: 12 }, (_, i) => ({ state: "working" as const, size: [24, 28, 42, 56][i % 4] })));
+  it("draws a sidebar full of moving mascots 20 times a second", () => {
+    const refs = Array.from({ length: 12 }, () => createRef<MausAvatarHandle>());
+    render(refs.map((ref, i) => ({ state: "working" as const, size: [24, 28, 42, 56][i % 4], ref })));
     run(100);
+    startleAll(refs);
     frameRequests = 0;
     run(1000);
     expect(frameRequests).toBeGreaterThanOrEqual(18);
     expect(frameRequests).toBeLessThanOrEqual(21);
   });
 
-  it("lets an unread mascot play its notice, then draws nothing while the news waits", () => {
+  it("keeps an unread mascot on the clock for its notice, then draws nothing while the news waits", () => {
     function Row({ unread }: { unread: boolean }) {
       return createElement(MausAvatar, { color: "green", state: unread ? "notifying" : "idle", size: 42, animated: useUnreadNotice(unread) });
     }
     act(() => root.render(createElement(Row, { unread: false })));
     run(200);
+    expect(mascotClock().pending()).toBe(0);
     act(() => root.render(createElement(Row, { unread: true })));
-    frameRequests = 0;
     run(2000);
-    expect(frameRequests).toBeGreaterThan(20);
+    expect(mascotClock().pending()).toBe(1);
     run(UNREAD_NOTICE_MS);
     run(100);
     frameRequests = 0;
@@ -101,16 +110,57 @@ describe("MausAvatar on the shared clock", () => {
     expect(mascotClock().pending()).toBe(0);
   });
 
-  it("stops drawing a mascot that leaves the screen", () => {
-    render([{ state: "working", size: 36 }]);
+  it("stops drawing a mascot that leaves the screen, and resumes when it returns", () => {
+    const ref = createRef<MausAvatarHandle>();
+    render([{ state: "working", size: 36, ref }]);
     run(200);
+    startleAll([ref]);
+    run(100);
     act(() => observed.callback!([{ target: host.querySelector("svg")!, isIntersecting: false }]));
     frameRequests = 0;
-    run(1000);
+    run(500);
     expect(frameRequests).toBe(0);
     act(() => observed.callback!([{ target: host.querySelector("svg")!, isIntersecting: true }]));
-    run(500);
+    run(400);
     expect(frameRequests).toBeGreaterThan(5);
+  });
+
+  it("lets a small idle Seira settle to no frames until her next glance or blink", () => {
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.999);
+    try {
+      render([{ state: "idle", size: 24 }]);
+      run(100);
+      frameRequests = 0;
+      run(3000);
+      expect(frameRequests).toBe(0);
+      expect(mascotClock().pending()).toBe(1);
+      run(1000);
+      expect(frameRequests).toBeGreaterThan(3);
+    } finally {
+      random.mockRestore();
+    }
+  });
+
+  it("draws a blink on a settled Seira, then settles again", () => {
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.999);
+    const ref = createRef<MausAvatarHandle>();
+    try {
+      render([{ state: "idle", size: 24, ref }]);
+      run(100);
+      const open = eyeHeight();
+      frameRequests = 0;
+      act(() => ref.current!.blink());
+      run(150);
+      expect(eyeHeight()).toBeLessThan(open * 0.7);
+      run(1050);
+      expect(frameRequests).toBeGreaterThan(3);
+      expect(eyeHeight()).toBe(open);
+      frameRequests = 0;
+      run(1500);
+      expect(frameRequests).toBe(0);
+    } finally {
+      random.mockRestore();
+    }
   });
 
   it("holds still under reduced motion: no body motion, blinks or spins", () => {

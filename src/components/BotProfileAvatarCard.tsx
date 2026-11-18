@@ -175,7 +175,7 @@ export function BotProfileAvatarCard({
                   title={expressionName(expression)}
                   aria-label={t("mascot.useExpression", { expression: expressionName(expression) })}
                 >
-                  <MausAvatar color={bot.color} faceColor={bot.mascotFaceColor} bodyId={bot.mascotBody ?? undefined} accessories={mascotAccessories(bot.mascotAccessories)} state={expression} size={42} animated={false} />
+                  <MausAvatar color={bot.color} bodyId={bot.mascotBody ?? undefined} accessories={mascotAccessories(bot.mascotAccessories)} state={expression} size={42} animated={false} />
                 </button>
               ))}
             </div>
@@ -215,7 +215,7 @@ function BodyButton({ id, name, bot, busy, onPatch }: {
         selected ? "bg-control text-ink" : "text-ink-secondary hover:bg-control/60",
       )}
     >
-      <MausAvatar color={bot.color} faceColor={bot.mascotFaceColor} bodyId={id} size={34} animated={false} trackPointer={false} />
+      <MausAvatar color={bot.color} bodyId={id} size={34} animated={false} trackPointer={false} />
     </button>
   );
 }

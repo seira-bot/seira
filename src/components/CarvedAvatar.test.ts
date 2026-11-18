@@ -11,8 +11,8 @@ import { MASCOT_ACCESSORY_IDS, type MascotAccessoryId } from "../../shared/masco
 
 const STYLE_IDS = BRAND_BODY_IDS.filter((id) => id !== "seira");
 
-const render = (body: (typeof CARVED_BODY_IDS)[number], color: "orange" | "purple" | "chrome" | "silver" = "orange", faceColor: "white" | "black" | null = null) =>
-  renderToStaticMarkup(createElement(CarvedAvatar, { body, color, faceColor, animated: false, label: body }));
+const render = (body: (typeof CARVED_BODY_IDS)[number], color: "orange" | "purple" | "chrome" | "silver" = "orange") =>
+  renderToStaticMarkup(createElement(CarvedAvatar, { body, color, animated: false, label: body }));
 const wear = (body: (typeof CARVED_BODY_IDS)[number], accessories: MascotAccessoryId[]) =>
   renderToStaticMarkup(createElement(CarvedAvatar, { body, color: "orange", animated: false, accessories }));
 const viewBox = (markup: string) => /viewBox="([^"]+)"/.exec(markup)![1]!.split(" ").map(Number);
@@ -38,16 +38,10 @@ describe("CarvedAvatar", () => {
     expect(carvedFills(CARVED_BODIES.seira, "blue").body).toBe(carvedFills(CARVED_BODIES.seira, "blue").accent);
   });
 
-  it.each(["white", "black", null] as const)("keeps Seira's eyes red with the %s face colour", (faceColor) => {
-    const markup = render("seira", "chrome", faceColor);
-    expect(markup.match(/<rect [^>]*fill="#e11d48"/g)?.length).toBe(2);
-    expect(markup).toContain('stroke="#e11d48"');
-  });
-
   it("draws every other hair style from its own rendered head, with Seira's red eyes", () => {
     expect(STYLE_IDS).toHaveLength(16);
     for (const id of STYLE_IDS) {
-      const markup = render(id, "chrome", "white");
+      const markup = render(id, "chrome");
       expect(markup, id).toMatch(new RegExp(`<image href="[^"]*seira-hair/${id}/front-\\d+\\.webp"`));
       expect(markup.match(/<rect /g)?.length, id).toBe(2);
       expect(markup.match(/<rect [^>]*fill="#e11d48"/g)?.length, id).toBe(2);

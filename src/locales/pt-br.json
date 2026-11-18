@@ -8744,7 +8744,6 @@
   "mascot.accessory.antenna": "Antena",
   "mascot.accessory.scarf": "Cachecol",
   "mascot.accessory.bowtie": "Gravata-borboleta",
-  "mascot.label": "Mascote {name}",
   "avatar.alt": "Avatar de {name}",
   "avatar.altFallback": "Avatar do bot",
   "botIdentity.framing.preview": "Prévia do avatar de {name}",

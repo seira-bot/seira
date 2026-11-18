@@ -10,7 +10,6 @@ import {
   type BotAvatarProps,
   type MausAvatarProps,
 } from "./Avatar";
-import { MASCOT_BODIES } from "../../shared/mascot-bodies";
 
 const render = (props: Partial<MausAvatarProps>) =>
   renderToStaticMarkup(createElement(MausAvatar, { color: "green", animated: false, ...props }));
@@ -23,7 +22,6 @@ const renderBot = (bot: Partial<BotAvatarProps["bot"]>) =>
 describe("MausAvatar body", () => {
   it("wears Seira when no body is given", () => {
     expect(render({})).toBe(render({ bodyId: "seira" }));
-    expect(render({})).not.toContain(MASCOT_BODIES.cursor.fit);
   });
 
   it("wears Seira for a body that is no longer offered", () => {
@@ -34,13 +32,6 @@ describe("MausAvatar body", () => {
     // SAFETY: "hexagram" is deliberately not a BotBodyId, to exercise the runtime fallback for persisted or streamed
     // data.
     expect(render({ bodyId: "hexagram" as MausAvatarProps["bodyId"] })).toBe(render({ bodyId: "seira" }));
-  });
-
-  it("paints the body with the per-bot gradient, never a flat black fill", () => {
-    const markup = render({ bodyId: "circle" });
-    expect(markup).not.toContain('fill="#000000"');
-    expect(markup).not.toContain("{{GRADIENT}}");
-    expect(markup).toContain("url(#");
   });
 });
 

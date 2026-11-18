@@ -36,7 +36,6 @@ export function MascotAccessoryPicker({ bot, disabled, compact = false, onPatch 
           >
             <MausAvatar
               color={bot.color}
-              faceColor={bot.mascotFaceColor}
               bodyId={bot.mascotBody ?? undefined}
               accessories={[id]}
               size={compact ? 32 : 34}

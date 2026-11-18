@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { botAvatarProfile } from "../../shared/bot-avatar";
-import { botBodyId, isBrandBody } from "../../shared/bot-body";
+import { botBodyId } from "../../shared/bot-body";
 import { mascotAccessories, type MascotAccessoryId } from "../../shared/mascot-accessories";
 import { BotAvatar, resolveBotAvatarOutcome, type BotAvatarProps } from "./Avatar";
 import { hairTint } from "./CarvedAvatar";
@@ -13,7 +13,7 @@ type CharacterBot = BotAvatarProps["bot"] & { mascotAccessories?: readonly Masco
 export function useWearsSeira(bot: BotAvatarProps["bot"]): boolean {
   const profile = botAvatarProfile(bot);
   const outcome = resolveBotAvatarOutcome({ avatarCrop: profile.avatarCrop, hasUrl: Boolean(profile.avatarUrl), imageFailed: false });
-  return outcome === "gradientMascot" && isBrandBody(botBodyId(bot.mascotBody));
+  return outcome === "gradientMascot";
 }
 
 /** The bot's live face for one moment: Seira's character, with the bot's hair style, hair colour and accessories, when the
@@ -45,7 +45,7 @@ export function TurnFace({ bot, working, size }: { bot: CharacterBot; working: b
       bot={bot}
       state={state}
       size={32}
-      fallback={<BotAvatar bot={bot} state={state} size={size} forward={false} lookAround={1} trackPointer={false} />}
+      fallback={<BotAvatar bot={bot} state={state} size={size} trackPointer={false} />}
     />
   );
 }

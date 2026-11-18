@@ -8816,7 +8816,6 @@
   "mascot.accessory.antenna": "Antenna",
   "mascot.accessory.scarf": "Scarf",
   "mascot.accessory.bowtie": "Bow tie",
-  "mascot.label": "{name} mascot",
   "avatar.alt": "{name} avatar",
   "avatar.altFallback": "Bot avatar",
   "botIdentity.framing.preview": "{name} avatar preview",

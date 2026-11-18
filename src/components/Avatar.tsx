@@ -1,232 +1,38 @@
-import {
-  forwardRef,
-  memo,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-  type ReactNode,
-} from "react";
+import { forwardRef, memo, useEffect, useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { avatarMarks, type AvatarKind } from "@/lib/avatar-marks";
-import { CHROME_EYES, CHROME_GRADIENT, MAUS_COLORS, type MausColor, type MausMotion, type MausState } from "@/lib/mascot";
-import { CursorAvatar, type CursorAvatarHandle } from "./CursorAvatar";
-import { avatarCropRadius, botAvatarProfile, clampAvatarFocus, clampAvatarZoom, mascotFaceInk, type BotAvatarCrop, type MascotFaceColor } from "../../shared/bot-avatar";
-import { MASCOT_BODIES, botMascotBody } from "../../shared/mascot-bodies";
-import { botBodyId, isCarvedBody, type BotBodyId } from "../../shared/bot-body";
+import type { MausColor, MausMotion, MausState } from "@/lib/mascot";
+import { avatarCropRadius, botAvatarProfile, clampAvatarFocus, clampAvatarZoom, type BotAvatarCrop, type MascotFaceColor } from "../../shared/bot-avatar";
+import { botBodyId, type BotBodyId } from "../../shared/bot-body";
 import { mascotAccessories, type MascotAccessoryId } from "../../shared/mascot-accessories";
 import { t } from "@/lib/i18n";
-import { CarvedAvatar } from "./CarvedAvatar";
-import { steelBodyImage } from "@/lib/steel-body";
+import { CarvedAvatar, type CarvedAvatarHandle } from "./CarvedAvatar";
 
-export const EYE_SCALE = 1.12;
-export const MOUTH_WEIGHT = 11;
-
-const POINTER_GAZE = { forward: 1, authored: 0.25 };
-
-interface MotionFaces
-  extends Partial<
-    Record<Exclude<MausMotion, "none">, { state?: MausState; blink?: boolean; spin?: number }>
-  > {}
-
-const MOTION_FACE: MotionFaces = {
-  arrive: { state: "spawning", spin: 900 },
-  switch: { state: "waking", spin: 620 },
-  customize: { state: "proud", blink: true },
-  alert: { state: "alerting" },
-  thinking: { state: "thinking" },
-  working: { state: "working" },
-  launch: { state: "loading" },
-  success: { state: "happy", blink: true },
-  celebrate: { state: "celebrate", spin: 700 },
-  blink: { blink: true },
-  surprise: { state: "surprised", blink: true },
-  failure: { state: "sad" },
-};
-
-const MOTION_FACE_MS = 1400;
-
-function mix(hex: string, toward: string, t: number): string {
-  const a = Number.parseInt(hex.slice(1), 16);
-  const b = Number.parseInt(toward.slice(1), 16);
-  const channel = (shift: number) => {
-    const va = (a >> shift) & 0xff;
-    const vb = (b >> shift) & 0xff;
-    return Math.round(va + (vb - va) * t);
-  };
-  return `#${[channel(16), channel(8), channel(0)]
-    .map((part) => part.toString(16).padStart(2, "0"))
-    .join("")}`;
-}
-
-const gradientFor = (color: MausColor): [string, string, string] => {
-  if (color === "chrome") return CHROME_GRADIENT;
-  const fill = MAUS_COLORS[color] ?? MAUS_COLORS.green;
-  return [mix(fill, "#ffffff", 0.55), fill, mix(fill, "#000000", 0.42)];
-};
-
-export function roomAvatarGradient(color: MausColor): [string, string, string] {
-  const fill = `var(--identity-${color})`;
-  return [
-    `color-mix(in srgb, ${fill} 82%, #ffffff)`,
-    fill,
-    `color-mix(in srgb, ${fill} 82%, #000000)`,
-  ];
-}
-
-export type MausAvatarHandle = CursorAvatarHandle;
+export type MausAvatarHandle = CarvedAvatarHandle;
 
 export type MausAvatarProps = {
   color: MausColor;
   state?: MausState;
-  expression?: number;
   size?: number;
   label?: string;
   motion?: MausMotion;
   motionKey?: number;
-  turn?: number;
   gaze?: { x?: number; y?: number };
-  spring?: number;
-  eyeScale?: number;
-  showMouth?: boolean;
-  mouthStroke?: number;
-  forward?: boolean;
-  lookAround?: number;
   trackPointer?: boolean;
   animated?: boolean;
   bodyId?: BotBodyId;
-  gradient?: [string, string, string];
-  faceColor?: MascotFaceColor | null;
   accessories?: readonly MascotAccessoryId[];
   /** Whose face this is; a decorative mascot has none. */
   kind?: AvatarKind;
 };
 
-function MausAvatarComponent(props: MausAvatarProps, ref: React.Ref<MausAvatarHandle>) {
-  const { color, size, state, motion, motionKey, gaze, trackPointer, animated, label, kind } = props;
-  const body = botBodyId(props.bodyId);
-  if (isCarvedBody(body)) {
-    return (
-      <CarvedAvatar
-        ref={ref}
-        body={body}
-        color={color}
-        faceColor={props.faceColor}
-        accessories={props.accessories}
-        size={size}
-        state={state}
-        motion={motion}
-        motionKey={motionKey}
-        gaze={gaze}
-        trackPointer={trackPointer}
-        animated={animated}
-        label={label}
-        kind={kind}
-      />
-    );
-  }
-  return <GradientAvatar ref={ref} {...props} bodyId={body} />;
+function MausAvatarComponent({ bodyId, ...props }: MausAvatarProps, ref: React.Ref<MausAvatarHandle>) {
+  return <CarvedAvatar ref={ref} body={botBodyId(bodyId)} {...props} />;
 }
-
-function GradientAvatarComponent(
-  {
-    color,
-    state = "idle",
-    expression,
-    size = 44,
-    label,
-    motion = "none",
-    motionKey = 0,
-    turn,
-    gaze,
-    spring,
-    eyeScale,
-    showMouth,
-    mouthStroke,
-    forward = true,
-    lookAround,
-    trackPointer = true,
-    animated = true,
-    bodyId,
-    gradient,
-    faceColor,
-    kind,
-  }: MausAvatarProps,
-  ref: React.Ref<MausAvatarHandle>,
-) {
-  const silhouette = MASCOT_BODIES[botMascotBody(bodyId)];
-  const chrome = color === "chrome";
-  const faceInk = mascotFaceInk(faceColor);
-  const inner = useRef<CursorAvatarHandle>(null);
-  useImperativeHandle(ref, () => ({
-    blink: () => inner.current?.blink(),
-    spin: (durationMs?: number) => inner.current?.spin(durationMs),
-    setExpression: (index: number) => inner.current?.setExpression(index),
-  }));
-
-  const [motionState, setMotionState] = useState<MausState | null>(null);
-  useEffect(() => {
-    if (motion === "none" || !animated) return;
-    const beat = MOTION_FACE[motion];
-    if (!beat) return;
-    if (beat.blink) inner.current?.blink();
-    if (beat.spin) inner.current?.spin(beat.spin);
-    if (!beat.state) return;
-    setMotionState(beat.state);
-    const timer = setTimeout(() => setMotionState(null), MOTION_FACE_MS);
-    return () => clearTimeout(timer);
-  }, [motion, motionKey, animated]);
-
-  const [pointer, setPointer] = useState({ x: 0, y: 0 });
-  const range = forward ? POINTER_GAZE.forward : POINTER_GAZE.authored;
-  const onPointerMove = (event: ReactPointerEvent<HTMLSpanElement>) => {
-    if (!trackPointer || !animated) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    setPointer({
-      x: Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width) * 2 - 1)) * range,
-      y: Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height) * 2 - 1)) * range,
-    });
-  };
-  const onPointerLeave = () => setPointer({ x: 0, y: 0 });
-
-  return (
-    <span
-      {...avatarMarks(kind, "mascot")}
-      className="inline-flex shrink-0"
-      onPointerMove={trackPointer && animated ? onPointerMove : undefined}
-      onPointerLeave={trackPointer && animated ? onPointerLeave : undefined}
-    >
-      <CursorAvatar
-        ref={inner}
-        state={motionState ?? state}
-        expression={expression}
-        size={size}
-        silhouette={silhouette}
-        gradient={gradient ?? gradientFor(color)}
-        picture={chrome && !faceInk ? steelBodyImage(silhouette.id, size, globalThis.devicePixelRatio ?? 1) : null}
-        eyeColor={faceInk ?? (chrome ? CHROME_EYES : undefined)}
-        title={label ?? null}
-        lookAround={lookAround ?? (forward ? 0 : 1)}
-        gaze={{ x: (gaze?.x ?? 0) + pointer.x, y: (gaze?.y ?? 0) + pointer.y }}
-        turn={turn}
-        spring={spring}
-        eyeScale={eyeScale}
-        showMouth={showMouth}
-        mouthStroke={mouthStroke}
-        paused={!animated}
-      />
-    </span>
-  );
-}
-
-const GradientAvatar = forwardRef(GradientAvatarComponent);
 
 export const MausAvatar = memo(forwardRef(MausAvatarComponent));
 
-export type BotAvatarProps = Omit<MausAvatarProps, "color" | "gradient"> & {
-  readable?: boolean;
+export type BotAvatarProps = Omit<MausAvatarProps, "color"> & {
   bot: {
     name?: string;
     color: MausColor;
@@ -256,7 +62,7 @@ export function resolveBotAvatarOutcome(params: {
   return "flatImage";
 }
 
-export function BotAvatar({ bot, size = 44, label, readable = false, ...mascotProps }: BotAvatarProps) {
+export function BotAvatar({ bot, size = 44, label, ...mascotProps }: BotAvatarProps) {
   const profile = botAvatarProfile(bot);
   const [imageFailed, setImageFailed] = useState(false);
   const worn = useMemo(() => mascotAccessories(bot.mascotAccessories), [bot.mascotAccessories]);
@@ -275,9 +81,7 @@ export function BotAvatar({ bot, size = 44, label, readable = false, ...mascotPr
         bodyId={bot.mascotBody ?? undefined}
         {...mascotProps}
         color={bot.color}
-        faceColor={bot.mascotFaceColor}
         accessories={worn}
-        gradient={readable ? roomAvatarGradient(bot.color) : undefined}
         size={size}
         label={label ?? bot.name}
         kind="bot"

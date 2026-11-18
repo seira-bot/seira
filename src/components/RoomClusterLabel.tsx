@@ -44,7 +44,6 @@ export function ClusterLabel({ bot, name, color, to = [], time, onOpen }: { bot?
         motion="none"
         motionKey={0}
         animated={false}
-        readable={isPaletteColor(color)}
       />
       <SpeakerName name={name} color={color} />
       {addressees}

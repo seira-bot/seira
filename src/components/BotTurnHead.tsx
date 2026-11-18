@@ -2,7 +2,7 @@ import type { Bot } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { normalizeState } from "@/lib/mascot";
 import { BotAvatar } from "./Avatar";
-import { isPaletteColor, SpeakerName } from "./RoomClusterLabel";
+import { SpeakerName } from "./RoomClusterLabel";
 
 /** Where a bot's turn begins in Simple mode: its face on the start edge, then its name and the time. The face hangs in the
  * indent the turn's own rows leave, so the head and the prose under it share one start edge. */
@@ -22,7 +22,6 @@ export function BotTurnHead({ bot, name, color, time, onOpen, children }: {
       motion="none"
       motionKey={0}
       animated={false}
-      readable={isPaletteColor(color)}
     />
   );
   return (

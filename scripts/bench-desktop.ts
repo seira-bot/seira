@@ -224,7 +224,7 @@ const HEAVY: Record<string, RegExp> = {
   duckdb: /node_modules\/@duckdb\//,
   analytics: /node_modules\/(posthog-js|@posthog)\//,
   locales: /\/src\/locales\//,
-  mascot: /\/src\/(lib\/mascot|components\/(CursorAvatar|CarvedAvatar|Avatar|mascot))/i,
+  mascot: /\/src\/(lib\/mascot|components\/(CarvedAvatar|Avatar|mascot))/i,
 };
 const packageOf = (id: string) => {
   const at = id.lastIndexOf("/node_modules/");

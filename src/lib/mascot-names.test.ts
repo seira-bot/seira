@@ -5,7 +5,7 @@ import { MASCOT_ACCESSORY_IDS } from "../../shared/mascot-accessories";
 import { en, locales } from "@/locales";
 import { setLocale } from "./i18n";
 import { MAUS_COLOR_NAMES, PICKABLE_STATES } from "./mascot";
-import { bodyName, colorName, expressionName, silhouetteName } from "./mascot-names";
+import { bodyName, colorName, expressionName } from "./mascot-names";
 
 afterEach(() => {
   setLocale("en");
@@ -27,13 +27,12 @@ describe("mascot names", () => {
   });
 
   it("reads the names in the app language", () => {
-    expect([bodyName("pumpkin"), colorName("red"), expressionName("happy"), silhouetteName("Ponytail")]).toEqual(["Pumpkin", "red", "happy", "Ponytail"]);
+    expect([bodyName("pumpkin"), colorName("red"), expressionName("happy")]).toEqual(["Pumpkin", "red", "happy"]);
     setLocale("pt-br");
-    expect([bodyName("pumpkin"), colorName("red"), expressionName("happy"), silhouetteName("Ponytail")]).toEqual(["Abóbora", "vermelha", "feliz", "Rabo de cavalo"]);
+    expect([bodyName("pumpkin"), colorName("red"), expressionName("happy")]).toEqual(["Abóbora", "vermelha", "feliz"]);
   });
 
   it("falls back to the id or name it was given when the catalog has none", () => {
     expect(expressionName("unknown-face")).toBe("unknown-face");
-    expect(silhouetteName("Not a body")).toBe("Not a body");
   });
 });

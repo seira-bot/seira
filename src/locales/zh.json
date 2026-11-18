@@ -9736,7 +9736,6 @@
   "mascot.expression.proud": "自豪",
   "mascot.useExpression": "使用{expression}表情",
   "mascot.useColor": "使用{color}的吉祥物配色",
-  "mascot.label": "{name} 吉祥物",
   "avatar.alt": "{name} 头像",
   "avatar.altFallback": "机器人头像",
   "botIdentity.framing.preview": "{name} 头像预览",
