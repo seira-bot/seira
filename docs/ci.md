@@ -62,6 +62,8 @@ holds these rules for every `package-*.yml` file:
   the repository.
 - Every job runs on a GitHub-hosted runner (`ubuntu-*`, `windows-*`, or
   `macos-*`), never on a self-hosted runner.
+- No step uses a dependency cache (`package-manager-cache: false`), so another
+  run cannot change what the package contains.
 - The workflow packages only through a `pnpm package:*` script, and each such
   script in `package.json` ends with `electron-builder ... --publish never`.
 - It has one `actions/upload-artifact` step with `if-no-files-found: error`.

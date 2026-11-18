@@ -127,6 +127,19 @@ describe("Package workflows", () => {
     }
   });
 
+  it("use no dependency cache, so no other run can change what a package contains", () => {
+    for (const [file, flow] of packageWorkflows) {
+      const steps = Object.values(flow.jobs).flatMap(stepsOf);
+      expect(steps.some((step) => step.uses?.startsWith("actions/cache")), file).toBe(false);
+      const nodes = steps.filter((step) => step.uses?.startsWith("actions/setup-node@"));
+      expect(nodes.length, file).toBeGreaterThan(0);
+      for (const step of nodes) {
+        expect(step.with?.cache, file).toBeUndefined();
+        expect(step.with?.["package-manager-cache"], file).toBe(false);
+      }
+    }
+  });
+
   it("run on GitHub-hosted runners only", () => {
     for (const [file, flow] of packageWorkflows) {
       for (const [id, job] of Object.entries(flow.jobs)) {
