@@ -6,10 +6,9 @@ import { mascotAccessories, type MascotAccessoryId } from "../../shared/mascot-a
 // anchor, width (in head radii), pivot, and size. brand/mascot/cast/tools/avatars.py makes both.
 const files = import.meta.glob<string>("../assets/seira-accessory/*.webp", { eager: true, query: "?url", import: "default" });
 
-type Point = [number, number];
-
-interface StylePlacement { r: number; anchors: Partial<Record<string, Point>> }
-interface StickerPlacement { anchor?: string; width?: number; pivot?: Point; size: Point; file: string }
+// Points are [x, y].
+interface StylePlacement { r: number; anchors: Partial<Record<string, number[]>> }
+interface StickerPlacement { anchor?: string; width?: number; pivot?: number[]; size: number[]; file: string }
 
 const STYLES = placement.styles as Record<string, StylePlacement>;
 const STICKERS = placement.accessories as Record<string, StickerPlacement>;
@@ -38,12 +37,12 @@ export function accessorySprites(style: string, ids: readonly MascotAccessoryId[
     const href = sticker && files[`../assets/seira-accessory/${sticker.file}`];
     if (!sticker || !href) return [];
     const anchor = sticker.anchor ?? "top";
-    const point: Point | undefined = anchor === "eyes" ? [eyes.cx, eyes.cy] : head.anchors[anchor];
-    if (!point) return [];
-    const [w, h] = sticker.size;
+    const [ax, ay] = anchor === "eyes" ? [eyes.cx, eyes.cy] : head.anchors[anchor] ?? [];
+    if (ax === undefined || ay === undefined) return [];
+    const [w = 1, h = 1] = sticker.size;
     const scale = ((sticker.width ?? 1) * head.r) / w;
-    const [px, py] = sticker.pivot ?? [w / 2, h / 2];
-    return [{ id, href, x: r2(point[0] - px * scale), y: r2(point[1] - py * scale), width: r2(w * scale), height: r2(h * scale) }];
+    const [px = w / 2, py = h / 2] = sticker.pivot ?? [];
+    return [{ id, href, x: r2(ax - px * scale), y: r2(ay - py * scale), width: r2(w * scale), height: r2(h * scale) }];
   });
 }
 
