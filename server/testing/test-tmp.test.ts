@@ -15,8 +15,9 @@ describe("the temp folder of a test file", () => {
     for (const name of ["TMPDIR", "TEMP", "TMP"]) expect(process.env[name]).toBe(tmpdir());
   });
 
-  it("sits beside the throwaway home, not inside it", () => {
+  it("holds the throwaway home, and is not inside it", () => {
     expect(basename(homedir()).startsWith(TEST_HOME_PREFIX)).toBe(true);
+    expect(homedir().startsWith(tmpdir() + sep)).toBe(true);
     expect(tmpdir().startsWith(homedir() + sep)).toBe(false);
   });
 
