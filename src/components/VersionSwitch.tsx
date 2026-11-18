@@ -2,7 +2,6 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { t } from "@/lib/i18n";
 import type { Message } from "@/state/store";
 
-/** The previous and next buttons under an edited message, one step per version. */
 export function VersionSwitch({ index, versions, busy, onSwitch }: {
   index: number;
   versions: readonly Message[];

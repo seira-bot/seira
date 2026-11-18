@@ -371,7 +371,7 @@ const Bubble = memo(function Bubble({
     [message.attachments],
   );
   const join: BubbleJoin = { above: joinAbove, below: joinBelow };
-  const turnRow = simple && !user && !peer, turnBelow = turnRow && !joinBelow;
+  const turnRow = simple && !user && !peer && !message.inbox, turnBelow = turnRow && !joinBelow;
   const reply = useReplySegments(conversational && !user && !peer && !viewRaw && !replyTarget && message.kind === "text", text, message.at, openedAt, message.id);
   const split = reply.segments.length > 1;
   // Simple mode draws each table of a reply as its own card between the reply's prose bubbles.

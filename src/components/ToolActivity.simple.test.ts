@@ -89,6 +89,14 @@ describe("ActivityRun", () => {
 });
 
 describe("ActivityRun at narrow widths", () => {
+  it("keeps Advanced mode's chip, which shrinks and truncates its summary", () => {
+    mode.advanced = true;
+    const steps = [{ id: "a", at: 1, role: "bot" as const, kind: "activity" as const, tool: { name: "Read", ok: true } }];
+    const html = renderToStaticMarkup(createElement(ActivityRun, { messages: steps, children: null }));
+    expect(html).toMatch(/<button[^>]*class="flex min-w-0 max-w-full /);
+    expect(html).not.toContain("data-activity-run");
+  });
+
   it("lets the run's row shrink and truncate its summary instead of running off the screen", () => {
     const steps = [
       { id: "a", at: 1, role: "bot" as const, kind: "activity" as const, tool: { name: "Read", ok: true } },

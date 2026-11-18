@@ -10,7 +10,6 @@ import {
   useStore,
   formatTime,
   openRoomThread,
-  openBot,
   openThread,
   type Bot,
   type Group,
@@ -501,7 +500,7 @@ export const Transcript = memo(function Transcript({
               (m.kind === "text" && botTextShowsSpeaker(items, i))
               || (!user && m.kind !== "text" && newCluster && !(m.kind === "activity" && m.comm) && !laterTextOwns(items, i, m.from.botId, m.at))
             ) && (
-              <ClusterLabel bot={memberOf(m.from.botId)} name={m.from.name} color={m.from.color} time={simple ? formatTime(m.at) : undefined} onOpen={simple && memberOf(m.from.botId) ? () => openBot(dispatch, memberOf(m.from!.botId)!, showThreads) : undefined} to={m.kind === "text" ? roomAddressees(m, members, transcript, teammatePeers) : undefined} />
+              <ClusterLabel bot={memberOf(m.from.botId)} name={m.from.name} color={m.from.color} time={simple ? formatTime(m.at) : undefined} onOpen={simple && memberOf(m.from.botId) ? () => dispatch({ type: "toggleSettings", open: true, botId: m.from!.botId }) : undefined} to={m.kind === "text" ? roomAddressees(m, members, transcript, teammatePeers) : undefined} />
             )}
             {fold && (
               <TurnNarrationRun

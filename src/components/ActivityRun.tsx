@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import type { Message } from "@/state/store";
 import { describeRun } from "@/lib/activity-runs";
 import { cn } from "@/lib/cn";
@@ -8,7 +8,6 @@ import { useAdvancedMode } from "@/lib/interface-mode";
 import { toolStepLabel } from "@/lib/tool-step-label";
 import { BOT_TURN_INDENT } from "./chat-bubble";
 
-/** One card for a run of tool steps: the summary and a check, with the steps listed under a thin line once opened. */
 export function ActivityRun({
   messages,
   label,
@@ -28,8 +27,43 @@ export function ActivityRun({
   useEffect(() => {
     if (forceOpen) setOpen(true);
   }, [forceOpen]);
+  if (advanced) {
+    if (open) {
+      return (
+        <div className="flex flex-col gap-1">
+          <div className="flex min-w-0 justify-start">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-expanded
+              className="flex min-w-0 max-w-full items-center gap-2 rounded-full border border-hairline/40 bg-panel px-3 py-1.5 text-[13px] text-ink-secondary hover:bg-control"
+            >
+              <ChevronRight size={13} className="shrink-0 rotate-90" />
+              <span className="min-w-0 truncate font-medium leading-5">{summary}</span>
+            </button>
+          </div>
+          {children}
+        </div>
+      );
+    }
+    return (
+      <div className="flex min-w-0 justify-start">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-expanded={false}
+          title={t("chat.run.showSteps")}
+          className="flex min-w-0 max-w-full items-center gap-2 rounded-full border border-hairline/40 bg-panel px-3 py-1.5 text-[13px] text-ink-secondary hover:bg-control"
+        >
+          <Check size={13} className="shrink-0 text-success" />
+          <span className="min-w-0 max-w-[480px] truncate font-medium leading-5">{summary}</span>
+          <ChevronRight size={13} className="shrink-0" />
+        </button>
+      </div>
+    );
+  }
   return (
-    <div data-activity-run className={cn("flex min-w-0 justify-start", !advanced && BOT_TURN_INDENT)}>
+    <div data-activity-run className={cn("flex min-w-0 justify-start", BOT_TURN_INDENT)}>
       <div className="min-w-0 max-w-[44rem] flex-1 overflow-hidden rounded-xl border border-hairline">
         <button
           type="button"
