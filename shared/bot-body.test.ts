@@ -21,13 +21,17 @@ describe("bot bodies", () => {
     expect(DEFAULT_BOT_BODY).toBe("seira");
   });
 
-  it("shows Seira first in the picker, then the gradient bodies", () => {
+  it("shows Seira first in the picker, then her cast, then the gradient bodies", () => {
     expect(PICKER_BODY_IDS[0]).toBe("seira");
     expect(PICKER_BODY_IDS).toEqual([...BRAND_BODY_IDS, ...MASCOT_BODY_IDS]);
+    expect(BRAND_BODY_IDS).toHaveLength(26);
+    expect(BRAND_BODY_IDS.slice(1, 4)).toEqual(["mira", "lumi", "rhea"]);
   });
 
   it("tells the brand body and the festival bodies apart", () => {
     expect(isBrandBody("seira")).toBe(true);
+    expect(isBrandBody("rhea")).toBe(true);
+    expect(isFestivalBody("rhea")).toBe(false);
     expect(isBrandBody("pumpkin")).toBe(false);
     expect(isBrandBody("cursor")).toBe(false);
     expect(isFestivalBody("seira")).toBe(false);

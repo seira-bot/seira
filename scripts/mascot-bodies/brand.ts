@@ -1,5 +1,5 @@
 /**
- * The brand pack: Seira, the shipped mascot. A blunt bob over a dark visor, with red eyes.
+ * The brand pack: Seira, the shipped mascot, then the cast. Seira is a blunt bob over a dark visor, with red eyes.
  *
  * The desktop app draws the rendered picture in `src/assets/seira-body/` and keeps only the eyes and the visor clip
  * from here. The paths match that picture, cropped to the 240-unit square, for clients that have no picture.
@@ -9,6 +9,7 @@
 
 import { box, circle, ellipse, intersect, mirror, smooth, stroke } from "./draw.ts"
 import type { Def } from "./carved.ts"
+import { CAST } from "./cast.ts"
 
 const SHELL = "#e8ebef"
 const SCREEN = "#0c0f14"
@@ -26,4 +27,5 @@ export const BRAND: Def[] = [
     eyes: { cx: 120, cy: 106, dx: 37, w: 20, h: 38, round: 32, ink: EYE, mouthY: 128 },
     parts: [[hair, "body"], [shell, SHELL], [visor, SCREEN], [lock, "body"]],
   },
+  ...CAST,
 ]

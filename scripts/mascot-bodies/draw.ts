@@ -52,6 +52,51 @@ export const polygon = (pts: Point[]): Field => (x, y) => {
   return s * Math.sqrt(d)
 }
 
+/**
+ * Distance to a set of closed rings, inside by the even-odd rule, so a ring inside another one cuts a hole.
+ * The distance is exact up to `reach` and stops there: enough to trace the outline, not to grow or blend the shape.
+ * Edges sit in buckets, so each point reads only the few edges near it.
+ */
+export const rings = (loops: Point[][], reach = 4): Field => {
+  const edges: Array<[number, number, number, number]> = []
+  for (const loop of loops) for (let i = 0, j = loop.length - 1; i < loop.length; j = i, i++) edges.push([loop[j][0], loop[j][1], loop[i][0], loop[i][1]])
+  const CELL = 4
+  const key = (cx: number, cy: number) => (cx + 100) * 1000 + cy + 100
+  const near = new Map<number, number[]>()
+  const rows = new Map<number, number[]>()
+  const add = (map: Map<number, number[]>, k: number, e: number) => {
+    const list = map.get(k)
+    if (list) list.push(e)
+    else map.set(k, [e])
+  }
+  edges.forEach(([ax, ay, bx, by], e) => {
+    const x0 = Math.floor((Math.min(ax, bx) - reach) / CELL)
+    const x1 = Math.floor((Math.max(ax, bx) + reach) / CELL)
+    const y0 = Math.floor((Math.min(ay, by) - reach) / CELL)
+    const y1 = Math.floor((Math.max(ay, by) + reach) / CELL)
+    for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) add(near, key(cx, cy), e)
+    for (let row = Math.floor(Math.min(ay, by)); row <= Math.floor(Math.max(ay, by)); row++) add(rows, row, e)
+  })
+  return (x, y) => {
+    let d = reach * reach
+    for (const e of near.get(key(Math.floor(x / CELL), Math.floor(y / CELL))) ?? []) {
+      const [ax, ay, bx, by] = edges[e]
+      const ex = bx - ax
+      const ey = by - ay
+      const wx = x - ax
+      const wy = y - ay
+      const t = clamp((wx * ex + wy * ey) / (ex * ex + ey * ey), 0, 1)
+      d = Math.min(d, (wx - ex * t) ** 2 + (wy - ey * t) ** 2)
+    }
+    let hit = false
+    for (const e of rows.get(Math.floor(y)) ?? []) {
+      const [ax, ay, bx, by] = edges[e]
+      if (ay > y !== by > y && x < ax + ((y - ay) * (bx - ax)) / (by - ay)) hit = !hit
+    }
+    return hit ? -Math.sqrt(d) : Math.sqrt(d)
+  }
+}
+
 /** A round-jointed stroke through `[x, y, radius]` points. */
 export const polyStroke = (pts: Array<[number, number, number]>): Field => (x, y) => {
   let best = Infinity

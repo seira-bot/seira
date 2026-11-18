@@ -4,15 +4,19 @@ import { describe, expect, it } from "vitest";
 
 import { CarvedAvatar, REST_POSE, carvedFills, carvedGeometry, hairTint } from "./CarvedAvatar";
 import { MausAvatar } from "./Avatar";
-import { CARVED_BODIES, CARVED_BODY_IDS } from "../../shared/carved-bodies";
+import { BRAND_BODY_IDS, CARVED_BODIES, CARVED_BODY_IDS } from "../../shared/carved-bodies";
+import { isBrandBody } from "../../shared/bot-body";
 import { MAUS_COLORS } from "@/lib/mascot";
+import { castHairMap } from "@/lib/cast-body";
 
-const render = (body: (typeof CARVED_BODY_IDS)[number], color: "orange" | "purple" | "chrome" = "orange", faceColor: "white" | "black" | null = null) =>
+const CAST_IDS = BRAND_BODY_IDS.filter((id) => id !== "seira");
+
+const render = (body: (typeof CARVED_BODY_IDS)[number], color: "orange" | "purple" | "chrome" | "silver" = "orange", faceColor: "white" | "black" | null = null) =>
   renderToStaticMarkup(createElement(CarvedAvatar, { body, color, faceColor, animated: false, label: body }));
 
 describe("CarvedAvatar", () => {
   it("draws every part, two eyes, and a smile unless the drawing has its own mouth", () => {
-    for (const id of CARVED_BODY_IDS.filter((id) => id !== "seira")) {
+    for (const id of CARVED_BODY_IDS.filter((id) => !isBrandBody(id))) {
       const markup = render(id);
       const body = CARVED_BODIES[id];
       expect(markup).toContain(`data-carved-body="${id}"`);
@@ -48,7 +52,38 @@ describe("CarvedAvatar", () => {
     expect(markup).toContain('stroke="#e11d48"');
   });
 
-  it.each(["pumpkin", "laddu"] as const)("is what MausAvatar wears for the %s body", (bodyId) => {
+  it("draws every cast body from its own rendered head, with two eyes in its own eye colour", () => {
+    expect(CAST_IDS).toHaveLength(25);
+    for (const id of CAST_IDS) {
+      const markup = render(id, "chrome", "white");
+      expect(markup, id).toMatch(new RegExp(`<image href="[^"]*cast-body/${id}/front-\\d+\\.webp"`));
+      expect(markup.match(/<rect /g)?.length, id).toBe(2);
+      expect(markup.match(new RegExp(`<rect [^>]*fill="${CARVED_BODIES[id].eyes.ink}"`, "g"))?.length, id).toBe(2);
+      expect(markup.match(/<path /g)?.length, id).toBe(2);
+      expect(markup, id).not.toContain("feComponentTransfer");
+    }
+  });
+
+  it("tints the cast's hair with the bot's colour, and shows each preset's own hair for silver and chrome", () => {
+    const markup = render("rhea", "orange");
+    expect(markup).toMatch(/<image href="[^"]*cast-body\/rhea\/hair-\d+\.webp"[^>]*filter="url\(#hair-[^"]+\)"/);
+    for (const table of castHairMap(hairTint("orange")!)) expect(markup).toContain(`tableValues="${table}"`);
+    expect(markup).not.toContain("mix-blend-mode");
+    expect(render("rhea", "silver")).not.toContain("hair-");
+    expect(carvedFills(CARVED_BODIES.rhea, "chrome").body).toBe("#B8232F");
+    expect(carvedFills(CARVED_BODIES.rhea, "blue").body).toBe(carvedFills(CARVED_BODIES.pumpkin, "blue").body);
+  });
+
+  it("maps the grey hair to the colour at full shade, and to a lighter highlight above it", () => {
+    const [red, green, blue] = castHairMap("#804020").map((table) => table.split(" ").map(Number));
+    expect(red).toHaveLength(13);
+    expect([red![0], green![0], blue![0]]).toEqual([0, 0, 0]);
+    expect(red![10]).toBeCloseTo(0x80 / 255, 2);
+    expect(blue![10]).toBeCloseTo(0x20 / 255, 2);
+    expect(red![12]).toBeGreaterThan(red![10]!);
+  });
+
+  it.each(["pumpkin", "laddu", "rhea"] as const)("is what MausAvatar wears for the %s body", (bodyId) => {
     const markup = renderToStaticMarkup(createElement(MausAvatar, { color: "orange", bodyId, animated: false }));
     expect(markup).toContain(`data-carved-body="${bodyId}"`);
     expect(markup).not.toContain("linearGradient");

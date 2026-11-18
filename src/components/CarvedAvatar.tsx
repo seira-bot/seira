@@ -17,6 +17,7 @@ import { frameFloorMs, nextFrameAt } from "./mascot-motion";
 import { mascotFaceInk, type MascotFaceColor } from "../../shared/bot-avatar";
 import { isBrandBody } from "../../shared/bot-body";
 import { seiraPictures } from "@/lib/seira-body";
+import { castHairMap, castPictures } from "@/lib/cast-body";
 
 /** Where the face looks and how it feels. */
 export type CarvedPose = {
@@ -174,7 +175,10 @@ function CarvedAvatarComponent(
 ) {
   const body = CARVED_BODIES[bodyId];
   const faceInk = isBrandBody(bodyId) ? undefined : mascotFaceInk(faceColor);
-  const pictures = bodyId === "seira" ? seiraPictures(size, globalThis.devicePixelRatio ?? 1) : null;
+  const density = globalThis.devicePixelRatio ?? 1;
+  const seira = bodyId === "seira" ? seiraPictures(size, density) : null;
+  const cast = !seira && isBrandBody(bodyId) ? castPictures(bodyId, size, density) : null;
+  const pictures = seira ?? cast;
   const uid = useId().replace(/:/g, "");
   const reduced = usePrefersReducedMotion();
   const live = animated && !reduced;
@@ -281,6 +285,7 @@ function CarvedAvatarComponent(
 
   const fills = carvedFills(body, color);
   const tint = pictures ? hairTint(color) : null;
+  const hairMap = cast && tint ? castHairMap(tint) : null;
   const glow = pictures ? `url(#glow-${uid})` : undefined;
   const resolve = (fill: string) => (fill === "body" ? fills.body : fill === "accent" ? fills.accent : fill);
   return (
@@ -308,7 +313,16 @@ function CarvedAvatarComponent(
               <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
             </filter>
           )}
-          {pictures && tint && (
+          {hairMap && (
+            <filter id={`hair-${uid}`} colorInterpolationFilters="sRGB">
+              <feComponentTransfer>
+                <feFuncR type="table" tableValues={hairMap[0]} />
+                <feFuncG type="table" tableValues={hairMap[1]} />
+                <feFuncB type="table" tableValues={hairMap[2]} />
+              </feComponentTransfer>
+            </filter>
+          )}
+          {seira && tint && (
             <mask id={`hair-${uid}`} maskUnits="userSpaceOnUse" x="0" y="0" width="240" height="240">
               <image href={pictures.hair} x="0" y="0" width="240" height="240" />
             </mask>
@@ -318,7 +332,8 @@ function CarvedAvatarComponent(
           {pictures ? (
             <g style={{ isolation: "isolate" }}>
               <image href={pictures.head} x="0" y="0" width="240" height="240" />
-              {tint && <rect x="0" y="0" width="240" height="240" fill={tint} mask={`url(#hair-${uid})`} style={{ mixBlendMode: "multiply" }} />}
+              {seira && tint && <rect x="0" y="0" width="240" height="240" fill={tint} mask={`url(#hair-${uid})`} style={{ mixBlendMode: "multiply" }} />}
+              {cast && hairMap && <image href={cast.hair} x="0" y="0" width="240" height="240" filter={`url(#hair-${uid})`} />}
             </g>
           ) : body.parts.map((part, i) => <path key={i} d={part.d} fill={resolve(part.fill)} />)}
           <g clipPath={`url(#carved-${uid})`} filter={glow}>

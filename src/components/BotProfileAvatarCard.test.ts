@@ -55,8 +55,16 @@ describe("BotProfileAvatarCard body picker", () => {
     expect(markup.indexOf('aria-label="Use the Seira body"')).toBeLessThan(markup.indexOf(`aria-label="Use the ${MASCOT_BODIES.cursor.name} body"`));
   });
 
-  it("hides the facial features row on Seira and keeps it on other bodies", () => {
+  it("lists the cast after Seira and before the gradient bodies", () => {
+    const markup = renderCard(makeBot());
+    const at = (name: string) => markup.indexOf(`aria-label="Use the ${name} body"`);
+    expect(at("Rhea")).toBeGreaterThan(at("Seira"));
+    expect(at("Ellis")).toBeLessThan(at(MASCOT_BODIES.cursor.name));
+  });
+
+  it("hides the facial features row on Seira and her cast, and keeps it on other bodies", () => {
     expect(renderCard(makeBot())).not.toContain("data-avatar-face-color");
+    expect(renderCard(makeBot({ mascotBody: "rhea" }))).not.toContain("data-avatar-face-color");
     expect(renderCard(makeBot({ mascotBody: "cursor" }))).toContain("data-avatar-face-color");
   });
 
