@@ -1,9 +1,13 @@
 # CI
 
-Seira has one workflow, `.github/workflows/ci.yml`. It runs on every pull
+Seira has one CI workflow, `.github/workflows/ci.yml`. It runs on every pull
 request, on every push to `main`, and on a manual start. Every run does the
 same work on Linux. There is no path-based job selection, merge queue, or
 nightly run.
+
+The repository also has package workflows, `.github/workflows/package-*.yml`.
+A maintainer starts them by hand to build a desktop package (see
+[Package workflows](#package-workflows)).
 
 ## Jobs
 
@@ -33,11 +37,34 @@ repository or read a secret:
 
 `scripts/ci-workflow.test.ts` holds these rules for every file in
 `.github/workflows/`. It runs in the `checks` job, so a change that breaks a
-rule fails CI.
+rule fails CI. The rules also stop a workflow that reads `github.token`, puts
+an `inputs` value into a shell command, or runs `electron-builder` with a
+`--publish` value other than `never`.
 
 A job that needs write access (for example a future release job) must use the
 GitHub environment `release`, and that environment must need a maintainer's
 approval. The test fails a job that asks for write access without it.
+
+## Package workflows
+
+| Workflow | What it builds |
+| --- | --- |
+| `package-windows.yml` | The Windows x64 installer, its block map, `latest.yml`, `Seira-setup.exe`, and `SHA256SUMS-windows-x64.txt` |
+
+A package workflow builds a package and uploads it as a workflow artifact.
+It does not create a tag or a release. A maintainer attaches the artifact to
+the release by hand (see [Releasing](releasing.md)). `scripts/ci-workflow.test.ts`
+holds these rules for every `package-*.yml` file:
+
+- The only trigger is `workflow_dispatch`. Only a person with write access can
+  start it, and a pull request never runs it.
+- No job asks for a permission or an environment, so the token can only read
+  the repository.
+- Every job runs on a GitHub-hosted runner (`ubuntu-*`, `windows-*`, or
+  `macos-*`), never on a self-hosted runner.
+- The workflow packages only through a `pnpm package:*` script, and each such
+  script in `package.json` ends with `electron-builder ... --publish never`.
+- It has one `actions/upload-artifact` step with `if-no-files-found: error`.
 
 ## Required check
 
@@ -109,10 +136,10 @@ Seira took over a larger CI from the project it forked. These parts are gone:
 
 | Removed | Why |
 | --- | --- |
-| Windows and macOS shards, Windows and macOS smokes | Seira ships only a Linux AppImage. |
+| Windows and macOS shards, Windows and macOS smokes | CI tests on Linux only. `package-windows.yml` runs the packaged smokes for the Windows installer. |
 | Packaged server, browser identity, browser driver, and UI smokes | Heavy jobs that download browsers and binaries. Run them locally when you change that area. |
 | Behavior evals, FOSS build, relay, control plane, broker deploy | Not part of the Seira app, or needed a secret. |
-| Release, packaging, container image, npm, and docs-site workflows | Seira releases by hand. See [Releasing](releasing.md). |
+| Release, Linux packaging, container image, npm, and docs-site workflows | A maintainer releases by hand. See [Releasing](releasing.md). |
 | Server installer, server update, Podman, and connector tests | They install container images that Seira does not publish. |
 | Contributor license check | Seira has no source-available folder. |
 

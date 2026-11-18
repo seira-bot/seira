@@ -15,6 +15,7 @@ interface Step {
 
 interface Job {
   name?: string;
+  "runs-on"?: string | string[];
   needs?: string | string[];
   if?: string;
   uses?: string;
@@ -35,6 +36,11 @@ const files = readdirSync(directory).sort();
 const texts = new Map(files.map((file) => [file, readFileSync(new URL(file, directory), "utf8")]));
 const workflows = new Map(files.map((file) => [file, parse(texts.get(file)!) as Workflow]));
 const workflow = workflows.get("ci.yml")!;
+const packageFiles = files.filter((file) => /^package-[a-z0-9-]+\.yml$/.test(file));
+const packageWorkflows = packageFiles.map((file) => [file, workflows.get(file)!] as const);
+const scripts = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+  scripts: Record<string, string>;
+}).scripts;
 
 const stepsOf = (job: Job) => job.steps ?? [];
 const allSteps = () => [...workflows.values()].flatMap((flow) => Object.values(flow.jobs).flatMap(stepsOf));
@@ -42,8 +48,8 @@ const allRuns = () => allSteps().flatMap((step) => (step.run === undefined ? [] 
 const runs = (job: Job) => stepsOf(job).flatMap((step) => (step.run === undefined ? [] : [step.run]));
 
 describe("CI workflows", () => {
-  it("keeps one workflow file", () => {
-    expect(files).toEqual(["ci.yml"]);
+  it("keeps the CI workflow and package workflows only", () => {
+    expect(files).toEqual(["ci.yml", ...packageFiles]);
   });
 
   it("runs on pull requests, pushes to main and manual starts only", () => {
@@ -66,8 +72,12 @@ describe("CI workflows", () => {
     }
   });
 
-  it("reads no secret", () => {
-    for (const [file, text] of texts) expect(text, file).not.toContain("secrets.");
+  it("reads no secret and no token", () => {
+    for (const [file, text] of texts) {
+      for (const forbidden of ["secrets.", "github.token", "GITHUB_TOKEN", "GH_TOKEN"]) {
+        expect(text, `${file} reads ${forbidden}`).not.toContain(forbidden);
+      }
+    }
   });
 
   it("drops the credentials of every checkout", () => {
@@ -85,15 +95,63 @@ describe("CI workflows", () => {
     for (const value of uses) expect(value).toMatch(/^[^@\s]+@[0-9a-f]{40}$/);
   });
 
-  it("passes event values through env, never into a command line", () => {
-    for (const run of allRuns()) expect(run).not.toMatch(/\$\{\{\s*github\.event/);
+  it("passes event values and inputs through env, never into a command line", () => {
+    for (const run of allRuns()) expect(run).not.toMatch(/\$\{\{[^}]*\b(github\.event|github\.head_ref|inputs\.)/);
   });
 
-  it("never builds a release, creates a tag, or publishes a package", () => {
+  it("never creates a tag or publishes a release or a package", () => {
     for (const run of allRuns()) {
       for (const forbidden of ["gh release", "git tag", "git push", "npm publish", "docker push"]) {
         expect(run).not.toContain(forbidden);
       }
+      expect(run).not.toMatch(/--publish(?!\s+never\b)/);
+    }
+  });
+});
+
+describe("Package workflows", () => {
+  it("include the Windows installer", () => {
+    expect(packageFiles).toContain("package-windows.yml");
+  });
+
+  it("start only by hand, so a pull request never runs them", () => {
+    for (const [file, flow] of packageWorkflows) expect(Object.keys(flow.on), file).toEqual(["workflow_dispatch"]);
+  });
+
+  it("ask for no job permission and no environment, so the token stays read-only", () => {
+    for (const [file, flow] of packageWorkflows) {
+      for (const [id, job] of Object.entries(flow.jobs)) {
+        expect(job.permissions, `${file} job ${id}`).toBeUndefined();
+        expect(job.environment, `${file} job ${id}`).toBeUndefined();
+      }
+    }
+  });
+
+  it("run on GitHub-hosted runners only", () => {
+    for (const [file, flow] of packageWorkflows) {
+      for (const [id, job] of Object.entries(flow.jobs)) {
+        expect(job["runs-on"], `${file} job ${id}`).toMatch(/^(ubuntu|windows|macos)-[0-9a-z.-]+$/);
+      }
+    }
+  });
+
+  it("package only through package.json scripts that never publish", () => {
+    for (const [file, flow] of packageWorkflows) {
+      const commands = Object.values(flow.jobs).flatMap(runs);
+      expect(commands.some((run) => run.includes("electron-builder")), file).toBe(false);
+      const used = commands.flatMap((run) => [...run.matchAll(/\bpnpm (package:[\w:-]+)/g)].map(([, name]) => name));
+      expect(used.length, file).toBeGreaterThan(0);
+      for (const name of used) {
+        expect(scripts[name], `${file} runs ${name}`).toMatch(/electron-builder .*--publish never$/);
+      }
+    }
+  });
+
+  it("upload their packages as one workflow artifact and fail when no file matches", () => {
+    for (const [file, flow] of packageWorkflows) {
+      const uploads = Object.values(flow.jobs).flatMap(stepsOf).filter((step) => step.uses?.startsWith("actions/upload-artifact@"));
+      expect(uploads.length, file).toBe(1);
+      expect(uploads[0].with?.["if-no-files-found"], file).toBe("error");
     }
   });
 });
