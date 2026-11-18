@@ -1,4 +1,4 @@
-import { cloudAsleep, onCloudPower } from "../lib/cloud-power";
+import { cloudAsleep, onCloudPower } from "../lib/cloud-power"; import { cloudSells } from "@/lib/cloud-sale";
 import { api, ApiError, retryRequest, snapshotArrays } from "./api";
 import { loadOlderPage, MESSAGE_PAGE_SIZE, reduceOlderMessages } from "./message-history";
 export { MESSAGE_PAGE_SIZE } from "./message-history";
@@ -405,7 +405,6 @@ import type { BrowserEngineSummary, BrowserProfile, ConfigStatus, ManagedPolicyS
 export type { BrowserEngineSummary, BrowserProfile, ConfigStatus, ManagedPolicySummary };
 
 import { configStatusFromFrame, type ConfigStatusFrame } from "@/lib/config-status-frame";
-import { cloudSells } from "@/lib/cloud-sale";
 export { configStatusFromFrame, type ConfigStatusFrame };
 
 export type { EngineInstall } from "./engine-install";
@@ -1503,13 +1502,11 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     }
     case "openCloudAdd":
-      if (!action.signIn && !cloudSells()) return state;
-      return { ...state, cloudAdd: state.cloudAdd ?? { source: action.source, ...(action.signIn ? { signIn: true as const } : {}) }, cloudHowTo: false };
+      return !action.signIn && !cloudSells() ? state : { ...state, cloudAdd: state.cloudAdd ?? { source: action.source, ...(action.signIn ? { signIn: true as const } : {}) }, cloudHowTo: false };
     case "closeCloudAdd":
       return state.cloudAdd ? { ...state, cloudAdd: null } : state;
     case "cloudHowTo":
-      if (action.open && !cloudSells()) return state;
-      return state.cloudHowTo === action.open ? state : { ...state, cloudHowTo: action.open };
+      return state.cloudHowTo === action.open || (action.open && !cloudSells()) ? state : { ...state, cloudHowTo: action.open };
     case "toggleTour": {
       const open = action.open ?? !state.tourOpen;
       return { ...state, tourOpen: open, appSettingsOpen: open ? false : state.appSettingsOpen };
