@@ -42,6 +42,8 @@ test("an AppImage update can never be written to a different filename", () => {
   assert.doesNotMatch(bundle, renamePattern);
 });
 
+const SHARED_RELAUNCH = 'require("../relaunch-after-exit.cjs").relaunchAppImageAfterExit(destination, [], {';
+
 // The shape of the sites the patch rewrites, as esbuild emits them.
 const UPSTREAM = [
   "        (0, fs_1.unlinkSync)(appImageFile);",
@@ -67,15 +69,14 @@ test("the patch keeps the running path and never deletes ahead of the rename", (
   assert.match(patched, /renameSync\)\(stagedDestination, destination\)/);
   // Electron's relauncher sets no_new_privs, so the AppImage runtime cannot mount the update with setuid fusermount.
   assert.doesNotMatch(patched, /app\.relaunch\(/);
-  assert.ok(patched.includes('spawn)("bash", ["-c", "read -r ignored\\nfor fd in /proc/$$/fd/*;'), patched);
-  assert.ok(patched.includes('exec \\"$1\\" </dev/null", "appimage-relaunch", destination]'), patched);
-  assert.match(patched, /detached: true/);
+  assert.ok(patched.includes(SHARED_RELAUNCH), patched);
   assert.doesNotMatch(patched, /this\.spawnLog\(destination/);
 });
 
-test("the vendored bundle restarts the AppImage without Electron's relauncher", () => {
+test("the vendored bundle restarts the AppImage through the desktop's shared restart", () => {
   assert.doesNotMatch(bundle, /app\.relaunch\(\{ execPath: destination/);
-  assert.ok(bundle.includes('spawn)("bash", ["-c", "read -r ignored\\nfor fd in /proc/$$/fd/*;'));
+  assert.ok(bundle.includes(SHARED_RELAUNCH));
+  assert.equal(typeof createRequire(import.meta.url)("./relaunch-after-exit.cjs").relaunchAppImageAfterExit, "function");
 });
 
 test("the patch tolerates esbuild renaming the path import", () => {
@@ -118,9 +119,10 @@ test("the shipped installer replaces the AppImage and starts it after the old pr
   const replacement = `
     const { readdirSync, readFileSync, readlinkSync, writeFileSync } = require("node:fs");
     (async () => {
+      // A zombie has exited, though kill(pid, 0) still answers for it.
       let parentAlive = true;
-      try { process.kill(Number(process.env.OMB_UPDATER_TEST_PARENT), 0); }
-      catch (error) { if (error.code === "ESRCH") parentAlive = false; else throw error; }
+      try { parentAlive = !/^\\d+ \\(.*\\) [ZX] /.test(readFileSync("/proc/" + process.env.OMB_UPDATER_TEST_PARENT + "/stat", "utf8")); }
+      catch (error) { if (error.code === "ENOENT") parentAlive = false; else throw error; }
       const descriptors = readdirSync("/proc/self/fd").map((fd) => { try { return readlinkSync("/proc/self/fd/" + fd); } catch { return null; } });
       const { acquireDataDirLease } = await import(${JSON.stringify(leaseModule)});
       acquireDataDirLease(${JSON.stringify(data)}).release();
@@ -230,7 +232,7 @@ test("a failed AppImage restart is reported without quitting the desktop", {
     app: { quit: () => assert.fail("a failed restart must not quit the desktop") },
   };
   BaseUpdater.prototype.quitAndInstall.call(updater, true, true);
-  assert.deepEqual(errors, ["Could not schedule the updated AppImage to restart"]);
+  assert.deepEqual(errors, ["Could not schedule the AppImage to restart"]);
   assert.equal(updater.quitAndInstallCalled, false);
   assert.equal(process.env.APPIMAGE_SILENT_INSTALL, "previous");
   assert.equal(readFileSync(launched, "utf8"), "new", "the installed replacement remains available for a manual restart");
@@ -307,9 +309,10 @@ test("the AppImage restart waits for deferred cleanup, keeps setuid fusermount u
   const replacement = `
     const { readFileSync, writeFileSync } = require("node:fs");
     (async () => {
+      // A zombie has exited, though kill(pid, 0) still answers for it.
       let parentAlive = true;
-      try { process.kill(Number(process.env.OMB_UPDATER_TEST_PARENT), 0); }
-      catch (error) { if (error.code === "ESRCH") parentAlive = false; else throw error; }
+      try { parentAlive = !/^\\d+ \\(.*\\) [ZX] /.test(readFileSync("/proc/" + process.env.OMB_UPDATER_TEST_PARENT + "/stat", "utf8")); }
+      catch (error) { if (error.code === "ENOENT") parentAlive = false; else throw error; }
       const { acquireDataDirLease } = await import(${JSON.stringify(leaseModule)});
       const lease = acquireDataDirLease(${JSON.stringify(join(workspace, "data"))});
       lease.release();

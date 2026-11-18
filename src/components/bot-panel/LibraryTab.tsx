@@ -11,6 +11,7 @@ import { recentChangedFiles, sharedFileReferences } from "../ComputerFilesPane";
 import { useDesktopCapabilities } from "../DesktopCapabilities";
 import { skillSwitchOn, useManagedSkills } from "../bot-settings/SkillsSection";
 import type { SimplePageId } from "./page-registry";
+import { SeiraCharacter } from "../seira-character";
 import { Card, CardLabel, NavRow } from "./rows";
 import { panelMemoryNotes } from "./memory-notes";
 import { useMemoryDoc } from "./use-memory-doc";
@@ -90,9 +91,10 @@ export function LibraryTab({ bot, onOpen }: { bot: Bot; onOpen: (page: SimplePag
   if (pages.length + apps.length + shared.length + unshared.length === 0) {
     return (
       <div data-panel-tabpanel="library">
-        <p data-panel-empty="library" className="px-3 py-7 text-center text-[13px] leading-[18px] text-ink-tertiary">
-          {t("botPanel.library.empty")}
-        </p>
+        <div data-panel-empty="library" className="flex flex-col items-center px-3 py-5 text-center text-[13px] leading-[18px] text-ink-tertiary">
+          <SeiraCharacter state="sleep" size={64} />
+          <p className="mt-2">{t("botPanel.library.empty")}</p>
+        </div>
         {keeps}
       </div>
     );

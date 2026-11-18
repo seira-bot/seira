@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { patchOrganizationUpdater } from "../scripts/patch-organization-updater.mjs";
 import { CLOUD_DEEP_LINK, createCloudEntry, isCloudDeepLink, takeCloudDeepLink } from "./cloud-entry.mjs";
+import restart from "./relaunch-after-exit.cjs";
 
 const main = readFileSync(new URL("./main.mjs", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const between = (start, end) => {
@@ -116,6 +117,7 @@ test("a consumed launch link is not replayed by the companion or updater relaunc
   runInNewContext(`${between("function relaunchAfterDesktopRemoteChange()", 'ipcMain.handle("desktop-remote:state"')}\nrelaunchAfterDesktopRemoteChange();`, {
     desktopShutdownStarted: false, process: { argv }, setTimeout: callback => { callback(); return {}; },
     app: { relaunch: options => calls.push(options.args), quit: () => {} },
+    relaunchAfterExit: (app, args, options) => restart.relaunchAfterExit(app, args, { ...options, env: {} }),
   });
   const patched = patchOrganizationUpdater("      relaunch() {\n        this.app.relaunch();\n      }");
   runInNewContext(`({ app, ${patched} }).relaunch();`, { process: { argv }, app: { relaunch: options => calls.push(options.args) } });
@@ -159,7 +161,7 @@ test("the Cloud entry checks the owned server, waits for the saved sign-in, and 
 
 test("Add a Cloud… is always the sheet on this computer's page, never a native box: the sheet says setting up or one Cloud for now", () => {
   const add = between("async function openCloudAdd(source)", "\n}\n");
-  assert.ok(add.indexOf("if (!cloudOffersAllowed() || !serverReady) return;") < add.indexOf("await cloudAccountRestored();"));
+  assert.ok(add.indexOf("if (!cloudSalesAllowed() || !serverReady) return;") < add.indexOf("await cloudAccountRestored();"));
   const restored = add.indexOf("await cloudAccountRestored();");
   for (const action of ["persistEnvironments(", "createWindow(", "win.webContents.send(", "win.loadURL("]) assert.ok(add.indexOf(action) > restored, `${action} after the restore`);
   assert.doesNotMatch(add, /dialog\.|anotherCloudBox|cloudOwned/);

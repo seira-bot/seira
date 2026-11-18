@@ -1500,7 +1500,7 @@
   "files.almostFull": "Cloud 的空间快满了。",
   "files.outputs.title": "机器人的工作成果",
   "files.outputs.switch": "将 Cloud 上的机器人生成的内容保存到这台电脑",
-  "files.outputs.help": "在「文稿 › Seira」中，每个机器人一个文件夹。",
+  "files.outputs.help": "在「文稿 › {folder}」中，每个机器人一个文件夹。",
   "files.outputs.open": "打开文件夹",
   "files.offline": "目前无法连接到 Cloud。恢复连接后，文件会继续同步。",
   "files.asleep": "Cloud 正在休眠。唤醒后文件会同步。",

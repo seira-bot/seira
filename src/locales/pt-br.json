@@ -1379,7 +1379,7 @@
   "files.almostFull": "O Cloud está quase cheio.",
   "files.outputs.title": "O trabalho dos seus bots",
   "files.outputs.switch": "Salvar neste computador o que os bots do Cloud criam",
-  "files.outputs.help": "Em Documentos › Seira, uma pasta para cada bot.",
+  "files.outputs.help": "Em Documentos › {folder}, uma pasta para cada bot.",
   "files.outputs.open": "Abrir pasta",
   "files.offline": "Não é possível acessar o Cloud agora. A sincronização continua quando ele voltar.",
   "files.asleep": "O Cloud está dormindo. Os arquivos sincronizam quando ele acordar.",

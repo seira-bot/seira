@@ -2,6 +2,7 @@
 // person last looked. The built-in ones are listed here, one entry each (docs/announcements.md says how to add one); the
 // cards from the project's announcements file come from src/lib/announcements.ts.
 import { useSyncExternalStore } from "react";
+import { SEIRA_CLOUD_PLANS } from "@/lib/seira-cloud";
 import { BOAT_OFFER, boatClaimMailto } from "@/lib/boat-offer";
 import type { CloudSource } from "@/lib/cloud-plan";
 import type { OnboardingStatus } from "@/lib/onboarding";
@@ -66,7 +67,7 @@ export const BUILT_IN_ANNOUNCEMENTS: readonly BuiltInAnnouncement[] = [
   { id: GROK_MOVE_NOTICE, date: "2026-11-04", title: "settings.import.grokTitle", body: "grokMove.popup.body", mark: "grok",
     for: facts => everywhere(facts) && !facts.remote && facts.canSave && !facts.team, open: { modal: "grok-move" } },
   { id: WHATS_NEW_NOTICE, date: "2026-10-31", title: "whatsNew.cloud.title", body: "whatsNew.cloud.body", mark: "cloud",
-    for: facts => everywhere(facts) && facts.cloudSale, open: { modal: "whats-new" } },
+    for: facts => everywhere(facts) && facts.cloudSale && SEIRA_CLOUD_PLANS.length > 0, open: { modal: "whats-new" } },
   { id: BOAT_OFFER_NOTICE, date: "2026-10-31", title: "boatOffer.title", body: "boatOffer.body", mark: "boat", for: facts => facts.sponsors && !facts.branded,
     open: { buttons: [{ label: "boatOffer.get", action: { open_url: BOAT_OFFER.url } }, { label: "boatOffer.claim", action: { email: boatClaimMailto() } }] }, until: BOAT_OFFER.until },
   { id: PRODUCT_HUNT_NOTICE, date: "2026-10-13", title: "productHunt.title", body: "productHunt.body", mark: "product-hunt",

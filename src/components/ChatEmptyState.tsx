@@ -2,6 +2,7 @@ import { api, useStore, type Bot } from "@/state/store";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { t } from "@/lib/i18n";
 import { BotAvatar } from "./Avatar";
+import { BotCharacter } from "./BotCharacter";
 import { RenameTitle } from "./RenameTitle";
 
 /** A chat with no messages yet: the bot, its name (renamable in Advanced) and what it is for. */
@@ -10,7 +11,7 @@ export function EmptyChat({ bot }: { bot: Bot }) {
   const advanced = useAdvancedMode();
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 py-24 text-center">
-      <BotAvatar bot={bot} state="idle" size={64} motion="none" motionKey={0} />
+      <BotCharacter bot={bot} state="idle" size={96} fallback={<BotAvatar bot={bot} state="idle" size={64} motion="none" motionKey={0} />} />
       {!advanced ? <div className="text-[17px] font-semibold text-ink">{bot.name}</div> : <RenameTitle
         value={bot.name}
         onCommit={(name) => {

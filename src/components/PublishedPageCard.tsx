@@ -8,6 +8,7 @@ import { usePageOpener } from "@/lib/page-open";
 import { t } from "@/lib/i18n";
 import { api, useStore, type Message } from "@/state/store";
 import { ASK_CHIP, ASK_CHIP_IDLE, ASK_PRIMARY_BUTTON } from "./AskCard";
+import { cloudSells } from "@/lib/cloud-sale";
 
 const usageLine = (card: Card) => card.usage ? t("chat.page.usage", { pages: card.usage.pages, limit: card.usage.limit }) : null;
 
@@ -65,7 +66,7 @@ export function PublishedPageCard({ message }: { message: Message }) {
       {card.state === "unpublished" && <p className="mt-1 text-[13px] text-ink-secondary">{t("chat.page.unpublished")}</p>}
       {card.state === "limit" && <>
         <p dir="auto" className="mt-1 text-[13px] leading-snug text-ink-secondary">{limitLine(card)}</p>
-        {card.upgrade && bridge && <button type="button" className={cn(ASK_PRIMARY_BUTTON, "mt-2")}
+        {card.upgrade && bridge && cloudSells() && <button type="button" className={cn(ASK_PRIMARY_BUTTON, "mt-2")}
           onClick={() => dispatch({ type: "openCloudAdd", source: "app_pages" })}>{t("chat.page.morePages")}</button>}
       </>}
     </div>

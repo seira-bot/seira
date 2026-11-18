@@ -1,5 +1,5 @@
 // Files, the desktop service: the folders the person shared go to My Cloud, and what Cloud bots make comes to
-// Documents/MausBot. This computer decides what is shared (settings.shared); a folder My Cloud names is never synced
+// Documents/Seira (Documents/MausBot on a computer that already had it). This computer decides what is shared (settings.shared); a folder My Cloud names is never synced
 // unless this computer registered it. It drives every pass over the Cloud sign-in the window holds.
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -24,6 +24,13 @@ const CHECK_FILES_MAX = 100_000, CHECK_MS = 3_000;
 const PRIVATE = [".ssh", ".aws", ".gnupg", ".kube", ".docker", ".config", ".local", ".npm", "Library", "AppData", ".openmausbot", ".claude", ".codex", ".gemini", ".grok"];
 
 const within = (child, parent, platform) => pathKey(child, platform) === pathKey(parent, platform) || pathKey(child, platform).startsWith(`${pathKey(parent, platform)}/`);
+
+/** What Cloud bots make goes in Documents/Seira. A computer that already has Documents/MausBot keeps that folder, so nothing moves. */
+const OUTPUTS_FOLDER = "Seira", OUTPUTS_FOLDER_BEFORE = "MausBot";
+const isOutputsFolder = (name) => name === OUTPUTS_FOLDER || name === OUTPUTS_FOLDER_BEFORE;
+function hasFolder(dir) {
+  try { return fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() === true; } catch { return false; }
+}
 
 function readSettings(file) {
   try {
@@ -63,7 +70,11 @@ export function createCloudFilesService({
 }) {
   let settings = readSettings(settingsFile);
   const state = openSyncState(stateFile);
-  const outputsDir = path.join(documentsDir, "MausBot");
+  const save = (next) => { settings = next; writeSettings(settingsFile, next); };
+  if (!settings.computerId || !settings.outputs) save({ ...settings, computerId: settings.computerId ?? randomUUID(), outputs: settings.outputs ?? { enabled: true, since: now() } });
+  // Decided once, when this computer first starts Files, and kept: the folder never changes under the person's work.
+  if (!isOutputsFolder(settings.outputs.folder)) save({ ...settings, outputs: { ...settings.outputs, folder: hasFolder(path.join(documentsDir, OUTPUTS_FOLDER_BEFORE)) ? OUTPUTS_FOLDER_BEFORE : OUTPUTS_FOLDER } });
+  const outputsDir = path.join(documentsDir, settings.outputs.folder);
   let closed = false, interval = null, poller = null, cursor = 0, chain = Promise.resolve(), pending = null;
   let status = { phase: "unavailable", lastSyncedAt: null, disk: null, shared: [], outputs: { enabled: true, dir: outputsDir, folders: 0, problem: null } };
   const results = new Map();
@@ -71,8 +82,6 @@ export function createCloudFilesService({
   /** Lent folders without a copy, as last counted: { at, path, check }. */
   const lentChecks = new Map();
 
-  const save = (next) => { settings = next; writeSettings(settingsFile, next); };
-  if (!settings.computerId || !settings.outputs) save({ ...settings, computerId: settings.computerId ?? randomUUID(), outputs: settings.outputs ?? { enabled: true, since: now() } });
   const view = () => ({
     ...status,
     shared: settings.shared.map((folder) => ({ id: folder.id ?? folder.key, name: folder.name, pcPath: folder.pcPath, lent: Boolean(folder.lentId), kept: folder.kept ?? [],
@@ -122,7 +131,7 @@ export function createCloudFilesService({
     return { name, pcPath: real, files, bytes, partial, refusal: null };
   }
 
-  /** Bot output folders that hold work from since the person turned this on, each in Documents/MausBot/<bot>/<conversation>. */
+  /** Bot output folders that hold work from since the person turned this on, each in Documents/Seira/<bot>/<conversation>. */
   async function outputPlaces(cloud, folders) {
     const places = new Map();
     const taken = (dir) => {
@@ -422,7 +431,7 @@ export function createCloudFilesService({
       return view();
     },
     async setOutputs(enabled) {
-      save({ ...settings, outputs: { enabled, since: settings.outputs.since ?? now() } });
+      save({ ...settings, outputs: { ...settings.outputs, enabled, since: settings.outputs.since ?? now() } });
       onChange(view());
       if (enabled) void pass();
       return view();

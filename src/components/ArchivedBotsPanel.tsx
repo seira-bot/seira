@@ -9,6 +9,7 @@ import { api, openBot, useStore, type Bot } from "@/state/store";
 import { BotAvatar } from "./Avatar";
 import { archivableChief } from "./bot-archive";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { SeiraCharacter } from "./seira-character";
 
 export type BotConfirmKind = "archive" | "delete";
 
@@ -248,7 +249,7 @@ export function ArchivedBotsPanel({
               />
             ))}
           </div>
-          {error && <div role="alert" className="mt-4 rounded-lg bg-danger/10 px-3 py-2 text-[13px] text-danger">{error}</div>}
+          {error && <div role="alert" className="mt-4 flex items-center gap-2 rounded-lg bg-danger/10 px-3 py-2 text-[13px] text-danger"><SeiraCharacter state="sad" size={28} /><span className="min-w-0 flex-1 break-words">{error}</span></div>}
         </div>
       </div>
       <ConfirmDialog

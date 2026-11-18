@@ -5,6 +5,7 @@ import { PRIMARY, QUIET } from "@/components/cloud-welcome/parts";
 import { PersonFace } from "@/components/TeamOwner";
 import { markTeamPrivateChatsLineSaid } from "@/components/TeamPrivateChatsLine";
 import { BotAvatar } from "@/components/Avatar";
+import { SeiraCharacter } from "@/components/seira-character";
 import { t } from "@/lib/i18n";
 import { finishTeamWelcome, markTeamWelcomeShown, teamWelcomeView, WELCOME_USE_MS } from "@/lib/team-welcome";
 import { useShowThreads } from "@/lib/thread-preferences";
@@ -43,11 +44,14 @@ export function TeamWelcome({ team, invitedBy }: { team: { id: string; name: str
   return <main data-team-welcome className="relative flex h-full min-w-0 flex-1 flex-col overflow-y-auto bg-app">
     <WindowDragStrip />
     <div className="mx-auto flex w-full max-w-[560px] flex-col gap-6 px-5 pb-12 pt-10 max-md:pt-14">
-      <header className="flex flex-col gap-1.5">
-        <h1 className="text-[22px] font-semibold tracking-[-0.015em] text-ink [text-wrap:balance]">{t("teamWelcome.title", { team: team.name })}</h1>
-        <p data-team-welcome-invited className="text-[14px] leading-relaxed text-ink-secondary">
-          {inviter ? t("teamWelcome.invited", { person: inviter, team: team.name }) : t("teamWelcome.invitedNobody", { team: team.name })}
-        </p>
+      <header className="flex items-center gap-4">
+        <SeiraCharacter state="greet" size={88} className="-my-2" />
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <h1 className="text-[22px] font-semibold tracking-[-0.015em] text-ink [text-wrap:balance]">{t("teamWelcome.title", { team: team.name })}</h1>
+          <p data-team-welcome-invited className="text-[14px] leading-relaxed text-ink-secondary">
+            {inviter ? t("teamWelcome.invited", { person: inviter, team: team.name }) : t("teamWelcome.invitedNobody", { team: team.name })}
+          </p>
+        </div>
       </header>
       {view.people.length > 0 && <section aria-labelledby="team-welcome-people" className="flex flex-col gap-2">
         <h2 id="team-welcome-people" className="text-[13px] font-medium text-ink-secondary">{t("teamWelcome.people", { team: team.name })}</h2>

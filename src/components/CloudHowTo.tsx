@@ -30,7 +30,7 @@ export function CloudHowTo() {
   if (toast) return <NoticeToast text={toast} onDone={() => setToast(null)} />;
   if (!open || !placement) return null;
   const skip = () => { track("cloud_howto", { result: "skipped" }); dispatch({ type: "cloudHowTo", open: false }); };
-  return <Spotlight anchor={SWITCHER_ANCHOR} placement={placement} mascot="curious" secondary={{ label: t("cloudHowTo.skip"), onClick: skip }} onDone={skip}>
+  return <Spotlight anchor={SWITCHER_ANCHOR} placement={placement} character="idle" secondary={{ label: t("cloudHowTo.skip"), onClick: skip }} onDone={skip}>
     <p className="font-semibold">{t("cloudHowTo.title")}</p>
     <p className="mt-1 text-[13px] text-ink-secondary">{t("cloudHowTo.body")}</p>
   </Spotlight>;

@@ -666,7 +666,7 @@ Workers Free, three accounts with `OMB_CLEANUP_SWEEP_LIMIT` 3 use the whole
 
 ### MausBot Relay
 
-Phones reach a desktop through MausBot Relay, end-to-end encrypted: the relay passes sealed bytes and can't open them
+Phones reach a desktop through Seira Relay, end-to-end encrypted: the relay passes sealed bytes and can't open them
 (`companion/src/e2e/README.md`). This Worker only lets a computer onto the relay. It mints a 12-hour host token signed
 with Ed25519; the relay holds only the public key and checks tokens offline, so it can't mint one itself.
 

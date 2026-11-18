@@ -9,6 +9,7 @@ import { newCloudUrl, startTeamUrl, type WhatsNewAction, type WhatsNewSlide, typ
 import type { LocaleKey } from "@/locales";
 import { CLOSE, PRIMARY, QUIET, SHEET } from "../cloud-buy/parts";
 import { LinkButton, NotNowButton } from "../NoticeCard";
+import { SeiraCharacter } from "../seira-character";
 import { TeamPicture } from "./TeamPicture";
 
 export const WHATS_NEW_POPUP = "[data-whats-new]";
@@ -110,7 +111,10 @@ export function WhatsNewPopup({ view, report, onBuy, onDone }: {
               here ? "visible translate-x-0 opacity-100" : cn("invisible opacity-0", index < at ? "-translate-x-6 rtl:translate-x-6" : "translate-x-6 rtl:-translate-x-6"))}>
             <Picture slide={of} active={here} />
             <div className="flex flex-col px-6 pt-5">
-              <p className="text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-ink-tertiary">{t("whatsNew.eyebrow")}</p>
+              <div className="flex items-center gap-2">
+                {here && <SeiraCharacter state="happy" size={32} />}
+                <p className="text-[12px] font-medium uppercase leading-4 tracking-[0.06em] text-ink-tertiary">{t("whatsNew.eyebrow")}</p>
+              </div>
               <h2 id={titleId(of)} tabIndex={-1} className="mt-1 text-[19px] font-semibold leading-6 tracking-[-0.012em] text-ink outline-none! [text-wrap:balance]">{t(WORDS[of].title)}</h2>
               <p className="mt-2 text-[14px] leading-5 text-ink-secondary [text-wrap:pretty]">{t(WORDS[of].body)}</p>
               {of === "team" && <ul className="mt-3 flex flex-col gap-1.5 text-[13px] leading-[18px] text-ink">

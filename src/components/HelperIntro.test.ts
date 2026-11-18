@@ -9,6 +9,7 @@ import { setWelcomingBot, stageIntro } from "@/lib/default-bot";
 import { setLocale, t } from "@/lib/i18n";
 import type { Bot, InstanceInfo, Message } from "@/state/store";
 import type { HelperFollowupFacts } from "../../shared/helper-followup";
+vi.mock("@/lib/seira-cloud", () => ({ SEIRA_CLOUD_PLANS: ["pro", "team"] })); // these tests cover the sale itself
 
 const f = vi.hoisted(() => ({
   state: {} as Record<string, unknown>, dispatch: vi.fn(), advanced: false, local: false, reduced: false,
