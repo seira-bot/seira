@@ -171,7 +171,7 @@ function planAllowances(input) {
 }
 /** The most one plan may cost per month, in its currency's billing unit: US cents, or whole rupiah. */
 const PRICE_MAX = Object.freeze({ USD: 10_000_000, IDR: 100_000_000 });
-/** Monthly price before tax: US cents for USD, whole rupiah for IDR (no `currency` on a plan means USD). A plan without
+/** Monthly price: US cents before tax for USD, whole rupiah with PPN included for IDR (no `currency` on a plan means USD). A plan without
  * one is not sold here. A Team plan's `extraSeatAmount` is the monthly price of each person past its included seats. */
 function offerPlan(input) {
   if (!record(input) || typeof input.tier !== "string" || !TIER.test(input.tier) || !record(input.price)) return null;

@@ -202,15 +202,22 @@ export function planCardRows(a: CloudPlanAllowances): CloudPlanCardRow[] {
   ];
 }
 /** What a plan's free trial costs and then what it comes to: "Free for 3 days, then $49/month + tax". */
-export function trialTerms(days: number, price: string): string {
+export function trialTerms(days: number, price: string, taxIncluded = false): string {
+  if (taxIncluded) return days === 1 ? t("cloudBuy.card.trial.one.taxIncluded", { price }) : t("cloudBuy.card.trial.many.taxIncluded", { days, price });
   return days === 1 ? t("cloudBuy.card.trial.one", { price }) : t("cloudBuy.card.trial.many", { days, price });
+}
+/** Rupiah prices already include PPN; USD prices are before tax. */
+export const taxIncluded = (plan: Pick<CloudOfferPlan, "currency">): boolean => plan.currency === "IDR";
+/** "{plan} · {price}/month" with the tax wording that fits the plan's currency. */
+export function planPaidLine(plan: CloudOfferPlan, name: string = offerPlanLabel(plan)): string {
+  return t(taxIncluded(plan) ? "cloudBuy.pay.planPaid.taxIncluded" : "cloudBuy.pay.planPaid", { plan: name, price: planPrice(plan) });
 }
 function planCard(plan: CloudOfferPlan, recommended: string, current: string | null): CloudPlanCard {
   const name = offerPlanLabel(plan), price = planPrice(plan), mine = plan.tier === current;
   return { tier: plan.tier, name, price, popular: plan.tier === recommended, current: mine,
     promise: Object.hasOwn(PROMISE, plan.tier) ? t(PROMISE[plan.tier]!) : plan.allowances?.seats ? t("cloudBuy.promise.teamPlan") : null,
     action: mine ? null : plan.trialDays ? t("cloudIntro.start") : t("cloudBuy.card.get", { plan: name }),
-    terms: mine ? null : plan.trialDays ? trialTerms(plan.trialDays, price) : t("cloudBuy.card.paid", { price }),
+    terms: mine ? null : plan.trialDays ? trialTerms(plan.trialDays, price, taxIncluded(plan)) : t(taxIncluded(plan) ? "cloudBuy.card.paid.taxIncluded" : "cloudBuy.card.paid", { price }),
     rows: plan.allowances ? planCardRows(plan.allowances) : [] };
 }
 /** The plans on sale as cards, in the Admin's order. `current` is the person's own tier; `own` is that plan when it is not
@@ -274,7 +281,7 @@ export function cloudIntroView(offer: CloudOffer | null | undefined): { badge: s
   return {
     badge: days === 1 ? t("cloudIntro.badge.one") : t("cloudIntro.badge.many", { days }),
     points: [t("cloudIntro.routines"), t("cloudIntro.phone"), offer.creditUsd ? t("cloudIntro.credit", { credit: usd(offer.creditUsd) }) : t("cloudIntro.included")],
-    price: t("cloudIntro.price", { price: planPrice(cheapest) }),
+    price: t(taxIncluded(cheapest) ? "cloudIntro.price.taxIncluded" : "cloudIntro.price", { price: planPrice(cheapest) }),
     moneyBack: moneyBackLine(offer),
   };
 }
