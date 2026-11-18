@@ -95,6 +95,7 @@ import { createHostScreenLease } from "./host-screen-lease.mjs";
 import { acquireDataDirLease } from "./data-dir-lease.mjs";
 import { reviveAfterFailedSwitch, switchLocalEnvironment } from "./environment-switch.mjs";
 import { createManagedDesktopClient, createManagedDesktopRelay, createManagedDesktopStore } from "./managed-desktop.mjs";
+import { seiraCloudSells } from "./seira-cloud-sale.mjs";
 import { CHECKOUT_SOURCES, cloudMenuSublabel, cloudTarget, createCloudAccountClient as cloudAccountClient, createCloudAccountStore } from "./cloud-account.mjs";
 import { installCloudPlanIpc } from "./cloud-plan-ipc.mjs";
 import { cloudLinkOpensSheet, colorDotIcons, createCloudLook, createCloudReadyNotice, installCloudBuy, lookFile } from "./cloud-buy.mjs"; import { unreadBadgeIcon } from "./color-dot.mjs";
@@ -840,6 +841,14 @@ async function cloudOffersReady() {
   if (brandedBuild === null && serverReady) await readCloudOfferBrand();
   return cloudOffersAllowed();
 }
+/** Selling a Cloud: Seira's own Cloud has a plan and this app may make offers. Menus, the Add sheet
+ * and checkout use this; sign-in and the Cloud an account already has do not. */
+function cloudSalesAllowed() {
+  return seiraCloudSells() && cloudOffersAllowed();
+}
+async function cloudSalesReady() {
+  return (await cloudOffersReady()) && cloudSalesAllowed();
+}
 const menuDate = value => new Intl.DateTimeFormat(nativeText.intlTag(), { day: "numeric", month: "short" }).format(new Date(value));
 function cloudHomeEntry() {
   const homeOrigin = cloudAccount?.homeTarget()?.origin ?? null;
@@ -852,18 +861,18 @@ function cloudMenuSublabels() {
 }
 const cloudColorDot = colorDotIcons(nativeImage);
 function cloudMenuOptions(source = "app_menu") {
-  return { sublabels: cloudMenuSublabels(), iconFor: cloudColorDot, ...(cloudOffersAllowed() ? { onAddCloud: () => void workspaceMenuAction(() => openCloudAdd(source)) } : {}) };
+  return { sublabels: cloudMenuSublabels(), iconFor: cloudColorDot, ...(cloudSalesAllowed() ? { onAddCloud: () => void workspaceMenuAction(() => openCloudAdd(source)) } : {}) };
 }
 let cloudMenuKey = "";
 function refreshCloudMenus() {
-  const key = JSON.stringify([cloudOffersAllowed(), cloudMenuSublabels()]);
+  const key = JSON.stringify([cloudSalesAllowed(), cloudMenuSublabels()]);
   if (key === cloudMenuKey) return;
   cloudMenuKey = key;
   refreshApplicationMenu();
 }
 /** Add a Cloud… is always the sheet on this computer's page, which says what is true now (setting up, one Cloud for now). */
 async function openCloudAdd(source) {
-  if (!cloudOffersAllowed() || !serverReady) return;
+  if (!cloudSalesAllowed() || !serverReady) return;
   await cloudAccountRestored();
   if (activeRemote(environmentsState)) persistEnvironments(withActive(environmentsState, LOCAL_ID));
   const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : createWindow({ deferNavigation: true });
@@ -2461,7 +2470,7 @@ for (const method of ["state", "begin", "signInAgain", "reopen", "cancel", "refr
   ipcMain.handle(`cloud-account:${method}`, localWorkspaceOnly(`cloud-account:${method}`, () => (method === "signOut" ? accounts.signOutActive() : ensureCloudAccount()[method]())));
 }
 ipcMain.handle("cloud-account:checkout", localWorkspaceOnly("cloud-account:checkout", async (_event, plan, source) => {
-  if (!(await cloudOffersReady())) throw new Error("Seira Cloud isn't offered in this app.");
+  if (!(await cloudSalesReady())) throw new Error("Seira Cloud isn't offered in this app.");
   const client = ensureCloudAccount();
   if (typeof plan !== "string" || !CHECKOUT_SOURCES.includes(source)) throw new Error("Choose a plan to continue.");
   const offer = await client.offer();
@@ -2576,7 +2585,7 @@ const savedWorkspace = id => {
 // The buying sheet (cloud-buy.mjs): its channels, and the Cloud's name and colour (Servers entry once listed).
 const cloudLook = createCloudLook({ store: lookFile(() => path.join(app.getPath("userData"), cloudTarget(process.env).look), fs), accountId: () => cloudAccount?.state().account?.id ?? null,
   homeEntry: cloudHomeEntry, saveEntry: (origin, look) => persistEnvironments(withEnvironmentLook(environmentsState, origin, look)) });
-const cloudBuy = installCloudBuy({ ipcMain, guard: localWorkspaceOnly, client: ensureCloudAccount, offersReady: cloudOffersReady, clipboard, look: cloudLook });
+const cloudBuy = installCloudBuy({ ipcMain, guard: localWorkspaceOnly, client: ensureCloudAccount, offersReady: cloudSalesReady, clipboard, look: cloudLook });
 const localServerRequest = (route, init = {}) => (serverProc && serverReady ? fetch(`http://127.0.0.1:${SERVER_PORT}${route}`, { ...init, redirect: "error", credentials: "omit", headers: { ...init.headers, [DESKTOP_MUTATION_HEADER]: desktopMutationToken } }) : Promise.reject(new Error("not running")));
 const teamProfileSeeds = createTeamProfileSeeds({ teamFetch: (...args) => session.defaultSession.fetch(...args), localRequest: localServerRequest, log: slog });
 const oneHome = installOneHome({ ipcMain, clean: cleanWorkspace, cloudPage: cloudPageAsking, pageOrigin: activePageOrigin, confirmMove: confirmTeamMove, server: () => serverProc, cookieFetch: (...args) => session.defaultSession.fetch(...args), home: () => (myCloud() && cloudAccount ? { origin: myCloud(), grant: () => cloudAccount.pairHome() } : null), power: cloudPower, file: () => path.join(app.getPath("userData"), "cloud-send.json"), localRequest: localServerRequest, space: { disk: () => cloudPlanDisk(ensureCloudAccount().state()), grow: sizeGb => ensureCloudAccount().growDisk(sizeGb) }, reconnect: origin => signInCloudSession({ origin, mine: myCloud(), pair: () => ensureCloudAccount().pairHome(), fetch: (...args) => session.defaultSession.fetch(...args) }), window: () => (desktopRemoteAccess ? null : mainWindow), localOrigin: rendererOrigin, account: () => cloudAccount, journalFile: () => path.join(app.getPath("userData"), "one-home.json"), tempRoot: () => path.join(app.getPath("temp"), "openmaus-one-home"), lend: projects => sharingController().lendProjects(projects), phone: { paired: () => companionStartsAtLaunch({ remoteClient: Boolean(desktopRemoteAccess), serverReady }), start: () => startDesktopCompanion({ waitForHosted: false, remember: false }).then(() => {}) }, openHome: () => void showHome({ place: "cloud" }), openTeam: team => void showHome({ place: { team: team.id, name: team.name } }), openLocal: () => void showHome(), restart: () => relaunchAfterDesktopRemoteChange(), version: app.getVersion(), log: slog, other: () => ownHome, accountsHere: () => accountRing()?.count() ?? 1, chooses: true, t: nativeT }); ownHome = installOwnHome({ t: nativeT, localRequest: localServerRequest, fetch: (...args) => session.defaultSession.fetch(...args), environments: () => environmentsState.environments, handoff: what => oneHome.handoff(what), cloudJournal: () => oneHome.journal(), journal: jsonFile(path.join(app.getPath("userData"), "own-home.json")), choice: jsonFile(path.join(app.getPath("userData"), "own-home-choice.json")), sendState: jsonFile(path.join(app.getPath("userData"), "own-home-send.json")), lend: (projects, place) => sharingController().lendProjects(projects, place), phone: { paired: () => companionStartsAtLaunch({ remoteClient: Boolean(desktopRemoteAccess), serverReady }), start: () => startDesktopCompanion({ waitForHosted: false, remember: false }).then(() => {}) }, openHome: place => void workspaceMenuAction(() => switchEnvironment(place.id)), lastInput: oneHome.lastInput, version: app.getVersion(), log: slog, onChange: () => { oneHome.publish(); computerSharing?.cloudChanged(); railChanged(); } }); botLink = createBotLinkMain({ wanted: () => placesTogether.on(), pref: jsonFile(path.join(app.getPath("userData"), PLACES_TOGETHER_FILE)), localRequest: localServerRequest, fetch: (...args) => session.defaultSession.fetch(...args), cloud: () => ({ origin: myCloud(), account: cloudAccount?.state().account?.id ?? null, asleep: cloudPower.asleep(), signedOut: cloudAccount?.state().status === "signed-out" }), cloudName: () => nativeT("cloudSetup.myCloud"), changed: () => placesTogether.linkChanged(), log: slog }); twoPlaces = installTwoPlacesMain({ t: nativeT, ipcMain, guard: localWorkspaceOnly, localRequest: localServerRequest, fetch: (...args) => session.defaultSession.fetch(...args), environments: () => environmentsState.environments, cloud: () => ({ origin: myCloud(), asleep: cloudPower.asleep() }), oneHome, ownHome, dismissed: jsonFile(path.join(app.getPath("userData"), "two-places.json")), account: () => cloudAccount, teamsRemembered: jsonFile(path.join(app.getPath("userData"), "team-places.json")), log: slog, tell: () => { if (mainWindow && !mainWindow.isDestroyed() && senderIsLocal({ sender: mainWindow.webContents })) mainWindow.webContents.send("two-places:changed"); } });
@@ -2612,7 +2621,7 @@ const rail = installCloudRail({ t: nativeT, ipcMain, clipboard, openCloud: openO
   lists: event => chromeRail.owns(event), trusted: event => chromeRail.owns(event) || senderIsLocal(event), beside: () => chromeRail.shown(),
   targets: () => [mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null, { send: channel => chromeRail.send(channel), isDestroyed: () => false }],
   places: railList, ask: placeSwitch.ask, switching: placeSwitch.target, open: openPlace, makeHome: id => ownHome.start(id), forget: id => forgetEnvironment(id, false, true), openProfile: (id, stale = () => false) => workspaceMenuAction(async () => { await cleanWorkspace.settled(); if (stale()) return; const opened = await localProfiles.open(id); railChanged(); if (opened === false) throw new Error(nativeT("native.places.profileFailed")); }), local: localProfiles,
-  add: { choices: () => ({ cloud: cloudOffersAllowed(), link: !desktopRemoteAccess, address: !desktopRemoteAccess && !homeWindow.cloudOrigin(), account: !desktopRemoteAccess && Boolean(accounts.view().active) }),
+  add: { choices: () => ({ cloud: cloudSalesAllowed(), link: !desktopRemoteAccess, address: !desktopRemoteAccess && !homeWindow.cloudOrigin(), account: !desktopRemoteAccess && Boolean(accounts.view().active) }),
     probe: serverConnect.probe, run: (choice, link, code) => (choice === "link" ? (link ? (code === null ? connectHostedWorkspace(link) : serverConnect.connect(link, code)) : addServerFromClipboard()) : choice === "address" ? openWorkspaceSettings() : homeWindow.cloudOrigin() ? undefined : openCloudAdd("app_menu")) } });
 const announceAddedCloud = createAddedCloudNotice({ t: nativeT, Notification, focused: () => Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()), sheetOpen: rail.sheetOpen,
   open: id => { if (!desktopTray?.show()) activateExistingWindow(appWindows()); void openOwnCloud(id); }, shown: () => cloudAccount?.addDone() }); const desktopNotifications = installDesktopNotifications({ ipcMain, Notification, nativeImage, fetch: (...args) => session.defaultSession.fetch(...args), window: () => mainWindow, mayNotify: (contents, url) => appPermissions?.check(contents, "notifications", url, { isMainFrame: true }) === true, reveal: revealForLink, openPlace: origin => (origin === homeWindow.cloudOrigin() ? showHome({ place: "cloud" }) : workspaceMenuAction(() => switchEnvironment(origin === rendererOrigin() ? LOCAL_ID : environmentsState.environments.find(entry => entry.origin === origin)?.id))) });

@@ -113,7 +113,7 @@ keeps people apart on it. The bot box ([bot-box.md](bot-box.md)) is what makes t
   *Paired devices* lists the phones those codes opened as *device · member* (`GET /api/team/phones`): a member sees their
   own, the Super admin and Admins every member's. **Remove** (`DELETE /api/team/phones/<id>`, the same rule) signs that
   phone out at once and closes its open streams; the app windows the Admin signs in are not listed there.
-- **Slack.** With the team's Slack connected on Seira Cloud, a message to `@MausBot` in a channel, or a direct
+- **Slack.** With the team's Slack connected on Seira Cloud, a message to `@Seira` in a channel, or a direct
   message, is its writer's own request here: the Admin hands it over with a session it opened for that member, so their
   level on the bot, their run and their right to stop it hold as in the app. A channel thread is a conversation shared
   with the team; a direct message is their private chat. It is never the relayed, information-only kind of line. See
@@ -722,7 +722,7 @@ The app offers no crown on a team, so this is reached only through the API (`PAT
 
 **A person's Seira hands work to the bots they can use.** A member's Seira is not crowned and has no authority over any
 bot, but from a chat private to its person, with their own request behind the turn, it can hand work to any team bot that
-person may chat with, at their level (`server/host/personal-reach.ts`): the receiving bot reads it as `[From @MausBot (bot)
+person may chat with, at their level (`server/host/personal-reach.ts`): the receiving bot reads it as `[From @Seira (bot)
 · assignment … for Mira · on their behalf at your level]`. The work runs in that bot's own private chat with the person,
 exactly as if they had opened it themselves: it is created private to them before anyone's app hears of it, reads and
 writes their layer, and comes back whole to the chat they asked in. Nothing of it reaches the bot's shared chat, a room,
@@ -730,7 +730,7 @@ the team's notes, another member or an admin, in lists, counts, search, notifica
 person could do: a bot they cannot see is never named to their Seira (by name or id it is refused exactly like a bot that
 does not exist, and it is never counted), and a bot they can only view is refused. A routine, a relayed line, an event, a
 guest and another person's words can't use this, and it can answer a waiting question only in that person's own chats.
-The same holds for an Owner's or Admin's Seira, which reaches every bot but other people's MausBots. Nothing reaches a
+The same holds for an Owner's or Admin's Seira, which reaches every bot but other people's Seiras. Nothing reaches a
 person's Seira from outside it: no other bot is told of it.
 
 **Every bot reaches every bot.** Departments are folders, not walls. Any bot can ask, hand work to or @mention any

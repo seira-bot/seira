@@ -9,7 +9,7 @@
 #   ./update.sh --dir PATH       the install's folder, when it is not this one (the installer's: /opt/openmausbot)
 #
 # It runs on the server itself, beside docker-compose.yml, because a server cannot replace its own container. The steps
-# are the ones the MausBot connector runs for a connected server (connector/src/home.ts `update`): download the new
+# are the ones the Seira connector runs for a connected server (connector/src/home.ts `update`): download the new
 # image by digest, stop the server and check that it stopped, copy its data into a new Docker volume and check the copy
 # file by file, start the new image, and wait until it answers and can still start bots. When it does not, the old image
 # and the copy are put back. The copy from the update before is removed only once the new copy has been checked.
@@ -448,7 +448,7 @@ services:
       OMB_SIGNIN_MEMBER_EMAILS:
       OMB_SIGNIN_SMTP_URL:
       OMB_SIGNIN_SMTP_FROM:
-      # "1": phones pair by QR through MausBot Relay. Sign in once: docker compose exec omb openmausbot login --relay
+      # "1": phones pair by QR through Seira Relay. Sign in once: docker compose exec omb openmausbot login --relay
       OMB_PHONE_RELAY:
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q openmausbot"]

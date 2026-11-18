@@ -237,8 +237,9 @@ Motion explains a change. It never decorates.
 - **Nothing scales in from zero.** Things grow from about 96% and fade.
 - **Hover and press transitions are 120ms** on colour and opacity only. Don't
   animate layout.
-- **No loops** except a live status that is really live (a bot working).
-  Never animate something just to draw the eye.
+- **No loops** except a live status that is really live (a bot working) and
+  Seira's character, which pauses when off screen and holds one still frame
+  under reduced motion. Never animate something just to draw the eye.
 - **Respect reduced motion.** Pair every transition with
   `motion-reduce:transition-none` and every animation with
   `motion-reduce:animate-none`, or gate it in CSS on
@@ -264,7 +265,10 @@ talks.
 - **Show values, not explanations.** "Theme · Midnight" beats a sentence about
   themes. "Your name · Not set yet" beats an empty field with grey text.
 - **Empty states are one line and one action.** Say what goes here and how
-  to add the first one. No paragraphs, no illustrations made for the occasion.
+  to add the first one. No paragraphs. The only picture is Seira's character
+  (`SeiraCharacter`), at most one in a view: asleep when a list is empty,
+  working or thinking while it waits, happy on success, sad on an error,
+  alert when the person must act. No other illustration made for the occasion.
 - **Never promise.** No "coming soon" and no teasers for unbuilt features.
 - **Use "…" (one character)** for work in progress ("Saving…") and for a
   command that asks for more before acting ("Rename…").

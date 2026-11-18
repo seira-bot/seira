@@ -7,34 +7,40 @@ import { createCloudFilesService } from "./cloud-sync.mjs";
 import { fakeCloud } from "./fixtures/cloud-sync-fake-cloud.mjs";
 
 const AT = new Date(2026, 9, 15, 12).getTime();
-function setup(t, { origin = "https://omb-u-aaaaaaaaaaaa.fly.dev" } = {}) {
+/** `existing`: folders already in Documents before Files first starts, as on a computer that ran an earlier version. */
+function setup(t, { origin = "https://omb-u-aaaaaaaaaaaa.fly.dev", existing = [] } = {}) {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "omb-files-service-")));
   const home = join(dir, "home");
   const project = join(home, "Clients");
   mkdirSync(project, { recursive: true });
   writeFileSync(join(project, "brief.md"), "the brief");
+  for (const name of existing) mkdirSync(join(home, "Documents", name), { recursive: true });
   utimesSync(join(project, "brief.md"), new Date(AT), new Date(AT));
   const cloud = fakeCloud();
   // The service builds its client per pass, so a test can point it at another Cloud by swapping holder.cloud.
   const holder = { cloud };
   const current = { origin };
   const clock = { now: AT + 60_000 };
-  const service = createCloudFilesService({
+  const open = () => createCloudFilesService({
     settingsFile: join(dir, "user", "settings.json"), stateFile: join(dir, "user", "state.db"),
     documentsDir: join(home, "Documents"), localDataDir: join(home, ".openmausbot"), homeDir: home,
     platform: process.platform, hostname: "Ash-PC", cloudOrigin: () => current.origin, fetch: async () => { throw new Error("no network in tests"); },
     trashItem: async (file) => rmSync(file), markDownloaded: async () => {},
     createClient: () => holder.cloud.client, watch: () => () => {}, freeBytes: () => 100 * 1024 ** 3, now: () => clock.now,
   });
-  t.after(() => { service.close(); rmSync(dir, { recursive: true, force: true }); });
-  return { dir, home, project, cloud, holder, current, clock, service };
+  const service = open();
+  const opened = [service];
+  t.after(() => { for (const each of opened) each.close(); rmSync(dir, { recursive: true, force: true }); });
+  // The same computer after the app quit and started again.
+  const restart = () => { service.close(); const again = open(); opened.push(again); return again; };
+  return { dir, home, project, cloud, holder, current, clock, service, restart };
 }
 
 test("checks a folder before sharing: too broad, private, Seira's own, or already shared are refused", async (t) => {
   const s = setup(t);
   mkdirSync(join(s.home, ".ssh"), { recursive: true });
   mkdirSync(join(s.home, ".openmausbot", "files"), { recursive: true });
-  mkdirSync(join(s.home, "Documents", "MausBot"), { recursive: true });
+  mkdirSync(join(s.home, "Documents", "Seira"), { recursive: true });
   assert.equal((await s.service.check(s.home)).refusal, "too-broad");
   assert.equal((await s.service.check(join(s.home, ".ssh"))).refusal, "private");
   for (const cli of [".claude", ".codex", ".gemini", ".grok"]) {
@@ -94,7 +100,7 @@ test("repeated output failures reach the Files state and clear after a successfu
   s.cloud.client.download = download;
   await s.service.pass();
   assert.equal(s.service.state().outputs.problem, null);
-  assert.equal(readFileSync(join(s.home, "Documents", "MausBot", "Owl", "Report", "report.md"), "utf8"), "the report");
+  assert.equal(readFileSync(join(s.home, "Documents", "Seira", "Owl", "Report", "report.md"), "utf8"), "the report");
 });
 
 test("only a folder this computer shared is ever synced: one My Cloud names for it is never read or written", async (t) => {
@@ -175,7 +181,7 @@ test("My Cloud's copy gone: the folder is shared again, and another My Cloud get
   assert.equal(s.holder.cloud.get(again.id, "brief.md"), "the brief");
 });
 
-test("bots' work from now on comes to Documents/MausBot/<bot>/<conversation>; older conversations and a switch turned off stay put", async (t) => {
+test("bots' work from now on comes to Documents/Seira/<bot>/<conversation>; older conversations and a switch turned off stay put", async (t) => {
   const s = setup(t);
   s.cloud.setBots({ bots: [{ id: "owl", name: "Owl", tasks: [{ threadId: "t1", title: "Q3: plan?" }, { threadId: "t0", title: "Old" }] }], groups: [] });
   const recent = s.cloud.addFolder({ id: "bot-owl-t1", kind: "bot", botId: "owl", threadId: "t1", cloudPath: "/data/.openmausbot/task-workspaces/owl/t1", newestMs: AT + 120_000 });
@@ -183,7 +189,7 @@ test("bots' work from now on comes to Documents/MausBot/<bot>/<conversation>; ol
   s.cloud.put(recent.id, "plan.md", "the plan");
   s.cloud.put(old.id, "old.md", "old work");
   await s.service.pass();
-  const owl = join(s.home, "Documents", "MausBot", "Owl");
+  const owl = join(s.home, "Documents", "Seira", "Owl");
   assert.deepEqual(readdirSync(owl), ["Q3- plan-"]);
   assert.equal(readFileSync(join(owl, "Q3- plan-", "plan.md"), "utf8"), "the plan");
   assert.equal(s.service.state().outputs.folders, 1);
@@ -191,4 +197,40 @@ test("bots' work from now on comes to Documents/MausBot/<bot>/<conversation>; ol
   s.cloud.put(recent.id, "more.md", "later");
   await s.service.pass();
   assert.equal(existsSync(join(owl, "Q3- plan-", "more.md")), false);
+});
+
+/** One bot with one recent conversation on My Cloud, as `pass` brings it down. */
+function botWork(s) {
+  s.cloud.setBots({ bots: [{ id: "owl", name: "Owl", tasks: [{ threadId: "t1", title: "Plan" }] }], groups: [] });
+  const folder = s.cloud.addFolder({ id: "bot-owl-t1", kind: "bot", botId: "owl", threadId: "t1", cloudPath: "/data/.openmausbot/task-workspaces/owl/t1", newestMs: AT + 120_000 });
+  s.cloud.put(folder.id, "plan.md", "the plan");
+}
+
+test("a computer that already has Documents/MausBot keeps using it: nothing there is moved, copied or removed", async (t) => {
+  const s = setup(t, { existing: ["MausBot"] });
+  const before = join(s.home, "Documents", "MausBot");
+  writeFileSync(join(before, "mine.md"), "mine");
+  botWork(s);
+  await s.service.pass();
+  assert.equal(s.service.state().outputs.dir, before);
+  assert.equal(readFileSync(join(before, "Owl", "Plan", "plan.md"), "utf8"), "the plan");
+  assert.equal(readFileSync(join(before, "mine.md"), "utf8"), "mine");
+  assert.equal(existsSync(join(s.home, "Documents", "Seira")), false);
+  assert.equal(s.service.localFolder({ outputs: true }), before);
+  assert.equal(s.restart().state().outputs.dir, before);
+});
+
+test("a new computer gets Documents/Seira, and a Documents/MausBot that shows up later does not move its work", async (t) => {
+  const s = setup(t);
+  const outputs = join(s.home, "Documents", "Seira");
+  assert.equal(s.service.state().outputs.dir, outputs);
+  botWork(s);
+  await s.service.pass();
+  assert.equal(readFileSync(join(outputs, "Owl", "Plan", "plan.md"), "utf8"), "the plan");
+  assert.equal(existsSync(join(s.home, "Documents", "MausBot")), false);
+  mkdirSync(join(s.home, "Documents", "MausBot"));
+  const again = s.restart();
+  assert.equal(again.state().outputs.dir, outputs);
+  await again.setOutputs(false);
+  assert.equal(s.restart().state().outputs.dir, outputs);
 });

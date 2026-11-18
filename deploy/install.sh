@@ -1,11 +1,11 @@
 #!/bin/sh
-# MausBot on a server of your own: checks the server, then installs the MausBot server with HTTPS on your domain.
+# Seira on a server of your own: checks the server, then installs the Seira server with HTTPS on your domain.
 # Running it again repairs or updates the install and never touches your data.
 #
 #   curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh | sudo sh -s -- --domain maus.example.com
 #   ... | sudo sh -s -- --check --domain maus.example.com    only checks the server; changes nothing
 #   ... | sudo sh -s -- --uninstall                          stops the server; keeps your data
-#   ... | sudo sh -s -- --domain maus.example.com <code>     also connects the server to MausBot with a one-time code
+#   ... | sudo sh -s -- --domain maus.example.com <code>     also connects the server to Seira with a one-time code
 #
 # Nothing runs until the last line calls main, so a download that is cut off part-way runs nothing. It sends no
 # telemetry. The addresses it contacts are the ones the checks name: the image registries, Let's Encrypt, GitHub's
@@ -126,7 +126,7 @@ parse() {
     *) fail "That email address doesn't look right. Give one address, like you@example.com." ;;
   esac
   case "$CODE" in
-    *[!A-Za-z0-9-]*) fail "That code doesn't look right. Copy the install command from MausBot again." ;;
+    *[!A-Za-z0-9-]*) fail "That code doesn't look right. Copy the install command from Seira again." ;;
   esac
   case "$INSTALL_DIR" in
     /?*) ;;
@@ -664,7 +664,7 @@ services:
       OMB_SIGNIN_MEMBER_EMAILS:
       OMB_SIGNIN_SMTP_URL:
       OMB_SIGNIN_SMTP_FROM:
-      # "1": phones pair by QR through MausBot Relay. Sign in once: docker compose exec omb openmausbot login --relay
+      # "1": phones pair by QR through Seira Relay. Sign in once: docker compose exec omb openmausbot login --relay
       OMB_PHONE_RELAY:
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q openmausbot"]
@@ -751,7 +751,7 @@ unset_env() { # name
 write_settings() {
   if [ ! -f "$INSTALL_DIR/.env" ]; then
     write_file "$INSTALL_DIR/.env" 600 <<'ENV'
-# MausBot's settings on this server. The installer sets DOMAIN, OMB_IMAGE and COMPOSE_FILE and keeps every other line.
+# Seira's settings on this server. The installer sets DOMAIN, OMB_IMAGE and COMPOSE_FILE and keeps every other line.
 # Who may sign in with an emailed code: OMB_SIGNIN_EMAILS (admins) and OMB_SIGNIN_MEMBER_EMAILS, comma-separated.
 ENV
   fi
@@ -937,7 +937,7 @@ prepare_data() {
   owner=$(docker run --rm --network none --entrypoint id "$IMAGE" -u 2>/dev/null || true)
   group=$(docker run --rm --network none --entrypoint id "$IMAGE" -g 2>/dev/null || true)
   case "$owner:$group" in
-    *[!0-9:]* | : | :* | *:) fail "The MausBot image did not say which user it runs as. Run this again; if it still fails, send us this line." ;;
+    *[!0-9:]* | : | :* | *:) fail "The Seira image did not say which user it runs as. Run this again; if it still fails, send us this line." ;;
   esac
   mkdir -m 700 "$INSTALL_DIR/data"
   chown "$owner:$group" "$INSTALL_DIR/data"
@@ -1007,7 +1007,7 @@ install_server() {
   wait_https || fail "Seira is running, but https://$DOMAIN did not answer within $HTTPS_WAIT_S seconds, usually because the certificate could not be issued. Check that $DOMAIN points at this server and that ports 80 and 443 are open in your provider's firewall, then run this again. Caddy's reason: cd $INSTALL_DIR && sudo docker compose logs caddy --tail 30"
 }
 
-# The connector has its own installer, which MausBot serves with its address and the connector's image filled in.
+# The connector has its own installer, which Seira serves with its address and the connector's image filled in.
 # It is run as it is, with the code.
 connect_server() {
   say ""

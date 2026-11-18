@@ -33,7 +33,7 @@ afterEach(async () => {
   for (const dir of dirs.splice(0)) { await flushDecisionLog(dir); await removeTempDir(dir); }
 });
 
-const bot = (fields: Partial<BotRecord>) => ({ id: "chief", name: "MausBot", color: "teal", ...fields }) as BotRecord;
+const bot = (fields: Partial<BotRecord>) => ({ id: "chief", name: "Seira", color: "teal", ...fields }) as BotRecord;
 const chief = bot({ chiefOfStaff: true });
 const registration = (name: string, capabilities: PhoneRegistration["capabilities"], platform: "ios" | "android" = "ios"): PhoneRegistration =>
   ({ installId: `install-${name.replace(/\W+/g, "-")}`, name, platform, appVersion: "1.6.0", timeZone: "Asia/Kolkata", capabilities });
@@ -113,7 +113,7 @@ describe("phone MCP host", () => {
     expect(h.host.toolListing()?.phone.map((tool) => tool.name)).toEqual([...PHONE_TOOL_NAMES]);
     const rows = await h.rows();
     expect(rows.filter((row) => row.decision === "auto-approved").map((row) => row.tool)).toEqual(names);
-    expect(rows[0]).toMatchObject({ threadId: TURN.threadId, botId: "chief", botName: "MausBot", source: "connector-scope", rule: "scope:phone:calendar" });
+    expect(rows[0]).toMatchObject({ threadId: TURN.threadId, botId: "chief", botName: "Seira", source: "connector-scope", rule: "scope:phone:calendar" });
   });
 
   it("a read runs on the phone and the result names the phone", async () => {
@@ -164,7 +164,7 @@ describe("phone MCP host", () => {
     await again;
     expect(h.messages[1]!.message).toEqual({
       role: "bot", kind: "activity", tool: { name: "mcp__device__PHONE_DELETE_EVENT", ok: true, summary: "Delete event on Omkar's iPhone", summaryCode: "chat.notice.phone.write.PHONE_DELETE_EVENT", summaryParams: { phone: "Omkar's iPhone" } },
-      from: { botId: "chief", name: "MausBot", color: "teal" },
+      from: { botId: "chief", name: "Seira", color: "teal" },
     });
     // A write the phone refused records no row and reaches the bot with the phone's reason.
     const failed = h.handle(call("PHONE_UPDATE_EVENT", { id: "evt-1", title: "Dentist (moved)" }));
@@ -264,7 +264,7 @@ describe("phone MCP host", () => {
     // Neither allows Messages: refused before any job.
     const message = await h.handle(call("PHONE_SEND_MESSAGE", { to: "Mom", text: "On my way" })) as PhoneToolResult;
     expect(message.isError).toBe(true);
-    expect(text(message)).toBe("MausBot can't use Messages on this phone: it is not allowed in the Seira app on the phone.");
+    expect(text(message)).toBe("Seira can't use Messages on this phone: it is not allowed in the Seira app on the phone.");
     // A named phone without the app is refused too, though another phone allows it.
     const rsvp = await h.handle(call("PHONE_RESPOND_TO_INVITE", { id: "inv-1", response: "decline", phone: "work pixel" })) as PhoneToolResult;
     expect(rsvp).toMatchObject({ isError: true, structuredContent: { code: "denied" } });

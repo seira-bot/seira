@@ -4,15 +4,15 @@ import { useAdvancedMode } from "@/lib/interface-mode";
 import { emailGateDone } from "@/lib/analytics";
 import { anchorFor, cardAnswered, nextSpotlight, placementFor, tourComplete, type ChatObservation, type SpotlightId } from "@/lib/first-conversation";
 import { t } from "@/lib/i18n";
-import type { MausState } from "@/lib/mascot";
 import { api, useStore } from "@/state/store";
+import type { SeiraState } from "@/components/seira-character";
 import { Spotlight } from "./Spotlight";
 
-const COPY: Record<SpotlightId, { key: "onboarding.spot.composer" | "onboarding.spot.model" | "onboarding.spot.approval" | "onboarding.spot.connector"; mascot: MausState }> = {
-  "spot.composer": { key: "onboarding.spot.composer", mascot: "happy" },
-  "spot.model": { key: "onboarding.spot.model", mascot: "curious" },
-  "spot.approval": { key: "onboarding.spot.approval", mascot: "suspicious" },
-  "spot.connector": { key: "onboarding.spot.connector", mascot: "curious" },
+const COPY: Record<SpotlightId, { key: "onboarding.spot.composer" | "onboarding.spot.model" | "onboarding.spot.approval" | "onboarding.spot.connector"; character: SeiraState }> = {
+  "spot.composer": { key: "onboarding.spot.composer", character: "greet" },
+  "spot.model": { key: "onboarding.spot.model", character: "idle" },
+  "spot.approval": { key: "onboarding.spot.approval", character: "attention" },
+  "spot.connector": { key: "onboarding.spot.connector", character: "idle" },
 };
 
 /** Spotlights on the first chat, in Advanced mode only: Simple mode's cards carry a one-line hint instead. */
@@ -86,7 +86,7 @@ export function FirstConversationTour({ quiet = false }: { quiet?: boolean }) {
       key={active}
       anchor={anchorFor(active)}
       placement={placementFor(active)}
-      mascot={copy.mascot}
+      character={copy.character}
       primary={{ label: t("onboarding.spot.gotIt"), onClick: dismiss }}
       onDone={dismiss}
     >

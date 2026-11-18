@@ -49,6 +49,7 @@ import { reportSimpleModePrompt, SimpleModePrompt } from "./SimpleModePrompt";
 import { TwoPlacesCard } from "./TwoPlacesCard";
 import { TeamsPopup } from "./whats-new/TeamsPopup";
 import { WhatsNewPopup } from "./whats-new/WhatsNewPopup";
+import { cloudSells } from "@/lib/cloud-sale";
 
 function StarCard({ onDismiss }: { onDismiss: () => void }) {
   return <NoticeCard titleId="github-star-title" notice="github-star" icon={Star} title={t("star.title")} onDismiss={onDismiss}>
@@ -131,7 +132,7 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   }, []);
   const view = bridge ? cloudPlanView(account) : null;
   const record = state.config?.onboarding;
-  const introAllowed = Boolean(bridge) && brandStatus().source !== "file" && organization !== true && !onboardingCloudOffered(record);
+  const introAllowed = Boolean(bridge) && cloudSells() && brandStatus().source !== "file" && organization !== true && !onboardingCloudOffered(record);
   const stage = introStage(record, now());
   const trialDue = cloudTrialNotice(plan);
   // What's new: This computer's page of a desktop that sells MausBot Cloud, once per person; never on a branded build or a
@@ -233,7 +234,7 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   // as the What's new popup, never in the launch a welcome or MausBot's card took, before a first reply, over a first
   // run's own screens or another dialog, during a live call or a move.
   const teamsSeen = noticeSeen(record, TEAMS_NOTICE) || Boolean(desktopState?.seen.includes(TEAMS_NOTICE));
-  const teamsHere = !branded && organization !== true && !teamsSeen;
+  const teamsHere = cloudSells() && !branded && organization !== true && !teamsSeen;
   const teamsBlocked = useOtherDialogOpen(teamsHere, true) || Boolean(state.liveCall && state.liveCall.status !== "ended");
   const teamsNow = !teamsHere || moving || afterWelcome === true ? false
     : organization === null || !viewer || (desktop && !desktopState) || afterWelcome === null || mausBotFirst || moving === null || teamsBlocked ? null : true;

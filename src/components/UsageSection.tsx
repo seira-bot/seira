@@ -15,6 +15,7 @@ import { PlanUsage } from "./PlanUsage";
 import { Select } from "./Select";
 import { UsageBudgetCards, type BudgetState } from "./UsageBudget";
 import { UsageCapsCard, type UsageCapView } from "./UsageCaps";
+import { SeiraCharacter } from "./seira-character";
 import { TraceView } from "./usage/TraceView";
 import { LiveBadge, modelName, StatStrip, totalsStats } from "./usage/TraceWaterfall";
 
@@ -260,7 +261,7 @@ function SettingsWhereItWent({ range, version, onSummary }: { range: { from: str
       </Select>}>
       <SettingsRows>
         {!top ? <SettingsEmptyRow>{t("common.checking")}</SettingsEmptyRow>
-          : top.length === 0 ? <SettingsEmptyRow>{t("usage.page.whereEmpty")}</SettingsEmptyRow>
+          : top.length === 0 ? <SettingsEmptyRow><SeiraCharacter state="sleep" size={48} className="me-3" />{t("usage.page.whereEmpty")}</SettingsEmptyRow>
           : top.map((group) => (
             <SettingRow key={group.key} title={by === "model" ? modelName(group.label, state.instances) : usageGroupLabel(by, group)}
               subtitle={t("usage.page.turns", { count: String(group.turns) })}>

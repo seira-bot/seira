@@ -6,7 +6,8 @@ import { teamPeoplePage } from "@/lib/app-links";
 import { cloudFilesBridge } from "@/lib/cloud-files";
 import { moveLine } from "@/lib/cloud-send";
 import { activeLocale, t } from "@/lib/i18n";
-import { buyOfferAllowed, cloudCreditLine, cloudPlanLabel, cloudPlanLine, cloudPlanView, cloudTrialView, moneyBackLine, offerTrialDays, trialRunning, type CloudPlanView } from "@/lib/cloud-plan";
+import { cloudCreditLine, cloudPlanLabel, cloudPlanLine, cloudPlanView, cloudTrialView, moneyBackLine, offerTrialDays, trialRunning, type CloudPlanView } from "@/lib/cloud-plan";
+import { cloudOfferAllowed, cloudSells } from "@/lib/cloud-sale";
 import { useCloudOffer } from "@/lib/use-cloud-offer";
 import type { LocaleKey } from "@/locales";
 import { AccountsSheet } from "./AccountMenu";
@@ -241,7 +242,7 @@ export function CloudAccountSettings({ linkRequest = 0, cloudHome = false, teamH
   const [moveNotice] = useCloudSendNotice(bridge ? window.ogb?.cloudSendPage : undefined);
   const move = moveNotice?.move ? moveLine(moveNotice.move, "local") : null;
   const moving = move && move.kind !== "done" ? move.text : null;
-  const offer = useCloudOffer(Boolean(account) && buyOfferAllowed(cloudPlanView(account)), account?.offer);
+  const offer = useCloudOffer(Boolean(account) && cloudOfferAllowed(cloudPlanView(account)), account?.offer);
   const renewal: CloudRenewalActions | null = bridge?.cancelPlan && bridge.keepPlan ? { cancel: survey => bridge.cancelPlan!(survey), keep: () => bridge.keepPlan!() } : null;
   if (!bridge) {
     const plan = window.ogb?.remoteClient?.active || !cloudHome ? undefined : window.ogb?.cloudPlan;
@@ -300,8 +301,8 @@ export function CloudAccountSettings({ linkRequest = 0, cloudHome = false, teamH
   if (part === "sign-out") return null;
 
   const cancelled = account?.status === "connected" && account.renewal?.cancelled === true;
-  const primary = signedOut || (view.kind === "free" && buyOfferAllowed(view))
-    ? onAddCloud && buyOfferAllowed(view) && <button type="button" disabled={busy} className="ui-button ui-button-primary" data-plan-add="" onClick={onAddCloud}>{startLabel}</button>
+  const primary = signedOut || (view.kind === "free" && cloudOfferAllowed(view))
+    ? onAddCloud && cloudOfferAllowed(view) && <button type="button" disabled={busy} className="ui-button ui-button-primary" data-plan-add="" onClick={onAddCloud}>{startLabel}</button>
     : view.kind === "reauth"
       ? <button type="button" disabled={busy} className="ui-button ui-button-primary" onClick={() => void perform(() => bridge.signInAgain())}>{t("cloudAccount.signInAgain")}</button>
       : cancelled && renewal ? <KeepPlanButton actions={renewal} onChanged={() => void perform(() => bridge.state())} />
@@ -312,7 +313,7 @@ export function CloudAccountSettings({ linkRequest = 0, cloudHome = false, teamH
     : line ?? t("settings.simple.billing.plan");
   return <>
     {planLayout({ title, primary: primary || undefined, usage, upgrade, extra, footnote: moneyBack,
-      subtitle: view.kind === "signed-out" ? t("settings.plan.offer") : cancelled && account?.status === "connected" && account.renewal ? endedLine(account.renewal)
+      subtitle: view.kind === "signed-out" ? (cloudSells() ? t("settings.plan.offer") : undefined) : cancelled && account?.status === "connected" && account.renewal ? endedLine(account.renewal)
         : view.kind === "paid" && view.checking ? t("cloudAccount.checking") : message ?? (account?.status === "connected" ? renewalLine(account.renewal) : undefined),
       // Only a trial or a staging account has a line here; an empty node would add height to the row.
       message: signed && (account.staging || (account.status === "connected" && trialLines(account.trial, account.credit)))

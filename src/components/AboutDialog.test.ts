@@ -41,6 +41,14 @@ describe("About", () => {
     expect(html).not.toContain("Connected to");
   });
 
+  it("credits the project it is built on by name, not the product's own", () => {
+    const html = about({ location: { host: "bots.example.test" } });
+    expect(html).toContain("A desktop home for your agents, built on OpenMausBot: open source, Apache 2.0 licensed.");
+    expect(html).not.toContain("built on Seira");
+    setLocale("de");
+    expect(about({ location: { host: "bots.example.test" } })).toContain("OpenMausBot");
+  });
+
   it("names the server as it was saved, in the person's language", () => {
     const app = { version: "0.1.127", ownPage: false };
     expect(aboutVersionLines({ app, bundle: "0.1.116", platform: "macOS", server: "Office Mac" })).toEqual([

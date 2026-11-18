@@ -194,7 +194,7 @@ paired and no code is open, the phone link sleeps: nothing listens and there is
 no relay connection. A desktop that is only a client of another computer starts
 none of it.
 
-Tailscale is optional. The direct path does not use an OpenMausBot-operated
+Tailscale is optional. The direct path does not use a Seira-operated
 relay or create a cloud copy of local transcript data.
 
 ### Optional hosted HTTPS

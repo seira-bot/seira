@@ -4,6 +4,7 @@ import { useStore } from "@/state/store";
 import { EngineGroupLabel } from "@/components/EngineGroupLabel";
 import { EngineSetup, installCommandFor } from "@/components/EngineSetup";
 import { InstanceProviderMark } from "@/components/ProviderIcons";
+import { SeiraCharacter } from "@/components/seira-character";
 import { WindowDragStrip } from "@/components/DesktopCapabilities";
 import { splitEngineRail } from "@/lib/engine-rail";
 import { t } from "@/lib/i18n";
@@ -28,6 +29,7 @@ export function NoEngines() {
       <main className="relative flex h-full min-w-0 flex-1 items-center justify-center bg-app px-6">
         <WindowDragStrip />
         <div className="max-w-[520px] rounded-2xl border border-hairline/40 bg-card p-6 text-center">
+          <SeiraCharacter state={rechecking ? "thinking" : "attention"} size={96} className="mx-auto -mt-2" />
           <h1 className="text-[20px] font-semibold text-ink">{t("noEngines.remote.title")}</h1>
           <p className="mt-2 text-[14px] leading-relaxed text-ink-secondary">
             {t("noEngines.remote.body", { app: productName() })}
@@ -52,10 +54,15 @@ export function NoEngines() {
     <main className="relative flex h-full min-w-0 flex-1 flex-col overflow-y-auto bg-app">
       <WindowDragStrip />
       <div className="mx-auto w-full max-w-[560px] px-6 py-12">
-        <h1 className="text-[20px] font-semibold text-ink">{t("noEngines.title")}</h1>
-        <p className="mt-1.5 text-[14px] leading-relaxed text-ink-secondary">
-          {t("noEngines.intro", { app: productName() })}
-        </p>
+        <div className="flex items-center gap-4">
+          <SeiraCharacter state={rechecking ? "thinking" : "attention"} size={96} className="-my-3" />
+          <div className="min-w-0">
+            <h1 className="text-[20px] font-semibold text-ink">{t("noEngines.title")}</h1>
+            <p className="mt-1.5 text-[14px] leading-relaxed text-ink-secondary">
+              {t("noEngines.intro", { app: productName() })}
+            </p>
+          </div>
+        </div>
 
         <div className="mt-6 flex flex-col gap-2.5">
           {(() => {

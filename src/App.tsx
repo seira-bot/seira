@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, Loader2, Menu } from "lucide-react";
+import { ChevronLeft, Menu } from "lucide-react";
 import { CLOUD_LINK_SETTINGS, openBot, StoreProvider, useStore } from "@/state/store";
 import { nextShortcutBot, shortcutBots, shownBotIds } from "@/lib/sidebar-shortcut-order";
 import { useShowThreads } from "@/lib/thread-preferences";
@@ -52,6 +52,7 @@ import { WindowCaptionButtons } from "@/components/WindowCaptionButtons";
 import { WindowFrameBar } from "@/components/WindowFrameBar";
 import { cn } from "@/lib/cn";
 import { NoEngines } from "@/components/NoEngines";
+import { SeiraCharacter } from "@/components/seira-character";
 import { CloudEngineSignIn } from "@/components/CloudEngineSignIn";
 import { CloudIntent } from "@/components/CloudIntent";
 import { cloudIntentDue, cloudIntentShown, useCloudIntent } from "@/lib/cloud-intent";
@@ -416,7 +417,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
         <main data-app-loading={loading.text} className="relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-3 bg-app text-ink-secondary">
           <WindowDragStrip />
           <div className="w-full max-w-md"><ChatNotice notice={state.notice} /></div>
-          {loading.busy && <Loader2 size={20} className="animate-spin" />}
+          <SeiraCharacter state={loading.busy ? "thinking" : "idle"} size={96} />
           <div className="text-[14px]">{t(loading.text)}</div>
           {loading.command && (
             <div className="text-[12px]">

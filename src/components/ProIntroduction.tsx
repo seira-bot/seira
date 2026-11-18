@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Cloud, Crown } from "lucide-react";
 import type { CloudAccountState } from "../../electron/cloud-account.mjs";
 import { useStore } from "@/state/store";
-import { buyOfferAllowed, cloudPlanLine, cloudPlanView, moneyBackLine, offerTrialDays, usd, type CloudPlanView } from "@/lib/cloud-plan";
+import { cloudPlanLine, cloudPlanView, moneyBackLine, offerTrialDays, usd, type CloudPlanView } from "@/lib/cloud-plan";
+import { cloudOfferAllowed } from "@/lib/cloud-sale";
 import { useCloudOffer } from "@/lib/use-cloud-offer";
 import { t } from "@/lib/i18n";
 import { SettingRow, SettingsLinkRow } from "./SettingsPrimitives";
@@ -10,7 +11,7 @@ import { UpgradeButton, type UpgradeUi } from "./CloudUsageMeter";
 import type { CloudUsage } from "../../electron/cloud-home.mjs";
 
 export function proOfferAvailable(account: CloudAccountState | null): boolean {
-  return buyOfferAllowed(cloudPlanView(account));
+  return cloudOfferAllowed(cloudPlanView(account));
 }
 
 export function useCloudPlan(): { view: CloudPlanView; account: CloudAccountState | null } | null {
@@ -29,7 +30,7 @@ export function useCloudPlan(): { view: CloudPlanView; account: CloudAccountStat
 export function ProSettingsCard() {
   const { dispatch } = useStore();
   const plan = useCloudPlan();
-  const offering = plan !== null && buyOfferAllowed(plan.view);
+  const offering = plan !== null && cloudOfferAllowed(plan.view);
   const offer = useCloudOffer(offering, plan?.account?.offer);
   if (!plan) return null;
   const { view } = plan;
@@ -71,7 +72,7 @@ export function ProSettingsCard() {
 export function CloudPlanRow({ place, usage = null, upgrade }: { place: "account" | "plan"; usage?: CloudUsage | null; upgrade?: UpgradeUi }) {
   const { dispatch } = useStore();
   const plan = useCloudPlan();
-  const offering = plan !== null && buyOfferAllowed(plan.view);
+  const offering = plan !== null && cloudOfferAllowed(plan.view);
   const offer = useCloudOffer(offering, plan?.account?.offer);
   if (!plan) return null;
   if (offering) {
@@ -104,7 +105,7 @@ export function CloudPlanRow({ place, usage = null, upgrade }: { place: "account
 
 export function CloudPlanFootnote() {
   const plan = useCloudPlan();
-  const offering = plan !== null && buyOfferAllowed(plan.view);
+  const offering = plan !== null && cloudOfferAllowed(plan.view);
   const offer = useCloudOffer(offering, plan?.account?.offer);
   if (!offering) return null;
   return [t("pro.disclaimer"), moneyBackLine(offer)].filter(Boolean).join(" ");
