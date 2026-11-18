@@ -15,9 +15,14 @@ describe("BotCharacter", () => {
     expect(markup).not.toContain("data-fallback");
   });
 
-  it("keeps the bot's own face when it has an uploaded picture or another body", () => {
+  it("keeps the bot's own face when it has an uploaded picture", () => {
     expect(render({ color: "blue", avatarUrl: "/api/attachments/b.png", avatarCrop: "circle" })).toContain("data-fallback");
-    expect(render({ color: "blue", mascotBody: "cursor" })).toContain("data-fallback");
+  });
+
+  it("draws Seira for a bot with an old body", () => {
+    const markup = render({ color: "blue", mascotBody: "cursor" });
+    expect(markup).toContain('data-seira-state="idle"');
+    expect(markup).not.toContain("data-fallback");
   });
 
   it("treats a picture cropped as the mascot as no picture", () => {

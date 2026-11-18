@@ -19,7 +19,6 @@ import { AvatarFraming, OrganizationAvatarIcons, RESET_MASCOT_PATCH, useAvatarIm
 import { t } from "@/lib/i18n";
 import { bodyName, colorName, expressionName } from "@/lib/mascot-names";
 import { MascotAccessoryPicker } from "./MascotAccessoryPicker";
-import { MascotFaceColorPicker } from "./MascotFaceColorPicker";
 
 export function BotProfileAvatarCard({
   bot,
@@ -154,7 +153,6 @@ export function BotProfileAvatarCard({
 
         {crop === "mascot" && (
           <>
-            <MascotFaceColorPicker bot={bot} disabled={busy} onPatch={onPatch} />
             <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
               {t("botIdentity.accessories")}
             </div>

@@ -149,7 +149,6 @@ const { RoutineEditor } = await import("./RoutinesPage");
 const { SignedInSites } = await import("./SignedInSites");
 const { AvatarImageGenerator } = await import("./AvatarImageGenerator");
 const { AvatarFraming } = await import("./avatar-editing");
-const { MascotFaceColorPicker } = await import("./MascotFaceColorPicker");
 const { MascotAccessoryPicker } = await import("./MascotAccessoryPicker");
 const { Switch } = await import("./SettingsPrimitives");
 const { OrgSkillsCard } = await import("./bot-settings/OrgSkillsCard");
@@ -590,15 +589,6 @@ describe("the avatar editor", () => {
   it("resets the mascot as the Advanced card does", () => {
     click(find(editor(makeBot()), "data-avatar-reset"));
     expect(patch).toHaveBeenLastCalledWith({ avatarCrop: "mascot", color: "green", mascotExpression: null, mascotBody: "seira", mascotFaceColor: null, mascotAccessories: null });
-  });
-
-  it("edits facial feature color without changing body color or expression", () => {
-    const props = ofType(editor(makeBot({ mascotFaceColor: "black", mascotBody: "cursor" })), MascotFaceColorPicker)!.props;
-    const choices = segment(capture(() => MascotFaceColorPicker(props as Parameters<typeof MascotFaceColorPicker>[0])), "data-avatar-face-color");
-    expect(choices.value).toBe("black");
-    expect(choices.options.map((option) => option.value)).toEqual(["white", "black"]);
-    choices.onChange("white");
-    expect(patch).toHaveBeenLastCalledWith({ mascotFaceColor: "white" });
   });
 
   it("generates with the shared generator, and uploads with shape and framing", () => {

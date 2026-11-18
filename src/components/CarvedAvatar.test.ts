@@ -48,9 +48,9 @@ describe("CarvedAvatar", () => {
     expect(markup).toContain('stroke="#e11d48"');
   });
 
-  it.each(["pumpkin", "laddu"] as const)("is what MausAvatar wears for the %s body", (bodyId) => {
+  it.each(["cursor", "pumpkin", "laddu"] as const)("draws Seira for the old %s body", (bodyId) => {
     const markup = renderToStaticMarkup(createElement(MausAvatar, { color: "orange", bodyId, animated: false }));
-    expect(markup).toContain(`data-carved-body="${bodyId}"`);
+    expect(markup).toContain('data-carved-body="seira"');
     expect(markup).not.toContain("linearGradient");
   });
 

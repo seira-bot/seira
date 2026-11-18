@@ -14,7 +14,6 @@ import { AvatarImageGenerator } from "../AvatarImageGenerator";
 import { AvatarFraming, OrganizationAvatarIcons, RESET_MASCOT_PATCH, useAvatarImage, type AvatarPatch } from "../avatar-editing";
 import { Segmented } from "./rows";
 import { MascotAccessoryPicker } from "../MascotAccessoryPicker";
-import { MascotFaceColorPicker } from "../MascotFaceColorPicker";
 
 export type AvatarEditorTab = "bot" | "generate" | "upload";
 
@@ -171,7 +170,6 @@ export function AvatarEditorCard({ bot, activeState, onPatch, onClose }: {
                 />
               ))}
             </div>
-            <MascotFaceColorPicker bot={bot} disabled={busy} onPatch={pickMascot} />
             <div className="mt-3">
               <div className="mb-1.5 text-[12px] text-ink-secondary">{t("botIdentity.accessories")}</div>
               <MascotAccessoryPicker bot={bot} disabled={busy} compact onPatch={pickMascot} />
