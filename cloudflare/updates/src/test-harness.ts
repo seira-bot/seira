@@ -151,7 +151,7 @@ export function updatesHarness() {
     subscriber(email: string) {
       return d1.rows<{
         email: string; status: string; confirm_hash: string | null; confirm_sent_at: number | null;
-        unsubscribe_token: string; confirmed_at: number | null; unsubscribed_at: number | null;
+        unsubscribe_token: string; confirmed_hash: string | null; confirmed_at: number | null; unsubscribed_at: number | null;
       }>("SELECT * FROM subscribers WHERE email = ?", email)[0];
     },
     receipts(email: string) {
