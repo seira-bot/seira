@@ -200,10 +200,10 @@ const call = (boxId: () => string, extra: Partial<Parameters<typeof tools.cloudC
     cfg, signal: new AbortController().signal, boxId, gate: async () => ({ held: false }), assertActive: () => {}, recovery, ...extra,
   });
 const ranEcho = () => requests.filter((request) => request.command?.includes("echo hi")).length;
-/** Left as it is: a passing failure that says MausBot keeps trying, never "do not retry". */
+/** Left as it is: a passing failure that says Seira keeps trying, never "do not retry". */
 function keptAsItIs(error: Error | null) {
   expect(error).toBeInstanceOf(Error);
-  expect(error!.message).toMatch(/MausBot keeps trying in the background; trying again later is fine/);
+  expect(error!.message).toMatch(/Seira keeps trying in the background; trying again later is fine/);
   expect(error!.message).not.toMatch(/Do not retry|replac/i);
   expect(claims.transientClaimFailure(error)).toBe(true);
 }
@@ -250,7 +250,7 @@ describe("a woken cloud computer that is slow to answer", () => {
       claims.startAutoVmClaim(table, "thread-1", "g1");
       await slot.begin;
       expect(slot.failed).toBeFalsy();
-      if (!slot.claimed) expect(slot.retryReason).toMatch(/MausBot keeps trying in the background/);
+      if (!slot.claimed) expect(slot.retryReason).toMatch(/Seira keeps trying in the background/);
     }
     expect(slot.claimed).toBe(true);
     expect(slot.attempts).toBeGreaterThan(3);

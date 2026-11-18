@@ -10,10 +10,11 @@ import { locales } from "./index";
 
 const RETIRED: ReadonlyArray<readonly [string, RegExp, string]> = [
   ["OMB Cloud", /OMB Cloud/i, "Seira Cloud"],
-  ["Seira Cloud", /OpenMausBot Cloud/i, "Seira Cloud"],
-  ["Seira Pro", /MausBot Pro\b/, "Seira Cloud"],
+  ["OpenMausBot Cloud", /OpenMausBot Cloud/i, "Seira Cloud"],
+  ["MausBot Pro", /MausBot Pro\b/, "Seira Cloud"],
+  ["Seira Pro", /\bSeira Pro\b/, "Seira Cloud"],
   // \b before "_" fails, so environment names such as OMB_PUBLIC_IPV4 pass.
-  ["OMB", /\bOMB\b/, "MausBot"],
+  ["OMB", /\bOMB\b/, "Seira"],
   ["Cloud box", /Cloud box/i, "cloud desktop"],
   ["Hosted desktop", /Hosted desktop/i, "cloud desktop"],
   ["Cloud VM", /Cloud VM/i, "cloud desktop"],
@@ -118,10 +119,19 @@ describe("one name per thing", () => {
       Object.entries(pack)
         .filter(([key]) => !PENDING_KEY_PREFIXES.some((prefix) => key.startsWith(prefix)))
         .filter(([key, value]) => /\bOMB\b|\bT3\b/.test(value!) || productNames.some(([, pattern]) => pattern.test(value!))
-          || (/MausBot Cloud/.test((en as Record<string, string>)[key]!) && !/MausBot Cloud/.test(value!))
+          || (/Seira Cloud/.test((en as Record<string, string>)[key]!) && !/Seira Cloud/.test(value!))
           || (/boat/i.test(value!) && !/\bboats?\b/i.test((en as Record<string, string>)[key]!)))
         .map(([key]) => `${code}: ${key}`));
     expect([...new Set(offending)]).toEqual([]);
+  });
+
+  it("translations name Seira wherever the English does, and MausBot only where the English does", () => {
+    const e = en as Record<string, string>;
+    const offending = Object.entries(locales).filter(([code]) => code !== "en").flatMap(([code, pack]) =>
+      Object.entries(pack)
+        .filter(([key, value]) => (/Seira/.test(e[key] ?? "") && !/Seira/.test(value!)) || (/MausBot/.test(value!) && !/MausBot/.test(e[key] ?? "")))
+        .map(([key]) => `${code}: ${key}`));
+    expect(offending).toEqual([]);
   });
 
   it("hard-coded strings in src, server, electron and shared use the same words", () => {
@@ -138,7 +148,7 @@ describe("one name per thing", () => {
   });
 
   it("the public docs name Seira Cloud and the Cloud as the app does", () => {
-    const names = new Set(["OMB Cloud", "Seira Cloud", "Seira Pro", "Connect to my Cloud", "your Cloud", "my Cloud"]);
+    const names = new Set(["OMB Cloud", "OpenMausBot Cloud", "MausBot Pro", "Seira Pro", "Connect to my Cloud", "your Cloud", "my Cloud"]);
     const cloudNames = RETIRED.filter(([word]) => names.has(word));
     const pages = (dir: string): string[] => readdirSync(dir).flatMap((name) => {
       const path = join(dir, name);
@@ -185,7 +195,7 @@ describe("one name per thing", () => {
 
   it("the check catches each retired word, and lets own-key Boat and env names through", () => {
     for (const bad of [
-      "Sign in to OMB Cloud", "Sign in to Seira Cloud", "Get Seira Pro", "Seira Pro plans",
+      "Sign in to OMB Cloud", "Sign in to OpenMausBot Cloud", "Get OpenMausBot Pro", "MausBot Pro plans", "Get Seira Pro",
       "restart OMB", "Cloud box", "Hosted desktop", "Run it in its cloud VM", "Boat cloud runner",
       "Open your Cloud dashboard", "Connect to my Cloud", "Your Cloud is ready", "Let my Cloud use this Mac",
       "Local (this computer)", "Choose Cloud to wake", "Auto, Cloud or Browser", "including one from T3",
