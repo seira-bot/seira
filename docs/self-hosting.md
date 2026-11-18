@@ -482,11 +482,9 @@ cp .env.example .env            # set DOMAIN
 docker compose pull omb && docker compose up -d
 ```
 
-That starts the image CI publishes on every `main` push
-(`ghcr.io/milind-soni/openmausbot:latest`; each release is also tagged `v…`,
-and the one our own Clouds have run for 48 hours is `stable`). Move to the
-stable version right away with `./update.sh`, which pins it by digest in
-`.env`. To build from your checkout instead: `docker compose up -d --build`. The
+That starts `ghcr.io/seira-bot/seira:latest`, the newest image a maintainer
+published from `main`. Each release is also tagged `v…`. Move to the newest
+release right away with `./update.sh`, which pins it by digest in `.env`. To build from your checkout instead: `docker compose up -d --build`. The
 build needs about 6 GB of memory: on a smaller server, add swap first or use
 the published image.
 
@@ -544,7 +542,7 @@ docker compose build --build-arg CHROME_CACHE_TAG=$(date +%F) omb && docker comp
 
 These platforms run the image's own command, with no `--init`, and usually
 with a 64 MB `/dev/shm` and a limit on how many processes the container may
-hold. The server image (`ghcr.io/milind-soni/openmausbot`) is built for that:
+hold. The server image (`ghcr.io/seira-bot/seira`) is built for that:
 
 - **It brings its own init.** tini is the image's entrypoint and collects
   the processes that bots' engines, browsers and shell commands leave behind.
@@ -556,7 +554,7 @@ hold. The server image (`ghcr.io/milind-soni/openmausbot`) is built for that:
   init of the platform's own on top (`docker run --init`, Compose's
   `init: true`) does no harm. A command you give the container runs as
   written, so start it with `openmausbot …` or `node …`
-  (`docker run --rm ghcr.io/milind-soni/openmausbot openmausbot --version`):
+  (`docker run --rm ghcr.io/seira-bot/seira openmausbot --version`):
   a bare `--version` or `dist-server/openmausbot.js`, which older images
   passed on to Node, no longer starts.
 - **Chrome does not need a larger `/dev/shm`.** Where `/dev/shm` is under
