@@ -75,7 +75,7 @@ export function attachInteraction(host) {
     }, HOLD_MS);
   }
 
-  function release(e) {
+  function release() {
     clearTimeout(holdTimer);
     if (down && !down.held && down.moved < STILL && host.now() - down.t < HOLD_MS) {
       host.trigger('click', [down.x, down.y]);
