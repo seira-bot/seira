@@ -91,7 +91,8 @@ describe("room speaker names", () => {
       line("a", "bot", "Sure. @Kai, can you draw it?", { botId: "ada", name: "Ada", color: "blue" }),
       line("k", "bot", "here", { botId: "kai", name: "Kai", color: "orange" }),
     ]);
-    expect(html).toMatch(/>Ada<\/span><span[^>]*>→<\/span><span class="text-\[13px\] font-semibold bot-identity" data-bot-color="orange">Kai</);
+    // Simple mode: the name sits in the turn head and the addressee follows it, in that bot's colour.
+    expect(html).toMatch(/data-turn-head="true"[^>]*>.*?>Ada<\/span><span class="[^"]*tabular-nums[^"]*">[^<]*<\/span><span[^>]*>→<\/span><span class="text-\[13px\] font-semibold bot-identity" data-bot-color="orange">Kai</);
     expect(html.match(/→/g)).toHaveLength(1);
   });
 

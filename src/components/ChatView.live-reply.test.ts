@@ -69,7 +69,8 @@ const liveRows = () => [...log().querySelectorAll('[data-mid^="live:"]')];
 const rowOf = (id: string) => log().querySelector(`[data-mid="${id}"]`);
 const occurrences = (text: string) => (log().textContent ?? "").split(text).length - 1;
 /** A row's markup with the ids that name it taken out: what the eye sees. */
-const looks = (row: Element) => row.outerHTML.replace(/live:[^"]+|data-mid="[^"]+"|data-citation-source="[^"]+"/g, "");
+// The avatar draws its own SVG ids from React, which differ from one mount to the next; they are not part of the look.
+const looks = (row: Element) => row.outerHTML.replace(/live:[^"]+|data-mid="[^"]+"|data-citation-source="[^"]+"|_r_[a-z0-9]+_/g, "");
 
 beforeEach(() => {
   vi.useFakeTimers({ now: started + 5_000 });

@@ -243,7 +243,7 @@ describe("header name", () => {
     // In the Simple pill the Chief label stands in for a title that only repeats it: shown once, never twice.
     fixture.advanced = false;
     try {
-      expect(header("chief of staff ").match(/Chief of Staff/g)).toHaveLength(1);
+      expect(header("chief of staff ").match(/<span data-chathead-role="true"[^>]*>Chief of Staff<\/span>/g)).toHaveLength(1);
       expect(header("Operations lead")).toContain('title="Operations lead"');
     } finally {
       fixture.advanced = true;
