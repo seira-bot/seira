@@ -1,4 +1,6 @@
 export const APP_NAME = "Seira";
+/** Apache-2.0 attribution: the project Seira is a fork of. */
+export const UPSTREAM_NAME = "OpenMausBot";
 export const APP_REPOSITORY = "https://github.com/seira-bot/seira";
 export const DOCS_URL = `${APP_REPOSITORY}/tree/main/docs`;
 export const HELP_CENTER_URL = DOCS_URL;

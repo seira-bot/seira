@@ -41,6 +41,12 @@ describe("About", () => {
     expect(html).not.toContain("Connected to");
   });
 
+  it("credits the project Seira is built on", () => {
+    const html = about({ location: { host: "bots.example.test" } });
+    expect(html).toContain("built on OpenMausBot");
+    expect(html).not.toContain("built on Seira");
+  });
+
   it("names the server as it was saved, in the person's language", () => {
     const app = { version: "0.1.127", ownPage: false };
     expect(aboutVersionLines({ app, bundle: "0.1.116", platform: "macOS", server: "Office Mac" })).toEqual([

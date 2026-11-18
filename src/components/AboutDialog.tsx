@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
 
 import {
-  APP_NAME,
   APP_REPOSITORY,
   DOCS_URL,
   LICENSE_URL,
   RELEASES_URL,
+  UPSTREAM_NAME,
   appVersion,
   openExternalLink,
   platformLabel,
@@ -67,7 +67,7 @@ export function AboutDialog({ open, onClose }: { open: boolean; onClose: () => v
         <p className="mt-1 text-[13px] text-ink-secondary">{version}</p>
         {connected && <p className="mt-0.5 text-[13px] text-ink-secondary">{connected}</p>}
         <p className="mt-3 text-[13px] leading-relaxed text-ink-secondary">
-          {t("about.tagline", { app: APP_NAME })}
+          {t("about.tagline", { app: UPSTREAM_NAME })}
         </p>
         <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-1.5 text-[13px]">
           <AboutLink href={APP_REPOSITORY} label="GitHub" />
