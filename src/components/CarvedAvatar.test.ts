@@ -2,17 +2,17 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { CarvedAvatar, REST_POSE, carvedFills, carvedGeometry } from "./CarvedAvatar";
+import { CarvedAvatar, REST_POSE, carvedFills, carvedGeometry, hairTint } from "./CarvedAvatar";
 import { MausAvatar } from "./Avatar";
 import { CARVED_BODIES, CARVED_BODY_IDS } from "../../shared/carved-bodies";
 import { MAUS_COLORS } from "@/lib/mascot";
 
-const render = (body: (typeof CARVED_BODY_IDS)[number], color: "orange" | "purple" = "orange") =>
-  renderToStaticMarkup(createElement(CarvedAvatar, { body, color, animated: false, label: body }));
+const render = (body: (typeof CARVED_BODY_IDS)[number], color: "orange" | "purple" | "chrome" = "orange", faceColor: "white" | "black" | null = null) =>
+  renderToStaticMarkup(createElement(CarvedAvatar, { body, color, faceColor, animated: false, label: body }));
 
 describe("CarvedAvatar", () => {
   it("draws every part, two eyes, and a smile unless the drawing has its own mouth", () => {
-    for (const id of CARVED_BODY_IDS) {
+    for (const id of CARVED_BODY_IDS.filter((id) => id !== "seira")) {
       const markup = render(id);
       const body = CARVED_BODIES[id];
       expect(markup).toContain(`data-carved-body="${id}"`);
@@ -20,6 +20,32 @@ describe("CarvedAvatar", () => {
       expect(markup.match(/<path /g)?.length, id).toBe(body.parts.length + 1 + (body.eyes.mouth ? 1 : 0));
       expect(markup.includes("<ellipse"), id).toBe(body.eyes.mouth);
     }
+  });
+
+  it("draws Seira from her rendered head, with two eyes and a smile on the visor", () => {
+    const markup = render("seira", "chrome");
+    expect(markup).toContain('data-carved-body="seira"');
+    expect(markup).toMatch(/<image href="[^"]*front-\d+\.webp"/);
+    expect(markup.match(/<rect /g)?.length).toBe(2);
+    expect(markup.match(/<path /g)?.length).toBe(2);
+    expect(markup).not.toContain("mix-blend-mode");
+  });
+
+  it("tints Seira's hair with the bot's colour, and keeps it white for silver and chrome", () => {
+    const markup = render("seira", "orange");
+    expect(markup).toMatch(/<mask id="hair-[^"]+"[^>]*><image href="[^"]*hair-\d+\.png"/);
+    expect(markup).toContain(`fill="${hairTint("orange")}"`);
+    expect(markup).toContain("mix-blend-mode:multiply");
+    expect(hairTint("chrome")).toBeNull();
+    expect(hairTint("silver")).toBeNull();
+    expect(carvedFills(CARVED_BODIES.seira, "chrome").body).toBe(CARVED_BODIES.seira.bone);
+    expect(carvedFills(CARVED_BODIES.seira, "blue").body).toBe(carvedFills(CARVED_BODIES.pumpkin, "blue").body);
+  });
+
+  it.each(["white", "black", null] as const)("keeps Seira's eyes red with the %s face colour", (faceColor) => {
+    const markup = render("seira", "chrome", faceColor);
+    expect(markup.match(/<rect [^>]*fill="#e11d48"/g)?.length).toBe(2);
+    expect(markup).toContain('stroke="#e11d48"');
   });
 
   it.each(["pumpkin", "laddu"] as const)("is what MausAvatar wears for the %s body", (bodyId) => {

@@ -14,7 +14,7 @@ import { CHROME_EYES, CHROME_GRADIENT, MAUS_COLORS, type MausColor, type MausMot
 import { CursorAvatar, type CursorAvatarHandle } from "./CursorAvatar";
 import { avatarCropRadius, botAvatarProfile, clampAvatarFocus, clampAvatarZoom, mascotFaceInk, type BotAvatarCrop, type MascotFaceColor } from "../../shared/bot-avatar";
 import { MASCOT_BODIES, botMascotBody } from "../../shared/mascot-bodies";
-import { DEFAULT_BOT_BODY, isCarvedBody, type BotBodyId } from "../../shared/bot-body";
+import { botBodyId, isCarvedBody, type BotBodyId } from "../../shared/bot-body";
 import { useFestivalDress, wornBody } from "@/lib/festival-dress";
 import { t } from "@/lib/i18n";
 import { CarvedAvatar } from "./CarvedAvatar";
@@ -104,7 +104,7 @@ export type MausAvatarProps = {
 
 function MausAvatarComponent(props: MausAvatarProps, ref: React.Ref<MausAvatarHandle>) {
   const { color, size, state, motion, motionKey, gaze, trackPointer, animated, label, kind } = props;
-  const body = props.bodyId ?? DEFAULT_BOT_BODY;
+  const body = botBodyId(props.bodyId);
   if (isCarvedBody(body)) {
     return (
       <CarvedAvatar
