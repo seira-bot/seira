@@ -17,7 +17,7 @@ It runs at `updates.seira.bot`. It stores the list in D1. It sends email with Cl
 
 The app sends `{status: "opted_in", email, installId, textVersion}` and gets `{receipt}`.
 The app sends `{status: "withdrawn" | "declined", receipt}` to withdraw.
-An app withdrawal ends only a subscription that the same app request started. Every update email has its own unsubscribe link.
+An app withdrawal ends only a subscription that the same confirmation email confirmed. Every update email has its own unsubscribe link.
 The Worker stores only SHA-256 hashes of receipts and confirmation tokens.
 The Worker sends a new confirmation email only when the address has no open link or the last email is more than 10 minutes old.
 Only a confirm clears the open link. A withdrawal does not.

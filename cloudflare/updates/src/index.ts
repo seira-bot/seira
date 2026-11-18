@@ -63,7 +63,7 @@ async function optIn(body: Record<string, unknown>, env: AppEnv) {
   } else if (existing.status === "unsubscribed") {
     statements.push(
       env.DB.prepare(
-        "UPDATE subscribers SET status = 'pending', text_version = ?, unsubscribed_at = NULL, confirm_hash = COALESCE(?, confirm_hash), confirm_sent_at = COALESCE(?, confirm_sent_at), updated_at = ? WHERE email = ?",
+        "UPDATE subscribers SET status = 'pending', text_version = ?, unsubscribed_at = NULL, confirmed_hash = NULL, confirm_hash = COALESCE(?, confirm_hash), confirm_sent_at = COALESCE(?, confirm_sent_at), updated_at = ? WHERE email = ?",
       ).bind(textVersion, confirmHash, token ? now : null, now, email),
     );
   } else if (existing.status === "pending" && token) {
@@ -80,13 +80,9 @@ async function optIn(body: Record<string, unknown>, env: AppEnv) {
 
   const receipt = randomToken();
   statements.push(
-    env.DB.prepare("INSERT INTO receipts (receipt_hash, email, install_id, text_version, created_at) VALUES (?, ?, ?, ?, ?)").bind(
-      await sha256(receipt),
-      email,
-      installId.value,
-      textVersion,
-      now,
-    ),
+    env.DB.prepare(
+      "INSERT INTO receipts (receipt_hash, email, install_id, text_version, created_at, confirm_hash) SELECT ?, email, ?, ?, ?, CASE WHEN status = 'confirmed' THEN NULL ELSE confirm_hash END FROM subscribers WHERE email = ?",
+    ).bind(await sha256(receipt), installId.value, textVersion, now, email),
   );
   await env.DB.batch(statements);
   return json({ receipt });
@@ -96,14 +92,14 @@ async function withdraw(body: Record<string, unknown>, env: AppEnv) {
   const receipt = body.receipt;
   if (typeof receipt !== "string" || !TOKEN_PATTERN.test(receipt)) return invalidRequest();
   const hash = await sha256(receipt);
-  const row = await env.DB.prepare("SELECT email, created_at FROM receipts WHERE receipt_hash = ?").bind(hash).first<{ email: string; created_at: number }>();
+  const row = await env.DB.prepare("SELECT email, confirm_hash FROM receipts WHERE receipt_hash = ?").bind(hash).first<{ email: string; confirm_hash: string | null }>();
   if (!row) return json({ error: "unknown_receipt" }, 404);
   const now = nowSeconds();
   await env.DB.batch([
     env.DB.prepare("UPDATE receipts SET withdrawn_at = COALESCE(withdrawn_at, ?) WHERE receipt_hash = ?").bind(now, hash),
     env.DB.prepare(
-      "UPDATE subscribers SET status = 'unsubscribed', unsubscribed_at = ?, updated_at = ? WHERE email = ? AND (status = 'pending' OR (status = 'confirmed' AND confirmed_at >= ?))",
-    ).bind(now, now, row.email, row.created_at),
+      "UPDATE subscribers SET status = 'unsubscribed', unsubscribed_at = ?, updated_at = ? WHERE email = ? AND ? IS NOT NULL AND ((status = 'pending' AND confirm_hash = ?) OR (status = 'confirmed' AND confirmed_hash = ?))",
+    ).bind(now, now, row.email, row.confirm_hash, row.confirm_hash, row.confirm_hash),
   ]);
   return json({ ok: true });
 }
@@ -154,7 +150,7 @@ async function confirm(request: Request, env: AppEnv, url: URL) {
   if (!TOKEN_PATTERN.test(token)) return expiredPage();
   const now = nowSeconds();
   const result = await env.DB.prepare(
-    "UPDATE subscribers SET status = 'confirmed', confirmed_at = ?, confirm_hash = NULL, updated_at = ? WHERE confirm_hash = ? AND status = 'pending' AND confirm_sent_at >= ?",
+    "UPDATE subscribers SET status = 'confirmed', confirmed_at = ?, confirmed_hash = confirm_hash, confirm_hash = NULL, updated_at = ? WHERE confirm_hash = ? AND status = 'pending' AND confirm_sent_at >= ?",
   )
     .bind(now, now, await sha256(token), now - CONFIRM_VALID_FOR)
     .run();

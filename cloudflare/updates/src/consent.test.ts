@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { sha256 } from "./common";
 import { updatesHarness } from "./test-harness";
 
 const RECEIPT = /^[A-Za-z0-9_-]{43}$/;
@@ -77,9 +78,10 @@ describe("opt-in", () => {
 
   it("sends one new email when a confirmed person withdraws and opts in again", async () => {
     const h = updatesHarness();
-    await h.confirmed("ana@example.test");
     const { body } = await h.optIn("ana@example.test");
+    await h.postForm("/confirm", { t: h.confirmToken() });
     await h.consent({ status: "withdrawn", receipt: body.receipt });
+    expect(h.subscriber("ana@example.test")?.status).toBe("unsubscribed");
     expect(h.emails).toHaveLength(1);
     await h.optIn("ana@example.test");
     expect(h.emails).toHaveLength(2);
@@ -143,53 +145,110 @@ describe("opt-in", () => {
 });
 
 describe("withdraw", () => {
-  it.each(["withdrawn", "declined"])("unsubscribes a pending address on %s (AC-04)", async (status) => {
-    const h = updatesHarness();
-    const { body } = await h.optIn("ana@example.test");
-    const response = await h.consent({ status, receipt: body.receipt });
+  const ADDRESS = "ana@example.test";
+  const older = (h: ReturnType<typeof updatesHarness>) => h.d1.db.exec("UPDATE subscribers SET confirm_sent_at = confirm_sent_at - 601");
+  const withdraw = async (h: ReturnType<typeof updatesHarness>, status: string, receipt: string | undefined) => {
+    const response = await h.consent({ status, receipt });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true });
-    const subscriber = h.subscriber("ana@example.test")!;
-    expect(subscriber.status).toBe("unsubscribed");
-    expect(subscriber.unsubscribed_at).not.toBeNull();
-    expect(h.receipts("ana@example.test")[0]!.withdrawn_at).not.toBeNull();
+  };
+  const state = (h: ReturnType<typeof updatesHarness>) => h.subscriber(ADDRESS)!.status;
+  const confirm = (h: ReturnType<typeof updatesHarness>) => h.postForm("/confirm", { t: h.confirmToken() });
 
-    const again = await h.consent({ status, receipt: body.receipt });
-    expect(again.status).toBe(200);
-    expect(await again.json()).toEqual({ ok: true });
+  it.each(["withdrawn", "declined"])("unsubscribes a pending address on %s (AC-04)", async (status) => {
+    const h = updatesHarness();
+    const { body } = await h.optIn(ADDRESS);
+    await withdraw(h, status, body.receipt);
+    expect(h.subscriber(ADDRESS)!.unsubscribed_at).not.toBeNull();
+    expect(h.receipts(ADDRESS)[0]!.withdrawn_at).not.toBeNull();
+    await withdraw(h, status, body.receipt);
+    expect(state(h)).toBe("unsubscribed");
   });
 
-  it.each(["withdrawn", "declined"])("unsubscribes a confirmed address when the receipt came before the confirmation on %s", async (status) => {
+  it.each(["withdrawn", "declined"])("ends only the subscription that the same link confirmed on %s", async (status) => {
     const h = updatesHarness();
-    const { body } = await h.optIn("ana@example.test");
-    await h.postForm("/confirm", { t: h.confirmToken() });
-    h.d1.db.exec("UPDATE receipts SET created_at = created_at - 5");
-    const response = await h.consent({ status, receipt: body.receipt });
-    expect(await response.json()).toEqual({ ok: true });
-    expect(h.subscriber("ana@example.test")?.status).toBe("unsubscribed");
-    expect(h.receipts("ana@example.test")[0]!.withdrawn_at).not.toBeNull();
+    const r1 = await h.optIn(ADDRESS);
+    older(h);
+    const r2 = await h.optIn(ADDRESS);
+    expect(h.emails).toHaveLength(2);
+    expect((await confirm(h)).status).toBe(200);
+    await withdraw(h, status, r1.body.receipt);
+    expect(state(h)).toBe("confirmed");
+    expect(h.receipts(ADDRESS).filter((row) => row.withdrawn_at !== null)).toHaveLength(1);
+    await withdraw(h, status, r2.body.receipt);
+    expect(state(h)).toBe("unsubscribed");
   });
 
   it.each(["withdrawn", "declined"])("keeps a confirmed address when the receipt came after the confirmation on %s", async (status) => {
     const h = updatesHarness();
-    await h.confirmed("ana@example.test");
-    const { body } = await h.optIn("ana@example.test");
-    h.d1.db.exec("UPDATE receipts SET created_at = created_at + 5 WHERE withdrawn_at IS NULL AND receipt_hash = (SELECT receipt_hash FROM receipts ORDER BY rowid DESC LIMIT 1)");
-    const response = await h.consent({ status, receipt: body.receipt });
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true });
-    expect(h.subscriber("ana@example.test")?.status).toBe("confirmed");
-    expect(h.receipts("ana@example.test").filter((row) => row.withdrawn_at !== null)).toHaveLength(1);
+    await h.optIn(ADDRESS);
+    await confirm(h);
+    const r3 = await h.optIn(ADDRESS);
+    expect(h.emails).toHaveLength(1);
+    await withdraw(h, status, r3.body.receipt);
+    expect(state(h)).toBe("confirmed");
+    expect(h.receipts(ADDRESS).filter((row) => row.withdrawn_at !== null)).toHaveLength(1);
   });
 
-  it("answers 200 and changes nothing for an unsubscribed address", async () => {
+  it("lets a receipt in the same link window end the confirmed subscription", async () => {
     const h = updatesHarness();
-    const { body } = await h.optIn("ana@example.test");
-    await h.consent({ status: "withdrawn", receipt: body.receipt });
-    const before = h.subscriber("ana@example.test");
-    const response = await h.consent({ status: "declined", receipt: body.receipt });
-    expect(await response.json()).toEqual({ ok: true });
-    expect(h.subscriber("ana@example.test")).toEqual(before);
+    await h.optIn(ADDRESS);
+    const r2 = await h.optIn(ADDRESS);
+    expect(h.emails).toHaveLength(1);
+    await confirm(h);
+    await withdraw(h, "withdrawn", r2.body.receipt);
+    expect(state(h)).toBe("unsubscribed");
+  });
+
+  it("keeps a pending address when a newer link replaced the receipt's link", async () => {
+    const h = updatesHarness();
+    const r1 = await h.optIn(ADDRESS);
+    older(h);
+    await h.optIn(ADDRESS);
+    await withdraw(h, "withdrawn", r1.body.receipt);
+    expect(state(h)).toBe("pending");
+  });
+
+  it("lets the new receipt withdraw a link that an earlier withdrawal left open", async () => {
+    const h = updatesHarness();
+    const r1 = await h.optIn(ADDRESS);
+    const token = h.confirmToken();
+    await withdraw(h, "withdrawn", r1.body.receipt);
+    const r2 = await h.optIn(ADDRESS);
+    expect(h.emails).toHaveLength(1);
+    expect(state(h)).toBe("pending");
+    expect((await h.postForm("/confirm", { t: token })).status).toBe(200);
+    await withdraw(h, "declined", r2.body.receipt);
+    expect(state(h)).toBe("unsubscribed");
+  });
+
+  it("rejects an old link after a resubscribe and keeps old receipts harmless", async () => {
+    const h = updatesHarness();
+    const r1 = await h.optIn(ADDRESS);
+    const l1 = h.confirmToken();
+    await h.postForm("/confirm", { t: l1 });
+    await h.fetch(`/unsubscribe?t=${h.subscriber(ADDRESS)!.unsubscribe_token}`, { method: "POST" });
+    expect(state(h)).toBe("unsubscribed");
+    older(h);
+    await h.optIn(ADDRESS);
+    expect(h.emails).toHaveLength(2);
+    expect((await h.postForm("/confirm", { t: l1 })).status).toBe(410);
+    expect(h.subscriber(ADDRESS)!.confirmed_hash).toBeNull();
+    expect((await confirm(h)).status).toBe(200);
+    const confirmed = h.subscriber(ADDRESS)!;
+    expect(confirmed.status).toBe("confirmed");
+    expect(confirmed.confirmed_hash).toBe(await sha256(h.confirmToken()));
+    await withdraw(h, "withdrawn", r1.body.receipt);
+    expect(state(h)).toBe("confirmed");
+  });
+
+  it("stores no link on a receipt made for a confirmed address", async () => {
+    const h = updatesHarness();
+    await h.confirmed(ADDRESS);
+    await h.optIn(ADDRESS);
+    const hashes = h.d1.rows<{ confirm_hash: string | null }>("SELECT confirm_hash FROM receipts ORDER BY rowid").map((row) => row.confirm_hash);
+    expect(hashes[0]).not.toBeNull();
+    expect(hashes[1]).toBeNull();
   });
 
   it("answers 404 unknown_receipt for an unknown receipt (AC-05)", async () => {

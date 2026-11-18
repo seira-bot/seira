@@ -4,6 +4,7 @@ CREATE TABLE subscribers (
   text_version TEXT NOT NULL,
   confirm_hash TEXT,
   confirm_sent_at INTEGER,
+  confirmed_hash TEXT,
   unsubscribe_token TEXT NOT NULL UNIQUE,
   created_at INTEGER NOT NULL,
   confirmed_at INTEGER,
@@ -19,7 +20,8 @@ CREATE TABLE receipts (
   install_id TEXT,
   text_version TEXT NOT NULL,
   created_at INTEGER NOT NULL,
-  withdrawn_at INTEGER
+  withdrawn_at INTEGER,
+  confirm_hash TEXT
 );
 
 CREATE INDEX receipts_email ON receipts (email);
