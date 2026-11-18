@@ -555,8 +555,8 @@ describe("the repository's import graph", () => {
   it("runs every test outside the renderer that reads a translation other than English with the locale tests", () => {
     const files = ["server", "shared", "packages", "electron", "companion", "enterprise", "evals", "scripts", "cloudflare"]
       .flatMap((directory) => codeFiles(join(ROOT, directory)))
-      // The selection names the catalogs without reading them.
-      .filter((file) => !/[/\\]ci-scope\.(?:mjs|test\.ts)$/.test(file));
+      // The selection names the catalogs without reading them, and the leak check's test names one as an exempt path.
+      .filter((file) => !/[/\\](?:ci-scope\.(?:mjs|test\.ts)|check-local-leaks\.test\.mjs)$/.test(file));
     const mentionsTranslations = (file: string) => {
       const text = readFileSync(file, "utf8");
       // A browser extension's own _locales folder is not one of ours.
