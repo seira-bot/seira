@@ -60,7 +60,7 @@ function emitTs(): string {
   const entries = BAKED.map((body) => {
     const parts = body.parts.map((part) => `      { fill: ${quote(part.fill)}, d: ${quote(part.d)} },`)
     return [
-      `  ${body.id}: {`,
+      `  ${/^[a-z]\w*$/.test(body.id) ? body.id : quote(body.id)}: {`,
       `    id: ${quote(body.id)},`,
       `    name: ${quote(body.name)},`,
       `    paint: ${quote(body.paint)},`,
@@ -85,7 +85,7 @@ function emitTs(): string {
   })
   const all = PACKS.map(([pack]) => `...${pack.toUpperCase()}_BODY_IDS`).join(", ")
   return `/**
- * The flat bodies a bot can wear: Seira, the shipped mascot, her cast, and the festival bodies.
+ * The flat bodies a bot can wear: Seira, the shipped mascot, her other hair styles, and the festival bodies.
  *
  * GENERATED FILE — do not hand-edit. Run \`pnpm gen:carved\` to rebuild it from
  * \`scripts/gen-carved-bodies.ts\`.
