@@ -142,7 +142,7 @@ describe("Chrome import routes", () => {
     const listing = await post("/import/sites", { bot: "pepper", source: "chrome:Default" });
     expect(listing.status).toBe(200);
     expect(listing.headers.get("cache-control")).toBe("no-store");
-    expect((await listing.json()).ticket).toBe("t1");
+    expect(((await listing.json()) as { ticket: string }).ticket).toBe("t1");
     const result = await post("/import", IMPORT);
     expect(result.status).toBe(200);
     expect(result.headers.get("cache-control")).toBe("no-store");
