@@ -15,6 +15,8 @@ import type { CursorAvatarHandle } from "./CursorAvatar";
 import { mascotClock, usePrefersReducedMotion } from "./mascot-clock";
 import { frameFloorMs, nextFrameAt } from "./mascot-motion";
 import { mascotFaceInk, type MascotFaceColor } from "../../shared/bot-avatar";
+import { isBrandBody } from "../../shared/bot-body";
+import { seiraPictures } from "@/lib/seira-body";
 
 /** Where the face looks and how it feels. */
 export type CarvedPose = {
@@ -140,7 +142,15 @@ export function carvedFills(body: CarvedBody, color: MausColor): { body: string;
   const accent = vivid(MAUS_COLORS[color] ?? MAUS_COLORS.green);
   if (body.paint === "bone") return { body: body.bone ?? "#f1ede6", accent };
   if (body.paint === "pale") return { body: mix(MAUS_COLORS[color] ?? MAUS_COLORS.green, "#ffffff", 0.86), accent };
+  if (body.paint === "hair") return { body: greyColor(color) ? body.bone ?? "#d3d8df" : accent, accent };
   return { body: accent, accent };
+}
+
+const greyColor = (color: MausColor) => color === "silver" || color === "chrome";
+
+/** The tint laid over the rendered hair: none for the grey colours, whose hair stays as rendered. */
+export function hairTint(color: MausColor): string | null {
+  return greyColor(color) ? null : vivid(MAUS_COLORS[color] ?? MAUS_COLORS.green);
 }
 
 export type CarvedAvatarProps = {
@@ -163,7 +173,8 @@ function CarvedAvatarComponent(
   ref: React.Ref<CursorAvatarHandle>,
 ) {
   const body = CARVED_BODIES[bodyId];
-  const faceInk = mascotFaceInk(faceColor);
+  const faceInk = isBrandBody(bodyId) ? undefined : mascotFaceInk(faceColor);
+  const pictures = bodyId === "seira" ? seiraPictures(size, globalThis.devicePixelRatio ?? 1) : null;
   const uid = useId().replace(/:/g, "");
   const reduced = usePrefersReducedMotion();
   const live = animated && !reduced;
@@ -269,6 +280,8 @@ function CarvedAvatarComponent(
   const onPointerLeave = () => { cue.current.pointer = null; };
 
   const fills = carvedFills(body, color);
+  const tint = pictures ? hairTint(color) : null;
+  const glow = pictures ? `url(#glow-${uid})` : undefined;
   const resolve = (fill: string) => (fill === "body" ? fills.body : fill === "accent" ? fills.accent : fill);
   return (
     <span
@@ -289,14 +302,30 @@ function CarvedAvatarComponent(
       >
         <defs>
           <clipPath id={`carved-${uid}`}><path d={body.clip} /></clipPath>
+          {pictures && (
+            <filter id={`glow-${uid}`} x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="3.5" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+          )}
+          {pictures && tint && (
+            <mask id={`hair-${uid}`} maskUnits="userSpaceOnUse" x="0" y="0" width="240" height="240">
+              <image href={pictures.hair} x="0" y="0" width="240" height="240" />
+            </mask>
+          )}
         </defs>
         <g ref={group} transform={initial.body}>
-          {body.parts.map((part, i) => <path key={i} d={part.d} fill={resolve(part.fill)} />)}
-          <g clipPath={`url(#carved-${uid})`}>
+          {pictures ? (
+            <g style={{ isolation: "isolate" }}>
+              <image href={pictures.head} x="0" y="0" width="240" height="240" />
+              {tint && <rect x="0" y="0" width="240" height="240" fill={tint} mask={`url(#hair-${uid})`} style={{ mixBlendMode: "multiply" }} />}
+            </g>
+          ) : body.parts.map((part, i) => <path key={i} d={part.d} fill={resolve(part.fill)} />)}
+          <g clipPath={`url(#carved-${uid})`} filter={glow}>
             {initial.eyes.map((rect, i) => <rect key={i} ref={eyes[i]} {...rect} fill={faceInk ?? body.eyes.ink} />)}
           </g>
           {body.eyes.mouth && (
-            <g>
+            <g filter={glow}>
               <path ref={smile} d={initial.smile.d} transform={initial.smile.transform} opacity={initial.smile.opacity}
                 fill="none" stroke={faceInk ?? body.eyes.mouthInk} strokeWidth={body.eyes.w * 0.36} strokeLinecap="round" />
               <ellipse ref={open} {...initial.open} fill={faceInk ?? body.eyes.mouthInk} />
