@@ -24,8 +24,8 @@ sign-in authority.
 Contribute under Apache 2.0. No DCO sign-off or CLA is required. Submit only
 code you wrote or have the right to contribute.
 
-The licensing files and the files under `.github/` have code owners
-([`CODEOWNERS`](.github/CODEOWNERS)): a maintainer reviews changes there.
+Every file has a code owner ([`CODEOWNERS`](.github/CODEOWNERS)): a maintainer
+reviews each change.
 
 ## Third-party components and trademarks
 

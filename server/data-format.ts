@@ -1,5 +1,5 @@
 // The data folder's format marker, and the rule that makes an update safe to roll back: what version N writes, version
-// N-1 can still read (CONTRIBUTING.md, "Changing how data is stored"). A server that finds data in a format it cannot
+// N-1 can still read (docs/contributing.md, "Changing how data is stored"). A server that finds data in a format it cannot
 // read refuses to start before it touches a file.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";

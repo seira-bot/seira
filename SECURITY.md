@@ -4,12 +4,11 @@
 
 Please **do not open a public issue** for security problems.
 
-- **Email** **soni.mil2001@gmail.com** with the details.
-- **Or, if it is enabled on this repository,** use GitHub's private vulnerability reporting:
-  <https://github.com/seira-bot/seira/security/advisories/new>. The report stays visible
-  only to you and the maintainers until a fix is published.
+Report it through GitHub's private vulnerability reporting:
+<https://github.com/seira-bot/seira/security/advisories/new>. Only you and the maintainers
+can see the report until a fix is published.
 
-You'll get a response as soon as possible, normally within a few days.
+You get a reply as soon as possible, normally within a few days.
 
 ## Scope notes for researchers
 
