@@ -198,14 +198,14 @@ export const GroupListItem = memo(function GroupListItem({
       {simpleRow ? <SimpleRoomStack members={members} /> : group.dm ? <StackedMauses members={members} density={railTile ? "comfortable" : density} large={railTile} /> : <RoomMark density={railTile ? "comfortable" : density} large={simpleRow || railTile} />}
       <div className={cn("min-w-0 flex-1", density === "icons" && "hidden")}>
         <div className={cn("flex items-baseline justify-between gap-2", simpleRow && "pr-7")}>
-          <span className={cn("truncate text-ink", simpleRow ? cn("text-[13px] leading-5", group.unread ? "font-semibold" : "font-medium") : "text-[14px] font-semibold")}>{group.name}</span>
+          <span className={cn("truncate", simpleRow ? cn("text-ink text-[13px] leading-5", group.unread ? "font-semibold" : "font-medium") : "text-[14px] text-ink font-semibold")}>{group.name}</span>
           {simpleRow && last && <span className="shrink-0 text-[12px] tabular-nums text-ink-tertiary">{formatTime(last.at)}</span>}
           {advanced && selected && last && !expanded && <span className="shrink-0 text-[10px] text-ink-secondary">{formatTime(last.at)}</span>}
           {!simpleRow && expanded && group.unread && <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-label={t("task.unreadMany")} />}
           
         </div>
         {!expanded && <div className="flex items-center justify-between gap-2">
-          <span className={cn("truncate", simpleRow ? cn("text-[12px] leading-4", group.unread ? "text-ink-secondary" : "text-ink-tertiary") : "text-[11px] text-ink-secondary")}>{group.description || groupPreview(group, bots, instances, advanced)}</span>
+          <span className={cn("truncate", simpleRow ? cn("text-[12px] leading-4", group.unread ? "text-ink-secondary" : "text-ink-tertiary") : "text-ink-secondary text-[11px]")}>{group.description || groupPreview(group, bots, instances, advanced)}</span>
           {group.unread && <span data-testid="unread-dot" title={t("task.unread")} className="size-2 shrink-0 rounded-full bg-accent" />}
         </div>}
         {simpleRow && <RowStatusText unread={group.unread} />}
@@ -1135,7 +1135,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
   const pendingBotUndo = teamFeedback?.restoreBot;
   const botRow = (bot: Bot) => botRowProps(state, dispatch, bot, { density, query: q, onMenu: setMenu, renameRequest: renameRequest?.botId === bot.id ? renameRequest.nonce : 0, ...drops.row(bot.id) });
   const railSearch = () => {
-    if (collapseToIcons || simple) return openCommandPalette();
+    if (collapseToIcons || !advanced) return openCommandPalette();
     setSearchOpen(true);
     toggleCollapsed();
   };

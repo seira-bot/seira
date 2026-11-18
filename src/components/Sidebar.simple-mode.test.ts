@@ -255,6 +255,11 @@ describe("bot-first sidebar", () => {
     fixture.state = { ...fixture.state, bots: [bot, pip] };
     const room: Group = { id: "room", threadId: "room-thread", name: "Launch", memberIds: [bot.id, pip.id], messages: [], defaultResponder: { kind: "mentions" }, bulletin: "", unread: false, createdAt: 1 };
     const roomMarkup = renderToStaticMarkup(createElement(GroupListItem, { group: room, density, onMenu: vi.fn() }));
+    if (density === "comfortable") {
+      expect(roomMarkup, "Simple draws a room as a stack of its first two members' faces").toContain("data-room-stack");
+      expect(roomMarkup.match(/data-avatar-kind="bot"/g)).toHaveLength(2);
+      return;
+    }
     expect(roomMarkup).toContain("data-room-mark");
     expect(roomMarkup).not.toContain("data-avatar-kind=\"bot\"");
     const channel = renderToStaticMarkup(createElement(GroupListItem, { group: { ...room, dm: true }, density, onMenu: vi.fn() }));
@@ -302,7 +307,6 @@ describe("bot-first sidebar", () => {
   });
 
   it.each([
-    { advanced: false, density: "comfortable", slot: "size-9", spacing: ["gap-2", "rounded-[8px]", "pl-2", "pr-2", "md:h-[54px]"], name: "font-medium", preview: "text-[13px]" },
     { advanced: false, density: "icons", slot: "size-9", spacing: ["h-[54px]", "justify-center"], name: "font-semibold", preview: "text-[11px]" },
     { advanced: true, density: "icons", slot: "size-12", spacing: ["justify-center", "px-1", "py-1.5"], name: "font-semibold", preview: "text-[11px]" },
     { advanced: true, density: "comfortable", slot: "size-8", spacing: ["gap-2", "py-1.5", "pl-6", "pr-9"], name: "font-semibold", preview: "text-[11px]" },
@@ -317,6 +321,23 @@ describe("bot-first sidebar", () => {
     expect(markup).toMatch(new RegExp(`data-room-mark="" class="[^"]*\\b${slot}\\b[^"]*"><svg[^>]*width="16" height="16"`));
     expect(markup).toMatch(new RegExp(`truncate text-\\[14px\\] text-ink ${name}`));
     expect(markup).toContain(`truncate text-ink-secondary ${preview}`);
+  });
+
+  it("draws a Simple room row 52px high: a face stack, a 13px medium title, a 12px time and a one-line preview", () => {
+    fixture.advanced = false;
+    const group: Group = { id: "room", threadId: "room-thread", name: "Launch", memberIds: [bot.id], messages: [{ id: "m1", role: "user", kind: "text", text: "Ship it", at: 1 }] as Group["messages"], defaultResponder: { kind: "mentions" }, bulletin: "", unread: false, createdAt: 1 };
+    let tree: ReactNode;
+    function Capture() { tree = (GroupListItem as unknown as { type: (props: ComponentProps<typeof GroupListItem>) => ReactElement }).type({ group, density: "comfortable", onMenu: vi.fn() }); return tree; }
+    const markup = renderToStaticMarkup(createElement(Capture));
+    const row = findElement(tree, "data-sidebar-group-row", group.id)!;
+    expect(String(row.props.className).split(" ")).toEqual(expect.arrayContaining(["gap-2.5", "rounded-lg", "md:h-[52px]"]));
+    expect(markup).toMatch(/truncate text-ink text-\[13px\] leading-5 font-medium/);
+    expect(markup).toMatch(/shrink-0 text-\[12px\] tabular-nums text-ink-tertiary/);
+    expect(markup).toMatch(/truncate text-\[12px\] leading-4 text-ink-tertiary/);
+    expect(markup).not.toContain("data-testid=\"unread-dot\"");
+    const unread = renderToStaticMarkup(createElement(GroupListItem, { group: { ...group, unread: true }, density: "comfortable", onMenu: vi.fn() }));
+    expect(unread).toMatch(/data-testid="unread-dot"[^>]*class="[^"]*\bbg-accent\b/);
+    expect(unread).toMatch(/text-ink font-semibold|text-\[13px\] leading-5 font-semibold/);
   });
 
   it("keeps the queued dot small", () => {
