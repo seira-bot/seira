@@ -404,7 +404,7 @@ describe.skipIf(!posix)("deploy/update.sh", () => {
     const box = install({}, { defaultImage: `${LEGACY}:latest`, images: [legacy, NEW] });
     const done = box.run();
     expect(done.status, done.stdout + done.stderr).toBe(0);
-    expect(box.calls()).toContain(`pull -q ${REPO}:v0.1.151`);
+    expect(box.calls()).toContain(`pull -q ${NEW.refs[0]}`);
     expect(box.env()).toBe(`${ENV}OMB_IMAGE=${NEW.refs[0]}\n`);
     const back = box.run(["--rollback", "--yes"]);
     expect(back.status, back.stdout + back.stderr).toBe(0);
