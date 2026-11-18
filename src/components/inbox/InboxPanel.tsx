@@ -63,7 +63,7 @@ export function InboxPanel() {
   const count = waitingCount(view);
   const body = (
     <>
-      <div className="flex h-[50px] shrink-0 items-start gap-2.5 px-[13px] pt-[13px]">
+      <div className="flex h-[52px] shrink-0 items-center gap-1.5 px-3">
         <div data-inbox-tab-chip className="flex h-[34px] min-w-0 flex-1 items-center gap-2 ps-1 text-[14px]">
           <Inbox size={16} aria-hidden="true" className="shrink-0 text-ink-secondary" />
           <span className="min-w-0 truncate font-medium text-ink">{t("inbox.panel.title")}</span>
@@ -71,7 +71,7 @@ export function InboxPanel() {
         </div>
         {view?.rows.some((row) => row.unread) && (
           <button type="button" data-inbox-mark-all onClick={markAllInboxRead} disabled={markingAll}
-            className="mt-[9px] shrink-0 whitespace-nowrap text-[12px] text-accent hover:underline disabled:opacity-50 disabled:hover:no-underline">
+            className="shrink-0 whitespace-nowrap rounded-md px-1.5 py-1 text-[12px] text-accent hover:underline disabled:opacity-50 disabled:hover:no-underline">
             {t("inbox.markAllRead")}
           </button>
         )}
@@ -96,7 +96,7 @@ export function InboxPanel() {
                 <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("inbox.search")} aria-label={t("inbox.search")}
                   className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-tertiary [&::-webkit-search-cancel-button]:hidden" />
               </label>}
-              <div role="list" data-inbox-list aria-label={t("inbox.panel.title")} className="space-y-0.5 px-1.5 pb-1.5">
+              <div role="list" data-inbox-list aria-label={t("inbox.panel.title")} className="space-y-2 px-3 pb-2">
                 {rows.length === 0
                   ? query.trim() && listedRows(view).length
                     ? <div className="flex flex-col items-center px-4 py-8 text-center text-[13px] text-ink-secondary">

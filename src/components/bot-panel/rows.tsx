@@ -4,11 +4,11 @@ import { Check, ChevronLeft, ChevronRight, Trash2, type LucideIcon } from "lucid
 import { cn } from "@/lib/cn";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { MAUS_COLORS, type MausColor } from "@/lib/mascot";
-import { ELEVATED_CONTROL, ELEVATED_HOVER } from "../elevated";
 import { Switch } from "../SettingsPrimitives";
+import { SlidingThumb } from "./SlidingThumb";
 
 export const rowCls = "flex min-h-[46px] items-center gap-2.5 px-3.5 py-[11px]";
-export const roundButtonCls = `flex size-[34px] shrink-0 items-center justify-center rounded-full text-ink ${ELEVATED_CONTROL} ${ELEVATED_HOVER} [:root[data-skin=daylight]_&]:shadow-[0_1px_3px_rgb(28_28_28/0.12)]`;
+export const roundButtonCls = "flex size-[34px] shrink-0 items-center justify-center rounded-full text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus";
 const titleCls = "text-[14px] font-medium text-ink";
 const hintCls = "mt-px text-[13px] leading-[1.35] text-ink-secondary";
 export const buttonCls =
@@ -24,7 +24,7 @@ export const chipCls = (on: boolean) =>
 
 export function CardLabel({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="mx-3.5 mb-2 mt-5 flex min-h-5 items-center justify-between gap-3 text-[13px] font-semibold text-ink-secondary">
+    <div className="mx-3.5 mb-2 mt-5 flex min-h-5 items-center justify-between gap-3 text-[12px] font-medium text-ink-tertiary">
       <span className="min-w-0 truncate">{children}</span>
       {action}
     </div>
@@ -203,7 +203,8 @@ export function Segmented<V extends string>({ options, value, onChange, label, a
   attr: string;
 }) {
   return (
-    <div role="group" aria-label={label} className="flex w-full rounded-full bg-ink/[0.05] p-[3px]">
+    <div role="group" aria-label={label} className="relative grid w-full auto-cols-fr grid-flow-col rounded-full bg-ink/[0.05] p-[3px]">
+      <SlidingThumb index={options.findIndex((option) => option.value === value)} count={options.length} />
       {options.map((option) => (
         <button
           key={option.value}
@@ -214,8 +215,8 @@ export function Segmented<V extends string>({ options, value, onChange, label, a
           title={option.tooltip}
           onClick={() => onChange(option.value)}
           className={cn(
-            "min-w-0 flex-auto truncate whitespace-nowrap rounded-full px-1.5 py-1.5 text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-            value === option.value ? "bg-ink/[0.14] text-ink" : "text-ink-secondary enabled:hover:text-ink",
+            "relative min-w-0 truncate whitespace-nowrap rounded-full px-1.5 py-1.5 text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+            value === option.value ? "font-medium text-ink" : "text-ink-secondary enabled:hover:text-ink",
           )}
         >
           {option.label}
