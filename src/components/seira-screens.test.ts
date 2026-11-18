@@ -17,7 +17,6 @@ const SCREENS: Record<string, RegExp> = {
   "team-files/TeamFilesPage.tsx": /<SeiraCharacter state="sleep"/,
   "bot-panel/LibraryTab.tsx": /<SeiraCharacter state="sleep"/,
   "TeamLibraryPanel.tsx": /<SeiraCharacter state="idle"/,
-  "TeamMapPage.tsx": /<SeiraCharacter state="sleep"/,
   "AboutDialog.tsx": /<SeiraCharacter state="greet"/,
   "VaultSettings.tsx": /<SeiraCharacter state="sleep"/,
   "UsageSection.tsx": /<SeiraCharacter state="sleep"/,

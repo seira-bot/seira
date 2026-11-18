@@ -25,7 +25,6 @@ import { useMapComputers, useShowComputers } from "@/lib/map-computers";
 import { MapComposer } from "./MapComposer";
 import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
 import { openBotSettings } from "./bot-panel/panel-link";
-import { SeiraCharacter } from "./seira-character";
 import type { TeamComputer } from "../../shared/team-computer";
 
 export function EdgeRow({ edge, bots }: { edge: TeamMapEdge; bots: Bot[] }) {
@@ -403,10 +402,6 @@ export function TeamMapPage() {
         onEditTeam={(section, rename) => setTeamEditor({ section, rename })}
         onDeleteTeam={setDeletingTeam}
         isEmpty={(key) => ![...state.bots, ...state.groups].some((record) => record.section?.trim() === key)} />
-      {bots.length === 0 && <div data-team-map-empty="" className="pointer-events-none absolute inset-x-0 top-6 z-10 flex flex-col items-center gap-1 text-center">
-        <SeiraCharacter state="sleep" size={96} />
-        <p className="text-[13px] text-ink-secondary">{t("canvas.empty")}</p>
-      </div>}
       {bots.length > 0 && <MapComposer bots={bots} teams={composerTeams} onTagged={setTaggedBotIds} onSent={acknowledgeSent} />}
       </div>
       {!remoteClient && <CanvasComputers open={computersOpen} createRequest={createComputerRequest} drop={computerDrop} sections={sections}
