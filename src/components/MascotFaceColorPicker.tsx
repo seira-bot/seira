@@ -1,6 +1,7 @@
 import { t } from "@/lib/i18n";
 import type { Bot } from "@/state/store";
 import { MASCOT_FACE_COLORS } from "../../shared/bot-avatar";
+import { DEFAULT_BOT_BODY, isBrandBody } from "../../shared/bot-body";
 import type { AvatarPatch } from "./avatar-editing";
 import { Segmented } from "./bot-panel/rows";
 
@@ -9,6 +10,7 @@ export function MascotFaceColorPicker({ bot, disabled, onPatch }: {
   disabled: boolean;
   onPatch: (patch: AvatarPatch) => void;
 }) {
+  if (isBrandBody(bot.mascotBody ?? DEFAULT_BOT_BODY)) return null;
   return (
     <div className="mt-3">
       <div className="mb-1.5 flex items-baseline justify-between gap-2 text-[12px] text-ink-secondary">

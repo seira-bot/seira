@@ -4,12 +4,17 @@ const files = import.meta.glob<string>("../assets/mausbot-steel/*.{webp,png}", {
 
 export interface SteelImage { body: string; px: number; url: string }
 
-export const STEEL_IMAGES: readonly SteelImage[] = Object.entries(files)
-  .flatMap(([path, url]) => {
-    const match = /\/([a-z]+)-(\d+)\.(?:webp|png)$/.exec(path);
-    return match ? [{ body: match[1]!, px: Number(match[2]), url }] : [];
-  })
-  .sort((a, b) => a.px - b.px);
+/** Reads `<body>-<px>.webp` or `.png` file names into a list sorted by size. */
+export function sizedImages(globbed: Record<string, string>): SteelImage[] {
+  return Object.entries(globbed)
+    .flatMap(([path, url]) => {
+      const match = /\/([a-z]+)-(\d+)\.(?:webp|png)$/.exec(path);
+      return match ? [{ body: match[1]!, px: Number(match[2]), url }] : [];
+    })
+    .sort((a, b) => a.px - b.px);
+}
+
+export const STEEL_IMAGES: readonly SteelImage[] = sizedImages(files);
 
 /** The smallest image that still has a device pixel for every pixel drawn, or the largest there is; null when this body
  * has none. */

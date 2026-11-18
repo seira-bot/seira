@@ -24,7 +24,7 @@ describe("the move MCP a Bot in Grok Bot talks to", () => {
     for (const [asked, given] of [["2025-06-18", "2025-06-18"], ["2025-03-26", "2025-03-26"], ["2024-11-05", "2024-11-05"], ["1999-01-01", "2025-06-18"], [undefined, "2025-06-18"]]) {
       expect(moveMcp(rpc("initialize", { protocolVersion: asked, capabilities: {} }), to)).toMatchObject({
         status: 200,
-        body: { jsonrpc: "2.0", id: 1, result: { protocolVersion: given, capabilities: { tools: {} }, serverInfo: { name: "MausBot" } } },
+        body: { jsonrpc: "2.0", id: 1, result: { protocolVersion: given, capabilities: { tools: {} }, serverInfo: { name: "Seira" } } },
       });
     }
     expect(moveMcp(rpc("notifications/initialized", undefined, null), to)).toEqual({ status: 202 });

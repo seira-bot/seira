@@ -98,7 +98,7 @@ describe("additive portable team backups", () => {
 
   it("backs up and restores a silver bot in silver", () => {
     const { store, routines } = fixture();
-    const maus = store.createBot({ name: "MausBot", color: "silver" }, { seedMessages: false });
+    const maus = store.createBot({ name: "Seira", color: "silver" }, { seedMessages: false });
     const backup = createTeamBackup(store, routines.listRoutines(), "With Seira");
     expect(backup.bots.find((bot) => bot.key === maus.id)?.color).toBe("silver");
     const restored = importTeamBackup(store, routines, JSON.parse(JSON.stringify(backup)), selection());

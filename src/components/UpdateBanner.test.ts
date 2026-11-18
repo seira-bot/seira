@@ -8,7 +8,7 @@ import type { UpdaterState } from "@/lib/updater";
 const fixture = vi.hoisted(() => ({ state: { status: "idle" } as UpdaterState }));
 // As the real hook: no state without the desktop app's updater bridge.
 vi.mock("@/lib/updater", async (original) => ({ ...(await original<typeof import("@/lib/updater")>()), useUpdaterState: () => (window.ogb?.updater ? fixture.state : null) }));
-vi.mock("../lib/brand", () => ({ brand: () => ({ name: "OpenMausBot" }), productName: () => "MausBot" }));
+vi.mock("../lib/brand", () => ({ brand: () => ({ name: "Seira" }), productName: () => "Seira" }));
 import { UpdateBanner } from "./UpdateBanner";
 
 afterEach(() => vi.unstubAllGlobals());

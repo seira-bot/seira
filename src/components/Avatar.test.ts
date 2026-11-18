@@ -21,8 +21,9 @@ const renderBot = (bot: Partial<BotAvatarProps["bot"]>) =>
   );
 
 describe("MausAvatar body", () => {
-  it("wears the cursor when no body is given", () => {
-    expect(render({})).toContain(MASCOT_BODIES.cursor.fit);
+  it("wears Seira when no body is given", () => {
+    expect(render({})).toBe(render({ bodyId: "seira" }));
+    expect(render({})).not.toContain(MASCOT_BODIES.cursor.fit);
   });
 
   it("wears the body it is given", () => {
@@ -30,12 +31,10 @@ describe("MausAvatar body", () => {
     expect(markup).toContain(MASCOT_BODIES.star.fit);
   });
 
-  it("falls back to the cursor for an unknown body", () => {
-    // SAFETY: "hexagram" is deliberately not a MascotBodyId, to exercise the runtime fallback for persisted or streamed
+  it("falls back to Seira for an unknown body", () => {
+    // SAFETY: "hexagram" is deliberately not a BotBodyId, to exercise the runtime fallback for persisted or streamed
     // data.
-    expect(render({ bodyId: "hexagram" as MausAvatarProps["bodyId"] })).toContain(
-      MASCOT_BODIES.cursor.fit,
-    );
+    expect(render({ bodyId: "hexagram" as MausAvatarProps["bodyId"] })).toBe(render({ bodyId: "seira" }));
   });
 
   it("paints the body with the per-bot gradient, never a flat black fill", () => {
@@ -60,9 +59,9 @@ describe("mascot facial feature colors", () => {
   });
 
   it("keeps default inks when an override is reset or comes from an older profile", () => {
-    expect(renderBot({ color: "chrome", mascotFaceColor: null })).toContain('stroke="#1E2833"');
+    expect(renderBot({ color: "chrome", mascotBody: "cursor", mascotFaceColor: null })).toContain('stroke="#1E2833"');
     expect(renderBot({ mascotBody: "ghost" })).toContain('stroke="#0d0a10"');
-    expect(renderBot({})).toContain('stroke="#ffffff"');
+    expect(renderBot({ mascotBody: "cursor" })).toContain('stroke="#ffffff"');
   });
 
   it("does not paint features over an uploaded image", () => {
