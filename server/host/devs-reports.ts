@@ -142,7 +142,7 @@ export const fixedLine = (version: string, language?: string) => serverLine(lang
 const fixedNote = (entry: Tracked, version: string) => `\n\n[From Seira, not the person: the problem they reported with @devs on ${new Date(entry.at).toISOString().slice(0, 10)}${
   entry.words ? ` ("${entry.words}")` : ""} is fixed in ${version}, which this app now runs. The chat told them so and asked whether they want to try again; if their message answers that, help them try it again.]`;
 /** A failure line names MausBot in every language: a bot reply that does has passed it on. */
-const FAILED_MARKER = "MausBot";
+const FAILED_MARKER = "Seira";
 
 /** The person's own words: the text outside quotes and each quote's comment. Only a @devs there tags the message,
  * never one inside a message they quoted. */

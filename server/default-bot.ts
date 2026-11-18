@@ -14,6 +14,7 @@ const LEDGER = "default-bot.json";
 
 /** The colour a new install gave its MausBot before Chrome, which an adopted MausBot trades for Chrome. */
 const STARTER_COLOR = "silver";
+const SEEDED_NAMES = new Set([DEFAULT_BOT_NAME, "MausBot"]);
 
 export const HELPER_ASKS = ["What are my bots up to?", "Set up a bot for my inbox", "Make me a morning routine", "How do I connect my email?"];
 
@@ -80,7 +81,7 @@ export function forgetDefaultBot(dataDir: string, person: string): void {
 export function seededMausBot(bots: readonly BotRecord[]): BotRecord | undefined {
   const oldest = bots.reduce<BotRecord | undefined>((first, bot) => !first || bot.createdAt < first.createdAt ? bot : first, undefined);
   if (!oldest || oldest.hidden || oldest.movedTo || oldest.section?.trim() || oldest.installedPackage) return undefined;
-  return oldest.name === DEFAULT_BOT_NAME || oldest.color === STARTER_COLOR ? oldest : undefined;
+  return SEEDED_NAMES.has(oldest.name) || oldest.color === STARTER_COLOR ? oldest : undefined;
 }
 
 /** Puts the intro where its person sees it next: in its open conversation while nobody has written there, else at the

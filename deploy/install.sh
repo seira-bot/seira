@@ -892,11 +892,11 @@ check_sandbox_runs() {
   report=$(compose exec -T omb node dist-server/bot-box/box-check.js --public=none 2>/dev/null | tr -d '\n' || true)
   case "$report" in
     *'"box":"bwrap"'*'"results":[{'*) ;;
-    *) fail "MausBot is running, but its bots' sandbox gave no answer to its self-check, so bots may not be separated from the server. $see" ;;
+    *) fail "Seira is running, but its bots' sandbox gave no answer to its self-check, so bots may not be separated from the server. $see" ;;
   esac
   case "$report" in
     *'"id":"config-hidden","ok":true'*) ;;
-    *) fail "MausBot is running, but its sandbox self-check did not show that a bot cannot read the server's settings (config-hidden), so bots are not safely separated from the server. $see" ;;
+    *) fail "Seira is running, but its sandbox self-check did not show that a bot cannot read the server's settings (config-hidden), so bots are not safely separated from the server. $see" ;;
   esac
   stopping=""
   set -f
