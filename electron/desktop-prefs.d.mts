@@ -104,6 +104,8 @@ export declare function registerDesktopPrefs(options: {
   frame?: { made(): boolean | null; restarts: boolean; changed(): void } | null;
   /** The MausBot Cloud sign-in client: with it, the product-updates question is asked and its answer kept here. */
   cloudAccount?(): import("./updates-consent.mjs").UpdatesConsentClient | null;
+  /** The updates list client; tests inject one. */
+  updatesList?: import("./updates-list.mjs").UpdatesList | null;
   now?: () => number;
   systemName?(): Promise<string | null>;
 }): import("./updates-consent.mjs").UpdatesConsent | null;
