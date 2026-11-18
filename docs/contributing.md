@@ -135,8 +135,8 @@ damage.
 
 `server/data-format.test.ts` fails the build on any other step. It compares
 the two numbers with `server/data-format-released.json`, the numbers of the
-last release, which **Prepare next release** records with the version bump
-(`scripts/record-data-format.mjs`); do not edit that file by hand. Raising
+last release, which the release's version bump records
+(`scripts/record-data-format.mjs`, see [Releasing](releasing.md)); do not edit that file by hand. Raising
 `writes` past what the last release reads fails with the two steps spelled
 out.
 
@@ -319,22 +319,12 @@ responses or events, no baking them into argv where another local process could 
 
 ## CI, in one glance
 
-Every PR runs locale validation (`pnpm i18n:check`), lint, CI-selection tests,
-verification-documentation checks, and the required `CI` gate. The changed files
-select the remaining checks; see [CI job selection](ci.md). Documentation-only
-PRs run the docs tests, while translation-only PRs run the locale subset. Runtime
-changes select broader tests and smokes.
+Every PR runs the same Linux jobs, from a fork too. See [CI](ci.md).
 
-- **preflight** — the static job always runs the checks above, in under a minute, before the dependent jobs.
-- **typecheck + build** — when selected, typecheck, Electron syntax checks and a production UI build, beside the shards.
-- **vitest (os, part)** — full platform suites use eight Linux or Windows shards and four macOS shards; subset jobs have their own file lists and shard counts. Windows jobs run on PRs whose changes can affect Windows or carry the `windows` label. macOS Vitest shards run in the nightly/manual full lane. Files run serially within each shard, balanced by recorded platform time. Use the [reproduction steps](ci.md#vitest-shards) for the failing job.
-- **packaged server smoke (os)** — when selected, the server bundle is copied out of the repo and started with no `node_modules` in reach.
-- **Windows CUA host smoke**, **macOS smokes (packaged server + Electron)** — when selected, real Electron utility processes run against disposable homes; never the live app.
-- **CI** — the required aggregate gate checks that selected jobs passed and unselected jobs were skipped. Its log names any failing dependency.
-
-For eligible owner runs on Boat, the static job also runs the selected Linux
-test lanes; their logs appear in groups named for each lane. Fork PRs use
-GitHub-hosted jobs. See [Linux on Boat](ci.md#linux-on-boat).
+- **checks** — locale validation (`pnpm i18n:check`), lint, contrast, the model manifest and announcements checks, the local-detail check, and the source guards.
+- **build** — typecheck, Electron syntax checks, and a production UI build.
+- **vitest (linux, shard n/8)** — the whole suite in eight shards, balanced by recorded time. Use the [reproduction steps](ci.md#vitest-shards) for a failing shard.
+- **CI** — the required gate. It fails when any job before it did not pass, and its log names that job.
 
 A `pre-push` hook installed by `pnpm install` checks the files a push changes, in seconds: lint, the locale check when a catalog changed, and the size and vocabulary guards when a source they read changed. Typecheck and the suite stay in CI. A checkout without dependencies checks nothing and lets the push go. `git push --no-verify` skips it once; `OMB_SKIP_HOOKS=1` skips it for a session.
 
