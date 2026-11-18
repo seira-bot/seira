@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it } from "vitest";
 import { setLocale } from "@/lib/i18n";
 import { CloudSetupSteps } from "./CloudSetupSteps";
-import { homeDay, homeScreenText } from "./HomeScreen";
+import { homeCharacterState, homeDay, homeScreenText } from "./HomeScreen";
 
 beforeEach(() => setLocale("en"));
 
@@ -62,4 +62,15 @@ it("a Cloud that isn't running says what it is in plain words with its one actio
   for (const screen of ["ended", "checkout", "payment"] as const) {
     for (const words of Object.values(homeScreenText({ screen, name: "Client B", deleteAt: day }, now))) expect(String(words)).not.toMatch(/—|\bVM\b|engine|ctx|server/i);
   }
+});
+
+it("Seira works while the screen waits, is sad when the Cloud can't be reached, and is alert when a button needs pressing", () => {
+  const state = (view: Parameters<typeof homeScreenText>[0]) => homeCharacterState(view, homeScreenText(view));
+  expect(state({ screen: "setup" })).toBe("working");
+  expect(state({ screen: "waking" })).toBe("working");
+  expect(state(null)).toBe("working");
+  expect(state({ screen: "offline" })).toBe("sad");
+  expect(state({ screen: "signin" })).toBe("attention");
+  expect(state({ screen: "ended" })).toBe("attention");
+  expect(state({ screen: "plan", machine: "stopped", member: true })).toBe("idle");
 });

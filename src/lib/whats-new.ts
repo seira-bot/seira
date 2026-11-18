@@ -4,6 +4,7 @@ import { CLOUD_TEAM_TIERS } from "../../electron/cloud-team-plan.mjs";
 import { track } from "@/lib/analytics";
 import { cloudPlanView, moneyBackShort, offerPlanLabel, trialRunning, trialTerms, usd } from "@/lib/cloud-plan";
 import { t } from "@/lib/i18n";
+import { SEIRA_CLOUD_PLANS } from "@/lib/seira-cloud";
 import { WHATS_NEW_NOTICE } from "@/lib/notices";
 
 export type WhatsNewSlide = "pro" | "team";
@@ -35,8 +36,9 @@ export function whatsNewAudience(account: CloudAccountState | null): WhatsNewAud
 }
 
 /** No plan: the new Cloud, then Team. A plan of one's own: Team. Anyone in a team, or not known: nothing. */
-export function whatsNewSlides(audience: WhatsNewAudience | null): WhatsNewSlide[] {
-  return audience === "none" ? ["pro", "team"] : audience === "own" ? ["team"] : [];
+export function whatsNewSlides(audience: WhatsNewAudience | null, plans: readonly WhatsNewSlide[] = SEIRA_CLOUD_PLANS): WhatsNewSlide[] {
+  const slides: WhatsNewSlide[] = audience === "none" ? ["pro", "team"] : audience === "own" ? ["team"] : [];
+  return slides.filter(slide => plans.includes(slide));
 }
 
 export interface WhatsNewView {
@@ -50,12 +52,14 @@ export interface WhatsNewView {
 
 /** "loading" while the account or the offer is read; "none" when nothing is for this account now (a later launch may say
  * otherwise). A slide whose plan the Admin doesn't offer is left out. */
-export function whatsNewView(account: CloudAccountState | null, offer: CloudOffer | null | undefined): WhatsNewView | "loading" | "none" {
+export function whatsNewView(account: CloudAccountState | null, offer: CloudOffer | null | undefined,
+  sold: readonly WhatsNewSlide[] = SEIRA_CLOUD_PLANS): WhatsNewView | "loading" | "none" {
+  if (!sold.length) return "none";
   const audience = whatsNewAudience(account);
   if (audience === null) return "loading";
   if (audience !== "none" && audience !== "own") return "none";
   if (offer === undefined) return "loading";
-  const wanted = whatsNewSlides(audience);
+  const wanted = whatsNewSlides(audience, sold);
   const plans: WhatsNewView["plans"] = {};
   for (const slide of wanted) {
     const plan = offer?.plans.find(entry => entry.tier === slide);

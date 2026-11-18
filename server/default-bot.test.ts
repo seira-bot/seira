@@ -7,7 +7,7 @@ import { MOVE_BOT_FIELDS, moveKindsRoute, type MoveKindsDeps } from "./cloud-sen
 import { chiefLevel, readTeamRolesWith } from "./chief-level.ts";
 import { DATA_DIR } from "./config.ts";
 import type { ModelSelection } from "./contracts.ts";
-import { defaultBotPatchRefusal, ensureDefaultBot } from "./default-bot.ts";
+import { defaultBotPatchRefusal, ensureDefaultBot, seededMausBot } from "./default-bot.ts";
 import * as mdb from "./message-db.ts";
 import { Store, type BotRecord } from "./store.ts";
 import { availableTools, catalogProfileFromEnv } from "./drivers/agents-catalog.ts";
@@ -31,6 +31,12 @@ function seededBefore(store: Store): BotRecord {
 describe("Seira, every person's helper", () => {
   beforeEach(() => rmSync(DATA_DIR, { recursive: true, force: true }));
   afterEach(() => readTeamRolesWith(() => null));
+
+  it("adopts a first bot that an earlier install named MausBot, in any colour", () => {
+    const store = new Store(selection);
+    const seeded = store.createBot({ name: "MausBot", color: "blue" });
+    expect(seededMausBot(store.bots)?.id).toBe(seeded.id);
+  });
 
   it("gives a fresh install one Seira, its Chief, in chrome, introduced once", () => {
     const store = new Store(selection);

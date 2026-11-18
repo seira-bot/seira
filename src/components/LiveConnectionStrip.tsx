@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { CloudOff, Loader2 } from "lucide-react";
 import { cloudAsleep, onCloudPower } from "@/lib/cloud-power";
 import { t } from "@/lib/i18n";
 import { retryLiveEvents } from "@/lib/live-events";
 import { noteRefusedRequest } from "@/lib/session-ended";
+import { SeiraCharacter } from "./seira-character";
 
 export const RECONNECTING_AFTER_MS = 4_000;
 export const CONNECTION_HELP_AFTER_MS = 20_000;
@@ -41,7 +41,7 @@ export function LiveConnectionStrip({ connected, hydrated }: { connected: boolea
   const notice = !online ? "offline" : !connected && late && (hydrated || help) ? "reconnecting" : null;
   if (!notice) return null;
   return <div role="status" data-live-connection={notice} className="flex flex-wrap items-center justify-center gap-2 border-b border-hairline/40 bg-panel px-3 py-1.5 text-[13px] text-ink-secondary">
-    {notice === "offline" ? <CloudOff size={14} className="shrink-0" aria-hidden="true" /> : <Loader2 size={14} className="shrink-0 animate-spin" aria-hidden="true" />}
+    <SeiraCharacter state={notice === "offline" ? "sad" : help ? "attention" : "thinking"} size={24} />
     <span>{t(notice === "offline" ? "liveConnection.offline" : help ? "liveConnection.help" : "liveConnection.reconnecting")}</span>
     {notice === "reconnecting" && help && <button type="button" onClick={retryLiveEvents} className="shrink-0 rounded px-2 py-1 text-ink underline underline-offset-2 hover:bg-raised focus-visible:outline-2 focus-visible:outline-offset-2">
       {t("liveConnection.retry")}

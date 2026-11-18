@@ -16,6 +16,7 @@ import { Card, LearnMore, SETTINGS_INPUT, SettingsEmptyRow, SettingsField, Setti
 import { SettingsDialog } from "./settings/SettingsDialog";
 import { EnvImportForm, SecretForm } from "./VaultSecretForms";
 import { BitwardenConnection } from "./BitwardenConnection";
+import { SeiraCharacter } from "./seira-character";
 
 // Security: a row never shows a password or a secret, which no route returns. A saved value can only be replaced.
 
@@ -268,7 +269,7 @@ export function VaultSettings() {
           {adding === "secret" && <div className="p-4"><SecretForm bots={bots} onCancel={() => setAdding(null)} onSaved={async () => { setAdding(null); await load(); }} /></div>}
           {adding === "env" && <div className="p-4"><EnvImportForm bots={bots} onCancel={() => setAdding(null)} onSaved={load} /></div>}
           {logins === null && !error && <SettingsEmptyRow>{t("settings.vault.loading")}</SettingsEmptyRow>}
-          {empty && !adding && <SettingsEmptyRow>{t(member ? "settings.vault.memberEmpty" : "settings.vault.emptyShort")}</SettingsEmptyRow>}
+          {empty && !adding && <SettingsEmptyRow><SeiraCharacter state="sleep" size={48} className="me-3" />{t(member ? "settings.vault.memberEmpty" : "settings.vault.emptyShort")}</SettingsEmptyRow>}
           {!empty && logins !== null && rows.length === 0 && <div data-vault-none className="contents"><SettingsEmptyRow>{t("settings.vault.noMatch")}</SettingsEmptyRow></div>}
           {rows.length > 0 && (
             <ul className="divide-y-[0.5px] divide-(--settings-edge) px-4" data-logins-list>

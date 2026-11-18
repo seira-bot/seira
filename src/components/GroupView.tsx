@@ -17,6 +17,7 @@ import {
   type Message,
 } from "@/state/store";
 import { BotAvatar } from "./Avatar";
+import { TurnFace } from "./BotCharacter";
 import { ScreenFrame } from "./ScreenFrame";
 import { RoomHoldsBanner } from "./RoomHoldsBanner";
 import { ThreadChip } from "./ThreadChip";
@@ -1119,16 +1120,7 @@ export function GroupView({ group, inForkPanel = false }: { group: Group; inFork
           )}
           {(speaker || presenceVisible) && (
             <TurnPresence
-              avatar={
-                <BotAvatar
-                  bot={presenceSpeaker ?? { color: "green" }}
-                  state={toolInFlight && !awaited ? "working" : "thinking"}
-                  size={36}
-                  forward={false}
-                  lookAround={1}
-                  trackPointer={false}
-                />
-              }
+              avatar={<TurnFace bot={presenceSpeaker ?? { color: "green" }} working={Boolean(toolInFlight && !awaited)} size={36} />}
               visible={presenceVisible} threadId={group.threadId}
               phrases={activity?.phrases}
               phase={activity?.phase}
