@@ -47,8 +47,8 @@ export function ChatHeadPill({ bot, avatar, privacy, onToggle }: {
   const conversation = !awayFromMainThread(bot, false) ? (privacy?.kind === "shared" ? t("task.sharedChat") : null)
     : !title || title === UNTITLED ? t("task.untitledChat") : localizedTaskTitle(title);
   const label = t("chat.openProfileAria", { name: bot.name });
-  const chief = t("chat.chiefOfStaff"), title = bot.title.trim();
-  const role = bot.chiefOfStaff && title.toLocaleLowerCase() === chief.toLocaleLowerCase() ? "" : title;
+  const chief = t("chat.chiefOfStaff"), botTitle = bot.title.trim();
+  const role = bot.chiefOfStaff && botTitle.toLocaleLowerCase() === chief.toLocaleLowerCase() ? "" : botTitle;
   return (
     <button
       type="button"
