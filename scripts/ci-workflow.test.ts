@@ -38,6 +38,9 @@ const workflows = new Map(files.map((file) => [file, parse(texts.get(file)!) as 
 const workflow = workflows.get("ci.yml")!;
 const packageFiles = files.filter((file) => /^package-[a-z0-9-]+\.yml$/.test(file));
 const packageWorkflows = packageFiles.map((file) => [file, workflows.get(file)!] as const);
+const IMAGE = "server-image.yml";
+const image = workflows.get(IMAGE)!;
+const LOGIN = "${{ secrets.GITHUB_TOKEN }}";
 const scripts = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
   scripts: Record<string, string>;
 }).scripts;
@@ -48,8 +51,8 @@ const allRuns = () => allSteps().flatMap((step) => (step.run === undefined ? [] 
 const runs = (job: Job) => stepsOf(job).flatMap((step) => (step.run === undefined ? [] : [step.run]));
 
 describe("CI workflows", () => {
-  it("keeps the CI workflow and package workflows only", () => {
-    expect(files).toEqual(["ci.yml", ...packageFiles]);
+  it("keeps the CI workflow, the package workflows and the server image workflow only", () => {
+    expect(files).toEqual(["ci.yml", ...packageFiles, IMAGE]);
   });
 
   it("runs on pull requests, pushes to main and manual starts only", () => {
@@ -72,8 +75,10 @@ describe("CI workflows", () => {
     }
   });
 
-  it("reads no token", () => {
-    for (const [file, text] of texts) {
+  it("reads no token, except the server image workflow once, to sign in to the registry", () => {
+    expect(texts.get(IMAGE)!.split(LOGIN)).toHaveLength(2);
+    for (const [file, original] of texts) {
+      const text = file === IMAGE ? original.replace(LOGIN, "") : original;
       for (const forbidden of ["github.token", "GITHUB_TOKEN", "GH_TOKEN"]) {
         expect(text, `${file} reads ${forbidden}`).not.toContain(forbidden);
       }
@@ -108,8 +113,8 @@ describe("CI workflows", () => {
     }
   });
 
-  it("reads a secret only in the macOS package workflow, for the Apple signature", () => {
-    expect(files.filter((file) => texts.get(file)!.includes("secrets."))).toEqual(["package-macos.yml"]);
+  it("reads a secret only in the macOS package workflow, for the Apple signature, and in the server image workflow", () => {
+    expect(files.filter((file) => texts.get(file)!.includes("secrets."))).toEqual(["package-macos.yml", IMAGE]);
   });
 
   it("drops the credentials of every checkout", () => {
@@ -131,13 +136,45 @@ describe("CI workflows", () => {
     for (const run of allRuns()) expect(run).not.toMatch(/\$\{\{[^}]*\b(github\.event|github\.head_ref|inputs\.)/);
   });
 
-  it("never creates a tag or publishes a release or a package", () => {
+  it("never creates a tag or publishes a release or a package from a command line", () => {
     for (const run of allRuns()) {
       for (const forbidden of ["gh release", "git tag", "git push", "npm publish", "docker push"]) {
         expect(run).not.toContain(forbidden);
       }
       expect(run).not.toMatch(/--publish(?!\s+never\b)/);
     }
+  });
+});
+
+describe("Server image workflow", () => {
+  const smoke = image.jobs.smoke!;
+  const publish = image.jobs.publish!;
+
+  it("starts on a pull request that changes the image, or by hand", () => {
+    expect(Object.keys(image.on).sort()).toEqual(["pull_request", "workflow_dispatch"]);
+  });
+
+  it("smoke-tests without permissions, secrets or an environment", () => {
+    expect(smoke.permissions).toBeUndefined();
+    expect(smoke.environment).toBeUndefined();
+    expect(JSON.stringify(smoke)).not.toContain("secrets.");
+    expect(stepsOf(smoke).some((step) => step.uses?.startsWith("docker/build-push-action@"))).toBe(false);
+  });
+
+  it("publishes only from a manual run on main, after the smoke test, behind the release environment", () => {
+    expect(publish.needs).toBe("smoke");
+    expect(publish.if).toBe("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'");
+    expect(publish.environment).toBe("release");
+    expect(publish.permissions).toEqual({ contents: "read", packages: "write" });
+    const pushes = stepsOf(publish).filter((step) => step.uses?.startsWith("docker/build-push-action@"));
+    expect(pushes).toHaveLength(1);
+    expect(pushes[0]!.with?.push).toBe(true);
+    expect(stepsOf(publish).some((step) => step.uses?.startsWith("actions/cache") || /\bcache-(from|to)\b/.test(JSON.stringify(step.with ?? {})))).toBe(false);
+  });
+
+  it("publishes to this repository's own package only", () => {
+    const meta = stepsOf(publish).find((step) => step.uses?.startsWith("docker/metadata-action@"));
+    expect(meta?.with?.images).toBe("ghcr.io/${{ github.repository }}");
   });
 });
 

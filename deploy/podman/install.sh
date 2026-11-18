@@ -20,11 +20,11 @@
 set -eu
 
 settings() {
-  IMAGE_REPO=ghcr.io/milind-soni/openmausbot
+  IMAGE_REPO=ghcr.io/seira-bot/seira
   STABLE_URL=https://raw.githubusercontent.com/seira-bot/seira/channels/stable.json
   RELEASES_URL=https://api.github.com/repos/seira-bot/seira/releases/latest
   REPOSITORY_FILES=https://raw.githubusercontent.com/seira-bot/seira
-  PINNED='^ghcr\.io/milind-soni/openmausbot@sha256:[0-9a-f]{64}$'
+  PINNED='^ghcr\.io/seira-bot/seira@sha256:[0-9a-f]{64}$'
   # One copy of this repository's files to use instead (https://… or file:///…), as deploy/install.sh takes it.
   SOURCE_ASKED="${OMB_INSTALL_SOURCE:-}"
   INSTALL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/openmausbot"
@@ -247,7 +247,7 @@ choose_image() {
         # update.sh's rollback can name the image that ran before by a name of this machine's own
         # (openmausbot-before-update:local), which no registry has: never pulled, pinned by the digest it came with.
         if podman image exists "$IMAGE" 2>/dev/null; then
-          digest=$(podman image inspect -f '{{range .RepoDigests}}{{println .}}{{end}}' "$IMAGE" 2>/dev/null | grep -E "^${IMAGE_REPO}@sha256:[0-9a-f]{64}$" | head -n 1 || true)
+          digest=$(podman image inspect -f '{{range .RepoDigests}}{{println .}}{{end}}' "$IMAGE" 2>/dev/null | grep -E "^(${IMAGE_REPO}|ghcr\.io/milind-soni/openmausbot)@sha256:[0-9a-f]{64}$" | head -n 1 || true)
           if [ -z "$digest" ]; then
             ok "version: the one already installed ($IMAGE, an image of this machine's own, not pinned by a digest); update.sh changes it"
             return 0
@@ -529,7 +529,7 @@ run_uninstall() {
   say "To remove the data too (some files belong to the container's other ids, so through Podman):"
   say "  podman unshare rm -rf $INSTALL_DIR"
   say "The copies of the data update.sh kept: podman volume ls --filter label=com.mausbot.role=update-backup"
-  say "The downloaded images: podman image ls ghcr.io/milind-soni/openmausbot"
+  say "The downloaded images: podman image ls ghcr.io/seira-bot/seira"
 }
 
 main() {

@@ -15,7 +15,7 @@ set -eu
 settings() {
   SYSROOT="${OMB_INSTALL_SYSROOT:-}"
   INSTALL_DIR="${OMB_INSTALL_DIR:-/opt/openmausbot}"
-  IMAGE_REPO=milind-soni/openmausbot
+  IMAGE_REPO=seira-bot/seira
   RELEASES_URL=https://api.github.com/repos/seira-bot/seira/releases/latest
   ADMIN_URL="${MAUSBOT_ADMIN_URL:-https://cloud.openmausbot.com}"
   SCRIPT_URL=https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh
