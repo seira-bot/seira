@@ -7,7 +7,7 @@ import path from "node:path";
 import nativeText from "./native-text.cjs";
 import { onboardingHints } from "./onboarding-record.mjs";
 import { DEFAULT_TALK_KEY, isTalkKey } from "./talk-keys.mjs";
-import { createUpdatesList, updatesListOrigin } from "./updates-list.mjs";
+import { createUpdatesList, updatesListOrigin, withUpstreamFallback } from "./updates-list.mjs";
 import { createUpdatesConsent, parseUpdatesConsent, registerUpdatesConsent } from "./updates-consent.mjs";
 import { accountFullName } from "./system-name.mjs";
 
@@ -233,7 +233,13 @@ export function registerDesktopPrefs({ prefs: given, ipcMain, read, write, page,
   const list = updatesList ?? createUpdatesList({ origin: updatesListOrigin() });
   const consent = createUpdatesConsent({ prefs: { installId: () => store().installId(), updatesConsent: () => store().updatesConsent(), setUpdatesConsent: value => store().setUpdatesConsent(value) },
     emailOnly: true, available: cloudOffered, now,
-    account: () => ({ state: () => cloudAccount()?.state() ?? null, updatesConsentByEmail: list.updatesConsentByEmail, withdrawUpdatesConsent: list.withdrawUpdatesConsent }) });
+    account: () => ({ state: () => cloudAccount()?.state() ?? null, updatesConsentByEmail: list.updatesConsentByEmail,
+      withdrawUpdatesConsent: withUpstreamFallback(list, cloudAccount),
+      recordUpdatesConsent: (status, version) => {
+        const upstream = cloudAccount();
+        if (!upstream) throw new Error("Sign in to Seira Cloud first.");
+        return upstream.recordUpdatesConsent(status, version);
+      } }) });
   registerUpdatesConsent({ ipcMain, page, consent });
   void cloudOffered().then(offered => offered && consent.sync()).catch(() => {});
   return consent;

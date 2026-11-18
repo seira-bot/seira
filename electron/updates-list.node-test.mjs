@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createUpdatesList, UPDATES_LIST_ORIGIN, updatesListOrigin } from "./updates-list.mjs";
+import { createUpdatesList, UPDATES_LIST_ORIGIN, updatesListOrigin, withUpstreamFallback } from "./updates-list.mjs";
 
 const RECEIPT = "r".repeat(43);
 const reply = (status, data) => async (url, init) => { reply.last = { url, init }; return new Response(typeof data === "string" ? data : JSON.stringify(data), { status }); };
@@ -55,4 +55,31 @@ test("the origin is the public list unless a loopback http fixture is named", ()
     "http://example.test:80", "http://127.0.0.1:18801@example.test", "https://evil.example"]) {
     assert.equal(updatesListOrigin({ OMB_UPDATES_ORIGIN: value }), UPDATES_LIST_ORIGIN, value);
   }
+});
+
+test("withUpstreamFallback: the Seira list answers, so the upstream Admin is not asked", async () => {
+  const calls = [];
+  const withdraw = withUpstreamFallback({ withdrawUpdatesConsent: async args => { calls.push(["list", args]); } },
+    () => ({ withdrawUpdatesConsent: async args => { calls.push(["upstream", args]); } }));
+  await withdraw({ status: "withdrawn", receipt: RECEIPT });
+  assert.deepEqual(calls.map(call => call[0]), ["list"]);
+});
+
+test("withUpstreamFallback: an unknown receipt on the list is withdrawn upstream with the same arguments", async () => {
+  const calls = [], unknown = () => Object.assign(new Error("x"), { code: "unknown_receipt" });
+  const withdraw = withUpstreamFallback({ withdrawUpdatesConsent: async () => { throw unknown(); } },
+    () => ({ withdrawUpdatesConsent: async args => { calls.push(args); } }));
+  await withdraw({ status: "declined", receipt: RECEIPT });
+  assert.deepEqual(calls, [{ status: "declined", receipt: RECEIPT }]);
+});
+
+test("withUpstreamFallback: both unknown throws unknown_receipt; an upstream network error throws", async () => {
+  const unknown = () => Object.assign(new Error("x"), { code: "unknown_receipt" });
+  const list = { withdrawUpdatesConsent: async () => { throw unknown(); } };
+  await assert.rejects(withUpstreamFallback(list, () => ({ withdrawUpdatesConsent: async () => { throw unknown(); } }))({ status: "withdrawn", receipt: RECEIPT }),
+    error => error.code === "unknown_receipt");
+  await assert.rejects(withUpstreamFallback(list, () => ({ withdrawUpdatesConsent: async () => { throw new Error("offline"); } }))({ status: "withdrawn", receipt: RECEIPT }),
+    error => error.message === "offline" && error.code !== "unknown_receipt");
+  await assert.rejects(withUpstreamFallback({ withdrawUpdatesConsent: async () => { throw Object.assign(new Error("x"), { code: "rate_limited" }); } },
+    () => { throw new Error("must not be asked"); })({ status: "withdrawn", receipt: RECEIPT }), error => error.code === "rate_limited");
 });

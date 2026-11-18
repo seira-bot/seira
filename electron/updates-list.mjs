@@ -46,3 +46,19 @@ export function createUpdatesList({ origin = UPDATES_LIST_ORIGIN, fetcher = fetc
     },
   };
 }
+
+/**
+ * Withdraws on the Seira list first. A receipt the list does not know may be one the upstream Admin issued, so the
+ * upstream Admin is asked next; only its own unknown_receipt reaches the caller.
+ */
+export function withUpstreamFallback(list, upstream) {
+  return async args => {
+    try { return await list.withdrawUpdatesConsent(args); }
+    catch (error) {
+      if (error?.code !== "unknown_receipt") throw error;
+      const client = upstream();
+      if (!client) throw new Error("Upstream Admin not available.");
+      return client.withdrawUpdatesConsent(args);
+    }
+  };
+}

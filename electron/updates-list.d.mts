@@ -5,4 +5,5 @@ export interface UpdatesList {
   updatesConsentByEmail(input: { email: string; installId: string; textVersion: string }): Promise<string>;
   withdrawUpdatesConsent(input: { status: "withdrawn" | "declined"; receipt: string }): Promise<void>;
 }
+export declare function withUpstreamFallback(list: Pick<UpdatesList, "withdrawUpdatesConsent">, upstream: () => Pick<UpdatesList, "withdrawUpdatesConsent"> | null): UpdatesList["withdrawUpdatesConsent"];
 export declare function createUpdatesList(options?: { origin?: string; fetcher?: typeof fetch }): UpdatesList;
