@@ -16,12 +16,12 @@ describe("BotCharacter", () => {
   });
 
   it("keeps the bot's own face when it has an uploaded picture or another body", () => {
-    expect(render({ color: "blue", avatarUrl: "/avatars/b.png", avatarCrop: "circle" })).toContain("data-fallback");
+    expect(render({ color: "blue", avatarUrl: "/api/attachments/b.png", avatarCrop: "circle" })).toContain("data-fallback");
     expect(render({ color: "blue", mascotBody: "cursor" })).toContain("data-fallback");
   });
 
   it("treats a picture cropped as the mascot as no picture", () => {
-    expect(render({ color: "blue", avatarUrl: "/avatars/b.png", avatarCrop: "mascot" })).toContain('data-seira-state="idle"');
+    expect(render({ color: "blue", avatarUrl: "/api/attachments/b.png", avatarCrop: "mascot" })).toContain('data-seira-state="idle"');
   });
 
   it("follows the state it is given", () => {
