@@ -15,7 +15,7 @@ describe("Boat's credit offer", () => {
     const mailto = boatClaimMailto();
     expect(mailto).toBe("mailto:support@ascii.dev"
       + "?subject=Seira%20introduced%20me%3A%20%2450%20Boat%20credit"
-      + "&body=Hi%20Boat%20team%2C%0D%0A%0D%0AMausBot%20introduced%20me%20to%20Boat.%20I'm%20on%20the%20%24___%20plan.%0D%0AMy%20Boat%20account%20email%3A%20___%0D%0A%0D%0AThanks!");
+      + "&body=Hi%20Boat%20team%2C%0D%0A%0D%0ASeira%20introduced%20me%20to%20Boat.%20I'm%20on%20the%20%24___%20plan.%0D%0AMy%20Boat%20account%20email%3A%20___%0D%0A%0D%0AThanks!");
     const url = new URL(mailto);
     expect(`${url.protocol}${url.pathname}`).toBe("mailto:support@ascii.dev");
     expect([...url.searchParams.keys()]).toEqual(["subject", "body"]);
