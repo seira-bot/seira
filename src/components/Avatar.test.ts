@@ -26,9 +26,8 @@ describe("MausAvatar body", () => {
     expect(render({})).not.toContain(MASCOT_BODIES.cursor.fit);
   });
 
-  it("wears the body it is given", () => {
-    const markup = render({ bodyId: "star" });
-    expect(markup).toContain(MASCOT_BODIES.star.fit);
+  it("wears Seira for a body that is no longer offered", () => {
+    expect(render({ bodyId: "star" })).toBe(render({ bodyId: "seira" }));
   });
 
   it("falls back to Seira for an unknown body", () => {
@@ -48,7 +47,7 @@ describe("MausAvatar body", () => {
 describe("mascot facial feature colors", () => {
   it.each(["white", "black"] as const)("uses %s for both eyes and mouth on every body type", (mascotFaceColor) => {
     const ink = mascotFaceColor === "white" ? "#ffffff" : "#000000";
-    for (const mascotBody of ["cursor", "star", "pumpkin", "vampire"] as const) {
+    for (const mascotBody of ["seira"] as const) {
       for (const color of ["green", "chrome"] as const) {
         const markup = renderBot({ color, mascotBody, mascotFaceColor });
         expect(markup).toContain(`fill="${ink}"`);
@@ -59,9 +58,9 @@ describe("mascot facial feature colors", () => {
   });
 
   it("keeps default inks when an override is reset or comes from an older profile", () => {
-    expect(renderBot({ color: "chrome", mascotBody: "cursor", mascotFaceColor: null })).toContain('stroke="#1E2833"');
+    expect(renderBot({ color: "chrome", mascotBody: "seira", mascotFaceColor: null })).toContain('stroke="#1E2833"');
     expect(renderBot({ mascotBody: "ghost" })).toContain('stroke="#0d0a10"');
-    expect(renderBot({ mascotBody: "cursor" })).toContain('stroke="#ffffff"');
+    expect(renderBot({ mascotBody: "seira" })).toContain('stroke="#ffffff"');
   });
 
   it("does not paint features over an uploaded image", () => {
