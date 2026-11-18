@@ -72,12 +72,29 @@ describe("CI workflows", () => {
     }
   });
 
-  it("reads no secret and no token", () => {
+  it("reads no token", () => {
     for (const [file, text] of texts) {
-      for (const forbidden of ["secrets.", "github.token", "GITHUB_TOKEN", "GH_TOKEN"]) {
+      for (const forbidden of ["github.token", "GITHUB_TOKEN", "GH_TOKEN"]) {
         expect(text, `${file} reads ${forbidden}`).not.toContain(forbidden);
       }
     }
+  });
+
+  it("reads a secret only in a job behind the release environment", () => {
+    const count = (text: string) => text.split("secrets.").length - 1;
+    for (const [file, flow] of workflows) {
+      const jobs = Object.entries(flow.jobs);
+      const inJobs = jobs.reduce((sum, [, job]) => sum + count(JSON.stringify(job)), 0);
+      expect(count(texts.get(file)!), `${file} reads a secret outside a job`).toBe(inJobs);
+      for (const [id, job] of jobs) {
+        expect(job, `${file} job ${id} passes secrets on`).not.toHaveProperty("secrets");
+        if (count(JSON.stringify(job)) > 0) expect(job.environment, `${file} job ${id}`).toBe("release");
+      }
+    }
+  });
+
+  it("reads a secret only in the macOS package workflow, for the Apple signature", () => {
+    expect(files.filter((file) => texts.get(file)!.includes("secrets."))).toEqual(["package-macos.yml"]);
   });
 
   it("drops the credentials of every checkout", () => {
@@ -110,19 +127,27 @@ describe("CI workflows", () => {
 });
 
 describe("Package workflows", () => {
-  it("include the Windows installer", () => {
+  it("include the Windows installer and the macOS apps", () => {
     expect(packageFiles).toContain("package-windows.yml");
+    expect(packageFiles).toContain("package-macos.yml");
   });
 
   it("start only by hand, so a pull request never runs them", () => {
     for (const [file, flow] of packageWorkflows) expect(Object.keys(flow.on), file).toEqual(["workflow_dispatch"]);
   });
 
-  it("ask for no job permission and no environment, so the token stays read-only", () => {
+  it("ask for no job permission, so the token stays read-only", () => {
+    for (const [file, flow] of packageWorkflows) {
+      for (const [id, job] of Object.entries(flow.jobs)) expect(job.permissions, `${file} job ${id}`).toBeUndefined();
+    }
+  });
+
+  it("use an environment only to read the signing secrets, and only the release environment", () => {
     for (const [file, flow] of packageWorkflows) {
       for (const [id, job] of Object.entries(flow.jobs)) {
-        expect(job.permissions, `${file} job ${id}`).toBeUndefined();
-        expect(job.environment, `${file} job ${id}`).toBeUndefined();
+        if (job.environment === undefined) continue;
+        expect(job.environment, `${file} job ${id}`).toBe("release");
+        expect(JSON.stringify(job), `${file} job ${id}`).toContain("secrets.");
       }
     }
   });

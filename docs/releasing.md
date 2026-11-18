@@ -1,10 +1,14 @@
 # Releasing
 
-Seira ships two desktop packages:
+Seira ships three desktop packages:
 
 - a Linux x64 AppImage, which a maintainer builds by hand on a Linux machine;
 - a Windows x64 installer, which the `Package Windows` workflow builds on a
-  GitHub-hosted Windows runner.
+  GitHub-hosted Windows runner;
+- macOS apps for Apple silicon (arm64) and Intel (x64), which the
+  `Package macOS` workflow builds, signs, and notarizes on a GitHub-hosted
+  macOS runner. This needs the [macOS signing secrets](#macos-signing-secrets).
+  Until a maintainer sets them, a release has no macOS assets.
 
 A maintainer creates the tag and the GitHub release, and attaches every file
 by hand. No workflow creates a tag or publishes a release.
@@ -18,7 +22,7 @@ Only the maintainers can release:
 - GitHub Actions has no bypass on either ruleset, and its token can only read
   the repository (see [CI](ci.md)).
 
-macOS, `.deb`, npm, and container images are not part of a Seira release.
+`.deb`, npm, and container images are not part of a Seira release.
 
 ## Assets
 
@@ -39,6 +43,18 @@ And these Windows assets:
 | `latest.yml` | The Windows update feed |
 | `Seira-setup.exe` | A byte-identical copy of the installer, so `/releases/latest/download/Seira-setup.exe` always works |
 | `SHA256SUMS-windows-x64.txt` | The SHA-256 of both installer files |
+
+And these macOS assets:
+
+| Asset | What it is |
+| --- | --- |
+| `Seira-<version>-arm64.dmg`, `Seira-<version>-x64.dmg` | The disk images for Apple silicon and for Intel. A person installs from these. |
+| `Seira-<version>-arm64.zip`, `Seira-<version>-x64.zip` | The apps as zip files. Installed apps download these to update. |
+| `Seira-<version>-arm64.dmg.blockmap`, `Seira-<version>-x64.dmg.blockmap`, `Seira-<version>-arm64.zip.blockmap`, `Seira-<version>-x64.zip.blockmap` | The block maps of the four files above |
+| `latest-mac.yml` | The macOS update feed. It names both zip files and both disk images. |
+| `Seira.dmg` | A byte-identical copy of the Apple silicon disk image, so `/releases/latest/download/Seira.dmg` always works |
+| `Seira-intel.dmg` | A byte-identical copy of the Intel disk image |
+| `SHA256SUMS-mac.txt` | The SHA-256 of the four packages, `Seira.dmg`, and `Seira-intel.dmg` |
 
 Each update feed names its package by file name, SHA-512, and size. Upload the
 files exactly as the build writes them. Do not rename them, and do not edit a
@@ -174,17 +190,138 @@ without a certificate. electron-updater checks the update signature only when
 Seira gets a certificate, keep its subject the same for each later
 certificate, or list the old and the new subject in `publisherName`.
 
-### 6. Check what users download
+### 6. Build and attach the macOS apps
+
+Do this step only when the [macOS signing secrets](#macos-signing-secrets)
+are set.
+
+The `Package macOS` workflow (`.github/workflows/package-macos.yml`) builds
+both apps from a tag on a GitHub-hosted macOS runner. It reads the Apple
+secrets from the `release` environment, so each run waits until a maintainer
+approves it. Before it uploads anything:
+
+- it makes sure that each app has every helper for its own CPU, and that
+  `app-update.yml` points at `seira-bot/seira`;
+- it verifies the code signature of each app, then starts the bundled browser
+  and the packaged server with an empty home folder;
+- it sends the four packages to Apple for notarization, staples the result to
+  them, and makes the zip files, the block maps, and `latest-mac.yml` again
+  from the stapled apps;
+- it makes sure that Gatekeeper accepts both apps and both disk images, and
+  that `latest-mac.yml` names each package with the correct SHA-512 and size.
+
+It uploads the twelve macOS assets as one workflow artifact. It cannot publish
+them: its token can only read the repository.
+
+```sh
+gh workflow run package-macos.yml --repo seira-bot/seira -f ref=v<version>
+gh run list --repo seira-bot/seira --workflow package-macos.yml --limit 1
+# Open the run page, select "Review deployments", and approve "release".
+gh run watch <run id> --repo seira-bot/seira --exit-status
+mkdir -p .omb-scratch/macos && cd .omb-scratch/macos
+gh run download <run id> --repo seira-bot/seira --name seira-<version>-macos
+sha256sum -c SHA256SUMS-mac.txt
+gh release upload v<version> --repo seira-bot/seira \
+  Seira-<version>-arm64.dmg Seira-<version>-x64.dmg \
+  Seira-<version>-arm64.zip Seira-<version>-x64.zip \
+  Seira-<version>-arm64.dmg.blockmap Seira-<version>-x64.dmg.blockmap \
+  Seira-<version>-arm64.zip.blockmap Seira-<version>-x64.zip.blockmap \
+  latest-mac.yml Seira.dmg Seira-intel.dmg SHA256SUMS-mac.txt
+```
+
+- Set `ref` to the release tag. The workflow stops when the tag and the
+  version in `package.json` are not equal.
+- Tags up to `v0.1.170` do not copy the dictation helper into the app, so the
+  workflow stops at a gate. Build `v0.1.171` or later.
+- The artifact stays for 14 days. Upload it before then, or run the workflow
+  again.
+- Upload all twelve files together. A release with the apps but without
+  `latest-mac.yml` leaves every installed macOS app on its old version.
+
+#### An artifact named NOT-FOR-RELEASE
+
+When the `release` environment has none of the Apple secrets, the workflow
+still builds and runs every gate that needs no Apple account. The apps then
+have an ad-hoc signature and no notarization, and the artifact is named
+`seira-<version>-macos-NOT-FOR-RELEASE`. It holds the four packages and
+`NOT-FOR-RELEASE.txt`, with no update feed and no block maps.
+
+- Use it only to test the build. macOS blocks these apps when they come from
+  a download.
+- Never attach it to a release.
+
+When only some of the five secrets are set, the workflow stops before it
+builds, so a missing secret never gives an unsigned build by mistake.
+
+### 7. Check what users download
 
 ```sh
 mkdir -p .omb-scratch/release-check && cd .omb-scratch/release-check
 gh release download v<version> --repo seira-bot/seira
 sha256sum -c SHA256SUMS-linux-x64.txt
 sha256sum -c SHA256SUMS-windows-x64.txt
+sha256sum -c SHA256SUMS-mac.txt
 ```
 
 Each check must print `OK`. If a check fails, delete the release assets and
 upload them again. Never edit an asset in place.
+
+## macOS signing secrets
+
+The `Package macOS` workflow reads five secrets from the GitHub environment
+`release` (see [CI](ci.md#the-release-environment)). Set all five, or none.
+
+| Secret | What it holds |
+| --- | --- |
+| `MAC_CERT_P12_BASE64` | The Developer ID Application certificate and its private key, as a `.p12` file in base64 |
+| `MAC_CERT_PASSWORD` | The password of that `.p12` file |
+| `APPLE_API_KEY_P8_BASE64` | An App Store Connect API key (the `.p8` file) in base64. The workflow sends the apps for notarization with it. |
+| `APPLE_API_KEY_ID` | The key ID of that API key |
+| `APPLE_API_ISSUER_ID` | The issuer ID of the App Store Connect team |
+
+To make them, you need a Mac and the Account Holder role on the Apple team.
+
+1. Enroll in the Apple Developer Program (`https://developer.apple.com/programs/`).
+   It costs a yearly fee. An organization needs a D-U-N-S number, and its
+   name then shows in the certificate.
+2. Make a certificate signing request. On the Mac, open **Keychain Access**,
+   then **Keychain Access → Certificate Assistant → Request a Certificate From
+   a Certificate Authority**. Select **Saved to disk**.
+3. Make the certificate. In **Certificates, IDs & Profiles → Certificates**,
+   add a certificate of the type **Developer ID Application**. Select the
+   **G2 Sub-CA** and upload the request from step 2.
+4. Download the certificate and open it. Keychain Access adds it to the login
+   keychain, beside the private key from step 2.
+5. Export the `.p12` file. In Keychain Access, open **My Certificates**,
+   select `Developer ID Application: <name> (<team ID>)`, and export it as a
+   `.p12` file with a strong password. The file must hold the private key.
+6. Make the API key. In App Store Connect, open **Users and Access →
+   Integrations → App Store Connect API → Team Keys**, and add a key with the
+   **Developer** role. Download the `.p8` file. Apple lets you download it
+   only once.
+7. Write down the key ID and the issuer ID. Both show on the same page.
+8. Store the five secrets in the environment. `gh secret set` asks for a value
+   when no value comes from the input, so the password does not go into the
+   shell history:
+
+```sh
+base64 -i developer-id.p12 | tr -d '\n' | gh secret set MAC_CERT_P12_BASE64 --env release --repo seira-bot/seira
+gh secret set MAC_CERT_PASSWORD --env release --repo seira-bot/seira
+base64 -i AuthKey_<key ID>.p8 | tr -d '\n' | gh secret set APPLE_API_KEY_P8_BASE64 --env release --repo seira-bot/seira
+gh secret set APPLE_API_KEY_ID --env release --repo seira-bot/seira
+gh secret set APPLE_API_ISSUER_ID --env release --repo seira-bot/seira
+```
+
+9. Keep the `.p12` file, its password, and the `.p8` file in a password
+   manager. Then delete the files from the disk.
+10. Run the workflow on `main` and approve it. The artifact name must end in
+    `-macos`, not in `-NOT-FOR-RELEASE`. Do not attach a build of `main` to
+    a release.
+
+A Developer ID certificate is valid for five years. Before it expires, make a
+new one with the same Apple team and replace `MAC_CERT_P12_BASE64` and
+`MAC_CERT_PASSWORD`. An installed macOS app accepts an update only when the
+same team signed it, so never change the team.
 
 ## Data format and rollback
 
