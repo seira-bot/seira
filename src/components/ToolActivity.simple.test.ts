@@ -95,7 +95,8 @@ describe("ActivityRun at narrow widths", () => {
       { id: "b", at: 2, role: "bot" as const, kind: "activity" as const, tool: { name: "mcp__omb__screenshot", ok: true } },
     ];
     const html = renderToStaticMarkup(createElement(ActivityRun, { messages: steps, children: null }));
-    expect(html).toMatch(/<button[^>]*class="flex min-w-0 max-w-full /);
-    expect(html).toContain('class="min-w-0 max-w-[480px] truncate font-medium leading-5"');
+    expect(html).toMatch(/<div data-activity-run[^>]*>[\s\S]*?<div class="min-w-0 max-w-\[44rem\] flex-1 overflow-hidden /);
+    expect(html).toMatch(/<button[^>]*class="flex h-10 w-full items-center [^"]*"/);
+    expect(html).toMatch(/<span class="[^"]*\btruncate\b[^"]*">2 steps/);
   });
 });
