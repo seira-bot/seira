@@ -39,13 +39,17 @@ repository or read a secret:
 `.github/workflows/`. It runs in the `checks` job, so a change that breaks a
 rule fails CI. The rules also stop a workflow that reads `github.token`, puts
 an `inputs` value into a shell command, or runs `electron-builder` with a
-`--publish` value other than `never`.
+`--publish` value other than `never`. The one token read they accept is the
+registry sign-in of `server-image.yml` (see [Server image workflow](#server-image-workflow)).
 
-A job that needs write access (for example a future release job) or reads a
-secret must use the GitHub environment `release`, and that environment must
-need a maintainer's approval. The test fails a job that asks for write access
-or reads a secret without it. Only `package-macos.yml` reads secrets: the
-Apple signing secrets in that environment.
+A job that needs write access or reads a secret must use the GitHub
+environment `release`, and that environment must need a maintainer's approval.
+The test fails a job that asks for write access or reads a secret without it.
+Two workflows read secrets in that environment:
+
+- `package-macos.yml` reads the Apple signing secrets;
+- `server-image.yml` reads the workflow token in its `publish` job, to sign in
+  to `ghcr.io`.
 
 ## Package workflows
 
@@ -73,6 +77,45 @@ holds these rules for every `package-*.yml` file:
 - The workflow packages only through a `pnpm package:*` script, and each such
   script in `package.json` ends with `electron-builder ... --publish never`.
 - It has one `actions/upload-artifact` step with `if-no-files-found: error`.
+
+## Server image workflow
+
+`server-image.yml` builds the server image of the root `Dockerfile` and
+publishes it as `ghcr.io/seira-bot/seira`. The scripts in `deploy/` install
+and update that image.
+
+| Start | What it does |
+| --- | --- |
+| A pull request that changes `Dockerfile`, `.dockerignore`, or the workflow | The `image` job only: build, start, and check the server on each platform |
+| Run by hand from `main`, with `tag` set to a release tag | Publishes that tag's code as `ghcr.io/seira-bot/seira:<tag>` |
+| Run by hand from `main`, with no `tag` | Publishes `main` as `latest` and `sha-<commit>` |
+
+The repository allows only GitHub's own actions, so the workflow uses the
+runner's `docker` CLI and no `docker/*` action. The `image` job builds each
+platform on its own runner: `linux/amd64` on `ubuntu-24.04`, `linux/arm64` on
+`ubuntu-24.04-arm`. It sets the label `org.opencontainers.image.version` to
+the tag, or to `main` when there is no tag. On a run by hand from `main`, it
+saves each image as a workflow artifact for 7 days.
+
+The `publish` job loads the two images and pushes each one to the tag
+`build-amd64` or `build-arm64`. It reads each pushed image back from the
+registry and checks its platform, version label, and commit. Then it joins the
+two digests under the final tags with `docker buildx imagetools create`. Approve the run within 7 days, or the
+artifacts expire and the job fails. Then start a new run.
+
+`scripts/ci-workflow.test.ts` holds these rules for it:
+
+- The workflow uses only `actions/*` actions.
+- The `image` job has no permission, no secret, and no environment, and it
+  pushes nothing.
+- The `publish` job runs only by hand from `main`, after `image`. It uses the
+  `release` environment, so each run waits until a maintainer approves it.
+- Only the `publish` job gets `packages: write`, and only it can run
+  `docker push` or `imagetools create`. The workflow token goes only into the
+  `env` of its sign-in step.
+- The `publish` job does no checkout, so it runs no code of the repository.
+- It publishes only to this repository's own package, with no build cache, so
+  another run cannot change the image.
 
 ## Required check
 
@@ -172,7 +215,9 @@ Then add the `CI` check (source: GitHub Actions) to the `main` branch ruleset.
 ### The `release` environment
 
 `package-macos.yml` reads the Apple signing secrets from the environment
-`release`. An organization admin creates it in **Settings → Environments**:
+`release`, and the `publish` job of `server-image.yml` waits for it before it
+writes to `ghcr.io`. An organization admin creates it in
+**Settings → Environments**:
 
 | Setting | Value |
 | --- | --- |

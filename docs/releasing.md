@@ -22,7 +22,9 @@ Only the maintainers can release:
 - GitHub Actions has no bypass on either ruleset, and its token can only read
   the repository (see [CI](ci.md)).
 
-`.deb`, npm, and container images are not part of a Seira release.
+The server image `ghcr.io/seira-bot/seira:v<version>` comes from the
+`Server image` workflow after the release (step 7). `.deb` and npm packages
+are not part of a Seira release.
 
 ## Assets
 
@@ -253,7 +255,32 @@ have an ad-hoc signature and no notarization, and the artifact is named
 When only some of the five secrets are set, the workflow stops before it
 builds, so a missing secret never gives an unsigned build by mistake.
 
-### 7. Check what users download
+### 7. Publish the server image
+
+The `Server image` workflow (`.github/workflows/server-image.yml`) builds the
+server image from the tag for `linux/amd64` and `linux/arm64`, each on its own
+runner (see [CI](ci.md#server-image-workflow)). The scripts in `deploy/`
+install the image of the newest release, so publish it for every release.
+
+```sh
+gh workflow run server-image.yml --repo seira-bot/seira --ref main -f tag=v<version>
+gh run list --repo seira-bot/seira --workflow server-image.yml --limit 1
+# Open the run page, select "Review deployments", and approve "release".
+gh run watch <run id> --repo seira-bot/seira --exit-status
+docker buildx imagetools inspect ghcr.io/seira-bot/seira:v<version>
+```
+
+- Start the run from `main`. The `release` environment refuses other branches.
+- The approval request shows after both builds pass. Approve it within 7 days,
+  or the saved images expire. Then start a new run.
+- Publish the GitHub release first. The workflow refuses a tag that is not a
+  published release, and it builds the tag only, never a branch of that name.
+- The image must show both platforms, and the label
+  `org.opencontainers.image.version` must be `v<version>`.
+- The package must be public, or a server cannot pull it. An organization
+  admin sets this once in the package settings on GitHub.
+
+### 8. Check what users download
 
 ```sh
 mkdir -p .omb-scratch/release-check && cd .omb-scratch/release-check
