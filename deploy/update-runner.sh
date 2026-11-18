@@ -35,7 +35,7 @@ QUIET_S=${OMB_RUNNER_QUIET_S:-30}
 IDLE_S=${OMB_RUNNER_IDLE_S:-300}
 UNIT=openmausbot-update
 RUNNER=openmausbot-update-runner
-INSTALLER_MARK="# Written by Seira's installer (deploy/install.sh)"
+INSTALLER_MARK="# Written by MausBot's installer (deploy/install.sh)"
 OVERRIDE_MARK="# Written by update-runner.sh --install"
 # Where the server's container finds the two folders (SERVER_UPDATE_DIR in server/server-update.ts).
 IN_CONTAINER=/run/omb-update

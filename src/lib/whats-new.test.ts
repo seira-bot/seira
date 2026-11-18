@@ -4,6 +4,7 @@ import type { CloudOffer } from "../../electron/cloud-home.mjs";
 import type { CloudListEntry } from "../../electron/cloud-list.mjs";
 
 vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
+vi.mock("@/lib/seira-cloud", () => ({ SEIRA_CLOUD_PLANS: ["pro", "team"] }));
 import { track } from "@/lib/analytics";
 import { setLocale } from "@/lib/i18n";
 import { WHATS_NEW_NOTICE } from "@/lib/notices";
@@ -71,6 +72,14 @@ describe("who sees which slides", () => {
       expect(whatsNewView(account as CloudAccountState | null, OFFER)).toBe("loading");
     }
     expect(whatsNewSlides(null)).toEqual([]);
+  });
+});
+
+describe("the plans Seira's Cloud sells", () => {
+  it("offers only the slides of a plan on sale", () => {
+    expect(whatsNewSlides("none", ["team"])).toEqual(["team"]);
+    expect(whatsNewView({ status: "signed-out" }, OFFER, ["team"])).toMatchObject({ slides: ["team"] });
+    expect(whatsNewView({ status: "signed-out" }, OFFER, [])).toBe("none");
   });
 });
 

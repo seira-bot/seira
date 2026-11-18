@@ -435,7 +435,7 @@ describe.skipIf(!posix)("deploy/update.sh", () => {
 
   it("moves an install the installer made with Caddy in the server's network to the current files, and back on rollback", () => {
     const box = install();
-    const oldCompose = `# Written by Seira's installer (deploy/install.sh), and written again each time it runs.
+    const oldCompose = `# Written by MausBot's installer (deploy/install.sh), and written again each time it runs.
 name: openmausbot
 services:
   omb:
