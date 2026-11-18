@@ -124,6 +124,15 @@ describe("one name per thing", () => {
     expect([...new Set(offending)]).toEqual([]);
   });
 
+  it("translations name Seira wherever the English does, and MausBot only where the English does", () => {
+    const e = en as Record<string, string>;
+    const offending = Object.entries(locales).filter(([code]) => code !== "en").flatMap(([code, pack]) =>
+      Object.entries(pack)
+        .filter(([key, value]) => (/Seira/.test(e[key] ?? "") && !/Seira/.test(value!)) || (/MausBot/.test(value!) && !/MausBot/.test(e[key] ?? "")))
+        .map(([key]) => `${code}: ${key}`));
+    expect(offending).toEqual([]);
+  });
+
   it("hard-coded strings in src, server, electron and shared use the same words", () => {
     const findings = hardcodedFindings();
     const offending = findings
