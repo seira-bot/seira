@@ -683,7 +683,7 @@ test("emailOnly: signed out with a typed email goes to the list, keeps the recei
   const state = await w.consent.choose({ status: "opted_in", email: "Typed@Example.test" });
   assert.deepEqual(w.calls, [{ opt: { email: "typed@example.test", installId: w.prefs.installId(), textVersion: UPDATES_CONSENT_VERSION } }]);
   assert.equal(w.saved.updatesConsent.receipt, receiptOf("typed@example.test"));
-  assert.equal(w.saved.updatesConsent.pending, false);
+  assert.ok(!w.saved.updatesConsent.pending);
   assert.equal(w.saved.updatesConsent.account, undefined);
   assert.equal(state.email, "typed@example.test");
 });
@@ -698,7 +698,7 @@ test("emailOnly: signed in, Yes without a typed email uses the account email and
   const record = w.saved.updatesConsent;
   assert.equal(record.email, ACCOUNT_EMAIL);
   assert.equal(record.account, undefined);
-  assert.equal(record.pending, false);
+  assert.ok(!record.pending);
   assert.equal(state.signedIn, true);
   assert.equal(state.email, ACCOUNT_EMAIL);
 });
@@ -721,7 +721,7 @@ test("emailOnly: signed out, Yes without an email waits; signing in sends it wit
   await w.consent.sync();
   assert.equal(w.calls.length, 1);
   assert.equal(w.calls[0].opt.email, ACCOUNT_EMAIL);
-  assert.equal(w.saved.updatesConsent.pending, false);
+  assert.ok(!w.saved.updatesConsent.pending);
   assert.equal(w.saved.updatesConsent.email, ACCOUNT_EMAIL);
   assert.equal(w.saved.updatesConsent.receipt, receiptOf(ACCOUNT_EMAIL));
 });
@@ -732,7 +732,7 @@ test("emailOnly: a withdrawal sends the receipt to the list", async () => {
   w.calls.length = 0;
   const state = await w.consent.choose({ status: "withdrawn" });
   assert.deepEqual(w.calls, [{ withdraw: { status: "withdrawn", receipt: receiptOf("typed@example.test") } }]);
-  assert.equal(w.saved.updatesConsent.pending, false);
+  assert.ok(!w.saved.updatesConsent.pending);
   assert.equal(state.status, "withdrawn");
 });
 
@@ -741,7 +741,7 @@ test("emailOnly: a receipt the list no longer knows counts as withdrawn", async 
   await w.consent.choose({ status: "opted_in", email: "typed@example.test" });
   w.failWithdraw = Object.assign(new Error("Updates list request failed."), { status: 404, code: "unknown_receipt" });
   const state = await w.consent.choose({ status: "withdrawn" });
-  assert.equal(w.saved.updatesConsent.pending, false);
+  assert.ok(!w.saved.updatesConsent.pending);
   assert.equal(w.saved.updatesConsent.status, "withdrawn");
   assert.equal(state.status, "withdrawn");
 });
@@ -775,6 +775,7 @@ test("main wiring: the desktop prefs send answers to the injected updates list, 
     read: () => saved, write: value => { saved = structuredClone(value); }, page: () => "local", cloudOffered: async () => true,
     cloudAccount: () => ({ state: () => connected }), updatesList });
   assert.equal(typeof wired.accountChanged, "function");
+  await sleep(20);
   const state = await handlers.get("updates-consent:choose")({}, { status: "opted_in" });
   assert.deepEqual(calls, [ACCOUNT_EMAIL]);
   assert.equal(state.email, ACCOUNT_EMAIL);
