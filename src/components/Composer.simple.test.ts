@@ -242,7 +242,7 @@ describe("the Simple composer in a bot chat", () => {
     press("ArrowDown");
     expect(document.activeElement).toBe(rows[1]);
     press("Escape");
-    expect(menu()).toBeNull();
+    expect(plus()!.getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(plus());
   });
 
