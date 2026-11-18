@@ -348,7 +348,7 @@ describe("what the person is told, in their language", () => {
     fx.busy.add("scout-main");
     fx.reports.note("scout-main", true);
     const answer = await fx.call("scout", "scout-main", { went_wrong: "Bilder laden nicht" });
-    const line = "An das MausBot-Team gesendet (Bericht report-1). Milind und Omkar bekommen ihn per E-Mail und antworten dir an ada@example.com.";
+    const line = "An das Seira-Team gesendet (Bericht report-1). Milind und Omkar bekommen ihn per E-Mail und antworten dir an ada@example.com.";
     expect(answer.body.text).toBe(`Sent. Tell the person this line in your reply, word for word: "${line}"`);
     fx.bot("scout-main", "Ich schaue mir das an.", { turnId: "t1", turnSucceeded: true });
     fx.busy.delete("scout-main");
@@ -363,7 +363,7 @@ describe("what the person is told, in their language", () => {
     fx.busy.add("scout-main");
     fx.reports.note("scout-main", true);
     const answer = await fx.call("scout", "scout-main", { went_wrong: "offline" });
-    const waiting = "Noch nicht gesendet: der Server des MausBot-Teams war nicht erreichbar. Der Bericht ist gespeichert und wird so bald wie möglich von selbst gesendet, du musst ihn also nicht noch einmal senden.";
+    const waiting = "Noch nicht gesendet: der Server des Seira-Teams war nicht erreichbar. Der Bericht ist gespeichert und wird so bald wie möglich von selbst gesendet, du musst ihn also nicht noch einmal senden.";
     expect(answer.body.text).toBe(`Not sent. Tell the person this line in your reply, word for word: "${waiting}"`);
     fx.bot("scout-main", waiting, { turnId: "t1", turnSucceeded: true });
     fx.busy.delete("scout-main");
@@ -371,7 +371,7 @@ describe("what the person is told, in their language", () => {
     expect(fx.notices("scout-main")).toEqual([]);
     fx.advance(RETRY_MS[0]);
     await fx.settle();
-    expect(fx.notices("scout-main")).toEqual(["notice: An das MausBot-Team gesendet (Bericht report-2), nachdem ein früherer Versuch nicht geklappt hat. Milind und Omkar bekommen ihn per E-Mail."]);
+    expect(fx.notices("scout-main")).toEqual(["notice: An das Seira-Team gesendet (Bericht report-2), nachdem ein früherer Versuch nicht geklappt hat. Milind und Omkar bekommen ihn per E-Mail."]);
     fx.stop();
   });
 });
