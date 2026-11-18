@@ -1,7 +1,7 @@
 {
   "name": "openmausbot",
   "private": true,
-  "version": "0.1.173",
+  "version": "0.1.174",
   "description": "A local-first chat app for running a team of AI agents.",
   "homepage": "https://github.com/seira-bot/seira",
   "repository": {
@@ -13,7 +13,9 @@
     "email": "46266943+milind-soni@users.noreply.github.com"
   },
   "contributors": [
-    { "name": "Rama Aditya" }
+    {
+      "name": "Rama Aditya"
+    }
   ],
   "license": "Apache-2.0",
   "desktopName": "bot.seira.app.desktop",
