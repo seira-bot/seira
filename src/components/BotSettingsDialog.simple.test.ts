@@ -522,10 +522,11 @@ describe("the avatar editor", () => {
     expect(rendered.html).not.toContain(">Diwali<");
     expect(rendered.html.match(/aria-label="Use \w+ mascot color"/g)).toHaveLength(12);
     expect(has(rendered, "data-avatar-face", "idle")).toBe(false);
-    if (hairs) {
+    const second = ([...PICKER_BODY_IDS] as string[])[1];
+    if (hairs && second) {
       expect(find(rendered, "aria-label", "Use the Seira hair").props["aria-pressed"]).toBe(true);
-      click(find(rendered, "aria-label", `Use the ${bodyName(PICKER_BODY_IDS[1]!)} hair`));
-      expect(patch).toHaveBeenLastCalledWith({ mascotBody: PICKER_BODY_IDS[1] });
+      click(find(rendered, "aria-label", `Use the ${bodyName(second as (typeof PICKER_BODY_IDS)[number])} hair`));
+      expect(patch).toHaveBeenLastCalledWith({ mascotBody: second });
     }
     click(find(rendered, "aria-label", "Use blue mascot color"));
     expect(patch).toHaveBeenLastCalledWith({ color: "blue" });
