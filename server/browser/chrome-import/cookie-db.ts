@@ -6,6 +6,8 @@ import { DatabaseSync } from "node:sqlite";
 export interface CookieDbOptions {
   /** Where the private copy lives; defaults to the system temporary folder. */
   tmpRoot?: string;
+  /** Called with the private folder while the copy exists; lets a test check its permissions. */
+  onCopy?: (directory: string) => void;
 }
 
 export interface HostSummary {
@@ -42,6 +44,7 @@ function withPrivateCopy<T>(cookiesPath: string, options: CookieDbOptions, use: 
     const copy = join(directory, "Cookies");
     writeFileSync(copy, readFileSync(cookiesPath), { mode: 0o600 });
     if (existsSync(`${cookiesPath}-wal`)) writeFileSync(`${copy}-wal`, readFileSync(`${cookiesPath}-wal`), { mode: 0o600 });
+    options.onCopy?.(directory);
     const db = new DatabaseSync(copy, { readOnly: true });
     try { return use(db); }
     finally { db.close(); }
