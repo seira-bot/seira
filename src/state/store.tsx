@@ -1503,7 +1503,6 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     }
     case "openCloudAdd":
-      // Sign-in stays for an account that has a Cloud; nothing starts a purchase until Seira's Cloud sells a plan.
       if (!action.signIn && !cloudSells()) return state;
       return { ...state, cloudAdd: state.cloudAdd ?? { source: action.source, ...(action.signIn ? { signIn: true as const } : {}) }, cloudHowTo: false };
     case "closeCloudAdd":

@@ -841,7 +841,7 @@ async function cloudOffersReady() {
   if (brandedBuild === null && serverReady) await readCloudOfferBrand();
   return cloudOffersAllowed();
 }
-/** Selling a Cloud: Seira's own Cloud has a plan (seira-cloud-sale.mjs) and this app may make offers. Menus, the Add sheet
+/** Selling a Cloud: Seira's own Cloud has a plan and this app may make offers. Menus, the Add sheet
  * and checkout use this; sign-in and the Cloud an account already has do not. */
 function cloudSalesAllowed() {
   return seiraCloudSells() && cloudOffersAllowed();
