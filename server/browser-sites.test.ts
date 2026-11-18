@@ -320,6 +320,15 @@ describe("importing cookies into a bot browser", () => {
     expect(readFileSync(current).includes("fresh.test")).toBe(false);
   });
 
+  it("leaves an unreadable saved state unchanged and fails with a message for the person", async () => {
+    const { current, target } = profile();
+    const unreadable = encryptBrowserState(JSON.stringify({ cookies: [], origins: [] }), "b".repeat(64));
+    writeFileSync(current, unreadable);
+    const failure = await importIntoSites(target, [imported("a", ".fresh.test")], stopped).catch((error: unknown) => error);
+    expect(failure).toMatchObject({ name: "ChromeImportError", status: 503, message: "Seira could not open this browser's saved logins. Open the browser, then try again." });
+    expect(readFileSync(current).equals(unreadable)).toBe(true);
+  });
+
   it("an imported site can be signed out again", async () => {
     const { target } = profile();
     await importIntoSites(target, [imported("a", ".fresh.test")], stopped);

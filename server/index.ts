@@ -440,7 +440,7 @@ import { ROUTINE_RESTARTED, RoutineManager, type Routine, type RoutineRun, type 
 import { CalendarCallManager, type CalendarCall } from "./calendar-calls.ts";
 import { BROWSER_UPLOAD_TOOL, browserRuntimeEnv } from "./browser-runtime.ts";
 import { BrowserUploadRefusal, uploadableFiles } from "./browser-upload.ts";
-import { listSignedInSites, signOutOfSites } from "./browser-sites.ts";
+import { importIntoSites, listSignedInSites, signOutOfSites } from "./browser-sites.ts"; import { createChromeImportService } from "./browser/chrome-import/service.ts";
 import { HeldSecrets, TEAM_READER, VaultStore } from "./vault-store.ts";
 import { OnePasswordLogins, onePasswordUnavailable, sdkOnePasswordClient, type OnePasswordSdk } from "./onepassword.ts";
 import { nativeRequire } from "./data/engine.ts";
@@ -12263,6 +12263,13 @@ ROUTES.push(createBrowserSiteRoutes({
   target: (which, threadId) => signedInSitesTarget(which, threadId === null ? "team" : teamHost.browserAudience(threadId)),
   list: (target) => listSignedInSites(target),
   signOut: (target, site) => signOutOfSites(target, site),
+  chromeImport: {
+    enabled: () => !CLOUD_HOME && !HOSTED_WORKSPACE && (process.platform === "linux" || process.platform === "darwin"),
+    owner: (auth) => !sharedMembership() && !HOSTED_WORKSPACE && ((auth.kind === "loopback" && auth.trust !== "service") || ownHome.owner(auth)),
+    caller: (auth) => (auth.kind === "session" ? `session:${auth.session.id}` : "loopback"),
+    service: createChromeImportService(),
+    write: (target) => (cookies) => importIntoSites(target, cookies),
+  },
 }));
 ROUTES.push(createBrowserEvidenceRoutes({ evidence: browserEvidence.attach({ onChange: (listener) => store.onChange(listener), threadExists: (id) => Boolean(threadOwner(id)) }), threadExists: (id) => Boolean(threadOwner(id)) }));
 const loginRoutes = botLogins.routes((id) => Boolean(store.bot(id))); ROUTES.push(createLoginRoutes(loginRoutes), createVaultRoutes({ logins: loginRoutes, secrets: logins, linked: () => botLogins.linkedSecrets(), keys: mcpKeys, reader: vaultReaders.viewer }));

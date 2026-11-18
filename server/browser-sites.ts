@@ -8,6 +8,7 @@ import { join } from "node:path";
 
 import { browserRestoreKey, browserSessionsDirectory, closeBrowserSession, inRunningBrowser, startBrowserSession } from "./browser-engine.ts";
 import { browserRuntimeEnv } from "./browser-runtime.ts";
+import { ChromeImportError } from "./browser/chrome-import/errors.ts";
 
 export interface SignedInSite {
   /** As wide as the browser's own records go: a cookie for `.google.com` makes `google.com` the site of `accounts.google.com`. */
@@ -450,7 +451,7 @@ function importIntoSavedState(target: BrowserSitesTarget, cookies: readonly Impo
     writeState(path, mergeIntoSavedState(state, cookies), target.encryptionKey);
     written += 1;
   }
-  if (written === 0) throw new Error("Seira could not open this browser's saved logins. Open the browser, then try again.");
+  if (written === 0) throw new ChromeImportError(503, "Seira could not open this browser's saved logins. Open the browser, then try again.");
   const after = savedState(directory, target.session, target.encryptionKey);
   return { running: false, sites: signedInSites(after.cookies, after.origins) };
 }
@@ -465,7 +466,7 @@ export function importIntoSites(target: BrowserSitesTarget, cookies: readonly Im
     const cdp = await (deps.connect ?? connectCdp)(url);
     try {
       const first = (await pages(cdp))[0];
-      if (!first) throw new Error("The running browser has no page open. Close it and try again.");
+      if (!first) throw new ChromeImportError(503, "The running browser has no page open. Close it and try again.");
       await onPage(cdp, first, (sessionId) => cdp.send("Network.setCookies", { cookies: cookies.map(cdpCookie) }, sessionId));
     } finally { cdp.close(); }
     const after = await runningState(target, deps) ?? EMPTY_STATE;
