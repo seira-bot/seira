@@ -1,5 +1,5 @@
 /**
- * The festival bodies a bot can wear, drawn flat with a carved face.
+ * The flat bodies a bot can wear: Seira, the shipped mascot, and the festival bodies.
  *
  * GENERATED FILE — do not hand-edit. Run `pnpm gen:carved` to rebuild it from
  * `scripts/gen-carved-bodies.ts`.
@@ -7,6 +7,11 @@
  * Drawn flat: the bot's own colour (or a pale or fixed stand-in), a few fixed-colour accents
  * and a carved face. Paths are in a 240-unit square centred on x = 120.
  */
+
+/** Every Brand body id, in the order the picker shows them. */
+export const BRAND_BODY_IDS = ["seira"] as const;
+
+export type BrandBodyId = (typeof BRAND_BODY_IDS)[number];
 
 /** Every Halloween body id, in the order the picker shows them. */
 export const HALLOWEEN_BODY_IDS = ["pumpkin", "ghost", "witch", "bat", "cat", "skull", "monster", "mummy", "vampire", "spider"] as const;
@@ -18,7 +23,7 @@ export const DIWALI_BODY_IDS = ["rocket", "anaar", "chakri", "sparkler", "bomb",
 
 export type DiwaliBodyId = (typeof DIWALI_BODY_IDS)[number];
 
-export const CARVED_BODY_IDS = [...HALLOWEEN_BODY_IDS, ...DIWALI_BODY_IDS] as const;
+export const CARVED_BODY_IDS = [...BRAND_BODY_IDS, ...HALLOWEEN_BODY_IDS, ...DIWALI_BODY_IDS] as const;
 
 export type CarvedBodyId = (typeof CARVED_BODY_IDS)[number];
 
@@ -45,8 +50,9 @@ export interface CarvedBody {
   id: CarvedBodyId;
   /** Human-readable name, used for the picker and the accessible label. */
   name: string;
-  /** "bot" fills with the bot's colour, "pale" with a near-white tint of it, "bone" with `bone`. */
-  paint: "bot" | "pale" | "bone";
+  /** "bot" fills with the bot's colour, "pale" with a near-white tint of it, "bone" with `bone`,
+   * "hair" with the bot's colour, or `bone` for silver and chrome. */
+  paint: "bot" | "pale" | "bone" | "hair";
   bone: string | null;
   eyes: CarvedEyes;
   /** Where the eyes may show. */
@@ -56,6 +62,20 @@ export interface CarvedBody {
 }
 
 export const CARVED_BODIES: Record<CarvedBodyId, CarvedBody> = {
+  seira: {
+    id: "seira",
+    name: "Seira",
+    paint: "hair",
+    bone: "#d3d8df",
+    eyes: {cx: 120, cy: 106, dx: 37, w: 20, h: 38, round: 32, ink: "#e11d48", mouthY: 128, mouth: true, mouthInk: "#e11d48"},
+    clip: "M47.5 66 C46.49 67.05 47 74.75 47 76.5 C47 86 47 95.5 47 105 C47 112.61 46.78 120.1 48.86 127.5 C50.19 132.27 52.24 136.83 54.92 141 C72.07 167.7 97.24 164 124.5 164 C146.44 164 163.64 165.49 180 147.63 C196.1 130.05 193 108.86 193 87 C193 82 193 77 193 72 C193 71.02 193.23 66.57 192.5 66 C192.27 65.82 187.16 66 186.5 66 C181 66 175.5 66 170 66 C148 66 126 66 104 66 C90 66 76 66 62 66 C58.5 66 55 66 51.5 66 C51.2 66 47.53 65.97 47.5 66 Z",
+    parts: [
+      { fill: "body", d: "M110 0.5 C99.13 1.61 88.47 4.43 78.5 8.92 C70.13 12.69 62.28 17.61 55.23 23.5 C39.32 36.79 27.74 54.97 22.4 75 C21.22 79.46 20.56 83.97 19.72 88.5 C18.97 92.51 17.77 96.43 17.37 100.5 C16.56 108.85 17.6 117.64 18.04 126 C18.8 140.53 19.16 155 20.55 169.5 C22.38 188.71 25.57 208.16 31.72 226.5 C33.6 232.1 35.98 242.1 41.5 244.93 C47.64 248.08 55.26 243.83 55.95 237 C56.18 234.76 53.11 217.43 52.7 213 C51.18 196.57 51.46 179.96 52.33 163.5 C52.54 159.7 52.77 145.04 54.26 142.5 C55.24 140.82 56.63 140.18 58.5 140.02 C61.95 139.72 65.54 140 69 140 C76 140 83 140 90 140 C111.5 140 133 140 154.5 140 C162 140 169.5 140 177 140 C180.11 140 183.88 139.34 185.74 142.5 C187.23 145.03 187.46 159.71 187.67 163.5 C188.71 183.01 188.76 202.6 186.26 222 C185.37 228.92 181.14 238.98 188 244 C189.75 245.28 191.83 246 194 246 C203.32 246 205.91 233.57 208.28 226.5 C215.52 204.92 218.91 181.67 220.41 159 C221.2 147 221.59 135.01 222.1 123 C222.41 115.59 223.35 107.9 222.63 100.5 C222.23 96.43 221.03 92.51 220.28 88.5 C219.25 82.94 218.38 77.44 216.75 72 C209.8 48.82 194.45 28.59 174 15.65 C165.21 10.09 155.56 5.9 145.5 3.27 C133.97 0.26 121.86 -0.71 110 0.5 Z" },
+      { fill: "#e8ebef", d: "M59 66 C56.33 67.6 50.36 80.17 49.04 83.5 C41.19 103.38 42.68 126.21 53 144.93 C73.83 182.69 123.2 195.11 159.87 173 C187.86 156.13 202.2 122.17 193.31 90.5 C191.87 85.37 185.35 69.52 181.5 66.52 C179.86 65.25 175.95 66 174 66 C167 66 160 66 153 66 C130 66 107 66 84 66 C78 66 72 66 66 66 C64.92 66 59.66 65.6 59 66 Z" },
+      { fill: "#0c0f14", d: "M47.5 66 C46.49 67.05 47 74.75 47 76.5 C47 86 47 95.5 47 105 C47 112.61 46.78 120.1 48.86 127.5 C50.19 132.27 52.24 136.83 54.92 141 C72.07 167.7 97.24 164 124.5 164 C146.44 164 163.64 165.49 180 147.63 C196.1 130.05 193 108.86 193 87 C193 82 193 77 193 72 C193 71.02 193.23 66.57 192.5 66 C192.27 65.82 187.16 66 186.5 66 C181 66 175.5 66 170 66 C148 66 126 66 104 66 C90 66 76 66 62 66 C58.5 66 55 66 51.5 66 C51.2 66 47.53 65.97 47.5 66 Z" },
+      { fill: "body", d: "M34 84.4 C16.66 88.18 17.75 103.64 17.98 117.5 C18.51 149.2 19.96 181.1 27.59 212 C29.87 221.21 32.67 230.29 36.46 239 C38.48 243.65 42.68 246.9 48 245.8 C52.42 244.88 55.76 241.01 55.99 236.5 C56.16 233.07 54.8 229.39 54.28 226 C53.28 219.54 52.66 213.02 52.25 206.5 C50.78 183.03 52.11 159.38 54.41 136 C55.05 129.49 55.74 122.99 56.55 116.5 C57.09 112.1 58.2 107.44 57.97 103 C57.38 91.08 45.79 81.83 34 84.4 Z M198 84.4 C188.35 86.51 181.21 95.51 182.06 105.5 C182.84 114.52 184.36 123.49 185.24 132.5 C187.93 159.77 189.98 187.66 187.08 215 C186.63 219.19 183.73 235.02 184.11 237.5 C184.54 240.31 186.15 242.77 188.5 244.35 C190.67 245.81 193.45 246.33 196 245.8 C201.03 244.76 202.82 240.79 204.58 236.5 C207.98 228.24 210.58 219.68 212.68 211 C220.47 178.76 222.12 145.06 222.05 112 C222.04 107.58 222.46 102.79 221.23 98.5 C218.41 88.69 208.07 82.21 198 84.4 Z" },
+    ],
+  },
   pumpkin: {
     id: "pumpkin",
     name: "Pumpkin",

@@ -249,7 +249,7 @@ describe("header name", () => {
       const idleMarkup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: false } }));
       const pillOf = (markup: string) => {
         const start = markup.indexOf("data-chathead-pill");
-        return markup.slice(start, markup.indexOf("data-chathead-status", start));
+        return markup.slice(start, markup.indexOf("data-chathead-status", start)).replace(/<svg[\s\S]*?<\/svg>/g, "<svg/>");
       };
       expect(pillOf(busyMarkup)).not.toContain("animate-status-pulse");
       expect(pillOf(busyMarkup)).toBe(pillOf(idleMarkup));

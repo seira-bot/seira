@@ -1,75 +1,77 @@
 <div align="center">
 
+<img src="docs/assets/brand/seira-3d.png" alt="Seira: a white 3D robot head with silver hair panels, a black visor screen, glowing red eyes, and a small smile" width="200">
+
+<br>
+<br>
+
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/seira-lockup-reversed.svg">
-  <img src="docs/assets/brand/seira-lockup.svg" alt="seira.bot" width="300">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/seira-wordmark-reversed.svg">
+  <img src="docs/assets/brand/seira-wordmark.svg" alt="seira.bot" width="210">
 </picture>
 
-<br>
-<br>
+<h3>Your own team of AI agents in one chat app.</h3>
 
-**A team of AI agents in one chat app, with Seira at your side.**
+Give each bot a job. Watch it work. Approve the steps that matter.<br>
+Seira runs on your computer and uses the AI plans that you already have.
 
-<img src="docs/assets/brand/seira-mascot.jpg" alt="Seira: a floating white robot head with silver hair panels, a black visor screen, red eyes, and a small smile" width="320">
+<p>
+  <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-0E1116?style=flat-square"></a>
+  <img alt="Platforms: macOS, Windows, and Ubuntu" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Ubuntu-0E1116?style=flat-square">
+  <img alt="Agents: Claude, Codex, and Grok" src="https://img.shields.io/badge/agents-Claude%20%C2%B7%20Codex%20%C2%B7%20Grok-E11D48?style=flat-square">
+  <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white">
+  <img alt="Status: early development" src="https://img.shields.io/badge/status-early%20development-6B7280?style=flat-square">
+</p>
 
-Each bot in the sidebar is a real agent with its own personality, model, computer, and connected apps.<br>
-Talk to your bots like contacts. Watch them work. Approve the steps that matter.
-
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-0E1116)](LICENSE)
-![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
-![Electron](https://img.shields.io/badge/Electron-macOS%20%C2%B7%20Windows%20%C2%B7%20Ubuntu-2B2E3A?logo=electron&logoColor=9FEAF9)
-![Agents](https://img.shields.io/badge/agents-Claude%20%C2%B7%20Codex%20%C2%B7%20Grok-E11D48)
-[![Fork of OpenMausBot](https://img.shields.io/badge/fork%20of-OpenMausBot-6B7280)](https://github.com/milind-soni/OpenMausBot)
+<p>
+  <a href="#quick-start"><b>Quick start</b></a> ·
+  <a href="#features"><b>Features</b></a> ·
+  <a href="#how-it-works"><b>How it works</b></a> ·
+  <a href="#documentation"><b>Documentation</b></a> ·
+  <a href="#contributing"><b>Contributing</b></a>
+</p>
 
 </div>
 
----
-
-## Meet Seira
-
-Seira is the face of this project: a small companion bot that floats next to your chats.
-Seira has a white matte head, silver hair panels, and a black visor screen.
-The face lives on that screen, so Seira can blink, smile, wink, and think while your agents work.
-
-<p align="center">
-  <img src="docs/assets/brand/seira-expressions.jpg" alt="Six expressions of Seira: calm smile, eyes closed, happy, surprised, wink, and thinking" width="820">
-</p>
-
-<details>
-<summary>Turnaround: front, three-quarter, side, and back</summary>
-<br>
-<p align="center">
-  <img src="docs/assets/brand/seira-turnaround.jpg" alt="Seira from the front, three-quarter, side, and back" width="820">
-</p>
-</details>
-
-| Color | Hex | Use |
-|---|---|---|
-| Ink | `#0E1116` | Head and wordmark on light backgrounds |
-| Signal red | `#E11D48` | Eyes, and the dot in seira.bot |
-| Mist | `#E9ECEF` | Head on dark backgrounds |
-
-The logo files for light and dark backgrounds are in [`docs/assets/brand/`](docs/assets/brand/).
+> [!NOTE]
+> Seira is in early development and has no packaged release yet.
+> To try it today, [build it from source](#quick-start).
 
 ## Why Seira
 
-- **Bring your own agents.** Bots run on the `claude`, `codex`, and `grok` CLIs on your computer.
-  They use the logins and plans that you already have. There is no new account and no proxy in the middle.
-  To use a custom CLI build, set it in **Settings → Engines**.
-- **Local first.** One small harness server on `127.0.0.1` owns every agent process.
-  Transcripts, keys, and events stay on your computer.
-- **Agents with hands.** A bot can use a cloud Linux desktop, an isolated local VM, or your own computer after you opt in.
-  It can also use more than 500 apps through Composio.
-- **You stay in control.** Shell commands, file edits, and questions show as cards in the chat.
-  You allow or deny each one.
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h4>Bring your own agents</h4>
+      Bots run on the <code>claude</code>, <code>codex</code>, and <code>grok</code> CLIs on your computer.
+      They use the sign-in and the plan that you already have. There is no new account and no proxy in the middle.
+    </td>
+    <td width="50%" valign="top">
+      <h4>Local first</h4>
+      One small harness server on <code>127.0.0.1</code> owns every agent process.
+      Transcripts, keys, and events stay on your computer.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h4>Agents with hands</h4>
+      A bot can use a cloud Linux desktop, an isolated local VM, or your own computer after you opt in.
+      It can also use more than 500 apps through Composio.
+    </td>
+    <td width="50%" valign="top">
+      <h4>You stay in control</h4>
+      Shell commands, file edits, and questions show as cards in the chat.
+      You allow or deny each one.
+    </td>
+  </tr>
+</table>
 
 ## Features
 
 | Feature | What you get |
 |---|---|
-| **A model per bot** | Pick Claude or Codex models for each bot from one model picker. Change the model in the middle of a conversation. |
-| **A computer per bot** | Open the Computer panel to start the bot's cloud desktop. Watch a live preview, or take over in your browser. |
+| **A model for each bot** | Pick a Claude or Codex model for each bot from one model picker. Change the model in the middle of a conversation. |
+| **A computer for each bot** | Open the Computer panel to start the cloud desktop of a bot. Watch a live preview, or take over in your browser. |
 | **Approval cards** | A permission broker turns each risky action into a card: Allow, Deny, or answer in the chat. |
 | **Connected apps** | Connect Gmail, Slack, GitHub, Notion, Linear, and hundreds more through Composio. Sign in once, and every bot can use them. |
 | **Channels** | Keep Work, Personal, and each project apart. Each channel has its own transcript, instructions, work folder, and bot roster. |
@@ -78,6 +80,34 @@ The logo files for light and dark backgrounds are in [`docs/assets/brand/`](docs
 | **Teams** | Install a full team from one Markdown file. Share a bot or a department as a folder. |
 | **MCP server** | Control your bots from Claude Desktop, Cursor, or another MCP client. See [docs/mcp-server.md](docs/mcp-server.md). |
 | **Scripts and CI** | Start a team from the command line, wait for the result, and export what it made. See [docs/headless-cli.md](docs/headless-cli.md). |
+
+To use a custom CLI build for an agent, set it in **Settings → Engines**.
+
+## Meet Seira
+
+Seira is the face of the project: a small companion bot that floats next to your chats.
+The face lives on a black visor screen, so Seira can blink, smile, wink, and think while your agents work.
+
+<p align="center">
+  <img src="docs/assets/brand/seira-expressions.jpg" alt="Six expressions of Seira: calm smile, eyes closed, happy, surprised, wink, and thinking" width="820">
+</p>
+
+<details>
+<summary><b>Brand assets:</b> turnaround, colors, and logo files</summary>
+<br>
+<p align="center">
+  <img src="docs/assets/brand/seira-turnaround.jpg" alt="Seira from the front, three-quarter, side, and back" width="820">
+</p>
+
+| Color | Hex | Use |
+|---|---|---|
+| Ink | `#0E1116` | Head and wordmark on light backgrounds |
+| Signal red | `#E11D48` | Eyes, and the dot in seira.bot |
+| Mist | `#E9ECEF` | Head on dark backgrounds |
+
+The 3D logo, the wordmark, the flat logo for light and dark backgrounds, and the avatar are in [`docs/assets/brand/`](docs/assets/brand/).
+
+</details>
 
 ## How it works
 
@@ -108,6 +138,10 @@ flowchart LR
     server -- "Composio" --> APPS[("Gmail · Slack · GitHub · …")]
 ```
 
+<details>
+<summary><b>Code map:</b> where each layer lives</summary>
+<br>
+
 | Layer | Path | What it does |
 |---|---|---|
 | Drivers | [`server/drivers/`](server/drivers/) | One driver for each provider: Claude, Codex, and Grok over their local CLIs, plus a cloud-computer agent. An unknown driver shows as "unavailable" and does not stop the other bots. |
@@ -116,6 +150,8 @@ flowchart LR
 | Voice | [`server/tts/`](server/tts/) | Speech for replies and calls. Cloud keys stay on the harness server. |
 | App | [`src/`](src/) | The chat app. One store from the server, one reducer, and no transport in the client. |
 | Desktop | [`electron/`](electron/) | The shells for macOS, Windows, and Ubuntu, with the harness server inside. |
+
+</details>
 
 ## Quick start
 
@@ -172,11 +208,8 @@ pnpm package:linux   # Ubuntu x64: .deb, AppImage, and the verified Cua runtime
 ```
 
 > [!WARNING]
-> Do not publish a packaged build yet. The app id and the update source are Seira's,
-> but the product name, the installer names, and the Linux install folder still say OpenMausBot,
-> so a Seira install can replace an OpenMausBot install on Linux
-> (see [Upstream names in the code](#upstream-names-in-the-code)).
-> Never upload a Seira build to the OpenMausBot release repository.
+> Do not publish a packaged build yet. Some package and install names still come from upstream.
+> Read [docs/upstream-names.md](docs/upstream-names.md) before you package.
 
 <details>
 <summary>Desktop support for each system</summary>
@@ -195,35 +228,6 @@ See [docs/linux-desktop.md](docs/linux-desktop.md) and [docs/computer-use-integr
 
 </details>
 
-## Upstream names in the code
-
-Seira started from OpenMausBot 0.1.169 on 18 November 2026.
-These names already belong to Seira:
-
-| Where | Name today |
-|---|---|
-| Desktop app id | `bot.seira.app` |
-| Update source of packaged builds | The `seira-bot/seira` releases on GitHub |
-| Update check of a server | The `seira-bot/seira` releases and stable channel on GitHub |
-
-Seira has no release yet, so there is nothing to update to.
-
-Some names in the code and in the docs still come from upstream:
-
-| Where | Name today |
-|---|---|
-| npm package and Linux package | `openmausbot` |
-| Data folder | `~/.openmausbot` |
-| Environment variables | `OMB_PORT`, `OMB_UI_PORT`, `OMB_WEBHOOK_PORT` |
-| Product name, installer files, Linux install folder | `OpenMausBot`, `OpenMausBot-<version>-…`, `/opt/OpenMausBot` |
-| Server image, installers, and update scripts in `deploy/` | `ghcr.io/milind-soni/openmausbot` and the upstream repository |
-| Files the app reads from GitHub | Announcements, model list, team library, and browser engine downloads, all from upstream repositories |
-| Cloud and website addresses | `openmausbot.com` and its subdomains |
-| Text in the app and in the docs | OpenMausBot, MausBot |
-
-Use these names as they are until the code changes.
-Do not install the `openmausbot` npm package to get Seira. That package is the upstream app.
-
 ## Privacy
 
 A Seira build sends no analytics.
@@ -238,8 +242,8 @@ They are anonymous and never include keys, names, addresses, or conversations.
 
 ## Documentation
 
-The guides in [`docs/`](docs/) and [`apps/docs/`](apps/docs/) come from upstream.
-They still say OpenMausBot in some places.
+Some guides in [`docs/`](docs/) and [`apps/docs/`](apps/docs/) still use upstream names.
+[docs/upstream-names.md](docs/upstream-names.md) lists them.
 
 | Topic | Guide |
 |---|---|
@@ -256,24 +260,30 @@ They still say OpenMausBot in some places.
 
 Issues and pull requests are welcome.
 [CONTRIBUTING.md](CONTRIBUTING.md) explains how a change lands, the [code guide](docs/contributing.md) holds the code rules,
-and [DESIGN.md](DESIGN.md) holds the design rules. The last two come from upstream, so read "OpenMausBot" as "Seira".
+and [DESIGN.md](DESIGN.md) holds the design rules.
 
 The driver contract in [`server/contracts.ts`](server/contracts.ts) is small.
 To add a provider, add one file in [`server/drivers/`](server/drivers/) and register it with one line.
 
 Do not post a security problem in public. Report it through [private vulnerability reporting](https://github.com/seira-bot/seira/security/advisories/new).
-If the problem is also in OpenMausBot, report it upstream too, as [SECURITY.md](SECURITY.md) describes.
+[SECURITY.md](SECURITY.md) gives the details.
 
-## License and credits
+## Credits and license
 
-Seira is a fork of [OpenMausBot](https://github.com/milind-soni/OpenMausBot) by Milind Soni and the OpenMausBot contributors.
+Seira builds on [OpenMausBot](https://github.com/milind-soni/OpenMausBot) by Milind Soni and its contributors.
 Their work is the base of this project. Thank you.
+Seira also adapts code from other open-source projects. [NOTICE](NOTICE) names each project and its authors.
 
-- The code is under the [Apache License 2.0](LICENSE). Read [NOTICE](NOTICE) for the upstream copyright and third-party credits.
-- [`enterprise/`](enterprise/) is source-available under [its own license](enterprise/LICENSE), not Apache 2.0.
-  Remove that folder to get the open-source edition. [LICENSING.md](LICENSING.md) gives the details.
-- The packaged Cua Driver parts keep their own licenses. See [`third_party/cua-driver/`](third_party/cua-driver/).
+- The code is under the [Apache License 2.0](LICENSE). [NOTICE](NOTICE) keeps the upstream copyright and the third-party credits.
+  [LICENSING.md](LICENSING.md) gives the details.
+- Bundled third-party parts keep their own licenses. See [`third_party/`](third_party/).
 - The Apache License does not give rights to the Seira name, logo, or mascot (section 6).
 
-Seira is an independent project. It is not affiliated with or endorsed by the OpenMausBot maintainer,
+Seira is an independent project. It is not affiliated with or endorsed by the upstream project,
 Anthropic, OpenAI, or xAI. Claude, Codex, and Grok are trademarks of their owners.
+
+---
+
+<div align="center">
+<sub><a href="#readme">Back to top ↑</a></sub>
+</div>

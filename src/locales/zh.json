@@ -9684,6 +9684,7 @@
   "routines.drawer.cancelRun": "取消运行",
   "routines.paused.title": "已暂停的例行任务",
   "routines.paused.help": "历史记录会保留；不会运行新的任务。",
+  "mascot.body.seira": "Seira",
   "mascot.body.cursor": "光标",
   "mascot.body.blob": "团块",
   "mascot.body.circle": "圆形",

@@ -8,8 +8,7 @@ import type { LocaleKey } from "@/locales";
 import { colorSwatch, MAUS_COLOR_LABEL, MAUS_COLOR_NAMES, PICKABLE_STATES, type MausState } from "@/lib/mascot";
 import { useStore, type Bot } from "@/state/store";
 import { mayRename, useTeamPeople } from "@/state/team-people";
-import { MASCOT_BODY_IDS } from "../../../shared/mascot-bodies";
-import { FESTIVAL_IDS, FESTIVALS, isCarvedBody, type BotBodyId } from "../../../shared/bot-body";
+import { DEFAULT_BOT_BODY, FESTIVAL_IDS, FESTIVALS, isFestivalBody, PICKER_BODY_IDS, type BotBodyId } from "../../../shared/bot-body";
 import { useFestivalDress, wornBody } from "@/lib/festival-dress";
 import { MausAvatar } from "../Avatar";
 import { AvatarImageGenerator } from "../AvatarImageGenerator";
@@ -66,15 +65,15 @@ export function AvatarEditorCard({ bot, activeState, onPatch, onClose }: {
     tabsRef.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
   }, []);
   const pickMascot = (patch: AvatarPatch) => onPatch(crop === "mascot" ? patch : { ...patch, avatarCrop: "mascot" });
-  const body = bot.mascotBody ?? "cursor";
+  const body = bot.mascotBody ?? DEFAULT_BOT_BODY;
   const { state, dispatch } = useStore();
   const team = useTeamPeople();
-  const othersToMatch = state.bots.filter((other) => other.id !== bot.id && (other.mascotBody ?? "cursor") !== body
+  const othersToMatch = state.bots.filter((other) => other.id !== bot.id && (other.mascotBody ?? DEFAULT_BOT_BODY) !== body
     && (team ? mayRename(other, team) : !state.config?.team));
   const festival = useFestivalDress();
   const costume = wornBody(bot.mascotBody, bot.color, festival);
-  const [moreLooks, setMoreLooks] = useState(() => Boolean(festival) || isCarvedBody(body) || Boolean(bot.mascotExpression && bot.mascotExpression !== "idle"));
-  const dressedAs = festival && costume !== body && isCarvedBody(costume) ? bodyName(costume) : null;
+  const [moreLooks, setMoreLooks] = useState(() => Boolean(festival) || isFestivalBody(body) || Boolean(bot.mascotExpression && bot.mascotExpression !== "idle"));
+  const dressedAs = festival && costume !== body && isFestivalBody(costume) ? bodyName(costume) : null;
   const bodyButton = (id: BotBodyId, name: string) => (
     <button
       key={id}
@@ -140,7 +139,7 @@ export function AvatarEditorCard({ bot, activeState, onPatch, onClose }: {
         {tab === "bot" && (
           <>
             <div className="grid grid-cols-5 gap-1.5">
-              {MASCOT_BODY_IDS.map((id) => bodyButton(id, bodyName(id)))}
+              {PICKER_BODY_IDS.map((id) => bodyButton(id, bodyName(id)))}
             </div>
             {!showsImage && othersToMatch.length > 0 && (
               <button

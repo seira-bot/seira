@@ -357,8 +357,6 @@ export async function mountBuilder(root, options = {}) {
     if (text) noteTimer = setTimeout(() => { note.textContent = ''; }, 6000);
   }
 
-  const syncers = [];
-
   function section(title, ...kids) {
     const hid = nextId('sec');
     return h('section', { class: 'sec', 'aria-labelledby': hid }, h('h2', { id: hid, text: title }), ...kids);
@@ -635,13 +633,13 @@ export async function mountBuilder(root, options = {}) {
     try {
       await navigator.clipboard.writeText(text);
       say('Copied.');
-    } catch (err) {
+    } catch {
       const ta = h('textarea', { 'aria-hidden': 'true', style: 'position:fixed;left:-9999px' });
       ta.value = text;
       document.body.append(ta);
       ta.select();
       let ok = false;
-      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      try { ok = document.execCommand('copy'); } catch { ok = false; }
       ta.remove();
       say(ok ? 'Copied.' : 'Copy did not work. Use Download JSON instead.');
     }
@@ -665,7 +663,7 @@ export async function mountBuilder(root, options = {}) {
     let data;
     try {
       data = JSON.parse(await file.text());
-    } catch (err) {
+    } catch {
       say('This file could not be read. Pick a JSON file from this page.');
       return;
     }
