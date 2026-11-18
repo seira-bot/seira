@@ -4,15 +4,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 
-import { SKIN_IDS } from "../../shared/app-settings.ts";
+import { storedSkinSchema } from "../../shared/app-settings.ts";
 import { LOOK_CHANGE_KINDS, LOOK_HISTORY_LIMIT, THEME_ASSET_NAME, THEME_ID, themeFileSchema, type LookChange } from "../../shared/theme.ts";
 import { writeFileAtomic } from "../atomic.ts";
 
-const skinSchema = z.enum([...SKIN_IDS, "system"]);
-export type Skin = z.infer<typeof skinSchema>;
+export type Skin = z.infer<typeof storedSkinSchema>;
 
 /** What a person wears: their saved theme, or none; and the built-in skin underneath when one is known. */
-const lookSchema = z.object({ id: z.string().regex(THEME_ID).nullable(), skin: skinSchema.optional() }).strict();
+const lookSchema = z.object({ id: z.string().regex(THEME_ID).nullable(), skin: storedSkinSchema.optional() }).strict();
 export type Look = z.infer<typeof lookSchema>;
 
 /** A theme file as it was; null when the theme did not exist yet. Its pictures and fonts stay in the theme's folder, so

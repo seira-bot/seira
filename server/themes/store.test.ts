@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -137,5 +137,21 @@ describe("theme store", () => {
     expect(store.missingAssets("owner", 1)).toEqual(["stars.png"]);
     expect(store.restore("owner", 1)).toEqual({});
     expect(store.list("owner")).toEqual({ active: "neon", themes: [{ id: "neon", name: "Neon", hasCss: false, assets: [] }] });
+  });
+
+  it("reads a theme and look changes that name a retired skin as the default look, and keeps every change", () => {
+    const { dataDir } = fixture();
+    const home = join(dataDir, "themes", "owner");
+    mkdirSync(join(home, "neon"), { recursive: true });
+    writeFileSync(join(home, "neon", "theme.json"), JSON.stringify({ name: "Neon", skin: "diwali" }));
+    writeFileSync(join(home, "history.json"), JSON.stringify({ entries: [
+      { seq: 1, at: "2026-11-01T00:00:00.000Z", change: { kind: "skin" }, before: { id: null, skin: "midnight" }, after: { id: null, skin: "diwali" } },
+      { seq: 2, at: "2026-11-02T00:00:00.000Z", change: { kind: "made", name: "Neon" }, before: { id: null, skin: "diwali" }, after: { id: "neon", skin: "diwali" }, themes: { neon: { file: null, assets: [] } } },
+    ] }));
+    const store = createThemeStore({ dataDir });
+    expect(store.read("owner", "neon")).toEqual({ name: "Neon", skin: "system" });
+    expect(store.history("owner").map((item) => item.look)).toEqual([{ id: "neon", skin: "system" }, { id: null, skin: "system" }]);
+    store.change("owner", { wear: null, skin: "midnight" });
+    expect(store.history("owner").map((item) => item.seq)).toEqual([3, 2, 1]);
   });
 });

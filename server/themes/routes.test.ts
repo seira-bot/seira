@@ -112,4 +112,12 @@ describe("theme routes", () => {
     expect(await callRoute(routes, { method: "POST", path: "/api/themes/import", body: { mausbotTheme: 1, theme: { name: "X", css: "a{background:url(https://example.com/a)}" } }, auth: bob })).toMatchObject({ status: 400 });
     expect(await callRoute(routes, { method: "POST", path: "/api/themes/import", body: { nope: true }, auth: bob })).toMatchObject({ status: 400 });
   });
+
+  it("takes a theme file and a skin choice that name a retired skin as the default look", async () => {
+    const { routes, store, changed } = fixture();
+    expect(await callRoute(routes, { method: "POST", path: "/api/themes/import", body: { mausbotTheme: 1, theme: { name: "Lamps", skin: "diwali" } }, auth: ann })).toEqual({ status: 200, body: { id: "lamps" } });
+    expect(store.read("p_ann", "lamps")?.skin).toBe("system");
+    expect(await callRoute(routes, { method: "PUT", path: "/api/themes/active", body: { id: null, skin: "diwali" }, auth: ann })).toMatchObject({ status: 200 });
+    expect(changed.at(-1)).toEqual({ person: "p_ann", skin: "system" });
+  });
 });
