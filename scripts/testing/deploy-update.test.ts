@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const SCRIPT = join(import.meta.dirname, "..", "..", "deploy", "update.sh");
 const FAKE = join(import.meta.dirname, "fake-compose-docker.mjs");
-const REPO = "ghcr.io/milind-soni/openmausbot";
+const REPO = "ghcr.io/seira-bot/seira";
 const posix = process.platform !== "win32";
 
 const id = (letter: string) => `sha256:${letter.repeat(64)}`;
@@ -396,6 +396,19 @@ describe.skipIf(!posix)("deploy/update.sh", () => {
     expect(tree(box.data)).toEqual({ ...before, "started-by.txt": "0.1.150\n0.1.150\n" });
     expect(box.env()).toBe(ROLLED_BACK);
     expect(box.run(["--rollback", "--yes"]).stdout).toContain("There is no earlier update to go back from.");
+  });
+
+  it("updates a server that runs an image of the old repository, and a rollback pins that image by its old digest", () => {
+    const LEGACY = "ghcr.io/milind-soni/openmausbot";
+    const legacy = { ...OLD, refs: [`${LEGACY}:latest`, `${LEGACY}@${id("1")}`] };
+    const box = install({}, { defaultImage: `${LEGACY}:latest`, images: [legacy, NEW] });
+    const done = box.run();
+    expect(done.status, done.stdout + done.stderr).toBe(0);
+    expect(box.calls()).toContain(`pull -q ${NEW.refs[0]}`);
+    expect(box.env()).toBe(`${ENV}OMB_IMAGE=${NEW.refs[0]}\n`);
+    const back = box.run(["--rollback", "--yes"]);
+    expect(back.status, back.stdout + back.stderr).toBe(0);
+    expect(box.env()).toBe(`${ENV}OMB_IMAGE=${legacy.refs[1]}\n`);
   });
 
   // A released version's own tag, or a digest, never moves: .env comes back byte for byte. Only a moving tag (`stable`,

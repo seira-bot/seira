@@ -22,7 +22,6 @@ Seira has no release yet, so there is nothing to update to.
 | Data folder | `~/.openmausbot` |
 | Environment variables | `OMB_PORT`, `OMB_UI_PORT`, `OMB_WEBHOOK_PORT` |
 | Product name, installer files, Linux install folder | `OpenMausBot`, `OpenMausBot-<version>-…`, `/opt/OpenMausBot` |
-| Server image, installers, and update scripts in `deploy/` | `ghcr.io/milind-soni/openmausbot` and the upstream repository |
 | Files the app reads from GitHub | Announcements, model list, team library, and browser engine downloads, all from upstream repositories |
 | Cloud and website addresses | `openmausbot.com` and its subdomains |
 | Text in the app and in the docs | OpenMausBot, MausBot |

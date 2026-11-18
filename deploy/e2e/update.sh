@@ -15,7 +15,7 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 OUT=${OUT:-$(mktemp -d)}
 LAYOUT=${LAYOUT:-installer}
-REPO=ghcr.io/milind-soni/openmausbot
+REPO=ghcr.io/seira-bot/seira
 FROM=${FROM_VERSION:-0.1.150}
 TO=${TO_VERSION:-0.1.151}
 mkdir -p "$OUT"

@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 const SCRIPT = join(import.meta.dirname, "..", "..", "deploy", "podman", "install.sh");
-const REPO = "ghcr.io/milind-soni/openmausbot";
+const REPO = "ghcr.io/seira-bot/seira";
 const DIGEST = `${REPO}@sha256:${"2".repeat(64)}`;
 const STABLE = `${REPO}@sha256:${"5".repeat(64)}`;
 const posix = process.platform !== "win32";
@@ -148,7 +148,7 @@ describe.skipIf(!posix)("deploy/podman/install.sh", () => {
     expect(stable.unit()).toContain(`Image=${STABLE}\n`);
 
     for (const [env, words] of [
-      [{ FAKE_STABLE_CODE: "500" }, "The stable channel could not be read (https://raw.githubusercontent.com/milind-soni/OpenMausBot/channels/stable.json answered 500)."],
+      [{ FAKE_STABLE_CODE: "500" }, "The stable channel could not be read (https://raw.githubusercontent.com/seira-bot/seira/channels/stable.json answered 500)."],
       [{ FAKE_STABLE_CODE: "000" }, "answered 000"],
       [{ FAKE_STABLE_CODE: "200", FAKE_STABLE_BODY: `{"image": "${REPO}:stable"}` }, "names no image this installer accepts"],
     ] as const) {
@@ -327,5 +327,20 @@ describe.skipIf(!posix)("deploy/podman/install.sh", () => {
     expect(local.stdout).toContain(`ok    version: the one already installed (${keep}, an image of this machine's own, not pinned by a digest); update.sh changes it`);
     expect(box.pulled()).toEqual([]);
     expect(box.unit()).toContain(`Image=${keep}\n`);
+  });
+
+  it("pins an image kept under this machine's own name by its digest from the old repository", () => {
+    const box = machine();
+    expect(box.run().status).toBe(0);
+    const keep = "openmausbot-before-update:local";
+    const legacy = `ghcr.io/milind-soni/openmausbot@sha256:${"3".repeat(64)}`;
+    writeFileSync(join(box.dir, ".env"), `OMB_IMAGE=${keep}\n`);
+    writeFileSync(join(box.fake, "local"), `${keep}\n`);
+    box.reset();
+    const again = box.run([], { FAKE_DIGESTS: legacy });
+    expect(again.status, again.out).toBe(0);
+    expect(again.stdout).toContain(`ok    version: the one already installed (${legacy}); update.sh changes it`);
+    expect(box.pulled()).toEqual([legacy]);
+    expect(box.unit()).toContain(`Image=${legacy}\n`);
   });
 });

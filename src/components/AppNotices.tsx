@@ -41,6 +41,7 @@ import { GrokMoveDialog } from "./lazy-screens";
 import { LinkButton, NoticeCard, NoticeToast, NotNowButton } from "./NoticeCard";
 import { useDesktopNotices, useOtherDialogOpen } from "./notice-dialogs";
 import { localDesktopPage } from "./onboarding/WelcomeGate";
+import { useSharedHintOn } from "./onboarding/SharedWorkspaceHint";
 import { UpdatesConsentDialog, updatesConsentBridge, useUpdatesConsent } from "./UpdatesConsent";
 import { useMausBotWelcomeDue } from "./MausBotWelcome";
 import { NewLookNotice, reportNewLook } from "./NewLookNotice";
@@ -109,6 +110,8 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const intent = useCloudIntent();
   const moving = useMoveQuiet(now);
   const mausBot = useMausBotWelcomeDue(viewer);
+  // A hosted member's note takes the notice cards' corner: every notice waits until they close it.
+  const sharedHint = useSharedHintOn(viewer);
   // Bots in two places: this computer's page only, where main knows what lives here.
   const two = useTwoPlaces();
   const twoFact = !local || two.suggest === null ? false : two.suggest === undefined ? null : true;
@@ -179,7 +182,8 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const setupHere = cloudSignInDue(viewer, state, engineReady)
     || ["waiting", "shown"].includes(cloudSetupStage({ viewer, connected: state.connected, enginesKnown: state.instances.length > 0,
       engineReady: state.instances.some(engineReady), onboarding: setupRecord, planned: Boolean(jobRoutine(state.routines, intent.sent)) }));
-  const waits = cornerPopupWaits(state, updater, { quiet, idle: true, viewer, duringFirstChat: true }) || Boolean(state.cloudAdd) || state.cloudHowTo || setupHere;
+  const waits = cornerPopupWaits(state, updater, { quiet, idle: true, viewer, duringFirstChat: true }) || Boolean(state.cloudAdd) || state.cloudHowTo || setupHere
+    || sharedHint;
   const kind = view ? cloudNoticeKind(view, account) : null;
   const introDue = (): boolean | null => {
     if (!introAllowed || !view) return false;
