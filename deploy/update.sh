@@ -37,10 +37,11 @@ umask 022
 # update half-way. Output to a terminal that has gone is lost; .update/update.log keeps it.
 trap '' HUP PIPE
 
-REPO="ghcr.io/milind-soni/openmausbot"
-PINNED="^ghcr\.io/milind-soni/openmausbot@sha256:[0-9a-f]{64}$"
-STABLE_URL=${OMB_STABLE_URL:-https://raw.githubusercontent.com/milind-soni/OpenMausBot/channels/stable.json}
-NEWEST_URL=${OMB_NEWEST_URL:-https://api.github.com/repos/milind-soni/OpenMausBot/releases/latest}
+REPO="ghcr.io/seira-bot/seira"
+LEGACY_REPO="ghcr.io/milind-soni/openmausbot"
+PINNED="^ghcr\.io/seira-bot/seira@sha256:[0-9a-f]{64}$"
+STABLE_URL=${OMB_STABLE_URL:-https://raw.githubusercontent.com/seira-bot/seira/channels/stable.json}
+NEWEST_URL=${OMB_NEWEST_URL:-https://api.github.com/repos/seira-bot/seira/releases/latest}
 SERVICE=${OMB_UPDATE_SERVICE:-omb}
 # A healthy server answers within seconds of starting; two minutes leaves room for a slow first start after an update,
 # and is how long the server is down before a version that never answers is rolled back. OMB_UPDATE_WAIT_S for more.
@@ -114,7 +115,7 @@ compose() { docker compose "$@"; }
 container() { compose ps -aq "$SERVICE" 2>/dev/null | head -n 1; }
 inspect() { docker inspect -f "$1" "$2" 2>/dev/null; }
 image_id() { docker image inspect -f '{{.Id}}' "$1" 2>/dev/null; }
-published_ref() { docker image inspect -f '{{range .RepoDigests}}{{println .}}{{end}}' "$1" 2>/dev/null | grep "^$REPO@" | head -n 1; }
+published_ref() { docker image inspect -f '{{range .RepoDigests}}{{println .}}{{end}}' "$1" 2>/dev/null | grep -E "^($REPO|$LEGACY_REPO)@" | head -n 1; }
 # The released version an image is labelled with; nothing for a build of main, whose label is the branch.
 image_version() { docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' "$1" 2>/dev/null | sed -n 's/^v\{0,1\}\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$/\1/p'; }
 if [ -n "$UNIT" ]; then
@@ -374,7 +375,7 @@ room_for_copy() { # data backup image → 0 when there is room where the copy go
 # this machine has no digest to pin.
 pin_previous() {
   local named
-  case "$J_previous" in "$REPO@sha256:"*) ;; *) return 0 ;; esac
+  case "$J_previous" in "$REPO@sha256:"* | "$LEGACY_REPO@sha256:"*) ;; *) return 0 ;; esac
   named=$(sed -n 's/^OMB_IMAGE=//p' .env 2>/dev/null | tail -n 1)
   case "$named" in
     *@sha256:* | *:v[0-9]*.[0-9]*.[0-9]*) return 0 ;;
