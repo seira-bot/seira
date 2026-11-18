@@ -6,8 +6,12 @@ import { join } from "node:path";
 import { afterAll, afterEach } from "vitest";
 
 import { removeTempDir } from "./cleanup.ts";
+import { TEST_HOME_PREFIX, useTestTmp } from "./test-tmp.ts";
 
-const home = mkdtempSync(join(tmpdir(), "omb-test-home-"));
+// Everything the test and the code under test put in tmpdir() lands in one folder that afterAll deletes.
+// The home is made after the move, so it sits in that folder and keeps its place under tmpdir().
+const scratch = useTestTmp();
+const home = mkdtempSync(join(tmpdir(), TEST_HOME_PREFIX));
 process.env.HOME = home;
 process.env.USERPROFILE = home;
 // A provider that answers 5xx retries with backoff: no test should wait out real seconds.
@@ -36,4 +40,5 @@ afterEach(closeMessageDb);
 afterAll(async () => {
   closeMessageDb();
   await removeTempDir(home);
+  await scratch.remove();
 });

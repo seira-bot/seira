@@ -21,7 +21,7 @@ services:
         ENGINES: ${ENGINES:-}
     # update.sh pins OMB_IMAGE in .env to the stable version's digest. Without it: `latest`, prebuilt on every main
     # push; `docker compose up --build` builds from source instead.
-    image: ${OMB_IMAGE:-ghcr.io/milind-soni/openmausbot:latest}
+    image: ${OMB_IMAGE:-ghcr.io/seira-bot/seira:latest}
     restart: unless-stopped
     # The bots' browsers (docs/browser-packaging.md, "Process hygiene"): an
     # init collects the browser processes whose parents exit, and Chrome
