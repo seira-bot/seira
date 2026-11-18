@@ -68,7 +68,7 @@ export function createEmailSignIn(options: {
     return client;
   };
   return {
-    enabled: () => signInEnabled(allow()),
+    enabled: () => signInEnabled(allow()) && (client !== null || resolveCompanionControlPlaneURL({ isPackaged: true, environment: env }) !== ""),
     async start(rawEmail) {
       const email = normalizeAccountEmail(rawEmail);
       if (!email) return { ok: false, status: 400, ...userError("serverError.email.invalid") };
