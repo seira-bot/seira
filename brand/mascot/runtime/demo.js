@@ -16,7 +16,7 @@ import { ACTIONS as ACTION_DEFS } from './catalog.js';
 const q = new URLSearchParams(location.search);
 const A = window.__SEIRA_ASSETS || {};
 let baseUrl = A.baseUrl;
-if (!baseUrl) { try { baseUrl = new URL('../art/', import.meta.url).href; } catch (err) { baseUrl = '../art/'; } }
+if (!baseUrl) { try { baseUrl = new URL('../art/', import.meta.url).href; } catch { baseUrl = '../art/'; } }
 const assetOpts = { bases: A.bases, stickers: A.stickers, baseUrl };
 const hex = (v) => (v ? (v.startsWith('#') ? v : '#' + v) : undefined);
 
@@ -141,7 +141,7 @@ async function grid(stage, name) {
     cap.textContent = c.label;
     box.append(holder, cap);
     stage.appendChild(box);
-    const cfg = { ...baseConfig(), ...(c.config || {}) };
+    const cfg = { ...baseConfig(), ...c.config };
     const bot = await createBot(holder, cfg, { ...assetOpts, manual: true, reduced: c.reduced || reducedAll || undefined, seed: 11 + i++ });
     let tickled = false;
     bot.on('tickle', () => { tickled = true; });
