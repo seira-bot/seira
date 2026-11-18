@@ -24,7 +24,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { BulkSelectFilters, ThreadListFooter, deleteThreadsInBulk, retitleThreadsInBulk, useBulkSelect } from "./BulkSelectBar";
 import { SidebarBotThreadsPeek } from "./SidebarBotThreadsPeek";
 import { RoomMark, StackedMauses } from "./StackedMauses";
-import { SimpleRoomStack } from "./SidebarSimpleRoom";
+import { SimpleRoomStack, SimpleRoomText } from "./SidebarSimpleRoom";
 import { LocalComputerAutoWarning } from "./LocalComputerAutoWarning";
 import { nextRename } from "@/lib/rename";
 import { useDesktopCapabilities, windowFramed } from "./DesktopCapabilities";
@@ -83,7 +83,7 @@ import { ELEVATED_CONTROL } from "./elevated";
 export { TeamMenuItems };
 import { SidebarResizeHandle, useSidebarWidth } from "./SidebarResizeHandle";
 import { PHONE_TOP_BUTTON, SIMPLE_ROW_FOCUS, SIMPLE_TOP_BUTTON, SidebarSearchPill } from "./SidebarSimpleTop";
-import { SIMPLE_NEW_BUTTON, SimpleAutomationsRow, SimpleSearchPill } from "./SidebarSimpleNav";
+import { SIMPLE_NEW_BUTTON, SimpleAutomationsRow, SimpleSearchPill, SimpleTopSlot } from "./SidebarSimpleNav";
 import { isSidebarToggle } from "@/lib/keyboard-shortcuts";
 import { SidebarRailSeparator, SimpleRailFooter } from "./SidebarSimpleRail";
 import { useShowThreads } from "@/lib/thread-preferences";
@@ -196,20 +196,18 @@ export const GroupListItem = memo(function GroupListItem({
       aria-label={density === "icons" ? group.name : undefined}
     >
       {simpleRow ? <SimpleRoomStack members={members} /> : group.dm ? <StackedMauses members={members} density={railTile ? "comfortable" : density} large={railTile} /> : <RoomMark density={railTile ? "comfortable" : density} large={simpleRow || railTile} />}
+      {simpleRow ? <SimpleRoomText name={group.name} unread={group.unread} time={last && formatTime(last.at)} preview={group.description || groupPreview(group, bots, instances, advanced)} expanded={expanded} /> : (
       <div className={cn("min-w-0 flex-1", density === "icons" && "hidden")}>
-        <div className={cn("flex items-baseline justify-between gap-2", simpleRow && "pr-7")}>
-          <span className={cn("truncate", simpleRow ? cn("text-ink text-[13px] leading-5", group.unread ? "font-semibold" : "font-medium") : "text-[14px] text-ink font-semibold")}>{group.name}</span>
-          {simpleRow && last && <span className="shrink-0 text-[12px] tabular-nums text-ink-tertiary">{formatTime(last.at)}</span>}
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="truncate text-[14px] text-ink font-semibold">{group.name}</span>
           {advanced && selected && last && !expanded && <span className="shrink-0 text-[10px] text-ink-secondary">{formatTime(last.at)}</span>}
-          {!simpleRow && expanded && group.unread && <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-label={t("task.unreadMany")} />}
-          
+          {expanded && group.unread && <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-label={t("task.unreadMany")} />}
         </div>
         {!expanded && <div className="flex items-center justify-between gap-2">
-          <span className={cn("truncate", simpleRow ? cn("text-[12px] leading-4", group.unread ? "text-ink-secondary" : "text-ink-tertiary") : "text-ink-secondary text-[11px]")}>{group.description || groupPreview(group, bots, instances, advanced)}</span>
+          <span className="truncate text-ink-secondary text-[11px]">{group.description || groupPreview(group, bots, instances, advanced)}</span>
           {group.unread && <span data-testid="unread-dot" title={t("task.unread")} className="size-2 shrink-0 rounded-full bg-accent" />}
         </div>}
-        {simpleRow && <RowStatusText unread={group.unread} />}
-      </div>
+      </div>)}
       {density === "icons" && group.unread && (
         <span className={cn("absolute size-2 rounded-full border border-panel bg-accent", railTile ? "right-1 top-1" : "bottom-1.5 right-1.5")} />
       )}
@@ -1275,11 +1273,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
           <div className="relative flex">{plusControl}</div>
         </div>}
         {density !== "icons" && (simpleDesk ? (
-          <div data-sidebar-top-slot className="@container/sidebar-top flex min-w-0 flex-1 items-center" style={windowNoDragStyle}>
-            <div data-sidebar-top-switcher className="flex min-w-0 items-center [&_button]:h-8 [&_button]:rounded-lg [&_button]:bg-transparent [&_button]:ps-2 [&_button]:pe-1.5 [&_button]:hover:bg-ink/[0.06] [&_button]:aria-expanded:bg-ink/[0.06]">
-              <DesktopWorkspaceSwitcher inline pill cloudHome={state.config?.cloudHome === true} place={state.config?.team?.name} owner={cloudOwner} howTo={state.cloudHowTo} onMenuClosed={endHowTo} />
-            </div>
-          </div>
+          <SimpleTopSlot style={windowNoDragStyle}><DesktopWorkspaceSwitcher inline pill cloudHome={state.config?.cloudHome === true} place={state.config?.team?.name} owner={cloudOwner} howTo={state.cloudHowTo} onMenuClosed={endHowTo} /></SimpleTopSlot>
         ) : (
           <div data-sidebar-top-slot className={cn("@container/sidebar-top flex min-w-0 flex-1 items-center", simple && "justify-end")}>
             {!simple && <div data-sidebar-top-spacer className="min-w-0 flex-1 @min-[96px]/sidebar-top:min-w-6" />}

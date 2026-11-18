@@ -1,4 +1,5 @@
 import { Plus, Search, Zap } from "lucide-react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
@@ -68,6 +69,17 @@ export function SimpleSectionLabel({ name, addLabel, onAdd }: { name: string; ad
           <Plus size={14} strokeWidth={1.75} aria-hidden="true" />
         </button>
       )}
+    </div>
+  );
+}
+
+/** The workspace button's slot in Simple's top row: its button drops the pill look for a 32px quiet one. */
+export function SimpleTopSlot({ style, children }: { style?: CSSProperties; children: ReactNode }) {
+  return (
+    <div data-sidebar-top-slot className="@container/sidebar-top flex min-w-0 flex-1 items-center" style={style}>
+      <div data-sidebar-top-switcher className="flex min-w-0 items-center [&_button]:h-8 [&_button]:rounded-lg [&_button]:bg-transparent [&_button]:ps-2 [&_button]:pe-1.5 [&_button]:hover:bg-ink/[0.06] [&_button]:aria-expanded:bg-ink/[0.06]">
+        {children}
+      </div>
     </div>
   );
 }
