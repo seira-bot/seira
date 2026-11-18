@@ -54,6 +54,11 @@ export const teamWelcomeShownThisLaunch = () => shownThisLaunch;
 /** Only for tests: the record is module state. */
 export function resetTeamWelcome(): void { asked.clear(); shownThisLaunch = false; publish(null); }
 
+/** The team's own welcome still comes first for an invited person: they have not closed it, or their record is still read. */
+export function teamWelcomeAhead(invited: boolean, record: TeamWelcomeRecord | null | undefined): boolean {
+  return invited && (record === undefined || record?.welcomedAt === null);
+}
+
 /** Everyone invited to a team: all but its Owner, who set it up. A Team Cloud too old to say the role knows only who can't change it. */
 export function invitedToTeam(viewer: { canSave: boolean; teamRole?: string } | null | undefined): boolean {
   return Boolean(viewer) && (viewer!.teamRole ? viewer!.teamRole !== "owner" : !viewer!.canSave);

@@ -7943,7 +7943,7 @@
   "botIdentity.useOrgIcon": "使用 {name} 圖示",
   "botIdentity.uploadUnusable": "上傳的圖片無法用作頭像",
   "app.openBotList": "開啟機器人清單",
-  "about.tagline": "為你的代理程式打造的桌面家園，以 {app} 為基礎：開放原始碼，採用 Apache 2.0 授權。",
+  "about.summary": "為你的代理程式打造的桌面家園：開放原始碼，採用 Apache 2.0 授權。",
   "about.docs": "文件",
   "about.releases": "版本發布",
   "about.license": "授權",
