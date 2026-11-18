@@ -49,9 +49,10 @@ test("an AppImage desktop restarts its AppImage after exit, with its arguments a
   // A disposable executable substitutes for the AppImage.
   writeFileSync(launched, `#!${process.execPath}
     const { readFileSync, writeFileSync } = require("node:fs");
+    // A zombie has exited, though kill(pid, 0) still answers for it.
     let parentAlive = true;
-    try { process.kill(Number(process.env.OMB_RELAUNCH_TEST_PARENT), 0); }
-    catch (error) { if (error.code === "ESRCH") parentAlive = false; else throw error; }
+    try { parentAlive = !/^\\d+ \\(.*\\) [ZX] /.test(readFileSync("/proc/" + process.env.OMB_RELAUNCH_TEST_PARENT + "/stat", "utf8")); }
+    catch (error) { if (error.code === "ENOENT") parentAlive = false; else throw error; }
     writeFileSync(${JSON.stringify(receipt)}, JSON.stringify({ parentAlive, args: process.argv.slice(2),
       noNewPrivs: readFileSync("/proc/self/status", "utf8").match(/NoNewPrivs:\\s*(\\d)/)?.[1] }));
   `, { mode: 0o755 });

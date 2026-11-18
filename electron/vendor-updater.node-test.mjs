@@ -119,9 +119,10 @@ test("the shipped installer replaces the AppImage and starts it after the old pr
   const replacement = `
     const { readdirSync, readFileSync, readlinkSync, writeFileSync } = require("node:fs");
     (async () => {
+      // A zombie has exited, though kill(pid, 0) still answers for it.
       let parentAlive = true;
-      try { process.kill(Number(process.env.OMB_UPDATER_TEST_PARENT), 0); }
-      catch (error) { if (error.code === "ESRCH") parentAlive = false; else throw error; }
+      try { parentAlive = !/^\\d+ \\(.*\\) [ZX] /.test(readFileSync("/proc/" + process.env.OMB_UPDATER_TEST_PARENT + "/stat", "utf8")); }
+      catch (error) { if (error.code === "ENOENT") parentAlive = false; else throw error; }
       const descriptors = readdirSync("/proc/self/fd").map((fd) => { try { return readlinkSync("/proc/self/fd/" + fd); } catch { return null; } });
       const { acquireDataDirLease } = await import(${JSON.stringify(leaseModule)});
       acquireDataDirLease(${JSON.stringify(data)}).release();
@@ -308,9 +309,10 @@ test("the AppImage restart waits for deferred cleanup, keeps setuid fusermount u
   const replacement = `
     const { readFileSync, writeFileSync } = require("node:fs");
     (async () => {
+      // A zombie has exited, though kill(pid, 0) still answers for it.
       let parentAlive = true;
-      try { process.kill(Number(process.env.OMB_UPDATER_TEST_PARENT), 0); }
-      catch (error) { if (error.code === "ESRCH") parentAlive = false; else throw error; }
+      try { parentAlive = !/^\\d+ \\(.*\\) [ZX] /.test(readFileSync("/proc/" + process.env.OMB_UPDATER_TEST_PARENT + "/stat", "utf8")); }
+      catch (error) { if (error.code === "ENOENT") parentAlive = false; else throw error; }
       const { acquireDataDirLease } = await import(${JSON.stringify(leaseModule)});
       const lease = acquireDataDirLease(${JSON.stringify(join(workspace, "data"))});
       lease.release();

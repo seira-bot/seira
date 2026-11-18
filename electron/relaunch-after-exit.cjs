@@ -10,14 +10,17 @@ const { spawn } = require("node:child_process");
 // away when this process exits.
 //
 // Instead, this process spawns a detached bash that it does not restrict. bash
-// reads stdin until EOF, which comes when this process exits and the kernel
-// closes the write end (libuv creates that end with close-on-exec, so no other
-// child holds it). The AppImage runtime leaves its keep-alive pipe and mount
-// directory open without close-on-exec, and spawn() passes them on, so bash
-// closes every descriptor above 2 before it starts the AppImage. Otherwise the
-// new process keeps the old mount alive.
+// reads stdin until EOF. libuv creates the write end with close-on-exec, so
+// only this process holds it, but Node closes it while Electron still shuts
+// down. bash then waits until the kernel gives it a new parent, which happens
+// only when this process has exited: the moment Electron's relauncher waits
+// for. The AppImage runtime leaves its keep-alive pipe and mount directory
+// open without close-on-exec, and spawn() passes them on, so bash closes every
+// descriptor above 2 before it starts the AppImage. Otherwise the new process
+// keeps the old mount alive.
 const RUN_AFTER_PARENT_EXITS = [
   "read -r ignored",
+  'for ((tries = 0; tries < 600; tries++)); do read -r -a stat </proc/$$/stat; [ "${stat[3]}" = "$PPID" ] || break; sleep 0.05; done',
   'for fd in /proc/$$/fd/*; do fd=${fd##*/}; case $fd in 0|1|2) ;; *) exec {fd}>&- ;; esac; done',
   'exec "$@" </dev/null',
 ].join("\n");
