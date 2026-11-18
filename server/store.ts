@@ -1272,7 +1272,7 @@ export class Store {
     profile: Partial<
       Pick<
         BotRecord,
-        "name" | "title" | "description" | "soul" | "color" | "mascotExpression" | "mascotBody" | "mascotFaceColor" | "modelSelection" | "section" | "cwd" | "visibility" | "toolScope" | "createdBy" | "reportsTo"
+        "name" | "title" | "description" | "soul" | "color" | "mascotExpression" | "mascotBody" | "mascotFaceColor" | "mascotAccessories" | "modelSelection" | "section" | "cwd" | "visibility" | "toolScope" | "createdBy" | "reportsTo"
       >
     > = {},
     opts: {
@@ -1294,6 +1294,7 @@ export class Store {
       soulHash: soulHash(profile.soul ?? ""),
       notifications: true,
       color: profile.color ?? rotationColor(this.bots.length), mascotFaceColor: profile.mascotFaceColor ?? undefined,
+      ...(profile.mascotAccessories?.length ? { mascotAccessories: profile.mascotAccessories } : {}),
       ...(profile.mascotExpression ? { mascotExpression: profile.mascotExpression } : {}),
       ...(profile.mascotBody ? { mascotBody: profile.mascotBody } : {}),
       ...this.newBotSharing(profile.visibility, newBotOwner(profile)),

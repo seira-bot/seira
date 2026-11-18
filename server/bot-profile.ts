@@ -8,6 +8,7 @@ import {
   botAvatarUrlSchema,
   mascotFaceColorSchema,
 } from "../shared/bot-avatar.ts";
+import { mascotAccessoriesSchema } from "../shared/mascot-accessories.ts";
 import { BOT_PROFILE_LIMITS, fitsOnOneLine } from "../shared/bot-profile.ts";
 import { REPLY_STYLES } from "../shared/reply-style.ts";
 import { BOT_BODY_IDS, botBodySchema } from "../shared/bot-body.ts";
@@ -29,6 +30,7 @@ export const BOT_PROFILE_PATCH_FIELDS = [
   "avatarFocusY",
   "mascotBody",
   "mascotFaceColor",
+  "mascotAccessories",
   "voice",
   "speakReplies",
   "replyStyle",
@@ -68,6 +70,7 @@ export const profilePatchSchema = z.object({
   avatarFocusY: z.number({ error: "avatarFocusY must be a number from 0 to 1" }).finite().min(0).max(1).optional(),
   mascotBody: botBodySchema.optional(),
   mascotFaceColor: mascotFaceColorSchema.nullable().optional(),
+  mascotAccessories: mascotAccessoriesSchema.nullable().optional(),
   voice: z
     .string({ error: "voice must be a string" })
     .max(BOT_PROFILE_LIMITS.voice, { error: "voice must be at most 200 characters" })
@@ -93,6 +96,7 @@ export type BotProfilePatch = Partial<
     | "avatarFocusY"
     | "mascotBody"
     | "mascotFaceColor"
+    | "mascotAccessories"
     | "voice"
     | "speakReplies"
     | "replyStyle"
@@ -123,6 +127,9 @@ export function parseBotProfilePatch(input: BotProfilePatchInput, strict = false
     }
     if (issue?.path[0] === "mascotFaceColor") {
       return { ok: false, error: "mascotFaceColor must be white, black, or null" };
+    }
+    if (issue?.path[0] === "mascotAccessories") {
+      return { ok: false, error: "mascotAccessories must list at most 3 known accessories, one in each slot, or be null" };
     }
     return { ok: false, error: issue?.message ?? "invalid profile patch" };
   }

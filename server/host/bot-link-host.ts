@@ -10,6 +10,7 @@ import { redactSecretsInText } from "../redact.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { createBotLinkRoutes, linkSessionUser } from "../routes/bot-link.ts";
 import { isLinkedId } from "../bot-link/protocol.ts";
+import { mascotAccessories } from "../../shared/mascot-accessories.ts";
 import type { Level } from "../runtime/types.ts";
 import type { BotRecord, Store } from "../store.ts";
 import type { HandoffFiles, PassedFile } from "./handoff-files.ts";
@@ -53,14 +54,16 @@ export function createBotLinkHost(deps: BotLinkHostDeps) {
     for (const { id, peer, place, kind, bot } of link.linked()) {
       next.set(id, { id, name: bot.name, color: bot.color ?? "blue", threadId: "", tasks: [], resumeCursors: {}, modelSelection: { instanceId: "", model: bot.model ?? "" },
         home: { place: peer, placeName: place.name, botId: bot.id, kind }, ...(bot.title ? { title: bot.title } : {}), ...(bot.description ? { description: bot.description } : {}),
-        ...(bot.mascotBody ? { mascotBody: bot.mascotBody } : {}), ...(bot.mascotFaceColor ? { mascotFaceColor: bot.mascotFaceColor } : {}) } as unknown as BotRecord);
+        ...(bot.mascotBody ? { mascotBody: bot.mascotBody } : {}), ...(bot.mascotFaceColor ? { mascotFaceColor: bot.mascotFaceColor } : {}),
+        ...(mascotAccessories(bot.mascotAccessories).length ? { mascotAccessories: mascotAccessories(bot.mascotAccessories) } : {}) } as unknown as BotRecord);
     }
     // A far member of a room here that cannot be reached now (the link is off, its place is unlinked, or its place no
     // longer has it) stays a member: it is found by its address, named as it was last known, and takes no turn.
     rooms.sync();
-    for (const { id, gone, name, color, place, placeName, botId, kind, title, mascotBody, mascotFaceColor } of rooms.absent()) {
+    for (const { id, gone, name, color, place, placeName, botId, kind, title, mascotBody, mascotFaceColor, mascotAccessories: worn } of rooms.absent()) {
       next.set(id, { id, name, color: color ?? "blue", threadId: "", tasks: [], resumeCursors: {}, modelSelection: { instanceId: "", model: "" },
-        home: { place, placeName, botId, ...(kind ? { kind } : {}), gone }, ...(title ? { title } : {}), ...(mascotBody ? { mascotBody } : {}), ...(mascotFaceColor ? { mascotFaceColor } : {}) } as unknown as BotRecord);
+        home: { place, placeName, botId, ...(kind ? { kind } : {}), gone }, ...(title ? { title } : {}), ...(mascotBody ? { mascotBody } : {}), ...(mascotFaceColor ? { mascotFaceColor } : {}),
+        ...(worn?.length ? { mascotAccessories: worn } : {}) } as unknown as BotRecord);
     }
     store.standIns.clear();
     for (const [id, record] of next) if (isLinkedId(id)) store.standIns.set(id, record);
