@@ -441,13 +441,16 @@ function importIntoSavedState(target: BrowserSitesTarget, cookies: readonly Impo
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     existing.push(join(directory, `${stateBases(target.session)[0]}.json.enc`));
   }
+  let written = 0;
   for (const path of existing) {
     let state: SavedState = EMPTY_STATE;
     if (existsSync(path)) {
-      try { state = readState(path, target.encryptionKey); } catch { state = EMPTY_STATE; }
+      try { state = readState(path, target.encryptionKey); } catch { continue; }
     }
     writeState(path, mergeIntoSavedState(state, cookies), target.encryptionKey);
+    written += 1;
   }
+  if (written === 0) throw new Error("Seira could not open this browser's saved logins. Open the browser, then try again.");
   const after = savedState(directory, target.session, target.encryptionKey);
   return { running: false, sites: signedInSites(after.cookies, after.origins) };
 }
