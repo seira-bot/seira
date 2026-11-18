@@ -124,6 +124,7 @@ const { createDisplayMediaGuard, invokeDisplayMediaCallback, selectCaptureSource
   "./screen-preview.cjs",
 );
 const { STAGE_PREFIX: APPIMAGE_CUA_STAGE_PREFIX } = require("./cua-linux-bundle.cjs");
+const { relaunchAfterExit } = require("./relaunch-after-exit.cjs");
 const { desktopViewerUrl, sameDesktopViewerOrigin } = require("./desktop-viewer.cjs");
 const { createDesktopWorkspaceManager } = require("./desktop-workspace.cjs");
 const { createTrustedApprovalModeCoordinator } = require("./approval-trusted-mode.cjs");
@@ -2407,7 +2408,7 @@ function relaunchAfterDesktopRemoteChange() {
   desktopShutdownStarted = true;
   const timer = setTimeout(() => {
     // Electron's default relaunch reuses the native argv, which still holds the consumed one-shot action.
-    app.relaunch({ args: process.argv.slice(1) });
+    relaunchAfterExit(app, process.argv.slice(1), { onError: error => slog(`[desktop] restart failed: ${error.stack || error}`) });
     app.quit();
   }, 250);
   timer.unref?.();
