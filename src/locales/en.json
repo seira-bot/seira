@@ -8706,6 +8706,7 @@
   "routines.drawer.cancelRun": "Cancel run",
   "routines.paused.title": "Paused routines",
   "routines.paused.help": "History is kept; no new tasks will run.",
+  "mascot.body.seira": "Seira",
   "mascot.body.cursor": "Cursor",
   "mascot.body.blob": "Blob",
   "mascot.body.circle": "Circle",
