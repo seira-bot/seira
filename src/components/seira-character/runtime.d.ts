@@ -11,7 +11,7 @@ declare module "*/mascot/runtime/bot.js" {
 
   export interface SeiraBot {
     readonly canvas: HTMLCanvasElement;
-    setConfig(partial: { hairColor?: string | null; name?: string }): Promise<void>;
+    setConfig(partial: { hairColor?: string | null; name?: string; style?: string; accessories?: readonly string[] }): Promise<void>;
     express(id: string, options?: { ms?: number }): void;
     play(id: string): Promise<void>;
     setState(id: string): void;
@@ -21,7 +21,7 @@ declare module "*/mascot/runtime/bot.js" {
 
   export function createBot(
     el: HTMLElement,
-    config?: { name?: string; hairColor?: string | null },
+    config?: { name?: string; hairColor?: string | null; style?: string; accessories?: readonly string[] },
     options?: SeiraBotOptions,
   ): Promise<SeiraBot>;
 }

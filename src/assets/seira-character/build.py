@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Build the web assets of the SeiraCharacter component from the character kit.
 
-Reads brand/mascot/art (bases and stickers), keeps only the frames and the
-sprites that the component states use, scales them down, writes WebP files and
+Reads brand/mascot/art (bases and stickers), keeps the frames of every hair style, the
+hands and the effects that the component states use, scales them down, writes WebP files and
 kit.json next to this script.
 
     python3 src/assets/seira-character/build.py
@@ -16,12 +16,13 @@ from PIL import Image
 HERE = Path(__file__).resolve().parent
 ART = HERE.parents[2] / "brand" / "mascot" / "art"
 
-STYLE = "seira"
+SEIRA = "seira"
 VIEWS = ["front", "yaw20", "yaw45", "up", "down"]
 HANDS = ["open", "wave", "chin", "fist"]
 FX = ["star", "zzz", "exclaim"]
 
 FRAME_SCALE = 0.75
+HAIR_STYLE_SCALE = 0.5
 HAND_SCALE = 0.5
 FRAME_QUALITY = 80
 STICKER_QUALITY = 82
@@ -52,25 +53,31 @@ def main() -> None:
 
     bases = json.loads((ART / "bases" / "manifest.json").read_text())
     stickers = json.loads((ART / "stickers" / "manifest.json").read_text())
-    style = bases["styles"][STYLE]
-    kit = {"views": {}, "hands": {}, "fx": {}}
+    kit = {"styles": {}, "hands": {}, "fx": {}}
+    sizes = {}
 
-    for name in VIEWS:
-        view = style["views"][name]
-        entry = {
-            "file": f"frames/{name}.webp",
-            "pivot": scaled(view["pivot"], FRAME_SCALE),
-            "r": view["r"] * FRAME_SCALE,
-            "visorBox": [round(n * FRAME_SCALE, 2) for n in view["visorBox"]],
-            "measuredYaw": view.get("measuredYaw", 0),
-            "anchors": {key: scaled(p, FRAME_SCALE) for key, p in view.get("anchors", {}).items()},
-        }
-        save_color(ART / "bases" / view["file"], HERE / entry["file"], FRAME_SCALE, FRAME_QUALITY)
-        entry["hair"] = f"frames/{name}.hair.webp"
-        save_mask(ART / "bases" / view["hair"], HERE / entry["hair"], FRAME_SCALE)
-        entry["visor"] = f"frames/{name}.visor.webp"
-        save_mask(ART / "bases" / view["visor"], HERE / entry["visor"], FRAME_SCALE)
-        kit["views"][name] = entry
+    for style_id, style in bases["styles"].items():
+        scale = FRAME_SCALE if style_id == SEIRA else HAIR_STYLE_SCALE
+        views = {}
+        for name in VIEWS:
+            view = style["views"][name]
+            entry = {
+                "file": f"frames/{style_id}/{name}.webp",
+                "pivot": scaled(view["pivot"], scale),
+                "r": view["r"] * scale,
+                "visorBox": [round(n * scale, 2) for n in view["visorBox"]],
+                "measuredYaw": view.get("measuredYaw", 0),
+                "anchors": {key: scaled(p, scale) for key, p in view.get("anchors", {}).items()},
+            }
+            save_color(ART / "bases" / view["file"], HERE / entry["file"], scale, FRAME_QUALITY)
+            if "hair" in view:
+                entry["hair"] = f"frames/{style_id}/{name}.hair.webp"
+                save_mask(ART / "bases" / view["hair"], HERE / entry["hair"], scale)
+            entry["visor"] = f"frames/{style_id}/{name}.visor.webp"
+            save_mask(ART / "bases" / view["visor"], HERE / entry["visor"], scale)
+            views[name] = entry
+        kit["styles"][style_id] = {"label": style["label"], "recolor": style["recolor"], "views": views}
+        sizes[style_id] = sum(p.stat().st_size for p in (HERE / "frames" / style_id).glob("*.webp"))
 
     for name in HANDS:
         hand = stickers["hands"][name]
@@ -89,6 +96,8 @@ def main() -> None:
 
     (HERE / "kit.json").write_text(json.dumps(kit, indent=2) + "\n")
     total = sum(p.stat().st_size for p in HERE.rglob("*") if p.suffix in (".webp", ".json"))
+    for style_id, size in sizes.items():
+        print(f"{style_id}: {size / 1024:.0f} KB")
     print(f"{total / 1024:.0f} KB in total")
 
 

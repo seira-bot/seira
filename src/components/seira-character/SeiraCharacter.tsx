@@ -10,13 +10,21 @@ export interface SeiraCharacterProps {
   state?: SeiraState;
   /** Width and height in px. The character fills the square. */
   size?: number;
-  /** A bot color for the hair. Without it, Seira keeps her own silver hair. */
+  /** A hair style id of the character kit. Without it, Seira keeps her own hair. */
+  hairStyle?: string;
+  /** A bot color for the hair. Without it, Seira keeps her own silver hair, and the other styles take silver. */
   hairColor?: MausColor;
+  /** Accessory ids, at most one for each slot. */
+  accessories?: readonly string[];
   /** Screen reader text. Without it, the character is decorative and hidden from screen readers. */
   label?: string;
   className?: string;
 }
 
+const SEIRA_STYLE = "seira";
+/** The runtime paints a recolored style dark when it gets no color. This silver is the median of Seira's own hair. */
+const SEIRA_SILVER = "#DADADF";
+const NO_ACCESSORIES: readonly string[] = [];
 const FRAME_MS = 1000 / 30;
 const MAX_STEP_MS = 100;
 const STILL_STEP_MS = 16;
@@ -36,13 +44,19 @@ function useReducedMotion(): boolean {
   return media || root;
 }
 
-export function SeiraCharacter({ state = "idle", size = 160, hairColor, label, className }: SeiraCharacterProps) {
+function hairPaint(hairStyle: string, hairColor: MausColor | undefined): string | null {
+  if (hairColor) return MAUS_COLORS[hairColor];
+  return hairStyle === SEIRA_STYLE ? null : SEIRA_SILVER;
+}
+
+export function SeiraCharacter({ state = "idle", size = 160, hairStyle = SEIRA_STYLE, hairColor, accessories = NO_ACCESSORIES, label, className }: SeiraCharacterProps) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const bot = useRef<SeiraBot | null>(null);
   const [ready, setReady] = useState(false);
   const reduced = useReducedMotion();
-  const latest = useRef({ label, hairColor: hairColor ? MAUS_COLORS[hairColor] : null });
-  latest.current = { label, hairColor: hairColor ? MAUS_COLORS[hairColor] : null };
+  const accessoryKey = accessories.join(",");
+  const latest = useRef({ label, hairStyle, accessories, hairColor: hairPaint(hairStyle, hairColor) });
+  latest.current = { label, hairStyle, accessories, hairColor: hairPaint(hairStyle, hairColor) };
 
   useEffect(() => {
     const element = canvas.current;
@@ -53,8 +67,8 @@ export function SeiraCharacter({ state = "idle", size = 160, hairColor, label, c
 
     void import("./kit").then(({ loadSeiraKit }) => loadSeiraKit()).then(async (kit) => {
       if (cancelled) return;
-      const { label: name, hairColor: hair } = latest.current;
-      const next = await kit.createBot(element, { name: name ?? "", hairColor: hair }, {
+      const { label: name, hairColor: hair, hairStyle: style, accessories: worn } = latest.current;
+      const next = await kit.createBot(element, { name: name ?? "", hairColor: hair, style, accessories: worn }, {
         bases: kit.bases,
         stickers: kit.stickers,
         manual: true,
@@ -106,10 +120,11 @@ export function SeiraCharacter({ state = "idle", size = 160, hairColor, label, c
   useEffect(() => {
     const current = bot.current;
     if (!ready || !current) return;
-    void current.setConfig({ hairColor: latest.current.hairColor }).then(() => {
+    const { hairColor: hair, hairStyle: style, accessories: worn } = latest.current;
+    void current.setConfig({ hairColor: hair, style, accessories: worn }).then(() => {
       if (reduced) current.tick(0);
     });
-  }, [hairColor, ready, reduced]);
+  }, [hairColor, hairStyle, accessoryKey, ready, reduced]);
 
   useEffect(() => {
     if (ready && reduced) bot.current?.tick(0);

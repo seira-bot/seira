@@ -1,259 +1,4468 @@
 {
-  "views": {
-    "front": {
-      "file": "frames/front.webp",
-      "pivot": [
-        384.0,
-        339.0
-      ],
-      "r": 225.0,
-      "visorBox": [
-        207.75,
-        258.75,
-        356.25,
-        237.75
-      ],
-      "measuredYaw": 0,
-      "anchors": {
-        "top": [
-          384.0,
-          99.75
-        ],
-        "earL": [
-          159.0,
-          350.25
-        ],
-        "earR": [
-          609.0,
-          350.25
-        ],
-        "templeL": [
-          170.25,
-          294.0
-        ],
-        "templeR": [
-          597.75,
-          294.0
-        ],
-        "mouth": [
-          384.0,
-          433.5
-        ],
-        "cheekL": [
-          244.5,
-          406.5
-        ],
-        "cheekR": [
-          523.5,
-          406.5
-        ],
-        "neck": [
-          384.0,
-          582.0
-        ]
-      },
-      "hair": "frames/front.hair.webp",
-      "visor": "frames/front.visor.webp"
+  "styles": {
+    "seira": {
+      "label": "Seira",
+      "recolor": false,
+      "views": {
+        "front": {
+          "file": "frames/seira/front.webp",
+          "pivot": [
+            384.0,
+            339.0
+          ],
+          "r": 225.0,
+          "visorBox": [
+            207.75,
+            258.75,
+            356.25,
+            237.75
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              384.0,
+              99.75
+            ],
+            "earL": [
+              159.0,
+              350.25
+            ],
+            "earR": [
+              609.0,
+              350.25
+            ],
+            "templeL": [
+              170.25,
+              294.0
+            ],
+            "templeR": [
+              597.75,
+              294.0
+            ],
+            "mouth": [
+              384.0,
+              433.5
+            ],
+            "cheekL": [
+              244.5,
+              406.5
+            ],
+            "cheekR": [
+              523.5,
+              406.5
+            ],
+            "neck": [
+              384.0,
+              582.0
+            ]
+          },
+          "hair": "frames/seira/front.hair.webp",
+          "visor": "frames/seira/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/seira/yaw20.webp",
+          "pivot": [
+            384.0,
+            339.0
+          ],
+          "r": 225.0,
+          "visorBox": [
+            255.75,
+            268.5,
+            325.5,
+            229.5
+          ],
+          "measuredYaw": 24,
+          "anchors": {
+            "top": [
+              384.0,
+              95.25
+            ],
+            "earL": [
+              179.25,
+              350.25
+            ],
+            "templeL": [
+              217.5,
+              294.0
+            ],
+            "mouth": [
+              475.5,
+              433.5
+            ],
+            "cheekL": [
+              331.5,
+              406.5
+            ],
+            "cheekR": [
+              585.75,
+              406.5
+            ],
+            "neck": [
+              384.0,
+              582.0
+            ]
+          },
+          "hair": "frames/seira/yaw20.hair.webp",
+          "visor": "frames/seira/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/seira/yaw45.webp",
+          "pivot": [
+            384.0,
+            339.0
+          ],
+          "r": 225.0,
+          "visorBox": [
+            314.25,
+            280.5,
+            256.5,
+            215.25
+          ],
+          "measuredYaw": 44,
+          "anchors": {
+            "top": [
+              384.0,
+              98.25
+            ],
+            "earL": [
+              223.5,
+              350.25
+            ],
+            "templeL": [
+              279.0,
+              294.0
+            ],
+            "mouth": [
+              538.5,
+              433.5
+            ],
+            "cheekL": [
+              411.0,
+              406.5
+            ],
+            "cheekR": [
+              609.75,
+              406.5
+            ],
+            "neck": [
+              384.0,
+              582.0
+            ]
+          },
+          "hair": "frames/seira/yaw45.hair.webp",
+          "visor": "frames/seira/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/seira/up.webp",
+          "pivot": [
+            384.0,
+            339.0
+          ],
+          "r": 225.0,
+          "visorBox": [
+            203.25,
+            171.75,
+            363.0,
+            162.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              384.0,
+              81.75
+            ],
+            "earL": [
+              159.0,
+              348.0
+            ],
+            "earR": [
+              609.0,
+              348.0
+            ],
+            "templeL": [
+              170.25,
+              261.75
+            ],
+            "templeR": [
+              597.75,
+              261.75
+            ],
+            "mouth": [
+              384.0,
+              276.75
+            ],
+            "cheekL": [
+              244.5,
+              280.5
+            ],
+            "cheekR": [
+              523.5,
+              280.5
+            ],
+            "neck": [
+              384.0,
+              530.25
+            ]
+          },
+          "hair": "frames/seira/up.hair.webp",
+          "visor": "frames/seira/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/seira/down.webp",
+          "pivot": [
+            384.0,
+            339.0
+          ],
+          "r": 225.0,
+          "visorBox": [
+            219.0,
+            345.0,
+            332.25,
+            186.75
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              384.0,
+              49.5
+            ],
+            "earL": [
+              159.0,
+              349.5
+            ],
+            "earR": [
+              609.0,
+              349.5
+            ],
+            "templeL": [
+              170.25,
+              313.5
+            ],
+            "templeR": [
+              597.75,
+              313.5
+            ],
+            "mouth": [
+              384.0,
+              488.25
+            ],
+            "cheekL": [
+              244.5,
+              451.5
+            ],
+            "cheekR": [
+              523.5,
+              451.5
+            ]
+          },
+          "hair": "frames/seira/down.hair.webp",
+          "visor": "frames/seira/down.visor.webp"
+        }
+      }
     },
-    "yaw20": {
-      "file": "frames/yaw20.webp",
-      "pivot": [
-        384.0,
-        339.0
-      ],
-      "r": 225.0,
-      "visorBox": [
-        255.75,
-        268.5,
-        325.5,
-        229.5
-      ],
-      "measuredYaw": 24,
-      "anchors": {
-        "top": [
-          384.0,
-          95.25
-        ],
-        "earL": [
-          179.25,
-          350.25
-        ],
-        "templeL": [
-          217.5,
-          294.0
-        ],
-        "mouth": [
-          475.5,
-          433.5
-        ],
-        "cheekL": [
-          331.5,
-          406.5
-        ],
-        "cheekR": [
-          585.75,
-          406.5
-        ],
-        "neck": [
-          384.0,
-          582.0
-        ]
-      },
-      "hair": "frames/yaw20.hair.webp",
-      "visor": "frames/yaw20.visor.webp"
+    "seira-long": {
+      "label": "Seira long",
+      "recolor": true,
+      "views": {
+        "front": {
+          "file": "frames/seira-long/front.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            138.0,
+            171.5,
+            238.0,
+            159.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              67.0
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              196.0
+            ],
+            "templeR": [
+              398.5,
+              196.0
+            ],
+            "mouth": [
+              256.0,
+              289.0
+            ],
+            "cheekL": [
+              163.0,
+              271.0
+            ],
+            "cheekR": [
+              349.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/seira-long/front.hair.webp",
+          "visor": "frames/seira-long/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/seira-long/yaw20.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            171.0,
+            168.0,
+            216.0,
+            164.5
+          ],
+          "measuredYaw": 25,
+          "anchors": {
+            "top": [
+              256.0,
+              64.5
+            ],
+            "earL": [
+              120.0,
+              233.5
+            ],
+            "templeL": [
+              146.0,
+              196.0
+            ],
+            "mouth": [
+              318.0,
+              289.0
+            ],
+            "cheekL": [
+              222.5,
+              271.0
+            ],
+            "cheekR": [
+              391.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/seira-long/yaw20.hair.webp",
+          "visor": "frames/seira-long/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/seira-long/yaw45.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            210.0,
+            188.0,
+            170.5,
+            142.5
+          ],
+          "measuredYaw": 44,
+          "anchors": {
+            "top": [
+              256.0,
+              66.0
+            ],
+            "earL": [
+              149.0,
+              233.5
+            ],
+            "templeL": [
+              186.0,
+              196.0
+            ],
+            "mouth": [
+              359.0,
+              289.0
+            ],
+            "cheekL": [
+              274.0,
+              271.0
+            ],
+            "cheekR": [
+              406.5,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/seira-long/yaw45.hair.webp",
+          "visor": "frames/seira-long/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/seira-long/up.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            135.5,
+            114.0,
+            243.0,
+            109.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              54.0
+            ],
+            "earL": [
+              106.0,
+              232.0
+            ],
+            "earR": [
+              406.0,
+              232.0
+            ],
+            "templeL": [
+              113.5,
+              174.5
+            ],
+            "templeR": [
+              398.5,
+              174.5
+            ],
+            "mouth": [
+              256.0,
+              184.5
+            ],
+            "cheekL": [
+              163.0,
+              187.0
+            ],
+            "cheekR": [
+              349.0,
+              187.0
+            ],
+            "neck": [
+              256.0,
+              353.5
+            ]
+          },
+          "hair": "frames/seira-long/up.hair.webp",
+          "visor": "frames/seira-long/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/seira-long/down.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            146.0,
+            230.0,
+            221.5,
+            125.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              32.5
+            ],
+            "earL": [
+              106.0,
+              233.0
+            ],
+            "earR": [
+              406.0,
+              233.0
+            ],
+            "templeL": [
+              113.5,
+              209.0
+            ],
+            "templeR": [
+              398.5,
+              209.0
+            ],
+            "mouth": [
+              256.0,
+              325.5
+            ],
+            "cheekL": [
+              163.0,
+              301.0
+            ],
+            "cheekR": [
+              349.0,
+              301.0
+            ]
+          },
+          "hair": "frames/seira-long/down.hair.webp",
+          "visor": "frames/seira-long/down.visor.webp"
+        }
+      }
     },
-    "yaw45": {
-      "file": "frames/yaw45.webp",
-      "pivot": [
-        384.0,
-        339.0
-      ],
-      "r": 225.0,
-      "visorBox": [
-        314.25,
-        280.5,
-        256.5,
-        215.25
-      ],
-      "measuredYaw": 44,
-      "anchors": {
-        "top": [
-          384.0,
-          98.25
-        ],
-        "earL": [
-          223.5,
-          350.25
-        ],
-        "templeL": [
-          279.0,
-          294.0
-        ],
-        "mouth": [
-          538.5,
-          433.5
-        ],
-        "cheekL": [
-          411.0,
-          406.5
-        ],
-        "cheekR": [
-          609.75,
-          406.5
-        ],
-        "neck": [
-          384.0,
-          582.0
-        ]
-      },
-      "hair": "frames/yaw45.hair.webp",
-      "visor": "frames/yaw45.visor.webp"
+    "bob": {
+      "label": "Bob",
+      "recolor": true,
+      "views": {
+        "front": {
+          "file": "frames/bob/front.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            138.0,
+            175.0,
+            238.0,
+            155.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              67.0
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              196.0
+            ],
+            "templeR": [
+              398.5,
+              196.0
+            ],
+            "mouth": [
+              256.0,
+              289.0
+            ],
+            "cheekL": [
+              163.0,
+              271.0
+            ],
+            "cheekR": [
+              349.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/bob/front.hair.webp",
+          "visor": "frames/bob/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/bob/yaw20.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            170.5,
+            185.5,
+            216.0,
+            147.0
+          ],
+          "measuredYaw": 25,
+          "anchors": {
+            "top": [
+              256.0,
+              64.5
+            ],
+            "earL": [
+              120.0,
+              233.5
+            ],
+            "templeL": [
+              146.0,
+              196.0
+            ],
+            "mouth": [
+              318.0,
+              289.0
+            ],
+            "cheekL": [
+              222.5,
+              271.0
+            ],
+            "cheekR": [
+              391.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/bob/yaw20.hair.webp",
+          "visor": "frames/bob/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/bob/yaw45.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            209.5,
+            188.0,
+            170.5,
+            143.0
+          ],
+          "measuredYaw": 44,
+          "anchors": {
+            "top": [
+              256.0,
+              67.0
+            ],
+            "earL": [
+              149.0,
+              233.5
+            ],
+            "templeL": [
+              186.0,
+              196.0
+            ],
+            "mouth": [
+              359.0,
+              289.0
+            ],
+            "cheekL": [
+              274.0,
+              271.0
+            ],
+            "cheekR": [
+              406.5,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/bob/yaw45.hair.webp",
+          "visor": "frames/bob/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/bob/up.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            137.5,
+            146.0,
+            241.0,
+            145.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              80.5
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              186.5
+            ],
+            "templeR": [
+              398.5,
+              186.5
+            ],
+            "mouth": [
+              256.0,
+              253.5
+            ],
+            "cheekL": [
+              163.0,
+              242.0
+            ],
+            "cheekR": [
+              349.0,
+              242.0
+            ],
+            "neck": [
+              256.0,
+              383.5
+            ]
+          },
+          "hair": "frames/bob/up.hair.webp",
+          "visor": "frames/bob/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/bob/down.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            143.0,
+            201.5,
+            228.5,
+            151.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              53.0
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              202.5
+            ],
+            "templeR": [
+              398.5,
+              202.5
+            ],
+            "mouth": [
+              256.0,
+              308.5
+            ],
+            "cheekL": [
+              163.0,
+              287.0
+            ],
+            "cheekR": [
+              349.0,
+              287.0
+            ]
+          },
+          "hair": "frames/bob/down.hair.webp",
+          "visor": "frames/bob/down.visor.webp"
+        }
+      }
     },
-    "up": {
-      "file": "frames/up.webp",
-      "pivot": [
-        384.0,
-        339.0
-      ],
-      "r": 225.0,
-      "visorBox": [
-        203.25,
-        171.75,
-        363.0,
-        162.0
-      ],
-      "measuredYaw": 0,
-      "anchors": {
-        "top": [
-          384.0,
-          81.75
-        ],
-        "earL": [
-          159.0,
-          348.0
-        ],
-        "earR": [
-          609.0,
-          348.0
-        ],
-        "templeL": [
-          170.25,
-          261.75
-        ],
-        "templeR": [
-          597.75,
-          261.75
-        ],
-        "mouth": [
-          384.0,
-          276.75
-        ],
-        "cheekL": [
-          244.5,
-          280.5
-        ],
-        "cheekR": [
-          523.5,
-          280.5
-        ],
-        "neck": [
-          384.0,
-          530.25
-        ]
-      },
-      "hair": "frames/up.hair.webp",
-      "visor": "frames/up.visor.webp"
+    "twin-tails": {
+      "label": "Twin tails",
+      "recolor": true,
+      "views": {
+        "front": {
+          "file": "frames/twin-tails/front.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            138.5,
+            176.5,
+            237.5,
+            154.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              66.5
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              196.0
+            ],
+            "templeR": [
+              398.5,
+              196.0
+            ],
+            "mouth": [
+              256.0,
+              289.0
+            ],
+            "cheekL": [
+              163.0,
+              271.0
+            ],
+            "cheekR": [
+              349.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/twin-tails/front.hair.webp",
+          "visor": "frames/twin-tails/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/twin-tails/yaw20.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            169.5,
+            185.0,
+            217.0,
+            147.5
+          ],
+          "measuredYaw": 24,
+          "anchors": {
+            "top": [
+              256.0,
+              64.5
+            ],
+            "earL": [
+              119.5,
+              233.5
+            ],
+            "templeL": [
+              145.0,
+              196.0
+            ],
+            "mouth": [
+              317.0,
+              289.0
+            ],
+            "cheekL": [
+              221.0,
+              271.0
+            ],
+            "cheekR": [
+              390.5,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/twin-tails/yaw20.hair.webp",
+          "visor": "frames/twin-tails/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/twin-tails/yaw45.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            246.0,
+            185.5,
+            175.0,
+            142.5
+          ],
+          "measuredYaw": 43,
+          "anchors": {
+            "top": [
+              256.0,
+              62.5
+            ],
+            "earL": [
+              146.5,
+              233.5
+            ],
+            "templeL": [
+              182.5,
+              196.0
+            ],
+            "mouth": [
+              356.5,
+              289.0
+            ],
+            "cheekL": [
+              270.0,
+              271.0
+            ],
+            "cheekR": [
+              406.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/twin-tails/yaw45.hair.webp",
+          "visor": "frames/twin-tails/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/twin-tails/up.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            139.5,
+            140.0,
+            237.5,
+            137.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              69.5
+            ],
+            "earL": [
+              106.0,
+              233.0
+            ],
+            "earR": [
+              406.0,
+              233.0
+            ],
+            "templeL": [
+              113.5,
+              183.0
+            ],
+            "templeR": [
+              398.5,
+              183.0
+            ],
+            "mouth": [
+              256.0,
+              238.0
+            ],
+            "cheekL": [
+              163.0,
+              230.0
+            ],
+            "cheekR": [
+              349.0,
+              230.0
+            ],
+            "neck": [
+              256.0,
+              379.5
+            ]
+          },
+          "hair": "frames/twin-tails/up.hair.webp",
+          "visor": "frames/twin-tails/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/twin-tails/down.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            145.5,
+            234.0,
+            223.0,
+            122.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              54.5
+            ],
+            "earL": [
+              106.0,
+              233.0
+            ],
+            "earR": [
+              406.0,
+              233.0
+            ],
+            "templeL": [
+              113.5,
+              209.0
+            ],
+            "templeR": [
+              398.5,
+              209.0
+            ],
+            "mouth": [
+              256.0,
+              325.5
+            ],
+            "cheekL": [
+              163.0,
+              301.0
+            ],
+            "cheekR": [
+              349.0,
+              301.0
+            ]
+          },
+          "hair": "frames/twin-tails/down.hair.webp",
+          "visor": "frames/twin-tails/down.visor.webp"
+        }
+      }
     },
-    "down": {
-      "file": "frames/down.webp",
-      "pivot": [
-        384.0,
-        339.0
-      ],
-      "r": 225.0,
-      "visorBox": [
-        219.0,
-        345.0,
-        332.25,
-        186.75
-      ],
-      "measuredYaw": 0,
-      "anchors": {
-        "top": [
-          384.0,
-          49.5
-        ],
-        "earL": [
-          159.0,
-          349.5
-        ],
-        "earR": [
-          609.0,
-          349.5
-        ],
-        "templeL": [
-          170.25,
-          313.5
-        ],
-        "templeR": [
-          597.75,
-          313.5
-        ],
-        "mouth": [
-          384.0,
-          488.25
-        ],
-        "cheekL": [
-          244.5,
-          451.5
-        ],
-        "cheekR": [
-          523.5,
-          451.5
-        ]
-      },
-      "hair": "frames/down.hair.webp",
-      "visor": "frames/down.visor.webp"
+    "ponytail": {
+      "label": "Ponytail",
+      "recolor": true,
+      "views": {
+        "front": {
+          "file": "frames/ponytail/front.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            138.5,
+            194.0,
+            238.0,
+            137.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              59.5
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              196.0
+            ],
+            "templeR": [
+              398.5,
+              196.0
+            ],
+            "mouth": [
+              256.0,
+              289.0
+            ],
+            "cheekL": [
+              163.0,
+              271.0
+            ],
+            "cheekR": [
+              349.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/ponytail/front.hair.webp",
+          "visor": "frames/ponytail/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/ponytail/yaw20.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            155.0,
+            193.0,
+            228.0,
+            140.0
+          ],
+          "measuredYaw": 16,
+          "anchors": {
+            "top": [
+              256.0,
+              69.0
+            ],
+            "earL": [
+              112.0,
+              233.5
+            ],
+            "templeL": [
+              132.0,
+              196.0
+            ],
+            "templeR": [
+              405.5,
+              196.0
+            ],
+            "mouth": [
+              298.0,
+              289.0
+            ],
+            "cheekL": [
+              201.0,
+              271.0
+            ],
+            "cheekR": [
+              379.5,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/ponytail/yaw20.hair.webp",
+          "visor": "frames/ponytail/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/ponytail/yaw45.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            181.5,
+            186.5,
+            197.0,
+            144.0
+          ],
+          "measuredYaw": 34,
+          "anchors": {
+            "top": [
+              256.0,
+              80.0
+            ],
+            "earL": [
+              132.5,
+              233.5
+            ],
+            "templeL": [
+              164.0,
+              196.0
+            ],
+            "mouth": [
+              339.5,
+              289.0
+            ],
+            "cheekL": [
+              247.5,
+              271.0
+            ],
+            "cheekR": [
+              400.5,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/ponytail/yaw45.hair.webp",
+          "visor": "frames/ponytail/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/ponytail/up.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            143.5,
+            162.0,
+            238.5,
+            132.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              71.5
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              186.0
+            ],
+            "templeR": [
+              398.5,
+              186.0
+            ],
+            "mouth": [
+              256.0,
+              252.0
+            ],
+            "cheekL": [
+              163.0,
+              241.0
+            ],
+            "cheekR": [
+              349.0,
+              241.0
+            ],
+            "neck": [
+              256.0,
+              383.5
+            ]
+          },
+          "hair": "frames/ponytail/up.hair.webp",
+          "visor": "frames/ponytail/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/ponytail/down.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            162.0,
+            216.5,
+            217.0,
+            143.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              59.5
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              203.5
+            ],
+            "templeR": [
+              398.5,
+              203.5
+            ],
+            "mouth": [
+              256.0,
+              311.5
+            ],
+            "cheekL": [
+              163.0,
+              289.5
+            ],
+            "cheekR": [
+              349.0,
+              289.5
+            ]
+          },
+          "hair": "frames/ponytail/down.hair.webp",
+          "visor": "frames/ponytail/down.visor.webp"
+        }
+      }
+    },
+    "long-straight": {
+      "label": "Long straight",
+      "recolor": true,
+      "views": {
+        "front": {
+          "file": "frames/long-straight/front.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            138.0,
+            177.0,
+            238.0,
+            153.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              68.0
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              196.0
+            ],
+            "templeR": [
+              398.5,
+              196.0
+            ],
+            "mouth": [
+              256.0,
+              289.0
+            ],
+            "cheekL": [
+              163.0,
+              271.0
+            ],
+            "cheekR": [
+              349.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/long-straight/front.hair.webp",
+          "visor": "frames/long-straight/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/long-straight/yaw20.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            174.5,
+            186.5,
+            211.0,
+            146.5
+          ],
+          "measuredYaw": 28,
+          "anchors": {
+            "top": [
+              256.0,
+              65.5
+            ],
+            "earL": [
+              123.0,
+              233.5
+            ],
+            "templeL": [
+              150.5,
+              196.0
+            ],
+            "mouth": [
+              324.0,
+              289.0
+            ],
+            "cheekL": [
+              229.0,
+              271.0
+            ],
+            "cheekR": [
+              394.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/long-straight/yaw20.hair.webp",
+          "visor": "frames/long-straight/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/long-straight/yaw45.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            252.0,
+            185.0,
+            166.0,
+            143.5
+          ],
+          "measuredYaw": 46,
+          "anchors": {
+            "top": [
+              256.0,
+              63.0
+            ],
+            "earL": [
+              152.0,
+              233.5
+            ],
+            "templeL": [
+              189.5,
+              196.0
+            ],
+            "mouth": [
+              361.5,
+              289.0
+            ],
+            "cheekL": [
+              277.5,
+              271.0
+            ],
+            "cheekR": [
+              407.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/long-straight/yaw45.hair.webp",
+          "visor": "frames/long-straight/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/long-straight/up.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            134.0,
+            116.5,
+            245.5,
+            136.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              61.5
+            ],
+            "earL": [
+              106.0,
+              232.5
+            ],
+            "earR": [
+              406.0,
+              232.5
+            ],
+            "templeL": [
+              113.5,
+              178.5
+            ],
+            "templeR": [
+              398.5,
+              178.5
+            ],
+            "mouth": [
+              256.0,
+              213.5
+            ],
+            "cheekL": [
+              163.0,
+              210.0
+            ],
+            "cheekR": [
+              349.0,
+              210.0
+            ],
+            "neck": [
+              256.0,
+              369.5
+            ]
+          },
+          "hair": "frames/long-straight/up.hair.webp",
+          "visor": "frames/long-straight/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/long-straight/down.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            152.0,
+            233.5,
+            211.5,
+            129.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              50.5
+            ],
+            "earL": [
+              106.0,
+              233.0
+            ],
+            "earR": [
+              406.0,
+              233.0
+            ],
+            "templeL": [
+              113.5,
+              213.5
+            ],
+            "templeR": [
+              398.5,
+              213.5
+            ],
+            "mouth": [
+              256.0,
+              335.5
+            ],
+            "cheekL": [
+              163.0,
+              309.5
+            ],
+            "cheekR": [
+              349.0,
+              309.5
+            ]
+          },
+          "hair": "frames/long-straight/down.hair.webp",
+          "visor": "frames/long-straight/down.visor.webp"
+        }
+      }
+    },
+    "bun": {
+      "label": "Bun",
+      "recolor": true,
+      "views": {
+        "front": {
+          "file": "frames/bun/front.webp",
+          "pivot": [
+            256.0,
+            245.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            139.5,
+            185.0,
+            238.0,
+            158.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              15.5
+            ],
+            "earL": [
+              106.0,
+              252.5
+            ],
+            "earR": [
+              406.0,
+              252.5
+            ],
+            "templeL": [
+              113.5,
+              215.0
+            ],
+            "templeR": [
+              398.5,
+              215.0
+            ],
+            "mouth": [
+              256.0,
+              308.0
+            ],
+            "cheekL": [
+              163.0,
+              290.0
+            ],
+            "cheekR": [
+              349.0,
+              290.0
+            ],
+            "neck": [
+              256.0,
+              407.0
+            ]
+          },
+          "hair": "frames/bun/front.hair.webp",
+          "visor": "frames/bun/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/bun/yaw20.webp",
+          "pivot": [
+            256.0,
+            245.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            176.0,
+            190.5,
+            220.0,
+            152.0
+          ],
+          "measuredYaw": 22,
+          "anchors": {
+            "top": [
+              256.0,
+              13.5
+            ],
+            "earL": [
+              117.5,
+              252.5
+            ],
+            "templeL": [
+              141.5,
+              215.0
+            ],
+            "templeR": [
+              405.0,
+              215.0
+            ],
+            "mouth": [
+              312.5,
+              308.0
+            ],
+            "cheekL": [
+              216.0,
+              290.0
+            ],
+            "cheekR": [
+              388.0,
+              290.0
+            ],
+            "neck": [
+              256.0,
+              407.0
+            ]
+          },
+          "hair": "frames/bun/yaw20.hair.webp",
+          "visor": "frames/bun/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/bun/yaw45.webp",
+          "pivot": [
+            256.0,
+            245.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            215.5,
+            198.0,
+            178.5,
+            141.0
+          ],
+          "measuredYaw": 42,
+          "anchors": {
+            "top": [
+              256.0,
+              12.5
+            ],
+            "earL": [
+              143.5,
+              252.5
+            ],
+            "templeL": [
+              179.0,
+              215.0
+            ],
+            "mouth": [
+              353.5,
+              308.0
+            ],
+            "cheekL": [
+              266.0,
+              290.0
+            ],
+            "cheekR": [
+              405.0,
+              290.0
+            ],
+            "neck": [
+              256.0,
+              407.0
+            ]
+          },
+          "hair": "frames/bun/yaw45.hair.webp",
+          "visor": "frames/bun/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/bun/up.webp",
+          "pivot": [
+            256.0,
+            245.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            138.5,
+            166.5,
+            239.0,
+            102.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              30.5
+            ],
+            "earL": [
+              106.0,
+              252.0
+            ],
+            "earR": [
+              406.0,
+              252.0
+            ],
+            "templeL": [
+              113.5,
+              202.5
+            ],
+            "templeR": [
+              398.5,
+              202.5
+            ],
+            "mouth": [
+              256.0,
+              259.0
+            ],
+            "cheekL": [
+              163.0,
+              250.5
+            ],
+            "cheekR": [
+              349.0,
+              250.5
+            ],
+            "neck": [
+              256.0,
+              399.0
+            ]
+          },
+          "hair": "frames/bun/up.hair.webp",
+          "visor": "frames/bun/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/bun/down.webp",
+          "pivot": [
+            256.0,
+            245.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            148.0,
+            254.0,
+            217.5,
+            118.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              21.0
+            ],
+            "earL": [
+              106.0,
+              252.0
+            ],
+            "earR": [
+              406.0,
+              252.0
+            ],
+            "templeL": [
+              113.5,
+              232.5
+            ],
+            "templeR": [
+              398.5,
+              232.5
+            ],
+            "mouth": [
+              256.0,
+              354.5
+            ],
+            "cheekL": [
+              163.0,
+              328.5
+            ],
+            "cheekR": [
+              349.0,
+              328.5
+            ]
+          },
+          "hair": "frames/bun/down.hair.webp",
+          "visor": "frames/bun/down.visor.webp"
+        }
+      }
+    },
+    "long-wavy": {
+      "label": "Long wavy",
+      "recolor": true,
+      "views": {
+        "front": {
+          "file": "frames/long-wavy/front.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            139.0,
+            191.5,
+            238.0,
+            139.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              68.5
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              196.0
+            ],
+            "templeR": [
+              398.5,
+              196.0
+            ],
+            "mouth": [
+              256.0,
+              289.0
+            ],
+            "cheekL": [
+              163.0,
+              271.0
+            ],
+            "cheekR": [
+              349.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/long-wavy/front.hair.webp",
+          "visor": "frames/long-wavy/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/long-wavy/yaw20.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            168.0,
+            189.5,
+            219.5,
+            144.0
+          ],
+          "measuredYaw": 23,
+          "anchors": {
+            "top": [
+              256.0,
+              68.0
+            ],
+            "earL": [
+              118.0,
+              233.5
+            ],
+            "templeL": [
+              142.5,
+              196.0
+            ],
+            "templeR": [
+              405.0,
+              196.0
+            ],
+            "mouth": [
+              313.5,
+              289.0
+            ],
+            "cheekL": [
+              217.5,
+              271.0
+            ],
+            "cheekR": [
+              388.5,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/long-wavy/yaw20.hair.webp",
+          "visor": "frames/long-wavy/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/long-wavy/yaw45.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            198.5,
+            186.5,
+            183.5,
+            144.0
+          ],
+          "measuredYaw": 40,
+          "anchors": {
+            "top": [
+              256.0,
+              69.0
+            ],
+            "earL": [
+              141.0,
+              233.5
+            ],
+            "templeL": [
+              176.0,
+              196.0
+            ],
+            "mouth": [
+              350.5,
+              289.0
+            ],
+            "cheekL": [
+              262.0,
+              271.0
+            ],
+            "cheekR": [
+              404.5,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/long-wavy/yaw45.hair.webp",
+          "visor": "frames/long-wavy/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/long-wavy/up.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            139.0,
+            153.5,
+            240.5,
+            131.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              81.0
+            ],
+            "earL": [
+              106.0,
+              233.0
+            ],
+            "earR": [
+              406.0,
+              233.0
+            ],
+            "templeL": [
+              113.5,
+              185.0
+            ],
+            "templeR": [
+              398.5,
+              185.0
+            ],
+            "mouth": [
+              256.0,
+              247.0
+            ],
+            "cheekL": [
+              163.0,
+              237.0
+            ],
+            "cheekR": [
+              349.0,
+              237.0
+            ],
+            "neck": [
+              256.0,
+              382.0
+            ]
+          },
+          "hair": "frames/long-wavy/up.hair.webp",
+          "visor": "frames/long-wavy/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/long-wavy/down.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            144.5,
+            227.0,
+            227.0,
+            131.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              56.0
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              205.0
+            ],
+            "templeR": [
+              398.5,
+              205.0
+            ],
+            "mouth": [
+              256.0,
+              316.0
+            ],
+            "cheekL": [
+              163.0,
+              293.0
+            ],
+            "cheekR": [
+              349.0,
+              293.0
+            ]
+          },
+          "hair": "frames/long-wavy/down.hair.webp",
+          "visor": "frames/long-wavy/down.visor.webp"
+        }
+      }
+    },
+    "short-neat": {
+      "label": "Short neat",
+      "recolor": true,
+      "views": {
+        "front": {
+          "file": "frames/short-neat/front.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            140.5,
+            184.5,
+            238.0,
+            149.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              76.5
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              196.0
+            ],
+            "templeR": [
+              398.5,
+              196.0
+            ],
+            "mouth": [
+              256.0,
+              289.0
+            ],
+            "cheekL": [
+              163.0,
+              271.0
+            ],
+            "cheekR": [
+              349.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/short-neat/front.hair.webp",
+          "visor": "frames/short-neat/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/short-neat/yaw20.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            167.0,
+            193.0,
+            218.0,
+            140.0
+          ],
+          "measuredYaw": 24,
+          "anchors": {
+            "top": [
+              256.0,
+              73.5
+            ],
+            "earL": [
+              118.5,
+              233.5
+            ],
+            "templeL": [
+              143.5,
+              196.0
+            ],
+            "templeR": [
+              404.5,
+              196.0
+            ],
+            "mouth": [
+              314.5,
+              289.0
+            ],
+            "cheekL": [
+              218.5,
+              271.0
+            ],
+            "cheekR": [
+              389.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/short-neat/yaw20.hair.webp",
+          "visor": "frames/short-neat/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/short-neat/yaw45.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            200.0,
+            186.5,
+            189.0,
+            140.0
+          ],
+          "measuredYaw": 38,
+          "anchors": {
+            "top": [
+              256.0,
+              68.5
+            ],
+            "earL": [
+              137.0,
+              233.5
+            ],
+            "templeL": [
+              170.5,
+              196.0
+            ],
+            "mouth": [
+              345.5,
+              289.0
+            ],
+            "cheekL": [
+              255.5,
+              271.0
+            ],
+            "cheekR": [
+              403.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/short-neat/yaw45.hair.webp",
+          "visor": "frames/short-neat/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/short-neat/up.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            138.5,
+            148.5,
+            238.5,
+            123.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              88.0
+            ],
+            "earL": [
+              106.0,
+              233.0
+            ],
+            "earR": [
+              406.0,
+              233.0
+            ],
+            "templeL": [
+              113.5,
+              183.0
+            ],
+            "templeR": [
+              398.5,
+              183.0
+            ],
+            "mouth": [
+              256.0,
+              238.0
+            ],
+            "cheekL": [
+              163.0,
+              230.0
+            ],
+            "cheekR": [
+              349.0,
+              230.0
+            ],
+            "neck": [
+              256.0,
+              379.5
+            ]
+          },
+          "hair": "frames/short-neat/up.hair.webp",
+          "visor": "frames/short-neat/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/short-neat/down.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            141.0,
+            224.5,
+            231.5,
+            132.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              75.0
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              206.0
+            ],
+            "templeR": [
+              398.5,
+              206.0
+            ],
+            "mouth": [
+              256.0,
+              318.5
+            ],
+            "cheekL": [
+              163.0,
+              295.5
+            ],
+            "cheekR": [
+              349.0,
+              295.5
+            ]
+          },
+          "hair": "frames/short-neat/down.hair.webp",
+          "visor": "frames/short-neat/down.visor.webp"
+        }
+      }
+    },
+    "center-part": {
+      "label": "Center part",
+      "recolor": true,
+      "views": {
+        "front": {
+          "file": "frames/center-part/front.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            138.0,
+            192.0,
+            238.0,
+            136.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              67.5
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              196.0
+            ],
+            "templeR": [
+              398.5,
+              196.0
+            ],
+            "mouth": [
+              256.0,
+              289.0
+            ],
+            "cheekL": [
+              163.0,
+              271.0
+            ],
+            "cheekR": [
+              349.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/center-part/front.hair.webp",
+          "visor": "frames/center-part/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/center-part/yaw20.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            170.5,
+            192.5,
+            216.0,
+            139.0
+          ],
+          "measuredYaw": 25,
+          "anchors": {
+            "top": [
+              256.0,
+              68.0
+            ],
+            "earL": [
+              120.0,
+              233.5
+            ],
+            "templeL": [
+              146.0,
+              196.0
+            ],
+            "mouth": [
+              318.0,
+              289.0
+            ],
+            "cheekL": [
+              222.5,
+              271.0
+            ],
+            "cheekR": [
+              391.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/center-part/yaw20.hair.webp",
+          "visor": "frames/center-part/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/center-part/yaw45.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            233.5,
+            188.5,
+            177.5,
+            141.5
+          ],
+          "measuredYaw": 42,
+          "anchors": {
+            "top": [
+              256.0,
+              66.5
+            ],
+            "earL": [
+              144.5,
+              233.5
+            ],
+            "templeL": [
+              180.0,
+              196.0
+            ],
+            "mouth": [
+              354.5,
+              289.0
+            ],
+            "cheekL": [
+              267.0,
+              271.0
+            ],
+            "cheekR": [
+              405.5,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/center-part/yaw45.hair.webp",
+          "visor": "frames/center-part/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/center-part/up.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            142.0,
+            138.0,
+            239.0,
+            126.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              71.5
+            ],
+            "earL": [
+              106.0,
+              233.0
+            ],
+            "earR": [
+              406.0,
+              233.0
+            ],
+            "templeL": [
+              113.5,
+              182.5
+            ],
+            "templeR": [
+              398.5,
+              182.5
+            ],
+            "mouth": [
+              256.0,
+              234.5
+            ],
+            "cheekL": [
+              163.0,
+              226.5
+            ],
+            "cheekR": [
+              349.0,
+              226.5
+            ],
+            "neck": [
+              256.0,
+              378.0
+            ]
+          },
+          "hair": "frames/center-part/up.hair.webp",
+          "visor": "frames/center-part/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/center-part/down.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            147.5,
+            220.5,
+            224.0,
+            133.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              52.0
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              206.0
+            ],
+            "templeR": [
+              398.5,
+              206.0
+            ],
+            "mouth": [
+              256.0,
+              318.0
+            ],
+            "cheekL": [
+              163.0,
+              295.0
+            ],
+            "cheekR": [
+              349.0,
+              295.0
+            ]
+          },
+          "hair": "frames/center-part/down.hair.webp",
+          "visor": "frames/center-part/down.visor.webp"
+        }
+      }
+    },
+    "spiky": {
+      "label": "Spiky",
+      "recolor": true,
+      "views": {
+        "front": {
+          "file": "frames/spiky/front.webp",
+          "pivot": [
+            256.0,
+            245.5
+          ],
+          "r": 150.0,
+          "visorBox": [
+            137.5,
+            205.5,
+            238.0,
+            139.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              20.5
+            ],
+            "earL": [
+              106.0,
+              253.0
+            ],
+            "earR": [
+              406.0,
+              253.0
+            ],
+            "templeL": [
+              113.5,
+              215.5
+            ],
+            "templeR": [
+              398.5,
+              215.5
+            ],
+            "mouth": [
+              256.0,
+              308.5
+            ],
+            "cheekL": [
+              163.0,
+              290.5
+            ],
+            "cheekR": [
+              349.0,
+              290.5
+            ],
+            "neck": [
+              256.0,
+              407.5
+            ]
+          },
+          "hair": "frames/spiky/front.hair.webp",
+          "visor": "frames/spiky/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/spiky/yaw20.webp",
+          "pivot": [
+            256.0,
+            245.5
+          ],
+          "r": 150.0,
+          "visorBox": [
+            178.0,
+            198.5,
+            224.5,
+            142.5
+          ],
+          "measuredYaw": 20,
+          "anchors": {
+            "top": [
+              256.0,
+              21.0
+            ],
+            "earL": [
+              115.0,
+              253.0
+            ],
+            "templeL": [
+              137.5,
+              215.5
+            ],
+            "templeR": [
+              405.5,
+              215.5
+            ],
+            "mouth": [
+              306.5,
+              308.5
+            ],
+            "cheekL": [
+              209.5,
+              290.5
+            ],
+            "cheekR": [
+              384.5,
+              290.5
+            ],
+            "neck": [
+              256.0,
+              407.5
+            ]
+          },
+          "hair": "frames/spiky/yaw20.hair.webp",
+          "visor": "frames/spiky/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/spiky/yaw45.webp",
+          "pivot": [
+            256.0,
+            245.5
+          ],
+          "r": 150.0,
+          "visorBox": [
+            234.0,
+            192.5,
+            187.5,
+            150.0
+          ],
+          "measuredYaw": 38,
+          "anchors": {
+            "top": [
+              256.0,
+              22.5
+            ],
+            "earL": [
+              138.5,
+              253.0
+            ],
+            "templeL": [
+              172.5,
+              215.5
+            ],
+            "mouth": [
+              347.5,
+              308.5
+            ],
+            "cheekL": [
+              258.0,
+              290.5
+            ],
+            "cheekR": [
+              403.5,
+              290.5
+            ],
+            "neck": [
+              256.0,
+              407.5
+            ]
+          },
+          "hair": "frames/spiky/yaw45.hair.webp",
+          "visor": "frames/spiky/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/spiky/up.webp",
+          "pivot": [
+            256.0,
+            245.5
+          ],
+          "r": 150.0,
+          "visorBox": [
+            143.0,
+            129.5,
+            253.0,
+            160.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              13.0
+            ],
+            "earL": [
+              106.0,
+              252.0
+            ],
+            "earR": [
+              406.0,
+              252.0
+            ],
+            "templeL": [
+              113.5,
+              197.5
+            ],
+            "templeR": [
+              398.5,
+              197.5
+            ],
+            "mouth": [
+              256.0,
+              230.0
+            ],
+            "cheekL": [
+              163.0,
+              227.5
+            ],
+            "cheekR": [
+              349.0,
+              227.5
+            ],
+            "neck": [
+              256.0,
+              387.5
+            ]
+          },
+          "hair": "frames/spiky/up.hair.webp",
+          "visor": "frames/spiky/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/spiky/down.webp",
+          "pivot": [
+            256.0,
+            245.5
+          ],
+          "r": 150.0,
+          "visorBox": [
+            162.0,
+            234.0,
+            223.5,
+            137.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              12.5
+            ],
+            "earL": [
+              106.0,
+              253.0
+            ],
+            "earR": [
+              406.0,
+              253.0
+            ],
+            "templeL": [
+              113.5,
+              227.5
+            ],
+            "templeR": [
+              398.5,
+              227.5
+            ],
+            "mouth": [
+              256.0,
+              342.5
+            ],
+            "cheekL": [
+              163.0,
+              318.5
+            ],
+            "cheekR": [
+              349.0,
+              318.5
+            ]
+          },
+          "hair": "frames/spiky/down.hair.webp",
+          "visor": "frames/spiky/down.visor.webp"
+        }
+      }
+    },
+    "slick-back": {
+      "label": "Slicked back",
+      "recolor": true,
+      "views": {
+        "front": {
+          "file": "frames/slick-back/front.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            137.5,
+            175.0,
+            238.0,
+            144.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              30.5
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              196.0
+            ],
+            "templeR": [
+              398.5,
+              196.0
+            ],
+            "mouth": [
+              256.0,
+              289.0
+            ],
+            "cheekL": [
+              163.0,
+              271.0
+            ],
+            "cheekR": [
+              349.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/slick-back/front.hair.webp",
+          "visor": "frames/slick-back/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/slick-back/yaw20.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            176.5,
+            172.0,
+            216.5,
+            145.0
+          ],
+          "measuredYaw": 24,
+          "anchors": {
+            "top": [
+              256.0,
+              28.5
+            ],
+            "earL": [
+              119.5,
+              233.5
+            ],
+            "templeL": [
+              145.0,
+              196.0
+            ],
+            "mouth": [
+              317.0,
+              289.0
+            ],
+            "cheekL": [
+              221.0,
+              271.0
+            ],
+            "cheekR": [
+              390.5,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/slick-back/yaw20.hair.webp",
+          "visor": "frames/slick-back/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/slick-back/yaw45.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            227.0,
+            180.0,
+            175.5,
+            146.0
+          ],
+          "measuredYaw": 42,
+          "anchors": {
+            "top": [
+              256.0,
+              32.5
+            ],
+            "earL": [
+              145.5,
+              233.5
+            ],
+            "templeL": [
+              181.5,
+              196.0
+            ],
+            "mouth": [
+              355.5,
+              289.0
+            ],
+            "cheekL": [
+              268.5,
+              271.0
+            ],
+            "cheekR": [
+              405.5,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/slick-back/yaw45.hair.webp",
+          "visor": "frames/slick-back/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/slick-back/up.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            143.5,
+            119.0,
+            234.5,
+            125.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              27.0
+            ],
+            "earL": [
+              106.0,
+              233.0
+            ],
+            "earR": [
+              406.0,
+              233.0
+            ],
+            "templeL": [
+              113.5,
+              181.5
+            ],
+            "templeR": [
+              398.5,
+              181.5
+            ],
+            "mouth": [
+              256.0,
+              229.0
+            ],
+            "cheekL": [
+              163.0,
+              222.5
+            ],
+            "cheekR": [
+              349.0,
+              222.5
+            ],
+            "neck": [
+              256.0,
+              376.0
+            ]
+          },
+          "hair": "frames/slick-back/up.hair.webp",
+          "visor": "frames/slick-back/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/slick-back/down.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            148.0,
+            233.0,
+            224.0,
+            128.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              27.0
+            ],
+            "earL": [
+              106.0,
+              233.0
+            ],
+            "earR": [
+              406.0,
+              233.0
+            ],
+            "templeL": [
+              113.5,
+              215.0
+            ],
+            "templeR": [
+              398.5,
+              215.0
+            ],
+            "mouth": [
+              256.0,
+              340.0
+            ],
+            "cheekL": [
+              163.0,
+              313.0
+            ],
+            "cheekR": [
+              349.0,
+              313.0
+            ]
+          },
+          "hair": "frames/slick-back/down.hair.webp",
+          "visor": "frames/slick-back/down.visor.webp"
+        }
+      }
+    },
+    "long-tied": {
+      "label": "Long tied",
+      "recolor": true,
+      "views": {
+        "front": {
+          "file": "frames/long-tied/front.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            138.0,
+            195.0,
+            238.0,
+            135.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              70.0
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              196.0
+            ],
+            "templeR": [
+              398.5,
+              196.0
+            ],
+            "mouth": [
+              256.0,
+              289.0
+            ],
+            "cheekL": [
+              163.0,
+              271.0
+            ],
+            "cheekR": [
+              349.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/long-tied/front.hair.webp",
+          "visor": "frames/long-tied/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/long-tied/yaw20.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            166.0,
+            194.5,
+            217.5,
+            139.0
+          ],
+          "measuredYaw": 24,
+          "anchors": {
+            "top": [
+              256.0,
+              69.0
+            ],
+            "earL": [
+              119.0,
+              233.5
+            ],
+            "templeL": [
+              144.0,
+              196.0
+            ],
+            "templeR": [
+              404.5,
+              196.0
+            ],
+            "mouth": [
+              316.0,
+              289.0
+            ],
+            "cheekL": [
+              220.0,
+              271.0
+            ],
+            "cheekR": [
+              390.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/long-tied/yaw20.hair.webp",
+          "visor": "frames/long-tied/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/long-tied/yaw45.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            206.0,
+            189.0,
+            175.5,
+            141.5
+          ],
+          "measuredYaw": 42,
+          "anchors": {
+            "top": [
+              256.0,
+              68.0
+            ],
+            "earL": [
+              145.5,
+              233.5
+            ],
+            "templeL": [
+              181.5,
+              196.0
+            ],
+            "mouth": [
+              355.5,
+              289.0
+            ],
+            "cheekL": [
+              268.5,
+              271.0
+            ],
+            "cheekR": [
+              405.5,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/long-tied/yaw45.hair.webp",
+          "visor": "frames/long-tied/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/long-tied/up.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            139.0,
+            151.5,
+            237.0,
+            124.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              84.5
+            ],
+            "earL": [
+              106.0,
+              233.0
+            ],
+            "earR": [
+              406.0,
+              233.0
+            ],
+            "templeL": [
+              113.5,
+              183.5
+            ],
+            "templeR": [
+              398.5,
+              183.5
+            ],
+            "mouth": [
+              256.0,
+              240.0
+            ],
+            "cheekL": [
+              163.0,
+              231.0
+            ],
+            "cheekR": [
+              349.0,
+              231.0
+            ],
+            "neck": [
+              256.0,
+              380.0
+            ]
+          },
+          "hair": "frames/long-tied/up.hair.webp",
+          "visor": "frames/long-tied/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/long-tied/down.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            142.5,
+            243.5,
+            230.0,
+            115.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              70.0
+            ],
+            "earL": [
+              106.0,
+              233.0
+            ],
+            "earR": [
+              406.0,
+              233.0
+            ],
+            "templeL": [
+              113.5,
+              209.5
+            ],
+            "templeR": [
+              398.5,
+              209.5
+            ],
+            "mouth": [
+              256.0,
+              326.5
+            ],
+            "cheekL": [
+              163.0,
+              302.0
+            ],
+            "cheekR": [
+              349.0,
+              302.0
+            ]
+          },
+          "hair": "frames/long-tied/down.hair.webp",
+          "visor": "frames/long-tied/down.visor.webp"
+        }
+      }
+    },
+    "long-loose": {
+      "label": "Long loose",
+      "recolor": true,
+      "views": {
+        "front": {
+          "file": "frames/long-loose/front.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            138.5,
+            132.0,
+            238.0,
+            198.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              66.5
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              196.0
+            ],
+            "templeR": [
+              398.5,
+              196.0
+            ],
+            "mouth": [
+              256.0,
+              289.0
+            ],
+            "cheekL": [
+              163.0,
+              271.0
+            ],
+            "cheekR": [
+              349.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/long-loose/front.hair.webp",
+          "visor": "frames/long-loose/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/long-loose/yaw20.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            169.5,
+            137.5,
+            217.5,
+            195.0
+          ],
+          "measuredYaw": 24,
+          "anchors": {
+            "top": [
+              256.0,
+              63.5
+            ],
+            "earL": [
+              119.0,
+              233.5
+            ],
+            "templeL": [
+              144.0,
+              196.0
+            ],
+            "templeR": [
+              404.5,
+              196.0
+            ],
+            "mouth": [
+              316.0,
+              289.0
+            ],
+            "cheekL": [
+              220.0,
+              271.0
+            ],
+            "cheekR": [
+              390.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/long-loose/yaw20.hair.webp",
+          "visor": "frames/long-loose/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/long-loose/yaw45.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            210.5,
+            141.5,
+            170.0,
+            189.5
+          ],
+          "measuredYaw": 44,
+          "anchors": {
+            "top": [
+              256.0,
+              65.0
+            ],
+            "earL": [
+              149.0,
+              233.5
+            ],
+            "templeL": [
+              186.0,
+              196.0
+            ],
+            "mouth": [
+              359.0,
+              289.0
+            ],
+            "cheekL": [
+              274.0,
+              271.0
+            ],
+            "cheekR": [
+              406.5,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/long-loose/yaw45.hair.webp",
+          "visor": "frames/long-loose/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/long-loose/up.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            143.5,
+            108.0,
+            240.0,
+            180.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              60.0
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              187.5
+            ],
+            "templeR": [
+              398.5,
+              187.5
+            ],
+            "mouth": [
+              256.0,
+              258.5
+            ],
+            "cheekL": [
+              163.0,
+              246.5
+            ],
+            "cheekR": [
+              349.0,
+              246.5
+            ],
+            "neck": [
+              256.0,
+              385.0
+            ]
+          },
+          "hair": "frames/long-loose/up.hair.webp",
+          "visor": "frames/long-loose/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/long-loose/down.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            162.0,
+            147.0,
+            221.5,
+            206.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              35.5
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              203.5
+            ],
+            "templeR": [
+              398.5,
+              203.5
+            ],
+            "mouth": [
+              256.0,
+              311.0
+            ],
+            "cheekL": [
+              163.0,
+              289.0
+            ],
+            "cheekR": [
+              349.0,
+              289.0
+            ]
+          },
+          "hair": "frames/long-loose/down.hair.webp",
+          "visor": "frames/long-loose/down.visor.webp"
+        }
+      }
+    },
+    "buzz": {
+      "label": "Buzz cut",
+      "recolor": true,
+      "views": {
+        "front": {
+          "file": "frames/buzz/front.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            112.5,
+            171.5,
+            289.0,
+            147.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              57.0
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              196.0
+            ],
+            "templeR": [
+              398.5,
+              196.0
+            ],
+            "mouth": [
+              256.0,
+              289.0
+            ],
+            "cheekL": [
+              163.0,
+              271.0
+            ],
+            "cheekR": [
+              349.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/buzz/front.hair.webp",
+          "visor": "frames/buzz/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/buzz/yaw20.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            153.0,
+            166.5,
+            254.0,
+            152.5
+          ],
+          "measuredYaw": 27,
+          "anchors": {
+            "top": [
+              256.0,
+              54.0
+            ],
+            "earL": [
+              122.5,
+              233.5
+            ],
+            "templeL": [
+              149.5,
+              196.0
+            ],
+            "mouth": [
+              322.5,
+              289.0
+            ],
+            "cheekL": [
+              227.5,
+              271.0
+            ],
+            "cheekR": [
+              393.5,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/buzz/yaw20.hair.webp",
+          "visor": "frames/buzz/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/buzz/yaw45.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            201.0,
+            156.5,
+            207.0,
+            157.0
+          ],
+          "measuredYaw": 44,
+          "anchors": {
+            "top": [
+              256.0,
+              48.0
+            ],
+            "earL": [
+              147.0,
+              233.5
+            ],
+            "templeL": [
+              183.5,
+              196.0
+            ],
+            "mouth": [
+              357.0,
+              289.0
+            ],
+            "cheekL": [
+              271.0,
+              271.0
+            ],
+            "cheekR": [
+              406.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "hair": "frames/buzz/yaw45.hair.webp",
+          "visor": "frames/buzz/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/buzz/up.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            116.5,
+            119.0,
+            280.5,
+            143.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              75.5
+            ],
+            "earL": [
+              106.0,
+              233.0
+            ],
+            "earR": [
+              406.0,
+              233.0
+            ],
+            "templeL": [
+              113.5,
+              183.0
+            ],
+            "templeR": [
+              398.5,
+              183.0
+            ],
+            "mouth": [
+              256.0,
+              238.0
+            ],
+            "cheekL": [
+              163.0,
+              229.5
+            ],
+            "cheekR": [
+              349.0,
+              229.5
+            ],
+            "neck": [
+              256.0,
+              379.0
+            ]
+          },
+          "hair": "frames/buzz/up.hair.webp",
+          "visor": "frames/buzz/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/buzz/down.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            121.5,
+            212.5,
+            269.5,
+            146.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              56.5
+            ],
+            "earL": [
+              106.0,
+              233.0
+            ],
+            "earR": [
+              406.0,
+              233.0
+            ],
+            "templeL": [
+              113.5,
+              211.0
+            ],
+            "templeR": [
+              398.5,
+              211.0
+            ],
+            "mouth": [
+              256.0,
+              330.0
+            ],
+            "cheekL": [
+              163.0,
+              305.0
+            ],
+            "cheekR": [
+              349.0,
+              305.0
+            ]
+          },
+          "hair": "frames/buzz/down.hair.webp",
+          "visor": "frames/buzz/down.visor.webp"
+        }
+      }
+    },
+    "messy": {
+      "label": "Messy",
+      "recolor": true,
+      "views": {
+        "front": {
+          "file": "frames/messy/front.webp",
+          "pivot": [
+            256.0,
+            228.5
+          ],
+          "r": 150.0,
+          "visorBox": [
+            140.5,
+            181.0,
+            238.0,
+            150.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              37.0
+            ],
+            "earL": [
+              106.0,
+              236.0
+            ],
+            "earR": [
+              406.0,
+              236.0
+            ],
+            "templeL": [
+              113.5,
+              198.5
+            ],
+            "templeR": [
+              398.5,
+              198.5
+            ],
+            "mouth": [
+              256.0,
+              291.5
+            ],
+            "cheekL": [
+              163.0,
+              273.5
+            ],
+            "cheekR": [
+              349.0,
+              273.5
+            ],
+            "neck": [
+              256.0,
+              390.5
+            ]
+          },
+          "hair": "frames/messy/front.hair.webp",
+          "visor": "frames/messy/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/messy/yaw20.webp",
+          "pivot": [
+            256.0,
+            228.5
+          ],
+          "r": 150.0,
+          "visorBox": [
+            164.0,
+            174.5,
+            231.5,
+            153.5
+          ],
+          "measuredYaw": 14,
+          "anchors": {
+            "top": [
+              256.0,
+              33.0
+            ],
+            "earL": [
+              110.0,
+              236.0
+            ],
+            "templeL": [
+              128.0,
+              198.5
+            ],
+            "templeR": [
+              405.0,
+              198.5
+            ],
+            "mouth": [
+              290.5,
+              291.5
+            ],
+            "cheekL": [
+              193.5,
+              273.5
+            ],
+            "cheekR": [
+              374.5,
+              273.5
+            ],
+            "neck": [
+              256.0,
+              390.5
+            ]
+          },
+          "hair": "frames/messy/yaw20.hair.webp",
+          "visor": "frames/messy/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/messy/yaw45.webp",
+          "pivot": [
+            256.0,
+            228.5
+          ],
+          "r": 150.0,
+          "visorBox": [
+            192.0,
+            169.0,
+            203.0,
+            154.5
+          ],
+          "measuredYaw": 32,
+          "anchors": {
+            "top": [
+              256.0,
+              17.0
+            ],
+            "earL": [
+              128.0,
+              236.0
+            ],
+            "templeL": [
+              158.0,
+              198.5
+            ],
+            "mouth": [
+              333.0,
+              291.5
+            ],
+            "cheekL": [
+              239.5,
+              273.5
+            ],
+            "cheekR": [
+              398.0,
+              273.5
+            ],
+            "neck": [
+              256.0,
+              390.5
+            ]
+          },
+          "hair": "frames/messy/yaw45.hair.webp",
+          "visor": "frames/messy/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/messy/up.webp",
+          "pivot": [
+            256.0,
+            228.5
+          ],
+          "r": 150.0,
+          "visorBox": [
+            149.0,
+            155.5,
+            234.0,
+            124.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              38.5
+            ],
+            "earL": [
+              106.0,
+              236.0
+            ],
+            "earR": [
+              406.0,
+              236.0
+            ],
+            "templeL": [
+              113.5,
+              188.5
+            ],
+            "templeR": [
+              398.5,
+              188.5
+            ],
+            "mouth": [
+              256.0,
+              254.5
+            ],
+            "cheekL": [
+              163.0,
+              243.5
+            ],
+            "cheekR": [
+              349.0,
+              243.5
+            ],
+            "neck": [
+              256.0,
+              386.0
+            ]
+          },
+          "hair": "frames/messy/up.hair.webp",
+          "visor": "frames/messy/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/messy/down.webp",
+          "pivot": [
+            256.0,
+            228.5
+          ],
+          "r": 150.0,
+          "visorBox": [
+            152.0,
+            215.5,
+            229.0,
+            146.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              35.0
+            ],
+            "earL": [
+              106.0,
+              236.0
+            ],
+            "earR": [
+              406.0,
+              236.0
+            ],
+            "templeL": [
+              113.5,
+              209.0
+            ],
+            "templeR": [
+              398.5,
+              209.0
+            ],
+            "mouth": [
+              256.0,
+              322.5
+            ],
+            "cheekL": [
+              163.0,
+              299.0
+            ],
+            "cheekR": [
+              349.0,
+              299.0
+            ]
+          },
+          "hair": "frames/messy/down.hair.webp",
+          "visor": "frames/messy/down.visor.webp"
+        }
+      }
+    },
+    "none": {
+      "label": "No hair",
+      "recolor": false,
+      "views": {
+        "front": {
+          "file": "frames/none/front.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            130.0,
+            181.5,
+            252.0,
+            138.5
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              74.5
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              196.0
+            ],
+            "templeR": [
+              398.5,
+              196.0
+            ],
+            "mouth": [
+              256.0,
+              289.0
+            ],
+            "cheekL": [
+              163.0,
+              271.0
+            ],
+            "cheekR": [
+              349.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "visor": "frames/none/front.visor.webp"
+        },
+        "yaw20": {
+          "file": "frames/none/yaw20.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            169.5,
+            183.0,
+            229.0,
+            137.0
+          ],
+          "measuredYaw": 25,
+          "anchors": {
+            "top": [
+              256.0,
+              74.0
+            ],
+            "earL": [
+              120.0,
+              233.5
+            ],
+            "templeL": [
+              146.0,
+              196.0
+            ],
+            "mouth": [
+              318.0,
+              289.0
+            ],
+            "cheekL": [
+              222.5,
+              271.0
+            ],
+            "cheekR": [
+              391.0,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "visor": "frames/none/yaw20.visor.webp"
+        },
+        "yaw45": {
+          "file": "frames/none/yaw45.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            214.0,
+            180.0,
+            187.0,
+            141.0
+          ],
+          "measuredYaw": 42,
+          "anchors": {
+            "top": [
+              256.0,
+              73.0
+            ],
+            "earL": [
+              145.5,
+              233.5
+            ],
+            "templeL": [
+              181.5,
+              196.0
+            ],
+            "mouth": [
+              355.5,
+              289.0
+            ],
+            "cheekL": [
+              268.5,
+              271.0
+            ],
+            "cheekR": [
+              405.5,
+              271.0
+            ],
+            "neck": [
+              256.0,
+              388.0
+            ]
+          },
+          "visor": "frames/none/yaw45.visor.webp"
+        },
+        "up": {
+          "file": "frames/none/up.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            130.5,
+            148.0,
+            252.5,
+            136.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              76.0
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              187.5
+            ],
+            "templeR": [
+              398.5,
+              187.5
+            ],
+            "mouth": [
+              256.0,
+              258.5
+            ],
+            "cheekL": [
+              163.0,
+              246.5
+            ],
+            "cheekR": [
+              349.0,
+              246.5
+            ],
+            "neck": [
+              256.0,
+              385.0
+            ]
+          },
+          "visor": "frames/none/up.visor.webp"
+        },
+        "down": {
+          "file": "frames/none/down.webp",
+          "pivot": [
+            256.0,
+            226.0
+          ],
+          "r": 150.0,
+          "visorBox": [
+            137.5,
+            223.5,
+            247.0,
+            122.0
+          ],
+          "measuredYaw": 0,
+          "anchors": {
+            "top": [
+              256.0,
+              74.5
+            ],
+            "earL": [
+              106.0,
+              233.5
+            ],
+            "earR": [
+              406.0,
+              233.5
+            ],
+            "templeL": [
+              113.5,
+              206.0
+            ],
+            "templeR": [
+              398.5,
+              206.0
+            ],
+            "mouth": [
+              256.0,
+              318.5
+            ],
+            "cheekL": [
+              163.0,
+              295.5
+            ],
+            "cheekR": [
+              349.0,
+              295.5
+            ]
+          },
+          "visor": "frames/none/down.visor.webp"
+        }
+      }
     }
   },
   "hands": {

@@ -14,7 +14,8 @@ interface Created {
   ticks: number[];
   destroyed: number;
   options: { manual?: boolean; reduced?: boolean };
-  config: { name?: string; hairColor?: string | null };
+  config: { name?: string; hairColor?: string | null; style?: string; accessories?: readonly string[] };
+  configs: Array<{ hairColor?: string | null; style?: string; accessories?: readonly string[] }>;
 }
 
 const fixture = vi.hoisted(() => ({ bots: [] as Created[], hold: null as Promise<void> | null }));
@@ -24,14 +25,18 @@ vi.mock("./kit", () => ({
     bases: {},
     stickers: {},
     createBot: async (_el: HTMLElement, config: Created["config"], options: Created["options"]) => {
-      const bot: Created = { calls: [], ticks: [], destroyed: 0, options, config };
+      const bot: Created = { calls: [], ticks: [], destroyed: 0, options, config, configs: [] };
       fixture.bots.push(bot);
       await fixture.hold;
       return {
         setState: (id: string) => bot.calls.push(`state:${id}`),
         express: (id: string, o?: { ms?: number }) => bot.calls.push(o?.ms ? `express:${id}:${o.ms}` : `express:${id}`),
         play: (id: string) => { bot.calls.push(`play:${id}`); return Promise.resolve(); },
-        setConfig: (partial: { hairColor?: string | null }) => { bot.calls.push(`hair:${partial.hairColor ?? "none"}`); return Promise.resolve(); },
+        setConfig: (partial: Created["configs"][number]) => {
+          bot.configs.push(partial);
+          bot.calls.push(`hair:${partial.hairColor ?? "none"}`);
+          return Promise.resolve();
+        },
         tick: (ms?: number) => { bot.ticks.push(ms ?? 16); },
         destroy: () => { bot.destroyed++; },
       };
@@ -94,6 +99,11 @@ const flush = () => act(async () => {
 });
 const run = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
 const render = (props: SeiraCharacterProps = {}) => act(() => root.render(createElement(SeiraCharacter, props)));
+const cleanRender = () => {
+  act(() => root.unmount());
+  root = createRoot(host);
+  render({});
+};
 const canvas = () => host.querySelector("canvas")!;
 const bot = () => fixture.bots.at(-1)!;
 const scriptCalls = (calls: string[]) => calls.filter((call) => !call.startsWith("hair:"));
@@ -165,6 +175,53 @@ describe("SeiraCharacter", () => {
     await flush();
     expect(bot().calls.at(-1)).toBe("hair:none");
     expect(fixture.bots).toHaveLength(1);
+  });
+
+  it("starts the character with its hair style and accessories", async () => {
+    render({ hairStyle: "bob", accessories: ["glasses", "cap"] });
+    await flush();
+    expect(bot().config.style).toBe("bob");
+    expect(bot().config.accessories).toEqual(["glasses", "cap"]);
+    cleanRender();
+    await flush();
+    expect(bot().config.style).toBe("seira");
+    expect(bot().config.accessories).toEqual([]);
+  });
+
+  it("gives silver hair to a style other than Seira's own when the bot has no hair color", async () => {
+    render({ hairStyle: "bun" });
+    await flush();
+    expect(bot().config.hairColor).toBe("#DADADF");
+    render({ hairStyle: "bun", hairColor: "green" });
+    await flush();
+    expect(bot().configs.at(-1)?.hairColor).toBe("#009957");
+  });
+
+  it("keeps Seira's own hair for her own style", async () => {
+    render({ hairStyle: "seira" });
+    await flush();
+    expect(bot().config.hairColor).toBeNull();
+  });
+
+  it("changes the hair style and the accessories without starting a second character", async () => {
+    render({ hairStyle: "bob", accessories: ["glasses"] });
+    await flush();
+    render({ hairStyle: "spiky", accessories: ["glasses"] });
+    await flush();
+    expect(bot().configs.at(-1)).toMatchObject({ style: "spiky", accessories: ["glasses"] });
+    render({ hairStyle: "spiky", accessories: ["glasses", "cap"] });
+    await flush();
+    expect(bot().configs.at(-1)).toMatchObject({ style: "spiky", accessories: ["glasses", "cap"] });
+    expect(fixture.bots).toHaveLength(1);
+  });
+
+  it("does not configure the character again for the same accessories in a new array", async () => {
+    render({ hairStyle: "bob", accessories: ["glasses", "cap"] });
+    await flush();
+    const count = bot().configs.length;
+    render({ hairStyle: "bob", accessories: ["glasses", "cap"] });
+    await flush();
+    expect(bot().configs).toHaveLength(count);
   });
 
   it("draws on the shared clock about 30 times a second", async () => {
