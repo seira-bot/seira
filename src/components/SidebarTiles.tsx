@@ -136,16 +136,15 @@ export function SidebarNoBots() {
   return <p data-sidebar-empty="" className="px-5 pt-4 text-[13px] leading-[18px] text-ink-tertiary">{t("onboarding.shell.noBots")}</p>;
 }
 
-export function SidebarTileGrid({ primary, pinned, others = [], row, onAdd }: { primary: Bot | null; pinned: Bot[]; others?: Bot[]; row: (bot: Bot) => BotRowProps; onAdd?: () => void }) {
+export function SidebarTileGrid({ primary, pinned, row, onAdd }: { primary: Bot | null; pinned: Bot[]; row: (bot: Bot) => BotRowProps; onAdd?: () => void }) {
   const order = usePinnedCircleDrag(pinned);
-  if (!primary && order.ranked.length === 0 && others.length === 0) return null;
+  if (!primary && order.ranked.length === 0) return null;
   return (
     <section data-sidebar-tiles="" aria-label={t("sidebar.section.team")} className="px-3 pb-2 pt-1">
       <SimpleSectionLabel name={t("sidebar.section.team")} addLabel={onAdd ? t("sidebar.newBotSimple") : undefined} onAdd={onAdd} />
       <div className="grid max-h-[40vh] grid-cols-4 gap-0.5 overflow-y-auto py-0.5" {...order.frameProps}>
         {primary && <SidebarBotTile {...row(primary)} primary />}
         {order.ranked.map((bot) => <SidebarBotTile key={bot.id} {...row(bot)} {...order.dragProps(bot)} />)}
-        {others.map((bot) => <SidebarBotTile key={bot.id} {...row(bot)} />)}
         <span role="status" className="sr-only">{order.moved}</span>
       </div>
     </section>

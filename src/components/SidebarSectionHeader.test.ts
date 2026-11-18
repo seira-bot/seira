@@ -97,12 +97,12 @@ describe("SidebarSectionHeader as a Simple-mode line", () => {
     name: "Work", collapsed: false, onToggle: () => {}, reorderable: true, dragging: false, line: true, ...props,
   }) as ReactElement<Props>;
 
-  it("draws a quiet 13px name with no hairline, and a ⋯ team menu button that shows on hover, with no trash or grip", () => {
+  it("draws a quiet 12px name with no hairline, and a ⋯ team menu button that shows on hover, with no trash or grip", () => {
     const onMenu = vi.fn();
     const element = line({ onMenu, onDelete: () => {} });
     const html = renderToStaticMarkup(element);
     expect(html).toContain('data-sidebar-section-line=""');
-    expect(html).toMatch(/text-\[13px\] leading-\[18px\] text-ink-secondary/);
+    expect(html).toMatch(/text-\[12px\] font-medium leading-4 text-ink-tertiary/);
     expect(html).not.toContain("bg-hairline");
     expect(html).toContain('aria-label="Actions for Work department" title="Actions for Work department" aria-haspopup="menu" aria-expanded="false"');
     expect(html).toMatch(/aria-label="Actions for Work department"[^>]*class="[^"]*\bopacity-0\b[^"]*\bgroup-hover\/section:opacity-100\b[^"]*\baria-expanded:opacity-100\b/);

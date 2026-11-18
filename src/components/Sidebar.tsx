@@ -1135,7 +1135,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
   const pendingBotUndo = teamFeedback?.restoreBot;
   const botRow = (bot: Bot) => botRowProps(state, dispatch, bot, { density, query: q, onMenu: setMenu, renameRequest: renameRequest?.botId === bot.id ? renameRequest.nonce : 0, ...drops.row(bot.id) });
   const railSearch = () => {
-    if (collapseToIcons) return openCommandPalette();
+    if (collapseToIcons || simple) return openCommandPalette();
     setSearchOpen(true);
     toggleCollapsed();
   };
