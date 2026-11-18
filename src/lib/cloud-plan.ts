@@ -83,6 +83,12 @@ export function usd(dollars: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: cents % 100 ? 2 : 0 }).format(cents / 100);
 }
 
+const rupiah = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
+/** A plan's price as the person reads it: whole rupiah for IDR, US cents (no `currency`) for USD. */
+export function planPrice(plan: Pick<CloudOfferPlan, "amount" | "currency">, amount: number = plan.amount): string {
+  return plan.currency === "IDR" ? rupiah.format(amount) : usd(amount / 100);
+}
+
 export type CloudTrialAction = "manage" | "subscribe" | "status";
 export interface CloudTrialView {
   state: CloudTrialState;
@@ -200,7 +206,7 @@ export function trialTerms(days: number, price: string): string {
   return days === 1 ? t("cloudBuy.card.trial.one", { price }) : t("cloudBuy.card.trial.many", { days, price });
 }
 function planCard(plan: CloudOfferPlan, recommended: string, current: string | null): CloudPlanCard {
-  const name = offerPlanLabel(plan), price = usd(plan.amount / 100), mine = plan.tier === current;
+  const name = offerPlanLabel(plan), price = planPrice(plan), mine = plan.tier === current;
   return { tier: plan.tier, name, price, popular: plan.tier === recommended, current: mine,
     promise: Object.hasOwn(PROMISE, plan.tier) ? t(PROMISE[plan.tier]!) : plan.allowances?.seats ? t("cloudBuy.promise.teamPlan") : null,
     action: mine ? null : plan.trialDays ? t("cloudIntro.start") : t("cloudBuy.card.get", { plan: name }),
@@ -251,6 +257,11 @@ export function sameTerms(shown: CloudOffer | null | undefined, mine: CloudOffer
   return Boolean(before && now && before.amount === now.amount && (before.trialDays ?? 0) === (now.trialDays ?? 0));
 }
 
+/** The lowest-priced plan of those given (one Cloud sells in one currency). */
+export function cheapestPlan<T extends Pick<CloudOfferPlan, "amount" | "currency">>(plans: readonly T[]): T {
+  return plans.reduce((low, plan) => (plan.amount < low.amount ? plan : low));
+}
+
 export function dueToday(cents: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(cents / 100);
 }
@@ -259,11 +270,11 @@ export function dueToday(cents: number): string {
 export function cloudIntroView(offer: CloudOffer | null | undefined): { badge: string; points: string[]; price: string; moneyBack: string | null } | null {
   const days = offerTrialDays(offer);
   if (!offer || !days) return null;
-  const cheapest = Math.min(...offer.plans.filter(plan => plan.trialDays).map(plan => plan.amount));
+  const cheapest = cheapestPlan(offer.plans.filter(plan => plan.trialDays));
   return {
     badge: days === 1 ? t("cloudIntro.badge.one") : t("cloudIntro.badge.many", { days }),
     points: [t("cloudIntro.routines"), t("cloudIntro.phone"), offer.creditUsd ? t("cloudIntro.credit", { credit: usd(offer.creditUsd) }) : t("cloudIntro.included")],
-    price: t("cloudIntro.price", { price: usd(cheapest / 100) }),
+    price: t("cloudIntro.price", { price: planPrice(cheapest) }),
     moneyBack: moneyBackLine(offer),
   };
 }

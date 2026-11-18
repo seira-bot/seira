@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Cloud, Crown } from "lucide-react";
 import type { CloudAccountState } from "../../electron/cloud-account.mjs";
 import { useStore } from "@/state/store";
-import { buyOfferAllowed, cloudPlanLine, cloudPlanView, moneyBackLine, offerTrialDays, usd, type CloudPlanView } from "@/lib/cloud-plan";
+import { buyOfferAllowed, cloudPlanLine, cloudPlanView, moneyBackLine, offerTrialDays, cheapestPlan, planPrice, type CloudPlanView } from "@/lib/cloud-plan";
 import { useCloudOffer } from "@/lib/use-cloud-offer";
 import { t } from "@/lib/i18n";
 import { SettingRow, SettingsLinkRow } from "./SettingsPrimitives";
@@ -35,13 +35,13 @@ export function ProSettingsCard() {
   const { view } = plan;
   if (offering) {
     const trial = offerTrialDays(offer) !== null, moneyBack = moneyBackLine(offer);
-    const cheapest = offer ? Math.min(...offer.plans.map(entry => entry.amount)) : null;
+    const cheapest = offer?.plans.length ? cheapestPlan(offer.plans) : null;
     return <section aria-label={t("pro.name")} data-cloud-offer={trial ? "trial" : offer ? "plans" : "none"} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-hairline/50 p-3">
       <div className="flex items-center gap-3">
         <Crown className="text-ink-secondary" size={18} aria-hidden="true" />
         <div><h3 className="text-[14px] font-semibold text-ink">{t("pro.name")}</h3>
           <p className="mt-1 text-[12px] text-ink-secondary">{t("pro.settingsSummary")}</p>
-          {cheapest !== null && <p className="mt-1 text-[12px] text-ink-secondary">{t("pro.fromPrice", { price: usd(cheapest / 100) })}</p>}
+          {cheapest !== null && <p className="mt-1 text-[12px] text-ink-secondary">{t("pro.fromPrice", { price: planPrice(cheapest) })}</p>}
           {moneyBack && <p className="mt-1 text-[12px] text-ink-secondary">{moneyBack}</p>}
           <p className="mt-1 text-[12px] text-ink-secondary">{t("pro.disclaimer")}</p></div>
       </div>
@@ -76,9 +76,9 @@ export function CloudPlanRow({ place, usage = null, upgrade }: { place: "account
   if (!plan) return null;
   if (offering) {
     const trial = offerTrialDays(offer) !== null;
-    const cheapest = offer && offer.plans.length ? Math.min(...offer.plans.map((entry) => entry.amount)) : null;
+    const cheapest = offer?.plans.length ? cheapestPlan(offer.plans) : null;
     return (
-      <SettingRow title={t("pro.name")} subtitle={place === "plan" && cheapest !== null ? t("pro.fromPrice", { price: usd(cheapest / 100) }) : t("pro.settingsSummary")}>
+      <SettingRow title={t("pro.name")} subtitle={place === "plan" && cheapest !== null ? t("pro.fromPrice", { price: planPrice(cheapest) }) : t("pro.settingsSummary")}>
         <div className="flex items-center gap-3">
           {place === "plan" && plan.view.kind === "signed-out" && (
             <button type="button" className="cursor-pointer text-[13px] text-ink-secondary hover:text-ink"
