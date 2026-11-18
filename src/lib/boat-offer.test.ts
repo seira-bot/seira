@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { BOAT_OFFER, boatClaimMailto, boatOfferRuns } from "./boat-offer";
 
 const SUBJECT = "Seira introduced me: $50 Boat credit";
-const BODY = "Hi Boat team,\n\nMausBot introduced me to Boat. I'm on the $___ plan.\nMy Boat account email: ___\n\nThanks!";
+const BODY = "Hi Boat team,\n\nSeira introduced me to Boat. I'm on the $___ plan.\nMy Boat account email: ___\n\nThanks!";
 
 describe("Boat's credit offer", () => {
   it("goes to boat.dev and claims at Boat's billing address, with no end date until Boat names one", () => {
