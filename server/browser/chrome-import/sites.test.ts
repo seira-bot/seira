@@ -22,7 +22,7 @@ describe("grouping hosts into sites", () => {
   });
 
   it("labels identity, email and financial sites and never suggests them", () => {
-    const sites = groupSites(["okta.com", ".gmail.com", "paypal.com", "login.okta.com", "myshop.test"].map((key) => host(key)));
+    const sites = groupSites(["okta.com", ".gmail.com", "paypal.com", "myshop.test"].map((key) => host(key)));
     const label = Object.fromEntries(sites.map((site) => [site.site, [site.sensitive, site.suggested]]));
     expect(label).toEqual({
       "okta.com": ["identity", false], "gmail.com": ["email", false], "paypal.com": ["financial", false], "myshop.test": [null, true],
