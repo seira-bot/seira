@@ -35,8 +35,8 @@ body:
   - type: input
     attributes:
       label: Version and install
-      description: App version (About / release tag) and whether you run the .dmg or from source
-      placeholder: v0.1.3 dmg · macOS 15.5
+      description: App version (About or release tag), your OS, and how you installed it (AppImage, .dmg, or from source)
+      placeholder: v0.1.170 AppImage · Ubuntu 24.04
     validations:
       required: true
   - type: textarea
