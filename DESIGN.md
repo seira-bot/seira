@@ -164,7 +164,10 @@ element's job and never a pixel value:
 - **Labels line up with their heading.** Put shortcut letters, counts and
   chevrons at the end of a row, not before the label.
 - **Control heights: 24, 28, 32 or 36px.** Menu rows are 30px. On touch
-  screens, targets grow to 40–44px with the `touch:` variant.
+  screens, targets grow to 40–44px with the `touch:` variant. Two rows may be
+  taller because they carry a face: the sidebar's chat rows and palette rows
+  (52px and 40px). The sidebar search field is 34px so it reads as a field,
+  not a button.
 - **Group with space before you group with lines.** Add a divider only between
   groups that space alone can't separate. Never a divider under a heading.
 - **No cards inside cards.** If a card needs sections, use spacing and a group
