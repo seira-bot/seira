@@ -48,7 +48,7 @@ function mulberry(seed) {
 }
 
 function sanitizeConfig(base, partial) {
-  const c = { ...base, ...(partial || {}) };
+  const c = { ...base, ...partial };
   if (!Array.isArray(c.accessories)) c.accessories = [];
   c.accessories = c.accessories.slice(0, SLOTS_MAX);
   if (!PERSONALITY[c.personality]) c.personality = 'calm';

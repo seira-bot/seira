@@ -5,7 +5,7 @@
 //   env.ground           -> world y of the floor               env.rand() -> 0..1
 //   env.flash(k)         -> screen flash for lightning         env.umbrella() -> { x, y, w } or null
 
-import { clamp, smooth, backOut, TAU } from './motion.js';
+import { clamp, backOut, TAU } from './motion.js';
 
 const MAX = 300;
 
@@ -206,7 +206,7 @@ export class Fx {
   // Loop emitters: set the active ids. Unknown ids are skipped.
   setLoops(ids) {
     const want = new Set(ids.filter((id) => LOOPS[id]));
-    for (const id of [...this.loops.keys()]) if (!want.has(id)) this.loops.delete(id);
+    for (const id of this.loops.keys()) if (!want.has(id)) this.loops.delete(id);
     for (const id of want) if (!this.loops.has(id)) this.loops.set(id, { next: 0, t: 0 });
   }
 

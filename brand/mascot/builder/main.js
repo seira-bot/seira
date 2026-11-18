@@ -9,7 +9,7 @@ async function load(url) {
     const res = await fetch(new URL(url, import.meta.url));
     if (!res.ok) return null;
     return await res.json();
-  } catch (err) {
+  } catch {
     return null;
   }
 }

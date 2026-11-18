@@ -24,13 +24,13 @@ async function loadJson(url) {
     const res = await fetch(url);
     if (!res.ok) return null;
     return await res.json();
-  } catch (err) {
+  } catch {
     return null;
   }
 }
 
 function pageUrl() {
-  try { return document.baseURI; } catch (err) { return 'http://localhost/'; }
+  try { return document.baseURI; } catch { return 'http://localhost/'; }
 }
 
 // Return { data, root } for one manifest. root is the folder that file paths resolve against.
@@ -48,7 +48,7 @@ export async function resolveManifest(input, baseUrl, folder) {
 export function fileUrl(root, file) {
   if (!file) return null;
   if (file.startsWith('data:') || file.startsWith('blob:')) return file;
-  try { return new URL(file, root).href; } catch (err) { return null; }
+  try { return new URL(file, root).href; } catch { return null; }
 }
 
 export function canvas(w, h) {
@@ -65,7 +65,7 @@ export function pixels(img) {
   x.drawImage(img, 0, 0);
   try {
     return { c, x, d: x.getImageData(0, 0, c.width, c.height) };
-  } catch (err) {
+  } catch {
     return null;
   }
 }

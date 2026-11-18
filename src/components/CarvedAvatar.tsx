@@ -292,8 +292,8 @@ function CarvedAvatarComponent(
     >
       <svg
         viewBox="-14 -14 268 268"
-        width={size}
-        height={size}
+        width={`${size}px`}
+        height={`${size}px`}
         role={label ? "img" : undefined}
         aria-label={label ?? undefined}
         aria-hidden={label ? undefined : true}
