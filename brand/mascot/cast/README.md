@@ -50,7 +50,7 @@ The script makes at most 2 images at the same time. It stops after 3 failures in
 It writes the raw image to `raw/` and the finished sheet to `concept/`.
 
 The generator draws Seira again in each sheet, so cell 1 of the raw female lineup is only a lookalike.
-`tools/place_seira.py` removes that head and pastes the head of `../options/d-bot-pendamping.png` at the same place and height.
+`tools/place_seira.py` removes that head and pastes the head of `../options/d-companion-bot.png` at the same place and height.
 The script uses the cell position that `CELL1` gives. If you make the female lineup again, measure `CELL1` again.
 Do not use a generated Seira as logo art. Use the files in `../options/` and `../../logo/`.
 

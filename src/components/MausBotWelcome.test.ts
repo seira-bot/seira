@@ -6,7 +6,7 @@ import { t } from "@/lib/i18n";
 import { StoreProvider, type Bot } from "@/state/store";
 import { draftOf, MausBotWelcomeCard, mausBotWelcomeDue, welcomeName, welcomePatch } from "./MausBotWelcome";
 
-const maus = { id: "maus", threadId: "t1", name: "MausBot", title: "", description: "", notifications: true, color: "chrome", mascotBody: null,
+const maus = { id: "maus", threadId: "t1", name: "Seira", title: "", description: "", notifications: true, color: "chrome", mascotBody: null,
   avatarUrl: null, unread: false, modelSelection: { instanceId: "claude", model: "sonnet" }, createdAt: 1, defaultBot: {} } as unknown as Bot;
 
 describe("Seira's first-launch welcome", () => {
@@ -38,7 +38,7 @@ describe("Seira's first-launch welcome", () => {
 
   it("saves an empty name as Seira and caps a long one at the bot-name limit", () => {
     const jarvis = { ...maus, name: "Jarvis" };
-    expect(welcomePatch(jarvis, { ...draftOf(jarvis), name: "   " }, true).name).toBe("MausBot");
+    expect(welcomePatch(jarvis, { ...draftOf(jarvis), name: "   " }, true).name).toBe("Seira");
     expect(welcomeName("x".repeat(300))).toHaveLength(100);
     expect(welcomeName("  Ada ")).toBe("Ada");
   });
@@ -55,11 +55,11 @@ describe("Seira's first-launch welcome", () => {
 
   it("opens on Seira's picture alone: the customise panel stays closed until the picture is clicked", () => {
     const html = renderToStaticMarkup(createElement(StoreProvider, null, createElement(MausBotWelcomeCard, { bot: maus, onClose: () => {} })));
-    expect(html).toContain(`aria-label="${t("mausbotWelcome.customize", { name: "MausBot" })}"`);
+    expect(html).toContain(`aria-label="${t("mausbotWelcome.customize", { name: "Seira" })}"`);
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('data-mausbot-welcome-panel="closed"');
     expect(html).toMatch(/data-mausbot-welcome-panel="closed"[^>]*|inert=""[^>]*data-mausbot-welcome-panel="closed"/);
-    expect(html).toContain(t("mausbotWelcome.title", { name: "MausBot" }));
-    expect(html).toContain(t("mausbotWelcome.add", { name: "MausBot" }));
+    expect(html).toContain(t("mausbotWelcome.title", { name: "Seira" }));
+    expect(html).toContain(t("mausbotWelcome.add", { name: "Seira" }));
   });
 });

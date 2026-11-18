@@ -94,7 +94,7 @@ describe("template folders", () => {
     const files = writeShareFolder(oneBot(), "bot");
     expect(() => readShareFolder({ ...files, "team.md": files["bot.md"]! })).toThrow(/not both/);
     expect(() => readShareFolder({ "README.md": "# hi" })).toThrow(/no bot.md or team.md/);
-    expect(() => readShareFolder({ "bot.md": String(files["bot.md"]).replace("botmrr: 2", "botmrr: 3") })).toThrow(/newer MausBot/);
+    expect(() => readShareFolder({ "bot.md": String(files["bot.md"]).replace("botmrr: 2", "botmrr: 3") })).toThrow(/newer Seira/);
   });
 
   it("names only skills and pictures for a remote reader to fetch", () => {

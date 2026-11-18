@@ -50,7 +50,7 @@ describe("the Fish agent for Live calls", () => {
       const route = `${init!.method} ${String(url).replace(ENDPOINT.apiBase, "")}`;
       return new Response(JSON.stringify(answers[route] ?? {}), { status: route in answers ? 200 : 404 });
     });
-    await expect(setUpFishAgent(" fish-key ", { ...ENDPOINT, model: "" }, "MausBot", "vi", fetchImpl)).resolves.toBe("agent_new");
+    await expect(setUpFishAgent(" fish-key ", { ...ENDPOINT, model: "" }, "Seira", "vi", fetchImpl)).resolves.toBe("agent_new");
     const calls = fetchImpl.mock.calls.map(([url, init]) => ({ route: `${init!.method} ${String(url).replace(ENDPOINT.apiBase, "")}`, body: JSON.parse(String(init!.body)), init: init! }));
     expect(calls.map((call) => call.route)).toEqual(Object.keys(answers));
     expect(calls[0]!.body).toMatchObject({ name: "delegate", tool_type: "client", expects_response: true });
@@ -83,9 +83,9 @@ describe("the Fish agent for Live calls", () => {
 
   it("stops at Fish's first refusal with the user's next step, never Fish's body", async () => {
     const fetchImpl = fakeFetch(401, { message: "raw fish-key detail" });
-    await expect(setUpFishAgent("fish-key", ENDPOINT, "MausBot", "en", fetchImpl)).rejects.toMatchObject({ status: 502, message: fishErrorMessage(401) });
+    await expect(setUpFishAgent("fish-key", ENDPOINT, "Seira", "en", fetchImpl)).rejects.toMatchObject({ status: 502, message: fishErrorMessage(401) });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    await expect(setUpFishAgent("fish-key", ENDPOINT, "MausBot", "en", fakeFetch(201, {}))).rejects.toMatchObject({ status: 502 });
+    await expect(setUpFishAgent("fish-key", ENDPOINT, "Seira", "en", fakeFetch(201, {}))).rejects.toMatchObject({ status: 502 });
   });
 });
 

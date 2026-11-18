@@ -14137,7 +14137,7 @@ describe("bot memory API", () => {
         id: "persona",
         label: "Identity",
         text: "You are Kiwi, a personal bot in Seira. Role: Tracker. About: Files bugs.",
-        bytes: 78,
+        bytes: 72,
       });
       expect(before.body.sections.map((s: { id: string }) => s.id)).not.toContain("soul");
       // A new bot has no memory yet: the preview shows how memory works, and the notes section once there is something in it.
