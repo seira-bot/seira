@@ -57,7 +57,7 @@ async function optIn(body: Record<string, unknown>, env: AppEnv) {
   if (!existing) {
     statements.push(
       env.DB.prepare(
-        "INSERT INTO subscribers (email, status, text_version, confirm_hash, confirm_sent_at, unsubscribe_token, created_at, updated_at) VALUES (?, 'pending', ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO subscribers (email, status, text_version, confirm_hash, confirm_sent_at, unsubscribe_token, created_at, updated_at) VALUES (?, 'pending', ?, ?, ?, ?, ?, ?) ON CONFLICT (email) DO NOTHING",
       ).bind(email, textVersion, confirmHash, now, randomToken(), now, now),
     );
   } else if (existing.status === "unsubscribed") {
