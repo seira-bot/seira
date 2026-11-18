@@ -5,11 +5,8 @@ import { SKINS, applySkin, resolveSkin, type SkinId } from "@/lib/skins";
 import { takeOffTheme } from "@/lib/theme/runtime";
 import { cn } from "@/lib/cn";
 import { t, tFromServer } from "@/lib/i18n";
-import { setDressUp, useDressUp } from "@/lib/festival-dress";
-import { FESTIVALS, isFestival, type CostumeColor, type FestivalId } from "../../shared/bot-body";
-import { MausAvatar } from "./Avatar";
 import { useContext } from "react";
-import { SettingsLook, Switch } from "./SettingsPrimitives";
+import { SettingsLook } from "./SettingsPrimitives";
 import { useSkinChoice } from "./ThemeRow";
 
 function Miniature({ skin }: { skin: SkinId }) {
@@ -55,30 +52,6 @@ function Miniature({ skin }: { skin: SkinId }) {
   );
 }
 
-const DRESS_UP_PREVIEW: Record<FestivalId, readonly CostumeColor[]> = {
-  halloween: ["orange", "purple", "teal", "red"],
-  diwali: ["red", "orange", "pink", "coral"],
-};
-
-export function DressUpRow({ festival }: { festival: FestivalId }) {
-  const dressed = useDressUp();
-  const title = t("settings.skin.dressUp.title");
-  return (
-    <div data-dress-up className="mt-4 flex items-center gap-4 rounded-xl border border-accent-border/40 bg-accent/[0.06] p-3">
-      <div className="flex shrink-0 -space-x-1.5" aria-hidden="true">
-        {DRESS_UP_PREVIEW[festival].map((color) => (
-          <MausAvatar key={color} color={color} bodyId={FESTIVALS[festival].costumes[color]} size={30} animated={false} trackPointer={false} />
-        ))}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-medium text-ink">{title}</div>
-        <div className="mt-1 text-[12px] leading-relaxed text-ink-secondary">{t("settings.skin.dressUp.subtitle")}</div>
-      </div>
-      <Switch checked={dressed} aria-label={title} onClick={() => setDressUp(!dressed)} />
-    </div>
-  );
-}
-
 export function SkinPicker() {
   const active = resolveSkin(useSkinChoice());
   const settings = useContext(SettingsLook);
@@ -105,7 +78,6 @@ export function SkinPicker() {
             );
           })}
         </div>
-        {isFestival(active) && <DressUpRow festival={active} />}
       </>
     );
   }
@@ -145,7 +117,6 @@ export function SkinPicker() {
           );
         })}
       </div>
-      {isFestival(active) && <DressUpRow festival={active} />}
     </>
   );
 }

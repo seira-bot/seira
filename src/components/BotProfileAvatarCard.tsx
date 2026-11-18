@@ -11,12 +11,12 @@ import {
   type MausState,
 } from "@/lib/mascot";
 import { BOT_AVATAR_CROPS } from "../../shared/bot-avatar";
-import { DEFAULT_BOT_BODY, FESTIVAL_IDS, FESTIVALS, PICKER_BODY_IDS, type BotBodyId } from "../../shared/bot-body";
+import { DEFAULT_BOT_BODY, PICKER_BODY_IDS, type BotBodyId } from "../../shared/bot-body";
 import { BotAvatar, MausAvatar } from "./Avatar";
 import { AvatarImageGenerator } from "./AvatarImageGenerator";
 import { AvatarFraming, OrganizationAvatarIcons, RESET_MASCOT_PATCH, useAvatarImage, type AvatarPatch } from "./avatar-editing";
 import { t } from "@/lib/i18n";
-import { bodyName, colorName, expressionName, festivalName } from "@/lib/mascot-names";
+import { bodyName, colorName, expressionName } from "@/lib/mascot-names";
 import { MascotFaceColorPicker } from "./MascotFaceColorPicker";
 
 export function BotProfileAvatarCard({
@@ -175,18 +175,6 @@ export function BotProfileAvatarCard({
                 <BodyButton key={id} id={id} name={bodyName(id)} bot={bot} busy={busy} onPatch={onPatch} />
               ))}
             </div>
-            {FESTIVAL_IDS.map((festival) => (
-              <div key={festival}>
-                <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
-                  {festivalName(festival)}
-                </div>
-                <div className="grid grid-cols-5 gap-1.5" data-festival-bodies={festival}>
-                  {FESTIVALS[festival].bodies.map((id) => (
-                    <BodyButton key={id} id={id} name={bodyName(id)} bot={bot} busy={busy} onPatch={onPatch} />
-                  ))}
-                </div>
-              </div>
-            ))}
           </>
         )}
 
