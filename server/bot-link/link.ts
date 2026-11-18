@@ -18,6 +18,7 @@ import { basename, join } from "node:path";
 import { z } from "zod";
 
 import { writeFileAtomic } from "../atomic.ts";
+import { mascotAccessories } from "../../shared/mascot-accessories.ts";
 import type { CoordinateBotsCall, Coordinator, CoordinatorHost, HandoffView, HostTurnResult } from "../coordinator.ts";
 import type { PassedFile } from "../host/handoff-files.ts";
 import type { PeerDeliveryReceipt } from "../peer-delivery.ts";
@@ -103,7 +104,7 @@ const endedSchema = z.array(z.object({ origin: z.string(), token: z.string(), at
 export type EndedLink = z.infer<typeof endedSchema>[number];
 
 interface LocalBot { id: string; name: string; color?: string; hidden?: boolean; title?: string; description?: string; movedTo?: unknown;
-  mascotBody?: string | null; mascotFaceColor?: string | null; chiefOfStaff?: boolean; threadId?: string }
+  mascotBody?: string | null; mascotFaceColor?: string | null; mascotAccessories?: readonly string[] | null; chiefOfStaff?: boolean; threadId?: string }
 
 export interface BotLinkDeps {
   dataDir: string;
@@ -209,6 +210,7 @@ export function createBotLink(deps: BotLinkDeps) {
     id: bot.id, name: bot.name, ...(bot.title ? { title: bot.title.slice(0, 200) } : {}), ...(bot.description ? { description: bot.description.slice(0, 400) } : {}),
     ...(deps.model?.(bot) ? { model: deps.model(bot)!.slice(0, 200) } : {}), level: deps.level(bot),
     ...(bot.color ? { color: bot.color.slice(0, 64) } : {}), ...(bot.mascotBody ? { mascotBody: bot.mascotBody.slice(0, 64) } : {}), ...(bot.mascotFaceColor ? { mascotFaceColor: bot.mascotFaceColor.slice(0, 64) } : {}),
+    ...(mascotAccessories(bot.mascotAccessories).length ? { mascotAccessories: mascotAccessories(bot.mascotAccessories) } : {}),
     ...(bot.chiefOfStaff ? { chief: true } : {}), ...(bot.threadId ? { threadId: bot.threadId } : {}),
   })).slice(0, 500);
 

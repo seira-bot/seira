@@ -137,6 +137,27 @@ describe("mascotFaceColor", () => {
   });
 });
 
+describe("mascotAccessories", () => {
+  it.each([[["glasses"]], [["glasses", "cap", "ribbon"]], [[]], [null]])("accepts %j at both profile boundaries", (mascotAccessories) => {
+    for (const strict of [true, false]) {
+      expect(parseBotProfilePatch({ mascotAccessories } as never, strict)).toEqual({ ok: true, patch: { mascotAccessories } });
+    }
+  });
+
+  it.each([
+    [["glasses", "cap", "ribbon", "scarf"]],
+    [["glasses", "sunglasses"]],
+    [["earring", "headphones"]],
+    [["monocle"]],
+    ["glasses"],
+    [[1]],
+  ])("rejects %j", (mascotAccessories) => {
+    expect(parseBotProfilePatch({ mascotAccessories } as never, true)).toEqual({
+      ok: false, error: "mascotAccessories must list at most 3 known accessories, one in each slot, or be null",
+    });
+  });
+});
+
 describe("soul (standing instructions)", () => {
   it("accepts soul on both the strict and broad boundaries", () => {
     expect(parseBotProfilePatch({ soul: "Be brief." }, true)).toEqual({ ok: true, patch: { soul: "Be brief." } });

@@ -1051,6 +1051,19 @@ describe("the link between a computer and its Cloud", () => {
     expect(receipts[0]?.outcome).toBe("queued");
   });
 
+  it("each place keeps the accessories the other place's bot wears, and drops the ones it does not know", async () => {
+    const worn = (bots: Bot[], mascotAccessories: string[]) => bots.map((bot) => ({ ...bot, color: "green", mascotBody: "seira", mascotAccessories, threadId: `${bot.id}-chat` }));
+    const computer = place("computer", worn([{ id: "shared", name: "Scout" }], ["glasses", "cap", "unknown", "ribbon", "bowtie", "scarf"])).boot();
+    const cloud = place("cloud", worn([{ id: "shared", name: "Atlas" }], [])).boot();
+    places.push(computer, cloud);
+    const origin = await cloud.listen();
+    await computer.listen();
+    await pair(computer, cloud, origin);
+    await until(() => cloud.link.linked().some((one) => one.bot.name === "Scout" && one.bot.mascotAccessories?.length), "the Cloud hears what Scout wears");
+    expect(cloud.link.linked().find((one) => one.bot.name === "Scout")?.bot.mascotAccessories).toEqual(["glasses", "cap", "ribbon"]);
+    expect(computer.link.linked().find((one) => one.bot.name === "Atlas")?.bot.mascotAccessories).toBeUndefined();
+  });
+
   it("a hello whose bot id could not be a bot's own id is dropped whole, and such a bot of this place is never told", async () => {
     const { computer, cloud } = await two();
     const known = cloud.link.linked().map((one) => one.id);

@@ -30,6 +30,7 @@ const COLOR = /^[\w#(),.% -]{1,64}$/;
 
 const record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const text = (value, limit) => (typeof value === "string" ? value.trim().slice(0, limit) : "");
+const worn = (value) => (Array.isArray(value) ? value.filter((id) => typeof id === "string" && /^[\w-]{1,40}$/.test(id)).slice(0, 3) : []);
 const look = (value) => (typeof value === "string" && COLOR.test(value) ? value : null);
 
 /** The other side of a page: This computer's page lists My Cloud's bots, My Cloud's page this computer's. */
@@ -54,9 +55,9 @@ export function botRow(bot, home) {
   if (!record(bot) || !ID.test(String(bot.id)) || !ID.test(String(bot.threadId)) || bot.hidden || bot.sidebarHidden || bot.movedTo) return null;
   const name = text(bot.name, 80);
   if (!name) return null;
-  const title = text(bot.title, 80), color = look(bot.color), body = look(bot.mascotBody), face = look(bot.mascotFaceColor);
+  const title = text(bot.title, 80), color = look(bot.color), body = look(bot.mascotBody), face = look(bot.mascotFaceColor), accessories = worn(bot.mascotAccessories);
   return { home, id: bot.id, threadId: bot.threadId, name, ...(title ? { title } : {}), ...(color ? { color } : {}),
-    ...(body ? { mascotBody: body } : {}), ...(face ? { mascotFaceColor: face } : {}), ...(bot.chiefOfStaff === true ? { chief: true } : {}), ...rowState(bot) };
+    ...(body ? { mascotBody: body } : {}), ...(face ? { mascotFaceColor: face } : {}), ...(accessories.length ? { mascotAccessories: accessories } : {}), ...(bot.chiefOfStaff === true ? { chief: true } : {}), ...rowState(bot) };
 }
 
 /** The AIs a place's `GET /api/instances` answer says are ready to use: installed and signed in, never one that only

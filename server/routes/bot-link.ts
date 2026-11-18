@@ -19,6 +19,7 @@ import { z } from "zod";
 import type { createDialer } from "../bot-link/dial.ts";
 import type { BotLink } from "../bot-link/link.ts";
 import { BOTS_PATH, FILE_PATH, LEVEL_HEADER, PAIR_PATH, PROTOCOL_LEVEL, SEEN_MS, STATE_PATH, SYNC_PATH, fileWay, levelOf, placeSchema, syncRequest } from "../bot-link/protocol.ts";
+import { mascotAccessories } from "../../shared/mascot-accessories.ts";
 import { FILE_MAX_BYTES } from "../../shared/upload-limits.ts";
 import { answerAsleep } from "../cloud-power.ts";
 import type { RequestAuth } from "../request-auth.ts";
@@ -103,7 +104,7 @@ export function createBotLinkRoutes(deps: BotLinkRouteDeps): RouteHandler {
       // Names and looks only, as each place told this one: no message, address or sign-in.
       return json(res, 200, { bots: link.linked().map(({ id, peer, place, kind, online, bot }) => ({ id, home: { id: place.id, key: peer, kind, name: place.name, online }, botId: bot.id, name: bot.name,
         ...(bot.title ? { title: bot.title } : {}), ...(bot.color ? { color: bot.color } : {}), ...(bot.mascotBody ? { mascotBody: bot.mascotBody } : {}),
-        ...(bot.mascotFaceColor ? { mascotFaceColor: bot.mascotFaceColor } : {}), ...(bot.chief ? { chiefOfStaff: true } : {}), ...(bot.threadId ? { threadId: bot.threadId } : {}) })) });
+        ...(bot.mascotFaceColor ? { mascotFaceColor: bot.mascotFaceColor } : {}), ...(mascotAccessories(bot.mascotAccessories).length ? { mascotAccessories: mascotAccessories(bot.mascotAccessories) } : {}), ...(bot.chief ? { chiefOfStaff: true } : {}), ...(bot.threadId ? { threadId: bot.threadId } : {}) })) });
     }
 
     if (path === STATE_PATH) {

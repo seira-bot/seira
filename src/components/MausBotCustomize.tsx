@@ -60,25 +60,27 @@ export function MausBotCustomize({ preview, name, nameRef, image, onName, onPatc
           ))}
         </div>
       </div>
-      <div>
-        <span className={LABEL}>{t("mausbotWelcome.look")}</span>
-        <div className="mt-1.5 grid grid-cols-5 gap-1">
-          {PICKER_BODY_IDS.map((id) => (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={!picture && (preview.mascotBody ?? DEFAULT_BOT_BODY) === id}
-              aria-label={bodyName(id)}
-              title={bodyName(id)}
-              data-mausbot-welcome-body={id}
-              onClick={() => shape({ mascotBody: id })}
-              className={cn("flex h-11 items-center justify-center rounded-xl", !picture && (preview.mascotBody ?? DEFAULT_BOT_BODY) === id ? "bg-ink/[0.08] ring-[1.5px] ring-inset ring-ink/25" : "hover:bg-ink/[0.05]")}
-            >
-              <MausAvatar color={preview.color} bodyId={id} size={30} animated={false} trackPointer={false} />
-            </button>
-          ))}
+      {PICKER_BODY_IDS.length > 1 && (
+        <div>
+          <span className={LABEL}>{t("mausbotWelcome.look")}</span>
+          <div className="mt-1.5 grid grid-cols-5 gap-1">
+            {PICKER_BODY_IDS.map((id) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={!picture && (preview.mascotBody ?? DEFAULT_BOT_BODY) === id}
+                aria-label={bodyName(id)}
+                title={bodyName(id)}
+                data-mausbot-welcome-body={id}
+                onClick={() => shape({ mascotBody: id })}
+                className={cn("flex h-11 items-center justify-center rounded-xl", !picture && (preview.mascotBody ?? DEFAULT_BOT_BODY) === id ? "bg-ink/[0.08] ring-[1.5px] ring-inset ring-ink/25" : "hover:bg-ink/[0.05]")}
+              >
+                <MausAvatar color={preview.color} bodyId={id} size={30} animated={false} trackPointer={false} />
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       <div>
         <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
           <input ref={image.fileRef} type="file" accept={AVATAR_FILE_TYPES} className="sr-only" tabIndex={-1} aria-hidden="true"

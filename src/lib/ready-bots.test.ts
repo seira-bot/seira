@@ -4,7 +4,6 @@ import { MAUS_COLORS } from "./mascot";
 import { CLASSIC_ROLE_IDS, READY_BOT_CATEGORIES, READY_BOTS, matchesReadyBot, readyBot, readyBotCopy, readyBotTemplate } from "./ready-bots";
 import { setLocale } from "./i18n";
 import en from "@/locales/en.json";
-import { MASCOT_BODY_IDS } from "../../shared/mascot-bodies";
 import type { NewBotDefaults } from "../../shared/new-bot-defaults";
 
 const defaults = (): NewBotDefaults => ({
@@ -27,7 +26,7 @@ describe("ready-made bots", () => {
   it("each has a look the app can draw, a category, and something to try", () => {
     for (const bot of READY_BOTS) {
       expect(Object.keys(MAUS_COLORS)).toContain(bot.look.color);
-      expect(MASCOT_BODY_IDS).toContain(bot.look.mascotBody);
+      expect(bot.look.mascotBody).toBe("seira");
       expect(READY_BOT_CATEGORIES).toContain(bot.category);
       expect(bot.tryAsking.length).toBeGreaterThanOrEqual(2);
       expect(bot.description.length).toBeLessThanOrEqual(120);
@@ -54,7 +53,7 @@ describe("readyBotTemplate", () => {
 
   it("sets who the bot is and how it looks", () => {
     const { profile } = readyBotTemplate(defaults(), plant);
-    expect(profile).toMatchObject({ name: "Fern", title: "Plant care log", soul: plant.soul, color: "green", mascotBody: "drop" });
+    expect(profile).toMatchObject({ name: "Fern", title: "Plant care log", soul: plant.soul, color: "green", mascotBody: "seira" });
   });
 
   it("never changes the person's model, approval level, computer, folder or apps", () => {

@@ -5868,7 +5868,6 @@
   "settings.simple.billing.included": "Mức dùng kèm theo trong tháng này",
   "settings.simple.billing.summary": "{percent}% mức dùng kèm theo trong tháng này",
   "settings.simple.billing.used": "đã dùng",
-  "settings.skin.dressUp.title": "Hóa trang cho bot của tôi",
   "server.cloudComputer.replaced": "Máy tính đám mây của {name} đã ngừng phản hồi, nên Seira đã thay nó bằng máy mới. Các tệp chỉ có trên máy cũ đã mất.",
   "server.cloudComputer.restarted": "Máy tính đám mây của {name} đã ngừng phản hồi, nên Seira đã khởi động lại nó. Máy đã phản hồi trở lại; các chương trình đang mở trên đó đã bị đóng.",
   "server.cloudComputer.capped": "Máy tính đám mây của {name} lại ngừng phản hồi trong vòng một giờ sau khi được thay, nên Seira để nguyên nó. Thay máy tính trong bảng máy tính sẽ thử thêm một lần.",

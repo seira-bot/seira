@@ -15,6 +15,7 @@ export interface PlaceBotRow {
   color?: string;
   mascotBody?: string;
   mascotFaceColor?: string;
+  mascotAccessories?: string[];
   chief?: true;
   waiting?: true;
   working?: true;
