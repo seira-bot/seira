@@ -52,7 +52,7 @@ export function InboxRowItem({ row, now, onOpen, onAction, inCard = false }: {
       className={cn("group relative flex min-w-0 pr-1.5 focus-within:bg-raised/70 hover:bg-raised/70",
         inCard ? cn("items-center gap-2", row.unread ? "bg-raised/45" : "bg-transparent")
           : cn("flex-col gap-2.5 rounded-[14px] p-3 pr-3 ring-1 ring-inset ring-ink/[0.07] transition-[opacity,transform,background-color] duration-200 motion-reduce:transition-none",
-            leaving && "translate-x-4 opacity-0 rtl:-translate-x-4")}>
+            leaving && "translate-x-4 opacity-0 rtl:-translate-x-4"))}>
       <button type="button" onClick={() => onOpen(row)} title={[sender, inCard ? subject : headline, place].filter(Boolean).join(" · ")}
         className={cn("flex min-w-0 flex-1 gap-2 pl-2.5 text-left text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60", inCard ? "items-center py-1.5" : "items-start gap-3 pl-0",
           row.unread ? "font-semibold text-ink" : "font-normal text-ink-secondary")}>
