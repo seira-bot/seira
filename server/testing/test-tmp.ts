@@ -1,7 +1,7 @@
 // One temp folder per test file for everything the test and the code under test put in tmpdir(): the file's
 // afterAll deletes it, so no omb-* folder outlives the file. It sits in the real temp folder, not in the
 // throwaway home, so paths keep the "under /tmp, not under $HOME" shape that product code and tests expect.
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -24,6 +24,11 @@ export function useTestTmp(): TestTmp {
   const path = mkdtempSync(join(tmpdir(), TEST_TMP_PREFIX));
   const before = TEMP_VARIABLES.map((name) => [name, process.env[name]] as const);
   for (const name of TEMP_VARIABLES) process.env[name] = path;
+  // A file whose tests are all skipped never runs its afterAll, so its worker's exit removes the folder then.
+  // It stays after remove(): that removal warns and leaves the folder when it fails, and this is the second try.
+  process.once("exit", () => {
+    try { rmSync(path, { recursive: true, force: true }); } catch {}
+  });
   return {
     path,
     async remove() {
