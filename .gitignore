@@ -42,3 +42,12 @@ deploy/podman/.env
 deploy/podman/.env.*
 !deploy/podman/.env.example
 /.env
+
+# Local working files: never public. See "Local details stay local" in AGENTS.md.
+# (*.local above already covers .env.local and brand/.env.local.)
+/internal/
+/AGENTS.local.md
+/CLAUDE.local.md
+/.leakcheck.local
+/.explore/
+__pycache__/
