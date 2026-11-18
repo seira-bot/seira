@@ -79,7 +79,7 @@ function Preview() {
   document.documentElement.dataset.skin = skin;
   if (params.get("reduced") === "1") document.documentElement.dataset.reducedMotion = "true";
   const state = params.get("state") ?? "choose";
-  const asked = POPUPS[state], popup = asked ? whatsNewView(asked.account, asked.offer) : null;
+  const asked = POPUPS[state], popup = asked ? whatsNewView(asked.account, asked.offer, ["pro", "team"]) : null;
   if (popup && typeof popup === "object") {
     return <div className="relative h-screen overflow-hidden">
       <MockApp />
