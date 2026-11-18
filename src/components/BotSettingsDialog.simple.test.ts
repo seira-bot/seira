@@ -552,10 +552,10 @@ describe("the avatar editor", () => {
   it("puts accessories on and takes them off, one in each slot and at most three", () => {
     const picker = (bot: Bot) => {
       const props = ofType(editor(bot), MascotAccessoryPicker)!.props as Parameters<typeof MascotAccessoryPicker>[0];
-      return capture(() => MascotAccessoryPicker(props));
+      return { nodes: nodes(MascotAccessoryPicker(props)) };
     };
     const rendered = picker(makeBot());
-    expect(rendered.html.match(/data-avatar-accessory="/g)).toHaveLength(MASCOT_ACCESSORY_IDS.length);
+    expect(rendered.nodes.filter((node) => node.props["data-avatar-accessory"] !== undefined)).toHaveLength(MASCOT_ACCESSORY_IDS.length);
     expect(find(rendered, "aria-label", "Wear Glasses").props["aria-pressed"]).toBe(false);
     click(find(rendered, "aria-label", "Wear Glasses"));
     expect(patch).toHaveBeenLastCalledWith({ mascotAccessories: ["glasses"] });

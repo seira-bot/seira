@@ -208,7 +208,7 @@ describe("additive portable team backups", () => {
       && store.projectBotForTask(importedChief.id, task.threadId)?.modelSelection.instanceId === selection().instanceId)).toBe(true);
     expect(store.bot(otherChief.id)?.chiefOfStaff).toBe(true);
     expect(store.bot(archived.id)?.hidden).toBe(true);
-    expect(importedScout.mascotBody).toBe(scout.mascotBody);
+    expect(importedScout.mascotBody).toBe("seira");
     expect(importedScout.mascotFaceColor).toBe("black");
     expect(importedScout.mascotAccessories).toEqual(["glasses", "cap"]);
     expect(importedChief.mascotAccessories).toBeUndefined();
