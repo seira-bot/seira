@@ -11,7 +11,7 @@ BRAND="$ROOT/brand"; . "$BRAND/load-env.sh"
 G=${SEIRA_IMAGE_CMD:?Set SEIRA_IMAGE_CMD in brand/.env.local. See brand/.env.example.}
 cd "$(dirname "$0")"
 mkdir -p raw concept
-REF="$ROOT/brand/mascot/options/d-bot-pendamping.png"
+REF="$ROOT/brand/mascot/options/d-companion-bot.png"
 
 # --- shared style text ------------------------------------------------------
 BODY="Every bot is a floating robot head in the exact style of the reference image: a round matte white head shell, a glossy near-black visor screen on the front, and a hair shell made of smooth matte plastic that sits on the head like the white hair shell in the reference. The eyes and the mouth are simple glowing shapes on the dark screen, as in the reference. No neck, no body, no hands. Same scale, same camera height, same soft studio light, front view, all heads straight to the camera."
