@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { emailGateDone } from "@/lib/analytics";
 import { clearWelcomeDraft } from "@/lib/welcome-draft";
+import { invitedToTeam, teamWelcomeAhead, useTeamWelcomeRecord } from "@/lib/team-welcome";
 import { hostedMember, LOCAL_VIEWER, welcomeDue, welcomeViewer, type WelcomeViewer } from "@/lib/onboarding";
 import { api, useStore } from "@/state/store";
 import { SharedWorkspaceHint } from "./SharedWorkspaceHint";
@@ -38,6 +39,9 @@ export function WelcomeGate({ viewer }: { viewer: WelcomeViewer | null }) {
   const { state, dispatch } = useStore();
   const [dismissed, setDismissed] = useState(false);
   const remoteClient = window.ogb?.remoteClient?.active === true;
+  const team = state.config?.team ?? null;
+  const invited = invitedToTeam(viewer);
+  const teamWelcome = useTeamWelcomeRecord(team && invited ? team.id : null);
   // A welcome finished elsewhere (another window, an older version's record) leaves no draft behind to resume later.
   const finished = Boolean(viewer && state.config) && !welcomeDue(state.config, {
     remoteClient, legacyDone: emailGateDone(), hosted: viewer?.hosted, canSave: viewer?.canSave, cloudHome: viewer?.cloudHome,
@@ -47,7 +51,7 @@ export function WelcomeGate({ viewer }: { viewer: WelcomeViewer | null }) {
   }, [finished]);
   if (!viewer) return null;
   if (hostedMember(viewer)) {
-    return remoteClient ? null : (
+    return remoteClient || teamWelcomeAhead(invited, teamWelcome) ? null : (
       <SharedWorkspaceHint
         replay={state.welcomeOpen}
         onClose={() => {

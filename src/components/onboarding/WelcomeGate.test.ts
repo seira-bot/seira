@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EMPTY_ONBOARDING, LOCAL_VIEWER, WELCOME_VERSION, type WelcomeViewer } from "@/lib/onboarding";
 import { setLocale } from "@/lib/i18n";
 import { WELCOME_DRAFT_KEY } from "@/lib/welcome-draft";
+import { finishTeamWelcome, resetTeamWelcome } from "@/lib/team-welcome";
 
 const fixture = vi.hoisted(() => ({ values: [] as unknown[], index: 0, effects: [] as EffectCallback[] }));
 vi.mock("react", async (original) => ({
@@ -70,6 +71,7 @@ beforeEach(() => {
   vi.stubGlobal("localStorage", storage());
   vi.stubGlobal("fetch", vi.fn());
   setLocale("en");
+  resetTeamWelcome();
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -237,6 +239,37 @@ describe("who gets the welcome flow", () => {
     expect(gate(LOCAL_VIEWER).tree).toBeNull();
     store.state = { ...store.state, appSettingsOpen: false };
     expect(gate(LOCAL_VIEWER).tree?.type).toBe(WelcomeFlow);
+  });
+});
+
+describe("the shared workspace hint on a team", () => {
+  const member: WelcomeViewer = { hosted: true, canSave: false, teamRole: "member" };
+  const readWelcome = async () => {
+    store.state = { ...store.state, config: { ...fresh, team: { id: "acme", name: "Acme" } } };
+    gate(member);
+    for (const effect of fixture.effects) effect();
+    await flush();
+  };
+
+  it("waits until the member closes the team's welcome, so it never covers that screen", async () => {
+    store.api.mockResolvedValue({ welcome: { invitedBy: "ada@acme.test", welcomedAt: null, hints: [] } });
+    store.state = { ...store.state, config: { ...fresh, team: { id: "acme", name: "Acme" } } };
+    expect(gate(member).tree, "while their welcome is still read").toBeNull();
+    await readWelcome();
+    expect(store.api).toHaveBeenCalledWith("/api/me", expect.objectContaining({ background: true }));
+    expect(gate(member).tree, "while their welcome is on screen").toBeNull();
+    store.state = { ...store.state, welcomeOpen: true };
+    expect(gate(member).tree, "a replay from Settings waits too").toBeNull();
+    await finishTeamWelcome("acme");
+    const replay = gate(member).tree!;
+    expect(replay.type).toBe(SharedWorkspaceHint);
+    expect(replay.props.replay).toBe(true);
+  });
+
+  it("shows at once where the Team Cloud keeps no welcome for them", async () => {
+    store.api.mockRejectedValue(new Error("older Team Cloud"));
+    await readWelcome();
+    expect(gate(member).tree?.type).toBe(SharedWorkspaceHint);
   });
 });
 
