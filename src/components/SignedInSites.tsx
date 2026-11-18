@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { LogOut } from "lucide-react";
+import { Download, LogOut } from "lucide-react";
 import { api } from "@/state/store";
 import { t } from "@/lib/i18n";
+import { ChromeImportDialog, type ImportProfile } from "./ChromeImportDialog";
 
 interface SignedInSite { site: string; cookies: number; storage: number }
 interface SignedInSitesAnswer { running: boolean; sites: SignedInSite[] }
@@ -18,6 +19,16 @@ export function SignedInSites({ target, scope = {}, sharedBy, disabled = false, 
   const [sites, setSites] = useState<SignedInSite[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [profiles, setProfiles] = useState<ImportProfile[]>([]);
+  const [importing, setImporting] = useState(false);
+
+  useEffect(() => {
+    let current = true;
+    api<{ profiles?: ImportProfile[] }>("/api/browser-sites/import/profiles")
+      .then((answer) => { if (current && Array.isArray(answer.profiles)) setProfiles(answer.profiles); })
+      .catch(() => {});
+    return () => { current = false; };
+  }, []);
 
   const run = async (request: () => Promise<SignedInSitesAnswer>) => {
     setBusy(true);
@@ -61,6 +72,14 @@ export function SignedInSites({ target, scope = {}, sharedBy, disabled = false, 
           <button type="button" disabled={locked} onClick={() => void signOut()} className={`${buttonClass} self-start`}>
             <LogOut size={13} />{t("settings.sites.signOutAll")}
           </button>
+        )}
+        {profiles.length > 0 && (
+          <button type="button" disabled={locked} title={disabled && !busy ? t("settings.sites.import.wait") : undefined} onClick={() => setImporting(true)} className={`${buttonClass} self-start`}>
+            <Download size={13} />{t("settings.sites.import.open")}
+          </button>
+        )}
+        {importing && (
+          <ChromeImportDialog profiles={profiles} target={target} scope={scope} sharedBy={sharedBy} onImported={setSites} onClose={() => setImporting(false)} />
         )}
         {error && <p role="alert" className="text-[12px] text-danger">{error}</p>}
       </div>

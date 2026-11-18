@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { WebSocketServer } from "ws";
 
 import { browserRestoreKey } from "./browser-engine.ts";
-import { connectCdp, decryptBrowserState, encryptBrowserState, listSignedInSites, signOutOfSites, signedInSites, type BrowserSitesTarget, type CdpEvent } from "./browser-sites.ts";
+import { connectCdp, decryptBrowserState, encryptBrowserState, importIntoSites, listSignedInSites, signOutOfSites, signedInSites, type BrowserSitesTarget, type CdpEvent } from "./browser-sites.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
 const KEY = "a".repeat(64);
@@ -153,6 +153,14 @@ async function fakeChrome(cookies: Array<Record<string, unknown>>, storage: Reco
       if (index >= 0) jar.splice(index, 1);
     }
     if (method === "Network.clearBrowserCookies") jar.length = 0;
+    if (method === "Network.setCookies") {
+      for (const added of params.cookies as Array<Record<string, unknown>>) {
+        const domain = typeof added.domain === "string" ? added.domain : new URL(String(added.url)).hostname;
+        const index = jar.findIndex((entry) => entry.name === added.name && entry.domain === domain && entry.path === added.path);
+        if (index >= 0) jar.splice(index, 1);
+        jar.push({ name: added.name, value: added.value, domain, path: added.path, httpOnly: added.httpOnly, secure: added.secure });
+      }
+    }
     if (method === "Storage.clearDataForOrigin") stored.delete(String(params.origin));
     socket.send(JSON.stringify({ id, result, ...(sessionId ? { sessionId } : {}) }));
   }));
@@ -249,6 +257,82 @@ describe("signing a running browser out", () => {
       args[0] === "get" ? { cdpUrl: "ws://browser.example.net:9222/devtools/browser/x" } : chrome.engine(_target, args);
     await expect(signOutOfSites(target, null, { engine })).rejects.toThrow("DevTools address");
     expect(chrome.calls).toEqual([]);
+  });
+});
+
+const imported = (name: string, domain: string, extra: Record<string, unknown> = {}) => ({ name, value: "iv", domain, path: "/", expires: -1, httpOnly: true, secure: true, ...extra });
+
+describe("importing cookies into a bot browser", () => {
+  it("writes into the running browser through its first page and lists the imported sites", async () => {
+    const { current, target } = profile();
+    writeFileSync(current, SAVED_BY_ENGINE);
+    const chrome = await fakeChrome([cookie("sid", "www.example.com")]);
+    const result = await importIntoSites(target, [
+      imported("a", ".shop.test", { sameSite: "Lax", expires: 1_900_000_000 }),
+      imported("b", "app.shop.test", { sameSite: "None" }),
+    ], { engine: chrome.engine });
+    expect(result).toEqual({ running: true, sites: [{ site: "shop.test", cookies: 2, storage: 0 }, { site: "www.example.com", cookies: 1, storage: 0 }] });
+    const call = chrome.calls.find((entry) => entry.method === "Network.setCookies")!;
+    expect(call.sessionId).toBe("on-page-1");
+    expect(call.params.cookies).toEqual([
+      { name: "a", value: "iv", domain: ".shop.test", path: "/", secure: true, httpOnly: true, sameSite: "Lax", expires: 1_900_000_000 },
+      { name: "b", value: "iv", url: "https://app.shop.test/", path: "/", secure: true, httpOnly: true, sameSite: "None" },
+    ]);
+  });
+
+  it("changes nothing in the running browser for an empty list", async () => {
+    const { target } = profile();
+    const chrome = await fakeChrome([cookie("sid", "www.example.com")]);
+    expect(await importIntoSites(target, [], { engine: chrome.engine })).toEqual({ running: true, sites: [{ site: "www.example.com", cookies: 1, storage: 0 }] });
+    expect(chrome.calls).toEqual([]);
+  });
+
+  it("only connects to the engine's own Chrome on this machine", async () => {
+    const { target } = profile();
+    const chrome = await fakeChrome([cookie("sid", "www.example.com")]);
+    const engine = async (given: BrowserSitesTarget, args: string[]) => args[0] === "get" ? { cdpUrl: "ws://browser.example.net:9222/devtools/browser/x" } : chrome.engine(given, args);
+    await expect(importIntoSites(target, [imported("a", "x.test")], { engine })).rejects.toThrow("DevTools address");
+    expect(chrome.calls).toEqual([]);
+  });
+
+  it("merges into the saved state of a stopped browser: same name, domain and path replace, others stay", async () => {
+    const { current, directory, target, saved } = profile();
+    writeFileSync(current, SAVED_BY_ENGINE);
+    writeFileSync(join(directory, "work-work.json.enc"), SAVED_BY_ENGINE);
+    const result = await importIntoSites(target, [imported("sid", "www.example.com", { value: "new", sameSite: "Lax", expires: 1_900_000_000 }), imported("n", ".fresh.test")], stopped);
+    expect(result).toEqual({ running: false, sites: [{ site: "example.com", cookies: 1, storage: 1 }, { site: "fresh.test", cookies: 1, storage: 0 }, { site: "wikipedia.org", cookies: 2, storage: 0 }].sort((a, b) => a.site.localeCompare(b.site)) });
+    for (const path of [current, join(directory, "work-work.json.enc")]) {
+      const state = saved(path);
+      expect(state.cookies.filter((entry: { name: string; domain: string }) => entry.name === "sid" && entry.domain === "www.example.com")).toEqual([
+        { name: "sid", value: "new", domain: "www.example.com", path: "/", expires: 1_900_000_000, httpOnly: true, secure: true, sameSite: "Lax", size: 6, session: false },
+      ]);
+      expect(state.cookies).toHaveLength(4);
+      expect(state.origins).toHaveLength(1);
+    }
+    expect(await listSignedInSites(target, stopped)).toEqual(result);
+  });
+
+  it("creates the saved state under the restore key when the browser has none, encrypted", async () => {
+    const { current, target, saved } = profile();
+    expect(existsSync(current)).toBe(false);
+    await importIntoSites(target, [imported("a", ".fresh.test", { expires: -1 })], stopped);
+    expect(saved().cookies).toEqual([{ name: "a", value: "iv", domain: ".fresh.test", path: "/", expires: -1, httpOnly: true, secure: true, size: 3, session: true }]);
+    expect(readFileSync(current).includes("fresh.test")).toBe(false);
+  });
+
+  it("leaves an unreadable saved state unchanged and fails with a message for the person", async () => {
+    const { current, target } = profile();
+    const unreadable = encryptBrowserState(JSON.stringify({ cookies: [], origins: [] }), "b".repeat(64));
+    writeFileSync(current, unreadable);
+    const failure = await importIntoSites(target, [imported("a", ".fresh.test")], stopped).catch((error: unknown) => error);
+    expect(failure).toMatchObject({ name: "ChromeImportError", status: 503, message: "Seira could not open this browser's saved logins. Open the browser, then try again." });
+    expect(readFileSync(current).equals(unreadable)).toBe(true);
+  });
+
+  it("an imported site can be signed out again", async () => {
+    const { target } = profile();
+    await importIntoSites(target, [imported("a", ".fresh.test")], stopped);
+    expect(await signOutOfSites(target, "fresh.test", stopped)).toEqual({ running: false, sites: [] });
   });
 });
 
