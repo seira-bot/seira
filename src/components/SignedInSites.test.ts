@@ -158,9 +158,11 @@ describe("signed-in sites", () => {
     await click("Import from Chrome");
     answer({ ticket: "t1", profileName: "Default", browserName: "Google Chrome", sites: [{ site: "google.com", cookies: 4, sensitive: null, suggested: true }] });
     answer({ imported: { sites: 1, cookies: 4 }, skipped: 0, running: false, sites: [example, google] });
-    await click("Continue");
-    await click("Import 1 site");
-    expect(host.textContent).toContain("Imported 1 site (4 cookies).");
+    const inDialog = (label: string) => act(async () => [...document.body.querySelectorAll("button")].find((candidate) => candidate.textContent === label)!.click());
+    await inDialog("Continue");
+    await inDialog("Import 1 site");
+    expect(document.body.textContent).toContain("Imported 1 site (4 cookies).");
+    await inDialog("Close");
     expect(listed().filter((text) => text === "example.com" || text === "google.com").sort()).toEqual(["example.com", "google.com"]);
     expect(host.querySelectorAll("ul")).toHaveLength(2);
   });
