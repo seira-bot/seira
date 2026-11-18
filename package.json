@@ -13,9 +13,7 @@
     "email": "46266943+milind-soni@users.noreply.github.com"
   },
   "contributors": [
-    {
-      "name": "Rama Aditya"
-    }
+    { "name": "Rama Aditya" }
   ],
   "license": "Apache-2.0",
   "desktopName": "bot.seira.app.desktop",
