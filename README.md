@@ -1,8 +1,13 @@
 <div align="center">
 
+<img src="docs/assets/brand/seira-3d.png" alt="Seira: a white 3D robot head with silver hair panels, a black visor screen, glowing red eyes, and a small smile" width="200">
+
+<br>
+<br>
+
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/seira-lockup-reversed.svg">
-  <img src="docs/assets/brand/seira-lockup.svg" alt="seira.bot" width="260">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/seira-wordmark-reversed.svg">
+  <img src="docs/assets/brand/seira-wordmark.svg" alt="seira.bot" width="210">
 </picture>
 
 <h3>Your own team of AI agents in one chat app.</h3>
@@ -25,10 +30,6 @@ Seira runs on your computer and uses the AI plans that you already have.
   <a href="#documentation"><b>Documentation</b></a> ·
   <a href="#contributing"><b>Contributing</b></a>
 </p>
-
-<br>
-
-<img src="docs/assets/brand/seira-mascot.jpg" alt="Seira: a floating white robot head with silver hair panels, a black visor screen, red eyes, and a small smile" width="280">
 
 </div>
 
@@ -104,7 +105,7 @@ The face lives on a black visor screen, so Seira can blink, smile, wink, and thi
 | Signal red | `#E11D48` | Eyes, and the dot in seira.bot |
 | Mist | `#E9ECEF` | Head on dark backgrounds |
 
-The logo files for light and dark backgrounds are in [`docs/assets/brand/`](docs/assets/brand/).
+The 3D logo, the wordmark, the flat logo for light and dark backgrounds, and the avatar are in [`docs/assets/brand/`](docs/assets/brand/).
 
 </details>
 
