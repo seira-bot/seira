@@ -19,7 +19,7 @@ from scipy import ndimage
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CAST_DIR = os.path.dirname(HERE)
-REF = os.path.join(CAST_DIR, "..", "options", "d-bot-pendamping.png")
+REF = os.path.join(CAST_DIR, "..", "options", "d-companion-bot.png")
 
 DIFF = 9          # a pixel is part of an object when a channel differs from the background by more than this
 ERASE_DIFF = 4    # the same limit against the smooth background, to find the whole old head and shadow

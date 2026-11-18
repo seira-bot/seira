@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { StoreProvider, type Bot } from "@/state/store";
-import { MASCOT_BODY_IDS, MASCOT_BODIES } from "../../shared/mascot-bodies";
+import { PICKER_BODY_IDS } from "../../shared/bot-body";
+import { MASCOT_BODIES } from "../../shared/mascot-bodies";
 import { CARVED_BODIES, DIWALI_BODY_IDS, HALLOWEEN_BODY_IDS } from "../../shared/carved-bodies";
 import { BotProfileAvatarCard } from "./BotProfileAvatarCard";
 
@@ -43,9 +44,20 @@ describe("BotProfileAvatarCard body picker", () => {
     const markup = renderCard(makeBot());
 
     expect(markup).toContain(">Body<");
-    for (const id of MASCOT_BODY_IDS) {
-      expect(markup).toContain(`aria-label="Use the ${MASCOT_BODIES[id].name} body"`);
+    for (const id of PICKER_BODY_IDS) {
+      expect(markup).toContain(`aria-label="Use the ${CARVED_BODIES[id as keyof typeof CARVED_BODIES]?.name ?? MASCOT_BODIES[id as keyof typeof MASCOT_BODIES].name} body"`);
     }
+  });
+
+  it("lists Seira first", () => {
+    const markup = renderCard(makeBot());
+    expect(markup.indexOf('aria-label="Use the Seira body"')).toBeGreaterThan(-1);
+    expect(markup.indexOf('aria-label="Use the Seira body"')).toBeLessThan(markup.indexOf(`aria-label="Use the ${MASCOT_BODIES.cursor.name} body"`));
+  });
+
+  it("hides the facial features row on Seira and keeps it on other bodies", () => {
+    expect(renderCard(makeBot())).not.toContain("data-avatar-face-color");
+    expect(renderCard(makeBot({ mascotBody: "cursor" }))).toContain("data-avatar-face-color");
   });
 
   it("offers each festival's bodies in their own row", () => {
@@ -60,10 +72,11 @@ describe("BotProfileAvatarCard body picker", () => {
     expect(markup).toContain(`aria-pressed="false" aria-label="Use the ${CARVED_BODIES.witch.name} body"`);
   });
 
-  it("marks the current body pressed and the rest unpressed, defaulting to cursor", () => {
+  it("marks the current body pressed and the rest unpressed, defaulting to Seira", () => {
     const markup = renderCard(makeBot());
 
-    expect(markup).toContain(`aria-pressed="true" aria-label="Use the ${MASCOT_BODIES.cursor.name} body"`);
+    expect(markup).toContain('aria-pressed="true" aria-label="Use the Seira body"');
+    expect(markup).toContain(`aria-pressed="false" aria-label="Use the ${MASCOT_BODIES.cursor.name} body"`);
     expect(markup).toContain(`aria-pressed="false" aria-label="Use the ${MASCOT_BODIES.star.name} body"`);
   });
 

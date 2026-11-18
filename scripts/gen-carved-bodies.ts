@@ -1,5 +1,5 @@
 /**
- * Bakes every festival pack into `packages/phone-protocol/src/carved-bodies.ts`. Run with `pnpm gen:carved`.
+ * Bakes the brand pack and every festival pack into `packages/phone-protocol/src/carved-bodies.ts`. Run with `pnpm gen:carved`.
  *
  * Each pack's drawings live in `scripts/mascot-bodies/<pack>.ts`, in a 240-unit square
  * centred on x = 120.
@@ -12,11 +12,12 @@ import { fileURLToPath } from "node:url"
 
 import { toPath } from "./mascot-bodies/draw.ts"
 import type { Def, Eyes, Fill } from "./mascot-bodies/carved.ts"
+import { BRAND } from "./mascot-bodies/brand.ts"
 import { DIWALI } from "./mascot-bodies/diwali.ts"
 import { HALLOWEEN } from "./mascot-bodies/halloween.ts"
 
 /** Picker order: each pack's ids, in its drawing order. */
-const PACKS: ReadonlyArray<[string, Def[]]> = [["halloween", HALLOWEEN], ["diwali", DIWALI]]
+const PACKS: ReadonlyArray<[string, Def[]]> = [["brand", BRAND], ["halloween", HALLOWEEN], ["diwali", DIWALI]]
 const DEFS = PACKS.flatMap(([, defs]) => defs)
 
 const quote = (s: string) => JSON.stringify(s)
@@ -84,7 +85,7 @@ function emitTs(): string {
   })
   const all = PACKS.map(([pack]) => `...${pack.toUpperCase()}_BODY_IDS`).join(", ")
   return `/**
- * The festival bodies a bot can wear, drawn flat with a carved face.
+ * The flat bodies a bot can wear: Seira, the shipped mascot, and the festival bodies.
  *
  * GENERATED FILE — do not hand-edit. Run \`pnpm gen:carved\` to rebuild it from
  * \`scripts/gen-carved-bodies.ts\`.
@@ -122,8 +123,9 @@ export interface CarvedBody {
   id: CarvedBodyId;
   /** Human-readable name, used for the picker and the accessible label. */
   name: string;
-  /** "bot" fills with the bot's colour, "pale" with a near-white tint of it, "bone" with \`bone\`. */
-  paint: "bot" | "pale" | "bone";
+  /** "bot" fills with the bot's colour, "pale" with a near-white tint of it, "bone" with \`bone\`,
+   * "hair" with the bot's colour, or \`bone\` for silver and chrome. */
+  paint: "bot" | "pale" | "bone" | "hair";
   bone: string | null;
   eyes: CarvedEyes;
   /** Where the eyes may show. */
@@ -196,7 +198,7 @@ enum CarvedBodies {
     struct Body {
         let id: String
         let name: String
-        /// "bot", "pale" or "bone".
+        /// "bot", "pale", "bone" or "hair".
         let paint: String
         let bone: String?
         let eyes: Eyes
@@ -275,7 +277,7 @@ internal object CarvedBodies {
     data class Body(
         val id: String,
         val name: String,
-        /** "bot", "pale" or "bone". */
+        /** "bot", "pale", "bone" or "hair". */
         val paint: String,
         val bone: String?,
         val eyes: Eyes,
