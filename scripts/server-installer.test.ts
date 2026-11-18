@@ -17,7 +17,7 @@ const TOKEN = "t0ken-of-the-registry";
 const CODE = "ABCD-1234-EFGH";
 const BOX_PASSED = '{"box":"bwrap","total":31,"passed":31,"failed":[],"results":[{"id":"config-hidden","ok":true},{"id":"messages-db-hidden","ok":true}]}';
 const BOX_FAILED = '{"box":"bwrap","total":31,"passed":30,"failed":["config-hidden"],"results":[{"id":"config-hidden","ok":false}]}';
-const FILES = "https://raw.githubusercontent.com/milind-soni/OpenMausBot";
+const FILES = "https://raw.githubusercontent.com/seira-bot/seira";
 const SOURCE = `${FILES}/v0.1.151`;
 const REAL_TOOLS = ["sed", "awk", "grep", "cat", "head", "tail", "tr", "sort", "cut", "mkdir", "mktemp", "chmod", "chown", "mv", "rm", "dirname", "sh", "stat", "install", "find"];
 
@@ -235,7 +235,7 @@ describe.skipIf(!posix)("deploy/install.sh", () => {
     ["a clock an hour off", { env: { FAKE_THEIRS: "1794265200" } }, /^This server's clock is 60 minutes off, so HTTPS certificates will be refused\. Run: sudo timedatectl set-ntp true/],
     ["a release without an image", { env: { FAKE_RELEASE_STATUS: "404" } }, /^Seira v0\.1\.151 has no server image yet/],
     ["a registry that is throttling", { env: { FAKE_RELEASE_STATUS: "429" } }, /^The image registry ghcr\.io did not say whether it has Seira v0\.1\.151 \(it answered 429\)\. Run this again in a few minutes\.$/],
-    ["the latest tag asked for", { env: { OMB_INSTALL_IMAGE: "ghcr.io/milind-soni/openmausbot:latest" } }, /^OMB_INSTALL_IMAGE names the latest tag/],
+    ["the latest tag asked for", { env: { OMB_INSTALL_IMAGE: "ghcr.io/seira-bot/seira:latest" } }, /^OMB_INSTALL_IMAGE names the latest tag/],
   ])("--check on %s prints the one thing to fix", (_name, server, sentence) => {
     const result = run(["--check", "--domain", "maus.example.com"], server);
     expect(result.fixes).toHaveLength(1);
@@ -284,7 +284,7 @@ describe.skipIf(!posix)("deploy/install.sh", () => {
 
   it("installs only as root, and only once every check passes", () => {
     const user = run(["--domain", "maus.example.com"], { env: { FAKE_UID: "1000" } });
-    expect(user.stderr).toContain("Please run this as root: put sudo before sh, like this: curl -fsSL https://raw.githubusercontent.com/milind-soni/OpenMausBot/main/deploy/install.sh | sudo sh -s -- --domain maus.example.com");
+    expect(user.stderr).toContain("Please run this as root: put sudo before sh, like this: curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh | sudo sh -s -- --domain maus.example.com");
     expect(user.calls).toEqual([]);
     const small = run(["--domain", "maus.example.com"], { env: { FAKE_CPUS: "1" } });
     expect(small.status).toBe(1);
@@ -308,19 +308,19 @@ describe.skipIf(!posix)("deploy/install.sh", () => {
     const result = run(["--domain", "maus.example.com", "--email", "owner@example.com"]);
     expect(result.all).toContain("Seira is running at https://maus.example.com");
     expect(result.status).toBe(0);
-    expect(readFileSync(join(result.install, ".env"), "utf8")).toContain("DOMAIN=maus.example.com\nOMB_IMAGE=ghcr.io/milind-soni/openmausbot:v0.1.151\nOMB_SIGNIN_EMAILS=owner@example.com\n");
+    expect(readFileSync(join(result.install, ".env"), "utf8")).toContain("DOMAIN=maus.example.com\nOMB_IMAGE=ghcr.io/seira-bot/seira:v0.1.151\nOMB_SIGNIN_EMAILS=owner@example.com\n");
     expect(statSync(join(result.install, ".env")).mode & 0o777).toBe(0o600);
     expect(statSync(join(result.install, "data")).mode & 0o777).toBe(0o700);
     for (const file of ["compose.yaml", "Caddyfile", "caddy/data", "caddy/config"]) expect(existsSync(join(result.install, file)), file).toBe(true);
     const changes = result.docker.filter((call) => !READS.test(call) && !call.includes(" ps -q omb") && !call.startsWith("docker inspect"));
     expect(changes).toEqual([
       "docker compose pull -q",
-      'docker image inspect -f {{index .Config.Labels "org.opencontainers.image.version"}} ghcr.io/milind-soni/openmausbot:v0.1.151',
-      "docker image inspect -f {{json .Config.Env}} ghcr.io/milind-soni/openmausbot:v0.1.151",
-      'docker image inspect -f {{index .Config.Labels "org.opencontainers.image.version"}} ghcr.io/milind-soni/openmausbot:v0.1.151',
-      "docker run --rm --network none --entrypoint id ghcr.io/milind-soni/openmausbot:v0.1.151 -u",
-      "docker run --rm --network none --entrypoint id ghcr.io/milind-soni/openmausbot:v0.1.151 -g",
-      'docker image inspect -f {{index .Config.Labels "org.opencontainers.image.version"}} ghcr.io/milind-soni/openmausbot:v0.1.151',
+      'docker image inspect -f {{index .Config.Labels "org.opencontainers.image.version"}} ghcr.io/seira-bot/seira:v0.1.151',
+      "docker image inspect -f {{json .Config.Env}} ghcr.io/seira-bot/seira:v0.1.151",
+      'docker image inspect -f {{index .Config.Labels "org.opencontainers.image.version"}} ghcr.io/seira-bot/seira:v0.1.151',
+      "docker run --rm --network none --entrypoint id ghcr.io/seira-bot/seira:v0.1.151 -u",
+      "docker run --rm --network none --entrypoint id ghcr.io/seira-bot/seira:v0.1.151 -g",
+      'docker image inspect -f {{index .Config.Labels "org.opencontainers.image.version"}} ghcr.io/seira-bot/seira:v0.1.151',
       "docker compose up -d --remove-orphans",
       "docker compose exec -T omb node dist-server/bot-box/box-check.js --public=none",
     ]);
@@ -346,9 +346,9 @@ describe.skipIf(!posix)("deploy/install.sh", () => {
     const without = run(["--check", "--domain", "maus.example.com"], registry(""));
     expect(without.stdout).toContain("  ok    version: v0.1.151, the newest release\n  note  This version has no bots' sandbox");
     expect(without.calls.filter((call) => call.includes("-fsSL")).map((call) => call.replace(/^.* (\S+)$/, "$1"))).toEqual([
-      "https://ghcr.io/v2/milind-soni/openmausbot/manifests/v0.1.151",
-      `https://ghcr.io/v2/milind-soni/openmausbot/manifests/${digest("b")}`,
-      `https://ghcr.io/v2/milind-soni/openmausbot/blobs/${digest("d")}`,
+      "https://ghcr.io/v2/seira-bot/seira/manifests/v0.1.151",
+      `https://ghcr.io/v2/seira-bot/seira/manifests/${digest("b")}`,
+      `https://ghcr.io/v2/seira-bot/seira/blobs/${digest("d")}`,
     ]);
     expect(run(["--check", "--domain", "maus.example.com"], registry("OMB_IMAGE=server")).stdout).not.toContain("no bots' sandbox");
     // Asked for no sandbox, or a registry that does not say: nothing to add.
@@ -359,8 +359,8 @@ describe.skipIf(!posix)("deploy/install.sh", () => {
   it("uses the stable channel once it is published, and never the latest tag", () => {
     const result = run(["--domain", "maus.example.com"], { env: { FAKE_STABLE: "200" } });
     expect(result.stdout).toContain("  ok    version: the stable channel");
-    expect(readFileSync(join(result.install, ".env"), "utf8")).toContain("OMB_IMAGE=ghcr.io/milind-soni/openmausbot:stable\n");
-    expect(script).not.toMatch(/openmausbot:latest/);
+    expect(readFileSync(join(result.install, ".env"), "utf8")).toContain("OMB_IMAGE=ghcr.io/seira-bot/seira:stable\n");
+    expect(script).not.toMatch(/(seira|openmausbot):latest/);
     expect(result.calls.some((call) => call.includes("releases/latest"))).toBe(false);
   });
 
@@ -407,7 +407,7 @@ describe.skipIf(!posix)("deploy/install.sh", () => {
     expect(second.all).toContain("Seira is running at https://maus.example.com");
     expect(second.status).toBe(0);
     expect(readFileSync(env, "utf8").split("\n").filter((line) => /^[A-Z_]+=/.test(line))).toEqual([
-      "OMB_SIGNIN_SMTP_URL=smtps://mail.example.com", "DOMAIN=maus.example.com", "OMB_IMAGE=ghcr.io/milind-soni/openmausbot:v0.1.152", "COMPOSE_FILE=compose.yaml:compose.box.yaml",
+      "OMB_SIGNIN_SMTP_URL=smtps://mail.example.com", "DOMAIN=maus.example.com", "OMB_IMAGE=ghcr.io/seira-bot/seira:v0.1.152", "COMPOSE_FILE=compose.yaml:compose.box.yaml",
     ]);
     expect(readFileSync(join(first.install, "compose.yaml"), "utf8")).toContain("name: openmausbot");
     expect(readFileSync(join(first.install, "data", "messages.db"), "utf8")).toBe("chats");
@@ -597,7 +597,7 @@ describe.skipIf(!posix)("deploy/install.sh", () => {
     expect(first.stdout).toContain(`To update later, with a backup first and a way back:  sudo ${first.install}/update.sh`);
     const env = join(first.install, ".env");
     const pin = `ghcr.io/milind-soni/openmausbot@sha256:${"a".repeat(64)}`;
-    writeFileSync(env, readFileSync(env, "utf8").replace("OMB_IMAGE=ghcr.io/milind-soni/openmausbot:stable", `OMB_IMAGE=${pin}`));
+    writeFileSync(env, readFileSync(env, "utf8").replace("OMB_IMAGE=ghcr.io/seira-bot/seira:stable", `OMB_IMAGE=${pin}`));
     const again = run([], { env: { FAKE_STABLE: "200" } }, { dir: first.dir });
     expect(again.status).toBe(0);
     expect(again.stdout).toContain("  ok    version: the one update.sh pinned here; it stays until update.sh changes it");
