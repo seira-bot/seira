@@ -460,25 +460,25 @@ describe("an invited person with no Cloud of their own", () => {
 
 describe("planPrice", () => {
   it("shows whole rupiah in the Indonesian format", () => {
-    expect(planPrice({ amount: 150000, currency: "IDR" }).replace(/\s/g, " ")).toBe("Rp150.000");
-    expect(planPrice({ amount: 40000, currency: "IDR" }).replace(/\s/g, " ")).toBe("Rp40.000");
-    expect(planPrice({ amount: 1500000, currency: "IDR" }).replace(/\s/g, " ")).toBe("Rp1.500.000");
+    expect(planPrice({ amount: 213000, currency: "IDR" }).replace(/\s/g, " ")).toBe("Rp213.000");
+    expect(planPrice({ amount: 30000, currency: "IDR" }).replace(/\s/g, " ")).toBe("Rp30.000");
+    expect(planPrice({ amount: 2130000, currency: "IDR" }).replace(/\s/g, " ")).toBe("Rp2.130.000");
   });
   it("shows no decimals for rupiah, and keeps US cents as dollars", () => {
-    expect(planPrice({ amount: 150000, currency: "IDR" })).not.toMatch(/[,]\d/);
+    expect(planPrice({ amount: 213000, currency: "IDR" })).not.toMatch(/[,]\d/);
     expect(planPrice({ amount: 4900 })).toBe("$49");
     expect(planPrice({ amount: 4950 })).toBe("$49.50");
   });
   it("prices an extra amount in the plan's own currency", () => {
-    expect(planPrice({ amount: 150000, currency: "IDR" }, 40000).replace(/\s/g, " ")).toBe("Rp40.000");
+    expect(planPrice({ amount: 213000, currency: "IDR" }, 30000).replace(/\s/g, " ")).toBe("Rp30.000");
     expect(planPrice({ amount: 4900 }, 1000)).toBe("$10");
   });
   it("finds the cheapest plan whatever its currency unit", () => {
-    expect(cheapestPlan([{ amount: 300000, currency: "IDR" as const }, { amount: 150000, currency: "IDR" as const }]).amount).toBe(150000);
+    expect(cheapestPlan([{ amount: 300000, currency: "IDR" as const }, { amount: 213000, currency: "IDR" as const }]).amount).toBe(213000);
   });
   it("puts an IDR plan's price on its card", () => {
-    const team: CloudOfferPlan = { tier: "team", amount: 150000, currency: "IDR" };
+    const team: CloudOfferPlan = { tier: "team", amount: 213000, currency: "IDR" };
     const [card] = planCards({ plans: [team], recommended: "team" });
-    expect(card!.price.replace(/\s/g, " ")).toBe("Rp150.000");
+    expect(card!.price.replace(/\s/g, " ")).toBe("Rp213.000");
   });
 });

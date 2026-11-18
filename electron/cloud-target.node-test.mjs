@@ -110,20 +110,20 @@ test("an unknown contract version is refused as unreachable, a known one is not"
 const plan = (price, extra = {}) => ({ tier: "team", label: "Team", price: { currency: "IDR", interval: "month", ...price }, ...extra });
 
 test("IDR plans parse in whole rupiah, and USD plans in cents keep working", () => {
-  const idr = parseCloudOffer({ plans: [plan({ amount: 150000, extraSeatAmount: 40000 })] });
-  assert.deepEqual(idr.plans, [{ tier: "team", label: "Team", amount: 150000, currency: "IDR", extraSeatAmount: 40000 }]);
+  const idr = parseCloudOffer({ plans: [plan({ amount: 213000, extraSeatAmount: 30000 })] });
+  assert.deepEqual(idr.plans, [{ tier: "team", label: "Team", amount: 213000, currency: "IDR", extraSeatAmount: 30000 }]);
   const usd = parseCloudOffer({ plans: [{ tier: "pro", price: { currency: "USD", interval: "month", amount: 4900 } }] });
   assert.deepEqual(usd.plans, [{ tier: "pro", amount: 4900 }], "USD has no currency field, as before");
   assert.equal(parsePublicOffer({ plans: [plan({ amount: 99000 })] }).plans[0].currency, "IDR");
 });
 
 test("an IDR plan with a bad amount, currency, interval or seat price is not sold", () => {
-  const bad = [{ amount: 0 }, { amount: -1 }, { amount: 1.5 }, { amount: 100_000_001 }, { amount: "150000" }, { amount: 150000, interval: "year" }, { amount: 150000, currency: "EUR" }, { amount: 150000, currency: "idr" }];
+  const bad = [{ amount: 0 }, { amount: -1 }, { amount: 1.5 }, { amount: 100_000_001 }, { amount: "213000" }, { amount: 213000, interval: "year" }, { amount: 213000, currency: "EUR" }, { amount: 213000, currency: "idr" }];
   for (const price of bad) assert.equal(parseCloudOffer({ plans: [plan(price)] }), null, JSON.stringify(price));
   assert.equal(parseCloudOffer({ plans: [{ tier: "pro", price: { currency: "USD", interval: "month", amount: 10_000_001 } }] }), null, "the USD cap is unchanged");
-  assert.equal(parseCloudOffer({ plans: [plan({ amount: 150000, extraSeatAmount: 100_000_001 })] }).plans[0].extraSeatAmount, undefined);
-  assert.equal(parseCloudOffer({ plans: [plan({ amount: 150000, extraSeatAmount: -5 })] }).plans[0].extraSeatAmount, undefined);
-  assert.equal(parseCloudOffer({ plans: [plan({ amount: 150000, extraSeatAmount: 0 })] }).plans[0].extraSeatAmount, 0);
-  const notTeam = parseCloudOffer({ plans: [{ ...plan({ amount: 150000, extraSeatAmount: 40000 }), tier: "pro" }] });
+  assert.equal(parseCloudOffer({ plans: [plan({ amount: 213000, extraSeatAmount: 100_000_001 })] }).plans[0].extraSeatAmount, undefined);
+  assert.equal(parseCloudOffer({ plans: [plan({ amount: 213000, extraSeatAmount: -5 })] }).plans[0].extraSeatAmount, undefined);
+  assert.equal(parseCloudOffer({ plans: [plan({ amount: 213000, extraSeatAmount: 0 })] }).plans[0].extraSeatAmount, 0);
+  const notTeam = parseCloudOffer({ plans: [{ ...plan({ amount: 213000, extraSeatAmount: 30000 }), tier: "pro" }] });
   assert.equal(notTeam.plans[0].extraSeatAmount, undefined, "only a Team plan has a seat price");
 });
