@@ -52,6 +52,7 @@ import { isCancelledTranscriptRow, PERSON_STOPPED_TURN_NAME } from "../../shared
 import { stopNoticeDue, useStoppedAt } from "@/lib/stop-turn";
 import { THIS_COMPUTER_NOT_READY } from "../../shared/your-computer";
 import { BotAvatar } from "./Avatar";
+import { TurnFace } from "./BotCharacter";
 import { TurnPresence } from "./TurnPresence";
 import { showToolCallsEnabled, skillAuthoringEnabled } from "@/lib/feature-flags";
 import { normalizeState, stateForBot } from "@/lib/mascot";
@@ -1196,16 +1197,7 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
             </div>
           )}
           <TurnPresence
-            avatar={
-              <BotAvatar
-                bot={bot}
-                state={toolInFlight ? "working" : "thinking"}
-                size={advanced ? 36 : 28}
-                forward={false}
-                lookAround={1}
-                trackPointer={false}
-              />
-            }
+            avatar={<TurnFace bot={bot} working={Boolean(toolInFlight)} size={advanced ? 36 : 28} />}
             simple={!advanced}
             className={cn(!advanced && presenceUnderBubble && SIMPLE_STACKED)}
             label={teammatesWorking ? t("chat.teammatesWorking") : sharedRun.label}

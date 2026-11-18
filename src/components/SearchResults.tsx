@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { GitBranch, Wrench } from "lucide-react";
 import { api, useStore, formatTime } from "@/state/store";
 import { BotAvatar } from "./Avatar";
+import { SeiraCharacter } from "./seira-character";
 import { cn } from "@/lib/cn";
 import type { SearchHit } from "@/lib/search-hit";
 import { landOnSearchHit } from "@/lib/focus-message";
@@ -55,7 +56,7 @@ export function SearchResults({ query, onLanded }: { query: string; onLanded: ()
         {hits ? t("search.messagesCount", { count: `${hits.length}${hits.length === 40 ? "+" : ""}` }) : t("search.messages")}
       </div>
       {error && <div className="px-3 py-2 text-[13px] text-danger">{t("search.failed", { error })}</div>}
-      {hits && hits.length === 0 && !error && <div className="px-3 py-3 text-[13px] text-ink-secondary">{t("search.noMatch", { query: q })}</div>}
+      {hits && hits.length === 0 && !error && <div className="flex items-center gap-2 px-3 py-2 text-[13px] text-ink-secondary"><SeiraCharacter state="idle" size={32} />{t("search.noMatch", { query: q })}</div>}
       {hits?.map((hit) => {
         const bot = hit.botId ? state.bots.find((b) => b.id === hit.botId) : undefined;
         const before = hit.snippet.slice(0, hit.matchStart);

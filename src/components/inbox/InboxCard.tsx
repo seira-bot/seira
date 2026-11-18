@@ -3,7 +3,7 @@
 // with their answers right there (the line it sits under answers on its own card), and the way into the whole inbox.
 // With nothing open it shrinks to one line.
 import { useEffect, useState } from "react";
-import { Check, CornerUpLeft, Inbox } from "lucide-react";
+import { CornerUpLeft, Inbox } from "lucide-react";
 import type { InboxRow, InboxView } from "../../../shared/inbox";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
@@ -11,6 +11,7 @@ import { openInbox, readInboxRow, useInboxView } from "@/state/inbox";
 import { pendingApprovals, PendingApprovalActions } from "../PendingApproval";
 import { ASK_QUIET_ANSWER, ASK_QUIET_BUTTON, AskChoices, AskError } from "../AskCard";
 import { ELEVATED_CARD } from "../elevated";
+import { SeiraCharacter } from "../seira-character";
 import { InboxRowItem } from "./InboxRow";
 import { asMessage } from "./inbox-answer";
 import { askOf, CARD_ROWS, choiceResponse, choicesOf, rowsIn, tabCounts } from "./inbox-view";
@@ -75,7 +76,7 @@ export function InboxCard({ view }: { view: InboxView }) {
   if (!rows.length) {
     return (
       <section data-inbox-card="caught-up" aria-label={t("inbox.card.caughtUp")} className={cn(shell, "flex items-center gap-2 px-4 py-2 text-[13px] text-ink-secondary")}>
-        <Check size={14} aria-hidden="true" className="shrink-0 text-success" />
+        <SeiraCharacter state="happy" size={24} />
         <span className="min-w-0 flex-1 truncate">{t("inbox.card.caughtUp")}{counts.info > 0 && ` · ${t("inbox.card.forInfo", { count: counts.info })}`}</span>
         <button type="button" onClick={openAll} className={cn(ASK_QUIET_BUTTON, "-me-2")}>{t("inbox.card.open")}</button>
       </section>

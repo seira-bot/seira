@@ -9,6 +9,7 @@ import type { LocaleKey } from "@/locales";
 import { useStore } from "@/state/store";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useCaptionChrome } from "./DesktopCapabilities";
+import { SeiraCharacter } from "./seira-character";
 import { Switch } from "./SettingsPrimitives";
 import { MENU_SHEET } from "./menu-recipe";
 
@@ -124,7 +125,7 @@ function FilesPage({ bridge }: { bridge: CloudFilesBridge }) {
         ? <ul className="flex flex-col divide-y divide-hairline/40 rounded-xl bg-card">
           {state.shared.map((folder) => <FolderRow key={folder.id} folder={folder} bridge={bridge} busy={busy} run={run} onStop={() => setAsk({ kind: "stop", folder })} />)}
         </ul>
-        : <p className="text-[13px] text-ink-secondary">{t("files.empty")}</p>}
+        : <div className="flex items-center gap-3"><SeiraCharacter state="sleep" size={48} /><p className="text-[13px] text-ink-secondary">{t("files.empty")}</p></div>}
       <button type="button" disabled={busy} className="ui-button self-start"
         onClick={() => void run(async () => { const check = await bridge.pickFolder(); if (check) setAsk({ kind: "share", check }); })}>{t("files.add")}</button>
       {state.disk && <Storage disk={state.disk} busy={busy} onMore={moreSpace} />}
