@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, Minus } from "lucide-react";
 import { useCloudSendNotice } from "@/components/CloudSendStrip";
+import { SeiraCharacter } from "@/components/seira-character";
 import { countedList } from "@/lib/cloud-send";
 import { WindowDragStrip } from "@/components/DesktopCapabilities";
 import { track } from "@/lib/analytics";
@@ -180,8 +181,13 @@ export function CloudWelcome() {
     <WindowDragStrip />
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto @2xl/welcome:grid @2xl/welcome:grid-cols-[250px_minmax(0,1fr)] @2xl/welcome:grid-rows-[minmax(0,1fr)] @2xl/welcome:overflow-hidden">
       <nav aria-label={t("cloudWelcome.steps")} className="flex shrink-0 flex-col border-b border-hairline/50 bg-panel px-5 pb-4 pt-7 max-md:pt-14 @2xl/welcome:min-h-0 @2xl/welcome:overflow-y-auto @2xl/welcome:border-b-0 @2xl/welcome:border-r @2xl/welcome:px-[18px] @2xl/welcome:pb-5 @2xl/welcome:pt-[30px]">
-        <h1 className="px-1.5 text-[18px] font-semibold tracking-[-0.015em] text-ink [text-wrap:balance]">{t("cloudWelcome.title", { name })}</h1>
-        <p className="mt-1 px-1.5 text-[13px] leading-relaxed text-ink-secondary">{t("cloudWelcome.intro")}</p>
+        <div className="flex items-center gap-2 @2xl/welcome:flex-col @2xl/welcome:items-start @2xl/welcome:gap-0">
+          <SeiraCharacter state={view === "done" ? "happy" : "greet"} size={72} className="-my-1 shrink-0" />
+          <div className="min-w-0">
+            <h1 className="px-1.5 text-[18px] font-semibold tracking-[-0.015em] text-ink [text-wrap:balance]">{t("cloudWelcome.title", { name })}</h1>
+            <p className="mt-1 px-1.5 text-[13px] leading-relaxed text-ink-secondary">{t("cloudWelcome.intro")}</p>
+          </div>
+        </div>
         <div className="mt-3 flex items-center justify-between gap-2 @2xl/welcome:mt-4 @2xl/welcome:flex-1 @2xl/welcome:flex-col @2xl/welcome:items-stretch @2xl/welcome:justify-start">
           <ol className="flex min-w-0 gap-1 @2xl/welcome:flex-col @2xl/welcome:gap-1.5">
             {WELCOME_STEPS.map((step, index) => {

@@ -1,24 +1,26 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type SyntheticEvent } from "react";
 import { Crown } from "lucide-react";
-import { BotAvatar, MausAvatar } from "@/components/Avatar";
+import { BotAvatar } from "@/components/Avatar";
 import { usePrefersReducedMotion } from "@/components/mascot-clock";
+import { SeiraCharacter } from "@/components/seira-character";
 import { cn } from "@/lib/cn";
-import { chiefChoices, chiefFor, createChiefPatch, DEFAULT_BOT_NAME, myDefaultBot, setWelcomingBot, stageIntro, useViewerEmail } from "@/lib/default-bot";
+import { chiefChoices, chiefFor, createChiefPatch, myDefaultBot, setWelcomingBot, stageIntro, useViewerEmail } from "@/lib/default-bot";
 import { t } from "@/lib/i18n";
 import { FLIGHT_MS, landInSidebar } from "@/lib/mausbot-landing";
 import { useStore, type Bot } from "@/state/store";
+import { SeiraHero, takeOff } from "./SeiraHero";
 
 /** Clicks, Enter and Space wait this long after the dialog opens, so a double click on Next never presses Create. */
 export const CHIEF_GUARD_MS = 300;
 /** The dialog and its scrim fade out (opacity only), and a reduced-motion landing crossfades, over this long. */
 export const CHIEF_FADE_MS = 150;
-const AVATAR_SIZE = 64;
+const CHARACTER_SIZE = 104;
 const SECONDARY = "ui-button ui-button-pill";
 const PRIMARY = "ui-button ui-button-pill ui-button-primary";
 
 function ChiefBadge() {
   return (
-    <span aria-hidden="true" data-chief-badge="" className="absolute bottom-0 right-0 flex size-4 items-center justify-center rounded-full bg-[#E8993A] text-white ring-2 ring-menu">
+    <span aria-hidden="true" data-chief-badge="" className="absolute bottom-3 right-3 flex size-4 items-center justify-center rounded-full bg-[#E8993A] text-white ring-2 ring-menu">
       <Crown size={9} strokeWidth={2.5} fill="currentColor" />
     </span>
   );
@@ -29,9 +31,9 @@ function canLead(bot: Bot, instances: ReturnType<typeof useStore>["state"]["inst
   return Boolean(bot.chiefOfStaff) || instances.find((instance) => instance.instanceId === bot.modelSelection.instanceId)?.capabilities?.agentsMcp === true;
 }
 
-/** The first run's second screen, over the empty app: MausBot as the person's Chief of Staff (Create), or, where they
+/** The first run's second screen, over the empty app: Seira as the person's Chief of Staff (Create), or, where they
  * already have bots, one of those (Choose, then Confirm). It shows only where no other bot is the Chief (chiefStepFits)
- * and asks for a choice, so Escape leaves only the list. Create flies MausBot onto its sidebar tile; the chat comes when
+ * and asks for a choice, so Escape leaves only the list. Create flies Seira onto its sidebar tile; the chat comes when
  * it lands (`onDone`), and `onLeave` fades the scrim with the dialog. */
 export function ChiefIntro({ replay, onDone, onLeave }: { replay: boolean; onDone: (botId: string | null) => void; onLeave?: () => void }) {
   const { state, dispatch } = useStore();
@@ -79,6 +81,7 @@ export function ChiefIntro({ replay, onDone, onLeave }: { replay: boolean; onDon
     if (leaving || !maus) return;
     const patch = createChiefPatch(maus, chief);
     if (!replay) stageIntro(maus.id);
+    if (!reduced) takeOff(avatar.current);
     landInSidebar({
       from: avatar.current,
       botId: maus.id,
@@ -173,7 +176,7 @@ export function ChiefIntro({ replay, onDone, onLeave }: { replay: boolean; onDon
         <>
           <div className="flex flex-col items-center gap-4 px-6 pb-4 pt-6 text-center">
             <span ref={avatar} className="relative flex">
-              {maus ? <BotAvatar bot={maus} size={AVATAR_SIZE} motion="arrive" /> : <MausAvatar color="chrome" size={AVATAR_SIZE} label={DEFAULT_BOT_NAME} />}
+              {maus ? <SeiraHero bot={maus} state="greet" size={CHARACTER_SIZE} /> : <SeiraCharacter state="greet" size={CHARACTER_SIZE} />}
               <ChiefBadge />
             </span>
             <div className="flex flex-col gap-2">
