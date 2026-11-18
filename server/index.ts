@@ -440,7 +440,8 @@ import { ROUTINE_RESTARTED, RoutineManager, type Routine, type RoutineRun, type 
 import { CalendarCallManager, type CalendarCall } from "./calendar-calls.ts";
 import { BROWSER_UPLOAD_TOOL, browserRuntimeEnv } from "./browser-runtime.ts";
 import { BrowserUploadRefusal, uploadableFiles } from "./browser-upload.ts";
-import { importIntoSites, listSignedInSites, signOutOfSites } from "./browser-sites.ts"; import { createChromeImportService } from "./browser/chrome-import/service.ts";
+import { importIntoSites, listSignedInSites, signOutOfSites } from "./browser-sites.ts";
+import { createChromeImportService } from "./browser/chrome-import/service.ts";
 import { HeldSecrets, TEAM_READER, VaultStore } from "./vault-store.ts";
 import { OnePasswordLogins, onePasswordUnavailable, sdkOnePasswordClient, type OnePasswordSdk } from "./onepassword.ts";
 import { nativeRequire } from "./data/engine.ts";

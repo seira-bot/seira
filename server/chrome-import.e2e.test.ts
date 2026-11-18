@@ -43,7 +43,7 @@ async function startServer(home: string, engine: string) {
   const base = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, ["--experimental-strip-types", join(ROOT, "server/index.ts")], {
     cwd: ROOT,
-    env: { ...verificationServerEnvironment(process.env, home, port), OMB_AGENT_BROWSER_PATH: engine },
+    env: { ...verificationServerEnvironment(process.env, home, port), XDG_CONFIG_HOME: join(home, ".config"), OMB_AGENT_BROWSER_PATH: engine },
     stdio: ["ignore", "pipe", "pipe"],
   });
   children.push(child);
