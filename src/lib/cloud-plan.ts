@@ -84,9 +84,9 @@ export function usd(dollars: number): string {
 }
 
 const rupiah = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
-/** A plan's price as the person reads it: whole rupiah for IDR, US cents (no `currency`) for USD. */
+/** A plan's price as the person reads it: whole rupiah for IDR, written "Rp213.000" without a space, US cents (no `currency`) for USD. */
 export function planPrice(plan: Pick<CloudOfferPlan, "amount" | "currency">, amount: number = plan.amount): string {
-  return plan.currency === "IDR" ? rupiah.format(amount) : usd(amount / 100);
+  return plan.currency === "IDR" ? rupiah.format(amount).replace(/^Rp\s*/, "Rp") : usd(amount / 100);
 }
 
 export type CloudTrialAction = "manage" | "subscribe" | "status";
