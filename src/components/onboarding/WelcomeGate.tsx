@@ -3,7 +3,7 @@ import { emailGateDone } from "@/lib/analytics";
 import { clearWelcomeDraft } from "@/lib/welcome-draft";
 import { hostedMember, LOCAL_VIEWER, welcomeDue, welcomeViewer, type WelcomeViewer } from "@/lib/onboarding";
 import { api, useStore } from "@/state/store";
-import { SharedWorkspaceHint } from "./SharedWorkspaceHint";
+import { SharedWorkspaceHint, useSharedHintOn } from "./SharedWorkspaceHint";
 import { WelcomeFlow } from "./WelcomeFlow";
 
 /**
@@ -38,6 +38,7 @@ export function WelcomeGate({ viewer }: { viewer: WelcomeViewer | null }) {
   const { state, dispatch } = useStore();
   const [dismissed, setDismissed] = useState(false);
   const remoteClient = window.ogb?.remoteClient?.active === true;
+  const sharedHint = useSharedHintOn(viewer);
   // A welcome finished elsewhere (another window, an older version's record) leaves no draft behind to resume later.
   const finished = Boolean(viewer && state.config) && !welcomeDue(state.config, {
     remoteClient, legacyDone: emailGateDone(), hosted: viewer?.hosted, canSave: viewer?.canSave, cloudHome: viewer?.cloudHome,
@@ -47,14 +48,14 @@ export function WelcomeGate({ viewer }: { viewer: WelcomeViewer | null }) {
   }, [finished]);
   if (!viewer) return null;
   if (hostedMember(viewer)) {
-    return remoteClient ? null : (
+    return sharedHint ? (
       <SharedWorkspaceHint
         replay={state.welcomeOpen}
         onClose={() => {
           if (state.welcomeOpen) dispatch({ type: "toggleWelcome", open: false });
         }}
       />
-    );
+    ) : null;
   }
   const due =
     !dismissed &&

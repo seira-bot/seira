@@ -50,6 +50,7 @@ import { ADVANCED_BACK_KEY } from "@/lib/new-look";
 import { api } from "@/state/store";
 import { forgetAnnouncementCards, seenKey } from "@/lib/announcements";
 import { CLOUD_WELCOME_DONE } from "../../shared/cloud-hints";
+import { resetTeamWelcome } from "@/lib/team-welcome";
 
 const DAY = 86_400_000, NOW = new Date(2026, 9, 9, 12).getTime();
 const plans = [
@@ -143,6 +144,7 @@ let session: Map<string, string>;
 const returning = () => { f.state.bots = [{ tasks: [{ threadId: "t", createdAt: 1, usage: { turns: 2 } }] }]; };
 const launchCardsSeen = () => { desk.saved = { seen: [WHATS_NEW_NOTICE] }; storage.set(TEAMS_NOTICE, "1"); storage.set(MODELGO_OFFER_NOTICE, "1"); storage.set(GROK_MOVE_NOTICE, "1"); storage.set(PRODUCT_HUNT_NOTICE, "1"); storage.set(SIMPLE_MODE_PROMPT_KEY, "1"); storage.set(BOAT_OFFER_NOTICE, "1"); };
 const hints = () => f.state.config.onboarding.hintsSeen as string[];
+const SHARED_HINT_CLOSED = "omb.onboarding.sharedWorkspaceHint";
 
 beforeEach(() => {
   // The page's announcement cards live beside the component for the session; no test inherits another's.
@@ -162,6 +164,8 @@ beforeEach(() => {
   vi.stubGlobal("localStorage", { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) });
   // The popups, the Product Hunt card and Boat's offer start seen: the tests before their own are about the other cards.
   launchCardsSeen();
+  // A hosted member closed the shared workspace hint already: one test below is about the notices waiting for it.
+  storage.set(SHARED_HINT_CLOSED, "1");
   accountListeners = new Set();
   bridges = {
     cloud: { state: vi.fn(async () => account), onState: vi.fn((listener: (next: CloudAccountState) => void) => { accountListeners.add(listener); return () => accountListeners.delete(listener); }),
@@ -1904,6 +1908,13 @@ describe("the Teams What's new", () => {
     expect(steps()).toContain("seen"); expect(steps().filter(step => step !== "seen")).toEqual(["got_it"]);
     expect(wrote("/api/me/welcome")).toEqual([{ hints: [TEAMS_NOTICE] }]);
     await keptForGood();
+  });
+
+  it("a Team Cloud's member: the notice waits while the shared workspace hint holds its corner", async () => {
+    onTeamCloud("member", "browser"); resetTeamWelcome(); storage.delete(SHARED_HINT_CLOSED);
+    expect(await launch(), "while the hint is on screen").not.toContain(TITLE);
+    storage.set(SHARED_HINT_CLOSED, "1");
+    expect(await launch(), "once they close it").toContain(TITLE);
   });
 
   it("everyone else in a browser, a personal Cloud's page included: Start a team on the website; × closes it for good", async () => {
