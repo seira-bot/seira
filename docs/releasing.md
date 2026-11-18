@@ -271,6 +271,8 @@ docker buildx imagetools inspect ghcr.io/seira-bot/seira:v<version>
 ```
 
 - Start the run from `main`. The `release` environment refuses other branches.
+- Publish the GitHub release first. The workflow refuses a tag that is not a
+  published release, and it builds the tag only, never a branch of that name.
 - The image must show both platforms, and the label
   `org.opencontainers.image.version` must be `v<version>`.
 - The package must be public, or a server cannot pull it. An organization

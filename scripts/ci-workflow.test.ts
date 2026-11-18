@@ -172,6 +172,12 @@ describe("Server image workflow", () => {
     expect(stepsOf(publish).some((step) => step.uses?.startsWith("actions/cache") || /\bcache-(from|to)\b/.test(JSON.stringify(step.with ?? {})))).toBe(false);
   });
 
+  it("checks out a release tag only by its full tag name", () => {
+    const checkouts = Object.values(image.jobs).flatMap(stepsOf).filter((step) => step.uses?.startsWith("actions/checkout@"));
+    expect(checkouts).toHaveLength(2);
+    for (const step of checkouts) expect(step.with?.ref).toBe("${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}");
+  });
+
   it("publishes to this repository's own package only", () => {
     const meta = stepsOf(publish).find((step) => step.uses?.startsWith("docker/metadata-action@"));
     expect(meta?.with?.images).toBe("ghcr.io/${{ github.repository }}");
