@@ -149,12 +149,12 @@ const { RoutineEditor } = await import("./RoutinesPage");
 const { SignedInSites } = await import("./SignedInSites");
 const { AvatarImageGenerator } = await import("./AvatarImageGenerator");
 const { AvatarFraming } = await import("./avatar-editing");
-const { MascotFaceColorPicker } = await import("./MascotFaceColorPicker");
 const { MascotAccessoryPicker } = await import("./MascotAccessoryPicker");
 const { Switch } = await import("./SettingsPrimitives");
 const { OrgSkillsCard } = await import("./bot-settings/OrgSkillsCard");
 const { PackageProvenance } = await import("./bot-settings/PackageProvenance");
 const { AdvancedSettingsRow } = await import("./bot-panel/AdvancedSettingsRow");
+const { PanelTabs } = await import("./bot-panel/PanelTabs");
 
 afterAll(() => vi.unstubAllGlobals());
 
@@ -164,6 +164,8 @@ function nodes(value: ReactNode): Node[] {
   return Children.toArray(value).flatMap((child) => {
     if (!isValidElement(child)) return [];
     const node = child as Node;
+    // PanelTabs holds no state, so its buttons are read by calling it, as a parent's own markup would be.
+    if (node.type === PanelTabs) return [node, ...nodes(PanelTabs(node.props as never))];
     return [node, ...nodes(node.props.children), ...nodes(node.props.action as ReactNode), ...nodes(node.props.extra as ReactNode), ...nodes(node.props.label as ReactNode), ...nodes(node.props.hint as ReactNode)];
   });
 }
@@ -552,10 +554,10 @@ describe("the avatar editor", () => {
   it("puts accessories on and takes them off, one in each slot and at most three", () => {
     const picker = (bot: Bot) => {
       const props = ofType(editor(bot), MascotAccessoryPicker)!.props as Parameters<typeof MascotAccessoryPicker>[0];
-      return capture(() => MascotAccessoryPicker(props));
+      return { nodes: nodes(MascotAccessoryPicker(props)) };
     };
     const rendered = picker(makeBot());
-    expect(rendered.html.match(/data-avatar-accessory="/g)).toHaveLength(MASCOT_ACCESSORY_IDS.length);
+    expect(rendered.nodes.filter((node) => node.props["data-avatar-accessory"] !== undefined)).toHaveLength(MASCOT_ACCESSORY_IDS.length);
     expect(find(rendered, "aria-label", "Wear Glasses").props["aria-pressed"]).toBe(false);
     click(find(rendered, "aria-label", "Wear Glasses"));
     expect(patch).toHaveBeenLastCalledWith({ mascotAccessories: ["glasses"] });
@@ -590,15 +592,6 @@ describe("the avatar editor", () => {
   it("resets the mascot as the Advanced card does", () => {
     click(find(editor(makeBot()), "data-avatar-reset"));
     expect(patch).toHaveBeenLastCalledWith({ avatarCrop: "mascot", color: "green", mascotExpression: null, mascotBody: "seira", mascotFaceColor: null, mascotAccessories: null });
-  });
-
-  it("edits facial feature color without changing body color or expression", () => {
-    const props = ofType(editor(makeBot({ mascotFaceColor: "black", mascotBody: "cursor" })), MascotFaceColorPicker)!.props;
-    const choices = segment(capture(() => MascotFaceColorPicker(props as Parameters<typeof MascotFaceColorPicker>[0])), "data-avatar-face-color");
-    expect(choices.value).toBe("black");
-    expect(choices.options.map((option) => option.value)).toEqual(["white", "black"]);
-    choices.onChange("white");
-    expect(patch).toHaveBeenLastCalledWith({ mascotFaceColor: "white" });
   });
 
   it("generates with the shared generator, and uploads with shape and framing", () => {

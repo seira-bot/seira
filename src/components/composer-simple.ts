@@ -3,11 +3,15 @@ import { effectiveDefaultResponder, groupComposerHint } from "@/lib/group-routin
 import { t } from "@/lib/i18n";
 import { BOT_BUTTON, botButtonStyle, botButtonTone, type BotButton } from "@/lib/bot-button";
 
-/** Simple mode's composer pill on a wider screen: the field, the mic and the round button in one shell. */
-export const SIMPLE_COMPOSER = "bg-composer p-2 ring-[0.5px] ring-ink/10 hover:ring-ink/[0.22] focus-within:ring-ink/[0.22] shadow-[0_2px_8px_-1px_rgb(0_0_0/0.05),0_1px_2px_rgb(0_0_0/0.03),0_0_0_1px_rgb(228_228_228/0.04)] [transition:border-radius_300ms,box-shadow_150ms]";
+/** Simple mode's composer card: the field above a bar of controls. The ring strengthens while the field has focus. */
+export const SIMPLE_COMPOSER = "bg-composer ps-4 pe-2.5 pt-3 pb-2 ring-1 ring-hairline hover:ring-ink/[0.2] focus-within:ring-ink/[0.3] shadow-[0_2px_8px_-1px_rgb(0_0_0/0.05),0_1px_2px_rgb(0_0_0/0.03),0_0_0_1px_rgb(228_228_228/0.04)] [transition:border-radius_300ms,box-shadow_150ms]";
 
-/** Simple mode's small round controls in the composer: the +, the mic and Stop beside the round button. */
-export const SIMPLE_CONTROL = "size-7 rounded-full bg-ink/[0.05] ring-[0.5px] ring-inset ring-ink/[0.07] text-ink-tertiary hover:bg-ink/[0.09] hover:text-ink";
+export const SIMPLE_CARD_ONE_LINE = 82.5;
+
+/** Simple mode's bare round controls in the bar: the +, the context meter, the mic and Stop beside the round slot. */
+export const SIMPLE_CONTROL = "size-8 rounded-full text-ink-tertiary hover:bg-ink/[0.06] hover:text-ink active:bg-ink/[0.08]";
+
+export const QUIET_CALL = { fill: "color-mix(in srgb, var(--color-ink) 8%, transparent)", ink: "var(--color-ink-secondary)" };
 
 const ROOM_FILL = { fill: "var(--color-accent)", ink: "var(--color-accent-ink)" };
 

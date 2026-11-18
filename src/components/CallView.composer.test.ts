@@ -189,7 +189,7 @@ describe("composer call button", () => {
     const html = renderToStaticMarkup(createElement(Capture));
     const button = findButton(tree)!;
     const classes = String(button.props.className).split(" ");
-    expect(classes).toEqual(expect.arrayContaining(["size-7", "rounded-full"]));
+    expect(classes).toEqual(expect.arrayContaining(["size-8", "rounded-full"]));
     expect(classes).not.toContain("text-white");
     expect(classes).not.toContain("rounded-l-3xl");
     expect(classes).not.toContain("bg-control");

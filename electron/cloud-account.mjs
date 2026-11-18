@@ -3,6 +3,8 @@ import { CLOUD_MACHINE_CONNECTABLE, cloudUnreachableText, parseCloudCredit, pars
 import { CLOUD_ID, CLOUD_SWATCHES, cleanCloudListName, ORGANIZATION_BLOCKS, otherOwnClouds, ownCloud, parseCloudList, parseCloudRenewal, parseOrganizations, releaseVersion } from "./cloud-list.mjs";
 import { planTeam, teamPlan } from "./cloud-team-plan.mjs";
 import { cleanCode, cleanEmail, parseSignInStart, SIGN_IN_START, SIGN_IN_TRIES, SIGN_IN_VERIFY, signInIdentity, startFailure, verifyFailure } from "./cloud-signin.mjs";
+import { createHash } from "node:crypto";
+import { DEFAULT_CLOUD } from "./cloud-default.mjs";
 import nativeText from "./native-text.cjs";
 
 const { englishText } = nativeText;
@@ -10,12 +12,27 @@ const { englishText } = nativeText;
 export const CLOUD_ORIGIN = "https://cloud.openmausbot.com";
 /** The staging Admin (Dodo test mode, real test Clouds): a fixed address, on only with OMB_CLOUD_STAGING=1. */
 export const STAGING_CLOUD_ORIGIN = "https://omb-cloud-staging.fly.dev";
-/** Which Admin this app signs in to, and the files that depend on it (the sign-in, saved servers with the Cloud's
- * entry, Files' state, the Cloud's chosen name): staging never reads or writes production's. */
-export function cloudTarget(env = process.env) {
-  return env?.OMB_CLOUD_STAGING === "1"
-    ? { origin: STAGING_CLOUD_ORIGIN, staging: true, file: "cloud-account-staging.bin", saved: "cloud-accounts-staging.bin", places: "account-places-staging.json", environments: "environments-staging.json", sync: "cloud-sync-staging", look: "cloud-home-look-staging.json" }
-    : { origin: CLOUD_ORIGIN, staging: false, file: "cloud-account.bin", saved: "cloud-accounts.bin", places: "account-places.json", environments: "environments.json", sync: "cloud-sync", look: "cloud-home-look.json" };
+export const SEIRA_CLOUD_ORIGIN = "https://cloud.seira.bot";
+const FILES = (suffix) => ({ file: `cloud-account${suffix}.bin`, saved: `cloud-accounts${suffix}.bin`, places: `account-places${suffix}.json`, environments: `environments${suffix}.json`, sync: `cloud-sync${suffix}`, look: `cloud-home-look${suffix}.json` });
+/** An https origin, or http on the loopback address for development; null for anything else, including a path, a port-less lookalike or credentials. */
+export function cloudOriginOf(value) {
+  if (typeof value !== "string" || value.length > 253) return null;
+  let url;
+  try { url = new URL(value); } catch { return null; }
+  if (value !== url.origin || url.username || url.password) return null;
+  return url.protocol === "https:" || (url.protocol === "http:" && url.hostname === "127.0.0.1") ? value : null;
+}
+/** Which Cloud this app signs in to, and the files that depend on it (the sign-in, saved servers with the Cloud's entry,
+ * Files' state, the Cloud's chosen name): each Cloud keeps its own, so one never reads or writes another's. The
+ * environment picks it: OMB_CLOUD_ORIGIN (an https origin, or http://127.0.0.1) wins over OMB_CLOUD_STAGING=1, which wins
+ * over the build's DEFAULT_CLOUD. An origin that is not valid is ignored. */
+export function cloudTarget(env = process.env, defaultCloud = DEFAULT_CLOUD) {
+  const asked = cloudOriginOf(env?.OMB_CLOUD_ORIGIN);
+  const origin = asked ?? (env?.OMB_CLOUD_STAGING === "1" ? STAGING_CLOUD_ORIGIN : defaultCloud === "seira" ? SEIRA_CLOUD_ORIGIN : CLOUD_ORIGIN);
+  if (origin === CLOUD_ORIGIN) return { origin, kind: "upstream", staging: false, ...FILES("") };
+  if (origin === STAGING_CLOUD_ORIGIN) return { origin, kind: "staging", staging: true, ...FILES("-staging") };
+  if (origin === SEIRA_CLOUD_ORIGIN) return { origin, kind: "seira", staging: false, ...FILES("-seira") };
+  return { origin, kind: "custom", staging: false, ...FILES(`-dev-${createHash("sha256").update(origin).digest("hex").slice(0, 10)}`) };
 }
 const TOKEN = /^omc_[A-Za-z0-9_-]{43}$/;
 const CODE = /^[A-HJ-NP-Z2-9]{5}-[A-HJ-NP-Z2-9]{5}$/;
@@ -59,20 +76,25 @@ export function cancelSurvey(input) {
 export const ADD_BLOCKS = Object.freeze(["cap", "checkout_open", "rate", "signups_closed"]);
 const ADD_INTERVALS = Object.freeze(["month", "year"]);
 const CHECKOUT_ORIGIN = "https://checkout.dodopayments.com", TEST_CHECKOUT_ORIGIN = "https://test.checkout.dodopayments.com";
+const PAY_PATH = /^\/bayar\/[A-Za-z0-9_-]{8,200}$/;
 /** Only Dodo's own HTTPS checkout origin, with no credentials and no fragment; anything else is never opened. Staging's
- * Admin sells in Dodo's test mode, so its checkouts are only Dodo's test page. */
-export function checkoutDestination(value, { fixture = false, staging = false } = {}) {
+ * Admin sells in Dodo's test mode, so its checkouts are only Dodo's test page. A Cloud that is none of the upstream
+ * ones (`own`: its origin) sells on its own page, `<origin>/bayar/<token>`, and nowhere else. */
+export function checkoutDestination(value, { fixture = false, staging = false, own = null } = {}) {
   if (typeof value !== "string" || value.length > 2048) return null;
   let url;
   try { url = new URL(value); } catch { return null; }
+  if (url.username || url.password || url.hash || value.includes("#")) return null;
+  if (own) return url.origin === own && !url.search && PAY_PATH.test(url.pathname) ? url.href : null;
   const allowed = fixture ? [CHECKOUT_ORIGIN, TEST_CHECKOUT_ORIGIN] : staging ? [TEST_CHECKOUT_ORIGIN] : [CHECKOUT_ORIGIN];
-  if (!allowed.includes(url.origin) || url.username || url.password || url.hash || value.includes("#")) return null;
-  return url.href;
+  return allowed.includes(url.origin) ? url.href : null;
 }
-// Never accept an address from the renderer.
-export function cloudOrigin(value = CLOUD_ORIGIN, fixture = false) {
+/** Never accept an address from the renderer: only the known Clouds, a loopback address for a fixture, and an origin the
+ * main process chose from its own environment (`trusted`). */
+export function cloudOrigin(value = CLOUD_ORIGIN, fixture = false, trusted = false) {
   const url = new URL(value);
-  if (value !== url.origin || (![CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN].includes(value) && !(fixture && url.protocol === "http:" && ["127.0.0.1", "[::1]"].includes(url.hostname)))) {
+  const known = [CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN, SEIRA_CLOUD_ORIGIN].includes(value);
+  if (value !== url.origin || !(known || (trusted && cloudOriginOf(value)) || (fixture && url.protocol === "http:" && ["127.0.0.1", "[::1]"].includes(url.hostname)))) {
     throw new Error("Invalid Seira Cloud address.");
   }
   return value;
@@ -97,10 +119,11 @@ function addOffer(result) {
 }
 
 export function createCloudAccountClient({ store, openBrowser, platform, deviceName, appVersion,
-  origin = CLOUD_ORIGIN, fixture = false, fetch: fetcher = globalThis.fetch, now = Date.now, onState = () => {},
+  origin = CLOUD_ORIGIN, fixture = false, trusted = false, fetch: fetcher = globalThis.fetch, now = Date.now, onState = () => {},
   setTimer = setTimeout, clearTimer = clearTimeout, warn = message => console.warn(message), awaitingWake = () => false, t = englishText.t }) {
-  origin = cloudOrigin(origin, fixture);
+  origin = cloudOrigin(origin, fixture, trusted);
   const staging = origin === STAGING_CLOUD_ORIGIN;
+  const own = origin === CLOUD_ORIGIN || staging || (fixture && !trusted) ? null : origin;
   let grant = null, issued = null, cleanup = null, pending = null, cleanupNeeded = false;
   let value = { status: "signed-out", message: "restoring" }, generation = 0, timer = null, closed = false, clearing = null, refreshing = null;
   let verifiedUntil = 0, restoring = false, controller = new AbortController(), failures = 0;
@@ -429,7 +452,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
     let destination;
     try {
       const result = await request("checkout", { method: "POST", body: { plan, source }, token: signedIn.token });
-      destination = checkoutDestination(result?.url, { fixture, staging });
+      destination = checkoutDestination(result?.url, { fixture, staging, own });
       if (result?.cloudContractVersion !== 1 || !destination) return { outcome: "failed", state: state() };
     } catch (error) {
       if (!error?.opaque && error?.status === 409) return { outcome: "conflict", state: await refresh() };
@@ -708,7 +731,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
         const blocked = !error?.opaque && ADD_BLOCKS.includes(error?.blocked) ? error.blocked : null;
         if (blocked === "checkout_open") {
           // Another Cloud's checkout is still open: its page is kept here, as one this app opened, to reopen or copy.
-          const open = checkoutDestination(error.checkoutUrl, { fixture, staging });
+          const open = checkoutDestination(error.checkoutUrl, { fixture, staging, own });
           const listed = otherOwnClouds(value.clouds).find(cloud => cloud.status === "checkout") ?? null;
           if (open && grant === signedIn) {
             adding = { cloudId: listed?.id ?? null, name: listed?.name ?? cleanName, color: listed ? listed.color : color, tier: listed?.tier ?? tier, startedAt: now(), url: open };
@@ -722,7 +745,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
         if ([404, 405, 501].includes(error?.status)) return { outcome: "unsupported" };
         return { outcome: "failed" };
       }
-      const destination = checkoutDestination(result?.checkoutUrl, { fixture, staging });
+      const destination = checkoutDestination(result?.checkoutUrl, { fixture, staging, own });
       if ((result?.cloudContractVersion !== undefined && result.cloudContractVersion !== 1) || typeof result?.cloudId !== "string" || !CLOUD_ID.test(result.cloudId) || !destination) return { outcome: "failed" };
       if (grant !== signedIn) return { outcome: "failed" };
       await openBrowser(destination);

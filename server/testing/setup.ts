@@ -5,9 +5,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach } from "vitest";
 
+import { VPS_SSH_DIR, vpsSshSharedControlDirectory } from "../vps-ssh-path.ts";
 import { removeTempDir } from "./cleanup.ts";
+import { TEST_HOME_PREFIX, useTestTmp } from "./test-tmp.ts";
 
-const home = mkdtempSync(join(tmpdir(), "omb-test-home-"));
+// Everything the test and the code under test put in tmpdir() lands in one folder that afterAll deletes.
+// The home is made after the move, so it sits in that folder and keeps its place under tmpdir().
+const scratch = useTestTmp();
+const home = mkdtempSync(join(tmpdir(), TEST_HOME_PREFIX));
 process.env.HOME = home;
 process.env.USERPROFILE = home;
 // A provider that answers 5xx retries with backoff: no test should wait out real seconds.
@@ -35,5 +40,9 @@ afterEach(closeMessageDb);
 // Windows holds a live process's cwd, and a just-killed CLI lets go a beat after the kill returns.
 afterAll(async () => {
   closeMessageDb();
+  // A data path too long for a control socket shares a folder in /tmp, outside the scratch folder; this home is its only user.
+  const sshFolder = vpsSshSharedControlDirectory(join(home, ".openmausbot", VPS_SSH_DIR));
+  if (sshFolder) await removeTempDir(sshFolder);
   await removeTempDir(home);
+  await scratch.remove();
 });

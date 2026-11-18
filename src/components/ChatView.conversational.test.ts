@@ -75,11 +75,11 @@ describe("conversational replies", () => {
     const bubbles = [...document.querySelectorAll<HTMLElement>("[data-reply-segment]")];
     expect(bubbles).toHaveLength(3);
     expect(bubbles.every((el) => !el.classList.contains("reply-bubble-in"))).toBe(true);
-    for (const el of bubbles) expect([...el.classList]).toEqual(expect.arrayContaining(["bg-card", "rounded-[18px]", "px-3", "text-[15px]", "leading-[22px]", "min-w-9"]));
-    expect([...bubbles[0]!.classList]).toContain("rounded-es-[6px]");
-    expect([...bubbles[1]!.classList]).toEqual(expect.arrayContaining(["rounded-ss-[6px]", "rounded-es-[6px]"]));
-    expect([...bubbles[2]!.classList]).toContain("rounded-ss-[6px]");
-    expect([...bubbles[2]!.classList]).not.toContain("rounded-es-[6px]");
+    // A bot's parts are unboxed prose: no fill, no rounded corners, same type as a one-part reply.
+    for (const el of bubbles) {
+      expect([...el.classList]).toEqual(expect.arrayContaining(["text-[15px]", "leading-[22px]", "min-w-0"]));
+      expect([...el.classList].filter((name) => /^(bg-|rounded-|px-|min-w-9$)/.test(name))).toEqual([]);
+    }
     expect(document.querySelector("[data-conversational-reply]")!.classList).toContain("gap-1");
   });
 
@@ -113,11 +113,22 @@ describe("conversational replies", () => {
     expect(items.slice(0, 2)).toEqual(["Reply", "Copy message"]);
   });
 
+  it("gives an inbox line no turn head of its own, since its caption already names who it is from", async () => {
+    const line: Message = { id: "m3", parentId: "m1", role: "bot", kind: "text", text: "Pricing page is ready.", at: 3, inbox: { kind: "ask", from: { name: "Cleo", botId: "cleo" } } } as Message;
+    await draw(profile({ messages: [messages[0]!, line], activeLeafId: "m3" }));
+    const row = document.querySelector("[data-mid='m3']")!;
+    expect(row.textContent).toContain("Pricing page is ready.");
+    expect(row.querySelector("[data-turn-head]")).toBeNull();
+    await draw(profile({}));
+    expect(document.querySelector("[data-mid='m2'] [data-turn-head]")).not.toBeNull();
+  });
+
   it("puts a formatted reply in the bot's bubble in Simple mode, and on the open page in Advanced", async () => {
     const bubbleOf = () => document.querySelector("[data-mid='m2'] [data-chat-bubble]")!;
     await draw(profile({}));
     expect(bubbleOf().getAttribute("data-chat-bubble")).toBe("simple");
-    expect([...bubbleOf().classList]).toEqual(expect.arrayContaining(["bg-card", "rounded-[18px]"]));
+    expect([...bubbleOf().classList]).toEqual(expect.arrayContaining(["text-[15px]", "leading-[22px]", "min-w-0"]));
+    expect([...bubbleOf().classList].filter((name) => /^(bg-|rounded-|px-)/.test(name))).toEqual([]);
     setAdvancedMode(true);
     try {
       await draw(profile({}));

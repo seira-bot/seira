@@ -3,7 +3,7 @@ import type { CloudAccountState, CloudPlanSnapshot } from "../../electron/cloud-
 import { CHECKOUT_SOURCES } from "../../electron/cloud-account.mjs";
 import type { CloudCredit, CloudOffer, CloudOfferPlan, CloudTeam, CloudTrial } from "../../electron/cloud-home.mjs";
 import { buyOfferAllowed, cardRows, CLOUD_SOURCES, cloudAddView, cloudCreditLine, cloudIntroView, cloudNoticeKind, cloudPlanLine, cloudPlanView, cloudTrialNotice, cloudTrialView,
-  dueToday, moneyBackLine, moneyBackShort, offerPlan, offerTrialDays, planCardRows, planCards, sameTerms, sharedTrialDays, trialTimeline, usd,
+  cheapestPlan, dueToday, planPaidLine, moneyBackLine, moneyBackShort, offerPlan, offerTrialDays, planCardRows, planCards, planPrice, sameTerms, sharedTrialDays, trialTimeline, usd,
   type CloudSignInPhase } from "./cloud-plan";
 import { setLocale } from "./i18n";
 
@@ -455,5 +455,51 @@ describe("an invited person with no Cloud of their own", () => {
     expect(cloudPlanView(account)).toEqual({ kind: "free", invited: true });
     expect(buyOfferAllowed(cloudPlanView(account))).toBe(false);
     expect(buyOfferAllowed(cloudPlanView({ ...(account as object), landing: undefined } as never))).toBe(true);
+  });
+});
+
+describe("planPrice", () => {
+  it("shows whole rupiah in the Indonesian format", () => {
+    expect(planPrice({ amount: 213000, currency: "IDR" })).toBe("Rp213.000");
+    expect(planPrice({ amount: 30000, currency: "IDR" })).toBe("Rp30.000");
+    expect(planPrice({ amount: 2130000, currency: "IDR" })).toBe("Rp2.130.000");
+  });
+  it("shows no decimals for rupiah, and keeps US cents as dollars", () => {
+    expect(planPrice({ amount: 213000, currency: "IDR" })).not.toMatch(/[,]\d/);
+    expect(planPrice({ amount: 4900 })).toBe("$49");
+    expect(planPrice({ amount: 4950 })).toBe("$49.50");
+  });
+  it("prices an extra amount in the plan's own currency", () => {
+    expect(planPrice({ amount: 213000, currency: "IDR" }, 30000)).toBe("Rp30.000");
+    expect(planPrice({ amount: 4900 }, 1000)).toBe("$10");
+  });
+  it("finds the cheapest plan whatever its currency unit", () => {
+    expect(cheapestPlan([{ amount: 300000, currency: "IDR" as const }, { amount: 213000, currency: "IDR" as const }]).amount).toBe(213000);
+  });
+  it("puts an IDR plan's price on its card", () => {
+    const team: CloudOfferPlan = { tier: "team", amount: 213000, currency: "IDR" };
+    const [card] = planCards({ plans: [team], recommended: "team" });
+    expect(card!.price).toBe("Rp213.000");
+  });
+});
+
+describe("tax wording of an IDR plan", () => {
+  const team: CloudOfferPlan = { tier: "team", amount: 213000, currency: "IDR" };
+  const pro: CloudOfferPlan = { tier: "pro", amount: 4900 };
+  it("never says the rupiah price is plus tax", () => {
+    for (const trialDays of [undefined, 1, 7]) {
+      const [card] = planCards({ plans: [{ ...team, ...(trialDays ? { trialDays } : {}) }], recommended: "team" });
+      expect(card!.terms).not.toMatch(/\+ ?tax|plus tax/i);
+      expect(card!.terms).toMatch(/tax included/);
+    }
+    expect(planPaidLine(team)).not.toMatch(/\+ ?tax|plus tax/i);
+    expect(planPaidLine(team)).toContain("Rp213.000");
+    const intro = cloudIntroView({ plans: [{ ...team, trialDays: 7 }], recommended: "team" });
+    expect(intro?.price).not.toMatch(/\+ ?tax|plus tax/i);
+  });
+  it("keeps + tax on a USD plan", () => {
+    const [card] = planCards({ plans: [pro], recommended: "pro" });
+    expect(card!.terms).toMatch(/\+ tax/);
+    expect(planPaidLine(pro)).toMatch(/\+ tax/);
   });
 });

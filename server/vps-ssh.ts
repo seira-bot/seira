@@ -1,11 +1,13 @@
 // An ssh_config and an `ssh` shim that add connection sharing and fail-fast timeouts to every VPS command, whatever the user's alias sets; the live-desktop tunnel opts out of sharing.
 import { execFile, spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 
-export const VPS_SSH_DIR = "ssh";
+import { VPS_SSH_DIR, vpsSshSharedControlDirectory } from "./vps-ssh-path.ts";
+
+export { VPS_SSH_DIR };
+
 /** The person's optional wake script in the data folder's ssh directory, e.g. to resume a host that pauses when idle. */
 export const VPS_WAKE_SCRIPT = "wake";
 
@@ -13,13 +15,11 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
-/** macOS caps Unix socket paths at 104 bytes and OpenSSH appends a temporary suffix, so a long data path cannot host the socket. */
 function controlDirectory(sshDir: string): string {
-  if (Buffer.byteLength(join(sshDir, `cm-${"0".repeat(40)}`)) <= 80) return sshDir;
+  const dir = vpsSshSharedControlDirectory(sshDir);
+  if (dir === null) return sshDir;
   const uid = process.getuid!();
-  const id = createHash("sha256").update(resolve(sshDir)).digest("hex").slice(0, 12);
-  // /tmp, not tmpdir(): macOS TMPDIR is often too long for a control socket. Validated first so a symlink or another user's dir cannot redirect it.
-  const dir = `/tmp/omb-ssh-${uid}-${id}`;
+  // Validated first so a symlink or another user's dir cannot redirect it.
   try { mkdirSync(dir, { mode: 0o700 }); }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
   const stat = lstatSync(dir);

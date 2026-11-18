@@ -1,5 +1,4 @@
 import { Search, X } from "lucide-react";
-import type { Ref } from "react";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
@@ -15,30 +14,10 @@ export const SIMPLE_TOP_BUTTON = `${SIMPLE_TOP} ${ELEVATED_CONTROL} ${ELEVATED_H
  * wears the tint of an open menu. */
 export const SIMPLE_TOP_TOGGLE = `${SIMPLE_TOP} ${ELEVATED_CONTROL} ${ELEVATED_TINT} ${SIMPLE_TOP_FOCUS}`;
 
-/** Search and New in the top corner of Simple's sidebar in a framed window: plain icons, each its own button. */
-export const SIMPLE_CORNER_BUTTON = `flex size-[26px] shrink-0 items-center justify-center rounded-lg text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink aria-expanded:bg-ink/[0.06] aria-expanded:text-ink ${SIMPLE_TOP_FOCUS}`;
-
 /** The round control at either end of the phone bot list's top row. */
 export const PHONE_TOP_BUTTON = "flex size-10 shrink-0 items-center justify-center rounded-full border border-hairline bg-card text-ink hover:bg-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 
 export const SIMPLE_RAIL_BUTTON = "flex size-9 shrink-0 items-center justify-center rounded-xl text-ink-secondary hover:bg-raised/60 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
-
-export function SidebarSearchToggle({ open, onToggle, corner = false, ref }: { open: boolean; onToggle: () => void; corner?: boolean; ref?: Ref<HTMLButtonElement> }) {
-  return (
-    <button
-      ref={ref}
-      type="button"
-      data-sidebar-search-toggle
-      onClick={onToggle}
-      aria-label={t("sidebar.searchAria")}
-      aria-expanded={open}
-      title={t("sidebar.searchAria")}
-      className={corner ? SIMPLE_CORNER_BUTTON : SIMPLE_TOP_BUTTON}
-    >
-      <Search size={corner ? 17 : 18} strokeWidth={1.5} aria-hidden="true" />
-    </button>
-  );
-}
 
 export function SidebarSearchPill({ query, onQuery, onClose }: { query: string; onQuery: (query: string) => void; onClose: () => void }) {
   return (

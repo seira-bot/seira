@@ -1,7 +1,7 @@
 // Screen 3: the browser has the payment page; this sheet shows where things stand and moves on by itself.
 import { Copy, ExternalLink } from "lucide-react";
 import type { CloudOffer } from "../../../electron/cloud-home.mjs";
-import { cloudPlanLabel, dueToday, offerPlanLabel, usd } from "@/lib/cloud-plan";
+import { cloudPlanLabel, dueToday, offerPlanLabel, planPaidLine } from "@/lib/cloud-plan";
 import { t } from "@/lib/i18n";
 import { Checklist, Heading, LINK, PRIMARY, QUIET, SCREEN } from "./parts";
 
@@ -13,7 +13,7 @@ export function PayScreen({ plan, offer, browser, late, link, email, busy, copie
   const name = sold ? offerPlanLabel(sold) : cloudPlanLabel(plan);
   const detail = sold?.trialDays === 1 ? t("cloudBuy.pay.planTrial.one", { plan: name, due: dueToday(0) })
     : sold?.trialDays ? t("cloudBuy.pay.planTrial.many", { plan: name, days: sold.trialDays, due: dueToday(0) })
-    : sold ? t("cloudBuy.pay.planPaid", { plan: name, price: usd(sold.amount / 100) }) : name;
+    : sold ? planPaidLine(sold, name) : name;
   return <div data-cloud-add={late ? "waiting-late" : browser === "signin" ? "waiting-signin" : "waiting"} className={SCREEN}>
     <Heading title={late ? t("cloudBuy.pay.lateTitle") : t("cloudAdd.browserTitle")}
       sub={late ? t("cloudBuy.pay.lateSub") : t(browser === "signin" ? "cloudBuy.pay.subSignIn" : "cloudBuy.pay.sub")} />

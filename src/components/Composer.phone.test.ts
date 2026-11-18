@@ -98,6 +98,12 @@ describe("the phone composer", () => {
     expect(fixture.call?.fill).toBeUndefined();
   });
 
+  it("gives a room's call button the round accent fill", () => {
+    render({ group: room, members: [bot, peer] });
+    expect(fixture.groupCall).toMatchObject({ placement: "composer" });
+    expect(fixture.groupCall?.fill).toBeTruthy();
+  });
+
   it("moves Advanced mode's row of buttons into the +", () => {
     fixture.advanced = true;
     render({ bot });

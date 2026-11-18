@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { BOT_BODY_IDS } from "../shared/bot-body.ts";
 import { parseBotProfilePatch } from "./bot-profile.ts";
 
 describe("parseBotProfilePatch (strict — the paired boundary)", () => {
@@ -113,13 +114,11 @@ describe("mascotBody", () => {
   });
 
   it("maps an unknown body to a readable message", () => {
-    expect(parseBotProfilePatch({ mascotBody: "hexagram" } as never, true)).toEqual({
-      ok: false,
-      error:
-        "mascotBody must be cursor, blob, circle, squircle, capsule, drop, shield, hexagon, diamond, star, " +
-        "pumpkin, ghost, witch, bat, cat, skull, monster, mummy, vampire, spider, " +
-        "rocket, anaar, chakri, sparkler, bomb, laddu, chakli, jalebi, katli, or karanji",
-    });
+    const result = parseBotProfilePatch({ mascotBody: "hexagram" } as never, true);
+    expect(result).toMatchObject({ ok: false });
+    const error = result.ok ? "" : result.error;
+    expect(error).toMatch(/^mascotBody must be [a-z0-9-]+(?:, [a-z0-9-]+)*, or [a-z0-9-]+$/);
+    expect(error.slice("mascotBody must be ".length).split(/, (?:or )?/)).toEqual([...BOT_BODY_IDS]);
   });
 });
 

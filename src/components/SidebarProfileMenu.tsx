@@ -533,8 +533,8 @@ export function useSimpleAccount(place: WorkspacePlace, owner: string | null, ar
 }
 
 /** `circle` is the phone's round avatar button at the top of the bot list. */
-export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = false, simple: account }: {
-  iconOnly?: boolean; rail?: boolean; circle?: boolean; simple?: SimpleAccount;
+export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = false, named = false, simple: account }: {
+  iconOnly?: boolean; rail?: boolean; circle?: boolean; named?: boolean; simple?: SimpleAccount;
 } = {}) {
   const { state, dispatch } = useStore();
   const simple = account !== undefined;
@@ -647,11 +647,19 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         items={items}
         ariaLabel={name}
         onOpenChange={setMenuOpen}
-        triggerClassName={iconOnly || simple ? cn("shrink-0", circle || simple ? "rounded-full" : "rounded-xl") : "w-full"}
+        triggerClassName={named && simple ? "min-w-0 flex-1 rounded-lg" : iconOnly || simple ? cn("shrink-0", circle || simple ? "rounded-full" : "rounded-xl") : "w-full"}
         triggerTitle={iconOnly || simple ? label : undefined}
         triggerLabel={label}
         triggerTour={account?.place.switchable ? "server-switcher" : undefined}
-        renderTrigger={({ open }) => simple ? (
+        renderTrigger={({ open }) => simple && named ? (
+          <span ref={triggerRef} data-sidebar-account="" className={cn("flex h-9 w-full min-w-0 items-center gap-2 rounded-lg px-1.5 transition-colors duration-150 motion-reduce:transition-none", open ? "bg-ink/[0.06]" : "hover:bg-ink/[0.05]")}>
+            <span className="relative flex shrink-0">
+              <InitialsAvatar initials={initials} avatarUrl={profile?.avatarUrl} size={28} fallback={nameless} fontSize={11} />
+              {dot && <span aria-hidden data-account-dot={dot} className={cn("absolute -right-0.5 -top-0.5 size-2.5 rounded-full ring-2 ring-panel", DOT_COLOR[dot])} />}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-start text-[13px] font-medium text-ink">{name}</span>
+          </span>
+        ) : simple ? (
           <span
             ref={triggerRef}
             data-sidebar-account=""

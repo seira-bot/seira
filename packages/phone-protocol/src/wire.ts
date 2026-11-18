@@ -8,9 +8,7 @@ import type { ToolScope } from "./tool-scope.ts"; import type { ToolGroup } from
 import type { CommandAllowlistCandidate } from "./command-allowlist.ts";
 import type { TurnDigest } from "./digest.ts";
 import type { BotAvatarCrop, MascotFaceColor } from "./bot-avatar.ts";
-import type { BotBodyId } from "./bot-body.ts";
-import type { MascotAccessoryId } from "./mascot-accessories.ts";
-import type { ReplyStyle } from "./reply-style.ts";
+import type { BotBodyId } from "./bot-body.ts"; import type { MascotAccessoryId } from "./mascot-accessories.ts"; import type { ReplyStyle } from "./reply-style.ts";
 import type { CredentialTargetId, CUSTOM_SECRET_TARGET, SecretDelivery } from "./credential-request.ts"; import type { EmailOutgoingFields } from "./email.ts";
 import type { TeamSetupRequest } from "./team-setup.ts"; import type { DefaultBotFields, HelperIntroField } from "./default-bot.ts";
 import type { SetupCardFields } from "./setup-card.ts"; import type { BugReportField } from "./devs-report-status.ts"; import type { AccessRequestCardField, BotAccessFields } from "./bot-access.ts";
@@ -287,7 +285,6 @@ export interface WireBot extends DefaultBotFields, BotAccessFields {
   mascotBody?: BotBodyId | null;
   /** Overrides both eyes and mouth. Absent or null preserves the body's default inks. */
   mascotFaceColor?: MascotFaceColor | null;
-  /** What the Seira look wears. Absent or null means nothing. */
   mascotAccessories?: MascotAccessoryId[] | null;
   /** App-owned attachment served as this bot's custom profile image;
    * always present on the wire, null when the bot has none. */

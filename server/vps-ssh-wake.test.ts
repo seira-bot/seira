@@ -3,10 +3,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ensureVpsSshMaster, prepareVpsSsh, VPS_SSH_DIR, VPS_WAKE_SCRIPT } from "./vps-ssh.ts";
+import { vpsSshSharedControlDirectory } from "./vps-ssh-path.ts";
 
 const roots: string[] = [];
 afterEach(() => {
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+  for (const root of roots.splice(0)) {
+    // The socket folder of a long data path is in /tmp, apart from the root.
+    const shared = vpsSshSharedControlDirectory(join(root, "data", VPS_SSH_DIR));
+    if (shared) rmSync(shared, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 /** A host that refuses SSH until something creates its `awake` file, as a box paused when idle does until resumed. */

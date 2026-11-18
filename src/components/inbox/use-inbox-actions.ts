@@ -29,9 +29,9 @@ export function useInboxActions(view: InboxView | null) {
     if (target.messageId) dispatch({ type: "focusMessage", threadId: target.threadId, messageId: target.messageId });
   }, [view, state, dispatch, showThreads]);
 
-  const run = useCallback((row: InboxRow, action: QuickAction) => {
-    if (action === "allow" || action === "deny") answer(row, { behavior: action });
-    else if (action === "close") answer(row, closeResponse(row));
+  const run = useCallback((row: InboxRow, action: QuickAction, failed?: () => void) => {
+    if (action === "allow" || action === "deny") answer(row, { behavior: action }, failed);
+    else if (action === "close") answer(row, closeResponse(row), failed);
     else if (action === "done") doneInboxRow(row);
     else if (action === "open") openInChat(row);
     else { readInboxRow(row); openInbox({ reading: row.id }); }

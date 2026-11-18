@@ -24,6 +24,7 @@ import { useMenuMotion } from "./MenuMotion";
 import { nextMenuIndex, SidebarPopoverMenu, type SidebarMenuItem } from "./SidebarPopoverMenu";
 import type { ApprovalChoice } from "./thread-approval";
 import { SIMPLE_CONTROL } from "./composer-simple";
+import { MENU_GUTTER, MENU_ICON, MENU_ITEM, MENU_SHEET, MENU_TRAILING } from "./menu-recipe";
 
 /** Finish together: the room (or, `solo`, the one bot) keeps working until the goal is done. The chip turns accent while it is on.
  * `compact` is Simple mode's chip, shown only while the mode is on: its name and a × that turns it off. */
@@ -37,7 +38,7 @@ export function GoalToggle({ on, onToggle, solo = false, compact = false }: { on
         aria-label={off}
         title={off}
         onClick={onToggle}
-        className="flex h-7 items-center gap-1 whitespace-nowrap rounded-full border border-accent/35 bg-accent/10 px-2.5 text-[13px] text-accent transition-colors hover:bg-accent/15"
+        className="ui-pill shrink-0 gap-1 whitespace-nowrap border-accent/35 bg-accent/10 px-2.5 text-accent hover:bg-accent/15 hover:text-accent"
       >
         {t(solo ? "composer.goal.soloAria" : "composer.goal.aria")}
         <X size={12} aria-hidden="true" />
@@ -235,7 +236,7 @@ export function ComposerPlusMenu({ onAttach, goal, teach, approval, callBotId, e
     </span>
   ) : (
     <span data-composer-plus className={cn("flex items-center justify-center transition-colors", SIMPLE_CONTROL, open && "bg-ink/[0.09] text-ink")}>
-      <Plus size={20} strokeWidth={1.75} absoluteStrokeWidth aria-hidden="true" />
+      <Plus size={18} strokeWidth={1.75} absoluteStrokeWidth aria-hidden="true" />
     </span>
   );
   if (!circle && items.length === 1) {
@@ -320,10 +321,7 @@ function ComposerMenu({ items, renderTrigger }: { items: SidebarMenuItem[]; rend
           aria-label={t("common.add")}
           data-composer-menu
           {...motion.exitProps}
-          className={cn(
-            "popover-surface absolute bottom-full start-0 z-40 mb-2 w-max min-w-[200px] max-w-[280px] origin-bottom-left rounded-[12px] border-[0.5px] border-ink/10 bg-menu p-1",
-            motion.className,
-          )}
+          className={cn(MENU_SHEET, "absolute bottom-full start-0 z-40 mb-2 w-max min-w-[220px] max-w-[280px] origin-bottom-left", motion.className)}
         >
           {items.map((item) => (
             <button
@@ -336,11 +334,11 @@ function ComposerMenu({ items, renderTrigger }: { items: SidebarMenuItem[]; rend
                 close(false);
                 item.onSelect();
               }}
-              className="flex h-[34px] w-full items-center gap-2 rounded-[8px] px-3 text-start text-[15px] text-ink transition-colors hover:bg-menu-hover focus-visible:bg-menu-hover focus-visible:outline-none disabled:opacity-50"
+              className={cn(MENU_ITEM, "text-ink transition-colors hover:bg-menu-hover focus-visible:outline-none disabled:opacity-50")}
             >
-              <span className={cn("flex size-3.5 shrink-0 items-center justify-center [&_svg]:size-3.5 [&_svg]:stroke-[1.5]", item.active ? "text-accent" : "text-ink-secondary")} aria-hidden="true">{item.icon}</span>
+              <span className={cn(MENU_GUTTER, item.active ? "text-accent" : MENU_ICON)} aria-hidden="true">{item.icon}</span>
               <span className="min-w-0 flex-1 truncate">{item.label}</span>
-              {item.trailing}
+              {item.trailing && <span className={MENU_TRAILING}>{item.trailing}</span>}
             </button>
           ))}
         </div>

@@ -260,7 +260,7 @@ export function CallTargetButton({
         className={cn(
           "relative flex shrink-0 items-center justify-center disabled:opacity-60",
           round ? "rounded-full transition-[color,background,filter]" : "rounded-l-3xl rounded-r-lg active:rounded-3xl transition-[color,background,border-radius]",
-          composer && fill ? "size-7" : composer || placement === "panel" ? "size-8" : "size-9",
+          composer && fill ? "size-8" : composer || placement === "panel" ? "size-8" : "size-9",
           active
             ? "bg-danger text-white hover:brightness-110"
             : inverse

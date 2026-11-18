@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import { ChevronRight, Pause, Plus, Search } from "lucide-react";
+import { ChevronDown, Pause, Plus, Search } from "lucide-react";
 
 import { cn } from "@/lib/cn";
 import { roomContextWarnings } from "@/lib/context-warning";
@@ -167,8 +167,8 @@ export function RoomHeader({
     const more = members.length - SIMPLE_FACES;
     return (
       <div {...headerDragProps} className="@container/roomhead px-5 py-3 pl-11 md:pl-5">
-        <div data-roomhead-row className="flex items-center justify-between gap-3">
-          <div data-roomhead-identity className="flex min-w-0 flex-col items-start" style={headerNoDragStyle}>
+        <div data-roomhead-row className="grid grid-cols-[minmax(0,1fr)_minmax(0,auto)_minmax(max-content,1fr)] items-center gap-3">
+          <div data-roomhead-identity className="col-start-2 flex min-w-0 flex-col items-center justify-self-center" style={headerNoDragStyle}>
             <button
               type="button"
               data-room-name
@@ -177,14 +177,17 @@ export function RoomHeader({
               aria-label={t("room.panel.openAria", { name: group.name })}
               aria-haspopup="dialog"
               style={headerNoDragStyle}
-              className="group -mx-2 flex min-w-0 max-w-[calc(100%+1rem)] items-center gap-1 rounded-lg px-2 py-0.5 hover:bg-raised/60 focus-visible:bg-raised/60"
+              className="group flex h-9 min-w-0 max-w-full items-center gap-2 rounded-full ps-2 pe-3 text-ink hover:bg-ink/[0.06] focus-visible:bg-ink/[0.06] motion-reduce:transition-none"
             >
-              <span className="truncate text-[15px] font-semibold text-ink">{group.name}</span>
-              <ChevronRight size={14} aria-hidden="true" className="-ml-1 w-0 shrink-0 text-ink-secondary opacity-0 transition-[width,margin,opacity] duration-150 group-hover:ml-0 group-hover:w-3.5 group-hover:opacity-100 group-focus-visible:ml-0 group-focus-visible:w-3.5 group-focus-visible:opacity-100" />
+              <span aria-hidden="true" className="flex shrink-0 items-center -space-x-1.5">
+                {members.slice(0, SIMPLE_FACES).map((member) => <BotAvatar key={member.id} bot={member} state={normalizeState(member.mascotExpression) ?? "happy"} size={22} animated={false} />)}
+              </span>
+              <span className="truncate text-[14px] font-semibold leading-5">{group.name}</span>
+              <ChevronDown size={14} aria-hidden="true" className="shrink-0 text-ink-tertiary" />
             </button>
             {group.description && <p className="max-w-full truncate text-[12px] leading-4 text-ink-secondary">{group.description}</p>}
           </div>
-          <div data-roomhead-controls className="flex shrink-0 items-center gap-1.5">
+          <div data-roomhead-controls className="col-start-3 flex shrink-0 items-center gap-1.5 justify-self-end">
             <ThreadPresenceFaces threadId={group.threadId} />
             {pinned}
             <button

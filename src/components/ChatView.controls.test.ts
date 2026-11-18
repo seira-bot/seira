@@ -161,7 +161,7 @@ describe("the Simple header", () => {
       expect(pill[0].match(/class="([^"]*)"/)![1]!.split(" ")).toEqual(expect.arrayContaining(["rounded-full", "bg-composer", "ring-[0.5px]", "py-[7.5px]", "pr-[13.5px]"]));
       // Away from the bot's main conversation, the pill names the one on screen.
       expect(pill[1]).toContain("data-chathead-conversation");
-      for (const gone of ["data-chathead-role", "data-background-activity", "data-chathead-back", 'data-testid="chat-more"']) {
+      for (const gone of ["data-background-activity", "data-chathead-back", 'data-testid="chat-more"']) {
         expect(simple, gone).not.toContain(gone);
       }
       window.ogb = { remoteClient: { active: true } } as NonNullable<Window["ogb"]>;
@@ -220,7 +220,9 @@ describe("header name", () => {
 
   it("shows the bot's role beside the pill in Advanced mode, taking only the room the name leaves, and leaves it to the bot panel in Simple", () => {
     fixture.advanced = false;
-    expect(renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, title: " Research " } }))).not.toContain("data-chathead-role");
+    // Simple mode keeps the role inside the pill, in quiet ink, and drops it on narrow screens.
+    const simpleRole = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, title: " Research " } })).match(/<span data-chathead-role="true"[^>]*class="([^"]*)"[^>]*>Research<\/span>/);
+    expect(simpleRole?.[1]!.split(" ")).toEqual(expect.arrayContaining(["truncate", "text-[13px]", "text-ink-tertiary", "max-md:hidden"]));
     for (const advanced of [true]) {
       fixture.advanced = advanced;
       const markup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, title: " Research " } }));
@@ -230,6 +232,7 @@ describe("header name", () => {
       expect(role![1].split(" ")).toEqual(expect.arrayContaining(["min-w-0", "max-w-fit", "grow", "basis-0"]));
       expect(role![2].split(" ")).toEqual(expect.arrayContaining(["truncate", "text-[13px]", "text-ink-secondary"]));
       expect(identity.indexOf("data-chathead-role")).toBeGreaterThan(identity.indexOf("Rename Pepper"));
+      fixture.advanced = true;
       expect(renderToStaticMarkup(createElement(ChatView, { bot }))).not.toContain("data-chathead-role");
     }
     fixture.advanced = true;
@@ -237,6 +240,14 @@ describe("header name", () => {
 
   it("leaves a Chief's role out of the header when it only repeats the Chief of Staff badge", () => {
     const header = (title: string) => renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, chiefOfStaff: true, title } }));
+    // In the Simple pill the Chief label stands in for a title that only repeats it: shown once, never twice.
+    fixture.advanced = false;
+    try {
+      expect(header("chief of staff ").match(/<span data-chathead-role="true"[^>]*>Chief of Staff<\/span>/g)).toHaveLength(1);
+      expect(header("Operations lead")).toContain('title="Operations lead"');
+    } finally {
+      fixture.advanced = true;
+    }
     expect(header("chief of staff ")).not.toContain("data-chathead-role");
     expect(header("Operations lead")).toContain('<span title="Operations lead"');
     expect(renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, title: "Chief of Staff" } }))).toContain("data-chathead-role");

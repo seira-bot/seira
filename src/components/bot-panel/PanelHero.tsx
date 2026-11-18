@@ -6,6 +6,7 @@ import { t } from "@/lib/i18n";
 import { imeComposing } from "@/lib/send-key";
 import type { MausState } from "@/lib/mascot";
 import type { Bot } from "@/state/store";
+import { PanelStatePill } from "./PanelStatePill";
 import { BOT_PROFILE_LIMITS } from "../../../shared/bot-profile";
 import { BotAvatar } from "../Avatar";
 import type { BotPatch } from "../bot-settings/useBotSettingsDerived";
@@ -74,19 +75,25 @@ export function PanelHero({ bot, activeState, patch, editorOpen, onToggleEditor 
   const title = bot.title.trim();
 
   return (
-    <div className="group/hero flex flex-col items-center text-center">
+    <div className="group/hero relative isolate flex flex-col items-center text-center">
+      <span
+        aria-hidden="true"
+        data-panel-glow
+        className="pointer-events-none absolute -top-10 start-1/2 -z-10 h-[200px] w-[280px] -translate-x-1/2 blur-[8px] rtl:translate-x-1/2"
+        style={{ background: `radial-gradient(closest-side, color-mix(in oklab, var(--identity-${bot.color}) 22%, transparent), transparent)` }}
+      />
       <button
         type="button"
         data-panel-avatar
         aria-label={t("botPanel.avatar.edit")}
         aria-expanded={editorOpen}
         onClick={onToggleEditor}
-        className="group relative rounded-[18px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-border"
+        className="group relative rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-border"
       >
-        <BotAvatar bot={bot} size={64} state={activeState} />
+        <BotAvatar bot={bot} size={88} state={activeState} />
         <span
           aria-hidden="true"
-          className="absolute inset-0 flex items-center justify-center rounded-[18px] bg-black/0 text-white opacity-0 transition-[opacity,background-color] group-hover:bg-black/40 group-hover:opacity-100 group-focus-visible:bg-black/40 group-focus-visible:opacity-100 group-focus-within:opacity-100 touch:opacity-100 motion-reduce:transition-none"
+          className="absolute inset-0 flex items-center justify-center rounded-[24px] bg-black/0 text-white opacity-0 transition-[opacity,background-color] group-hover:bg-black/40 group-hover:opacity-100 group-focus-visible:bg-black/40 group-focus-visible:opacity-100 group-focus-within:opacity-100 touch:opacity-100 motion-reduce:transition-none"
         >
           <Pencil size={20} />
         </span>
@@ -158,6 +165,7 @@ export function PanelHero({ bot, activeState, patch, editorOpen, onToggleEditor 
           {title}
         </button>
       )}
+      <PanelStatePill bot={bot} />
     </div>
   );
 }

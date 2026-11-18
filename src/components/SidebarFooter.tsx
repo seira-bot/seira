@@ -1,6 +1,8 @@
+import { Settings } from "lucide-react";
 import { useRef } from "react";
 
 import { cn } from "@/lib/cn";
+import { t } from "@/lib/i18n";
 import type { SidebarDensity } from "@/lib/sidebar-preferences";
 import { useStore } from "@/state/store";
 
@@ -26,7 +28,7 @@ export function SidebarPlaceStatus({ place, className }: { place: WorkspacePlace
 }
 
 function SimpleSidebarFooter({ owner, archived }: { owner: string | null; archived?: ArchivedBots }) {
-  const { state } = useStore();
+  const { state, dispatch } = useStore();
   const place = useSimplePlace();
   const account = useSimpleAccount(place, owner, archived);
   const move = useAccountMoveLine(state.config?.cloudHome === true);
@@ -34,15 +36,21 @@ function SimpleSidebarFooter({ owner, archived }: { owner: string | null; archiv
   // The move's words open the account menu just below them, where the move's row is.
   const openAccount = () => footer.current?.querySelector("[data-sidebar-account]")?.closest("button")?.click();
   return (
-    <div ref={footer} data-sidebar-footer="simple" className="px-4 pb-4 pt-2">
+    <div ref={footer} data-sidebar-footer="simple" className="px-3 pb-2 pt-1">
       <CloudRoomCard />
       <CloudUsageCard />
       <SidebarPlaceStatus place={place} className="mb-2 px-1" />
       <AccountMoveStatus kind={move.kind} place={move.place} retry={move.retry} onOpen={openAccount} className="ps-1" />
-      <div className="flex items-center gap-2 not-first:mt-2">
-        <SidebarProfileMenu simple={account} />
+      <div className="mb-1 flex items-center gap-2 empty:hidden">
         <SidebarConnectApps />
         <UpdateIndicator className="size-9" />
+      </div>
+      <div className="flex h-12 items-center gap-1 border-t-[0.5px] border-edge pt-1.5">
+        <SidebarProfileMenu simple={account} named />
+        <button type="button" onClick={() => dispatch({ type: "toggleAppSettings", open: true, section: "overview" })} aria-label={t("sidebar.menu.settings")} title={t("sidebar.menu.settings")}
+          className="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-secondary transition-colors duration-150 hover:bg-ink/[0.06] hover:text-ink motion-reduce:transition-none touch:size-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus">
+          <Settings size={16} strokeWidth={1.75} aria-hidden="true" />
+        </button>
       </div>
     </div>
   );

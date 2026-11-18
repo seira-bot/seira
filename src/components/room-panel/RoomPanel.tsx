@@ -28,9 +28,11 @@ const PAGES: Record<RoomPage, { title: LocaleKey; intro: LocaleKey }> = {
 function RoomHero({ group, members }: { group: Group; members: Bot[] }) {
   return (
     <div className="flex flex-col items-center text-center">
-      <div data-room-panel-faces className="mt-0.5 flex -space-x-3">
-        {members.slice(0, 3).map((member) => (
-          <BotAvatar key={member.id} bot={member} state="happy" size={52} animated={false} />
+      <div data-room-panel-faces className="mt-0.5 flex">
+        {members.slice(0, 3).map((member, index) => (
+          <span key={member.id} className={cn("rounded-full ring-[3px] ring-app", index > 0 && "-ms-4")}>
+            <BotAvatar bot={member} state="happy" size={56} animated={false} />
+          </span>
         ))}
       </div>
       <h2 id="room-panel-title" className="mt-2.5 max-w-full truncate px-1.5 text-[18px] font-semibold text-ink">{group.name}</h2>
@@ -180,7 +182,7 @@ export function RoomPanel({ group, overlay = false }: { group: Group; overlay?: 
         onKeyDown={onKeyDown}
         className={sidePanelCls(overlay, true)}
       >
-        <div {...dragProps} className="flex h-[52px] shrink-0 items-center justify-end gap-2 px-3.5">
+        <div {...dragProps} className="flex h-[52px] shrink-0 items-center justify-end gap-1.5 px-3">
           <RoomMoreMenu group={group} />
           <button type="button" onClick={() => closeRoomPanel({ refocus: true })} aria-label={t("botSettings.simple.close")} className={roundButtonCls}>
             <X size={16} className="pointer-events-none" />

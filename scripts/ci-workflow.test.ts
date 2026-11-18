@@ -21,7 +21,7 @@ interface Job {
   uses?: string;
   environment?: unknown;
   permissions?: Record<string, string> | string;
-  strategy?: { matrix?: { shard?: number[] } };
+  strategy?: { matrix?: { shard?: number[]; include?: Record<string, string>[] } };
   steps?: Step[];
 }
 
@@ -38,6 +38,9 @@ const workflows = new Map(files.map((file) => [file, parse(texts.get(file)!) as 
 const workflow = workflows.get("ci.yml")!;
 const packageFiles = files.filter((file) => /^package-[a-z0-9-]+\.yml$/.test(file));
 const packageWorkflows = packageFiles.map((file) => [file, workflows.get(file)!] as const);
+const IMAGE = "server-image.yml";
+const image = workflows.get(IMAGE)!;
+const LOGIN = "${{ secrets.GITHUB_TOKEN }}";
 const scripts = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
   scripts: Record<string, string>;
 }).scripts;
@@ -48,8 +51,8 @@ const allRuns = () => allSteps().flatMap((step) => (step.run === undefined ? [] 
 const runs = (job: Job) => stepsOf(job).flatMap((step) => (step.run === undefined ? [] : [step.run]));
 
 describe("CI workflows", () => {
-  it("keeps the CI workflow and package workflows only", () => {
-    expect(files).toEqual(["ci.yml", ...packageFiles]);
+  it("keeps the CI workflow, the package workflows and the server image workflow only", () => {
+    expect(files).toEqual(["ci.yml", ...packageFiles, IMAGE]);
   });
 
   it("runs on pull requests, pushes to main and manual starts only", () => {
@@ -72,8 +75,10 @@ describe("CI workflows", () => {
     }
   });
 
-  it("reads no token", () => {
-    for (const [file, text] of texts) {
+  it("reads no token, except the server image workflow once, to sign in to the registry", () => {
+    expect(texts.get(IMAGE)!.split(LOGIN)).toHaveLength(2);
+    for (const [file, original] of texts) {
+      const text = file === IMAGE ? original.replace(LOGIN, "") : original;
       for (const forbidden of ["github.token", "GITHUB_TOKEN", "GH_TOKEN"]) {
         expect(text, `${file} reads ${forbidden}`).not.toContain(forbidden);
       }
@@ -108,8 +113,8 @@ describe("CI workflows", () => {
     }
   });
 
-  it("reads a secret only in the macOS package workflow, for the Apple signature", () => {
-    expect(files.filter((file) => texts.get(file)!.includes("secrets."))).toEqual(["package-macos.yml"]);
+  it("reads a secret only in the macOS package workflow, for the Apple signature, and in the server image workflow", () => {
+    expect(files.filter((file) => texts.get(file)!.includes("secrets."))).toEqual(["package-macos.yml", IMAGE]);
   });
 
   it("drops the credentials of every checkout", () => {
@@ -131,12 +136,87 @@ describe("CI workflows", () => {
     for (const run of allRuns()) expect(run).not.toMatch(/\$\{\{[^}]*\b(github\.event|github\.head_ref|inputs\.)/);
   });
 
-  it("never creates a tag or publishes a release or a package", () => {
-    for (const run of allRuns()) {
-      for (const forbidden of ["gh release", "git tag", "git push", "npm publish", "docker push"]) {
-        expect(run).not.toContain(forbidden);
+  it("never creates a tag or publishes a release or a package from a command line, except the server image publish job", () => {
+    for (const [file, flow] of workflows) {
+      for (const [id, job] of Object.entries(flow.jobs)) {
+        const publishes = file === IMAGE && id === "publish";
+        for (const run of runs(job)) {
+          for (const forbidden of ["gh release", "git tag", "git push", "npm publish"]) expect(run).not.toContain(forbidden);
+          if (!publishes) {
+            expect(run, `${file} job ${id}`).not.toContain("docker push");
+            expect(run, `${file} job ${id}`).not.toContain("imagetools create");
+          }
+          expect(run).not.toMatch(/--publish(?!\s+never\b)/);
+        }
       }
-      expect(run).not.toMatch(/--publish(?!\s+never\b)/);
+    }
+  });
+});
+
+describe("Server image workflow", () => {
+  const build = image.jobs.image!;
+  const publish = image.jobs.publish!;
+  const ON_MAIN = "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'";
+
+  it("starts on a pull request that changes the image, or by hand", () => {
+    expect(Object.keys(image.on).sort()).toEqual(["pull_request", "workflow_dispatch"]);
+  });
+
+  it("uses GitHub's own actions only", () => {
+    const uses = Object.values(image.jobs).flatMap(stepsOf).flatMap((step) => (step.uses === undefined ? [] : [step.uses]));
+    for (const value of uses) expect(value).toMatch(/^actions\//);
+  });
+
+  it("builds and smoke-tests each platform on its own GitHub-hosted runner, without permissions, secrets or an environment", () => {
+    expect(build.strategy?.matrix?.include).toEqual([
+      { arch: "amd64", runner: "ubuntu-24.04" },
+      { arch: "arm64", runner: "ubuntu-24.04-arm" },
+    ]);
+    expect(build["runs-on"]).toBe("${{ matrix.runner }}");
+    expect(build.permissions).toBeUndefined();
+    expect(build.environment).toBeUndefined();
+    expect(JSON.stringify(build)).not.toContain("secrets.");
+    expect(runs(build).join("\n")).not.toMatch(/docker (login|push)/);
+  });
+
+  it("hands the image to the publish job only from a manual run on main", () => {
+    const uploads = stepsOf(build).filter((step) => step.uses?.startsWith("actions/upload-artifact@"));
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]!.if).toBe(ON_MAIN);
+    expect(uploads[0]!.with?.["if-no-files-found"]).toBe("error");
+  });
+
+  it("publishes only from a manual run on main, after the build, behind the release environment", () => {
+    expect(publish.needs).toBe("image");
+    expect(publish.if).toBe(ON_MAIN);
+    expect(publish.environment).toBe("release");
+    expect(publish.permissions).toEqual({ contents: "read", packages: "write" });
+    expect(publish["runs-on"]).toBe("ubuntu-24.04");
+  });
+
+  it("runs no code of the repository in the publish job, and uses no build cache", () => {
+    expect(stepsOf(publish).some((step) => step.uses?.startsWith("actions/checkout@"))).toBe(false);
+    const steps = Object.values(image.jobs).flatMap(stepsOf);
+    expect(steps.some((step) => step.uses?.startsWith("actions/cache"))).toBe(false);
+    expect(Object.values(image.jobs).flatMap(runs).join("\n")).not.toMatch(/--cache-(from|to)\b/);
+  });
+
+  it("checks out a release tag only by its full tag name", () => {
+    const checkouts = Object.values(image.jobs).flatMap(stepsOf).filter((step) => step.uses?.startsWith("actions/checkout@"));
+    expect(checkouts).toHaveLength(1);
+    expect(checkouts[0]!.with?.ref).toBe("${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}");
+  });
+
+  it("labels the image with the release tag, or main when there is none", () => {
+    expect(runs(build).join("\n")).toContain('--label "org.opencontainers.image.version=${TAG:-main}"');
+  });
+
+  it("publishes to this repository's own package only", () => {
+    const step = stepsOf(publish).find((each) => each.run?.includes("imagetools create"));
+    expect(step?.env?.REPOSITORY).toBe("${{ github.repository }}");
+    expect(step?.run).toContain('image="ghcr.io/${REPOSITORY,,}"');
+    for (const run of runs(publish)) {
+      for (const [name] of run.matchAll(/ghcr\.io\S*/g)) expect(["ghcr.io", 'ghcr.io/${REPOSITORY,,}"']).toContain(name);
     }
   });
 });

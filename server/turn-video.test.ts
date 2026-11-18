@@ -1,9 +1,9 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { TurnVideoInput } from "./contracts.ts";
 import { videoFrameImages } from "./turn-video.ts";
@@ -113,5 +113,53 @@ describe.skipIf(!hasFfmpeg())("video frame sampling", () => {
     const notAVideo: TurnVideoInput = { path: join(root, "missing.mp4"), mime: "video/mp4", bytes: 0 };
 
     await expect(videoFrameImages([notAVideo])).resolves.toEqual([]);
+  });
+
+  describe("the folder that holds the frames", () => {
+    const frameFolders = () => readdirSync(tmpdir()).filter((name) => name.startsWith("omb-video-frame-"));
+    // The folders of the other tests wait for their delay, so each test looks only at what its own call made.
+    const madeBy = async (call: () => Promise<unknown>) => {
+      const before = new Set(frameFolders());
+      await call();
+      return frameFolders().filter((name) => !before.has(name));
+    };
+
+    it("is named after this process and stays while the turn reads the frames", async () => {
+      const clip = syntheticClip(store(), 2);
+      let frames: Awaited<ReturnType<typeof videoFrameImages>> = [];
+      const [folder, ...others] = await madeBy(async () => { frames = await videoFrameImages([clip]); });
+
+      expect(others).toEqual([]);
+      expect(folder).toMatch(new RegExp(`^omb-video-frame-${process.pid}-[A-Za-z0-9]{6}$`));
+      for (const frame of frames) {
+        expect(dirname(frame.path)).toBe(join(tmpdir(), folder!));
+        expect(existsSync(frame.path)).toBe(true);
+      }
+    });
+
+    it("does not keep the process alive for the delay that ends it", async () => {
+      const timers = vi.spyOn(globalThis, "setTimeout");
+      try {
+        await videoFrameImages([syntheticClip(store(), 2)]);
+        const cleanup = timers.mock.calls.flatMap((call, index) => call[1] === 10 * 60 * 1000 ? [timers.mock.results[index]!.value as NodeJS.Timeout] : []);
+        expect(cleanup).toHaveLength(1);
+        expect(cleanup[0]!.hasRef()).toBe(false);
+      } finally {
+        timers.mockRestore();
+      }
+    });
+
+    it("is removed at once when the video gave no frame", async () => {
+      // Audio only: ffprobe reads a duration, and ffmpeg has no picture to take.
+      const root = store();
+      const path = join(root, "audio.mp4");
+      const made = spawnSync("ffmpeg", ["-f", "lavfi", "-i", "sine=duration=2", "-y", path]);
+      if (made.status !== 0) throw new Error(`fixture ffmpeg failed: ${made.stderr?.toString()}`);
+
+      const before = new Set(frameFolders());
+      await expect(videoFrameImages([{ path, mime: "video/mp4", bytes: 0 }])).resolves.toEqual([]);
+
+      await vi.waitFor(() => expect(frameFolders().filter((name) => !before.has(name))).toEqual([]));
+    });
   });
 });
