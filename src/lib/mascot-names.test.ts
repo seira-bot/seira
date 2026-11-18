@@ -27,9 +27,9 @@ describe("mascot names", () => {
   });
 
   it("reads the names in the app language", () => {
-    expect([bodyName("pumpkin"), colorName("red"), expressionName("happy"), silhouetteName("Ghost")]).toEqual(["Pumpkin", "red", "happy", "Ghost"]);
+    expect([bodyName("pumpkin"), colorName("red"), expressionName("happy"), silhouetteName("Ponytail")]).toEqual(["Pumpkin", "red", "happy", "Ponytail"]);
     setLocale("pt-br");
-    expect([bodyName("pumpkin"), colorName("red"), expressionName("happy"), silhouetteName("Ghost")]).toEqual(["Abóbora", "vermelha", "feliz", "Fantasma"]);
+    expect([bodyName("pumpkin"), colorName("red"), expressionName("happy"), silhouetteName("Ponytail")]).toEqual(["Abóbora", "vermelha", "feliz", "Rabo de cavalo"]);
   });
 
   it("falls back to the id or name it was given when the catalog has none", () => {

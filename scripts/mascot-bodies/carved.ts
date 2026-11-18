@@ -1,5 +1,5 @@
 /**
- * What a carved body is made of, shared by every festival pack the generator bakes.
+ * What a carved body is made of, shared by every pack the generator bakes.
  *
  * Loaded by `node --experimental-strip-types`, so only erasable type syntax.
  */

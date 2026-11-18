@@ -1,5 +1,5 @@
 /**
- * Bakes the brand pack and every festival pack into `packages/phone-protocol/src/carved-bodies.ts`. Run with `pnpm gen:carved`.
+ * Bakes the brand pack (Seira and her other hair styles) into `packages/phone-protocol/src/carved-bodies.ts`. Run with `pnpm gen:carved`.
  *
  * Each pack's drawings live in `scripts/mascot-bodies/<pack>.ts`, in a 240-unit square
  * centred on x = 120.
@@ -13,11 +13,9 @@ import { fileURLToPath } from "node:url"
 import { toPath } from "./mascot-bodies/draw.ts"
 import type { Def, Eyes, Fill } from "./mascot-bodies/carved.ts"
 import { BRAND } from "./mascot-bodies/brand.ts"
-import { DIWALI } from "./mascot-bodies/diwali.ts"
-import { HALLOWEEN } from "./mascot-bodies/halloween.ts"
 
 /** Picker order: each pack's ids, in its drawing order. */
-const PACKS: ReadonlyArray<[string, Def[]]> = [["brand", BRAND], ["halloween", HALLOWEEN], ["diwali", DIWALI]]
+const PACKS: ReadonlyArray<[string, Def[]]> = [["brand", BRAND]]
 const DEFS = PACKS.flatMap(([, defs]) => defs)
 
 const quote = (s: string) => JSON.stringify(s)
@@ -85,7 +83,7 @@ function emitTs(): string {
   })
   const all = PACKS.map(([pack]) => `...${pack.toUpperCase()}_BODY_IDS`).join(", ")
   return `/**
- * The flat bodies a bot can wear: Seira, the shipped mascot, her other hair styles, and the festival bodies.
+ * The flat bodies a bot can wear: Seira, the shipped mascot, and her other hair styles.
  *
  * GENERATED FILE — do not hand-edit. Run \`pnpm gen:carved\` to rebuild it from
  * \`scripts/gen-carved-bodies.ts\`.
@@ -166,7 +164,7 @@ function emitSwift(): string {
       `        ),`,
     ].join("\n")
   })
-  return `// The festival bodies a bot can wear — the phone's half of \`shared/carved-bodies.ts\`.
+  return `// The flat bodies a bot can wear — the phone's half of \`shared/carved-bodies.ts\`.
 //
 // GENERATED FILE — do not hand-edit. Run \`pnpm gen:carved --swift <file>\` to rebuild it
 // from \`scripts/gen-carved-bodies.ts\`.
@@ -249,7 +247,7 @@ function emitKotlin(): string {
   return `package com.openmausbot.companion.ui
 
 /**
- * The festival bodies a bot can wear — the Android half of \`shared/carved-bodies.ts\`.
+ * The flat bodies a bot can wear — the Android half of \`shared/carved-bodies.ts\`.
  *
  * GENERATED FILE — do not hand-edit. Run \`pnpm gen:carved --kotlin <file>\` to rebuild it
  * from \`scripts/gen-carved-bodies.ts\`.

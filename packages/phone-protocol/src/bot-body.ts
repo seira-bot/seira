@@ -5,7 +5,13 @@ import { z } from "zod";
 import { MASCOT_BODY_IDS } from "./mascot-bodies.ts";
 import { BRAND_BODY_IDS, CARVED_BODY_IDS, type CarvedBodyId } from "./carved-bodies.ts";
 
-export const BOT_BODY_IDS = [...MASCOT_BODY_IDS, ...CARVED_BODY_IDS] as const;
+/** The Halloween and Diwali bodies. Nothing draws them now, but stored bots and old backups still carry these ids. */
+export const RETIRED_BODY_IDS = [
+  "pumpkin", "ghost", "witch", "bat", "cat", "skull", "monster", "mummy", "vampire", "spider",
+  "rocket", "anaar", "chakri", "sparkler", "bomb", "laddu", "chakli", "jalebi", "katli", "karanji",
+] as const;
+
+export const BOT_BODY_IDS = [...MASCOT_BODY_IDS, ...CARVED_BODY_IDS, ...RETIRED_BODY_IDS] as const;
 
 export type BotBodyId = (typeof BOT_BODY_IDS)[number];
 

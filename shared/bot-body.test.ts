@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { BOT_BODY_IDS, DEFAULT_BOT_BODY, PICKER_BODY_IDS, botBodyId, botBodySchema, isBrandBody } from "./bot-body.ts";
+import { BOT_BODY_IDS, DEFAULT_BOT_BODY, PICKER_BODY_IDS, RETIRED_BODY_IDS, botBodyId, botBodySchema, isBrandBody } from "./bot-body.ts";
 import { BRAND_BODY_IDS, CARVED_BODY_IDS } from "./carved-bodies.ts";
 import { MASCOT_BODY_IDS } from "./mascot-bodies.ts";
 
 describe("bot bodies", () => {
   it("still parses every stored body id", () => {
-    expect(BOT_BODY_IDS).toEqual([...MASCOT_BODY_IDS, ...CARVED_BODY_IDS]);
+    expect(BOT_BODY_IDS).toEqual([...MASCOT_BODY_IDS, ...CARVED_BODY_IDS, ...RETIRED_BODY_IDS]);
+    expect(CARVED_BODY_IDS).toEqual(BRAND_BODY_IDS);
     for (const id of BOT_BODY_IDS) expect(botBodySchema.safeParse(id).success).toBe(true);
   });
 
@@ -14,7 +15,7 @@ describe("bot bodies", () => {
     for (const id of BRAND_BODY_IDS) expect(botBodyId(id)).toBe(id);
     expect(botBodyId("star")).toBe("seira");
     expect(botBodyId("cursor")).toBe("seira");
-    expect(botBodyId("pumpkin")).toBe("seira");
+    for (const id of RETIRED_BODY_IDS) expect(botBodyId(id)).toBe("seira");
     expect(botBodyId("nonsense")).toBe("seira");
     expect(botBodyId(undefined)).toBe("seira");
     expect(DEFAULT_BOT_BODY).toBe("seira");

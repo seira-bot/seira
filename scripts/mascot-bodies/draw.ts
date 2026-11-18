@@ -1,5 +1,5 @@
 /**
- * Drawing toolkit for the Halloween bodies: shapes are signed distance fields built from
+ * Drawing toolkit for the carved bodies: shapes are signed distance fields built from
  * primitives with soft unions, traced at their zero contour, and fitted with smooth
  * cubics. The output is absolute `M`/`C`/`Z` path data, the subset the phone path
  * parsers accept.

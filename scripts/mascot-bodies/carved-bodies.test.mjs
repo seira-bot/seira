@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { flatten } from "./geometry.ts";
-import { BRAND_BODY_IDS, CARVED_BODIES, CARVED_BODY_IDS, DIWALI_BODY_IDS, HALLOWEEN_BODY_IDS } from "../../shared/carved-bodies.ts";
+import { BRAND_BODY_IDS, CARVED_BODIES, CARVED_BODY_IDS } from "../../shared/carved-bodies.ts";
 import { MASCOT_BODY_IDS } from "../../shared/mascot-bodies.ts";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -39,7 +39,7 @@ describe("carved catalog", () => {
   }, 120_000);
 
   it("uses ids that never collide with each other or the gradient catalog", () => {
-    expect(CARVED_BODY_IDS).toEqual([...BRAND_BODY_IDS, ...HALLOWEEN_BODY_IDS, ...DIWALI_BODY_IDS]);
+    expect(CARVED_BODY_IDS).toEqual([...BRAND_BODY_IDS]);
     expect(new Set(CARVED_BODY_IDS).size).toBe(CARVED_BODY_IDS.length);
     for (const id of CARVED_BODY_IDS) {
       expect(MASCOT_BODY_IDS).not.toContain(id);
