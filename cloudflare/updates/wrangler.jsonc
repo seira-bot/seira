@@ -1,0 +1,32 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "seira-updates",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [{ "pattern": "updates.seira.bot", "custom_domain": true }],
+  "vars": {
+    "PUBLIC_ORIGIN": "https://updates.seira.bot",
+    "SITE_URL": "https://seira.bot",
+    "FROM_ADDRESS": "updates@seira.bot",
+    "FROM_NAME": "Seira"
+  },
+  "secrets": { "required": ["ADMIN_TOKEN"] },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "seira-updates",
+      "database_id": "846b226a-77a9-4a96-a3d1-485049a5f67f",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["updates@seira.bot"] }],
+  "ratelimits": [
+    { "name": "SUBSCRIBE_LIMITER", "namespace_id": "18110001", "simple": { "limit": 10, "period": 60 } }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 }
+  }
+}
