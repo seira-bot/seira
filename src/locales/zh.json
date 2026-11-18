@@ -9741,7 +9741,7 @@
   "botIdentity.useOrgIcon": "使用 {name} 图标",
   "botIdentity.uploadUnusable": "上传的图片无法用作头像",
   "app.openBotList": "打开机器人列表",
-  "about.tagline": "基于 {app} 构建的桌面代理之家：开源，Apache 2.0 许可。",
+  "about.summary": "桌面代理之家：开源，Apache 2.0 许可。",
   "about.docs": "文档",
   "about.releases": "发行版",
   "about.license": "许可证",
