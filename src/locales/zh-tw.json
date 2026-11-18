@@ -9683,7 +9683,6 @@
   "vault.choices.note": "{bot} 從現在起可以使用你選擇的項目。",
   "vault.choices.error": "無法使用該項目。請再試一次，或在下方直接輸入。",
   "skills.foundWhenNeeded": "不在這個機器人的清單中。它會在任務需要時自行找到這項技能。",
-  "skins.tagline.diwali": "靛藍夜色，點綴金盞花與油燈金光。煙火可有可無。",
   "skins.tagline.aurora": "近乎純黑，劃過一道綠色極光。頂層呈現玻璃質感。",
   "native.dialog.resetSavedKeys.title": "要重設已儲存的金鑰嗎？",
   "native.dialog.resetSavedKeys.detail": "{app} 無法讀取這裡儲存的金鑰，因此無法使用它們或儲存新金鑰。重設會將無法讀取的檔案移開並重新啟動 {app}。之後請重新輸入你的金鑰，並重新連線你的應用程式。",

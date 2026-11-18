@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { SKINS, SKIN_IDS, DEFAULT_SKIN_CHOICE, PRIOR_INSTALL_SKIN, THEME_SKINS, resolveSkin } from "./skins";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { SKINS, SKIN_IDS, DEFAULT_SKIN_CHOICE, PRIOR_INSTALL_SKIN, THEME_SKINS, resolveSkin, readSkinChoice } from "./skins";
 import en from "@/locales/en.json";
 
 const css = readFileSync(
@@ -13,6 +13,8 @@ const css = readFileSync(
 const blocks = new Set(
   [...css.matchAll(/\[data-skin="([a-z-]+)"\]/g)].map(([, id]) => id),
 );
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("skins", () => {
   it("gives every registered skin a stylesheet block", () => {
@@ -90,15 +92,19 @@ describe("skins", () => {
     expect(css).toMatch(/@scope \(\[data-skin="pop"\]:not\(\[data-skin-preview\]\)\) to \(\[data-skin\]\)/);
   });
 
-  it.each([["halloween", "Halloween"], ["diwali", "Diwali"]] as const)(
-    "adds the %s festival skin after Pop, with its atmosphere kept off the picker miniature",
-    (id, name) => {
-      expect(SKIN_IDS.slice(10, 12)).toEqual(["halloween", "diwali"]);
-      expect(SKINS.find((s) => s.id === id)?.name).toBe(name);
-      expect(css).toMatch(new RegExp(`@scope \\(\\[data-skin="${id}"\\]:not\\(\\[data-skin-preview\\]\\)\\) to \\(\\[data-skin\\]\\)\\s*\\{\\s*main\\.bg-app\\s*\\{`));
-      expect(css).toMatch(new RegExp(`@media \\(prefers-reduced-motion: reduce\\)\\s*\\{\\s*\\[data-skin="${id}"\\] main\\.bg-app::before`));
-    },
-  );
+  it("adds the Halloween skin after Pop, with its atmosphere kept off the picker miniature", () => {
+    expect(SKIN_IDS.slice(10, 11)).toEqual(["halloween"]);
+    expect(SKINS.find((s) => s.id === "halloween")?.name).toBe("Halloween");
+    expect(css).toMatch(/@scope \(\[data-skin="halloween"\]:not\(\[data-skin-preview\]\)\) to \(\[data-skin\]\)\s*\{\s*main\.bg-app\s*\{/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{\s*\[data-skin="halloween"\] main\.bg-app::before/);
+  });
+
+  it("has no Diwali skin, and a stored Diwali choice reads as the default", () => {
+    expect(SKIN_IDS).not.toContain("diwali");
+    expect(css).not.toContain('data-skin="diwali"');
+    vi.stubGlobal("localStorage", { getItem: (key: string) => (key === "omb-skin" ? "diwali" : null), setItem: () => undefined });
+    expect([DEFAULT_SKIN_CHOICE, PRIOR_INSTALL_SKIN]).toContain(readSkinChoice());
+  });
 
   it("adds Aurora last, dark, with its light field kept off the picker miniature", () => {
     expect(SKIN_IDS.at(-1)).toBe("aurora");
