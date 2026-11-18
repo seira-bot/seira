@@ -28,19 +28,39 @@ const ATOMIC_MOVE = [
 
 // BaseUpdater starts doInstall before it asks Electron to quit, so an immediate
 // spawn can reach the data-directory lease while the old desktop is still
-// cleaning up. Electron's relauncher waits for this process to exit instead.
+// cleaning up. The replacement must start only after this process exits.
+//
+// Electron's app.relaunch() cannot start it: its relauncher process runs with
+// PR_SET_NO_NEW_PRIVS, which the kernel keeps across exec. The AppImage
+// runtime mounts its image with the setuid fusermount3, which then fails with
+// "Operation not permitted", and the relauncher sends that error to /dev/null.
+//
+// Instead, this process spawns a detached bash that it does not restrict. bash
+// reads stdin until EOF, which comes when this process exits and the kernel
+// closes the write end (libuv creates that end with close-on-exec, so no
+// other child holds it). The AppImage runtime leaves its keep-alive pipe and
+// mount directory open without close-on-exec, and spawn() passes them on, so
+// bash closes every descriptor above 2 before it runs the update. Otherwise
+// the new version keeps the old version's mount alive.
 const IMMEDIATE_RELAUNCH = /this\.spawnLog\(destination, \[\], env\);/g;
+const RELAUNCH_AFTER_EXIT = [
+  "read -r ignored",
+  'for fd in /proc/$$/fd/*; do fd=${fd##*/}; case $fd in 0|1|2) ;; *) exec {fd}>&- ;; esac; done',
+  'exec "$1" </dev/null',
+].join("\n");
 const QUEUED_RELAUNCH = [
-  'const previousSilentInstall = process.env.APPIMAGE_SILENT_INSTALL;',
-  'try {',
-  '  process.env.APPIMAGE_SILENT_INSTALL = env.APPIMAGE_SILENT_INSTALL;',
-  '  if (require("electron").app.relaunch({ execPath: destination, args: [] }) === false) {',
-  '    throw new Error("Could not schedule the updated AppImage to restart");',
-  '  }',
-  '} finally {',
-  '  if (previousSilentInstall === undefined) delete process.env.APPIMAGE_SILENT_INSTALL;',
-  '  else process.env.APPIMAGE_SILENT_INSTALL = previousSilentInstall;',
+  `const relaunch = (0, child_process_1.spawn)("bash", ["-c", ${JSON.stringify(RELAUNCH_AFTER_EXIT)}, "appimage-relaunch", destination], {`,
+  '  detached: true,',
+  '  stdio: ["pipe", "ignore", "ignore"],',
+  '  env',
+  '});',
+  'relaunch.on("error", (error) => this._logger.error(`Cannot restart the updated AppImage: ${error.stack || error}`));',
+  'if (relaunch.pid === undefined) {',
+  '  throw new Error("Could not schedule the updated AppImage to restart");',
   '}',
+  'relaunch.stdin.on("error", () => {});',
+  'relaunch.stdin.unref();',
+  'relaunch.unref();',
 ].join("\n          ");
 
 const REPLACEMENTS = [
@@ -66,7 +86,8 @@ export function patchAppImageUpdater(source) {
           "scripts/patch-appimage-updater.mjs before releasing.",
       );
     }
-    patched = patched.replace(pattern, replacement);
+    // A replacement function keeps "$$" and "$1" in the shell script literal.
+    patched = patched.replace(pattern, () => replacement);
   }
   return patched;
 }

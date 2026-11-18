@@ -8,6 +8,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import Module, { createRequire } from "node:module";
@@ -17,7 +18,6 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { patchAppImageUpdater } from "../scripts/patch-appimage-updater.mjs";
-import { acquireDataDirLease } from "./data-dir-lease.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const bundle = readFileSync(join(root, "electron/vendor/electron-updater.cjs"), "utf8");
@@ -65,8 +65,17 @@ test("the patch keeps the running path and never deletes ahead of the rename", (
   assert.doesNotMatch(patched, /unlinkSync\)\(appImageFile\)/);
   assert.match(patched, /mv", \["-f", installerPath, stagedDestination\]/);
   assert.match(patched, /renameSync\)\(stagedDestination, destination\)/);
-  assert.match(patched, /app\.relaunch\(\{ execPath: destination, args: \[\] \}\)/);
+  // Electron's relauncher sets no_new_privs, so the AppImage runtime cannot mount the update with setuid fusermount.
+  assert.doesNotMatch(patched, /app\.relaunch\(/);
+  assert.ok(patched.includes('spawn)("bash", ["-c", "read -r ignored\\nfor fd in /proc/$$/fd/*;'), patched);
+  assert.ok(patched.includes('exec \\"$1\\" </dev/null", "appimage-relaunch", destination]'), patched);
+  assert.match(patched, /detached: true/);
   assert.doesNotMatch(patched, /this\.spawnLog\(destination/);
+});
+
+test("the vendored bundle restarts the AppImage without Electron's relauncher", () => {
+  assert.doesNotMatch(bundle, /app\.relaunch\(\{ execPath: destination/);
+  assert.ok(bundle.includes('spawn)("bash", ["-c", "read -r ignored\\nfor fd in /proc/$$/fd/*;'));
 });
 
 test("the patch tolerates esbuild renaming the path import", () => {
@@ -88,64 +97,105 @@ test("the patch fails closed when upstream's shape moves", () => {
   }
 });
 
-test("the shipped installer replaces the AppImage and queues its original path for relaunch", (t) => {
-  let relaunched = null;
-  let relaunchEnvironment = null;
-  const electron = { app: { relaunch(options) {
-    relaunched = options;
-    relaunchEnvironment = { appImage: process.env.APPIMAGE, silent: process.env.APPIMAGE_SILENT_INSTALL };
-    return true;
-  } }, autoUpdater: new EventEmitter() };
-  const load = Module._load;
-  Module._load = (request, ...rest) => (request === "electron" ? electron : load(request, ...rest));
-  t.after(() => {
-    Module._load = load;
-  });
-
-  const { AppImageUpdater } = createRequire(import.meta.url)("./vendor/electron-updater.cjs");
+test("the shipped installer replaces the AppImage and starts it after the old process exits", {
+  skip: process.platform !== "linux" && "AppImage updates run only on Linux",
+  timeout: 20_000,
+}, async (t) => {
   const workspace = mkdtempSync(join(tmpdir(), "omb-appimage-install-"));
-  const lease = acquireDataDirLease(join(workspace, "data"));
-  t.after(() => { lease.release(); rmSync(workspace, { recursive: true, force: true }); });
+  t.after(() => rmSync(workspace, { recursive: true, force: true }));
 
   // The user launches a versioned filename — the case upstream renames.
   const launched = join(workspace, "OpenMausBot-0.1.43-x86_64.AppImage");
   const staged = join(workspace, "pending", "OpenMausBot-0.1.44-x86_64.AppImage");
+  const installer = join(workspace, "installer.cjs");
+  const installed = join(workspace, "installed.json");
+  const keepAlive = join(workspace, "keep-alive.txt");
+  const receipt = join(workspace, "restarted.json");
+  const data = join(workspace, "data");
+  const leaseModule = new URL("./data-dir-lease.mjs", import.meta.url).href;
   mkdirSync(join(workspace, "pending"));
   writeFileSync(launched, "old", { mode: 0o755 });
-  writeFileSync(staged, "new", { mode: 0o755 });
+  const replacement = `
+    const { readdirSync, readFileSync, readlinkSync, writeFileSync } = require("node:fs");
+    (async () => {
+      let parentAlive = true;
+      try { process.kill(Number(process.env.OMB_UPDATER_TEST_PARENT), 0); }
+      catch (error) { if (error.code === "ESRCH") parentAlive = false; else throw error; }
+      const descriptors = readdirSync("/proc/self/fd").map((fd) => { try { return readlinkSync("/proc/self/fd/" + fd); } catch { return null; } });
+      const { acquireDataDirLease } = await import(${JSON.stringify(leaseModule)});
+      acquireDataDirLease(${JSON.stringify(data)}).release();
+      writeFileSync(${JSON.stringify(receipt)}, JSON.stringify({ parentAlive, acquired: true, descriptors,
+        noNewPrivs: readFileSync("/proc/self/status", "utf8").match(/NoNewPrivs:\\s*(\\d)/)?.[1],
+        appImage: process.env.APPIMAGE, silent: process.env.APPIMAGE_SILENT_INSTALL }));
+    })().catch((error) => { writeFileSync(${JSON.stringify(receipt)}, JSON.stringify({ error: error.message })); process.exitCode = 1; });
+  `;
+  // A disposable executable substitutes for the AppImage payload, not for the vendored methods.
+  writeFileSync(staged, `#!${process.execPath}\n${replacement}`, { mode: 0o755 });
+  writeFileSync(installer, `
+    const Module = require("node:module");
+    const { EventEmitter } = require("node:events");
+    const { existsSync, readlinkSync, writeFileSync } = require("node:fs");
+    const load = Module._load;
+    const electron = { app: { relaunch() { throw new Error("Electron's relauncher cannot mount an AppImage"); } }, autoUpdater: new EventEmitter() };
+    Module._load = (request, ...rest) => (request === "electron" ? electron : load(request, ...rest));
+    (async () => {
+      const { acquireDataDirLease } = await import(${JSON.stringify(leaseModule)});
+      const lease = acquireDataDirLease(${JSON.stringify(data)});
+      writeFileSync(${JSON.stringify(keepAlive)}, readlinkSync("/proc/self/fd/3"));
+      process.env.APPIMAGE = ${JSON.stringify(launched)};
+      process.env.OMB_UPDATER_TEST_PARENT = String(process.pid);
+      const silent = process.env.APPIMAGE_SILENT_INSTALL;
+      const { AppImageUpdater } = require(${JSON.stringify(join(root, "electron/vendor/electron-updater.cjs"))});
+      const renames = [];
+      const errors = [];
+      const result = AppImageUpdater.prototype.doInstall.call({
+        installerPath: ${JSON.stringify(staged)},
+        _logger: { info() {}, warn() {}, debug() {}, error: (message) => errors.push(String(message)) },
+        dispatchError(error) { throw error; },
+        emit: (event, value) => renames.push([event, value]),
+        spawnLog() { throw new Error("the replacement must not start before desktop shutdown"); },
+      }, { isForceRunAfter: true });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      writeFileSync(${JSON.stringify(installed)}, JSON.stringify({ result, renames, errors,
+        silentKept: process.env.APPIMAGE_SILENT_INSTALL === silent, startedEarly: existsSync(${JSON.stringify(receipt)}) }));
+      lease.release();
+    })().catch((error) => { console.error(error); process.exitCode = 1; });
+  `);
 
-  const previous = process.env.APPIMAGE;
-  const previousSilent = process.env.APPIMAGE_SILENT_INSTALL;
-  process.env.APPIMAGE = launched;
-  t.after(() => {
-    if (previous === undefined) delete process.env.APPIMAGE;
-    else process.env.APPIMAGE = previous;
+  // fd 3 stands for the AppImage runtime's keep-alive pipe: inherited without close-on-exec, it holds the old mount open.
+  const child = spawn(process.execPath, [installer], { stdio: ["ignore", "pipe", "pipe", "pipe"] });
+  let output = "";
+  child.stdout.on("data", (chunk) => { output += chunk; });
+  child.stderr.on("data", (chunk) => { output += chunk; });
+  const code = await new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", resolve);
   });
+  assert.equal(code, 0, output);
+  for (let attempt = 0; !existsSync(receipt) && attempt < 200; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
 
-  const renames = [];
-  AppImageUpdater.prototype.doInstall.call(
-    {
-      installerPath: staged,
-      _logger: { info() {}, warn() {}, error() {}, debug() {} },
-      dispatchError: (error) => assert.fail(error),
-      emit: (event, value) => renames.push([event, value]),
-      spawnLog: () => assert.fail("the replacement must not start before desktop shutdown"),
-    },
-    { isForceRunAfter: true },
-  );
-
-  assert.equal(readFileSync(launched, "utf8"), "new", "the update must land on the launched path");
+  assert.deepEqual(JSON.parse(readFileSync(installed, "utf8")), {
+    result: true, renames: [], errors: [], silentKept: true, startedEarly: false,
+  }, "no filename change means no appimage-filename-updated event, and nothing starts before the old process exits");
+  assert.equal(existsSync(receipt), true, `the updated AppImage never started: ${output}`);
+  const { descriptors, ...restarted } = JSON.parse(readFileSync(receipt, "utf8"));
+  assert.deepEqual(restarted, {
+    parentAlive: false, acquired: true, noNewPrivs: "0", appImage: launched, silent: "true",
+  });
+  const keptMount = readFileSync(keepAlive, "utf8");
+  assert.equal(descriptors.includes(keptMount), false, `the new version inherited ${keptMount} from the old one`);
+  assert.equal(readFileSync(launched, "utf8"), `#!${process.execPath}\n${replacement}`, "the update must land on the launched path");
   assert.equal(existsSync(staged), false, "the staged download must be consumed");
-  assert.deepEqual(readdirSync(workspace).sort(), ["OpenMausBot-0.1.43-x86_64.AppImage", "data", "pending"]);
-  assert.deepEqual(relaunched, { execPath: launched, args: [] });
-  assert.deepEqual(relaunchEnvironment, { appImage: launched, silent: "true" });
-  assert.equal(process.env.APPIMAGE_SILENT_INSTALL, previousSilent, "the old process keeps its environment");
-  assert.throws(() => acquireDataDirLease(join(workspace, "data")), /already using this data directory/);
-  assert.deepEqual(renames, [], "no filename change means no appimage-filename-updated event");
+  assert.deepEqual(readdirSync(workspace).sort(),
+    ["OpenMausBot-0.1.43-x86_64.AppImage", "data", "installed.json", "installer.cjs", "keep-alive.txt", "pending", "restarted.json"]);
 });
 
-test("a rejected AppImage relaunch is reported without quitting the desktop", (t) => {
-  const electron = { app: { relaunch: () => false }, autoUpdater: new EventEmitter() };
+test("a failed AppImage restart is reported without quitting the desktop", {
+  skip: process.platform === "win32" && "AppImage updates run only on Linux",
+}, (t) => {
+  const electron = { app: { relaunch: () => assert.fail("Electron's relauncher cannot mount an AppImage") }, autoUpdater: new EventEmitter() };
   const load = Module._load;
   Module._load = (request, ...rest) => request === "electron" ? electron : load(request, ...rest);
   t.after(() => { Module._load = load; });
@@ -156,15 +206,17 @@ test("a rejected AppImage relaunch is reported without quitting the desktop", (t
   const staged = join(workspace, "pending.AppImage");
   writeFileSync(launched, "old");
   writeFileSync(staged, "new");
-  const previous = process.env.APPIMAGE;
-  const previousSilent = process.env.APPIMAGE_SILENT_INSTALL;
-  process.env.APPIMAGE = launched;
-  process.env.APPIMAGE_SILENT_INSTALL = "previous";
+  // A PATH that holds mv and no bash makes the restart shell fail to start.
+  const bin = join(workspace, "bin");
+  mkdirSync(bin);
+  symlinkSync(spawnSync("which", ["mv"], { encoding: "utf8" }).stdout.trim(), join(bin, "mv"));
+  const previous = { APPIMAGE: process.env.APPIMAGE, APPIMAGE_SILENT_INSTALL: process.env.APPIMAGE_SILENT_INSTALL, PATH: process.env.PATH };
+  Object.assign(process.env, { APPIMAGE: launched, APPIMAGE_SILENT_INSTALL: "previous", PATH: bin });
   t.after(() => {
-    if (previous === undefined) delete process.env.APPIMAGE;
-    else process.env.APPIMAGE = previous;
-    if (previousSilent === undefined) delete process.env.APPIMAGE_SILENT_INSTALL;
-    else process.env.APPIMAGE_SILENT_INSTALL = previousSilent;
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   });
   const errors = [];
   const updater = {
@@ -175,7 +227,7 @@ test("a rejected AppImage relaunch is reported without quitting the desktop", (t
     emit() {},
     doInstall: AppImageUpdater.prototype.doInstall,
     install: BaseUpdater.prototype.install,
-    app: { quit: () => assert.fail("a failed relaunch must not quit the desktop") },
+    app: { quit: () => assert.fail("a failed restart must not quit the desktop") },
   };
   BaseUpdater.prototype.quitAndInstall.call(updater, true, true);
   assert.deepEqual(errors, ["Could not schedule the updated AppImage to restart"]);
@@ -233,10 +285,13 @@ const dbusRunSession = process.platform === "linux" && !process.env.DBUS_SESSION
   ? spawnSync("which", ["dbus-run-session"], { encoding: "utf8" }).stdout?.trim()
   : "";
 
-test("Electron relaunch waits for deferred cleanup and the replacement acquires the same data directory", {
-  skip: process.platform === "win32" || (process.platform === "linux" && !process.env.DISPLAY && !xvfb)
-    ? true
-    : process.platform === "linux" && !process.env.DBUS_SESSION_BUS_ADDRESS && !dbusRunSession
+// Without a display or xvfb-run, Electron runs on the headless Ozone platform: the fixture opens no window.
+const headless = process.platform === "linux" && !process.env.DISPLAY && !xvfb;
+
+test("the AppImage restart waits for deferred cleanup, keeps setuid fusermount usable, and reacquires the data directory", {
+  skip: process.platform !== "linux"
+    ? "AppImage updates run only on Linux"
+    : !process.env.DBUS_SESSION_BUS_ADDRESS && !dbusRunSession
       ? "no session bus and no dbus-run-session; single-instance lock cannot be tested"
       : false,
   timeout: 45_000,
@@ -250,7 +305,7 @@ test("Electron relaunch waits for deferred cleanup and the replacement acquires 
   mkdirSync(join(workspace, "user-data"));
   const leaseModule = new URL("./data-dir-lease.mjs", import.meta.url).href;
   const replacement = `
-    const { writeFileSync } = require("node:fs");
+    const { readFileSync, writeFileSync } = require("node:fs");
     (async () => {
       let parentAlive = true;
       try { process.kill(Number(process.env.OMB_UPDATER_TEST_PARENT), 0); }
@@ -258,12 +313,13 @@ test("Electron relaunch waits for deferred cleanup and the replacement acquires 
       const { acquireDataDirLease } = await import(${JSON.stringify(leaseModule)});
       const lease = acquireDataDirLease(${JSON.stringify(join(workspace, "data"))});
       lease.release();
-      writeFileSync(${JSON.stringify(receipt)}, JSON.stringify({ parentAlive,
-        acquired: true, appImage: process.env.APPIMAGE, silent: process.env.APPIMAGE_SILENT_INSTALL }));
+      writeFileSync(${JSON.stringify(receipt)}, JSON.stringify({ parentAlive, acquired: true,
+        noNewPrivs: readFileSync("/proc/self/status", "utf8").match(/NoNewPrivs:\\s*(\\d)/)?.[1],
+        appImage: process.env.APPIMAGE, silent: process.env.APPIMAGE_SILENT_INSTALL }));
     })().catch(error => { writeFileSync(${JSON.stringify(receipt)}, JSON.stringify({ error: error.message })); process.exitCode = 1; });
   `;
   writeFileSync(launched, "old AppImage", { mode: 0o755 });
-  // A disposable executable substitutes for the AppImage payload, not for Electron's relauncher or the vendored methods.
+  // A disposable executable substitutes for the AppImage payload, not for the vendored methods.
   writeFileSync(staged, `#!${process.execPath}\n${replacement}`, { mode: 0o755 });
   writeFileSync(fixture, `
     const { app, autoUpdater } = require("electron");
@@ -299,7 +355,7 @@ test("Electron relaunch waits for deferred cleanup and the replacement acquires 
     }).catch(error => { console.error(error); app.exit(1); });
   `);
   const electron = createRequire(import.meta.url)("electron");
-  const args = ["--no-sandbox", fixture];
+  const args = ["--no-sandbox", ...(headless ? ["--ozone-platform=headless"] : []), fixture];
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   const run = xvfb ? [xvfb, "-a", electron, ...args] : [electron, ...args];
@@ -325,7 +381,7 @@ test("Electron relaunch waits for deferred cleanup and the replacement acquires 
   }
   assert.equal(existsSync(receipt), true, `replacement never started: ${output}`);
   assert.deepEqual(JSON.parse(readFileSync(receipt, "utf8")), {
-    parentAlive: false, acquired: true, appImage: launched, silent: "true",
-  });
+    parentAlive: false, acquired: true, noNewPrivs: "0", appImage: launched, silent: "true",
+  }, "with no_new_privs set, the AppImage runtime cannot mount the update");
   assert.equal(readFileSync(launched, "utf8"), `#!${process.execPath}\n${replacement}`);
 });

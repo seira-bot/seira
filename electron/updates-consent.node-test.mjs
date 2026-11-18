@@ -656,3 +656,219 @@ test("a successful account post clears its pending choice even if another accoun
     assert.deepEqual(sent.slice(first), [{ method: "GET", account: "account-1" }]);
   });
 });
+
+const ACCOUNT_EMAIL = "account@example.test";
+const connected = { status: "connected", account: { id: "account-1", email: ACCOUNT_EMAIL } };
+const SIGNED_OUT = { status: "signed-out" };
+
+function emailOnlyWorld() {
+  const w = { state: SIGNED_OUT, calls: [], failWithdraw: null, saved: null };
+  w.prefs = createDesktopPrefs({ read: () => w.saved, write: value => { w.saved = structuredClone(value); }, now: () => 1_800_000_000_000 });
+  const client = {
+    state: () => w.state,
+    updatesConsentByEmail: async input => { w.calls.push({ opt: input }); return receiptOf(input.email); },
+    withdrawUpdatesConsent: async input => {
+      w.calls.push({ withdraw: input });
+      if (w.failWithdraw) throw w.failWithdraw;
+    },
+    recordUpdatesConsent: async () => { w.calls.push("recordUpdatesConsent"); },
+    updatesConsent: async () => { w.calls.push("updatesConsent"); return { cloudContractVersion: 1, consent: null }; },
+  };
+  w.consent = createUpdatesConsent({ prefs: w.prefs, account: () => client, available: () => true, emailOnly: true, now: () => 1_800_000_000_000 });
+  return w;
+}
+
+test("emailOnly: signed out with a typed email goes to the list, keeps the receipt, never records on an account", async () => {
+  const w = emailOnlyWorld();
+  const state = await w.consent.choose({ status: "opted_in", email: "Typed@Example.test" });
+  assert.deepEqual(w.calls, [{ opt: { email: "typed@example.test", installId: w.prefs.installId(), textVersion: UPDATES_CONSENT_VERSION } }]);
+  assert.equal(w.saved.updatesConsent.receipt, receiptOf("typed@example.test"));
+  assert.ok(!w.saved.updatesConsent.pending);
+  assert.equal(w.saved.updatesConsent.account, undefined);
+  assert.equal(state.email, "typed@example.test");
+});
+
+test("emailOnly: signed in, Yes without a typed email uses the account email and keeps no account on the record", async () => {
+  const w = emailOnlyWorld();
+  w.state = connected;
+  const state = await w.consent.choose({ status: "opted_in" });
+  assert.equal(w.calls.length, 1);
+  assert.equal(w.calls[0].opt.email, ACCOUNT_EMAIL);
+  assert.ok(!w.calls.includes("recordUpdatesConsent") && !w.calls.includes("updatesConsent"));
+  const record = w.saved.updatesConsent;
+  assert.equal(record.email, ACCOUNT_EMAIL);
+  assert.equal(record.account, undefined);
+  assert.ok(!record.pending);
+  assert.equal(state.signedIn, true);
+  assert.equal(state.email, ACCOUNT_EMAIL);
+});
+
+test("emailOnly: signed in, a typed email wins over the account email", async () => {
+  const w = emailOnlyWorld();
+  w.state = connected;
+  await w.consent.choose({ status: "opted_in", email: "other@example.test" });
+  assert.equal(w.calls[0].opt.email, "other@example.test");
+});
+
+test("emailOnly: signed out, Yes without an email waits; signing in sends it with the account email", async () => {
+  const w = emailOnlyWorld();
+  const first = await w.consent.choose({ status: "opted_in" });
+  assert.deepEqual(w.calls, []);
+  assert.equal(w.saved.updatesConsent.pending, true);
+  assert.equal(first.due, false);
+  w.state = connected;
+  w.consent.accountChanged(w.state);
+  await w.consent.sync();
+  assert.equal(w.calls.length, 1);
+  assert.equal(w.calls[0].opt.email, ACCOUNT_EMAIL);
+  assert.ok(!w.saved.updatesConsent.pending);
+  assert.equal(w.saved.updatesConsent.email, ACCOUNT_EMAIL);
+  assert.equal(w.saved.updatesConsent.receipt, receiptOf(ACCOUNT_EMAIL));
+});
+
+test("emailOnly: a withdrawal sends the receipt to the list", async () => {
+  const w = emailOnlyWorld();
+  await w.consent.choose({ status: "opted_in", email: "typed@example.test" });
+  w.calls.length = 0;
+  const state = await w.consent.choose({ status: "withdrawn" });
+  assert.deepEqual(w.calls, [{ withdraw: { status: "withdrawn", receipt: receiptOf("typed@example.test") } }]);
+  assert.ok(!w.saved.updatesConsent.pending);
+  assert.equal(state.status, "withdrawn");
+});
+
+test("emailOnly: a receipt the list no longer knows counts as withdrawn", async () => {
+  const w = emailOnlyWorld();
+  await w.consent.choose({ status: "opted_in", email: "typed@example.test" });
+  w.failWithdraw = Object.assign(new Error("Updates list request failed."), { status: 404, code: "unknown_receipt" });
+  const state = await w.consent.choose({ status: "withdrawn" });
+  assert.ok(!w.saved.updatesConsent.pending);
+  assert.equal(w.saved.updatesConsent.status, "withdrawn");
+  assert.equal(state.status, "withdrawn");
+});
+
+test("emailOnly: another list failure keeps the withdrawal pending", async () => {
+  const w = emailOnlyWorld();
+  await w.consent.choose({ status: "opted_in", email: "typed@example.test" });
+  w.failWithdraw = Object.assign(new Error("Updates list request failed."), { status: 502, code: "send_failed" });
+  await w.consent.choose({ status: "withdrawn" });
+  assert.equal(w.saved.updatesConsent.pending, true);
+});
+
+test("emailOnly: a record that still carries an account counts as this computer's answer", async () => {
+  const w = emailOnlyWorld();
+  w.saved = { updatesConsent: { status: "declined", version: UPDATES_CONSENT_VERSION, at: 1_800_000_000_000, account: "account-9" } };
+  w.state = connected;
+  const state = await w.consent.state();
+  assert.equal(state.due, false);
+  assert.equal(state.status, "declined");
+  assert.equal(state.signedIn, true);
+});
+
+test("main wiring: the desktop prefs send answers to the injected updates list, signed in or not", async () => {
+  const calls = [], handlers = new Map();
+  let saved = null;
+  const updatesList = {
+    updatesConsentByEmail: async input => { calls.push(input.email); return receiptOf(input.email); },
+    withdrawUpdatesConsent: async () => {},
+  };
+  const wired = registerDesktopPrefs({ ipcMain: { handle: (channel, handler) => handlers.set(channel, handler), on: () => {} },
+    read: () => saved, write: value => { saved = structuredClone(value); }, page: () => "local", cloudOffered: async () => true,
+    cloudAccount: () => ({ state: () => connected }), updatesList });
+  assert.equal(typeof wired.accountChanged, "function");
+  await sleep(20);
+  const state = await handlers.get("updates-consent:choose")({}, { status: "opted_in" });
+  assert.deepEqual(calls, [ACCOUNT_EMAIL]);
+  assert.equal(state.email, ACCOUNT_EMAIL);
+  assert.equal(saved.updatesConsent.account, undefined);
+});
+
+const AT = 1_800_000_000_000;
+const legacy = (status, extra = {}) => ({ updatesConsent: { status, version: UPDATES_CONSENT_VERSION, at: AT - 1, account: "a1", ...extra } });
+const upstreamCalls = w => w.calls.filter(call => Array.isArray(call.record)).map(call => call.record);
+
+function upstreamWorld(saved) {
+  const w = emailOnlyWorld();
+  w.saved = saved;
+  const record = async (status, version) => { w.calls.push({ record: [status, version] }); };
+  const original = w.consent;
+  w.consent = createUpdatesConsent({ prefs: w.prefs, available: () => true, emailOnly: true, now: () => AT,
+    account: () => ({ state: () => w.state, recordUpdatesConsent: record,
+      updatesConsentByEmail: async input => { w.calls.push({ opt: input }); return receiptOf(input.email); },
+      withdrawUpdatesConsent: async input => { w.calls.push({ withdraw: input }); } }) });
+  void original;
+  return w;
+}
+
+test("emailOnly upstream: a legacy account answer withdrawn while signed in as that account is recorded upstream once", async () => {
+  const w = upstreamWorld(legacy("opted_in", { pending: false }));
+  w.state = { status: "connected", account: { id: "a1", email: ACCOUNT_EMAIL } };
+  await w.consent.choose({ status: "withdrawn" });
+  assert.deepEqual(upstreamCalls(w), [["withdrawn", UPDATES_CONSENT_VERSION]]);
+  assert.equal(w.saved.updatesConsent.upstreamAccount, undefined);
+  assert.equal(w.saved.updatesConsent.account, undefined);
+  await w.consent.sync();
+  assert.equal(upstreamCalls(w).length, 1);
+});
+
+test("emailOnly upstream: signed out keeps the owed account and sends nothing until that account signs in", async () => {
+  const w = upstreamWorld(legacy("opted_in", { pending: false }));
+  await w.consent.choose({ status: "withdrawn" });
+  assert.deepEqual(upstreamCalls(w), []);
+  assert.equal(w.saved.updatesConsent.upstreamAccount, "a1");
+  w.state = { status: "connected", account: { id: "a1", email: ACCOUNT_EMAIL } };
+  w.consent.accountChanged(w.state);
+  await w.consent.sync();
+  assert.deepEqual(upstreamCalls(w), [["withdrawn", UPDATES_CONSENT_VERSION]]);
+  assert.equal(w.saved.updatesConsent.upstreamAccount, undefined);
+});
+
+test("emailOnly upstream: signed in as another account sends nothing and keeps the owed account", async () => {
+  const w = upstreamWorld(legacy("opted_in", { pending: false }));
+  w.state = { status: "connected", account: { id: "a2", email: ACCOUNT_EMAIL } };
+  await w.consent.choose({ status: "declined" });
+  assert.deepEqual(upstreamCalls(w), []);
+  assert.equal(w.saved.updatesConsent.upstreamAccount, "a1");
+});
+
+test("emailOnly upstream: a pending legacy declined answer keeps its account as upstreamAccount", async () => {
+  const w = upstreamWorld(legacy("declined", { pending: true }));
+  await w.consent.sync();
+  assert.deepEqual(upstreamCalls(w), []);
+  assert.equal(w.saved.updatesConsent.upstreamAccount, "a1");
+  assert.equal(w.saved.updatesConsent.account, undefined);
+  assert.ok(!w.saved.updatesConsent.pending);
+});
+
+test("emailOnly upstream: a new opt-in carries the owed account and sends nothing upstream; a later withdrawal records it", async () => {
+  const w = upstreamWorld(legacy("opted_in", { pending: false }));
+  w.state = { status: "connected", account: { id: "a1", email: ACCOUNT_EMAIL } };
+  await w.consent.choose({ status: "opted_in", email: "typed@example.test" });
+  assert.deepEqual(upstreamCalls(w), []);
+  assert.equal(w.saved.updatesConsent.upstreamAccount, "a1");
+  assert.equal(w.calls.filter(call => call.opt).length, 1);
+  await w.consent.choose({ status: "withdrawn" });
+  assert.deepEqual(upstreamCalls(w), [["withdrawn", UPDATES_CONSENT_VERSION]]);
+  assert.equal(w.saved.updatesConsent.upstreamAccount, undefined);
+});
+
+test("emailOnly upstream: upstreamAccount is parsed and persisted", () => {
+  const record = { status: "declined", version: UPDATES_CONSENT_VERSION, at: AT, upstreamAccount: "a1" };
+  assert.deepEqual(parseUpdatesConsent(record), record);
+  assert.equal(parseUpdatesConsent({ ...record, upstreamAccount: "" }).upstreamAccount, undefined);
+});
+
+test("main wiring: a receipt the list does not know is withdrawn at the upstream Admin", async () => {
+  const withdrawn = [], handlers = new Map();
+  let saved = null;
+  const updatesList = {
+    updatesConsentByEmail: async input => receiptOf(input.email),
+    withdrawUpdatesConsent: async () => { throw Object.assign(new Error("x"), { code: "unknown_receipt" }); },
+  };
+  registerDesktopPrefs({ ipcMain: { handle: (channel, handler) => handlers.set(channel, handler), on: () => {} },
+    read: () => saved, write: value => { saved = structuredClone(value); }, page: () => "local", cloudOffered: async () => true,
+    cloudAccount: () => ({ state: () => SIGNED_OUT, withdrawUpdatesConsent: async input => { withdrawn.push(input); } }), updatesList });
+  await sleep(20);
+  await handlers.get("updates-consent:choose")({}, { status: "opted_in", email: "typed@example.test" });
+  await handlers.get("updates-consent:choose")({}, { status: "withdrawn" });
+  assert.deepEqual(withdrawn, [{ status: "withdrawn", receipt: receiptOf("typed@example.test") }]);
+});

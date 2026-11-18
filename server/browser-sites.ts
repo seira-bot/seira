@@ -2,12 +2,13 @@
 // it autosaves (`<restore key>-<session>.json.enc`, cli/src/native/state.rs: AES-256-GCM under SHA-256 of the key text,
 // 12-byte nonce first, 16-byte tag last); signing out clears all three. The key stays in this server process; no bot or page ever sees it.
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { browserRestoreKey, browserSessionsDirectory, closeBrowserSession, inRunningBrowser, startBrowserSession } from "./browser-engine.ts";
 import { browserRuntimeEnv } from "./browser-runtime.ts";
+import { ChromeImportError } from "./browser/chrome-import/errors.ts";
 
 export interface SignedInSite {
   /** As wide as the browser's own records go: a cookie for `.google.com` makes `google.com` the site of `accounts.google.com`. */
@@ -26,6 +27,21 @@ export interface BrowserSitesTarget {
   session: string;
   env: Record<string, string | undefined>;
   encryptionKey: string;
+}
+
+/** A cookie ready to write into a bot browser; the shape the browser keeps in its saved state. */
+export interface ImportCookie {
+  name: string;
+  value: string;
+  /** A leading dot makes the cookie domain-wide; without one it belongs to that host only. */
+  domain: string;
+  path: string;
+  /** Seconds since 1970; -1 for a session cookie. */
+  expires: number;
+  httpOnly: boolean;
+  secure: boolean;
+  /** Left out when the site did not say. */
+  sameSite?: "Strict" | "Lax" | "None";
 }
 
 export interface Cdp {
@@ -367,22 +383,93 @@ async function visit(target: BrowserSitesTarget, deps: BrowserSitesDeps, site: s
   }
 }
 
-async function signOutLiveState(target: BrowserSitesTarget, deps: BrowserSitesDeps, site: string | null, signOut: boolean, live: SavedState, stopped: () => SignedInSites): Promise<SignedInSites> {
-  const directory = directoryOf(target);
-  const listed = (sites: SignedInSite[]) => site === null || sites.some((entry) => entry.site === site);
-  const sites = signedInSites(live.cookies, live.origins);
-  if (!signOut || !listed(sites)) return { running: true, sites };
+async function liveCdpUrl(target: BrowserSitesTarget, deps: BrowserSitesDeps): Promise<string | null> {
   const answer = await (deps.engine ?? defaultEngine)(target, ["get", "cdp-url"]);
-  if (!answer) return stopped();
+  if (!answer) return null;
   const url = answer.cdpUrl;
   // Only the engine's own Chrome on this machine is ever addressed.
   if (typeof url !== "string" || !/^wss?:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):\d+\//u.test(url)) {
     throw new Error("The running browser did not give its DevTools address. Close it and try again.");
   }
+  return url;
+}
+
+async function signOutLiveState(target: BrowserSitesTarget, deps: BrowserSitesDeps, site: string | null, signOut: boolean, live: SavedState, stopped: () => SignedInSites): Promise<SignedInSites> {
+  const directory = directoryOf(target);
+  const listed = (sites: SignedInSite[]) => site === null || sites.some((entry) => entry.site === site);
+  const sites = signedInSites(live.cookies, live.origins);
+  if (!signOut || !listed(sites)) return { running: true, sites };
+  const url = await liveCdpUrl(target, deps);
+  if (!url) return stopped();
   const cdp = await (deps.connect ?? connectCdp)(url);
   try { await signOutLive(cdp, site, live); }
   finally { cdp.close(); }
   rewriteSavedState(directory, target.session, target.encryptionKey, site);
   const after = await runningState(target, deps) ?? EMPTY_STATE;
   return { running: true, sites: signedInSites(after.cookies, after.origins) };
+}
+
+function cdpCookie(cookie: ImportCookie): Record<string, unknown> {
+  const hostOnly = !cookie.domain.startsWith(".");
+  return {
+    name: cookie.name,
+    value: cookie.value,
+    ...(hostOnly ? { url: `${cookie.secure ? "https" : "http"}://${cookie.domain}${cookie.path}` } : { domain: cookie.domain }),
+    path: cookie.path,
+    secure: cookie.secure,
+    httpOnly: cookie.httpOnly,
+    ...(cookie.sameSite ? { sameSite: cookie.sameSite } : {}),
+    ...(cookie.expires > 0 ? { expires: cookie.expires } : {}),
+  };
+}
+
+function savedCookie(cookie: ImportCookie): Record<string, unknown> {
+  return { ...cookie, size: cookie.name.length + cookie.value.length, session: cookie.expires <= 0 };
+}
+
+const sameCookie = (a: Cookie, b: Cookie) => a.name === b.name && a.domain === b.domain && a.path === b.path;
+
+function mergeIntoSavedState(state: SavedState, cookies: readonly ImportCookie[]): SavedState {
+  const incoming = cookies.map(savedCookie) as unknown as Cookie[];
+  const kept = state.cookies.filter((existing) => !isCookie(existing) || !incoming.some((added) => sameCookie(existing, added)));
+  return { ...state, cookies: [...kept, ...incoming] };
+}
+
+function importIntoSavedState(target: BrowserSitesTarget, cookies: readonly ImportCookie[]): SignedInSites {
+  const directory = directoryOf(target);
+  const existing = stateBases(target.session).flatMap((base) => [".json.enc", ".json"].map((suffix) => join(directory, base + suffix))).filter(existsSync);
+  if (existing.length === 0) {
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    existing.push(join(directory, `${stateBases(target.session)[0]}.json.enc`));
+  }
+  let written = 0;
+  for (const path of existing) {
+    let state: SavedState = EMPTY_STATE;
+    if (existsSync(path)) {
+      try { state = readState(path, target.encryptionKey); } catch { continue; }
+    }
+    writeState(path, mergeIntoSavedState(state, cookies), target.encryptionKey);
+    written += 1;
+  }
+  if (written === 0) throw new ChromeImportError(503, "Seira could not open this browser's saved logins. Open the browser, then try again.");
+  const after = savedState(directory, target.session, target.encryptionKey);
+  return { running: false, sites: signedInSites(after.cookies, after.origins) };
+}
+
+/** Adds the cookies to the running browser, or to the saved state the next launch restores. Same name, domain and path replace. */
+export function importIntoSites(target: BrowserSitesTarget, cookies: readonly ImportCookie[], deps: BrowserSitesDeps = {}): Promise<SignedInSites> {
+  return serially(target.session, async () => {
+    const live = await runningState(target, deps);
+    const url = live ? await liveCdpUrl(target, deps) : null;
+    if (!live || !url) return cookies.length === 0 ? visit(target, deps, null, false) : importIntoSavedState(target, cookies);
+    if (cookies.length === 0) return { running: true, sites: signedInSites(live.cookies, live.origins) };
+    const cdp = await (deps.connect ?? connectCdp)(url);
+    try {
+      const first = (await pages(cdp))[0];
+      if (!first) throw new ChromeImportError(503, "The running browser has no page open. Close it and try again.");
+      await onPage(cdp, first, (sessionId) => cdp.send("Network.setCookies", { cookies: cookies.map(cdpCookie) }, sessionId));
+    } finally { cdp.close(); }
+    const after = await runningState(target, deps) ?? EMPTY_STATE;
+    return { running: true, sites: signedInSites(after.cookies, after.origins) };
+  });
 }

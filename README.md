@@ -208,11 +208,8 @@ pnpm package:linux   # Ubuntu x64: .deb, AppImage, and the verified Cua runtime
 ```
 
 > [!WARNING]
-> Do not publish a packaged build yet. The app id and the update source are Seira's,
-> but the product name, the installer names, and the Linux install folder still say OpenMausBot,
-> so a Seira install can replace an OpenMausBot install on Linux
-> (see [Upstream names in the code](#upstream-names-in-the-code)).
-> Never upload a Seira build to the OpenMausBot release repository.
+> Do not publish a packaged build yet. Some package and install names still come from upstream.
+> Read [docs/upstream-names.md](docs/upstream-names.md) before you package.
 
 <details>
 <summary>Desktop support for each system</summary>
@@ -231,35 +228,6 @@ See [docs/linux-desktop.md](docs/linux-desktop.md) and [docs/computer-use-integr
 
 </details>
 
-## Upstream names in the code
-
-Seira started from OpenMausBot 0.1.169 on 18 November 2026.
-These names already belong to Seira:
-
-| Where | Name today |
-|---|---|
-| Desktop app id | `bot.seira.app` |
-| Update source of packaged builds | The `seira-bot/seira` releases on GitHub |
-| Update check of a server | The `seira-bot/seira` releases and stable channel on GitHub |
-
-Seira has no release yet, so there is nothing to update to.
-
-Some names in the code and in the docs still come from upstream:
-
-| Where | Name today |
-|---|---|
-| npm package and Linux package | `openmausbot` |
-| Data folder | `~/.openmausbot` |
-| Environment variables | `OMB_PORT`, `OMB_UI_PORT`, `OMB_WEBHOOK_PORT` |
-| Product name, installer files, Linux install folder | `OpenMausBot`, `OpenMausBot-<version>-…`, `/opt/OpenMausBot` |
-| Server image, installers, and update scripts in `deploy/` | `ghcr.io/milind-soni/openmausbot` and the upstream repository |
-| Files the app reads from GitHub | Announcements, model list, team library, and browser engine downloads, all from upstream repositories |
-| Cloud and website addresses | `openmausbot.com` and its subdomains |
-| Text in the app and in the docs | OpenMausBot, MausBot |
-
-Use these names as they are until the code changes.
-Do not install the `openmausbot` npm package to get Seira. That package is the upstream app.
-
 ## Privacy
 
 A Seira build sends no analytics.
@@ -274,8 +242,8 @@ They are anonymous and never include keys, names, addresses, or conversations.
 
 ## Documentation
 
-The guides in [`docs/`](docs/) and [`apps/docs/`](apps/docs/) come from upstream.
-They still say OpenMausBot in some places.
+Some guides in [`docs/`](docs/) and [`apps/docs/`](apps/docs/) still use upstream names.
+[docs/upstream-names.md](docs/upstream-names.md) lists them.
 
 | Topic | Guide |
 |---|---|
@@ -292,26 +260,26 @@ They still say OpenMausBot in some places.
 
 Issues and pull requests are welcome.
 [CONTRIBUTING.md](CONTRIBUTING.md) explains how a change lands, the [code guide](docs/contributing.md) holds the code rules,
-and [DESIGN.md](DESIGN.md) holds the design rules. The last two come from upstream, so read "OpenMausBot" as "Seira".
+and [DESIGN.md](DESIGN.md) holds the design rules.
 
 The driver contract in [`server/contracts.ts`](server/contracts.ts) is small.
 To add a provider, add one file in [`server/drivers/`](server/drivers/) and register it with one line.
 
 Do not post a security problem in public. Report it through [private vulnerability reporting](https://github.com/seira-bot/seira/security/advisories/new).
-If the problem is also in OpenMausBot, report it upstream too, as [SECURITY.md](SECURITY.md) describes.
+[SECURITY.md](SECURITY.md) gives the details.
 
-## License and credits
+## Credits and license
 
-Seira is a fork of [OpenMausBot](https://github.com/milind-soni/OpenMausBot) by Milind Soni and the OpenMausBot contributors.
+Seira builds on [OpenMausBot](https://github.com/milind-soni/OpenMausBot) by Milind Soni and its contributors.
 Their work is the base of this project. Thank you.
+Seira also adapts code from other open-source projects. [NOTICE](NOTICE) names each project and its authors.
 
-- The code is under the [Apache License 2.0](LICENSE). Read [NOTICE](NOTICE) for the upstream copyright and third-party credits.
-- [`enterprise/`](enterprise/) is source-available under [its own license](enterprise/LICENSE), not Apache 2.0.
-  Remove that folder to get the open-source edition. [LICENSING.md](LICENSING.md) gives the details.
-- The packaged Cua Driver parts keep their own licenses. See [`third_party/cua-driver/`](third_party/cua-driver/).
+- The code is under the [Apache License 2.0](LICENSE). [NOTICE](NOTICE) keeps the upstream copyright and the third-party credits.
+  [LICENSING.md](LICENSING.md) gives the details.
+- Bundled third-party parts keep their own licenses. See [`third_party/`](third_party/).
 - The Apache License does not give rights to the Seira name, logo, or mascot (section 6).
 
-Seira is an independent project. It is not affiliated with or endorsed by the OpenMausBot maintainer,
+Seira is an independent project. It is not affiliated with or endorsed by the upstream project,
 Anthropic, OpenAI, or xAI. Claude, Codex, and Grok are trademarks of their owners.
 
 ---
