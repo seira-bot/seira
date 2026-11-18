@@ -22,7 +22,7 @@ import { SIMPLE_ONLY } from "@/lib/simple-only";
 import { useAdvancedBackDue, useNewLookDue } from "@/lib/new-look";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { useSimpleModePromptSeen } from "@/lib/simple-mode-prompt";
-import { reportWhatsNew, WHATS_NEW_SOURCES, whatsNewAudience, whatsNewView, type WhatsNewAction, type WhatsNewSlide } from "@/lib/whats-new";
+import { reportWhatsNew, WHATS_NEW_SOURCES, whatsNewAudience, whatsNewSlides, whatsNewView, type WhatsNewAction, type WhatsNewSlide } from "@/lib/whats-new";
 import { cloudSignInDue, onboardingCloudOffered, welcomeFinishedThisLaunch, type WelcomeViewer } from "@/lib/onboarding";
 import { launchDialogShown, markLaunchDialog } from "@/lib/launch-dialogs";
 import { useUpdaterState } from "@/lib/updater";
@@ -142,7 +142,7 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
     : desktopState.cloud && !desktopState.seen.includes(WHATS_NEW_NOTICE);
   const whatsNewFor = whatsNewDue === false ? null : whatsNewAudience(account);
   const wantOffer = Boolean(bridge?.offer) && ((introAllowed && view !== null && buyOfferAllowed(view) && stage !== "done")
-    || whatsNewFor === "none" || whatsNewFor === "own");
+    || whatsNewSlides(whatsNewFor).length > 0);
   const offerKey = wantOffer ? `${view?.kind}:${JSON.stringify(account?.offer ?? null)}` : null;
   useEffect(() => {
     if (!offerKey || !bridge?.offer) return;
