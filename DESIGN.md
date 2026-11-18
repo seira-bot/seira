@@ -109,7 +109,8 @@ and never add fonts.
 |---|---|---|---|
 | Page or dialog title | 20px, `tracking-[-0.01em]` | 600 | `ink` |
 | Sheet or section title | 17px | 600 | `ink` |
-| Chat bubble (Simple) | 15 / 22px | 400 | `ink` |
+| Chat text (Simple) | 15 / 22px | 400 | `ink` |
+| Time on a turn | 12px, `tabular-nums` | 400 | `ink-tertiary` |
 | Menu item (`MENU_ITEM`) | 14 / 18px | 400 | `ink` |
 | Body, rows, menu rows (`MENU_ROW`) | 13 / 18px | 400 | `ink` or `ink-secondary` |
 | Names in lists | 13 / 18px | 500 | `ink` |
@@ -199,9 +200,13 @@ element's job and never a pixel value:
 - **Borders are 1px `hairline`.** Panes meet on a 0.5px `edge`. An element in
   the page gets a border or a tint, not both, and no shadow. Floating surfaces
   take their surface class, which already balances all three.
-- **Rich content in a reply stays in the bubble.** Tables, code and quotes are
-  drawn alike: no fill of their own, a 1px hairline and a faint tint. One
-  reply is one bubble.
+- **A bot reply is prose on the page, not a bubble.** It has no fill and no
+  corners, and runs at most 44rem wide. A 32px face, the speaker name and the
+  time start each turn; later parts from the same bot stack under it without
+  repeating them. Only the person's own message keeps `bubble-user`.
+- **Rich content in a reply keeps its own edge.** Tables, code and quotes are
+  drawn alike: no fill of their own, a 1px hairline and rounded corners, so
+  they stay readable now that the text around them has no bubble.
 - **Scrims** (`ui-scrim`) dim the app behind a modal dialog; nothing else
   dims the app.
 
