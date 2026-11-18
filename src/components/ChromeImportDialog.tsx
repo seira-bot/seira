@@ -30,6 +30,7 @@ export function ChromeImportDialog({ profiles, target, scope = {}, sharedBy, onI
   const [step, setStep] = useState<"profile" | "sites" | "done">("profile");
   const [found, setFound] = useState<SitesAnswer | null>(null);
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
+  const [query, setQuery] = useState("");
   const [result, setResult] = useState<ImportAnswer | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -43,7 +44,8 @@ export function ChromeImportDialog({ profiles, target, scope = {}, sharedBy, onI
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        close.current();
+        if (event.target instanceof HTMLInputElement && event.target.type === "search" && event.target.value) setQuery("");
+        else close.current();
         return;
       }
       if (event.key !== "Tab") return;
@@ -74,6 +76,7 @@ export function ChromeImportDialog({ profiles, target, scope = {}, sharedBy, onI
     try {
       const answer = await api<SitesAnswer>("/api/browser-sites/import/sites", { method: "POST", body: JSON.stringify({ ...target, ...scope, source }) });
       setFound(answer);
+      setQuery("");
       setChosen(new Set(answer.sites.filter((entry) => entry.suggested && !entry.sensitive).map((entry) => entry.site)));
       setStep("sites");
     } catch (cause) { setError(failure(cause)); }
@@ -98,6 +101,17 @@ export function ChromeImportDialog({ profiles, target, scope = {}, sharedBy, onI
   const toggle = (site: string) => setChosen((current) => {
     const next = new Set(current);
     if (!next.delete(site)) next.add(site);
+    return next;
+  });
+
+  const needle = query.trim().toLowerCase();
+  const shown = found ? found.sites.filter((entry) => entry.site.toLowerCase().includes(needle)) : [];
+  const shownChosen = shown.filter((entry) => chosen.has(entry.site)).length;
+  const allShown = shown.length > 0 && shownChosen === shown.length;
+  const someShown = shownChosen > 0 && !allShown;
+  const toggleShown = () => setChosen((current) => {
+    const next = new Set(current);
+    for (const entry of shown) if (allShown) next.delete(entry.site); else next.add(entry.site);
     return next;
   });
 
@@ -133,8 +147,19 @@ export function ChromeImportDialog({ profiles, target, scope = {}, sharedBy, onI
             <p className="text-[12px] text-ink-secondary">{t("settings.sites.import.sitesFrom", { profile: found.profileName })}</p>
             {found.sites.length === 0 && <p className="text-[13px] text-ink-secondary">{t("settings.sites.import.empty")}</p>}
             {found.sites.length > 0 && (
+              <>
+                <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("settings.sites.import.search")} aria-label={t("settings.sites.import.search")}
+                  className="w-full rounded-lg border border-hairline/50 bg-inset px-3 py-2 text-[13px] text-ink placeholder:text-ink-secondary focus:border-accent focus:outline-none" />
+                <label className="flex min-w-0 cursor-pointer items-center gap-2 border-b border-hairline/30 pb-1.5">
+                  <input type="checkbox" ref={(box) => { if (box) box.indeterminate = someShown; }} checked={allShown} disabled={!shown.length} onChange={toggleShown} />
+                  <span className="text-[13px] font-medium text-ink">{t("settings.sites.import.selectAll")}</span>
+                </label>
+              </>
+            )}
+            {found.sites.length > 0 && !shown.length && <p className="text-[13px] text-ink-secondary">{t("settings.sites.import.noMatch")}</p>}
+            {shown.length > 0 && (
               <ul className="flex min-h-0 flex-col divide-y divide-hairline/30 overflow-y-auto">
-                {found.sites.map((entry) => (
+                {shown.map((entry) => (
                   <li key={entry.site}>
                     <label className="flex min-w-0 cursor-pointer items-center gap-2 py-1.5">
                       <input type="checkbox" checked={chosen.has(entry.site)} onChange={() => toggle(entry.site)} />
