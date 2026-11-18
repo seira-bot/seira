@@ -131,7 +131,7 @@ it is switched on, so the opt-in is never implicit.
 
 `OMB_COMPANION_NAME` overrides a name the sidecar otherwise asks the harness
 for: the computer name set in Settings → Remote access, else the profile from
-onboarding, as *"Ada's computer"*. It falls back to `OpenMausBot` when neither
+onboarding, as *"Ada's computer"*. It falls back to `Seira` when neither
 is set. The sidecar asks again every 30 seconds; a changed name withdraws the
 old Bonjour record (a goodbye) before advertising the new one, so the phone
 does not see two computers.
