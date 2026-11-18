@@ -29,7 +29,7 @@ repository or read a secret:
   `workflow_run`, or `issue_comment`, which run with the base repository's
   rights.
 - The workflow sets `permissions: contents: read`, and no job asks for more.
-- No step reads a secret. Every `actions/checkout` sets
+- No step in `ci.yml` reads a secret. Every `actions/checkout` sets
   `persist-credentials: false`, so the token is not left in `.git/config`.
 - Every action is pinned to a full commit SHA, with the version in a comment.
 - No `run` step puts an event value such as a branch name or a title into the
@@ -41,15 +41,18 @@ rule fails CI. The rules also stop a workflow that reads `github.token`, puts
 an `inputs` value into a shell command, or runs `electron-builder` with a
 `--publish` value other than `never`.
 
-A job that needs write access (for example a future release job) must use the
-GitHub environment `release`, and that environment must need a maintainer's
-approval. The test fails a job that asks for write access without it.
+A job that needs write access (for example a future release job) or reads a
+secret must use the GitHub environment `release`, and that environment must
+need a maintainer's approval. The test fails a job that asks for write access
+or reads a secret without it. Only `package-macos.yml` reads secrets: the
+Apple signing secrets in that environment.
 
 ## Package workflows
 
 | Workflow | What it builds |
 | --- | --- |
 | `package-windows.yml` | The Windows x64 installer, its block map, `latest.yml`, `Seira-setup.exe`, and `SHA256SUMS-windows-x64.txt` |
+| `package-macos.yml` | The macOS arm64 and x64 apps as `.dmg` and `.zip`, their block maps, `latest-mac.yml`, `Seira.dmg`, `Seira-intel.dmg`, and `SHA256SUMS-mac.txt`. Without the Apple secrets it builds test apps only, in an artifact named `NOT-FOR-RELEASE`. |
 
 A package workflow builds a package and uploads it as a workflow artifact.
 It does not create a tag or a release. A maintainer attaches the artifact to
@@ -58,8 +61,11 @@ holds these rules for every `package-*.yml` file:
 
 - The only trigger is `workflow_dispatch`. Only a person with write access can
   start it, and a pull request never runs it.
-- No job asks for a permission or an environment, so the token can only read
-  the repository.
+- No job asks for a permission, so the token can only read the repository.
+- A job uses an environment only to read the signing secrets, and only the
+  `release` environment. Today only `package-macos.yml` does this.
+- A secret goes only into a step's `env`, as `${{ secrets.NAME }}`. It never
+  goes into a `run` command, an action input, or a job setting.
 - Every job runs on a GitHub-hosted runner (`ubuntu-*`, `windows-*`, or
   `macos-*`), never on a self-hosted runner.
 - No step uses a dependency cache (`package-manager-cache: false`), so another
@@ -138,7 +144,7 @@ Seira took over a larger CI from the project it forked. These parts are gone:
 
 | Removed | Why |
 | --- | --- |
-| Windows and macOS shards, Windows and macOS smokes | CI tests on Linux only. `package-windows.yml` runs the packaged smokes for the Windows installer. |
+| Windows and macOS shards, Windows and macOS smokes | CI tests on Linux only. `package-windows.yml` and `package-macos.yml` run the packaged smokes for their packages. |
 | Packaged server, browser identity, browser driver, and UI smokes | Heavy jobs that download browsers and binaries. Run them locally when you change that area. |
 | Behavior evals, FOSS build, relay, control plane, broker deploy | Not part of the Seira app, or needed a secret. |
 | Release, Linux packaging, container image, npm, and docs-site workflows | A maintainer releases by hand. See [Releasing](releasing.md). |
@@ -162,3 +168,21 @@ sets them in **Settings → Actions → General**:
 | Allow GitHub Actions to create and approve pull requests | Off |
 
 Then add the `CI` check (source: GitHub Actions) to the `main` branch ruleset.
+
+### The `release` environment
+
+`package-macos.yml` reads the Apple signing secrets from the environment
+`release`. An organization admin creates it in **Settings → Environments**:
+
+| Setting | Value |
+| --- | --- |
+| Required reviewers | The maintainers. Turn on **Prevent self-review** when there are two or more. |
+| Deployment branches and tags | Selected branches and tags: `main` only |
+| Environment secrets | The five Apple secrets (see [Releasing](releasing.md#macos-signing-secrets)) |
+
+- Each run of `package-macos.yml` waits until a reviewer approves it, with or
+  without the secrets.
+- With `main` as the only deployment branch, a workflow file changed on another
+  branch cannot read the secrets.
+- Do not store the Apple secrets as repository or organization secrets. Every
+  workflow can read those without an approval.
