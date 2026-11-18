@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { StoreProvider, type Bot } from "@/state/store";
 import { PICKER_BODY_IDS } from "../../shared/bot-body";
-import { MASCOT_BODIES } from "../../shared/mascot-bodies";
-import { CARVED_BODIES, DIWALI_BODY_IDS, HALLOWEEN_BODY_IDS } from "../../shared/carved-bodies";
+import { MASCOT_ACCESSORY_IDS } from "../../shared/mascot-accessories";
+import { bodyName } from "@/lib/mascot-names";
 import { BotProfileAvatarCard } from "./BotProfileAvatarCard";
 
 function makeBot(overrides: Partial<Bot> = {}): Bot {
@@ -39,20 +39,25 @@ function renderCard(bot: Bot) {
   );
 }
 
-describe("BotProfileAvatarCard body picker", () => {
-  it("renders one option per body catalog entry, labeled by name", () => {
+const HAIR = PICKER_BODY_IDS.length > 1;
+
+describe("BotProfileAvatarCard hair picker", () => {
+  it("shows one option per hair of the picker, and none while there is only one", () => {
     const markup = renderCard(makeBot());
 
-    expect(markup).toContain(">Body<");
+    expect(markup).not.toContain(">Body<");
+    expect(markup.includes(">Hair<")).toBe(HAIR);
     for (const id of PICKER_BODY_IDS) {
-      expect(markup).toContain(`aria-label="Use the ${CARVED_BODIES[id as keyof typeof CARVED_BODIES]?.name ?? MASCOT_BODIES[id as keyof typeof MASCOT_BODIES].name} body"`);
+      expect(markup.includes(`aria-label="Use the ${bodyName(id)} hair"`)).toBe(HAIR);
     }
   });
 
-  it("lists Seira first", () => {
-    const markup = renderCard(makeBot());
-    expect(markup.indexOf('aria-label="Use the Seira body"')).toBeGreaterThan(-1);
-    expect(markup.indexOf('aria-label="Use the Seira body"')).toBeLessThan(markup.indexOf(`aria-label="Use the ${MASCOT_BODIES.cursor.name} body"`));
+  it("offers no old body and no festival row", () => {
+    const markup = renderCard(makeBot({ mascotBody: "jalebi" }));
+
+    for (const name of ["Cursor", "Blob", "Pumpkin", "Kaju katli"]) expect(markup).not.toContain(`Use the ${name} body`);
+    expect(markup).not.toContain(">Halloween<");
+    expect(markup).not.toContain(">Diwali<");
   });
 
   it("hides the facial features row on Seira and keeps it on other bodies", () => {
@@ -60,31 +65,9 @@ describe("BotProfileAvatarCard body picker", () => {
     expect(renderCard(makeBot({ mascotBody: "cursor" }))).toContain("data-avatar-face-color");
   });
 
-  it("offers each festival's bodies in their own row", () => {
-    const markup = renderCard(makeBot({ mascotBody: "jalebi" }));
-
-    expect(markup).toContain(">Halloween<");
-    expect(markup).toContain(">Diwali<");
-    for (const id of [...HALLOWEEN_BODY_IDS, ...DIWALI_BODY_IDS]) {
-      expect(markup).toContain(`aria-label="Use the ${CARVED_BODIES[id].name} body"`);
-    }
-    expect(markup).toContain(`aria-pressed="true" aria-label="Use the ${CARVED_BODIES.jalebi.name} body"`);
-    expect(markup).toContain(`aria-pressed="false" aria-label="Use the ${CARVED_BODIES.witch.name} body"`);
-  });
-
-  it("marks the current body pressed and the rest unpressed, defaulting to Seira", () => {
-    const markup = renderCard(makeBot());
-
-    expect(markup).toContain('aria-pressed="true" aria-label="Use the Seira body"');
-    expect(markup).toContain(`aria-pressed="false" aria-label="Use the ${MASCOT_BODIES.cursor.name} body"`);
-    expect(markup).toContain(`aria-pressed="false" aria-label="Use the ${MASCOT_BODIES.star.name} body"`);
-  });
-
-  it("reflects an explicitly chosen body", () => {
-    const markup = renderCard(makeBot({ mascotBody: "star" }));
-
-    expect(markup).toContain(`aria-pressed="true" aria-label="Use the ${MASCOT_BODIES.star.name} body"`);
-    expect(markup).toContain(`aria-pressed="false" aria-label="Use the ${MASCOT_BODIES.cursor.name} body"`);
+  it("marks the current hair pressed, defaulting to Seira", () => {
+    if (!HAIR) return;
+    expect(renderCard(makeBot())).toContain('aria-pressed="true" aria-label="Use the Seira hair"');
   });
 
   it("offers zoom and drag framing for a custom image", () => {
@@ -104,18 +87,13 @@ describe("BotProfileAvatarCard body picker", () => {
     expect(markup).not.toContain('aria-label="Zoom avatar"');
   });
 
-  it("hides the body picker for flat crops that have no mascot to wear one", () => {
-    const markup = renderCard(makeBot({ avatarCrop: "circle" }));
-
-    expect(markup).not.toContain(">Body<");
-    expect(markup).not.toContain(`aria-label="Use the ${MASCOT_BODIES.cursor.name} body"`);
-  });
-
-  it("hides the body picker for every flat crop, not just circle", () => {
-    for (const crop of ["rounded", "square"] as const) {
+  it("hides hair, accessories and expressions for every flat crop", () => {
+    for (const crop of ["circle", "rounded", "square"] as const) {
       const markup = renderCard(makeBot({ avatarCrop: crop }));
 
-      expect(markup).not.toContain(">Body<");
+      expect(markup).not.toContain(">Hair<");
+      expect(markup).not.toContain(">Accessories<");
+      expect(markup).not.toContain("data-avatar-accessory=");
     }
   });
 });
@@ -138,11 +116,23 @@ describe("BotProfileAvatarCard color picker", () => {
     }
   });
 
-  it("shows the color picker for the mascot too", () => {
+  it("lists Color, then Accessories, then Expression for the mascot", () => {
     const markup = renderCard(makeBot());
 
+    expect(markup.indexOf(">Color<")).toBeLessThan(markup.indexOf(">Accessories<"));
+    expect(markup.indexOf(">Accessories<")).toBeLessThan(markup.indexOf(">Expression<"));
+    expect(markup.match(/data-avatar-accessory="/g)).toHaveLength(MASCOT_ACCESSORY_IDS.length);
+    expect(markup).toContain('aria-label="Wear Headset mic"');
     expect(markup).toContain(">Expression<");
     expect(markup).toContain(">Color<");
     expect(markup).toContain('aria-label="Use green mascot color"');
+  });
+
+  it("marks the accessories a bot wears as pressed", () => {
+    const markup = renderCard(makeBot({ mascotAccessories: ["glasses", "cap"] }));
+
+    expect(markup).toMatch(/aria-pressed="true"[^>]*aria-label="Wear Glasses"/);
+    expect(markup).toMatch(/aria-pressed="true"[^>]*aria-label="Wear Cap"/);
+    expect(markup).toMatch(/aria-pressed="false"[^>]*aria-label="Wear Scarf"/);
   });
 });

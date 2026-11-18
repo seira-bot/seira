@@ -13,6 +13,7 @@ import { MausAvatar } from "../Avatar";
 import { AvatarImageGenerator } from "../AvatarImageGenerator";
 import { AvatarFraming, OrganizationAvatarIcons, RESET_MASCOT_PATCH, useAvatarImage, type AvatarPatch } from "../avatar-editing";
 import { Segmented } from "./rows";
+import { MascotAccessoryPicker } from "../MascotAccessoryPicker";
 import { MascotFaceColorPicker } from "../MascotFaceColorPicker";
 
 export type AvatarEditorTab = "bot" | "generate" | "upload";
@@ -76,7 +77,7 @@ export function AvatarEditorCard({ bot, activeState, onPatch, onClose }: {
       type="button"
       disabled={busy}
       aria-pressed={!showsImage && body === id}
-      aria-label={t("mascot.useBody", { name })}
+      aria-label={t("mascot.useHair", { name })}
       title={name}
       onClick={() => pickMascot({ mascotBody: id })}
       className={cn(
@@ -134,10 +135,12 @@ export function AvatarEditorCard({ bot, activeState, onPatch, onClose }: {
       <div className="p-3">
         {tab === "bot" && (
           <>
-            <div className="grid grid-cols-5 gap-1.5">
-              {PICKER_BODY_IDS.map((id) => bodyButton(id, bodyName(id)))}
-            </div>
-            {!showsImage && othersToMatch.length > 0 && (
+            {PICKER_BODY_IDS.length > 1 && (
+              <div className="grid grid-cols-5 gap-1.5" role="group" aria-label={t("botIdentity.hair")}>
+                {PICKER_BODY_IDS.map((id) => bodyButton(id, bodyName(id)))}
+              </div>
+            )}
+            {PICKER_BODY_IDS.length > 1 && !showsImage && othersToMatch.length > 0 && (
               <button
                 type="button"
                 data-avatar-body-everywhere
@@ -169,6 +172,10 @@ export function AvatarEditorCard({ bot, activeState, onPatch, onClose }: {
               ))}
             </div>
             <MascotFaceColorPicker bot={bot} disabled={busy} onPatch={pickMascot} />
+            <div className="mt-3">
+              <div className="mb-1.5 text-[12px] text-ink-secondary">{t("botIdentity.accessories")}</div>
+              <MascotAccessoryPicker bot={bot} disabled={busy} compact onPatch={pickMascot} />
+            </div>
             <button
               type="button"
               data-avatar-more

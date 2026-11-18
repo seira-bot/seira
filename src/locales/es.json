@@ -6368,7 +6368,6 @@
   "settings.simple.billing.included": "Uso incluido de este mes",
   "settings.simple.billing.summary": "{percent} % del uso incluido de este mes",
   "settings.simple.billing.used": "usado",
-  "settings.skin.dressUp.title": "Disfrazar a mis bots",
   "server.cloudComputer.replaced": "La computadora en la nube de {name} dejó de responder, así que Seira la reemplazó por una nueva. Los archivos que solo estaban en la computadora anterior se perdieron.",
   "server.cloudComputer.restarted": "La computadora en la nube de {name} dejó de responder, así que Seira la reinició. Ya responde de nuevo; los programas que tenía abiertos se cerraron.",
   "server.cloudComputer.capped": "La computadora en la nube de {name} volvió a dejar de responder menos de una hora después de ser reemplazada, así que Seira la dejó como está. Reemplazar computadora, en el panel de la computadora, lo intenta una vez más.",

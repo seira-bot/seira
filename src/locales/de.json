@@ -3976,7 +3976,6 @@
   "settings.simple.billing.included": "Inklusive Nutzung in diesem Monat",
   "settings.simple.billing.summary": "{percent} % der inklusiven Nutzung in diesem Monat",
   "settings.simple.billing.used": "genutzt",
-  "settings.skin.dressUp.title": "Meine Bots verkleiden",
   "server.cloudComputer.replaced": "Der Cloud-Computer von {name} hat nicht mehr reagiert, deshalb hat Seira ihn durch einen neuen ersetzt. Dateien, die nur auf dem alten Computer lagen, sind weg.",
   "server.cloudComputer.setAside": "Der Cloud-Computer von {name} hat nicht mehr reagiert, deshalb hat Seira ihm einen neuen gegeben. Der alte bleibt mit seinen Dateien bis {date} in Einstellungen → Desktops & Browser → Desktops erhalten und wird danach gelöscht.",
   "server.cloudComputer.noRoom": "Der Cloud-Computer von {name} reagiert nicht mehr, und der Tarif hat keinen Platz für einen neuen Computer daneben. Seira hat ihn deshalb mit seinen Dateien behalten und versucht weiter, ihn zurückzuholen. „Computer neu starten“ im Computer-Bereich versucht es sofort noch einmal.",

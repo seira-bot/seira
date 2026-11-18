@@ -10,6 +10,7 @@ import {
   type MausMotion,
   type MausState,
 } from "@/lib/mascot";
+import { mascotAccessories } from "../../shared/mascot-accessories";
 import { BOT_AVATAR_CROPS } from "../../shared/bot-avatar";
 import { DEFAULT_BOT_BODY, PICKER_BODY_IDS, type BotBodyId } from "../../shared/bot-body";
 import { BotAvatar, MausAvatar } from "./Avatar";
@@ -17,6 +18,7 @@ import { AvatarImageGenerator } from "./AvatarImageGenerator";
 import { AvatarFraming, OrganizationAvatarIcons, RESET_MASCOT_PATCH, useAvatarImage, type AvatarPatch } from "./avatar-editing";
 import { t } from "@/lib/i18n";
 import { bodyName, colorName, expressionName } from "@/lib/mascot-names";
+import { MascotAccessoryPicker } from "./MascotAccessoryPicker";
 import { MascotFaceColorPicker } from "./MascotFaceColorPicker";
 
 export function BotProfileAvatarCard({
@@ -115,29 +117,14 @@ export function BotProfileAvatarCard({
           ))}
         </div>
 
-        {crop === "mascot" && (
+        {crop === "mascot" && PICKER_BODY_IDS.length > 1 && (
           <>
-            <MascotFaceColorPicker bot={bot} disabled={busy} onPatch={onPatch} />
             <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
-              {t("botIdentity.expression")}
+              {t("botIdentity.hair")}
             </div>
-            <div className="grid grid-cols-5 gap-2">
-              {PICKABLE_STATES.map((expression) => (
-                <button
-                  key={expression}
-                  type="button"
-                  disabled={busy}
-                  aria-pressed={activeState === expression}
-                  onClick={() => onPatch({ mascotExpression: expression })}
-                  className={cn(
-                    "flex h-[58px] items-center justify-center rounded-xl bg-inset transition-colors hover:bg-control disabled:opacity-50",
-                    activeState === expression && "ring-2 ring-accent-border",
-                  )}
-                  title={expressionName(expression)}
-                  aria-label={t("mascot.useExpression", { expression: expressionName(expression) })}
-                >
-                  <MausAvatar color={bot.color} faceColor={bot.mascotFaceColor} bodyId={bot.mascotBody ?? undefined} state={expression} size={42} animated={false} />
-                </button>
+            <div className="grid grid-cols-5 gap-1.5">
+              {PICKER_BODY_IDS.map((id) => (
+                <BodyButton key={id} id={id} name={bodyName(id)} bot={bot} busy={busy} onPatch={onPatch} />
               ))}
             </div>
           </>
@@ -167,12 +154,31 @@ export function BotProfileAvatarCard({
 
         {crop === "mascot" && (
           <>
+            <MascotFaceColorPicker bot={bot} disabled={busy} onPatch={onPatch} />
             <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
-              {t("botIdentity.body")}
+              {t("botIdentity.accessories")}
             </div>
-            <div className="grid grid-cols-5 gap-1.5">
-              {PICKER_BODY_IDS.map((id) => (
-                <BodyButton key={id} id={id} name={bodyName(id)} bot={bot} busy={busy} onPatch={onPatch} />
+            <MascotAccessoryPicker bot={bot} disabled={busy} onPatch={onPatch} />
+            <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
+              {t("botIdentity.expression")}
+            </div>
+            <div className="grid grid-cols-5 gap-2">
+              {PICKABLE_STATES.map((expression) => (
+                <button
+                  key={expression}
+                  type="button"
+                  disabled={busy}
+                  aria-pressed={activeState === expression}
+                  onClick={() => onPatch({ mascotExpression: expression })}
+                  className={cn(
+                    "flex h-[58px] items-center justify-center rounded-xl bg-inset transition-colors hover:bg-control disabled:opacity-50",
+                    activeState === expression && "ring-2 ring-accent-border",
+                  )}
+                  title={expressionName(expression)}
+                  aria-label={t("mascot.useExpression", { expression: expressionName(expression) })}
+                >
+                  <MausAvatar color={bot.color} faceColor={bot.mascotFaceColor} bodyId={bot.mascotBody ?? undefined} accessories={mascotAccessories(bot.mascotAccessories)} state={expression} size={42} animated={false} />
+                </button>
               ))}
             </div>
           </>
@@ -204,7 +210,7 @@ function BodyButton({ id, name, bot, busy, onPatch }: {
       type="button"
       disabled={busy}
       aria-pressed={selected}
-      aria-label={t("mascot.useBody", { name })}
+      aria-label={t("mascot.useHair", { name })}
       onClick={() => onPatch({ mascotBody: id })}
       className={cn(
         "flex items-center justify-center rounded-lg py-1.5 disabled:opacity-50",

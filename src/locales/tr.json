@@ -5868,7 +5868,6 @@
   "settings.simple.billing.included": "Bu ayın dahil kullanımı",
   "settings.simple.billing.summary": "Bu ayın dahil kullanımının %{percent} kadarı",
   "settings.simple.billing.used": "kullanıldı",
-  "settings.skin.dressUp.title": "Botlarımı giydir",
   "server.cloudComputer.replaced": "{name} botunun bulut bilgisayarı yanıt vermeyi bıraktı, bu yüzden Seira onu yenisiyle değiştirdi. Yalnızca eski bilgisayarda olan dosyalar artık yok.",
   "server.cloudComputer.restarted": "{name} botunun bulut bilgisayarı yanıt vermeyi bıraktı, bu yüzden Seira onu yeniden başlattı. Yeniden yanıt veriyor; üzerinde açık olan programlar kapatıldı.",
   "server.cloudComputer.capped": "{name} botunun bulut bilgisayarı değiştirildikten sonraki bir saat içinde yine yanıt vermeyi bıraktı, bu yüzden Seira onu olduğu gibi bıraktı. Bilgisayar panelindeki Bilgisayarı değiştir bir kez daha dener.",
