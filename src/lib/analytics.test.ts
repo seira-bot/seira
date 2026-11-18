@@ -11,6 +11,7 @@ const ph = vi.hoisted(() => {
     initThrows: false,
     storedOptOut: false,
     calls: [] as string[],
+    tokens: [] as string[],
     captured: [] as Array<{ event: string; props: unknown }>,
     options: [] as Record<string, unknown>[],
     registered: [] as Record<string, unknown>[],
@@ -22,9 +23,10 @@ const ph = vi.hoisted(() => {
       let optedOut = ph.storedOptOut;
       return {
         default: {
-          init: (_token: string, options: Record<string, unknown>) => {
+          init: (token: string, options: Record<string, unknown>) => {
             if (ph.initThrows) throw new Error("init failed");
             ph.calls.push("init");
+            ph.tokens.push(token);
             ph.options.push(options);
           },
           has_opted_out_capturing: () => optedOut,
@@ -61,13 +63,17 @@ const baseStorage = {
 };
 vi.stubGlobal("localStorage", baseStorage);
 
+const TOKEN = "phc_test_token";
+
 beforeEach(() => {
+  vi.stubEnv("VITE_SEIRA_POSTHOG_TOKEN", TOKEN);
   store.clear();
   ph.loads = 0;
   ph.fail = false;
   ph.initThrows = false;
   ph.storedOptOut = false;
   ph.calls = [];
+  ph.tokens = [];
   ph.captured = [];
   ph.options = [];
   ph.registered = [];
@@ -75,7 +81,10 @@ beforeEach(() => {
   ph.optIns = [];
 });
 // Restored in afterEach: an inline restore would be skipped when an assertion fails mid-test.
-afterEach(() => vi.stubGlobal("localStorage", baseStorage));
+afterEach(() => {
+  vi.stubGlobal("localStorage", baseStorage);
+  vi.unstubAllEnvs();
+});
 
 // resetModules keeps the mocked posthog-js cached, so it is registered again and `loads` counts this graph only.
 async function freshAnalytics() {
@@ -101,6 +110,43 @@ describe("optAction", () => {
 
   it("does nothing when there is no client to stop", () => {
     expect(optAction(false, false)).toBe("none");
+  });
+});
+
+describe("a build without a project key", () => {
+  beforeEach(() => vi.stubEnv("VITE_SEIRA_POSTHOG_TOKEN", ""));
+
+  it("is off, even for a fresh install", async () => {
+    const analytics = await freshAnalytics();
+    expect(analytics.analyticsEnabled()).toBe(false);
+  });
+
+  it("never loads the client, from startup or from a switch turned on", async () => {
+    const analytics = await freshAnalytics();
+    await analytics.initAnalytics();
+    analytics.setAnalyticsEnabled(true);
+    await analytics.initAnalytics();
+    analytics.track("app_snapshot", { bots: 1 });
+    expect(analytics.analyticsEnabled()).toBe(false);
+    expect(ph.loads).toBe(0);
+    expect(ph.calls).toEqual([]);
+    expect(store.size).toBe(0);
+  });
+
+  it("is off for a key made of spaces", async () => {
+    vi.stubEnv("VITE_SEIRA_POSTHOG_TOKEN", "   ");
+    const analytics = await freshAnalytics();
+    await analytics.initAnalytics();
+    expect(ph.loads).toBe(0);
+  });
+});
+
+describe("a build with a project key", () => {
+  it("starts the client with that key and no other", async () => {
+    vi.stubEnv("VITE_SEIRA_POSTHOG_TOKEN", "  phc_seira_key  ");
+    const analytics = await freshAnalytics();
+    await analytics.initAnalytics();
+    expect(ph.tokens).toEqual(["phc_seira_key"]);
   });
 });
 

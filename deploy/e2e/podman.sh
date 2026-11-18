@@ -25,7 +25,7 @@ UNIT="$HOME/.config/containers/systemd/openmausbot.container"
 INSTALL=(env "OMB_INSTALL_SOURCE=file://$ROOT" sh "$ROOT/deploy/podman/install.sh")
 FINDINGS="$OUT/findings.txt"
 if [ -e "$DIR" ] || [ -e "$UNIT" ]; then
-  echo "This user already has a MausBot Podman install ($DIR or $UNIT). This test replaces and removes it: run it on a throwaway host." >&2
+  echo "This user already has a Seira Podman install ($DIR or $UNIT). This test replaces and removes it: run it on a throwaway host." >&2
   exit 2
 fi
 : >"$FINDINGS"
@@ -115,7 +115,7 @@ finding "linger: without it the installer printed 'sudo loginctl enable-linger $
 step "install $OLD_VERSION as this user's service (run again, now with linger)"
 OMB_INSTALL_IMAGE="$REPO:v$OLD_VERSION" "${INSTALL[@]}" >"$OUT/install.txt" 2>&1 || { cat "$OUT/install.txt"; fail "the install failed"; }
 cat "$OUT/install.txt"
-contains "$OUT/install.txt" "MausBot is running as your user's service (openmausbot), on http://127.0.0.1:8799." "the install did not finish"
+contains "$OUT/install.txt" "Seira is running as your user's service (openmausbot), on http://127.0.0.1:8799." "the install did not finish"
 contains "$OUT/install.txt" "It starts at boot, without anyone logged in." "the install did not see linger"
 grep -q "^Image=$REPO@sha256:[0-9a-f]\{64\}$" "$UNIT" || fail "the unit does not pin the image by digest: $(grep '^Image=' "$UNIT")"
 grep -q "^UserNS=keep-id:uid=[0-9]*,gid=[0-9]*$" "$UNIT" || fail "the unit does not map the image's user to this one"

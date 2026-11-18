@@ -91,7 +91,7 @@ pnpm exec vitest run server/bot-visibility.test.ts server/bot-visibility.e2e.tes
 
 ## Observed local result — 2026-09-23
 
-On a disposable worktree stacked on #1708 and rebased onto OpenMausBot main
+On a disposable worktree stacked on #1708 and rebased onto Seira main
 `0b132aec`: `pnpm typecheck`, `pnpm lint`, `pnpm i18n:check` and the files
 above passed. Before that rebase (main `0bb37982` plus #1708),
 `pnpm test:packaged-server` and `server/index.test.ts`,
@@ -105,8 +105,6 @@ above passed. Before that rebase (main `0bb37982` plus #1708),
 `server/runtime-coordinator.test.ts`, `server/chief-of-staff.test.ts`,
 `server/thread-capacity-api.test.ts`, `server/cli-service-trust.e2e.test.ts`
 and the Settings/People/session UI tests passed on macOS.
-`server/hosted-access.test.ts` passed except once for its 8-second licence
-expiry case, which failed under load and passed when rerun alone.
 
 Mutation checks, each restored afterwards, turned a named test red: the
 per-path gate off; the bot list unfiltered; the live stream unfiltered;
@@ -156,7 +154,7 @@ A review of #1717 reproduced eight problems; each is now covered.
   of a frame kept from clients (`memberFrame` returns nothing for a withheld
   frame).
 
-Observed on a disposable worktree on OpenMausBot main `3eb90469`:
+Observed on a disposable worktree on Seira main `3eb90469`:
 `pnpm typecheck`, `pnpm lint`, `pnpm i18n:check`, the files above and their
 neighbours (`server/index.test.ts`, card answerers, CLI, recent work, room
 and team suites) passed on macOS. Mutation checks, each restored afterwards,

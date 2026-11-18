@@ -46,7 +46,7 @@ describe("the sidebar tiles", () => {
     const html = renderToStaticMarkup(createElement(SidebarBotTile, { ...props(bot({ chiefOfStaff: primary })), primary }));
     expect(html).toMatch(new RegExp(`data-sidebar-tile="${primary ? "primary" : "pinned"}"[^>]*class="[^"]*\\bh-\\[92px\\] w-\\[78px\\][^"]*\\brounded-\\[8px\\]`));
     expect(html).toContain('width="56px" height="56px"');
-    expect(html).toMatch(/truncate text-center text-\[13px\] font-medium leading-4 text-ink"[^>]*>MausBot</);
+    expect(html).toMatch(/truncate text-center text-\[13px\] font-medium leading-4 text-ink"[^>]*>Seira</);
     expect(html).not.toContain("data-provider-mark");
   });
 
@@ -54,7 +54,7 @@ describe("the sidebar tiles", () => {
     const tileHtml = (extra: Partial<Bot>, primary: boolean) => renderToStaticMarkup(createElement(SidebarBotTile, { ...props(bot(extra)), primary }));
     const main = tileHtml({ chiefOfStaff: true }, true);
     expect(main).toContain('data-testid="chief-badge"');
-    expect(main).toContain('title="MausBot · Chief of Staff"');
+    expect(main).toContain('title="Seira · Chief of Staff"');
     expect(tileHtml({ chiefOfStaff: true }, false)).not.toContain('data-testid="chief-badge"');
     expect(tileHtml({}, true)).not.toContain('data-testid="chief-badge"');
   });
@@ -67,14 +67,14 @@ describe("the sidebar tiles", () => {
     expect(renderToStaticMarkup(createElement(SidebarBotTile, props(bot({ activity: "waiting-on-you" }))))).toContain('data-testid="waiting-dot"');
     const unread = renderToStaticMarkup(createElement(SidebarBotTile, props(bot({ unread: true }))));
     expect(unread).toContain('data-testid="unread-dot"');
-    expect(unread).toContain('aria-label="MausBot · Unread"');
+    expect(unread).toContain('aria-label="Seira · Unread"');
   });
 
   it("shows a failed last turn as a red dot on the tile and on a Simple row, never the orange waiting one", () => {
     const failed = bot({ messages: [{ id: "e1", role: "bot", kind: "activity", at: 2, tool: { name: "error: The site did not answer.", ok: false } }] as Bot["messages"] });
     const html = renderToStaticMarkup(createElement(SidebarBotTile, props(failed)));
     expect(html).toMatch(/data-testid="failed-dot"[^>]*class="[^"]*\bbg-danger\b/);
-    expect(html).toContain('aria-label="MausBot · Ran into a problem"');
+    expect(html).toContain('aria-label="Seira · Ran into a problem"');
     expect(html).not.toContain('data-testid="waiting-dot"');
     const row = renderToStaticMarkup(createElement(BotListItem, props(failed)));
     expect(row).toMatch(/data-testid="failed-dot"[^>]*class="[^"]*\bbg-danger\b/);

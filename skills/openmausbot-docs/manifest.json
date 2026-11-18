@@ -1,8 +1,8 @@
 {
   "id": "openmausbot-docs",
-  "name": "OpenMausBot Docs",
+  "name": "Seira Docs",
   "version": "0.1.0",
-  "description": "Answer how OpenMausBot itself is configured, from this install's files and the app's own docs.",
+  "description": "Answer how Seira itself is configured, from this install's files and the app's own docs.",
   "defaultEnabled": true,
   "triggerTerms": [
     "openmausbot",

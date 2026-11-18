@@ -112,7 +112,7 @@ it("Escape keeps the card as seen, so it does not come back and claim every late
   expect(document.querySelector("[data-mausbot-welcome]"), "closed").toBeNull();
 });
 
-it("never comes after a first run that met the Chief, which already introduced MausBot; an older install still gets it once", async () => {
+it("never comes after a first run that met the Chief, which already introduced Seira; an older install still gets it once", async () => {
   f.state = { ...f.state, bots: [{ ...maus(1), welcomed: true }] };
   await show();
   expect(opened()).toBe(false);

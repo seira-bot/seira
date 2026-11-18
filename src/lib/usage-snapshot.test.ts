@@ -38,11 +38,15 @@ const memoryStorage = {
 };
 
 beforeEach(() => {
+  vi.stubEnv("VITE_SEIRA_POSTHOG_TOKEN", "phc_test_token");
   storage.clear();
   ph.captured = [];
   vi.stubGlobal("localStorage", memoryStorage);
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 const DOCUMENTED = [
   "key_providers", "key_count", "has_boat_key", "cloud_computer_source", "cloud_computers", "team_computers", "bots_cloud_boat",

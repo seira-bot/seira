@@ -54,7 +54,7 @@ describe("the Fish agent for Live calls", () => {
     const calls = fetchImpl.mock.calls.map(([url, init]) => ({ route: `${init!.method} ${String(url).replace(ENDPOINT.apiBase, "")}`, body: JSON.parse(String(init!.body)), init: init! }));
     expect(calls.map((call) => call.route)).toEqual(Object.keys(answers));
     expect(calls[0]!.body).toMatchObject({ name: "delegate", tool_type: "client", expects_response: true });
-    expect(calls[1]!.body.name).toBe("MausBot Live calls");
+    expect(calls[1]!.body.name).toBe("Seira Live calls");
     expect(calls[1]!.body.config).toEqual({ voice: { engine: "live3", speaking_language: "vi" }, tools: { enabled: true, tool_ids: ["tool_1"] } });
     expect(calls[2]!.body).toEqual({ overrides_allowed: ["system_prompt"] });
     for (const call of calls) {

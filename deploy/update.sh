@@ -404,7 +404,7 @@ restore_env() {
 # network then, and stayed in the old, dead one whenever the server restarted without it: HTTPS refused while both
 # containers looked healthy. The installer rewrites its own two files at every run; an update does the same, with the
 # copies below, which are the installer's own (scripts/server-installer.test.ts keeps them equal).
-INSTALLER_MARK="# Written by MausBot's installer (deploy/install.sh)"
+INSTALLER_MARK="# Written by Seira's installer (deploy/install.sh)"
 old_installer_layout() { [ -f compose.yaml ] && grep -qF "$INSTALLER_MARK" compose.yaml && grep -q '^ *network_mode: "service:omb"' compose.yaml; }
 # A Compose file of this repository's (path B) with Caddy in the server's network: `git pull` brings the current one.
 old_repository_layout() { [ -f docker-compose.yml ] && grep -q '^ *network_mode: "service:omb"' docker-compose.yml; }

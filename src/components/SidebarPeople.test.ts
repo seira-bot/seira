@@ -95,7 +95,7 @@ describe("the team's people in the sidebar", () => {
     expect(needsYouVersion(tasks(2), [], [])).toBe(needsYouVersion(tasks(2), [], []));
   });
 
-  it("finds the person's inbox with their own Chief, else their own MausBot", () => {
+  it("finds the person's inbox with their own Chief, else their own Seira", () => {
     const mausbot = bot({ id: "mm", name: "MausBot", defaultBot: { person: BEN.email } });
     const chief = bot({ id: "mc", name: "Ben's Chief", chiefOfStaff: true, reportsTo: BEN.email });
     const cleos = bot({ id: "pc", chiefOfStaff: true, reportsTo: CLEO.email });

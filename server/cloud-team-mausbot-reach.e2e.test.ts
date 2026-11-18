@@ -95,7 +95,7 @@ beforeAll(async () => {
   await share(archive, { everyone: "view", people: {} });
   await share(payroll, { everyone: "none", people: { [BEN.email]: "chat" } });
   mausbot = (await botsOf(mira)).find((bot) => bot.defaultBot?.person === MIRA.email)!;
-  expect(mausbot, "every member has their own MausBot").toBeDefined();
+  expect(mausbot, "every member has their own Seira").toBeDefined();
   const chat = await team.as(mira, "POST", `/api/bots/${mausbot.id}/tasks`, { title: "Mine" });
   expect(chat.status, JSON.stringify(chat.body)).toBe(201);
   mine = chat.body.task.threadId as string;
@@ -232,7 +232,7 @@ it("never into a room, nor into Sales' shared chat", async () => {
   expect(JSON.stringify(await lines(ada, sales.threadId))).not.toContain("pull the numbers for Mira");
 }, hostTimeout(120_000));
 
-it("works from her MausBot's main chat too, which is hers alone", async () => {
+it("works from her Seira's main chat too, which is hers alone", async () => {
   const main = (await botsOf(mira)).find((bot) => bot.id === mausbot.id)!.mainThreadId;
   expect(main).toBeTruthy();
   await say("FROM-MY-MAIN-CHAT", main);

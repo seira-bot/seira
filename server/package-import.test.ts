@@ -111,7 +111,7 @@ describe("importing a whole team", () => {
     expect(app.events.filter((kind) => kind === "bot")).toHaveLength(3);
   });
 
-  it("brings a new install's chrome MausBot back in chrome from its own export", async () => {
+  it("brings a new install's chrome Seira back in chrome from its own export", async () => {
     const app = await installation();
     app.store.seedIfEmpty();
     const { createBotPackageExport } = await import("./package-export.ts");

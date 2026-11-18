@@ -1,6 +1,6 @@
-# OpenMausBot design rules
+# Seira design rules
 
-These are the rules for how OpenMausBot looks, reads and behaves. They cover
+These are the rules for how Seira looks, reads and behaves. They cover
 the desktop and web app in `src/`. Every UI change follows them, whoever
 writes it: a maintainer, a first-time contributor or a coding agent.
 
@@ -258,7 +258,7 @@ talks.
   a raw error code without a sentence before it.
 - **Name controls exactly as they're labelled.** If copy says "open
   Automations", the button reads "Automations" (a test checks this).
-- **Use the product's words.** "MausBot Cloud" or "the Cloud", "cloud
+- **Use the product's words.** "Seira Cloud" or "the Cloud", "cloud
   desktop", "This computer", "AI", "Organization". The vocabulary tests list
   the retired ones and the internal words to avoid.
 - **Show values, not explanations.** "Theme · Midnight" beats a sentence about

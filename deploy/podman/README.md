@@ -5,13 +5,13 @@ back, one command is enough: `install.sh` here
 ([Podman (rootless, as a service)](../../docs/self-hosting.md#podman-rootless-as-a-service)).
 The recipe below builds from a checkout and adds Caddy and per-bot desktops.
 
-Run the OpenMausBot server, Caddy, and per-bot Linux desktops with one Podman
+Run the Seira server, Caddy, and per-bot Linux desktops with one Podman
 engine. Docker Engine, Docker Desktop, and Docker Compose are not required;
 `podman-compose` provides the Compose commands. The existing
 [`deploy/docker-compose.yml`](../docker-compose.yml) remains an independent option.
 
 ```text
-Browser -> loopback Caddy :8080 -> OpenMausBot :8799
+Browser -> loopback Caddy :8080 -> Seira :8799
                                     |
                              rootless Podman socket
                                     |

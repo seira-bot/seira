@@ -4,10 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import { createUpdateChecker, installKind, isNewerVersion, LATEST_RELEASE_URL, STABLE_CHANNEL_URL, updateChannel, updateCommand } from "./update-check.ts";
 
 const release = (tag: string) =>
-  ({ ok: true, status: 200, json: async () => ({ tag_name: tag, html_url: `https://github.com/milind-soni/OpenMausBot/releases/tag/${tag}` }) }) as Response;
+  ({ ok: true, status: 200, json: async () => ({ tag_name: tag, html_url: `https://github.com/seira-bot/seira/releases/tag/${tag}` }) }) as Response;
 
 const promoted = (version: string) =>
-  ({ ok: true, status: 200, json: async () => ({ channel: "stable", version, image: `ghcr.io/milind-soni/openmausbot@sha256:${"a".repeat(64)}`, releaseUrl: `https://github.com/milind-soni/OpenMausBot/releases/tag/v${version}` }) }) as Response;
+  ({ ok: true, status: 200, json: async () => ({ channel: "stable", version, image: `ghcr.io/milind-soni/openmausbot@sha256:${"a".repeat(64)}`, releaseUrl: `https://github.com/seira-bot/seira/releases/tag/v${version}` }) }) as Response;
 const missing = { ok: false, status: 404, json: async () => ({}) } as Response;
 /** GitHub's newest release is `newest`; the stable channel names `stable`, or does not exist yet. */
 const github = (newest: string, stable: string | null) => vi.fn(async (url: string | URL | Request) =>
@@ -71,7 +71,7 @@ describe("server update check", () => {
       channel: "stable",
       latest: "0.1.93",
       available: true,
-      releaseUrl: "https://github.com/milind-soni/OpenMausBot/releases/tag/v0.1.93",
+      releaseUrl: "https://github.com/seira-bot/seira/releases/tag/v0.1.93",
       command: "git pull && ./update.sh",
       restart: false,
     });
@@ -97,6 +97,13 @@ describe("server update check", () => {
     expect(updateChannel({})).toBe("stable");
     expect(updateChannel({ OMB_UPDATE_CHANNEL: " Newest " })).toBe("newest");
     expect(updateChannel({ OMB_UPDATE_CHANNEL: "latest" })).toBe("stable");
+  });
+
+  it("says nothing is available while the repository has no release", async () => {
+    const fetch = vi.fn(async (_url: string | URL | Request) => missing);
+    const check = createUpdateChecker({ current: "0.1.92", install: "docker", fetch });
+    expect(await check()).toEqual({ current: "0.1.92", install: "docker", channel: "newest", available: false, command: "git pull && ./update.sh", restart: false });
+    expect(fetch.mock.calls.map(([url]) => String(url))).toEqual([STABLE_CHANNEL_URL, LATEST_RELEASE_URL]);
   });
 
   it("does not take a broken channel record for a version, or fall back past it", async () => {

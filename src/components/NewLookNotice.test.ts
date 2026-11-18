@@ -49,7 +49,7 @@ describe("the new look notice", () => {
     await show();
     expect(dialog()?.getAttribute("role")).toBe("dialog");
     expect(dialog()?.getAttribute("aria-modal")).toBe("true");
-    expect(host.querySelector("h2")?.textContent).toBe("MausBot has a simpler look");
+    expect(host.querySelector("h2")?.textContent).toBe("Seira has a simpler look");
     expect(host.textContent).toContain("Everything you need is still here; search Settings to find the rarer ones.");
     expect(host.querySelector('[role="switch"]')).toBeNull();
     expect(host.textContent).not.toContain("Advanced");

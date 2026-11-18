@@ -31,7 +31,7 @@ afterEach(async () => {
 });
 
 describe("Try asking", () => {
-  it("lists MausBot's four asks, and a tap sends one in the open conversation", async () => {
+  it("lists Seira's four asks, and a tap sends one in the open conversation", async () => {
     await show(bot());
     const asks = [...host.querySelectorAll<HTMLButtonElement>("[data-panel-ask]")];
     expect(host.textContent).toContain("Try asking");
@@ -40,7 +40,7 @@ describe("Try asking", () => {
     expect(f.dispatch).toHaveBeenCalledWith({ type: "send", botId: "maus", text: "Set up a bot for my inbox", threadId: "t" });
   });
 
-  it("is MausBot's alone, and Simple mode's", async () => {
+  it("is Seira's alone, and Simple mode's", async () => {
     await show(bot({ defaultBot: undefined }));
     expect(host.textContent).toBe("");
     f.advanced = true;

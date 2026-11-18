@@ -1,9 +1,9 @@
 ---
 name: openmausbot-docs
-description: "Answer how OpenMausBot itself works and how to change it: settings, the data folder, approval levels, routines, engines, skills, teams, memory and self-hosting. Use when the question is about the app, not about the person's own project."
+description: "Answer how Seira itself works and how to change it: settings, the data folder, approval levels, routines, engines, skills, teams, memory and self-hosting. Use when the question is about the app, not about the person's own project."
 ---
 
-# OpenMausBot, documented
+# Seira, documented
 
 Answer from this install and from the app's own docs, in that order. Never
 describe a setting from memory: read the setting, the file, or the page.

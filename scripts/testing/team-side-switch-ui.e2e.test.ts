@@ -154,7 +154,7 @@ async function openAs(who: keyof typeof tokens, size: readonly [string, string])
 
     const bots = (await team.as(tokens.ada, "GET", "/api/bots?messages=0")).body.bots as Array<Bot & { defaultBot?: { person?: string } }>;
     mine = bots.find((bot) => bot.defaultBot?.person === "ada@acme.test")!.id;
-    expect(await ada.listed(), "Just me lists her own MausBot and the bots she can chat with").toEqual(expect.arrayContaining([scout, mine]));
+    expect(await ada.listed(), "Just me lists her own Seira and the bots she can chat with").toEqual(expect.arrayContaining([scout, mine]));
     const own = (await scoutAs("ada")).tasks.filter((task) => task.private === true);
     expect(own.length, "one private conversation, made by the click").toBe(1);
     adaOwn = own[0]!.threadId;

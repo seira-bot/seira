@@ -116,8 +116,6 @@ without the admin scope `live.provider`, never `azureEndpoint` or
 `azureDeployment`. `server/live-access.test.ts` runs each caller above through
 the sign-in gate and the limit. `server/live-azure-access.e2e.test.ts` does it on
 the full server with a made-up key and its `fetch` stubbed.
-`server/hosted-access.test.ts` does it for a shared workspace, with no key saved,
-so a caller who gets through stops at the setup prompt.
 
 ## A custom endpoint as the Live provider
 
@@ -154,7 +152,7 @@ Audio key from Settings → API keys (`tts.fishKey`, `OMB_FISH_AUDIO_API_KEY`),
 the same key Fish voices use; nothing else is asked. On the first call the
 harness sets up an agent on that key's account (`server/live-fish.ts`
 `setUpFishAgent`): a client tool `delegate` (`POST /v1/agent/tools`), an agent
-named "<product> Live calls" (`productName` in `server/brand.ts`: MausBot, or a
+named "<product> Live calls" (`productName` in `server/brand.ts`: Seira, or a
 white-label brand's name) on the `live3` engine in English with that tool (`POST /v1/agent/agents`),
 `overrides_allowed: ["system_prompt"]` (`PATCH /v1/agent/agents/{id}`), and a
 publish. It saves the agent as `live.fishAgentId` with `live.fishAgentFor`, a
@@ -185,7 +183,7 @@ same route for the bot's answers. `FishRelay` (`server/live-fish.ts`) turns the
 reports into the GPT-Live sideband events `LiveCallController` already reads
 and the controller's appends into commands the client hands the agent: the
 answer to a pending `delegate` call as its tool result, anything later as a
-user message prefixed `[OpenMausBot]`. Every report is a strict, bounded zod
+user message prefixed `[Seira]`. Every report is a strict, bounded zod
 shape; a wrong token or session answers `404`; the route needs the admin scope.
 The `delegate` tool's arguments are ignored: the request is what the client
 heard, as on GPT-Live.

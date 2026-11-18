@@ -10,7 +10,7 @@ reruns and recovery. It
 builds macOS (arm64 + x64, signed, notarized, stapled), Windows, and Ubuntu
 from a single pinned commit, verifies every artifact the way a user would
 receive it, and assembles the canonical draft in
-[OpenMausBot releases](https://github.com/milind-soni/OpenMausBot/releases).
+[Seira releases](https://github.com/seira-bot/seira/releases).
 The exact same assets are also staged in the public legacy releases repo so
 installed builds from 0.1.46 and earlier can update across the repository
 migration.
@@ -54,7 +54,7 @@ Each release records the data-folder formats it writes and reads:
 `server/data-format-released.json` into the version-bump commit. The next
 release's changes are tested against that record, so a version never writes
 data the release before it cannot read
-([CONTRIBUTING.md, "Changing how data is stored"](../CONTRIBUTING.md#changing-how-data-is-stored)).
+([code guide, "Changing how data is stored"](contributing.md#changing-how-data-is-stored)).
 A version bump made by hand needs the same command, or
 `server/data-format.test.ts` fails on the mismatched version.
 
@@ -161,7 +161,7 @@ must fail the build, not ship an installer that downloads them on first use.
 
 ## One-time setup: release secrets
 
-Set these in **OpenMausBot → Settings → Secrets and variables → Actions**.
+Set these in **Seira → Settings → Secrets and variables → Actions**.
 
 The **Prepare next release** workflow also needs
 **Settings → Actions → General → Workflow permissions → Allow GitHub Actions

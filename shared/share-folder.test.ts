@@ -15,7 +15,7 @@ function oneBot(): PackageDocument {
     format: "openmaus.package", version: 2,
     package: {
       id: "helper", release: "1.0.0", name: "Helper", tagline: "Answers questions.", summary: "A helpful bot.", category: "Community",
-      author: { name: "MausBot user" }, license: "Unspecified", outcomes: ["Answers."], setupMinutes: 2,
+      author: { name: "Seira user" }, license: "Unspecified", outcomes: ["Answers."], setupMinutes: 2,
       requirements: { apps: [{ slug: "gmail", label: "Gmail", reason: "Reads mail.", optional: true }], capabilities: [] },
       team: { name: "Helper" },
       agents: [{ key: "helper", name: "Helper", soul: "Be brief.\n---\nNever guess.", appearance: { color: "blue" }, skills: ["triage"], tools: { off: ["images", "warp-drive"] } }],

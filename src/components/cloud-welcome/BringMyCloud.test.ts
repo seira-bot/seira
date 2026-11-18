@@ -22,7 +22,7 @@ function page(bots: unknown[], over: Record<string, unknown> = {}) {
 const draw = async () => { await act(async () => { root.render(createElement(BringMyCloud)); }); await act(async () => {}); };
 const moveButton = (id: string) => host.querySelector<HTMLButtonElement>(`[data-bring-move="${id}"]`);
 
-it("lists My Cloud's bots with one Move each, and says why MausBot stays", async () => {
+it("lists My Cloud's bots with one Move each, and says why Seira stays", async () => {
   page([MAUS, ATLAS, BEACON]);
   await draw();
   expect(host.textContent).toContain("Move a bot here from My Cloud");

@@ -30,7 +30,7 @@ describe("a routine's refused hand-off", () => {
     }
   });
 
-  it("stays quiet about anything that wasn't the refusal: a hand-off that went through, a typo, the bot itself, someone's own MausBot", () => {
+  it("stays quiet about anything that wasn't the refusal: a hand-off that went through, a typo, the bot itself, someone's own Seira", () => {
     for (const [named, status] of [["Staff Hours", 202], ["Staff Hours", 403], ["Bookkeeper", 403], ["Rooms", 403], ["MausBot", 403], ["books", 202]] as const) {
       const { refused } = fixture();
       refused.settled("t", rooms, [named], status);

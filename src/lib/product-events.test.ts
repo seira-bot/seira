@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/state/store";
 import { keySaveFailure, keyTestResult, savedKeyResult } from "./product-events";
@@ -28,9 +28,11 @@ vi.stubGlobal("localStorage", {
 });
 
 beforeEach(() => {
+  vi.stubEnv("VITE_SEIRA_POSTHOG_TOKEN", "phc_test_token");
   store.clear();
   ph.captured = [];
 });
+afterEach(() => vi.unstubAllEnvs());
 
 describe("why a key save failed", () => {
   it("calls it rejected only when the provider refused the key", () => {

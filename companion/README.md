@@ -2,7 +2,7 @@
 
 The sidecar a phone talks to.
 
-OpenMausBot's harness listens on `127.0.0.1` and nothing else, which is the
+Seira's harness listens on `127.0.0.1` and nothing else, which is the
 right default and one it has recently gone out of its way to enforce: it now
 rejects any request whose `Host` is not loopback, defeating DNS rebinding.
 

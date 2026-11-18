@@ -172,8 +172,10 @@ pnpm package:linux   # Ubuntu x64: .deb, AppImage, and the verified Cua runtime
 ```
 
 > [!WARNING]
-> Do not publish a packaged build yet. The build config still uses the upstream app id, product name,
-> and update source (see [Upstream names in the code](#upstream-names-in-the-code)).
+> Do not publish a packaged build yet. The app id and the update source are Seira's,
+> but the product name, the installer names, and the Linux install folder still say OpenMausBot,
+> so a Seira install can replace an OpenMausBot install on Linux
+> (see [Upstream names in the code](#upstream-names-in-the-code)).
 > Never upload a Seira build to the OpenMausBot release repository.
 
 <details>
@@ -196,15 +198,27 @@ See [docs/linux-desktop.md](docs/linux-desktop.md) and [docs/computer-use-integr
 ## Upstream names in the code
 
 Seira started from OpenMausBot 0.1.169 on 18 November 2026.
+These names already belong to Seira:
+
+| Where | Name today |
+|---|---|
+| Desktop app id | `bot.seira.app` |
+| Update source of packaged builds | The `seira-bot/seira` releases on GitHub |
+| Update check of a server | The `seira-bot/seira` releases and stable channel on GitHub |
+
+Seira has no release yet, so there is nothing to update to.
+
 Some names in the code and in the docs still come from upstream:
 
 | Where | Name today |
 |---|---|
-| npm package | `openmausbot` |
+| npm package and Linux package | `openmausbot` |
 | Data folder | `~/.openmausbot` |
 | Environment variables | `OMB_PORT`, `OMB_UI_PORT`, `OMB_WEBHOOK_PORT` |
-| Desktop app id and product name | `com.openmausbot.app`, `OpenMausBot` |
-| Update source of packaged builds | The OpenMausBot releases on GitHub |
+| Product name, installer files, Linux install folder | `OpenMausBot`, `OpenMausBot-<version>-…`, `/opt/OpenMausBot` |
+| Server image, installers, and update scripts in `deploy/` | `ghcr.io/milind-soni/openmausbot` and the upstream repository |
+| Files the app reads from GitHub | Announcements, model list, team library, and browser engine downloads, all from upstream repositories |
+| Cloud and website addresses | `openmausbot.com` and its subdomains |
 | Text in the app and in the docs | OpenMausBot, MausBot |
 
 Use these names as they are until the code changes.
@@ -212,14 +226,15 @@ Do not install the `openmausbot` npm package to get Seira. That package is the u
 
 ## Privacy
 
-Usage analytics are optional and anonymous.
-They never include keys, names, addresses, or conversations.
+A Seira build sends no analytics.
+The code can send them, but only to a PostHog project whose key you give when you build the app.
+They are anonymous and never include keys, names, addresses, or conversations.
 [docs/analytics.md](docs/analytics.md) lists each event and each property.
 
 > [!IMPORTANT]
-> Seira still uses the upstream analytics setup. Analytics are on by default,
-> and the events go to the PostHog project of the OpenMausBot maintainers.
-> To stop them, turn off **Settings → General → Usage analytics**.
+> This repository has no analytics key.
+> A build made without `VITE_SEIRA_POSTHOG_TOKEN` has no analytics switch in Settings and sends nothing.
+> A build made with a key sends analytics until you turn off **Settings → General → Usage analytics**.
 
 ## Documentation
 
@@ -239,14 +254,14 @@ They still say OpenMausBot in some places.
 
 ## Contributing
 
-Pull requests are welcome.
-[CONTRIBUTING.md](CONTRIBUTING.md) holds the code rules, and [DESIGN.md](DESIGN.md) holds the design rules.
-Both files come from upstream, so read "OpenMausBot" as "Seira".
+Issues and pull requests are welcome.
+[CONTRIBUTING.md](CONTRIBUTING.md) explains how a change lands, the [code guide](docs/contributing.md) holds the code rules,
+and [DESIGN.md](DESIGN.md) holds the design rules. The last two come from upstream, so read "OpenMausBot" as "Seira".
 
 The driver contract in [`server/contracts.ts`](server/contracts.ts) is small.
 To add a provider, add one file in [`server/drivers/`](server/drivers/) and register it with one line.
 
-Do not post a security problem in public. Report it in private to the maintainers of [seira-bot](https://github.com/seira-bot).
+Do not post a security problem in public. Report it through [private vulnerability reporting](https://github.com/seira-bot/seira/security/advisories/new).
 If the problem is also in OpenMausBot, report it upstream too, as [SECURITY.md](SECURITY.md) describes.
 
 ## License and credits

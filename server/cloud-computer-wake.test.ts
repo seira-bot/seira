@@ -338,7 +338,7 @@ describe("a woken cloud computer that never answers", () => {
     const { bot, box, originalName } = await madeThenSilent();
     noRoom = true;
     const error = await failure(bot);
-    expect(error!.message).toMatch(/plan has no room for a new computer beside it, so MausBot kept it, stopped and with its files/);
+    expect(error!.message).toMatch(/plan has no room for a new computer beside it, so Seira kept it, stopped and with its files/);
     expect(claims.transientClaimFailure(error)).toBe(true);
     expect(box.name).toBe(originalName);
     expect(renames(box.id).map((request) => request.name)).toEqual([expect.stringMatching(SET_ASIDE_NAME), originalName]);

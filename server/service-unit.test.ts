@@ -24,7 +24,7 @@ describe("service units", () => {
 
   it("renders a systemd unit that restarts, runs as the user, and grants low ports only for --domain", () => {
     const unit = systemdUnit(spec);
-    expect(unit).toContain("Description=OpenMausBot (agentada)");
+    expect(unit).toContain("Description=Seira (agentada)");
     expect(unit).toContain("User=maus");
     expect(unit).toContain("Environment=OMB_DATA_DIR=/home/maus/.openmausbot");
     expect(unit).toContain("ExecStart=/usr/bin/node /usr/lib/node_modules/openmausbot/cli.js serve --port 8799 --data-dir /home/maus/.openmausbot --domain maus.example.com --no-pair");
@@ -95,12 +95,12 @@ describe("service units", () => {
   });
 
   it("finds the CLI the installed desktop app ships, and runs it as Node", () => {
-    const app = "/Applications/OpenMausBot.app/Contents";
+    const app = "/Applications/Seira.app/Contents";
     const present = new Set([`${app}/MacOS/OpenMausBot`, `${app}/Resources/server/openmausbot.js`]);
     expect(shippedSentinelCli("darwin", "/Users/maus", (path) => present.has(path))).toEqual({ node: `${app}/MacOS/OpenMausBot`, script: `${app}/Resources/server/openmausbot.js` });
-    const user = "/Users/maus/Applications/OpenMausBot.app/Contents";
+    const user = "/Users/maus/Applications/Seira.app/Contents";
     expect(shippedSentinelCli("darwin", "/Users/maus", (path) => path.startsWith(user))?.script).toBe(`${user}/Resources/server/openmausbot.js`);
-    expect(shippedSentinelCli("linux", "/home/maus", (path) => path.startsWith("/opt/OpenMausBot/"))).toEqual({ node: "/opt/OpenMausBot/openmausbot", script: "/opt/OpenMausBot/resources/server/openmausbot.js" });
+    expect(shippedSentinelCli("linux", "/home/maus", (path) => path.startsWith("/opt/Seira/"))).toEqual({ node: "/opt/Seira/openmausbot", script: "/opt/Seira/resources/server/openmausbot.js" });
     // an app with its script missing, or one released before Sentinel, is no CLI for it
     expect(shippedSentinelCli("darwin", "/Users/maus", (path) => path.endsWith("MacOS/OpenMausBot"))).toBeNull();
     expect(shippedSentinelCli("darwin", "/Users/maus", (path) => present.has(path), () => false)).toBeNull();

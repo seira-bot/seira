@@ -1,5 +1,5 @@
 // The data folder's format marker, and the rule that makes an update safe to roll back: what version N writes, version
-// N-1 can still read (CONTRIBUTING.md, "Changing how data is stored"). A server that finds data in a format it cannot
+// N-1 can still read (docs/contributing.md, "Changing how data is stored"). A server that finds data in a format it cannot
 // read refuses to start before it touches a file.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -56,7 +56,7 @@ export function readDataFormat(dataDir: string, writes: number = DATA_FORMAT.wri
     console.warn(`[data-format] ${file} cannot be read; taking the data as format 1, the only format any version has written.`);
     return null;
   }
-  throw new DataFormatError(`OpenMausBot startup failed: ${file} cannot be read, so this version cannot tell whether it understands the data in ${dataDir}. Nothing was changed. Restore that file from a backup, or the whole folder from the copy taken before the last update.`);
+  throw new DataFormatError(`Seira startup failed: ${file} cannot be read, so this version cannot tell whether it understands the data in ${dataDir}. Nothing was changed. Restore that file from a backup, or the whole folder from the copy taken before the last update.`);
 }
 
 /** Throws, having changed nothing, when a newer version left the data in a format `reads` does not cover. */
@@ -67,8 +67,8 @@ export function checkDataFormat(dataDir: string, version: string, reads: number 
 
 function newerData(dataDir: string, version: string, marker: DataFormatMarker): DataFormatError {
   return new DataFormatError(
-    `OpenMausBot startup failed: the data in ${dataDir} was written by a newer OpenMausBot (${marker.writtenBy}), in a format this version (${version}) cannot read. Nothing was changed. `
-    + `Install OpenMausBot ${marker.writtenBy} or newer, or put back the copy of the data taken before that update.`,
+    `Seira startup failed: the data in ${dataDir} was written by a newer Seira (${marker.writtenBy}), in a format this version (${version}) cannot read. Nothing was changed. `
+    + `Install Seira ${marker.writtenBy} or newer, or put back the copy of the data taken before that update.`,
   );
 }
 

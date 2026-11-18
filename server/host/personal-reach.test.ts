@@ -26,7 +26,7 @@ function world(acting: string | null = key(MIRA), behind = true) {
   });
 }
 
-describe("a person's own MausBot reaching the team's bots", () => {
+describe("a person's own Seira reaching the team's bots", () => {
   it("reaches only the bots its person may chat with, from a chat private to them", () => {
     expect(world().peers(bots, mausbot, "mine").map((bot) => bot.id)).toEqual(["sales"]);
     expect(world().reaches(mausbot, sales, "shared")).toBe(false);
@@ -40,7 +40,7 @@ describe("a person's own MausBot reaching the team's bots", () => {
     expect(world().handOnProblem(mausbot, sales, "mine", "turn")).toBeUndefined();
   });
 
-  it("never names a bot its person cannot see, nor another person's MausBot", () => {
+  it("never names a bot its person cannot see, nor another person's Seira", () => {
     for (const hidden of [payroll, bensMausbot]) {
       expect(world().hides(mausbot, hidden)).toBe(true);
       expect(world().refusal(mausbot, hidden, "mine")).toBe(`No bot with id "${hidden.id}" — call list_bots and copy the exact id from the result`);

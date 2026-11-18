@@ -81,7 +81,7 @@ usage() {
   say "  --install-docker   install Docker with Docker's official script when it is missing, without asking"
   say "  --dir PATH         where the install lives (default /opt/openmausbot)"
   say "  --no-sandbox       do not prepare this server for the bots' sandbox (only for a server you alone sign in to)"
-  say "  <code>             the one-time code MausBot shows, to also connect this server to MausBot"
+  say "  <code>             the one-time code Seira shows, to also connect this server to Seira"
 }
 
 parse() {
@@ -185,7 +185,7 @@ check_tools() {
 check_os() {
   release="$SYSROOT/etc/os-release"
   if [ ! -r "$release" ]; then
-    fix "This server's operating system can't be identified. MausBot's installer runs on Ubuntu 22.04 or 24.04: pick one of those."
+    fix "This server's operating system can't be identified. Seira's installer runs on Ubuntu 22.04 or 24.04: pick one of those."
     return
   fi
   field() { sed -n "s/^$1=//p" "$release" | head -n 1 | tr -d '"'; }
@@ -199,7 +199,7 @@ check_os() {
       if [ "${OMB_INSTALL_ALLOW_UNTESTED_OS:-}" = 1 ]; then
         note "This server runs $os_name, which the installer is not tested on; going on as asked."
       else
-        fix "This server runs $os_name. MausBot's installer runs on Ubuntu 22.04 or 24.04: pick one of those, or run again with OMB_INSTALL_ALLOW_UNTESTED_OS=1 to try anyway."
+        fix "This server runs $os_name. Seira's installer runs on Ubuntu 22.04 or 24.04: pick one of those, or run again with OMB_INSTALL_ALLOW_UNTESTED_OS=1 to try anyway."
       fi
       ;;
   esac
@@ -220,7 +220,7 @@ check_cpus() {
   if [ "$cpus" -ge "$MIN_CPUS" ]; then
     ok "processor cores: $cpus"
   else
-    fix "This server has $cpus processor core. MausBot needs at least $MIN_CPUS: pick a bigger server."
+    fix "This server has $cpus processor core. Seira needs at least $MIN_CPUS: pick a bigger server."
   fi
 }
 
@@ -229,7 +229,7 @@ check_memory() {
   case "$memory_mb" in '' | *[!0-9]*) memory_mb=0 ;; esac
   memory_gb=$(awk -v m="$memory_mb" 'BEGIN { printf "%.1f", m / 1024 }')
   if [ "$memory_mb" -lt "$MIN_MEMORY_MB" ]; then
-    fix "This server has $memory_gb GB of memory. MausBot needs at least 4 GB: pick a bigger server."
+    fix "This server has $memory_gb GB of memory. Seira needs at least 4 GB: pick a bigger server."
     return
   fi
   ok "memory: $memory_gb GB"
@@ -262,7 +262,7 @@ check_disk() {
   if [ "$least" -ge "$MIN_DISK_GB" ]; then
     ok "free disk: $least GB"
   else
-    fix "This server has only $least GB free at $least_place. MausBot needs at least $MIN_DISK_GB GB: free some space or add a disk."
+    fix "This server has only $least GB free at $least_place. Seira needs at least $MIN_DISK_GB GB: free some space or add a disk."
   fi
 }
 
@@ -287,13 +287,13 @@ check_docker() {
   major=${server%%.*}
   case "$major" in '' | *[!0-9]*) major=0 ;; esac
   if [ "$major" -lt "$MIN_DOCKER" ]; then
-    fix "Docker $server is too old; MausBot needs Docker $MIN_DOCKER or newer. Update it with: curl -fsSL https://get.docker.com | sudo sh  and then run this again."
+    fix "Docker $server is too old; Seira needs Docker $MIN_DOCKER or newer. Update it with: curl -fsSL https://get.docker.com | sudo sh  and then run this again."
     return
   fi
   security=$(docker info --format '{{json .SecurityOptions}}' 2>/dev/null || true)
   case "$security" in
     *rootless*)
-      fix "Docker runs in rootless mode here. MausBot needs the standard Docker service: run curl -fsSL https://get.docker.com | sudo sh  and then run this again."
+      fix "Docker runs in rootless mode here. Seira needs the standard Docker service: run curl -fsSL https://get.docker.com | sudo sh  and then run this again."
       return
       ;;
   esac
@@ -555,16 +555,16 @@ check_version() {
   fi
   release=$(newest_release || true)
   if [ -z "$release" ]; then
-    fix "The newest MausBot release could not be read from api.github.com. Check this server's outbound HTTPS, then run this again in a few minutes."
+    fix "The newest Seira release could not be read from api.github.com. Check this server's outbound HTTPS, then run this again in a few minutes."
     return
   fi
   registry_ask "$release"
   if [ "$REGISTRY_STATUS" = 404 ]; then
-    fix "MausBot $release has no server image yet. Run this again in a few minutes."
+    fix "Seira $release has no server image yet. Run this again in a few minutes."
     return
   fi
   if [ "$REGISTRY_STATUS" != 200 ]; then
-    fix "The image registry ghcr.io did not say whether it has MausBot $release (it answered $REGISTRY_STATUS). Run this again in a few minutes."
+    fix "The image registry ghcr.io did not say whether it has Seira $release (it answered $REGISTRY_STATUS). Run this again in a few minutes."
     return
   fi
   IMAGE="ghcr.io/$IMAGE_REPO:$release"
@@ -795,7 +795,7 @@ from_repository() { # what-to-fetch
   version=$(image_version || true)
   if [ -n "$version" ]; then
     SOURCE="$REPOSITORY_FILES/$version"
-    SOURCE_NAME="MausBot $version's own"
+    SOURCE_NAME="Seira $version's own"
     if "$1"; then return 0; fi
   fi
   SOURCE="$REPOSITORY_FILES/main"
@@ -865,7 +865,7 @@ prepare_sandbox() {
   if ! image_has_sandbox; then
     unset_env COMPOSE_FILE
     SANDBOX=absent
-    note "This MausBot version has no bots' sandbox yet. Run this command again after updating to a version that has it."
+    note "This Seira version has no bots' sandbox yet. Run this command again after updating to a version that has it."
     return
   fi
   if ! from_repository fetch_sandbox; then
@@ -927,7 +927,7 @@ check_sandbox_runs() {
       *) case "$report" in *'"ok":false'*) ;; *) stopping=" checks it did not name," ;; esac ;;
     esac
   fi
-  [ -z "$stopping" ] || fail "MausBot is running, but its bots' sandbox failed its self-check:${stopping%,}. Bots are not safely separated from the server. $see"
+  [ -z "$stopping" ] || fail "Seira is running, but its bots' sandbox failed its self-check:${stopping%,}. Bots are not safely separated from the server. $see"
   say "The bots' sandbox is on: a bot cannot read the server's settings, keys or other bots' files."
 }
 
@@ -987,31 +987,31 @@ make_folders() { # folder...
 
 install_server() {
   say ""
-  say "Installing MausBot in $INSTALL_DIR..."
+  say "Installing Seira in $INSTALL_DIR..."
   if [ -d "$INSTALL_DIR/data" ]; then close_to_others "$INSTALL_DIR/data"; fi
   make_folders "$INSTALL_DIR" "$INSTALL_DIR/caddy" "$INSTALL_DIR/caddy/data" "$INSTALL_DIR/caddy/config"
   write_compose
   write_caddyfile
   write_settings
-  say "Downloading MausBot..."
-  compose_quietly pull -q || fail "MausBot could not be downloaded (Docker's message is above). Check this server's outbound HTTPS, then run this again."
+  say "Downloading Seira..."
+  compose_quietly pull -q || fail "Seira could not be downloaded (Docker's message is above). Check this server's outbound HTTPS, then run this again."
   place_update
   prepare_sandbox
   prepare_data
   place_button
-  say "Starting MausBot..."
-  compose_quietly up -d --remove-orphans || fail "MausBot could not be started (Docker's message is above). Fix that, then run this again."
-  wait_healthy || fail "MausBot started but did not report healthy within $HEALTH_WAIT_S seconds. Its log: cd $INSTALL_DIR && sudo docker compose logs omb --tail 50"
+  say "Starting Seira..."
+  compose_quietly up -d --remove-orphans || fail "Seira could not be started (Docker's message is above). Fix that, then run this again."
+  wait_healthy || fail "Seira started but did not report healthy within $HEALTH_WAIT_S seconds. Its log: cd $INSTALL_DIR && sudo docker compose logs omb --tail 50"
   check_sandbox_runs
   say "Waiting for the HTTPS certificate of $DOMAIN..."
-  wait_https || fail "MausBot is running, but https://$DOMAIN did not answer within $HTTPS_WAIT_S seconds, usually because the certificate could not be issued. Check that $DOMAIN points at this server and that ports 80 and 443 are open in your provider's firewall, then run this again. Caddy's reason: cd $INSTALL_DIR && sudo docker compose logs caddy --tail 30"
+  wait_https || fail "Seira is running, but https://$DOMAIN did not answer within $HTTPS_WAIT_S seconds, usually because the certificate could not be issued. Check that $DOMAIN points at this server and that ports 80 and 443 are open in your provider's firewall, then run this again. Caddy's reason: cd $INSTALL_DIR && sudo docker compose logs caddy --tail 30"
 }
 
 # The connector has its own installer, which MausBot serves with its address and the connector's image filled in.
 # It is run as it is, with the code.
 connect_server() {
   say ""
-  say "Connecting this server to MausBot..."
+  say "Connecting this server to Seira..."
   connector_script="${MAUSBOT_CONNECTOR_INSTALLER:-}"
   fetched=""
   if [ -z "$connector_script" ]; then
@@ -1019,12 +1019,12 @@ connect_server() {
     connector_script=$fetched
     if ! curl -fsSL --max-time 60 "$ADMIN_URL/install.sh" -o "$connector_script"; then
       rm -f "$fetched"
-      fail "MausBot is installed and running here, but the connector's installer could not be downloaded from $ADMIN_URL. Nothing needs reinstalling: run this again with your code once that address answers."
+      fail "Seira is installed and running here, but the connector's installer could not be downloaded from $ADMIN_URL. Nothing needs reinstalling: run this again with your code once that address answers."
     fi
   fi
   if ! grep -q 'mausbot-connector' "$connector_script" 2>/dev/null; then
     [ -z "$fetched" ] || rm -f "$fetched"
-    fail "MausBot is installed and running here, but what $ADMIN_URL sent is not the connector's installer. Nothing needs reinstalling: copy the install command from MausBot again."
+    fail "Seira is installed and running here, but what $ADMIN_URL sent is not the connector's installer. Nothing needs reinstalling: copy the install command from Seira again."
   fi
   # Always customer-run, on this install's folder (--dir included): the connector attaches to the server installed here
   # and never starts a second one beside it. A connector installer that does not know --customer-run refuses it, and
@@ -1036,7 +1036,7 @@ connect_server() {
     MAUSBOT_ADMIN_URL="$ADMIN_URL" MAUSBOT_INSTALL_DIR="$INSTALL_DIR" sh "$connector_script" "$CODE" --customer-run || status=$?
   fi
   [ -z "$fetched" ] || rm -f "$fetched"
-  [ "$status" = 0 ] || fail "MausBot is installed and running here, but connecting it did not finish (the reason is above). Nothing needs reinstalling: fix that and run this again with a new code."
+  [ "$status" = 0 ] || fail "Seira is installed and running here, but connecting it did not finish (the reason is above). Nothing needs reinstalling: fix that and run this again with a new code."
 }
 
 # The first admin's one-time sign-in link, as `openmausbot pair` prints it: its code line (until when it works) and the
@@ -1049,7 +1049,7 @@ first_admin_link() {
 
 finish() {
   say ""
-  say "MausBot is running at https://$DOMAIN"
+  say "Seira is running at https://$DOMAIN"
   say ""
   pair_command="cd $INSTALL_DIR && sudo docker compose exec omb openmausbot pair --label \"First admin\""
   # Only to a terminal: in a log, the link would let whoever reads it sign in as the admin until it is used or expires.
@@ -1099,18 +1099,18 @@ run_check() {
     fail "This server is not ready: fix the $FAILED line(s) marked FIX above. Nothing was changed."
   fi
   say ""
-  say "This server is ready for MausBot. Nothing was changed."
+  say "This server is ready for Seira. Nothing was changed."
 }
 
 # Stops the server and removes its containers. The data, the settings and the certificates stay where they are.
 run_uninstall() {
   need_root --uninstall
-  [ -f "$INSTALL_DIR/compose.yaml" ] || fail "MausBot isn't installed in $INSTALL_DIR, so there is nothing to stop."
-  command -v docker >/dev/null 2>&1 || fail "Docker isn't installed here, so MausBot isn't running. Your data is in $INSTALL_DIR/data."
-  say "Stopping MausBot..."
-  compose_quietly down --remove-orphans || fail "MausBot could not be stopped (Docker's message is above)."
+  [ -f "$INSTALL_DIR/compose.yaml" ] || fail "Seira isn't installed in $INSTALL_DIR, so there is nothing to stop."
+  command -v docker >/dev/null 2>&1 || fail "Docker isn't installed here, so Seira isn't running. Your data is in $INSTALL_DIR/data."
+  say "Stopping Seira..."
+  compose_quietly down --remove-orphans || fail "Seira could not be stopped (Docker's message is above)."
   if [ -f "$INSTALL_DIR/update-runner.sh" ]; then sh "$INSTALL_DIR/update-runner.sh" --remove --dir "$INSTALL_DIR" >/dev/null 2>&1 || true; fi
-  say "MausBot is stopped and its containers are removed."
+  say "Seira is stopped and its containers are removed."
   say "Your data is kept in $INSTALL_DIR/data, your settings in $INSTALL_DIR/.env and the HTTPS certificates in $INSTALL_DIR/caddy."
   say "To start it again: $(command_line "--domain $(env_value DOMAIN)")"
   say "This command never deletes your data. To delete it yourself: sudo rm -rf $INSTALL_DIR"
@@ -1118,7 +1118,7 @@ run_uninstall() {
     say "The sandbox's two profiles stay on this server: /etc/mausbot/$SECCOMP and /etc/apparmor.d/$APPARMOR_PROFILE."
   fi
   if [ -n "$(docker ps -aq --filter name=mausbot-connector 2>/dev/null || true)" ]; then
-    say "This server is still connected to MausBot. To disconnect it, run the uninstall command MausBot shows for the connector."
+    say "This server is still connected to Seira. To disconnect it, run the uninstall command Seira shows for the connector."
   fi
 }
 

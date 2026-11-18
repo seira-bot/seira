@@ -187,7 +187,7 @@ describe("who can see it, by the message box", () => {
     box(acme(), { group: ROOM });
     expect(label()?.textContent).toBe("Shared · everyone in this group chat can see");
     box(acme(), { bot: MINE });
-    expect(label()?.textContent, "the person's own MausBot").toBe("Private · only you");
+    expect(label()?.textContent, "the person's own Seira").toBe("Private · only you");
   });
 
   it("names the one other reader of a conversation shared with one person, and says a conversation shared with the team is the team's", () => {
@@ -230,7 +230,7 @@ describe("who can see it, by the message box", () => {
     expect(checked()).toBe("team");
     expect(savedTeamSide()).toBe("team");
     box(acme({ selectedId: "mine" }), { bot: MINE });
-    expect(checked(), "their own MausBot, picked from search").toBe("me");
+    expect(checked(), "their own Seira, picked from search").toBe("me");
     expect(savedTeamSide()).toBe("me");
     expect(fixture.dispatch).not.toHaveBeenCalled();
   });
