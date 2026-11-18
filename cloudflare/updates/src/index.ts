@@ -26,6 +26,7 @@ const invalidRequest = () => json({ error: "invalid_request" }, 400);
 
 interface SubscriberRow {
   status: "pending" | "confirmed" | "unsubscribed";
+  confirm_hash: string | null;
   confirm_sent_at: number | null;
 }
 
@@ -36,8 +37,8 @@ async function optIn(body: Record<string, unknown>, env: AppEnv) {
   if (!email || !installId.ok || typeof textVersion !== "string" || !TEXT_VERSION.test(textVersion)) return invalidRequest();
 
   const now = nowSeconds();
-  const existing = await env.DB.prepare("SELECT status, confirm_sent_at FROM subscribers WHERE email = ?").bind(email).first<SubscriberRow>();
-  const resendDue = !existing || existing.confirm_sent_at === null || existing.confirm_sent_at < now - RESEND_AFTER;
+  const existing = await env.DB.prepare("SELECT status, confirm_hash, confirm_sent_at FROM subscribers WHERE email = ?").bind(email).first<SubscriberRow>();
+  const resendDue = !existing || existing.confirm_hash === null || existing.confirm_sent_at === null || existing.confirm_sent_at < now - RESEND_AFTER;
   const sendConfirmation = existing?.status === "confirmed" ? false : resendDue;
 
   let token: string | undefined;
@@ -62,7 +63,7 @@ async function optIn(body: Record<string, unknown>, env: AppEnv) {
   } else if (existing.status === "unsubscribed") {
     statements.push(
       env.DB.prepare(
-        "UPDATE subscribers SET status = 'pending', text_version = ?, unsubscribed_at = NULL, confirm_hash = ?, confirm_sent_at = COALESCE(?, confirm_sent_at), updated_at = ? WHERE email = ?",
+        "UPDATE subscribers SET status = 'pending', text_version = ?, unsubscribed_at = NULL, confirm_hash = COALESCE(?, confirm_hash), confirm_sent_at = COALESCE(?, confirm_sent_at), updated_at = ? WHERE email = ?",
       ).bind(textVersion, confirmHash, token ? now : null, now, email),
     );
   } else if (existing.status === "pending" && token) {
@@ -107,7 +108,7 @@ async function withdraw(body: Record<string, unknown>, env: AppEnv) {
 
 function unsubscribeStatement(env: AppEnv, column: "email" | "unsubscribe_token", value: string, now: number) {
   return env.DB.prepare(
-    `UPDATE subscribers SET unsubscribed_at = CASE WHEN status = 'unsubscribed' THEN unsubscribed_at ELSE ? END, status = 'unsubscribed', confirm_hash = NULL, updated_at = ? WHERE ${column} = ?`,
+    `UPDATE subscribers SET unsubscribed_at = CASE WHEN status = 'unsubscribed' THEN unsubscribed_at ELSE ? END, status = 'unsubscribed', updated_at = ? WHERE ${column} = ?`,
   ).bind(now, now, value);
 }
 

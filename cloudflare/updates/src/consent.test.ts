@@ -62,6 +62,32 @@ describe("opt-in", () => {
     expect(h.emails).toHaveLength(2);
   });
 
+  it("keeps the first link valid when a person withdraws and opts in again inside 10 minutes", async () => {
+    const h = updatesHarness();
+    const first = await h.optIn("ana@example.test");
+    const token = h.confirmToken();
+    await h.consent({ status: "withdrawn", receipt: first.body.receipt });
+    expect(h.subscriber("ana@example.test")?.confirm_hash).not.toBeNull();
+    await h.optIn("ana@example.test");
+    expect(h.emails).toHaveLength(1);
+    expect(h.subscriber("ana@example.test")?.status).toBe("pending");
+    expect((await h.postForm("/confirm", { t: token })).status).toBe(200);
+    expect(h.subscriber("ana@example.test")?.status).toBe("confirmed");
+  });
+
+  it("sends one new email when a confirmed person withdraws and opts in again", async () => {
+    const h = updatesHarness();
+    await h.confirmed("ana@example.test");
+    const { body } = await h.optIn("ana@example.test");
+    await h.consent({ status: "withdrawn", receipt: body.receipt });
+    expect(h.emails).toHaveLength(1);
+    await h.optIn("ana@example.test");
+    expect(h.emails).toHaveLength(2);
+    await h.optIn("ana@example.test");
+    expect(h.emails).toHaveLength(2);
+    expect(h.subscriber("ana@example.test")?.status).toBe("pending");
+  });
+
   it("answers 502 and keeps no receipt when the email send fails", async () => {
     const h = updatesHarness();
     h.mail.failWhen = () => "E_RATE_LIMIT_EXCEEDED";
@@ -126,7 +152,6 @@ describe("withdraw", () => {
     expect(await response.json()).toEqual({ ok: true });
     const subscriber = h.subscriber("ana@example.test")!;
     expect(subscriber.status).toBe("unsubscribed");
-    expect(subscriber.confirm_hash).toBeNull();
     expect(subscriber.unsubscribed_at).not.toBeNull();
     expect(h.receipts("ana@example.test").some((row) => row.withdrawn_at !== null)).toBe(true);
 
@@ -183,6 +208,15 @@ describe("confirm page", () => {
     expect(response.status).toBe(410);
     expect(await response.text()).toContain("This link has expired. Turn on updates again in Seira.");
     expect(h.subscriber("ana@example.test")?.status).toBe("pending");
+  });
+
+  it("answers 410 when an old token meets a withdrawn address", async () => {
+    const h = updatesHarness();
+    const { body } = await h.optIn("ana@example.test");
+    const token = h.confirmToken();
+    await h.consent({ status: "withdrawn", receipt: body.receipt });
+    expect((await h.postForm("/confirm", { t: token })).status).toBe(410);
+    expect(h.subscriber("ana@example.test")?.status).toBe("unsubscribed");
   });
 
   it("answers 410 to a token older than 7 days", async () => {
