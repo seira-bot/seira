@@ -2,8 +2,7 @@ import type { CloudAccountState } from "../../electron/cloud-account.mjs";
 import type { CloudOffer } from "../../electron/cloud-home.mjs";
 import { CLOUD_TEAM_TIERS } from "../../electron/cloud-team-plan.mjs";
 import { track } from "@/lib/analytics";
-import { cloudPlanView, moneyBackShort, offerPlanLabel, trialRunning, trialTerms, usd } from "@/lib/cloud-plan";
-import { t } from "@/lib/i18n";
+import { cloudPlanView, moneyBackShort, offerPlanLabel, planPaidLine, planPrice, taxIncluded, trialRunning, trialTerms } from "@/lib/cloud-plan";
 import { SEIRA_CLOUD_PLANS } from "@/lib/seira-cloud";
 import { WHATS_NEW_NOTICE } from "@/lib/notices";
 
@@ -64,9 +63,9 @@ export function whatsNewView(account: CloudAccountState | null, offer: CloudOffe
   for (const slide of wanted) {
     const plan = offer?.plans.find(entry => entry.tier === slide);
     if (!plan) continue;
-    const name = offerPlanLabel(plan), price = usd(plan.amount / 100);
-    plans[slide] = { name, terms: slide === "team" && plan.trialDays ? trialTerms(plan.trialDays, price)
-      : [t("cloudBuy.pay.planPaid", { plan: name, price }), offer ? moneyBackShort(offer) : null].filter(Boolean).join(" · ") };
+    const name = offerPlanLabel(plan), price = planPrice(plan);
+    plans[slide] = { name, terms: slide === "team" && plan.trialDays ? trialTerms(plan.trialDays, price, taxIncluded(plan))
+      : [planPaidLine(plan, name), offer ? moneyBackShort(offer) : null].filter(Boolean).join(" · ") };
   }
   const slides = wanted.filter(slide => plans[slide]);
   if (!slides.length) return "none";

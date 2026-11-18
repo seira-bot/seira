@@ -29,15 +29,20 @@ export function CommandPalette({ onOpenChange }: { onOpenChange?: (open: boolean
   const [messageHits, setMessageHits] = useState<SearchHit[]>([]);
   const [cursor, setCursor] = useState(0);
   const selectedRef = useRef<HTMLButtonElement>(null);
+  const opener = useRef<Element | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
+        opener.current ??= document.activeElement;
         setOpen((o) => !o);
       }
     };
-    const onOpen = () => setOpen(true);
+    const onOpen = () => {
+      opener.current ??= document.activeElement;
+      setOpen(true);
+    };
     window.addEventListener("keydown", onKey);
     window.addEventListener(OPEN_EVENT, onOpen);
     return () => {
@@ -51,6 +56,11 @@ export function CommandPalette({ onOpenChange }: { onOpenChange?: (open: boolean
     setQuery("");
     setMessageHits([]);
     setCursor(0);
+    return () => {
+      const back = opener.current;
+      opener.current = null;
+      if (back instanceof HTMLElement && back.isConnected) back.focus();
+    };
   }, [open]);
 
   useEffect(() => {
@@ -140,9 +150,9 @@ export function CommandPalette({ onOpenChange }: { onOpenChange?: (open: boolean
       // mousemove, not mouseenter: rows shifting under a resting pointer must not steal the keyboard selection.
       onMouseMove={() => setCursor(index)}
       className={cn(
-        "flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-left",
+        "flex min-h-10 w-full items-center gap-3 rounded-lg px-2.5 py-1.5 text-start",
         twoLine && "flex-col items-stretch gap-0.5",
-        index === selected ? "bg-menu-active" : "hover:bg-menu-hover",
+        index === selected ? "bg-ink/[0.06]" : "hover:bg-ink/[0.04]",
       )}
     >
       {children}
@@ -159,21 +169,19 @@ export function CommandPalette({ onOpenChange }: { onOpenChange?: (open: boolean
         role="dialog" data-look="dialog"
         aria-modal="true"
         aria-label={t("palette.label")}
-        className="popover-surface flex max-h-[min(480px,70vh)] w-full max-w-[560px] flex-col overflow-hidden rounded-[var(--radius-menu)] border border-hairline/50 bg-menu shadow-2xl shadow-black/60"
+        className="popover-surface flex max-h-[min(520px,70vh)] w-full max-w-[560px] flex-col overflow-hidden ui-modal shadow-2xl shadow-black/60 motion-safe:animate-pop-in"
       >
-        <div className="flex items-center gap-3 border-b border-hairline/40 px-4 py-3">
-          <Search size={16} className="shrink-0 text-ink-secondary" />
+        <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-hairline/40 px-4">
+          <Search size={18} strokeWidth={1.75} className="shrink-0 text-ink-tertiary" />
           <input
             autoFocus
+            dir="auto"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label={t("commandPalette.searchLabel")}
             placeholder={t("commandPalette.searchPlaceholder")}
-            className="w-full bg-transparent text-[14px] text-ink placeholder:text-ink-secondary focus:outline-none"
+            className="h-full w-full bg-transparent text-[14px] text-ink placeholder:text-ink-tertiary focus:outline-none"
           />
-          <kbd className="shrink-0 rounded-md border border-hairline/40 px-1.5 py-0.5 text-[11px] text-ink-secondary">
-            esc
-          </kbd>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {entries.length === 0 && (
@@ -192,7 +200,7 @@ export function CommandPalette({ onOpenChange }: { onOpenChange?: (open: boolean
               i,
               () => void activate({ kind: "bot", bot }),
               <>
-                <BotAvatar bot={bot} state="happy" size={22} animated={false} />
+                <BotAvatar bot={bot} state="happy" size={24} animated={false} />
                 <span className="truncate text-[14px] text-ink">{bot.name}</span>
                 {bot.title && (
                   <span className="min-w-0 truncate text-[13px] text-ink-secondary">{bot.title}</span>
@@ -211,7 +219,7 @@ export function CommandPalette({ onOpenChange }: { onOpenChange?: (open: boolean
               roomOffset + i,
               () => void activate({ kind: "room", group }),
               <>
-                <Users size={16} strokeWidth={1.75} className="mx-[3px] shrink-0 text-ink-secondary" />
+                <Users size={16} strokeWidth={1.75} className="mx-1 shrink-0 text-ink-secondary" />
                 <span className="truncate text-[14px] text-ink">{group.name}</span>
               </>,
             ),
@@ -243,6 +251,14 @@ export function CommandPalette({ onOpenChange }: { onOpenChange?: (open: boolean
                 true,
               );
             })}
+        </div>
+        <div data-palette-foot="" className="flex shrink-0 gap-4 border-t border-hairline/40 px-4 py-2.5 text-[12px] text-ink-tertiary max-md:hidden">
+          {([["↑↓", "palette.hint.move"], ["↵", "palette.hint.open"], ["esc", "palette.hint.close"]] as const).map(([key, label]) => (
+            <span key={key} className="flex items-center gap-1.5">
+              <kbd className="inline-grid h-5 min-w-5 place-items-center rounded-[5px] px-1 font-sans text-[11px] shadow-[inset_0_0_0_1px_var(--color-hairline)]">{key}</kbd>
+              {t(label)}
+            </span>
+          ))}
         </div>
       </div>
     </div>

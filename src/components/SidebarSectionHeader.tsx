@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
 
 import { cn } from "@/lib/cn";
@@ -8,6 +8,7 @@ import {
   type SidebarSectionAttention,
 } from "@/lib/sidebar-attention";
 import type { SectionNaming } from "./SidebarBotDrag";
+import { SIMPLE_LABEL_ADD } from "./SidebarSimpleNav";
 
 export function SidebarSectionHeader({
   name,
@@ -28,6 +29,8 @@ export function SidebarSectionHeader({
   menuOpen = false,
   naming,
   dropInto = false,
+  onAdd,
+  addLabel,
 }: {
   name: string;
   collapsed: boolean;
@@ -50,6 +53,9 @@ export function SidebarSectionHeader({
   naming?: SectionNaming;
   /** A dragged bot would go into this department. */
   dropInto?: boolean;
+  /** Simple's add button at the end of the line. */
+  onAdd?: () => void;
+  addLabel?: string;
 }) {
   const reorderable = canReorder && !naming;
   const Chevron = collapsed ? ChevronRight : ChevronDown;
@@ -88,7 +94,7 @@ export function SidebarSectionHeader({
         draggable={reorderable || undefined}
         onDragStart={reorderable ? onDragStart : undefined}
         onDragEnd={reorderable ? onDragEnd : undefined}
-        className={cn("group/section flex h-[30px] items-center gap-1.5 rounded-[6px] px-2 pb-1.5 pt-2 hover:bg-raised/50", reorderable && "cursor-grab", dragging && "opacity-40", naming && "py-0.5", dropMark)}
+        className={cn("group/section group/label flex h-7 items-center gap-1.5 rounded-lg px-2", reorderable && "cursor-grab", dragging && "opacity-40", naming && "py-0.5", dropMark)}
       >
         {naming ? <SectionNameField {...naming} /> : onToggle ? (
           <button
@@ -100,13 +106,13 @@ export function SidebarSectionHeader({
             title={toggleTitle}
             className="flex min-w-0 flex-1 items-center gap-1.5 rounded text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
           >
-            <span className="min-w-0 flex-1 truncate text-[13px] leading-[18px] text-ink-secondary">{name}</span>
+            <span className="min-w-0 flex-1 truncate text-[12px] font-medium leading-4 text-ink-tertiary">{name}</span>
             {collapsed && <SectionAttention attention={attention} label={attentionLabel} alert={alert} />}
             {tail}
           </button>
         ) : (
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            <span className="min-w-0 flex-1 truncate text-[13px] leading-[18px] text-ink-secondary">{name}</span>
+            <span className="min-w-0 flex-1 truncate text-[12px] font-medium leading-4 text-ink-tertiary">{name}</span>
             {attentionLabel && <span className="sr-only">{attentionLabel}</span>}
             {tail}
           </div>
@@ -124,7 +130,12 @@ export function SidebarSectionHeader({
             <MoreHorizontal size={15} aria-hidden="true" />
           </button>
         )}
-        {!onMenu && reserveMenu && !naming && <span aria-hidden="true" className="w-6 shrink-0" />}
+        {onAdd && addLabel && !naming && (
+          <button type="button" onClick={onAdd} aria-label={addLabel} title={addLabel} className={SIMPLE_LABEL_ADD}>
+            <Plus size={14} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        )}
+        {!onMenu && !onAdd && reserveMenu && !naming && <span aria-hidden="true" className="w-6 shrink-0" />}
       </div>
     );
   }

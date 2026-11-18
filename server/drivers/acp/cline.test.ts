@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -123,8 +123,11 @@ describe("Cline ACP driver", () => {
     expect(revoked.path).toBe(first.path);
     expect(revoked.settings).toEqual({ mcpServers: {} });
     expect(readFileSync(ambient, "utf8")).toBe(before);
+    // The folder is named after this process, so a later process can tell it from one that a live process uses.
+    expect(basename(dirname(first.path))).toMatch(new RegExp(`^omb-cline-mcp-${process.pid}-[A-Za-z0-9]{6}$`));
     await instance.dispose();
     expect(existsSync(first.path)).toBe(false);
+    expect(existsSync(dirname(first.path))).toBe(false);
     expect(existsSync(second.path)).toBe(false);
   });
 

@@ -1,9 +1,10 @@
 // Cline owns its saved provider/model configuration; no static OMB catalog switches providers.
-import { mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { resolveCli } from "../../procs.ts";
+import { makeOwnedTempFolder, releaseOwnedTempFolder, sweepOrphanedTempFoldersOnce } from "../../temp-folders.ts";
 import { createAcpDriver, type AcpConfig, type AcpSupport } from "./core.ts";
 import type { ModelCatalog } from "../../contracts.ts";
 
@@ -104,14 +105,19 @@ const SUPPORT: AcpSupport = {
   },
 };
 
+const MCP_FOLDER_PREFIX = "omb-cline-mcp-";
+
 export const ClineAgentDriver = {
   ...createAcpDriver(SUPPORT),
   async create(input: Parameters<ReturnType<typeof createAcpDriver>["create"]>[0]) {
     // Cline 3.0.70 records ACP mcpServers without connecting them; its native settings override connects
     // the scoped stdio servers instead, without rewriting the user's MCP file.
-    const directory = mkdtempSync(join(tmpdir(), "omb-cline-mcp-"));
+    // Named after this process: a process that ends without disposing the instance leaves a folder that the next one removes.
+    sweepOrphanedTempFoldersOnce(MCP_FOLDER_PREFIX);
+    const directory = makeOwnedTempFolder(MCP_FOLDER_PREFIX);
     const cleanup = () => {
       try { rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch {}
+      releaseOwnedTempFolder(directory);
     };
     try {
       const driver = createAcpDriver({

@@ -54,7 +54,7 @@ import { SidebarResizeHandle } from "./SidebarResizeHandle";
 import { SidebarTileGrid } from "./SidebarTiles";
 import { GlassBar, GlassScrollFrame, GlassScroller } from "./GlassScrollFrame";
 import { SidebarSectionHeader } from "./SidebarSectionHeader";
-import { SidebarSearchPill, SidebarSearchToggle } from "./SidebarSimpleTop";
+import { SimpleSearchPill } from "./SidebarSimpleNav";
 import { SidebarRailSeparator, SimpleRailFooter } from "./SidebarSimpleRail";
 
 const bot = (id: string, extra: Partial<Bot> = {}): Bot => ({
@@ -241,25 +241,23 @@ describe("Simple-mode sidebar layout", () => {
     expect(headers(tree).find((header) => header.props.name === "Work")!.props.collapsed).toBe(true);
   });
 
-  it("toggles a search pill from the round search button, and closing it clears the filter", () => {
-    const toggle = () => render().tree.find((node) => node.type === SidebarSearchToggle)!.props as Parameters<typeof SidebarSearchToggle>[0];
-    const pill = () => render().tree.find((node) => node.type === SidebarSearchPill)?.props as Parameters<typeof SidebarSearchPill>[0] | undefined;
-    expect(render().tree.some((node) => node.props["aria-label"] === "Search bots and messages" && node.type === "input")).toBe(false);
-    expect(pill()).toBeUndefined();
-    expect(toggle().open).toBe(false);
-    toggle().onToggle();
-    expect(toggle().open).toBe(true);
-    pill()!.onQuery("bea");
-    expect(pill()!.query).toBe("bea");
+  it("drops a filter typed in Advanced when the sidebar switches to Simple, which has no field to clear it", () => {
+    fixture.advanced = true;
+    const field = render().tree.find((node) => node.type === "input" && node.props["aria-label"] === "Search bots and messages")!;
+    (field.props.onChange as (event: { target: { value: string } }) => void)({ target: { value: "bea" } });
     expect(listedBots(render().tree)).toEqual(["bea"]);
-    pill()!.onClose();
-    expect(pill()).toBeUndefined();
+    fixture.advanced = false;
+    render();
+    for (const effect of fixture.effects) {
+      try { effect(); } catch {}
+    }
     expect(listedBots(render().tree)).toEqual(["atlas", "bea", "dodo"]);
-    toggle().onToggle();
-    pill()!.onQuery("atlas");
-    toggle().onToggle();
-    expect(pill()).toBeUndefined();
-    expect(listedBots(render().tree)).toHaveLength(3);
+  });
+
+  it("puts one full-width search pill that opens the palette under the top row, with no inline filter", () => {
+    const { tree } = render();
+    expect(tree.filter((node) => node.type === SimpleSearchPill)).toHaveLength(1);
+    expect(tree.some((node) => node.props["aria-label"] === "Search bots and messages" && node.type === "input")).toBe(false);
   });
 
   it("opens at 280px in Simple and 320px in Advanced, each remembering its own resized width", () => {
@@ -304,7 +302,7 @@ describe("Simple-mode sidebar layout", () => {
     expect(listedBots(tree)).toEqual(["atlas", "bea", "dodo"]);
     expect(headers(tree)).toEqual([]);
     expect(tree.filter((node) => node.type === SidebarRailSeparator)).toHaveLength(2);
-    expect(tree.some((node) => node.type === SidebarSearchToggle)).toBe(false);
+    expect(tree.some((node) => node.type === SimpleSearchPill)).toBe(false);
     expect(edge(tree)?.avatars, "the rail keeps its edge, to drag it open again").toBe(true);
     expect(edge(tree)?.avatarsWidth).toBe(92);
     expect(tree.some((node) => node.props["data-sidebar-top-buttons"] !== undefined)).toBe(false);
@@ -353,13 +351,13 @@ describe("Simple-mode sidebar layout", () => {
 
   const railSearch = (tree: ReactElement<Props>[]) => tree.find((node) => node.type === "button" && node.props["aria-label"] === "Search bots and messages")!.props.onClick as () => void;
 
-  it("opens the search pill from the rail's search button by expanding the sidebar", () => {
+  it("opens the command palette from the rail's search button and leaves the rail as it is", () => {
     setSidebarDensity("icons");
-    expect(render().tree.some((node) => node.type === SidebarSearchPill)).toBe(false);
+    const opened = vi.fn();
+    window.addEventListener("omb:open-command-palette", opened);
     railSearch(render().tree)();
-    const { tree } = render();
-    expect(tree.some((node) => node.type === SimpleRailFooter)).toBe(false);
-    expect(tree.some((node) => node.type === SidebarSearchPill)).toBe(true);
+    expect(opened).toHaveBeenCalledOnce();
+    expect(render().tree.some((node) => node.type === SimpleRailFooter)).toBe(true);
   });
 
   it("opens the command palette instead when a side panel holds the sidebar collapsed", () => {

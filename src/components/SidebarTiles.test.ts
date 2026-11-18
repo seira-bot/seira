@@ -42,11 +42,13 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("the sidebar tiles", () => {
-  it.each([true, false])("draws the main tile and a pinned tile the same: 78 by 92, radius 8, a 56px avatar over a one-line 13px medium name (main %s)", (primary) => {
+  it.each([true, false])("draws the main tile and a pinned tile the same: a grid cell, radius 8, a 48px avatar over a one-line 12px medium name (main %s)", (primary) => {
     const html = renderToStaticMarkup(createElement(SidebarBotTile, { ...props(bot({ chiefOfStaff: primary })), primary }));
-    expect(html).toMatch(new RegExp(`data-sidebar-tile="${primary ? "primary" : "pinned"}"[^>]*class="[^"]*\\bh-\\[92px\\] w-\\[78px\\][^"]*\\brounded-\\[8px\\]`));
-    expect(html).toContain('width="56px" height="56px"');
-    expect(html).toMatch(/truncate text-center text-\[13px\] font-medium leading-4 text-ink"[^>]*>Seira</);
+    expect(html).toMatch(new RegExp(`data-sidebar-tile="${primary ? "primary" : "pinned"}"[^>]*class="[^"]*\\bgroup/tile\\b[^"]*\\brounded-lg\\b`));
+    expect(html).toContain('width="48px" height="48px"');
+    expect(html).toMatch(/truncate text-center text-\[12px\] font-medium leading-4 text-ink"[^>]*>Seira</);
+    expect(html).toContain("group-hover/tile:-translate-y-px");
+    expect(html).toContain("motion-reduce:transform-none");
     expect(html).not.toContain("data-provider-mark");
   });
 
@@ -121,13 +123,14 @@ describe("the tile grid", () => {
 
   afterEach(() => setPinnedCircleOrder([]));
 
-  it.each([0, 1, 2, 3, 5])("puts the main bot first, then %i pinned bots, as same-size tiles in one centred, wrapping grid", (count) => {
+  it.each([0, 1, 2, 3, 5])("puts the main bot first, then %i pinned bots, as same-size tiles in one four-column grid under a Bots label", (count) => {
     const html = grid(main, pins(count));
     const drag = count > 1 ? ":drag" : "";
     expect(tiles(html)).toEqual(["primary:mausbot", ...pins(count).map((pin) => `pinned:${pin.id}${drag}`)]);
-    expect(html).toMatch(/^<div data-sidebar-tiles="" class="flex max-h-\[40vh\] flex-wrap justify-center gap-1 overflow-y-auto /);
-    expect(html.match(/\bh-\[92px\] w-\[78px\]/g)).toHaveLength(count + 1);
-    expect(html.match(/width="56px" height="56px"/g)).toHaveLength(count + 1);
+    expect(html).toMatch(/^<section data-sidebar-tiles="" aria-label="Bots"/);
+    expect(html).toContain("grid max-h-[40vh] grid-cols-4");
+    expect(html).toContain('data-sidebar-section-label=""');
+    expect(html.match(/width="48px" height="48px"/g)).toHaveLength(count + 1);
     expect(html.match(/data-testid="chief-badge"/g)).toHaveLength(1);
   });
 
@@ -141,15 +144,9 @@ describe("the tile grid", () => {
     expect(grid(null, [])).toBe("");
   });
 
-  // A grid taller than its 40vh cap scrolls, and its 8px scrollbar takes from the room.
-  it.each([[280, 3], [360, 4]])("fits %ipx of sidebar to %i tiles across, with or without a scrollbar", (width, columns) => {
-    const html = grid(main, pins(5));
-    const tile = Number(/data-sidebar-tile="primary"[^>]*class="[^"]*\bw-\[(\d+)px\]/.exec(html)![1]);
-    const gridClass = /data-sidebar-tiles="" class="([^"]*)"/.exec(html)![1]!;
-    const gap = 4 * Number(/\bgap-(\d+)\b/.exec(gridClass)![1]);
-    const gutters = 2 * 4 * Number(/\bpx-(\d+)\b/.exec(gridClass)![1]);
-    const across = (room: number) => Math.floor((room + gap) / (tile + gap));
-    expect(across(width - gutters)).toBe(columns);
-    expect(across(width - gutters - 8)).toBe(columns);
+  it("adds a plus button only when it is given something to do", () => {
+    const row = (candidate: Bot) => botRowProps({ ...initialState, bots: [main], selectedId: "", activeView: "chat" }, dispatch, candidate, { density: "comfortable", query: "", onMenu });
+    expect(renderToStaticMarkup(createElement(SidebarTileGrid, { primary: main, pinned: [], row }))).not.toContain("<svg class=\"lucide lucide-plus");
+    expect(renderToStaticMarkup(createElement(SidebarTileGrid, { primary: main, pinned: [], row, onAdd: vi.fn() }))).toMatch(/aria-label="[^"]+"[^>]*title="[^"]+"[^>]*class="[^"]*opacity-0/);
   });
 });

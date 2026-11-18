@@ -9,7 +9,7 @@ import type { AddCloudView } from "../../../electron/cloud-rail.mjs";
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/cn";
 import { addCloudScreen, addCloudStop, CLOUD_LIST_NAME_LIMIT, DEFAULT_SWATCH, swatchFill, type AddCloudScreen, type AddCloudStop } from "@/lib/cloud-extra";
-import { offerPlanLabel, usd, type CloudSource } from "@/lib/cloud-plan";
+import { planPaidLine, planPrice, taxIncluded, type CloudSource } from "@/lib/cloud-plan";
 import { t } from "@/lib/i18n";
 import { placeInitials } from "@/lib/places";
 import { SwatchRadios } from "../SwatchRadios";
@@ -41,10 +41,10 @@ function NameScreen({ plan, name, color, busy, suggested, onName, onColor, onBac
         style={color === "slate" ? undefined : { background: swatchFill(color) }}>{placeInitials(shown)}</span>
       <span className="min-w-0">
         <span className="block truncate text-[14px] font-semibold text-ink">{shown}</span>
-        <span className="block text-[13px] text-ink-secondary">{t("cloudBuy.pay.planPaid", { plan: offerPlanLabel(plan), price: usd(plan.amount / 100) })}</span>
+        <span className="block text-[13px] text-ink-secondary">{planPaidLine(plan)}</span>
       </span>
     </div>
-    <p className="text-[13px] leading-relaxed text-ink-secondary">{t("cloudBuy.card.paid", { price: usd(plan.amount / 100) })}</p>
+    <p className="text-[13px] leading-relaxed text-ink-secondary">{t(taxIncluded(plan) ? "cloudBuy.card.paid.taxIncluded" : "cloudBuy.card.paid", { price: planPrice(plan) })}</p>
     <button type="submit" className={PRIMARY_WIDE} disabled={busy}>
       {busy && <Loader2 size={15} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}{t("cloudBuy.extra.continue")}
     </button>

@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, sep } from "node:path";
+import { basename, dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -340,8 +340,11 @@ describe("GitHub Copilot ACP driver", () => {
     expect(revoked.text).toBe("No MCP servers configured.");
     expect(Number(readFileSync(launches, "utf8"))).toBe(before + 1);
     expect(JSON.parse(readFileSync(join(scratch, "launch.json.mcp.json"), "utf8"))).toEqual([]);
+    // The folder is named after this process, so a later process can tell it from one that a live process uses.
+    expect(basename(dirname(first.path))).toMatch(new RegExp(`^omb-copilot-mcp-${process.pid}-[A-Za-z0-9]{6}$`));
     await instance.dispose();
     expect(existsSync(first.path)).toBe(false);
+    expect(existsSync(dirname(first.path))).toBe(false);
     expect(existsSync(second.path)).toBe(false);
   });
 

@@ -40,11 +40,11 @@ export function ComposerSendButton({ compact, waits, label, title, look, disable
       style={waits ? undefined : look.style}
       className={cn(
         "flex shrink-0 items-center justify-center rounded-full disabled:cursor-default",
-        compact ? "size-7 animate-[slot-fade-in_120ms_ease-out]" : "size-8",
+        "size-8",
         waits ? "bg-raised text-ink-secondary hover:bg-raised-hover" : look.className,
       )}
     >
-      {waits ? <Clock size={compact ? 14 : 15} /> : <ArrowUp size={16} strokeWidth={1.75} absoluteStrokeWidth />}
+      {waits ? <Clock size={compact ? 14 : 15} /> : <ArrowUp size={compact ? 18 : 16} strokeWidth={1.75} absoluteStrokeWidth />}
     </button>
   );
   if (!menu) return button;
@@ -69,7 +69,7 @@ export function ComposerSendButton({ compact, waits, label, title, look, disable
         triggerTitle={t("composer.followUp.menu")}
         triggerClassName={cn(
           "flex shrink-0 items-center justify-center rounded-full text-ink-secondary hover:bg-raised hover:text-ink",
-          compact ? "h-7 w-5" : "h-8 w-6",
+          compact ? "h-8 w-5" : "h-8 w-6",
         )}
         renderTrigger={() => <ChevronUp size={14} aria-hidden="true" />}
       />

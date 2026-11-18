@@ -3,7 +3,7 @@ import { useAdvancedMode } from "@/lib/interface-mode";
 import { PHONE_LAYOUT, useMediaQuery } from "@/lib/use-media-query";
 import { ThreadLinkContext } from "@/components/ThreadLinkMenu";
 import { useShowThreads } from "@/lib/thread-preferences";
-import { AlertTriangle, ChevronLeft, ChevronRight, Monitor, RefreshCw, Square, Webhook } from "lucide-react";
+import { AlertTriangle, ChevronRight, Monitor, RefreshCw, Square, Webhook } from "lucide-react";
 import { WorkingDots } from "@/components/WorkingIndicator";
 import { ChatBusyContext, CopyButton, MESSAGE_ROW, MessageActions, messageActionClass, ReplyAction } from "@/components/MessageActions";
 import { ReactAction, ReactionChips } from "@/components/Reactions";
@@ -136,7 +136,8 @@ import { latestFailure, latestReply, type TranscriptSnapshot } from "@/lib/trans
 import { pendingApprovals } from "./PendingApproval";
 import { TranscriptAnnouncer } from "./TranscriptAnnouncer";
 import { JumpToLatestButton } from "./JumpToLatestButton";
-import { isBotTextRow, joinedCorners, needsStamp, quietRow, simpleRowLayout, SIMPLE_BOT_BUBBLE, SIMPLE_BUBBLE_MAX, SIMPLE_BUBBLE_TEXT, SIMPLE_STACKED, SIMPLE_USER_BUBBLE, type BubbleJoin } from "./chat-bubble";
+import { BOT_STACKED, BOT_TURN_INDENT, isBotTextRow, joinedCorners, needsStamp, quietRow, simpleRowLayout, SIMPLE_BOT_BUBBLE, SIMPLE_BUBBLE_MAX, SIMPLE_BUBBLE_TEXT, SIMPLE_STACKED, SIMPLE_USER_BUBBLE, SIMPLE_USER_MAX, type BubbleJoin } from "./chat-bubble";
+import { BotTurnHead } from "./BotTurnHead"; import { VersionSwitch } from "./VersionSwitch";
 
 const USER_COLLAPSE_CHARS = 600;
 const USER_COLLAPSE_LINES = 8;
@@ -324,7 +325,7 @@ const Bubble = memo(function Bubble({
   replyTarget?: Message;
   onReply: (message: Message) => void;
 }) {
-  const { botId, threadId, botName, voiceId, tts, localVoice, bots, mentionPeers, mentionPerson, focus, dispatch, onBranch, bubbleStyle, conversational, simple, canReact, openedAt, speakerViewer, phone } = useChatRows(), busy = use(ChatBusyContext);
+  const { botId, threadId, botName, botColor, voiceId, tts, localVoice, bots, mentionPeers, mentionPerson, focus, dispatch, onBranch, bubbleStyle, conversational, simple, canReact, openedAt, speakerViewer, phone } = useChatRows(), busy = use(ChatBusyContext);
   const forkAction = !phone && message.kind === "text" && !message.id.startsWith("optimistic-")
     ? [forkMessageItem({ kind: "bot", ownerId: botId, threadId, messageId: message.id }, dispatch, busy)] : [];
   const remoteClient = window.ogb?.remoteClient?.active === true;
@@ -370,6 +371,7 @@ const Bubble = memo(function Bubble({
     [message.attachments],
   );
   const join: BubbleJoin = { above: joinAbove, below: joinBelow };
+  const turnRow = simple && !user && !peer && !message.inbox, turnBelow = turnRow && !joinBelow;
   const reply = useReplySegments(conversational && !user && !peer && !viewRaw && !replyTarget && message.kind === "text", text, message.at, openedAt, message.id);
   const split = reply.segments.length > 1;
   // Simple mode draws each table of a reply as its own card between the reply's prose bubbles.
@@ -419,7 +421,8 @@ const Bubble = memo(function Bubble({
   );
 
   return (
-    <div {...{ [MESSAGE_ROW]: "" }} data-look={user ? "message-user" : "message-bot"} className={cn("group flex w-full flex-col", user ? "animate-msg-in items-end" : "items-start", simple && join?.above && SIMPLE_STACKED)}>
+    <div {...{ [MESSAGE_ROW]: "" }} data-look={user ? "message-user" : "message-bot"} className={cn("group flex w-full flex-col", user ? "animate-msg-in items-end" : "items-start", simple && join?.above && (user ? SIMPLE_STACKED : BOT_STACKED), turnRow && BOT_TURN_INDENT)}>
+      {turnRow && !joinAbove && <BotTurnHead bot={bots.find((one) => one.id === botId)} name={botName} color={botColor} time={formatTime(message.at)} onOpen={() => dispatch({ type: "toggleSettings", open: true })} />}
       {message.relay ? <RelayLabel message={message} /> : peer && <PeerLabel peer={peer} />}
       {speaker && <div className="mb-0.5 px-1 text-right text-[13px] [overflow-wrap:anywhere] font-semibold text-ink-secondary">{speaker}</div>}
       <div className={cn("flex w-full items-center gap-1.5", user ? "justify-end" : "justify-start")}>
@@ -445,7 +448,7 @@ const Bubble = memo(function Bubble({
           data-chat-bubble={simple ? "simple" : ""} data-look={user ? "user-bubble" : "bot-bubble"}
           className={cn(
             tabled ? "w-full" : "w-fit",
-            simple ? !tabled && SIMPLE_BUBBLE_MAX : "max-w-[min(var(--chat-bubble-max),var(--chat-bubble-pct))] rounded-2xl text-[15px] leading-relaxed",
+            simple ? !tabled && (user ? SIMPLE_USER_MAX : SIMPLE_BUBBLE_MAX) : "max-w-[min(var(--chat-bubble-max),var(--chat-bubble-pct))] rounded-2xl text-[15px] leading-relaxed",
             emerging && !streamedReply(message.id) && "turn-answer",
             user && webhookView
               ? cn("overflow-hidden border border-accent/25 bg-card text-ink", simple ? cn("rounded-[18px]", SIMPLE_BUBBLE_TEXT) : "shadow-[0_10px_30px_rgba(0,0,0,0.18)]")
@@ -538,10 +541,10 @@ const Bubble = memo(function Bubble({
               )}
               {!group && <AttachmentGallery images={generatedPaths} files={linkedFiles} originals={attached.originals} message={{ threadId, messageId: message.id }} className={text ? undefined : "mb-0"} eager={eagerAttachments} />}
               {split ? (
-                <ConversationalReply simple={simple} join={join} segments={reply.segments} firstNew={reply.firstNew} citation={{ messageId: message.id, botId, threadId }}
+                <ConversationalReply simple={simple} segments={reply.segments} firstNew={reply.firstNew} citation={{ messageId: message.id, botId, threadId }}
                   renderSegment={(segment) => <ChatMarkdown text={segment} mentionPeers={mentionPeers} mentionPerson={mentionPerson} message={{ threadId, messageId: message.id }} delivered={group?.delivered} originals={group?.originals} />} />
               ) : tabled && blocks ? (
-                <ReplyBlocks blocks={blocks} join={join} tray={botActions} citation={{ messageId: message.id, ownerType: "bot", ownerId: botId, threadId }}
+                <ReplyBlocks blocks={blocks} tray={botActions} citation={{ messageId: message.id, ownerType: "bot", ownerId: botId, threadId }}
                   render={(block) => <ChatMarkdown text={block} mentionPeers={mentionPeers} mentionPerson={mentionPerson} message={{ threadId, messageId: message.id }} delivered={group?.delivered} originals={group?.originals} />} />
               ) : viewRaw && text ? (
                 <div data-citation-source={message.id} data-citation-owner-type="bot" data-citation-owner={botId} data-citation-thread={threadId}><RawMarkdownView text={text} /></div>
@@ -552,42 +555,21 @@ const Bubble = memo(function Bubble({
             </MessageBoundary>
           )}
         </div>
-        {!tabled && botActions}
+        {!tabled && !turnBelow && botActions}
         <span
           className={cn(
             "self-end pb-1 text-[11px] tabular-nums text-ink-tertiary opacity-0 transition-opacity group-hover:opacity-100",
-            user ? "order-first mr-2" : "ml-2",
+            user ? "order-first mr-2" : "ml-2", turnRow && "hidden",
           )}
         >
           {formatTime(message.at)}
         </span>
       </div>
+      {turnBelow && !tabled && <div className="-ms-1.5 -mt-0.5 flex">{botActions}</div>}
       <ReactionChips threadId={threadId} message={message} bots={bots} align={user ? "end" : "start"} canReact={canReact} />
       {peer && expanded && peerLong && <PeerOpenedActions peer={peer} bots={bots} botId={botId} botName={botName} onFold={() => { setExpanded(false); setFolded(true); }} />}
       <ForkLinks kind="bot" ownerId={botId} threadId={threadId} messageId={message.id} phone={phone} />
-      {forks.length > 1 && (
-        <div className="mt-1 flex items-center gap-0.5 pr-1 text-[12px] text-ink-secondary">
-          <button
-            onClick={() => switchTo(forks[versionIndex - 1])}
-            disabled={versionIndex <= 0 || busy}
-            className="rounded p-0.5 hover:bg-raised hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent"
-            title={t("chat.previousVersion")}
-          >
-            <ChevronLeft size={14} />
-          </button>
-          <span className="tabular-nums">
-            {versionIndex + 1}/{forks.length}
-          </span>
-          <button
-            onClick={() => switchTo(forks[versionIndex + 1])}
-            disabled={versionIndex >= forks.length - 1 || busy}
-            className="rounded p-0.5 hover:bg-raised hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent"
-            title={t("chat.nextVersion")}
-          >
-            <ChevronRight size={14} />
-          </button>
-        </div>
-      )}
+      <VersionSwitch index={versionIndex} versions={forks} busy={busy} onSwitch={switchTo} />
     </div>
   );
 });
@@ -699,9 +681,9 @@ const MessagesList = memo(function MessagesList({
             <div key={item.id} className="contents">
               {newDay && <DaySeparator at={first.at} today={today} simple={simple} />}
               {divider}
-              {item.kind === "turn"
+              {item.kind === "turn" && !simple
                 ? <TurnNarrationRun label={item.label} title={t("chat.run.showSteps")} forceOpen={forceOpen}>{steps}</TurnNarrationRun>
-                : <ActivityRun messages={item.messages} forceOpen={forceOpen}>{steps}</ActivityRun>}
+                : <ActivityRun messages={item.messages} label={item.kind === "turn" ? item.label : undefined} forceOpen={forceOpen}>{steps}</ActivityRun>}
             </div>
           );
         }

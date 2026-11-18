@@ -180,10 +180,13 @@ describe("the panel's tabs", () => {
     const strip = host.querySelector('[role="tablist"]')!.className.split(" ");
     expect(strip).toEqual(expect.arrayContaining(["sticky", "top-0", "bg-app"]));
     expect(host.querySelector('[role="tab"]')!.parentElement!.className.split(" ")).toEqual(expect.arrayContaining(["rounded-full", "bg-ink/[0.05]"]));
-    expect(host.querySelector('[role="tab"]')!.className.split(" ")).toEqual(expect.arrayContaining(["h-[26px]", "text-[13px]", "bg-ink/[0.1]", "font-medium"]));
+    expect(host.querySelector('[role="tab"]')!.className.split(" ")).toEqual(expect.arrayContaining(["h-[26px]", "text-[13px]", "font-medium"]));
+    const thumb = () => host.querySelector<HTMLElement>("[data-segment-thumb]")!.style.getPropertyValue("--i");
+    expect(thumb()).toBe("0");
     for (const id of ["library", "computer", "details"]) {
       click(host.querySelector(`[data-panel-tab="${id}"]`));
       expect(tab()).toBe(id);
+      expect(thumb()).toBe(String(["details", "library", "computer"].indexOf(id)));
       expect(host.querySelector(`[data-stub-${id}]`), id).not.toBeNull();
     }
   });
@@ -243,7 +246,9 @@ describe("the chat header's pill", () => {
     const { header, onToggle, done } = pill();
     try {
       const button = header.querySelector<HTMLButtonElement>("[data-chathead-pill]")!;
-      expect(button.textContent).toBe("Scout");
+      // The name, then the role in quiet ink (the fixture's bot is a Researcher).
+      expect(button.querySelector("span")!.textContent).toBe("Scout");
+      expect(button.querySelector("[data-chathead-role]")!.textContent).toBe("Researcher");
       expect(button.getAttribute("aria-label")).toBe("Open Scout's profile");
       expect(button.getAttribute("aria-expanded")).toBe("false");
       expect(button.hasAttribute("aria-controls")).toBe(false);
@@ -256,14 +261,14 @@ describe("the chat header's pill", () => {
     }
   });
 
-  it("says the panel is open and points at it, then hides the hover chevron", () => {
+  it("says the panel is open and points at it, then turns the chevron over", () => {
     fixture.settingsOpen = true;
     const { header, done } = pill();
     try {
       const button = header.querySelector<HTMLButtonElement>("[data-chathead-pill]")!;
       expect(button.getAttribute("aria-expanded")).toBe("true");
       expect(button.getAttribute("aria-controls")).toBe("bot-panel");
-      expect(header.querySelector("[data-chathead-chevron]")).toBeNull();
+      expect(header.querySelector("[data-chathead-chevron]")!.getAttribute("class")).toContain("rotate-180");
     } finally {
       fixture.settingsOpen = false;
       done();

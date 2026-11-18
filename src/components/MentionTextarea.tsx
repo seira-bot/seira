@@ -6,7 +6,8 @@ import { MentionText } from "./MentionText";
 const TEXT_LAYOUT = ["font-family", "font-size", "font-weight", "font-style", "font-stretch", "font-feature-settings", "font-variation-settings",
   "letter-spacing", "word-spacing", "line-height", "text-indent", "tab-size", "padding-top", "padding-right", "padding-bottom", "padding-left"] as const;
 
-export function MentionTextarea({ inputRef, peers, everyone = false, wrapperClassName, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & {
+export function MentionTextarea({ inputRef, peers, everyone = false, wrapperClassName, maxRows = 6, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  maxRows?: number;
   wrapperClassName?: string;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   peers: readonly MentionPeer[];
@@ -29,10 +30,10 @@ export function MentionTextarea({ inputRef, peers, everyone = false, wrapperClas
     const scrollTop = input.scrollTop;
     const line = parseFloat(getComputedStyle(input).lineHeight) || 24;
     input.style.height = "auto";
-    input.style.height = `${Math.min(input.scrollHeight, line * 6)}px`;
+    input.style.height = `${Math.min(input.scrollHeight, line * maxRows)}px`;
     input.scrollTop = scrollTop;
     sync();
-  }, [inputRef, sync]);
+  }, [inputRef, sync, maxRows]);
   useLayoutEffect(resize, [props.value, props.className, resize]);
   useLayoutEffect(() => {
     let width = inputRef.current?.clientWidth;

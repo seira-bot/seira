@@ -99,9 +99,10 @@ export interface CloudPlanAllowances {
   /** A team plan's most people, its owner included. */
   seats?: number;
 }
-/** One plan OpenMausBot Cloud sells: its monthly price before tax in US cents,
- * and its free trial's days when it comes with one. */
-export interface CloudOfferPlan { tier: string; label?: string; amount: number; allowances?: CloudPlanAllowances; trialDays?: number }
+/** One plan a Cloud sells: its monthly price (`amount`: US cents before tax, or whole rupiah with PPN included when
+ * `currency` is "IDR"; no `currency` means USD), a Team plan's price for each person past its included seats, and its free trial's days
+ * when it comes with one. */
+export interface CloudOfferPlan { tier: string; label?: string; amount: number; currency?: "IDR"; extraSeatAmount?: number; allowances?: CloudPlanAllowances; trialDays?: number }
 /** What someone may buy now: the session's `offer` (signed in), or the public
  * config (signed out). The trial's extras come only with a trial; money-back
  * only when the Admin offers it to this person. */

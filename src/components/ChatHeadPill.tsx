@@ -1,5 +1,5 @@
 import { localizedTaskTitle } from "@/lib/task-title";
-import { ChevronRight, Lock, UserRound, Users } from "lucide-react";
+import { ChevronDown, ChevronRight, Crown, Lock, UserRound, Users } from "lucide-react";
 import type { ComponentProps } from "react";
 
 import { cn } from "@/lib/cn";
@@ -47,6 +47,8 @@ export function ChatHeadPill({ bot, avatar, privacy, onToggle }: {
   const conversation = !awayFromMainThread(bot, false) ? (privacy?.kind === "shared" ? t("task.sharedChat") : null)
     : !title || title === UNTITLED ? t("task.untitledChat") : localizedTaskTitle(title);
   const label = t("chat.openProfileAria", { name: bot.name });
+  const chief = t("chat.chiefOfStaff"), botTitle = bot.title.trim();
+  const role = bot.chiefOfStaff && botTitle.toLocaleLowerCase() === chief.toLocaleLowerCase() ? "" : botTitle;
   return (
     <button
       type="button"
@@ -60,7 +62,9 @@ export function ChatHeadPill({ bot, avatar, privacy, onToggle }: {
       className={cn("group flex min-w-0 max-w-full items-center gap-2 rounded-full py-[7.5px] pl-[7.5px] pr-[13.5px] text-ink", ELEVATED_FLOAT, ELEVATED_HOVER)}
     >
       <BotAvatar bot={bot} size={24} {...avatar} />
-      <span dir="auto" className="min-w-0 truncate text-[14px] font-medium leading-5">{bot.name}</span>
+      <span dir="auto" className="min-w-0 truncate text-[14px] font-semibold leading-5">{bot.name}</span>
+      {bot.chiefOfStaff && <Crown size={13} aria-hidden="true" className="shrink-0 text-warning" />}
+      {(role || bot.chiefOfStaff) && <span data-chathead-role dir="auto" title={role || chief} className="min-w-0 max-w-[12rem] truncate text-[13px] leading-5 text-ink-tertiary max-md:hidden">{role || chief}</span>}
       {conversation && (
         <>
           <ChevronRight size={12} aria-hidden="true" className="shrink-0 text-ink-tertiary" />
@@ -76,12 +80,7 @@ export function ChatHeadPill({ bot, avatar, privacy, onToggle }: {
       {elsewhere > 0 && (
         <span role="img" data-chathead-elsewhere aria-label={t("task.otherActivity", { count: elsewhere })} className="size-1.5 shrink-0 rounded-full bg-accent" />
       )}
-      {!open && !conversation && (
-        // Hidden at rest and folded into the gap, so the pill stays tight; it slides in on hover or keyboard focus.
-        <span aria-hidden="true" data-chathead-chevron className={cn("-ml-2 flex w-0 shrink-0 overflow-hidden opacity-0 transition-[width,margin,opacity] group-hover:-ml-0.5 group-hover:w-3 group-hover:opacity-100 group-focus-visible:-ml-0.5 group-focus-visible:w-3 group-focus-visible:opacity-100", CHEVRON_MOTION)}>
-          <ChevronRight size={12} className="shrink-0 text-ink-tertiary" />
-        </span>
-      )}
+      {!conversation && <ChevronDown size={14} aria-hidden="true" data-chathead-chevron className={cn("shrink-0 text-ink-tertiary transition-transform motion-reduce:transition-none", CHEVRON_MOTION, open && "rotate-180")} />}
     </button>
   );
 }

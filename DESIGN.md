@@ -109,7 +109,8 @@ and never add fonts.
 |---|---|---|---|
 | Page or dialog title | 20px, `tracking-[-0.01em]` | 600 | `ink` |
 | Sheet or section title | 17px | 600 | `ink` |
-| Chat bubble (Simple) | 15 / 22px | 400 | `ink` |
+| Chat text (Simple) | 15 / 22px | 400 | `ink` |
+| Time on a turn | 12px, `tabular-nums` | 400 | `ink-tertiary` |
 | Menu item (`MENU_ITEM`) | 14 / 18px | 400 | `ink` |
 | Body, rows, menu rows (`MENU_ROW`) | 13 / 18px | 400 | `ink` or `ink-secondary` |
 | Names in lists | 13 / 18px | 500 | `ink` |
@@ -164,7 +165,10 @@ element's job and never a pixel value:
 - **Labels line up with their heading.** Put shortcut letters, counts and
   chevrons at the end of a row, not before the label.
 - **Control heights: 24, 28, 32 or 36px.** Menu rows are 30px. On touch
-  screens, targets grow to 40–44px with the `touch:` variant.
+  screens, targets grow to 40–44px with the `touch:` variant. Two rows may be
+  taller because they carry a face: the sidebar's chat rows and palette rows
+  (52px and 40px). The sidebar search field is 34px so it reads as a field,
+  not a button.
 - **Group with space before you group with lines.** Add a divider only between
   groups that space alone can't separate. Never a divider under a heading.
 - **No cards inside cards.** If a card needs sections, use spacing and a group
@@ -181,6 +185,8 @@ element's job and never a pixel value:
   hand-drawn SVGs for things Lucide has. Product marks (the Maus, third-party
   logos) are the exception.
 - **Sizes:** 16px in menus, rows and toolbars; 14px next to 12–13px text.
+- **The composer's + and its round Send glyph are 18px,** because the bar holds
+  few controls and they are the main targets.
 - **Don't set `strokeWidth`.** The stylesheet draws Lucide at 1.75, and menus
   at 1.5 through `MENU_SHEET`. Menu code that passes `MENU_STROKE` is the one
   exception.
@@ -199,9 +205,13 @@ element's job and never a pixel value:
 - **Borders are 1px `hairline`.** Panes meet on a 0.5px `edge`. An element in
   the page gets a border or a tint, not both, and no shadow. Floating surfaces
   take their surface class, which already balances all three.
-- **Rich content in a reply stays in the bubble.** Tables, code and quotes are
-  drawn alike: no fill of their own, a 1px hairline and a faint tint. One
-  reply is one bubble.
+- **A bot reply is prose on the page, not a bubble.** It has no fill and no
+  corners, and runs at most 44rem wide. A 32px face, the speaker name and the
+  time start each turn; later parts from the same bot stack under it without
+  repeating them. Only the person's own message keeps `bubble-user`.
+- **Rich content in a reply keeps its own edge.** Tables, code and quotes are
+  drawn alike: no fill of their own, a 1px hairline and rounded corners, so
+  they stay readable now that the text around them has no bubble.
 - **Scrims** (`ui-scrim`) dim the app behind a modal dialog; nothing else
   dims the app.
 

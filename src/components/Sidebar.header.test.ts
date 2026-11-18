@@ -132,27 +132,24 @@ describe("sidebar top row", () => {
     expect(html.match(/Switch server:/g)).toHaveLength(1);
   });
 
-  it.each(["mac-inset", "win-caption"] as const)("in Simple mode on %s keeps only the top corner: plain search and + at its right end, no drag region, no server pill, nothing on the edge", (windowChrome) => {
+  it.each(["mac-inset", "win-caption"] as const)("in Simple mode on %s keeps a 52px top row with the new-chat button at its end, and a full-width search pill under it", (windowChrome) => {
     fixture.advanced = false;
     fixture.windowChrome = windowChrome;
     desktop();
     const html = render();
     const row = topRow(html);
-    expect(row, "the bot tiles rise into the rest of the corner: no drag region, no clicks but the buttons'").toMatch(/^data-sidebar-top-row="corner" class="[^"]*\bpointer-events-none\b[^"]*\bh-\[34px\][^"]*\bitems-start\b[^"]*">/);
-    expect(classesOf(row, "data-sidebar-top-row")).toEqual(expect.arrayContaining(["justify-end", "px-1.5", "pt-1.5"]));
-    expect(row).not.toContain("data-workspace-switcher");
-    expect(html).not.toContain("Switch server:");
+    expect(classesOf(row, "data-sidebar-top-row")).toEqual(expect.arrayContaining(["relative", "h-[52px]"]));
+    expect(row).not.toContain("pointer-events-none");
     const { lights, slot, buttons } = order(row);
     expect(lights).toBe(-1);
     expect(buttons).toBeGreaterThan(slot);
-    expect(classesOf(row, "data-sidebar-top-buttons")).toEqual(expect.arrayContaining(["shrink-0", "pointer-events-auto"]));
-    expect(row.slice(buttons).match(/<button/g)).toHaveLength(2);
-    expect(row).toMatch(/data-sidebar-search-toggle="true" aria-label="Search bots and messages" aria-expanded="false" title="Search bots and messages" class="[^"]*\bsize-\[26px\][^"]*\brounded-lg\b[^"]*\btext-ink-secondary\b/);
-    expect(row, "no round box round either").not.toContain("bg-composer");
-    expect(html).toMatch(/aria-label="New or share" class="[^"]*\bsize-\[26px\][^"]*\brounded-lg\b/);
+    expect(row.slice(buttons).match(/<button/g)).toHaveLength(1);
+    expect(html).toMatch(/aria-label="New or share" class="[^"]*\bsize-8\b[^"]*\brounded-lg\b/);
+    expect(html).toMatch(/data-sidebar-search-pill="" aria-label="Search bots and messages"/);
+    expect(html.indexOf("data-sidebar-search-pill")).toBeGreaterThan(html.indexOf('aria-label="New or share"'));
+    expect(html).not.toContain("data-sidebar-search-toggle");
     expect(html).not.toContain("data-sidebar-edge-toggle");
     expect(html).not.toContain('title="Active Threads"');
-    expect(html).not.toContain("data-sidebar-search-pill");
   });
 
   it.each([["win-caption", "Windows"], ["native", "Linux"]] as const)(
@@ -361,7 +358,8 @@ describe("sidebar foot in Simple mode", () => {
     expect(html).not.toContain('data-sidebar-nav="team-map"');
     expect(html.match(/data-sidebar-nav="apps"/g)).toHaveLength(1);
     expect(foot.indexOf("data-sidebar-account")).toBeGreaterThan(-1);
-    expect(foot.indexOf("data-sidebar-account")).toBeLessThan(foot.indexOf('data-sidebar-nav="apps"'));
+    expect(foot.indexOf('data-sidebar-nav="apps"')).toBeLessThan(foot.indexOf("data-sidebar-account"));
+    expect(foot).toContain('aria-label="Settings"');
     expect(foot).toMatch(/data-tour="nav-apps" data-sidebar-nav="apps"[^>]*>(<[^>]*>)*Connect apps</);
     expect(foot.match(/data-app-face="/g)).toHaveLength(3);
   });

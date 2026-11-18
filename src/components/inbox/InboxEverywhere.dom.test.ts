@@ -183,8 +183,10 @@ describe("a place's inbox in the panel", () => {
   it("answers an ask from its row where it was asked, since there is no copy", async () => {
     await panel([approval, question]);
     await click('[data-inbox-row="card-a"] [data-inbox-action="allow"]');
+    await new Promise((resolve) => setTimeout(resolve, 260));
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "decideRequest", threadId: "eli-pricing", requestId: "req-a", behavior: "allow" }));
     await click('[data-inbox-row="card-q"] [data-inbox-action="close"]');
+    await new Promise((resolve) => setTimeout(resolve, 260));
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "decideRequest", threadId: "eli-launch", requestId: "req-q", behavior: "answer" }));
   });
 

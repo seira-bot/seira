@@ -5,7 +5,7 @@ import { t } from "@/lib/i18n";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { sendsMessage, useSendKey } from "@/lib/send-key";
 import type { userBubbleStyle } from "@/lib/user-bubble-tone";
-import { SIMPLE_BUBBLE_MAX, SIMPLE_USER_BUBBLE } from "./chat-bubble";
+import { SIMPLE_USER_BUBBLE, SIMPLE_USER_MAX } from "./chat-bubble";
 
 /** Edits one of your sent messages in place, in the bubble's own shape; the send key resubmits and Escape cancels. */
 export function BubbleEditor({
@@ -37,7 +37,7 @@ export function BubbleEditor({
       data-chat-bubble={simple ? "simple" : ""}
       className={cn(
         "w-full",
-        simple ? cn(SIMPLE_BUBBLE_MAX, SIMPLE_USER_BUBBLE, "py-2") : "max-w-[min(var(--chat-bubble-max),var(--chat-bubble-pct))] rounded-2xl border border-hairline/40 bg-bubble-user px-4 py-3",
+        simple ? cn(SIMPLE_USER_MAX, SIMPLE_USER_BUBBLE, "py-2") : "max-w-[min(var(--chat-bubble-max),var(--chat-bubble-pct))] rounded-2xl border border-hairline/40 bg-bubble-user px-4 py-3",
         bubbleStyle && "user-bubble-colored",
       )}
       style={bubbleStyle}

@@ -169,13 +169,18 @@ function planAllowances(input) {
     ...(count(input.swapMb) && input.swapMb > 0 ? { swapMb: input.swapMb } : {}), ...(days(input.snapshotDays, 365) ? { snapshotDays: input.snapshotDays } : {}),
     ...(days(input.seats, 1_000) ? { seats: input.seats } : {}) };
 }
-/** Monthly price before tax in US cents; a plan without one is not sold here. */
+/** The most one plan may cost per month, in its currency's billing unit: US cents, or whole rupiah. */
+const PRICE_MAX = Object.freeze({ USD: 10_000_000, IDR: 100_000_000 });
+/** Monthly price: US cents before tax for USD, whole rupiah with PPN included for IDR (no `currency` on a plan means USD). A plan without
+ * one is not sold here. A Team plan's `extraSeatAmount` is the monthly price of each person past its included seats. */
 function offerPlan(input) {
   if (!record(input) || typeof input.tier !== "string" || !TIER.test(input.tier) || !record(input.price)) return null;
-  const { price } = input;
-  if (price.currency !== "USD" || price.interval !== "month" || !Number.isSafeInteger(price.amount) || price.amount < 1 || price.amount > 10_000_000) return null;
+  const { price } = input, max = PRICE_MAX[price.currency];
+  if (!max || price.interval !== "month" || !Number.isSafeInteger(price.amount) || price.amount < 1 || price.amount > max) return null;
   const allowances = planAllowances(input.allowances), trial = days(input.trialDays, 30);
+  const seat = input.tier === "team" && Number.isSafeInteger(price.extraSeatAmount) && price.extraSeatAmount >= 0 && price.extraSeatAmount <= max ? price.extraSeatAmount : null;
   return { tier: input.tier, ...(label(input.label) ? { label: label(input.label) } : {}), amount: price.amount,
+    ...(price.currency === "IDR" ? { currency: "IDR" } : {}), ...(seat !== null ? { extraSeatAmount: seat } : {}),
     ...(allowances ? { allowances } : {}), ...(trial ? { trialDays: trial } : {}) };
 }
 /** An Admin older than this app may still list these; their subscribers keep them, but nobody new buys them here. */

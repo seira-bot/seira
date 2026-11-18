@@ -33,7 +33,7 @@ import { botTextShowsSpeaker, laterTextOwns, runShowsSpeaker } from "@/lib/room-
 import { defaultResponderName, groupResponseHint, jevRoomRoutingOn } from "@/lib/group-routing";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { FailedTurnRow, MessageBoundary } from "./ChatView";
-import { SIMPLE_BOT_BUBBLE, SIMPLE_BUBBLE_MAX, SIMPLE_BUBBLE_TEXT, SIMPLE_USER_BUBBLE } from "./chat-bubble";
+import { BOT_TURN_INDENT, SIMPLE_BOT_BUBBLE, SIMPLE_BUBBLE_MAX, SIMPLE_BUBBLE_TEXT, SIMPLE_USER_BUBBLE, SIMPLE_USER_MAX } from "./chat-bubble";
 import { ReplyBlocks } from "./ReplyBlocks";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { CopyButton, MESSAGE_ROW, MessageActions, messageActionClass, ReplyAction } from "./MessageActions";
@@ -203,7 +203,7 @@ function RoomTextMessage({
     </MessageActions>
   );
   return (
-    <div {...{ [MESSAGE_ROW]: "" }} data-look={user ? "message-user" : "message-bot"} className={cn("group flex w-full flex-col", user ? "items-end" : "items-start")}>
+    <div {...{ [MESSAGE_ROW]: "" }} data-look={user ? "message-user" : "message-bot"} className={cn("group flex w-full flex-col", user ? "items-end" : "items-start", simple && !user && BOT_TURN_INDENT)}>
       {speaker && <div className="mb-0.5 px-1 text-right text-[13px] [overflow-wrap:anywhere] font-semibold text-ink-secondary">{speaker}</div>}
       <div className={cn("flex w-full items-end gap-1.5", user ? "justify-end" : "justify-start")}>
         {user && (
@@ -216,7 +216,7 @@ function RoomTextMessage({
           data-chat-bubble={simple ? "simple" : ""} data-look={user ? "user-bubble" : "bot-bubble"}
           className={cn(
             tabled ? "w-full" : "w-fit",
-            simple ? cn(!tabled && SIMPLE_BUBBLE_MAX, SIMPLE_BUBBLE_TEXT) : "max-w-[min(var(--chat-bubble-max),var(--chat-bubble-pct))] rounded-2xl text-[15px] leading-relaxed",
+            simple ? cn(!tabled && (user ? SIMPLE_USER_MAX : SIMPLE_BUBBLE_MAX), SIMPLE_BUBBLE_TEXT) : "max-w-[min(var(--chat-bubble-max),var(--chat-bubble-pct))] rounded-2xl text-[15px] leading-relaxed",
             !user && emerging && !streamedReply(m.id) && "turn-answer",
             tabled || (!user && !m.text?.trim() && !m.replyToId && m.attachments?.length)
               ? "text-ink"
@@ -334,7 +334,7 @@ export const Transcript = memo(function Transcript({
 }) {
   const { state, dispatch } = useStore();
   const phone = useMediaQuery(PHONE_LAYOUT);
-  const showThreads = useShowThreads();
+  const showThreads = useShowThreads(), simple = !useAdvancedMode();
   const showToolCalls = showToolCallsEnabled(state.config);
   const canReact = useCanReact(group.threadId); const teammatePeers = useTeammates().peers;
   const memberOf = (id?: string) => members.find((b) => b.id === id); const messages = useLiveTranscript(group.threadId, saved, transcript, members, roomThreadSpeakerId(group, group.threadId));
@@ -500,7 +500,7 @@ export const Transcript = memo(function Transcript({
               (m.kind === "text" && botTextShowsSpeaker(items, i))
               || (!user && m.kind !== "text" && newCluster && !(m.kind === "activity" && m.comm) && !laterTextOwns(items, i, m.from.botId, m.at))
             ) && (
-              <ClusterLabel bot={memberOf(m.from.botId)} name={m.from.name} color={m.from.color} to={m.kind === "text" ? roomAddressees(m, members, transcript, teammatePeers) : undefined} />
+              <ClusterLabel bot={memberOf(m.from.botId)} name={m.from.name} color={m.from.color} time={simple ? formatTime(m.at) : undefined} onOpen={simple && memberOf(m.from.botId) ? () => dispatch({ type: "toggleSettings", open: true, botId: m.from!.botId }) : undefined} to={m.kind === "text" ? roomAddressees(m, members, transcript, teammatePeers) : undefined} />
             )}
             {fold && (
               <TurnNarrationRun
