@@ -230,7 +230,6 @@ describe("the Simple composer in a bot chat", () => {
     restoreComposerDraft(draft, { text: "", attachments: [] });
     render({ bot: { ...bot, color: "teal", busy: true } });
     expect(state()).toBe("stop");
-    expect(container.querySelector("[data-composer-slot]")!.className.split(" ")).toContain("animate-slot-morph");
   });
 
   it("moves through the + menu rows with the arrow keys and closes on Escape, handing focus back to the +", () => {

@@ -6,13 +6,11 @@ import { BOT_BUTTON, botButtonStyle, botButtonTone, type BotButton } from "@/lib
 /** Simple mode's composer card: the field above a bar of controls. The ring strengthens while the field has focus. */
 export const SIMPLE_COMPOSER = "bg-composer ps-4 pe-2.5 pt-3 pb-2 ring-1 ring-hairline hover:ring-ink/[0.2] focus-within:ring-ink/[0.3] shadow-[0_2px_8px_-1px_rgb(0_0_0/0.05),0_1px_2px_rgb(0_0_0/0.03),0_0_0_1px_rgb(228_228_228/0.04)] [transition:border-radius_300ms,box-shadow_150ms]";
 
-/** The card's height with a one-line field and no strip above it; taller means the message wraps. */
 export const SIMPLE_CARD_ONE_LINE = 82.5;
 
 /** Simple mode's bare round controls in the bar: the +, the context meter, the mic and Stop beside the round slot. */
 export const SIMPLE_CONTROL = "size-8 rounded-full text-ink-tertiary hover:bg-ink/[0.06] hover:text-ink active:bg-ink/[0.08]";
 
-/** The call button beside Stop or Send: an ink tint, so only the round slot carries the bot's colour. */
 export const QUIET_CALL = { fill: "color-mix(in srgb, var(--color-ink) 8%, transparent)", ink: "var(--color-ink-secondary)" };
 
 const ROOM_FILL = { fill: "var(--color-accent)", ink: "var(--color-accent-ink)" };

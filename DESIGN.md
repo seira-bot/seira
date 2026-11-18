@@ -180,9 +180,9 @@ element's job and never a pixel value:
 - **Use `lucide-react` only.** No emoji as icons, no icon fonts, no
   hand-drawn SVGs for things Lucide has. Product marks (the Maus, third-party
   logos) are the exception.
-- **Sizes:** 16px in menus, rows and toolbars; 14px next to 12–13px text. The composer's + and
-  its round Send glyph are 18px, because the bar holds few controls and they
-  are the main targets.
+- **Sizes:** 16px in menus, rows and toolbars; 14px next to 12–13px text.
+- **The composer's + and its round Send glyph are 18px,** because the bar holds
+  few controls and they are the main targets.
 - **Don't set `strokeWidth`.** The stylesheet draws Lucide at 1.75, and menus
   at 1.5 through `MENU_SHEET`. Menu code that passes `MENU_STROKE` is the one
   exception.

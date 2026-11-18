@@ -5,7 +5,6 @@ import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { SIMPLE_CONTROL } from "./composer-simple";
 
-/** Stop for the running turn. In Simple mode it is the round slot itself while the field is empty, and a quiet button beside the slot otherwise. */
 export function ComposerStopButton({ onStop, simple, inSlot, look }: {
   onStop: () => void;
   simple: boolean;

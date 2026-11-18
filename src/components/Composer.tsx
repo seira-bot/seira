@@ -697,7 +697,7 @@ export function Composer({
   const callControl = callShown && (
     <>
       {bot && !group && <CallButton bot={bot} placement="composer" fill={callFill} ink={callInk} inverse={singleRow} />}
-      {group && !advanced && <GroupCallButton group={group} members={members ?? []} placement="composer" fill={callFill} ink={callInk} />}
+      {group && !advanced && <GroupCallButton group={group} members={members ?? []} placement="composer" fill={singleRow ? slot.fill : callFill} ink={callInk} />}
     </>
   );
   const sendControl = hasContent && !locked && (
@@ -744,6 +744,7 @@ export function Composer({
         </div>
       )}
       <div className="pointer-events-auto relative w-full">
+        {simpleDock && <span aria-hidden data-composer-fade className="pointer-events-none absolute -inset-x-5 bottom-full h-8 bg-linear-to-t from-app to-transparent" />}
         {failedSends.map((failed) => (
           <div
             key={failed.id}
@@ -826,7 +827,6 @@ export function Composer({
             data-composer-backdrop
             className={cn("pointer-events-none absolute -left-5 -right-5 bg-app", advanced ? "-bottom-3 top-1/2" : cn("top-0", simpleDock ? "-bottom-4" : "-bottom-3"))}
           >
-            {simpleDock && <span data-composer-fade className="absolute inset-x-0 bottom-full h-8 bg-linear-to-t from-app to-transparent" />}
           </div>
         <div ref={shellRef} data-tour="composer" data-look="composer" data-multiline={multiline ? "" : undefined} className={cn("@container/composer relative z-[1]", singleRow ? "flex items-end gap-2" : simpleDock ? cn(SIMPLE_COMPOSER, multiline ? "rounded-[18px]" : "rounded-[22px]") : cn("rounded-2xl px-2 py-1.5", ELEVATED_FLOAT))}>
         {singleRow && !locked && (
