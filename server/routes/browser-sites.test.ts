@@ -121,7 +121,9 @@ describe("Chrome import routes", () => {
     const server = createServer(async (req, res) => {
       const url = new URL(req.url ?? "/", "http://localhost");
       const auth = { kind: "loopback", scopes: ["admin"] } as unknown as RequestAuth;
-      if (!await dispatchRoutes(routes, { req, res, url, path: url.pathname, method: req.method ?? "GET", auth, json, readBody })) json(res, 404, { from: "inline routes" });
+      try {
+        if (!await dispatchRoutes(routes, { req, res, url, path: url.pathname, method: req.method ?? "GET", auth, json, readBody })) json(res, 404, { from: "inline routes" });
+      } catch (error) { json(res, (error as { status?: number }).status ?? 500, { error: "refused" }); }
     });
     servers.push(server);
     await new Promise<void>((ready) => server.listen(0, "127.0.0.1", ready));

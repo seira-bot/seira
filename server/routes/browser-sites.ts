@@ -49,9 +49,12 @@ export function createBrowserSiteRoutes(deps: BrowserSitesRouteDeps): RouteHandl
       res.setHeader("cache-control", "no-store");
       if (!gate || !gate.enabled(auth)) return json(res, 404, { error: "Not found." });
       if (!gate.owner(auth)) return json(res, 403, { error: "Only this computer's owner can import sign-ins." });
+      const refused = (error: unknown) => error instanceof ChromeImportError
+        ? json(res, error.status, { error: error.message })
+        : json(res, 503, { error: "Seira could not import these sign-ins. Try again." });
       if (path === "/api/browser-sites/import/profiles") {
         try { return json(res, 200, { profiles: await gate.service.profiles() }); }
-        catch { return json(res, 503, { error: "Seira could not import these sign-ins. Try again." }); }
+        catch (error) { return refused(error); }
       }
       const mediaType = String(req.headers["content-type"] ?? "").split(";", 1)[0]!.trim().toLowerCase();
       if (mediaType !== "application/json") return json(res, 415, { error: "content-type must be application/json" });
@@ -70,10 +73,7 @@ export function createBrowserSiteRoutes(deps: BrowserSitesRouteDeps): RouteHandl
         if (typeof body.ticket !== "string" || body.ticket.length === 0 || body.ticket.length > TEXT_LIMIT) return json(res, 400, { error: "Choose sites from the list." });
         if (!Array.isArray(sites) || sites.length === 0 || sites.length > SITE_LIMIT || !sites.every((site) => typeof site === "string" && SITE.test(site))) return json(res, 400, { error: "Choose sites from the list." });
         return json(res, 200, await gate.service.run({ ticket: body.ticket, caller, sites: sites as string[], write: gate.write(target) }));
-      } catch (error) {
-        if (error instanceof ChromeImportError) return json(res, error.status, { error: error.message });
-        return json(res, 503, { error: "Seira could not import these sign-ins. Try again." });
-      }
+      } catch (error) { return refused(error); }
     }
     if (path === "/api/browser-sites" && method === "GET") {
       const which = ref({ profile: url.searchParams.get("profile") ?? undefined, bot: url.searchParams.get("bot") ?? undefined });
