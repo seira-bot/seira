@@ -151,6 +151,7 @@ const { Switch } = await import("./SettingsPrimitives");
 const { OrgSkillsCard } = await import("./bot-settings/OrgSkillsCard");
 const { PackageProvenance } = await import("./bot-settings/PackageProvenance");
 const { AdvancedSettingsRow } = await import("./bot-panel/AdvancedSettingsRow");
+const { PanelTabs } = await import("./bot-panel/PanelTabs");
 
 afterAll(() => vi.unstubAllGlobals());
 
@@ -160,6 +161,8 @@ function nodes(value: ReactNode): Node[] {
   return Children.toArray(value).flatMap((child) => {
     if (!isValidElement(child)) return [];
     const node = child as Node;
+    // PanelTabs holds no state, so its buttons are read by calling it, as a parent's own markup would be.
+    if (node.type === PanelTabs) return [node, ...nodes(PanelTabs(node.props as never))];
     return [node, ...nodes(node.props.children), ...nodes(node.props.action as ReactNode), ...nodes(node.props.extra as ReactNode), ...nodes(node.props.label as ReactNode), ...nodes(node.props.hint as ReactNode)];
   });
 }
