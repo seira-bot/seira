@@ -2,17 +2,15 @@ import type { ReactNode } from "react";
 
 import { botAvatarProfile } from "../../shared/bot-avatar";
 import { botBodyId } from "../../shared/bot-body";
-import { useFestivalDress, wornBody } from "@/lib/festival-dress";
 import { BotAvatar, resolveBotAvatarOutcome, type BotAvatarProps } from "./Avatar";
 import { hairTint } from "./CarvedAvatar";
 import { SeiraCharacter, type SeiraState } from "./seira-character";
 
-/** True when the bot's face is Seira herself: the shipped body, with no uploaded picture and no festival costume. */
+/** True when the bot's face is Seira herself: the shipped body, with no uploaded picture. */
 export function useWearsSeira(bot: BotAvatarProps["bot"]): boolean {
-  const festival = useFestivalDress();
   const profile = botAvatarProfile(bot);
   const outcome = resolveBotAvatarOutcome({ avatarCrop: profile.avatarCrop, hasUrl: Boolean(profile.avatarUrl), imageFailed: false });
-  return outcome === "gradientMascot" && botBodyId(wornBody(bot.mascotBody, bot.color, festival)) === "seira";
+  return outcome === "gradientMascot" && botBodyId(bot.mascotBody) === "seira";
 }
 
 /** The bot's live face for one moment: Seira's character, in the bot's hair colour, when the bot wears her. A bot with its

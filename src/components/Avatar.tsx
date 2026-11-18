@@ -15,7 +15,6 @@ import { CursorAvatar, type CursorAvatarHandle } from "./CursorAvatar";
 import { avatarCropRadius, botAvatarProfile, clampAvatarFocus, clampAvatarZoom, mascotFaceInk, type BotAvatarCrop, type MascotFaceColor } from "../../shared/bot-avatar";
 import { MASCOT_BODIES, botMascotBody } from "../../shared/mascot-bodies";
 import { botBodyId, isCarvedBody, type BotBodyId } from "../../shared/bot-body";
-import { useFestivalDress, wornBody } from "@/lib/festival-dress";
 import { t } from "@/lib/i18n";
 import { CarvedAvatar } from "./CarvedAvatar";
 import { steelBodyImage } from "@/lib/steel-body";
@@ -254,7 +253,6 @@ export function resolveBotAvatarOutcome(params: {
 
 export function BotAvatar({ bot, size = 44, label, readable = false, ...mascotProps }: BotAvatarProps) {
   const profile = botAvatarProfile(bot);
-  const festival = useFestivalDress();
   const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => setImageFailed(false), [profile.avatarUrl]);
@@ -268,7 +266,7 @@ export function BotAvatar({ bot, size = 44, label, readable = false, ...mascotPr
   if (outcome !== "flatImage") {
     return (
       <MausAvatar
-        bodyId={wornBody(bot.mascotBody, bot.color, festival)}
+        bodyId={bot.mascotBody ?? undefined}
         {...mascotProps}
         color={bot.color}
         faceColor={bot.mascotFaceColor}
