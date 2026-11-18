@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EMPTY_ONBOARDING, LOCAL_VIEWER, WELCOME_VERSION, type WelcomeViewer } from "@/lib/onboarding";
 import { setLocale } from "@/lib/i18n";
 import { WELCOME_DRAFT_KEY } from "@/lib/welcome-draft";
+import { finishTeamWelcome, resetTeamWelcome } from "@/lib/team-welcome";
 
 const fixture = vi.hoisted(() => ({ values: [] as unknown[], index: 0, effects: [] as EffectCallback[] }));
 vi.mock("react", async (original) => ({
@@ -25,7 +26,7 @@ vi.mock("@/lib/analytics", () => ({ emailGateDone: () => false }));
 // The gate's job is choosing; the flow itself has its own recipe.
 vi.mock("./WelcomeFlow", () => ({ WelcomeFlow: () => null }));
 vi.mock("@/components/Avatar", () => ({ MausAvatar: () => null }));
-import { SharedWorkspaceHint } from "./SharedWorkspaceHint";
+import { resetSharedHint, SharedWorkspaceHint } from "./SharedWorkspaceHint";
 import { useWelcomeViewer, WelcomeGate } from "./WelcomeGate";
 import { WelcomeFlow } from "./WelcomeFlow";
 
@@ -70,6 +71,8 @@ beforeEach(() => {
   vi.stubGlobal("localStorage", storage());
   vi.stubGlobal("fetch", vi.fn());
   setLocale("en");
+  resetTeamWelcome();
+  resetSharedHint();
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -144,6 +147,8 @@ describe("who gets the welcome flow", () => {
     expect(tree?.type).toBe(SharedWorkspaceHint);
     expect(html).toContain("Your team&#x27;s shared Seira");
     expect(html).not.toContain("role=\"dialog\"");
+    expect(html, "the notice cards' corner, below the chat and its header").toMatch(/class="fixed bottom-4 left-\[calc\(var\(--rail-beside,0px\)_\+_1rem\)\] [^"]*w-\[300px\]/);
+    expect(html).not.toMatch(/\btop-/);
     fixture.values = [];
     const hint = render(() => SharedWorkspaceHint({ replay: false, onClose: vi.fn() }));
     const gotIt = (hint.tree!.props.children as Node[]).flatMap(function all(node): Node[] {
@@ -158,9 +163,11 @@ describe("who gets the welcome flow", () => {
     expect(localStorage.getItem("omb.onboarding.sharedWorkspaceHint")).toBe("1");
     fixture.values = [];
     expect(render(() => SharedWorkspaceHint({ replay: false, onClose: vi.fn() })).html).toBe("");
+    expect(gate({ hosted: true, canSave: false }).tree, "closed for the gate too").toBeNull();
     fixture.values = [];
     expect(render(() => SharedWorkspaceHint({ replay: true, onClose: vi.fn() })).html).toContain("shared Seira");
     vi.stubGlobal("localStorage", { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } });
+    resetSharedHint();
     fixture.values = [];
     expect(render(() => SharedWorkspaceHint({ replay: false, onClose: vi.fn() })).html).toContain("shared Seira");
   });
@@ -237,6 +244,37 @@ describe("who gets the welcome flow", () => {
     expect(gate(LOCAL_VIEWER).tree).toBeNull();
     store.state = { ...store.state, appSettingsOpen: false };
     expect(gate(LOCAL_VIEWER).tree?.type).toBe(WelcomeFlow);
+  });
+});
+
+describe("the shared workspace hint on a team", () => {
+  const member: WelcomeViewer = { hosted: true, canSave: false, teamRole: "member" };
+  const readWelcome = async () => {
+    store.state = { ...store.state, config: { ...fresh, team: { id: "acme", name: "Acme" } } };
+    gate(member);
+    for (const effect of fixture.effects) effect();
+    await flush();
+  };
+
+  it("waits until the member closes the team's welcome, so it never covers that screen", async () => {
+    store.api.mockResolvedValue({ welcome: { invitedBy: "ada@acme.test", welcomedAt: null, hints: [] } });
+    store.state = { ...store.state, config: { ...fresh, team: { id: "acme", name: "Acme" } } };
+    expect(gate(member).tree, "while their welcome is still read").toBeNull();
+    await readWelcome();
+    expect(store.api).toHaveBeenCalledWith("/api/me", expect.objectContaining({ background: true }));
+    expect(gate(member).tree, "while their welcome is on screen").toBeNull();
+    store.state = { ...store.state, welcomeOpen: true };
+    expect(gate(member).tree, "a replay from Settings waits too").toBeNull();
+    await finishTeamWelcome("acme");
+    const replay = gate(member).tree!;
+    expect(replay.type).toBe(SharedWorkspaceHint);
+    expect(replay.props.replay).toBe(true);
+  });
+
+  it("shows at once where the Team Cloud keeps no welcome for them", async () => {
+    store.api.mockRejectedValue(new Error("older Team Cloud"));
+    await readWelcome();
+    expect(gate(member).tree?.type).toBe(SharedWorkspaceHint);
   });
 });
 

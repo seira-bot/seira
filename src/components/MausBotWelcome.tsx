@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { invitedToTeam, teamWelcomeShownThisLaunch, useTeamWelcomeRecord, type TeamWelcomeRecord } from "@/lib/team-welcome";
+import { invitedToTeam, teamWelcomeAhead, teamWelcomeShownThisLaunch, useTeamWelcomeRecord, type TeamWelcomeRecord } from "@/lib/team-welcome";
 import { createPortal } from "react-dom";
 import { BookOpen, Crown, Pencil, Sparkles, Wand2 } from "lucide-react";
 
@@ -53,8 +53,7 @@ export function mausBotWelcomeDue(input: { bot: Pick<Bot, "welcomed" | "hidden">
 export function teamQuiet(state: { config?: { team?: unknown } | null; bots: ReadonlyArray<{ busy?: boolean }> }, viewer: WelcomeViewer | null,
   welcome: TeamWelcomeRecord | null | undefined): boolean {
   if (!state.config?.team) return false;
-  const welcomeFirst = invitedToTeam(viewer) && (welcome === undefined || welcome?.welcomedAt === null);
-  return viewer?.canSave === false || welcomeFirst || teamWelcomeShownThisLaunch() || state.bots.some((candidate) => candidate.busy);
+  return viewer?.canSave === false || teamWelcomeAhead(invitedToTeam(viewer), welcome) || teamWelcomeShownThisLaunch() || state.bots.some((candidate) => candidate.busy);
 }
 
 /** MausBot's first-launch card is due now (mausBotWelcomeDue), and, like the Cloud Pro popup and the product-updates
