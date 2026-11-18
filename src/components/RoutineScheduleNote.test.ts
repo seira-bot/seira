@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { schedulePlace } from "./RoutineScheduleNote";
+vi.mock("@/lib/seira-cloud", () => ({ SEIRA_CLOUD_PLANS: ["pro", "team"] })); // these tests cover the sale itself
 
 describe("where a routine runs, said where it is scheduled", () => {
   const free = { kind: "free" } as const, paid = { kind: "paid", label: "Pro", checking: false } as const;
