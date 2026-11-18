@@ -652,7 +652,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         triggerLabel={label}
         triggerTour={account?.place.switchable ? "server-switcher" : undefined}
         renderTrigger={({ open }) => simple && named ? (
-          <span ref={triggerRef} data-sidebar-account="" className={cn("flex h-9 w-full min-w-0 items-center gap-2.5 rounded-lg px-1.5 transition-colors duration-150 motion-reduce:transition-none", open ? "bg-ink/[0.06]" : "hover:bg-ink/[0.05]")}>
+          <span ref={triggerRef} data-sidebar-account="" className={cn("flex h-9 w-full min-w-0 items-center gap-2 rounded-lg px-1.5 transition-colors duration-150 motion-reduce:transition-none", open ? "bg-ink/[0.06]" : "hover:bg-ink/[0.05]")}>
             <span className="relative flex shrink-0">
               <InitialsAvatar initials={initials} avatarUrl={profile?.avatarUrl} size={28} fallback={nameless} fontSize={11} />
               {dot && <span aria-hidden data-account-dot={dot} className={cn("absolute -right-0.5 -top-0.5 size-2.5 rounded-full ring-2 ring-panel", DOT_COLOR[dot])} />}

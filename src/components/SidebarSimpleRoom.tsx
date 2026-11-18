@@ -8,11 +8,10 @@ import { t } from "@/lib/i18n";
 import { BotAvatar } from "./Avatar";
 import { RowStatusText } from "./SidebarRowMarkers";
 
-/** The two member avatars of a Simple room row: 28px, overlapped, each cut against the row's colour. */
 export function SimpleRoomStack({ members }: { members: Bot[] }) {
   const shown = members.slice(0, 2);
   return (
-    <div data-room-stack="" className="flex w-10 shrink-0 items-center">
+    <div data-room-stack="" className="flex w-[46px] shrink-0 items-center">
       {shown.length === 0 && <Users size={20} aria-hidden="true" className="ms-1 text-ink-secondary" />}
       {shown.map((member, index) => (
         <span key={member.id} className={index > 0 ? "-ms-2.5 flex rounded-full ring-2 ring-[var(--row)]" : "flex rounded-full ring-2 ring-[var(--row)]"}>

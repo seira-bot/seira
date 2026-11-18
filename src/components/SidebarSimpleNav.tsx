@@ -10,16 +10,13 @@ import { ShortcutHint } from "./ShortcutHint";
 import { useAutomationsNeedYou } from "./SidebarFooterNav";
 import { SIMPLE_ROW_FOCUS } from "./SidebarSimpleTop";
 
-/** A Simple nav row: 32px, icon and name, with a dot at the end while something is new. */
 export const SIMPLE_NAV_ROW = cn(
   "flex h-8 w-full min-w-0 items-center gap-2.5 rounded-lg px-2 text-start text-[13px] font-medium text-ink-secondary transition-colors duration-150 motion-reduce:transition-none touch:h-10",
   "hover:bg-ink/[0.05] hover:text-ink aria-[current=true]:bg-raised aria-[current=true]:text-ink", SIMPLE_ROW_FOCUS,
 );
 
-/** The new-chat button at the end of Simple's top row. */
 export const SIMPLE_NEW_BUTTON = "flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-secondary transition-colors duration-150 hover:bg-ink/[0.06] hover:text-ink aria-expanded:bg-ink/[0.06] aria-expanded:text-ink motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 
-/** The 24px icon button at the end of a Simple section label: it shows on hover, on focus and on touch. */
 export const SIMPLE_LABEL_ADD = "flex size-6 shrink-0 items-center justify-center rounded-md text-ink-tertiary opacity-0 transition-opacity duration-150 hover:bg-ink/[0.06] hover:text-ink focus-visible:opacity-100 group-hover/label:opacity-100 group-focus-within/label:opacity-100 touch:opacity-100 motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus";
 
 export function SimpleSearchPill() {
@@ -59,7 +56,6 @@ export function SimpleAutomationsRow() {
   );
 }
 
-/** A Simple section label (12px, tertiary) with its add button at the end. */
 export function SimpleSectionLabel({ name, addLabel, onAdd }: { name: string; addLabel?: string; onAdd?: () => void }) {
   return (
     <div data-sidebar-section-label="" className="group/label flex h-7 items-center ps-2 pe-1 text-[12px] font-medium text-ink-tertiary">

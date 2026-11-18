@@ -10,7 +10,6 @@ import { inboxFixes, waitingCount } from "./inbox/inbox-view";
 
 export function SidebarInboxRow({ icons, large, running, onOpened }: {
   icons: boolean;
-  /** Simple's row: a 32px nav row with a dot while something waits. */
   large: boolean;
   running: boolean;
   onOpened?: () => void;
@@ -44,6 +43,7 @@ export function SidebarInboxRow({ icons, large, running, onOpened }: {
         <button type="button" data-sidebar-inbox={count} aria-label={label} title={label} aria-pressed={open} aria-current={open || undefined} onClick={toggle} className={SIMPLE_NAV_ROW}>
           <Inbox size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
           <span className="min-w-0 flex-1 truncate">{t("inbox.panel.title")}</span>
+          {running && <span aria-hidden="true" data-inbox-running="" className="size-[7px] shrink-0 rounded-full bg-success" />}
           {count > 0 && <span aria-hidden="true" data-inbox-count="" className="size-[7px] shrink-0 rounded-full bg-accent" />}
         </button>
       </div>

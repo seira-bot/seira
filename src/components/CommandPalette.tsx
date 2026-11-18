@@ -29,15 +29,20 @@ export function CommandPalette({ onOpenChange }: { onOpenChange?: (open: boolean
   const [messageHits, setMessageHits] = useState<SearchHit[]>([]);
   const [cursor, setCursor] = useState(0);
   const selectedRef = useRef<HTMLButtonElement>(null);
+  const opener = useRef<Element | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
+        opener.current ??= document.activeElement;
         setOpen((o) => !o);
       }
     };
-    const onOpen = () => setOpen(true);
+    const onOpen = () => {
+      opener.current ??= document.activeElement;
+      setOpen(true);
+    };
     window.addEventListener("keydown", onKey);
     window.addEventListener(OPEN_EVENT, onOpen);
     return () => {
@@ -51,6 +56,11 @@ export function CommandPalette({ onOpenChange }: { onOpenChange?: (open: boolean
     setQuery("");
     setMessageHits([]);
     setCursor(0);
+    return () => {
+      const back = opener.current;
+      opener.current = null;
+      if (back instanceof HTMLElement && back.isConnected) back.focus();
+    };
   }, [open]);
 
   useEffect(() => {
@@ -159,17 +169,18 @@ export function CommandPalette({ onOpenChange }: { onOpenChange?: (open: boolean
         role="dialog" data-look="dialog"
         aria-modal="true"
         aria-label={t("palette.label")}
-        className="popover-surface flex max-h-[min(520px,70vh)] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl border border-hairline/50 bg-menu shadow-2xl shadow-black/60 motion-safe:animate-pop-in"
+        className="popover-surface flex max-h-[min(520px,70vh)] w-full max-w-[560px] flex-col overflow-hidden ui-modal shadow-2xl shadow-black/60 motion-safe:animate-pop-in"
       >
         <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-hairline/40 px-4">
           <Search size={18} strokeWidth={1.75} className="shrink-0 text-ink-tertiary" />
           <input
             autoFocus
+            dir="auto"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label={t("commandPalette.searchLabel")}
             placeholder={t("commandPalette.searchPlaceholder")}
-            className="h-full w-full bg-transparent text-[15px] text-ink placeholder:text-ink-tertiary focus:outline-none"
+            className="h-full w-full bg-transparent text-[14px] text-ink placeholder:text-ink-tertiary focus:outline-none"
           />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2">

@@ -997,8 +997,8 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
   const [pinnedCircleThreadsCollapsed, setPinnedCircleThreadsCollapsed] = useState(true);
 
   useEffect(() => {
-    if (density === "icons") setQuery("");
-  }, [density]);
+    if (density === "icons" || !advanced) setQuery("");
+  }, [density, advanced]);
 
   const toggleCollapsed = () => {
     setSidebarDensity(density === "icons" ? "comfortable" : "icons");

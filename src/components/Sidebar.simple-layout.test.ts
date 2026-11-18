@@ -241,6 +241,19 @@ describe("Simple-mode sidebar layout", () => {
     expect(headers(tree).find((header) => header.props.name === "Work")!.props.collapsed).toBe(true);
   });
 
+  it("drops a filter typed in Advanced when the sidebar switches to Simple, which has no field to clear it", () => {
+    fixture.advanced = true;
+    const field = render().tree.find((node) => node.type === "input" && node.props["aria-label"] === "Search bots and messages")!;
+    (field.props.onChange as (event: { target: { value: string } }) => void)({ target: { value: "bea" } });
+    expect(listedBots(render().tree)).toEqual(["bea"]);
+    fixture.advanced = false;
+    render();
+    for (const effect of fixture.effects) {
+      try { effect(); } catch {}
+    }
+    expect(listedBots(render().tree)).toEqual(["atlas", "bea", "dodo"]);
+  });
+
   it("puts one full-width search pill that opens the palette under the top row, with no inline filter", () => {
     const { tree } = render();
     expect(tree.filter((node) => node.type === SimpleSearchPill)).toHaveLength(1);

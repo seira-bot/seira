@@ -63,6 +63,24 @@ describe("the command palette look", () => {
     expect(fixture.dispatch).toHaveBeenCalledWith({ type: "select", id: "room-a" });
   });
 
+  it("puts focus back on the control that opened it when it closes", () => {
+    flushSync(() => root.unmount());
+    root = createRoot(host);
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    flushSync(() => root.render(createElement(CommandPalette)));
+    flushSync(() => openCommandPalette());
+    expect(document.activeElement).toBe(document.querySelector("input"));
+    press("Escape");
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
+
+  it("reads its input in the direction of what is typed", () => {
+    expect(document.querySelector("input")!.getAttribute("dir")).toBe("auto");
+  });
+
   it("closes on Escape", () => {
     press("Escape");
     expect(document.querySelector('[role="dialog"]')).toBeNull();

@@ -267,13 +267,14 @@ describe("bot-first sidebar", () => {
     expect(channel.match(/data-avatar-kind="bot"/g)).toHaveLength(2);
   });
 
-  it("marks an unread Simple group chat with the same top-right dot as a bot row, said once for a screen reader", () => {
+  it("marks an unread Simple group chat with an accent dot after the preview and a bold title, said once for a screen reader", () => {
     const group: Group = { id: "room", threadId: "room-thread", name: "Launch", memberIds: [bot.id], messages: [], defaultResponder: { kind: "mentions" }, bulletin: "", unread: true, createdAt: 1 };
     const markup = renderToStaticMarkup(createElement(GroupListItem, { group, density: "comfortable", onMenu: vi.fn() }));
-    const name = markup.slice(markup.indexOf('class="flex items-baseline justify-between gap-2 pr-7"'));
-    expect(name.indexOf('data-row-dot=""')).toBeLessThan(name.indexOf("</div>"));
     expect(markup.match(/data-testid="unread-dot"/g)).toHaveLength(1);
-    expect(markup).toContain('<span class="sr-only">Unread</span>');
+    expect(markup).toMatch(/data-testid="unread-dot"[^>]*class="[^"]*\bbg-accent\b/);
+    expect(markup.indexOf('data-testid="unread-dot"')).toBeGreaterThan(markup.indexOf("flex items-baseline justify-between gap-2 pr-7"));
+    expect(markup).toMatch(/font-semibold">Launch</);
+    expect(markup.match(/<span class="sr-only">Unread<\/span>/g)).toHaveLength(1);
   });
 
   it("draws no engine mark for a bot with no AI yet or in a group chat, and a faded one in Advanced mode", () => {
