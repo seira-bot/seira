@@ -5,8 +5,8 @@
 // Auto (the stored id stays `auto`; the picker may show Copilot Fusion and an autoTier instead). Its own
 // `allow_all` option stays at its `off` default: the ACP broker answers every permission request.
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { readFile, realpath, rm } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 import type { ModelCatalog, ProviderErrorCode } from "../../contracts.ts";
@@ -14,6 +14,7 @@ import { createAcpDriver, type AccountErrorCode, type AcpConfig, type AcpSupport
 import { AcpDiscoveryRpcError, discoverAcpModels, DISCOVERY_CLIENT_NAME, type AcpDiscoveryOptions } from "./custom-model-catalog.ts";
 import { offeredModels } from "./config-options.ts";
 import { writeFileAtomicIfChanged } from "../../atomic.ts";
+import { makeOwnedTempFolder, releaseOwnedTempFolder, sweepOrphanedTempFoldersOnce } from "../../temp-folders.ts";
 
 const AUTO = "auto";
 const MODELS: ModelCatalog = { default: AUTO, options: [{ id: AUTO, label: "Auto" }] };
@@ -242,13 +243,17 @@ export function copilotServerNames(names: readonly string[]): string[] {
   });
 }
 
+const MCP_FOLDER_PREFIX = "omb-copilot-mcp-";
+
 export const CopilotAgentDriver = {
   ...createAcpDriver(SUPPORT),
   /** Creates an instance with thread-isolated launcher config files, removed when the instance is disposed. */
   async create(input: Parameters<ReturnType<typeof createAcpDriver>["create"]>[0]) {
     // Copilot CLI 1.0.105 rejects stdio servers from ACP clients; --additional-mcp-config accepts them from its launcher.
-    const directory = await mkdtemp(join(tmpdir(), "omb-copilot-mcp-"));
-    const cleanup = () => rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    // Named after this process: a process that ends without disposing the instance leaves a folder that the next one removes.
+    sweepOrphanedTempFoldersOnce(MCP_FOLDER_PREFIX);
+    const directory = makeOwnedTempFolder(MCP_FOLDER_PREFIX);
+    const cleanup = () => rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).finally(() => releaseOwnedTempFolder(directory));
     try {
       const instance = await createAcpDriver({
         ...SUPPORT,

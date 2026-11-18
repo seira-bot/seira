@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach } from "vitest";
 
+import { VPS_SSH_DIR, vpsSshSharedControlDirectory } from "../vps-ssh-path.ts";
 import { removeTempDir } from "./cleanup.ts";
 import { TEST_HOME_PREFIX, useTestTmp } from "./test-tmp.ts";
 
@@ -39,6 +40,9 @@ afterEach(closeMessageDb);
 // Windows holds a live process's cwd, and a just-killed CLI lets go a beat after the kill returns.
 afterAll(async () => {
   closeMessageDb();
+  // A data path too long for a control socket shares a folder in /tmp, outside the scratch folder; this home is its only user.
+  const sshFolder = vpsSshSharedControlDirectory(join(home, ".openmausbot", VPS_SSH_DIR));
+  if (sshFolder) await removeTempDir(sshFolder);
   await removeTempDir(home);
   await scratch.remove();
 });

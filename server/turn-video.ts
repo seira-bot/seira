@@ -1,18 +1,19 @@
 // No model here speaks video natively (OpenAI's chat-completions content parts are only "text" and "image_url",
 // and a local vision model takes the same two); ffmpeg on PATH stands in by sampling stills from the clip.
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { TurnImageInput, TurnVideoInput } from "./contracts.ts";
 import { OWN_GROUP, stopGroup } from "./group-exec.ts";
+import { makeOwnedTempFolder, releaseOwnedTempFolder, sweepOrphanedTempFoldersOnce } from "./temp-folders.ts";
 
 export const VIDEO_SAMPLE_FRAME_COUNT = 4;
 const FFPROBE_TIMEOUT_MS = 10_000;
 const FFMPEG_TIMEOUT_MS = 20_000;
 // Generous past any driver's turn timeout, so a slow tool loop still finds its frames; this is a leak bound, not a lease.
 const FRAME_CLEANUP_DELAY_MS = 10 * 60 * 1000;
+const FRAME_FOLDER_PREFIX = "omb-video-frame-";
 
 // Security invariant: an attachment comes from anyone who can reach a bot, and ffmpeg otherwise picks its reader from the
 // file's contents, so a playlist named .mp4 could read other files or the network into a frame the model sees.
@@ -75,11 +76,16 @@ async function extractFrame(video: TurnVideoInput, atSeconds: number, outPath: s
   ], FFMPEG_TIMEOUT_MS);
 }
 
+function removeFrameFolder(path: string): void {
+  void rm(path, { recursive: true, force: true }).finally(() => releaseOwnedTempFolder(path));
+}
+
 /**
  * Samples a handful of evenly spaced stills from an attached video so a model with only image input can see what
  * it contains. Frames live in their own temp directory, cleaned up on a delay rather than right after this call,
- * since the caller's driver still has to read each frame's path off disk later in the same turn. `limit` caps the
- * frames returned, so a turn's pictures plus frames never pass its image count.
+ * since the caller's driver still has to read each frame's path off disk later in the same turn. A video that gave
+ * no frame leaves no folder, and a process that ends before the delay removes the folder as it exits. `limit` caps
+ * the frames returned, so a turn's pictures plus frames never pass its image count.
  */
 export async function videoFrameImages(videos: readonly TurnVideoInput[] | undefined, limit = Infinity): Promise<TurnImageInput[]> {
   if (!videos?.length || limit <= 0) return [];
@@ -87,10 +93,12 @@ export async function videoFrameImages(videos: readonly TurnVideoInput[] | undef
   for (const video of videos) {
     if (frames.length >= limit) break;
     let dir: string | undefined;
+    const before = frames.length;
     try {
       const duration = await videoDurationSeconds(video);
       const count = Math.min(VIDEO_SAMPLE_FRAME_COUNT, Math.max(1, Math.ceil(duration)), limit - frames.length);
-      dir = await mkdtemp(join(tmpdir(), "omb-video-frame-"));
+      sweepOrphanedTempFoldersOnce(FRAME_FOLDER_PREFIX);
+      dir = makeOwnedTempFolder(FRAME_FOLDER_PREFIX);
       for (let index = 0; index < count; index += 1) {
         const atSeconds = (duration * (index + 0.5)) / count;
         const outPath = join(dir, `frame-${index}.jpg`);
@@ -103,7 +111,9 @@ export async function videoFrameImages(videos: readonly TurnVideoInput[] | undef
     } finally {
       if (dir) {
         const cleanup = dir;
-        setTimeout(() => { void rm(cleanup, { recursive: true, force: true }); }, FRAME_CLEANUP_DELAY_MS);
+        if (frames.length === before) removeFrameFolder(cleanup);
+        // The timer must not keep a short command alive for ten minutes; the exit hook removes the folder then.
+        else setTimeout(() => removeFrameFolder(cleanup), FRAME_CLEANUP_DELAY_MS).unref();
       }
     }
   }
