@@ -8,8 +8,9 @@
 // c.fx(kind, opts) adds an effect (see fx.js). The bot fades every action in and out with the edge
 // value of the action (default 0.1 of its length).
 
-import { hand, REST, bump, ramp, win, smooth, easeOut, easeInOut, clamp, lerp } from './motion.js';
+import { hand, REST, bump, ramp, win, smooth, easeOut, easeInOut, backOut, clamp, lerp } from './motion.js';
 
+const restL = () => ({ ...REST.L });
 const restR = () => ({ ...REST.R });
 const sq = (k) => ({ sx: 1 + k * 0.6, sy: 1 - k });   // squash (k > 0) or stretch (k < 0), volume kept
 
