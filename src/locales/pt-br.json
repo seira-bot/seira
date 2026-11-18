@@ -8723,7 +8723,7 @@
   "botIdentity.useOrgIcon": "Usar o ícone {name}",
   "botIdentity.uploadUnusable": "Não foi possível usar a imagem enviada como avatar",
   "app.openBotList": "Abrir a lista de bots",
-  "about.tagline": "Um app para reunir seus agentes no computador, baseado no {app}: código aberto com licença Apache 2.0.",
+  "about.summary": "Um app para reunir seus agentes no computador: código aberto com licença Apache 2.0.",
   "about.docs": "Documentação",
   "about.releases": "Versões",
   "about.license": "Licença",
