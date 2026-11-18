@@ -1,4 +1,4 @@
-import { readdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, truncateSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -30,7 +30,7 @@ function setup(cookies: FakeCookie[], options: { version?: 17 | 18 | 23 | 24; se
     written.push(cookies);
     return { running: false, sites: [{ site: "example.com", cookies: cookies.length, storage: 0 }] };
   };
-  return { service: createChromeImportService(deps), tmpRoot, commands, written, write };
+  return { service: createChromeImportService(deps), home, tmpRoot, commands, written, write };
 }
 
 const base: FakeCookie[] = [
@@ -55,9 +55,15 @@ describe("the import service", () => {
     expect(readdirSync(tmpRoot)).toEqual([]);
   });
 
-  it("answers 404 for an unknown profile and 413 for a database over 64 MiB", async () => {
+  it("answers 404 for an unknown profile", async () => {
     const { service } = setup(base);
     await expect(service.sites("chrome:Nope", "owner")).rejects.toMatchObject({ status: 404, message: "That browser profile is no longer available." });
+  });
+
+  it("answers 413 for a cookie database over 64 MiB and reads nothing", async () => {
+    const { service, home } = setup(base);
+    truncateSync(join(home, ".config", "google-chrome", "Default", "Network", "Cookies"), 64 * 1024 * 1024 + 1);
+    await expect(service.sites("chrome:Default", "owner")).rejects.toMatchObject({ status: 413, message: "This Chrome profile is too large to import." });
   });
 
   it("imports only the chosen sites, reads no key before the selection checks out, and wipes", async () => {
