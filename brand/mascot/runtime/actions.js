@@ -8,10 +8,8 @@
 // c.fx(kind, opts) adds an effect (see fx.js). The bot fades every action in and out with the edge
 // value of the action (default 0.1 of its length).
 
-import { hand, REST, bump, ramp, win, smooth, easeOut, easeInOut, backOut, clamp, lerp } from './motion.js';
+import { hand, bump, ramp, win, smooth, easeOut, easeInOut, clamp, lerp } from './motion.js';
 
-const restL = () => ({ ...REST.L });
-const restR = () => ({ ...REST.R });
 const sq = (k) => ({ sx: 1 + k * 0.6, sy: 1 - k });   // squash (k > 0) or stretch (k < 0), volume kept
 
 // Hop curve: anticipation squash, jump with stretch, landing squash, settle. Returns { y, k } with k for sq().
@@ -150,7 +148,7 @@ export const ACTION_FNS = {
       face = 'sneeze-choo';
       pitch = lerp(-1, 1, easeOut(q * 2));
       hy = lerp(-0.05, 0.16, easeOut(q * 2));
-      k = 0.16 * Math.sin(Math.min(1, q * 1.3) * Math.PI / 2 + Math.PI / 2 * 0);
+      k = 0.16 * Math.sin(Math.min(1, q * 1.3) * Math.PI / 2);
       jit = (1 - q) * 0.02;
     } else {
       const q = (p - 0.6) / 0.4;
