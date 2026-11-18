@@ -11,7 +11,7 @@ import { FilesView } from "./FilesView";
 const GB = 1024 ** 3;
 const folder = (status: SharedFolder["status"], extra: Partial<SharedFolder> = {}): SharedFolder =>
   ({ id: `f-${status}`, name: `Folder ${status}`, pcPath: `/Users/ada/${status}`, status, files: 1200, done: 400, waitingBytes: 0, pendingDeletes: 3, problem: null, ...extra });
-const base: CloudFilesState = { phase: "idle", lastSyncedAt: 1, disk: null, shared: [], outputs: { enabled: false, dir: "/Users/ada/Documents/MausBot", folders: 0, problem: null } };
+const base: CloudFilesState = { phase: "idle", lastSyncedAt: 1, disk: null, shared: [], outputs: { enabled: false, dir: "/Users/ada/Documents/Seira", folders: 0, problem: null } };
 const check = (name: string, extra: Partial<FolderCheck> = {}): FolderCheck =>
   ({ token: `t-${name}`, name, pcPath: `/Users/ada/${name}`, files: 120, bytes: 3 * 1024 ** 2, partial: false, refusal: null, ...extra });
 
@@ -235,6 +235,13 @@ describe("Your bots' work", () => {
     expect(bridge.open).toHaveBeenCalledWith({ outputs: true });
     await act(async () => emit({ ...base, outputs: { ...base.outputs, enabled: true, problem: "Documents › Seira is full." } }));
     expect(page()).toContain("Documents › Seira is full.");
+  });
+
+  it("names the folder this computer really uses: Documents › MausBot where it was already there, and on Windows too", async () => {
+    await mount({ ...base, outputs: { ...base.outputs, dir: "/Users/ada/Documents/MausBot" } });
+    expect(page()).toContain("In Documents › MausBot, one folder for each bot.");
+    await act(async () => emit({ ...base, outputs: { ...base.outputs, dir: "C:\\Users\\Ada\\Documents\\Seira" } }));
+    expect(page()).toContain("In Documents › Seira, one folder for each bot.");
   });
 });
 

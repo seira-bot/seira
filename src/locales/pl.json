@@ -1137,7 +1137,7 @@
   "files.almostFull": "Chmura jest prawie pełna.",
   "files.outputs.title": "Praca twoich botów",
   "files.outputs.switch": "Zapisuj na tym komputerze to, co tworzą boty w Chmurze",
-  "files.outputs.help": "W Dokumentach › Seira, po jednym folderze dla każdego bota.",
+  "files.outputs.help": "W Dokumentach › {folder}, po jednym folderze dla każdego bota.",
   "files.outputs.open": "Otwórz folder",
   "files.offline": "Chmura jest teraz nieosiągalna. Udostępnianie plików wznowi się, gdy wróci.",
   "files.asleep": "Chmura śpi. Pliki zsynchronizują się, gdy się obudzi.",
