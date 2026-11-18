@@ -2157,6 +2157,14 @@ body {
 @keyframes slot-fade-in {
   from { opacity: 0; }
 }
+@keyframes slot-morph-in {
+  from { opacity: 0; transform: scale(0.96); }
+}
+.animate-slot-morph { animation: slot-morph-in 150ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-slot-morph { animation: none; }
+}
+:root[data-reduced-motion="true"] .animate-slot-morph { animation: none; }
 .reply-bubble {
   width: fit-content;
   max-width: min(100%, 36rem);
