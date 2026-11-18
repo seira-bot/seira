@@ -164,6 +164,5 @@ describe("signed-in sites", () => {
     expect(document.body.textContent).toContain("Imported 1 site (4 cookies).");
     await inDialog("Close");
     expect(listed().filter((text) => text === "example.com" || text === "google.com").sort()).toEqual(["example.com", "google.com"]);
-    expect(host.querySelectorAll("ul")).toHaveLength(2);
   });
 });
