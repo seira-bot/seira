@@ -1120,13 +1120,13 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
     ...(pinnedBots.length > 0 && !universalPins && !simpleDesk ? [PINNED_SECTION_ID] : []),
     ...(unsectionedRooms.length > 0 ? [CHANNELS_SECTION_ID] : []),
     ...(botChats.length > 0 ? [BOT_CHATS_SECTION_ID] : []),
-    ...((simpleDesk ? false : unsectionedBots.length > 0) || drops.slot ? [BOTS_SECTION_ID] : []),
+    ...(unsectionedBots.length > 0 || drops.slot ? [BOTS_SECTION_ID] : []),
     ...sectionNames.map(userSectionId),
   ];
   const layout = sections.arrange(naturalSectionIds);
   const sectionIds = layout.sectionIds;
   const showPinnedCircleThreads = !simpleDesk && pinnedCircleThreadListVisible(pinnedCircles, density, pinnedBots.length);
-  const tiles = simpleDesk && (primary !== null || pinnedBots.length > 0 || unsectionedBots.length > 0);
+  const tiles = simpleDesk && (primary !== null || pinnedBots.length > 0);
   const { interactive: layoutInteractive, collapsed: sectionCollapsed, toggle: toggleSection } = sections;
   const archivedBots = state.bots.filter((bot) => bot.hidden && !bot.movedTo);
   const archivedEntry = remoteClient ? undefined : { count: archivedBots.length, open: () => setArchivedBotsOpen(true) };
@@ -1364,7 +1364,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
           onToggle={layoutInteractive ? () => toggleSection(PINNED_THREADS_SECTION_ID) : undefined}
         />
       )}
-      {tiles && <SidebarTileGrid primary={primary} pinned={pinnedBots} others={unsectionedBots} row={botRow} onAdd={teamSettingsAllowed !== false || state.config?.team ? () => dispatch({ type: "newBot" }) : undefined} />}
+      {tiles && <SidebarTileGrid primary={primary} pinned={pinnedBots} row={botRow} onAdd={teamSettingsAllowed !== false || state.config?.team ? () => dispatch({ type: "newBot" }) : undefined} />}
       {simpleDesk && !tiles && <SidebarNoBots />}
       </GlassBar>
 
@@ -1400,7 +1400,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
               id === PINNED_SECTION_ID
                 ? pinnedBots
                 : id === BOTS_SECTION_ID
-                  ? simpleDesk ? [] : unsectionedBots
+                  ? unsectionedBots
                   : sectionName
                     ? sectionedBots.filter((bot) => bot.section === sectionName)
                     : [];
