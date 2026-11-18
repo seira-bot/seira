@@ -12,6 +12,7 @@ const f = vi.hoisted(() => ({ found: null as unknown as Announcements, dispatch:
 vi.mock("./use-announcements", () => ({ useAnnouncements: () => f.found }));
 vi.mock("@/state/store", () => ({ useStore: () => ({ state: f.state, dispatch: f.dispatch }), api: vi.fn() }));
 vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
+vi.mock("@/lib/seira-cloud", () => ({ SEIRA_CLOUD_PLANS: ["pro", "team"] }));
 vi.mock("@/components/Avatar", () => ({ MausAvatar: () => null }));
 vi.mock("../lazy-screens", () => ({ GrokMoveDialog: () => createElement("div", { "data-grok-move-dialog": "" }) }));
 vi.mock("@/lib/announcement-history", async original => ({ ...await original<typeof import("@/lib/announcement-history")>(), rememberNoticeSeen: f.remembered }));

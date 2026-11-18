@@ -1389,7 +1389,7 @@
   "files.almostFull": "Cloud 的空間快滿了。",
   "files.outputs.title": "你的機器人的工作成果",
   "files.outputs.switch": "將 Cloud 上的機器人產生的內容儲存到這台電腦",
-  "files.outputs.help": "位於「文件 › Seira」，每個機器人一個資料夾。",
+  "files.outputs.help": "位於「文件 › {folder}」，每個機器人一個資料夾。",
   "files.outputs.open": "開啟資料夾",
   "files.offline": "目前無法連線到 Cloud。恢復連線後，檔案會繼續同步。",
   "files.asleep": "Cloud 正在休眠。喚醒後檔案會同步。",

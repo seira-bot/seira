@@ -19,6 +19,18 @@ test("the page for a server that never came up keeps its English, link and all",
   assert.ok(page(buildErrorPage({ allPortsOccupied: true, logDir })).includes("Every Seira port answered health checks from another process"));
 });
 
+test("the page shows the app icon, never a mouse", () => {
+  const html = page(buildErrorPage({ allPortsOccupied: false, logDir }));
+  assert.match(html, /<img src="data:image\/png;base64,[A-Za-z0-9+/=]{1000,}" alt="" width="64" height="64"/u);
+  assert.ok(!html.includes("🐭"));
+});
+
+test("an icon that cannot be read leaves the page without an image, with its message", () => {
+  const html = page(buildErrorPage({ allPortsOccupied: false, logDir, iconPath: path.resolve("/missing/app-icon.png") }));
+  assert.ok(!html.includes("<img"));
+  assert.match(html, /Couldn't start the bot server<\/h2>/u);
+});
+
 test("the page speaks the app's language, with the log's link where the sentence puts it", () => {
   const text = nativeText.createNativeText({ saved: "pt-br" });
   const html = page(buildErrorPage({ allPortsOccupied: true, logDir }, text));

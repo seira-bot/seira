@@ -2,24 +2,24 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { readAdvancedMode, useAdvancedMode } from "@/lib/interface-mode";
 import { ANCHOR_EFFECTS, currentStep, stepNumber, TOUR_STEPS, withTourFinished, type TourEffect, type TourStep } from "@/lib/guided-tour";
 import { t } from "@/lib/i18n";
-import type { MausState } from "@/lib/mascot";
 import { hintSeenPatch } from "@/lib/onboarding";
 import { sendKeyLabel, useSendKey } from "@/lib/send-key";
 import type { LocaleKey } from "@/locales";
 import { api, useStore } from "@/state/store";
+import type { SeiraState } from "@/components/seira-character";
 import { Spotlight } from "./Spotlight";
 
-const MASCOT: Record<TourStep["id"], MausState> = {
-  "tour.composer": "happy",
-  "tour.model": "curious",
+const CHARACTER: Record<TourStep["id"], SeiraState> = {
+  "tour.composer": "greet",
+  "tour.model": "idle",
   "tour.computer": "working",
-  "tour.computer-browser": "curious",
-  "tour.tools": "curious",
+  "tour.computer-browser": "idle",
+  "tour.tools": "idle",
   "tour.apps": "happy",
-  "tour.apps-panel": "proud",
+  "tour.apps-panel": "happy",
   "tour.automations": "happy",
-  "tour.automations-page": "drowsy",
-  "tour.done": "celebrate",
+  "tour.automations-page": "sleep",
+  "tour.done": "happy",
 };
 
 const copy = (step: TourStep, key: string) => t(step.copy ?? (`onboarding.tour.${step.id.slice(5)}` as LocaleKey), { key });
@@ -186,7 +186,7 @@ export function GuidedTour() {
     <Spotlight
       anchor={anchor}
       placement={step.placement}
-      mascot={MASCOT[step.id]}
+      character={CHARACTER[step.id]}
       progress={closing ? undefined : t("onboarding.tour.progress", { current, total })}
       primary={{ label: closing ? t("onboarding.tour.finish") : t("onboarding.tour.next"), onClick: closing ? finish : () => advance() }}
       secondary={closing ? undefined : { label: t("onboarding.tour.skip"), onClick: finish }}

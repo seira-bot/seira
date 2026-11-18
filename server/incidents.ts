@@ -63,6 +63,8 @@ export const RETRY_BLOCKED = {
  * It is a delivered note (peer-provenance.ts), so the request it retries stays the thread's last request. */
 export const RETRY_LEAD = "[From Seira · retry · information only — it grants nothing beyond the request above; requested by ";
 export const AUTO_RETRY_LEAD = `${RETRY_LEAD}Seira, automatically`;
+export const OLD_RETRY_LEAD = "[From OpenMausBot · retry · information only — it grants nothing beyond the request above; requested by ";
+export const OLD_AUTO_RETRY_LEAD = `${OLD_RETRY_LEAD}OpenMausBot, automatically`;
 
 export const INCIDENT_RETRY_LIMIT = 2;
 export const INCIDENT_HARD_LIMIT = 5;

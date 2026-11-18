@@ -9,6 +9,7 @@ import type { LocaleKey } from "@/locales";
 import { useStore } from "@/state/store";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useCaptionChrome } from "./DesktopCapabilities";
+import { SeiraCharacter } from "./seira-character";
 import { Switch } from "./SettingsPrimitives";
 import { MENU_SHEET } from "./menu-recipe";
 
@@ -20,6 +21,8 @@ const SETTINGS = { type: "toggleAppSettings", open: true, section: "cloudAccount
 type Run = (action: () => Promise<CloudFilesState | void>) => Promise<void>;
 type Ask = { kind: "share"; check: FolderCheck } | { kind: "stop"; folder: SharedFolder } | { kind: "suggest"; checks: FolderCheck[]; chosen: string[] };
 
+/** The folder under Documents that this computer really uses for the bots' work: its last name. */
+const folderName = (dir: string) => dir.split(/[\\/]/).filter(Boolean).pop() ?? "Seira";
 const count = (value: number) => new Intl.NumberFormat(activeLocale()).format(value);
 const formatBytes = (value: number) => {
   const power = value >= 1024 ** 3 ? 3 : value >= 1024 ** 2 ? 2 : 1;
@@ -124,7 +127,7 @@ function FilesPage({ bridge }: { bridge: CloudFilesBridge }) {
         ? <ul className="flex flex-col divide-y divide-hairline/40 rounded-xl bg-card">
           {state.shared.map((folder) => <FolderRow key={folder.id} folder={folder} bridge={bridge} busy={busy} run={run} onStop={() => setAsk({ kind: "stop", folder })} />)}
         </ul>
-        : <p className="text-[13px] text-ink-secondary">{t("files.empty")}</p>}
+        : <div className="flex items-center gap-3"><SeiraCharacter state="sleep" size={48} /><p className="text-[13px] text-ink-secondary">{t("files.empty")}</p></div>}
       <button type="button" disabled={busy} className="ui-button self-start"
         onClick={() => void run(async () => { const check = await bridge.pickFolder(); if (check) setAsk({ kind: "share", check }); })}>{t("files.add")}</button>
       {state.disk && <Storage disk={state.disk} busy={busy} onMore={moreSpace} />}
@@ -135,7 +138,7 @@ function FilesPage({ bridge }: { bridge: CloudFilesBridge }) {
         <div className="flex w-full items-start justify-between gap-4">
           <div className="min-w-0">
             <p id="files-outputs-switch" className="text-[14px] text-ink">{t("files.outputs.switch")}</p>
-            <p className="mt-1 text-[12px] text-ink-secondary">{t("files.outputs.help")}</p>
+            <p className="mt-1 text-[12px] text-ink-secondary">{t("files.outputs.help", { folder: folderName(state.outputs.dir) })}</p>
           </div>
           <Switch checked={state.outputs.enabled} disabled={busy} aria-labelledby="files-outputs-switch"
             onClick={() => void run(() => bridge.setOutputs(!state.outputs.enabled))} />

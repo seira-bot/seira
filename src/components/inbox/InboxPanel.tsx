@@ -14,6 +14,7 @@ import { matchesSearch, nextAfter } from "./inbox-answer";
 import { listedRows, waitingCount } from "./inbox-view";
 import { useInboxActions } from "./use-inbox-actions";
 import { roundButtonCls } from "../bot-panel/rows";
+import { SeiraCharacter } from "../seira-character";
 
 
 export function InboxPanel() {
@@ -98,10 +99,13 @@ export function InboxPanel() {
               <div role="list" data-inbox-list aria-label={t("inbox.panel.title")} className="space-y-0.5 px-1.5 pb-1.5">
                 {rows.length === 0
                   ? query.trim() && listedRows(view).length
-                    ? <p className="px-4 py-8 text-center text-[13px] text-ink-secondary">{t("inbox.noMatch")}</p>
+                    ? <div className="flex flex-col items-center px-4 py-8 text-center text-[13px] text-ink-secondary">
+                      <SeiraCharacter state="idle" size={64} />
+                      <p className="mt-2">{t("inbox.noMatch")}</p>
+                    </div>
                     : (
                       <div data-inbox-empty className="mx-auto flex max-w-[16rem] flex-col items-center px-4 py-10 text-center">
-                        <Inbox size={22} strokeWidth={1.5} aria-hidden="true" className="text-ink-tertiary" />
+                        <SeiraCharacter state="sleep" size={96} />
                         <p className="mt-3 text-[14px] font-medium text-ink">{t("inbox.empty")}</p>
                         <p className="mt-1 text-[13px] leading-[18px] text-ink-tertiary">{t("inbox.emptyHint")}</p>
                       </div>

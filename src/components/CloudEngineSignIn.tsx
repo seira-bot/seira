@@ -1,17 +1,15 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowUpRight, Check, Info, KeyRound, RefreshCw } from "lucide-react";
-import { MausAvatar } from "@/components/Avatar";
 import { startCloudSetup } from "@/components/CloudIntent";
 import { engineReady } from "@/components/EngineLibrary";
 import { EngineCheckLine, useEngineLiveCheck } from "@/components/EngineLiveCheck";
 import { EngineSetup } from "@/components/EngineSetup";
 import { ProviderMark } from "@/components/ProviderIcons";
+import { SeiraCharacter, type SeiraState } from "@/components/seira-character";
 import { staggerIndex } from "@/components/onboarding/beats/shared";
-import { productName } from "@/lib/brand";
 import { reopenCloudIntent, setPendingIntent, useCloudIntent } from "@/lib/cloud-intent";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
-import type { MausMotion, MausState } from "@/lib/mascot";
 import { withViewTransition } from "@/components/onboarding/view-transition";
 import { useStore, type InstanceInfo } from "@/state/store";
 import { openKeySettings } from "./keys/key-focus";
@@ -160,12 +158,6 @@ export function cloudEngineChoices(engines: CloudEngineChoices, { handing = fals
 export function CloudEngineSignIn() {
   const engines = useCloudEngineChoices();
   const { state, dispatch } = useStore();
-  const [motion, setMotion] = useState<{ kind: MausMotion; key: number }>({ kind: "none", key: 0 });
-  // One frame late: a motion issued in the avatar's mounting commit is lost.
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setMotion({ kind: "arrive", key: 1 }));
-    return () => cancelAnimationFrame(frame);
-  }, []);
   const { pending } = useCloudIntent();
   const ready = state.instances.some(engineReady);
   const latest = useRef(state);
@@ -174,17 +166,15 @@ export function CloudEngineSignIn() {
   useEffect(() => {
     if (!pending || !ready) return;
     setHanding(true);
-    setMotion({ kind: "success", key: 2 });
     const timer = setTimeout(() => {
       if (!startCloudSetup(pending, latest.current, dispatch)) setPendingIntent(null);
     }, 1200);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pending, ready]);
-  let face: MausState = "curious";
-  if (handing) face = "proud";
-  else if (engines.checking) face = "searching";
-  else if (engines.open) face = "listening";
+  let face: SeiraState = "attention";
+  if (handing) face = "happy";
+  else if (engines.checking) face = "thinking";
   const credit = state.instances.find((instance) => instance.trialCredit && instance.trialCredit !== "active")?.trialCredit;
 
   return (
@@ -195,7 +185,7 @@ export function CloudEngineSignIn() {
       />
       <div className="stagger relative mx-auto flex w-full max-w-[540px] flex-col px-6 pb-12 pt-[clamp(48px,10vh,112px)]">
         <div className="animate-rise flex flex-col items-center text-center" style={staggerIndex(0)}>
-          <MausAvatar color="green" state={face} motion={motion.kind} motionKey={motion.key} size={64} label={productName()} />
+          <SeiraCharacter state={face} size={104} />
         </div>
         {pending && (
           <figure data-cloud-intent-pending className="mt-6 rounded-2xl bg-composer px-4 pb-3 pt-2.5 ring-1 ring-composer-ring" style={{ viewTransitionName: "cloud-intent" }}>

@@ -19,10 +19,12 @@ import { BotAvatar } from "./Avatar";
 import { useAvatarImage } from "./avatar-editing";
 import { MausBotCustomize } from "./MausBotCustomize";
 import { usePrefersReducedMotion } from "./mascot-clock";
+import { SeiraHero, takeOff } from "./onboarding/SeiraHero";
 
 const LOOK = ["name", "color", "mascotBody", "avatarUrl", "avatarCrop", "avatarZoom", "avatarFocusX", "avatarFocusY"] as const;
 export type WelcomeDraft = Pick<Bot, (typeof LOOK)[number]>;
 const RECEDE_MS = 240;
+const CHARACTER_SIZE = 120;
 const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 export const welcomeName = (name: string): string => name.trim().slice(0, BOT_PROFILE_LIMITS.name) || DEFAULT_BOT_NAME;
@@ -113,6 +115,8 @@ export function MausBotWelcomeCard({ bot, onClose }: { bot: Bot; onClose: () => 
   const nameRef = useRef<HTMLInputElement>(null);
   const name = welcomeName(draft.name);
   const preview: Bot = { ...bot, ...draft, name };
+  const ownPicture = Boolean(preview.avatarUrl) && preview.avatarCrop !== "mascot";
+  const seiraLook = !ownPicture && (preview.mascotBody ?? DEFAULT_BOT_BODY) === DEFAULT_BOT_BODY;
   const edit = (patch: Partial<WelcomeDraft>) => setDraft((current) => ({ ...current, ...patch }));
   const image = useAvatarImage(preview, edit);
   useEffect(() => { dialogRef.current?.focus(); }, []);
@@ -130,8 +134,10 @@ export function MausBotWelcomeCard({ bot, onClose }: { bot: Bot; onClose: () => 
     setLeaving(true);
     const patch = welcomePatch(bot, draft, add);
     const commit = () => { setWelcomingBot(null); dispatch({ type: "updateBot", botId: bot.id, patch }); };
-    if (add) landInSidebar({ from: avatarRef.current, botId: bot.id, reduced, commit });
-    else commit();
+    if (add) {
+      if (!reduced) takeOff(avatarRef.current);
+      landInSidebar({ from: avatarRef.current, botId: bot.id, reduced, commit });
+    } else commit();
     recede();
   };
 
@@ -183,7 +189,7 @@ export function MausBotWelcomeCard({ bot, onClose }: { bot: Bot; onClose: () => 
           >
             <span className="pointer-events-none absolute inset-1 rounded-full ring-0 ring-accent/35 transition-[box-shadow] duration-200 group-hover:ring-2 group-focus-visible:ring-2" aria-hidden="true" />
             <span ref={avatarRef} data-mausbot-welcome-avatar="" className="block drop-shadow-[0_10px_24px_rgba(0,0,0,0.22)]">
-              <BotAvatar bot={preview} size={96} label={name} motion="arrive" />
+              {seiraLook ? <SeiraHero bot={preview} state="greet" size={CHARACTER_SIZE} /> : <BotAvatar bot={preview} size={96} label={name} motion="arrive" />}
             </span>
             <span aria-hidden="true" className="absolute bottom-2 right-2 flex size-7 items-center justify-center rounded-full border border-hairline/60 bg-panel text-ink-secondary shadow-sm transition-colors group-hover:text-ink">
               <Pencil size={13} />

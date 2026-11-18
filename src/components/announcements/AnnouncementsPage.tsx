@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
-import { Cloud, Gift, Megaphone, Rocket, UsersRound } from "lucide-react";
+import { Cloud, Gift, Rocket, UsersRound } from "lucide-react";
 import type { CloudOffer } from "../../../electron/cloud-home.mjs";
 import { itemSeen, rememberNoticeSeen, type HistoryAction, type HistoryItem, type HistoryMark, type HistoryModal } from "@/lib/announcement-history";
 import { openEmailDraft, openExternalLink } from "@/lib/app-links";
@@ -15,6 +15,7 @@ import { GrokMovePopup } from "../GrokMovePopup";
 import { GrokMoveDialog } from "../lazy-screens";
 import { PRIMARY_BUTTON } from "../NoticeCard";
 import { ModelgoMark, type IconProps } from "../ProviderIcons";
+import { SeiraCharacter } from "../seira-character";
 import { TOOL_PAGE_TITLE, ToolPage, ToolPageHeader } from "../ToolPageShell";
 import { TeamsPopup } from "../whats-new/TeamsPopup";
 import { WhatsNewPopup } from "../whats-new/WhatsNewPopup";
@@ -96,7 +97,7 @@ export function AnnouncementList({ items, locale = activeLocale(), onModal, canR
 }) {
   if (!items.length) {
     return <section aria-label={t("announcements.empty")} className="px-6 py-16 text-center">
-      <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl bg-accent/10 text-accent"><Megaphone size={22} /></div>
+      <SeiraCharacter state="sleep" size={96} className="mx-auto mb-2" />
       <p className="text-[14px] text-ink-secondary">{t("announcements.empty")}</p>
     </section>;
   }

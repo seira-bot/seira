@@ -13,6 +13,7 @@ vi.mock("react", async original => ({ ...await original<typeof import("react")>(
 vi.mock("@/state/store", () => ({ useStore: () => ({ dispatch: f.dispatch }),
   CLOUD_LINK_SETTINGS: { type: "toggleAppSettings", open: true, section: "cloudAccount", cloudLink: true } }));
 import { ProSettingsCard, proOfferAvailable } from "./ProIntroduction";
+vi.mock("@/lib/seira-cloud", () => ({ SEIRA_CLOUD_PLANS: ["pro", "team"] })); // these tests cover the sale itself
 
 const PLANS = [{ tier: "starter", label: "Starter", amount: 1500, trialDays: 7 }, { tier: "pro", label: "Pro", amount: 4900, trialDays: 7 }];
 const TRIAL: CloudOffer = { plans: PLANS, recommended: "pro", creditUsd: 5, refundDays: 14 };
@@ -51,7 +52,7 @@ it("for someone who may buy: what Cloud does, the Admin's lowest price and money
   const html = await card(signedOut);
   for (const text of ["Seira Cloud", "Keeps your bots and routines running 24/7, even when this computer is off.", "Seira Cloud plans from $15/month + tax.",
     "14-day money-back on every plan.", "Seira on this computer stays free and open source.", "Compare plans", "Start free trial", "Sign in to your Cloud plan"]) expect(html).toContain(text);
-  for (const gone of ["OMB", "$89", "launch price", "New features first", "Get Pro", "Seira Pro", "MausBot"]) expect(html).not.toContain(gone);
+  for (const gone of ["OMB", "$89", "launch price", "New features first", "Get Pro", "Seira Pro", "OMB Cloud", "OpenMausBot Cloud", "MausBot"]) expect(html).not.toContain(gone);
   press("Start free trial");
   expect(f.dispatch).toHaveBeenCalledWith({ type: "openCloudAdd", source: "app_settings" });
   f.dispatch.mockClear();

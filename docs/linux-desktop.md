@@ -32,8 +32,8 @@ CUA supply-chain work is tracked in [issue #113](https://github.com/milind-soni/
 
 Choose one Ubuntu 24.04 x86_64 package from the latest release:
 
-- [Debian package (`OpenMausBot-amd64.deb`)](https://github.com/seira-bot/seira/releases/latest/download/Seira-amd64.deb) — recommended; APT installs its desktop dependencies and configures the bundled bot browser's sandbox.
-- [Portable AppImage (`OpenMausBot.AppImage`)](https://github.com/seira-bot/seira/releases/latest/download/Seira.AppImage) — does not install system files.
+- [Debian package (`Seira-amd64.deb`)](https://github.com/seira-bot/seira/releases/latest/download/Seira-amd64.deb) — recommended; APT installs its desktop dependencies and configures the bundled bot browser's sandbox.
+- [Portable AppImage (`Seira.AppImage`)](https://github.com/seira-bot/seira/releases/latest/download/Seira.AppImage) — does not install system files.
 - [SHA-256 checksums](https://github.com/seira-bot/seira/releases/latest/download/SHA256SUMS-ubuntu-x64.txt)
 
 Versioned packages and previous releases remain available on the
@@ -57,8 +57,8 @@ pnpm package:linux
 
 The build creates:
 
-- `release/OpenMausBot-<version>-amd64.deb`
-- `release/OpenMausBot-<version>-x86_64.AppImage`
+- `release/Seira-<version>-amd64.deb`
+- `release/Seira-<version>-x86_64.AppImage`
 
 The AppImage uses a static runtime and does not require the legacy `libfuse2` package.
 
@@ -67,7 +67,7 @@ The AppImage uses a static runtime and does not require the legacy `libfuse2` pa
 Install a downloaded Debian package with APT so its desktop dependencies are resolved:
 
 ```sh
-sudo apt install ./OpenMausBot-amd64.deb
+sudo apt install ./Seira-amd64.deb
 ```
 
 Then open **Seira** from the GNOME application launcher. To remove it:
@@ -79,11 +79,11 @@ sudo apt remove openmausbot
 The portable AppImage does not install system files:
 
 ```sh
-chmod +x release/OpenMausBot-*-x86_64.AppImage
-./release/OpenMausBot-*-x86_64.AppImage
+chmod +x release/Seira-*-x86_64.AppImage
+./release/Seira-*-x86_64.AppImage
 ```
 
-For a downloaded release AppImage, use `OpenMausBot.AppImage` in place of the versioned path above.
+For a downloaded release AppImage, use `Seira.AppImage` in place of the versioned path above.
 
 ### Arch Linux and EndeavourOS
 
@@ -96,7 +96,7 @@ profile; whether a pacman upgrade re-applies the install steps has not been veri
 
 ```sh
 pnpm package:arch
-sudo pacman -U release/OpenMausBot-<version>-x64.pacman
+sudo pacman -U release/Seira-<version>-x64.pacman
 ```
 
 Replace `<version>` with the built version (for example, `0.1.149`). Then launch `openmausbot` from the application launcher or command line.
@@ -106,8 +106,8 @@ A minimal Arch install lacks the FUSE helper and some desktop libraries the AppI
 
 ```sh
 sudo pacman -S --needed fuse3 gtk3 nss alsa-lib libcups mesa
-chmod +x OpenMausBot.AppImage
-./OpenMausBot.AppImage
+chmod +x Seira.AppImage
+./Seira.AppImage
 ```
 
 A full desktop install (for example EndeavourOS with KDE or GNOME) usually has all of these already, and
@@ -179,7 +179,7 @@ It also probes the login shell in the background. If a CLI still is not detected
 path before launching the app from a terminal and verify it there:
 
 ```sh
-OMB_EXTRA_PATH=/your/custom/bin ./release/OpenMausBot-*-x86_64.AppImage
+OMB_EXTRA_PATH=/your/custom/bin ./release/Seira-*-x86_64.AppImage
 ```
 
 Restart Seira after installing or signing in to a CLI.
@@ -356,8 +356,8 @@ open a new chooser. Cancelling or stopping sharing never causes an automatic sec
 Confirm the executable bit and architecture:
 
 ```sh
-chmod +x OpenMausBot-*-x86_64.AppImage
-file OpenMausBot-*-x86_64.AppImage
+chmod +x Seira-*-x86_64.AppImage
+file Seira-*-x86_64.AppImage
 ```
 
 Run it from a terminal once to collect the startup output. Do not install `libfuse2` just for this AppImage; the

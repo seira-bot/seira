@@ -14,6 +14,7 @@ import type { WelcomeViewer } from "@/lib/onboarding";
 import { useStore } from "@/state/store";
 import { useDesktopNotices } from "../desktop-notices";
 import { localDesktopPage, useWelcomeViewer } from "../onboarding/WelcomeGate";
+import { cloudSells } from "@/lib/cloud-sale";
 
 /** An organization runs this desktop: null while main answers; false in a browser. */
 function useOrganization(): boolean | null {
@@ -75,7 +76,7 @@ export function useAnnouncements(now: () => number = Date.now): Announcements {
   const sponsors = SPONSOR_CARDS_FOR_TEAM_MEMBERS || !team || viewer?.canSave === true;
   const facts: HistoryFacts = {
     branded, organization, remote, team, canSave, sponsors,
-    cloudSale: Boolean(bridge && desktop), cloudCards: Boolean(bridge || (!remote && cloudHome && window.ogb?.cloudPlan)),
+    cloudSale: Boolean(bridge && desktop) && cloudSells(), cloudCards: Boolean(bridge || (!remote && cloudHome && window.ogb?.cloudPlan)),
     modelgo: modelgoOfferable(state.config?.managedPolicy),
   };
   const surface = announcementSurface(local, cloudHome);
