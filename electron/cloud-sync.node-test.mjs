@@ -100,7 +100,7 @@ test("repeated output failures reach the Files state and clear after a successfu
   s.cloud.client.download = download;
   await s.service.pass();
   assert.equal(s.service.state().outputs.problem, null);
-  assert.equal(readFileSync(join(s.home, "Documents", "MausBot", "Owl", "Report", "report.md"), "utf8"), "the report");
+  assert.equal(readFileSync(join(s.home, "Documents", "Seira", "Owl", "Report", "report.md"), "utf8"), "the report");
 });
 
 test("only a folder this computer shared is ever synced: one My Cloud names for it is never read or written", async (t) => {
