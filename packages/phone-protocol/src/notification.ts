@@ -54,14 +54,15 @@ export interface Notification {
    * passed a message to. It reaches nobody else, an admin included. */
   forPerson?: string;
   /** The request this notification waits on, so a phone can answer that exact request from the banner. It is set for
-   * `approval`, `question`, `secret` and `sign-in`, and absent for every other kind and for a client that predates it.
-   * For `approval` and `question` it is the card's `requestId`: answer it with
-   * `POST /api/threads/:threadId/respond` and `{ requestId, behavior: "allow" | "deny" | "answer", message? }`, using this
-   * notification's `threadId`. For `secret` it is the secure card's message id: answer it with
-   * `POST /api/bots/:botId/secret-cards/:requestId/provide`, `dismiss` or `resume`. For `sign-in` it is the card's message
-   * id: answer it with `POST /api/bots/:botId/sign-in-cards/:requestId/done` or `cancel`, or, for an app connection,
-   * `POST /api/bots/:botId/connector-cards/:requestId/resume`, `dismiss` or `authorize`. A phone that cannot find the
-   * request any more (it settled elsewhere) opens `threadId` instead. */
+   * `approval`, `question`, `secret` and `sign-in`, and absent for every other kind, for a request with no card, and for a
+   * client that predates it. Answer it in the conversation named by `threadId`.
+   * - `approval` and `question`: the card's `requestId`. `POST /api/threads/:threadId/respond` with
+   *   `{ requestId, behavior: "allow" | "deny" | "answer", message? }`.
+   * - `secret`: the secure card's message id. `POST /api/bots/:botId/secret-cards/:requestId/(provide|save|use|resume|dismiss)`
+   *   with `threadId` in the body.
+   * - `sign-in`: the card's message id. For a website, `POST /api/bots/:botId/sign-in-cards/:requestId/(done|cancel)`; for an
+   *   app connection, `POST /api/bots/:botId/connector-cards/:requestId/(authorize|resume|dismiss)`; `threadId` in the body.
+   * A phone that cannot find the request any more (it settled elsewhere) opens `threadId` instead. */
   requestId?: string;
 }
 
