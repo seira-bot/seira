@@ -18,7 +18,7 @@ describe("filesHolding", () => {
     writeFileSync(join(root, "b.json"), "the secret");
     writeFileSync(join(root, "deep", "er", "a.json"), "x the secret y");
     writeFileSync(join(root, "c.json"), "nothing here");
-    expect(filesHolding(root, "the secret")).toEqual([join("deep", "er", "a.json"), "b.json"]);
+    expect(filesHolding(root, "the secret")).toEqual(["b.json", join("deep", "er", "a.json")]);
   });
 
   it("leaves out what the caller skips", () => {
