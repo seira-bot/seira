@@ -1,0 +1,33 @@
+{
+  "budgets": [
+    { "metric": "/bundle/initial/jsGzipKb", "max": 1450, "kind": "count" },
+    { "metric": "/bundle/initial/cssKb", "max": 370, "kind": "count" },
+    { "metric": "/idle/small/pages/app/reactCommits", "max": 4, "kind": "count" },
+    { "metric": "/idle/small/pages/app/longTasks", "max": 0, "kind": "count" },
+    { "metric": "/idle/small/pages/app/timerCallbacksPerSec", "max": 0.5, "kind": "count" },
+    { "metric": "/idle/small/pages/rail/reactCommits", "max": 1, "kind": "count" },
+    { "metric": "/idle/small/serverTimerCallbacksPerSec", "max": 1.5, "kind": "count" },
+    { "metric": "/stream/small/componentsRenderedPerCommit", "max": 30, "kind": "count" },
+    { "metric": "/stream/small/maxComponentsInOneCommit", "max": 470, "kind": "count" },
+    { "metric": "/big/stream/componentsRenderedPerCommit", "max": 80, "kind": "count" },
+    { "metric": "/big/stream/maxComponentsInOneCommit", "max": 1450, "kind": "count" },
+    { "metric": "/big/load/componentsMounted", "max": 3900, "kind": "count" },
+    { "metric": "/big/load/domNodes", "max": 7800, "kind": "count" },
+    { "metric": "/big/switchProfiled/backToBig/mounts", "max": 1550, "kind": "count" },
+    { "metric": "/big/scroll/domNodesAfter", "max": 16500, "kind": "count" },
+    { "metric": "/big/idle/pages/app/reactCommits", "max": 2, "kind": "count" },
+    { "metric": "/big/idle/pages/app/longTasks", "max": 0, "kind": "count" },
+    { "metric": "/server/bundleReadyMs/cold", "max": 2000, "kind": "time" },
+    { "metric": "/big/load/usefulMs", "max": 2000, "kind": "time" },
+    { "metric": "/big/load/longestTaskMs", "max": 1000, "kind": "time" },
+    { "metric": "/big/switchProfiled/backToBig/longestTaskMs", "max": 700, "kind": "time" },
+    { "metric": "/big/scroll/frameMsP95", "max": 33, "kind": "time" },
+    { "metric": "/stream/small/longestTaskMs", "max": 400, "kind": "time" },
+    { "metric": "/big/stream/longestTaskMs", "max": 700, "kind": "time" },
+    { "metric": "/idle/small/chromeCpuPct/renderer", "max": 3, "kind": "time" },
+    { "metric": "/big/idle/chromeCpuPct/renderer", "max": 3, "kind": "time" },
+    { "metric": "/server/bundleRssMb/at30s", "max": 300, "kind": "memory" },
+    { "metric": "/big/serverMemoryMb/afterStartupRoutes/rss", "max": 500, "kind": "memory" },
+    { "metric": "/big/scroll/rendererRssMbAfter", "max": 600, "kind": "memory" }
+  ]
+}
