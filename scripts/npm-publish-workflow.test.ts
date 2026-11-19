@@ -16,6 +16,7 @@ interface Job {
   if?: string;
   environment?: unknown;
   permissions?: Record<string, string>;
+  outputs?: Record<string, string>;
   steps?: Step[];
 }
 interface Workflow {
@@ -30,8 +31,8 @@ const flow = parse(text) as Workflow;
 const publish = flow.jobs.publish!;
 const steps = publish.steps ?? [];
 const stepNamed = (name: string) => steps.find((step) => step.name === name)!;
-const NOT_MAINTAINER = "!contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)";
-const APPROVED = "needs.approval.result == 'success' || needs.approval.result == 'skipped'";
+const IS_MAINTAINER = "(startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor))";
+const APPROVED_NOW = "needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt";
 
 describe("npm publish workflow", () => {
   it("starts when a release is published, or by hand with a tag", () => {
@@ -58,15 +59,16 @@ describe("npm publish workflow", () => {
   it("publishes behind the release environment, after the commit lookup and the approval", () => {
     expect(publish.environment).toBe("release");
     expect(publish.needs).toEqual(["commit", "approval"]);
-    expect(publish.if).toBe(`\${{ !cancelled() && needs.commit.result == 'success' && (${APPROVED}) }}`);
+    expect(publish.if).toBe(`\${{ !cancelled() && needs.commit.result == 'success' && (${IS_MAINTAINER} || (${APPROVED_NOW})) }}`);
   });
 
   it("asks a maintainer to approve a run that another person starts, with no permission and no secret", () => {
     const approval = flow.jobs.approval!;
     expect(approval.environment).toBe("release-approval");
     expect(approval.needs).toBe("commit");
-    expect(approval.if).toBe(`\${{ ${NOT_MAINTAINER} }}`);
+    expect(approval.if).toBe(`\${{ !${IS_MAINTAINER} }}`);
     expect(approval.permissions).toEqual({});
+    expect(approval.outputs).toEqual({ attempt: "${{ github.run_attempt }}" });
   });
 
   it("builds the commit of the tag that the commit job found, never the tag name", () => {

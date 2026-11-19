@@ -475,6 +475,7 @@ describe("Release job conditions", () => {
 
   const flows = [
     { file: MACOS, job: "package", first: "commit", extra: {} },
+    { file: NPM, job: "publish", first: "commit", extra: {} },
     { file: IMAGE, job: "publish", first: "image", extra: { event_name: "workflow_dispatch", ref: "refs/heads/main" } },
   ];
 

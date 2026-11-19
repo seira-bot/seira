@@ -339,8 +339,13 @@ npm view @seira-bot/seira@<version> version
 - npm adds a provenance statement that links the package to this commit and run.
 - The `release` environment accepts the `main` branch and the `v*` tags, so a
   run that starts from a published release can use it. The `release-approval`
-  environment accepts `main` only. A person outside the maintainers who needs an
-  approval must start the workflow by hand from `main`.
+  environment accepts `main` only. So a run that starts from a published
+  release, and that a person outside the maintainers starts, fails at the
+  `approval` job. It does not publish. This is intended. That person starts the
+  workflow by hand from `main` instead.
+- A person who is not a maintainer cannot re-run a failed `publish` job alone.
+  The job reuses no approval of an earlier attempt. Re-run all jobs for a new
+  approval, or ask a maintainer to re-run.
 
 ### One-time npm setup
 
