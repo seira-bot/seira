@@ -199,8 +199,10 @@ are set.
 
 The `Package macOS` workflow (`.github/workflows/package-macos.yml`) builds
 both apps from a tag on a GitHub-hosted macOS runner. It reads the Apple
-secrets from the `release` environment, so each run waits until a maintainer
-approves it. Before it uploads anything:
+secrets from the `release` environment. A run that a maintainer starts does
+not wait. A run that another person starts waits until a maintainer approves
+`release-approval` (see [CI](ci.md#the-release-approval-environment)). Before
+it uploads anything:
 
 - it makes sure that each app has every helper for its own CPU, and that
   `app-update.yml` points at `seira-bot/seira`;
@@ -218,7 +220,8 @@ them: its token can only read the repository.
 ```sh
 gh workflow run package-macos.yml --repo seira-bot/seira -f ref=v<version>
 gh run list --repo seira-bot/seira --workflow package-macos.yml --limit 1
-# Open the run page, select "Review deployments", and approve "release".
+# A person who is not a maintainer: open the run page, select "Review deployments",
+# and ask a maintainer to approve "release-approval".
 gh run watch <run id> --repo seira-bot/seira --exit-status
 mkdir -p .omb-scratch/macos && cd .omb-scratch/macos
 gh run download <run id> --repo seira-bot/seira --name seira-<version>-macos
@@ -265,14 +268,18 @@ install the image of the newest release, so publish it for every release.
 ```sh
 gh workflow run server-image.yml --repo seira-bot/seira --ref main -f tag=v<version>
 gh run list --repo seira-bot/seira --workflow server-image.yml --limit 1
-# Open the run page, select "Review deployments", and approve "release".
+# A person who is not a maintainer: open the run page, select "Review deployments",
+# and ask a maintainer to approve "release-approval".
 gh run watch <run id> --repo seira-bot/seira --exit-status
 docker buildx imagetools inspect ghcr.io/seira-bot/seira:v<version>
 ```
 
 - Start the run from `main`. The `release` environment refuses other branches.
-- The approval request shows after both builds pass. Approve it within 7 days,
-  or the saved images expire. Then start a new run.
+- A run that a maintainer starts needs no approval. For another person, the
+  approval request shows after both builds pass. A maintainer approves it
+  within 7 days, or the saved images expire. Then start a new run.
+- Maintainers are the logins in the repository variable `RELEASE_MAINTAINERS`.
+  When the variable is missing or empty, every run waits for approval.
 - Publish the GitHub release first. The workflow refuses a tag that is not a
   published release, and it builds the tag only, never a branch of that name.
 - The image must show both platforms, and the label
@@ -341,7 +348,8 @@ gh secret set APPLE_API_ISSUER_ID --env release --repo seira-bot/seira
 
 9. Keep the `.p12` file, its password, and the `.p8` file in a password
    manager. Then delete the files from the disk.
-10. Run the workflow on `main` and approve it. The artifact name must end in
+10. Run the workflow on `main`. A person who is not a maintainer needs a
+    maintainer to approve it. The artifact name must end in
     `-macos`, not in `-NOT-FOR-RELEASE`. Do not attach a build of `main` to
     a release.
 

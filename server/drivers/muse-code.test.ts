@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -143,6 +143,19 @@ describe.skipIf(process.platform === "win32")("Muse Code's process", () => {
       vi.stubEnv("TMPDIR", previousTmp);
       await instance.refreshModels!();
       expect(instance.models.default).toBe("muse-fake-1.0");
+    } finally {
+      await instance.dispose();
+    }
+  });
+
+  it("removes the folder of a model list once the list is read", async () => {
+    const { cli } = fakeMuse();
+    const instance = await MuseCodeDriver.create({ instanceId: "museCode", displayName: "Muse Code", enabled: true,
+      environment: {}, config: MuseCodeDriver.decodeConfig({ cli }) });
+    try {
+      await instance.refreshModels!();
+      expect(instance.models.default).toBe("muse-fake-1.0");
+      await expect.poll(() => readdirSync(tmpdir()).filter((name) => name.startsWith("omb-muse-models-"))).toEqual([]);
     } finally {
       await instance.dispose();
     }

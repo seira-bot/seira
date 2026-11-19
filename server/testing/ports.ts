@@ -12,14 +12,28 @@ const isFree = (port: number): Promise<boolean> =>
     probe.listen(port, "127.0.0.1", () => probe.close(() => resolve(true)));
   });
 
+/** A server takes seconds to bind the port it was given, and until then a probe sees that port free. */
+const SERVER_START_MS = 60_000;
+const handedOut = new Map<number, number>();
+
+function claim(ports: number[]): boolean {
+  const now = Date.now();
+  if (ports.some((port) => (handedOut.get(port) ?? 0) > now)) return false;
+  for (const port of ports) handedOut.set(port, now + SERVER_START_MS);
+  return true;
+}
+
 /** A base of this worker where every `base + offset` is free (the harness also opens a webhook receiver one above
- * itself). A probe, not a reservation: the ports are released before they are returned. A range too narrow to share is
- * one a suite keeps to itself. */
+ * itself). A probe, not a reservation: the ports are released before they are returned, so this process does not hand
+ * them out again while the server given them may still be starting. A range too narrow to share is one a suite keeps to
+ * itself. */
 export async function freePortBlock(offsets: number[], from = 19_600, span = 3_000): Promise<number> {
   for (let attempt = 0; attempt < 40; attempt++) {
     const picked = from + Math.floor(Math.random() * span);
     const base = span < 64 ? picked : forWorker(picked);
-    const checks = await Promise.all(offsets.map((offset) => isFree(base + offset)));
+    const ports = offsets.map((offset) => base + offset);
+    if (!claim(ports)) continue;
+    const checks = await Promise.all(ports.map(isFree));
     if (checks.every(Boolean)) return base;
   }
   throw new Error(`no free port block for offsets ${offsets.join(",")} in ${from}..${from + span}`);

@@ -4,9 +4,9 @@
 // sessions over stdio. The person signs in once with `muse login` (or gives
 // the instance a META_API_KEY), and the models come from Muse itself, so a
 // new Muse model reaches the picker without an app release.
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { Connection, MspError, type DuplexTransport } from "@muse-code/sdk";
 import { z } from "zod";
@@ -20,6 +20,7 @@ import { newEventId, newId } from "../contracts.ts";
 import { augmentedPath } from "../env-path.ts";
 import { describeSpawnFailure, execCli, killCliTree, spawnCli, type CliOwner } from "../procs.ts";
 import { redactSecretsInText } from "../redact.ts";
+import { makeOwnedTempFolder, removeOwnedTempFolder, sweepOrphanedTempFoldersOnce } from "../temp-folders.ts";
 import { answersAlone } from "./permission-command.ts";
 import { commandSummary, toolDetailPreview } from "../tool-summary.ts";
 import type { ApprovalMode } from "../../shared/approval-mode.ts";
@@ -35,6 +36,8 @@ const MUSE_CONTEXT_WINDOW = 1_048_576;
 const RE_ANCHOR_TURNS = 8;
 const STARTUP_TIMEOUT_MS = 30_000;
 const MODEL_LIST_TIMEOUT_MS = 20_000;
+/** Each model list runs in an empty folder named after this process: one that is cut off at exit goes with the process or the next start. */
+const MODELS_FOLDER_PREFIX = "omb-muse-models-";
 const INTERRUPT_CONFIRM_MS = 5_000;
 const SHUTDOWN_DRAIN_MS = 10_000;
 const SHUTDOWN_KILL_GRACE_MS = 2_000;
@@ -333,7 +336,8 @@ export const MuseCodeDriver: ProviderDriver<MuseConfig> = {
       let cwd: string | undefined;
       let host: Host | undefined;
       try {
-        cwd = mkdtempSync(join(tmpdir(), "omb-muse-models-"));
+        sweepOrphanedTempFoldersOnce(MODELS_FOLDER_PREFIX);
+        cwd = makeOwnedTempFolder(MODELS_FOLDER_PREFIX);
         host = await startHost(["serve", "--disable-shell", "--disable-write", "--no-session-log"], cwd, "models", false, "openmausbot");
         const result = await Promise.race([
           host.connection.request("model/list", {}),
@@ -349,7 +353,7 @@ export const MuseCodeDriver: ProviderDriver<MuseConfig> = {
         catalogError = error instanceof Error ? error.message : String(error);
       } finally {
         await host?.close().catch(() => {});
-        if (cwd) rmSync(cwd, { recursive: true, force: true });
+        if (cwd) removeOwnedTempFolder(cwd);
       }
     };
 
