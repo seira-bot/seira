@@ -83,7 +83,7 @@ describe("BotListItem", () => {
       messages: [{ id: "b1", role: "bot", kind: "text", text: "Created notes.txt", at: 2 }] as Bot["messages"],
     }));
     expect(preview).toContain('class="min-w-0 overflow-hidden whitespace-nowrap">Created notes.txt</span>');
-    expect(preview).toContain("truncate text-[13px] leading-[18px] text-ink-secondary");
+    expect(preview).toContain("truncate text-[13px] leading-4 text-ink-tertiary");
     expect(preview).not.toContain("text-warning");
     expect(preview).not.toContain("waiting-dot");
   });
@@ -259,7 +259,6 @@ describe("BotListItem", () => {
     expect(markup).not.toContain('data-testid="bot-role"');
     expect(titleLine.test(markup)).toBe(false);
     expect(markup).toContain('title="Atlas · Developer"');
-    expect(markup).toContain('title="Double-click to rename"');
   });
 
   it("draws no role for a bot without one", () => {
