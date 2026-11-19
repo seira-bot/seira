@@ -6,7 +6,7 @@ import { sidebarState } from "./sidebar-state"; import { sameFields, useStoreDis
 import { api, formatTime, visibleMessages, currentTaskBot, botOpensTo, openBot, openThread, type Action, type AppState, type Bot, type BotProject, type Group, type InstanceInfo, type Message } from "@/state/store";
 import { approvalModeFor } from "../../shared/approval-mode";
 import { liveActivityLabel, sidebarMessage } from "@/lib/live-activity";
-import { AdvancedRoomStack, AdvancedRoomText, AdvancedThreadText } from "./SidebarAdvancedRows"; import { advancedSectionAdd } from "./sidebar-advanced-add"; import { BotRowPreview } from "./SidebarBotRowPreview";
+import { AdvancedRoomStack, AdvancedRoomText, AdvancedThreadText } from "./SidebarAdvancedRows"; import { advancedSectionAdd } from "./sidebar-advanced-add"; import { formatRowTime } from "./sidebar-row-time"; import { BotRowPreview } from "./SidebarBotRowPreview";
 import { openBotRow } from "@/state/thread-navigation";
 
 import { BotAvatar } from "./Avatar";
