@@ -2,7 +2,7 @@
 // This hook unpacks each built .snap, names it seira, removes that switch, packs it again, and fails the build when the
 // switch is still anywhere in the result.
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -34,6 +34,13 @@ export function assertSandboxOn(files) {
   for (const [name, text] of Object.entries(files)) {
     if (SANDBOX_OFF.test(text)) throw new Error(`${name} still turns the Chromium sandbox off`);
   }
+}
+
+/** The entries of an `unsquashfs -ll` listing whose mode has a setuid or setgid bit; a store rejects them. */
+export function setuidEntries(listing) {
+  return listing.split("\n")
+    .filter((line) => /^[-dlcbps]([rwx-]{2}[sS]|[rwx-]{5}[sS])/.test(line))
+    .map((line) => line.split(/\s+/).at(-1));
 }
 
 function run(command, args) {
@@ -70,7 +77,7 @@ export function finishSnap(snap) {
     for (const file of walk(path.join(root, "meta", "gui")).filter((file) => file.endsWith(".desktop"))) {
       writeFileSync(file, renameDesktopEntry(readFileSync(file, "utf8"), oldName));
     }
-    const setuid = walk(root).filter((file) => statSync(file).mode & 0o6000);
+    const setuid = setuidEntries(run("unsquashfs", ["-ll", snap]));
     if (setuid.length > 0) throw new Error(`The snap ships setuid files: ${setuid.join(", ")}`);
     const output = path.join(work, "out.snap");
     run(process.env.MKSQUASHFS_PATH || "mksquashfs", [
