@@ -22,7 +22,7 @@ describe("the prefilled issue form for a @devs report", () => {
     expect(query.get("title")).toBe("The calendar never syncs");
     expect(query.get("what-happened")).toBe(PAYLOAD.description);
     expect(query.get("version")).toBe("0.1.128 · darwin arm64, desktop app");
-    expect(query.get("logs")).toContain("## Server warnings and errors, newest last");
+    expect(query.get("logs")).toBe("Seira @devs report\nApp version: 0.1.128\n");
   });
 
   it("carries no contact address and no install id", () => {
