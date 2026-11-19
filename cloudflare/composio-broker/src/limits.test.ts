@@ -367,9 +367,10 @@ describe("kill switch and fleet budget (FR-148)", () => {
     const owner = (await register("203.0.113.10")).status;
     expect(owner).toBe(201);
     const installation = await h.install();
+    // Before h.account: an account already connected to the toolkit makes authorize answer 400.
+    expect((await h.call(installation, "/v1/connectors/gmail/authorize", { method: "POST", body: "{}" })).status).toBe(200);
     h.account(installation);
     expect((await (await mcp(installation, toolCall())).json() as { result: { isError?: boolean } }).result.isError).toBeUndefined();
-    expect((await h.call(installation, "/v1/connectors/gmail/authorize", { method: "POST", body: "{}" })).status).toBe(200);
     expect(forwarded()).toBe(1);
     expect(errors.mock.calls.some(([line]) => String(line).includes("usage limits unavailable"))).toBe(true);
   });
