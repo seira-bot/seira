@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import nativeText from "./native-text.cjs";
 import { FINISH_MS, STEP_NAMES } from "./splash/line.js";
+import { startupTimeline } from "./startup-timeline.mjs";
 
 const attribute = (value) => String(value).replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
 const resource = (name) => fileURLToPath(new URL(`./resources/${name}`, import.meta.url));
@@ -125,9 +126,11 @@ export function createStartupScreen({
   };
   void ready.then(() => progress("shown"));
   const attach = (win, { maximized = false } = {}) => {
+    startupTimeline.mark("window-created");
     const reveal = () => {
       if (revealed || win.isDestroyed() || isQuitting()) return;
       revealed = true;
+      startupTimeline.finish("window-shown");
       const minimized = !splash.isDestroyed() && splash.isMinimized();
       if (isHidden()) {
         win.setSkipTaskbar(true);
@@ -141,16 +144,28 @@ export function createStartupScreen({
       dispose();
     };
     progress("window");
-    const finish = () => {
-      if (revealed || finishTimer) return;
+    let beatStarted = false, beatEnded = false, rootRendered = false;
+    const revealWhenBothDone = () => { if (beatEnded && rootRendered) reveal(); };
+    const startBeat = () => {
+      if (beatStarted) return;
+      beatStarted = true;
       splashFinish();
       const wait = reducedMotion() ? 0 : FINISH_MS;
-      if (wait === 0) reveal();
-      else { finishTimer = setTimeout(reveal, wait); finishTimer.unref?.(); }
+      if (wait === 0) { beatEnded = true; return; }
+      finishTimer = setTimeout(() => { beatEnded = true; revealWhenBothDone(); }, wait);
+      finishTimer.unref?.();
+    };
+    const rootDone = () => {
+      if (rootRendered) return;
+      rootRendered = true;
+      startupTimeline.mark("root-rendered");
+      revealWhenBothDone();
     };
     win.webContents.on("did-finish-load", () => {
       if (revealed || win.isDestroyed() || isQuitting()) return;
       progress("loaded");
+      startupTimeline.mark("window-loaded");
+      startBeat();
       void win.webContents.executeJavaScript(`new Promise(resolve => {
         const root = document.getElementById('root');
         if (!root || root.childElementCount) { resolve(); return; }
@@ -158,7 +173,7 @@ export function createStartupScreen({
           if (root.childElementCount) { observer.disconnect(); resolve(); }
         });
         observer.observe(root, { childList: true });
-      })`).then(finish).catch(reveal);
+      })`).then(rootDone).catch(reveal);
     });
     win.webContents.once("render-process-gone", reveal);
     win.once("show", () => { if (!revealed) { revealed = true; dispose(); } });

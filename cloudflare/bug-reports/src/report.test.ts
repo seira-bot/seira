@@ -140,7 +140,7 @@ describe("AC-09 slots are reserved before GitHub is called", () => {
     const install = await sha256("install-id-for-tests-0001");
     expect(await recentDuplicate(h.env, install, "p0", now)).toBeNull();
     h.d1.db.exec("UPDATE reports SET issue_number = 7");
-    expect(await recentDuplicate(h.env, install, "p0", now)).toBe("br_pending0");
+    expect(await recentDuplicate(h.env, install, "p0", now)).toEqual({ id: "br_pending0", issue: 7, joined: false });
   });
 
   it("leaves 5 reports with 201 and 1 with 429 when 6 arrive in parallel", async () => {
@@ -362,11 +362,11 @@ describe("AC-09 429 global and per IP", () => {
 describe("AC-10 same payload again", () => {
   it("answers the first id and calls GitHub zero more times", async () => {
     const h = bugHarness();
-    const first = await (await h.send(validReport())).json() as { id: string };
+    const first = await (await h.send(validReport())).json() as { id: string; issue: number; joined: boolean };
     const calls = h.github.requests.length;
     const again = await h.send(validReport({ contactEmail: "other@mail.test" }));
     expect(again.status).toBe(201);
-    expect(await again.json()).toEqual({ id: first.id });
+    expect(await again.json()).toEqual({ id: first.id, issue: first.issue, joined: false });
     expect(h.github.requests).toHaveLength(calls);
     expect(h.reportRows()).toHaveLength(1);
   });

@@ -2,7 +2,7 @@
 
 Seira ships three desktop packages:
 
-- a Linux x64 AppImage, which a maintainer builds by hand on a Linux machine;
+- a Linux x64 AppImage and Debian package, which a maintainer builds by hand on a Linux machine;
 - a Windows x64 installer, which the `Package Windows` workflow builds on a
   GitHub-hosted Windows runner;
 - macOS apps for Apple silicon (arm64) and Intel (x64), which the
@@ -22,12 +22,15 @@ Only the maintainers can release:
   tags for everyone except the organization admins.
 - GitHub Actions has no bypass on either ruleset, and its token can only read
   the repository (see [CI](ci.md)).
+- A new push to `main` cancels the older `main` CI run that is still going
+  (see [CI](ci.md#fewer-runners)). When you release, rely on the `CI` check of
+  the release pull request, or on the run of the newest `main` commit. A
+  cancelled run of an older commit is not a failure.
 
 The server image `ghcr.io/seira-bot/seira:v<version>` comes from the
 `Server image` workflow after the release (step 7). The npm package
 `@seira-bot/seira` comes from the `npm publish` workflow (see
-[Publish to npm](#publish-to-npm)). `.deb` packages are not part of a Seira
-release.
+[Publish to npm](#publish-to-npm)).
 
 ## Assets
 
@@ -35,9 +38,12 @@ Each release has these Linux assets:
 
 | Asset | What it is |
 | --- | --- |
-| `Seira-<version>-x86_64.AppImage` | The desktop app |
+| `Seira-<version>-x86_64.AppImage` | The portable app |
+| `Seira-<version>-amd64.deb` | The Debian package. Ubuntu 24.04 needs it: there, only its setuid helper keeps the Chromium sandbox on. |
 | `latest-linux.yml` | The update feed. Installed apps read it to find the new version. |
-| `SHA256SUMS-linux-x64.txt` | The SHA-256 of the AppImage |
+| `Seira.AppImage` | A byte-identical copy of the AppImage, so `/releases/latest/download/Seira.AppImage` always works |
+| `Seira-amd64.deb` | A byte-identical copy of the Debian package. The docs and the AppImage's install message name this file. |
+| `SHA256SUMS-linux-x64.txt` | The SHA-256 of the AppImage, the Debian package, and both copies |
 
 And these Windows assets:
 
@@ -107,9 +113,13 @@ pnpm package:linux
 - The packaging step needs more than the default 2 GB Node heap.
 - It also writes several GB of temporary files. A small `/tmp` in memory fills
   up and the build stops with `EDQUOT` or `ENOSPC`, so point `TMPDIR` at a disk.
+- The Debian package step runs `fpm`, and its bundled Ruby needs `libcrypt.so.1`.
+  Ubuntu and Debian have it. On Arch, install `libxcrypt-compat` first, or the
+  build stops with `fpm process failed 127`.
 
 The build writes `release/Seira-<version>-x86_64.AppImage`,
-`release/latest-linux.yml`, and `release/linux-unpacked/`.
+`release/Seira-<version>-amd64.deb`, `release/latest-linux.yml`, and
+`release/linux-unpacked/`.
 
 ### 3. Check the package
 
@@ -118,18 +128,36 @@ grep -E '^(owner|repo):' release/linux-unpacked/resources/app-update.yml
 # owner: seira-bot
 # repo: seira
 grep -E '^(version|path):' release/latest-linux.yml
-./release/Seira-<version>-x86_64.AppImage --version
-(cd release && sha256sum Seira-<version>-x86_64.AppImage > SHA256SUMS-linux-x64.txt)
+node scripts/verify-linux-package.mjs release
+```
+
+`scripts/verify-linux-package.mjs` needs `dpkg-deb`, `desktop-file-validate`, and
+`unsquashfs`. It checks the Debian package and the AppImage, and it fails when
+the AppImage can start without the Chromium sandbox.
+
+Then put the files to upload, and the copies with stable names, in their own
+folder. Keep `release/` as the build wrote it.
+
+```sh
+mkdir -p .omb-scratch/linux-upload && cd .omb-scratch/linux-upload
+cp ../../release/Seira-<version>-x86_64.AppImage ../../release/Seira-<version>-amd64.deb ../../release/latest-linux.yml .
+cp Seira-<version>-x86_64.AppImage Seira.AppImage
+cp Seira-<version>-amd64.deb Seira-amd64.deb
+sha256sum Seira-<version>-x86_64.AppImage Seira-<version>-amd64.deb Seira.AppImage Seira-amd64.deb \
+  > SHA256SUMS-linux-x64.txt
+cd ../..
 ```
 
 - If `app-update.yml` names another owner or repository, stop. Installed apps
   would look for updates in the wrong place.
 - The version and path in `latest-linux.yml` must match the AppImage.
-- Start the AppImage once with a temporary data folder and a free port. Do not
+- Start the app once with a temporary data folder and a free port. Do not
   point it at the data folder of an installed copy.
-
-`scripts/verify-linux-package.mjs` also expects a `.deb`, so it does not apply
-to an AppImage-only build.
+- On a host that blocks user namespaces, such as stock Ubuntu 24.04, the
+  AppImage shows its install message and stops. This is correct.
+- `scripts/linux-store/deb-vm-test.sh` installs the Debian package and starts
+  the AppImage in an Ubuntu 24.04 VM with the stock settings. Each `RESULT`
+  line records one check.
 
 ### 4. Merge, tag, and publish
 
@@ -138,12 +166,31 @@ gh pr merge <pr number> --squash
 git fetch origin
 git tag -a v<version> -m "Seira v<version>" <merge commit sha>
 git push origin v<version>
+cd .omb-scratch/linux-upload
 gh release create v<version> --verify-tag --title "Seira v<version>" --generate-notes \
-  release/Seira-<version>-x86_64.AppImage release/latest-linux.yml release/SHA256SUMS-linux-x64.txt
+  Seira-<version>-x86_64.AppImage Seira-<version>-amd64.deb latest-linux.yml \
+  Seira.AppImage Seira-amd64.deb SHA256SUMS-linux-x64.txt
 ```
 
 Tag the squash commit on `main`, not the release branch's last commit. The
 tag push works only for an organization admin.
+
+### Publish the Flatpak repo
+
+Seira has a signed Flatpak repository at `https://flatpak.seira.bot/repo/`.
+Only the release owner publishes to it, and only from a release tag. See the
+[Flatpak packaging notes](../packaging/flatpak/README.md#publish) for the
+settings and the recovery steps.
+
+```sh
+git switch --detach v<version>
+scripts/linux-store/publish-flatpak.sh v<version>
+gh release upload v<version> release/Seira-<version>-x86_64.flatpak --repo seira-bot/seira
+```
+
+- Use `--init-repo` for the first publish only.
+- The script stops when HEAD is not the tag, the tree is not clean, or `package.json` has another version.
+- The bundle `Seira-<version>-x86_64.flatpak` adds the Seira remote when a person installs it.
 
 ### 5. Build and attach the Windows installer
 

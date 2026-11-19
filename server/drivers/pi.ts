@@ -4,12 +4,12 @@ import { RuntimeNoticeError, runtimeErrorText } from "./runtime-notice-error.ts"
 // (`pi --mode rpc --no-session`), not ACP. pi is BYOK and reads ~/.pi/agent/auth.json itself, so
 // this driver holds no key; resumeCursor is pi's `sessionFile` (switch_session).
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { PROVIDER_CREDENTIAL_ENV, stripWorkspaceCredentialEnv } from "../config.ts";
 import { openStartupModelCatalog, unconfirmedModelCatalog, writeStartupModelCache } from "../startup-model-catalog.ts";
-import { augmentedPath } from "../env-path.ts";
+import { augmentedPath, userHome } from "../env-path.ts";
 import { describeSpawnFailure, execCliBoxed, killCliTree, spawnCli } from "../procs.ts";
 import { instanceEnvNames } from "../bot-box/env.ts";
 import {
@@ -167,7 +167,7 @@ export async function applyPiLocalCatalog(
 }
 
 function piAgentDir(env: Record<string, string | undefined>): string {
-  return join(env.HOME || env.USERPROFILE || homedir(), ".pi", "agent");
+  return join(userHome(env), ".pi", "agent");
 }
 
 /** Upsert a live local host into ~/.pi/agent/models.json so `set_model` can reach it. */
@@ -246,7 +246,7 @@ export function ensurePiInjectModel(
 }
 
 function readPiDefaultModel(env: Record<string, string | undefined>): string {
-  const home = env.HOME || env.USERPROFILE || homedir();
+  const home = userHome(env);
   try {
     const s = JSON.parse(readFileSync(`${home}/.pi/agent/settings.json`, "utf8")) as {
       defaultProvider?: string;

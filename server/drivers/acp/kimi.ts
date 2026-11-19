@@ -1,7 +1,6 @@
 // Kimi Code 2.5.3 ignores the global -m option when opening an ACP session;
 // its model config option selects both subscription and configured API providers.
 import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { ModelCatalog } from "../../contracts.ts";
@@ -10,6 +9,7 @@ import { decodeInjectId, hostApiKey, LOCAL_HOSTS, localHost, mergeLocalInject } 
 import { createAcpDriver, type AcpSupport } from "./core.ts";
 import { currentEngineCatalog } from "../../model-manifest/manifest.ts";
 import { ENGINE_MODEL_ID } from "../../model-manifest/schema.ts";
+import { userHome } from "../../env-path.ts";
 
 const SLUG = ENGINE_MODEL_ID.kimi;
 const LOCAL_PROVIDER_PREFIXES = LOCAL_HOSTS.map((host) => `${host.id}/`);
@@ -19,7 +19,7 @@ function isLocalInjectAlias(slug: string): boolean {
 }
 
 function kimiDataRoot(env: Record<string, string | undefined>): string {
-  return env.KIMI_CODE_HOME || join(env.HOME || env.USERPROFILE || homedir(), ".kimi-code");
+  return env.KIMI_CODE_HOME || join(userHome(env), ".kimi-code");
 }
 
 /** kimi-code 2.4.1 (resolveKimiTokenStorageName) keeps a kimi.com login in credentials/kimi-code.json and a kimi.ai
