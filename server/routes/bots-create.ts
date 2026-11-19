@@ -196,10 +196,12 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
       if (created && !created.ok) return json(res, 400, { error: created.error });
       // Checked again beside the synchronous write: an await above let another request take the same id.
       if (kept.id && "error" in keptBotIds(kept, store)) return json(res, 409, { error: "a bot with this id already exists here" });
-      // A bot moved in from another computer keeps its own look; a new one named no look starts in a fresh one.
-      const look = kept.id || settings.color || settings.mascotBody ? undefined : freshLook(store.bots);
+      // A bot moved in from another computer keeps its own look; a new one fills what it names not from a fresh one.
+      const look = kept.id ? undefined : freshLook(store.bots);
+      const character = settings.mascotBody || settings.mascotAccessories?.length ? undefined : look;
       const bot = store.createBot({ ...profile.patch, soul: settings.soul, section, modelSelection: selection,
-        toolScope: settings.toolScope ?? undefined, color: settings.color ?? look?.color, mascotBody: settings.mascotBody ?? look?.mascotBody,
+        toolScope: settings.toolScope ?? undefined, color: settings.color ?? look?.color, mascotBody: settings.mascotBody ?? character?.mascotBody,
+        mascotAccessories: settings.mascotAccessories ?? character?.mascotAccessories,
         ...(deps.team && creator ? { createdBy: creator } : {}), ...(reportsTo ? { reportsTo } : {}),
         ...(created?.ok ? { visibility: created.visibility } : {}) }, kept.id ? { ...kept, seedMessages: false } : {});
       const createdRoutines: Array<{ id: string; enabled: boolean }> = [];
@@ -208,6 +210,7 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
         store.patchBot(bot.id, {
           // Store creation completed the workspace defaults (effort included): the rest of the template must not undo them.
           ...ordinary, name: bot.name, section, modelSelection: bot.modelSelection,
+          color: bot.color, mascotBody: bot.mascotBody, mascotAccessories: bot.mascotAccessories,
           mascotExpression: ordinary.mascotExpression ?? undefined,
           avatarUrl: ordinary.avatarUrl || undefined,
           // Auto with Approve for me stays Auto: This computer with it needs the warning only the bot's Settings shows.

@@ -18,7 +18,7 @@ import { workspaceDir } from "./workspace.ts";
 import type { Destination } from "./surface.ts";
 import { newId, type ModelSelection } from "./contracts.ts";
 import { pickBotName } from "./names.ts";
-import { rotationColor } from "./bot-look.ts";
+import { freshLook, rotationColor, wearsPlainLook } from "./bot-look.ts";
 import { redactBotAuthored } from "./message-redaction.ts";
 import { AVATAR_FOCUS_CENTER, AVATAR_ZOOM_MIN, botAvatarProfile, clampAvatarFocus, clampAvatarZoom } from "../shared/bot-avatar.ts";
 import { approvalModeFor, isApprovalMode, modelSwitchNeedsAsk, threadApproval, type ApprovalMode } from "../shared/approval-mode.ts";
@@ -173,6 +173,7 @@ export const botWireProjectionIsExact: BotWireProjectionIsExact = true;
 
 const THREAD_MODEL_COPIES_CLEARED = join(DATA_DIR, "thread-model-copies-cleared");
 const ASKED_AT_FILLED = join(DATA_DIR, "asked-at-filled");
+const CHARACTERS_GIVEN = join(DATA_DIR, "characters-given");
 
 const messagesFile = (threadId: string) => join(DATA_DIR, `messages-${threadId}.json`);
 
@@ -468,6 +469,7 @@ export class Store {
     if (groupsMigrated) this.saveGroups();
     const clearModelCopies = !existsSync(THREAD_MODEL_COPIES_CLEARED) && (botsLoaded || !existsSync(BOTS_FILE));
     const fillAskedAts = !existsSync(ASKED_AT_FILLED) && (botsLoaded || !existsSync(BOTS_FILE));
+    const giveCharacters = !existsSync(CHARACTERS_GIVEN) && (botsLoaded || !existsSync(BOTS_FILE));
     for (const b of this.bots) {
       if (b.projects?.some((project) => "modelSelection" in project)) {
         b.projects = b.projects.map(({ id, name, emoji }) => ({ id, name, ...(isProjectEmoji(emoji) ? { emoji } : {}) }));
@@ -534,7 +536,9 @@ export class Store {
       this.mirrorActiveTask(b, active);
       b.unread = b.tasks.some(taskCountsAsBotUnread);
     }
+    if (giveCharacters && this.giveCharacters()) botsMigrated = true;
     if (botsMigrated) this.saveBots();
+    if (giveCharacters) writeFileAtomic(CHARACTERS_GIVEN, "Bots in the look older builds gave every new bot each wear a character of their own.\n", { mode: 0o600 });
     if (clearModelCopies) writeFileAtomic(THREAD_MODEL_COPIES_CLEARED, "Threads follow their bot's model; the copies older builds made are cleared.\n", { mode: 0o600 });
     const knownThreads = new Set([
       ...this.bots.flatMap((b) => [b.threadId, ...(b.tasks ?? []).map((task) => task.threadId)]),
@@ -550,6 +554,16 @@ export class Store {
     // After the roster loads, so identity resolution sees which opener ids are live.
     this.repairDuplicatePairConversations();
     this.registeringInitialSections = false;
+  }
+
+  private giveCharacters(): boolean {
+    const plain = this.bots.filter((bot) => !bot.home && wearsPlainLook(bot));
+    for (const bot of plain) {
+      const { mascotBody, mascotAccessories } = freshLook(this.bots);
+      bot.mascotBody = mascotBody;
+      bot.mascotAccessories = mascotAccessories;
+    }
+    return plain.length > 0;
   }
 
   /** In memory only: message writes must not rewrite bots.json. */
@@ -1349,8 +1363,9 @@ export class Store {
         if (at >= 0 || !operation.threadId || !operation.fields.name || !operation.fields.modelSelection) throw new Error("Invalid new bot in team setup");
         const createdAt = Date.now();
         const modelSelection = this.newBotSelection(operation.fields.modelSelection);
+        const { mascotBody, mascotAccessories } = freshLook(nextBots);
         next = { id: operation.botId, threadId: operation.threadId, name: operation.fields.name,
-          title: "", description: "", soul: "", notifications: true, color: rotationColor(nextBots.length), unread: false,
+          title: "", description: "", soul: "", notifications: true, color: rotationColor(nextBots.length), mascotBody, mascotAccessories, unread: false,
           resumeCursors: {}, createdAt, ...operation.fields, modelSelection,
           autoApprove: false,
           ...sharedAsMaker(chief),
