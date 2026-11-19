@@ -133,7 +133,7 @@ test("a build that cannot add a login item offers no switch and changes nothing"
   assert.equal(app.getLoginItemSettings().openAtLogin, false);
   const packaged = createOpenAtLogin({ app: fakeApp(), file: path.join(dir, "mac.json"), platform: "darwin", home: dir });
   installOpenAtLogin({ ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) }, guard: (_channel, handler) => handler, loginItem: packaged, changed: () => redraws++ });
-  assert.deepEqual(await handlers.get("open-at-login:set")({}, true), { available: true, on: true });
+  assert.deepEqual(await handlers.get("open-at-login:set")({}, true), { available: true, on: true, startupApps: false });
   assert.deepEqual(await handlers.get("open-at-login:set")({}, "yes"), { available: true, on: false, startupApps: false }, "only a real true turns it on");
   assert.equal(redraws, 3, "the app menu's item is drawn again after each change");
 });
