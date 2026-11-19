@@ -14,7 +14,7 @@ describe("askToUseYourComputer", () => {
       appendMessage: (_threadId: string, row: object) => { const added = { id: `m${rows.length}`, ...row }; rows.push(added); return added; },
       projectBotForTask: () => null,
     } as unknown as Store;
-    void askToUseYourComputer({ store, notify: (notification) => sent.push(notification) }, { id: "b1", name: "Scout", color: "green" }, { threadId: "t1", generation: "g1" }).catch(() => undefined);
+    void askToUseYourComputer({ store, notify: (notification) => sent.push(notification) }, { id: "b1", name: "Scout", color: "green", notifications: true }, { threadId: "t1", generation: "g1" }).catch(() => undefined);
     expect(sent).toEqual([expect.objectContaining({ kind: "approval", threadId: "t1", requestId: rows[0]!.card!.requestId })]);
     expect(rows[0]!.card!.requestId).toEqual(expect.any(String));
   });
