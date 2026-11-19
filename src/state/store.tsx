@@ -66,6 +66,7 @@ export { formatTime } from "@/lib/clock-time";
 import { createBotPatchQueue, flushWhenLeaving, keepaliveFits, type BotUpdatePatch } from "./bot-patch-queue"; import { createNewTaskOnce } from "./new-task-once";
 import { liveCallFromFrame, nextLiveCallLookup } from "./live-call";
 import { isNoAiRefusal, useChatErrorClear } from "./chat-error";
+import { dataSheetFromResponse, dataTablesFromResponse } from "./data-sheet-response";
 import { openLiveEvents, publishLiveFrame, publishMissedFrames, withoutScreenPixels } from "@/lib/live-events";
 import { unlessRefused } from "@/lib/admin-scope";
 import { olderRunsSince, ROUTINE_RUNS_WINDOW_MS, trimRoutineRuns, withOlderRoutineRuns } from "./routine-runs";
@@ -1786,20 +1787,6 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     }
   }
-}
-
-export function dataTablesFromResponse(body: unknown): DataTable[] {
-  const tables = body && typeof body === "object" && "tables" in body ? (body as { tables: unknown }).tables : undefined;
-  return Array.isArray(tables) ? (tables as DataTable[]).filter((table) => table && typeof table.name === "string") : [];
-}
-
-export function dataSheetFromResponse(body: unknown, botId: string): DataSheet {
-  const candidate = body && typeof body === "object" && "sheet" in body ? (body as { sheet: unknown }).sheet : body;
-  if (candidate && typeof candidate === "object" && Array.isArray((candidate as DataSheet).cards)) {
-    const sheet = candidate as DataSheet;
-    return { ...sheet, botId: sheet.botId || botId, sources: Array.isArray(sheet.sources) ? sheet.sources : [] };
-  }
-  return { version: 1, botId, cards: [], sources: [], updatedAt: new Date(0).toISOString() };
 }
 
 export const initialState: AppState = {
