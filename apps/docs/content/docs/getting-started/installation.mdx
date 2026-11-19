@@ -40,10 +40,14 @@ Requirements: Node.js 24 or newer, pnpm 10.33.0, and at least one authenticated 
 
 ```bash
 git clone https://github.com/seira-bot/seira.git
-cd Seira
+cd seira
 corepack enable
 pnpm install --frozen-lockfile
 ```
+
+<Callout type="info" title="Windows">
+  `corepack enable` writes to the Node.js install folder, so it fails with `EPERM` in a terminal without administrator rights. Run it in a terminal opened as administrator, or install pnpm with `npm install -g pnpm@10.33.0` and skip `corepack enable`.
+</Callout>
 
 Run the harness, web UI, and Electron shell in separate terminals:
 

@@ -84,9 +84,12 @@ describe("package-macos.yml", () => {
   it("reads only the five Apple secrets, and only behind the release environment", () => {
     const read = new Set([...text.matchAll(/secrets\.([A-Z0-9_]+)/g)].map(([, name]) => name));
     expect([...read].sort()).toEqual([...APPLE_SECRETS].sort());
-    expect(Object.keys(flow.jobs)).toEqual(["package"]);
+    expect(Object.keys(flow.jobs)).toEqual(["approval", "package"]);
     expect(job.environment).toBe("release");
     expect(job.permissions).toBeUndefined();
+    expect(flow.jobs.approval.environment).toBe("release-approval");
+    expect(flow.jobs.approval.permissions).toEqual({});
+    expect(JSON.stringify(flow.jobs.approval)).not.toContain("secrets.");
   });
 
   describe("chooses a signed or an unsigned build", () => {

@@ -161,6 +161,8 @@ You need:
 
 - macOS, Windows, or Ubuntu 24.04 x64.
 - Node.js 24 or later, and pnpm 10.
+  To get pnpm, run `corepack enable`.
+  On Windows, run it in a terminal opened as administrator, or install pnpm with `npm install -g pnpm@10.33.0`.
 - At least one agent CLI, installed and signed in: [`claude`](https://claude.com/claude-code), [`codex`](https://github.com/openai/codex), or [`grok`](https://x.ai/cli).
   The model picker finds them automatically.
 

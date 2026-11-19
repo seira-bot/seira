@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
+import { freePortBlock } from "./ports.ts";
 import { forWorker, workerPort } from "./worker-port.ts";
 
 describe("a worker's ports", () => {
@@ -31,6 +32,12 @@ describe("a worker's ports", () => {
       const port = workerPort(18_800, 10_000);
       expect(forWorker(port), "already this worker's").toBe(port);
     }
+  });
+
+  it("are not given to two suites of one worker that start side by side", async () => {
+    const [first, second] = await Promise.all([freePortBlock([0, 1], 29_000, 640), freePortBlock([0, 1], 29_000, 640)]);
+    expect(new Set([first, first + 1, second, second + 1]).size).toBe(4);
+    await expect(freePortBlock([0], first + 1, 1)).rejects.toThrow(/no free port block/);
   });
 });
 
