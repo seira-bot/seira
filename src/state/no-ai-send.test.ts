@@ -3,7 +3,7 @@ import { act, createElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { StoreProvider, useStore } from "./store";
+import { StoreProvider, useStore, type Bot } from "./store";
 
 class FixtureEventSource {
   onopen: (() => void) | null = null;
@@ -66,4 +66,41 @@ it("shows any other refusal as the error it is", async () => {
   store.dispatch({ type: "send", botId: "maus", threadId: "t", text: "Hello", onError });
   await vi.waitFor(() => expect(store.state.error).toBe("this thread is already working"));
   expect(store.state.notice).toBeNull();
+});
+
+const introBot = {
+  id: "chief", threadId: "t", name: "Chief", title: "", description: "", unread: false, notifications: true,
+  messages: [{ id: "intro", role: "bot", kind: "options", helperIntro: true, text: "Hi", at: "2026-11-19T00:00:00.000Z", card: { title: "Hi", subtitle: "", options: [] } }],
+} as unknown as Bot;
+
+const introCardDismissed = () => store.state.bots.find((bot) => bot.id === "chief")?.messages.find((message) => message.id === "intro")?.card?.dismissed;
+
+const answeringWithIntro = (messageResponse: () => Response) => {
+  const calls: { url: string; method: string; body: string }[] = [];
+  vi.stubGlobal("fetch", async (path: unknown, init?: RequestInit) => {
+    const url = String(path);
+    calls.push({ url, method: init?.method ?? "GET", body: String(init?.body ?? "") });
+    return url.endsWith("/messages") ? messageResponse() : new Response(JSON.stringify({ bots: [], groups: [], instances: [] }));
+  });
+  flushSync(() => store.dispatch({ type: "botAdded", bot: introBot }));
+  return calls;
+};
+
+it("opens the intro card again when a Send is refused, and does not save it as closed", async () => {
+  const calls = answeringWithIntro(() => new Response(JSON.stringify({ error: "Connect an AI first, so bots can answer.", code: "no_ai" }), { status: 409 }));
+  const onError = vi.fn();
+  store.dispatch({ type: "send", botId: "chief", threadId: "t", text: "Hello", onError });
+  await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
+  expect(introCardDismissed()).toBeFalsy();
+  expect(calls.some((call) => call.url.includes("/cards/"))).toBe(false);
+});
+
+it("saves the intro card as closed once a Send is accepted", async () => {
+  const calls = answeringWithIntro(() => new Response(JSON.stringify({})));
+  store.dispatch({ type: "send", botId: "chief", threadId: "t", text: "Hello" });
+  await vi.waitFor(() => expect(calls.filter((call) => call.url.includes("/cards/"))).toHaveLength(1));
+  const [save] = calls.filter((call) => call.url.includes("/cards/"));
+  expect(save).toMatchObject({ url: "/api/bots/chief/cards/intro", method: "PATCH" });
+  expect(save.body).toContain('"dismissed":true');
+  expect(introCardDismissed()).toBe(true);
 });

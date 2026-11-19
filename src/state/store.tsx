@@ -676,6 +676,7 @@ export type Action =
   | { type: "loadOlderMessages"; threadId: string }
   | { type: "olderMessages"; threadId: string; generation: number; messages: Message[]; hasMore: boolean }
   | { type: "answerCard"; botId: string; messageId: string; answer: string; threadId?: string; groupId?: string }
+  | { type: "onboardingCardReopened"; botId: string; messageId: string }
   | { type: "answerCardFailed"; botId: string; messageId: string; answer: string; threadId?: string; groupId?: string }
   | { type: "dismissCard"; botId: string; messageId: string; threadId?: string; groupId?: string }
   | {
@@ -1073,6 +1074,8 @@ export function reducer(state: AppState, action: Action): AppState {
       });
       return action.groupId ? patched : withMascotMotion(patched, action.botId, "working");
     }
+    case "onboardingCardReopened":
+      return patchCard(state, action.botId, action.messageId, { dismissed: false });
     case "answerCardFailed": {
       const card = cardMessages(state, action.botId, action.groupId, action.threadId)?.find((message) => message.id === action.messageId)?.card;
       if (card?.pendingAnswer !== action.answer) return state;
@@ -2356,7 +2359,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             });
           break;
         case "send": {
-          if (quizBeforeSend) persistCard(action.botId, quizBeforeSend.id, { dismissed: true });
           const threadId =
             action.threadId ?? stateRef.current.bots.find((bot) => bot.id === action.botId)?.threadId;
           const sendId = action.sendId ?? randomUuid();
@@ -2371,6 +2373,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 body: JSON.stringify({ text: action.text, replyToId: action.replyToId, threadId, sendId, ...(action.dataContext ? { dataContext: action.dataContext } : {}), ...(action.pointed?.length ? { pointed: action.pointed } : {}), ...(action.openPage ? { openPage: action.openPage } : {}), ...(action.mode === "goal" ? { mode: "goal" } : {}), ...(action.followUp ? { followUp: action.followUp } : {}), ...(action.mentions?.length ? { mentions: action.mentions } : {}) }),
               }), arrived))
             .then((sent) => {
+              if (quizBeforeSend) persistCard(action.botId, quizBeforeSend.id, { dismissed: true });
               if (!("body" in sent)) return;
               const body = sent.body;
               if (body?.message && typeof body.threadId === "string") {
@@ -2400,6 +2403,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               if (threadId) {
                 rawDispatch({ type: "optimisticMessageRemoved", threadId, sendId });
               }
+              if (quizBeforeSend) rawDispatch({ type: "onboardingCardReopened", botId: action.botId, messageId: quizBeforeSend.id });
               showError(error);
               action.onError?.();
             });
