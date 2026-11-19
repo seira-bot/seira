@@ -464,9 +464,7 @@ export function usePhoneSetupController(profileEmail = ""): PhoneSetupController
   const pairOnWifi = useCallback(() => {
     const baseline = phoneSetupBaseline(state?.devices ?? null);
     if (!baseline) return;
-    if (!flow.active) {
-      dispatchFlow({ type: "start", deviceIds: baseline });
-    }
+    if (!flow.active) dispatchFlow({ type: "start", deviceIds: baseline });
     const generation = ++setupGeneration.current;
     dispatchFlow({ type: "use-local" });
     setProvisioning(true);
@@ -476,10 +474,7 @@ export function usePhoneSetupController(profileEmail = ""): PhoneSetupController
   }, [flow.active, openPairing, state?.devices]);
 
   const start = useCallback(() => {
-    if (account?.problem === "unconfigured") {
-      pairOnWifi();
-      return;
-    }
+    if (account?.problem === "unconfigured") return pairOnWifi();
     const baseline = phoneSetupBaseline(state?.devices ?? null);
     if (!baseline) return;
     const generation = ++setupGeneration.current;
