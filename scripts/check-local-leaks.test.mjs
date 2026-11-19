@@ -13,7 +13,7 @@ describe("generic rules", () => {
   });
 
   it("allows placeholders, container users and web routes", () => {
-    for (const text of ["/home/node/app", "/home/you/.config", "/Users/Shared/x", "https://x.com/home/feed/", "GET /users/42/"]) {
+    for (const text of ["/home/node/app", "/home/you/.config", "/home/seira/.local/bin", "/Users/Shared/x", "https://x.com/home/feed/", "GET /users/42/"]) {
       expect(one(text)).toEqual([]);
     }
   });
