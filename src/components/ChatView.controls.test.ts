@@ -147,6 +147,29 @@ describe("the header's right side", () => {
   });
 });
 
+describe("the Advanced transcript", () => {
+  it("heads a bot turn with its face, name and time, opens the work card and keeps Reply and Copy beside the reply", () => {
+    fixture.advanced = true;
+    fixture.showToolCalls = true;
+    const messages: Bot["messages"] = [
+      { id: "ask", role: "user", kind: "text", at: 1, text: "Check it" },
+      { id: "read", role: "bot", kind: "activity", at: 2, tool: { name: "Read", ok: true } },
+      { id: "reply", role: "bot", kind: "text", at: 3, text: "Done." },
+    ];
+    try {
+      const markup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: false, messages } }));
+      expect(markup).toContain("data-turn-head");
+      expect(markup).toContain("data-activity-run");
+      expect(markup).toMatch(/data-activity-run[\s\S]*aria-expanded="true"[\s\S]*data-mid="read"/);
+      expect(markup).toContain('data-chat-bubble="simple"');
+      expect(markup).toContain(`aria-label="${en["chat.reply"]}"`);
+      expect(markup).toContain(`aria-label="${en["common.copy"]}"`);
+    } finally {
+      fixture.showToolCalls = false;
+    }
+  });
+});
+
 describe("the Simple header", () => {
   it("is one pill: the avatar and name, with a dot for another busy conversation and no title, role or way back", () => {
     const busyElsewhere: Bot = { ...bot, title: "Research", mainThreadId: "other", tasks: [...bot.tasks!, { threadId: "other", title: "Other", createdAt: 0, busy: true, activity: "working" }] };
