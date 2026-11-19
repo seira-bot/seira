@@ -700,16 +700,17 @@ const MessagesList = memo(function MessagesList({
         const first = item.kind === "message" ? item.message : item.messages[0];
         const newDay = needsStamp(prev, first, simple);
         const divider = dividerAbove(item.kind === "message" ? [item.message] : item.messages);
-        if (item.kind === "turn" || item.kind === "run") {
+        if (item.kind === "turn" || item.kind === "run" || i === liveStart) {
           if (!showToolCalls) return divider && <div key={item.id} className="contents">{divider}</div>;
           const live = i === liveStart;
-          const rows = live ? items.slice(i).flatMap((one) => one.kind === "message" ? [one.message] : one.kind === "run" ? one.messages : []) : item.messages;
+          const rows = live ? items.slice(i).flatMap((one) => one.kind === "message" ? [one.message] : one.kind === "run" ? one.messages : []) : item.kind === "message" ? [] : item.messages;
+          const itemId = item.kind === "message" ? `live:${item.message.id}` : item.id;
           const forceOpen = live || rows.some((step) => step.id === focusedId);
           const steps = rows.map((step) => <div key={step.id} className="contents" data-mid={step.id}><ActivityChip message={step} place={place} /></div>);
           const label = item.kind === "turn" ? item.label : undefined;
           if (!advanced) {
             return (
-              <div key={item.id} className="contents">
+              <div key={itemId} className="contents">
                 {newDay && <DaySeparator at={first.at} today={today} simple={simple} />}
                 {divider}
                 <ActivityRun messages={rows} label={label} forceOpen={forceOpen}>{steps}</ActivityRun>
@@ -718,12 +719,12 @@ const MessagesList = memo(function MessagesList({
           }
           const headed = !(previous?.kind === "message" && bubbleGroup(previous.message, botId) === "bot" && !newDay && !divider);
           return (
-            <div key={live ? `live:${first.id}` : item.id} className="contents">
+            <div key={itemId} className="contents">
               {newDay && <DaySeparator at={first.at} today={today} simple={simple} />}
               {divider}
               <div className="flex min-w-0 flex-col" data-turn-card>
                 {headed && <div className={BOT_TURN_INDENT}><BotTurnHead bot={bots.find((one) => one.id === botId)} name={botName} color={botColor} time={formatTime(first.at)} onOpen={() => dispatch({ type: "toggleSettings", open: true })} /></div>}
-                <ActivityRun messages={rows} label={label} forceOpen={forceOpen} status={live ? "working" : undefined} trace={traces.byItem.get(item.id)}>{steps}</ActivityRun>
+                <ActivityRun messages={rows} label={label} forceOpen={forceOpen} status={live ? "working" : undefined} trace={traces.byItem.get(itemId)}>{steps}</ActivityRun>
               </div>
             </div>
           );
