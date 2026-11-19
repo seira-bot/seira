@@ -317,6 +317,10 @@ on. Simple is the default for new installs.
   threads as a tree under its row), Simple may offer a shortcut to the same
   thing there instead of a second copy of it: a menu that opens on a click
   of a small chevron, never on hover.
+- **Advanced uses Simple's composer card.** The field sits above one bar, and
+  the round slot is voice, Send or Stop. Advanced fills the bar with quiet 28px
+  chips (Goal, approval level, place, context) where Simple uses the + menu.
+  The slash menu is a 360px text-only popover with 44px rows.
 - **Switching modes never loses data.**
 
 ## 14. Accessibility

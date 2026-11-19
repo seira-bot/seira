@@ -23,7 +23,7 @@ import { liveLineHeldElsewhere } from "./LiveCallBar";
 import { useMenuMotion } from "./MenuMotion";
 import { nextMenuIndex, SidebarPopoverMenu, type SidebarMenuItem } from "./SidebarPopoverMenu";
 import type { ApprovalChoice } from "./thread-approval";
-import { SIMPLE_CONTROL } from "./composer-simple";
+import { COMPOSER_CHIP, SIMPLE_CONTROL } from "./composer-simple";
 import { MENU_GUTTER, MENU_ICON, MENU_ITEM, MENU_SHEET, MENU_TRAILING } from "./menu-recipe";
 
 /** Finish together: the room (or, `solo`, the one bot) keeps working until the goal is done. The chip turns accent while it is on.
@@ -52,13 +52,7 @@ export function GoalToggle({ on, onToggle, solo = false, compact = false }: { on
       aria-label={t(solo ? "composer.goal.soloAria" : "composer.goal.aria")}
       title={t(solo ? "composer.goal.soloTitle" : "composer.goal.title")}
       onClick={onToggle}
-      className={cn(
-        "flex items-center gap-1.5 whitespace-nowrap rounded-full border text-[13px] transition-colors",
-        compact ? "h-7 px-2.5" : "h-8 px-3",
-        on
-          ? "border-accent/35 bg-accent/10 text-accent"
-          : "border-hairline/20 bg-transparent text-ink-secondary hover:bg-raised hover:text-ink",
-      )}
+      className={cn(COMPOSER_CHIP, on && "bg-accent/[0.12] text-accent-text hover:bg-accent/[0.18] hover:text-accent-text")}
     >
       <Target size={14} aria-hidden="true" />
       {on ? "/goal" : t("composer.goal.chip")}
@@ -132,7 +126,7 @@ export function TeachTaskButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       aria-label={t("composer.teachTask")}
       title={t("composer.teachTask")}
-      className="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-secondary hover:bg-control hover:text-ink"
+      className="flex size-7 shrink-0 items-center justify-center rounded-full text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink"
     >
       <GraduationCap size={16} strokeWidth={1.75} absoluteStrokeWidth />
     </button>

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -130,7 +131,8 @@ describe("custom ACP catalog discovery (isolated fake CLI)", () => {
     expect(forgetSession).toHaveBeenCalledOnce();
     const [session] = forgetSession.mock.calls[0] as unknown as [{ sessionId: string; cwd: string; env: unknown }];
     expect(session.sessionId).toBe("fake-session");
-    expect(basename(session.cwd)).toMatch(/^omb-acp-models-/);
+    expect(basename(session.cwd)).toMatch(new RegExp(`^omb-acp-models-${process.pid}-[A-Za-z0-9]{6}$`));
+    expect(existsSync(session.cwd)).toBe(false);
     // macOS reports the agent's cwd through /private; the folder name is the same either way.
     expect(basename(session.cwd)).toBe(basename((await fixture.requests())[0].cwd));
     expect(session.env).toBe(fixture.env);

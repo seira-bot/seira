@@ -43,9 +43,11 @@ an `inputs` value into a shell command, or runs `electron-builder` with a
 registry sign-in of `server-image.yml` (see [Server image workflow](#server-image-workflow)).
 
 A job that needs write access or reads a secret must use the GitHub
-environment `release`, and that environment must need a maintainer's approval.
-The test fails a job that asks for write access or reads a secret without it.
-Two workflows read secrets in that environment:
+environment `release`. The test fails a job that asks for write access or
+reads a secret without it. A job with no secret and no permission can use the
+environment `release-approval`. It holds the approval (see
+[The `release-approval` environment](#the-release-approval-environment)).
+Two workflows read secrets in the `release` environment:
 
 - `package-macos.yml` reads the Apple signing secrets;
 - `server-image.yml` reads the workflow token in its `publish` job, to sign in
@@ -66,8 +68,13 @@ holds these rules for every `package-*.yml` file:
 - The only trigger is `workflow_dispatch`. Only a person with write access can
   start it, and a pull request never runs it.
 - No job asks for a permission, so the token can only read the repository.
+  The `approval` job sets `permissions: {}`, which grants nothing.
 - A job uses an environment only to read the signing secrets, and only the
-  `release` environment. Today only `package-macos.yml` does this.
+  `release` environment. Today only `package-macos.yml` does this. The one
+  exception is an `approval` job in the `release-approval` environment. It
+  has `permissions: {}` and reads no secret.
+- The `package` job of `package-macos.yml` needs the `approval` job. It runs
+  only when `approval` succeeded or was skipped, and it is not cancelled.
 - A secret goes only into a step's `env`, as `${{ secrets.NAME }}`. It never
   goes into a `run` command, an action input, or a job setting.
 - Every job runs on a GitHub-hosted runner (`ubuntu-*`, `windows-*`, or
@@ -108,8 +115,11 @@ artifacts expire and the job fails. Then start a new run.
 - The workflow uses only `actions/*` actions.
 - The `image` job has no permission, no secret, and no environment, and it
   pushes nothing.
-- The `publish` job runs only by hand from `main`, after `image`. It uses the
-  `release` environment, so each run waits until a maintainer approves it.
+- The `approval` job needs `image`. It runs only for a person who is not a
+  maintainer, in the `release-approval` environment.
+- The `publish` job runs only by hand from `main`, after `image` succeeded. It
+  needs `approval`, and it runs only when `approval` succeeded or was skipped.
+  It uses the `release` environment.
 - Only the `publish` job gets `packages: write`, and only it can run
   `docker push` or `imagetools create`. The workflow token goes only into the
   `env` of its sign-in step.
@@ -215,18 +225,17 @@ Then add the `CI` check (source: GitHub Actions) to the `main` branch ruleset.
 ### The `release` environment
 
 `package-macos.yml` reads the Apple signing secrets from the environment
-`release`, and the `publish` job of `server-image.yml` waits for it before it
-writes to `ghcr.io`. An organization admin creates it in
-**Settings → Environments**:
+`release`, and the `publish` job of `server-image.yml` uses it to write to
+`ghcr.io`. An organization admin creates it in **Settings → Environments**:
 
 | Setting | Value |
 | --- | --- |
-| Required reviewers | The maintainers. Turn on **Prevent self-review** when there are two or more. |
+| Required reviewers | None. The `release-approval` environment holds the approval. |
 | Deployment branches and tags | Selected branches and tags: `main` only |
 | Environment secrets | The five Apple secrets (see [Releasing](releasing.md#macos-signing-secrets)) |
 
-- Each run of `package-macos.yml` waits until a reviewer approves it, with or
-  without the secrets.
+- A job in `release` never waits for a person. The `approval` job before it
+  decides if a maintainer must approve the run.
 - With `main` as the only deployment branch, a workflow file changed on another
   branch cannot read the secrets.
 - Do not store the Apple secrets as repository or organization secrets. Every

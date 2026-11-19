@@ -11,6 +11,9 @@ export const SIMPLE_CARD_ONE_LINE = 82.5;
 /** Simple mode's bare round controls in the bar: the +, the context meter, the mic and Stop beside the round slot. */
 export const SIMPLE_CONTROL = "size-8 rounded-full text-ink-tertiary hover:bg-ink/[0.06] hover:text-ink active:bg-ink/[0.08]";
 
+/** Advanced mode's quiet 28px chip in the card's bar: the Goal, approval level, place and context controls. */
+export const COMPOSER_CHIP = "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full ps-2 pe-2.5 text-[12px] font-medium leading-4 text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink aria-expanded:bg-ink/[0.09] aria-expanded:text-ink";
+
 export const QUIET_CALL = { fill: "color-mix(in srgb, var(--color-ink) 8%, transparent)", ink: "var(--color-ink-secondary)" };
 
 const ROOM_FILL = { fill: "var(--color-accent)", ink: "var(--color-accent-ink)" };

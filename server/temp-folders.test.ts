@@ -9,6 +9,7 @@ import {
   makeOwnedTempFolder,
   ORPHAN_MIN_AGE_MS,
   releaseOwnedTempFolder,
+  removeOwnedTempFolder,
   sweepOrphanedTempFolders,
 } from "./temp-folders.ts";
 
@@ -43,10 +44,30 @@ describe("makeOwnedTempFolder", () => {
     const script = fileURLToPath(new URL("./testing/exit-owned-folder.mjs", import.meta.url));
     const run = spawnSync(process.execPath, ["--experimental-strip-types", script], { encoding: "utf8", env: process.env });
     expect(run.status, run.stderr).toBe(0);
-    const { kept, released } = JSON.parse(run.stdout.trim().split("\n").at(-1) ?? "") as { kept: string; released: string };
+    const { kept, released, removed } = JSON.parse(run.stdout.trim().split("\n").at(-1) ?? "") as { kept: string; released: string; removed: string };
     expect(existsSync(kept)).toBe(false);
     // The caller took charge of this one, so it is still there after the exit.
     expect(existsSync(released)).toBe(true);
+    // The caller removed this one with the helper and someone else made a folder at its path: the hook leaves that folder.
+    expect(existsSync(removed)).toBe(true);
+  });
+});
+
+describe("removeOwnedTempFolder", () => {
+  it("removes the folder with its content, and says so", () => {
+    const path = makeOwnedTempFolder(PREFIX);
+    mkdirSync(join(path, "deep"));
+    writeFileSync(join(path, "deep", "mcp.json"), "{}");
+
+    expect(removeOwnedTempFolder(path)).toBe(true);
+
+    expect(existsSync(path)).toBe(false);
+  });
+
+  it("accepts a folder that is already gone", () => {
+    const path = makeOwnedTempFolder(PREFIX);
+    expect(removeOwnedTempFolder(path)).toBe(true);
+    expect(removeOwnedTempFolder(path)).toBe(true);
   });
 });
 
