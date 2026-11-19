@@ -1960,7 +1960,7 @@ describe("a Codex Live call through the real session wiring", () => {
   it("aborts the start of the session when the person hangs up before it is created, and not after", async () => {
     let signal!: AbortSignal;
     let release!: (answer: { sessionId: string; sdp: string }) => void;
-    const t = setup({ createSession: vi.fn((input) => { signal = input.signal!; return new Promise((resolve) => { release = resolve; }); }) });
+    const t = setup({ createSession: vi.fn((input) => { signal = input.signal!; return new Promise<{ sessionId: string; sdp: string }>((resolve) => { release = resolve; }); }) });
     const starting = t.controller.start({ auth: owner, ...BOT, client: "desktop", sdp: "offer-sdp" });
     const rejected = expect(starting).rejects.toMatchObject({ status: 503 });
     expect(signal.aborted).toBe(false);
