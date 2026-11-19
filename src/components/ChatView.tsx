@@ -1175,9 +1175,9 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
             </div>
           )}
           <TurnPresence
-            avatar={<TurnFace bot={bot} working={Boolean(toolInFlight)} size={28} />}
-            simple
-            className={cn(presenceUnderBubble && SIMPLE_STACKED)}
+            avatar={<TurnFace bot={bot} working={Boolean(toolInFlight)} size={advanced ? 36 : 28} />}
+            simple={!advanced}
+            className={cn(!advanced && presenceUnderBubble && SIMPLE_STACKED)}
             label={teammatesWorking ? t("chat.teammatesWorking") : sharedRun.label}
             visible={presenceVisible} threadId={bot.threadId}
             {...now}

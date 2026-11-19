@@ -216,7 +216,7 @@ describe("header name", () => {
     expect(pill?.[1]).toContain(">Pepper</span>");
     expect(pill?.[1]).toContain("data-chathead-chevron");
     expect(pill?.[1]).toMatch(/<span data-chathead-role="true"[^>]*>Research<\/span>/);
-    expect(markup).not.toContain("Rename Pepper");
+    expect(pill?.[0]).not.toContain("Rename");
   });
 
   it("shows the bot's role in the pill in both modes, dropping it on narrow screens", () => {
