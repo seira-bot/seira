@@ -2819,12 +2819,10 @@ app.whenReady().then(async () => {
     onHide: desktopTray ? (win) => desktopTray.hide(win) : undefined,
     isHidden: () => desktopTray?.isHidden() ?? false,
     onShow: (win) => desktopTray?.windowShown(win),
-    onFinished: () => { startupScreen = null; },
-    reducedMotion: () => { try { return systemPreferences.getAnimationSettings().prefersReducedMotion; } catch { return false; } },
+    onFinished: () => { startupScreen = null; }, systemPreferences,
   });
-  await startupScreen?.ready;
+  await startupScreen?.ready; startupScreen?.progress("shown");
   if (desktopShutdownStarted) return;
-  startupScreen?.progress("shown");
   session.defaultSession.on("will-download", (_event, item) => {
     if (mediaDownloads.claim(item)) return;
     item.setSavePath(collisionFreeDownloadPath(app.getPath("downloads"), item.getFilename()));

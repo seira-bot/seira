@@ -42,7 +42,8 @@ export function startupScreenHtml({ t = nativeText.englishText.t, lang = "en", r
 
 export function createStartupScreen({
   BrowserWindow, iconPath, platform = process.platform, isQuitting, onQuit,
-  onHide, isHidden = () => false, onShow, onFinished, t, lang, reducedMotion = () => false,
+  onHide, isHidden = () => false, onShow, onFinished, t, lang, systemPreferences,
+  reducedMotion = () => { try { return systemPreferences?.getAnimationSettings().prefersReducedMotion === true; } catch { return false; } },
 }) {
   let disposed = false, revealed = false, fallback, finishTimer, resolveReady;
   let reached = -1, finished = false;
