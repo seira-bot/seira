@@ -10,6 +10,7 @@ import { useStore, type Bot } from "@/state/store";
 import { mayRename, useTeamPeople } from "@/state/team-people";
 import { PICKER_BODY_IDS, botBodyId, type BotBodyId } from "../../../shared/bot-body";
 import { MausAvatar } from "../Avatar";
+import { CastCharacterPicker } from "../CastCharacterPicker";
 import { AvatarImageGenerator } from "../AvatarImageGenerator";
 import { AvatarFraming, OrganizationAvatarIcons, RESET_MASCOT_PATCH, useAvatarImage, type AvatarPatch } from "../avatar-editing";
 import { Segmented } from "./rows";
@@ -134,8 +135,10 @@ export function AvatarEditorCard({ bot, activeState, onPatch, onClose }: {
       <div className="p-3">
         {tab === "bot" && (
           <>
+            <div className="mb-1.5 text-[12px] text-ink-secondary">{t("botIdentity.characters")}</div>
+            <CastCharacterPicker look={bot} selectable={!showsImage} disabled={busy} onPick={pickMascot} />
             {PICKER_BODY_IDS.length > 1 && (
-              <div className="grid grid-cols-5 gap-1.5" role="group" aria-label={t("botIdentity.hair")}>
+              <div className="mt-3 grid grid-cols-5 gap-1.5" role="group" aria-label={t("botIdentity.hair")}>
                 {PICKER_BODY_IDS.map((id) => bodyButton(id, bodyName(id)))}
               </div>
             )}
