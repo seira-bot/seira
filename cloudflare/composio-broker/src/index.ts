@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { planAccountLink } from "../../../shared/connector-account-link";
 import { appEventStats, composioWebhook, pollEvents, presentCloudGrant, queueTestEvent, runHourly } from "./app-events";
+import { admitMcp, admitRegistration, admitRoute } from "./limits";
+import { usageStats, watchUsage } from "./usage";
 import {
   ACCOUNT_ID,
   MAX_CONNECTED_ACCOUNT_PAGES,
@@ -400,6 +402,8 @@ async function register(request: Request, env: Env) {
   if (!(await env.REGISTRATION_LIMITER.limit({ key: await sha256(fingerprint.slice(0, 512)) })).success) {
     return json({ error: "too many registration attempts" }, 429);
   }
+  const refused = await admitRegistration(request, env);
+  if (refused) return refused;
   const installationId = crypto.randomUUID();
   const token = randomToken();
   const now = Date.now();
@@ -415,6 +419,8 @@ async function proxyMcp(request: Request, installation: InstallationRow, env: En
   if (!body) return json({ error: "MCP request is too large" }, 413);
   await limitSessionRequests(installation, env);
   Object.assign(installation, await currentInstallation(env, installation.id));
+  const admitted = await admitMcp(body, installation, env);
+  if (admitted instanceof Response) return admitted;
   const reused = verifiedSession(installation);
   if (reused) touchLastSeen(installation, env, ctx);
   let session = reused ?? await verifySession(installation, env, ctx);
@@ -428,7 +434,7 @@ async function proxyMcp(request: Request, installation: InstallationRow, env: En
     return fetch(target.url, {
       method: "POST",
       headers: upstreamHeaders,
-      body,
+      body: admitted,
       signal: AbortSignal.timeout(10 * 60_000),
     }).catch((error: unknown) => {
       forgetSession(target.sessionId);
@@ -746,10 +752,13 @@ async function route(request: Request, env: Env, ctx: ExecutionContext) {
   if (request.method === "GET" && url.pathname === "/health") return json({ service: "seira-composio", ready: Boolean(env.COMPOSIO_API_KEY) });
   if (request.method === "POST" && url.pathname === "/v1/installations") return register(request, env);
   if (request.method === "POST" && url.pathname === "/v1/composio/webhook") return composioWebhook(request, env, ctx);
+  if (request.method === "GET" && url.pathname === "/v1/stats/usage") return usageStats(request, url, env);
   if (request.method === "GET" && url.pathname === "/v1/stats/app-events") return appEventStats(request, url, env);
   if (!url.pathname.startsWith("/v1/")) return json({ error: "not found" }, 404);
   const installation = await authenticate(request, env);
   if (!installation) return json({ error: "unauthorized" }, 401);
+  const held = await admitRoute(request, url, installation, env);
+  if (held) return held;
   const appEvents = await appEventRoute(request, url, installation, env, ctx);
   if (appEvents) return appEvents;
   if (request.method === "GET" && url.pathname === "/v1/me") return me(installation);
@@ -795,6 +804,7 @@ export default {
     }
   },
   async scheduled(controller: ScheduledController, env: Env) {
+    await watchUsage(env, controller.scheduledTime);
     await runHourly(env, controller.scheduledTime);
   },
 } satisfies ExportedHandler<Env>;
