@@ -108,10 +108,10 @@ import { cn } from "@/lib/cn";
 import { activeLocale, intlLocale, t } from "@/lib/i18n";
 import { COMPACT_BUBBLE } from "@/lib/compact-chip";
 import { groupTranscript, isStatusActivity, liveWorkSteps, turnDurations, workedLabel } from "@/lib/activity-runs";
-import { traceRootId } from "../../shared/usage-trace";
 import { StatusActivityRow } from "@/components/StatusActivityRow";
 import { CancelledTurnRow } from "./CancelledTurnRow";
 import { ActivityRun } from "./ActivityRun";
+import { AdvancedTurnCard, cardRows, renameBotWith, useAdvancedTurns } from "./advanced-turn";
 import { BubbleEditor } from "./BubbleEditor";
 import { ReplyBlocks } from "./ReplyBlocks";
 import { webhookMessageView } from "@/lib/webhook-message";
@@ -649,32 +649,7 @@ const MessagesList = memo(function MessagesList({
   const messages = useLiveTranscript(threadId, saved, transcript);
   // A finished turn keeps the bot's progress lines and folds only its tool steps under "Worked for", in both modes.
   const items = useMemo(() => groupTranscript(messages), [messages, locale]);
-  // Advanced mode: a turn still running shows one open card with its steps so far, and a finished turn's trace sits in its card.
-  const liveStart = useMemo(() => {
-    if (!advanced || !busy || !showToolCalls) return -1;
-    const ids = new Set(liveWorkSteps(messages).map((message) => message.id));
-    let start = items.length;
-    while (start > 0) {
-      const item = items[start - 1]!;
-      if (!(item.kind === "message" ? ids.has(item.message.id) : item.kind === "run" && item.messages.every((step) => ids.has(step.id)))) break;
-      start -= 1;
-    }
-    return start < items.length ? start : -1;
-  }, [advanced, busy, showToolCalls, items, messages]);
-  const traces = useMemo(() => {
-    const byItem = new Map<string, { id: string; at: number }>(), absorbed = new Set<string>();
-    if (!advanced || !showToolCalls) return { byItem, absorbed };
-    const digests = new Map<string, Message>();
-    for (const row of messages) if (row.kind === "digest" && row.digest) digests.set(row.digest.turnId, row);
-    for (const item of items) {
-      if (item.kind !== "turn") continue;
-      const row = digests.get(item.turnId), digest = row?.digest;
-      if (!row || !digest) continue;
-      byItem.set(item.id, { id: traceRootId(digest.threadId, digest.turnId), at: digest.at });
-      absorbed.add(row.id);
-    }
-    return { byItem, absorbed };
-  }, [advanced, showToolCalls, items, messages]);
+  const { liveStart, traces } = useAdvancedTurns({ advanced, busy, showToolCalls, items, messages });
   const newestMessageId = messages.at(-1)?.id;
   let newestUserMessageId: string | undefined;
   for (let i = messages.length - 1; i >= 0 && !newestUserMessageId; i--) {
@@ -703,7 +678,7 @@ const MessagesList = memo(function MessagesList({
         if (item.kind === "turn" || item.kind === "run" || i === liveStart) {
           if (!showToolCalls) return divider && <div key={item.kind === "message" ? item.message.id : item.id} className="contents">{divider}</div>;
           const live = i === liveStart;
-          const rows = live ? items.slice(i).flatMap((one) => one.kind === "message" ? [one.message] : one.kind === "run" ? one.messages : []) : item.kind === "message" ? [] : item.messages;
+          const rows = cardRows(items, i, live);
           const itemId = item.kind === "message" ? `live:${item.message.id}` : item.id;
           const forceOpen = live || rows.some((step) => step.id === focusedId);
           const steps = rows.map((step) => <div key={step.id} className="contents" data-mid={step.id}><ActivityChip message={step} place={place} /></div>);
@@ -722,10 +697,9 @@ const MessagesList = memo(function MessagesList({
             <div key={itemId} className="contents">
               {newDay && <DaySeparator at={first.at} today={today} simple={simple} />}
               {divider}
-              <div className="flex min-w-0 flex-col" data-turn-card>
-                {headed && <div className={BOT_TURN_INDENT}><BotTurnHead bot={bots.find((one) => one.id === botId)} name={botName} color={botColor} time={formatTime(first.at)} onOpen={() => dispatch({ type: "toggleSettings", open: true })} /></div>}
+              <AdvancedTurnCard headed={headed} bot={bots.find((one) => one.id === botId)} name={botName} color={botColor} time={formatTime(first.at)} onOpen={() => dispatch({ type: "toggleSettings", open: true })}>
                 <ActivityRun messages={rows} label={label} forceOpen={forceOpen} status={live ? "working" : undefined} trace={traces.byItem.get(itemId)}>{steps}</ActivityRun>
-              </div>
+              </AdvancedTurnCard>
             </div>
           );
         }
@@ -835,15 +809,7 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
   const phoneMenu = phone && !remoteClient;
   const pillHead = !remoteClient, simpleHead = !advanced && pillHead;
   const [renaming, setRenaming] = useState(false);
-  const renameBot = (name: string) => {
-    if (window.ogb?.remoteClient?.active) {
-      void api(`/api/bots/${bot.id}/profile`, { method: "PATCH", body: JSON.stringify({ name }) })
-        .then(({ bot: updated }) => dispatch({ type: "botPatched", bot: updated }))
-        .catch((cause) => dispatch({ type: "error", message: cause instanceof Error ? cause.message : String(cause) }));
-    } else {
-      dispatch({ type: "updateBot", botId: bot.id, patch: { name } });
-    }
-  };
+  const renameBot = renameBotWith(bot, dispatch);
   const canWrite = useCanWriteIn(bot.threadId, bot.yourAccess);
 
   const computerStarting = computerStartLine(state.computerStart, bot.name); useScreensWhile(Boolean(computerStarting));
