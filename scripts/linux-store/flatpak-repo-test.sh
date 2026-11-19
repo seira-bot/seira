@@ -27,6 +27,8 @@ APP_ID=bot.seira.Seira
 APP_REF="app/$APP_ID/x86_64/stable"
 VER_A=0.1.179-test.a
 VER_B=0.1.179-test.b
+# The build takes the app version from package.json, not from the test version names above.
+PKG_VERSION="$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$REPO_ROOT/package.json" | head -1)"
 MEMORY="${VM_MEMORY_MB:-2048}"
 BASE_URL="${UBUNTU_IMAGE_URL:-https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
 
@@ -124,11 +126,13 @@ stage_host() {
   echo "$COMMIT_A" > "$ROOT/commit-a"
   check "a: build and publish A ($VER_A, commit $COMMIT_A)" test -s "$ROOT/out-a/Seira-$VER_A-x86_64.flatpak"
   check "a: refs files are generated for the test URL" grep -q "Url=$TEST_URL" "$ROOT/out-a/seira.flatpakref"
+  local got
+  got="$(zcat "$ROOT"/build/files/share/{swcatalog/xml,app-info/xmls}/"$APP_ID".xml.gz 2>/dev/null \
+    | grep -o '<release [^>]*version="[^"]*"' | head -1 | sed 's/.*version="//; s/"$//' || true)"
+  [ "$got" = "$PKG_VERSION" ] && pass "a: app data has version $PKG_VERSION" || fail "a: app data has version '$got', not $PKG_VERSION"
 }
 
 make_b() {
-  local meta="$ROOT/build/files/share/metainfo/$APP_ID.metainfo.xml"
-  sed -i 's|<release version="[^"]*"|<release version="9.9.9-test-b"|' "$meta"
   echo B > "$ROOT/build/files/share/seira-test-marker"
   publish "$VER_B" "$ROOT/out-b" 2>&1 | tee "$ROOT/logs/publish-b.log"
   COMMIT_B="$(ostree --repo="$SEIRA_FLATPAK_CACHE_DIR" rev-parse "$APP_REF")"
@@ -220,6 +224,7 @@ EOF
   check "d: remote seira has the test URL" bash -c "grep -q '${TEST_URL}' '$ROOT/logs/vm-remotes-1.log'"
   check "d: remote seira checks signatures (gpg-verify on)" vm_ssh "! grep -A12 '^\[remote \"seira\"\]' ~/.local/share/flatpak/repo/config | grep -q 'gpg-verify=false'; test -s ~/.local/share/flatpak/repo/seira.trustedkeys.gpg"
   vm_ssh "flatpak info --user $APP_ID | grep -E 'Version|Commit|Subject'" | sed 's/^/  A: /'
+  check "d: flatpak info shows version $PKG_VERSION" vm_ssh "flatpak info --user $APP_ID | grep -qE '^ *Version: ${PKG_VERSION//./\\.}\$'"
 
   echo "== B: publish version $VER_B, then update in the guest"
   make_b

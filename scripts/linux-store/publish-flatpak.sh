@@ -179,6 +179,7 @@ if [ "$UPLOAD" = 1 ]; then
     rc sync "$DEST/repo" "$CACHE_DIR" "${LOCAL_ONLY[@]}"
   else
     [ "$INIT_REPO" = 1 ] || die "the bucket has no repo. Use --init-repo for the first publish only."
+    [ ! -e "$CACHE_DIR/config" ] || die "the bucket has no repo, but $CACHE_DIR has one. Move that folder away, or set SEIRA_FLATPAK_CACHE_DIR to an empty folder."
     echo "bucket has no repo yet; a new one is made"
   fi
 fi
@@ -239,7 +240,7 @@ echo "== upload"
 IMMUTABLE='Cache-Control: public, max-age=31536000, immutable'
 NOCACHE='Cache-Control: no-cache'
 rc copy "$CACHE_DIR" "$DEST/repo" --ignore-existing --header-upload "$IMMUTABLE" \
-  --include "/objects/**" --include "/deltas/**" --include "/summaries/**" --exclude "*"
+  --include "/objects/**" --include "/deltas/**" --include "/summaries/**"
 rc copy "$CACHE_DIR" "$DEST/repo" --checksum --header-upload "$NOCACHE" "${LOCAL_ONLY[@]}" \
   --exclude "/objects/**" --exclude "/deltas/**" --exclude "/summaries/**" --exclude "/summary*"
 for f in summary.sig summary summary.idx.sig summary.idx; do

@@ -30,6 +30,9 @@ appstreamcli validate --no-net packaging/flatpak/bot.seira.Seira.metainfo.xml
 desktop-file-validate packaging/flatpak/bot.seira.Seira.desktop
 ```
 
+The build writes the `package.json` version and the build date into the `<release>` entry of the metainfo.
+Flatpak and software centers show that version. Do not edit the version in the metainfo file by hand.
+
 ## Permissions
 
 | Permission | Reason |
