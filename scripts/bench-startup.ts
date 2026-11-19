@@ -96,7 +96,7 @@ async function launchOnce(options: Options, sandbox: string, label: string): Pro
   const wrapped = env.DISPLAY ? appCommand : ["xvfb-run", "-a", "-s", "-screen 0 1440x900x24", ...appCommand];
   const command = options.hostNetwork
     ? wrapped
-    : ["unshare", "-Urn", "sh", "-c", 'ip link set lo up && exec unshare -U --map-user="$1" --map-group="$2" "${@:3}"', "sh", String(process.getuid!()), String(process.getgid!()), ...wrapped];
+    : ["unshare", "-Urn", "sh", "-c", 'u=$1; g=$2; shift 2; ip link set lo up && exec unshare -U --map-user="$u" --map-group="$g" "$@"', "sh", String(process.getuid!()), String(process.getgid!()), ...wrapped];
   const logFd = openSync(logFile, "a");
   const child = spawn(command[0], command.slice(1), { env, detached: true, stdio: ["ignore", logFd, logFd] });
   closeSync(logFd);
