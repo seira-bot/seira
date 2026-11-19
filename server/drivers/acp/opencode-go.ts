@@ -26,8 +26,8 @@ import { openCodePromptUnreachedModel } from "./opencode-unreached.ts";
 import { parseOpenCodeLogLine } from "./quiet-status.ts";
 import type { ModelCatalog, ModelVariantOption, ProviderDriver, ProviderErrorCode } from "../../contracts.ts";
 import { execCliBoxed } from "../../procs.ts";
-import {
 import { userHome } from "../../env-path.ts";
+import {
   catalogFromOpenCodeSession,
   DISCOVERY_TIMEOUT_MS,
   discoveryDirectory,
