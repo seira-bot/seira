@@ -31,7 +31,7 @@ it("shows this app's update where the desktop app answers, with no Download step
 
 it("offers no update action when an app store updates this install, and says so in plain words", () => {
   const html = render({ status: "idle", managedByStore: true });
-  expect(html).toContain("Updates come from the app store you installed Seira from.");
+  expect(html).toContain("Updates come with your package or store.");
   expect(html).not.toContain("<button");
   expect(html).not.toContain("Check for updates");
 });
