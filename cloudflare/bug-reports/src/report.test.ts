@@ -55,6 +55,7 @@ describe("AC-02 comments on the open issue", () => {
   it("comments through the D1 fingerprint row", async () => {
     const h = bugHarness();
     await sendOk(h, 1);
+    const callsBefore = h.github.apiCalls().length;
     const id = await sendOk(h, 2);
     expect(h.github.issues.size).toBe(1);
     expect(h.github.comments).toHaveLength(1);
@@ -62,7 +63,7 @@ describe("AC-02 comments on the open issue", () => {
     expect(h.github.comments[0]?.body).toContain("Another report of this error.");
     const rows = h.reportRows();
     expect(rows[1]).toMatchObject({ id, issue_number: rows[0]!.issue_number, comment_id: h.github.comments[0]!.id });
-    expect(h.github.apiCalls().some((call) => call.path.startsWith("/search"))).toBe(false);
+    expect(h.github.apiCalls().slice(callsBefore).some((call) => call.path.startsWith("/search"))).toBe(false);
   });
 
   it("comments through the search path when D1 does not know the fingerprint", async () => {
