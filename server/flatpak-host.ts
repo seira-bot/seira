@@ -1,10 +1,16 @@
 // Inside a Flatpak the agent CLIs (claude, codex, ...) live on the host, not in the sandbox. Every lookup and every
 // launch below goes through `flatpak-spawn --host`, which needs the org.freedesktop.Flatpak bus name in finish-args.
 // Arguments are always an argv array. The two shell scripts are constants that read their inputs as positional parameters.
+// Environment values never enter an argv, which any user of the host can read in /proc: they travel on a pipe (--env-fd).
 import { execFile, spawnSync } from "node:child_process";
+import { isAbsolute, resolve } from "node:path";
+import { serverMayRunFrom, serverPath } from "./bot-box/program-trust.ts";
 import type { ResolvedSpawn } from "./env-path.ts";
 
 export const FLATPAK_SPAWN = "/usr/bin/flatpak-spawn";
+
+/** The descriptor `flatpak-spawn` reads the environment from: the first one after stdin, stdout and stderr. */
+export const HOST_ENV_FD = 3;
 
 const HOST_DEFAULT_PATH = "/usr/local/bin:/usr/bin";
 const HOST_PROBE_TIMEOUT_MS = 5_000;
@@ -14,8 +20,9 @@ const CANDIDATE_TTL_MS = 3_000;
 const SANDBOX_ENV = /^(?:FLATPAK_.*|ZYPAK_.*|XDG_(?:CONFIG|DATA|CACHE|STATE)_HOME|XDG_(?:DATA|CONFIG)_DIRS|XDG_RUNTIME_DIR|DBUS_SESSION_BUS_ADDRESS|XAUTHORITY|TMPDIR|LD_LIBRARY_PATH|LD_PRELOAD|LD_AUDIT|GI_TYPELIB_PATH|GIO_EXTRA_MODULES|GST_.*|PKG_CONFIG_.*|CHROME_.*|container|PULSE_.*|PIPEWIRE_.*|AT_SPI_BUS_ADDRESS)$/;
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-const FIND_ON_PATH = 'set -f; IFS=:; for d in $1; do [ -n "$d" ] || continue; p="$d/$2"; if [ -f "$p" ] && [ -x "$p" ]; then printf "%s\\n" "$p"; fi; done';
-const FIND_FILE = 'if [ -f "$1" ] && [ -x "$1" ]; then printf "%s\\n" "$1"; fi';
+// Each hit prints two lines: the file, then where its links lead.
+const FIND_ON_PATH = 'set -f; IFS=:; for d in $1; do [ -n "$d" ] || continue; p="$d/$2"; if [ -f "$p" ] && [ -x "$p" ]; then printf "%s\\n%s\\n" "$p" "$(readlink -f -- "$p")"; fi; done';
+const FIND_FILE = 'if [ -f "$1" ] && [ -x "$1" ]; then printf "%s\\n%s\\n" "$1" "$(readlink -f -- "$1")"; fi';
 
 export interface HostRunResult {
   status: number | null;
@@ -24,6 +31,21 @@ export interface HostRunResult {
 
 export type HostRunner = (argv: readonly string[]) => HostRunResult;
 
+export interface HostProgram {
+  path: string;
+  real: string;
+}
+
+/** A command line for `flatpak-spawn`, and the environment block its descriptor HOST_ENV_FD must carry. */
+export interface HostSpawn {
+  command: string;
+  args: string[];
+  /** What `flatpak-spawn` itself runs with: only the way to the session bus. */
+  env: NodeJS.ProcessEnv;
+  /** NAME=value pairs ended by NUL, written to HOST_ENV_FD and then closed. */
+  envBlock: string;
+}
+
 function defaultRunner(argv: readonly string[]): HostRunResult {
   const result = spawnSync(FLATPAK_SPAWN, [...argv], { encoding: "utf8", timeout: HOST_PROBE_TIMEOUT_MS, windowsHide: true });
   return { status: result.status, stdout: typeof result.stdout === "string" ? result.stdout : "" };
@@ -31,7 +53,7 @@ function defaultRunner(argv: readonly string[]): HostRunResult {
 
 let runner: HostRunner = defaultRunner;
 let basePath: string | null = null;
-const candidates = new Map<string, { at: number; found: string[] }>();
+const candidates = new Map<string, { at: number; found: HostProgram[] }>();
 
 export function inFlatpak(env: NodeJS.ProcessEnv = process.env): boolean {
   return typeof env.FLATPAK_ID === "string" && env.FLATPAK_ID !== "";
@@ -52,13 +74,14 @@ export function hostEnvEntries(env: NodeJS.ProcessEnv): string[] {
   return out;
 }
 
-/** The arguments of `flatpak-spawn` (the program itself is FLATPAK_SPAWN) that start `command` on the host. */
-export function hostSpawnArgv(input: { command: string; args: readonly string[]; cwd?: string; env: NodeJS.ProcessEnv }): string[] {
+/** The arguments of `flatpak-spawn` (the program itself is FLATPAK_SPAWN) that start `command` on the host. No value of
+ * the environment is among them: see HostSpawn.envBlock. */
+export function hostSpawnArgv(input: { command: string; args: readonly string[]; cwd?: string }): string[] {
   return [
     "--host",
     "--watch-bus",
     ...(input.cwd ? [`--directory=${input.cwd}`] : []),
-    ...hostEnvEntries(input.env).map((entry) => `--env=${entry}`),
+    `--env-fd=${HOST_ENV_FD}`,
     "--",
     input.command,
     ...input.args,
@@ -75,8 +98,8 @@ export function hostBasePath(): string {
   return basePath;
 }
 
-/** Every copy of `name` that exists on the host, searching `path` (host folders). Cached for a few seconds. */
-export function hostFindCandidates(name: string, path: string): string[] {
+/** Every copy of `name` that exists on the host, searching `path` (host folders), with where its links lead. Cached for a few seconds. */
+export function hostFindPrograms(name: string, path: string): HostProgram[] {
   const key = `${path}\0${name}`;
   const hit = candidates.get(key);
   if (hit && Date.now() - hit.at < CANDIDATE_TTL_MS) return hit.found;
@@ -84,30 +107,45 @@ export function hostFindCandidates(name: string, path: string): string[] {
     ? ["--host", "/bin/sh", "-c", FIND_FILE, "sh", name]
     : ["--host", "/bin/sh", "-c", FIND_ON_PATH, "sh", path, name];
   const result = runner(argv);
-  const found = result.status === 0 ? result.stdout.split("\n").filter(Boolean) : [];
+  const lines = result.status === 0 ? result.stdout.split("\n").filter(Boolean) : [];
+  const found: HostProgram[] = [];
+  for (let i = 0; i + 1 < lines.length; i += 2) found.push({ path: lines[i]!, real: lines[i + 1]! });
   candidates.set(key, { at: Date.now(), found });
   return found;
 }
 
-/** The host command line for `resolved`, or null when it should run here: off Flatpak, an app file, or no such program on the host (the caller then gets the same ENOENT as on a deb). */
+export function hostFindCandidates(name: string, path: string): string[] {
+  return hostFindPrograms(name, path).map((program) => program.path);
+}
+
+/** The host command line for `resolved`, or null when it should run here: off Flatpak, an app file, or no such program on
+ * the host (the caller then gets the same ENOENT as on a deb). Throws EACCES, as outsideBoxOptions does, for a program in
+ * a folder the bots can write. */
 export function hostBridge(
   resolved: ResolvedSpawn,
   context: { cwd?: string | URL; env?: NodeJS.ProcessEnv },
   processEnv: NodeJS.ProcessEnv = process.env,
-): ResolvedSpawn | null {
+): HostSpawn | null {
   if (!inFlatpak(processEnv) || runsInSandbox(resolved.command)) return null;
-  const env = { ...(context.env ?? processEnv), ...resolved.env };
-  const found = hostFindCandidates(resolved.command, env.PATH ?? hostBasePath())[0];
-  if (!found) return null;
   const cwd = typeof context.cwd === "string" && context.cwd ? context.cwd : undefined;
+  const env = { ...(context.env ?? processEnv), ...resolved.env };
+  const path = serverPath(env.PATH ?? hostBasePath());
+  const name = /\//.test(resolved.command) && !isAbsolute(resolved.command) ? resolve(cwd ?? "/", resolved.command) : resolved.command;
+  const program = hostFindPrograms(name, path)[0];
+  if (!program) return null;
+  if (!serverMayRunFrom(program.path) || !serverMayRunFrom(program.real)) {
+    throw Object.assign(new Error(`${resolved.command} is in a folder the bots can write, so the server does not run it outside the bot box.`), { code: "EACCES" });
+  }
+  const entries = hostEnvEntries({ ...env, PATH: path });
   return {
     command: FLATPAK_SPAWN,
-    args: hostSpawnArgv({ command: found, args: resolved.args, cwd, env: { ...env, PATH: env.PATH ?? hostBasePath() } }),
+    args: hostSpawnArgv({ command: program.path, args: resolved.args, cwd }),
     env: busEnv(processEnv),
+    envBlock: entries.map((entry) => `${entry}\0`).join(""),
   };
 }
 
-/** `flatpak-spawn` itself needs only the way to the session bus; everything else reaches the host child as --env. */
+/** `flatpak-spawn` itself needs only the way to the session bus; everything else reaches the host child on the pipe. */
 function busEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = { PATH: "/app/bin:/usr/bin" };
   for (const name of ["DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "HOME"]) if (env[name]) out[name] = env[name];

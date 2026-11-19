@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { distrustHomePrograms } from "./bot-box/program-trust.ts";
 import {
   FLATPAK_SPAWN,
   hostBasePath,
@@ -44,13 +45,13 @@ describe("hostEnvEntries", () => {
 });
 
 describe("hostSpawnArgv", () => {
-  it("passes arguments as separate elements and never joins them", () => {
-    const argv = hostSpawnArgv({ command: "/home/u/.local/bin/claude", args: ["-p", "a b; rm -rf /", "$(id)"], cwd: "/work dir", env: { A: "1" } });
+  it("passes arguments as separate elements, never joined, and reads the environment from a descriptor", () => {
+    const argv = hostSpawnArgv({ command: "/home/u/.local/bin/claude", args: ["-p", "a b; rm -rf /", "$(id)"], cwd: "/work dir" });
     expect(argv).toEqual([
       "--host",
       "--watch-bus",
       "--directory=/work dir",
-      "--env=A=1",
+      "--env-fd=3",
       "--",
       "/home/u/.local/bin/claude",
       "-p",
@@ -60,13 +61,13 @@ describe("hostSpawnArgv", () => {
   });
 
   it("leaves out --directory without a working folder", () => {
-    expect(hostSpawnArgv({ command: "x", args: [], env: {} })).toEqual(["--host", "--watch-bus", "--", "x"]);
+    expect(hostSpawnArgv({ command: "x", args: [] })).toEqual(["--host", "--watch-bus", "--env-fd=3", "--", "x"]);
   });
 });
 
 describe("host lookups", () => {
   const calls: string[][] = [];
-  let hostFiles: Set<string>;
+  let hostFiles: Map<string, string>;
   let hostPath: string;
 
   const runner: HostRunner = (argv) => {
@@ -74,19 +75,22 @@ describe("host lookups", () => {
     if (argv[1] === "printenv" && argv[2] === "PATH") return { status: 0, stdout: `${hostPath}\n` };
     if (argv[1] === "/bin/sh" && argv.length === 7) {
       const found = (argv[5] ?? "").split(":").map((d) => `${d}/${argv[6]}`).filter((p) => hostFiles.has(p));
-      return { status: 0, stdout: found.map((p) => `${p}\n`).join("") };
+      return { status: 0, stdout: found.map((p) => `${p}\n${hostFiles.get(p)}\n`).join("") };
     }
-    if (argv[1] === "/bin/sh") return { status: 0, stdout: hostFiles.has(argv[5] ?? "") ? `${argv[5]}\n` : "" };
+    if (argv[1] === "/bin/sh") return { status: 0, stdout: hostFiles.has(argv[5] ?? "") ? `${argv[5]}\n${hostFiles.get(argv[5]!)}\n` : "" };
     return { status: 1, stdout: "" };
   };
 
   beforeEach(() => {
     calls.length = 0;
-    hostFiles = new Set(["/home/u/.local/bin/claude"]);
+    hostFiles = new Map([["/home/u/.local/bin/claude", "/home/u/.local/bin/claude"]]);
     hostPath = "/usr/local/bin:/usr/bin";
     setHostRunnerForTests(runner);
   });
-  afterEach(() => setHostRunnerForTests(null));
+  afterEach(() => {
+    setHostRunnerForTests(null);
+    distrustHomePrograms(null);
+  });
 
   it("reads the host PATH once", () => {
     hostPath = "/a:/b";
@@ -113,9 +117,9 @@ describe("host lookups", () => {
     expect(call.slice(-2)).toEqual(["/p", "cl$(touch x)aude"]);
   });
 
-  it("sees a program that is installed after a miss once the short cache ends", () => {
+  it("sees a program that is installed after a miss once the cache is reset", () => {
     expect(hostFindCandidates("codex", "/usr/local/bin")).toEqual([]);
-    hostFiles.add("/usr/local/bin/codex");
+    hostFiles.set("/usr/local/bin/codex", "/usr/local/bin/codex");
     resetHostCaches();
     expect(hostFindCandidates("codex", "/usr/local/bin")).toEqual(["/usr/local/bin/codex"]);
   });
@@ -141,25 +145,37 @@ describe("host lookups", () => {
       expect(hostBridge({ command: "codex", args: [] }, { env: { PATH: "/usr/bin" } }, FLATPAK_ENV)).toBeNull();
     });
 
-    it("builds a flatpak-spawn command line for a program on the host", () => {
+    it("builds a flatpak-spawn command line and carries the environment on a descriptor, never in argv", () => {
       const bridged = hostBridge(
         { command: "claude", args: ["--version"] },
-        { cwd: "/work", env: { PATH: "/usr/bin:/home/u/.local/bin", API: "1", FLATPAK_ID: "x" } },
+        { cwd: "/work", env: { PATH: "/usr/bin:/home/u/.local/bin", API: "token-1", FLATPAK_ID: "x" } },
         { ...FLATPAK_ENV, DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus", SECRET_FROM_APP: "no" },
       );
       expect(bridged?.command).toBe(FLATPAK_SPAWN);
-      expect(bridged?.args).toEqual([
-        "--host",
-        "--watch-bus",
-        "--directory=/work",
-        "--env=PATH=/usr/bin:/home/u/.local/bin",
-        "--env=API=1",
-        "--",
-        "/home/u/.local/bin/claude",
-        "--version",
-      ]);
+      expect(bridged?.args).toEqual(["--host", "--watch-bus", "--directory=/work", "--env-fd=3", "--", "/home/u/.local/bin/claude", "--version"]);
+      expect(bridged?.args.join(" ")).not.toContain("token-1");
+      expect(bridged?.envBlock).toBe("PATH=/usr/bin:/home/u/.local/bin\0API=token-1\0");
       expect(bridged?.env?.DBUS_SESSION_BUS_ADDRESS).toBe("unix:path=/run/user/1000/bus");
       expect(bridged?.env?.SECRET_FROM_APP).toBeUndefined();
+    });
+
+    it("leaves a folder the bots can write out of the host PATH, as outsideBoxOptions does", () => {
+      distrustHomePrograms("/home/u", ["/home/u/data"], []);
+      hostFiles.set("/usr/bin/claude", "/usr/bin/claude");
+      const bridged = hostBridge({ command: "claude", args: [] }, { env: { PATH: "/home/u/.local/bin:/usr/bin" } }, FLATPAK_ENV);
+      expect(bridged?.args.at(-1)).toBe("/usr/bin/claude");
+      expect(bridged?.envBlock).toBe("PATH=/usr/bin\0");
+    });
+
+    it("refuses with EACCES a program whose link leads into a folder the bots can write", () => {
+      distrustHomePrograms("/home/u", ["/home/u/data"], []);
+      hostFiles.set("/usr/bin/claude", "/home/u/.local/bin/evil");
+      expect(() => hostBridge({ command: "claude", args: [] }, { env: { PATH: "/usr/bin" } }, FLATPAK_ENV)).toThrow(expect.objectContaining({ code: "EACCES" }));
+    });
+
+    it("refuses with EACCES a path name in such a folder", () => {
+      distrustHomePrograms("/home/u", ["/home/u/data"], []);
+      expect(() => hostBridge({ command: "/home/u/.local/bin/claude", args: [] }, { env: { PATH: "/usr/bin" } }, FLATPAK_ENV)).toThrow(expect.objectContaining({ code: "EACCES" }));
     });
   });
 });

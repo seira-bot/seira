@@ -22,7 +22,7 @@ import { ENGINE_TAG_ENV, engineRunTag, engineStopped, recordEngine } from "./eng
 import { engineHomes } from "./engine-homes/engine-homes.ts";
 import type { HomedSpawn } from "./engine-homes/layout.ts";
 import { resolveCliSpawn, type ResolvedSpawn } from "./env-path.ts";
-import { hostBridge } from "./flatpak-host.ts";
+import { HOST_ENV_FD, hostBridge, inFlatpak, type HostSpawn } from "./flatpak-host.ts";
 import { spawnBotWork } from "./oom-score.ts";
 import { noticeFailure } from "./chat-notices.ts";
 import { processBudget } from "./process-room.ts";
@@ -307,6 +307,20 @@ export function outsideBoxOptions<T extends { env?: NodeJS.ProcessEnv; cwd?: str
   return { ...opts, env: { ...env, PATH: serverPath(env.PATH) } };
 }
 
+/** `stdio` with one more pipe at HOST_ENV_FD, where `flatpak-spawn` reads the child's environment. */
+export function hostStdio(stdio: SpawnOptions["stdio"]): NonNullable<SpawnOptions["stdio"]> {
+  const base = Array.isArray(stdio) ? stdio.slice(0, 3) : [stdio ?? "pipe", stdio ?? "pipe", stdio ?? "pipe"];
+  while (base.length < HOST_ENV_FD) base.push("pipe");
+  return [...base, "pipe"] as NonNullable<SpawnOptions["stdio"]>;
+}
+
+export function sendHostEnv(child: ChildProcess, block: string): void {
+  const pipe = child.stdio[HOST_ENV_FD] as Writable | null | undefined;
+  if (!pipe) return;
+  pipe.on("error", () => {});
+  pipe.end(block);
+}
+
 export function spawnCli(
   cli: string,
   args: string[],
@@ -322,20 +336,30 @@ export function spawnCli(
     : homed ? { ...opts, env } : opts;
   // A server that restarts in place stops what an earlier one left by this tag (engine-records.ts).
   const tag = process.platform === "win32" ? null : engineRunTag();
-  // In a Flatpak the program lives on the host and runs there, outside the bot box (flatpak-host.ts).
-  const hosted = hostBridge(resolved, { cwd: options.cwd, env: tag ? { ...(options.env ?? process.env), [ENGINE_TAG_ENV]: tag } : options.env });
-  const boxed = hosted ? null : boxedSpawn(resolved, options, owner, homed);
+  const boxed = boxedSpawn(resolved, options, owner, homed);
+  // The box's command, broker and bridge are paths of this sandbox, which the host does not have: a boxed spawn cannot run there.
+  if (boxed && inFlatpak()) {
+    for (const fd of boxed.extraFds) try { closeSync(fd); } catch {}
+    boxed.release();
+    throw Object.assign(new Error("Bots cannot run in a protected box in this version of Seira."), { code: "EACCES" });
+  }
+  // In a Flatpak a spawn the deb would also run outside the box starts on the host (flatpak-host.ts).
+  const hosted = boxed ? null : hostBridge(resolved, { cwd: options.cwd, env: tag ? { ...(options.env ?? process.env), [ENGINE_TAG_ENV]: tag } : options.env });
   const { box: _box, engineHome: _engineHome, botWork, ...spawnOpts } = boxed || hosted ? options : outsideBoxOptions(resolved.command, options);
   // The box's extra descriptors (its seccomp filter) follow stdio; only a plain three-entry stdio can take them.
   const stdio = boxed?.extraFds.length && Array.isArray(spawnOpts.stdio) && spawnOpts.stdio.length === 3 ? [...spawnOpts.stdio, ...boxed.extraFds] : spawnOpts.stdio;
-  const start = () => spawn(boxed?.command ?? hosted?.command ?? resolved.command, boxed?.args ?? hosted?.args ?? resolved.args, {
-    ...spawnOpts,
-    ...(boxed ? { env: boxed.env, stdio } : {}),
-    ...(tag ? { env: { ...(boxed?.env ?? spawnOpts.env ?? process.env), [ENGINE_TAG_ENV]: tag } } : {}),
-    ...(hosted ? { env: hosted.env, cwd: undefined } : {}),
-    // POSIX: own group so kill(-pid) reaps child MCP servers; Windows: taskkill /T does it.
-    ...(process.platform === "win32" ? { windowsHide: true } : { detached: true }),
-  }) as ChildProcessByStdio<Writable, Readable, Readable>;
+  const start = () => {
+    const child = spawn(boxed?.command ?? hosted?.command ?? resolved.command, boxed?.args ?? hosted?.args ?? resolved.args, {
+      ...spawnOpts,
+      ...(boxed ? { env: boxed.env, stdio } : {}),
+      ...(tag ? { env: { ...(boxed?.env ?? spawnOpts.env ?? process.env), [ENGINE_TAG_ENV]: tag } } : {}),
+      ...(hosted ? { env: hosted.env, cwd: undefined, stdio: hostStdio(spawnOpts.stdio) } : {}),
+      // POSIX: own group so kill(-pid) reaps child MCP servers; Windows: taskkill /T does it.
+      ...(process.platform === "win32" ? { windowsHide: true } : { detached: true }),
+    }) as ChildProcessByStdio<Writable, Readable, Readable>;
+    if (hosted) sendHostEnv(child, hosted.envBlock);
+    return child;
+  };
   let child: ChildProcessByStdio<Writable, Readable, Readable>;
   const refused = (code: string | undefined) => { processBudget.spawnFailed(code); engineMemory.spawnRefused(code, owner === "bot"); };
   try {
@@ -415,6 +439,40 @@ export function execCliBoxed(
 
 const EXEC_KILL_GRACE_MS = 2_000;
 
+/** execFile for a program on the host: `execFile` cannot pass the descriptor that carries the environment, so this reads the output itself. */
+function execHosted(hosted: HostSpawn, opts: ExecFileOptions, done: (err: Error | null, stdout: string, stderr: string) => void): ChildProcess {
+  const limit = typeof opts.maxBuffer === "number" ? opts.maxBuffer : 1024 * 1024;
+  const child = spawn(hosted.command, hosted.args, { env: hosted.env, stdio: ["ignore", "pipe", "pipe", "pipe"], windowsHide: true });
+  sendHostEnv(child, hosted.envBlock);
+  let stdout = "", stderr = "", finished = false, overflow = false;
+  const finish = (err: Error | null) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timer);
+    done(err, stdout, stderr);
+  };
+  const take = (current: string, chunk: string) => {
+    if (current.length + chunk.length > limit) {
+      overflow = true;
+      child.kill("SIGTERM");
+    }
+    return current.length < limit ? current + chunk.slice(0, limit - current.length) : current;
+  };
+  child.stdout?.setEncoding("utf8");
+  child.stderr?.setEncoding("utf8");
+  child.stdout?.on("data", (chunk: string) => { stdout = take(stdout, chunk); });
+  child.stderr?.on("data", (chunk: string) => { stderr = take(stderr, chunk); });
+  const timer = opts.timeout ? setTimeout(() => child.kill("SIGTERM"), opts.timeout) : undefined;
+  timer?.unref?.();
+  child.once("error", (error) => finish(error));
+  child.once("close", (code, signal) => {
+    if (overflow) return finish(Object.assign(new Error("stdout maxBuffer length exceeded"), { code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" }));
+    if (code === 0) return finish(null);
+    finish(Object.assign(new Error(`Command failed: ${hosted.command}`), { code, signal, killed: child.killed }));
+  });
+  return child;
+}
+
 export function execCli(
   cli: string,
   args: string[],
@@ -422,7 +480,7 @@ export function execCli(
   cb: (err: Error | null, stdout: string, stderr?: string) => void,
 ): void {
   const resolved = resolveCli(cli, args);
-  let hosted: ResolvedSpawn | null = null;
+  let hosted: HostSpawn | null = null;
   try {
     assertSafeCliArgv(resolved);
     hosted = hostBridge(resolved, { cwd: opts.cwd, env: opts.env });
@@ -435,11 +493,14 @@ export function execCli(
   let deadline: NodeJS.Timeout | undefined;
   let timedOut = false;
   const env = hosted ? hosted.env : resolved.env ? { ...(opts.env ?? process.env), ...resolved.env } : opts.env;
-  const child = execFile(hosted?.command ?? resolved.command, hosted?.args ?? resolved.args, { ...opts, ...(hosted ? { cwd: undefined } : {}), env, windowsHide: true, encoding: "utf8" }, (err, stdout, stderr) => {
+  const done = (err: Error | null, stdout: string, stderr: string) => {
     clearTimeout(escalate);
     clearTimeout(deadline);
     cb(err ?? (timedOut ? cutOffError(cli, opts.timeout) : null), stdout, stderr);
-  });
+  };
+  const child = hosted
+    ? execHosted(hosted, opts, done)
+    : execFile(resolved.command, resolved.args, { ...opts, env, windowsHide: true, encoding: "utf8" }, done);
   // Node (24) calls back only once the child exits, and a CLI wrapper that traps SIGTERM outlives the timeout's signal.
   // Only the child is stopped: execFile starts no process group, so a grandchild that ignores SIGTERM can outlive it.
   // When its timeout fires after the child exited but before Node saw the exit, Node (24) drops the output and still
