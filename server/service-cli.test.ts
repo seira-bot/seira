@@ -113,7 +113,7 @@ describe("openmausbot service", () => {
     const checkout = { action: "install" as const, dataDir: join(dir, "data"), port: 8799, sentinel: true, sentinelOut, script: "/src/OpenMausBot/server/openmausbot.ts", node: "/home/maus/.nvm/versions/node/v24.0.0/bin/node", platform: "darwin" as const, home: "/Users/maus" };
     expect(runServiceCommand({ ...checkout, exists: (path) => path.startsWith(app), hasSentinel: () => true }, io)).toBe(0);
     const plist = readFileSync(join(sentinelOut, "com.openmausbot.sentinel.plist"), "utf8");
-    expect(plist).toContain(`<string>${app}/MacOS/OpenMausBot</string>`);
+    expect(plist).toContain(`<string>${app}/MacOS/Seira</string>`);
     expect(plist).toContain(`<string>${app}/Resources/server/openmausbot.js</string>`);
     expect(plist).toContain("<key>ELECTRON_RUN_AS_NODE</key>");
     expect(plist).not.toContain("openmausbot.ts");
