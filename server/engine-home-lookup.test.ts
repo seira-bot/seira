@@ -71,7 +71,7 @@ describe("the server's own code", () => {
       return entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts") ? [path] : [];
     });
   // HOME first, then USERPROFILE or the system's own: the order that is wrong on Windows.
-  const OWN_LOOKUP = /\.HOME\s*(?:\|\||\?\?)\s*(?:[\w.]*\.USERPROFILE|homedir\(\))|\.USERPROFILE\s*(?:\|\||\?\?)\s*[\w.]*\.HOME\b/;
+  const OWN_LOOKUP = /\.HOME\)?\s*(?:\|\||\?\?)\s*(?:\w+\()?(?:[\w.]*\.USERPROFILE|homedir\(\))|\.USERPROFILE\)?\s*(?:\|\||\?\?)\s*(?:\w+\()?[\w.]*\.HOME\b/;
 
   it("resolves the profile folder only through userHome()", () => {
     const own = sources(SERVER)
