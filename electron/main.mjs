@@ -62,9 +62,8 @@ import {
 } from "./managed-companion-tunnel.mjs";
 import { createSecureCredentialState } from "./secure-credential-state.mjs";
 import {
-  createPhoneSecretSaveCoordinator,
   createPhoneSecretIdentity,
-  decodePhoneSecretSaveRequest,
+  createPhoneSecretSaveReceiver,
   phoneSecretPrivateKeyMessage,
   readPhoneSecretIdentity,
   withPhoneSecretIdentity,
@@ -1096,22 +1095,7 @@ function syncDesktopMutationToken(proc) {
   }
 }
 
-const savePhoneSecretOnce = createPhoneSecretSaveCoordinator((target, value) =>
-  saveWorkspaceCredential(target, value),
-);
-
-function receivePhoneSecretSave(proc, rawMessage) {
-  const request = decodePhoneSecretSaveRequest(rawMessage);
-  if (!request) return false;
-  void savePhoneSecretOnce(request).then((result) => {
-    try {
-      proc.postMessage(result);
-    } catch (error) {
-      slog(`phone credential save result failed: ${error?.message ?? error}`);
-    }
-  });
-  return true;
-}
+const receivePhoneSecretSave = createPhoneSecretSaveReceiver(saveWorkspaceCredential, slog);
 
 async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmentDir(environmentsState, desktopDataDir())) {
   if (desktopShutdownStarted) return { proc: null, abort: true };
