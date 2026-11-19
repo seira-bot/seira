@@ -206,7 +206,7 @@ describe("Move from Grok Bot", () => {
     expect(host.querySelector<HTMLInputElement>('input[aria-label="Link for Grok Bot"]')!.value).toBe(link);
     expect(shown()).toContain("open Connect apps, choose Add a custom connector at the bottom, name it Seira, paste this as the Server URL, then choose Add plugin");
     await act(async () => button("Add the Seira bot in Grok Bot")!.click());
-    expect(openExternal).toHaveBeenCalledWith("https://x.ai/bot/3i4Tvjckmdk05UwntFeNo");
+    expect(openExternal).toHaveBeenCalledWith("https://x.ai/bot/JGJM9a99A33808-urJ87-");
     expect(host.querySelector("[data-grok-move-arrived]")).toBeNull();
 
     sent = true;

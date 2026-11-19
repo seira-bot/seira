@@ -1,17 +1,17 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 
 import type { ModelCatalog } from "../../contracts.ts";
 import type { AcpConfig } from "./core.ts";
 import { killCliTree, spawnCli } from "../../procs.ts";
+import { makeOwnedTempFolder, removeOwnedTempFolder, sweepOrphanedTempFoldersOnce } from "../../temp-folders.ts";
 import { acpModelOption, acpVariantOption } from "./config-options.ts";
 import { deleteAcpSessions, deletesAcpSessions } from "./session-delete.ts";
 
 const REQUEST_TIMEOUT_MS = 8_000;
 const DISCOVERY_TIMEOUT_MS = 60_000;
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
+/** Each discovery runs in an empty folder named after this process: one that is cut off at exit goes with the process or the next start. */
+const DISCOVERY_FOLDER_PREFIX = "omb-acp-models-";
 const MAX_LINE_BYTES = 1024 * 1024;
 const MAX_MODELS = 128;
 /** The `clientInfo.name` every discovery session is opened with. */
@@ -108,7 +108,8 @@ export async function discoverAcpModels(
   args: string[],
   discovery: AcpDiscoveryOptions = {},
 ): Promise<ModelCatalog> {
-  const cwd = await mkdtemp(join(tmpdir(), "omb-acp-models-"));
+  sweepOrphanedTempFoldersOnce(DISCOVERY_FOLDER_PREFIX);
+  const cwd = makeOwnedTempFolder(DISCOVERY_FOLDER_PREFIX);
   let child: ReturnType<typeof spawnCli> | undefined;
   let globalTimer: ReturnType<typeof setTimeout> | undefined;
   const pending = new Map<number, { resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }>();
@@ -265,7 +266,7 @@ export async function discoverAcpModels(
       stopped = await stopDiscovery(child, discovery.exitGraceMs);
       if (stopped && sessionId && !deleted) await discovery.forgetSession?.({ sessionId, cwd, env }).catch(() => undefined);
     } finally {
-      await rm(cwd, { recursive: true, force: true });
+      removeOwnedTempFolder(cwd);
     }
     // The discovery's own failure says more than a process that would not stop.
     if (!stopped) thrown ??= new Error("The ACP discovery process could not be stopped.");

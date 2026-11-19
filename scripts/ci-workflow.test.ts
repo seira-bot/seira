@@ -41,6 +41,8 @@ const packageWorkflows = packageFiles.map((file) => [file, workflows.get(file)!]
 const IMAGE = "server-image.yml";
 const image = workflows.get(IMAGE)!;
 const LOGIN = "${{ secrets.GITHUB_TOKEN }}";
+const NOT_MAINTAINER = "!contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)";
+const APPROVED = "needs.approval.result == 'success' || needs.approval.result == 'skipped'";
 const scripts = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
   scripts: Record<string, string>;
 }).scripts;
@@ -71,6 +73,22 @@ describe("CI workflows", () => {
       for (const [id, job] of Object.entries(flow.jobs)) {
         const grants = JSON.stringify(job.permissions ?? {});
         if (grants.includes("write")) expect(job.environment, `${file} job ${id}`).toBe("release");
+      }
+    }
+  });
+
+  it("uses the release-approval environment only in a job with no permission, no secret and one exact condition", () => {
+    for (const [file, flow] of workflows) {
+      for (const [id, job] of Object.entries(flow.jobs)) {
+        const where = `${file} job ${id}`;
+        if (job.environment === undefined) continue;
+        expect(["release", "release-approval"], where).toContain(job.environment);
+        if (job.environment !== "release-approval") continue;
+        expect(id, where).toBe("approval");
+        expect(job.permissions, where).toEqual({});
+        expect(JSON.stringify(job), where).not.toContain("secrets.");
+        expect(job.if, where).toContain(NOT_MAINTAINER);
+        expect(String(job.if).replace("${{ ", "").replace(" }}", "").split(" && ").filter((part) => part.includes("RELEASE_MAINTAINERS")), where).toEqual([NOT_MAINTAINER]);
       }
     }
   });
@@ -155,6 +173,7 @@ describe("CI workflows", () => {
 
 describe("Server image workflow", () => {
   const build = image.jobs.image!;
+  const approval = image.jobs.approval!;
   const publish = image.jobs.publish!;
   const ON_MAIN = "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'";
 
@@ -186,9 +205,19 @@ describe("Server image workflow", () => {
     expect(uploads[0]!.with?.["if-no-files-found"]).toBe("error");
   });
 
-  it("publishes only from a manual run on main, after the build, behind the release environment", () => {
-    expect(publish.needs).toBe("image");
-    expect(publish.if).toBe(ON_MAIN);
+  it("asks a maintainer to approve a run that another person starts, after the build and only on main", () => {
+    expect(approval.needs).toBe("image");
+    expect(approval.if).toBe(`${ON_MAIN} && ${NOT_MAINTAINER}`);
+    expect(approval.environment).toBe("release-approval");
+    expect(approval.permissions).toEqual({});
+    expect(approval["runs-on"]).toBe("ubuntu-24.04");
+  });
+
+  it("publishes only from a manual run on main, after a successful build and the approval, behind the release environment", () => {
+    expect(publish.needs).toEqual(["image", "approval"]);
+    expect(publish.if).toBe(
+      `\${{ !cancelled() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.image.result == 'success' && (${APPROVED}) }}`,
+    );
     expect(publish.environment).toBe("release");
     expect(publish.permissions).toEqual({ contents: "read", packages: "write" });
     expect(publish["runs-on"]).toBe("ubuntu-24.04");
@@ -233,16 +262,32 @@ describe("Package workflows", () => {
 
   it("ask for no job permission, so the token stays read-only", () => {
     for (const [file, flow] of packageWorkflows) {
-      for (const [id, job] of Object.entries(flow.jobs)) expect(job.permissions, `${file} job ${id}`).toBeUndefined();
+      for (const [id, job] of Object.entries(flow.jobs)) {
+        expect(job.permissions, `${file} job ${id}`).toEqual(id === "approval" ? {} : undefined);
+      }
     }
   });
 
   it("use an environment only to read the signing secrets, and only the release environment", () => {
     for (const [file, flow] of packageWorkflows) {
       for (const [id, job] of Object.entries(flow.jobs)) {
-        if (job.environment === undefined) continue;
+        if (job.environment === undefined || id === "approval") continue;
         expect(job.environment, `${file} job ${id}`).toBe("release");
         expect(JSON.stringify(job), `${file} job ${id}`).toContain("secrets.");
+      }
+    }
+  });
+
+  it("ask a maintainer to approve a run that another person starts, before the job that reads the secrets", () => {
+    for (const [file, flow] of packageWorkflows) {
+      const gated = Object.entries(flow.jobs).filter(([, job]) => job.environment === "release");
+      if (gated.length === 0) continue;
+      expect(flow.jobs.approval?.environment, file).toBe("release-approval");
+      expect(flow.jobs.approval?.if, file).toBe(`\${{ ${NOT_MAINTAINER} }}`);
+      expect(flow.jobs.approval?.needs, file).toBeUndefined();
+      for (const [id, job] of gated) {
+        expect(job.needs, `${file} job ${id}`).toBe("approval");
+        expect(job.if, `${file} job ${id}`).toBe(`\${{ !cancelled() && (${APPROVED}) }}`);
       }
     }
   });

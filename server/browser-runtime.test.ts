@@ -712,10 +712,11 @@ describe("server-owned browser MCP runtime", () => {
     const typed = deferred();
     const human = value.withHumanAction("s", "person", () => typed.promise);
     value.release("s", "person");
+    const released = Date.now();
     expect(await idle()).toBe(false);
     typed.resolve();
     await human;
-    expect(await value.closeIfIdle("s", 10)).toBe(false);
+    expect(await value.closeIfIdle("s", Date.now() - released)).toBe(false);
     expect(closeBrowser).not.toHaveBeenCalled();
     expect(await idle()).toBe(true);
   });
@@ -726,9 +727,10 @@ describe("server-owned browser MCP runtime", () => {
     const value = runtime({ closeBrowser });
     value.onIdleClose((session) => order.push(`views ${session}`));
     await value.agentRpc("s", spec(), "tools/call", { name: "echo" });
+    const called = Date.now();
     await new Promise((resolve) => setTimeout(resolve, 15));
     const unwatch = value.watch("s", spec());
-    expect(await value.closeIfIdle("s", 10)).toBe(false);
+    expect(await value.closeIfIdle("s", Date.now() - called)).toBe(false);
     await new Promise((resolve) => setTimeout(resolve, 15));
     expect(await value.closeIfIdle("s", 10)).toBe(true);
     expect(order).toEqual(["views s", "close s"]);
@@ -1348,12 +1350,13 @@ describe("around each bot call (browser-steps.ts)", () => {
       await sleep(15);
       const click = value.agentRpc("s", engine, "tools/call", { name: "agent_browser_click", arguments: { selector: "@e1" } }, undefined, { ...ctx, record: false });
       await vi.waitFor(() => expect(held).toBe(true));
+      const readStarted = Date.now();
       await sleep(15); // longer than the idle window, with only the page read running
       expect(await value.closeIfIdle("s", 10)).toBe(false);
       release();
       await expect(click).resolves.not.toMatchObject({ isError: true });
       expect(relay.actions()).toEqual(expect.arrayContaining(["console", "console:clear"]));
-      expect(await value.closeIfIdle("s", 10)).toBe(false);
+      expect(await value.closeIfIdle("s", Date.now() - readStarted)).toBe(false);
       await sleep(15);
       expect(await value.closeIfIdle("s", 10)).toBe(true);
       expect(closeBrowser).toHaveBeenCalledTimes(1);
