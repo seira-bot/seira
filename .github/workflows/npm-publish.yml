@@ -158,7 +158,7 @@ jobs:
           test "$(node -p "require('$RUNNER_TEMP/seira-pack/package/package.json').name")" = "@seira-bot/seira"
           node "$RUNNER_TEMP/seira-pack/package/cli.js" --help | grep -q "serve"
 
-      # No NODE_AUTH_TOKEN is set. npm exchanges the OIDC token of this job for a short publish token.
+      # No token is set. npm exchanges the OIDC token of this job for a short publish token.
       - name: Publish to npm
         if: steps.exists.outputs.exists != 'true'
         shell: bash

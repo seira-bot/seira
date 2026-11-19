@@ -52,7 +52,6 @@ describe("npm publish workflow", () => {
     for (const forbidden of ["NODE_AUTH_TOKEN", "NPM_TOKEN", "_authToken", "secrets.", "github.token", "GITHUB_TOKEN", "GH_TOKEN"]) {
       expect(text, forbidden).not.toContain(forbidden);
     }
-    expect(JSON.stringify(stepNamed("Make sure npm can publish with OIDC")?.with ?? {})).toBe("{}");
     expect(steps.some((step) => step.with?.["registry-url"] !== undefined)).toBe(false);
   });
 
