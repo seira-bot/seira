@@ -270,7 +270,7 @@ export function bugHarness(env: Partial<AppEnv> = {}) {
     },
   };
   const github = fakeGitHub(clock);
-  const limits = { report: true, status: true, keys: [] as string[] };
+  const limits = { report: true, status: true, keys: [] as string[], statusKeys: [] as string[] };
   const fullEnv: AppEnv = {
     DB: d1.D1 as unknown as D1Database,
     REPORT_LIMITER: {
@@ -279,7 +279,12 @@ export function bugHarness(env: Partial<AppEnv> = {}) {
         return { success: limits.report };
       },
     },
-    STATUS_LIMITER: { limit: async () => ({ success: limits.status }) },
+    STATUS_LIMITER: {
+      limit: async ({ key }) => {
+        limits.statusKeys.push(key);
+        return { success: limits.status };
+      },
+    },
     GITHUB_REPOSITORY: REPO,
     GLOBAL_HOURLY_LIMIT: "120",
     GITHUB_APP_ID: APP_ID,
@@ -306,11 +311,11 @@ export function bugHarness(env: Partial<AppEnv> = {}) {
     deps,
     call,
     send: (body: unknown, headers?: Record<string, string>) => post("/api/bug-reports", body, headers),
-    status: (body: unknown) => post("/api/bug-reports/status", body),
+    status: (body: unknown, headers?: Record<string, string>) => post("/api/bug-reports/status", body, headers),
     /** Sends a valid report; the description differs for each `n`, so no two are the same payload. */
-    async sendNumbered(n: number, installId = "install-id-for-tests-0001") {
-      const response = await post("/api/bug-reports", validReport({ installId, description: `The Bash tool failed, case ${n}.` }));
-      return { response, body: (await response.clone().json()) as { id?: string } };
+    async sendNumbered(n: number, installId = "install-id-for-tests-0001", headers?: Record<string, string>) {
+      const response = await post("/api/bug-reports", validReport({ installId, description: `The Bash tool failed, case ${n}.` }), headers);
+      return { response, body: (await response.clone().json()) as { id?: string; issue?: number; joined?: boolean } };
     },
     reportRows: () => d1.rows<{ id: string; issue_number: number; comment_id: number | null; install_hash: string; fingerprint: string }>("SELECT * FROM reports ORDER BY rowid"),
     everyTable: () => JSON.stringify(["reports", "fingerprints", "issues"].map((table) => d1.rows(`SELECT * FROM ${table}`))),

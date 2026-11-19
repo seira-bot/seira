@@ -17,6 +17,14 @@ afterEach(() => {
 });
 
 describe("About", () => {
+  it("links the Privacy Policy and the Terms of Service with the other links", () => {
+    const html = about({ ogb: { platform: "linux", app: { version: "0.1.127", ownPage: true } }, location: { host: "127.0.0.1:8799" } });
+    expect(html).toContain('data-legal-link="https://seira.bot/privacy"');
+    expect(html).toContain(">Privacy Policy</button>");
+    expect(html).toContain('data-legal-link="https://seira.bot/terms"');
+    expect(html).toContain(">Terms of Service</button>");
+  });
+
   it("in the app on this computer, shows the app's own version on one line", () => {
     const html = about({ ogb: { platform: "darwin", app: { version: "0.1.127", ownPage: true } }, location: { host: "127.0.0.1:8799" } });
     expect(html).toContain(">Version 0.1.127 · macOS</p>");

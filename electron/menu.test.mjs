@@ -62,10 +62,39 @@ describe("buildApplicationMenu", () => {
     const template = build("darwin", { onOpenSettings });
     const item = template[0].submenu.find((entry) => entry.label === "Settings…");
     expect(item).toBeDefined();
+    expect(item.id).toBe("open-settings");
     expect(item.accelerator).toBe("CmdOrCtrl+,");
     expect(item.click).toBeTypeOf("function");
     item.click();
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["linux", "win32"])("puts Settings with Ctrl+, in the File menu on %s", (platform) => {
+    const onOpenSettings = vi.fn();
+    for (const openAtLogin of [null, { checked: false, onToggle: vi.fn() }]) {
+      const file = build(platform, { onOpenSettings, openAtLogin })[0];
+      expect(file.role).toBe("fileMenu");
+      const item = file.submenu.find((entry) => entry.id === "open-settings");
+      expect(item).toMatchObject({ label: "Settings…", accelerator: "CmdOrCtrl+," });
+      expect(file.submenu.at(-1).role, "Exit or Quit stays last").toBe("quit");
+      item.click();
+    }
+    expect(onOpenSettings).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["linux", "win32"])("has a Help menu with About on %s", (platform) => {
+    const template = build(platform);
+    const help = template.find((entry) => entry.role === "help");
+    expect(help).toMatchObject({ label: "Help" });
+    expect(help.submenu).toEqual([{ role: "about", label: "About Seira" }]);
+    expect(template.at(-1), "Help closes the bar, as on other Windows and Linux apps").toBe(help);
+  });
+
+  it("keeps Settings and About in the macOS app menu only", () => {
+    const template = build("darwin");
+    expect(template.some((entry) => entry.role === "help")).toBe(false);
+    expect(template[0].submenu.map((entry) => entry.id ?? entry.role).slice(0, 2)).toEqual(["about", "open-settings"]);
+    expect(template.find((entry) => entry.role === "fileMenu").submenu.some((entry) => entry.id === "open-settings")).toBe(false);
   });
 
   it.each(["linux", "win32"])("does not add an app menu on %s", (platform) => {
@@ -125,7 +154,7 @@ describe("buildApplicationMenu", () => {
     expect(template[0].submenu.find((entry) => entry.accelerator === "CmdOrCtrl+,").label).toBe("Configurações…");
     expect(template[0].submenu.at(-1)).toEqual({ role: "quit", label: "Sair do app Seira" });
     expect(template.map((entry) => entry.label)).toEqual(["Seira", "Arquivo", "Editar", "Servidor", "Visualizar", "Janela"]);
-    for (const platform of ["win32", "linux"]) expect(build(platform, { t })[0].submenu[0].label).toBe("Sair do Seira");
+    for (const platform of ["win32", "linux"]) expect(build(platform, { t })[0].submenu.at(-1).label).toBe("Sair do Seira");
   });
 
   // Electron 43.7.9 lib/browser/api/menu-item-roles.ts: each role menu's default items, in order.
@@ -146,13 +175,14 @@ describe("buildApplicationMenu", () => {
   };
   ELECTRON_DEFAULTS.linux = ELECTRON_DEFAULTS.win32;
   const roles = (items) => items.map((item) => (item.type === "separator" ? "-" : item.submenu ? roles(item.submenu) : item.role));
+  const electronOwn = (items) => items.filter((item) => !item.id).filter((item, index) => !(index === 0 && item.type === "separator"));
   const labelled = (items) => items.flatMap((item) => (item.type === "separator" ? [] : [item, ...(item.submenu ? labelled(item.submenu) : [])]));
 
   it.each(["darwin", "win32", "linux"])("writes out Electron's own role menus on %s, each item with a label", (platform) => {
     const template = build(platform);
     for (const [role, expected] of Object.entries(ELECTRON_DEFAULTS[platform])) {
       const menu = template.find((entry) => entry.role === role);
-      expect(roles(menu.submenu), role).toEqual(expected);
+      expect(roles(electronOwn(menu.submenu)), role).toEqual(expected);
     }
     const items = labelled(template);
     expect(items.filter((item) => typeof item.label !== "string" || !item.label)).toEqual([]);
@@ -167,8 +197,8 @@ describe("buildApplicationMenu", () => {
       minimize: "Minimize", zoom: "Zoom", front: "Bring All to Front", about: "About Seira", hide: "Hide Seira", hideOthers: "Hide Others",
       unhide: "Show All", quit: "Quit Seira" };
     for (const item of labelled(build("darwin")).filter((entry) => entry.role && !entry.role.endsWith("Menu"))) expect(item.label, item.role).toBe(english[item.role]);
-    expect(build("win32")[0].submenu[0].label).toBe("Exit");
-    expect(build("linux")[0].submenu[0].label).toBe("Quit");
+    expect(build("win32")[0].submenu.at(-1).label).toBe("Exit");
+    expect(build("linux")[0].submenu.at(-1).label).toBe("Quit");
     expect(build("linux").find((entry) => entry.role === "windowMenu").submenu.at(-1).label).toBe("Close");
   });
 });

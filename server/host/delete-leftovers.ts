@@ -11,6 +11,7 @@ import { lstatSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { baseBotId, isLayerId } from "../audience.ts";
+import { namedUserHome } from "../env-path.ts";
 
 /** A file in attachments/, by its URL or by its path (as JSON escapes it) a sent document's tag carries. */
 const ATTACHMENT = /attachments(?:\/|\\)+([A-Za-z0-9][\w.-]{0,200})/g;
@@ -171,7 +172,7 @@ export function engineSessionFolders(dataDir: string, environments: Iterable<Rec
   const claude = new Set<string>(), codex = new Set<string>(), pi = new Set<string>();
   const absolute = (value: string | undefined) => (value && isAbsolute(value) ? resolve(value) : null);
   for (const env of environments) {
-    const home = absolute(env.HOME) ?? absolute(env.USERPROFILE);
+    const home = absolute(namedUserHome(env));
     const claudeFolder = absolute(env.CLAUDE_CONFIG_DIR) ?? (home && join(home, ".claude"));
     const codexFolder = absolute(env.CODEX_HOME) ?? (home && join(home, ".codex"));
     if (claudeFolder) claude.add(claudeFolder);
@@ -191,7 +192,7 @@ export function engineSessionFolders(dataDir: string, environments: Iterable<Rec
 export function instanceEnvironment(base: Record<string, string | undefined>, instance: { environment?: Record<string, string>; config?: unknown }): Record<string, string | undefined> {
   const env = { ...base, ...instance.environment };
   const configDir = (instance.config as { configDir?: unknown } | null | undefined)?.configDir;
-  const home = env.HOME ?? env.USERPROFILE;
+  const home = namedUserHome(env);
   if (typeof configDir !== "string" || !configDir.trim()) return env;
   const named = configDir.trim();
   const folder = named === "~" ? home : named.startsWith("~/") && home ? join(home, named.slice(2)) : named;

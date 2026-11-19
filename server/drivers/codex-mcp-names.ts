@@ -2,12 +2,12 @@
 // same-named config.toml table; a stdio command over a remote `url` is "invalid configuration" and kills
 // the turn, so a colliding server mounts under a name of its own.
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
 import type { McpServerSpec } from "../contracts.ts";
 import { parseToml } from "../toml-lite.ts";
+import { userHome } from "../env-path.ts";
 
 const HEADER = /^[ \t]*\[[ \t]*mcp_servers[ \t]*\.[ \t]*(?:"((?:[^"\\]|\\.)*)"|'([^']*)'|([A-Za-z0-9_-]+))[ \t]*[.\]]/gm;
 
@@ -30,7 +30,7 @@ export interface CodexConfigMcp {
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
 export function codexConfigMcp(env: Record<string, string | undefined>): CodexConfigMcp {
-  const codexHome = env.CODEX_HOME || join(env.HOME || env.USERPROFILE || homedir(), ".codex");
+  const codexHome = env.CODEX_HOME || join(userHome(env), ".codex");
   let text = "";
   try {
     text = readFileSync(join(codexHome, "config.toml"), "utf8");

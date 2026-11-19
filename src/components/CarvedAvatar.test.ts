@@ -88,6 +88,18 @@ describe("CarvedAvatar", () => {
     }
   });
 
+  it("keeps the cap brim just above the eyes on every hair style", () => {
+    for (const id of BRAND_BODY_IDS) {
+      const body = CARVED_BODIES[id];
+      const [cap] = accessorySprites(id, ["cap"], body.eyes);
+      if (!cap) throw new Error(`${id} has no cap`);
+      const eyeTop = Math.min(...carvedGeometry(body, REST_POSE).eyes.map((eye) => eye.y));
+      const brim = cap.y + cap.height;
+      expect(brim, id).toBeLessThanOrEqual(eyeTop);
+      expect(eyeTop - brim, id).toBeLessThan(body.eyes.h / 2);
+    }
+  });
+
   it("keeps the avatar box, and grows the view only when an accessory reaches out of it", () => {
     expect(viewBox(render("seira"))).toEqual([-14, -14, 268, 268]);
     expect(viewBox(wear("seira", ["glasses"]))).toEqual([-14, -14, 268, 268]);

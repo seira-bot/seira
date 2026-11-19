@@ -5,6 +5,8 @@ import { chiefStepFits, myDefaultBot, setChiefStepOpen, useViewerEmail } from "@
 import { beatsFor, completionPatch, firstRunPatch, markWelcomeFinished, resumeBeat, showWelcome, type BeatId } from "@/lib/onboarding";
 import { clearWelcomeDraft, readWelcomeDraft, saveWelcomeDraft } from "@/lib/welcome-draft";
 import { api, useStore } from "@/state/store";
+import { useDesktopCapabilities, WindowDragStrip } from "@/components/DesktopCapabilities";
+import { WindowCaptionButtons } from "@/components/WindowCaptionButtons";
 import { ChiefIntro } from "./ChiefIntro";
 import { MeetScreen } from "./MeetScreen";
 import { localDesktopPage } from "./WelcomeGate";
@@ -62,6 +64,7 @@ export function WelcomeFlow({
   hosted?: boolean;
 }) {
   const { state, dispatch } = useStore();
+  const { capabilities } = useDesktopCapabilities();
   const maus = myDefaultBot(state.bots, useViewerEmail());
   // A first run keeps its screen in this browser, so a reload resumes it; a replay starts over. A hosted place's
   // browser may hold another person's draft.
@@ -166,10 +169,18 @@ export function WelcomeFlow({
         chief ? "ui-scrim items-center justify-center p-4" : "overflow-y-auto bg-app",
       )}
     >
+      {/* The screen covers the window's own frame, so it brings the frame's drag area and buttons. Fixed, so a short window
+          that scrolls keeps them in place. The strip is first and the buttons last: Blink resolves -webkit-app-region in DOM order. */}
+      {!embedded && <div aria-hidden className="fixed left-[var(--rail-beside,0px)] right-0 top-0 h-0"><WindowDragStrip /></div>}
       {chief ? (
         <ChiefIntro replay={replay} onLeave={fadeScrim} onDone={(botId) => void finish("completed", botId)} />
       ) : (
         <MeetScreen hosted={hosted} onNext={next} />
+      )}
+      {!embedded && (
+        <div className="fixed left-[var(--rail-beside,0px)] right-0 top-0 h-0">
+          <WindowCaptionButtons visible={capabilities.windowChrome === "win-caption" && Boolean(window.ogb?.windowControls)} />
+        </div>
       )}
     </div>
   );

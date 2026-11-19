@@ -9,9 +9,9 @@ It runs at `bugs.seira.bot`. It stores a small index in D1.
 
 | Route | Auth | Action |
 | --- | --- | --- |
-| `POST /api/bug-reports` | none, rate limited | File a report. Answer `201 {id}`. |
+| `POST /api/bug-reports` | none, rate limited | File a report. Answer `201 {id, issue, joined}`. |
 | `POST /api/bug-reports/status` | none, rate limited | Answer the status of the reports that one install sent. |
-| `GET /health` | none | Answer `ok`. |
+| `GET /health` | none | Answer `ok`. In dry-run mode, answer `ok dry-run`. |
 
 Other methods on the two API routes get `405`. Other paths get `404`.
 
@@ -51,6 +51,18 @@ The Worker then answers the first ID and does not call GitHub.
 An optional `title` (up to 120 characters) sets the issue title.
 An optional `fingerprint` object `{kind, step, frame}` replaces the computed values.
 
+## The answer
+
+A filed report gets `201` with these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `id` | The ID of this report. The app sends it to the status route. |
+| `issue` | The number of the public issue that holds the report. |
+| `joined` | `true` if the report became a comment on an issue that was already open. `false` if the report opened a new issue. |
+
+A report that the Worker answered before (same install, same text, within 24 hours) gets the same three fields again.
+
 ## Status and `fixedIn`
 
 The app asks for the status of its reports.
@@ -75,9 +87,9 @@ The Worker keeps each issue status for 900 seconds. One request refreshes at mos
 | Limit | Value |
 | --- | --- |
 | Reports per install | 5 in 3,600 seconds |
-| Reports per IP address | 10 in 3,600 seconds, whatever the install ID |
+| Reports per IP address | 10 in 3,600 seconds, whatever the install ID. For an IPv6 address the limit holds for its whole `/64` prefix. |
 | Reports from all installs | `GLOBAL_HOURLY_LIMIT` in 3,600 seconds (default 30) |
-| Requests per IP address | 10 per minute for reports, 60 per minute for status |
+| Requests per IP address | 10 per minute for reports, 60 per minute for status. For an IPv6 address the limit holds for its whole `/64` prefix. |
 | Report size | 600 KB |
 | Status request size | 16 KB, 50 IDs |
 
@@ -87,9 +99,34 @@ A failed call does not count in the limits.
 D1 keeps an HMAC of the IP address, not the address. D1 keeps the HMAC for at most one hour.
 The HMAC key comes from the App private key with HKDF.
 
+One IPv6 subscriber controls a whole `/64` prefix (2^64 addresses) and can change address at will.
+So the Worker keys every per-address limit by the `/64` prefix of an IPv6 address.
+The HMAC then covers the prefix, not the full address.
+The Worker keeps an IPv4 address whole.
+It reads an IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) as that IPv4 address.
+It uses text that is not an IP address as it is. A missing address becomes `unknown`.
+Many people behind one IPv6 prefix share the limit. Raise `PER_IP_LIMIT` in `src/limits.ts` if that causes complaints.
+
 To stop all new reports, set the var `REPORTS_PAUSED` to `true` and deploy.
 The Worker then answers `503` to `POST /api/bug-reports`. It does not call GitHub and does not write D1.
 The status route keeps working.
+
+## Dry-run mode
+
+Set the var `DRY_RUN` to `true` to run the Worker without GitHub.
+The Worker then does everything but the GitHub calls: it checks the report, redacts it, computes the fingerprint,
+applies the limits, and writes D1.
+It sends no request to GitHub, so it needs no GitHub App secret and files no issue.
+
+- The answer adds `dryRun: {title, body}`. This is the redacted text that the Worker would have sent.
+- An earlier report with the same fingerprint stands for an open issue, so the next report gets `joined: true`.
+- Issue numbers start at 9,000,000, so none is the number of a real issue.
+- The status route answers `received` and does not call GitHub.
+- `GET /health` answers `ok dry-run`.
+
+Only the exact value `true` turns the mode on. `wrangler.jsonc` sets `false`.
+Never set `DRY_RUN` on the production Worker: every report would be lost without a trace in GitHub.
+Check a deployed Worker with `GET /health`. It must answer `ok`.
 
 ## Create the GitHub App
 
@@ -119,7 +156,10 @@ Set `CLOUDFLARE_ACCOUNT_ID` in the environment for each command.
    pnpm exec wrangler secret put GITHUB_APP_PRIVATE_KEY --config cloudflare/bug-reports/wrangler.jsonc < key.pem
    ```
 5. Deploy:
-   `pnpm exec wrangler deploy --config cloudflare/bug-reports/wrangler.jsonc`
+   `pnpm bugs:deploy`
+
+This change set needs no D1 migration. The `ip_hash` column of migration `0002` holds the `/64` HMAC too.
+After a deploy, the IPv6 limit starts from zero for one hour, because the new hashes differ from the old ones.
 
 The private key can be a PKCS#1 key (`BEGIN RSA PRIVATE KEY`) or a PKCS#8 key (`BEGIN PRIVATE KEY`).
 
@@ -131,23 +171,35 @@ The private key can be a PKCS#1 key (`BEGIN RSA PRIVATE KEY`) or a PKCS#8 key (`
 | `GITHUB_REPOSITORY` | var | `owner/name` of the repository that receives the issues |
 | `GLOBAL_HOURLY_LIMIT` | var | Reports per hour from all installs (default 30) |
 | `REPORTS_PAUSED` | var | `true` stops new reports with `503` |
+| `DRY_RUN` | var | `true` files no issue and calls no GitHub API. For tests and local runs only. |
 
 The suggested route is `bugs.seira.bot`. The app then uses `https://bugs.seira.bot/api/bug-reports`.
 Forks must change the route, the repository variable, and the rate-limit namespace IDs in `wrangler.jsonc`.
 
 ## Test
 
-1. `pnpm exec wrangler types --config cloudflare/bug-reports/wrangler.jsonc cloudflare/bug-reports/worker-configuration.d.ts`
-2. `pnpm exec tsc -p cloudflare/bug-reports/tsconfig.json`
-3. `pnpm exec vitest run --config cloudflare/bug-reports/vitest.config.ts`
+1. `pnpm bugs:check` runs `wrangler types` and the type check.
+2. `pnpm bugs:test` runs the tests.
 
 The tests use a fake GitHub API and a fake D1 database. They need no network and no secrets.
+CI runs both commands in the workflow `.github/workflows/bug-reports.yml`.
+That workflow starts only when this folder changes.
 
 ## Try it with the app
 
-Never point a local test at `seira-bot/seira`. Use a test repository and a test GitHub App.
+Never point a local test at `seira-bot/seira`.
+The simplest run uses dry-run mode: no GitHub App and no test repository.
+To see a real issue, use a test repository and a test GitHub App.
 
 1. Create a file `cloudflare/bug-reports/.dev.vars`. Git ignores it.
+   For dry-run mode:
+   ```
+   DRY_RUN=true
+   GITHUB_APP_ID=dry-run
+   GITHUB_APP_INSTALLATION_ID=dry-run
+   GITHUB_APP_PRIVATE_KEY=dry-run
+   ```
+   For a test repository:
    ```
    GITHUB_REPOSITORY=your-account/your-test-repo
    GITHUB_APP_ID=...
@@ -160,3 +212,8 @@ Never point a local test at `seira-bot/seira`. Use a test repository and a test 
    `pnpm exec wrangler dev --config cloudflare/bug-reports/wrangler.jsonc`
 4. Start the app with `OMB_BUG_REPORT_URL=http://127.0.0.1:8787/api/bug-reports`. The app accepts `https` or loopback `http`.
 5. Send a report with `@devs` in a conversation. Check the issue in the test repository.
+   In dry-run mode, send a report with `curl` and read `issue`, `joined`, and `dryRun` in the answer:
+   ```bash
+   curl -s http://127.0.0.1:8787/api/bug-reports -H 'content-type: application/json' \
+     -d '{"installId":"try-install-0001","source":"bot","description":"It failed.","appVersion":"0.0.0","platform":"linux","diagnostics":""}'
+   ```

@@ -2,12 +2,11 @@
 // forward it), and OPENAI_API_KEY makes provider:auto resolve to OpenRouter without its key ("HTTP 401:
 // Missing Authentication header"), so injects write providers.<host> and set_model `custom:<host>:<model>`.
 import { accessSync, constants, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import type { ModelCatalog } from "../../contracts.ts";
-import { findCliCandidates, harnessHome, resolveCliSpawn, splitCliString, whichWin } from "../../env-path.ts";
+import { findCliCandidates, harnessHome, resolveCliSpawn, splitCliString, userHome, whichWin } from "../../env-path.ts";
 import { killCliTree, resolveCli, spawnCli } from "../../procs.ts";
 import { decodeInjectId, hostApiKey, INJECT_SEP, localHost, mergeLocalInject } from "../local-inject.ts";
 import { createAcpDriver, type AcpSupport } from "./core.ts";
@@ -336,7 +335,7 @@ export async function fetchHermesAcpModels(
         }
         if (msg?.id === initId) {
           if (!msg.result) return done([]);
-          sessionId = send("session/new", { cwd: env.HOME || env.USERPROFILE || homedir(), mcpServers: [] });
+          sessionId = send("session/new", { cwd: userHome(env), mcpServers: [] });
         } else if (sessionId && msg?.id === sessionId) {
           const list = Array.isArray(msg.result?.models?.availableModels)
             ? msg.result.models.availableModels

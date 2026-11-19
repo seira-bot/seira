@@ -1,4 +1,4 @@
-// Electron has no role for the macOS Preferences… item, so it is built explicitly.
+// Electron has no role for the Preferences… item, so Settings is built explicitly: in the app menu on macOS, in File elsewhere.
 import { Menu, app } from "electron";
 import nativeText from "./native-text.cjs";
 
@@ -122,11 +122,13 @@ export function buildApplicationMenu({ environments, activeId, onSwitch, onAddFr
   };
   const atLogin = openAtLogin ? [{ id: "open-at-login", label: t("native.menu.openAtLogin"), type: "checkbox", checked: openAtLogin.checked, click: () => openAtLogin.onToggle(!openAtLogin.checked) }] : [];
   const roles = roleMenus(t, isMac);
+  const settings = { id: "open-settings", label: t("native.menu.settings"), accelerator: "CmdOrCtrl+,", click: () => onOpenSettings() };
+  const about = role(t, "about", "native.role.about", { app: app.name });
   const appMenu = {
     label: app.name,
     submenu: [
-      role(t, "about", "native.role.about", { app: app.name }),
-      { label: t("native.menu.settings"), accelerator: "CmdOrCtrl+,", click: () => onOpenSettings() },
+      about,
+      settings,
       ...atLogin,
       { type: "separator" },
       role(t, "hide", "native.role.hide", { app: app.name }),
@@ -136,13 +138,16 @@ export function buildApplicationMenu({ environments, activeId, onSwitch, onAddFr
       role(t, "quit", "native.role.quitApp", { app: app.name }),
     ],
   };
+  const file = isMac ? roles.file : { ...roles.file, submenu: [settings, ...atLogin, { type: "separator" }, ...roles.file.submenu] };
+  const help = { role: "help", label: t("native.role.help"), submenu: [about] };
   const template = [
     ...(isMac ? [appMenu] : []),
-    !isMac && openAtLogin ? { ...roles.file, submenu: [...atLogin, { type: "separator" }, role(t, "quit", "native.role.quit")] } : roles.file,
+    file,
     roles.edit,
     ...(home && !others.length ? [] : [server]),
     roles.view,
     roles.window,
+    ...(isMac ? [] : [help]),
   ];
   return Menu.buildFromTemplate(template);
 }

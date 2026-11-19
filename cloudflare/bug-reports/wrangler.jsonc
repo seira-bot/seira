@@ -8,7 +8,8 @@
   "vars": {
     "GITHUB_REPOSITORY": "seira-bot/seira",
     "GLOBAL_HOURLY_LIMIT": "30",
-    "REPORTS_PAUSED": "false"
+    "REPORTS_PAUSED": "false",
+    "DRY_RUN": "false"
   },
   "secrets": { "required": ["GITHUB_APP_ID", "GITHUB_APP_INSTALLATION_ID", "GITHUB_APP_PRIVATE_KEY"] },
   "d1_databases": [

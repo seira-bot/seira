@@ -9,7 +9,7 @@ import { join, dirname, isAbsolute, normalize } from "node:path";
 import { DATA_DIR, stripWorkspaceCredentialEnv } from "../config.ts";
 import { openStartupModelCatalog, unconfirmedModelCatalog, writeStartupModelCache } from "../startup-model-catalog.ts";
 import { writeFileAtomicIfChanged } from "../atomic.ts";
-import { augmentedPath, findCliCandidates } from "../env-path.ts"; import { BASH_MAX_TIMEOUT_MS } from "../system-prompt.ts";
+import { augmentedPath, findCliCandidates, userHome } from "../env-path.ts"; import { BASH_MAX_TIMEOUT_MS } from "../system-prompt.ts";
 import { boxAudienceKey, brokerSocketPath, describeSpawnFailure, execCli, killCliTree, spawnCli } from "../procs.ts"; import { stopEngineTree, stopEngineTrees } from "../engine-stop.ts";
 import { cliToLaunch, cliVersionProbe } from "../cli-version-probe.ts";
 import { claudeAuthStatus } from "./claude-auth-status.ts";
@@ -89,7 +89,7 @@ export const CLAUDE_ACCOUNT_ENV_KEYS = [
 ] as const;
 
 export function resolveClaudeConfigDir(configDir?: string, env: NodeJS.ProcessEnv = process.env): string {
-  const home = env.HOME || env.USERPROFILE || homedir();
+  const home = userHome(env);
   const configured = configDir?.trim() || env.CLAUDE_CONFIG_DIR?.trim() || join(home, ".claude");
   const expanded = configured === "~" ? home : configured.startsWith("~/") ? join(home, configured.slice(2)) : configured;
   if (!isAbsolute(expanded) || /[\p{Cc}\p{Cf}]/u.test(expanded)) {

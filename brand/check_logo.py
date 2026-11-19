@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """Check the Seira logo files that brand/build_logo.py writes.
 
-Every face must show two eye blobs and one mouth blob in the official red, inside the visor.
+The logo face rule applies to seira-head.png.
+It must show two eye blobs and one mouth blob in the official red, inside the visor.
 A 2D face with pointed eyes and no mouth fails this check.
+App icons must come from brand/logo/app-icon-source.png.
+Each app icon must match that image and show two red eyes, one on each side of the centre.
 
 Run: python3 brand/check_logo.py   Exit 0 on pass, 1 on fail.
 """
 import base64
+import functools
 import io
 import re
 import struct
@@ -17,12 +21,16 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+LANCZOS = Image.Resampling.LANCZOS
+
 BRAND = Path(__file__).resolve().parent
 ROOT = BRAND.parent
 LOGO = BRAND / "logo"
 DOCS_BRAND = ROOT / "docs/assets/brand"
 VISOR = (277, 345, 752, 662)
-ICON_HEAD_SCALE = 0.95
+ICON_SOURCE = LOGO / "app-icon-source.png"
+MAX_SOURCE_DIFF = 1.0
+OPAQUE_ICONS = {"public/apple-touch-icon.png"}
 
 errors = []
 
@@ -92,12 +100,44 @@ def check_face(im, label, visor, min_area):
         fail(f"{label}: the mouth is not below and between the eyes")
 
 
-def scaled_visor(size, head_scale):
-    k = size / 1024
-    return tuple((512 + (v - 512) * head_scale) * k for v in VISOR)
+@functools.cache
+def load_source():
+    if not ICON_SOURCE.exists():
+        fail(f"missing file: {rel(ICON_SOURCE)}")
+        return None
+    im = Image.open(ICON_SOURCE)
+    if im.size != (1024, 1024):
+        fail(f"{rel(ICON_SOURCE)}: size {im.size}, expected (1024, 1024)")
+    if im.mode != "RGB":
+        fail(f"{rel(ICON_SOURCE)}: mode {im.mode}, expected RGB")
+    return im.convert("RGB")
+
+
+def check_icon(im, label, source):
+    size = im.width
+    a = np.asarray(im).astype(int)
+    if label in OPAQUE_ICONS:
+        if a[..., 3].min() != 255:
+            fail(f"{label}: every alpha value must be 255")
+    elif a[0, 0, 3] != 0:
+        fail(f"{label}: corner pixel is not transparent, the tile must have rounded corners")
+    if source is not None and size >= 64:
+        ref = np.asarray(source.resize((size, size), LANCZOS)).astype(int)
+        solid = a[..., 3] == 255
+        diff = float(np.abs(a[..., :3] - ref)[solid].mean())
+        if diff > MAX_SOURCE_DIFF:
+            fail(f"{label}: does not match brand/logo/app-icon-source.png (mean difference {diff:.2f}, limit {MAX_SOURCE_DIFF})")
+    if size >= 128:
+        blobs = red_blobs(im, 3 if size < 512 else 12)
+        mid = size / 2
+        left = [b for b in blobs if b[3] < mid]
+        right = [b for b in blobs if b[1] > mid]
+        if len(blobs) != 2 or len(left) != 1 or len(right) != 1:
+            fail(f"{label}: found {len(blobs)} red blobs, expected 2 eyes, one on each side of the centre")
 
 
 def check_png_set():
+    source = load_source()
     master = open_image(LOGO / "seira-head.png", (1024, 1024), "RGBA")
     if master:
         check_face(master, "seira-head.png", VISOR, 40)
@@ -119,8 +159,8 @@ def check_png_set():
         icons.append((ROOT / f"build/icon.iconset/icon_{base}x{base}@2x.png", base * 2))
     for path, size in icons:
         im = open_image(path, (size, size), "RGBA")
-        if im and size >= 128:
-            check_face(im, rel(path), scaled_visor(size, ICON_HEAD_SCALE), 3 if size < 512 else 12)
+        if im:
+            check_icon(im, rel(path), source)
 
     splash = ROOT / "electron/resources/splash-seira.webp"
     open_image(splash, (198, 232), "RGBA")
@@ -138,13 +178,14 @@ def embedded_png(path):
 
 
 def check_svgs():
+    source = load_source()
     for path in (ROOT / "build/icon.svg", ROOT / "public/app-icon.svg"):
         im = embedded_png(path)
         if im:
             if im.size != (512, 512):
                 fail(f"{rel(path)}: embedded image size {im.size}")
             else:
-                check_face(im, rel(path), scaled_visor(512, ICON_HEAD_SCALE), 12)
+                check_icon(im, rel(path), source)
     for suffix in ("", "-reversed"):
         for path in (LOGO / f"svg/seira-lockup{suffix}.svg", DOCS_BRAND / f"seira-lockup{suffix}.svg",
                      LOGO / f"svg/seira-wordmark{suffix}.svg"):

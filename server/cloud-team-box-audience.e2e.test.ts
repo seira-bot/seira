@@ -60,7 +60,8 @@ const newThread = async (token: string, title: string) => {
 
 beforeAll(async () => {
   if (!posix) return;
-  fx = await launchCloudSendFixture({ onePasswordToken: TOKEN, team: { id: "team-acme-box", name: "Acme", engine: SHELL }, cloudEngine: SHELL });
+  const box = { OMB_BOT_BOX: boxed ? "1" : "0" };
+  fx = await launchCloudSendFixture({ onePasswordToken: TOKEN, team: { id: "team-acme-box", name: "Acme", engine: SHELL, env: box }, cloudEngine: SHELL, cloudEnv: box });
   team = fx.team!;
   dataDir = join(team.home, ".openmausbot");
   owner = (await team.pair(OWNER)).token!;

@@ -1,6 +1,8 @@
 import { json, readCapped, sha256, tooMany } from "./common";
 import type { AppEnv, Deps } from "./env";
 import { getIssue, type GitHubIssue } from "./github";
+import { isDryRun } from "./dry-run";
+import { rateKeyOf } from "./ip";
 import { STATUS_BODY_LIMIT, statusSchema } from "./schema";
 
 export const STATUS_TTL_SECONDS = 900;
@@ -70,7 +72,7 @@ async function refresh(env: AppEnv, deps: Deps, numbers: number[], nowSeconds: n
 }
 
 export async function handleStatus(request: Request, env: AppEnv, deps: Deps): Promise<Response> {
-  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  const ip = rateKeyOf(request.headers.get("cf-connecting-ip") || "unknown");
   if (!(await env.STATUS_LIMITER.limit({ key: ip })).success) return tooMany(60);
 
   const body = await readCapped(request, STATUS_BODY_LIMIT);
@@ -107,7 +109,8 @@ export async function handleStatus(request: Request, env: AppEnv, deps: Deps): P
       .all<CachedIssue>();
     for (const row of cached.results) known.set(row.number, row);
   }
-  await refresh(env, deps, numbers, Math.floor(deps.now() / 1000), known);
+  // A dry run has no real issues. Its numbers are made up, so it never asks GitHub about them.
+  if (!isDryRun(env)) await refresh(env, deps, numbers, Math.floor(deps.now() / 1000), known);
 
   const reports = ids.map((id) => {
     const number = issueOf.get(id);
