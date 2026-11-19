@@ -321,6 +321,9 @@ on. Simple is the default for new installs.
   field, then rows in five groups: Profile, Knowledge, Work, Channels, Admin. Each row is a 44px button with an
   icon, a title, a short value that comes from state already on screen (left empty when there is none) and a
   chevron that turns when the row is open. One row is open at a time. Groups with no match hide while searching.
+  The hero shows a 24px status pill only while the bot works, waits or has failed, in the words its sidebar row
+  uses. A group card has a 1px `hairline` ring so it shows on every skin. An open section drops the cards of its
+  own content (a card with its own border stays) so its fields sit flat inside the group card.
 - **Advanced uses Simple's composer card.** The field sits above one bar, and
   the round slot is voice, Send or Stop. Advanced fills the bar with quiet 28px
   chips (Goal, approval level, place, context) where Simple uses the + menu.
