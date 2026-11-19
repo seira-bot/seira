@@ -200,7 +200,7 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const grokBlocked = useOtherDialogOpen(grokDue) || Boolean(state.liveCall && state.liveCall.status !== "ended");
   const grokNow = !grokDue ? false
     : !viewer || (desktop && !desktopState) || organization === null || firstChat === null || mausBotFirst || moving === null || grokBlocked ? null : true;
-  // A card from the project's announcements file: the built-in sponsor card's exclusions, and src/lib/announcements.ts's rules for
+  // A card from the project's announcements file: never in the welcome's launch, during a call or a move, and src/lib/announcements.ts's rules for
   // which card and for whom (once per person, one sponsor card a week, none on a branded build).
   const branded = brandStatus().source === "file", team = Boolean(state.config?.team);
   const remoteCards = useAnnouncementCards(!branded);
