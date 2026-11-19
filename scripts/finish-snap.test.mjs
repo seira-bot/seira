@@ -7,12 +7,13 @@ import afterAllArtifactBuild, {
   assertSandboxOn,
   dropSandboxSwitch,
   finishSnap,
+  plainLauncher,
   readSnapFiles,
   renameDesktopEntry,
   renameSnapYaml,
 } from "./finish-snap.mjs";
 
-const LAUNCHER = `#!/bin/bash -e\nexec "$SNAP/desktop-init.sh" "$SNAP/openmausbot" '--no-sandbox' "$@"`;
+const LAUNCHER = `#!/bin/bash -e\nexec "$SNAP/desktop-init.sh" "$SNAP/desktop-common.sh" "$SNAP/openmausbot" '--no-sandbox' "$@"`;
 const YAML = "base: core22\nconfinement: classic\nname: openmausbot\napps:\n  openmausbot:\n    command: command.sh\n";
 const DESKTOP = "[Desktop Entry]\nName=Seira\nExec=openmausbot %U\nIcon=${SNAP}/meta/gui/icon.png\n";
 
@@ -38,7 +39,12 @@ describe("snap launcher edits", () => {
   it("removes the sandbox switch and keeps every other argument", () => {
     const fixed = dropSandboxSwitch(LAUNCHER);
     expect(fixed).not.toContain("--no-sandbox");
-    expect(fixed).toBe(`#!/bin/bash -e\nexec "$SNAP/desktop-init.sh" "$SNAP/openmausbot" "$@"`);
+    expect(fixed).toBe(`#!/bin/bash -e\nexec "$SNAP/desktop-init.sh" "$SNAP/desktop-common.sh" "$SNAP/openmausbot" "$@"`);
+  });
+
+  it("starts the app binary directly, without the template helper scripts", () => {
+    expect(plainLauncher(LAUNCHER)).toBe(`#!/bin/bash -e\nexec "$SNAP/openmausbot" "$@"\n`);
+    expect(() => plainLauncher("#!/bin/bash\nexec true")).toThrow(/does not start an app binary/);
   });
 
   it("names the snap and its app seira, and fails when it cannot", () => {
@@ -73,6 +79,7 @@ describe.skipIf(!haveTools)("a packed snap", () => {
     await afterAllArtifactBuild({ artifactPaths: [snap, "/not/a/snap.AppImage"] });
     const files = readSnapFiles(snap, ["command.sh", "meta/snap.yaml"]);
     expect(files["command.sh"]).not.toContain("--no-sandbox");
+    expect(files["command.sh"]).not.toContain("desktop-init.sh");
     expect(files["meta/snap.yaml"]).toContain("name: seira");
     expect(files["meta/snap.yaml"]).toContain("confinement: classic");
   });

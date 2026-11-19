@@ -23,6 +23,17 @@ export function dropSandboxSwitch(launcher) {
   return launcher.replace(/ '(?:--no-sandbox|--disable-setuid-sandbox|--disable-gpu-sandbox)'/g, "");
 }
 
+// The builder's launcher calls helper scripts of a 2019 template (desktop-init.sh and others) that it leaves in the snap as an
+// unextracted tar. A classic snap uses the host libraries, so the launcher only has to start the app.
+export function plainLauncher(launcher) {
+  const binary = [...dropSandboxSwitch(launcher).matchAll(/"\$SNAP\/([^"]+)"/g)]
+    .map((match) => match[1])
+    .filter((name) => !name.endsWith(".sh"))
+    .at(-1);
+  if (!binary) throw new Error("command.sh does not start an app binary");
+  return `#!/bin/bash -e\nexec "$SNAP/${binary}" "$@"\n`;
+}
+
 export function renameDesktopEntry(text, from) {
   return text
     .replace(new RegExp(`^Exec=${from}( |$)`, "m"), `Exec=${SNAP_NAME}$1`)
@@ -73,7 +84,8 @@ export function finishSnap(snap) {
     if (!oldName) throw new Error("snap.yaml has no name");
     writeFileSync(yamlFile, renameSnapYaml(readFileSync(yamlFile, "utf8"), oldName));
     const launcher = path.join(root, "command.sh");
-    writeFileSync(launcher, dropSandboxSwitch(readFileSync(launcher, "utf8")));
+    writeFileSync(launcher, plainLauncher(readFileSync(launcher, "utf8")));
+    for (const entry of readdirSync(root).filter((name) => /^snap-template-.*\.tar$/.test(name))) rmSync(path.join(root, entry));
     for (const file of walk(path.join(root, "meta", "gui")).filter((file) => file.endsWith(".desktop"))) {
       writeFileSync(file, renameDesktopEntry(readFileSync(file, "utf8"), oldName));
     }
