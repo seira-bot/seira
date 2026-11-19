@@ -4037,7 +4037,9 @@
       "call.live.codexHint": "e76c21dd75059d5c94cf12a81f83babe820fd01fea822d0bb9d12dbcdc066bbd",
       "call.live.disclosureCodex": "0beb8b8eee2370795a8c34807c2423bed07833d8c6747b075f435d0a6ec30d71",
       "call.live.codexCost": "9c93b8ed12f0570a59b39b0c1144274fcbba05f6adb4b2afd19d6c6febacb307",
-      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576"
+      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576",
+      "settings.openAtLogin.startupApps": "a71cdcc3af8d5d5fca654dfb300e54b515675b10ad2d3bd97e3b1734f0dcf6a3",
+      "alwaysOn.login.startupApps": "b50feca6a7d0cd61da4905f6eb387482cc3a5c6984c021b87d4b9c0384676700"
     },
     "es": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -10451,7 +10453,9 @@
       "call.live.codexHint": "e76c21dd75059d5c94cf12a81f83babe820fd01fea822d0bb9d12dbcdc066bbd",
       "call.live.disclosureCodex": "0beb8b8eee2370795a8c34807c2423bed07833d8c6747b075f435d0a6ec30d71",
       "call.live.codexCost": "9c93b8ed12f0570a59b39b0c1144274fcbba05f6adb4b2afd19d6c6febacb307",
-      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576"
+      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576",
+      "settings.openAtLogin.startupApps": "a71cdcc3af8d5d5fca654dfb300e54b515675b10ad2d3bd97e3b1734f0dcf6a3",
+      "alwaysOn.login.startupApps": "b50feca6a7d0cd61da4905f6eb387482cc3a5c6984c021b87d4b9c0384676700"
     },
     "fr": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -14272,7 +14276,9 @@
       "call.live.codexHint": "e76c21dd75059d5c94cf12a81f83babe820fd01fea822d0bb9d12dbcdc066bbd",
       "call.live.disclosureCodex": "0beb8b8eee2370795a8c34807c2423bed07833d8c6747b075f435d0a6ec30d71",
       "call.live.codexCost": "9c93b8ed12f0570a59b39b0c1144274fcbba05f6adb4b2afd19d6c6febacb307",
-      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576"
+      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576",
+      "settings.openAtLogin.startupApps": "a71cdcc3af8d5d5fca654dfb300e54b515675b10ad2d3bd97e3b1734f0dcf6a3",
+      "alwaysOn.login.startupApps": "b50feca6a7d0cd61da4905f6eb387482cc3a5c6984c021b87d4b9c0384676700"
     },
     "hi": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -17947,7 +17953,9 @@
       "call.live.codexHint": "e76c21dd75059d5c94cf12a81f83babe820fd01fea822d0bb9d12dbcdc066bbd",
       "call.live.disclosureCodex": "0beb8b8eee2370795a8c34807c2423bed07833d8c6747b075f435d0a6ec30d71",
       "call.live.codexCost": "9c93b8ed12f0570a59b39b0c1144274fcbba05f6adb4b2afd19d6c6febacb307",
-      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576"
+      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576",
+      "settings.openAtLogin.startupApps": "a71cdcc3af8d5d5fca654dfb300e54b515675b10ad2d3bd97e3b1734f0dcf6a3",
+      "alwaysOn.login.startupApps": "b50feca6a7d0cd61da4905f6eb387482cc3a5c6984c021b87d4b9c0384676700"
     },
     "ja": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -25896,7 +25904,9 @@
       "call.live.codexHint": "e76c21dd75059d5c94cf12a81f83babe820fd01fea822d0bb9d12dbcdc066bbd",
       "call.live.disclosureCodex": "0beb8b8eee2370795a8c34807c2423bed07833d8c6747b075f435d0a6ec30d71",
       "call.live.codexCost": "9c93b8ed12f0570a59b39b0c1144274fcbba05f6adb4b2afd19d6c6febacb307",
-      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576"
+      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576",
+      "settings.openAtLogin.startupApps": "a71cdcc3af8d5d5fca654dfb300e54b515675b10ad2d3bd97e3b1734f0dcf6a3",
+      "alwaysOn.login.startupApps": "b50feca6a7d0cd61da4905f6eb387482cc3a5c6984c021b87d4b9c0384676700"
     },
     "pt-br": {
       "voice.gemini.keyPlaceholder": "8c87ba2043a4a89d63c90cae8a6dafd5cbd193652e923b97988e381a74773e10",
@@ -37041,7 +37051,9 @@
       "call.live.codexHint": "e76c21dd75059d5c94cf12a81f83babe820fd01fea822d0bb9d12dbcdc066bbd",
       "call.live.disclosureCodex": "0beb8b8eee2370795a8c34807c2423bed07833d8c6747b075f435d0a6ec30d71",
       "call.live.codexCost": "9c93b8ed12f0570a59b39b0c1144274fcbba05f6adb4b2afd19d6c6febacb307",
-      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576"
+      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576",
+      "settings.openAtLogin.startupApps": "a71cdcc3af8d5d5fca654dfb300e54b515675b10ad2d3bd97e3b1734f0dcf6a3",
+      "alwaysOn.login.startupApps": "b50feca6a7d0cd61da4905f6eb387482cc3a5c6984c021b87d4b9c0384676700"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -47112,7 +47124,9 @@
       "call.live.codexHint": "e76c21dd75059d5c94cf12a81f83babe820fd01fea822d0bb9d12dbcdc066bbd",
       "call.live.disclosureCodex": "0beb8b8eee2370795a8c34807c2423bed07833d8c6747b075f435d0a6ec30d71",
       "call.live.codexCost": "9c93b8ed12f0570a59b39b0c1144274fcbba05f6adb4b2afd19d6c6febacb307",
-      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576"
+      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576",
+      "settings.openAtLogin.startupApps": "a71cdcc3af8d5d5fca654dfb300e54b515675b10ad2d3bd97e3b1734f0dcf6a3",
+      "alwaysOn.login.startupApps": "b50feca6a7d0cd61da4905f6eb387482cc3a5c6984c021b87d4b9c0384676700"
     },
     "zh-tw": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -57285,7 +57299,9 @@
       "call.live.codexHint": "e76c21dd75059d5c94cf12a81f83babe820fd01fea822d0bb9d12dbcdc066bbd",
       "call.live.disclosureCodex": "0beb8b8eee2370795a8c34807c2423bed07833d8c6747b075f435d0a6ec30d71",
       "call.live.codexCost": "9c93b8ed12f0570a59b39b0c1144274fcbba05f6adb4b2afd19d6c6febacb307",
-      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576"
+      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576",
+      "settings.openAtLogin.startupApps": "a71cdcc3af8d5d5fca654dfb300e54b515675b10ad2d3bd97e3b1734f0dcf6a3",
+      "alwaysOn.login.startupApps": "b50feca6a7d0cd61da4905f6eb387482cc3a5c6984c021b87d4b9c0384676700"
     },
     "uk": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -61380,7 +61396,9 @@
       "call.live.codexHint": "e76c21dd75059d5c94cf12a81f83babe820fd01fea822d0bb9d12dbcdc066bbd",
       "call.live.disclosureCodex": "0beb8b8eee2370795a8c34807c2423bed07833d8c6747b075f435d0a6ec30d71",
       "call.live.codexCost": "9c93b8ed12f0570a59b39b0c1144274fcbba05f6adb4b2afd19d6c6febacb307",
-      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576"
+      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576",
+      "settings.openAtLogin.startupApps": "a71cdcc3af8d5d5fca654dfb300e54b515675b10ad2d3bd97e3b1734f0dcf6a3",
+      "alwaysOn.login.startupApps": "b50feca6a7d0cd61da4905f6eb387482cc3a5c6984c021b87d4b9c0384676700"
     },
     "vi": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -67294,7 +67312,9 @@
       "call.live.codexHint": "e76c21dd75059d5c94cf12a81f83babe820fd01fea822d0bb9d12dbcdc066bbd",
       "call.live.disclosureCodex": "0beb8b8eee2370795a8c34807c2423bed07833d8c6747b075f435d0a6ec30d71",
       "call.live.codexCost": "9c93b8ed12f0570a59b39b0c1144274fcbba05f6adb4b2afd19d6c6febacb307",
-      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576"
+      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576",
+      "settings.openAtLogin.startupApps": "a71cdcc3af8d5d5fca654dfb300e54b515675b10ad2d3bd97e3b1734f0dcf6a3",
+      "alwaysOn.login.startupApps": "b50feca6a7d0cd61da4905f6eb387482cc3a5c6984c021b87d4b9c0384676700"
     },
     "tr": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -73208,7 +73228,9 @@
       "call.live.codexHint": "e76c21dd75059d5c94cf12a81f83babe820fd01fea822d0bb9d12dbcdc066bbd",
       "call.live.disclosureCodex": "0beb8b8eee2370795a8c34807c2423bed07833d8c6747b075f435d0a6ec30d71",
       "call.live.codexCost": "9c93b8ed12f0570a59b39b0c1144274fcbba05f6adb4b2afd19d6c6febacb307",
-      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576"
+      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576",
+      "settings.openAtLogin.startupApps": "a71cdcc3af8d5d5fca654dfb300e54b515675b10ad2d3bd97e3b1734f0dcf6a3",
+      "alwaysOn.login.startupApps": "b50feca6a7d0cd61da4905f6eb387482cc3a5c6984c021b87d4b9c0384676700"
     },
     "pl": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -80325,7 +80347,9 @@
       "call.live.codexHint": "e76c21dd75059d5c94cf12a81f83babe820fd01fea822d0bb9d12dbcdc066bbd",
       "call.live.disclosureCodex": "0beb8b8eee2370795a8c34807c2423bed07833d8c6747b075f435d0a6ec30d71",
       "call.live.codexCost": "9c93b8ed12f0570a59b39b0c1144274fcbba05f6adb4b2afd19d6c6febacb307",
-      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576"
+      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576",
+      "settings.openAtLogin.startupApps": "a71cdcc3af8d5d5fca654dfb300e54b515675b10ad2d3bd97e3b1734f0dcf6a3",
+      "alwaysOn.login.startupApps": "b50feca6a7d0cd61da4905f6eb387482cc3a5c6984c021b87d4b9c0384676700"
     },
     "ru": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -87496,7 +87520,9 @@
       "call.live.codexHint": "e76c21dd75059d5c94cf12a81f83babe820fd01fea822d0bb9d12dbcdc066bbd",
       "call.live.disclosureCodex": "0beb8b8eee2370795a8c34807c2423bed07833d8c6747b075f435d0a6ec30d71",
       "call.live.codexCost": "9c93b8ed12f0570a59b39b0c1144274fcbba05f6adb4b2afd19d6c6febacb307",
-      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576"
+      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576",
+      "settings.openAtLogin.startupApps": "a71cdcc3af8d5d5fca654dfb300e54b515675b10ad2d3bd97e3b1734f0dcf6a3",
+      "alwaysOn.login.startupApps": "b50feca6a7d0cd61da4905f6eb387482cc3a5c6984c021b87d4b9c0384676700"
     },
     "it": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
@@ -94480,7 +94506,9 @@
       "call.live.codexHint": "e76c21dd75059d5c94cf12a81f83babe820fd01fea822d0bb9d12dbcdc066bbd",
       "call.live.disclosureCodex": "0beb8b8eee2370795a8c34807c2423bed07833d8c6747b075f435d0a6ec30d71",
       "call.live.codexCost": "9c93b8ed12f0570a59b39b0c1144274fcbba05f6adb4b2afd19d6c6febacb307",
-      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576"
+      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576",
+      "settings.openAtLogin.startupApps": "a71cdcc3af8d5d5fca654dfb300e54b515675b10ad2d3bd97e3b1734f0dcf6a3",
+      "alwaysOn.login.startupApps": "b50feca6a7d0cd61da4905f6eb387482cc3a5c6984c021b87d4b9c0384676700"
     },
     "ko": {
       "connectedWorkspaces.localTitle": "7d6deafeab011d734c3fdd1bfd6f69544fbb746a004019269bdb48544b01164b",
@@ -102123,7 +102151,9 @@
       "call.live.codexHint": "e76c21dd75059d5c94cf12a81f83babe820fd01fea822d0bb9d12dbcdc066bbd",
       "call.live.disclosureCodex": "0beb8b8eee2370795a8c34807c2423bed07833d8c6747b075f435d0a6ec30d71",
       "call.live.codexCost": "9c93b8ed12f0570a59b39b0c1144274fcbba05f6adb4b2afd19d6c6febacb307",
-      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576"
+      "onboarding.engines.freeBackupInstalling": "c2302a8c827942693c629ff1d5b09f28530c235f6fd1f52f07b0a6dadeea8576",
+      "settings.openAtLogin.startupApps": "a71cdcc3af8d5d5fca654dfb300e54b515675b10ad2d3bd97e3b1734f0dcf6a3",
+      "alwaysOn.login.startupApps": "b50feca6a7d0cd61da4905f6eb387482cc3a5c6984c021b87d4b9c0384676700"
     }
   }
 }
