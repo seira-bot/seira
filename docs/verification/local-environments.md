@@ -26,7 +26,7 @@ They do not prove the user workflow — the recipe does.
 - A packaged desktop installation of this branch, signed in on This
   computer with at least one bot so the bot list is visibly non-empty.
 - The registry lives in the app's user-data folder: on macOS
-  `~/Library/Application Support/OpenMausBot/environments.json`.
+  `~/Library/Application Support/openmausbot/environments.json`.
 - The app log (`server.log` in the app's logs directory) records every
   switch decision; keep it open.
 
