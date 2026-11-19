@@ -6,7 +6,7 @@ log="$HOME/.var/app/bot.seira.Seira/config/openmausbot/logs/server.log"
 bin="$HOME/.local/bin"
 run=$(mktemp)
 before=$(wc -l <"$log" 2>/dev/null || echo 0)
-trap 'rm -f "$bin/codex" "$run"; kill "$app" 2>/dev/null || true; flatpak kill bot.seira.Seira 2>/dev/null || true' EXIT
+trap 'rm -f "$bin/cline" "$run"; kill "$app" 2>/dev/null || true; flatpak kill bot.seira.Seira 2>/dev/null || true' EXIT
 
 echo "start-up"
 dbus-run-session -- xvfb-run -a timeout 120 flatpak run bot.seira.Seira >"$run" 2>&1 &
@@ -27,19 +27,19 @@ echo "PASS: server ready, port 8799 open"
 api=http://127.0.0.1:8799
 echo "host bridge: program installed"
 mkdir -p "$bin"
-printf '#!/bin/sh\necho "9.9.9 (codex-cli dummy)"\n' >"$bin/codex"
-chmod +x "$bin/codex"
+printf '#!/bin/sh\necho "9.9.9 (cline dummy)"\n' >"$bin/cline"
+chmod +x "$bin/cline"
 sleep 4
-found=$(curl -fsS "$api/api/cli-candidates?name=codex")
+found=$(curl -fsS "$api/api/cli-candidates?name=cline")
 echo "$found"
-case "$found" in *"$bin/codex"*) echo "PASS: dummy found on the host" ;; *) echo "FAIL: dummy not found"; exit 1 ;; esac
-seen=$(curl -fsS "$api/api/instances?fresh=1" | tr ',' '\n' | grep -c "9.9.9 (codex-cli dummy)" || true)
-echo "dummy output seen in the engine list: $seen"
-[ "$seen" -gt 0 ] && echo "PASS: dummy launched on the host, output returned" || { echo "FAIL: no dummy output"; exit 1; }
+case "$found" in *"$bin/cline"*) echo "PASS: dummy found on the host" ;; *) echo "FAIL: dummy not found"; exit 1 ;; esac
+state=$(curl -fsS "$api/api/instances?fresh=1" | jq -r '.instances[] | select(.instanceId=="cline") | .snapshot.state + " " + (.snapshot.reason // "")')
+echo "engine state with the dummy: $state"
+case "$state" in available*) echo "PASS: dummy launched on the host, engine is available" ;; *) echo "FAIL: engine not available"; exit 1 ;; esac
 
 echo "host bridge: program removed"
-rm -f "$bin/codex"
+rm -f "$bin/cline"
 sleep 4
-found=$(curl -fsS "$api/api/cli-candidates?name=codex")
+found=$(curl -fsS "$api/api/cli-candidates?name=cline")
 echo "$found"
-case "$found" in *"$bin/codex"*) echo "FAIL: removed dummy still listed"; exit 1 ;; *) echo "PASS: removed dummy not listed" ;; esac
+case "$found" in *"$bin/cline"*) echo "FAIL: removed dummy still listed"; exit 1 ;; *) echo "PASS: removed dummy not listed" ;; esac
