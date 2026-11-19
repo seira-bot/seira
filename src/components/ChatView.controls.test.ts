@@ -154,7 +154,8 @@ describe("the Advanced transcript", () => {
     const messages: Bot["messages"] = [
       { id: "ask", role: "user", kind: "text", at: 1, text: "Check it" },
       { id: "read", role: "bot", kind: "activity", at: 2, tool: { name: "Read", ok: true } },
-      { id: "reply", role: "bot", kind: "text", at: 3, text: "Done." },
+      { id: "bash", role: "bot", kind: "activity", at: 3, tool: { name: "Bash", ok: true } },
+      { id: "reply", role: "bot", kind: "text", at: 4, text: "Done." },
     ];
     try {
       const markup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: false, messages } }));
