@@ -191,7 +191,8 @@ exports.createClient = async ({ auth }) => {
  * few turns make a conversation of several pages. `broker`: the connected-apps service both servers use, this computer
  * with an installation of its own as the desktop app registers one, My Cloud registering itself as a Cloud home does.
  * `env`: more of both servers' environment. `cloudEngine`: lines run at the start of My Cloud's synthetic Claude CLI, to
- * script its turns (fake-claude-cli.ts). */
+ * script its turns (fake-claude-cli.ts). Every server runs without a bot box, as CI's runners do: a box refuses the
+ * synthetic CLIs in the server's HOME and hides the test's files from its turns. To box a server, set `OMB_BOT_BOX`. */
 export async function launchCloudSendFixture({ onePasswordToken, cloudOnePasswordToken = onePasswordToken, onePasswordItems = [], bitwarden, toolCalls = 0, broker, env = {}, cloudEnv = {}, cloudEngine = "", desktopEngine = "", space, cloudSignedIn = true, team }: {
   onePasswordToken: string; cloudOnePasswordToken?: string; toolCalls?: number;
   /** A fake Bitwarden tool already in each server's data folder, holding this one account (no download, no network). */
@@ -247,7 +248,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     const child = spawn(process.execPath, ["--import", offline, ...extra, join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: { PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}), HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir,
-        OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), OMB_DUCKDB_DIR: fakeOnePassword(join(home, "native"), acceptedToken, onePasswordItems), ...env, ...own },
+        OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), OMB_DUCKDB_DIR: fakeOnePassword(join(home, "native"), acceptedToken, onePasswordItems), OMB_BOT_BOX: "0", ...env, ...own },
       stdio: ["ignore", "pipe", "pipe", ...(ipc ? ["ipc" as const] : [])],
     });
     children.add(child);

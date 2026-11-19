@@ -88,7 +88,7 @@ test("Windows: Settings shows on while Windows already starts the app, even from
   const login = createOpenAtLogin({ app, file: path.join(dir, "win.json"), platform: "win32", home: dir, argv: ["Seira.exe"] });
   const handlers = new Map();
   installOpenAtLogin({ ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) }, guard: (_channel, handler) => handler, loginItem: login, changed: () => {} });
-  assert.deepEqual(await handlers.get("open-at-login:state")({}), { available: true, on: true });
+  assert.deepEqual(await handlers.get("open-at-login:state")({}), { available: true, on: true, startupApps: false });
   app.items.get("electron.app.OpenMausBot").enabled = false;
   assert.equal(login.chosen(), false, "an entry turned off in Task Manager starts nothing");
 });
@@ -128,13 +128,13 @@ test("a build that cannot add a login item offers no switch and changes nothing"
   const handlers = new Map();
   let redraws = 0;
   installOpenAtLogin({ ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) }, guard: (_channel, handler) => handler, loginItem: login, changed: () => redraws++ });
-  assert.deepEqual(await handlers.get("open-at-login:state")({}), { available: false, on: false });
+  assert.deepEqual(await handlers.get("open-at-login:state")({}), { available: false, on: false, startupApps: false });
   await handlers.get("open-at-login:set")({}, true);
   assert.equal(app.getLoginItemSettings().openAtLogin, false);
   const packaged = createOpenAtLogin({ app: fakeApp(), file: path.join(dir, "mac.json"), platform: "darwin", home: dir });
   installOpenAtLogin({ ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) }, guard: (_channel, handler) => handler, loginItem: packaged, changed: () => redraws++ });
-  assert.deepEqual(await handlers.get("open-at-login:set")({}, true), { available: true, on: true });
-  assert.deepEqual(await handlers.get("open-at-login:set")({}, "yes"), { available: true, on: false }, "only a real true turns it on");
+  assert.deepEqual(await handlers.get("open-at-login:set")({}, true), { available: true, on: true, startupApps: false });
+  assert.deepEqual(await handlers.get("open-at-login:set")({}, "yes"), { available: true, on: false, startupApps: false }, "only a real true turns it on");
   assert.equal(redraws, 3, "the app menu's item is drawn again after each change");
 });
 
@@ -149,4 +149,37 @@ test("Linux in a snap: the autostart entry starts the snap's stable command, not
   login.choose(false);
   login.follow(true);
   assert.equal(await readFile(entry, "utf8"), autostartEntry("/snap/bin/seira"));
+});
+
+test("Windows in a Microsoft Store package: no Run entry is ever written, and only Startup apps can start the app", async t => {
+  const dir = await temp(t);
+  const app = windowsApp([{ name: "electron.app.OpenMausBot", args: ["--omb-hidden"] }]);
+  const writes = [];
+  const setLoginItemSettings = app.setLoginItemSettings.bind(app);
+  app.setLoginItemSettings = settings => { writes.push(settings); setLoginItemSettings(settings); };
+  const login = createOpenAtLogin({ app, file: path.join(dir, "store.json"), platform: "win32", home: dir, argv: ["Seira.exe"], windowsStore: true });
+  assert.deepEqual([login.available(), login.startupApps(), login.chosen(), login.starts()], [false, true, false, false]);
+  login.follow(true);
+  login.follow(false);
+  login.choose(true);
+  login.choose(false);
+  login.hold(true);
+  assert.equal(login.homeAdd(), null);
+  login.homeRelease({ declined: false, lending: true });
+  assert.deepEqual(writes, [], "nothing reaches the Run key");
+  const handlers = new Map();
+  installOpenAtLogin({ ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) }, guard: (_channel, handler) => handler, loginItem: login, changed: () => {} });
+  assert.deepEqual(await handlers.get("open-at-login:state")({}), { available: false, on: false, startupApps: true });
+  assert.deepEqual(await handlers.get("open-at-login:set")({}, true), { available: false, on: false, startupApps: true });
+  assert.deepEqual(writes, []);
+});
+
+test("a Store package on another system, or a build that is not packaged, keeps the normal behaviour", async t => {
+  const dir = await temp(t);
+  const mac = createOpenAtLogin({ app: fakeApp(), file: path.join(dir, "mac.json"), platform: "darwin", home: dir, windowsStore: true });
+  assert.deepEqual([mac.available(), mac.startupApps()], [true, false]);
+  const win = createOpenAtLogin({ app: windowsApp(), file: path.join(dir, "win.json"), platform: "win32", home: dir, windowsStore: undefined });
+  assert.deepEqual([win.available(), win.startupApps()], [true, false]);
+  const dev = createOpenAtLogin({ app: { ...windowsApp(), isPackaged: false }, file: path.join(dir, "dev.json"), platform: "win32", home: dir, windowsStore: true });
+  assert.equal(dev.startupApps(), false);
 });

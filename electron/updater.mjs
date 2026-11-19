@@ -8,6 +8,7 @@ import {
   HAND_OFF_PACKAGE_TYPES,
   linuxPackageType,
   managedByStore,
+  windowsPackageType,
   packageInstallCommand,
   stagedInstallFile,
 } from "./package-install-command.mjs";
@@ -196,7 +197,7 @@ export function startUpdater(signals = null) {
     setState({ status: "idle" });
     return;
   }
-  const packageType = linuxPackageType({ readMarker: (file) => (existsSync(file) ? readFileSync(file, "utf8") : null) });
+  const packageType = windowsPackageType() ?? linuxPackageType({ readMarker: (file) => (existsSync(file) ? readFileSync(file, "utf8") : null) });
   if (managedByStore(packageType)) {
     updaterCoordinator = null;
     setState({ status: "idle", managedByStore: true });

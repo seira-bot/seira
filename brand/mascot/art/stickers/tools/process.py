@@ -172,8 +172,11 @@ def pivot_for(rule, rgba):
         while end + 1 < len(col) and col[end + 1]:
             end += 1
         return cx, float(end)
-    if rule == "cap":
-        return cx, y0 + 0.10 * h
+    if rule == "brim":
+        # the eyes sit under the middle of the red brim, a fixed share of the cap height below its lowest point
+        rgb = rgba[..., :3].astype(np.int16)
+        brim = a & (rgb[..., 0] - rgb[..., 1] > 60)
+        return float(np.nonzero(brim)[1].mean()), y1 + 0.23 * h
     if rule == "grip":
         sel = a[int(y0 + 0.62 * h):int(y0 + 0.72 * h)]
         return float(np.nonzero(sel)[1].mean()), y0 + 0.78 * h

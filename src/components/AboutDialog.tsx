@@ -10,6 +10,7 @@ import {
   platformLabel,
 } from "@/lib/app-links";
 import { productName } from "@/lib/brand";
+import { LegalLinks } from "./LegalLinks";
 import { t } from "@/lib/i18n";
 import { useOtherServerName } from "@/lib/other-server";
 import { SeiraCharacter } from "./seira-character";
@@ -73,6 +74,7 @@ export function AboutDialog({ open, onClose }: { open: boolean; onClose: () => v
           <AboutLink href={DOCS_URL} label={t("about.docs")} />
           <AboutLink href={RELEASES_URL} label={t("about.releases")} />
           <AboutLink href={LICENSE_URL} label={t("about.license")} />
+          <LegalLinks />
         </div>
         <button
           ref={closeRef}

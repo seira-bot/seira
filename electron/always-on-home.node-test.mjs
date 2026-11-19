@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { createOpenAtLogin } from "./open-at-login.mjs";
 import { ALWAYS_ON_BLOCKER, createAlwaysOnHome, installAlwaysOnHome, parseAlwaysOn } from "./always-on-home.mjs";
 
 /** A login item that is simply on or off, recording what the switch asked of it. */
@@ -40,9 +41,9 @@ test("the saved switch reads only its own shape; anything else is off", () => {
 
 test("on: opens at login, holds the computer awake on power, and says how updates arrive", (t) => {
   const f = fixture(t);
-  assert.deepEqual(f.home.state(), { available: true, on: false, platform: "darwin", openAtLogin: false, awake: "off", updates: "by-itself" });
+  assert.deepEqual(f.home.state(), { available: true, on: false, platform: "darwin", openAtLogin: false, startupApps: false, awake: "off", updates: "by-itself" });
   const state = f.home.set(true);
-  assert.deepEqual(state, { available: true, on: true, platform: "darwin", openAtLogin: true, awake: "holding", updates: "by-itself" });
+  assert.deepEqual(state, { available: true, on: true, platform: "darwin", openAtLogin: true, startupApps: false, awake: "holding", updates: "by-itself" });
   assert.deepEqual(f.world.chose, [true]);
   assert.deepEqual(f.world.started, [ALWAYS_ON_BLOCKER]);
   assert.equal(f.home.holding(), true);
@@ -109,7 +110,7 @@ test("a damaged file reads as off, and a failing login item still saves the choi
 
 test("an updater that names no way reads as none", (t) => {
   const f = fixture(t, { updates: "sideways", available: false, platform: "linux" });
-  assert.deepEqual(f.home.state(), { available: false, on: false, platform: "linux", openAtLogin: false, awake: "off", updates: "none" });
+  assert.deepEqual(f.home.state(), { available: false, on: false, platform: "linux", openAtLogin: false, startupApps: false, awake: "off", updates: "none" });
 });
 
 test("Settings' channels go through main's guard, and set takes only true as on", async (t) => {
@@ -125,4 +126,18 @@ test("Settings' channels go through main's guard, and set takes only true as on"
   assert.equal((await handlers.get("always-on-home:state")({})).on, true);
   assert.equal(changed, 2);
   home.stop();
+});
+
+test("in a Microsoft Store package the state points to Startup apps, and turning on adds no login item", (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), "omb-always-on-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const writes = [];
+  const app = { isPackaged: true, getLoginItemSettings: () => ({ openAtLogin: false, launchItems: [] }), setLoginItemSettings: (settings) => writes.push(settings) };
+  const loginItem = createOpenAtLogin({ app, file: path.join(dir, "open-at-login.json"), platform: "win32", home: dir, windowsStore: true });
+  const blocker = { start: () => 1, stop: () => {}, isStarted: () => true };
+  const home = createAlwaysOnHome({ file: path.join(dir, "always-on-home.json"), loginItem, blocker, isOnBattery: () => false, platform: "win32", lookMs: 3_600_000 });
+  assert.deepEqual(home.state(), { available: false, on: false, platform: "win32", openAtLogin: false, startupApps: true, awake: "off", updates: "none" });
+  assert.equal(home.set(true).startupApps, true);
+  home.set(false);
+  assert.deepEqual(writes, []);
 });

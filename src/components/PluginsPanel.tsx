@@ -13,22 +13,13 @@ import { pollConnector } from "@/lib/connector-poll";
 import { connectorConnect } from "@/lib/product-events";
 import { managedConnectorUnavailableReason } from "../../shared/connector-availability";
 import { isConnectorToolGrantShape } from "@/lib/connector-grants";
-import {
-  accountAliasTaken,
-  accountToReconnect,
-  connectedInventoryCopy,
-  connectorActionLabel,
-  hasActiveConnection,
-  needsReconnect,
-  requiresAccountAlias,
-  type ConnectorAccount,
-  type ConnectorInventoryPhase,
-  type ConnectorStatus,
-} from "@/lib/connector-status";
+import { accountAliasTaken, accountToReconnect, connectedInventoryCopy, connectorActionLabel, hasActiveConnection, needsReconnect,
+  requiresAccountAlias, type ConnectorAccount, type ConnectorInventoryPhase, type ConnectorStatus } from "@/lib/connector-status";
 import { BotAvatar } from "./Avatar";
 import { SidebarPopoverMenu } from "./SidebarPopoverMenu";
 import { appCategoryLabel, CATEGORY_SECTION_SIZE, catalogSections, connectorDescription, inCategory, rankCategories } from "@/lib/app-catalog";
 import { McpServersPanel } from "./McpServersPanel";
+import { LegalLinks } from "./LegalLinks";
 import { HOSTED_MCP_APPS, mcpServerConnected, ownMcpServer, type HostedApp, type HostedConnections } from "@/lib/hosted-mcp-apps";
 import { isRemoteMcpListing, type McpServerListing } from "./mcp-draft";
 import { useSuggestedApps } from "@/lib/app-suggestions";
@@ -731,6 +722,9 @@ export function PluginsPanel() {
               <McpServersPanel embedded hideHosted={filter === "all"} />
             </div>
           )}
+          <nav aria-label={t("legal.label")} className="mt-10 flex justify-center gap-x-4 text-[12px]">
+            <LegalLinks />
+          </nav>
         </div>
         <ConfirmDialog open={disconnecting !== null} layer="z-[60]" tone="danger" title={t("connectors.disconnect")} confirmLabel={t("connectors.disconnect")}
           body={disconnecting ? disconnectAccountConfirmation(disconnecting.label, disconnecting.account) : ""} onCancel={() => setDisconnecting(null)}

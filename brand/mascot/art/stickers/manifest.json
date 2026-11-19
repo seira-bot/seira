@@ -201,8 +201,8 @@
       "label": "Cap",
       "slot": "top",
       "file": "out/acc/cap.png",
-      "pivot": [208, 39],
-      "anchor": "top",
+      "pivot": [207, 393],
+      "anchor": "eyes",
       "width": 2.1,
       "views": [
         "front",
@@ -215,7 +215,7 @@
         "yaw45": "out/acc/cap.yaw45.png"
       },
       "pivots": {
-        "yaw45": [256, 41]
+        "yaw45": [308, 415]
       },
       "widths": {
         "yaw45": 2.451

@@ -6,7 +6,6 @@
 // new Muse model reaches the picker without an app release.
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { Connection, MspError, type DuplexTransport } from "@muse-code/sdk";
 import { z } from "zod";
@@ -17,7 +16,7 @@ import type {
   RuntimeEventListener, SendTurnInput, SteerOutcome,
 } from "../contracts.ts";
 import { newEventId, newId } from "../contracts.ts";
-import { augmentedPath } from "../env-path.ts";
+import { augmentedPath, userHome } from "../env-path.ts";
 import { describeSpawnFailure, execCli, killCliTree, spawnCli, type CliOwner } from "../procs.ts";
 import { redactSecretsInText } from "../redact.ts";
 import { makeOwnedTempFolder, removeOwnedTempFolder, sweepOrphanedTempFoldersOnce } from "../temp-folders.ts";
@@ -361,7 +360,7 @@ export const MuseCodeDriver: ProviderDriver<MuseConfig> = {
     const signedIn = () => {
       if (input.environment.META_API_KEY) return true;
       const env = childEnv();
-      const home = env.HOME || homedir();
+      const home = userHome(env);
       return existsSync(join(env.XDG_CONFIG_HOME || join(home, ".config"), "muse", "auth.json"))
         || existsSync(join(home, ".config", "muse", "auth.json"));
     };

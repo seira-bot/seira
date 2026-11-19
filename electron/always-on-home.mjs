@@ -71,6 +71,7 @@ export function createAlwaysOnHome({ file, loginItem, blocker, isOnBattery, upda
       on: saved.on,
       platform,
       openAtLogin: loginOn(),
+      startupApps: loginItem.startupApps?.() === true,
       awake: !saved.on ? "off" : battery() ? "battery" : "holding",
       updates: UPDATES.has(kind) ? kind : "none",
     };

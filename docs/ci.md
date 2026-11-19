@@ -1,13 +1,17 @@
 # CI
 
 Seira has one CI workflow, `.github/workflows/ci.yml`. It runs on every pull
-request, on every push to `main`, and on a manual start. Every run does the
-same work on Linux. There is no path-based job selection, merge queue, or
-nightly run.
+request, on every push to `main`, and on a manual start. A run does its work
+on Linux. There is no merge queue or nightly run. Two rules cut the number of
+runners that a run uses (see [Fewer runners](#fewer-runners)).
 
 The repository also has package workflows, `.github/workflows/package-*.yml`.
 A maintainer starts them by hand to build a desktop package (see
 [Package workflows](#package-workflows)).
+
+A separate workflow, `.github/workflows/bug-reports.yml`, checks the bug report
+Worker. It starts only when the Worker changes (see
+[Bug report Worker workflow](#bug-report-worker-workflow)).
 
 ## Jobs
 
@@ -16,9 +20,34 @@ A maintainer starts them by hand to build a desktop package (see
 | `checks` | `pnpm install --frozen-lockfile`, `pnpm i18n:check`, `pnpm lint`, `pnpm check:contrast`, the model manifest and announcements checks, `node scripts/check-local-leaks.mjs`, and the source guards (tests that only read the source) |
 | `build` | `pnpm typecheck`, `pnpm check:electron`, and a production web build (`pnpm exec vite build`) |
 | `vitest (linux, shard n/8)` | The whole Vitest suite in 8 shards, 4 files at once per shard. Shard 1 also runs `pnpm broker:test` and `pnpm test:electron`. |
-| `CI` | The gate. It passes only when every job before it passed. |
+| `CI` | The gate. It passes only when every job before it passed. `build` and the shards may be skipped only as [Fewer runners](#fewer-runners) says. |
 
 `build` and the shards start after `checks` passes.
+
+## Fewer runners
+
+The organization can run 20 jobs at the same time, and a full run uses 10.
+These rules keep a release from waiting for a free runner:
+
+- **Draft pull request.** A draft runs `checks` only. `build` and the shards
+  are skipped. When the author marks the pull request ready, CI runs the full
+  suite. A draft cannot merge, so the skip hides no failure.
+- **Documentation and pictures only.** A pull request runs `checks` only when
+  every changed file is one of these: a Markdown file in the repository root,
+  a `.md`, `.png`, `.jpg`, `.gif`, or `.webp` file under `docs/`, or a
+  `.png`, `.jpg`, `.gif`, or `.webp` file under `brand/`. It still runs the
+  full suite when a tracked source file names the changed file, or the folder
+  of a picture, because a test can read it. `scripts/ci-heavy.mjs` applies the
+  rule. It runs the full suite for any other file and for any doubt, such as
+  an empty or unreadable list of changed files. The tests that read the docs
+  in `checks` (`scripts/testing/verification-docs.test.ts`) still run.
+- **Newer push to `main`.** A push to `main` cancels the older `main` run that
+  is still going. The newer commit holds the older one, so the newer run tests
+  both. A manual start is never cancelled.
+
+The `CI` gate passes a skipped `build` or shard only for a draft or a
+documentation-only pull request. In every other run, a skipped job fails the
+gate.
 
 ## Fork pull requests
 
@@ -143,6 +172,34 @@ artifacts expire and the job fails. Then start a new run.
 - It publishes only to this repository's own package, with no build cache, so
   another run cannot change the image.
 
+## Bug report Worker workflow
+
+`bug-reports.yml` checks the Worker in `cloudflare/bug-reports/`. It is not
+part of `ci.yml` and not part of the `CI` gate. A pull request that does not
+change the Worker adds no job. A draft pull request does not start the job, as
+in `ci.yml` (see [Fewer runners](#fewer-runners)). Marking the pull request ready
+starts it.
+
+| Start | What it does |
+| --- | --- |
+| A pull request, or a push to `main`, that changes `cloudflare/bug-reports/**` or `bug-reports.yml` | The job `bug-reports`: `pnpm install --frozen-lockfile`, `pnpm bugs:check` (the type check), and `pnpm bugs:test` (the tests) |
+| Run by hand | The same job |
+
+`scripts/ci-workflow.test.ts` holds these rules for it:
+
+- The workflow has one job. The job has no permission, no secret, and no
+  environment.
+- The job never deploys. Deploying the Worker stays a manual step (see the
+  [Worker README](../cloudflare/bug-reports/README.md)).
+- The two `paths` filters name the Worker folder and the workflow file.
+- The job skips a draft pull request. A new push cancels the older run of the
+  same pull request or of `main`. A manual start never cancels or is cancelled.
+- All the rules of [Fork pull requests](#fork-pull-requests) hold for it too.
+
+Do not add `bug-reports` to the `main` branch ruleset. A required check that
+does not run on every pull request keeps the pull requests that skip it
+waiting forever. Read the result on a pull request that changes the Worker.
+
 ## Required check
 
 The `main` branch ruleset requires the one check `CI`. The gate runs with
@@ -216,7 +273,7 @@ Seira took over a larger CI from the project it forked. These parts are gone:
 | Windows and macOS shards, Windows and macOS smokes | CI tests on Linux only. `package-windows.yml` and `package-macos.yml` run the packaged smokes for their packages. |
 | Packaged server, browser identity, browser driver, and UI smokes | Heavy jobs that download browsers and binaries. Run them locally when you change that area. |
 | Behavior evals, FOSS build, relay, control plane, broker deploy | Not part of the Seira app, or needed a secret. |
-| Release, Linux packaging, container image, npm, and docs-site workflows | A maintainer releases by hand. See [Releasing](releasing.md). |
+| Release, Linux packaging, and docs-site workflows | A maintainer releases by hand. See [Releasing](releasing.md). |
 | Server installer, server update, Podman, and connector tests | They install container images that Seira does not publish. |
 | Contributor license check | Seira has no source-available folder. |
 
@@ -241,19 +298,21 @@ Then add the `CI` check (source: GitHub Actions) to the `main` branch ruleset.
 ### The `release` environment
 
 `package-macos.yml` reads the Apple signing secrets from the environment
-`release`, and the `publish` job of `server-image.yml` uses it to write to
-`ghcr.io`. An organization admin creates it in **Settings → Environments**:
+`release`, the `publish` job of `server-image.yml` uses it to write to
+`ghcr.io`, and the `publish` job of `npm-publish.yml` uses it to publish to
+npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin creates it in **Settings → Environments**:
 
 | Setting | Value |
 | --- | --- |
 | Required reviewers | None. The `release-approval` environment holds the approval. |
-| Deployment branches and tags | Selected branches and tags: `main` only |
+| Deployment branches and tags | Selected branches and tags: `main` and the tag pattern `v*` |
 | Environment secrets | The five Apple secrets (see [Releasing](releasing.md#macos-signing-secrets)) |
 
 - A job in `release` never waits for a person. The `approval` job before it
   decides if a maintainer must approve the run.
-- With `main` as the only deployment branch, a workflow file changed on another
-  branch cannot read the secrets.
+- With `main` and `v*` as the only deployment refs, a workflow file changed on
+  another branch cannot read the secrets. Only an organization admin can create
+  a `v*` tag.
 - Do not store the Apple secrets as repository or organization secrets. Every
   workflow can read those without an approval.
 

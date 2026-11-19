@@ -2,14 +2,15 @@
 // both ways of connecting end to end, the bot's turn gets the postiz tools and calls one, the token and the key reach
 // Postiz and nothing else (no answer, transcript, prompt, log or data file), a refused key or address is said plainly,
 // a revoked credential shows as such, and disconnecting takes the tools away.
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
 import { launchVerificationServer, runControlSeira, type VerificationServer } from "../scripts/control-seira.ts";
 import { CONFIG_BACKUP_PREFIX } from "./config-backup.ts";
 import { FAKE_POSTIZ_KEY, startFakePostiz, type FakePostiz } from "./testing/fake-postiz.ts";
+import { filesHolding as filesHoldingText } from "./testing/files-holding.ts";
 
 type Dump = { prompt?: string; systemPrompt: string | null; mcpConfig: { mcpServers: Record<string, { url?: string; alwaysLoad?: boolean }> } };
 
@@ -50,19 +51,8 @@ async function turn(botId: string, calls: unknown[]): Promise<Dump> {
 /** Files under the data folder that hold this text, the fake engine's own capture of its launch files aside.
  * The dated copies of the settings file count as the settings file itself: config.json holds every credential
  * of the install, so a copy of it beside it holds nothing that config.json does not hold. */
-function filesHolding(secret: string): string[] {
-  const found: string[] = [];
-  const walk = (dir: string) => {
-    for (const name of readdirSync(dir)) {
-      const path = join(dir, name);
-      const stat = statSync(path);
-      if (stat.isDirectory()) walk(path);
-      else if (stat.isFile() && stat.size < 20_000_000 && path !== fixture.fixtureDumpPath && !name.startsWith(CONFIG_BACKUP_PREFIX) && readFileSync(path).includes(secret)) found.push(relative(fixture.info.dataDir, path));
-    }
-  };
-  walk(fixture.info.dataDir);
-  return found.sort();
-}
+const filesHolding = (secret: string): string[] =>
+  filesHoldingText(fixture.info.dataDir, secret, { skip: (path, name) => path === fixture.fixtureDumpPath || name.startsWith(CONFIG_BACKUP_PREFIX) });
 
 const draft = { socialPost: [{ integrationId: "int_linkedin", date: "2026-11-02T09:00:00.000Z", type: "draft", shortLink: false, isPremium: false, settings: [],
   postsAndComments: [{ content: "<p>We launched.</p>" }] }] };

@@ -2,7 +2,7 @@
 
 Seira ships three desktop packages:
 
-- a Linux x64 AppImage, which a maintainer builds by hand on a Linux machine;
+- a Linux x64 AppImage and Debian package, which a maintainer builds by hand on a Linux machine;
 - a Windows x64 installer, which the `Package Windows` workflow builds on a
   GitHub-hosted Windows runner;
 - macOS apps for Apple silicon (arm64) and Intel (x64), which the
@@ -11,7 +11,8 @@ Seira ships three desktop packages:
   Until a maintainer sets them, a release has no macOS assets.
 
 A maintainer creates the tag and the GitHub release, and attaches every file
-by hand. No workflow creates a tag or publishes a release.
+by hand. No workflow creates a tag or publishes a release. The only package
+that a workflow publishes is the npm package (see [Publish to npm](#publish-to-npm)).
 
 Only the maintainers can release:
 
@@ -21,10 +22,15 @@ Only the maintainers can release:
   tags for everyone except the organization admins.
 - GitHub Actions has no bypass on either ruleset, and its token can only read
   the repository (see [CI](ci.md)).
+- A new push to `main` cancels the older `main` CI run that is still going
+  (see [CI](ci.md#fewer-runners)). When you release, rely on the `CI` check of
+  the release pull request, or on the run of the newest `main` commit. A
+  cancelled run of an older commit is not a failure.
 
 The server image `ghcr.io/seira-bot/seira:v<version>` comes from the
-`Server image` workflow after the release (step 7). `.deb` and npm packages
-are not part of a Seira release.
+`Server image` workflow after the release (step 7). The npm package
+`@seira-bot/seira` comes from the `npm publish` workflow (see
+[Publish to npm](#publish-to-npm)).
 
 ## Assets
 
@@ -32,9 +38,12 @@ Each release has these Linux assets:
 
 | Asset | What it is |
 | --- | --- |
-| `Seira-<version>-x86_64.AppImage` | The desktop app |
+| `Seira-<version>-x86_64.AppImage` | The portable app |
+| `Seira-<version>-amd64.deb` | The Debian package. Ubuntu 24.04 needs it: there, only its setuid helper keeps the Chromium sandbox on. |
 | `latest-linux.yml` | The update feed. Installed apps read it to find the new version. |
-| `SHA256SUMS-linux-x64.txt` | The SHA-256 of the AppImage |
+| `Seira.AppImage` | A byte-identical copy of the AppImage, so `/releases/latest/download/Seira.AppImage` always works |
+| `Seira-amd64.deb` | A byte-identical copy of the Debian package. The docs and the AppImage's install message name this file. |
+| `SHA256SUMS-linux-x64.txt` | The SHA-256 of the AppImage, the Debian package, and both copies |
 
 And these Windows assets:
 
@@ -104,9 +113,13 @@ pnpm package:linux
 - The packaging step needs more than the default 2 GB Node heap.
 - It also writes several GB of temporary files. A small `/tmp` in memory fills
   up and the build stops with `EDQUOT` or `ENOSPC`, so point `TMPDIR` at a disk.
+- The Debian package step runs `fpm`, and its bundled Ruby needs `libcrypt.so.1`.
+  Ubuntu and Debian have it. On Arch, install `libxcrypt-compat` first, or the
+  build stops with `fpm process failed 127`.
 
 The build writes `release/Seira-<version>-x86_64.AppImage`,
-`release/latest-linux.yml`, and `release/linux-unpacked/`.
+`release/Seira-<version>-amd64.deb`, `release/latest-linux.yml`, and
+`release/linux-unpacked/`.
 
 ### 3. Check the package
 
@@ -115,18 +128,36 @@ grep -E '^(owner|repo):' release/linux-unpacked/resources/app-update.yml
 # owner: seira-bot
 # repo: seira
 grep -E '^(version|path):' release/latest-linux.yml
-./release/Seira-<version>-x86_64.AppImage --version
-(cd release && sha256sum Seira-<version>-x86_64.AppImage > SHA256SUMS-linux-x64.txt)
+node scripts/verify-linux-package.mjs release
+```
+
+`scripts/verify-linux-package.mjs` needs `dpkg-deb`, `desktop-file-validate`, and
+`unsquashfs`. It checks the Debian package and the AppImage, and it fails when
+the AppImage can start without the Chromium sandbox.
+
+Then put the files to upload, and the copies with stable names, in their own
+folder. Keep `release/` as the build wrote it.
+
+```sh
+mkdir -p .omb-scratch/linux-upload && cd .omb-scratch/linux-upload
+cp ../../release/Seira-<version>-x86_64.AppImage ../../release/Seira-<version>-amd64.deb ../../release/latest-linux.yml .
+cp Seira-<version>-x86_64.AppImage Seira.AppImage
+cp Seira-<version>-amd64.deb Seira-amd64.deb
+sha256sum Seira-<version>-x86_64.AppImage Seira-<version>-amd64.deb Seira.AppImage Seira-amd64.deb \
+  > SHA256SUMS-linux-x64.txt
+cd ../..
 ```
 
 - If `app-update.yml` names another owner or repository, stop. Installed apps
   would look for updates in the wrong place.
 - The version and path in `latest-linux.yml` must match the AppImage.
-- Start the AppImage once with a temporary data folder and a free port. Do not
+- Start the app once with a temporary data folder and a free port. Do not
   point it at the data folder of an installed copy.
-
-`scripts/verify-linux-package.mjs` also expects a `.deb`, so it does not apply
-to an AppImage-only build.
+- On a host that blocks user namespaces, such as stock Ubuntu 24.04, the
+  AppImage shows its install message and stops. This is correct.
+- `scripts/linux-store/deb-vm-test.sh` installs the Debian package and starts
+  the AppImage in an Ubuntu 24.04 VM with the stock settings. Each `RESULT`
+  line records one check.
 
 ### 4. Merge, tag, and publish
 
@@ -135,12 +166,31 @@ gh pr merge <pr number> --squash
 git fetch origin
 git tag -a v<version> -m "Seira v<version>" <merge commit sha>
 git push origin v<version>
+cd .omb-scratch/linux-upload
 gh release create v<version> --verify-tag --title "Seira v<version>" --generate-notes \
-  release/Seira-<version>-x86_64.AppImage release/latest-linux.yml release/SHA256SUMS-linux-x64.txt
+  Seira-<version>-x86_64.AppImage Seira-<version>-amd64.deb latest-linux.yml \
+  Seira.AppImage Seira-amd64.deb SHA256SUMS-linux-x64.txt
 ```
 
 Tag the squash commit on `main`, not the release branch's last commit. The
 tag push works only for an organization admin.
+
+### Publish the Flatpak repo
+
+Seira has a signed Flatpak repository at `https://flatpak.seira.bot/repo/`.
+Only the release owner publishes to it, and only from a release tag. See the
+[Flatpak packaging notes](../packaging/flatpak/README.md#publish) for the
+settings and the recovery steps.
+
+```sh
+git switch --detach v<version>
+scripts/linux-store/publish-flatpak.sh v<version>
+gh release upload v<version> release/Seira-<version>-x86_64.flatpak --repo seira-bot/seira
+```
+
+- Use `--init-repo` for the first publish only.
+- The script stops when HEAD is not the tag, the tree is not clean, or `package.json` has another version.
+- The bundle `Seira-<version>-x86_64.flatpak` adds the Seira remote when a person installs it.
 
 ### 5. Build and attach the Windows installer
 
@@ -155,8 +205,10 @@ uploads anything:
 - it makes sure that `latest.yml` names the installer with the correct
   SHA-512 and size.
 
-It uploads the five Windows assets as one workflow artifact. It cannot publish
-them: its token can only read the repository.
+It uploads the five Windows assets as one workflow artifact. It uploads the
+Microsoft Store package as a second artifact (see
+[Microsoft Store (MSIX)](#microsoft-store-msix)). It cannot publish them: its
+token can only read the repository.
 
 ```sh
 gh workflow run package-windows.yml --repo seira-bot/seira -f ref=v<version>
@@ -191,6 +243,48 @@ without a certificate. electron-updater checks the update signature only when
 `publisherName` is set, so every installed app would reject every update. When
 Seira gets a certificate, keep its subject the same for each later
 certificate, or list the old and the new subject in `publisherName`.
+
+#### Microsoft Store (MSIX)
+
+The same workflow builds an MSIX package for the Microsoft Store. The file is
+`Seira-<version>-x64.appx`. It is in a separate artifact,
+`seira-<version>-windows-x64-store`, with `SHA256SUMS-windows-x64-store.txt`.
+Do not attach this package to the GitHub release.
+
+```sh
+gh run download <run id> --repo seira-bot/seira --name seira-<version>-windows-x64-store
+sha256sum -c SHA256SUMS-windows-x64-store.txt
+```
+
+Before it uploads the package, the workflow extracts it and checks that:
+
+- the manifest names the display name and the publisher display name of Seira;
+- the manifest declares the `openmausbot` protocol, the `runFullTrust`
+  capability, and a start-up task that is off by default;
+- the package version is the mapped version (see below);
+- each logo in `build/appx/` is in the package with the same SHA-256, and no
+  sample logo of electron-builder is in the package.
+
+Rules for the package:
+
+- The Store rejects a version that starts with 0, and it needs a last part
+  of 0. The build maps `<major>.<minor>.<patch>` to
+  `<major+1>.<minor>.<patch>.0`. Version `0.1.179` becomes `1.1.179.0`.
+  `scripts/appx-manifest.mjs` does this. The build stops when it cannot map
+  the version. The app still reports `0.1.179`.
+- The package has no signature. The Store signs the package after you upload it.
+  A person cannot install the file from the workflow without a test signature.
+- Before the first upload, set `appx.identityName` and `appx.publisher` in
+  `electron-builder.yml`. Copy both values from the Product identity page of
+  the product in Partner Center. The Store rejects a package with other values.
+- Upload the package to Partner Center by hand. Submit each release as a new
+  submission of the same product.
+- The app does not update itself in this package. The Store delivers updates.
+- The app does not write a Windows Run entry in this package, because Windows
+  redirects that write. A person turns on Open at login in Startup apps in
+  Windows Settings. Settings tells the person this.
+- Change the logos only in `brand/build_logo.py`. Run `python3 brand/build_logo.py`
+  and `python3 brand/check_logo.py`, and commit the files in `build/appx/`.
 
 ### 6. Build and attach the macOS apps
 
@@ -306,6 +400,68 @@ sha256sum -c SHA256SUMS-mac.txt
 
 Each check must print `OK`. If a check fails, delete the release assets and
 upload them again. Never edit an asset in place.
+
+## Publish to npm
+
+The `npm publish` workflow (`.github/workflows/npm-publish.yml`) publishes
+`@seira-bot/seira` with npm Trusted Publishing. No npm token exists in GitHub
+or on a maintainer's machine. npm trusts the workflow file and the `release`
+environment through the GitHub OIDC token.
+
+It starts in one of two ways:
+
+```sh
+# Automatic: it starts when a maintainer publishes the GitHub release (step 4).
+# By hand, from main:
+gh workflow run npm-publish.yml --repo seira-bot/seira --ref main -f tag=v<version>
+gh run watch <run id> --repo seira-bot/seira --exit-status
+npm view @seira-bot/seira@<version> version
+```
+
+- The tag must be equal to `v` and the version in `package.json`. The workflow
+  stops when they differ.
+- The workflow finds the commit of the tag first, and builds that commit only.
+- A run that a maintainer starts needs no approval. For another person, a
+  maintainer approves `release-approval` (see
+  [CI](ci.md#the-release-approval-environment)). The `publish` job then uses
+  the `release` environment, as the other release jobs do.
+- When the version is already on npm, the workflow skips the build and the
+  publish. A repeated run changes nothing.
+- npm adds a provenance statement that links the package to this commit and run.
+- The `release` environment accepts the `main` branch and the `v*` tags, so a
+  run that starts from a published release can use it. The `release-approval`
+  environment accepts `main` only. So a run that starts from a published
+  release, and that a person outside the maintainers starts, fails at the
+  `approval` job. It does not publish. This is intended. That person starts the
+  workflow by hand from `main` instead.
+- A person who is not a maintainer cannot re-run a failed `publish` job alone.
+  The job reuses no approval of an earlier attempt. Re-run all jobs for a new
+  approval, or ask a maintainer to re-run.
+
+### One-time npm setup
+
+An organization owner does this once, on npmjs.com. The workflow cannot do it.
+
+1. Sign in to npmjs.com as an owner of the `@seira-bot` organization.
+2. Open the package `@seira-bot/seira`, then **Settings**.
+3. In **Trusted Publisher**, select **GitHub Actions** and enter:
+
+   | Field | Value |
+   | --- | --- |
+   | Organization or user | `seira-bot` |
+   | Repository | `seira` |
+   | Workflow filename | `npm-publish.yml` |
+   | Environment name | `release` |
+
+4. Save. Optionally, set **Publishing access** to require two-factor
+   authentication and disallow tokens, so that only this workflow can publish.
+
+The first version, 0.1.178, was published by hand. Trusted Publishing needs a
+package that already exists on npm, so a first publish cannot use it. Every
+later version comes from the workflow.
+
+If a run fails with an authentication error, check that the four fields above
+match the workflow file name and the environment name exactly.
 
 ## macOS signing secrets
 

@@ -339,6 +339,9 @@ sent mentions, multiline scrolling and responsive wrapping in real chat views.
 The [Group and Goal Local VM recipe](group-local-vm.md) checks per-speaker
 desktop routing, cancellation, and computer authority cleanup.
 
+The [desktop startup timeline](desktop-startup.md) records the time of each
+startup phase and measures the median of each phase on the packaged Linux app.
+
 ## Evidence
 
 The [Gemini speech fixture](gemini-speech.md) checks write-only credentials,
@@ -351,6 +354,10 @@ offline provider in an isolated server.
 The [persistence responsiveness benchmark](persistence-performance.md) measures
 synthetic message/log bursts and history scans, with isolated chat, visibility
 and packaged-worker checks. It is not a production capacity qualification.
+
+The [desktop performance bench](desktop-performance.md) measures bundle size,
+start-up, idle work, streaming and a large workspace, and fails when a metric
+passes its budget.
 
 The [backup responsiveness benchmark](backup-responsiveness.md) compares in-process
 and worker exports using synthetic data, with isolated backup workflow checks.
