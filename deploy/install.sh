@@ -2,10 +2,10 @@
 # Seira on a server of your own: checks the server, then installs the Seira server with HTTPS on your domain.
 # Running it again repairs or updates the install and never touches your data.
 #
-#   curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh | sudo sh -s -- --domain maus.example.com
-#   ... | sudo sh -s -- --check --domain maus.example.com    only checks the server; changes nothing
+#   curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh | sudo sh -s -- --domain seira.example.com
+#   ... | sudo sh -s -- --check --domain seira.example.com    only checks the server; changes nothing
 #   ... | sudo sh -s -- --uninstall                          stops the server; keeps your data
-#   ... | sudo sh -s -- --domain maus.example.com <code>     also connects the server to Seira with a one-time code
+#   ... | sudo sh -s -- --domain seira.example.com <code>     also connects the server to Seira with a one-time code
 #
 # Nothing runs until the last line calls main, so a download that is cut off part-way runs nothing. It sends no
 # telemetry. The addresses it contacts are the ones the checks name: the image registries, Let's Encrypt, GitHub's
@@ -72,8 +72,8 @@ command_line() { # what to run again, as the person ran it
 }
 
 usage() {
-  say "Usage: $(command_line '--domain maus.example.com')"
-  say "       $(command_line '--check --domain maus.example.com')   only checks this server; changes nothing"
+  say "Usage: $(command_line '--domain seira.example.com')"
+  say "       $(command_line '--check --domain seira.example.com')   only checks this server; changes nothing"
   say "       $(command_line '--uninstall')                        stops the server; keeps your data"
   say ""
   say "  --domain NAME      the name people will open, already pointing at this server"
@@ -115,9 +115,9 @@ parse() {
   DOMAIN=$(printf '%s' "$DOMAIN" | tr '[:upper:]' '[:lower:]')
   case "$DOMAIN" in
     "") ;;
-    *[!a-z0-9.-]* | .* | *. | -* | *..*) fail "$DOMAIN is not a domain name. Give the name alone, like maus.example.com, without https:// or a path." ;;
+    *[!a-z0-9.-]* | .* | *. | -* | *..*) fail "$DOMAIN is not a domain name. Give the name alone, like seira.example.com, without https:// or a path." ;;
     *.*) ;;
-    *) fail "$DOMAIN is not a full domain name. Give a name like maus.example.com." ;;
+    *) fail "$DOMAIN is not a full domain name. Give a name like seira.example.com." ;;
   esac
   case "$EMAIL" in
     "") ;;
@@ -1077,9 +1077,9 @@ finish() {
 }
 
 run_install() {
-  need_root "--domain ${DOMAIN:-maus.example.com}"
+  need_root "--domain ${DOMAIN:-seira.example.com}"
   if [ -z "$DOMAIN" ]; then DOMAIN=$(env_value DOMAIN); fi
-  [ -n "$DOMAIN" ] || fail "Say which name people will open, like this: $(command_line '--domain maus.example.com')"
+  [ -n "$DOMAIN" ] || fail "Say which name people will open, like this: $(command_line '--domain seira.example.com')"
   preflight
   if [ "$FAILED" != 0 ]; then
     report_docker_missing

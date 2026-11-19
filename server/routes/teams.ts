@@ -58,7 +58,7 @@ export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
       if (body?.format !== "backup") return json(res, 400, { error: "Only backups are exported here. Share a bot or a department as a template instead." });
       const botShown = deps.botShown?.(auth), exportable = botShown ? store.bots.filter((bot) => botShown(bot.id)) : store.bots;
       const profileName = deps.authorName(auth);
-      const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : profileName ? `${profileName}'s Team` : "My OpenMaus Team";
+      const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : profileName ? `${profileName}'s Team` : "My Seira Team";
       if (exportable.length === 0) return json(res, 400, { error: "Create a bot before exporting your team" });
       try {
         return json(res, 200, createTeamBackup(store, routinesFor(auth), name, deps.threadShown?.(auth)));

@@ -91,9 +91,9 @@ parse() {
   esac
   case "$PUBLIC_URL" in
     "" | https://*) ;;
-    *) fail "--public-url takes the https:// address people open, like https://maus.example.com." ;;
+    *) fail "--public-url takes the https:// address people open, like https://seira.example.com." ;;
   esac
-  case "$PUBLIC_URL" in *[!A-Za-z0-9:/._-]*) fail "--public-url takes a plain address, like https://maus.example.com." ;; esac
+  case "$PUBLIC_URL" in *[!A-Za-z0-9:/._-]*) fail "--public-url takes a plain address, like https://seira.example.com." ;; esac
   UNIT="$UNIT_DIR/$NAME.container"
 }
 
