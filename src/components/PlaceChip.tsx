@@ -11,6 +11,7 @@ import { useStore, type Bot, type Task } from "@/state/store";
 import type { PlaceView } from "../../shared/place-view";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
 import { PlaceIcon } from "./PlaceIcon";
+import { COMPOSER_CHIP } from "./composer-simple";
 import type { SidebarMenuItem } from "./SidebarPopoverMenu";
 
 export type PlaceAvailability = Record<Place, boolean>;
@@ -95,11 +96,13 @@ const DESCRIPTION: Record<Place, "computer.dest.cloudDesc" | "computer.dest.vmDe
   cloud: "computer.dest.cloudDesc", vm: "computer.dest.vmDesc", local: "computer.dest.localDesc", browser: "computer.dest.browserDesc",
 };
 
-export function PlaceChip({ bot, task, live, disabled = false, onPin }: {
+export function PlaceChip({ bot, task, live, disabled = false, chip = false, onPin }: {
   bot: Bot;
   task?: Pick<Task, "surface" | "surfaceAuto"> | null;
   live: boolean;
   disabled?: boolean;
+  /** Advanced composer: the place's name beside its icon, as a quiet chip. */
+  chip?: boolean;
   onPin: (surface: Place | null) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -139,13 +142,14 @@ export function PlaceChip({ bot, task, live, disabled = false, onPin }: {
         data-testid="place-chip"
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          "relative flex size-8 shrink-0 items-center justify-center rounded-full text-ink-secondary hover:bg-control hover:text-ink",
+          chip ? cn(COMPOSER_CHIP, "relative") : "relative flex size-8 shrink-0 items-center justify-center rounded-full text-ink-secondary hover:bg-control hover:text-ink",
           pinned && "text-accent hover:text-accent",
           (disabled || off) && "cursor-not-allowed opacity-45 hover:bg-transparent",
         )}
       >
-        <PlaceIcon place={effective} size={16} className="shrink-0 opacity-80" aria-hidden="true" />
-        {showLive && <span className="absolute right-1.5 top-1.5 size-1.5 animate-pulse rounded-full bg-success" aria-label={t("place.live")} />}
+        <PlaceIcon place={effective} size={chip ? 14 : 16} className={cn("shrink-0", !chip && "opacity-80")} aria-hidden="true" />
+        {chip && <span className="truncate">{label}</span>}
+        {showLive && <span className={cn("absolute size-1.5 animate-pulse rounded-full bg-success", chip ? "start-1.5 top-1" : "right-1.5 top-1.5")} aria-label={t("place.live")} />}
       </button>
       {motion.shown && (
         <div role="menu" aria-label={t("place.chipTitle")} className={cn("absolute bottom-full left-0 z-40 mb-2 w-[300px] overflow-hidden", MENU_SHEET, motion.className)} {...motion.exitProps}>
