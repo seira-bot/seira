@@ -96,7 +96,8 @@ function harness(options: { fake?: Record<string, string>; timeouts?: Partial<Co
     },
     clientVersion: "0.0.0-test",
     log: (line) => logs.push(line),
-    timeouts: { answerMs: 5_000, stopMs: 2_000, killMs: 2_000, approvalMs: 60_000, rpcMs: 5_000, settleMs: 50, ...options.timeouts },
+    timeouts: { answerMs: 5_000, stopMs: 2_000, killMs: 2_000, approvalMs: 60_000, rpcMs: 5_000, settleMs: 50,
+      spokenCharsPerSecond: Number.POSITIVE_INFINITY, echoTailMs: 20, ...options.timeouts },
     ...options.deps,
   });
   const read = () => (existsSync(dump) ? JSON.parse(readFileSync(dump, "utf8")) : { calls: [], decision: null });
@@ -741,7 +742,7 @@ describe("codexLiveVoice approvals by voice", () => {
     await h.start();
     await until(() => h.events.some((event) => event.type === "approval"));
     expect(h.events).toContainEqual({ type: "approval", outcome: "accept" });
-    expect(asked(h)).toEqual({ threadId: "codex-thread-1", text: "Codex wants to run a command: rm -rf scratch. Do you allow it? Say yes or no." });
+    expect(asked(h)).toEqual({ threadId: "codex-thread-1", text: "I need your OK to run this command: rm -rf scratch. Should I go ahead? Say yes or no." });
     await until(() => h.decision() !== null);
     expect(h.decision()).toEqual({ decision: "accept" });
   });
@@ -763,12 +764,54 @@ describe("codexLiveVoice approvals by voice", () => {
     expect(asked(h)).toBeUndefined();
   });
 
-  it("declines a long command at once and tells the user", async () => {
+  it("declines a multi-part command at once and tells the user", async () => {
     const h = harness({ fake: { FAKE_CODEX_REALTIME_MODE: "approval", FAKE_CODEX_REALTIME_COMMAND: "echo one; echo two" } });
     await h.start();
     await until(() => h.decision() !== null);
     expect(h.decision()).toEqual({ decision: "decline" });
-    expect(asked(h).text).toBe("Codex asked to run a long command. I declined it. Ask in the chat to run it.");
+    expect(asked(h).text).toBe("I need to run a command that I cannot read out in full, so I did not run it. Ask me in the chat to run it.");
+  });
+
+  it("declines a network request at once and never asks", async () => {
+    const network = { command: null, networkApprovalContext: { host: "example.com", protocol: "https" } };
+    const h = harness({ fake: { FAKE_CODEX_REALTIME_MODE: "approval", FAKE_CODEX_REALTIME_APPROVAL: JSON.stringify({ params: network }) } });
+    await h.start();
+    await until(() => h.decision() !== null);
+    expect(h.decision()).toEqual({ decision: "decline" });
+    expect(asked(h).text).toBe("I need more access than I have now, so I did not do it. Ask me in the chat to allow it.");
+  });
+
+  const fileChange = (thread?: string, change: unknown = { path: "src/app.ts", kind: { type: "update", move_path: null }, diff: "" }) => ({
+    FAKE_CODEX_REALTIME_MODE: "approval",
+    FAKE_CODEX_REALTIME_APPROVAL: JSON.stringify({ method: "item/fileChange/requestApproval" }),
+    FAKE_CODEX_REALTIME_ITEM: JSON.stringify({
+      ...(thread ? { threadId: thread } : {}),
+      item: { id: "realtime-item-1", type: "fileChange", status: "inProgress", changes: [change] },
+    }),
+  });
+
+  it("asks about a file change with the names of its started item and accepts a yes", async () => {
+    const h = harness({ fake: fileChange() });
+    await h.start();
+    await until(() => h.decision() !== null);
+    expect(asked(h).text).toBe("I need your OK to change this file: src/app.ts. Should I go ahead? Say yes or no.");
+    expect(h.decision()).toEqual({ decision: "accept" });
+  });
+
+  it("declines at once a file change outside the working folder", async () => {
+    const h = harness({ fake: fileChange(undefined, { path: "/etc/hosts", kind: { type: "delete" }, diff: "" }) });
+    await h.start();
+    await until(() => h.decision() !== null);
+    expect(h.decision()).toEqual({ decision: "decline" });
+    expect(asked(h).text).toBe("I need to change files that I cannot read out in full, so I did not change them. Ask me in the chat to change them.");
+  });
+
+  it("declines a file change whose item started on another thread", async () => {
+    const h = harness({ fake: fileChange("other-thread") });
+    await h.start();
+    await until(() => h.decision() !== null);
+    expect(h.decision()).toEqual({ decision: "decline" });
+    expect(asked(h).text).toBe("I need to change files that I cannot read out in full, so I did not change them. Ask me in the chat to change them.");
   });
 
   it("does not take an answer that began before the question", async () => {

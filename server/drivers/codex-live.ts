@@ -9,7 +9,7 @@ import {
   type EngineLiveVoiceSession,
   type EngineLiveVoiceStart,
 } from "../contracts.ts";
-import { createLiveCodexApproval } from "../live-codex-approval.ts";
+import { createLiveCodexApproval, fileChangeOf, type LiveCodexFileChange } from "../live-codex-approval.ts";
 import { decodeCodexSelection } from "./codex-catalog.ts";
 import { codexShellDisabled } from "./codex-guest.ts";
 import { codexLiveAppServerArgs } from "./codex-own-login-args.ts";
@@ -32,6 +32,10 @@ export interface CodexLiveTimeouts {
   rpcMs: number;
   /** Quiet time after a spoken answer before it counts. Defaults to the consent window of chat calls. */
   settleMs?: number;
+  /** Speaking rate that estimates when the voice stops playing an approval question. */
+  spokenCharsPerSecond?: number;
+  /** Time after that estimate in which user speech can still be the voice's echo. */
+  echoTailMs?: number;
 }
 
 export interface LiveCodexApprovalParams {
@@ -85,6 +89,13 @@ export function codexVersionTooOld(output: string | null): boolean {
 }
 
 const wait = (ms: number) => new Promise<void>((resolve) => { setTimeout(resolve, ms).unref?.(); });
+
+/** Every change of a `fileChange` item, or null when one is malformed. */
+function fileChangesOf(changes: unknown): LiveCodexFileChange[] | null {
+  if (!Array.isArray(changes) || changes.length === 0) return null;
+  const parsed = changes.map((change) => fileChangeOf(change?.path, change?.kind));
+  return parsed.includes(null) ? null : parsed as LiveCodexFileChange[];
+}
 
 export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
   const timeouts: CodexLiveTimeouts = { ...DEFAULT_TIMEOUTS, ...deps.timeouts };
@@ -155,12 +166,17 @@ export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
       counts.speeches++;
       request("thread/realtime/appendSpeech", { threadId, text }).catch(() => { counts.appendFailures++; });
     };
+    const changedFiles = new Map<string, LiveCodexFileChange[]>();
     const approval = createLiveCodexApproval({
       speak: appendSpeech,
       onOutcome: (outcome) => { counts.approvals++; emit({ type: "approval", outcome }); },
       timeoutMs: timeouts.approvalMs,
       threadId: () => threadId,
+      cwd: input.cwd,
+      files: (params) => (typeof params.itemId === "string" ? changedFiles.get(params.itemId) ?? null : null),
       settleMs: timeouts.settleMs,
+      spokenCharsPerSecond: timeouts.spokenCharsPerSecond,
+      echoTailMs: timeouts.echoTailMs,
     });
 
     const terminate = async () => {
@@ -215,6 +231,7 @@ export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
           break;
         case "thread/realtime/transcript/delta":
           if (params.role === "user") approval.userSpeech();
+          if (params.role === "assistant") approval.voiceSpeech();
           if ((params.role === "user" || params.role === "assistant") && typeof params.delta === "string") {
             counts.transcripts++;
             emit({ type: "transcript", role: params.role, delta: params.delta });
@@ -222,12 +239,20 @@ export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
           break;
         case "thread/realtime/transcript/done":
           if (params.role === "user" && typeof params.text === "string") approval.heard(params.text);
+          if (params.role === "assistant") approval.voiceDone(typeof params.text === "string" ? params.text : "");
           break;
         case "turn/started":
+          emit({ type: "working" });
+          break;
         case "item/started":
+          if (params.threadId === threadId && params.item?.type === "fileChange" && typeof params.item.id === "string") {
+            const changes = fileChangesOf(params.item.changes);
+            if (changes) changedFiles.set(params.item.id, changes);
+          }
           emit({ type: "working" });
           break;
         case "item/completed":
+          if (params.item?.type === "fileChange" && typeof params.item.id === "string") changedFiles.delete(params.item.id);
           emit({ type: "working" });
           if (params.item?.type === "agentMessage" && typeof params.item.text === "string" && params.item.text.trim()) {
             keptAnswer = params.item.text;

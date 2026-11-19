@@ -33,8 +33,9 @@
 //   FAKE_CODEX_ACCOUNT_MODE  chatgpt (default) | api-key | none | unsupported | error | hang
 //   FAKE_CODEX_ACCOUNT  chatgpt (default) | apikey | none; wins over FAKE_CODEX_ACCOUNT_MODE
 //   FAKE_CODEX_REALTIME_MODE  thread/realtime/start: answer (default: sdp, then started) | silent (no sdp) | error (sdp, started, then
-//     thread/realtime/error) | exit (sdp, started, then exit 1) | approval (sdp, started, then a command approval request; the
-//     next appendSpeech is followed by a user transcript/done) | turn-answer (sdp, started, then an agent message and turn/completed) |
+//     thread/realtime/error) | exit (sdp, started, then exit 1) | approval (sdp, started, then a command approval request; each
+//     appendSpeech comes back as an assistant transcript/done, then 100 ms later as the user's answer) | turn-answer (sdp, started,
+//     then an agent message and turn/completed) |
 //     working (sdp, started, then turn/started, item/started, item/completed and turn/completed of the call thread, no transcript) |
 //     working-other-thread (the same steps for another thread) | closed-early (thread/realtime/closed with no sdp) |
 //     error-early (thread/realtime/error with no sdp)
@@ -42,6 +43,7 @@
 //   FAKE_CODEX_REALTIME_APPROVAL  approval mode: JSON {method, params} merged over the default command request
 //   FAKE_CODEX_REALTIME_STALE  approval mode: "1" sends the user's answer as an utterance that began before the question
 //   FAKE_CODEX_REALTIME_COMMAND  approval mode: the command Codex asks about (default "rm -rf scratch")
+//   FAKE_CODEX_REALTIME_ITEM  approval mode: JSON params merged over {threadId, turnId} of an item/started sent before the request
 //   FAKE_CODEX_RESUME_ERROR  JSON-RPC error rejecting thread/resume
 //   FAKE_CODEX_ARCHIVED  "1": thread/resume says the session is archived until thread/unarchive; "unarchive-fails": unarchive is refused too
 //   FAKE_CODEX_STARTUP_DELAY_MS  hold the initialize reply this long, like a loaded host
@@ -1156,6 +1158,9 @@ process.stdin.on("data", (chunk) => {
         } else if (realtimeMode === "approval") {
           const override = process.env.FAKE_CODEX_REALTIME_APPROVAL ? JSON.parse(process.env.FAKE_CODEX_REALTIME_APPROVAL) : {};
           if (process.env.FAKE_CODEX_REALTIME_STALE === "1") notify("thread/realtime/transcript/delta", { threadId, role: "user", delta: "ye" });
+          if (process.env.FAKE_CODEX_REALTIME_ITEM) {
+            notify("item/started", { threadId, turnId: "realtime-turn-1", ...JSON.parse(process.env.FAKE_CODEX_REALTIME_ITEM) });
+          }
           out({
             jsonrpc: "2.0", id: REALTIME_APPROVAL_ID, method: override.method ?? "item/commandExecution/requestApproval",
             params: { threadId, turnId: "realtime-turn-1", itemId: "realtime-item-1", command: process.env.FAKE_CODEX_REALTIME_COMMAND ?? "rm -rf scratch", cwd: process.cwd(), ...override.params },
@@ -1180,10 +1185,16 @@ process.stdin.on("data", (chunk) => {
       case "thread/realtime/appendSpeech": {
         dump();
         out({ jsonrpc: "2.0", id: msg.id, result: {} });
+        if (realtimeMode !== "approval") break;
+        const threadId = msg.params?.threadId;
+        notify("thread/realtime/transcript/delta", { threadId, role: "assistant", delta: msg.params?.text });
+        notify("thread/realtime/transcript/done", { threadId, role: "assistant", text: msg.params?.text });
         const spoken = process.env.FAKE_CODEX_REALTIME_REPLY ?? "yes";
-        if (realtimeMode === "approval" && spoken && process.env.FAKE_CODEX_REALTIME_STALE !== "1") {
-          notify("thread/realtime/transcript/delta", { threadId: msg.params?.threadId, role: "user", delta: spoken });
-          notify("thread/realtime/transcript/done", { threadId: msg.params?.threadId, role: "user", text: spoken });
+        if (spoken && process.env.FAKE_CODEX_REALTIME_STALE !== "1") {
+          setTimeout(() => {
+            notify("thread/realtime/transcript/delta", { threadId, role: "user", delta: spoken });
+            notify("thread/realtime/transcript/done", { threadId, role: "user", text: spoken });
+          }, 100);
         }
         break;
       }
