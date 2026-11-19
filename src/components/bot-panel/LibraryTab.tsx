@@ -13,7 +13,7 @@ import { skillSwitchOn, useManagedSkills } from "../bot-settings/SkillsSection";
 import type { SimplePageId } from "./page-registry";
 import { SeiraCharacter } from "../seira-character";
 import { Card, CardLabel, NavRow } from "./rows";
-import { panelMemoryNotes } from "./memory-notes";
+import { memoryValue } from "./advanced-sections";
 import { useMemoryDoc } from "./use-memory-doc";
 
 export interface LibraryItems {
@@ -63,14 +63,10 @@ export function LibraryTab({ bot, onOpen }: { bot: Bot; onOpen: (page: SimplePag
     if (phone) dispatch({ type: "toggleSettings", open: false });
   };
   const skillsOn = skills.skills.filter(skillSwitchOn).length;
-  const notes = memory.docs ? panelMemoryNotes(memory.docs).length : null;
-  const memoryValue = bot.memoryEnabled === false ? t("botPanel.memory.off")
-    : notes === null ? (memory.error ? t("botPanel.memory.nothingYet") : undefined)
-    : notes === 0 ? t("botPanel.memory.nothingYet")
-    : notes === 1 ? t("botPanel.memory.note") : t("botPanel.memory.notes", { count: notes });
+  const memoryText = memoryValue(bot, memory.docs, memory.error);
   const keeps = (
     <Card anchor="keeps">
-      <NavRow data-panel-page="memory" icon={Brain} title={t("botPanel.memoryRow")} value={memoryValue} onClick={() => onOpen("memory")} />
+      <NavRow data-panel-page="memory" icon={Brain} title={t("botPanel.memoryRow")} value={memoryText}onClick={() => onOpen("memory")} />
       <NavRow
         data-panel-page="skills"
         icon={Zap}

@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Search, X } from "lucide-react";
 
 import { useStore, type Bot, type BotSettingsSection } from "@/state/store";
-import { cn } from "@/lib/cn";
-import { useCaptionChrome } from "./DesktopCapabilities";
-import { BOT_SECTIONS, appSearchPhase, searchEmptyText, sectionLabel, sectionMatches } from "./bot-settings/sections";
+import { BOT_SECTIONS, appSearchPhase } from "./bot-settings/sections";
 import { useBotApps } from "./bot-settings/useBotApps";
 import { useBotSettingsDerived } from "./bot-settings/useBotSettingsDerived";
 import { OverviewSection } from "./bot-settings/OverviewSection";
@@ -24,13 +21,14 @@ import { UsageSection } from "./bot-settings/UsageSection";
 import { VisibilitySection } from "./bot-settings/VisibilitySection";
 import { t } from "@/lib/i18n";
 import { useAdvancedMode } from "@/lib/interface-mode";
+import { AdvancedPanel } from "./bot-panel/AdvancedPanel";
 import { BotPanel } from "./bot-panel/PanelShell";
 import { LibraryTab } from "./bot-panel/LibraryTab";
 import type { SimplePageId } from "./bot-panel/page-registry";
 import { BOT_PANEL_ID, sidePanelCls } from "./bot-panel/side-panel";
 import { HistoryRollbackDialog, useBotHistory, useBotOverview } from "./bot-settings/useBotOverview";
 import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
-import { ShareBotButton, useTeamName } from "./bot-access/ShareBotButton";
+import { useTeamName } from "./bot-access/ShareBotButton";
 
 /** Where the Library's memory, skills and folder rows lead in Advanced settings. */
 const LIBRARY_LINKS: Partial<Record<SimplePageId, BotSettingsSection>> = { memory: "memory", skills: "skills", folder: "access" };
@@ -43,7 +41,6 @@ export function BotSettingsDialog({ bot, overlay = false }: {
   const section = state.botSettingsSection;
   const derived = useBotSettingsDerived(bot);
   const dialogRef = useRef<HTMLElement | null>(null);
-  const { dragProps } = useCaptionChrome();
   const [query, setQuery] = useState("");
   const collapsed = !state.botSettingsExpandAccordion;
   const q = query.trim().toLowerCase();
@@ -59,7 +56,6 @@ export function BotSettingsDialog({ bot, overlay = false }: {
   // Connected apps load only once the person searches; their names find the Access section.
   const searchApps = useBotApps(bot, q !== "");
   const appNames = searchApps.apps.flatMap((app) => [app.label, app.slug]);
-  const visibleSections = sections.filter((entry) => sectionMatches(entry, q, appNames));
 
   const { overview, overviewError, prompt, promptError } = useBotOverview(bot, {
     overview: section === "overview" && !simpleView,
@@ -71,7 +67,7 @@ export function BotSettingsDialog({ bot, overlay = false }: {
     if (collapsed) return;
     if (q) { setQuery(""); return; }
     dialogRef.current?.querySelector(`[data-bot-settings-section="${section}"]`)
-      ?.scrollIntoView({ block: "nearest" });
+      ?.scrollIntoView({ block: "start" });
   }, [collapsed, section, q]);
 
   useEffect(() => {
@@ -183,101 +179,31 @@ export function BotSettingsDialog({ bot, overlay = false }: {
             linkedSection={linkedSection}
             onClose={() => dispatch({ type: "toggleSettings", open: false })}
           />
-        ) : <>
-        <div {...dragProps} className="flex shrink-0 items-center justify-between px-4 py-3">
-          <span id="bot-settings-title" className="truncate text-[15px] font-semibold text-ink">
-            {bot.name}
-          </span>
-          <span className="flex shrink-0 items-center gap-1">
-            <ShareBotButton bot={bot} className="rounded-md p-1 text-ink-secondary hover:bg-control hover:text-ink" />
-            <button
-              type="button"
-              onClick={() => dispatch({ type: "toggleSettings", open: false })}
-              aria-label={t("botSettings.simple.close")}
-              className="rounded-md p-1 text-ink-secondary hover:bg-control hover:text-ink"
-            >
-              <X size={18} className="pointer-events-none" />
-            </button>
-          </span>
-        </div>
-
-        <div className="mx-4 mb-2 flex shrink-0 items-center gap-2 rounded-lg border border-transparent bg-control/70 px-2.5 py-2 focus-within:border-focus">
-          <Search size={14} className="shrink-0 text-ink-secondary" />
-          <input
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
+        ) : (
+          <AdvancedPanel
+            bot={bot}
+            derived={derived}
+            sections={sections}
+            query={query}
+            appNames={appNames}
+            appsPhase={appSearchPhase(searchApps)}
+            open={collapsed ? null : section}
+            onQuery={(value) => {
+              setQuery(value);
               dispatch({ type: "toggleSettings", open: true });
             }}
-            onKeyDown={(e) => {
-              if (e.key !== "Escape") return;
-              e.stopPropagation();
-              if (query) setQuery("");
-              else dispatch({ type: "toggleSettings", open: false });
+            onToggle={(id) => {
+              if (section === id && !collapsed) {
+                dispatch({ type: "toggleSettings", open: true });
+                return;
+              }
+              dispatch({ type: "toggleSettings", open: true, section: id });
             }}
-            placeholder={t("botSettings.search")}
-            aria-label={t("botSettings.searchAria")}
-            className="w-full bg-transparent text-[13px] text-ink placeholder:text-ink-secondary focus:outline-none"
+            onOpenSection={(id) => dispatch({ type: "toggleSettings", open: true, section: id })}
+            renderBody={renderSectionBody}
+            onClose={() => dispatch({ type: "toggleSettings", open: false })}
           />
-        </div>
-
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          {visibleSections.length === 0 && (
-            <div className="px-4 py-4 text-[13px] leading-relaxed text-ink-secondary">
-              {searchEmptyText(query.trim(), appSearchPhase(searchApps))}
-            </div>
-          )}
-          {sections.map((entry) => {
-            const { id, icon: Icon } = entry;
-            const label = sectionLabel(entry);
-            const matched = sectionMatches(entry, q, appNames);
-            if (!matched && id !== "memory") return null;
-            const open = !collapsed && section === id;
-            return (
-              <div
-                key={id}
-                data-bot-settings-section={id}
-                className="border-b border-hairline/30"
-                hidden={!matched}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (section === id && !collapsed) {
-                      dispatch({ type: "toggleSettings", open: true });
-                      return;
-                    }
-                    dispatch({ type: "toggleSettings", open: true, section: id });
-                  }}
-                  aria-expanded={open}
-                  className={cn(
-                    "flex w-full shrink-0 items-center gap-2.5 px-4 py-2.5 text-left text-[14px]",
-                    open ? "bg-control/60 text-ink" : "text-ink-secondary hover:bg-control/40 hover:text-ink",
-                  )}
-                >
-                  <Icon size={15} className="shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{label}</span>
-                  <ChevronDown
-                    size={16}
-                    className={cn(
-                      "shrink-0 text-ink-secondary transition-transform",
-                      open && "rotate-180",
-                    )}
-                  />
-                </button>
-                {/* Memory stays mounted (hidden when collapsed) so its unsaved draft survives. */}
-                {id === "memory" ? (
-                  <div hidden={!open} className="px-4 pb-4 pt-1">
-                    {renderSectionBody("memory")}
-                  </div>
-                ) : (
-                  open && <div className="px-4 pb-4 pt-1">{renderSectionBody(id)}</div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        </>}
+        )}
       </aside>
       <HistoryRollbackDialog history={history} returnFocusRef={dialogRef} />
     </>
