@@ -165,8 +165,8 @@ changes nothing.
    it (or without `CLOUD_GRANT_SECRET`) the broker never asks the Admin to wake
    anything.
 7. Idle sweep progress: apply migration `0005_trigger_sweep_progress.sql`
-   (step 1) before the code that uses it reaches `main`, because CI deploys
-   every push to `main`. Without it, the hourly sweep of idle installations
+   (step 1) before you run `pnpm broker:deploy`. A push to `main` does not
+   deploy the broker. Without it, the hourly sweep of idle installations
    fails after it has expired old events.
 
 ## Erasing an installation and what the broker keeps
