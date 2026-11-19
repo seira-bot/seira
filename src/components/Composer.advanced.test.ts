@@ -8,8 +8,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Bot, Group } from "@/state/store";
 import { restoreComposerDraft } from "@/lib/drafts";
 import { setCallMode } from "@/lib/call-mode";
-import { userBubbleTone } from "@/lib/user-bubble-tone";
-import { BOT_BUTTON, botButtonTone } from "@/lib/bot-button";
 
 const fixture = vi.hoisted(() => ({
   advanced: false,
@@ -61,28 +59,11 @@ const room: Group = {
 let root: Root;
 let container: HTMLDivElement;
 const render = (props: Parameters<typeof Composer>[0]) => flushSync(() => root.render(createElement(Composer, props)));
-const menu = () => document.body.querySelector<HTMLElement>("[data-composer-menu]");
-const popover = () => document.body.querySelector<HTMLElement>('[data-sidebar-popover-menu="anchored"]');
-const item = (key: string) => document.body.querySelector<HTMLButtonElement>(`[data-menu-key="${key}"]`);
 const click = (element: Element | null) => {
   if (!element) throw new Error("nothing to click");
   flushSync(() => (element as HTMLElement).click());
 };
-/** The bot's own button: its bubble's fill and ink, with the darker hover and press steps. */
-function expectBotButton(button: HTMLElement | null, color: Bot["color"]) {
-  const tone = botButtonTone(color);
-  expect(button?.className.split(" ")).toContain(BOT_BUTTON);
-  expect(button?.style.getPropertyValue("--bot-button")).toBe(tone.fill);
-  expect(button?.style.getPropertyValue("--bot-button-ink")).toBe(tone.ink);
-  expect(button?.style.getPropertyValue("--bot-button-hover")).toBe(tone.hover);
-  expect(button?.style.getPropertyValue("--bot-button-pressed")).toBe(tone.pressed);
-}
 const sendButton = () => container.querySelector<HTMLButtonElement>('button[aria-label="Send message"]');
-
-function openPlus() {
-  click(plus());
-  expect(menu()).not.toBeNull();
-}
 
 beforeEach(() => {
   fixture.advanced = true;
