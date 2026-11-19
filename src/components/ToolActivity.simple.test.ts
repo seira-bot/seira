@@ -89,12 +89,17 @@ describe("ActivityRun", () => {
 });
 
 describe("ActivityRun at narrow widths", () => {
-  it("keeps Advanced mode's chip, which shrinks and truncates its summary", () => {
-    mode.advanced = true;
+  it("opens Advanced mode's work card by default and keeps Simple's closed", () => {
     const steps = [{ id: "a", at: 1, role: "bot" as const, kind: "activity" as const, tool: { name: "Read", ok: true } }];
-    const html = renderToStaticMarkup(createElement(ActivityRun, { messages: steps, children: null }));
-    expect(html).toMatch(/<button[^>]*class="flex min-w-0 max-w-full /);
-    expect(html).not.toContain("data-activity-run");
+    mode.advanced = true;
+    const open = renderToStaticMarkup(createElement(ActivityRun, { messages: steps, children: createElement("i", { "data-step": "" }) }));
+    expect(open).toContain("data-activity-run");
+    expect(open).toContain('aria-expanded="true"');
+    expect(open).toContain("data-step");
+    mode.advanced = false;
+    const closed = renderToStaticMarkup(createElement(ActivityRun, { messages: steps, children: createElement("i", { "data-step": "" }) }));
+    expect(closed).toContain('aria-expanded="false"');
+    expect(closed).not.toContain("data-step");
   });
 
   it("lets the run's row shrink and truncate its summary instead of running off the screen", () => {

@@ -81,7 +81,8 @@ it("says a member's own Seira is theirs, not everyone's", () => {
   expect(container.textContent).toContain(t("team.ownHelperHeader"));
 });
 
-it.each([[false, "[data-chathead-privacy='shared']"], [true, "[data-chathead-shared]"]])("names who can read a bot's shared chat from the bot's own sharing (Advanced: %s)", (advanced, shown) => {
+it.each([false, true])("names who can read a bot's shared chat from the bot's own sharing (Advanced: %s)", (advanced) => {
+  const shown = "[data-chathead-privacy='shared']";
   setAdvancedMode(advanced);
   const said = () => container.querySelector(shown)?.getAttribute("title");
   draw(luna([]));
