@@ -8,9 +8,11 @@ import test from "node:test";
 import {
   HAND_OFF_PACKAGE_TYPES,
   linuxPackageType,
+  managedByStore,
   packageInstallCommand,
   shellQuote,
   stagedInstallFile,
+  STORE_PACKAGE_TYPES,
 } from "./package-install-command.mjs";
 
 test("the Ubuntu command resolves dependencies", () => {
@@ -163,4 +165,37 @@ test("a build with nothing to identify it keeps the restart path", () => {
     }),
     null,
   );
+});
+
+test("a snap is told from its sandbox, before any marker", () => {
+  const snapEnv = { SNAP: "/snap/seira/17", SNAP_NAME: "seira" };
+  const base = { platform: "linux", exists: () => false, readMarker: () => "deb" };
+
+  assert.equal(linuxPackageType({ ...base, env: snapEnv, resourcesPath: "/snap/seira/17/resources" }), "snap");
+  assert.equal(linuxPackageType({ ...base, env: snapEnv, resourcesPath: "/snap/seira/17/resources", appImage: "/a.AppImage" }), "snap");
+  assert.equal(linuxPackageType({ ...base, env: { ...snapEnv, SNAP: "/snap/seira/17/" }, resourcesPath: "/snap/seira/17/resources" }), "snap");
+  assert.equal(
+    linuxPackageType({ ...base, env: snapEnv, resourcesPath: undefined, execPath: "/snap/seira/17/seira" }),
+    "snap",
+  );
+  // A program started from inside a snap's shell, yet installed elsewhere, is not that snap.
+  assert.equal(linuxPackageType({ ...base, env: snapEnv, resourcesPath: "/opt/app/resources" }), "deb");
+  assert.equal(linuxPackageType({ ...base, env: snapEnv, resourcesPath: "/snap/seira/170/resources" }), "deb");
+  assert.equal(linuxPackageType({ ...base, env: {}, resourcesPath: "/snap/seira/17/resources" }), "deb");
+});
+
+test("a Flatpak is told by its id or its info file", () => {
+  const base = { platform: "linux", resourcesPath: "/app/Seira/resources", readMarker: () => null };
+
+  assert.equal(linuxPackageType({ ...base, env: { FLATPAK_ID: "bot.seira.Seira" }, exists: () => false }), "flatpak");
+  assert.equal(linuxPackageType({ ...base, env: {}, exists: (file) => file === "/.flatpak-info" }), "flatpak");
+  assert.equal(linuxPackageType({ ...base, env: {}, exists: () => false }), null);
+  assert.equal(linuxPackageType({ platform: "darwin", env: { FLATPAK_ID: "x" }, exists: () => true, readMarker: () => null }), null);
+});
+
+test("only the store package types leave updates to the store", () => {
+  assert.deepEqual([...STORE_PACKAGE_TYPES], ["snap", "flatpak"]);
+  assert.equal(managedByStore("snap"), true);
+  assert.equal(managedByStore("flatpak"), true);
+  for (const type of ["deb", "rpm", "pacman", "AppImage", null, undefined]) assert.equal(managedByStore(type), false);
 });

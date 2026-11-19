@@ -28,6 +28,7 @@ export function UpdatesRow({ title = t("settings.updates.title") }: { title?: st
   const s = useUpdaterState();
   const updater = window.ogb?.updater;
   if (!s || !updater) return null;
+  if (s.managedByStore) return <SettingRow title={title} subtitle={t("settings.updates.store", { app: productName() })}>{null}</SettingRow>;
   const label =
     s.status === "checking"
       ? t("settings.updates.checking")

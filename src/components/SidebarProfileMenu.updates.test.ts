@@ -26,3 +26,7 @@ it("offers the restart once an update has downloaded by itself", () => {
   expect(ready?.label).toBe("Restart to update to Seira 0.2.0");
   expect(ready?.item.attention).toBe(true);
 });
+
+it("puts no update entry in the account menu when an app store updates this install", () => {
+  expect(entry({ status: "idle", managedByStore: true })).toBeNull();
+});

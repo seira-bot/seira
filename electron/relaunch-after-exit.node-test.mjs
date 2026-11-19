@@ -116,3 +116,21 @@ test("an AppImage desktop restarts its AppImage after exit, with its arguments a
   }, "with no_new_privs set, the AppImage runtime cannot mount the image again");
   assert.ok(JSON.parse(readFileSync(expected, "utf8")).includes("an argument with spaces"));
 });
+
+test("in a snap the desktop restarts through the snap's command, never Electron's relauncher", () => {
+  const { relaunchAfterExit } = createRequire(import.meta.url)(relaunchModule);
+  const calls = [];
+  const errors = [];
+  const empty = mkdtempSync(join(tmpdir(), "omb-snap-path-"));
+  try {
+    // With nothing in PATH the waiting shell cannot start: the failure goes to onError, so the path taken was the snap's.
+    relaunchAfterExit({ relaunch: (options) => calls.push(options) }, ["--flag"], {
+      env: { SNAP: "/snap/seira/17", SNAP_NAME: "seira", PATH: empty },
+      onError: (error) => errors.push(error),
+    });
+    assert.deepEqual(calls, []);
+    assert.equal(errors.length > 0, true);
+  } finally {
+    rmSync(empty, { recursive: true, force: true });
+  }
+});

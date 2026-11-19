@@ -1993,6 +1993,7 @@
   "settings.toolCalls.aria": "Show tool calls in chat",
   "settings.toolCalls.error": "Could not save the tool-call setting.",
   "settings.updates.title": "Updates",
+  "settings.updates.store": "Updates come from the app store you installed {app} from.",
   "settings.updates.checking": "Checking…",
   "settings.updates.downloading": "Downloading {percent}%",
   "settings.updates.ready": "{app} {version} is ready. Restart the app to apply it.",
