@@ -47,7 +47,8 @@ describe("sourceNames in this repository", () => {
     expect(sourceNames("releasing.md")).toBe(true);
   });
   it("finds nothing for a name no source file holds", () => {
-    expect(sourceNames("no-such-page-8c1f2d7a.md")).toBe(false);
+    // Built from parts, so that this file does not hold the name.
+    expect(sourceNames(["no-such", "page", "8c1f2d7a.md"].join("-"))).toBe(false);
   });
   it("answers true when git cannot run", () => {
     expect(sourceNames("a", "/nonexistent-folder-for-ci-heavy")).toBe(true);
