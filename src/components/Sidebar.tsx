@@ -787,7 +787,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
         )}
       </span>
       <div className={cn("min-w-0 flex-1", iconOnly && "hidden")}>
-        <div className={cn("flex justify-between gap-2", advRow ? "items-center" : "items-baseline", simpleRow && "pe-7 group-hover:pe-[3.25rem] group-focus-within:pe-[3.25rem] touch:pe-[3.25rem] max-md:touch:pe-7")}>
+        <div className={cn(advRow ? "flex items-center justify-between gap-2" : "flex items-baseline justify-between gap-2", simpleRow && "pe-7 group-hover:pe-[3.25rem] group-focus-within:pe-[3.25rem] touch:pe-[3.25rem] max-md:touch:pe-7")}>
           <span className={cn("flex min-w-0 grow items-center gap-1.5 truncate text-ink", simpleRow ? "text-[14px] font-medium leading-5" : advRow ? "text-[14px] font-semibold leading-[18px]" : "text-[15px] font-semibold leading-5")}>
             {!quiet && bot.pinned && <Pin size={12} className="shrink-0 text-ink-secondary" />}
             <RenameTitle
@@ -1153,7 +1153,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
   const advancedAdd = (id: string, sectionName: string | undefined): { onAdd?: () => void; addLabel?: string } => {
     if (id === BOTS_SECTION_ID && canAddBots) return { onAdd: () => dispatch({ type: "newBot" }), addLabel: t("sidebar.newBot") };
     if (id === CHANNELS_SECTION_ID) return { onAdd: () => setNewRoom(true), addLabel: t("sidebar.newChannel.title") };
-    if (sectionName && !remoteClient && layoutInteractive) return { onAdd: () => setMoveToTeam(sectionName), addLabel: t("team.addBotsTo", { name: sectionName }) };
+    if (sectionName && !remoteClient && layoutInteractive) return { onAdd: () => setMoveToTeam(sectionName), addLabel: t(state.bots.some((bot) => !bot.hidden && bot.section?.trim() === sectionName) ? "team.manageBotsIn" : "team.addBotsTo", { name: sectionName }) };
     return {};
   };
   const railSearch = () => {
@@ -1449,7 +1449,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
                   <SidebarSectionHeader
                     name={sectionLabel(id)}
                     line={simple || advDesk} reserveMenu={(simple || advDesk) && !remoteClient}
-                    count={advDesk ? sectionChiefItems.length + sectionGroupItems.length + sectionBotItems.length : undefined}
+                    {...(advDesk ? { count: sectionChiefItems.length + sectionGroupItems.length + sectionBotItems.length } : {})}
                     onMenu={(simple || advDesk) && !remoteClient && sectionName ? (button) => {
                       const rect = button.getBoundingClientRect();
                       openTeamMenu(sectionName, rect.right - 256, rect.bottom + 4, button);

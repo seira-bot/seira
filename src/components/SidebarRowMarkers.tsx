@@ -25,7 +25,7 @@ const ACTIVITY = {
 export function AvatarActivityDot({ activity, large = false }: { activity: RowActivity | null; large?: boolean }) {
   if (!activity) return null;
   const { tone, label, testId } = ACTIVITY[activity];
-  return <span aria-hidden="true" data-testid={testId} title={label()} className={cn("absolute rounded-full ring-2 ring-[var(--row)]", large ? "bottom-0 right-0 size-2.5" : "bottom-0.5 right-0.5 size-2", tone)} />;
+  return <span aria-hidden="true" data-testid={testId} title={label()} className={cn("absolute", large ? "bottom-0 right-0 size-2.5" : "bottom-0.5 right-0.5 size-2", "rounded-full ring-2 ring-[var(--row)]", tone)} />;
 }
 
 /** The same marker on a full row's avatar: a larger dot on its bottom-right corner, cut against the panel. */
