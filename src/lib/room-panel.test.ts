@@ -4,7 +4,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AppState } from "@/state/store";
-import { closeRoomPanel, openRoomPanel, simpleRoomHeader, useRoomPanel, useRoomPanelShown } from "./room-panel";
+import { advancedRoomHeader, closeRoomPanel, openRoomPanel, simpleRoomHeader, useRoomPanel, useRoomPanelShown } from "./room-panel";
 
 type Shell = Pick<AppState, "selectedId" | "activeView" | "settingsOpen">;
 
@@ -107,5 +107,16 @@ describe("the Room panel's open state", () => {
     render(inRoom, false);
     open();
     expect([seen.open, seen.shown]).toEqual(["desk", false]);
+  });
+});
+
+describe("which rooms get the Advanced header", () => {
+  const room = { dm: false };
+  it("is a normal room on this desktop in Advanced mode only", () => {
+    expect(advancedRoomHeader({ advanced: true, remoteClient: false, group: room, setupPending: false })).toBe(true);
+    expect(advancedRoomHeader({ advanced: false, remoteClient: false, group: room, setupPending: false })).toBe(false);
+    expect(advancedRoomHeader({ advanced: true, remoteClient: true, group: room, setupPending: false })).toBe(false);
+    expect(advancedRoomHeader({ advanced: true, remoteClient: false, group: { dm: true }, setupPending: false })).toBe(false);
+    expect(advancedRoomHeader({ advanced: true, remoteClient: false, group: room, setupPending: true })).toBe(false);
   });
 });

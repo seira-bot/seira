@@ -11249,5 +11249,9 @@
   "alwaysOn.added.screen": "Bots there use its screen, browser and files, once {app} is allowed to use that computer.",
   "alwaysOn.windowClosed": "Keeps running when its window is closed",
   "alwaysOn.windowClosedLinux": "Keeps running when its window is closed. Open {app} again to bring the window back; to quit, press Alt and choose File → Quit.",
-  "alwaysOn.status.noWay": "Home is on · no phone or computer can reach it yet"
+  "alwaysOn.status.noWay": "Home is on · no phone or computer can reach it yet",
+  "room.panel.botsAndYouOne": "1 bot and you",
+  "room.panel.botsAndYouMany": "{count} bots and you",
+  "room.panel.addBot": "Add bot",
+  "room.panel.lead": "Lead"
 }

@@ -11249,5 +11249,9 @@
   "alwaysOn.added.screen": "Os bots de lá usam a tela, o navegador e os arquivos daquele computador, depois que o {app} tiver permissão para usá-lo.",
   "alwaysOn.windowClosed": "Continua rodando quando a janela é fechada",
   "alwaysOn.windowClosedLinux": "Continua rodando quando a janela é fechada. Abra o {app} de novo para trazer a janela de volta; para sair, pressione Alt e escolha Arquivo → Sair do Seira.",
-  "alwaysOn.status.noWay": "Casa ligada · nenhum celular ou computador consegue alcançá-la ainda"
+  "alwaysOn.status.noWay": "Casa ligada · nenhum celular ou computador consegue alcançá-la ainda",
+  "room.panel.botsAndYouOne": "1 bot e você",
+  "room.panel.botsAndYouMany": "{count} bots e você",
+  "room.panel.addBot": "Adicionar bot",
+  "room.panel.lead": "Líder"
 }
