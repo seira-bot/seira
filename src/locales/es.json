@@ -2471,6 +2471,7 @@
   "onboarding.engines.error": "No se pudieron comprobar tus conexiones de IA. Inténtalo de nuevo.",
   "onboarding.tour.error": "No se pudo guardar tu progreso. Inténtalo de nuevo u omite el recorrido.",
   "onboarding.engines.otherWays": "Otras formas",
+  "onboarding.engines.freeWay": "Modelos gratis. No necesitas cuenta.",
   "onboarding.engines.connected": "{name} está conectado. Tus bots ya pueden empezar.",
   "onboarding.engines.answered": "Conectado · {name}",
   "onboarding.engines.checkingAnswer": "Comprobando que {name} responde…",

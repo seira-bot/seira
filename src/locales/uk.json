@@ -1364,6 +1364,7 @@
   "onboarding.engines.error": "Не вдалося перевірити ваші AI-підключення. Спробуйте ще раз.",
   "onboarding.tour.error": "Не вдалося зберегти ваш прогрес. Спробуйте ще раз або пропустіть тур.",
   "onboarding.engines.otherWays": "Інші способи",
+  "onboarding.engines.freeWay": "Безплатні моделі. Обліковий запис не потрібен.",
   "onboarding.engines.connected": "{name} підключено. Ваші боти вже можуть починати.",
   "onboarding.engines.answered": "Підключено · {name}",
   "onboarding.engines.checkingAnswer": "Перевіряємо, чи відповідає {name}…",

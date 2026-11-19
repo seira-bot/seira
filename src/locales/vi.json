@@ -2170,6 +2170,7 @@
   "onboarding.engines.error": "Không thể kiểm tra các kết nối AI của bạn. Thử lại.",
   "onboarding.tour.error": "Không thể lưu tiến trình của bạn. Hãy thử lại hoặc bỏ qua phần giới thiệu.",
   "onboarding.engines.otherWays": "Cách khác",
+  "onboarding.engines.freeWay": "Mô hình miễn phí. Không cần tài khoản.",
   "onboarding.engines.connected": "{name} đã được kết nối. Bot của bạn có thể bắt đầu ngay.",
   "onboarding.engines.answered": "Đã kết nối · {name}",
   "onboarding.engines.checkingAnswer": "Đang kiểm tra {name} có trả lời không…",

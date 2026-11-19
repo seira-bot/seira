@@ -2170,6 +2170,7 @@
   "onboarding.engines.error": "AI bağlantılarınız denetlenemedi. Tekrar deneyin.",
   "onboarding.tour.error": "İlerlemeniz kaydedilemedi. Tekrar deneyin veya turu atlayın.",
   "onboarding.engines.otherWays": "Diğer yollar",
+  "onboarding.engines.freeWay": "Ücretsiz modeller. Hesap gerekmez.",
   "onboarding.engines.connected": "{name} bağlandı. Botlarınız artık başlayabilir.",
   "onboarding.engines.answered": "Bağlandı · {name}",
   "onboarding.engines.checkingAnswer": "{name} yanıt veriyor mu kontrol ediliyor…",

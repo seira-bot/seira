@@ -2605,6 +2605,7 @@
   "onboarding.engines.error": "Non siamo riusciti a controllare le tue connessioni AI. Riprova.",
   "onboarding.tour.error": "Non siamo riusciti a salvare i tuoi progressi. Riprova, oppure salta il tour.",
   "onboarding.engines.otherWays": "Altri modi",
+  "onboarding.engines.freeWay": "Modelli gratuiti. Nessun account richiesto.",
   "onboarding.engines.connected": "{name} è collegato. I tuoi bot possono iniziare ora.",
   "onboarding.engines.signInHint": "Usa l'account {name} che hai già. Accedi sul loro sito, così la password resta da loro.",
   "onboarding.engines.ready": "Pronto",

@@ -1214,6 +1214,7 @@
   "task.helperGroup": "बॉट्स द्वारा खोले गए",
   "onboarding.continue": "जारी रखें",
   "onboarding.engines.otherWays": "दूसरे तरीके",
+  "onboarding.engines.freeWay": "मुफ़्त मॉडल। किसी खाते की ज़रूरत नहीं।",
   "onboarding.engines.connected": "{name} जुड़ गया है। आपके बॉट अब शुरू कर सकते हैं।",
   "onboarding.engines.answered": "जुड़ा हुआ · {name}",
   "onboarding.engines.checkingAnswer": "जाँच रहे हैं कि {name} जवाब देता है…",

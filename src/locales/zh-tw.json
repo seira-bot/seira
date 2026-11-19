@@ -3208,6 +3208,7 @@
   "onboarding.engines.error": "無法檢查你的 AI 連線。請再試一次。",
   "onboarding.tour.error": "無法儲存你的進度。請再試一次，或跳過導覽。",
   "onboarding.engines.otherWays": "其他方式",
+  "onboarding.engines.freeWay": "免費模型，不需要帳號。",
   "onboarding.engines.connected": "{name} 已連線。你的機器人現在就可以開始了。",
   "onboarding.engines.answered": "已連線 · {name}",
   "onboarding.engines.checkingAnswer": "正在確認 {name} 是否回應…",

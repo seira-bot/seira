@@ -2694,6 +2694,7 @@
   "onboarding.engines.error": "Не удалось проверить подключение к AI. Попробуйте ещё раз.",
   "onboarding.tour.error": "Не удалось сохранить ваш прогресс. Попробуйте ещё раз или пропустите обзор.",
   "onboarding.engines.otherWays": "Другие способы",
+  "onboarding.engines.freeWay": "Бесплатные модели. Аккаунт не нужен.",
   "onboarding.engines.connected": "{name} подключён. Ваши боты могут приступать к работе.",
   "onboarding.engines.signInHint": "Используйте уже имеющийся у вас аккаунт {name}. Вход выполняется на сайте самого сервиса, поэтому пароль остаётся у него.",
   "onboarding.engines.ready": "Готово",

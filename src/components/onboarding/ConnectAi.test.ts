@@ -51,9 +51,12 @@ const text = () => host.textContent ?? "";
 const show = async (extra: { hosted?: boolean } = {}) => {
   await act(async () => { root.render(createElement(FirstScreenAi, extra)); });
 };
-/** Every other way is listed under the recommended one, with nothing to unfold. */
+const moreButton = () => host.querySelector<HTMLButtonElement>("[data-ai-more]");
+const wayButtons = () => [...host.querySelectorAll<HTMLButtonElement>("button[aria-expanded]:not([data-ai-more])")];
+/** Opens the Other ways list when it is closed. */
 const otherWays = async () => {
-  await act(async () => {});
+  const more = moreButton();
+  await act(async () => { if (more?.getAttribute("aria-expanded") === "false") more.click(); });
 };
 
 beforeEach(() => {
@@ -81,7 +84,7 @@ describe("connecting an AI on the first screen", () => {
     // Was a step of scripts/verify-onboarding-ui.ts, whose fixture no longer reaches this step (its AI already works).
     await show();
     await otherWays();
-    const listed = () => [...host.querySelectorAll("[aria-expanded]")].map((node) => node.textContent);
+    const listed = () => wayButtons().map((node) => node.textContent);
     const before = listed();
     const checkAgain = async () => {
       const button = [...host.querySelectorAll("button")].find((node) => node.textContent === "Check again")!;
@@ -95,14 +98,17 @@ describe("connecting an AI on the first screen", () => {
     expect(text()).not.toContain("Couldn't check your AI connections");
   });
 
-  it("leads with one recommended way, then lists every other way, with no status list and no engine talk", async () => {
+  it("leads with one recommended way and a closed Other ways list, with no status list and no engine talk", async () => {
     await show();
     expect([...host.querySelectorAll("[data-engine-setup]")].map((node) => node.getAttribute("data-engine-setup"))).toEqual(["claude"]);
     expect(host.querySelector("[data-ai-recommended]")?.getAttribute("data-ai-recommended")).toBe("claude");
-    const rows = [...host.querySelectorAll("button[aria-expanded]")].map((node) => node.textContent);
+    expect(wayButtons()).toHaveLength(0);
+    expect(moreButton()?.textContent).toBe("Other ways3");
+    expect(moreButton()?.getAttribute("aria-expanded")).toBe("false");
+    await otherWays();
+    const rows = wayButtons().map((node) => node.textContent);
     expect(rows).toHaveLength(2);
     expect(rows).toContain("Codex");
-    expect(text()).not.toContain("Other ways");
     for (const word of [/\bengines?\b/i, /\bReady\b/, /Needs setup/i, /to set up/i, /provider/i]) expect(text()).not.toMatch(word);
   });
 
@@ -123,7 +129,7 @@ describe("connecting an AI on the first screen", () => {
     expect(setup("claude")?.getAttribute("data-description")).toBe(plain("Claude"));
     await otherWays();
     const openRow = async (name: string) => {
-      const row = [...host.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find((button) => button.textContent?.includes(name))!;
+      const row = wayButtons().find((button) => button.textContent?.includes(name))!;
       await act(async () => { row.click(); });
     };
     await openRow("Grok");
@@ -144,7 +150,7 @@ describe("connecting an AI on the first screen", () => {
     await show();
     expect(host.querySelector("[data-ai-connected]")?.textContent).toContain("Claude");
     expect(host.querySelector("[data-ai-recommended]")).toBeNull();
-    expect(text()).not.toContain("Other ways");
+    expect(moreButton()?.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("says Connected only after the AI answered a test message, and plainly while it checks", async () => {
@@ -214,9 +220,49 @@ describe("connecting an AI on the first screen", () => {
     expect(host.querySelector("[data-ai-connected]")).toBeNull();
     expect(host.querySelector("[data-ai-backup]")?.textContent).toBe("OpenCode's free model is ready as a backup. For the best answers, connect an AI you already use.");
     expect(host.querySelector("[data-ai-recommended]")?.getAttribute("data-ai-recommended")).toBe("claude");
+    expect(host.querySelector("[data-ai-free]")).toBeNull();
+    expect(text()).not.toContain("Free models. No account needed.");
   });
 
-  it("offers the organization sign-in under Other ways on this computer's own window only", async () => {
+  it("shows at first only the recommended way, the free way, an Other ways button with its count, and Check again", async () => {
+    f.instances = [...f.instances, engine("opencodeGo", "opencodeGo", "OpenCode", false)];
+    await show();
+    expect(host.querySelector("[data-ai-recommended]")?.getAttribute("data-ai-recommended")).toBe("claude");
+    expect(host.querySelector("[data-ai-free]")?.getAttribute("data-ai-free")).toBe("opencodeGo");
+    const more = moreButton()!;
+    expect(more.textContent).toBe("Other ways3");
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    const list = document.getElementById(more.getAttribute("aria-controls")!)!;
+    expect(list.hasAttribute("hidden")).toBe(true);
+    expect(list.children).toHaveLength(0);
+    expect(wayButtons().map((node) => node.textContent)).toEqual(["OpenCodeFree models. No account needed."]);
+    expect(more.parentElement!.lastElementChild?.textContent).toBe("Check again");
+  });
+
+  it("opens every other way when the person opens Other ways", async () => {
+    await show();
+    const more = moreButton()!;
+    await act(async () => { more.click(); });
+    expect(more.getAttribute("aria-expanded")).toBe("true");
+    const list = document.getElementById(more.getAttribute("aria-controls")!)!;
+    expect(list.hasAttribute("hidden")).toBe(false);
+    expect([...list.querySelectorAll("button[aria-expanded]")].map((node) => node.textContent)).toEqual(["Grok", "Codex"]);
+    await act(async () => { more.click(); });
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    expect(list.hasAttribute("hidden")).toBe(true);
+  });
+
+  it("says the free way needs no account, and opens its setup on a click", async () => {
+    f.instances = [...f.instances, engine("opencodeGo", "opencodeGo", "OpenCode", false)];
+    await show();
+    const free = host.querySelector("[data-ai-free]")!;
+    expect(free.textContent).toContain("Free models. No account needed.");
+    expect(host.querySelector('[data-engine-setup="opencodeGo"]')).toBeNull();
+    await act(async () => { free.querySelector("button")!.click(); });
+    expect(host.querySelector('[data-engine-setup="opencodeGo"]')).not.toBeNull();
+  });
+
+  it("keeps the organization sign-in on this computer's own window only, visible outside Other ways", async () => {
     await show();
     await otherWays();
     expect(f.row).toBeNull();
@@ -253,12 +299,16 @@ describe("the ModelGo option", () => {
   const events = () => vi.mocked(track).mock.calls.filter(([name]) => name === "modelgo_offer").map(([, props]) => props);
   const provider = (ready = false) => engine("modelgo", "modelgo", "ModelGo (API)", ready);
 
-  it("sits among the other ways, labelled a sponsor, and its link opens exactly the sponsor's address", async () => {
+  it("sits last in the Other ways list, is reported shown only once the list opens, and its link opens exactly the sponsor's address", async () => {
     f.instances.push(provider());
     await show();
+    expect(option()).toBeNull();
+    expect(events()).toEqual([]);
+    await otherWays();
     expect(option()?.textContent).toContain("ModelGo"); expect(option()?.textContent).toContain("Sponsor");
     expect(option()?.textContent).toContain("One API key, every model.");
     expect(host.querySelectorAll("[data-modelgo-option]")).toHaveLength(1);
+    expect(option()!.parentElement!.lastElementChild).toBe(option());
     expect(events()).toEqual([{ action: "shown", place: "onboarding" }]);
     const link = [...option()!.querySelectorAll("button")].find(button => button.textContent?.includes("Get a key"))!;
     await act(async () => { link.click(); });
@@ -269,15 +319,16 @@ describe("the ModelGo option", () => {
   it("opens to its key field, and counts that as starting to add a key", async () => {
     f.instances.push(provider());
     await show();
+    await otherWays();
     await act(async () => { option()!.querySelector<HTMLButtonElement>("button[aria-expanded]")!.click(); });
     expect(option()!.querySelector('[data-engine-setup="modelgo"]')).toBeTruthy();
     expect(events().at(-1)).toEqual({ action: "add_key", place: "onboarding" });
   });
 
   it("is not added on a white-label build, a desktop whose organization refuses it, or a hosted workspace; nor once connected", async () => {
-    f.brand = "file"; await show(); expect(option()).toBeNull();
-    f.brand = "default"; f.config = { managedPolicy: { companyModelsOnly: false, allowedEngines: ["codex"] } }; await show(); expect(option()).toBeNull();
-    f.config = {}; await show({ hosted: true }); expect(option()).toBeNull();
-    f.instances.push(provider(true)); await show(); expect(option()).toBeNull();
+    f.brand = "file"; await show(); await otherWays(); expect(option()).toBeNull();
+    f.brand = "default"; f.config = { managedPolicy: { companyModelsOnly: false, allowedEngines: ["codex"] } }; await show(); await otherWays(); expect(option()).toBeNull();
+    f.config = {}; await show({ hosted: true }); await otherWays(); expect(option()).toBeNull();
+    f.instances.push(provider(true)); await show(); await otherWays(); expect(option()).toBeNull();
   });
 });

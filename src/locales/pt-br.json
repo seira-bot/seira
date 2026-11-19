@@ -3352,6 +3352,7 @@
   "onboarding.engines.error": "Não foi possível verificar suas conexões de IA. Tente novamente.",
   "onboarding.tour.error": "Não foi possível salvar seu progresso. Tente novamente ou pule o tour.",
   "onboarding.engines.otherWays": "Outras formas",
+  "onboarding.engines.freeWay": "Modelos grátis. Não precisa de conta.",
   "onboarding.engines.connected": "A conexão com {name} está ativa. Seus bots já podem começar.",
   "onboarding.engines.answered": "Conectado · {name}",
   "onboarding.engines.checkingAnswer": "Verificando se {name} responde…",

@@ -3021,6 +3021,7 @@
   "onboarding.engines.error": "AI の接続を確認できませんでした。もう一度お試しください。",
   "onboarding.tour.error": "進捗を保存できませんでした。もう一度試すか、ツアーをスキップしてください。",
   "onboarding.engines.otherWays": "ほかの方法",
+  "onboarding.engines.freeWay": "無料のモデル。アカウントは不要です。",
   "onboarding.engines.connected": "{name} に接続しました。ボットはすぐに使い始められます。",
   "onboarding.engines.answered": "接続済み · {name}",
   "onboarding.engines.checkingAnswer": "{name} が応答するか確認しています…",
