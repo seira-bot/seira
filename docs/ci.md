@@ -73,8 +73,21 @@ holds these rules for every `package-*.yml` file:
   `release` environment. Today only `package-macos.yml` does this. The one
   exception is an `approval` job in the `release-approval` environment. It
   has `permissions: {}` and reads no secret.
-- The `package` job of `package-macos.yml` needs the `approval` job. It runs
-  only when `approval` succeeded or was skipped, and it is not cancelled.
+- The `commit` job of `package-macos.yml` finds the commit of the `ref` input
+  before the approval. It refuses a ref with unusual characters. The run
+  summary shows the commit. The `package` job builds that commit, never the
+  ref name, so a moved tag or branch changes nothing after the approval.
+- The `package` job of `package-macos.yml` needs the `commit` and `approval`
+  jobs. It runs only when `commit` succeeded, it is not cancelled, and one of
+  these is true:
+  - a maintainer started this attempt;
+  - `approval` succeeded in this same attempt. The `approval` job writes the
+    attempt number as its output, and `package` compares it with the current
+    attempt.
+  A re-run keeps the result of a job that succeeded or was skipped. So a
+  person who is not a maintainer cannot re-run a failed `package` job and
+  reuse an earlier approval. That person must re-run all jobs, which asks for
+  a new approval, or ask a maintainer to re-run.
 - A secret goes only into a step's `env`, as `${{ secrets.NAME }}`. It never
   goes into a `run` command, an action input, or a job setting.
 - Every job runs on a GitHub-hosted runner (`ubuntu-*`, `windows-*`, or
@@ -118,8 +131,11 @@ artifacts expire and the job fails. Then start a new run.
 - The `approval` job needs `image`. It runs only for a person who is not a
   maintainer, in the `release-approval` environment.
 - The `publish` job runs only by hand from `main`, after `image` succeeded. It
-  needs `approval`, and it runs only when `approval` succeeded or was skipped.
-  It uses the `release` environment.
+  needs `approval`. It runs only when a maintainer started this attempt, or
+  when `approval` succeeded in this same attempt. A person who is not a
+  maintainer cannot re-run a failed `publish` job and reuse an earlier
+  approval. That person must re-run all jobs or ask a maintainer. It uses the
+  `release` environment.
 - Only the `publish` job gets `packages: write`, and only it can run
   `docker push` or `imagetools create`. The workflow token goes only into the
   `env` of its sign-in step.
