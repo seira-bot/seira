@@ -335,7 +335,7 @@ User=maus
 WorkingDirectory=/home/maus
 Environment=HOME=/home/maus
 Environment=PATH=/home/maus/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/usr/local/bin/seira serve --tunnel
+ExecStart=/usr/bin/env seira serve --tunnel
 Restart=always
 RestartSec=5
 
