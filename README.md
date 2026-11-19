@@ -105,7 +105,7 @@ The face lives on a black visor screen, so Seira can blink, smile, wink, and thi
 | Signal red | `#E11D48` | Eyes, and the dot in seira.bot |
 | Mist | `#E9ECEF` | Head on dark backgrounds |
 
-The 3D logo, the wordmark, the flat logo for light and dark backgrounds, and the avatar are in [`docs/assets/brand/`](docs/assets/brand/).
+The 3D logo, the wordmark, the lockups for light and dark backgrounds, and the avatar are in [`docs/assets/brand/`](docs/assets/brand/).
 
 </details>
 

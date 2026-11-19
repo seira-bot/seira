@@ -10,7 +10,6 @@ Copy `brand/.env.example` to `brand/.env.local` and fill in your values. Git ign
 | Variable | Used by | Required |
 |----------|---------|----------|
 | `SEIRA_IMAGE_CMD` | `mascot/**/prompts.sh` | yes, to make mascot images |
-| `SEIRA_FONT_DIR` | `build_logo.py` | no: the script searches the usual font folders |
 | `SHOT_HOST`, `SHOT_CHROMIUM`, `SHOT_MEM` | `mascot/live/tools/shot.sh` | no |
 
 Rules for scripts in this folder:
