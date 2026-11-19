@@ -29,7 +29,7 @@ describe("seira serve --relay", () => {
     const body = { inviteUrl: invite, expiresAt: Date.now() + 600_000, relay: status() };
     const block = relayPairingBlock(body, true, "openmausbot")!;
     expect(block).toContain("Scan with the Seira app. It connects through Seira Relay, end-to-end encrypted");
-    expect(block).toContain("Paired phones: 1 of 20. Remove one: openmausbot devices revoke ID");
+    expect(block).toContain("Paired phones: 1 of 20. Remove one: seira devices revoke ID");
     expect(relayPairingBlock(body, false, "openmausbot")).toBeNull();
     expect(relayPairingBlock({ ...body, relay: undefined }, true, "openmausbot")).toBeNull();
     expect(relayPairingBlock({ ...body, inviteUrl: "openmausbot://pair?address=https%3A%2F%2Fmaus.example.com&token=omb_pair_x" }, true, "openmausbot")).toBeNull();

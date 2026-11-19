@@ -29,10 +29,10 @@ seira doctor --data [--fix] [--data-dir DIR]
   --fix applies the repairs that cannot lose data, only while no server uses the folder; whatever a repair changes is
   copied to DIR/doctor-backups/<time>/ first. Anything else is reported with what to do.
   Exit 0 fine (after --fix: fine now), 8 a problem is left.`,
-  bots: "openmausbot bots\n  Your bots and what each is doing.",
-  channels: "openmausbot channels\n  Your rooms (group chats) and who is in them.",
-  models: "openmausbot models\n  The engines and the models each offers (use them as INSTANCE/MODEL).",
-  messages: `openmausbot messages TARGET [--limit 30]\n  The latest messages of a conversation (at most 200).
+  bots: "seira bots\n  Your bots and what each is doing.",
+  channels: "seira channels\n  Your rooms (group chats) and who is in them.",
+  models: "seira models\n  The engines and the models each offers (use them as INSTANCE/MODEL).",
+  messages: `seira messages TARGET [--limit 30]\n  The latest messages of a conversation (at most 200).
   ${T}`,
   send: `seira send TARGET (TEXT | --text TEXT | --message-file FILE | -) [--task new|current|ID] [--title T] [--send-id ID] [--dry-run]
   Send one message and return at once. It goes to the conversation the bot or room has open (--task current,
@@ -56,12 +56,12 @@ seira doctor --data [--fix] [--data-dir DIR]
   --since MS (which run prints) keeps watching the same job, so one that ended meanwhile reports how.
   Nothing running: it returns at once (exit 0). Same exit codes as run.
   ${T}`,
-  interrupt: `openmausbot interrupt TARGET [--tree] [--dry-run]\n  Press Stop on a conversation. --tree also stops every teammate still working on its job.
+  interrupt: `seira interrupt TARGET [--tree] [--dry-run]\n  Press Stop on a conversation. --tree also stops every teammate still working on its job.
   ${T}`,
-  "new-bot": "openmausbot new-bot NAME [--title T] [--team T] [--model INSTANCE/MODEL] [--effort E]\n  Make a bot.",
-  "new-channel": "openmausbot new-channel NAME --members A,B [--team T]\n  Make a room from bots, by name or id.",
-  "set-model": "openmausbot set-model BOT --model INSTANCE/MODEL [--effort E] [--task ID] [--dry-run]\n  Change an idle bot's model (or one idle conversation's, with --task).",
-  edit: "openmausbot edit BOT --message ID (TEXT | --text TEXT) [--task ID] [--dry-run]\n  Rewrite an earlier message of yours and have the bot answer again from there.",
+  "new-bot": "seira new-bot NAME [--title T] [--team T] [--model INSTANCE/MODEL] [--effort E]\n  Make a bot.",
+  "new-channel": "seira new-channel NAME --members A,B [--team T]\n  Make a room from bots, by name or id.",
+  "set-model": "seira set-model BOT --model INSTANCE/MODEL [--effort E] [--task ID] [--dry-run]\n  Change an idle bot's model (or one idle conversation's, with --task).",
+  edit: "seira edit BOT --message ID (TEXT | --text TEXT) [--task ID] [--dry-run]\n  Rewrite an earlier message of yours and have the bot answer again from there.",
   export: `seira export TARGET --out DIR [--root ID] [--since MS] [--max-files 200] [--max-screens 100] [--max-bytes 500MB] [--force]
   Write a conversation's job to DIR: the job tree, every transcript (secrets removed),
   the files its replies link to, and screen captures. --root keeps one job.

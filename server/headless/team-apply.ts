@@ -181,10 +181,10 @@ export async function reconcile(client: HeadlessClient, file: TeamFile, options:
   for (const desired of file.bots.filter((bot) => bot.model)) {
     const { instanceId, model } = desired.model!;
     const instance = instances.find((candidate) => candidate.instanceId === instanceId);
-    if (!instance) throw new HeadlessError(`bot "${desired.name}": no engine "${instanceId}" here`, EXIT.failed, "openmausbot models lists the engines and their models");
+    if (!instance) throw new HeadlessError(`bot "${desired.name}": no engine "${instanceId}" here`, EXIT.failed, "seira models lists the engines and their models");
     const offered = [instance.models?.default, ...(instance.models?.options ?? []).map((option: Rec) => option.id)];
     if (instance.snapshot?.state === "available" && !offered.includes(model)) {
-      throw new HeadlessError(`bot "${desired.name}": ${instanceId} offers no model "${model}"`, EXIT.failed, "openmausbot models lists them");
+      throw new HeadlessError(`bot "${desired.name}": ${instanceId} offers no model "${model}"`, EXIT.failed, "seira models lists them");
     }
   }
   let current = await fleet();

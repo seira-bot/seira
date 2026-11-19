@@ -29,7 +29,7 @@ beforeAll(() => {
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 describe("the npm package", () => {
-  it("is @seira-bot/seira, public, with the seira and openmausbot commands", () => {
+  it("is @seira-bot/seira, public, with the seira command", () => {
     expect(run.status).toBe(0);
     expect(run.stdout).toContain("@seira-bot/seira@1.2.3");
     expect(pkg.name).toBe("@seira-bot/seira");

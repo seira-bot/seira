@@ -144,7 +144,7 @@ export async function explain(error: unknown, baseUrl?: string): Promise<Headles
       "this needs a paired session with the right scope: `seira connect` mints one on this computer");
   }
   if (status === 404 && /^no such (bot|channel|conversation|task|message)\b/i.test(message)) {
-    return usageError(message, "openmausbot bots and openmausbot channels list the ids");
+    return usageError(message, "seira bots and seira channels list the ids");
   }
   if (/cannot report a conversation's job/.test(message)) return new HeadlessError(message, EXIT.unreachable, "update Seira on the server");
   const cause = (error as { cause?: { code?: unknown } })?.cause?.code;

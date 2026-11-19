@@ -617,7 +617,7 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
   }, 120_000);
 });
 
-describe("openmausbot access", () => {
+describe("seira access", () => {
   it("edits the sign-in allow-list in config.json without a running server", async () => {
     const home = mkdtempSync(join(tmpdir(), "omb-cli-access-"));
     const dataDir = join(home, "data");

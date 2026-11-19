@@ -482,7 +482,7 @@ export function upgradePlan(input: { registry: FleetRegistry }): FleetStep[] {
   ];
 }
 
-/** The same shape `openmausbot access` writes; the server reads it live. */
+/** The same shape `seira access` writes; the server reads it live. */
 export function applySignIn(configText: string, action: "add" | "remove", email: string, chatOnly: boolean): { config: string; summary: string } {
   const entry = email.trim().toLowerCase();
   assertEmailOrDomain(entry);
