@@ -2914,7 +2914,7 @@ describe("Store characters for bots in the plain look", () => {
     const chosen = store.createBot({ name: "Dewi", mascotBody: "bob" });
     const dressed = store.createBot({ name: "Eka", mascotBody: "seira", mascotAccessories: ["cap"] });
     const pictured = store.createBot({ name: "Bima" });
-    store.patchBot(pictured.id, { avatarUrl: "/api/bot-avatars/bima.png", avatarCrop: "circle" });
+    store.patchBot(pictured.id, { avatarUrl: "/api/attachments/bima.png", avatarCrop: "circle" });
     expect(existsSync(join(DATA_DIR, "characters-given"))).toBe(true);
     expect(new Store(selection).bot(plain[0]!.id)).not.toHaveProperty("mascotBody");
 

@@ -47,7 +47,7 @@ describe("the plain look older builds gave", () => {
     expect(wearsPlainLook({ color: "red", mascotBody: "bob" })).toBe(false);
     expect(wearsPlainLook({ color: "red", mascotBody: "blob" })).toBe(false);
     expect(wearsPlainLook({ color: "red", mascotBody: "seira", mascotAccessories: ["cap"] })).toBe(false);
-    expect(wearsPlainLook({ color: "red", avatarUrl: "/api/bot-avatars/a.png" })).toBe(false);
+    expect(wearsPlainLook({ color: "red", avatarUrl: "/api/attachments/a.png" })).toBe(false);
   });
 
   it("is never the MausBot's", () => {
