@@ -1,620 +1,352 @@
 #!/usr/bin/env python3
-"""Build the seira.bot logo files (SVG, PNG, ICO) from one set of Fibonacci parameters.
+"""Build every Seira logo and app icon from one master: the 3D head with the official face.
 
-The logo is the face of a female bot: long hair with a fringe, a face window,
-and two eyes with a highlight and a lash wing.
+The master is brand/mascot/art/bases/out/seira/front.png with the resting face of
+brand/mascot/runtime/face.js drawn on the visor. Every other file comes from the master.
 
-Run: python3 brand/build_logo.py [output_dir]
-The script is deterministic. Two runs give identical files.
+Run: python3 brand/build_logo.py
+The output is byte-identical on every run.
 """
+import base64
+import io
 import math
-import os
-import struct
+import re
 import sys
+from pathlib import Path
 
 import numpy as np
-from fontTools.pens.boundsPen import BoundsPen
-from fontTools.pens.recordingPen import RecordingPen
-from fontTools.pens.svgPathPen import SVGPathPen
-from fontTools.pens.transformPen import TransformPen
-from fontTools.ttLib import TTFont
-from PIL import Image, ImageFont, features
+from PIL import Image, ImageDraw, ImageFilter
 
-# ---------------------------------------------------------------------------
-# PARAMETERS (all tunable values live in this block)
-# ---------------------------------------------------------------------------
-MASTER_KS = [6, 7, 8, 9, 10, 11]      # master R = F(k): 8, 13, 21, 34, 55, 89
-DETAIL_MIN_K = 9                      # highlight and lash wing only from this k
-MAIN_K = 11                           # master used for the SVG files
+BRAND = Path(__file__).resolve().parent
+ROOT = BRAND.parent
+BASE = BRAND / "mascot/art/bases/out/seira"
+LOGO = BRAND / "logo"
+DOCS_BRAND = ROOT / "docs/assets/brand"
 
-INK = "#0E1116"
-SILVER = "#E9ECEF"
-RED = "#E11D48"
-WHITE = "#FFFFFF"
+LANCZOS = Image.Resampling.LANCZOS
 
-SS = 16                               # samples per pixel on each axis (16 x 16)
-STRIP_ROWS = 4                        # pixel rows per strip (limits peak memory)
+INK = (14, 17, 22)
+SCREEN = (12, 15, 20)
+EYE_COLOR = (255, 42, 87)
 
-# Opaque face variant (favicons): name, k, scale, N, ox, oy
-FACE_RASTERS = [
-    ("favicon-16.png", 6, 1, 16, 0, 0),
-    ("favicon-32.png", 7, 1, 32, 3, 3),
-    ("favicon-48.png", 8, 1, 48, 3, 3),
-]
-# Transparent marks: name, k, scale, N, ox, oy, hair colour
-MARK_RASTERS = [
-    ("mark-68.png", 9, 1, 68, 0, 0, INK),
-    ("mark-178.png", 11, 1, 178, 0, 0, INK),
-    ("mark-356.png", 11, 2, 356, 0, 0, INK),
-    ("mark-712.png", 11, 4, 712, 0, 0, INK),
-    ("mark-reversed-178.png", 11, 1, 178, 0, 0, SILVER),
-    ("mark-reversed-356.png", 11, 2, 356, 0, 0, SILVER),
-]
-# Opaque tiles (INK ground, SILVER hair): name, k, scale, N, ox, oy
-TILE_RASTERS = [
-    ("icon-180.png", 10, 1, 180, 35, 35),
-    ("icon-192.png", 10, 1, 192, 41, 41),
-    ("icon-288.png", 11, 1, 288, 55, 55),
-    ("icon-512.png", 11, 2, 512, 78, 78),
-]
-ICO_SOURCES = ["favicon-16.png", "favicon-32.png", "favicon-48.png"]
+# Face unit and layout of brand/mascot/runtime/face.js (Fibonacci numbers times U).
+U = 6
+FW, FH = 1024, 640
+EW, EH = 21 * U, 34 * U
+GAP = 2 * 13 * U
+EYE_TOP = FH * 0.45 - EH / 2
+EYE_CY = EYE_TOP + EH / 2
+EYE_CX = (FW / 2 - GAP / 2 - EW / 2, FW / 2 + GAP / 2 + EW / 2)
+MOUTH_Y = EYE_TOP + EH + 8 * U
+GLOW_BLUR = 5 * U
 
-# Animation (units are user units of the 178 master)
-ANIM_STYLE = (
-    ".eye{transform-box:fill-box;transform-origin:center;animation:blink 8s infinite}"
-    ".eyes{animation:look 8s infinite cubic-bezier(.4,0,.2,1)}"
-    "@keyframes blink{0%,22%,26%,60%,64%,68%,100%{transform:scaleY(1)}"
-    "24%,62%,66%{transform:scaleY(.1)} }"
-    "@keyframes look{0%,30%,60%,100%{transform:translate(0,0)}"
-    "34%,46%{transform:translate(5px,0)}50%,56%{transform:translate(-5px,3px)} }"
-    "@media (prefers-reduced-motion:reduce){.eye,.eyes{animation:none} }"
-)
+# bot.js scales the face canvas to the width of the front visor box and centres it there.
+VISOR_BOX = (277, 345, 475, 317)
+SS = 4
+REGION = (256, 320, 768, 688)
 
-# Icon
-ICON_SIZE = 288
-ICON_RADIUS = 55
-ICON_OFFSET = 55
+ICON_RADIUS = 0.2246
+ICON_HEAD_SCALE = 0.95
+MARK_FILL = 0.92
+FAVICON_CROP = 0.86
+SPLASH_SIZE = (198, 232)
+SPLASH_BOX = (190, 224)
 
-# Lockup
-# Geist Sans TTF folder: SEIRA_FONT_DIR from the environment or from brand/.env.local.
-# Without it, the script searches FONT_SEARCH. See brand/.env.example.
-FONT_ENV = "SEIRA_FONT_DIR"
-FONT_SEARCH = ["~/.local/share/fonts", "~/.fonts", "~/Library/Fonts",
-               "/usr/local/share/fonts", "/usr/share/fonts"]
-FONT_WEIGHTS = ["Medium", "SemiBold", "Bold", "ExtraBold"]
-LOCKUP_TEXT = "seira.bot"
+ICNS_SIZES = (16, 32, 64, 128, 256, 512, 1024)
+ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
+ICONSET_SIZES = ((16, 1), (16, 2), (32, 1), (32, 2), (64, 1), (64, 2), (128, 1), (128, 2),
+                (256, 1), (256, 2), (512, 1), (512, 2))
+
+WORDMARK_X = 233
+LOCKUP_GAP = 56
 LOCKUP_HEIGHT = 178
-BASELINE_Y = 144
-XHEIGHT_Y = 55
-TEXT_X0 = 233                         # x of the first glyph bbox xMin
-TARGET_STEM = 21                      # target stem width of glyph "i" in px
-PERIOD_DIAMETER = 21
-
-OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo")
-
-
-# ---------------------------------------------------------------------------
-# Fibonacci masters
-# ---------------------------------------------------------------------------
-def fib(n):
-    a, b = 0, 1
-    for _ in range(n):
-        a, b = b, a + b
-    return a
-
-
-F = [fib(n) for n in range(20)]
-
-
-def master(k):
-    """Return the geometry of one master (all values in master units)."""
-    R = F[k]
-    m = dict(
-        k=k, R=R, W=2 * R,
-        lock=F[k - 2], r=F[k - 1], fringe=F[k - 1],
-        ew=F[k - 3], eh=F[k - 2], og=F[k - 3], hg=F[k - 4], chin=F[k - 2],
-        detail=k >= DETAIL_MIN_K,
-    )
-    # Bands must add up to W on both axes.
-    assert 2 * (m["lock"] + m["og"] + m["ew"] + m["hg"]) == m["W"]
-    assert m["fringe"] + m["ew"] + m["eh"] + m["chin"] + m["chin"] == m["W"]
-    assert m["R"] - m["lock"] == m["r"]
-    m["eye_y"] = m["fringe"] + m["ew"]
-    m["eye_xl"] = m["lock"] + m["og"]
-    m["eye_xr"] = R + m["hg"]
-    if m["detail"]:
-        m["hd"] = F[k - 5]
-        m["hi"] = F[k - 6]            # highlight gap to the top and right eye edge
-        m["wa"], m["wb"], m["wc"], m["wd"] = F[k - 6], F[k - 7], F[k - 5], F[k - 4]
-    return m
-
-
-def num(v):
-    """Format a number for SVG. Integers have no decimal point."""
-    if float(v) == int(v):
-        return str(int(v))
-    return repr(float(v))
-
-
-# ---------------------------------------------------------------------------
-# Shapes (as numbers, shared by the SVG writer and the rasteriser)
-# ---------------------------------------------------------------------------
-def eye_shapes(m, side):
-    """Return the pill, hole, and wing of one eye. side is 'l' or 'r'."""
-    x0 = m["eye_xl"] if side == "l" else m["eye_xr"]
-    y0 = m["eye_y"]
-    ew, eh = m["ew"], m["eh"]
-    pill = (x0, y0, ew, eh)
-    if not m["detail"]:
-        return pill, None, None
-    hd = m["hd"]
-    # Inner upper side: left eye highlight sits right, right eye highlight sits left.
-    cx = x0 + ew - m["hi"] - hd / 2 if side == "l" else x0 + m["hi"] + hd / 2
-    cy = y0 + m["hi"] + hd / 2
-    a, b, c, d = m["wa"], m["wb"], m["wc"], m["wd"]
-    if side == "r":
-        ox = x0 + ew
-        wing = [(ox - a, y0 + b), (ox + c, y0), (ox, y0 + d)]
-    else:
-        ox = x0
-        wing = [(ox + a, y0 + b), (ox, y0 + d), (ox - c, y0)]
-    return pill, (cx, cy, hd / 2), wing
-
-
-def hair_path(m):
-    R, W, lock, r, fr = m["R"], m["W"], m["lock"], m["r"], m["fringe"]
-    n = num
-    return (
-        f"M0 {n(W)}V{n(R)}A{n(R)} {n(R)} 0 0 1 {n(W)} {n(R)}V{n(W)}Z "
-        f"M{n(lock)} {n(fr)}H{n(W - lock)}V{n(R)}A{n(r)} {n(r)} 0 0 1 {n(lock)} {n(R)}Z"
-    )
-
-
-def pill_path(x, y, ew, eh):
-    rr = ew / 2
-    n = num
-    return (
-        f"M{n(x)} {n(y + rr)}A{n(rr)} {n(rr)} 0 0 1 {n(x + ew)} {n(y + rr)}"
-        f"V{n(y + eh - rr)}A{n(rr)} {n(rr)} 0 0 1 {n(x)} {n(y + eh - rr)}Z"
-    )
-
-
-def hole_path(cx, cy, hr):
-    n = num
-    return (
-        f"M{n(cx - hr)} {n(cy)}A{n(hr)} {n(hr)} 0 1 0 {n(cx + hr)} {n(cy)}"
-        f"A{n(hr)} {n(hr)} 0 1 0 {n(cx - hr)} {n(cy)}Z"
-    )
-
-
-def wing_path(pts):
-    n = num
-    (x1, y1), (x2, y2), (x3, y3) = pts
-    return f"M{n(x1)} {n(y1)}L{n(x2)} {n(y2)}L{n(x3)} {n(y3)}Z"
-
-
-def eye_markup(m, side):
-    pill, hole, wing = eye_shapes(m, side)
-    d = pill_path(*pill)
-    if hole is None:
-        return f'<g class="eye"><path d="{d}"/></g>'
-    d += " " + hole_path(*hole)
-    return (f'<g class="eye"><path fill-rule="evenodd" d="{d}"/>'
-            f'<path d="{wing_path(wing)}"/></g>')
-
-
-# Reference strings from the spec for the R = 89 master.
-_m = master(11)
-assert hair_path(_m) == ("M0 178V89A89 89 0 0 1 178 89V178Z "
-                         "M34 55H144V89A55 55 0 0 1 34 89Z")
-assert " ".join(p for p in (
-    pill_path(*eye_shapes(_m, "l")[0]),
-    hole_path(*eye_shapes(_m, "l")[1]),
-    wing_path(eye_shapes(_m, "l")[2]))) == (
-    "M55 86.5A10.5 10.5 0 0 1 76 86.5V99.5A10.5 10.5 0 0 1 55 99.5Z "
-    "M63 85A4 4 0 1 0 71 85A4 4 0 1 0 63 85Z M60 79L55 89L47 76Z")
-assert " ".join(p for p in (
-    pill_path(*eye_shapes(_m, "r")[0]),
-    hole_path(*eye_shapes(_m, "r")[1]),
-    wing_path(eye_shapes(_m, "r")[2]))) == (
-    "M102 86.5A10.5 10.5 0 0 1 123 86.5V99.5A10.5 10.5 0 0 1 102 99.5Z "
-    "M107 85A4 4 0 1 0 115 85A4 4 0 1 0 107 85Z M118 79L131 76L123 89Z")
-del _m
-
-
-# ---------------------------------------------------------------------------
-# Rasteriser (exact integer arithmetic, no float rounding at edges)
-# ---------------------------------------------------------------------------
-def coverage(k, sc, N, ox, oy):
-    """Return int arrays (N, N) of sample counts (0..256): tombstone, hair, eyes.
-
-    Sample (pixel p, sub-sample i) has centre u = p + (i + 0.5) / SS in pixel space.
-    The master coordinate is x = (u - ox) / sc. Integer unit: 1 / (2 * SS * sc).
-    """
-    m = master(k)
-    q = 2 * SS * sc
-
-    def Q(v):
-        iv = int(round(v * q))
-        assert abs(v * q - iv) < 1e-9
-        return iv
-
-    R, W = Q(m["R"]), Q(m["W"])
-    lock, r, fr = Q(m["lock"]), Q(m["r"]), Q(m["fringe"])
-    xs = 2 * np.arange(N * SS, dtype=np.int64) + 1 - 2 * SS * ox
-    dxR2 = (xs - R) ** 2
-    in_x = (xs >= 0) & (xs <= W)
-    win_x = (xs >= lock) & (xs <= W - lock)
-
-    eyes = []
-    for side in "lr":
-        pill, hole, wing = eye_shapes(m, side)
-        x0, y0, ew, eh = pill
-        rr = ew / 2
-        eyes.append(dict(
-            x0=Q(x0), x1=Q(x0 + ew), cx=Q(x0 + rr), rr2=Q(rr) ** 2,
-            ya=Q(y0 + rr), yb=Q(y0 + eh - rr),
-            hole=None if hole is None else (Q(hole[0]), Q(hole[1]), Q(hole[2]) ** 2),
-            wing=None if wing is None else [(Q(px), Q(py)) for px, py in wing],
-        ))
-
-    shape = (N, N)
-    cov_t = np.zeros(shape, dtype=np.int64)
-    cov_h = np.zeros(shape, dtype=np.int64)
-    cov_e = np.zeros(shape, dtype=np.int64)
-    for p0 in range(0, N, STRIP_ROWS):
-        p1 = min(N, p0 + STRIP_ROWS)
-        ys = 2 * np.arange(p0 * SS, p1 * SS, dtype=np.int64) + 1 - 2 * SS * oy
-        dyR2 = (ys - R) ** 2
-        d_main = dxR2[None, :] + dyR2[:, None]
-        top = (ys <= R)[:, None] & (d_main <= R * R)
-        body = (ys > R)[:, None] & in_x[None, :] & (ys <= W)[:, None]
-        tomb = top | body
-        rect = ((ys >= fr) & (ys <= R))[:, None] & win_x[None, :]
-        disc = (ys > R)[:, None] & (d_main <= r * r)
-        hair = tomb & ~(rect | disc)
-
-        eye = np.zeros(d_main.shape, dtype=bool)
-        for e in eyes:
-            inx = (xs >= e["x0"]) & (xs <= e["x1"])
-            pill = ((ys >= e["ya"]) & (ys <= e["yb"]))[:, None] & inx[None, :]
-            dx2 = ((xs - e["cx"]) ** 2)[None, :]
-            pill |= (dx2 + ((ys - e["ya"]) ** 2)[:, None]) <= e["rr2"]
-            pill |= (dx2 + ((ys - e["yb"]) ** 2)[:, None]) <= e["rr2"]
-            if e["hole"] is not None:
-                hx, hy, hr2 = e["hole"]
-                pill &= ~((((xs - hx) ** 2)[None, :] + ((ys - hy) ** 2)[:, None]) <= hr2)
-            if e["wing"] is not None:
-                (ax, ay), (bx, by), (cx_, cy_) = e["wing"]
-
-                def cross(px, py, qx, qy):
-                    return (qx - px) * (ys[:, None] - py) - (qy - py) * (xs[None, :] - px)
-
-                c1, c2, c3 = cross(ax, ay, bx, by), cross(bx, by, cx_, cy_), cross(cx_, cy_, ax, ay)
-                tri = ((c1 >= 0) & (c2 >= 0) & (c3 >= 0)) | ((c1 <= 0) & (c2 <= 0) & (c3 <= 0))
-                pill |= tri
-            eye |= pill
-        eye &= ~hair
-        rows = p1 - p0
-        for dst, src in ((cov_t, tomb), (cov_h, hair), (cov_e, eye)):
-            dst[p0:p1] = src.reshape(rows, SS, N, SS).sum(axis=(1, 3))
-    return cov_t, cov_h, cov_e
-
-
-def hex_rgb(h):
-    return np.array([int(h[i:i + 2], 16) for i in (1, 3, 5)], dtype=np.int64)
-
-
-def alpha_of(total):
-    return (255 * total + SS * SS // 2) // (SS * SS)
-
-
-def render_mark(k, sc, N, ox, oy, hair_col):
-    """Transparent mark: hair in hair_col, eyes red, window transparent. RGBA uint8."""
-    _, ch, ce = coverage(k, sc, N, ox, oy)
-    total = ch + ce
-    hc, rc = hex_rgb(hair_col), hex_rgb(RED)
-    safe = np.maximum(total, 1)
-    out = np.zeros((N, N, 4), dtype=np.uint8)
-    for c in range(3):
-        v = (hc[c] * ch + rc[c] * ce + safe // 2) // safe
-        out[..., c] = np.where(total > 0, v, 0)
-    out[..., 3] = alpha_of(total)
-    return out
-
-
-def render_face(k, sc, N, ox, oy):
-    """Opaque face: hair ink, window white, eyes red, outside transparent. RGBA uint8."""
-    ct, ch, ce = coverage(k, sc, N, ox, oy)
-    cw = ct - ch - ce
-    assert cw.min() >= 0
-    hc, rc, wc = hex_rgb(INK), hex_rgb(RED), hex_rgb(WHITE)
-    safe = np.maximum(ct, 1)
-    out = np.zeros((N, N, 4), dtype=np.uint8)
-    for c in range(3):
-        v = (hc[c] * ch + rc[c] * ce + wc[c] * cw + safe // 2) // safe
-        out[..., c] = np.where(ct > 0, v, 0)
-    out[..., 3] = alpha_of(ct)
-    return out
-
-
-def render_tile(k, sc, N, ox, oy):
-    """Opaque tile: ink ground, silver hair, red eyes. RGB uint8."""
-    _, ch, ce = coverage(k, sc, N, ox, oy)
-    n = SS * SS
-    cg = n - ch - ce
-    assert cg.min() >= 0
-    ic, sv, rc = hex_rgb(INK), hex_rgb(SILVER), hex_rgb(RED)
-    out = np.zeros((N, N, 3), dtype=np.uint8)
-    for c in range(3):
-        out[..., c] = (ic[c] * cg + sv[c] * ch + rc[c] * ce + n // 2) // n
-    return out
-
-
-def save_png(arr, path):
-    Image.fromarray(arr).save(path, format="PNG", compress_level=9)
-
-
-# ---------------------------------------------------------------------------
-# SVG files
-# ---------------------------------------------------------------------------
-def svg_doc(w, h, body, extra=""):
-    return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
-        f'width="{w}" height="{h}" role="img" aria-label="seira.bot">'
-        f'<title>seira.bot</title>{extra}{body}</svg>\n'
-    )
-
-
-def face_markup(k, hair_fill, eye_fill, hair_class=None):
-    m = master(k)
-    cls = f' class="{hair_class}"' if hair_class else ""
-    return (
-        f'<path{cls} fill="{hair_fill}" fill-rule="evenodd" d="{hair_path(m)}"/>'
-        f'<g class="eyes" fill="{eye_fill}">{eye_markup(m, "l")}{eye_markup(m, "r")}</g>'
-    )
-
-
-def mark_svg(hair_fill, eye_fill=RED, style=""):
-    w = master(MAIN_K)["W"]
-    extra = f"<style>{ANIM_STYLE}</style>" if style else ""
-    return svg_doc(w, w, face_markup(MAIN_K, hair_fill, eye_fill), extra=extra)
-
-
-def icon_svg():
-    body = (
-        f'<rect width="{ICON_SIZE}" height="{ICON_SIZE}" rx="{ICON_RADIUS}" fill="{INK}"/>'
-        f'<g transform="translate({ICON_OFFSET} {ICON_OFFSET})">'
-        f'{face_markup(MAIN_K, SILVER, RED)}</g>'
-    )
-    return svg_doc(ICON_SIZE, ICON_SIZE, body)
-
-
-def favicon_svg():
-    style = f"<style>@media (prefers-color-scheme: dark){{.hair{{fill:{SILVER}}}}}</style>"
-    w = master(MASTER_KS[0])["W"]
-    return svg_doc(w, w, face_markup(MASTER_KS[0], INK, RED, hair_class="hair"), extra=style)
-
-
-# ---------------------------------------------------------------------------
-# Lockup
-# ---------------------------------------------------------------------------
-def fmt2(v):
-    """Round to 2 decimals and drop trailing zeros."""
-    s = f"{v:.2f}".rstrip("0").rstrip(".")
-    return "0" if s in ("-0", "") else s
-
-
-def local_env(name):
-    """Return the value of name from brand/.env.local, or None."""
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.local")
-    if not os.path.isfile(path):
-        return None
-    with open(path, encoding="utf-8") as fh:
-        for line in fh:
-            key, sep, value = line.strip().partition("=")
-            if sep and key.removeprefix("export ").strip() == name:
-                return value.strip().strip("'\"") or None
-    return None
-
-
-_font_dir = []
-
-
-def font_dir():
-    """Return the folder that holds Geist-<weight>.ttf for each FONT_WEIGHTS."""
-    if _font_dir:
-        return _font_dir[0]
-    want = [f"Geist-{w}.ttf" for w in FONT_WEIGHTS]
-    found = os.environ.get(FONT_ENV) or local_env(FONT_ENV)
-    if not found:
-        for root in FONT_SEARCH:
-            for dirpath, _, files in sorted(os.walk(os.path.expanduser(root))):
-                if all(w in files for w in want):
-                    found = dirpath
-                    break
-            if found:
-                break
-    if not found or not all(os.path.isfile(os.path.join(found, w)) for w in want):
-        sys.exit(f"Geist Sans TTF files not found. Set {FONT_ENV} to the folder that "
-                 f"holds {', '.join(want)}. See brand/.env.example.")
-    _font_dir.append(found)
-    return found
-
-
-def font_path(weight):
-    return os.path.join(font_dir(), f"Geist-{weight}.ttf")
-
-
-def stem_width_px(font, s):
-    """Width of the lower contour of glyph i (the stem), in px."""
-    gs = font.getGlyphSet()
-    rec = RecordingPen()
-    gs[font.getBestCmap()[ord("i")]].draw(rec)
-    contours, cur = [], []
-    for op, args in rec.value:
-        if op == "moveTo" and cur:
-            contours.append(cur)
-            cur = []
-        cur.append((op, args))
-    if cur:
-        contours.append(cur)
-    best = None
-    for cn in contours:
-        bp = BoundsPen(gs)
-        for op, args in cn:
-            getattr(bp, op)(*args)
-        x0, y0, x1, y1 = bp.bounds
-        if best is None or y0 < best[0]:
-            best = (y0, (x1 - x0) * s)
-    return best[1]
-
-
-def x_scale(font):
-    gs = font.getGlyphSet()
-    bp = BoundsPen(gs)
-    gs[font.getBestCmap()[ord("x")]].draw(bp)
-    return (BASELINE_Y - XHEIGHT_Y) / bp.bounds[3]
-
-
-def choose_weight():
-    rows = []
-    for wt in FONT_WEIGHTS:
-        f = TTFont(font_path(wt))
-        s = x_scale(f)
-        rows.append((abs(stem_width_px(f, s) - TARGET_STEM), wt, stem_width_px(f, s), s))
-    rows.sort()
-    return rows[0][1], rows[0][2], rows[0][3]
-
-
-def kern_table(path, upem, text):
-    """Pair kerning in font units. Use raqm when it is available."""
-    if not features.check("raqm"):
-        return (lambda a, b: 0.0), "zero"
-    ft = ImageFont.truetype(path, size=upem, layout_engine=ImageFont.Layout.RAQM)
-
-    def kern(a, b):
-        return ft.getlength(a + b) - ft.getlength(a) - ft.getlength(b)
-
-    return kern, "raqm"
-
-
-def floor_half(x):
-    return math.floor(x + 0.5)
-
-
-def build_lockup(weight, s):
-    path = font_path(weight)
-    font = TTFont(path)
-    gs = font.getGlyphSet()
-    cmap = font.getBestCmap()
-    upem = font["head"].unitsPerEm
-    kern, kern_method = kern_table(path, upem, LOCKUP_TEXT)
-
-    def bounds(name):
-        bp = BoundsPen(gs)
-        gs[name].draw(bp)
-        return bp.bounds
-
-    names = [cmap[ord(ch)] for ch in LOCKUP_TEXT]
-    xmin0 = bounds(names[0])[0]
-    pen = TEXT_X0 - xmin0 * s
-    parts = {"seira": SVGPathPen(gs, ntos=fmt2), "bot": SVGPathPen(gs, ntos=fmt2)}
-    circle = None
-    right_edge = 0.0
-    for i, ch in enumerate(LOCKUP_TEXT):
-        if i > 0:
-            pen += kern(LOCKUP_TEXT[i - 1], ch) * s
-        adv = font["hmtx"][names[i]][0] * s
-        if ch == ".":
-            left = floor_half(pen + adv / 2 - PERIOD_DIAMETER / 2)
-            circle = (left + PERIOD_DIAMETER / 2, BASELINE_Y - PERIOD_DIAMETER / 2)
-        else:
-            xmin, _, xmax, _ = bounds(names[i])
-            off = floor_half(pen + xmin * s) - xmin * s
-            target = parts["seira"] if i < LOCKUP_TEXT.index(".") else parts["bot"]
-            gs[names[i]].draw(TransformPen(target, (s, 0, 0, -s, off, BASELINE_Y)))
-            right_edge = max(right_edge, off + xmax * s)
-        pen += adv
-    width = math.ceil(round(right_edge, 6))
-    return dict(
-        seira=parts["seira"].getCommands(), bot=parts["bot"].getCommands(),
-        circle=circle, width=width, kern=kern_method, right=right_edge,
-    )
-
-
-def lockup_svg(lk, hair_fill, text_fill):
-    cx, cy = lk["circle"]
-    body = (
-        f'{face_markup(MAIN_K, hair_fill, RED)}'
-        f'<path fill="{text_fill}" d="{lk["seira"]}"/>'
-        f'<circle cx="{num(cx)}" cy="{num(cy)}" r="{num(PERIOD_DIAMETER / 2)}" fill="{RED}"/>'
-        f'<path fill="{text_fill}" d="{lk["bot"]}"/>'
-    )
-    return svg_doc(lk["width"], LOCKUP_HEIGHT, body)
-
-
-# ---------------------------------------------------------------------------
-# ICO (PNG-compressed entries, pixels unchanged)
-# ---------------------------------------------------------------------------
-def build_ico(png_dir, names, out_path):
-    blobs = []
-    for nm in names:
-        with open(os.path.join(png_dir, nm), "rb") as fh:
-            data = fh.read()
-        wd, ht = struct.unpack(">II", data[16:24])
-        blobs.append((wd, ht, data))
-    head = struct.pack("<HHH", 0, 1, len(blobs))
-    offset = 6 + 16 * len(blobs)
-    entries = b""
-    for wd, ht, data in blobs:
-        entries += struct.pack("<BBBBHHII", wd % 256, ht % 256, 0, 0, 1, 32, len(data), offset)
-        offset += len(data)
-    with open(out_path, "wb") as fh:
-        fh.write(head + entries + b"".join(b[2] for b in blobs))
-
-
-# ---------------------------------------------------------------------------
-def write(path, text):
-    with open(path, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(text)
-
-
-def main(out_dir=OUT_DIR):
-    svg_dir = os.path.join(out_dir, "svg")
-    png_dir = os.path.join(out_dir, "png")
-    os.makedirs(svg_dir, exist_ok=True)
-    os.makedirs(png_dir, exist_ok=True)
-
-    def sv(name, text):
-        write(os.path.join(svg_dir, name), text)
-
-    sv("seira-mark.svg", mark_svg(INK))
-    sv("seira-mark-reversed.svg", mark_svg(SILVER))
-    sv("seira-mark-mono-ink.svg", mark_svg(INK, INK))
-    sv("seira-mark-mono-white.svg", mark_svg(WHITE, WHITE))
-    sv("seira-mark-animated.svg", mark_svg(INK, style=ANIM_STYLE))
-    sv("seira-mark-animated-reversed.svg", mark_svg(SILVER, style=ANIM_STYLE))
-    sv("seira-icon.svg", icon_svg())
-    sv("favicon.svg", favicon_svg())
-
-    weight, stem, s = choose_weight()
-    lk = build_lockup(weight, s)
-    sv("seira-lockup.svg", lockup_svg(lk, INK, INK))
-    sv("seira-lockup-reversed.svg", lockup_svg(lk, SILVER, WHITE))
-    print(f"weight={weight} stem={stem:.3f}px scale={s:.6f} kerning={lk['kern']} "
-          f"right_edge={lk['right']:.3f} viewBox_width={lk['width']} "
-          f"dot=(cx={num(lk['circle'][0])}, cy={num(lk['circle'][1])}, "
-          f"r={num(PERIOD_DIAMETER / 2)})")
-
-    for name, k, sc, N, ox, oy in FACE_RASTERS:
-        save_png(render_face(k, sc, N, ox, oy), os.path.join(png_dir, name))
-    for name, k, sc, N, ox, oy, col in MARK_RASTERS:
-        save_png(render_mark(k, sc, N, ox, oy, col), os.path.join(png_dir, name))
-    for name, k, sc, N, ox, oy in TILE_RASTERS:
-        save_png(render_tile(k, sc, N, ox, oy), os.path.join(png_dir, name))
-    build_ico(png_dir, ICO_SOURCES, os.path.join(out_dir, "favicon.ico"))
+
+
+def mix(rgb, other, k):
+    return tuple(c * (1 - k) + o * k for c, o in zip(rgb, other))
+
+
+def region_shape():
+    x0, y0, x1, y1 = REGION
+    return (y1 - y0) * SS, (x1 - x0) * SS
+
+
+def to_layer(fx, fy):
+    k = VISOR_BOX[2] / FW
+    cx = VISOR_BOX[0] + VISOR_BOX[2] / 2
+    cy = VISOR_BOX[1] + VISOR_BOX[3] / 2
+    return ((cx + (fx - FW / 2) * k - REGION[0]) * SS, (cy + (fy - FH / 2) * k - REGION[1]) * SS)
+
+
+def layer_scale():
+    return VISOR_BOX[2] / FW * SS
+
+
+def face_grid():
+    h, w = region_shape()
+    k = layer_scale()
+    cx = VISOR_BOX[0] + VISOR_BOX[2] / 2
+    cy = VISOR_BOX[1] + VISOR_BOX[3] / 2
+    xs = ((np.arange(w) + 0.5) / SS + REGION[0] - cx) / (k / SS) + FW / 2
+    ys = ((np.arange(h) + 0.5) / SS + REGION[1] - cy) / (k / SS) + FH / 2
+    return np.meshgrid(xs, ys)
+
+
+def quad(p0, p1, p2, n=48):
+    t = np.linspace(0, 1, n)[:, None]
+    p0, p1, p2 = map(np.array, (p0, p1, p2))
+    return (1 - t) ** 2 * p0 + 2 * (1 - t) * t * p1 + t ** 2 * p2
+
+
+def draw_screen(shape):
+    """The glass of face.js drawScreen: a vertical gradient and a soft shade near the rim."""
+    fx, fy = face_grid()
+    top = np.array(mix(SCREEN, (255, 255, 255), 0.04))
+    bottom = np.array(mix(SCREEN, (0, 0, 0), 0.55))
+    t = np.clip(fy / FH, 0, 1)[..., None]
+    rgb = top * (1 - t) + bottom * t
+
+    c0, r0 = np.array([FW / 2, FH * 0.45]), FH * 0.32
+    c1, r1 = np.array([FW / 2, FH * 0.5]), FW * 0.62
+    dx, dy = fx - c0[0], fy - c0[1]
+    cd, dr = c1 - c0, r1 - r0
+    a = cd @ cd - dr * dr
+    b = dx * cd[0] + dy * cd[1] + r0 * dr
+    c = dx * dx + dy * dy - r0 * r0
+    disc = np.sqrt(np.maximum(b * b - a * c, 0))
+    s = np.clip(np.where(abs(a) < 1e-9, c / (2 * b), (b + disc) / a), 0, 1)
+    shade = (0.5 * s)[..., None]
+    rgb = rgb * (1 - shade)
+    return rgb
+
+
+def stroke_arc(draw, center, radius, a0, a1, width, scale):
+    n = max(int(abs(a1 - a0) * radius * scale / 0.4), 8)
+    for ang in np.linspace(a0, a1, n):
+        x, y = to_layer(center[0] + math.cos(ang) * radius, center[1] + math.sin(ang) * radius)
+        r = width / 2 * scale
+        draw.ellipse((x - r, y - r, x + r, y + r), fill=255)
+
+
+def pill_mask(shape, cx, cy):
+    img = Image.new("L", (shape[1], shape[0]), 0)
+    x0, y0 = to_layer(cx - EW / 2, cy - EH / 2)
+    x1, y1 = to_layer(cx + EW / 2, cy + EH / 2)
+    ImageDraw.Draw(img).rounded_rectangle((x0, y0, x1, y1), radius=min(EW, EH) / 2 * layer_scale(), fill=255)
+    return img
+
+
+def lash_mask(shape, ex, ey, out):
+    img = Image.new("L", (shape[1], shape[0]), 0)
+    first = quad((ex - out * 5 * U, ey + 3 * U), (ex + out * 2 * U, ey - 0.5 * U), (ex + out * 8 * U, ey - 1 * U))
+    second = quad((ex + out * 8 * U, ey - 1 * U), (ex + out * 3 * U, ey + 5 * U), (ex, ey + 13 * U))
+    pts = [to_layer(*p) for p in np.vstack([first, second])]
+    ImageDraw.Draw(img).polygon(pts, fill=255)
+    return img
+
+
+def mouth_mask(shape):
+    img = Image.new("L", (shape[1], shape[0]), 0)
+    stroke_arc(ImageDraw.Draw(img), (FW / 2, MOUTH_Y - 4 * U), 7 * U, math.pi * 0.2, math.pi * 0.8, 2 * U, layer_scale())
+    return img
+
+
+def highlight_mask(shape, cx, out):
+    img = Image.new("L", (shape[1], shape[0]), 0)
+    r = 6 * U / 2
+    hx = cx - out * max(0, EW / 2 - 5 * U - r)
+    hy = EYE_TOP + 5 * U + r
+    x, y = to_layer(hx, hy)
+    pr = r * layer_scale()
+    ImageDraw.Draw(img).ellipse((x - pr, y - pr, x + pr, y + pr), fill=255)
+    return img
+
+
+def over(canvas, mask, rgb, alpha=1.0):
+    a = (np.asarray(mask, dtype=np.float32) / 255.0 * alpha)[..., None]
+    canvas[:] = canvas * (1 - a) + np.array(rgb, dtype=np.float32) * a
+
+
+def glow(mask):
+    sigma = GLOW_BLUR / 2 * layer_scale()
+    return mask.filter(ImageFilter.GaussianBlur(sigma))
+
+
+def draw_face_region():
+    """The resting face as face.js draws it: both eyes open, gaze ahead, lashes, smile."""
+    shape = region_shape()
+    canvas = draw_screen(shape).astype(np.float32)
+
+    shapes = []
+    for i, cx in enumerate(EYE_CX):
+        out = -1 if i == 0 else 1
+        shapes.append(("eye", pill_mask(shape, cx, EYE_CY), cx, out))
+        shapes.append(("lash", lash_mask(shape, cx + out * EW / 2, EYE_TOP, out), cx, out))
+    shapes.append(("mouth", mouth_mask(shape), None, 0))
+
+    for kind, mask, cx, out in shapes:
+        over(canvas, glow(mask), EYE_COLOR, 0.85)
+        over(canvas, mask, EYE_COLOR)
+        if kind == "eye":
+            over(canvas, highlight_mask(shape, cx, out), (255, 255, 255))
+
+    fx, fy = face_grid()
+    inside = (((fx - FW * 0.5) / (FW * 0.42)) ** 2 + ((fy - FH * 0.06) / (FH * 0.24)) ** 2) <= 1
+    ramp = np.clip((fy - FH * 0.02) / (FH * 0.28), 0, 1)
+    gloss = np.where(inside, 0.10 * (1 - ramp), 0.0)[..., None]
+    canvas[:] = canvas * (1 - gloss) + 255 * gloss
+    return canvas
+
+
+def build_master():
+    base = Image.open(BASE / "front.png").convert("RGBA")
+    visor = Image.open(BASE / "front.visor.png").convert("L")
+    region = np.clip(draw_face_region() + 0.5, 0, 255).astype(np.uint8)
+    face = Image.fromarray(region, "RGB").resize((REGION[2] - REGION[0], REGION[3] - REGION[1]), LANCZOS)
+    layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    layer.paste(face.convert("RGBA"), REGION[:2])
+    mask = visor.copy()
+    layer.putalpha(Image.fromarray(np.minimum(np.asarray(mask), np.asarray(layer.getchannel("A"))), "L"))
+    return Image.alpha_composite(base, layer)
+
+
+def head_box(im):
+    return im.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()
+
+
+def fit(im, box_w, box_h):
+    scale = min(box_w / im.width, box_h / im.height)
+    return im.resize((max(1, round(im.width * scale)), max(1, round(im.height * scale))), LANCZOS)
+
+
+def centred(im, size, fill, crop=1.0):
+    box = head_box(im)
+    cropped = im.crop((box[0], box[1], box[2], box[1] + round((box[3] - box[1]) * crop)))
+    inner = fit(cropped, round(size * fill), round(size * fill))
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas.alpha_composite(inner, ((size - inner.width) // 2, (size - inner.height) // 2))
+    return canvas
+
+
+def app_icon_master(master):
+    size = master.width
+    big = size * 4
+    mask = Image.new("L", (big, big), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, big - 1, big - 1), radius=ICON_RADIUS * big, fill=255)
+    mask = mask.resize((size, size), LANCZOS)
+    tile = Image.new("RGBA", (size, size), INK + (255,))
+    head_size = round(size * ICON_HEAD_SCALE)
+    head = master.resize((head_size, head_size), LANCZOS)
+    offset = (size - head_size) // 2
+    tile.alpha_composite(head, (offset, offset))
+    tile.putalpha(mask)
+    return tile
+
+
+def sharpen(im):
+    return im.filter(ImageFilter.UnsharpMask(radius=0.6, percent=60, threshold=0))
+
+
+def png_bytes(im):
+    buf = io.BytesIO()
+    im.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
+
+
+def write_png(path, im):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(png_bytes(im))
+
+
+def write_text(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(text.encode("utf-8"))
+
+
+def icon_svg(tile512):
+    data = base64.b64encode(png_bytes(tile512)).decode("ascii")
+    return ('<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
+            'viewBox="0 0 512 512" width="512" height="512"><title>Seira</title>'
+            f'<image width="512" height="512" xlink:href="data:image/png;base64,{data}"/></svg>\n')
+
+
+def wordmark_body(name):
+    text = (DOCS_BRAND / name).read_text(encoding="utf-8")
+    match = re.search(r"</title>(.*)</svg>", text, re.S)
+    return match.group(1)
+
+
+def lockup_svg(master, wordmark_name):
+    box = head_box(master)
+    head = master.crop(box)
+    height = LOCKUP_HEIGHT
+    width = round(head.width * height / head.height)
+    pixels = fit(head, width * 2, height * 2)
+    data = base64.b64encode(png_bytes(pixels)).decode("ascii")
+    shift = width + LOCKUP_GAP - WORDMARK_X
+    total = 924 + shift
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
+            f'viewBox="0 0 {total} {height}" width="{total}" height="{height}" role="img" aria-label="seira.bot">'
+            f'<title>seira.bot</title>'
+            f'<image x="0" y="0" width="{width}" height="{height}" xlink:href="data:image/png;base64,{data}"/>'
+            f'<g transform="translate({shift} 0)">{wordmark_body(wordmark_name)}</g></svg>\n')
+
+
+def build_splash(master):
+    head = master.crop(head_box(master))
+    inner = fit(head, *SPLASH_BOX)
+    canvas = Image.new("RGBA", SPLASH_SIZE, (0, 0, 0, 0))
+    canvas.alpha_composite(inner, ((SPLASH_SIZE[0] - inner.width) // 2, (SPLASH_SIZE[1] - inner.height) // 2))
+    return canvas
+
+
+def main():
+    master = build_master()
+    write_png(LOGO / "seira-head.png", master)
+
+    for size in (64, 128, 256, 512):
+        write_png(LOGO / f"png/mark-{size}.png", centred(master, size, MARK_FILL))
+
+    tile = app_icon_master(master)
+    tiles = {size: tile if size == tile.width else tile.resize((size, size), LANCZOS)
+             for size in sorted({16, 24, 32, 48, 64, 128, 180, 192, 256, 512, 1024})}
+    for size in (180, 192, 512, 1024):
+        write_png(LOGO / f"png/icon-{size}.png", tiles[size])
+
+    favicons = {}
+    for size in (16, 32, 48):
+        icon = centred(master, size, 1.0, FAVICON_CROP)
+        favicons[size] = sharpen(icon) if size <= 32 else icon
+        write_png(LOGO / f"png/favicon-{size}.png", favicons[size])
+    favicons[48].save(LOGO / "favicon.ico", format="ICO", sizes=[(s, s) for s in favicons],
+                      append_images=[favicons[s] for s in (16, 32)])
+
+    for suffix in ("", "-reversed"):
+        write_text(LOGO / f"svg/seira-wordmark{suffix}.svg", (DOCS_BRAND / f"seira-wordmark{suffix}.svg").read_text(encoding="utf-8"))
+        lockup = lockup_svg(master, f"seira-wordmark{suffix}.svg")
+        write_text(LOGO / f"svg/seira-lockup{suffix}.svg", lockup)
+        write_text(DOCS_BRAND / f"seira-lockup{suffix}.svg", lockup)
+
+    write_png(ROOT / "build/icon-1024.png", tiles[1024])
+    write_png(ROOT / "electron/resources/app-icon.png", tiles[1024])
+    for base, scale in ICONSET_SIZES:
+        write_png(ROOT / f"build/icon.iconset/icon_{base}x{base}{'@2x' if scale == 2 else ''}.png", tiles[base * scale])
+    ico_tiles = [tiles[s] for s in ICO_SIZES]
+    ico_tiles[-1].save(ROOT / "build/icon.ico", format="ICO", sizes=[(s, s) for s in ICO_SIZES],
+                       append_images=ico_tiles[:-1])
+    tiles[1024].save(ROOT / "build/icon.icns", format="ICNS", append_images=[tiles[s] for s in ICNS_SIZES[:-1]])
+
+    svg = icon_svg(tiles[512])
+    write_text(ROOT / "build/icon.svg", svg)
+    write_text(ROOT / "public/app-icon.svg", svg)
+    write_png(ROOT / "public/app-icon-512.png", tiles[512])
+    write_png(ROOT / "public/app-icon-192.png", tiles[192])
+    write_png(ROOT / "public/apple-touch-icon.png", tiles[180])
+
+    splash = build_splash(master)
+    splash.save(ROOT / "electron/resources/splash-seira.webp", format="WEBP", quality=92, alpha_quality=100, method=6)
+    return 0
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else OUT_DIR)
+    sys.exit(main())

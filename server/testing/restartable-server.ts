@@ -1,12 +1,12 @@
 // A real fake-engine server in a temporary home that can be stopped and started again on the same data and port, so a
-// test can prove what survives a restart. Same environment as control-omb's launch: no user data, no developer CLIs.
+// test can prove what survives a restart. Same environment as control-seira's launch: no user data, no developer CLIs.
 import { spawn, type ChildProcess } from "node:child_process";
 import { closeSync, mkdirSync, mkdtempSync, openSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { verificationServerArgs, verificationServerEnvironment } from "../../scripts/control-omb.ts";
+import { verificationServerArgs, verificationServerEnvironment } from "../../scripts/control-seira.ts";
 import { removeTempDir, waitForExit } from "./cleanup.ts";
 import { freePortBlock } from "./ports.ts";
 

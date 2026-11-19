@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync,
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { request } from "../scripts/mcp-server.ts";
 
 it("a bot template carries its skills, which arrive disabled; originals stay; a failed install rolls back", async () => {
@@ -10,7 +10,7 @@ it("a bot template carries its skills, which arrive disabled; originals stay; a 
   console.log(JSON.stringify({ fixture: fixture.info }));
   const url = fixture.info.url;
   const post = (path: string, body: unknown) => request(path, { method: "POST", body: JSON.stringify(body) }, url);
-  const command = (...args: string[]) => runControlOmb([...args, "--url", url]);
+  const command = (...args: string[]) => runControlSeira([...args, "--url", url]);
   const instructions = (name: string, body: string) => `---\nname: ${name}\ndescription: Fixture instructions.\n---\n${body}\n`;
   const sharedText = instructions("source-check", "SHARED_SKILL_FIXTURE_MARKER");
   const privateText = instructions("private-notes", "PRIVATE_SKILL_FIXTURE_MARKER");

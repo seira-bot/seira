@@ -1,14 +1,14 @@
-// Real renderer and API against an explicit control-omb UI fixture handle.
+// Real renderer and API against an explicit control-seira UI fixture handle.
 // The only substituted responses exercise unavailable-provider and retry UI.
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { runControlOmb } from "./control-omb.ts";
+import { runControlSeira } from "./control-seira.ts";
 
 const handle = process.argv[2];
 if (!handle) throw new Error("Usage: node --experimental-strip-types scripts/verify-command-allowlist-ui.ts /path/to/fixture/ui.json");
-const ui = (verb: string, ...args: string[]) => runControlOmb(["ui", verb, "--ui", handle, ...args]) as Promise<Record<string, any>>;
+const ui = (verb: string, ...args: string[]) => runControlSeira(["ui", verb, "--ui", handle, ...args]) as Promise<Record<string, any>>;
 const evaluate = async (js: string) => (await ui("eval", "--js", js)).result;
 const click = (name: string) => ui("click", "--name", name);
 const type = (name: string, text: string) => ui("type", "--name", name, "--text", text);

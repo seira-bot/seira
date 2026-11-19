@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb, verificationServerEnvironment } from "../../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, verificationServerEnvironment } from "../../scripts/control-seira.ts";
 import { DATA_ROUTES, DATA_TOOL_NAMES, type DataCard, type DataSheet } from "../../shared/data-surface.ts";
 import { waitForExit } from "../testing/cleanup.ts";
 
@@ -37,7 +37,7 @@ it("loads, queries, shows, pages, renders and exports through the real server", 
       try { return (await fetch(url + "/api/health", { signal: AbortSignal.timeout(1_000) })).ok; } catch { return false; }
     }, { timeout: 30_000 }).toBe(true);
 
-    const { bot } = await runControlOmb(["new-bot", "--name", "Data bot", "--url", url]) as { bot: { id: string; activeTaskId: string } };
+    const { bot } = await runControlSeira(["new-bot", "--name", "Data bot", "--url", url]) as { bot: { id: string; activeTaskId: string } };
     const threadId = bot.activeTaskId;
 
     const regions = ["north", "south", "west"];
@@ -113,7 +113,7 @@ it("loads, queries, shows, pages, renders and exports through the real server", 
     };
     const envelope = (prompt: string) => prompt.match(/<data-context>.*?<\/data-context>/g) ?? [];
     const settled = async () => {
-      const outcome = await runControlOmb(["wait", "--bot", bot.id, "--task", threadId, "--timeout", "60", "--url", url]) as { status: string };
+      const outcome = await runControlSeira(["wait", "--bot", bot.id, "--task", threadId, "--timeout", "60", "--url", url]) as { status: string };
       expect(outcome.status, JSON.stringify(outcome)).toBe("settled");
     };
     const draftSql = "SELECT region FROM sales WHERE";
@@ -180,7 +180,7 @@ it("loads, queries, shows, pages, renders and exports through the real server", 
       expect(workbook.isError, workbook.text).toBe(false);
       expect(readFileSync(workbook.data.path).subarray(0, 2).toString()).toBe("PK");
       // A second instance proves cached extensions load again, without relying on the exporter's LOAD.
-      const { bot: reader } = await runControlOmb(["new-bot", "--name", "Workbook reader", "--url", url]) as { bot: { id: string; activeTaskId: string } };
+      const { bot: reader } = await runControlSeira(["new-bot", "--name", "Workbook reader", "--url", url]) as { bot: { id: string; activeTaskId: string } };
       const readerToken = await api("POST", "/api/testing/internal-capability", { botId: reader.id, threadId: reader.activeTaskId, kind: "data" }, 201, { "x-openmausbot-test-capability": CAPABILITY_KEY });
       const reloaded = await call("data_load", { source: workbook.data.path, name: "workbook_sales" }, readerToken.token);
       expect(reloaded.isError, reloaded.text).toBe(false);

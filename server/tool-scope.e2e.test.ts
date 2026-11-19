@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb, verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, verificationServerEnvironment } from "../scripts/control-seira.ts";
 
 async function withFixture(mode: "happy" | "hang", run: (helpers: {
   api(method: string, path: string, body?: unknown, headers?: Record<string, string>): Promise<{ status: number; body: any }>;
@@ -22,7 +22,7 @@ async function withFixture(mode: "happy" | "hang", run: (helpers: {
         const response = await fetch(`${fixture.info.url}${path}`, { method, headers: { "content-type": "application/json", ...headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
         return { status: response.status, body: await response.json() };
       },
-      control: (args) => runControlOmb([...args, "--url", fixture.info.url]),
+      control: (args) => runControlSeira([...args, "--url", fixture.info.url]),
       dump: async () => {
         await expect.poll(() => existsSync(fixture.fixtureDumpPath), { timeout: 15_000 }).toBe(true);
         const value = JSON.parse(readFileSync(fixture.fixtureDumpPath, "utf8"));
@@ -86,7 +86,7 @@ it.each(["direct", "preview", "room", "goal"] as const)("keeps a corrupt persist
   let restarted: ReturnType<typeof spawn> | undefined;
   const log = openSync(fixture.info.logPath, "a", 0o600);
   try {
-    const control = (args: string[]) => runControlOmb([...args, "--url", fixture.info.url]);
+    const control = (args: string[]) => runControlSeira([...args, "--url", fixture.info.url]);
     const { bot } = await control(["new-bot", "--name", "Corrupt scope fixture"]) as any;
     const { channel } = await control(["new-channel", "--name", "Corrupt scope room", "--members", bot.id]) as any;
     const stopped = once(fixture.child, "close"); fixture.child.kill(); await stopped;

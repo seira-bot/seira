@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { linkedAddress } from "../electron/bot-link-address.mjs";
 
 type Fixture = Awaited<ReturnType<typeof launchVerificationServer>>;
@@ -21,7 +21,7 @@ function place(fixture: Fixture) {
   };
   return {
     url, dataDir, api,
-    cli: (...args: string[]) => runControlOmb([...args, "--url", url]) as Promise<any>,
+    cli: (...args: string[]) => runControlSeira([...args, "--url", url]) as Promise<any>,
     plan(botId: string, ...turns: unknown[]) { (plans[botId] ??= { turns: [] }).turns.push(...turns); writeFileSync(planPath, JSON.stringify(plans)); },
     providerTurns: (): any[] => existsSync(`${planPath}.evidence.jsonl`)
       ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [],

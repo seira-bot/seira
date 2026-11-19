@@ -1,4 +1,4 @@
-// Bot pages in the real <App/> through `control-omb ui`: a page drawn to its window keeps a page's height in the chat,
+// Bot pages in the real <App/> through `control-seira ui`: a page drawn to its window keeps a page's height in the chat,
 // and a page that flows keeps sizing to its content. Needs the pinned agent-browser binary: runs when one resolves or
 // OMB_UI_E2E=1 asks for the verified download; otherwise skipped.
 import { spawn } from "node:child_process";
@@ -10,8 +10,8 @@ import { afterAll, expect, it } from "vitest";
 
 import { resolveAgentBrowserBinary } from "../../server/browser-engine.ts";
 import { removeTempDir, waitForExit } from "../../server/testing/cleanup.ts";
-import { runControlOmb } from "../control-omb.ts";
-import { UI_TOOLS_DIR, agentBrowser, sessionEnv, type UiHandle } from "./control-omb-ui.ts";
+import { runControlSeira } from "../control-seira.ts";
+import { UI_TOOLS_DIR, agentBrowser, sessionEnv, type UiHandle } from "./control-seira-ui.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const forced = process.env.OMB_UI_E2E === "1";
@@ -70,7 +70,7 @@ const PAGES = [
 ] as const;
 
 const ui = (verb: string, handle: string, ...args: string[]) =>
-  runControlOmb(["ui", verb, "--ui", handle, ...args]) as Promise<Record<string, any>>;
+  runControlSeira(["ui", verb, "--ui", handle, ...args]) as Promise<Record<string, any>>;
 
 let child: ReturnType<typeof spawn> | undefined;
 afterAll(async () => {
@@ -81,7 +81,7 @@ afterAll(async () => {
 (enabled ? it : it.skip)("shows every page in a fixed preview card, the page inside at its own height", async () => {
   mkdirSync(evidenceDir, { recursive: true });
   const calls = join(evidenceDir, "tool-calls.json");
-  child = spawn(process.execPath, ["--experimental-strip-types", join(ROOT, "scripts/control-omb.ts"), "ui", "launch"], {
+  child = spawn(process.execPath, ["--experimental-strip-types", join(ROOT, "scripts/control-seira.ts"), "ui", "launch"], {
     cwd: ROOT, env: { ...process.env, FAKE_CLAUDE_TOOL_CALLS_FILE: calls }, stdio: ["ignore", "pipe", "pipe"],
   });
   let stdout = "", stderr = "";
@@ -112,8 +112,8 @@ afterAll(async () => {
   const measured: Record<string, { box: number; frame: number }> = {};
   for (const [index, page] of PAGES.entries()) {
     writeFileSync(calls, JSON.stringify([{ name: "show_html", server: "agents", input: page.input }]));
-    await runControlOmb(["send", "--bot", botId, "--text", `Show ${page.input.title}.`, "--url", url]);
-    expect((await runControlOmb(["wait", "--bot", botId, "--timeout", "60", "--url", url]) as { status: string }).status).toBe("settled");
+    await runControlSeira(["send", "--bot", botId, "--text", `Show ${page.input.title}.`, "--url", url]);
+    expect((await runControlSeira(["wait", "--bot", botId, "--timeout", "60", "--url", url]) as { status: string }).status).toBe("settled");
     // A page drawn to its window never changes the frame's height: steady means the same for three seconds.
     const seen: string[] = [];
     await expect.poll(async () => {

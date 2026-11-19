@@ -9,7 +9,7 @@ without a real Google account, a model or the Electron app.
 pnpm exec vitest run server/proactive-routines.e2e.test.ts
 ```
 
-It launches the same isolated fixture as `control-omb launch`: a temporary home
+It launches the same isolated fixture as `control-seira launch`: a temporary home
 and data directory and the fake Claude CLI. It points the fixture at
 `server/testing/fake-connected-apps.ts`, a loopback stand-in for the
 connected-apps service that answers Composio's Gmail and Calendar tools from

@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { launchVerificationServer, verificationServerArgs, verificationServerEnvironment, type VerificationServer } from "../control-omb.ts";
+import { launchVerificationServer, verificationServerArgs, verificationServerEnvironment, type VerificationServer } from "../control-seira.ts";
 import { waitForExit } from "../../server/testing/cleanup.ts";
 import { hostTimeout } from "../../server/testing/host-timeout.ts";
 

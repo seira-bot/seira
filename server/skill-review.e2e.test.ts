@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import type { WireBot, WireMessage } from "../shared/wire.ts";
 import { SKILL_REVIEW_MARKER } from "./skill-review.ts";
 
@@ -34,8 +34,8 @@ it("reviews a conversation in the background once its tool steps reach the thres
     return response.json() as Promise<T>;
   };
   const turn = async (bot: WireBot, text: string) => {
-    await runControlOmb(["send", "--bot", bot.id, "--task", bot.threadId, "--text", text, "--url", url]);
-    expect(await runControlOmb(["wait", "--bot", bot.id, "--task", bot.threadId, "--timeout", "30", "--url", url])).toMatchObject({ status: "settled" });
+    await runControlSeira(["send", "--bot", bot.id, "--task", bot.threadId, "--text", text, "--url", url]);
+    expect(await runControlSeira(["wait", "--bot", bot.id, "--task", bot.threadId, "--timeout", "30", "--url", url])).toMatchObject({ status: "settled" });
   };
   const messages = async (bot: WireBot) =>
     ((await api<{ bots: Array<WireBot & { messages: WireMessage[] }> }>("/api/bots")).bots.find((candidate) => candidate.id === bot.id)?.messages ?? []);
@@ -87,8 +87,8 @@ it("reviews a Codex bot's conversation through Codex's own background call", asy
     return response.json() as Promise<T>;
   };
   const turn = async (bot: WireBot, text: string) => {
-    await runControlOmb(["send", "--bot", bot.id, "--task", bot.threadId, "--text", text, "--url", url]);
-    expect(await runControlOmb(["wait", "--bot", bot.id, "--task", bot.threadId, "--timeout", "30", "--url", url])).toMatchObject({ status: "settled" });
+    await runControlSeira(["send", "--bot", bot.id, "--task", bot.threadId, "--text", text, "--url", url]);
+    expect(await runControlSeira(["wait", "--bot", bot.id, "--task", bot.threadId, "--timeout", "30", "--url", url])).toMatchObject({ status: "settled" });
   };
   const messages = async (bot: WireBot) =>
     ((await api<{ bots: Array<WireBot & { messages: WireMessage[] }> }>("/api/bots")).bots.find((candidate) => candidate.id === bot.id)?.messages ?? []);

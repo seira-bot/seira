@@ -10,12 +10,12 @@ import {
   HELP,
   HELP_UI,
   launchVerificationServer,
-  runControlOmb,
-} from "../scripts/control-omb.ts";
-import { installedChrome, UI_MUTATING } from "../scripts/testing/control-omb-ui.ts";
+  runControlSeira,
+} from "../scripts/control-seira.ts";
+import { installedChrome, UI_MUTATING } from "../scripts/testing/control-seira-ui.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
-describe("control-omb command mapping", () => {
+describe("control-seira command mapping", () => {
   it("treats unhealthy doctor and non-settled waits as command failures", () => {
     expect(controlResultSucceeded("doctor", { ok: true })).toBe(true);
     expect(controlResultSucceeded("doctor", { ok: false })).toBe(false);
@@ -32,17 +32,17 @@ describe("control-omb command mapping", () => {
     const verbs = [...UI_MUTATING, "snapshot", "screenshot", "console", "wait-settle"];
     expect(UI_MUTATING).toEqual(new Set(["click", "type", "press", "flag", "eval"]));
     for (const verb of verbs) {
-      await expect(runControlOmb(["ui", verb], { env })).rejects.toMatchObject({
+      await expect(runControlSeira(["ui", verb], { env })).rejects.toMatchObject({
         message: `ui ${verb} requires --ui HANDLE`,
         hint: expect.stringContaining("ui launch"),
       });
       expect(HELP_UI).toContain(`\n  ui ${verb} --ui HANDLE`);
     }
     expect(HELP).toContain(HELP_UI);
-    expect(await runControlOmb(["ui", "help"])).toBe(HELP_UI);
-    await expect(runControlOmb(["ui", "launch"])).rejects.toThrow("ui launch is available only from the executable CLI");
-    await expect(runControlOmb(["ui", "bogus"])).rejects.toThrow('unknown ui command "bogus"');
-    await expect(runControlOmb(["ui", "snapshot", "--ui", "/nowhere/ui.json"])).rejects.toThrow("could not read the ui handle");
+    expect(await runControlSeira(["ui", "help"])).toBe(HELP_UI);
+    await expect(runControlSeira(["ui", "launch"])).rejects.toThrow("ui launch is available only from the executable CLI");
+    await expect(runControlSeira(["ui", "bogus"])).rejects.toThrow('unknown ui command "bogus"');
+    await expect(runControlSeira(["ui", "snapshot", "--ui", "/nowhere/ui.json"])).rejects.toThrow("could not read the ui handle");
   });
 
   it("refuses a handle whose launch has already been stopped", async () => {
@@ -53,12 +53,12 @@ describe("control-omb command mapping", () => {
         url: "http://127.0.0.1:19999", previewUrl: "http://127.0.0.1:5199/__threads.html", session: "omb-ui-19999",
         binary: "/fixture/agent-browser", home: join(dir, "gone"), botId: "bot-1", logPath: "/fixture/server.log", chrome: null,
       }));
-      await expect(runControlOmb(["ui", "snapshot", "--ui", handle])).rejects.toMatchObject({
+      await expect(runControlSeira(["ui", "snapshot", "--ui", handle])).rejects.toMatchObject({
         message: expect.stringContaining("data directory is gone"),
         hint: expect.stringContaining("ui launch"),
       });
       writeFileSync(handle, JSON.stringify({ url: "http://127.0.0.1:19999" }));
-      await expect(runControlOmb(["ui", "snapshot", "--ui", handle])).rejects.toThrow("lacks previewUrl");
+      await expect(runControlSeira(["ui", "snapshot", "--ui", handle])).rejects.toThrow("lacks previewUrl");
     } finally {
       await removeTempDir(dir);
     }
@@ -88,11 +88,11 @@ describe("control-omb command mapping", () => {
   it("runs directly under Node's strip-only TypeScript loader", () => {
     const result = spawnSync(process.execPath, [
       "--experimental-strip-types",
-      join(process.cwd(), "scripts", "control-omb.ts"),
+      join(process.cwd(), "scripts", "control-seira.ts"),
       "help",
     ], { encoding: "utf8" });
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain("control-omb");
+    expect(result.stdout).toContain("control-seira");
   });
 
   it("composes doctor from the shared health and model tools", async () => {
@@ -104,7 +104,7 @@ describe("control-omb command mapping", () => {
             { instanceId: "missing", snapshot: { state: "unavailable" } },
           ],
         });
-    const result = await runControlOmb(["doctor", "--url", "http://127.0.0.1:19999"], {
+    const result = await runControlSeira(["doctor", "--url", "http://127.0.0.1:19999"], {
       callTool: callTool as any,
     }) as any;
     expect(callTool.mock.calls.map(([name]) => name)).toEqual(["get_system_health", "list_available_models"]);
@@ -120,7 +120,7 @@ describe("control-omb command mapping", () => {
       ? { status: "connected", app: "another-app" }
       : { instances: [{ instanceId: "ready", snapshot: { state: "available" } }] });
 
-    const result = await runControlOmb(["doctor", "--url", "http://127.0.0.1:19999"], {
+    const result = await runControlSeira(["doctor", "--url", "http://127.0.0.1:19999"], {
       callTool: callTool as any,
     }) as any;
 
@@ -128,7 +128,7 @@ describe("control-omb command mapping", () => {
   });
 
   it("refuses to mutate a silently discovered live app", async () => {
-    await expect(runControlOmb(["new-bot", "--name", "Probe"], {
+    await expect(runControlSeira(["new-bot", "--name", "Probe"], {
       callTool: vi.fn() as any,
       env: {},
     })).rejects.toMatchObject({
@@ -139,12 +139,12 @@ describe("control-omb command mapping", () => {
   it("maps bounded reads and dry-run actions without reimplementing them", async () => {
     const callTool = vi.fn(async (name: string, args: Record<string, unknown>) => ({ name, args }));
     const env = { OPENMAUSBOT_URL: "http://127.0.0.1:19999" };
-    await expect(runControlOmb(["messages", "--channel", "room-1", "--limit", "20"], {
+    await expect(runControlSeira(["messages", "--channel", "room-1", "--limit", "20"], {
       callTool: callTool as any,
       env,
     })).resolves.toEqual({ name: "get_channel_messages", args: { channel_id: "room-1", limit: 20 } });
 
-    await expect(runControlOmb(["send", "--bot", "bot-1", "--text", "hello", "--dry-run"], {
+    await expect(runControlSeira(["send", "--bot", "bot-1", "--text", "hello", "--dry-run"], {
       callTool: callTool as any,
       env: {},
     })).resolves.toMatchObject({
@@ -161,14 +161,14 @@ describe("control-omb command mapping", () => {
     // a cleanly resumed turn never compacts.
     const callTool = vi.fn(async (name: string, args: Record<string, unknown>) => ({ name, args }));
     const env = { OPENMAUSBOT_URL: "http://127.0.0.1:19999" };
-    await expect(runControlOmb(
+    await expect(runControlSeira(
       ["edit", "--bot", "bot-1", "--message", "msg-9", "--text", "say that again"],
       { callTool: callTool as any, env },
     )).resolves.toEqual({
       name: "edit_bot_message",
       args: { bot_id: "bot-1", message_id: "msg-9", text: "say that again" },
     });
-    await expect(runControlOmb(
+    await expect(runControlSeira(
       ["edit", "--bot", "bot-1", "--message", "msg-9", "--text", "again", "--task", "task-2", "--dry-run"],
       { callTool: callTool as any, env: {} },
     )).resolves.toMatchObject({
@@ -180,7 +180,7 @@ describe("control-omb command mapping", () => {
   });
 
   it("treats edit as mutating, so it cannot reach a silently discovered app", async () => {
-    await expect(runControlOmb(["edit", "--bot", "b", "--message", "m", "--text", "x"], {
+    await expect(runControlSeira(["edit", "--bot", "b", "--message", "m", "--text", "x"], {
       callTool: vi.fn() as any,
       env: {},
     })).rejects.toMatchObject({
@@ -196,18 +196,18 @@ describe("control-omb command mapping", () => {
       ["edit", "--bot", "b", "--text", "x"],
       ["edit", "--bot", "b", "--message", "m"],
     ]) {
-      await expect(runControlOmb(args, { callTool: callTool as any, env })).rejects.toThrow(/is required/);
+      await expect(runControlSeira(args, { callTool: callTool as any, env })).rejects.toThrow(/is required/);
     }
     expect(callTool).not.toHaveBeenCalled();
   });
 
   it("rejects invalid bounds before the shared tool is called", async () => {
     const callTool = vi.fn();
-    await expect(runControlOmb(["wait", "--bot", "bot-1", "--timeout", "0"], {
+    await expect(runControlSeira(["wait", "--bot", "bot-1", "--timeout", "0"], {
       callTool: callTool as any,
       env: {},
     })).rejects.toThrow("--timeout must be a duration from 1s to 24h");
-    await expect(runControlOmb(["wait", "--bot", "bot-1", "--timeout", "25h"], { callTool: callTool as any, env: {} }))
+    await expect(runControlSeira(["wait", "--bot", "bot-1", "--timeout", "25h"], { callTool: callTool as any, env: {} }))
       .rejects.toThrow("--timeout must be a duration from 1s to 24h");
     expect(callTool).not.toHaveBeenCalled();
   });
@@ -222,19 +222,19 @@ describe("control-omb command mapping", () => {
       ["interrupt", "interrupt_conversation", []],
       ["set-model", "set_bot_model", ["--instance", "claude", "--model", "model-b", "--effort", "high"]],
     ] as const) {
-      await expect(runControlOmb([command, "--bot", "bot-1", "--task", "task-a", ...extra], dependencies))
+      await expect(runControlSeira([command, "--bot", "bot-1", "--task", "task-a", ...extra], dependencies))
         .resolves.toMatchObject({ name: tool, args: { task_id: "task-a" } });
     }
     expect(callTool.mock.calls.at(-1)?.[1]).toEqual({
       bot_id: "bot-1", task_id: "task-a", instance_id: "claude", model: "model-b", effort: "high",
     });
-    await expect(runControlOmb(["set-model", "--bot", "bot-1", "--instance", "claude", "--model", "model-b"], {
+    await expect(runControlSeira(["set-model", "--bot", "bot-1", "--instance", "claude", "--model", "model-b"], {
       callTool: callTool as any, env: {},
     })).rejects.toThrow("explicit Seira instance");
   });
 });
 
-describe("control-omb isolated verification loop", () => {
+describe("control-seira isolated verification loop", () => {
   it.each([
     "tcp://127.0.0.1:2375",
     "ssh://user@production.example/run/podman.sock",
@@ -256,16 +256,16 @@ describe("control-omb isolated verification loop", () => {
     const session = await launchVerificationServer(parentEnv);
     const env = { OPENMAUSBOT_URL: session.info.url };
     try {
-      const doctor = await runControlOmb(["doctor"], { env }) as any;
+      const doctor = await runControlSeira(["doctor"], { env }) as any;
       expect(doctor.ok).toBe(true);
       expect(doctor.availableEngines).toEqual(["claude"]);
 
-      const created = await runControlOmb(["new-bot", "--name", "Verification Probe"], { env }) as any;
+      const created = await runControlSeira(["new-bot", "--name", "Verification Probe"], { env }) as any;
       const botId = created.bot.id as string;
-      await runControlOmb(["send", "--bot", botId, "--text", "hello from the verification test"], { env });
-      const settled = await runControlOmb(["wait", "--bot", botId, "--timeout", "20"], { env }) as any;
+      await runControlSeira(["send", "--bot", botId, "--text", "hello from the verification test"], { env });
+      const settled = await runControlSeira(["wait", "--bot", botId, "--timeout", "20"], { env }) as any;
       expect(settled.status).toBe("settled");
-      const transcript = await runControlOmb(["messages", "--bot", botId, "--limit", "10"], { env }) as any;
+      const transcript = await runControlSeira(["messages", "--bot", botId, "--limit", "10"], { env }) as any;
       expect(transcript.messages.some((message: { role?: string }) => message.role === "bot")).toBe(true);
       const fixtureEnv = JSON.parse(readFileSync(session.fixtureDumpPath, "utf8")).env as Record<string, string>;
       expect(fixtureEnv).not.toHaveProperty("COMPOSIO_API_KEY");
@@ -307,16 +307,16 @@ describe("control-omb isolated verification loop", () => {
   it("scripts the fake engine's tool calls from the launcher's environment", async () => {
     const session = await launchVerificationServer({
       ...process.env,
-      FAKE_CLAUDE_TOOL_CALLS: '[{"name":"Bash","input":{"command":"pnpm control:omb doctor","password":"fixture-secret"},"output":{"text":"fixture healthy","api_key":"fixture-output-secret"},"ok":true},{"name":"Bash","input":{"command":"false"},"output":"fixture command failed","ok":false}]',
+      FAKE_CLAUDE_TOOL_CALLS: '[{"name":"Bash","input":{"command":"pnpm control:seira doctor","password":"fixture-secret"},"output":{"text":"fixture healthy","api_key":"fixture-output-secret"},"ok":true},{"name":"Bash","input":{"command":"false"},"output":"fixture command failed","ok":false}]',
     });
     const env = { OPENMAUSBOT_URL: session.info.url };
     try {
-      const created = await runControlOmb(["new-bot", "--name", "Tool Script Probe"], { env }) as any;
+      const created = await runControlSeira(["new-bot", "--name", "Tool Script Probe"], { env }) as any;
       const botId = created.bot.id as string;
-      await runControlOmb(["send", "--bot", botId, "--text", "run both commands"], { env });
-      const settled = await runControlOmb(["wait", "--bot", botId, "--timeout", "20"], { env }) as any;
+      await runControlSeira(["send", "--bot", botId, "--text", "run both commands"], { env });
+      const settled = await runControlSeira(["wait", "--bot", botId, "--timeout", "20"], { env }) as any;
       expect(settled.status).toBe("settled");
-      const transcript = await runControlOmb(["messages", "--bot", botId, "--limit", "10"], { env }) as any;
+      const transcript = await runControlSeira(["messages", "--bot", botId, "--limit", "10"], { env }) as any;
       const tools = transcript.messages
         .filter((message: { kind?: string }) => message.kind === "activity")
         .map((message: { tool?: { name?: string; ok?: boolean } }) => ({ name: message.tool?.name, ok: message.tool?.ok }));
@@ -329,7 +329,7 @@ describe("control-omb isolated verification loop", () => {
       expect(response.ok).toBe(true);
       const rendererTranscript = await response.json() as { messages: Array<{ kind: string; tool?: { input?: string; output?: string } }> };
       const recorded = rendererTranscript.messages.filter((message) => message.kind === "activity");
-      expect(recorded[0].tool?.input).toContain("pnpm control:omb doctor");
+      expect(recorded[0].tool?.input).toContain("pnpm control:seira doctor");
       expect(recorded[0].tool?.output).toContain("fixture healthy");
       expect(recorded[1].tool?.output).toBe("fixture command failed");
       expect(JSON.stringify(recorded)).not.toContain("fixture-secret");

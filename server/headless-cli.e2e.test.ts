@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { launchVerificationServer, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, type VerificationServer } from "../scripts/control-seira.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
 const ENTRY = join(import.meta.dirname, "openmausbot.ts");

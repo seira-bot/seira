@@ -12,7 +12,7 @@ pnpm exec vitest run server/commands.test.ts server/store.test.ts server/message
 ```
 
 The first test starts `launchVerificationServer`, then uses the shared
-`control:omb` surface to create two bots, send consecutive direct turns,
+`control:seira` surface to create two bots, send consecutive direct turns,
 wait for settlement, create a room, send to it, and read both transcripts.
 It checks per-turn hook results (including reused tool IDs), unique persisted
 receipts and the room speaker. Commands, wait results and transcripts are
@@ -61,7 +61,7 @@ detached, or to use `mdfind`/a scoped folder instead of `find /`.
 ```sh
 pnpm exec vitest run server/shell-timeout-hint.test.ts server/hooks.e2e.test.ts
 FAKE_CLAUDE_HOOKS=1 FAKE_CLAUDE_TOOL_CALLS='[{"name":"Bash","input":{"command":"find / -name x"},"ok":false,"output":"Exit code 143\nCommand timed out after 2m 0s"}]' \
-  node --experimental-strip-types scripts/control-omb.ts launch
+  node --experimental-strip-types scripts/control-seira.ts launch
 ```
 
 Send one direct turn and one channel turn, then wait for each to settle. The fake echoes each

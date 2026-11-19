@@ -6,7 +6,7 @@ import { closeSync, existsSync, openSync, readFileSync, writeFileSync } from "no
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 import { readRegistry, writeRegistry } from "./testing/registry.ts";
@@ -31,7 +31,7 @@ it("applies requested Full Access workflows through MCP without duplicate approv
     if (method !== "GET") evidence.push({ method, path, body, status: response.status, result });
     return result;
   };
-  const cli = (...args: string[]) => runControlOmb([...args, "--url", url]) as Promise<any>;
+  const cli = (...args: string[]) => runControlSeira([...args, "--url", url]) as Promise<any>;
   const bots = async () => (await api("GET", "/api/bots")).bots as any[];
   const messages = async (threadId: string) => (await api("GET", `/api/threads/${threadId}/messages?limit=100`)).messages as any[];
   const unanswered = async (threadId: string) => (await messages(threadId)).filter(message => message.card && !message.card.answered && !message.card.dismissed);

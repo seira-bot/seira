@@ -23,10 +23,18 @@ describe("generic rules", () => {
     expect(one("-----BEGIN OPENSSH PRIVATE KEY-----")).toEqual(["docs/setup.md:1: private key"]);
     expect(one(`token: ghp_${"a".repeat(36)}`)).toEqual(["docs/setup.md:1: provider API key"]);
     expect(one("DEPLOY_TOKEN=4f9c2a7e1b3d5f6a8c9e")).toEqual(["docs/setup.md:1: secret value in an assignment"]);
+    expect(one("DEPLOY_TOKEN = config.f4c2a7e1b3d5f6a8c9e")).toEqual(["docs/setup.md:1: secret value in an assignment"]);
   });
 
   it("allows references to a secret", () => {
-    for (const text of ["API_KEY=", "TOKEN=${TOKEN}", "API_KEY=<your key>", "SECRET='$SECRET_FROM_VAULT'"]) {
+    for (const text of [
+      "API_KEY=",
+      "TOKEN=${TOKEN}",
+      "API_KEY=<your key>",
+      "SECRET='$SECRET_FROM_VAULT'",
+      "childEnv.OMB_CLOUD_X_TOKEN = parentEnv.OMB_CLOUD_X_TOKEN;",
+      "const DEPLOY_TOKEN = process.env.DEPLOY_TOKEN_VALUE",
+    ]) {
       expect(one(text)).toEqual([]);
     }
   });

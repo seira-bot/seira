@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { readRegistry } from "./testing/registry.ts";
 
 async function launch() {
@@ -17,7 +17,7 @@ async function launch() {
     expect(response.status, `${method} ${path}: ${JSON.stringify(value)}`).toBe(status);
     return value;
   };
-  const cli = (...args: string[]) => runControlOmb([...args, "--url", url]) as Promise<any>;
+  const cli = (...args: string[]) => runControlSeira([...args, "--url", url]) as Promise<any>;
   const wire = async (botId: string) => (await api("GET", "/api/bots")).bots.find((bot: any) => bot.id === botId);
   const tasks = async (botId: string) => (await wire(botId)).tasks as any[];
   const stamps = (botId: string) => Object.fromEntries((readRegistry(dataDir).bots as any[])

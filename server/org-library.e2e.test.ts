@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer } from "../scripts/control-seira.ts";
 import { canonicalJson, parsePackageDocument } from "../shared/package-format.ts";
 
 const FIXTURES = join(import.meta.dirname, "..", "shared", "package-fixtures");

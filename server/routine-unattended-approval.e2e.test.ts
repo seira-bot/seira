@@ -6,7 +6,7 @@ import { connect, type Socket } from "node:net";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, type VerificationServer } from "../scripts/control-seira.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { openSse, type SseRecorder } from "./testing/sse.ts";
 
@@ -29,7 +29,7 @@ it("waits for the person, tells them at once, and stops saying nobody answered t
     expect(response.status, `${method} ${path}: ${JSON.stringify(value)}`).toBeLessThan(300);
     return value;
   };
-  const bot = (await runControlOmb(["new-bot", "--name", "Inbox bot", "--url", url]) as any).bot;
+  const bot = (await runControlSeira(["new-bot", "--name", "Inbox bot", "--url", url]) as any).bot;
   // Each launch writes where the test can find its permission broker.
   const wrapper = join(dataDir, "claude-dumping.mjs");
   writeFileSync(wrapper, [

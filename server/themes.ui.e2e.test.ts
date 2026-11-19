@@ -7,7 +7,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { WELCOME_VERSION } from "../electron/onboarding-record.mjs";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 
 const { OMB_UI_CHROMIUM: chromiumPath, OMB_UI_PLAYWRIGHT_CORE: playwrightPath, OMB_UI_DIST: dist, OMB_UI_SHOTS: shots } = process.env;
 const ready = Boolean(chromiumPath && playwrightPath && dist);
@@ -37,7 +37,7 @@ it.skipIf(!ready)("paints a theme live, lists it in Settings, and the reset keys
     return { status: res.status, body: await res.json().catch(() => ({})) as any };
   };
   await api("PUT", "/api/config", { onboarding: { completedAt: new Date().toISOString(), version: WELCOME_VERSION } });
-  await runControlOmb(["new-bot", "--name", "Scout", "--url", url]);
+  await runControlSeira(["new-bot", "--name", "Scout", "--url", url]);
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
   const remote: string[] = [];
   page.on("request", (request: any) => { if (!request.url().startsWith(url)) remote.push(request.url()); });

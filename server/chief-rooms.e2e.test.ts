@@ -4,7 +4,7 @@ import { createInterface } from "node:readline";
 import { expect, it } from "vitest";
 import { z } from "zod";
 
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 
 type Bot = { id: string; threadId: string; name: string };
@@ -19,7 +19,7 @@ it("creates and manages an own-section room through the mounted Chief MCP proxy"
   const evidence: unknown[] = [{ fixture: fixture.info }];
   const proxies: ChildProcess[] = [];
   const control = async (args: string[]) => {
-    const result = await runControlOmb([...args, "--url", fixture.info.url]);
+    const result = await runControlSeira([...args, "--url", fixture.info.url]);
     evidence.push({ command: args, result });
     return result;
   };

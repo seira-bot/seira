@@ -6,8 +6,8 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "./control-omb.ts";
-import { agentBrowser, ensureUiBrowser, sessionEnv } from "./testing/control-omb-ui.ts";
+import { launchVerificationServer, runControlSeira, type VerificationServer } from "./control-seira.ts";
+import { agentBrowser, ensureUiBrowser, sessionEnv } from "./testing/control-seira-ui.ts";
 import { fixtureApi } from "./testing/preview-fixture.ts";
 import { fakeVnc } from "./testing/fake-vnc.ts";
 import { BASE_IMAGE_DIGEST, CUA_DRIVER_VERSION, CONTAINER, IMAGE, IMAGE_LAYER_VERSION } from "../server/container-computer.ts";
@@ -235,7 +235,7 @@ process.on('SIGTERM',()=>{fs.appendFileSync(log,'close ');process.exit(0)});
   await nextConnection;
   await command("wait", "--fn", "document.getElementById('status').textContent === 'Desktop connected'");
   // Exercise the real VPS join route, SSH process lifecycle and the same UI.
-  await runControlOmb(["new-bot", "--name", "VPS fixture", "--url", fixture.info.url]);
+  await runControlSeira(["new-bot", "--name", "VPS fixture", "--url", fixture.info.url]);
   const { bots } = await api("GET", "/api/bots?messages=0");
   const vpsBot = bots.find((bot: { name: string }) => bot.name === "VPS fixture");
   await api("PATCH", "/api/config", { vps: { sshAlias: "viewer-fixture" } });

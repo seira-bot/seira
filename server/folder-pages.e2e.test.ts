@@ -6,7 +6,7 @@ import { createServer, type Server } from "node:http";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { FAKE_DESKTOP_TOKEN, fakePagesService } from "./testing/fake-pages.ts";
 
 const owner = randomBytes(32).toString("base64url");
@@ -49,7 +49,7 @@ afterAll(async () => {
 });
 
 it("shows a dashboard folder inline, serves its Parquet to the frame by token only, keeps other bots out, and gives the card its link on publish", async () => {
-  const cli = (...args: string[]) => runControlOmb(args, { env: { OPENMAUSBOT_URL: fixture.info.url } }) as Promise<any>;
+  const cli = (...args: string[]) => runControlSeira(args, { env: { OPENMAUSBOT_URL: fixture.info.url } }) as Promise<any>;
   const api = async (path: string, init: RequestInit = {}) => {
     const response = await fetch(`${fixture.info.url}${path}`, { ...init, headers: { "content-type": "application/json" } });
     return { status: response.status, body: await response.json() as any };
@@ -113,7 +113,7 @@ it("shows a dashboard folder inline, serves its Parquet to the frame by token on
 }, 120_000);
 
 it("streams a folder's video to the card by byte range, leaves it out of a publish, and refuses it once the file is replaced", async () => {
-  const cli = (...args: string[]) => runControlOmb(args, { env: { OPENMAUSBOT_URL: fixture.info.url } }) as Promise<any>;
+  const cli = (...args: string[]) => runControlSeira(args, { env: { OPENMAUSBOT_URL: fixture.info.url } }) as Promise<any>;
   const api = async (path: string) => (await fetch(`${fixture.info.url}${path}`, { headers: { "content-type": "application/json" } })).json() as Promise<any>;
   const planPath = join(fixture.info.dataDir, "room-plan.json");
   const reply = (botId: string) => readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").map((line) => JSON.parse(line)).filter((entry: any) => entry.botId === botId)

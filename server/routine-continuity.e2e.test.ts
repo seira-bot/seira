@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 
 it("passes the previous report to the real fake-engine turn only when continuity is enabled", async () => {
   const fixture = await launchVerificationServer();
@@ -16,8 +16,8 @@ it("passes the previous report to the real fake-engine turn only when continuity
     return result as any;
   };
   try {
-    expect((await runControlOmb(["doctor"], { env }) as any).ok).toBe(true);
-    const { bot } = await runControlOmb(["new-bot", "--name", "Continuity fixture"], { env }) as any;
+    expect((await runControlSeira(["doctor"], { env }) as any).ok).toBe(true);
+    const { bot } = await runControlSeira(["new-bot", "--name", "Continuity fixture"], { env }) as any;
     const { routine } = await api("POST", "/api/routines", {
       name: "Continuity fixture",
       prompt: "Report the current fixture state.",

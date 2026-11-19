@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 
-import { launchVerificationServer, verificationServerEnvironment, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, verificationServerEnvironment, type VerificationServer } from "../scripts/control-seira.ts";
 import { PHONE_MCP_SERVER } from "../shared/phone-apps.ts";
 import { harnessMcpTokenEnv } from "./harness-mcp-token.ts";
 import { PHONE_PLACE_PROMPT } from "./phones/instructions.ts";

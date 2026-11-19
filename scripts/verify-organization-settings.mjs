@@ -276,7 +276,7 @@ if (process.versions.electron && process.argv.includes(flag)) {
   const { createServer } = await import("vite");
   const { default: react } = await import("@vitejs/plugin-react");
   const { default: tailwindcss } = await import("@tailwindcss/vite");
-  const { launchVerificationServer } = await import("./control-omb.ts");
+  const { launchVerificationServer } = await import("./control-seira.ts");
   const fixture = await launchVerificationServer();
   const output = mkdtempSync(join(tmpdir(), "omb-organization-ui-"));
   for (const name of ["home", "user-data"]) mkdirSync(join(output, name));

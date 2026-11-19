@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb, verificationServerEnvironment, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, verificationServerEnvironment, type VerificationServer } from "../scripts/control-seira.ts";
 import { ROUTINE_SUPERSEDED } from "./routine-execution.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
@@ -33,7 +33,7 @@ it("starts the next scheduled run of a routine whose sign-in nobody answered, an
   };
   const runs = async () => (await api("GET", "/api/routines")).runs as any[];
   const messages = async (threadId: string) => (await api("GET", `/api/threads/${threadId}/messages?limit=100`)).messages as any[];
-  const bot = (await runControlOmb(["new-bot", "--name", "Morning bot", "--url", url]) as any).bot;
+  const bot = (await runControlSeira(["new-bot", "--name", "Morning bot", "--url", url]) as any).bot;
   // Each conversation's turn waits on its own gate file, so a run stays running until the test finishes it.
   const wrapper = join(dataDir, "routine-gated.mjs");
   writeFileSync(wrapper, [

@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 import { resolveAgentBrowserBinary } from "../../server/browser-engine.ts";
 import { waitForExit } from "../../server/testing/cleanup.ts";
-import { runControlOmb } from "../control-omb.ts";
-import { ENABLE_ADVANCED_UI, OPEN_SIDEBAR_TOOLS, UI_TOOLS_DIR } from "./control-omb-ui.ts";
+import { runControlSeira } from "../control-seira.ts";
+import { ENABLE_ADVANCED_UI, OPEN_SIDEBAR_TOOLS, UI_TOOLS_DIR } from "./control-seira-ui.ts";
 import { fixtureApi } from "./preview-fixture.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -26,7 +26,7 @@ type BotRecord = {
   const receipts: Record<string, unknown> = { pointerInput: "synthetic DOM events; native pointer capture is not proven" };
   try {
     let stdout = "", stderr = "";
-    child = spawn(process.execPath, ["--experimental-strip-types", join(ROOT, "scripts/control-omb.ts"), "ui", "launch"], {
+    child = spawn(process.execPath, ["--experimental-strip-types", join(ROOT, "scripts/control-seira.ts"), "ui", "launch"], {
       cwd: ROOT, env: process.env, stdio: ["ignore", "pipe", "pipe"],
     });
     child.stdout!.on("data", (chunk: Buffer) => { stdout += String(chunk); });
@@ -38,7 +38,7 @@ type BotRecord = {
     }, { timeout: binary ? 180_000 : 600_000, interval: 250 }).toBe(true);
     const fixture = info!;
     const api = fixtureApi(fixture.url);
-    const ui = (verb: string, ...args: string[]) => runControlOmb(["ui", verb, "--ui", fixture.ui, ...args]) as Promise<Record<string, any>>;
+    const ui = (verb: string, ...args: string[]) => runControlSeira(["ui", verb, "--ui", fixture.ui, ...args]) as Promise<Record<string, any>>;
     await ui("eval", "--js", ENABLE_ADVANCED_UI);
     const evaluate = async (js: string) => (await ui("eval", "--js", js)).result;
     const snapshot = async () => (await ui("snapshot")).snapshot as string;
@@ -59,7 +59,7 @@ type BotRecord = {
       }, { timeout: 10_000, message: `one ${role ?? "button/menuitem"} named ${name}` }).toBe(1);
       await ui("click", "--ref", `@${matches[0][0]}`);
     };
-    const control = (...args: string[]) => runControlOmb([...args, "--url", fixture.url]) as Promise<any>;
+    const control = (...args: string[]) => runControlSeira([...args, "--url", fixture.url]) as Promise<any>;
     const bots = async (): Promise<BotRecord[]> => (await api("GET", "/api/bots?messages=0")).bots;
     const savedBot = async (id: string) => (await bots()).find(bot => bot.id === id)!;
     const identity = (bot: BotRecord) => ({ id: bot.id, name: bot.name, title: bot.title, threadId: bot.threadId,
@@ -375,8 +375,8 @@ type BotRecord = {
     if (info) {
       if (!receipts.screenshots) {
         try {
-          receipts.failureSnapshot = await runControlOmb(["ui", "snapshot", "--ui", info.ui]);
-          receipts.failureScreenshot = await runControlOmb(["ui", "screenshot", "--ui", info.ui, "--out", `${info.logPath}.team-canvas-failure.png`]);
+          receipts.failureSnapshot = await runControlSeira(["ui", "snapshot", "--ui", info.ui]);
+          receipts.failureScreenshot = await runControlSeira(["ui", "screenshot", "--ui", info.ui, "--out", `${info.logPath}.team-canvas-failure.png`]);
         } catch { /* Preserve the original failure when the browser has stopped. */ }
       }
       const evidence = `${info.logPath}.team-canvas.json`;

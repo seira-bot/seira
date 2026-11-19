@@ -6,7 +6,7 @@ import { createServer } from "node:http";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { FAKE_DESKTOP_TOKEN, fakePagesService } from "./testing/fake-pages.ts";
 
 const owner = randomBytes(32).toString("base64url");
@@ -71,7 +71,7 @@ afterAll(async () => {
 });
 
 it("publishes a bot's page to a link shown inline, keeps the link and the card on a republish, and unpublishes it from the card", async () => {
-  const cli = (...args: string[]) => runControlOmb(args, { env: { OPENMAUSBOT_URL: fixture.info.url } }) as Promise<any>;
+  const cli = (...args: string[]) => runControlSeira(args, { env: { OPENMAUSBOT_URL: fixture.info.url } }) as Promise<any>;
   const api = async (path: string, init: RequestInit = {}) => (await fetch(`${fixture.info.url}${path}`, { ...init, headers: { "content-type": "application/json" } })).json() as Promise<any>;
   const planPath = join(fixture.info.dataDir, "room-plan.json");
   const bot = (await cli("new-bot", "--name", "Publisher")).bot;
@@ -116,7 +116,7 @@ it("publishes a bot's page to a link shown inline, keeps the link and the card o
 }, 120_000);
 
 it.each([false, true])("keeps an Unpublish card when Stop aborts an upload whose Worker committed: %s", async (committed) => {
-  const cli = (...args: string[]) => runControlOmb(args, { env: { OPENMAUSBOT_URL: fixture.info.url } }) as Promise<any>;
+  const cli = (...args: string[]) => runControlSeira(args, { env: { OPENMAUSBOT_URL: fixture.info.url } }) as Promise<any>;
   const api = async (path: string, init: RequestInit & { headers?: Record<string, string> } = {}) =>
     fetch(`${fixture.info.url}${path}`, { ...init, headers: { "content-type": "application/json", ...init.headers } });
   const bot = (await cli("new-bot", "--name", "Stopped publisher")).bot;

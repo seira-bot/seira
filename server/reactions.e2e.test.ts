@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer } from "../scripts/control-seira.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
 it("answers a bot's yes-or-no question with a 👍, and the bot goes on by itself", async () => {

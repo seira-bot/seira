@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { startBrokerFake, type BrokerFake } from "./testing/broker-fake.ts";
 
 // App events end to end on a real server (temporary home, scripted engine) against the connected-apps service's own
@@ -45,7 +45,7 @@ it("sets up an app-event automation from chat, runs on a Composio event, and sho
     expect(response.status, `${method} ${path}: ${JSON.stringify(value)}`).toBe(status);
     return value;
   };
-  const cli = (...args: string[]) => runControlOmb([...args, "--url", fixture.info.url]) as Promise<any>;
+  const cli = (...args: string[]) => runControlSeira([...args, "--url", fixture.info.url]) as Promise<any>;
   const { bot } = await cli("new-bot", "--name", "Scout");
   await api("PATCH", `/api/bots/${bot.id}`, { approvalMode: "ask" });
   const threadId = bot.activeTaskId as string;

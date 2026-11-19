@@ -111,7 +111,7 @@ UI and harness, then removes its temporary data; the server log remains.
 
 ### A narrow panel filled
 
-Run `node --experimental-strip-types scripts/control-omb.ts ui launch --entry threads`, turn on
+Run `node --experimental-strip-types scripts/control-seira.ts ui launch --entry threads`, turn on
 `features.browser`, allow the test page's loopback port in `browserEngine.egress.allow`, open the
 bot's screen and its Browser tab in Simple mode, and open the test page. The page must reach every
 edge of the panel at 1280 CSS pixels wide; Maximize shows it at the window's own size; a preset

@@ -3,7 +3,7 @@ import { closeSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import type { RoutineRun } from "./routines.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 
@@ -78,8 +78,8 @@ it("does not run a delivery twice after a process dies between the queue and ing
     const runs: RoutineRun[] = (await api("/api/routines")).runs;
     expect(runs.filter((run) => run.webhookId === created.webhook.id)).toHaveLength(1);
     const run = runs.find((run) => run.id === committed.id)!;
-    const wait = await runControlOmb(["wait", "--bot", bot.id, "--task", run.threadId!, "--url", url]);
-    const messages = await runControlOmb(["messages", "--bot", bot.id, "--task", run.threadId!, "--url", url]);
+    const wait = await runControlSeira(["wait", "--bot", bot.id, "--task", run.threadId!, "--url", url]);
+    const messages = await runControlSeira(["messages", "--bot", bot.id, "--task", run.threadId!, "--url", url]);
     expect(wait).toMatchObject({ status: "settled" });
     const evidencePath = `${logPath}.webhook-restart.json`;
     writeFileSync(evidencePath, JSON.stringify({ fixture: fixture.info, crashExit: crash.status, receipt, runs, wait, messages }, null, 2));

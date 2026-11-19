@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { readRegistry } from "./testing/registry.ts";
 
 it("pins an explicitly chosen new-thread folder without moving existing sessions or the bot default", async () => {
@@ -18,7 +18,7 @@ it("pins an explicitly chosen new-thread folder without moving existing sessions
     return result;
   };
   const control = async (args: string[]) => {
-    const result = await runControlOmb([...args, "--url", fixture.info.url]) as any;
+    const result = await runControlSeira([...args, "--url", fixture.info.url]) as any;
     evidence.push({ command: args, result });
     return result;
   };

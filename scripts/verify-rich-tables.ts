@@ -2,7 +2,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { launchVerificationServer, runControlOmb } from "./control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "./control-seira.ts";
 import { fixtureApi, mountPreview, parkUntilSignal, type MountedPreview } from "./testing/preview-fixture.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -10,7 +10,7 @@ const fixture = await launchVerificationServer();
 let ui: MountedPreview | undefined;
 try {
   const api = fixtureApi(fixture.info.url);
-  const control = (args: string[]) => runControlOmb([...args, "--url", fixture.info.url]);
+  const control = (args: string[]) => runControlSeira([...args, "--url", fixture.info.url]);
   await control(["new-bot", "--name", "Table reviewer"]);
   const { bots } = await api("GET", "/api/bots?messages=0");
   const bot = bots.find((item: { name: string }) => item.name === "Table reviewer");

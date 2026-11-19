@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import type { WireBot } from "../shared/wire.ts";
 import { splitLaunchNote } from "./testing/launch-note.ts";
 import { turnClockLine } from "./turn-clock.ts";
@@ -19,7 +19,7 @@ it("stamps every direct and room turn with the time it was sent", async () => {
   const scratch = mkdtempSync(join(tmpdir(), "omb-turn-clock-"));
   const prompts = join(scratch, "prompts.jsonl");
   const fixture = await launchVerificationServer({ ...process.env, TZ: ZONE, FAKE_CLAUDE_PROMPTS: prompts });
-  const control = (...args: string[]) => runControlOmb([...args, "--url", fixture.info.url]);
+  const control = (...args: string[]) => runControlSeira([...args, "--url", fixture.info.url]);
   const api = async <T = any>(path: string, method = "GET", body?: unknown, status = 200): Promise<T> => {
     const response = await fetch(fixture.info.url + path, {
       method,
