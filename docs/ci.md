@@ -1,9 +1,9 @@
 # CI
 
 Seira has one CI workflow, `.github/workflows/ci.yml`. It runs on every pull
-request, on every push to `main`, and on a manual start. Every run does the
-same work on Linux. There is no path-based job selection, merge queue, or
-nightly run.
+request, on every push to `main`, and on a manual start. A run does its work
+on Linux. There is no merge queue or nightly run. Two rules cut the number of
+runners that a run uses (see [Fewer runners](#fewer-runners)).
 
 The repository also has package workflows, `.github/workflows/package-*.yml`.
 A maintainer starts them by hand to build a desktop package (see
@@ -16,9 +16,34 @@ A maintainer starts them by hand to build a desktop package (see
 | `checks` | `pnpm install --frozen-lockfile`, `pnpm i18n:check`, `pnpm lint`, `pnpm check:contrast`, the model manifest and announcements checks, `node scripts/check-local-leaks.mjs`, and the source guards (tests that only read the source) |
 | `build` | `pnpm typecheck`, `pnpm check:electron`, and a production web build (`pnpm exec vite build`) |
 | `vitest (linux, shard n/8)` | The whole Vitest suite in 8 shards, 4 files at once per shard. Shard 1 also runs `pnpm broker:test` and `pnpm test:electron`. |
-| `CI` | The gate. It passes only when every job before it passed. |
+| `CI` | The gate. It passes only when every job before it passed. `build` and the shards may be skipped only as [Fewer runners](#fewer-runners) says. |
 
 `build` and the shards start after `checks` passes.
+
+## Fewer runners
+
+The organization can run 20 jobs at the same time, and a full run uses 10.
+These rules keep a release from waiting for a free runner:
+
+- **Draft pull request.** A draft runs `checks` only. `build` and the shards
+  are skipped. When the author marks the pull request ready, CI runs the full
+  suite. A draft cannot merge, so the skip hides no failure.
+- **Documentation and pictures only.** A pull request runs `checks` only when
+  every changed file is one of these: a Markdown file in the repository root,
+  a `.md`, `.png`, `.jpg`, `.gif`, or `.webp` file under `docs/`, or a
+  `.png`, `.jpg`, `.gif`, or `.webp` file under `brand/`. It still runs the
+  full suite when a tracked source file names the changed file, or the folder
+  of a picture, because a test can read it. `scripts/ci-heavy.mjs` applies the
+  rule. It runs the full suite for any other file and for any doubt, such as
+  an empty or unreadable list of changed files. The tests that read the docs
+  in `checks` (`scripts/testing/verification-docs.test.ts`) still run.
+- **Newer push to `main`.** A push to `main` cancels the older `main` run that
+  is still going. The newer commit holds the older one, so the newer run tests
+  both. A manual start is never cancelled.
+
+The `CI` gate passes a skipped `build` or shard only for a draft or a
+documentation-only pull request. In every other run, a skipped job fails the
+gate.
 
 ## Fork pull requests
 

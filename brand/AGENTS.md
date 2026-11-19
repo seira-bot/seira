@@ -1,6 +1,7 @@
 # Brand assets: agent notes
 
 This folder holds the Seira logo, mascot images, and the character code.
+The [brand guide](README.md) sets the rules for the name, tagline, logo, colours, and upstream names.
 The root `AGENTS.md` applies here too, including "Local details stay local".
 
 ## Machine values

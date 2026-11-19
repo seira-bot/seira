@@ -22,7 +22,7 @@ directly; it serves the same tools:
 ```json
 {
   "mcpServers": {
-    "openmausbot": { "command": "seira", "args": ["mcp"], "env": { "OMB_PORT": "8799" } }
+    "seira": { "command": "seira", "args": ["mcp"], "env": { "OMB_PORT": "8799" } }
   }
 }
 ```
@@ -37,9 +37,9 @@ Start Seira, then configure the MCP client to run:
 ```json
 {
   "mcpServers": {
-    "openmausbot": {
+    "seira": {
       "command": "pnpm",
-      "args": ["--dir", "/absolute/path/to/OpenMausBot", "mcp"]
+      "args": ["--dir", "/absolute/path/to/seira", "mcp"]
     }
   }
 }
@@ -87,21 +87,21 @@ macOS example:
 ```json
 {
   "mcpServers": {
-    "openmausbot": {
-      "command": "/Applications/OpenMausBot.app/Contents/MacOS/OpenMausBot",
-      "args": ["/Applications/OpenMausBot.app/Contents/Resources/server/mcp-server.js"],
+    "seira": {
+      "command": "/Applications/Seira.app/Contents/MacOS/Seira",
+      "args": ["/Applications/Seira.app/Contents/Resources/server/mcp-server.js"],
       "env": { "ELECTRON_RUN_AS_NODE": "1" }
     }
   }
 }
 ```
 
-On Windows, use the installed `OpenMausBot.exe` as `command`, the adjacent
+On Windows, use the installed `Seira.exe` as `command`, the adjacent
 `resources\\server\\mcp-server.js` as the argument, and the same `ELECTRON_RUN_AS_NODE=1` environment value.
-The usual per-user install is under `%LOCALAPPDATA%\\Programs\\OpenMausBot`.
+The usual per-user install is under `%LOCALAPPDATA%\\Programs\\Seira`.
 
-On Ubuntu `.deb` installs, the executable is normally `/opt/OpenMausBot/openmausbot` and the script is
-`/opt/OpenMausBot/resources/server/mcp-server.js`. Use the same environment value.
+On Ubuntu `.deb` installs, the executable is normally `/opt/Seira/openmausbot` and the script is
+`/opt/Seira/resources/server/mcp-server.js`. Use the same environment value.
 
 ## Connection discovery
 
