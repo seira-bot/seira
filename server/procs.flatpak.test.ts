@@ -34,7 +34,7 @@ const pipes = ["pipe", "pipe", "pipe"] as ["pipe", "pipe", "pipe"];
 
 const hostHasClaude: HostRunner = (argv) => {
   if (argv[1] === "printenv") return { status: 0, stdout: "/usr/local/bin:/usr/bin\n" };
-  if (argv[1] === "/bin/sh" && argv.at(-1) === "claude") return { status: 0, stdout: "/home/u/.local/bin/claude\n/opt/claude/bin/claude\n" };
+  if (argv[1] === "/bin/sh" && argv.at(-1) === "claude") return { status: 0, stdout: "/home/u/.local/bin/claude\0/opt/claude/bin/claude\0" };
   return { status: 0, stdout: "" };
 };
 
@@ -58,7 +58,7 @@ describe("spawnCli in a Flatpak", () => {
     expect(spawned).toHaveLength(1);
     const call = spawned[0]!;
     expect(call.command).toBe(FLATPAK_SPAWN);
-    expect(call.args).toEqual(["--host", "--watch-bus", "--directory=/work", "--env-fd=3", "--", "/home/u/.local/bin/claude", "-p", "hello"]);
+    expect(call.args).toEqual(["--host", "--watch-bus", "--directory=/work", "--env-fd=3", "--", "/opt/claude/bin/claude", "-p", "hello"]);
     expect(JSON.stringify([call.command, call.args])).not.toContain(SECRET);
     expect(call.options.stdio).toEqual(["pipe", "pipe", "pipe", "pipe"]);
     expect(call.options.cwd).toBeUndefined();
