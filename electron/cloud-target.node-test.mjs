@@ -5,20 +5,22 @@ import { parseCloudOffer, parsePublicOffer } from "./cloud-home.mjs";
 
 const filesOf = target => [target.file, target.saved, target.places, target.environments, target.sync, target.look];
 
-test("with no setting the app signs in to the upstream Cloud, as before", () => {
-  assert.equal(cloudTarget({}).origin, CLOUD_ORIGIN);
-  assert.equal(cloudTarget({}).kind, "upstream");
+test("with no setting the app signs in to Seira's Cloud", () => {
+  assert.equal(cloudTarget({}).origin, SEIRA_CLOUD_ORIGIN);
+  assert.equal(cloudTarget({}).kind, "seira");
   assert.equal(cloudTarget({}, "upstream").origin, CLOUD_ORIGIN);
+  assert.equal(cloudTarget({}, "upstream").kind, "upstream");
 });
 
-test("the build's default can be flipped to Seira's Cloud, and the environment still wins", () => {
+test("the build default is Seira's Cloud, and the environment still wins", () => {
   const seira = cloudTarget({}, "seira");
   assert.equal(seira.origin, SEIRA_CLOUD_ORIGIN);
   assert.equal(seira.kind, "seira");
   assert.equal(seira.staging, false);
   assert.equal(cloudTarget({ OMB_CLOUD_STAGING: "1" }, "seira").origin, STAGING_CLOUD_ORIGIN);
   assert.equal(cloudTarget({ OMB_CLOUD_ORIGIN: CLOUD_ORIGIN }, "seira").origin, CLOUD_ORIGIN);
-  assert.equal(cloudTarget({ OMB_CLOUD_ORIGIN: SEIRA_CLOUD_ORIGIN }).origin, SEIRA_CLOUD_ORIGIN);
+  assert.equal(cloudTarget({ OMB_CLOUD_ORIGIN: CLOUD_ORIGIN }).origin, CLOUD_ORIGIN);
+  assert.equal(cloudTarget({ OMB_CLOUD_ORIGIN: SEIRA_CLOUD_ORIGIN }, "upstream").origin, SEIRA_CLOUD_ORIGIN);
   assert.equal(cloudTarget({ OMB_CLOUD_ORIGIN: SEIRA_CLOUD_ORIGIN, OMB_CLOUD_STAGING: "1" }).origin, SEIRA_CLOUD_ORIGIN);
 });
 
@@ -34,11 +36,11 @@ test("OMB_CLOUD_ORIGIN takes an https origin or http://127.0.0.1, and refuses an
 });
 
 test("each Cloud keeps its own files, so one never reads or writes another's", () => {
-  const targets = [cloudTarget({}), cloudTarget({ OMB_CLOUD_STAGING: "1" }), cloudTarget({}, "seira"), cloudTarget({ OMB_CLOUD_ORIGIN: "https://cloud.example.test" }),
+  const targets = [cloudTarget({}, "upstream"), cloudTarget({ OMB_CLOUD_STAGING: "1" }), cloudTarget({}), cloudTarget({ OMB_CLOUD_ORIGIN: "https://cloud.example.test" }),
     cloudTarget({ OMB_CLOUD_ORIGIN: "https://other.example.test" }), cloudTarget({ OMB_CLOUD_ORIGIN: "http://127.0.0.1:18899" })];
   const names = targets.flatMap(filesOf);
   assert.equal(new Set(names).size, names.length, "no file name is shared between two Clouds");
-  assert.deepEqual(filesOf(cloudTarget({})), ["cloud-account.bin", "cloud-accounts.bin", "account-places.json", "environments.json", "cloud-sync", "cloud-home-look.json"], "upstream's files keep their names");
+  assert.deepEqual(filesOf(cloudTarget({}, "upstream")), ["cloud-account.bin", "cloud-accounts.bin", "account-places.json", "environments.json", "cloud-sync", "cloud-home-look.json"], "upstream's files keep their names");
   assert.deepEqual(cloudTarget({ OMB_CLOUD_ORIGIN: "https://cloud.example.test" }), cloudTarget({ OMB_CLOUD_ORIGIN: "https://cloud.example.test" }), "the same origin keeps the same files");
 });
 

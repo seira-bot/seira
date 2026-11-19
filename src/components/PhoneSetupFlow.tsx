@@ -461,7 +461,20 @@ export function usePhoneSetupController(profileEmail = ""): PhoneSetupController
     if (decision === "start") void runPairingAttemptRef.current(request);
   }, []);
 
+  const pairOnWifi = useCallback(() => {
+    const baseline = phoneSetupBaseline(state?.devices ?? null);
+    if (!baseline) return;
+    if (!flow.active) dispatchFlow({ type: "start", deviceIds: baseline });
+    const generation = ++setupGeneration.current;
+    dispatchFlow({ type: "use-local" });
+    setProvisioning(true);
+    setSetupTimedOut(false);
+    setAccountError(null);
+    void openPairing("local", undefined, generation);
+  }, [flow.active, openPairing, state?.devices]);
+
   const start = useCallback(() => {
+    if (account?.problem === "unconfigured") return pairOnWifi();
     const baseline = phoneSetupBaseline(state?.devices ?? null);
     if (!baseline) return;
     const generation = ++setupGeneration.current;
@@ -476,21 +489,7 @@ export function usePhoneSetupController(profileEmail = ""): PhoneSetupController
       setProvisioning(true);
       void openPairing("automatic", account, generation);
     }
-  }, [account, openPairing, state]);
-
-  const useLocal = useCallback(() => {
-    const baseline = phoneSetupBaseline(state?.devices ?? null);
-    if (!baseline) return;
-    if (!flow.active) {
-      dispatchFlow({ type: "start", deviceIds: baseline });
-    }
-    const generation = ++setupGeneration.current;
-    dispatchFlow({ type: "use-local" });
-    setProvisioning(true);
-    setSetupTimedOut(false);
-    setAccountError(null);
-    void openPairing("local", undefined, generation);
-  }, [flow.active, openPairing, state?.devices]);
+  }, [account, openPairing, state, pairOnWifi]);
 
   const useTailscale = useCallback(() => {
     const baseline = phoneSetupBaseline(state?.devices ?? null);
@@ -807,7 +806,7 @@ export function usePhoneSetupController(profileEmail = ""): PhoneSetupController
       setAccountError(null);
     },
     start,
-    useLocal,
+    useLocal: pairOnWifi,
     useTailscale,
     refreshTailscale,
     requestCode,
