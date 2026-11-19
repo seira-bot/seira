@@ -58,7 +58,7 @@ ACC = {
     "ribbon":      dict(label="Ribbon", slot="hair", anchor="top", width=0.9, pivot="knot"),
     "hairpin":     dict(label="Hairpin", slot="hair", anchor="templeR", width=0.4, pivot="center"),
     "tiara":       dict(label="Tiara", slot="hair", anchor="top", width=1.1, pivot="run-bottom"),
-    "cap":         dict(label="Cap", slot="top", anchor="top", width=2.1, pivot="cap"),
+    "cap":         dict(label="Cap", slot="top", anchor="eyes", width=2.1, pivot="brim"),
     "antenna":     dict(label="Antenna", slot="top", anchor="top", width=0.35, pivot="bottom-center"),
     "scarf":       dict(label="Scarf", slot="neck", anchor="neck", width=1.9, pivot="neck-band"),
     "bowtie":      dict(label="Bow tie", slot="neck", anchor="neck", width=0.8, pivot="knot"),
