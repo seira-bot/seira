@@ -160,9 +160,9 @@ test("the tray's menu and the startup screen speak the app's language, and the t
   assert.deepEqual(trayInstance.menu.map(item => item.label), ["Abrir o Seira", undefined, "Sair do Seira"]);
   assert.equal(trayInstance.tooltip, "Seira");
   const html = startupScreenHtml({ t: text.t, lang: text.intlTag() });
-  assert.match(html, /<html lang="pt-BR">/);
+  assert.match(html, /<html lang="pt-BR" data-reduced-motion="false">/);
   assert.match(html, /<button aria-label="Fechar"/);
-  assert.match(startupScreenHtml(), /<html lang="en">.*<button aria-label="Close"/s);
+  assert.match(startupScreenHtml(), /<html lang="en"[^>]*>.*<button aria-label="Close"/s);
   assert.match(startupScreenHtml(), /<img class="still" src="data:image\/webp;base64,[A-Za-z0-9+/=]+" alt="">/);
 });
 
