@@ -907,6 +907,36 @@ describe("with automatic replacement switched off", () => {
   });
 });
 
+describe("closing the recovery", () => {
+  it("waits for the work under way, which then restarts nothing and sends nothing more", async () => {
+    const { botId, box } = await botWith("ready");
+    const witness = await botWith("ready");
+    commandStatus.set(box.id, 502);
+    await boat.findBoat(cfg, botId);
+    watched.add(botId);
+    stopsAnswering(box.id);
+    health.answered(witness.box.id);
+    await until(() => recovery.status(botId)?.state === "needs-person");
+    // Closed while it looks at the computer again, with nothing left that would keep a restart back.
+    let asked = false;
+    let closing: Promise<void> | void = undefined;
+    onLook = (id) => {
+      if (id !== box.id || asked) return;
+      asked = true;
+      watched.clear();
+      at += 2 * 60 * 60_000;
+      health.answered(witness.box.id);
+      closing = recovery.close();
+    };
+    await until(() => asked);
+    await closing;
+    const sent = requests.length;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(requests).toHaveLength(sent);
+    expect(stops()).toHaveLength(0);
+  });
+});
+
 describe("deletes from this installation", () => {
   it("are sent one at a time, whoever asks for them, with each one fenced on disk before it waits", async () => {
     deletesAllowed = true;
