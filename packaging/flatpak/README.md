@@ -35,7 +35,7 @@ desktop-file-validate packaging/flatpak/bot.seira.Seira.desktop
 | Permission | Reason |
 |------------|--------|
 | `--share=network` | The app talks to model providers and its own pages. |
-| `--share=ipc`, `--socket=x11`, `--socket=wayland`, `--device=dri` | Window and graphics. |
+| `--share=ipc`, `--socket=fallback-x11`, `--socket=wayland`, `--device=dri` | Window and graphics. |
 | `--socket=pulseaudio` | Voice. |
 | `--talk-name=org.freedesktop.Notifications` | Notifications. |
 | `--talk-name=org.freedesktop.Flatpak` | Start agent programs on the host (below). |
