@@ -8,36 +8,50 @@ This page lists them, so you can find them and use them correctly.
 
 | Where | Name today |
 |---|---|
+| Product name | `Seira` |
 | Desktop app id | `bot.seira.app` |
-| Update source of packaged builds | The `seira-bot/seira` releases on GitHub |
+| Release files | `Seira-<version>-…`, `Seira-setup.exe` (see [Releasing](releasing.md)) |
+| Releases and update source of packaged builds | The `seira-bot/seira` releases on GitHub |
 | Update check of a server | The `seira-bot/seira` releases and stable channel on GitHub |
-
-Seira has no release yet, so there is nothing to update to.
+| Announcements and the model list | The `seira-bot/seira` repository on GitHub |
+| Server image | `ghcr.io/seira-bot/seira` |
 
 ## Names that still come from upstream
 
+These names keep installs, scripts, and links working. A change to one of them
+needs a migration, so change it only in its own pull request.
+
 | Where | Name today |
 |---|---|
-| npm package and Linux package | `openmausbot` |
-| Data folder | `~/.openmausbot` |
-| Environment variables | `OMB_PORT`, `OMB_UI_PORT`, `OMB_WEBHOOK_PORT` |
-| Product name, installer files, Linux install folder | `OpenMausBot`, `OpenMausBot-<version>-…`, `/opt/OpenMausBot` |
-| Files the app reads from GitHub | Announcements, model list, team library, and browser engine downloads, all from upstream repositories |
+| npm package and command line | `openmausbot` (for example `openmausbot serve`) |
+| Linux executable and systemd unit | `openmausbot`, `openmausbot.service` |
+| Link scheme | `openmausbot://` |
+| Data folder | `~/.openmausbot` (`OMB_DATA_DIR` moves it) |
+| Folder of the desktop app (logs, sign-ins, window state) | `openmausbot`: `~/.config/openmausbot`, `%APPDATA%\openmausbot`, `~/Library/Application Support/openmausbot` |
+| Environment variables | `OMB_*` (for example `OMB_PORT`, `OMB_UI_PORT`, `OMB_WEBHOOK_PORT`), `OPENMAUSBOT_URL` |
+| Local VM image and desktops | `localhost/openmausbot/cua-local-vm`, `openmausbot-computer…` |
+| Page script API of chat pages | `window.mausbot`, `import … from "mausbot"` |
+| Id of the built-in docs skill | `openmausbot-docs` |
+| Developer tools | `pnpm control:omb`, `scripts/control-omb.ts`, `pnpm omb`, the `.omb-scratch/` folder |
+| Files the app reads from GitHub | The team library (`milind-soni/openmausbot-teams`) and the Windows browser engine download |
 | Cloud and website addresses | `openmausbot.com` and its subdomains |
-| Text in the app and in the docs | OpenMausBot, MausBot |
+| Text in the docs | OpenMausBot, MausBot |
 
 Use these names as they are until the code changes.
-In the guides, [CONTRIBUTING.md](../CONTRIBUTING.md), the [code guide](contributing.md), and [DESIGN.md](../DESIGN.md), read "OpenMausBot" as "Seira".
+In the guides under `docs/`, read "OpenMausBot" as "Seira".
 
 Do not install the `openmausbot` npm package to get Seira. That package is the upstream app.
 
 ## Packaged builds
 
-> [!WARNING]
-> Do not publish a packaged build yet. The app id and the update source are Seira's,
-> but the product name, the installer names, and the Linux install folder still say OpenMausBot.
-> A Seira install can replace an OpenMausBot install on Linux.
-> Never upload a Seira build to the OpenMausBot release repository.
+Seira publishes its packaged builds only to the
+[`seira-bot/seira` releases](https://github.com/seira-bot/seira/releases).
+Never upload a Seira build to an OpenMausBot repository.
+
+An OpenMausBot install reads the upstream releases, so it never updates to Seira.
+To change to Seira, install the Seira package once.
+Seira and OpenMausBot use the same data folder and the same default port,
+so do not run both on one computer.
 
 ## Security reports
 
