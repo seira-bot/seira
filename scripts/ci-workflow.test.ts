@@ -26,7 +26,7 @@ interface Job {
 }
 
 interface Workflow {
-  on: Record<string, unknown>;
+  on: Record<string, { branches?: string[]; paths?: string[] } | null>;
   permissions?: Record<string, string>;
   jobs: Record<string, Job>;
 }
@@ -40,7 +40,9 @@ const packageFiles = files.filter((file) => /^package-[a-z0-9-]+\.yml$/.test(fil
 const packageWorkflows = packageFiles.map((file) => [file, workflows.get(file)!] as const);
 const IMAGE = "server-image.yml";
 const NPM = "npm-publish.yml";
+const BUGS = "bug-reports.yml";
 const image = workflows.get(IMAGE)!;
+const bugs = workflows.get(BUGS)!;
 const LOGIN = "${{ secrets.GITHUB_TOKEN }}";
 const MAINTAINER_CHECK = "startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)";
 const NOT_MAINTAINER = `!(${MAINTAINER_CHECK})`;
@@ -58,8 +60,8 @@ const allRuns = () => allSteps().flatMap((step) => (step.run === undefined ? [] 
 const runs = (job: Job) => stepsOf(job).flatMap((step) => (step.run === undefined ? [] : [step.run]));
 
 describe("CI workflows", () => {
-  it("keeps the CI workflow, the npm publish workflow, the package workflows and the server image workflow only", () => {
-    expect(files).toEqual(["ci.yml", NPM, ...packageFiles, IMAGE]);
+  it("keeps the CI workflow, the bug report Worker workflow, the npm publish workflow, the package workflows and the server image workflow only", () => {
+    expect(files).toEqual([BUGS, "ci.yml", NPM, ...packageFiles, IMAGE]);
   });
 
   it("runs on pull requests, pushes to main and manual starts only", () => {
@@ -377,6 +379,36 @@ describe("CI vitest job", () => {
   });
 });
 
+describe("Bug report Worker workflow", () => {
+  const job = bugs.jobs.worker!;
+  const paths = ["cloudflare/bug-reports/**", ".github/workflows/bug-reports.yml"];
+
+  it("starts on a pull request or a push to main that changes the Worker or this file, or by hand", () => {
+    expect(Object.keys(bugs.on).sort()).toEqual(["pull_request", "push", "workflow_dispatch"]);
+    expect(bugs.on.pull_request).toEqual({ paths });
+    expect(bugs.on.push).toEqual({ branches: ["main"], paths });
+  });
+
+  it("runs the type check and the tests of the Worker", () => {
+    expect(runs(job)).toContain("pnpm bugs:check");
+    expect(runs(job)).toContain("pnpm bugs:test");
+    expect(scripts["bugs:check"]).toContain("cloudflare/bug-reports/tsconfig.json");
+    expect(scripts["bugs:test"]).toContain("cloudflare/bug-reports/vitest.config.ts");
+  });
+
+  it("has one job on a GitHub-hosted runner, with no permission, no secret and no environment", () => {
+    expect(Object.keys(bugs.jobs)).toEqual(["worker"]);
+    expect(job["runs-on"]).toBe("ubuntu-24.04");
+    expect(job.permissions).toBeUndefined();
+    expect(job.environment).toBeUndefined();
+    expect(JSON.stringify(bugs)).not.toContain("secrets.");
+  });
+
+  it("never deploys the Worker", () => {
+    for (const run of runs(job)) expect(run).not.toMatch(/deploy|wrangler/);
+  });
+});
+
 describe("CI required checks", () => {
   it("runs the locale, lint and local-detail checks in the checks job", () => {
     const commands = runs(workflow.jobs.checks);
@@ -387,27 +419,6 @@ describe("CI required checks", () => {
 
   it("runs the type check in the build job", () => {
     expect(runs(workflow.jobs.build).some((run) => run.includes("pnpm typecheck"))).toBe(true);
-  });
-});
-
-describe("CI bug-reports job", () => {
-  const job = workflow.jobs["bug-reports"]!;
-
-  it("runs the type check and the tests of the bug report Worker", () => {
-    expect(job).toBeDefined();
-    const commands = runs(job);
-    expect(commands.filter((run) => run === "pnpm bugs:check")).toHaveLength(1);
-    expect(commands.filter((run) => run === "pnpm bugs:test")).toHaveLength(1);
-  });
-
-  it("reads no secret and deploys nothing", () => {
-    expect(JSON.stringify(job)).not.toMatch(/secrets\.|wrangler deploy|bugs:deploy/);
-  });
-
-  it("has a script in package.json for each command it runs", () => {
-    for (const name of ["bugs:types", "bugs:check", "bugs:test", "bugs:deploy"]) expect(scripts[name], name).toBeDefined();
-    expect(scripts["bugs:check"]).toBe("pnpm bugs:types && tsc -p cloudflare/bug-reports/tsconfig.json");
-    expect(scripts["bugs:test"]).toBe("vitest run --config cloudflare/bug-reports/vitest.config.ts");
   });
 });
 

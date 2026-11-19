@@ -182,7 +182,8 @@ Forks must change the route, the repository variable, and the rate-limit namespa
 2. `pnpm bugs:test` runs the tests.
 
 The tests use a fake GitHub API and a fake D1 database. They need no network and no secrets.
-CI runs both commands in the job `bug-reports`.
+CI runs both commands in the workflow `.github/workflows/bug-reports.yml`.
+That workflow starts only when this folder changes.
 
 ## Try it with the app
 

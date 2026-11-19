@@ -9,6 +9,10 @@ The repository also has package workflows, `.github/workflows/package-*.yml`.
 A maintainer starts them by hand to build a desktop package (see
 [Package workflows](#package-workflows)).
 
+A separate workflow, `.github/workflows/bug-reports.yml`, checks the bug report
+Worker. It starts only when the Worker changes (see
+[Bug report Worker workflow](#bug-report-worker-workflow)).
+
 ## Jobs
 
 | Job | What it does |
@@ -16,10 +20,9 @@ A maintainer starts them by hand to build a desktop package (see
 | `checks` | `pnpm install --frozen-lockfile`, `pnpm i18n:check`, `pnpm lint`, `pnpm check:contrast`, the model manifest and announcements checks, `node scripts/check-local-leaks.mjs`, and the source guards (tests that only read the source) |
 | `build` | `pnpm typecheck`, `pnpm check:electron`, and a production web build (`pnpm exec vite build`) |
 | `vitest (linux, shard n/8)` | The whole Vitest suite in 8 shards, 4 files at once per shard. Shard 1 also runs `pnpm broker:test` and `pnpm test:electron`. |
-| `bug-reports` | `pnpm bugs:check` and `pnpm bugs:test` for the bug report Worker in `cloudflare/bug-reports`. The tests use a fake GitHub and a fake database, so the job needs no secret. |
 | `CI` | The gate. It passes only when every job before it passed. |
 
-`build`, `bug-reports`, and the shards start after `checks` passes.
+`build` and the shards start after `checks` passes.
 
 ## Fork pull requests
 
@@ -143,6 +146,30 @@ artifacts expire and the job fails. Then start a new run.
 - The `publish` job does no checkout, so it runs no code of the repository.
 - It publishes only to this repository's own package, with no build cache, so
   another run cannot change the image.
+
+## Bug report Worker workflow
+
+`bug-reports.yml` checks the Worker in `cloudflare/bug-reports/`. It is not
+part of `ci.yml` and not part of the `CI` gate. A pull request that does not
+change the Worker adds no job.
+
+| Start | What it does |
+| --- | --- |
+| A pull request, or a push to `main`, that changes `cloudflare/bug-reports/**` or `bug-reports.yml` | The job `bug-reports`: `pnpm install --frozen-lockfile`, `pnpm bugs:check` (the type check), and `pnpm bugs:test` (the tests) |
+| Run by hand | The same job |
+
+`scripts/ci-workflow.test.ts` holds these rules for it:
+
+- The workflow has one job. The job has no permission, no secret, and no
+  environment.
+- The job never deploys. Deploying the Worker stays a manual step (see the
+  [Worker README](../cloudflare/bug-reports/README.md)).
+- The two `paths` filters name the Worker folder and the workflow file.
+- All the rules of [Fork pull requests](#fork-pull-requests) hold for it too.
+
+Do not add `bug-reports` to the `main` branch ruleset. A required check that
+does not run on every pull request keeps the pull requests that skip it
+waiting forever. Read the result on a pull request that changes the Worker.
 
 ## Required check
 

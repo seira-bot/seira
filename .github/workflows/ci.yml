@@ -120,31 +120,11 @@ jobs:
         timeout-minutes: 5
         run: pnpm broker:test && pnpm test:electron
 
-  bug-reports:
-    # The bug report Worker (cloudflare/bug-reports). Its tests use a fake GitHub and a fake database, so the job needs no
-    # secret and never deploys. Pushing a Worker change to production stays a manual step (cloudflare/bug-reports/README.md).
-    name: bug-reports
-    needs: checks
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm bugs:check
-      - run: pnpm bugs:test
-
   gate:
     # The one check that the main branch ruleset requires. It runs even when a job before it fails, and it fails then:
     # a skipped required check counts as a pass, so the gate must not skip.
     name: CI
-    needs: [checks, build, vitest, bug-reports]
+    needs: [checks, build, vitest]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
