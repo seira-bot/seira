@@ -7,6 +7,8 @@ export const PASSKEY_HELP_URL = `${APP_REPOSITORY}/blob/main/apps/docs/content/d
 export const FEEDBACK_URL = `${APP_REPOSITORY}/issues`;
 export const RELEASES_URL = `${APP_REPOSITORY}/releases`;
 export const PRICING_URL = "https://seira.bot/#pricing";
+export const PRIVACY_URL = "https://seira.bot/privacy";
+export const TERMS_URL = "https://seira.bot/terms";
 export const CLOUD_PLAN_URL = "https://cloud.openmausbot.com/cloud";
 /** The Admin's team People page (openmaus-cloud docs/team-seats.md): people, seats and roles are managed there, never in
  * the app. `invite` opens its invite box (Owner and Admins); `seats` its seat stepper (the Owner, whose card pays). */
