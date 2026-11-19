@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 
 it("rejects a misspelled start_thread recipient without creating work, then delivers the corrected handoff", async () => {
   const fixture = await launchVerificationServer({}, undefined, undefined, undefined, undefined, { scripted: true });
@@ -9,7 +9,7 @@ it("rejects a misspelled start_thread recipient without creating work, then deli
   const planPath = join(dataDir, "room-plan.json");
   const evidence: unknown[] = [];
   const cli = async (...args: string[]) => {
-    const result = await runControlOmb([...args, "--url", url]) as any;
+    const result = await runControlSeira([...args, "--url", url]) as any;
     evidence.push({ command: [...args, "--url", url], result });
     return result;
   };

@@ -1,10 +1,10 @@
 # Chat UI, driven headlessly
 
-The `ui` group of `control-omb` drives the real React renderer — the same
+The `ui` group of `control-seira` drives the real React renderer — the same
 `<App/>` the desktop shell loads, mounted by `scripts/testing/threads-preview.tsx`
 — in a headless Chrome through the agent-browser binary the harness pins
 (`server/browser-engine-release.ts`, implementation in
-`scripts/testing/control-omb-ui.ts`). Everything it touches is disposable: the
+`scripts/testing/control-seira-ui.ts`). Everything it touches is disposable: the
 fake-engine fixture from `launch`, a Vite preview of the app, and one browser
 session whose `HOME` is the fixture's data directory. The user's app on port
 8799 and `~/.openmausbot` are never involved.
@@ -12,7 +12,7 @@ session whose `HOME` is the fixture's data directory. The user's app on port
 ## Launch
 
 ```sh
-node --experimental-strip-types scripts/control-omb.ts ui launch \
+node --experimental-strip-types scripts/control-seira.ts ui launch \
   --tool-calls '[{"name":"Bash","input":{"command":"echo hi"},"ok":true}]'
 ```
 
@@ -44,15 +44,15 @@ a browser it did not launch.
 
 ```sh
 H=/tmp/openmausbot-verify-data-XXXXXX/ui.json
-pnpm control:omb ui flag --ui $H --set features.showToolCalls=true --dry-run
-pnpm control:omb ui flag --ui $H --set features.showToolCalls=true
-pnpm control:omb ui snapshot --ui $H --interactive
-pnpm control:omb ui type --ui $H --name "Message Pepper" --text hello
-pnpm control:omb ui press --ui $H --keys Enter
-pnpm control:omb ui wait-settle --ui $H --timeout 60
-pnpm control:omb ui snapshot --ui $H
-pnpm control:omb ui click --ui $H --name "Save as skill"
-pnpm control:omb ui eval --ui $H --js "document.querySelector('textarea[aria-label=\"Message Pepper\"]').value"
+pnpm control:seira ui flag --ui $H --set features.showToolCalls=true --dry-run
+pnpm control:seira ui flag --ui $H --set features.showToolCalls=true
+pnpm control:seira ui snapshot --ui $H --interactive
+pnpm control:seira ui type --ui $H --name "Message Pepper" --text hello
+pnpm control:seira ui press --ui $H --keys Enter
+pnpm control:seira ui wait-settle --ui $H --timeout 60
+pnpm control:seira ui snapshot --ui $H
+pnpm control:seira ui click --ui $H --name "Save as skill"
+pnpm control:seira ui eval --ui $H --js "document.querySelector('textarea[aria-label=\"Message Pepper\"]').value"
 ```
 
 `snapshot` returns the accessibility tree with `@eN` refs and a `refs` table
@@ -75,9 +75,9 @@ too, so read the transcript landmark, not the whole tree.
 ## Evidence
 
 ```sh
-pnpm control:omb ui screenshot --ui $H --out .omb-scratch/verify-evidence/chat-ui.png
-pnpm control:omb ui console --ui $H
-pnpm control:omb ui eval --ui $H --js "document.title"
+pnpm control:seira ui screenshot --ui $H --out .omb-scratch/verify-evidence/chat-ui.png
+pnpm control:seira ui console --ui $H
+pnpm control:seira ui eval --ui $H --js "document.title"
 ```
 
 Keep the `wait-settle` JSON, both snapshots, the screenshot and the printed
@@ -87,7 +87,7 @@ What the screenshot looks like when the recipe passes (`evidence/chat-ui/chat-ui
 
 ![The isolated app after the recipe: Pepper's greeting, the sent "hello", a passed Bash chip and the fake reply](evidence/chat-ui/chat-ui.png)
 
-The permanent form of this recipe is `scripts/testing/control-omb-ui.e2e.test.ts`:
+The permanent form of this recipe is `scripts/testing/control-seira-ui.e2e.test.ts`:
 
 The fixture also hit-tests the rendered empty band beside **This run**. It
 must target the conversation rather than the transparent dock, while points
@@ -95,7 +95,7 @@ inside the card and composer still target those controls. This checks browser
 pointer targeting, not native OS wheel delivery.
 
 ```sh
-OMB_UI_E2E=1 pnpm exec vitest run scripts/testing/control-omb-ui.e2e.test.ts
+OMB_UI_E2E=1 pnpm exec vitest run scripts/testing/control-seira-ui.e2e.test.ts
 ```
 
 The asserted recipe now also covers the floating **This run** card with a
@@ -244,7 +244,7 @@ seconds:
 
 ```sh
 OMB_ACP_QUIET_NOTICE_MS=10000 OMB_ACP_QUIET_TICK_MS=2000 FAKE_CLAUDE_RELEASE=/tmp/release \
-node --experimental-strip-types scripts/control-omb.ts ui launch --tool-calls \
+node --experimental-strip-types scripts/control-seira.ts ui launch --tool-calls \
   '[{"name":"WebSearch","input":{"query":"Acme construction leads"},"ok":true},
     {"name":"Bash","input":{"command":"cd ~/acme && python3 scrape.py --pages 40"},"hold":"busy"}]'
 ```
@@ -297,7 +297,7 @@ The client's checks are `src/state/live-reply.test.ts`,
 `src/components/ChatMarkdown.streaming.test.ts`.
 
 The before-and-after screenshots were removed because they showed real example
-data; run the `scripts/control-omb.ts ui launch` command above to see the
+data; run the `scripts/control-seira.ts ui launch` command above to see the
 working line and the Now card.
 
 The checks are `server/step-summary.test.ts` (the words and their redaction),

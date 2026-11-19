@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
-import { launchVerificationServer, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, type VerificationServer } from "../scripts/control-seira.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 
 const KEY = `sk-ant-${"k".repeat(40)}`;

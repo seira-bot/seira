@@ -14,8 +14,8 @@ import { cloudHomeConfiguration, cloudPairingSignature } from "../../server/clou
 import { removeTempDir, waitForExit } from "../../server/testing/cleanup.ts";
 import { freePortBlock } from "../../server/testing/ports.ts";
 import { launchRestartableServer, type RestartableServer } from "../../server/testing/restartable-server.ts";
-import { runControlOmb } from "../control-omb.ts";
-import { agentBrowser, ensureUiBrowser, sessionEnv, type UiHandle } from "./control-omb-ui.ts";
+import { runControlSeira } from "../control-seira.ts";
+import { agentBrowser, ensureUiBrowser, sessionEnv, type UiHandle } from "./control-seira-ui.ts";
 import { mountPreview } from "./preview-fixture.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -106,7 +106,7 @@ async function openApp(server: { url: string; port: number; dataDir: string; log
   await browser("open", preview.previewUrl);
   const handlePath = join(server.dataDir, "ui.json");
   writeFileSync(handlePath, JSON.stringify(handle));
-  const ui = (verb: string, ...args: string[]) => runControlOmb(["ui", verb, "--ui", handlePath, ...args]) as Promise<Record<string, any>>;
+  const ui = (verb: string, ...args: string[]) => runControlSeira(["ui", verb, "--ui", handlePath, ...args]) as Promise<Record<string, any>>;
   const evaluate = async (js: string) => (await ui("eval", "--js", js)).result;
   const click = (name: string) => ui("click", "--name", name);
   let shot = 0;
@@ -173,7 +173,7 @@ async function openApp(server: { url: string; port: number; dataDir: string; log
     };
     const starter = (await api("GET", "/api/bots?messages=0")).bots[0];
     await api("PATCH", `/api/bots/${starter.id}/profile`, { name: "Hazel" });
-    const newBot = async (name: string) => ((await runControlOmb(["new-bot", "--name", name, "--url", live.url])) as { bot: { id: string } }).bot.id;
+    const newBot = async (name: string) => ((await runControlSeira(["new-bot", "--name", name, "--url", live.url])) as { bot: { id: string } }).bot.id;
     const scout = await newBot("Scout");
     const ledger = await newBot("Ledger");
     writeFileSync(live.planPath, JSON.stringify(plan([{ id: starter.id }, { id: scout }, { id: ledger }])));

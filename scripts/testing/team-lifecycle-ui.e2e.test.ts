@@ -5,10 +5,10 @@ import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 import { resolveAgentBrowserBinary } from "../../server/browser-engine.ts";
 import { waitForExit } from "../../server/testing/cleanup.ts";
-import { runControlOmb } from "../control-omb.ts";
+import { runControlSeira } from "../control-seira.ts";
 import { request } from "../mcp-server.ts";
 import { mountPreview, type MountedPreview } from "./preview-fixture.ts";
-import { ENABLE_ADVANCED_UI, OPEN_SIDEBAR_TOOLS, UI_TOOLS_DIR } from "./control-omb-ui.ts";
+import { ENABLE_ADVANCED_UI, OPEN_SIDEBAR_TOOLS, UI_TOOLS_DIR } from "./control-seira-ui.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const binary = resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env });
@@ -24,7 +24,7 @@ if (!enabled) console.log("skipping team lifecycle UI e2e: set OMB_UI_E2E=1 to i
   try {
     let stdout = "", stderr = "";
     let info: { ui: string; url: string; botId: string; logPath: string };
-    child = spawn(process.execPath, ["--experimental-strip-types", join(ROOT, "scripts/control-omb.ts"), "ui", "launch"], {
+    child = spawn(process.execPath, ["--experimental-strip-types", join(ROOT, "scripts/control-seira.ts"), "ui", "launch"], {
       cwd: ROOT, env: process.env, stdio: ["ignore", "pipe", "pipe"],
     });
     child.stdout!.on("data", (chunk: Buffer) => { stdout += String(chunk); });
@@ -36,7 +36,7 @@ if (!enabled) console.log("skipping team lifecycle UI e2e: set OMB_UI_E2E=1 to i
     }, { timeout: binary ? 180_000 : 600_000, interval: 250 }).toBe(true);
     fixtureHandle = info!.ui;
     fixtureLog = info!.logPath;
-    const ui = (verb: string, ...args: string[]) => runControlOmb(["ui", verb, "--ui", info.ui, ...args]) as Promise<Record<string, any>>;
+    const ui = (verb: string, ...args: string[]) => runControlSeira(["ui", verb, "--ui", info.ui, ...args]) as Promise<Record<string, any>>;
     await ui("eval", "--js", ENABLE_ADVANCED_UI);
     const target = async (name: string, roles: string[]) => {
       let matches: Array<[string, { name: string; role: string }]> = [];
@@ -72,7 +72,7 @@ if (!enabled) console.log("skipping team lifecycle UI e2e: set OMB_UI_E2E=1 to i
     };
     const api = (path: string, method = "GET", body?: unknown) => request(path, { method,
       ...(body === undefined ? {} : { body: JSON.stringify(body) }) }, info.url);
-    const control = (...args: string[]) => runControlOmb([...args, "--url", info.url]);
+    const control = (...args: string[]) => runControlSeira([...args, "--url", info.url]);
     const a = (await control("new-bot", "--name", "Researcher", "--section", "Research") as any).bot;
     const b = (await control("new-bot", "--name", "Engineer", "--section", "Engineering") as any).bot;
 
@@ -347,9 +347,9 @@ if (!enabled) console.log("skipping team lifecycle UI e2e: set OMB_UI_E2E=1 to i
   } finally {
     if (!succeeded && fixtureHandle && fixtureLog) {
       try {
-        const result = await runControlOmb(["ui", "snapshot", "--ui", fixtureHandle]);
+        const result = await runControlSeira(["ui", "snapshot", "--ui", fixtureHandle]);
         writeFileSync(`${fixtureLog}.team-lifecycle-failure.json`, JSON.stringify(result, null, 2));
-        await runControlOmb(["ui", "screenshot", "--ui", fixtureHandle, "--out", `${fixtureLog}.team-lifecycle-failure.png`]);
+        await runControlSeira(["ui", "screenshot", "--ui", fixtureHandle, "--out", `${fixtureLog}.team-lifecycle-failure.png`]);
         console.info(JSON.stringify({ failureEvidence: `${fixtureLog}.team-lifecycle-failure.json` }));
       } catch { /* The original failure remains authoritative if the browser stopped. */ }
     }

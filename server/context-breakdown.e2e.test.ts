@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { request } from "../scripts/mcp-server.ts";
 import type { ContextBreakdown } from "../shared/context-breakdown.ts";
 
@@ -18,7 +18,7 @@ const answer = {
 
 async function setup(extraEnv: NodeJS.ProcessEnv) {
   const fixture = await launchVerificationServer({ ...process.env, ...extraEnv }, undefined, undefined, undefined, undefined, undefined, ["codex"]);
-  const control = async (...args: string[]) => runControlOmb([...args, "--url", fixture.info.url]) as Promise<any>;
+  const control = async (...args: string[]) => runControlSeira([...args, "--url", fixture.info.url]) as Promise<any>;
   const bot = (await control("new-bot", "--name", "Context probe").catch(async (error) => {
     await fixture.close();
     throw error;

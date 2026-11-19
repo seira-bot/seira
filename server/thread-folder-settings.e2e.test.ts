@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } fro
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
 it("runs every thread of a bot with the bot's settings, and moves its threads to the working folder it is given", async () => {
@@ -10,7 +10,7 @@ it("runs every thread of a bot with the bot's settings, and moves its threads to
   const fixture = await launchVerificationServer({ FAKE_CLAUDE_HOOKS: "1" });
   const project = realpathSync(mkdtempSync(join(tmpdir(), "omb-thread-settings-project-")));
   const chosen = realpathSync(mkdtempSync(join(tmpdir(), "omb-thread-settings-chosen-")));
-  const control = (args: string[]) => runControlOmb([...args, "--url", fixture.info.url]) as Promise<any>;
+  const control = (args: string[]) => runControlSeira([...args, "--url", fixture.info.url]) as Promise<any>;
   const api = async (method: string, path: string, body?: unknown) => {
     const response = await fetch(`${fixture.info.url}${path}`, {
       method, headers: { "content-type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }),

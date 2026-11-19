@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 
 // Deliberate opt-in: never discover the user's CLI. The supplied OpenCode 2 binary reaches only an owned loopback
@@ -98,7 +98,7 @@ test("offers Copilot models' efforts through OpenCode 2 and sends each turn's ch
     return result;
   };
   const control = async (args: string[]) => {
-    const result = await runControlOmb([...args, "--url", url]) as any;
+    const result = await runControlSeira([...args, "--url", url]) as any;
     evidence.push({ command: args, result });
     return result;
   };

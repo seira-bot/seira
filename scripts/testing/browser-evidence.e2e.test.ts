@@ -19,8 +19,8 @@ import { BrowserSteps, type StepContext } from "../../server/browser-steps.ts";
 import { openGate, type EgressGate } from "../../server/browser/egress/gate.ts";
 import { refusalFor } from "../../server/browser/egress/policy.ts";
 import { removeTempDir } from "../../server/testing/cleanup.ts";
-import { launchVerificationServer, runControlOmb } from "../control-omb.ts";
-import { ensureUiBrowser, UI_TOOLS_DIR } from "./control-omb-ui.ts";
+import { launchVerificationServer, runControlSeira } from "../control-seira.ts";
+import { ensureUiBrowser, UI_TOOLS_DIR } from "./control-seira-ui.ts";
 
 const forced = process.env.OMB_UI_E2E === "1";
 const enabled = forced || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
@@ -277,7 +277,7 @@ describe("recorded browser steps through the real server", () => {
         { server: "browser", tool: "agent_browser_open", arguments: { url: `${base}/` } },
         { server: "browser", tool: "agent_browser_click", arguments: { selector: "#signup" } },
       ], reply: "Signed up." }] } }));
-      await runControlOmb(["send", "--bot", bot.id, "--task", bot.threadId, "--text", "Try the sign-up.", "--url", url]);
+      await runControlSeira(["send", "--bot", bot.id, "--task", bot.threadId, "--text", "Try the sign-up.", "--url", url]);
       await expect.poll(() => evidenceLines().length, { timeout: 90_000 }).toBe(1);
       const [turn] = evidenceLines();
       const results = turn.evidence.filter((entry: any) => entry.step?.server === "browser").map((entry: any) => entry.response.result.content.map((part: any) => part.text).join("\n"));

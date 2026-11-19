@@ -6,8 +6,8 @@ import { createServer } from "node:https";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { credentialStoreFlags } from "../server/browser/egress/gate.ts";
-import { launchVerificationServer, runControlOmb } from "./control-omb.ts";
-import { agentBrowser, ensureUiBrowser, sessionEnv } from "./testing/control-omb-ui.ts";
+import { launchVerificationServer, runControlSeira } from "./control-seira.ts";
+import { agentBrowser, ensureUiBrowser, sessionEnv } from "./testing/control-seira-ui.ts";
 import { mountPreview, type MountedPreview } from "./testing/preview-fixture.ts";
 
 const fixture = await launchVerificationServer();
@@ -30,7 +30,7 @@ const pauseAuthorize = (fail = false) => {
   hold = new Promise<void>((done) => { release = done; });
 };
 try {
-  await runControlOmb(["doctor", "--url", fixture.info.url]);
+  await runControlSeira(["doctor", "--url", fixture.info.url]);
   // All native popups use this dedicated test hostname mapped to loopback.
   // Its ephemeral certificate and ignored trust live only in this fixture.
   const key = join(fixture.info.dataDir, "oauth-fixture.key");

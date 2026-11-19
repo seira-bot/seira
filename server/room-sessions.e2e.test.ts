@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import type { WireBot, WireGroup } from "../shared/wire.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { withoutTurnClock } from "./testing/turn-clock-text.ts";
@@ -43,7 +43,7 @@ async function fixture(test: (f: Awaited<ReturnType<typeof build>>) => Promise<v
 
 async function build(session: Awaited<ReturnType<typeof launchVerificationServer>>) {
   const { url, dataDir } = session.info;
-  const control = (...args: string[]) => runControlOmb([...args, "--url", url]) as Promise<any>;
+  const control = (...args: string[]) => runControlSeira([...args, "--url", url]) as Promise<any>;
   const api = async (method: string, path: string, body?: unknown) => {
     const response = await fetch(url + path, { method, headers: { "content-type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     return { status: response.status, body: await response.json().catch(() => null) as any };

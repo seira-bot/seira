@@ -3,7 +3,7 @@ import { lstatSync, mkdirSync, readFileSync, readlinkSync, writeFileSync } from 
 import { dirname, join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, type VerificationServer } from "../scripts/control-seira.ts";
 
 // The fixture server's HOME is its own disposable data folder, so the files planted here are the only ones it can find.
 const SENTINEL = "SENTINEL-e2e-credential-51c0";
@@ -45,8 +45,8 @@ describe("bringing in another AI tool's setup through the desktop app's own serv
   /** One turn of `bot` on the fixture Claude: what it was told, how it was launched, and its task folder. */
   const turn = async (bot: { id: string; threadId: string }, text: string) => {
     const url = fixture.info.url;
-    await runControlOmb(["send", "--bot", bot.id, "--task", bot.threadId, "--text", text, "--url", url]);
-    await runControlOmb(["wait", "--bot", bot.id, "--task", bot.threadId, "--timeout", "60", "--url", url]);
+    await runControlSeira(["send", "--bot", bot.id, "--task", bot.threadId, "--text", text, "--url", url]);
+    await runControlSeira(["wait", "--bot", bot.id, "--task", bot.threadId, "--timeout", "60", "--url", url]);
     const dump = JSON.parse(readFileSync(fixture.fixtureDumpPath, "utf8")) as { argv: string[]; cwd: string; systemPrompt?: string; prompt?: unknown };
     const linked = (family: string, name: string) => {
       try {

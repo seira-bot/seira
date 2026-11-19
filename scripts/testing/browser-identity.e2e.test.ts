@@ -16,7 +16,7 @@ import { IdentitySidecars, startIdentitySidecar } from "../../server/browser/chr
 import { removeTempDir } from "../../server/testing/cleanup.ts";
 import { verifyBrowserIdentity } from "../verify-browser-identity.ts";
 import { expectedUserAgent } from "./browser-identity-probe.ts";
-import { ensureUiBrowser, UI_TOOLS_DIR } from "./control-omb-ui.ts";
+import { ensureUiBrowser, UI_TOOLS_DIR } from "./control-seira-ui.ts";
 
 const enabled = process.env.OMB_UI_E2E === "1" || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
 if (!enabled) console.log(`skipping browser identity e2e: no agent-browser binary resolves (looked in ${UI_TOOLS_DIR}, OMB_AGENT_BROWSER_PATH and PATH); set OMB_UI_E2E=1 to install the pinned release`);

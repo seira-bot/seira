@@ -69,10 +69,10 @@ const chip = (id: string, summary: string, ok?: boolean): Message =>
 const asked = (id: string, text: string): Message => ({ id, role: "user", kind: "text", at: 1, text });
 const run: Message[] = [
   asked("u1", "verify the fixture"),
-  chip("c1", "pnpm control:omb doctor --url http://127.0.0.1:8799", true),
-  chip("c2", "node --experimental-strip-types scripts/control-omb.ts send --bot x --text hi", false),
+  chip("c1", "pnpm control:seira doctor --url http://127.0.0.1:8799", true),
+  chip("c2", "node --experimental-strip-types scripts/control-seira.ts send --bot x --text hi", false),
   chip("c3", "git status", true),
-  chip("c4", "cat scripts/control-omb.ts", true),
+  chip("c4", "cat scripts/control-seira.ts", true),
 ];
 const release: Message[] = [
   asked("u1", "publish the release"),

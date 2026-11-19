@@ -11,7 +11,7 @@ import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
 import { EXIT, HeadlessError } from "../server/headless/args.ts";
 import { runHeadlessCommand } from "../server/headless/main.ts";
 import type { handleToolCall, request } from "./mcp-server.ts";
-import { launchUi, runControlOmbUi } from "./testing/control-omb-ui.ts";
+import { launchUi, runControlSeiraUi } from "./testing/control-seira-ui.ts";
 import { removeTempDir, waitForExit } from "../server/testing/cleanup.ts";
 import { hostTimeout } from "../server/testing/host-timeout.ts";
 import { freePortBlock } from "../server/testing/ports.ts";
@@ -22,20 +22,20 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const FIXTURE_STARTER_BOT_NAME = "Fixture Starter";
 const FAKE_CLI = join(ROOT, "server", "testing", "fake-claude-cli.ts");
 
-export class ControlOmbError extends HeadlessError {
+export class ControlSeiraError extends HeadlessError {
   constructor(message: string, hint?: string) {
     super(message, EXIT.failed, hint);
   }
 }
 
-export interface ControlOmbDependencies {
+export interface ControlSeiraDependencies {
   callTool?: typeof handleToolCall;
   request?: typeof request;
   env?: NodeJS.ProcessEnv;
 }
 
 export const HELP_UI = `renderer (needs a ui launch handle; every verb takes --ui HANDLE, never discovery):
-  node --experimental-strip-types scripts/control-omb.ts ui launch [--entry threads] [--tool-calls JSON] [--mode happy] [--engine codex|acp|cline|copilot|opencode]
+  node --experimental-strip-types scripts/control-seira.ts ui launch [--entry threads] [--tool-calls JSON] [--mode happy] [--engine codex|acp|cline|copilot|opencode]
   ui snapshot --ui HANDLE [--interactive]
   ui click --ui HANDLE (--ref @eN | --name NAME)
   ui type --ui HANDLE (--ref @eN | --name NAME) --text TEXT
@@ -47,7 +47,7 @@ export const HELP_UI = `renderer (needs a ui launch handle; every verb takes --u
   ui wait-settle --ui HANDLE [--timeout 30]
   ui help`;
 
-export const HELP = `control-omb — the openmausbot headless verbs (docs/headless-cli.md), for verifying a fixture
+export const HELP = `control-seira — the openmausbot headless verbs (docs/headless-cli.md), for verifying a fixture
 
 read-only (every verb also takes --url URL):
   doctor
@@ -76,7 +76,7 @@ mutating (an explicit --url or OPENMAUSBOT_URL/OMB_PORT is required):
 ${HELP_UI}
 
 isolated fixture:
-  node --experimental-strip-types scripts/control-omb.ts launch
+  node --experimental-strip-types scripts/control-seira.ts launch
 
 Output is JSON. wait defaults to 30 seconds here. launch and ui launch own a temporary fake-engine server until interrupted.`;
 
@@ -97,21 +97,21 @@ export function parse(
       allowPositionals: false,
     }).values as Record<string, unknown> & { url?: string };
   } catch (error) {
-    throw new ControlOmbError(
+    throw new ControlSeiraError(
       error instanceof Error ? error.message : String(error),
-      `run control-omb help for the ${command} syntax`,
+      `run control-seira help for the ${command} syntax`,
     );
   }
 }
 
-export async function runControlOmb(
+export async function runControlSeira(
   argv: string[],
-  dependencies: ControlOmbDependencies = {},
+  dependencies: ControlSeiraDependencies = {},
 ): Promise<unknown> {
   const [command = "help", ...args] = argv;
   if (command === "help" || command === "--help" || command === "-h") return HELP;
-  if (command === "launch") throw new ControlOmbError("launch is available only from the executable CLI");
-  if (command === "ui") return runControlOmbUi(args);
+  if (command === "launch") throw new ControlSeiraError("launch is available only from the executable CLI");
+  if (command === "ui") return runControlSeiraUi(args);
   return runHeadlessCommand(argv, {
     env: dependencies.env ?? process.env,
     ...(dependencies.callTool ? { callTool: dependencies.callTool } : {}),
@@ -299,21 +299,21 @@ export async function launchVerificationServer(
 ): Promise<VerificationServer> {
   if (boatFixtureApi) {
     if (!/^http:\/\/127\.0\.0\.1:[1-9]\d{0,4}$/.test(boatFixtureApi)) {
-      throw new ControlOmbError("Boat verification requires an explicit loopback HTTP provider");
+      throw new ControlSeiraError("Boat verification requires an explicit loopback HTTP provider");
     }
     try { new URL(boatFixtureApi); }
-    catch { throw new ControlOmbError("Boat verification requires a valid loopback port"); }
+    catch { throw new ControlSeiraError("Boat verification requires a valid loopback port"); }
   }
   if (localVm) {
     const endpoint = new URL(localVm.host);
     if (endpoint.protocol !== "ssh:" || endpoint.hostname !== "127.0.0.1" || endpoint.password) {
-      throw new ControlOmbError("Local VM verification requires an explicit loopback Podman machine");
+      throw new ControlSeiraError("Local VM verification requires an explicit loopback Podman machine");
     }
   }
   // OMB_TEST_PORTS=19975-19999 keeps a recipe's fixture in a range of its own.
   const range = /^(\d+)-(\d+)$/.exec((parentEnv.OMB_TEST_PORTS ?? process.env.OMB_TEST_PORTS)?.trim() ?? "");
   const port = range ? await freePortBlock([0, 1], Number(range[1]), Number(range[2]) - Number(range[1])) : await freePortBlock([0, 1]);
-  if (signal?.aborted) throw new ControlOmbError("verification launch cancelled");
+  if (signal?.aborted) throw new ControlSeiraError("verification launch cancelled");
   const url = `http://127.0.0.1:${port}`;
   // Native browser daemons use UNIX sockets, and a macOS temp home can exceed
   // their path limit.
@@ -406,7 +406,7 @@ export async function launchVerificationServer(
   const deadline = Date.now() + hostTimeout(20_000);
   try {
     for (;;) {
-      if (signal?.aborted) throw new ControlOmbError("verification launch cancelled");
+      if (signal?.aborted) throw new ControlSeiraError("verification launch cancelled");
       if (child.exitCode !== null || child.signalCode !== null) {
         throw new Error(`verification server exited before it was ready; see ${logPath}${logTail()}`);
       }
@@ -478,10 +478,10 @@ export function controlResultSucceeded(command: string, result: unknown): boolea
 
 /** pnpm swallows Ctrl-C; a launcher that owns processes must get the signal itself. */
 function requireForegroundTerminal(command: string): void {
-  if (process.env.npm_lifecycle_event === "control:omb") {
-    throw new ControlOmbError(
+  if (process.env.npm_lifecycle_event?.startsWith("control:")) {
+    throw new ControlSeiraError(
       `${command} must own the terminal directly so Ctrl-C can clean up its children`,
-      `run \`node --experimental-strip-types scripts/control-omb.ts ${command}\``,
+      `run \`node --experimental-strip-types scripts/control-seira.ts ${command}\``,
     );
   }
 }
@@ -530,7 +530,7 @@ async function main() {
     });
     return;
   }
-  const result = await runControlOmb(process.argv.slice(2));
+  const result = await runControlSeira(process.argv.slice(2));
   process.stdout.write(typeof result === "string" ? `${result}\n` : `${JSON.stringify(result, null, 2)}\n`);
   if (!controlResultSucceeded(command, result)) process.exitCode = 1;
 }

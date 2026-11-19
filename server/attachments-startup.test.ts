@@ -3,7 +3,7 @@ import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 
 // Obstruct only the attachments directory in the launcher's disposable home.
 // The real child still boots normally and handles real HTTP requests.
@@ -25,7 +25,7 @@ vi.mock("node:child_process", async (importOriginal) => {
 it("starts despite attachment cleanup failure and initializes quota after the directory is repaired", async () => {
   const session = await launchVerificationServer();
   try {
-    await expect(runControlOmb(["doctor", "--url", session.info.url])).resolves.toMatchObject({ ok: true });
+    await expect(runControlSeira(["doctor", "--url", session.info.url])).resolves.toMatchObject({ ok: true });
     expect(readFileSync(session.info.logPath, "utf8")).toContain("attachments: startup partial cleanup failed:");
     const upload = () => fetch(`${session.info.url}/api/files?name=fixture.txt`, {
       method: "POST",

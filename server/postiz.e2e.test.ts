@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, type VerificationServer } from "../scripts/control-seira.ts";
 import { CONFIG_BACKUP_PREFIX } from "./config-backup.ts";
 import { FAKE_POSTIZ_KEY, startFakePostiz, type FakePostiz } from "./testing/fake-postiz.ts";
 
@@ -28,7 +28,7 @@ const api = async (method: string, path: string, body?: unknown) => {
   answers.push(text);
   return { status: response.status, body: text ? JSON.parse(text) : null };
 };
-const control = (args: string[]) => runControlOmb([...args, "--url", fixture.info.url]);
+const control = (args: string[]) => runControlSeira([...args, "--url", fixture.info.url]);
 const toolCalls = () => join(scratch, "tool-calls.json");
 const newBot = async (name: string): Promise<{ id: string; threadId: string }> => {
   const created = await api("POST", "/api/bots", { name });

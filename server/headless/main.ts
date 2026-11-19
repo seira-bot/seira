@@ -105,7 +105,7 @@ export interface HeadlessOptions {
   io?: HeadlessIo;
   callTool?: ClientDeps["callTool"];
   request?: ClientDeps["request"];
-  /** control-omb: never change something on a server it merely found. */
+  /** control-seira: never change something on a server it merely found. */
   requireExplicitForMutations?: boolean;
   defaultWaitMs?: number;
   signal?: AbortSignal;

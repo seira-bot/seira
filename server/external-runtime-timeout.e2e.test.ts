@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, type VerificationServer } from "../scripts/control-seira.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 
@@ -15,7 +15,7 @@ it("answers an external caller's long ask at once and lets it poll the slow peer
   try {
     fixture = await launchVerificationServer({ ...process.env, FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_SLOW_FINISH_GATE: gate });
     const session = fixture;
-    const control = (...args: string[]) => runControlOmb([...args, "--url", session.info.url]) as Promise<any>;
+    const control = (...args: string[]) => runControlSeira([...args, "--url", session.info.url]) as Promise<any>;
     const api = async (method: string, path: string, body?: unknown, runtime = false): Promise<any> => {
       const response = await fetch(session.info.url + path, {
         method, headers: { "content-type": "application/json", ...(runtime ? { authorization: `Bearer ${TOKEN}` } : { origin: session.info.url }) },

@@ -5,7 +5,7 @@ import { request } from "node:http";
 import { networkInterfaces } from "node:os";
 import { describe, expect, it } from "vitest";
 
-import { launchVerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer } from "../scripts/control-seira.ts";
 
 const NAME = "fixture.tail1234.ts.net";
 

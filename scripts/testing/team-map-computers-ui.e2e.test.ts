@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 import { resolveAgentBrowserBinary } from "../../server/browser-engine.ts";
 import { waitForExit } from "../../server/testing/cleanup.ts";
-import { runControlOmb } from "../control-omb.ts";
-import { ENABLE_ADVANCED_UI, UI_TOOLS_DIR } from "./control-omb-ui.ts";
+import { runControlSeira } from "../control-seira.ts";
+import { ENABLE_ADVANCED_UI, UI_TOOLS_DIR } from "./control-seira-ui.ts";
 import { fixtureApi } from "./preview-fixture.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -35,7 +35,7 @@ type Receipts = { calls: Array<{ method: string; path: string }>; shots: Record<
     }, { timeout: binary ? 180_000 : 600_000, interval: 250 }).toBe(true);
     const fixture = info!;
     const provider = fixtureApi(fixture.boatFixtureApi);
-    const ui = (verb: string, ...args: string[]) => runControlOmb(["ui", verb, "--ui", fixture.ui, ...args]) as Promise<Record<string, any>>;
+    const ui = (verb: string, ...args: string[]) => runControlSeira(["ui", verb, "--ui", fixture.ui, ...args]) as Promise<Record<string, any>>;
     await ui("eval", "--js", ENABLE_ADVANCED_UI);
     const evaluate = async (js: string) => (await ui("eval", "--js", js)).result;
     const snapshot = async () => (await ui("snapshot")).snapshot as string;

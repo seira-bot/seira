@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { resolveAgentBrowserBinary } from "../../server/browser-engine.ts";
 import { waitForExit } from "../../server/testing/cleanup.ts";
-import { runControlOmb } from "../control-omb.ts";
-import { ENABLE_ADVANCED_UI, UI_TOOLS_DIR } from "./control-omb-ui.ts";
+import { runControlSeira } from "../control-seira.ts";
+import { ENABLE_ADVANCED_UI, UI_TOOLS_DIR } from "./control-seira-ui.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const enabled = process.env.OMB_UI_E2E === "1" || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
@@ -22,7 +22,7 @@ describe("trust controls in the real renderer", () => {
   (enabled ? it : it.skip)("refreshes receipts, saves intersecting limits and serializes memory edits", async () => {
     let output = "", errors = "";
     let info!: FixtureInfo;
-    const launcher = new URL("./control-omb-ui.ts", import.meta.url).href;
+    const launcher = new URL("./control-seira-ui.ts", import.meta.url).href;
     const bootstrap = `import { launchUi } from ${JSON.stringify(launcher)};
       process.on('message', message => { if (message === 'stop') process.emit('SIGINT'); });
       try { await launchUi(['--tool-calls', '[{"name":"Bash","input":{"command":"echo fixture"},"ok":true}]']); } finally { process.disconnect(); }`;
@@ -37,7 +37,7 @@ describe("trust controls in the real renderer", () => {
       try { info = JSON.parse(output); return Boolean(info.ui); } catch { return false; }
     }, { timeout: 300_000, interval: 250 }).toBe(true);
 
-    const ui = (verb: string, ...args: string[]) => runControlOmb(["ui", verb, "--ui", info.ui, ...args]) as Promise<Record<string, any>>;
+    const ui = (verb: string, ...args: string[]) => runControlSeira(["ui", verb, "--ui", info.ui, ...args]) as Promise<Record<string, any>>;
     await ui("eval", "--js", ENABLE_ADVANCED_UI);
     const evaluate = async (js: string) => (await ui("eval", "--js", js)).result;
     const click = (name: string) => ui("click", "--name", name);
@@ -63,8 +63,8 @@ describe("trust controls in the real renderer", () => {
     await click("More");
     await click("Activity");
     await expect.poll(snapshot, { timeout: 10_000 }).toContain("Nothing yet.");
-    await runControlOmb(["send", "--bot", bot.id, "--text", "Run the harmless fixture tool.", "--url", info.url]);
-    await runControlOmb(["wait", "--bot", bot.id, "--timeout", "20", "--url", info.url]);
+    await runControlSeira(["send", "--bot", bot.id, "--text", "Run the harmless fixture tool.", "--url", info.url]);
+    await runControlSeira(["wait", "--bot", bot.id, "--timeout", "20", "--url", info.url]);
     await expect.poll(snapshot, { timeout: 10_000 }).toContain("Ran a command");
     await ui("screenshot", "--out", `${info.logPath}.activity.png`);
     await click("Close activity");

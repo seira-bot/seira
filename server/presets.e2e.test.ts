@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer } from "../scripts/control-seira.ts";
 import { canonicalJson, parsePackageDocument } from "../shared/package-format.ts";
 import { createLibraryPackageExport } from "./package-export.ts";
 import { NO_PRESETS_MESSAGE } from "./package-import.ts";

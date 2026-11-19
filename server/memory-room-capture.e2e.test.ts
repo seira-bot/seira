@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import type { WireBot } from "../shared/wire.ts";
 import { CAPTURE_MARKER } from "./memory-capture.ts";
 
@@ -50,7 +50,7 @@ it("captures a member bot's room turn into its memory, sourced to the room, once
       setup: { bulletin: "", defaultResponder: { kind: "member", botId: lead.id } },
     });
     await api(`/api/groups/${group.id}/messages`, "POST", { text: "Lead, the garden launch moved to Friday." });
-    await runControlOmb(["wait", "--bot", lead.id, "--timeout", "30"], { env });
+    await runControlSeira(["wait", "--bot", lead.id, "--timeout", "30"], { env });
 
     await expect.poll(async () => (await api<{ text: string }>(`/api/bots/${lead.id}/memory/file?path=MEMORY.md`)).text, { timeout: 30_000 })
       .toMatch(/- \d{4}-\d{2}-\d{2} · from room "Garden room" \(noticed\) · The garden launch moved to Friday/);
@@ -102,7 +102,7 @@ it("captures a Codex member bot's room turn through Codex's own background call"
       setup: { bulletin: "", defaultResponder: { kind: "member", botId: lead.id } },
     });
     await api(`/api/groups/${group.id}/messages`, "POST", { text: "Lead, the orchard tour moved to Monday." });
-    await runControlOmb(["wait", "--bot", lead.id, "--timeout", "30"], { env });
+    await runControlSeira(["wait", "--bot", lead.id, "--timeout", "30"], { env });
 
     await expect.poll(async () => (await api<{ text: string }>(`/api/bots/${lead.id}/memory/file?path=MEMORY.md`)).text, { timeout: 30_000 })
       .toMatch(/- \d{4}-\d{2}-\d{2} · from room "Orchard room" \(noticed\) · The orchard tour moved to Monday/);

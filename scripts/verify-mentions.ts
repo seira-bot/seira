@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { removeTempDir } from "../server/testing/cleanup.ts";
-import { launchVerificationServer, runControlOmb } from "./control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "./control-seira.ts";
 import { mountPreview, parkUntilSignal, type MountedPreview } from "./testing/preview-fixture.ts";
 
 // Opt in to an actual fake-engine reply containing peer mentions. A shared
@@ -22,10 +22,10 @@ const fixture = await launchVerificationServer({
 let ui: MountedPreview | undefined;
 try {
   for (const name of ["Atlas", "Juniper", "調査担当"]) {
-    await runControlOmb(["new-bot", "--name", name, "--url", fixture.info.url]);
+    await runControlSeira(["new-bot", "--name", name, "--url", fixture.info.url]);
   }
   const { bots } = await fetch(`${fixture.info.url}/api/bots`).then((r) => r.json()) as { bots: Array<{ id: string; name: string }> };
-  await runControlOmb(["new-channel", "--name", "Design review", "--members", bots.map((b) => b.id).join(","), "--url", fixture.info.url]);
+  await runControlSeira(["new-channel", "--name", "Design review", "--members", bots.map((b) => b.id).join(","), "--url", fixture.info.url]);
   ui = await mountPreview(fixture, {
     entry: "/src/testing/mentions.tsx", route: "/__mentions.html", title: "Isolated mention verification",
   });

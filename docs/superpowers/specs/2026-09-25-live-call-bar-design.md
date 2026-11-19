@@ -533,7 +533,7 @@ spoken line is answered aloud). The docs page says so.
   sideband loss, one call at a time), routes, companion allowlist, settings
   validation, desktop components, iOS `CompanionCore` (`swift test`), Android
   `:core`/`:app` unit tests.
-- Isolated fixture (`scripts/control-omb.ts launch`) + fake GPT-Live for the
+- Isolated fixture (`scripts/control-seira.ts launch`) + fake GPT-Live for the
   end-to-end server path; the desktop UI in the browser pane; the iOS app in the
   simulator and the Android app in an emulator against a fixture.
 - Real audio needs a microphone and a real key: each client is tested with

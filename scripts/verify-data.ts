@@ -9,8 +9,8 @@ import { fileURLToPath } from "node:url";
 import { closeBrowserSession } from "../server/browser-engine.ts";
 import { waitForExit } from "../server/testing/cleanup.ts";
 import { DATA_ROUTES, DATA_TOOL_NAMES, type DataSheet } from "../shared/data-surface.ts";
-import { launchVerificationServer, runControlOmb, verificationServerEnvironment } from "./control-omb.ts";
-import { agentBrowser, ensureUiBrowser, sessionEnv, type UiHandle } from "./testing/control-omb-ui.ts";
+import { launchVerificationServer, runControlSeira, verificationServerEnvironment } from "./control-seira.ts";
+import { agentBrowser, ensureUiBrowser, sessionEnv, type UiHandle } from "./testing/control-seira-ui.ts";
 import { mountPreview, parkUntilSignal, type MountedPreview } from "./testing/preview-fixture.ts";
 
 assert(process.argv.slice(2).every((arg) => arg === "--check"), "Usage: node --experimental-strip-types scripts/verify-data.ts [--check]");
@@ -62,7 +62,7 @@ try {
   await waitForExit(fixture.child, { signal: "SIGTERM" });
   await startServer();
   await api("PATCH", "/api/config", { language: "en" });
-  const { bot } = await runControlOmb(["new-bot", "--name", "Data review", "--url", url]) as { bot: { id: string; activeTaskId: string } };
+  const { bot } = await runControlSeira(["new-bot", "--name", "Data review", "--url", url]) as { bot: { id: string; activeTaskId: string } };
   const minted = await api("POST", "/api/testing/internal-capability", { botId: bot.id, threadId: bot.activeTaskId, kind: "data" }, { "x-openmausbot-test-capability": capabilityKey });
   const mcp = async (method: string, params?: unknown) =>
     (await api("POST", "/api/internal/data/mcp", { method, params }, { authorization: `Bearer ${minted.token}` })).result;
@@ -128,7 +128,7 @@ try {
   await agentBrowser(binary, sessionEnv(handle), ["open", preview.previewUrl], 120_000);
   const handlePath = join(dataDir, "ui.json");
   writeFileSync(handlePath, JSON.stringify(handle, null, 2) + "\n", { mode: 0o600 });
-  const ui = (verb: string, ...args: string[]) => runControlOmb(["ui", verb, "--ui", handlePath, ...args]) as Promise<Record<string, any>>;
+  const ui = (verb: string, ...args: string[]) => runControlSeira(["ui", verb, "--ui", handlePath, ...args]) as Promise<Record<string, any>>;
   const evaluate = async (js: string) => (await ui("eval", "--js", js)).result;
   const click = (name: string) => ui("click", "--name", name);
   // The selected panel shares its tab's name; click the tab itself.
@@ -703,7 +703,7 @@ try {
       const address = upstream.address();
       assert(address && typeof address !== "string");
       await api("PATCH", "/api/config", { openaiCompat: { key: "synthetic-data-fixture", url: `http://127.0.0.1:${address.port}/v1`, model: "data-chat-fixture" } });
-      await runControlOmb(["set-model", "--bot", bot.id, "--instance", "openaiCompat", "--model", "data-chat-fixture", "--url", url]);
+      await runControlSeira(["set-model", "--bot", bot.id, "--instance", "openaiCompat", "--model", "data-chat-fixture", "--url", url]);
       await api("PATCH", `/api/bots/${bot.id}`, { toolScope: { allow: ["mcp:data:data_describe", "mcp:data:data_show"] } });
       await browser("set", "viewport", "1600", "1000");
       await clickTab("computer-data");
@@ -719,7 +719,7 @@ try {
         await until(async () => chatRequests > before, "Composer did not send the chat request");
         let settled: any;
         for (let attempt = 0; attempt < 4; attempt++) {
-          settled = await runControlOmb(["wait", "--bot", bot.id, "--task", bot.activeTaskId, "--timeout", "30", "--url", url]);
+          settled = await runControlSeira(["wait", "--bot", bot.id, "--task", bot.activeTaskId, "--timeout", "30", "--url", url]);
           if (chatFailure) throw chatFailure;
           if (settled.status !== "needs-user") break;
           const current = (await api("GET", "/api/bots")).bots.find((entry: { id: string }) => entry.id === bot.id);

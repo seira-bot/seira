@@ -7,7 +7,7 @@ import { connect, type Socket } from "node:net";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, type VerificationServer } from "../scripts/control-seira.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 
 let fixture: VerificationServer | undefined;
@@ -51,7 +51,7 @@ it("runs a marked key's thread at the bot's level as the owner's work, keeps the
     expect(response.status, `${method} ${path}: ${JSON.stringify(value)}`).toBeLessThan(300);
     return value;
   };
-  const bot = (await runControlOmb(["new-bot", "--name", "Trusted", "--url", url]) as any).bot;
+  const bot = (await runControlSeira(["new-bot", "--name", "Trusted", "--url", url]) as any).bot;
   await api("PATCH", `/api/bots/${bot.id}`, { approvalMode: "full", applyToAllThreads: true });
   await api("PUT", "/api/config", { safetyFloor: { enabled: true } });
   const on = await api("POST", `/api/bots/${bot.id}/bot-api`, { enabled: true });

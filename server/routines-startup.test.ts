@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { RoutineManager, type RoutineRun } from "./routines.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
@@ -37,7 +37,7 @@ it("recovers queued/due work and a waiting routine's imported hand-off after res
     const reusedBot = (await api("POST", "/api/bots", { name: "Reused routine conversation" })).bot;
     const reusedPeer = (await api("POST", "/api/bots", { name: "New user handoff peer" })).bot;
     await api("POST", `/api/bots/${reusedBot.id}/messages`, { text: "A later user request that owns its own pending handoff." });
-    await runControlOmb(["wait", "--bot", reusedBot.id, "--task", reusedBot.threadId, "--url", url]);
+    await runControlSeira(["wait", "--bot", reusedBot.id, "--task", reusedBot.threadId, "--url", url]);
     const scheduled = (await api("POST", "/api/routines", {
       name: "Due at startup", prompt: "Report after the restart", botId: scheduledBot.id,
       schedule: { type: "once", at: Date.now() + 60 * 60_000 },
@@ -185,8 +185,8 @@ it("recovers queued/due work and a waiting routine's imported hand-off after res
     await expect.poll(() => readHandoffs(dataDir).find((node) => node.id === `legacy-${interruptedBot.threadId}`)?.status, { timeout: 15_000 }).toBe("completed");
     await expect.poll(() => readHandoffs(dataDir).find((node) => node.id === `legacy-${reusedBot.threadId}`)?.status, { timeout: 15_000 }).toBe("completed");
     const scheduledRun = runs.find((run) => run.routineId === scheduled.id)!;
-    const wait = await runControlOmb(["wait", "--bot", scheduledBot.id, "--task", scheduledRun.threadId!, "--url", url]);
-    const messages = await runControlOmb(["messages", "--bot", scheduledBot.id, "--task", scheduledRun.threadId!, "--url", url]);
+    const wait = await runControlSeira(["wait", "--bot", scheduledBot.id, "--task", scheduledRun.threadId!, "--url", url]);
+    const messages = await runControlSeira(["messages", "--bot", scheduledBot.id, "--task", scheduledRun.threadId!, "--url", url]);
     expect(wait).toMatchObject({ status: "settled" });
     const evidence = { fixture: fixture.info, restartPid: restarted.pid, runs, wait, messages };
     writeFileSync(`${logPath}.routines-restart.json`, JSON.stringify(evidence, null, 2));

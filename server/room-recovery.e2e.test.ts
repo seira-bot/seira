@@ -3,7 +3,7 @@ import { closeSync, existsSync, openSync, readFileSync, writeFileSync } from "no
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb, verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, verificationServerEnvironment } from "../scripts/control-seira.ts";
 import { handleToolCall, request } from "../scripts/mcp-server.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
@@ -13,7 +13,7 @@ it("boots, starts an interrupted routine once more, and reports it back to its s
   const { url, dataDir, logPath } = fixture.info;
   let restarted: ChildProcess | undefined;
   try {
-    const { bot } = await runControlOmb(["new-bot", "--name", "Recovery lead", "--url", url]) as any;
+    const { bot } = await runControlSeira(["new-bot", "--name", "Recovery lead", "--url", url]) as any;
     const { channel } = await handleToolCall("create_channel", { name: "Recovery room", member_ids: [bot.id] },
       (path, options) => request(path, options, url)) as any;
     await waitForExit(fixture.child, { signal: "SIGTERM" });
@@ -67,7 +67,7 @@ it("keeps a routine waiting through a restart, reruns its cut teammate once, and
   const { url, dataDir, logPath } = fixture.info;
   let restarted: ChildProcess | undefined;
   try {
-    const cli = (...args: string[]) => runControlOmb([...args, "--url", url]) as Promise<any>;
+    const cli = (...args: string[]) => runControlSeira([...args, "--url", url]) as Promise<any>;
     const { bot: chief } = await cli("new-bot", "--name", "Clive", "--section", "Leadership");
     const { bot: mate } = await cli("new-bot", "--name", "Mira", "--section", "Engineering");
     await request(`/api/bots/${chief.id}`, { method: "PATCH", body: JSON.stringify({ chiefOfStaff: true, managedSections: ["Engineering"], acknowledgePeerScope: true }) }, url);

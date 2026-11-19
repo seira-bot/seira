@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { launchVerificationServer, type VerificationServer } from "./control-omb.ts";
+import { launchVerificationServer, type VerificationServer } from "./control-seira.ts";
 import { fixtureApi, mountPreview, type MountedPreview } from "./testing/preview-fixture.ts";
 
 const RELAY_PATH = "/api/cloud/services/x", PLAN_TOKEN = "omb_x_verify_fixture", OWN_KEY = "treg_verify_fixture_key";

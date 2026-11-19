@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer } from "../scripts/control-seira.ts";
 import { startFakeConnectedApps } from "./testing/fake-connected-apps.ts";
 
 type Bridge = { command: string; args: string[]; env: Record<string, string> };

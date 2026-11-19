@@ -93,7 +93,7 @@
 ### Task A6: e2e and docs
 - Files:
   - `server/x-research.e2e.test.ts`: a loopback relay stub via `OMB_CLOUD_X_URL` and `OMB_CLOUD_X_TOKEN`
-  - `scripts/control-omb.ts` (+ test): allows a loopback `OMB_CLOUD_X_URL` and its token; drops `OMB_TREG_URL`
+  - `scripts/control-seira.ts` (+ test): allows a loopback `OMB_CLOUD_X_URL` and its token; drops `OMB_TREG_URL`
   - `apps/docs/content/docs/connected-apps/index.mdx`
 - Tests: the e2e (tools shown, search answered through the stub with the Bearer token); the launcher crossing rules.
 

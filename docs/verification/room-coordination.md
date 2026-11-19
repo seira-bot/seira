@@ -301,7 +301,7 @@ a member's private chat is handed into a room or posted in one.
 pnpm exec vitest run server/peer-roster.test.ts server/post-to-room.test.ts server/room-coordination.e2e.test.ts server/direct-coordination.e2e.test.ts server/runtime-coordinator.test.ts server/cloud-team-open-reach.e2e.test.ts
 ```
 
-The coordination suites use `launchVerificationServer`, `control-omb`, and the
+The coordination suites use `launchVerificationServer`, `control-seira`, and the
 actual agents MCP proxy with a scripted provider and disposable HOME/data.
 They assert discovered targets, accepted or refused tool calls, durable
 handoff state, the destination conversation, and absence of dispatch after
@@ -425,7 +425,7 @@ from a completed routine back to a normal user conversation.
 
 Use an isolated home and data directory, never the running app. Create Maya,
 Eli (developer) and Nora (reviewer), set an explicit shared working folder, and
-create Launch and Delivery rooms through `control-omb`. Send through
+create Launch and Delivery rooms through `control-seira`. Send through
 `send-channel`, wait on the source channel, and retain `messages` plus the
 actual files and executed tool evidence. Follow [channels](channels.md) and
 [chat UI](chat-ui.md) for the common launch/control paths.

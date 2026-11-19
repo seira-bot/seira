@@ -52,7 +52,7 @@ model are required. The fake engine does not prove model-driven GUI interaction.
 
 ## Drive and observe
 
-Use the candidate checkout's `control-omb.ts` on the host. The explicit fixture
+Use the candidate checkout's `control-seira.ts` on the host. The explicit fixture
 URL in this example is `http://127.0.0.1:28799` (WSL forwards the machine's loopback
 listener on Windows). Confirm `GET /api/config` has the fixture profile before
 issuing mutations. If it does not, stop: the URL is not your fixture.
@@ -60,7 +60,7 @@ issuing mutations. If it does not, stop: the URL is not your fixture.
 1. `GET /api/local-computer` must report `runtime: podman` and `daemonUp: true`.
    If `image` is false, `POST /api/local-computer/pull` prepares the official
    managed desktop image. This may take several minutes on a fresh machine.
-2. Use `control-omb.ts new-bot --name "Fixture A" --url URL` and repeat for B.
+2. Use `control-seira.ts new-bot --name "Fixture A" --url URL` and repeat for B.
    Record each returned `bot.id`.
 3. For each ID, `PATCH /api/bots/ID` with `{"computer":"vm"}`, then
    `POST /api/bots/ID/local-computer/run` with `{}`. JSON requests must send

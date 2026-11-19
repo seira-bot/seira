@@ -39,7 +39,7 @@ that is not live and local membership, 404 for missing and hidden agents, and
 a pass for every other method and path. The helper tests cover incomplete or invalid configuration
 and URL parameter boundaries.
 
-The UI test launches `control-omb ui` with the real renderer and a disposable
+The UI test launches `control-seira ui` with the real renderer and a disposable
 fake-engine workspace. It checks that the real API answers `{available:false}`
 and that the settings rail has no Slack row, then supplies synthetic Admin
 responses only inside that browser page. It checks the row, its copy and the

@@ -13,8 +13,8 @@ import { afterAll, expect, it } from "vitest";
 import { ROOM_VIEW_ONLY } from "../../shared/app.ts";
 import { resolveAgentBrowserBinary } from "../../server/browser-engine.ts";
 import { removeTempDir, waitForExit } from "../../server/testing/cleanup.ts";
-import { runControlOmb } from "../control-omb.ts";
-import { agentBrowser, sessionEnv, UI_TOOLS_DIR, type UiHandle } from "./control-omb-ui.ts";
+import { runControlSeira } from "../control-seira.ts";
+import { agentBrowser, sessionEnv, UI_TOOLS_DIR, type UiHandle } from "./control-seira-ui.ts";
 import { fixtureApi } from "./preview-fixture.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -50,7 +50,7 @@ document.getElementById("send").onclick = function () {
 </script></body></html>`;
 
 async function launch(env: NodeJS.ProcessEnv): Promise<{ child: ReturnType<typeof spawn>; info: { ui: string; url: string; botId: string; dataDir: string; logPath: string } }> {
-  const child = spawn(process.execPath, ["--experimental-strip-types", join(ROOT, "scripts", "control-omb.ts"), "ui", "launch", "--mode", "slow"], {
+  const child = spawn(process.execPath, ["--experimental-strip-types", join(ROOT, "scripts", "control-seira.ts"), "ui", "launch", "--mode", "slow"], {
     cwd: ROOT, env, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32",
   });
   let stdout = "", stderr = "";
@@ -85,7 +85,7 @@ async function until<T>(probe: () => Promise<T> | T, what: string, timeoutMs = 3
   let engineSide: ChildProcessWithoutNullStreams | undefined;
   try {
     const api = fixtureApi(info.url, { headers: { origin: info.url } });
-    const ui = (verb: string, ...args: string[]) => runControlOmb(["ui", verb, "--ui", info.ui, ...args]) as Promise<Record<string, any>>;
+    const ui = (verb: string, ...args: string[]) => runControlSeira(["ui", verb, "--ui", info.ui, ...args]) as Promise<Record<string, any>>;
     const evaluate = async (js: string) => (await ui("eval", "--js", js)).result;
     const browser = JSON.parse(readFileSync(info.ui, "utf8")) as UiHandle;
     const mouse = (...args: string[]) => agentBrowser(browser.binary, sessionEnv(browser), ["mouse", ...args]);

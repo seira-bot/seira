@@ -2,7 +2,7 @@
 // Existing sign-in is explicitly designated; personal chats/config are not copied.
 import { copyFileSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { launchVerificationServer, runControlOmb } from "./control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "./control-seira.ts";
 import { fixtureApi } from "./testing/preview-fixture.ts";
 import { verifiedNativeSearch } from "./testing/native-search-evidence.ts";
 
@@ -33,15 +33,15 @@ try {
     const prompt = "Check the current official OpenAI documentation: is the built-in browser available in Codex CLI? After searching, open the source URL in a separate call, read it, and cite that exact URL in your answer.";
     const entry: any = { model, prompt, botId: bot.id };
     report.cases.push(entry); save();
-    entry.sent = await runControlOmb(["send", "--bot", bot.id, "--text", prompt, "--url", fixture.info.url]);
+    entry.sent = await runControlSeira(["send", "--bot", bot.id, "--text", prompt, "--url", fixture.info.url]);
     console.log(JSON.stringify({ model, sent: entry.sent }));
     const deadline = Date.now() + 240_000;
     do {
-      entry.wait = await runControlOmb(["wait", "--bot", bot.id, "--timeout", "30", "--url", fixture.info.url]);
+      entry.wait = await runControlSeira(["wait", "--bot", bot.id, "--timeout", "30", "--url", fixture.info.url]);
       save();
       if (["settled", "failed", "needs-user", "stalled"].includes(entry.wait?.status)) break;
     } while (Date.now() < deadline);
-    entry.messages = await runControlOmb(["messages", "--bot", bot.id, "--limit", "50", "--url", fixture.info.url]);
+    entry.messages = await runControlSeira(["messages", "--bot", bot.id, "--limit", "50", "--url", fixture.info.url]);
     const nativePath = join(fixture.info.dataDir, "native", `${entry.sent.taskId}.ndjson`);
     const records = readFileSync(nativePath, "utf8").trim().split("\n").map(line => JSON.parse(line));
     const searches = records.filter(record => record.msg?.method === "item/completed" && record.msg?.params?.item?.type === "webSearch");

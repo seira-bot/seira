@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 import { resolveAgentBrowserBinary } from "../../server/browser-engine.ts";
 import { waitForExit } from "../../server/testing/cleanup.ts";
-import { runControlOmb } from "../control-omb.ts";
-import { UI_TOOLS_DIR } from "./control-omb-ui.ts";
+import { runControlSeira } from "../control-seira.ts";
+import { UI_TOOLS_DIR } from "./control-seira-ui.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const enabled = Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env })) || process.env.OMB_UI_E2E === "1";
@@ -17,7 +17,7 @@ interface SavedBot { id: string; name: string; toolScope?: { allow?: string[]; d
   try {
     let stdout = "", stderr = "";
     let info: { ui: string; url: string };
-    const launcher = new URL("./control-omb-ui.ts", import.meta.url).href;
+    const launcher = new URL("./control-seira-ui.ts", import.meta.url).href;
     child = spawn(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", `
       import { launchUi } from ${JSON.stringify(launcher)};
       process.on('message', message => { if (message === 'stop') process.emit('SIGINT'); });
@@ -29,7 +29,7 @@ interface SavedBot { id: string; name: string; toolScope?: { allow?: string[]; d
       if (child!.exitCode !== null || child!.signalCode !== null) throw new Error(stderr);
       try { info = JSON.parse(stdout); return Boolean(info.ui); } catch { return false; }
     }, { timeout: 600_000, interval: 250 }).toBe(true);
-    const ui = (verb: string, ...args: string[]) => runControlOmb(["ui", verb, "--ui", info.ui, ...args]) as Promise<Record<string, any>>;
+    const ui = (verb: string, ...args: string[]) => runControlSeira(["ui", verb, "--ui", info.ui, ...args]) as Promise<Record<string, any>>;
     const evaluate = async (js: string) => (await ui("eval", "--js", js)).result;
     const click = (name: string) => ui("click", "--name", name);
     const snapshot = async () => (await ui("snapshot")).snapshot as string;
@@ -137,12 +137,12 @@ interface SavedBot { id: string; name: string; toolScope?: { allow?: string[]; d
     await expect.poll(async () => (await bots()).find(bot => bot.name === `${first.name} copy`)?.toolScope).toEqual({ allow: ["native:*"], deny: [] });
 
     await selectBot(first.name); await click("Open settings"); await click("Access");
-    await runControlOmb(["send", "--bot", first.id, "--text", "Stay active for the settings test.", "--url", info.url]);
+    await runControlSeira(["send", "--bot", first.id, "--text", "Stay active for the settings test.", "--url", info.url]);
     await expect.poll(async () => (await bots()).find(bot => bot.id === first.id)?.busy).toBe(true);
     await expect.poll(async () => await snapshot()).toContain("Added access applies from its next turn");
     expect(await evaluate("document.querySelector('select[aria-label=\"Tool selection\"]')?.disabled")).toBe(false);
-    await runControlOmb(["interrupt", "--bot", first.id, "--url", info.url]);
-    await runControlOmb(["wait", "--bot", first.id, "--timeout", "30", "--url", info.url]);
+    await runControlSeira(["interrupt", "--bot", first.id, "--url", info.url]);
+    await runControlSeira(["wait", "--bot", first.id, "--timeout", "30", "--url", info.url]);
     await expect.poll(async () => await snapshot()).not.toContain("Added access applies from its next turn");
   } finally {
     if (child?.connected) child.send("stop");

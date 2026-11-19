@@ -238,6 +238,6 @@ export async function waitVerb(ctx: VerbContext): Promise<VerbOutcome> {
     throw error;
   }
   const { human } = report(waited, waited.result.taskId);
-  // control-omb and MCP read the tool's own result: keep it as it came.
+  // control-seira and MCP read the tool's own result: keep it as it came.
   return { result: waited.stopped ? { ...waited.result, stopped: waited.stopped } : waited.result, exitCode: waited.exitCode, human };
 }
