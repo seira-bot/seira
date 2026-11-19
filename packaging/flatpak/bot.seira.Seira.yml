@@ -49,7 +49,13 @@ modules:
       - cp -a release/linux-unpacked/. /app/lib/seira/
       - install -Dm755 packaging/flatpak/seira /app/bin/seira
       - install -Dm644 packaging/flatpak/bot.seira.Seira.desktop /app/share/applications/bot.seira.Seira.desktop
-      - install -Dm644 packaging/flatpak/bot.seira.Seira.metainfo.xml /app/share/metainfo/bot.seira.Seira.metainfo.xml
+      # The release entry gets the version of package.json, so a release needs no metainfo edit.
+      - >-
+        version="$(node -p 'require("./package.json").version')" &&
+        sed "0,/<release version=\"[^\"]*\" date=\"[^\"]*\"/s//<release version=\"$version\" date=\"$(date -u +%F)\"/"
+        packaging/flatpak/bot.seira.Seira.metainfo.xml > bot.seira.Seira.metainfo.xml &&
+        grep -q "<release version=\"$version\"" bot.seira.Seira.metainfo.xml &&
+        install -Dm644 bot.seira.Seira.metainfo.xml /app/share/metainfo/bot.seira.Seira.metainfo.xml
       - install -Dm644 build/icon.svg /app/share/icons/hicolor/scalable/apps/bot.seira.Seira.svg
     sources:
       - type: dir

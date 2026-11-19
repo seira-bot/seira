@@ -41,8 +41,7 @@ vi.mock("@/components/EngineLibrary", () => ({ engineReady: (instance: { snapsho
   instance.snapshot.state === "available" && instance.snapshot.authenticated !== false }));
 import { AppNotices } from "./AppNotices";
 import { TwoPlacesCard } from "./TwoPlacesCard";
-import { BOAT_OFFER_NOTICE, CLOUD_INTRO, GROK_MOVE_NOTICE, launchNotice, localDay, MODELGO_OFFER_NOTICE, PRODUCT_HUNT_NOTICE, PRODUCT_HUNT_UNTIL, PRODUCT_HUNT_URL, STAR_NOTICE, TEAMS_NOTICE, WHATS_NEW_NOTICE } from "@/lib/notices";
-import { BOAT_OFFER, boatClaimMailto } from "@/lib/boat-offer";
+import { CLOUD_INTRO, GROK_MOVE_NOTICE, launchNotice, localDay, PRODUCT_HUNT_NOTICE, PRODUCT_HUNT_UNTIL, PRODUCT_HUNT_URL, STAR_NOTICE, TEAMS_NOTICE, WHATS_NEW_NOTICE } from "@/lib/notices";
 import { track } from "@/lib/analytics";
 import { ADVANCED_MODE_KEY, setAdvancedMode } from "@/lib/interface-mode";
 import { SIMPLE_MODE_PROMPT_KEY } from "@/lib/simple-mode-prompt";
@@ -142,7 +141,7 @@ const press = (label: string) => {
 const FIRST_REPLY = [{ tasks: [{ threadId: "first", usage: { turns: 1 } }] }];
 let session: Map<string, string>;
 const returning = () => { f.state.bots = [{ tasks: [{ threadId: "t", createdAt: 1, usage: { turns: 2 } }] }]; };
-const launchCardsSeen = () => { desk.saved = { seen: [WHATS_NEW_NOTICE] }; storage.set(TEAMS_NOTICE, "1"); storage.set(MODELGO_OFFER_NOTICE, "1"); storage.set(GROK_MOVE_NOTICE, "1"); storage.set(PRODUCT_HUNT_NOTICE, "1"); storage.set(SIMPLE_MODE_PROMPT_KEY, "1"); storage.set(BOAT_OFFER_NOTICE, "1"); };
+const launchCardsSeen = () => { desk.saved = { seen: [WHATS_NEW_NOTICE] }; storage.set(TEAMS_NOTICE, "1"); storage.set(GROK_MOVE_NOTICE, "1"); storage.set(PRODUCT_HUNT_NOTICE, "1"); storage.set(SIMPLE_MODE_PROMPT_KEY, "1"); };
 const hints = () => f.state.config.onboarding.hintsSeen as string[];
 const SHARED_HINT_CLOSED = "omb.onboarding.sharedWorkspaceHint";
 
@@ -162,7 +161,7 @@ beforeEach(() => {
     return f.state.config;
   });
   vi.stubGlobal("localStorage", { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) });
-  // The popups, the Product Hunt card and Boat's offer start seen: the tests before their own are about the other cards.
+  // The popups and the Product Hunt card start seen: the tests before their own are about the other cards.
   launchCardsSeen();
   // A hosted member closed the shared workspace hint already: one test below is about the notices waiting for it.
   storage.set(SHARED_HINT_CLOSED, "1");
@@ -444,176 +443,9 @@ describe("the Product Hunt launch card", () => {
   });
 });
 
-describe("Boat's credit offer", () => {
-  const TITLE = "$50 of Boat credit for you";
-  const BODY = "Boat runs the cloud computers behind Seira. Buy Boat's $100 plan or bigger, then tell Boat that Seira sent you, and they'll add $50 in credits to your Boat account.";
-  const YOURSELF = "You claim it yourself: it isn't automatic.";
-  const CLAIM = "I bought it: claim my $50";
-  const html = (text: string) => text.replace(/'/g, "&#x27;");
-  // No Cloud trial to offer, as for every plan but Team: the Cloud's own card after the update steps aside.
-  const fresh = () => { storage.delete(BOAT_OFFER_NOTICE); returning(); offer = { ...PLAIN_OFFER }; };
-  const boatEvents = () => vi.mocked(track).mock.calls.filter(([name]) => name === "boat_offer").map(([, props]) => props);
-  const escape = () => tree().find(node => node.type === "aside")!.props.onKeyDown({ key: "Escape", preventDefault() {}, stopPropagation() {} });
-  const endedForGood = async () => {
-    expect(render()).toBe("");
-    expect(storage.get(BOAT_OFFER_NOTICE)).toBe("1"); expect(hints()).toContain(BOAT_OFFER_NOTICE); expect(desk.saved?.seen).toContain(BOAT_OFFER_NOTICE);
-    expect(await launch()).not.toContain(TITLE);
-  };
-  afterEach(() => { BOAT_OFFER.until = null; });
-
-  it("never reaches a Team Cloud's member", async () => {
-    fresh(); storage.delete(STAR_NOTICE);
-    f.state.config.team = { id: "team-acme", name: "Acme" };
-    viewer = { hosted: false, canSave: false };
-    expect(await launch()).not.toContain(html(TITLE));
-    delete f.state.config.team; viewer = LOCAL_VIEWER;
-    expect(await relaunch(), "off a team as before").toContain(html(TITLE));
-  });
-
-  it("shows once to someone who used the app before this launch: what Boat gives, that they claim it themselves, Get Boat, the claim and Not now", async () => {
-    fresh(); storage.delete(STAR_NOTICE);
-    const shown = await launch();
-    const words = [TITLE, BODY, YOURSELF, "Get Boat", CLAIM, "Not now"].map(html);
-    for (const text of words) expect(shown).toContain(text);
-    for (let i = 1; i < words.length; i++) expect(shown.indexOf(words[i - 1]!), words[i]).toBeLessThan(shown.indexOf(words[i]!));
-    expect(shown).not.toContain(STAR); expect(shown).not.toContain('aria-modal="true"');
-    expect(await settle()).toContain(html(TITLE));
-    expect(boatEvents()).toEqual([{ action: "shown", place: "card" }]);
-  });
-
-  it("never on a first launch: not before the bots load, on a new install's first chat, in the launch its welcome or Seira's card took", async () => {
-    fresh(); storage.delete(STAR_NOTICE);
-    f.state.bots = [];
-    expect(await launch(), "nothing said yet").not.toContain(html(TITLE));
-    f.state.bots = structuredClone(FIRST_REPLY);
-    expect(await launch(), "the first reply came in this launch").not.toContain(html(TITLE));
-    returning(); f.state.hydrated = false;
-    expect(await launch(), "until the bots load nothing shows, not even the star after it").toBe("");
-    f.state.hydrated = true; markWelcomeFinished();
-    expect(await launch(), "the launch its welcome finished in").not.toContain(html(TITLE));
-    session.clear(); markLaunchDialog("mausbot");
-    expect(await launch(), "the launch Seira's first card took").not.toContain(html(TITLE));
-    session.clear();
-    expect(await launch()).toContain(html(TITLE));
-  });
-
-  it("never during onboarding or the tour, nor while a bot or a room is working: it waits for an idle moment, and steps aside for a turn", async () => {
-    fresh();
-    const waits: Array<() => void> = [
-      () => { f.state.welcomeOpen = true; }, () => { f.state.tourOpen = true; }, () => { f.state.config.onboarding.completedAt = undefined; },
-      () => { f.state.bots[0].busy = true; }, () => { f.state.bots[0].tasks[0].busy = true; },
-      () => { f.state.groups = [{ working: true }]; }, () => { f.state.groups = [{ busyBotId: "b" }]; },
-    ];
-    for (const wait of waits) {
-      const saved = structuredClone(f.state); wait();
-      expect(await launch(), wait.toString()).not.toContain(html(TITLE));
-      f.state = saved;
-    }
-    expect(boatEvents()).toEqual([]);
-    expect(await launch()).toContain(html(TITLE));
-    f.state.bots[0].busy = true;
-    expect(await settle(), "a turn starts while it is up").toBe("");
-    f.state.bots[0].busy = false;
-    expect(await settle(), "back once the turn ends, still not dismissed").toContain(html(TITLE));
-    expect(storage.get(BOAT_OFFER_NOTICE)).toBeUndefined();
-    expect(boatEvents()).toEqual([{ action: "shown", place: "card" }]);
-  });
-
-  it("Get Boat opens boat.dev in the browser and ends it for good", async () => {
-    fresh(); await launch();
-    press("Get Boat"); await flush();
-    expect(window.ogb?.openExternal).toHaveBeenCalledWith("https://boat.dev");
-    expect(boatEvents()).toContainEqual({ action: "get_boat", place: "card" });
-    await endedForGood();
-  });
-
-  it("the claim opens an email to Boat's billing address with Boat's subject and body for the person to send, and ends it for good; nothing is sent for them", async () => {
-    fresh(); await launch();
-    vi.mocked(api).mockClear();
-    press(CLAIM); await flush();
-    expect(window.ogb?.openExternal).toHaveBeenCalledWith(boatClaimMailto());
-    const draft = new URL(vi.mocked(window.ogb!.openExternal!).mock.calls[0]![0]);
-    expect(`${draft.protocol}${draft.pathname}`).toBe("mailto:support@ascii.dev");
-    expect(draft.searchParams.get("subject")).toBe("Seira introduced me: $50 Boat credit");
-    expect(draft.searchParams.get("body")!.replace(/\r\n/g, "\n")).toBe("Hi Boat team,\n\nSeira introduced me to Boat. I'm on the $___ plan.\nMy Boat account email: ___\n\nThanks!");
-    expect(vi.mocked(api).mock.calls.map(([path]) => path), "only the dismissal is saved").toEqual(["/api/config"]);
-    expect(boatEvents()).toContainEqual({ action: "claim", place: "card" });
-    await endedForGood();
-  });
-
-  it("an email app that won't open leaves it up and names the address to write to", async () => {
-    fresh(); await launch();
-    vi.mocked(window.ogb!.openExternal!).mockRejectedValueOnce(new Error("no mail app"));
-    press(CLAIM); await flush();
-    const after = render();
-    expect(after).toContain(html("Couldn't open your email app. Write to support@ascii.dev instead."));
-    expect(after).toContain(html(TITLE)); expect(storage.get(BOAT_OFFER_NOTICE)).toBeUndefined();
-  });
-
-  it("Not now, the X and Escape end it for good too", async () => {
-    for (const end of [() => press("Not now"), () => press("Dismiss for good"), escape]) {
-      fresh(); desk = desktopMachine(); desk.saved = { seen: [WHATS_NEW_NOTICE] }; f.state.config.onboarding.hintsSeen = withTourFinished(undefined);
-      expect(await launch()).toContain(html(TITLE));
-      end(); await flush();
-      await endedForGood();
-    }
-    expect(boatEvents().map((props) => props?.action)).toEqual(["shown", "not_now", "shown", "close", "shown", "close"]);
-  });
-
-  it("closed on This computer's page, it stays closed on My Cloud's page in the same desktop; a desktop that never showed it shows it there", async () => {
-    fresh(); await launch(); press("Not now"); await flush();
-    storage.clear(); storage.set(PRODUCT_HUNT_NOTICE, "1"); storage.set(SIMPLE_MODE_PROMPT_KEY, "1");
-    snapshot = { status: "none" }; viewer = { hosted: false, canSave: true, cloudHome: true }; f.state.config.cloudHome = true;
-    f.state.config.onboarding.hintsSeen = [...withTourFinished(undefined), "cloud-setup-hidden"]; showWindow(MY_CLOUD);
-    expect(await launch()).not.toContain(html(TITLE));
-    desk = desktopMachine(); desk.saved = { seen: [WHATS_NEW_NOTICE] };
-    expect(await launch()).toContain(html(TITLE));
-  });
-
-  it("shows in a plain browser too, where the claim goes to the browser's own mail app", async () => {
-    vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn(), location: { href: "https://bots.example.test/" } });
-    viewer = { hosted: true, canSave: true }; fresh();
-    expect(await launch()).toContain(html(TITLE));
-    press(CLAIM); await flush();
-    expect(window.location.href).toBe(boatClaimMailto());
-    expect(storage.get(BOAT_OFFER_NOTICE)).toBe("1"); expect(render()).toBe("");
-  });
-
-  it("never on a branded build or an organization's desktop, and never from its end date on", async () => {
-    fresh(); f.brand = "file";
-    expect(await launch()).not.toContain(html(TITLE));
-    f.brand = "default"; BOAT_OFFER.until = NOW + DAY;
-    expect(await launch(), "before its end date").toContain(html(TITLE));
-    now = NOW + DAY;
-    expect(await launch(), "from its end date").not.toContain(html(TITLE));
-    BOAT_OFFER.until = NOW - 1; now = NOW;
-    expect(await launch(), "an end date already gone switches it off").not.toContain(html(TITLE));
-    BOAT_OFFER.until = null;
-    (window.ogb as Record<string, unknown>).organization = { state: async () => ({ status: "connected", organization: { id: "o", name: "Acme" } }), onState: () => () => {} };
-    expect(await launch()).not.toContain(html(TITLE));
-  });
-
-  it("comes after a trial's notice, before the star, and waits while the bots move to My Cloud", async () => {
-    fresh(); storage.delete(STAR_NOTICE);
-    const running = trial("active");
-    account = paid({ trial: running }); snapshot = { status: "paid", tier: "pro", trial: running, notice: "active" };
-    const first = await launch();
-    expect(first).toContain("Your free trial ends on"); expect(first).not.toContain(html(TITLE));
-    snapshot = { ...snapshot, notice: undefined };
-    const line = (move: unknown) => desk.handlers.set("cloud-send:notice", () => ({ ready: true, bots: [], move }));
-    line({ phase: "copy", chats: { done: 1, total: 5 } });
-    expect(await launch(), "while the bots move").not.toContain(html(TITLE));
-    line(undefined);
-    expect(await relaunch()).toContain(html(TITLE));
-    press("Not now"); await flush();
-    expect(await relaunch()).toContain(STAR);
-  });
-});
-
 describe("What's new after the update", () => {
   const PRO = "Meet the new Seira Cloud", TEAM = "Shared bots for your whole team";
   const ID = WHATS_NEW_NOTICE;
-  const BOAT = "$50 of Boat credit for you";
   let modal: boolean;
   const steps = () => vi.mocked(track).mock.calls.filter(([event]) => event === "whats_new").map(([, props]) => props as Record<string, unknown>);
   const step = (action: string, slide: string, audience = "no_plan", signedIn = false) => ({ action, slide, audience, signed_in: signedIn, campaign: ID });
@@ -735,16 +567,16 @@ describe("What's new after the update", () => {
     expect(on(await relaunch()), "back online, a later launch").toBe("pro");
   });
 
-  it("one promo a launch: What's new first; Boat's credit offer waits for the next launch, a reload in this one included", async () => {
-    returning(); storage.delete(BOAT_OFFER_NOTICE); storage.set(CLOUD_INTRO, "1"); desk.saved = null;
+  it("one promo a launch: What's new first; the star waits for the next launch, a reload in this one included", async () => {
+    returning(); storage.delete(STAR_NOTICE); storage.set(CLOUD_INTRO, "1"); desk.saved = null;
     const first = await launch();
-    expect(on(first)).toBe("pro"); expect(first).not.toContain(BOAT);
+    expect(on(first)).toBe("pro"); expect(first).not.toContain(STAR);
     press("Not now"); await flush();
     expect(render(), "nothing else after it in this launch").toBe("");
     expect(await launch(), "a reload is the same launch").toBe("");
     const next = await relaunch();
-    expect(on(next)).toBeNull(); expect(next).toContain(BOAT);
-    expect(launchNotice()).toBe(BOAT_OFFER_NOTICE);
+    expect(on(next)).toBeNull(); expect(next).toContain(STAR);
+    expect(launchNotice()).toBe(STAR_NOTICE);
     expect(steps().map(props => props.action)).toEqual(["seen", "not_now"]);
   });
 
@@ -1015,7 +847,7 @@ describe("the Move from Grok Bot popup", () => {
   });
 
   it("goes first in the queue, one a launch: What's new, then the rest, wait for later launches", async () => {
-    returning(); desk.saved = null; storage.delete(SIMPLE_MODE_PROMPT_KEY); storage.delete(BOAT_OFFER_NOTICE); storage.delete(STAR_NOTICE);
+    returning(); desk.saved = null; storage.delete(SIMPLE_MODE_PROMPT_KEY); storage.delete(STAR_NOTICE);
     const first = await launch();
     expect(first).toContain(TITLE);
     for (const other of ["data-simple-mode-prompt", WHATS_NEW, STAR]) expect(first).not.toContain(other);
@@ -1369,196 +1201,13 @@ describe("bots in two places", () => {
   });
 });
 
-describe("ModelGo's sponsor card", () => {
-  const TITLE = "ModelGo is now in Seira", LINE = "One API key, every model.";
-  const URL_EXACT = "https://modelgo.ai/?utm_source=openmausbot&utm_medium=sponsorship&utm_content=app&campaign_id=openmausbot&ad_group_id=app";
-  const due = () => { storage.delete(MODELGO_OFFER_NOTICE); };
-  const events = () => vi.mocked(track).mock.calls.filter(([name]) => name === "modelgo_offer").map(([, props]) => props);
-  const escape = () => tree().find(node => node.type === "aside")!.props.onKeyDown({ key: "Escape", preventDefault() {}, stopPropagation() {} });
-  const gone = async () => {
-    expect(render()).toBe("");
-    expect(storage.get(MODELGO_OFFER_NOTICE)).toBe("1"); expect(hints()).toContain(MODELGO_OFFER_NOTICE); expect(desk.saved?.seen).toContain(MODELGO_OFFER_NOTICE);
-    expect(await relaunch()).not.toContain(TITLE);
-  };
-  beforeEach(due);
-
-  it("is one corner card: its mark, the title, the one line, a sponsor label, one primary button, Not now and close, and no key button", async () => {
-    const shown = await launch();
-    for (const text of [TITLE, LINE, "Sponsor", "Get a ModelGo key", "Not now"]) expect(shown).toContain(text);
-    expect(shown).toContain('data-notice="modelgo-offer"'); expect(shown).not.toContain('aria-modal="true"'); expect(shown).toContain("<svg");
-    const buttons = tree().filter(node => node.type === "button");
-    expect(buttons).toHaveLength(3);
-    expect(render()).not.toMatch(/add my key|Settings/i);
-    expect(events()).toEqual([{ action: "shown", place: "popup" }]);
-    expect(await settle()).toContain(TITLE);
-    expect(events()).toHaveLength(1);
+describe("the upstream sponsor offers", () => {
+  const OFFERS = [/ModelGo is now in Seira/, /\$50 of Boat credit/, /data-notice="(?:boat|modelgo)-offer"/];
+  it("shows no Boat card and no ModelGo card to a returning user who has seen nothing", async () => {
+    returning();
+    for (const shown of [await launch(), await relaunch(), await relaunch()]) for (const offer of OFFERS) expect(shown).not.toMatch(offer);
+    expect(vi.mocked(track).mock.calls.map(([name]) => name).filter(name => /^(?:boat|modelgo)_offer$/.test(name))).toEqual([]);
   });
-
-  it("opens exactly the sponsor's address, and is gone for good", async () => {
-    await launch(); press("Get a ModelGo key"); await flush();
-    expect(window.ogb!.openExternal).toHaveBeenCalledWith(URL_EXACT);
-    expect(events().at(-1)).toEqual({ action: "get_key", place: "popup" });
-    await gone();
-  });
-
-  it("Not now records its action and ends it for good, on the desktop too", async () => {
-    await launch(); press("Not now"); await flush();
-    expect(events().at(-1)).toEqual({ action: "not_now", place: "popup" });
-    await gone();
-  });
-
-  it("close (the X or Escape) records its action and ends it for good", async () => {
-    await launch(); escape(); await flush();
-    expect(events().at(-1)).toEqual({ action: "close", place: "popup" });
-    await gone();
-  });
-
-  it("stays until acted on: no timer ends it", async () => {
-    await launch();
-    now += 2 * DAY;
-    expect(await settle()).toContain(TITLE);
-  });
-
-  it("goes to someone who never used a bot, once the welcome and any first chat are out of the way", async () => {
-    f.state.bots = [];
-    expect(await launch(), "no chat started, no welcome met: no gate on a bot having answered").toContain(TITLE);
-    session.clear(); f.values = [];
-    f.state.config.onboarding.hintsSeen = [...f.state.config.onboarding.hintsSeen, MET_CHIEF_HINT];
-    expect(await relaunch(), "the Chief's first conversation stays quiet until its first reply").not.toContain(TITLE);
-    f.state.bots = structuredClone(FIRST_REPLY);
-    expect(await relaunch(), "then it comes").toContain(TITLE);
-  });
-
-  it("never in the launch the welcome took or over a live call, and waits for the bots to load", async () => {
-    f.state.liveCall = { status: "active" };
-    expect(await launch(), "a live call").not.toContain(TITLE);
-    f.state.liveCall = undefined; f.state.hydrated = false;
-    expect(await relaunch(), "until the bots load").not.toContain(TITLE);
-    f.state.hydrated = true; session.clear(); markWelcomeFinished();
-    expect(await launch(), "the welcome's own launch").not.toContain(TITLE);
-    expect(launchNotice()).not.toBe(MODELGO_OFFER_NOTICE);
-  });
-
-  it("is on every page: the desktop, My Cloud, a Team Cloud's Member and a browser", async () => {
-    expect(await launch()).toContain(TITLE);
-    due(); session.clear(); viewer = { hosted: false, canSave: true, cloudHome: true }; f.state.config.cloudHome = true; snapshot = { status: "none" };
-    f.state.config.onboarding.hintsSeen = [...withTourFinished(undefined), "cloud-setup-hidden"]; showWindow(MY_CLOUD);
-    expect(await relaunch(), "My Cloud").toContain(TITLE);
-    due(); session.clear(); viewer = { hosted: true, canSave: false }; f.state.config.cloudHome = false; showWindow(VPS);
-    expect(await relaunch(), "a Member").toContain(TITLE);
-    expect(render(), "no key button for anyone").not.toMatch(/add my key/i);
-    due(); session.clear(); viewer = { hosted: false, canSave: true }; vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
-    expect(await relaunch(), "a plain browser").toContain(TITLE);
-  });
-
-  it("shares seen across desktop and Cloud, as Boat's offer does", async () => {
-    desk.saved = { seen: [WHATS_NEW_NOTICE, MODELGO_OFFER_NOTICE] };
-    expect(await launch(), "the desktop's record").not.toContain(TITLE);
-    desk.saved = { seen: [WHATS_NEW_NOTICE] };
-    f.state.config.onboarding.hintsSeen = [...f.state.config.onboarding.hintsSeen, MODELGO_OFFER_NOTICE];
-    expect(await relaunch(), "the server's record").not.toContain(TITLE);
-  });
-
-  it("the only two exceptions: a white-label build, and a desktop whose organization refuses ModelGo", async () => {
-    f.brand = "file";
-    expect(await launch(), "white-label").not.toContain(TITLE);
-    f.brand = "default";
-    f.state.config.managedPolicy = { organizationName: "Acme", companyModelsOnly: false, allowedEngines: ["claudeAgent"] };
-    expect(await relaunch(), "a list without ModelGo").not.toContain(TITLE);
-    f.state.config.managedPolicy = { organizationName: "Acme", companyModelsOnly: true, allowedEngines: "all" };
-    expect(await relaunch(), "company models only").not.toContain(TITLE);
-    f.state.config.managedPolicy = { organizationName: "Acme", companyModelsOnly: false, allowedEngines: ["modelgo"] };
-    expect(await relaunch(), "listed").toContain(TITLE);
-    due(); session.clear();
-    f.state.config.managedPolicy = { organizationName: "Acme", companyModelsOnly: false, allowedEngines: "all" };
-    expect(await relaunch(), "an organization that allows everything still sees it").toContain(TITLE);
-    due(); session.clear();
-    f.state.config.managedPolicy = { organizationName: "Team", team: true, companyModelsOnly: false, allowedEngines: ["codex"] };
-    expect(await relaunch(), "a Team Cloud's rules are no organization-managed desktop").toContain(TITLE);
-  });
-
-  it("never reaches a Team Cloud's member; its Owner and Admins, who choose its providers, still see it", async () => {
-    f.state.config.team = { id: "team-acme", name: "Acme" };
-    viewer = { hosted: false, canSave: false };
-    expect(await launch(), "a member").not.toContain(TITLE);
-    viewer = { hosted: false, canSave: true };
-    expect(await relaunch(), "an admin").toContain(TITLE);
-  });
-
-  it("after an update, What's new takes the launch and the card follows it in that same launch once it closes, then never again", async () => {
-    returning(); desk.saved = null; storage.delete(WHATS_NEW_NOTICE);
-    const first = await launch();
-    expect(first).toContain("Meet the new Seira Cloud"); expect(first, "never two at once").not.toContain(TITLE);
-    expect(events()).toEqual([]);
-    press("Not now"); await flush();
-    const after = await settle();
-    expect(after, "right after What's new closes").toContain(TITLE); expect(after).not.toContain("Meet the new Seira Cloud");
-    expect(events()).toEqual([{ action: "shown", place: "popup" }]);
-    expect(launchNotice(), "What's new keeps the launch").toBe(WHATS_NEW_NOTICE);
-    expect(await launch(), "a reload in the same launch").toContain(TITLE);
-    press("Not now"); await flush();
-    await gone();
-  });
-
-  it("follows the product-updates question when that follows What's new", async () => {
-    desk.saved = null; storage.delete(WHATS_NEW_NOTICE);
-    const prefs = createDesktopPrefs({ read: () => null, write: () => {} });
-    const client = { state: vi.fn(() => account), updatesConsent: vi.fn(async () => ({ cloudContractVersion: 1, consent: null })), recordUpdatesConsent: vi.fn(async () => {}),
-      updatesConsentByEmail: vi.fn(async () => "R".repeat(43)), withdrawUpdatesConsent: vi.fn(async () => {}) };
-    registerUpdatesConsent({ ipcMain: { handle: (channel, handler) => void desk.handlers.set(channel, handler as Handler) }, page: event => (event as { page: Page }).page,
-      consent: createUpdatesConsent({ prefs, account: () => client as never, available: async () => true, now: () => now }) });
-    await launch(); press("Not now"); await flush();
-    const question = await settle();
-    expect(question).toContain("Get Seira updates?"); expect(question).not.toContain(TITLE);
-    press("No thanks"); await flush();
-    expect(await settle(), "then the card, in the same launch").toContain(TITLE);
-  });
-
-  it("a notice to act on keeps its place: the move popup or a trial's notice comes first, and the card follows it once closed", async () => {
-    storage.delete(GROK_MOVE_NOTICE); returning();
-    vi.stubGlobal("document", { activeElement: null, body: null, documentElement: { dataset: {} }, getElementById: () => null,
-      querySelector: (selector: string) => selector === "[data-grok-move-popup]" ? { querySelectorAll: () => [] } : null, querySelectorAll: () => [] });
-    const grok = await launch();
-    expect(grok).toContain("data-grok-move-popup"); expect(grok).not.toContain(TITLE);
-    press("Not now"); await flush();
-    expect(await settle(), "after the move's popup").toContain(TITLE);
-    due(); session.clear(); f.values = [];
-    const running = trial("active");
-    account = paid({ trial: running }); snapshot = { status: "paid", tier: "pro", trial: running, notice: "active" }; offer = { ...PLAIN_OFFER };
-    const notice = await relaunch();
-    expect(notice).toContain("Your free trial ends on"); expect(notice).not.toContain(TITLE);
-    expect(await settle(), "it stays up alone").not.toContain(TITLE);
-    press("Manage subscription"); await flush();
-    expect(await settle(), "after the trial's notice").toContain(TITLE);
-  });
-
-  it("a card left up keeps the corner: the card waits for it to close", async () => {
-    returning(); storage.delete(STAR_NOTICE); storage.set(CLOUD_INTRO, "1"); storage.set(MODELGO_OFFER_NOTICE, "1");
-    expect(await launch()).toContain("Enjoying Seira?");
-    due();
-    expect(await settle(), "the star took the launch and is still up").not.toContain(TITLE);
-    press("Not now"); await flush();
-    expect(await settle()).toContain(TITLE);
-  });
-
-  it("follows a closed notice only where it may show at all: not on a branded build, an organization that refuses it, a move to My Cloud or a call", async () => {
-    returning(); desk.saved = null; storage.delete(WHATS_NEW_NOTICE);
-    f.state.config.managedPolicy = { organizationName: "Acme", companyModelsOnly: true, allowedEngines: "all" };
-    await launch(); press("Not now"); await flush();
-    expect(await settle(), "an organization that refuses it").toBe("");
-    f.state.config.managedPolicy = undefined; f.brand = "file";
-    expect(await launch(), "a branded build").toBe("");
-    f.brand = "default"; f.state.liveCall = { status: "active" };
-    expect(await launch(), "a live call").toBe("");
-    f.state.liveCall = undefined;
-    const line = (move: unknown) => desk.handlers.set("cloud-send:notice", () => ({ ready: true, bots: [], move }));
-    line({ phase: "copy", chats: { done: 1, total: 5 } });
-    expect(await launch(), "while the bots move to My Cloud").toBe("");
-    line(undefined); now += DAY;
-    expect(await launch(), "then, still in the launch What's new took").toContain(TITLE);
-    expect(launchNotice()).toBe(WHATS_NEW_NOTICE);
-  });
-
 });
 
 describe("cards from the announcements file", () => {
@@ -1606,16 +1255,6 @@ describe("cards from the announcements file", () => {
     expect(await settle(), "the same page").toBe("");
     expect(await launch(), "the same launch").toBe("");
     expect(await relaunch()).toContain("Title of second-card");
-  });
-
-  it("follows the built-in sponsor card in its launch once that closes, never beside it", async () => {
-    storage.delete(MODELGO_OFFER_NOTICE);
-    const first = await launch();
-    expect(first).toContain("ModelGo"); expect(first).not.toContain("Title of phone-app");
-    press("Not now"); await flush();
-    const after = await settle();
-    expect(after).toContain("Title of phone-app"); expect(after).not.toContain("ModelGo");
-    expect(launchNotice()).toBe(MODELGO_OFFER_NOTICE);
   });
 
   it("follows a closed What's new in the same launch, then no other remote card that launch", async () => {
@@ -1721,7 +1360,7 @@ describe("cards from the announcements file", () => {
 });
 
 describe("Update Seira on your phone", () => {
-  const TITLE = "Update Seira on your phone", MODELGO = "ModelGo is now in Seira";
+  const TITLE = "Update Seira on your phone";
   const OLD = { id: "0f8c2a41-1111-4222-8333-444455556666", name: "Ada's iPhone", createdAt: 1, lastSeenAt: 1, cloudDesktopAccess: false };
   const NEW = { id: "5b5b5b5b-1111-4222-8333-444455556666", name: "Work phone", createdAt: 1, lastSeenAt: 1, cloudDesktopAccess: false, e2eAt: 2 };
   const OTHER = { ...OLD, id: "7c7c7c7c-1111-4222-8333-444455556666", name: "Old Android" };
@@ -1796,11 +1435,10 @@ describe("Update Seira on your phone", () => {
     expect(await launch()).toContain(TITLE);
   });
 
-  it("is a notice to act on: ahead of the sponsor's card, which follows once it is closed, and behind the Grok Bot popup", async () => {
-    storage.delete(MODELGO_OFFER_NOTICE);
+  it("is a notice to act on: nothing follows it once it is closed, and the Grok Bot popup goes first", async () => {
     expect(await launch()).toContain(TITLE);
     press("Not now"); await flush();
-    expect(await settle(), "then the sponsor's card, in the same launch").toContain(MODELGO);
+    expect(await settle(), "nothing else in the same launch").toBe("");
     storage.delete(GROK_MOVE_NOTICE); session.clear(); f.state.config.onboarding.hintsSeen = withTourFinished(undefined); storage.delete("phone-app-update:0f8c2a41");
     const first = await launch();
     expect(first, "the Grok Bot popup goes first").not.toContain(TITLE);
@@ -1810,7 +1448,6 @@ describe("Update Seira on your phone", () => {
   it("waits while it can't tell yet, and over a live call", async () => {
     let answer = (_value: unknown) => {};
     companion.mockImplementation(() => new Promise(resolve => { answer = resolve; }));
-    storage.delete(MODELGO_OFFER_NOTICE);
     expect(await launch(), "nothing lower shows meanwhile").toBe("");
     answer({ enabled: true, devices, pairing: null }); await flush();
     expect(await settle()).toContain(TITLE);

@@ -175,6 +175,23 @@ gh release create v<version> --verify-tag --title "Seira v<version>" --generate-
 Tag the squash commit on `main`, not the release branch's last commit. The
 tag push works only for an organization admin.
 
+### Publish the Flatpak repo
+
+Seira has a signed Flatpak repository at `https://flatpak.seira.bot/repo/`.
+Only the release owner publishes to it, and only from a release tag. See the
+[Flatpak packaging notes](../packaging/flatpak/README.md#publish) for the
+settings and the recovery steps.
+
+```sh
+git switch --detach v<version>
+scripts/linux-store/publish-flatpak.sh v<version>
+gh release upload v<version> release/Seira-<version>-x86_64.flatpak --repo seira-bot/seira
+```
+
+- Use `--init-repo` for the first publish only.
+- The script stops when HEAD is not the tag, the tree is not clean, or `package.json` has another version.
+- The bundle `Seira-<version>-x86_64.flatpak` adds the Seira remote when a person installs it.
+
 ### 5. Build and attach the Windows installer
 
 The `Package Windows` workflow (`.github/workflows/package-windows.yml`)

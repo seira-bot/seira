@@ -307,18 +307,18 @@ describe("connecting an AI on the first screen", () => {
 });
 
 describe("the ModelGo option", () => {
-  const URL_EXACT = "https://modelgo.ai/?utm_source=openmausbot&utm_medium=sponsorship&utm_content=app&campaign_id=openmausbot&ad_group_id=app";
+  const URL_EXACT = "https://modelgo.ai/";
   const option = () => host.querySelector("[data-modelgo-option]");
   const events = () => vi.mocked(track).mock.calls.filter(([name]) => name === "modelgo_offer").map(([, props]) => props);
   const provider = (ready = false) => engine("modelgo", "modelgo", "ModelGo (API)", ready);
 
-  it("sits last in the Other ways list, is reported shown only once the list opens, and its link opens exactly the sponsor's address", async () => {
+  it("sits last in the Other ways list, is reported shown only once the list opens, and its link opens exactly ModelGo's address", async () => {
     f.instances.push(provider());
     await show();
     expect(option()).toBeNull();
     expect(events()).toEqual([]);
     await otherWays();
-    expect(option()?.textContent).toContain("ModelGo"); expect(option()?.textContent).toContain("Sponsor");
+    expect(option()?.textContent).toContain("ModelGo"); expect(option()?.textContent).not.toContain("Sponsor");
     expect(option()?.textContent).toContain("One API key, every model.");
     expect(host.querySelectorAll("[data-modelgo-option]")).toHaveLength(1);
     expect(option()!.parentElement!.lastElementChild).toBe(option());
