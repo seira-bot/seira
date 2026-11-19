@@ -230,10 +230,14 @@ default. A value of `0` turns that limit off. Days are UTC days.
 | `quota.triggers` | `50` | Triggers one installation can have. |
 | `quota.registrations_per_ip` | `50` | New installations per IPv4 address or IPv6 /64 per day. |
 | `budget.tool_calls_per_day` | `10000` | Tool calls by all installations together per day. |
+| `units.workbench` | `10` | Tool calls that one remote workbench or bash call counts as (at least 1). |
+| `tools.workbench` | `on` | `off` refuses the remote workbench and bash meta tools. |
 
 One `COMPOSIO_MULTI_EXECUTE_TOOL` call counts once for each tool in it.
-`COMPOSIO_SEARCH_TOOLS` and other MCP methods do not count. A batch over the
-quota is refused whole. The fleet budget is approximate: each Worker isolate
+`COMPOSIO_SEARCH_TOOLS` and other MCP methods do not count. A
+`COMPOSIO_REMOTE_WORKBENCH` or `COMPOSIO_REMOTE_BASH_TOOL` call runs code at
+Composio that can call more tools, which the broker cannot see, so it counts
+as `units.workbench` tool calls. A batch over the quota is refused whole. The fleet budget is approximate: each Worker isolate
 reads the fleet total again after 60 seconds.
 
 A refused tool call gets a JSON-RPC result with `isError: true` and a text
@@ -254,7 +258,7 @@ the settings again after 30 seconds.
 | `pause` | Stops |
 | --- | --- |
 | `none` | Nothing (default). |
-| `new` | New installations, new sign-in links, and new triggers. Tool calls continue. |
+| `new` | New installations, new sign-in links (also `COMPOSIO_MANAGE_CONNECTIONS` through MCP), and new triggers. Other tool calls continue. |
 | `tools` | The same as `new`, plus every tool call. |
 | `all` | Every route that reaches Composio, except deletes. Trigger events still arrive: to stop them, disable the webhook subscription in the Composio dashboard. |
 

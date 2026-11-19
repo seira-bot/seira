@@ -1,7 +1,7 @@
 import { DAY_MS, json, sha256, utcDay, utf8, type InstallationRow } from "./common";
 
 /** Owner decisions (FR-147..149), each one changeable in the broker_settings table without a redeploy. 0 turns a
- *  limit or an alert off. The prices are Composio Pro's for its own OAuth apps at the Gmail tier
+ *  limit or an alert off; `units.workbench` is at least 1. The prices are Composio Pro's for its own OAuth apps at the Gmail tier
  *  (https://composio.dev/pricing/platform, 2026-11-19): the costliest common case, so the estimate errs high. */
 export const NUMBER_SETTINGS = {
   "quota.tool_calls.desktop": 500,
@@ -10,6 +10,7 @@ export const NUMBER_SETTINGS = {
   "quota.triggers": 50,
   "quota.registrations_per_ip": 50,
   "budget.tool_calls_per_day": 10_000,
+  "units.workbench": 10,
   "alert.budget_ratio": 0.8,
   "alert.usd_per_month": 50,
   "alert.registrations_per_day": 1_000,
@@ -30,6 +31,8 @@ export type PauseLevel = (typeof PAUSE_LEVELS)[number];
 export interface LimitSettings {
   pause: PauseLevel;
   dailySummary: boolean;
+  /** Off: the shared key refuses the remote workbench and bash meta tools. */
+  workbench: boolean;
   values: Record<NumberSetting, number>;
 }
 
@@ -43,6 +46,11 @@ const FLEET_TTL_MS = 60_000;
 const UNLIMITED = Number.MAX_SAFE_INTEGER;
 const FREE_TOOLS = new Set(["COMPOSIO_SEARCH_TOOLS"]);
 const MULTI_EXECUTE = "COMPOSIO_MULTI_EXECUTE_TOOL";
+/** Run code at Composio that can call many tools in one call, which the broker cannot see. Each call counts as
+ *  `units.workbench` tool calls. */
+const WORKBENCH_TOOLS = new Set(["COMPOSIO_REMOTE_WORKBENCH", "COMPOSIO_REMOTE_BASH_TOOL"]);
+/** Starts app sign-ins from the relay, so the pause stops it like the sign-in link route. */
+const MANAGE_CONNECTIONS = "COMPOSIO_MANAGE_CONNECTIONS";
 const CONNECT_LINK = /^\/v1\/connectors\/[^/]+\/authorize$/;
 const KEY_PLACE = "Settings → AI → Other services";
 
@@ -50,6 +58,7 @@ const REFUSED = {
   quota: `This app action did not run: this device used all of today's app actions. They start again at 00:00 UTC. To keep going now, add your own Composio project key in ${KEY_PLACE}.`,
   fleet: `This app action did not run: Seira's shared connected apps used all of today's app actions. Try again after 00:00 UTC, or add your own Composio project key in ${KEY_PLACE}.`,
   paused: `This app action did not run: Seira's shared connected apps are paused for a short time. Try again later, or add your own Composio project key in ${KEY_PLACE}.`,
+  workbench: `This app action did not run: Seira's shared connected apps do not run code in the remote workbench. Use the app tools directly, or add your own Composio project key in ${KEY_PLACE}.`,
   route: "Connected apps are paused for a short time. Try again later.",
   links: "You started many app sign-ins today. Try again tomorrow.",
   triggers: "This device has the most app triggers it can have. Remove a trigger to add a new one.",
@@ -80,11 +89,12 @@ function logFailure(error: unknown) {
 }
 
 function parseSettings(rows: Array<{ key: string; value: string }>): LimitSettings {
-  const settings: LimitSettings = { pause: "none", dailySummary: true, values: { ...NUMBER_SETTINGS } };
+  const settings: LimitSettings = { pause: "none", dailySummary: true, workbench: true, values: { ...NUMBER_SETTINGS } };
   for (const { key, value } of rows) {
     const text = String(value).trim();
     if (key === "pause" && (PAUSE_LEVELS as readonly string[]).includes(text)) settings.pause = text as PauseLevel;
     else if (key === "alert.daily_summary" && (text === "on" || text === "off")) settings.dailySummary = text === "on";
+    else if (key === "tools.workbench" && (text === "on" || text === "off")) settings.workbench = text === "on";
     else if (Object.hasOwn(NUMBER_SETTINGS, key) && /^\d{1,15}(\.\d{1,6})?$/.test(text)) settings.values[key as NumberSetting] = Number(text);
     else console.error(JSON.stringify({ message: "broker setting ignored, default used", key: String(key).slice(0, 64) }));
   }
@@ -112,18 +122,33 @@ function record(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
-/** Billable Composio tool executions in one MCP message: a tools/call is 1, the free search meta tool 0, the
- *  multi-execute meta tool one per tool it runs, and a JSON-RPC batch the sum of its items. */
-export function toolUnits(message: unknown): number {
-  if (Array.isArray(message)) return message.reduce<number>((sum, item) => sum + toolUnits(item), 0);
+/** The tool names one MCP message runs, upper case: a tools/call its name, the multi-execute meta tool the slug of
+ *  each tool it runs, and a JSON-RPC batch each item's. "" is a billable tool: a multi-execute item without a slug or
+ *  with a free slug, and a multi-execute call with no items. */
+function toolNames(message: unknown): string[] {
+  if (Array.isArray(message)) return message.flatMap(toolNames);
   const rpc = record(message);
-  if (rpc?.method !== "tools/call") return 0;
+  if (rpc?.method !== "tools/call") return [];
   const params = record(rpc.params);
   const name = typeof params?.name === "string" ? params.name.toUpperCase() : "";
-  if (FREE_TOOLS.has(name)) return 0;
-  if (name !== MULTI_EXECUTE) return 1;
+  if (name !== MULTI_EXECUTE) return [name];
   const tools = record(params?.arguments)?.tools;
-  return Array.isArray(tools) ? Math.max(1, tools.length) : 1;
+  if (!Array.isArray(tools) || !tools.length) return [""];
+  return tools.map((item) => {
+    const slug = record(item)?.tool_slug;
+    const upper = typeof slug === "string" ? slug.toUpperCase() : "";
+    return FREE_TOOLS.has(upper) ? "" : upper;
+  });
+}
+
+/** Billable Composio tool executions in one MCP message: each tool it runs is 1, the free search meta tool 0, and a
+ *  workbench or bash meta tool `workbench` units. */
+export function toolUnits(message: unknown, workbench: number = NUMBER_SETTINGS["units.workbench"]): number {
+  return unitsOf(toolNames(message), workbench);
+}
+
+function unitsOf(names: string[], workbench: number) {
+  return names.reduce((sum, name) => sum + (FREE_TOOLS.has(name) ? 0 : WORKBENCH_TOOLS.has(name) ? Math.max(1, workbench) : 1), 0);
 }
 
 /** The rate-limit key of an address: an IPv4 address whole (also when IPv4-mapped), an IPv6 address by its /64. */
@@ -176,12 +201,17 @@ export async function admitMcp(raw: Uint8Array, installation: Metered, env: Env)
     return json({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }, 400);
   }
   const forward = utf8(JSON.stringify(message));
-  const units = toolUnits(message);
-  if (!units) return forward;
+  const names = toolNames(message);
+  if (!names.some((name) => !FREE_TOOLS.has(name))) return forward;
   const settings = await limitSettings(env);
-  if (settings.pause === "tools" || settings.pause === "all") {
+  const units = unitsOf(names, settings.values["units.workbench"]);
+  if (settings.pause === "tools" || settings.pause === "all" || (settings.pause === "new" && names.includes(MANAGE_CONNECTIONS))) {
     await countRefusal(env, installation.id, "refused_paused");
     return rpcRefusal(message, REFUSED.paused);
+  }
+  if (!settings.workbench && names.some((name) => WORKBENCH_TOOLS.has(name))) {
+    await countRefusal(env, installation.id, "refused_quota");
+    return rpcRefusal(message, REFUSED.workbench);
   }
   try {
     const day = utcDay(Date.now());

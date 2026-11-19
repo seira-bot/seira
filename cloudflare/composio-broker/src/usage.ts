@@ -99,6 +99,7 @@ export async function usageStats(request: Request, url: URL, env: Env) {
     month: { ...month, estimateUsd: costEstimate(settings.values, month.toolCalls, month.appEvents) },
     pause: settings.pause,
     dailySummary: settings.dailySummary,
+    workbench: settings.workbench,
     settings: settings.values,
   });
 }

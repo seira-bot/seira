@@ -73,6 +73,13 @@ describe("tool units", () => {
     expect(toolUnits(null)).toBe(0);
     expect(toolUnits("tools/call")).toBe(0);
     expect(toolUnits({ method: "tools/call" })).toBe(1);
+    // A workbench call can run many tools at Composio, so it counts as `units.workbench` tool calls (at least 1).
+    expect(toolUnits(toolCall("COMPOSIO_REMOTE_WORKBENCH"))).toBe(10);
+    expect(toolUnits(toolCall("composio_remote_bash_tool"), 3)).toBe(3);
+    expect(toolUnits(toolCall("COMPOSIO_REMOTE_WORKBENCH"), 0)).toBe(1);
+    // Inside multi-execute, a workbench slug keeps its weight and a free slug is not free.
+    const mixed = { tools: [{ tool_slug: "COMPOSIO_REMOTE_WORKBENCH" }, { tool_slug: "COMPOSIO_SEARCH_TOOLS" }, {}] };
+    expect(toolUnits(toolCall("COMPOSIO_MULTI_EXECUTE_TOOL", mixed))).toBe(12);
   });
 
   it("keys an IPv6 address by its /64 and an IPv4 address whole", () => {
@@ -110,6 +117,31 @@ describe("per-installation quotas (FR-147)", () => {
     expect(forwarded()).toBe(4);
     const other = await h.install();
     expect((await (await mcp(other, toolCall())).json() as { result: { isError?: boolean } }).result.isError).toBeUndefined();
+  });
+
+  it("counts a workbench call as many tool calls, and the owner can turn the workbench off", async () => {
+    setting("quota.tool_calls.desktop", "25");
+    const owner = await h.install();
+    h.account(owner);
+    const passed = async (message: unknown) => (await (await mcp(owner, message)).json() as { result: { isError?: boolean } }).result.isError === undefined;
+
+    expect(await passed(toolCall("COMPOSIO_REMOTE_WORKBENCH"))).toBe(true);
+    expect(await passed(toolCall("COMPOSIO_REMOTE_BASH_TOOL"))).toBe(true);
+    expect(await refusalText(await mcp(owner, toolCall("COMPOSIO_REMOTE_WORKBENCH")))).toMatch(/all of today's app actions/);
+    expect(await passed(toolCall())).toBe(true);
+    expect(usage(owner.id)).toMatchObject({ tool_calls: 21, refused_quota: 1 });
+
+    setting("tools.workbench", "off");
+    const other = await h.install();
+    h.account(other);
+    const text = await refusalText(await mcp(other, toolCall("COMPOSIO_REMOTE_WORKBENCH")));
+    expect(text).toMatch(/remote workbench/);
+    expect(text).toMatch(/Settings → AI → Other services/);
+    const batch = [toolCall(), toolCall("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [{ tool_slug: "COMPOSIO_REMOTE_BASH_TOOL" }] })];
+    expect((await (await mcp(other, batch)).json() as unknown[]).length).toBe(2);
+    expect(await passed(toolCall())).toBe(true);
+    expect(usage(other.id)).toMatchObject({ tool_calls: 1, refused_quota: 2 });
+    expect(forwarded()).toBe(4);
   });
 
   it("gives a Cloud installation the Cloud quota and starts again each UTC day", async () => {
@@ -269,6 +301,12 @@ describe("kill switch and fleet budget (FR-148)", () => {
     expect((await h.createTrigger(owner, account)).response.status).toBe(503);
     expect((await (await mcp(owner, toolCall())).json() as { result: { isError?: boolean } }).result.isError).toBeUndefined();
     expect((await h.call(owner, "/v1/connectors/connected")).status).toBe(200);
+    // The relay's sign-in meta tool stops too, also inside a batch.
+    expect(await refusalText(await mcp(owner, toolCall("COMPOSIO_MANAGE_CONNECTIONS", { toolkits: ["gmail"] })))).toMatch(/paused/);
+    const batch = await (await mcp(owner, [toolCall(), toolCall("composio_manage_connections")])).json() as Array<{ result: { isError?: boolean } }>;
+    expect(batch.map((reply) => reply.result.isError)).toEqual([true, true]);
+    expect(usage(owner.id)).toMatchObject({ tool_calls: 1, refused_paused: 2 });
+    expect(forwarded()).toBe(1);
   });
 
   it("pause tools: refuses each billable tool call and passes the free messages", async () => {
