@@ -2503,8 +2503,8 @@ const selectionContext = {
   company: (instanceId: string) => managedDesktop.owns(instanceId) || cloudCredit?.owns(instanceId) === true,
   refusal: (instance: SelectableInstance) => policyModelRefusal(instance) ?? heldKeys?.refusal(instance.instanceId),
   answered: (instance: SelectableInstance) => testedAi.answered(instance), // what its test message showed (server/tested-ai.ts)
-};
-
+}; const freeEngine = createFreeEngineInstaller({ statePath: join(DATA_DIR, "providers", "free-engine.json"), enabled: freeEngineInstallEnabled() && !CLOUD_HOME && !HOSTED_WORKSPACE && !hostedModels, instances: async () => selectableInstances(await registry.describe()),
+  ready: (instance) => readyToRun(instance, selectionContext), refused: (instance) => selectionContext.refusal(instance) !== undefined || managedDesktop.owns(instance.instanceId), install: (instanceId) => registry.installRuntime(instanceId), changed: () => broadcast({ kind: "config", ...configStatus() }), installed: async (instanceId) => { await registry.refreshModels(instanceId).catch(() => false); await refreshUnsetModelSelections(); }, log: (line) => console.log(`[free-engine] ${line}`) });
 async function refreshUnsetModelSelections(instances?: readonly SelectableInstance[], read = testedAi.read()): Promise<void> {
   if (registry.provisional(instances)) return;
   const selectable = selectableInstances<SelectableInstance>(instances ?? await registry.describe());
@@ -2517,21 +2517,6 @@ async function refreshUnsetModelSelections(instances?: readonly SelectableInstan
     if (!bot.modelSelection.instanceId && !bot.modelSelection.model) store.applyModelDefault(bot.id, selection);
   }
 }
-
-const freeEngine = createFreeEngineInstaller({
-  statePath: join(DATA_DIR, "providers", "free-engine.json"),
-  enabled: freeEngineInstallEnabled() && !CLOUD_HOME && !HOSTED_WORKSPACE && !hostedModels,
-  instances: async () => selectableInstances(await registry.describe()),
-  ready: (instance) => readyToRun(instance, selectionContext),
-  refused: (instance) => selectionContext.refusal(instance) !== undefined || managedDesktop.owns(instance.instanceId),
-  install: (instanceId) => registry.installRuntime(instanceId),
-  changed: () => broadcast({ kind: "config", ...configStatus() }),
-  installed: async (instanceId) => {
-    await registry.refreshModels(instanceId).catch(() => false);
-    await refreshUnsetModelSelections();
-  },
-  log: (line) => console.log(`[free-engine] ${line}`),
-});
 
 function saveNewBotModel(replacement: ModelSelection): void {
   const newBotDefaults = cfg.newBotDefaults && newBotDefaultsSchema.parse({
@@ -11813,8 +11798,7 @@ async function describeInstances() {
     const entry = configs[instance.instanceId];
     const described = {
       ...instance, ...testedAi.info(instance), ...engineUpdates.shown(instance.driverKind),
-      ...instanceLook(entry),
-      ...(freeEngine.installing(instance.instanceId) ? { installing: true } : {}),
+      ...instanceLook(entry), ...(freeEngine.installing(instance.instanceId) ? { installing: true } : {}),
       ...(entry?.access ? { access: entry.access } : {}), ...(entry?.driver === "openai-compat" && typeof (entry.config as { replyWaitMinutes?: unknown } | undefined)?.replyWaitMinutes === "number" ? { replyWaitMinutes: (entry.config as { replyWaitMinutes: number }).replyWaitMinutes } : {}), ...(heldKeys?.refusal(instance.instanceId) ? { snapshot: { state: "unavailable" as const, reason: TRIAL_KEY_HELD } } : {}),
     };
     if (hostedModels) return { ...described, readOnly: true,
