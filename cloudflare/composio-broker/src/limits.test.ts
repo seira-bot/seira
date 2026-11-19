@@ -29,6 +29,9 @@ function setting(key: string, value: string, { forget = true } = {}) {
   if (forget) forgetLimitSettings();
 }
 
+/** A multi-execute argument that runs `inner` as a nested multi-execute call, plus one more tool. */
+const nest = (inner: Record<string, unknown>) => ({ tools: [{ tool_slug: "composio_multi_execute_tool", arguments: inner }, { tool_slug: "X" }] });
+
 let rpcId = 0;
 function toolCall(name = "GMAIL_SEND_EMAIL", args: Record<string, unknown> = {}) {
   return { jsonrpc: "2.0", id: ++rpcId, method: "tools/call", params: { name, arguments: args } };
@@ -80,11 +83,9 @@ describe("tool units", () => {
     // Inside multi-execute, a workbench slug keeps its weight and a free slug is not free.
     const mixed = { tools: [{ tool_slug: "COMPOSIO_REMOTE_WORKBENCH" }, { tool_slug: "COMPOSIO_SEARCH_TOOLS" }, {}] };
     expect(toolUnits(toolCall("COMPOSIO_MULTI_EXECUTE_TOOL", mixed))).toBe(12);
-    // A nested multi-execute item counts by its own items; past three levels, it is refused by any quota.
-    const nest = (inner: Record<string, unknown>) => ({ tools: [{ tool_slug: "composio_multi_execute_tool", arguments: inner }, { tool_slug: "X" }] });
+    // A nested multi-execute item counts by its own items.
     expect(toolUnits(toolCall("COMPOSIO_MULTI_EXECUTE_TOOL", nest(three)))).toBe(4);
     expect(toolUnits(toolCall("COMPOSIO_MULTI_EXECUTE_TOOL", nest(nest(three))))).toBe(5);
-    expect(toolUnits(toolCall("COMPOSIO_MULTI_EXECUTE_TOOL", nest(nest(nest(three)))))).toBeGreaterThanOrEqual(1_000_000);
   });
 
   it("keys an IPv6 address by its /64 and an IPv4 address whole", () => {
@@ -197,6 +198,18 @@ describe("per-installation quotas (FR-147)", () => {
 
     // One unit is left: a single call still fits.
     expect((await (await mcp(owner, toolCall())).json() as { result: { isError?: boolean } }).result.isError).toBeUndefined();
+  });
+
+  it("refuses multi-execute calls nested past three levels, with every limit off", async () => {
+    for (const key of ["quota.tool_calls.desktop", "budget.tool_calls_per_day"]) setting(key, "0");
+    const owner = await h.install();
+    h.account(owner);
+    const three = { tools: [{ tool_slug: "A" }, { tool_slug: "B" }, { tool_slug: "C" }] };
+    expect(await refusalText(await mcp(owner, toolCall("COMPOSIO_MULTI_EXECUTE_TOOL", nest(nest(nest(three))))))).toMatch(/three levels/);
+    expect(forwarded()).toBe(0);
+    expect(usage(owner.id)).toMatchObject({ tool_calls: 0, refused_quota: 1 });
+    expect((await (await mcp(owner, toolCall("COMPOSIO_MULTI_EXECUTE_TOOL", nest(nest(three))))).json() as { result: { isError?: boolean } }).result.isError).toBeUndefined();
+    expect(forwarded()).toBe(1);
   });
 
   it("forwards what it counted and refuses a body that is not JSON", async () => {

@@ -238,8 +238,8 @@ One `COMPOSIO_MULTI_EXECUTE_TOOL` call counts once for each tool in it.
 `COMPOSIO_REMOTE_WORKBENCH` or `COMPOSIO_REMOTE_BASH_TOOL` call runs code at
 Composio that can call more tools, which the broker cannot see, so it counts
 as `units.workbench` tool calls. A multi-execute call nested in another counts
-by its own tools; nested deeper than three levels, it counts as 1,000,000 tool
-calls, so any quota refuses it. A batch over the quota is refused whole. The fleet budget is approximate: each Worker isolate
+by its own tools; a call nested deeper than three levels is refused, also with
+every limit off. A batch over the quota is refused whole. The fleet budget is approximate: each Worker isolate
 reads the fleet total again after 60 seconds.
 
 A refused tool call gets a JSON-RPC result with `isError: true` and a text

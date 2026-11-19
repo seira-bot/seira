@@ -51,10 +51,9 @@ const MULTI_EXECUTE = "COMPOSIO_MULTI_EXECUTE_TOOL";
 const WORKBENCH_TOOLS = new Set(["COMPOSIO_REMOTE_WORKBENCH", "COMPOSIO_REMOTE_BASH_TOOL"]);
 /** Starts app sign-ins from the relay, so the pause stops it like the sign-in link route. */
 const MANAGE_CONNECTIONS = "COMPOSIO_MANAGE_CONNECTIONS";
-/** Multi-execute calls nested deeper than this count as TOO_DEEP_UNITS, so any quota or budget refuses them. */
+/** Multi-execute calls nested deeper than this are refused: the broker does not count what it does not read. */
 const NESTED_LIMIT = 3;
 const TOO_DEEP = "\u0000nested";
-const TOO_DEEP_UNITS = 1_000_000;
 const CONNECT_LINK = /^\/v1\/connectors\/[^/]+\/authorize$/;
 const KEY_PLACE = "Settings → AI → Other services";
 
@@ -62,6 +61,7 @@ const REFUSED = {
   quota: `This app action did not run: this device used all of today's app actions. They start again at 00:00 UTC. To keep going now, add your own Composio project key in ${KEY_PLACE}.`,
   fleet: `This app action did not run: Seira's shared connected apps used all of today's app actions. Try again after 00:00 UTC, or add your own Composio project key in ${KEY_PLACE}.`,
   paused: `This app action did not run: Seira's shared connected apps are paused for a short time. Try again later, or add your own Composio project key in ${KEY_PLACE}.`,
+  nested: "This app action did not run: it puts multi-execute calls more than three levels deep. Run the tools in fewer levels.",
   workbench: `This app action did not run: Seira's shared connected apps do not run code in the remote workbench. Use the app tools directly, or add your own Composio project key in ${KEY_PLACE}.`,
   route: "Connected apps are paused for a short time. Try again later.",
   links: "You started many app sign-ins today. Try again tomorrow.",
@@ -157,9 +157,7 @@ export function toolUnits(message: unknown, workbench: number = NUMBER_SETTINGS[
 }
 
 function unitsOf(names: string[], workbench: number) {
-  return names.reduce((sum, name) => sum + (FREE_TOOLS.has(name) ? 0
-    : WORKBENCH_TOOLS.has(name) ? Math.max(1, workbench)
-    : name === TOO_DEEP ? TOO_DEEP_UNITS : 1), 0);
+  return names.reduce((sum, name) => sum + (FREE_TOOLS.has(name) ? 0 : WORKBENCH_TOOLS.has(name) ? Math.max(1, workbench) : 1), 0);
 }
 
 /** The rate-limit key of an address: an IPv4 address whole (also when IPv4-mapped), an IPv6 address by its /64. */
@@ -214,6 +212,11 @@ export async function admitMcp(raw: Uint8Array, installation: Metered, env: Env)
   const forward = utf8(JSON.stringify(message));
   const names = toolNames(message);
   if (!names.some((name) => !FREE_TOOLS.has(name))) return forward;
+  // Before the settings and the quota: this refusal holds with every limit off and without D1.
+  if (names.includes(TOO_DEEP)) {
+    await countRefusal(env, installation.id, "refused_quota");
+    return rpcRefusal(message, REFUSED.nested);
+  }
   const settings = await limitSettings(env);
   const units = unitsOf(names, settings.values["units.workbench"]);
   // Under "new", also the meta tools that start sign-ins: the workbench can run them where the broker cannot see.
