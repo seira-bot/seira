@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer as createHttpServer, type IncomingHttpHeaders } from "node:http";
 import { connect, createServer as createNetServer, type AddressInfo, type Socket } from "node:net";
 import { homedir, tmpdir } from "node:os";
@@ -446,6 +446,8 @@ describe("ClaudeDriver.decodeConfig", () => {
       const shared = join(dir, "shared.sock");
       const asksTwo: Array<{ id: string }> = [];
       const first = await createPermissionBroker({ socketPaths: [shared], onAsk: () => {}, onResolve: () => {} });
+      // A hard link keeps the first inode allocated, so the second bind cannot reuse its number.
+      linkSync(shared, join(dir, "first.hold"));
       const second = await createPermissionBroker({
         socketPaths: [shared],
         onAsk: (ask) => asksTwo.push(ask),
