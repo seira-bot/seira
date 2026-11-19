@@ -773,6 +773,8 @@ describe("codexLiveVoice approvals by voice", () => {
     await h.start();
     await until(() => h.decision() !== null);
     expect(h.decision()).toEqual({ decision: "decline" });
+    // The spoken notice can reach the fake after the decision.
+    await until(() => asked(h) !== undefined);
     expect(asked(h).text).toBe("I need to run a command that I cannot read out in full, so I did not run it. Ask me in the chat to run it.");
   });
 
@@ -782,6 +784,8 @@ describe("codexLiveVoice approvals by voice", () => {
     await h.start();
     await until(() => h.decision() !== null);
     expect(h.decision()).toEqual({ decision: "decline" });
+    // The spoken notice can reach the fake after the decision.
+    await until(() => asked(h) !== undefined);
     expect(asked(h).text).toBe("I need more access than I have now, so I did not do it. Ask me in the chat to allow it.");
   });
 
@@ -807,6 +811,8 @@ describe("codexLiveVoice approvals by voice", () => {
     await h.start();
     await until(() => h.decision() !== null);
     expect(h.decision()).toEqual({ decision: "decline" });
+    // The spoken notice can reach the fake after the decision.
+    await until(() => asked(h) !== undefined);
     expect(asked(h).text).toBe("I need to change files that I cannot read out in full, so I did not change them. Ask me in the chat to change them.");
   });
 
@@ -815,6 +821,8 @@ describe("codexLiveVoice approvals by voice", () => {
     await h.start();
     await until(() => h.decision() !== null);
     expect(h.decision()).toEqual({ decision: "decline" });
+    // The spoken notice can reach the fake after the decision.
+    await until(() => asked(h) !== undefined);
     expect(asked(h).text).toBe("I need to change files that I cannot read out in full, so I did not change them. Ask me in the chat to change them.");
   });
 
