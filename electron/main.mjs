@@ -29,6 +29,7 @@ import { bootFailureMessage, listeningSignal, pollServerIdentity, SERVER_BOOT_TI
 import { startupTimeline } from "./startup-timeline.mjs";
 import { createServerSupervisor } from "./server-supervisor.mjs";
 import { serverChildLaunch } from "./server-child-launch.mjs";
+import { postToServer } from "./server-message.mjs";
 import { packageUrlFromCommandLine, packageUrlFromDeepLink } from "./package-link.mjs";
 import { chatLinkFrom, chatLinkFromCommandLine } from "./chat-link.mjs"; import { installDesktopNotifications } from "./desktop-notifications.mjs";
 import { createOrganizationEntry, isOrganizationDeepLink, takeOrganizationDeepLink, organizationRestartIntent, withOrganizationRestartIntent, withoutOrganizationRestartIntent } from "./organization-entry.mjs";
@@ -788,12 +789,7 @@ let serverStartConflictOnly = false;
 
 function syncPhoneSecretKey(proc) {
   const message = phoneSecretPrivateKeyMessage(phoneSecretIdentity);
-  if (!message) return;
-  try {
-    proc.postMessage(message);
-  } catch (error) {
-    slog(`phone credential key sync failed: ${error?.message ?? error}`);
-  }
+  if (message) postToServer(proc, message, "phone credential key sync", slog);
 }
 
 const cloudEncryption = { available: async () => (await safeStorage.isAsyncEncryptionAvailable()) && (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text"), encrypt: value => safeStorage.encryptStringAsync(value), decrypt: value => safeStorage.decryptStringAsync(value) }; let activeSignIn = null; const cloudAccountStore = () => (activeSignIn ??= createCloudAccountStore({ file: path.join(app.getPath("userData"), cloudTarget(process.env).file), encryption: cloudEncryption }));
@@ -1084,15 +1080,11 @@ async function runCompanyBackup(kind, input, scheduled = null) {
 }
 
 function syncDesktopMutationToken(proc) {
-  try {
-    proc.postMessage({
-      type: "openmausbot:desktop-mutation-token",
-      token: desktopMutationToken,
-      companionToken: companionMutationToken,
-    });
-  } catch (error) {
-    slog(`desktop mutation capability sync failed: ${error?.message ?? error}`);
-  }
+  postToServer(proc, {
+    type: "openmausbot:desktop-mutation-token",
+    token: desktopMutationToken,
+    companionToken: companionMutationToken,
+  }, "desktop mutation capability sync", slog);
 }
 
 const receivePhoneSecretSave = createPhoneSecretSaveReceiver(saveWorkspaceCredential, slog);
@@ -1215,14 +1207,10 @@ function checkInManagedComposio() {
 
 function syncManagedComposioCredentials() {
   if (!serverProc) return;
-  try {
-    serverProc.postMessage({
-      type: "openmausbot:managed-composio",
-      access: managedComposioAccess(composioBrokerUrl(), secureCredentials),
-    });
-  } catch (error) {
-    slog(`connected-apps credential sync failed: ${error?.message ?? error}`);
-  }
+  postToServer(serverProc, {
+    type: "openmausbot:managed-composio",
+    access: managedComposioAccess(composioBrokerUrl(), secureCredentials),
+  }, "connected-apps credential sync", slog);
 }
 
 let cuaReady = Promise.resolve({ mode: "unavailable", reason: "not-started" });
