@@ -224,7 +224,7 @@ describe("a Codex call's session", () => {
     const startLiveVoice = vi.fn(start ?? (async (input: EngineLiveVoiceStart) => { inputs.push(input); return { sdp: "answer sdp\r\n", appendText: vi.fn(), appendSpeech: vi.fn(), stop }; }));
     const wired = liveSessionWiring({
       bot: () => ({ name: "Rigel" }), history: () => [{ role: "user", text: "hello" }], cloudHome: false, othersOnLoopback: () => false, saveAgent: vi.fn(),
-      codexLive: () => ({ startLiveVoice, cwd: "/work", approvalMode: "ask" as never }),
+      codexLive: () => ({ startLiveVoice, cwd: "/work", approvalMode: "ask" as never, botId: "b1", model: "gpt-5.5" }),
       postCallAnswer: (a) => posted.push(a), fetchImpl: vi.fn() as never, ...rest,
     });
     return { ...wired, startLiveVoice, inputs, posted, stop };
@@ -235,7 +235,7 @@ describe("a Codex call's session", () => {
     const w = codexWiring();
     const answer = await create(w);
     expect(answer).toMatchObject({ sdp: "answer sdp\r\n" });
-    expect(w.inputs[0]).toMatchObject({ sdp: offer, cwd: "/work", approvalMode: "ask", history: [{ role: "user", text: "hello" }] });
+    expect(w.inputs[0]).toMatchObject({ sdp: offer, cwd: "/work", botId: "b1", model: "gpt-5.5", approvalMode: "ask", history: [{ role: "user", text: "hello" }] });
     expect(w.inputs[0]!.voiceInstructions).toContain("Rigel");
     expect(w.inputs[0]!.workInstructions).toContain("Rigel");
   });

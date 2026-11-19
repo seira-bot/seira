@@ -10,6 +10,8 @@ import {
   type EngineLiveVoiceStart,
 } from "../contracts.ts";
 import { createLiveCodexApproval } from "../live-codex-approval.ts";
+import { decodeCodexSelection } from "./codex-catalog.ts";
+import { codexLiveAppServerArgs } from "./codex-own-login-args.ts";
 
 /** `thread/realtime/start` with `version: "v3"` and WebRTC exists from Codex 0.170.0. */
 export const LIVE_VOICE_MIN_CODEX = [0, 170, 0] as const;
@@ -85,7 +87,7 @@ const wait = (ms: number) => new Promise<void>((resolve) => { setTimeout(resolve
 
 export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
   const timeouts: CodexLiveTimeouts = { ...DEFAULT_TIMEOUTS, ...deps.timeouts };
-  const open = new Set<{ stop(): Promise<void> }>();
+  const open = new Set<{ stop(endCall?: boolean): Promise<void> }>();
 
   const refuse = (refusal: EngineLiveVoiceError["refusal"]): never => {
     deps.log(`live codex: refused ${refusal}`);
@@ -112,7 +114,8 @@ export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
 
     let child: LiveCodexChild;
     try {
-      child = deps.spawn(["app-server"], { cwd: input.cwd, env: deps.env() });
+      const env = deps.env();
+      child = deps.spawn(["app-server", ...codexLiveAppServerArgs(env, input)], { cwd: input.cwd, env });
     } catch {
       return refuse(await tooOld() ? "too-old" : "failed");
     }
@@ -232,9 +235,11 @@ export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
           }
           break;
         case "thread/realtime/closed":
+          if (!established && onEarlyFailure) { onEarlyFailure(); break; }
           emit({ type: "closed", reason: typeof params.reason === "string" ? params.reason : null });
           break;
         case "thread/realtime/error":
+          if (!established && onEarlyFailure) { onEarlyFailure(); break; }
           emit({ type: "failed", reason: "error" });
           break;
       }
@@ -264,8 +269,9 @@ export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
     });
 
     let stopOnce: Promise<void> | undefined;
-    const session: { stop(): Promise<void> } = {
-      stop: () => stopOnce ??= (async () => {
+    const session: { stop(endCall?: boolean): Promise<void> } = {
+      stop: (endCall = false) => stopOnce ??= (async () => {
+        if (endCall && established) emit({ type: "failed", reason: "exit" });
         stopping = true;
         approval.dispose();
         if (!exited && threadId) await Promise.race([request("thread/realtime/stop", { threadId }, timeouts.stopMs).catch(() => {}), wait(timeouts.stopMs)]);
@@ -304,7 +310,14 @@ export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
       const effectiveConfig = configRead ? (await configRead)?.config : undefined;
       endPhase("thread");
       let params = deps.approvalParams(input.approvalMode, effectiveConfig);
-      const startThread = () => request("thread/start", { cwd: input.cwd, ...params.thread, ephemeral: false });
+      const selection = decodeCodexSelection(input.model);
+      const startThread = () => request("thread/start", {
+        cwd: input.cwd,
+        ...(selection.model ? { model: selection.model } : {}),
+        ...(selection.modelProvider ? { modelProvider: selection.modelProvider } : {}),
+        ...params.thread,
+        ephemeral: false,
+      });
       let started: any;
       try {
         started = await startThread();
@@ -363,14 +376,14 @@ export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
         request("thread/realtime/appendText", { threadId, text, role: "developer" }).catch(() => { counts.appendFailures++; });
       },
       appendSpeech,
-      stop: session.stop,
+      stop: () => session.stop(),
     };
   }
 
   return {
     start,
     async dispose() {
-      await Promise.all([...open].map((session) => session.stop()));
+      await Promise.all([...open].map((session) => session.stop(true)));
     },
   };
 }

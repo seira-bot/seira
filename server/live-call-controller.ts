@@ -30,6 +30,9 @@ const MAX_REVOKED_DEVICES = 200;
 /** GPT-Live's own delegation of a spoken yes/no may land this far past the decision on the session timeline. */
 const DECISION_ECHO_MS = 3_000;
 
+/** A Codex call has no GPT-Live voice; this names its voice in the call state and the log. */
+const CODEX_CALL_VOICE = "codex";
+
 export interface LiveSocket {
   readonly readyState: number;
   onopen: ((event: unknown) => void) | null;
@@ -214,7 +217,7 @@ export class LiveCallController {
     if (settings.setupProblem || (!key && !codex) || !endpoint) throw new LiveSessionError(settings.setupProblem || LIVE_NEEDS_KEY, 409);
     if (relayed !== relayedProvider(endpoint.provider)) throw new LiveSessionError(settings.setupProblem || LIVE_NEEDS_KEY, 409);
     const botVoice = this.deps.botVoice?.(input.botId);
-    const voice = relayed === "gemini" ? geminiLiveVoice(botCallVoice(botVoice, settings.geminiVoice, true))
+    const voice = codex ? CODEX_CALL_VOICE : relayed === "gemini" ? geminiLiveVoice(botCallVoice(botVoice, settings.geminiVoice, true))
       : relayed ? FISH_AGENT_VOICE : liveVoice(botCallVoice(botVoice, settings.voice, false));
     const call = this.newCall(input, key, endpoint, voice);
     // Taken before the first await: a second start in the same tick is refused.

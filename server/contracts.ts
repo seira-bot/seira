@@ -569,6 +569,10 @@ export interface EngineLiveVoiceStart {
   sdp: string;
   /** Working folder of the bot. */
   cwd: string;
+  /** The called bot: its switched-off skills apply to the call. */
+  botId: string;
+  /** The bot's model, as chat turns pass it. */
+  model: string | null;
   approvalMode: ApprovalMode;
   /** Persona and rules for the voice model. */
   voiceInstructions: string;

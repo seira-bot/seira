@@ -25,7 +25,7 @@ export interface LiveSessionWiringInput {
   /** Saves the Fish Audio or ElevenLabs agent the harness set up, with the account it belongs to. */
   saveAgent(agent: Required<Pick<LiveConfig, "fishAgentId" | "fishAgentFor" | "fishAgentLanguage">> | Required<Pick<LiveConfig, "elevenlabsAgentId" | "elevenlabsAgentFor">>): void;
   /** The voice hook and run settings of the engine the bot's conversation runs on; null when that engine is not Codex or has no voice. */
-  codexLive?(botId: string, threadId: string): { startLiveVoice(input: EngineLiveVoiceStart): Promise<EngineLiveVoiceSession>; cwd: string; approvalMode: ApprovalMode } | null;
+  codexLive?(botId: string, threadId: string): { startLiveVoice(input: EngineLiveVoiceStart): Promise<EngineLiveVoiceSession>; cwd: string; approvalMode: ApprovalMode; botId: string; model: string | null } | null;
   /** Adds what the bot's engine answered during a Codex call to the chat; the voice already spoke it. */
   postCallAnswer?(input: { botId: string; threadId: string; text: string }): void;
   /** The app's language, which a Fish Audio agent speaks; English when unset. */
@@ -132,6 +132,8 @@ export function liveSessionWiring(input: LiveSessionWiringInput): {
       const session = await engine.startLiveVoice({
         sdp,
         cwd: engine.cwd,
+        botId: engine.botId,
+        model: engine.model,
         approvalMode: engine.approvalMode,
         voiceInstructions: codexVoiceInstructions(bot, { cloudHome: input.cloudHome }),
         workInstructions: codexWorkInstructions(bot),

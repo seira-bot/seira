@@ -12419,7 +12419,7 @@ function liveCodexFor(botId: string, threadId: string): ReturnType<NonNullable<P
   if (!bot || !instance || instance.driverKind !== "codex" || !instance.startLiveVoice) return null;
   const { privateWorkspace, pinnedCwd } = taskFolders(bot, threadId, instance);
   const cwd = pinnedCwd ?? privateWorkspace;
-  return { startLiveVoice: (input) => instance.startLiveVoice!(input), cwd, approvalMode: approvalModeForTurn(bot, false, threadId) };
+  return { startLiveVoice: (input) => instance.startLiveVoice!(input), cwd, approvalMode: approvalModeForTurn(bot, false, threadId), botId: bot.id, model: bot.modelSelection.model || null };
 }
 function postLiveCallAnswer({ botId, threadId, text }: { botId: string; threadId: string; text: string }): void {
   if (store.taskByThread(botId, threadId)) store.appendMessage(threadId, { role: "bot", kind: "text", text });
@@ -15370,7 +15370,10 @@ const gracefulShutdown = createGracefulShutdown({
       await Promise.all([...temporaries, browserSweep.closeAll()]);
       await browserRuntime.closeAll();
     },
-    async () => { await liveCalls.shutdown(); await liveWiring.stopAll(); },
+    async () => {
+      try { await liveWiring.stopAll(); } catch (error) { console.warn("live: stopping Codex calls failed", error); }
+      await liveCalls.shutdown();
+    },
     () => flushAllProfileHistory(),
     () => flushAllMemoryJournals(),
     () => flushUsageLedger(DATA_DIR),

@@ -1777,6 +1777,15 @@ describe("a Codex Live call", () => {
     expect(t.controller.current()?.status).toBe("live");
   });
 
+  it("reports the voice of Codex, not a GPT-Live voice", async () => {
+    const t = codex();
+    t.settings.voice = "cedar";
+    const started = await t.controller.start({ auth: owner, ...BOT, client: "desktop", sdp: "offer-sdp" });
+    expect(started.call.voice).toBe("codex");
+    expect(t.deps.createSession).toHaveBeenCalledWith(expect.objectContaining({ voice: "codex" }));
+    expect(t.logs.join("\n")).toContain("voice=codex");
+  });
+
   it("still asks for the call request's offer", async () => {
     const t = codex();
     await expect(t.controller.start({ auth: owner, ...BOT, client: "web" })).rejects.toMatchObject({ status: 400 });
@@ -1798,7 +1807,7 @@ describe("a Codex Live call through the real session wiring", () => {
     const wiring = liveSessionWiring({
       bot: () => ({ name: "Ada" }), history: () => [], cloudHome: false, othersOnLoopback: () => false, saveAgent: vi.fn(),
       codexLive: () => ({
-        cwd: "/work", approvalMode: "ask" as never,
+        cwd: "/work", approvalMode: "ask" as never, botId: "bot1", model: null,
         startLiveVoice: async (input: EngineLiveVoiceStart) => {
           await opts.hold;
           if (opts.startError) throw opts.startError;

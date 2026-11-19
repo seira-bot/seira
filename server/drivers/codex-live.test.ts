@@ -1,13 +1,22 @@
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { chmodSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { PassThrough, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EngineLiveVoiceError, type EngineLiveVoiceEvent, type EngineLiveVoiceSession, type EngineLiveVoiceStart, type ProviderInstance } from "../contracts.ts";
+import { DATA_DIR } from "../config.ts";
+import { codexLiveEndpoint } from "../live-call.ts";
+import { liveSessionWiring } from "../live-session-wiring.ts";
+import { setNativeSkillEnabled } from "../native-skill-choices.ts";
 import { removeTempDir } from "../testing/cleanup.ts";
 import { CodexDriver } from "./codex.ts";
+import { decodeCodexSelection, encodeCodexSelection } from "./codex-catalog.ts";
+import { codexTurnConfigArgs } from "./codex-guest.ts";
+import { codexOwnLoginArgs } from "./codex-own-login-args.ts";
 import { codexLiveVoice, codexVersionTooOld, type CodexLiveDeps, type CodexLiveTimeouts, type LiveCodexChild } from "./codex-live.ts";
 
 const FAKE = join(dirname(fileURLToPath(import.meta.url)), "..", "testing", "fake-codex-app-server.ts");
@@ -94,6 +103,8 @@ function harness(options: { fake?: Record<string, string>; timeouts?: Partial<Co
   const input = (overrides: Partial<EngineLiveVoiceStart> = {}): EngineLiveVoiceStart => ({
     sdp: "offer-sdp",
     cwd: scratch,
+    botId: "bot-live",
+    model: null,
     approvalMode: "ask",
     voiceInstructions: "Be brief.",
     workInstructions: "Do the work.",
@@ -186,7 +197,7 @@ describe("codexLiveVoice start", () => {
     const h = harness();
     const session = await h.start({ cwd: scratch, approvalMode: "auto" });
     expect(session.sdp).toBe(FAKE_SDP_ANSWER);
-    expect(h.spawned[0]!.args).toEqual(["app-server"]);
+    expect(h.spawned[0]!.args[0]).toBe("app-server");
     const calls = h.calls();
     const methods = calls.map((call) => call.method);
     expect(methods.slice(0, 3)).toEqual(["initialize", "initialized", "account/read"]);
@@ -327,6 +338,110 @@ describe("codexLiveVoice start timing", () => {
     const h = harness({ fake: { FAKE_CODEX_ACCOUNT: "none" }, deps: { now: () => (tick += 10) } });
     await refusalOf(h.live.start(h.input()));
     expect(h.logs).toEqual(["live codex: refused not-signed-in ms=20 init=10 account=10 thread=0 answer=0"]);
+  });
+});
+
+describe("codexLiveVoice limits of the bot", () => {
+  const skill = () => join(process.env.HOME!, ".agents", "skills", "pdf", "SKILL.md");
+  afterEach(() => {
+    rmSync(join(process.env.HOME!, ".agents"), { recursive: true, force: true });
+    rmSync(join(DATA_DIR, "skill-state"), { recursive: true, force: true });
+  });
+
+  it("starts the app-server with the tool limits and the skill switches of the bot", async () => {
+    mkdirSync(dirname(skill()), { recursive: true });
+    writeFileSync(skill(), "---\nname: pdf\ndescription: PDFs.\n---\nSteps.\n");
+    setNativeSkillEnabled("bot-live", "pdf", false);
+    const h = harness();
+    await h.start();
+    const args = h.spawned[0]!.args;
+    expect(args[0]).toBe("app-server");
+    for (const setting of ["features.plugins=false", "features.computer_use=false", "features.browser_use=false", "features.browser_use_external=false"]) {
+      expect(args.slice(1).filter((arg, index, all) => arg === setting && all[index - 1] === "-c")).toHaveLength(1);
+    }
+    expect(args.find((arg) => arg.startsWith("skills.config="))).toContain(`{path=${JSON.stringify(skill())},enabled=false}`);
+    const other = harness();
+    await other.start({ botId: "bot-without-switches" });
+    expect(other.spawned[0]!.args.some((arg) => arg.startsWith("skills.config="))).toBe(false);
+  });
+
+  it("builds the arguments with the function that chat turns use, from the environment the process gets", async () => {
+    const model = encodeCodexSelection("magpie", "local-model");
+    const h = harness();
+    await h.start({ model });
+    const spawnedEnv = h.spawned[0]!.env;
+    expect(h.spawned[0]!.args).toEqual(["app-server", ...codexOwnLoginArgs(spawnedEnv, model, codexTurnConfigArgs({ botId: "bot-live" }, spawnedEnv))]);
+    expect(h.spawned[0]!.args).toContain('model_provider="magpie"');
+  });
+
+  it("starts the thread on the model and provider of the bot, decoded as chat decodes them", async () => {
+    const model = encodeCodexSelection("magpie", "local-model");
+    const h = harness();
+    await h.start({ model });
+    expect(h.calls().find((call) => call.method === "thread/start")!.params).toMatchObject({ model: "local-model", modelProvider: "magpie" });
+    const official = harness();
+    await official.start({ model: "gpt-5.5" });
+    const decoded = decodeCodexSelection("gpt-5.5");
+    expect(official.calls().find((call) => call.method === "thread/start")!.params).toMatchObject({ model: decoded.model, modelProvider: decoded.modelProvider });
+    const none = harness();
+    await none.start({ model: null });
+    expect(none.calls().find((call) => call.method === "thread/start")!.params).not.toHaveProperty("model");
+    expect(none.calls().find((call) => call.method === "thread/start")!.params).not.toHaveProperty("modelProvider");
+  });
+});
+
+describe("codexLiveVoice close before the answer", () => {
+  it.each([["closed-early", "closed"], ["error-early", "error"]])("refuses at once when Codex ends the call with %s before the answer", async (mode) => {
+    const h = harness({ fake: { FAKE_CODEX_REALTIME_MODE: mode }, timeouts: { answerMs: 30_000 } });
+    const started = Date.now();
+    expect(await refusalOf(h.live.start(h.input()))).toBe("failed");
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(isGone(h.spawned[0]!.child)).toBe(true);
+    expect(h.events).toEqual([]);
+    expect(h.logs).toHaveLength(1);
+    expect(h.logs[0]).toMatch(/^live codex: refused failed ms=\d+ init=\d+ account=\d+ thread=\d+ answer=\d+$/);
+  });
+
+  it("refuses well before the wait for the answer ends, with fake timers", async () => {
+    vi.useFakeTimers();
+    try {
+      const sent: string[] = [];
+      let emitLine!: (line: string) => void;
+      const stdout = new PassThrough();
+      const child = Object.assign(new EventEmitter(), {
+        stdin: new Writable({ write(chunk, _enc, done) { sent.push(String(chunk)); done(); } }),
+        stdout,
+        stderr: new PassThrough(),
+        kill: () => { child.emit("exit", 0, null); return true; },
+      }) as unknown as LiveCodexChild;
+      emitLine = (line) => { stdout.write(`${line}\n`); };
+      const logs: string[] = [];
+      const live = codexLiveVoice({
+        unsupportedSignIn: false, env: () => ({}), version: async () => MODERN,
+        approvalParams: (mode) => workspaceParams(mode), permissionProfileUnsupported: () => false, withResolvedSandbox: resolveLike,
+        spawn: () => child, clientVersion: "0.0.0-test", log: (line) => logs.push(line),
+        timeouts: { answerMs: 20_000, stopMs: 100, killMs: 100, approvalMs: 60_000, rpcMs: 20_000 },
+      });
+      const starting = live.start({ sdp: "offer", cwd: "/work", botId: "b", model: null, approvalMode: "ask", voiceInstructions: "", workInstructions: "", history: [], onEvent: () => {} });
+      const failure = starting.then(() => null, (error) => error);
+      const reply = async (method: string, result: unknown) => {
+        await vi.waitFor(() => expect(sent.some((line) => JSON.parse(line).method === method)).toBe(true));
+        const id = JSON.parse(sent.find((line) => JSON.parse(line).method === method)!).id;
+        emitLine(JSON.stringify({ jsonrpc: "2.0", id, result }));
+      };
+      await reply("initialize", {});
+      await reply("account/read", { account: { type: "chatgpt" } });
+      await reply("thread/start", { thread: { id: "t1" }, sandbox: { type: "workspaceWrite" } });
+      await vi.waitFor(() => expect(sent.some((line) => JSON.parse(line).method === "thread/realtime/start")).toBe(true));
+      emitLine(JSON.stringify({ jsonrpc: "2.0", method: "thread/realtime/closed", params: { threadId: "t1", reason: "quota" } }));
+      await vi.advanceTimersByTimeAsync(1_000);
+      const error = await failure;
+      expect(error).toBeInstanceOf(EngineLiveVoiceError);
+      expect((error as EngineLiveVoiceError).refusal).toBe("failed");
+      expect(logs.at(-1)).toMatch(/^live codex: refused failed ms=\d+ /);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -510,6 +625,33 @@ describe("codexLiveVoice stop and dispose", () => {
     expect(h.events.some((event) => event.type === "failed")).toBe(false);
   });
 
+  it("ends the call of an open session on dispose, once, before it stops", async () => {
+    const h = harness();
+    await h.start();
+    await until(() => h.events.some((event) => event.type === "started"));
+    await h.live.dispose();
+    expect(h.events.filter((event) => event.type === "failed")).toEqual([{ type: "failed", reason: "exit" }]);
+    await h.live.dispose();
+    expect(h.events.filter((event) => event.type === "failed")).toHaveLength(1);
+  });
+
+  it("closes the socket of a call and frees it when the provider is disposed during the call", async () => {
+    const h = harness();
+    const wiring = liveSessionWiring({
+      bot: () => ({ name: "Ada" }), history: () => [], cloudHome: false, othersOnLoopback: () => false, saveAgent: () => {},
+      codexLive: () => ({ startLiveVoice: (input) => h.live.start(input), cwd: scratch, approvalMode: "ask", botId: "bot-live", model: null }),
+    });
+    const { sessionId } = await wiring.calls.createSession({ key: "", endpoint: codexLiveEndpoint(), sdp: "offer-sdp", botId: "bot-live", threadId: "t1", voice: "codex" });
+    const socket = wiring.calls.openSocket(sessionId, "", codexLiveEndpoint());
+    const closed = vi.fn();
+    socket.onclose = closed;
+    await until(() => socket.readyState === 1);
+    await h.live.dispose();
+    expect(closed).toHaveBeenCalledOnce();
+    expect(socket.readyState).toBe(3);
+    expect(wiring.calls.openSocket(sessionId, "", codexLiveEndpoint()).readyState).toBe(3);
+  });
+
   it("ignores appends after stop", async () => {
     const h = harness();
     const session = await h.start();
@@ -569,7 +711,7 @@ describe("CodexDriver startLiveVoice", () => {
     return instance;
   };
   const offer = (): EngineLiveVoiceStart => ({
-    sdp: "offer-sdp", cwd: scratch, approvalMode: "ask", voiceInstructions: "Be brief.", workInstructions: "", history: [], onEvent: () => {},
+    sdp: "offer-sdp", cwd: scratch, botId: "bot-live", model: null, approvalMode: "ask", voiceInstructions: "Be brief.", workInstructions: "", history: [], onEvent: () => {},
   });
 
   it("starts the app-server with no plan arguments and none of the plan or API credentials", async () => {
@@ -584,11 +726,32 @@ describe("CodexDriver startLiveVoice", () => {
     expect(session.sdp).toBe(FAKE_SDP_ANSWER);
     await session.stop();
     const seen = JSON.parse(readFileSync(dump, "utf8"));
-    expect(seen.argv).toEqual(["app-server"]);
+    expect(seen.argv[0]).toBe("app-server");
+    expect(seen.argv).toEqual(expect.arrayContaining(["features.plugins=false", "features.computer_use=false", "features.browser_use=false"]));
     for (const name of ["OPENMAUSBOT_CHATGPT_TOKEN", "OPENMAUSBOT_CODEX_API_KEY", "OPENAI_API_KEY"]) expect(seen.env[name]).toBeUndefined();
     expect(JSON.stringify(seen.env)).not.toContain("leak-");
     const start = seen.calls.find((call: { method: string }) => call.method === "thread/start");
     expect(start.params).toMatchObject({ cwd: scratch, approvalPolicy: "on-request", sandbox: "workspace-write", ephemeral: false });
+  });
+
+  it("starts the app-server with the arguments of a chat turn of the same bot and model", async () => {
+    const model = encodeCodexSelection("magpie", "local-model");
+    const argvOf = async (file: string, run: (provider: ProviderInstance) => Promise<void>) => {
+      const provider = await create({ FAKE_CODEX_DUMP: file });
+      try { await run(provider); } finally { await provider.dispose(); instance = undefined; }
+      return (JSON.parse(readFileSync(file, "utf8")) as { argv: string[] }).argv;
+    };
+    const chat = await argvOf(join(scratch, "chat-argv.json"), async (provider) => {
+      const done = new Promise<void>((resolve) => { provider.adapter.onEvent((event) => { if (event.type === "turn.completed") resolve(); }); });
+      await provider.adapter.sendTurn({ threadId: "same-args", botId: "bot-live", model, text: "hi" });
+      await done;
+    });
+    const call = await argvOf(join(scratch, "call-argv.json"), async (provider) => {
+      const session = await provider.startLiveVoice!({ ...offer(), model });
+      await session.stop();
+    });
+    expect(call).toEqual(chat);
+    expect(call).toContain("features.plugins=false");
   });
 
   it("refuses an old Codex and an unsigned account", async () => {

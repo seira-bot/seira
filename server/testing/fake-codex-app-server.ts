@@ -36,7 +36,8 @@
 //     thread/realtime/error) | exit (sdp, started, then exit 1) | approval (sdp, started, then a command approval request; the
 //     next appendSpeech is followed by a user transcript/done) | turn-answer (sdp, started, then an agent message and turn/completed) |
 //     working (sdp, started, then turn/started, item/started, item/completed and turn/completed of the call thread, no transcript) |
-//     working-other-thread (the same steps for another thread)
+//     working-other-thread (the same steps for another thread) | closed-early (thread/realtime/closed with no sdp) |
+//     error-early (thread/realtime/error with no sdp)
 //   FAKE_CODEX_REALTIME_REPLY  approval mode: the user's spoken answer (default "yes", empty: no answer); turn-answer mode: the agent message
 //   FAKE_CODEX_REALTIME_APPROVAL  approval mode: JSON {method, params} merged over the default command request
 //   FAKE_CODEX_REALTIME_STALE  approval mode: "1" sends the user's answer as an utterance that began before the question
@@ -1144,6 +1145,8 @@ process.stdin.on("data", (chunk) => {
         const threadId = msg.params?.threadId;
         out({ jsonrpc: "2.0", id: msg.id, result: {} });
         if (realtimeMode === "silent") break;
+        if (realtimeMode === "closed-early") { notify("thread/realtime/closed", { threadId, reason: "quota" }); break; }
+        if (realtimeMode === "error-early") { notify("thread/realtime/error", { threadId, message: "fake early error" }); break; }
         notify("thread/realtime/sdp", { threadId, sdp: FAKE_REALTIME_SDP });
         notify("thread/realtime/started", { threadId, sessionId: threadId, version: "v3" });
         if (realtimeMode === "error") {
