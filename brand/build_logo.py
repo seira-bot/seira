@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Build every Seira logo and app icon from one master: the 3D head with the official face.
+"""Build the Seira logo files and the app icons.
 
+The logo files come from one master: the 3D head with the official face.
 The master is brand/mascot/art/bases/out/seira/front.png with the resting face of
-brand/mascot/runtime/face.js drawn on the visor. Every other file comes from the master.
+brand/mascot/runtime/face.js drawn on the visor.
+The app icons come from brand/logo/app-icon-source.png, the same image as the mobile app icon.
 
 Run: python3 brand/build_logo.py
 The output is byte-identical on every run.
@@ -21,11 +23,11 @@ BRAND = Path(__file__).resolve().parent
 ROOT = BRAND.parent
 BASE = BRAND / "mascot/art/bases/out/seira"
 LOGO = BRAND / "logo"
+ICON_SOURCE = LOGO / "app-icon-source.png"
 DOCS_BRAND = ROOT / "docs/assets/brand"
 
 LANCZOS = Image.Resampling.LANCZOS
 
-INK = (14, 17, 22)
 SCREEN = (12, 15, 20)
 EYE_COLOR = (255, 42, 87)
 
@@ -46,9 +48,8 @@ SS = 4
 REGION = (256, 320, 768, 688)
 
 ICON_RADIUS = 0.2246
-ICON_HEAD_SCALE = 0.95
+ICON_SIZE = 1024
 MARK_FILL = 0.92
-FAVICON_CROP = 0.86
 SPLASH_SIZE = (198, 232)
 SPLASH_BOX = (190, 224)
 
@@ -219,28 +220,32 @@ def fit(im, box_w, box_h):
     return im.resize((max(1, round(im.width * scale)), max(1, round(im.height * scale))), LANCZOS)
 
 
-def centred(im, size, fill, crop=1.0):
-    box = head_box(im)
-    cropped = im.crop((box[0], box[1], box[2], box[1] + round((box[3] - box[1]) * crop)))
-    inner = fit(cropped, round(size * fill), round(size * fill))
+def centred(im, size, fill):
+    inner = fit(im.crop(head_box(im)), round(size * fill), round(size * fill))
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     canvas.alpha_composite(inner, ((size - inner.width) // 2, (size - inner.height) // 2))
     return canvas
 
 
-def app_icon_master(master):
-    size = master.width
-    big = size * 4
+def load_icon_source():
+    im = Image.open(ICON_SOURCE).convert("RGBA")
+    if im.size != (ICON_SIZE, ICON_SIZE):
+        im = im.resize((ICON_SIZE, ICON_SIZE), LANCZOS)
+    return im
+
+
+def app_icon_master():
+    tile = load_icon_source()
+    big = ICON_SIZE * 4
     mask = Image.new("L", (big, big), 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, big - 1, big - 1), radius=ICON_RADIUS * big, fill=255)
-    mask = mask.resize((size, size), LANCZOS)
-    tile = Image.new("RGBA", (size, size), INK + (255,))
-    head_size = round(size * ICON_HEAD_SCALE)
-    head = master.resize((head_size, head_size), LANCZOS)
-    offset = (size - head_size) // 2
-    tile.alpha_composite(head, (offset, offset))
-    tile.putalpha(mask)
+    tile.putalpha(mask.resize((ICON_SIZE, ICON_SIZE), LANCZOS))
     return tile
+
+
+def touch_icon():
+    # iOS fills transparent pixels of an apple-touch-icon with black and applies its own corner mask.
+    return load_icon_source().resize((180, 180), LANCZOS)
 
 
 def sharpen(im):
@@ -307,7 +312,7 @@ def main():
     for size in (64, 128, 256, 512):
         write_png(LOGO / f"png/mark-{size}.png", centred(master, size, MARK_FILL))
 
-    tile = app_icon_master(master)
+    tile = app_icon_master()
     tiles = {size: tile if size == tile.width else tile.resize((size, size), LANCZOS)
              for size in sorted({16, 24, 32, 48, 64, 128, 180, 192, 256, 512, 1024})}
     for size in (180, 192, 512, 1024):
@@ -315,7 +320,7 @@ def main():
 
     favicons = {}
     for size in (16, 32, 48):
-        icon = centred(master, size, 1.0, FAVICON_CROP)
+        icon = tiles[size]
         favicons[size] = sharpen(icon) if size <= 32 else icon
         write_png(LOGO / f"png/favicon-{size}.png", favicons[size])
     favicons[48].save(LOGO / "favicon.ico", format="ICO", sizes=[(s, s) for s in favicons],
@@ -341,7 +346,7 @@ def main():
     write_text(ROOT / "public/app-icon.svg", svg)
     write_png(ROOT / "public/app-icon-512.png", tiles[512])
     write_png(ROOT / "public/app-icon-192.png", tiles[192])
-    write_png(ROOT / "public/apple-touch-icon.png", tiles[180])
+    write_png(ROOT / "public/apple-touch-icon.png", touch_icon())
 
     splash = build_splash(master)
     splash.save(ROOT / "electron/resources/splash-seira.webp", format="WEBP", quality=92, alpha_quality=100, method=6)
