@@ -40,7 +40,7 @@ export function updateCommand(install: InstallKind, target?: { version: string; 
     case "docker": return { command: `git pull && ./update.sh${version}`, restart: false };
     case "podman-service": return { command: `${podmanServiceDir(env)}/update.sh${version}`, restart: false };
     case "podman": return { command: "git pull && cd deploy/podman && PODMAN_COMPOSE_PROVIDER=podman-compose podman compose --env-file .env -f compose.yaml up -d --build", restart: false };
-    case "npm": return { command: `npm install -g openmausbot@${target?.version ?? "latest"}`, restart: true };
+    case "npm": return { command: `npm install -g @seira-bot/seira@${target?.version ?? "latest"}`, restart: true };
     case "git": return { command: "git pull && pnpm install", restart: true };
     default: return undefined;
   }

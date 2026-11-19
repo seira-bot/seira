@@ -29,10 +29,8 @@ export const SIMPLE_BUBBLE_MAX = "max-w-[min(44rem,100%)]";
 export const SIMPLE_USER_MAX = "max-w-[min(var(--chat-bubble-max),var(--chat-bubble-pct),calc(100%-82px))]";
 
 /** A plain-text bot bubble drawn outside the transcript's own Bubble: a widget's text fallback or a row that failed. */
-export function plainBotBubble(simple: boolean): string {
-  return simple
-    ? cn("chat-text w-fit whitespace-pre-wrap", SIMPLE_BUBBLE_MAX, SIMPLE_BOT_BUBBLE)
-    : "chat-text w-fit max-w-[min(var(--chat-bubble-max),var(--chat-bubble-pct))] rounded-2xl bg-card px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap text-ink";
+export function plainBotBubble(): string {
+  return cn("chat-text w-fit whitespace-pre-wrap", SIMPLE_BUBBLE_MAX, SIMPLE_BOT_BUBBLE);
 }
 
 /** Simple mode's transcript spaces rows 16px apart (ChatView's data-simple-rows); a row in the same group pulls up 12px, to 4px. */

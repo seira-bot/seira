@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import type { SidebarDensity } from "@/lib/sidebar-preferences";
+import { useAdvancedMode } from "@/lib/interface-mode";
 import { useStore } from "@/state/store";
 
 import { AccountMoveStatus, useAccountMoveLine } from "./AccountMove";
@@ -65,6 +66,7 @@ export function SidebarFooter({ density, simple = false, owner = null, archived,
   onToggleTools?: () => void;
 }) {
   const { dispatch } = useStore();
+  const advanced = useAdvancedMode();
   if (simple) return <SimpleSidebarFooter owner={owner} archived={archived} />;
   return (
     <div className={cn("pb-3 pt-2", density === "icons" ? "flex flex-col items-center gap-1 px-2" : "px-3")}>
@@ -81,7 +83,7 @@ export function SidebarFooter({ density, simple = false, owner = null, archived,
         <>
           <CloudRoomCard />
           <CloudUsageCard />
-          <div className="flex items-center gap-1 not-first:mt-3">
+          <div className={cn("flex items-center gap-1", advanced ? "h-[52px] border-t-[0.5px] border-edge" : "not-first:mt-3")}>
             <div className="min-w-0 flex-1">
               <SidebarProfileMenu />
             </div>

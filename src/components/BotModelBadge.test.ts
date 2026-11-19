@@ -76,8 +76,8 @@ describe("sidebar bot row", () => {
   });
   afterEach(() => { vi.unstubAllGlobals(); });
 
-  // Every density puts the badge on the avatar's bottom-left: the status dots own the bottom-right, and a mark at the
-  // row's end sat under the hover actions (+, new folder, …) without lining up with them.
+  // Every density puts the badge on the avatar's bottom-left: the status dots own the bottom-right, and the row's right
+  // slot holds the time, which the hover actions (+, new folder, …) replace.
   it.each<[SidebarDensity, string]>([["comfortable", "absolute -bottom-0.5 -left-0.5"], ["icons", "absolute -bottom-0.5 -left-0.5"]])(
     "shows the model once in a %s row", (density, placement) => {
       const found = badges(render(bot("claude", "opus"), density));

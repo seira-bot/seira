@@ -71,9 +71,9 @@ const bot = {
 
 let host: HTMLDivElement;
 let root: Root;
-const render = (state: Record<string, unknown> = {}) => {
+const render = (state: Record<string, unknown> = {}, shown: Bot = bot) => {
   fixture.storeState = state;
-  flushSync(() => root.render(createElement(BotSettingsDialog, { bot })));
+  flushSync(() => root.render(createElement(BotSettingsDialog, { bot: shown })));
 };
 const row = (id: string) => host.querySelector<HTMLElement>(`[data-bot-settings-section="${id}"]`)!;
 const rowButton = (id: string) => row(id).querySelector<HTMLButtonElement>("button")!;
@@ -103,6 +103,17 @@ describe("the Advanced panel", () => {
     expect(title.textContent).toBe("Scout");
     expect(host.querySelector("[data-advanced-hero]")!.textContent).toContain("Researcher");
     expect(host.querySelector("[data-advanced-hero]")!.textContent).toContain("Chief of Staff");
+  });
+
+  it("shows no status while the bot is idle, and one line when it works, waits or failed", () => {
+    expect(host.querySelector("[data-panel-state]")).toBeNull();
+    render({}, { ...bot, busy: true, activity: "working" } as Bot);
+    expect(host.querySelector("[data-panel-state]")!.getAttribute("data-panel-state")).toBe("working");
+    render({}, { ...bot, busy: false, activity: "waiting-on-you" } as Bot);
+    expect(host.querySelector("[data-panel-state]")!.textContent).toBe("Waiting for you…");
+    const failedTurn = { id: "m1", role: "assistant", kind: "activity", at: 1, text: "", tool: { name: "Bash", ok: false } };
+    render({}, { ...bot, busy: false, activity: "idle", messages: [failedTurn] } as unknown as Bot);
+    expect(host.querySelector("[data-panel-state]")?.getAttribute("data-panel-state")).toBe("failed");
   });
 
   it("offers Message, Screen, Routines and Settings", () => {

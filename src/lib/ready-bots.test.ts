@@ -5,6 +5,8 @@ import { CLASSIC_ROLE_IDS, READY_BOT_CATEGORIES, READY_BOTS, matchesReadyBot, re
 import { setLocale } from "./i18n";
 import en from "@/locales/en.json";
 import type { NewBotDefaults } from "../../shared/new-bot-defaults";
+import { PICKER_BODY_IDS } from "../../shared/bot-body";
+import { mascotAccessories } from "../../shared/mascot-accessories";
 
 const defaults = (): NewBotDefaults => ({
   profile: {
@@ -26,11 +28,18 @@ describe("ready-made bots", () => {
   it("each has a look the app can draw, a category, and something to try", () => {
     for (const bot of READY_BOTS) {
       expect(Object.keys(MAUS_COLORS)).toContain(bot.look.color);
-      expect(bot.look.mascotBody).toBe("seira");
+      expect(PICKER_BODY_IDS).toContain(bot.look.mascotBody);
+      expect(mascotAccessories(bot.look.mascotAccessories)).toEqual(bot.look.mascotAccessories);
       expect(READY_BOT_CATEGORIES).toContain(bot.category);
       expect(bot.tryAsking.length).toBeGreaterThanOrEqual(2);
       expect(bot.description.length).toBeLessThanOrEqual(120);
     }
+  });
+
+  it("each wears a hair style of its own, never Seira's", () => {
+    const styles = READY_BOTS.map((bot) => bot.look.mascotBody);
+    expect(styles).not.toContain("seira");
+    expect(new Set(styles).size).toBe(styles.length);
   });
 
   it("fit the standing-instructions limit", () => {
@@ -53,7 +62,7 @@ describe("readyBotTemplate", () => {
 
   it("sets who the bot is and how it looks", () => {
     const { profile } = readyBotTemplate(defaults(), plant);
-    expect(profile).toMatchObject({ name: "Fern", title: "Plant care log", soul: plant.soul, color: "green", mascotBody: "seira" });
+    expect(profile).toMatchObject({ name: "Fern", title: "Plant care log", soul: plant.soul, color: "green", mascotBody: "seira-long", mascotAccessories: ["hairpin"] });
   });
 
   it("never changes the person's model, approval level, computer, folder or apps", () => {

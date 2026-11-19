@@ -35,6 +35,7 @@ afterAllArtifactBuild: ./scripts/finish-snap.mjs
 files:
   - electron/**
   - "!electron/**/*.test.*"
+  - "!electron/splash/page.js"
   - "!electron/resources/speech-helper"
   - "!electron/resources/speech-helper.swift"
   - "!electron/resources/speech-helper-Info.plist"

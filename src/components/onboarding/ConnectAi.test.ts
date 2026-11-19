@@ -224,6 +224,19 @@ describe("connecting an AI on the first screen", () => {
     expect(text()).not.toContain("Free models. No account needed.");
   });
 
+  it("says OpenCode's free model is being prepared while the app installs it, then shows the backup line", async () => {
+    const installing: InstanceInfo = { ...engine("opencodeGo", "opencodeGo", "OpenCode", false), installing: true };
+    f.instances = [installing, engine("claude", "claudeAgent", "Claude", false)];
+    await show();
+    expect(host.querySelector("[data-ai-backup-installing]")?.textContent).toBe("Getting OpenCode's free model ready as a backup…");
+    expect(host.querySelector("[data-ai-backup]")).toBeNull();
+    expect(host.querySelector("[data-ai-free]")).toBeNull();
+    f.instances = [{ ...engine("opencodeGo", "opencodeGo", "OpenCode", true), snapshot: { state: "available", authenticated: true, freeFallback: true } }, engine("claude", "claudeAgent", "Claude", false)];
+    await show();
+    expect(host.querySelector("[data-ai-backup-installing]")).toBeNull();
+    expect(host.querySelector("[data-ai-backup]")).not.toBeNull();
+  });
+
   it("shows at first only the recommended way, the free way, an Other ways button with its count, and Check again", async () => {
     f.instances = [...f.instances, engine("opencodeGo", "opencodeGo", "OpenCode", false)];
     await show();
