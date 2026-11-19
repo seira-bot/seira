@@ -1,7 +1,7 @@
 // Claude Code over stream-json both ways: prompt on stdin, one retained CLI process per thread,
 // each turn settled by the CLI's own `result` frame.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { join, dirname, isAbsolute, normalize } from "node:path";
@@ -409,15 +409,16 @@ const steerSilenceScale = () => fakeTimerScale("FAKE_CLAUDE_STEER_SILENCE_SCALE"
 
 /** In a folder of its own, which the bot box puts back read-only: a bind of the file alone would keep showing the box the
  * copy it was started with after a turn renames a new token over it. */
-export function hookTokenFile(threadId: string, botId?: string): string {
-  const digest = createHash("sha256").update(`${botId ?? ""}\0${threadId}`).digest("hex").slice(0, 24);
+export function hookTokenFile(threadId: string, botId?: string, account?: string): string {
+  const digest = createHash("sha256").update(`${botId ?? ""}\0${threadId}${account ? `\0${account}` : ""}`).digest("hex").slice(0, 24);
   return join(DATA_DIR, "hook-tokens", digest, "token");
 }
 
-export function permissionSocketPath(threadId: string, botId?: string) {
+export function permissionSocketPath(threadId: string, botId?: string, account?: string) {
   // Half the tag digests the full bot+thread key: Windows named pipes share one global namespace
   // and are never unlinked, and 8 chars keeps POSIX paths under the 104-byte sun_path limit.
-  const key = botId ? `${botId}\0${threadId}` : threadId;
+  const baseKey = botId ? `${botId}\0${threadId}` : threadId;
+  const key = account ? `${baseKey}\0${account}` : baseKey;
   const prefix = threadId.replace(/[^\w-]/g, "").slice(0, 4);
   const digest = createHash("sha256").update(key).digest("hex").slice(0, 4);
   return brokerSocketPath(DATA_DIR, `${prefix}${digest}`);
@@ -425,11 +426,11 @@ export function permissionSocketPath(threadId: string, botId?: string) {
 
 /** Broker bind paths, in order. Windows pipe names are never unlinkable (a hung child can hold one
  * for minutes), and macOS rejects socket paths past `sun_path`, hence the short temp fallback. */
-export function brokerSocketCandidates(threadId: string, botId?: string): string[] {
-  const base = permissionSocketPath(threadId, botId);
+export function brokerSocketCandidates(threadId: string, botId?: string, account?: string): string[] {
+  const base = permissionSocketPath(threadId, botId, account);
   if (process.platform !== "win32") {
     const scope = createHash("sha256")
-      .update(`${DATA_DIR}\0${process.pid}\0${botId ?? ""}\0${threadId}`)
+      .update(`${DATA_DIR}\0${process.pid}\0${botId ?? ""}\0${threadId}${account ? `\0${account}` : ""}`)
       .digest("hex")
       .slice(0, 16);
     return [base, join(tmpdir(), `omb-perm-${scope}.sock`)];
@@ -519,6 +520,7 @@ export async function createPermissionBroker(opts: {
     });
   };
   let server: ReturnType<typeof createNetServer> | null = null;
+  let boundIdentity: { dev: number; ino: number } | null = null;
   for (const [index, candidate] of opts.socketPaths.entries()) {
     const attempt = createNetServer(connectionHandler);
     try {
@@ -542,6 +544,12 @@ export async function createPermissionBroker(opts: {
         } catch {}
         outcome = error as Error & { code?: string };
       }
+    }
+    if (outcome === "listening" && process.platform !== "win32") {
+      try {
+        const { dev, ino } = statSync(candidate);
+        boundIdentity = { dev, ino };
+      } catch {}
     }
     if (outcome === "listening") {
       if (index > 0) {
@@ -588,7 +596,11 @@ export async function createPermissionBroker(opts: {
         server?.close();
       } catch {}
       try {
-        unlinkSync(boundPath);
+        if (process.platform === "win32") unlinkSync(boundPath);
+        else {
+          const now = lstatSync(boundPath);
+          if (boundIdentity && now.dev === boundIdentity.dev && now.ino === boundIdentity.ino) unlinkSync(boundPath);
+        }
       } catch {}
     },
     socketPath: boundPath,
@@ -1126,7 +1138,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
       const ownHttp = claudeOwnMcpOverHttp(mcpServers); // Seira's own servers by URL where that setting is on: no proxy process each
       // Full access keeps ask_user: native bypass skips permission prompts, not questions.
       let broker: Awaited<ReturnType<typeof createPermissionBroker>> | undefined;
-      const socketPath = permissionSocketPath(threadId, botId);
+      const socketPath = permissionSocketPath(threadId, botId, instanceId);
       if (permissionMode !== "bypassPermissions") {
         args.push("--permission-prompt-tool", "mcp__ogb__approve");
       }
@@ -1149,7 +1161,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
       // The hook helper reads its bearer from a per-thread file refreshed every turn, so a
       // long-lived CLI process never presents a stale token.
       const hooks = turn.integrations?.hooks;
-      const hookTokenPath = hooks ? hookTokenFile(threadId, botId) : null;
+      const hookTokenPath = hooks ? hookTokenFile(threadId, botId, instanceId) : null;
       if (hooks && hookTokenPath) {
         mkdirSync(dirname(hookTokenPath), { recursive: true, mode: 0o700 });
         writeFileAtomicIfChanged(hookTokenPath, hooks.token, { mode: 0o600, durable: false });
@@ -1246,7 +1258,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
         if (socketPath) {
           const askTools = new Map<string, string | undefined>();
           broker = await createPermissionBroker({
-            socketPaths: brokerSocketCandidates(threadId, botId),
+            socketPaths: brokerSocketCandidates(threadId, botId, instanceId),
             isActive: () => Boolean(sessions.get(threadId)?.turn),
             onAsk: (ask) => {
               const eventTurnId = sessions.get(threadId)?.turn?.turnId ?? turnId;

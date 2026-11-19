@@ -428,6 +428,46 @@ describe("ClaudeDriver.decodeConfig", () => {
       }
     },
   );
+
+  it("gives each Claude account its own socket and hook token path", () => {
+    expect(permissionSocketPath("t1", "b1", "claude")).not.toBe(permissionSocketPath("t1", "b1", "claude-x"));
+    expect(hookTokenFile("t1", "b1", "claude")).not.toBe(hookTokenFile("t1", "b1", "claude-x"));
+    expect(brokerSocketCandidates("t1", "b1", "claude")[0]).toBe(permissionSocketPath("t1", "b1", "claude"));
+    expect(brokerSocketCandidates("t1", "b1", "claude")[1]).not.toBe(brokerSocketCandidates("t1", "b1", "claude-x")[1]);
+    expect(permissionSocketPath("t1", "b1")).toBe(permissionSocketPath("t1", "b1", undefined));
+    expect(hookTokenFile("t1", "b1")).toBe(hookTokenFile("t1", "b1", undefined));
+    expect(brokerSocketCandidates("t1", "b1")[0]).toBe(permissionSocketPath("t1", "b1"));
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "close leaves a socket that another broker bound on the same path",
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), "omb-broker-shared-"));
+      const shared = join(dir, "shared.sock");
+      const asksTwo: Array<{ id: string }> = [];
+      const first = await createPermissionBroker({ socketPaths: [shared], onAsk: () => {}, onResolve: () => {} });
+      const second = await createPermissionBroker({
+        socketPaths: [shared],
+        onAsk: (ask) => asksTwo.push(ask),
+        onResolve: () => {},
+      });
+      try {
+        first.close();
+        const conn = await new Promise<Socket>((resolve, reject) => {
+          const c = connect(second.socketPath);
+          c.once("connect", () => resolve(c));
+          c.once("error", reject);
+        });
+        conn.write(JSON.stringify({ t: "ask", id: "ask-two-accounts", tool: "Bash", input: { command: "echo hi" } }) + "\n");
+        await expect.poll(() => asksTwo.length, { timeout: 5_000 }).toBe(1);
+        conn.destroy();
+      } finally {
+        first.close();
+        second.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
 });
 
 describe("spawnContractDiff", () => {
@@ -481,6 +521,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
   let instance: ProviderInstance;
   let recorder: EventRecorder;
   let scratch: string;
+  const driverSocket = (threadId: string, botId?: string) => permissionSocketPath(threadId, botId, "claude-test");
 
   const create = async (
     mode?: string,
@@ -1032,7 +1073,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
   it("keeps questions answerable in per-bot Full access", async () => {
     await create("hang");
     await instance.adapter.sendTurn({ threadId: "t-full-question", text: "go", approvalMode: "full" });
-    const conn = await connectSocket(permissionSocketPath("t-full-question"));
+    const conn = await connectSocket(driverSocket("t-full-question"));
     try {
       conn.write(JSON.stringify({ t: "ask", kind: "question", id: "full-question", tool: "ask_user", input: { question: "Which account?" } }) + "\n");
       const opened = await recorder.until((e) => e.type === "request.opened");
@@ -1047,7 +1088,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     // MiniMax M3 (through the Anthropic-compatible endpoint) answers ask_user with AskUserQuestion-shaped rows.
     await create("hang");
     await instance.adapter.sendTurn({ threadId: "t-object-choices", text: "go" });
-    const conn = await connectSocket(permissionSocketPath("t-object-choices"));
+    const conn = await connectSocket(driverSocket("t-object-choices"));
     try {
       conn.write(JSON.stringify({
         t: "ask",
@@ -1074,7 +1115,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     // In Full access the CLI has no permission prompt tool, so ask_user is the only way to ask.
     await create("hang");
     await instance.adapter.sendTurn({ threadId: "t-multi-ask", text: "go", approvalMode: "full" });
-    const conn = await connectSocket(permissionSocketPath("t-multi-ask"));
+    const conn = await connectSocket(driverSocket("t-multi-ask"));
     try {
       const questions = [{ question: "Which fruits?", multiSelect: true, options: [{ label: "Apple" }, { label: "Cherry" }] }];
       conn.write(JSON.stringify({
@@ -1094,7 +1135,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     // The CLI routes AskUserQuestion through --permission-prompt-tool like any other tool use.
     await create("hang");
     await instance.adapter.sendTurn({ threadId: "t-structured-ask", text: "go" });
-    const conn = await connectSocket(permissionSocketPath("t-structured-ask"));
+    const conn = await connectSocket(driverSocket("t-structured-ask"));
     try {
       conn.write(JSON.stringify({
         t: "ask",
@@ -1136,7 +1177,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: "t-perm-lbl", text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = await connectSocket(permissionSocketPath("t-perm-lbl"));
+    const conn = await connectSocket(driverSocket("t-perm-lbl"));
     // The companion maps every label but "Allow" to a denial, so model-authored labels would all deny.
     conn.write(
       JSON.stringify({
@@ -1167,7 +1208,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: "t-perm-raw", text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = await connectSocket(permissionSocketPath("t-perm-raw"));
+    const conn = await connectSocket(driverSocket("t-perm-raw"));
     conn.write(
       JSON.stringify({ t: "ask", id: "ask-raw", tool: "mcp__x__wire", input: { amount: 4200, to: "acct-9" } }) + "\n",
     );
@@ -1411,7 +1452,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
   it("rewrites the hook token file only when the bearer changes", async () => {
     await create();
     const threadId = "t-hook-token";
-    const file = hookTokenFile(threadId, "b-hook");
+    const file = hookTokenFile(threadId, "b-hook", "claude-test");
     const turn = async (token: string) => {
       const { turnId } = await instance.adapter.sendTurn({
         threadId, botId: "b-hook", text: "hi",
@@ -2735,7 +2776,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await recorder.until((e) => e.type === "content.delta" && e.delta === "parent still working");
     expect(recorder.events.filter((e) => e.type === "turn.completed")).toHaveLength(0);
     expect(instance.adapter.hasSession("t-background-result")).toBe(true);
-    const conn = await connectSocket(permissionSocketPath("t-background-result"));
+    const conn = await connectSocket(driverSocket("t-background-result"));
     try {
       const answer = answerQueue(conn)();
       conn.write(JSON.stringify({ t: "ask", id: "network-after-background", tool: "WebFetch", input: { url: "https://example.com" } }) + "\n");
@@ -3091,7 +3132,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await recorder.until((e) => e.type === "item.completed" && e.itemType === "tool" && e.turnId === running.turnId);
     const stoppedPid = JSON.parse(readFileSync(dump, "utf8")).pid;
     // Holds the interrupt-before-exit window open: the pipe stays writable until the kill is released.
-    const conn = await connectSocket(permissionSocketPath(threadId));
+    const conn = await connectSocket(driverSocket(threadId));
     const nextAnswer = answerQueue(conn);
     const kill = procs.killCliTree;
     const delayedKill = vi.spyOn(procs, "killCliTree").mockImplementation(async () => false);
@@ -3691,7 +3732,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: "t-retained-late", text: "one" });
     await recorder.until((e) => e.type === "turn.completed");
 
-    const conn = await connectSocket(permissionSocketPath("t-retained-late"));
+    const conn = await connectSocket(driverSocket("t-retained-late"));
     const nextAnswer = answerQueue(conn);
     const opensBefore = recorder.events.filter((e) => e.type === "request.opened").length;
     const answer = nextAnswer();
@@ -4067,7 +4108,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     process.env.FAKE_CLAUDE_AUTO_UNAVAILABLE_MODELS = "claude-haiku-4-5";
     await create("hang", {}, { permissionMode: "bypassPermissions" });
     const raise = async (threadId: string, id: string) => {
-      const conn = connect(permissionSocketPath(threadId));
+      const conn = connect(driverSocket(threadId));
       await new Promise<void>((resolve, reject) => {
         conn.on("connect", resolve);
         conn.on("error", reject);
@@ -4095,7 +4136,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await create("hang");
     const threadId = "t-command-descriptor";
     await instance.adapter.sendTurn({ threadId, text: "go", cwd: scratch });
-    const conn = await connectSocket(permissionSocketPath(threadId));
+    const conn = await connectSocket(driverSocket(threadId));
     const command = `printf '  ${"complete input ".repeat(30)}'\n  pwd  `;
     try {
       for (const [index, ask] of [
@@ -4138,7 +4179,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = connect(permissionSocketPath("t-perm-abc"));
+    const conn = connect(driverSocket("t-perm-abc"));
     const answered = new Promise<{ behavior: string }>((resolve) => {
       let buf = "";
       conn.on("data", (c) => {
@@ -4199,7 +4240,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await create("hang");
     const dump = join(scratch, "dump.json");
     process.env.FAKE_CLAUDE_DUMP = dump;
-    const basePath = permissionSocketPath("t-perm-squat");
+    const basePath = driverSocket("t-perm-squat");
     // Squat the deterministic path like a hung child: POSIX steals the socket file, Windows must bind a fallback.
     const squatter = createNetServer(() => {});
     await new Promise<void>((resolve, reject) => {
@@ -4245,7 +4286,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: "t-perm-stop", text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = connect(permissionSocketPath("t-perm-stop"));
+    const conn = connect(driverSocket("t-perm-stop"));
     await new Promise<void>((resolve, reject) => {
       conn.on("connect", resolve);
       conn.on("error", reject);
@@ -4265,7 +4306,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: COLLISION_THREAD_IDS[0], text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = await connectSocket(permissionSocketPath(COLLISION_THREAD_IDS[0]));
+    const conn = await connectSocket(driverSocket(COLLISION_THREAD_IDS[0]));
     const nextAnswer = answerQueue(conn);
 
     conn.write(JSON.stringify({ t: "ask", id: "dup-1", tool: "Bash", input: { command: "echo one" } }) + "\n");
@@ -4294,11 +4335,11 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: COLLISION_THREAD_IDS[1], text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn1 = await connectSocket(permissionSocketPath(COLLISION_THREAD_IDS[1]));
+    const conn1 = await connectSocket(driverSocket(COLLISION_THREAD_IDS[1]));
     conn1.write(JSON.stringify({ t: "ask", id: "dup-2", tool: "Bash", input: { command: "echo one" } }) + "\n");
     await recorder.until((e) => e.type === "request.opened" && e.requestId === "dup-2");
 
-    const conn2 = await connectSocket(permissionSocketPath(COLLISION_THREAD_IDS[1]));
+    const conn2 = await connectSocket(driverSocket(COLLISION_THREAD_IDS[1]));
     const conn2Answer = answerQueue(conn2)();
     conn2.write(JSON.stringify({ t: "ask", id: "dup-2", tool: "Bash", input: { command: "echo two" } }) + "\n");
     expect(await conn2Answer).toMatchObject({
@@ -4323,7 +4364,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: COLLISION_THREAD_IDS[2], text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = await connectSocket(permissionSocketPath(COLLISION_THREAD_IDS[2]));
+    const conn = await connectSocket(driverSocket(COLLISION_THREAD_IDS[2]));
 
     conn.write(JSON.stringify({ t: "ask", id: "dup-3", tool: "Bash", input: { command: "echo one" } }) + "\n");
     await recorder.until((e) => e.type === "request.opened" && e.requestId === "dup-3" && e.summary === "echo one");
@@ -4347,7 +4388,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: COLLISION_THREAD_IDS[3], text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = await connectSocket(permissionSocketPath(COLLISION_THREAD_IDS[3]));
+    const conn = await connectSocket(driverSocket(COLLISION_THREAD_IDS[3]));
     const nextAnswer = answerQueue(conn);
 
     conn.write(JSON.stringify({ t: "ask", id: "dup-4", kind: "question", tool: "ask_user", input: { question: "one?" } }) + "\n");
@@ -4376,7 +4417,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: "t-perm-late", text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = await connectSocket(permissionSocketPath("t-perm-late"));
+    const conn = await connectSocket(driverSocket("t-perm-late"));
     const nextAnswer = answerQueue(conn);
     const initialReply = nextAnswer();
     conn.write(JSON.stringify({ t: "ask", id: "ask-ready", tool: "Bash", input: { command: "echo ready" } }) + "\n");
@@ -4409,7 +4450,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: "t-question-late", text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = await connectSocket(permissionSocketPath("t-question-late"));
+    const conn = await connectSocket(driverSocket("t-question-late"));
     const nextAnswer = answerQueue(conn);
     const initialReply = nextAnswer();
     conn.write(JSON.stringify({ t: "ask", kind: "question", id: "q-ready", tool: "ask_user", input: { question: "ready?" } }) + "\n");
