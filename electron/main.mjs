@@ -26,6 +26,7 @@ import { migrateWorkspaceConfigFile, workspaceCredentialEnv } from "./workspace-
 import { evictStartupCacheOnce } from "./startup-cache-eviction.mjs";
 import { activateExistingWindow, releaseSingleInstanceLock } from "./single-instance.mjs";
 import { bootFailureMessage, listeningSignal, pollServerIdentity, SERVER_BOOT_TIMEOUT_MS, SERVER_LISTENING_GRACE_MS } from "./server-boot-probe.mjs";
+import { startupTimeline } from "./startup-timeline.mjs";
 import { createServerSupervisor } from "./server-supervisor.mjs";
 import { serverChildLaunch } from "./server-child-launch.mjs";
 import { packageUrlFromCommandLine, packageUrlFromDeepLink } from "./package-link.mjs";
@@ -61,9 +62,8 @@ import {
 } from "./managed-companion-tunnel.mjs";
 import { createSecureCredentialState } from "./secure-credential-state.mjs";
 import {
-  createPhoneSecretSaveCoordinator,
   createPhoneSecretIdentity,
-  decodePhoneSecretSaveRequest,
+  createPhoneSecretSaveReceiver,
   phoneSecretPrivateKeyMessage,
   readPhoneSecretIdentity,
   withPhoneSecretIdentity,
@@ -1098,22 +1098,7 @@ function syncDesktopMutationToken(proc) {
   }
 }
 
-const savePhoneSecretOnce = createPhoneSecretSaveCoordinator((target, value) =>
-  saveWorkspaceCredential(target, value),
-);
-
-function receivePhoneSecretSave(proc, rawMessage) {
-  const request = decodePhoneSecretSaveRequest(rawMessage);
-  if (!request) return false;
-  void savePhoneSecretOnce(request).then((result) => {
-    try {
-      proc.postMessage(result);
-    } catch (error) {
-      slog(`phone credential save result failed: ${error?.message ?? error}`);
-    }
-  });
-  return true;
-}
+const receivePhoneSecretSave = createPhoneSecretSaveReceiver(saveWorkspaceCredential, slog);
 
 async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmentDir(environmentsState, desktopDataDir())) {
   if (desktopShutdownStarted) return { proc: null, abort: true };
@@ -1144,6 +1129,7 @@ async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmen
   delete childEnv.OMB_SERVER_COMPILE_CACHE;
   if (compileCacheDir) childEnv.OMB_SERVER_COMPILE_CACHE = compileCacheDir;
   slog(`fork ${entry} port=${port}`);
+  startupTimeline.mark("server-fork");
   const proc = utilityProcess.fork(entry, [], {
     env: childEnv,
     stdio: ["ignore", "pipe", "pipe"],
@@ -1155,6 +1141,7 @@ async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmen
   const listening = listeningSignal();
   proc.stdout?.on("data", (d) => {
     listening.hear(String(d));
+    if (listening.heard()) startupTimeline.mark("server-listening");
     slog(`[out] ${String(d).trimEnd()}`);
   });
   proc.stderr?.on("data", (d) => slog(`[err] ${String(d).trimEnd()}`));
@@ -1192,6 +1179,7 @@ async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmen
     isListening: listening.heard,
     listeningGraceMs: SERVER_LISTENING_GRACE_MS,
   });
+  if (identity.outcome === "ready") startupTimeline.mark("server-healthy");
   if (identity.outcome === "ready" && serverSupervisor.isCurrent(proc)) return { proc };
   slog(bootFailureMessage(port, identity));
   const stopped = await stopUtilityServer(proc);
@@ -1204,6 +1192,7 @@ async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmen
 async function startServerPackaged() {
   let everyPortForeignOwned = true;
   await systemProxy.refresh();
+  startupTimeline.mark("proxy");
   for (let attempt = 0; attempt < 2; attempt++) {
     for (const port of DESKTOP_PORTS) {
       if (desktopShutdownStarted) return false;
@@ -2798,6 +2787,7 @@ setCuaStateListener((connection) => {
 });
 
 app.whenReady().then(async () => {
+  startupTimeline.start(slog);
   await evictStartupCacheOnce({
     userData: app.getPath("userData"),
     currentVersion: app.getVersion(),
@@ -2825,6 +2815,7 @@ app.whenReady().then(async () => {
     onFinished: () => { startupScreen = null; },
   });
   await startupScreen?.ready;
+  startupTimeline.mark("splash-shown");
   if (desktopShutdownStarted) return;
   session.defaultSession.on("will-download", (_event, item) => {
     if (mediaDownloads.claim(item)) return;
@@ -2864,6 +2855,7 @@ app.whenReady().then(async () => {
   if (app.isPackaged) app.setAsDefaultProtocolClient("openmausbot");
   if (process.platform === "darwin") app.dock.setIcon(APP_ICON);
   secureCredentials = await loadSecureCredentials();
+  startupTimeline.mark("credentials");
   // An orphaned third-party key with no clear handler left: drop it rather than keep it at rest.
   if (secureCredentials && Object.hasOwn(secureCredentials, "assemblyAiApiKey") && !credentialStoreUnavailable) {
     try {
@@ -2884,6 +2876,7 @@ app.whenReady().then(async () => {
   });
   secureCredentials = secureCredentialState.read();
   if (app.isPackaged) await ensurePhoneSecretIdentity();
+  startupTimeline.mark("config-migrated");
   companionE2E = createDesktopCompanionE2E({ isPackaged: app.isPackaged, appVersion: app.getVersion(), readCredentials: () => secureCredentialState?.read() ?? secureCredentials, updateCredentials: updateSecureCredentialDocument, powerMonitor, log: slog, onState: phoneLinkFact.observe });
   void companionE2E.start();
   desktopRemoteAccess = desktopCompanionAccess(secureCredentials);
@@ -3040,6 +3033,7 @@ app.whenReady().then(async () => {
   // A cold-start action owns its first navigation; a default load started first would be aborted by it.
   const deliveredOrganizationEntry = await deliverOrganizationEntry();
   const deliveredCloudEntry = await cloudEntry.ready();
+  startupTimeline.mark("entries-restored");
   if (!hiddenStart && !restoredOrganizationEntry && !deliveredOrganizationEntry && !deliveredCloudEntry) await showStartPlace(); void cloudAccountRestored().then(() => teamLinks.ready());
   // Reconcile incomplete setup and resume interrupted sign-out only once the local app is usable.
   if (hostedAccount) void hostedAccount.restore().catch(() => {});

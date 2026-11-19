@@ -339,6 +339,9 @@ sent mentions, multiline scrolling and responsive wrapping in real chat views.
 The [Group and Goal Local VM recipe](group-local-vm.md) checks per-speaker
 desktop routing, cancellation, and computer authority cleanup.
 
+The [desktop startup timeline](desktop-startup.md) records the time of each
+startup phase and measures the median of each phase on the packaged Linux app.
+
 ## Evidence
 
 The [Gemini speech fixture](gemini-speech.md) checks write-only credentials,
