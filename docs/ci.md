@@ -200,7 +200,7 @@ Seira took over a larger CI from the project it forked. These parts are gone:
 | Windows and macOS shards, Windows and macOS smokes | CI tests on Linux only. `package-windows.yml` and `package-macos.yml` run the packaged smokes for their packages. |
 | Packaged server, browser identity, browser driver, and UI smokes | Heavy jobs that download browsers and binaries. Run them locally when you change that area. |
 | Behavior evals, FOSS build, relay, control plane, broker deploy | Not part of the Seira app, or needed a secret. |
-| Release, Linux packaging, container image, npm, and docs-site workflows | A maintainer releases by hand. See [Releasing](releasing.md). |
+| Release, Linux packaging, and docs-site workflows | A maintainer releases by hand. See [Releasing](releasing.md). |
 | Server installer, server update, Podman, and connector tests | They install container images that Seira does not publish. |
 | Contributor license check | Seira has no source-available folder. |
 
@@ -225,8 +225,9 @@ Then add the `CI` check (source: GitHub Actions) to the `main` branch ruleset.
 ### The `release` environment
 
 `package-macos.yml` reads the Apple signing secrets from the environment
-`release`, and the `publish` job of `server-image.yml` uses it to write to
-`ghcr.io`. An organization admin creates it in **Settings → Environments**:
+`release`, the `publish` job of `server-image.yml` uses it to write to
+`ghcr.io`, and the `publish` job of `npm-publish.yml` uses it to publish to
+npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin creates it in **Settings → Environments**:
 
 | Setting | Value |
 | --- | --- |

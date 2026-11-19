@@ -11,7 +11,8 @@ Seira ships three desktop packages:
   Until a maintainer sets them, a release has no macOS assets.
 
 A maintainer creates the tag and the GitHub release, and attaches every file
-by hand. No workflow creates a tag or publishes a release.
+by hand. No workflow creates a tag or publishes a release. The only package
+that a workflow publishes is the npm package (see [Publish to npm](#publish-to-npm)).
 
 Only the maintainers can release:
 
@@ -23,8 +24,10 @@ Only the maintainers can release:
   the repository (see [CI](ci.md)).
 
 The server image `ghcr.io/seira-bot/seira:v<version>` comes from the
-`Server image` workflow after the release (step 7). `.deb` and npm packages
-are not part of a Seira release.
+`Server image` workflow after the release (step 7). The npm package
+`@seira-bot/seira` comes from the `npm publish` workflow (see
+[Publish to npm](#publish-to-npm)). `.deb` packages are not part of a Seira
+release.
 
 ## Assets
 
@@ -299,6 +302,63 @@ sha256sum -c SHA256SUMS-mac.txt
 
 Each check must print `OK`. If a check fails, delete the release assets and
 upload them again. Never edit an asset in place.
+
+## Publish to npm
+
+The `npm publish` workflow (`.github/workflows/npm-publish.yml`) publishes
+`@seira-bot/seira` with npm Trusted Publishing. No npm token exists in GitHub
+or on a maintainer's machine. npm trusts the workflow file and the `release`
+environment through the GitHub OIDC token.
+
+It starts in one of two ways:
+
+```sh
+# Automatic: it starts when a maintainer publishes the GitHub release (step 4).
+# By hand, from main:
+gh workflow run npm-publish.yml --repo seira-bot/seira --ref main -f tag=v<version>
+gh run watch <run id> --repo seira-bot/seira --exit-status
+npm view @seira-bot/seira@<version> version
+```
+
+- The tag must be equal to `v` and the version in `package.json`. The workflow
+  stops when they differ.
+- The workflow finds the commit of the tag first, and builds that commit only.
+- A run that a maintainer starts needs no approval. For another person, a
+  maintainer approves `release-approval` (see
+  [CI](ci.md#the-release-approval-environment)). The `publish` job then uses
+  the `release` environment, as the other release jobs do.
+- When the version is already on npm, the workflow skips the build and the
+  publish. A repeated run changes nothing.
+- npm adds a provenance statement that links the package to this commit and run.
+- The `release` environment accepts `main` only. A run that starts from a
+  published release has the tag as its ref. Until an organization admin adds the
+  tag pattern `v*` to the deployment branches and tags of `release`, start the
+  workflow by hand from `main`.
+
+### One-time npm setup
+
+An organization owner does this once, on npmjs.com. The workflow cannot do it.
+
+1. Sign in to npmjs.com as an owner of the `@seira-bot` organization.
+2. Open the package `@seira-bot/seira`, then **Settings**.
+3. In **Trusted Publisher**, select **GitHub Actions** and enter:
+
+   | Field | Value |
+   | --- | --- |
+   | Organization or user | `seira-bot` |
+   | Repository | `seira` |
+   | Workflow filename | `npm-publish.yml` |
+   | Environment name | `release` |
+
+4. Save. Optionally, set **Publishing access** to require two-factor
+   authentication and disallow tokens, so that only this workflow can publish.
+
+The first version, 0.1.178, was published by hand. Trusted Publishing needs a
+package that already exists on npm, so a first publish cannot use it. Every
+later version comes from the workflow.
+
+If a run fails with an authentication error, check that the four fields above
+match the workflow file name and the environment name exactly.
 
 ## macOS signing secrets
 

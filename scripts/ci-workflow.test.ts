@@ -39,6 +39,7 @@ const workflow = workflows.get("ci.yml")!;
 const packageFiles = files.filter((file) => /^package-[a-z0-9-]+\.yml$/.test(file));
 const packageWorkflows = packageFiles.map((file) => [file, workflows.get(file)!] as const);
 const IMAGE = "server-image.yml";
+const NPM = "npm-publish.yml";
 const image = workflows.get(IMAGE)!;
 const LOGIN = "${{ secrets.GITHUB_TOKEN }}";
 const NOT_MAINTAINER = "!contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)";
@@ -53,8 +54,8 @@ const allRuns = () => allSteps().flatMap((step) => (step.run === undefined ? [] 
 const runs = (job: Job) => stepsOf(job).flatMap((step) => (step.run === undefined ? [] : [step.run]));
 
 describe("CI workflows", () => {
-  it("keeps the CI workflow, the package workflows and the server image workflow only", () => {
-    expect(files).toEqual(["ci.yml", ...packageFiles, IMAGE]);
+  it("keeps the CI workflow, the npm publish workflow, the package workflows and the server image workflow only", () => {
+    expect(files).toEqual(["ci.yml", NPM, ...packageFiles, IMAGE]);
   });
 
   it("runs on pull requests, pushes to main and manual starts only", () => {
@@ -154,12 +155,13 @@ describe("CI workflows", () => {
     for (const run of allRuns()) expect(run).not.toMatch(/\$\{\{[^}]*\b(github\.event|github\.head_ref|inputs\.)/);
   });
 
-  it("never creates a tag or publishes a release or a package from a command line, except the server image publish job", () => {
+  it("never creates a tag or publishes a release or a package from a command line, except the server image and npm publish jobs", () => {
     for (const [file, flow] of workflows) {
       for (const [id, job] of Object.entries(flow.jobs)) {
         const publishes = file === IMAGE && id === "publish";
+        const publishesToNpm = file === NPM && id === "publish";
         for (const run of runs(job)) {
-          for (const forbidden of ["gh release", "git tag", "git push", "npm publish"]) expect(run).not.toContain(forbidden);
+          for (const forbidden of ["gh release", "git tag", "git push", ...(publishesToNpm ? [] : ["npm publish"])]) expect(run).not.toContain(forbidden);
           if (!publishes) {
             expect(run, `${file} job ${id}`).not.toContain("docker push");
             expect(run, `${file} job ${id}`).not.toContain("imagetools create");
