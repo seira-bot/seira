@@ -25,6 +25,7 @@ directories:
 # electron-builder makes copied directories group-writable by default. The
 # Linux CUA trust boundary requires root-owned package ancestors to be 0755.
 afterPack: ./scripts/after-pack.mjs
+afterAllArtifactBuild: ./scripts/finish-snap.mjs
 
 # The app is three self-contained pieces, none needing node_modules at
 # runtime: the Electron main/preload (plain .mjs/.cjs), the built UI
@@ -210,6 +211,9 @@ linux:
     # DEB stays off until build/linux-after-install.sh and build/linux-after-remove.sh follow the Seira install path.
     - target: AppImage
       arch: x64
+    # Classic snap for the Snap Store. scripts/finish-snap.mjs renames it to seira and drops --no-sandbox.
+    - target: snap
+      arch: x64
   # Keep the vector source in the freedesktop scalable icon hierarchy. A
   # lone 1024px PNG is not indexed by GNOME's hicolor theme on Ubuntu 24.04.
   icon: build/icon.svg
@@ -249,6 +253,16 @@ deb:
   # idempotent hook repairs only the exact package-owned CUA path.
   afterInstall: build/linux-after-install.sh
   afterRemove: build/linux-after-remove.sh
+
+# core22 builds the snap from a prebuilt template, so no snapcraft is needed.
+# Classic confinement keeps the host's user namespaces: the Chromium sandbox stays on.
+snap:
+  base: core22
+  confinement: classic
+  grade: stable
+  summary: Your own team of AI bots, in a chat app
+  description: A local-first chat app for running a team of AI agents.
+  autoStart: false
 
 pacman:
   packageCategory: utils
