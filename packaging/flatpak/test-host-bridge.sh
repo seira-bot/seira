@@ -1,29 +1,44 @@
 #!/bin/sh
-# Start-up under Xvfb, then the host bridge with a dummy program. Needs the app installed as bot.seira.Seira.
+# Start-up under Xvfb, then the host bridge with a dummy agent program.
+# Needs the app installed as bot.seira.Seira and no other Seira on port 8799.
 set -eu
-data=$(mktemp -d)
-trap 'rm -rf "$data"' EXIT
+log="$HOME/.var/app/bot.seira.Seira/config/openmausbot/logs/server.log"
+bin="$HOME/.local/bin"
+run=$(mktemp)
+before=$(wc -l <"$log" 2>/dev/null || echo 0)
+trap 'rm -f "$bin/codex" "$run"; kill "$app" 2>/dev/null || true' EXIT
 
 echo "start-up"
-dbus-run-session -- xvfb-run -a timeout 70 flatpak run \
-  --env=OMB_DATA_DIR="$data" --env=OMB_PORT=18799 bot.seira.Seira >"$data/run.log" 2>&1 &
+dbus-run-session -- xvfb-run -a timeout 120 flatpak run bot.seira.Seira >"$run" 2>&1 &
+app=$!
 i=0
-until (exec 3<>/dev/tcp/127.0.0.1/18799) 2>/dev/null; do
+until tail -n +"$((before + 1))" "$log" 2>/dev/null | grep -q "server ready"; do
   i=$((i + 1))
   if [ "$i" -gt 60 ]; then
-    echo "FAIL: port 18799 did not open"
-    tail -40 "$data/run.log"
+    echo "FAIL: the server did not start in 60 s"
+    tail -30 "$run"
     exit 1
   fi
   sleep 1
 done
-echo "PASS: port 18799 open"
+ss -ltn | grep -q ":8799" || { echo "FAIL: port 8799 closed"; exit 1; }
+echo "PASS: server ready, port 8799 open"
 
-echo "host bridge"
-bin="$HOME/.local/bin"
+api=http://127.0.0.1:8799
+echo "host bridge: program installed"
 mkdir -p "$bin"
-printf '#!/bin/sh\necho seira-dummy-ok "$@"\n' >"$bin/codex"
+printf '#!/bin/sh\necho "9.9.9 (codex-cli dummy)"\n' >"$bin/codex"
 chmod +x "$bin/codex"
-trap 'rm -f "$bin/codex"; rm -rf "$data"' EXIT
-out=$(flatpak run --command=flatpak-spawn bot.seira.Seira --host "$bin/codex" ping)
-[ "$out" = "seira-dummy-ok ping" ] && echo "PASS: host program ran" || { echo "FAIL: $out"; exit 1; }
+found=$(curl -fsS "$api/api/cli-candidates?name=codex")
+echo "$found"
+case "$found" in *"$bin/codex"*) echo "PASS: dummy found on the host" ;; *) echo "FAIL: dummy not found"; exit 1 ;; esac
+probe=$(curl -fsS -X POST -H 'content-type: application/json' -d "{\"cli\":\"$bin/codex\"}" "$api/api/cli-test")
+echo "$probe"
+case "$probe" in *"9.9.9 (codex-cli dummy)"*) echo "PASS: dummy output returned" ;; *) echo "FAIL: no dummy output"; exit 1 ;; esac
+
+echo "host bridge: program removed"
+rm -f "$bin/codex"
+sleep 4
+found=$(curl -fsS "$api/api/cli-candidates?name=codex")
+echo "$found"
+case "$found" in *"$bin/codex"*) echo "FAIL: removed dummy still listed"; exit 1 ;; *) echo "PASS: removed dummy not listed" ;; esac
