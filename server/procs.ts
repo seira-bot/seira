@@ -22,6 +22,7 @@ import { ENGINE_TAG_ENV, engineRunTag, engineStopped, recordEngine } from "./eng
 import { engineHomes } from "./engine-homes/engine-homes.ts";
 import type { HomedSpawn } from "./engine-homes/layout.ts";
 import { resolveCliSpawn, type ResolvedSpawn } from "./env-path.ts";
+import { hostBridge } from "./flatpak-host.ts";
 import { spawnBotWork } from "./oom-score.ts";
 import { noticeFailure } from "./chat-notices.ts";
 import { processBudget } from "./process-room.ts";
@@ -319,16 +320,19 @@ export function spawnCli(
   const options: CliSpawnOptions = resolved.env
     ? { ...opts, env: { ...(env ?? process.env), ...resolved.env } }
     : homed ? { ...opts, env } : opts;
-  const boxed = boxedSpawn(resolved, options, owner, homed);
-  const { box: _box, engineHome: _engineHome, botWork, ...spawnOpts } = boxed ? options : outsideBoxOptions(resolved.command, options);
-  // The box's extra descriptors (its seccomp filter) follow stdio; only a plain three-entry stdio can take them.
-  const stdio = boxed?.extraFds.length && Array.isArray(spawnOpts.stdio) && spawnOpts.stdio.length === 3 ? [...spawnOpts.stdio, ...boxed.extraFds] : spawnOpts.stdio;
   // A server that restarts in place stops what an earlier one left by this tag (engine-records.ts).
   const tag = process.platform === "win32" ? null : engineRunTag();
-  const start = () => spawn(boxed?.command ?? resolved.command, boxed?.args ?? resolved.args, {
+  // In a Flatpak the program lives on the host and runs there, outside the bot box (flatpak-host.ts).
+  const hosted = hostBridge(resolved, { cwd: options.cwd, env: tag ? { ...(options.env ?? process.env), [ENGINE_TAG_ENV]: tag } : options.env });
+  const boxed = hosted ? null : boxedSpawn(resolved, options, owner, homed);
+  const { box: _box, engineHome: _engineHome, botWork, ...spawnOpts } = boxed || hosted ? options : outsideBoxOptions(resolved.command, options);
+  // The box's extra descriptors (its seccomp filter) follow stdio; only a plain three-entry stdio can take them.
+  const stdio = boxed?.extraFds.length && Array.isArray(spawnOpts.stdio) && spawnOpts.stdio.length === 3 ? [...spawnOpts.stdio, ...boxed.extraFds] : spawnOpts.stdio;
+  const start = () => spawn(boxed?.command ?? hosted?.command ?? resolved.command, boxed?.args ?? hosted?.args ?? resolved.args, {
     ...spawnOpts,
     ...(boxed ? { env: boxed.env, stdio } : {}),
     ...(tag ? { env: { ...(boxed?.env ?? spawnOpts.env ?? process.env), [ENGINE_TAG_ENV]: tag } } : {}),
+    ...(hosted ? { env: hosted.env, cwd: undefined } : {}),
     // POSIX: own group so kill(-pid) reaps child MCP servers; Windows: taskkill /T does it.
     ...(process.platform === "win32" ? { windowsHide: true } : { detached: true }),
   }) as ChildProcessByStdio<Writable, Readable, Readable>;
@@ -418,9 +422,11 @@ export function execCli(
   cb: (err: Error | null, stdout: string, stderr?: string) => void,
 ): void {
   const resolved = resolveCli(cli, args);
+  let hosted: ResolvedSpawn | null = null;
   try {
     assertSafeCliArgv(resolved);
-    opts = outsideBoxOptions(resolved.command, opts);
+    hosted = hostBridge(resolved, { cwd: opts.cwd, env: opts.env });
+    if (!hosted) opts = outsideBoxOptions(resolved.command, opts);
   } catch (error) {
     queueMicrotask(() => cb(error instanceof Error ? error : new Error(String(error)), "", ""));
     return;
@@ -428,8 +434,8 @@ export function execCli(
   let escalate: NodeJS.Timeout | undefined;
   let deadline: NodeJS.Timeout | undefined;
   let timedOut = false;
-  const env = resolved.env ? { ...(opts.env ?? process.env), ...resolved.env } : opts.env;
-  const child = execFile(resolved.command, resolved.args, { ...opts, env, windowsHide: true, encoding: "utf8" }, (err, stdout, stderr) => {
+  const env = hosted ? hosted.env : resolved.env ? { ...(opts.env ?? process.env), ...resolved.env } : opts.env;
+  const child = execFile(hosted?.command ?? resolved.command, hosted?.args ?? resolved.args, { ...opts, ...(hosted ? { cwd: undefined } : {}), env, windowsHide: true, encoding: "utf8" }, (err, stdout, stderr) => {
     clearTimeout(escalate);
     clearTimeout(deadline);
     cb(err ?? (timedOut ? cutOffError(cli, opts.timeout) : null), stdout, stderr);
