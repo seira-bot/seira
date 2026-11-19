@@ -1,6 +1,7 @@
 // What one @devs report carries to the MausBot team's endpoint (POST /api/bug-reports on the Cloud origin): the person's
 // message, the bot's summary when it wrote one, and facts the server gathers itself. Never the conversation, never a
 // file. Everything passes redactReportText, and every field stays inside the endpoint's limits.
+import type { ErrorFingerprint } from "../shared/bug-offer.ts";
 import { withoutCitationMarkers } from "../src/lib/citations.ts";
 import { isSecretName, mask, redactSecretsInText } from "./redact.ts";
 import { clip, oneLine } from "./host/text-clip.ts";
@@ -25,6 +26,10 @@ export interface DevsReportPayload {
   diagnostics: string;
   contactEmail?: string;
   contact?: string;
+  /** The issue's title; the relay takes up to 120 characters. Absent: the relay takes the description's first line. */
+  title?: string;
+  /** What the relay groups reports by: one open issue per fingerprint, later reports become comments. */
+  fingerprint?: ErrorFingerprint;
 }
 
 export interface BotSummary { wentWrong: string; seen?: string; steps?: string }

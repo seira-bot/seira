@@ -25,7 +25,7 @@ import { TurnPresence } from "./TurnPresence";
 import { showToolCallsEnabled } from "@/lib/feature-flags";
 import { CompactionChip, DigestChip } from "./DigestChip";
 import { roomActivityVisible } from "@/lib/room-activity";
-import { StatusActivityRow } from "@/components/StatusActivityRow"; import { BugReportNote } from "@/components/BugReportNote";
+import { StatusActivityRow } from "@/components/StatusActivityRow"; import { BugReportNote } from "@/components/BugReportNote"; import { BugOfferLine } from "./BugOffer";
 import { botTextShowsSpeaker, laterTextOf, laterTextOwns, runShowsSpeaker } from "@/lib/room-speaker"; import { roomRunTraces } from "@/lib/room-run-traces"; import { roomAddressees } from "@/lib/room-addressees";
 import { defaultResponderName, groupResponseHint, jevRoomRoutingOn } from "@/lib/group-routing";
 import { ChatMarkdown } from "./ChatMarkdown";
@@ -108,7 +108,7 @@ export function RoomToolChip({ message, roomId, threadId, live = false }: { mess
   if (!tool) return null;
   if (message.threadRef) return <ThreadChip message={message} threadId={threadId} />; if (message.relay) return <TeammateChip message={message} />;
   if (failedTurnCause(tool.name) !== null) {
-    return <FailedTurnRow tool={tool} engine={botEngine(state.bots.find((b) => b.id === message.from?.botId), state.instances)} botId={message.from?.botId} messageAt={message.at} />;
+    return <FailedTurnRow tool={tool} engine={botEngine(state.bots.find((b) => b.id === message.from?.botId), state.instances)} botId={message.from?.botId} messageAt={message.at} offer={message.bugOffer} />;
   }
   const comm = message.comm;
   if (comm && comm.groupId !== roomId) {
@@ -252,7 +252,7 @@ function RoomTextMessage({
                 data-citation-thread={group.threadId}
               >
                 <ThreadRefText text={display} peers={peers} everyone={!group.dm} />
-              </div>{m.bugReport ? <BugReportNote report={m.bugReport} /> : m.pointed?.length ? <UserLineNote message={m} /> : null}
+              </div>{m.bugOffer ? <BugOfferLine message={m} /> : m.bugReport ? <BugReportNote report={m.bugReport} /> : m.pointed?.length ? <UserLineNote message={m} /> : null}
               {cited && <SentCitations
                 citations={cited.citations}
                 onNavigate={async (citation: CitationAttachment) => {
@@ -538,6 +538,7 @@ export const Transcript = memo(function Transcript({
               </TurnNarrationRun>
             )}
             {isLiveReply(m) ? <StreamingReplyContext value>{row}</StreamingReplyContext> : row}
+            {m.bugOffer && !user && <BugOfferLine message={m} hideOfferLine={m.kind === "activity" && !!m.tool && failedTurnCause(m.tool.name) !== null} />}
           </div>
         );
       })}
@@ -686,7 +687,7 @@ export function GroupView({ group, inForkPanel = false }: { group: Group; inFork
       )}
 
       {findOpen && <ChatFindBar threadId={group.threadId} inForkPanel={inForkPanel} onClose={() => setFindOpen(false)} />}
-      <ChatErrorBanner message={state.error} onDismiss={() => dispatch({ type: "error", message: null })} />
+      <ChatErrorBanner threadId={group.threadId} message={state.error} onDismiss={() => dispatch({ type: "error", message: null })} />
       <ChatNotice notice={state.notice} />
       {!setupPending && <RoomContextWarnings group={group} members={members} />}{!setupPending && !remoteClient && <RoomChiefAbsent group={group} quiet={advancedHeader} />}
 

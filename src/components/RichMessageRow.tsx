@@ -3,6 +3,7 @@ import type { Message } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { AppMessage } from "./app/AppMessage";
 import { BugReportNote } from "./BugReportNote";
+import { BugOfferLine } from "./BugOffer";
 import { BurstCard } from "./BurstCard";
 import { GoalRunRow } from "./GoalRunCard";
 import { HelperKeySuggestion } from "./HelperKeySuggestion";
@@ -48,6 +49,8 @@ export function RoomRichRow({ message, from, threadId }: { message: Message; fro
 }
 
 export function UserLineNote({ message }: { message: Message }) {
+  // A bug report a bot wrote for this message: the line handles the @devs report's status too.
+  if (message.bugOffer) return <BugOfferLine message={message} />;
   // A @devs message: its report's status ("Got it, we're looking", then "Fixed in 0.1.x").
   if (message.bugReport) return <BugReportNote report={message.bugReport} />;
   if (message.pointed?.length) {

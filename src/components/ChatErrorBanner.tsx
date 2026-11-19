@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { Bug, X } from "lucide-react";
 import { t } from "@/lib/i18n";
 import { plainErrorLine } from "@/lib/plain-error";
 import { useStore, type AppState } from "@/state/store";
@@ -7,6 +7,8 @@ import { useTeamPeople } from "@/state/team-people";
 import { engineReady } from "./EngineLibrary";
 import { IntroConnectAi } from "./ConnectAiInPlace";
 import { SeiraCharacter } from "./seira-character";
+import { BugDraftPanel, bugOfferStatusText } from "./BugOffer";
+import { seiraOwnsError } from "../../shared/bug-offer";
 
 type Notice = NonNullable<AppState["notice"]>;
 
@@ -58,9 +60,13 @@ export function ChatNotice({ notice }: { notice: AppState["notice"] }) {
   );
 }
 
-export function ChatErrorBanner({ message, onDismiss }: { message: string | null; onDismiss: () => void }) {
+export function ChatErrorBanner({ message, onDismiss, threadId }: { message: string | null; onDismiss: () => void; threadId?: string }) {
   const member = useTeamPeople()?.admin === false;
+  const [reviewing, setReviewing] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
+  useEffect(() => { setReviewing(false); setSent(null); }, [message]);
   if (!message) return null;
+  const owns = threadId !== undefined && seiraOwnsError({ text: message });
   const plain = plainErrorLine(message) ?? (member && message.startsWith("forbidden:") ? t("serverError.chat.ownerOrAdmin") : undefined);
   return (
     <div className="w-full px-5">
@@ -69,6 +75,17 @@ export function ChatErrorBanner({ message, onDismiss }: { message: string | null
         <div className="min-w-0 flex-1 break-words">
           <p>{plain ?? message}</p>
           {plain && <details className="mt-1 text-[12px] text-ink-secondary"><summary className="cursor-pointer">{t("chat.error.details")}</summary><p dir="auto" className="mt-1 break-words">{message}</p></details>}
+          {owns && sent === null && (
+            <button
+              type="button"
+              aria-expanded={reviewing}
+              onClick={() => setReviewing(!reviewing)}
+              className="ui-button ui-button-md mt-1.5 rounded-full border-transparent bg-transparent text-danger hover:bg-danger/15"
+            >
+              <Bug aria-hidden="true" size={12} /> {t("bugOffer.review")}
+            </button>
+          )}
+          {sent && <p role="status" className="mt-1 text-[12px] text-ink-secondary">{sent}</p>}
         </div>
         <button
           type="button"
@@ -80,6 +97,13 @@ export function ChatErrorBanner({ message, onDismiss }: { message: string | null
           <X size={13} />
         </button>
       </div>
+      {owns && reviewing && threadId !== undefined && (
+        <BugDraftPanel
+          create={{ threadId, error: message }}
+          onClose={() => setReviewing(false)}
+          onSettled={(view) => setSent(bugOfferStatusText(view))}
+        />
+      )}
     </div>
   );
 }

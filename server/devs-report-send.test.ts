@@ -30,6 +30,16 @@ describe("sending a @devs report", () => {
     expect(sent[0]!.body).toEqual(PAYLOAD);
   });
 
+  it("reads the public issue's number, and whether the report joined an open issue, only when the relay says them well", async () => {
+    const { fetcher } = endpoint(answer(201, { id: "r1", issue: 41 }), answer(201, { id: "r2", issue: 41, joined: true }),
+      answer(201, { id: "r3", issue: "41", joined: "yes" }), answer(201, { id: "r4", issue: -2 }));
+    const send = () => sendDevsReport("https://cloud.example/api/bug-reports", PAYLOAD, fetcher);
+    expect(await send()).toEqual({ ok: true, id: "r1", issue: 41 });
+    expect(await send()).toEqual({ ok: true, id: "r2", issue: 41, joined: true });
+    expect(await send()).toEqual({ ok: true, id: "r3" });
+    expect(await send()).toEqual({ ok: true, id: "r4" });
+  });
+
   it("sends again without the address when the endpoint refuses only that", async () => {
     const { sent, fetcher } = endpoint(answer(400, { error: "contactEmail must be an email address of at most 254 characters, or left out." }), answer(201, { id: "r2" }));
     expect(await sendDevsReport("https://cloud.example/api/bug-reports", PAYLOAD, fetcher)).toEqual({ ok: true, id: "r2" });

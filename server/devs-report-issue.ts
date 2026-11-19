@@ -50,13 +50,21 @@ function largest(size: number, fits: (n: number) => boolean): number {
   return low;
 }
 
+/** The issue's title: the report's own, else the description's first line, else a fixed one. */
+export function bugReportTitle(payload: DevsReportPayload, home = homedir()): string {
+  const own = [payload.installId, payload.contactEmail, payload.contact].filter((value): value is string => Boolean(value));
+  const clean = (text: string) => tidy(text, own, home);
+  const words = clean(payload.description).trim().split("\n").map((line) => line.trim()).find(Boolean) ?? "";
+  const named = payload.title ? clean(payload.title).replace(/\s+/g, " ").trim() : "";
+  return named ? clipText(named, TITLE_MAX).trimEnd() : !words || words === NO_WORDS ? DEFAULT_TITLE : clipText(words, TITLE_MAX).trimEnd();
+}
+
 export function bugReportIssueUrl(payload: DevsReportPayload, home = homedir()): string {
   const own = [payload.installId, payload.contactEmail, payload.contact].filter((value): value is string => Boolean(value));
   const clean = (text: string) => tidy(text, own, home);
   const diagnostics = clean(conversationDiagnostics(payload.diagnostics).split("\n").filter((line) => !/^\s*Install:\s/.test(line)).join("\n")).trimEnd();
   const description = clean(payload.description).trim();
-  const words = description.split("\n").map((line) => line.trim()).find(Boolean) ?? "";
-  const title = !words || words === NO_WORDS ? DEFAULT_TITLE : clipText(words, TITLE_MAX).trimEnd();
+  const title = bugReportTitle(payload, home);
   const version = clipText(clean(`${payload.appVersion} · ${payload.platform}`).replace(/\s+/g, " ").trim(), 200);
 
   const build = (what: string, logs: string) => {
