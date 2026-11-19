@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
@@ -115,31 +115,18 @@ const messagesOf = async (threadId: string): Promise<StoredMessage[]> => {
   return Array.isArray(messages) ? (messages as StoredMessage[]) : [];
 };
 
-/** A stopped turn ends when its engine exits, after the stop has answered. Until then the server refuses a setup
- * change from a bare loopback call (the 409 of `makeBot`), so no case may start while a bot still works. */
-const untilNoBotWorks = async (): Promise<void> => {
-  await expect.poll(async () => {
-    const bots = field((await api("GET", "/api/bots?messages=0")).body, "bots");
-    return (Array.isArray(bots) ? bots : [])
-      .filter((bot) => field(bot as Record<string, unknown>, "busy"))
-      .map((bot) => str(field(bot as Record<string, unknown>, "name")));
-  }, { timeout: 20_000 }).toEqual([]);
-};
-
 const makeBot = async (
   name: string,
   section: string,
   instanceId = "claude",
 ): Promise<{ id: string; threadId: string }> => {
-  const created = await api("POST", "/api/bots");
-  const id = str(field(created.body, "bot", "id"));
-  const patched = await api("PATCH", `/api/bots/${id}`, {
+  const created = await api("POST", "/api/bots", {
     name,
     section,
     modelSelection: { instanceId, model: "claude-sonnet-5" },
   });
-  expect(patched.status).toBe(200);
-  return { id, threadId: str(field(created.body, "bot", "threadId")) };
+  expect(created.status, JSON.stringify(created.body)).toBe(201);
+  return { id: str(field(created.body, "bot", "id")), threadId: str(field(created.body, "bot", "threadId")) };
 };
 
 const makeCoordinator = async (
@@ -158,7 +145,7 @@ const makeCoordinator = async (
     acknowledgePeerScope: true,
     modelSelection: { instanceId, model: "claude-sonnet-5" },
   });
-  expect(patched.status).toBe(200);
+  expect(patched.status, JSON.stringify(patched.body)).toBe(200);
   return { id, threadId: str(field(created.body, "bot", "threadId")) };
 };
 
@@ -235,8 +222,6 @@ beforeAll(async () => {
   }
 
 }, 60_000);
-
-afterEach(untilNoBotWorks);
 
 afterAll(async () => {
   await waitForExit(child, { signal: "SIGTERM" });
