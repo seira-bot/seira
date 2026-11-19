@@ -167,8 +167,11 @@ element's job and never a pixel value:
 - **Control heights: 24, 28, 32 or 36px.** Menu rows are 30px. On touch
   screens, targets grow to 40–44px with the `touch:` variant. Two rows may be
   taller because they carry a face: the sidebar's chat rows and palette rows
-  (52px and 40px). The sidebar search field is 34px so it reads as a field,
-  not a button.
+  (52px and 40px). The Advanced sidebar's chat rows are 44px and its thread
+  rows 32px, with the same quiet nav rows, line headings and 52px top row
+  as Simple. The sidebar search field is 34px so it reads as a field, not a
+  button. A section count shows beside a heading only while that section is
+  closed.
 - **Group with space before you group with lines.** Add a divider only between
   groups that space alone can't separate. Never a divider under a heading.
 - **No cards inside cards.** If a card needs sections, use spacing and a group
