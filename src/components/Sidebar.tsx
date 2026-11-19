@@ -6,7 +6,7 @@ import { sidebarState } from "./sidebar-state"; import { sameFields, useStoreDis
 import { api, formatTime, visibleMessages, currentTaskBot, botOpensTo, openBot, openThread, type Action, type AppState, type Bot, type BotProject, type Group, type InstanceInfo, type Message } from "@/state/store";
 import { approvalModeFor } from "../../shared/approval-mode";
 import { liveActivityLabel, sidebarMessage } from "@/lib/live-activity";
-import { AdvancedRoomStack, AdvancedRoomText, AdvancedThreadText } from "./SidebarAdvancedRows"; import { advancedSectionAdd } from "./sidebar-advanced-add"; import { formatRowTime } from "./sidebar-row-time"; import { BotRowPreview } from "./SidebarBotRowPreview";
+import { ADV_ACTIONS_PAD_1, ADV_ACTIONS_PAD_3, AdvancedRoomStack, AdvancedRoomText, AdvancedThreadText } from "./SidebarAdvancedRows"; import { advancedSectionAdd } from "./sidebar-advanced-add"; import { formatRowTime } from "./sidebar-row-time"; import { BotRowPreview } from "./SidebarBotRowPreview";
 import { openBotRow } from "@/state/thread-navigation";
 
 import { BotAvatar } from "./Avatar";
@@ -785,9 +785,9 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
           </span>
         )}
       </span>
-      <div className={cn("min-w-0 flex-1", iconOnly && "hidden")}>
+      <div className={cn("min-w-0 flex-1", iconOnly && "hidden", advRow && (showThreads ? ADV_ACTIONS_PAD_3 : ADV_ACTIONS_PAD_1))}>
         <div className={cn(advRow ? "flex items-center justify-between gap-2" : "flex items-baseline justify-between gap-2", simpleRow && "pe-7 group-hover:pe-[3.25rem] group-focus-within:pe-[3.25rem] touch:pe-[3.25rem] max-md:touch:pe-7")}>
-          <span className={cn("flex min-w-0 grow items-center gap-1.5 truncate text-ink", simpleRow ? "text-[14px] font-medium leading-5" : advRow ? cn("text-[14px] font-semibold leading-[18px]", showThreads && "group-hover:pe-6 group-focus-within:pe-6 touch:pe-6") : "text-[15px] font-semibold leading-5")}>
+          <span className={cn("flex min-w-0 grow items-center gap-1.5 truncate text-ink", simpleRow ? "text-[14px] font-medium leading-5" : advRow ? "text-[14px] font-semibold leading-[18px]" : "text-[15px] font-semibold leading-5")}>
             {!quiet && bot.pinned && <Pin size={12} className="shrink-0 text-ink-secondary" />}
             <RenameTitle
               key={iconOnly ? "icons" : "expanded"}

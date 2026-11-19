@@ -26,7 +26,7 @@ export function AdvancedRoomStack({ members }: { members: Bot[] }) {
 /** A group chat row's text: 14px title, 12px time, a one-line 13px preview and an accent dot while unread. */
 export function AdvancedRoomText({ name, unread, time, preview, expanded }: { name: string; unread: boolean; time?: string; preview: string; expanded: boolean }) {
   return (
-    <div className="min-w-0 flex-1">
+    <div className={cn("min-w-0 flex-1", ADV_ACTIONS_PAD_1)}>
       <div className="flex items-center justify-between gap-2">
         <span className={cn("truncate text-[14px] leading-[18px] text-ink", unread ? "font-semibold" : "font-medium")}>{name}</span>
         {time && <span className="shrink-0 text-[12px] tabular-nums text-ink-tertiary transition-opacity group-hover:opacity-0 group-focus-within:opacity-0 touch:opacity-0">{time}</span>}
@@ -58,3 +58,7 @@ export function AdvancedThreadText({ bot, name, unread, time }: { bot?: Bot; nam
     </>
   );
 }
+
+/** Inline-end room for a row's hover actions, so text ends before them: the ⋯ alone, or the + and folder with it. */
+export const ADV_ACTIONS_PAD_1 = "md:group-hover:pe-7 md:group-focus-within:pe-7 md:touch:pe-7";
+export const ADV_ACTIONS_PAD_3 = "md:group-hover:pe-[5.25rem] md:group-focus-within:pe-[5.25rem] md:touch:pe-[5.25rem]";
