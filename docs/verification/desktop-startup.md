@@ -72,3 +72,14 @@ host load with each result.
 | 2026-11-19 | `a14167bb8` | load average 10–14, 16 CPUs | 5966 (5440–6366) | 2513 (2238–2735) |
 
 The warm opens in the `a14167bb8` row did not use the server compile cache.
+
+A/B of `f0e5a1281` (before) and `4a28b9ec3` (after: earlier finish beat, AppImage
+compile cache, server fork without the splash wait). Both builds ran in the same
+session, in turn, 2 rounds, load average 3–4, 16 CPUs. "AppImage" opens copy the
+app to a new path at each open and set `APPIMAGE`. Median `window-shown` in ms,
+with the range:
+
+| Launch | Cold before | Cold after | Warm before | Warm after |
+|--------|-------------|------------|-------------|------------|
+| Plain | 4041 (3823–4295) | 3783 (3628–3824) | 1439 (1411–1671) | 1149 (1114–1224) |
+| AppImage | 4128 (4095–4325) | 3797 (3664–4045) | 1757 (1653–1788) | 1262 (1172–1334) |
