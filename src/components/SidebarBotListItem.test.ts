@@ -156,6 +156,8 @@ describe("BotListItem", () => {
     });
 
     it("times the open row by the last reply, not by the hang-up", () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 9, 6, 12, 0));
       const markup = draw(bot({
         messages: [spoken, { id: "b1", role: "bot", kind: "text", text: "Sunny in Pune.", at: at(1) }, record] as Bot["messages"],
       }), { selected: true });
