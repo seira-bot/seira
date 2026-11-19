@@ -121,7 +121,7 @@ export class ClaudeLoginController {
         homeKey,
         env,
         startupTimer: setTimeout(
-          () => this.finish(flow, "failed", "Claude Code did not show a sign-in link in time. Check that it is installed and up to date on the server, then try again."),
+          () => this.finish(flow, "failed", "Claude Code did not show a sign-in link in time. Make sure Claude Code is installed and up to date, then try again."),
           this.options.startupTimeoutMs ?? 30_000,
         ),
         expiryTimer: setTimeout(() => this.finish(flow, "expired", "The Claude sign-in link expired. Start sign-in again."), this.options.lifetimeMs ?? 15 * 60_000),

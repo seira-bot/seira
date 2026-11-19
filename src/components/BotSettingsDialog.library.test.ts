@@ -29,7 +29,7 @@ vi.mock("./bot-panel/LibraryTab", async (importOriginal) => {
 import { BotSettingsDialog } from "./BotSettingsDialog";
 import { DesktopCapabilitiesProvider } from "./DesktopCapabilities";
 
-const bot = { id: "bot-1", name: "Maily", threadId: "bot-1-main", messages: [], tasks: [] } as never as Bot;
+const bot = { id: "bot-1", name: "Maily", threadId: "bot-1-main", title: "", messages: [], tasks: [], modelSelection: { instanceId: "claude", model: "m" } } as never as Bot;
 const html = () => renderToStaticMarkup(createElement(DesktopCapabilitiesProvider, null, createElement(BotSettingsDialog, { bot })));
 
 describe("Advanced bot settings", () => {

@@ -5,8 +5,8 @@ import { listConfigBackups, restoreConfigBackup } from "./config-backup.ts";
 import { parseStoredConfig } from "./config.ts";
 import { parseJson } from "./schema.ts";
 
-export const CONFIG_USAGE = `openmausbot config backups [--data-dir DIR] [--json]
-openmausbot config restore NAME [--data-dir DIR] [--dry-run] [--json]
+export const CONFIG_USAGE = `seira config backups [--data-dir DIR] [--json]
+seira config restore NAME [--data-dir DIR] [--dry-run] [--json]
 
 Shows and puts back the dated copies of the settings file. Every save keeps a
 copy of the file as it was, named config.json.bak.YYYYMMDD-HHMMSS, beside it,
@@ -69,10 +69,10 @@ export function parseConfigArgs(argv: string[], env: NodeJS.ProcessEnv = process
       dataDir = resolve(value);
       index += 1;
     } else if (command === "restore" && name === undefined && !arg.startsWith("-")) name = arg;
-    else return fail(`unknown argument "${arg}"; see openmausbot config --help`);
+    else return fail(`unknown argument "${arg}"; see seira config --help`);
   }
   // The help comes before the name is asked for: "config restore --help" is a question, not a request.
-  if (command === "restore" && name === undefined && !help) return fail("restore needs the name of a copy, or \"latest\"; run openmausbot config backups to see them");
+  if (command === "restore" && name === undefined && !help) return fail("restore needs the name of a copy, or \"latest\"; run seira config backups to see them");
   return { command, dataDir, name, json, help, dryRun };
 }
 

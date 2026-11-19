@@ -1027,7 +1027,7 @@ describe("the Move from Grok Bot popup", () => {
     expect(launchNotice()).not.toBe(GROK_MOVE_NOTICE);
   });
 
-  it("never during onboarding; after a new install's welcome it follows the first messages, while the other cards keep to the first chat's quiet", async () => {
+  it("never during onboarding nor in the launch the welcome took; the next launch shows it, while the other cards keep to the first chat's quiet", async () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
     storage.delete(STAR_NOTICE);
     f.state.bots = [{ tasks: [{ threadId: "first" }] }];
@@ -1037,10 +1037,11 @@ describe("the Move from Grok Bot popup", () => {
     f.state.config.onboarding = { ...EMPTY_ONBOARDING, completedAt: "2026-11-01", version: 1, hintsSeen: [MET_CHIEF_HINT] };
     expect(await launch(), "the welcome is open").toBe("");
     f.state.welcomeOpen = false; markWelcomeFinished();
-    expect(await settle(), "its first messages are still arriving").toBe("");
+    expect(await settle(), "its first messages are arriving").toBe("");
+    vi.advanceTimersByTime(60_000);
+    expect(await settle(), "the first chat stays its own for the rest of that launch").toBe("");
     expect(events()).toEqual([]);
-    vi.advanceTimersByTime(6_000);
-    const html = await settle();
+    const html = await relaunch();
     expect(html).toContain(TITLE); expect(html).not.toContain(STAR);
     press("Let&#x27;s start"); await flush();
     expect(render()).toContain(DIALOG);

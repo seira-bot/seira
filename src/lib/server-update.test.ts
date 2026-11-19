@@ -22,8 +22,8 @@ describe("self-hosted update row", () => {
       label: "Version 0.1.93 available (release notes)",
       subtitle: "Update with: git pull && ./update.sh",
     });
-    const npm = check({ install: "npm", available: true, latest: "0.1.93", command: "npm install -g openmausbot@latest", restart: true });
-    expect(serverUpdateRow("available", npm).subtitle).toBe("Update with: npm install -g openmausbot@latest, then restart the app");
+    const npm = check({ install: "npm", available: true, latest: "0.1.93", command: "npm install -g @seira-bot/seira@latest", restart: true });
+    expect(serverUpdateRow("available", npm).subtitle).toBe("Update with: npm install -g @seira-bot/seira@latest, then restart the app");
     // an install it cannot recognise still learns there is a new version
     expect(serverUpdateRow("available", check({ install: "unknown", available: true, latest: "0.1.93" }))).toEqual({
       label: "Version 0.1.93 available (release notes)",
@@ -66,12 +66,12 @@ describe("self-hosted update row", () => {
 });
 
 describe("the update row for another server the app shows", () => {
-  const npm = check({ current: "0.1.116", install: "npm", available: true, latest: "0.1.127", command: "npm install -g openmausbot@latest", restart: true });
+  const npm = check({ current: "0.1.116", install: "npm", available: true, latest: "0.1.127", command: "npm install -g @seira-bot/seira@latest", restart: true });
 
   it("says whose update it is, and that whoever runs that server installs it", () => {
     expect(serverUpdateRow("available", npm, "0.1.116", "Office Mac")).toEqual({
       label: "Office Mac can update to 0.1.127",
-      subtitle: "Whoever runs that server updates it with: npm install -g openmausbot@latest, then restarts it",
+      subtitle: "Whoever runs that server updates it with: npm install -g @seira-bot/seira@latest, then restarts it",
     });
     const docker = check({ available: true, latest: "0.1.127", command: "git pull && ./update.sh", restart: false });
     expect(serverUpdateRow("available", docker, "0.1.116", "Office Mac").subtitle).toBe(
@@ -96,7 +96,7 @@ describe("the update row for another server the app shows", () => {
     try {
       expect(serverUpdateRow("available", npm, "0.1.116", "Office Mac")).toEqual({
         label: "Office Mac kann auf 0.1.127 aktualisiert werden",
-        subtitle: "Wer diesen Server betreibt, aktualisiert ihn mit: npm install -g openmausbot@latest und startet ihn danach neu",
+        subtitle: "Wer diesen Server betreibt, aktualisiert ihn mit: npm install -g @seira-bot/seira@latest und startet ihn danach neu",
       });
     } finally {
       setLocale("en");
@@ -121,8 +121,8 @@ describe("the Update server row", () => {
     const command = { label: "Version 0.1.151 is available for this server", subtitle: "Update with: git pull && ./update.sh", action: null, busy: false };
     expect(view({ status: button({ mode: "command", command: "git pull && ./update.sh", rollback: undefined }) })).toEqual(command);
     expect(view({ status: null })).toEqual(command);
-    const npm = check({ install: "npm", available: true, latest: "0.1.151", command: "npm install -g openmausbot@0.1.151", restart: true });
-    expect(view({ check: npm, status: button({ mode: "command", command: npm.command }) }).subtitle).toBe("Update with: npm install -g openmausbot@0.1.151, then restart the app");
+    const npm = check({ install: "npm", available: true, latest: "0.1.151", command: "npm install -g @seira-bot/seira@0.1.151", restart: true });
+    expect(view({ check: npm, status: button({ mode: "command", command: npm.command }) }).subtitle).toBe("Update with: npm install -g @seira-bot/seira@0.1.151, then restart the app");
     expect(view({ status: button({ mode: "held" }) })).toMatchObject({ subtitle: "Updates are on hold on this server.", action: null });
   });
 

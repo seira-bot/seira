@@ -16,7 +16,7 @@ beforeEach(async () => {
   durable = join(workspaceDir, ".desktop-apps", "local");
   await mkdir(copied, { recursive: true });
   await mkdir(durable, { recursive: true });
-  target = { key: "bot:fixture", containerName: "fixture", workspaceDir, viewerPort: null, label: "fixture" };
+  target = { key: "bot:fixture", containerName: "fixture", legacyContainerName: "fixture-legacy", workspaceDir, viewerPort: null, label: "fixture" };
   exec.mockReset().mockImplementation((command, args, _options, callback) => {
     if (command !== "fixture-runtime") {
       callback(Object.assign(new Error("executable is unavailable on this host"), { code: "ENOENT" }));

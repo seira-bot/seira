@@ -16,6 +16,8 @@ same runtime as the other ACP engines.
 3. Restart Seira. It reuses OpenCode's existing connections and model
    configuration automatically.
 
+When no other AI is ready at first start, Seira installs OpenCode by itself, one time. Its free models then work as a backup. Set `OMB_FREE_ENGINE=0` to turn this off. Seira never replaces an OpenCode CLI that is already installed.
+
 For OpenRouter, Fireworks AI, DeepSeek, Cline or your own provider, see
 [Other model providers](../apps/docs/content/docs/providers/model-providers.mdx).
 

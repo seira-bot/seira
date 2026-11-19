@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Check, ChevronDown, LoaderCircle, RefreshCw, X } from "lucide-react";
 import { EngineSetup } from "@/components/EngineSetup";
 import { engineReady } from "@/components/EngineLibrary";
@@ -23,9 +23,9 @@ function setupFor(instance: InstanceInfo) {
     : { intent: "cloud" as const };
 }
 
-function OtherWay({ instance, open, onToggle }: { instance: InstanceInfo; open: boolean; onToggle: () => void }) {
+function OtherWay({ instance, open, onToggle, line, ...marker }: { instance: InstanceInfo; open: boolean; onToggle: () => void; line?: string; "data-ai-free"?: string }) {
   return (
-    <div>
+    <div {...marker}>
       <button
         type="button"
         onClick={onToggle}
@@ -35,7 +35,12 @@ function OtherWay({ instance, open, onToggle }: { instance: InstanceInfo; open: 
         <span className="flex size-[18px] shrink-0 items-center justify-center">
           <InstanceProviderMark instance={instance} size={18} />
         </span>
-        <span className="min-w-0 flex-1 truncate text-[14px] text-ink">{engineDisplayName(instance)}</span>
+        {line ? (
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[14px] text-ink">{engineDisplayName(instance)}</span>
+            <span className="block truncate text-[12px] leading-4 text-ink-secondary">{line}</span>
+          </span>
+        ) : <span className="min-w-0 flex-1 truncate text-[14px] text-ink">{engineDisplayName(instance)}</span>}
         <ChevronDown size={14} className={cn("shrink-0 text-ink-secondary transition-transform duration-200", open && "rotate-180")} />
       </button>
       {open && <EngineSetup instance={instance} {...setupFor(instance)} className="mx-4 mb-3.5 border-0 bg-inset" />}
@@ -52,6 +57,8 @@ export function ConnectAi({ hosted = false, tested }: { hosted?: boolean; tested
   const [failed, setFailed] = useState(false);
   const [checking, setChecking] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
+  const [more, setMore] = useState(false);
+  const listId = useId();
   const latestRequest = useRef(0);
 
   const refresh = useCallback(async (fresh = true) => {
@@ -78,12 +85,18 @@ export function ConnectAi({ hosted = false, tested }: { hosted?: boolean; tested
 
   const connected = tested && aiWorks(tested) ? tested.instance : undefined;
   const backup = state.instances.find((instance) => engineReady(instance) && freeFallback(instance));
+  const preparing = backup ? undefined : state.instances.find((instance) => instance.installing === true && !engineReady(instance));
   const { recommended, others } = aiChoices(state.instances.filter((instance) => instance.install && !engineReady(instance)));
   const modelgoReady = state.instances.some((instance) => instance.driverKind === "modelgo" && engineReady(instance));
   // Hosted: the organization provides the AI and refuses a key of the person's own.
   const showModelgo = !hosted && !modelgoReady && modelgoOfferable(state.config?.managedPolicy);
   const modelgo = others.find((instance) => instance.driverKind === "modelgo");
   const otherRows = others.filter((instance) => !(showModelgo && instance === modelgo));
+  const freeRow = others.find((instance) => instance.driverKind === "opencodeGo");
+  // While the app installs OpenCode, the "getting ready" line above speaks for it: no row to open yet.
+  const free = freeRow?.installing === true ? undefined : freeRow;
+  const foldRows = otherRows.filter((instance) => instance !== freeRow);
+  const foldCount = foldRows.length + (showModelgo ? 1 : 0);
 
   return (
     <div className="flex w-full flex-col">
@@ -120,18 +133,24 @@ export function ConnectAi({ hosted = false, tested }: { hosted?: boolean; tested
               {t("onboarding.engines.freeBackup", { name: engineDisplayName(backup) })}
             </p>
           )}
+          {!tested && preparing && (
+            <p data-ai-backup-installing className="animate-rise mb-3 flex items-center gap-2 text-[13px] text-ink-secondary">
+              <LoaderCircle size={13} className="shrink-0 animate-spin" aria-hidden="true" />
+              {t("onboarding.engines.freeBackupInstalling", { name: engineDisplayName(preparing) })}
+            </p>
+          )}
           {recommended ? (
             <div data-ai-recommended={recommended.instanceId} className="animate-rise w-full rounded-2xl bg-card p-4 text-left">
               <EngineSetup instance={recommended} {...setupFor(recommended)} className="border-0 bg-transparent p-0" />
             </div>
-          ) : !tested && !backup && !failed ? (
+          ) : !tested && !backup && !preparing && !failed ? (
             <p className="text-[13px] text-ink-secondary" aria-live="polite">{t("common.checking")}</p>
           ) : null}
         </>
       )}
       {failed && <p role="alert" className="mt-2 text-[13px] text-danger">{t("onboarding.engines.error")}</p>}
 
-      {(organisation || otherRows.length > 0 || showModelgo) && (
+      {(organisation || free || foldCount > 0) && (
         <div className="mt-3 w-full divide-y divide-hairline/40 overflow-hidden rounded-2xl bg-card text-left">
           {organisation && (
             <OrganisationRow
@@ -140,13 +159,33 @@ export function ConnectAi({ hosted = false, tested }: { hosted?: boolean; tested
               onConnected={() => void refresh()}
             />
           )}
-          {showModelgo && <ModelgoOption open={open === "modelgo"} onToggle={() => setOpen(open === "modelgo" ? null : "modelgo")}>
-            {modelgo && <EngineSetup instance={modelgo} {...setupFor(modelgo)} className="mx-4 mb-3.5 border-0 bg-inset" />}
-          </ModelgoOption>}
-          {otherRows.map((instance) => (
-            <OtherWay key={instance.instanceId} instance={instance} open={open === instance.instanceId}
-              onToggle={() => setOpen(open === instance.instanceId ? null : instance.instanceId)} />
-          ))}
+          {free && (
+            <OtherWay data-ai-free={free.instanceId} instance={free} line={t("onboarding.engines.freeWay")} open={open === free.instanceId}
+              onToggle={() => setOpen(open === free.instanceId ? null : free.instanceId)} />
+          )}
+          {foldCount > 0 && (
+            <button
+              type="button"
+              data-ai-more
+              onClick={() => setMore(!more)}
+              aria-expanded={more}
+              aria-controls={listId}
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-ink/[0.04] focus-visible:outline-offset-[-2px]"
+            >
+              <span className="min-w-0 flex-1 truncate text-[14px] text-ink">{t("onboarding.engines.otherWays")}</span>
+              <span className="shrink-0 text-[12px] text-ink-tertiary">{foldCount}</span>
+              <ChevronDown size={14} className={cn("shrink-0 text-ink-secondary transition-transform duration-200", more && "rotate-180")} />
+            </button>
+          )}
+          <div id={listId} hidden={!more} className="divide-y divide-hairline/40">
+            {more && foldRows.map((instance) => (
+              <OtherWay key={instance.instanceId} instance={instance} open={open === instance.instanceId}
+                onToggle={() => setOpen(open === instance.instanceId ? null : instance.instanceId)} />
+            ))}
+            {more && showModelgo && <ModelgoOption open={open === "modelgo"} onToggle={() => setOpen(open === "modelgo" ? null : "modelgo")}>
+              {modelgo && <EngineSetup instance={modelgo} {...setupFor(modelgo)} className="mx-4 mb-3.5 border-0 bg-inset" />}
+            </ModelgoOption>}
+          </div>
           <button
             type="button"
             onClick={() => void refresh()}

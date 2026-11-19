@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 
 import { shellQuote } from "./browser/chrome/wrapper.ts";
-import type { ContainerComputerStatus, LocalVmTarget } from "./container-computer.ts";
+import { localVmContainerName, type ContainerComputerStatus, type LocalVmTarget } from "./container-computer.ts";
 import { augmentedPath, resolveCliSpawn } from "./env-path.ts";
 
 const run = promisify(execFile);
@@ -95,7 +95,7 @@ export async function rescueFirefoxProfile(runtime: string, target: LocalVmTarge
   // ~/.mozilla is already a link into the workspace must update without writing there.
   const staging = join(target.workspaceDir, `.mozilla-rescue-${randomBytes(6).toString("hex")}`);
   try {
-    const { command, args } = resolveCliSpawn(runtime, ["cp", `${target.containerName}:${PROFILE_IN_CONTAINER}`, staging]);
+    const { command, args } = resolveCliSpawn(runtime, ["cp", `${localVmContainerName(target)}:${PROFILE_IN_CONTAINER}`, staging]);
     try {
       await run(command, args, { timeout: 5 * 60_000, maxBuffer: 1024 * 1024, env: { ...process.env, PATH: augmentedPath() } });
     } catch (error) {
@@ -135,7 +135,7 @@ export async function rescueInstalledApps(runtime: string, target: LocalVmTarget
   const existing = await lstat(durable).catch(() => null);
   const staging = join(target.workspaceDir, `.local-rescue-${randomBytes(6).toString("hex")}`); // the root, as for Firefox
   try {
-    const { command, args } = resolveCliSpawn(runtime, ["cp", `${target.containerName}:${APPS_IN_CONTAINER}`, staging]);
+    const { command, args } = resolveCliSpawn(runtime, ["cp", `${localVmContainerName(target)}:${APPS_IN_CONTAINER}`, staging]);
     try {
       await run(command, args, { timeout: 5 * 60_000, maxBuffer: 1024 * 1024, env: { ...process.env, PATH: augmentedPath() } });
     } catch (error) {

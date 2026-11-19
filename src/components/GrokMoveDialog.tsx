@@ -1,15 +1,14 @@
-import { Check, Copy, ExternalLink, FileUp, Loader2, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Loader2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { track } from "@/lib/analytics";
-import { openExternalLink } from "@/lib/app-links";
 import { cn } from "@/lib/cn";
-import { useCopyFeedback } from "@/lib/copy-text";
-import { foundExports, grokConnector, grokErrorText, lookForGrokBot, NOTHING_FOUND, previewGrokMove, runGrokMove, SEIRA_GROK_TEMPLATE_URL, type GrokConnector, type GrokLook, type GrokPreview, type GrokReport } from "@/lib/grok-move";
+import { foundExports, grokConnector, grokErrorText, lookForGrokBot, NOTHING_FOUND, previewGrokMove, runGrokMove, type GrokConnector, type GrokLook, type GrokPreview, type GrokReport } from "@/lib/grok-move";
 import { t } from "@/lib/i18n";
 import { localSetupImport } from "@/lib/setup-import";
 import { api, useStore } from "@/state/store";
-import { GROK_EXPORT_MAX_CHARS, GROK_EXPORT_PROMPT, parseGrokExport, type GrokBot } from "../../shared/grok-import";
+import { GrokMoveStart } from "./GrokMoveStart";
+import { GROK_EXPORT_MAX_CHARS, parseGrokExport, type GrokBot } from "../../shared/grok-import";
 
 const PRIMARY = "ui-button ui-button-primary min-h-9 px-4 text-[14px]";
 const SECONDARY = "ui-button min-h-9 px-4 text-[14px]";
@@ -53,101 +52,6 @@ export function GrokMoveLines({ paused, files = null, apps, moved, unreadable, f
 const NO_CONNECTOR: Pick<GrokConnector, "available" | "connectorUrl" | "stopped"> = { available: false, stopped: false };
 const POLL_MS = 3_000;
 
-/** The other way over: a link Grok Bot is given once, which the MausBot bot there sends every Bot through. */
-function ConnectGrokBot({ url, stopped, names, error, busy, onConnect, onUse }: {
-  url: string | undefined; stopped: boolean; names: readonly string[]; error: boolean; busy: boolean; onConnect: () => void; onUse: () => void;
-}) {
-  const arrived = names.length > 0 && (
-    <div data-grok-move-arrived role="status" className="mt-1 flex w-full items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent/[0.06] px-3 py-2">
-      <span className="min-w-0 break-words text-[13px] text-ink">{t("grokMove.connect.arrived", { names: names.join(", ") })}</span>
-      <button type="button" data-grok-move-use-arrived onClick={onUse} className={cn(PRIMARY, "shrink-0")}>{t("grokMove.useFound")}</button>
-    </div>
-  );
-  const { state: copied, copy } = useCopyFeedback(url ?? "");
-  return (
-    <section data-grok-move-connect className="flex flex-col items-start gap-1.5">
-      <h3 className="text-[14px] font-medium text-ink">{t("grokMove.connect.title")}</h3>
-      <p className={LINE}>{t("grokMove.connect.hint")}</p>
-      {url ? (
-        <>
-          <div className="mt-1 flex w-full items-center gap-2">
-            <input readOnly value={url} aria-label={t("grokMove.connect.linkLabel")} onFocus={(event) => event.target.select()}
-              className="min-w-0 flex-1 rounded-xl border border-hairline/40 bg-inset px-3 py-2 font-mono text-[12px] text-ink focus:outline-none" />
-            <button type="button" data-grok-move-copy-link onClick={copy} className={cn(SECONDARY, "inline-flex shrink-0 items-center gap-2")}>
-              {copied === "copied" ? <Check size={15} /> : <Copy size={15} />}
-              {copied === "copied" ? t("grokMove.copied") : copied === "failed" ? t("grokMove.copyFailed") : t("grokMove.connect.copy")}
-            </button>
-          </div>
-          <p className={LINE}>{t("grokMove.connect.where")}</p>
-          <p className={LINE}>{t("grokMove.connect.private")}</p>
-          <button type="button" data-grok-move-template onClick={() => void openExternalLink(SEIRA_GROK_TEMPLATE_URL)} className={cn(SECONDARY, "mt-1 inline-flex items-center gap-2")}>
-            <ExternalLink size={15} />{t("grokMove.connect.addBot")}
-          </button>
-          {arrived}
-        </>
-      ) : (
-        <>
-          {stopped && <p role="status" data-grok-move-stopped className={LINE}>{t("grokMove.connect.stopped")}</p>}
-          {arrived}
-          <button type="button" data-grok-move-connect-start disabled={busy} onClick={onConnect} className={cn(SECONDARY, "mt-1 inline-flex items-center gap-2")}>
-            {busy && <Loader2 size={15} className="animate-spin" />}{t("grokMove.connect.start")}
-          </button>
-        </>
-      )}
-      {error && <p role="alert" className="text-[13px] leading-relaxed text-danger">{t("grokMove.connect.failed")}</p>}
-    </section>
-  );
-}
-
-function BringBack({ connect, local, look, found, reply, error, onReply, onFile, onFound }: {
-  connect: ReactNode;
-  local: boolean;
-  look: GrokLook;
-  found: ReturnType<typeof foundExports>;
-  reply: string;
-  error: string;
-  onReply: (reply: string) => void;
-  onFile: (file: File | undefined) => void;
-  onFound: () => void;
-}) {
-  const picker = useRef<HTMLInputElement>(null);
-  const { state: copied, copy } = useCopyFeedback(GROK_EXPORT_PROMPT);
-  return (
-    <>
-      <p className="text-[13px] leading-relaxed text-ink-secondary">{t("grokMove.intro")}</p>
-      {connect}
-      <section className="flex flex-col items-start gap-1.5">
-        <h3 className="text-[14px] font-medium text-ink">{t("grokMove.step1")}</h3>
-        <p className="text-[13px] leading-relaxed text-ink-secondary">{t("grokMove.step1Hint")}</p>
-        {local && look.bots.length > 0 && <p data-grok-move-roster className="text-[13px] text-ink-secondary">{t("grokMove.roster", { names: look.bots.join(", ") })}</p>}
-        <button type="button" data-grok-move-copy onClick={copy} className={cn(SECONDARY, "mt-1 inline-flex items-center gap-2")}>
-          {copied === "copied" ? <Check size={15} /> : <Copy size={15} />}
-          {copied === "copied" ? t("grokMove.copied") : copied === "failed" ? t("grokMove.copyFailed") : t("grokMove.copy")}
-        </button>
-      </section>
-      <section className="flex flex-col gap-1.5">
-        <h3 className="text-[14px] font-medium text-ink">{t("grokMove.step2")}</h3>
-        <p className="text-[13px] leading-relaxed text-ink-secondary">{t("grokMove.step2Hint")}</p>
-        {found.bots.length > 0 && (
-          <div data-grok-move-found className="mt-1 flex items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent/[0.06] px-3 py-2">
-            <span className="min-w-0 break-words text-[13px] text-ink">{t("grokMove.found", { names: found.bots.map((bot) => bot.name).join(", ") })}</span>
-            <button type="button" data-grok-move-use-found onClick={onFound} className={cn(PRIMARY, "shrink-0")}>{t("grokMove.useFound")}</button>
-          </div>
-        )}
-        {found.refused.map((item) => <p key={item.file} role="alert" className="text-[13px] leading-relaxed text-danger">{t("grokMove.refused", { file: item.file, reason: item.error })}</p>)}
-        <textarea value={reply} onChange={(event) => onReply(event.target.value)} rows={4}
-          aria-label={t("grokMove.replyLabel")} placeholder={t("grokMove.replyPlaceholder")}
-          className="mt-1 w-full resize-y rounded-xl border border-hairline/40 bg-inset px-3 py-2.5 text-[13px] text-ink placeholder:text-ink-secondary focus:outline-none" />
-        {error && <p role="alert" className="text-[13px] leading-relaxed text-danger">{error}</p>}
-        <div>
-          <button type="button" onClick={() => picker.current?.click()} className={cn(SECONDARY, "inline-flex items-center gap-2")}><FileUp size={15} />{t("grokMove.chooseFile")}</button>
-          <input ref={picker} type="file" accept=".json,.md,.txt,application/json,text/plain,text/markdown" className="hidden" onChange={(event) => { onFile(event.target.files?.[0]); event.target.value = ""; }} />
-        </div>
-      </section>
-    </>
-  );
-}
-
 /** Settings → Import → Move from Grok Bot: the message, what the Bot wrote, the preview, the import, the report. Nothing on
  * this computer is read until this dialog is open. */
 export function GrokMoveDialog({ onClose, inline = false }: { onClose: () => void; inline?: boolean }) {
@@ -159,6 +63,7 @@ export function GrokMoveDialog({ onClose, inline = false }: { onClose: () => voi
   const [preview, setPreview] = useState<GrokPreview | null>(null);
   const [report, setReport] = useState<GrokReport | null>(null);
   const [importing, setImporting] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(() => {
@@ -175,6 +80,7 @@ export function GrokMoveDialog({ onClose, inline = false }: { onClose: () => voi
 
   const onStart = !preview && !report;
   const [connector, setConnector] = useState(NO_CONNECTOR);
+  const linkAvailable = local && connector.available;
   const [arrivedFiles, setArrivedFiles] = useState<GrokLook["files"]>([]);
   const [connecting, setConnecting] = useState(false);
   const [connectFailed, setConnectFailed] = useState(false);
@@ -279,6 +185,30 @@ export function GrokMoveDialog({ onClose, inline = false }: { onClose: () => voi
     refresh();
   };
 
+  const manualShown = !linkAvailable || manualOpen;
+  const footer = report ? (
+    <>
+      <button type="button" data-grok-move-another onClick={another} className={SECONDARY}>{t("grokMove.another")}</button>
+      <button type="button" data-grok-move-done onClick={onClose} className={PRIMARY}>{t("common.done")}</button>
+    </>
+  ) : preview ? (
+    <>
+      <button type="button" disabled={importing} onClick={() => setPreview(null)} className={SECONDARY}>{t("grokMove.back")}</button>
+      <button type="button" data-grok-move-import disabled={importing || !preview.plans.length} onClick={() => void start()} className={cn(PRIMARY, "inline-flex items-center gap-2")}>
+        {importing && <Loader2 size={15} className="animate-spin" />}
+        {importing ? t("grokMove.importing") : t("grokMove.import")}
+      </button>
+    </>
+  ) : reply.trim() ? (
+    <button type="button" data-grok-move-continue onClick={() => void show(() => parseGrokExport(reply))} className={PRIMARY}>{t("onboarding.continue")}</button>
+  ) : arrived.length > 0 ? (
+    <button type="button" data-grok-move-use-arrived onClick={() => void show(() => arrived, true)} className={PRIMARY}>
+      {arrived.length === 1 ? t("grokMove.reviewOne") : t("grokMove.reviewMany", { count: arrived.length })}
+    </button>
+  ) : manualShown ? (
+    <button type="button" data-grok-move-continue disabled onClick={() => {}} className={PRIMARY}>{t("onboarding.continue")}</button>
+  ) : null;
+
   const panel = (
       <div ref={root} tabIndex={-1} {...(inline ? {} : { role: "dialog", "aria-modal": true, "aria-labelledby": "grok-move-title" })} data-grok-move={report ? "report" : preview ? "preview" : "start"}
         onKeyDown={(event) => {
@@ -316,33 +246,15 @@ export function GrokMoveDialog({ onClose, inline = false }: { onClose: () => voi
                 moved={preview.moved} unreadable={preview.unreadable} />
             </>
           ) : (
-            <BringBack local={local} look={look} found={found} reply={reply} error={error} onReply={setReply}
-              onFile={(file) => readFile.current(file)} onFound={() => void show(() => found.bots)}
-              connect={local && connector.available && (
-                <ConnectGrokBot url={connector.connectorUrl} stopped={connector.stopped} names={arrived.map((bot) => bot.name)} error={connectFailed} busy={connecting}
-                  onConnect={() => void connect()} onUse={() => void show(() => arrived, true)} />
-              )} />
+            <GrokMoveStart local={local} linkAvailable={linkAvailable} url={connector.connectorUrl} stopped={connector.stopped} connecting={connecting} connectFailed={connectFailed}
+              onConnect={() => void connect()} look={look} found={found} arrived={arrived} reply={reply} error={error} manualOpen={manualOpen}
+              onManualToggle={() => setManualOpen((open) => !open)} onReply={setReply} onFile={(file) => readFile.current(file)} onFound={() => void show(() => found.bots)} />
           )}
         </div>
-        <div className="ui-modal-divider shrink-0" />
-        <div className="flex shrink-0 justify-end gap-2 p-3">
-          {report ? (
-            <>
-              <button type="button" data-grok-move-another onClick={another} className={SECONDARY}>{t("grokMove.another")}</button>
-              <button type="button" data-grok-move-done onClick={onClose} className={PRIMARY}>{t("common.done")}</button>
-            </>
-          ) : preview ? (
-            <>
-              <button type="button" disabled={importing} onClick={() => setPreview(null)} className={SECONDARY}>{t("grokMove.back")}</button>
-              <button type="button" data-grok-move-import disabled={importing || !preview.plans.length} onClick={() => void start()} className={cn(PRIMARY, "inline-flex items-center gap-2")}>
-                {importing && <Loader2 size={15} className="animate-spin" />}
-                {importing ? t("grokMove.importing") : t("grokMove.import")}
-              </button>
-            </>
-          ) : (
-            <button type="button" data-grok-move-continue disabled={!reply.trim()} onClick={() => void show(() => parseGrokExport(reply))} className={PRIMARY}>{t("onboarding.continue")}</button>
-          )}
-        </div>
+        {footer && <>
+          <div className="ui-modal-divider shrink-0" />
+          <div className="flex shrink-0 justify-end gap-2 p-3">{footer}</div>
+        </>}
       </div>
   );
   if (inline) return panel;

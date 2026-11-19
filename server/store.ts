@@ -18,7 +18,7 @@ import { workspaceDir } from "./workspace.ts";
 import type { Destination } from "./surface.ts";
 import { newId, type ModelSelection } from "./contracts.ts";
 import { pickBotName } from "./names.ts";
-import { rotationColor } from "./bot-look.ts";
+import { freshCharacter, giveCharactersOnce, rotationColor } from "./bot-look.ts";
 import { redactBotAuthored } from "./message-redaction.ts";
 import { AVATAR_FOCUS_CENTER, AVATAR_ZOOM_MIN, botAvatarProfile, clampAvatarFocus, clampAvatarZoom } from "../shared/bot-avatar.ts";
 import { approvalModeFor, isApprovalMode, modelSwitchNeedsAsk, threadApproval, type ApprovalMode } from "../shared/approval-mode.ts";
@@ -534,7 +534,7 @@ export class Store {
       this.mirrorActiveTask(b, active);
       b.unread = b.tasks.some(taskCountsAsBotUnread);
     }
-    if (botsMigrated) this.saveBots();
+    giveCharactersOnce(this.bots, DATA_DIR, botsLoaded || !existsSync(BOTS_FILE), (changed) => { if (changed || botsMigrated) this.saveBots(); });
     if (clearModelCopies) writeFileAtomic(THREAD_MODEL_COPIES_CLEARED, "Threads follow their bot's model; the copies older builds made are cleared.\n", { mode: 0o600 });
     const knownThreads = new Set([
       ...this.bots.flatMap((b) => [b.threadId, ...(b.tasks ?? []).map((task) => task.threadId)]),
@@ -1350,7 +1350,7 @@ export class Store {
         const createdAt = Date.now();
         const modelSelection = this.newBotSelection(operation.fields.modelSelection);
         next = { id: operation.botId, threadId: operation.threadId, name: operation.fields.name,
-          title: "", description: "", soul: "", notifications: true, color: rotationColor(nextBots.length), unread: false,
+          title: "", description: "", soul: "", notifications: true, color: rotationColor(nextBots.length), ...freshCharacter(nextBots), unread: false,
           resumeCursors: {}, createdAt, ...operation.fields, modelSelection,
           autoApprove: false,
           ...sharedAsMaker(chief),

@@ -21,6 +21,7 @@ import * as mdb from "./message-db.ts";
 import { hasTeamAuthority } from "./peer-roster.ts";
 import { flushLaterSaves } from "./save-batch.ts";
 import { Store, toWireTask, type BotRecord } from "./store.ts";
+import { STARTER_CHARACTERS } from "./bot-look.ts";
 import type { TeamSetupRequest } from "../shared/team-setup.ts";
 import { SECTION_CONTEXTS_FILE, readSectionContext, writeSectionContext } from "./section-context.ts";
 import { TeamComputers } from "./team-computers.ts";
@@ -2893,5 +2894,58 @@ describe("soul", () => {
     } finally {
       rmSync(folder, { force: true });
     }
+  });
+});
+
+describe("Store characters for bots in the plain look", () => {
+  beforeEach(() => {
+    rmSync(DATA_DIR, { recursive: true, force: true });
+  });
+
+  it("gives each bot in the plain look its own hair style, once per data directory, and keeps every chosen look", () => {
+    const store = new Store(selection);
+    const seira = store.createBot({ name: "Seira", color: "chrome" });
+    store.patchBot(seira.id, { defaultBot: {} });
+    const plain = [
+      store.createBot({ name: "Joko" }),
+      store.createBot({ name: "Gita", mascotBody: "seira" }),
+      store.createBot({ name: "Indra", mascotBody: "cursor" }),
+    ];
+    const chosen = store.createBot({ name: "Dewi", mascotBody: "bob" });
+    const dressed = store.createBot({ name: "Eka", mascotBody: "seira", mascotAccessories: ["cap"] });
+    const pictured = store.createBot({ name: "Bima" });
+    store.patchBot(pictured.id, { avatarUrl: "/api/attachments/bima.png", avatarCrop: "circle" });
+    expect(existsSync(join(DATA_DIR, "characters-given"))).toBe(true);
+    expect(new Store(selection).bot(plain[0]!.id)).not.toHaveProperty("mascotBody");
+
+    rmSync(join(DATA_DIR, "characters-given"));
+    const upgraded = new Store(selection);
+    const styles = plain.map((bot) => upgraded.bot(bot.id)!.mascotBody);
+    for (const [i, bot] of plain.entries()) {
+      const look = upgraded.bot(bot.id)!;
+      expect(STARTER_CHARACTERS).toContainEqual({ mascotBody: look.mascotBody, mascotAccessories: look.mascotAccessories ?? [] });
+      expect(look.color, "the colour stays").toBe(bot.color);
+      expect(styles.indexOf(look.mascotBody), "no two share a hair style").toBe(i);
+    }
+    expect(styles).not.toContain("bob");
+    expect(upgraded.bot(seira.id)).not.toHaveProperty("mascotBody");
+    expect(upgraded.bot(chosen.id)?.mascotBody).toBe("bob");
+    expect(upgraded.bot(dressed.id)).toMatchObject({ mascotBody: "seira", mascotAccessories: ["cap"] });
+    expect(upgraded.bot(pictured.id)).not.toHaveProperty("mascotBody");
+
+    upgraded.patchBot(plain[0]!.id, { mascotBody: "seira", mascotAccessories: null });
+    expect(new Store(selection).bot(plain[0]!.id)?.mascotBody, "a later choice survives the next start").toBe("seira");
+  });
+
+  it("dresses a Chief's new specialist as a character", () => {
+    const store = new Store(selection);
+    const chief = store.createBot({ name: "Chief", section: "Ops" });
+    store.patchBot(chief.id, { chiefOfStaff: true });
+    store.applyTeamSetup({ version: 1, requestId: "setup-look", botId: chief.id, threadId: chief.threadId,
+      reason: "Requested", createdAt: 1, requesterRevision: "fixture", newTeams: [], operations: [
+        { action: "create", botId: "researcher", threadId: "researcher-thread", fields: { name: "Researcher", section: "Ops", modelSelection: selection() } },
+      ] });
+    const look = new Store(selection).bot("researcher")!;
+    expect(STARTER_CHARACTERS).toContainEqual({ mascotBody: look.mascotBody, mascotAccessories: look.mascotAccessories ?? [] });
   });
 });

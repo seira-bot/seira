@@ -14,15 +14,15 @@ Seira team while the desktop app and its harness are running.
 The v1 server intentionally cannot approve requests, remember permission grants, delete data, import teams,
 change credentials, or control computer/VM lifecycle. Those actions stay in the human-facing app.
 
-## From the openmausbot command
+## From the seira command
 
-With the `openmausbot` npm package installed, the MCP client can run it
+With the `@seira-bot/seira` npm package installed, the MCP client can run it
 directly; it serves the same tools:
 
 ```json
 {
   "mcpServers": {
-    "openmausbot": { "command": "openmausbot", "args": ["mcp"], "env": { "OMB_PORT": "8799" } }
+    "openmausbot": { "command": "seira", "args": ["mcp"], "env": { "OMB_PORT": "8799" } }
   }
 }
 ```

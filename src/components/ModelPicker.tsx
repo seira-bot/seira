@@ -996,7 +996,7 @@ export function ModelPicker({
   return (
     <div ref={rootRef} className={cn(contained ? "w-full" : "relative", className)}>
       {contained ? (
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4 [[data-advanced-body]_&]:flex-col [[data-advanced-body]_&]:items-stretch [[data-advanced-body]_&]:gap-3">
           {label}
           {trigger}
         </div>
