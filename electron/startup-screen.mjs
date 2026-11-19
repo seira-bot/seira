@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import nativeText from "./native-text.cjs";
 import { FINISH_MS, STEP_NAMES } from "./splash/line.js";
+import { startupTimeline } from "./startup-timeline.mjs";
 
 const attribute = (value) => String(value).replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
 const resource = (name) => fileURLToPath(new URL(`./resources/${name}`, import.meta.url));
@@ -125,9 +126,11 @@ export function createStartupScreen({
   };
   void ready.then(() => progress("shown"));
   const attach = (win, { maximized = false } = {}) => {
+    startupTimeline.mark("window-created");
     const reveal = () => {
       if (revealed || win.isDestroyed() || isQuitting()) return;
       revealed = true;
+      startupTimeline.finish("window-shown");
       const minimized = !splash.isDestroyed() && splash.isMinimized();
       if (isHidden()) {
         win.setSkipTaskbar(true);
@@ -143,6 +146,7 @@ export function createStartupScreen({
     progress("window");
     const finish = () => {
       if (revealed || finishTimer) return;
+      startupTimeline.mark("root-rendered");
       splashFinish();
       const wait = reducedMotion() ? 0 : FINISH_MS;
       if (wait === 0) reveal();
@@ -151,6 +155,7 @@ export function createStartupScreen({
     win.webContents.on("did-finish-load", () => {
       if (revealed || win.isDestroyed() || isQuitting()) return;
       progress("loaded");
+      startupTimeline.mark("window-loaded");
       void win.webContents.executeJavaScript(`new Promise(resolve => {
         const root = document.getElementById('root');
         if (!root || root.childElementCount) { resolve(); return; }

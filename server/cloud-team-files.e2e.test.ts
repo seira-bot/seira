@@ -68,7 +68,8 @@ const upload = (token: string, path: string, name: string, text: string) =>
 
 beforeAll(async () => {
   if (!posix) return;
-  fx = await launchCloudSendFixture({ onePasswordToken: TOKEN, team: { id: "team-acme-files", name: "Acme", engine: SHELL }, cloudEngine: SHELL });
+  const box = { OMB_BOT_BOX: boxed ? "1" : "0" };
+  fx = await launchCloudSendFixture({ onePasswordToken: TOKEN, team: { id: "team-acme-files", name: "Acme", engine: SHELL, env: box }, cloudEngine: SHELL, cloudEnv: box });
   team = fx.team!;
   dataDir = join(team.home, ".openmausbot");
   olive = (await team.pair(OLIVE)).token!;

@@ -5,6 +5,7 @@ import {
   PHONE_SECRET_CREDENTIAL_KEY,
   createPhoneSecretIdentity,
   createPhoneSecretSaveCoordinator,
+  createPhoneSecretSaveReceiver,
   decodePhoneSecretSaveRequest,
   phoneSecretKeyId,
   phoneSecretPrivateKeyMessage,
@@ -160,4 +161,27 @@ test("does not cache a failed save for an exact encrypted retry", async () => {
   assert.equal(calls, 1);
   assert.deepEqual(await save(request), phoneSecretSaveResult("operation_1", true));
   assert.equal(calls, 2);
+});
+
+test("the save receiver ignores other messages and posts one result per save", async () => {
+  const saved = [];
+  const posted = [];
+  const receive = createPhoneSecretSaveReceiver(async (target, value) => { saved.push([target, value]); }, () => {});
+  const proc = { postMessage: (message) => posted.push(message) };
+  assert.equal(receive(proc, { type: "openmausbot:other" }), false);
+  const message = { type: "openmausbot:phone-secret-save", requestId: "operation_1", target: "xaiApiKey", value: " secret " };
+  assert.equal(receive(proc, { data: message }), true);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(saved, [["xaiApiKey", "secret"]]);
+  assert.deepEqual(posted, [phoneSecretSaveResult("operation_1", true)]);
+});
+
+test("the save receiver logs a result that cannot reach the server", async () => {
+  const logged = [];
+  const receive = createPhoneSecretSaveReceiver(async () => {}, (line) => logged.push(line));
+  const proc = { postMessage: () => { throw new Error("channel closed"); } };
+  const message = { type: "openmausbot:phone-secret-save", requestId: "operation_1", target: "xaiApiKey", value: "secret" };
+  assert.equal(receive(proc, message), true);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(logged, ["phone credential save result failed: channel closed"]);
 });

@@ -740,6 +740,10 @@ describe("codexLiveVoice thread start checks", () => {
 
 describe("codexLiveVoice approvals by voice", () => {
   const asked = (h: Harness) => h.calls().find((call) => call.method === "thread/realtime/appendSpeech")?.params;
+  const spokenNotice = async (h: Harness) => {
+    await until(() => asked(h) !== undefined);
+    return asked(h);
+  };
 
   it("accepts on a spoken yes and asks with appendSpeech", async () => {
     const h = harness({ fake: { FAKE_CODEX_REALTIME_MODE: "approval", FAKE_CODEX_REALTIME_REPLY: "yes" } });
@@ -773,7 +777,7 @@ describe("codexLiveVoice approvals by voice", () => {
     await h.start();
     await until(() => h.decision() !== null);
     expect(h.decision()).toEqual({ decision: "decline" });
-    expect(asked(h).text).toBe("I need to run a command that I cannot read out in full, so I did not run it. Ask me in the chat to run it.");
+    expect((await spokenNotice(h)).text).toBe("I need to run a command that I cannot read out in full, so I did not run it. Ask me in the chat to run it.");
   });
 
   it("declines a network request at once and never asks", async () => {
@@ -782,7 +786,7 @@ describe("codexLiveVoice approvals by voice", () => {
     await h.start();
     await until(() => h.decision() !== null);
     expect(h.decision()).toEqual({ decision: "decline" });
-    expect(asked(h).text).toBe("I need more access than I have now, so I did not do it. Ask me in the chat to allow it.");
+    expect((await spokenNotice(h)).text).toBe("I need more access than I have now, so I did not do it. Ask me in the chat to allow it.");
   });
 
   const fileChange = (thread?: string, change: unknown = { path: "src/app.ts", kind: { type: "update", move_path: null }, diff: "" }) => ({
@@ -807,7 +811,7 @@ describe("codexLiveVoice approvals by voice", () => {
     await h.start();
     await until(() => h.decision() !== null);
     expect(h.decision()).toEqual({ decision: "decline" });
-    expect(asked(h).text).toBe("I need to change files that I cannot read out in full, so I did not change them. Ask me in the chat to change them.");
+    expect((await spokenNotice(h)).text).toBe("I need to change files that I cannot read out in full, so I did not change them. Ask me in the chat to change them.");
   });
 
   it("declines a file change whose item started on another thread", async () => {
@@ -815,7 +819,7 @@ describe("codexLiveVoice approvals by voice", () => {
     await h.start();
     await until(() => h.decision() !== null);
     expect(h.decision()).toEqual({ decision: "decline" });
-    expect(asked(h).text).toBe("I need to change files that I cannot read out in full, so I did not change them. Ask me in the chat to change them.");
+    expect((await spokenNotice(h)).text).toBe("I need to change files that I cannot read out in full, so I did not change them. Ask me in the chat to change them.");
   });
 
   it("does not take an answer that began before the question", async () => {

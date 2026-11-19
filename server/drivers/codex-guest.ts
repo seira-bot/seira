@@ -1,9 +1,9 @@
 import { statSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { codexSkillRoots } from "../imported-skills.ts";
 import { deniedNativeSkills } from "../native-skill-choices.ts";
+import { userHome } from "../env-path.ts";
 
 const plainRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === "object" && !Array.isArray(value)
@@ -35,7 +35,7 @@ const isFile = (path: string) => {
 export function codexDisabledNativeSkillArgs(botId: string | undefined, env: Record<string, string | undefined>): string[] {
   if (!botId) return [];
   const denied = deniedNativeSkills(botId);
-  const inRoots = codexSkillRoots(env.HOME ?? homedir(), env.CODEX_HOME).flatMap((root) => denied.names.map((name) => join(root, name, "SKILL.md")));
+  const inRoots = codexSkillRoots(userHome(env), env.CODEX_HOME).flatMap((root) => denied.names.map((name) => join(root, name, "SKILL.md")));
   const files = [...new Set([...inRoots, ...denied.origins])].filter(isFile);
   if (!files.length) return [];
   const tables = files.map((file) => `{path=${JSON.stringify(file)},enabled=false}`).join(",");

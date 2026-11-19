@@ -5,12 +5,12 @@
 // credentials: hence no OAuth client code in this repository.
 import type { ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import type { ProviderAuthenticationStart, ProviderAuthenticationStatus } from "../contracts.ts";
 import { killCliTree, spawnCli } from "../procs.ts";
 import { canonicalPath } from "./device-auth.ts";
+import { userHome } from "../env-path.ts";
 
 const MAX_OUTPUT = 32_768;
 /** Where Anthropic's sign-in lives. Anything else in the CLI's output is not a link we show. */
@@ -95,7 +95,7 @@ export class ClaudeLoginController {
     await this.flow?.stopping;
     if (this.disposed) throw new Error("This provider was removed. Refresh Settings before signing in.");
     const env = this.options.environment();
-    const home = env.HOME || env.USERPROFILE || homedir();
+    const home = userHome(env);
     if (!isAbsolute(home) || (env.CLAUDE_CONFIG_DIR && !isAbsolute(env.CLAUDE_CONFIG_DIR))) {
       throw new Error("Use an absolute HOME and CLAUDE_CONFIG_DIR path for this server's Claude provider before signing in.");
     }
@@ -205,7 +205,7 @@ export class ClaudeLoginController {
     await this.flow?.stopping;
     if (this.disposed) throw new Error("This provider was removed. Refresh Settings before signing out.");
     const env = this.options.environment();
-    const home = env.HOME || env.USERPROFILE || homedir();
+    const home = userHome(env);
     if (!isAbsolute(home) || (env.CLAUDE_CONFIG_DIR && !isAbsolute(env.CLAUDE_CONFIG_DIR))) {
       throw new Error("Use an absolute HOME and CLAUDE_CONFIG_DIR path for this server's Claude provider before signing out.");
     }
