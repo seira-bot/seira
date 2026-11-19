@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>bot.seira.Seira</id>
+  <name>Seira</name>
+  <summary>Your own team of AI bots, in a chat app</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+  <developer id="bot.seira">
+    <name>Seira</name>
+  </developer>
+  <description>
+    <p>Seira is a local-first chat app for running a team of AI agents. Each bot has its own conversations, files and tools, and your data stays on your computer.</p>
+    <p>Seira runs the AI agent programs that you already use, such as Claude, Codex and Gemini. It starts them from this app and shows their work in one chat.</p>
+    <ul>
+      <li>Chat with many bots and keep each conversation apart.</li>
+      <li>Approve or refuse what a bot wants to do before it does it.</li>
+      <li>Connect apps, files and cloud computers to your bots.</li>
+    </ul>
+    <p>The Flatpak package starts agent programs on your computer, outside the Flatpak sandbox. Install these programs on your computer first. Seira does not include them.</p>
+  </description>
+  <launchable type="desktop-id">bot.seira.Seira.desktop</launchable>
+  <url type="homepage">https://github.com/seira-bot/seira</url>
+  <url type="bugtracker">https://github.com/seira-bot/seira/issues</url>
+  <url type="vcs-browser">https://github.com/seira-bot/seira</url>
+  <categories>
+    <category>Utility</category>
+  </categories>
+  <keywords>
+    <keyword>AI</keyword>
+    <keyword>Agents</keyword>
+    <keyword>Chat</keyword>
+    <keyword>Bots</keyword>
+  </keywords>
+  <branding>
+    <color type="primary" scheme_preference="light">#7fc0ff</color>
+    <color type="primary" scheme_preference="dark">#1084fe</color>
+  </branding>
+  <content_rating type="oars-1.1" />
+  <provides>
+    <binary>seira</binary>
+  </provides>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+  <releases>
+    <release version="0.1.176" date="2026-11-19" />
+  </releases>
+</component>
