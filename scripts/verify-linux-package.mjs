@@ -434,8 +434,11 @@ for (const expected of [
 const extracted = mkdtempSync(path.join(tmpdir(), "omb-deb-verify-"));
 try {
   execFileSync("dpkg-deb", ["--extract", deb, extracted]);
-  const debAppRoot = path.join(extracted, "opt", "OpenMausBot");
+  const debAppRoot = path.join(extracted, "opt", "Seira");
   requireDirectoryMode(debAppRoot, 0o755);
+  // The after-install hook makes this helper root-owned setuid. It keeps the Chromium sandbox on where
+  // Ubuntu blocks unprivileged user namespaces.
+  requireFile(path.join(debAppRoot, "chrome-sandbox"));
   const debResources = path.join(debAppRoot, "resources");
   // Routes the in-app updater to the package-manager hand-off.
   requirePackageType(debResources, "DEB", "deb");
@@ -501,6 +504,13 @@ try {
     fail(
       `expected AppImage directory mode 755 or 775 for ${squashRoot}, found ${appImageDirectoryMode.toString(8)}`,
     );
+  }
+  // electron-builder's own AppRun adds --no-sandbox when user namespaces are blocked. The pnpm patch of
+  // app-builder-lib replaces that fallback with a message that points to the DEB.
+  const appRun = readFileSync(path.join(squashRoot, "AppRun"), "utf8");
+  if (/NO_SANDBOX=\(\s*--/.test(appRun)) fail("AppImage AppRun can start Electron without the Chromium sandbox");
+  if (!appRun.includes("Seira can't open from this AppImage on this computer.")) {
+    fail("AppImage AppRun does not carry the sandbox message; check patches/app-builder-lib@*.patch");
   }
   const appImageResources = path.join(squashRoot, "resources");
   // No marker: the AppImage keeps the in-place restart-to-update path.
