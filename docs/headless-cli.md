@@ -31,12 +31,12 @@ On this computer a headless server treats you as its owner, and no token is
 needed. Anywhere else you need a token:
 
 ```sh
-seira connect https://maus.example.com --code 7KQ2-M9XD-H4TP --out ~/.openmausbot-token
-seira doctor --url https://maus.example.com --token-file ~/.openmausbot-token
+seira connect https://seira.example.com --code 7KQ2-M9XD-H4TP --out ~/.openmausbot-token
+seira doctor --url https://seira.example.com --token-file ~/.openmausbot-token
 ```
 
 `connect` also takes the whole link the server printed
-(`https://maus.example.com/pair#code=…`), so `--code` can be left out then.
+(`https://seira.example.com/pair#code=…`), so `--code` can be left out then.
 Make the pairing code on the server with `seira pair` (add
 `--client --ttl 24h` for a chat-only code that stays open up to a day; a code
 works once). On this
