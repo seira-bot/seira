@@ -107,7 +107,8 @@ import { effectivePlace, toolPlace, type EffectivePlace } from "@/lib/place";
 import { cn } from "@/lib/cn";
 import { activeLocale, intlLocale, t } from "@/lib/i18n";
 import { COMPACT_BUBBLE } from "@/lib/compact-chip";
-import { groupTranscript, isStatusActivity, turnDurations, workedLabel } from "@/lib/activity-runs";
+import { groupTranscript, isStatusActivity, liveWorkSteps, turnDurations, workedLabel } from "@/lib/activity-runs";
+import { traceRootId } from "../../shared/usage-trace";
 import { StatusActivityRow } from "@/components/StatusActivityRow";
 import { CancelledTurnRow } from "./CancelledTurnRow";
 import { ActivityRun } from "./ActivityRun";
@@ -135,7 +136,7 @@ import { latestFailure, latestReply, type TranscriptSnapshot } from "@/lib/trans
 import { pendingApprovals } from "./PendingApproval";
 import { TranscriptAnnouncer } from "./TranscriptAnnouncer";
 import { JumpToLatestButton } from "./JumpToLatestButton";
-import { BOT_STACKED, BOT_TURN_INDENT, isBotTextRow, joinedCorners, needsStamp, quietRow, simpleRowLayout, SIMPLE_BOT_BUBBLE, SIMPLE_BUBBLE_MAX, SIMPLE_BUBBLE_TEXT, SIMPLE_STACKED, SIMPLE_USER_BUBBLE, SIMPLE_USER_MAX, type BubbleJoin } from "./chat-bubble";
+import { BOT_STACKED, BOT_TURN_INDENT, bubbleGroup, isBotTextRow, joinedCorners, needsStamp, quietRow, simpleRowLayout, SIMPLE_BOT_BUBBLE, SIMPLE_BUBBLE_MAX, SIMPLE_BUBBLE_TEXT, SIMPLE_STACKED, SIMPLE_USER_BUBBLE, SIMPLE_USER_MAX, type BubbleJoin } from "./chat-bubble";
 import { BotTurnHead } from "./BotTurnHead"; import { VersionSwitch } from "./VersionSwitch";
 
 const USER_COLLAPSE_CHARS = 600;
@@ -644,10 +645,36 @@ const MessagesList = memo(function MessagesList({
   onRegenerate: () => void;
   onReply: (message: Message) => void;
 }) {
-  const { botId, threadId, botName, botColor, bots, hasMore, focus, showToolCalls, locale, dispatch, canReact, simple = false } = useChatRows(), busy = use(ChatBusyContext);
+  const { botId, threadId, botName, botColor, bots, hasMore, focus, showToolCalls, locale, dispatch, canReact, simple = false, advanced = false } = useChatRows(), busy = use(ChatBusyContext);
   const messages = useLiveTranscript(threadId, saved, transcript);
   // A finished turn keeps the bot's progress lines and folds only its tool steps under "Worked for", in both modes.
   const items = useMemo(() => groupTranscript(messages), [messages, locale]);
+  // Advanced mode: a turn still running shows one open card with its steps so far, and a finished turn's trace sits in its card.
+  const liveStart = useMemo(() => {
+    if (!advanced || !busy || !showToolCalls) return -1;
+    const ids = new Set(liveWorkSteps(messages).map((message) => message.id));
+    let start = items.length;
+    while (start > 0) {
+      const item = items[start - 1]!;
+      if (!(item.kind === "message" ? ids.has(item.message.id) : item.kind === "run" && item.messages.every((step) => ids.has(step.id)))) break;
+      start -= 1;
+    }
+    return start < items.length ? start : -1;
+  }, [advanced, busy, showToolCalls, items, messages]);
+  const traces = useMemo(() => {
+    const byItem = new Map<string, { id: string; at: number }>(), absorbed = new Set<string>();
+    if (!advanced || !showToolCalls) return { byItem, absorbed };
+    const digests = new Map<string, Message>();
+    for (const row of messages) if (row.kind === "digest" && row.digest) digests.set(row.digest.turnId, row);
+    for (const item of items) {
+      if (item.kind !== "turn") continue;
+      const row = digests.get(item.turnId), digest = row?.digest;
+      if (!row || !digest) continue;
+      byItem.set(item.id, { id: traceRootId(digest.threadId, digest.turnId), at: digest.at });
+      absorbed.add(row.id);
+    }
+    return { byItem, absorbed };
+  }, [advanced, showToolCalls, items, messages]);
   const newestMessageId = messages.at(-1)?.id;
   let newestUserMessageId: string | undefined;
   for (let i = messages.length - 1; i >= 0 && !newestUserMessageId; i--) {
@@ -667,6 +694,7 @@ const MessagesList = memo(function MessagesList({
   return (
     <PeerMessagesContext value={transcript}>
       {items.map((item, i) => {
+        if (liveStart >= 0 && i > liveStart) return null;
         const previous = items[i - 1];
         const prev = previous && (previous.kind === "message" ? previous.message : previous.messages.at(-1));
         const first = item.kind === "message" ? item.message : item.messages[0];
@@ -674,13 +702,29 @@ const MessagesList = memo(function MessagesList({
         const divider = dividerAbove(item.kind === "message" ? [item.message] : item.messages);
         if (item.kind === "turn" || item.kind === "run") {
           if (!showToolCalls) return divider && <div key={item.id} className="contents">{divider}</div>;
-          const forceOpen = item.messages.some((step) => step.id === focusedId);
-          const steps = item.messages.map((step) => <div key={step.id} className="contents" data-mid={step.id}><ActivityChip message={step} place={place} /></div>);
+          const live = i === liveStart;
+          const rows = live ? items.slice(i).flatMap((one) => one.kind === "message" ? [one.message] : one.kind === "run" ? one.messages : []) : item.messages;
+          const forceOpen = live || rows.some((step) => step.id === focusedId);
+          const steps = rows.map((step) => <div key={step.id} className="contents" data-mid={step.id}><ActivityChip message={step} place={place} /></div>);
+          const label = item.kind === "turn" ? item.label : undefined;
+          if (!advanced) {
+            return (
+              <div key={item.id} className="contents">
+                {newDay && <DaySeparator at={first.at} today={today} simple={simple} />}
+                {divider}
+                <ActivityRun messages={rows} label={label} forceOpen={forceOpen}>{steps}</ActivityRun>
+              </div>
+            );
+          }
+          const headed = !(previous?.kind === "message" && bubbleGroup(previous.message, botId) === "bot" && !newDay && !divider);
           return (
-            <div key={item.id} className="contents">
+            <div key={live ? `live:${first.id}` : item.id} className="contents">
               {newDay && <DaySeparator at={first.at} today={today} simple={simple} />}
               {divider}
-              <ActivityRun messages={item.messages} label={item.kind === "turn" ? item.label : undefined} forceOpen={forceOpen}>{steps}</ActivityRun>
+              <div className="flex min-w-0 flex-col" data-turn-card>
+                {headed && <div className={BOT_TURN_INDENT}><BotTurnHead bot={bots.find((one) => one.id === botId)} name={botName} color={botColor} time={formatTime(first.at)} onOpen={() => dispatch({ type: "toggleSettings", open: true })} /></div>}
+                <ActivityRun messages={rows} label={label} forceOpen={forceOpen} status={live ? "working" : undefined} trace={traces.byItem.get(item.id)}>{steps}</ActivityRun>
+              </div>
             </div>
           );
         }
@@ -727,7 +771,7 @@ const MessagesList = memo(function MessagesList({
               return <ActivityChip message={m} place={place} />;
             }
             case "digest":
-              return showToolCalls ? <DigestChip message={m} /> : null;
+              return showToolCalls && !traces.absorbed.has(m.id) ? <DigestChip message={m} /> : null;
             case "compaction":
               return <CompactionChip message={m} onNewChat={m.id === lookups.newChatHintId && canReact ? () => dispatch({ type: "newTask", botId }) : undefined} />;
             case "screen":
@@ -742,7 +786,7 @@ const MessagesList = memo(function MessagesList({
                   message={m}
                   emerging={m.id === emergingId}
                   eagerAttachments={m.id === newestMessageId || m.id === newestUserMessageId}
-                  joinAbove={joins?.[i]?.above}
+                  joinAbove={joins?.[i]?.above || (advanced && (previous?.kind === "turn" || previous?.kind === "run") && !newDay && !divider && bubbleGroup(m, botId) === "bot")}
                   joinBelow={joins?.[i]?.below}
                   workedFor={durations?.get(m.id)}
                   editing={editingId === m.id}
@@ -789,6 +833,16 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
   const phone = useMediaQuery(PHONE_LAYOUT);
   const phoneMenu = phone && !remoteClient;
   const pillHead = !remoteClient, simpleHead = !advanced && pillHead;
+  const [renaming, setRenaming] = useState(false);
+  const renameBot = (name: string) => {
+    if (window.ogb?.remoteClient?.active) {
+      void api(`/api/bots/${bot.id}/profile`, { method: "PATCH", body: JSON.stringify({ name }) })
+        .then(({ bot: updated }) => dispatch({ type: "botPatched", bot: updated }))
+        .catch((cause) => dispatch({ type: "error", message: cause instanceof Error ? cause.message : String(cause) }));
+    } else {
+      dispatch({ type: "updateBot", botId: bot.id, patch: { name } });
+    }
+  };
   const canWrite = useCanWriteIn(bot.threadId, bot.yourAccess);
 
   const computerStarting = computerStartLine(state.computerStart, bot.name); useScreensWhile(Boolean(computerStarting));
@@ -924,7 +978,8 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
     }, 520);
   }, [lastMessage?.id, lastMessage?.role, lastMessage?.kind]);
   const teammatesWorking = !advanced && !bot.busy && Boolean(bot.waitingForTeammates);
-  const presenceVisible = waiting || popping !== null || teammatesWorking, sharedRun = useSharedRun(bot, advanced);
+  const liveCard = advanced && Boolean(bot.busy) && showToolCalls && liveWorkSteps(windowedMessages).length > 0;
+  const presenceVisible = (waiting && !liveCard) || popping !== null || teammatesWorking, sharedRun = useSharedRun(bot, advanced);
   const lastShownRow = windowedMessages.findLast((message) => !quietRow(message, showToolCalls));
   const presenceUnderBubble = useHasLiveReply(bot.threadId) || Boolean(lastShownRow && isBotTextRow(lastShownRow, bot.id));
   const announcement = useMemo((): TranscriptSnapshot => {
@@ -979,6 +1034,7 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
             <ChatHeadPill
               bot={bot}
               threadsInPill={!advanced}
+              rename={advanced ? { active: renaming, onCommit: renameBot, onDone: () => setRenaming(false) } : undefined}
               avatar={{ state: stateForBot({ ...bot, messages }), motion: mascotMotion?.kind ?? "none", motionKey: mascotMotion?.nonce ?? 0, animated: headerAnimated }}
               privacy={privateChat ? { kind: "private" } : ownHelper ? { kind: "ownHelper" } : sharedChat && team ? { kind: "shared", team: team.name, onlyPeopleAdded: bot.onlyPeopleAdded, sharedWith: currentTask?.sharedWith?.name } : null}
               onToggle={() => dispatch({ type: "toggleSettings", open: !state.settingsOpen })}
@@ -1003,15 +1059,7 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
               </button>
               <RenameTitle
                 value={bot.name}
-                onCommit={(name) => {
-                  if (window.ogb?.remoteClient?.active) {
-                    void api(`/api/bots/${bot.id}/profile`, { method: "PATCH", body: JSON.stringify({ name }) })
-                      .then(({ bot: updated }) => dispatch({ type: "botPatched", bot: updated }))
-                      .catch((cause) => dispatch({ type: "error", message: cause instanceof Error ? cause.message : String(cause) }));
-                  } else {
-                    dispatch({ type: "updateBot", botId: bot.id, patch: { name } });
-                  }
-                }}
+                onCommit={renameBot}
                 onActivate={() => dispatch({ type: "toggleSettings", open: true })}
                 showEditButton
                 className="truncate text-[14px] font-semibold text-ink"
@@ -1089,7 +1137,7 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
           >
             <Monitor size={16} />{busy && place === "browser" && <span aria-hidden="true" className="absolute right-1 top-1 size-1.5 animate-pulse rounded-full bg-success" data-testid="computer-button-live" />}
           </button>}
-          <HeaderShare bot={bot} />{phoneMenu ? <ChatMoreMenu bot={bot} phoneHeader /> : (advanced || remoteClient) && <ChatHeaderMenu key={`menu:${bot.threadId}`} bot={bot} />}
+          <HeaderShare bot={bot} />{phoneMenu ? <ChatMoreMenu bot={bot} phoneHeader /> : (advanced || remoteClient) && <ChatHeaderMenu key={`menu:${bot.threadId}`} bot={bot} onRename={pillHead ? () => setRenaming(true) : undefined} />}
         </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useMemo, useState, type JSX } from "react";
-import { Bug, Copy, Cpu, Download, Gauge, LayoutTemplate, ListChecks, MessagesSquare, Monitor, MoreHorizontal, RotateCcw, Search, Share, SquarePen, UserPlus, UserRound, Users } from "lucide-react";
+import { Bug, Copy, Cpu, Download, Gauge, LayoutTemplate, ListChecks, MessagesSquare, Monitor, MoreHorizontal, Pencil, RotateCcw, Search, Share, SquarePen, UserPlus, UserRound, Users } from "lucide-react";
 import { currentTaskBot, openBotThread, useStore, visibleMessages, type Bot } from "@/state/store";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { useShowThreads } from "@/lib/thread-preferences";
@@ -256,11 +256,12 @@ function ShareMenu({ bot, className }: { bot: Bot; className: string }) {
 }
 
 /** The same menu as the chat header's plain ⋯ in Advanced mode, opening on hover below the header. */
-export function ChatHeaderMenu({ bot }: { bot: Bot }): JSX.Element {
+export function ChatHeaderMenu({ bot, onRename }: { bot: Bot; onRename?: () => void }): JSX.Element {
   const { items, on } = useChatMoreItems(bot);
+  const withRename: SidebarMenuItem[] = onRename ? [{ key: "rename", label: t("rename.aria"), icon: <Pencil size={16} />, onSelect: onRename }, ...items.map((item, index) => index === 0 ? { ...item, separatorBefore: true } : item)] : items;
   return (
     <SidebarPopoverMenu
-      items={items}
+      items={withRename}
       ariaLabel={t("chat.more")}
       openOnHover
       placement="below"

@@ -3,7 +3,7 @@ import { formatElapsed } from "@/lib/working-time";
 import { t } from "@/lib/i18n";
 import { activityText } from "@/lib/activity-text";
 import { failedTurnCause } from "../../shared/failed-turn";
-import { isStoppedTurnName } from "../../shared/client-cancel";
+import { isCancelledTranscriptRow, isStoppedTurnName } from "../../shared/client-cancel";
 import { localDay } from "@/lib/transcript-derivations";
 
 export type ActivityTranscriptItem =
@@ -187,4 +187,29 @@ export function describeRun(messages: Message[], label: (tool: NonNullable<Messa
   const shown = names.slice(0, MAX_NAMES).join(", ");
   const rest = names.length > MAX_NAMES ? ` ${t("chat.run.more", { count: names.length - MAX_NAMES })}` : "";
   return t("chat.run.steps", { count: messages.length, tools: `${shown}${rest}` });
+}
+
+export type RunStatus = "done" | "working" | "failed";
+
+/** The tool steps at the end of the transcript that nothing has answered yet: the work card of a turn still running. */
+export function liveWorkSteps(messages: readonly Message[]): Message[] {
+  let start = messages.length;
+  while (start > 0 && isToolStep(messages[start - 1]!) && !isCancelledTranscriptRow(messages[start - 1]!)) start -= 1;
+  return messages.slice(start);
+}
+
+export function runStatus(messages: readonly Message[]): RunStatus {
+  return messages.some((message) => message.tool?.ok === false) ? "failed" : "done";
+}
+
+/** The head of Advanced mode's work card: "Worked for 29s", "Working…" or "Failed after 4s". */
+export function runHeadline(messages: readonly Message[], status: RunStatus, label?: string): string {
+  if (status === "working") return t("chat.run.working");
+  const elapsed = messages.length > 1 ? Math.max(0, messages[messages.length - 1]!.at - messages[0]!.at) : 0;
+  if (status === "failed") return elapsed >= 1_000 ? t("chat.run.failedAfter", { elapsed: formatElapsed(elapsed) }) : t("toolDetail.failed");
+  return label ?? workedLabel(elapsed);
+}
+
+export function stepCountLabel(count: number): string {
+  return count === 1 ? t("chat.run.stepOne") : t("chat.run.stepMany", { count });
 }
