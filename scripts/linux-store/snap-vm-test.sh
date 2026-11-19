@@ -5,6 +5,7 @@
 #   scripts/linux-store/snap-vm-test.sh path/to/seira.snap
 #
 # Needs qemu-system-x86_64, qemu-img, xorriso, ssh, ssh-keygen and /dev/kvm.
+# The app listens on its own fixed port inside the VM, which holds no other Seira.
 # Environment: VM_WORK (default ~/.cache/seira-vm), VM_SSH_PORT (default 2222), VM_MEMORY_MB (default 4096),
 # UBUNTU_IMAGE_URL (default: the current Ubuntu 24.04 cloud image), KEEP_VM_DISK=1 keeps the disk files.
 set -euo pipefail
@@ -94,11 +95,11 @@ DATA=$(mktemp -d)
 Xvfb :99 -screen 0 1280x800x24 >/tmp/xvfb.log 2>&1 &
 export DISPLAY=:99
 sleep 2
-OMB_DATA_DIR="$DATA" OMB_PORT=18799 OMB_WEBHOOK_PORT=18800 /snap/bin/seira >/tmp/electron.log 2>&1 &
+OMB_DATA_DIR="$DATA" /snap/bin/seira >/tmp/electron.log 2>&1 &
 APP=$!
 up=no
 for _ in $(seq 1 150); do
-  if curl -fsS "http://127.0.0.1:18799/api/health" >/dev/null 2>&1; then up=yes; break; fi
+  if curl -fsS "http://127.0.0.1:8799/api/health" >/dev/null 2>&1; then up=yes; break; fi
   kill -0 "$APP" 2>/dev/null || break
   sleep 1
 done
@@ -108,7 +109,7 @@ say "electron-cmdline-has-no-sandbox=$(ps -eo args | grep -E '[/]seira|[/]openma
 say "electron-log-no-usable-sandbox=$(grep -ci 'no usable sandbox' /tmp/electron.log)"
 say "electron-log-sandbox-lines:"; grep -i 'sandbox\|namespace\|FATAL' /tmp/electron.log | head -10 | sed 's/^/RESULT   /'
 say "electron-log-head:"; tail -25 /tmp/electron.log | sed 's/^/RESULT   /'
-curl -fsS "http://127.0.0.1:18799/api/health" 2>&1 | head -c 300 | sed 's/^/RESULT health: /'; echo
+curl -fsS "http://127.0.0.1:8799/api/health" 2>&1 | head -c 300 | sed 's/^/RESULT health: /'; echo
 
 CHROME=$(find /snap/seira/current/resources/browser-engine/chrome -name chrome-headless-shell -type f | head -1)
 say "bot-browser-binary=$CHROME"
