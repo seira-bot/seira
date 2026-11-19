@@ -16,9 +16,10 @@ A maintainer starts them by hand to build a desktop package (see
 | `checks` | `pnpm install --frozen-lockfile`, `pnpm i18n:check`, `pnpm lint`, `pnpm check:contrast`, the model manifest and announcements checks, `node scripts/check-local-leaks.mjs`, and the source guards (tests that only read the source) |
 | `build` | `pnpm typecheck`, `pnpm check:electron`, and a production web build (`pnpm exec vite build`) |
 | `vitest (linux, shard n/8)` | The whole Vitest suite in 8 shards, 4 files at once per shard. Shard 1 also runs `pnpm broker:test` and `pnpm test:electron`. |
+| `bug-reports` | `pnpm bugs:check` and `pnpm bugs:test` for the bug report Worker in `cloudflare/bug-reports`. The tests use a fake GitHub and a fake database, so the job needs no secret. |
 | `CI` | The gate. It passes only when every job before it passed. |
 
-`build` and the shards start after `checks` passes.
+`build`, `bug-reports`, and the shards start after `checks` passes.
 
 ## Fork pull requests
 

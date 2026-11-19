@@ -390,6 +390,27 @@ describe("CI required checks", () => {
   });
 });
 
+describe("CI bug-reports job", () => {
+  const job = workflow.jobs["bug-reports"]!;
+
+  it("runs the type check and the tests of the bug report Worker", () => {
+    expect(job).toBeDefined();
+    const commands = runs(job);
+    expect(commands.filter((run) => run === "pnpm bugs:check")).toHaveLength(1);
+    expect(commands.filter((run) => run === "pnpm bugs:test")).toHaveLength(1);
+  });
+
+  it("reads no secret and deploys nothing", () => {
+    expect(JSON.stringify(job)).not.toMatch(/secrets\.|wrangler deploy|bugs:deploy/);
+  });
+
+  it("has a script in package.json for each command it runs", () => {
+    for (const name of ["bugs:types", "bugs:check", "bugs:test", "bugs:deploy"]) expect(scripts[name], name).toBeDefined();
+    expect(scripts["bugs:check"]).toBe("pnpm bugs:types && tsc -p cloudflare/bug-reports/tsconfig.json");
+    expect(scripts["bugs:test"]).toBe("vitest run --config cloudflare/bug-reports/vitest.config.ts");
+  });
+});
+
 describe("CI gate", () => {
   const gate = workflow.jobs.gate;
   const others = Object.keys(workflow.jobs).filter((id) => id !== "gate");
