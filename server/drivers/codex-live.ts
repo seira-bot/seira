@@ -340,7 +340,7 @@ export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
       sdp = await new Promise<string>((resolve, reject) => {
         const timer = setTimeout(() => reject(new EngineLiveVoiceError("no-answer")), timeouts.answerMs);
         timer.unref?.();
-        onSdp = (answer) => { clearTimeout(timer); resolve(answer); };
+        onSdp = (answer) => { clearTimeout(timer); onEarlyFailure = null; resolve(answer); };
         onEarlyFailure = () => { clearTimeout(timer); reject(new EngineLiveVoiceError("failed")); };
         request("thread/realtime/start", {
           threadId: id,
