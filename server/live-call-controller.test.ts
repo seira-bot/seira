@@ -5,9 +5,11 @@ import {
   LIVE_FISH_NEEDS_APP, LIVE_ELEVENLABS_NEEDS_APP, LIVE_GEMINI_NEEDS_APP, LiveCallBusyError, LiveCallController, LiveCallSignedOutError, type LiveActivity, type LiveCallDeps, type LiveSocket,
 } from "./live-call-controller.ts";
 import { LIVE_COPY } from "../shared/live-approval.ts";
-import { LIVE_CUSTOM_REFUSAL } from "./live-access.ts";
-import { LIVE_NEEDS_AZURE, LIVE_NEEDS_KEY, LiveSessionError, type LiveEndpoint } from "./live-call.ts";
+import { LIVE_CODEX_REFUSAL, LIVE_CUSTOM_REFUSAL } from "./live-access.ts";
+import { codexLiveEndpoint, LIVE_CODEX_PHONE, LIVE_NEEDS_AZURE, LIVE_NEEDS_KEY, LiveSessionError, type LiveEndpoint } from "./live-call.ts";
 import { FishRelays, FISH_AGENT_VOICE } from "./live-fish.ts";
+import { liveSessionWiring, shutdownLiveCalls } from "./live-session-wiring.ts";
+import { EngineLiveVoiceError, type EngineLiveVoiceEvent, type EngineLiveVoiceStart } from "./contracts.ts";
 import type { LiveElevenLabsSession, LiveFishSessionToken, LiveGeminiSession } from "../shared/wire.ts";
 import type { RequestAuth } from "./request-auth.ts";
 import type { Message, StoreChange } from "./store.ts";
@@ -84,7 +86,7 @@ describe("LiveCallController lifecycle", () => {
   it("creates the session with the key and voice, attaches the sideband and goes live", async () => {
     const t = setup();
     const result = await t.controller.start({ auth: owner, ...BOT, client: "ios", sdp: "offer-sdp" });
-    expect(t.deps.createSession).toHaveBeenCalledWith({ key: "sk-test", endpoint: ENDPOINT, sdp: "offer-sdp", botId: "bot1", threadId: "t1", voice: "sol" });
+    expect(t.deps.createSession).toHaveBeenCalledWith({ key: "sk-test", endpoint: ENDPOINT, sdp: "offer-sdp", botId: "bot1", threadId: "t1", voice: "sol", signal: expect.any(AbortSignal) });
     expect(result.sdp).toBe("answer-sdp");
     expect(result.call).toMatchObject({ botId: "bot1", threadId: "t1", client: "ios", voice: "sol", status: "connecting" });
     expect(t.socket().url).toBe("ws://fake/sess_1/attach");
@@ -1728,5 +1730,297 @@ describe("LiveCallController record", () => {
     expect(t.controller.current()).toBeNull();
     expect(t.logs.at(-1)).toContain("errors=record");
     await expect(t.start()).resolves.toBeTruthy();
+  });
+});
+
+describe("a Codex Live call", () => {
+  const member: RequestAuth = { kind: "loopback", scopes: ["client"], trust: "service" };
+  const codex = () => {
+    const t = setup();
+    t.settings.key = "";
+    t.settings.endpoint = codexLiveEndpoint();
+    t.settings.provider = "codex";
+    return t;
+  };
+
+  it("refuses a person who is not an admin or the owner, before any session or socket", async () => {
+    const t = codex();
+    t.deps.azureRefusal = vi.fn(() => "not you");
+    await expect(t.controller.start({ auth: member, ...BOT, client: "web", sdp: "a" })).rejects.toMatchObject({ status: 403, message: LIVE_CODEX_REFUSAL });
+    expect(t.deps.createSession).not.toHaveBeenCalled();
+    expect(t.sockets).toHaveLength(0);
+    expect(t.logs.join("\n")).toContain("[live] call refused bot=bot1 client=web provider=codex");
+  });
+
+  it("lets an admin or the owner start a call", async () => {
+    const t = codex();
+    await t.controller.start({ auth: owner, ...BOT, client: "web", sdp: "a" });
+    expect(t.deps.azureRefusal).toHaveBeenCalledWith(owner);
+    expect(t.deps.createSession).toHaveBeenCalledOnce();
+  });
+
+  it("sends a phone to the desktop app or a browser, before any session is created", async () => {
+    for (const client of ["ios", "android"] as const) {
+      const t = codex();
+      await expect(t.controller.start({ auth: owner, ...BOT, client, sdp: "offer-sdp" })).rejects.toMatchObject({ status: 400, message: LIVE_CODEX_PHONE });
+      expect(t.deps.createSession).not.toHaveBeenCalled();
+      expect(t.controller.current()).toBeNull();
+    }
+  });
+
+  it("starts without any key and goes live", async () => {
+    const t = codex();
+    const started = await t.controller.start({ auth: owner, ...BOT, client: "desktop", sdp: "offer-sdp" });
+    expect(t.deps.createSession).toHaveBeenCalledWith(expect.objectContaining({ key: "", endpoint: codexLiveEndpoint(), sdp: "offer-sdp" }));
+    expect(started.sdp).toBe("answer-sdp");
+    t.socket().open();
+    expect(t.controller.current()?.status).toBe("live");
+  });
+
+  it("reports the voice of Codex, not a GPT-Live voice", async () => {
+    const t = codex();
+    t.settings.voice = "cedar";
+    const started = await t.controller.start({ auth: owner, ...BOT, client: "desktop", sdp: "offer-sdp" });
+    expect(started.call.voice).toBe("codex");
+    expect(t.deps.createSession).toHaveBeenCalledWith(expect.objectContaining({ voice: "codex" }));
+    expect(t.logs.join("\n")).toContain("voice=codex");
+  });
+
+  it("still asks for the call request's offer", async () => {
+    const t = codex();
+    await expect(t.controller.start({ auth: owner, ...BOT, client: "web" })).rejects.toMatchObject({ status: 400 });
+    expect(t.deps.createSession).not.toHaveBeenCalled();
+  });
+
+  it("keeps asking for a key on every other provider", async () => {
+    const t = setup();
+    t.settings.key = "";
+    await expect(t.controller.start({ auth: owner, ...BOT, client: "web", sdp: "a" })).rejects.toMatchObject({ status: 409, message: LIVE_NEEDS_KEY });
+  });
+});
+
+describe("a Codex Live call through the real session wiring", () => {
+  function through(opts: { startError?: EngineLiveVoiceError; signedIn?: () => boolean; hold?: Promise<void> } = {}) {
+    const stop = vi.fn(async () => {});
+    const posted: string[] = [];
+    let onEvent!: (event: EngineLiveVoiceEvent) => void;
+    const wiring = liveSessionWiring({
+      bot: () => ({ name: "Ada" }), history: () => [], cloudHome: false, othersOnLoopback: () => false, saveAgent: vi.fn(),
+      codexLive: () => ({
+        cwd: "/work", approvalMode: "ask" as never, botId: "bot1", model: null,
+        startLiveVoice: async (input: EngineLiveVoiceStart) => {
+          await opts.hold;
+          if (opts.startError) throw opts.startError;
+          onEvent = input.onEvent;
+          return { sdp: "codex-answer", appendText: vi.fn(), appendSpeech: vi.fn(), stop };
+        },
+      }),
+      postCallAnswer: ({ text }) => posted.push(text),
+    });
+    const t = setup({ ...wiring.calls, ...(opts.signedIn ? { signedIn: opts.signedIn } : {}) });
+    t.settings.key = "";
+    t.settings.endpoint = codexLiveEndpoint();
+    t.settings.provider = "codex";
+    const begin = () => t.controller.start({ auth: owner, ...BOT, client: "desktop", sdp: "offer-sdp" });
+    return { t, stop, posted, wiring, event: (e: EngineLiveVoiceEvent) => onEvent(e), begin };
+  }
+
+  it("goes live on started with an empty key, and returns the answer unchanged", async () => {
+    const c = through();
+    const started = await c.begin();
+    expect(started.sdp).toBe("codex-answer");
+    expect(c.t.controller.current()?.status).toBe("connecting");
+    c.event({ type: "started" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(c.t.controller.current()?.status).toBe("live");
+    expect(c.t.frames.map((f) => f?.status)).toEqual(["connecting", "live"]);
+  });
+
+  it("goes live when started arrives before the controller attaches", async () => {
+    const c = through();
+    const origCreate = c.t.deps.createSession;
+    c.t.deps.createSession = async (input) => { const out = await origCreate(input); c.event({ type: "started" }); return out; };
+    await c.begin();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(c.t.controller.current()?.status).toBe("live");
+  });
+
+  it("ends a start with no answer as a 502 and leaves no call", async () => {
+    const c = through({ startError: new EngineLiveVoiceError("no-answer") });
+    await expect(c.begin()).rejects.toMatchObject({ status: 502, message: "Codex did not answer in time. Try the call again." });
+    expect(c.t.controller.current()).toBeNull();
+  });
+
+  it("counts transcript deltas as activity, and ends in silence as idle", async () => {
+    const c = through();
+    await c.begin();
+    c.event({ type: "started" });
+    await vi.advanceTimersByTimeAsync(0);
+    for (let i = 0; i < 8; i++) {
+      await vi.advanceTimersByTimeAsync(60_000);
+      c.event({ type: "transcript", role: "user", delta: "still here" });
+    }
+    expect(c.t.controller.current()?.status).toBe("live");
+    await vi.advanceTimersByTimeAsync(5 * 60_000 + IDLE_CHECK_MS * 2);
+    expect(c.t.frames.at(-1)).toMatchObject({ status: "ended", endReason: "idle" });
+    expect(c.stop).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the call live while Codex works with no speech, and ends it as idle after the work stops", async () => {
+    const c = through();
+    await c.begin();
+    c.event({ type: "started" });
+    await vi.advanceTimersByTimeAsync(0);
+    for (let i = 0; i < 14; i++) {
+      await vi.advanceTimersByTimeAsync(60_000);
+      c.event({ type: "working" });
+    }
+    expect(c.t.controller.current()?.status).toBe("live");
+    expect(c.stop).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(5 * 60_000 + IDLE_CHECK_MS * 2);
+    expect(c.t.frames.at(-1)).toMatchObject({ status: "ended", endReason: "idle" });
+    expect(c.stop).toHaveBeenCalledOnce();
+  });
+
+  it("stops Codex once when the person hangs up before Codex has answered", async () => {
+    let release!: () => void;
+    const c = through({ hold: new Promise<void>((resolve) => { release = resolve; }) });
+    const starting = c.begin();
+    await c.t.controller.end(c.t.controller.current()!.callId);
+    release();
+    await expect(starting).rejects.toMatchObject({ status: 503 });
+    expect(c.stop).toHaveBeenCalledOnce();
+    expect(c.t.controller.current()).toBeNull();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("leaves nothing to stop when Codex fails to start after the person hung up", async () => {
+    let release!: () => void;
+    const c = through({ startError: new EngineLiveVoiceError("no-answer"), hold: new Promise<void>((resolve) => { release = resolve; }) });
+    const starting = c.begin();
+    await c.t.controller.end(c.t.controller.current()!.callId);
+    release();
+    await expect(starting).rejects.toMatchObject({ status: 502 });
+    expect(c.stop).not.toHaveBeenCalled();
+    expect(c.t.controller.current()).toBeNull();
+    await expect(c.wiring.stopAll()).resolves.toBeUndefined();
+  });
+
+  it("stops Codex once when the person hangs up", async () => {
+    const c = through();
+    const started = await c.begin();
+    c.event({ type: "started" });
+    await vi.advanceTimersByTimeAsync(0);
+    await c.t.controller.end(started.call.callId);
+    expect(c.t.frames.at(-1)).toMatchObject({ status: "ended", endReason: "hung-up" });
+    expect(c.stop).toHaveBeenCalledOnce();
+  });
+
+  it("stops Codex once when Codex closes the call", async () => {
+    const c = through();
+    await c.begin();
+    c.event({ type: "started" });
+    await vi.advanceTimersByTimeAsync(0);
+    c.event({ type: "closed", reason: "expired" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(c.t.frames.at(-1)).toMatchObject({ status: "ended", endReason: "expired" });
+    expect(c.stop).toHaveBeenCalledOnce();
+  });
+
+  it("stops Codex once when the person signs out", async () => {
+    let signedIn = true;
+    const c = through({ signedIn: () => signedIn });
+    await c.begin();
+    c.event({ type: "started" });
+    await vi.advanceTimersByTimeAsync(0);
+    signedIn = false;
+    await vi.advanceTimersByTimeAsync(IDLE_CHECK_MS * 2);
+    expect(c.t.frames.at(-1)).toMatchObject({ status: "ended", endReason: "signed-out" });
+    expect(c.stop).toHaveBeenCalledOnce();
+  });
+
+  it("ends the call as a shutdown, and waits for a slow stop of Codex, when the server shuts down", async () => {
+    const c = through();
+    let release!: () => void;
+    c.stop.mockImplementation(() => new Promise<void>((resolve) => { release = resolve; }));
+    await c.begin();
+    c.event({ type: "started" });
+    await vi.advanceTimersByTimeAsync(0);
+    let done = false;
+    const shutting = shutdownLiveCalls(c.t.controller, c.wiring).then(() => { done = true; });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(c.t.frames.at(-1)).toMatchObject({ status: "ended", endReason: "shutdown" });
+    expect(c.t.frames.at(-1)?.error).toBeUndefined();
+    expect(done).toBe(false);
+    release();
+    await shutting;
+    expect(c.stop).toHaveBeenCalledOnce();
+  });
+
+  it("aborts the start of the session when the person hangs up before it is created, and not after", async () => {
+    let signal!: AbortSignal;
+    let release!: (answer: { sessionId: string; sdp: string }) => void;
+    const t = setup({ createSession: vi.fn((input) => { signal = input.signal!; return new Promise<{ sessionId: string; sdp: string }>((resolve) => { release = resolve; }); }) });
+    const starting = t.controller.start({ auth: owner, ...BOT, client: "desktop", sdp: "offer-sdp" });
+    const rejected = expect(starting).rejects.toMatchObject({ status: 503 });
+    expect(signal.aborted).toBe(false);
+    await t.controller.end(t.controller.current()!.callId);
+    expect(signal.aborted).toBe(true);
+    release({ sessionId: "sess_1", sdp: "answer-sdp" });
+    await rejected;
+
+    const live = setup({ createSession: vi.fn(async (input) => { signal = input.signal!; return { sessionId: "sess_2", sdp: "answer-sdp" }; }) });
+    const started = await live.start();
+    expect(started.call.callId).toBeTruthy();
+    await live.controller.shutdown();
+    expect(signal.aborted).toBe(false);
+  });
+
+  it("stops Codex once on server shutdown", async () => {
+    const c = through();
+    await c.begin();
+    c.event({ type: "started" });
+    await vi.advanceTimersByTimeAsync(0);
+    await c.t.controller.shutdown();
+    await c.wiring.stopAll();
+    expect(c.t.frames.at(-1)).toMatchObject({ status: "ended", endReason: "shutdown" });
+    expect(c.stop).toHaveBeenCalledOnce();
+  });
+
+  it("ends the call and stops Codex when Codex never reports started", async () => {
+    const c = through();
+    await c.begin();
+    await vi.advanceTimersByTimeAsync(ATTACH_TIMEOUT_MS + 1);
+    expect(c.t.frames.at(-1)).toMatchObject({ status: "ended", endReason: "sideband-lost" });
+    expect(c.stop).toHaveBeenCalledOnce();
+  });
+
+  it("ends the call as unexpected when Codex fails, for an exit and for an error", async () => {
+    for (const reason of ["exit", "error"] as const) {
+      const c = through();
+      await c.begin();
+      c.event({ type: "started" });
+      await vi.advanceTimersByTimeAsync(0);
+      c.event({ type: "failed", reason });
+      expect(c.t.frames.at(-1), reason).toMatchObject({ status: "ended", endReason: "sideband-lost" });
+      expect(c.stop, reason).toHaveBeenCalledOnce();
+      expect(c.t.controller.current()).toBeNull();
+    }
+  });
+
+  it("posts answers to the chat and keeps the call record without transcript text in the log", async () => {
+    const recordCall = vi.fn();
+    const c = through();
+    c.t.deps.recordCall = recordCall;
+    const started = await c.begin();
+    c.event({ type: "started" });
+    await vi.advanceTimersByTimeAsync(0);
+    c.event({ type: "transcript", role: "user", delta: "my secret phrase" });
+    c.event({ type: "answer", text: "an answer phrase" } as never);
+    await c.t.controller.end(started.call.callId);
+    expect(c.posted).toEqual(["an answer phrase"]);
+    expect(recordCall).toHaveBeenCalledOnce();
+    expect(recordCall.mock.calls[0]![0].record).toMatchObject({ botId: "bot1", client: "desktop", endReason: "hung-up" });
+    expect(c.t.logs.join("\n")).not.toMatch(/secret phrase|answer phrase/);
   });
 });

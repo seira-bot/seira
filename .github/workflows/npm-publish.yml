@@ -1,0 +1,174 @@
+name: npm publish
+
+# Publishes `@seira-bot/seira` to npm with npm Trusted Publishing (docs/releasing.md).
+# No npm token exists in this repository. npm trusts this workflow file and the `release` environment through the GitHub OIDC token.
+# - It starts when a release is published, or by hand with a tag.
+# - The `commit` job finds the commit of the tag before the approval. The `publish` job builds that commit only.
+# - A run that a person outside the repository variable RELEASE_MAINTAINERS starts waits for a maintainer's approval in the `release-approval` environment.
+#   The `publish` job runs only if a maintainer started this attempt, or if the approval came in this same attempt.
+#   A re-run by another person therefore never reuses an approval of an earlier attempt.
+# - The `publish` job uses the `release` environment. The npm Trusted Publisher names that environment.
+# - A version that is already on npm is skipped, so a repeated run does nothing.
+# scripts/ci-workflow.test.ts and scripts/npm-publish-workflow.test.ts hold these rules.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release tag to publish, like v0.1.178. It must match the version in package.json.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  commit:
+    name: find the commit to publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+      tag: ${{ steps.sha.outputs.tag }}
+    steps:
+      - name: Find the commit of the tag
+        id: sha
+        shell: bash
+        env:
+          TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The tag must look like v1.2.3."
+            exit 1
+          fi
+          lines=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY.git" "refs/tags/$TAG" "refs/tags/$TAG^{}")
+          # An annotated tag lists its commit on the line that ends in ^{}. A light tag lists it on the plain line.
+          sha=$(awk -v peeled="refs/tags/$TAG^{}" '$2 == peeled { print $1 }' <<<"$lines")
+          [ -n "$sha" ] || sha=$(awk -v plain="refs/tags/$TAG" '$2 == plain { print $1 }' <<<"$lines")
+          if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The repository has no commit for this tag."
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Tag \`$TAG\` is commit \`$sha\`." >> "$GITHUB_STEP_SUMMARY"
+
+  approval:
+    name: approval for a person outside the maintainers
+    needs: commit
+    if: ${{ !(startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: release-approval
+    permissions: {}
+    outputs:
+      attempt: ${{ github.run_attempt }}
+    steps:
+      - run: echo "A maintainer approved this run."
+
+  publish:
+    name: publish to npm
+    needs: [commit, approval]
+    if: ${{ !cancelled() && needs.commit.result == 'success' && ((startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.commit.outputs.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          # A published package must not read a dependency cache that another run wrote.
+          package-manager-cache: false
+
+      - name: Check the version
+        id: version
+        shell: bash
+        env:
+          TAG: ${{ needs.commit.outputs.tag }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          echo "tag:     $TAG"
+          echo "version: $version"
+          echo "commit:  $(git rev-parse HEAD)"
+          [ "$TAG" = "v$version" ] || { echo "::error::tag $TAG holds package.json version $version"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Look for the version on npm
+        id: exists
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if found=$(npm view "@seira-bot/seira@$VERSION" version 2>/dev/null) && [ -n "$found" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Version \`$VERSION\` is already on npm. Nothing to publish." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Trusted Publishing needs npm 11.5.1 or newer.
+      - name: Make sure npm can publish with OIDC
+        if: steps.exists.outputs.exists != 'true'
+        shell: bash
+        run: |
+          current=$(npm --version)
+          if node -e 'const [a,b,c]=process.argv[1].split(".").map(Number);process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)' "$current"; then
+            echo "npm $current"
+          else
+            npm install --global npm@11.5.1
+            echo "npm $(npm --version)"
+          fi
+
+      - name: Install
+        if: steps.exists.outputs.exists != 'true'
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the package
+        if: steps.exists.outputs.exists != 'true'
+        run: pnpm build:server && pnpm exec vite build && node scripts/build-npm-package.mjs
+
+      - name: Pack and check the tarball
+        if: steps.exists.outputs.exists != 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd release/npm
+          npm pack --silent
+          tarball="seira-bot-seira-$VERSION.tgz"
+          test -f "$tarball"
+          rm -rf "$RUNNER_TEMP/seira-pack" && mkdir -p "$RUNNER_TEMP/seira-pack"
+          tar -xzf "$tarball" -C "$RUNNER_TEMP/seira-pack"
+          test ! -d "$RUNNER_TEMP/seira-pack/package/node_modules"
+          test "$(node -p "require('$RUNNER_TEMP/seira-pack/package/package.json').name")" = "@seira-bot/seira"
+          node "$RUNNER_TEMP/seira-pack/package/cli.js" --help | grep -q "serve"
+
+      # No token is set. npm exchanges the OIDC token of this job for a short publish token.
+      - name: Publish to npm
+        if: steps.exists.outputs.exists != 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          npm publish "release/npm/seira-bot-seira-$VERSION.tgz" --provenance --access public
+          echo "Published \`@seira-bot/seira@$VERSION\` to npm." >> "$GITHUB_STEP_SUMMARY"

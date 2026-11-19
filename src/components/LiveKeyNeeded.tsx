@@ -18,6 +18,7 @@ export function LiveKeyNeeded() {
   const fish = live?.provider === "fish";
   const gemini = live?.provider === "gemini";
   const elevenlabs = live?.provider === "elevenlabs";
+  const codex = live?.provider === "codex";
   const copy = liveKeyCopy(live?.provider);
   // A key is tied to the endpoint it is saved for, so the endpoint comes first.
   const keyForm = (Boolean((azure && live?.azureEndpoint) || (custom && live?.customEndpoint)) && live?.keySource !== "live") || (fish && live?.keySource !== "fishAudio") || (gemini && live?.keySource !== "gemini")
@@ -28,9 +29,9 @@ export function LiveKeyNeeded() {
       <h2 id={titleId} className="text-[14px] font-medium leading-[1.4] text-ink">{t(copy.needs)}</h2>
     </div>
     <ProviderAndKey formKey={liveKeyFormKey(live)} keyForm={keyForm} />
-    {(azure || custom || fish || gemini || elevenlabs) && <DismissWhenReady ready={live?.configured === true} />}
-    {!azure && !custom && !fish && !gemini && !elevenlabs && <button type="button" className="ui-button ui-button-primary self-start" onClick={() => { dismissLiveNotice(); dispatch(openKeySettings("openai", "liveCalls")); }}>{t("call.live.openApiKeys")}</button>}
-    <p className="text-[12px] leading-[1.45] text-ink-tertiary">{!keyForm && `${liveDisclosure({ cloudHome: state.config?.cloudHome === true, azure, custom, fish, gemini, elevenlabs })} `}{t(copy.cost)}</p>
+    {(azure || custom || fish || gemini || elevenlabs || codex) && <DismissWhenReady ready={live?.configured === true} />}
+    {!azure && !custom && !fish && !gemini && !elevenlabs && !codex && <button type="button" className="ui-button ui-button-primary self-start" onClick={() => { dismissLiveNotice(); dispatch(openKeySettings("openai", "liveCalls")); }}>{t("call.live.openApiKeys")}</button>}
+    <p className="text-[12px] leading-[1.45] text-ink-tertiary">{!keyForm && `${liveDisclosure({ cloudHome: state.config?.cloudHome === true, azure, custom, fish, gemini, elevenlabs, codex })} `}{t(copy.cost)}</p>
   </section>;
 }
 

@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Seira
-Comment=Your own team of AI bots, in a chat app
+Comment=Your own team of AI agents in one chat app
 Exec=seira %U
 Icon=bot.seira.Seira
 Terminal=false

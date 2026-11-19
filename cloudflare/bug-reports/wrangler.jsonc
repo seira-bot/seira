@@ -1,0 +1,30 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "seira-bug-reports",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-25",
+  "workers_dev": false,
+  "routes": [{ "pattern": "bugs.seira.bot", "custom_domain": true }],
+  "vars": {
+    "GITHUB_REPOSITORY": "seira-bot/seira",
+    "GLOBAL_HOURLY_LIMIT": "30",
+    "REPORTS_PAUSED": "false"
+  },
+  "secrets": { "required": ["GITHUB_APP_ID", "GITHUB_APP_INSTALLATION_ID", "GITHUB_APP_PRIVATE_KEY"] },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "seira-bug-reports",
+      "database_id": "22a4e455-bf0d-463f-8f40-0d055d41d2bd",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "ratelimits": [
+    { "name": "REPORT_LIMITER", "namespace_id": "18110002", "simple": { "limit": 10, "period": 60 } },
+    { "name": "STATUS_LIMITER", "namespace_id": "18110003", "simple": { "limit": 60, "period": 60 } }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 }
+  }
+}

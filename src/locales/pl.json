@@ -7114,5 +7114,9 @@
   "call.capability.turnsNeedDeepSeekKey": "Dodaj klucz DeepSeek, aby rozmawiać po kolei w połączeniach",
   "alwaysOn.section": "Zawsze włączony dom",
   "alwaysOn.title": "Używaj tego komputera jako zawsze włączonego domu",
-  "alwaysOn.add.title": "Dodaj Maca mini lub inny zawsze włączony komputer"
+  "alwaysOn.add.title": "Dodaj Maca mini lub inny zawsze włączony komputer",
+  "call.live.provider.codex": "Codex",
+  "call.live.codexHint": "Połączenia korzystają z logowania do ChatGPT w Codex na tym komputerze. Zadzwoń do bota, który działa na Codex.",
+  "call.live.disclosureCodex": "Rozmowy na żywo przez Codex wysyłają Twój głos do OpenAI przez Twoje konto ChatGPT w Codex, razem z ostatnimi wiadomościami czatu i personą bota.",
+  "call.live.codexCost": "Rozmowy przez Codex korzystają z limitu głosowego Twojego planu ChatGPT."
 }

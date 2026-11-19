@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AppConfig } from "./config.ts";
 import { nestedKeyStatus } from "./key-hint.ts";
-import { LIVE_NEEDS_AZURE, LIVE_NEEDS_ELEVENLABS, LIVE_NEEDS_FISH, LIVE_NEEDS_GEMINI, LIVE_NEEDS_KEY } from "./live-call.ts";
+import { codexLiveEndpoint, LIVE_NEEDS_AZURE, LIVE_NEEDS_ELEVENLABS, LIVE_NEEDS_FISH, LIVE_NEEDS_GEMINI, LIVE_NEEDS_KEY } from "./live-call.ts";
 import { fishKeyFromLiveKey, LIVE_KEY_NEEDS_ENDPOINT, liveConfigWithEnv, liveKeyTarget, liveSavePatch, usableLiveKey, type LiveConfig } from "./live-config.ts";
 import { fishKeyPrint } from "./live-fish.ts";
 import { LIVE_IDLE_MINUTES_DEFAULT, liveCallEndpoint, liveCallKey, liveCallSettings, liveSettingsFor, liveSettingsForClient, liveSetupProblem } from "./live-settings.ts";
@@ -351,5 +351,36 @@ describe("Live calls through ElevenLabs", () => {
     const settings = liveSettingsFor(cfg);
     expect(settings).toMatchObject({ configured: true, keySource: "elevenlabs", provider: "elevenlabs" });
     expect(JSON.stringify(settings)).not.toContain("eleven-secret");
+  });
+});
+
+describe("Live calls through Codex", () => {
+  const codex = { provider: "codex" as const };
+
+  it("use no key, not even one saved for OpenAI, and have no setup to finish", () => {
+    const cfg = { live: { ...codex, key: "sk-live", keyFor: "openai" }, openai: { key: "sk-openai" } } as AppConfig;
+    expect(liveCallKey(cfg)).toBeNull();
+    expect(liveSetupProblem(cfg)).toBeNull();
+    expect(liveCallEndpoint(cfg, {})).toEqual(codexLiveEndpoint());
+    expect(liveCallEndpoint(cfg, {})).not.toBeNull();
+    expect(liveCallSettings(cfg)).toMatchObject({ key: "", setupProblem: null, provider: "codex", endpoint: codexLiveEndpoint() });
+  });
+
+  it("keep the provider and report it configured with no key source", () => {
+    const settings = liveSettingsFor({ live: codex } as AppConfig);
+    expect(settings).toMatchObject({ configured: true, provider: "codex" });
+    expect(settings).not.toHaveProperty("keySource");
+    expect(settings).not.toHaveProperty("codexAvailable");
+  });
+
+  it("tell the client whether Codex is installed only when asked", () => {
+    expect(liveSettingsFor({} as AppConfig, { codexAvailable: true })).toMatchObject({ codexAvailable: true });
+    expect(liveSettingsFor({} as AppConfig, { codexAvailable: false })).toMatchObject({ codexAvailable: false });
+    expect(liveSettingsForClient(liveSettingsFor({} as AppConfig, { codexAvailable: true }))).toMatchObject({ codexAvailable: true });
+  });
+
+  it("can be chosen from the environment", () => {
+    expect(liveConfigWithEnv(undefined, { OMB_LIVE_PROVIDER: "codex" }).provider).toBe("codex");
+    expect(liveConfigWithEnv(undefined, { OMB_LIVE_PROVIDER: "nope" }).provider).toBeUndefined();
   });
 });

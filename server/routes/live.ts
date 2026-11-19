@@ -46,7 +46,7 @@ const relayBody = z.object({
 }).strict();
 // Strict, so `key` is refused rather than ignored: the key is saved only through the credential store or PUT /api/config.
 const settingsBody = z.object({
-  provider: z.enum(["openai", "azure", "fish", "gemini", "elevenlabs", "custom"]).optional(),
+  provider: z.enum(["openai", "azure", "fish", "gemini", "elevenlabs", "custom", "codex"]).optional(),
   // "" clears the field. Anything else must be an https Azure OpenAI host, since the key is sent there.
   azureEndpoint: z.string().trim().max(300).refine((url) => url === "" || azureOpenAiRoot(url) !== null).optional(),
   azureDeployment: z.string().trim().max(64).refine((name) => name === "" || azureLiveDeployment(name) === name).optional(),
@@ -93,7 +93,7 @@ export function createLiveRoutes(deps: LiveRouteDeps): RouteHandler {
       } catch (error) {
         if (error instanceof LiveCallBusyError) return json(res, 409, { error: error.message, activeCall: error.call });
         if (error instanceof LiveSessionError) {
-          return json(res, error.status, error.status === 409 ? { error: error.message, needsKey: true } : { error: error.message });
+          return json(res, error.status, error.status === 409 && deps.settings().provider !== "codex" ? { error: error.message, needsKey: true } : { error: error.message });
         }
         throw error;
       }

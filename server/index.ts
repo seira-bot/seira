@@ -320,8 +320,8 @@ import { voiceNoteFailure } from "./tts/errors.ts";
 import { createDecider, deciderReady, describeDecider } from "./decider/index.ts"; import { createExtractor, describeHelpers } from "./extractor/index.ts";
 import { createStopLineRoutes } from "./routes/stop-line.ts"; import { decideRoomResponder } from "./decider/room-routing.ts"; import { roomRoutingInput } from "./host/room-routing-input.ts";
 import { autoRoomDefault, roomTurnMembers } from "./room-routing-members.ts";
-import { liveHistoryFrom, LiveSessionError, type LiveBot, type LiveHistoryMessage } from "./live-call.ts";
-import { LiveCallController, LiveCallSignedOutError } from "./live-call-controller.ts"; import { liveSessionWiring } from "./live-session-wiring.ts";
+import { createLiveCallHost } from "./host/live-calls.ts";
+import { LiveCallController, LiveCallSignedOutError } from "./live-call-controller.ts"; import { liveSessionWiring, shutdownLiveCalls } from "./live-session-wiring.ts";
 import { liveCallSettings, liveSettingsFor, liveSettingsForClient, saveLiveSettings } from "./live-settings.ts"; import { azureLiveCallRefusal, liveScopeRefusal } from "./live-access.ts";
 import { recordLiveCall, spokenLineFields, titleLiveCall } from "./live-call-record.ts"; import { finalTurnBlock, noteGroupTurn, roomRoundPasses, roomTurnsPerMember, turnsPerMemberPatch, turnsSince } from "./room-round-turns.ts";
 import { narrateTool, toUtterances } from "./tts/speech-text.ts";
@@ -806,6 +806,7 @@ function customDomainStatus() {
 }
 const registry = new ProviderRegistry(BUILT_IN_DRIVERS, { statusFile: join(DATA_DIR, "providers", "engine-status.json") });
 const supportsApprovalMode = createApprovalModeSupport(registry);
+const codexInstalled = () => registry.instances().some((instance) => instance.driverKind === "codex");
 registerEnginesBinDir(); const engineUpdates = engineUpdatesFor({ drivers: BUILT_IN_DRIVERS, turnRunning: () => store.bots.some((bot) => botHasActiveTurn(bot.id)) || store.groups.some(groupIsWorking) || Boolean(routines?.hasActiveRuns()), configuredClis: () => Object.values(providerConfigs()).flatMap((entry) => { const cli = (entry.config as { cli?: unknown } | undefined)?.cli; return typeof cli === "string" && cli ? [cli] : []; }), updated: () => { registry.forgetSnapshots(); broadcast({ kind: "config", ...configStatus() }); } });
 
 // Set only when a turn is admitted, never on queue or steer, so a second person's words cannot re-book the first person's turn.
@@ -7892,16 +7893,14 @@ async function beginTurn(
         ensureWorkspace(bot.id, appLanguage());
         if (bot.memoryEnabled !== false) beginMemoryTurn(teamHost.layer(bot.id, threadId), threadId); botBox.lend(bot.id, threadId, teamHost.layerDirs(bot.id, threadId)); teamFilesHost.beginTurn(bot.id, threadId);
       }
-      const privateWorkspace = worksInWorkspace ? ensureTaskWorkspaceWithSkills(bot.id, threadId, skillsHost.turnImports(bot, threadId, instance)) : undefined;
+      const folders = worksInWorkspace ? taskFolders(bot, threadId, instance) : undefined;
+      const privateWorkspace = folders?.privateWorkspace;
       const skillInstructions = renderSkillInstructions(selectedSkills, {
         includeRoot: worksInWorkspace,
       });
       const packagePlaybooks = installedPlaybookInstructions(providerText, bot.playbooks);
       // A legacy task with a live provider session pins to null, since moving it breaks resume; a Cloud guest's conversation pins its own private folder.
-      const pinnedCwd =
-        privateWorkspace
-          ? store.pinTaskCwd(bot.id, threadId, privateWorkspace, { privateOnly: cloudGuestOpened(threadId) || botApiThread(threadId) })
-          : null;
+      const pinnedCwd = folders ? folders.pinnedCwd : null;
       const cwd = pinnedCwd ?? undefined;
       const checkpointCwd = cwd && cwd !== privateWorkspace ? cwd : undefined;
       const dwebUrl = process.env.DWEB_URL?.trim();
@@ -11698,7 +11697,7 @@ function configStatus() {
     tts: tts.describeVoice(cfg),
     decider: describeDecider(cfg), helpers: describeHelpers(cfg),
     imageGen: avatarImageStatus(cfg), savedKeys: nestedKeyStatus(cfg),
-    live: liveSettingsFor(cfg),
+    live: liveSettingsFor(cfg, { codexAvailable: codexInstalled() }),
     profile: CLOUD_TEAM ? NOBODY_PROFILE : { name: cfg.profile?.name ?? "", email: cfg.profile?.email ?? "", aboutMe: cfg.profile?.aboutMe ?? "", ...(cfg.profile?.avatarUrl ? { avatarUrl: cfg.profile.avatarUrl } : {}) },
     managedPolicy: managedPolicy.summary(),
     ...(CLOUD_HOME ? { cloudHome: true } : {}), ...(CLOUD_TEAM ? { team: { id: CLOUD_TEAM.id, name: CLOUD_TEAM.name, ...(CLOUD_HOME ? { cloudPage: `${CLOUD_HOME.adminOrigin}/cloud` } : {}) } } : {}),
@@ -12388,26 +12387,20 @@ ROUTES.push(createBrowserViewerRoutes({
 const internalToolRoutes = createInternalToolRoutes({ engineLimits: { instances: () => registry.instances(), configs: () => instanceConfigs(cfg), status: (instanceId) => registry.knownSnapshot(instanceId), load: (accounts) => loadPlanUsage({ accounts }), audienceOf: (threadId) => teamHost.audienceOf(threadId), guestDriven: cloudGuestDriven, dataDir: DATA_DIR }, helpers: { decider, extractor }, notifications: { bot: (id) => store.bot(id), team: sharedMembership, broadcast }, xResearch: { credential: () => researchCredential(cfg.treg?.key), botEnabled: (botId) => store.bot(botId)?.xResearch !== false, cloudHome: CLOUD_HOME !== null, researchOff: () => researchAvailability.refused() }, appPublisher }); const waitRoutes = createWaitRoutes({ waits: botWaits, cloudHome: Boolean(CLOUD_HOME), sleeps: Boolean(CLOUD_HOME) && CLOUD_TEAM === null }); ROUTES.push(createXConnectorRoutes({ credential: () => researchCredential(cfg.treg?.key), included: () => xCredential(), unavailable: () => xResearchStatus().unavailable === true }));
 
 // Live calls: the client holds the WebRTC audio; the key never leaves the harness, which creates the session.
-function liveBotFor(botId: string): LiveBot {
-  const bot = store.bot(botId);
-  if (!bot) throw new LiveSessionError("That bot no longer exists.", 404);
-  return { name: bot.name, title: bot.title, description: bot.description };
-}
-function liveHistoryFor(threadId: string): LiveHistoryMessage[] {
-  return liveHistoryFrom(sinceFreshStart(store.activePath(threadId)));
-}
 /** A signed-out or removed person's call must not keep reaching the bot or spending the key. */
 function liveSignedIn(auth: RequestAuth): boolean {
   return auth.kind !== "session" || sessions.isLive(auth.session.id);
 }
-/** On the bot's own engine, which already saw the requests, so nothing new reaches OpenAI. */
-function liveCallTitle(botId: string, threadId: string, excerpt: string): Promise<string | null> | null {
-  const bot = store.projectBotForTask(botId, threadId);
-  if (!bot) return null;
-  const gate = threadTitleGate(bot);
-  return gate.ok ? generateThreadTitle(gate.instance, excerpt, "call") : null;
+/** The conversation's private folder and the folder its work is pinned to, if any. A chat turn and a Live call both start here. */
+function taskFolders(bot: BotRecord, threadId: string, instance: { instanceId: string; driverKind: string }): { privateWorkspace: string; pinnedCwd: string | null } {
+  const privateWorkspace = ensureTaskWorkspaceWithSkills(bot.id, threadId, skillsHost.turnImports(bot, threadId, instance));
+  const pinnedCwd = store.pinTaskCwd(bot.id, threadId, privateWorkspace, { privateOnly: cloudGuestOpened(threadId) || botApiThread(threadId) });
+  return { privateWorkspace, pinnedCwd };
 }
-const liveWiring = liveSessionWiring({ bot: liveBotFor, history: liveHistoryFor, cloudHome: Boolean(CLOUD_HOME), othersOnLoopback: adminActivityRecording, saveAgent: (agent) => { saveConfig({ live: agent }); Object.assign(cfg, loadConfig()); }, language: appLanguage, fishAgentLanguage: () => cfg.live?.fishAgentLanguage });
+const { liveBotFor, liveHistoryFor, liveCallTitle, liveCodexFor, postLiveCallAnswer } = createLiveCallHost({
+  store, registry, taskFolders, toolScopeForTurn, approvalModeForTurn, cloudGuestDriven, botApiThread, threadTitleGate, generateThreadTitle, sinceFreshStart,
+});
+const liveWiring = liveSessionWiring({ codexLive: liveCodexFor, postCallAnswer: postLiveCallAnswer, bot: liveBotFor, history: liveHistoryFor, cloudHome: Boolean(CLOUD_HOME), othersOnLoopback: adminActivityRecording, saveAgent: (agent) => { saveConfig({ live: agent }); Object.assign(cfg, loadConfig()); }, language: appLanguage, fishAgentLanguage: () => cfg.live?.fishAgentLanguage });
 const liveCalls = new LiveCallController({
   store,
   send: async ({ auth, botId, threadId, text, callId }) => {
@@ -12478,14 +12471,14 @@ ROUTES.push(createLiveRoutes({
     if (store.botByThread(target)?.id !== bot.id) return null;
     return { botId: bot.id, botName: bot.name, threadId: target };
   },
-  settings: () => liveSettingsFor(cfg),
+  settings: () => liveSettingsFor(cfg, { codexAvailable: codexInstalled() }),
   fishRelay: liveWiring.fishRelay,
   saveSettings: async (patch) => {
     if (providerConfigBusy) throw Object.assign(new Error("Settings are already being updated. Try again in a moment."), { status: 409 });
     saveLiveSettings(cfg, patch);
     Object.assign(cfg, loadConfig());
     broadcast({ kind: "config", ...configStatus() });
-    return liveSettingsFor(cfg);
+    return liveSettingsFor(cfg, { codexAvailable: codexInstalled() });
   },
 }));
 
@@ -15353,7 +15346,7 @@ const gracefulShutdown = createGracefulShutdown({
       await Promise.all([...temporaries, browserSweep.closeAll()]);
       await browserRuntime.closeAll();
     },
-    () => liveCalls.shutdown(),
+    () => shutdownLiveCalls(liveCalls, liveWiring),
     () => flushAllProfileHistory(),
     () => flushAllMemoryJournals(),
     () => flushUsageLedger(DATA_DIR),
