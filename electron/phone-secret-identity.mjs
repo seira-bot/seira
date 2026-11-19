@@ -209,3 +209,19 @@ export function createPhoneSecretSaveCoordinator(save, maximumCompleted = 512) {
     return operation.promise;
   };
 }
+
+export function createPhoneSecretSaveReceiver(save, log) {
+  const saveOnce = createPhoneSecretSaveCoordinator(save);
+  return (proc, rawMessage) => {
+    const request = decodePhoneSecretSaveRequest(rawMessage);
+    if (!request) return false;
+    void saveOnce(request).then((result) => {
+      try {
+        proc.postMessage(result);
+      } catch (error) {
+        log(`phone credential save result failed: ${error?.message ?? error}`);
+      }
+    });
+    return true;
+  };
+}

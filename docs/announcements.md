@@ -78,7 +78,7 @@ shows it again to everyone.
       "label": "Sponsor",
       "title": "Acme Inference: $5 of free credit",
       "body": "Acme Inference sponsors Seira. New accounts get $5 of credit for any model they serve.",
-      "primary": { "label": "Get a key", "action": { "open_url": "https://example.com/acme?utm_source=openmausbot&utm_medium=sponsorship" } },
+      "primary": { "label": "Get a key", "action": { "open_url": "https://example.com/acme?utm_source=seira&utm_medium=sponsorship" } },
       "secondary": { "label": "Add a key", "action": { "open": "api_keys" } },
       "starts": "2026-12-01T00:00:00Z",
       "ends": "2026-12-15T00:00:00Z",
@@ -150,21 +150,21 @@ that use it.
 
 ## The rules the app keeps, whatever the file says
 
-- **Once per person per `id`.** The app remembers a card someone closed or used the way it remembers the built-in sponsor card (`MODELGO_OFFER_NOTICE`):
+- **Once per person per `id`.** The app remembers a card someone closed or used the way it remembers every other notice:
   in the browser, in the desktop app's own record for every page its window shows (My Cloud's included), and in the
   workspace's record. On a Team Cloud the workspace record is the whole team's, so there it uses only the first two.
 - **One card on screen, through the notice queue.** A remote card comes after everything else in
   `src/lib/notices.ts`'s queue that is due: the Grok Bot move, the What's new popup, the product-updates question, bots
-  in two places, the Cloud trial and account notices, and the built-in sponsor and partner offers; only the GitHub star comes
-  after it. Like the built-in sponsor card it may also follow the launch's first notice in the same launch, once that
-  notice is closed, after the product-updates question and the built-in sponsor card, so it reaches people on their next
+  in two places and the Cloud trial and account notices; only the GitHub star comes
+  after it. It may also follow the launch's first notice in the same launch, once that
+  notice is closed, after the product-updates question, so it reaches people on their next
   launch rather than some later one. It never replaces a card still on screen, and never goes ahead of a notice someone
   has to act on (the Grok Bot move, a trial's notice, the account's card), even one left for a later launch: it waits for
   that launch and follows it there.
 - **At most one remote card a launch**, and **at most one `sponsor` card in any 7 days** per person (counted from the day
   one was shown).
 - **Never** in the launch whose welcome just finished, over Seira's first-launch card, during a live call, or while a
-  move to My Cloud is under way (the built-in sponsor card's exclusions).
+  move to My Cloud is under way.
 - **Never on a branded build** (`brandStatus().source === "file"`), any kind, as the What's new popup.
 - **Sponsor cards** also skip a desktop whose organization's policy limits the AI providers (company models only, or a
   list of allowed engines), and a Team Cloud's members who are not its owner or an admin
@@ -212,13 +212,6 @@ The `id` is the card's own id from this public file, the same for everyone. See 
 Tests never download the live file: `server/testing/setup.ts` and the verification server
 (`scripts/control-seira.ts`, which the renderer previews and UI tests run on) set `OMB_DISABLE_ANNOUNCEMENTS=1`, so their
 pages get no cards whatever `main` holds. The server's tests hand the store a fake fetch.
-
-## Moving the built-in sponsor card into the feed later
-
-The built-in sponsor card (`MODELGO_OFFER_NOTICE`) stays built in. To move it: publish a `sponsor` card with the same
-words, its mark and `MODELGO_URL` as its `open_url`; release a version whose app treats the old seen id as the card's
-(mark `announcement:<id>` seen when `modelgo-offer-2026-11` is), then remove the built-in card. Until every install runs
-that version, older ones keep showing the built-in card.
 
 ## Design notes
 

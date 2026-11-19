@@ -496,3 +496,35 @@ for (const [name, env] of [["a Flatpak", { FLATPAK_ID: "bot.seira.Seira" }], ["a
     }
   });
 }
+
+it("never checks, downloads or installs an update by itself in a Microsoft Store package, and says the store does it", async () => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  const store = Object.getOwnPropertyDescriptor(process, "windowsStore");
+  Object.defineProperty(process, "platform", { value: "win32" });
+  Object.defineProperty(process, "windowsStore", { value: true, configurable: true });
+  try {
+    const rule = mainRule();
+    const local = page(LOCAL);
+    rule.show(local);
+    const { updater, autoUpdater, handlers } = await load(rule.pageAllowed);
+    updater.attachUpdaterWindow(rule.window);
+    updater.startUpdater();
+
+    await vi.advanceTimersByTimeAsync(2 * 60 * 60 * 1000);
+    await settle();
+
+    expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+    expect(autoUpdater.downloadUpdate).not.toHaveBeenCalled();
+    expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
+    expect(handlers.get("update:get-state")(local.event)).toEqual({ status: "idle", managedByStore: true });
+    await handlers.get("update:check")(local.event);
+    await handlers.get("update:install")(local.event);
+    expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+    expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
+    expect(updater.unattendedUpdates()).toBe("none");
+  } finally {
+    if (platform) Object.defineProperty(process, "platform", platform);
+    if (store) Object.defineProperty(process, "windowsStore", store);
+    else delete process.windowsStore;
+  }
+});

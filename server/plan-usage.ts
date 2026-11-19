@@ -2,13 +2,12 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import type { InstanceConfigMap } from "./contracts.ts";
 import { resolveClaudeConfigDir } from "./drivers/claude.ts";
 import { codexHome } from "./drivers/codex-identity.ts";
 import { antigravityPlanUsage } from "./drivers/antigravity-usage-limits.ts";
-import { harnessHome, sealedFixture } from "./env-path.ts";
+import { harnessHome, sealedFixture, userHome } from "./env-path.ts";
 
 export type PlanDriver = "claude" | "codex" | "grok" | "opencode" | "antigravity";
 
@@ -878,7 +877,7 @@ function readOpenCodeCredential(env: NodeJS.ProcessEnv, readText: (path: string)
 
 /** The CLI is xdg-flavoured on every platform, so the xdg data folder comes first. */
 function openCodeAuthText(env: NodeJS.ProcessEnv, readText: (path: string) => string | null): string | null {
-  const home = env.HOME || env.USERPROFILE || homedir();
+  const home = userHome(env);
   const roots = [
     env.XDG_DATA_HOME || join(home, ".local", "share"),
     process.platform === "darwin" ? join(home, "Library", "Application Support") : "",

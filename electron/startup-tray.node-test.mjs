@@ -254,9 +254,9 @@ test("the line follows the steps forward and never back", () => {
   }
 });
 
-test("the finish beat adds at most 400 ms before the workspace shows", async t => {
+test("the finish beat adds at most 240 ms before the workspace shows", async t => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  assert.ok(FINISH_MS <= 400);
+  assert.ok(FINISH_MS <= 240);
   const { splash, win, calls } = fixture({ reducedMotion: () => false });
   await splash.ready; splash.attach(win);
   win.webContents.emit("did-finish-load"); await flush();
@@ -267,6 +267,69 @@ test("the finish beat adds at most 400 ms before the workspace shows", async t =
   t.mock.timers.tick(1);
   assert.equal(win.visible, true); assert.equal(splash.window.destroyed, true);
   assert.deepEqual(calls, ["finished"]);
+});
+
+test("a root that renders before the beat ends shows the workspace when the beat ends", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { splash, win } = fixture({ reducedMotion: () => false });
+  await splash.ready; splash.attach(win);
+  win.webContents.emit("did-finish-load"); await flush();
+  t.mock.timers.tick(FINISH_MS - 1);
+  assert.equal(win.visible, false);
+  t.mock.timers.tick(1);
+  assert.equal(win.visible, true);
+});
+
+test("a root that renders after the beat ended shows the workspace at once", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { splash, win } = fixture({ reducedMotion: () => false });
+  await splash.ready; splash.attach(win);
+  let mounted;
+  win.webContents.executeJavaScript = () => new Promise(resolve => { mounted = resolve; });
+  win.webContents.emit("did-finish-load"); await flush();
+  t.mock.timers.tick(FINISH_MS + 500);
+  assert.equal(win.visible, false);
+  mounted(); await flush();
+  assert.equal(win.visible, true); assert.equal(splash.window.destroyed, true);
+});
+
+test("a second page load does not start a second finish beat", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { splash, win } = fixture({ reducedMotion: () => false });
+  await splash.ready; splash.attach(win);
+  let mounted;
+  win.webContents.executeJavaScript = () => new Promise(resolve => { mounted = resolve; });
+  win.webContents.emit("did-finish-load"); await flush();
+  t.mock.timers.tick(FINISH_MS - 10);
+  win.webContents.emit("did-finish-load"); await flush();
+  t.mock.timers.tick(10);
+  mounted(); await flush();
+  assert.equal(win.visible, true);
+});
+
+class RejectingWindow extends Window {
+  loadURL() { return Promise.reject(new Error("load failed")); }
+}
+
+test("a startup screen that fails to load still resolves ready, and the workspace shows", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { splash, win } = fixture({ BrowserWindow: RejectingWindow, reducedMotion: () => false });
+  await splash.ready;
+  splash.attach(win);
+  win.webContents.emit("did-finish-load"); await flush();
+  t.mock.timers.tick(FINISH_MS);
+  assert.equal(win.visible, true);
+});
+
+test("a workspace revealed before the startup screen was ready never lets it show late", async () => {
+  const { splash, win, calls } = fixture({ BrowserWindow: UnreadyWindow });
+  splash.attach(win);
+  win.webContents.emit("did-finish-load"); await flush();
+  assert.equal(win.visible, true);
+  assert.equal(splash.window.destroyed, true);
+  assert.deepEqual(calls, ["finished"]);
+  splash.window.emit("ready-to-show");
+  assert.equal(splash.window.visible, false);
 });
 
 test("with reduced motion the workspace shows with no finish delay", async t => {

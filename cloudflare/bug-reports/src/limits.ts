@@ -34,13 +34,14 @@ export async function reportRetryAfter(env: AppEnv, installHash: string, ipHash:
   return null;
 }
 
+/** The first report of this install with this payload in the last 24 hours that reached an issue, else null. */
 export async function recentDuplicate(env: AppEnv, installHash: string, payloadHash: string, nowSeconds: number) {
   const row = await env.DB.prepare(
-    "SELECT id FROM reports WHERE install_hash = ? AND payload_hash = ? AND created_at > ? AND issue_number IS NOT NULL ORDER BY created_at DESC LIMIT 1",
+    "SELECT id, issue_number, comment_id FROM reports WHERE install_hash = ? AND payload_hash = ? AND created_at > ? AND issue_number IS NOT NULL ORDER BY created_at DESC LIMIT 1",
   )
     .bind(installHash, payloadHash, nowSeconds - DUPLICATE_SECONDS)
-    .first<{ id: string }>();
-  return row?.id ?? null;
+    .first<{ id: string; issue_number: number; comment_id: number | null }>();
+  return row ? { id: row.id, issue: row.issue_number, joined: row.comment_id !== null } : null;
 }
 
 /** Takes one slot of all three hourly limits in a single statement, so parallel requests cannot all pass the check. */

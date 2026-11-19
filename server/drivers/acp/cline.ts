@@ -1,12 +1,12 @@
 // Cline owns its saved provider/model configuration; no static OMB catalog switches providers.
 import { readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { resolveCli } from "../../procs.ts";
 import { makeOwnedTempFolder, releaseOwnedTempFolder, sweepOrphanedTempFoldersOnce } from "../../temp-folders.ts";
 import { createAcpDriver, type AcpConfig, type AcpSupport } from "./core.ts";
 import type { ModelCatalog } from "../../contracts.ts";
+import { userHome } from "../../env-path.ts";
 
 const MODELS: ModelCatalog = {
   default: "cline-default",
@@ -22,7 +22,7 @@ function savedProvider(env: Record<string, string | undefined>, config: AcpConfi
       const index = args.lastIndexOf(name);
       return index >= 0 ? args[index + 1] : args.find((arg) => arg.startsWith(`${name}=`))?.slice(name.length + 1);
     };
-    const home = flag("--config") || env.CLINE_DIR || join(env.HOME || env.USERPROFILE || homedir(), ".cline");
+    const home = flag("--config") || env.CLINE_DIR || join(userHome(env), ".cline");
     const data = flag("--data-dir") || env.CLINE_DATA_DIR || join(home, "data");
     const path = env.CLINE_PROVIDER_SETTINGS_PATH || join(data, "settings", "providers.json");
     if (statSync(path).size > 256 * 1024) return null;

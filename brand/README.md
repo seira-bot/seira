@@ -45,13 +45,15 @@ Write like a calm, competent colleague.
 
 ## Logo
 
-Every logo and app icon comes from one master image: the 3D Seira head with its resting face.
+Every logo comes from one master image: the 3D Seira head with its resting face.
+The app icons and the favicons come from `brand/logo/app-icon-source.png`, the same image as the mobile app icon.
 `python3 brand/build_logo.py` makes all the files, and `python3 brand/check_logo.py` checks them.
-Do not edit a generated file by hand. Change the master or the script, then build again.
+Do not edit a generated file by hand. Change a source image or the script, then build again.
 
 | File | Use |
 |------|-----|
 | `brand/logo/seira-head.png` | Master image of the head |
+| `brand/logo/app-icon-source.png` | Source of the app icons and favicons (same image as the mobile app icon) |
 | `brand/logo/svg/seira-lockup.svg`, `seira-lockup-reversed.svg` | Head and wordmark together, on light or dark backgrounds |
 | `brand/logo/svg/seira-wordmark.svg`, `seira-wordmark-reversed.svg` | Wordmark alone, when the head is already on the page |
 | `brand/logo/png/icon-*.png` | App icons (180, 192, 512, 1024 px) |
@@ -71,7 +73,8 @@ Rules:
 
 | Name | Hex | Use |
 |------|-----|-----|
-| Ink | `#0E1116` | Wordmark, icon tile, dark backgrounds, badges |
+| Ink | `#0E1116` | Wordmark, dark backgrounds, badges |
+| Icon tile | `#EFEFF2` | App icon and favicon background |
 | Eye red | `#FF2A57` | The eyes and face on the visor only |
 | Accent red | `#E11D48` | One highlight per page or badge row |
 | White | `#FFFFFF` | Backgrounds and reversed wordmark |

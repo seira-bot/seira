@@ -6,7 +6,6 @@ import {
   readSync, realpathSync, renameSync, rmSync, writeFileSync, writeSync,
 } from "node:fs";
 import { isAbsolute, join, parse, posix, relative, resolve, sep, win32 } from "node:path";
-import { homedir } from "node:os";
 import { backup, DatabaseSync } from "node:sqlite";
 import { pipeline } from "node:stream/promises";
 import { Worker } from "node:worker_threads";
@@ -19,6 +18,7 @@ import { ephemeralWorkspaceTokenPath, excludedWorkspaceAuthPath, liveDataEngineP
 import { omittedAsTeamPrivate, routinesWithoutTeamPrivate, stripTeamPrivate, TEAM_PRIVATE_NOTE, teamPrivateAttachments, teamPrivateThreads, withoutTeamPrivate } from "./workspace-backup-team-private.ts";
 import { flushLaterSaves } from "./save-batch.ts";
 import type { WorkspaceBackupClientState, WorkspaceBackupPrivateMetadata, WorkspaceBackupSummary, WorkspaceLeftBehind } from "../shared/workspace-backup.ts";
+import { userHome } from "./env-path.ts";
 
 export type { WorkspaceBackupSummary, WorkspaceBackupPrivateMetadata } from "../shared/workspace-backup.ts";
 export const MAX_WORKSPACE_BACKUP_BYTES = 10 * 1024 ** 3;
@@ -168,6 +168,11 @@ function writeJson(path: string, value: unknown): void {
 function privateMetadata(manifest: Manifest): WorkspaceBackupPrivateMetadata {
   return { summary: manifest.summary, clientState: manifest.clientState };
 }
+/** An engine's profile folder from an environment whose values came out of config.json, so any of them may not be text. */
+function profileFolder(environment: Record<string, unknown>): string {
+  const text = (value: unknown) => (typeof value === "string" ? value : undefined);
+  return userHome({ HOME: text(environment.HOME), USERPROFILE: text(environment.USERPROFILE) });
+}
 function assertLocalAuthOutsideSnapshot(dataDir: string): void {
   const configPath = join(dataDir, "config.json");
   const config = existsSync(configPath) ? privateJson(configPath) : {};
@@ -186,13 +191,13 @@ function assertLocalAuthOutsideSnapshot(dataDir: string): void {
   };
   const environments = [process.env, ...Object.values(instances).filter(record).map((instance) => ({ ...process.env, ...(record(instance.environment) ? instance.environment : {}) }))];
   for (const environment of environments) {
-    const home = String(environment.HOME || environment.USERPROFILE || homedir());
+    const home = profileFolder(environment);
     for (const field of fields) check(environment[field], field, home);
   }
   for (const instance of Object.values(instances)) {
     if (!record(instance) || instance.driver !== "claudeAgent" || !record(instance.config)) continue;
     const environment = { ...process.env, ...(record(instance.environment) ? instance.environment : {}) };
-    check(instance.config.configDir, "config.configDir", String(environment.HOME || environment.USERPROFILE || homedir()));
+    check(instance.config.configDir, "config.configDir", profileFolder(environment));
   }
 }
 function passwordKey(password: string, salt: Buffer): Promise<Buffer> {

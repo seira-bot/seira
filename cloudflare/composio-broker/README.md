@@ -183,8 +183,10 @@ changes nothing.
 It removes share codes the installation minted or was named in, then at
 Composio its triggers and connected accounts (`revoke_on_delete=true`), then in
 one D1 transaction its rows in `trigger_bindings`, `events`, `event_drops`,
-`app_event_days`, `user_shares` and last `installations`. It needs migrations
-through `0004`; before that it answers 503 and changes nothing.
+`app_event_days`, `user_shares` and last `installations`. Before that
+transaction, it adds its `usage_days` counts to the `''` row and deletes its
+own rows. It needs migrations through `0004`; before that it answers 503 and
+changes nothing.
 
 A trigger another installation also binds stays at Composio. A Composio user
 another live installation still acts as (a desktop and its Cloud) keeps its
@@ -199,11 +201,125 @@ Kept without an erase:
 | `installations` | Indefinitely: only an erase removes a row. |
 | `events` | Unread: 7 days. Read: body cleared at once, the id kept for 7 days to spot duplicates. |
 | `trigger_bindings`, `event_drops` | Until the trigger is deleted. |
-| `app_event_days` | 90 days. Counts only. |
+| `app_event_days`, `usage_days`, `registration_days`, `usage_alerts` | 90 days. Counts only. `registration_days` holds a hash of the address, never the address. |
 | `user_shares` | Until used; an expired code, until the next code is minted. Hash only. |
 | Composio connected accounts and triggers | Until disconnected or deleted. A trigger is only paused after 14 days without a poll. |
 
 An erase does not reach Composio's tool router Sessions (the broker has no call
-that deletes one), the `''` row of `app_event_days` (deliveries no installation
-owned), Worker logs (which carry installation ids), or a copy of the token on
+that deletes one), the `''` rows of `app_event_days` and `usage_days` (counts no
+installation owns), Worker logs (which carry installation ids), or a copy of the token on
 the customer's side.
+
+## Usage limits and cost watch
+
+Composio bills the project for each tool call and each trigger event. These
+limits keep one installation, or a fault, from running up that bill. They need
+migration `0007_usage_limits.sql`. Before that migration, the Worker logs
+`usage limits unavailable` and lets every request through.
+
+### Limits and their defaults
+
+Each limit is a row in the `broker_settings` table. A missing row uses the
+default. A value of `0` turns that limit off. Days are UTC days.
+
+| Key | Default | Limits |
+| --- | --- | --- |
+| `quota.tool_calls.desktop` | `500` | Tool calls per installation per day. |
+| `quota.tool_calls.cloud` | `2000` | Tool calls per Cloud installation per day. |
+| `quota.connect_links` | `30` | Sign-in links per installation per day. |
+| `quota.triggers` | `50` | Triggers one installation can have. |
+| `quota.registrations_per_ip` | `50` | New installations per IPv4 address or IPv6 /64 per day. |
+| `budget.tool_calls_per_day` | `10000` | Tool calls by all installations together per day. |
+| `units.workbench` | `10` | Tool calls that one remote workbench or bash call counts as (at least 1). |
+| `tools.workbench` | `on` | `off` refuses the remote workbench and bash meta tools. |
+
+One `COMPOSIO_MULTI_EXECUTE_TOOL` call counts once for each tool in it.
+`COMPOSIO_SEARCH_TOOLS` and other MCP methods do not count. A
+`COMPOSIO_REMOTE_WORKBENCH` or `COMPOSIO_REMOTE_BASH_TOOL` call runs code at
+Composio that can call more tools, which the broker cannot see, so it counts
+as `units.workbench` tool calls. A multi-execute call nested in another counts
+by its own tools; a call nested deeper than three levels is refused, also with
+every limit off. A batch over the quota is refused whole. The fleet budget is approximate: each Worker isolate
+reads the fleet total again after 60 seconds.
+
+A refused tool call gets a JSON-RPC result with `isError: true` and a text
+that tells the person what to do. The other refusals:
+
+| Refused | Answer |
+| --- | --- |
+| Sign-in link over the quota | `429`, `retry-after` until 00:00 UTC |
+| Trigger over the cap | `409` |
+| Registration over the per-address quota | `429` |
+| Paused route | `503`, `retry-after: 300` |
+
+### Kill switch
+
+The `pause` setting stops Composio use with no redeploy. Each isolate reads
+the settings again after 30 seconds.
+
+| `pause` | Stops |
+| --- | --- |
+| `none` | Nothing (default). |
+| `new` | New installations, new sign-in links (also `COMPOSIO_MANAGE_CONNECTIONS`, and the remote workbench and bash meta tools, through MCP), and new triggers. Other tool calls continue. |
+| `tools` | The same as `new`, plus every tool call. |
+| `all` | Every route that reaches Composio, except deletes. Trigger events still arrive: to stop them, disable the webhook subscription in the Composio dashboard. |
+
+Set a value (here `pause` to `tools`):
+
+```sh
+pnpm exec wrangler d1 execute seira-composio --remote --config cloudflare/composio-broker/wrangler.jsonc \
+  --command "INSERT INTO broker_settings (key, value, updated_at) VALUES ('pause', 'tools', unixepoch() * 1000)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at"
+```
+
+Use the same command for each key in the limits table. A value that is not a
+number is ignored, logged as `broker setting ignored, default used`, and the
+default applies. To go back to a default, delete the row. To stop one
+installation, set `disabled_at` on its `installations` row.
+
+### Daily counts and alerts
+
+`usage_days` keeps counts per installation per day, and `registration_days`
+keeps counts per hashed address per day. Both keep 90 days. An erase moves the
+installation's counts to the `''` row, so the fleet totals stay right.
+
+`GET /v1/stats/usage?days=<1-90>` with `Authorization: Bearer <STATS_TOKEN>`
+returns the daily fleet counts, the month so far, an estimated Composio bill,
+the pause level, and the settings in force. It holds no installation id.
+
+The hourly cron sends each alert at most once per UTC day:
+
+| Alert | When |
+| --- | --- |
+| `budget-near` | Today's tool calls reach `alert.budget_ratio` (`0.8`) of the fleet budget. |
+| `budget-reached` | Today's tool calls reach the fleet budget. |
+| `paused` | `pause` is not `none`. |
+| `month-cost` | The month's estimated bill reaches `alert.usd_per_month` (`50`). |
+| `registrations` | Today's new installations reach `alert.registrations_per_day` (`1000`). |
+| `daily-summary` | Once a day, the counts of the day before. Set `alert.daily_summary` to `off` to stop it. |
+
+The estimate uses the `price.*` settings: `price.plan_usd` (`29`),
+`price.credit_usd` (`29`), `price.tool_calls_included` (`20000`),
+`price.usd_per_1k_tool_calls` (`2`), `price.trigger_events_included` (`10000`)
+and `price.usd_per_1k_trigger_events` (`6`). Set them to the project's plan.
+The trigger event count includes the events the broker did not keep, because
+Composio bills each delivery.
+
+Alerts go to `ALERT_WEBHOOK_URL`, an `https` URL set with `wrangler secret put`:
+
+| Channel | `ALERT_WEBHOOK_URL` | Also set |
+| --- | --- | --- |
+| Telegram | `https://api.telegram.org/bot<token>/sendMessage` | `ALERT_CHAT_ID` (a secret) |
+| Discord | The channel webhook URL | |
+| Slack and others | An incoming webhook URL that accepts `{text}` | |
+
+Without it, each alert is a `usage alert` warning in the Worker logs. A
+failed post is sent again the next hour.
+
+### Deploy order
+
+1. Apply migration `0007_usage_limits.sql` (owner setup, step 1).
+2. Deploy the Worker.
+3. Optional: set `ALERT_WEBHOOK_URL` (and `ALERT_CHAT_ID` for Telegram) and
+   `STATS_TOKEN`.
+4. Optional: set the limits and prices in `broker_settings`.
