@@ -5,7 +5,9 @@
 # - the token can only read the repository;
 # - it uses no dependency cache, so no other run can change what the packages contain;
 # - it uploads the packages as a workflow artifact. A maintainer attaches the artifact to the release by hand.
-# It reads the five Apple secrets from the `release` environment, which needs a maintainer's approval (docs/ci.md):
+# A run that a person outside the repository variable RELEASE_MAINTAINERS starts waits for a maintainer's approval in the `release-approval` environment.
+# A maintainer's run does not wait.
+# The `release` environment accepts `main` only and holds the five Apple secrets (docs/ci.md):
 # - all five set: Developer ID signature, notarization, staple, and a Gatekeeper check;
 # - none set: ad-hoc signed apps for tests only, in an artifact named NOT-FOR-RELEASE with no update feed;
 # - some set: the run stops before it builds.
@@ -25,8 +27,20 @@ permissions:
   contents: read
 
 jobs:
+  approval:
+    name: approval for a person outside the maintainers
+    if: ${{ !contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: release-approval
+    permissions: {}
+    steps:
+      - run: echo "A maintainer approved this run."
+
   package:
     name: macOS arm64 and x64 apps
+    needs: approval
+    if: ${{ !cancelled() && (needs.approval.result == 'success' || needs.approval.result == 'skipped') }}
     runs-on: macos-15
     timeout-minutes: 120
     environment: release

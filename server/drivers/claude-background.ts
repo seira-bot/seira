@@ -1,11 +1,11 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { spawnCli } from "../procs.ts";
+import { makeOwnedTempFolder, removeOwnedTempFolder, sweepOrphanedTempFoldersOnce } from "../temp-folders.ts";
 
 type BackgroundFlag = "--tools" | "--no-session-persistence" | "--strict-mcp-config" | "--setting-sources";
 
 export const BACKGROUND_CALL_TIMEOUT_MS = 60_000;
+
+const CWD_PREFIX = "omb-claude-background-";
 
 /** No extended thinking and none of the person's hooks. Claude CLI 2.1.303: only this setting keeps Haiku 5.5 from thinking;
  * MAX_THINKING_TOKENS=0 still left it thinking on about half the calls, and any --effort turns thinking back on. */
@@ -29,10 +29,11 @@ export function backgroundCallArgs(input: {
   return args;
 }
 
-/** Runs in an empty temp folder so no project settings or files leak in; the caller removes it once settled. */
+/** Runs in an empty temp folder so no project settings or files leak in; the caller removes it once settled, and a process that ends first removes it at exit. */
 export function spawnBackgroundCall(cli: string, args: string[], env: NodeJS.ProcessEnv) {
-  const cwd = mkdtempSync(join(tmpdir(), "omb-claude-background-"));
-  const removeCwd = () => { try { rmSync(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch {} };
+  sweepOrphanedTempFoldersOnce(CWD_PREFIX);
+  const cwd = makeOwnedTempFolder(CWD_PREFIX);
+  const removeCwd = () => { removeOwnedTempFolder(cwd); };
   try {
     return { child: spawnCli(cli, args, { cwd, stdio: ["pipe", "pipe", "pipe"], env, botWork: true }), removeCwd };
   } catch (error) {

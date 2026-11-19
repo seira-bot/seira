@@ -2,7 +2,7 @@
 // T3 Tools Inc. (full text in third_party/t3-code/LICENSE); modified:
 //   - apps/server/src/provider/acp/AntigravityTurnOutcome.test.ts (the error
 //     payload fixtures and the cases of the two reader tests).
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -180,9 +180,10 @@ describe("watchAntigravityPromptOutcome", () => {
     const file = join(conversations, "session.db");
     append(file, [[USER_INPUT, "first"]]);
     const check = await watchAntigravityPromptOutcome(NAME, directory, "session");
-    rmSync(file);
-    append(join(conversations, "other.db"), [[USER_INPUT, "hold the inode"]]);
-    append(file, [[USER_INPUT, "second"], [USER_INPUT, "third"], [ERROR_MESSAGE, QUOTA_ERROR]]);
+    // A file system can give a deleted file's inode to the next new file, so the new log exists before the old one goes.
+    const replacement = join(conversations, "replacement.db");
+    append(replacement, [[USER_INPUT, "second"], [USER_INPUT, "third"], [ERROR_MESSAGE, QUOTA_ERROR]]);
+    renameSync(replacement, file);
     expect(await check({ stopReason: "end_turn" })).toBeUndefined();
   });
 });

@@ -4,6 +4,7 @@ import { Check, ChevronDown, ListChecks } from "lucide-react";
 import { approvalModeFor, type ApprovalMode } from "../../shared/approval-mode";
 import { cn } from "@/lib/cn";
 import { useMenuMotion } from "./MenuMotion";
+import { COMPOSER_CHIP } from "./composer-simple";
 import { MENU_ITEM_SEPARATOR, MENU_SHEET } from "./menu-recipe";
 import { APPROVAL_LEVELS_URL, openExternalLink } from "@/lib/app-links";
 import { t } from "@/lib/i18n";
@@ -30,6 +31,7 @@ export function ApprovalModeSelector({
   align = "left",
   menuDirection = "up",
   wide = false,
+  chip = false,
   busy = false,
   trustedModesAvailable = true,
   trustedModesNotice,
@@ -43,6 +45,8 @@ export function ApprovalModeSelector({
   align?: "left" | "right";
   menuDirection?: "up" | "down";
   wide?: boolean;
+  /** Advanced composer: the level's icon and short name as a quiet chip. */
+  chip?: boolean;
   busy?: boolean;
   trustedModesAvailable?: boolean;
   trustedModesNotice?: string;
@@ -110,7 +114,9 @@ export function ApprovalModeSelector({
         className={cn(
           wide
             ? "flex h-10 w-full items-center justify-between rounded-lg border border-hairline/40 bg-inset px-3.5 text-[13px] text-ink hover:bg-raised"
-            : "flex size-8 shrink-0 items-center justify-center rounded-full text-ink-secondary hover:bg-control hover:text-ink",
+            : chip
+              ? COMPOSER_CHIP
+              : "flex size-8 shrink-0 items-center justify-center rounded-full text-ink-secondary hover:bg-control hover:text-ink",
         )}
       >
         {wide ? (
@@ -118,6 +124,11 @@ export function ApprovalModeSelector({
             <CurrentIcon size={14} className="shrink-0 opacity-70" />
             <span className="truncate">{current.label}</span>
           </span>
+        ) : chip ? (
+          <>
+            <CurrentIcon size={14} className="shrink-0" />
+            {current.chip}
+          </>
         ) : (
           <CurrentIcon size={16} className="shrink-0 opacity-80" />
         )}

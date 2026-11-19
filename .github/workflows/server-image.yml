@@ -1,9 +1,11 @@
 name: Server image
 
 # The repository allows GitHub's own actions only, so the runner's docker CLI
-# builds and publishes. Each platform builds on its own native runner. The
-# publish job waits until a reviewer approves the `release` environment, which
-# accepts runs from `main` only (docs/ci.md).
+# builds and publishes. Each platform builds on its own native runner.
+# A run that a person outside the repository variable RELEASE_MAINTAINERS starts
+# waits for a maintainer's approval in the `release-approval` environment.
+# A maintainer's run does not wait. The publish job uses the `release`
+# environment, which accepts runs from `main` only (docs/ci.md).
 
 on:
   pull_request:
@@ -112,10 +114,21 @@ jobs:
           retention-days: 7
           compression-level: 0
 
+  approval:
+    name: approval for a person outside the maintainers
+    needs: image
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && !contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: release-approval
+    permissions: {}
+    steps:
+      - run: echo "A maintainer approved this run."
+
   publish:
     name: publish to GHCR
-    needs: image
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: [image, approval]
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.image.result == 'success' && (needs.approval.result == 'success' || needs.approval.result == 'skipped') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: release
