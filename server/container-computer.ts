@@ -51,11 +51,14 @@ export const BASE_IMAGE_DIGEST = "sha256:274eb636f5cf3fc58f705916ee72b7a701270b3
 export const BASE_IMAGE = `${BASE_IMAGE_REPOSITORY}@${BASE_IMAGE_DIGEST}`;
 // localhost/ is explicit: Podman prepends it to unqualified build tags and may then resolve the name on Docker Hub.
 // Image and container labels, not this mutable tag, decide compatibility.
-export const IMAGE_REPOSITORY = "localhost/openmausbot/cua-local-vm";
+export const IMAGE_REPOSITORY = "localhost/seira/cua-local-vm";
 export const IMAGE_LAYER_VERSION = "9";
 export const IMAGE_LAYER_LABEL = "com.openmausbot.image-layer";
 export const IMAGE = `${IMAGE_REPOSITORY}:driver-${CUA_DRIVER_VERSION}-v${IMAGE_LAYER_VERSION}`;
-export const CONTAINER = "openmausbot-computer";
+export const CONTAINER = "seira-computer";
+// Desktops created under these names stay in use until they are recreated; the VPS desktop keeps the image name.
+export const OPENMAUSBOT_IMAGE = `localhost/openmausbot/cua-local-vm:driver-${CUA_DRIVER_VERSION}-v${IMAGE_LAYER_VERSION}`;
+export const OPENMAUSBOT_CONTAINER = "openmausbot-computer";
 export const MANAGED_LABEL = "com.openmausbot.local-vm";
 export const DRIVER_LABEL = "com.openmausbot.cua-driver";
 export const BASE_IMAGE_LABEL = "com.openmausbot.cua-base";
@@ -83,6 +86,7 @@ export interface DesktopRunOptions {
 export interface LocalVmTarget {
   key: string;
   containerName: string;
+  legacyContainerName: string;
   workspaceDir: string;
   viewerPort: number | null;
   label: string;
@@ -91,6 +95,7 @@ export interface LocalVmTarget {
 export const SHARED_LOCAL_VM_TARGET: LocalVmTarget = {
   key: "shared",
   containerName: CONTAINER,
+  legacyContainerName: OPENMAUSBOT_CONTAINER,
   workspaceDir: VM_WORKSPACE_DIR,
   viewerPort: HOST_VIEWER_PORT,
   label: "shared",
@@ -103,6 +108,7 @@ export function perBotLocalVmTarget(botId: string): LocalVmTarget {
   return {
     key: `bot:${digest}`,
     containerName: `${CONTAINER}-${short}`,
+    legacyContainerName: `${OPENMAUSBOT_CONTAINER}-${short}`,
     workspaceDir: join(DATA_DIR, "vm-homes", short),
     viewerPort: null,
     label: digest,
@@ -114,10 +120,22 @@ export function poolLocalVmTarget(seat: number): LocalVmTarget {
   return {
     key: `pool:${seat}`,
     containerName: `${CONTAINER}-p${seat}`,
+    legacyContainerName: `${OPENMAUSBOT_CONTAINER}-p${seat}`,
     workspaceDir: join(DATA_DIR, "vm-homes", `pool-${seat}`),
     viewerPort: null,
     label: `pool-${seat}`,
   };
+}
+
+const resolvedContainerNames = new Map<string, string>();
+
+/** The container that currently serves the target: its own name, or the older name of a desktop not yet recreated. */
+export function localVmContainerName(target: LocalVmTarget): string {
+  return resolvedContainerNames.get(target.key) ?? target.containerName;
+}
+
+function isLocalVmImageRef(ref: string | undefined): boolean {
+  return ref === IMAGE || ref === OPENMAUSBOT_IMAGE;
 }
 
 /** Only provisioning creates this durable directory; idle shutdown keeps it. */
@@ -421,6 +439,34 @@ function containerOwnershipLabelsMatch(
   );
 }
 
+function inspectedLabels(stdout: string, runtime: Runtime): Record<string, string> | undefined {
+  const [detail] = JSON.parse(stdout) as Array<{ configuration?: { labels?: Record<string, string> }; Config?: { Labels?: Record<string, string> } }>;
+  return runtime === "container" ? detail?.configuration?.labels : detail?.Config?.Labels;
+}
+
+/** An older-named container counts only when it carries this target's ownership labels. */
+async function inspectTargetContainer(
+  runtime: Runtime,
+  target: LocalVmTarget,
+  runner: CommandRunner,
+  timeout?: number,
+): Promise<{ stdout: string; name: string } | null> {
+  try {
+    const { stdout } = await runner(runtime, ["inspect", target.containerName], timeout);
+    resolvedContainerNames.delete(target.key);
+    return { stdout, name: target.containerName };
+  } catch {}
+  try {
+    const { stdout } = await runner(runtime, ["inspect", target.legacyContainerName], timeout);
+    if (containerOwnershipLabelsMatch(inspectedLabels(stdout, runtime), target)) {
+      resolvedContainerNames.set(target.key, target.legacyContainerName);
+      return { stdout, name: target.legacyContainerName };
+    }
+  } catch {}
+  resolvedContainerNames.delete(target.key);
+  return null;
+}
+
 function normalizeImageId(id: string | undefined): string | null {
   return id?.trim().replace(/^sha256:/, "") || null;
 }
@@ -516,8 +562,13 @@ export async function containerComputerStatus(
     status.image_id = image.id;
   } catch {}
 
+  let name = target.containerName;
   try {
-    const { stdout } = await runner(status.runtime, ["inspect", target.containerName]);
+    const found = await inspectTargetContainer(status.runtime, target, runner);
+    if (!found) throw new Error("missing container");
+    const { stdout } = found;
+    name = found.name;
+    status.container_name = name;
     if (status.runtime === "container") {
       const inspected = JSON.parse(stdout) as Array<{
         configuration?: {
@@ -544,7 +595,7 @@ export async function containerComputerStatus(
           ? normalizeImageId(detail.configuration.image.descriptor?.digest)
           : null;
       status.imageMatches =
-        appleImage === IMAGE && status.image_id !== null && appleImageId === status.image_id;
+        isLocalVmImageRef(appleImage) && status.image_id !== null && appleImageId === status.image_id;
       status.managed = containerOwnershipLabelsMatch(detail?.configuration?.labels, target);
       status.persistence = appleWorkspaceMountIsSafe(detail?.configuration?.mounts, platform, target.workspaceDir)
         ? "durable"
@@ -578,13 +629,13 @@ export async function containerComputerStatus(
       status.network = dockerPortsAreLocal(detail?.HostConfig?.PortBindings) ? "loopback" : "unsafe";
       status.viewer_port = dockerViewerPort(detail?.NetworkSettings?.Ports, target.viewerPort);
       status.imageMatches =
-        detail?.Config?.Image === IMAGE &&
+        isLocalVmImageRef(detail?.Config?.Image) &&
         imageLabelsMatch(detail?.Config?.Labels) &&
         (!rootIsHostRoot || detail?.Config?.Labels?.[DESKTOP_FLAGS_LABEL] === DESKTOP_FLAGS_VERSION) &&
         status.image_id !== null &&
         normalizeImageId(detail?.Image) === status.image_id;
       status.managed = containerOwnershipLabelsMatch(detail?.Config?.Labels, target);
-      if (status.managed) raisePidsLimit(target.containerName, detail?.HostConfig?.PidsLimit, runner.bind(null, status.runtime));
+      if (status.managed) raisePidsLimit(name, detail?.HostConfig?.PidsLimit, runner.bind(null, status.runtime));
       status.persistence = dockerWorkspaceMountIsSafe(
         detail?.Mounts,
         platform,
@@ -613,12 +664,12 @@ export async function containerComputerStatus(
   if (canProbe) {
     try {
       const expected = `cua-driver ${CUA_DRIVER_VERSION}`;
-      const version = await runner(status.runtime, cuaExecArgs(["--version"], { container: target.containerName }), 8000);
+      const version = await runner(status.runtime, cuaExecArgs(["--version"], { container: name }), 8000);
       if (version.stdout.trim() !== expected) throw new Error(`expected ${expected}`);
-      await runner(status.runtime, cuaExecArgs(["status", "--socket", CUA_SOCKET], { container: target.containerName }), 8000);
+      await runner(status.runtime, cuaExecArgs(["status", "--socket", CUA_SOCKET], { container: name }), 8000);
       const health = await runner(
         status.runtime,
-        cuaExecArgs(["call", "health_report", "{}", "--socket", CUA_SOCKET], { container: target.containerName }),
+        cuaExecArgs(["call", "health_report", "{}", "--socket", CUA_SOCKET], { container: name }),
         15_000,
       );
       const report = JSON.parse(health.stdout) as { schema_version?: string; overall?: string; checks?: unknown[] };
@@ -640,12 +691,12 @@ export async function containerComputerStatus(
           CUA_SOCKET,
           "--screenshot-out-file",
           readinessShot,
-        ], { container: target.containerName }),
+        ], { container: name }),
         20_000,
       );
       const captured = await runner(
         status.runtime,
-        ["exec", target.containerName, "base64", "-w0", readinessShot],
+        ["exec", name, "base64", "-w0", readinessShot],
         20_000,
       );
       if (!wholeScreenshot(Buffer.from(captured.stdout.trim(), "base64")).ok) {
@@ -657,7 +708,7 @@ export async function containerComputerStatus(
       try {
         const errorLog = await runner(
           status.runtime,
-          ["exec", target.containerName, "tail", "-n", "4", "/var/log/supervisor/cua-driver.error.log"],
+          ["exec", name, "tail", "-n", "4", "/var/log/supervisor/cua-driver.error.log"],
           4000,
         );
         status.desktop_error =
@@ -856,9 +907,31 @@ function baseImagePullArgs(runtime: Runtime): string[] {
   return runtime === "container" ? ["image", "pull", BASE_IMAGE] : ["pull", BASE_IMAGE];
 }
 
+async function imageHasManagedLabels(runtime: Runtime, runner: CommandRunner, ref: string): Promise<boolean> {
+  try {
+    const { stdout } = await runner(runtime, ["image", "inspect", ref]);
+    return imageLabelsMatch(inspectedImage(stdout, runtime).labels);
+  } catch {
+    return false;
+  }
+}
+
+/** The image under the older name is the same build, so a new tag replaces a pull and a build. */
+async function tagOlderImage(runtime: Runtime, runner: CommandRunner): Promise<boolean> {
+  if (await imageHasManagedLabels(runtime, runner, IMAGE)) return false;
+  if (!(await imageHasManagedLabels(runtime, runner, OPENMAUSBOT_IMAGE))) return false;
+  try {
+    await runner(runtime, runtime === "container" ? ["image", "tag", OPENMAUSBOT_IMAGE, IMAGE] : ["tag", OPENMAUSBOT_IMAGE, IMAGE]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function prepareManagedImage(runtime: Runtime, runner: CommandRunner): Promise<void> {
+  if (await tagOlderImage(runtime, runner)) return;
   await runner(runtime, baseImagePullArgs(runtime), 10 * 60_000);
-  const context = await mkdtemp(join(tmpdir(), "openmausbot-cua-image-"));
+  const context = await mkdtemp(join(tmpdir(), "seira-cua-image-"));
   try {
     await writeFile(join(context, "Dockerfile"), managedImageDockerfile(), { mode: 0o600 });
     await runner(runtime, ["build", ...(runtime === "container" ? [] : ["--force-rm"]), "-t", IMAGE, context], 10 * 60_000); // the legacy builder keeps a failed step's container without --force-rm
@@ -899,7 +972,7 @@ export async function containerComputerAction(
   if (action === "remove" && !before.managed) {
     throw Object.assign(
       new Error(
-        `The existing container named ${target.containerName} was not created by Seira; remove it manually in ${runtime}`,
+        `The existing container named ${localVmContainerName(target)} was not created by Seira; remove it manually in ${runtime}`,
       ),
       { status: 409 },
     );
@@ -910,7 +983,7 @@ export async function containerComputerAction(
   } else {
     if (action === "run") await ensureVmWorkspace(platform, target, runtime);
     if (action === "start" && runtime !== "container") {
-      await applyResourcesBeforeStart(target.containerName, resources, (args, timeoutMs) => runner(runtime, args, timeoutMs));
+      await applyResourcesBeforeStart(localVmContainerName(target), resources, (args, timeoutMs) => runner(runtime, args, timeoutMs));
     }
     const args =
       action === "run"
@@ -920,8 +993,8 @@ export async function containerComputerAction(
           hostUser: currentHostUser(platform),
         })
         : action === "remove"
-          ? ["rm", runtime === "container" ? "--force" : "-f", target.containerName]
-          : [action, target.containerName];
+          ? ["rm", runtime === "container" ? "--force" : "-f", localVmContainerName(target)]
+          : [action, localVmContainerName(target)];
     await runner(runtime, args, 2 * 60_000);
   }
   return containerComputerStatus(runner, platform, target);
@@ -932,12 +1005,7 @@ export async function containerComputerExists(
   target: LocalVmTarget,
   runner: CommandRunner = sh,
 ): Promise<boolean> {
-  try {
-    await runner(runtime, ["inspect", target.containerName], 8_000);
-    return true;
-  } catch {
-    return false;
-  }
+  return (await inspectTargetContainer(runtime, target, runner, 8_000)) !== null;
 }
 
 export type ScreenshotCheck = { ok: boolean; mime: "image/png" | "image/jpeg" };
@@ -988,12 +1056,12 @@ export async function containerComputerFrame(
         CUA_SOCKET,
         "--screenshot-out-file",
         screenshot,
-      ], { container: target.containerName }),
+      ], { container: name }),
       30_000,
     );
     const { stdout } = await runner(
       status.runtime,
-      ["exec", target.containerName, "base64", "-w0", screenshot],
+      ["exec", localVmContainerName(target), "base64", "-w0", screenshot],
       30_000,
     );
     const data = stdout.trim();
@@ -1088,7 +1156,7 @@ export async function containerExec(
       "-w", VM_WORKSPACE_GUEST,
       "-e", "HOME=/home/cua",
       "-e", `DISPLAY=${DISPLAY}`,
-      target.containerName,
+      localVmContainerName(target),
       "timeout", "-k", "5", String(seconds),
       "sh", "-lc", command,
     ],
@@ -1111,7 +1179,7 @@ export function containerComputerMcp(
 ): ContainerMcpLaunch {
   return {
     command: process.execPath,
-    args: [containerMcpPath, runtime, target.containerName, CUA_SOCKET],
+    args: [containerMcpPath, runtime, localVmContainerName(target), CUA_SOCKET],
     // The control pair rides in env, not argv, which `ps` shows for the bridge's whole life.
     env: {
       ELECTRON_RUN_AS_NODE: "1",
@@ -1167,9 +1235,9 @@ export function setupCommands(
           resources: DEFAULT_DESKTOP_RESOURCES,
           hostUser: null,
         })),
-    start: command(["start", target.containerName]),
-    stop: command(["stop", target.containerName]),
-    remove: command(["rm", runtime === "container" ? "--force" : "-f", target.containerName]),
+    start: command(["start", localVmContainerName(target)]),
+    stop: command(["stop", localVmContainerName(target)]),
+    remove: command(["rm", runtime === "container" ? "--force" : "-f", localVmContainerName(target)]),
     view: target.viewerPort ? `http://127.0.0.1:${target.viewerPort}/vnc.html` : "",
   };
 }
