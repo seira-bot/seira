@@ -26,3 +26,13 @@ describe("roomRunTraces", () => {
     expect(traces.absorbed.size).toBe(0);
   });
 });
+
+describe("roomRunTraces duration", () => {
+  it("carries the recorded duration of the turn to its card", () => {
+    const row = { id: "d1", role: "bot", kind: "digest", at: 3, text: "", from: ada, digest: { turnId: "turn-1", threadId: "main", at: 3, steps: 1, durationMs: 2_000 } } as unknown as Message;
+    const messages = [tool("t1", "turn-1", 1), tool("t2", "turn-1", 2), row];
+    const items = groupActivityRuns(messages);
+    const run = items.find((item) => item.kind === "run")!;
+    expect(roomRunTraces(items, messages).byRun.get(run.id)?.durationMs).toBe(2_000);
+  });
+});

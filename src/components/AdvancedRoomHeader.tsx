@@ -33,7 +33,7 @@ export function AdvancedRoomHeader({ group, members, working, folderOpen, onTogg
     <div {...dragProps} data-look="room-header" className="@container/roomhead px-5 py-2.5 pl-11 md:pl-5 max-md:pl-14 max-md:pr-3">
       <div
         data-roomhead-row
-        className="flex items-center justify-between @max-[30rem]/roomhead:flex-wrap @max-[30rem]/roomhead:gap-y-1 @min-[30rem]/roomhead:grid @min-[30rem]/roomhead:grid-cols-[minmax(0,1fr)_minmax(0,auto)_minmax(max-content,1fr)] @min-[30rem]/roomhead:gap-3"
+        className="flex items-center justify-between @max-[30rem]/roomhead:flex-wrap @max-[30rem]/roomhead:gap-y-1 @min-[30rem]/roomhead:grid @min-[30rem]/roomhead:grid-cols-[minmax(0,1fr)_minmax(0,auto)_minmax(0,1fr)] @min-[30rem]/roomhead:gap-3"
       >
         <div data-roomhead-identity className="flex min-w-0 flex-col items-center @max-[30rem]/roomhead:basis-full @min-[30rem]/roomhead:col-start-2 @min-[30rem]/roomhead:justify-self-center" style={noDragStyle}>
           <button
@@ -62,7 +62,7 @@ export function AdvancedRoomHeader({ group, members, working, folderOpen, onTogg
           </button>
           {group.description && <p className="max-w-full truncate text-[12px] leading-4 text-ink-secondary">{group.description}</p>}
         </div>
-        <div data-roomhead-thread className="min-w-0 max-w-full @min-[30rem]/roomhead:col-start-1 @min-[30rem]/roomhead:row-start-1 @min-[30rem]/roomhead:justify-self-start" style={noDragStyle}>
+        <div data-roomhead-thread className="min-w-0 max-w-full @min-[30rem]/roomhead:justify-self-stretch @min-[30rem]/roomhead:col-start-1 @min-[30rem]/roomhead:row-start-1" style={noDragStyle}>
           <GroupTaskPicker group={group} chip />
         </div>
         <div
@@ -75,12 +75,13 @@ export function AdvancedRoomHeader({ group, members, working, folderOpen, onTogg
             <button
               type="button"
               data-room-stop
+              aria-label={t("chat.stop")}
               onClick={() => dispatch({ type: "interruptGroup", groupId: group.id, threadId: group.threadId })}
               title={t("chat.stopTurn")}
               className="flex h-7 items-center gap-1.5 rounded-full bg-ink/[0.06] px-2.5 text-[12px] font-medium text-ink hover:bg-ink/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
             >
               <Square size={10} aria-hidden="true" className="fill-current" />
-              <span>{t("chat.stop")}</span>
+              <span className="@max-4xl/roomhead:hidden">{t("chat.stop")}</span>
             </button>
           )}
           <RoomHeaderCallButton group={group} members={members} />
