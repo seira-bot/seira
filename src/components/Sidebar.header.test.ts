@@ -109,20 +109,18 @@ describe("sidebar top row", () => {
     const html = render();
     const row = topRow(html);
     expect(row).toMatch(/^data-sidebar-top-row="true" class="[^"]*\bitems-center\b[^"]*\bh-\[52px\][^"]*" style="-webkit-app-region:drag"/);
-    const { lights, slot, spacer, switcher, buttons } = order(row);
+    const { lights, slot, switcher, buttons } = order(row);
     expect(lights).toBe(-1);
     expect(slot).toBeGreaterThan(-1);
-    expect(spacer).toBeGreaterThan(slot);
-    expect(switcher).toBeGreaterThan(spacer);
+    expect(switcher).toBeGreaterThan(slot);
     expect(buttons).toBeGreaterThan(switcher);
     expect(row.slice(buttons).match(/<button/g)).toHaveLength(1);
     const rowClasses = classesOf(row, "data-sidebar-top-row");
     expect(rowClasses).toEqual(expect.arrayContaining(["relative", "h-[52px]", "ps-3", "pe-3"]));
     expect(rowClasses).not.toContain("px-4");
     expect(classesOf(row, "data-sidebar-top-slot")).toEqual(expect.arrayContaining(["@container/sidebar-top", "min-w-0", "flex-1"]));
-    expect(row).toContain('<div data-sidebar-top-spacer="true" class="min-w-0 flex-1 @min-[96px]/sidebar-top:min-w-6"></div>');
     const switcherClasses = classesOf(row, "data-sidebar-top-switcher");
-    expect(switcherClasses).toEqual(expect.arrayContaining(["min-w-0", "max-w-[140px]"]));
+    expect(switcherClasses).toEqual(expect.arrayContaining(["min-w-0", "items-center"]));
     expect(switcherClasses).not.toContain("flex-1");
     expect(classesOf(row, "data-sidebar-top-buttons")).toEqual(expect.arrayContaining(["shrink-0", "gap-0.5"]));
     expect(row).toMatch(/aria-label="Switch server: Servers"[^>]*title="Servers"[^>]*class="[^"]*\bh-7\b[^"]*\boverflow-hidden\b[^"]*\btext-\[13px\][^"]*" style="-webkit-app-region:no-drag"/);
@@ -163,10 +161,9 @@ describe("sidebar top row", () => {
       expect(row).not.toContain("data-traffic-light-space");
       expect(row).not.toContain("bg-[#ff5f57]");
       expect(classesOf(row, "data-sidebar-top-row")).toEqual(expect.arrayContaining(["relative", "h-[52px]", "ps-3", "pe-3"]));
-      const { slot, spacer, switcher, buttons } = order(row);
+      const { slot, switcher, buttons } = order(row);
       expect(slot).toBeGreaterThan(-1);
-      expect(spacer).toBeGreaterThan(slot);
-      expect(switcher).toBeGreaterThan(spacer);
+      expect(switcher).toBeGreaterThan(slot);
       expect(buttons).toBeGreaterThan(switcher);
       expect(html.match(/Switch server:/g)).toHaveLength(1);
     },
