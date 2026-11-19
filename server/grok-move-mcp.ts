@@ -37,7 +37,7 @@ export function createMoveInbox(seq: () => number): MoveInbox {
   };
 }
 
-// The names and the `document` input are fixed: the published MausBot bot in Grok Bot calls them.
+// The names and the `document` input are fixed: the published Seira Migrator bot in Grok Bot calls them.
 const tools = (app = productName()) => [
   {
     name: "move_status",
