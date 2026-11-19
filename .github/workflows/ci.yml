@@ -10,6 +10,8 @@ name: CI
 
 on:
   pull_request:
+    # A draft pull request runs `checks` only. Marking it ready runs the rest.
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
   workflow_dispatch:
@@ -18,15 +20,19 @@ permissions:
   contents: read
 
 concurrency:
-  # A new push to a pull request cancels that pull request's older run. A push to main never cancels a run.
-  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # A new push to a pull request cancels that pull request's older run. A new push to main cancels the older main run
+  # that is still going, because the newer commit holds the older one. A manual start never cancels or is cancelled.
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
   checks:
     name: checks
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      # "false" only for a pull request that changes documentation and pictures no source file reads (scripts/ci-heavy.mjs).
+      heavy: ${{ steps.scope.outputs.heavy }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -34,6 +40,13 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
+      - name: Decide if the heavy jobs run
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/ci-heavy.mjs
       - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -61,6 +74,8 @@ jobs:
   build:
     name: build
     needs: checks
+    # Skipped on a draft pull request, and on a pull request that changes documentation and pictures only.
+    if: ${{ github.event.pull_request.draft != true && needs.checks.outputs.heavy == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -84,6 +99,8 @@ jobs:
     # scripts/ci-scope.mjs (VITEST_SHARDS and VITEST_WORKERS), and scripts/ci-workflow.test.ts keeps them equal.
     name: vitest (linux, shard ${{ matrix.shard }}/8)
     needs: checks
+    # Skipped on a draft pull request, and on a pull request that changes documentation and pictures only.
+    if: ${{ github.event.pull_request.draft != true && needs.checks.outputs.heavy == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -122,7 +139,8 @@ jobs:
 
   gate:
     # The one check that the main branch ruleset requires. It runs even when a job before it fails, and it fails then:
-    # a skipped required check counts as a pass, so the gate must not skip.
+    # a skipped required check counts as a pass, so the gate must not skip. Only `build` and `vitest` may be skipped,
+    # and only on a draft pull request or a pull request that changes documentation and pictures only (`checks` decides).
     name: CI
     needs: [checks, build, vitest]
     if: ${{ !cancelled() }}
@@ -132,10 +150,14 @@ jobs:
       - name: Every job passed
         env:
           NEEDS: ${{ toJSON(needs) }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          HEAVY: ${{ needs.checks.outputs.heavy }}
         run: |
           node --input-type=module -e '
             const needs = JSON.parse(process.env.NEEDS);
+            const mayStop = process.env.DRAFT === "true" || process.env.HEAVY === "false";
+            const stopped = (job, result) => mayStop && result === "skipped" && (job === "build" || job === "vitest");
             for (const [job, { result }] of Object.entries(needs)) console.log(`${result.padEnd(9)} ${job}`);
-            const bad = Object.entries(needs).filter(([, { result }]) => result !== "success").map(([job]) => job);
+            const bad = Object.entries(needs).filter(([job, { result }]) => result !== "success" && !stopped(job, result)).map(([job]) => job);
             if (bad.length) { console.error(`\n${bad.length} job(s) did not pass: ${bad.join(", ")}`); process.exit(1); }
           '
