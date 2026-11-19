@@ -40,9 +40,12 @@ mkdir -p "$WORK"
 
 stop_vm() {
   if [ -f "$PIDFILE" ]; then
+    # Read the PID first: qemu deletes its PID file when the guest powers off.
+    local pid
+    pid="$(cat "$PIDFILE")"
     ssh "${SSH_OPTS[@]}" tester@127.0.0.1 'sudo poweroff' >/dev/null 2>&1 || true
-    for _ in $(seq 1 30); do kill -0 "$(cat "$PIDFILE")" 2>/dev/null || break; sleep 1; done
-    kill "$(cat "$PIDFILE")" 2>/dev/null || true
+    for _ in $(seq 1 30); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+    kill "$pid" 2>/dev/null || true
     rm -f "$PIDFILE"
   fi
   [ "${KEEP_VM_DISK:-0}" = 1 ] || rm -f "$DISK" "$SEED"
