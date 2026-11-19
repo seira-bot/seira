@@ -453,6 +453,9 @@ describe("live Codex approval spoken question limits", () => {
     ["a substitution", "echo $(id)"],
     ["an output redirect", "echo x > ~/.bashrc"],
     ["an input redirect", "sh < script"],
+    ["a bidi override", "cat notes\u202Etxt.sh"],
+    ["a zero-width space", "rm\u200B -rf x"],
+    ["a tab", "ls\t-la"],
   ])("declines at once a command with %s", (_name, command) => {
     const { spoken, outcomes, respond, open } = setup();
     open(command);

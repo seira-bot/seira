@@ -60,6 +60,8 @@ const NOTICE_COMMAND = "I need to run a command that I cannot read out in full, 
 const NOTICE_PERMISSIONS = "I need more access than I have now, so I did not do it. Ask me in the chat to allow it.";
 const NOTICE_FILES = "I need to change files that I cannot read out in full, so I did not change them. Ask me in the chat to change them.";
 const SEPARATORS = /[;|&`<>\n\r]|\$\(/;
+/** Control and format characters (bidi overrides, zero-width marks) that a voice does not read out. */
+const UNSPOKEN = /[\p{Cc}\p{Cf}]/u;
 const SPOKEN_PATH = /^[A-Za-z0-9._ /-]+$/;
 /** Repository internals, credentials and agent settings: a change there is never approved by voice. */
 const PROTECTED_SEGMENT = /^\.(?:git|ssh|codex|env)/i;
@@ -233,7 +235,7 @@ function questionFor(
   if (kind === "command") {
     const command = commandText(fields);
     const plain = fields.kind == null || fields.kind === "command";
-    if (!plain || !command.trim() || command.length > COMMAND_SPOKEN_LIMIT || SEPARATORS.test(command)) return { notice: NOTICE_COMMAND };
+    if (!plain || !command.trim() || command.length > COMMAND_SPOKEN_LIMIT || SEPARATORS.test(command) || UNSPOKEN.test(command)) return { notice: NOTICE_COMMAND };
     return { question: `I need your OK to run this command: ${command}. ${ANSWER_HINT}`, subject: commandSubject(command) };
   }
   const changes = isRecord(fields.fileChanges) ? legacyFileChanges(fields.fileChanges) : options.files?.(fields) ?? null;
