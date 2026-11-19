@@ -7,7 +7,6 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { augmentedPath, resolveCliSpawn } from "./env-path.ts";
-import { workspacePreparationDockerfile } from "./container-workspace.ts";
 import { DATA_DIR } from "./config.ts";
 import {
   applyResourcesBeforeStart,
@@ -33,6 +32,41 @@ import {
   type HostUser,
 } from "./container-isolation.ts";
 import { SPAWNED_PROXIES } from "./proxy-paths.ts";
+import {
+  CUA_DRIVER_VERSION,
+  BASE_IMAGE_DIGEST,
+  BASE_IMAGE,
+  IMAGE_LAYER_VERSION,
+  IMAGE_LAYER_LABEL,
+  IMAGE,
+  OPENMAUSBOT_IMAGE,
+  MANAGED_LABEL,
+  DRIVER_LABEL,
+  BASE_IMAGE_LABEL,
+  VM_WORKSPACE_GUEST,
+  CUA_SOCKET,
+  CUA_EXECUTABLE,
+  managedImageDockerfile,
+} from "./local-vm-image.ts";
+
+export {
+  CUA_DRIVER_VERSION,
+  BASE_IMAGE_REPOSITORY,
+  BASE_IMAGE_DIGEST,
+  BASE_IMAGE,
+  IMAGE_REPOSITORY,
+  IMAGE_LAYER_VERSION,
+  IMAGE_LAYER_LABEL,
+  IMAGE,
+  OPENMAUSBOT_IMAGE,
+  MANAGED_LABEL,
+  DRIVER_LABEL,
+  BASE_IMAGE_LABEL,
+  VM_WORKSPACE_GUEST,
+  CUA_SOCKET,
+  CUA_EXECUTABLE,
+  managedImageDockerfile,
+} from "./local-vm-image.ts";
 
 // Its own group: a timeout also ends the docker CLI plugins and credential helpers it started.
 const run = execFileInGroupAsync;
@@ -44,28 +78,12 @@ export type CommandRunner = (
   timeout?: number,
 ) => Promise<{ stdout: string }>;
 
-export const CUA_DRIVER_VERSION = "0.37.0";
-export const BASE_IMAGE_REPOSITORY = "docker.io/trycua/xfce-cua";
-// Official multi-architecture Cua XFCE 0.1.0 manifest (amd64 + arm64).
-export const BASE_IMAGE_DIGEST = "sha256:274eb636f5cf3fc58f705916ee72b7a701270b3877369d08533a385c5325be9b";
-export const BASE_IMAGE = `${BASE_IMAGE_REPOSITORY}@${BASE_IMAGE_DIGEST}`;
-// localhost/ is explicit: Podman prepends it to unqualified build tags and may then resolve the name on Docker Hub.
-// Image and container labels, not this mutable tag, decide compatibility.
-export const IMAGE_REPOSITORY = "localhost/openmausbot/cua-local-vm";
-export const IMAGE_LAYER_VERSION = "9";
-export const IMAGE_LAYER_LABEL = "com.openmausbot.image-layer";
-export const IMAGE = `${IMAGE_REPOSITORY}:driver-${CUA_DRIVER_VERSION}-v${IMAGE_LAYER_VERSION}`;
-export const CONTAINER = "openmausbot-computer";
-export const MANAGED_LABEL = "com.openmausbot.local-vm";
-export const DRIVER_LABEL = "com.openmausbot.cua-driver";
-export const BASE_IMAGE_LABEL = "com.openmausbot.cua-base";
+export const CONTAINER = "seira-computer";
+export const OPENMAUSBOT_CONTAINER = "openmausbot-computer";
 export const WORKSPACE_LABEL = "com.openmausbot.workspace";
 export const TARGET_LABEL = "com.openmausbot.local-vm-target";
 export const VM_WORKSPACE_DIR = join(DATA_DIR, "vm-home");
-export const VM_WORKSPACE_GUEST = "/home/cua/workspace";
 export const DISPLAY = ":1";
-export const CUA_SOCKET = "/run/user/1000/openmausbot-cua.sock";
-export const CUA_EXECUTABLE = "/usr/local/libexec/openmausbot/cua-driver";
 
 const RUNTIMES = ["docker", "podman", "container"] as const;
 export type Runtime = (typeof RUNTIMES)[number];
@@ -83,6 +101,7 @@ export interface DesktopRunOptions {
 export interface LocalVmTarget {
   key: string;
   containerName: string;
+  legacyContainerName: string;
   workspaceDir: string;
   viewerPort: number | null;
   label: string;
@@ -91,6 +110,7 @@ export interface LocalVmTarget {
 export const SHARED_LOCAL_VM_TARGET: LocalVmTarget = {
   key: "shared",
   containerName: CONTAINER,
+  legacyContainerName: OPENMAUSBOT_CONTAINER,
   workspaceDir: VM_WORKSPACE_DIR,
   viewerPort: HOST_VIEWER_PORT,
   label: "shared",
@@ -103,6 +123,7 @@ export function perBotLocalVmTarget(botId: string): LocalVmTarget {
   return {
     key: `bot:${digest}`,
     containerName: `${CONTAINER}-${short}`,
+    legacyContainerName: `${OPENMAUSBOT_CONTAINER}-${short}`,
     workspaceDir: join(DATA_DIR, "vm-homes", short),
     viewerPort: null,
     label: digest,
@@ -114,10 +135,21 @@ export function poolLocalVmTarget(seat: number): LocalVmTarget {
   return {
     key: `pool:${seat}`,
     containerName: `${CONTAINER}-p${seat}`,
+    legacyContainerName: `${OPENMAUSBOT_CONTAINER}-p${seat}`,
     workspaceDir: join(DATA_DIR, "vm-homes", `pool-${seat}`),
     viewerPort: null,
     label: `pool-${seat}`,
   };
+}
+
+const resolvedContainerNames = new Map<string, string>();
+
+export function localVmContainerName(target: LocalVmTarget): string {
+  return resolvedContainerNames.get(target.key) ?? target.containerName;
+}
+
+function isLocalVmImageRef(ref: string | undefined): boolean {
+  return ref === IMAGE || ref === OPENMAUSBOT_IMAGE;
 }
 
 /** Only provisioning creates this durable directory; idle shutdown keeps it. */
@@ -129,87 +161,6 @@ export function localVmWorkspaceExists(target: LocalVmTarget): boolean {
   }
 }
 
-const LINUX_WHEELS = {
-  x86_64: {
-    url: "https://files.pythonhosted.org/packages/3b/b0/97f6d8828b8a6ca3649ad7150ddbc23addde56f014c9bd407876484ecb8d/cua_driver-0.37.0-py3-none-manylinux_2_31_x86_64.whl",
-    sha256: "e530ee36226d99516ef7ec696ba31d516e487ae5e5effdd5e2610c56af3eee19",
-  },
-  aarch64: {
-    url: "https://files.pythonhosted.org/packages/dc/33/81e2531353837f80358fbf56629a74f50d7f097af4b5f67626b0afce2d61/cua_driver-0.37.0-py3-none-manylinux_2_31_aarch64.whl",
-    sha256: "1a0103fd7fa5e9d51ee3ce26d502eb4187702282b3f4bcf1e9c09c6ce9f9d558",
-  },
-} as const;
-
-/** Both Linux wheels are exact-version and SHA-256 verified. The first RUN rejects a defective base: some published ARM64
- * upstream layers shipped zero-byte OpenSSL libraries ("curl: error while loading shared libraries … file too short"). */
-export function managedImageDockerfile(): string {
-  return `FROM ${BASE_IMAGE}
-USER root
-RUN set -eux; \\
-    arch="$(uname -m)"; \\
-    case "$arch" in \\
-      x86_64) wheel_url='${LINUX_WHEELS.x86_64.url}'; wheel_sha='${LINUX_WHEELS.x86_64.sha256}'; wheel_path='/tmp/cua_driver-${CUA_DRIVER_VERSION}-py3-none-manylinux_2_31_x86_64.whl'; lib_triplet='x86_64-linux-gnu' ;; \\
-      aarch64|arm64) wheel_url='${LINUX_WHEELS.aarch64.url}'; wheel_sha='${LINUX_WHEELS.aarch64.sha256}'; wheel_path='/tmp/cua_driver-${CUA_DRIVER_VERSION}-py3-none-manylinux_2_31_aarch64.whl'; lib_triplet='aarch64-linux-gnu' ;; \\
-      *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \\
-    esac; \\
-    for ssl_lib in "/lib/$lib_triplet/libssl.so.3" "/lib/$lib_triplet/libcrypto.so.3"; do \\
-      if [ -e "$ssl_lib" ] && [ ! -s "$ssl_lib" ]; then \\
-        echo "pinned base image is defective on $arch: $ssl_lib is zero bytes, so curl cannot start — re-pull or replace the base image instead of debugging the wheel download" >&2; \\
-        exit 1; \\
-      fi; \\
-    done; \\
-    curl -fsSL "$wheel_url" -o "$wheel_path"; \\
-    echo "$wheel_sha  $wheel_path" | sha256sum -c -; \\
-    /opt/venv/bin/python -m pip install --no-cache-dir --force-reinstall --no-deps "$wheel_path"; \\
-    rm -f "$wheel_path"; \\
-    driver_bin="$(find /opt/venv/lib -path '*/cua_driver/bin/cua-driver' -type f -print -quit)"; \\
-    test -n "$driver_bin"; \\
-    install -D -m 0755 "$driver_bin" ${CUA_EXECUTABLE}; \\
-    install -d -o cua -g cua -m 0700 ${VM_WORKSPACE_GUEST}; \\
-    test "$(${CUA_EXECUTABLE} --version)" = "cua-driver ${CUA_DRIVER_VERSION}"
-# Install before XFCE starts so the panel and window manager see the font too.
-# Noto Sans CJK JP is distributed under the SIL Open Font License 1.1.
-RUN set -eux; \\
-    install -d -m 0755 /usr/local/share/fonts; \\
-    curl -fsSL 'https://raw.githubusercontent.com/notofonts/noto-cjk/165c01b46ea533872e002e0785ff17e44f6d97d8/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf' -o /usr/local/share/fonts/NotoSansCJKjp-Regular.otf; \\
-    echo '68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5  /usr/local/share/fonts/NotoSansCJKjp-Regular.otf' | sha256sum -c -; \\
-    chmod 0644 /usr/local/share/fonts/NotoSansCJKjp-Regular.otf; \\
-    install -d -m 0755 /usr/local/share/licenses/noto-cjk; \\
-    curl -fsSL 'https://raw.githubusercontent.com/notofonts/noto-cjk/165c01b46ea533872e002e0785ff17e44f6d97d8/LICENSE' -o /usr/local/share/licenses/noto-cjk/OFL.txt; \\
-    echo '6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2  /usr/local/share/licenses/noto-cjk/OFL.txt' | sha256sum -c -; \\
-    fc-cache -f
-${workspacePreparationDockerfile(VM_WORKSPACE_GUEST)}
-# A bot's own desktop: a 200 ms (not 800) watch for windows an action opens still sees Firefox popups; no cursor glide; plain logs; Chrome's own sandbox off, since it needs namespaces this hardened container (capabilities dropped, runtime seccomp) refuses and Chrome exits with code 21; the container is the isolation boundary here. --grant existing-profile lets the bot attach the browser tools to Chromium it opened on this desktop; without it every attach is refused with browser_consent_required.
-RUN printf '%s\\n' \\
-      '#!/bin/sh' \\
-      '/usr/local/bin/prepare-openmausbot-workspace.sh' \\
-      'attempt=0' \\
-      'until DISPLAY=:1 xset q >/dev/null 2>&1; do' \\
-      '  attempt=$((attempt + 1))' \\
-      '  if [ "$attempt" -ge 45 ]; then echo "X display :1 did not become ready within 45 seconds" >&2; exit 1; fi' \\
-      '  sleep 1' \\
-      'done' \\
-      'exec env CUA_DRIVER_BROWSER_NO_SANDBOX=1 CUA_DRIVER_INSTALL_CHANNEL=python_package CUA_DRIVER_RS_TELEMETRY_ENABLED=0 CUA_DRIVER_WINDOW_CHANGE_TIMEOUT_MS=200 NO_COLOR=1 ${CUA_EXECUTABLE} serve --socket ${CUA_SOCKET} --permission-mode standard --grant existing-profile --cursor-reduced-motion on' \\
-      > /usr/local/bin/start-openmausbot-cua-driver.sh \\
-    && chmod 0755 /usr/local/bin/start-openmausbot-cua-driver.sh
-RUN printf '%s\\n' \\
-      '' \\
-      '[program:openmausbot-cua-driver]' \\
-      'command=/usr/local/bin/start-openmausbot-cua-driver.sh' \\
-      'user=cua' \\
-      'environment=HOME="/home/cua",USER="cua",DISPLAY=":1"' \\
-      'autorestart=true' \\
-      'startsecs=2' \\
-      'stdout_logfile=/var/log/supervisor/cua-driver.log' \\
-      'stderr_logfile=/var/log/supervisor/cua-driver.error.log' \\
-      'priority=30' \\
-      >> /etc/supervisor/supervisord.conf
-LABEL ${MANAGED_LABEL}="1" \\
-      ${DRIVER_LABEL}="${CUA_DRIVER_VERSION}" \\
-      ${BASE_IMAGE_LABEL}="${BASE_IMAGE_DIGEST}" \\
-      ${IMAGE_LAYER_LABEL}="${IMAGE_LAYER_VERSION}"
-`;
-}
 
 export async function sh(cmd: string, args: string[], timeout = 8000): Promise<{ stdout: string }> {
   const resolved = resolveCliSpawn(cmd, args);
@@ -421,6 +372,33 @@ function containerOwnershipLabelsMatch(
   );
 }
 
+function inspectedLabels(stdout: string, runtime: Runtime): Record<string, string> | undefined {
+  const [detail] = JSON.parse(stdout) as Array<{ configuration?: { labels?: Record<string, string> }; Config?: { Labels?: Record<string, string> } }>;
+  return runtime === "container" ? detail?.configuration?.labels : detail?.Config?.Labels;
+}
+
+async function inspectTargetContainer(
+  runtime: Runtime,
+  target: LocalVmTarget,
+  runner: CommandRunner,
+  timeout?: number,
+): Promise<{ stdout: string; name: string } | null> {
+  try {
+    const { stdout } = await runner(runtime, ["inspect", target.containerName], timeout);
+    resolvedContainerNames.delete(target.key);
+    return { stdout, name: target.containerName };
+  } catch {}
+  try {
+    const { stdout } = await runner(runtime, ["inspect", target.legacyContainerName], timeout);
+    if (containerOwnershipLabelsMatch(inspectedLabels(stdout, runtime), target)) {
+      resolvedContainerNames.set(target.key, target.legacyContainerName);
+      return { stdout, name: target.legacyContainerName };
+    }
+  } catch {}
+  resolvedContainerNames.delete(target.key);
+  return null;
+}
+
 function normalizeImageId(id: string | undefined): string | null {
   return id?.trim().replace(/^sha256:/, "") || null;
 }
@@ -516,8 +494,13 @@ export async function containerComputerStatus(
     status.image_id = image.id;
   } catch {}
 
+  let name = target.containerName;
   try {
-    const { stdout } = await runner(status.runtime, ["inspect", target.containerName]);
+    const found = await inspectTargetContainer(status.runtime, target, runner);
+    if (!found) throw new Error("missing container");
+    const { stdout } = found;
+    name = found.name;
+    status.container_name = name;
     if (status.runtime === "container") {
       const inspected = JSON.parse(stdout) as Array<{
         configuration?: {
@@ -544,7 +527,7 @@ export async function containerComputerStatus(
           ? normalizeImageId(detail.configuration.image.descriptor?.digest)
           : null;
       status.imageMatches =
-        appleImage === IMAGE && status.image_id !== null && appleImageId === status.image_id;
+        isLocalVmImageRef(appleImage) && status.image_id !== null && appleImageId === status.image_id;
       status.managed = containerOwnershipLabelsMatch(detail?.configuration?.labels, target);
       status.persistence = appleWorkspaceMountIsSafe(detail?.configuration?.mounts, platform, target.workspaceDir)
         ? "durable"
@@ -578,13 +561,13 @@ export async function containerComputerStatus(
       status.network = dockerPortsAreLocal(detail?.HostConfig?.PortBindings) ? "loopback" : "unsafe";
       status.viewer_port = dockerViewerPort(detail?.NetworkSettings?.Ports, target.viewerPort);
       status.imageMatches =
-        detail?.Config?.Image === IMAGE &&
+        isLocalVmImageRef(detail?.Config?.Image) &&
         imageLabelsMatch(detail?.Config?.Labels) &&
         (!rootIsHostRoot || detail?.Config?.Labels?.[DESKTOP_FLAGS_LABEL] === DESKTOP_FLAGS_VERSION) &&
         status.image_id !== null &&
         normalizeImageId(detail?.Image) === status.image_id;
       status.managed = containerOwnershipLabelsMatch(detail?.Config?.Labels, target);
-      if (status.managed) raisePidsLimit(target.containerName, detail?.HostConfig?.PidsLimit, runner.bind(null, status.runtime));
+      if (status.managed) raisePidsLimit(name, detail?.HostConfig?.PidsLimit, runner.bind(null, status.runtime));
       status.persistence = dockerWorkspaceMountIsSafe(
         detail?.Mounts,
         platform,
@@ -613,12 +596,12 @@ export async function containerComputerStatus(
   if (canProbe) {
     try {
       const expected = `cua-driver ${CUA_DRIVER_VERSION}`;
-      const version = await runner(status.runtime, cuaExecArgs(["--version"], { container: target.containerName }), 8000);
+      const version = await runner(status.runtime, cuaExecArgs(["--version"], { container: name }), 8000);
       if (version.stdout.trim() !== expected) throw new Error(`expected ${expected}`);
-      await runner(status.runtime, cuaExecArgs(["status", "--socket", CUA_SOCKET], { container: target.containerName }), 8000);
+      await runner(status.runtime, cuaExecArgs(["status", "--socket", CUA_SOCKET], { container: name }), 8000);
       const health = await runner(
         status.runtime,
-        cuaExecArgs(["call", "health_report", "{}", "--socket", CUA_SOCKET], { container: target.containerName }),
+        cuaExecArgs(["call", "health_report", "{}", "--socket", CUA_SOCKET], { container: name }),
         15_000,
       );
       const report = JSON.parse(health.stdout) as { schema_version?: string; overall?: string; checks?: unknown[] };
@@ -640,12 +623,12 @@ export async function containerComputerStatus(
           CUA_SOCKET,
           "--screenshot-out-file",
           readinessShot,
-        ], { container: target.containerName }),
+        ], { container: name }),
         20_000,
       );
       const captured = await runner(
         status.runtime,
-        ["exec", target.containerName, "base64", "-w0", readinessShot],
+        ["exec", name, "base64", "-w0", readinessShot],
         20_000,
       );
       if (!wholeScreenshot(Buffer.from(captured.stdout.trim(), "base64")).ok) {
@@ -657,7 +640,7 @@ export async function containerComputerStatus(
       try {
         const errorLog = await runner(
           status.runtime,
-          ["exec", target.containerName, "tail", "-n", "4", "/var/log/supervisor/cua-driver.error.log"],
+          ["exec", name, "tail", "-n", "4", "/var/log/supervisor/cua-driver.error.log"],
           4000,
         );
         status.desktop_error =
@@ -856,9 +839,30 @@ function baseImagePullArgs(runtime: Runtime): string[] {
   return runtime === "container" ? ["image", "pull", BASE_IMAGE] : ["pull", BASE_IMAGE];
 }
 
+async function imageHasManagedLabels(runtime: Runtime, runner: CommandRunner, ref: string): Promise<boolean> {
+  try {
+    const { stdout } = await runner(runtime, ["image", "inspect", ref]);
+    return imageLabelsMatch(inspectedImage(stdout, runtime).labels);
+  } catch {
+    return false;
+  }
+}
+
+async function tagOlderImage(runtime: Runtime, runner: CommandRunner): Promise<boolean> {
+  if (await imageHasManagedLabels(runtime, runner, IMAGE)) return false;
+  if (!(await imageHasManagedLabels(runtime, runner, OPENMAUSBOT_IMAGE))) return false;
+  try {
+    await runner(runtime, runtime === "container" ? ["image", "tag", OPENMAUSBOT_IMAGE, IMAGE] : ["tag", OPENMAUSBOT_IMAGE, IMAGE]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function prepareManagedImage(runtime: Runtime, runner: CommandRunner): Promise<void> {
+  if (await tagOlderImage(runtime, runner)) return;
   await runner(runtime, baseImagePullArgs(runtime), 10 * 60_000);
-  const context = await mkdtemp(join(tmpdir(), "openmausbot-cua-image-"));
+  const context = await mkdtemp(join(tmpdir(), "seira-cua-image-"));
   try {
     await writeFile(join(context, "Dockerfile"), managedImageDockerfile(), { mode: 0o600 });
     await runner(runtime, ["build", ...(runtime === "container" ? [] : ["--force-rm"]), "-t", IMAGE, context], 10 * 60_000); // the legacy builder keeps a failed step's container without --force-rm
@@ -899,7 +903,7 @@ export async function containerComputerAction(
   if (action === "remove" && !before.managed) {
     throw Object.assign(
       new Error(
-        `The existing container named ${target.containerName} was not created by Seira; remove it manually in ${runtime}`,
+        `The existing container named ${localVmContainerName(target)} was not created by Seira; remove it manually in ${runtime}`,
       ),
       { status: 409 },
     );
@@ -910,7 +914,7 @@ export async function containerComputerAction(
   } else {
     if (action === "run") await ensureVmWorkspace(platform, target, runtime);
     if (action === "start" && runtime !== "container") {
-      await applyResourcesBeforeStart(target.containerName, resources, (args, timeoutMs) => runner(runtime, args, timeoutMs));
+      await applyResourcesBeforeStart(localVmContainerName(target), resources, (args, timeoutMs) => runner(runtime, args, timeoutMs));
     }
     const args =
       action === "run"
@@ -920,8 +924,8 @@ export async function containerComputerAction(
           hostUser: currentHostUser(platform),
         })
         : action === "remove"
-          ? ["rm", runtime === "container" ? "--force" : "-f", target.containerName]
-          : [action, target.containerName];
+          ? ["rm", runtime === "container" ? "--force" : "-f", localVmContainerName(target)]
+          : [action, localVmContainerName(target)];
     await runner(runtime, args, 2 * 60_000);
   }
   return containerComputerStatus(runner, platform, target);
@@ -932,12 +936,7 @@ export async function containerComputerExists(
   target: LocalVmTarget,
   runner: CommandRunner = sh,
 ): Promise<boolean> {
-  try {
-    await runner(runtime, ["inspect", target.containerName], 8_000);
-    return true;
-  } catch {
-    return false;
-  }
+  return (await inspectTargetContainer(runtime, target, runner, 8_000)) !== null;
 }
 
 export type ScreenshotCheck = { ok: boolean; mime: "image/png" | "image/jpeg" };
@@ -988,12 +987,12 @@ export async function containerComputerFrame(
         CUA_SOCKET,
         "--screenshot-out-file",
         screenshot,
-      ], { container: target.containerName }),
+      ], { container: localVmContainerName(target) }),
       30_000,
     );
     const { stdout } = await runner(
       status.runtime,
-      ["exec", target.containerName, "base64", "-w0", screenshot],
+      ["exec", localVmContainerName(target), "base64", "-w0", screenshot],
       30_000,
     );
     const data = stdout.trim();
@@ -1088,7 +1087,7 @@ export async function containerExec(
       "-w", VM_WORKSPACE_GUEST,
       "-e", "HOME=/home/cua",
       "-e", `DISPLAY=${DISPLAY}`,
-      target.containerName,
+      localVmContainerName(target),
       "timeout", "-k", "5", String(seconds),
       "sh", "-lc", command,
     ],
@@ -1111,7 +1110,7 @@ export function containerComputerMcp(
 ): ContainerMcpLaunch {
   return {
     command: process.execPath,
-    args: [containerMcpPath, runtime, target.containerName, CUA_SOCKET],
+    args: [containerMcpPath, runtime, localVmContainerName(target), CUA_SOCKET],
     // The control pair rides in env, not argv, which `ps` shows for the bridge's whole life.
     env: {
       ELECTRON_RUN_AS_NODE: "1",
@@ -1167,9 +1166,9 @@ export function setupCommands(
           resources: DEFAULT_DESKTOP_RESOURCES,
           hostUser: null,
         })),
-    start: command(["start", target.containerName]),
-    stop: command(["stop", target.containerName]),
-    remove: command(["rm", runtime === "container" ? "--force" : "-f", target.containerName]),
+    start: command(["start", localVmContainerName(target)]),
+    stop: command(["stop", localVmContainerName(target)]),
+    remove: command(["rm", runtime === "container" ? "--force" : "-f", localVmContainerName(target)]),
     view: target.viewerPort ? `http://127.0.0.1:${target.viewerPort}/vnc.html` : "",
   };
 }

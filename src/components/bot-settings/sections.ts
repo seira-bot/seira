@@ -73,5 +73,5 @@ export function appSearchPhase(apps: Pick<BotAppsState, "phase" | "inventorySett
 
 /** The note shown when no section matches. Until the bot's connected apps have loaded, an app name may still match. */
 export function searchEmptyText(query: string, appsPhase: BotApps["phase"]): string {
-  return appsPhase === "loading" ? t("botSettings.searchLoading") : t("botSettings.searchNone", { query });
+  return appsPhase === "loading" ? t("botSettings.searchLoading") : t("botPanel.advanced.searchNone", { query });
 }

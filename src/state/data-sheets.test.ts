@@ -37,7 +37,8 @@ const answers: Record<string, unknown> = {
   [DATA_ROUTES.sheet("bot")]: sheet(["from-get"]),
 };
 
-const { StoreProvider, useStore, dataSheetFromResponse, reducer } = await import("./store");
+const { StoreProvider, useStore, reducer } = await import("./store");
+const { dataSheetFromResponse } = await import("./data-sheet-response");
 
 let seen!: AppState;
 let dispatch!: ReturnType<typeof useStore>["dispatch"];

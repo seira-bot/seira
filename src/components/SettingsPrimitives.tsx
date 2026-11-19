@@ -142,13 +142,13 @@ export function SettingRow({
     );
   }
   return (
-    <div role="group" aria-labelledby={titleId} className={cn("px-4", className)}>
-      <div className="grid min-w-0 grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-6">
+    <div role="group" aria-labelledby={titleId} className={cn("px-4 [[data-advanced-body]_&]:px-0", className)}>
+      <div className="grid min-w-0 grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-6 sm:[[data-advanced-body]_&]:grid-cols-1 sm:[[data-advanced-body]_&]:items-start sm:[[data-advanced-body]_&]:gap-3">
         <div className="min-w-0">
           <div id={titleId} className="text-[14px] font-medium text-ink">{title}</div>
           {subtitle && <div className="mt-1 text-[12px] leading-relaxed text-pretty text-ink-secondary">{subtitle}</div>}
         </div>
-        <div className="min-w-0 sm:max-w-[240px]">{children}</div>
+        <div className="min-w-0 sm:max-w-[240px] sm:[[data-advanced-body]_&]:max-w-none">{children}</div>
       </div>
       {(message || inert) && <div className="mt-2 text-[12px]">{message}{inert}</div>}
     </div>

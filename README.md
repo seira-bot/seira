@@ -34,8 +34,8 @@ Seira runs on your computer and uses the AI plans that you already have.
 </div>
 
 > [!NOTE]
-> Seira is in early development and has no packaged release yet.
-> To try it today, [build it from source](#quick-start).
+> Seira is in early development.
+> Download it for Windows or Linux from the [latest release](https://github.com/seira-bot/seira/releases/latest), or [build it from source](#build-from-source).
 
 ## Why Seira
 
@@ -155,12 +155,26 @@ flowchart LR
 
 ## Quick start
 
-Seira has no packaged release yet. Build it from source.
+Download the app from the [latest release](https://github.com/seira-bot/seira/releases/latest):
+
+- Windows 10 or later: `Seira-setup.exe`. If Windows warns you, select **More info**, then **Run anyway**.
+- Linux x64: `Seira-<version>-x86_64.AppImage`. Make it executable, then open it:
+
+  ```sh
+  chmod +x Seira-*-x86_64.AppImage
+  ./Seira-*-x86_64.AppImage
+  ```
+
+There is no macOS download. On macOS, or to work on the code, build Seira from source.
+
+### Build from source
 
 You need:
 
 - macOS, Windows, or Ubuntu 24.04 x64.
 - Node.js 24 or later, and pnpm 10.
+  To get pnpm, run `corepack enable`.
+  On Windows, run it in a terminal opened as administrator, or install pnpm with `npm install -g pnpm@10.33.0`.
 - At least one agent CLI, installed and signed in: [`claude`](https://claude.com/claude-code), [`codex`](https://github.com/openai/codex), or [`grok`](https://x.ai/cli).
   The model picker finds them automatically.
 
@@ -204,11 +218,11 @@ pnpm check:electron  # syntax check of the Electron files
 ```sh
 pnpm package:mac     # macOS: DMG and ZIP (needs Swift and Xcode tools)
 pnpm package:win     # Windows: installer and ZIP
-pnpm package:linux   # Ubuntu x64: .deb, AppImage, and the verified Cua runtime
+pnpm package:linux   # Ubuntu x64: AppImage and the verified Cua runtime
 ```
 
 > [!WARNING]
-> Do not publish a packaged build yet. Some package and install names still come from upstream.
+> Some package and install names still come from upstream.
 > Read [docs/upstream-names.md](docs/upstream-names.md) before you package.
 
 <details>

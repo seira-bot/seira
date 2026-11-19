@@ -1371,3 +1371,9 @@ describe("a missing Docker CLI", () => {
     expect(status.problem).not.toMatch(/ENOENT/);
   });
 });
+
+describe("the VPS desktop image", () => {
+  it("keeps the image name that existing VPS desktops run", () => {
+    expect(VPS_IMAGE).toBe(`localhost/openmausbot/cua-local-vm:driver-${CUA_DRIVER_VERSION}-v${IMAGE_LAYER_VERSION}`);
+  });
+});

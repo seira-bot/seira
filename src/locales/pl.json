@@ -2662,6 +2662,7 @@
   "onboarding.engines.error": "Nie udało się sprawdzić połączeń AI. Spróbuj ponownie.",
   "onboarding.tour.error": "Nie udało się zapisać postępów. Spróbuj ponownie lub pomiń samouczek.",
   "onboarding.engines.otherWays": "Inne sposoby",
+  "onboarding.engines.freeWay": "Darmowe modele. Bez konta.",
   "onboarding.engines.connected": "Połączono: {name}. Twoje boty mogą już zacząć.",
   "onboarding.engines.answered": "Połączono · {name}",
   "onboarding.engines.checkingAnswer": "Sprawdzanie, czy {name} odpowiada…",

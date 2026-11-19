@@ -16,22 +16,27 @@ import {
   IMAGE_LAYER_LABEL,
   IMAGE_LAYER_VERSION,
   MANAGED_LABEL,
+  OPENMAUSBOT_CONTAINER,
+  OPENMAUSBOT_IMAGE,
   TARGET_LABEL,
   VM_WORKSPACE_DIR,
   VM_WORKSPACE_GUEST,
   WORKSPACE_LABEL,
   containerComputerAction,
+  containerExec,
   containerComputerFrame,
   containerComputerMcp,
   containerComputerScreenshot,
   containerComputerStatus,
   containerRuntimeStatus,
   containerRunArgs,
+  localVmContainerName,
   localVmRecreatableOnDemand,
   localVmResumable,
   localVmWorkspaceExists,
   managedImageDockerfile,
   perBotLocalVmTarget,
+  poolLocalVmTarget,
   SHARED_LOCAL_VM_TARGET,
   setupCommands,
   type CommandRunner,
@@ -1326,7 +1331,7 @@ describe("setupCommands", () => {
   });
 
   it("uses an explicit local image name so Podman never resolves the managed build on Docker Hub", () => {
-    expect(IMAGE).toMatch(/^localhost\/openmausbot\/cua-local-vm:/);
+    expect(IMAGE).toMatch(/^localhost\/seira\/cua-local-vm:/);
     expect(setupCommands("podman", "darwin").run).toContain(IMAGE);
     expect(setupCommands("podman", "darwin").run).not.toContain("docker.io/openmausbot");
   });
@@ -1439,5 +1444,258 @@ describe("Local VM resume safety", () => {
     expect((await containerComputerStatus(fake.run, "linux")).resumable).toBe(false);
     await expect(containerComputerAction("start", fake.run, "linux")).rejects.toThrow();
     expect(fake.calls).not.toContain(`docker start ${CONTAINER}`);
+  });
+});
+
+describe("Local VM names after the Seira rename", () => {
+  const docker = {
+    "/usr/bin/which docker": "docker\n",
+    "/usr/bin/which podman": new Error("missing"),
+    "docker info --format {{.ServerVersion}}": "29\n",
+  };
+  const podman = {
+    "/usr/bin/which docker": new Error("missing"),
+    "/usr/bin/which podman": "podman\n",
+    "podman info --format json": '{"host":{"arch":"amd64"}}\n',
+  };
+  const stopped = { State: { Running: false, FinishedAt: "2026-10-01T12:00:00Z" } };
+  const olderDesktop = (botId: string, overrides: Record<string, unknown> = {}) => {
+    const detail = JSON.parse(perBotReadyInspect(botId, 6081))[0];
+    detail.Config.Image = OPENMAUSBOT_IMAGE;
+    return JSON.stringify([{ ...detail, ...stopped, ...overrides }]);
+  };
+
+  it("names the image and the containers after Seira", () => {
+    expect(IMAGE).toBe(`localhost/seira/cua-local-vm:driver-${CUA_DRIVER_VERSION}-v${IMAGE_LAYER_VERSION}`);
+    expect(SHARED_LOCAL_VM_TARGET.containerName).toBe("seira-computer");
+    expect(perBotLocalVmTarget("bot-a").containerName).toMatch(/^seira-computer-[0-9a-f]{16}$/);
+    expect(poolLocalVmTarget(3).containerName).toBe("seira-computer-p3");
+    expect(SHARED_LOCAL_VM_TARGET.legacyContainerName).toBe("openmausbot-computer");
+    expect(perBotLocalVmTarget("bot-a").legacyContainerName).toBe(`openmausbot-computer-${perBotLocalVmTarget("bot-a").containerName.slice("seira-computer-".length)}`);
+    expect(poolLocalVmTarget(3).legacyContainerName).toBe("openmausbot-computer-p3");
+    for (const target of [SHARED_LOCAL_VM_TARGET, perBotLocalVmTarget("bot-a"), poolLocalVmTarget(3)]) {
+      const args = containerRunArgs("docker", "pw", target);
+      expect(args.slice(0, 4)).toEqual(["run", "-d", "--name", target.containerName]);
+      expect(args.at(-1)).toBe(IMAGE);
+    }
+  });
+
+  it("builds the image under the Seira name when no older image fits", async () => {
+    const calls: string[][] = [];
+    const run: CommandRunner = async (command, args) => {
+      calls.push([command, ...args]);
+      if (command === "/usr/bin/which") {
+        if (args[0] === "docker") return { stdout: "docker" };
+        throw new Error("missing executable");
+      }
+      if (args[0] === "info") return { stdout: "running" };
+      if (args[0] === "image" && args[1] === "inspect") {
+        if (calls.some((call) => call[1] === "build")) return { stdout: preparedImageInspect() };
+        throw new Error("missing image");
+      }
+      if (args[0] === "inspect") throw new Error("missing container");
+      if (args[0] === "pull" || args[0] === "build") return { stdout: "" };
+      throw new Error(`unsupported command: ${args.join(" ")}`);
+    };
+    await containerComputerAction("pull", run, "linux");
+    const build = calls.find((call) => call[1] === "build");
+    expect(build?.slice(0, 4)).toEqual(["docker", "build", "--force-rm", "-t"]);
+    expect(build?.[4]).toBe(`localhost/seira/cua-local-vm:driver-${CUA_DRIVER_VERSION}-v${IMAGE_LAYER_VERSION}`);
+  });
+
+  it("tags an older image with the Seira name instead of pulling and building", async () => {
+    const calls: string[] = [];
+    const run: CommandRunner = async (command, args) => {
+      const key = [command, ...args].join(" ");
+      calls.push(key);
+      if (key === "/usr/bin/which docker") return { stdout: "docker" };
+      if (command === "/usr/bin/which") throw new Error("missing executable");
+      if (args[0] === "info") return { stdout: "running" };
+      if (key === `docker image inspect ${OPENMAUSBOT_IMAGE}`) return { stdout: preparedImageInspect() };
+      if (key === `docker image inspect ${IMAGE}`) {
+        if (calls.includes(`docker tag ${OPENMAUSBOT_IMAGE} ${IMAGE}`)) return { stdout: preparedImageInspect() };
+        throw new Error("missing image");
+      }
+      if (key === `docker tag ${OPENMAUSBOT_IMAGE} ${IMAGE}`) return { stdout: "" };
+      if (args[0] === "inspect") throw new Error("missing container");
+      throw new Error(`unsupported command: ${key}`);
+    };
+    const status = await containerComputerAction("pull", run, "linux");
+    expect(status.image).toBe(true);
+    expect(calls.some((call) => call.includes(" pull ") || call.includes(" build "))).toBe(false);
+  });
+
+  it("tags an older image with the Seira name for Apple container", async () => {
+    const calls: string[] = [];
+    const run: CommandRunner = async (command, args) => {
+      const key = [command, ...args].join(" ");
+      calls.push(key);
+      if (key === "/usr/bin/which container") return { stdout: "container" };
+      if (command === "/usr/bin/which") throw new Error("missing executable");
+      if (key === "container system status") return { stdout: "running" };
+      if (key === `container image inspect ${OPENMAUSBOT_IMAGE}`) return { stdout: appleImageInspect([appleImageVariant(preparedLabels)]) };
+      if (key === `container image inspect ${IMAGE}`) {
+        if (calls.includes(`container image tag ${OPENMAUSBOT_IMAGE} ${IMAGE}`)) return { stdout: appleImageInspect([appleImageVariant(preparedLabels)]) };
+        throw new Error("missing image");
+      }
+      if (key === `container image tag ${OPENMAUSBOT_IMAGE} ${IMAGE}`) return { stdout: "" };
+      if (args[0] === "inspect") throw new Error("missing container");
+      throw new Error(`unsupported command: ${key}`);
+    };
+    expect((await containerComputerAction("pull", run, "darwin")).image).toBe(true);
+    expect(calls.some((call) => call.includes("image pull") || call.includes(" build "))).toBe(false);
+  });
+
+  it("builds the image when the older image has the wrong labels or cannot be tagged", async () => {
+    for (const failure of ["labels", "tag"] as const) {
+      const calls: string[] = [];
+      const run: CommandRunner = async (command, args) => {
+        const key = [command, ...args].join(" ");
+        calls.push(key);
+        if (key === "/usr/bin/which docker") return { stdout: "docker" };
+        if (command === "/usr/bin/which") throw new Error("missing executable");
+        if (args[0] === "info") return { stdout: "running" };
+        if (key === `docker image inspect ${OPENMAUSBOT_IMAGE}`) {
+          return { stdout: failure === "labels" ? JSON.stringify([{ Id: "x", Config: { Labels: {} } }]) : preparedImageInspect() };
+        }
+        if (key === `docker image inspect ${IMAGE}`) {
+          if (calls.some((call) => call.startsWith("docker build "))) return { stdout: preparedImageInspect() };
+          throw new Error("missing image");
+        }
+        if (args[0] === "tag") throw new Error("tag failed");
+        if (args[0] === "inspect") throw new Error("missing container");
+        if (args[0] === "pull" || args[0] === "build") return { stdout: "" };
+        throw new Error(`unsupported command: ${key}`);
+      };
+      await containerComputerAction("pull", run, "linux");
+      expect(calls.some((call) => call.startsWith("docker build "))).toBe(true);
+    }
+  });
+
+  it("keeps using an older-named desktop that carries this target's labels", async () => {
+    const target = perBotLocalVmTarget("legacy-bot");
+    const fake = runner({
+      ...docker,
+      [`docker image inspect ${IMAGE}`]: preparedImageInspect(),
+      [`docker inspect ${target.containerName}`]: new Error("missing container"),
+      [`docker inspect ${target.legacyContainerName}`]: olderDesktop("legacy-bot"),
+      [`docker update --memory 8g --memory-swap 8g --cpus 4 ${target.legacyContainerName}`]: "",
+      [`docker start ${target.legacyContainerName}`]: "",
+      [`docker rm -f ${target.legacyContainerName}`]: "",
+    });
+    const status = await containerComputerStatus(fake.run, "linux", target);
+    expect(status).toMatchObject({ container: "stopped", managed: true, container_name: target.legacyContainerName });
+    expect(localVmContainerName(target)).toBe(target.legacyContainerName);
+    expect(containerComputerMcp("docker", undefined, target).args.at(-2)).toBe(target.legacyContainerName);
+    expect(setupCommands("docker", "linux", target).stop).toBe(`docker stop ${target.legacyContainerName}`);
+    expect(setupCommands("docker", "linux", target).remove).toBe(`docker rm -f ${target.legacyContainerName}`);
+    await containerComputerAction("start", fake.run, "linux", target, { memoryGb: 8, cpus: 4 });
+    await containerComputerAction("remove", fake.run, "linux", target);
+    expect(fake.calls).toContain(`docker start ${target.legacyContainerName}`);
+    expect(fake.calls).toContain(`docker rm -f ${target.legacyContainerName}`);
+    expect(fake.calls.some((call) => call.includes(target.containerName) && !call.startsWith("docker inspect"))).toBe(false);
+  });
+
+  it("resolves a shared older-named desktop for screens and exec, then returns to the new name once it is gone", async () => {
+    const shared = SHARED_LOCAL_VM_TARGET;
+    const olderShared = JSON.parse(readyInspect());
+    olderShared[0].Config.Image = OPENMAUSBOT_IMAGE;
+    Object.assign(olderShared[0], stopped);
+    const present = runner({
+      ...docker,
+      [`docker image inspect ${IMAGE}`]: preparedImageInspect(),
+      [`docker inspect ${shared.containerName}`]: new Error("missing container"),
+      [`docker inspect ${shared.legacyContainerName}`]: JSON.stringify(olderShared),
+    });
+    expect(await containerComputerStatus(present.run, "linux", shared)).toMatchObject({ container: "stopped", container_name: OPENMAUSBOT_CONTAINER });
+    const execs: string[][] = [];
+    await containerExec(shared, "true", { runtime: "docker", exec: async (_command, args) => { execs.push(args); return { stdout: "", stderr: "", code: 0 }; } });
+    expect(execs[0]).toContain(OPENMAUSBOT_CONTAINER);
+    const gone = runner({
+      ...docker,
+      [`docker image inspect ${IMAGE}`]: preparedImageInspect(),
+      [`docker inspect ${shared.containerName}`]: new Error("missing container"),
+      [`docker inspect ${shared.legacyContainerName}`]: new Error("missing container"),
+    });
+    expect((await containerComputerStatus(gone.run, "linux", shared)).container).toBe("missing");
+    expect(localVmContainerName(shared)).toBe(CONTAINER);
+  });
+
+  it("refuses to create a second desktop while an older-named one exists", async () => {
+    const target = perBotLocalVmTarget("legacy-run");
+    const fake = runner({
+      ...docker,
+      [`docker image inspect ${IMAGE}`]: preparedImageInspect(),
+      [`docker inspect ${target.containerName}`]: new Error("missing container"),
+      [`docker inspect ${target.legacyContainerName}`]: olderDesktop("legacy-run"),
+    });
+    await expect(containerComputerAction("run", fake.run, "linux", target)).rejects.toThrow("A Local VM already exists");
+    expect(fake.calls.some((call) => call.startsWith("docker run "))).toBe(false);
+  });
+
+  it("ignores an older-named container without this target's ownership labels", async () => {
+    const target = perBotLocalVmTarget("legacy-foreign");
+    for (const labels of [{}, { [MANAGED_LABEL]: "1", [WORKSPACE_LABEL]: "1", [TARGET_LABEL]: "someone-else" }]) {
+      const foreign = JSON.parse(olderDesktop("legacy-foreign"));
+      foreign[0].Config.Labels = labels;
+      const fake = runner({
+        ...docker,
+        [`docker image inspect ${IMAGE}`]: preparedImageInspect(),
+        [`docker inspect ${target.containerName}`]: new Error("missing container"),
+        [`docker inspect ${target.legacyContainerName}`]: JSON.stringify(foreign),
+      });
+      const status = await containerComputerStatus(fake.run, "linux", target);
+      expect(status).toMatchObject({ container: "missing", managed: false, container_name: target.containerName });
+      expect(localVmContainerName(target)).toBe(target.containerName);
+    }
+  });
+
+  it.each([
+    ["docker", docker],
+    ["podman", podman],
+  ] as const)("accepts a %s container that runs from the older image name and the same image ID", async (runtime, base) => {
+    const target = perBotLocalVmTarget(`legacy-image-${runtime}`);
+    const fake = runner({
+      ...base,
+      [`${runtime} image inspect ${IMAGE}`]: preparedImageInspect(),
+      [`${runtime} inspect ${target.containerName}`]: new Error("missing container"),
+      [`${runtime} inspect ${target.legacyContainerName}`]: olderDesktop(`legacy-image-${runtime}`),
+    });
+    expect((await containerComputerStatus(fake.run, "linux", target)).imageMatches).toBe(true);
+    const otherId = runner({
+      ...base,
+      [`${runtime} image inspect ${IMAGE}`]: preparedImageInspect(),
+      [`${runtime} inspect ${target.containerName}`]: new Error("missing container"),
+      [`${runtime} inspect ${target.legacyContainerName}`]: olderDesktop(`legacy-image-${runtime}`, { Image: "sha256:another-build" }),
+    });
+    expect((await containerComputerStatus(otherId.run, "linux", target)).imageMatches).toBe(false);
+  });
+
+  it("accepts an Apple container that runs from the older image name and the same image ID", async () => {
+    const shared = SHARED_LOCAL_VM_TARGET;
+    const fake = runner({
+      ...appleRuntime,
+      [`container image inspect ${IMAGE}`]: appleImageInspect([appleImageVariant(preparedLabels)]),
+      [`container inspect ${shared.containerName}`]: new Error("missing container"),
+      [`container inspect ${shared.legacyContainerName}`]: JSON.stringify([{
+        configuration: {
+          image: { reference: OPENMAUSBOT_IMAGE, descriptor: { digest: "sha256:managed-image-id" } },
+          resources: { cpus: 2, memoryInBytes: 4 * 1024 ** 3 },
+          publishedPorts: [{ hostAddress: "127.0.0.1", containerPort: 6901 }],
+          labels: { ...preparedLabels, [WORKSPACE_LABEL]: "1", [DESKTOP_FLAGS_LABEL]: DESKTOP_FLAGS_VERSION },
+          mounts: [{ source: VM_WORKSPACE_DIR, destination: VM_WORKSPACE_GUEST, options: [] }],
+        },
+        status: { state: "stopped" },
+      }]),
+    });
+    const status = await containerComputerStatus(fake.run, "darwin", shared);
+    expect(status).toMatchObject({ imageMatches: true, managed: true, container_name: OPENMAUSBOT_CONTAINER });
+    const gone = runner({
+      ...appleRuntime,
+      [`container image inspect ${IMAGE}`]: appleImageInspect([appleImageVariant(preparedLabels)]),
+      [`container inspect ${shared.containerName}`]: new Error("missing container"),
+      [`container inspect ${shared.legacyContainerName}`]: new Error("missing container"),
+    });
+    await containerComputerStatus(gone.run, "darwin", shared);
   });
 });

@@ -66,6 +66,7 @@ export { formatTime } from "@/lib/clock-time";
 import { createBotPatchQueue, flushWhenLeaving, keepaliveFits, type BotUpdatePatch } from "./bot-patch-queue"; import { createNewTaskOnce } from "./new-task-once";
 import { liveCallFromFrame, nextLiveCallLookup } from "./live-call";
 import { isNoAiRefusal, useChatErrorClear } from "./chat-error";
+import { dataSheetFromResponse, dataTablesFromResponse } from "./data-sheet-response";
 import { openLiveEvents, publishLiveFrame, publishMissedFrames, withoutScreenPixels } from "@/lib/live-events";
 import { unlessRefused } from "@/lib/admin-scope";
 import { olderRunsSince, ROUTINE_RUNS_WINDOW_MS, trimRoutineRuns, withOlderRoutineRuns } from "./routine-runs";
@@ -555,7 +556,7 @@ export interface AppState {
   connected: boolean;
   hydrated?: true;
   error: string | null;
-  notice: { kind: "thread-gone" | "bot-gone" | "steer-images" | "note"; botName: string | null; text?: string } | null;
+  notice: { kind: "thread-gone" | "bot-gone" | "steer-images" | "note" | "no-ai"; botName: string | null; text?: string } | null;
   revealThread: { threadId: string; nonce: number } | null;
   mascotMotion: {
     botId: string;
@@ -676,6 +677,7 @@ export type Action =
   | { type: "loadOlderMessages"; threadId: string }
   | { type: "olderMessages"; threadId: string; generation: number; messages: Message[]; hasMore: boolean }
   | { type: "answerCard"; botId: string; messageId: string; answer: string; threadId?: string; groupId?: string }
+  | { type: "onboardingCardReopened"; botId: string; messageId: string }
   | { type: "answerCardFailed"; botId: string; messageId: string; answer: string; threadId?: string; groupId?: string }
   | { type: "dismissCard"; botId: string; messageId: string; threadId?: string; groupId?: string }
   | {
@@ -1073,6 +1075,8 @@ export function reducer(state: AppState, action: Action): AppState {
       });
       return action.groupId ? patched : withMascotMotion(patched, action.botId, "working");
     }
+    case "onboardingCardReopened":
+      return patchCard(state, action.botId, action.messageId, { dismissed: false });
     case "answerCardFailed": {
       const card = cardMessages(state, action.botId, action.groupId, action.threadId)?.find((message) => message.id === action.messageId)?.card;
       if (card?.pendingAnswer !== action.answer) return state;
@@ -1785,20 +1789,6 @@ export function reducer(state: AppState, action: Action): AppState {
   }
 }
 
-export function dataTablesFromResponse(body: unknown): DataTable[] {
-  const tables = body && typeof body === "object" && "tables" in body ? (body as { tables: unknown }).tables : undefined;
-  return Array.isArray(tables) ? (tables as DataTable[]).filter((table) => table && typeof table.name === "string") : [];
-}
-
-export function dataSheetFromResponse(body: unknown, botId: string): DataSheet {
-  const candidate = body && typeof body === "object" && "sheet" in body ? (body as { sheet: unknown }).sheet : body;
-  if (candidate && typeof candidate === "object" && Array.isArray((candidate as DataSheet).cards)) {
-    const sheet = candidate as DataSheet;
-    return { ...sheet, botId: sheet.botId || botId, sources: Array.isArray(sheet.sources) ? sheet.sources : [] };
-  }
-  return { version: 1, botId, cards: [], sources: [], updatedAt: new Date(0).toISOString() };
-}
-
 export const initialState: AppState = {
   modelVariantSessions: {},
   backgroundThreadEvents: {},
@@ -2095,7 +2085,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const olderPagesInFlight = new Set<string>();
     const newTaskOnce = createNewTaskOnce();
     let creatingBot = false;
-    const showError = (e: unknown) => { if (isBotLimitRefusal(e)) return; if (isNoAiRefusal(e)) wrapped({ type: "notice", notice: { kind: "note", botName: null, text: e.message } }); else rawDispatch({ type: "error", message: e instanceof Error ? e.message : String(e) }); };
+    const showError = (e: unknown) => { if (isBotLimitRefusal(e)) return; if (isNoAiRefusal(e)) wrapped({ type: "notice", notice: { kind: "no-ai", botName: null, text: e.message } }); else rawDispatch({ type: "error", message: e instanceof Error ? e.message : String(e) }); };
     const showSavedState = (owner: SavedOwner) => (error: unknown) => {
       showError(error);
       void api<SavedSnapshot>("/api/bots?messages=0").then((snapshot) => {
@@ -2257,7 +2247,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           break;
         }
         case "notice":
-          if (action.notice) setTimeout(() => rawDispatch({ type: "notice", notice: null }), action.notice.kind === "note" ? 20_000 : 6000);
+          if (action.notice && action.notice.kind !== "no-ai") {
+            const shown = action.notice;
+            setTimeout(() => { if (stateRef.current.notice === shown) rawDispatch({ type: "notice", notice: null }); }, shown.kind === "note" ? 20_000 : 6000);
+          }
           break;
         case "createRoutine":
           api("/api/routines", { method: "POST", body: JSON.stringify(action.input) }).catch(showError);
@@ -2353,7 +2346,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             });
           break;
         case "send": {
-          if (quizBeforeSend) persistCard(action.botId, quizBeforeSend.id, { dismissed: true });
           const threadId =
             action.threadId ?? stateRef.current.bots.find((bot) => bot.id === action.botId)?.threadId;
           const sendId = action.sendId ?? randomUuid();
@@ -2368,6 +2360,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 body: JSON.stringify({ text: action.text, replyToId: action.replyToId, threadId, sendId, ...(action.dataContext ? { dataContext: action.dataContext } : {}), ...(action.pointed?.length ? { pointed: action.pointed } : {}), ...(action.openPage ? { openPage: action.openPage } : {}), ...(action.mode === "goal" ? { mode: "goal" } : {}), ...(action.followUp ? { followUp: action.followUp } : {}), ...(action.mentions?.length ? { mentions: action.mentions } : {}) }),
               }), arrived))
             .then((sent) => {
+              if (quizBeforeSend) persistCard(action.botId, quizBeforeSend.id, { dismissed: true });
               if (!("body" in sent)) return;
               const body = sent.body;
               if (body?.message && typeof body.threadId === "string") {
@@ -2397,6 +2390,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               if (threadId) {
                 rawDispatch({ type: "optimisticMessageRemoved", threadId, sendId });
               }
+              if (quizBeforeSend) rawDispatch({ type: "onboardingCardReopened", botId: action.botId, messageId: quizBeforeSend.id });
               showError(error);
               action.onError?.();
             });

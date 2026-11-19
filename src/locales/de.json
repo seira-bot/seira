@@ -1329,6 +1329,7 @@
   "approvalMode.customLocalOnlyDot": "Die benutzerdefinierte Freigabe lässt sich nur in der installierten Desktop-App ändern.",
   "onboarding.continue": "Weiter",
   "onboarding.engines.otherWays": "Andere Wege",
+  "onboarding.engines.freeWay": "Kostenlose Modelle. Kein Konto nötig.",
   "onboarding.engines.connected": "{name} ist verbunden. Deine Bots können jetzt loslegen.",
   "onboarding.engines.answered": "Verbunden · {name}",
   "onboarding.engines.checkingAnswer": "Prüfe, ob {name} antwortet…",

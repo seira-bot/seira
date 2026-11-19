@@ -3247,6 +3247,7 @@
   "onboarding.engines.error": "无法检查你的 AI 连接。请再试一次。",
   "onboarding.tour.error": "无法保存你的进度。请再试一次，或跳过导览。",
   "onboarding.engines.otherWays": "其他方式",
+  "onboarding.engines.freeWay": "免费模型，无需账号。",
   "onboarding.engines.connected": "{name} 已连接。你的机器人现在就可以开始了。",
   "onboarding.engines.answered": "已连接 · {name}",
   "onboarding.engines.checkingAnswer": "正在确认 {name} 是否回应…",

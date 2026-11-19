@@ -17,7 +17,7 @@ import { fixtureApi } from "./testing/preview-fixture.ts";
 import { fakeVncDesktop } from "./testing/fake-vnc-desktop.ts";
 import { decodePng } from "./testing/png.ts";
 import { createServer as createHttpServer } from "node:http";
-import { BASE_IMAGE_DIGEST, CUA_DRIVER_VERSION, IMAGE, IMAGE_LAYER_VERSION, TARGET_LABEL, perBotLocalVmTarget } from "../server/container-computer.ts";
+import { BASE_IMAGE_DIGEST, CONTAINER, CUA_DRIVER_VERSION, IMAGE, IMAGE_LAYER_VERSION, TARGET_LABEL, perBotLocalVmTarget } from "../server/container-computer.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 
@@ -153,7 +153,7 @@ else if (args[0] === 'exec') result = args.includes('--version') ? 'cua-driver $
   : args.includes('health_report') ? {schema_version:'1',overall:'ok',checks:[]} : {};
 else if (args[0] === 'info') result = 'fixture';
 else if (args[0] === 'image' && args[1] === 'inspect') result = [{Id:imageId,Config:{Labels:labels}}];
-else if (args[0] === 'inspect' && (args[1] === 'openmausbot-computer' || args[1] === target?.containerName)) result = [{
+else if (args[0] === 'inspect' && (args[1] === ${JSON.stringify(CONTAINER)} || args[1] === target?.containerName)) result = [{
   Config:{Image:${JSON.stringify(IMAGE)},Labels:args[1] === target?.containerName ? {...labels,${JSON.stringify(TARGET_LABEL)}:target.label} : labels,Env:['VNC_PW=fixture-password']},
   State:{Running:true},Image:imageId,
   Mounts:[{Type:'bind',Source:args[1] === target?.containerName
