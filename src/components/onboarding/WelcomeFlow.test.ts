@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
 // The first run: two screens, then the chat. Meeting the app (and connecting an AI when none works), then the Chief of
 // Staff over the app; what it saves, where it lands, and what a reload or a replay does.
+import { Window } from "happy-dom";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { introStaged, stageIntro, useChiefStepOpen } from "@/lib/default-bot";
 import { setLocale } from "@/lib/i18n";
@@ -290,8 +292,14 @@ describe("the window's own controls over the first run", () => {
   const bridge = (windowControls: ReturnType<typeof controls> | undefined) => Object.assign(window, { ogb: { windowControls } });
   const caption = (label: string) => host.querySelector<HTMLButtonElement>(`[data-welcome] button[aria-label="${label}"]`);
   const strip = () => host.querySelector<HTMLElement>("[data-welcome] [data-window-drag-strip]");
-  // happy-dom's style object drops the Electron-only property, so the attribute is read.
+  // happy-dom drops the Electron-only style property when React sets it on a live node, so the drag regions are read off
+  // the server-rendered page, as window-drag-regions.test.ts does.
   const region = (node: Element | null) => /(?:^|;)\s*-webkit-app-region:\s*([^;]+)/.exec(node?.getAttribute("style") ?? "")?.[1].trim();
+  const staticPage = () => {
+    const page = new Window();
+    page.document.body.innerHTML = renderToStaticMarkup(createElement(DesktopCapabilitiesProvider, null, createElement(WelcomeFlow, { onDone: f.onDone })));
+    return page.document as unknown as Document;
+  };
   const FOLLOWING = 4; // Node.DOCUMENT_POSITION_FOLLOWING
 
   it("shows the minimize, maximize and close buttons on a Windows window, and each calls its control", async () => {
@@ -330,18 +338,19 @@ describe("the window's own controls over the first run", () => {
     expect(caption("Close")).toBeNull();
   });
 
-  it.each(["win-caption", "mac-inset"] as const)("drags the window from its top edge on %s, with the controls cut back out after it", async (kind) => {
+  it.each(["win-caption", "mac-inset"] as const)("drags the window from its top edge on %s, with the controls cut back out after it", (kind) => {
     chrome.value = kind;
     bridge(controls());
-    await show();
-    expect(region(strip())).toBe("drag");
-    const title = host.querySelector("h1")!;
-    expect(strip()!.compareDocumentPosition(title) & FOLLOWING, "the strip comes before the screen's own controls").toBeTruthy();
+    const page = staticPage();
+    const strip = page.querySelector("[data-welcome] [data-window-drag-strip]");
+    expect(region(strip)).toBe("drag");
+    const title = page.querySelector("h1")!;
+    expect(strip!.compareDocumentPosition(title) & FOLLOWING, "the strip comes before the screen's own controls").toBeTruthy();
     if (kind === "win-caption") {
-      const close = caption("Close")!;
+      const close = page.querySelector('[data-welcome] button[aria-label="Close"]')!;
       expect(title.compareDocumentPosition(close) & FOLLOWING, "the caption buttons come after every drag region").toBeTruthy();
       let node: Element | null = close;
-      while (node && node !== host && region(node) !== "no-drag") node = node.parentElement;
+      while (node && region(node) !== "no-drag") node = node.parentElement;
       expect(region(node), "the buttons opt out of dragging").toBe("no-drag");
     }
   });
