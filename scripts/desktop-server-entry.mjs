@@ -12,6 +12,15 @@ const cacheRoot = process.env.OMB_SERVER_COMPILE_CACHE;
 // nothing from this.
 delete process.env.OMB_SERVER_COMPILE_CACHE;
 
+// The symlink flags break CLIs that the server starts through symlinked bin files, so spawned processes must not inherit them.
+const nodeOptionsBase = process.env.OMB_SERVER_NODE_OPTIONS;
+delete process.env.OMB_SERVER_NODE_OPTIONS;
+if (nodeOptionsBase !== undefined
+  && process.env.NODE_OPTIONS === `${nodeOptionsBase} --preserve-symlinks --preserve-symlinks-main`.trim()) {
+  if (nodeOptionsBase) process.env.NODE_OPTIONS = nodeOptionsBase;
+  else delete process.env.NODE_OPTIONS;
+}
+
 let enabled = false;
 if (cacheRoot) {
   try {

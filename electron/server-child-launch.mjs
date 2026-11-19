@@ -16,8 +16,8 @@ function replaceSymlink(link, target) {
 export function serverChildLaunch({ resourcesPath, userData, env = process.env, exists = fs.existsSync, link = replaceSymlink }) {
   const serverDir = path.join(resourcesPath, "server");
   const bootstrap = path.join(serverDir, "desktop-entry.mjs");
-  if (!exists(bootstrap)) return { entry: path.join(serverDir, "index.js"), compileCacheDir: null, execArgv: [] };
-  const real = { entry: bootstrap, compileCacheDir: null, execArgv: [] };
+  if (!exists(bootstrap)) return { entry: path.join(serverDir, "index.js"), compileCacheDir: null, symlinkEnv: null };
+  const real = { entry: bootstrap, compileCacheDir: null, symlinkEnv: null };
   // A translocated macOS app must load server code from its signed bundle, not through a link in user data.
   if (resourcesPath.includes("/AppTranslocation/")) return real;
   const compileCacheDir = path.join(userData, "server-compile-cache");
@@ -29,9 +29,14 @@ export function serverChildLaunch({ resourcesPath, userData, env = process.env, 
   } catch {
     return real;
   }
+  // Electron 43 utilityProcess ignores Node flags in execArgv and reads them from NODE_OPTIONS.
+  const base = env.NODE_OPTIONS ?? "";
   return {
     entry: path.join(fixed, "server", "desktop-entry.mjs"),
     compileCacheDir,
-    execArgv: ["--preserve-symlinks", "--preserve-symlinks-main"],
+    symlinkEnv: {
+      NODE_OPTIONS: `${base} --preserve-symlinks --preserve-symlinks-main`.trim(),
+      OMB_SERVER_NODE_OPTIONS: base,
+    },
   };
 }

@@ -1099,7 +1099,7 @@ const receivePhoneSecretSave = createPhoneSecretSaveReceiver(saveWorkspaceCreden
 
 async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmentDir(environmentsState, desktopDataDir())) {
   if (desktopShutdownStarted) return { proc: null, abort: true };
-  const { entry, compileCacheDir, execArgv } = serverChildLaunch({
+  const { entry, compileCacheDir, symlinkEnv } = serverChildLaunch({
     resourcesPath: process.resourcesPath,
     userData: app.getPath("userData"),
   });
@@ -1125,10 +1125,10 @@ async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmen
   delete childEnv.OMB_BROWSER_CONNECTION;
   delete childEnv.OMB_SERVER_COMPILE_CACHE;
   if (compileCacheDir) childEnv.OMB_SERVER_COMPILE_CACHE = compileCacheDir;
+  if (symlinkEnv) Object.assign(childEnv, symlinkEnv);
   slog(`fork ${entry} port=${port}`);
   startupTimeline.mark("server-fork");
   const proc = utilityProcess.fork(entry, [], {
-    execArgv,
     env: childEnv,
     stdio: ["ignore", "pipe", "pipe"],
   });

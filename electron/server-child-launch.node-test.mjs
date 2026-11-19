@@ -17,7 +17,7 @@ test("the packaged server forks the bootstrap with a compile cache under userDat
   assert.deepEqual(serverChildLaunch({ resourcesPath, userData, env: {}, exists: () => true }), {
     entry: path.join(resourcesPath, "server", "desktop-entry.mjs"),
     compileCacheDir: path.join(userData, "server-compile-cache"),
-    execArgv: [],
+    symlinkEnv: null,
   });
 });
 
@@ -26,7 +26,7 @@ test("a server tree without the bootstrap forks index.js with no cache, as befor
   assert.deepEqual(serverChildLaunch({ resourcesPath, userData: "/home/someone/.config/OpenMausBot", env: {}, exists: () => false }), {
     entry: path.join(resourcesPath, "server", "index.js"),
     compileCacheDir: null,
-    execArgv: [],
+    symlinkEnv: null,
   });
 });
 
@@ -44,7 +44,21 @@ test("an AppImage forks the server through a fixed link, with the cache and the 
   assert.deepEqual(launch, {
     entry: path.join(userData, "server-resources", "server", "desktop-entry.mjs"),
     compileCacheDir: path.join(userData, "server-compile-cache"),
-    execArgv: ["--preserve-symlinks", "--preserve-symlinks-main"],
+    symlinkEnv: { NODE_OPTIONS: "--preserve-symlinks --preserve-symlinks-main", OMB_SERVER_NODE_OPTIONS: "" },
+  });
+});
+
+test("an AppImage keeps the app's own NODE_OPTIONS beside the preserve-symlinks flags", () => {
+  const launch = serverChildLaunch({
+    resourcesPath: "/tmp/.mount_OpenMaXk3f9a/resources",
+    userData: "/home/someone/.config/OpenMausBot",
+    env: { APPIMAGE: "/x.AppImage", NODE_OPTIONS: "--max-old-space-size=4096" },
+    exists: () => true,
+    link: () => {},
+  });
+  assert.deepEqual(launch.symlinkEnv, {
+    NODE_OPTIONS: "--max-old-space-size=4096 --preserve-symlinks --preserve-symlinks-main",
+    OMB_SERVER_NODE_OPTIONS: "--max-old-space-size=4096",
   });
 });
 
@@ -58,7 +72,7 @@ test("an AppImage whose link cannot be made forks the real bootstrap with no cac
   }), {
     entry: path.join(resourcesPath, "server", "desktop-entry.mjs"),
     compileCacheDir: null,
-    execArgv: [],
+    symlinkEnv: null,
   });
 });
 
@@ -71,7 +85,7 @@ test("a translocated macOS app forks the real bootstrap with no cache and makes 
   }), {
     entry: path.join(resourcesPath, "server", "desktop-entry.mjs"),
     compileCacheDir: null,
-    execArgv: [],
+    symlinkEnv: null,
   });
   assert.equal(linked, false);
 });
@@ -98,7 +112,8 @@ test("main forks what the helper picks and hands only the server the cache direc
   const start = main.indexOf("async function startServerOn(port,");
   const body = main.slice(start, main.indexOf("utilityProcess.fork(entry", start));
   assert.match(body, /const \{ entry, compileCacheDir, execArgv \} = serverChildLaunch\(\{\n\s+resourcesPath: process\.resourcesPath,\n\s+userData: app\.getPath\("userData"\),/);
-  assert.match(body, /delete childEnv\.OMB_SERVER_COMPILE_CACHE;\n\s+if \(compileCacheDir\) childEnv\.OMB_SERVER_COMPILE_CACHE = compileCacheDir;/);
+  assert.match(body, /delete childEnv\.OMB_SERVER_COMPILE_CACHE;\n\s+if \(compileCacheDir\) childEnv\.OMB_SERVER_COMPILE_CACHE = compileCacheDir;\n\s+if \(symlinkEnv\) Object\.assign\(childEnv, symlinkEnv\);/);
+  assert.doesNotMatch(body, /execArgv/);
   assert.doesNotMatch(body, /path\.join\(process\.resourcesPath, "server", "index\.js"\)/);
 });
 
@@ -283,4 +298,64 @@ test("nothing is pruned when Node keeps its cache somewhere else", (t) => {
   const result = runEntry(dir, cacheRoot, { NODE_COMPILE_CACHE: path.join(dir, "elsewhere") });
   assert.equal(result.status, 0, result.stderr);
   assert.ok(existsSync(stale));
+});
+
+const NODE_OPTIONS_INDEX = `
+import { execFileSync } from "node:child_process";
+const child = JSON.parse(execFileSync(process.execPath, ["-e",
+  "process.stdout.write(JSON.stringify([process.env.NODE_OPTIONS ?? null, process.env.OMB_SERVER_NODE_OPTIONS ?? null]))"],
+  { encoding: "utf8" }));
+console.log(JSON.stringify({
+  url: import.meta.url,
+  nodeOptions: process.env.NODE_OPTIONS ?? null,
+  marker: process.env.OMB_SERVER_NODE_OPTIONS ?? null,
+  child,
+}));
+`;
+
+function runBootstrapAt(entry, env) {
+  const full = { ...process.env, ...env };
+  for (const key of ["NODE_OPTIONS", "OMB_SERVER_NODE_OPTIONS"]) if (env[key] === undefined) delete full[key];
+  const result = spawnSync(process.execPath, [entry], { encoding: "utf8", env: full, timeout: 20_000 });
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout.trim().split("\n").filter(Boolean).at(-1));
+}
+
+test("the server loads through the link path and its children never inherit the symlink flags", { skip: process.platform === "win32" }, (t) => {
+  const dir = stage(t, NODE_OPTIONS_INDEX);
+  const userData = path.join(dir, "userData");
+  mkdirSync(userData);
+  const launch = serverChildLaunch({
+    resourcesPath: dir, userData,
+    env: { APPIMAGE: "/x.AppImage", NODE_OPTIONS: "--max-old-space-size=512" },
+    exists: () => true,
+  });
+  const report = runBootstrapAt(launch.entry, launch.symlinkEnv);
+  assert.ok(report.url.startsWith(`file://${path.join(userData, "server-resources")}`), report.url);
+  assert.equal(report.nodeOptions, "--max-old-space-size=512");
+  assert.equal(report.marker, null);
+  assert.deepEqual(report.child, ["--max-old-space-size=512", null]);
+});
+
+test("with no NODE_OPTIONS of its own, the server and its children see none", { skip: process.platform === "win32" }, (t) => {
+  const dir = stage(t, NODE_OPTIONS_INDEX);
+  const userData = path.join(dir, "userData");
+  mkdirSync(userData);
+  const launch = serverChildLaunch({ resourcesPath: dir, userData, env: { APPIMAGE: "/x.AppImage" }, exists: () => true });
+  const report = runBootstrapAt(launch.entry, launch.symlinkEnv);
+  assert.ok(report.url.startsWith(`file://${path.join(userData, "server-resources")}`), report.url);
+  assert.equal(report.nodeOptions, null);
+  assert.equal(report.marker, null);
+  assert.deepEqual(report.child, [null, null]);
+});
+
+test("an inherited marker without the symlink flags leaves NODE_OPTIONS alone and is removed", (t) => {
+  const dir = stage(t, NODE_OPTIONS_INDEX);
+  const report = runBootstrapAt(path.join(dir, "server", "desktop-entry.mjs"), {
+    NODE_OPTIONS: "--max-old-space-size=512",
+    OMB_SERVER_NODE_OPTIONS: "--foo",
+  });
+  assert.equal(report.nodeOptions, "--max-old-space-size=512");
+  assert.equal(report.marker, null);
+  assert.deepEqual(report.child, ["--max-old-space-size=512", null]);
 });
