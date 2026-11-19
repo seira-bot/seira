@@ -1056,7 +1056,7 @@ export async function containerComputerFrame(
         CUA_SOCKET,
         "--screenshot-out-file",
         screenshot,
-      ], { container: name }),
+      ], { container: localVmContainerName(target) }),
       30_000,
     );
     const { stdout } = await runner(
