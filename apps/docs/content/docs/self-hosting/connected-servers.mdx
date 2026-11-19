@@ -126,11 +126,10 @@ To build this the connector reads four things from your server, on the server's 
 Your server is a standalone Seira, and a standalone Seira talks to Seira in a few cases of its own. Connecting it does not add to them and does not remove them:
 
 - **Emailed sign-in codes**, unless you use your own mail server: the address being signed in goes to Seira's account service.
-- **A report to the developers**, only when a person writes a message that tags `@devs`: it carries that message, the bot's name and recent log lines, with secrets removed. While such a report is open, the server asks for its status once an hour.
 - **An update check**, only when a person opens it in the app: it asks GitHub for the latest release.
 - **In the browser:** [usage analytics](/docs/security/analytics), which each person can turn off.
 
-It does not send what a server Seira operates sends: no health report to the Admin, no team summary with members' addresses, no registration with Seira's connected-apps broker, no traffic through Seira's AI, voice or research hosts.
+It does not send what a server Seira operates sends: no health report to the Admin, no team summary with members' addresses, no registration with Seira's connected-apps broker, no traffic through Seira's AI, voice or research hosts. A message that tags `@devs` sends nothing either: the app opens a prefilled GitHub issue that the person reads and submits.
 
 Traffic to the AI providers, engines and apps you set up is between your server and them, and is not on this page.
 

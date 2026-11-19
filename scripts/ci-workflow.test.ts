@@ -42,8 +42,12 @@ const IMAGE = "server-image.yml";
 const NPM = "npm-publish.yml";
 const image = workflows.get(IMAGE)!;
 const LOGIN = "${{ secrets.GITHUB_TOKEN }}";
-const NOT_MAINTAINER = "!contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)";
-const APPROVED = "needs.approval.result == 'success' || needs.approval.result == 'skipped'";
+const MAINTAINER_CHECK = "startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)";
+const NOT_MAINTAINER = `!(${MAINTAINER_CHECK})`;
+const IS_MAINTAINER = `(${MAINTAINER_CHECK})`;
+const APPROVED_NOW = "needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt";
+const MACOS = "package-macos.yml";
+const READ_TOKEN = "GH_TOKEN: ${{ github.token }}";
 const scripts = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
   scripts: Record<string, string>;
 }).scripts;
@@ -89,15 +93,33 @@ describe("CI workflows", () => {
         expect(job.permissions, where).toEqual({});
         expect(JSON.stringify(job), where).not.toContain("secrets.");
         expect(job.if, where).toContain(NOT_MAINTAINER);
-        expect(String(job.if).replace("${{ ", "").replace(" }}", "").split(" && ").filter((part) => part.includes("RELEASE_MAINTAINERS")), where).toEqual([NOT_MAINTAINER]);
+        expect(job.outputs, where).toEqual({ attempt: "${{ github.run_attempt }}" });
+        const condition = String(job.if).replace("${{ ", "").replace(" }}", "");
+        expect(condition.endsWith(NOT_MAINTAINER), where).toBe(true);
+        expect(condition.split("RELEASE_MAINTAINERS"), where).toHaveLength(3);
       }
     }
   });
 
-  it("reads no token, except the server image workflow once, to sign in to the registry", () => {
+  it("runs a job behind the release environment only for a maintainer or after an approval in the same attempt", () => {
+    const gated = [...workflows].flatMap(([file, flow]) =>
+      Object.entries(flow.jobs)
+        .filter(([, job]) => job.environment === "release")
+        .map(([id, job]) => ({ where: `${file} job ${id}`, job })),
+    );
+    expect(gated.length).toBeGreaterThan(0);
+    for (const { where, job } of gated) {
+      expect([job.needs].flat(), where).toContain("approval");
+      expect(job.if, where).toContain(`(${IS_MAINTAINER} || (${APPROVED_NOW}))`);
+      expect(job.if, where).not.toContain("'skipped'");
+    }
+  });
+
+  it("reads no token, except the server image workflow once to sign in to the registry and the macOS commit step once to read the repository", () => {
     expect(texts.get(IMAGE)!.split(LOGIN)).toHaveLength(2);
+    expect(texts.get(MACOS)!.split(READ_TOKEN)).toHaveLength(2);
     for (const [file, original] of texts) {
-      const text = file === IMAGE ? original.replace(LOGIN, "") : original;
+      const text = file === IMAGE ? original.replace(LOGIN, "") : file === MACOS ? original.replace(READ_TOKEN, "") : original;
       for (const forbidden of ["github.token", "GITHUB_TOKEN", "GH_TOKEN"]) {
         expect(text, `${file} reads ${forbidden}`).not.toContain(forbidden);
       }
@@ -218,7 +240,7 @@ describe("Server image workflow", () => {
   it("publishes only from a manual run on main, after a successful build and the approval, behind the release environment", () => {
     expect(publish.needs).toEqual(["image", "approval"]);
     expect(publish.if).toBe(
-      `\${{ !cancelled() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.image.result == 'success' && (${APPROVED}) }}`,
+      `\${{ !cancelled() && ${ON_MAIN} && needs.image.result == 'success' && (${IS_MAINTAINER} || (${APPROVED_NOW})) }}`,
     );
     expect(publish.environment).toBe("release");
     expect(publish.permissions).toEqual({ contents: "read", packages: "write" });
@@ -286,10 +308,12 @@ describe("Package workflows", () => {
       if (gated.length === 0) continue;
       expect(flow.jobs.approval?.environment, file).toBe("release-approval");
       expect(flow.jobs.approval?.if, file).toBe(`\${{ ${NOT_MAINTAINER} }}`);
-      expect(flow.jobs.approval?.needs, file).toBeUndefined();
+      expect(flow.jobs.approval?.needs, file).toBe("commit");
       for (const [id, job] of gated) {
-        expect(job.needs, `${file} job ${id}`).toBe("approval");
-        expect(job.if, `${file} job ${id}`).toBe(`\${{ !cancelled() && (${APPROVED}) }}`);
+        expect(job.needs, `${file} job ${id}`).toEqual(["commit", "approval"]);
+        expect(job.if, `${file} job ${id}`).toBe(
+          `\${{ !cancelled() && needs.commit.result == 'success' && (${IS_MAINTAINER} || (${APPROVED_NOW})) }}`,
+        );
       }
     }
   });
@@ -406,5 +430,87 @@ describe("CI gate", () => {
     const check = runGate({ ...allWith("success"), [others[0]]: { result } });
     expect(check.status).toBe(1);
     expect(check.stderr).toContain(others[0]);
+  });
+});
+
+describe("Release job conditions", () => {
+  type Result = "success" | "failure" | "skipped";
+  interface Case {
+    name: string;
+    actor: string;
+    attempt: number;
+    approval: Result;
+    approvalAttempt?: number;
+    variable?: string;
+    first?: Result;
+    runs: boolean;
+  }
+
+  const MAINTAINERS = '["maint"]';
+  const cases: Case[] = [
+    { name: "runs when a maintainer starts it", actor: "maint", attempt: 1, approval: "skipped", runs: true },
+    { name: "runs when another person starts it and a maintainer approves", actor: "other", attempt: 1, approval: "success", approvalAttempt: 1, runs: true },
+    { name: "does not run when the approval is rejected", actor: "other", attempt: 1, approval: "failure", runs: false },
+    { name: "does not run when another person re-runs a maintainer's run", actor: "other", attempt: 2, approval: "skipped", runs: false },
+    { name: "does not run when another person re-runs an approved run", actor: "other", attempt: 2, approval: "success", approvalAttempt: 1, runs: false },
+    { name: "runs when another person re-runs all jobs and a maintainer approves again", actor: "other", attempt: 2, approval: "success", approvalAttempt: 2, runs: true },
+    { name: "runs when a maintainer re-runs another person's approved run", actor: "maint", attempt: 2, approval: "success", approvalAttempt: 1, runs: true },
+    { name: "does not run when the maintainer list is missing and nobody approved", actor: "other", attempt: 1, approval: "skipped", variable: undefined, runs: false },
+    { name: "does not run when the maintainer list is not a JSON array, even if it holds the login", actor: "maint", attempt: 1, approval: "skipped", variable: '"maint"', runs: false },
+    { name: "does not run when the first job failed, even for a maintainer", actor: "maint", attempt: 1, approval: "skipped", first: "failure", runs: false },
+  ];
+
+  const evaluate = (condition: string, scope: Record<string, unknown>) => {
+    const expression = condition.trim().replace(/^\$\{\{/, "").replace(/\}\}$/, "");
+    const contains = (search: unknown, item: unknown) =>
+      Array.isArray(search)
+        ? search.some((each) => String(each).toLowerCase() === String(item).toLowerCase())
+        : String(search).toLowerCase().includes(String(item).toLowerCase());
+    const startsWith = (text: unknown, start: unknown) =>
+      String(text ?? "").toLowerCase().startsWith(String(start).toLowerCase());
+    const names = ["needs", "github", "vars", "cancelled", "fromJSON", "contains", "startsWith"];
+    const values = [scope.needs, scope.github, scope.vars, () => false, JSON.parse, contains, startsWith];
+    return Boolean(new Function(...names, `return (${expression});`)(...values));
+  };
+
+  const flows = [
+    { file: MACOS, job: "package", first: "commit", extra: {} },
+    { file: IMAGE, job: "publish", first: "image", extra: { event_name: "workflow_dispatch", ref: "refs/heads/main" } },
+  ];
+
+  for (const flow of flows) {
+    describe(`${flow.file} job ${flow.job}`, () => {
+      it.each(cases)("$name", (each) => {
+        const needs: Record<string, unknown> = {
+          [flow.first]: { result: each.first ?? "success", outputs: {} },
+          approval: {
+            result: each.approval,
+            outputs: each.approvalAttempt === undefined ? {} : { attempt: each.approvalAttempt },
+          },
+        };
+        const vars = !("variable" in each)
+          ? { RELEASE_MAINTAINERS: MAINTAINERS }
+          : each.variable === undefined
+            ? {}
+            : { RELEASE_MAINTAINERS: each.variable };
+        const github = { triggering_actor: each.actor, run_attempt: each.attempt, ...flow.extra };
+        const condition = workflows.get(flow.file)!.jobs[flow.job]!.if!;
+        expect(evaluate(condition, { needs, github, vars })).toBe(each.runs);
+      });
+    });
+  }
+
+  it.each([
+    { name: "a maintainer", variable: '["maint"]', asks: false },
+    { name: "another person", variable: '["maint", "boss"]', asks: true, actor: "other" },
+    { name: "a maintainer when the list is missing", variable: undefined, asks: true },
+    { name: "a maintainer when the list is a JSON string that holds the login", variable: '"maintainers"', asks: true },
+  ])("asks for approval for $name: $asks", ({ variable, asks, actor }) => {
+    for (const flow of flows) {
+      const vars = variable === undefined ? {} : { RELEASE_MAINTAINERS: variable };
+      const github = { triggering_actor: actor ?? "maint", run_attempt: 1, ...flow.extra };
+      const condition = workflows.get(flow.file)!.jobs.approval!.if!;
+      expect(evaluate(condition, { needs: {}, github, vars }), flow.file).toBe(asks);
+    }
   });
 });

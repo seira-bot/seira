@@ -204,8 +204,11 @@ The `Package macOS` workflow (`.github/workflows/package-macos.yml`) builds
 both apps from a tag on a GitHub-hosted macOS runner. It reads the Apple
 secrets from the `release` environment. A run that a maintainer starts does
 not wait. A run that another person starts waits until a maintainer approves
-`release-approval` (see [CI](ci.md#the-release-approval-environment)). Before
-it uploads anything:
+`release-approval` (see [CI](ci.md#the-release-approval-environment)). A
+re-run by a person who is not a maintainer never reuses an approval of an
+earlier attempt. That person must re-run all jobs or ask a maintainer. The
+workflow finds the commit of the ref before the approval, and it builds that
+commit only. The run summary shows the commit. Before it uploads anything:
 
 - it makes sure that each app has every helper for its own CPU, and that
   `app-update.yml` points at `seira-bot/seira`;
@@ -282,7 +285,11 @@ docker buildx imagetools inspect ghcr.io/seira-bot/seira:v<version>
   approval request shows after both builds pass. A maintainer approves it
   within 7 days, or the saved images expire. Then start a new run.
 - Maintainers are the logins in the repository variable `RELEASE_MAINTAINERS`.
-  When the variable is missing or empty, every run waits for approval.
+  When the variable is missing, empty, or not a JSON array, every run waits
+  for approval.
+- A person who is not a maintainer cannot re-run a failed publish job alone.
+  An approval from an earlier attempt does not count. Re-run all jobs, or ask a
+  maintainer to re-run.
 - Publish the GitHub release first. The workflow refuses a tag that is not a
   published release, and it builds the tag only, never a branch of that name.
 - The image must show both platforms, and the label
