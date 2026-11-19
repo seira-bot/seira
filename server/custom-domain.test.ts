@@ -244,7 +244,7 @@ describe("HTTPS transport", () => {
     for (const [url, options] of httpsRequestMock.mock.calls as [URL, RequestOptions][]) {
       expect(url.hostname).toBe("bots.company.com");
       expect(options).toMatchObject({ method: "GET", agent: false, rejectUnauthorized: true });
-      expect(options.headers).toEqual({ Accept: "application/json", "User-Agent": "OpenMausBot-domain-check" });
+      expect(options.headers).toEqual({ Accept: "application/json", "User-Agent": "Seira-domain-check" });
       const callback = vi.fn();
       options.lookup!("bots.company.com", { all: false }, callback);
       expect(callback).toHaveBeenCalledWith(null, "8.8.8.8", 4);

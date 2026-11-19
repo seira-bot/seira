@@ -6,7 +6,7 @@
 # data. It also records whether the bots' sandbox (bubblewrap) can run in a rootless container, and with what.
 # The files the installer places (update.sh) come from this checkout.
 # ONLY ON A THROWAWAY HOST (a CI runner): it writes into this user's ~/.local/share/openmausbot and removes it at the
-# end, and restarts this user's systemd. It refuses to start where a MausBot Podman install already exists, and anywhere
+# end, and restarts this user's systemd. It refuses to start where a Seira Podman install already exists, and anywhere
 # but a CI runner (GITHUB_ACTIONS or CI set to true): it runs sudo.
 #   OUT=<evidence folder> bash deploy/e2e/podman.sh
 set -euo pipefail
@@ -65,7 +65,7 @@ if ! grep -q "^$(id -un):" /etc/subuid; then
   podman system migrate
 fi
 podman version | tee "$OUT/podman-version.txt"
-# What listens beyond loopback before MausBot: with the host's network, anything the server or Chrome opens is a host port.
+# What listens beyond loopback before Seira: with the host's network, anything the server or Chrome opens is a host port.
 outside() { ss -ltnH | awk '{ print $4 }' | grep -vE '^(127\.[0-9.]+|\[::1\]|\[::ffff:127\.[0-9.]+\]):[0-9]+$' | sort -u; }
 outside >"$OUT/outside-before.txt"
 new_outside() { outside | comm -13 "$OUT/outside-before.txt" -; }

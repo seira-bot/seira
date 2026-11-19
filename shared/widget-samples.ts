@@ -80,7 +80,7 @@ export const WIDGET_SAMPLES: Record<string, unknown> = {
   buildStatus: {
     type: "Card",
     title: "Build 25 to TestFlight",
-    caption: "OpenMausMobile 1.4.0 (25)",
+    caption: "Seira 1.4.0 (25)",
     status: { text: "Uploading", icon: "upload" },
     children: [
       { type: "Progress", value: 0.62, label: "about 40s left" },
@@ -193,7 +193,7 @@ export const WIDGET_SAMPLES: Record<string, unknown> = {
       { type: "Text", value: "Body text with a longer line that wraps onto a second line when the card is narrow.", maxLines: 2 },
       { type: "Caption", value: "A caption in secondary ink", size: "sm" },
       { type: "Box", padding: 4, radius: "lg", background: "surface-secondary", children: [{ type: "Text", value: "Inside a box", weight: "semibold" }, { type: "Caption", value: "with padding and a surface" }] },
-      { type: "Image", src: "https://mausbot.com/og.png", alt: "Seira", aspectRatio: "16/9", radius: "lg", frame: true },
+      { type: "Image", src: "https://seira.bot/og.png", alt: "Seira", aspectRatio: "16/9", radius: "lg", frame: true },
       { type: "Transition", children: [{ type: "Text", value: "A transition wraps one child." }] },
       {
         type: "Form",
