@@ -37,8 +37,8 @@ function useAdvancedValues(bot: Bot, derived: Derived): Values {
   const { currentLabel } = usePlaceChoices(bot);
   const items = useMemo(() => libraryItems(bot), [bot]);
   const library = items.pages.length + items.apps.length + items.shared.length + items.unshared.length;
-  const effort = bot.modelSelection.effort;
-  const model = derived.engine?.models ? modelLabel(derived.engine, bot.modelSelection.model) : undefined;
+  const effort = bot.modelSelection?.effort;
+  const model = derived.engine?.models ? modelLabel(derived.engine, bot.modelSelection?.model ?? "") : undefined;
   const usage = botUsage(bot);
   const title = bot.title.trim();
   const approval = approvalModeOptions().find((option) => option.mode === derived.approvalMode)?.label;

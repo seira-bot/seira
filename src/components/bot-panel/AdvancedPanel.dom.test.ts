@@ -59,6 +59,7 @@ vi.mock("./LibraryTab", () => ({
 }));
 vi.mock("../ModelPicker", () => ({ effortLabel: (level: string) => level[0]!.toUpperCase() + level.slice(1) }));
 vi.mock("../bot-settings/SoulSection", () => ({ SoulSection: () => createElement("div", { "data-stub": "soul" }) }));
+vi.mock("../bot-settings/ModelSection", () => ({ ModelSection: () => createElement("div", { "data-stub": "model" }) }));
 
 const { BotSettingsDialog } = await import("../BotSettingsDialog");
 
