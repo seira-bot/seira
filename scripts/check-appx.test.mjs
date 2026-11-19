@@ -6,7 +6,10 @@ import { checkAssets, checkManifest } from "./check-appx.mjs";
 
 const GOOD = `<?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10">
-  <Identity Name="openmausbot" Publisher="CN=ms" Version="1.1.179.0" ProcessorArchitecture="x64" />
+  <Identity Name="openmausbot"
+    ProcessorArchitecture="x64"
+    Publisher='CN=ms'
+    Version="1.1.179.0" />
   <Properties>
     <DisplayName>Seira</DisplayName>
     <PublisherDisplayName>PT GLOBAL RAYA ORIS WIJAYA</PublisherDisplayName>

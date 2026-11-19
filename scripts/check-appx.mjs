@@ -12,7 +12,11 @@ export const EXPECTED = Object.freeze({
   protocol: "openmausbot",
 });
 
-const attribute = (tag, name) => new RegExp(`\\s${name}="([^"]*)"`).exec(tag)?.[1];
+/** electron-builder 26.15.3 writes the Identity Publisher in single quotes. */
+const attribute = (tag, name) => {
+  const match = new RegExp(`\\s${name}=(?:"([^"]*)"|'([^']*)')`).exec(tag);
+  return match?.[1] ?? match?.[2];
+};
 
 export function checkManifest(xml, { version }) {
   const errors = [];
