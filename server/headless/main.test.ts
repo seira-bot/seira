@@ -51,7 +51,7 @@ describe("the headless command line", () => {
     expect(out[0]).toContain("Give a bot or room one job and wait until it, and every teammate it asked, is done.");
     expect(await runHeadless(["team", "apply", "--help"], { io })).toBe(0);
     expect(out[1]).toContain("a second apply prints \"No changes.\"");
-    expect(USAGE).toContain("openmausbot run BOT \"do this\"         give a bot one job and wait until it and every teammate it asked are done");
+    expect(USAGE).toContain("seira run BOT \"do this\"               give a bot one job and wait until it and every teammate it asked are done");
   });
 
   it("is reachable through the published entry, which keeps every other command as it was", () => {

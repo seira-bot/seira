@@ -49,6 +49,6 @@ describe("the npm package", () => {
     expect(readme).toContain("npm install -g @seira-bot/seira");
     expect(readme).toContain("npx @seira-bot/seira");
     expect(readme).toContain("npm uninstall -g openmausbot");
-    expect(readme).not.toMatch(/npx openmausbot|install -g openmausbot|milind-soni/);
+    expect(readme).not.toMatch(/npx openmausbot|(?<!un)install -g openmausbot|milind-soni/);
   });
 });
