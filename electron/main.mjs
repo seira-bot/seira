@@ -111,6 +111,7 @@ import { askForMicrophone, openPrivacySettings } from "./privacy-settings.mjs";
 import { createHomeWindow, installHomeWindowIpc, HOME_SCREEN_PATH } from "./home-window.mjs";
 import { createTeamProfileSeeds } from "./team-profile-seed.mjs";
 import { createHomePlaces } from "./home-places.mjs"; import { openStartPlace } from "./start-place.mjs"; import { createDesktopRing, installAccounts } from "./accounts-main.mjs"; import { createAddedCloudNotice, installCloudRail, railPlaces } from "./cloud-rail.mjs"; import { createPlaceInboxWatch } from "./place-inbox-watch.mjs"; import { homeLook, otherOwnClouds, withoutOldCloudHome } from "./cloud-list.mjs"; import { installPlaceLook } from "./place-look.mjs"; import { CHROME_RAIL_PATH, createChromeRail } from "./chrome-rail.mjs"; import { openComputerSettings } from "./open-computer-settings.mjs"; import { createPlacesTogether, installPlacesTogether, PLACES_TOGETHER_FILE } from "./places-together.mjs"; import { createBotLinkMain } from "./bot-link-main.mjs";
+import { createRendererRecovery } from "./renderer-recovery.mjs";
 import { createWindowStateFile } from "./window-state-file.mjs"; import { createSystemProxyCache } from "./system-proxy.mjs";
 import { createEnvironmentsFile, ENVIRONMENTS_SAVE_FAILED } from "./environments-file.mjs";
 import { createOrgLibrary } from "./org-library.mjs";
@@ -513,6 +514,8 @@ installDesktopCrashListeners({
   isShuttingDown: () => desktopShutdownStarted,
   mainWebContents: () => mainWindow?.webContents ?? null,
 });
+
+const rendererRecovery = createRendererRecovery({ isShuttingDown: () => desktopShutdownStarted, log: slog });
 
 let managedCompanionConnector = null;
 let companionAccountService = null;
@@ -1960,7 +1963,7 @@ function createWindow({ deferNavigation = false } = {}) {
         ...(app.isPackaged && !desktopRemoteAccess ? ["--omb-company-desktop=1"] : []), `--omb-app-version=${app.getVersion()}`, ...(linuxSoftwareRendering ? [SOFTWARE_RENDERING_ARG] : [])],
     },
   });
-  mainWindow = win; hiddenStart = false; chromeRail.attach(win);
+  mainWindow = win; hiddenStart = false; chromeRail.attach(win); rendererRecovery.attach(win);
   win.on("show", () => desktopTray?.windowShown(win));
   win.on("focus", () => { if (cloudAccount?.checkoutPending()) void cloudAccount.refresh().catch(() => {}); });
   win.on("close", (event) => {

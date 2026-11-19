@@ -87,7 +87,7 @@ test("a page that stays unresponsive for 30 seconds is ended, and reloads in a n
   t.mock.timers.tick(1);
   assert.equal(page.crashes, 1);
   assert.equal(page.reloads, 1, "the renderer's end reloads the page once");
-  assert.match(state.lines.join("\n"), /unresponsive/i);
+  assert.match(state.lines.join("\n"), /did not respond/i);
   t.mock.timers.tick(HANG_LIMIT_MS * 2);
   assert.equal(page.crashes, 1, "the timer fires once");
 });
