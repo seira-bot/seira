@@ -109,6 +109,9 @@ pnpm package:linux
 - The packaging step needs more than the default 2 GB Node heap.
 - It also writes several GB of temporary files. A small `/tmp` in memory fills
   up and the build stops with `EDQUOT` or `ENOSPC`, so point `TMPDIR` at a disk.
+- The Debian package step runs `fpm`, and its bundled Ruby needs `libcrypt.so.1`.
+  Ubuntu and Debian have it. On Arch, install `libxcrypt-compat` first, or the
+  build stops with `fpm process failed 127`.
 
 The build writes `release/Seira-<version>-x86_64.AppImage`,
 `release/Seira-<version>-amd64.deb`, `release/latest-linux.yml`, and

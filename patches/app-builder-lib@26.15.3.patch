@@ -44,3 +44,18 @@ index 12f078abd42700857b239b0e53cd568c1b1836b7..b89a6f8ab65ccf887c252d1bc65ad961
  fi
  
  atexit()
+diff --git a/out/targets/snap/coreLegacy.js b/out/targets/snap/coreLegacy.js
+index 63dc31fdbd0d49b5d5b7832f4faaa62bdb684e69..f3d7fba04897c4259d2121cbd1507af7e202ac31 100644
+--- a/out/targets/snap/coreLegacy.js
++++ b/out/targets/snap/coreLegacy.js
+@@ -246,8 +246,8 @@ class SnapCoreLegacy extends SnapTarget_1.SnapCore {
+         builder_util_1.log.info({ releaseName }, "downloading snap template");
+         const templateDir = await (0, electronGet_1.downloadBuilderToolset)({ releaseName, filenameWithExt, checksums, githubOrgRepo: "electron-userland/electron-builder-binaries" });
+         await this.stageSnapFiles({ stageDir, appOutDir, hooksDir, extraAppArgs, isTemplate: true });
+-        // Best-effort: remove chrome-sandbox from app dir before mksquashfs scans it.
+-        await (0, promises_1.rm)(path.join(appOutDir, "chrome-sandbox"), { force: true });
++        // Seira: keep chrome-sandbox in the shared app folder. The DEB built from the same folder needs it, and the
++        // mksquashfs file list below already leaves it out of the snap.
+         // chmod -R g-s to avoid setgid bits in final image
+         for (const dir of [stageDir, appOutDir, templateDir]) {
+             await (0, builder_util_1.exec)("chmod", ["-R", "g-s", dir]).catch(err => builder_util_1.log.warn({ error: err.message }, "chmod g-s failed"));
