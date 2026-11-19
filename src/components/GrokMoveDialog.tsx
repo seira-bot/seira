@@ -5,7 +5,7 @@ import { track } from "@/lib/analytics";
 import { openExternalLink } from "@/lib/app-links";
 import { cn } from "@/lib/cn";
 import { useCopyFeedback } from "@/lib/copy-text";
-import { foundExports, grokConnector, grokErrorText, lookForGrokBot, MAUSBOT_GROK_TEMPLATE_URL, NOTHING_FOUND, previewGrokMove, runGrokMove, type GrokConnector, type GrokLook, type GrokPreview, type GrokReport } from "@/lib/grok-move";
+import { foundExports, grokConnector, grokErrorText, lookForGrokBot, NOTHING_FOUND, previewGrokMove, runGrokMove, SEIRA_GROK_TEMPLATE_URL, type GrokConnector, type GrokLook, type GrokPreview, type GrokReport } from "@/lib/grok-move";
 import { t } from "@/lib/i18n";
 import { localSetupImport } from "@/lib/setup-import";
 import { api, useStore } from "@/state/store";
@@ -80,7 +80,7 @@ function ConnectGrokBot({ url, stopped, names, error, busy, onConnect, onUse }: 
           </div>
           <p className={LINE}>{t("grokMove.connect.where")}</p>
           <p className={LINE}>{t("grokMove.connect.private")}</p>
-          <button type="button" data-grok-move-template onClick={() => void openExternalLink(MAUSBOT_GROK_TEMPLATE_URL)} className={cn(SECONDARY, "mt-1 inline-flex items-center gap-2")}>
+          <button type="button" data-grok-move-template onClick={() => void openExternalLink(SEIRA_GROK_TEMPLATE_URL)} className={cn(SECONDARY, "mt-1 inline-flex items-center gap-2")}>
             <ExternalLink size={15} />{t("grokMove.connect.addBot")}
           </button>
           {arrived}

@@ -1,5 +1,6 @@
-# pnpm 11 reads allowBuilds, pnpm 10 reads onlyBuiltDependencies — keep both
-# so either version runs the postinstalls this project actually needs.
+# pnpm 11 reads allowBuilds, pnpm 10 reads onlyBuiltDependencies and
+# ignoredBuiltDependencies — keep them in step so either version runs the
+# postinstalls this project needs and stays quiet about the ones it skips.
 # A packages list is required for `pnpm list` (electron-builder's collector).
 packages:
   - "."
@@ -16,9 +17,14 @@ allowBuilds:
   electron: true # postinstall downloads the Electron dist
   esbuild: true # postinstall validates the platform binary
   electron-winstaller: false # unused — Windows builds ship NSIS
+  core-js: false # postinstall only prints a funding message
+  workerd: false # the binary comes from its @cloudflare/workerd-* platform package
 onlyBuiltDependencies:
   - electron
   - esbuild
+ignoredBuiltDependencies:
+  - core-js
+  - workerd
 # Transitive packages whose parents still allow a release with a published advisory: mermaid allows an older dompurify
 # and ajv an older fast-uri. Force the patched releases.
 overrides:
