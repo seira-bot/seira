@@ -104,9 +104,11 @@ describe("a Send with no AI on a team", () => {
     expect(lines).toEqual([]);
   });
 
-  it("is nothing off a team", () => {
+  it("off a team, asks the person to connect an AI and tells nobody else", () => {
     const { notice, lines } = fixture({ team: null });
-    expect(notice.refusal("t1", said(DANA))).toBeNull();
+    expect(notice.refusal("t1", said(DANA))).toMatchObject({ status: 409, code: "no_ai", message: "Connect an AI first, so bots can answer." });
+    expect(notice.refusal("t1", undefined)?.message).toBe("Connect an AI first, so bots can answer.");
+    expect(notice.refusal("t1", undefined, "claude"), "an engine this server no longer has isn't a missing AI").toBeNull();
     notice.flush();
     expect(lines).toEqual([]);
   });
