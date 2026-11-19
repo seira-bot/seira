@@ -171,14 +171,14 @@ export function WelcomeFlow({
     >
       {/* The screen covers the window's own frame, so it brings the frame's drag area and buttons. Fixed, so a short window
           that scrolls keeps them in place. The strip is first and the buttons last: Blink resolves -webkit-app-region in DOM order. */}
-      {!embedded && <div aria-hidden className="fixed inset-x-0 top-0 h-0"><WindowDragStrip /></div>}
+      {!embedded && <div aria-hidden className="fixed left-[var(--rail-beside,0px)] right-0 top-0 h-0"><WindowDragStrip /></div>}
       {chief ? (
         <ChiefIntro replay={replay} onLeave={fadeScrim} onDone={(botId) => void finish("completed", botId)} />
       ) : (
         <MeetScreen hosted={hosted} onNext={next} />
       )}
       {!embedded && (
-        <div className="fixed inset-x-0 top-0 h-0">
+        <div className="fixed left-[var(--rail-beside,0px)] right-0 top-0 h-0">
           <WindowCaptionButtons visible={capabilities.windowChrome === "win-caption" && Boolean(window.ogb?.windowControls)} />
         </div>
       )}
