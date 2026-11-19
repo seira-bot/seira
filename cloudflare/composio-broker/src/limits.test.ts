@@ -80,6 +80,11 @@ describe("tool units", () => {
     // Inside multi-execute, a workbench slug keeps its weight and a free slug is not free.
     const mixed = { tools: [{ tool_slug: "COMPOSIO_REMOTE_WORKBENCH" }, { tool_slug: "COMPOSIO_SEARCH_TOOLS" }, {}] };
     expect(toolUnits(toolCall("COMPOSIO_MULTI_EXECUTE_TOOL", mixed))).toBe(12);
+    // A nested multi-execute item counts by its own items; past three levels, it is refused by any quota.
+    const nest = (inner: Record<string, unknown>) => ({ tools: [{ tool_slug: "composio_multi_execute_tool", arguments: inner }, { tool_slug: "X" }] });
+    expect(toolUnits(toolCall("COMPOSIO_MULTI_EXECUTE_TOOL", nest(three)))).toBe(4);
+    expect(toolUnits(toolCall("COMPOSIO_MULTI_EXECUTE_TOOL", nest(nest(three))))).toBe(5);
+    expect(toolUnits(toolCall("COMPOSIO_MULTI_EXECUTE_TOOL", nest(nest(nest(three)))))).toBeGreaterThanOrEqual(1_000_000);
   });
 
   it("keys an IPv6 address by its /64 and an IPv4 address whole", () => {
@@ -305,7 +310,9 @@ describe("kill switch and fleet budget (FR-148)", () => {
     expect(await refusalText(await mcp(owner, toolCall("COMPOSIO_MANAGE_CONNECTIONS", { toolkits: ["gmail"] })))).toMatch(/paused/);
     const batch = await (await mcp(owner, [toolCall(), toolCall("composio_manage_connections")])).json() as Array<{ result: { isError?: boolean } }>;
     expect(batch.map((reply) => reply.result.isError)).toEqual([true, true]);
-    expect(usage(owner.id)).toMatchObject({ tool_calls: 1, refused_paused: 2 });
+    // So does the workbench, which can start sign-ins the broker cannot see.
+    expect(await refusalText(await mcp(owner, toolCall("COMPOSIO_REMOTE_WORKBENCH")))).toMatch(/paused/);
+    expect(usage(owner.id)).toMatchObject({ tool_calls: 1, refused_paused: 3 });
     expect(forwarded()).toBe(1);
   });
 

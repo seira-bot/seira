@@ -51,6 +51,10 @@ const MULTI_EXECUTE = "COMPOSIO_MULTI_EXECUTE_TOOL";
 const WORKBENCH_TOOLS = new Set(["COMPOSIO_REMOTE_WORKBENCH", "COMPOSIO_REMOTE_BASH_TOOL"]);
 /** Starts app sign-ins from the relay, so the pause stops it like the sign-in link route. */
 const MANAGE_CONNECTIONS = "COMPOSIO_MANAGE_CONNECTIONS";
+/** Multi-execute calls nested deeper than this count as TOO_DEEP_UNITS, so any quota or budget refuses them. */
+const NESTED_LIMIT = 3;
+const TOO_DEEP = "\u0000nested";
+const TOO_DEEP_UNITS = 1_000_000;
 const CONNECT_LINK = /^\/v1\/connectors\/[^/]+\/authorize$/;
 const KEY_PLACE = "Settings → AI → Other services";
 
@@ -122,23 +126,28 @@ function record(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
-/** The tool names one MCP message runs, upper case: a tools/call its name, the multi-execute meta tool the slug of
- *  each tool it runs, and a JSON-RPC batch each item's. "" is a billable tool: a multi-execute item without a slug or
- *  with a free slug, and a multi-execute call with no items. */
+/** The slugs a multi-execute call runs, a nested multi-execute item by its own items. "" is a billable tool: an item
+ *  without a slug or with a free slug, and a call with no items. */
+function multiExecuteNames(args: unknown, depth: number): string[] {
+  const tools = record(args)?.tools;
+  if (!Array.isArray(tools) || !tools.length) return [""];
+  return tools.flatMap((item) => {
+    const entry = record(item);
+    const slug = typeof entry?.tool_slug === "string" ? entry.tool_slug.toUpperCase() : "";
+    if (slug === MULTI_EXECUTE) return depth < NESTED_LIMIT ? multiExecuteNames(entry?.arguments, depth + 1) : [TOO_DEEP];
+    return [FREE_TOOLS.has(slug) ? "" : slug];
+  });
+}
+
+/** The tool names one MCP message runs, upper case: a tools/call its name, a multi-execute call the slug of each tool
+ *  it runs, and a JSON-RPC batch each item's. */
 function toolNames(message: unknown): string[] {
   if (Array.isArray(message)) return message.flatMap(toolNames);
   const rpc = record(message);
   if (rpc?.method !== "tools/call") return [];
   const params = record(rpc.params);
   const name = typeof params?.name === "string" ? params.name.toUpperCase() : "";
-  if (name !== MULTI_EXECUTE) return [name];
-  const tools = record(params?.arguments)?.tools;
-  if (!Array.isArray(tools) || !tools.length) return [""];
-  return tools.map((item) => {
-    const slug = record(item)?.tool_slug;
-    const upper = typeof slug === "string" ? slug.toUpperCase() : "";
-    return FREE_TOOLS.has(upper) ? "" : upper;
-  });
+  return name === MULTI_EXECUTE ? multiExecuteNames(params?.arguments, 1) : [name];
 }
 
 /** Billable Composio tool executions in one MCP message: each tool it runs is 1, the free search meta tool 0, and a
@@ -148,7 +157,9 @@ export function toolUnits(message: unknown, workbench: number = NUMBER_SETTINGS[
 }
 
 function unitsOf(names: string[], workbench: number) {
-  return names.reduce((sum, name) => sum + (FREE_TOOLS.has(name) ? 0 : WORKBENCH_TOOLS.has(name) ? Math.max(1, workbench) : 1), 0);
+  return names.reduce((sum, name) => sum + (FREE_TOOLS.has(name) ? 0
+    : WORKBENCH_TOOLS.has(name) ? Math.max(1, workbench)
+    : name === TOO_DEEP ? TOO_DEEP_UNITS : 1), 0);
 }
 
 /** The rate-limit key of an address: an IPv4 address whole (also when IPv4-mapped), an IPv6 address by its /64. */
@@ -205,7 +216,9 @@ export async function admitMcp(raw: Uint8Array, installation: Metered, env: Env)
   if (!names.some((name) => !FREE_TOOLS.has(name))) return forward;
   const settings = await limitSettings(env);
   const units = unitsOf(names, settings.values["units.workbench"]);
-  if (settings.pause === "tools" || settings.pause === "all" || (settings.pause === "new" && names.includes(MANAGE_CONNECTIONS))) {
+  // Under "new", also the meta tools that start sign-ins: the workbench can run them where the broker cannot see.
+  const startsSignIn = names.some((name) => name === MANAGE_CONNECTIONS || WORKBENCH_TOOLS.has(name));
+  if (settings.pause === "tools" || settings.pause === "all" || (settings.pause === "new" && startsSignIn)) {
     await countRefusal(env, installation.id, "refused_paused");
     return rpcRefusal(message, REFUSED.paused);
   }

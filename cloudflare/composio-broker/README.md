@@ -237,7 +237,9 @@ One `COMPOSIO_MULTI_EXECUTE_TOOL` call counts once for each tool in it.
 `COMPOSIO_SEARCH_TOOLS` and other MCP methods do not count. A
 `COMPOSIO_REMOTE_WORKBENCH` or `COMPOSIO_REMOTE_BASH_TOOL` call runs code at
 Composio that can call more tools, which the broker cannot see, so it counts
-as `units.workbench` tool calls. A batch over the quota is refused whole. The fleet budget is approximate: each Worker isolate
+as `units.workbench` tool calls. A multi-execute call nested in another counts
+by its own tools; nested deeper than three levels, it counts as 1,000,000 tool
+calls, so any quota refuses it. A batch over the quota is refused whole. The fleet budget is approximate: each Worker isolate
 reads the fleet total again after 60 seconds.
 
 A refused tool call gets a JSON-RPC result with `isError: true` and a text
@@ -258,7 +260,7 @@ the settings again after 30 seconds.
 | `pause` | Stops |
 | --- | --- |
 | `none` | Nothing (default). |
-| `new` | New installations, new sign-in links (also `COMPOSIO_MANAGE_CONNECTIONS` through MCP), and new triggers. Other tool calls continue. |
+| `new` | New installations, new sign-in links (also `COMPOSIO_MANAGE_CONNECTIONS`, and the remote workbench and bash meta tools, through MCP), and new triggers. Other tool calls continue. |
 | `tools` | The same as `new`, plus every tool call. |
 | `all` | Every route that reaches Composio, except deletes. Trigger events still arrive: to stop them, disable the webhook subscription in the Composio dashboard. |
 
