@@ -551,6 +551,21 @@ describe("the avatar editor", () => {
     expect(open.html).toContain(">Proud<");
   });
 
+  it("reads an old body as Seira's hair and does not count it as a different hair", () => {
+    if (PICKER_BODY_IDS.length < 2) return;
+    const bot = makeBot({ mascotBody: "cursor" });
+    fixture.storeState = {
+      ...fixture.storeState,
+      bots: [bot, makeBot({ id: "pumpkin", mascotBody: "pumpkin" }), makeBot({ id: "bob", mascotBody: "bob" })],
+    };
+    const rendered = editor(bot);
+    expect(find(rendered, "aria-label", "Use the Seira hair").props["aria-pressed"]).toBe(true);
+    expect(rendered.html).toContain("Give this body to the other bots (1)");
+    click(find(rendered, "data-avatar-body-everywhere"));
+    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "updateBot", botId: "bob", patch: { mascotBody: "seira" } });
+    expect(fixture.dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ botId: "pumpkin" }));
+  });
+
   it("puts accessories on and takes them off, one in each slot and at most three", () => {
     const picker = (bot: Bot) => {
       const props = ofType(editor(bot), MascotAccessoryPicker)!.props as Parameters<typeof MascotAccessoryPicker>[0];

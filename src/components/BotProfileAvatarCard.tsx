@@ -12,7 +12,7 @@ import {
 } from "@/lib/mascot";
 import { mascotAccessories } from "../../shared/mascot-accessories";
 import { BOT_AVATAR_CROPS } from "../../shared/bot-avatar";
-import { DEFAULT_BOT_BODY, PICKER_BODY_IDS, type BotBodyId } from "../../shared/bot-body";
+import { PICKER_BODY_IDS, botBodyId, type BotBodyId } from "../../shared/bot-body";
 import { BotAvatar, MausAvatar } from "./Avatar";
 import { AvatarImageGenerator } from "./AvatarImageGenerator";
 import { AvatarFraming, OrganizationAvatarIcons, RESET_MASCOT_PATCH, useAvatarImage, type AvatarPatch } from "./avatar-editing";
@@ -202,7 +202,7 @@ function BodyButton({ id, name, bot, busy, onPatch }: {
   busy: boolean;
   onPatch: (patch: AvatarPatch) => void;
 }) {
-  const selected = (bot.mascotBody ?? DEFAULT_BOT_BODY) === id;
+  const selected = botBodyId(bot.mascotBody) === id;
   return (
     <button
       type="button"

@@ -42,6 +42,12 @@ export const SKIN_IDS = [
   "halloween",
   "aurora",
 ] as const;
+const RETIRED_SKIN_IDS: readonly string[] = ["diwali"];
+/** A built-in skin choice as a saved theme, the look history, or a request holds it. A retired skin reads as "system". */
+export const storedSkinSchema = z.preprocess(
+  (value) => (typeof value === "string" && RETIRED_SKIN_IDS.includes(value) ? "system" : value),
+  z.enum([...SKIN_IDS, "system"]),
+);
 export const FONT_IDS = ["skin", "system", "inter", "poppins", "serif"] as const;
 export const CHAT_WIDTH_IDS = ["standard", "wide", "full"] as const;
 /** The Enter-adds-a-line modes are for input methods that confirm a conversion with Enter (Japanese). */

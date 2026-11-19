@@ -68,6 +68,7 @@ describe("BotProfileAvatarCard hair picker", () => {
   it("marks the current hair pressed, defaulting to Seira", () => {
     if (!HAIR) return;
     expect(renderCard(makeBot())).toContain('aria-pressed="true" aria-label="Use the Seira hair"');
+    expect(renderCard(makeBot({ mascotBody: "cursor" }))).toContain('aria-pressed="true" aria-label="Use the Seira hair"');
   });
 
   it("offers zoom and drag framing for a custom image", () => {

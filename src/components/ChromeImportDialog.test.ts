@@ -53,6 +53,18 @@ const button = (label: string) => [...document.body.querySelectorAll("button")].
 const click = (label: string) => act(async () => button(label).click());
 const checkboxes = () => [...document.body.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
 const rowOf = (site: string) => checkboxes().find((box) => box.closest("label")?.textContent?.includes(site))!;
+const selectAll = () => rowOf("Select all");
+const siteRows = () => checkboxes().filter((box) => box !== selectAll());
+const search = () => document.body.querySelector<HTMLInputElement>('input[type="search"]')!;
+const typeSearch = (value: string) => act(async () => {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search(), value);
+  search().dispatchEvent(new Event("input", { bubbles: true }));
+});
+async function openList() {
+  fixture.api.mockResolvedValueOnce(found);
+  await open();
+  await click("Continue");
+}
 
 describe("Chrome import dialog", () => {
   it("shows the consent text with the last used profile chosen, and asks for no sites yet", async () => {
@@ -162,6 +174,65 @@ describe("Chrome import dialog", () => {
     await click("Continue");
     expect(document.body.querySelector('[role="alert"]')?.textContent).toBe("This Chrome profile is too large to import.");
     expect(button("Continue")).toBeTruthy();
+  });
+
+  it("shows only the sites that match the search, ignoring case", async () => {
+    await openList();
+    expect(search().getAttribute("aria-label")).toBe("Search sites");
+    await typeSearch("  SHOP ");
+    expect(siteRows().map((box) => box.closest("label")!.textContent)).toEqual(["shop.example"]);
+    await typeSearch("");
+    expect(siteRows()).toHaveLength(found.sites.length);
+  });
+
+  it("checks and unchecks every shown site with Select all, sensitive ones included", async () => {
+    await openList();
+    await act(async () => selectAll().click());
+    expect(siteRows().every((box) => box.checked)).toBe(true);
+    expect(button("Import 5 sites")).toBeTruthy();
+    await act(async () => selectAll().click());
+    expect(siteRows().some((box) => box.checked)).toBe(false);
+    expect(button("Import 0 sites").disabled).toBe(true);
+  });
+
+  it("marks Select all as partly checked while only some shown sites are checked", async () => {
+    await openList();
+    expect(selectAll().checked).toBe(false);
+    expect(selectAll().indeterminate).toBe(true);
+    await act(async () => selectAll().click());
+    expect(selectAll().checked).toBe(true);
+    expect(selectAll().indeterminate).toBe(false);
+    await typeSearch("shop");
+    expect(selectAll().checked).toBe(true);
+    expect(selectAll().indeterminate).toBe(false);
+  });
+
+  it("says nothing matches and turns Select all off when the search finds no site", async () => {
+    await openList();
+    await typeSearch("nowhere");
+    expect(text()).toContain("No sites match.");
+    expect(siteRows()).toHaveLength(0);
+    expect(selectAll().disabled).toBe(true);
+  });
+
+  it("imports checked sites that the search hides", async () => {
+    await openList();
+    fixture.api.mockResolvedValueOnce({ imported: { sites: 2, cookies: 5 }, skipped: 0, running: false, sites: [] });
+    await typeSearch("bank");
+    await act(async () => selectAll().click());
+    expect(rowOf("shop.example")).toBeUndefined();
+    await click("Import 2 sites");
+    expect(fixture.api).toHaveBeenLastCalledWith("/api/browser-sites/import", { method: "POST", body: JSON.stringify({ bot: "pepper", ticket: "t-1", sites: ["shop.example", "bank.example"] }) });
+  });
+
+  it("clears the search on Escape instead of closing", async () => {
+    await openList();
+    await typeSearch("bank");
+    act(() => { search().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    expect(search().value).toBe("");
+    expect(onClose).not.toHaveBeenCalled();
+    act(() => { search().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("goes back from the list to the profiles", async () => {

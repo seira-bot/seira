@@ -3,7 +3,7 @@
 // edits, imports and exports them.
 import { z } from "zod";
 
-import { SKIN_IDS } from "./app-settings.ts";
+import { storedSkinSchema } from "./app-settings.ts";
 
 /** Where a theme's files are served, same origin, behind the server's sign-in: `<prefix><themeId>/<file>`. */
 export const THEME_ASSET_PREFIX = "/api/theme-assets/";
@@ -59,7 +59,7 @@ const variant = z.object({ canvas: hex.optional(), accent: hex.optional(), color
 export const themeFileSchema = z.object({
   name: z.string().trim().min(1).max(60),
   /** The built-in skin underneath: what any colour the theme leaves out comes from. Absent: the one matching the canvas. */
-  skin: z.enum([...SKIN_IDS, "system"]).optional(),
+  skin: storedSkinSchema.optional(),
   /** The base background; the app derives its surfaces, lines and text from it. */
   canvas: hex.optional(),
   accent: hex.optional(),

@@ -400,7 +400,7 @@ describe("focus around the hero", () => {
 });
 
 describe("one body for every bot", () => {
-  const roundBot: Bot = { ...bot, mascotBody: "circle" };
+  const spikyBot: Bot = { ...bot, mascotBody: "spiky" };
   const everywhere = () => host.querySelector("[data-avatar-body-everywhere]");
   const openEditor = async (shown: Bot) => {
     flushSync(() => root.render(createElement("aside", { role: "dialog" }, createElement(BotPanel, { bot: shown, derived, linkedSection: null, onClose }))));
@@ -410,39 +410,39 @@ describe("one body for every bot", () => {
   };
 
   it.skipIf(PICKER_BODY_IDS.length < 2)("gives this bot's body to every other bot that wears another one", async () => {
-    fixture.bots = [roundBot, { ...bot, id: "ada", mascotBody: "cursor" }, { ...bot, id: "bob" }, { ...bot, id: "cara", mascotBody: "circle" }];
-    await openEditor(roundBot);
+    fixture.bots = [spikyBot, { ...bot, id: "ada", mascotBody: "cursor" }, { ...bot, id: "bob" }, { ...bot, id: "cara", mascotBody: "spiky" }];
+    await openEditor(spikyBot);
     expect(everywhere()?.textContent).toBe("Give this body to the other bots (2)");
     click(everywhere());
     expect(fixture.dispatch.mock.calls.map(([action]) => action)).toEqual([
-      { type: "updateBot", botId: "ada", patch: { mascotBody: "circle" } },
-      { type: "updateBot", botId: "bob", patch: { mascotBody: "circle" } },
+      { type: "updateBot", botId: "ada", patch: { mascotBody: "spiky" } },
+      { type: "updateBot", botId: "bob", patch: { mascotBody: "spiky" } },
     ]);
   });
 
   it.skipIf(PICKER_BODY_IDS.length < 2)("on a Team Cloud, leaves out the bots this person may not restyle", async () => {
     fixture.team = { admin: false, me: { email: "me@example.test" } };
     fixture.bots = [
-      roundBot,
+      spikyBot,
       { ...bot, id: "edits", yourAccess: "edit" },
       { ...bot, id: "chats", yourAccess: "chat" },
       { ...bot, id: "my-mausbot", yourAccess: "chat", defaultBot: { person: "me@example.test" } },
       { ...bot, id: "their-mausbot", yourAccess: "chat", defaultBot: { person: "ada@example.test" } },
     ] as Bot[];
-    await openEditor(roundBot);
+    await openEditor(spikyBot);
     expect(everywhere()?.textContent).toBe("Give this body to the other bots (2)");
     click(everywhere());
     expect(fixture.dispatch.mock.calls.map(([action]) => action.botId)).toEqual(["edits", "my-mausbot"]);
   });
 
   it("is not offered once every bot wears this body, or while the bot shows a picture", async () => {
-    fixture.bots = [roundBot, { ...bot, id: "cara", mascotBody: "circle" }];
-    await openEditor(roundBot);
+    fixture.bots = [spikyBot, { ...bot, id: "cara", mascotBody: "spiky" }];
+    await openEditor(spikyBot);
     expect(everywhere()).toBeNull();
     flushSync(() => root.unmount());
     root = createRoot(host);
-    fixture.bots = [roundBot, { ...bot, id: "ada" }];
-    await openEditor({ ...roundBot, avatarUrl: "/avatars/scout.png", avatarCrop: "circle" });
+    fixture.bots = [spikyBot, { ...bot, id: "ada" }];
+    await openEditor({ ...spikyBot, avatarUrl: "/avatars/scout.png", avatarCrop: "circle" });
     expect(everywhere()).toBeNull();
   });
 });

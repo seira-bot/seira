@@ -1,7 +1,7 @@
 import { createReadStream } from "node:fs";
 import { z } from "zod";
 
-import { SKIN_IDS } from "../../shared/app-settings.ts";
+import { storedSkinSchema } from "../../shared/app-settings.ts";
 import { THEME_ID, THEME_LIMITS, themeExportSchema, themeFileSchema, type ThemeHistoryItem } from "../../shared/theme.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
@@ -11,7 +11,7 @@ const THEME_PATH = /^\/api\/themes\/([a-z0-9][a-z0-9-]{0,47})(\/duplicate|\/expo
 const ASSET_PATH = /^\/api\/theme-assets\/([a-z0-9][a-z0-9-]{0,47})\/([a-z0-9][a-z0-9._-]{0,99})$/;
 const IMPORT_LIMIT = Math.ceil(THEME_LIMITS.themeBytes * 1.4) + THEME_LIMITS.cssChars * 4 + 100_000;
 
-const activeBody = z.object({ id: z.string().regex(THEME_ID).nullable(), skin: z.enum([...SKIN_IDS, "system"]).optional() }).strict();
+const activeBody = z.object({ id: z.string().regex(THEME_ID).nullable(), skin: storedSkinSchema.optional() }).strict();
 const saveBody = z.object({ theme: themeFileSchema }).strict();
 const nameBody = z.object({ name: z.string().trim().min(1).max(60) }).strict();
 const historyBody = z.object({ index: z.number().int().positive() }).strict();

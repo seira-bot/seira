@@ -8,7 +8,7 @@ import type { LocaleKey } from "@/locales";
 import { colorSwatch, MAUS_COLOR_LABEL, MAUS_COLOR_NAMES, PICKABLE_STATES, type MausState } from "@/lib/mascot";
 import { useStore, type Bot } from "@/state/store";
 import { mayRename, useTeamPeople } from "@/state/team-people";
-import { DEFAULT_BOT_BODY, PICKER_BODY_IDS, type BotBodyId } from "../../../shared/bot-body";
+import { PICKER_BODY_IDS, botBodyId, type BotBodyId } from "../../../shared/bot-body";
 import { MausAvatar } from "../Avatar";
 import { AvatarImageGenerator } from "../AvatarImageGenerator";
 import { AvatarFraming, OrganizationAvatarIcons, RESET_MASCOT_PATCH, useAvatarImage, type AvatarPatch } from "../avatar-editing";
@@ -64,10 +64,10 @@ export function AvatarEditorCard({ bot, activeState, onPatch, onClose }: {
     tabsRef.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
   }, []);
   const pickMascot = (patch: AvatarPatch) => onPatch(crop === "mascot" ? patch : { ...patch, avatarCrop: "mascot" });
-  const body = bot.mascotBody ?? DEFAULT_BOT_BODY;
+  const body = botBodyId(bot.mascotBody);
   const { state, dispatch } = useStore();
   const team = useTeamPeople();
-  const othersToMatch = state.bots.filter((other) => other.id !== bot.id && (other.mascotBody ?? DEFAULT_BOT_BODY) !== body
+  const othersToMatch = state.bots.filter((other) => other.id !== bot.id && botBodyId(other.mascotBody) !== body
     && (team ? mayRename(other, team) : !state.config?.team));
   const [moreLooks, setMoreLooks] = useState(() => Boolean(bot.mascotExpression && bot.mascotExpression !== "idle"));
   const bodyButton = (id: BotBodyId, name: string) => (
