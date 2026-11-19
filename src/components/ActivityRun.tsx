@@ -20,48 +20,13 @@ export function ActivityRun({
   forceOpen?: boolean;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(forceOpen);
-  const bodyId = useId();
   const advanced = useAdvancedMode();
+  const [open, setOpen] = useState(forceOpen || advanced);
+  const bodyId = useId();
   const summary = label ?? (advanced ? describeRun(messages) : describeRun(messages, toolStepLabel));
   useEffect(() => {
     if (forceOpen) setOpen(true);
   }, [forceOpen]);
-  if (advanced) {
-    if (open) {
-      return (
-        <div className="flex flex-col gap-1">
-          <div className="flex min-w-0 justify-start">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-expanded
-              className="flex min-w-0 max-w-full items-center gap-2 rounded-full border border-hairline/40 bg-panel px-3 py-1.5 text-[13px] text-ink-secondary hover:bg-control"
-            >
-              <ChevronRight size={13} className="shrink-0 rotate-90" />
-              <span className="min-w-0 truncate font-medium leading-5">{summary}</span>
-            </button>
-          </div>
-          {children}
-        </div>
-      );
-    }
-    return (
-      <div className="flex min-w-0 justify-start">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-expanded={false}
-          title={t("chat.run.showSteps")}
-          className="flex min-w-0 max-w-full items-center gap-2 rounded-full border border-hairline/40 bg-panel px-3 py-1.5 text-[13px] text-ink-secondary hover:bg-control"
-        >
-          <Check size={13} className="shrink-0 text-success" />
-          <span className="min-w-0 max-w-[480px] truncate font-medium leading-5">{summary}</span>
-          <ChevronRight size={13} className="shrink-0" />
-        </button>
-      </div>
-    );
-  }
   return (
     <div data-activity-run className={cn("flex min-w-0 justify-start", BOT_TURN_INDENT)}>
       <div className="min-w-0 max-w-[44rem] flex-1 overflow-hidden rounded-xl border border-hairline">

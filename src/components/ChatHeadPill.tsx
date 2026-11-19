@@ -32,11 +32,13 @@ function privacyLabelOf(privacy: ChatHeadPrivacy): string | null {
 /** Simple mode's whole chat header: the bot's face and name in one pill, which opens and closes the bot panel. Away from
  * the bot's main conversation it also names the one on screen. A dot says another of the bot's conversations needs a
  * look; a team chat says who can read it with one quiet glyph. */
-export function ChatHeadPill({ bot, avatar, privacy, onToggle }: {
+export function ChatHeadPill({ bot, avatar, privacy, onToggle, showConversation = true }: {
   bot: Bot;
   avatar: Pick<ComponentProps<typeof BotAvatar>, "state" | "motion" | "motionKey" | "animated">;
   privacy: ChatHeadPrivacy;
   onToggle: () => void;
+  /** Advanced mode names the conversation in its own thread picker, so the pill keeps to the bot. */
+  showConversation?: boolean;
 }) {
   const open = useStoreSelector((state) => state.settingsOpen), pendingQueued = useStoreSelector((state) => state.pendingQueued);
   const elsewhere = sidebarBotActivityTasks(bot, pendingQueued).filter((task) => task.threadId !== bot.threadId).length;
@@ -44,7 +46,7 @@ export function ChatHeadPill({ bot, avatar, privacy, onToggle }: {
   const PrivacyIcon = privacy ? PRIVACY_ICONS[privacy.kind] : Users;
   const title = bot.tasks?.find((task) => task.threadId === bot.threadId)?.title;
   // Simple mode calls an untitled conversation what it is, never a "thread".
-  const conversation = !awayFromMainThread(bot, false) ? (privacy?.kind === "shared" ? t("task.sharedChat") : null)
+  const conversation = !showConversation ? null : !awayFromMainThread(bot, false) ? (privacy?.kind === "shared" ? t("task.sharedChat") : null)
     : !title || title === UNTITLED ? t("task.untitledChat") : localizedTaskTitle(title);
   const label = t("chat.openProfileAria", { name: bot.name });
   const chief = t("chat.chiefOfStaff"), botTitle = bot.title.trim();
