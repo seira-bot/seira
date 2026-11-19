@@ -46,7 +46,7 @@ Agent CLIs live on the host. In a Flatpak the server finds them and starts them 
 `flatpak-spawn --host` (`server/flatpak-host.ts`).
 
 - Arguments are an argv array. No shell string is built from them.
-- The environment goes over a pipe (`--env-fd=3`). No environment value is in any argv.
+- The environment goes in a nameless file of the runtime folder, open on descriptor 3 (`--env-fd=3`). No environment value is in any argv.
 - The server looks up the program on the host right before each launch. It starts the resolved target and refuses
   one in a folder the bots can write (same rule as the deb build).
 - Where the bot box is on, a bot run is refused in a Flatpak. Where it is off, the run is unboxed, as in the deb build.

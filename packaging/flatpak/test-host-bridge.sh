@@ -6,7 +6,9 @@ log="$HOME/.var/app/bot.seira.Seira/config/openmausbot/logs/server.log"
 bin="$HOME/.local/bin"
 run=$(mktemp)
 before=$(wc -l <"$log" 2>/dev/null || echo 0)
-trap 'rm -f "$bin/cline" "$run"; kill "$app" 2>/dev/null || true; flatpak kill bot.seira.Seira 2>/dev/null || true' EXIT
+made=0
+[ ! -e "$bin/cline" ] || { echo "FAIL: $bin/cline exists; the test will not replace a real program"; exit 1; }
+trap 'if [ "$made" = 1 ]; then rm -f "$bin/cline"; fi; rm -f "$run"; kill "$app" 2>/dev/null || true; flatpak kill bot.seira.Seira 2>/dev/null || true' EXIT
 
 echo "start-up"
 dbus-run-session -- xvfb-run -a timeout 120 flatpak run bot.seira.Seira >"$run" 2>&1 &
@@ -27,6 +29,7 @@ echo "PASS: server ready, port 8799 open"
 api=http://127.0.0.1:8799
 echo "host bridge: program installed"
 mkdir -p "$bin"
+made=1
 printf '#!/bin/sh\necho "9.9.9 (cline dummy)"\n' >"$bin/cline"
 chmod +x "$bin/cline"
 sleep 4
