@@ -13,18 +13,8 @@ import { pollConnector } from "@/lib/connector-poll";
 import { connectorConnect } from "@/lib/product-events";
 import { managedConnectorUnavailableReason } from "../../shared/connector-availability";
 import { isConnectorToolGrantShape } from "@/lib/connector-grants";
-import {
-  accountAliasTaken,
-  accountToReconnect,
-  connectedInventoryCopy,
-  connectorActionLabel,
-  hasActiveConnection,
-  needsReconnect,
-  requiresAccountAlias,
-  type ConnectorAccount,
-  type ConnectorInventoryPhase,
-  type ConnectorStatus,
-} from "@/lib/connector-status";
+import { accountAliasTaken, accountToReconnect, connectedInventoryCopy, connectorActionLabel, hasActiveConnection, needsReconnect,
+  requiresAccountAlias, type ConnectorAccount, type ConnectorInventoryPhase, type ConnectorStatus } from "@/lib/connector-status";
 import { BotAvatar } from "./Avatar";
 import { SidebarPopoverMenu } from "./SidebarPopoverMenu";
 import { appCategoryLabel, CATEGORY_SECTION_SIZE, catalogSections, connectorDescription, inCategory, rankCategories } from "@/lib/app-catalog";
