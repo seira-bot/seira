@@ -371,7 +371,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
       }
       lastSent.set(entry.threadId, { reportId: outcome.id, at: now() });
       track(entry, outcome.id, payload, person, entry.words);
-      return { ok: true, line: sentLine(outcome.id, contact, language), marker: outcome.id };
+      return { ok: true, line: sentLine(outcome.id, outcome.noReply ? undefined : contact, language), marker: outcome.id };
     }
     if (!outcome.retry) return { ok: false, line: refusedLine(outcome.detail, language), marker: FAILED_MARKER };
     if (outbox.length >= MAX_OUTBOX) return { ok: false, line: fullLine(MAX_OUTBOX, language), marker: FAILED_MARKER };
@@ -419,7 +419,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
       } else {
         lastSent.set(queued.threadId, { reportId: outcome.id, at: now() });
         track(queued, outcome.id, queued.payload, queued.person, queued.payload.description.split("\n")[0] ?? "");
-        notice(queued.threadId, { ok: true, line: laterLine(outcome.id, contact, language), marker: outcome.id });
+        notice(queued.threadId, { ok: true, line: laterLine(outcome.id, outcome.noReply ? undefined : contact, language), marker: outcome.id });
       }
     } else if (!outcome.retry) {
       outbox = outbox.filter((one) => one !== queued);

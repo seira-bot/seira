@@ -13,6 +13,7 @@ import type { PublicSession } from "../sessions.ts";
 import type { Message, StoreChange } from "../store.ts";
 import { createDevsReports, DEVS_REPORTS_FILE, fixedLine, LONGEST_WAIT_MS, NO_ANSWER_MS, RETRY_MS, sentLine, STATUS_EVERY_MS, STATUS_FIRST_MS, TRACKED_MS,
   type DevsReportsDeps } from "./devs-reports.ts";
+import { laterLine } from "./devs-report-words.ts";
 
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
@@ -374,6 +375,31 @@ describe("what the person is told, in their language", () => {
     fx.advance(RETRY_MS[0]);
     await fx.settle();
     expect(fx.notices("scout-main")).toEqual(["notice: An das Seira-Team gesendet (Bericht report-2), nachdem ein früherer Versuch nicht geklappt hat."]);
+    fx.stop();
+  });
+});
+
+describe("a report that the endpoint keeps no contact address for", () => {
+  it("tells the person the plain sent line, not that the team will reply", async () => {
+    const fx = fixture({ profileEmail: "ada@example.com", outcomes: [{ ok: true, id: "br_x", noReply: true }] });
+    fx.person("scout-main", "@devs no reply please");
+    fx.advance(NO_ANSWER_MS);
+    await fx.settle();
+    expect(fx.sent[0]!.contactEmail).toBe("ada@example.com");
+    expect(fx.notices("scout-main")).toEqual([`notice: ${sentLine("br_x")}`]);
+    expect(fx.notices("scout-main").join("\n")).not.toContain("ada@example.com");
+    fx.stop();
+  });
+
+  it("tells the plain later line when the report goes on its own later", async () => {
+    const fx = fixture({ profileEmail: "ada@example.com", outcomes: [{ ok: false, retry: true, why: "offline" }, { ok: true, id: "br_y", noReply: true }] });
+    fx.person("scout-main", "@devs offline then sent");
+    fx.advance(NO_ANSWER_MS);
+    await fx.settle();
+    fx.advance(RETRY_MS[0]);
+    await fx.settle();
+    expect(fx.notices("scout-main").at(-1)).toBe(`notice: ${laterLine("br_y", undefined, "en")}`);
+    expect(fx.notices("scout-main").at(-1)).not.toContain("ada@example.com");
     fx.stop();
   });
 });

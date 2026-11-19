@@ -1,19 +1,22 @@
-// Preparing one @devs report. Without OMB_BUG_REPORT_URL nothing leaves this machine: the report becomes a prefilled
-// issue form the person opens and submits themselves (devs-report-issue.ts). With it, the report is posted to that
-// address and its answer read: 201 {id}; 400 or 413 {error}; 429 {error, retryAfter} (seconds, also Retry-After). The same
-// address is asked what became of the reports this app sent (POST /api/bug-reports/status), which a Cloud also signs
-// with the bootstrap secret it shares with its Admin.
+// Preparing one @devs report. By default it is posted to Seira's bug report service, in the strict public form
+// (publicReport), and its answer read: 201 {id}; 400 or 413 {error}; 429 {error, retryAfter} (seconds, also Retry-After).
+// When that service cannot file it, or OMB_BUG_REPORT_URL is off, the report becomes a prefilled issue form the person
+// opens and submits themselves (devs-report-issue.ts). Another OMB_BUG_REPORT_URL address gets the full report, with no
+// fallback. The same address is asked what became of the reports this app sent (POST /api/bug-reports/status), which a
+// Cloud also signs with the bootstrap secret it shares with its Admin.
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { z } from "zod";
 
 import { DEVS_REPORT_LIMITS, withoutContact, type DevsReportPayload } from "./devs-report.ts";
-import { bugReportIssueUrl } from "./devs-report-issue.ts";
+import { bugReportIssueUrl, publicReport } from "./devs-report-issue.ts";
 
+export const SEIRA_BUG_REPORT_URL = "https://bugs.seira.bot/api/bug-reports";
 const SEND_TIMEOUT_MS = 20_000;
 const ANSWER_MAX_BYTES = 16 * 1024;
 
 export type SendOutcome =
-  | { ok: true; id: string }
+  /** `noReply`: the endpoint keeps no contact address, so nobody replies by email. */
+  | { ok: true; id: string; noReply?: true }
   /** Nothing was sent: the report is a prefilled issue form that the person opens and submits. */
   | { ok: true; issueUrl: string }
   /** Worth sending again later: offline, a server error, or the endpoint's hourly limit. */
@@ -21,10 +24,11 @@ export type SendOutcome =
   /** The endpoint refused this report; sending it again would be refused again. */
   | { ok: false; retry: false; why: "refused"; detail: string };
 
-/** OMB_BUG_REPORT_URL (an https address, or http on this machine's loopback, for fixtures); otherwise null. */
+/** Seira's bug report service when OMB_BUG_REPORT_URL is unset; its https address (or http on this machine's loopback,
+ * for fixtures) when set; null for anything else, such as `off`, which keeps reports as issue forms. */
 export function bugReportEndpoint(env: NodeJS.ProcessEnv): string | null {
   const explicit = env.OMB_BUG_REPORT_URL?.trim();
-  if (!explicit) return null;
+  if (!explicit) return SEIRA_BUG_REPORT_URL;
   try {
     const url = new URL(explicit);
     const loopback = url.protocol === "http:" && ["127.0.0.1", "[::1]", "localhost"].includes(url.hostname);
@@ -70,8 +74,14 @@ async function post(endpoint: string, payload: DevsReportPayload, fetcher: typeo
   }
 }
 
-export const devsReportSender = (endpoint: string | null, fetcher: typeof fetch = fetch) => (payload: DevsReportPayload): Promise<SendOutcome> =>
-  endpoint === null ? Promise.resolve({ ok: true, issueUrl: bugReportIssueUrl(payload) }) : sendDevsReport(endpoint, payload, fetcher);
+export const devsReportSender = (endpoint: string | null, fetcher: typeof fetch = fetch) => async (payload: DevsReportPayload): Promise<SendOutcome> => {
+  if (endpoint === null) return { ok: true, issueUrl: bugReportIssueUrl(payload) };
+  if (endpoint !== SEIRA_BUG_REPORT_URL) return sendDevsReport(endpoint, payload, fetcher);
+  const outcome = await sendDevsReport(endpoint, publicReport(payload), fetcher);
+  if (outcome.ok && "id" in outcome) return { ...outcome, noReply: true };
+  if (!outcome.ok && outcome.why === "limited") return outcome;
+  return outcome.ok ? outcome : { ok: true, issueUrl: bugReportIssueUrl(payload) };
+};
 
 export async function sendDevsReport(endpoint: string, payload: DevsReportPayload, fetcher: typeof fetch = fetch): Promise<SendOutcome> {
   let answer = await post(endpoint, payload, fetcher);
@@ -138,4 +148,4 @@ export async function askReportStatus(endpoint: string, question: ReportStatusQu
 
 export const devsStatusAsker = (reportEndpoint: string | null, home: ReportStatusHome | null, fetcher: typeof fetch = fetch) =>
   (question: ReportStatusQuestion): Promise<ReportStatusAnswer | null> =>
-    reportEndpoint === null ? Promise.resolve(null) : askReportStatus(bugReportStatusEndpoint(reportEndpoint), question, home, fetcher);
+    reportEndpoint === null ? Promise.resolve(null) : askReportStatus(bugReportStatusEndpoint(reportEndpoint), question, reportEndpoint === SEIRA_BUG_REPORT_URL ? null : home, fetcher);

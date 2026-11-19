@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { isBugReportIssueUrl } from "../shared/devs-report-issue.ts";
 import { buildDevsReport, type DevsReportPayload } from "./devs-report.ts";
-import { bugReportIssueUrl, conversationDiagnostics, MAX_ISSUE_URL } from "./devs-report-issue.ts";
+import { bugReportIssueUrl, conversationDiagnostics, MAX_ISSUE_URL, publicReport } from "./devs-report-issue.ts";
 
 const INSTALL = "4b7c1f2e-0a9d-4c2b-9f1e-6d5a4b3c2d1e";
 const PAYLOAD: DevsReportPayload = {
@@ -111,5 +111,30 @@ describe("what of the diagnostics goes into a public issue", () => {
     expect(conversationDiagnostics(diagnostics)).toBe("Seira @devs report\nApp version: 1\n\n## Conversation\nMessage: m1\n");
     const other = "Seira @devs report\n\n## Server warnings and errors, newest last\nsecret line\n\n## Cloud computers since the server started\nx";
     expect(conversationDiagnostics(other)).toBe("Seira @devs report\n");
+  });
+});
+
+describe("the report a public issue is filed from", () => {
+  const home = "/srv/box";
+  it("has no contact fields, no install id or contact text, and home folders as ~", () => {
+    const report = publicReport({ ...PAYLOAD, description: `see /srv/box/a, mail ada@example.com, install ${INSTALL}` }, home);
+    expect("contactEmail" in report || "contact" in report).toBe(false);
+    expect(report.installId).toBe(INSTALL);
+    expect(report.source).toBe("bot");
+    expect(report.description).toBe("see ~/a, mail , install");
+    expect(JSON.stringify({ ...report, installId: "" })).not.toMatch(/ada@example\.com|Install:|4b7c1f2e|\/srv\/box/);
+    expect(report.diagnostics).not.toContain("Server warnings and errors");
+  });
+
+  it("keeps the version and platform non-empty and the description non-empty", () => {
+    const report = publicReport({ ...PAYLOAD, appVersion: INSTALL, platform: " ada@example.com ", description: INSTALL }, home);
+    expect(report.appVersion).toBe(INSTALL);
+    expect(report.platform).toBe("ada@example.com");
+    expect(report.description).toBe("(no words besides @devs)");
+  });
+
+  it("carries the same diagnostics the form puts in its logs field", () => {
+    const logs = fields(bugReportIssueUrl(PAYLOAD, home)).get("logs");
+    expect(publicReport(PAYLOAD, home).diagnostics).toBe(logs);
   });
 });
