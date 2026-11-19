@@ -14,6 +14,7 @@
     {
       "binding": "DB",
       "database_name": "seira-bug-reports",
+      "database_id": "22a4e455-bf0d-463f-8f40-0d055d41d2bd",
       "migrations_dir": "migrations"
     }
   ],
