@@ -224,7 +224,7 @@ function ConversationTaskPicker({
   const results = [...attentionRows.map((entry) => ({ kind: "attention" as const, entry })), ...visible.map((task) => ({ kind: "task" as const, task }))];
 
   return (
-    <div className="relative" ref={ref}>
+    <div className={cn("relative", chip && "max-w-full")} ref={ref}>
       <button
         type="button"
         onClick={() => {
@@ -237,7 +237,7 @@ function ConversationTaskPicker({
         aria-expanded={chip ? open : undefined}
         className={cn(
           "flex max-w-[220px] items-center gap-1.5 rounded-full text-[13px] text-ink-secondary hover:text-ink",
-          chip ? cn("h-8 px-3", ELEVATED_FLOAT, ELEVATED_HOVER) : cn("border border-hairline/40 px-2.5 py-1 hover:bg-raised", COMPACT_BUBBLE),
+          chip ? cn("h-8 max-w-full px-3", ELEVATED_FLOAT, ELEVATED_HOVER) : cn("border border-hairline/40 px-2.5 py-1 hover:bg-raised", COMPACT_BUBBLE),
         )}
       >
         {chip ? <span dir="auto" className="truncate">{chipTitle}</span> : <>

@@ -62,7 +62,7 @@ export function AdvancedRoomHeader({ group, members, working, folderOpen, onTogg
           </button>
           {group.description && <p className="max-w-full truncate text-[12px] leading-4 text-ink-secondary">{group.description}</p>}
         </div>
-        <div data-roomhead-thread className="min-w-0 @min-[30rem]/roomhead:col-start-1 @min-[30rem]/roomhead:row-start-1 @min-[30rem]/roomhead:justify-self-start" style={noDragStyle}>
+        <div data-roomhead-thread className="min-w-0 max-w-full @min-[30rem]/roomhead:col-start-1 @min-[30rem]/roomhead:row-start-1 @min-[30rem]/roomhead:justify-self-start" style={noDragStyle}>
           <GroupTaskPicker group={group} chip />
         </div>
         <div
