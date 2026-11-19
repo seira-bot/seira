@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { request } from "../scripts/mcp-server.ts";
 import type { WireMessage } from "../shared/wire.ts";
 import { withoutTurnClock } from "./testing/turn-clock-text.ts";
@@ -12,7 +12,7 @@ const OLD = /OLD_SECRET_ALPHA|OLD_BETA_REPLY|OLD_DELTA_REPLY|OLD_GAMMA_MORE|Earl
 
 async function setup(extraEnv: NodeJS.ProcessEnv) {
   const fixture = await launchVerificationServer({ ...process.env, ...extraEnv }, undefined, undefined, undefined, undefined, undefined, ["codex"]);
-  const control = async (...args: string[]) => runControlOmb([...args, "--url", fixture.info.url]) as Promise<any>;
+  const control = async (...args: string[]) => runControlSeira([...args, "--url", fixture.info.url]) as Promise<any>;
   const bot = (await control("new-bot", "--name", "Fresh probe")).bot;
   const thread: string = bot.activeTaskId;
   const api = (path: string, options: RequestInit = {}) => request(path, options, fixture.info.url);

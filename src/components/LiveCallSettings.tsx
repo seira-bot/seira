@@ -31,6 +31,7 @@ export function LiveCallSettings({ bot, onClose }: { bot?: Pick<Bot, "id" | "nam
   const fish = live.provider === "fish";
   const gemini = live.provider === "gemini";
   const elevenlabs = live.provider === "elevenlabs";
+  const codex = live.provider === "codex";
   const copy = liveKeyCopy(live.provider);
   const hasKey = live.keySource === (fish ? "fishAudio" : gemini ? "gemini" : elevenlabs ? "elevenlabs" : "live");
   // Gemini has its own voices, kept apart from the GPT-Live one.
@@ -82,8 +83,8 @@ export function LiveCallSettings({ bot, onClose }: { bot?: Pick<Bot, "id" | "nam
       }}
     >
       <LiveProviderSettings locked={keySaving} onSaving={setProviderSaving} />
-      {/* Fish Audio and ElevenLabs calls speak in their agent's own voice. */}
-      {!fish && !elevenlabs && <>
+      {/* Fish Audio, ElevenLabs and Codex calls speak in their own voice. */}
+      {!fish && !elevenlabs && !codex && <>
       {bot && (
         <label className="flex items-center justify-between gap-2">
           <span className="text-ink-secondary">{t("call.live.botVoice", { name: bot.name })}</span>
@@ -135,6 +136,7 @@ export function LiveCallSettings({ bot, onClose }: { bot?: Pick<Bot, "id" | "nam
           ))}
         </Select>
       </label>
+      {!codex && <>
       <div className="flex items-center justify-between gap-2 border-t border-hairline/60 pt-2">
         <span className="text-ink-secondary">{t(copy.key)}</span>
         <span className="flex gap-2">
@@ -154,7 +156,8 @@ export function LiveCallSettings({ bot, onClose }: { bot?: Pick<Bot, "id" | "nam
       )}
       {/* Keyed by provider and endpoint: a key typed for one is never saved for another. */}
       {changingKey && <LiveKeySetup key={liveKeyFormKey(state.config?.live)} compact locked={providerSaving} onSaving={setKeySaving} onSaved={() => setChangingKey(false)} />}
-      <div className="text-[12px] text-ink-tertiary">{liveDisclosure({ cloudHome: state.config?.cloudHome === true, azure, custom, fish, gemini, elevenlabs })} {t(copy.cost)}</div>
+      </>}
+      <div className="text-[12px] text-ink-tertiary">{liveDisclosure({ cloudHome: state.config?.cloudHome === true, azure, custom, fish, gemini, elevenlabs, codex })} {t(copy.cost)}</div>
       {error && <div className="text-[12px] text-danger">{error}</div>}
     </div>
   );

@@ -130,6 +130,12 @@ describe("Apps pop-up", () => {
     }
     expect(fixture.dispatch).not.toHaveBeenCalled();
   });
+  it("links the Privacy Policy and the Terms of Service below the apps", () => {
+    const { html } = render();
+    const legal = html.indexOf('<nav aria-label="Legal"');
+    expect(legal).toBeGreaterThan(html.indexOf("data-apps-grid"));
+    expect(html.slice(legal)).toMatch(/^<nav[^>]*>.*Privacy Policy.*Terms of Service.*?<\/nav>/s);
+  });
   it("counts every connected hosted app among connected apps", () => {
     const everyApp = (connected: boolean) => Object.fromEntries(HOSTED_MCP_APPS.map((app) => [app.id, connected]));
     fixture.overrides.set(HOSTED_CONNECTED, everyApp(true));

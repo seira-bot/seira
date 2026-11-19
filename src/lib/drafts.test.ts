@@ -377,7 +377,7 @@ describe("durable attachment completion", () => {
 });
 
 describe("appendComposerDraft", () => {
-  const prompt = "Create a verification skill from the run below.\n\n✓ doctor — pnpm control:omb doctor\n\n";
+  const prompt = "Create a verification skill from the run below.\n\n✓ doctor — pnpm control:seira doctor\n\n";
 
   it("puts the text into an empty draft exactly as given", () => {
     const store = memoryStorage();

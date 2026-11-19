@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { launchVerificationServer, runControlOmb } from "./control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "./control-seira.ts";
 import { mountPreview, type MountedPreview } from "./testing/preview-fixture.ts";
 import { activityPage } from "../electron/lending-activity-window.mjs";
 import { createLendingIndicator } from "../electron/lending-indicator.mjs";
@@ -131,7 +131,7 @@ try {
     await chrome.shoot(data(activityPage(ENTRIES, "en")), "ul", file, { width: 560, height: 520, dark: skin.dark });
     console.log(file);
   }
-  for (const name of ["Chief of Staff", "Research"]) await runControlOmb(["new-bot", "--name", name, "--url", fixture.info.url]);
+  for (const name of ["Chief of Staff", "Research"]) await runControlSeira(["new-bot", "--name", name, "--url", fixture.info.url]);
   ui = await mountPreview(fixture, { entry: "/scripts/testing/lend-automatically-preview.tsx", route: "/__lend-automatically.html", title: "Isolated lending settings", logLevel: "warn" });
   for (const view of SETTINGS) for (const skin of SKINS) {
     const file = join(shots, `${view.name}-${skin.look}.png`);

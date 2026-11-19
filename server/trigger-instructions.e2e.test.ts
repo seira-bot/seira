@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 
 it("reads, edits and verifies long automation instructions through the real MCP tools without losing the tail or hidden credentials", async () => {
   const fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, { scripted: true });
@@ -16,7 +16,7 @@ it("reads, edits and verifies long automation instructions through the real MCP 
     expect(response.ok, JSON.stringify(value)).toBe(true);
     return value;
   };
-  const control = (...args: string[]) => runControlOmb([...args, "--url", fixture.info.url]) as Promise<any>;
+  const control = (...args: string[]) => runControlSeira([...args, "--url", fixture.info.url]) as Promise<any>;
   const turns = () => existsSync(evidencePath)
     ? readFileSync(evidencePath, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line)) : [];
   try {

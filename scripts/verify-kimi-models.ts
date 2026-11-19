@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { launchVerificationServer, runControlOmb } from "./control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "./control-seira.ts";
 
 const fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, undefined, ["kimi"]);
 const { url, dataDir } = fixture.info;
-const control = (args: string[]) => runControlOmb([...args, "--url", url]) as Promise<any>;
+const control = (args: string[]) => runControlSeira([...args, "--url", url]) as Promise<any>;
 const subscription = "kimi-code/kimi-for-coding";
 const platform = "moonshot-cn/kimi-k2.6";
 const evidence: unknown[] = [];

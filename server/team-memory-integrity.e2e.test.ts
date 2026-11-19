@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
-import { launchVerificationServer, verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { launchVerificationServer, verificationServerEnvironment } from "../scripts/control-seira.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 import { CAPTURE_MARKER } from "./memory-capture.ts";
 import type { TeamMemoryEntry } from "./team-memory.ts";

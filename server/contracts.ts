@@ -563,6 +563,63 @@ export interface SmallModelFallback {
   onRefused: (model: string) => void;
 }
 
+/** Input for one voice call run by the engine itself over WebRTC. */
+export interface EngineLiveVoiceStart {
+  /** WebRTC SDP offer from the client. */
+  sdp: string;
+  /** Working folder of the bot. */
+  cwd: string;
+  /** The called bot: its switched-off skills apply to the call. */
+  botId: string;
+  /** The bot's model, as chat turns pass it. */
+  model: string | null;
+  approvalMode: ApprovalMode;
+  /** The bot has a tool selection: the engine keeps its shell snapshot and every config MCP server off. */
+  toolScoped?: boolean;
+  /** A guest or bot API caller drives the call: the engine runs with its shell off. */
+  guestConfined?: boolean;
+  /** Aborts the start when the call ends before the answer. Engines may ignore it. */
+  signal?: AbortSignal;
+  /** Persona and rules for the voice model. */
+  voiceInstructions: string;
+  /** Instructions for the engine model that does the work. */
+  workInstructions: string;
+  /** Recent conversation, oldest first. */
+  history: ReadonlyArray<{ role: "user" | "assistant"; text: string }>;
+  /** May fire before `startLiveVoice` resolves. */
+  onEvent(event: EngineLiveVoiceEvent): void;
+}
+
+export type EngineLiveVoiceEvent =
+  | { type: "started" }
+  | { type: "transcript"; role: "user" | "assistant"; delta: string }
+  | { type: "answer"; text: string }
+  | { type: "approval"; outcome: "accept" | "decline" | "timeout" }
+  /** Codex is doing work for the call. It fires for each step of the call thread's turn, with no payload. */
+  | { type: "working" }
+  | { type: "closed"; reason: string | null }
+  | { type: "failed"; reason: "error" | "exit" };
+
+export interface EngineLiveVoiceSession {
+  /** SDP answer, unchanged. */
+  readonly sdp: string;
+  appendText(text: string): void;
+  appendSpeech(text: string): void;
+  /** Idempotent. Resolves within 5 seconds. */
+  stop(): Promise<void>;
+}
+
+export type EngineLiveVoiceRefusal = "not-signed-in" | "too-old" | "unsupported-sign-in" | "no-answer" | "failed";
+
+export class EngineLiveVoiceError extends Error {
+  readonly refusal: EngineLiveVoiceRefusal;
+  constructor(refusal: EngineLiveVoiceRefusal) {
+    super(refusal);
+    this.refusal = refusal;
+    this.name = "EngineLiveVoiceError";
+  }
+}
+
 export interface ProviderInstance {
   readonly instanceId: InstanceId;
   readonly driverKind: DriverKind;
@@ -595,6 +652,8 @@ export interface ProviderInstance {
   generateMemoryText?(prompt: string, options?: TextGenerationOptions): Promise<string>;
   /** Isolated, tool-free permission review; separate from generateText so no security capability is inferred from a generic helper. */
   reviewPermission?(prompt: string, signal?: AbortSignal): Promise<string>;
+  /** Start a voice call that the engine runs itself. Omitted when the engine has no voice. */
+  startLiveVoice?(input: EngineLiveVoiceStart): Promise<EngineLiveVoiceSession>;
   dispose(): Promise<void>;
 }
 

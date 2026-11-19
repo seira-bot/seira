@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb, verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, verificationServerEnvironment } from "../scripts/control-seira.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 
 const jsonl = (path: string) => existsSync(path)
@@ -77,7 +77,7 @@ async function fixture(test: (f: any) => Promise<void>, { thisComputer = false }
       try { return (await fetch(url + "/api/health", { signal: AbortSignal.timeout(1_000) })).ok; } catch { return false; }
     }, { timeout: 20_000 }).toBe(true);
 
-    const cli = (...args: string[]) => runControlOmb([...args, "--url", url]) as Promise<any>;
+    const cli = (...args: string[]) => runControlSeira([...args, "--url", url]) as Promise<any>;
     const api = async (method: string, path: string, body?: unknown, token?: string) => {
       const response = await fetch(url + path, {
         method,

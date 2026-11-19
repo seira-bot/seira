@@ -58,6 +58,15 @@ function testEnv(fetchCalls: Array<{ url: string; init?: RequestInit }>, userId 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("connected-apps broker boundaries", () => {
+  it("names the service in the health answer", async () => {
+    const response = await worker.fetch(
+      new Request("https://broker.test/health"),
+      { COMPOSIO_API_KEY: "key" } as never,
+      {} as never,
+    );
+    expect(await response.json()).toEqual({ service: "seira-composio", ready: true });
+  });
+
   it("accepts an empty authorize body as a first-account request", async () => {
     await expect(requestAlias(new Request("https://broker.test/v1/connectors/gmail/authorize", {
       method: "POST",

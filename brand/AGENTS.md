@@ -1,6 +1,7 @@
 # Brand assets: agent notes
 
 This folder holds the Seira logo, mascot images, and the character code.
+The [brand guide](README.md) sets the rules for the name, tagline, logo, colours, and upstream names.
 The root `AGENTS.md` applies here too, including "Local details stay local".
 
 ## Machine values
@@ -10,7 +11,6 @@ Copy `brand/.env.example` to `brand/.env.local` and fill in your values. Git ign
 | Variable | Used by | Required |
 |----------|---------|----------|
 | `SEIRA_IMAGE_CMD` | `mascot/**/prompts.sh` | yes, to make mascot images |
-| `SEIRA_FONT_DIR` | `build_logo.py` | no: the script searches the usual font folders |
 | `SHOT_HOST`, `SHOT_CHROMIUM`, `SHOT_MEM` | `mascot/live/tools/shot.sh` | no |
 
 Rules for scripts in this folder:
@@ -28,5 +28,7 @@ Rules for scripts in this folder:
 | Check the logo files | `python3 brand/check_logo.py` |
 | Bundle a demo page | `python3 brand/mascot/live/tools/bundle.py <entry.js> <out.html>` |
 | Take a headless screenshot | `brand/mascot/live/tools/shot.sh <page.html> <out.png>` |
+
+`build_logo.py` makes the app icons from `brand/logo/app-icon-source.png`. This is the same image as the mobile app icon.
 
 The character modules follow `brand/mascot/live/CONTRACT.md`.

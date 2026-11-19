@@ -67,7 +67,7 @@ OMB_TEST_DESKTOP_CUA_CONNECTION="$SCRATCH/cua-connection.json" \
 FAKE_CLAUDE_TOOL_CALLS_FILE="$SCRATCH/calls.json" FAKE_CLAUDE_PROMPTS="$SCRATCH/prompts.jsonl" \
 FAKE_CLAUDE_REPLY_STATE="$SCRATCH/replies" \
 FAKE_CLAUDE_REPLIES='["Typed hello world into TextEdit. Nothing else changed.","Typed hello world into TextEdit again.","Typed it in the Auto thread.","Typed it with the switch off.","Typed it after the saved run failed."]' \
-  node --experimental-strip-types scripts/control-omb.ts launch
+  node --experimental-strip-types scripts/control-seira.ts launch
 ```
 
 In a second terminal set `SCRATCH` to the same folder, `URL` to the printed
@@ -76,13 +76,13 @@ In a second terminal set `SCRATCH` to the same folder, `URL` to the printed
 PATCH picks this computer as T1's place, as the composer's place chip does:
 
 ```sh
-pnpm control:omb new-bot --name Typist --url $URL
+pnpm control:seira new-bot --name Typist --url $URL
 curl -s -X PATCH $URL/api/bots/$BOT_ID/tasks/$T1 -H 'content-type: application/json' -H "origin: $URL" -d '{"surface":"local"}'
 ```
 
 Each round below sends with
-`pnpm control:omb send --bot $BOT_ID --task $T1 --text "…" --url $URL`, waits
-with `pnpm control:omb wait --bot $BOT_ID --task $T1 --timeout 300 --url $URL`
+`pnpm control:seira send --bot $BOT_ID --task $T1 --text "…" --url $URL`, waits
+with `pnpm control:seira wait --bot $BOT_ID --task $T1 --timeout 300 --url $URL`
 (`settled`), then reads `curl -s "$URL/api/threads/$T1/messages?limit=100"`.
 "Round 1's words" are `Open TextEdit and type hello world`.
 
@@ -112,7 +112,7 @@ with `pnpm control:omb wait --bot $BOT_ID --task $T1 --timeout 300 --url $URL`
    with `savedSteps: {recipeId: R, replayed: true}`.
 3. **Stop a live replay.** `touch "$SCRATCH/hold"`, send round 1's words, and
    once `cua-calls.jsonl` logs the new `click`, run
-   `pnpm control:omb interrupt --bot $BOT_ID --task $T1 --url $URL`; wait, then
+   `pnpm control:seira interrupt --bot $BOT_ID --task $T1 --url $URL`; wait, then
    `rm "$SCRATCH/hold"`. The `mcp__computer__click` row is not `ok`, a
    "stopped: You stopped this." row follows, and there is no reply.
    `prompts.jsonl` still has 1 line, no `fake-cua-driver.ts mcp` process is

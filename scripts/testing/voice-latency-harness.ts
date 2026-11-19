@@ -1,7 +1,7 @@
 // Voice-latency measurement harness. Drives the real app — renderer store
 // speak path, the Speaker, the server TTS route and the provider call —
 // against the committed corpus fixture, through the same disposable
-// verification fixture `control-omb ui` uses. The record protocol is the
+// verification fixture `control-seira ui` uses. The record protocol is the
 // deterministic stub: no live engine call, no engine key. See
 // fixtures/voice-latency/README.md for the protocol.
 import { execFileSync } from "node:child_process";
@@ -10,8 +10,8 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { cpus, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { runControlOmb, launchVerificationServer, type VerificationServer } from "../control-omb.ts";
-import { agentBrowser, ensureUiBrowser, sessionEnv } from "./control-omb-ui.ts";
+import { runControlSeira, launchVerificationServer, type VerificationServer } from "../control-seira.ts";
+import { agentBrowser, ensureUiBrowser, sessionEnv } from "./control-seira-ui.ts";
 import { mountPreview, type MountedPreview } from "./preview-fixture.ts";
 import { CADENCE, corpusFixtureId, readLfText, SYNTHESIS } from "./voice-latency-corpus.ts";
 import { launchVoiceLatencyStub, STUB_KEY, STUB_MODEL, STUB_VOICE } from "./voice-latency-stub.ts";
@@ -193,7 +193,7 @@ async function main(): Promise<void> {
     };
 
     await api("PATCH", "/api/config", { tts: { provider: "elevenlabs", key: STUB_KEY, model: STUB_MODEL, voice: STUB_VOICE } });
-    const created = await runControlOmb(["new-bot", "--name", "VoiceProbe", "--url", fixture.info.url]) as { bot: { id: string } };
+    const created = await runControlSeira(["new-bot", "--name", "VoiceProbe", "--url", fixture.info.url]) as { bot: { id: string } };
     const botId = created.bot.id;
     await api("PATCH", `/api/bots/${botId}`, { speakReplies: true, voice: STUB_VOICE });
     console.error(`tts provider=elevenlabs(stub) model=${STUB_MODEL} voice=${STUB_VOICE} synthesis=modeled rtf=${SYNTHESIS.rtf} audioMsPerChar=${SYNTHESIS.audioMsPerChar}`);

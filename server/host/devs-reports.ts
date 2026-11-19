@@ -36,7 +36,7 @@ import { serverLine, type LineLanguage } from "../server-lines.ts";
 import { cloudComputerCounters } from "../cloud-computer-counters.ts";
 import type { PublicSession } from "../sessions.ts";
 import type { BotRecord, Message, Store, StoreChange } from "../store.ts";
-import { droppedLine, fullLine, laterLine, notYetLine, refusedLine, sentLine } from "./devs-report-words.ts";
+import { droppedLine, fullLine, laterLine, notYetLine, readyLine, refusedLine, sentLine } from "./devs-report-words.ts";
 import { clip } from "./text-clip.ts";
 
 export const DEVS_REPORTS_FILE = "devs-reports.json";
@@ -85,7 +85,7 @@ type Waiting = z.infer<typeof waitingSchema> & { answered?: boolean; offered?: b
 type Queued = z.infer<typeof queuedSchema>;
 type Tracked = z.infer<typeof trackedSchema>;
 /** What the person is told, and the words in a bot's reply that show it already told them. */
-type Told = { ok: boolean; line: string; marker: string };
+type Told = { ok: boolean; line: string; marker: string; link?: string };
 type Author = { bot: BotRecord; summary: BotSummary } | { why: string };
 
 export interface DevsReportsDeps {
@@ -227,7 +227,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
   const inFlight = new Map<string, Promise<Told>>();
   const retrying = new Set<Queued>();
   let told: Array<{ threadId: string; messageId: string; said: Told; until: number }> = [];
-  const lastSent = new Map<string, { reportId: string; at: number }>();
+  const lastSent = new Map<string, { reportId?: string; at: number }>();
   const seen = new Set<string>();
 
   const save = () => {
@@ -238,7 +238,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
     }
   };
   const notice = (threadId: string, said: Told) => {
-    try { store.appendMessage(threadId, { role: "bot", kind: "activity", tool: { name: `notice: ${said.line}`, ok: said.ok } }); }
+    try { store.appendMessage(threadId, { role: "bot", kind: "activity", tool: { name: `notice: ${said.line}`, ok: said.ok, ...(said.link ? { bugReportUrl: said.link } : {}) } }); }
     catch { /* the conversation is gone; the report still went */ }
   };
   // A bot or a department named devs is tagged instead.
@@ -365,6 +365,10 @@ export function createDevsReports(deps: DevsReportsDeps) {
   function settle(entry: Waiting, payload: DevsReportPayload, outcome: SendOutcome, contact?: string): Told {
     const person = entry.sender?.id, language = languageFor(person);
     if (outcome.ok) {
+      if ("issueUrl" in outcome) {
+        lastSent.set(entry.threadId, { at: now() });
+        return { ok: true, line: readyLine(language), marker: "", link: outcome.issueUrl };
+      }
       lastSent.set(entry.threadId, { reportId: outcome.id, at: now() });
       track(entry, outcome.id, payload, person, entry.words);
       return { ok: true, line: sentLine(outcome.id, contact, language), marker: outcome.id };
@@ -409,9 +413,14 @@ export function createDevsReports(deps: DevsReportsDeps) {
     const contact = queued.payload.contactEmail ?? queued.payload.contact, language = languageFor(queued.person);
     if (outcome.ok) {
       outbox = outbox.filter((one) => one !== queued);
-      lastSent.set(queued.threadId, { reportId: outcome.id, at: now() });
-      track(queued, outcome.id, queued.payload, queued.person, queued.payload.description.split("\n")[0] ?? "");
-      notice(queued.threadId, { ok: true, line: laterLine(outcome.id, contact, language), marker: outcome.id });
+      if ("issueUrl" in outcome) {
+        lastSent.set(queued.threadId, { at: now() });
+        notice(queued.threadId, { ok: true, line: readyLine(language), marker: "", link: outcome.issueUrl });
+      } else {
+        lastSent.set(queued.threadId, { reportId: outcome.id, at: now() });
+        track(queued, outcome.id, queued.payload, queued.person, queued.payload.description.split("\n")[0] ?? "");
+        notice(queued.threadId, { ok: true, line: laterLine(outcome.id, contact, language), marker: outcome.id });
+      }
     } else if (!outcome.retry) {
       outbox = outbox.filter((one) => one !== queued);
       notice(queued.threadId, { ok: false, line: refusedLine(outcome.detail, language), marker: "" });
@@ -458,11 +467,17 @@ export function createDevsReports(deps: DevsReportsDeps) {
     const entry = waiting.filter((one) => one.threadId === threadId).at(-1);
     if (!bot || !entry) {
       const last = lastSent.get(threadId);
-      if (last && now() - last.at < REPEAT_MS) return { status: 200, text: `Already sent as report ${last.reportId}: report_bug sends once per @devs message. Do not call it again for it.` };
+      if (last && now() - last.at < REPEAT_MS) return { status: 200, text: last.reportId
+        ? `Already sent as report ${last.reportId}: report_bug sends once per @devs message. Do not call it again for it.`
+        : "Already prepared: report_bug prepares one report per @devs message. Do not call it again for it." };
       return { status: 409, text: "report_bug sends only for a message that tags @devs, once per message. To report a problem to the Seira team, the person types @devs and a few words about what went wrong." };
     }
     const fallingBack = inFlight.has(entry.messageId);
     const said = await deliver(entry, { bot, summary });
+    if (said.link) {
+      if (!fallingBack) notice(threadId, said);
+      return { status: 200, text: `Ready. Tell the person this line in your reply, word for word: "${said.line}"` };
+    }
     if (!fallingBack) told.push({ threadId, messageId: entry.messageId, said, until: now() + LONGEST_WAIT_MS });
     timer?.poke();
     return { status: 200, text: `${said.ok ? "Sent" : "Not sent"}. Tell the person this line in your reply, word for word: "${said.line}"` };

@@ -15,9 +15,9 @@
 // `ogb` (approvals and questions), `agents` (bots, rooms, jobs) and the browser when the turn plans to browse. With
 // tool search on, `agents` sends only a few tools whole and marks the rest deferred (agents-claude-defer.ts).
 import { readFileSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { DEFER_TOOLS_ENV } from "./agents-claude-defer.ts";
+import { userHome } from "../env-path.ts";
 
 /** Only a regular file this small is read: a FIFO would hold the server's one thread. */
 const FILE_MAX_BYTES = 1024 * 1024;
@@ -103,7 +103,7 @@ function localSettingsFolder(cwd: string, home: string): string {
  * settings count even when the turn leaves them out (--setting-sources project), so an opt-out made
  * there still holds. `env` is the turn's environment, its CLAUDE_CONFIG_DIR already resolved. */
 export function claudeToolSearchSetting(cwd: string, env: NodeJS.ProcessEnv): string {
-  const home = env.HOME || env.USERPROFILE || homedir();
+  const home = userHome(env);
   const local = localSettingsFolder(cwd, home);
   const files = [
     join(local, ".claude", "settings.local.json"),

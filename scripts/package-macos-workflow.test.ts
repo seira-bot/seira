@@ -17,13 +17,14 @@ interface Step {
 
 interface Workflow {
   on: { workflow_dispatch?: { inputs?: Record<string, { required?: boolean; default?: string }> } };
-  jobs: Record<string, { environment?: unknown; permissions?: unknown; steps: Step[] }>;
+  jobs: Record<string, { environment?: unknown; permissions?: unknown; outputs?: Record<string, string>; steps: Step[] }>;
 }
 
 const text = readFileSync(new URL("../.github/workflows/package-macos.yml", import.meta.url), "utf8");
 const flow = parse(text) as Workflow;
 const job = flow.jobs.package;
 const steps = job.steps;
+const findSha = flow.jobs.commit.steps;
 const SIGNED = "steps.mode.outputs.signed == 'true'";
 const APPLE_SECRETS = [
   "MAC_CERT_P12_BASE64",
@@ -38,7 +39,7 @@ const position = (name: string) => {
   expect(found, name).toBeGreaterThanOrEqual(0);
   return found;
 };
-const step = (name: string) => steps[position(name)];
+const step = (name: string) => steps.find((each) => each.name === name) ?? findSha.find((each) => each.name === name)!;
 const gates = steps.filter((each) => each.name?.startsWith("Gate: "));
 const notarize = position("Notarize the two dmg and the two zip files");
 
@@ -53,13 +54,13 @@ function folder() {
 }
 
 /** Run a step's real script the way `shell: bash` runs it on the runner. */
-function runStep(name: string, cwd: string, env: Record<string, string>) {
+function runStep(name: string, cwd: string, env: Record<string, string>, path: string[] = []) {
   const output = join(cwd, "github-output");
   writeFileSync(output, "");
   const result = spawnSync("bash", ["--noprofile", "--norc", "-eo", "pipefail", "-c", step(name).run!], {
     cwd,
     env: {
-      PATH: [dirname(process.execPath), process.env.PATH].join(delimiter),
+      PATH: [...path, dirname(process.execPath), process.env.PATH].join(delimiter),
       HOME: cwd,
       GITHUB_OUTPUT: output,
       GITHUB_STEP_SUMMARY: join(cwd, "summary.md"),
@@ -84,12 +85,61 @@ describe("package-macos.yml", () => {
   it("reads only the five Apple secrets, and only behind the release environment", () => {
     const read = new Set([...text.matchAll(/secrets\.([A-Z0-9_]+)/g)].map(([, name]) => name));
     expect([...read].sort()).toEqual([...APPLE_SECRETS].sort());
-    expect(Object.keys(flow.jobs)).toEqual(["approval", "package"]);
+    expect(Object.keys(flow.jobs)).toEqual(["commit", "approval", "package"]);
+    expect(flow.jobs.commit.environment).toBeUndefined();
+    expect(flow.jobs.commit.permissions).toBeUndefined();
+    expect(JSON.stringify(flow.jobs.commit)).not.toContain("secrets.");
     expect(job.environment).toBe("release");
     expect(job.permissions).toBeUndefined();
     expect(flow.jobs.approval.environment).toBe("release-approval");
     expect(flow.jobs.approval.permissions).toEqual({});
     expect(JSON.stringify(flow.jobs.approval)).not.toContain("secrets.");
+  });
+
+  it("checks out the commit that the commit job found, never the ref itself", () => {
+    const checkout = steps.find((each) => each.uses?.startsWith("actions/checkout@"));
+    expect(checkout?.with?.ref).toBe("${{ needs.commit.outputs.sha }}");
+    expect(flow.jobs.commit.outputs).toEqual({ sha: "${{ steps.sha.outputs.sha }}" });
+  });
+
+  describe("finds the commit of the ref", () => {
+    const SHA = "0123456789abcdef0123456789abcdef01234567";
+    const find = (ref: string, ghScript: string) => {
+      const cwd = folder();
+      const bin = join(cwd, "bin");
+      mkdirSync(bin);
+      writeFileSync(join(bin, "gh"), `#!/bin/bash\n${ghScript}\n`, { mode: 0o755 });
+      return { ...runStep("Find the commit of the ref", cwd, { REF: ref, GH_TOKEN: "x", GITHUB_REPOSITORY: "owner/repo" }, [bin]), cwd };
+    };
+
+    it.each(["../x", "-x", "a b", "", "a;b", "$(id)"])("refuses the ref %j without echoing it", (ref) => {
+      const result = find(ref, `echo ${SHA}`);
+      expect(result.status).toBe(1);
+      expect(result.outputs).toEqual({});
+      expect(result.stdout).toContain("::error::The ref is not a tag, branch or commit name.");
+      if (ref !== "") expect(result.stdout + result.stderr).not.toContain(ref);
+    });
+
+    it("writes the SHA of the ref as the output and in the run summary", () => {
+      const result = find("v1.2.3", `echo ${SHA}`);
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.outputs).toEqual({ sha: SHA });
+      const summary = readFileSync(join(result.cwd, "summary.md"), "utf8");
+      expect(summary).toContain("v1.2.3");
+      expect(summary).toContain(SHA);
+    });
+
+    it("stops when the answer is not a 40-character SHA", () => {
+      const result = find("main", "echo not-a-sha");
+      expect(result.status).toBe(1);
+      expect(result.outputs).toEqual({});
+    });
+
+    it("stops when the repository has no commit for the ref", () => {
+      const result = find("main", "exit 1");
+      expect(result.status).toBe(1);
+      expect(result.outputs).toEqual({});
+    });
   });
 
   describe("chooses a signed or an unsigned build", () => {

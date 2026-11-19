@@ -196,8 +196,8 @@ Read at the commit that adds the customer-run mode. "Built" means the code is in
   while paused.
 - **Emailed sign-in codes pass through us unless the customer sets a mail server.** Pairing codes never do. So
   principle 2 holds for sign-in by pairing code always, and by emailed code only with `OMB_SIGNIN_SMTP_URL`.
-- **The home's own traffic is unchanged by connecting.** A report a person sends by tagging `@devs` carries their
-  message, the bot's name and recent log lines to us, and its status is asked hourly while it is open; browser
+- **The home's own traffic is unchanged by connecting.** A report a person starts by tagging `@devs` becomes a
+  prefilled GitHub issue that the person submits, so the server sends nothing to us; browser
   analytics are on until a person turns them off. Principle 6 is about the connector; these are the docs page's
   "What your server itself still sends".
 - **Connector images are not signed.** Only the owner replaces the connector on a customer-run server, and never

@@ -12,7 +12,8 @@ export const CALL_MODES: ReadonlyArray<{ id: CallMode; label: LocaleKey }> = [
   { id: "live", label: "call.mode.live" },
 ];
 
-export function liveDisclosure({ cloudHome = false, azure = false, custom = false, fish = false, gemini = false, elevenlabs = false }: { cloudHome?: boolean; azure?: boolean; custom?: boolean; fish?: boolean; gemini?: boolean; elevenlabs?: boolean } = {}): string {
+export function liveDisclosure({ cloudHome = false, azure = false, custom = false, fish = false, gemini = false, elevenlabs = false, codex = false }: { cloudHome?: boolean; azure?: boolean; custom?: boolean; fish?: boolean; gemini?: boolean; elevenlabs?: boolean; codex?: boolean } = {}): string {
+  if (codex) return t("call.live.disclosureCodex");
   if (custom) return t(cloudHome ? "call.live.disclosureCustomCloud" : "call.live.disclosureCustom");
   if (azure) return t(cloudHome ? "call.live.disclosureAzureCloud" : "call.live.disclosureAzure");
   if (fish) return t(cloudHome ? "call.live.disclosureFishCloud" : "call.live.disclosureFish");
@@ -37,6 +38,9 @@ export function liveKeyCopy(provider: LiveProvider | undefined) {
   }
   if (provider === "elevenlabs") {
     return { title: "call.live.elevenLabsKeyTitle", explain: "call.live.elevenLabsKeyExplain", field: "call.live.elevenLabsKeyField", key: "call.live.elevenLabsKey", missing: "call.live.elevenLabsNeedsKey", needs: "call.live.needsElevenLabs", cost: "call.live.elevenLabsCost" } as const;
+  }
+  if (provider === "codex") {
+    return { title: "call.live.keyTitle", explain: "call.live.keyExplain", field: "call.live.keyField", key: "call.live.key", missing: "call.live.needsKey", needs: "call.live.needsKey", cost: "call.live.codexCost" } as const;
   }
   return { title: "call.live.keyTitle", explain: "call.live.keyExplain", field: "call.live.keyField", key: "call.live.key", missing: "call.live.needsKey", needs: "call.live.needsKey", cost: "call.live.cost" } as const;
 }

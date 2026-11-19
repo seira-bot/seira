@@ -29,7 +29,7 @@ no network is reached.
 ## By hand in a fixture
 
 ```sh
-node --experimental-strip-types scripts/control-omb.ts launch
+node --experimental-strip-types scripts/control-seira.ts launch
 ```
 
 1. Create a bot, give it a skill and a routine, then send it: "Create a public template of yourself that I can share with somebody else".

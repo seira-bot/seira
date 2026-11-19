@@ -13,8 +13,8 @@ This skill holds the rules that you must not break.
 
 - Use only an isolated fixture. Never drive a Seira app that a person uses,
   and never read or change its data folder (`~/.openmausbot` or `OMB_DATA_DIR`).
-- Use only the shared control surface: `scripts/control-omb.ts` and
-  `pnpm control:omb`. Do not send raw API calls that the surface does not have.
+- Use only the shared control surface: `scripts/control-seira.ts` and
+  `pnpm control:seira`. Do not send raw API calls that the surface does not have.
 - Give every verb an explicit `--url`. Do not set `OPENMAUSBOT_URL` or
   `OMB_PORT` in the shell: a mutating verb uses them, and port 8799 is the
   default port of an installed app.
@@ -28,7 +28,7 @@ This skill holds the rules that you must not break.
    through `pnpm`, so that Ctrl-C reaches it:
 
    ```sh
-   node --experimental-strip-types scripts/control-omb.ts launch
+   node --experimental-strip-types scripts/control-seira.ts launch
    ```
 
    It prints the URL, the PID, the temporary data folder, and the log path.
@@ -37,11 +37,11 @@ This skill holds the rules that you must not break.
 2. Check the fixture from a second terminal:
 
    ```sh
-   pnpm control:omb doctor --url http://127.0.0.1:PORT
+   pnpm control:seira doctor --url http://127.0.0.1:PORT
    ```
 
-3. Drive the flow with the commands of your recipe. `pnpm control:omb help`
-   lists every verb. For the chat UI, use `control-omb ui launch` and the `ui`
+3. Drive the flow with the commands of your recipe. `pnpm control:seira help`
+   lists every verb. For the chat UI, use `control-seira ui launch` and the `ui`
    verbs ([chat-ui.md](../../../docs/verification/chat-ui.md)).
 4. Keep the evidence: the exact command sequence, the JSON from `wait` and
    `messages`, and the log path of the fixture. The evidence must show the

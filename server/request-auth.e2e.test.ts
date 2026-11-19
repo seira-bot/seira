@@ -3,7 +3,7 @@
 import { request } from "node:http";
 import { describe, expect, it } from "vitest";
 
-import { launchVerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer } from "../scripts/control-seira.ts";
 import { BROWSER_SIGN_IN } from "./request-auth.ts";
 
 /** Headers set exactly as given: Chrome's Sec-Fetch-* and Origin, which a page cannot change. */

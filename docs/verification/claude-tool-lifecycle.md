@@ -138,7 +138,7 @@ pnpm exec vitest run server/delta-context.e2e.test.ts -t "resets Claude's native
 
 The second command launches a disposable server and fake CLI through the
 shared verification launcher. It creates a conversation, edits the last user
-message with `control-omb edit`, and checks the native launch, reset log,
+message with `control-seira edit`, and checks the native launch, reset log,
 active-branch replay and subsequent resume. Abandoned request/reply markers
 must not reach the replacement prompt. It does not exercise a live Claude
 account or claim automatic context compaction is implemented.

@@ -2,14 +2,14 @@
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { launchVerificationServer, runControlOmb } from "./control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "./control-seira.ts";
 import { mountPreview, parkUntilSignal, REPO_ROOT, type MountedPreview } from "./testing/preview-fixture.ts";
 
 const fixture = await launchVerificationServer();
 let ui: MountedPreview | undefined;
 try {
   for (const name of ["Settings Atlas", "Settings Juniper"]) {
-    await runControlOmb(["new-bot", "--name", name, "--url", fixture.info.url]);
+    await runControlSeira(["new-bot", "--name", name, "--url", fixture.info.url]);
   }
   const { bots } = await fetch(`${fixture.info.url}/api/bots`).then((r) => r.json()) as { bots: Array<{ id: string; name: string }> };
   const ids = new Set(bots.map((bot) => bot.id));

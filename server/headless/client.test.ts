@@ -43,7 +43,7 @@ describe("the server and the credential", () => {
     await expect(openClient({ port: "70000" }, { env: {} }, false)).rejects.toMatchObject({ exitCode: 2 });
   });
 
-  it("refuses control-omb's changes on a server it merely found", async () => {
+  it("refuses control-seira's changes on a server it merely found", async () => {
     await expect(openClient({}, { env: {}, requireExplicitForMutations: true }, true))
       .rejects.toMatchObject({ message: "mutating commands require an explicit Seira instance", exitCode: 2 });
   });

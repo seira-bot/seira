@@ -17,7 +17,6 @@
 //   - `vibe-acp --version` prints "vibe-acp 3.1.1".
 import { execFile, execFileSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { productName } from "../../brand.ts";
@@ -26,6 +25,7 @@ import { createAcpDriver, type AcpConfig, type AcpSupport } from "./core.ts";
 import { discoverAcpModels } from "./custom-model-catalog.ts";
 import { acpModelOption } from "./config-options.ts";
 import { MISTRAL_VIBE_STANDALONE } from "./mistral-vibe-release.ts";
+import { userHome } from "../../env-path.ts";
 
 /** The stock chat-capable models mistral.ai lists for Vibe (only some ship per version; a signed-in
  * session's own list replaces these on Refresh). The `mistral-medium-3.5` id is the CLI's current default. */
@@ -42,7 +42,7 @@ export const MISTRAL_VIBE_MODELS: ModelCatalog = {
 };
 
 export function vibeHome(env: Record<string, string | undefined>): string {
-  return env.VIBE_HOME || join(env.HOME || homedir(), ".vibe");
+  return env.VIBE_HOME || join(userHome(env), ".vibe");
 }
 
 const nonEmpty = (value: unknown): boolean => typeof value === "string" && value.trim() !== "";

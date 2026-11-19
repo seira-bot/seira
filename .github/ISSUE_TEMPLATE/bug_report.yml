@@ -3,12 +3,14 @@ description: Something is broken
 labels: [bug]
 body:
   - type: checkboxes
+    id: checks
     attributes:
       label: Before filing
       options:
         - label: I searched existing issues and this isn't a duplicate
           required: true
   - type: dropdown
+    id: area
     attributes:
       label: Area
       options:
@@ -23,6 +25,7 @@ body:
     validations:
       required: true
   - type: textarea
+    id: what-happened
     attributes:
       label: What happened
       description: What did you do, what did you expect, what happened instead?
@@ -33,6 +36,7 @@ body:
     validations:
       required: true
   - type: input
+    id: version
     attributes:
       label: Version and install
       description: App version (About or release tag), your OS, and how you installed it (AppImage, .dmg, or from source)
@@ -40,6 +44,7 @@ body:
     validations:
       required: true
   - type: textarea
+    id: logs
     attributes:
       label: Logs
       description: >-

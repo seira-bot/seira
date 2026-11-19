@@ -3,7 +3,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { connect, type Socket } from "node:net";
 import { join } from "node:path";
-import { launchVerificationServer, runControlOmb } from "./control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "./control-seira.ts";
 import { fixtureApi, mountPreview, parkUntilSignal, type MountedPreview } from "./testing/preview-fixture.ts";
 
 const RUNS = 5;
@@ -16,7 +16,7 @@ let ui: MountedPreview | undefined;
 let broker: Socket | undefined;
 const evidence: unknown[] = [];
 const api = fixtureApi(fixture.info.url, { headers: { origin: fixture.info.url }, observe: (call) => { if (call.method !== "GET") evidence.push(call); } });
-const control = (args: string[]) => runControlOmb([...args, "--url", fixture.info.url]) as Promise<any>;
+const control = (args: string[]) => runControlSeira([...args, "--url", fixture.info.url]) as Promise<any>;
 const say = (line: Record<string, unknown>) => console.log(JSON.stringify({ at: new Date().toISOString(), ...line }));
 async function until<T>(check: () => T | Promise<T>, timeoutMs = 120_000): Promise<NonNullable<T>> {
   const deadline = Date.now() + timeoutMs;

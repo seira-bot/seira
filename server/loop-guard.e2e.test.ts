@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { failedTurnCause } from "../shared/failed-turn.ts";
 import { lastNonReceipt } from "../src/lib/receipts.ts";
 import { openSse } from "./testing/sse.ts";
@@ -36,7 +36,7 @@ it("leaves a stuck turn alone when off; on, tells it at 5 in a row and stops it 
     rmSync(scratch, { recursive: true, force: true });
     throw error;
   });
-  const control = (args: string[]) => runControlOmb([...args, "--url", fixture.info.url]) as Promise<any>;
+  const control = (args: string[]) => runControlSeira([...args, "--url", fixture.info.url]) as Promise<any>;
   const api = async (method: string, path: string, body?: unknown) => {
     const response = await fetch(`${fixture.info.url}${path}`, {
       method, headers: { "content-type": "application/json", origin: fixture.info.url },

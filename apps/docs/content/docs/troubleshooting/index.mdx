@@ -19,7 +19,7 @@ Most Seira failures come from one of four layers: the desktop app, a local agent
 
 In any chat with a bot, on the desktop app or on the Cloud, type `@devs` (it is
 the last entry in the @ list) and a few words about what went wrong, then send.
-Typing it is the decision to send: there is nothing else to press.
+Typing it prepares the report. Nothing is sent until you submit it yourself.
 
 The bot answering the message adds a short summary: what you said went wrong,
 what it saw itself in the conversation, and steps to reproduce. Seira adds
@@ -29,19 +29,10 @@ conversation, the server's latest warnings and errors, and the conversation's
 ids. Keys, passwords, tokens, cookies and the parameters of web addresses are
 masked first. The rest of the conversation is never sent, and neither is any file.
 
-A line in the chat says where it went, for example *Sent to the Seira team
-(report …). Milind and Omkar get it by email and will reply to you@example.com.*
-The reply address is the email you signed in with, or the one in your profile.
-If the report cannot go yet (no connection, or too many reports in the last
-hour), the line says so: the report is saved and sent on its own later, so there
-is no need to send it again.
-
-Under your message you can follow what becomes of it: *Got it, we're looking*,
-then *Fixed in 0.1.135, coming in your next update* once the team has fixed it.
-When the app (or the Cloud) runs that version, you get one message in the same
-chat, *Fixed in 0.1.135. Want to try again?*, and one notification. The app asks
-the Seira team about your reports about once an hour and each time it starts;
-it sends only the reports' ids.
+The chat then shows a notice with an **Open on GitHub** button. It opens a
+prefilled issue form in the Seira repository on GitHub. Read the text, change it
+if you like, and submit it there. The issue is public once you submit it. Home
+folders show as `~`, and your email address and install id are not in it.
 
 ## Collect useful evidence
 

@@ -1,6 +1,7 @@
 import { decodeRoutedCodexConfig, managedCodexArgs, endpointCodexArgs, type CodexEndpointConfig } from "./codex-endpoint-config.ts";
 export { managedCodexArgs, endpointCodexArgs } from "./codex-endpoint-config.ts";
 import { codexActionFailure } from "./codex-action-notice.ts";
+import { codexOwnLoginArgs } from "./codex-own-login-args.ts";
 import { codexToolSurfaceArgs } from "./codex-tool-surface.ts";
 import { codexShellDisabled, codexTurnConfigArgs } from "./codex-guest.ts";
 import { TEAM_TOOLS_FAILED, teamToolsFailed } from "./team-tools.ts";
@@ -25,6 +26,7 @@ import { chatgptPlanCodexArgs, PLAN_TOKEN_BRIDGE_ENV, planTokenRenewal, startPla
 export { chatgptPlanCodexArgs } from "./codex-plan-token.ts";
 import { captureCliTree, describeSpawnFailure, killCliTree, spawnCli, waitForExit } from "../procs.ts";
 import { cliVersionProbe } from "../cli-version-probe.ts";
+import { codexLiveVoice } from "./codex-live.ts";
 import { codexLaunch, codexLaunchesStarting, codexLaunchSlot, codexRpcTimeoutMs, keepStopping, RELAUNCH_EXIT_WAIT_MS, spawnHoldingSlot, tryCodexLaunchSlot } from "./codex-process.ts";
 import { perTurnCustomMcp } from "../mcp-registry.ts";
 
@@ -42,7 +44,7 @@ import type {
   TextGenerationOptions,
 } from "../contracts.ts";
 import { newEventId, newId } from "../contracts.ts";
-import { codexSelectedProviderArgs, decodeCodexSelection, OFFICIAL_CODEX_PROVIDER, readCodexModelCatalog, STATIC_CODEX_MODELS } from "./codex-catalog.ts";
+import { decodeCodexSelection, OFFICIAL_CODEX_PROVIDER, readCodexModelCatalog, STATIC_CODEX_MODELS } from "./codex-catalog.ts";
 import { codexBackgroundProviderArgs, codexBackgroundRoute, runCodexBackgroundRoute, runCodexOneShot } from "./codex-background-text.ts";
 import { augmentedPath } from "../env-path.ts";
 import { classifyError, computeBackoff, interruptibleDelay, RETRY_MAX_ATTEMPTS } from "./retry.ts";
@@ -55,7 +57,7 @@ import type { ApprovalMode } from "../../shared/approval-mode.ts";
 import { CodexDeviceAuthController } from "./codex-device-auth.ts"; import { messageItem } from "../harness/text-items.ts";
 import { codexAccountEmail, codexHome } from "./codex-identity.ts";
 import { keepChatsOutOfCodexHistory, linkSharedCodexHome } from "./codex-shared-home.ts";
-import { containsControlCharacter, mcpAppApprovalForm, mcpAppApprovalText, mcpElicitationDeclined, plainRecord } from "./codex-app-approval.ts";
+import { mcpAppApprovalForm, mcpAppApprovalText, mcpElicitationDeclined, plainRecord } from "./codex-app-approval.ts";
 import { archivedNativeCodexThread, CODEX_MISSING_CREDENTIALS, codexProviderMismatch, CODEX_SIGN_IN_EXPIRED, codexLimitFacts, codexNotSignedIn, CodexRpcError, codexSignInExpired, codexPlanModelRefused, codexSignInRefused, codexUserError, codexUserFailure, missingNativeCodexThread, type CodexRoute } from "./codex-errors.ts";
 import { codexLoginCheck, readCodexLogin, storedCodexLogin } from "./codex-login.ts";
 import { keyRejected, noteKeyAccepted, noteKeyRejected } from "../key-rejections.ts";
@@ -65,7 +67,7 @@ import { parseProtocolAskQuestions, questionChoices } from "../../shared/ask-que
 import { codexQuestionReply, openAsyncQuestion, type CodexAsk } from "./codex-questions.ts";
 import { codexReleaseUpdate, codexUpdateCommand } from "./codex-update.ts";
 export { codexUpdateCommand };
-import { effectiveApprovalPolicy, effectiveApprovalsReviewer } from "./codex-approval-config.ts"; import { AGENTS_TOOL_TIMEOUT_SECONDS } from "./agents-tool-limit.ts"; import { COMPUTER_PROXY_TIMEOUT_MS } from "../harness-budget.ts";
+import { customApprovalParams, namedApprovalParams, permissionProfileUnsupported, withResolvedSandbox, type CodexApprovalParams } from "./codex-approval-params.ts"; import { AGENTS_TOOL_TIMEOUT_SECONDS } from "./agents-tool-limit.ts"; import { COMPUTER_PROXY_TIMEOUT_MS } from "../harness-budget.ts";
 import { canUseMcpServer } from "../../shared/tool-scope.ts";
 import { assertToolScopeSupported } from "../../shared/tool-scope-support.ts";
 import { appMountFor, gateServer, mcpStdioServer } from "../mcp-gate-config.ts"; import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
@@ -111,13 +113,6 @@ function noteRenamedMcpServer(name: string, mountName: string): void {
   console.error(`codex: MCP server ${JSON.stringify(name)} is mounted as ${JSON.stringify(mountName)} for this bot to keep its CLI configuration distinct`);
 }
 
-interface CodexApprovalParams {
-  thread: Record<string, unknown>;
-  turn: Record<string, unknown>;
-  /** Legacy settings for an older app-server that rejects the named-profile field. */
-  fallback?: Omit<CodexApprovalParams, "fallback">;
-}
-
 /** RequestPermissionProfile uses null for permission families that were not
  * requested; GrantedPermissionProfile requires those keys to be absent. */
 function grantedPermissions(raw: unknown): Record<string, unknown> {
@@ -155,112 +150,6 @@ function extendShellExclusions(policy: Record<string, unknown>, patterns: readon
     ...Object.entries(table).filter(([pattern]) => !ours.has(pattern.toLowerCase())),
     ...patterns.map(pattern => [pattern, "exclude"]),
   ]) };
-}
-
-/** Codex persists these on its native thread, so they are explicit on start, resume and every turn.
- * Codex has no narrower "edits only" sandbox, so a stray Edits value asks. */
-function namedApprovalParams(mode: Exclude<ApprovalMode, "custom">): CodexApprovalParams {
-  if (mode === "full") {
-    return {
-      thread: {
-        approvalPolicy: "never",
-        approvalsReviewer: "user",
-        sandbox: "danger-full-access",
-      },
-      turn: {
-        approvalPolicy: "never",
-        approvalsReviewer: "user",
-        sandboxPolicy: { type: "dangerFullAccess" },
-      },
-    };
-  }
-  return {
-    thread: {
-      approvalPolicy: "on-request",
-      approvalsReviewer: mode === "auto" ? "auto_review" : "user",
-      sandbox: "workspace-write",
-    },
-    turn: {
-      approvalPolicy: "on-request",
-      approvalsReviewer: mode === "auto" ? "auto_review" : "user",
-      sandboxPolicy: { type: "workspaceWrite" },
-    },
-  };
-}
-
-function withResolvedSandbox(params: CodexApprovalParams, session: unknown): CodexApprovalParams {
-  const requested = plainRecord(params.turn.sandboxPolicy);
-  if (!requested) return params;
-  const sandbox = plainRecord(plainRecord(session)?.sandbox);
-  if (!sandbox || typeof sandbox.type !== "string") {
-    throw new Error("Codex did not return its resolved sandbox policy. Update Codex, then retry; the turn was not started because its permissions could not be verified.");
-  }
-  if (sandbox.type !== requested.type) {
-    throw new Error("Codex did not apply the requested sandbox mode; cannot safely start the turn.");
-  }
-  return { ...params, turn: { ...params.turn, sandboxPolicy: sandbox } };
-}
-
-function legacyCustomApprovalParams(config: Record<string, unknown>): CodexApprovalParams {
-  const approvalPolicy = effectiveApprovalPolicy(config.approval_policy);
-  const approvalsReviewer = effectiveApprovalsReviewer(config.approvals_reviewer);
-  const sandbox = config.sandbox_mode === "workspace-write" ||
-    config.sandbox_mode === "danger-full-access" ||
-    config.sandbox_mode === "read-only"
-    ? config.sandbox_mode
-    : "read-only";
-  let sandboxPolicy: Record<string, unknown>;
-  if (sandbox === "danger-full-access") sandboxPolicy = { type: "dangerFullAccess" };
-  else if (sandbox === "read-only") sandboxPolicy = { type: "readOnly" };
-  else {
-    const workspace = config.sandbox_workspace_write && typeof config.sandbox_workspace_write === "object"
-      ? config.sandbox_workspace_write as Record<string, unknown>
-      : {};
-    sandboxPolicy = {
-      type: "workspaceWrite",
-      ...(Array.isArray(workspace.writable_roots) ? { writableRoots: workspace.writable_roots } : {}),
-      ...(typeof workspace.network_access === "boolean" ? { networkAccess: workspace.network_access } : {}),
-      ...(typeof workspace.exclude_slash_tmp === "boolean" ? { excludeSlashTmp: workspace.exclude_slash_tmp } : {}),
-      ...(typeof workspace.exclude_tmpdir_env_var === "boolean"
-        ? { excludeTmpdirEnvVar: workspace.exclude_tmpdir_env_var }
-        : {}),
-    };
-  }
-  return {
-    thread: { approvalPolicy, approvalsReviewer, sandbox },
-    turn: { approvalPolicy, approvalsReviewer, sandboxPolicy },
-  };
-}
-
-function configuredPermissionProfile(config: Record<string, unknown>): string | null {
-  if (typeof config.default_permissions !== "string") return null;
-  const profile = config.default_permissions.trim();
-  if (!profile || profile.length > 240 || containsControlCharacter(profile)) return null;
-  return profile;
-}
-
-function customApprovalParams(raw: unknown): CodexApprovalParams {
-  const config = raw && typeof raw === "object" && !Array.isArray(raw)
-    ? raw as Record<string, unknown>
-    : {};
-  const fallback = legacyCustomApprovalParams(config);
-  const permissions = configuredPermissionProfile(config);
-  const approvalPolicy = effectiveApprovalPolicy(config.approval_policy);
-  const approvalsReviewer = effectiveApprovalsReviewer(config.approvals_reviewer);
-  // Codex 0.151 profiles define the sandbox but not the approval policy: reassert both approval
-  // fields so a resumed Full thread cannot keep `never`.
-  return permissions
-    ? {
-        thread: { permissions, approvalPolicy, approvalsReviewer },
-        turn: { permissions, approvalPolicy, approvalsReviewer },
-        fallback,
-      }
-    : fallback;
-}
-
-function permissionProfileUnsupported(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /(?:experimental api|invalid params|unknown field|unknown.*permissions|permissions.*(?:unsupported|sandbox)|cannot.*permissions)/i.test(message);
 }
 
 /** Native instructions and image bytes stay out of diagnostics; the provider still gets the unmodified request. */
@@ -546,11 +435,12 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
         const env = childEnv();
         const launchedLogin = chatgptTurn ? storedCodexLogin(env) : null; if (ownLogin) keepChatsOutOfCodexHistory(env, instanceId);
         if (authBridge) Object.assign(env, authBridge.env); else if (planToken) env.OPENMAUSBOT_CHATGPT_TOKEN = planToken;
-        const appServerArgs = ["app-server", ...(plan ? chatgptPlanCodexArgs(!!authBridge) : config.endpoint ? endpointCodexArgs(config.endpoint) : config.managed ? managedCodexArgs(config.managed) : codexSelectedProviderArgs(env, turn.model)), ...codexToolSurfaceArgs(),
-          // Native shell snapshots can restore variables the shell policy removed.
-          ...(turn.toolScope === undefined && !authBridge ? [] : ["-c", "features.shell_snapshot=false"]),
-          // A guest-driven turn: no shell, no file reads (-c wins over config files).
-          ...turnConfigArgs];
+        // Native shell snapshots can restore variables the shell policy removed.
+        const shellSnapshotArgs = turn.toolScope === undefined && !authBridge ? [] : ["-c", "features.shell_snapshot=false"];
+        // A guest-driven turn: no shell, no file reads (-c wins over config files).
+        const appServerArgs = ["app-server", ...(plan || config.endpoint || config.managed
+          ? [...(plan ? chatgptPlanCodexArgs(!!authBridge) : config.endpoint ? endpointCodexArgs(config.endpoint) : managedCodexArgs(config.managed!)), ...codexToolSurfaceArgs(), ...shellSnapshotArgs, ...turnConfigArgs]
+          : codexOwnLoginArgs(env, turn.model, turnConfigArgs, shellSnapshotArgs))];
         const codexConfig = codexConfigMcp(env), declaredInCodexConfig = codexConfig.names;
         if (turn.toolScope !== undefined) appServerArgs.push(...codexMcpDisableArgs(declaredInCodexConfig));
         const baseEnv = new Map(Object.entries(env).filter(([, value]) => value !== undefined));
@@ -1531,6 +1421,25 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
   };
 
   const readCliVersion = cliVersionProbe(config.cli);
+  const live = codexLiveVoice({
+    unsupportedSignIn: plan || Boolean(routed),
+    env: () => {
+      const env = childEnv();
+      if (ownLogin) keepChatsOutOfCodexHistory(env, instanceId);
+      return env;
+    },
+    version: async () => {
+      const probe = await readCliVersion(childEnv());
+      return "version" in probe ? probe.version : null;
+    },
+    approvalParams: (mode, effectiveConfig) => mode === "custom" ? customApprovalParams(effectiveConfig) : namedApprovalParams(mode),
+    permissionProfileUnsupported,
+    withResolvedSandbox,
+    spawn: (args, options) => spawnCli(...codexLaunch(config.cli, args), { ...options, stdio: ["pipe", "pipe", "pipe"] }, "bot"),
+    terminate: (child, signal) => { if (signal === "SIGTERM") void killCliTree(child, 2_000); else child.kill(signal); },
+    clientVersion: serverVersion(),
+    log: (line) => console.info(`[codex] ${line}`),
+  });
   const snapshot = async (): Promise<ProviderSnapshot> => {
     if (planUnavailable) return { state: "unavailable", authenticated: false, chatgptPlan: true, reason: planUnavailable, authenticationUnavailableReason: planUnavailable };
     const env = childEnv();
@@ -1660,6 +1569,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
         } finally { planSigningOut = false; }
       },
     } : {}),
+    startLiveVoice: (input) => live.start(input),
     snapshot,
     adapter: {
       provider: DRIVER_KIND,
@@ -1708,6 +1618,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
     dispose: async () => {
       disposed = true;
       planGeneration++;
+      await live.dispose();
       await authentication.dispose();
       await planAuth?.dispose();
       await Promise.all([...active.values()].map(({ stop }) => stop()));

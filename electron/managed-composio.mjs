@@ -10,10 +10,13 @@ export function ownComposioKey(credentials, environment = process.env) {
   return Boolean((typeof saved === "string" && saved.trim()) || environment.COMPOSIO_API_KEY?.trim());
 }
 
-/** A connected-apps service is used only when a URL names one. "" for none. */
-export function managedComposioBrokerUrl(configured) {
+export const SEIRA_COMPOSIO_BROKER_URL = "https://apps.seira.bot";
+
+/** Return the service URL: a configured URL, else Seira's service in the packaged app, else "". */
+export function managedComposioBrokerUrl(configured, { packaged = false } = {}) {
   if (managedComposioBrokerOff()) return "";
-  return normalizeManagedComposioBrokerUrl(configured);
+  if (typeof configured === "string" && configured.trim()) return normalizeManagedComposioBrokerUrl(configured);
+  return packaged ? SEIRA_COMPOSIO_BROKER_URL : "";
 }
 
 export function normalizeManagedComposioBrokerUrl(value) {

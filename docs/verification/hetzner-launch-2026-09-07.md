@@ -37,7 +37,7 @@ systemctl is-active openmausbot.service: active
 NRestarts=0
 codex login status: Logged in using ChatGPT
 kernel.apparmor_restrict_unprivileged_userns = 1
-control-omb doctor: ok=true, packaged=true, availableEngines=[codex]
+control-seira doctor: ok=true, packaged=true, availableEngines=[codex]
 ```
 
 The browser received approval for only the requested public-page navigation and

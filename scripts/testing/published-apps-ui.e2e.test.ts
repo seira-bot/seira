@@ -17,8 +17,8 @@ import { removeTempDir, waitForExit } from "../../server/testing/cleanup.ts";
 import { startFakeNetlify } from "../../server/testing/fake-netlify.ts";
 // @ts-expect-error the skill's helper is plain JavaScript with no types
 import { publish } from "../../skills/publish-to-netlify/deploy.mjs";
-import { runControlOmb } from "../control-omb.ts";
-import { agentBrowser, sessionEnv, UI_TOOLS_DIR, type UiHandle } from "./control-omb-ui.ts";
+import { runControlSeira } from "../control-seira.ts";
+import { agentBrowser, sessionEnv, UI_TOOLS_DIR, type UiHandle } from "./control-seira-ui.ts";
 import { fixtureApi } from "./preview-fixture.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -57,7 +57,7 @@ for (const [name, attempt] of Object.entries(tries)) {
 </script></body></html>`;
 
 async function launch(env: NodeJS.ProcessEnv): Promise<{ child: ReturnType<typeof spawn>; info: { ui: string; url: string; botId: string; dataDir: string; logPath: string } }> {
-  const child = spawn(process.execPath, ["--experimental-strip-types", join(ROOT, "scripts", "control-omb.ts"), "ui", "launch"], {
+  const child = spawn(process.execPath, ["--experimental-strip-types", join(ROOT, "scripts", "control-seira.ts"), "ui", "launch"], {
     cwd: ROOT, env, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32",
   });
   let stdout = "", stderr = "";
@@ -93,7 +93,7 @@ async function until<T>(probe: () => Promise<T> | T, what: string, timeoutMs = 3
   const { child, info } = await launch({ ...process.env, OMB_NETLIFY_API_URL: fake.url, FAKE_CLAUDE_REPLY_FILE: replyFile });
   try {
     const api = fixtureApi(info.url, { headers: { origin: info.url } });
-    const ui = (verb: string, ...args: string[]) => runControlOmb(["ui", verb, "--ui", info.ui, ...args]) as Promise<Record<string, any>>;
+    const ui = (verb: string, ...args: string[]) => runControlSeira(["ui", verb, "--ui", info.ui, ...args]) as Promise<Record<string, any>>;
     const evaluate = async (js: string) => (await ui("eval", "--js", js)).result;
     const browser = JSON.parse(readFileSync(info.ui, "utf8")) as UiHandle;
     const viewport = (width: number, height: number) => agentBrowser(browser.binary, sessionEnv(browser), ["set", "viewport", String(width), String(height)]);

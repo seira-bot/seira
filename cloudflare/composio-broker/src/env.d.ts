@@ -6,4 +6,8 @@ interface Env {
   STATS_TOKEN?: string;
   /** A var, not in wrangler.jsonc: the Cloud Admin's origin, which wakes a sleeping Cloud for its app events. */
   CLOUD_ADMIN_URL?: string;
+  /** The https webhook the hourly cost watch posts alerts to: Telegram sendMessage, Discord, or Slack (README, "Usage limits"). */
+  ALERT_WEBHOOK_URL?: string;
+  /** The Telegram chat for alerts, where ALERT_WEBHOOK_URL is a Telegram sendMessage URL. */
+  ALERT_CHAT_ID?: string;
 }

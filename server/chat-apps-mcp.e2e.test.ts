@@ -7,7 +7,7 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer } from "../scripts/control-seira.ts";
 import { APP_EXTENSION_KEY } from "../shared/app.ts";
 import { CSP_META_PREFIX } from "../shared/app-frame/document.ts";
 import { APP_ONLY_REFUSAL } from "./mcp-app-observer.ts";

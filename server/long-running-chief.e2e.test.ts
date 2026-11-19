@@ -7,7 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb, verificationServerArgs, verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, verificationServerArgs, verificationServerEnvironment } from "../scripts/control-seira.ts";
 import { CONTROL_WAITED } from "./control-client.ts";
 import { CONSENT_RULE } from "./peer-provenance.ts";
 import { waitForExit } from "./testing/cleanup.ts";
@@ -84,7 +84,7 @@ async function chiefJob(test: (f: any) => Promise<void>) {
       try { parsed = JSON.parse(raw); } catch {}
       return { status: response.status, body: parsed };
     };
-    const cli = (...args: string[]) => runControlOmb([...args, "--url", url]) as Promise<any>;
+    const cli = (...args: string[]) => runControlSeira([...args, "--url", url]) as Promise<any>;
     // The team works at Ask, as Claude Code does there, so its approvals are cards.
     const bot = async (name: string, section: string) => {
       const made = (await cli("new-bot", "--name", name, "--section", section)).bot;

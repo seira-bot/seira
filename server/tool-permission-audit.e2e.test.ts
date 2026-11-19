@@ -1,11 +1,11 @@
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { readAdminActivityRange } from "./admin-activity.ts";
 
 it("records tool permission changes through the bot settings API", async () => {
   const fixture = await launchVerificationServer();
   try {
-    const { bot } = await runControlOmb(["new-bot", "--name", "Permission audit fixture", "--url", fixture.info.url]) as { bot: { id: string } };
+    const { bot } = await runControlSeira(["new-bot", "--name", "Permission audit fixture", "--url", fixture.info.url]) as { bot: { id: string } };
     expect((await fetch(`${fixture.info.url}/api/auth/pairing`, { method: "POST", headers: { "content-type": "application/json", origin: fixture.info.url }, body: JSON.stringify({ label: "Audit sharing fixture", scopes: ["client"] }) })).status).toBe(200);
     const patch = async (body: unknown) => fetch(`${fixture.info.url}/api/bots/${bot.id}`, {
       method: "PATCH", headers: { "content-type": "application/json", origin: fixture.info.url }, body: JSON.stringify(body),

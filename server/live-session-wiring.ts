@@ -1,7 +1,15 @@
+import { randomUUID } from "node:crypto";
+import type { ApprovalMode } from "../shared/approval-mode.ts";
 import { productName } from "./brand.ts";
+import { EngineLiveVoiceError, type EngineLiveVoiceSession, type EngineLiveVoiceStart } from "./contracts.ts";
 import type { LiveCallDeps } from "./live-call-controller.ts";
 import { openLiveSocket, relayedProvider } from "./live-call-controller.ts";
-import { createLiveSession, liveAttachUrl, type LiveBot, type LiveEndpoint, type LiveHistoryMessage } from "./live-call.ts";
+import {
+  createLiveSession, LIVE_CODEX_CLOUD, LIVE_CODEX_ENGINE, LIVE_CODEX_NO_ANSWER, LIVE_CODEX_SIGN_IN, LIVE_CODEX_UPDATE, liveAttachUrl, liveErrorMessage, LiveSessionError, MAX_SDP_BYTES,
+  type LiveBot, type LiveEndpoint, type LiveHistoryMessage,
+} from "./live-call.ts";
+import { codexCallHistory, codexVoiceInstructions, codexWorkInstructions } from "./live-codex.ts";
+import { LiveCodexSocket } from "./live-codex-socket.ts";
 import { elevenLabsLiveCallRefusal, fishLiveCallRefusal, geminiLiveCallRefusal } from "./live-access.ts";
 import type { LiveConfig } from "./live-config.ts";
 import { createFishLiveSession, endFishLiveSession, fishKeyPrint, FishRelays, fishSpeakingLanguage, setFishAgentLanguage, setUpFishAgent } from "./live-fish.ts";
@@ -16,6 +24,10 @@ export interface LiveSessionWiringInput {
   othersOnLoopback(): boolean;
   /** Saves the Fish Audio or ElevenLabs agent the harness set up, with the account it belongs to. */
   saveAgent(agent: Required<Pick<LiveConfig, "fishAgentId" | "fishAgentFor" | "fishAgentLanguage">> | Required<Pick<LiveConfig, "elevenlabsAgentId" | "elevenlabsAgentFor">>): void;
+  /** The voice hook and run settings of the engine the bot's conversation runs on; null when that engine is not Codex or has no voice. */
+  codexLive?(botId: string, threadId: string): { startLiveVoice(input: EngineLiveVoiceStart): Promise<EngineLiveVoiceSession>; cwd: string; approvalMode: ApprovalMode; botId: string; model: string | null; toolScoped?: boolean; guestConfined?: boolean } | null;
+  /** Adds what the bot's engine answered during a Codex call to the chat; the voice already spoke it. */
+  postCallAnswer?(input: { botId: string; threadId: string; text: string }): void;
   /** The app's language, which a Fish Audio agent speaks; English when unset. */
   language?(): string | undefined;
   /** The language the saved Fish Audio agent was last set to speak (`LiveConfig.fishAgentLanguage`). */
@@ -31,9 +43,13 @@ export interface LiveSessionWiringInput {
 export function liveSessionWiring(input: LiveSessionWiringInput): {
   calls: Pick<LiveCallDeps, "fishRefusal" | "geminiRefusal" | "elevenlabsRefusal" | "createSession" | "openSocket" | "attachUrl">;
   fishRelay: LiveRouteDeps["fishRelay"];
+  /** Stops every open Codex voice session. */
+  stopAll(): Promise<void>;
 } {
   const relays = new FishRelays();
   const relayed = (endpoint: LiveEndpoint) => relayedProvider(endpoint.provider) !== null;
+  const codexSockets = new Map<string, LiveCodexSocket>();
+  const stopsInFlight = new Set<Promise<void>>();
   const env = input.env ?? process.env;
   const fetchImpl = input.fetchImpl ?? fetch;
 
@@ -95,13 +111,77 @@ export function liveSessionWiring(input: LiveSessionWiringInput): {
     }
   };
 
+  const codexRefusal = (error: unknown): LiveSessionError => {
+    const refusal = error instanceof EngineLiveVoiceError ? error.refusal : "failed";
+    if (refusal === "not-signed-in") return new LiveSessionError(LIVE_CODEX_SIGN_IN, 409);
+    if (refusal === "too-old") return new LiveSessionError(LIVE_CODEX_UPDATE, 409);
+    if (refusal === "unsupported-sign-in") return new LiveSessionError(LIVE_CODEX_ENGINE, 409);
+    if (refusal === "no-answer") return new LiveSessionError(LIVE_CODEX_NO_ANSWER, 502);
+    return new LiveSessionError(liveErrorMessage(500, undefined, "codex"), 502);
+  };
+
+  const startCodex = async (sdp: string, botId: string, threadId: string, signal?: AbortSignal) => {
+    if (input.cloudHome) throw new LiveSessionError(LIVE_CODEX_CLOUD, 409);
+    if (!sdp.trim() || Buffer.byteLength(sdp) > MAX_SDP_BYTES) throw new LiveSessionError("The call could not start: the connection offer was invalid.", 400);
+    const engine = input.codexLive?.(botId, threadId) ?? null;
+    if (!engine) throw new LiveSessionError(LIVE_CODEX_ENGINE, 409);
+    const bot = input.bot(botId);
+    const sessionId = randomUUID();
+    const socket = new LiveCodexSocket({
+      onClosed: () => codexSockets.delete(sessionId),
+      onStop: (stop) => { stopsInFlight.add(stop); void stop.finally(() => stopsInFlight.delete(stop)); },
+    });
+    codexSockets.set(sessionId, socket);
+    try {
+      const session = await engine.startLiveVoice({
+        sdp,
+        cwd: engine.cwd,
+        botId: engine.botId,
+        model: engine.model,
+        approvalMode: engine.approvalMode,
+        toolScoped: engine.toolScoped,
+        guestConfined: engine.guestConfined,
+        signal,
+        voiceInstructions: codexVoiceInstructions(bot, { cloudHome: input.cloudHome }),
+        workInstructions: codexWorkInstructions(bot),
+        history: codexCallHistory(input.history(threadId)),
+        onEvent: (event) => {
+          socket.event(event);
+          if (event.type === "answer") input.postCallAnswer?.({ botId, threadId, text: event.text });
+        },
+      });
+      socket.attach(session);
+      if (socket.closedByEngine) {
+        await socket.stop();
+        throw new EngineLiveVoiceError("failed");
+      }
+      return { sessionId, sdp: session.sdp };
+    } catch (error) {
+      codexSockets.delete(sessionId);
+      throw codexRefusal(error);
+    }
+  };
+
+  const codexSocket = (sessionId: string): LiveCodexSocket => {
+    const found = codexSockets.get(sessionId);
+    if (found) return found;
+    const closed = new LiveCodexSocket();
+    closed.close();
+    return closed;
+  };
+
   return {
     fishRelay: (sessionId, token) => relays.find(sessionId, token),
+    stopAll: async () => {
+      const stops = [...codexSockets.values()].map((socket) => socket.stop());
+      await Promise.all([...stops, ...stopsInFlight]);
+    },
     calls: {
       fishRefusal: (auth) => fishLiveCallRefusal(auth, { othersOnLoopback: input.othersOnLoopback() }),
       geminiRefusal: (auth) => geminiLiveCallRefusal(auth, { othersOnLoopback: input.othersOnLoopback() }),
       elevenlabsRefusal: (auth) => elevenLabsLiveCallRefusal(auth, { othersOnLoopback: input.othersOnLoopback() }),
-      createSession: async ({ key, endpoint, sdp, botId, threadId, voice }) => {
+      createSession: async ({ key, endpoint, sdp, botId, threadId, voice, signal }) => {
+        if (endpoint.provider === "codex") return startCodex(sdp, botId, threadId, signal);
         if (endpoint.provider === "gemini") {
           const session = await createGeminiLiveSession({ key, endpoint, voice, bot: input.bot(botId), history: input.history(threadId), cloudHome: input.cloudHome, fetchImpl });
           // Gemini has nothing to end: the session ends when the client closes it, and the token is single use.
@@ -121,8 +201,15 @@ export function liveSessionWiring(input: LiveSessionWiringInput): {
         const { token } = relays.open(session.session_id, () => endFishLiveSession(session.session_id, key, agent, fetchImpl));
         return { sessionId: session.session_id, fish: { type: "fish", session, relayToken: token } };
       },
-      openSocket: (url, key, endpoint) => relayed(endpoint) ? relays.socket(url) : openLiveSocket(url, key, endpoint),
-      attachUrl: (sessionId, endpoint) => relayed(endpoint) ? sessionId : liveAttachUrl(sessionId, endpoint),
+      openSocket: (url, key, endpoint) => endpoint.provider === "codex" ? codexSocket(url) : relayed(endpoint) ? relays.socket(url) : openLiveSocket(url, key, endpoint),
+      attachUrl: (sessionId, endpoint) => relayed(endpoint) || endpoint.provider === "codex" ? sessionId : liveAttachUrl(sessionId, endpoint),
     },
   };
+}
+
+/** Ends the running call first, so it is recorded as a shutdown, then waits for every Codex session to stop. */
+export async function shutdownLiveCalls(calls: { shutdown(): Promise<void> }, wiring: { stopAll(): Promise<void> }): Promise<void> {
+  try {
+    try { await calls.shutdown(); } finally { await wiring.stopAll(); }
+  } catch (error) { console.warn("live: stopping Codex calls failed", error); }
 }

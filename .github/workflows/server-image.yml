@@ -6,6 +6,9 @@ name: Server image
 # waits for a maintainer's approval in the `release-approval` environment.
 # A maintainer's run does not wait. The publish job uses the `release`
 # environment, which accepts runs from `main` only (docs/ci.md).
+# The publish job runs only if a maintainer started this attempt, or if the
+# approval came in this same attempt. A re-run by another person therefore
+# never reuses an approval of an earlier attempt.
 
 on:
   pull_request:
@@ -117,18 +120,20 @@ jobs:
   approval:
     name: approval for a person outside the maintainers
     needs: image
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && !contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && !(startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: release-approval
     permissions: {}
+    outputs:
+      attempt: ${{ github.run_attempt }}
     steps:
       - run: echo "A maintainer approved this run."
 
   publish:
     name: publish to GHCR
     needs: [image, approval]
-    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.image.result == 'success' && (needs.approval.result == 'success' || needs.approval.result == 'skipped') }}
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.image.result == 'success' && ((startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: release

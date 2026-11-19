@@ -5,7 +5,7 @@ export const STEP_AT = Object.freeze({ shown: 0.1, engine: 0.4, window: 0.62, lo
 export const STEP_NAMES = Object.freeze(Object.keys(STEP_AT));
 /** Where the line waits after the last step, until the page is painted. */
 export const WAIT_CAP = 0.94;
-export const FINISH_MS = 360;
+export const FINISH_MS = 240;
 
 const EASE_MS = 3200;
 const FOLLOW_MS = 140;

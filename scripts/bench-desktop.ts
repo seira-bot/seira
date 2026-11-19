@@ -24,8 +24,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { gzipSync } from "node:zlib";
 
-import { runControlOmb, verificationServerArgs, verificationServerEnvironment } from "./control-omb.ts";
-import { installedChrome } from "./testing/control-omb-ui.ts";
+import { runControlSeira, verificationServerArgs, verificationServerEnvironment } from "./control-seira.ts";
+import { installedChrome } from "./testing/control-seira-ui.ts";
 import { FRAMES_START, FRAMES_STOP, launchChrome, switchExpression, TRANSCRIPT_BOX, type Chrome, type Page } from "./testing/bench-desktop-page.ts";
 import { removeTempDir, waitForExit } from "../server/testing/cleanup.ts";
 import { freePortBlock } from "../server/testing/ports.ts";
@@ -442,7 +442,7 @@ async function idleWindow(chrome: Chrome, pages: Record<string, Page>, fixture: 
 }
 
 async function waitTurn(fixture: Fixture, botId: string) {
-  return await runControlOmb(["wait", "--bot", botId, "--timeout", "180", "--for", "turn", "--url", fixture.url]) as { status?: string; messages?: Array<{ id?: string; kind?: string; role?: string }> };
+  return await runControlSeira(["wait", "--bot", botId, "--timeout", "180", "--for", "turn", "--url", fixture.url]) as { status?: string; messages?: Array<{ id?: string; kind?: string; role?: string }> };
 }
 
 /** One streamed reply with tool calls into `botId`'s open chat, measured in the page, Chrome and the server. */
@@ -452,7 +452,7 @@ async function streamTurn(chrome: Chrome, page: Page, fixture: Fixture, botId: s
   const cpu0 = await chrome.cpu();
   const tally0 = await fixture.tally();
   const started = performance.now();
-  await runControlOmb(["send", "--bot", botId, "--text", "Write the long report, please.", "--url", fixture.url]);
+  await runControlSeira(["send", "--bot", botId, "--text", "Write the long report, please.", "--url", fixture.url]);
   await sleep(4_000);
   const animationsMidTurn = await page.evaluate<Record<string, number>>(RUNNING_ANIMATIONS);
   const settled = await waitTurn(fixture, botId);
@@ -491,7 +491,7 @@ async function streamTurn(chrome: Chrome, page: Page, fixture: Fixture, botId: s
 }
 
 async function newBot(fixture: Fixture, name: string): Promise<string> {
-  const created = await runControlOmb(["new-bot", "--name", name, "--url", fixture.url]) as { bot: { id: string } };
+  const created = await runControlSeira(["new-bot", "--name", name, "--url", fixture.url]) as { bot: { id: string } };
   return created.bot.id;
 }
 
@@ -580,7 +580,7 @@ async function main() {
 
   let chrome: Chrome | undefined;
   if (needsUi) {
-    if (!chromePath) throw new Error("no Chrome: run `control-omb ui launch` once, or pass --chrome PATH");
+    if (!chromePath) throw new Error("no Chrome: run `control-seira ui launch` once, or pass --chrome PATH");
     chrome = await launchChrome(chromePath);
     cleanups.push(() => chrome!.close());
   }

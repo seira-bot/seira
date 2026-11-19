@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
 
@@ -20,7 +20,7 @@ it("forks bot and room conversations through the public API and keeps a fork aft
   const messages = async (threadId: string) => (await api("GET", `/api/threads/${threadId}/messages?limit=200`)).body.messages as Array<{ id: string; role: string; kind: string; text?: string }>;
 
   try {
-    const bot = (await runControlOmb(["new-bot", "--name", "Fork Tester", "--url", url]) as any).bot;
+    const bot = (await runControlSeira(["new-bot", "--name", "Fork Tester", "--url", url]) as any).bot;
     const sourceThreadId = bot.activeTaskId as string;
     expect((await api("POST", `/api/bots/${bot.id}/messages`, { text: "Plan the release", threadId: sourceThreadId })).status).toBe(202);
     await expect.poll(async () => (await messages(sourceThreadId)).some((message) => message.role === "bot" && message.kind === "text" && message.text?.includes("hello from fake claude")), { timeout: 20_000 }).toBe(true);
@@ -60,7 +60,7 @@ it("forks bot and room conversations through the public API and keeps a fork aft
     expect(prompt).toContain("Plan the release");
     expect(prompt).toContain("Continue the fork");
 
-    const room = (await runControlOmb(["new-channel", "--name", "Fork Room", "--members", bot.id, "--url", url]) as any).channel;
+    const room = (await runControlSeira(["new-channel", "--name", "Fork Room", "--members", bot.id, "--url", url]) as any).channel;
     const roomThreadId = room.activeTaskId as string;
     expect((await api("POST", `/api/groups/${room.id}/messages`, { text: "Room question", threadId: roomThreadId })).status).toBe(202);
     await expect.poll(async () => (await messages(roomThreadId)).some((message) => message.role === "bot" && message.kind === "text"), { timeout: 20_000 }).toBe(true);

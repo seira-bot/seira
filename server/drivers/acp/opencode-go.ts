@@ -1,6 +1,5 @@
 // OpenCode over ACP; Zen, Go, OpenRouter and local providers are models it discovers, not separate drivers.
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
 
 import { ATTACHMENTS_DIR } from "../../attachments.ts";
@@ -27,6 +26,7 @@ import { openCodePromptUnreachedModel } from "./opencode-unreached.ts";
 import { parseOpenCodeLogLine } from "./quiet-status.ts";
 import type { ModelCatalog, ModelVariantOption, ProviderDriver, ProviderErrorCode } from "../../contracts.ts";
 import { execCliBoxed } from "../../procs.ts";
+import { userHome } from "../../env-path.ts";
 import {
   catalogFromOpenCodeSession,
   DISCOVERY_TIMEOUT_MS,
@@ -345,7 +345,7 @@ function withholdProviderKeysWhenManaged(
 }
 
 function opencodeConfigDir(env: Record<string, string | undefined>): string {
-  const home = env.HOME || env.USERPROFILE || homedir();
+  const home = userHome(env);
   return join(env.XDG_CONFIG_HOME || join(home, ".config"), "opencode");
 }
 
@@ -410,13 +410,13 @@ export function ensureOpenCodeInjectModel(
 
 /** OpenCode 1.18 appends every process's log to one file under its xdg data folder. */
 export function openCodeLogPath(env: Record<string, string | undefined>): string {
-  return join(env.XDG_DATA_HOME || join(env.HOME || env.USERPROFILE || homedir(), ".local", "share"), "opencode", "log", "opencode.log");
+  return join(env.XDG_DATA_HOME || join(userHome(env), ".local", "share"), "opencode", "log", "opencode.log");
 }
 
 /** The CLI is xdg-flavoured on every platform (`opencode auth list` on macOS prints
  * `~/.local/share/opencode/auth.json`), so the xdg path comes first. */
 function storedAuthPaths(env: Record<string, string | undefined>): string[] {
-  const home = env.HOME || env.USERPROFILE || homedir();
+  const home = userHome(env);
   const roots = [
     env.XDG_DATA_HOME || join(home, ".local", "share"),
     process.platform === "darwin"
@@ -561,7 +561,7 @@ export function configuredOpenCodeFolderAction(
       for (const name of ["opencode.json", "opencode.jsonc"]) apply(readText(join(folder, name)));
     }
   }
-  const home = env.HOME || env.USERPROFILE || homedir();
+  const home = userHome(env);
   const configFolders = [
     ...projectFolders.map((folder) => join(folder, ".opencode")),
     join(home, ".opencode"),

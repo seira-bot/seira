@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { z } from "zod";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { request } from "../scripts/mcp-server.ts";
 import { startFakeImageApi, type FakeImageApi } from "./testing/fake-image-api.ts";
 
@@ -41,7 +41,7 @@ interface ImageFixture {
 async function withImageFixture(test: (f: ImageFixture) => Promise<void>) {
   // A fake image URL exported in the shell would configure Custom in every fixture.
   const session = await launchVerificationServer({ ...process.env, OMB_FAKE_IMAGE_API_URL: undefined }, undefined, undefined, undefined, undefined, { scripted: true });
-  const cli = (...args: string[]) => runControlOmb(args, { env: { OPENMAUSBOT_URL: session.info.url } });
+  const cli = (...args: string[]) => runControlSeira(args, { env: { OPENMAUSBOT_URL: session.info.url } });
   const api = (path: string, body?: unknown, method = "POST") =>
     request(path, body === undefined ? {} : { method, body: JSON.stringify(body) }, session.info.url);
   let images: FakeImageApi | undefined;

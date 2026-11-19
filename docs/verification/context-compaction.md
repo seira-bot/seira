@@ -17,7 +17,7 @@ pnpm test:packaged-server
 ```
 
 The API fixture launches the shared isolated server and fake engine. It uses
-`control-omb` for create, send, wait, edit and Stop. Its new manual operation is
+`control-seira` for create, send, wait, edit and Stop. Its new manual operation is
 `POST /api/bots/:id/compact` with `{ "threadId": "owned-thread-id" }`; this uses
 normal turn admission, returns 202, and completes through that thread's ordinary
 busy/idle state. The route accepts no agent-written summary or file path.
@@ -341,7 +341,7 @@ pnpm exec vitest run server/context-rebuild.test.ts server/replay-settings.test.
 ```
 
 The fixture's engine runs a command and reads a file each turn. The test rewinds
-with `control-omb edit` and reads the prompt the engine received: no such line
+with `control-seira edit` and reads the prompt the engine received: no such line
 while the setting is off, both lines in order once it is on (the command, and
 the file read), and the plain message for every turn that resumes its session.
 It then switches the bot to the fixture's Codex and reads what that engine was

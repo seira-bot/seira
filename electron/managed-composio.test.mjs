@@ -29,6 +29,12 @@ describe("managed Composio desktop registration", () => {
     expect(managedComposioBrokerUrl("http://broker.example")).toBe("");
   });
 
+  it("uses Seira's service by default in the packaged app", () => {
+    expect(managedComposioBrokerUrl(undefined, { packaged: true })).toBe("https://apps.seira.bot");
+    expect(managedComposioBrokerUrl("  ", { packaged: true })).toBe("https://apps.seira.bot");
+    expect(managedComposioBrokerUrl("https://broker.example/", { packaged: true })).toBe("https://broker.example");
+  });
+
   it("turns the service off for the server when no URL names one", () => {
     expect(managedComposioChildEnvironment("", { composioBrokerToken: TOKEN }, { PATH: "/usr/bin" })).toEqual({
       PATH: "/usr/bin",
@@ -217,6 +223,11 @@ describe("keeping the desktop app off the managed service", () => {
     expect(await launch({})).not.toHaveBeenCalled();
     expect(await launch({ composioApiKey: "ak_owner" })).not.toHaveBeenCalled();
     await expect(registerManagedComposio({ brokerUrl: managedComposioBrokerUrl(undefined), updateCredentials: vi.fn() })).resolves.toBeUndefined();
+  });
+
+  it("OMB_COMPOSIO_BROKER=off turns off Seira's default service in the packaged app", () => {
+    vi.stubEnv("OMB_COMPOSIO_BROKER", "off");
+    expect(managedComposioBrokerUrl(undefined, { packaged: true })).toBe("");
   });
 
   it("any other value of the switch leaves a named service on", () => {

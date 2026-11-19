@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, type VerificationServer } from "../scripts/control-seira.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
 let fixture: VerificationServer;
@@ -27,7 +27,7 @@ const ok = async (method: string, path: string, body?: unknown) => {
   return answer.body;
 };
 type FixtureBot = { id: string; activeTaskId: string };
-const newBot = async (name: string) => (await runControlOmb(["new-bot", "--name", name, "--url", fixture.info.url]) as { bot: FixtureBot }).bot;
+const newBot = async (name: string) => (await runControlSeira(["new-bot", "--name", name, "--url", fixture.info.url]) as { bot: FixtureBot }).bot;
 const send = (bot: FixtureBot, text: string) => call("POST", `/api/bots/${bot.id}/messages`, { text, threadId: bot.activeTaskId, sendId: randomUUID() });
 const dueSoon = async (bot: FixtureBot, name: string, inMs: number) =>
   (await ok("POST", "/api/routines", { name, prompt: `Do ${name}.`, botId: bot.id, schedule: { type: "once", at: Date.now() + inMs } })).routine as { id: string };

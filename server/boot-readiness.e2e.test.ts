@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { afterEach, expect, it } from "vitest";
-import { runControlOmb, verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { runControlSeira, verificationServerEnvironment } from "../scripts/control-seira.ts";
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 import { freePortBlock } from "./testing/ports.ts";
 
@@ -52,7 +52,7 @@ async function boot(home: string, knobs: Record<string, string> = {}) {
     expect(response.status).toBe(200);
     return response.json() as Promise<any>;
   };
-  const control = (...args: string[]) => runControlOmb([...args, "--url", base]) as Promise<any>;
+  const control = (...args: string[]) => runControlSeira([...args, "--url", base]) as Promise<any>;
   const stop = () => waitForExit(child, { signal: "SIGTERM" });
   return { get, control, stop };
 }

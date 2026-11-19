@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "./control-omb.ts";
+import { launchVerificationServer, runControlSeira, type VerificationServer } from "./control-seira.ts";
 import { waitForExit } from "../server/testing/cleanup.ts";
 import { escapeAttribute } from "../src/lib/composer-attachments.ts";
 
@@ -82,7 +82,7 @@ export async function verifyWorkspaceBackup(report: (event: unknown) => void = (
   const evidencePath = `${source.info.logPath}.workspace-backup.json`;
   record({ source: source.info });
   const control = async (fixture: VerificationServer, ...args: string[]) => {
-    const result = await runControlOmb([...args, "--url", fixture.info.url]);
+    const result = await runControlSeira([...args, "--url", fixture.info.url]);
     record({ command: [...args, "--url", fixture.info.url], result });
     return result;
   };

@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, type VerificationServer } from "../scripts/control-seira.ts";
 import type { Message } from "./store.ts";
 
 type Bot = { id: string; name: string };
@@ -23,7 +23,7 @@ const api = async (method: string, path: string, body?: unknown) => {
   expect(response.ok, `${method} ${path}: ${JSON.stringify(result)}`).toBe(true);
   return result;
 };
-const control = (args: string[]) => runControlOmb([...args, "--url", fixture.info.url]) as Promise<any>;
+const control = (args: string[]) => runControlSeira([...args, "--url", fixture.info.url]) as Promise<any>;
 const messages = async (room: Room) => (await api("GET", `/api/threads/${room.threadId}/messages?limit=200`)).messages as Message[];
 
 beforeAll(async () => {

@@ -16,16 +16,18 @@ Give each bot a job. Watch it work. Approve the steps that matter.<br>
 Seira runs on your computer and uses the AI plans that you already have.
 
 <p>
+  <a href="https://github.com/seira-bot/seira/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/seira-bot/seira?style=flat-square&color=0E1116&label=release"></a>
+  <a href="https://www.npmjs.com/package/@seira-bot/seira"><img alt="npm package @seira-bot/seira" src="https://img.shields.io/npm/v/@seira-bot/seira?style=flat-square&color=0E1116&label=npm"></a>
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-0E1116?style=flat-square"></a>
-  <img alt="Platforms: macOS, Windows, and Ubuntu" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Ubuntu-0E1116?style=flat-square">
-  <img alt="Agents: Claude, Codex, and Grok" src="https://img.shields.io/badge/agents-Claude%20%C2%B7%20Codex%20%C2%B7%20Grok-E11D48?style=flat-square">
-  <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white">
-  <img alt="Status: early development" src="https://img.shields.io/badge/status-early%20development-6B7280?style=flat-square">
+  <img alt="Platforms: Windows, Linux, and macOS" src="https://img.shields.io/badge/platform-Windows%20%C2%B7%20Linux%20%C2%B7%20macOS-0E1116?style=flat-square">
+  <img alt="Engines: Claude, Codex, Gemini, Grok, and more than 25 others" src="https://img.shields.io/badge/engines-Claude%20%C2%B7%20Codex%20%C2%B7%20Gemini%20%C2%B7%20Grok%20%C2%B7%2025%2B-E11D48?style=flat-square">
 </p>
 
 <p>
+  <a href="https://seira.bot"><b>Website</b></a> ·
   <a href="#quick-start"><b>Quick start</b></a> ·
   <a href="#features"><b>Features</b></a> ·
+  <a href="#engines"><b>Engines</b></a> ·
   <a href="#how-it-works"><b>How it works</b></a> ·
   <a href="#documentation"><b>Documentation</b></a> ·
   <a href="#contributing"><b>Contributing</b></a>
@@ -35,7 +37,8 @@ Seira runs on your computer and uses the AI plans that you already have.
 
 > [!NOTE]
 > Seira is in early development.
-> Download it for Windows or Linux from the [latest release](https://github.com/seira-bot/seira/releases/latest), or [build it from source](#build-from-source).
+> Download it for Windows or Linux from the [latest release](https://github.com/seira-bot/seira/releases/latest),
+> run the server with [`npx @seira-bot/seira`](#run-it-on-a-server), or [build it from source](#build-from-source).
 
 ## Why Seira
 
@@ -43,25 +46,25 @@ Seira runs on your computer and uses the AI plans that you already have.
   <tr>
     <td width="50%" valign="top">
       <h4>Bring your own agents</h4>
-      Bots run on the <code>claude</code>, <code>codex</code>, and <code>grok</code> CLIs on your computer.
+      Bots run on the agent programs on your computer: Claude Code, Codex, Gemini, Cursor, GitHub Copilot, and many more.
       They use the sign-in and the plan that you already have. There is no new account and no proxy in the middle.
     </td>
     <td width="50%" valign="top">
-      <h4>Local first</h4>
-      One small harness server on <code>127.0.0.1</code> owns every agent process.
-      Transcripts, keys, and events stay on your computer.
+      <h4>Ready on the first start</h4>
+      No AI on your computer yet? Seira installs OpenCode and its free models as a backup,
+      so you can chat before you connect a paid plan.
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
       <h4>Agents with hands</h4>
       A bot can use a cloud Linux desktop, an isolated local VM, or your own computer after you opt in.
-      It can also use more than 500 apps through Composio.
+      With your own Composio key, it can also use more than 500 apps.
     </td>
     <td width="50%" valign="top">
-      <h4>You stay in control</h4>
-      Shell commands, file edits, and questions show as cards in the chat.
-      You allow or deny each one.
+      <h4>Local first, you stay in control</h4>
+      One small harness server on <code>127.0.0.1</code> owns every agent process. Transcripts and keys stay on your computer.
+      Shell commands, file edits, and questions show as cards that you allow or deny.
     </td>
   </tr>
 </table>
@@ -70,18 +73,32 @@ Seira runs on your computer and uses the AI plans that you already have.
 
 | Feature | What you get |
 |---|---|
-| **A model for each bot** | Pick a Claude or Codex model for each bot from one model picker. Change the model in the middle of a conversation. |
+| **A model for each bot** | Pick the engine and the model of each bot from one model picker. Change the model in the middle of a conversation. |
+| **A character for each bot** | Each new bot gets its own character. Pick a different look from the cast at any time. |
 | **A computer for each bot** | Open the Computer panel to start the cloud desktop of a bot. Watch a live preview, or take over in your browser. |
 | **Approval cards** | A permission broker turns each risky action into a card: Allow, Deny, or answer in the chat. |
-| **Connected apps** | Connect Gmail, Slack, GitHub, Notion, Linear, and hundreds more through Composio. Sign in once, and every bot can use them. |
+| **Connected apps** | Add your Composio key, then connect Gmail, Slack, GitHub, Notion, Linear, and hundreds more. Every bot can use them. |
 | **Channels** | Keep Work, Personal, and each project apart. Each channel has its own transcript, instructions, work folder, and bot roster. |
 | **Triggers** | Tell a bot "every weekday at 9, summarize my inbox". Schedules and webhooks start bots while you do other work. |
 | **Voice** | Listen to replies, or call a bot. Voices come from ElevenLabs, Fish Audio, xAI, built-in Mac voices, or a local Chatterbox server. |
 | **Teams** | Install a full team from one Markdown file. Share a bot or a department as a folder. |
+| **Run it anywhere** | Use the desktop app, or run the same server on a VPS or a home server and open it from your browser or phone. |
 | **MCP server** | Control your bots from Claude Desktop, Cursor, or another MCP client. See [docs/mcp-server.md](docs/mcp-server.md). |
 | **Scripts and CI** | Start a team from the command line, wait for the result, and export what it made. See [docs/headless-cli.md](docs/headless-cli.md). |
 
-To use a custom CLI build for an agent, set it in **Settings → Engines**.
+## Engines
+
+Seira has more than 30 engines. Install an agent program and sign in, or add an API key.
+The model picker shows each engine that is ready.
+
+| Kind | Engines |
+|---|---|
+| Agent programs | Claude Code, Codex, pi |
+| Agent programs over ACP | Gemini, Google Antigravity, Grok, Cursor, GitHub Copilot, OpenCode, Qwen, Kimi, Droid, Cline, Kiro, Devin, Hermes, DeepSeek, Mistral (Vibe), Command Code, OMP |
+| API and plan engines | Grok, Mistral, Groq, Cerebras, MiniMax, Greenference, ModelGo, Meta Muse, Muse Code, and any OpenAI-compatible endpoint |
+
+To add an ACP program or an endpoint that is not in this list, see [docs/custom-engines.md](docs/custom-engines.md).
+To use a custom build of an agent program, set it in **Settings → Engines**.
 
 ## Meet Seira
 
@@ -105,7 +122,7 @@ The face lives on a black visor screen, so Seira can blink, smile, wink, and thi
 | Signal red | `#E11D48` | Eyes, and the dot in seira.bot |
 | Mist | `#E9ECEF` | Head on dark backgrounds |
 
-The 3D logo, the wordmark, the flat logo for light and dark backgrounds, and the avatar are in [`docs/assets/brand/`](docs/assets/brand/).
+The 3D logo, the wordmark, the lockups for light and dark backgrounds, and the avatar are in [`docs/assets/brand/`](docs/assets/brand/).
 
 </details>
 
@@ -114,26 +131,26 @@ The 3D logo, the wordmark, the flat logo for light and dark backgrounds, and the
 Seira runs as two processes.
 The app sends typed commands over HTTP and reads one event stream (SSE).
 The harness server owns every agent process.
-It changes the protocol of each provider into one event stream, and logs each thread as NDJSON.
+It changes the protocol of each engine into one event stream, and logs each thread as NDJSON.
 
 ```mermaid
 flowchart LR
-    subgraph app ["Seira app: React + Tailwind (5199)"]
+    subgraph app ["Seira app: React + Tailwind"]
         UI[Chat · model picker · computer panel]
     end
-    subgraph server ["Harness server (127.0.0.1:8799)"]
+    subgraph server ["Harness server (127.0.0.1)"]
         REG[Driver registry] --> BUS[Event bus → SSE]
         BROKER[Permission broker]
     end
-    subgraph agents ["Agent CLIs on your computer"]
-        CL[claude]
-        CX[codex]
-        GR[grok]
+    subgraph agents ["Engines"]
+        CLI[Agent programs<br>claude · codex · pi]
+        ACP[ACP agents<br>gemini · antigravity · cursor · copilot · opencode · …]
+        API[API engines<br>OpenAI-compatible endpoints]
     end
     UI -- "HTTP commands" --> server
     BUS -- "one SSE stream" --> UI
-    REG --> CL & CX & GR
-    CL & CX & GR -- "permission requests" --> BROKER
+    REG --> CLI & ACP & API
+    CLI & ACP -- "permission requests" --> BROKER
     server -- "Boat API" --> BOAT[("Cloud computer")]
     server -- "Composio" --> APPS[("Gmail · Slack · GitHub · …")]
 ```
@@ -144,12 +161,12 @@ flowchart LR
 
 | Layer | Path | What it does |
 |---|---|---|
-| Drivers | [`server/drivers/`](server/drivers/) | One driver for each provider: Claude, Codex, and Grok over their local CLIs, plus a cloud-computer agent. An unknown driver shows as "unavailable" and does not stop the other bots. |
+| Drivers | [`server/drivers/`](server/drivers/) | One driver for each engine. ACP agents are in [`server/drivers/acp/`](server/drivers/acp/). An unknown driver shows as "unavailable" and does not stop the other bots. |
 | Harness | [`server/harness/`](server/harness/) | The registry that turns configs into live bots, and the event bus that every client reads. |
 | API | [`server/index.ts`](server/index.ts) | Bots, turns, approvals, models, computers, connectors, and config over HTTP and SSE. |
 | Voice | [`server/tts/`](server/tts/) | Speech for replies and calls. Cloud keys stay on the harness server. |
 | App | [`src/`](src/) | The chat app. One store from the server, one reducer, and no transport in the client. |
-| Desktop | [`electron/`](electron/) | The shells for macOS, Windows, and Ubuntu, with the harness server inside. |
+| Desktop | [`electron/`](electron/) | The shells for macOS, Windows, and Linux, with the harness server inside. |
 
 </details>
 
@@ -157,15 +174,37 @@ flowchart LR
 
 Download the app from the [latest release](https://github.com/seira-bot/seira/releases/latest):
 
-- Windows 10 or later: `Seira-setup.exe`. If Windows warns you, select **More info**, then **Run anyway**.
-- Linux x64: `Seira-<version>-x86_64.AppImage`. Make it executable, then open it:
+- **Windows 10 or later:** `Seira-setup.exe`. If Windows warns you, select **More info**, then **Run anyway**.
+- **Ubuntu 24.04 x64:** `Seira-<version>-amd64.deb`. Install it, then open Seira from the app menu:
+
+  ```sh
+  sudo apt install ./Seira-*-amd64.deb
+  ```
+
+- **Other Linux x64:** `Seira-<version>-x86_64.AppImage`. Make it executable, then open it:
 
   ```sh
   chmod +x Seira-*-x86_64.AppImage
   ./Seira-*-x86_64.AppImage
   ```
 
-There is no macOS download. On macOS, or to work on the code, build Seira from source.
+  On Ubuntu 24.04 the AppImage does not open, because the system blocks the sandbox it needs. Use the Debian package there.
+
+The app updates itself. Each release also has a `SHA256SUMS` file for each system, to check your download.
+There is no macOS download yet. On macOS, run the server with Node, or build Seira from source.
+
+### Run it on a server
+
+The npm package [`@seira-bot/seira`](https://www.npmjs.com/package/@seira-bot/seira) is the same server without the desktop shell.
+It needs Node.js 24 or later.
+
+```sh
+npx @seira-bot/seira setup              # once: AI access and a default model
+npx @seira-bot/seira serve --tailscale  # or --lan, --domain, --public-url, --tunnel
+```
+
+The server prints a pairing link. Open it in your browser or on your phone.
+[docs/self-hosting.md](docs/self-hosting.md) explains each way to reach the server, and the Docker image.
 
 ### Build from source
 
@@ -175,8 +214,8 @@ You need:
 - Node.js 24 or later, and pnpm 10.
   To get pnpm, run `corepack enable`.
   On Windows, run it in a terminal opened as administrator, or install pnpm with `npm install -g pnpm@10.33.0`.
-- At least one agent CLI, installed and signed in: [`claude`](https://claude.com/claude-code), [`codex`](https://github.com/openai/codex), or [`grok`](https://x.ai/cli).
-  The model picker finds them automatically.
+- An engine is optional. If no engine is ready, Seira installs OpenCode with free models at the first start.
+  For your own plans, install and sign in to [`claude`](https://claude.com/claude-code), [`codex`](https://github.com/openai/codex), or [another engine](#engines).
 
 Run each `dev` command in its own terminal:
 
@@ -218,12 +257,11 @@ pnpm check:electron  # syntax check of the Electron files
 ```sh
 pnpm package:mac     # macOS: DMG and ZIP (needs Swift and Xcode tools)
 pnpm package:win     # Windows: installer and ZIP
-pnpm package:linux   # Ubuntu x64: AppImage and the verified Cua runtime
+pnpm package:linux   # Linux x64: AppImage, Debian package, snap, and the verified Cua runtime
 ```
 
-> [!WARNING]
-> Some package and install names still come from upstream.
-> Read [docs/upstream-names.md](docs/upstream-names.md) before you package.
+[docs/linux-desktop.md](docs/linux-desktop.md) covers the snap, and the Flatpak build in [`packaging/flatpak/`](packaging/flatpak/).
+[docs/releasing.md](docs/releasing.md) explains how a release is made.
 
 <details>
 <summary>Desktop support for each system</summary>
@@ -231,7 +269,7 @@ pnpm package:linux   # Ubuntu x64: AppImage and the verified Cua runtime
 
 | Capability | macOS | Windows x64 | Ubuntu 24.04 Xorg | Ubuntu 24.04 Wayland |
 |---|---|---|---|---|
-| Packaged app, harness server inside, local agent CLIs | Supported | Supported | Beta | Beta |
+| Packaged app, harness server inside, local engines | Supported | Supported | Beta | Beta |
 | Composio and Boat cloud computers | Supported | Supported | Beta | Beta |
 | Preview of the local screen | Supported | Not available | Beta | Beta |
 | Bot control of this computer | Supported | Supported | Beta, after you opt in | Off for safety |
@@ -256,14 +294,14 @@ They are anonymous and never include keys, names, addresses, or conversations.
 
 ## Documentation
 
-Some guides in [`docs/`](docs/) and [`apps/docs/`](apps/docs/) still use upstream names.
-[docs/upstream-names.md](docs/upstream-names.md) lists them.
-
 | Topic | Guide |
 |---|---|
-| Your own engines (ACP CLIs, OpenAI-compatible endpoints) | [docs/custom-engines.md](docs/custom-engines.md) |
+| Your own engines (ACP programs, OpenAI-compatible endpoints) | [docs/custom-engines.md](docs/custom-engines.md) |
+| OpenCode and its free models | [docs/opencode-go.md](docs/opencode-go.md) |
 | Your own MCP tool servers | [docs/custom-mcp-servers.md](docs/custom-mcp-servers.md) |
 | Self-hosting on a server | [docs/self-hosting.md](docs/self-hosting.md), [docs/deploy-vps.md](docs/deploy-vps.md) |
+| Command line and CI | [docs/headless-cli.md](docs/headless-cli.md) |
+| Linux desktop, Snap, and Flatpak | [docs/linux-desktop.md](docs/linux-desktop.md) |
 | Voice | [docs/voice-mode.md](docs/voice-mode.md) |
 | Team sharing | [docs/team-sharing.md](docs/team-sharing.md) |
 | Routing with a decision model | [docs/decision-model.md](docs/decision-model.md) |
@@ -277,24 +315,21 @@ Issues and pull requests are welcome.
 and [DESIGN.md](DESIGN.md) holds the design rules.
 
 The driver contract in [`server/contracts.ts`](server/contracts.ts) is small.
-To add a provider, add one file in [`server/drivers/`](server/drivers/) and register it with one line.
+To add an engine, add one file in [`server/drivers/`](server/drivers/) and register it with one line in [`server/drivers/builtIn.ts`](server/drivers/builtIn.ts).
 
 Do not post a security problem in public. Report it through [private vulnerability reporting](https://github.com/seira-bot/seira/security/advisories/new).
 [SECURITY.md](SECURITY.md) gives the details.
 
-## Credits and license
+## License
 
-Seira builds on [OpenMausBot](https://github.com/milind-soni/OpenMausBot) by Milind Soni and its contributors.
-Their work is the base of this project. Thank you.
-Seira also adapts code from other open-source projects. [NOTICE](NOTICE) names each project and its authors.
-
-- The code is under the [Apache License 2.0](LICENSE). [NOTICE](NOTICE) keeps the upstream copyright and the third-party credits.
+- The code is under the [Apache License 2.0](LICENSE).
+  [NOTICE](NOTICE) names the projects that Seira uses code from, with their authors and licenses.
   [LICENSING.md](LICENSING.md) gives the details.
 - Bundled third-party parts keep their own licenses. See [`third_party/`](third_party/).
 - The Apache License does not give rights to the Seira name, logo, or mascot (section 6).
 
-Seira is an independent project. It is not affiliated with or endorsed by the upstream project,
-Anthropic, OpenAI, or xAI. Claude, Codex, and Grok are trademarks of their owners.
+Seira is an independent project. It is not affiliated with or endorsed by Anthropic, OpenAI, Google, or xAI.
+Claude, Codex, Gemini, Grok, and the other engine names are trademarks of their owners.
 
 ---
 

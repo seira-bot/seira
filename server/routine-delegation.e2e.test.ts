@@ -2,7 +2,7 @@ import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, type VerificationServer } from "../scripts/control-seira.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 
 const SETTLED = "Your downstream room requests have settled.";
@@ -27,7 +27,7 @@ describe("routine delegation through the isolated harness", () => {
     expect(status, `${method} ${path}: ${JSON.stringify(value)}`).toBeLessThan(300);
     return value;
   };
-  const control = (args: string[]) => runControlOmb([...args, "--url", fixture.info.url]);
+  const control = (args: string[]) => runControlSeira([...args, "--url", fixture.info.url]);
   const file = (threadId: string, extension: string) => join(fixture.info.dataDir, `${threadId}.${extension}`);
   const finish = (threadId: string) => writeFileSync(file(threadId, "gate"), "finish isolated turn");
   const dump = async (threadId: string) => {

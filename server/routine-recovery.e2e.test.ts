@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb, verificationServerArgs, verificationServerEnvironment, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, verificationServerArgs, verificationServerEnvironment, type VerificationServer } from "../scripts/control-seira.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
@@ -52,7 +52,7 @@ async function server(env: NodeJS.ProcessEnv = {}) {
   // its own on the same engine. Stepped down, what these runs tell the owner is theirs alone.
   const starter = (await api("GET", "/api/bots")).bots.find((candidate: any) => candidate.chiefOfStaff);
   await api("PATCH", `/api/bots/${starter.id}`, { chiefOfStaff: false });
-  const bot = (await runControlOmb(["new-bot", "--name", "Inbox bot", "--url", url]) as any).bot;
+  const bot = (await runControlSeira(["new-bot", "--name", "Inbox bot", "--url", url]) as any).bot;
   events = await openSse(`${url}/api/events`, { origin: url });
   const routine = async (name = "Inbox brief") => (await api("POST", "/api/routines", {
     name, prompt: "Summarise my inbox.", botId: bot.id, enabled: false, schedule: { type: "cron", expression: "0 7 * * *", timeZone: "Europe/London" },
@@ -201,7 +201,7 @@ it("keeps an ACP engine's run that a graceful shutdown cut off, and starts it on
     closeSync(log);
     await expect.poll(async () => { try { return (await fetch(`${url}/api/health`)).ok; } catch { return false; } }, { timeout: hostTimeout(30_000) }).toBe(true);
   };
-  const cli = (...args: string[]) => runControlOmb([...args, "--url", url]) as Promise<any>;
+  const cli = (...args: string[]) => runControlSeira([...args, "--url", url]) as Promise<any>;
   const api = async (method: string, path: string, body?: unknown) => (await fetch(url + path, {
     method, headers: { "content-type": "application/json", origin: url }, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })).json() as Promise<any>;
@@ -228,7 +228,7 @@ it("keeps an ACP engine's run that a graceful shutdown cut off, and starts it on
 it("waits for the conversation it joins to be free instead of failing, then runs there", async () => {
   const s = await server();
   s.engine("hang", { FAKE_CLAUDE_RELEASE: join(s.dataDir, "release") });
-  await runControlOmb(["send", "--bot", s.bot.id, "--task", s.bot.activeTaskId, "--text", "Draft the weekly update.", "--url", s.url]);
+  await runControlSeira(["send", "--bot", s.bot.id, "--task", s.bot.activeTaskId, "--text", "Draft the weekly update.", "--url", s.url]);
   await expect.poll(async () => (await s.api("GET", "/api/bots")).bots.find((bot: any) => bot.id === s.bot.id)?.busy, { timeout: hostTimeout(15_000) }).toBe(true);
 
   const { routine } = await s.api("POST", "/api/routines", {

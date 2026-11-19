@@ -2,9 +2,9 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "../control-omb.ts";
+import { launchVerificationServer, runControlSeira, type VerificationServer } from "../control-seira.ts";
 import { waitForExit } from "../../server/testing/cleanup.ts";
-import { ensureUiBrowser } from "./control-omb-ui.ts";
+import { ensureUiBrowser } from "./control-seira-ui.ts";
 import { fixtureApi, mountPreview, type MountedPreview } from "./preview-fixture.ts";
 import { NOTICES } from "../../src/lib/notices.ts";
 
@@ -85,7 +85,7 @@ async function connect(url: string) {
     await api("PATCH", "/api/config", { language: "en" });
     const { bots } = await api("GET", "/api/bots");
     for (const bot of bots.filter((bot: { defaultBot?: unknown }) => bot.defaultBot)) await api("PATCH", `/api/bots/${bot.id}`, { welcomed: true });
-    const created = await runControlOmb(["new-bot", "--name", "Pepper", "--url", fixture.info.url]) as { bot: { id: string; activeTaskId: string } };
+    const created = await runControlSeira(["new-bot", "--name", "Pepper", "--url", fixture.info.url]) as { bot: { id: string; activeTaskId: string } };
     preview = await mountPreview(fixture, { entry: "/scripts/testing/threads-preview.tsx", route: "/__mobile-blocks.html", title: "Isolated mobile code blocks", logLevel: "warn" });
     const profile = join(fixture.info.dataDir, "chrome");
     mkdirSync(profile, { recursive: true });
@@ -127,7 +127,7 @@ async function connect(url: string) {
     await request("Input.insertText", { text: "Show separate text and code examples" });
     await request("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
     await request("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
-    const settled = await runControlOmb(["wait", "--bot", created.bot.id, "--task", created.bot.activeTaskId, "--timeout", "60", "--url", fixture.info.url]);
+    const settled = await runControlSeira(["wait", "--bot", created.bot.id, "--task", created.bot.activeTaskId, "--timeout", "60", "--url", fixture.info.url]);
     receipts.settled = settled;
     await expect.poll(() => evaluate(`${blocks}.length`), { timeout: 30_000 }).toBe(snippets.length);
     await expect.poll(() => evaluate(`${blocks}[1].querySelector('pre')?.classList.contains('shiki')`), { timeout: 30_000 }).toBe(true);
