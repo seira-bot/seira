@@ -65,7 +65,7 @@ const key = async (name: string) => {
 };
 const show = async (extra: Record<string, unknown> = {}) => {
   await act(async () => { root.render([createElement(Watch, { key: "w" }),
-    createElement(DesktopCapabilitiesProvider, { key: "f" }, createElement(WelcomeFlow, { onDone: f.onDone, ...extra }))]); });
+    createElement(DesktopCapabilitiesProvider, { key: "f", children: createElement(WelcomeFlow, { onDone: f.onDone, ...extra }) })]); });
 };
 /** Next, the first screen's 100 ms fade, and the Chief dialog's input guard. */
 const toChief = async (label = "Next") => {
