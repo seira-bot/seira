@@ -18,6 +18,8 @@ export interface LiveCodexSocketOptions {
   now?(): number;
   /** Runs once, when the socket has closed. */
   onClosed?(): void;
+  /** Receives the stop of the session when it begins, so a caller can wait for it after the socket has closed. */
+  onStop?(stop: Promise<void>): void;
 }
 
 /** Presents a Codex voice session to the Live call controller as the sideband socket of a GPT-Live call. */
@@ -38,12 +40,14 @@ export class LiveCodexSocket implements LiveSocket {
   private lastActivityFrameAt = Number.NEGATIVE_INFINITY;
   private readonly now: () => number;
   private readonly onClosed: (() => void) | undefined;
+  private readonly onStop: ((stop: Promise<void>) => void) | undefined;
   private readonly createdAt: number;
   private readonly voices: Record<"user" | "assistant", Voice | null> = { user: null, assistant: null };
 
   constructor(options: LiveCodexSocketOptions = {}) {
     this.now = options.now ?? Date.now;
     this.onClosed = options.onClosed;
+    this.onStop = options.onStop;
     this.createdAt = this.now();
   }
 
@@ -152,7 +156,10 @@ export class LiveCodexSocket implements LiveSocket {
 
   private stopSession(): Promise<void> {
     this.stopRequested = true;
-    if (this.session && !this.stopPromise) this.stopPromise = this.session.stop().catch(() => undefined);
+    if (this.session && !this.stopPromise) {
+      this.stopPromise = this.session.stop().catch(() => undefined);
+      this.onStop?.(this.stopPromise);
+    }
     return this.stopPromise ?? Promise.resolve();
   }
 

@@ -82,7 +82,8 @@ export interface LiveCallDeps {
   geminiRefusal(auth: RequestAuth): string | null;
   elevenlabsRefusal(auth: RequestAuth): string | null;
   /** `sdp` is "" on relayed calls, which answer with `fish`, `gemini` or `elevenlabs` instead of an SDP answer. */
-  createSession(input: { key: string; endpoint: LiveEndpoint; sdp: string; botId: string; threadId: string; voice: string }): Promise<LiveSessionAnswer>;
+  /** `signal` aborts when the call ends before the session is created. */
+  createSession(input: { key: string; endpoint: LiveEndpoint; sdp: string; botId: string; threadId: string; voice: string; signal?: AbortSignal }): Promise<LiveSessionAnswer>;
   openSocket(url: string, key: string, endpoint: LiveEndpoint): LiveSocket;
   attachUrl(sessionId: string, endpoint: LiveEndpoint): string;
   speakable(text: string): string[];
@@ -128,6 +129,8 @@ interface Call {
   key: string;
   endpoint: LiveEndpoint;
   sessionId: string;
+  /** Set while the session starts. */
+  starting: AbortController | null;
   socket: LiveSocket | null;
   attached: boolean;
   transcript: LiveTranscript;
@@ -223,9 +226,13 @@ export class LiveCallController {
     // Taken before the first await: a second start in the same tick is refused.
     this.call = call;
     let session: LiveSessionAnswer;
+    const starting = new AbortController();
+    call.starting = starting;
     try {
-      session = await this.deps.createSession({ key, endpoint, sdp: relayed ? "" : input.sdp ?? "", botId: input.botId, threadId: input.threadId, voice });
+      session = await this.deps.createSession({ key, endpoint, sdp: relayed ? "" : input.sdp ?? "", botId: input.botId, threadId: input.threadId, voice, signal: starting.signal });
+      call.starting = null;
     } catch (error) {
+      call.starting = null;
       if (this.call === call) this.call = null;
       this.deps.log(`[live] call failed bot=${input.botId} client=${input.client} status=${error instanceof LiveSessionError ? error.status : "error"}`);
       throw error;
@@ -299,6 +306,7 @@ export class LiveCallController {
       key,
       endpoint,
       sessionId: "",
+      starting: null,
       socket: null,
       attached: false,
       transcript: new LiveTranscript(),
@@ -410,6 +418,8 @@ export class LiveCallController {
     if (call.state.status === "ended") return;
     call.state.status = "ended";
     call.state.endReason = reason;
+    call.starting?.abort();
+    call.starting = null;
     if (error) call.state.error = error;
     for (const timer of call.timers) clearTimeout(timer);
     call.timers.clear();

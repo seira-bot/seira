@@ -11,6 +11,7 @@ import {
 } from "../contracts.ts";
 import { createLiveCodexApproval } from "../live-codex-approval.ts";
 import { decodeCodexSelection } from "./codex-catalog.ts";
+import { codexShellDisabled } from "./codex-guest.ts";
 import { codexLiveAppServerArgs } from "./codex-own-login-args.ts";
 
 /** `thread/realtime/start` with `version: "v3"` and WebRTC exists from Codex 0.170.0. */
@@ -96,6 +97,7 @@ export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
 
   async function start(input: EngineLiveVoiceStart): Promise<EngineLiveVoiceSession> {
     if (deps.unsupportedSignIn) refuse("unsupported-sign-in");
+    if (input.signal?.aborted) refuse("failed");
     const clock = deps.now ?? Date.now;
     const began = clock();
     const phases = { init: 0, account: 0, thread: 0, answer: 0 };
@@ -195,6 +197,11 @@ export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
     child.stdin.on("error", () => {});
     child.stderr.on("data", () => {});
 
+    const onAbort = () => { void terminate(); };
+    input.signal?.addEventListener("abort", onAbort, { once: true });
+    const detachAbort = () => input.signal?.removeEventListener("abort", onAbort);
+    if (input.signal?.aborted) onAbort();
+
     const forThread = (params: any) => threadId !== null && (params?.threadId === undefined || params.threadId === threadId);
     const onNotification = (method: string, params: any) => {
       if (method === "thread/realtime/sdp") {
@@ -270,15 +277,21 @@ export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
 
     let stopOnce: Promise<void> | undefined;
     const session: { stop(endCall?: boolean): Promise<void> } = {
-      stop: (endCall = false) => stopOnce ??= (async () => {
+      stop: (endCall = false) => {
+        if (stopOnce) return stopOnce;
+        let proceed!: () => void;
+        stopOnce = new Promise<void>((resolve) => { proceed = resolve; }).then(async () => {
+          approval.dispose();
+          if (!exited && threadId) await Promise.race([request("thread/realtime/stop", { threadId }, timeouts.stopMs).catch(() => {}), wait(timeouts.stopMs)]);
+          await terminate();
+          open.delete(session);
+          deps.log(`live codex: stopped transcripts=${counts.transcripts} answers=${counts.answers} approvals=${counts.approvals} appends=${counts.appends} speeches=${counts.speeches} failedAppends=${counts.appendFailures}`);
+        });
         if (endCall && established) emit({ type: "failed", reason: "exit" });
         stopping = true;
-        approval.dispose();
-        if (!exited && threadId) await Promise.race([request("thread/realtime/stop", { threadId }, timeouts.stopMs).catch(() => {}), wait(timeouts.stopMs)]);
-        await terminate();
-        open.delete(session);
-        deps.log(`live codex: stopped transcripts=${counts.transcripts} answers=${counts.answers} approvals=${counts.approvals} appends=${counts.appends} speeches=${counts.speeches} failedAppends=${counts.appendFailures}`);
-      })(),
+        proceed();
+        return stopOnce;
+      },
     };
     open.add(session);
 
@@ -299,7 +312,9 @@ export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
 
       if (await tooOld()) throw new EngineLiveVoiceError("too-old");
       const accountRead = request("account/read", { refreshToken: false });
-      const configRead = input.approvalMode === "custom" ? request("config/read", { cwd: input.cwd, includeLayers: false }) : null;
+      const configRead = input.approvalMode === "custom" || input.toolScoped || input.guestConfined
+        ? request("config/read", { cwd: input.cwd, includeLayers: false })
+        : null;
       configRead?.catch(() => {});
       const account = await accountRead;
       if (account?.account?.type !== "chatgpt") {
@@ -308,6 +323,14 @@ export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
         return refuseAfterSpawn("not-signed-in");
       }
       const effectiveConfig = configRead ? (await configRead)?.config : undefined;
+      if (input.toolScoped) {
+        const catalog = (effectiveConfig as { mcp_servers?: unknown } | null | undefined)?.mcp_servers;
+        if (!catalog || typeof catalog !== "object" || Array.isArray(catalog)) throw new EngineLiveVoiceError("failed");
+        for (const entry of Object.values(catalog)) {
+          if ((entry as { enabled?: unknown } | null)?.enabled !== false) throw new EngineLiveVoiceError("failed");
+        }
+      }
+      if (input.guestConfined && !codexShellDisabled(effectiveConfig)) throw new EngineLiveVoiceError("failed");
       endPhase("thread");
       let params = deps.approvalParams(input.approvalMode, effectiveConfig);
       const selection = decodeCodexSelection(input.model);
@@ -357,7 +380,9 @@ export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
           reject(new EngineLiveVoiceError("failed"));
         });
       }).finally(() => { onSdp = null; onEarlyFailure = null; });
+      if (stopping || input.signal?.aborted) throw new EngineLiveVoiceError("failed");
     } catch (error) {
+      detachAbort();
       if (error instanceof EngineLiveVoiceError && error.refusal === "not-signed-in") throw error;
       await terminate();
       open.delete(session);
@@ -365,6 +390,7 @@ export function codexLiveVoice(deps: CodexLiveDeps): CodexLiveVoice {
       return refuseAfterSpawn(refusal);
     }
 
+    detachAbort();
     established = true;
     const ready = endPhase();
     deps.log(`live codex: started ${timings(ready)}`);

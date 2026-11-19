@@ -8,7 +8,7 @@ import { LIVE_COPY } from "../shared/live-approval.ts";
 import { LIVE_CODEX_REFUSAL, LIVE_CUSTOM_REFUSAL } from "./live-access.ts";
 import { codexLiveEndpoint, LIVE_CODEX_PHONE, LIVE_NEEDS_AZURE, LIVE_NEEDS_KEY, LiveSessionError, type LiveEndpoint } from "./live-call.ts";
 import { FishRelays, FISH_AGENT_VOICE } from "./live-fish.ts";
-import { liveSessionWiring } from "./live-session-wiring.ts";
+import { liveSessionWiring, shutdownLiveCalls } from "./live-session-wiring.ts";
 import { EngineLiveVoiceError, type EngineLiveVoiceEvent, type EngineLiveVoiceStart } from "./contracts.ts";
 import type { LiveElevenLabsSession, LiveFishSessionToken, LiveGeminiSession } from "../shared/wire.ts";
 import type { RequestAuth } from "./request-auth.ts";
@@ -86,7 +86,7 @@ describe("LiveCallController lifecycle", () => {
   it("creates the session with the key and voice, attaches the sideband and goes live", async () => {
     const t = setup();
     const result = await t.controller.start({ auth: owner, ...BOT, client: "ios", sdp: "offer-sdp" });
-    expect(t.deps.createSession).toHaveBeenCalledWith({ key: "sk-test", endpoint: ENDPOINT, sdp: "offer-sdp", botId: "bot1", threadId: "t1", voice: "sol" });
+    expect(t.deps.createSession).toHaveBeenCalledWith({ key: "sk-test", endpoint: ENDPOINT, sdp: "offer-sdp", botId: "bot1", threadId: "t1", voice: "sol", signal: expect.any(AbortSignal) });
     expect(result.sdp).toBe("answer-sdp");
     expect(result.call).toMatchObject({ botId: "bot1", threadId: "t1", client: "ios", voice: "sol", status: "connecting" });
     expect(t.socket().url).toBe("ws://fake/sess_1/attach");
@@ -1937,6 +1937,42 @@ describe("a Codex Live call through the real session wiring", () => {
     await vi.advanceTimersByTimeAsync(IDLE_CHECK_MS * 2);
     expect(c.t.frames.at(-1)).toMatchObject({ status: "ended", endReason: "signed-out" });
     expect(c.stop).toHaveBeenCalledOnce();
+  });
+
+  it("ends the call as a shutdown, and waits for a slow stop of Codex, when the server shuts down", async () => {
+    const c = through();
+    let release!: () => void;
+    c.stop.mockImplementation(() => new Promise<void>((resolve) => { release = resolve; }));
+    await c.begin();
+    c.event({ type: "started" });
+    await vi.advanceTimersByTimeAsync(0);
+    let done = false;
+    const shutting = shutdownLiveCalls(c.t.controller, c.wiring).then(() => { done = true; });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(c.t.frames.at(-1)).toMatchObject({ status: "ended", endReason: "shutdown" });
+    expect(c.t.frames.at(-1)?.error).toBeUndefined();
+    expect(done).toBe(false);
+    release();
+    await shutting;
+    expect(c.stop).toHaveBeenCalledOnce();
+  });
+
+  it("aborts the start of the session when the person hangs up before it is created, and not after", async () => {
+    let signal!: AbortSignal;
+    let release!: (answer: { sessionId: string; sdp: string }) => void;
+    const t = setup({ createSession: vi.fn((input) => { signal = input.signal!; return new Promise((resolve) => { release = resolve; }); }) });
+    const starting = t.controller.start({ auth: owner, ...BOT, client: "desktop", sdp: "offer-sdp" });
+    const rejected = expect(starting).rejects.toMatchObject({ status: 503 });
+    expect(signal.aborted).toBe(false);
+    await t.controller.end(t.controller.current()!.callId);
+    expect(signal.aborted).toBe(true);
+    release({ sessionId: "sess_1", sdp: "answer-sdp" });
+    await rejected;
+
+    const live = setup({ createSession: vi.fn(async (input) => { signal = input.signal!; return { sessionId: "sess_2", sdp: "answer-sdp" }; }) });
+    const started = await live.start();
+    await live.controller.end(started.call.callId);
+    expect(signal.aborted).toBe(false);
   });
 
   it("stops Codex once on server shutdown", async () => {

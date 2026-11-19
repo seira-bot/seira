@@ -574,6 +574,12 @@ export interface EngineLiveVoiceStart {
   /** The bot's model, as chat turns pass it. */
   model: string | null;
   approvalMode: ApprovalMode;
+  /** The bot has a tool selection: the engine keeps its shell snapshot and every config MCP server off. */
+  toolScoped?: boolean;
+  /** A guest or bot API caller drives the call: the engine runs with its shell off. */
+  guestConfined?: boolean;
+  /** Aborts the start when the call ends before the answer. Engines may ignore it. */
+  signal?: AbortSignal;
   /** Persona and rules for the voice model. */
   voiceInstructions: string;
   /** Instructions for the engine model that does the work. */

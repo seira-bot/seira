@@ -16,7 +16,7 @@ import { removeTempDir } from "../testing/cleanup.ts";
 import { CodexDriver } from "./codex.ts";
 import { decodeCodexSelection, encodeCodexSelection } from "./codex-catalog.ts";
 import { codexTurnConfigArgs } from "./codex-guest.ts";
-import { codexOwnLoginArgs } from "./codex-own-login-args.ts";
+import { codexLiveAppServerArgs, codexOwnLoginArgs } from "./codex-own-login-args.ts";
 import { codexLiveVoice, codexVersionTooOld, type CodexLiveDeps, type CodexLiveTimeouts, type LiveCodexChild } from "./codex-live.ts";
 
 const FAKE = join(dirname(fileURLToPath(import.meta.url)), "..", "testing", "fake-codex-app-server.ts");
@@ -442,6 +442,197 @@ describe("codexLiveVoice close before the answer", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("codexLiveVoice scripted process", () => {
+  function scripted(over: Partial<CodexLiveDeps> = {}) {
+    const sent: string[] = [];
+    const stdout = new PassThrough();
+    const child = Object.assign(new EventEmitter(), {
+      stdin: new Writable({ write(chunk, _enc, done) { sent.push(String(chunk)); done(); } }),
+      stdout,
+      stderr: new PassThrough(),
+      kill: () => { child.emit("exit", 0, null); return true; },
+    }) as unknown as LiveCodexChild;
+    const logs: string[] = [];
+    const live = codexLiveVoice({
+      unsupportedSignIn: false, env: () => ({}), version: async () => MODERN,
+      approvalParams: (mode) => workspaceParams(mode), permissionProfileUnsupported: () => false, withResolvedSandbox: resolveLike,
+      spawn: () => child, clientVersion: "0.0.0-test", log: (line) => logs.push(line),
+      timeouts: { answerMs: 20_000, stopMs: 100, killMs: 100, approvalMs: 60_000, rpcMs: 20_000 },
+      ...over,
+    });
+    const line = (message: unknown) => { stdout.write(`${JSON.stringify(message)}\n`); };
+    const requestsOf = (method: string) => sent.map((text) => JSON.parse(text)).filter((message) => message.method === method);
+    const reply = async (method: string, result: unknown) => {
+      await vi.waitFor(() => expect(requestsOf(method)).toHaveLength(1));
+      line({ jsonrpc: "2.0", id: requestsOf(method)[0].id, result });
+    };
+    const input = (extra: Partial<EngineLiveVoiceStart> = {}): EngineLiveVoiceStart => ({
+      sdp: "offer", cwd: "/work", botId: "b", model: null, approvalMode: "ask", voiceInstructions: "", workInstructions: "", history: [], onEvent: () => {}, ...extra,
+    });
+    const toRealtimeStart = async () => {
+      await reply("initialize", {});
+      await reply("account/read", { account: { type: "chatgpt" } });
+      await reply("thread/start", { thread: { id: "t1" }, sandbox: { type: "workspaceWrite" } });
+      await vi.waitFor(() => expect(requestsOf("thread/realtime/start")).toHaveLength(1));
+    };
+    return { live, logs, line, requestsOf, input, toRealtimeStart, child };
+  }
+
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("ends the process and refuses at once when the call ends while it waits for the answer", async () => {
+    const p = scripted();
+    const abort = new AbortController();
+    const failure = p.live.start(p.input({ signal: abort.signal })).then(() => null, (error) => error);
+    await p.toRealtimeStart();
+    const exited = vi.fn();
+    p.child.on("exit", exited);
+    abort.abort();
+    await vi.advanceTimersByTimeAsync(1_000);
+    const error = await failure;
+    expect(error).toBeInstanceOf(EngineLiveVoiceError);
+    expect((error as EngineLiveVoiceError).refusal).toBe("failed");
+    expect(exited).toHaveBeenCalled();
+    expect(p.logs.some((line) => line.startsWith("live codex: started"))).toBe(false);
+  });
+
+  it("ends the process when the call ends before the account read answers", async () => {
+    const p = scripted();
+    const abort = new AbortController();
+    const failure = p.live.start(p.input({ signal: abort.signal })).then(() => null, (error) => error);
+    await p.reply("initialize", {});
+    const exited = vi.fn();
+    p.child.on("exit", exited);
+    abort.abort();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(((await failure) as EngineLiveVoiceError).refusal).toBe("failed");
+    expect(exited).toHaveBeenCalled();
+  });
+
+  it("starts no process when the call has already ended", async () => {
+    const spawned = vi.fn();
+    const p = scripted({ spawn: spawned });
+    const abort = new AbortController();
+    abort.abort();
+    expect(await refusalOf(p.live.start(p.input({ signal: abort.signal })))).toBe("failed");
+    expect(spawned).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the call ends after the answer came but before the start returned", async () => {
+    const p = scripted();
+    const abort = new AbortController();
+    const failure = p.live.start(p.input({ signal: abort.signal })).then(() => null, (error) => error);
+    await p.toRealtimeStart();
+    abort.abort();
+    p.line({ jsonrpc: "2.0", method: "thread/realtime/sdp", params: { threadId: "t1", sdp: "answer" } });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(((await failure) as EngineLiveVoiceError).refusal).toBe("failed");
+    expect(p.logs.some((line) => line.startsWith("live codex: started"))).toBe(false);
+  });
+
+  it("refuses an answer that arrives after dispose began, and reports no started call", async () => {
+    const p = scripted();
+    const failure = p.live.start(p.input()).then(() => null, (error) => error);
+    await p.toRealtimeStart();
+    const disposing = p.live.dispose();
+    p.line({ jsonrpc: "2.0", method: "thread/realtime/sdp", params: { threadId: "t1", sdp: "late answer" } });
+    await vi.advanceTimersByTimeAsync(1_000);
+    await disposing;
+    expect(((await failure) as EngineLiveVoiceError).refusal).toBe("failed");
+    expect(p.logs.some((line) => line.startsWith("live codex: started"))).toBe(false);
+  });
+
+  it("runs one stop when a listener of the final failed event stops the session again", async () => {
+    const p = scripted();
+    let session!: EngineLiveVoiceSession;
+    const events: EngineLiveVoiceEvent[] = [];
+    const starting = p.live.start(p.input({ onEvent: (event) => { events.push(event); if (event.type === "failed") void session.stop(); } }));
+    await p.toRealtimeStart();
+    p.line({ jsonrpc: "2.0", method: "thread/realtime/sdp", params: { threadId: "t1", sdp: "answer" } });
+    session = await starting;
+    const disposing = p.live.dispose();
+    await vi.advanceTimersByTimeAsync(1_000);
+    await disposing;
+    expect(events.filter((event) => event.type === "failed")).toEqual([{ type: "failed", reason: "exit" }]);
+    expect(p.requestsOf("thread/realtime/stop")).toHaveLength(1);
+    expect(p.logs.filter((line) => line.startsWith("live codex: stopped"))).toHaveLength(1);
+  });
+});
+
+describe("codexLiveVoice config checks", () => {
+  const mcpConfig = (config: unknown) => ({ FAKE_CODEX_MCP_CONFIG: JSON.stringify(config) });
+
+  it("switches off the shell snapshot and every config MCP server of a bot with a tool selection", async () => {
+    const codexHome = join(scratch, "codex-home");
+    mkdirSync(codexHome, { recursive: true });
+    writeFileSync(join(codexHome, "config.toml"), '[mcp_servers.docs]\ncommand = "docs-server"\n');
+    const h = harness({ fake: { CODEX_HOME: codexHome, ...mcpConfig({ docs: { enabled: false } }) } });
+    await h.start({ toolScoped: true });
+    const args = h.spawned[0]!.args;
+    expect(args).toEqual(["app-server", ...codexLiveAppServerArgs(h.spawned[0]!.env, { botId: "bot-live", model: null, toolScoped: true })]);
+    const pairs = args.flatMap((arg, index) => args[index - 1] === "-c" ? [arg] : []);
+    expect(pairs).toContain("features.shell_snapshot=false");
+    expect(pairs).toContain("mcp_servers.docs.enabled=false");
+    expect(h.calls().map((call) => call.method)).toContain("config/read");
+  });
+
+  it("leaves the shell snapshot and the MCP servers alone for a bot without a tool selection", async () => {
+    const h = harness();
+    await h.start();
+    const pairs = h.spawned[0]!.args.flatMap((arg, index) => h.spawned[0]!.args[index - 1] === "-c" ? [arg] : []);
+    expect(pairs).not.toContain("features.shell_snapshot=false");
+    expect(pairs.some((arg) => arg.startsWith("mcp_servers"))).toBe(false);
+    expect(h.calls().map((call) => call.method)).not.toContain("config/read");
+  });
+
+  it("refuses a call whose Codex keeps an MCP server on, before it starts a thread", async () => {
+    const h = harness({ fake: mcpConfig({ docs: { command: "docs-server" } }) });
+    expect(await refusalOf(h.live.start(h.input({ toolScoped: true })))).toBe("failed");
+    expect(h.calls().map((call) => call.method)).not.toContain("thread/start");
+    expect(isGone(h.spawned[0]!.child)).toBe(true);
+  });
+
+  it("refuses a call whose Codex does not report its MCP servers", async () => {
+    const h = harness({ fake: mcpConfig(null) });
+    expect(await refusalOf(h.live.start(h.input({ toolScoped: true })))).toBe("failed");
+    expect(h.calls().map((call) => call.method)).not.toContain("thread/start");
+  });
+
+  it("sends the config read with the account read in the own sign-in mode when the bot has a tool selection", async () => {
+    const methods: string[] = [];
+    const write = (child: LiveCodexChild) => {
+      const original = child.stdin.write.bind(child.stdin);
+      child.stdin.write = ((chunk: unknown, ...rest: unknown[]) => {
+        try { methods.push(JSON.parse(String(chunk)).method); } catch { /* not a request */ }
+        return (original as (...args: unknown[]) => boolean)(chunk, ...rest);
+      }) as typeof child.stdin.write;
+      return child;
+    };
+    const h = harness({ fake: { FAKE_CODEX_ACCOUNT_MODE: "hang" }, timeouts: { rpcMs: 300 }, deps: {
+      spawn: (args, options) => write(spawn(process.execPath, [FAKE, ...args], { cwd: options.cwd, env: options.env, stdio: ["pipe", "pipe", "pipe"] })),
+    } });
+    expect(await refusalOf(h.live.start(h.input({ toolScoped: true, approvalMode: "ask" })))).toBe("failed");
+    expect(methods).toContain("account/read");
+    expect(methods).toContain("config/read");
+  });
+
+  it("starts with the shell off, as a guest-driven chat turn does", async () => {
+    const h = harness();
+    await h.start({ guestConfined: true });
+    const env = h.spawned[0]!.env;
+    expect(h.spawned[0]!.args).toEqual(["app-server", ...codexOwnLoginArgs(env, null, codexTurnConfigArgs({ botId: "bot-live", guestConfined: true }, env))]);
+    expect(h.spawned[0]!.args).toContain("features.shell_tool=false");
+  });
+
+  it("refuses a guest-driven call whose Codex did not turn the shell off", async () => {
+    const h = harness({ fake: { FAKE_CODEX_IGNORE_FEATURES: "1" } });
+    expect(await refusalOf(h.live.start(h.input({ guestConfined: true })))).toBe("failed");
+    expect(h.calls().map((call) => call.method)).not.toContain("thread/start");
+    expect(isGone(h.spawned[0]!.child)).toBe(true);
   });
 });
 

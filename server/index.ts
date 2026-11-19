@@ -321,7 +321,7 @@ import { createDecider, deciderReady, describeDecider } from "./decider/index.ts
 import { createStopLineRoutes } from "./routes/stop-line.ts"; import { decideRoomResponder } from "./decider/room-routing.ts"; import { roomRoutingInput } from "./host/room-routing-input.ts";
 import { autoRoomDefault, roomTurnMembers } from "./room-routing-members.ts";
 import { liveHistoryFrom, LiveSessionError, type LiveBot, type LiveHistoryMessage } from "./live-call.ts";
-import { LiveCallController, LiveCallSignedOutError } from "./live-call-controller.ts"; import { liveSessionWiring } from "./live-session-wiring.ts";
+import { LiveCallController, LiveCallSignedOutError } from "./live-call-controller.ts"; import { liveSessionWiring, shutdownLiveCalls } from "./live-session-wiring.ts";
 import { liveCallSettings, liveSettingsFor, liveSettingsForClient, saveLiveSettings } from "./live-settings.ts"; import { azureLiveCallRefusal, liveScopeRefusal } from "./live-access.ts";
 import { recordLiveCall, spokenLineFields, titleLiveCall } from "./live-call-record.ts"; import { finalTurnBlock, noteGroupTurn, roomRoundPasses, roomTurnsPerMember, turnsPerMemberPatch, turnsSince } from "./room-round-turns.ts";
 import { narrateTool, toUtterances } from "./tts/speech-text.ts";
@@ -12419,7 +12419,11 @@ function liveCodexFor(botId: string, threadId: string): ReturnType<NonNullable<P
   if (!bot || !instance || instance.driverKind !== "codex" || !instance.startLiveVoice) return null;
   const { privateWorkspace, pinnedCwd } = taskFolders(bot, threadId, instance);
   const cwd = pinnedCwd ?? privateWorkspace;
-  return { startLiveVoice: (input) => instance.startLiveVoice!(input), cwd, approvalMode: approvalModeForTurn(bot, false, threadId), botId: bot.id, model: bot.modelSelection.model || null };
+  const toolScoped = (() => { try { return toolScopeForTurn(bot.id) !== undefined; } catch { return true; } })();
+  return {
+    startLiveVoice: (input) => instance.startLiveVoice!(input), cwd, approvalMode: approvalModeForTurn(bot, false, threadId), botId: bot.id, model: bot.modelSelection.model || null,
+    toolScoped, guestConfined: cloudGuestDriven(threadId) || botApiThread(threadId),
+  };
 }
 function postLiveCallAnswer({ botId, threadId, text }: { botId: string; threadId: string; text: string }): void {
   if (store.taskByThread(botId, threadId)) store.appendMessage(threadId, { role: "bot", kind: "text", text });
@@ -15371,8 +15375,7 @@ const gracefulShutdown = createGracefulShutdown({
       await browserRuntime.closeAll();
     },
     async () => {
-      try { await liveWiring.stopAll(); } catch (error) { console.warn("live: stopping Codex calls failed", error); }
-      await liveCalls.shutdown();
+      try { await shutdownLiveCalls(liveCalls, liveWiring); } catch (error) { console.warn("live: stopping Codex calls failed", error); }
     },
     () => flushAllProfileHistory(),
     () => flushAllMemoryJournals(),

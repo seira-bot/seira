@@ -240,6 +240,45 @@ describe("a Codex call's session", () => {
     expect(w.inputs[0]!.workInstructions).toContain("Rigel");
   });
 
+  it("hands the tool selection, the guest confinement and the abort signal of the start to the voice", async () => {
+    const inputs: EngineLiveVoiceStart[] = [];
+    const startLiveVoice = async (input: EngineLiveVoiceStart) => { inputs.push(input); return { sdp: "a", appendText: vi.fn(), appendSpeech: vi.fn(), stop: vi.fn(async () => {}) }; };
+    const w = codexWiring({ codexLive: () => ({ startLiveVoice, cwd: "/work", approvalMode: "ask" as never, botId: "b1", model: null, toolScoped: true, guestConfined: true }) });
+    const signal = new AbortController().signal;
+    await w.calls.createSession({ key: "", endpoint: codexLiveEndpoint(), sdp: offer, botId: "b1", threadId: "t1", voice: "", signal });
+    expect(inputs[0]).toMatchObject({ toolScoped: true, guestConfined: true, signal });
+  });
+
+  it("refuses and stops the session when Codex reports a failure before the session is attached", async () => {
+    const stop = vi.fn(async () => {});
+    const w = codexWiring({ start: async (input) => {
+      input.onEvent({ type: "failed", reason: "error" });
+      return { sdp: "a", appendText: vi.fn(), appendSpeech: vi.fn(), stop };
+    } });
+    await expect(create(w)).rejects.toMatchObject({ status: 502, message: liveErrorMessage(500, undefined, "codex") });
+    await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce());
+    await w.stopAll();
+    expect(stop).toHaveBeenCalledOnce();
+    expect(w.calls.openSocket("anything", "", codexLiveEndpoint()).readyState).toBe(3);
+  });
+
+  it("waits in stopAll for a stop that began when the socket closed", async () => {
+    let release!: () => void;
+    const stop = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
+    const w = codexWiring({ start: async () => ({ sdp: "a", appendText: vi.fn(), appendSpeech: vi.fn(), stop }) });
+    const { sessionId } = await create(w);
+    w.calls.openSocket(sessionId, "", codexLiveEndpoint()).close(1000);
+    expect(stop).toHaveBeenCalledOnce();
+    let done = false;
+    const stopping = w.stopAll().then(() => { done = true; });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(done).toBe(false);
+    release();
+    await stopping;
+    expect(done).toBe(true);
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
   it("refuses when the bot's engine cannot take the call", async () => {
     const w = codexWiring({ codexLive: () => null });
     await expect(create(w)).rejects.toMatchObject({ status: 409, message: LIVE_CODEX_ENGINE });
