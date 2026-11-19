@@ -116,7 +116,7 @@ describe("createOutboundHold", () => {
     });
     expect(card).not.toHaveProperty("from");
     expect(activity).toEqual(["task:waiting-on-you"]);
-    expect(notified).toMatchObject([{ kind: "approval", botId: "b1", threadId: "t1" }]);
+    expect(notified).toMatchObject([{ kind: "approval", botId: "b1", threadId: "t1", requestId: card.card!.requestId }]);
 
     const requestId = card.card!.requestId as string;
     expect(outboundRequests.resolve({ threadId: "t1", requestId, behavior: "allow" })).toEqual({ claimed: true, state: "allowed" });

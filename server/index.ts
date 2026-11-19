@@ -6591,11 +6591,13 @@ bus.subscribe((event: RuntimeEvent) => {
           else if (asker.busy) store.setActivity(asker.id, "waiting-on-you");
           if (event.requestId) askCards.showWaitingOnPersonChip(event.threadId, event.requestId, asker, permission ? "approval" : "answer");
           const notificationBot = (routineRun && routineSourceOwner(routineRun)?.bot) || asker;
+          const notificationThread = (routineRun && routineSourceThread(routineRun)) || event.threadId;
           notify(buildNotification(
             permission ? "approval" : "question",
             notificationBot,
-            (routineRun && routineSourceThread(routineRun)) || event.threadId,
+            notificationThread,
             routineRun?.attention ? `${routineRun.routineName}: ${routineRun.attention}` : event.summary,
+            event.requestId && notificationThread === event.threadId ? { requestId: event.requestId } : undefined,
           ), routineRun ? { routine: true } : undefined);
         }
       }

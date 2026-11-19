@@ -189,6 +189,19 @@ describe("phone push relay, FCM", () => {
     expect(providers.calls.some((one) => one.url.includes("attacker"))).toBe(false);
   });
 
+  it("puts the request an alert waits on in the data the phone reads", async () => {
+    const account = await serviceAccount();
+    const environment = testEnv({ FCM_SERVICE_ACCOUNT: account.json });
+    const providers = fakeProviders();
+    const worker = createWorker(fetch, providers.fetch);
+    const { credential } = await installation(worker, environment, "fcm-request@example.test");
+    expect((await registerFcm(worker, environment, credential)).status).toBe(200);
+    expect((await send(worker, environment, credential, { notification: { ...notification, requestId: "req-7" } })).status).toBe(202);
+    const [message] = providers.fcm();
+    const data = (JSON.parse(message!.text) as { message: { data: { body: string } } }).message.data;
+    expect(JSON.parse(data.body)).toMatchObject({ v: 1, kind: "approval", threadId: "th_1", requestId: "req-7" });
+  });
+
   it("reuses Google's access token until it nears expiry, and maps a finished turn to the messages channel", async () => {
     const account = await serviceAccount();
     const environment = testEnv({ FCM_SERVICE_ACCOUNT: account.json });

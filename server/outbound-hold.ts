@@ -79,7 +79,7 @@ export function createOutboundHold(deps: OutboundHoldDeps): OutboundHold {
         } else if (store.taskByThread(currentSender.id, threadId)?.busy) {
           store.setTaskActivity(currentSender.id, threadId, "waiting-on-you");
         }
-        notify(buildNotification("approval", currentSender, threadId, summary, { avatarUrl: currentSender.avatarUrl }));
+        notify(buildNotification("approval", currentSender, threadId, summary, { avatarUrl: currentSender.avatarUrl, requestId: held.requestId }));
         const answer = await held.answer;
         outboundRequests.forget(held.requestId);
         if (active()) {

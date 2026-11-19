@@ -618,6 +618,7 @@ describe("bot-to-bot coordination is recorded, not announced", () => {
         (message: { kind: string; card?: { title?: string } }) => message.kind === "options" && Boolean(message.card),
       );
       expect(card?.card).toMatchObject({ title: "Your bot has a question", subtitle: "Which color?" });
+      expect(frame.notification.requestId).toBe(card?.card.requestId);
       expect(((await botState(peer.id))?.messages ?? []).some(
         (message: { kind: string; card?: { subtitle?: string } }) => message.kind === "options" && message.card?.subtitle === "Which color?",
       )).toBe(false);

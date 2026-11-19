@@ -117,6 +117,7 @@ export interface PushableNotification {
   botName: string;
   threadId: string;
   groupId?: string;
+  requestId?: string;
 }
 
 interface Job {
@@ -142,9 +143,9 @@ function clip(value: string, max: number): string {
 
 function pushableOf(value: unknown): PushableNotification | null {
   if (!value || typeof value !== "object") return null;
-  const { kind, botId, botName, threadId, groupId } = value as Record<string, unknown>;
+  const { kind, botId, botName, threadId, groupId, requestId } = value as Record<string, unknown>;
   if (typeof kind !== "string" || typeof botId !== "string" || typeof botName !== "string" || typeof threadId !== "string") return null;
-  return { kind, botId, botName, threadId, ...(typeof groupId === "string" ? { groupId } : {}) };
+  return { kind, botId, botName, threadId, ...(typeof groupId === "string" ? { groupId } : {}), ...(typeof requestId === "string" ? { requestId } : {}) };
 }
 
 /** The push for one notification, or null when it is not a kind a closed app is woken for or an id is not one the
@@ -162,6 +163,7 @@ export function phonePushNotification(notification: PushableNotification, room?:
     botName,
     threadId: notification.threadId,
     ...(room && roomName ? { roomId: room.id, roomName } : {}),
+    ...(notification.requestId && PUSH_ID.test(notification.requestId) ? { requestId: notification.requestId } : {}),
   };
 }
 
@@ -380,10 +382,17 @@ export class PhonePush {
     const recent = (this.sent.get(job.key) ?? []).filter((at) => now - at < PUSH_DEVICE_WINDOW_MS);
     if (recent.length >= PUSH_DEVICE_WINDOW_MAX) return "dropped";
     const body = { v: PHONE_PUSH_WIRE_VERSION, token: device.token, ...(device.pairing ? { pairing: device.pairing } : {}), ...(job.collapseId ? { collapseId: job.collapseId } : {}), notification: job.push };
-    let answer = await this.relay(PHONE_PUSH_RELAY_PATHS.send, body);
+    let sent = body;
+    let answer = await this.relay(PHONE_PUSH_RELAY_PATHS.send, sent);
     if (answer?.status === 404 && answer.code === PUSH_RELAY_ERRORS.unknownDevice) {
       const registered = await this.relay(PHONE_PUSH_RELAY_PATHS.register, this.registerBody(device));
-      if (registered && registered.status < 300) answer = await this.relay(PHONE_PUSH_RELAY_PATHS.send, body);
+      if (registered && registered.status < 300) answer = await this.relay(PHONE_PUSH_RELAY_PATHS.send, sent);
+    }
+    if (answer?.status === 400 && job.push.requestId) {
+      // A relay that predates the request id refuses a body that carries it: the alert still goes, without it.
+      const { requestId: _requestId, ...withoutRequest } = job.push;
+      sent = { ...body, notification: withoutRequest };
+      answer = await this.relay(PHONE_PUSH_RELAY_PATHS.send, sent);
     }
     if (!answer) return "retry";
     if (answer.status < 300) {

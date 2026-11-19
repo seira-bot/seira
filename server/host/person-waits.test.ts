@@ -137,6 +137,26 @@ describe("telling the person", () => {
     expect(sent).toEqual([expect.objectContaining({ kind: "secret", botId: bot.id, threadId: thread, title: "Postie needs your Mailbox password", body: "To read the mail." })]);
   });
 
+  it("names the card a password, a sign-in and an app to connect wait on by its message id", async () => {
+    const { store, sent, thread, card } = fixture();
+    const secret = card();
+    const signIn = store.appendMessage(thread, { role: "bot", kind: "signin", text: "sign in", signIn: { ...SIGN_IN } });
+    const connector = store.appendMessage(thread, { role: "bot", kind: "connector", text: "connect", connector: { slug: "gmail", label: "Gmail", description: "Read mail.", status: "required", resumeKey: "k" } });
+    await flush();
+    expect(sent.map(({ kind, requestId }) => ({ kind, requestId }))).toEqual([
+      { kind: "secret", requestId: secret.id },
+      { kind: "sign-in", requestId: signIn.id },
+      { kind: "sign-in", requestId: connector.id },
+    ]);
+  });
+
+  it("names the request id of a proposal left open", async () => {
+    const { store, sent, thread } = fixture();
+    store.appendMessage(thread, { role: "bot", kind: "options", card: { title: "New skill", options: ["Allow"], requestId: "skill-req-1", mcpRequest: {} } as never });
+    await flush();
+    expect(sent).toEqual([expect.objectContaining({ kind: "approval", requestId: "skill-req-1" })]);
+  });
+
   it("says who and where for a sign-in and an app to connect", async () => {
     const { store, sent, thread } = fixture();
     store.appendMessage(thread, { role: "bot", kind: "signin", text: "sign in", signIn: { ...SIGN_IN } });

@@ -61,6 +61,13 @@ describe("what work from outside writes where later turns read it waits on a car
     expect(fits.status).toBe(201);
   });
 
+  it("tells the person, naming the card that waits on them", () => {
+    const notify = vi.fn();
+    const w = world({ notify });
+    const proposed = w.writes.submitMemory(bot, "hook-run", { action: "append", text: "a note" });
+    expect(notify).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ kind: "approval", threadId: "hook-run", requestId: requestOf(proposed) }));
+  });
+
   it("offers a person only a few at a time from one conversation", () => {
     const w = world();
     for (let i = 0; i < 5; i++) expect(w.writes.submitMemory(bot, "hook-run", { action: "append", text: `note ${i}` }).status).toBe(201);

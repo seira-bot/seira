@@ -214,7 +214,7 @@ shape.
 - `unregister` `{ "v": 1, "platform"?: …, "token": "…" }` deletes it. `204`.
 - `send` `{ "v": 1, "token": "…", "pairing"?: "…", "collapseId"?: "…",
   "notification": { "kind", "title", "botId", "botName", "threadId",
-  "roomId"?, "roomName"? } }` pushes to a token **this** installation
+  "roomId"?, "roomName"?, "requestId"? } }` pushes to a token **this** installation
   registered, else `404 push_device_unknown` (the harness then registers and
   retries once). The schema is strict: `kind` is `[a-z-]`, ids are
   `[\w-]{1,120}`, `title` is one line of at most 200 characters, names at most
@@ -258,7 +258,7 @@ alert`, `apns-priority: 10`, a 24-hour `apns-expiration`, `apns-topic` set to
 the bundle id, and `apns-collapse-id`. The payload is
 `{ "aps": { "alert": { "title" }, "sound": "default", "thread-id", "category",
 "interruption-level" }, "omb": { "v": 1, "kind", "botId", "botName",
-"threadId", "roomId"?, "roomName"?, "pairing"? }, "body": <the same as omb> }`.
+"threadId", "roomId"?, "roomName"?, "requestId"?, "pairing"? }, "body": <the same as omb> }`.
 `category` is the app's `OPENMAUS_APPROVAL`, `OPENMAUS_QUESTION` or
 `OPENMAUS_UPDATE`, so the notification carries the app's buttons.
 `interruption-level` is `time-sensitive` for `approval`, `question`,

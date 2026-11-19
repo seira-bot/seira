@@ -209,6 +209,48 @@ describe("offering a notify frame", () => {
     for (const secret of ["PRIVATE", "payroll", "sk-live", "API_KEY"]) expect(raw).not.toContain(secret);
   });
 
+  it.each(["approval", "question", "sign-in"])("carries the request a %s waits on, so a tap answers that one", async (kind) => {
+    const { push, relay } = harness();
+    await push.register(PHONE, { platform: "apns", token: APNS });
+    push.offer({ notification: notification({ kind, requestId: "req-7" }), seq: 3 }, everyone);
+    await push.flush();
+    expect(relay.sends().map((call) => (call.body.notification as { requestId?: string }).requestId)).toEqual(["req-7"]);
+  });
+
+  it("sends the push without a request id that is not an id the relay takes, and with none given", async () => {
+    const { push, relay } = harness();
+    await push.register(PHONE, { platform: "apns", token: APNS });
+    push.offer({ notification: notification({ requestId: "has space & symbols" }), seq: 1 }, everyone);
+    push.offer({ notification: notification({ threadId: "th_2" }), seq: 2 }, everyone);
+    push.offer({ notification: notification({ threadId: "th_3", requestId: 42 }), seq: 3 }, everyone);
+    await push.flush();
+    const sent = relay.sends().map((call) => call.body.notification as Record<string, unknown>);
+    expect(sent).toHaveLength(3);
+    for (const one of sent) expect(one).not.toHaveProperty("requestId");
+  });
+
+  it("sends the push again without the request id when a relay that does not know it refuses the body", async () => {
+    const { push, relay } = harness();
+    await push.register(PHONE, { platform: "apns", token: APNS });
+    relay.answers.push({ status: 400, error: "invalid_request" });
+    push.offer({ notification: notification({ requestId: "req-7" }), seq: 5 }, everyone);
+    await push.flush();
+    const sends = relay.sends().map((call) => call.body.notification as Record<string, unknown>);
+    expect(sends).toHaveLength(2);
+    expect(sends[0]).toMatchObject({ requestId: "req-7" });
+    expect(sends[1]).not.toHaveProperty("requestId");
+    expect(sends[1]).toMatchObject({ kind: "approval", threadId: "th_1" });
+  });
+
+  it("does not send a push twice when the refusal had nothing to do with a request id", async () => {
+    const { push, relay } = harness();
+    await push.register(PHONE, { platform: "apns", token: APNS });
+    relay.answers.push({ status: 400, error: "invalid_request" });
+    push.offer({ notification: notification(), seq: 5 }, everyone);
+    await push.flush();
+    expect(relay.sends()).toHaveLength(1);
+  });
+
   it("wakes the phone for approvals, questions, sign-ins and finished replies only, as the phone chose", async () => {
     const { push, relay } = harness();
     await push.register(PHONE, { platform: "apns", token: APNS, kinds: ["question", "sign-in", "done"] });

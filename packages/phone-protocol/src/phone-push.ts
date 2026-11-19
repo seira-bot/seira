@@ -79,6 +79,9 @@ export interface PhonePushNotification {
   threadId: string;
   roomId?: string;
   roomName?: string;
+  /** The request an approval, question, secret or sign-in waits on: `Notification.requestId`, so a tap on the alert
+   * can answer that exact request. An opaque id; a relay that predates it rejects a send that carries it. */
+  requestId?: string;
 }
 
 export interface PushRelaySendRequest {
@@ -98,6 +101,7 @@ export interface PhonePushData {
   threadId: string;
   roomId?: string;
   roomName?: string;
+  requestId?: string;
   pairing?: string;
 }
 

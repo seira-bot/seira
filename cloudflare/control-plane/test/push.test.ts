@@ -157,6 +157,21 @@ describe("phone push relay", () => {
     expect(apns.calls).toHaveLength(1);
   });
 
+  it("hands the phone the request an alert waits on, and still takes an alert without one", async () => {
+    const key = await apnsKey();
+    const testEnv = await pushEnv(key.privateKeyPem);
+    const apns = fakeApns();
+    const worker = createWorker(fetch, apns.fetch);
+    const { credential } = await installation(worker, testEnv, "request@example.test");
+    expect((await register(worker, testEnv, credential)).status).toBe(200);
+    expect((await send(worker, testEnv, credential, { notification: { ...notification, requestId: "req-7" } })).status).toBe(202);
+    const [sent] = apns.calls;
+    const data = { v: 1, kind: "approval", botId: "bot_1", botName: "Scout", threadId: "th_1", roomId: "grp_1", roomName: "Launch", requestId: "req-7", pairing: "pair-tag-1" };
+    expect(sent!.body).toMatchObject({ omb: data, body: data });
+    expect((await send(worker, testEnv, credential, { notification: { ...notification, requestId: "has space" } })).status).toBe(400);
+    expect(apns.calls).toHaveLength(1);
+  });
+
   it("signs an ES256 provider token and sends a content-free alert", async () => {
     const key = await apnsKey();
     const testEnv = await pushEnv(key.privateKeyPem);
@@ -187,6 +202,8 @@ describe("phone push relay", () => {
       omb: { v: 1, kind: "approval", botId: "bot_1", botName: "Scout", threadId: "th_1", roomId: "grp_1", roomName: "Launch", pairing: "pair-tag-1" },
       body: { v: 1, kind: "approval", botId: "bot_1", botName: "Scout", threadId: "th_1", roomId: "grp_1", roomName: "Launch", pairing: "pair-tag-1" },
     });
+
+    expect((sent!.body as { omb: object }).omb).not.toHaveProperty("requestId");
 
     const jwt = sent!.headers.authorization!.replace(/^bearer /, "");
     const [header, claims, signature] = jwt.split(".");

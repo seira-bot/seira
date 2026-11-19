@@ -110,6 +110,7 @@ const sendSchema = z.strictObject({
     threadId: z.string().regex(ID),
     roomId: z.string().regex(ID).optional(),
     roomName: oneLine(80).optional(),
+    requestId: z.string().regex(ID).optional(),
   }),
 });
 export type PushSendRequest = z.infer<typeof sendSchema>;
@@ -189,6 +190,7 @@ function ombPayload(request: PushSendRequest) {
     botName: notification.botName,
     threadId: notification.threadId,
     ...(notification.roomId && notification.roomName ? { roomId: notification.roomId, roomName: notification.roomName } : {}),
+    ...(notification.requestId ? { requestId: notification.requestId } : {}),
     ...(request.pairing ? { pairing: request.pairing } : {}),
   };
 }

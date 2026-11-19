@@ -77,6 +77,7 @@ describe("the card that lifts a lock on the lent computer (server/host/lending-l
     expect(lines.filter((line) => line.card)).toHaveLength(1);
     expect(deps.notify).toHaveBeenCalledTimes(1);
     const card = cardOf(lines);
+    expect(deps.notify).toHaveBeenCalledWith(expect.objectContaining({ kind: "approval", threadId: "t1", requestId: card.requestId }));
     expect(card.title).toBe("Let Postmeister use your Mac for this?");
     expect(card.subtitle).toBe("Its notes changed in work you didn't write:\n- MEMORY.md\nwords of MEMORY.md");
     expect(card.options).toEqual(["Allow", "Not now"]);

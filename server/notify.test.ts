@@ -84,6 +84,21 @@ describe("buildNotification", () => {
 
     expect(buildNotification("done", bot, "thread-1", "pushed")?.avatarUrl).toBeUndefined();
   });
+  it.each([
+    ["approval", {}],
+    ["question", {}],
+    ["secret", { label: "Mailbox password" }],
+    ["sign-in", { site: "example.com" }],
+  ] as const)("names the request a %s waits on, so a phone answers that one", (kind, extra) => {
+    expect(buildNotification(kind, bot, "thread-1", "waiting", { ...extra, requestId: "req-7" })).toMatchObject({ kind, requestId: "req-7" });
+  });
+
+  it("leaves the request id out when there is none to name", () => {
+    expect(buildNotification("approval", bot, "thread-1", "rm -rf ./build")).not.toHaveProperty("requestId");
+    expect(buildNotification("approval", bot, "thread-1", "rm -rf ./build", { requestId: "" })).not.toHaveProperty("requestId");
+    expect(buildNotification("done", bot, "thread-1", "pushed", { avatarUrl: "/a.webp" })).not.toHaveProperty("requestId");
+  });
+
   it("titles a finished wait and keeps its line as the body", () => {
     expect(buildNotification("wait", { id: "b", name: "Pepper" }, "t", "the build: done. ci passed.")).toEqual({
       kind: "wait", botId: "b", botName: "Pepper", threadId: "t", title: "Pepper's wait is over", body: "the build: done. ci passed.",

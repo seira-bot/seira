@@ -90,6 +90,7 @@ describe("a teammate's NEEDS INPUT question", () => {
       card: { subtitle: QUESTION, options: [], requestId: "needs-input-as_1-1", requestType: "question" } });
     expect(w.rows("inbox").map((row) => row.tool?.name)).toEqual([`Ledger needs your input: ${QUESTION}`]);
     expect(w.notified.map((notification) => [notification.kind, notification.threadId])).toEqual([["question", "work"]]);
+    expect(w.notified[0]).toMatchObject({ requestId: "needs-input-as_1-1" });
   });
 
   it("keeps the localized chip's question identical to its English fallback, without the default answer", () => {
@@ -374,6 +375,19 @@ describe("a reminder of work parked on the person", () => {
     expect(w.notified[0]!.body).toContain("2 days");
     expect(w.notified[0]!.body).not.toContain("eu-west");
     expect(w.rows("work")).toEqual([]);
+  });
+
+  it("names the open question card when work parked with one, and no card when there is none", () => {
+    const w = world();
+    w.say("work", `Checked.\nNEEDS INPUT: ${QUESTION}`);
+    const parked = w.node({ status: "waiting", question: QUESTION });
+    w.cards.park(parked, QUESTION);
+    w.notified.length = 0;
+    w.cards.remind({ ...parked, cards: ["m1"] }, closesAt);
+    expect(w.notified).toEqual([expect.objectContaining({ kind: "question", threadId: "work", requestId: "needs-input-as_1-1" })]);
+    const bare = world();
+    bare.cards.remind(bare.node({ status: "waiting", question: QUESTION }), closesAt);
+    expect(bare.notified[0]).not.toHaveProperty("requestId");
   });
 
   it("does not read a card's internal wait description to the person", () => {

@@ -401,8 +401,8 @@ export function createPersonInbox(deps: PersonInboxDeps) {
     if (!delivered) return notification;
     const bot = store.bot(delivered.botId);
     if (!bot || bot.notifications === false) return null;
-    const { groupId: _room, avatarUrl: _face, ...rest } = notification;
-    return { ...rest, botId: bot.id, botName: bot.name, threadId: delivered.threadId, forPerson: person, ...(bot.avatarUrl ? { avatarUrl: bot.avatarUrl } : {}) };
+    const { groupId: _room, avatarUrl: _face, requestId, ...rest } = notification;
+    return { ...rest, ...(requestId && card?.requestId === requestId ? { requestId } : {}), botId: bot.id, botName: bot.name, threadId: delivered.threadId, forPerson: person, ...(bot.avatarUrl ? { avatarUrl: bot.avatarUrl } : {}) };
   }
 
   /** Where an answer to a card in this conversation goes: an inbox's copy answers the conversation that asked. */

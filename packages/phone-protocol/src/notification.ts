@@ -53,6 +53,16 @@ export interface Notification {
   /** On a Team Cloud, the one person this is for (their person key): a teammate tagged by name, or the person a bot
    * passed a message to. It reaches nobody else, an admin included. */
   forPerson?: string;
+  /** The request this notification waits on, so a phone can answer that exact request from the banner. It is set for
+   * `approval`, `question`, `secret` and `sign-in`, and absent for every other kind and for a client that predates it.
+   * For `approval` and `question` it is the card's `requestId`: answer it with
+   * `POST /api/threads/:threadId/respond` and `{ requestId, behavior: "allow" | "deny" | "answer", message? }`, using this
+   * notification's `threadId`. For `secret` it is the secure card's message id: answer it with
+   * `POST /api/bots/:botId/secret-cards/:requestId/provide`, `dismiss` or `resume`. For `sign-in` it is the card's message
+   * id: answer it with `POST /api/bots/:botId/sign-in-cards/:requestId/done` or `cancel`, or, for an app connection,
+   * `POST /api/bots/:botId/connector-cards/:requestId/resume`, `dismiss` or `authorize`. A phone that cannot find the
+   * request any more (it settled elsewhere) opens `threadId` instead. */
+  requestId?: string;
 }
 
 /** A `Notification` as the feed stores it: the live `notify` frame and `GET /api/notifications` carry the same entry. */

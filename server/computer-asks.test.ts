@@ -22,10 +22,10 @@ function fixture({ known = [{ platform: "win32" }] }: { known?: Array<{ platform
     setTaskActivity: (_id: string, _threadId: string, value: string) => { activity = value; },
     groupByThread: () => null,
   };
-  const state = { online: [] as OnlineComputer[], known, carried: [] as Array<{ threadId: string; requestMessageId: string; text: string }>, busy: false, notified: 0 };
+  const state = { online: [] as OnlineComputer[], known, carried: [] as Array<{ threadId: string; requestMessageId: string; text: string }>, busy: false, notified: 0, sent: [] as unknown[] };
   const asks = new ComputerAsks({
     store: store as never,
-    notify: () => { state.notified++; },
+    notify: (notification) => { state.notified++; state.sent.push(notification); },
     online: () => state.online,
     known: () => state.known,
     carryOn: (ask, text) => { if (state.busy) return false; state.carried.push({ threadId: ask.threadId, requestMessageId: ask.requestMessageId, text }); return true; },
@@ -61,6 +61,7 @@ describe("a bot on the person's own Cloud asks to turn on what it needs from the
       computerAsk: { need: "screen", reason: "paused", device: "PC", state: "asking", why: "Fill in the invoice in Excel" },
     });
     expect(f.state.notified).toBe(1);
+    expect(f.state.sent).toEqual([expect.objectContaining({ kind: "approval", threadId: "t1", requestId: f.card().requestId })]);
     expect(f.activity()).toBe("waiting-on-you");
     const heard = await f.present(desktop({ paused: true }));
     expect(heard.asks).toEqual([expect.objectContaining({ need: "screen", reason: "paused", bot: "Scout", why: "Fill in the invoice in Excel", state: "asking", turnOn: 0 })]);
