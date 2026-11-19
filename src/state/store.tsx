@@ -415,6 +415,8 @@ export interface InstanceInfo extends InstanceEndpointInfo {
   displayName: string;
   icon?: import("../../shared/provider-icon").ProviderIcon; /** An OpenAI-compatible server recognised as Ollama. */ serverKind?: "ollama";
   readOnly?: boolean;
+  /** The app is installing this engine by itself. */
+  installing?: boolean;
   trialCredit?: "active" | "used_up" | "ended";
   managed?: { organizationId: string; organizationName: string };
   policy?: { organizationName: string; reason: string; team?: boolean };

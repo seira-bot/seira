@@ -216,6 +216,18 @@ describe("connecting an AI on the first screen", () => {
     expect(host.querySelector("[data-ai-recommended]")?.getAttribute("data-ai-recommended")).toBe("claude");
   });
 
+  it("says OpenCode's free model is being prepared while the app installs it, then shows the backup line", async () => {
+    const installing: InstanceInfo = { ...engine("opencodeGo", "opencodeGo", "OpenCode", false), installing: true };
+    f.instances = [installing, engine("claude", "claudeAgent", "Claude", false)];
+    await show();
+    expect(host.querySelector("[data-ai-backup-installing]")?.textContent).toBe("Getting OpenCode's free model ready as a backup…");
+    expect(host.querySelector("[data-ai-backup]")).toBeNull();
+    f.instances = [{ ...engine("opencodeGo", "opencodeGo", "OpenCode", true), snapshot: { state: "available", authenticated: true, freeFallback: true } }, engine("claude", "claudeAgent", "Claude", false)];
+    await show();
+    expect(host.querySelector("[data-ai-backup-installing]")).toBeNull();
+    expect(host.querySelector("[data-ai-backup]")).not.toBeNull();
+  });
+
   it("offers the organization sign-in under Other ways on this computer's own window only", async () => {
     await show();
     await otherWays();

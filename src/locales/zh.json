@@ -3253,6 +3253,7 @@
   "onboarding.engines.noAnswer": "{name} 已登录，但没有回应。请换一种方式试试。",
   "onboarding.engines.orAnother": "或在下方连接另一个 AI。",
   "onboarding.engines.freeBackup": "{name} 的免费模型已可作为备用。要获得最好的回答，请连接你已经在用的 AI。",
+  "onboarding.engines.freeBackupInstalling": "正在准备 {name} 的免费模型作为备用…",
   "onboarding.engines.signInHint": "使用你已有的 {name} 账户。你在对方自己的网站上登录，密码只留在对方那里。",
   "onboarding.engines.ready": "就绪",
   "onboarding.engines.needsSetup": "需要设置",

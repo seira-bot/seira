@@ -1220,6 +1220,7 @@
   "onboarding.engines.noAnswer": "{name} est connecté mais n’a pas répondu. Essayez une autre méthode.",
   "onboarding.engines.orAnother": "Ou connectez une autre IA ci-dessous.",
   "onboarding.engines.freeBackup": "Le modèle gratuit de {name} est prêt en secours. Pour de meilleures réponses, connectez une IA que vous utilisez déjà.",
+  "onboarding.engines.freeBackupInstalling": "Préparation du modèle gratuit de {name} comme solution de secours…",
   "onboarding.engines.signInHint": "Utilisez le compte {name} que vous avez déjà. Vous vous connectez sur leur propre site, votre mot de passe reste donc chez eux.",
   "onboarding.engines.ready": "Prêts",
   "onboarding.engines.needsSetup": "À configurer",

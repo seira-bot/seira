@@ -1335,6 +1335,7 @@
   "onboarding.engines.noAnswer": "{name} ist angemeldet, hat aber nicht geantwortet. Versuch es auf einem anderen Weg.",
   "onboarding.engines.orAnother": "Oder verbinde unten eine andere KI.",
   "onboarding.engines.freeBackup": "Das kostenlose Modell von {name} steht als Reserve bereit. Für die besten Antworten verbinde eine KI, die du schon nutzt.",
+  "onboarding.engines.freeBackupInstalling": "{name}s kostenloses Modell wird als Reserve vorbereitet…",
   "onboarding.engines.signInHint": "Nutze das {name}-Konto, das du schon hast. Du meldest dich auf deren eigener Website an, dein Passwort bleibt also bei ihnen.",
   "onboarding.engines.ready": "Bereit",
   "onboarding.engines.needsSetup": "Einrichtung nötig",

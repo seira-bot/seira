@@ -3027,6 +3027,7 @@
   "onboarding.engines.noAnswer": "{name} にはサインインしていますが、応答がありませんでした。別の方法をお試しください。",
   "onboarding.engines.orAnother": "または、下で別の AI を接続してください。",
   "onboarding.engines.freeBackup": "{name} の無料モデルを予備として使えます。より良い回答を得るには、普段使っている AI を接続してください。",
+  "onboarding.engines.freeBackupInstalling": "{name}の無料モデルをバックアップとして準備しています…",
   "onboarding.engines.signInHint": "お持ちの{name}アカウントを使います。サインインは提供元のウェブサイトで行うため、パスワードはそちらから外に出ません。",
   "onboarding.engines.ready": "利用可能",
   "onboarding.engines.needsSetup": "セットアップが必要",

@@ -3358,6 +3358,7 @@
   "onboarding.engines.noAnswer": "O login de {name} está ativo, mas a IA não respondeu. Tente outra opção.",
   "onboarding.engines.orAnother": "Ou conecte outra IA abaixo.",
   "onboarding.engines.freeBackup": "O modelo grátis de {name} está disponível como reserva. Para obter as melhores respostas, conecte uma IA que você já usa.",
+  "onboarding.engines.freeBackupInstalling": "Preparando o modelo gratuito do {name} como reserva…",
   "onboarding.engines.signInHint": "Use a conta de {name} que você já tem. O login é no próprio site do provedor, e sua senha fica com ele.",
   "onboarding.engines.ready": "Tudo pronto",
   "onboarding.engines.needsSetup": "Precisa de configuração",

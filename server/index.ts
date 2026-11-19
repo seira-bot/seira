@@ -286,7 +286,7 @@ import { CloudCreditProvider } from "./cloud-credit-provider.ts";
 import { createCreditMoves } from "./cloud-credit-moves.ts"; import { createRoutineHoldsHost } from "./host/routine-holds-host.ts"; import { tellTurnedBackOn } from "./host/routines-turned-back-on.ts";
 import { TRIAL_CREDIT_OWN_AI, TRIAL_KEY_HELD } from "./trial-credit.ts"; import { createHeldKeys } from "./cloud-held-keys.ts";
 import type { ProviderInstance } from "./contracts.ts";
-import { readyToRun, selectDefaultModelSelection, withInstanceConfig, withNewBotEffort, type SelectableInstance } from "./default-model-selection.ts"; import { configIdentity, createTestedAi } from "./tested-ai.ts"; import { instanceLook } from "./provider-icon.ts";
+import { readyToRun, selectDefaultModelSelection, withInstanceConfig, withNewBotEffort, type SelectableInstance } from "./default-model-selection.ts"; import { createFreeEngineInstaller, freeEngineInstallEnabled } from "./free-engine.ts"; import { configIdentity, createTestedAi } from "./tested-ai.ts"; import { instanceLook } from "./provider-icon.ts";
 import { threadModelFallback, type ThreadEngine } from "./thread-model.ts";
 import { computerEngineMoveText, removedComputerInstanceIds, writeComputerEngineMoveLines } from "./computer-engine-removal.ts";
 import { peerDeliveryReceipt, type PeerDeliveryReceipt } from "./peer-delivery.ts";
@@ -2517,6 +2517,18 @@ async function refreshUnsetModelSelections(instances?: readonly SelectableInstan
     if (!bot.modelSelection.instanceId && !bot.modelSelection.model) store.applyModelDefault(bot.id, selection);
   }
 }
+
+const freeEngine = createFreeEngineInstaller({
+  statePath: join(DATA_DIR, "providers", "free-engine.json"),
+  enabled: freeEngineInstallEnabled() && !CLOUD_HOME && !HOSTED_WORKSPACE && !hostedModels,
+  instances: async () => selectableInstances(await registry.describe()),
+  ready: (instance) => readyToRun(instance, selectionContext),
+  refused: (instance) => selectionContext.refusal(instance) !== undefined || managedDesktop.owns(instance.instanceId),
+  install: (instanceId) => registry.installRuntime(instanceId),
+  changed: () => broadcast({ kind: "config", ...configStatus() }),
+  installed: () => refreshUnsetModelSelections(),
+  log: (line) => console.log(`[free-engine] ${line}`),
+});
 
 function saveNewBotModel(replacement: ModelSelection): void {
   const newBotDefaults = cfg.newBotDefaults && newBotDefaultsSchema.parse({
@@ -11799,6 +11811,7 @@ async function describeInstances() {
     const described = {
       ...instance, ...testedAi.info(instance), ...engineUpdates.shown(instance.driverKind),
       ...instanceLook(entry),
+      ...(freeEngine.installing(instance.instanceId) ? { installing: true } : {}),
       ...(entry?.access ? { access: entry.access } : {}), ...(entry?.driver === "openai-compat" && typeof (entry.config as { replyWaitMinutes?: unknown } | undefined)?.replyWaitMinutes === "number" ? { replyWaitMinutes: (entry.config as { replyWaitMinutes: number }).replyWaitMinutes } : {}), ...(heldKeys?.refusal(instance.instanceId) ? { snapshot: { state: "unavailable" as const, reason: TRIAL_KEY_HELD } } : {}),
     };
     if (hostedModels) return { ...described, readOnly: true,
@@ -15262,7 +15275,7 @@ server.listen(PORT, listenHost(server), async () => {
   console.log(`openmausbot server on http://127.0.0.1:${PORT}`);
   personWaits.boot(); browserSweep.start(); startCloudTeamPolicy({ cloudHome: CLOUD_HOME, dataDir: DATA_DIR, managed: managedPolicy, sessions }); startCloudTeamRoster({ cloudHome: CLOUD_HOME, sessions }); moveFreeze.hold(() => appTriggers.start(), () => void appTriggers.stop()); startCloudHomeConnectedApps({ cloudHome: CLOUD_HOME !== null, dataDir: DATA_DIR, cloudGrant: CLOUD_ENV.OMB_CLOUD_CONNECTED_APPS_GRANT, ownKey: () => composio.connectionMode(cfg) === "self-hosted", apply: (access) => { composio.setManagedBrokerAccess(access); broadcast({ kind: "config", ...configStatus() }); } });
   void afterFirstEngineRead().then(() => { if (builtInBrowserEnabled(cfg)) chromeLauncher.start(); });
-  followupsReady = true; engineUpdates.start();
+  followupsReady = true; engineUpdates.start(); void afterFirstEngineRead().then(() => freeEngine.start());
   drainQueuedSends();
   drainQueuedChannelSends();
   void cloudComputerPower.armRunning();

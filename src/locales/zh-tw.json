@@ -3214,6 +3214,7 @@
   "onboarding.engines.noAnswer": "{name} 已登入，但沒有回應。請換個方式試試。",
   "onboarding.engines.orAnother": "或在下方連線另一個 AI。",
   "onboarding.engines.freeBackup": "{name} 的免費模型已可作為備用。若要獲得最好的回答，請連線你已在使用的 AI。",
+  "onboarding.engines.freeBackupInstalling": "正在準備 {name} 的免費模型作為備用…",
   "onboarding.engines.signInHint": "使用你已有的 {name} 帳號。你在對方自己的網站上登入，密碼只留在對方那裡。",
   "onboarding.engines.ready": "已就緒",
   "onboarding.engines.needsSetup": "需要設定",

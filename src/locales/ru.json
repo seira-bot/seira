@@ -2695,6 +2695,7 @@
   "onboarding.tour.error": "Не удалось сохранить ваш прогресс. Попробуйте ещё раз или пропустите обзор.",
   "onboarding.engines.otherWays": "Другие способы",
   "onboarding.engines.connected": "{name} подключён. Ваши боты могут приступать к работе.",
+  "onboarding.engines.freeBackupInstalling": "Готовим бесплатную модель {name} как запасной вариант…",
   "onboarding.engines.signInHint": "Используйте уже имеющийся у вас аккаунт {name}. Вход выполняется на сайте самого сервиса, поэтому пароль остаётся у него.",
   "onboarding.engines.ready": "Готово",
   "onboarding.engines.needsSetup": "Требуется настройка",

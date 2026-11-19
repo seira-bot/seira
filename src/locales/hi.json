@@ -1220,6 +1220,7 @@
   "onboarding.engines.noAnswer": "{name} में साइन इन है, लेकिन उसने जवाब नहीं दिया। कोई दूसरा तरीका आज़माएँ।",
   "onboarding.engines.orAnother": "या नीचे कोई दूसरा AI जोड़ें।",
   "onboarding.engines.freeBackup": "{name} का मुफ़्त मॉडल बैकअप के रूप में तैयार है। सबसे अच्छे जवाबों के लिए, वह AI जोड़ें जिसे आप पहले से इस्तेमाल करते हैं।",
+  "onboarding.engines.freeBackupInstalling": "{name} का मुफ़्त मॉडल बैकअप के तौर पर तैयार किया जा रहा है…",
   "onboarding.engines.signInHint": "अपना मौजूदा {name} खाता इस्तेमाल करें। आप उनकी अपनी वेबसाइट पर साइन इन करते हैं, इसलिए आपका पासवर्ड उन्हीं के पास रहता है।",
   "onboarding.engines.ready": "तैयार",
   "onboarding.engines.needsSetup": "सेटअप चाहिए",

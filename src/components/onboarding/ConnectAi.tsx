@@ -78,6 +78,7 @@ export function ConnectAi({ hosted = false, tested }: { hosted?: boolean; tested
 
   const connected = tested && aiWorks(tested) ? tested.instance : undefined;
   const backup = state.instances.find((instance) => engineReady(instance) && freeFallback(instance));
+  const preparing = backup ? undefined : state.instances.find((instance) => instance.installing === true && !engineReady(instance));
   const { recommended, others } = aiChoices(state.instances.filter((instance) => instance.install && !engineReady(instance)));
   const modelgoReady = state.instances.some((instance) => instance.driverKind === "modelgo" && engineReady(instance));
   // Hosted: the organization provides the AI and refuses a key of the person's own.
@@ -120,11 +121,17 @@ export function ConnectAi({ hosted = false, tested }: { hosted?: boolean; tested
               {t("onboarding.engines.freeBackup", { name: engineDisplayName(backup) })}
             </p>
           )}
+          {!tested && preparing && (
+            <p data-ai-backup-installing className="animate-rise mb-3 flex items-center gap-2 text-[13px] text-ink-secondary">
+              <LoaderCircle size={13} className="shrink-0 animate-spin" aria-hidden="true" />
+              {t("onboarding.engines.freeBackupInstalling", { name: engineDisplayName(preparing) })}
+            </p>
+          )}
           {recommended ? (
             <div data-ai-recommended={recommended.instanceId} className="animate-rise w-full rounded-2xl bg-card p-4 text-left">
               <EngineSetup instance={recommended} {...setupFor(recommended)} className="border-0 bg-transparent p-0" />
             </div>
-          ) : !tested && !backup && !failed ? (
+          ) : !tested && !backup && !preparing && !failed ? (
             <p className="text-[13px] text-ink-secondary" aria-live="polite">{t("common.checking")}</p>
           ) : null}
         </>

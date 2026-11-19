@@ -2668,6 +2668,7 @@
   "onboarding.engines.noAnswer": "{name} jest zalogowany, ale nie odpowiedział. Spróbuj w inny sposób.",
   "onboarding.engines.orAnother": "Albo połącz poniżej inne AI.",
   "onboarding.engines.freeBackup": "Darmowy model {name} jest gotowy jako zapasowy. Aby dostawać najlepsze odpowiedzi, połącz AI, którego już używasz.",
+  "onboarding.engines.freeBackupInstalling": "Przygotowuję darmowy model {name} jako zapas…",
   "onboarding.engines.signInHint": "Użyj konta {name}, które już masz. Logujesz się na ich własnej stronie, więc twoje hasło pozostaje u nich.",
   "onboarding.engines.ready": "Gotowe",
   "onboarding.engines.needsSetup": "Wymaga konfiguracji",

@@ -2895,6 +2895,7 @@
   "onboarding.engines.noAnswer": "{name}에 로그인됐지만 응답이 없어요. 다른 방법을 써 보세요.",
   "onboarding.engines.orAnother": "또는 아래에서 다른 AI를 연결하세요.",
   "onboarding.engines.freeBackup": "{name}의 무료 모델이 백업으로 준비돼 있어요. 가장 좋은 답을 얻으려면 이미 쓰고 있는 AI를 연결하세요.",
+  "onboarding.engines.freeBackupInstalling": "{name}의 무료 모델을 백업용으로 준비하는 중…",
   "onboarding.engines.signInHint": "이미 있는 {name} 계정을 쓰세요. 로그인은 해당 서비스 웹사이트에서 하므로 비밀번호는 그쪽에만 남아요.",
   "onboarding.engines.ready": "준비됨",
   "onboarding.engines.needsSetup": "설정 필요",
