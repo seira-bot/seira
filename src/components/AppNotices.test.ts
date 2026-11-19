@@ -1204,7 +1204,7 @@ describe("bots in two places", () => {
 describe("the upstream sponsor offers", () => {
   const OFFERS = [/ModelGo is now in Seira/, /\$50 of Boat credit/, /data-notice="(?:boat|modelgo)-offer"/];
   it("shows no Boat card and no ModelGo card to a returning user who has seen nothing", async () => {
-    returning(); desk.saved = null; storage.clear(); storage.set(SHARED_HINT_CLOSED, "1"); f.state.config.onboarding.hintsSeen = withTourFinished(undefined);
+    returning();
     for (const shown of [await launch(), await relaunch(), await relaunch()]) for (const offer of OFFERS) expect(shown).not.toMatch(offer);
     expect(vi.mocked(track).mock.calls.map(([name]) => name).filter(name => /^(?:boat|modelgo)_offer$/.test(name))).toEqual([]);
   });
