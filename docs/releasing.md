@@ -22,6 +22,10 @@ Only the maintainers can release:
   tags for everyone except the organization admins.
 - GitHub Actions has no bypass on either ruleset, and its token can only read
   the repository (see [CI](ci.md)).
+- A new push to `main` cancels the older `main` CI run that is still going
+  (see [CI](ci.md#fewer-runners)). When you release, rely on the `CI` check of
+  the release pull request, or on the run of the newest `main` commit. A
+  cancelled run of an older commit is not a failure.
 
 The server image `ghcr.io/seira-bot/seira:v<version>` comes from the
 `Server image` workflow after the release (step 7). The npm package
