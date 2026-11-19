@@ -160,3 +160,20 @@ describe("RoomMoreMenu, the Room panel's round ⋯", () => {
     expect(markup).toContain('title="This thread:');
   });
 });
+
+describe("RoomMoreMenu folder item", () => {
+  it("adds the room folder after find and toggles it", () => {
+    const onToggle = vi.fn();
+    fixture.menus = [];
+    renderToStaticMarkup(createElement(RoomMoreMenu, { group: room(), folder: { open: true, onToggle } }));
+    const items = fixture.menus.at(-1)!.items;
+    expect(items.map((entry) => entry.key).slice(0, 2)).toEqual(["find", "folder"]);
+    expect(items[1]!.active).toBe(true);
+    items[1]!.onSelect();
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("has no folder item without the folder option", () => {
+    expect(menuOf(room()).items.map((entry) => entry.key)).not.toContain("folder");
+  });
+});

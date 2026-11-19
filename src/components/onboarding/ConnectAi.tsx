@@ -85,14 +85,17 @@ export function ConnectAi({ hosted = false, tested }: { hosted?: boolean; tested
 
   const connected = tested && aiWorks(tested) ? tested.instance : undefined;
   const backup = state.instances.find((instance) => engineReady(instance) && freeFallback(instance));
+  const preparing = backup ? undefined : state.instances.find((instance) => instance.installing === true && !engineReady(instance));
   const { recommended, others } = aiChoices(state.instances.filter((instance) => instance.install && !engineReady(instance)));
   const modelgoReady = state.instances.some((instance) => instance.driverKind === "modelgo" && engineReady(instance));
   // Hosted: the organization provides the AI and refuses a key of the person's own.
   const showModelgo = !hosted && !modelgoReady && modelgoOfferable(state.config?.managedPolicy);
   const modelgo = others.find((instance) => instance.driverKind === "modelgo");
   const otherRows = others.filter((instance) => !(showModelgo && instance === modelgo));
-  const free = others.find((instance) => instance.driverKind === "opencodeGo");
-  const foldRows = otherRows.filter((instance) => instance !== free);
+  const freeRow = others.find((instance) => instance.driverKind === "opencodeGo");
+  // While the app installs OpenCode, the "getting ready" line above speaks for it: no row to open yet.
+  const free = freeRow?.installing === true ? undefined : freeRow;
+  const foldRows = otherRows.filter((instance) => instance !== freeRow);
   const foldCount = foldRows.length + (showModelgo ? 1 : 0);
 
   return (
@@ -130,11 +133,17 @@ export function ConnectAi({ hosted = false, tested }: { hosted?: boolean; tested
               {t("onboarding.engines.freeBackup", { name: engineDisplayName(backup) })}
             </p>
           )}
+          {!tested && preparing && (
+            <p data-ai-backup-installing className="animate-rise mb-3 flex items-center gap-2 text-[13px] text-ink-secondary">
+              <LoaderCircle size={13} className="shrink-0 animate-spin" aria-hidden="true" />
+              {t("onboarding.engines.freeBackupInstalling", { name: engineDisplayName(preparing) })}
+            </p>
+          )}
           {recommended ? (
             <div data-ai-recommended={recommended.instanceId} className="animate-rise w-full rounded-2xl bg-card p-4 text-left">
               <EngineSetup instance={recommended} {...setupFor(recommended)} className="border-0 bg-transparent p-0" />
             </div>
-          ) : !tested && !backup && !failed ? (
+          ) : !tested && !backup && !preparing && !failed ? (
             <p className="text-[13px] text-ink-secondary" aria-live="polite">{t("common.checking")}</p>
           ) : null}
         </>

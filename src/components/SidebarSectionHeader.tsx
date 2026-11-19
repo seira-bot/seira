@@ -31,6 +31,8 @@ export function SidebarSectionHeader({
   dropInto = false,
   onAdd,
   addLabel,
+  count,
+  compact = false,
 }: {
   name: string;
   collapsed: boolean;
@@ -56,6 +58,10 @@ export function SidebarSectionHeader({
   /** Simple's add button at the end of the line. */
   onAdd?: () => void;
   addLabel?: string;
+  /** Advanced's line: the chevron always follows the name, and a collapsed section says how many it holds. */
+  count?: number;
+  /** Advanced's line without a count, as the Tools line has. */
+  compact?: boolean;
 }) {
   const reorderable = canReorder && !naming;
   const Chevron = collapsed ? ChevronRight : ChevronDown;
@@ -81,9 +87,15 @@ export function SidebarSectionHeader({
   const dropMark = dropInto ? "bg-accent/10 outline outline-2 -outline-offset-2 outline-accent/70" : undefined;
 
   if (line) {
-    const tail = onToggle && (
+    const counted = count !== undefined || compact;
+    const tail = onToggle && (counted ? (
+      <ChevronDown size={12} aria-hidden="true" data-section-chevron="" className={cn("shrink-0 text-ink-tertiary transition-transform duration-200 motion-reduce:transition-none", collapsed && "-rotate-90")} />
+    ) : (
       <Chevron size={14} aria-hidden="true" className="shrink-0 text-ink-secondary opacity-0 transition-opacity group-hover/section:opacity-100 group-focus-within/section:opacity-100 touch:opacity-100" />
-    );
+    ));
+    const label = <span className={cn("min-w-0 truncate text-[12px] font-medium leading-4 text-ink-tertiary", !counted && "flex-1")}>{name}</span>;
+    const total = count !== undefined && collapsed && <span data-section-count="" className="shrink-0 text-[12px] font-medium leading-4 tabular-nums text-ink-tertiary">· {count}</span>;
+    const spacer = counted && <span aria-hidden="true" className="min-w-0 flex-1" />;
     return (
       <div
         data-section={name}
@@ -106,13 +118,17 @@ export function SidebarSectionHeader({
             title={toggleTitle}
             className="flex min-w-0 flex-1 items-center gap-1.5 rounded text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
           >
-            <span className="min-w-0 flex-1 truncate text-[12px] font-medium leading-4 text-ink-tertiary">{name}</span>
-            {collapsed && <SectionAttention attention={attention} label={attentionLabel} alert={alert} />}
+            {label}
+            {total}
             {tail}
+            {spacer}
+            {collapsed && <SectionAttention attention={attention} label={attentionLabel} alert={alert} />}
           </button>
         ) : (
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            <span className="min-w-0 flex-1 truncate text-[12px] font-medium leading-4 text-ink-tertiary">{name}</span>
+            {label}
+            {total}
+            {spacer}
             {attentionLabel && <span className="sr-only">{attentionLabel}</span>}
             {tail}
           </div>

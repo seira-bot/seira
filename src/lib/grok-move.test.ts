@@ -16,7 +16,7 @@ vi.mock("@/state/store", () => ({
 }));
 
 import { GROK_EXPORT_FORMAT, parseGrokExport } from "../../shared/grok-import";
-import { foundExports, previewGrokMove, runGrokMove, type GrokPreviewFacts } from "./grok-move";
+import { foundExports, isSeiraMigrator, previewGrokMove, rosterMatches, runGrokMove, type GrokPreviewFacts } from "./grok-move";
 
 const bots = (...list: unknown[]) => parseGrokExport(JSON.stringify({ format: GROK_EXPORT_FORMAT, bots: list }));
 const facts = (over: Partial<GrokPreviewFacts> = {}): GrokPreviewFacts => ({ bots: [], servers: new Set(), timeZone: "UTC", ...over });
@@ -101,5 +101,21 @@ describe("files found on this computer", () => {
     expect(found.bots.map((bot) => bot.name).sort()).toEqual(["Drew", "Eve"]);
     expect(found.bots.find((bot) => bot.name === "Drew")).toMatchObject({ title: "Newest", memories: ["a"] });
     expect(found.refused).toEqual([{ file: "grok-bot-export-bad.json", error: expect.stringContaining("passwords or keys") }]);
+  });
+});
+
+describe("roster names", () => {
+  it("knows Seira Migrator by its name, with a label, in any case or spacing", () => {
+    expect(isSeiraMigrator("Seira Migrator")).toBe(true);
+    expect(isSeiraMigrator("seira migrator · Helper")).toBe(true);
+    expect(isSeiraMigrator("  SEIRA MIGRATOR  ")).toBe(true);
+    expect(isSeiraMigrator("Scout")).toBe(false);
+    expect(isSeiraMigrator("Seira Migrator Two")).toBe(false);
+  });
+
+  it("matches a roster name to a Bot name by the name before the label", () => {
+    expect(rosterMatches("Job Search · Lead", "Job Search")).toBe(true);
+    expect(rosterMatches("job search", " Job Search ")).toBe(true);
+    expect(rosterMatches("Scout", "Job Search")).toBe(false);
   });
 });

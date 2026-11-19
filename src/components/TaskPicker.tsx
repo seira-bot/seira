@@ -16,6 +16,7 @@ import { useShowThreads } from "@/lib/thread-preferences";
 import { attentionJumpAction, attentionOwnerName, AttentionThreadRows, crossBotAttentionThreads, threadsWhenTreeHidden, type AttentionThread } from "./SidebarBotActivity";
 import { formatUpdatedAt, orderedThreadList, threadByline, threadRecency, threadUpdatedLabel, useRelativeNow } from "./SidebarThreadRow";
 import { Select } from "./Select";
+import { ELEVATED_FLOAT, ELEVATED_HOVER } from "./elevated";
 
 export const TASK_PICKER_DISMISS_MS = 500;
 
@@ -89,11 +90,14 @@ function ConversationTaskPicker({
   attention,
   onAttentionJump,
   workingElsewhere = 0,
+  chip = false,
 }: {
   threadId: string;
   tasks: PickerTask[];
   busy: boolean;
   workingElsewhere?: number;
+  /** Advanced mode: the trigger names the conversation on screen, as a quiet chip, instead of "All threads". */
+  chip?: boolean;
   bot?: Bot;
   onNew: () => void;
   onSwitch: (threadId: string) => void;
@@ -115,6 +119,7 @@ function ConversationTaskPicker({
   const now = useRelativeNow();
 
   const current = tasks.find((t) => t.threadId === threadId);
+  const chipTitle = !current?.title || current.title === "New thread" ? t("task.newShort") : localizedTaskTitle(current.title);
 
   const clearDismiss = () => {
     if (dismissTimer.current) {
@@ -219,7 +224,7 @@ function ConversationTaskPicker({
   const results = [...attentionRows.map((entry) => ({ kind: "attention" as const, entry })), ...visible.map((task) => ({ kind: "task" as const, task }))];
 
   return (
-    <div className="relative" ref={ref}>
+    <div className={cn("relative", chip && "inline-block max-w-full")} ref={ref}>
       <button
         type="button"
         onClick={() => {
@@ -227,14 +232,18 @@ function ConversationTaskPicker({
           else setOpen(true);
         }}
         title={switchTitle}
-        aria-label={t("task.switch")}
+        aria-label={chip ? `${t("task.switch")}: ${chipTitle}` : t("task.switch")}
+        data-thread-chip={chip ? "" : undefined}
+        aria-expanded={chip ? open : undefined}
         className={cn(
-          "flex max-w-[220px] items-center gap-1.5 rounded-full border border-hairline/40 px-2.5 py-1 text-[13px] text-ink-secondary hover:bg-raised hover:text-ink",
-          COMPACT_BUBBLE,
+          "flex max-w-[220px] items-center gap-1.5 rounded-full text-[13px] text-ink-secondary hover:text-ink",
+          chip ? cn("h-8 min-w-0 max-w-full px-3", ELEVATED_FLOAT, ELEVATED_HOVER) : cn("border border-hairline/40 px-2.5 py-1 hover:bg-raised", COMPACT_BUBBLE),
         )}
       >
-        <span className="truncate @max-4xl/chathead:hidden">{t("task.switch")}</span>
-        <span className="shrink-0 tabular-nums opacity-60 @max-4xl/chathead:opacity-100">{tasks.length}</span>
+        {chip ? <span dir="auto" className="truncate">{chipTitle}</span> : <>
+          <span className="truncate @max-4xl/chathead:hidden">{t("task.switch")}</span>
+          <span className="shrink-0 tabular-nums opacity-60 @max-4xl/chathead:opacity-100">{tasks.length}</span>
+        </>}
         {workingElsewhere > 0 && (
           <span
             role="img"
@@ -244,11 +253,11 @@ function ConversationTaskPicker({
             className="size-1.5 shrink-0 animate-pulse rounded-full bg-accent"
           />
         )}
-        <ChevronDown size={12} className="shrink-0 @max-4xl/chathead:hidden" />
+        <ChevronDown size={12} className={cn("shrink-0", !chip && "@max-4xl/chathead:hidden")} />
       </button>
 
       {motion.shown && (
-        <div className={cn("absolute right-0 top-full z-40 mt-1 w-[300px] overflow-hidden", MENU_SHEET, motion.className)} {...motion.exitProps}>
+        <div className={cn("absolute top-full z-40 mt-1 w-[300px] overflow-hidden", chip ? "left-0" : "right-0", MENU_SHEET, motion.className)} {...motion.exitProps}>
           <div>
             <div className="flex items-center gap-2 rounded-md bg-ink/[0.05] px-2 py-1.5 focus-within:ring-2 focus-within:ring-focus/60">
               <Search size={14} className="shrink-0 text-ink-secondary" />
@@ -467,7 +476,7 @@ export function TaskPicker({ bot }: { bot: Bot }) {
   );
 }
 
-export function GroupTaskPicker({ group }: { group: Group }) {
+export function GroupTaskPicker({ group, chip = false }: { group: Group; chip?: boolean }) {
   const { dispatch } = useStore();
   const tasks = useMemo(() => {
     return (group.tasks ?? []).map((task) => ({
@@ -481,6 +490,7 @@ export function GroupTaskPicker({ group }: { group: Group }) {
       tasks={orderedThreadList(tasks)}
       busy={false}
       workingElsewhere={roomThreadsWorkingElsewhere(group)}
+      chip={chip}
       onNew={() => dispatch({ type: "newGroupTask", groupId: group.id })}
       onSwitch={(threadId) => dispatch({ type: "switchGroupTask", groupId: group.id, threadId })}
       onRename={(threadId, title) => dispatch({ type: "renameGroupTask", groupId: group.id, threadId, title })}

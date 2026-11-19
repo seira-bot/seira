@@ -14,7 +14,7 @@ import {
   type SectionDropPlace,
 } from "@/lib/sidebar-layout";
 import {
-  loadCollapsedSections,
+  loadCollapsedSectionsOrDefault,
   loadSectionOrder,
   loadSimpleSectionOrder,
   saveCollapsedSections,
@@ -36,7 +36,7 @@ export function useSidebarSections({ simple, rail, density, query, label, sideba
   label: (id: string) => string;
   sidebarRef: RefObject<HTMLElement | null>;
 }) {
-  const [collapsedIds, setCollapsedIds] = useState<string[]>(() => loadCollapsedSections());
+  const [collapsedIds, setCollapsedIds] = useState<string[]>(() => loadCollapsedSectionsOrDefault());
   const [savedOrder, setSavedOrder] = useState<string[]>(() => loadSectionOrder());
   const [simpleOrder, setSimpleOrder] = useState<string[]>(() => loadSimpleSectionOrder());
   const [draggingId, setDraggingId] = useState<string | null>(null);

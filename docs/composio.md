@@ -6,7 +6,7 @@ Seira uses one Composio project API key and one reusable Composio Session. That 
 
 1. Open your project's [API Keys page](https://dashboard.composio.dev/~/project/settings/api-keys) in the Composio Dashboard (sign in or create a project first if asked).
 2. Create a project key there if the project has none, then copy it (it begins with `ak_`). The `ck_` key on the personal **Sessions & API Key** page is a different key and won't work.
-3. In Seira, open **Settings → API keys** and save it under **Self-host connected apps → Composio project key**.
+3. In Seira, open **Settings → API keys** and save it under **Apps and tools → Composio project key**.
 4. Open **Connected apps** and choose Gmail, GitHub, Slack, or another service. Enter a unique label such as `work` or `personal`, then finish the authorization in your normal browser.
 5. To connect another account for the same app, choose **Add account**, give it a unique label, and finish the second authorization in your browser.
 
@@ -16,21 +16,25 @@ The desktop app validates the key before saving it. The key is encrypted using E
 
 ## Seira Cloud
 
-A Seira Cloud plan includes connected apps: there is no key to add. At every start a Cloud home's server makes sure it has its own installation on Seira's managed connection service, the same one the packaged desktop app registers with (`server/cloud-connected-apps.ts`, sharing `electron/managed-composio.mjs` with the app):
+Seira ships with no connected-apps service. A Cloud home needs the owner's Composio project key, saved under **Settings → API keys → Apps and tools → Composio project key**.
+
+A Cloud home uses a connected-apps service only when `OMB_COMPOSIO_BROKER_URL` names one, for example your own deploy of `cloudflare/composio-broker`. Without it, the app behaves as if `OMB_COMPOSIO_BROKER=off`: connected apps need your own project key, and app-event automations are not available.
+
+When a service is named, at every start a Cloud home's server makes sure it has its own installation on that service (`server/cloud-connected-apps.ts`, sharing `electron/managed-composio.mjs` with the desktop app):
 
 - The first start registers the installation (`POST /v1/installations`) and keeps its token in `connected-apps-installation.json` in the data folder (`/data/.openmausbot`), owner-only (0600). The token is never written to `config.json`, sent to a client or logged.
 - Every later start serves that token at once and checks it with `GET /v1/me`. Only a refusal (401) registers a new installation; an outage or a rate limit keeps the token, so the Cloud's connected accounts are never stranded.
 - While the Cloud has no token (the service is down or refuses new registrations), the server keeps booting and serving, Connected apps says the service is temporarily unavailable, and it tries again after 30 seconds, then 1, 2, 5, 10 and every 30 minutes, with some jitter.
 - The file never goes into a backup or a move to another computer, and a restore keeps the Cloud's own (`server/workspace-backup-policy.ts`): its connected accounts belong to that installation.
-- A Composio project key the owner saves under **Self-host connected apps** still wins, and while it is saved the server sends the service nothing, not even its start-up check. Clearing it returns to the included service, within about a minute.
+- A Composio project key the owner saves under **Apps and tools → Composio project key** still wins, and while it is saved the server sends the service nothing, not even its start-up check. Clearing it returns to the named service, within about a minute.
 
-The built image uses the default service; `OMB_COMPOSIO_BROKER_URL` names another (a staging service, or a closed port in CI). The server run from source registers only with an explicitly named service, so development and tests never create installations on the real one.
+The server run from source and the packaged desktop app behave the same way: both register only with a service that `OMB_COMPOSIO_BROKER_URL` names.
 
 ## App events
 
 An app-event automation runs a bot when something happens in a connected app: a new Gmail message, a Slack
-message in a channel, a HubSpot deal changing stage. It uses Composio triggers through the managed service, on
-the desktop, a headless server and a Cloud alike:
+message in a channel, a HubSpot deal changing stage. It uses Composio triggers through a connected-apps service, so
+it applies only when `OMB_COMPOSIO_BROKER_URL` names one. It works on the desktop, a headless server and a Cloud alike:
 
 1. `trigger` (`action: "create"`, `when: "app_event"`) or the editor saves the automation in `app-triggers.json` in the data
    folder and creates its trigger on the service (`POST /v1/triggers`), which checks that the connected account
@@ -58,11 +62,13 @@ schedule that checks the app, or a webhook, does the job instead.
 
 ## Keeping traffic off the managed service
 
-**With your own project key saved**, the desktop app and a Cloud home do not register or check in with Seira's managed service, and connected apps go to Composio directly. An app-event automation made before the key was saved can still be paused, deleted or restored, but only here: its copy on the service is left alone and removed if you later go back to the service.
+**With no service named**, which is the default, the app sends nothing to a connected-apps service. The desktop app gives its server `OMB_COMPOSIO_BROKER=off`, and connected apps go to Composio directly with your own project key. Until a key is saved, Connected apps shows the setup message.
 
-**`OMB_COMPOSIO_BROKER=off`** in the environment of the desktop app, a server or a Cloud home turns the service off whether or not a key is saved: no registration, check-in, tool calls or app events. Connected apps then need your own key, and show the setup message until there is one. A saved installation is kept for if the switch is removed. `OMB_COMPOSIO_BROKER_URL` is not a switch: left blank it means the default service.
+**With your own project key saved** and a service named, the desktop app and a Cloud home do not register or check in with the service, and connected apps go to Composio directly. An app-event automation made before the key was saved can still be paused, deleted or restored, but only here: its copy on the service is left alone and removed if you later go back to the service.
 
-A Team Cloud's per-person apps (**each person connects their own**) follow the same rule. With the team's key saved, each member is their own Composio user in the team's project (`omb_member_…`, made from the team's id and a hash of the person, never their address), and their connect links, connections, tool calls and disconnects go to Composio with the team's key. A member who leaves has that user's connections removed from the project; if Composio can't be reached then, it is tried again at the next start. App events are not available for them, as for the team's own apps with a key.
+**`OMB_COMPOSIO_BROKER=off`** in the environment of the desktop app, a server or a Cloud home turns a named service off whether or not a key is saved: no registration, check-in, tool calls or app events. Connected apps then need your own key, and show the setup message until there is one. A saved installation is kept for if the switch is removed. `OMB_COMPOSIO_BROKER_URL` is not a switch: left blank it means no service.
+
+A Team Cloud's per-person apps (**each person connects their own**) follow the same rule when a service is named. With the team's key saved, each member is their own Composio user in the team's project (`omb_member_…`, made from the team's id and a hash of the person, never their address), and their connect links, connections, tool calls and disconnects go to Composio with the team's key. A member who leaves has that user's connections removed from the project; if Composio can't be reached then, it is tried again at the next start. App events are not available for them, as for the team's own apps with a key.
 
 Connections do not carry between the service and a project, or between two projects. After the team saves, removes or changes its key, a member's app shows as not connected, their page and their bot say to connect it again, and nothing is an error. An installation a member made on the service before the key was saved is left there, unused and not erased, and is theirs again if the key is removed; the Admin's signed read counts them (`appsLeftOnService`). Connections made in a project stay in that project when its key is removed or replaced.
 
@@ -117,7 +123,7 @@ To grant the permission:
 
 Seira uses your project's own auth config for an app automatically, in place of the Composio-managed one. If there are several enabled ones for the same app, it uses the most recently created, and it skips disabled ones. Google may require your OAuth app to list the added permissions on its consent screen, and to be verified before people outside your organization can grant them.
 
-On a Seira Cloud plan, connected apps run through Seira's managed connection service rather than your own Composio project, so you cannot add permissions yourself; ask Seira support instead.
+When a Cloud uses a connected-apps service that `OMB_COMPOSIO_BROKER_URL` names, its apps run through that service rather than your own Composio project, so you cannot add permissions yourself; save your own project key to use your own auth config.
 
 ## Files a tool takes
 
@@ -126,10 +132,10 @@ Composio runs app tools on its own servers, so a tool that takes a file (Google 
 - **Which files.** Only a file in the bot's working folder or Local VM folder, or one attached to this conversation (by its exact path: never the attachment store as a whole, which holds every conversation's and every team member's files). Never a file in a hidden folder (`.ssh`, `.aws`, `.config`, any dotfile) below the bot's folder or the home folder, nor in the app's own data (`DATA_DIR`, the desktop app's data folder) unless the bot's own folder is inside it, as its workspace is. Such a file is refused with the reason and the call does not go out.
 - **Anything else goes as it is.** A value that is not an existing file in those folders (a Dropbox path such as `/Apps/report.pdf`, `/images/logo.png`, text that starts with `/`, anything with a line break) is sent unchanged, with no refusal.
 - **When.** The files are read before the call's checks and listed in full (name, path, size) on a "Send on your behalf?" card, ahead of the arguments it cuts at 400 characters. They are uploaded only after the last check before sending, so a call refused there, or whose permission or turn ended meanwhile, uploads nothing.
-- **Where.** The harness asks for an upload link (`POST /v1/files/upload` on the managed service, which gives one only for a toolkit the installation has a working connection to; Composio's `POST /files/upload/request` with your own project key). It puts the bytes only to an HTTPS link on Composio's storage (`*.composio.dev` or AWS S3; with `OMB_COMPOSIO_API`, that backend's origin), never following a redirect. The call then carries `{ name, mimetype, s3key }`.
+- **Where.** The harness asks for an upload link (`POST /v1/files/upload` on a named connected-apps service, which gives one only for a toolkit the installation has a working connection to; Composio's `POST /files/upload/request` with your own project key). It puts the bytes only to an HTTPS link on Composio's storage (`*.composio.dev` or AWS S3; with `OMB_COMPOSIO_API`, that backend's origin), never following a redirect. The call then carries `{ name, mimetype, s3key }`.
 - **Failures.** A failed upload is refused with what failed, and nothing is written to the app. When Composio still cannot fetch a call's file (`Failed to download file with s3key …`), the bot is told to give a local path instead of an invented key. At most 10 files per call. Plain text needs no file: `GOOGLEDRIVE_CREATE_FILE_FROM_TEXT` takes the text itself.
 
-The managed service needs the updated broker as well as the updated app for this.
+A named service needs the updated broker as well as the updated app for this.
 
 ## Apps with no Composio-managed sign-in
 
@@ -146,7 +152,7 @@ An account you connected in the Composio dashboard belongs to a different Compos
 
 A bot can also name one auth config for an app: `COMPOSIO_MANAGE_CONNECTIONS` with `"auth_config_id": "ac_…"` next to a single toolkit, or `toolkits: [{ "name": "xero", "action": "add", "auth_config_id": "ac_…" }]` (`auth_config_override` is read as well). Seira adds `auth_config_id` to the tool's description so bots can see it. It checks the id in your project before it shows the Connect card (it must exist, belong to that app and be enabled) and keeps the choice in `composio-auth-configs.json` in the data folder, so later Sessions use it while it stays usable.
 
-Seira's managed connection service (the desktop default and Seira Cloud) runs on Seira's own Composio project, which cannot use an auth config in yours. For such an app it says so in one line: add your own Composio project key in **Settings → API keys**; Seira then uses your auth config for that app from that project.
+A connected-apps service named with `OMB_COMPOSIO_BROKER_URL` runs on its own Composio project, which cannot use an auth config in yours. For such an app it says so in one line: add your own Composio project key in **Settings → API keys**; Seira then uses your auth config for that app from that project.
 
 ## Browser authorization recovery
 

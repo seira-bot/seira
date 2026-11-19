@@ -23,6 +23,21 @@ export function lookForGrokBot(): Promise<GrokLook> {
 /** The Seira Migrator bot in Grok Bot: it sends each Bot's setup to the link below. */
 export const SEIRA_GROK_TEMPLATE_URL = "https://x.ai/bot/JGJM9a99A33808-urJ87-";
 
+export const SEIRA_MIGRATOR_NAME = "Seira Migrator";
+
+/** A roster name may carry a label after " · " ("Ada · Copy Editor"); the name before it is what a Bot calls itself. */
+function rosterKey(name: string): string {
+  return name.split(" · ")[0]!.trim().toLowerCase();
+}
+
+export function isSeiraMigrator(rosterName: string): boolean {
+  return rosterKey(rosterName) === SEIRA_MIGRATOR_NAME.toLowerCase();
+}
+
+export function rosterMatches(rosterName: string, botName: string): boolean {
+  return rosterKey(rosterName) === rosterKey(botName);
+}
+
 /** The link Grok Bot sends Bots to, when this app can make one, and what arrived through it. */
 export interface GrokConnector {
   available: boolean;

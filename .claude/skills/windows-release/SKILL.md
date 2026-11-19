@@ -1,138 +1,108 @@
 ---
 name: windows-release
-description: Build and verify the Windows desktop build (NSIS installer + latest.yml) for the canonical OpenMausBot release and its legacy updater mirror. Use when cutting a release, shipping a new version to Windows users, or when a Windows user reports they are stuck on an old version. Windows only — does not cover the macOS dmg/notarization flow.
+description: Build, check, and attach the Seira Windows x64 installer and its update feed to a seira-bot/seira release. Use when you cut a release, when a release has no Windows assets, or when a Windows user says that the app does not update. Covers Windows only; docs/releasing.md covers Linux and macOS.
 ---
 
 # Windows release
 
-Ships `OpenMausBot-<version>-setup.exe` and its update feed to
-[milind-soni/OpenMausBot](https://github.com/milind-soni/OpenMausBot/releases).
-The unified release workflow mirrors the same bytes to the legacy releases
-repository for apps installed before the updater migration.
+The full release guide is [`docs/releasing.md`](../../../docs/releasing.md).
+This skill covers its step 5 and the Windows update problems.
+A release goes only to [`seira-bot/seira`](https://github.com/seira-bot/seira/releases).
+Never upload a Seira build to an OpenMausBot repository.
 
-**Scope: Windows only.** The macOS build is a separate flow (dmg + notarytool +
-staple) that must run on a Mac. This skill never touches mac artifacts — but see
-[Every release ships both](#every-release-ships-both) before you finish.
+## Before you start
 
-## Preconditions
+- The tag `v<version>` exists, and `package.json` at that tag has the same
+  version. The workflow stops when they are not equal.
+- Only a maintainer can start the workflow and attach the files.
+- GitHub Actions is on for the repository ([CI](../../../docs/ci.md)).
+- Do not build the installer on a local machine. The workflow builds it on a
+  GitHub-hosted Windows runner from a clean checkout with no dependency cache.
 
-- **Run on Windows.** NSIS packaging from macOS needs Wine; don't.
-- **Node 24+** (`package.json` `engines`). Node 23 builds fine but pnpm warns on
-  every step and CI runs 24 — don't debug a runtime oddity on the wrong major.
-- **pnpm** via `corepack pnpm`. If `corepack enable` fails with EPERM (no admin),
-  drop a `pnpm.cmd` shim containing `@echo off` / `corepack pnpm %*` somewhere on
-  PATH — `package:win` chains `pnpm build && …` and needs bare `pnpm` to resolve.
+## 1. Build
 
-## 1. Version
-
-Bump `version` in `package.json`. It must match the tag on the GitHub release you
-upload to, and it becomes the version electron-updater compares against.
-
-## 2. Build
-
-```powershell
-pnpm install
-pnpm typecheck
-pnpm package:win
+```sh
+gh workflow run package-windows.yml --repo seira-bot/seira -f ref=v<version>
+gh run list --repo seira-bot/seira --workflow package-windows.yml --limit 1
+gh run watch <run id> --repo seira-bot/seira --exit-status
 ```
 
-`package:win` deliberately omits `build:speech` — the dictation helper is a signed
-macOS Swift binary and has no Windows counterpart.
+Before it uploads, the workflow does these checks. When one fails, the run fails:
 
-Output in `release/`:
+| Check | Problem that it stops |
+| --- | --- |
+| `server/index.js` and `ui/index.html` are in the package | The "Couldn't start the bot server" page, or a black window |
+| The bundled browser and the packaged server start with an empty home folder, and `/api/health` answers | An app that cannot start on a new computer |
+| `app-update.yml` names `owner: seira-bot` and `repo: seira`, and has no `publisherName` | Installed apps that look for updates in the wrong place, or reject every update |
+| `latest.yml` names `Seira-<version>-setup.exe` with the correct SHA-512 and size | Installed apps that download the update and then reject it |
+| `cloudflared.exe` has the pinned version and SHA-256 | A wrong third-party binary in the package |
 
-| File | Purpose |
-|---|---|
-| `OpenMausBot-<version>-setup.exe` | the installer |
-| `latest.yml` | **the update feed** — see step 4 |
-| `OpenMausBot-<version>-setup.exe.blockmap` | differential updates |
-| `OpenMausBot-<version>-x64.zip` | portable, not used by the updater |
+## 2. Download and check
 
-## 3. Verify before uploading
-
-Three things silently produce a broken app if wrong. Check all three:
-
-```powershell
-Test-Path release\win-unpacked\resources\server\index.js   # harness server
-Test-Path release\win-unpacked\resources\ui\index.html     # built UI
-Get-Content release\win-unpacked\resources\app-update.yml  # feed config
+```sh
+mkdir -p .omb-scratch/windows && cd .omb-scratch/windows
+gh run download <run id> --repo seira-bot/seira --name seira-<version>-windows-x64
+sha256sum -c SHA256SUMS-windows-x64.txt
 ```
 
-- Missing `server/index.js` → `utilityProcess.fork` fails → the 🐭 "Couldn't start
-  the bot server" page.
-- Missing `ui/index.html` → server has nothing to serve → black window.
-- `app-update.yml` must point at `milind-soni/OpenMausBot` and, while the
-  build is unsigned, **must not contain `publisherName`** — electron-updater would
-  reject every update as untrusted.
+Each line must print `OK`. The artifact stays for 14 days. After that, run the
+workflow again.
 
-Then smoke-test the installer itself. Run it, and confirm:
+## 3. Attach to the release
 
-1. It installs per-user with no UAC prompt and launches.
-2. The chat window renders (not the error page). Server logs land in
-   `%APPDATA%\OpenMausBot\logs\server.log`.
-3. The model picker lists at least one provider — this exercises the `.cmd`-shim
-   resolution in `server/procs.ts`, which only ever runs for real on Windows.
-4. No update popup appears on launch. Background check failures are silent by
-   design; a popup here means that regressed.
+Attach all five files to the same release as the Linux and macOS files:
 
-## 4. Publish
-
-Upload to the **same tag** as the macOS release for that version, so one release
-carries both platforms.
-
-```powershell
-Copy-Item release/OpenMausBot-<version>-setup.exe release/OpenMausBot-setup.exe
-gh release upload v<version> --repo milind-soni/OpenMausBot `
-  release/OpenMausBot-<version>-setup.exe `
-  release/OpenMausBot-setup.exe `
-  release/OpenMausBot-<version>-setup.exe.blockmap `
-  release/latest.yml
+```sh
+gh release upload v<version> --repo seira-bot/seira \
+  Seira-<version>-setup.exe Seira-<version>-setup.exe.blockmap latest.yml \
+  Seira-setup.exe SHA256SUMS-windows-x64.txt
 ```
 
-Prefer the repository's **Release** workflow, which builds all platforms from
-one pinned commit and mirrors the complete, byte-identical asset set safely.
-If this emergency manual path is used, the same four files must also be attached
-to the matching draft in `milind-soni/openmausbot-releases`; never replace the
-bytes of an already-published asset.
+| File | Who uses it |
+| --- | --- |
+| `Seira-<version>-setup.exe` | The installer. `latest.yml` names this file, so the updater downloads it. |
+| `Seira-<version>-setup.exe.blockmap` | The updater. It downloads only the changed parts. |
+| `latest.yml` | Installed apps. They read it to find the new version. |
+| `Seira-setup.exe` | The download link `/releases/latest/download/Seira-setup.exe`. It is a byte-identical copy. |
+| `SHA256SUMS-windows-x64.txt` | People who check the download |
 
-Both names are required, for different consumers:
+- Upload the files as the workflow wrote them. Do not rename them, and do not
+  edit `latest.yml`. Do not use a `latest.yml` from an earlier build.
+- Never replace an asset in place. If an asset is wrong, delete the assets of
+  the release and upload all five again.
+- Then do step 8 of `docs/releasing.md`: download the release and check every
+  checksum file.
 
-- **`OpenMausBot-<version>-setup.exe`** is what `latest.yml` references by name and
-  sha512. The auto-updater downloads exactly this.
-- **`OpenMausBot-setup.exe`** is a byte-identical copy that gives the README's
-  `/releases/latest/download/OpenMausBot-setup.exe` button a stable URL. This
-  mirrors `OpenMausBot.dmg` sitting beside `OpenMausBot-<version>.dmg`.
+## Each release has Windows files
 
-### latest.yml is not optional
+A release without `latest.yml` leaves every installed Windows app on its old
+version. A background update check that fails shows no message, so the user
+gets no warning. Attach the Windows files to each release. If you cannot, say in the
+release notes that Windows stays on the earlier version.
 
-Without it every installed Windows app 404s on check and stays on its version
-forever. It is generated by `package:win` even under `--publish never`.
+## A Windows user says that the app does not update
 
-**Never hand-edit it or carry one forward from a previous build.** It pins the
-installer's sha512; a mismatch makes the updater download and then reject the
-update, which looks like "updates silently do nothing".
+Find the cause in this order:
 
-## Every release ships both
+1. Open the release of the newest version. It must have all five files. If
+   `latest.yml` is missing, attach the files of step 3.
+2. Download `latest.yml` and the installer from the release. The `path`, the
+   SHA-512, and the size in `latest.yml` must match the installer. If they do
+   not match, delete the five assets and attach the workflow files again.
+3. Ask for `updater.log` from the log folder of the app:
+   `%APPDATA%\openmausbot\logs`. The folder keeps its upstream name.
+4. Ask where the user installed the app from. An OpenMausBot installer from
+   the upstream project reads the upstream releases. It never updates to Seira.
+   The user must install `Seira-setup.exe` once.
 
-A version that exists on macOS but not on this release is a Windows user stuck on
-old code with no signal that anything is wrong — the updater reports "up to date"
-because `latest.yml` still describes the older build.
+## The installer is not signed
 
-So: **whenever a new version goes out, this flow runs too.** If Windows can't ship
-for some reason, don't publish the mac-only release under a new version tag either
-— or accept that Windows is knowingly frozen and say so in the release notes.
+Seira has no Windows code-signing certificate. Microsoft Defender SmartScreen
+shows "Windows protected your PC" and "Unknown publisher". The user selects
+**More info**, then **Run anyway**. Say this in the release notes.
 
-Because the two builds must run on two machines, the tag is the join point: cut the
-release, attach mac artifacts from the Mac, attach Windows artifacts from here.
-
-## Known: the build is unsigned
-
-No certificate is configured, so SmartScreen shows "unknown publisher" and users
-click **More info → Run anyway**. The README documents this. Auto-update still
-works *because* it's unsigned (no `publisherName` to verify against).
-
-If signing is added later, it goes under `win.signtoolOptions` or
-`win.azureSignOptions` in `electron-builder.yml` — electron-builder 26 nests these;
-there is no top-level `win.certificateFile`. Once signed, keep the certificate
-subject stable forever, or list both old and new in `publisherName`; changing it
-strands every already-installed user.
+Do not add `publisherName` or signing settings to `electron-builder.yml`
+without a certificate. electron-updater checks the signature only when
+`publisherName` is set, so each installed app then rejects each update. When
+Seira gets a certificate, keep its subject the same for each later certificate,
+or list the old and the new subject in `publisherName`.
