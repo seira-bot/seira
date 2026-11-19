@@ -175,12 +175,20 @@ flowchart LR
 Download the app from the [latest release](https://github.com/seira-bot/seira/releases/latest):
 
 - **Windows 10 or later:** `Seira-setup.exe`. If Windows warns you, select **More info**, then **Run anyway**.
-- **Linux x64:** `Seira-<version>-x86_64.AppImage`. Make it executable, then open it:
+- **Ubuntu 24.04 x64:** `Seira-<version>-amd64.deb`. Install it, then open Seira from the app menu:
+
+  ```sh
+  sudo apt install ./Seira-*-amd64.deb
+  ```
+
+- **Other Linux x64:** `Seira-<version>-x86_64.AppImage`. Make it executable, then open it:
 
   ```sh
   chmod +x Seira-*-x86_64.AppImage
   ./Seira-*-x86_64.AppImage
   ```
+
+  On Ubuntu 24.04 the AppImage does not open, because the system blocks the sandbox it needs. Use the Debian package there.
 
 The app updates itself. Each release also has a `SHA256SUMS` file for each system, to check your download.
 There is no macOS download yet. On macOS, run the server with Node, or build Seira from source.
@@ -249,7 +257,7 @@ pnpm check:electron  # syntax check of the Electron files
 ```sh
 pnpm package:mac     # macOS: DMG and ZIP (needs Swift and Xcode tools)
 pnpm package:win     # Windows: installer and ZIP
-pnpm package:linux   # Linux x64: AppImage, snap, and the verified Cua runtime
+pnpm package:linux   # Linux x64: AppImage, Debian package, snap, and the verified Cua runtime
 ```
 
 [docs/linux-desktop.md](docs/linux-desktop.md) covers the snap, and the Flatpak build in [`packaging/flatpak/`](packaging/flatpak/).
