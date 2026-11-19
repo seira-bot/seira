@@ -41,7 +41,7 @@ function Roster({ names, arrived = [] }: { names: readonly string[]; arrived?: r
       {names.map((name) => {
         const here = arrived.some((bot) => rosterMatches(name, bot.name));
         return (
-          <li key={name} {...(here ? { "data-arrived": "true" } : {})} className="ui-chip max-w-full">
+          <li key={name} {...(here ? { "data-arrived": "true" } : {})} className={cn("ui-chip max-w-full", here ? "bg-accent/[0.12] text-ink" : "bg-ink/[0.06] text-ink-secondary")}>
             {here && <Check size={13} aria-hidden className="shrink-0 text-accent-text" />}
             <span title={name} dir="auto" className="truncate">{name}</span>
             {here && <span className="sr-only">{t("grokMove.guide.arrived")}</span>}
