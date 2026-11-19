@@ -89,6 +89,15 @@ describe("ActivityRun", () => {
     expect(html).not.toContain("Run a command");
   });
 
+  it("heads a room's card with the duration recorded for its turn", () => {
+    mode.advanced = true;
+    const trace = { id: "trace", at: 4, durationMs: 2_000 };
+    const done = renderToStaticMarkup(createElement(ActivityRun, { messages: steps, trace, children: null }));
+    expect(done).toContain("Worked for 2s");
+    const failed = renderToStaticMarkup(createElement(ActivityRun, { messages: [{ ...steps[0]!, tool: { name: "Bash", ok: false } }, steps[1]!], trace: { ...trace, durationMs: 4_000 }, children: null }));
+    expect(failed).toContain("Failed after 4s");
+  });
+
   it("says Working while the turn runs and Failed when a step failed", () => {
     mode.advanced = true;
     const working = renderToStaticMarkup(createElement(ActivityRun, { messages: steps, status: "working", children: null }));

@@ -16,7 +16,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 
 /** Installs the Linux libraries Chrome needs (as root, once). */
-export const LIBRARIES_COMMAND = "sudo openmausbot browser install --with-deps";
+export const LIBRARIES_COMMAND = "sudo seira browser install --with-deps";
 /** There is no command for the sandbox: an administrator allows one root-owned Chrome by hand. */
 export const SANDBOX_STEPS_URL = "https://github.com/seira-bot/seira/blob/main/docs/deploy-vps.md#ubuntu-2404-browser-sandbox";
 

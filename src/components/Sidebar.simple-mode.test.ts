@@ -86,9 +86,9 @@ describe("bot-first sidebar", () => {
   });
 
   it.each([
-    { advanced: true, enabled: true, density: "comfortable", size: 32, spacing: ["gap-2", "py-2", "pl-6"] },
+    { advanced: true, enabled: true, density: "comfortable", size: 32, spacing: ["gap-2.5", "py-0", "pl-5", "md:h-11"] },
     { advanced: true, enabled: true, density: "icons", size: 44, spacing: ["justify-center", "px-1", "py-1.5"] },
-    { advanced: true, enabled: false, density: "comfortable", size: 44, spacing: ["gap-3", "py-2", "pl-2.5", "pr-9"] },
+    { advanced: true, enabled: false, density: "comfortable", size: 32, spacing: ["gap-2.5", "py-0", "pl-2", "pr-2", "md:h-11"] },
     { advanced: false, enabled: false, density: "comfortable", size: 42, spacing: ["gap-2", "rounded-[8px]", "pl-2", "pr-2", "md:h-[54px]"] },
     { advanced: false, enabled: false, density: "icons", size: 36, spacing: ["h-[54px]", "justify-center"] },
   ] as const)("sizes bot portraits and row spacing in $density density with threads $enabled (advanced $advanced)", ({ advanced, enabled, density, size, spacing }) => {
@@ -133,18 +133,17 @@ describe("bot-first sidebar", () => {
     fixture.showThreads = false;
     const markup = renderToStaticMarkup(createElement(BotListItem, rowProps("comfortable", { ...bot, tasks: [], projects: [] })));
     const name = markup.match(/<span class="flex min-w-0 grow items-center gap-1\.5 truncate text-ink ([^"]*)"/)?.[1];
-    expect(name).toBe(advanced ? "text-[15px] font-semibold leading-5" : "text-[14px] font-medium leading-5");
-    expect(markup).toContain("truncate text-[13px] leading-[18px]");
+    expect(name).toBe(advanced ? "text-[14px] font-semibold leading-[18px]" : "text-[14px] font-medium leading-5");
+    expect(markup).toContain(advanced ? "truncate text-[13px] leading-4" : "truncate text-[13px] leading-[18px]");
   });
 
-  it("puts the bot's role in its name line in Advanced mode", () => {
+  it("keeps the bot's role in an Advanced row's tooltip, not in its name line", () => {
     fixture.advanced = true;
-    const markup = renderToStaticMarkup(createElement(BotListItem, rowProps("comfortable", { ...bot, title: "Research" })));
-    const nameLine = markup.match(/<span class="flex min-w-0 grow items-center gap-1\.5 truncate text-ink [^"]*">([\s\S]*?)<\/span><\/span><\/span>/)?.[1] ?? "";
-    expect(nameLine.indexOf(">Atlas<")).toBeGreaterThan(-1);
-    expect(nameLine.indexOf('data-testid="bot-role"')).toBeGreaterThan(nameLine.indexOf(">Atlas<"));
-    expect(nameLine).toContain("Research");
-    expect(renderToStaticMarkup(createElement(BotListItem, rowProps("comfortable")))).not.toContain('data-testid="bot-role"');
+    let tree: ReactNode;
+    function Capture() { tree = botRow(rowProps("comfortable", { ...bot, title: "Research" })); return tree; }
+    const markup = renderToStaticMarkup(createElement(Capture));
+    expect(markup).not.toContain('data-testid="bot-role"');
+    expect(String(findElement(tree, "data-sidebar-bot-row", bot.id)!.props.title)).toContain("Research");
   });
 
   it("ends a Simple row's preview line with its engine's faded mark, puts the unread dot at the name line's top right where ⋯ shows, and never moves the name", () => {
@@ -238,7 +237,7 @@ describe("bot-first sidebar", () => {
     expect(advanced).not.toContain("focus-visible:ring-accent/60");
   });
 
-  it("hides even the selected Simple row's actions until hover or focus, where Advanced keeps them shown", () => {
+  it("hides even the selected row's actions until hover or focus, in Simple and in Advanced", () => {
     fixture.showThreads = false;
     fixture.state = { ...fixture.state, selectedId: bot.id, activeView: "chat" };
     const candidate = { ...bot, tasks: [], projects: [] };
@@ -247,7 +246,7 @@ describe("bot-first sidebar", () => {
     expect(simple).toMatch(/data-bot-actions="atlas"[^>]*class="[^"]*\bpointer-events-none opacity-0 group-hover:pointer-events-auto/);
     expect(simple).toContain('class="flex items-baseline justify-between gap-2 pe-7 group-hover:pe-[3.25rem] group-focus-within:pe-[3.25rem] touch:pe-[3.25rem] max-md:touch:pe-7"');
     fixture.advanced = true;
-    expect(renderToStaticMarkup(createElement(BotListItem, rowProps("comfortable", candidate)))).toMatch(/data-bot-actions="atlas"[^>]*class="[^"]*\bpointer-events-auto opacity-100/);
+    expect(renderToStaticMarkup(createElement(BotListItem, rowProps("comfortable", candidate)))).toMatch(/data-bot-actions="atlas"[^>]*class="[^"]*\bpointer-events-none opacity-0 group-hover:pointer-events-auto/);
   });
 
   it.each(densities)("marks a room as one place instead of its members' faces, where a two-bot channel keeps both faces (%s)", (density) => {
@@ -310,8 +309,7 @@ describe("bot-first sidebar", () => {
   it.each([
     { advanced: false, density: "icons", slot: "size-9", spacing: ["h-[54px]", "justify-center"], name: "font-semibold", preview: "text-[11px]" },
     { advanced: true, density: "icons", slot: "size-12", spacing: ["justify-center", "px-1", "py-1.5"], name: "font-semibold", preview: "text-[11px]" },
-    { advanced: true, density: "comfortable", slot: "size-8", spacing: ["gap-2", "py-1.5", "pl-6", "pr-9"], name: "font-semibold", preview: "text-[11px]" },
-  ] as const)("sizes group chat rows in $density density (advanced $advanced)", ({ advanced, density, slot, spacing, name, preview }) => {
+      ] as const)("sizes group chat rows in $density density (advanced $advanced)", ({ advanced, density, slot, spacing, name, preview }) => {
     fixture.advanced = advanced;
     const group: Group = { id: "room", threadId: "room-thread", name: "Launch", memberIds: [bot.id], messages: [], defaultResponder: { kind: "mentions" }, bulletin: "", unread: false, createdAt: 1 };
     let tree: ReactNode;

@@ -425,6 +425,17 @@ export function loadCollapsedSections(storage?: Pick<Storage, "getItem"> | null)
   return loadStringList(SIDEBAR_COLLAPSED_SECTIONS_KEY, storage);
 }
 
+/** The collapsed sections as saved. Before the person has collapsed or opened any, the Tools list starts closed. */
+export function loadCollapsedSectionsOrDefault(storage?: Pick<Storage, "getItem"> | null): string[] {
+  try {
+    const target = storage === undefined ? (globalThis.localStorage ?? null) : storage;
+    if (target && target.getItem(SIDEBAR_COLLAPSED_SECTIONS_KEY) === null) return ["builtin:tools"];
+  } catch {
+    return [];
+  }
+  return loadCollapsedSections(storage);
+}
+
 export function saveCollapsedSections(
   ids: string[],
   storage?: Pick<Storage, "setItem"> | null,
