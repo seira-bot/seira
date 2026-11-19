@@ -100,6 +100,20 @@ describe("CI workflows", () => {
     }
   });
 
+  it("runs a job behind the release environment only for a maintainer or after an approval in the same attempt", () => {
+    const gated = [...workflows].flatMap(([file, flow]) =>
+      Object.entries(flow.jobs)
+        .filter(([, job]) => job.environment === "release")
+        .map(([id, job]) => ({ where: `${file} job ${id}`, job })),
+    );
+    expect(gated.length).toBeGreaterThan(0);
+    for (const { where, job } of gated) {
+      expect([job.needs].flat(), where).toContain("approval");
+      expect(job.if, where).toContain(`(${IS_MAINTAINER} || (${APPROVED_NOW}))`);
+      expect(job.if, where).not.toContain("'skipped'");
+    }
+  });
+
   it("reads no token, except the server image workflow once to sign in to the registry and the macOS commit step once to read the repository", () => {
     expect(texts.get(IMAGE)!.split(LOGIN)).toHaveLength(2);
     expect(texts.get(MACOS)!.split(READ_TOKEN)).toHaveLength(2);
