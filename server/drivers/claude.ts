@@ -1,7 +1,7 @@
 // Claude Code over stream-json both ways: prompt on stdin, one retained CLI process per thread,
 // each turn settled by the CLI's own `result` frame.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { chmodSync, lstatSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { join, dirname, isAbsolute, normalize } from "node:path";
@@ -592,16 +592,32 @@ export async function createPermissionBroker(opts: {
     close() {
       closed = true;
       drain();
+      // net.Server.close() unlinks its path by name, so a path another broker rebound is set aside first.
+      let foreign: { aside: string } | null = null;
+      let owned = process.platform === "win32";
+      if (!owned) {
+        try {
+          const now = lstatSync(boundPath);
+          owned = boundIdentity !== null && now.dev === boundIdentity.dev && now.ino === boundIdentity.ino;
+          if (!owned) {
+            const aside = `${boundPath}.${randomBytes(4).toString("hex")}.held`;
+            renameSync(boundPath, aside);
+            foreign = { aside };
+          }
+        } catch {}
+      }
       try {
         server?.close();
       } catch {}
-      try {
-        if (process.platform === "win32") unlinkSync(boundPath);
-        else {
-          const now = lstatSync(boundPath);
-          if (boundIdentity && now.dev === boundIdentity.dev && now.ino === boundIdentity.ino) unlinkSync(boundPath);
-        }
-      } catch {}
+      if (foreign) {
+        try {
+          renameSync(foreign.aside, boundPath);
+        } catch {}
+      } else if (owned) {
+        try {
+          unlinkSync(boundPath);
+        } catch {}
+      }
     },
     socketPath: boundPath,
   };
