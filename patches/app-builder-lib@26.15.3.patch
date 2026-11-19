@@ -33,7 +33,7 @@ index 12f078abd42700857b239b0e53cd568c1b1836b7..b89a6f8ab65ccf887c252d1bc65ad961
 +  echo "Seira: this system blocks the user namespaces that the Chromium sandbox needs, and an AppImage cannot use the setuid sandbox helper. Seira does not start without its sandbox." >&2
 +  if [ -n "$DISPLAY$WAYLAND_DISPLAY" ] ; then
 +    if [ -x /usr/bin/zenity ] ; then
-+      LD_LIBRARY_PATH="" zenity --error --title=Seira --width=440 --text="$SANDBOX_TEXT" 2>/dev/null || true
++      LD_LIBRARY_PATH="" zenity --error --title=Seira --width=640 --text="$SANDBOX_TEXT" 2>/dev/null || true
 +    elif [ -x /usr/bin/kdialog ] ; then
 +      LD_LIBRARY_PATH="" kdialog --title Seira --error "$SANDBOX_TEXT" 2>/dev/null || true
 +    elif [ -x /usr/bin/notify-send ] ; then
