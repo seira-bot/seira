@@ -2828,8 +2828,7 @@ app.whenReady().then(async () => {
     onShow: (win) => desktopTray?.windowShown(win),
     onFinished: () => { startupScreen = null; },
   });
-  await startupScreen?.ready;
-  startupTimeline.mark("splash-shown");
+  const splashReady = startupScreen?.ready.then(() => startupTimeline.mark("splash-shown"));
   if (desktopShutdownStarted) return;
   session.defaultSession.on("will-download", (_event, item) => {
     if (mediaDownloads.claim(item)) return;
@@ -3006,6 +3005,8 @@ app.whenReady().then(async () => {
     }
     if (!serverReady && !desktopShutdownStarted) serverSupervisor.startLater(startServerPackaged); // an always-on home keeps trying
   }
+  if (desktopShutdownStarted) return;
+  await splashReady;
   if (desktopShutdownStarted) return;
   startupScreen?.progress("engine");
   if (app.isPackaged && !desktopRemoteAccess) { void ensureManagedDesktop().start().then(() => companyBackupSchedule.start()).catch(() => {}); void managedDesktop.whenRestored().then(() => tailnetShare.recheck()); }
