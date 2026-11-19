@@ -127,6 +127,19 @@ The app checks for updates in the background and downloads them by itself. Nothi
   and opening a terminal, and says why. Set `OMB_UPDATE_INSTALL=terminal` to always use the terminal.
 - **AppImage.** The update replaces the AppImage when you restart; no password is needed.
 - **rpm and pacman packages** still use the terminal hand-off.
+- **Snap and Flatpak.** The store updates the app. Seira does not check, download or install updates itself, and
+  Settings says so instead of showing an update button.
+
+### Snap
+
+The snap is a classic snap: it uses the libraries of the host and runs with the same Chromium sandbox as the other
+packages. It never turns the sandbox off and ships no setuid helper. `electron-builder` adds `--no-sandbox` to every
+classic snap, so `scripts/finish-snap.mjs` removes it after the build and fails the build if the switch is still in the
+launcher or in `meta/snap.yaml`. Classic confinement needs a store review before a public release.
+
+Install a local build with `sudo snap install --dangerous --classic Seira-*.snap`, and start it with `seira`.
+`scripts/linux-store/snap-vm-test.sh` installs the snap in an Ubuntu 24.04 VM and records whether the app and the bot
+browser start with the sandbox on.
 
 ### Bundled bot browser on Ubuntu 24.04
 
