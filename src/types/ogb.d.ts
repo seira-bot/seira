@@ -114,6 +114,8 @@ const __APP_VERSION__: string;
     on: boolean;
     platform: string;
     openAtLogin: boolean;
+    /** Open at login can be turned on only in the Startup apps list of Windows Settings. */
+    startupApps: boolean;
     awake: "holding" | "battery" | "off";
     updates: "by-itself" | "restart" | "package" | "none";
   }
@@ -461,7 +463,7 @@ const __APP_VERSION__: string;
       /** Opens this app's logs folder in Explorer or Finder and says where it is. */
       openLogsFolder?(): Promise<{ folder: string; opened: boolean; error?: string }>;
       /** This app's own login item, which opens the window. `available`: false in a build that cannot add one. */
-      openAtLogin?: { state(): Promise<{ available: boolean; on: boolean }>; set(on: boolean): Promise<{ available: boolean; on: boolean }> };
+      openAtLogin?: { state(): Promise<{ available: boolean; on: boolean; startupApps?: boolean }>; set(on: boolean): Promise<{ available: boolean; on: boolean; startupApps?: boolean }> };
       /** Use this computer as an always-on home (this computer's own page only). Absent on an older app. */
       alwaysOnHome?: { state(): Promise<AlwaysOnHomeState>; set(on: boolean): Promise<AlwaysOnHomeState> };
       /** Saved keys this launch could not read (this app's own page only). `reset` asks the person, moves the unreadable

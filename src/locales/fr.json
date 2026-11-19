@@ -3723,6 +3723,7 @@
   "settings.notificationFeed.subtitle": "Affiche une cloche sur le bord droit de la fenêtre qui garde les 500 dernières notifications de tous les bots, lues ou non.",
   "settings.notificationSounds.subtitle": "Joue le son d'alerte de cet ordinateur quand un agent a fini ou a besoin de vous. Désactivé, vous gardez les bannières sans le son (pratique en appel, quand l'agent vous parle déjà).",
   "settings.openAtLogin.subtitle": "Ouvre {app} quand vous vous connectez à cet ordinateur, pour que vos bots et routines soient prêts sans l'ouvrir vous-même.",
+  "settings.openAtLogin.startupApps": "Pour ouvrir {app} à la connexion, activez-le dans Applications au démarrage, dans les Paramètres de Windows.",
   "settings.simple.advancedMode": "Affiche chaque réglage, y compris les outils pour bâtisseurs. Rien n'est supprimé dans un cas comme dans l'autre.",
   "settings.simple.analytics": "Des événements d'usage anonymes. Jamais vos messages, fichiers ou clés. Votre email seulement si vous l'avez partagé à la configuration ou sur un écran de forfait Cloud.",
   "settings.simple.analyticsLink": "Voir tout ce qui est envoyé",
@@ -3821,5 +3822,6 @@
   "call.live.provider.codex": "Codex",
   "call.live.codexHint": "Les appels utilisent la connexion ChatGPT de Codex sur cet ordinateur. Appelez un bot qui fonctionne sur Codex.",
   "call.live.disclosureCodex": "Les appels en direct via Codex envoient votre voix à OpenAI par votre compte ChatGPT dans Codex, avec les messages récents du chat et la personnalité du bot.",
-  "call.live.codexCost": "Les appels Codex utilisent le quota vocal de votre forfait ChatGPT."
+  "call.live.codexCost": "Les appels Codex utilisent le quota vocal de votre forfait ChatGPT.",
+  "alwaysOn.login.startupApps": "Ouvrir à la connexion est désactivé ici. Activez-le dans Applications au démarrage, dans les Paramètres de Windows."
 }

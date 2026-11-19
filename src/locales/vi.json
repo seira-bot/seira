@@ -5824,6 +5824,7 @@
   "settings.analytics.subtitle": "Sự kiện sản phẩm ẩn danh và mỗi ngày một lần đếm những gì đã thiết lập: nhà cung cấp nào có khóa (không bao giờ là khóa) và bao nhiêu bot, phòng, quy trình và máy tính. Không bao giờ gửi cuộc trò chuyện, lời nhắc, nội dung tệp, tên hay địa chỉ. Email của bạn chỉ được đính kèm nếu bạn đã chia sẻ khi thiết lập, hoặc khi bạn chọn nâng cấp, quản lý hay so sánh gói trên cửa sổ Cloud Pro lúc đã đăng nhập Seira Cloud (email tài khoản Cloud của bạn).",
   "settings.followUp.subtitle": "Đưa vào sẽ thêm tin nhắn vào việc bot đang làm; xếp hàng sẽ chạy khi lượt kết thúc. {key} làm cách còn lại cho một tin nhắn, và mũi tên cạnh Gửi cũng có thể bắt đầu lại lượt. Chỉ trên thiết bị này.",
   "settings.openAtLogin.subtitle": "Mở {app} khi bạn đăng nhập vào máy tính này, để bot và quy trình sẵn sàng mà không cần tự mở.",
+  "settings.openAtLogin.startupApps": "Để mở {app} khi bạn đăng nhập, hãy bật nó trong Ứng dụng khởi động ở Cài đặt Windows.",
   "settings.simple.advancedMode": "Hiện mọi điều khiển, kể cả công cụ cho người xây dựng. Không có gì bị xóa.",
   "settings.simple.analytics": "Sự kiện sử dụng ẩn danh. Không bao giờ có tin nhắn, tệp hay khóa của bạn. Email chỉ khi bạn đã chia sẻ lúc thiết lập hoặc trên màn hình gói Cloud.",
   "settings.simple.analyticsLink": "Xem mọi thứ được gửi đi",
@@ -5914,5 +5915,6 @@
   "call.live.provider.codex": "Codex",
   "call.live.codexHint": "Cuộc gọi dùng phiên đăng nhập ChatGPT của Codex trên máy tính này. Hãy gọi cho một bot chạy trên Codex.",
   "call.live.disclosureCodex": "Cuộc gọi trực tiếp qua Codex gửi giọng nói của bạn đến OpenAI qua tài khoản ChatGPT của bạn trong Codex, cùng với các tin nhắn gần đây trong cuộc trò chuyện và tính cách của bot.",
-  "call.live.codexCost": "Cuộc gọi Codex dùng hạn mức giọng nói của gói ChatGPT của bạn."
+  "call.live.codexCost": "Cuộc gọi Codex dùng hạn mức giọng nói của gói ChatGPT của bạn.",
+  "alwaysOn.login.startupApps": "Mở khi đăng nhập đang tắt ở đây. Hãy bật nó trong Ứng dụng khởi động ở Cài đặt Windows."
 }

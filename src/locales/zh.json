@@ -1937,6 +1937,7 @@
   "advancedBack.body": "此设备已重新使用高级模式。随时可以在「设置 → 高级模式」中关闭。",
   "settings.openAtLogin.title": "登录时打开",
   "settings.openAtLogin.subtitle": "你登录这台电脑时自动打开 {app}，让你的机器人和例行任务随时就绪，无需手动打开。",
+  "settings.openAtLogin.startupApps": "要在你登录时打开 {app}，请在 Windows 设置的“启动应用”中打开它。",
   "settings.openAtLogin.failed": "无法更改此项。请重试，或检查系统设置中的「登录项」。",
   "settings.updatesConsent.title": "通过邮件接收产品更新",
   "settings.updatesConsent.subtitle": "新功能和技巧，大约每月两次。你可以随时退订。",
@@ -10088,5 +10089,6 @@
   "call.live.provider.codex": "Codex",
   "call.live.codexHint": "通话使用这台电脑上 Codex 的 ChatGPT 登录。请呼叫运行在 Codex 上的机器人。",
   "call.live.disclosureCodex": "通过 Codex 的实时通话会经由你在 Codex 中的 ChatGPT 账号，把你的声音连同对话的近期消息和机器人的人设一起发送给 OpenAI。",
-  "call.live.codexCost": "Codex 通话会使用你的 ChatGPT 套餐的语音额度。"
+  "call.live.codexCost": "Codex 通话会使用你的 ChatGPT 套餐的语音额度。",
+  "alwaysOn.login.startupApps": "这里的“登录时打开”已关闭。请在 Windows 设置的“启动应用”中打开它。"
 }

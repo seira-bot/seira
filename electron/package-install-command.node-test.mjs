@@ -13,6 +13,7 @@ import {
   shellQuote,
   stagedInstallFile,
   STORE_PACKAGE_TYPES,
+  windowsPackageType,
 } from "./package-install-command.mjs";
 
 test("the Ubuntu command resolves dependencies", () => {
@@ -194,8 +195,17 @@ test("a Flatpak is told by its id or its info file", () => {
 });
 
 test("only the store package types leave updates to the store", () => {
-  assert.deepEqual([...STORE_PACKAGE_TYPES], ["snap", "flatpak"]);
+  assert.deepEqual([...STORE_PACKAGE_TYPES], ["snap", "flatpak", "msix"]);
   assert.equal(managedByStore("snap"), true);
+  assert.equal(managedByStore("msix"), true);
   assert.equal(managedByStore("flatpak"), true);
   for (const type of ["deb", "rpm", "pacman", "AppImage", null, undefined]) assert.equal(managedByStore(type), false);
+});
+
+test("a Windows package is MSIX only when Electron says it runs from the Store", () => {
+  assert.equal(windowsPackageType({ platform: "win32", windowsStore: true }), "msix");
+  assert.equal(windowsPackageType({ platform: "win32", windowsStore: false }), null);
+  assert.equal(windowsPackageType({ platform: "win32", windowsStore: undefined }), null);
+  assert.equal(windowsPackageType({ platform: "linux", windowsStore: true }), null);
+  assert.equal(windowsPackageType({ platform: "darwin", windowsStore: true }), null);
 });

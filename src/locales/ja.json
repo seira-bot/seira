@@ -1701,6 +1701,7 @@
   "advancedBack.body": "このデバイスは再び詳細モードになりました。「設定 → 詳細モード」でいつでもオフにできます。",
   "settings.openAtLogin.title": "ログイン時に開く",
   "settings.openAtLogin.subtitle": "このコンピューターにサインインしたときに {app} を開きます。自分で開かなくても、ボットとルーティンがすぐ使える状態になります。",
+  "settings.openAtLogin.startupApps": "サインイン時に {app} を開くには、Windows の設定の［スタートアップ アプリ］でオンにしてください。",
   "settings.openAtLogin.failed": "変更できませんでした。もう一度試すか、システム設定の「ログイン項目」を確認してください。",
   "settings.updatesConsent.title": "製品のお知らせをメールで受信",
   "settings.updatesConsent.subtitle": "新機能やヒントを月2回程度お届けします。配信はいつでも停止できます。",
@@ -7949,5 +7950,6 @@
   "call.live.provider.codex": "Codex",
   "call.live.codexHint": "通話には、このコンピューターの Codex の ChatGPT サインインを使います。Codex で動くボットに電話してください。",
   "call.live.disclosureCodex": "Codex を通じたライブ通話では、Codex 内の ChatGPT アカウント経由で、あなたの声、チャットの最近のメッセージ、ボットのペルソナを OpenAI に送信します。",
-  "call.live.codexCost": "Codex の通話では、ChatGPT プランの音声の利用枠を使います。"
+  "call.live.codexCost": "Codex の通話では、ChatGPT プランの音声の利用枠を使います。",
+  "alwaysOn.login.startupApps": "ここではログイン時に開く設定はオフです。Windows の設定の［スタートアップ アプリ］でオンにしてください。"
 }

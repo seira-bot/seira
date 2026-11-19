@@ -7028,6 +7028,7 @@
   "defaultBot.show.subtitle": "Twój pomocnik do wszystkiego w aplikacji. Ukryty dalej pracuje, a wyszukiwanie wciąż go znajduje.",
   "settings.followUp.subtitle": "Włączenie dodaje wiadomość do tego, co bot teraz robi; kolejka uruchamia ją po końcu tury. {key} robi to drugie dla pojedynczej wiadomości, a strzałka obok Wyślij może też zacząć turę od nowa. Tylko na tym urządzeniu.",
   "settings.openAtLogin.subtitle": "Otwiera {app} po zalogowaniu się do tego komputera, aby boty i rutyny były gotowe bez ręcznego otwierania.",
+  "settings.openAtLogin.startupApps": "Aby {app} otwierał się przy logowaniu, włącz go w sekcji Aplikacje startowe w Ustawieniach systemu Windows.",
   "settings.simple.advancedMode": "Pokazuje każde ustawienie, także narzędzia dla twórców. Nic nie jest usuwane w żadnym przypadku.",
   "settings.simple.analytics": "Anonimowe zdarzenia użycia. Nigdy Twoje wiadomości, pliki ani klucze. Twój e-mail tylko wtedy, gdy podano go podczas konfiguracji lub na ekranie planu Cloud.",
   "settings.simple.analyticsLink": "Zobacz wszystko, co wysyła",
@@ -7118,5 +7119,6 @@
   "call.live.provider.codex": "Codex",
   "call.live.codexHint": "Połączenia korzystają z logowania do ChatGPT w Codex na tym komputerze. Zadzwoń do bota, który działa na Codex.",
   "call.live.disclosureCodex": "Rozmowy na żywo przez Codex wysyłają Twój głos do OpenAI przez Twoje konto ChatGPT w Codex, razem z ostatnimi wiadomościami czatu i personą bota.",
-  "call.live.codexCost": "Rozmowy przez Codex korzystają z limitu głosowego Twojego planu ChatGPT."
+  "call.live.codexCost": "Rozmowy przez Codex korzystają z limitu głosowego Twojego planu ChatGPT.",
+  "alwaysOn.login.startupApps": "Otwieranie przy logowaniu jest tu wyłączone. Włącz je w sekcji Aplikacje startowe w Ustawieniach systemu Windows."
 }

@@ -6894,6 +6894,7 @@
   "sidebar.nav.teamFiles": "File del team",
   "settings.followUp.subtitle": "Inserirlo aggiunge il tuo messaggio a ciò che il bot sta facendo; metterlo in coda lo esegue alla fine del turno. {key} fa l'altra cosa per un solo messaggio, e la freccia accanto a Invia può anche riavviare il turno. Solo su questo dispositivo.",
   "settings.openAtLogin.subtitle": "Apre {app} quando accedi a questo computer, così bot e routine sono pronti senza aprirlo tu.",
+  "settings.openAtLogin.startupApps": "Per aprire {app} all'accesso, attivalo in App di avvio nelle Impostazioni di Windows.",
   "settings.simple.advancedMode": "Mostra ogni controllo, compresi gli strumenti per chi costruisce. Non si cancella nulla in nessun caso.",
   "settings.simple.analytics": "Eventi d'uso anonimi. Mai i tuoi messaggi, file o chiavi. La tua email solo se l'hai condivisa durante la configurazione o in una schermata del piano Cloud.",
   "settings.simple.analyticsLink": "Vedi tutto ciò che invia",
@@ -6984,5 +6985,6 @@
   "call.live.provider.codex": "Codex",
   "call.live.codexHint": "Le chiamate usano l'accesso a ChatGPT di Codex su questo computer. Chiama un bot che funziona su Codex.",
   "call.live.disclosureCodex": "Le chiamate live tramite Codex inviano la tua voce a OpenAI tramite il tuo account ChatGPT in Codex, insieme ai messaggi recenti della chat e alla personalità del bot.",
-  "call.live.codexCost": "Le chiamate Codex usano la quota vocale del tuo piano ChatGPT."
+  "call.live.codexCost": "Le chiamate Codex usano la quota vocale del tuo piano ChatGPT.",
+  "alwaysOn.login.startupApps": "Apri all'accesso è disattivato qui. Attivalo in App di avvio nelle Impostazioni di Windows."
 }

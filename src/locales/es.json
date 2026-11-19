@@ -6324,6 +6324,7 @@
   "sidebar.nav.teamFiles": "Archivos del equipo",
   "settings.followUp.subtitle": "Meterlo añade tu mensaje a lo que el bot hace ahora; ponerlo en cola lo ejecuta cuando termina el turno. {key} hace lo otro para un solo mensaje, y la flecha junto a Enviar también puede reiniciar el turno. Solo en este dispositivo.",
   "settings.openAtLogin.subtitle": "Abre {app} cuando inicias sesión en este ordenador, para que tus bots y rutinas estén listos sin abrirlo tú.",
+  "settings.openAtLogin.startupApps": "Para abrir {app} al iniciar sesión, actívalo en Aplicaciones de inicio, dentro de Configuración de Windows.",
   "settings.simple.advancedMode": "Muestra todos los controles, incluidas herramientas para creadores. No se borra nada en ningún caso.",
   "settings.simple.analytics": "Eventos de uso anónimos. Nunca tus mensajes, archivos ni claves. Tu email solo si lo compartiste al configurar o en una pantalla de plan de Cloud.",
   "settings.simple.analyticsLink": "Ver todo lo que envía",
@@ -6414,5 +6415,6 @@
   "call.live.provider.codex": "Codex",
   "call.live.codexHint": "Las llamadas usan el inicio de sesión de ChatGPT de Codex en este equipo. Llama a un bot que se ejecute en Codex.",
   "call.live.disclosureCodex": "Las llamadas en vivo con Codex envían tu voz a OpenAI a través de tu cuenta de ChatGPT en Codex, junto con los mensajes recientes del chat y la personalidad del bot.",
-  "call.live.codexCost": "Las llamadas con Codex usan el límite de voz de tu plan de ChatGPT."
+  "call.live.codexCost": "Las llamadas con Codex usan el límite de voz de tu plan de ChatGPT.",
+  "alwaysOn.login.startupApps": "Abrir al iniciar sesión está desactivado aquí. Actívalo en Aplicaciones de inicio, dentro de Configuración de Windows."
 }
