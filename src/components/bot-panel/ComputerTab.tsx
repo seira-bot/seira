@@ -51,7 +51,7 @@ function useSignedInCount(bot: Pick<Bot, "id">, enabled: boolean): number | null
   return count?.botId === bot.id ? count.count : null;
 }
 
-function usePlaceChoices(bot: Bot) {
+export function usePlaceChoices(bot: Bot) {
   const { state } = useStore();
   const { capabilities } = useDesktopCapabilities();
   const platform = capabilities.host?.platform ?? "other";

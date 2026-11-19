@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { Cpu, Server } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { HermesMark } from "./HermesMark";
 import { CursorMark } from "./CursorMark";
@@ -175,6 +176,40 @@ export function ModelgoMark({ size = 16, className }: IconProps) {
   </svg>;
 }
 
+/** Groq's mark from Lobe Icons (MIT), in the text colour so it reads on light and dark. */
+export function GroqMark({ size = 16, className }: IconProps) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fillRule="evenodd" className={cn("fill-[var(--color-ink)]", className)} aria-hidden="true">
+    <path d="M12.036 2c-3.853-.035-7 3-7.036 6.781-.035 3.782 3.055 6.872 6.908 6.907h2.42v-2.566h-2.292c-2.407.028-4.38-1.866-4.408-4.23-.029-2.362 1.901-4.298 4.308-4.326h.1c2.407 0 4.358 1.915 4.365 4.278v6.305c0 2.342-1.944 4.25-4.323 4.279a4.375 4.375 0 01-3.033-1.252l-1.851 1.818A7 7 0 0012.029 22h.092c3.803-.056 6.858-3.083 6.879-6.816v-6.5C18.907 4.963 15.817 2 12.036 2z" />
+  </svg>;
+}
+
+/** Cerebras's mark from Lobe Icons (MIT), in its own orange. */
+export function CerebrasMark({ size = 16, className }: IconProps) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" className={className} aria-hidden="true">
+    <path fill="#F15A29" fillRule="evenodd" clipRule="evenodd" d="M14.121 2.701a9.299 9.299 0 000 18.598V22.7c-5.91 0-10.7-4.791-10.7-10.701S8.21 1.299 14.12 1.299V2.7zm4.752 3.677A7.353 7.353 0 109.42 17.643l-.901 1.074a8.754 8.754 0 01-1.08-12.334 8.755 8.755 0 0112.335-1.08l-.901 1.075zm-2.255.844a5.407 5.407 0 00-5.048 9.563l-.656 1.24a6.81 6.81 0 016.358-12.043l-.654 1.24zM14.12 8.539a3.46 3.46 0 100 6.922v1.402a4.863 4.863 0 010-9.726v1.402z" />
+    <path fill="#F15A29" d="M15.407 10.836a2.24 2.24 0 00-.51-.409 1.084 1.084 0 00-.544-.152c-.255 0-.483.047-.684.14a1.58 1.58 0 00-.84.912c-.074.203-.11.416-.11.631 0 .218.036.43.11.631a1.594 1.594 0 00.84.913c.2.093.43.14.684.14.216 0 .417-.046.602-.135.188-.09.35-.225.475-.392l.928 1.006c-.14.14-.3.261-.482.363a3.367 3.367 0 01-1.083.38c-.17.026-.317.04-.44.04a3.315 3.315 0 01-1.182-.21 2.825 2.825 0 01-.961-.597 2.816 2.816 0 01-.644-.929 2.987 2.987 0 01-.238-1.21c0-.444.08-.847.238-1.21.15-.35.368-.666.643-.929.278-.261.605-.464.962-.596a3.315 3.315 0 011.182-.21c.355 0 .712.068 1.072.204.361.138.685.36.944.649l-.962.97z" />
+  </svg>;
+}
+
+/** Cline's mark from Lobe Icons (MIT), in the text colour so it reads on light and dark. */
+export function ClineMark({ size = 16, className }: IconProps) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fillRule="evenodd" className={cn("fill-[var(--color-ink)]", className)} aria-hidden="true">
+    <path d="M17.035 3.991c2.75 0 4.98 2.24 4.98 5.003v1.667l1.45 2.896a1.01 1.01 0 01-.002.909l-1.448 2.864v1.668c0 2.762-2.23 5.002-4.98 5.002H7.074c-2.751 0-4.98-2.24-4.98-5.002V17.33l-1.48-2.855a1.01 1.01 0 01-.003-.927l1.482-2.887V8.994c0-2.763 2.23-5.003 4.98-5.003h9.962zM8.265 9.6a2.274 2.274 0 00-2.274 2.274v4.042a2.274 2.274 0 004.547 0v-4.042A2.274 2.274 0 008.265 9.6zm7.326 0a2.274 2.274 0 00-2.274 2.274v4.042a2.274 2.274 0 104.548 0v-4.042A2.274 2.274 0 0015.59 9.6z" />
+    <path d="M12.054 5.558a2.779 2.779 0 100-5.558 2.779 2.779 0 000 5.558z" />
+  </svg>;
+}
+
+/** Oh My Pi's mark from omp.sh (package @oh-my-pi/pi-coding-agent, MIT), with the gradient of its favicon. */
+export function OmpMark({ size = 16, className }: IconProps) {
+  const id = useId().replace(/\W/gu, "");
+  return <svg width={size} height={size} viewBox="0 0 64 64" className={className} aria-hidden="true">
+    <defs>
+      <linearGradient id={`${id}g`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ed4abf" /><stop offset=".5" stopColor="#9b4dff" /><stop offset="1" stopColor="#5ad8e6" /></linearGradient>
+    </defs>
+    <path fill={`url(#${id}g)`} d="M10 14h44v9H43v33h-9V23h-9v22h-9V23H10z" />
+  </svg>;
+}
+
 export function ProviderMark({ driverKind, size, className }: IconProps & { driverKind: string }) {
   switch (driverKind) {
     case "grok":
@@ -220,12 +255,20 @@ export function ProviderMark({ driverKind, size, className }: IconProps & { driv
       return <GreenferenceMark size={size} className={className} />;
     case "modelgo":
       return <ModelgoMark size={size} className={className} />;
+    case "groq":
+      return <GroqMark size={size} className={className} />;
+    case "cerebras":
+      return <CerebrasMark size={size} className={className} />;
+    case "clineAgent":
+      return <ClineMark size={size} className={className} />;
+    case "ompAgent":
+      return <OmpMark size={size} className={className} />;
+    case "geminiAgent":
+      return <PresetProviderMark preset="google" size={size} className={className} />;
+    case "openai-compat":
+      return <Server size={size ?? 16} className={cn("text-ink-secondary", className)} aria-hidden="true" />;
     default:
-      return (
-        <span className={cn("flex size-full items-center justify-center text-[10px] font-semibold tracking-tight text-ink-secondary", className)}>
-          {(driverKind.replace(/Agent$/i, "").slice(0, 1) || "?").toUpperCase()}
-        </span>
-      );
+      return <Cpu size={size ?? 16} className={cn("text-ink-secondary", className)} aria-hidden="true" />;
   }
 }
 

@@ -16,11 +16,11 @@ vi.mock("@/state/store", async (importOriginal) => {
 import { BotSettingsDialog } from "./BotSettingsDialog";
 import { DesktopCapabilitiesProvider } from "./DesktopCapabilities";
 
-const bot = { id: "bot-1", name: "Maily" } as never as Bot;
+const bot = { id: "bot-1", name: "Maily", title: "", messages: [], tasks: [], modelSelection: { instanceId: "claude", model: "m" } } as never as Bot;
 // The provider reads window.ogb.platform on render, so each case sees its stub.
 const headerTag = () => {
   const html = renderToStaticMarkup(createElement(DesktopCapabilitiesProvider, null, createElement(BotSettingsDialog, { bot })));
-  return html.match(/<div[^>]*>(?=<span id="bot-settings-title")/)?.[0] ?? "";
+  return html.match(/<div[^>]*h-\[52px\][^>]*>/)?.[0] ?? "";
 };
 const header = () => headerTag().match(/class="([^"]*)"/)?.[1] ?? "";
 
@@ -31,7 +31,7 @@ describe("bot settings caption inset", () => {
   it.each(["win32", "darwin"] as const)("keeps the header flush on %s: the frame's top bar holds the window's buttons", (platform) => {
     vi.stubGlobal("window", { ogb: { platform } });
     const classes = header();
-    expect(classes).toContain("py-3");
+    expect(classes).toContain("h-[52px]");
     expect(classes).not.toContain("pt-[28px]");
   });
 

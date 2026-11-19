@@ -249,7 +249,9 @@ describe("Claude server-owned sign-in", () => {
   it("never shows a link that is not Anthropic's, and times out instead", async () => {
     // The startup timeout lands before the 3s link lifetime, so the rejection names the missing link.
     const controller = create("evil", { startupTimeoutMs: 1000 });
-    await expect(controller.start()).rejects.toThrow(/did not show a sign-in link/);
+    const failed = controller.start();
+    await expect(failed).rejects.toThrow(/did not show a sign-in link/);
+    await expect(failed).rejects.not.toThrow(/server/i);
   });
 
   it("times out when the CLI prints no link, and cancel kills the process", async () => {

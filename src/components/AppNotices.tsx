@@ -73,8 +73,6 @@ function ProductHuntCard({ onDone }: { onDone: (action: "upvote" | "not_now" | "
 }
 
 const trialKey = (trial: { state: string; endsAt: number }) => `${trial.state}:${trial.endsAt}`;
-/** A first run lands in its Chief's chat, whose first messages arrive one at a time; the Grok Bot popup follows them. */
-const FIRST_MESSAGES_MS = 6_000;
 
 export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { quiet?: boolean; viewer?: WelcomeViewer | null; now?: () => number }) {
   const { state, dispatch } = useStore();
@@ -102,7 +100,6 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const [announcementShown, setAnnouncementShown] = useState<string | null>(null);
   const [grokShown, setGrokShown] = useState(false);
   const [grokOpen, setGrokOpen] = useState(false);
-  const [grokLanded, setGrokLanded] = useState(false);
   const consentHere = (local || viewer?.cloudHome === true) && brandStatus().source !== "file";
   const consent = useUpdatesConsent(consentHere ? updatesConsentBridge() : undefined);
   const [consentDone, setConsentDone] = useState(false);
@@ -204,19 +201,13 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const consentWaits = welcomeFinishedThisLaunch() || firstChat;
   const mausBotFirst = mausBot.due;
   const consentNow = consentWaits === true || consentFact === false ? false : consentWaits === null || mausBotFirst ? null : consentFact;
-  // The Grok Bot popup: once for everyone who can add a bot, the one thing a first chat may be interrupted by. Nothing reads
-  // this computer for it: GrokMoveDialog does that, once opened.
+  // The Grok Bot popup: once for everyone who can add a bot, never in the launch the welcome or MausBot's card took, and the
+  // one thing a later first chat may be interrupted by. Nothing reads this computer for it: GrokMoveDialog does that, once opened.
   const grokDue = !remote && viewer?.canSave !== false && !state.config?.team && brandStatus().source !== "file" && organization !== true && moving !== true
-    && launchDialogShown() !== "mausbot" && !noticeSeen(record, GROK_MOVE_NOTICE) && !desktopState?.seen.includes(GROK_MOVE_NOTICE);
+    && !welcomeFinishedThisLaunch() && launchDialogShown() !== "mausbot" && !noticeSeen(record, GROK_MOVE_NOTICE) && !desktopState?.seen.includes(GROK_MOVE_NOTICE);
   const grokBlocked = useOtherDialogOpen(grokDue) || Boolean(state.liveCall && state.liveCall.status !== "ended");
-  const grokLanding = welcomeFinishedThisLaunch() && !grokLanded;
-  useEffect(() => {
-    if (!grokDue || !grokLanding || waits) return;
-    const timer = setTimeout(() => setGrokLanded(true), FIRST_MESSAGES_MS);
-    return () => clearTimeout(timer);
-  }, [grokDue, grokLanding, waits]);
   const grokNow = !grokDue ? false
-    : !viewer || (desktop && !desktopState) || organization === null || firstChat === null || mausBotFirst || moving === null || grokLanding || grokBlocked ? null : true;
+    : !viewer || (desktop && !desktopState) || organization === null || firstChat === null || mausBotFirst || moving === null || grokBlocked ? null : true;
   // Everyone, whether or not a bot has answered yet (so not `afterWelcome`, which holds until one has), but never in the launch
   // the welcome or MausBot's card took, or during a live call.
   const modelgoNow = !modelgoHere || moving || welcomeFinishedThisLaunch() || launchDialogShown() === "mausbot" || desktopState?.seen.includes(MODELGO_OFFER_NOTICE) ? false

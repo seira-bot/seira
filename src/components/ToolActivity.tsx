@@ -1,5 +1,5 @@
 import { Check, ChevronRight, Circle, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { api } from "@/state/api";
 import type { Message } from "@/state/store";
 import { cn } from "@/lib/cn";
@@ -11,6 +11,7 @@ import { toolStepLabel } from "@/lib/tool-step-label";
 import { isNoticeCode, routineLineText } from "@/lib/activity-text";
 import type { MessageAttachmentContext } from "./AttachmentPreview";
 import { PlaceIcon } from "./PlaceIcon";
+import { StepRowContext } from "./step-row";
 import { WorkingDots } from "./WorkingIndicator";
 
 /** Which stored message a step is: a clipped step (its output cut short in conversation pages) loads the rest from it. */
@@ -19,12 +20,55 @@ export function ToolActivity({ tool, place = null, live = false, source }: { too
   const full = useFullOutput(expanded && tool.clipped ? source : undefined, tool.output);
   const output = full.output ?? tool.output;
   const failed = tool.ok === false;
-  const advanced = useAdvancedMode();
+  const advanced = useAdvancedMode(), row = use(StepRowContext) && advanced;
   const notice = isNoticeCode(tool.nameCode);
   const summary = routineLineText(tool.summaryCode, tool.summary ?? "", tool.summaryParams);
   const problem = failed ? tool.problem : undefined;
   const label = problem ?? (advanced && !notice ? tool.label ?? tool.name : toolStepLabel(tool));
   const status = tool.ok === undefined ? (live ? t("toolDetail.running") : t("toolDetail.unverified")) : failed ? t("toolDetail.failed") : t("toolDetail.completed");
+  const running = tool.ok === undefined && live;
+  const shownSummary = Boolean(advanced && tool.summary && tool.summary !== tool.name && !nameIsCommand(tool.name));
+  const detail = (
+    <>
+      <div className={cn("text-[11px] font-medium", failed && "text-danger")}>{status}</div>
+      {label !== tool.name && !notice && <div>
+        <div className="mb-1 text-[11px] font-medium">{t("toolDetail.tool")}</div>
+        <p dir="ltr" className="break-words font-mono text-xs text-ink" data-testid="tool-name">{tool.name}</p>
+      </div>}
+      <div>
+        <div className="mb-1 text-[11px] font-medium">{t("toolDetail.input")}</div>
+        <pre dir="ltr" className="max-h-52 overflow-auto rounded-lg bg-inset p-2.5 font-mono text-xs whitespace-pre-wrap break-words text-ink">{tool.input ?? (tool.summary ? summary : notice ? label : tool.name)}</pre>
+      </div>
+      <div>
+        <div className="mb-1 text-[11px] font-medium">{t("toolDetail.output")}</div>
+        {output ? <pre dir="ltr" className="max-h-64 overflow-auto rounded-lg bg-inset p-2.5 font-mono text-xs whitespace-pre-wrap break-words text-ink">{output}</pre> : <p className="text-xs">{tool.ok === undefined ? (live ? t("toolDetail.waiting") : t("toolDetail.unverified")) : t("toolDetail.noOutput")}</p>}
+      </div>
+      {(full.state === "loading" || full.state === "failed") && <p className="text-[11px] text-ink-secondary" role="status">{t(full.state === "loading" ? "toolDetail.loadingFull" : "toolDetail.partial")}</p>}
+      <p className="text-[11px] text-ink-secondary">{t("toolDetail.previewHint")}</p>
+    </>
+  );
+  if (row) {
+    return (
+      <details onToggle={(event) => setExpanded(event.currentTarget.open)} className="group/tool w-full text-[13px]" data-testid="tool-activity" data-step-row>
+        <summary
+          role="button"
+          aria-expanded={expanded}
+          aria-label={t("toolDetail.label", { name: label, status })}
+          className="flex h-8 cursor-pointer list-none items-center gap-2.5 rounded-md pe-2 transition-colors duration-[120ms] hover:bg-ink/[0.03] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none [&::-webkit-details-marker]:hidden"
+        >
+          <span data-step-icon className={cn("relative z-[1] flex size-5 shrink-0 items-center justify-center rounded-full bg-app", failed ? "text-danger" : "text-ink-tertiary")} aria-hidden="true">
+            {tool.ok === undefined ? (live ? <WorkingDots size={3.5} /> : <Circle size={12} />) : failed ? <X size={13} /> : <Check size={13} className="text-success" />}
+          </span>
+          {place && <PlaceIcon place={place} size={13} className="shrink-0 opacity-70" role="img" aria-label={t(placeLabelKey(place))} data-testid="tool-place" />}
+          <span className={cn("min-w-0 truncate font-mono text-[13px] font-medium leading-5", shownSummary ? "max-w-[55%] shrink-0" : "flex-1", failed ? "text-danger" : "text-ink")}>{label}</span>
+          {shownSummary && <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-ink-tertiary" title={summary}>{summary}</span>}
+          {running && <span className="shrink-0 text-[12px] font-medium text-accent">{t("toolDetail.running")}</span>}
+          {failed && <span className="shrink-0 text-[12px] font-medium text-danger">{t("toolDetail.failed")}</span>}
+        </summary>
+        <div className="mb-2 ms-7 space-y-3 rounded-lg border border-hairline/40 bg-panel p-3 text-ink-secondary">{detail}</div>
+      </details>
+    );
+  }
   return (
     <details onToggle={(event) => setExpanded(event.currentTarget.open)} className="group/tool w-fit max-w-full rounded-xl border border-hairline/40 bg-panel text-[13px] open:w-[min(38rem,100%)]" data-testid="tool-activity">
       <summary
@@ -36,26 +80,10 @@ export function ToolActivity({ tool, place = null, live = false, source }: { too
         <span className="shrink-0" aria-hidden="true">{tool.ok === undefined ? (live ? <WorkingDots size={3.5} /> : <Circle size={13} />) : failed ? <X size={13} /> : <Check size={13} className="text-success" />}</span>
         {place && <PlaceIcon place={place} size={13} className="shrink-0 opacity-70" role="img" aria-label={t(placeLabelKey(place))} data-testid="tool-place" />}
         <span className={cn("min-w-0 max-w-[30rem]", !problem && "truncate", "leading-5", advanced && !notice && !problem ? "font-mono" : "font-medium")}>{label}</span>
-        {advanced && tool.summary && tool.summary !== tool.name && !nameIsCommand(tool.name) && <span className="min-w-0 flex-1 truncate font-mono" title={summary}>{summary}</span>}
+        {shownSummary && <span className="min-w-0 flex-1 truncate font-mono" title={summary}>{summary}</span>}
         <ChevronRight size={13} className="ml-auto shrink-0 group-open/tool:rotate-90" aria-hidden="true" />
       </summary>
-      <div className="space-y-3 border-t border-hairline/40 p-3 text-ink-secondary">
-        <div className={cn("text-[11px] font-medium", failed && "text-danger")}>{status}</div>
-        {label !== tool.name && !notice && <div>
-          <div className="mb-1 text-[11px] font-medium">{t("toolDetail.tool")}</div>
-          <p dir="ltr" className="break-words font-mono text-xs text-ink" data-testid="tool-name">{tool.name}</p>
-        </div>}
-        <div>
-          <div className="mb-1 text-[11px] font-medium">{t("toolDetail.input")}</div>
-          <pre dir="ltr" className="max-h-52 overflow-auto rounded-lg bg-inset p-2.5 font-mono text-xs whitespace-pre-wrap break-words text-ink">{tool.input ?? (tool.summary ? summary : notice ? label : tool.name)}</pre>
-        </div>
-        <div>
-          <div className="mb-1 text-[11px] font-medium">{t("toolDetail.output")}</div>
-          {output ? <pre dir="ltr" className="max-h-64 overflow-auto rounded-lg bg-inset p-2.5 font-mono text-xs whitespace-pre-wrap break-words text-ink">{output}</pre> : <p className="text-xs">{tool.ok === undefined ? (live ? t("toolDetail.waiting") : t("toolDetail.unverified")) : t("toolDetail.noOutput")}</p>}
-        </div>
-        {(full.state === "loading" || full.state === "failed") && <p className="text-[11px] text-ink-secondary" role="status">{t(full.state === "loading" ? "toolDetail.loadingFull" : "toolDetail.partial")}</p>}
-        <p className="text-[11px] text-ink-secondary">{t("toolDetail.previewHint")}</p>
-      </div>
+      <div className="space-y-3 border-t border-hairline/40 p-3 text-ink-secondary">{detail}</div>
     </details>
   );
 }

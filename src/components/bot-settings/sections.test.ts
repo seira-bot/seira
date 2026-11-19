@@ -36,8 +36,8 @@ describe("bot settings search", () => {
 
   it("says it is still looking while the connected apps load, and nothing matches only after", () => {
     expect(searchEmptyText("github", "loading")).toBe("Looking through connected apps…");
-    expect(searchEmptyText("github", "ready")).toBe("Nothing matches “github”");
-    expect(searchEmptyText("github", "unknown")).toBe("Nothing matches “github”");
+    expect(searchEmptyText("github", "ready")).toBe("No settings match “github”");
+    expect(searchEmptyText("github", "unknown")).toBe("No settings match “github”");
   });
 
   it("keeps looking until the Email lookup has answered too", () => {

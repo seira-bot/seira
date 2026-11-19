@@ -8,8 +8,7 @@ import { phonePairingSettingsAction } from "@/lib/phone-pairing";
 import type { LocaleKey } from "@/locales";
 import { useStore, type Action } from "@/state/store";
 import { engineReady } from "./EngineLibrary";
-import { ConnectAiDialog } from "./onboarding/ConnectAi";
-import { useWelcomeAi } from "./onboarding/welcome-ai";
+import { IntroConnectAi } from "./ConnectAiInPlace";
 
 const STEPS: Record<SetupStep, { label: LocaleKey; icon: LucideIcon }> = {
   ai: { label: "helperIntro.step.ai", icon: Sparkles },
@@ -78,11 +77,6 @@ export function chipAction(chip: Exclude<IntroChip, "ai">): Action {
     case "phone": return phonePairingSettingsAction();
     case "cloud": return { type: "openCloudAdd", source: "app_onboarding" };
   }
-}
-
-function IntroConnectAi({ onClose }: { onClose: () => void }) {
-  const { state } = useStore();
-  return <ConnectAiDialog tested={useWelcomeAi(state.instances, true)} onClose={onClose} />;
 }
 
 /** What is still missing, as chips under MausBot's follow-up (Simple mode): at most INTRO_CHIPS, and one that was tapped

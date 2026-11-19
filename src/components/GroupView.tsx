@@ -172,7 +172,7 @@ function RoomTextMessage({
   const focusedSearch = focus?.messageId === m.id && Boolean(focus.matchText) && focus.threadId === group.threadId;
   const collapsible = user && !expanded && (display.length > USER_COLLAPSE_CHARS || display.split("\n").length > USER_COLLAPSE_LINES);
   useEffect(() => { if (focusedSearch && collapsible) setExpanded(true); }, [focusedSearch, collapsible, focus?.nonce]);
-  const simple = !useAdvancedMode();
+  const simple = true;
   const speakerBot = members.find((member) => member.id === m.from?.botId);
   const botText = rawText; const teammates = useTeammates(); const peers = useMemo(() => [...members, ...teammates.peers], [members, teammates]);
   const pin = roomPin(group, m, dispatch);
@@ -334,7 +334,7 @@ export const Transcript = memo(function Transcript({
 }) {
   const { state, dispatch } = useStore();
   const phone = useMediaQuery(PHONE_LAYOUT);
-  const showThreads = useShowThreads(), simple = !useAdvancedMode();
+  const showThreads = useShowThreads(), simple = true;
   const showToolCalls = showToolCallsEnabled(state.config);
   const canReact = useCanReact(group.threadId); const teammatePeers = useTeammates().peers;
   const memberOf = (id?: string) => members.find((b) => b.id === id); const messages = useLiveTranscript(group.threadId, saved, transcript, members, roomThreadSpeakerId(group, group.threadId));
