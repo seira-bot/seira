@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { memo, useEffect, useMemo, useSyncExternalStore } from "react";
 import { ArrowUpRight, Eye } from "lucide-react";
 
 import { openExternalLink } from "@/lib/app-links";
@@ -48,7 +48,7 @@ function useNewestFor(links: readonly SiteCardLink[], messageId: string, at: num
  * on the newest reply that links it: the site drawn small, its name and address, Open (the preview beside the chat,
  * full screen on a phone) and Open in browser. Any other site stays a plain link. Nothing while the reply streams, and
  * nothing on a published page's or a template's own card. */
-export function PublishedSiteCards({ message }: { message: Message }) {
+export const PublishedSiteCards = memo(function PublishedSiteCards({ message }: { message: Message }) {
   const apps = useKnownPublishedApps();
   const done = message.role === "bot" && message.kind === "text" && !message.publishedPage && !message.template && !isLiveReply(message);
   const text = done ? message.text ?? "" : "";
@@ -62,7 +62,7 @@ export function PublishedSiteCards({ message }: { message: Message }) {
       {shown.map((link) => <PublishedSiteCard key={link.appId} link={link} />)}
     </div>
   );
-}
+});
 
 function PublishedSiteCard({ link }: { link: SiteCardLink }) {
   const store = useOptionalStoreRef();

@@ -1,8 +1,9 @@
 import { GitFork } from "lucide-react";
-import type { Dispatch } from "react";
+import { memo, type Dispatch } from "react";
 import { ACTION_ICON, type MessageMenuItem } from "./MessageActions";
 import { t } from "@/lib/i18n";
-import { useStore, type Action } from "@/state/store";
+import type { Action } from "@/state/store";
+import { useStoreDispatch, useStoreSelector } from "@/state/store-select";
 
 type Owner = { kind: "bot" | "group"; ownerId: string; threadId: string; messageId: string };
 
@@ -16,12 +17,23 @@ export function forkMessageItem(owner: Owner, dispatch: Dispatch<Action>, disabl
   };
 }
 
-export function ForkLinks(owner: Owner & { phone: boolean }) {
-  const { state, dispatch } = useStore();
-  const tasks = owner.kind === "bot"
-    ? state.bots?.find((bot) => bot.id === owner.ownerId)?.tasks
-    : state.groups?.find((group) => group.id === owner.ownerId)?.tasks;
-  const forks = tasks?.filter((task) => task.origin?.threadId === owner.threadId && task.origin.messageId === owner.messageId) ?? [];
+type ForkLink = { threadId: string; title: string };
+
+const NO_FORKS: readonly ForkLink[] = [];
+
+const sameForks = (a: readonly ForkLink[], b: readonly ForkLink[]) =>
+  a.length === b.length && a.every((fork, index) => fork.threadId === b[index]!.threadId && fork.title === b[index]!.title);
+
+export const ForkLinks = memo(function ForkLinks(owner: Owner & { phone: boolean }) {
+  const dispatch = useStoreDispatch();
+  const forks = useStoreSelector((state) => {
+    const tasks = owner.kind === "bot"
+      ? state.bots?.find((bot) => bot.id === owner.ownerId)?.tasks
+      : state.groups?.find((group) => group.id === owner.ownerId)?.tasks;
+    const found = tasks?.filter((task) => task.origin?.threadId === owner.threadId && task.origin.messageId === owner.messageId)
+      .map((task) => ({ threadId: task.threadId, title: task.title }));
+    return found?.length ? found : NO_FORKS;
+  }, sameForks);
   if (owner.phone || !forks.length) return null;
   return (
     <div className="mt-1 flex flex-wrap gap-1" data-testid="fork-links">
@@ -34,4 +46,4 @@ export function ForkLinks(owner: Owner & { phone: boolean }) {
       ))}
     </div>
   );
-}
+});
