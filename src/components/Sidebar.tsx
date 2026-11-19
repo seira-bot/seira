@@ -1150,7 +1150,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
   const pendingBotUndo = teamFeedback?.restoreBot;
   const botRow = (bot: Bot) => botRowProps(state, dispatch, bot, { density, query: q, onMenu: setMenu, renameRequest: renameRequest?.botId === bot.id ? renameRequest.nonce : 0, ...drops.row(bot.id) });
   const canAddBots = teamSettingsAllowed !== false || Boolean(state.config?.team);
-  const advancedAdd = (id: string, sectionName: string | undefined): { onAdd?: () => void; addLabel?: string } => {
+  const advancedAdd = (id: string, sectionName: string | null | undefined): { onAdd?: () => void; addLabel?: string } => {
     if (id === BOTS_SECTION_ID && canAddBots) return { onAdd: () => dispatch({ type: "newBot" }), addLabel: t("sidebar.newBot") };
     if (id === CHANNELS_SECTION_ID) return { onAdd: () => setNewRoom(true), addLabel: t("sidebar.newChannel.title") };
     if (sectionName && !remoteClient && layoutInteractive) return { onAdd: () => setMoveToTeam(sectionName), addLabel: t(state.bots.some((bot) => !bot.hidden && bot.section?.trim() === sectionName) ? "team.manageBotsIn" : "team.addBotsTo", { name: sectionName }) };

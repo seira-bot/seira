@@ -34,7 +34,7 @@ const bot = (id: string, extra: Partial<Bot> = {}): Bot => ({
 const atlas = bot("atlas", { title: "Developer", messages: [{ id: "m1", role: "bot", kind: "text", text: "All set.", at: 1 }] as Bot["messages"] });
 const chief = bot("chief", { chiefOfStaff: true, title: "Planner" });
 const room: Group = {
-  id: "room", threadId: "room-thread", name: "Launch room", memberIds: ["atlas", "chief"], messages: [{ id: "g1", role: "bot", kind: "text", text: "Ship it.", at: 1, botId: "atlas" }] as Group["messages"],
+  id: "room", threadId: "room-thread", name: "Launch room", memberIds: ["atlas", "chief"], messages: [{ id: "g1", role: "bot", kind: "text", text: "Ship it.", at: 1 }] as Group["messages"],
   defaultResponder: { kind: "mentions" }, bulletin: "", unread: false, createdAt: 1,
 };
 const threadRoom: Group = { ...room, id: "thread", name: "Release notes", dm: true } as Group;
