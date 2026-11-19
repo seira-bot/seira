@@ -20,9 +20,9 @@ const CANDIDATE_TTL_MS = 3_000;
 const SANDBOX_ENV = /^(?:FLATPAK_.*|ZYPAK_.*|XDG_(?:CONFIG|DATA|CACHE|STATE)_HOME|XDG_(?:DATA|CONFIG)_DIRS|XDG_RUNTIME_DIR|DBUS_SESSION_BUS_ADDRESS|XAUTHORITY|TMPDIR|LD_LIBRARY_PATH|LD_PRELOAD|LD_AUDIT|GI_TYPELIB_PATH|GIO_EXTRA_MODULES|GST_.*|PKG_CONFIG_.*|CHROME_.*|container|PULSE_.*|PIPEWIRE_.*|AT_SPI_BUS_ADDRESS)$/;
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-// Each hit prints two lines: the file, then where its links lead.
-const FIND_ON_PATH = 'set -f; IFS=:; for d in $1; do [ -n "$d" ] || continue; p="$d/$2"; if [ -f "$p" ] && [ -x "$p" ]; then printf "%s\\n%s\\n" "$p" "$(readlink -f -- "$p")"; fi; done';
-const FIND_FILE = 'if [ -f "$1" ] && [ -x "$1" ]; then printf "%s\\n%s\\n" "$1" "$(readlink -f -- "$1")"; fi';
+// Each hit prints two NUL-ended fields: the file, then where its links lead (empty when that cannot be resolved).
+const FIND_ON_PATH = 'set -f; IFS=:; for d in $1; do [ -n "$d" ] || continue; p="$d/$2"; if [ -f "$p" ] && [ -x "$p" ]; then printf "%s\\0%s\\0" "$p" "$(readlink -f -- "$p")"; fi; done';
+const FIND_FILE = 'if [ -f "$1" ] && [ -x "$1" ]; then printf "%s\\0%s\\0" "$1" "$(readlink -f -- "$1")"; fi';
 
 export interface HostRunResult {
   status: number | null;
@@ -98,18 +98,26 @@ export function hostBasePath(): string {
   return basePath;
 }
 
-/** Every copy of `name` that exists on the host, searching `path` (host folders), with where its links lead. Cached for a few seconds. */
-export function hostFindPrograms(name: string, path: string): HostProgram[] {
+/** Reads NUL-ended path and real fields. A field left over without its partner comes back with an empty `real`. */
+export function parseHostPrograms(stdout: string): HostProgram[] {
+  const fields = stdout.split("\0");
+  fields.pop();
+  const found: HostProgram[] = [];
+  for (let i = 0; i < fields.length; i += 2) found.push({ path: fields[i]!, real: fields[i + 1] ?? "" });
+  return found;
+}
+
+/** Every copy of `name` that exists on the host, searching `path` (host folders), with where its links lead.
+ * Cached for a few seconds unless `fresh`: a decision to run a program must never rest on the cache. */
+export function hostFindPrograms(name: string, path: string, fresh = false): HostProgram[] {
   const key = `${path}\0${name}`;
   const hit = candidates.get(key);
-  if (hit && Date.now() - hit.at < CANDIDATE_TTL_MS) return hit.found;
+  if (!fresh && hit && Date.now() - hit.at < CANDIDATE_TTL_MS) return hit.found;
   const argv = /\//.test(name)
     ? ["--host", "/bin/sh", "-c", FIND_FILE, "sh", name]
     : ["--host", "/bin/sh", "-c", FIND_ON_PATH, "sh", path, name];
   const result = runner(argv);
-  const lines = result.status === 0 ? result.stdout.split("\n").filter(Boolean) : [];
-  const found: HostProgram[] = [];
-  for (let i = 0; i + 1 < lines.length; i += 2) found.push({ path: lines[i]!, real: lines[i + 1]! });
+  const found = result.status === 0 ? parseHostPrograms(result.stdout) : [];
   candidates.set(key, { at: Date.now(), found });
   return found;
 }
@@ -131,15 +139,15 @@ export function hostBridge(
   const env = { ...(context.env ?? processEnv), ...resolved.env };
   const path = serverPath(env.PATH ?? hostBasePath());
   const name = /\//.test(resolved.command) && !isAbsolute(resolved.command) ? resolve(cwd ?? "/", resolved.command) : resolved.command;
-  const program = hostFindPrograms(name, path)[0];
+  const program = hostFindPrograms(name, path, true)[0];
   if (!program) return null;
-  if (!serverMayRunFrom(program.path) || !serverMayRunFrom(program.real)) {
+  if (!program.real || !serverMayRunFrom(program.path) || !serverMayRunFrom(program.real)) {
     throw Object.assign(new Error(`${resolved.command} is in a folder the bots can write, so the server does not run it outside the bot box.`), { code: "EACCES" });
   }
   const entries = hostEnvEntries({ ...env, PATH: path });
   return {
     command: FLATPAK_SPAWN,
-    args: hostSpawnArgv({ command: program.path, args: resolved.args, cwd }),
+    args: hostSpawnArgv({ command: program.real, args: resolved.args, cwd }),
     env: busEnv(processEnv),
     envBlock: entries.map((entry) => `${entry}\0`).join(""),
   };

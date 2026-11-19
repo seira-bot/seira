@@ -8,7 +8,9 @@ import {
   hostEnvEntries,
   hostFindCandidates,
   hostSpawnArgv,
+  hostFindPrograms,
   inFlatpak,
+  parseHostPrograms,
   resetHostCaches,
   runsInSandbox,
   setHostRunnerForTests,
@@ -75,9 +77,9 @@ describe("host lookups", () => {
     if (argv[1] === "printenv" && argv[2] === "PATH") return { status: 0, stdout: `${hostPath}\n` };
     if (argv[1] === "/bin/sh" && argv.length === 7) {
       const found = (argv[5] ?? "").split(":").map((d) => `${d}/${argv[6]}`).filter((p) => hostFiles.has(p));
-      return { status: 0, stdout: found.map((p) => `${p}\n${hostFiles.get(p)}\n`).join("") };
+      return { status: 0, stdout: found.map((p) => `${p}\0${hostFiles.get(p)}\0`).join("") };
     }
-    if (argv[1] === "/bin/sh") return { status: 0, stdout: hostFiles.has(argv[5] ?? "") ? `${argv[5]}\n${hostFiles.get(argv[5]!)}\n` : "" };
+    if (argv[1] === "/bin/sh") return { status: 0, stdout: hostFiles.has(argv[5] ?? "") ? `${argv[5]}\0${hostFiles.get(argv[5]!)}\0` : "" };
     return { status: 1, stdout: "" };
   };
 
@@ -176,6 +178,40 @@ describe("host lookups", () => {
     it("refuses with EACCES a path name in such a folder", () => {
       distrustHomePrograms("/home/u", ["/home/u/data"], []);
       expect(() => hostBridge({ command: "/home/u/.local/bin/claude", args: [] }, { env: { PATH: "/usr/bin" } }, FLATPAK_ENV)).toThrow(expect.objectContaining({ code: "EACCES" }));
+    });
+
+    it("launches the checked target, not the link it found", () => {
+      hostFiles.set("/usr/bin/claude", "/opt/claude/bin/claude");
+      const bridged = hostBridge({ command: "claude", args: [] }, { env: { PATH: "/usr/bin" } }, FLATPAK_ENV);
+      expect(bridged?.args.at(-1)).toBe("/opt/claude/bin/claude");
+    });
+
+    it("looks again before a launch instead of trusting a cached answer", () => {
+      hostFiles.set("/usr/bin/claude", "/opt/claude/bin/claude");
+      expect(hostFindPrograms("claude", "/usr/bin")[0]?.real).toBe("/opt/claude/bin/claude");
+      hostFiles.set("/usr/bin/claude", "/home/u/.local/bin/evil");
+      distrustHomePrograms("/home/u", ["/home/u/data"], []);
+      expect(() => hostBridge({ command: "claude", args: [] }, { env: { PATH: "/usr/bin" } }, FLATPAK_ENV)).toThrow(expect.objectContaining({ code: "EACCES" }));
+    });
+
+    it("refuses with EACCES a program whose target could not be resolved", () => {
+      hostFiles.set("/usr/bin/claude", "");
+      expect(() => hostBridge({ command: "claude", args: [] }, { env: { PATH: "/usr/bin" } }, FLATPAK_ENV)).toThrow(expect.objectContaining({ code: "EACCES" }));
+    });
+  });
+
+  describe("parseHostPrograms", () => {
+    it("reads path and target records", () => {
+      expect(parseHostPrograms("/a\0/b\0/c\0/d\0")).toEqual([{ path: "/a", real: "/b" }, { path: "/c", real: "/d" }]);
+    });
+    it("keeps an empty target empty and never shifts the pairs", () => {
+      expect(parseHostPrograms("/a\0\0/c\0/d\0")).toEqual([{ path: "/a", real: "" }, { path: "/c", real: "/d" }]);
+    });
+    it("gives a lone field an empty target", () => {
+      expect(parseHostPrograms("/a\0/b\0/c\0")).toEqual([{ path: "/a", real: "/b" }, { path: "/c", real: "" }]);
+    });
+    it("reads nothing from nothing", () => {
+      expect(parseHostPrograms("")).toEqual([]);
     });
   });
 });
