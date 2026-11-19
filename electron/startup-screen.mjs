@@ -126,7 +126,7 @@ export function createStartupScreen({
   };
   void ready.then(() => progress("shown"));
   const attach = (win, { maximized = false } = {}) => {
-  startupTimeline.mark("window-created");
+    startupTimeline.mark("window-created");
     const reveal = () => {
       if (revealed || win.isDestroyed() || isQuitting()) return;
       revealed = true;
