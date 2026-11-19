@@ -799,7 +799,7 @@ export function createBoatRecovery(deps: BoatRecoveryDeps) {
       boat.onDeadBoat(null);
       for (const timer of timers.values()) clearTimeout(timer);
       timers.clear();
-      return Promise.allSettled([...lanes.values()]).then(() => undefined);
+      return Promise.allSettled(lanes.values()).then(() => undefined);
     },
   };
 }
