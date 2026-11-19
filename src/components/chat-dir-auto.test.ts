@@ -20,7 +20,7 @@ describe("chat text follows the writer's direction", () => {
     expectDirAuto("RawMarkdownToggle.tsx", 'data-testid="raw-markdown-view"');
     expectDirAuto("RoomBulletin.tsx", "value={bulletin.draft}");
     expectDirAuto("RoomBulletin.tsx", "group.bulletin.split");
-    expectDirAuto("room-panel/RoomPanel.tsx", "value={bulletin.draft}");
+    expectDirAuto("room-panel/InstructionsRow.tsx", "value={bulletin.draft}");
     expectDirAuto("TaskPicker.tsx", "{localizedTaskTitle(task.title)}");
     expectDirAuto("TaskPicker.tsx", "task.threadId === bot.threadId");
     expectDirAuto("SearchResults.tsx", "line-clamp-2");
