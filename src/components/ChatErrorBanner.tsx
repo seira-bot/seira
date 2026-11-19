@@ -1,12 +1,48 @@
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { t } from "@/lib/i18n";
 import { plainErrorLine } from "@/lib/plain-error";
-import type { AppState } from "@/state/store";
+import { useStore, type AppState } from "@/state/store";
 import { useTeamPeople } from "@/state/team-people";
+import { engineReady } from "./EngineLibrary";
+import { IntroConnectAi } from "./ConnectAiInPlace";
 import { SeiraCharacter } from "./seira-character";
+
+type Notice = NonNullable<AppState["notice"]>;
+
+function NoAiNotice({ notice }: { notice: Notice }) {
+  const { state, dispatch } = useStore();
+  const member = useTeamPeople()?.admin === false;
+  const [connecting, setConnecting] = useState(false);
+  const ready = state.instances.some(engineReady);
+  useEffect(() => { if (ready) dispatch({ type: "notice", notice: null }); }, [ready, dispatch]);
+  return (
+    <div className="w-full px-5">
+      <div role="status" className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-hairline/40 bg-panel px-3 py-2 text-[13px] text-ink-secondary">
+        <p className="min-w-0 flex-1 break-words">{notice.text}</p>
+        {!member && (
+          <button type="button" onClick={() => setConnecting(true)} className="shrink-0 rounded-full bg-accent/10 px-3 py-1 text-[13px] font-medium text-ink hover:bg-accent/20">
+            {t("helperIntro.chip.ai")}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => dispatch({ type: "notice", notice: null })}
+          aria-label={t("chat.error.dismiss")}
+          title={t("chat.error.dismiss")}
+          className="shrink-0 rounded p-0.5 hover:bg-ink/10"
+        >
+          <X size={13} />
+        </button>
+      </div>
+      {connecting && <IntroConnectAi onClose={() => setConnecting(false)} />}
+    </div>
+  );
+}
 
 export function ChatNotice({ notice }: { notice: AppState["notice"] }) {
   if (!notice) return null;
+  if (notice.kind === "no-ai") return <NoAiNotice notice={notice} />;
   return (
     <div className="w-full px-5">
       <div role="status" className="mb-2 rounded-lg border border-hairline/40 bg-panel px-3 py-2 text-[13px] text-ink-secondary">
