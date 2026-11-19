@@ -2,7 +2,7 @@
 
 To keep Seira and its agents on your current computer and use a VPS only as a
 bot’s remote desktop, see [Bring Your Own VPS](byo-vps.md) and the
-[published setup guide](https://docs.openmausbot.com/docs/computers/byo-vps).
+[setup guide](../apps/docs/content/docs/computers/byo-vps.mdx).
 
 Run the server on a machine you control (a VPS, a home server, a Mac mini in a
 closet). Then connect the desktop app, browsers and phones to it. Every path
@@ -23,8 +23,8 @@ For server feature switches, defaults and configuration-file instructions, see
 
 | You have | Run | Link it prints |
 |---|---|---|
-| HTTPS in front already (cloudflared, Caddy, nginx) | `npx @seira-bot/seira serve --public-url https://maus.example.com` | `https://maus.example.com/pair#code=…` |
-| A domain name, and ports 80 and 443 open | `npx @seira-bot/seira serve --domain maus.example.com` | `https://maus.example.com/pair#code=…` |
+| HTTPS in front already (cloudflared, Caddy, nginx) | `npx @seira-bot/seira serve --public-url https://seira.example.com` | `https://seira.example.com/pair#code=…` |
+| A domain name, and ports 80 and 443 open | `npx @seira-bot/seira serve --domain seira.example.com` | `https://seira.example.com/pair#code=…` |
 | Tailscale on the server and your devices | `npx @seira-bot/seira serve --tailscale` | `https://<machine>.<tailnet>.ts.net/pair#code=…` |
 | Only this network (home or office) | `npx @seira-bot/seira serve --lan` | `http://192.168.1.20:8799/pair#code=…` |
 | Nothing at all | `npx @seira-bot/seira login`, then `npx @seira-bot/seira serve --tunnel` | `https://c-….openmausbot.com/pair#code=…` |
@@ -43,18 +43,18 @@ On any machine with Node 24 or newer.
 
 ```sh
 npx @seira-bot/seira setup                                        # once: AI access and a default model
-npx @seira-bot/seira serve --public-url https://maus.example.com  # or --domain, --tailscale, --lan, --tunnel
+npx @seira-bot/seira serve --public-url https://seira.example.com  # or --domain, --tailscale, --lan, --tunnel
 ```
 
 In a terminal, `serve` checks the address and prints one pairing block:
 
 ```
 Seira 0.1.147 · server "hetzner-1"
-data: /home/maus/.openmausbot
-Reach    https://maus.example.com   ✓ answers as this server (11:04)
+data: /home/seira/.openmausbot
+Reach    https://seira.example.com   ✓ answers as this server (11:04)
 
 Pairing code   7KQ2-M9XD-H4TP   works once, until 11:14 · everything
-Link           https://maus.example.com/pair#code=7KQ2-M9XD-H4TP
+Link           https://seira.example.com/pair#code=7KQ2-M9XD-H4TP
 
   Desktop app   ＋ → Connect to a server, paste the link
   Phone         scan with your camera or the Seira app
@@ -73,7 +73,7 @@ Each way in has its own Reach line:
 
 Paste the link into Seira: **＋ → Connect to a server**. The sheet names the
 server it found ("✓ hetzner-1 · Seira 0.1.147 · HTTPS"), and **Connect to
-hetzner-1** finishes. You can also type the address (`maus.example.com`,
+hetzner-1** finishes. You can also type the address (`seira.example.com`,
 `192.168.1.20:8799`) and the pairing code in their own fields.
 
 `serve` with no way in mints no code. It lists the ways in instead. Every
@@ -89,12 +89,12 @@ and don't buffer the event stream ([details](#putting-a-proxy-in-front)).
 Then:
 
 ```sh
-npx @seira-bot/seira serve --public-url https://maus.example.com
+npx @seira-bot/seira serve --public-url https://seira.example.com
 ```
 
-Setting `OMB_PUBLIC_URL=https://maus.example.com` in the environment works the
+Setting `OMB_PUBLIC_URL=https://seira.example.com` in the environment works the
 same way. If the Reach line says
-`✗ https://maus.example.com doesn't reach this server`, the tunnel points
+`✗ https://seira.example.com doesn't reach this server`, the tunnel points
 somewhere else. Fix that, then run `npx @seira-bot/seira status` to check again.
 
 ### Docker on your computer or home network
@@ -125,7 +125,7 @@ server, installs Seira under `/opt/openmausbot` and ends with HTTPS on your
 domain:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/milind-soni/OpenMausBot/main/deploy/install.sh | sudo sh -s -- --domain maus.example.com
+curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh | sudo sh -s -- --domain seira.example.com
 cd /opt/openmausbot && sudo docker compose exec omb openmausbot pair   # Link https://<DOMAIN>/pair#code=…
 ```
 
@@ -149,7 +149,7 @@ Caddy gets the certificate. See [Docker (with HTTPS on your own domain)](#docker
 ### Keep it running (a service)
 
 ```sh
-npx @seira-bot/seira service install --public-url https://maus.example.com   # the same way-in options as serve
+npx @seira-bot/seira service install --public-url https://seira.example.com   # the same way-in options as serve
 ```
 
 This writes a systemd unit (Linux) or a launchd agent (macOS) with the same
@@ -182,7 +182,7 @@ without `sudo`, installs the published server image as your user's systemd
 service:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/milind-soni/OpenMausBot/main/deploy/podman/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/podman/install.sh | sh
 podman exec -it openmausbot openmausbot pair      # a code, and a sign-in link for this machine's browser
 ```
 
@@ -279,7 +279,7 @@ Debian 13 and Fedora), SELinux hosts and ARM64 have not been tried.
 | "http://… is on the open internet and isn't encrypted…" | A plain http link to a public address. | Use its https address, or put HTTPS in front: `--public-url` behind cloudflared or Caddy, `--domain`, or `--tailscale`. |
 | "This points at this computer (127.0.0.1), not at the server." | A link to `127.0.0.1` or `localhost`, which is the computer you're on. | Use the address other devices reach the server at: run `seira pair` on the server, or choose a way in. |
 | "Can't reach 192.168.1.20:8799. Check the server is running and reachable from this computer." | Nothing answers there. | Start it with a way in (`serve --lan` for this network), and check a firewall allows the port. |
-| "maus.example.com doesn't exist yet." / "…certificate isn't valid yet." | DNS or the certificate isn't ready. | Wait for the DNS record, or give a new server a minute. |
+| "seira.example.com doesn't exist yet." / "…certificate isn't valid yet." | DNS or the certificate isn't ready. | Wait for the DNS record, or give a new server a minute. |
 | "That address answers, but it isn't a Seira server." | Something else answers there, often a proxy pointing at the wrong port. | Point it at `http://127.0.0.1:8799`. |
 | "That's a sign-in code from an email…" / "That code is for the phone app…" / "That's a script key…" | The wrong kind of code. | On the server, run `seira pair` for a 12-character pairing code. |
 | "Too many wrong codes. Try again at 11:19." | Five wrong codes in five minutes from one address. | Wait until then, or make a new code. |
@@ -754,7 +754,7 @@ OMB_DATA_DIR="$HOME/.openmausbot" OMB_PORT=8799 \
 For something durable, let the CLI write the service for you:
 
 ```sh
-npx @seira-bot/seira service install --domain maus.example.com   # or --public-url, --tunnel, --tailscale, --lan
+npx @seira-bot/seira service install --domain seira.example.com   # or --public-url, --tunnel, --tailscale, --lan
 ```
 
 It renders a systemd unit (Linux) or a launchd agent (macOS) that runs the
@@ -903,7 +903,7 @@ loads. `npx @seira-bot/seira devices` lists the paired devices and
 `devices revoke ID` signs one out.
 
 From the **desktop app**, choose **＋ → Connect to a server** and paste the
-link. You can also type the address (`maus.example.com`,
+link. You can also type the address (`seira.example.com`,
 `192.168.1.20:8799`, a `*.ts.net` name) and the pairing code in its own
 field. The sheet looks the address up and names what it found, for example
 "✓ hetzner-1 · Seira 0.1.147 · HTTPS". A bare address tries https first,
@@ -1420,9 +1420,9 @@ Owners can read the same over the API:
 
 ```sh
 curl -H "Authorization: Bearer $TOKEN" \
-  "https://maus.example.com/api/usage?from=2026-09-01&to=2026-09-30&groupBy=user"
+  "https://seira.example.com/api/usage?from=2026-09-01&to=2026-09-30&groupBy=user"
 curl -H "Authorization: Bearer $TOKEN" -o usage.csv \
-  "https://maus.example.com/api/usage.csv?from=2026-09-01&to=2026-09-30"
+  "https://seira.example.com/api/usage.csv?from=2026-09-01&to=2026-09-30"
 ```
 
 Dates are inclusive, UTC, at most a year apart; without them you get the
@@ -1550,9 +1550,9 @@ than the window. An older server's `decisions.ndjson` and `.1` are still read
 and age out the same way. Admins can read it back:
 
 ```sh
-curl -H "Authorization: Bearer $TOKEN" "https://maus.example.com/api/decisions?limit=200"
+curl -H "Authorization: Bearer $TOKEN" "https://seira.example.com/api/decisions?limit=200"
 curl -H "Authorization: Bearer $TOKEN" -o decisions.csv \
-  "https://maus.example.com/api/decisions.csv?from=2026-09-01&to=2026-09-30"
+  "https://seira.example.com/api/decisions.csv?from=2026-09-01&to=2026-09-30"
 ```
 
 The CSV has one line per decision (time, decision, source, bot, tool,
@@ -1646,9 +1646,9 @@ them as CSV. The same over the API:
 
 ```sh
 curl -H "Authorization: Bearer $TOKEN" \
-  "https://maus.example.com/api/admin-activity?from=2026-09-01&to=2026-09-30&what=visibility"
+  "https://seira.example.com/api/admin-activity?from=2026-09-01&to=2026-09-30&what=visibility"
 curl -H "Authorization: Bearer $TOKEN" -o activity.csv \
-  "https://maus.example.com/api/admin-activity.csv?who=ada@company.com"
+  "https://seira.example.com/api/admin-activity.csv?who=ada@company.com"
 ```
 
 `what` is `all` (admin changes and answered cards, the default), `approvals`,
@@ -1924,7 +1924,7 @@ directory and lasts across restarts until it is resumed.
 
 Self-hosted servers follow the **stable** channel: a released version that our
 own Clouds have run for 48 hours, named by the image tag `stable` and by
-[`stable.json`](https://raw.githubusercontent.com/milind-soni/OpenMausBot/channels/stable.json).
+[`stable.json`](https://raw.githubusercontent.com/seira-bot/seira/channels/stable.json).
 `latest` follows `main` and is not for a server you rely on. The update check
 (`GET /api/updates/check`, **Check for updates** in the app) compares the
 server with the stable version; `OMB_UPDATE_CHANNEL=newest` makes it follow
