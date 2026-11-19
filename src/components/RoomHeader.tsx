@@ -219,7 +219,7 @@ export function RoomHeader({
         {...headerDragProps}
         className={cn(
           // A container query never matches the container itself, so the row that wraps is the child below.
-          "@container/roomhead px-5 py-3",
+          "@container/roomhead px-5 py-2.5",
           "pl-11 md:pl-5",
         )}
       >
@@ -227,7 +227,11 @@ export function RoomHeader({
         <div data-roomhead-identity className="flex min-w-0 items-center gap-2 @max-3xl/roomhead:basis-full" style={headerNoDragStyle}>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="truncate text-[15px] font-semibold text-ink">{group.name}</span>
+              <span aria-hidden="true" className="flex shrink-0 items-center -space-x-1.5">
+                {members.slice(0, SIMPLE_FACES).map((member) => <BotAvatar key={member.id} bot={member} state={normalizeState(member.mascotExpression) ?? "happy"} size={22} animated={false} />)}
+              </span>
+              <span className="truncate text-[14px] font-semibold leading-5 text-ink">{group.name}</span>
+              <span className="shrink-0 text-[13px] leading-5 text-ink-tertiary">{t(members.length === 1 ? "routines.botCountOne" : "routines.botCountMany", { count: members.length })}</span>
               {!setupPending && !group.dm && <GroupTaskPicker group={group} />}
             </div>
             {group.description && <p className="truncate text-[12px] leading-4 text-ink-secondary">{group.description}</p>}

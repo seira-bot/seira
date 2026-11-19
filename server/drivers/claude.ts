@@ -1,7 +1,7 @@
 // Claude Code over stream-json both ways: prompt on stdin, one retained CLI process per thread,
 // each turn settled by the CLI's own `result` frame.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { join, dirname, isAbsolute, normalize } from "node:path";
@@ -60,6 +60,7 @@ import type { KeepWarmContract } from "./claude-keepwarm.ts"; import { claudeFor
 import { BACKGROUND_CALL_TIMEOUT_MS, backgroundCallArgs, spawnBackgroundCall } from "./claude-background.ts"; import { withEndpointFolder } from "./claude-endpoint-folder.ts";
 import { permissionLaunchCwd, shellRequest } from "./permission-command.ts"; import { readToolPaths } from "../own-file-reads.ts";
 import { SPAWNED_PROXIES } from "../proxy-paths.ts"; import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
+import { makeOwnedTempFolder, removeOwnedTempFolder, sweepOrphanedTempFoldersOnce } from "../temp-folders.ts";
 import { extractMcpImages } from "../mcp-tool-images.ts"; import { claudeToolDraft } from "./tool-progress.ts"; import { redactSecretsInText } from "../../shared/redact.ts";
 import {
   ASK_USER_QUESTION_TOOL,
@@ -320,14 +321,17 @@ const HOOK_HELPER_PATH = SPAWNED_PROXIES.hook;
 // In the packaged app process.execPath is the Electron binary; this makes it run as plain node.
 const NODE_ENV_FLAG = { ELECTRON_RUN_AS_NODE: "1" };
 
+/** The launch folders (MCP config, system prompt) are named after this process: one that is cut off at exit goes with the process or the next start. */
+const MCP_FOLDER_PREFIX = "omb-mcp-";
+const SYSTEM_FOLDER_PREFIX = "omb-system-";
+
+function makeLaunchFolder(prefix: string, name: string): string {
+  sweepOrphanedTempFoldersOnce(prefix);
+  return join(makeOwnedTempFolder(prefix), name);
+}
+
 function removePrivateTempDir(filePath: string | null | undefined): boolean {
-  if (!filePath) return true;
-  try {
-    rmSync(dirname(filePath), { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
-    return true;
-  } catch {
-    return false;
-  }
+  return !filePath || removeOwnedTempFolder(dirname(filePath));
 }
 
 interface Ask {
@@ -885,9 +889,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
     const discardSession = (threadId: string, session: Session) => {
       session.elicit.close(); session.context.close();
       if (session.mcpConfigPath) {
-        try {
-          rmSync(dirname(session.mcpConfigPath), { recursive: true, force: true });
-        } catch {}
+        removePrivateTempDir(session.mcpConfigPath);
         session.mcpConfigPath = null;
       }
       if (session.systemPromptPath) {
@@ -1137,7 +1139,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
       // The MCP config carries credentials and argv is readable via `ps`: a 0600 file, removed at settle.
       let mcpConfigPath: string | null = null;
       if (Object.keys(mcpServers).length) {
-        mcpConfigPath = join(mkdtempSync(join(tmpdir(), "omb-mcp-")), "mcp.json");
+        mcpConfigPath = makeLaunchFolder(MCP_FOLDER_PREFIX, "mcp.json");
         args.push("--mcp-config", mcpConfigPath);
         args.push("--allowedTools", allowed.join(","));
       }
@@ -1211,11 +1213,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
         const running = live.turn;
         // A warm process can exit just as the next turn is written; its close resumes this turn.
         if (!(await writeUser(live, threadId, message)) && !running?.stopRequested) closeSession(threadId, "stdin write failed");
-        if (mcpConfigPath) {
-          try {
-            rmSync(dirname(mcpConfigPath), { recursive: true, force: true });
-          } catch {}
-        }
+        removePrivateTempDir(mcpConfigPath);
         return { turnId };
       }
       // The old process and its tree end before the new one starts, so two never share the session.
@@ -1229,9 +1227,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
         broker?.close();
         broker = undefined;
         if (mcpConfigPath) {
-          try {
-            rmSync(dirname(mcpConfigPath), { recursive: true, force: true });
-          } catch {}
+          removePrivateTempDir(mcpConfigPath);
           mcpConfigPath = null;
         }
         if (systemPromptPath) {
@@ -1243,7 +1239,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
 
       try {
         if (launchSystem) {
-          systemPromptPath = join(mkdtempSync(join(tmpdir(), "omb-system-")), "prompt.txt");
+          systemPromptPath = makeLaunchFolder(SYSTEM_FOLDER_PREFIX, "prompt.txt");
           writeFileSync(systemPromptPath, launchSystem, { mode: 0o600 });
           args.push("--append-system-prompt-file", systemPromptPath);
         }
@@ -1379,9 +1375,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
         session.broker?.pause();
         // The CLI read the credential-bearing config at start; it must not sit on disk.
         if (session.mcpConfigPath) {
-          try {
-            rmSync(dirname(session.mcpConfigPath), { recursive: true, force: true });
-          } catch {}
+          removePrivateTempDir(session.mcpConfigPath);
           session.mcpConfigPath = null;
         }
         if (session.systemPromptPath) {
@@ -1827,11 +1821,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
         session.broker?.close();
         session.elicit.close();
         session.context.close();
-        if (session.mcpConfigPath) {
-          try {
-            rmSync(dirname(session.mcpConfigPath), { recursive: true, force: true });
-          } catch {}
-        }
+        removePrivateTempDir(session.mcpConfigPath);
         removePrivateTempDir(session.systemPromptPath);
         if (sessions.get(threadId) === session) sessions.delete(threadId);
       };

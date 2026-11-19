@@ -12,6 +12,7 @@ import { api } from "@/state/api";
 import { visibleMessages, type Bot, type Group, type Message } from "@/state/store";
 import type { ContextBreakdown } from "../../shared/context-breakdown";
 import { useContextAction } from "./ContextWarning";
+import { COMPOSER_CHIP } from "./composer-simple";
 import { MENU_ICON, MENU_LABEL, MENU_NOTE, MENU_ROW, MENU_SEPARATOR, MENU_SHEET } from "./menu-recipe";
 
 const TONE_INK: Record<ContextTone, string> = { quiet: "", warning: "text-warning", danger: "text-danger" };
@@ -20,10 +21,10 @@ const RING = 16;
 const RING_RADIUS = 6;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 
-function ContextRing({ percent }: { percent: number }) {
+function ContextRing({ percent, size = RING }: { percent: number; size?: number }) {
   const filled = RING_LENGTH * Math.min(100, Math.max(4, percent)) / 100;
   return (
-    <svg aria-hidden="true" width={RING} height={RING} viewBox={`0 0 ${RING} ${RING}`} fill="none" stroke="currentColor" strokeWidth={1.75} className="-rotate-90">
+    <svg aria-hidden="true" width={size} height={size} viewBox={`0 0 ${RING} ${RING}`} fill="none" stroke="currentColor" strokeWidth={1.75} className="-rotate-90">
       <circle cx={RING / 2} cy={RING / 2} r={RING_RADIUS} opacity={0.3} />
       <circle cx={RING / 2} cy={RING / 2} r={RING_RADIUS} strokeLinecap="round" strokeDasharray={`${filled} ${RING_LENGTH}`} />
     </svg>
@@ -194,7 +195,8 @@ function RoomContext({ group, members, detailed }: { group: Group; members: read
   );
 }
 
-export function ComposerContextMenu({ bot, group, members, className }: { bot?: Bot; group?: Group; members?: readonly Bot[]; className?: string }) {
+/** `chip` is the Advanced card's quiet 28px chip: the ring and "Context 34%". Without it the trigger is the bare icon. */
+export function ComposerContextMenu({ bot, group, members, className, chip = false }: { bot?: Bot; group?: Group; members?: readonly Bot[]; className?: string; chip?: boolean }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLSpanElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -216,8 +218,9 @@ export function ComposerContextMenu({ bot, group, members, className }: { bot?: 
     <span ref={root} data-composer-context className="relative flex shrink-0">
       <button ref={trigger} type="button" aria-label={name} title={name} aria-haspopup="dialog" aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className={cn("flex shrink-0 items-center justify-center rounded-full", className, fullest && TONE_INK[fullest.tone], open && "bg-ink/[0.09] text-ink")}>
-        {fullest?.percent === undefined ? <Gauge size={16} /> : <ContextRing percent={fullest.percent} />}
+        className={cn(chip ? cn(COMPOSER_CHIP, "gap-1.5 tabular-nums text-ink-tertiary") : "flex shrink-0 items-center justify-center rounded-full", className, fullest && TONE_INK[fullest.tone], open && "bg-ink/[0.09] text-ink")}>
+        {fullest?.percent === undefined ? <Gauge size={chip ? 14 : 16} /> : <ContextRing percent={fullest.percent} size={chip ? 14 : RING} />}
+        {chip && name}
       </button>
       {open && (
         <div ref={panel} role="dialog" tabIndex={-1} aria-label={t("contextMenu.title")} data-context-panel

@@ -224,4 +224,14 @@ describe("the model menu's usage rings", () => {
     flushSync(() => rings(menu)[0]!.click());
     expect(shownRows(menu)).toEqual(["weekly"]);
   });
+
+  it("stacks the contained picker only under an Advanced panel body", () => {
+    render(true);
+    const row = host.querySelector<HTMLElement>("div.justify-between")!;
+    expect(row.className).toContain("[[data-advanced-body]_&]:flex-col");
+    expect(row.className).toContain("justify-between");
+    expect(row.closest("[data-advanced-body]")).toBeNull();
+    host.setAttribute("data-advanced-body", "");
+    expect(row.closest("[data-advanced-body]")).not.toBeNull();
+  });
 });

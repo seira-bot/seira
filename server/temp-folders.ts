@@ -33,6 +33,17 @@ export function releaseOwnedTempFolder(path: string): void {
   atExit.delete(path);
 }
 
+/** Removes a folder that makeOwnedTempFolder made. A folder that stays (a locked file) is left to the exit hook. */
+export function removeOwnedTempFolder(path: string): boolean {
+  try {
+    rmSync(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  } catch {
+    return false;
+  }
+  releaseOwnedTempFolder(path);
+  return true;
+}
+
 function processIsAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);

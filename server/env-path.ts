@@ -5,6 +5,7 @@ import { closeSync, existsSync, openSync, readFileSync, readSync, statSync, read
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, extname, join } from "node:path";
 import { homeProgramsDistrusted, serverMayRunFrom } from "./bot-box/program-trust.ts";
+import { hostBasePath, hostFindCandidates, inFlatpak, probeHostLoginPath } from "./flatpak-host.ts";
 import { resolvePortableHermes } from "./portable-hermes.ts";
 
 function nvmBinDirs(home: string): string[] {
@@ -120,13 +121,16 @@ export function augmentedPath(): string {
 
 function buildPath(): string {
   const fallback = fallbackDirs.filter((d) => existsSync(d));
+  // In a Flatpak the programs are on the host: the sandbox's PATH and folder listing say nothing about them.
+  const onHost = inFlatpak();
+  const basePath = onHost ? hostBasePath() : process.env.PATH;
   return mergePaths([
     ...registeredDirs.filter((d) => existsSync(d)),
     ...(process.env.OMB_EXTRA_PATH ? process.env.OMB_EXTRA_PATH.split(delimiter) : []),
-    ...(process.env.PATH ? process.env.PATH.split(delimiter) : []),
+    ...(basePath ? basePath.split(delimiter) : []),
     // Keep the last login-shell result while a rescan re-probes, or rc-only CLIs vanish for the response that triggered it.
     ...(loginShellPath ? loginShellPath.split(delimiter) : []),
-    ...(process.platform === "win32" ? windowsKnownDirs() : knownDirs()).filter((d) => existsSync(d)),
+    ...(process.platform === "win32" ? windowsKnownDirs() : knownDirs()).filter((d) => onHost || existsSync(d)),
   ].filter((d) => !fallback.includes(d)).concat(fallback).filter(serverMayRunFrom));
 }
 
@@ -135,6 +139,14 @@ function mergePaths(parts: string[]): string {
 }
 
 function probeLoginShellPath(): void {
+  if (inFlatpak()) {
+    probeHostLoginPath((path) => {
+      if (!path) return;
+      loginShellPath = path;
+      cached = buildPath();
+    });
+    return;
+  }
   const shell = process.env.SHELL || "/bin/zsh";
   // -l -i: nvm and friends live in .zshrc/.bashrc, which only interactive shells read; a marker isolates $PATH from rc noise.
   execFile(
@@ -174,6 +186,7 @@ export function harnessHome(name: string, env: Record<string, string | undefined
 export function findCliCandidates(name: string, path: string = augmentedPath()): string[] {
   if (!name || /[\n\r]/.test(name)) return [];
   if (/[/\\]/.test(name) || /^[a-zA-Z]:/.test(name)) return [name];
+  if (inFlatpak()) return hostFindCandidates(name, path);
   const exts = process.platform === "win32" ? (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean) : [""];
   const out: string[] = [];
   for (const dir of path.split(delimiter)) {

@@ -104,6 +104,14 @@ describe("every credential has one home on the keys page", () => {
   });
 });
 
+describe("the Composio key row", () => {
+  it("tells the person how to get a project key and links to the dashboard page that makes one", () => {
+    const target = keyEntry("composio").target;
+    expect(target).toMatchObject({ noteKey: "keys.composio.note", href: "https://dashboard.composio.dev/~/project/settings/api-keys" });
+    expect(t("keys.composio.note")).toContain("ak_");
+  });
+});
+
 describe("searching the keys", () => {
   const found = (query: string) => KEY_CATALOG.filter((entry) => keyMatches(entry, query)).map((entry) => entry.id);
 

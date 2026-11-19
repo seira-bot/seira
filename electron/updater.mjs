@@ -7,6 +7,7 @@ import { join } from "node:path";
 import {
   HAND_OFF_PACKAGE_TYPES,
   linuxPackageType,
+  managedByStore,
   packageInstallCommand,
   stagedInstallFile,
 } from "./package-install-command.mjs";
@@ -195,6 +196,12 @@ export function startUpdater(signals = null) {
     setState({ status: "idle" });
     return;
   }
+  const packageType = linuxPackageType({ readMarker: (file) => (existsSync(file) ? readFileSync(file, "utf8") : null) });
+  if (managedByStore(packageType)) {
+    updaterCoordinator = null;
+    setState({ status: "idle", managedByStore: true });
+    return;
+  }
   try {
     ({ autoUpdater } = require("./vendor/electron-updater.cjs"));
   } catch {
@@ -207,7 +214,6 @@ export function startUpdater(signals = null) {
   autoUpdater.logger = updaterLogger();
 
   // Broadcast the install flavour before the first check so the banner never offers a restart it cannot deliver.
-  const packageType = linuxPackageType({ readMarker: (file) => (existsSync(file) ? readFileSync(file, "utf8") : null) });
   const handOff = HAND_OFF_TYPES.has(packageType);
   // On macOS this also starts Squirrel.Mac's native staging at once; a system package is never installed on quit.
   autoUpdater.autoInstallOnAppQuit = !handOff;

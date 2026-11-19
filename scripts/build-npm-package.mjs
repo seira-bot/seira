@@ -1,9 +1,9 @@
-// Assemble the `openmausbot` npm package: the self-contained server bundle,
+// Assemble the `@seira-bot/seira` npm package: the self-contained server bundle,
 // the built UI, the bundled skills and the CLI, with a package.json of its
-// own. `npx openmausbot serve` then needs Node 24+ and nothing else.
+// own. `npx @seira-bot/seira serve` then needs Node 24+ and nothing else.
 //
 //   pnpm build:server && pnpm exec vite build && node scripts/build-npm-package.mjs
-//   cd release/npm && npm pack        # or npm publish --access public
+//   cd release/npm && npm pack        # or npm publish (publishConfig makes it public)
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,12 +33,13 @@ writeFileSync(
   join(out, "package.json"),
   JSON.stringify(
     {
-      name: "openmausbot",
+      name: "@seira-bot/seira",
       version: app.version,
       description: "Run the Seira server anywhere and pair your devices to it",
       license: "Apache-2.0",
       type: "module",
-      bin: { openmausbot: "cli.js" },
+      bin: { seira: "cli.js" },
+      publishConfig: { access: "public" },
       // Never bundled, so npm installs them beside the server: DuckDB and
       // resvg are native addons that npm picks per platform from their
       // optional packages, and the 1Password SDK reads its WebAssembly core
@@ -50,9 +51,9 @@ writeFileSync(
       },
       files: ["cli.js", "dist-server", "dist", "skills", "LICENSE", "README.md"],
       engines: { node: ">=24" },
-      repository: { type: "git", url: "https://github.com/milind-soni/OpenMausBot.git" },
-      homepage: "https://github.com/milind-soni/OpenMausBot#readme",
-      keywords: ["openmausbot", "agents", "self-hosted", "server"],
+      repository: { type: "git", url: "https://github.com/seira-bot/seira.git" },
+      homepage: "https://github.com/seira-bot/seira#readme",
+      keywords: ["seira", "agents", "self-hosted", "server"],
     },
     null,
     2,
@@ -61,17 +62,17 @@ writeFileSync(
 
 writeFileSync(
   join(out, "README.md"),
-  `# openmausbot
+  `# @seira-bot/seira
 
 Your own team of AI bots, with guided terminal setup. Requires Node 24+.
 
 \`\`\`sh
-npm install -g openmausbot
-openmausbot
+npm install -g @seira-bot/seira
+seira
 \`\`\`
 
-Or run \`npx openmausbot\` without a global install. Use the same command next
-time; \`openmausbot start\` is an alias for the bare command.
+Or run \`npx @seira-bot/seira\` without a global install. Use the same command next
+time; \`seira start\` is an alias for the bare command.
 
 First launch: use arrow keys and Enter (numbered choices in plain terminals) to choose
 ChatGPT/Codex, Claude Code, or an API service; sign in or paste a hidden API
@@ -104,13 +105,13 @@ browser opening uses only the local address; it is skipped for SSH and
 headless sessions, and can be disabled with \`--no-open\`.
 
 \`\`\`sh
-openmausbot setup          # reconfigure AI and optional phone access; not a reset
-openmausbot --no-open      # do not open a browser
-openmausbot --local        # ignore saved remote access for this launch
-openmausbot --no-pair      # suppress phone prompts and invitations
-openmausbot pair           # another phone while the HTTPS server is running
-openmausbot sessions       # list devices; sessions revoke ID signs one out
-openmausbot serve          # no onboarding prompts; explicit remote flags for services
+seira setup          # reconfigure AI and optional phone access; not a reset
+seira --no-open      # do not open a browser
+seira --local        # ignore saved remote access for this launch
+seira --no-pair      # suppress phone prompts and invitations
+seira pair           # another phone while the HTTPS server is running
+seira sessions       # list devices; sessions revoke ID signs one out
+seira serve          # no onboarding prompts; explicit remote flags for services
 \`\`\`
 
 Stop an existing server before reconfiguring or changing access mode.
@@ -131,7 +132,7 @@ with owner-only permissions (0600 on Unix). Keep these files private.
 Ctrl-C before saving AI setup leaves its pending OMB changes unapplied.
 During the later phone step, it keeps the AI setup already saved and exits
 without starting a server. Completed installs and sign-ins remain; run
-\`openmausbot setup\` to continue without deleting your data.
+\`seira setup\` to continue without deleting your data.
 
 For a service, use \`serve --tunnel\` after \`login\` for managed HTTPS,
 \`serve --tailscale\` for your tailnet, or your own reverse proxy. The
@@ -143,14 +144,14 @@ set a team up from a file, give a bot one job and wait until it and every
 teammate it asked are done, and export what they made.
 
 \`\`\`sh
-openmausbot team apply team.yaml
-openmausbot run "Room Lead" "Rehearse the launch of https://example.com" --export ./out
-openmausbot help run       # every verb: doctor, run, wait, send, export, events, team, engine, connect, mcp
+seira team apply team.yaml
+seira run "Room Lead" "Rehearse the launch of https://example.com" --export ./out
+seira help run       # every verb: doctor, run, wait, send, export, events, team, engine, connect, mcp
 \`\`\`
 
-[Setup guide](https://github.com/milind-soni/OpenMausBot/blob/main/docs/cli-onboarding.md)
-· [Scripts and CI](https://github.com/milind-soni/OpenMausBot/blob/main/docs/headless-cli.md)
-· [Hosting guide](https://github.com/milind-soni/OpenMausBot/blob/main/docs/self-hosting.md)
+[Setup guide](https://github.com/seira-bot/seira/blob/main/docs/cli-onboarding.md)
+· [Scripts and CI](https://github.com/seira-bot/seira/blob/main/docs/headless-cli.md)
+· [Hosting guide](https://github.com/seira-bot/seira/blob/main/docs/self-hosting.md)
 `,
 );
-console.log(`npm package assembled at ${out} (openmausbot@${app.version})`);
+console.log(`npm package assembled at ${out} (@seira-bot/seira@${app.version})`);

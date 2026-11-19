@@ -12,6 +12,7 @@ import { useSidebarToolsLayout, type SidebarDensity } from "@/lib/sidebar-prefer
 import { useStore } from "@/state/store";
 
 import { SidebarSectionHeader } from "./SidebarSectionHeader";
+import { SIMPLE_NAV_ROW } from "./SidebarSimpleNav";
 import { UpdateIndicator } from "./UpdateIndicator";
 
 
@@ -23,6 +24,7 @@ function NavRow({
   attention = false,
   iconsOnly,
   rail = false,
+  quiet = false,
   tourId,
   onClick,
 }: {
@@ -33,9 +35,21 @@ function NavRow({
   attention?: boolean;
   iconsOnly: boolean;
   rail?: boolean;
+  /** Advanced's Tools row: the 32px quiet row that Inbox and Automations use. */
+  quiet?: boolean;
   tourId?: string;
   onClick: () => void;
 }) {
+  if (quiet) {
+    return (
+      <button type="button" data-tour={tourId} data-sidebar-nav={id} onClick={onClick} aria-current={active ? "page" : undefined}
+        className={cn(SIMPLE_NAV_ROW, "font-normal aria-[current=page]:bg-raised aria-[current=page]:text-ink")}>
+        {icon(active)}
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        {attention && <span data-testid="routines-attention" className="size-[7px] shrink-0 rounded-full bg-danger" />}
+      </button>
+    );
+  }
   return (
     <button
       type="button"
@@ -122,10 +136,11 @@ export function SidebarFooterNav({
   const iconsOnly = density === "icons";
   const toolsLayout = useSidebarToolsLayout();
   const toolbar = advanced && !iconsOnly && toolsLayout === "toolbar";
-  const iconSize = iconsOnly && !rail ? 20 : 18;
-  const tone = (active: boolean) => (active ? "text-accent" : "text-ink-secondary");
+  const quiet = advanced && !iconsOnly && !toolbar;
+  const iconSize = iconsOnly && !rail ? 20 : quiet ? 16 : 18;
+  const tone = (active: boolean) => (quiet ? "shrink-0" : active ? "text-accent" : "text-ink-secondary");
   const automationsNeedYou = useAutomationsNeedYou();
-  const automationsRow = <NavRow
+  const automationsRow = advanced && !iconsOnly ? null : <NavRow
     id="automations"
     label={t("sidebar.nav.automations")}
     tourId="nav-automations"
@@ -140,6 +155,7 @@ export function SidebarFooterNav({
     label={t("sidebar.nav.files")}
     iconsOnly={iconsOnly}
     rail={rail}
+    quiet={quiet}
     active={state.activeView === "files"}
     icon={(active) => <FolderOpen size={iconSize} className={tone(active)} />}
     onClick={() => dispatch({ type: "showFiles" })}
@@ -167,6 +183,7 @@ export function SidebarFooterNav({
           label={t("sidebar.nav.teamMap")}
           tourId="team-tools"
           iconsOnly={iconsOnly || toolbar}
+          quiet={quiet}
           active={state.activeView === "team-map"}
           icon={(active) => <UsersRound size={iconSize} className={tone(active)} />}
           onClick={() => dispatch({ type: "showTeamMap" })}
@@ -177,6 +194,7 @@ export function SidebarFooterNav({
         id="published-apps"
         label={t("sidebar.nav.publishedApps")}
         iconsOnly={iconsOnly || toolbar}
+        quiet={quiet}
         active={state.activeView === "published-apps"}
         icon={(active) => <Rocket size={iconSize} className={tone(active)} />}
         onClick={() => dispatch({ type: "showPublishedApps" })}
@@ -186,6 +204,7 @@ export function SidebarFooterNav({
           id="team-files"
           label={t("sidebar.nav.teamFiles")}
           iconsOnly={iconsOnly || toolbar}
+          quiet={quiet}
           active={state.activeView === "team-files"}
           icon={(active) => <FolderTree size={iconSize} className={tone(active)} />}
           onClick={() => dispatch({ type: "showTeamFiles" })}
@@ -197,6 +216,7 @@ export function SidebarFooterNav({
           id={`web-panel-${panel.id}`}
           label={panel.name}
           iconsOnly={iconsOnly || toolbar}
+          quiet={quiet}
           active={state.activeView === "web-panel" && state.webPanelId === panel.id}
           icon={(active) => (panel.page ? <AppWindow size={iconSize} className={tone(active)} /> : <Globe size={iconSize} className={tone(active)} />)}
           onClick={() => dispatch({ type: "showWebPanel", id: panel.id })}
@@ -213,10 +233,12 @@ export function SidebarFooterNav({
       <SidebarSectionHeader
         name={t("sidebar.tools")}
         collapsed={collapsed}
-        alert={collapsed && automationsNeedYou}
+        alert={collapsed && automationsNeedYou && !advanced}
         onToggle={onToggleCollapsed}
         reorderable={false}
         dragging={false}
+        line={advanced}
+        compact={advanced}
       />
       {!collapsed && <nav aria-label={t("sidebar.tools")} className={toolbar ? "flex flex-row gap-1" : "flex flex-col gap-0.5"}>{rows}</nav>}
     </div>

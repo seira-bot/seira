@@ -192,7 +192,7 @@ export function useUpdateItem(): UpdateEntry | null {
     return () => clearTimeout(timer);
   }, [upToDate]);
 
-  if (!updater || !state) return null;
+  if (!updater || !state || state.managedByStore) return null;
 
   const phase = updatePhase(state, upToDate);
   const label = updateLabel(phase, state);

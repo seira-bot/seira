@@ -460,3 +460,39 @@ it("a server's page the window shows may ask for the app's own update: it learns
   expect(confirmRestart).toHaveBeenLastCalledWith("2.0.0", OTHER);
   expect(autoUpdater.quitAndInstall).toHaveBeenCalledTimes(1);
 });
+
+for (const [name, env] of [["a Flatpak", { FLATPAK_ID: "bot.seira.Seira" }], ["a snap", { SNAP: "/snap/seira/17", SNAP_NAME: "seira" }]]) {
+  it(`never checks, downloads or installs an update by itself in ${name}, and says the store does it`, async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, "platform");
+    const resources = Object.getOwnPropertyDescriptor(process, "resourcesPath");
+    Object.defineProperty(process, "platform", { value: "linux" });
+    Object.defineProperty(process, "resourcesPath", { value: "/snap/seira/17/resources", configurable: true });
+    for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
+    try {
+      const rule = mainRule();
+      const local = page(LOCAL);
+      rule.show(local);
+      const { updater, autoUpdater, handlers } = await load(rule.pageAllowed);
+      updater.attachUpdaterWindow(rule.window);
+      updater.startUpdater();
+
+      await vi.advanceTimersByTimeAsync(2 * 60 * 60 * 1000);
+      await settle();
+
+      expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+      expect(autoUpdater.downloadUpdate).not.toHaveBeenCalled();
+      expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
+      expect(handlers.get("update:get-state")(local.event)).toEqual({ status: "idle", managedByStore: true });
+      await handlers.get("update:check")(local.event);
+      await handlers.get("update:install")(local.event);
+      expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+      expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
+      expect(updater.unattendedUpdates()).toBe("none");
+    } finally {
+      vi.unstubAllEnvs();
+      if (platform) Object.defineProperty(process, "platform", platform);
+      if (resources) Object.defineProperty(process, "resourcesPath", resources);
+      else delete process.resourcesPath;
+    }
+  });
+}

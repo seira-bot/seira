@@ -59,6 +59,7 @@ Do not use a generated Seira as logo art. Use the files in `../options/` and `..
 
 A bot wears Seira's head with one hair style of `../art/bases/`, and up to three accessory stickers.
 The desktop avatar picker shows the 17 hair styles, Seira first. The body id is the style id.
+The picker also offers the 25 cast characters from `shared/cast-characters.ts`. That file must match `cast.json`; `shared/cast-characters.test.ts` checks it.
 Each style is a rendered head with an empty visor. The app draws the eyes, the mouth, and the accessories.
 Run the script after you change a base frame or an accessory sticker:
 

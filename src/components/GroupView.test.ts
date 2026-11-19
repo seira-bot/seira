@@ -72,8 +72,8 @@ describe("room header", () => {
     createdAt: 1, setupCompletedAt: 1, messages: [],
   };
 
-  it("wraps into a name line and a control line when the column is narrow in Advanced mode", () => {
-    vi.stubGlobal("window", { ogb: undefined });
+  it("wraps into a name line and a control line when the column is narrow on a remote client", () => {
+    vi.stubGlobal("window", { ogb: { remoteClient: { active: true } } });
     mode.advanced = true;
     let markup: string;
     try {

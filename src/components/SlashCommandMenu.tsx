@@ -4,17 +4,52 @@ import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import type { ComposerSlashCommand } from "@/lib/composer-commands";
 import type { MenuMotion } from "./MenuMotion";
+import { MENU_SHEET } from "./menu-recipe";
 
-/** The composer's / list: room commands like /goal, then the bot's skills. */
-export function SlashCommandMenu({ listRef, motion, commands, highlight, onPick, onHighlight }: {
+/** The composer's / list: room commands like /goal, then the bot's skills. Advanced mode draws it as the text-only
+ * popover of the new design: a mono command over its description, 44px rows. */
+export function SlashCommandMenu({ listRef, motion, commands, highlight, onPick, onHighlight, advanced = false }: {
   listRef: RefObject<HTMLDivElement | null>;
   motion: MenuMotion;
   commands: ComposerSlashCommand[];
   highlight: number;
   onPick: (command: ComposerSlashCommand) => void;
   onHighlight: (index: number) => void;
+  advanced?: boolean;
 }) {
   if (!motion.shown) return null;
+  if (advanced) {
+    return (
+      <div
+        ref={listRef}
+        role="listbox"
+        aria-label={t("composer.commands.aria")}
+        data-slash-menu="advanced"
+        className={cn("absolute bottom-full start-2 z-20 mb-2 flex max-h-80 w-[360px] max-w-[calc(100%-1rem)] flex-col gap-0 overflow-x-hidden overflow-y-auto overscroll-contain", MENU_SHEET, motion.className)} {...motion.exitProps}
+      >
+        <div className="px-2 pb-1 pt-1.5 text-[12px] font-medium leading-4 text-ink-tertiary">{t("composer.commands.title")}</div>
+        {commands.map((command, index) => (
+          <button
+            key={`${command.kind}:${command.id}`}
+            data-command-index={index}
+            type="button"
+            role="option"
+            aria-selected={index === highlight}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => onPick(command)}
+            onMouseEnter={() => onHighlight(index)}
+            className={cn("flex min-h-11 w-full shrink-0 flex-col justify-center gap-px rounded-md px-2 py-1 text-start", index === highlight && "bg-ink/[0.06]")}
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate font-mono text-[13px] font-medium leading-[18px] text-ink">{command.label}</span>
+              {command.kind === "skill" && <span className="shrink-0 text-[12px] leading-4 text-ink-tertiary">{t("composer.command.skillTag")}</span>}
+            </span>
+            <span className="block truncate text-[12px] leading-4 text-ink-tertiary">{command.description}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
   return (
     <div
       ref={listRef}

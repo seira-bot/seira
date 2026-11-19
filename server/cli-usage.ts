@@ -1,59 +1,59 @@
 export { HEADLESS_VERBS as HEADLESS_VERB_NAMES } from "./headless/args.ts";
 
 export const HEADLESS_USAGE = `Drive a running workspace (scripts, CI, other agents):
-  openmausbot doctor                    check the server answers and an engine is ready
-  openmausbot doctor --host             check this Linux machine can run a server (exit 7 if not)
-  openmausbot doctor --data [--fix]     check (and safely repair) this computer's data folder (exit 8 if a problem is left)
-  openmausbot bots | channels | models  your bots, your rooms, the engines and their models
-  openmausbot run BOT "do this"         give a bot one job and wait until it and every teammate it asked are done
-  openmausbot send BOT "text"           send one message and return at once
-  openmausbot wait BOT                  wait on work already running
-  openmausbot messages BOT              the latest messages of a conversation
-  openmausbot interrupt BOT [--tree]    press Stop (--tree: and every teammate on its job)
-  openmausbot export BOT --out DIR      write a job's transcripts, files and screens to DIR
-  openmausbot events [--job THREAD]     the server's live events as JSON lines
-  openmausbot team apply FILE           make the workspace match a team file (team export writes one)
-  openmausbot engine set claude --key-env ANTHROPIC_API_KEY   give it an engine without a screen
-  openmausbot connect URL --code CODE --out FILE              get a token for a workspace elsewhere
-  openmausbot token create NAME --out FILE [--expires 90d]    a token for CI that ends on its date (token list, token revoke ID)
-  openmausbot new-bot | new-channel | set-model | edit | mcp
+  seira doctor                          check the server answers and an engine is ready
+  seira doctor --host                   check this Linux machine can run a server (exit 7 if not)
+  seira doctor --data [--fix]           check (and safely repair) this computer's data folder (exit 8 if a problem is left)
+  seira bots | channels | models        your bots, your rooms, the engines and their models
+  seira run BOT "do this"               give a bot one job and wait until it and every teammate it asked are done
+  seira send BOT "text"                 send one message and return at once
+  seira wait BOT                        wait on work already running
+  seira messages BOT                    the latest messages of a conversation
+  seira interrupt BOT [--tree]          press Stop (--tree: and every teammate on its job)
+  seira export BOT --out DIR            write a job's transcripts, files and screens to DIR
+  seira events [--job THREAD]           the server's live events as JSON lines
+  seira team apply FILE                 make the workspace match a team file (team export writes one)
+  seira engine set claude --key-env ANTHROPIC_API_KEY         give it an engine without a screen
+  seira connect URL --code CODE --out FILE                    get a token for a workspace elsewhere
+  seira token create NAME --out FILE [--expires 90d]          a token for CI that ends on its date (token list, token revoke ID)
+  seira new-bot | new-channel | set-model | edit | mcp
 
   Server: --url URL (or OPENMAUSBOT_URL), --port N (or OMB_PORT), else this computer's.
   Token: OPENMAUSBOT_TOKEN or --token-file FILE. --json prints one JSON document;
-  progress goes to stderr (--quiet drops it). openmausbot help VERB for the details.`;
+  progress goes to stderr (--quiet drops it). seira help VERB for the details.`;
 
-/** The usage text, its commands written the way this CLI was started (`npx openmausbot …`). */
-export function usage(prefix = "openmausbot"): string {
-  return USAGE.split("\n").map((line) => line.replace(/^(\s+)openmausbot(?= )/, `$1${prefix}`)).join("\n");
+/** The usage text, its commands written the way this CLI was started (`npx @seira-bot/seira …`). */
+export function usage(prefix = "seira"): string {
+  return USAGE.split("\n").map((line) => line.replace(/^(\s+)seira(?= )/, `$1${prefix}`)).join("\n");
 }
 
-export const USAGE = `openmausbot — your team of AI bots, ready in a few steps
+export const USAGE = `seira — your team of AI bots, ready in a few steps
 
-  openmausbot                         set up once, then open your workspace
-  openmausbot setup [--data-dir DIR]
-  openmausbot start [the same options as serve]
-  openmausbot serve [--port 8799] [--data-dir DIR] [--label NAME]
+  seira                               set up once, then open your workspace
+  seira setup [--data-dir DIR]
+  seira start [the same options as serve]
+  seira serve [--port 8799] [--data-dir DIR] [--label NAME]
                     [--public-url https://host | --domain HOST | --tunnel | --tailscale] [--lan] [--relay]
-  openmausbot pair  [--label NAME] [--phone [ios|android]] [--ttl 24h] [--public-url https://host]
-  openmausbot devices [revoke ID]
-  openmausbot status
-  openmausbot --version
-  openmausbot login [--email you@example.com] [--relay]
-  openmausbot logout
-  openmausbot access list | add EMAIL [--chat-only] | remove EMAIL
-  openmausbot service install [the same way-in options as serve] [--port N] [--data-dir DIR] | uninstall
+  seira pair  [--label NAME] [--phone [ios|android]] [--ttl 24h] [--public-url https://host]
+  seira devices [revoke ID]
+  seira status
+  seira --version
+  seira login [--email you@example.com] [--relay]
+  seira logout
+  seira access list | add EMAIL [--chat-only] | remove EMAIL
+  seira service install [the same way-in options as serve] [--port N] [--data-dir DIR] | uninstall
                     [--sentinel]   (the health scan below, every two minutes, instead of the server)
-  openmausbot sentinel [--data-dir DIR] [--out DIR] [--once] [--json]   (read-only health scan; see --help)
-  openmausbot config backups | restore NAME    (dated copies of the settings file; see --help)
-  openmausbot browser install [--with-deps] | status
-  openmausbot fleet init --domain HOST [--operator USER] | create NAME --admin EMAIL [--member EMAIL] [--brand FILE]
+  seira sentinel [--data-dir DIR] [--out DIR] [--once] [--json]         (read-only health scan; see --help)
+  seira config backups | restore NAME          (dated copies of the settings file; see --help)
+  seira browser install [--with-deps] | status
+  seira fleet init --domain HOST [--operator USER] | create NAME --admin EMAIL [--member EMAIL] [--brand FILE]
                     [--anthropic-key-file FILE] [--cap USD] [--license-key KEY] [--memory 1G]
                   | list | users NAME add|remove EMAIL [--chat-only] | suspend NAME | resume NAME
                   | delete NAME --yes [--keep-data] | upgrade   (all take --dry-run)
                   | agent [--socket PATH] [--group USER]   (root; installed by init --operator)
 
 setup   choose AI access and optional phone access; keep existing bots and chats
-start   same as openmausbot: use your saved settings and open the workspace
+start   same as seira: use your saved settings and open the workspace
 serve   starts the server without prompts; in a terminal it prints a pairing
         code, the link to paste into the desktop app (＋ → Connect to a
         server) and a QR for a phone
@@ -100,7 +100,7 @@ Ways in (pick one; --lan can join any):
              when serve stops
 --tunnel     serve at a public https://c-… address through a
              Cloudflare tunnel: no domain, no proxy, no open port. Run
-             \`openmausbot login\` once on this machine first.
+             \`seira login\` once on this machine first.
 --domain     serve at https://HOST on your own domain: a pinned Caddy is
              downloaded once and run alongside the server, and gets the
              certificate itself. Point the domain's DNS at this machine and
@@ -109,7 +109,7 @@ Ways in (pick one; --lan can join any):
 --relay      phones only, and it can join any of the above except --tunnel:
              the Seira phone app pairs by QR through Seira Relay,
              end-to-end encrypted, with no address, open port or VPN. Run
-             \`openmausbot login --relay\` once on this machine first. Not on a
+             \`seira login --relay\` once on this machine first. Not on a
              machine with a tunnel address: the relay stays off there.
 
 --no-open   do not open a browser window
@@ -118,6 +118,6 @@ Ways in (pick one; --lan can join any):
 
 ${HEADLESS_USAGE}
 
-Install once with \`npm install -g openmausbot\`, then type \`openmausbot\`.
-Or run without a global install: \`npx openmausbot\`. Node 24+ is required.
+Install once with \`npm install -g @seira-bot/seira\`, then type \`seira\`.
+Or run without a global install: \`npx @seira-bot/seira\`. Node 24+ is required.
 `;

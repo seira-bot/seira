@@ -9,6 +9,7 @@ import type { Bot } from "@/state/store";
 import { BOT_PROFILE_LIMITS } from "../../shared/bot-profile";
 import { PICKER_BODY_IDS, botBodyId } from "../../shared/bot-body";
 import { MausAvatar } from "./Avatar";
+import { CastCharacterPicker } from "./CastCharacterPicker";
 import { AvatarImageGenerator } from "./AvatarImageGenerator";
 import type { AvatarPatch, useAvatarImage } from "./avatar-editing";
 
@@ -58,6 +59,12 @@ export function MausBotCustomize({ preview, name, nameRef, image, onName, onPatc
               style={{ background: colorSwatch(color) }}
             />
           ))}
+        </div>
+      </div>
+      <div>
+        <span className={LABEL}>{t("botIdentity.characters")}</span>
+        <div className="mt-1.5">
+          <CastCharacterPicker look={preview} selectable={!picture} avatarSize={30} onPick={shape} />
         </div>
       </div>
       {PICKER_BODY_IDS.length > 1 && (
