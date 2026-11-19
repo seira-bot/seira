@@ -1,4 +1,5 @@
 import { Info, RefreshCw } from "lucide-react";
+import { isBugReportIssueUrl } from "../../shared/devs-report-issue";
 import { statusActivity } from "@/lib/activity-runs";
 import { t } from "@/lib/i18n";
 import { useStore, type Message } from "@/state/store";
@@ -27,6 +28,19 @@ export function StatusActivityRow({ message }: { message: Message }) {
           onClick={() => dispatch({ type: "toggleAppSettings", open: true, section: "engines" })}>
           {t("chat.notice.signIn")}
         </button>
+      </div>
+    );
+  }
+  const reportUrl = message.tool?.bugReportUrl;
+  const issueUrl = status.kind === "notice" && isBugReportIssueUrl(reportUrl) ? reportUrl : null;
+  if (issueUrl) {
+    return (
+      <div role="status" className="flex w-fit max-w-full flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-hairline/40 bg-panel px-3 py-2 text-[13px] text-ink-secondary">
+        <span className="flex min-w-0 items-start gap-2">
+          <Icon size={13} aria-hidden="true" className="mt-0.5 shrink-0" />
+          <span className="min-w-0 break-words">{status.text}</span>
+        </span>
+        <a className={pill} href={issueUrl} target="_blank" rel="noreferrer">{t("devs.report.openOnGithub")}</a>
       </div>
     );
   }

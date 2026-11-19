@@ -7,7 +7,7 @@ import { citationAttachment, createCitationTextSelector } from "../../src/lib/ci
 import { composeMessage, pasteAttachment } from "../../src/lib/composer-attachments.ts";
 import "../server-line-packs.ts";
 import type { DevsReportPayload } from "../devs-report.ts";
-import type { ReportStatusAnswer, ReportStatusQuestion, SendOutcome } from "../devs-report-send.ts";
+import { devsReportSender, type ReportStatusAnswer, ReportStatusQuestion, SendOutcome } from "../devs-report-send.ts";
 import { personKey } from "../person-key.ts";
 import type { PublicSession } from "../sessions.ts";
 import type { Message, StoreChange } from "../store.ts";
@@ -25,7 +25,9 @@ function fixture(options: { dataDir?: string; sections?: string[]; outcomes?: Se
   /** The conversations, kept across a restart (another fixture on the same data). */
   threads?: Map<string, Message[]>;
   /** The MausBot team's answer to each question about this app's reports; none: no answer (offline). */
-  answer?: (question: ReportStatusQuestion) => ReportStatusAnswer | null } = {}) {
+  answer?: (question: ReportStatusQuestion) => ReportStatusAnswer | null;
+  /** Replaces the sender that answers from `outcomes`. */
+  send?: DevsReportsDeps["send"] } = {}) {
   const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "omb-devs-reports-"));
   if (!options.dataDir) dirs.push(dataDir);
   const listeners = new Set<(change: StoreChange) => void>();
@@ -68,7 +70,7 @@ function fixture(options: { dataDir?: string; sections?: string[]; outcomes?: Se
     appsReady: () => false, sessions: () => options.sessions ?? [], ownerKey: options.ownerKey ?? null, team: options.team === true,
     profileEmail: () => options.profileEmail, language: () => "en", ...(options.lineLanguage ? { lineLanguage: options.lineLanguage } : {}),
     recentLog: () => ["2026-10-27T08:59:00.000Z warn engine probe slow"],
-    send: async (payload) => { sent.push(payload); return outcomes.shift() ?? { ok: true, id: `report-${sent.length}` }; },
+    send: options.send ?? (async (payload) => { sent.push(payload); return outcomes.shift() ?? { ok: true, id: `report-${sent.length}` }; }),
     askStatus: async (question) => { asked.push(question); return options.answer?.(question) ?? null; },
     tell: (threadId, text, person) => { told.push({ threadId, text, ...(person ? { person } : {}) }); },
     now: () => clock, timer: false,
@@ -626,6 +628,69 @@ describe("closing the loop on a report", () => {
     expect(fixedLines(fx)).toEqual([`notice: ${fixedLine("0.1.128")}`]);
     expect(fx.told).toEqual([{ threadId: "scout-main", text: fixedLine("0.1.128"), person: "p_bob_bob_bob_bob_bob_bob_bob" }]);
     expect(fx.reports.note("scout-main", true)).toContain('("pictures never load")');
+    fx.stop();
+  });
+});
+
+describe("a @devs report prepared as a prefilled issue form", () => {
+  const FORM = "https://github.com/seira-bot/seira/issues/new?template=bug_report.yml&title=Pictures+never+load";
+  const links = (fx: ReturnType<typeof fixture>, threadId: string) => fx.store.activePath(threadId)
+    .filter((one) => one.kind === "activity" && one.tool?.bugReportUrl !== undefined).map((one) => one.tool!);
+
+  it("posts one notice with the link when the bot calls report_bug, follows nothing, and answers a second call", async () => {
+    const fx = fixture({ outcomes: [{ ok: true, issueUrl: FORM }] });
+    fx.person("scout-main", "@devs pictures never load");
+    fx.busy.add("scout-main");
+    fx.reports.note("scout-main", true);
+    const answer = await fx.call("scout", "scout-main", { went_wrong: "Pictures never load" });
+    expect(answer.status).toBe(200);
+    expect(answer.body.text).toMatch(/^Ready\. Tell the person this line in your reply, word for word: "Your bug report is ready\./);
+    expect(links(fx, "scout-main")).toEqual([{ name: expect.stringMatching(/^notice: Your bug report is ready/), ok: true, bugReportUrl: FORM }]);
+
+    fx.busy.delete("scout-main");
+    fx.bot("scout-main", "Your bug report is ready. Open it on GitHub.", { turnId: "t1", turnSucceeded: true });
+    await fx.settle();
+    fx.advance(LONGEST_WAIT_MS * 2);
+    await fx.settle();
+    expect(links(fx, "scout-main")).toHaveLength(1);
+    expect(fx.notices("scout-main").filter((name) => name.startsWith("notice:"))).toHaveLength(1);
+
+    const kept = JSON.parse(readFileSync(join(fx.dataDir, DEVS_REPORTS_FILE), "utf8"));
+    expect(kept.outbox).toEqual([]);
+    expect(kept.tracked).toEqual([]);
+    fx.advance(STATUS_FIRST_MS * 2);
+    await fx.settle();
+    expect(fx.asked).toEqual([]);
+
+    const again = await fx.call("scout", "scout-main", { went_wrong: "again" });
+    expect(again.body.text).toMatch(/^Already prepared/);
+    expect(links(fx, "scout-main")).toHaveLength(1);
+    fx.stop();
+  });
+
+  it("posts the notice itself, once, when the bot never calls report_bug", async () => {
+    const fx = fixture({ outcomes: [{ ok: true, issueUrl: FORM }] });
+    fx.person("scout-main", "@devs pictures never load");
+    fx.advance(NO_ANSWER_MS + 1);
+    await fx.settle();
+    expect(links(fx, "scout-main").map((tool) => tool.bugReportUrl)).toEqual([FORM]);
+    await fx.settle();
+    expect(links(fx, "scout-main")).toHaveLength(1);
+    fx.stop();
+  });
+
+  it("sends no network request when no report address is set", async () => {
+    const calls: string[] = [];
+    const fetcher = (async (url: string) => { calls.push(url); throw new Error("offline"); }) as unknown as typeof fetch;
+    const fx = fixture({ send: devsReportSender(null, fetcher) });
+    fx.person("scout-main", "@devs pictures never load");
+    fx.busy.add("scout-main");
+    fx.reports.note("scout-main", true);
+    const answer = await fx.call("scout", "scout-main", { went_wrong: "Pictures never load" });
+    expect(answer.body.text).toMatch(/^Ready\./);
+    const [link] = links(fx, "scout-main");
+    expect(link!.bugReportUrl!.startsWith("https://github.com/seira-bot/seira/issues/new?template=bug_report.yml")).toBe(true);
+    expect(calls).toEqual([]);
     fx.stop();
   });
 });

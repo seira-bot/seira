@@ -15,3 +15,4 @@ export function notYetLine(outcome: Extract<SendOutcome, { retry: true }>, langu
 export const refusedLine = (detail: string, language: string | undefined) => serverLine(language, "server.reports.refused", { detail: detail.replace(/[.\s]+$/, "") });
 export const fullLine = (count: number, language: string | undefined) => serverLine(language, "server.reports.full", { count });
 export const droppedLine = (language: string | undefined) => serverLine(language, "server.reports.dropped");
+export const readyLine = (language: string | undefined) => serverLine(language, "server.reports.ready");
