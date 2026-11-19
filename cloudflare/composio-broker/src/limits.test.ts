@@ -123,7 +123,7 @@ describe("per-installation quotas (FR-147)", () => {
     setting("quota.tool_calls.desktop", "25");
     const owner = await h.install();
     h.account(owner);
-    const passed = async (message: unknown) => (await (await mcp(owner, message)).json() as { result: { isError?: boolean } }).result.isError === undefined;
+    const passed = async (message: unknown, by = owner) => (await (await mcp(by, message)).json() as { result: { isError?: boolean } }).result.isError === undefined;
 
     expect(await passed(toolCall("COMPOSIO_REMOTE_WORKBENCH"))).toBe(true);
     expect(await passed(toolCall("COMPOSIO_REMOTE_BASH_TOOL"))).toBe(true);
@@ -139,7 +139,7 @@ describe("per-installation quotas (FR-147)", () => {
     expect(text).toMatch(/Settings → AI → Other services/);
     const batch = [toolCall(), toolCall("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [{ tool_slug: "COMPOSIO_REMOTE_BASH_TOOL" }] })];
     expect((await (await mcp(other, batch)).json() as unknown[]).length).toBe(2);
-    expect(await passed(toolCall())).toBe(true);
+    expect(await passed(toolCall(), other)).toBe(true);
     expect(usage(other.id)).toMatchObject({ tool_calls: 1, refused_quota: 2 });
     expect(forwarded()).toBe(4);
   });
