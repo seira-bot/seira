@@ -7,6 +7,7 @@ import { join } from "node:path";
 const [scenario, cli] = process.argv.slice(2);
 const PREFIXES = {
   muse: ["omb-muse-models-"],
+  acp: ["omb-acp-models-"],
   background: ["omb-claude-background-"],
   turn: ["omb-mcp-", "omb-system-"],
 };
@@ -16,6 +17,9 @@ if (scenario === "muse") {
   const instance = await MuseCodeDriver.create({ instanceId: "museCode", displayName: "Muse Code", enabled: true,
     environment: {}, config: MuseCodeDriver.decodeConfig({ cli }) });
   void instance.refreshModels();
+} else if (scenario === "acp") {
+  const { discoverAcpModels } = await import("../drivers/acp/custom-model-catalog.ts");
+  void discoverAcpModels({}, cli, []).catch(() => {});
 } else {
   const { ensureDirs } = await import("../config.ts");
   const { ClaudeDriver } = await import("../drivers/claude.ts");

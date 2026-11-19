@@ -9,8 +9,8 @@ const SERVER = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SCRIPT = join(SERVER, "testing", "cut-off-launch.mjs");
 const FAKE_CLAUDE = join(SERVER, "testing", "fake-claude-cli.ts");
 
-// A Muse Code that starts and then never answers; it ends when its parent does and closes its input.
-const SILENT_MUSE = `process.stdin.resume(); process.stdin.on("close", () => process.exit(0)); setInterval(() => {}, 1 << 30);`;
+// An agent that starts and then never answers; it ends when its parent does and closes its input.
+const SILENT_AGENT = `process.stdin.resume(); process.stdin.on("close", () => process.exit(0)); setInterval(() => {}, 1 << 30);`;
 
 interface CutOff {
   pid: number;
@@ -19,17 +19,17 @@ interface CutOff {
 }
 
 /** Runs the call in a process that exits in the middle of it, with its own temp folder, and says what it left. */
-function cutOff(scenario: "muse" | "background" | "turn", env: Record<string, string> = {}): CutOff {
+function cutOff(scenario: "muse" | "acp" | "background" | "turn", env: Record<string, string> = {}): CutOff {
   const root = mkdtempSync(join(tmpdir(), "omb-cut-off-"));
   const home = join(root, "home");
   const tmp = join(root, "tmp");
   mkdirSync(home);
   mkdirSync(tmp);
   let cli = FAKE_CLAUDE;
-  if (scenario === "muse") {
-    writeFileSync(join(root, "silent-muse.mjs"), SILENT_MUSE);
-    cli = join(root, "muse");
-    writeFileSync(cli, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(join(root, "silent-muse.mjs"))} "$@"\n`, { mode: 0o755 });
+  if (scenario === "muse" || scenario === "acp") {
+    writeFileSync(join(root, "silent-agent.mjs"), SILENT_AGENT);
+    cli = join(root, "agent");
+    writeFileSync(cli, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(join(root, "silent-agent.mjs"))} "$@"\n`, { mode: 0o755 });
   } else {
     chmodSync(FAKE_CLAUDE, 0o755);
   }
@@ -55,6 +55,10 @@ function expectOwnedAndGone(left: CutOff, prefix: string): void {
 describe.skipIf(process.platform === "win32")("the temp folder of a call that a process leaves unfinished", () => {
   it("goes with the process when it ends in the middle of a Muse Code model list", () => {
     expectOwnedAndGone(cutOff("muse"), "omb-muse-models-");
+  });
+
+  it("goes with the process when it ends in the middle of an ACP model discovery", () => {
+    expectOwnedAndGone(cutOff("acp"), "omb-acp-models-");
   });
 
   it("goes with the process when it ends in the middle of a one-off Claude call", () => {
