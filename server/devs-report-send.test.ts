@@ -103,7 +103,8 @@ describe("the default Seira bug report service", () => {
     const body = sent[0]!.body, text = JSON.stringify(body);
     expect("contactEmail" in body || "contact" in body).toBe(false);
     expect(text).not.toContain("ada@example.com");
-    expect(text).not.toContain(PAYLOAD.installId);
+    expect(body.installId).toBe(PAYLOAD.installId);
+    expect(`${String(body.description)}\n${String(body.diagnostics)}`).not.toContain(PAYLOAD.installId);
     expect(text).not.toContain("Install:");
     for (const section of ["Server warnings and errors", "Cloud computers", "Performance", "teammate Grace"]) expect(text).not.toContain(section);
     expect(text).not.toContain("/home/ada");
