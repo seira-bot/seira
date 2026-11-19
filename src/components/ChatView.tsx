@@ -701,7 +701,7 @@ const MessagesList = memo(function MessagesList({
         const newDay = needsStamp(prev, first, simple);
         const divider = dividerAbove(item.kind === "message" ? [item.message] : item.messages);
         if (item.kind === "turn" || item.kind === "run" || i === liveStart) {
-          if (!showToolCalls) return divider && <div key={item.id} className="contents">{divider}</div>;
+          if (!showToolCalls) return divider && <div key={item.kind === "message" ? item.message.id : item.id} className="contents">{divider}</div>;
           const live = i === liveStart;
           const rows = live ? items.slice(i).flatMap((one) => one.kind === "message" ? [one.message] : one.kind === "run" ? one.messages : []) : item.kind === "message" ? [] : item.messages;
           const itemId = item.kind === "message" ? `live:${item.message.id}` : item.id;
