@@ -182,7 +182,7 @@ describe("the Advanced transcript", () => {
       { id: "bash", role: "bot", kind: "activity", at: 3, tool: { name: "Bash" } },
     ];
     try {
-      const markup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: true, messages } }));
+      const markup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: true, messages, tasks: (bot.tasks ?? []).map((task) => ({ ...task, busy: true })) } }));
       expect(markup).toContain('data-run-status="working"');
       expect(markup).toContain("Working…");
       expect(markup).toMatch(/data-activity-run[\s\S]*aria-expanded="true"/);
