@@ -49,7 +49,7 @@ Requirements for building from source:
 
 ```sh
 git clone https://github.com/seira-bot/seira.git
-cd Seira
+cd seira
 corepack enable
 pnpm install --frozen-lockfile
 pnpm package:linux
