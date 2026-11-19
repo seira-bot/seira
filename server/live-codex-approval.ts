@@ -53,15 +53,13 @@ export const PATH_SPOKEN_LIMIT = 80;
 export const SPOKEN_CHARS_PER_SECOND = 14;
 /** Playback buffer and transcription delay of the voice's audio heard back through the microphone. */
 export const ECHO_TAIL_MS = 800;
-/** Share of a request's subject words that a voice output must say before it counts as the question. */
-export const SUBJECT_SHARE = 0.6;
 const ANSWER_HINT = "Should I go ahead? Say yes or no.";
 const NOTICE_COMMAND = "I need to run a command that I cannot read out in full, so I did not run it. Ask me in the chat to run it.";
 const NOTICE_PERMISSIONS = "I need more access than I have now, so I did not do it. Ask me in the chat to allow it.";
 const NOTICE_FILES = "I need to change files that I cannot read out in full, so I did not change them. Ask me in the chat to change them.";
 const SEPARATORS = /[;|&`<>\n\r]|\$\(/;
-/** Control and format characters (bidi overrides, zero-width marks) that a voice does not read out. */
-const UNSPOKEN = /[\p{Cc}\p{Cf}]/u;
+/** Printable ASCII only. A voice does not read out control or format characters, and letters that look alike sound alike. */
+const SPOKEN_COMMAND = /^[\x20-\x7e]+$/;
 const SPOKEN_PATH = /^[A-Za-z0-9._ /-]+$/;
 /** Repository internals, credentials and agent settings: a change there is never approved by voice. */
 const PROTECTED_SEGMENT = /^\.(?:git|ssh|codex|env)/i;
@@ -78,11 +76,8 @@ const KINDS: Record<string, { kind: Kind; legacy: boolean }> = {
   applyPatchApproval: { kind: "files", legacy: true },
 };
 
-/** Words a voice output must say before it counts as the question. All `required` words must be among them. */
-interface Subject {
-  words: string[];
-  required: string[];
-}
+/** Phrases that a voice output must each say in full before it counts as the question. */
+type Subject = string[];
 
 interface OpenRequest {
   question: string;
@@ -132,7 +127,9 @@ function reply(method: string, params: Record<string, unknown>, allow: boolean):
 }
 
 const words = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
-const unique = (list: string[]) => [...new Set(list)];
+const spokenForm = (text: string) => text.replace(/\s+/g, " ").trim().toLowerCase();
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const QUOTES = "[\"'`)]*";
 
 /** The voice's own question, heard again through the microphone. */
 function isEcho(heard: string, question: string): boolean {
@@ -142,18 +139,16 @@ function isEcho(heard: string, question: string): boolean {
   return asked.includes(` ${said.join(" ")} `);
 }
 
-function namesSubject(text: string, subject: Subject): boolean {
-  if (!subject.words.length) return false;
-  const said = new Set(words(text));
-  const found = subject.words.filter((word) => said.has(word)).length;
-  return subject.required.every((word) => said.has(word)) && found >= SUBJECT_SHARE * subject.words.length;
+/**
+ * True when the output says the phrase in full, with only case and spacing changed. The phrase must start a word,
+ * and the output or a clause must end right after it: a word or flag that follows changes what the person hears.
+ */
+function saysInFull(output: string, phrase: string): boolean {
+  const end = `${QUOTES}(?:$|[.,;:!?]+${QUOTES}(?:\\s|$))`;
+  return new RegExp(`(?:^|[\\s"'\`(])${escapeRegExp(spokenForm(phrase))}${end}`).test(spokenForm(output));
 }
 
-function commandSubject(command: string): Subject {
-  const [program = "", ...rest] = command.trim().split(/\s+/);
-  const required = words(program);
-  return { words: unique([...required, ...words(rest.filter((part) => !part.startsWith("-")).join(" "))]), required };
-}
+const namesSubject = (output: string, subject: Subject) => subject.length > 0 && subject.every((phrase) => saysInFull(output, phrase));
 
 const realFolder = (path: string): string | null => {
   try {
@@ -210,18 +205,10 @@ function filesQuestion(changes: LiveCodexFileChange[] | null, cwd: string | unde
     if (path === null || (change.movePath !== null && to === null)) return null;
     spoken.push({ verb: to ? "move" : VERBS[change.kind ?? "update"], path, to });
   }
-  const paths = spoken.flatMap(({ path, to }) => (to ? [path, to] : [path]));
-  const subject = {
-    words: unique(paths.flatMap(words)),
-    required: unique(paths.flatMap((path) => words(path.split("/").pop()!))),
-  };
-  const [only] = spoken;
-  if (spoken.length === 1 && only) {
-    const target = only.to ? `${only.path} to ${only.to}` : only.path;
-    return { question: `I need your OK to ${only.verb} this file: ${target}. ${ANSWER_HINT}`, subject };
-  }
-  const list = spoken.map(({ verb, path, to }) => (to ? `${verb} ${path} to ${to}` : `${verb} ${path}`)).join(", ");
-  return { question: `I need your OK for these file changes: ${list}. ${ANSWER_HINT}`, subject };
+  const subject = spoken.map(({ verb, path, to }) => (to ? `${verb} ${path} to ${to}` : `${verb} ${path}`));
+  const list = subject.join(", ");
+  const question = subject.length === 1 ? `I need your OK to ${list}.` : `I need your OK for these file changes: ${list}.`;
+  return { question: `${question} ${ANSWER_HINT}`, subject };
 }
 
 function questionFor(
@@ -235,8 +222,8 @@ function questionFor(
   if (kind === "command") {
     const command = commandText(fields);
     const plain = fields.kind == null || fields.kind === "command";
-    if (!plain || !command.trim() || command.length > COMMAND_SPOKEN_LIMIT || SEPARATORS.test(command) || UNSPOKEN.test(command)) return { notice: NOTICE_COMMAND };
-    return { question: `I need your OK to run this command: ${command}. ${ANSWER_HINT}`, subject: commandSubject(command) };
+    if (!plain || !command.trim() || command.length > COMMAND_SPOKEN_LIMIT || SEPARATORS.test(command) || !SPOKEN_COMMAND.test(command)) return { notice: NOTICE_COMMAND };
+    return { question: `I need your OK to run this command: ${command}. ${ANSWER_HINT}`, subject: [command] };
   }
   const changes = isRecord(fields.fileChanges) ? legacyFileChanges(fields.fileChanges) : options.files?.(fields) ?? null;
   return filesQuestion(changes, options.cwd) ?? { notice: NOTICE_FILES };
