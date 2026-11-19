@@ -43,8 +43,6 @@ modules:
         export PATH="$PWD/pnpm-local/bin:$PATH" &&
         pnpm exec electron-builder --linux dir $ELECTRON_BUILDER_ARCH_ARGS --publish never
         -c.afterPack=packaging/flatpak/after-pack.cjs
-        -c.electronDist=node_modules/electron/dist
-        -c.electronVersion=$(node -p "require('electron/package.json').version")
       - mkdir -p /app/lib/seira
       - cp -a release/linux-unpacked/. /app/lib/seira/
       - install -Dm755 packaging/flatpak/seira /app/bin/seira
