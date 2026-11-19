@@ -209,5 +209,7 @@ export function liveSessionWiring(input: LiveSessionWiringInput): {
 
 /** Ends the running call first, so it is recorded as a shutdown, then waits for every Codex session to stop. */
 export async function shutdownLiveCalls(calls: { shutdown(): Promise<void> }, wiring: { stopAll(): Promise<void> }): Promise<void> {
-  try { await calls.shutdown(); } finally { await wiring.stopAll(); }
+  try {
+    try { await calls.shutdown(); } finally { await wiring.stopAll(); }
+  } catch (error) { console.warn("live: stopping Codex calls failed", error); }
 }

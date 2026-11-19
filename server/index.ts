@@ -320,7 +320,7 @@ import { voiceNoteFailure } from "./tts/errors.ts";
 import { createDecider, deciderReady, describeDecider } from "./decider/index.ts"; import { createExtractor, describeHelpers } from "./extractor/index.ts";
 import { createStopLineRoutes } from "./routes/stop-line.ts"; import { decideRoomResponder } from "./decider/room-routing.ts"; import { roomRoutingInput } from "./host/room-routing-input.ts";
 import { autoRoomDefault, roomTurnMembers } from "./room-routing-members.ts";
-import { liveHistoryFrom, LiveSessionError, type LiveBot, type LiveHistoryMessage } from "./live-call.ts";
+import { createLiveCallHost } from "./host/live-calls.ts";
 import { LiveCallController, LiveCallSignedOutError } from "./live-call-controller.ts"; import { liveSessionWiring, shutdownLiveCalls } from "./live-session-wiring.ts";
 import { liveCallSettings, liveSettingsFor, liveSettingsForClient, saveLiveSettings } from "./live-settings.ts"; import { azureLiveCallRefusal, liveScopeRefusal } from "./live-access.ts";
 import { recordLiveCall, spokenLineFields, titleLiveCall } from "./live-call-record.ts"; import { finalTurnBlock, noteGroupTurn, roomRoundPasses, roomTurnsPerMember, turnsPerMemberPatch, turnsSince } from "./room-round-turns.ts";
@@ -12387,24 +12387,9 @@ ROUTES.push(createBrowserViewerRoutes({
 const internalToolRoutes = createInternalToolRoutes({ engineLimits: { instances: () => registry.instances(), configs: () => instanceConfigs(cfg), status: (instanceId) => registry.knownSnapshot(instanceId), load: (accounts) => loadPlanUsage({ accounts }), audienceOf: (threadId) => teamHost.audienceOf(threadId), guestDriven: cloudGuestDriven, dataDir: DATA_DIR }, helpers: { decider, extractor }, notifications: { bot: (id) => store.bot(id), team: sharedMembership, broadcast }, xResearch: { credential: () => researchCredential(cfg.treg?.key), botEnabled: (botId) => store.bot(botId)?.xResearch !== false, cloudHome: CLOUD_HOME !== null, researchOff: () => researchAvailability.refused() }, appPublisher }); const waitRoutes = createWaitRoutes({ waits: botWaits, cloudHome: Boolean(CLOUD_HOME), sleeps: Boolean(CLOUD_HOME) && CLOUD_TEAM === null }); ROUTES.push(createXConnectorRoutes({ credential: () => researchCredential(cfg.treg?.key), included: () => xCredential(), unavailable: () => xResearchStatus().unavailable === true }));
 
 // Live calls: the client holds the WebRTC audio; the key never leaves the harness, which creates the session.
-function liveBotFor(botId: string): LiveBot {
-  const bot = store.bot(botId);
-  if (!bot) throw new LiveSessionError("That bot no longer exists.", 404);
-  return { name: bot.name, title: bot.title, description: bot.description };
-}
-function liveHistoryFor(threadId: string): LiveHistoryMessage[] {
-  return liveHistoryFrom(sinceFreshStart(store.activePath(threadId)));
-}
 /** A signed-out or removed person's call must not keep reaching the bot or spending the key. */
 function liveSignedIn(auth: RequestAuth): boolean {
   return auth.kind !== "session" || sessions.isLive(auth.session.id);
-}
-/** On the bot's own engine, which already saw the requests, so nothing new reaches OpenAI. */
-function liveCallTitle(botId: string, threadId: string, excerpt: string): Promise<string | null> | null {
-  const bot = store.projectBotForTask(botId, threadId);
-  if (!bot) return null;
-  const gate = threadTitleGate(bot);
-  return gate.ok ? generateThreadTitle(gate.instance, excerpt, "call") : null;
 }
 /** The conversation's private folder and the folder its work is pinned to, if any. A chat turn and a Live call both start here. */
 function taskFolders(bot: BotRecord, threadId: string, instance: { instanceId: string; driverKind: string }): { privateWorkspace: string; pinnedCwd: string | null } {
@@ -12412,22 +12397,9 @@ function taskFolders(bot: BotRecord, threadId: string, instance: { instanceId: s
   const pinnedCwd = store.pinTaskCwd(bot.id, threadId, privateWorkspace, { privateOnly: cloudGuestOpened(threadId) || botApiThread(threadId) });
   return { privateWorkspace, pinnedCwd };
 }
-/** The folder and approval level are the ones a chat turn of this conversation gets (beginTurn). */
-function liveCodexFor(botId: string, threadId: string): ReturnType<NonNullable<Parameters<typeof liveSessionWiring>[0]["codexLive"]>> {
-  const bot = store.projectBotForTask(botId, threadId);
-  const instance = bot ? registry.get(bot.modelSelection.instanceId) : undefined;
-  if (!bot || !instance || instance.driverKind !== "codex" || !instance.startLiveVoice) return null;
-  const { privateWorkspace, pinnedCwd } = taskFolders(bot, threadId, instance);
-  const cwd = pinnedCwd ?? privateWorkspace;
-  const toolScoped = (() => { try { return toolScopeForTurn(bot.id) !== undefined; } catch { return true; } })();
-  return {
-    startLiveVoice: (input) => instance.startLiveVoice!(input), cwd, approvalMode: approvalModeForTurn(bot, false, threadId), botId: bot.id, model: bot.modelSelection.model || null,
-    toolScoped, guestConfined: cloudGuestDriven(threadId) || botApiThread(threadId),
-  };
-}
-function postLiveCallAnswer({ botId, threadId, text }: { botId: string; threadId: string; text: string }): void {
-  if (store.taskByThread(botId, threadId)) store.appendMessage(threadId, { role: "bot", kind: "text", text });
-}
+const { liveBotFor, liveHistoryFor, liveCallTitle, liveCodexFor, postLiveCallAnswer } = createLiveCallHost({
+  store, registry, taskFolders, toolScopeForTurn, approvalModeForTurn, cloudGuestDriven, botApiThread, threadTitleGate, generateThreadTitle, sinceFreshStart,
+});
 const liveWiring = liveSessionWiring({ codexLive: liveCodexFor, postCallAnswer: postLiveCallAnswer, bot: liveBotFor, history: liveHistoryFor, cloudHome: Boolean(CLOUD_HOME), othersOnLoopback: adminActivityRecording, saveAgent: (agent) => { saveConfig({ live: agent }); Object.assign(cfg, loadConfig()); }, language: appLanguage, fishAgentLanguage: () => cfg.live?.fishAgentLanguage });
 const liveCalls = new LiveCallController({
   store,
@@ -15374,9 +15346,7 @@ const gracefulShutdown = createGracefulShutdown({
       await Promise.all([...temporaries, browserSweep.closeAll()]);
       await browserRuntime.closeAll();
     },
-    async () => {
-      try { await shutdownLiveCalls(liveCalls, liveWiring); } catch (error) { console.warn("live: stopping Codex calls failed", error); }
-    },
+    () => shutdownLiveCalls(liveCalls, liveWiring),
     () => flushAllProfileHistory(),
     () => flushAllMemoryJournals(),
     () => flushUsageLedger(DATA_DIR),
