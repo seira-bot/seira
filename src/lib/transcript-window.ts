@@ -1,5 +1,5 @@
 export const TRANSCRIPT_WINDOW_SIZE = 120;
-export const TRANSCRIPT_OPEN_SIZE = 40;
+export const TRANSCRIPT_OPEN_SIZE = 24;
 export const TRANSCRIPT_STEP_SIZE = 40;
 
 export interface TranscriptWindow<T> {
