@@ -248,10 +248,15 @@ EOF
 }
 
 stage_checks() {
-  local out
-  out="$(cd "$REPO_ROOT" && git grep -n 'PRIVATE KEY' -- scripts/linux-store packaging/flatpak docs/releasing.md || true)"
+  # The pattern is built in parts so that this file does not match itself.
+  local needle="PRIVATE"" KEY" out lw="$ROOT/tmp/leak-check"
+  out="$(cd "$REPO_ROOT" && git grep -n "$needle" -- scripts/linux-store packaging/flatpak docs/releasing.md || true)"
   [ -z "$out" ] && pass "f: no private key text in the files of this change" || { echo "$out"; fail "f: private key text found"; }
-  if (cd "$REPO_ROOT" && node scripts/check-local-leaks.mjs); then pass "f: check-local-leaks passes"; else fail "f: check-local-leaks reports findings"; fi
+  # Check a clean checkout of HEAD, so untracked files of this machine do not count.
+  rm -rf "$lw"
+  git -C "$REPO_ROOT" worktree add -q --detach "$lw" HEAD
+  if (cd "$lw" && node scripts/check-local-leaks.mjs); then pass "f: check-local-leaks passes"; else fail "f: check-local-leaks reports findings"; fi
+  git -C "$REPO_ROOT" worktree remove --force "$lw"
 }
 
 stage_clean() {
