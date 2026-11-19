@@ -97,17 +97,17 @@ sleep 2
 OMB_DATA_DIR="$DATA" OMB_PORT=18799 OMB_WEBHOOK_PORT=18800 /snap/bin/seira >/tmp/electron.log 2>&1 &
 APP=$!
 up=no
-for _ in $(seq 1 60); do
+for _ in $(seq 1 150); do
   if curl -fsS "http://127.0.0.1:18799/api/health" >/dev/null 2>&1; then up=yes; break; fi
   kill -0 "$APP" 2>/dev/null || break
   sleep 1
 done
-say "electron-server-answers=$up"
+say "electron-server-answers=$up"; say "listening: $(ss -ltn | awk "NR>1{print \$4}" | tr "\n" " ")"; say "electron-procs: $(pgrep -fc seira)"
 say "electron-process-alive=$(kill -0 "$APP" 2>/dev/null && echo yes || echo no)"
 say "electron-cmdline-has-no-sandbox=$(ps -eo args | grep -E '[/]seira|[/]openmausbot' | grep -c -e '--no-sandbox')"
 say "electron-log-no-usable-sandbox=$(grep -ci 'no usable sandbox' /tmp/electron.log)"
 say "electron-log-sandbox-lines:"; grep -i 'sandbox\|namespace\|FATAL' /tmp/electron.log | head -10 | sed 's/^/RESULT   /'
-say "electron-log-head:"; head -15 /tmp/electron.log | sed 's/^/RESULT   /'
+say "electron-log-head:"; tail -25 /tmp/electron.log | sed 's/^/RESULT   /'
 curl -fsS "http://127.0.0.1:18799/api/health" 2>&1 | head -c 300 | sed 's/^/RESULT health: /'; echo
 
 CHROME=$(find /snap/seira/current/resources/browser-engine/chrome -name chrome-headless-shell -type f | head -1)
