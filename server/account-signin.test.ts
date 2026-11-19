@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { ControlPlaneClient } from "../electron/control-plane-client.mjs";
 import { allowedScopes, createEmailSignIn, parseAllowList, signInEnabled } from "./account-signin.ts";
 import { startControlPlaneStub } from "./testing/control-plane-stub.ts";
 
@@ -61,5 +62,14 @@ describe("the exchange with the control plane", () => {
     expect(off.enabled()).toBe(false);
     const down = createEmailSignIn({ allow: { admins: ["a@b.test"], members: [] }, env: { ...process.env, OMB_CONTROL_PLANE_URL: "http://127.0.0.1:9" } });
     expect(await down.start("a@b.test")).toMatchObject({ ok: false, status: 502 });
+  });
+
+  it("is off without a mail server and without a phone account service, and on with either one", () => {
+    const allow = { admins: ["a@b.test"], members: [] };
+    expect(createEmailSignIn({ allow, env: {} }).enabled()).toBe(false);
+    expect(createEmailSignIn({ allow, env: { OMB_CONTROL_PLANE_URL: "ftp://nope" } }).enabled()).toBe(false);
+    expect(createEmailSignIn({ allow, env: { OMB_CONTROL_PLANE_URL: "https://accounts.example.test" } }).enabled()).toBe(true);
+    expect(createEmailSignIn({ allow, env: {}, client: {} as ControlPlaneClient }).enabled()).toBe(true);
+    expect(createEmailSignIn({ allow, env: { OMB_SIGNIN_SMTP_URL: "smtp://mail.example.test:25" } }).enabled()).toBe(true);
   });
 });
