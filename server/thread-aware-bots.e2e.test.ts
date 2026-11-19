@@ -916,6 +916,14 @@ describe("a Chief of Staff tidying its team (MOCA-202)", () => {
       await expect.poll(() => handoffs().find(node => node.id === child.id)?.status, { timeout: 15_000 }).toBe("completed");
       await expect.poll(async () => (await taskOf(qa.id, child.threadId)).closedBy, { timeout: 15_000 })
         .toMatchObject({ botId: pm.id, name: "Parker" });
+      // The finished handoff resumes Parker with a review turn. Wait for it, or the next message queues behind it.
+      await expect.poll(async () => (await messages(pm.threadId)).some(
+        (message) => message.roomRequest?.id === child.id && message.roomRequest.phase === "result",
+      ), { timeout: 20_000 }).toBe(true);
+      await expect.poll(async () => {
+        const state = await botState(pm.id);
+        return state?.busy === false && state.waitingForTeammates !== true;
+      }, { timeout: 15_000 }).toBe(true);
       token = await heldTurn(pm, "Close the completed QA task.");
       const closed = await close(opened.body.threadId);
       expect(closed.status).toBe(200);
