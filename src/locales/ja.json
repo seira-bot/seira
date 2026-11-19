@@ -3413,7 +3413,7 @@
   "keys.composio.label": "Composio のプロジェクトキー",
   "keys.composio.desc": "自分の Composio プロジェクト経由で Gmail、GitHub、Slack、Notion などを連携します。",
   "keys.composio.link": "プロジェクトキーを作成またはコピー",
-  "keys.composio.note": "1. 無料の Composio アカウントを作成します。\n2. Composio のプロジェクトで Settings → API Keys を開き、キーを作成します。\n3. ここにキーを貼り付けます。キーは ak_ で始まります。",
+  "keys.composio.note": "1. 無料の Composio アカウントを作成します。\n2. Composio のプロジェクトで API Keys ページを開き、キーを作成します。\n3. ここにキーを貼り付けます。キーは ak_ で始まります。",
   "keys.opencode.label": "OpenCode の API キー",
   "keys.opencode.placeholder": "OpenCode の API キーを貼り付け",
   "keys.opencode.desc": "任意です。既存の OpenCode Zen、Go などのプロバイダー接続は自動的に検出されます。",

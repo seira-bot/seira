@@ -2465,7 +2465,7 @@
   "keys.composio.label": "Composio proje anahtarı",
   "keys.composio.desc": "Gmail, GitHub, Slack, Notion ve diğer uygulamaları kendi Composio projeniz üzerinden bağlayın.",
   "keys.composio.link": "Proje anahtarı oluşturun veya kopyalayın",
-  "keys.composio.note": "1. Ücretsiz bir Composio hesabı oluşturun.\n2. Composio projenizde Settings → API Keys sayfasını açın ve bir anahtar oluşturun.\n3. Anahtarı buraya yapıştırın. ak_ ile başlar.",
+  "keys.composio.note": "1. Ücretsiz bir Composio hesabı oluşturun.\n2. Composio projenizde API Keys sayfasını açın ve bir anahtar oluşturun.\n3. Anahtarı buraya yapıştırın. ak_ ile başlar.",
   "keys.opencode.label": "OpenCode API anahtarı",
   "keys.opencode.placeholder": "Bir OpenCode API anahtarı yapıştırın",
   "keys.opencode.desc": "İsteğe bağlı. Mevcut OpenCode Zen, Go ve diğer sağlayıcı bağlantıları otomatik olarak algılanır.",

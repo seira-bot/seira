@@ -2465,7 +2465,7 @@
   "keys.composio.label": "Khóa dự án Composio",
   "keys.composio.desc": "Kết nối Gmail, GitHub, Slack, Notion và các ứng dụng khác thông qua dự án Composio của chính bạn.",
   "keys.composio.link": "Tạo hoặc sao chép khóa dự án",
-  "keys.composio.note": "1. Tạo một tài khoản Composio miễn phí.\n2. Trong dự án Composio của bạn, mở Settings → API Keys và tạo một khóa.\n3. Dán khóa vào đây. Khóa bắt đầu bằng ak_.",
+  "keys.composio.note": "1. Tạo một tài khoản Composio miễn phí.\n2. Trong dự án Composio của bạn, mở trang API Keys và tạo một khóa.\n3. Dán khóa vào đây. Khóa bắt đầu bằng ak_.",
   "keys.opencode.label": "Khóa API OpenCode",
   "keys.opencode.placeholder": "Dán khóa API OpenCode",
   "keys.opencode.desc": "Tùy chọn. Các kết nối hiện có tới OpenCode Zen, Go và các nhà cung cấp khác sẽ được tự động phát hiện.",

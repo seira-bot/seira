@@ -4010,7 +4010,7 @@
   "keys.composio.label": "Composio project key",
   "keys.composio.desc": "Connect Gmail, GitHub, Slack, Notion, and other apps through your own Composio project.",
   "keys.composio.link": "Create or copy a project key",
-  "keys.composio.note": "1. Create a free Composio account.\n2. In your Composio project, open Settings → API Keys and create a key.\n3. Paste the key here. It starts with ak_.",
+  "keys.composio.note": "1. Create a free Composio account.\n2. In your Composio project, open the API Keys page and create a key.\n3. Paste the key here. It starts with ak_.",
   "keys.opencode.label": "OpenCode API key",
   "keys.opencode.placeholder": "Paste an OpenCode API key",
   "keys.opencode.desc": "Optional. Existing OpenCode Zen, Go, and other provider connections are detected automatically.",

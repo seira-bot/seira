@@ -3823,7 +3823,7 @@
   "keys.composio.label": "Chave de projeto Composio",
   "keys.composio.desc": "Conecte Gmail, GitHub, Slack, Notion e outros apps pelo seu próprio projeto Composio.",
   "keys.composio.link": "Criar ou copiar uma chave de projeto",
-  "keys.composio.note": "1. Crie uma conta gratuita do Composio.\n2. No seu projeto do Composio, abra Settings → API Keys e crie uma chave.\n3. Cole a chave aqui. Ela começa com ak_.",
+  "keys.composio.note": "1. Crie uma conta gratuita do Composio.\n2. No seu projeto do Composio, abra a página API Keys e crie uma chave.\n3. Cole a chave aqui. Ela começa com ak_.",
   "keys.opencode.label": "Chave de API do OpenCode",
   "keys.opencode.placeholder": "Cole uma chave de API do OpenCode",
   "keys.opencode.desc": "Opcional. Conexões existentes do OpenCode Zen, Go e de outros provedores são detectadas automaticamente.",

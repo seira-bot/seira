@@ -3605,7 +3605,7 @@
   "keys.composio.label": "Composio 專案金鑰",
   "keys.composio.desc": "透過你自己的 Composio 專案連線 Gmail、GitHub、Slack、Notion 及其他應用程式。",
   "keys.composio.link": "建立或複製專案金鑰",
-  "keys.composio.note": "1. 建立一個免費的 Composio 帳號。\n2. 在你的 Composio 專案中，開啟 Settings → API Keys 並建立金鑰。\n3. 在此貼上金鑰。金鑰以 ak_ 開頭。",
+  "keys.composio.note": "1. 建立一個免費的 Composio 帳號。\n2. 在你的 Composio 專案中，開啟 API Keys 頁面並建立金鑰。\n3. 在此貼上金鑰。金鑰以 ak_ 開頭。",
   "keys.opencode.label": "OpenCode API 金鑰",
   "keys.opencode.placeholder": "貼上 OpenCode API 金鑰",
   "keys.opencode.desc": "選填。系統會自動偵測既有的 OpenCode Zen、Go 及其他供應商連線。",

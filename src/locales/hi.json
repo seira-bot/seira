@@ -1323,7 +1323,7 @@
   "keys.composio.label": "Composio प्रोजेक्ट कुंजी",
   "keys.composio.desc": "अपने Composio प्रोजेक्ट से Gmail, GitHub, Slack, Notion और दूसरे ऐप जोड़ें।",
   "keys.composio.link": "प्रोजेक्ट कुंजी बनाएँ या कॉपी करें",
-  "keys.composio.note": "1. एक मुफ़्त Composio खाता बनाएँ।\n2. अपने Composio प्रोजेक्ट में Settings → API Keys खोलें और एक कुंजी बनाएँ।\n3. कुंजी यहाँ चिपकाएँ। वह ak_ से शुरू होती है।",
+  "keys.composio.note": "1. एक मुफ़्त Composio खाता बनाएँ।\n2. अपने Composio प्रोजेक्ट में API Keys पेज खोलें और एक कुंजी बनाएँ।\n3. कुंजी यहाँ चिपकाएँ। वह ak_ से शुरू होती है।",
   "keys.opencode.label": "OpenCode API कुंजी",
   "keys.opencode.placeholder": "OpenCode API कुंजी पेस्ट करें",
   "keys.opencode.desc": "वैकल्पिक। OpenCode Zen, Go और दूसरे प्रदाताओं के मौजूदा कनेक्शन अपने आप पहचान लिए जाते हैं।",

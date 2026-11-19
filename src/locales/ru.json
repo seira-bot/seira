@@ -3054,7 +3054,7 @@
   "keys.composio.label": "Ключ проекта Composio",
   "keys.composio.desc": "Подключайте Gmail, GitHub, Slack, Notion и другие приложения через собственный проект Composio.",
   "keys.composio.link": "Создать или скопировать ключ проекта",
-  "keys.composio.note": "1. Создайте бесплатный аккаунт Composio.\n2. В своём проекте Composio откройте Settings → API Keys и создайте ключ.\n3. Вставьте ключ сюда. Он начинается с ak_.",
+  "keys.composio.note": "1. Создайте бесплатный аккаунт Composio.\n2. В своём проекте Composio откройте страницу API Keys и создайте ключ.\n3. Вставьте ключ сюда. Он начинается с ak_.",
   "keys.opencode.label": "API-ключ OpenCode",
   "keys.opencode.placeholder": "Вставьте API-ключ OpenCode",
   "keys.opencode.desc": "Необязательно. Существующие подключения OpenCode Zen, Go и других провайдеров определяются автоматически.",
