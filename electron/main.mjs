@@ -1115,7 +1115,7 @@ function receivePhoneSecretSave(proc, rawMessage) {
 
 async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmentDir(environmentsState, desktopDataDir())) {
   if (desktopShutdownStarted) return { proc: null, abort: true };
-  const { entry, compileCacheDir } = serverChildLaunch({
+  const { entry, compileCacheDir, execArgv } = serverChildLaunch({
     resourcesPath: process.resourcesPath,
     userData: app.getPath("userData"),
   });
@@ -1144,6 +1144,7 @@ async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmen
   slog(`fork ${entry} port=${port}`);
   startupTimeline.mark("server-fork");
   const proc = utilityProcess.fork(entry, [], {
+    execArgv,
     env: childEnv,
     stdio: ["ignore", "pipe", "pipe"],
   });
