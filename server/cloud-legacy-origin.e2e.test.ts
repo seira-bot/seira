@@ -32,7 +32,7 @@ async function launch(legacy: string, port: number): Promise<{ child: ChildProce
     cwd: join(SERVER_DIR, ".."),
     env: {
       PATH: process.env.PATH, HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
-      OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: "5c9e3d2f-0b8a-4f7e-9d6c-2b3c4d5e6f70", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
+      OMB_CLOUD_ROLE: "home", OMB_BOT_BOX: "0", OMB_CLOUD_MACHINE_ID: "5c9e3d2f-0b8a-4f7e-9d6c-2b3c4d5e6f70", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
       OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_PUBLIC_URL: `https://${NEW_HOST}`, OMB_CLOUD_LEGACY_ORIGINS: legacy,
     },
     stdio: ["ignore", "pipe", "pipe"],

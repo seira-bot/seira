@@ -1,12 +1,13 @@
 // Real server, a fake Chrome profile, and a real headless Chromium as the bot's browser behind a stand-in for agent-browser.
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { freemem, loadavg, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { verificationServerEnvironment } from "../scripts/control-seira.ts";
 import { writeFakeBrowser } from "./browser/chrome-import/testing/fake-profile.ts";
+import { credentialStoreFlags } from "./browser/egress/gate.ts";
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 import { freePortBlock } from "./testing/ports.ts";
 
@@ -27,15 +28,32 @@ afterEach(async () => {
   for (const folder of folders.splice(0)) await removeTempDir(folder);
 });
 
+/** Chromium as the bot's browser, and the DevTools address it opened. It starts the way the other real-Chrome suites start it
+ * (no first-run work, no background network, no update check, no sync, no desktop keyring) so nothing outside the machine
+ * or the desktop session can hold its start. A Chromium that exits, or that opens nothing in time, fails the test with what
+ * it wrote to stderr: the old wait ignored the exit and ran out the clock with no word on why. */
 async function startBrowser(root: string): Promise<string> {
   const profile = join(root, "chromium-profile");
   mkdirSync(profile, { recursive: true });
-  const child = spawn(CHROMIUM, ["--headless=new", "--no-sandbox", "--disable-gpu", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"], { stdio: "ignore" });
+  const child = spawn(CHROMIUM, [
+    "--headless=new", "--no-sandbox", "--disable-gpu", "--remote-debugging-port=0", `--user-data-dir=${profile}`,
+    "--no-first-run", "--no-default-browser-check", "--disable-background-networking", "--disable-component-update", "--disable-sync",
+    ...credentialStoreFlags(), "about:blank",
+  ], { stdio: ["ignore", "ignore", "pipe"] });
   children.push(child);
+  let stderr = "";
+  child.stderr!.on("data", (chunk) => { if (stderr.length < 8_192) stderr += String(chunk); });
   const portFile = join(profile, "DevToolsActivePort");
-  await expect.poll(() => existsSync(portFile) && readFileSync(portFile, "utf8").split("\n").length >= 2, { timeout: 30_000, interval: 100 }).toBe(true);
-  const [port, path] = readFileSync(portFile, "utf8").split("\n");
-  return `ws://127.0.0.1:${port}${path}`;
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    const lines = existsSync(portFile) ? readFileSync(portFile, "utf8").split("\n") : [];
+    if (lines.length >= 2) return `ws://127.0.0.1:${lines[0]}${lines[1]}`;
+    const state = child.exitCode !== null || child.signalCode !== null ? `exited with ${child.exitCode ?? child.signalCode}` : "still running";
+    if (child.exitCode !== null || child.signalCode !== null || Date.now() > deadline) {
+      throw new Error(`Chromium ${state} and had not opened its DevTools port (load ${loadavg().map((value) => value.toFixed(1)).join(" ")}, ${Math.round(freemem() / 1_048_576)} MB free):\n${stderr || "(nothing on stderr)"}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
 }
 
 async function startServer(home: string, engine: string) {

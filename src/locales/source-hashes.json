@@ -34508,6 +34508,7 @@
       "native.role.edit": "464c4ffd019e1e9691dcf0537c797353ef2b1c1d4833d3d463e5b74ae4547344",
       "native.role.view": "dcc839a4015c4b7dd9db959a8f757833b8adb92462a751b973386e453c6d58a3",
       "native.role.window": "19734a1b58cabc22cae1f88493289ee94f40ff2b350f7f1b9f7011ea84096916",
+      "native.role.help": "b79cac926e0b2e347e72cc91d5174037c9e17ae7733fd7bdb570f71b10cd7bfc",
       "native.role.closeWindow": "32fd144c1f4b399d6437cdf06de3dbea637a981eb794a52930b392a91bd0527f",
       "native.role.close": "7d9eb7acb13e24625c404401d8e88b2350e32162455885f18276cf802f7701ed",
       "native.role.exit": "d17d84a604994b722db37b35860b1ac7e8d9e43e725d0eb50702a9f7228a2999",

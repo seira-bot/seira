@@ -467,7 +467,7 @@ await import(${JSON.stringify(pathToFileURL(join(ROOT, "server", "testing", "fak
   const port = await freePortBlock([0, 1]);
   const secret = randomBytes(32).toString("base64url");
   const offered: NodeJS.ProcessEnv = {
-    OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: "7a1c2e4f-9b3d-4c6e-8a7f-1d5e8c2b0a94", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
+    OMB_CLOUD_ROLE: "home", OMB_BOT_BOX: "0", OMB_CLOUD_MACHINE_ID: "7a1c2e4f-9b3d-4c6e-8a7f-1d5e8c2b0a94", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
     OMB_PUBLIC_URL: `https://${CLOUD_HOST}`, OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_DATA_DIR: dataDir, PATH: dirname(process.execPath),
   };
   const { server: serverEnv, secrets } = cloudHomeChildEnvironments(cloudHomeConfiguration(offered)!, offered, home);

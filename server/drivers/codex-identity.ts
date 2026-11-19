@@ -1,6 +1,5 @@
 // Codex resolves its own effective account (keyring included): reading auth.json directly can label an
 // API-key or keyring login with an old file's email. Only the protocol's display email leaves here.
-import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { userHome } from "../env-path.ts";
 import { killCliTree, spawnCli } from "../procs.ts";
@@ -20,7 +19,7 @@ export async function codexAccountEmail(
   env: Record<string, string | undefined>,
   timeoutMs = 3_000,
 ): Promise<string | null> {
-  const cwd = env.HOME || env.USERPROFILE || homedir();
+  const cwd = userHome(env);
   if (!isAbsolute(cwd) || !codexHome(env)) return null;
   return new Promise((resolveEmail) => {
     let child: ReturnType<typeof spawnCli>;

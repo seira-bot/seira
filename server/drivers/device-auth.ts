@@ -4,12 +4,12 @@
 import type { ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
-import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import { deviceSignInPrompt, type DeviceSignInProvider } from "../../shared/device-sign-in.ts";
 import type { ProviderAuthenticationStart, ProviderAuthenticationStatus } from "../contracts.ts";
 import { killCliTree, spawnCli } from "../procs.ts";
+import { userHome } from "../env-path.ts";
 
 const MAX_OUTPUT = 16_384;
 // Only the auth operation on a shared credential home is exclusive, never normal turns.
@@ -104,7 +104,7 @@ export class DeviceAuthController {
 
   private home(env: Env, action: "signing in" | "signing out"): { home: string; homeKey: string } {
     const { homeEnv, homeDir, product } = this.spec;
-    const home = env.HOME || env.USERPROFILE || homedir();
+    const home = userHome(env);
     const named = env[homeEnv];
     if (!isAbsolute(home) || (named && !isAbsolute(named))) {
       throw new Error(`Use an absolute HOME and ${homeEnv} path for this server's ${product} provider before ${action}.`);

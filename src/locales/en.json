@@ -9682,6 +9682,7 @@
   "native.role.edit": "Edit",
   "native.role.view": "View",
   "native.role.window": "Window",
+  "native.role.help": "Help",
   "native.role.closeWindow": "Close Window",
   "native.role.close": "Close",
   "native.role.exit": "Exit",

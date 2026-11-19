@@ -178,6 +178,12 @@ export function userHome(env: Record<string, string | undefined> = process.env):
     : env.HOME || env.USERPROFILE || homedir();
 }
 
+/** The profile folder an environment names, in userHome()'s order; none when it names none, so an empty environment is
+ * not taken for the server's own home. */
+export function namedUserHome(env: Record<string, string | undefined>): string | undefined {
+  return env.HOME || env.USERPROFILE ? userHome(env) : undefined;
+}
+
 export function harnessHome(name: string, env: Record<string, string | undefined> = process.env): string {
   return join(userHome(env), `.${name}`);
 }
