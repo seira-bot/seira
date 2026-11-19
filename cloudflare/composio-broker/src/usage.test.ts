@@ -157,7 +157,7 @@ describe("usage alerts (FR-149)", () => {
 
     // A new UTC day: the conditions that still hold alert again, from the hourly cron.
     vi.setSystemTime(new Date("2026-11-21T00:23:00Z"));
-    await worker.scheduled({ scheduledTime: Date.now() } as never, withHook(), {} as never);
+    await worker.scheduled({ scheduledTime: Date.now() } as never, withHook());
     expect(alertKinds("2026-11-21")).toEqual(["month-cost", "paused"]);
   });
 
