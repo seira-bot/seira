@@ -126,9 +126,9 @@ describe("resolveTranscriptWindow", () => {
   });
 
   it("resets a boundary sitting exactly at the end of the thread", () => {
-    const result = resolveTranscriptWindow(thread(100), 100);
+    const result = resolveTranscriptWindow(thread(TRANSCRIPT_OPEN_SIZE), TRANSCRIPT_OPEN_SIZE);
     expect(result.startIndex).toBe(0);
-    expect(result.visible).toHaveLength(100);
+    expect(result.visible).toHaveLength(TRANSCRIPT_OPEN_SIZE);
   });
 
   it("resolves an empty thread to an empty window", () => {
@@ -185,7 +185,7 @@ describe("withRestingCard", () => {
   });
 
   it("adds nothing when the newest resting card is already in the range", () => {
-    expect(withRestingCard(rows, range.visible, range.startIndex, (row) => row === 10 || row === 250)).toBe(range.visible);
+    expect(withRestingCard(rows, range.visible, range.startIndex, (row) => row === 10 || row === 300 - TRANSCRIPT_OPEN_SIZE + 10)).toBe(range.visible);
   });
 
   it("adds nothing when no card rests on the person", () => {

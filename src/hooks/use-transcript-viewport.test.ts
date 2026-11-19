@@ -349,11 +349,11 @@ describe("transcript viewport", () => {
   it("holds the reader's rows and grows the window once they have scrolled away", () => {
     const view = mount({ messages: rows(300) });
     view.act(() => view.current.scrollHandlers.onWheel({ deltaY: -40 } as never));
-    scroller.scrollTop = 2_000;
+    scroller.scrollTop = 1_000;
     for (let total = 301; total <= 900; total++) view.rerender({ messages: rows(total) });
     expect(view.current.hiddenCount).toBe(300 - TRANSCRIPT_OPEN_SIZE);
     expect(view.current.windowedMessages).toHaveLength(900 - 300 + TRANSCRIPT_OPEN_SIZE);
-    expect(scroller.scrollTop).toBe(2_000);
+    expect(scroller.scrollTop).toBe(1_000);
   });
 
   it("slides back to the latest window when the reader returns to the bottom", () => {
@@ -523,7 +523,7 @@ describe("transcript viewport", () => {
 
   it("loads an older page on an upward scroll when the whole thread so far is too short to scroll (#4365)", () => {
     scroller.clientHeight = 10_000;
-    const view = mount({ messages: rows(50), hasMore: true });
+    const view = mount({ messages: rows(TRANSCRIPT_OPEN_SIZE), hasMore: true });
     view.act(() => view.current.scrollHandlers.onWheel({ deltaY: -40 } as never));
     expect(dispatched).toEqual([{ type: "loadOlderMessages", threadId: "thread" }]);
   });
@@ -592,7 +592,7 @@ describe("transcript viewport", () => {
   });
 
   it("automatically loads older messages from server when at top of window and hasMore is true", () => {
-    const view = mount({ messages: rows(50), hasMore: true });
+    const view = mount({ messages: rows(TRANSCRIPT_OPEN_SIZE), hasMore: true });
     expect(view.current.hiddenCount).toBe(0);
 
     view.act(() => {
