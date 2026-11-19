@@ -27,21 +27,21 @@ describe("seira serve --relay", () => {
 
   it("prints the relay QR for a phone code, and the usual block for everything else", () => {
     const body = { inviteUrl: invite, expiresAt: Date.now() + 600_000, relay: status() };
-    const block = relayPairingBlock(body, true, "openmausbot")!;
+    const block = relayPairingBlock(body, true, "seira")!;
     expect(block).toContain("Scan with the Seira app. It connects through Seira Relay, end-to-end encrypted");
     expect(block).toContain("Paired phones: 1 of 20. Remove one: seira devices revoke ID");
-    expect(relayPairingBlock(body, false, "openmausbot")).toBeNull();
-    expect(relayPairingBlock({ ...body, relay: undefined }, true, "openmausbot")).toBeNull();
-    expect(relayPairingBlock({ ...body, inviteUrl: "openmausbot://pair?address=https%3A%2F%2Fmaus.example.com&token=omb_pair_x" }, true, "openmausbot")).toBeNull();
+    expect(relayPairingBlock(body, false, "seira")).toBeNull();
+    expect(relayPairingBlock({ ...body, relay: undefined }, true, "seira")).toBeNull();
+    expect(relayPairingBlock({ ...body, inviteUrl: "openmausbot://pair?address=https%3A%2F%2Fmaus.example.com&token=omb_pair_x" }, true, "seira")).toBeNull();
   });
 
   it("says why a phone cannot pair yet, in the person's terms", () => {
-    expect(relayProblemLines(null, "openmausbot")).toEqual(["Seira Relay is off on this server. Start it with: seira serve --relay"]);
-    expect(relayProblemLines(status({ grant: "signed-out", relay: "off" }), "openmausbot")[0]).toMatch(/^Seira Relay needs this machine signed in to a Seira account: seira login --relay/);
+    expect(relayProblemLines(null, "seira")).toEqual(["Seira Relay is off on this server. Start it with: seira serve --relay"]);
+    expect(relayProblemLines(status({ grant: "signed-out", relay: "off" }), "seira")[0]).toMatch(/^Seira Relay needs this machine signed in to a Seira account: seira login --relay/);
     expect(relayProblemLines(status({ grant: "unavailable", relay: "off" }), "npx @seira-bot/seira")[0]).toMatch(/not available for this machine right now\. The server keeps working here/);
-    expect(relayProblemLines(status({ relay: "connecting", node: null }), "openmausbot")[0]).toMatch(/^Can't reach Seira Relay yet\. The server keeps working here/);
-    expect(relayProblemLines(status(), "openmausbot")).toEqual([]);
-    expect(relayProblemLines(status({ grant: "tunnel", relay: "off", reason: "this server runs with --tunnel" }), "openmausbot")).toEqual([
+    expect(relayProblemLines(status({ relay: "connecting", node: null }), "seira")[0]).toMatch(/^Can't reach Seira Relay yet\. The server keeps working here/);
+    expect(relayProblemLines(status(), "seira")).toEqual([]);
+    expect(relayProblemLines(status({ grant: "tunnel", relay: "off", reason: "this server runs with --tunnel" }), "seira")).toEqual([
       "Seira Relay stays off here: this server runs with --tunnel. A relay token would make that tunnel go for good; use the relay on a machine signed in with seira login --relay.",
     ]);
   });
@@ -51,11 +51,11 @@ describe("seira serve --relay", () => {
     const lines: string[] = [];
     let minted = 0;
     const mint = async () => `code ${++minted}`;
-    expect(await showRelayPairing({ tty: true, status: async () => reads.shift() ?? status(), mint, log: (line) => lines.push(line), prefix: "openmausbot", waitMs: 5_000 })).toBe(true);
+    expect(await showRelayPairing({ tty: true, status: async () => reads.shift() ?? status(), mint, log: (line) => lines.push(line), prefix: "seira", waitMs: 5_000 })).toBe(true);
     expect(lines).toEqual(["code 1"]);
 
     lines.length = 0;
-    expect(await showRelayPairing({ tty: true, status: async () => status({ grant: "signed-out", relay: "off" }), mint, log: (line) => lines.push(line), prefix: "openmausbot", waitMs: 0 })).toBe(false);
+    expect(await showRelayPairing({ tty: true, status: async () => status({ grant: "signed-out", relay: "off" }), mint, log: (line) => lines.push(line), prefix: "seira", waitMs: 0 })).toBe(false);
     expect(minted).toBe(1);
     expect(lines[1]).toBe("Then: seira pair --phone");
   });
@@ -87,7 +87,7 @@ describe("seira serve --relay", () => {
   it("never prints the one-time credential into a service's log", async () => {
     const lines: string[] = [];
     let minted = 0;
-    expect(await showRelayPairing({ tty: false, status: async () => status(), mint: async () => `code ${++minted}`, log: (line) => lines.push(line), prefix: "openmausbot" })).toBe(false);
+    expect(await showRelayPairing({ tty: false, status: async () => status(), mint: async () => `code ${++minted}`, log: (line) => lines.push(line), prefix: "seira" })).toBe(false);
     expect(minted).toBe(0);
     expect(lines).toEqual(["Pair a phone: seira pair --phone"]);
   });
