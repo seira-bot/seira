@@ -56,7 +56,6 @@ export const IMAGE_LAYER_VERSION = "9";
 export const IMAGE_LAYER_LABEL = "com.openmausbot.image-layer";
 export const IMAGE = `${IMAGE_REPOSITORY}:driver-${CUA_DRIVER_VERSION}-v${IMAGE_LAYER_VERSION}`;
 export const CONTAINER = "seira-computer";
-// Desktops created under these names stay in use until they are recreated; the VPS desktop keeps the image name.
 export const OPENMAUSBOT_IMAGE = `localhost/openmausbot/cua-local-vm:driver-${CUA_DRIVER_VERSION}-v${IMAGE_LAYER_VERSION}`;
 export const OPENMAUSBOT_CONTAINER = "openmausbot-computer";
 export const MANAGED_LABEL = "com.openmausbot.local-vm";
@@ -129,7 +128,6 @@ export function poolLocalVmTarget(seat: number): LocalVmTarget {
 
 const resolvedContainerNames = new Map<string, string>();
 
-/** The container that currently serves the target: its own name, or the older name of a desktop not yet recreated. */
 export function localVmContainerName(target: LocalVmTarget): string {
   return resolvedContainerNames.get(target.key) ?? target.containerName;
 }
@@ -444,7 +442,6 @@ function inspectedLabels(stdout: string, runtime: Runtime): Record<string, strin
   return runtime === "container" ? detail?.configuration?.labels : detail?.Config?.Labels;
 }
 
-/** An older-named container counts only when it carries this target's ownership labels. */
 async function inspectTargetContainer(
   runtime: Runtime,
   target: LocalVmTarget,
@@ -916,7 +913,6 @@ async function imageHasManagedLabels(runtime: Runtime, runner: CommandRunner, re
   }
 }
 
-/** The image under the older name is the same build, so a new tag replaces a pull and a build. */
 async function tagOlderImage(runtime: Runtime, runner: CommandRunner): Promise<boolean> {
   if (await imageHasManagedLabels(runtime, runner, IMAGE)) return false;
   if (!(await imageHasManagedLabels(runtime, runner, OPENMAUSBOT_IMAGE))) return false;
