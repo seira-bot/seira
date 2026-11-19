@@ -22,7 +22,7 @@ import { ENGINE_TAG_ENV, engineRunTag, engineStopped, recordEngine } from "./eng
 import { engineHomes } from "./engine-homes/engine-homes.ts";
 import type { HomedSpawn } from "./engine-homes/layout.ts";
 import { resolveCliSpawn, type ResolvedSpawn } from "./env-path.ts";
-import { HOST_ENV_FD, hostBridge, inFlatpak, type HostSpawn } from "./flatpak-host.ts";
+import { HOST_ENV_FD, hostBridge, hostEnvFile, inFlatpak, type HostSpawn } from "./flatpak-host.ts";
 import { spawnBotWork } from "./oom-score.ts";
 import { noticeFailure } from "./chat-notices.ts";
 import { processBudget } from "./process-room.ts";
@@ -307,18 +307,11 @@ export function outsideBoxOptions<T extends { env?: NodeJS.ProcessEnv; cwd?: str
   return { ...opts, env: { ...env, PATH: serverPath(env.PATH) } };
 }
 
-/** `stdio` with one more pipe at HOST_ENV_FD, where `flatpak-spawn` reads the child's environment. */
-export function hostStdio(stdio: SpawnOptions["stdio"]): NonNullable<SpawnOptions["stdio"]> {
+/** `stdio` with the descriptor `envFd` at HOST_ENV_FD, where `flatpak-spawn` reads the child's environment. */
+export function hostStdio(stdio: SpawnOptions["stdio"], envFd: number): NonNullable<SpawnOptions["stdio"]> {
   const base = Array.isArray(stdio) ? stdio.slice(0, 3) : [stdio ?? "pipe", stdio ?? "pipe", stdio ?? "pipe"];
   while (base.length < HOST_ENV_FD) base.push("pipe");
-  return [...base, "pipe"] as NonNullable<SpawnOptions["stdio"]>;
-}
-
-export function sendHostEnv(child: ChildProcess, block: string): void {
-  const pipe = child.stdio[HOST_ENV_FD] as Writable | null | undefined;
-  if (!pipe) return;
-  pipe.on("error", () => {});
-  pipe.end(block);
+  return [...base, envFd] as NonNullable<SpawnOptions["stdio"]>;
 }
 
 export function spawnCli(
@@ -349,16 +342,19 @@ export function spawnCli(
   // The box's extra descriptors (its seccomp filter) follow stdio; only a plain three-entry stdio can take them.
   const stdio = boxed?.extraFds.length && Array.isArray(spawnOpts.stdio) && spawnOpts.stdio.length === 3 ? [...spawnOpts.stdio, ...boxed.extraFds] : spawnOpts.stdio;
   const start = () => {
-    const child = spawn(boxed?.command ?? hosted?.command ?? resolved.command, boxed?.args ?? hosted?.args ?? resolved.args, {
-      ...spawnOpts,
-      ...(boxed ? { env: boxed.env, stdio } : {}),
-      ...(tag ? { env: { ...(boxed?.env ?? spawnOpts.env ?? process.env), [ENGINE_TAG_ENV]: tag } } : {}),
-      ...(hosted ? { env: hosted.env, cwd: undefined, stdio: hostStdio(spawnOpts.stdio) } : {}),
-      // POSIX: own group so kill(-pid) reaps child MCP servers; Windows: taskkill /T does it.
-      ...(process.platform === "win32" ? { windowsHide: true } : { detached: true }),
-    }) as ChildProcessByStdio<Writable, Readable, Readable>;
-    if (hosted) sendHostEnv(child, hosted.envBlock);
-    return child;
+    const envFd = hosted ? hostEnvFile(hosted.envBlock) : null;
+    try {
+      return spawn(boxed?.command ?? hosted?.command ?? resolved.command, boxed?.args ?? hosted?.args ?? resolved.args, {
+        ...spawnOpts,
+        ...(boxed ? { env: boxed.env, stdio } : {}),
+        ...(tag ? { env: { ...(boxed?.env ?? spawnOpts.env ?? process.env), [ENGINE_TAG_ENV]: tag } } : {}),
+        ...(hosted && envFd !== null ? { env: hosted.env, cwd: undefined, stdio: hostStdio(spawnOpts.stdio, envFd) } : {}),
+        // POSIX: own group so kill(-pid) reaps child MCP servers; Windows: taskkill /T does it.
+        ...(process.platform === "win32" ? { windowsHide: true } : { detached: true }),
+      }) as ChildProcessByStdio<Writable, Readable, Readable>;
+    } finally {
+      if (envFd !== null) try { closeSync(envFd); } catch {}
+    }
   };
   let child: ChildProcessByStdio<Writable, Readable, Readable>;
   const refused = (code: string | undefined) => { processBudget.spawnFailed(code); engineMemory.spawnRefused(code, owner === "bot"); };
@@ -442,8 +438,13 @@ const EXEC_KILL_GRACE_MS = 2_000;
 /** execFile for a program on the host: `execFile` cannot pass the descriptor that carries the environment, so this reads the output itself. */
 function execHosted(hosted: HostSpawn, opts: ExecFileOptions, done: (err: Error | null, stdout: string, stderr: string) => void): ChildProcess {
   const limit = typeof opts.maxBuffer === "number" ? opts.maxBuffer : 1024 * 1024;
-  const child = spawn(hosted.command, hosted.args, { env: hosted.env, stdio: ["ignore", "pipe", "pipe", "pipe"], windowsHide: true });
-  sendHostEnv(child, hosted.envBlock);
+  const envFd = hostEnvFile(hosted.envBlock);
+  let child: ChildProcess;
+  try {
+    child = spawn(hosted.command, hosted.args, { env: hosted.env, stdio: ["ignore", "pipe", "pipe", envFd], windowsHide: true });
+  } finally {
+    try { closeSync(envFd); } catch {}
+  }
   let stdout = "", stderr = "", finished = false, overflow = false;
   const finish = (err: Error | null) => {
     if (finished) return;

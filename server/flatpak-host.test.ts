@@ -1,3 +1,4 @@
+import { closeSync, fstatSync, readSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { distrustHomePrograms } from "./bot-box/program-trust.ts";
@@ -6,6 +7,7 @@ import {
   hostBasePath,
   hostBridge,
   hostEnvEntries,
+  hostEnvFile,
   hostFindCandidates,
   hostSpawnArgv,
   hostFindPrograms,
@@ -24,6 +26,24 @@ describe("inFlatpak", () => {
     expect(inFlatpak({ FLATPAK_ID: "bot.seira.Seira" })).toBe(true);
     expect(inFlatpak({ FLATPAK_ID: "" })).toBe(false);
     expect(inFlatpak({})).toBe(false);
+  });
+});
+
+describe("hostEnvFile", () => {
+  it("returns a nameless regular file, owner only, that reads back from offset 0", () => {
+    const block = "A=1\0SECRET=sk-x\0";
+    const fd = hostEnvFile(block);
+    try {
+      const stat = fstatSync(fd);
+      expect(stat.isFile()).toBe(true);
+      expect(stat.nlink).toBe(0);
+      expect(stat.mode & 0o077).toBe(0);
+      const buffer = Buffer.alloc(stat.size);
+      readSync(fd, buffer, 0, buffer.length, 0);
+      expect(buffer.toString()).toBe(block);
+    } finally {
+      closeSync(fd);
+    }
   });
 });
 

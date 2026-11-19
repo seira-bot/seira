@@ -1,9 +1,12 @@
 // Inside a Flatpak the agent CLIs (claude, codex, ...) live on the host, not in the sandbox. Every lookup and every
 // launch below goes through `flatpak-spawn --host`, which needs the org.freedesktop.Flatpak bus name in finish-args.
 // Arguments are always an argv array. The two shell scripts are constants that read their inputs as positional parameters.
-// Environment values never enter an argv, which any user of the host can read in /proc: they travel on a pipe (--env-fd).
+// Environment values never enter an argv, which any user of the host can read in /proc: they travel on a descriptor (--env-fd).
 import { execFile, spawnSync } from "node:child_process";
-import { isAbsolute, resolve } from "node:path";
+import { randomBytes } from "node:crypto";
+import { openSync, unlinkSync, writeSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { isAbsolute, join, resolve } from "node:path";
 import { serverMayRunFrom, serverPath } from "./bot-box/program-trust.ts";
 import type { ResolvedSpawn } from "./env-path.ts";
 
@@ -42,7 +45,7 @@ export interface HostSpawn {
   args: string[];
   /** What `flatpak-spawn` itself runs with: only the way to the session bus. */
   env: NodeJS.ProcessEnv;
-  /** NAME=value pairs ended by NUL, written to HOST_ENV_FD and then closed. */
+  /** NAME=value pairs ended by NUL: see hostEnvFile. */
   envBlock: string;
 }
 
@@ -72,6 +75,23 @@ export function hostEnvEntries(env: NodeJS.ProcessEnv): string[] {
     out.push(`${name}=${value}`);
   }
   return out;
+}
+
+/** The environment block in a nameless file of the runtime folder (memory-backed, owner only), as an open descriptor at offset 0.
+ * `flatpak-spawn` opens /proc/self/fd/N itself, which a socket from a `"pipe"` stdio entry refuses. The caller closes the descriptor. */
+export function hostEnvFile(block: string): number {
+  const path = join(process.env.XDG_RUNTIME_DIR || tmpdir(), `.seira-env-${randomBytes(12).toString("hex")}`);
+  const fd = openSync(path, "wx+", 0o600);
+  try {
+    unlinkSync(path);
+    const data = Buffer.from(block);
+    let done = 0;
+    while (done < data.length) done += writeSync(fd, data, done, data.length - done, done);
+    return fd;
+  } catch (error) {
+    try { unlinkSync(path); } catch {}
+    throw error;
+  }
 }
 
 /** The arguments of `flatpak-spawn` (the program itself is FLATPAK_SPAWN) that start `command` on the host. No value of

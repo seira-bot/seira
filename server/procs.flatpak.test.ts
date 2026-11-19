@@ -1,24 +1,33 @@
 import { EventEmitter } from "node:events";
+import { fstatSync, readSync } from "node:fs";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const spawned: { command: string; args: string[]; options: Record<string, unknown>; envPipe: PassThrough }[] = [];
+const spawned: { command: string; args: string[]; options: Record<string, unknown>; envText: string | null; envIsFile: boolean }[] = [];
 
 vi.mock("node:child_process", async (original) => {
   const actual = await original<typeof import("node:child_process")>();
   return {
     ...actual,
     spawn: vi.fn((command: string, args: string[], options: Record<string, unknown>) => {
-      const envPipe = new PassThrough();
       const child = Object.assign(new EventEmitter(), {
         stdin: new PassThrough(),
         stdout: new PassThrough(),
         stderr: new PassThrough(),
-        stdio: [null, null, null, envPipe],
+        stdio: [null, null, null, null],
         pid: undefined,
         kill: () => true,
       });
-      spawned.push({ command, args, options, envPipe });
+      const fd = Array.isArray(options.stdio) ? options.stdio[3] : undefined;
+      let envText: string | null = null;
+      let envIsFile = false;
+      if (typeof fd === "number") {
+        envIsFile = fstatSync(fd).isFile();
+        const buffer = Buffer.alloc(fstatSync(fd).size);
+        readSync(fd, buffer, 0, buffer.length, 0);
+        envText = buffer.toString();
+      }
+      spawned.push({ command, args, options, envText, envIsFile });
       return child;
     }),
   };
@@ -60,10 +69,12 @@ describe("spawnCli in a Flatpak", () => {
     expect(call.command).toBe(FLATPAK_SPAWN);
     expect(call.args).toEqual(["--host", "--watch-bus", "--directory=/work", "--env-fd=3", "--", "/opt/claude/bin/claude", "-p", "hello"]);
     expect(JSON.stringify([call.command, call.args])).not.toContain(SECRET);
-    expect(call.options.stdio).toEqual(["pipe", "pipe", "pipe", "pipe"]);
+    expect((call.options.stdio as unknown[]).slice(0, 3)).toEqual(["pipe", "pipe", "pipe"]);
+    expect(typeof (call.options.stdio as unknown[])[3]).toBe("number");
+    expect(call.envIsFile).toBe(true);
     expect(call.options.cwd).toBeUndefined();
     expect(JSON.stringify(call.options.env)).not.toContain(SECRET);
-    expect((call.envPipe.read() as Buffer).toString()).toContain(`ANTHROPIC_API_KEY=${SECRET}\0`);
+    expect(call.envText).toContain(`ANTHROPIC_API_KEY=${SECRET}\0`);
   });
 
   it("refuses a boxed spawn, because the box's paths do not exist on the host", () => {
