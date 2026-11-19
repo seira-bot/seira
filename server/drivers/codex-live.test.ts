@@ -802,7 +802,7 @@ describe("codexLiveVoice approvals by voice", () => {
     const h = harness({ fake: fileChange() });
     await h.start();
     await until(() => h.decision() !== null);
-    expect(asked(h).text).toBe("I need your OK to change this file: src/app.ts. Should I go ahead? Say yes or no.");
+    expect(asked(h).text).toBe("I need your OK to change src/app.ts. Should I go ahead? Say yes or no.");
     expect(h.decision()).toEqual({ decision: "accept" });
   });
 

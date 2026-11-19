@@ -455,6 +455,7 @@ describe("live Codex approval spoken question limits", () => {
     ["an input redirect", "sh < script"],
     ["a bidi override", "cat notes\u202Etxt.sh"],
     ["a zero-width space", "rm\u200B -rf x"],
+    ["a look-alike letter", "cat n\u0430me.txt"],
     ["a tab", "ls\t-la"],
   ])("declines at once a command with %s", (_name, command) => {
     const { spoken, outcomes, respond, open } = setup();
@@ -498,7 +499,7 @@ describe("live Codex approval spoken question limits", () => {
     const { spoken, approval, respond, say, voiceSays } = setup({ files });
     approval.request(FILES, { threadId: THREAD, itemId: "call-1" }, respond);
     expect(files).toHaveBeenCalledWith({ threadId: THREAD, itemId: "call-1" });
-    expect(spoken).toEqual(["I need your OK to change this file: readme.md. Should I go ahead? Say yes or no."]);
+    expect(spoken).toEqual(["I need your OK to change readme.md. Should I go ahead? Say yes or no."]);
     voiceSays();
     say("yes");
     expect(respond).toHaveBeenCalledExactlyOnceWith({ decision: "accept" });
@@ -546,10 +547,15 @@ describe("live Codex approval counts only a voice output that names the request"
     expect(outcomes).toEqual(["timeout"]);
   });
 
-  it("takes a yes after an output that names the command in its own words", () => {
+  it.each([
+    ["in its own words", "rm -rf build", "Okay, to go on I want to run rm -rf build. Is that fine? Please say yes or no."],
+    ["exactly in other case and spacing", "git push --force origin main", "I need your OK to run this command:  Git push   --force origin MAIN. Should I go ahead? Say yes or no."],
+    ["in quotes", "rm -rf build", "I want to run \"rm -rf build\". Is that fine?"],
+    ["at the end of the output", "ls -la", "Can I run ls -la"],
+  ])("takes a yes after an output that names the command %s", (_name, command, output) => {
     const { approval, outcomes, respond, open, say } = setup();
-    open("rm -rf build");
-    voiceSaysOwnWords(approval, "Okay, to go on I want to run rm -rf build. Is that fine? Please say yes or no.");
+    open(command);
+    voiceSaysOwnWords(approval, output);
     say("yes");
     expect(respond).toHaveBeenCalledExactlyOnceWith({ decision: "accept" });
     expect(outcomes).toEqual(["accept"]);
@@ -558,6 +564,12 @@ describe("live Codex approval counts only a voice output that names the request"
   it.each([
     ["drops the program word", "git push origin main", "Shall I push origin main? Say yes or no."],
     ["names too few of its words", "git reset --hard origin main", "Can I run git now? Say yes or no."],
+    ["drops a flag", "git push --force origin main", "I need your OK to run this command: git push origin main. Should I go ahead? Say yes or no."],
+    ["drops a short flag", "rm -rf build", "I need your OK to run this command: rm build. Should I go ahead? Say yes or no."],
+    ["drops an argument", "rm a.ts b.ts c.ts d.ts e.ts", "I need your OK to run this command: rm a.ts b.ts e.ts. Should I go ahead? Say yes or no."],
+    ["adds a flag after it", "rm -rf build", "I need your OK to run this command: rm -rf build --dry-run. Should I go ahead? Say yes or no."],
+    ["names a longer path", "rm -rf build", "I need your OK to run this command: rm -rf build.old. Should I go ahead? Say yes or no."],
+    ["says it inside a longer word", "rm -rf build", "I need your OK to run this command: xrm -rf build. Should I go ahead? Say yes or no."],
   ])("does not take a yes after an output that %s", (_name, command, output) => {
     const { approval, respond, open, say } = setup();
     open(command);
@@ -586,7 +598,30 @@ describe("live Codex approval counts only a voice output that names the request"
     expect(respond).not.toHaveBeenCalled();
     voiceSaysOwnWords(approval, "I want to change app.ts and util.ts in src. Is that okay? Say yes or no.");
     say("yes");
+    expect(respond).not.toHaveBeenCalled();
+    voiceSaysOwnWords(approval, "I want to change src/app.ts, and change src/util.ts. Is that okay? Say yes or no.");
+    say("yes");
     expect(respond).toHaveBeenCalledExactlyOnceWith({ decision: "accept" });
+  });
+
+  it.each([
+    ["drops the folder", "I need your OK to delete readme.md. Should I go ahead? Say yes or no."],
+    ["names another verb", "I need your OK to change docs/readme.md. Should I go ahead? Say yes or no."],
+  ])("does not take a yes for a file change after an output that %s", (_name, output) => {
+    const { approval, spoken, respond, say } = setup({ files: () => [change("docs/readme.md", "delete")] });
+    approval.request(FILES, { threadId: THREAD, itemId: "call-1" }, respond);
+    expect(spoken).toEqual(["I need your OK to delete docs/readme.md. Should I go ahead? Say yes or no."]);
+    voiceSaysOwnWords(approval, output);
+    say("yes");
+    expect(respond).not.toHaveBeenCalled();
+  });
+
+  it("does not take a yes when the verbs of a list are swapped", () => {
+    const { approval, respond, say } = setup({ files: () => [change("a.ts", "add"), change("b.ts", "delete")] });
+    approval.request(FILES, { threadId: THREAD, itemId: "call-1" }, respond);
+    voiceSaysOwnWords(approval, "I need your OK for these file changes: create b.ts, delete a.ts. Should I go ahead? Say yes or no.");
+    say("yes");
+    expect(respond).not.toHaveBeenCalled();
   });
 });
 
@@ -604,7 +639,7 @@ describe("live Codex approval speaks only file paths inside the working folder",
   ])("speaks %s relative to the working folder", (_name, path) => {
     const { spoken, respond } = askFiles([change(path, "add")]);
     expect(respond).not.toHaveBeenCalled();
-    expect(spoken).toEqual(["I need your OK to create this file: src/app.ts. Should I go ahead? Say yes or no."]);
+    expect(spoken).toEqual(["I need your OK to create src/app.ts. Should I go ahead? Say yes or no."]);
   });
 
   it.each([
@@ -632,7 +667,7 @@ describe("live Codex approval speaks only file paths inside the working folder",
     const path = `${"x".repeat(77)}.ts`;
     const { spoken, respond } = askFiles([change(path)]);
     expect(respond).not.toHaveBeenCalled();
-    expect(spoken).toEqual([`I need your OK to change this file: ${path}. Should I go ahead? Say yes or no.`]);
+    expect(spoken).toEqual([`I need your OK to change ${path}. Should I go ahead? Say yes or no.`]);
   });
 
   it.each([
@@ -642,12 +677,12 @@ describe("live Codex approval speaks only file paths inside the working folder",
     [null, "change"],
   ] as const)("speaks the %s kind as %j", (kind, verb) => {
     const { spoken } = askFiles([change("old.ts", kind)]);
-    expect(spoken).toEqual([`I need your OK to ${verb} this file: old.ts. Should I go ahead? Say yes or no.`]);
+    expect(spoken).toEqual([`I need your OK to ${verb} old.ts. Should I go ahead? Say yes or no.`]);
   });
 
   it("speaks a move with its target and accepts a yes", () => {
     const { spoken, respond, say, voiceSays } = askFiles([change(`${ROOT}/a.ts`, "update", `${ROOT}/lib/a.ts`)]);
-    expect(spoken).toEqual(["I need your OK to move this file: a.ts to lib/a.ts. Should I go ahead? Say yes or no."]);
+    expect(spoken).toEqual(["I need your OK to move a.ts to lib/a.ts. Should I go ahead? Say yes or no."]);
     voiceSays();
     say("yes");
     expect(respond).toHaveBeenCalledExactlyOnceWith({ decision: "accept" });
@@ -729,13 +764,13 @@ describe("live Codex approval follows symlinks to the real file", () => {
   it("asks about a new file in an existing subfolder", () => {
     const { spoken, respond } = askFiles([change("lib/new.ts", "add")]);
     expect(respond).not.toHaveBeenCalled();
-    expect(spoken).toEqual(["I need your OK to create this file: lib/new.ts. Should I go ahead? Say yes or no."]);
+    expect(spoken).toEqual(["I need your OK to create lib/new.ts. Should I go ahead? Say yes or no."]);
   });
 
   it("asks about an existing file", () => {
     const { spoken, respond } = askFiles([change(join(ROOT, "lib", "old.ts"), "delete")]);
     expect(respond).not.toHaveBeenCalled();
-    expect(spoken).toEqual(["I need your OK to delete this file: lib/old.ts. Should I go ahead? Say yes or no."]);
+    expect(spoken).toEqual(["I need your OK to delete lib/old.ts. Should I go ahead? Say yes or no."]);
   });
 
   it.each([
@@ -744,7 +779,7 @@ describe("live Codex approval follows symlinks to the real file", () => {
   ])("speaks %s of a working folder reached through a symlink relative to it", (_name, path) => {
     const { spoken, respond } = askFiles([change(path, "add")], { cwd: join(OUTSIDE, "project") });
     expect(respond).not.toHaveBeenCalled();
-    expect(spoken).toEqual(["I need your OK to create this file: lib/new.ts. Should I go ahead? Say yes or no."]);
+    expect(spoken).toEqual(["I need your OK to create lib/new.ts. Should I go ahead? Say yes or no."]);
   });
 
   it("declines each file change when the working folder does not exist", () => {
