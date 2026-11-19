@@ -63,7 +63,7 @@ jobs:
   approval:
     name: approval for a person outside the maintainers
     needs: commit
-    if: ${{ !contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor) }}
+    if: ${{ !(startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: release-approval
@@ -76,7 +76,7 @@ jobs:
   package:
     name: macOS arm64 and x64 apps
     needs: [commit, approval]
-    if: ${{ !cancelled() && needs.commit.result == 'success' && (contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor) || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    if: ${{ !cancelled() && needs.commit.result == 'success' && ((startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
     runs-on: macos-15
     timeout-minutes: 120
     environment: release

@@ -41,8 +41,9 @@ const packageWorkflows = packageFiles.map((file) => [file, workflows.get(file)!]
 const IMAGE = "server-image.yml";
 const image = workflows.get(IMAGE)!;
 const LOGIN = "${{ secrets.GITHUB_TOKEN }}";
-const NOT_MAINTAINER = "!contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)";
-const IS_MAINTAINER = "contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)";
+const MAINTAINER_CHECK = "startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)";
+const NOT_MAINTAINER = `!(${MAINTAINER_CHECK})`;
+const IS_MAINTAINER = `(${MAINTAINER_CHECK})`;
 const APPROVED_NOW = "needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt";
 const MACOS = "package-macos.yml";
 const READ_TOKEN = "GH_TOKEN: ${{ github.token }}";
@@ -92,7 +93,9 @@ describe("CI workflows", () => {
         expect(JSON.stringify(job), where).not.toContain("secrets.");
         expect(job.if, where).toContain(NOT_MAINTAINER);
         expect(job.outputs, where).toEqual({ attempt: "${{ github.run_attempt }}" });
-        expect(String(job.if).replace("${{ ", "").replace(" }}", "").split(" && ").filter((part) => part.includes("RELEASE_MAINTAINERS")), where).toEqual([NOT_MAINTAINER]);
+        const condition = String(job.if).replace("${{ ", "").replace(" }}", "");
+        expect(condition.endsWith(NOT_MAINTAINER), where).toBe(true);
+        expect(condition.split("RELEASE_MAINTAINERS"), where).toHaveLength(3);
       }
     }
   });
@@ -437,15 +440,20 @@ describe("Release job conditions", () => {
     { name: "runs when another person re-runs all jobs and a maintainer approves again", actor: "other", attempt: 2, approval: "success", approvalAttempt: 2, runs: true },
     { name: "runs when a maintainer re-runs another person's approved run", actor: "maint", attempt: 2, approval: "success", approvalAttempt: 1, runs: true },
     { name: "does not run when the maintainer list is missing and nobody approved", actor: "other", attempt: 1, approval: "skipped", variable: undefined, runs: false },
+    { name: "does not run when the maintainer list is not a JSON array, even if it holds the login", actor: "maint", attempt: 1, approval: "skipped", variable: '"maint"', runs: false },
     { name: "does not run when the first job failed, even for a maintainer", actor: "maint", attempt: 1, approval: "skipped", first: "failure", runs: false },
   ];
 
   const evaluate = (condition: string, scope: Record<string, unknown>) => {
     const expression = condition.trim().replace(/^\$\{\{/, "").replace(/\}\}$/, "");
-    const contains = (list: unknown, item: unknown) =>
-      Array.isArray(list) && list.some((each) => String(each).toLowerCase() === String(item).toLowerCase());
-    const names = ["needs", "github", "vars", "cancelled", "fromJSON", "contains"];
-    const values = [scope.needs, scope.github, scope.vars, () => false, JSON.parse, contains];
+    const contains = (search: unknown, item: unknown) =>
+      Array.isArray(search)
+        ? search.some((each) => String(each).toLowerCase() === String(item).toLowerCase())
+        : String(search).toLowerCase().includes(String(item).toLowerCase());
+    const startsWith = (text: unknown, start: unknown) =>
+      String(text ?? "").toLowerCase().startsWith(String(start).toLowerCase());
+    const names = ["needs", "github", "vars", "cancelled", "fromJSON", "contains", "startsWith"];
+    const values = [scope.needs, scope.github, scope.vars, () => false, JSON.parse, contains, startsWith];
     return Boolean(new Function(...names, `return (${expression});`)(...values));
   };
 
@@ -464,11 +472,29 @@ describe("Release job conditions", () => {
             outputs: each.approvalAttempt === undefined ? {} : { attempt: each.approvalAttempt },
           },
         };
-        const vars = "variable" in each ? {} : { RELEASE_MAINTAINERS: MAINTAINERS };
+        const vars = !("variable" in each)
+          ? { RELEASE_MAINTAINERS: MAINTAINERS }
+          : each.variable === undefined
+            ? {}
+            : { RELEASE_MAINTAINERS: each.variable };
         const github = { triggering_actor: each.actor, run_attempt: each.attempt, ...flow.extra };
         const condition = workflows.get(flow.file)!.jobs[flow.job]!.if!;
         expect(evaluate(condition, { needs, github, vars })).toBe(each.runs);
       });
     });
   }
+
+  it.each([
+    { name: "a maintainer", variable: '["maint"]', asks: false },
+    { name: "another person", variable: '["maint", "boss"]', asks: true, actor: "other" },
+    { name: "a maintainer when the list is missing", variable: undefined, asks: true },
+    { name: "a maintainer when the list is a JSON string that holds the login", variable: '"maintainers"', asks: true },
+  ])("asks for approval for $name: $asks", ({ variable, asks, actor }) => {
+    for (const flow of flows) {
+      const vars = variable === undefined ? {} : { RELEASE_MAINTAINERS: variable };
+      const github = { triggering_actor: actor ?? "maint", run_attempt: 1, ...flow.extra };
+      const condition = workflows.get(flow.file)!.jobs.approval!.if!;
+      expect(evaluate(condition, { needs: {}, github, vars }), flow.file).toBe(asks);
+    }
+  });
 });

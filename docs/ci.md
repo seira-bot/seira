@@ -256,3 +256,25 @@ Then add the `CI` check (source: GitHub Actions) to the `main` branch ruleset.
   branch cannot read the secrets.
 - Do not store the Apple secrets as repository or organization secrets. Every
   workflow can read those without an approval.
+
+### The `release-approval` environment
+
+The `approval` jobs of `package-macos.yml` and `server-image.yml` use the
+`release-approval` environment. An organization admin creates it in
+**Settings → Environments**:
+
+| Setting | Value |
+| --- | --- |
+| Required reviewers | The `maintainers` team |
+| Deployment branches and tags | Selected branches and tags: `main` only |
+| Environment secrets | None |
+
+The repository variable `RELEASE_MAINTAINERS` holds the maintainers' GitHub
+logins as a JSON array, for example `["login-a", "login-b"]`.
+
+- A maintainer's run skips the `approval` job and does not wait.
+- Another person's run waits until a maintainer approves the `approval` job.
+- When the variable is missing, empty, or not a JSON array, every run waits
+  for approval.
+- Each attempt checks the person who started that attempt. An approval from
+  an earlier attempt never counts.

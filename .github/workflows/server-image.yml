@@ -120,7 +120,7 @@ jobs:
   approval:
     name: approval for a person outside the maintainers
     needs: image
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && !contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && !(startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: release-approval
@@ -133,7 +133,7 @@ jobs:
   publish:
     name: publish to GHCR
     needs: [image, approval]
-    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.image.result == 'success' && (contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor) || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.image.result == 'success' && ((startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: release

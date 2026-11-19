@@ -282,7 +282,8 @@ docker buildx imagetools inspect ghcr.io/seira-bot/seira:v<version>
   approval request shows after both builds pass. A maintainer approves it
   within 7 days, or the saved images expire. Then start a new run.
 - Maintainers are the logins in the repository variable `RELEASE_MAINTAINERS`.
-  When the variable is missing or empty, every run waits for approval.
+  When the variable is missing, empty, or not a JSON array, every run waits
+  for approval.
 - A person who is not a maintainer cannot re-run a failed publish job alone.
   An approval from an earlier attempt does not count. Re-run all jobs, or ask a
   maintainer to re-run.
