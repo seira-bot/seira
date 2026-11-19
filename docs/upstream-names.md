@@ -34,7 +34,7 @@ needs a migration, so change it only in its own pull request.
 | VPS desktop image | `localhost/openmausbot/cua-local-vm` |
 | Page script API of chat pages | `window.mausbot`, `import … from "mausbot"` |
 | Id of the built-in docs skill | `openmausbot-docs` |
-| Developer tools | `pnpm control:omb`, `scripts/control-omb.ts`, `pnpm omb`, the `.omb-scratch/` folder |
+| Developer tools | `pnpm omb`, the `.omb-scratch/` folder |
 | Files the app reads from GitHub | The team library (`milind-soni/openmausbot-teams`) and the Windows browser engine download |
 | Cloud and website addresses | `openmausbot.com` and its subdomains |
 | Text in the docs | OpenMausBot, MausBot |
