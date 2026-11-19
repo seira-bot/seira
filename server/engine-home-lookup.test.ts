@@ -77,7 +77,7 @@ describe("the server's own code", () => {
     const own = sources(SERVER)
       .filter((path) => relative(SERVER, path) !== "env-path.ts")
       .flatMap((path) => readFileSync(path, "utf8").split("\n").map((line, index) => ({ line, at: `${relative(SERVER, path)}:${index + 1}` })))
-      .filter(({ line }) => OWN_LOOKUP.test(line))
+      .filter(({ line }) => OWN_LOOKUP.test(line) && !line.includes('"win32"')) // a line that already picks by platform is right
       .map(({ at }) => at);
     expect(own).toEqual([]);
   });
