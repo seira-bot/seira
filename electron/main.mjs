@@ -12,6 +12,7 @@ import { finishSpeech, speechBusy, startSpeech, stopSpeech } from "./speech.mjs"
 import { installTalk, isTalkPanel } from "./talk-main.mjs";
 import { openBlankTerminal } from "./terminal-launch.mjs";
 import { linuxDisablesGpu, SOFTWARE_RENDERING_ARG } from "./linux-gpu.mjs";
+import { applyWindowsAppId } from "./app-identity.mjs";
 import { contextMenuTemplate, createMediaDownloads } from "./context-menu.mjs";
 import { attachUpdaterWindow, startUpdater, registerUpdaterIpc, sendUpdaterState, reopenedOutOfSight, quietSignals, unattendedUpdates } from "./updater.mjs"; import { installAlwaysOnHome } from "./always-on-home.mjs";
 import {
@@ -178,6 +179,8 @@ function applyUnreadBadge(win = mainWindow) {
   }
   if (process.platform === "darwin" || process.platform === "linux") app.setBadgeCount(count);
 }
+
+applyWindowsAppId({ app });
 
 // GNOME groups the window with its desktop entry only when both identities match; set before ready.
 // A launch with --disable-gpu (a desktop entry or a user workaround) renders on the CPU too.
