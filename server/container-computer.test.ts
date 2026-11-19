@@ -1331,7 +1331,7 @@ describe("setupCommands", () => {
   });
 
   it("uses an explicit local image name so Podman never resolves the managed build on Docker Hub", () => {
-    expect(IMAGE).toMatch(/^localhost\/openmausbot\/cua-local-vm:/);
+    expect(IMAGE).toMatch(/^localhost\/seira\/cua-local-vm:/);
     expect(setupCommands("podman", "darwin").run).toContain(IMAGE);
     expect(setupCommands("podman", "darwin").run).not.toContain("docker.io/openmausbot");
   });
