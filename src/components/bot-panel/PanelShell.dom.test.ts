@@ -475,6 +475,7 @@ describe("cast characters in the avatar editor", () => {
   it("picking a character sends its whole look and the mascot crop", async () => {
     patch.mockReset();
     await openEditor({ ...bot, avatarUrl: "/avatars/scout.png", avatarCrop: "circle" });
+    click(host.querySelector('[data-avatar-tab="bot"]'));
     expect(characters().every((button) => button.getAttribute("aria-pressed") === "false")).toBe(true);
     click(host.querySelector('[data-cast-character="rhea"]'));
     expect(patch).toHaveBeenCalledWith({ color: "red", mascotBody: "ponytail", mascotAccessories: ["glasses", "earring"], avatarCrop: "mascot" });

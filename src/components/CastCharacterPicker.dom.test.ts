@@ -104,8 +104,8 @@ describe("the welcome look editor", () => {
     const hair = host.querySelector("[data-mausbot-welcome-body]");
     if (hair) expect(group.compareDocumentPosition(hair) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(characters()).toHaveLength(10);
-    click(host.querySelector('[data-cast-character="bix"]'));
-    expect(onPatch).toHaveBeenCalledWith({ color: "teal", mascotBody: "short-neat", mascotAccessories: ["headphones", "glasses"], avatarCrop: "mascot" });
+    click(host.querySelector('[data-cast-character="pippa"]'));
+    expect(onPatch).toHaveBeenCalledWith({ color: "coral", mascotBody: "twin-tails", mascotAccessories: ["ribbon"], avatarCrop: "mascot" });
   });
 
   it("presses the worn character, and none while a picture shows", () => {
