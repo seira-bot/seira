@@ -55,12 +55,12 @@ describe("createFreeEngineInstaller", () => {
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
   function make(over: Partial<FreeEngineDeps> = {}) {
-    const calls = { install: [] as string[], changed: 0, installed: 0, log: [] as string[] };
+    const calls = { install: [] as string[], changed: 0, installed: [] as string[], log: [] as string[] };
     const installer = createFreeEngineInstaller<FreeEngineCandidate>({
       statePath, enabled: true,
       instances: async () => [claude(false), engine()], ready: isReady, refused: never,
       install: async (id) => { calls.install.push(id); return true; },
-      changed: () => { calls.changed++; }, installed: async () => { calls.installed++; }, log: (line) => { calls.log.push(line); },
+      changed: () => { calls.changed++; }, installed: async (id) => { calls.installed.push(id); }, log: (line) => { calls.log.push(line); },
       ...over,
     });
     return { installer, calls };
@@ -72,7 +72,8 @@ describe("createFreeEngineInstaller", () => {
     await installer.start();
     await installer.start();
     expect(calls.install).toEqual(["opencodeGo"]);
-    expect(calls.installed).toBe(1);
+    expect(calls.installed).toEqual(["opencodeGo"]);
+    expect(calls.changed).toBe(3);
     expect(state()).toMatchObject({ outcome: "installed", attempts: 1 });
     expect(statSync(statePath).mode & 0o777).toBe(0o600);
   });
@@ -91,14 +92,14 @@ describe("createFreeEngineInstaller", () => {
     for (let i = 0; i < 5; i++) await installer.start();
     expect(state()).toMatchObject({ outcome: "failed", attempts: 3 });
     expect(calls.log.filter((line) => line.includes("offline"))).toHaveLength(3);
-    expect(calls.installed).toBe(0);
+    expect(calls.installed).toEqual([]);
   });
 
   it("counts an install that reports false as a failure", async () => {
     const { installer, calls } = make({ install: async () => false });
     await installer.start();
     expect(state()).toMatchObject({ outcome: "failed", attempts: 1 });
-    expect(calls.installed).toBe(0);
+    expect(calls.installed).toEqual([]);
   });
 
   it("does nothing when disabled", async () => {
@@ -133,7 +134,7 @@ describe("createFreeEngineInstaller", () => {
     await Promise.all([a, b]);
     expect(installer.installing("opencodeGo")).toBe(false);
     expect(seen).toEqual([true]);
-    expect(calls.changed).toBe(2);
+    expect(calls.changed).toBe(3);
   });
 
   it("never throws when listing the engines fails", async () => {

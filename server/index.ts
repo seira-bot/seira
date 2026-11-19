@@ -2526,7 +2526,10 @@ const freeEngine = createFreeEngineInstaller({
   refused: (instance) => selectionContext.refusal(instance) !== undefined || managedDesktop.owns(instance.instanceId),
   install: (instanceId) => registry.installRuntime(instanceId),
   changed: () => broadcast({ kind: "config", ...configStatus() }),
-  installed: () => refreshUnsetModelSelections(),
+  installed: async (instanceId) => {
+    await registry.refreshModels(instanceId).catch(() => false);
+    await refreshUnsetModelSelections();
+  },
   log: (line) => console.log(`[free-engine] ${line}`),
 });
 

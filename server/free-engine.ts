@@ -51,7 +51,7 @@ export interface FreeEngineDeps<T extends FreeEngineCandidate = FreeEngineCandid
   refused(instance: T): boolean;
   install(instanceId: string): Promise<unknown>;
   changed(): void;
-  installed(): Promise<void>;
+  installed(instanceId: string): Promise<void>;
   log(line: string): void;
 }
 
@@ -102,7 +102,9 @@ export function createFreeEngineInstaller<T extends FreeEngineCandidate>(deps: F
       installingId = null;
       deps.changed();
     }
-    if (done) await deps.installed();
+    if (!done) return;
+    await deps.installed(decision.install);
+    deps.changed();
   }
 
   return {
