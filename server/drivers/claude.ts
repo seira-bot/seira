@@ -1,7 +1,7 @@
 // Claude Code over stream-json both ways: prompt on stdin, one retained CLI process per thread,
 // each turn settled by the CLI's own `result` frame.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { chmodSync, lstatSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { join, dirname, isAbsolute, normalize } from "node:path";
@@ -415,7 +415,7 @@ export function hookTokenFile(threadId: string, botId?: string, account?: string
 }
 
 export function permissionSocketPath(threadId: string, botId?: string, account?: string) {
-  // Half the tag digests the full bot+thread key: Windows named pipes share one global namespace
+  // Half the tag digests the full bot+thread+account key: Windows named pipes share one global namespace
   // and are never unlinked, and 8 chars keeps POSIX paths under the 104-byte sun_path limit.
   const baseKey = botId ? `${botId}\0${threadId}` : threadId;
   const key = account ? `${baseKey}\0${account}` : baseKey;
@@ -520,7 +520,6 @@ export async function createPermissionBroker(opts: {
     });
   };
   let server: ReturnType<typeof createNetServer> | null = null;
-  let boundIdentity: { dev: number; ino: number } | null = null;
   for (const [index, candidate] of opts.socketPaths.entries()) {
     const attempt = createNetServer(connectionHandler);
     try {
@@ -544,12 +543,6 @@ export async function createPermissionBroker(opts: {
         } catch {}
         outcome = error as Error & { code?: string };
       }
-    }
-    if (outcome === "listening" && process.platform !== "win32") {
-      try {
-        const { dev, ino } = statSync(candidate);
-        boundIdentity = { dev, ino };
-      } catch {}
     }
     if (outcome === "listening") {
       if (index > 0) {
@@ -590,34 +583,15 @@ export async function createPermissionBroker(opts: {
       drain();
     },
     close() {
+      if (closed) return;
       closed = true;
       drain();
-      // net.Server.close() unlinks its path by name, so a path another broker rebound is set aside first.
-      let foreign: { aside: string } | null = null;
-      let owned = process.platform === "win32";
-      if (!owned) {
-        try {
-          const now = lstatSync(boundPath);
-          owned = boundIdentity !== null && now.dev === boundIdentity.dev && now.ino === boundIdentity.ino;
-          if (!owned) {
-            const aside = `${boundPath}.${randomBytes(4).toString("hex")}.held`;
-            renameSync(boundPath, aside);
-            foreign = { aside };
-          }
-        } catch {}
-      }
       try {
         server?.close();
       } catch {}
-      if (foreign) {
-        try {
-          renameSync(foreign.aside, boundPath);
-        } catch {}
-      } else if (owned) {
-        try {
-          unlinkSync(boundPath);
-        } catch {}
-      }
+      try {
+        unlinkSync(boundPath);
+      } catch {}
     },
     socketPath: boundPath,
   };

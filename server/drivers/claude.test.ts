@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer as createHttpServer, type IncomingHttpHeaders } from "node:http";
 import { connect, createServer as createNetServer, type AddressInfo, type Socket } from "node:net";
 import { homedir, tmpdir } from "node:os";
@@ -439,37 +439,55 @@ describe("ClaudeDriver.decodeConfig", () => {
     expect(brokerSocketCandidates("t1", "b1")[0]).toBe(permissionSocketPath("t1", "b1"));
   });
 
-  it.skipIf(process.platform === "win32")(
-    "close leaves a socket that another broker bound on the same path",
-    async () => {
-      const dir = mkdtempSync(join(tmpdir(), "omb-broker-shared-"));
-      const shared = join(dir, "shared.sock");
-      const asksTwo: Array<{ id: string }> = [];
-      const first = await createPermissionBroker({ socketPaths: [shared], onAsk: () => {}, onResolve: () => {} });
-      // A hard link keeps the first inode allocated, so the second bind cannot reuse its number.
-      linkSync(shared, join(dir, "first.hold"));
-      const second = await createPermissionBroker({
-        socketPaths: [shared],
-        onAsk: (ask) => asksTwo.push(ask),
-        onResolve: () => {},
-      });
-      try {
-        first.close();
-        const conn = await new Promise<Socket>((resolve, reject) => {
-          const c = connect(second.socketPath);
-          c.once("connect", () => resolve(c));
-          c.once("error", reject);
-        });
-        conn.write(JSON.stringify({ t: "ask", id: "ask-two-accounts", tool: "Bash", input: { command: "echo hi" } }) + "\n");
-        await expect.poll(() => asksTwo.length, { timeout: 5_000 }).toBe(1);
-        conn.destroy();
-      } finally {
-        first.close();
-        second.close();
-        rmSync(dir, { recursive: true, force: true });
-      }
-    },
-  );
+  const askThrough = async (socketPath: string, id: string) => {
+    const conn = await new Promise<Socket>((resolve, reject) => {
+      const c = connect(socketPath);
+      c.once("connect", () => resolve(c));
+      c.once("error", reject);
+    });
+    conn.write(JSON.stringify({ t: "ask", id, tool: "Bash", input: { command: "echo hi" } }) + "\n");
+    return conn;
+  };
+
+  it("keeps a second account's broker reachable after the first account's broker on the same thread closes", async () => {
+    const asks: Array<{ id: string }> = [];
+    const first = await createPermissionBroker({
+      socketPaths: brokerSocketCandidates("t-two-accounts", "bot-two-accounts", "claude"),
+      onAsk: () => {},
+      onResolve: () => {},
+    });
+    const second = await createPermissionBroker({
+      socketPaths: brokerSocketCandidates("t-two-accounts", "bot-two-accounts", "claude-x"),
+      onAsk: (ask) => asks.push(ask),
+      onResolve: () => {},
+    });
+    try {
+      first.close();
+      const conn = await askThrough(second.socketPath, "ask-two-accounts");
+      await expect.poll(() => asks.length, { timeout: 5_000 }).toBe(1);
+      conn.destroy();
+    } finally {
+      second.close();
+    }
+  });
+
+  it.skipIf(process.platform === "win32")("a second close leaves the socket of a broker that replaced it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "omb-broker-again-"));
+    const path = join(dir, "perm.sock");
+    const asks: Array<{ id: string }> = [];
+    const first = await createPermissionBroker({ socketPaths: [path], onAsk: () => {}, onResolve: () => {} });
+    first.close();
+    const second = await createPermissionBroker({ socketPaths: [path], onAsk: (ask) => asks.push(ask), onResolve: () => {} });
+    try {
+      first.close();
+      const conn = await askThrough(second.socketPath, "ask-after-second-close");
+      await expect.poll(() => asks.length, { timeout: 5_000 }).toBe(1);
+      conn.destroy();
+    } finally {
+      second.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("spawnContractDiff", () => {
