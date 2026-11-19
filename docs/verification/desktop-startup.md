@@ -42,6 +42,7 @@ node --experimental-strip-types scripts/bench-startup.ts --cold 5 --warm 5 --out
 | `--executable PATH` | Packaged app. Default `release/linux-unpacked/openmausbot`. |
 | `--cold N` | Opens with a new data folder each time. Default 5. |
 | `--warm N` | Opens that reuse one data folder after one uncounted open. Default 5. |
+| `--prime-hold-ms N` | Time that the uncounted open stays open after the window shows. Default 12000. The server writes its compile cache 10 s after it starts, so warm opens use that cache. |
 | `--out FILE` | Write the JSON report to a file. |
 | `--timeout-ms N` | Time limit for one open. Default 120000. |
 | `--host-network` | Skip the private network. Stops if port 8799, 18799, or 28799 is in use. |
@@ -69,3 +70,5 @@ host load with each result.
 | Date | Commit | Host load | Cold median shown (ms) | Warm median shown (ms) |
 |------|--------|-----------|------------------------|------------------------|
 | 2026-11-19 | `a14167bb8` | load average 10–14, 16 CPUs | 5966 (5440–6366) | 2513 (2238–2735) |
+
+The warm opens in the `a14167bb8` row did not use the server compile cache.

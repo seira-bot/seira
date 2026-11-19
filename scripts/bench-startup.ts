@@ -1,7 +1,7 @@
 #!/usr/bin/env -S node --experimental-strip-types
 // Launches the packaged Linux app and reports the median of each startup phase, for cold and warm opens.
 //   node --experimental-strip-types scripts/bench-startup.ts [--executable PATH] [--cold 5] [--warm 5] [--out FILE]
-//     [--timeout-ms 120000] [--host-network] [--keep]
+//     [--timeout-ms 120000] [--prime-hold-ms 12000] [--host-network] [--keep]
 // Every launch gets a temporary HOME and XDG folders, the managed broker off and a dead loopback updates origin. The
 // app runs in a private network namespace with only loopback, because port 8799 belongs to an installed app.
 import { spawn, type ChildProcess } from "node:child_process";
@@ -88,7 +88,7 @@ function readTimeline(file: string): Marks | null {
 
 type Options = { executable: string; timeoutMs: number; hostNetwork: boolean };
 
-async function launchOnce(options: Options, sandbox: string, label: string): Promise<Run> {
+async function launchOnce(options: Options, sandbox: string, label: string, holdMs = 0): Promise<Run> {
   const timeline = join(sandbox, `timeline-${label}.json`);
   const logFile = join(sandbox, `app-${label}.log`);
   const env = launchEnv(process.env, sandbox, timeline);
@@ -112,6 +112,7 @@ async function launchOnce(options: Options, sandbox: string, label: string): Pro
     if (failure) { error = failure; break; }
   }
   if (!marks && !error) error = `no timeline after ${options.timeoutMs} ms`;
+  if (marks && holdMs > 0) await sleep(holdMs);
   killGroup(child, "SIGTERM");
   const grace = await Promise.race([exited(child).then(() => true), sleep(20_000).then(() => false)]);
   if (!grace) { killGroup(child, "SIGKILL"); await exited(child); }
@@ -133,6 +134,7 @@ async function main(): Promise<void> {
       warm: { type: "string", default: "5" },
       out: { type: "string" },
       "timeout-ms": { type: "string", default: "120000" },
+      "prime-hold-ms": { type: "string", default: "12000" },
       "host-network": { type: "boolean", default: false },
       keep: { type: "boolean", default: false },
     },
@@ -167,7 +169,7 @@ async function main(): Promise<void> {
     if (Number(values.warm) > 0) {
       const sandbox = newSandbox();
       sandboxes.push(sandbox);
-      await launchOnce(options, sandbox, "prime");
+      await launchOnce(options, sandbox, "prime", Number(values["prime-hold-ms"]));
       for (let i = 0; i < Number(values.warm); i++) warm.push(await launchOnce(options, sandbox, `warm${i}`));
     }
   } finally {
