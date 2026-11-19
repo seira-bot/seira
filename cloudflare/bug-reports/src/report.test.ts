@@ -421,3 +421,55 @@ describe("AC-13 GitHub down", () => {
     expect(h.github.issues.size).toBe(2);
   });
 });
+
+describe("AC-17 429 per IP address", () => {
+  const ipOf = (n: number) => ({ "cf-connecting-ip": n === 0 ? "198.51.100.20" : "198.51.100.21" });
+  const from = (h: ReturnType<typeof bugHarness>, n: number, ip: number) =>
+    h.send(validReport({ installId: `install-id-for-ip-test-${n}`, description: `The Bash tool failed, ip case ${n}.` }), ipOf(ip));
+
+  it("refuses the 11th report from one IP address whatever the install ID, and does not call GitHub", async () => {
+    const h = bugHarness();
+    for (let n = 1; n <= 10; n += 1) expect((await from(h, n, 0)).status).toBe(201);
+    const calls = h.github.requests.length;
+    const response = await from(h, 11, 0);
+    expect(response.status).toBe(429);
+    const body = (await response.json()) as { error: string; retryAfter: number };
+    expect(body.retryAfter).toBeGreaterThan(0);
+    expect(body.retryAfter).toBe(Number(response.headers.get("retry-after")));
+    expect(h.github.requests).toHaveLength(calls);
+    expect((await from(h, 12, 1)).status).toBe(201);
+  });
+
+  it("keeps no raw IP address in any D1 table", async () => {
+    const h = bugHarness();
+    expect((await from(h, 1, 0)).status).toBe(201);
+    expect((await from(h, 2, 1)).status).toBe(201);
+    const dump = h.everyTable();
+    expect(dump).not.toContain("198.51.100.20");
+    expect(dump).not.toContain("198.51.100.21");
+    expect(h.d1.rows<{ ip_hash: string }>("SELECT ip_hash FROM reports").every((row) => /^[0-9a-f]{64}$/.test(row.ip_hash))).toBe(true);
+  });
+
+  it("clears the IP hash of a row older than 3,600 seconds and keeps it inside the window", async () => {
+    const h = bugHarness();
+    expect((await from(h, 1, 0)).status).toBe(201);
+    h.clock.advance(3000);
+    expect((await from(h, 2, 0)).status).toBe(201);
+    h.clock.advance(700);
+    expect((await from(h, 3, 0)).status).toBe(201);
+    const rows = h.d1.rows<{ ip_hash: string | null }>("SELECT ip_hash FROM reports ORDER BY rowid");
+    expect(rows.map((row) => row.ip_hash !== null)).toEqual([false, true, true]);
+  });
+});
+
+describe("AC-18 reports paused", () => {
+  it("answers 503 to a report, does nothing else, and still answers status", async () => {
+    const h = bugHarness({ REPORTS_PAUSED: "true" });
+    const response = await h.send(validReport());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: expect.any(String) });
+    expect(h.github.requests).toHaveLength(0);
+    expect(h.reportRows()).toHaveLength(0);
+    expect((await h.status({ installId: "install-id-for-tests-0001", ids: [] })).status).toBe(200);
+  });
+});

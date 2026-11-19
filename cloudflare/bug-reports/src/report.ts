@@ -1,9 +1,9 @@
-import { base64url, json, readCapped, sha256, tooMany } from "./common";
+import { base64url, ipHashOf, json, readCapped, sha256, tooMany } from "./common";
 import type { AppEnv, Deps } from "./env";
 import { fingerprintOf } from "./fingerprint";
 import { createComment, createIssue, findOpenIssue, getIssue } from "./github";
 import { commentBody, issueBody, issueTitle, type ReportText } from "./issue-text";
-import { recentDuplicate, reportRetryAfter, reserveReport } from "./limits";
+import { clearOldIpHashes, recentDuplicate, reportRetryAfter, reserveReport } from "./limits";
 import { homeUserNames, redact } from "./redact";
 import { REPORT_BODY_LIMIT, reportSchema, type Report } from "./schema";
 
@@ -35,6 +35,8 @@ async function targetIssue(env: AppEnv, deps: Deps, hash: string) {
 }
 
 export async function handleReport(request: Request, env: AppEnv, deps: Deps): Promise<Response> {
+  if (env.REPORTS_PAUSED === "true") return json({ error: "Reports are paused. Try again later." }, 503);
+
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
   if (!(await env.REPORT_LIMITER.limit({ key: ip })).success) return tooMany(60);
 
@@ -54,6 +56,7 @@ export async function handleReport(request: Request, env: AppEnv, deps: Deps): P
   const nowSeconds = Math.floor(deps.now() / 1000);
   const installHash = await sha256(report.installId);
   const payloadHash = await sha256(canonical(report));
+  const ipHash = await ipHashOf(env.GITHUB_APP_PRIVATE_KEY, ip);
 
   const earlier = await recentDuplicate(env, installHash, payloadHash, nowSeconds);
   if (earlier) return json({ id: earlier }, 201);
@@ -72,11 +75,13 @@ export async function handleReport(request: Request, env: AppEnv, deps: Deps): P
   const fingerprint = await fingerprintOf({ description, diagnostics, hint: report.fingerprint });
   const id = `br_${base64url(crypto.getRandomValues(new Uint8Array(16)))}`;
 
-  const reserved = await reserveReport(env, { id, installHash, payloadHash, fingerprint: fingerprint.hash }, nowSeconds);
+  const reserved = await reserveReport(env, { id, installHash, ipHash, payloadHash, fingerprint: fingerprint.hash }, nowSeconds);
   if (!reserved) {
-    const retryAfter = (await reportRetryAfter(env, installHash, nowSeconds)) ?? 1;
+    const retryAfter = (await reportRetryAfter(env, installHash, ipHash, nowSeconds)) ?? 1;
     return tooMany(retryAfter, "Too many reports. Try again later.");
   }
+
+  await clearOldIpHashes(env, nowSeconds).catch(() => {});
 
   let issueNumber: number;
   let commentId: number | null = null;

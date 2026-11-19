@@ -19,6 +19,36 @@ export async function sha256Hex(text: string) {
   return Array.from(await digest(text), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+const IP_HASH_INFO = "seira-bug-reports/ip-hash/v1";
+const ipHashKeys = new Map<string, Promise<CryptoKey>>();
+
+/** HMAC key derived with HKDF-SHA256 from the secret, so the secret itself is never an HMAC key. Cached per isolate. */
+function ipHashKey(secret: string) {
+  let key = ipHashKeys.get(secret);
+  if (!key) {
+    key = crypto.subtle
+      .importKey("raw", new TextEncoder().encode(secret), "HKDF", false, ["deriveKey"])
+      .then((material) =>
+        crypto.subtle.deriveKey(
+          { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info: new TextEncoder().encode(IP_HASH_INFO) },
+          material,
+          { name: "HMAC", hash: "SHA-256", length: 256 },
+          false,
+          ["sign"],
+        ),
+      );
+    ipHashKeys.clear();
+    ipHashKeys.set(secret, key);
+  }
+  return key;
+}
+
+/** Hex HMAC-SHA256 of `ip:` + the IP address, keyed with a sub-key of `secret`. */
+export async function ipHashOf(secret: string, ip: string) {
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", await ipHashKey(secret), new TextEncoder().encode(`ip:${ip}`)));
+  return Array.from(mac, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export function json(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,

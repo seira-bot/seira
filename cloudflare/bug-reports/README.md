@@ -75,7 +75,8 @@ The Worker keeps each issue status for 900 seconds. One request refreshes at mos
 | Limit | Value |
 | --- | --- |
 | Reports per install | 5 in 3,600 seconds |
-| Reports from all installs | `GLOBAL_HOURLY_LIMIT` in 3,600 seconds (default 120) |
+| Reports per IP address | 10 in 3,600 seconds, whatever the install ID |
+| Reports from all installs | `GLOBAL_HOURLY_LIMIT` in 3,600 seconds (default 30) |
 | Requests per IP address | 10 per minute for reports, 60 per minute for status |
 | Report size | 600 KB |
 | Status request size | 16 KB, 50 IDs |
@@ -83,6 +84,12 @@ The Worker keeps each issue status for 900 seconds. One request refreshes at mos
 A refused request gets `429` with `retryAfter` and a `Retry-After` header.
 A failed GitHub call gets `502`. The app sends the report again later.
 A failed call does not count in the limits.
+D1 keeps an HMAC of the IP address, not the address. D1 keeps the HMAC for at most one hour.
+The HMAC key comes from the App private key with HKDF.
+
+To stop all new reports, set the var `REPORTS_PAUSED` to `true` and deploy.
+The Worker then answers `503` to `POST /api/bug-reports`. It does not call GitHub and does not write D1.
+The status route keeps working.
 
 ## Create the GitHub App
 
@@ -122,7 +129,8 @@ The private key can be a PKCS#1 key (`BEGIN RSA PRIVATE KEY`) or a PKCS#8 key (`
 | `GITHUB_APP_INSTALLATION_ID` | secret | Installation ID |
 | `GITHUB_APP_PRIVATE_KEY` | secret | App private key, PEM |
 | `GITHUB_REPOSITORY` | var | `owner/name` of the repository that receives the issues |
-| `GLOBAL_HOURLY_LIMIT` | var | Reports per hour from all installs |
+| `GLOBAL_HOURLY_LIMIT` | var | Reports per hour from all installs (default 30) |
+| `REPORTS_PAUSED` | var | `true` stops new reports with `503` |
 
 The suggested route is `bugs.seira.bot`. The app then uses `https://bugs.seira.bot/api/bug-reports`.
 Forks must change the route, the repository variable, and the rate-limit namespace IDs in `wrangler.jsonc`.

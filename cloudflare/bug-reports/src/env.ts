@@ -8,6 +8,7 @@ export interface AppEnv {
   STATUS_LIMITER: RateLimiter;
   GITHUB_REPOSITORY: string;
   GLOBAL_HOURLY_LIMIT: string;
+  REPORTS_PAUSED?: string;
   GITHUB_APP_ID: string;
   GITHUB_APP_INSTALLATION_ID: string;
   GITHUB_APP_PRIVATE_KEY: string;
