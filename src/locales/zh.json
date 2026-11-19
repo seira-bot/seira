@@ -658,7 +658,6 @@
   "grokMove.intro": "Grok Bot 没有导出按钮，所以每个 Bot 要自己写下它的设置。Grok Bot 里的任何内容都不会改动。",
   "grokMove.step1": "1. 把这条消息发给你的 Bot",
   "grokMove.step1Hint": "拷贝它，并在你的 Bot 聊天里发送。每个 Bot 做一次。",
-  "grokMove.roster": "你这台电脑上的 Bot：{names}",
   "grokMove.copy": "拷贝这条消息",
   "grokMove.copied": "已拷贝",
   "grokMove.copyFailed": "无法拷贝",

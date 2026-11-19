@@ -173,7 +173,7 @@ describe("Move from Grok Bot", () => {
       : path === "/api/mcp/servers" ? { servers: [] } : {}));
     await open();
     expect(shown()).toContain("Found in Downloads: Job Search");
-    expect(shown()).toContain("Your Bots on this computer: Job Search, Scout");
+    expect([...host.querySelectorAll("[data-grok-move-roster] li")].map((chip) => chip.textContent)).toEqual(["Job Search", "Scout"]);
     await act(async () => button("Use these")!.click());
     await tick();
     expect(host.querySelector('[data-grok-move="preview"]')).not.toBeNull();
@@ -199,25 +199,25 @@ describe("Move from Grok Bot", () => {
         : path === "/api/mcp/servers" ? { servers: [] } : {};
     });
     await open();
-    expect(shown()).toContain("Connect Grok Bot");
+    expect(shown()).toContain("Get your link");
     expect(shown()).not.toContain("Add a custom connector");
     await act(async () => button("Get the link")!.click());
     await tick();
     expect(host.querySelector<HTMLInputElement>('input[aria-label="Link for Grok Bot"]')!.value).toBe(link);
-    expect(shown()).toContain("open Connect apps, choose Add a custom connector at the bottom, name it Seira, paste this as the Server URL, then choose Add plugin");
-    await act(async () => button("Add the Seira bot in Grok Bot")!.click());
+    expect(shown()).toContain("open Connect apps, choose Add a custom connector, name it Seira, paste the link as the Server URL, then choose Add plugin");
+    await act(async () => button("Open Seira Migrator")!.click());
     expect(openExternal).toHaveBeenCalledWith("https://x.ai/bot/JGJM9a99A33808-urJ87-");
-    expect(host.querySelector("[data-grok-move-arrived]")).toBeNull();
+    expect(shown()).not.toContain("Bot arrived");
 
     sent = true;
     await act(async () => { vi.advanceTimersByTime(3_000); });
     await tick();
-    expect(shown()).toContain("Arrived from Grok Bot: Job Search");
-    expect(shown()).toContain("The link works for an hour, while Seira stays open.");
+    expect(shown()).toContain("1 Bot arrived");
+    expect(shown()).toContain("It works for an hour while Seira is open.");
     await act(async () => { vi.advanceTimersByTime(3_000); });
     await tick();
     expect(calls.at(-1)).toBe("GET /api/setup-import/grok/connector?after=1");
-    expect(shown().match(/Arrived from Grok Bot/g)).toHaveLength(1);
+    expect(shown().match(/1 Bot arrived/g)).toHaveLength(1);
 
     await act(async () => host.querySelector<HTMLButtonElement>("[data-grok-move-use-arrived]")!.click());
     await tick();
@@ -255,7 +255,7 @@ describe("Move from Grok Bot", () => {
       return { available: true, ...(stopped ? { stopped: true } : { connectorUrl: "https://quiet-test-words.trycloudflare.com/mcp/move/abc" }), arrived: after < 1 ? [{ seq: 1, at: 5, text: EXPORT }] : [] };
     });
     await open();
-    expect(shown()).toContain("Arrived from Grok Bot: Job Search");
+    expect(shown()).toContain("1 Bot arrived");
     expect(host.querySelector("[data-grok-move-stopped]")).toBeNull();
     stopped = true;
     await act(async () => { vi.advanceTimersByTime(3_000); });
@@ -263,7 +263,7 @@ describe("Move from Grok Bot", () => {
     expect(host.querySelector("[data-grok-move-stopped]")?.textContent).toBe("The link stopped working. Get a new one and paste it into Grok Bot in place of the old one.");
     expect(host.querySelector('input[aria-label="Link for Grok Bot"]')).toBeNull();
     expect(button("Get the link")).toBeDefined();
-    expect(shown().match(/Arrived from Grok Bot: Job Search/g)).toHaveLength(1);
+    expect(shown().match(/1 Bot arrived/g)).toHaveLength(1);
     await act(async () => host.querySelector<HTMLButtonElement>("[data-grok-move-use-arrived]")!.click());
     await tick();
     expect(host.querySelector('[data-grok-move="preview"]')).not.toBeNull();
@@ -284,7 +284,7 @@ describe("Move from Grok Bot", () => {
     await open();
     await act(async () => button("Get the link")!.click());
     await tick();
-    expect(host.querySelector('[data-grok-move-connect] [role="alert"]')?.textContent).toBe("Couldn't make the link. Check that you're online and try again.");
+    expect(host.querySelector('[data-grok-move-step="link"] [role="alert"]')?.textContent).toBe("Couldn't make the link. Check that you're online and try again.");
     expect(button("Get the link")).toBeDefined();
   });
 
@@ -344,6 +344,137 @@ describe("Move from Grok Bot", () => {
     expect(GROK_EXPORT_PROMPT).toContain(`"format": "${GROK_EXPORT_FORMAT}"`);
     expect(GROK_EXPORT_PROMPT).toContain("grok-bot-export-<your name>.json");
     expect(GROK_EXPORT_PROMPT).toMatch(/Never include passwords, API keys, tokens, webhook keys, cookies or card numbers/);
+  });
+});
+
+describe("the guided steps on the desktop app", () => {
+  const LINK = "https://quiet-test-words.trycloudflare.com/mcp/move/abc";
+  const fixture = { roster: [] as string[], made: false, sent: false, failPost: false };
+  const openExternal = vi.fn();
+  const writeText = vi.fn(async () => {});
+  const stepOf = (id: string) => host.querySelector<HTMLElement>(`[data-grok-move-step="${id}"]`)!;
+  const chips = () => [...host.querySelectorAll<HTMLElement>('[data-grok-move-step="arrive"] [data-grok-move-roster] li')];
+
+  beforeEach(() => {
+    fixture.roster = [];
+    fixture.made = false;
+    fixture.sent = false;
+    fixture.failPost = false;
+    writeText.mockClear();
+    openExternal.mockClear();
+    vi.stubGlobal("ogb", { remoteClient: { active: false }, openExternal });
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    f.api.mockImplementation(async (path: string, init?: { method?: string }) => {
+      if (path === "/api/setup-import/grok") return { files: [], bots: fixture.roster };
+      if (path.startsWith("/api/setup-import/grok/connector")) {
+        if (init?.method === "POST") {
+          if (fixture.failPost) throw new Error("502");
+          fixture.made = true;
+        }
+        if (init?.method === "DELETE") fixture.made = false;
+        const after = Number(new URL(path, "http://x").searchParams.get("after") ?? 0);
+        return { available: true, ...(fixture.made ? { connectorUrl: LINK } : {}), arrived: fixture.made && fixture.sent && after < 1 ? [{ seq: 1, at: 5, text: EXPORT }] : [] };
+      }
+      return path === "/api/mcp/servers" ? { servers: [] } : {};
+    });
+  });
+
+  it("shows four numbered steps in order", async () => {
+    await open();
+    expect([...host.querySelectorAll("[data-grok-move-step]")].map((step) => step.getAttribute("data-grok-move-step"))).toEqual(["add", "link", "send", "arrive"]);
+    expect(host.querySelector("[data-grok-move-steps]")!.tagName).toBe("OL");
+  });
+
+  it("offers Seira Migrator before there is a link", async () => {
+    await open();
+    expect(host.querySelector('[data-grok-move-step="link"] [data-grok-move-connect-start]')).not.toBeNull();
+    await act(async () => button("Open Seira Migrator")!.click());
+    expect(openExternal).toHaveBeenCalledWith("https://x.ai/bot/JGJM9a99A33808-urJ87-");
+  });
+
+  it("marks the first step done and keeps Seira Migrator out of the chips when it is in the roster", async () => {
+    fixture.roster = ["Seira Migrator", "Job Search · Lead", "Scout"];
+    await open();
+    expect(stepOf("add").getAttribute("data-state")).toBe("done");
+    expect(shown()).toContain("Seira Migrator is in your Grok Bot.");
+    expect(chips().map((chip) => chip.textContent)).toEqual(["Job Search · Lead", "Scout"]);
+    expect([...host.querySelectorAll("[data-grok-move-roster] li")].some((chip) => chip.textContent === "Seira Migrator")).toBe(false);
+  });
+
+  it("copies a message with the link", async () => {
+    await open();
+    await act(async () => button("Get the link")!.click());
+    await tick();
+    await act(async () => button("Copy the message with the link")!.click());
+    await tick();
+    expect(writeText).toHaveBeenCalledOnce();
+    const copied = String((writeText.mock.calls[0] as unknown[])[0]);
+    expect(copied).toContain(LINK);
+    expect(copied).toContain("Move my Bots from Grok Bot to Seira");
+  });
+
+  it("says it is waiting once the link exists and no Bot has come", async () => {
+    await open();
+    expect(host.querySelector("[data-grok-move-status]")!.textContent).toContain("Your Bots show up here as they arrive.");
+    await act(async () => button("Get the link")!.click());
+    await tick();
+    const status = host.querySelector('[data-grok-move-status][role="status"]')!;
+    expect(status.textContent).toContain("Waiting for your Bots…");
+  });
+
+  it("ticks the Bot that arrived, counts it, and offers to review it", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    fixture.roster = ["Job Search · Lead", "Scout"];
+    await open();
+    await act(async () => button("Get the link")!.click());
+    await tick();
+    fixture.sent = true;
+    await act(async () => { vi.advanceTimersByTime(3_000); });
+    await tick();
+    expect(chips().map((chip) => chip.getAttribute("data-arrived"))).toEqual(["true", null]);
+    expect(host.querySelector("[data-grok-move-status]")!.textContent).toContain("1 Bot arrived");
+    await act(async () => button("Review 1 Bot")!.click());
+    await tick();
+    expect(host.querySelector('[data-grok-move="preview"]')).not.toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("keeps the by-hand way folded until asked, with its box still in the page", async () => {
+    await open();
+    const toggle = host.querySelector<HTMLButtonElement>("[data-grok-move-manual-toggle]")!;
+    expect(toggle.textContent).toBe("Move a Bot by hand instead");
+    const panel = document.getElementById(toggle.getAttribute("aria-controls")!)!;
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(panel.hasAttribute("hidden")).toBe(true);
+    expect(panel.querySelector("textarea")).not.toBeNull();
+    await act(async () => toggle.click());
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(panel.hasAttribute("hidden")).toBe(false);
+  });
+
+  it("shows no steps and no fold where there is no link, and the box is open", async () => {
+    f.api.mockImplementation(async (path: string) => (path.startsWith("/api/setup-import/grok/connector") ? {} : path === "/api/mcp/servers" ? { servers: [] } : {}));
+    await open();
+    expect(host.querySelector("[data-grok-move-steps]")).toBeNull();
+    expect(host.querySelector("[data-grok-move-manual-toggle]")).toBeNull();
+    const box = host.querySelector("textarea")!;
+    expect(box.closest("[hidden]")).toBeNull();
+  });
+
+  it("says in the link step when making the link fails", async () => {
+    fixture.failPost = true;
+    await open();
+    await act(async () => button("Get the link")!.click());
+    await tick();
+    expect(host.querySelector('[data-grok-move-step="link"] [role="alert"]')?.textContent).toBe("Couldn't make the link. Check that you're online and try again.");
+    expect(button("Get the link")).toBeDefined();
+  });
+
+  it("never names the tunnel provider", async () => {
+    await open();
+    await act(async () => button("Get the link")!.click());
+    await tick();
+    expect(shown()).not.toContain("Cloudflare");
   });
 });
 

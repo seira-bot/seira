@@ -7261,7 +7261,6 @@
   "grokMove.intro": "Grok Bot にはエクスポートのボタンがないため、ボットごとに自分の設定を書き出してもらいます。Grok Bot 側は何も変わりません。",
   "grokMove.step1": "1. ボットにこのメッセージを送る",
   "grokMove.step1Hint": "コピーして、ボットのチャットで送ってください。ボットごとに 1 回ずつ行います。",
-  "grokMove.roster": "このコンピューターにあるボット：{names}",
   "grokMove.copy": "メッセージをコピー",
   "grokMove.copied": "コピーしました",
   "grokMove.copyFailed": "コピーできませんでした",

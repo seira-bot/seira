@@ -7491,7 +7491,6 @@
   "grokMove.intro": "Grok Bot 沒有匯出按鈕，因此每個 Bot 會自行寫下自己的設定。Grok Bot 中不會有任何變更。",
   "grokMove.step1": "1. 傳送這則訊息給你的 Bot",
   "grokMove.step1Hint": "複製後在你 Bot 的聊天中傳送。每個 Bot 做一次。",
-  "grokMove.roster": "你在這台電腦上的 Bot：{names}",
   "grokMove.copy": "複製訊息",
   "grokMove.copied": "已複製",
   "grokMove.copyFailed": "無法複製",
