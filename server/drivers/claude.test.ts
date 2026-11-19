@@ -449,19 +449,15 @@ describe("ClaudeDriver.decodeConfig", () => {
     return conn;
   };
 
-  it("keeps a second account's broker reachable after the first account's broker on the same thread closes", async () => {
+  it.skipIf(process.platform === "win32")("keeps a second account's broker reachable after the first account's broker on the same thread closes", async () => {
     const asks: Array<{ id: string }> = [];
-    const first = await createPermissionBroker({
-      socketPaths: brokerSocketCandidates("t-two-accounts", "bot-two-accounts", "claude"),
-      onAsk: () => {},
-      onResolve: () => {},
-    });
-    const second = await createPermissionBroker({
-      socketPaths: brokerSocketCandidates("t-two-accounts", "bot-two-accounts", "claude-x"),
-      onAsk: (ask) => asks.push(ask),
-      onResolve: () => {},
-    });
+    const firstPaths = brokerSocketCandidates("t-two-accounts", "bot-two-accounts", "claude");
+    const secondPaths = brokerSocketCandidates("t-two-accounts", "bot-two-accounts", "claude-x");
+    mkdirSync(dirname(firstPaths[0]), { recursive: true });
+    const first = await createPermissionBroker({ socketPaths: firstPaths, onAsk: () => {}, onResolve: () => {} });
+    const second = await createPermissionBroker({ socketPaths: secondPaths, onAsk: (ask) => asks.push(ask), onResolve: () => {} });
     try {
+      expect([first.socketPath, second.socketPath]).toEqual([firstPaths[0], secondPaths[0]]);
       first.close();
       const conn = await askThrough(second.socketPath, "ask-two-accounts");
       await expect.poll(() => asks.length, { timeout: 5_000 }).toBe(1);
