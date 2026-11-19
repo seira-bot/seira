@@ -21,7 +21,7 @@ export function tailWindowStart(total: number, size: number = TRANSCRIPT_OPEN_SI
 
 export function followWindowStart(messages: readonly { role?: string }[], start: number): number {
   const tail = tailWindowStart(messages.length);
-  const oldest = Math.max(start, tail - TRANSCRIPT_WINDOW_SIZE);
+  const oldest = Math.max(start, messages.length - 2 * TRANSCRIPT_WINDOW_SIZE);
   for (let index = messages.length - 1; index >= oldest; index--) {
     if (messages[index].role === "user") return Math.min(tail, index);
   }

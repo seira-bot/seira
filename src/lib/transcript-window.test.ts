@@ -46,8 +46,8 @@ describe("followWindowStart", () => {
     expect(followWindowStart(turn(tail - 100, 300), 0)).toBe(tail - 100);
   });
 
-  it("stops at most one lookback window behind the tail", () => {
-    const limit = tail - TRANSCRIPT_WINDOW_SIZE;
+  it("stops at most two full windows back from the end", () => {
+    const limit = 300 - 2 * TRANSCRIPT_WINDOW_SIZE;
     expect(followWindowStart(turn(limit, 300), 0)).toBe(limit);
     expect(followWindowStart(turn(limit - 1, 300), 0)).toBe(tail);
   });

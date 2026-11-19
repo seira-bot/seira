@@ -14,7 +14,7 @@ import { BOTTOM_FOLLOW_THRESHOLD, followBottomGrowth, useBottomFollowResize } fr
 import { useFocusMessage } from "@/lib/focus-message";
 import {
   TRANSCRIPT_OPEN_SIZE,
-  TRANSCRIPT_WINDOW_SIZE,
+  TRANSCRIPT_STEP_SIZE,
   expandWindowStart,
   focusWindowRange,
   followWindowStart,
@@ -252,7 +252,7 @@ export function useTranscriptViewport<T extends { id: string; role?: string }>({
   };
   const showLater = () => {
     setBottomFollow(false);
-    const nextEnd = Math.min(messages.length, endIndex + TRANSCRIPT_WINDOW_SIZE);
+    const nextEnd = Math.min(messages.length, endIndex + TRANSCRIPT_STEP_SIZE);
     setTranscriptWindow((w) => ({ ...w, end: nextEnd >= messages.length ? null : nextEnd }));
   };
   const loadOlder = () => {

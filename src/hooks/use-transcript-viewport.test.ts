@@ -318,16 +318,16 @@ describe("transcript viewport", () => {
     expect(scroller.scrollTop).toBe(scroller.bottom);
   });
 
-  it("keeps the window to one lookback window beyond the opening window while one long stretch follows a single message", () => {
+  it("keeps the window to two windows while one long stretch follows a single message", () => {
     let thread: Row[] = [{ id: "ask", role: "user" }];
     const view = mount({ messages: thread });
     for (let step = 0; step < 600; step++) {
       thread = [...thread, { id: `step${step}`, role: "bot" }];
       view.rerender({ messages: thread });
-      expect(view.current.windowedMessages.length).toBeLessThanOrEqual(TRANSCRIPT_WINDOW_SIZE + TRANSCRIPT_OPEN_SIZE);
+      expect(view.current.windowedMessages.length).toBeLessThanOrEqual(2 * TRANSCRIPT_WINDOW_SIZE);
       expect(view.current.following).toBe(true);
       expect(scroller.scrollTop).toBe(scroller.bottom);
-      if (thread.length <= TRANSCRIPT_WINDOW_SIZE + TRANSCRIPT_OPEN_SIZE) expect(view.current.windowedMessages[0]?.id).toBe("ask");
+      if (thread.length <= 2 * TRANSCRIPT_WINDOW_SIZE) expect(view.current.windowedMessages[0]?.id).toBe("ask");
     }
     expect(view.current.windowedMessages).toHaveLength(TRANSCRIPT_OPEN_SIZE);
     expect(view.current.windowedMessages.at(-1)?.id).toBe("step599");
@@ -458,7 +458,7 @@ describe("transcript viewport", () => {
     expect(view.current.following).toBe(false);
 
     view.act(() => view.current.showLater());
-    expect(view.current.laterCount).toBe(300 - 2 * TRANSCRIPT_WINDOW_SIZE);
+    expect(view.current.laterCount).toBe(300 - TRANSCRIPT_WINDOW_SIZE - TRANSCRIPT_STEP_SIZE);
   });
 
   it("keeps a search result's window when the reader scrolls to its end", () => {
