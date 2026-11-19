@@ -165,7 +165,7 @@ describe("the Advanced panel", () => {
   });
 
   it("filters the rows as you search and hides a group with no match", () => {
-    type("model");
+    type("provider");
     const shown = [...host.querySelectorAll<HTMLElement>("[data-bot-settings-section]")].filter((node) => !node.hidden).map((node) => node.dataset.botSettingsSection);
     expect(shown).toEqual(["model"]);
     const hidden = [...host.querySelectorAll<HTMLElement>("[data-advanced-group]")].filter((node) => node.hidden).map((node) => node.dataset.advancedGroup);
