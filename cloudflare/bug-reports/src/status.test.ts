@@ -62,6 +62,16 @@ describe("AC-11 status", () => {
     expect(body.notify).toBe(true);
   });
 
+  it("answers unknown for a report that is still being filed", async () => {
+    const h = bugHarness();
+    h.d1.db
+      .prepare("INSERT INTO reports (id, install_hash, payload_hash, fingerprint, issue_number, comment_id, created_at) VALUES (?, ?, ?, ?, NULL, NULL, ?)")
+      .run("br_pending", await sha256(INSTALL), "p", "0".repeat(16), Math.floor(h.clock.ms / 1000));
+    const { body } = await ask(h, ["br_pending"]);
+    expect(body.reports).toEqual([{ id: "br_pending", status: "unknown", fixedIn: null }]);
+    expect(h.github.requests).toHaveLength(0);
+  });
+
   it("answers an empty list for no ids", async () => {
     const h = bugHarness();
     const { body } = await ask(h, []);

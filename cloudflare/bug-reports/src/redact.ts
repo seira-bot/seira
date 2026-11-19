@@ -1,19 +1,20 @@
 const MASK = "«redacted»";
 const TOKEN_MASK = "«redacted token»";
 
-const PEM = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
+const PEM_BEGIN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;
+const PEM_END = /-----END [A-Z ]*PRIVATE KEY-----/g;
 const URL_PATTERN = /https?:\/\/[^\s"'<>\\]+/g;
 const HEADER = /(authorization|proxy-authorization|cookie|set-cookie)(["']?\s*[:=]\s*)[^\r\n]+/gi;
 const BEARER = /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi;
 const TOKEN_SHAPES = [
-  /gh[pousr]_[A-Za-z0-9]{20,}/g,
-  /github_pat_[A-Za-z0-9_]{20,}/g,
-  /sk-(?:ant-|proj-)?[A-Za-z0-9_-]{16,}/g,
-  /xox[abposr]-[A-Za-z0-9-]{10,}/g,
-  /A(?:KIA|SIA)[0-9A-Z]{16}/g,
-  /AIza[0-9A-Za-z_-]{35}/g,
-  /ya29\.[0-9A-Za-z_-]{10,}/g,
-  /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
+  /(?<![A-Za-z0-9_-])gh[pousr]_[A-Za-z0-9]{20,}/g,
+  /(?<![A-Za-z0-9_-])github_pat_[A-Za-z0-9_]{20,}/g,
+  /(?<![A-Za-z0-9_-])sk-(?:ant-|proj-)?[A-Za-z0-9_-]{16,}/g,
+  /(?<![A-Za-z0-9_-])xox[abposr]-[A-Za-z0-9-]{10,}/g,
+  /(?<![A-Za-z0-9_-])A(?:KIA|SIA)[0-9A-Z]{16}/g,
+  /(?<![A-Za-z0-9_-])AIza[0-9A-Za-z_-]{35}/g,
+  /(?<![A-Za-z0-9_-])ya29\.[0-9A-Za-z_-]{10,}/g,
+  /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
 ];
 const LONG_RUN = /[A-Za-z0-9_-]{40,}/g;
 const SECRET_PAIR =
@@ -24,6 +25,23 @@ const UNIX_HOME = /(?:\/var\/home\/|\/home\/|\/Users\/)([^\\/\s"'<>:]+)/g;
 const PHONE = /(?<![\w.:/+-])\+?\(?\d[\d ().\t-]{7,25}\d(?![\w.:/-])/g;
 
 const SHARED_PROFILES = new Set(["shared", "public", "default", "all"]);
+
+/** Scans forward once: a BEGIN line without a later END line leaves the rest alone and ends the scan. */
+function redactPrivateKeys(text: string) {
+  let out = "";
+  let last = 0;
+  for (;;) {
+    PEM_BEGIN.lastIndex = last;
+    const begin = PEM_BEGIN.exec(text);
+    if (!begin) break;
+    PEM_END.lastIndex = begin.index + begin[0].length;
+    const end = PEM_END.exec(text);
+    if (!end) break;
+    out += `${text.slice(last, begin.index)}«redacted private key»`;
+    last = end.index + end[0].length;
+  }
+  return out + text.slice(last);
+}
 
 function redactUrl(url: string) {
   const parts = /^(https?:\/\/)([^/?#]*)([^?#]*)(.*)$/.exec(url);
@@ -65,7 +83,7 @@ export function redact(text: string, { installId, userNames }: { installId: stri
   const hideInstall = (value: string) => (installId ? value.split(installId).join("«install»") : value);
   let out = hideInstall(text);
 
-  out = out.replace(PEM, "«redacted private key»");
+  out = redactPrivateKeys(out);
   out = out.replace(URL_PATTERN, redactUrl);
   out = out.replace(HEADER, `$1$2${MASK}`);
   out = out.replace(BEARER, `Bearer ${MASK}`);

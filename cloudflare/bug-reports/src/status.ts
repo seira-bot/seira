@@ -90,7 +90,7 @@ export async function handleStatus(request: Request, env: AppEnv, deps: Deps): P
   const issueOf = new Map<string, number>();
   if (unique.length) {
     const rows = await env.DB.prepare(
-      `SELECT id, issue_number FROM reports WHERE install_hash = ? AND id IN (${marks(unique.length)})`,
+      `SELECT id, issue_number FROM reports WHERE install_hash = ? AND issue_number IS NOT NULL AND id IN (${marks(unique.length)})`,
     )
       .bind(installHash, ...unique)
       .all<{ id: string; issue_number: number }>();

@@ -96,6 +96,8 @@ export interface FakeIssue {
   labels: Array<{ name: string }>;
   milestone: { title: string } | null;
   pull_request?: unknown;
+  user: { type: string; login: string } | null;
+  performed_via_github_app: { id: number } | null;
 }
 
 type Failure = "throw" | number | undefined;
@@ -146,6 +148,8 @@ export function fakeGitHub(clock: Clock) {
       state_reason: null,
       labels: [],
       milestone: null,
+      user: { type: "User", login: "someone" },
+      performed_via_github_app: null,
       ...partial,
     };
     issues.set(number, issue);
@@ -199,7 +203,10 @@ export function fakeGitHub(clock: Clock) {
       const refused = failure(fail.create);
       if (refused) return refused;
       const payload = body as { title: string; body: string; labels: string[] };
-      const issue = seed({ title: payload.title, body: payload.body, labels: payload.labels.map((name) => ({ name })) });
+      const issue = seed({ title: payload.title, body: payload.body, labels: payload.labels.map((name) => ({ name })),
+        user: { type: "Bot", login: "seira-bug-reports[bot]" },
+        performed_via_github_app: { id: Number(APP_ID) },
+      });
       return reply(issue, 201);
     }
     const comment = new RegExp(`^${repoPath}/issues/(\\d+)/comments$`).exec(url.pathname);

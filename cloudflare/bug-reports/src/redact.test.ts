@@ -84,3 +84,19 @@ describe("AC-04 redact", () => {
     expect(run("at 2026-11-19 10:00:00")).toBe("at 2026-11-19 10:00:00");
   });
 });
+
+describe("redact speed", () => {
+  const texts: Array<[string, string]> = [
+    ["dots", "a.".repeat(100_000)],
+    ["JWT starts", "eyJ".repeat(66_000)],
+    ["token starts", "sk-".repeat(66_000)],
+    ["key block starts", "-----BEGIN PRIVATE KEY-----".repeat(7000)],
+    ["at signs", "a@".repeat(100_000)],
+    ["key words", "token ".repeat(33_000)],
+  ];
+  it.each(texts)("redacts 200,000 characters of %s in under 500 ms", (_name, text) => {
+    const start = performance.now();
+    run(text);
+    expect(performance.now() - start).toBeLessThan(500);
+  });
+});

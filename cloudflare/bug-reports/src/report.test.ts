@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { sha256 } from "./common";
+import { recentDuplicate } from "./limits";
 import { bodiesOf, bugHarness, validReport, type FakeIssue } from "./test-harness";
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -92,6 +94,69 @@ describe("AC-02 comments on the open issue", () => {
     await sendOk(h, 2);
     expect(h.github.comments).toHaveLength(0);
     expect(h.github.issues.size).toBe(2);
+  });
+});
+
+describe("AC-02 search hits from other authors are ignored", () => {
+  const spoofs: Array<[string, Partial<FakeIssue>]> = [
+    ["a person", { user: { type: "User", login: "mallory" }, performed_via_github_app: null }],
+    ["a bot of another App", { user: { type: "Bot", login: "other[bot]" }, performed_via_github_app: { id: 1 } }],
+  ];
+  it.each(spoofs)("creates a new issue when the marker issue comes from %s", async (_name, author) => {
+    const h = bugHarness();
+    await sendOk(h, 1);
+    const [issue] = [...h.github.issues.values()];
+    const hash = MARKER.exec(issue!.body)![1]!;
+    h.github.issues.clear();
+    h.github.seed({ body: `<!-- seira-fp:${hash} -->\nfake`, ...author });
+    h.d1.db.exec("DELETE FROM fingerprints");
+    await sendOk(h, 2);
+    expect(h.github.comments).toHaveLength(0);
+    expect(h.github.issues.size).toBe(2);
+  });
+});
+
+describe("AC-09 slots are reserved before GitHub is called", () => {
+  const pending = async (h: ReturnType<typeof bugHarness>, count: number, installId = "install-id-for-tests-0001") => {
+    for (let n = 0; n < count; n += 1) {
+      h.d1.db
+        .prepare("INSERT INTO reports (id, install_hash, payload_hash, fingerprint, issue_number, comment_id, created_at) VALUES (?, ?, ?, ?, NULL, NULL, ?)")
+        .run(`br_pending${n}`, await sha256(installId), `p${n}`, "0".repeat(16), Math.floor(h.clock.ms / 1000));
+    }
+  };
+
+  it("counts a pending row toward the per-install limit", async () => {
+    const h = bugHarness();
+    await pending(h, 5);
+    const response = (await h.sendNumbered(1)).response;
+    expect(response.status).toBe(429);
+    expect(h.github.requests).toHaveLength(0);
+  });
+
+  it("does not return a pending row as a duplicate", async () => {
+    const h = bugHarness();
+    await pending(h, 1);
+    const now = Math.floor(h.clock.ms / 1000);
+    const install = await sha256("install-id-for-tests-0001");
+    expect(await recentDuplicate(h.env, install, "p0", now)).toBeNull();
+    h.d1.db.exec("UPDATE reports SET issue_number = 7");
+    expect(await recentDuplicate(h.env, install, "p0", now)).toBe("br_pending0");
+  });
+
+  it("leaves 5 reports with 201 and 1 with 429 when 6 arrive in parallel", async () => {
+    const h = bugHarness();
+    const results = await Promise.all([1, 2, 3, 4, 5, 6].map((n) => h.sendNumbered(n)));
+    const statuses = results.map((result) => result.response.status).sort();
+    expect(statuses).toEqual([201, 201, 201, 201, 201, 429]);
+    expect(h.reportRows()).toHaveLength(5);
+    expect(h.reportRows().every((row) => row.issue_number !== null)).toBe(true);
+  });
+
+  it("keeps no row after a GitHub failure", async () => {
+    const h = bugHarness();
+    h.github.fail.create = 500;
+    expect((await h.send(validReport())).status).toBe(502);
+    expect(h.d1.rows("SELECT * FROM reports")).toEqual([]);
   });
 });
 

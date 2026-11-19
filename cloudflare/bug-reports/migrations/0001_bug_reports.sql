@@ -3,7 +3,7 @@ CREATE TABLE reports (
   install_hash TEXT NOT NULL,
   payload_hash TEXT NOT NULL,
   fingerprint TEXT NOT NULL,
-  issue_number INTEGER NOT NULL,
+  issue_number INTEGER,
   comment_id INTEGER,
   created_at INTEGER NOT NULL
 );

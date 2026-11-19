@@ -14,6 +14,23 @@ const diagnostics = (time: string, tool: string, line: number, id: string) =>
     `${time} warn engine restarted at 10:00:01`,
   ].join("\n");
 
+describe("fingerprint speed", () => {
+  it("reads a 200,000 character line of dots in under 200 ms", async () => {
+    const line = "a.".repeat(100_000);
+    const diagnostics = [
+      "## Recent problems in this conversation, newest last",
+      `2026-11-19T10:00:00.000Z tool Bash failed: ${line}`,
+      "",
+      "## Server warnings and errors, newest last",
+      line,
+    ].join("\n");
+    const start = performance.now();
+    await fingerprintOf({ description: "x", diagnostics });
+    await fingerprintOf({ description: "x", diagnostics: line });
+    expect(performance.now() - start).toBeLessThan(200);
+  });
+});
+
 describe("fingerprint", () => {
   it("is the same for the same error at another time, line and id", async () => {
     const a = await fingerprintOf({ description: "one", diagnostics: diagnostics("2026-11-19T10:00:00.000Z", "Bash", 12, "42") });

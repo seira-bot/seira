@@ -4,7 +4,9 @@ const PROBLEMS_HEADING = "## Recent problems in this conversation, newest last";
 const LOG_HEADING = "## Server warnings and errors, newest last";
 const GENERIC_KINDS = new Set(["ERROR", "EXCEPTION"]);
 const KIND = /\b([A-Z][A-Za-z0-9]*(?:Error|Exception)|E[A-Z]{2,}(?:_[A-Z]+)*)\b/g;
-const FRAME = /\bat\s+(?:async\s+)?(?:([^\s()]+)\s+\(([^()\s]+:\d+(?::\d+)?)\)|([^\s()]*[\\/.][^\s()]*:\d+(?::\d+)?))/;
+const FRAME =
+  /\bat\s{1,20}(?:async\s{1,20})?(?:([^\s()]{1,300})\s{1,20}\(([^()\s]{1,300}:\d{1,9}(?::\d{1,9})?)\)|([^\s()]{0,300}[\\/.][^\s()]{0,300}:\d{1,9}(?::\d{1,9})?))/;
+const LINE_SCAN_LIMIT = 1000;
 
 export interface FingerprintHint {
   kind?: string | undefined;
@@ -42,7 +44,7 @@ function section(diagnostics: string, heading: string) {
 function newestProblem(problems: string) {
   const lines = problems.split(/\r?\n/);
   for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = lines[index] ?? "";
+    const line = (lines[index] ?? "").slice(0, LINE_SCAN_LIMIT);
     const tool = /\btool (\S+) failed(?:: (.*))?/.exec(line);
     if (tool) return { step: `tool:${tool[1]}`, detail: tool[2] ?? "" };
     const turn = /\bturn failed: (.*)/.exec(line);
@@ -51,7 +53,7 @@ function newestProblem(problems: string) {
   return { step: "", detail: "" };
 }
 
-const newestFirst = (text: string) => text.split(/\r?\n/).reverse();
+const newestFirst = (text: string) => text.split(/\r?\n/).reverse().map((line) => line.slice(0, LINE_SCAN_LIMIT));
 
 function kindIn(text: string) {
   for (const line of newestFirst(text)) {
@@ -63,7 +65,11 @@ function kindIn(text: string) {
 }
 
 function frameIn(text: string) {
-  const match = newestFirst(text).map((line) => FRAME.exec(line)).find(Boolean);
+  let match: RegExpExecArray | null = null;
+  for (const line of newestFirst(text)) {
+    match = FRAME.exec(line);
+    if (match) break;
+  }
   if (!match) return "";
   const fn = match[1] ?? "";
   const location = match[2] ?? match[3] ?? "";

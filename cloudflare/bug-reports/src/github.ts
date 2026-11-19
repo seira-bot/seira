@@ -19,6 +19,8 @@ export interface GitHubIssue {
   pull_request?: unknown;
   labels?: Array<string | { name?: string }>;
   milestone?: { title?: string } | null;
+  user?: { type?: string; login?: string } | null;
+  performed_via_github_app?: { id?: number } | null;
 }
 
 const text = new TextEncoder();
@@ -135,6 +137,12 @@ export async function getIssue(env: AppEnv, deps: Deps, number: number): Promise
   return (await readJson(response)) as GitHubIssue | null;
 }
 
+/** Anyone can open an issue with the marker, so only an issue that a bot of this App filed counts. */
+function isFromThisApp(env: AppEnv, issue: GitHubIssue) {
+  const app = issue.performed_via_github_app;
+  return issue.user?.type === "Bot" && (app == null || app.id === Number(env.GITHUB_APP_ID));
+}
+
 export async function findOpenIssue(env: AppEnv, deps: Deps, hash: string): Promise<number | null> {
   const repo = repository(env);
   const query = `"seira-fp:${hash}" repo:${repo.owner}/${repo.name} is:issue is:open in:body`;
@@ -146,7 +154,12 @@ export async function findOpenIssue(env: AppEnv, deps: Deps, hash: string): Prom
   const answer = (await readJson(response)) as { items?: GitHubIssue[] } | null;
   const marker = issueMarker(hash);
   const hit = answer?.items?.find(
-    (item) => item.state === "open" && !("pull_request" in item) && typeof item.body === "string" && item.body.startsWith(marker),
+    (item) =>
+      item.state === "open" &&
+      !("pull_request" in item) &&
+      typeof item.body === "string" &&
+      item.body.startsWith(marker) &&
+      isFromThisApp(env, item),
   );
   return hit?.number ?? null;
 }

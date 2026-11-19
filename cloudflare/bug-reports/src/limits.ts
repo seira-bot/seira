@@ -32,9 +32,27 @@ export async function reportRetryAfter(env: AppEnv, installHash: string, nowSeco
 
 export async function recentDuplicate(env: AppEnv, installHash: string, payloadHash: string, nowSeconds: number) {
   const row = await env.DB.prepare(
-    "SELECT id FROM reports WHERE install_hash = ? AND payload_hash = ? AND created_at > ? ORDER BY created_at DESC LIMIT 1",
+    "SELECT id FROM reports WHERE install_hash = ? AND payload_hash = ? AND created_at > ? AND issue_number IS NOT NULL ORDER BY created_at DESC LIMIT 1",
   )
     .bind(installHash, payloadHash, nowSeconds - DUPLICATE_SECONDS)
     .first<{ id: string }>();
   return row?.id ?? null;
+}
+
+/** Takes one slot of both hourly limits in a single statement, so parallel requests cannot all pass the check. */
+export async function reserveReport(
+  env: AppEnv,
+  row: { id: string; installHash: string; payloadHash: string; fingerprint: string },
+  nowSeconds: number,
+) {
+  const since = nowSeconds - WINDOW_SECONDS;
+  const result = await env.DB.prepare(
+    `INSERT INTO reports (id, install_hash, payload_hash, fingerprint, issue_number, comment_id, created_at)
+     SELECT ?, ?, ?, ?, NULL, NULL, ?
+     WHERE (SELECT COUNT(*) FROM reports WHERE install_hash = ? AND created_at > ?) < ?
+       AND (SELECT COUNT(*) FROM reports WHERE created_at > ?) < ?`,
+  )
+    .bind(row.id, row.installHash, row.payloadHash, row.fingerprint, nowSeconds, row.installHash, since, PER_INSTALL_LIMIT, since, Number(env.GLOBAL_HOURLY_LIMIT) || 120)
+    .run();
+  return result.meta.changes > 0;
 }

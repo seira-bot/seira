@@ -3,7 +3,7 @@ import type { AppEnv, Deps } from "./env";
 import { fingerprintOf } from "./fingerprint";
 import { createComment, createIssue, findOpenIssue, getIssue } from "./github";
 import { commentBody, issueBody, issueTitle, type ReportText } from "./issue-text";
-import { recentDuplicate, reportRetryAfter } from "./limits";
+import { recentDuplicate, reportRetryAfter, reserveReport } from "./limits";
 import { homeUserNames, redact } from "./redact";
 import { REPORT_BODY_LIMIT, reportSchema, type Report } from "./schema";
 
@@ -58,9 +58,6 @@ export async function handleReport(request: Request, env: AppEnv, deps: Deps): P
   const earlier = await recentDuplicate(env, installHash, payloadHash, nowSeconds);
   if (earlier) return json({ id: earlier }, 201);
 
-  const retryAfter = await reportRetryAfter(env, installHash, nowSeconds);
-  if (retryAfter !== null) return tooMany(retryAfter, "Too many reports. Try again later.");
-
   const userNames = homeUserNames([report.description, report.diagnostics, report.title ?? "", report.appVersion, report.platform]);
   const clean = (value: string) => redact(value, { installId: report.installId, userNames });
   const description = clean(report.description);
@@ -75,6 +72,12 @@ export async function handleReport(request: Request, env: AppEnv, deps: Deps): P
   const fingerprint = await fingerprintOf({ description, diagnostics, hint: report.fingerprint });
   const id = `br_${base64url(crypto.getRandomValues(new Uint8Array(16)))}`;
 
+  const reserved = await reserveReport(env, { id, installHash, payloadHash, fingerprint: fingerprint.hash }, nowSeconds);
+  if (!reserved) {
+    const retryAfter = (await reportRetryAfter(env, installHash, nowSeconds)) ?? 1;
+    return tooMany(retryAfter, "Too many reports. Try again later.");
+  }
+
   let issueNumber: number;
   let commentId: number | null = null;
   try {
@@ -87,13 +90,12 @@ export async function handleReport(request: Request, env: AppEnv, deps: Deps): P
     }
   } catch (error) {
     console.error("github failed", (error as { status?: unknown }).status ?? "unreachable");
+    await env.DB.prepare("DELETE FROM reports WHERE id = ?").bind(id).run();
     return json({ error: FAILED }, 502);
   }
 
   await env.DB.batch([
-    env.DB.prepare(
-      "INSERT INTO reports (id, install_hash, payload_hash, fingerprint, issue_number, comment_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ).bind(id, installHash, payloadHash, fingerprint.hash, issueNumber, commentId, nowSeconds),
+    env.DB.prepare("UPDATE reports SET issue_number = ?, comment_id = ? WHERE id = ?").bind(issueNumber, commentId, id),
     env.DB.prepare(
       "INSERT INTO fingerprints (fingerprint, issue_number, updated_at) VALUES (?, ?, ?) ON CONFLICT (fingerprint) DO UPDATE SET issue_number = excluded.issue_number, updated_at = excluded.updated_at",
     ).bind(fingerprint.hash, issueNumber, nowSeconds),
