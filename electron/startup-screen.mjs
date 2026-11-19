@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import nativeText from "./native-text.cjs";
 import { FINISH_MS, STEP_NAMES } from "./splash/line.js";
@@ -8,6 +9,11 @@ const resource = (name) => fileURLToPath(new URL(`./resources/${name}`, import.m
 const readResource = (name, encoding) => { try { return fs.readFileSync(resource(name), encoding); } catch { return null; } };
 // Inside an inline script, "<" could close the tag; JSON stays valid with it escaped. The bundle is checked by the build.
 const inlineJson = (text) => text.replaceAll("<", "\\u003c");
+
+// Outside Electron, as in the node tests, require("electron") gives a path and there is no preference to read.
+function systemReducedMotion() {
+  try { return createRequire(import.meta.url)("electron").systemPreferences?.getAnimationSettings().prefersReducedMotion === true; } catch { return false; }
+}
 
 export function startupScreenHtml({ t = nativeText.englishText.t, lang = "en", reducedMotion = false } = {}) {
   const still = fs.readFileSync(resource("splash-seira.webp")).toString('base64');
@@ -42,8 +48,7 @@ export function startupScreenHtml({ t = nativeText.englishText.t, lang = "en", r
 
 export function createStartupScreen({
   BrowserWindow, iconPath, platform = process.platform, isQuitting, onQuit,
-  onHide, isHidden = () => false, onShow, onFinished, t, lang, systemPreferences,
-  reducedMotion = () => { try { return systemPreferences?.getAnimationSettings().prefersReducedMotion === true; } catch { return false; } },
+  onHide, isHidden = () => false, onShow, onFinished, t, lang, reducedMotion = systemReducedMotion,
 }) {
   let disposed = false, revealed = false, fallback, finishTimer, resolveReady;
   let reached = -1, finished = false;
@@ -118,6 +123,7 @@ export function createStartupScreen({
     if (finished || disposed) return;
     finished = true; sendProgress();
   };
+  void ready.then(() => progress("shown"));
   const attach = (win, { maximized = false } = {}) => {
     const reveal = () => {
       if (revealed || win.isDestroyed() || isQuitting()) return;

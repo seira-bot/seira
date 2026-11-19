@@ -228,9 +228,10 @@ const progressOf = (splash) => splash.window.webContents.sent.filter(([channel])
 test("startup steps reach the page in order and never go back", async () => {
   const { splash } = fixture({ reducedMotion: () => false });
   await splash.ready;
+  await flush();
   splash.progress("engine"); splash.progress("shown"); splash.progress("engine"); splash.progress("nonsense");
   splash.progress("loaded");
-  assert.deepEqual(progressOf(splash).map(state => state.step), ["engine", "loaded"]);
+  assert.deepEqual(progressOf(splash).map(state => state.step), ["shown", "engine", "loaded"]);
   assert.ok(progressOf(splash).every(state => state.finished === false));
   splash.window.webContents.emit("did-finish-load");
   assert.deepEqual(progressOf(splash).at(-1), { step: "loaded", finished: false });

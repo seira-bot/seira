@@ -2819,9 +2819,9 @@ app.whenReady().then(async () => {
     onHide: desktopTray ? (win) => desktopTray.hide(win) : undefined,
     isHidden: () => desktopTray?.isHidden() ?? false,
     onShow: (win) => desktopTray?.windowShown(win),
-    onFinished: () => { startupScreen = null; }, systemPreferences,
+    onFinished: () => { startupScreen = null; },
   });
-  await startupScreen?.ready; startupScreen?.progress("shown");
+  await startupScreen?.ready;
   if (desktopShutdownStarted) return;
   session.defaultSession.on("will-download", (_event, item) => {
     if (mediaDownloads.claim(item)) return;
