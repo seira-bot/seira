@@ -478,7 +478,7 @@ describe("codexLiveVoice scripted process", () => {
       await reply("thread/start", { thread: { id: "t1" }, sandbox: { type: "workspaceWrite" } });
       await vi.waitFor(() => expect(requestsOf("thread/realtime/start")).toHaveLength(1));
     };
-    return { live, logs, line, requestsOf, input, toRealtimeStart, child };
+    return { live, logs, line, requestsOf, reply, input, toRealtimeStart, child };
   }
 
   beforeEach(() => { vi.useFakeTimers(); });

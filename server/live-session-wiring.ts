@@ -151,7 +151,7 @@ export function liveSessionWiring(input: LiveSessionWiringInput): {
         },
       });
       socket.attach(session);
-      if (socket.readyState === 3) {
+      if (socket.closedByEngine) {
         await socket.stop();
         throw new EngineLiveVoiceError("failed");
       }

@@ -37,6 +37,7 @@ export class LiveCodexSocket implements LiveSocket {
   private stopRequested = false;
   private stopPromise: Promise<void> | null = null;
   private closeDelivered = false;
+  private engineClosed = false;
   private lastActivityFrameAt = Number.NEGATIVE_INFINITY;
   private readonly now: () => number;
   private readonly onClosed: (() => void) | undefined;
@@ -73,6 +74,11 @@ export class LiveCodexSocket implements LiveSocket {
     if (handler && this.held.length) queueMicrotask(() => this.flushHeld());
   }
 
+  /** The engine ended the call, by closing it or by failing, as opposed to the caller closing the socket. */
+  get closedByEngine(): boolean {
+    return this.engineClosed;
+  }
+
   attach(session: EngineLiveVoiceSession): void {
     this.session = session;
     if (this.stopRequested) void this.stopSession();
@@ -102,6 +108,7 @@ export class LiveCodexSocket implements LiveSocket {
         return;
       }
       case "closed": {
+        this.engineClosed = true;
         const reason = event.reason ?? "";
         this.frame({ type: "session.closed", reason: KNOWN_CLOSE_REASONS.has(reason) ? reason : "remote_hangup" });
         this.finishClose(NORMAL_CLOSE);
@@ -109,6 +116,7 @@ export class LiveCodexSocket implements LiveSocket {
         return;
       }
       case "failed":
+        this.engineClosed = true;
         this.frame({ type: "error", error: { code: event.reason } });
         this.finishClose(UNEXPECTED_CLOSE);
         void this.stopSession();

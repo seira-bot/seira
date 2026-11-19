@@ -1971,7 +1971,8 @@ describe("a Codex Live call through the real session wiring", () => {
 
     const live = setup({ createSession: vi.fn(async (input) => { signal = input.signal!; return { sessionId: "sess_2", sdp: "answer-sdp" }; }) });
     const started = await live.start();
-    await live.controller.end(started.call.callId);
+    expect(started.call.callId).toBeTruthy();
+    await live.controller.shutdown();
     expect(signal.aborted).toBe(false);
   });
 
