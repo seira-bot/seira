@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { describeRun, groupActivityRuns, groupTranscript, isRecoveryActivity, isToolStep, roomTurnFolds, statusActivity } from "./activity-runs";
+import { describeRun, groupActivityRuns, groupTranscript, isRecoveryActivity, isToolStep, roomTurnFolds, runHeadline, statusActivity } from "./activity-runs";
 import { setLocale } from "./i18n";
 import { toolStepLabel } from "./tool-step-label";
 import type { Message } from "@/state/store";
@@ -311,5 +311,14 @@ describe("groupTranscript", () => {
       [progress.id],
       "message",
     ]);
+  });
+});
+
+describe("runHeadline with a recorded duration", () => {
+  it("uses the recorded duration of the turn for the card title, not the gap between its steps", () => {
+    const steps = [tool("Read"), tool("Bash")];
+    expect(runHeadline(steps, "done")).toBe("Worked");
+    expect(runHeadline(steps, "done", undefined, 2_000)).toBe("Worked for 2s");
+    expect(runHeadline([tool("Read"), tool("Bash", false)], "failed", undefined, 4_000)).toBe("Failed after 4s");
   });
 });

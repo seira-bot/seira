@@ -181,18 +181,21 @@ describe("Simple-mode sidebar layout", () => {
     expect(labelled(tree, "Add or remove bots in Work")).toBe(false);
   });
 
-  it("keeps Advanced's headings, trash button and order", () => {
+  it("gives Advanced's sections the same quiet line, with a count and the department's menu, and its order", () => {
     fixture.advanced = true;
     const { tree } = render();
     expect(sectionOrder(tree)).toEqual([CHANNELS_SECTION_ID, BOTS_SECTION_ID, userSectionId("Work")]);
     const all = headers(tree);
     expect(all.map((header) => header.props.name)).toEqual(["Group chats", "Bots", "Work"]);
     for (const header of all) {
-      expect(header.props.line).toBe(false);
-      expect(header.props.onMenu).toBeUndefined();
+      expect(header.props.line).toBe(true);
+      expect(header.props.count).toBeTypeOf("number");
+      expect(header.props.onDelete).toBeUndefined();
     }
-    expect(all[2]!.props.onDelete).toBeTypeOf("function");
-    expect(labelled(tree, "Add or remove bots in Work")).toBe(true);
+    expect(all[0]!.props.onMenu).toBeUndefined();
+    expect(all[2]!.props.onMenu).toBeTypeOf("function");
+    expect(all[2]!.props.addLabel).toBe("Add or remove bots in Work");
+    expect(labelled(tree, "Add or remove bots in Work")).toBe(false);
   });
 
   it("opens the team menu from the line's ⋯ button, under it, with every team action", () => {
@@ -241,17 +244,11 @@ describe("Simple-mode sidebar layout", () => {
     expect(headers(tree).find((header) => header.props.name === "Work")!.props.collapsed).toBe(true);
   });
 
-  it("drops a filter typed in Advanced when the sidebar switches to Simple, which has no field to clear it", () => {
+  it("puts the same search pill under Advanced's top row, with no inline filter", () => {
     fixture.advanced = true;
-    const field = render().tree.find((node) => node.type === "input" && node.props["aria-label"] === "Search bots and messages")!;
-    (field.props.onChange as (event: { target: { value: string } }) => void)({ target: { value: "bea" } });
-    expect(listedBots(render().tree)).toEqual(["bea"]);
-    fixture.advanced = false;
-    render();
-    for (const effect of fixture.effects) {
-      try { effect(); } catch {}
-    }
-    expect(listedBots(render().tree)).toEqual(["atlas", "bea", "dodo"]);
+    const { tree } = render();
+    expect(tree.filter((node) => node.type === SimpleSearchPill)).toHaveLength(1);
+    expect(tree.some((node) => node.type === "input" && node.props["aria-label"] === "Search bots and messages")).toBe(false);
   });
 
   it("puts one full-width search pill that opens the palette under the top row, with no inline filter", () => {

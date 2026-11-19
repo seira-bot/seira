@@ -92,12 +92,18 @@ describe("the room header in Simple mode", () => {
     expect(head).not.toMatch(/>\+\d/);
   });
 
-  it("keeps every control and the instructions line in Advanced mode", () => {
+  it("gives Advanced mode the group pill and a thread chip, and moves the other controls to the panel and the more menu", () => {
     fixture.advanced = true;
     const markup = view(room());
-    expect(shown(header(markup))).toEqual(Object.keys(CONTROLS));
-    expect(header(markup)).not.toContain("data-room-name");
-    expect(markup).toContain(BULLETIN);
+    const head = header(markup);
+    expect(head).toContain("data-room-name");
+    expect(head).toContain("data-room-count");
+    expect(head).toContain("9 bots");
+    expect(head).toContain("data-thread-chip");
+    expect(head).toContain('data-testid="room-more"');
+    expect(head).not.toContain("data-room-stop");
+    expect(shown(head)).toEqual([]);
+    expect(markup).not.toContain(BULLETIN);
   });
 
   it("keeps today's header on a remote client, which cannot open the Room panel", () => {

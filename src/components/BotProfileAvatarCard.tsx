@@ -14,6 +14,7 @@ import { mascotAccessories } from "../../shared/mascot-accessories";
 import { BOT_AVATAR_CROPS } from "../../shared/bot-avatar";
 import { PICKER_BODY_IDS, botBodyId, type BotBodyId } from "../../shared/bot-body";
 import { BotAvatar, MausAvatar } from "./Avatar";
+import { CastCharacterPicker } from "./CastCharacterPicker";
 import { AvatarImageGenerator } from "./AvatarImageGenerator";
 import { AvatarFraming, OrganizationAvatarIcons, RESET_MASCOT_PATCH, useAvatarImage, type AvatarPatch } from "./avatar-editing";
 import { t } from "@/lib/i18n";
@@ -115,6 +116,15 @@ export function BotProfileAvatarCard({
             </button>
           ))}
         </div>
+
+        {crop === "mascot" && (
+          <>
+            <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
+              {t("botIdentity.characters")}
+            </div>
+            <CastCharacterPicker look={bot} selectable disabled={busy} avatarSize={34} variant="control" onPick={onPatch} />
+          </>
+        )}
 
         {crop === "mascot" && PICKER_BODY_IDS.length > 1 && (
           <>

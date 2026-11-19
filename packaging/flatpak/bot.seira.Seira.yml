@@ -1,0 +1,71 @@
+app-id: bot.seira.Seira
+runtime: org.freedesktop.Platform
+runtime-version: '26.08'
+sdk: org.freedesktop.Sdk
+base: org.electronjs.Electron2.BaseApp
+base-version: '26.08'
+command: seira
+separate-locales: false
+
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.node24
+
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  - --talk-name=org.freedesktop.Notifications
+  # Agent programs live on the host. The server starts them with flatpak-spawn --host.
+  - --talk-name=org.freedesktop.Flatpak
+  - --env=ELECTRON_OZONE_PLATFORM_HINT=auto
+
+build-options:
+  append-path: /usr/lib/sdk/node24/bin
+  env:
+    XDG_CACHE_HOME: /run/build/seira/flatpak-node/cache
+    npm_config_cache: /run/build/seira/flatpak-node/npm-cache
+    npm_config_offline: 'true'
+    npm_config_nodedir: /usr/lib/sdk/node24
+    CI: 'true'
+
+modules:
+  - name: seira
+    buildsystem: simple
+    build-commands:
+      - . flatpak-node/electron-builder-arch-args.sh
+      - npm install -g --offline --prefix "$PWD/pnpm-local" flatpak-node/pnpm-tarball/pnpm-10.33.0.tgz
+      - export PATH="$PWD/pnpm-local/bin:$PATH" && pnpm install --offline --frozen-lockfile
+      - export PATH="$PWD/pnpm-local/bin:$PATH" && pnpm build && pnpm build:server && pnpm build:companion && pnpm build:updater
+      - mkdir -p electron-dist && unzip -q flatpak-node/cache/electron/electron-v*-linux-*.zip -d electron-dist
+      - >-
+        export PATH="$PWD/pnpm-local/bin:$PATH" &&
+        pnpm exec electron-builder --linux dir $ELECTRON_BUILDER_ARCH_ARGS --publish never
+        -c.afterPack=packaging/flatpak/after-pack.cjs
+        -c.electronDist=electron-dist
+      - mkdir -p /app/lib/seira
+      - cp -a release/linux-unpacked/. /app/lib/seira/
+      - install -Dm755 packaging/flatpak/seira /app/bin/seira
+      - install -Dm644 packaging/flatpak/bot.seira.Seira.desktop /app/share/applications/bot.seira.Seira.desktop
+      - install -Dm644 packaging/flatpak/bot.seira.Seira.metainfo.xml /app/share/metainfo/bot.seira.Seira.metainfo.xml
+      - install -Dm644 build/icon.svg /app/share/icons/hicolor/scalable/apps/bot.seira.Seira.svg
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - .git
+          - node_modules
+          - release
+          - dist
+          - dist-server
+          - dist-companion
+          - dist-native
+          - internal
+          - .claude
+      - generated-sources.json
+      - type: file
+        url: https://registry.npmjs.org/pnpm/-/pnpm-10.33.0.tgz
+        sha512: 10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319
+        dest: flatpak-node/pnpm-tarball

@@ -1,5 +1,5 @@
 import { useState, type JSX } from "react";
-import { Copy, Download, Gauge, MessagesSquare, MoreHorizontal, Search, SquarePen, Timer } from "lucide-react";
+import { Copy, Download, Folder, Gauge, MessagesSquare, MoreHorizontal, Search, SquarePen, Timer } from "lucide-react";
 
 import { requestChatFind, useChatFindOpen } from "@/lib/chat-find";
 import { cn } from "@/lib/cn";
@@ -15,6 +15,7 @@ import { useShowThreads } from "@/lib/thread-preferences";
 import { useStore, type Group } from "@/state/store";
 import { PRESET_TURN_LIMITS, useConversationTurnLimit } from "./ConversationTurnLimit";
 import { groupUsageSummary } from "./GroupUsageChip";
+import { roomWorkingFolder } from "./RoomWorkingFolder";
 import { ShortcutHint } from "./ShortcutHint";
 import { SidebarPopoverMenu, type SidebarMenuItem } from "./SidebarPopoverMenu";
 import { orderedThreadList } from "./SidebarThreadRow";
@@ -25,7 +26,10 @@ function turnLimitLabel(minutes: number): string {
   return t("room.panel.minutes", { minutes });
 }
 
-function useRoomMoreItems(group: Group): { items: SidebarMenuItem[]; on: boolean } {
+/** Advanced mode keeps the working folder in this menu: its editor opens under the header. */
+export type RoomMoreFolder = { open: boolean; onToggle: () => void };
+
+function useRoomMoreItems(group: Group, folder?: RoomMoreFolder): { items: SidebarMenuItem[]; on: boolean } {
   const { dispatch } = useStore();
   const showThreads = useShowThreads();
   const findOpen = useChatFindOpen(group.threadId);
@@ -45,6 +49,14 @@ function useRoomMoreItems(group: Group): { items: SidebarMenuItem[]; on: boolean
       trailing: <ShortcutHint id="find-conversation" />,
       onSelect: () => requestChatFind(group.threadId),
     },
+    ...(folder ? [{
+      key: "folder",
+      label: t("room.folder.title"),
+      icon: <Folder size={16} />,
+      active: folder.open,
+      value: roomWorkingFolder(group)?.name ?? t("room.panel.folder.own"),
+      onSelect: folder.onToggle,
+    } satisfies SidebarMenuItem] : []),
     ...(showThreads ? [] : [{
       key: "new-thread",
       heading: t("task.list"),
@@ -118,8 +130,8 @@ function useRoomMoreItems(group: Group): { items: SidebarMenuItem[]; on: boolean
   return { items, on: findOpen };
 }
 
-function RoundRoomMoreMenu({ group }: { group: Group }) {
-  const { items, on } = useRoomMoreItems(group);
+function RoundRoomMoreMenu({ group, folder }: { group: Group; folder?: RoomMoreFolder }) {
+  const { items, on } = useRoomMoreItems(group, folder);
   return (
     <SidebarPopoverMenu
       items={items}
@@ -142,7 +154,7 @@ function RoundRoomMoreMenu({ group }: { group: Group }) {
   );
 }
 
-export function RoomMoreMenu({ group }: { group: Group }): JSX.Element {
+export function RoomMoreMenu({ group, folder }: { group: Group; folder?: RoomMoreFolder }): JSX.Element {
   // Keyed by thread so a "Copied" note never follows the panel into another conversation.
-  return <RoundRoomMoreMenu key={group.threadId} group={group} />;
+  return <RoundRoomMoreMenu key={group.threadId} group={group} folder={folder} />;
 }

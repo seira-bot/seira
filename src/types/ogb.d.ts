@@ -545,6 +545,8 @@ export interface UpdaterState {
    * can be shown, use this.
    */
   installMode?: "restart" | "handoff";
+  /** an app store updates this install, so the app offers no update action of its own */
+  managedByStore?: boolean;
   /** hand-off only: the install command, already on the clipboard */
   command?: string;
   /** hand-off only: whether a terminal was opened to paste it into */

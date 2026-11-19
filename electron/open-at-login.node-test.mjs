@@ -137,3 +137,16 @@ test("a build that cannot add a login item offers no switch and changes nothing"
   assert.deepEqual(await handlers.get("open-at-login:set")({}, "yes"), { available: true, on: false }, "only a real true turns it on");
   assert.equal(redraws, 3, "the app menu's item is drawn again after each change");
 });
+
+test("Linux in a snap: the autostart entry starts the snap's stable command, not this revision's path", async t => {
+  const dir = await temp(t);
+  const config = path.join(dir, "config");
+  const entry = path.join(config, "autostart", "openmausbot.desktop");
+  const env = { XDG_CONFIG_HOME: config, SNAP: "/snap/seira/17", SNAP_NAME: "seira" };
+  const login = createOpenAtLogin({ app: fakeApp(), file: path.join(dir, "snap.json"), platform: "linux", home: dir, env, execPath: "/snap/seira/17/seira" });
+  login.choose(true);
+  assert.equal(await readFile(entry, "utf8"), autostartEntry("/snap/bin/seira", { lending: false }));
+  login.choose(false);
+  login.follow(true);
+  assert.equal(await readFile(entry, "utf8"), autostartEntry("/snap/bin/seira"));
+});

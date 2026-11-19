@@ -26,7 +26,7 @@ export function ActivityRun({
   /** Advanced mode: "working" while the turn runs; otherwise the card says "failed" when a step did. */
   status?: RunStatus;
   /** Advanced mode: the recorded trace of this turn, reached from the foot of the open card. */
-  trace?: { id: string; at: number };
+  trace?: { id: string; at: number; durationMs?: number };
   children: React.ReactNode;
 }) {
   const advanced = useAdvancedMode();
@@ -34,7 +34,7 @@ export function ActivityRun({
   const [tracing, setTracing] = useState(false);
   const bodyId = useId();
   const state = status ?? runStatus(messages);
-  const summary = advanced ? runHeadline(messages, state, label) : label ?? describeRun(messages, toolStepLabel);
+  const summary = advanced ? runHeadline(messages, state, label, trace?.durationMs) : label ?? describeRun(messages, toolStepLabel);
   useEffect(() => {
     if (forceOpen) setOpen(true);
   }, [forceOpen]);

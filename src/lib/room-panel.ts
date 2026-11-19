@@ -37,17 +37,18 @@ export function useRoomPanel(): string | null {
 }
 
 /** Whether the shell draws the open room's panel. Another room, another view, a bot panel or a mode change closes it. */
-export function useRoomPanelShown({ group, state, simple }: {
+export function useRoomPanelShown({ group, state, simple, advanced = false }: {
   group: Pick<Group, "id"> | undefined;
   state: Pick<AppState, "selectedId" | "activeView" | "settingsOpen">;
   simple: boolean;
+  advanced?: boolean;
 }): boolean {
   const open = useRoomPanel();
-  useEffect(() => closeRoomPanel(), [state.selectedId, state.activeView, simple]);
+  useEffect(() => closeRoomPanel(), [state.selectedId, state.activeView, simple, advanced]);
   useEffect(() => {
     if (state.settingsOpen) closeRoomPanel();
   }, [state.settingsOpen]);
-  return simple && state.activeView === "chat" && group !== undefined && open === group.id;
+  return (simple || advanced) && state.activeView === "chat" && group !== undefined && open === group.id;
 }
 
 // A remote client cannot open desktop panels, so it keeps every control in the header.
@@ -58,4 +59,14 @@ export function simpleRoomHeader({ advanced, remoteClient, group, setupPending }
   setupPending: boolean;
 }): boolean {
   return !advanced && !remoteClient && !group.dm && !setupPending;
+}
+
+/** Advanced mode's room header: the pill that opens the room panel, on the same rooms Simple mode gives its calm header. */
+export function advancedRoomHeader({ advanced, remoteClient, group, setupPending }: {
+  advanced: boolean;
+  remoteClient: boolean;
+  group: Pick<Group, "dm">;
+  setupPending: boolean;
+}): boolean {
+  return advanced && !remoteClient && !group.dm && !setupPending;
 }

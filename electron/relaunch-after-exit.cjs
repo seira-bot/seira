@@ -1,6 +1,7 @@
 "use strict";
 
 const { spawn } = require("node:child_process");
+const { snapCommand } = require("./snap-command.cjs");
 
 // Electron's app.relaunch() cannot restart an AppImage: its relauncher process
 // runs with PR_SET_NO_NEW_PRIVS, which the kernel keeps across exec. The
@@ -48,12 +49,15 @@ function relaunchAppImageAfterExit(appImage, args, { env, onError }) {
  * Restarts the desktop with `args` after it quits. The caller still quits the app.
  */
 function relaunchAfterExit(app, args, { env = process.env, onError }) {
-  if (!env.APPIMAGE) {
+  // A snap's own execPath names the revision that is running; its command starts the current one. The command goes
+  // through the same waiting shell, because Electron's relauncher runs with no_new_privs, which snap-confine cannot use.
+  const target = env.APPIMAGE || snapCommand({ env });
+  if (!target) {
     app.relaunch({ args });
     return;
   }
   try {
-    relaunchAppImageAfterExit(env.APPIMAGE, args, { env, onError });
+    relaunchAppImageAfterExit(target, args, { env, onError });
   } catch (error) {
     onError(error);
   }

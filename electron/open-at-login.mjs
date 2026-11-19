@@ -3,6 +3,7 @@
 // launch starts hidden: one the person set up themselves, here or in the system's settings, opens the window.
 import fs from "node:fs";
 import path from "node:path";
+import snap from "./snap-command.cjs";
 
 export const HIDDEN_ARG = "--omb-hidden";
 const MARK = "X-OpenMausBot-Lending=true";
@@ -36,6 +37,8 @@ export function createOpenAtLogin({ app, file, platform = process.platform, env 
    * default), so lending's `--omb-hidden` entry reads as off; `launchItems` lists the entries that start this executable,
    * each with its name, arguments and whether Task Manager has it enabled. */
   const windowsStartsApp = () => (app.getLoginItemSettings().launchItems ?? []).filter(item => item.enabled !== false);
+  /** An AppImage and a snap run from a path that changes: the AppImage file, or the snap's own command. */
+  const launcher = () => env.APPIMAGE || snap.snapCommand({ env }) || execPath;
   const ours = () => { try { return fs.readFileSync(autostart, "utf8").includes(MARK); } catch { return false; } };
   let holding = false;
   let whenChosen = () => {};
@@ -44,7 +47,7 @@ export function createOpenAtLogin({ app, file, platform = process.platform, env 
     if (platform === "linux") {
       if (on) {
         fs.mkdirSync(path.dirname(autostart), { recursive: true });
-        fs.writeFileSync(autostart, autostartEntry(env.APPIMAGE || execPath, { lending: false }));
+        fs.writeFileSync(autostart, autostartEntry(launcher(), { lending: false }));
       } else if (!ours()) fs.rmSync(autostart, { force: true });
       return;
     }
@@ -64,7 +67,7 @@ export function createOpenAtLogin({ app, file, platform = process.platform, env 
         if (platform === "linux") {
           if (on && !fs.existsSync(autostart)) {
             fs.mkdirSync(path.dirname(autostart), { recursive: true });
-            fs.writeFileSync(autostart, autostartEntry(env.APPIMAGE || execPath));
+            fs.writeFileSync(autostart, autostartEntry(launcher()));
           } else if (!on && ours()) fs.rmSync(autostart, { force: true });
           return;
         }
@@ -118,7 +121,7 @@ export function createOpenAtLogin({ app, file, platform = process.platform, env 
       if (!app.isPackaged) return;
       if (platform === "linux") {
         if (!fs.existsSync(autostart) || ours()) return;
-        if (lending) fs.writeFileSync(autostart, autostartEntry(env.APPIMAGE || execPath));
+        if (lending) fs.writeFileSync(autostart, autostartEntry(launcher()));
         else fs.rmSync(autostart, { force: true });
         return;
       }

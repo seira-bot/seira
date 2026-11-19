@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
+import { CAST_CHARACTERS } from "../shared/cast-characters.ts";
 import type { BrandBodyId } from "../shared/carved-bodies.ts";
 import type { MascotAccessoryId } from "../shared/mascot-accessories.ts";
 import { MAUS_COLOR_NAMES, type MausColor } from "../shared/wire.ts";
@@ -17,35 +18,12 @@ export interface StarterCharacter {
   mascotAccessories: MascotAccessoryId[];
 }
 
-/** The cast of brand/mascot/cast/cast.json without Seira: a hair style and its accessories. The first fifteen each wear
+/** The cast of `CAST_CHARACTERS` without the colour: a hair style and its accessories. The first fifteen each wear
  * their own hair style. Seira's own hair stays hers. */
-export const STARTER_CHARACTERS: readonly StarterCharacter[] = [
-  { mascotBody: "long-straight", mascotAccessories: ["hairpin"] },
-  { mascotBody: "bob", mascotAccessories: ["headset-mic"] },
-  { mascotBody: "ponytail", mascotAccessories: ["glasses", "earring"] },
-  { mascotBody: "long-wavy", mascotAccessories: ["earring", "hairpin"] },
-  { mascotBody: "seira-long", mascotAccessories: ["ribbon"] },
-  { mascotBody: "twin-tails", mascotAccessories: ["ribbon"] },
-  { mascotBody: "bun", mascotAccessories: ["tiara"] },
-  { mascotBody: "center-part", mascotAccessories: ["earring"] },
-  { mascotBody: "long-loose", mascotAccessories: ["glasses", "bowtie"] },
-  { mascotBody: "slick-back", mascotAccessories: ["bowtie"] },
-  { mascotBody: "messy", mascotAccessories: ["headset-mic"] },
-  { mascotBody: "short-neat", mascotAccessories: ["headphones", "glasses"] },
-  { mascotBody: "long-tied", mascotAccessories: ["scarf"] },
-  { mascotBody: "spiky", mascotAccessories: ["headphones"] },
-  { mascotBody: "buzz", mascotAccessories: ["glasses", "antenna"] },
-  { mascotBody: "long-straight", mascotAccessories: ["earring"] },
-  { mascotBody: "short-neat", mascotAccessories: ["bowtie"] },
-  { mascotBody: "slick-back", mascotAccessories: [] },
-  { mascotBody: "long-loose", mascotAccessories: [] },
-  { mascotBody: "long-tied", mascotAccessories: ["sunglasses", "earring"] },
-  { mascotBody: "messy", mascotAccessories: ["earring"] },
-  { mascotBody: "long-loose", mascotAccessories: ["earring"] },
-  { mascotBody: "spiky", mascotAccessories: [] },
-  { mascotBody: "slick-back", mascotAccessories: ["glasses"] },
-  { mascotBody: "center-part", mascotAccessories: ["glasses", "bowtie"] },
-];
+export const STARTER_CHARACTERS: readonly StarterCharacter[] = CAST_CHARACTERS.map(({ mascotBody, mascotAccessories }) => ({
+  mascotBody,
+  mascotAccessories: [...mascotAccessories],
+}));
 
 export interface WornLook {
   color: MausColor;

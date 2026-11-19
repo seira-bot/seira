@@ -99,6 +99,38 @@ describe("BotProfileAvatarCard hair picker", () => {
   });
 });
 
+describe("BotProfileAvatarCard character picker", () => {
+  it("shows the first ten cast characters by name, with a toggle for the rest", () => {
+    const markup = renderCard(makeBot());
+    expect(markup).toContain(">Characters<");
+    expect((markup.match(/data-cast-character="/g) ?? []).length).toBe(10);
+    expect(markup).toContain('aria-label="Use the look of Mira"');
+    expect(markup).toContain(">Mira<");
+    expect(markup).toContain("Show all 25 characters");
+    expect(markup).not.toContain('data-cast-character="ellis"');
+  });
+
+  it("presses the character the bot wears", () => {
+    const markup = renderCard(makeBot({ color: "red", mascotBody: "ponytail", mascotAccessories: ["earring", "glasses"] }));
+    expect(markup).toContain('aria-pressed="true" aria-label="Use the look of Rhea"');
+    expect((markup.match(/aria-label="Use the look of [^"]*"/g) ?? []).length).toBe(10);
+  });
+
+  it("starts open when the worn character is past the first ten", () => {
+    const markup = renderCard(makeBot({ color: "yellow", mascotBody: "center-part", mascotAccessories: ["glasses", "bowtie"] }));
+    expect((markup.match(/data-cast-character="/g) ?? []).length).toBe(25);
+    expect(markup).toContain("Show fewer characters");
+  });
+
+  it("is hidden for every flat crop", () => {
+    for (const crop of ["circle", "rounded", "square"] as const) {
+      const markup = renderCard(makeBot({ avatarCrop: crop }));
+      expect(markup).not.toContain(">Characters<");
+      expect(markup).not.toContain("data-cast-character=");
+    }
+  });
+});
+
 function colorButton(markup: string, color: string): string {
   const tag = markup.match(new RegExp(`<button[^>]*aria-label="Use ${color} mascot color"[^>]*>`))?.[0];
   expect(tag, `${color} color button`).toBeDefined();

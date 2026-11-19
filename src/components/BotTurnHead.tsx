@@ -6,10 +6,12 @@ import { SpeakerName } from "./RoomClusterLabel";
 
 /** Where a bot's turn begins in Simple mode: its face on the start edge, then its name and the time. The face hangs in the
  * indent the turn's own rows leave, so the head and the prose under it share one start edge. */
-export function BotTurnHead({ bot, name, color, time, onOpen, children }: {
+export function BotTurnHead({ bot, name, color, role, time, onOpen, children }: {
   bot?: Bot;
   name: string;
   color: string;
+  /** A room's turn head names what the bot does there, between its name and the time. */
+  role?: string;
   time: string;
   onOpen?: () => void;
   children?: React.ReactNode;
@@ -38,6 +40,7 @@ export function BotTurnHead({ bot, name, color, time, onOpen, children }: {
         </button>
       ) : <span aria-hidden="true" className="absolute -start-[46px] top-0 flex">{face}</span>}
       <SpeakerName name={name} color={color} />
+      {role && <span dir="auto" data-turn-role className="max-w-[12rem] truncate text-[12px] text-ink-tertiary">{role}</span>}
       <span className="text-[12px] tabular-nums text-ink-tertiary">{time}</span>
       {children}
     </div>

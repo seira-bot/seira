@@ -446,3 +446,44 @@ describe("one body for every bot", () => {
     expect(everywhere()).toBeNull();
   });
 });
+
+describe("cast characters in the avatar editor", () => {
+  const openEditor = async (shown: Bot) => {
+    flushSync(() => root.render(createElement("aside", { role: "dialog" }, createElement(BotPanel, { bot: shown, derived, linkedSection: null, onClose }))));
+    await settle();
+    click(host.querySelector("[data-panel-avatar]"));
+    await settle();
+  };
+  const characters = () => [...host.querySelectorAll("[data-cast-character]")];
+  const patch = (derived as unknown as { patch: ReturnType<typeof vi.fn> }).patch;
+
+  it("shows ten named characters above the hair, then all 25 after the toggle", async () => {
+    await openEditor(bot);
+    expect(characters()).toHaveLength(10);
+    expect(characters()[0]!.textContent).toBe("Mira");
+    const group = host.querySelector('[role="group"][aria-label="Characters"]')!;
+    const hair = host.querySelector('[role="group"][aria-label="Hair"]');
+    if (hair) expect(group.compareDocumentPosition(hair) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const more = host.querySelector("[data-cast-more]")!;
+    expect(more.textContent).toBe("Show all 25 characters");
+    click(more);
+    expect(characters()).toHaveLength(25);
+    expect(more.getAttribute("aria-expanded")).toBe("true");
+    expect(more.textContent).toBe("Show fewer characters");
+  });
+
+  it("picking a character sends its whole look and the mascot crop", async () => {
+    patch.mockReset();
+    await openEditor({ ...bot, avatarUrl: "/avatars/scout.png", avatarCrop: "circle" });
+    click(host.querySelector('[data-avatar-tab="bot"]'));
+    expect(characters().every((button) => button.getAttribute("aria-pressed") === "false")).toBe(true);
+    click(host.querySelector('[data-cast-character="rhea"]'));
+    expect(patch).toHaveBeenCalledWith({ color: "red", mascotBody: "ponytail", mascotAccessories: ["glasses", "earring"], avatarCrop: "mascot" });
+  });
+
+  it("presses the character the bot wears", async () => {
+    await openEditor({ ...bot, color: "teal", mascotBody: "short-neat", mascotAccessories: ["glasses", "headphones"] });
+    expect(host.querySelector('[data-cast-character="bix"]')!.getAttribute("aria-pressed")).toBe("true");
+    expect(characters().filter((button) => button.getAttribute("aria-pressed") === "true")).toHaveLength(1);
+  });
+});

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Seira
+Comment=Your own team of AI bots, in a chat app
+Exec=seira %U
+Icon=bot.seira.Seira
+Terminal=false
+Categories=Utility;
+Keywords=AI;Agents;Chat;Productivity;
+MimeType=x-scheme-handler/openmausbot;
+StartupWMClass=Seira
+StartupNotify=true

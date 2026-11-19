@@ -19,6 +19,7 @@ import {
   loadUniversalPins,
   loadSidebarAttentionPinned,
   loadCollapsedSections,
+  loadCollapsedSectionsOrDefault,
   loadSectionOrder,
   loadSidebarDensity,
   loadSidebarToolsLayout,
@@ -122,6 +123,12 @@ describe("sidebar section preferences", () => {
       "section:Work",
       "builtin:bots",
     ]);
+  });
+
+  it("starts with the Tools list closed until the person has chosen, then keeps their choice", () => {
+    expect(loadCollapsedSectionsOrDefault({ getItem: () => null })).toEqual(["builtin:tools"]);
+    expect(loadCollapsedSectionsOrDefault({ getItem: () => JSON.stringify([]) })).toEqual([]);
+    expect(loadCollapsedSectionsOrDefault({ getItem: () => JSON.stringify(["section:Work"]) })).toEqual(["section:Work"]);
   });
 
   it("ignores malformed storage and toggles ids without mutating the source", () => {
