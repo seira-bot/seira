@@ -67,3 +67,20 @@ load, so the times are noisy. The counts are stable.
 | Stream, components per commit | 27.5 small, 74.3 big |
 | Idle renderer CPU | 0.85% small, 1.3% big |
 | Idle React commits in 20 s | 0 to 2 |
+
+## 2026-11-19 observations: open a long conversation
+
+A long conversation now opens with its newest 40 messages, and scrolling up
+adds 40 at a time. Same host, two runs each of `--only big`, before and after
+in turn. The host was under load, so the times are noisy.
+
+| Measure | Before | After |
+|---------|--------|-------|
+| Switch back to the long conversation, mounts | 1,433 | 502 |
+| Switch back, longest task (profiling build) | 245 to 276 ms | 123 to 139 ms |
+| Switch back, time to show | 185 to 188 ms | 95 to 150 ms |
+| Switch back a second time | 87 to 124 ms | 63 to 65 ms |
+| Scroll up, longest task | 98 to 103 ms | 62 to 66 ms |
+| Scroll up, slowest frame | 103 to 107 ms | 66 to 70 ms |
+| Scroll up, DOM nodes after | 15,153 | 10,248 |
+| Stream in the long conversation, components per commit | 74 to 75 | 42 |
