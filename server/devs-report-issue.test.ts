@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { isBugReportIssueUrl } from "../shared/devs-report-issue.ts";
-import type { DevsReportPayload } from "./devs-report.ts";
-import { bugReportIssueUrl, MAX_ISSUE_URL } from "./devs-report-issue.ts";
+import { buildDevsReport, type DevsReportPayload } from "./devs-report.ts";
+import { bugReportIssueUrl, conversationDiagnostics, MAX_ISSUE_URL } from "./devs-report-issue.ts";
 
 const INSTALL = "4b7c1f2e-0a9d-4c2b-9f1e-6d5a4b3c2d1e";
 const PAYLOAD: DevsReportPayload = {
@@ -80,5 +80,36 @@ describe("the prefilled issue form for a @devs report", () => {
     const url = bugReportIssueUrl({ ...PAYLOAD, description: "日本語".repeat(5_000), diagnostics: "😀".repeat(5_000) });
     expect(url.length).toBeLessThanOrEqual(MAX_ISSUE_URL);
     expect(() => decodeURIComponent(url)).not.toThrow();
+  });
+});
+
+describe("what of the diagnostics goes into a public issue", () => {
+  const built = () => buildDevsReport({
+    installId: INSTALL, appVersion: "0.1.128", platform: "linux x64, team cloud", os: "linux 6.1 x64", runsOn: "team cloud", node: "v24.0.0", uptimeSeconds: 90, now: Date.UTC(2026, 10, 19),
+    threadId: "t1", messageId: "m1", where: "a chat with Scout", message: "@devs it broke", words: "it broke", bots: [],
+    problems: ["2026-11-19T08:00:00.000Z tool Bash failed: convert: command not found"],
+    performance: ["## Performance", "turn t1 took 4200 ms"],
+    cloudComputers: ["computer cc-9f3a opened 3 times"],
+    log: ["2026-11-19T08:59:00.000Z warn teammate Grace opened /srv/private/plan.md"],
+  }, []);
+
+  it("keeps the conversation's problems and drops the server-wide sections", () => {
+    const logs = fields(bugReportIssueUrl(built())).get("logs")!;
+    expect(logs).toContain("## Recent problems in this conversation, newest last");
+    expect(logs).toContain("tool Bash failed: convert: command not found");
+    expect(logs).not.toContain("teammate Grace");
+    expect(logs).not.toContain("Server warnings and errors");
+    expect(logs).not.toContain("cc-9f3a");
+    expect(logs).not.toContain("Cloud computers");
+    expect(logs).not.toContain("turn t1 took 4200 ms");
+    expect(logs).not.toContain("Performance");
+    expect(logs).not.toContain("Install:");
+  });
+
+  it("cuts before the first server-wide section when the problems header is missing", () => {
+    const diagnostics = "Seira @devs report\nApp version: 1\n\n## Conversation\nMessage: m1\n\n## Cloud computers since the server started\ncomputer x\n\n## Server warnings and errors, newest last\nsecret line";
+    expect(conversationDiagnostics(diagnostics)).toBe("Seira @devs report\nApp version: 1\n\n## Conversation\nMessage: m1\n");
+    const other = "Seira @devs report\n\n## Server warnings and errors, newest last\nsecret line\n\n## Cloud computers since the server started\nx";
+    expect(conversationDiagnostics(other)).toBe("Seira @devs report\n");
   });
 });

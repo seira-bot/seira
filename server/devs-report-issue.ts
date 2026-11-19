@@ -16,8 +16,23 @@ function tidy(text: string, own: readonly string[], home: string): string {
   for (const value of own) if (value) out = out.split(value).join("");
   if (home.length > 1) out = out.replace(new RegExp(`${escapeRegExp(home.replace(/[\\/]+$/, ""))}(?=$|[\\\\/\\s"'\`),:;])`, "g"), "~");
   return out
-    .replace(/\/(?:home|Users)\/[^/\s"'`)]+/g, "~")
-    .replace(/[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s"'`)]+/g, "~");
+    .replace(/[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s"'`)]+/g, "~")
+    .replace(/\/(?:home|Users)\/[^/\s"'`)]+/g, "~");
+}
+
+const PROBLEMS_HEADER = "## Recent problems in this conversation, newest last";
+const BROAD_HEADERS = /^## (?:Server warnings and errors|Cloud computers|Performance)/;
+
+/** Only this conversation's part of the diagnostics: the lines before the server-wide sections. */
+export function conversationDiagnostics(diagnostics: string): string {
+  const lines = diagnostics.split("\n");
+  const header = lines.indexOf(PROBLEMS_HEADER);
+  if (header >= 0) {
+    const blank = lines.findIndex((line, index) => index > header && line.trim() === "");
+    return lines.slice(0, blank < 0 ? lines.length : blank).join("\n");
+  }
+  const broad = lines.findIndex((line) => BROAD_HEADERS.test(line));
+  return lines.slice(0, broad < 0 ? lines.length : broad).join("\n");
 }
 
 function clipText(text: string, length: number): string {
@@ -38,7 +53,7 @@ function largest(size: number, fits: (n: number) => boolean): number {
 export function bugReportIssueUrl(payload: DevsReportPayload, home = homedir()): string {
   const own = [payload.installId, payload.contactEmail, payload.contact].filter((value): value is string => Boolean(value));
   const clean = (text: string) => tidy(text, own, home);
-  const diagnostics = clean(payload.diagnostics.split("\n").filter((line) => !/^\s*Install:\s/.test(line)).join("\n")).trimEnd();
+  const diagnostics = clean(conversationDiagnostics(payload.diagnostics).split("\n").filter((line) => !/^\s*Install:\s/.test(line)).join("\n")).trimEnd();
   const description = clean(payload.description).trim();
   const words = description.split("\n").map((line) => line.trim()).find(Boolean) ?? "";
   const title = !words || words === NO_WORDS ? DEFAULT_TITLE : clipText(words, TITLE_MAX).trimEnd();
