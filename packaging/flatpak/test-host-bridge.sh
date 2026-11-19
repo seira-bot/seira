@@ -29,6 +29,7 @@ echo "host bridge: program installed"
 mkdir -p "$bin"
 printf '#!/bin/sh\necho "9.9.9 (codex-cli dummy)"\n' >"$bin/codex"
 chmod +x "$bin/codex"
+sleep 4
 found=$(curl -fsS "$api/api/cli-candidates?name=codex")
 echo "$found"
 case "$found" in *"$bin/codex"*) echo "PASS: dummy found on the host" ;; *) echo "FAIL: dummy not found"; exit 1 ;; esac
