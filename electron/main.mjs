@@ -2820,9 +2820,11 @@ app.whenReady().then(async () => {
     isHidden: () => desktopTray?.isHidden() ?? false,
     onShow: (win) => desktopTray?.windowShown(win),
     onFinished: () => { startupScreen = null; },
+    reducedMotion: () => { try { return systemPreferences.getAnimationSettings().prefersReducedMotion; } catch { return false; } },
   });
   await startupScreen?.ready;
   if (desktopShutdownStarted) return;
+  startupScreen?.progress("shown");
   session.defaultSession.on("will-download", (_event, item) => {
     if (mediaDownloads.claim(item)) return;
     item.setSavePath(collisionFreeDownloadPath(app.getPath("downloads"), item.getFilename()));
@@ -2997,6 +2999,7 @@ app.whenReady().then(async () => {
     if (!serverReady && !desktopShutdownStarted) serverSupervisor.startLater(startServerPackaged); // an always-on home keeps trying
   }
   if (desktopShutdownStarted) return;
+  startupScreen?.progress("engine");
   if (app.isPackaged && !desktopRemoteAccess) { void ensureManagedDesktop().start().then(() => companyBackupSchedule.start()).catch(() => {}); void managedDesktop.whenRestored().then(() => tailnetShare.recheck()); }
   // Fresh local use never makes a Cloud request; start only restores an existing grant.
   if (app.isPackaged && !desktopRemoteAccess) {
