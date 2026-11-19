@@ -198,12 +198,12 @@ export function AdvancedPanel({ bot, derived, sections, query, appNames, appsPha
                         />
                       </button>
                       {id === "memory" ? (
-                        <div id="bot-settings-body-memory" role="region" aria-label={label} hidden={!isOpen} className="pb-4 ps-10 pe-3.5 pt-0.5">
+                        <div id="bot-settings-body-memory" data-advanced-body="" role="region" aria-label={label} hidden={!isOpen} className="pb-4 ps-10 pe-3.5 pt-0.5">
                           {renderBody("memory")}
                         </div>
                       ) : (
                         isOpen && (
-                          <div id={`bot-settings-body-${id}`} role="region" aria-label={label} className="pb-4 ps-10 pe-3.5 pt-0.5">
+                          <div id={`bot-settings-body-${id}`} data-advanced-body="" role="region" aria-label={label} className="pb-4 ps-10 pe-3.5 pt-0.5">
                             {renderBody(id)}
                           </div>
                         )

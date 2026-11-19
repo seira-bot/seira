@@ -165,6 +165,16 @@ describe("the Advanced panel", () => {
     expect(fixture.dispatch).toHaveBeenLastCalledWith({ type: "toggleSettings", open: true });
   });
 
+  it("marks an open section body as the Advanced scope, and no other part of the panel", () => {
+    expect(host.querySelectorAll("[data-advanced-body]")).toHaveLength(1);
+    expect(host.querySelector("[data-advanced-body]")!.id).toBe("bot-settings-body-memory");
+    render({ botSettingsSection: "model", botSettingsExpandAccordion: true });
+    const scoped = [...host.querySelectorAll("[data-advanced-body]")].map((node) => node.id);
+    expect(scoped).toEqual(["bot-settings-body-memory", "bot-settings-body-model"]);
+    expect(row("model").contains(host.querySelector("#bot-settings-body-model"))).toBe(true);
+    expect(host.querySelector("[data-advanced-hero]")!.closest("[data-advanced-body]")).toBeNull();
+  });
+
   it("filters the rows as you search and hides a group with no match", () => {
     type("provider");
     const shown = [...host.querySelectorAll<HTMLElement>("[data-bot-settings-section]")].filter((node) => !node.hidden).map((node) => node.dataset.botSettingsSection);
