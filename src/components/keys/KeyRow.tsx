@@ -465,7 +465,7 @@ export function KeyRow({
                 {engineCheckError && <p role="alert" className="text-danger">{t("engineSetup.checkFailed", { reason: engineCheckError })}</p>}
               </div>
             )}
-            {note && <p className="text-ink-secondary">{note}</p>}
+            {note && <p className="whitespace-pre-line text-ink-secondary">{note}</p>}
             {verdict && <p role="status" className="whitespace-pre-line text-ink-secondary">{verdict}</p>}
             {(fieldShown && target.href && !settings) || (!fieldShown && saved.configured && target.test) ? (
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1">

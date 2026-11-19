@@ -6,7 +6,7 @@ Seira uses one Composio project API key and one reusable Composio Session. That 
 
 1. Open your project's [API Keys page](https://dashboard.composio.dev/~/project/settings/api-keys) in the Composio Dashboard (sign in or create a project first if asked).
 2. Create a project key there if the project has none, then copy it (it begins with `ak_`). The `ck_` key on the personal **Sessions & API Key** page is a different key and won't work.
-3. In Seira, open **Settings → API keys** and save it under **Self-host connected apps → Composio project key**.
+3. In Seira, open **Settings → API keys** and save it under **Apps and tools → Composio project key**.
 4. Open **Connected apps** and choose Gmail, GitHub, Slack, or another service. Enter a unique label such as `work` or `personal`, then finish the authorization in your normal browser.
 5. To connect another account for the same app, choose **Add account**, give it a unique label, and finish the second authorization in your browser.
 
@@ -16,7 +16,7 @@ The desktop app validates the key before saving it. The key is encrypted using E
 
 ## Seira Cloud
 
-Seira ships with no connected-apps service. A Cloud home needs the owner's Composio project key, saved under **Settings → API keys → Self-host connected apps**.
+Seira ships with no connected-apps service. A Cloud home needs the owner's Composio project key, saved under **Settings → API keys → Apps and tools → Composio project key**.
 
 A Cloud home uses a connected-apps service only when `OMB_COMPOSIO_BROKER_URL` names one, for example your own deploy of `cloudflare/composio-broker`. Without it, the app behaves as if `OMB_COMPOSIO_BROKER=off`: connected apps need your own project key, and app-event automations are not available.
 
@@ -26,7 +26,7 @@ When a service is named, at every start a Cloud home's server makes sure it has 
 - Every later start serves that token at once and checks it with `GET /v1/me`. Only a refusal (401) registers a new installation; an outage or a rate limit keeps the token, so the Cloud's connected accounts are never stranded.
 - While the Cloud has no token (the service is down or refuses new registrations), the server keeps booting and serving, Connected apps says the service is temporarily unavailable, and it tries again after 30 seconds, then 1, 2, 5, 10 and every 30 minutes, with some jitter.
 - The file never goes into a backup or a move to another computer, and a restore keeps the Cloud's own (`server/workspace-backup-policy.ts`): its connected accounts belong to that installation.
-- A Composio project key the owner saves under **Self-host connected apps** still wins, and while it is saved the server sends the service nothing, not even its start-up check. Clearing it returns to the named service, within about a minute.
+- A Composio project key the owner saves under **Apps and tools → Composio project key** still wins, and while it is saved the server sends the service nothing, not even its start-up check. Clearing it returns to the named service, within about a minute.
 
 The server run from source and the packaged desktop app behave the same way: both register only with a service that `OMB_COMPOSIO_BROKER_URL` names.
 

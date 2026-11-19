@@ -1545,7 +1545,7 @@ The plan includes connected apps (Gmail, Outlook, Slack, LinkedIn, Calendly and
 the rest of the catalog) only when the Cloud image names a connected-apps
 service with `OMB_COMPOSIO_BROKER_URL` (env, not secret). Without it, the
 Cloud behaves as if `OMB_COMPOSIO_BROKER=off`: the owner adds a Composio
-project key under **Settings → API keys → Self-host connected apps**.
+project key under **Settings → API keys → Apps and tools → Composio project key**.
 
 When a service is named, the Admin sets nothing else for it: at every start the
 server registers the Cloud's own installation if it has none, keeps the token
