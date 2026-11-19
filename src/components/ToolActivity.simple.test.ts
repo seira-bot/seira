@@ -81,10 +81,42 @@ describe("ActivityRun", () => {
     expect(html).toContain("3 steps · Run a command ×2, Look at the screen");
   });
 
-  it("keeps the tool names in Advanced mode", () => {
+  it("heads Advanced mode's card with the time worked and the step count", () => {
     mode.advanced = true;
-    const html = renderToStaticMarkup(createElement(ActivityRun, { messages: steps, children: null }));
-    expect(html).toContain("3 steps · Bash, ls -la /tmp, mcp__omb__screenshot");
+    const html = renderToStaticMarkup(createElement(ActivityRun, { messages: steps, label: "Worked for 29s", children: null }));
+    expect(html).toContain("Worked for 29s");
+    expect(html).toContain("3 steps");
+    expect(html).not.toContain("Run a command");
+  });
+
+  it("says Working while the turn runs and Failed when a step failed", () => {
+    mode.advanced = true;
+    const working = renderToStaticMarkup(createElement(ActivityRun, { messages: steps, status: "working", children: null }));
+    expect(working).toContain("Working…");
+    expect(working).toContain('data-run-status="working"');
+    const failed = renderToStaticMarkup(createElement(ActivityRun, { messages: [{ ...steps[0]!, tool: { name: "Bash", ok: false } }], children: null }));
+    expect(failed).toContain("Failed");
+    expect(failed).toContain("1 step");
+  });
+
+  it("draws the steps under Advanced mode's card as timeline rows", () => {
+    mode.advanced = true;
+    const html = renderToStaticMarkup(createElement(ActivityRun, { messages: steps, children: createElement(ToolActivity, { tool: { name: "Bash", ok: true, summary: "ls" } }) }));
+    expect(html).toContain("data-step-timeline");
+    expect(html).toContain("data-step-row");
+    expect(html).toMatch(/font-mono text-\[13px\] font-medium[^>]*>Bash<\/span>/);
+  });
+
+  it("shows Running on a live step row", () => {
+    mode.advanced = true;
+    const html = renderToStaticMarkup(createElement(ActivityRun, { messages: steps, status: "working", children: createElement(ToolActivity, { tool: { name: "Bash" }, live: true }) }));
+    expect(html).toContain("Running");
+  });
+
+  it("keeps a trace link at the foot of the open card", () => {
+    mode.advanced = true;
+    const html = renderToStaticMarkup(createElement(ActivityRun, { messages: steps, trace: { id: "t", at: 1 }, children: null }));
+    expect(html).toContain('data-testid="view-trace"');
   });
 });
 

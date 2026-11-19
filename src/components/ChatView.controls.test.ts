@@ -140,7 +140,7 @@ describe("the header's right side", () => {
     expect(markup).toContain('data-tour="computer"');
     expect(markup).toContain('data-testid="chat-more"');
     const more = fixture.menus.find((menu) => menu.ariaLabel === "More")!;
-    expect(more.items.map((item) => item.key)).toEqual(["find", "start-fresh", "as-template", "copy", "download", "activity", "inspector"]);
+    expect(more.items.map((item) => item.key)).toEqual(["rename", "find", "start-fresh", "as-template", "copy", "download", "activity", "inspector"]);
     const inspector = more.items.find((item) => item.key === "inspector")!;
     expect(inspector.disabled).toBeFalsy();
     expect(inspector.heading).toBeUndefined();
@@ -163,6 +163,32 @@ describe("the Advanced transcript", () => {
       expect(markup).toContain("data-activity-run");
       expect(markup).toMatch(/data-activity-run[\s\S]*aria-expanded="true"[\s\S]*data-mid="read"/);
       expect(markup).toContain('data-chat-bubble="simple"');
+      // The head comes first, then the card, then the reply.
+      expect(markup.indexOf("data-turn-head")).toBeLessThan(markup.indexOf("data-activity-run"));
+      expect(markup.indexOf("data-activity-run")).toBeLessThan(markup.indexOf("Done."));
+      expect(markup.match(/data-turn-head/g)).toHaveLength(1);
+      expect(markup).toContain("data-step-timeline");
+    } finally {
+      fixture.showToolCalls = false;
+    }
+  });
+
+  it("shows one open Working card with the steps so far while the turn runs", () => {
+    fixture.advanced = true;
+    fixture.showToolCalls = true;
+    const messages: Bot["messages"] = [
+      { id: "ask", role: "user", kind: "text", at: 1, text: "Check it" },
+      { id: "read", role: "bot", kind: "activity", at: 2, tool: { name: "Read", ok: true } },
+      { id: "bash", role: "bot", kind: "activity", at: 3, tool: { name: "Bash" } },
+    ];
+    try {
+      const markup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: true, messages } }));
+      expect(markup).toContain('data-run-status="working"');
+      expect(markup).toContain("Working…");
+      expect(markup).toMatch(/data-activity-run[\s\S]*aria-expanded="true"/);
+      expect(markup).toContain('data-mid="read"');
+      expect(markup).toContain('data-mid="bash"');
+      expect(markup).not.toContain("thinking-shimmer");
     } finally {
       fixture.showToolCalls = false;
     }
