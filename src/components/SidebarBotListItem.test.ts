@@ -252,7 +252,6 @@ describe("BotListItem", () => {
   });
 
   const titleLine = /<div class="truncate text-\[11px\][^"]*">([^<]*)<\/div>/;
-  const roleOf = (markup: string) => /<span data-testid="bot-role"[^>]*><span title="([^"]*)" class="([^"]*)"><span class="sr-only">, <\/span>([^<]*)<\/span>/.exec(markup);
 
   it("keeps the bot's role out of the row and in its tooltip", () => {
     const markup = renderRow(bot({ title: "  Developer ", messages: [{ id: "b1", role: "bot", kind: "text", text: "All set.", at: 1 }] as Bot["messages"] }));
