@@ -185,7 +185,7 @@ element's job and never a pixel value:
 ## 7. Icons
 
 - **Use `lucide-react` only.** No emoji as icons, no icon fonts, no
-  hand-drawn SVGs for things Lucide has. Product marks (the Maus, third-party
+  hand-drawn SVGs for things Lucide has. Product marks (the Seira head, third-party
   logos) are the exception.
 - **Sizes:** 16px in menus, rows and toolbars; 14px next to 12–13px text.
 - **The composer's + and its round Send glyph are 18px,** because the bar holds

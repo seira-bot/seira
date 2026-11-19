@@ -13,7 +13,7 @@ If you only want to use a remote Docker desktop while Seira and its agents stay 
 On a fresh Ubuntu 22.04 or 24.04 server (x86-64) with a domain name pointing at it, the installer checks the server, installs Seira with Docker under `/opt/openmausbot` and ends with HTTPS on your domain:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/milind-soni/OpenMausBot/main/deploy/install.sh | sudo sh -s -- --domain maus.example.com
+curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh | sudo sh -s -- --domain seira.example.com
 ```
 
 Add `--check` to only check the server; it changes nothing. Run the command again to update or repair, and `--uninstall` to stop the server while keeping your data. [Deploy on a VPS](/docs/self-hosting/deploy-vps#quick-start-one-command-on-your-own-domain) lists every check, the files it writes and how the first admin signs in.
@@ -28,8 +28,8 @@ Add `--check` to only check the server; it changes nothing. Run the command agai
 
 | You have | Run |
 |---|---|
-| HTTPS in front already (cloudflared, Caddy, nginx) | `npx @seira-bot/seira serve --public-url https://maus.example.com` |
-| A domain name, ports 80 and 443 open | `npx @seira-bot/seira serve --domain maus.example.com` |
+| HTTPS in front already (cloudflared, Caddy, nginx) | `npx @seira-bot/seira serve --public-url https://seira.example.com` |
+| A domain name, ports 80 and 443 open | `npx @seira-bot/seira serve --domain seira.example.com` |
 | Tailscale | `npx @seira-bot/seira serve --tailscale` |
 | Only this network | `npx @seira-bot/seira serve --lan` |
 | Nothing at all | `npx @seira-bot/seira login`, then `npx @seira-bot/seira serve --tunnel` |
