@@ -30,3 +30,8 @@ ignoredBuiltDependencies:
 overrides:
   dompurify: 3.4.17
   fast-uri: 3.1.9
+# electron-builder's AppImage AppRun adds --no-sandbox when user namespaces are blocked (Ubuntu 24.04).
+# The patch shows a message and stops instead, so the Chromium sandbox is never off.
+# The patch also stops the snap target from deleting chrome-sandbox in linux-unpacked, which the DEB packs next.
+patchedDependencies:
+  app-builder-lib@26.15.3: patches/app-builder-lib@26.15.3.patch

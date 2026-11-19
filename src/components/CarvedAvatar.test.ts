@@ -132,6 +132,13 @@ describe("CarvedAvatar", () => {
     expect(wide.open.opacity).toBe(1);
   });
 
+  it("keeps the mouth size at zero or more when the pose springs past rest", () => {
+    const past = carvedGeometry(CARVED_BODIES.seira, { ...REST_POSE, wide: -0.05 });
+    expect(past.open.rx).toBe(0);
+    expect(past.open.ry).toBe(0);
+    expect(past.open.opacity).toBe(0);
+  });
+
   it("closes the eyes and follows the gaze", () => {
     const body = CARVED_BODIES.seira;
     const shut = carvedGeometry(body, { ...REST_POSE, shut: 1 });

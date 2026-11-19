@@ -8,8 +8,8 @@ import { botCallVoice, clampAppend, commentaryChunks, geminiLiveVoice, LiveTrans
 import { signInWaits } from "../shared/sign-in-request.ts";
 import type { LiveCallRecord, LiveCallState, LiveClient, LiveElevenLabsTransport, LiveEndReason, LiveFishTransport, LiveGeminiTransport, LiveProvider } from "../shared/wire.ts";
 import { FISH_AGENT_VOICE } from "./live-fish.ts";
-import { LIVE_NEEDS_KEY, liveAuthHeaders, liveCallSummaryLine, liveProviderName, LiveSessionError, liveVoice, spokenHangUp, type LiveEndpoint } from "./live-call.ts";
-import { LIVE_CUSTOM_REFUSAL } from "./live-access.ts";
+import { LIVE_CODEX_PHONE, LIVE_NEEDS_KEY, liveAuthHeaders, liveCallSummaryLine, liveProviderName, LiveSessionError, liveVoice, spokenHangUp, type LiveEndpoint } from "./live-call.ts";
+import { LIVE_CODEX_REFUSAL, LIVE_CUSTOM_REFUSAL } from "./live-access.ts";
 import type { RequestAuth } from "./request-auth.ts";
 import type { Message, StoreChange } from "./store.ts";
 
@@ -29,6 +29,9 @@ const MAX_ERRORS = 5;
 const MAX_REVOKED_DEVICES = 200;
 /** GPT-Live's own delegation of a spoken yes/no may land this far past the decision on the session timeline. */
 const DECISION_ECHO_MS = 3_000;
+
+/** A Codex call has no GPT-Live voice; this names its voice in the call state and the log. */
+const CODEX_CALL_VOICE = "codex";
 
 export interface LiveSocket {
   readonly readyState: number;
@@ -79,7 +82,8 @@ export interface LiveCallDeps {
   geminiRefusal(auth: RequestAuth): string | null;
   elevenlabsRefusal(auth: RequestAuth): string | null;
   /** `sdp` is "" on relayed calls, which answer with `fish`, `gemini` or `elevenlabs` instead of an SDP answer. */
-  createSession(input: { key: string; endpoint: LiveEndpoint; sdp: string; botId: string; threadId: string; voice: string }): Promise<LiveSessionAnswer>;
+  /** `signal` aborts when the call ends before the session is created. */
+  createSession(input: { key: string; endpoint: LiveEndpoint; sdp: string; botId: string; threadId: string; voice: string; signal?: AbortSignal }): Promise<LiveSessionAnswer>;
   openSocket(url: string, key: string, endpoint: LiveEndpoint): LiveSocket;
   attachUrl(sessionId: string, endpoint: LiveEndpoint): string;
   speakable(text: string): string[];
@@ -125,6 +129,8 @@ interface Call {
   key: string;
   endpoint: LiveEndpoint;
   sessionId: string;
+  /** Set while the session starts. */
+  starting: AbortController | null;
   socket: LiveSocket | null;
   attached: boolean;
   transcript: LiveTranscript;
@@ -190,9 +196,11 @@ export class LiveCallController {
     // A custom endpoint is held to Azure's limit (LIVE_DATA_CHANNEL), with its own words.
     const limited = settings.provider === "azure" || settings.endpoint?.provider === "azure" ? "azure"
       : settings.provider === "custom" || settings.endpoint?.provider === "custom" ? "custom"
+      : settings.provider === "codex" || settings.endpoint?.provider === "codex" ? "codex"
       : relayedChoice ?? relayedProvider(settings.endpoint?.provider);
     if (limited) {
       const refusal = limited === "azure" ? this.deps.azureRefusal(input.auth) : limited === "custom" ? this.deps.azureRefusal(input.auth) && LIVE_CUSTOM_REFUSAL
+        : limited === "codex" ? this.deps.azureRefusal(input.auth) && LIVE_CODEX_REFUSAL
         : limited === "fish" ? this.deps.fishRefusal(input.auth)
         : limited === "gemini" ? this.deps.geminiRefusal(input.auth) : this.deps.elevenlabsRefusal(input.auth);
       if (refusal) {
@@ -200,25 +208,31 @@ export class LiveCallController {
         throw new LiveSessionError(refusal, 403);
       }
     }
-    const relayed = limited === "azure" || limited === "custom" ? null : limited;
+    const relayed = limited === "azure" || limited === "custom" || limited === "codex" ? null : limited;
     if (relayed && (input.client === "ios" || input.client === "android")) throw new LiveSessionError(relayed === "fish" ? LIVE_FISH_NEEDS_APP : relayed === "gemini" ? LIVE_GEMINI_NEEDS_APP : LIVE_ELEVENLABS_NEEDS_APP, 400);
+    if (settings.provider === "codex" && (input.client === "ios" || input.client === "android")) throw new LiveSessionError(LIVE_CODEX_PHONE, 400);
     if (!relayed && !input.sdp) throw new LiveSessionError("The call request was not valid.", 400);
     if (this.call && this.call.state.status !== "ended") throw new LiveCallBusyError({ ...this.call.state });
     if (input.device && this.revokedDevices.has(input.device)) throw new LiveCallSignedOutError();
     const key = settings.key.trim();
     const endpoint = settings.endpoint;
-    if (settings.setupProblem || !key || !endpoint) throw new LiveSessionError(settings.setupProblem || LIVE_NEEDS_KEY, 409);
+    const codex = settings.provider === "codex";
+    if (settings.setupProblem || (!key && !codex) || !endpoint) throw new LiveSessionError(settings.setupProblem || LIVE_NEEDS_KEY, 409);
     if (relayed !== relayedProvider(endpoint.provider)) throw new LiveSessionError(settings.setupProblem || LIVE_NEEDS_KEY, 409);
     const botVoice = this.deps.botVoice?.(input.botId);
-    const voice = relayed === "gemini" ? geminiLiveVoice(botCallVoice(botVoice, settings.geminiVoice, true))
+    const voice = codex ? CODEX_CALL_VOICE : relayed === "gemini" ? geminiLiveVoice(botCallVoice(botVoice, settings.geminiVoice, true))
       : relayed ? FISH_AGENT_VOICE : liveVoice(botCallVoice(botVoice, settings.voice, false));
     const call = this.newCall(input, key, endpoint, voice);
     // Taken before the first await: a second start in the same tick is refused.
     this.call = call;
     let session: LiveSessionAnswer;
+    const starting = new AbortController();
+    call.starting = starting;
     try {
-      session = await this.deps.createSession({ key, endpoint, sdp: relayed ? "" : input.sdp ?? "", botId: input.botId, threadId: input.threadId, voice });
+      session = await this.deps.createSession({ key, endpoint, sdp: relayed ? "" : input.sdp ?? "", botId: input.botId, threadId: input.threadId, voice, signal: starting.signal });
+      call.starting = null;
     } catch (error) {
+      call.starting = null;
       if (this.call === call) this.call = null;
       this.deps.log(`[live] call failed bot=${input.botId} client=${input.client} status=${error instanceof LiveSessionError ? error.status : "error"}`);
       throw error;
@@ -292,6 +306,7 @@ export class LiveCallController {
       key,
       endpoint,
       sessionId: "",
+      starting: null,
       socket: null,
       attached: false,
       transcript: new LiveTranscript(),
@@ -368,6 +383,10 @@ export class LiveCallController {
     } catch {
       return;
     }
+    if (endpoint.provider === "codex") {
+      try { socket.close(1000, "call cancelled"); } catch {}
+      return;
+    }
     const done = () => {
       clearTimeout(timer);
       socket.onopen = socket.onmessage = socket.onerror = socket.onclose = null;
@@ -399,6 +418,8 @@ export class LiveCallController {
     if (call.state.status === "ended") return;
     call.state.status = "ended";
     call.state.endReason = reason;
+    call.starting?.abort();
+    call.starting = null;
     if (error) call.state.error = error;
     for (const timer of call.timers) clearTimeout(timer);
     call.timers.clear();
@@ -494,6 +515,9 @@ export class LiveCallController {
         return;
       case "session.output_transcript.delta":
         call.transcript.addOutput(Number(event.start_ms), Number(event.end_ms));
+        this.touch(call);
+        return;
+      case "session.activity":
         this.touch(call);
         return;
       case "session.delegation.created": {

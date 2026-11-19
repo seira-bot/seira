@@ -14,7 +14,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const PLACEHOLDERS = "node|runner|user|username|you|yourname|your-name|me|name|alice|bob|ubuntu|pi|app|root|shared|public|default|guest";
+const PLACEHOLDERS = "node|runner|user|username|you|yourname|your-name|me|name|alice|bob|ubuntu|pi|app|seira|root|shared|public|default|guest";
 const notPlaceholder = `(?!(?:${PLACEHOLDERS})(?:[/\\\\]|$))`;
 
 export const GENERIC_RULES = [

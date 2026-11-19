@@ -7945,5 +7945,9 @@
   "call.capability.turnsNeedDeepSeekKey": "通話で交互に話すには DeepSeek キーを追加してください",
   "alwaysOn.section": "常時オンの拠点",
   "alwaysOn.title": "このコンピュータを常時オンの拠点として使う",
-  "alwaysOn.add.title": "Mac mini などの常時オンのコンピュータを追加"
+  "alwaysOn.add.title": "Mac mini などの常時オンのコンピュータを追加",
+  "call.live.provider.codex": "Codex",
+  "call.live.codexHint": "通話には、このコンピューターの Codex の ChatGPT サインインを使います。Codex で動くボットに電話してください。",
+  "call.live.disclosureCodex": "Codex を通じたライブ通話では、Codex 内の ChatGPT アカウント経由で、あなたの声、チャットの最近のメッセージ、ボットのペルソナを OpenAI に送信します。",
+  "call.live.codexCost": "Codex の通話では、ChatGPT プランの音声の利用枠を使います。"
 }

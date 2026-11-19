@@ -7167,5 +7167,9 @@
   "call.capability.turnsNeedDeepSeekKey": "Добавьте ключ DeepSeek, чтобы говорить по очереди в звонках",
   "alwaysOn.section": "Всегда включённый дом",
   "alwaysOn.title": "Использовать этот компьютер как всегда включённый дом",
-  "alwaysOn.add.title": "Добавить Mac mini или другой всегда включённый компьютер"
+  "alwaysOn.add.title": "Добавить Mac mini или другой всегда включённый компьютер",
+  "call.live.provider.codex": "Codex",
+  "call.live.codexHint": "Звонки используют вход в ChatGPT в Codex на этом компьютере. Звоните боту, который работает на Codex.",
+  "call.live.disclosureCodex": "Живые звонки через Codex отправляют ваш голос в OpenAI через ваш аккаунт ChatGPT в Codex вместе с недавними сообщениями чата и описанием личности бота.",
+  "call.live.codexCost": "Звонки через Codex расходуют голосовой лимит вашего тарифа ChatGPT."
 }

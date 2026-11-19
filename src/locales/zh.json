@@ -10084,5 +10084,9 @@
   "call.capability.turnsNeedDeepSeekKey": "添加 DeepSeek 密钥即可在通话中轮流说话",
   "alwaysOn.section": "常开的家",
   "alwaysOn.title": "将这台电脑用作常开的家",
-  "alwaysOn.add.title": "添加 Mac mini 或其他常开的电脑"
+  "alwaysOn.add.title": "添加 Mac mini 或其他常开的电脑",
+  "call.live.provider.codex": "Codex",
+  "call.live.codexHint": "通话使用这台电脑上 Codex 的 ChatGPT 登录。请呼叫运行在 Codex 上的机器人。",
+  "call.live.disclosureCodex": "通过 Codex 的实时通话会经由你在 Codex 中的 ChatGPT 账号，把你的声音连同对话的近期消息和机器人的人设一起发送给 OpenAI。",
+  "call.live.codexCost": "Codex 通话会使用你的 ChatGPT 套餐的语音额度。"
 }

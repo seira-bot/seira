@@ -4091,5 +4091,9 @@
   "call.capability.turnsNeedDeepSeekKey": "Додайте ключ DeepSeek, щоб говорити по черзі в дзвінках",
   "alwaysOn.section": "Завжди увімкнений дім",
   "alwaysOn.title": "Використовувати цей комп’ютер як завжди увімкнений дім",
-  "alwaysOn.add.title": "Додати Mac mini або інший завжди увімкнений комп’ютер"
+  "alwaysOn.add.title": "Додати Mac mini або інший завжди увімкнений комп’ютер",
+  "call.live.provider.codex": "Codex",
+  "call.live.codexHint": "Дзвінки використовують вхід у ChatGPT у Codex на цьому комп'ютері. Телефонуйте боту, який працює на Codex.",
+  "call.live.disclosureCodex": "Живі дзвінки через Codex надсилають ваш голос до OpenAI через ваш обліковий запис ChatGPT у Codex разом з останніми повідомленнями чату та описом особистості бота.",
+  "call.live.codexCost": "Дзвінки через Codex витрачають голосовий ліміт вашого тарифу ChatGPT."
 }

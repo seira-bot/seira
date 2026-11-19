@@ -10186,5 +10186,9 @@
   "call.capability.turnsNeedDeepSeekKey": "新增 DeepSeek 金鑰即可在通話中輪流對話",
   "alwaysOn.section": "常開的家",
   "alwaysOn.title": "將這台電腦當作常開的家",
-  "alwaysOn.add.title": "加入 Mac mini 或其他常開的電腦"
+  "alwaysOn.add.title": "加入 Mac mini 或其他常開的電腦",
+  "call.live.provider.codex": "Codex",
+  "call.live.codexHint": "通話使用這台電腦上 Codex 的 ChatGPT 登入。請撥打在 Codex 上執行的機器人。",
+  "call.live.disclosureCodex": "透過 Codex 的即時通話會經由你在 Codex 中的 ChatGPT 帳號，把你的聲音連同對話的近期訊息和機器人的人設一起傳送給 OpenAI。",
+  "call.live.codexCost": "Codex 通話會使用你的 ChatGPT 方案的語音額度。"
 }

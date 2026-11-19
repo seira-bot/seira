@@ -5910,5 +5910,9 @@
   "call.capability.turnsNeedDeepSeekKey": "Aramalarda sırayla konuşmak için bir DeepSeek anahtarı ekle",
   "alwaysOn.section": "Her zaman açık ev",
   "alwaysOn.title": "Bu bilgisayarı her zaman açık ev olarak kullan",
-  "alwaysOn.add.title": "Mac mini veya her zaman açık başka bir bilgisayar ekle"
+  "alwaysOn.add.title": "Mac mini veya her zaman açık başka bir bilgisayar ekle",
+  "call.live.provider.codex": "Codex",
+  "call.live.codexHint": "Aramalar bu bilgisayardaki Codex'in ChatGPT oturumunu kullanır. Codex üzerinde çalışan bir botu arayın.",
+  "call.live.disclosureCodex": "Codex üzerinden canlı aramalar, sesinizi Codex'teki ChatGPT hesabınız aracılığıyla, sohbetin son mesajları ve botun kişiliğiyle birlikte OpenAI'a gönderir.",
+  "call.live.codexCost": "Codex aramaları ChatGPT planınızın ses hakkını kullanır."
 }

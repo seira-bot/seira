@@ -75,6 +75,7 @@ export function carvedGeometry(body: CarvedBody, p: CarvedPose): CarvedGeometry 
   const half = mw * (1 - 0.25 * ax);
   const depth = mw * 0.5 * p.smile;
   const my = (e.mouthY ?? e.cy + e.h * 0.5 + e.dx * 0.42) + p.gy * 10;
+  const gape = Math.max(0, p.wide);
   return {
     body: `translate(120 ${PIVOT}) rotate(${r2(lean)}) scale(${r2(sx * 1000) / 1000} ${r2(sy * 1000) / 1000}) translate(-120 ${-PIVOT})`,
     eyes: [eye(-1), eye(1)],
@@ -83,7 +84,7 @@ export function carvedGeometry(body: CarvedBody, p: CarvedPose): CarvedGeometry 
       transform: `rotate(${r2(tilt * 0.6)} ${r2(cx)} ${r2(my)})`,
       opacity: r2(1 - p.wide),
     },
-    open: { cx: r2(cx), cy: r2(my + mw * 0.1), rx: r2(mw * 0.5 * p.wide), ry: r2(mw * 0.62 * p.wide), opacity: r2(p.wide) },
+    open: { cx: r2(cx), cy: r2(my + mw * 0.1), rx: r2(mw * 0.5 * gape), ry: r2(mw * 0.62 * gape), opacity: r2(gape) },
   };
 }
 
