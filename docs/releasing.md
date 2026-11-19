@@ -330,10 +330,10 @@ npm view @seira-bot/seira@<version> version
 - When the version is already on npm, the workflow skips the build and the
   publish. A repeated run changes nothing.
 - npm adds a provenance statement that links the package to this commit and run.
-- The `release` environment accepts `main` only. A run that starts from a
-  published release has the tag as its ref. Until an organization admin adds the
-  tag pattern `v*` to the deployment branches and tags of `release`, start the
-  workflow by hand from `main`.
+- The `release` environment accepts the `main` branch and the `v*` tags, so a
+  run that starts from a published release can use it. The `release-approval`
+  environment accepts `main` only. A person outside the maintainers who needs an
+  approval must start the workflow by hand from `main`.
 
 ### One-time npm setup
 

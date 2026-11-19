@@ -232,12 +232,13 @@ npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin create
 | Setting | Value |
 | --- | --- |
 | Required reviewers | None. The `release-approval` environment holds the approval. |
-| Deployment branches and tags | Selected branches and tags: `main` only |
+| Deployment branches and tags | Selected branches and tags: `main` and the tag pattern `v*` |
 | Environment secrets | The five Apple secrets (see [Releasing](releasing.md#macos-signing-secrets)) |
 
 - A job in `release` never waits for a person. The `approval` job before it
   decides if a maintainer must approve the run.
-- With `main` as the only deployment branch, a workflow file changed on another
-  branch cannot read the secrets.
+- With `main` and `v*` as the only deployment refs, a workflow file changed on
+  another branch cannot read the secrets. Only an organization admin can create
+  a `v*` tag.
 - Do not store the Apple secrets as repository or organization secrets. Every
   workflow can read those without an approval.
