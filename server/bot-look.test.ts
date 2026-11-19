@@ -1,8 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, describe, expect, it } from "vitest";
 
 import { BRAND_BODY_IDS } from "../shared/carved-bodies.ts";
 import { mascotAccessories } from "../shared/mascot-accessories.ts";
-import { freshLook, STARTER_CHARACTERS, STARTER_COLORS, wearsPlainLook } from "./bot-look.ts";
+import { freshLook, giveCharactersOnce, STARTER_CHARACTERS, STARTER_COLORS, wearsPlainLook } from "./bot-look.ts";
 
 describe("a new bot's first look", () => {
   it("is a cast character, never Seira's own hair or a metal colour", () => {
@@ -52,5 +56,47 @@ describe("the plain look older builds gave", () => {
 
   it("is never the MausBot's", () => {
     expect(wearsPlainLook({ color: "chrome", defaultBot: {} })).toBe(false);
+  });
+});
+
+describe("giving plain bots a character", () => {
+  const dirs: string[] = [];
+  const dataDir = () => {
+    const dir = mkdtempSync(join(tmpdir(), "omb-bot-look-"));
+    dirs.push(dir);
+    return dir;
+  };
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("gives each plain bot its own hair style once, and saves before it marks the folder", () => {
+    const dir = dataDir();
+    const bots = [
+      { color: "red" as const },
+      { color: "blue" as const, mascotBody: "seira" },
+      { color: "green" as const, mascotBody: "bob", mascotAccessories: ["headset-mic"] },
+      { color: "pink" as const, home: {} },
+    ];
+    const saves: Array<[boolean, boolean]> = [];
+    giveCharactersOnce(bots, dir, true, (changed) => saves.push([changed, existsSync(join(dir, "characters-given"))]));
+    expect(saves).toEqual([[true, false]]);
+    expect(existsSync(join(dir, "characters-given"))).toBe(true);
+    expect(new Set(bots.slice(0, 3).map((bot) => bot.mascotBody)).size).toBe(3);
+    expect(bots[2]).toMatchObject({ mascotBody: "bob", mascotAccessories: ["headset-mic"] });
+    expect(bots[3]).not.toHaveProperty("mascotBody");
+    const again = bots.map((bot) => ({ ...bot }));
+    giveCharactersOnce(bots, dir, true, (changed) => saves.push([changed, true]));
+    expect(saves.at(-1)).toEqual([false, true]);
+    expect(bots).toEqual(again);
+  });
+
+  it("tries again on the next start when the bots could not be read or saved", () => {
+    const dir = dataDir();
+    const saves: boolean[] = [];
+    giveCharactersOnce([{ color: "red" }], dir, false, (changed) => saves.push(changed));
+    expect(saves).toEqual([false]);
+    expect(() => giveCharactersOnce([{ color: "red" }], dir, true, () => { throw new Error("fixture disk full"); })).toThrow("fixture disk full");
+    expect(existsSync(join(dir, "characters-given"))).toBe(false);
   });
 });
