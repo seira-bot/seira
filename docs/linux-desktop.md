@@ -184,6 +184,16 @@ OMB_EXTRA_PATH=/your/custom/bin ./release/Seira-*-x86_64.AppImage
 
 Restart Seira after installing or signing in to a CLI.
 
+## Flatpak
+
+`packaging/flatpak/` builds Seira as the Flatpak `bot.seira.Seira` from source, with no network during the build
+commands. See `packaging/flatpak/README.md` for the build steps and the permissions the app asks for.
+
+- Agent programs (`claude`, `codex` and the others) stay on the host. The server starts them through
+  `flatpak-spawn --host`, so install them on the host first.
+- Local control of the computer is off in the Flatpak.
+- The bundled bot browser, the computer-tools bundle and the tunnel program are not part of the Flatpak.
+
 ## Xorg and Wayland
 
 The shell, chat, cloud computers, connected apps, and preview-only capture work in both GNOME session types.
