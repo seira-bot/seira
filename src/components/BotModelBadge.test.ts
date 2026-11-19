@@ -76,8 +76,9 @@ describe("sidebar bot row", () => {
   });
   afterEach(() => { vi.unstubAllGlobals(); });
 
-  // The Advanced row puts the mark at the end of its second line; the icon rail keeps it on the avatar's bottom-left.
-  it.each<[SidebarDensity, string]>([["comfortable", "flex shrink-0 ms-auto"], ["icons", "absolute -bottom-0.5 -left-0.5"]])(
+  // Every density puts the badge on the avatar's bottom-left: the status dots own the bottom-right, and the row's right
+  // slot holds the time, which the hover actions (+, new folder, …) replace.
+  it.each<[SidebarDensity, string]>([["comfortable", "absolute -bottom-0.5 -left-0.5"], ["icons", "absolute -bottom-0.5 -left-0.5"]])(
     "shows the model once in a %s row", (density, placement) => {
       const found = badges(render(bot("claude", "opus"), density));
       expect(found).toHaveLength(1);

@@ -47,7 +47,7 @@ export function BotRowPreview({ bot, visible, instances, last, advanced, advRow,
           )}
         </span>
       )}
-      {(simpleRow || advRow) && <BotEngineMark bot={bot} instances={instances} className="ms-auto" />}
+      {simpleRow && <BotEngineMark bot={bot} instances={instances} className="ms-auto" />}
       {!simpleRow && unread && <span className={cn("shrink-0 rounded-full bg-accent", advRow ? "size-[7px]" : "size-2")} aria-label={t("task.unreadMany")} />}
     </div>
   );

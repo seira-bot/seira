@@ -193,16 +193,16 @@ export const GroupListItem = memo(function GroupListItem({
         density === "icons" ? (railTile ? "h-[54px] justify-center" : "justify-center px-1 py-1.5") : advThread
           ? cn("h-8 gap-0 rounded-lg pe-2", rowSurface(selected && !expanded))
           : advRow
-          ? cn("gap-2.5 rounded-lg py-0 pr-2 group-hover:pr-9 group-focus-within:pr-9 max-md:pr-9 touch:pr-9 md:h-11 max-md:py-2", !group.dm && hasThreadList ? "pl-5" : "pl-2", rowSurface(selected && !expanded)) : simpleRow
+          ? cn("gap-2.5 rounded-lg py-0 pr-2 max-md:pr-9 md:h-11 max-md:py-2", !group.dm && hasThreadList ? "pl-5" : "pl-2", rowSurface(selected && !expanded)) : simpleRow
           ? cn("gap-2.5 rounded-lg py-2 pr-2 group-hover:pr-9 group-focus-within:pr-9 max-md:pr-9 touch:pr-9 md:h-[52px] md:py-0", !group.dm && hasThreadList ? "pl-6" : "pl-2", rowSurface(selected && !expanded)) : "gap-2 py-1.5 pl-6 pr-9",
         selected && !expanded ? rowSelectedSurface : "hover:bg-raised/50",
       )}
       title={density === "icons" ? group.name : undefined}
       aria-label={density === "icons" ? group.name : undefined}
     >
-      {advThread ? <AdvancedThreadText bot={members[0]} name={group.name} unread={group.unread} time={last && formatTime(last.at)} /> : advRow ? <>
+      {advThread ? <AdvancedThreadText bot={members[0]} name={group.name} unread={group.unread} time={last && formatRowTime(last.at)} /> : advRow ? <>
         <AdvancedRoomStack members={members} />
-        <AdvancedRoomText name={group.name} unread={group.unread} time={last && formatTime(last.at)} preview={group.description || groupPreview(group, bots, instances, advanced)} expanded={expanded} />
+        <AdvancedRoomText name={group.name} unread={group.unread} time={last && formatRowTime(last.at)} preview={group.description || groupPreview(group, bots, instances, advanced)} expanded={expanded} />
       </> : simpleRow ? <SimpleRoomStack members={members} /> : group.dm ? <StackedMauses members={members} density={railTile ? "comfortable" : density} large={railTile} /> : <RoomMark density={railTile ? "comfortable" : density} large={simpleRow || railTile} />}
       {advRow ? null : simpleRow ? <SimpleRoomText name={group.name} unread={group.unread} time={last && formatTime(last.at)} preview={group.description || groupPreview(group, bots, instances, advanced)} expanded={expanded} /> : (
       <div className={cn("min-w-0 flex-1", density === "icons" && "hidden")}>
@@ -733,7 +733,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
     "flex w-full items-center rounded-xl text-left transition-colors duration-150", SIMPLE_ROW_FOCUS,
     iconOnly
       ? railTile ? "h-[54px] justify-center" : "justify-center px-1 py-1.5"
-      : advRow ? cn("gap-2.5 rounded-lg py-0 md:h-11", showThreads ? "pl-5 pr-2 group-hover:pr-[5.75rem] group-focus-within:pr-[5.75rem] max-md:pr-9 touch:pr-[5.75rem]" : "pl-2 pr-2 group-hover:pr-9 group-focus-within:pr-9 max-md:pr-9 touch:pr-9")
+      : advRow ? cn("gap-2.5 rounded-lg py-0 pr-2 max-md:pr-9 md:h-11", showThreads ? "pl-5" : "pl-2")
       : simpleRow ? "gap-2 rounded-[8px] py-2 pl-2 pr-2 md:h-[54px] md:py-0"
         : cn(showThreads ? "gap-2 py-2" : "gap-3 py-2", showThreads ? "pl-6 pr-9 group-hover:pr-[5.75rem] group-focus-within:pr-[5.75rem] max-md:pr-9 touch:pr-[5.75rem]" : "pl-2.5 pr-9"),
     !iconOnly && "max-md:rounded-2xl max-md:py-2.5",
@@ -755,7 +755,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
           animated={working || noticing || (mascotMotion?.kind ?? "none") !== "none"}
         />
         {/* Bottom-left, clear of the status dots on the right and of the row's hover actions. */}
-        {(iconOnly || !quiet) && <BotModelBadge bot={bot} instances={instances} avatarSize={avatarSize} />}
+        {(iconOnly || !simpleList) && <BotModelBadge bot={bot} instances={instances} avatarSize={avatarSize} />}
         {simpleRow && <AvatarActivityDot activity={working ? "working" : failed ? "failed" : teammateWait ? "teammate" : queued && !waiting ? "queued" : null} />}
         {!simpleRow && !advRow && working && (
           <span
@@ -787,7 +787,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
       </span>
       <div className={cn("min-w-0 flex-1", iconOnly && "hidden")}>
         <div className={cn(advRow ? "flex items-center justify-between gap-2" : "flex items-baseline justify-between gap-2", simpleRow && "pe-7 group-hover:pe-[3.25rem] group-focus-within:pe-[3.25rem] touch:pe-[3.25rem] max-md:touch:pe-7")}>
-          <span className={cn("flex min-w-0 grow items-center gap-1.5 truncate text-ink", simpleRow ? "text-[14px] font-medium leading-5" : advRow ? "text-[14px] font-semibold leading-[18px]" : "text-[15px] font-semibold leading-5")}>
+          <span className={cn("flex min-w-0 grow items-center gap-1.5 truncate text-ink", simpleRow ? "text-[14px] font-medium leading-5" : advRow ? cn("text-[14px] font-semibold leading-[18px]", showThreads && "group-hover:pe-6 group-focus-within:pe-6 touch:pe-6") : "text-[15px] font-semibold leading-5")}>
             {!quiet && bot.pinned && <Pin size={12} className="shrink-0 text-ink-secondary" />}
             <RenameTitle
               key={iconOnly ? "icons" : "expanded"}
@@ -825,7 +825,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
               // Phones show the time on every row; elsewhere only the selected row, until its actions appear.
               advRow ? "text-ink-tertiary group-hover:opacity-0 group-focus-within:opacity-0 touch:opacity-0 max-md:touch:opacity-100" : selected && !simpleList ? "group-hover:opacity-0 group-focus-within:opacity-0 touch:opacity-0 max-md:touch:opacity-100" : "hidden max-md:inline",
             )}>
-              {formatTime(last.at)}
+              {advRow ? formatRowTime(last.at) : formatTime(last.at)}
             </span>
           )}
           {expanded && unread && <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-label={t("task.unreadMany")} />}
