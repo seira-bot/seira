@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import module from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,7 +31,7 @@ test("a server tree without the bootstrap forks index.js with no cache, as befor
   });
 });
 
-test("an AppImage forks the server through a fixed link, with the cache and the preserve-symlinks flags", () => {
+test("an AppImage forks the server through a fixed link, with the cache and the link name", () => {
   const resourcesPath = "/tmp/.mount_OpenMaXk3f9a/resources";
   const userData = "/home/someone/.config/OpenMausBot";
   const links = [];
@@ -42,23 +43,9 @@ test("an AppImage forks the server through a fixed link, with the cache and the 
   });
   assert.deepEqual(links, [[path.join(userData, "server-resources"), resourcesPath]]);
   assert.deepEqual(launch, {
-    entry: path.join(userData, "server-resources", "server", "desktop-entry.mjs"),
+    entry: path.join(resourcesPath, "server", "desktop-entry.mjs"),
     compileCacheDir: path.join(userData, "server-compile-cache"),
-    symlinkEnv: { NODE_OPTIONS: "--preserve-symlinks --preserve-symlinks-main", OMB_SERVER_NODE_OPTIONS: "" },
-  });
-});
-
-test("an AppImage keeps the app's own NODE_OPTIONS beside the preserve-symlinks flags", () => {
-  const launch = serverChildLaunch({
-    resourcesPath: "/tmp/.mount_OpenMaXk3f9a/resources",
-    userData: "/home/someone/.config/OpenMausBot",
-    env: { APPIMAGE: "/x.AppImage", NODE_OPTIONS: "--max-old-space-size=4096" },
-    exists: () => true,
-    link: () => {},
-  });
-  assert.deepEqual(launch.symlinkEnv, {
-    NODE_OPTIONS: "--max-old-space-size=4096 --preserve-symlinks --preserve-symlinks-main",
-    OMB_SERVER_NODE_OPTIONS: "--max-old-space-size=4096",
+    symlinkEnv: { OMB_SERVER_RESOURCES_LINK: path.join(userData, "server-resources") },
   });
 });
 
@@ -300,62 +287,103 @@ test("nothing is pruned when Node keeps its cache somewhere else", (t) => {
   assert.ok(existsSync(stale));
 });
 
-const NODE_OPTIONS_INDEX = `
-import { execFileSync } from "node:child_process";
-const child = JSON.parse(execFileSync(process.execPath, ["-e",
-  "process.stdout.write(JSON.stringify([process.env.NODE_OPTIONS ?? null, process.env.OMB_SERVER_NODE_OPTIONS ?? null]))"],
-  { encoding: "utf8" }));
+const hooksSupported = process.platform !== "win32" && typeof module.registerHooks === "function";
+
+const LINKED_INDEX = `
+import { createRequire } from "node:module";
+import { url as bUrl, cjs } from "./lib/b.mjs";
+const require = createRequire(import.meta.url);
 console.log(JSON.stringify({
-  url: import.meta.url,
-  nodeOptions: process.env.NODE_OPTIONS ?? null,
-  marker: process.env.OMB_SERVER_NODE_OPTIONS ?? null,
-  child,
+  index: import.meta.url,
+  b: bUrl,
+  c: cjs,
+  c2: require("./lib/c.cjs"),
+  link: process.env.OMB_SERVER_RESOURCES_LINK ?? null,
 }));
 `;
+const B_SOURCE = `
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+function describe(value) {
+  const parts = [];
+  for (let i = 0; i < 20; i += 1) parts.push(String(value) + ":" + i);
+  return parts.join("|");
+}
+export const cjs = require("./c.cjs");
+export const url = import.meta.url;
+export const summary = describe(url);
+`;
+const C_SOURCE = `
+function twice(value) {
+  const out = [];
+  for (let i = 0; i < 20; i += 1) out.push(value + i);
+  return out.length;
+}
+twice(__filename);
+module.exports = __filename;
+`;
 
-function runBootstrapAt(entry, env) {
-  const full = { ...process.env, ...env };
-  for (const key of ["NODE_OPTIONS", "OMB_SERVER_NODE_OPTIONS"]) if (env[key] === undefined) delete full[key];
-  const result = spawnSync(process.execPath, [entry], { encoding: "utf8", env: full, timeout: 20_000 });
-  assert.equal(result.status, 0, result.stderr);
-  return JSON.parse(result.stdout.trim().split("\n").filter(Boolean).at(-1));
+function stageResources(t, name) {
+  const root = path.join(mkdtempSync(path.join(tmpdir(), "omb-resources-")), name);
+  t.after(() => rmSync(path.dirname(root), { recursive: true, force: true }));
+  mkdirSync(path.join(root, "server", "lib"), { recursive: true });
+  copyFileSync(bootstrapSource, path.join(root, "server", "desktop-entry.mjs"));
+  writeFileSync(path.join(root, "server", "index.js"), LINKED_INDEX);
+  writeFileSync(path.join(root, "server", "lib", "b.mjs"), B_SOURCE);
+  writeFileSync(path.join(root, "server", "lib", "c.cjs"), C_SOURCE);
+  return root;
 }
 
-test("the server loads through the link path and its children never inherit the symlink flags", { skip: process.platform === "win32" }, (t) => {
-  const dir = stage(t, NODE_OPTIONS_INDEX);
-  const userData = path.join(dir, "userData");
-  mkdirSync(userData);
-  const launch = serverChildLaunch({
-    resourcesPath: dir, userData,
-    env: { APPIMAGE: "/x.AppImage", NODE_OPTIONS: "--max-old-space-size=512" },
-    exists: () => true,
-  });
-  const report = runBootstrapAt(launch.entry, launch.symlinkEnv);
-  assert.ok(report.url.startsWith(`file://${path.join(userData, "server-resources")}`), report.url);
-  assert.equal(report.nodeOptions, "--max-old-space-size=512");
-  assert.equal(report.marker, null);
-  assert.deepEqual(report.child, ["--max-old-space-size=512", null]);
+function runLinked(entry, env) {
+  const full = { ...process.env, ...env };
+  delete full.NODE_COMPILE_CACHE;
+  delete full.NODE_DISABLE_COMPILE_CACHE;
+  const result = spawnSync(process.execPath, [entry], { encoding: "utf8", env: full, timeout: 20_000 });
+  assert.equal(result.status, 0, result.stderr);
+  return { stderr: result.stderr, report: JSON.parse(result.stdout.trim().split("\n").filter(Boolean).at(-1)) };
+}
+
+const countFiles = (dir) =>
+  readdirSync(dir, { withFileTypes: true }).reduce(
+    (sum, entry) => sum + (entry.isDirectory() ? countFiles(path.join(dir, entry.name)) : 1), 0);
+
+const underLink = (report, link) => [report.index, report.b, report.c, report.c2].every((value) =>
+  value.startsWith(`file://${link}/`) || value.startsWith(`${link}/`));
+
+test("the server loads its modules through the fixed link and reuses the cache after the mount moves", { skip: !hooksSupported }, (t) => {
+  const a = stageResources(t, "mount-a");
+  const b = stageResources(t, "mount-b");
+  const link = path.join(path.dirname(a), "server-resources");
+  const cache = path.join(path.dirname(a), "cache");
+  const env = { OMB_SERVER_COMPILE_CACHE: cache, OMB_SERVER_RESOURCES_LINK: link };
+  symlinkSync(a, link, "dir");
+  const first = runLinked(path.join(a, "server", "desktop-entry.mjs"), env);
+  assert.ok(underLink(first.report, link), JSON.stringify(first.report));
+  assert.equal(first.report.link, null);
+  const written = countFiles(cache);
+  assert.ok(written > 0, "the first start must leave cache entries behind");
+
+  rmSync(link);
+  symlinkSync(b, link, "dir");
+  const second = runLinked(path.join(b, "server", "desktop-entry.mjs"), env);
+  assert.ok(underLink(second.report, link), JSON.stringify(second.report));
+  assert.equal(countFiles(cache), written, "a moved mount must reuse the cache entries, not add new ones");
+  t.diagnostic(`ExperimentalWarning in stderr: ${/ExperimentalWarning/.test(first.stderr + second.stderr)}`);
 });
 
-test("with no NODE_OPTIONS of its own, the server and its children see none", { skip: process.platform === "win32" }, (t) => {
-  const dir = stage(t, NODE_OPTIONS_INDEX);
-  const userData = path.join(dir, "userData");
-  mkdirSync(userData);
-  const launch = serverChildLaunch({ resourcesPath: dir, userData, env: { APPIMAGE: "/x.AppImage" }, exists: () => true });
-  const report = runBootstrapAt(launch.entry, launch.symlinkEnv);
-  assert.ok(report.url.startsWith(`file://${path.join(userData, "server-resources")}`), report.url);
-  assert.equal(report.nodeOptions, null);
-  assert.equal(report.marker, null);
-  assert.deepEqual(report.child, [null, null]);
+test("a missing link leaves the server on its real path", { skip: !hooksSupported }, (t) => {
+  const real = stageResources(t, "mount-a");
+  const missing = path.join(path.dirname(real), "no-such-link");
+  const { report } = runLinked(path.join(real, "server", "desktop-entry.mjs"), { OMB_SERVER_RESOURCES_LINK: missing });
+  assert.ok(underLink(report, realpathSync(real)), JSON.stringify(report));
+  assert.equal(report.link, null);
 });
 
-test("an inherited marker without the symlink flags leaves NODE_OPTIONS alone and is removed", (t) => {
-  const dir = stage(t, NODE_OPTIONS_INDEX);
-  const report = runBootstrapAt(path.join(dir, "server", "desktop-entry.mjs"), {
-    NODE_OPTIONS: "--max-old-space-size=512",
-    OMB_SERVER_NODE_OPTIONS: "--foo",
-  });
-  assert.equal(report.nodeOptions, "--max-old-space-size=512");
-  assert.equal(report.marker, null);
-  assert.deepEqual(report.child, ["--max-old-space-size=512", null]);
+test("a link to another app leaves the server on its real path", { skip: !hooksSupported }, (t) => {
+  const real = stageResources(t, "mount-a");
+  const other = stageResources(t, "mount-b");
+  const link = path.join(path.dirname(real), "server-resources");
+  symlinkSync(other, link, "dir");
+  const { report } = runLinked(path.join(real, "server", "desktop-entry.mjs"), { OMB_SERVER_RESOURCES_LINK: link });
+  assert.ok(underLink(report, realpathSync(real)), JSON.stringify(report));
 });

@@ -29,14 +29,6 @@ export function serverChildLaunch({ resourcesPath, userData, env = process.env, 
   } catch {
     return real;
   }
-  // Electron 43 utilityProcess ignores Node flags in execArgv and reads them from NODE_OPTIONS.
-  const base = env.NODE_OPTIONS ?? "";
-  return {
-    entry: path.join(fixed, "server", "desktop-entry.mjs"),
-    compileCacheDir,
-    symlinkEnv: {
-      NODE_OPTIONS: `${base} --preserve-symlinks --preserve-symlinks-main`.trim(),
-      OMB_SERVER_NODE_OPTIONS: base,
-    },
-  };
+  // Electron 43 utilityProcess ignores Node flags in execArgv, and a packaged Electron 43 app drops most NODE_OPTIONS, so --preserve-symlinks is not available.
+  return { entry: bootstrap, compileCacheDir, symlinkEnv: { OMB_SERVER_RESOURCES_LINK: fixed } };
 }
