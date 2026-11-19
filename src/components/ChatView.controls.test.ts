@@ -582,8 +582,7 @@ describe("thread control placement", () => {
     ];
     try {
       const markup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: false, messages } }));
-      console.log("DBG", markup.slice(markup.indexOf("data-mid=\"read\"") - 50, markup.indexOf("data-mid=\"reply\"")));
-      expect(markup).toContain('data-mid="notice"><div role="status"');
+      expect(markup).toMatch(/data-mid="notice"[^>]*><div role="status"/);
       expect(markup.match(/no longer offers/g)).toHaveLength(1);
       expect(markup).not.toContain(`notice: ${explanation}`);
       if (!showToolCalls) expect(markup).not.toContain('data-testid="tool-activity"');
