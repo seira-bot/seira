@@ -32,9 +32,9 @@ chmod +x "$bin/codex"
 found=$(curl -fsS "$api/api/cli-candidates?name=codex")
 echo "$found"
 case "$found" in *"$bin/codex"*) echo "PASS: dummy found on the host" ;; *) echo "FAIL: dummy not found"; exit 1 ;; esac
-probe=$(curl -fsS -X POST -H 'content-type: application/json' -d "{\"cli\":\"$bin/codex\"}" "$api/api/cli-test")
-echo "$probe"
-case "$probe" in *"9.9.9 (codex-cli dummy)"*) echo "PASS: dummy output returned" ;; *) echo "FAIL: no dummy output"; exit 1 ;; esac
+seen=$(curl -fsS "$api/api/instances?fresh=1" | tr ',' '\n' | grep -c "9.9.9 (codex-cli dummy)" || true)
+echo "dummy output seen in the engine list: $seen"
+[ "$seen" -gt 0 ] && echo "PASS: dummy launched on the host, output returned" || { echo "FAIL: no dummy output"; exit 1; }
 
 echo "host bridge: program removed"
 rm -f "$bin/codex"
