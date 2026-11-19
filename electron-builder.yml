@@ -220,7 +220,7 @@ linux:
   icon: build/icon.svg
   category: Utility
   executableName: openmausbot
-  synopsis: Your own team of AI bots, in a chat app
+  synopsis: Your own team of AI agents in one chat app
   description: A local-first chat app for running a team of AI agents.
   maintainer: Milind Soni <46266943+milind-soni@users.noreply.github.com>
   vendor: Seira
@@ -241,7 +241,7 @@ linux:
   desktop:
     entry:
       Name: Seira
-      Comment: Your own team of AI bots, in a chat app
+      Comment: Your own team of AI agents in one chat app
       Keywords: AI;Agents;Chat;Productivity;
 
 deb:
@@ -261,7 +261,7 @@ snap:
   base: core22
   confinement: classic
   grade: stable
-  summary: Your own team of AI bots, in a chat app
+  summary: Your own team of AI agents in one chat app
   description: A local-first chat app for running a team of AI agents.
   autoStart: false
 

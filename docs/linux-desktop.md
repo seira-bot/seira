@@ -22,11 +22,11 @@ The local preview does **not** give the bot control of this computer by itself. 
 the global **Enable local control** choice and assigning a bot to **This computer**; every action still enters the
 approval flow. On Wayland, local control is disabled and legacy opt-ins are cleared automatically. Automatic Wayland
 helper installation, native on-device dictation, and ARM64 remain unavailable and fail closed; follow their
-progress in [issue #29](https://github.com/milind-soni/OpenMausBot/issues/29) and the safety hold in
-[issue #345](https://github.com/milind-soni/OpenMausBot/issues/345). Bundled
-CUA supply-chain work is tracked in [issue #113](https://github.com/milind-soni/OpenMausBot/issues/113). Xorg is tracked in
-[issue #79](https://github.com/milind-soni/OpenMausBot/issues/79), and guarded GNOME/Wayland support in
-[issue #109](https://github.com/milind-soni/OpenMausBot/issues/109).
+progress in [upstream issue #29](https://github.com/milind-soni/OpenMausBot/issues/29) and the safety hold in
+[upstream issue #345](https://github.com/milind-soni/OpenMausBot/issues/345). Bundled
+CUA supply-chain work is tracked in [upstream issue #113](https://github.com/milind-soni/OpenMausBot/issues/113). Xorg is tracked in
+[upstream issue #79](https://github.com/milind-soni/OpenMausBot/issues/79), and guarded GNOME/Wayland support in
+[upstream issue #109](https://github.com/milind-soni/OpenMausBot/issues/109).
 
 ## Download packages
 
@@ -344,7 +344,7 @@ pnpm smoke:linux-package
 The verifier checks `.deb` metadata, desktop identity, the exact dormant Cua resource tree and provenance,
 SquashFS/DEB directory modes, runtime path policy, and matching binary hashes across all artifacts. The local smoke
 launches the unpacked app and AppImage without `--no-sandbox`; CI first reproduces a `0.1.7` in-place DEB upgrade and
-then runs the same smoke against `/opt/OpenMausBot/openmausbot`. These lanes prove the embedded server and UI are
+then runs the same smoke against `/opt/Seira/openmausbot`. These lanes prove the embedded server and UI are
 usable while an optional Composio broker stalls, verify that an old local-control opt-in is cleared, and assert that
 no Cua executable starts on Xorg or simulated Wayland. Low-level runtime tests retain the future private-daemon
 contract without activating it in a packaged app. Only a real-seat acceptance matrix can authorize re-enablement.

@@ -34,13 +34,20 @@ needs a migration, so change it only in its own pull request.
 | VPS desktop image | `localhost/openmausbot/cua-local-vm` |
 | Page script API of chat pages | `window.mausbot`, `import … from "mausbot"` |
 | Id of the built-in docs skill | `openmausbot-docs` |
-| Developer tools | `pnpm omb`, the `.omb-scratch/` folder |
+| Server install folder and its system files | `/opt/openmausbot`, `/etc/mausbot`, the compose service `omb`, the `openmausbot-update` units |
+| Linux package path that Sentinel and the MCP server read | `/opt/Seira/openmausbot` |
+| Folder for the work of Cloud bots, on a computer that had it before | `Documents/MausBot` (new computers use `Documents/Seira`) |
+| Developer tools | `pnpm omb`, `pnpm control:omb` (an alias of `control:seira`), the `.omb-scratch/` folder |
 | Files the app reads from GitHub | The team library (`milind-soni/openmausbot-teams`) and the Windows browser engine download |
-| Cloud and website addresses | `openmausbot.com` and its subdomains |
-| Text in the docs | OpenMausBot, MausBot |
+| Connector image | `ghcr.io/milind-soni/mausbot-connector` |
+| Phone apps | Android id `com.openmausbot.companion`; iOS project names `OpenMausMobile`, `OpenMausCompanion` |
+| Cloud, tunnel, and relay addresses | `openmausbot.com` and its subdomains, such as `c-….openmausbot.com` and `relay1.openmausbot.com` |
 
 Use these names as they are until the code changes.
-In the guides, [CONTRIBUTING.md](../CONTRIBUTING.md), the [code guide](contributing.md), and [DESIGN.md](../DESIGN.md), read "OpenMausBot" as "Seira".
+
+The guides, [CONTRIBUTING.md](../CONTRIBUTING.md), the [code guide](contributing.md), and [DESIGN.md](../DESIGN.md) call the product Seira.
+The notes in `docs/superpowers/` and `docs/plans/` are history from before the fork and keep the upstream names.
+The [brand guide](../brand/README.md) tells you where an upstream name is correct.
 
 Seira's npm package is `@seira-bot/seira`. Do not install the npm package `openmausbot`: it is the upstream app.
 
