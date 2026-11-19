@@ -185,7 +185,7 @@ export function AdvancedPanel({ bot, derived, sections, query, appNames, appsPha
                         type="button"
                         onClick={() => onToggle(id)}
                         aria-expanded={isOpen}
-                        aria-controls={`bot-settings-body-${id}`}
+                        aria-controls={isOpen || id === "memory" ? `bot-settings-body-${id}` : undefined}
                         className="flex h-11 w-full items-center gap-3 px-3 text-left transition-colors hover:bg-ink/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
                       >
                         <Icon size={16} aria-hidden="true" className="shrink-0 text-ink-secondary" />
