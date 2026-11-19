@@ -22,7 +22,7 @@ export function SpeakerName({ name, color }: { name: string; color?: string }) {
   );
 }
 
-export function ClusterLabel({ bot, name, color, to = [], time, onOpen }: { bot?: Bot; name: string; color: string; to?: readonly RoomAddressee[]; time?: string; onOpen?: () => void }) {
+export function ClusterLabel({ bot, name, color, role, to = [], time, onOpen }: { bot?: Bot; name: string; color: string; role?: string; to?: readonly RoomAddressee[]; time?: string; onOpen?: () => void }) {
   const addressees = to.length > 0 && (
     <>
       <span className="inline-block text-[13px] text-ink-tertiary rtl:-scale-x-100">→</span>
@@ -34,7 +34,7 @@ export function ClusterLabel({ bot, name, color, to = [], time, onOpen }: { bot?
       ))}
     </>
   );
-  if (time !== undefined) return <div className={`mt-3 ${BOT_TURN_INDENT}`}><BotTurnHead bot={bot} name={name} color={color} time={time} onOpen={onOpen}>{addressees}</BotTurnHead></div>;
+  if (time !== undefined) return <div className={`mt-3 ${BOT_TURN_INDENT}`}><BotTurnHead bot={bot} name={name} color={color} role={role} time={time} onOpen={onOpen}>{addressees}</BotTurnHead></div>;
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-0.5">
       <BotAvatar

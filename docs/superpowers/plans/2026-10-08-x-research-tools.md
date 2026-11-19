@@ -2079,7 +2079,7 @@ These need Omkar's treg token, entered by him in the app, never in a shell or a 
 
 - [ ] **Step 3: End-to-end check with a fake engine**
 
-Use the repo's `verify-omb` skill (isolated fake-engine instance) to confirm, before any real token: a bot with `xResearch` off is not shown the `x_*` tools; switching it on with a token saved shows them on the next turn; and an `x_search` call on a bot switched off mid-turn is refused with the bot-off sentence.
+Use the repo's `verify-seira` skill (isolated fake-engine instance) to confirm, before any real token: a bot with `xResearch` off is not shown the `x_*` tools; switching it on with a token saved shows them on the next turn; and an `x_search` call on a bot switched off mid-turn is refused with the bot-off sentence.
 
 - [ ] **Step 4: Hand off for a local test**
 

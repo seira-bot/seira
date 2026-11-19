@@ -203,9 +203,9 @@ export function runStatus(messages: readonly Message[]): RunStatus {
 }
 
 /** The head of Advanced mode's work card: "Worked for 29s", "Working…" or "Failed after 4s". */
-export function runHeadline(messages: readonly Message[], status: RunStatus, label?: string): string {
+export function runHeadline(messages: readonly Message[], status: RunStatus, label?: string, recordedMs?: number): string {
   if (status === "working") return t("chat.run.working");
-  const elapsed = messages.length > 1 ? Math.max(0, messages[messages.length - 1]!.at - messages[0]!.at) : 0;
+  const elapsed = recordedMs ?? (messages.length > 1 ? Math.max(0, messages[messages.length - 1]!.at - messages[0]!.at) : 0);
   if (status === "failed") return elapsed >= 1_000 ? t("chat.run.failedAfter", { elapsed: formatElapsed(elapsed) }) : t("toolDetail.failed");
   return label ?? workedLabel(elapsed);
 }

@@ -325,3 +325,18 @@ test("the generated startup page script and kit match their sources", () => {
   const result = spawnSync(process.execPath, [fileURLToPath(new URL("../scripts/build-splash.mjs", import.meta.url)), "--check"], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
 });
+
+test("the packaged app keeps every module that a main process file imports", () => {
+  const config = fs.readFileSync(fileURLToPath(new URL("../electron-builder.yml", import.meta.url)), "utf8");
+  const files = config.slice(config.indexOf("\nfiles:"), config.indexOf("\nasar:"));
+  const glob = (pattern) => new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\0").replace(/\*/g, "[^/]*").replace(/\0/g, ".*")}$`);
+  const excluded = [...files.matchAll(/^\s+- "!([^"]+)"$/gm)].map(([, pattern]) => glob(pattern));
+  assert.ok(excluded.length > 0);
+  const dir = new URL("./", import.meta.url);
+  for (const file of fs.readdirSync(dir).filter((name) => name.endsWith(".mjs") && !/\.(node-)?test\./.test(name))) {
+    for (const [, spec] of fs.readFileSync(new URL(file, dir), "utf8").matchAll(/^import [^;]*? from ["'](\.\/[^"']+)["']/gm)) {
+      const target = `electron/${spec.slice(2)}`;
+      assert.ok(!excluded.some((pattern) => pattern.test(target)), `${file} imports ${target}, but electron-builder.yml leaves it out`);
+    }
+  }
+});

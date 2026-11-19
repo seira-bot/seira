@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runServiceCommand, serviceServeArgs } from "./service-cli.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
-describe("openmausbot service", () => {
+describe("seira service", () => {
   let dir: string;
   const out: string[] = [];
   const err: string[] = [];
@@ -37,15 +37,15 @@ describe("openmausbot service", () => {
     const npx = { action: "install" as const, dataDir: join(dir, "x"), port: 8799, publicUrl: "https://maus.example.com", script: "/home/maus/.npm/_npx/deadbeef/node_modules/openmausbot/dist-server/openmausbot.js", node: "/usr/bin/node", platform: "linux" as const, home: "/home/maus", user: "maus" };
     const installs: string[] = [];
     expect(runServiceCommand({ ...npx, installCopy: (prefix) => { installs.push(prefix); return false; } }, io)).toBe(1);
-    expect(err.join("\n")).toContain(`npm install --prefix ${join(dir, "x", "app", "latest")} openmausbot@latest`);
+    expect(err.join("\n")).toContain(`npm install --prefix ${join(dir, "x", "app", "latest")} @seira-bot/seira@latest`);
     expect(existsSync(join(dir, "x", "openmausbot.service"))).toBe(false);
     expect(runServiceCommand({ ...npx, installCopy: (prefix) => { installs.push(prefix); return true; }, exists: () => true }, io)).toBe(0);
     const pinned = readFileSync(join(dir, "x", "openmausbot.service"), "utf8");
-    const script = join(dir, "x", "app", "latest", "node_modules", "openmausbot", "dist-server", "openmausbot.js");
+    const script = join(dir, "x", "app", "latest", "node_modules", "@seira-bot", "seira", "dist-server", "openmausbot.js");
     expect(pinned).toContain(`ExecStart=/usr/bin/node ${/[\s"\\]/.test(script) ? `"${script.replace(/[\\"]/g, "\\$&")}"` : script} serve`);
     expect(pinned).toContain("--public-url https://maus.example.com");
     expect(pinned).not.toContain("--no-pair");
-    expect(pinned).toContain('Environment="OMB_CLI_PREFIX=npx openmausbot"');
+    expect(pinned).toContain('Environment="OMB_CLI_PREFIX=npx @seira-bot/seira"');
     expect(installs).toEqual([join(dir, "x", "app", "latest"), join(dir, "x", "app", "latest")]);
   });
 
@@ -69,7 +69,7 @@ describe("openmausbot service", () => {
     expect(plist).toContain("<string>/usr/bin/node</string>");
     expect(plist).not.toContain("ELECTRON_RUN_AS_NODE");
     expect(plist).toContain(`<string>${sentinelOut}</string>`);
-    expect(out.join("\n")).toContain("openmausbot sentinel --check-install");
+    expect(out.join("\n")).toContain("seira sentinel --check-install");
     expect(existsSync(dataDir)).toBe(false);
     expect(out.join("\n")).toContain("launchctl bootstrap gui/$(id -u) /Users/maus/Library/LaunchAgents/com.openmausbot.sentinel.plist");
     expect(out.join("\n")).toContain(`issues: ${join(sentinelOut, "issues.jsonl")}`);

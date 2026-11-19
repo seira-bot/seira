@@ -21,7 +21,7 @@ import { ADVANCED_GROUPS, memoryValue } from "./advanced-sections";
 import { usePlaceChoices, useOpenComputer } from "./ComputerTab";
 import { libraryItems } from "./LibraryTab";
 import { PanelQuickActions, type QuickAction } from "./PanelQuickActions";
-import { PanelStatePill } from "./PanelStatePill";
+import { AdvancedStatePill } from "./AdvancedStatePill";
 import { useMemoryDoc } from "./use-memory-doc";
 import { roundButtonCls } from "./rows";
 
@@ -118,7 +118,7 @@ export function AdvancedPanel({ bot, derived, sections, query, appNames, appsPha
         <div className="flex min-w-0 flex-col items-start gap-0.5">
           <h2 id="bot-settings-title" className="max-w-full truncate text-[17px] font-semibold leading-[22px] tracking-[-0.01em] text-ink">{bot.name}</h2>
           {title && <p className="max-w-full truncate text-[13px] text-ink-secondary">{title}</p>}
-          <PanelStatePill bot={bot} />
+          <AdvancedStatePill bot={bot} />
         </div>
       </div>
 
@@ -164,7 +164,7 @@ export function AdvancedPanel({ bot, derived, sections, query, appNames, appsPha
           return (
             <section key={group.id} data-advanced-group={group.id} hidden={shown.length === 0}>
               <h3 className="px-1 pb-1.5 pt-3.5 text-[12px] font-medium text-ink-tertiary">{t(group.label)}</h3>
-              <div className="overflow-hidden rounded-[12px] border border-ink/[0.04] bg-ink/[0.03]">
+              <div className="overflow-hidden rounded-[12px] bg-ink/[0.03] shadow-[inset_0_0_0_1px_var(--color-hairline)]">
                 {entries.map((entry) => {
                   const { id, icon: Icon } = entry;
                   const isMatch = matched(entry);

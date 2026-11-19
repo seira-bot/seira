@@ -119,7 +119,7 @@ export function serverInstall(env: NodeJS.ProcessEnv = process.env, script = pro
   const prefix = cliPrefix(env, script);
   if (prefix.includes("docker") || docker()) return "docker";
   if (prefix === "pnpm omb" || script.endsWith(".ts")) return "source";
-  return prefix === "npx openmausbot" ? "npx" : "global";
+  return prefix === "npx @seira-bot/seira" ? "npx" : "global";
 }
 
 /** What a server only its one owner signs in to takes from that owner's own desktop by default: told in the owner's own

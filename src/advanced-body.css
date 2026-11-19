@@ -1,0 +1,12 @@
+/* An open section of the Advanced bot panel sits inside the group card, so its own cards drop their fill, padding and
+   corners and its blocks sit closer. A card with a border of its own (a warning, a danger zone) keeps it. */
+[data-advanced-body] .rounded-xl.bg-card.p-4:not([class*="border"]) {
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+[data-advanced-body] > .flex-col.gap-4,
+[data-advanced-body] > * > .flex-col.gap-4 {
+  gap: 14px;
+}

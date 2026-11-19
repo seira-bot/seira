@@ -108,25 +108,23 @@ describe("sidebar top row", () => {
     desktop();
     const html = render();
     const row = topRow(html);
-    expect(row).toMatch(/^data-sidebar-top-row="true" class="[^"]*\bitems-center\b[^"]*\bh-12\b[^"]*" style="-webkit-app-region:drag"/);
-    const { lights, slot, spacer, switcher, buttons } = order(row);
+    expect(row).toMatch(/^data-sidebar-top-row="true" class="[^"]*\bitems-center\b[^"]*\bh-\[52px\][^"]*" style="-webkit-app-region:drag"/);
+    const { lights, slot, switcher, buttons } = order(row);
     expect(lights).toBe(-1);
     expect(slot).toBeGreaterThan(-1);
-    expect(spacer).toBeGreaterThan(slot);
-    expect(switcher).toBeGreaterThan(spacer);
+    expect(switcher).toBeGreaterThan(slot);
     expect(buttons).toBeGreaterThan(switcher);
     expect(row.slice(buttons).match(/<button/g)).toHaveLength(1);
     const rowClasses = classesOf(row, "data-sidebar-top-row");
-    expect(rowClasses).toEqual(expect.arrayContaining(["relative", "pl-4", "pr-2"]));
+    expect(rowClasses).toEqual(expect.arrayContaining(["relative", "h-[52px]", "ps-3", "pe-3"]));
     expect(rowClasses).not.toContain("px-4");
     expect(classesOf(row, "data-sidebar-top-slot")).toEqual(expect.arrayContaining(["@container/sidebar-top", "min-w-0", "flex-1"]));
-    expect(row).toContain('<div data-sidebar-top-spacer="true" class="min-w-0 flex-1 @min-[96px]/sidebar-top:min-w-6"></div>');
     const switcherClasses = classesOf(row, "data-sidebar-top-switcher");
-    expect(switcherClasses).toEqual(expect.arrayContaining(["min-w-0", "max-w-[140px]"]));
+    expect(switcherClasses).toEqual(expect.arrayContaining(["min-w-0", "items-center"]));
     expect(switcherClasses).not.toContain("flex-1");
-    expect(classesOf(row, "data-sidebar-top-buttons")).toEqual(expect.arrayContaining(["shrink-0", "gap-0.5"]));
-    expect(row).toMatch(/aria-label="Switch server: Servers"[^>]*title="Servers"[^>]*class="[^"]*\bh-7\b[^"]*\boverflow-hidden\b[^"]*\btext-\[13px\][^"]*" style="-webkit-app-region:no-drag"/);
-    expect(row).toContain('<span class="min-w-0 truncate @max-[96px]/sidebar-top:hidden">Servers</span>');
+    expect(classesOf(row, "data-sidebar-top-buttons")).toEqual(expect.arrayContaining(["shrink-0", "gap-1"]));
+    expect(row).toMatch(/aria-label="Switch server: Servers"[^>]*title="Servers"/);
+    expect(row).toContain(">Servers</span>");
     expect(row).toContain("focus-visible:outline-2");
     expect(html).toContain('title="New or share"');
     expect(html.match(/Switch server:/g)).toHaveLength(1);
@@ -162,11 +160,10 @@ describe("sidebar top row", () => {
       const row = topRow(html);
       expect(row).not.toContain("data-traffic-light-space");
       expect(row).not.toContain("bg-[#ff5f57]");
-      expect(classesOf(row, "data-sidebar-top-row")).toEqual(expect.arrayContaining(["relative", "h-12", "pl-4", "pr-2"]));
-      const { slot, spacer, switcher, buttons } = order(row);
+      expect(classesOf(row, "data-sidebar-top-row")).toEqual(expect.arrayContaining(["relative", "h-[52px]", "ps-3", "pe-3"]));
+      const { slot, switcher, buttons } = order(row);
       expect(slot).toBeGreaterThan(-1);
-      expect(spacer).toBeGreaterThan(slot);
-      expect(switcher).toBeGreaterThan(spacer);
+      expect(switcher).toBeGreaterThan(slot);
       expect(buttons).toBeGreaterThan(switcher);
       expect(html.match(/Switch server:/g)).toHaveLength(1);
     },
@@ -178,7 +175,7 @@ describe("sidebar top row", () => {
     fixture.rail = { available: true, hidden: false };
     desktop();
     const advanced = topRow(render());
-    expect(advanced).toMatch(/^data-sidebar-top-row="true" class="[^"]*" style="-webkit-app-region:drag;height:46px"/);
+    expect(advanced).toMatch(/^data-sidebar-top-row="true" class="[^"]*" style="-webkit-app-region:drag"/);
     expect(classesOf(advanced, "data-traffic-light-space")).toEqual(["w-[72px]", "shrink-0", "md:w-[calc(72px_-_var(--rail-beside,0px))]"]);
     expect(advanced.indexOf("data-traffic-light-space")).toBeLessThan(advanced.indexOf("data-rail-toggle"));
     fixture.advanced = false;
@@ -333,15 +330,20 @@ describe("sidebar head and foot", () => {
       const search = at('aria-label="Search bots and messages"');
       const list = at('data-scroll-fade-frame=""');
       const foot = at('data-glass-bar="bottom"');
-      const automations = at('data-sidebar-nav="automations"');
+      const automations = at(density === "icons" ? 'data-sidebar-nav="automations"' : "data-sidebar-automations");
       const places = at('data-sidebar-nav="team-map"');
       expect(head).toBeLessThan(topRow);
       expect(topRow).toBeLessThan(search);
       expect(search).toBeLessThan(list);
       expect(list).toBeLessThan(foot);
-      expect(foot).toBeLessThan(automations);
-      expect(automations).toBeLessThan(places);
-      expect(html.match(/data-sidebar-nav="automations"/g)).toHaveLength(1);
+      if (density === "icons") {
+        expect(foot).toBeLessThan(automations);
+        expect(automations).toBeLessThan(places);
+      } else {
+        expect(topRow).toBeLessThan(automations);
+        expect(foot).toBeLessThan(places);
+      }
+      expect(html.match(/data-sidebar-automations|data-sidebar-nav="automations"/g)).toHaveLength(1);
       expect(html.match(/data-glass-frame=""/g)).toHaveLength(1);
       expect(at("data-glass-frame")).toBeLessThan(head);
     },
@@ -364,12 +366,12 @@ describe("sidebar foot in Simple mode", () => {
     expect(foot.match(/data-app-face="/g)).toHaveLength(3);
   });
 
-  it("keeps one Automations row in the foot and no Routines row in Advanced mode, and still one Apps", () => {
+  it("keeps one Automations row in the head and no Routines row in Advanced mode, and still one Apps", () => {
     fixture.advanced = true;
     const html = render();
     expect(html).not.toContain('data-sidebar-nav="routines"');
-    expect(html.match(/data-sidebar-nav="automations"/g)).toHaveLength(1);
-    expect(html.indexOf('data-sidebar-nav="automations"')).toBeGreaterThan(html.indexOf('data-glass-bar="bottom"'));
+    expect(html.match(/data-sidebar-automations/g)).toHaveLength(1);
+    expect(html.indexOf("data-sidebar-automations")).toBeLessThan(html.indexOf('data-glass-bar="bottom"'));
     expect(html.match(/data-sidebar-nav="apps"/g)).toHaveLength(1);
   });
 });

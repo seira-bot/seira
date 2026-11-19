@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// How Windows Security treats the real installer on a fresh GitHub Windows runner, after `pnpm package:win`
-// (.github/workflows/windows-defender-check.yml). GitHub's image turns most of Defender off and excludes every drive, so
+// How Windows Security treats the real installer on a fresh GitHub Windows runner, after `pnpm package:win`.
+// GitHub's image turns most of Defender off and excludes every drive, so
 // its protection is first set to a home PC's defaults. The installer is saved with a browser download's Zone.Identifier
 // (ZoneId=3), started the way a double-click starts it, and the app opened for two minutes; Start screen control is
 // then pressed through the app's DevTools port. report.md says what Defender found, whether cua-driver-background.exe
 // runs and whether Start screen control worked; the run fails when any of those went wrong. It changes Defender's
 // settings and installs the app, so it runs only on a GitHub Windows runner.
 //
-//   node scripts/defender-check-win.mjs --installer release/OpenMausBot-<version>-setup.exe --out <folder> [--wait 120]
+//   node scripts/defender-check-win.mjs --installer release/Seira-<version>-setup.exe --out <folder> [--wait 120]
 import { execFile, execFileSync, spawn } from "node:child_process";
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -21,7 +21,7 @@ if (process.platform !== "win32" || process.env.GITHUB_ACTIONS !== "true") {
   process.exit(2);
 }
 if (!options.installer || !existsSync(options.installer) || !options.out) {
-  console.error("usage: node scripts/defender-check-win.mjs --installer <OpenMausBot-<version>-setup.exe> --out <folder> [--wait 120]");
+  console.error("usage: node scripts/defender-check-win.mjs --installer <Seira-<version>-setup.exe> --out <folder> [--wait 120]");
   process.exit(2);
 }
 
@@ -217,7 +217,7 @@ $downloads = Join-Path $env:USERPROFILE 'Downloads'
 New-Item -ItemType Directory -Force -Path $downloads | Out-Null
 $target = Join-Path $downloads ${quote(path.basename(installer))}
 Copy-Item -LiteralPath ${quote(installer)} -Destination $target -Force
-Set-Content -LiteralPath $target -Stream Zone.Identifier -Value @('[ZoneTransfer]', 'ZoneId=3', 'ReferrerUrl=https://www.openmausbot.com/download', 'HostUrl=https://github.com/milind-soni/OpenMausBot/releases/latest/download/OpenMausBot-setup.exe')
+Set-Content -LiteralPath $target -Stream Zone.Identifier -Value @('[ZoneTransfer]', 'ZoneId=3', 'ReferrerUrl=https://github.com/seira-bot/seira/releases/latest', 'HostUrl=https://github.com/seira-bot/seira/releases/latest/download/Seira-setup.exe')
 [pscustomobject]@{
   path = $target; bytes = (Get-Item -LiteralPath $target).Length; sha256 = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
   zone = @(Get-Content -LiteralPath $target -Stream Zone.Identifier) -join ' | '
@@ -424,7 +424,7 @@ async function pressStart() {
 }
 
 function appLog() {
-  const folder = path.join(process.env.APPDATA ?? "", "OpenMausBot", "logs");
+  const folder = path.join(process.env.APPDATA ?? "", "openmausbot", "logs");
   const file = path.join(folder, "server.log");
   if (!existsSync(file)) return { file, present: false, lines: [] };
   for (const name of readdirSync(folder)) {

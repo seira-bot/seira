@@ -11,24 +11,25 @@ export function rowSurface(selected: boolean): string {
 /** The conversation the chat window has open: the same plain fill as a selected row. */
 export const rowSelectedSurface = "bg-raised";
 
-export type RowActivity = "working" | "failed" | "teammate" | "queued";
+export type RowActivity = "working" | "waiting" | "failed" | "teammate" | "queued";
 
 const ACTIVITY = {
   working: { tone: "bg-success", label: () => t("chat.activity.working"), testId: "working-dot" },
+  waiting: { tone: "bg-warning", label: () => t("sidebar.preview.waiting"), testId: "waiting-dot" },
   failed: { tone: "bg-danger", label: () => t("sidebar.preview.failed"), testId: "failed-dot" },
   teammate: { tone: "bg-accent", label: () => t("sidebar.preview.waitingOnTeammate"), testId: "teammate-wait-dot" },
   queued: { tone: "bg-ink-secondary", label: () => t("task.queued"), testId: "queued-dot" },
 } as const satisfies Record<RowActivity, { tone: string; label: () => string; testId: string }>;
 
 /** Working, waiting on a teammate or queued: a small dot on the avatar's corner. */
-export function AvatarActivityDot({ activity }: { activity: RowActivity | null }) {
+export function AvatarActivityDot({ activity, large = false }: { activity: RowActivity | null; large?: boolean }) {
   if (!activity) return null;
   const { tone, label, testId } = ACTIVITY[activity];
-  return <span aria-hidden="true" data-testid={testId} title={label()} className={cn("absolute bottom-0.5 right-0.5 size-2 rounded-full ring-2 ring-[var(--row)]", tone)} />;
+  return <span aria-hidden="true" data-testid={testId} title={label()} className={cn("absolute", large ? "bottom-0 right-0 size-2.5" : "bottom-0.5 right-0.5 size-2", "rounded-full ring-2 ring-[var(--row)]", tone)} />;
 }
 
 /** The same marker on a full row's avatar: a larger dot on its bottom-right corner, cut against the panel. */
-export function AvatarCornerDot({ activity, large }: { activity: Exclude<RowActivity, "working"> | null; large: boolean }) {
+export function AvatarCornerDot({ activity, large }: { activity: Exclude<RowActivity, "working" | "waiting"> | null; large: boolean }) {
   if (!activity) return null;
   const { tone, label, testId } = ACTIVITY[activity];
   return <span data-testid={testId} role="status" aria-label={label()} title={label()}
