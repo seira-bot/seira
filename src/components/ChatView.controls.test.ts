@@ -140,10 +140,58 @@ describe("the header's right side", () => {
     expect(markup).toContain('data-tour="computer"');
     expect(markup).toContain('data-testid="chat-more"');
     const more = fixture.menus.find((menu) => menu.ariaLabel === "More")!;
-    expect(more.items.map((item) => item.key)).toEqual(["find", "start-fresh", "as-template", "copy", "download", "activity", "inspector"]);
+    expect(more.items.map((item) => item.key)).toEqual(["rename", "find", "start-fresh", "as-template", "copy", "download", "activity", "inspector"]);
     const inspector = more.items.find((item) => item.key === "inspector")!;
     expect(inspector.disabled).toBeFalsy();
     expect(inspector.heading).toBeUndefined();
+  });
+});
+
+describe("the Advanced transcript", () => {
+  it("heads a bot turn with its face, name and time, opens the work card", () => {
+    fixture.advanced = true;
+    fixture.showToolCalls = true;
+    const messages: Bot["messages"] = [
+      { id: "ask", role: "user", kind: "text", at: 1, text: "Check it" },
+      { id: "read", role: "bot", kind: "activity", at: 2, tool: { name: "Read", ok: true } },
+      { id: "bash", role: "bot", kind: "activity", at: 3, tool: { name: "Bash", ok: true } },
+      { id: "reply", role: "bot", kind: "text", at: 4, text: "Done." },
+    ];
+    try {
+      const markup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: false, messages } }));
+      expect(markup).toContain("data-turn-head");
+      expect(markup).toContain("data-activity-run");
+      expect(markup).toMatch(/data-activity-run[\s\S]*aria-expanded="true"[\s\S]*data-mid="read"/);
+      expect(markup).toContain('data-chat-bubble="simple"');
+      // The head comes first, then the card, then the reply.
+      expect(markup.indexOf("data-turn-head")).toBeLessThan(markup.indexOf("data-activity-run"));
+      expect(markup.indexOf("data-activity-run")).toBeLessThan(markup.indexOf("Done."));
+      expect(markup.match(/data-turn-head/g)).toHaveLength(1);
+      expect(markup).toContain("data-step-timeline");
+    } finally {
+      fixture.showToolCalls = false;
+    }
+  });
+
+  it("shows one open Working card with the steps so far while the turn runs", () => {
+    fixture.advanced = true;
+    fixture.showToolCalls = true;
+    const messages: Bot["messages"] = [
+      { id: "ask", role: "user", kind: "text", at: 1, text: "Check it" },
+      { id: "read", role: "bot", kind: "activity", at: 2, tool: { name: "Read", ok: true } },
+      { id: "bash", role: "bot", kind: "activity", at: 3, tool: { name: "Bash" } },
+    ];
+    try {
+      const markup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: true, messages, tasks: (bot.tasks ?? []).map((task) => ({ ...task, busy: true })) } }));
+      expect(markup).toContain('data-run-status="working"');
+      expect(markup).toContain("Working…");
+      expect(markup).toMatch(/data-activity-run[\s\S]*aria-expanded="true"/);
+      expect(markup).toContain('data-mid="read"');
+      expect(markup).toContain('data-mid="bash"');
+      expect(markup).not.toContain("thinking-shimmer");
+    } finally {
+      fixture.showToolCalls = false;
+    }
   });
 });
 
@@ -208,49 +256,35 @@ describe("header name", () => {
     fixture.advanced = true;
   });
 
-  it("keeps the rename pencil in Advanced mode, inside the same pill as the avatar and name", () => {
+  it("draws Advanced mode's header as the same pill: avatar, name, role and a chevron, with no pencil", () => {
     fixture.advanced = true;
-    const markup = renderToStaticMarkup(createElement(ChatView, { bot }));
-    const start = markup.indexOf('<div data-chathead-pill="true"');
-    expect(start).toBeGreaterThan(-1);
-    const pill = markup.slice(start, markup.indexOf("data-chathead-controls"));
-    expect(pill).toContain('aria-label="Open Pepper&#x27;s profile"');
-    expect(pill).toContain("Rename Pepper");
+    const markup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, title: " Research " } }));
+    const pill = markup.match(/<button[^>]*data-chathead-pill="true"[^>]*>([\s\S]*?)<\/button>/);
+    expect(pill?.[0]).toContain('aria-label="Open Pepper&#x27;s profile"');
+    expect(pill?.[1]).toContain(">Pepper</span>");
+    expect(pill?.[1]).toContain("data-chathead-chevron");
+    expect(pill?.[1]).toMatch(/<span data-chathead-role="true"[^>]*>Research<\/span>/);
+    expect(pill?.[0]).not.toContain("Rename");
   });
 
-  it("shows the bot's role beside the pill in Advanced mode, taking only the room the name leaves, and leaves it to the bot panel in Simple", () => {
-    fixture.advanced = false;
-    // Simple mode keeps the role inside the pill, in quiet ink, and drops it on narrow screens.
-    const simpleRole = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, title: " Research " } })).match(/<span data-chathead-role="true"[^>]*class="([^"]*)"[^>]*>Research<\/span>/);
-    expect(simpleRole?.[1]!.split(" ")).toEqual(expect.arrayContaining(["truncate", "text-[13px]", "text-ink-tertiary", "max-md:hidden"]));
-    for (const advanced of [true]) {
+  it("shows the bot's role in the pill in both modes, dropping it on narrow screens", () => {
+    for (const advanced of [false, true]) {
       fixture.advanced = advanced;
-      const markup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, title: " Research " } }));
-      const identity = markup.slice(markup.indexOf("data-chathead-identity"), markup.indexOf("data-chathead-controls"));
-      const role = identity.match(/<span data-chathead-role="true" class="([^"]*)"><span title="Research" class="([^"]*)">Research<\/span><\/span>/);
-      expect(role, `advanced ${advanced}`).toBeTruthy();
-      expect(role![1].split(" ")).toEqual(expect.arrayContaining(["min-w-0", "max-w-fit", "grow", "basis-0"]));
-      expect(role![2].split(" ")).toEqual(expect.arrayContaining(["truncate", "text-[13px]", "text-ink-secondary"]));
-      expect(identity.indexOf("data-chathead-role")).toBeGreaterThan(identity.indexOf("Rename Pepper"));
-      fixture.advanced = true;
-      expect(renderToStaticMarkup(createElement(ChatView, { bot }))).not.toContain("data-chathead-role");
+      const role = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, title: " Research " } })).match(/<span data-chathead-role="true"[^>]*class="([^"]*)"[^>]*>Research<\/span>/);
+      expect(role?.[1]!.split(" "), `advanced ${advanced}`).toEqual(expect.arrayContaining(["truncate", "text-[13px]", "text-ink-tertiary", "max-md:hidden"]));
     }
     fixture.advanced = true;
+    expect(renderToStaticMarkup(createElement(ChatView, { bot }))).not.toContain("data-chathead-role");
   });
 
   it("leaves a Chief's role out of the header when it only repeats the Chief of Staff badge", () => {
     const header = (title: string) => renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, chiefOfStaff: true, title } }));
-    // In the Simple pill the Chief label stands in for a title that only repeats it: shown once, never twice.
-    fixture.advanced = false;
-    try {
-      expect(header("chief of staff ").match(/<span data-chathead-role="true"[^>]*>Chief of Staff<\/span>/g)).toHaveLength(1);
+    for (const advanced of [false, true]) {
+      fixture.advanced = advanced;
+      expect(header("chief of staff ").match(/<span data-chathead-role="true"[^>]*>Chief of Staff<\/span>/g), `advanced ${advanced}`).toHaveLength(1);
       expect(header("Operations lead")).toContain('title="Operations lead"');
-    } finally {
-      fixture.advanced = true;
     }
-    expect(header("chief of staff ")).not.toContain("data-chathead-role");
-    expect(header("Operations lead")).toContain('<span title="Operations lead"');
-    expect(renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, title: "Chief of Staff" } }))).toContain("data-chathead-role");
+    fixture.advanced = true;
   });
 
   it("draws no working dots in the header pill, keeping one width, while a status still tells a screen reader", () => {
@@ -595,7 +629,7 @@ describe("thread control placement", () => {
     ];
     try {
       const markup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: false, messages } }));
-      expect(markup).toContain('data-mid="notice"><div role="status"');
+      expect(markup).toMatch(/data-mid="notice"[^>]*><div role="status"/);
       expect(markup.match(/no longer offers/g)).toHaveLength(1);
       expect(markup).not.toContain(`notice: ${explanation}`);
       if (!showToolCalls) expect(markup).not.toContain('data-testid="tool-activity"');
@@ -656,11 +690,11 @@ describe("thread control placement", () => {
     expect(controls[1].split(" ")).toEqual(expect.arrayContaining(["shrink-0", "@max-[30rem]/chathead:ml-auto", "@max-[30rem]/chathead:flex-wrap"]));
   });
 
-  it("keeps the Chief of Staff badge on one line instead of stacking a word per line", () => {
+  it("keeps the Chief of Staff crown and label inside the pill, on one line", () => {
     const markup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: false, chiefOfStaff: true } }));
-    const badge = /<span title="Chief of Staff" class="([^"]*)"><svg[^>]*lucide-crown[^]*?<\/svg> <span class="([^"]*)">Chief of Staff<\/span>/.exec(markup)!;
-    expect(badge[1].split(" ")).toEqual(expect.arrayContaining(["shrink-0", "whitespace-nowrap"]));
-    expect(badge[2].split(" ")).toContain("@max-4xl/chathead:sr-only");
+    const pill = /<button[^>]*data-chathead-pill="true"[^>]*>([\s\S]*?)<\/button>/.exec(markup)![1]!;
+    expect(pill).toContain("lucide-crown");
+    expect(/<span data-chathead-role="true"[^>]*class="([^"]*)"[^>]*>Chief of Staff<\/span>/.exec(pill)![1]!.split(" ")).toContain("truncate");
   });
 
   it("keeps the selected thread's model in the header and permissions inside the composer pill", () => {

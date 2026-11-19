@@ -7,7 +7,7 @@ import {
   BASE_IMAGE,
   CUA_DRIVER_VERSION,
   CUA_SOCKET,
-  IMAGE as CUA_IMAGE,
+  OPENMAUSBOT_IMAGE,
   cuaExecArgs,
   imageLabelsMatch,
   managedImageDockerfile,
@@ -30,7 +30,7 @@ import { loadEnvironmentId } from "./environment.ts";
 import { SPAWNED_PROXIES } from "./proxy-paths.ts";
 import { dockerCliMissing, dockerCliMissingProblem } from "./vps-hints.ts";
 
-export const VPS_IMAGE = CUA_IMAGE;
+export const VPS_IMAGE = OPENMAUSBOT_IMAGE;
 export const VPS_MANAGED_LABEL = "com.openmausbot.vps";
 export const VPS_CONTAINER_LABEL = "com.openmausbot.container";
 export const VPS_ENVIRONMENT_LABEL = "com.openmausbot.environment";

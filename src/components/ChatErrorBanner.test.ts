@@ -1,11 +1,15 @@
-import { createElement } from "react";
+// @vitest-environment happy-dom
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
-import { describe, expect, it, vi } from "vitest";
+import { resolve } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setTeamPeople } from "@/state/team-people";
+import { StoreProvider, useStore } from "@/state/store";
 import { ChatErrorBanner, ChatNotice } from "./ChatErrorBanner";
 
-const source = (name: string) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
+const source = (name: string) => readFileSync(resolve(process.cwd(), "src", name), "utf8");
 
 describe("ChatErrorBanner", () => {
   it("renders nothing when there is no error", () => {
@@ -97,5 +101,61 @@ describe("ChatNotice", () => {
     for (const file of ["components/ChatView.tsx", "components/GroupView.tsx"]) {
       expect(source(file)).toContain("<ChatNotice notice={state.notice} />");
     }
+  });
+});
+
+class FixtureEventSource {
+  onopen: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  onmessage: ((event: { data: string }) => void) | null = null;
+  close() {}
+}
+
+describe("ChatNotice with no AI", () => {
+  const text = "Olive needs to connect an AI before bots can answer. I've told them.";
+  let store!: ReturnType<typeof useStore>;
+  let host: HTMLElement;
+  let root: Root;
+  function Harness() { store = useStore(); return createElement(ChatNotice, { notice: store.state.notice }); }
+  const button = (label: string) => [...host.querySelectorAll("button")].find((b) => b.textContent === label || b.getAttribute("aria-label") === label);
+
+  beforeEach(async () => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.stubGlobal("EventSource", FixtureEventSource);
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ bots: [], groups: [], instances: [] })));
+    host = document.createElement("div");
+    root = createRoot(host);
+    await act(async () => { root.render(createElement(StoreProvider, null, createElement(Harness))); });
+    await act(async () => { store.dispatch({ type: "notice", notice: { kind: "no-ai", botName: null, text } }); });
+  });
+  afterEach(async () => {
+    await act(async () => { root.unmount(); });
+    vi.unstubAllGlobals();
+    setTeamPeople(null);
+  });
+
+  it("shows the words with a way to connect and a way to dismiss", () => {
+    expect(host.textContent).toContain(text);
+    expect(button("Connect an AI")).toBeDefined();
+    expect(button("Dismiss")?.getAttribute("title")).toBe("Dismiss");
+  });
+
+  it("offers no way to connect to a team's member", async () => {
+    await act(async () => { setTeamPeople({ people: [], me: null, admin: false, needsYou: [] }); });
+    expect(host.textContent).toContain(text);
+    expect(button("Connect an AI")).toBeUndefined();
+    expect(button("Dismiss")).toBeDefined();
+  });
+
+  it("goes away when the person dismisses it", async () => {
+    await act(async () => { button("Dismiss")!.click(); });
+    expect(store.state.notice).toBeNull();
+    expect(host.textContent).toBe("");
+  });
+
+  it("goes away when an AI is ready", async () => {
+    const ready = { id: "i1", driverKind: "codex", access: "account", snapshot: { state: "available", authenticated: true } };
+    await act(async () => { store.dispatch({ type: "instances", instances: [ready] as never }); });
+    expect(store.state.notice).toBeNull();
   });
 });

@@ -84,12 +84,14 @@ const PENDING_WORDS: readonly Word[] = [
 ];
 
 const ALLOWED: Record<string, string> = {
-  "grokMove.connect.where": "names the Server URL field of Grok Bot's own form, where the link is pasted",
+  "grokMove.guide.sendManual": "names the Server URL field of Grok Bot's own form, where the link is pasted",
   "sidebar.servers": "the switcher's own Servers list, renamed with the one-workspace switcher",
   "sidebar.switchServer": "the switcher's own Servers list, renamed with the one-workspace switcher",
   "sidebar.switchServerError": "points at the app menu's Server menu",
   "sidebar.update.howOther": "a server added from the app menu's Server menu: its update is for whoever runs it, not this app",
   "sidebar.update.howOtherRestart": "a server added from the app menu's Server menu: its update is for whoever runs it, not this app",
+  "connectors.setupNeeded": "names Composio because the person must add their own Composio project key",
+  "connectors.setupNeededRemote": "names Composio because the host needs the owner's own Composio project key",
   "botAccess.tools.syntax": "the tool names people type, such as mcp:SERVER:NAME",
   "chat.notice.modelServerStoppedAnswering": "the person's model server at a named host, not the app's internal server",
   "rail.local": "the owner's own name for the ＋ choice that adds a workspace of this computer's own",

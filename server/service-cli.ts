@@ -62,7 +62,7 @@ export function runServiceCommand(input: ServiceInstallInput, io: ServiceIo): nu
   if (input.sentinel) return runSentinelService(input, platform, home, io);
   const plan = servicePlan(platform, input.dataDir, home);
   if (!plan) {
-    io.error("services are written for Linux (systemd) and macOS (launchd); on Windows, use Task Scheduler to run `openmausbot serve` at startup");
+    io.error("services are written for Linux (systemd) and macOS (launchd); on Windows, use Task Scheduler to run `seira serve` at startup");
     return 1;
   }
   if (input.action === "uninstall") {
@@ -85,7 +85,7 @@ export function runServiceCommand(input: ServiceInstallInput, io: ServiceIo): nu
     home,
     bindsLowPorts: Boolean(input.domain),
     ...(input.label ? { label: input.label } : {}),
-    ...(script !== input.script ? { cliPrefix: "npx openmausbot" } : {}),
+    ...(script !== input.script ? { cliPrefix: "npx @seira-bot/seira" } : {}),
   };
   const rendered = platform === "darwin" ? launchdPlist(spec) : systemdUnit(spec);
   mkdirSync(input.dataDir, { recursive: true, mode: 0o700 });
@@ -110,10 +110,10 @@ function pinnedCopy(input: ServiceInstallInput, io: ServiceIo): string | null {
     version = undefined;
   }
   const prefix = join(input.dataDir, "app", version ?? "latest");
-  const command = `npm install --prefix ${prefix} openmausbot@${version ?? "latest"}`;
-  io.log(`this run comes from npx's cache, which npm prunes: installing openmausbot ${version ?? ""} into ${prefix} for the service`.replace("  ", " "));
+  const command = `npm install --prefix ${prefix} @seira-bot/seira@${version ?? "latest"}`;
+  io.log(`this run comes from npx's cache, which npm prunes: installing @seira-bot/seira ${version ?? ""} into ${prefix} for the service`.replace("  ", " "));
   const installed = (input.installCopy ?? installWithNpm)(prefix, version ?? "latest");
-  const script = join(prefix, "node_modules", "openmausbot", "dist-server", "openmausbot.js");
+  const script = join(prefix, "node_modules", "@seira-bot", "seira", "dist-server", "openmausbot.js");
   if (installed && (input.exists ?? existsSync)(script)) return script;
   io.error(`could not install that copy. Run this, then the same service install command again from it:\n  ${command}\n  node ${script} service install …`);
   return null;
@@ -122,7 +122,7 @@ function pinnedCopy(input: ServiceInstallInput, io: ServiceIo): string | null {
 function installWithNpm(prefix: string, version: string): boolean {
   mkdirSync(prefix, { recursive: true, mode: 0o700 });
   const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-  return spawnSync(npm, ["install", "--prefix", prefix, `openmausbot@${version}`, "--no-audit", "--no-fund"], { stdio: "inherit" }).status === 0;
+  return spawnSync(npm, ["install", "--prefix", prefix, `@seira-bot/seira@${version}`, "--no-audit", "--no-fund"], { stdio: "inherit" }).status === 0;
 }
 
 function bundleHasSentinel(script: string): boolean {
@@ -187,6 +187,6 @@ function runSentinelService(input: ServiceInstallInput, platform: NodeJS.Platfor
   io.log("");
   io.log(`issues: ${join(out, "issues.jsonl")}`);
   io.log(`logs: ${platform === "darwin" ? join(out, "sentinel.log") : "journalctl --user -u openmausbot-sentinel"}`);
-  io.log("after an app update or a Node upgrade, check the schedule still points at both: openmausbot sentinel --check-install");
+  io.log("after an app update or a Node upgrade, check the schedule still points at both: seira sentinel --check-install");
   return 0;
 }

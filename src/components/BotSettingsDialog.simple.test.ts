@@ -124,6 +124,7 @@ vi.mock("@/state/store", async (importOriginal) => {
 
 const { BotSettingsDialog } = await import("./BotSettingsDialog");
 const { BotPanel } = await import("./bot-panel/PanelShell");
+const { AdvancedPanel } = await import("./bot-panel/AdvancedPanel");
 const { PanelHero } = await import("./bot-panel/PanelHero");
 const { AvatarEditorCard } = await import("./bot-panel/AvatarEditorCard");
 const { DetailsTab } = await import("./bot-panel/DetailsTab");
@@ -1396,14 +1397,13 @@ describe("the bot settings dialog", () => {
       settingsOpen: true, botSettingsSection: "model", botSettingsExpandAccordion: true,
       botSettingsSectionStored: true, botSettingsExpandRemembered: true,
     };
-    const rowOpen = (rendered: Rendered, id: string) =>
-      (Children.toArray(find(rendered, "data-bot-settings-section", id).props.children)[0] as Node).props["aria-expanded"] === true;
-    expect(rowOpen(dialog(makeBot()), "model")).toBe(true);
-    const search = find(dialog(makeBot()), "aria-label", "Search settings");
-    change(search, "model");
+    const open = (rendered: Rendered) => ofType(rendered, AdvancedPanel)!.props.open;
+    expect(open(dialog(makeBot()))).toBe("model");
+    const search = ofType(dialog(makeBot()), AdvancedPanel)!;
+    (search.props.onQuery as (value: string) => void)("model");
     expect(fixture.dispatch).toHaveBeenLastCalledWith({ type: "toggleSettings", open: true });
     fixture.storeState = { ...fixture.storeState, botSettingsExpandAccordion: false, botSettingsExpandRemembered: false };
-    expect(rowOpen(dialog(makeBot()), "model")).toBe(false);
+    expect(open(dialog(makeBot()))).toBeNull();
   });
 
   it("one click on a remembered-expanded row collapses it", () => {
@@ -1412,8 +1412,7 @@ describe("the bot settings dialog", () => {
       settingsOpen: true, botSettingsSection: "model", botSettingsExpandAccordion: true,
       botSettingsSectionStored: true, botSettingsExpandRemembered: true,
     };
-    const row = find(dialog(makeBot()), "data-bot-settings-section", "model");
-    click(Children.toArray(row.props.children)[0] as Node);
+    (ofType(dialog(makeBot()), AdvancedPanel)!.props.onToggle as (id: string) => void)("model");
     expect(fixture.dispatch).toHaveBeenLastCalledWith({ type: "toggleSettings", open: true });
   });
 

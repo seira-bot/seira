@@ -88,11 +88,13 @@ export function createNoAiNotice(deps: NoAiNoticeDeps) {
   }
 
   return {
-    /** The refusal for a turn that has no AI on a team, in the words of the conversation's language; null off a team. */
+    /** The refusal for a turn that has no AI, in the words of the conversation's language; null for a bot on an engine
+     * this server no longer has. */
     refusal(threadId: string, sender: ResolvedSender | undefined, instanceId?: string): NoAiRefusal | null {
-      if (!deps.team || instanceId) return null;
+      if (instanceId) return null;
       const language = deps.threadLanguage(threadId);
       const refused = (line: string) => Object.assign(new Error(line), { status: 409, code: "no_ai" as const });
+      if (!deps.team) return refused(serverLine(language, "server.noAi.admin"));
       const asker = sender?.id ? deps.people().find((person) => keyOf(person.email) === sender.id) : undefined;
       if (!asker) return refused(serverLine(language, "server.noAi.nobodyHere"));
       if (asker.role !== "member") return refused(serverLine(language, "server.noAi.admin"));

@@ -1,8 +1,9 @@
 import { localizedTaskTitle } from "@/lib/task-title";
 import { ChevronDown, ChevronRight, Crown, Lock, UserRound, Users } from "lucide-react";
-import type { ComponentProps } from "react";
+import { useState, type ComponentProps } from "react";
 
 import { cn } from "@/lib/cn";
+import { nextRename } from "@/lib/rename";
 import { t } from "@/lib/i18n";
 import type { Bot } from "@/state/store"; import { useStoreSelector } from "@/state/store-select";
 import { awayFromMainThread } from "@/state/thread-navigation";
@@ -11,6 +12,7 @@ import { ELEVATED_FLOAT, ELEVATED_HOVER } from "./elevated";
 import { sidebarBotActivityTasks } from "./SidebarBotActivity";
 import { BOT_PANEL_ID } from "./bot-panel/side-panel";
 import { sharedChatAudience } from "./TeamPrivateChatsLine";
+import { BOT_PROFILE_LIMITS } from "../../shared/bot-profile";
 
 /** The factory title a new conversation starts with. */
 const UNTITLED = "New thread";
@@ -32,21 +34,26 @@ function privacyLabelOf(privacy: ChatHeadPrivacy): string | null {
 /** Simple mode's whole chat header: the bot's face and name in one pill, which opens and closes the bot panel. Away from
  * the bot's main conversation it also names the one on screen. A dot says another of the bot's conversations needs a
  * look; a team chat says who can read it with one quiet glyph. */
-export function ChatHeadPill({ bot, avatar, privacy, onToggle }: {
+export function ChatHeadPill({ bot, avatar, privacy, onToggle, threadsInPill = true, rename }: {
   bot: Bot;
   avatar: Pick<ComponentProps<typeof BotAvatar>, "state" | "motion" | "motionKey" | "animated">;
   privacy: ChatHeadPrivacy;
   onToggle: () => void;
+  /** Advanced mode lists the bot's conversations in its own picker, so its pill carries neither the title nor the dot. */
+  threadsInPill?: boolean;
+  /** Advanced mode: the pill turns into a name field while the header menu's Rename is open. */
+  rename?: { active: boolean; onCommit: (name: string) => void; onDone: () => void };
 }) {
   const open = useStoreSelector((state) => state.settingsOpen), pendingQueued = useStoreSelector((state) => state.pendingQueued);
-  const elsewhere = sidebarBotActivityTasks(bot, pendingQueued).filter((task) => task.threadId !== bot.threadId).length;
+  const elsewhere = threadsInPill ? sidebarBotActivityTasks(bot, pendingQueued).filter((task) => task.threadId !== bot.threadId).length : 0;
   const privacyLabel = privacyLabelOf(privacy);
   const PrivacyIcon = privacy ? PRIVACY_ICONS[privacy.kind] : Users;
   const title = bot.tasks?.find((task) => task.threadId === bot.threadId)?.title;
   // Simple mode calls an untitled conversation what it is, never a "thread".
-  const conversation = !awayFromMainThread(bot, false) ? (privacy?.kind === "shared" ? t("task.sharedChat") : null)
+  const conversation = !threadsInPill ? null : !awayFromMainThread(bot, false) ? (privacy?.kind === "shared" ? t("task.sharedChat") : null)
     : !title || title === UNTITLED ? t("task.untitledChat") : localizedTaskTitle(title);
   const label = t("chat.openProfileAria", { name: bot.name });
+  if (rename?.active) return <RenamePill bot={bot} avatar={avatar} onCommit={rename.onCommit} onDone={rename.onDone} />;
   const chief = t("chat.chiefOfStaff"), botTitle = bot.title.trim();
   const role = bot.chiefOfStaff && botTitle.toLocaleLowerCase() === chief.toLocaleLowerCase() ? "" : botTitle;
   return (
@@ -82,5 +89,43 @@ export function ChatHeadPill({ bot, avatar, privacy, onToggle }: {
       )}
       {!conversation && <ChevronDown size={14} aria-hidden="true" data-chathead-chevron className={cn("shrink-0 text-ink-tertiary transition-transform motion-reduce:transition-none", CHEVRON_MOTION, open && "rotate-180")} />}
     </button>
+  );
+}
+
+function RenamePill({ bot, avatar, onCommit, onDone }: {
+  bot: Bot;
+  avatar: Pick<ComponentProps<typeof BotAvatar>, "state" | "motion" | "motionKey" | "animated">;
+  onCommit: (name: string) => void;
+  onDone: () => void;
+}) {
+  const [draft, setDraft] = useState(bot.name);
+  const finish = (save: boolean) => {
+    const next = save ? nextRename(bot.name, draft) : null;
+    onDone();
+    if (next) onCommit(next);
+  };
+  return (
+    <div data-chathead-pill data-chathead-rename className={cn("flex min-w-0 max-w-full items-center gap-2 rounded-full py-[7.5px] pl-[7.5px] pr-[13.5px] text-ink", ELEVATED_FLOAT)}>
+      <BotAvatar bot={bot} size={24} {...avatar} />
+      <input
+        autoFocus
+        value={draft}
+        maxLength={BOT_PROFILE_LIMITS.name}
+        aria-label={t("rename.aria")}
+        onFocus={(event) => event.currentTarget.select()}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => finish(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            finish(true);
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            finish(false);
+          }
+        }}
+        className="min-w-0 w-48 bg-transparent text-[14px] font-semibold leading-5 text-ink focus:outline-none"
+      />
+    </div>
   );
 }

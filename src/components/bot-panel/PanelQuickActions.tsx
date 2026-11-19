@@ -12,7 +12,7 @@ const LOOK: Record<QuickAction, { Icon: LucideIcon; label: LocaleKey }> = {
   settings: { Icon: Settings, label: "botPanel.quick.settings" },
 };
 
-export function PanelQuickActions({ onAction, canMessage = true }: { onAction: (action: QuickAction) => void; canMessage?: boolean }) {
+export function PanelQuickActions({ onAction, canMessage = true, computerLabel }: { onAction: (action: QuickAction) => void; canMessage?: boolean; computerLabel?: LocaleKey }) {
   return (
     <div data-panel-quick className="mt-4 grid w-full grid-cols-4 gap-1.5">
       {(Object.keys(LOOK) as QuickAction[]).filter((action) => canMessage || action !== "message").map((action) => {
@@ -26,7 +26,7 @@ export function PanelQuickActions({ onAction, canMessage = true }: { onAction: (
             className="flex h-16 min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl bg-ink/[0.04] px-1 text-[12px] leading-4 text-ink-secondary transition-colors hover:bg-ink/[0.08] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           >
             <Icon size={16} aria-hidden="true" className="shrink-0 text-ink" />
-            <span className="max-w-full truncate">{t(label)}</span>
+            <span className="max-w-full truncate">{t(action === "computer" && computerLabel ? computerLabel : label)}</span>
           </button>
         );
       })}

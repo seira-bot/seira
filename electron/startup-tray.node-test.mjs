@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import nativeText from "./native-text.cjs";
 import { createStartupScreen, startupScreenHtml } from "./startup-screen.mjs";
+import { FINISH_MS, STEP_AT, createLine } from "./splash/line.js";
 import { createSystemTray } from "./system-tray.mjs";
 
 const iconPath = fileURLToPath(new URL("./resources/app-icon.png", import.meta.url));
@@ -12,6 +15,8 @@ class Window extends EventEmitter {
     super(); this.options = options; this.destroyed = false; this.visible = false;
     this.webContents = new EventEmitter();
     this.webContents.executeJavaScript = async () => {};
+    this.webContents.sent = [];
+    this.webContents.send = (channel, payload) => { this.webContents.sent.push([channel, payload]); };
   }
   setMenu() {}
   loadURL() { queueMicrotask(() => this.emit("ready-to-show")); return Promise.resolve(); }
@@ -44,7 +49,7 @@ function fixture(options = {}) {
   const splash = createStartupScreen({ BrowserWindow: Window, iconPath, platform: "win32",
     isQuitting: () => false, onQuit: () => calls.push("quit"), onHide: win => tray.hide(win),
     isHidden: () => tray.isHidden(), onShow: win => tray.windowShown(win),
-    onFinished: () => calls.push("finished"), ...options });
+    onFinished: () => calls.push("finished"), reducedMotion: () => true, ...options });
   active = splash.window;
   const win = new Window();
   win.on("show", () => tray.windowShown(win));
@@ -155,10 +160,10 @@ test("the tray's menu and the startup screen speak the app's language, and the t
   assert.deepEqual(trayInstance.menu.map(item => item.label), ["Abrir o Seira", undefined, "Sair do Seira"]);
   assert.equal(trayInstance.tooltip, "Seira");
   const html = startupScreenHtml({ t: text.t, lang: text.intlTag() });
-  assert.match(html, /<html lang="pt-BR">/);
+  assert.match(html, /<html lang="pt-BR" data-reduced-motion="false">/);
   assert.match(html, /<button aria-label="Fechar"/);
-  assert.match(startupScreenHtml(), /<html lang="en">.*<button aria-label="Close"/s);
-  assert.match(startupScreenHtml(), /<img src="data:image\/webp;base64,[A-Za-z0-9+/=]+" alt="">/);
+  assert.match(startupScreenHtml(), /<html lang="en"[^>]*>.*<button aria-label="Close"/s);
+  assert.match(startupScreenHtml(), /<img class="still" src="data:image\/webp;base64,[A-Za-z0-9+/=]+" alt="">/);
 });
 
 test("tray restores minimized windows, supports explicit quit, and disposes once", async () => {
@@ -216,4 +221,107 @@ test("the loading screen says what the app waits on, before its page has loaded 
   splash.dispose();
   splash.status("Opening My Cloud…");
   assert.equal(ran.length, 2, "nothing after it is gone");
+});
+
+const progressOf = (splash) => splash.window.webContents.sent.filter(([channel]) => channel === "startup-screen:progress").map(([, state]) => state);
+
+test("startup steps reach the page in order and never go back", async () => {
+  const { splash } = fixture({ reducedMotion: () => false });
+  await splash.ready;
+  await flush();
+  splash.progress("engine"); splash.progress("shown"); splash.progress("engine"); splash.progress("nonsense");
+  splash.progress("loaded");
+  assert.deepEqual(progressOf(splash).map(state => state.step), ["shown", "engine", "loaded"]);
+  assert.ok(progressOf(splash).every(state => state.finished === false));
+  splash.window.webContents.emit("did-finish-load");
+  assert.deepEqual(progressOf(splash).at(-1), { step: "loaded", finished: false });
+});
+
+test("the line follows the steps forward and never back", () => {
+  for (const reduced of [false, true]) {
+    const line = createLine({ reduced });
+    let last = 0;
+    for (const step of [null, "shown", "engine", "window", "loaded"]) {
+      if (step) line.reach(step);
+      for (let i = 0; i < 40; i += 1) { const p = line.tick(16); assert.ok(p >= last); last = p; }
+    }
+    assert.ok(last >= STEP_AT.loaded - 0.001 && last < 1);
+    assert.equal(line.reach("shown"), false);
+    assert.ok(line.tick(16) >= last);
+    line.finish();
+    for (let i = 0; i < 40; i += 1) line.tick(16);
+    assert.equal(line.position, 1);
+  }
+});
+
+test("the finish beat adds at most 400 ms before the workspace shows", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  assert.ok(FINISH_MS <= 400);
+  const { splash, win, calls } = fixture({ reducedMotion: () => false });
+  await splash.ready; splash.attach(win);
+  win.webContents.emit("did-finish-load"); await flush();
+  assert.equal(win.visible, false);
+  assert.deepEqual(progressOf(splash).map(state => [state.step, state.finished]).slice(-2), [["loaded", false], ["loaded", true]]);
+  t.mock.timers.tick(FINISH_MS - 1);
+  assert.equal(win.visible, false);
+  t.mock.timers.tick(1);
+  assert.equal(win.visible, true); assert.equal(splash.window.destroyed, true);
+  assert.deepEqual(calls, ["finished"]);
+});
+
+test("with reduced motion the workspace shows with no finish delay", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { splash, win } = fixture({ reducedMotion: () => true });
+  await splash.ready; splash.attach(win);
+  win.webContents.emit("did-finish-load"); await flush();
+  assert.equal(win.visible, true);
+});
+
+test("the ten second fallback still shows the workspace", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { splash, win } = fixture({ reducedMotion: () => false });
+  await splash.ready; splash.attach(win);
+  win.webContents.executeJavaScript = () => new Promise(() => {});
+  win.webContents.emit("did-finish-load");
+  t.mock.timers.tick(10_000);
+  assert.equal(win.visible, true);
+});
+
+test("the startup page keeps its tight CSP and carries the glow line and the still", () => {
+  const html = startupScreenHtml({ reducedMotion: true });
+  assert.ok(html.includes(`content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"`));
+  assert.match(html, /data-reduced-motion="true"/);
+  assert.match(html, /<div class="line" aria-hidden="true"><div class="fill"><\/div><span class="head"><\/span><\/div>/);
+  assert.match(html, /<script>window\.__SEIRA_KIT=\{/);
+  assert.ok(!/<(script|link|iframe)[^>]+(src|href)=/.test(html), "no external loads");
+  assert.equal(html.split("</script>").length, 3, "two inline scripts, none closed early");
+});
+
+test("without the character kit the page still has the still image and the line", () => {
+  const readFileSync = fs.readFileSync;
+  fs.readFileSync = (file, ...rest) => {
+    if (/splash-(kit\.json|page\.js)$/.test(String(file))) throw new Error("missing");
+    return readFileSync(file, ...rest);
+  };
+  try {
+    const html = startupScreenHtml();
+    assert.ok(!html.includes("__SEIRA_KIT"));
+    assert.match(html, /<img class="still"/);
+    assert.match(html, /class="fill"/);
+  } finally { fs.readFileSync = readFileSync; }
+});
+
+test("the packaged app ships every startup screen asset", () => {
+  const config = fs.readFileSync(fileURLToPath(new URL("../electron-builder.yml", import.meta.url)), "utf8");
+  const files = config.slice(config.indexOf("\nfiles:"));
+  assert.match(files, /^\s+- electron\/\*\*$/m);
+  for (const name of ["splash-seira.webp", "splash-kit.json", "splash-page.js"]) {
+    assert.ok(fs.existsSync(fileURLToPath(new URL(`./resources/${name}`, import.meta.url))), name);
+    assert.ok(!files.includes(`"!electron/resources/${name}"`) && !files.includes('"!electron/resources/**'), `${name} is not excluded`);
+  }
+});
+
+test("the generated startup page script and kit match their sources", () => {
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL("../scripts/build-splash.mjs", import.meta.url)), "--check"], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
 });

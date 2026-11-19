@@ -18,6 +18,14 @@ describe("settings primitives", () => {
     expect(html).not.toContain("bg-card");
   });
 
+  it("stacks a setting only under an Advanced panel body, and keeps two columns everywhere else", () => {
+    const html = renderToStaticMarkup(createElement(SettingRow, { title: "Model", children: createElement("button", null, "Pick") }));
+    expect(html).toContain("sm:grid-cols-[minmax(0,1fr)_auto]");
+    expect(html).toContain("sm:[[data-advanced-body]_&amp;]:grid-cols-1");
+    expect(html).toContain("sm:[[data-advanced-body]_&amp;]:max-w-none");
+    expect(html).not.toContain("data-advanced-body=");
+  });
+
   it("keeps the form card surface and native switch semantics", () => {
     const html = renderToStaticMarkup(createElement(Card, {
       title: "Profile",

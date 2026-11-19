@@ -12,16 +12,14 @@ This page lists them, so you can find them and use them correctly.
 | Update source of packaged builds | The `seira-bot/seira` releases on GitHub |
 | Update check of a server | The `seira-bot/seira` releases and stable channel on GitHub |
 
-Seira has no release yet, so there is nothing to update to.
-
 ## Names that still come from upstream
 
 | Where | Name today |
 |---|---|
-| npm package and Linux package | `openmausbot` |
+| Linux package | `openmausbot` |
 | Data folder | `~/.openmausbot` |
 | Environment variables | `OMB_PORT`, `OMB_UI_PORT`, `OMB_WEBHOOK_PORT` |
-| Product name, installer files, Linux install folder | `OpenMausBot`, `OpenMausBot-<version>-…`, `/opt/OpenMausBot` |
+| Linux executable | `openmausbot` |
 | Files the app reads from GitHub | Announcements, model list, team library, and browser engine downloads, all from upstream repositories |
 | Cloud and website addresses | `openmausbot.com` and its subdomains |
 | Text in the app and in the docs | OpenMausBot, MausBot |
@@ -29,14 +27,15 @@ Seira has no release yet, so there is nothing to update to.
 Use these names as they are until the code changes.
 In the guides, [CONTRIBUTING.md](../CONTRIBUTING.md), the [code guide](contributing.md), and [DESIGN.md](../DESIGN.md), read "OpenMausBot" as "Seira".
 
-Do not install the `openmausbot` npm package to get Seira. That package is the upstream app.
+Seira's npm package is `@seira-bot/seira`. Do not install the npm package `openmausbot`: it is the upstream app.
 
 ## Packaged builds
 
+Each release on GitHub has the Windows installer and the Linux AppImage, named `Seira-<version>-…`.
+
 > [!WARNING]
-> Do not publish a packaged build yet. The app id and the update source are Seira's,
-> but the product name, the installer names, and the Linux install folder still say OpenMausBot.
-> A Seira install can replace an OpenMausBot install on Linux.
+> Seira and OpenMausBot use the same data folder, port, and Linux executable name.
+> Do not install both on one computer.
 > Never upload a Seira build to the OpenMausBot release repository.
 
 ## Security reports
