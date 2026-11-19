@@ -10,9 +10,9 @@ crashes. The code lives in [`server/sentinel/`](../server/sentinel/). Every
 input is explicit, so the same scan could later run inside the server.
 
 ```sh
-openmausbot sentinel [--data-dir DIR] [--out DIR] [--once] [--json]
+seira sentinel [--data-dir DIR] [--out DIR] [--once] [--json]
                      [--queue-wait SECONDS] [--cost USD]
-openmausbot sentinel --check-install [--json]
+seira sentinel --check-install [--json]
 ```
 
 Each run does one scan, prints a short summary (or JSON with `--json`) and
@@ -129,7 +129,7 @@ itself.
 ## Installing it
 
 ```sh
-openmausbot service install --sentinel [--data-dir DIR]
+seira service install --sentinel [--data-dir DIR]
 ```
 
 This writes the schedule into Sentinel's own folder (above) and prints the
@@ -144,7 +144,7 @@ explicitly, so the paths it prints are the ones the scan uses.
 - **Windows:** prints a `schtasks` command that runs the same scan every two
   minutes.
 
-`openmausbot service uninstall --sentinel` prints the commands that remove it.
+`seira service uninstall --sentinel` prints the commands that remove it.
 
 ### Which CLI the schedule runs
 
@@ -170,11 +170,11 @@ after an nvm upgrade or a fresh checkout.
 ### After an update
 
 ```sh
-openmausbot sentinel --check-install
+seira sentinel --check-install
 ```
 
 This reads the installed plist or unit and checks that its Node and script
-paths still exist. It prints `stale install: … rerun openmausbot service
+paths still exist. It prints `stale install: … rerun seira service
 install --sentinel` if either path is missing. This matters because launchd
 and systemd fail quietly when a path is gone: nothing reaches Sentinel's own
 log, because Sentinel never starts. After moving the app, upgrading Node, or

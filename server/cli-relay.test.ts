@@ -38,7 +38,7 @@ describe("openmausbot serve --relay", () => {
   it("says why a phone cannot pair yet, in the person's terms", () => {
     expect(relayProblemLines(null, "openmausbot")).toEqual(["Seira Relay is off on this server. Start it with: openmausbot serve --relay"]);
     expect(relayProblemLines(status({ grant: "signed-out", relay: "off" }), "openmausbot")[0]).toMatch(/^Seira Relay needs this machine signed in to a Seira account: openmausbot login --relay/);
-    expect(relayProblemLines(status({ grant: "unavailable", relay: "off" }), "npx openmausbot")[0]).toMatch(/not available for this machine right now\. The server keeps working here/);
+    expect(relayProblemLines(status({ grant: "unavailable", relay: "off" }), "npx @seira-bot/seira")[0]).toMatch(/not available for this machine right now\. The server keeps working here/);
     expect(relayProblemLines(status({ relay: "connecting", node: null }), "openmausbot")[0]).toMatch(/^Can't reach Seira Relay yet\. The server keeps working here/);
     expect(relayProblemLines(status(), "openmausbot")).toEqual([]);
     expect(relayProblemLines(status({ grant: "tunnel", relay: "off", reason: "this server runs with --tunnel" }), "openmausbot")).toEqual([

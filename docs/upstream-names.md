@@ -18,7 +18,7 @@ Seira has no release yet, so there is nothing to update to.
 
 | Where | Name today |
 |---|---|
-| npm package and Linux package | `openmausbot` |
+| Linux package | `openmausbot` |
 | Data folder | `~/.openmausbot` |
 | Environment variables | `OMB_PORT`, `OMB_UI_PORT`, `OMB_WEBHOOK_PORT` |
 | Product name, installer files, Linux install folder | `OpenMausBot`, `OpenMausBot-<version>-…`, `/opt/OpenMausBot` |
@@ -29,7 +29,7 @@ Seira has no release yet, so there is nothing to update to.
 Use these names as they are until the code changes.
 In the guides, [CONTRIBUTING.md](../CONTRIBUTING.md), the [code guide](contributing.md), and [DESIGN.md](../DESIGN.md), read "OpenMausBot" as "Seira".
 
-Do not install the `openmausbot` npm package to get Seira. That package is the upstream app.
+Seira's npm package is `@seira-bot/seira`. Do not install the npm package `openmausbot`: it is the upstream app.
 
 ## Packaged builds
 

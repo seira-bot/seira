@@ -63,7 +63,7 @@ describe("the headless command line", () => {
     expect(refused.status).toBe(2);
     expect(JSON.parse(refused.stdout)).toMatchObject({ ok: false, exitCode: 2 });
     const usage = spawnSync(process.execPath, ["--experimental-strip-types", entry, "--help"], { encoding: "utf8" });
-    expect(usage.stdout).toContain("openmausbot serve [--port 8799]");
+    expect(usage.stdout).toContain("seira serve [--port 8799]");
     expect(usage.stdout).toContain("Drive a running workspace");
   });
 
