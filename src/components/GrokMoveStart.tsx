@@ -209,7 +209,7 @@ export function GrokMoveStart(props: GrokMoveStartProps) {
           <ChevronDown size={14} className={cn("transition-transform motion-reduce:transition-none", manualOpen && "rotate-180")} />
         </button>
         <div id={panel} hidden={!manualOpen} className="w-full">
-          <ManualPath roster={roster} reply={reply} error={error} onReply={onReply} onFile={onFile} />
+          <ManualPath roster={[]} reply={reply} error={error} onReply={onReply} onFile={onFile} />
         </div>
       </div>
     </>
