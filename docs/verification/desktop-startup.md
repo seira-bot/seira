@@ -68,3 +68,4 @@ host load with each result.
 
 | Date | Commit | Host load | Cold median shown (ms) | Warm median shown (ms) |
 |------|--------|-----------|------------------------|------------------------|
+| 2026-11-19 | `a14167bb8` | load average 10–14, 16 CPUs | 5966 (5440–6366) | 2513 (2238–2735) |
