@@ -371,17 +371,16 @@ describe("thread control placement", () => {
     fixture.advanced = true;
   });
 
-  it("keeps the editor and its controls on one line, wrapping only in a narrow composer", () => {
+  it("sets the editor above the bar of controls in one card", () => {
     const markup = renderToStaticMarkup(createElement(ChatView, { bot }));
     expect(markup).toContain("@container/composer");
     const row = /data-composer-row="[^"]*" class="([^"]*)"/.exec(markup)!.at(1)!.split(" ");
-    expect(row).toContain("@max-[30rem]/composer:flex-wrap");
+    expect(row).toContain("grid");
     expect(row).not.toContain("flex-wrap");
     const editor = /class="mention-editor ([^"]*)"/.exec(markup)!.at(1)!.split(" ");
-    expect(editor).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "@max-[30rem]/composer:order-first", "@max-[30rem]/composer:basis-full"]));
-    expect(editor).not.toContain("basis-full");
+    expect(editor).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "col-span-2"]));
     const textarea = /<textarea[^>]*class="([^"]*)"/.exec(markup)!.at(1)!.split(" ");
-    expect(textarea).toContain("min-h-6");
+    expect(textarea).toContain("min-h-[22px]");
     expect(textarea).not.toContain("min-h-14");
   });
 
@@ -670,7 +669,7 @@ describe("thread control placement", () => {
     expect(markup.indexOf("data-test-model-control")).toBeLessThan(markup.indexOf('role="log"'));
     expect(markup.indexOf('data-tour="composer"')).toBeGreaterThan(-1);
     expect(markup.indexOf("data-test-approval-control")).toBeGreaterThan(markup.indexOf('data-tour="composer"'));
-    expect(markup.indexOf("data-test-approval-control")).toBeLessThan(markup.indexOf("<textarea"));
+    expect(markup.indexOf("data-test-approval-control")).toBeGreaterThan(markup.indexOf("<textarea"));
     expect(markup).not.toContain('aria-label="Thread settings"');
     expect(fixture.model).toMatchObject({ threadId: "selected", bot: { busy: false, modelSelection: { model: "thread-model" } } });
     expect(fixture.approval).toMatchObject({ approvalMode: "ask", busy: false, trustedModesAvailable: false });
@@ -701,7 +700,7 @@ describe("thread control placement", () => {
   it.each([true, false])("pins a place per conversation from the composer only in Advanced (advanced: %s)", (advanced) => {
     fixture.advanced = advanced;
     const markup = renderToStaticMarkup(createElement(ChatView, { bot }));
-    const pill = markup.slice(markup.indexOf('data-tour="composer"'), markup.indexOf("<textarea"));
+    const pill = markup.slice(markup.indexOf('data-tour="composer"'));
     expect(pill.match(/data-testid="place-chip"/g) ?? []).toHaveLength(advanced ? 1 : 0);
     expect(markup.includes("Where this conversation works")).toBe(advanced);
     fixture.advanced = true;

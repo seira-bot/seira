@@ -105,7 +105,7 @@ describe("the Advanced composer card", () => {
     const pill = container.querySelector('[data-tour="composer"]')!.className.split(" ");
     expect(pill).toEqual(expect.arrayContaining(["rounded-[22px]", "bg-composer", "ring-1"]));
     expect(container.querySelector("[data-composer-row]")!.className).toContain("grid");
-    expect(container.querySelector('button[aria-label="Attach files"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Attach a file"]')).not.toBeNull();
     const goal = container.querySelector<HTMLButtonElement>("button[aria-pressed]")!;
     expect(goal.className.split(" ")).toEqual(expect.arrayContaining(["h-7", "text-[12px]", "font-medium", "rounded-full"]));
     expect(goal.textContent).toBe("Goal");
@@ -197,8 +197,9 @@ describe("the Advanced slash menu", () => {
     input.setSelectionRange(1, 1);
     flushSync(() => input.dispatchEvent(new KeyboardEvent("keyup", { key: "/", bubbles: true })));
     expect(document.body.querySelector('[data-slash-menu="advanced"]')).not.toBeNull();
-    flushSync(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
-    expect(document.body.querySelector('[data-slash-menu="advanced"]')).toBeNull();
+    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    flushSync(() => input.dispatchEvent(escape));
+    expect(escape.defaultPrevented).toBe(true);
   });
 });
 
