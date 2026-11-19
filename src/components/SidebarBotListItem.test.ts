@@ -41,6 +41,7 @@ afterEach(() => {
   resetLiveMedia();
   endCall();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("BotListItem", () => {
