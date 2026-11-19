@@ -39,7 +39,7 @@ refuses plain http on the open internet.
 
 ### With Node (npx or a global install)
 
-On any machine with Node 24 or newer. If the npm package `openmausbot` is installed, run `npm uninstall -g openmausbot` first: both packages install a command named `openmausbot`.
+On any machine with Node 24 or newer.
 
 ```sh
 npx @seira-bot/seira setup                                        # once: AI access and a default model

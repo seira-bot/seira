@@ -14,8 +14,6 @@ Or, without a global install:
 npx @seira-bot/seira
 ```
 
-If the npm package `openmausbot` is installed, run `npm uninstall -g openmausbot` first: both packages install a command named `openmausbot`.
-
 Use the same command next time. The first launch guides you through setup; later launches reuse your saved AI connection and phone-access choice. `seira start` is the same as the bare command. If that workspace is already running, Seira opens it instead of starting a second server.
 
 ## First launch

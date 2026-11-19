@@ -147,8 +147,6 @@ Run the `npx` commands and engine sign-ins below in this account. Keep a separat
 administrator shell for system packages and systemd. If you already signed in as
 root, sign in again as `maus`; those accounts have different homes and credentials.
 
-If the npm package `openmausbot` is installed, run `npm uninstall -g openmausbot` first: both packages install a command named `openmausbot`.
-
 ## Path A: a public address with one command
 
 No domain, no proxy, no open port. The server gets an address like `https://c-7f3a9c.openmausbot.com` through a Cloudflare tunnel; only traffic through the tunnel reaches it, and that traffic still has to pair.
@@ -321,7 +319,7 @@ User=maus
 WorkingDirectory=/home/maus
 Environment=HOME=/home/maus
 Environment=PATH=/home/maus/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/home/maus/.local/bin/openmausbot serve --tunnel
+ExecStart=/usr/local/bin/seira serve --tunnel
 Restart=always
 RestartSec=5
 

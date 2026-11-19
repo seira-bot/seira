@@ -58,7 +58,7 @@ describe("the headless command line", () => {
     const entry = join(import.meta.dirname, "..", "openmausbot.ts");
     const help = spawnSync(process.execPath, ["--experimental-strip-types", entry, "help", "export"], { encoding: "utf8" });
     expect(help.status).toBe(0);
-    expect(help.stdout).toContain("openmausbot export TARGET --out DIR");
+    expect(help.stdout).toContain("seira export TARGET --out DIR");
     const refused = spawnSync(process.execPath, ["--experimental-strip-types", entry, "run", "--json"], { encoding: "utf8", env: { ...process.env, OPENMAUSBOT_URL: "" } });
     expect(refused.status).toBe(2);
     expect(JSON.parse(refused.stdout)).toMatchObject({ ok: false, exitCode: 2 });

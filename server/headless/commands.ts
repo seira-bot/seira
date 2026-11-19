@@ -40,12 +40,12 @@ async function doctorOnce(ctx: VerbContext): Promise<VerbOutcome> {
   if (!isOmb) problems.push(`${client.baseUrl} answered, but it is not Seira`);
   const tooOld = Boolean(server) && server!.capabilities?.jobs !== true;
   if (tooOld) problems.push(`Seira ${server!.version ?? "(unknown version)"} is too old for the headless commands: it cannot report a conversation's job`);
-  if (isOmb && !availableCount) problems.push("no engine is available: set one up with `openmausbot engine set KIND --key-env VAR`");
+  if (isOmb && !availableCount) problems.push("no engine is available: set one up with `seira engine set KIND --key-env VAR`");
   if (session?.kind === "session" && typeof session.expiresAt === "number" && session.expiresAt - Date.now() < 14 * DAY) {
-    warnings.push(`this session expires in ${Math.max(0, Math.floor((session.expiresAt - Date.now()) / DAY))} days: get a new one with openmausbot connect`);
+    warnings.push(`this session expires in ${Math.max(0, Math.floor((session.expiresAt - Date.now()) / DAY))} days: get a new one with seira connect`);
   }
   const browser = config?.browserEngine ?? null;
-  if (browser && browser.kind !== "engine") warnings.push(`bots have no built-in browser here: ${browser.reason ?? "not installed"}${browser.installable ? " (install it with `openmausbot browser install`)" : ""}`);
+  if (browser && browser.kind !== "engine") warnings.push(`bots have no built-in browser here: ${browser.reason ?? "not installed"}${browser.installable ? " (install it with `seira browser install`)" : ""}`);
   const ok = isOmb && !tooOld && availableCount > 0;
   const who = !session ? "unknown" : session.kind === "loopback"
     ? `this computer${session.trust === "service" ? " (as a local service, not the owner)" : " (the owner)"}`
@@ -142,7 +142,7 @@ export async function send(ctx: VerbContext): Promise<VerbOutcome> {
   return {
     result: title !== undefined ? { ...result, newConversation: { title } } : result, exitCode: EXIT.done,
     human: [`Sent to ${target.name ?? target.id} ${title !== undefined ? `in a new conversation, "${title}", ` : ""}(thread ${result.taskId})${result.queued ? "; it waits until the turn running there ends" : ""}.`,
-      `Follow it with: openmausbot wait --thread ${result.taskId}`],
+      `Follow it with: seira wait --thread ${result.taskId}`],
   };
 }
 

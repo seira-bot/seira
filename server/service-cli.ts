@@ -62,7 +62,7 @@ export function runServiceCommand(input: ServiceInstallInput, io: ServiceIo): nu
   if (input.sentinel) return runSentinelService(input, platform, home, io);
   const plan = servicePlan(platform, input.dataDir, home);
   if (!plan) {
-    io.error("services are written for Linux (systemd) and macOS (launchd); on Windows, use Task Scheduler to run `openmausbot serve` at startup");
+    io.error("services are written for Linux (systemd) and macOS (launchd); on Windows, use Task Scheduler to run `seira serve` at startup");
     return 1;
   }
   if (input.action === "uninstall") {
@@ -187,6 +187,6 @@ function runSentinelService(input: ServiceInstallInput, platform: NodeJS.Platfor
   io.log("");
   io.log(`issues: ${join(out, "issues.jsonl")}`);
   io.log(`logs: ${platform === "darwin" ? join(out, "sentinel.log") : "journalctl --user -u openmausbot-sentinel"}`);
-  io.log("after an app update or a Node upgrade, check the schedule still points at both: openmausbot sentinel --check-install");
+  io.log("after an app update or a Node upgrade, check the schedule still points at both: seira sentinel --check-install");
   return 0;
 }

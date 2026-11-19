@@ -38,7 +38,7 @@ writeFileSync(
       description: "Run the Seira server anywhere and pair your devices to it",
       license: "Apache-2.0",
       type: "module",
-      bin: { seira: "cli.js", openmausbot: "cli.js" },
+      bin: { seira: "cli.js" },
       publishConfig: { access: "public" },
       // Never bundled, so npm installs them beside the server: DuckDB and
       // resvg are native addons that npm picks per platform from their
@@ -72,8 +72,7 @@ seira
 \`\`\`
 
 Or run \`npx @seira-bot/seira\` without a global install. Use the same command next
-time; \`seira start\` is an alias for the bare command. If the npm package
-\`openmausbot\` is installed, run \`npm uninstall -g openmausbot\` first.
+time; \`seira start\` is an alias for the bare command.
 
 First launch: use arrow keys and Enter (numbered choices in plain terminals) to choose
 ChatGPT/Codex, Claude Code, or an API service; sign in or paste a hidden API

@@ -34,7 +34,7 @@ const cli = async (args: string[]) => {
   }
 };
 
-describe.skipIf(process.platform === "win32")("openmausbot serve under service loopback trust", () => {
+describe.skipIf(process.platform === "win32")("seira serve under service loopback trust", () => {
   beforeAll(async () => {
     home = mkdtempSync(join(tmpdir(), "omb-cli-service-"));
     PORT = await freePortBlock([0, 1]);

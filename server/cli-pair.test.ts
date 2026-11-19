@@ -81,7 +81,7 @@ afterEach(async () => {
 
 const printed = () => vi.mocked(console.log).mock.calls.map(([line]) => String(line)).join("\n");
 
-describe("openmausbot pair", () => {
+describe("seira pair", () => {
   it("never asks anything: one code, the running server's own link, a QR, and the phone command", async () => {
     expect(await runPair(options)).toBe(0);
     expect(mocks.ui.choose).not.toHaveBeenCalled();
@@ -159,7 +159,7 @@ describe("openmausbot pair", () => {
   });
 });
 
-describe("the phone-app link `openmausbot pair --phone android` scans", () => {
+describe("the phone-app link `seira pair --phone android` scans", () => {
   const credential = `omb_pair_${"b".repeat(43)}`;
   const serverName = "Miguel's computer";
   const pairingResponse = (fields: Record<string, unknown>) => {

@@ -1,15 +1,15 @@
 // `openmausbot` on the command line: run the server anywhere and pair devices to it.
 //
-//   openmausbot setup [--data-dir ~/.openmausbot]
-//   openmausbot start [serve options]
-//   openmausbot serve [--port 8799] [--data-dir ~/.openmausbot] [--label "cab mini"]
+//   seira setup [--data-dir ~/.openmausbot]
+//   seira start [serve options]
+//   seira serve [--port 8799] [--data-dir ~/.openmausbot] [--label "cab mini"]
 //                     [--public-url https://host] [--tailscale | --tunnel | --domain HOST] [--relay] [--no-pair]
-//   openmausbot pair  [--label "My MacBook"] [--client] [--public-url https://host]
-//   openmausbot sessions [revoke <id>]
-//   openmausbot status
-//   openmausbot login [--email you@example.com] [--relay]
-//   openmausbot logout
-//   openmausbot run | send | wait | doctor | team apply | export | …
+//   seira pair  [--label "My MacBook"] [--client] [--public-url https://host]
+//   seira sessions [revoke <id>]
+//   seira status
+//   seira login [--email you@example.com] [--relay]
+//   seira logout
+//   seira run | send | wait | doctor | team apply | export | …
 //
 // This module only exports: openmausbot.ts runs main(), so bundling this file into other entries never runs it twice.
 import { spawn, type ChildProcess } from "node:child_process";
@@ -570,7 +570,7 @@ export async function runBrowser(options: CliOptions, io: CliIo = defaultIo()): 
   const status = browserEngineStatus({ dataDir: options.dataDir });
   if (options.browserAction === "status") {
     io.log(describeBrowserEngine(status, status.kind === "ready" ? new (await import("./browser/chrome/launcher.ts")).ChromeLauncher({ dataDir: options.dataDir }).describe() : undefined));
-    if (status.kind !== "ready" && status.installable) io.log("install it with:  openmausbot browser install");
+    if (status.kind !== "ready" && status.installable) io.log("install it with:  seira browser install");
     return status.kind === "ready" ? 0 : 1;
   }
   let binary = resolveAgentBrowserBinary({ dataDir: options.dataDir });

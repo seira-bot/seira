@@ -13,7 +13,7 @@ import { startControlPlaneStub } from "./testing/control-plane-stub.ts";
 const status = (over: Partial<PhoneRelayStatus> = {}): PhoneRelayStatus => ({ relay: "connected", node: "relay1.openmausbot.com", grant: "ok", phones: 1, maxPhones: 20, ...over });
 const invite = "openmausbot://pair?address=relay-only.invalid%3A443&token=omb_pair_x&e2e=eyJ2IjoxfQ";
 
-describe("openmausbot serve --relay", () => {
+describe("seira serve --relay", () => {
   it("is off unless asked for, joins any way in but --tunnel, and never a local start", () => {
     expect(parseArgs(["serve"], {})).not.toHaveProperty("relay");
     expect(parseArgs(["serve", "--relay"], {})).toMatchObject({ command: "serve", relay: true, tunnel: false });
@@ -36,13 +36,13 @@ describe("openmausbot serve --relay", () => {
   });
 
   it("says why a phone cannot pair yet, in the person's terms", () => {
-    expect(relayProblemLines(null, "openmausbot")).toEqual(["Seira Relay is off on this server. Start it with: openmausbot serve --relay"]);
-    expect(relayProblemLines(status({ grant: "signed-out", relay: "off" }), "openmausbot")[0]).toMatch(/^Seira Relay needs this machine signed in to a Seira account: openmausbot login --relay/);
+    expect(relayProblemLines(null, "openmausbot")).toEqual(["Seira Relay is off on this server. Start it with: seira serve --relay"]);
+    expect(relayProblemLines(status({ grant: "signed-out", relay: "off" }), "openmausbot")[0]).toMatch(/^Seira Relay needs this machine signed in to a Seira account: seira login --relay/);
     expect(relayProblemLines(status({ grant: "unavailable", relay: "off" }), "npx @seira-bot/seira")[0]).toMatch(/not available for this machine right now\. The server keeps working here/);
     expect(relayProblemLines(status({ relay: "connecting", node: null }), "openmausbot")[0]).toMatch(/^Can't reach Seira Relay yet\. The server keeps working here/);
     expect(relayProblemLines(status(), "openmausbot")).toEqual([]);
     expect(relayProblemLines(status({ grant: "tunnel", relay: "off", reason: "this server runs with --tunnel" }), "openmausbot")).toEqual([
-      "Seira Relay stays off here: this server runs with --tunnel. A relay token would make that tunnel go for good; use the relay on a machine signed in with openmausbot login --relay.",
+      "Seira Relay stays off here: this server runs with --tunnel. A relay token would make that tunnel go for good; use the relay on a machine signed in with seira login --relay.",
     ]);
   });
 
@@ -57,7 +57,7 @@ describe("openmausbot serve --relay", () => {
     lines.length = 0;
     expect(await showRelayPairing({ tty: true, status: async () => status({ grant: "signed-out", relay: "off" }), mint, log: (line) => lines.push(line), prefix: "openmausbot", waitMs: 0 })).toBe(false);
     expect(minted).toBe(1);
-    expect(lines[1]).toBe("Then: openmausbot pair --phone");
+    expect(lines[1]).toBe("Then: seira pair --phone");
   });
 
   it("signs a machine in for the relay without reserving one of the scarce tunnel addresses", async () => {
@@ -89,7 +89,7 @@ describe("openmausbot serve --relay", () => {
     let minted = 0;
     expect(await showRelayPairing({ tty: false, status: async () => status(), mint: async () => `code ${++minted}`, log: (line) => lines.push(line), prefix: "openmausbot" })).toBe(false);
     expect(minted).toBe(0);
-    expect(lines).toEqual(["Pair a phone: openmausbot pair --phone"]);
+    expect(lines).toEqual(["Pair a phone: seira pair --phone"]);
   });
 
   it("keeps a saved tunnel choice and the relay apart, and passes --relay to a service", () => {

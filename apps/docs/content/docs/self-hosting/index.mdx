@@ -26,8 +26,6 @@ Add `--check` to only check the server; it changes nothing. Run the command agai
 4. Keep the harness on loopback.
 5. Use it from other devices by pairing them. `seira serve` prints one pairing link for the way in you choose; paste it into the desktop app under **＋ → Connect to a server**, open it in a browser, or scan its QR with a phone.
 
-If the npm package `openmausbot` is installed, run `npm uninstall -g openmausbot` first: both packages install a command named `openmausbot`.
-
 | You have | Run |
 |---|---|
 | HTTPS in front already (cloudflared, Caddy, nginx) | `npx @seira-bot/seira serve --public-url https://maus.example.com` |

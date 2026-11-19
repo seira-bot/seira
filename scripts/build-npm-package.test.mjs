@@ -34,7 +34,7 @@ describe("the npm package", () => {
     expect(run.stdout).toContain("@seira-bot/seira@1.2.3");
     expect(pkg.name).toBe("@seira-bot/seira");
     expect(pkg.version).toBe("1.2.3");
-    expect(pkg.bin).toEqual({ seira: "cli.js", openmausbot: "cli.js" });
+    expect(pkg.bin).toEqual({ seira: "cli.js" });
     expect(pkg.publishConfig).toEqual({ access: "public" });
   });
 
@@ -48,7 +48,7 @@ describe("the npm package", () => {
     expect(readme).toContain("# @seira-bot/seira");
     expect(readme).toContain("npm install -g @seira-bot/seira");
     expect(readme).toContain("npx @seira-bot/seira");
-    expect(readme).toContain("npm uninstall -g openmausbot");
+    expect(readme).not.toContain("npm uninstall -g openmausbot");
     expect(readme).not.toMatch(/npx openmausbot|(?<!un)install -g openmausbot|milind-soni/);
   });
 });
