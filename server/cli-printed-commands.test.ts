@@ -15,7 +15,7 @@ const PLACEHOLDERS: Record<string, string> = {
 function printedCommands(text: string): string[][] {
   const found: string[][] = [];
   for (const line of text.split("\n")) {
-    for (const match of line.matchAll(/(?:npx @seira-bot\/seira|(?<![\w@/.-])seira(?![\w/-]))((?: (?!seira)[^\s,;()`'"]+)*)/g)) {
+    for (const match of line.matchAll(/(?:npx @seira-bot\/seira|(?<![\w@/.-])seira(?![\w/-]|\.\w))((?: (?!seira(?![\w/-]|\.\w))[^\s,;()`'"]+)*)/g)) {
       const words = match[1]!.trim().split(/\s+/).filter(Boolean).map((word) => PLACEHOLDERS[word] ?? word.replace(/[.:]$/, "")).filter(Boolean);
       if (words.length && !/[[\]|]/.test(words.join(" "))) found.push(words);
     }
