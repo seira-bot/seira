@@ -314,10 +314,12 @@ describe("codexLiveVoice start timing", () => {
 
   it("sends the account read and the config read together in the custom mode", async () => {
     const methods: string[] = [];
-    const h = harness({ fake: { FAKE_CODEX_ACCOUNT_MODE: "hang" }, timeouts: { rpcMs: 300 }, deps: spyOnRequests(methods) });
-    expect(await refusalOf(h.live.start(h.input({ approvalMode: "custom" })))).toBe("failed");
-    expect(methods).toContain("account/read");
-    expect(methods).toContain("config/read");
+    const h = harness({ fake: { FAKE_CODEX_ACCOUNT_MODE: "hang" }, deps: spyOnRequests(methods) });
+    const abort = new AbortController();
+    const refused = refusalOf(h.live.start(h.input({ approvalMode: "custom", signal: abort.signal })));
+    await until(() => methods.includes("account/read") && methods.includes("config/read"));
+    abort.abort();
+    expect(await refused).toBe("failed");
   });
 
   it("never starts a thread for an account that is not signed in, even in the custom mode", async () => {
@@ -613,12 +615,14 @@ describe("codexLiveVoice config checks", () => {
       }) as typeof child.stdin.write;
       return child;
     };
-    const h = harness({ fake: { FAKE_CODEX_ACCOUNT_MODE: "hang" }, timeouts: { rpcMs: 300 }, deps: {
+    const h = harness({ fake: { FAKE_CODEX_ACCOUNT_MODE: "hang" }, deps: {
       spawn: (args, options) => write(spawn(process.execPath, [FAKE, ...args], { cwd: options.cwd, env: options.env, stdio: ["pipe", "pipe", "pipe"] })),
     } });
-    expect(await refusalOf(h.live.start(h.input({ toolScoped: true, approvalMode: "ask" })))).toBe("failed");
-    expect(methods).toContain("account/read");
-    expect(methods).toContain("config/read");
+    const abort = new AbortController();
+    const refused = refusalOf(h.live.start(h.input({ toolScoped: true, approvalMode: "ask", signal: abort.signal })));
+    await until(() => methods.includes("account/read") && methods.includes("config/read"));
+    abort.abort();
+    expect(await refused).toBe("failed");
   });
 
   it("starts with the shell off, as a guest-driven chat turn does", async () => {
