@@ -10,6 +10,8 @@ name: Bug report Worker
 
 on:
   pull_request:
+    # A draft pull request does not start the job. Marking it ready does, like the heavy jobs of ci.yml.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "cloudflare/bug-reports/**"
       - ".github/workflows/bug-reports.yml"
@@ -24,13 +26,15 @@ permissions:
   contents: read
 
 concurrency:
-  # A new push to a pull request cancels that pull request's older run. A push to main never cancels a run.
-  group: bug-reports-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # The same rule as ci.yml: a new push cancels the older run of the same pull request or of main. A manual start never cancels or is cancelled.
+  group: bug-reports-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
   worker:
     name: bug-reports
+    # Skipped on a draft pull request. The job is not a required check, so a skipped job blocks nothing.
+    if: ${{ github.event.pull_request.draft != true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

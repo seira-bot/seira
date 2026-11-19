@@ -64,7 +64,8 @@ writeFileSync(
   join(out, "README.md"),
   `# @seira-bot/seira
 
-Your own team of AI bots, with guided terminal setup. Requires Node 24+.
+Your own team of AI agents in one chat app. This package runs the Seira server,
+with guided setup in the terminal. Requires Node 24+.
 
 \`\`\`sh
 npm install -g @seira-bot/seira
