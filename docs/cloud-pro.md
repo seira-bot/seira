@@ -1349,7 +1349,7 @@ too). Only the named peers are believed, and only the last address they add,
 so a client's own `X-Forwarded-For` or `Cf-Connecting-IP` changes nothing.
 
 **No inbound port: a Cloudflare tunnel.** The same managed tunnel as
-`openmausbot serve --tunnel`, one per server: the control plane's
+`seira serve --tunnel`, one per server: the control plane's
 `ensureEndpoint`, called with the server's installation credential
 (`fleetAccess` in `server/tunnel.ts`), returns the address
 (`https://c-<32 hex>.<zone>`) and the connector token, which go into

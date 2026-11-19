@@ -14,6 +14,7 @@ This page lists them, so you can find them and use them correctly.
 | Releases and update source of packaged builds | The `seira-bot/seira` releases on GitHub |
 | Update check of a server | The `seira-bot/seira` releases and stable channel on GitHub |
 | Announcements and the model list | The `seira-bot/seira` repository on GitHub |
+| npm package and command line | `@seira-bot/seira`, command `seira` (for example `npx @seira-bot/seira serve`) |
 | Server image | `ghcr.io/seira-bot/seira` |
 | Local VM image and desktops | `localhost/seira/cua-local-vm`, `seira-computer` (a desktop with the old `openmausbot-computer` name works until you create it again) |
 
@@ -24,11 +25,11 @@ needs a migration, so change it only in its own pull request.
 
 | Where | Name today |
 |---|---|
-| npm package and command line | `openmausbot` (for example `openmausbot serve`) |
 | Linux executable and systemd unit | `openmausbot`, `openmausbot.service` |
 | Link scheme | `openmausbot://` |
 | Data folder | `~/.openmausbot` (`OMB_DATA_DIR` moves it) |
 | Folder of the desktop app (logs, sign-ins, window state) | `openmausbot`: `~/.config/openmausbot`, `%APPDATA%\openmausbot`, `~/Library/Application Support/openmausbot` |
+| Command in the server image | `openmausbot` (for example `docker compose exec omb openmausbot`); `seira` also works |
 | Environment variables | `OMB_*` (for example `OMB_PORT`, `OMB_UI_PORT`, `OMB_WEBHOOK_PORT`), `OPENMAUSBOT_URL` |
 | VPS desktop image | `localhost/openmausbot/cua-local-vm` |
 | Page script API of chat pages | `window.mausbot`, `import … from "mausbot"` |
@@ -41,7 +42,7 @@ needs a migration, so change it only in its own pull request.
 Use these names as they are until the code changes.
 In the guides, [CONTRIBUTING.md](../CONTRIBUTING.md), the [code guide](contributing.md), and [DESIGN.md](../DESIGN.md), read "OpenMausBot" as "Seira".
 
-Do not install the `openmausbot` npm package to get Seira. That package is the upstream app.
+Seira's npm package is `@seira-bot/seira`. Do not install the npm package `openmausbot`: it is the upstream app.
 
 ## Packaged builds
 

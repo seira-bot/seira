@@ -101,8 +101,8 @@ describe("the button's state", () => {
   it("shows the command to run instead wherever the button could not work", () => {
     expect(status({ facts: { runner: null, writable: false, last: null } })).toMatchObject({ mode: "command", command: "git pull && ./update.sh" });
     expect(status({ facts: { ...runner, writable: false } }).mode).toBe("command");
-    const npm: UpdateCheck = { ...available, install: "npm", command: "npm install -g openmausbot@0.1.151", restart: true };
-    expect(status({ install: "npm", check: npm })).toMatchObject({ mode: "command", command: "npm install -g openmausbot@0.1.151" });
+    const npm: UpdateCheck = { ...available, install: "npm", command: "npm install -g @seira-bot/seira@0.1.151", restart: true };
+    expect(status({ install: "npm", check: npm })).toMatchObject({ mode: "command", command: "npm install -g @seira-bot/seira@0.1.151" });
     // A runner's files somewhere else than a container are never the button: npm and Podman get their commands.
     expect(status({ install: "podman", check: { ...available, install: "podman", command: undefined } })).toMatchObject({ mode: "command" });
   });

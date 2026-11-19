@@ -35,7 +35,7 @@ export function serviceCommand(spec: Pick<ServiceSpec, "node" | "script" | "serv
 
 export function systemdUnit(spec: ServiceSpec): string {
   const lines = [
-    "# Written by `openmausbot service install`. Re-run it to change the options.",
+    "# Written by `seira service install`. Re-run it to change the options.",
     "[Unit]",
     `Description=Seira${spec.label ? ` (${spec.label})` : ""}`,
     "After=network-online.target",
@@ -110,7 +110,7 @@ export function launchdPlist(spec: ServiceSpec): string {
 export function unstableInstallWarning(script: string): string | null {
   const normalized = script.replace(/\\/g, "/");
   if (/\/_npx\//.test(normalized) || /\/\.npm\/_npx\//.test(normalized)) {
-    return `this command runs from an npx cache (${dirname(script)}), which npm may delete at any time. Install it permanently first (npm install -g openmausbot) and run \`openmausbot service install\` from that install.`;
+    return `this command runs from an npx cache (${dirname(script)}), which npm may delete at any time. Install it permanently first (npm install -g @seira-bot/seira) and run \`seira service install\` from that install.`;
   }
   return null;
 }
@@ -220,7 +220,7 @@ function systemdQuoted(value: string, command = false): string {
 export function sentinelSystemdService(spec: SentinelServiceSpec): string {
   for (const [label, value] of [["home", spec.home], ["node", spec.node], ["script", spec.script], ["data dir", spec.dataDir], ["output", spec.out]] as const) assertUnitValue(label, value);
   return [
-    "# Written by `openmausbot service install --sentinel`. Started by its timer.",
+    "# Written by `seira service install --sentinel`. Started by its timer.",
     "[Unit]",
     "Description=Seira Sentinel health scan",
     "",
@@ -237,7 +237,7 @@ export function sentinelSystemdService(spec: SentinelServiceSpec): string {
 
 export function sentinelSystemdTimer(): string {
   return [
-    "# Written by `openmausbot service install --sentinel`.",
+    "# Written by `seira service install --sentinel`.",
     "[Unit]",
     "Description=Run the Seira Sentinel health scan every two minutes",
     "",
