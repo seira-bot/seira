@@ -34,7 +34,8 @@ Choose one Ubuntu 24.04 x86_64 package from the latest release:
 
 - [Debian package (`Seira-amd64.deb`)](https://github.com/seira-bot/seira/releases/latest/download/Seira-amd64.deb) — recommended; APT installs its desktop dependencies and configures the bundled bot browser's sandbox.
 - [Portable AppImage (`Seira.AppImage`)](https://github.com/seira-bot/seira/releases/latest/download/Seira.AppImage) — does not install system files.
-- [SHA-256 checksums](https://github.com/seira-bot/seira/releases/latest/download/SHA256SUMS-ubuntu-x64.txt)
+  It does not open on Ubuntu 24.04 with the default settings; use the Debian package there.
+- [SHA-256 checksums](https://github.com/seira-bot/seira/releases/latest/download/SHA256SUMS-linux-x64.txt)
 
 Versioned packages and previous releases remain available on the
 [releases page](https://github.com/seira-bot/seira/releases).
@@ -149,10 +150,11 @@ package-owned files and loads an AppArmor rule for that exact executable. The br
 and the machine-wide user-namespace restriction is unchanged. Upgrades refresh the same rule; uninstalling
 the package removes it. Enabling a bot's browser and approving its actions remain explicit choices.
 
-An AppImage is portable and cannot install privileged system policy. On hosts restricting unprivileged
-user namespaces, its bundled browser can still report `No usable sandbox`. Install the `.deb` instead;
-do not add `--no-sandbox`, disable AppArmor globally, or allowlist arbitrary executables under your home
-directory. See [Chromium's explanation of the Ubuntu restriction](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
+An AppImage is portable and cannot install privileged system policy, and its mount ignores the setuid sandbox
+helper. On hosts that restrict unprivileged user namespaces, as Ubuntu 24.04 does by default, the AppImage does
+not open: it shows a message that points to the Debian package, and it never starts without the sandbox. Install
+the `.deb` instead; do not add `--no-sandbox`, disable AppArmor globally, change the user-namespace setting, or
+allowlist arbitrary executables under your home directory. See [Chromium's explanation of the Ubuntu restriction](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
 
 Application data remains local in `~/.openmausbot`. Electron browser data and window state use the normal XDG
 configuration directory (`~/.config/openmausbot` unless the environment overrides it).
@@ -385,6 +387,10 @@ file Seira-*-x86_64.AppImage
 
 Run it from a terminal once to collect the startup output. Do not install `libfuse2` just for this AppImage; the
 package is built with the static runtime.
+
+If it says `Seira can't open from this AppImage on this computer.`, the system blocks the user namespaces that the
+Chromium sandbox needs, as stock Ubuntu 24.04 does. Install the Debian package instead (see
+[Install and run](#install-and-run)). Do not add `--no-sandbox` or change the user-namespace setting.
 
 If it prints `No suitable fusermount binary found on the $PATH` or `Cannot mount AppImage, please check your FUSE
 setup`, install the distribution's FUSE 3 package (`fuse3` on Ubuntu, Debian and Arch). If it then names a missing

@@ -209,8 +209,11 @@ nsis:
 
 linux:
   target:
-    # DEB stays off until build/linux-after-install.sh and build/linux-after-remove.sh follow the Seira install path.
     - target: AppImage
+      arch: x64
+    # Ubuntu 24.04 restricts unprivileged user namespaces. There, only the DEB's root-owned setuid chrome-sandbox keeps
+    # the Chromium sandbox on; an AppImage mount ignores setuid.
+    - target: deb
       arch: x64
     # Classic snap for the Snap Store. scripts/finish-snap.mjs renames it to seira and drops --no-sandbox.
     - target: snap
