@@ -6,17 +6,17 @@ import { sidebarState } from "./sidebar-state"; import { sameFields, useStoreDis
 import { api, formatTime, visibleMessages, currentTaskBot, botOpensTo, openBot, openThread, type Action, type AppState, type Bot, type BotProject, type Group, type InstanceInfo, type Message } from "@/state/store";
 import { approvalModeFor } from "../../shared/approval-mode";
 import { liveActivityLabel, sidebarMessage } from "@/lib/live-activity";
-import { SidebarWorkingStep } from "./SidebarWorkingStep"; import { FadeLine } from "./FadeLine";
+import { AdvancedRoomStack, AdvancedRoomText, AdvancedThreadText } from "./SidebarAdvancedRows"; import { advancedSectionAdd } from "./sidebar-advanced-add"; import { BotRowPreview } from "./SidebarBotRowPreview";
 import { openBotRow } from "@/state/thread-navigation";
 
 import { BotAvatar } from "./Avatar";
-import { BotEngineMark, BotModelBadge, botTooltip } from "./BotModelBadge"; import { SidebarBotRole } from "./BotRole";
+import { BotModelBadge, botTooltip } from "./BotModelBadge"; import { SidebarBotRole } from "./BotRole";
 import { stateForBot } from "@/lib/mascot";
 import { cn } from "@/lib/cn";
 import { searchMatchesThreads, useSearchDisclosure } from "@/lib/search-disclosure";
 import { useHeldMenuMotion, useMenuMotion } from "./MenuMotion";
 import { lastNonReceipt } from "@/lib/receipts";
-import { botPreview, groupPreview, lastLine } from "./sidebar-preview";
+import { botPreview, groupPreview } from "./sidebar-preview";
 import { activeLocale, t } from "@/lib/i18n"; import { isBotHeld } from "@/lib/bot-pause";
 import { copyText } from "@/lib/copy-text";
 import type { LocaleKey } from "@/locales";
@@ -24,7 +24,6 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { BulkSelectFilters, ThreadListFooter, deleteThreadsInBulk, retitleThreadsInBulk, useBulkSelect } from "./BulkSelectBar";
 import { SidebarBotThreadsPeek } from "./SidebarBotThreadsPeek";
 import { RoomMark, StackedMauses } from "./StackedMauses";
-import { AdvancedRoomStack, AdvancedRoomText, AdvancedThreadText } from "./SidebarAdvancedRows";
 import { SimpleRoomStack, SimpleRoomText } from "./SidebarSimpleRoom";
 import { LocalComputerAutoWarning } from "./LocalComputerAutoWarning";
 import { nextRename } from "@/lib/rename";
@@ -832,26 +831,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
           {expanded && unread && <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-label={t("task.unreadMany")} />}
           {simpleRow && (unread || waiting) && <RowDot waiting={waiting} />}
         </div>
-        {(!expanded || deleting) && <div className="flex items-center justify-between gap-2">
-          {deleting ? (
-            <span role="status" className="flex min-w-0 items-center gap-1.5 truncate text-[13px] leading-[18px] text-ink-secondary">
-              <Loader2 size={12} className="shrink-0 animate-spin" />
-              {t("sidebar.bot.deletingRow")}
-            </span>
-          ) : (
-            <span className={cn("flex min-w-0 items-center gap-1.5 truncate text-[13px]", advRow ? "leading-4" : "leading-[18px]",
-              advRow ? failed ? "text-danger" : waiting ? "text-warning" : unread || working ? "text-ink-secondary" : "text-ink-tertiary"
-                : waiting ? simpleRow ? "text-warning" : "font-semibold text-warning" : "text-ink-secondary")}>
-              {working ? (
-                <SidebarWorkingStep bot={bot} last={last} />
-              ) : (
-                <FadeLine>{waiting ? t("sidebar.preview.waiting") : teammateWait ? t("sidebar.preview.waitingOnTeammate") : queued && !failed ? t("task.queued") : failed ? lastLine(bot, visible, instances, advanced) : botPreview(bot, visible, instances, advanced)}</FadeLine>
-              )}
-            </span>
-          )}
-          {(simpleRow || advRow) && <BotEngineMark bot={bot} instances={instances} className="ms-auto" />}
-          {!simpleRow && unread && <span className={cn("shrink-0 rounded-full bg-accent", advRow ? "size-[7px]" : "size-2")} aria-label={t("task.unreadMany")} />}
-        </div>}
+        {(!expanded || deleting) && <BotRowPreview bot={bot} visible={visible} instances={instances} last={last} advanced={advanced} advRow={advRow} simpleRow={simpleRow} deleting={Boolean(deleting)} working={working} waiting={waiting} teammateWait={teammateWait} queued={queued} failed={failed} unread={unread} />}
         {(simpleRow || advRow) && <RowStatusText working={working} failed={failed} unread={unread} />}
       </div>
     </>
@@ -1150,12 +1130,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
   const pendingBotUndo = teamFeedback?.restoreBot;
   const botRow = (bot: Bot) => botRowProps(state, dispatch, bot, { density, query: q, onMenu: setMenu, renameRequest: renameRequest?.botId === bot.id ? renameRequest.nonce : 0, ...drops.row(bot.id) });
   const canAddBots = teamSettingsAllowed !== false || Boolean(state.config?.team);
-  const advancedAdd = (id: string, sectionName: string | null | undefined): { onAdd?: () => void; addLabel?: string } => {
-    if (id === BOTS_SECTION_ID && canAddBots) return { onAdd: () => dispatch({ type: "newBot" }), addLabel: t("sidebar.newBot") };
-    if (id === CHANNELS_SECTION_ID) return { onAdd: () => setNewRoom(true), addLabel: t("sidebar.newChannel.title") };
-    if (sectionName && !remoteClient && layoutInteractive) return { onAdd: () => setMoveToTeam(sectionName), addLabel: t(state.bots.some((bot) => !bot.hidden && bot.section?.trim() === sectionName) ? "team.manageBotsIn" : "team.addBotsTo", { name: sectionName }) };
-    return {};
-  };
+  const advancedAdd = (id: string, sectionName: string | null | undefined) => advancedSectionAdd({ bots: state.bots, canAddBots, manageDepartments: !remoteClient && layoutInteractive, newBot: () => dispatch({ type: "newBot" }), newRoom: () => setNewRoom(true), moveToTeam: setMoveToTeam }, id, sectionName);
   const railSearch = () => {
     if (collapseToIcons || !advanced) return openCommandPalette();
     setSearchOpen(true);
