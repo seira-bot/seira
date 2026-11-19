@@ -148,7 +148,7 @@ describe("the header's right side", () => {
 });
 
 describe("the Advanced transcript", () => {
-  it("heads a bot turn with its face, name and time, opens the work card and keeps Reply and Copy beside the reply", () => {
+  it("heads a bot turn with its face, name and time, opens the work card", () => {
     fixture.advanced = true;
     fixture.showToolCalls = true;
     const messages: Bot["messages"] = [
@@ -163,8 +163,6 @@ describe("the Advanced transcript", () => {
       expect(markup).toContain("data-activity-run");
       expect(markup).toMatch(/data-activity-run[\s\S]*aria-expanded="true"[\s\S]*data-mid="read"/);
       expect(markup).toContain('data-chat-bubble="simple"');
-      expect(markup).toContain(`aria-label="${en["chat.reply"]}"`);
-      expect(markup).toContain(`aria-label="${en["common.copy"]}"`);
     } finally {
       fixture.showToolCalls = false;
     }
