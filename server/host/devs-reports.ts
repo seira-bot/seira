@@ -176,8 +176,6 @@ export const fixedLine = (version: string, language?: string) => serverLine(lang
 /** Rides on the bot's next turn in that chat, once, so an answer to the line above makes sense to it. */
 const fixedNote = (entry: Tracked, version: string) => `\n\n[From Seira, not the person: the problem they reported with @devs on ${new Date(entry.at).toISOString().slice(0, 10)}${
   entry.words ? ` ("${entry.words}")` : ""} is fixed in ${version}, which this app now runs. The chat told them so and asked whether they want to try again; if their message answers that, help them try it again.]`;
-/** A failure line names Seira in every language: a bot reply that does has passed it on. */
-const FAILED_MARKER = "Seira";
 
 /** The person's own words: the text outside quotes and each quote's comment. Only a @devs there tags the message,
  * never one inside a message they quoted. */
@@ -632,7 +630,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
   }
 
   function tick(): void {
-    for (const entry of [...waiting]) {
+    for (const entry of waiting) {
       if (deps.working(entry.threadId)) {
         entry.answered = true;
         if (now() - entry.at >= LONGEST_WAIT_MS) prepare(entry, { why: "its turn was still running after 10 minutes" });
@@ -641,7 +639,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
       if (!entry.answered && !entry.restored && now() - entry.at < NO_ANSWER_MS) continue;
       prepare(entry, { why: why(entry) });
     }
-    for (const one of [...pending]) {
+    for (const one of pending) {
       if (deps.working(one.threadId) && now() - one.at < LONGEST_WAIT_MS) continue;
       pending = pending.filter((other) => other !== one);
       try { offerAfter(one); } catch (error) {
