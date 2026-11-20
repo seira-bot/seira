@@ -80,8 +80,8 @@ describe.skipIf(process.platform === "win32")("ensurePrivateDir", () => {
     expect(modeOf(dir)).toBe(after);
   });
 
-  it("reads group access from OMB_DATA_DIR_GROUP_ACCESS", () => {
-    vi.stubEnv("OMB_DATA_DIR_GROUP_ACCESS", "1");
+  it("reads group access from SEIRA_DATA_DIR_GROUP_ACCESS", () => {
+    vi.stubEnv("SEIRA_DATA_DIR_GROUP_ACCESS", "1");
     const dir = join(root, "data");
     mkdirSync(dir);
     chmodSync(dir, 0o775);

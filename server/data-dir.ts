@@ -22,7 +22,7 @@ export interface PrivateDirOptions {
   chmod?: (path: string, mode: number) => void;
 }
 
-const groupAccessFromEnv = () => /^(?:1|true)$/iu.test(process.env.OMB_DATA_DIR_GROUP_ACCESS ?? "");
+const groupAccessFromEnv = () => /^(?:1|true)$/iu.test(process.env.SEIRA_DATA_DIR_GROUP_ACCESS ?? "");
 
 const openBits = (path: string, allowed: number) => statSync(path).mode & 0o7777 & ~allowed;
 
