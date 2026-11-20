@@ -71,7 +71,7 @@ describe("hosted MCP apps", () => {
   });
 
   it("counts each app on its own server", () => {
-    const [first] = HOSTED_MCP_APPS;
+    const first = HOSTED_MCP_APPS.find((app) => !("key" in app))!;
     const connections = hostedConnections([
       { type: "http", url: first.url, enabled: true, auth: "signed-in" },
       { type: "http", url: "https://unrelated.example/mcp", enabled: true, auth: "signed-in" },

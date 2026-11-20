@@ -59,7 +59,7 @@ recognized rather than replaced.
 
 | Card | Endpoint | Connects with |
 | --- | --- | --- |
-| **Konektor.id**, WhatsApp leads, inbox, broadcasts, ads and conversion tracking | `https://mcp.konektor.id/mcp` | An API key from your workspace's developer page |
+| **Konektor.id**, WhatsApp leads, inbox, broadcasts, ads and conversion tracking | `https://mcp.konektor.id/mcp` | An API key from your account's developer page |
 | **Biver.id**, websites: pages, sections, forms, products, checkout and domains | `https://mcp.biver.id/mcp` | Browser sign-in |
 | **Coret.id**, mind maps, sketches and pads | `https://mcp.coret.id/mcp` | Browser sign-in |
 | **Termilo.id**, bookings, services, schedules and customer messages | `https://api.termilo.id/mcp` | Browser sign-in |
