@@ -62,7 +62,7 @@ test("the desktop holds its address on demand, read from the running companion",
   assert.equal(options.autoRecover, true);
   assert.equal(clientOptions.isPackaged, true);
   assert.equal(clientOptions.origin, "https://cloud.example.test");
-  assert.deepEqual(clientOptions.identity, { deviceName: "Fixture Mac", platform: "darwin", appVersion: "1.2.3" });
+  assert.deepEqual({ ...clientOptions.identity }, { deviceName: "Fixture Mac", platform: "darwin", appVersion: "1.2.3" });
   assert.equal(options.cloudSession.current().accountToken, "omc_fixture");
   assert.equal(await options.managedEndpointNeeded(), null);
   assert.equal(stateReads.length, 0);
