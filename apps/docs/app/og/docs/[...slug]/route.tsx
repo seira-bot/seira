@@ -5,6 +5,8 @@ import { generate as DefaultImage } from 'fumadocs-ui/og';
 import { appName } from '@/lib/shared';
 
 export const revalidate = false;
+// A static export prerenders a route handler only when it is marked static.
+export const dynamic = 'force-static';
 
 export async function GET(_req: Request, { params }: RouteContext<'/og/docs/[...slug]'>) {
   const { slug } = await params;
