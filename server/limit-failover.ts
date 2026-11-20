@@ -133,6 +133,10 @@ export class LimitFailovers {
     return true;
   }
 
+  holds(threadId: string): boolean {
+    return this.rows.some((row) => row.threadId === threadId);
+  }
+
   forget(threadId: string): false {
     const kept = this.rows.filter((row) => row.threadId !== threadId);
     if (kept.length !== this.rows.length) {

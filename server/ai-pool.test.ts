@@ -81,7 +81,13 @@ describe("pickPoolMember, even mode", () => {
 
   it("moves a pay-per-use key with no reading to a plan with no reading when no known member is above the floor", () => {
     const members: PoolMemberState[] = [unknown(true), unknown(false)];
-    expect(pickPoolMember({ mode: "even", levels: LEVELS, floor: 0, members, currentIndex: 0 })).toMatchObject({ index: 1, reason: "low" });
+    expect(pickPoolMember({ mode: "even", levels: LEVELS, floor: 0, members, currentIndex: 0 })).toMatchObject({ index: 1, reason: "payPerUse" });
+  });
+
+  it("gives the payPerUse reason when a pay-per-use key hands the conversation to a plan with a reading", () => {
+    const members: PoolMemberState[] = [unknown(true), known(80)];
+    expect(pickPoolMember({ mode: "even", levels: LEVELS, floor: 0, members, currentIndex: 0 })).toMatchObject({ index: 1, reason: "payPerUse" });
+    expect(pickPoolMember({ mode: "even", levels: LEVELS, floor: 0, members: [unknown(true), unknown(true)], currentIndex: 0 }).reason).toBe("stay");
   });
 
   it("gives the cannotRun reason when the current member cannot run", () => {
@@ -96,7 +102,7 @@ describe("pickPoolMember, even mode", () => {
 
   it("moves to the first unknown member when every known member is at or below the floor", () => {
     const members: PoolMemberState[] = [known(50), unknown(), unknown()];
-    expect(pickPoolMember({ mode: "even", levels: LEVELS, floor: 50, members, currentIndex: 0 })).toEqual({ index: 1, threadLevel: 50, reason: "low" });
+    expect(pickPoolMember({ mode: "even", levels: LEVELS, floor: 50, members, currentIndex: 0 })).toEqual({ index: 1, threadLevel: 90, reason: "low" });
   });
 
   it("stays when every known member is at or below the floor and nothing is unknown", () => {
@@ -127,6 +133,17 @@ describe("pickPoolMember, in-order mode", () => {
     expect(pick(members, 0, 0)).toMatchObject({ index: 1, reason: "cannotRun" });
     members[0]!.eligible = true;
     expect(pick(members, 1, 0)).toMatchObject({ index: 0, reason: "order" });
+  });
+
+  it("gives the low reason for a later member and the order reason for an earlier one", () => {
+    const floor10 = (members: PoolMemberState[], currentIndex: number) => pickPoolMember({ mode: "inOrder", levels: LEVELS, floor: 10, members, currentIndex });
+    expect(floor10([known(5), known(100)], 0)).toMatchObject({ index: 1, reason: "low" });
+    expect(floor10([known(100), known(5)], 1)).toMatchObject({ index: 0, reason: "order" });
+    expect(floor10([known(100), known(100)], 1)).toMatchObject({ index: 0, reason: "order" });
+  });
+
+  it("returns the highest level, which means no own level", () => {
+    expect(pick(three(), 0).threadLevel).toBe(90);
   });
 
   it("ignores the level a conversation holds", () => {

@@ -46,7 +46,7 @@ export function samePlanPair(members: { instanceId: string; driverKind: string; 
 
 export interface PoolMemberState { eligible: boolean; remaining: number | null; resetsAt: number | null; paid: boolean }
 
-export type PoolReason = "stay" | "moreLeft" | "cannotRun" | "low" | "order";
+export type PoolReason = "stay" | "moreLeft" | "cannotRun" | "low" | "order" | "payPerUse";
 
 export interface PickPoolMemberInput {
   mode: AiPoolMode;
@@ -59,25 +59,28 @@ export interface PickPoolMemberInput {
 
 export function pickPoolMember(input: PickPoolMemberInput): { index: number; threadLevel: number; reason: PoolReason } {
   const { mode, members, currentIndex, threadLevel, floor } = input;
+  const noLevel = input.levels[0]!;
   const current = members[currentIndex];
   const move = (index: number, level: number, why: PoolReason) => ({ index, threadLevel: level, reason: index === currentIndex ? "stay" as const : current?.eligible ? why : "cannotRun" as const });
   if (mode === "inOrder") {
     const first = members.findIndex((member) => member.eligible && (member.remaining === null || member.remaining > floor));
-    return move(first === -1 ? currentIndex : first, floor, "order");
+    const atFloor = current?.eligible && current.remaining !== null && current.remaining <= floor;
+    return move(first === -1 ? currentIndex : first, noLevel, atFloor && first > currentIndex ? "low" : "order");
   }
   const known = members.flatMap((member, index) => (member.eligible && member.remaining !== null ? [{ ...member, index, remaining: member.remaining }] : []));
   const level = [...input.levels, floor].filter((candidate) => known.some((member) => member.remaining > candidate)).reduce<number | undefined>((best, candidate) => (best === undefined || candidate > best ? candidate : best), undefined);
   const unknown = members.flatMap((member, index) => (member.eligible && member.remaining === null ? [{ index, paid: member.paid }] : []));
   const unknownPick = () => (unknown.find((member) => !member.paid) ?? unknown.find((member) => member.paid))?.index ?? currentIndex;
   const currentUnknown = current?.eligible && current.remaining === null;
-  if (currentUnknown && !current.paid) return move(currentIndex, threadLevel ?? level ?? floor, "low");
+  const moveEven = (index: number, level: number, why: PoolReason) => move(index, level, current?.paid && !members[index]?.paid ? "payPerUse" : why);
+  if (currentUnknown && !current.paid) return move(currentIndex, threadLevel ?? level ?? noLevel, "low");
   if (level === undefined) {
     const free = unknown.find((member) => !member.paid)?.index;
-    return move(currentUnknown ? free ?? currentIndex : unknownPick(), threadLevel ?? floor, "low");
+    return moveEven(currentUnknown ? free ?? currentIndex : unknownPick(), threadLevel ?? noLevel, "low");
   }
   const held = Math.min(level, threadLevel ?? level);
   if (current?.eligible && current.remaining !== null && current.remaining > held) return move(currentIndex, held, "moreLeft");
   const pick = known.filter((member) => member.remaining > level).sort((a, b) => b.remaining - a.remaining
     || (a.resetsAt ?? Infinity) - (b.resetsAt ?? Infinity) || a.index - b.index)[0]!;
-  return move(pick.index, level, "moreLeft");
+  return moveEven(pick.index, level, "moreLeft");
 }
