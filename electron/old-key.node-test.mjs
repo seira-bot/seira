@@ -1,12 +1,13 @@
 // Secrets that an earlier app name encrypted are opened by a reader under that name and encrypted again under the current one.
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import { LEGACY_APP_NAME } from "./legacy-names.mjs";
-import { OLD_KEY_READER, moveCopiedSecrets, oldKeyReader, readerSwitches, runOldKeyReader, secretFiles } from "./old-key.mjs";
+import { OLD_KEY_READER, moveCopiedSecrets, oldKeyReader, readerSwitches, runOldKeyReader, secretFiles, startedByThisApp } from "./old-key.mjs";
 import { SETTINGS_MOVE_RECEIPT } from "./settings-folder.mjs";
 
 function folder(t) {
@@ -153,28 +154,81 @@ test("the reader process answers by pipe, and its input folder is removed", asyn
   assert.deepEqual(readdirSync(tmp), []);
 });
 
-test("the reader starts under the earlier name in a private profile, before the app is ready", async t => {
-  const dir = folder(t);
-  const input = path.join(dir, "secrets.json");
-  writeFileSync(input, JSON.stringify([{ name: "credentials.bin", data: sealed("old", '{"k":1}').toString("base64") }, { name: "x.bin", data: Buffer.from("v11other:1").toString("base64") }]));
+/** A fake Electron app whose settings folder holds a receipt with the given key state. */
+function readerApp(dir, keys = "pending") {
+  const appData = path.join(dir, "appData");
+  mkdirSync(path.join(appData, "Seira"), { recursive: true });
+  if (keys) writeFileSync(path.join(appData, "Seira", SETTINGS_MOVE_RECEIPT), JSON.stringify({ keys }));
   const steps = [];
   let ready;
   const app = {
+    getName: () => "Seira",
+    getPath: key => { assert.equal(key, "appData"); return appData; },
     setName: name => steps.push(`name ${name}`),
     setPath: (key, value) => steps.push(`path ${key} ${value}`),
     whenReady: () => new Promise(resolve => { ready = resolve; }),
     exit: code => steps.push(`exit ${code}`),
   };
+  return { app, steps, ready: () => ready() };
+}
+
+test("the reader starts under the earlier name in a private profile, before the app is ready", async t => {
+  const dir = folder(t);
+  const input = path.join(dir, "secrets.json");
+  writeFileSync(input, JSON.stringify([{ name: "credentials.bin", data: sealed("old", '{"k":1}').toString("base64") }, { name: "x.bin", data: Buffer.from("v11other:1").toString("base64") }]));
+  const { app, steps, ready } = readerApp(dir);
   const safeStorage = { decryptStringAsync: async data => {
     assert.ok(steps.includes(`name ${LEGACY_APP_NAME}`));
     return oldStore.decrypt(data);
   } };
   let answer = "";
-  runOldKeyReader({ app, safeStorage, argv: ["seira", `${OLD_KEY_READER}=${input}`], write: (text, done) => { answer += text; done(); } });
+  runOldKeyReader({ app, safeStorage, argv: ["seira", `${OLD_KEY_READER}=${input}`], trusted: () => true, write: (text, done) => { answer += text; done(); } });
   assert.deepEqual(steps, [`name ${LEGACY_APP_NAME}`, `path userData ${path.join(dir, "profile")}`]);
   ready();
   await new Promise(resolve => setTimeout(resolve, 20));
   assert.equal(steps.at(-1), "exit 0");
   const texts = JSON.parse(Buffer.from(answer.trim().slice("seira-old-key:".length), "base64").toString("utf8"));
   assert.deepEqual(texts, { "credentials.bin": '{"k":1}' });
+});
+
+test("the reader opens nothing for another program, or when no copied folder waits for its keys", t => {
+  const dir = folder(t);
+  const input = path.join(dir, "secrets.json");
+  writeFileSync(input, "[]");
+  const safeStorage = { decryptStringAsync: async () => assert.fail("nothing is opened") };
+  const write = () => assert.fail("nothing is answered");
+  for (const [label, keys, trusted] of [["another program", "pending", false], ["keys already moved", "done", true], ["no copy", null, true]]) {
+    const { app, steps } = readerApp(folder(t), keys);
+    runOldKeyReader({ app, safeStorage, argv: ["seira", `${OLD_KEY_READER}=${input}`], trusted: () => trusted, write });
+    assert.deepEqual(steps, ["exit 2"], label);
+  }
+});
+
+test("the reader trusts only a parent that runs the same app binary", () => {
+  const links = { "/opt/Seira/seira": "/opt/Seira/seira", "/usr/bin/seira": "/opt/Seira/seira", "/proc/10/exe": "/opt/Seira/seira", "/proc/11/exe": "/usr/bin/python3" };
+  const fsApi = { realpathSync: file => {
+    if (!(file in links)) throw Object.assign(new Error("gone"), { code: "ENOENT" });
+    return links[file];
+  } };
+  const check = options => startedByThisApp({ platform: "linux", execPath: "/usr/bin/seira", fsApi, ...options });
+  assert.equal(check({ ppid: 10 }), true);
+  assert.equal(check({ ppid: 11 }), false, "another program");
+  assert.equal(check({ ppid: 12 }), false, "a parent that cannot be checked");
+  assert.equal(startedByThisApp({ platform: "darwin", ppid: 10, execPath: "/usr/bin/seira", fsApi, run: () => "/opt/Seira/seira\n" }), true);
+  assert.equal(startedByThisApp({ platform: "darwin", ppid: 10, execPath: "/usr/bin/seira", fsApi, run: () => { throw new Error("no ps"); } }), false);
+  assert.equal(startedByThisApp({ platform: "win32", ppid: 10, execPath: "/usr/bin/seira", fsApi }), false);
+});
+
+test("on Linux, a direct child of the same binary passes and a child of a shell does not", { skip: process.platform !== "linux" }, () => {
+  const probe = `import { startedByThisApp } from ${JSON.stringify(new URL("./old-key.mjs", import.meta.url).href)}; console.log(startedByThisApp());`;
+  const direct = spawnSync(process.execPath, ["--input-type=module", "-e", probe], { encoding: "utf8" });
+  assert.equal(direct.stdout.trim(), "true", direct.stderr);
+  const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
+  const viaShell = spawnSync("/bin/sh", ["-c", `${quote(process.execPath)} --input-type=module -e ${quote(probe)}; true`], { encoding: "utf8" });
+  assert.equal(viaShell.stdout.trim(), "false", viaShell.stderr);
+});
+
+test("on Windows no reader starts: the copied folder keeps its own key", async () => {
+  const read = oldKeyReader({ platform: "win32", spawnImpl: () => assert.fail("no reader on Windows") });
+  assert.deepEqual(await read([{ name: "credentials.bin", data: Buffer.from("v10x") }]), {});
 });

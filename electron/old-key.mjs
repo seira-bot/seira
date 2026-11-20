@@ -2,7 +2,7 @@
 // macOS the Keychain item carry that name. A secret that the earlier name encrypted opens only in a process that starts
 // under that name, so a short reader process of this same app opens the copied secrets, and this process encrypts them
 // again under the current name. Windows keeps its key in `Local State` inside the copied folder and needs no reader.
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -106,9 +106,24 @@ export function readerSwitches(commandLine) {
   return switches;
 }
 
+/**
+ * True when this process is a direct child of the same app binary. The reader opens secrets of the earlier name, so it
+ * answers only the app that started it, never another program that starts the binary with the reader switch.
+ */
+export function startedByThisApp({ platform = process.platform, ppid = process.ppid, execPath = process.execPath, fsApi = fs, run = execFileSync } = {}) {
+  try {
+    const self = fsApi.realpathSync(execPath);
+    if (platform === "linux") return fsApi.realpathSync(`/proc/${ppid}/exe`) === self;
+    if (platform === "darwin") return fsApi.realpathSync(run("/bin/ps", ["-o", "comm=", "-p", String(ppid)], { encoding: "utf8" }).trim()) === self;
+  } catch {}
+  return false;
+}
+
 /** Starts this app as the reader and returns the opened texts by file name. Ciphertext goes in by file, text comes back by pipe. */
 export function oldKeyReader({ execPath = process.execPath, appArgs = [], switches = [], spawnImpl = spawn, fsApi = fs, tmp = os.tmpdir(),
-  timeoutMs = 30_000 } = {}) {
+  timeoutMs = 30_000, platform = process.platform } = {}) {
+  // The copied `Local State` keeps the Windows key; a reader under another name has no key at all.
+  if (platform === "win32") return async () => ({});
   return async files => {
     const work = fsApi.mkdtempSync(path.join(tmp, "seira-old-key-"));
     try {
@@ -141,10 +156,22 @@ export function oldKeyReader({ execPath = process.execPath, appArgs = [], switch
   };
 }
 
-/** The reader side: starts under the earlier name in a private profile, opens the given ciphertext, answers once, and exits. */
-export function runOldKeyReader({ app, safeStorage, argv = process.argv, fsApi = fs, write = (text, done) => process.stdout.write(text, done) }) {
+function copyWaitsForKeys(app, fsApi) {
+  try {
+    return JSON.parse(fsApi.readFileSync(path.join(app.getPath("appData"), app.getName(), SETTINGS_MOVE_RECEIPT), "utf8"))?.keys === "pending";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The reader side: starts under the earlier name in a private profile, opens the given ciphertext, answers once, and
+ * exits. It runs only for the app that started it, and only while a copied settings folder still waits for its keys.
+ */
+export function runOldKeyReader({ app, safeStorage, argv = process.argv, fsApi = fs, trusted = startedByThisApp,
+  write = (text, done) => process.stdout.write(text, done) }) {
   const input = argv.find(entry => entry.startsWith(`${OLD_KEY_READER}=`))?.slice(OLD_KEY_READER.length + 1);
-  if (!input) {
+  if (!input || !trusted() || !copyWaitsForKeys(app, fsApi)) {
     app.exit(2);
     return;
   }

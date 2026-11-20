@@ -116,7 +116,7 @@ test("a failed copy leaves no partial folder and keeps the earlier name for this
   const before = snapshot(legacy);
   const failing = {
     ...fs,
-    cpSync(source, target, options) {
+    cpSync(source, target) {
       mkdirSync(target);
       writeFileSync(path.join(target, "half.json"), "{}");
       throw Object.assign(new Error("no space left"), { code: "ENOSPC" });
