@@ -82,7 +82,7 @@ describe("new-bot templates", () => {
 
 describe("new-bot defaults an earlier version saved", () => {
   it("reads a routine template whose run-on value is the old one", () => {
-    const defaults = newBotDefaultsSchema.parse({ routines: [{ name: "Old", prompt: "Do it", schedule: { type: "interval", everyMinutes: 60 }, runOn: "maus" }] });
+    const defaults = newBotDefaultsSchema.parse({ routines: [{ name: "Old", prompt: "Do it", schedule: { type: "interval", everyMinutes: 60, anchorAt: 1 }, runOn: "maus" }] });
     expect(defaults.routines[0]?.runOn).toBe("seira");
   });
 });
