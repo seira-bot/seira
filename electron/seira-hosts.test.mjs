@@ -4,7 +4,7 @@ import { LIVE_SEIRA_SERVICES, SEIRA_HOSTS, seiraOrigin, seiraServiceLive } from 
 
 describe("seiraServiceLive", () => {
   it("lists the services that answer today", () => {
-    expect([...LIVE_SEIRA_SERVICES].sort()).toEqual(["apps", "cloud", "site", "updates"]);
+    expect([...LIVE_SEIRA_SERVICES].sort()).toEqual(["apps", "cloud", "serverTunnel", "site", "updates"]);
     for (const name of LIVE_SEIRA_SERVICES) expect(seiraServiceLive(name)).toBe(true);
   });
 
