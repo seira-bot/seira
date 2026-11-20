@@ -46,6 +46,7 @@ afterEach(() => {
 
 async function start(source: string, more: Record<string, unknown> = {}) {
   document.body.innerHTML = "<div id=\"mausbot-root\"></div>";
+  const rendered = document.body.firstElementChild as HTMLElement;
   const problems: Problem[] = [];
   const loads: string[] = [];
   const root = await runtime({
@@ -55,8 +56,10 @@ async function start(source: string, more: Record<string, unknown> = {}) {
     ...more,
   }) as { unmount(): void } | null;
   if (root) roots.push(root);
-  await new Promise((resolve) => setTimeout(resolve, 30));
-  return { problems, loads, overlay: document.querySelector<HTMLElement>("[data-page-problem]"), rendered: document.getElementById("mausbot-root")! };
+  await vi.waitFor(() => {
+    if (root && !rendered.hasChildNodes() && !document.querySelector("[data-page-problem]")) throw new Error("React has not committed the page yet.");
+  });
+  return { problems, loads, overlay: document.querySelector<HTMLElement>("[data-page-problem]"), rendered };
 }
 
 const PRICING = `import { useState } from "react";
@@ -79,8 +82,7 @@ describe("a jsx page in the shell", () => {
     expect([...rendered.querySelectorAll("h2")].map((heading) => heading.textContent)).toEqual(["Starter", "Pro"]);
     expect(rendered.querySelectorAll("svg")).toHaveLength(2);
     rendered.querySelectorAll("button")[1]!.click();
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(rendered.querySelector("#picked")?.textContent).toBe("Pro");
+    await vi.waitFor(() => expect(rendered.querySelector("#picked")?.textContent).toBe("Pro"));
   });
 
   it("shows a syntax error as a readable overlay with the line, and tells the bot through the page's context", async () => {
@@ -129,7 +131,7 @@ export default function Page() { const theme = useTheme(); return <div><p id="th
     expect(loads).toContain("echarts");
     expect(rendered.querySelector("#theme")?.textContent).toBe("dark");
     expect(rendered.querySelector("[role=img]")?.getAttribute("aria-label")).toBe("Sales");
-    expect(fakeEcharts.made[0]).toMatchObject({ theme: "dark", options: [{ backgroundColor: "transparent", series: [{ type: "bar", data: [1, 2] }] }] });
+    await vi.waitFor(() => expect(fakeEcharts.made[0]).toMatchObject({ theme: "dark", options: [{ backgroundColor: "transparent", series: [{ type: "bar", data: [1, 2] }] }] }));
   });
 
   it("runs a published page's transpiled code without loading the compiler", async () => {
