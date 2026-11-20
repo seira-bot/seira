@@ -23,9 +23,9 @@ Only the maintainers can release:
   tags for everyone except the organization admins.
 - GitHub Actions has no bypass on any of these rulesets, and its token can only read
   the repository (see [CI](ci.md)).
-- A new push to `main` cancels the older `main` CI run that is still going
-  (see [CI](ci.md#fewer-runners)). A cancelled run proves nothing about the
-  released tree. Step 4 runs a preflight that needs a successful `CI` run for
+- A newer push to `main` can replace a `main` CI run that still waits for a
+  runner (see [CI](ci.md#runs-on-main-and-in-the-merge-queue)). A cancelled
+  run proves nothing about the released tree. Step 4 runs a preflight that needs a successful `CI` run for
   that tree.
 
 The server image `ghcr.io/seira-bot/seira:v<version>` comes from the
