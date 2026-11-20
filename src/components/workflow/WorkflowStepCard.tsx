@@ -49,6 +49,7 @@ export function WorkflowStepCard({ step, title, kindLabel, selected, problem, st
   const { width, height } = stepSize(step);
   const detailId = `workflow-step-${step.id}-detail`;
   const hasDetail = Boolean(problem || status);
+  const doing = step.kind === "bot" ? step.instruction.split(/\r?\n/).map((line) => line.trim()).find(Boolean) : undefined;
   const sides: PortSide[] = step.kind === "check" ? ["yes", "no"] : ["out"];
   return (
     <button type="button" data-workflow-step={step.id} data-step-status={status?.view.state} aria-label={t("workflow.step.label", { kind: kindLabel, title })}
@@ -67,7 +68,8 @@ export function WorkflowStepCard({ step, title, kindLabel, selected, problem, st
         <Icon size={16} aria-hidden className="shrink-0" />
         <span className="truncate text-[12px] leading-4 text-ink-tertiary">{kindLabel}</span>
       </span>
-      <span className={cn("mt-1 line-clamp-2 block text-[13px] leading-[18px] text-ink", note ? "font-normal" : "font-medium")} dir="auto">{title}</span>
+      <span className={cn("mt-1 block text-[13px] leading-[18px] text-ink", doing ? "line-clamp-1" : "line-clamp-2", note ? "font-normal" : "font-medium")} dir="auto">{title}</span>
+      {doing && <span data-workflow-step-instruction className="block line-clamp-1 text-[12px] leading-4 text-ink-secondary" dir="auto">{doing}</span>}
       {hasDetail && (
         <span id={detailId} className="mt-1.5 flex items-start gap-1.5 text-[12px] leading-4">
           {problem ? (

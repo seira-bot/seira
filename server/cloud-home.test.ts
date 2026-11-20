@@ -157,7 +157,7 @@ it("opens one ordinary pairing window for a correctly signed request", () => {
   expect(granted.status).toBe(200);
   expect(Object.keys(granted.body).sort()).toEqual(["code", "credential", "expiresAt"]);
   expect(granted.body.code).toMatch(/^[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/);
-  expect(granted.body.credential).toMatch(/^omb_pair_[A-Za-z0-9_-]{43}$/);
+  expect(granted.body.credential).toMatch(/^seira_pair_[A-Za-z0-9_-]{43}$/);
   expect(granted.body.expiresAt).toBe(f.now() + 300_000);
   const paired = f.exchange(granted.body.code as string);
   expect(paired).toMatchObject({ ok: true, session: { label: "Seira app (Cloud)", scopes: ["admin", "client"] } });
@@ -244,7 +244,7 @@ it("opens a browser sign-in only a browser redeems, by credential alone, for at 
   expect(f.mint(f.sign(JSON.stringify({ purpose: "browser", owner: "ada.o'neil+cloud@example-mail.test" }))).status).toBe(200);
   expect(granted.status).toBe(200);
   expect(Object.keys(granted.body).sort()).toEqual(["credential", "expiresAt", "purpose"]);
-  expect(granted.body).toMatchObject({ credential: expect.stringMatching(/^omb_pair_[A-Za-z0-9_-]{43}$/), expiresAt: f.now() + 120_000, purpose: "browser" });
+  expect(granted.body).toMatchObject({ credential: expect.stringMatching(/^seira_pair_[A-Za-z0-9_-]{43}$/), expiresAt: f.now() + 120_000, purpose: "browser" });
   const credential = granted.body.credential as string;
   expect(f.sessions.previewBrowserSignIn(credential)).toEqual({ owner: "ada@example.test", expiresAt: f.now() + 120_000 });
   expect(f.exchange(credential).ok).toBe(false);

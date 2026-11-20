@@ -88,6 +88,20 @@ describe("the workflow canvas", () => {
     expect(container.querySelector("#" + CSS.escape(region(container).getAttribute("aria-describedby")!))!.textContent).toContain("Arrow keys move the view");
   });
 
+  it("shows the first line of a bot step's instruction under its name, and nothing for an empty one", () => {
+    const { props } = canvasProps({ graph: {
+      steps: [{ ...botStep("a", "bot-a", 0, 0), instruction: "\n  Pull today's orders  \nthen total them" }, { ...botStep("b", "bot-b", 0, 200), instruction: "  " }, checkStep("c", 400, 0)],
+      connections: [],
+    } });
+    const container = mount(createElement(WorkflowCanvas, props as never));
+    const line = (id: string) => step(container, id).querySelector<HTMLElement>("[data-workflow-step-instruction]");
+    expect(line("a")?.textContent).toBe("Pull today's orders");
+    expect(line("a")?.className).toContain("line-clamp-1");
+    expect(line("b")).toBeNull();
+    expect(line("c")).toBeNull();
+    expect(step(container, "a").getAttribute("aria-label")).toBe("Bot step: Scout");
+  });
+
   it("moves the focused step 8 px with an arrow key and 40 px with Shift, and announces it", () => {
     vi.useFakeTimers();
     const { props, edit } = canvasProps();

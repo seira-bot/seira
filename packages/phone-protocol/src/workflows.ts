@@ -25,6 +25,9 @@ export interface WorkflowGraph { steps: WorkflowStep[]; connections: WorkflowCon
 export interface Workflow extends WorkflowGraph { id: string; name: string; createdAt: number; updatedAt: number }
 /** `ifUpdatedAt`: refuse the change when the saved workflow is newer (another window changed it). */
 export interface WorkflowInput extends WorkflowGraph { name: string; ifUpdatedAt?: number }
+/** A workflow drawn from a finished reply, not saved yet. `omitted`: steps left out because the person may not use
+ * their bot. `trimmed`: steps past the step limit. */
+export interface DrawnWorkflow { draft: WorkflowInput; omitted: number; trimmed: number }
 
 export type WorkflowProblemCode =
   | "workflow_shape" | "workflow_name" | "workflow_too_big" | "workflow_duplicate_id" | "workflow_unknown_step"

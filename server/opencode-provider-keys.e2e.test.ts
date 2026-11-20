@@ -103,7 +103,7 @@ afterAll(async () => {
 });
 
 it("saves keys for any OpenCode provider on a Cloud, shows only their names, and hands them to OpenCode alone", async () => {
-  expect(owner).toMatch(/^omb_sess_/);
+  expect(owner).toMatch(/^seira_sess_/);
   expect((await api("GET", "/api/config")).body.opencodeGo).toEqual({ configured: false, providerKeys: [] });
   await expect.poll(() => written(dump), { timeout: 15_000 }).toBe(true);
   expect(started().env.ANTHROPIC_API_KEY).toBeUndefined();

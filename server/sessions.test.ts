@@ -41,10 +41,10 @@ afterEach(() => { vi.restoreAllMocks(); rmSync(dir, { recursive: true, force: tr
 describe("the native-app encoding of a pairing window", () => {
   it("redeems the same window as the typed code, and consumes it", () => {
     const { code, credential } = registry.openPairing({ label: "Pixel" });
-    // The released Android companion demands the 9-character prefix plus exactly 43 base64url characters.
-    expect(credential.startsWith("omb_pair_")).toBe(true);
-    expect(credential.length).toBe(52);
-    expect(credential.slice("omb_pair_".length)).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    // The phone apps read both prefixes: the old 9-character one and the Seira 11-character one, then 43 base64url characters.
+    expect(credential.startsWith("seira_pair_")).toBe(true);
+    expect(credential.length).toBe(54);
+    expect(credential.slice("seira_pair_".length)).toMatch(/^[A-Za-z0-9_-]{43}$/);
 
     const paired = registry.exchange({ code: credential, label: "Pixel", source: "10.0.0.9" });
     expect(paired.ok).toBe(true);

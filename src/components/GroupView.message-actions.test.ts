@@ -120,6 +120,23 @@ describe("room message actions", () => {
     expect(items).not.toContain("Read this aloud");
   });
 
+  it("offers Draw as workflow in a finished room reply's more menu, and not while the room is working", () => {
+    vi.unstubAllGlobals();
+    const finished: Message = { ...text("a", "bot", "The build is green"), turnTerminal: true };
+    const menuItems = (group: Group) => {
+      flushSync(() => root.render(createElement(Transcript, {
+        group, members: [lead], locale: "en", messages: group.messages, transcript: group.messages, onReply: () => {},
+      })));
+      flushSync(() => host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!.click());
+      return [...host.querySelectorAll<HTMLButtonElement>("[role=menuitem]")].map((item) => item.textContent);
+    };
+    expect(menuItems({ ...room, messages: [finished] })).toContain("Draw as workflow");
+    flushSync(() => root.render(createElement("div")));
+    expect(menuItems({ ...room, messages: [{ ...finished, turnTerminal: undefined }] })).not.toContain("Draw as workflow");
+    flushSync(() => root.render(createElement("div")));
+    expect(menuItems({ ...room, working: true, messages: [finished] })).not.toContain("Draw as workflow");
+  });
+
   it("copies a person's message and folds a long one", () => {
     const html = markup([text("u", "user", "word ".repeat(200))]);
     expect(html).toContain("Copy message");
