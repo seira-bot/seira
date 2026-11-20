@@ -1,6 +1,6 @@
 {
   "about": [
-    "Shared contract between Seira (server/extractor/contract.ts) and the seira-cloud Admin's relay.",
+    "Shared contract between Seira (server/extractor/contract.ts) and the Cloud service's relay.",
     "Seira sends POST <SEIRA_CLOUD_DECIDER_URL>/v1/extract with Authorization: Bearer <SEIRA_CLOUD_DECIDER_TOKEN>, the x-seira-seam header naming the seam, and `body` as JSON: { seam, fields, input } (the seam in both).",
     "The relay answers { values: { [field]: value | null }, model }, refuses any request whose `accepts` would be false, and answers 413 for one over the caps; Seira never sends one, and never retries a 413.",
     "Body cap: 256 KB counting each image's data as empty; then at most 4 images of at most 1 MB decoded each (so a raw body can reach about 6 MB).",

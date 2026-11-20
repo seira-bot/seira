@@ -679,7 +679,7 @@ Tests:
 - `mcpRpc` (rules 15 and 18; signed-out 401 with `signIn`; removed server 410; a change declined outside Full access; rate limit);
 - `claude.ts` mounts a URL app server through the proxy and a non-app URL server natively, unchanged.
 
-### I1. iOS (seira-mobile)
+### I1. iOS (phone-app)
 
 Owns:
 
@@ -696,7 +696,7 @@ Owns:
 
 First step: confirm that a script in a `WKContentWorld` receives the iframe's `message` events and can `postMessage` into it. The fallback is the page world, plus the `isMainFrame` and origin checks, which stay either way.
 
-### A1. Android (seira-mobile)
+### A1. Android (phone-app)
 
 Owns:
 
@@ -773,7 +773,7 @@ S1 and S2 (2026-10-14). Small deviations from the text above, so later tasks bui
 - **Tools.** `update_html` answers `Updated app <id>.`; on an MCP row it is refused with 409, on another bot's or thread's row with 404. It drops the row's `context` (the page reloads).
 - **Replay.** `transcriptText` reads words an app sent as `[app: <title>]`, and a typed reply to an app row as `[replying to <speaker>'s app: “…”]`.
 - **Storage.** `DATA_DIR/app-docs/{html,data,doc}/<sha256>`; an MCP row's data blob also holds its filtered `network`. Sweeps run 30 s after start and 2 s after a thread is deleted, and never remove a file younger than ten minutes. `ChatApps.mcpAccess` is the hook S4 sets; until then an MCP row's document renders read-only (`blocked: server-removed`).
-- **Fixtures.** `scripts/gen-app-fixtures.ts <seira-mobile checkout>` writes `app-messages.json`, `app-documents.json` and `app-expectations.json` (with `appHostSha256`) under `ios/Tests/CompanionCoreTests/Fixtures`, and copies `app-host.html` to both phone apps. `node --experimental-strip-types scripts/build-app-host.ts [--check]` rebuilds the host page.
+- **Fixtures.** `scripts/gen-app-fixtures.ts <phone-app checkout>` writes `app-messages.json`, `app-documents.json` and `app-expectations.json` (with `appHostSha256`) under `ios/Tests/CompanionCoreTests/Fixtures`, and copies `app-host.html` to both phone apps. `node --experimental-strip-types scripts/build-app-host.ts [--check]` rebuilds the host page.
 
 S3, the desktop renderer and Electron (2026-10-14):
 
