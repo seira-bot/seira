@@ -7,6 +7,7 @@ import { useStore } from "@/state/store";
 import { useTeamPeople } from "@/state/team-people";
 import { AdminOnly } from "../../AdminOnly";
 import { AutomaticRecoverySettings } from "../../AutomaticRecoverySettings";
+import { AiPoolSettings } from "../../AiPoolSettings";
 import { AwayEmailsSetting } from "../../AwayEmailsSetting";
 import { PausedBotsButton } from "../../AwakeBotsPicker";
 import { BrowserProxyRow, BuiltInBrowserRow, NewBrowserSettings, ServerSitesRow } from "../../BrowserSettingsRows";
@@ -143,6 +144,7 @@ export function AiPage() {
         </SettingsGroup>
       )}
       <AdvancedSection anchor="backup-model"><SettingsGroup label={t("settings.ai.backupModel")} block="backup-model"><AutomaticRecoverySettings /></SettingsGroup></AdvancedSection>
+      <AdvancedSection anchor="ai-pool"><SettingsGroup label={t("settings.ai.pool")} block="ai-pool"><AiPoolSettings /></SettingsGroup></AdvancedSection>
       <AdvancedSection anchor="routing"><DecisionModelSettings /></AdvancedSection>
       <AdvancedSection anchor="images"><ImageGenerationSettings /></AdvancedSection>
     </AdminOnly>
