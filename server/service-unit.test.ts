@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { LEGACY_SENTINEL_LAUNCHD_LABEL, LEGACY_SENTINEL_SYSTEMD_NAME } from "../electron/legacy-names.mjs";
 import {
-  checkSentinelInstall, launchdPlist, sentinelCommand, sentinelLaunchdPlist, sentinelServicePlan, sentinelSystemdService, sentinelSystemdTimer,
+  checkSentinelInstall, earlierSentinelSchedule, launchdPlist, sentinelCommand, sentinelLaunchdPlist, sentinelServicePlan, sentinelSystemdService, sentinelSystemdTimer,
   sentinelUnitCommand, serviceCommand, servicePlan, shippedSentinelCli, systemdUnit, unstableInstallWarning, type ServiceSpec,
 } from "./service-unit.ts";
 
@@ -144,5 +145,36 @@ describe("service units", () => {
     files.set(unit, "garbage");
     expect(checkSentinelInstall("linux", "/home/seira", fs([]))).toEqual({ status: "unreadable", unit });
     expect(checkSentinelInstall("win32", "C:\\Users\\seira", fs([]))).toEqual({ status: "unsupported" });
+  });
+
+  it("finds the Sentinel schedule an earlier version installed and gives the commands that remove it", () => {
+    const unit = `/home/seira/.config/systemd/user/${LEGACY_SENTINEL_SYSTEMD_NAME}.service`;
+    const timer = `/home/seira/.config/systemd/user/${LEGACY_SENTINEL_SYSTEMD_NAME}.timer`;
+    const plist = `/Users/seira/Library/LaunchAgents/${LEGACY_SENTINEL_LAUNCHD_LABEL}.plist`;
+    const fs = (...present: string[]) => ({ exists: (path: string) => present.includes(path), read: () => "" });
+    expect(checkSentinelInstall("linux", "/home/seira", fs(unit, timer))).toEqual({
+      status: "earlier_version",
+      unit,
+      deactivate: [`systemctl --user disable --now ${LEGACY_SENTINEL_SYSTEMD_NAME}.timer`, `rm ${unit} ${timer}`, "systemctl --user daemon-reload"],
+    });
+    expect(checkSentinelInstall("darwin", "/Users/seira", fs(plist))).toEqual({
+      status: "earlier_version",
+      unit: plist,
+      deactivate: [`launchctl bootout gui/$(id -u)/${LEGACY_SENTINEL_LAUNCHD_LABEL}`, `rm ${plist}`],
+    });
+    expect(checkSentinelInstall("darwin", "/Users/seira", fs())).toMatchObject({ status: "not_installed" });
+    expect(earlierSentinelSchedule("darwin", "/Users/seira", () => false)).toBeNull();
+    expect(earlierSentinelSchedule("win32", "C:\\Users\\seira", () => true)).toBeNull();
+    expect(earlierSentinelSchedule("linux", "/home/seira", fs(unit))?.files).toEqual([unit, timer]);
+  });
+
+  it("keeps checking the current schedule when an earlier one is also installed", () => {
+    const spec = { node: "/usr/bin/node", script: "/srv/seira/cli.js", dataDir: "/home/seira/data", home: "/home/seira", out: "/home/seira/out" };
+    const dir = "/home/seira/.config/systemd/user";
+    const current = `${dir}/seira-sentinel.service`;
+    const earlier = `${dir}/${LEGACY_SENTINEL_SYSTEMD_NAME}.service`;
+    const present = [current, earlier, `${dir}/seira-sentinel.timer`, spec.node, spec.script];
+    const fs = { exists: (path: string) => present.includes(path), read: () => sentinelSystemdService(spec) };
+    expect(checkSentinelInstall("linux", "/home/seira", fs)).toMatchObject({ status: "ok", unit: current });
   });
 });

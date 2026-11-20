@@ -37,3 +37,5 @@ export declare const LEGACY_DEVICE_TOKEN_PREFIX: string;
 export declare const LEGACY_COMPOSIO_USER_PREFIX: string;
 export declare const LEGACY_WEBHOOK_AUTH_HEADER: string;
 export declare const LEGACY_POLLER_HEADER: string;
+export declare const LEGACY_SENTINEL_LAUNCHD_LABEL: string;
+export declare const LEGACY_SENTINEL_SYSTEMD_NAME: string;

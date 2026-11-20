@@ -1,6 +1,8 @@
 import { homedir, userInfo } from "node:os";
 import { posix } from "node:path";
 
+import { LEGACY_SENTINEL_LAUNCHD_LABEL, LEGACY_SENTINEL_SYSTEMD_NAME } from "../electron/legacy-names.mjs";
+
 // Unit files describe a Linux or macOS machine: POSIX paths whatever host renders them (Windows CI included).
 const { basename, dirname, join } = posix;
 
@@ -251,26 +253,37 @@ export function sentinelSystemdTimer(): string {
   ].join("\n");
 }
 
-export function sentinelServicePlan(platform: NodeJS.Platform, out: string, home = homedir()): { files: Array<{ name: string; installed: string }>; activate: string[]; deactivate: string[] } | null {
+function sentinelPlanFor(launchdLabel: string, systemdName: string, platform: NodeJS.Platform, out: string, home: string): { files: Array<{ name: string; installed: string }>; activate: string[]; deactivate: string[] } | null {
   if (platform === "linux") {
     const dir = join(home, ".config", "systemd", "user");
-    const files = [`${SENTINEL_SYSTEMD_NAME}.service`, `${SENTINEL_SYSTEMD_NAME}.timer`].map((name) => ({ name, installed: join(dir, name) }));
+    const files = [`${systemdName}.service`, `${systemdName}.timer`].map((name) => ({ name, installed: join(dir, name) }));
     return {
       files,
-      activate: [`mkdir -p ${shellArg(dir)} && cp ${files.map((file) => shellArg(join(out, file.name))).join(" ")} ${shellArg(dir)}/`, "systemctl --user daemon-reload", `systemctl --user enable --now ${SENTINEL_SYSTEMD_NAME}.timer`],
-      deactivate: [`systemctl --user disable --now ${SENTINEL_SYSTEMD_NAME}.timer`, `rm ${files.map((file) => shellArg(file.installed)).join(" ")}`, "systemctl --user daemon-reload"],
+      activate: [`mkdir -p ${shellArg(dir)} && cp ${files.map((file) => shellArg(join(out, file.name))).join(" ")} ${shellArg(dir)}/`, "systemctl --user daemon-reload", `systemctl --user enable --now ${systemdName}.timer`],
+      deactivate: [`systemctl --user disable --now ${systemdName}.timer`, `rm ${files.map((file) => shellArg(file.installed)).join(" ")}`, "systemctl --user daemon-reload"],
     };
   }
   if (platform === "darwin") {
-    const name = `${SENTINEL_LAUNCHD_LABEL}.plist`;
+    const name = `${launchdLabel}.plist`;
     const installed = join(home, "Library", "LaunchAgents", name);
     return {
       files: [{ name, installed }],
       activate: [`mkdir -p ${shellArg(dirname(installed))} && cp ${shellArg(join(out, name))} ${shellArg(installed)}`, `launchctl bootstrap gui/$(id -u) ${shellArg(installed)}`],
-      deactivate: [`launchctl bootout gui/$(id -u)/${SENTINEL_LAUNCHD_LABEL}`, `rm ${shellArg(installed)}`],
+      deactivate: [`launchctl bootout gui/$(id -u)/${launchdLabel}`, `rm ${shellArg(installed)}`],
     };
   }
   return null;
+}
+
+export function sentinelServicePlan(platform: NodeJS.Platform, out: string, home = homedir()): { files: Array<{ name: string; installed: string }>; activate: string[]; deactivate: string[] } | null {
+  return sentinelPlanFor(SENTINEL_LAUNCHD_LABEL, SENTINEL_SYSTEMD_NAME, platform, out, home);
+}
+
+/** The Sentinel schedule an earlier version installed, when its unit file or plist is still there. Only the deactivate commands are meant to be printed. */
+export function earlierSentinelSchedule(platform: NodeJS.Platform, home: string, exists: (path: string) => boolean): { unit: string; files: string[]; deactivate: string[] } | null {
+  const plan = sentinelPlanFor(LEGACY_SENTINEL_LAUNCHD_LABEL, LEGACY_SENTINEL_SYSTEMD_NAME, platform, "", home);
+  if (!plan || !exists(plan.files[0]!.installed)) return null;
+  return { unit: plan.files[0]!.installed, files: plan.files.map((file) => file.installed), deactivate: plan.deactivate };
 }
 
 export function sentinelUnitCommand(text: string): { node: string; script: string } | null {
@@ -292,6 +305,7 @@ export function sentinelUnitCommand(text: string): { node: string; script: strin
 export type SentinelInstallCheck =
   | { status: "ok"; unit: string; node: string; script: string }
   | { status: "stale"; unit: string; node: string; script: string; missing: string[] }
+  | { status: "earlier_version"; unit: string; deactivate: string[] }
   | { status: "not_installed" | "unreadable"; unit: string }
   | { status: "unsupported" };
 
@@ -300,7 +314,10 @@ export function checkSentinelInstall(platform: NodeJS.Platform, home: string, fs
   const plan = sentinelServicePlan(platform, "", home);
   if (!plan) return { status: "unsupported" };
   const unit = plan.files[0]!.installed;
-  if (!fs.exists(unit)) return { status: "not_installed", unit };
+  if (!fs.exists(unit)) {
+    const earlier = earlierSentinelSchedule(platform, home, (path) => fs.exists(path));
+    return earlier ? { status: "earlier_version", unit: earlier.unit, deactivate: earlier.deactivate } : { status: "not_installed", unit };
+  }
   let command: { node: string; script: string } | null;
   try {
     command = sentinelUnitCommand(fs.read(unit));

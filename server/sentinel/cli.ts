@@ -84,6 +84,11 @@ export function describeInstallCheck(check: SentinelInstallCheck): string {
   switch (check.status) {
     case "ok": return `sentinel schedule ok: ${check.unit} runs ${check.script} with ${check.node}`;
     case "stale": return `stale install: ${check.unit} needs ${check.missing.join(" and ")}, which no longer exists; rerun seira service install --sentinel`;
+    case "earlier_version": return [
+      `a Sentinel schedule from an earlier version is installed at ${check.unit} and no longer runs. Remove it:`,
+      ...check.deactivate.map((line) => `  ${line}`),
+      "then install the current one: seira service install --sentinel",
+    ].join("\n");
     case "not_installed": return `no Sentinel schedule at ${check.unit}; install one with seira service install --sentinel`;
     case "unreadable": return `could not read the command in ${check.unit}; rerun seira service install --sentinel`;
     default: return "no Sentinel schedule to check on this platform; seira service install --sentinel prints the Task Scheduler command for Windows";

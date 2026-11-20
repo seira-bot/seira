@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { LEGACY_SENTINEL_LAUNCHD_LABEL, LEGACY_SENTINEL_SYSTEMD_NAME } from "../electron/legacy-names.mjs";
 import { runServiceCommand, serviceServeArgs } from "./service-cli.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
@@ -92,6 +93,26 @@ describe("seira service", () => {
   });
 
   // Simulates a Linux install with the host's paths; on Windows those are backslash paths no Linux unit has.
+  it("--sentinel lists the commands that remove a schedule an earlier version installed, before the install steps", () => {
+    const sentinelOut = join(dir, "sentinel-state");
+    const base = { action: "install" as const, dataDir: join(dir, "data"), port: 8799, sentinel: true, sentinelOut, script: "/usr/lib/node_modules/seira/cli.js", node: "/usr/bin/node" };
+    const oldPlist = `/Users/seira/Library/LaunchAgents/${LEGACY_SENTINEL_LAUNCHD_LABEL}.plist`;
+    expect(runServiceCommand({ ...base, platform: "darwin", home: "/Users/seira", exists: (path) => path === oldPlist }, io)).toBe(0);
+    let text = out.join("\n");
+    expect(text).toContain("first remove the schedule an earlier version installed:");
+    expect(text).toContain(`launchctl bootout gui/$(id -u)/${LEGACY_SENTINEL_LAUNCHD_LABEL}`);
+    expect(text).toContain(`rm ${oldPlist}`);
+    expect(text.indexOf("first remove")).toBeLessThan(text.indexOf("launchctl bootstrap"));
+    out.length = 0;
+    const oldUnit = `/home/seira/.config/systemd/user/${LEGACY_SENTINEL_SYSTEMD_NAME}.service`;
+    expect(runServiceCommand({ ...base, platform: "linux", home: "/home/seira", exists: (path) => path === oldUnit }, io)).toBe(0);
+    text = out.join("\n");
+    expect(text).toContain(`systemctl --user disable --now ${LEGACY_SENTINEL_SYSTEMD_NAME}.timer`);
+    out.length = 0;
+    expect(runServiceCommand({ ...base, platform: "linux", home: "/home/seira", exists: () => false }, io)).toBe(0);
+    expect(out.join("\n")).not.toContain("first remove");
+  });
+
   it.skipIf(process.platform === "win32")("--sentinel refuses an output folder the scan itself would refuse, before writing anything", () => {
     const dataDir = join(dir, "data");
     mkdirSync(dataDir);

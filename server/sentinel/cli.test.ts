@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { LEGACY_SENTINEL_LAUNCHD_LABEL } from "../../electron/legacy-names.mjs";
 import { removeTempDir } from "../testing/cleanup.ts";
 import { parseSentinelArgs, runSentinelCli } from "./cli.ts";
 import { runScan } from "./scan.ts";
@@ -139,5 +140,21 @@ describe("seira sentinel", () => {
     lines.length = 0;
     expect(runSentinelCli(["--check-install"], io, {}, { ...host([]), exists: () => false })).toBe(1);
     expect(lines.join("\n")).toContain("install one with seira service install --sentinel");
+  });
+
+  it("--check-install points to the schedule an earlier version installed, without running anything", () => {
+    const lines: string[] = [];
+    const io = { log: (line: string) => lines.push(line), error: (line: string) => lines.push(line) };
+    const old = `/Users/seira/Library/LaunchAgents/${LEGACY_SENTINEL_LAUNCHD_LABEL}.plist`;
+    const host = { platform: "darwin" as const, home: "/Users/seira", exists: (path: string) => path === old, read: () => "" };
+    expect(runSentinelCli(["--check-install"], io, {}, host)).toBe(1);
+    const text = lines.join("\n");
+    expect(text).toContain("a Sentinel schedule from an earlier version is installed");
+    expect(text).toContain(`launchctl bootout gui/$(id -u)/${LEGACY_SENTINEL_LAUNCHD_LABEL}`);
+    expect(text).toContain(`rm ${old}`);
+    expect(text).toContain("seira service install --sentinel");
+    lines.length = 0;
+    expect(runSentinelCli(["--check-install", "--json"], io, {}, host)).toBe(1);
+    expect(JSON.parse(lines[0]!)).toMatchObject({ ok: false, status: "earlier_version", unit: old, deactivate: [expect.stringContaining("bootout"), `rm ${old}`] });
   });
 });
