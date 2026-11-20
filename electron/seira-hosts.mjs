@@ -24,7 +24,7 @@ export const SEIRA_HOSTS = Object.freeze({
 export const seiraOrigin = (host) => `https://${host}`;
 
 /** Services that answer for every user today. Add a name here in the release that follows the service going live. */
-export const LIVE_SEIRA_SERVICES = Object.freeze(["site", "cloud", "apps", "updates"]);
+export const LIVE_SEIRA_SERVICES = Object.freeze(["site", "cloud", "apps", "updates", "serverTunnel"]);
 
 /** The environment variable that names a service of one's own, for self-hosting and development. */
 export const SEIRA_SERVICE_OVERRIDE_ENV = Object.freeze({
