@@ -37597,7 +37597,9 @@
       "releaseNotes.items.claudeAccounts.title": "3afaf9b898541303d59fb479a2a9e7e438ce5ba3c6a509e114c0307c83be8993",
       "releaseNotes.items.claudeAccounts.body": "c6a116ff3930de42ec23535b10198f4cc6852cf423532846da9b8c199fd6d391",
       "releaseNotes.items.whatsNew.title": "4ed04dddb704ad49a9cccc37dffd2b72378d3b85e8ba223ec3488d6a8bed2c32",
-      "releaseNotes.items.whatsNew.body": "6f2369bcb75a8f15e160065b4b06996f504dae59b62e3f9adceff4a26fe1fa4a"
+      "releaseNotes.items.whatsNew.body": "6f2369bcb75a8f15e160065b4b06996f504dae59b62e3f9adceff4a26fe1fa4a",
+      "releaseNotes.items.flatpakEngine.title": "5e0d5d4575dd7779744604a7262c7ec7154d387902f9c0de492ed990984b51c4",
+      "releaseNotes.items.flatpakEngine.body": "c21c13dff0a50d6434f8f61cb6365218550c85f0374d547fce4b8c3089478bc7"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",

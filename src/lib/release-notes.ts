@@ -1,4 +1,4 @@
-import { Archive, Bug, Layers, MessagesSquare, Mic, Plug, Sparkles, Timer, Users, type LucideIcon } from "lucide-react";
+import { Archive, Bug, Layers, MessagesSquare, Mic, Package, Plug, Sparkles, Timer, Users, type LucideIcon } from "lucide-react";
 import type { LocaleKey } from "@/locales";
 import { RELEASES_URL } from "@/lib/app-links";
 
@@ -15,6 +15,7 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
     { id: "backupName", icon: Archive },
     { id: "claudeAccounts", icon: Users },
     { id: "whatsNew", icon: Sparkles },
+    { id: "flatpakEngine", icon: Package },
   ] },
   { version: "0.1.180", items: [
     { id: "bugReport", icon: Bug },

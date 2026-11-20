@@ -571,6 +571,8 @@
   "releaseNotes.items.claudeAccounts.body": "Every Claude account you sign in keeps its own approvals, so a request never lands on the wrong account.",
   "releaseNotes.items.whatsNew.title": "See what changed after an update",
   "releaseNotes.items.whatsNew.body": "After an update, a short note tells you what is new. You see it once.",
+  "releaseNotes.items.flatpakEngine.title": "Flatpak finds your engine",
+  "releaseNotes.items.flatpakEngine.body": "Seira from Flatpak now starts an engine that the host installs through a version manager such as mise.",
   "whatsNew.eyebrow": "What's new",
   "whatsNew.slideOf": "Slide {n} of {count}",
   "whatsNew.next": "Next",

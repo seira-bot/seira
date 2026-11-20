@@ -547,6 +547,8 @@
   "releaseNotes.items.claudeAccounts.body": "Cada conta do Claude que você conecta mantém as próprias aprovações, e um pedido nunca cai na conta errada.",
   "releaseNotes.items.whatsNew.title": "Veja o que mudou após uma atualização",
   "releaseNotes.items.whatsNew.body": "Depois de atualizar, uma nota curta mostra as novidades. Você a vê uma vez.",
+  "releaseNotes.items.flatpakEngine.title": "O Flatpak encontra o seu motor",
+  "releaseNotes.items.flatpakEngine.body": "O Seira instalado pelo Flatpak agora inicia um motor que o computador instala por um gerenciador de versões, como o mise.",
   "whatsNew.eyebrow": "Novidades",
   "whatsNew.slideOf": "Slide {n} de {count}",
   "whatsNew.next": "Avançar",
