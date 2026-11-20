@@ -22,6 +22,30 @@ export const isLightPath = (file) =>
   && LIGHT_PATHS.some((pattern) => pattern.test(file));
 
 /**
+ * The Cloudflare Workers that CI checks. `check` and `test` are root package scripts. `paths` are the files outside
+ * `cloudflare/<name>/` that the Worker reads. `fast` tests run on the root dependencies in seconds, so the pre-push
+ * check runs them too.
+ */
+export const WORKERS = [
+  { name: "bug-reports", check: "bugs:check", test: "bugs:test", fast: true, paths: [] },
+  { name: "composio-broker", check: "broker:check", test: "broker:test", fast: true, paths: ["shared/composio-storage.ts", "shared/connector-account-link.ts"] },
+  { name: "control-plane", check: "control-plane:check", test: "control-plane:test", fast: false, paths: ["companion/src/e2e/vectors/v1.json"] },
+  { name: "push-relay", check: "push:check", test: "push:test", fast: true, paths: [] },
+  { name: "updates", check: "updates:check", test: "updates:test", fast: true, paths: [] },
+];
+
+/** Files that every Worker reads: the dependencies, and the CI files that run the Workers. A path that ends in "/" is a folder. */
+export const WORKER_INPUTS = ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "patches/", ".github/workflows/ci.yml", "scripts/ci-heavy.mjs"];
+
+const matches = (path, file) => (path.endsWith("/") ? file.startsWith(path) : file === path);
+
+/** The Workers that a change to `files` can break. */
+export function workersFor(files) {
+  if (files.some((file) => WORKER_INPUTS.some((path) => matches(path, file)))) return [...WORKERS];
+  return WORKERS.filter((worker) => files.some((file) => file.startsWith(`cloudflare/${worker.name}/`) || worker.paths.some((path) => matches(path, file))));
+}
+
+/**
  * The reason a change needs the heavy jobs, or null when it does not.
  * `named(text)` tells whether a source file contains `text`. It is true when unsure.
  */
@@ -56,17 +80,32 @@ function changedFiles(base, head) {
   return diff && diff.endsWith("\0") ? diff.slice(0, -1).split("\0") : [];
 }
 
+/** The events whose diff decides the scope: a pull request, and a merge queue entry that holds the same change. */
+export const DIFF_EVENTS = ["pull_request", "merge_group"];
+
+/** The Workers that a CI run checks: every Worker, except for a diff event whose changed files name fewer. */
+export function workersToRun(eventName, files) {
+  return DIFF_EVENTS.includes(eventName) && Array.isArray(files) ? workersFor(files) : [...WORKERS];
+}
+
+export const workersOutput = (workers) => JSON.stringify(workers.map(({ name, check, test }) => ({ name, check, test })));
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { EVENT_NAME, BASE_SHA, HEAD_SHA, GITHUB_OUTPUT } = process.env;
-  let reason = `the event is ${EVENT_NAME}, not a pull request`;
-  if (EVENT_NAME === "pull_request") {
+  let reason = `the event is ${EVENT_NAME}, not a pull request or a merge queue entry`;
+  let files = null;
+  if (DIFF_EVENTS.includes(EVENT_NAME)) {
     try {
       if (![BASE_SHA, HEAD_SHA].every((sha) => typeof sha === "string" && SHA.test(sha))) throw new Error("missing or invalid commit SHAs");
-      reason = heavyReason(changedFiles(BASE_SHA, HEAD_SHA), (text) => sourceNames(text));
+      files = changedFiles(BASE_SHA, HEAD_SHA);
+      reason = heavyReason(files, (text) => sourceNames(text));
     } catch (error) {
+      files = null;
       reason = `the change could not be read (${error.message})`;
     }
   }
+  const workers = workersToRun(EVENT_NAME, files);
   console.log(reason ? `CI scope: heavy jobs run, because ${reason}` : "CI scope: documentation and pictures only, so only checks run");
-  if (GITHUB_OUTPUT) appendFileSync(GITHUB_OUTPUT, `heavy=${reason ? "true" : "false"}\n`);
+  console.log(workers.length ? `CI scope: Workers that run: ${workers.map((worker) => worker.name).join(", ")}` : "CI scope: no Worker runs");
+  if (GITHUB_OUTPUT) appendFileSync(GITHUB_OUTPUT, `heavy=${reason ? "true" : "false"}\nworkers=${workersOutput(workers)}\n`);
 }
