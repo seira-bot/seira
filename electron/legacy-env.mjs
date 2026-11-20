@@ -1,6 +1,6 @@
 import { LEGACY_ENV_PREFIX, ENV_PREFIX } from "./legacy-names.mjs";
 
-export const LEGACY_ENV_REMOVAL = "two minor releases after v0.1.183";
+export const LEGACY_ENV_REMOVAL = "two minor releases after v0.1.182";
 
 /** Security: a filter that refuses `SEIRA_` names must refuse the old `OMB_` ones too, which may still sit in an operator's environment. */
 export function isHarnessEnvName(name) {

@@ -12,7 +12,7 @@ fallback:
   processes only ever see the `SEIRA_` name.
 - Each old name prints one warning per process that names the variable and never its value.
 - When both names are set to different values, `SEIRA_<NAME>` wins and a warning says so.
-- The fallback is removed two minor releases after v0.1.183. Rename the variables in your service files, `.env` files and
+- The fallback is removed two minor releases after v0.1.182. Rename the variables in your service files, `.env` files and
   scripts before then.
 
 To find what still uses the old prefix on a server, start it and search its log for `is deprecated`.
