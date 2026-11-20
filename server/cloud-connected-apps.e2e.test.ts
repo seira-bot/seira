@@ -85,8 +85,8 @@ globalThis.fetch = async (input, init) => {
   const body = JSON.stringify({ label: "Seira app (Cloud)", ttlSeconds: 300 });
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const granted = await api("POST", "/api/cloud/pairing", { remote: true, headers: {
-    "content-type": "application/json", "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce,
-    "x-seira-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
+    "content-type": "application/json", "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
+    "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
   }, body: JSON.parse(body) });
   ownerToken = (await api("POST", "/api/auth/pair", { remote: true, body: { code: granted.body.code } })).body.token as string;
 }

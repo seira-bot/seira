@@ -53,7 +53,7 @@ async function signed(path: string, method = "GET", body = "") {
   const signature = method === "POST" && path === "/api/cloud/pairing" ? cloudPairingSignature(secret, timestamp, nonce, body) : cloudRequestSignature(secret, timestamp, nonce, method, path, body);
   const response = await fetch(`${base}${path}`, { method, headers: {
     host: HOST, "x-forwarded-for": "203.0.113.9", "x-forwarded-proto": "https", ...(body ? { "content-type": "application/json" } : {}),
-    "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${signature}`,
+    "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${signature}`,
   }, ...(body ? { body } : {}) });
   return response.json() as Promise<any>;
 }

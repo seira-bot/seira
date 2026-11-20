@@ -133,8 +133,8 @@ async function ownerPairing(): Promise<string> {
   const body = JSON.stringify({ label: "Seira app (Cloud)", ttlSeconds: 300 });
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const granted = await api("POST", "/api/cloud/pairing", { remote: true, headers: {
-    "content-type": "application/json", "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce,
-    "x-seira-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
+    "content-type": "application/json", "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
+    "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
   }, body: JSON.parse(body) });
   return (await api("POST", "/api/auth/pair", { remote: true, body: { code: granted.body.code } })).body.token as string;
 }
@@ -175,8 +175,8 @@ it("pairs the app on a signed request and tells it its first run is the engine s
   const body = JSON.stringify({ label: "Seira app (Cloud)", ttlSeconds: 300 });
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const granted = await api("POST", "/api/cloud/pairing", { remote: true, headers: {
-    "content-type": "application/json", "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce,
-    "x-seira-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
+    "content-type": "application/json", "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
+    "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
   }, body: JSON.parse(body) });
   expect(granted.status, JSON.stringify(granted.body)).toBe(200);
   const paired = await api("POST", "/api/auth/pair", { remote: true, body: { code: granted.body.code } });
@@ -196,8 +196,8 @@ async function mintBrowserSignIn(owner = "ada@example.test"): Promise<string> {
   const body = JSON.stringify({ label: "Web browser (Cloud page)", ttlSeconds: 120, purpose: "browser", owner });
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const granted = await api("POST", "/api/cloud/pairing", { remote: true, headers: {
-    "content-type": "application/json", "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce,
-    "x-seira-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
+    "content-type": "application/json", "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
+    "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
   }, body: JSON.parse(body) });
   expect(granted.status, JSON.stringify(granted.body)).toBe(200);
   expect(granted.body).toMatchObject({ purpose: "browser", credential: expect.stringMatching(/^seira_pair_/) });
@@ -434,8 +434,8 @@ it("tells the Admin's signed health read a failed turn's code, never its words, 
   }
   const read = async (key = secret) => {
     const target = "/api/cloud/health?after=0", timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
-    return api("GET", target, { remote: true, headers: { "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce,
-      "x-seira-cloud-signature": `v1=${cloudRequestSignature(key, timestamp, nonce, "GET", target, "")}` } });
+    return api("GET", target, { remote: true, headers: { "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
+      "x-omb-cloud-signature": `v1=${cloudRequestSignature(key, timestamp, nonce, "GET", target, "")}` } });
   };
   await expect.poll(async () => (await read()).body.incidents?.some((incident: { botId: string }) => incident.botId === botId), { timeout: 15_000 }).toBe(true);
   const report = await read();

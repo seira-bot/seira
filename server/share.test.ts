@@ -107,7 +107,7 @@ describe("publishing", () => {
   it("posts the folder's files to the Admin with the account's sign-in, and shows the link it answers with", async () => {
     let sent: { url: string; init: RequestInit } | null = null;
     const publisher = createCommunityPublisher({
-      access: () => ({ kind: "desktop", url: "https://admin.example.com/api/cloud/pages/token", token: "seira_pd_token" }),
+      access: () => ({ kind: "desktop", url: "https://admin.example.com/api/cloud/pages/token", token: "omb_pd_token" }),
       fetch: (async (url: string, init: RequestInit) => {
         sent = { url, init };
         return Response.json({ link: "https://github.com/milind-soni/openmausbot-teams/tree/abc/teams/helper", prUrl: "https://github.com/milind-soni/openmausbot-teams/pull/7" });
@@ -117,7 +117,7 @@ describe("publishing", () => {
     expect(result).toEqual({ ok: true, link: "https://github.com/milind-soni/openmausbot-teams/tree/abc/teams/helper", prUrl: "https://github.com/milind-soni/openmausbot-teams/pull/7" });
     expect(sent!.url).toBe("https://admin.example.com/api/cloud/community/submissions");
     expect(sent!.init.redirect).toBe("error");
-    expect((sent!.init.headers as Record<string, string>).authorization).toBe("Bearer seira_pd_token");
+    expect((sent!.init.headers as Record<string, string>).authorization).toBe("Bearer omb_pd_token");
     expect(JSON.parse(String(sent!.init.body))).toEqual({ slug: "helper", files: { "bot.md": "x", "avatars/helper.png": { base64: "iVBORw0K" } } });
   });
 
@@ -128,9 +128,9 @@ describe("publishing", () => {
     const publisher = createCommunityPublisher({ access: () => home, now: () => 1_792_670_400_000,
       fetch: (async (_url: string, init: RequestInit) => { headers = init.headers as Record<string, string>; body = String(init.body); return answer; }) as typeof fetch });
     expect(await publisher.submit({ slug: "a", files: { "bot.md": "x" } })).toEqual({ ok: false, reason: "failed", message: "Someone else already shares a template by that name." });
-    const expected = pagesHomeSignature(home.secret, home.machineId, headers["x-seira-cloud-timestamp"]!, headers["x-seira-cloud-nonce"]!, body, "seira-community-v1");
-    expect(headers["x-seira-cloud-signature"]).toBe(`v1=${expected}`);
-    expect(expected).not.toBe(pagesHomeSignature(home.secret, home.machineId, headers["x-seira-cloud-timestamp"]!, headers["x-seira-cloud-nonce"]!, body));
+    const expected = pagesHomeSignature(home.secret, home.machineId, headers["x-omb-cloud-timestamp"]!, headers["x-omb-cloud-nonce"]!, body, "omb-community-v1");
+    expect(headers["x-omb-cloud-signature"]).toBe(`v1=${expected}`);
+    expect(expected).not.toBe(pagesHomeSignature(home.secret, home.machineId, headers["x-omb-cloud-timestamp"]!, headers["x-omb-cloud-nonce"]!, body));
     answer = Response.json({ prUrl: "https://github.com/milind-soni/openmausbot-teams/pull/2", link: "https://github.com/milind-soni/openmausbot-teams/tree/b/teams/a", updated: true });
     expect(await publisher.submit({ slug: "a", files: { "bot.md": "x" } })).toMatchObject({ ok: true, prUrl: "https://github.com/milind-soni/openmausbot-teams/pull/2" });
   });

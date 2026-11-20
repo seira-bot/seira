@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   rmSync,
   statSync,
@@ -16,6 +17,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { LICENSE_FILES } from "./cua-linux-release.mjs";
+import { LEGACY_LINUX_EXECUTABLE } from "../electron/legacy-names.mjs";
 import {
   CLOUDFLARED_ASSETS,
   CLOUDFLARED_VERSION,
@@ -98,6 +100,13 @@ function requireDirectoryMode(directory, mode) {
     fail(
       `expected mode ${mode.toString(8)} for ${directory}, found ${(details.mode & 0o777).toString(8)}`,
     );
+  }
+}
+
+function requireLegacyExecutableLink(appRoot, label) {
+  const link = path.join(appRoot, LEGACY_LINUX_EXECUTABLE);
+  if (!lstatSync(link, { throwIfNoEntry: false })?.isSymbolicLink() || readlinkSync(link) !== "seira") {
+    fail(`${label} has no link from ${LEGACY_LINUX_EXECUTABLE} to seira`);
   }
 }
 
@@ -403,6 +412,7 @@ const resources = path.join(unpacked, "resources");
 
 requireExecutable(appImage);
 requireExecutable(executable);
+requireLegacyExecutableLink(unpacked, "linux-unpacked");
 requireDirectoryMode(unpacked, 0o755);
 for (const relative of ["app.asar", "ui/index.html", "server/index.js", "server/desktop-entry.mjs"]) {
   requireFile(path.join(resources, relative));
@@ -440,6 +450,7 @@ try {
   execFileSync("dpkg-deb", ["--extract", deb, extracted]);
   const debAppRoot = path.join(extracted, "opt", "Seira");
   requireDirectoryMode(debAppRoot, 0o755);
+  requireLegacyExecutableLink(debAppRoot, "DEB");
   // The after-install hook makes this helper root-owned setuid. It keeps the Chromium sandbox on where
   // Ubuntu blocks unprivileged user namespaces.
   requireFile(path.join(debAppRoot, "chrome-sandbox"));

@@ -32,7 +32,7 @@ describe("api() and a Cloud home that sleeps", () => {
   });
 
   it("goes quiet on the home's asleep answer", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "asleep" }), { status: 503, headers: { "x-seira-cloud-power": "asleep" } })));
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "asleep" }), { status: 503, headers: { "x-omb-cloud-power": "asleep" } })));
     await expect(api("/api/sync")).rejects.toBeInstanceOf(ApiError);
     expect(cloudAsleep()).toBe(true);
   });

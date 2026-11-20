@@ -450,7 +450,7 @@ describe("limits", () => {
     const { owner, triggerId } = await withTrigger();
     await h.deliver(message(triggerId, owner.userId, { message_text: "y".repeat(100_000) }, "msg_big"));
     const [event] = (await pollBody(owner)).events;
-    expect(event.event.data).toEqual({ seira_truncated: true, original_bytes: 100_019, preview: expect.any(String) });
+    expect(event.event.data).toEqual({ omb_truncated: true, original_bytes: 100_019, preview: expect.any(String) });
     expect(new TextEncoder().encode(event.event.data.preview).byteLength).toBe(64 * 1024);
     expect(event.event.data.preview.startsWith('{"message_text":"yyy')).toBe(true);
   });
@@ -468,7 +468,7 @@ describe("limits", () => {
     const sent = await h.call(owner, "/v1/events/test", { method: "POST", body: JSON.stringify({ triggerId, data: { subject: "TEST order" } }) });
     expect(sent.status).toBe(201);
     const [event] = (await pollBody(owner)).events;
-    expect(event).toMatchObject({ kind: "test", triggerId, event: { type: "seira.test", data: { subject: "TEST order" }, metadata: { trigger_slug: GMAIL_TYPE.slug } } });
+    expect(event).toMatchObject({ kind: "test", triggerId, event: { type: "omb.test", data: { subject: "TEST order" }, metadata: { trigger_slug: GMAIL_TYPE.slug } } });
     h.d1.db.prepare("UPDATE app_event_days SET queued = 500 WHERE installation_id = ?").run(owner.id);
     const refused = await h.call(owner, "/v1/events/test", { method: "POST", body: JSON.stringify({ triggerId, data: {} }) });
     expect(refused.status).toBe(429);
@@ -829,9 +829,9 @@ describe("waking a sleeping Cloud for its events", () => {
     expect(wake.method).toBe("POST");
     expect(wake.body).toBe(`{"machineId":"${MACHINE}"}`);
     expect(wake.headers.get("content-type")).toBe("application/json");
-    expect(wake.headers.get("x-seira-wake-timestamp")).toBe(timestamp);
-    const expected = createHmac("sha256", CLOUD_GRANT_SECRET).update(`seira-cloud-wake:v1\n${timestamp}\n${MACHINE}`).digest("base64url");
-    expect(wake.headers.get("x-seira-wake-signature")).toBe(`v1=${expected}`);
+    expect(wake.headers.get("x-omb-wake-timestamp")).toBe(timestamp);
+    const expected = createHmac("sha256", CLOUD_GRANT_SECRET).update(`omb-cloud-wake:v1\n${timestamp}\n${MACHINE}`).digest("base64url");
+    expect(wake.headers.get("x-omb-wake-signature")).toBe(`v1=${expected}`);
     expect(h.d1.rows("SELECT wake_requested_at FROM installations WHERE id = ?", owner.id)).toEqual([{ wake_requested_at: T0 }]);
   });
 

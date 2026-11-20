@@ -44,8 +44,8 @@ async function admin(method: "GET" | "POST", path: string, body = "") {
     body: method === "POST" ? body : undefined,
     headers: {
       ...EDGE, ...(method === "POST" ? { "content-type": "application/json" } : {}),
-      "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce,
-      "x-seira-cloud-signature": `v1=${cloudRequestSignature(secret, timestamp, nonce, method, path, body)}`,
+      "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
+      "x-omb-cloud-signature": `v1=${cloudRequestSignature(secret, timestamp, nonce, method, path, body)}`,
     },
   });
   return { status: response.status, body: await response.json().catch(() => null) as any };
@@ -118,7 +118,7 @@ beforeAll(async () => {
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const granted = await (await realFetch(`${base}/api/cloud/pairing`, { method: "POST", body, headers: {
     ...EDGE, "content-type": "application/json",
-    "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
+    "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
   } })).json() as { code: string };
   token = (await api("POST", "/api/auth/pair", { code: granted.code })).body.token;
 }, hostTimeout(60_000));

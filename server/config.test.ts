@@ -2489,4 +2489,13 @@ describe("a key the desktop app hands the server as an environment variable", ()
     const stored = parseStoredConfig({ newBotDefaults: { routines: [{ name: "Old", prompt: "Do it", schedule: { type: "interval", everyMinutes: 60, anchorAt: 1 }, runOn: "maus" }] } });
     expect(stored.newBotDefaults?.routines[0]?.runOn).toBe("seira");
   });
+
+  it("reads an engine key that an earlier version saved under its old name, and keeps a key saved under the current name", () => {
+    const stored = parseStoredConfig({ instances: {
+      endpoint: { driver: "codex", environment: { CODEX_HOME: "/data/providers/endpoint", OPENMAUSBOT_CODEX_API_KEY: "sk-old" } },
+      company: { driver: "codex", environment: { OPENMAUSBOT_COMPANY_API_KEY: "old", SEIRA_COMPANY_API_KEY: "new" } },
+    } });
+    expect(stored.instances?.endpoint?.environment).toEqual({ CODEX_HOME: "/data/providers/endpoint", SEIRA_CODEX_API_KEY: "sk-old" });
+    expect(stored.instances?.company?.environment).toEqual({ SEIRA_COMPANY_API_KEY: "new" });
+  });
 });

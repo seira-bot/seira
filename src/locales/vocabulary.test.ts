@@ -59,6 +59,8 @@ const ALLOWED: ReadonlyArray<{ file: string; snippet?: string; why: string }> = 
   { file: "packages/phone-protocol/src/credential-request.ts", snippet: "when Boat is selected", why: "the card that asks for a person's own Boat key" },
   { file: "server/boat-create-idempotency.ts", snippet: "unnamed Boat", why: "own-key repair: boat.dev's own name for a machine" },
   { file: "electron/legacy-names.mjs", why: "reads files that earlier versions wrote" },
+  { file: "server/phone-secret.ts", snippet: "openmausbot-phone-credential-v1", why: "the phone apps seal secrets with this label" },
+  { file: "packages/phone-protocol/src/phone-secret-envelope.ts", snippet: "OpenMausBot phone credential v1", why: "the phone apps seal secrets with this label" },
   { file: "server/peer-provenance.ts", snippet: "openmausbot", why: "defuses imitations of an earlier version's notes" },
   { file: "server/checkpoints.ts", snippet: ".openmausbot-secrets/", why: "keeps the secrets folder of an earlier version out of snapshots" },
   { file: "server/browser-engine-release.ts", snippet: "milind-soni/OpenMausBot/releases", why: "the release assets still live in the upstream repository" },

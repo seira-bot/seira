@@ -1,7 +1,7 @@
 // ~/.seira/config.json, with env vars overriding its credentials.
 import { readFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
 import { dataHome } from "./data-dir.ts";
-import { migrateLegacyData } from "../electron/legacy-migrate.mjs";
+import { migrateLegacyData } from "../electron/legacy-migrate.mjs"; import { currentEngineEnvironment } from "../electron/legacy-names.mjs";
 import { signInFromEnv } from "./sign-in-env.ts";
 export { signInFromEnv };
 import { join } from "node:path";
@@ -265,7 +265,7 @@ const instanceConfigSchema = z.object({
     z.object({ kind: z.literal("custom"), dataUrl: z.string() }).strict()
       .refine((icon) => providerIconError(icon) === null, { message: "Invalid provider icon" }),
   ]).optional(),
-  environment: z.record(z.string(), z.string()).optional(),
+  environment: z.preprocess(currentEngineEnvironment, z.record(z.string(), z.string())).optional(),
   enabled: z.boolean().optional(), hidden: z.boolean().optional(),
   access: z.enum(["subscription", "custom", "api"]).optional(),
   config: z.json().optional(),

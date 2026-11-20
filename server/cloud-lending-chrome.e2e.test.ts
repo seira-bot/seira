@@ -62,7 +62,7 @@ async function adminPairing(cloud: Cloud): Promise<string> {
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const response = await fetch(`${cloud.base}/api/cloud/pairing`, { method: "POST", signal: AbortSignal.timeout(20_000), headers: {
     ...edge, "content-type": "application/json",
-    "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${cloudPairingSignature(cloud.secret, timestamp, nonce, body)}`,
+    "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudPairingSignature(cloud.secret, timestamp, nonce, body)}`,
   }, body });
   const granted = await response.json() as { code: string };
   const paired = await api(cloud, "POST", "/api/auth/pair", { code: granted.code });
