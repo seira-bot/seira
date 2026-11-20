@@ -751,6 +751,13 @@ OMB_DATA_DIR="$HOME/.openmausbot" OMB_PORT=8799 \
   node --experimental-strip-types server/index.ts
 ```
 
+The server keeps the data folder private to the account that runs it: at start it
+removes every group and other permission bit (mode 0700) from the folder and its
+subfolders, and stops with a message if it cannot, for example when another account
+owns the folder or the mount refuses `chmod`. When several accounts share one install
+on purpose, set `OMB_DATA_DIR_GROUP_ACCESS=1`: the owner's group may then read, write
+and enter the folder (mode 2770), and other users still cannot.
+
 For something durable, let the CLI write the service for you:
 
 ```sh
