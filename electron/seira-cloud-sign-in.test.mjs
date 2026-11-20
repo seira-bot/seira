@@ -102,7 +102,7 @@ describe("sign-in through Seira Cloud", () => {
       calls.push(JSON.parse(init.body));
       return json({ cloudContractVersion: 1, attempt: ATTEMPT, expiresIn: 600, resendAfter: 30 });
     });
-    const signIn = createSeiraCloudSignIn({ origin: CLOUD, identity: { deviceName: `${"h".repeat(150)}\n`, platform: "freebsd", appVersion: "unknown" }, fetchImpl });
+    const signIn = createSeiraCloudSignIn({ origin: CLOUD, identity: { deviceName: `${"h".repeat(150)}\n`, platform: "freebsd", appVersion: "not a version" }, fetchImpl });
     await signIn.start("ada@example.com");
     expect(calls[0].deviceName).toHaveLength(100);
     expect(calls[0]).toMatchObject({ platform: "linux", appVersion: "0.0.0" });
