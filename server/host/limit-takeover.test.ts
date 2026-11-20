@@ -470,6 +470,16 @@ describe("canCarry", () => {
     expect(takeover({ engines: () => [CLAUDE, apiClaude], configs: () => keyed }).instance.canCarry(on("claude", "claude-opus-5-5"), on("claude-api", "claude-opus-5-5"))).toBe(true);
   });
 
+  it("lets a key that bills each use hand the conversation back to the plan, but never one plan to another", () => {
+    const apiClaude = engine("claude-api", "claudeAgent", ["claude-opus-5-5"], { access: "api" });
+    const otherClaude = engine("claude-two", "claudeAgent", ["claude-opus-5-5"]);
+    const keyed = { "claude-api": { access: "api" } } as unknown as InstanceConfigMap;
+    const { instance } = takeover({ engines: () => [CLAUDE, apiClaude, otherClaude], configs: () => keyed, chosen: () => [on("claude", "claude-opus-5-5")] });
+    expect(instance.canCarry(on("claude-api", "claude-opus-5-5"), on("claude", "claude-opus-5-5"))).toBe(true);
+    expect(instance.canCarry(on("claude-two", "claude-opus-5-5"), on("claude", "claude-opus-5-5"))).toBe(false);
+    expect(instance.backups("kai", on("claude-api", "claude-opus-5-5")), "a limit backup keeps the old rule").toEqual([]);
+  });
+
   it("refuses a blocked AI, an unknown AI and an unknown model", () => {
     const { instance } = takeover({ blockedUntil: (id) => (id === "codex" ? NOW + HOUR : null) });
     expect(instance.canCarry(on("claude", "claude-opus-5-5"), on("codex", "gpt-6"))).toBe(false);

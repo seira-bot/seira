@@ -12,7 +12,7 @@ import type { InstanceConfigMap, ProviderAdapter, RuntimeEvent } from "../contra
 import { readyToRun, type DefaultSelectionContext, type SelectableInstance } from "../default-model-selection.ts";
 import { engineFailureKind } from "../drivers/engine-errors.ts";
 import { classifyError } from "../drivers/retry.ts";
-import { failoverLine, limitBackupAllowed, signedOutLine, type LimitFailover } from "../limit-failover.ts";
+import { billsEachUse, failoverLine, limitBackupAllowed, signedOutLine, type LimitFailover } from "../limit-failover.ts";
 import { LimitNotices, limitNoticeText, signedOutNoticeText } from "../limit-notices.ts";
 import { UNNAMED_LIMIT_MS } from "../limit-resets.ts";
 import type { ModelSelection } from "../../shared/wire.ts";
@@ -160,13 +160,15 @@ export function createLimitTakeover(deps: LimitTakeoverDeps) {
     notices.endedEverywhere(signedOutKey(instanceId));
   };
 
-  const usable = (engines: TakeoverEngine[], current: TakeoverEngine, selection: ModelSelection, scope: TakeoverScope, approval?: ApprovalMode): boolean => {
+  const usable = (engines: TakeoverEngine[], current: TakeoverEngine, selection: ModelSelection, scope: TakeoverScope | "pool", approval?: ApprovalMode): boolean => {
     const engine = engines.find((candidate) => candidate.instanceId === selection.instanceId);
     if (!engine || !readyToRun(engine, deps.context) || deps.blockedUntil(engine.instanceId, selection.model) !== null || modelHeld(selection) !== null) return false;
     if (engine.instanceId !== current.instanceId) {
       if (signedOutHeld(engine.instanceId)) return false;
       // Another sign-in to the same plan never carries a limit (that rotates accounts); it may stand in for one signed out.
-      if (scope !== "signed-out" && !limitBackupAllowed(current, engine, deps.configs()[engine.instanceId])) return false;
+      // A pay-per-use key in the AI pool may hand the conversation back to the plan.
+      const keyHandsBack = scope === "pool" && billsEachUse(deps.configs()[current.instanceId]);
+      if (scope !== "signed-out" && !keyHandsBack && !limitBackupAllowed(current, engine, deps.configs()[engine.instanceId])) return false;
       // The same rule as switching by hand: a level the other AI has no such mode for needs the person first.
       if (approval && modelSwitchNeedsAsk(approval, current.driverKind, engine.driverKind)) return false;
     }
@@ -235,7 +237,7 @@ export function createLimitTakeover(deps: LimitTakeoverDeps) {
     /** Whether a conversation on `from` may move to `to` for its next turn: the same checks as for a backup. */
     canCarry(from: ModelSelection, to: ModelSelection, approval?: ApprovalMode): boolean {
       const engines = deps.engines(), current = engines.find((engine) => engine.instanceId === from.instanceId);
-      return Boolean(current) && usable(engines, current!, to, "engine", approval);
+      return Boolean(current) && usable(engines, current!, to, "pool", approval);
     },
     /** This model alone, held by its own limit; null when it is not. */
     modelHeld,
