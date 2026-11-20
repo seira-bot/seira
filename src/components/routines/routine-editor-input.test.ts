@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Routine, RoutineContextAttachment } from "@/lib/routines";
-import { routineEditorInput, type RoutineEditorFields } from "./routine-editor-input";
+import { choiceOf, routineEditorInput, workflowBlock, workflowIdOf, workflowClears, type RoutineEditorFields } from "./routine-editor-input";
 
 const attachment = { path: "/tmp/notes.md" } as unknown as RoutineContextAttachment;
 
@@ -63,5 +63,48 @@ describe("routineEditorInput", () => {
   it("leaves enabled alone for a routine that is on", () => {
     const existing = { enabled: true, schedule: { type: "daily", time: "09:00" } } as unknown as Routine;
     expect(routineEditorInput(fields({ existingRoutine: existing })).enabled).toBeUndefined();
+  });
+
+  it("sends workflowId and clears delivery, model choice, checks, access and the same chat when a workflow is chosen", () => {
+    expect(routineEditorInput(fields({ workflowId: "wf1" }))).toMatchObject({
+      workflowId: "wf1", deliver: null, modelSelection: null, checks: null, access: null, sameConversation: false,
+    });
+  });
+
+  it("sends workflowId null to stop using a workflow, and nothing when there never was one", () => {
+    const using = { enabled: true, workflowId: "wf1", schedule: { type: "daily", time: "09:00" } } as unknown as Routine;
+    expect(routineEditorInput(fields({ workflowId: null, existingRoutine: using })).workflowId).toBeNull();
+    const never = routineEditorInput(fields({ workflowId: null }));
+    expect("workflowId" in never).toBe(false);
+    expect("workflowId" in routineEditorInput(fields())).toBe(false);
+  });
+});
+
+describe("workflowBlock", () => {
+  it("names what blocks a workflow: a team goal, a cloud desktop, a limit reset", () => {
+    expect(workflowBlock({ target: "room-goal", runOn: "cloud" as never, limitReset: true })).toBe("room");
+    expect(workflowBlock({ target: "bot", runOn: "cloud" as never, limitReset: true })).toBe("cloud");
+    expect(workflowBlock({ target: "bot", runOn: "seira" as never, limitReset: true })).toBe("limit");
+    expect(workflowBlock({ target: "bot", runOn: "seira" as never, limitReset: false })).toBeNull();
+  });
+});
+
+describe("workflowClears", () => {
+  it("finds settings a workflow would turn off", () => {
+    expect(workflowClears(undefined)).toBe(false);
+    expect(workflowClears({} as Routine)).toBe(false);
+    expect(workflowClears({ deliver: { kind: "email" } } as unknown as Routine)).toBe(true);
+    expect(workflowClears({ checks: [{}] } as unknown as Routine)).toBe(true);
+    expect(workflowClears({ access: "read-and-draft" } as unknown as Routine)).toBe(true);
+    expect(workflowClears({ workflowId: "wf1", access: "read-and-draft" } as unknown as Routine)).toBe(false);
+  });
+});
+
+describe("the workflow choice", () => {
+  it("tells Instructions, Workflow with none picked, and a picked workflow apart, and turns back into the saved id", () => {
+    expect(choiceOf(null)).toEqual({ mode: "instructions" });
+    expect(choiceOf("")).toEqual({ mode: "workflow", id: null });
+    expect(choiceOf("wf1")).toEqual({ mode: "workflow", id: "wf1" });
+    for (const id of [null, "", "wf1"]) expect(workflowIdOf(choiceOf(id))).toBe(id);
   });
 });

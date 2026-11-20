@@ -2,6 +2,7 @@
 // store's schedules (routines), webhooks and runs, so the Automations page, its panel and the chat card never disagree.
 import { cronPresetText, cronText } from "@/lib/cron-text";
 import { clockOptions } from "@/lib/clock-time";
+import { listOf } from "@/lib/cloud-send";
 import { activeLocale, t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { ROUTINE_HANDOFF_WAIT, isCountedSkip, isRoutineProblemRun, type Routine, type RoutineRun, type RoutineSchedule } from "@/lib/routines";
@@ -37,6 +38,7 @@ export interface Automation {
   readsAndDrafts?: boolean;
   /** Its newest runs in a row whose cloud desktop did not start, while its scheduled runs are spaced out for it. */
   noStartStreak?: number;
+  workflowId?: string;
 }
 
 const runTime = (run: RoutineRun) => run.startedAt ?? run.scheduledFor ?? run.createdAt;
@@ -52,6 +54,7 @@ export function automationsFrom(sources: { routines: readonly Routine[]; webhook
       schedule: routine.schedule, nextRunAt: routine.enabled ? routine.nextRunAt : null, runs: runsOf(routine.id),
       ...(routine.checkedAt !== undefined ? { checkedAt: routine.checkedAt } : {}), ...(routine.checkTrouble ? { checkTrouble: routine.checkTrouble, ...(routine.checkTroubleCode ? { checkTroubleCode: routine.checkTroubleCode } : {}) } : {}),
       ...(routine.access === "read-and-draft" ? { readsAndDrafts: true } : {}), ...(routine.noStartStreak ? { noStartStreak: routine.noStartStreak } : {}),
+      ...(routine.workflowId ? { workflowId: routine.workflowId } : {}),
     })),
     ...sources.webhooks.map((webhook): Automation => ({
       kind: "webhook", id: webhook.id, name: webhook.name, botId: webhook.botId, instructions: webhook.prompt, enabled: webhook.enabled,
@@ -218,9 +221,13 @@ export function sourcePhrase(name: string): string {
 }
 
 /** "Every weekday at 9 AM, Scout sends you a summary of your inbox"; "When your sales form sends something, Scout drafts…". */
-export function automationSentence(automation: Pick<Automation, "kind" | "name" | "instructions" | "schedule" | "appTrigger">, botName: string): string {
+export function automationSentence(automation: Pick<Automation, "kind" | "name" | "instructions" | "schedule" | "appTrigger" | "workflowId">, botName: string, workflow?: { name: string; bots: string[] }): string {
   const does = doesPhrase(automation.instructions);
   if (automation.kind === "app" && automation.appTrigger) return t("automations.sentence.appEvent", { when: appWhen(automation.appTrigger), bot: botName, does });
+  if (automation.kind === "schedule" && automation.schedule && automation.workflowId) {
+    const when = plainWhen(automation.schedule);
+    return workflow?.bots.length ? t("workflow.sentence.named", { when, name: workflow.name, bots: listOf(workflow.bots) }) : t("workflow.sentence.unknown", { when, bot: botName });
+  }
   if (automation.kind === "schedule" && automation.schedule) {
     return t("automations.sentence.schedule", { when: plainWhen(automation.schedule), bot: botName, does });
   }

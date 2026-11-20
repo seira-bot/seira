@@ -1,15 +1,32 @@
 import { chmodSync, mkdirSync, mkdtempSync, statSync } from "node:fs";
 import { homedir, tmpdir, userInfo } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 let home: string | undefined;
 
+/** The start of the name of every throwaway home the test suite makes. */
+export const TEST_HOME_PREFIX = "seira-test-home-";
+
+/**
+ * A test runner other than vitest: bun test, jest or node --test. These skip server/testing/setup.ts, which gives each
+ * test file a throwaway home, so a server test under them would read and delete the person's own data.
+ */
+export function otherTestRunner(env: NodeJS.ProcessEnv = process.env, versions: NodeJS.ProcessVersions = process.versions, argv: string[] = process.argv): boolean {
+  if (env.VITEST !== undefined) return false;
+  if (env.JEST_WORKER_ID !== undefined || env.NODE_TEST_CONTEXT !== undefined) return true;
+  return versions.bun !== undefined && (env.NODE_ENV === "test" || /\.(test|spec)\.[cm]?[jt]sx?$/.test(argv[1] ?? ""));
+}
+
 /** The home the data folder lives under. Under vitest, with HOME still the real one, a temp folder instead, so a test
- * never reads, migrates or deletes the person's own data. */
+ * never reads, migrates or deletes the person's own data. Under another test runner, a home the suite did not make stops
+ * the test before it touches any data. */
 export function dataHome(): string {
   if (home !== undefined) return home;
   const real = homedir();
-  home = process.env.VITEST !== undefined && real === userInfo().homedir ? mkdtempSync(join(tmpdir(), "seira-test-home-")) : real;
+  if (otherTestRunner() && !basename(real).startsWith(TEST_HOME_PREFIX)) {
+    throw new Error(`Run the server tests with vitest (pnpm test). This test runner keeps HOME at ${real}, and the tests would change the data folder there.`);
+  }
+  home = process.env.VITEST !== undefined && real === userInfo().homedir ? mkdtempSync(join(tmpdir(), TEST_HOME_PREFIX)) : real;
   return home;
 }
 

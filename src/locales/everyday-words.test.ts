@@ -27,6 +27,7 @@ const EVERYDAY_PREFIXES: Record<string, readonly string[]> = {
   ],
   "routines and automations": ["routines.", "automations."],
   "the team map": ["canvas.", "mapComputer.", "canvasComputers."],
+  "the workflow canvas and its runs": ["workflow."],
   "Apps": ["apps.", "connectors."],
   "the Settings pages Simple mode shows": ["settings.section.", "settings.group.", "settings.mcpCalls.", "settings.logins."],
   "Settings's pages, its search and Phone & devices": [
