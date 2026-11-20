@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { LEGACY_TEAM_MANIFEST_FILE } from "../electron/legacy-names.mjs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
@@ -87,6 +88,8 @@ describe("team library", () => {
       "https://raw.githubusercontent.com/acme/team/master/botmrr.md",
       "https://raw.githubusercontent.com/acme/team/master/team.md",
       "https://raw.githubusercontent.com/acme/team/master/team.seirateam.json",
+      `https://raw.githubusercontent.com/acme/team/main/${LEGACY_TEAM_MANIFEST_FILE}`,
+      `https://raw.githubusercontent.com/acme/team/master/${LEGACY_TEAM_MANIFEST_FILE}`,
     ]);
     expect(githubManifestUrls("https://github.com/acme/team/blob/main/presets/seo.seirateam.json")).toEqual([
       "https://raw.githubusercontent.com/acme/team/main/presets/seo.seirateam.json",
