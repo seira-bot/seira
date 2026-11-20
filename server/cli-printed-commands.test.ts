@@ -65,6 +65,15 @@ describe("printed commands", () => {
     expect(checked).toEqual(expect.arrayContaining(["serve --lan", "serve --public-url", "pair --phone", "pair --ttl"]));
   });
 
+  it("names the Seira tunnel address in the help once that service is live, unless SEIRA_CONTROL_PLANE_URL is set", () => {
+    const live = ["site", "cloud", "apps", "updates", "serverTunnel"];
+    const own = "Needs SEIRA_CONTROL_PLANE_URL (an";
+    expect(usage("seira", {}, live)).toContain("https://c-….seira.run address of your Seira");
+    expect(usage("seira", {}, live)).not.toContain(own);
+    expect(usage("seira", {}, ["site"])).toContain(own);
+    expect(usage("seira", { SEIRA_CONTROL_PLANE_URL: "https://cp.example.test" }, live)).toContain(own);
+  });
+
   it("writes commands the way the CLI was started", () => {
     expect(usage("npx @seira-bot/seira")).toContain("  npx @seira-bot/seira pair  [--label NAME]");
     expect(noRouteLines(8799, "docker compose exec seira seira").join("\n")).toContain("docker compose exec seira seira serve --lan");
