@@ -93,7 +93,7 @@ describe("Your MCP servers inside the Apps pop-up", () => {
     expect(html).toContain("Add server");
   });
 
-  it.each(HOSTED_MCP_APPS)("offers $label setup with no API key form or forced installation", (app) => {
+  it.each(HOSTED_MCP_APPS.filter((app) => !("key" in app)))("offers $label setup with no API key form or forced installation", (app) => {
     fixture.servers = [];
     const html = render(true, true);
     expect(html).toContain(`data-app-tile="${app.id}"`);
@@ -104,9 +104,11 @@ describe("Your MCP servers inside the Apps pop-up", () => {
     expect(html).not.toContain("Paste config");
   });
 
-  it("explains Whop's admin access on its card", () => {
+  it("asks for a key on the Konektor.id card and explains what the key allows", () => {
     fixture.servers = [];
-    expect(render(true, true)).toContain("admin access across businesses");
+    const html = render(true, true);
+    expect(html).toContain('aria-label="Konektor.id API key"');
+    expect(html).toContain("including sending WhatsApp messages");
   });
 
   it.each(HOSTED_MCP_APPS)("recognizes an existing $label URL under any name and exposes access and disconnect", (app) => {
@@ -138,13 +140,13 @@ describe("Your MCP servers inside the Apps pop-up", () => {
   });
 
   it.each([true, false])("shows the paste step openly only when the browser cannot come back (pasteBack %s)", (pasteBack) => {
-    fixture.servers = [{ name: "whop", type: "http", url: "https://mcp.whop.com/mcp", headerKeys: [], enabled: true, auth: "needs-sign-in" }];
+    fixture.servers = [{ name: "biver", type: "http", url: "https://mcp.biver.id/mcp", headerKeys: [], enabled: true, auth: "needs-sign-in" }];
     fixture.seeded = {
-      [SIGNING_IN]: "whop",
-      [SIGN_IN_FLOW]: { phase: "waiting", flowId: "00000000-0000-4000-8000-000000000000", authorizationUrl: "https://whop.example/authorize", ...(pasteBack ? { pasteBack } : {}) },
+      [SIGNING_IN]: "biver",
+      [SIGN_IN_FLOW]: { phase: "waiting", flowId: "00000000-0000-4000-8000-000000000000", authorizationUrl: "https://biver.example/authorize", ...(pasteBack ? { pasteBack } : {}) },
     };
     for (const html of [render(true, true), render(true)]) {
-      expect(html).toContain('id="mcp-callback-whop"');
+      expect(html).toContain('id="mcp-callback-biver"');
       if (pasteBack) {
         expect(html).toContain("your browser shows a page that can&#x27;t load. Copy that page&#x27;s full address and paste it here.");
         expect(html).not.toContain("Signing in from another computer?");

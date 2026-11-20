@@ -53,14 +53,14 @@ describe("plugins modal translation", () => {
     });
   });
 
-  it("translates the Agentcard card's generic strings and leaves its untranslated copy in English", () => {
+  it("translates the Coret.id card's generic strings and leaves its untranslated copy in English", () => {
     setLocale("ja");
     const html = renderToStaticMarkup(createElement(() => McpServersPanel({ hostedCards: { shown: () => true, onConnections: () => {} } })));
-    expect(html).toContain(`aria-label="${locales.ja!["hostedMcp.connect"]!.replace("{service}", "Agentcard")}"`);
+    expect(html).toContain(`aria-label="${locales.ja!["hostedMcp.connect"]!.replace("{service}", "Coret.id")}"`);
     expect(html).toContain(locales.ja!["hostedMcp.access"]);
-    expect(html).not.toContain("Connect Agentcard");
-    expect(locales.ja).not.toHaveProperty("agentcard.description");
-    expect(html).toContain("Shop and pay from your own Agentcard account.");
+    expect(html).not.toContain("Connect Coret.id");
+    expect(locales.ja).not.toHaveProperty("coret.description");
+    expect(html).toContain("Create, edit and share mind maps, sketches and pads in Coret.id.");
   });
 
   it("translates the in-chat connector card", () => {
