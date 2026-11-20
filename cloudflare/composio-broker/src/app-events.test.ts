@@ -829,9 +829,9 @@ describe("waking a sleeping Cloud for its events", () => {
     expect(wake.method).toBe("POST");
     expect(wake.body).toBe(`{"machineId":"${MACHINE}"}`);
     expect(wake.headers.get("content-type")).toBe("application/json");
-    expect(wake.headers.get("x-seira-wake-timestamp")).toBe(timestamp);
-    const expected = createHmac("sha256", CLOUD_GRANT_SECRET).update(`seira-cloud-wake:v1\n${timestamp}\n${MACHINE}`).digest("base64url");
-    expect(wake.headers.get("x-seira-wake-signature")).toBe(`v1=${expected}`);
+    expect(wake.headers.get("x-omb-wake-timestamp")).toBe(timestamp);
+    const expected = createHmac("sha256", CLOUD_GRANT_SECRET).update(`omb-cloud-wake:v1\n${timestamp}\n${MACHINE}`).digest("base64url");
+    expect(wake.headers.get("x-omb-wake-signature")).toBe(`v1=${expected}`);
     expect(h.d1.rows("SELECT wake_requested_at FROM installations WHERE id = ?", owner.id)).toEqual([{ wake_requested_at: T0 }]);
   });
 

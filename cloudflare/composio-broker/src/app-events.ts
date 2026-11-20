@@ -204,7 +204,7 @@ export async function enqueue(
 }
 
 export function cloudWakeMessage(timestamp: number, machineId: string) {
-  return `seira-cloud-wake:v1\n${timestamp}\n${machineId}`;
+  return `omb-cloud-wake:v1\n${timestamp}\n${machineId}`;
 }
 
 /** `v1=<base64url HMAC-SHA256(CLOUD_GRANT_SECRET, cloudWakeMessage(timestamp, machine id))>`, which the Cloud Admin
@@ -238,7 +238,7 @@ async function wakeCloud(env: Env, owner: Owner, now: number) {
     const timestamp = Math.floor(now / 1000);
     const response = await fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-seira-wake-timestamp": String(timestamp), "x-seira-wake-signature": await cloudWakeSignature(secret, timestamp, machineId) },
+      headers: { "content-type": "application/json", "x-omb-wake-timestamp": String(timestamp), "x-omb-wake-signature": await cloudWakeSignature(secret, timestamp, machineId) },
       body: JSON.stringify({ machineId }),
       signal: AbortSignal.timeout(WAKE_TIMEOUT_MS),
     });
@@ -603,7 +603,7 @@ export async function appEventStats(request: Request, url: URL, env: Env) {
 }
 
 export function cloudGrantMessage(machineId: string) {
-  return `seira-connected-apps-cloud:v1\n${machineId}`;
+  return `omb-connected-apps-cloud:v1\n${machineId}`;
 }
 
 /** `v1.<machine id>.<base64url HMAC-SHA256(CLOUD_GRANT_SECRET, cloudGrantMessage(machine id))>`, minted by the Cloud

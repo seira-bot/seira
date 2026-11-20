@@ -270,7 +270,7 @@ export interface Auth {
 }
 
 export function authText(box: string, adminNonce: string, boxNonce: string, count: number): string {
-  return `seira-box auth v1\n${box}\n${adminNonce}\n${boxNonce}\n${count}`;
+  return `omb-box auth v1\n${box}\n${adminNonce}\n${boxNonce}\n${count}`;
 }
 
 /** Admin → connector, `{t: "hello", signed}`: an envelope (signed.ts) of this payload, under a key the connector pinned. */

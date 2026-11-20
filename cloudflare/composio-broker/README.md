@@ -92,11 +92,11 @@ counts. Status events (`composio.trigger.disabled`,
 
 Registration is open, so a Cloud proves its plan with a grant the Cloud Admin
 signs. The grant is `v1.<machine id>.<signature>`, where the signature is
-`base64url(HMAC-SHA256(CLOUD_GRANT_SECRET, "seira-connected-apps-cloud:v1\n" + machineId))`:
+`base64url(HMAC-SHA256(CLOUD_GRANT_SECRET, "omb-connected-apps-cloud:v1\n" + machineId))`:
 
 ```js
 import { createHmac } from "node:crypto";
-const grant = `v1.${machineId}.${createHmac("sha256", CLOUD_GRANT_SECRET).update(`seira-connected-apps-cloud:v1\n${machineId}`).digest("base64url")}`;
+const grant = `v1.${machineId}.${createHmac("sha256", CLOUD_GRANT_SECRET).update(`omb-connected-apps-cloud:v1\n${machineId}`).digest("base64url")}`;
 ```
 
 The Admin sets it as the machine's `SEIRA_CLOUD_CONNECTED_APPS_GRANT` secret
@@ -115,8 +115,8 @@ machine, at most once a minute per installation (`wake_requested_at`):
 ```
 POST <CLOUD_ADMIN_URL>/api/cloud/machines/wake
 content-type: application/json
-x-seira-wake-timestamp: <unix seconds>
-x-seira-wake-signature: v1=<base64url(HMAC-SHA256(CLOUD_GRANT_SECRET, "seira-cloud-wake:v1\n" + timestamp + "\n" + machineId))>
+x-omb-wake-timestamp: <unix seconds>
+x-omb-wake-signature: v1=<base64url(HMAC-SHA256(CLOUD_GRANT_SECRET, "omb-cloud-wake:v1\n" + timestamp + "\n" + machineId))>
 
 {"machineId":"<machine id>"}
 ```
