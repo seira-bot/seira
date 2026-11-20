@@ -37407,7 +37407,17 @@
       "releaseNotes.items.fasterStart.title": "54c182f7fb0b2444f16fc43141b7644525620981f1e5450e898ed056d493c58f",
       "releaseNotes.items.fasterStart.body": "c864be41e9cb1457c380aa53c0cf47f78829188e93804c2428eb98bda98adb0a",
       "releaseNotes.items.liveYes.title": "9bec3e3b57f0c8d3d0d71f0f8d145fb011e950f14805dd117a70c558a8623d67",
-      "releaseNotes.items.liveYes.body": "fd4890f15c30c8388ae4ccc4b5af5af3e85fcca10772e9966e58aada2b145526"
+      "releaseNotes.items.liveYes.body": "fd4890f15c30c8388ae4ccc4b5af5af3e85fcca10772e9966e58aada2b145526",
+      "releaseNotes.items.aiPool.title": "2e283a57e6015049ca9c343738155aa8667e3ba5dec516a8790f60bfe01e3e3b",
+      "releaseNotes.items.aiPool.body": "3abea14637b605bcb5225abfae174305896de7a6922fd11884b12525e364e9f8",
+      "releaseNotes.items.connectOneClick.title": "839b78da8f8b92ce0995d046830092afe3c0a63b89d3dbfdb62ae1e2dd45bbbb",
+      "releaseNotes.items.connectOneClick.body": "330b20a1eea253938a580be8e26a2eb2dc8140d72fe253cc783f5262e5fe4a9d",
+      "releaseNotes.items.backupName.title": "d88051bcc7449d1618164a7f13584bae6634feb3459dbfe4784d5f18108c7628",
+      "releaseNotes.items.backupName.body": "875724786737b0fe24b9462deb164de9073f481f5c624462ce750caa52443f0c",
+      "releaseNotes.items.claudeAccounts.title": "3afaf9b898541303d59fb479a2a9e7e438ce5ba3c6a509e114c0307c83be8993",
+      "releaseNotes.items.claudeAccounts.body": "c6a116ff3930de42ec23535b10198f4cc6852cf423532846da9b8c199fd6d391",
+      "releaseNotes.items.whatsNew.title": "4ed04dddb704ad49a9cccc37dffd2b72378d3b85e8ba223ec3488d6a8bed2c32",
+      "releaseNotes.items.whatsNew.body": "6f2369bcb75a8f15e160065b4b06996f504dae59b62e3f9adceff4a26fe1fa4a"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
