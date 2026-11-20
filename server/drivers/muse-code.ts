@@ -10,8 +10,7 @@ import { join } from "node:path";
 import { Connection, MspError, type DuplexTransport } from "@muse-code/sdk";
 import { z } from "zod";
 import { instanceEnvNames } from "../bot-box/env.ts";
-import { PROVIDER_CREDENTIAL_ENV, stripControlPlaneEnv } from "../config.ts";
-import { stripWorkspaceCredentialKeys } from "../credential-env.ts";
+import { PROVIDER_CREDENTIAL_ENV, stripControlPlaneEnv, stripWorkspaceCredentialKeys } from "../config.ts";
 import type {
   ModelCatalog, ProviderDriver, ProviderInstance, ProviderSnapshot, RequestOutcome, RuntimeEvent,
   RuntimeEventListener, SendTurnInput, SteerOutcome,

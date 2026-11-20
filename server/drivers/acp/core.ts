@@ -11,8 +11,7 @@ import { dirname, join } from "node:path";
 import { resolveAcpClientPath } from "./client-path.ts";
 import { createHash } from "node:crypto";
 
-import { PROVIDER_CREDENTIAL_ENV, stripControlPlaneEnv } from "../../config.ts";
-import { stripWorkspaceCredentialKeys } from "../../credential-env.ts";
+import { PROVIDER_CREDENTIAL_ENV, stripControlPlaneEnv, stripWorkspaceCredentialKeys } from "../../config.ts";
 import { openStartupModelCatalog } from "../../startup-model-catalog.ts";
 import { acpModelCatalog } from "./model-catalog.ts";
 import { decodeInjectId } from "../local-inject.ts";
@@ -347,9 +346,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
         const allowedCredentials = new Set(support.credentialEnv ?? []);
         // Foreign provider keys would flip billing off the CLI's login, and workspace credentials are
         // the harness's: only credentialEnv passes.
-        for (const key of PROVIDER_CREDENTIAL_ENV) {
-          if (!allowedCredentials.has(key)) delete env[key];
-        }
+        for (const key of PROVIDER_CREDENTIAL_ENV) if (!allowedCredentials.has(key)) delete env[key];
         stripWorkspaceCredentialKeys(env, allowedCredentials);
         stripControlPlaneEnv(env);
         support.transformEnv?.(env, activeConfig, instanceId, input.environment);
