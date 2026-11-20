@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { planTunnel, runLogin, type CliIo, type CliOptions } from "./cli.ts";
+import { runLogin, type CliIo, type CliOptions } from "./cli.ts";
+import { planTunnel } from "./cli-tunnel-plan.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 import { startControlPlaneStub, type ControlPlaneStub } from "./testing/control-plane-stub.ts";
 import { describeTunnelAccount, openTunnelCredentials, tunnelAccess } from "./tunnel.ts";
