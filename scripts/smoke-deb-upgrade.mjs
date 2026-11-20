@@ -32,7 +32,7 @@ const legacyRoot = path.join(temporary, "legacy-package");
 const controlRoot = path.join(legacyRoot, "DEBIAN");
 const legacyApp = path.join(legacyRoot, "opt", "Seira");
 const legacyResources = path.join(legacyApp, "resources");
-const legacyDeb = path.join(temporary, "seira_0.1.7_amd64.deb");
+const legacyDeb = path.join(temporary, "openmausbot_0.1.7_amd64.deb");
 
 try {
   fs.mkdirSync(controlRoot, { recursive: true, mode: 0o755 });
@@ -42,7 +42,7 @@ try {
   fs.writeFileSync(
     path.join(controlRoot, "control"),
     [
-      "Package: seira",
+      "Package: openmausbot",
       "Version: 0.1.7",
       "Architecture: amd64",
       "Maintainer: Seira CI <ci@seira.invalid>",

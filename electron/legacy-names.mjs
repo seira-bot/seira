@@ -5,6 +5,9 @@
 export const LEGACY_APP_NAME = "openmausbot";
 /** dpkg and pacman replace an installed package only when its name stays the same. */
 export const LEGACY_LINUX_PACKAGE = "openmausbot";
+/** Electron reopens a running app through the path it started from, so an earlier version still running during a Linux
+ * update reopens itself here. Its login entry also starts it here. */
+export const LEGACY_LINUX_EXECUTABLE = "openmausbot";
 
 export const LEGACY_HOME_PREFIX = ".openmausbot";
 export const HOME_PREFIX = ".seira";

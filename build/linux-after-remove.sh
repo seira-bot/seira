@@ -32,9 +32,9 @@ fi
 # remove an unrelated file that now happens to use the same command name.
 if [ "$TEST_MODE" -eq 0 ]; then
   if command -v update-alternatives >/dev/null 2>&1; then
-    update-alternatives --remove seira /opt/Seira/seira
-  elif [ -L /usr/bin/seira ] && [ "$(readlink /usr/bin/seira)" = /opt/Seira/seira ]; then
-    rm -- /usr/bin/seira
+    update-alternatives --remove openmausbot /opt/Seira/openmausbot
+  elif [ -L /usr/bin/openmausbot ] && [ "$(readlink /usr/bin/openmausbot)" = /opt/Seira/openmausbot ]; then
+    rm -- /usr/bin/openmausbot
   fi
 fi
 

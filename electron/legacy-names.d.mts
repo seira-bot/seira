@@ -1,3 +1,4 @@
+export const LEGACY_LINUX_EXECUTABLE: string;
 export const LEGACY_HOME_PREFIX: string;
 export const HOME_PREFIX: string;
 export const LEGACY_COMPANION_FOLDER: string;
