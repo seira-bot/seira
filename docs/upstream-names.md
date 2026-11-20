@@ -46,7 +46,6 @@ needs a migration, so change it only in its own pull request.
 Use these names as they are until the code changes.
 
 The guides, [CONTRIBUTING.md](../CONTRIBUTING.md), the [code guide](contributing.md), and [DESIGN.md](../DESIGN.md) call the product Seira.
-The notes in `docs/superpowers/` and `docs/plans/` are history from before the fork and keep the upstream names.
 The [brand guide](../brand/README.md) tells you where an upstream name is correct.
 
 Seira's npm package is `@seira-bot/seira`. Do not install the npm package `openmausbot`: it is the upstream app.

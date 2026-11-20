@@ -109,7 +109,7 @@ OpenMausBot and MausBot are trademarks of another company ([LICENSING.md](../LIC
 Before you merge a change to docs or a listing, run this from the repository root:
 
 ```bash
-git grep -nE 'OpenMausBot|MausBot|OpenMaus|\bMaus\b' -- '*.md' '*.mdx' ':!docs/superpowers' ':!docs/plans' ':!third_party'
+git grep -nE 'OpenMausBot|MausBot|OpenMaus|\bMaus\b' -- '*.md' '*.mdx' ':!third_party'
 ```
 
 Every result must be attribution, an upstream link, or a name in the upstream names page.
