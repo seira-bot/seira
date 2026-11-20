@@ -11,12 +11,13 @@ import type { Bot, InstanceInfo } from "@/state/store";
 
 const fixture = vi.hoisted(() => ({
   advanced: false,
+  instances: [] as InstanceInfo[],
   api: vi.fn(async (..._args: unknown[]) => ({}) as unknown),
 }));
 vi.mock("@/state/store", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/state/store")>()),
   useStore: () => ({
-    state: { instances: [claude], bots: [], modelVariantSessions: {}, config: {} },
+    state: { instances: fixture.instances, bots: [], modelVariantSessions: {}, config: {} },
     dispatch: vi.fn(),
     refreshInstances: () => Promise.resolve(),
     refreshModels: () => Promise.resolve(),
@@ -62,6 +63,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(NOW);
   fixture.advanced = false;
+  fixture.instances = [claude];
   remember([usage(38)]);
   document.documentElement.dataset.reducedMotion = "true";
   vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
@@ -185,6 +187,52 @@ describe("the model menu's usage rings", () => {
     expect(shownRows(menu)).toEqual(["weekly"]);
     expect(menu.querySelector("[data-usage-rows]")?.textContent).toContain("Codex usage");
     expect(document.querySelector("[data-model-picker-content]")).not.toBeNull();
+  });
+
+  describe("with a second Claude account", () => {
+    const second: InstanceInfo = {
+      instanceId: "claude-2", driverKind: "claudeAgent", displayName: "Work", access: "subscription",
+      snapshot: { state: "available", version: "2.1.300", authenticated: true },
+      models: { default: "claude-opus-5", options: [{ id: "claude-opus-5", label: "Claude Opus 5" }] },
+    } as InstanceInfo;
+    const secondUsage = (): EngineLimit => ({ ...usage(60), engine: "claude-2", name: "Claude · work" });
+    const groupOf = (menu: HTMLElement, id: string) => menu.querySelector<HTMLElement>(`[data-simple-provider="${id}"]`)!;
+
+    it("move the model list to that account's group when its ring is pressed", async () => {
+      fixture.instances = [claude, second];
+      remember([usage(38), secondUsage()]);
+      const scroll = vi.mocked(HTMLElement.prototype.scrollIntoView);
+      const menu = await openMenu();
+      scroll.mockClear();
+      flushSync(() => rings(menu)[1]!.click());
+      await settle();
+      expect(scroll).toHaveBeenCalledTimes(1);
+      expect(scroll.mock.contexts[0]).toBe(groupOf(menu, "claude-2"));
+      expect(scroll).toHaveBeenCalledWith({ block: "start" });
+      expect(groupOf(menu, "claude-2").contains(document.activeElement)).toBe(true);
+    });
+
+    it("show that account's usage rows as well", async () => {
+      fixture.instances = [claude, second];
+      remember([usage(38), secondUsage()]);
+      const menu = await openMenu();
+      flushSync(() => rings(menu)[1]!.click());
+      await settle();
+      expect(rings(menu).map((ring) => ring.getAttribute("aria-pressed"))).toEqual(["false", "true"]);
+      expect(shownRows(menu)).toEqual(["5-hour", "weekly"]);
+      expect(menu.querySelector("[data-usage-rows]")?.textContent).toContain("Claude · work usage");
+    });
+
+    it("leave the list alone when the bot's own account ring is pressed", async () => {
+      fixture.instances = [claude, second];
+      remember([usage(38), secondUsage()]);
+      const scroll = vi.mocked(HTMLElement.prototype.scrollIntoView);
+      const menu = await openMenu();
+      scroll.mockClear();
+      flushSync(() => rings(menu)[0]!.click());
+      await settle();
+      expect(scroll).not.toHaveBeenCalled();
+    });
   });
 
   it("go back to the bot's own AI when the pressed AI stops reporting usage", async () => {

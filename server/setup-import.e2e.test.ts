@@ -9,7 +9,7 @@ import { launchVerificationServer, runControlSeira, type VerificationServer } fr
 const SENTINEL = "SENTINEL-e2e-credential-51c0";
 
 it("is refused on a server that is not the desktop app's own, where any local process is the owner's loopback", async () => {
-  const headless = await launchVerificationServer();
+  const headless = await launchVerificationServer({ ...process.env, OMB_DEV_TRUST_LOCAL_BROWSER: "0" });
   try {
     mkdirSync(join(headless.info.dataDir, ".claude", "skills", "notes"), { recursive: true });
     writeFileSync(join(headless.info.dataDir, ".claude", "skills", "notes", "SKILL.md"), "---\nname: notes\ndescription: Takes notes.\n---\n\nWrite it down.\n");
@@ -18,9 +18,22 @@ it("is refused on a server that is not the desktop app's own, where any local pr
         method, headers: { "content-type": "application/json", origin: headless.info.url }, ...(body ? { body } : {}),
       });
       expect(response.status, method).toBe(403);
+      expect(((await response.json()) as { error?: string }).error, method).toMatch(/^Only the desktop app on the computer running Seira/);
     }
   } finally {
     await headless.close();
+  }
+});
+
+it("answers on a development server run from source that trusts this computer's browsers", async () => {
+  const dev = await launchVerificationServer();
+  try {
+    for (const path of ["/api/setup-import", "/api/setup-import/grok/connector"]) {
+      const response = await fetch(`${dev.info.url}${path}`, { headers: { origin: dev.info.url } });
+      expect(response.status, path).toBe(200);
+    }
+  } finally {
+    await dev.close();
   }
 });
 

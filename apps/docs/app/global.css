@@ -103,7 +103,9 @@ body {
 .omb-product-shot img {
   display: block;
   width: 100%;
+  height: auto;
   max-height: 38rem;
+  margin: 0;
   object-fit: cover;
 }
 

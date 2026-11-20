@@ -84,44 +84,46 @@ async function sandbox(req: IncomingMessage, res: ServerResponse, url: URL) {
   res.writeHead(405); res.end();
 }
 
+async function boatApi(req: IncomingMessage, res: ServerResponse) {
+  const url = new URL(req.url ?? "/", base);
+  if (url.pathname.startsWith("/sandbox/")) {
+    calls.push({ method: req.method ?? "", path: url.pathname.replace(/\/[^/]+$/, "/<token>"), body: null, authorization: req.headers.authorization, contentLength: req.headers["content-length"] });
+    // A copy stopped mid-transfer closes its request; the sandbox just lets it go.
+    await sandbox(req, res, url).catch(() => res.destroy());
+    return;
+  }
+  const chunks: Buffer[] = [];
+  for await (const part of req) chunks.push(part as Buffer);
+  const text = Buffer.concat(chunks).toString("utf8");
+  calls.push({ method: req.method ?? "", path: url.pathname, body: text ? JSON.parse(text) : null, authorization: req.headers.authorization });
+  const kind = /\/(?:sandboxes|boxes)\/bx_[a-z0-9]+\/files\/(download-url|upload-url)$/.exec(url.pathname)?.[1];
+  if (kind && req.method === "POST") {
+    const answer = mintAnswer?.(kind);
+    if (answer) { res.writeHead(answer.status, { "content-type": "application/json" }); res.end(JSON.stringify(answer.body)); return; }
+    const body = JSON.parse(text);
+    const path = body.path.startsWith("/") ? body.path : `/home/user/${body.path}`;
+    const token = Buffer.from(`${path}|${randomBytes(12).toString("hex")}`).toString("base64url");
+    const link = `${base}/sandbox/${kind === "download-url" ? "get" : "put"}/${token}`;
+    minted.push(token);
+    res.end(JSON.stringify({ ok: true, type: kind === "download-url" ? "file.download_url" : "file.upload_url", url: link, method: kind === "download-url" ? "GET" : "PUT", path, expiresAt: new Date(Date.now() + 300_000).toISOString() }));
+    return;
+  }
+  res.writeHead(404); res.end();
+}
+
 beforeAll(async () => {
   dataDir = mkdtempSync(join(tmpdir(), "omb-computer-files-data-"));
   vi.stubEnv("OMB_DATA_DIR", dataDir);
-  server = createServer(async (req, res) => {
-    const url = new URL(req.url ?? "/", base);
-    if (url.pathname.startsWith("/sandbox/")) {
-      calls.push({ method: req.method ?? "", path: url.pathname.replace(/\/[^/]+$/, "/<token>"), body: null, authorization: req.headers.authorization, contentLength: req.headers["content-length"] });
-      // A copy stopped mid-transfer closes its request; the sandbox just lets it go.
-      await sandbox(req, res, url).catch(() => res.destroy());
-      return;
-    }
-    const chunks: Buffer[] = [];
-    for await (const part of req) chunks.push(part as Buffer);
-    const text = Buffer.concat(chunks).toString("utf8");
-    calls.push({ method: req.method ?? "", path: url.pathname, body: text ? JSON.parse(text) : null, authorization: req.headers.authorization });
-    const kind = /\/(?:sandboxes|boxes)\/bx_[a-z0-9]+\/files\/(download-url|upload-url)$/.exec(url.pathname)?.[1];
-    if (kind && req.method === "POST") {
-      const answer = mintAnswer?.(kind);
-      if (answer) { res.writeHead(answer.status, { "content-type": "application/json" }); res.end(JSON.stringify(answer.body)); return; }
-      const body = JSON.parse(text);
-      const path = body.path.startsWith("/") ? body.path : `/home/user/${body.path}`;
-      const token = Buffer.from(`${path}|${randomBytes(12).toString("hex")}`).toString("base64url");
-      const link = `${base}/sandbox/${kind === "download-url" ? "get" : "put"}/${token}`;
-      minted.push(token);
-      res.end(JSON.stringify({ ok: true, type: kind === "download-url" ? "file.download_url" : "file.upload_url", url: link, method: kind === "download-url" ? "GET" : "PUT", path, expiresAt: new Date(Date.now() + 300_000).toISOString() }));
-      return;
-    }
-    res.writeHead(404); res.end();
-  });
-  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  if (!address || typeof address === "string") throw new Error("fixture did not bind");
-  base = `http://127.0.0.1:${address.port}`;
   files = await import("./cloud-computer-files.ts");
   tools = await import("./cloud-computer-tools.ts");
   journal = await import("./boat-delete-journal.ts");
 });
-beforeEach(() => {
+beforeEach(async () => {
+  server = createServer((req, res) => { boatApi(req, res).catch(() => res.destroy()); });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("fixture did not bind");
+  base = `http://127.0.0.1:${address.port}`;
   vi.stubEnv("OMB_BOAT_API", `${base}/boat/api/v1`);
   vi.stubEnv("OMB_CLOUD_BOAT_URL", `${base}/relay/api/box/v1`);
   vi.stubEnv("OMB_CLOUD_BOAT_TOKEN", INCLUDED);
@@ -136,11 +138,13 @@ beforeEach(() => {
   mkdirSync(folder);
   mkdirSync(outside);
 });
-afterEach(() => { rmSync(root, { recursive: true, force: true }); });
-afterAll(async () => {
-  vi.unstubAllEnvs();
+afterEach(async () => {
   server.closeAllConnections();
   await new Promise<void>(resolve => server.close(() => resolve()));
+  rmSync(root, { recursive: true, force: true });
+});
+afterAll(() => {
+  vi.unstubAllEnvs();
   rmSync(dataDir, { recursive: true, force: true });
 });
 

@@ -1581,17 +1581,15 @@ describe("harness HTTP API", () => {
       const afterAnsweredTurn = (await isolatedApi("GET", `/api/threads/${bot.threadId}/messages`)).body.messages
         .find((message: { id: string }) => message.id === cardId)?.card;
       expect(afterAnsweredTurn).toMatchObject({ answered: "answer", answeredText: "README", dismissed: false });
+
+      await waitForExit(server.child, { signal: "SIGTERM" });
+      expectStoppedTestServerCleanly(server.child, server.stderr());
+      activeServer = undefined;
     } finally {
       writeFileSync(isolatedFinishGate, "finish");
       questionSocket?.destroy();
-      try {
-        if (activeServer) {
-          await waitForExit(activeServer.child, { signal: "SIGTERM" });
-          expectStoppedTestServerCleanly(activeServer.child, activeServer.stderr());
-        }
-      } finally {
-        await removeTempDir(isolatedHome);
-      }
+      await waitForExit(activeServer?.child, { signal: "SIGTERM" });
+      await removeTempDir(isolatedHome);
     }
   }, 30_000);
 
@@ -1744,16 +1742,19 @@ describe("harness HTTP API", () => {
     contender.stderr!.on("data", (chunk) => (contenderStderr += chunk));
 
     try {
-      const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
-        // On Windows without wmic the lease reads the other server's start time through Windows PowerShell, whose first
-        // start on a CI runner takes several seconds.
-        const timer = setTimeout(() => reject(new Error("competing server did not exit")), process.platform === "win32" ? 30_000 : 5_000);
-        timer.unref?.();
-        contender.once("close", (code, signal) => {
-          clearTimeout(timer);
-          resolve({ code, signal });
-        });
+      const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+        contender.once("close", (code, signal) => resolve({ code, signal }));
       });
+      // On Windows without wmic the lease reads the other server's start time through Windows PowerShell, whose first
+      // start on a CI runner takes several seconds.
+      const deadline = Date.now() + 30_000;
+      let result: { code: number | null; signal: NodeJS.Signals | null } | undefined;
+      while (!result) {
+        if (Date.now() > deadline) throw new Error(`competing server did not exit:\n${contenderStderr}`);
+        const serving = await fetch(`http://127.0.0.1:${contenderPort}/api/health`).then((res) => res.ok, () => false);
+        if (serving) throw new Error(`competing server started serving the shared data directory:\n${contenderStderr}`);
+        result = await Promise.race([closed, new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 200))]);
+      }
       expect(result.code).not.toBe(0);
       expect(result.signal).toBeNull();
       expect(contenderStderr).toMatch(/already using this data directory.*close the other instance first/i);
@@ -9369,7 +9370,7 @@ describe("harness HTTP API", () => {
       expect((await api("PATCH", `/api/bots/${bot.id}`, { modelSelection: { instanceId: "claude", model: "claude-haiku-4-5" }, approvalMode: "auto" })).status).toBe(200);
       rmSync(fakeClaudeDump, { force: true });
       expect((await api("POST", `/api/bots/${bot.id}/messages`, { text: "read my ledger" })).status).toBe(202);
-      const dump = z.object({ mcpConfig: z.object({ mcpServers: z.object({ ogb: z.object({ args: z.array(z.string()) }) }) }) }).parse(await readJsonFileWhenReady(fakeClaudeDump));
+      const dump = z.object({ mcpConfig: z.object({ mcpServers: z.object({ ogb: z.object({ args: z.array(z.string()) }) }) }) }).parse(await readJsonFileWhenReady(fakeClaudeDump, 15_000));
       const raise = async (id: string, summary: string, tool: string) => {
         const conn = connect(dump.mcpConfig.mcpServers.ogb.args[1]);
         conns.push(conn);

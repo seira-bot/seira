@@ -210,12 +210,13 @@ nsis:
   # release — the same trick as Seira.dmg beside Seira-${version}.dmg.
   artifactName: Seira-${version}-setup.${ext}
 
-# Identity name and publisher stay unset until the Partner Center product
-# identity exists. The Store signs the package.
+# Identity values come from Product identity in Partner Center. The Store signs the package.
 appx:
   applicationId: Seira
   displayName: Seira
-  publisherDisplayName: PT GLOBAL RAYA ORIS WIJAYA
+  identityName: PTGLOBALRAYAORISWIJAYA.Seira
+  publisher: CN=9FC9B65D-F775-40DD-ACD9-79CFD31D124A
+  publisherDisplayName: PT Global Raya Oris Wijaya
   backgroundColor: transparent
   languages: [en-US]
   minVersion: 10.0.17763.0

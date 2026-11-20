@@ -24,7 +24,8 @@ const SANDBOX_ENV = /^(?:FLATPAK_.*|ZYPAK_.*|XDG_(?:CONFIG|DATA|CACHE|STATE)_HOM
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 // Each hit prints two NUL-ended fields: the file, then where its links lead (empty when that cannot be resolved).
-const FIND_ON_PATH = 'set -f; IFS=:; for d in $1; do [ -n "$d" ] || continue; p="$d/$2"; if [ -f "$p" ] && [ -x "$p" ]; then printf "%s\\0%s\\0" "$p" "$(readlink -f -- "$p")"; fi; done';
+// A relative folder is skipped: the launch runs in another folder, where the same name means another file.
+const FIND_ON_PATH = 'set -f; IFS=:; for d in $1; do case "$d" in /*) ;; *) continue ;; esac; p="$d/$2"; if [ -f "$p" ] && [ -x "$p" ]; then printf "%s\\0%s\\0" "$p" "$(readlink -f -- "$p")"; fi; done';
 const FIND_FILE = 'if [ -f "$1" ] && [ -x "$1" ]; then printf "%s\\0%s\\0" "$1" "$(readlink -f -- "$1")"; fi';
 
 export interface HostRunResult {
@@ -165,9 +166,11 @@ export function hostBridge(
     throw Object.assign(new Error(`${resolved.command} is in a folder the bots can write, so the server does not run it outside the bot box.`), { code: "EACCES" });
   }
   const entries = hostEnvEntries({ ...env, PATH: path });
+  // The link, not its target, as a shell and the deb's spawn start it: a program such as mise links every tool to itself
+  // and picks the tool by the name it runs as. Started by its target, mise gets its own name and refuses the tool's flags.
   return {
     command: FLATPAK_SPAWN,
-    args: hostSpawnArgv({ command: program.real, args: resolved.args, cwd }),
+    args: hostSpawnArgv({ command: program.path, args: resolved.args, cwd }),
     env: busEnv(processEnv),
     envBlock: entries.map((entry) => `${entry}\0`).join(""),
   };

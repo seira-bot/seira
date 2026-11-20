@@ -7,11 +7,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { SessionRegistry } from "./sessions.ts";
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
-import { workerPort } from "./testing/worker-port.ts";
+import { freePortBlock } from "./testing/ports.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
-const PORT = workerPort(28800, 10_000);
-const BASE = `http://127.0.0.1:${PORT}`;
+let BASE = "";
 const posixOnly = describe.skipIf(process.platform === "win32");
 const BOSS = "boss@example.test";
 const ADA = "ada@example.test";
@@ -42,12 +41,14 @@ const api = async (method: string, path: string, body?: unknown, as?: string, ex
 };
 
 async function start() {
+  const port = await freePortBlock([0, 1]);
+  BASE = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
     cwd: join(SERVER_DIR, ".."),
     env: {
       ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-      HOME: home, USERPROFILE: home, OMB_PORT: String(PORT), OMB_WEBHOOK_PORT: String(PORT + 1),
+      HOME: home, USERPROFILE: home, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -55,8 +56,10 @@ async function start() {
   child.stderr!.on("data", (c) => (log += c));
   const deadline = Date.now() + 20_000;
   for (;;) {
+    if (child.exitCode !== null || child.signalCode !== null) throw new Error(`server exited before it was ready:\n${log}`);
     try {
-      if ((await fetch(`${BASE}/api/health`)).ok) return;
+      const health = await fetch(`${BASE}/api/health`);
+      if (health.ok && (await health.json() as { pid?: unknown }).pid === child.pid) return;
     } catch {
     }
     if (Date.now() > deadline) throw new Error(`server never came up:\n${log}`);

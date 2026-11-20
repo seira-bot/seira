@@ -67,7 +67,7 @@ describe("spawnCli in a Flatpak", () => {
     expect(spawned).toHaveLength(1);
     const call = spawned[0]!;
     expect(call.command).toBe(FLATPAK_SPAWN);
-    expect(call.args).toEqual(["--host", "--watch-bus", "--directory=/work", "--env-fd=3", "--", "/opt/claude/bin/claude", "-p", "hello"]);
+    expect(call.args).toEqual(["--host", "--watch-bus", "--directory=/work", "--env-fd=3", "--", "/home/u/.local/bin/claude", "-p", "hello"]);
     expect(JSON.stringify([call.command, call.args])).not.toContain(SECRET);
     expect((call.options.stdio as unknown[]).slice(0, 3)).toEqual(["pipe", "pipe", "pipe"]);
     expect(typeof (call.options.stdio as unknown[])[3]).toBe("number");
