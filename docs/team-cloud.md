@@ -1064,7 +1064,7 @@ away. At least 30 minutes between two emails, at most 6 a day, and never the sam
 goes, answering, or opening the line drops it. `server/host/team-away.ts` decides; `team-away-events.ts` says what is
 worth one; "away" is one function (`here`) so presence can replace it.
 
-What leaves the machine is `POST /api/cloud/machines/team-away`, signed with the bootstrap secret (`seira-team-away-v1`):
+What leaves the machine is `POST /api/cloud/machines/team-away`, signed with the bootstrap secret (`omb-team-away-v1`):
 `{ v: 1, notices: [{ id, to, language?, items: [{ kind: "mention" | "waiting" | "finished" | "failed", key, who?, place?,
 routine?, private? }], more? }], prefs?: [{ to, on }] }`. `key` is a SHA-256 of what it is about; `who` a teammate's or
 bot's name; `place` a group chat's or the bot's name. Never a message's words, a title or an id. From someone's private

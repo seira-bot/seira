@@ -74,14 +74,14 @@ describe("the away email a Team Cloud asks the Admin for", () => {
     expect(Object.keys(request!.body.notices[0]!).sort()).toEqual(["id", "items", "language", "to"]);
     expect(awayKey("inbox:line-1")).toMatch(/^[0-9a-f]{64}$/);
     const headers = request!.headers;
-    expect(headers["x-seira-cloud-machine"]).toBe(MACHINE);
-    expect(headers["x-seira-cloud-timestamp"]).toBe(String(Math.floor(clock() / 1000)));
-    expect(headers["x-seira-cloud-signature"]).toBe(`v1=${teamAwaySignature(SECRET, MACHINE, headers["x-seira-cloud-timestamp"]!, headers["x-seira-cloud-nonce"]!, request!.raw)}`);
+    expect(headers["x-omb-cloud-machine"]).toBe(MACHINE);
+    expect(headers["x-omb-cloud-timestamp"]).toBe(String(Math.floor(clock() / 1000)));
+    expect(headers["x-omb-cloud-signature"]).toBe(`v1=${teamAwaySignature(SECRET, MACHINE, headers["x-omb-cloud-timestamp"]!, headers["x-omb-cloud-nonce"]!, request!.raw)}`);
   });
 
   it("signs the way the Admin checks (a fixed vector both repositories test)", () => {
     expect(teamAwaySignature("secret-of-the-home", "cm-acme", "1762765200", "nonce-0123456789abcdef", '{"v":1,"notices":[]}'))
-      .toBe("OfW3-BT6VKMcJBhiW-0l3PONmiEii4CZPyqyjp6myJc");
+      .toBe("wXx8Ty3f-Z1Ag0DrNs80GxPT4KwAZ6RoIzrRF139vAI");
   });
 
   it("puts what happens within the window in one email, the question first", async () => {

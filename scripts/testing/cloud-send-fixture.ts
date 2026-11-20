@@ -293,7 +293,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     const body = JSON.stringify({ label, ttlSeconds: 300 });
     const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
     const response = await fetch(`${cloudBase}/api/cloud/pairing`, { method: "POST", headers: { ...EDGE, "content-type": "application/json",
-      "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}` }, body });
+      "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}` }, body });
     // A Cloud that turns the request away says why, instead of handing main a code that is not there.
     if (!response.ok) throw new Error(`My Cloud gave no one-time code: HTTP ${response.status} ${await response.text()}`);
     return ((await response.json()) as { code: string }).code;
@@ -306,7 +306,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
   const signedRequest = async (base: string, method: string, path: string, body: string) => {
     const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
     const init: RequestInit = { method, headers: { ...EDGE, ...(body ? { "content-type": "application/json" } : {}),
-      "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${cloudRequestSignature(secret, timestamp, nonce, method, path, body)}` } };
+      "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudRequestSignature(secret, timestamp, nonce, method, path, body)}` } };
     if (body) init.body = body;
     const response = await remember(await fetch(`${base}${path}`, init));
     return { status: response.status, body: parse(await response.text()) };
@@ -361,7 +361,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
         const body = JSON.stringify({ label: "Seira app (Team Cloud)", ttlSeconds: 300, team: { id: team.id, name: team.name }, member });
         const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
         const minted = await fetch(`${teamBase}/api/cloud/pairing`, { method: "POST", headers: { ...EDGE, "content-type": "application/json",
-          "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}` }, body });
+          "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}` }, body });
         if (minted.status !== 200) throw Object.assign(new Error(`team pairing ${minted.status}`), { status: minted.status });
         return { origin: teamBase, code: ((await minted.json()) as { code: string }).code, expiresAt: Date.now() + 300_000 };
       },
@@ -370,7 +370,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
         const body = JSON.stringify({ label: options.label ?? "Seira app (Team Cloud)", ttlSeconds: 300, ...claims });
         const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
         const minted = await remember(await teamFetch("/api/cloud/pairing", { method: "POST", headers: { ...EDGE, "content-type": "application/json",
-          "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${cloudPairingSignature(options.secret ?? secret, timestamp, nonce, body)}` }, body }));
+          "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudPairingSignature(options.secret ?? secret, timestamp, nonce, body)}` }, body }));
         const grant = parse(await minted.text());
         if (minted.status !== 200) return { status: minted.status, body: grant, token: null };
         const paired = await remember(await teamFetch("/api/auth/pair", { method: "POST", headers: { ...EDGE, "content-type": "application/json" }, body: JSON.stringify({ code: grant.code }) }));

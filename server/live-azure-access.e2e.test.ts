@@ -92,7 +92,7 @@ async function boot(env: NodeJS.ProcessEnv, config: Record<string, unknown> = {}
     const body = JSON.stringify({ label: "Seira app (Cloud)", ttlSeconds: 300, ...claim });
     const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
     const response = await fetch(`${base}/api/cloud/pairing`, { method: "POST", headers: {
-      ...REMOTE, "content-type": "application/json", "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
+      ...REMOTE, "content-type": "application/json", "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
     }, body });
     const granted = await response.json() as { code: string };
     return redeem(granted.code);

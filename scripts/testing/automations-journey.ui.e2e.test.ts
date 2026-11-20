@@ -492,7 +492,7 @@ await import(${JSON.stringify(pathToFileURL(join(ROOT, "server", "testing", "fak
   const body = JSON.stringify({ label: "Seira app (Cloud)", ttlSeconds: 300 });
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const granted = await (await fetch(`${url}/api/cloud/pairing`, { method: "POST", headers: { ...edge, "content-type": "application/json",
-    "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}` }, body })).json() as { code: string };
+    "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}` }, body })).json() as { code: string };
   const paired = await (await fetch(`${url}/api/auth/pair`, { method: "POST", headers: { ...edge, origin: `https://${CLOUD_HOST}`, "content-type": "application/json" }, body: JSON.stringify({ code: granted.code }) })).json() as { token: string };
   const owner = { ...edge, origin: `https://${CLOUD_HOST}`, authorization: `Bearer ${paired.token}` };
   return {

@@ -50,7 +50,7 @@ async function serveStub(seen: Seen[], options: { researchOff?: boolean } = {}):
       if (plan && req.method === "GET" && path === `${RELAY_PATH}/usage`) return send(200, USAGE);
       if (plan && path === `${RELAY_PATH}/call/anyapi.x.search.posts` && raw.includes("used up")) return send(429, { error: "quota_exceeded", message: USED_UP });
       if (plan && path === `${RELAY_PATH}/call/anyapi.x.search.posts`) return send(200, POSTS);
-      if (plan && path === `${RELAY_PATH}/research/call/apollo.people.search`) return send(200, { people: [{ name: "Seira" }] }, { "x-seira-research-charged-usd": "0.002" });
+      if (plan && path === `${RELAY_PATH}/research/call/apollo.people.search`) return send(200, { people: [{ name: "Seira" }] }, { "x-omb-research-charged-usd": "0.002" });
       send(404, { error: "not_found" });
     });
   });

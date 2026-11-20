@@ -97,7 +97,7 @@ describe("research through the plan's relay", () => {
     const { fetcher, calls } = fakeFetch(
       { body: { query: "people", results: [], budget: { leftUsd: 14 } } },
       { body: { endpoint: { id: "apollo.people.search" } } },
-      { body: { people: [] }, headers: { "x-seira-research-charged-usd": "0.0045", "x-seira-research-pending": "true" } },
+      { body: { people: [] }, headers: { "x-omb-research-charged-usd": "0.0045", "x-omb-research-pending": "true" } },
     );
     const client = createResearchClient(PLAN, { fetcher });
     expect(await client.search({ job: "people", limit: 3 })).toEqual({ query: "people", results: [], budget: { leftUsd: 14 } });

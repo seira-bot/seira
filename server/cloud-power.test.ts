@@ -249,7 +249,7 @@ describe("the Admin's signed power routes", () => {
     let counter = 0;
     const sign = (target: string, method = "GET", body = "", key = secret) => {
       const timestamp = String(Math.floor(h.now() / 1000)), nonce = `nonce-${String(++counter).padStart(12, "0")}`;
-      return { "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${cloudRequestSignature(key, timestamp, nonce, method, target, body)}` };
+      return { "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudRequestSignature(key, timestamp, nonce, method, target, body)}` };
     };
     const send = async (method: string, target: string, headers: Record<string, string>, body = "") => {
       const req = Object.assign(new PassThrough(), { method, url: target, headers, socket: { remoteAddress: "127.0.0.1" } }) as unknown as IncomingMessage;

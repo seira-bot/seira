@@ -88,7 +88,7 @@ beforeAll(async () => {
       const body = Buffer.concat(chunks).toString("utf8");
       expect(req.url).toBe(TEAM_POLICY_ADMIN_PATH);
       const headers = req.headers as Record<string, string>;
-      admin.signed.push(/^v1=[\w-]{43}$/.test(headers["x-seira-cloud-signature"] ?? "") && Boolean(headers["x-seira-cloud-machine"]) && createHash("sha256").update(body).digest().length === 32);
+      admin.signed.push(/^v1=[\w-]{43}$/.test(headers["x-omb-cloud-signature"] ?? "") && Boolean(headers["x-omb-cloud-machine"]) && createHash("sha256").update(body).digest().length === 32);
       admin.reports.push(JSON.parse(body));
       res.writeHead(admin.answer.status, { "content-type": admin.answer.type });
       res.end(typeof admin.answer.body === "string" ? admin.answer.body : JSON.stringify(admin.answer.body));

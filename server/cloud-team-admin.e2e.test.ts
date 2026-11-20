@@ -25,8 +25,8 @@ async function call(method: string, path: string, options: { body?: string; head
 }
 function signed(method: "GET" | "POST", path: string, body = "") {
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
-  return call(method, path, { ...(body ? { body } : {}), headers: { ...(body ? { "content-type": "application/json" } : {}), "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce,
-    "x-seira-cloud-signature": `v1=${path === "/api/cloud/pairing" ? cloudPairingSignature(secret, timestamp, nonce, body) : cloudRequestSignature(secret, timestamp, nonce, method, path, body)}` } });
+  return call(method, path, { ...(body ? { body } : {}), headers: { ...(body ? { "content-type": "application/json" } : {}), "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
+    "x-omb-cloud-signature": `v1=${path === "/api/cloud/pairing" ? cloudPairingSignature(secret, timestamp, nonce, body) : cloudRequestSignature(secret, timestamp, nonce, method, path, body)}` } });
 }
 
 beforeAll(async () => {

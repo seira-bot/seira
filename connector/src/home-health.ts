@@ -17,9 +17,9 @@ export function signedHeaders(secret: string, method: string, target: string, bo
   const timestamp = String(Math.floor(now / 1000));
   const nonce = randomBytes(18).toString("base64url");
   return {
-    "x-seira-cloud-timestamp": timestamp,
-    "x-seira-cloud-nonce": nonce,
-    "x-seira-cloud-signature": `v1=${cloudRequestSignature(secret, timestamp, nonce, method, target, body)}`,
+    "x-omb-cloud-timestamp": timestamp,
+    "x-omb-cloud-nonce": nonce,
+    "x-omb-cloud-signature": `v1=${cloudRequestSignature(secret, timestamp, nonce, method, target, body)}`,
   };
 }
 

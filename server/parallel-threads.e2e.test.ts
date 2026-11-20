@@ -127,7 +127,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-ac
     const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
     const response = await fetch(`${this.base}/api/cloud/pairing`, { method: "POST", headers: {
       host: HOST, "x-forwarded-for": "203.0.113.9", "x-forwarded-proto": "https", "content-type": "application/json",
-      "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${cloudPairingSignature(this.secret, timestamp, nonce, body)}`,
+      "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudPairingSignature(this.secret, timestamp, nonce, body)}`,
     }, body });
     const granted = await response.json() as { code: string };
     return (await this.api("POST", "/api/auth/pair", { code: granted.code })).body.token as string;
@@ -383,7 +383,7 @@ describe("a Starter Cloud", () => {
   const tellPlan = async (tier: string) => {
     const body = JSON.stringify({ v: 1, tier }), timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
     const response = await fetch(`${f.base}/api/cloud/plan`, { method: "POST", body, headers: { host: HOST, "x-forwarded-for": "203.0.113.9", "x-forwarded-proto": "https", "content-type": "application/json",
-      "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${cloudRequestSignature(f.secret, timestamp, nonce, "POST", "/api/cloud/plan", body)}` } });
+      "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudRequestSignature(f.secret, timestamp, nonce, "POST", "/api/cloud/plan", body)}` } });
     expect(response.status).toBe(200);
   };
   const starter = async () => {

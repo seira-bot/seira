@@ -38,7 +38,7 @@ async function admin(method: "GET" | "POST", path: string, body = "") {
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const response = await fetch(`${base}${path}`, { method, ...(method === "POST" ? { body } : {}), headers: {
     ...EDGE, ...(method === "POST" ? { "content-type": "application/json" } : {}),
-    "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${cloudRequestSignature(secret, timestamp, nonce, method, path, body)}`,
+    "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudRequestSignature(secret, timestamp, nonce, method, path, body)}`,
   } });
   return { status: response.status, body: await response.json().catch(() => null) as any };
 }
@@ -49,7 +49,7 @@ async function pair(person: { email: string; role: "owner" | "member" }) {
   const body = JSON.stringify({ label: "Seira app (Team Cloud)", ttlSeconds: 300, team: TEAM, member: person });
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const minted = await fetch(`${base}/api/cloud/pairing`, { method: "POST", body, headers: { ...EDGE, "content-type": "application/json",
-    "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}` } });
+    "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}` } });
   expect(minted.status, log.slice(-2000)).toBe(200);
   const { code } = await minted.json() as { code: string };
   const paired = await fetch(`${base}/api/auth/pair`, { method: "POST", headers: { ...EDGE, "content-type": "application/json" }, body: JSON.stringify({ code }) });

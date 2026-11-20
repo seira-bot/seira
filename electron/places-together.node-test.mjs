@@ -170,7 +170,7 @@ test("a sleeping Cloud is never asked; its bots stay listed and a click wakes it
 test("a Cloud that answers it is going to sleep is held like a sleeping one", async () => {
   const f = setup();
   await f.together.refresh("cloud");
-  f.reply.cloud = answer(503, { error: "asleep" }, { "x-seira-cloud-power": "asleep" });
+  f.reply.cloud = answer(503, { error: "asleep" }, { "x-omb-cloud-power": "asleep" });
   f.later();
   await f.together.refresh("cloud");
   assert.equal(f.napped, 1);

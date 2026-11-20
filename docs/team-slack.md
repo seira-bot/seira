@@ -110,7 +110,7 @@ Each takes the member's session, as a bearer. `server/routes/team-slack.ts`; the
 ## Reporting back
 
 `POST <Admin>/api/cloud/machines/slack`, signed with the bootstrap secret in a context of its own
-(`teamSlackSignature`, `seira-team-slack-v1`), like the roster check: `{ v: 1, id, status, conversationId, bot, openUrl }`
+(`teamSlackSignature`, `omb-team-slack-v1`), like the roster check: `{ v: 1, id, status, conversationId, bot, openUrl }`
 with `text` on `completed`, `waiting` on `waiting` and `error` on `failed`.
 
 What a message's run is doing is read from the conversation's own records each time they change, never polled and

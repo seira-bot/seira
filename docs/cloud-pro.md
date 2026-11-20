@@ -1643,9 +1643,9 @@ credit, the Admin also sets:
 ```http
 POST /api/cloud/pairing
 Content-Type: application/json
-x-seira-cloud-timestamp: 1790000000
-x-seira-cloud-nonce: <base64url, 16–128 characters>
-x-seira-cloud-signature: v1=<base64url HMAC-SHA256(SEIRA_CLOUD_BOOTSTRAP_SECRET, canonical)>
+x-omb-cloud-timestamp: 1790000000
+x-omb-cloud-nonce: <base64url, 16–128 characters>
+x-omb-cloud-signature: v1=<base64url HMAC-SHA256(SEIRA_CLOUD_BOOTSTRAP_SECRET, canonical)>
 
 {"label":"Seira app (Cloud)","ttlSeconds":300}
 ```
@@ -1914,7 +1914,7 @@ Fly's proxy, to tell which app reaches a sleeping home.
 
 **`POST /api/cloud/machines/woke`** on the Admin (additive, sent by the home,
 signed with its machine secret over `{"v":1,"wokeAt":<ms>}`, as
-`seira-power-woke-v1\n<machine id>\n<timestamp>\n<nonce>\n<hash of the body>`;
+`omb-power-woke-v1\n<machine id>\n<timestamp>\n<nonce>\n<hash of the body>`;
 sent at each wake (a resume, or a boot from a sleep it was stopped for), never
 retried; an Admin without it answers `404` and nothing changes). It says the
 home is awake now, so the Admin can move `cloud.power` on at the desktops' next
@@ -1941,7 +1941,7 @@ resume, someone's use, or 120 s (a sleep the Admin never carried out):
   hidden tab whose stream dropped (the laptop slept) can't wake a sleeping home
   every minute;
 - held `GET /api/sync/changes` and `POST /api/shared-computers/<id>/poll`
-  answer `503 {"error":"asleep"}` with `x-seira-cloud-power: asleep`, and new
+  answer `503 {"error":"asleep"}` with `x-omb-cloud-power: asleep`, and new
   ones get the same, so the desktop's Files sync and lending pause instead of
   waking it;
 - `cloud-sleep.json` in the data folder marks the sleep. A boot that finds it
@@ -2273,7 +2273,7 @@ its proxy). The session's `cloud.power` (additive, only for such a plan) says `{
 sleeps: true}`; `cloud.state` stays `ready`. Without `cloud.power`, nothing below happens (`electron/cloud-power.mjs`).
 
 - **Files sync and lending pause** while the session says `asleep`, and also at once when My Cloud answers a held poll
-  `503` with `x-seira-cloud-power: asleep` (it does just before it sleeps). They make no request to My Cloud then, not even
+  `503` with `x-omb-cloud-power: asleep` (it does just before it sleeps). They make no request to My Cloud then, not even
   a retry, and the session is read every 15 s instead of 60 s while they wait. They resume when it says awake. Files and
   lending show "My Cloud is asleep" meanwhile.
 - **Opening My Cloud while it sleeps** asks the Admin to wake it first (`POST /api/cloud/desktop/wake`), shows "Waking
