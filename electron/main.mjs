@@ -896,10 +896,16 @@ const announceCloudReady = createCloudReadyNotice({ Notification, focused: () =>
 function ensureManagedDesktop() {
   if (managedDesktop) return managedDesktop;
   if (!app.isPackaged || desktopRemoteAccess) throw new Error("Organization sign-in requires the installed desktop app running on this computer.");
-  const store = createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-connection.bin"), encryption: cloudEncryption });
+  const encryption = {
+    available: async () => (await safeStorage.isAsyncEncryptionAvailable()) &&
+      (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text"),
+    encrypt: value => safeStorage.encryptStringAsync(value),
+    decrypt: decryptSecret,
+  };
+  const store = createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-connection.bin"), encryption });
   orgLibrary = createOrgLibrary({
     dataDir: path.join(desktopDataDir(), "org-library"),
-    store: createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-library.bin"), encryption: cloudEncryption }),
+    store: createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-library.bin"), encryption }),
     fetchBytes: (route, maxBytes, options) => managedDesktop.fetchLibraryBytes(route, maxBytes, options),
     relay: library => managedDesktopRelay.sendLibrary(serverProc, library),
     appVersion: app.getVersion(),
@@ -932,7 +938,7 @@ function ensureManagedDesktop() {
     },
   });
   companyBackupSchedule = createCompanyBackupSchedule({
-    store: createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-backup-schedule.bin"), encryption: cloudEncryption }),
+    store: createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-backup-schedule.bin"), encryption }),
     scope: companyBackupScope,
     run: async (signal, scope) => {
       if (companyBackupController || preparedCompanyRestore || companyRestoreCommitting || desktopShutdownStarted) throw companyBackupDeferred();

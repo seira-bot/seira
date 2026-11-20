@@ -161,13 +161,13 @@ test("the reader process answers by pipe, and its input folder is removed", asyn
     process.stderr.write("noise from Chromium\\n");
     process.stdout.write("other line\\nseira-old-key:" + Buffer.from(JSON.stringify(texts)).toString("base64") + "\\n");
   `;
-  const read = oldKeyReader({ execPath: process.execPath, appArgs: ["-e", standIn], tmp });
+  const read = oldKeyReader({ execPath: process.execPath, appArgs: ["-e", standIn, "--"], tmp });
   assert.deepEqual(await read([{ name: "credentials.bin", data: sealed("old", '{"k":1}') }]), { "credentials.bin": '{"k":1}' });
   assert.deepEqual(readdirSync(tmp), [], "the ciphertext file and the reader profile are gone");
 
-  const silent = oldKeyReader({ execPath: process.execPath, appArgs: ["-e", ""], tmp });
+  const silent = oldKeyReader({ execPath: process.execPath, appArgs: ["-e", "", "--"], tmp });
   await assert.rejects(silent([{ name: "a.bin", data: Buffer.from("v11") }]), /no answer/);
-  const slow = oldKeyReader({ execPath: process.execPath, appArgs: ["-e", "setTimeout(() => {}, 60000)"], tmp, timeoutMs: 200 });
+  const slow = oldKeyReader({ execPath: process.execPath, appArgs: ["-e", "setTimeout(() => {}, 60000)", "--"], tmp, timeoutMs: 200 });
   await assert.rejects(slow([{ name: "a.bin", data: Buffer.from("v11") }]), /in time/);
   assert.deepEqual(readdirSync(tmp), []);
 });
