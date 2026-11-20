@@ -104,6 +104,17 @@ describe("serve --tailscale", () => {
     }
   });
 
+  it("stops tailscale serve again when it cannot note the share", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "omb-ts-"));
+    try {
+      const fake = fakeServe(null);
+      await expect(tailscaleServe(status, 8799, { dataDir: join(dir, "missing"), settleMs: 20, spawnImpl: fake.spawnImpl })).rejects.toMatchObject({ code: "ENOENT" });
+      expect(fake.children[0]!.killed).toEqual(["SIGTERM"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("turns off a share a crashed run left behind, and nothing without its note", async () => {
     const dir = mkdtempSync(join(tmpdir(), "omb-ts-"));
     try {
