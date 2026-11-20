@@ -14,8 +14,8 @@ A maintainer starts them by hand to build a desktop package (see
 | Job | What it does |
 | --- | --- |
 | `checks` | `pnpm install --frozen-lockfile`, `pnpm i18n:check`, `pnpm lint`, `pnpm check:contrast`, the model manifest and announcements checks, `node scripts/check-local-leaks.mjs`, and the source guards (tests that only read the source) |
-| `build` | `pnpm typecheck`, `pnpm check:electron`, and a production web build (`pnpm exec vite build`) |
-| `vitest (linux, shard n/8)` | The whole Vitest suite in 8 shards, 4 files at once per shard. Shard 1 also runs `pnpm test:electron`. |
+| `build` | `pnpm typecheck`, `pnpm check:electron`, the Electron unit tests (`pnpm test:electron`), and a production web build (`pnpm exec vite build`) |
+| `vitest (linux, shard n/8)` | The whole Vitest suite in 8 shards, 4 files at once per shard. |
 | `worker (<name>)` | One job for each Cloudflare Worker in scope: `pnpm install --frozen-lockfile`, the type check of the Worker, and its tests. The Worker list is `WORKERS` in `scripts/ci-heavy.mjs`. No job deploys a Worker. |
 | `server image` | The image build and boot check of `server-image-smoke.yml`: build the server image on `linux/amd64` and `linux/arm64`, start it, and check the server, the UI, and the user. |
 | `CI` | The gate. It passes only when every job before it passed or was skipped for an allowed reason. See [Skipped jobs](#skipped-jobs). |

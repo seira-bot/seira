@@ -94,6 +94,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm check:electron
+      - name: Electron unit tests
+        timeout-minutes: 5
+        run: pnpm test:electron
       - name: Build the web app
         run: pnpm exec vite build
 
@@ -136,10 +139,6 @@ jobs:
         env:
           SEIRA_VITEST_RETRY_LOG: ${{ runner.temp }}/vitest-retries.jsonl
         run: node scripts/testing/ci-retry-summary.mjs
-      - name: Electron unit tests
-        if: matrix.shard == 1
-        timeout-minutes: 5
-        run: pnpm test:electron
 
   workers:
     # The type check and the tests of each Cloudflare Worker that the change can break (scripts/ci-heavy.mjs holds the
