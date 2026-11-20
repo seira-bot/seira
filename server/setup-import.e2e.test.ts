@@ -9,7 +9,7 @@ import { launchVerificationServer, runControlSeira, type VerificationServer } fr
 const SENTINEL = "SENTINEL-e2e-credential-51c0";
 
 it("is refused on a server that is not the desktop app's own, where any local process is the owner's loopback", async () => {
-  const headless = await launchVerificationServer({ ...process.env, OMB_DEV_TRUST_LOCAL_BROWSER: "0" });
+  const headless = await launchVerificationServer({ ...process.env, SEIRA_DEV_TRUST_LOCAL_BROWSER: "0" });
   try {
     mkdirSync(join(headless.info.dataDir, ".claude", "skills", "notes"), { recursive: true });
     writeFileSync(join(headless.info.dataDir, ".claude", "skills", "notes", "SKILL.md"), "---\nname: notes\ndescription: Takes notes.\n---\n\nWrite it down.\n");
