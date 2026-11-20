@@ -7,6 +7,9 @@ Browser access is on by default, both for the workspace (Settings) and for
 each bot (its computer panel); switching either off withholds the browser,
 and bundling executables never overrides that switch.
 
+How bots drive the browser, the live view, page health and recorded steps are in
+[The bots' browser](browser-engine.md).
+
 ## Package layout and lookup
 
 `pnpm package:prepare` runs `pnpm build:browser`. It downloads verified vendor
