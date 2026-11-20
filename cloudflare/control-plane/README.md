@@ -61,7 +61,7 @@ still reads those tables.
 | Method | Path | Authentication |
 | --- | --- | --- |
 | `GET` | `/healthz` | none |
-| any | `/api/auth/*` | Better Auth |
+| any | `/api/auth/*` | Better Auth (`404` in Seira Cloud mode) |
 | `GET` | `/v1/me` | account bearer |
 | `GET`, `POST` | `/v1/installations` | account bearer |
 | `POST` | `/v1/installations/:id/credentials/rotate` | owning account bearer |
@@ -821,6 +821,10 @@ pnpm --filter @seira/control-plane exec wrangler d1 migrations apply DB --local 
 pnpm --filter @seira/control-plane exec wrangler dev --config wrangler.jsonc
 ```
 
+`wrangler.jsonc` selects Seira Cloud accounts, which need the `seira-cloud` Worker
+at `wrangler dev` time. The test suite runs in Better Auth mode and stubs Seira
+Cloud for its own tests.
+
 Do not commit `.dev.vars`. Because `wrangler.jsonc` declares
 `secrets.required`, `wrangler dev` reads from `.dev.vars` only the names it
 declares, so a second account cannot be configured there; the test suite
@@ -895,6 +899,105 @@ node --test electron/companion-provisioning.node-test.mjs
 Run it from the repository root. It uses synthetic credentials and a loopback
 server, never a real account, cloud tunnel, or the user's desktop data. It
 verifies client recovery, not live Cloudflare availability or iPhone pairing.
+
+## Seira deployment (Seira Cloud accounts)
+
+`wrangler.jsonc` configures the Seira deployment at `accounts.seira.bot`. It uses
+Seira Cloud for accounts. It does not use Better Auth.
+
+### Account mode
+
+| `ACCOUNT_SERVICE` | Behavior |
+| --- | --- |
+| `seira-cloud` | Seira Cloud checks the account bearer token. `/api/auth/*` answers `404 not_found`. |
+| empty or unset | Better Auth, with email OTP. This mode needs `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `EMAIL_FROM`, and an `EMAIL` binding. |
+| any other value | `/healthz` answers `503 misconfigured`. |
+
+`/healthz` reports `"accounts": "seira-cloud"` or `"accounts": "better-auth"`.
+
+In `seira-cloud` mode the Worker needs a `SEIRA_CLOUD` service binding to the
+`seira-cloud` Worker. For each account request it sends one `GET` to
+`/api/cloud/desktop/session` with the `omc_` token and nothing else. No version
+header goes with it, because Seira Cloud stores that header as the device's app
+version.
+
+| Seira Cloud answer | Worker answer |
+| --- | --- |
+| `200` with an account | The request goes on. |
+| `401`, or a token that is not an `omc_` token | `401 unauthorized`. A malformed token causes no call. |
+| Any other status, a network error, or a bad body | `503 account_service_unavailable`. An outage never looks like a sign-out. |
+
+The first request of an account writes a shadow row in `"user"`. Its `id` is the
+Seira Cloud account ID. Its email is `<account id>@seira-cloud.invalid`, so no
+real address enters this database. `GET /v1/me` returns the real email from
+Seira Cloud. The Worker never stores or returns the token.
+
+### Limits and blocks
+
+- `SEIRA_ENDPOINTS_PER_ACCOUNT` (default 3, 1 to 100) is the number of tunnels one
+  account holds at the same time. A first call that would create a fourth answers
+  `429 endpoint_limit` before any Cloudflare call. An installation that already
+  holds its endpoint keeps it. The check and the tunnel creation are two steps, so
+  concurrent first calls can pass together and exceed the limit by a few tunnels.
+- `account_blocks` (migration `0019`) lists blocked accounts. A block revokes the
+  account's installations and credentials and deletes their push devices. The next
+  cleanup run (five minutes at most) deletes their tunnels and DNS records. A
+  blocked account gets `403 account_blocked` on every account route.
+- Push is off in this deployment: no APNs or FCM secret exists, so the push
+  routes answer `503 push_unavailable`.
+- The relay is off (`RELAY_DISABLED` is `"1"`) and every tunnel-release switch is
+  `"0"`.
+
+### Secrets
+
+Set these three secrets. Wrangler refuses a deploy while one is missing.
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_ZONE_ID`
+
+### Deploy
+
+1. Put the Cloudflare account ID in the environment: `CLOUDFLARE_ACCOUNT_ID=<id>`.
+   `wrangler.jsonc` has no `account_id`.
+2. Apply the migrations first, including `0019`:
+   `wrangler d1 migrations apply DB --remote --config wrangler.jsonc`.
+3. Put the three secrets with `wrangler secret put <NAME> --config wrangler.jsonc`.
+4. Deploy: `wrangler deploy --config wrangler.jsonc`.
+5. Check that `GET https://accounts.seira.bot/healthz` shows `"ok": true` and
+   `"accounts": "seira-cloud"`.
+
+`pnpm control-plane:dry-run` builds the Worker without a deploy.
+
+### Abuse runbook
+
+The Seira Cloud account ID (`acc_...`) comes from Seira Cloud admin.
+
+Block an account. `<unix ms>` is the time now in milliseconds:
+
+```sh
+wrangler d1 execute seira-control-plane --remote --config wrangler.jsonc \
+  --command "INSERT INTO account_blocks (user_id, reason, created_at) VALUES ('acc_...', '...', <unix ms>)"
+```
+
+Check the block and its effect:
+
+```sh
+wrangler d1 execute seira-control-plane --remote --config wrangler.jsonc \
+  --command "SELECT * FROM account_blocks WHERE user_id = 'acc_...'"
+wrangler d1 execute seira-control-plane --remote --config wrangler.jsonc \
+  --command "SELECT id, revoked_at FROM installations WHERE owner_user_id = 'acc_...'"
+```
+
+Unblock the account:
+
+```sh
+wrangler d1 execute seira-control-plane --remote --config wrangler.jsonc \
+  --command "DELETE FROM account_blocks WHERE user_id = 'acc_...'"
+```
+
+The installations that the block revoked stay revoked. The person signs in again
+and registers a new installation.
 
 ## Production blockers
 

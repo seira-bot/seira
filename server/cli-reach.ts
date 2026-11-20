@@ -80,7 +80,7 @@ export function reachLines(route: Route, origin: string, port: number, prefix: s
 
 /** `serve` with no way in: nothing to pair from elsewhere yet, so no code; the ways in, as commands that paste. */
 export function noRouteLines(port: number, prefix: string, env: NodeJS.ProcessEnv = process.env): string[] {
-  const tunnel = controlPlaneProblem(env) === null ? [`  ${prefix} serve --tunnel                   a public address from your account service; sign in first: ${prefix} login`] : [];
+  const tunnel = controlPlaneProblem(env) === null ? [`  ${prefix} serve --tunnel                   a public address through a Cloudflare tunnel; sign in first: ${prefix} login`] : [];
   return [
     `Listening on 127.0.0.1:${port}, reachable from this machine only.`,
     "",

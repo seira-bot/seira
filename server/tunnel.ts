@@ -12,6 +12,7 @@ import {
   COMPANION_INSTALLATION_ID_FIELD,
   createCompanionAccountService,
   resolveCompanionControlPlaneURL,
+  resolveServerControlPlaneURL,
   type CompanionAccountService,
   type CredentialDocument,
 } from "../electron/companion-account-service.mjs";
@@ -21,15 +22,18 @@ import {
   MANAGED_COMPANION_ORIGIN_PORT,
   type CompanionOriginEndpoint,
 } from "../electron/companion-origin-gateway.mjs";
-import { ControlPlaneError, createControlPlaneClient } from "../electron/control-plane-client.mjs";
+import { ControlPlaneError, createControlPlaneClient, type ControlPlaneClient } from "../electron/control-plane-client.mjs";
 import {
   createManagedCompanionTunnel,
   managedCompanionTunnelAccess,
   resolveCloudflaredBinary,
+  serverTunnelEndpointAllowed,
   stagedCloudflaredPath,
   type ManagedTunnelAccess,
   type ManagedTunnelState,
 } from "../electron/managed-companion-tunnel.mjs";
+import { cloudOriginFor } from "../electron/cloud-signin.mjs";
+import { createSeiraCloudSignIn } from "../electron/seira-cloud-sign-in.mjs";
 import { createSecureCredentialState } from "../electron/secure-credential-state.mjs";
 import { writeFileAtomic } from "./atomic.ts";
 
@@ -106,8 +110,22 @@ export function describeTunnelAccount(document: CredentialDocument): TunnelAccou
   };
 }
 
-export function tunnelAccess(document: CredentialDocument): ManagedTunnelAccess | null {
-  return managedCompanionTunnelAccess(document);
+/** The saved access, or null when its address is not one this server may use. */
+export function tunnelAccess(document: CredentialDocument, env: NodeJS.ProcessEnv = process.env): ManagedTunnelAccess | null {
+  const access = managedCompanionTunnelAccess(document);
+  return access && serverTunnelEndpointAllowed(access.endpoint, env) ? access : null;
+}
+
+/** Refuses an address outside the allowed zones before the caller stores its connector token or starts a connector. */
+function withEndpointCheck(client: ControlPlaneClient, env: NodeJS.ProcessEnv): ControlPlaneClient {
+  return {
+    ...client,
+    async ensureEndpoint(credential, options) {
+      const provision = await client.ensureEndpoint(credential, options);
+      if (!serverTunnelEndpointAllowed(provision.endpoint.url, env)) throw new ControlPlaneError("invalid_response");
+      return provision;
+    },
+  };
 }
 
 export function platformName(platform: NodeJS.Platform = process.platform): "darwin" | "windows" | "linux" {
@@ -136,6 +154,8 @@ export function createTunnelAccount(options: {
   recovery?: TunnelRecovery;
   /** `login --relay`: sign in without reserving a public address; phones reach this machine through Seira Relay. */
   relayOnly?: boolean;
+  /** Services treated as live; tests only. */
+  liveServices?: readonly string[];
   log?: (line: string) => void;
   clock?: {
     setTimer: (callback: () => void, milliseconds: number) => unknown;
@@ -145,14 +165,22 @@ export function createTunnelAccount(options: {
 }): TunnelAccount {
   const env = options.env ?? process.env;
   const credentials = openTunnelCredentials(options.dataDir);
-  const controlPlane = resolveCompanionControlPlaneURL({ isPackaged: true, environment: env });
-  const client = controlPlane ? createControlPlaneClient({ baseURL: controlPlane, fetchImpl: options.fetchImpl }) : null;
+  const controlPlane = resolveServerControlPlaneURL({ environment: env, ...(options.liveServices ? { live: options.liveServices } : {}) });
+  const machineName = options.machineName ?? hostname();
+  const cloudSignIn = createSeiraCloudSignIn({
+    origin: cloudOriginFor(env),
+    identity: { deviceName: machineName, platform: process.platform, appVersion: options.version },
+    ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+  });
+  const client = controlPlane
+    ? withEndpointCheck(createControlPlaneClient({ baseURL: controlPlane, fetchImpl: options.fetchImpl, cloudSignIn }), env)
+    : null;
   const recovery = options.recovery;
   const service = createCompanionAccountService({
     client,
     readCredentials: () => credentials.read(),
     updateCredentials: (derive, afterPersist) => credentials.update(derive, afterPersist),
-    identity: { name: options.machineName ?? hostname(), platform: platformName(), appVersion: options.version, kind: "server" },
+    identity: { name: machineName, platform: platformName(), appVersion: options.version, kind: "server" },
     newClientInstanceId: () => randomUUID(),
     ...(options.log ? { log: options.log } : {}),
     ...(options.relayOnly ? { onDemand: true, managedEndpointNeeded: async () => false, relay: { capable: () => true, legacyDevices: async () => 0 } } : {}),
@@ -163,7 +191,7 @@ export function createTunnelAccount(options: {
           managedConnectionState: () => recovery.running()?.state() ?? STOPPED_TUNNEL,
           activatePersistedEndpoint: async () => {
             const tunnel = recovery.running();
-            const access = tunnelAccess(credentials.read());
+            const access = tunnelAccess(credentials.read(), env);
             if (!tunnel || !access) return tunnel?.state() ?? STOPPED_TUNNEL;
             return tunnel.restart(access);
           },
@@ -174,11 +202,18 @@ export function createTunnelAccount(options: {
   return { service, credentials, controlPlane };
 }
 
-/** Null when a control plane is set. Otherwise the reason that tunnel, login and Seira Relay cannot work, with the ways in that do. */
-export function controlPlaneProblem(env: NodeJS.ProcessEnv = process.env): string | null {
-  if (resolveCompanionControlPlaneURL({ isPackaged: true, environment: env })) return null;
+/** What the control plane is asked for. Seira's own control plane gives tunnel addresses, not Seira Relay. */
+export type ControlPlanePurpose = "tunnel" | "relay";
+
+/** Null when `purpose` has a control plane. Otherwise the reason that it cannot work, with the ways in that do. */
+export function controlPlaneProblem(env: NodeJS.ProcessEnv = process.env, purpose: ControlPlanePurpose = "tunnel", liveServices?: readonly string[]): string | null {
+  const url = purpose === "relay"
+    ? resolveCompanionControlPlaneURL({ isPackaged: true, environment: env })
+    : resolveServerControlPlaneURL({ environment: env, ...(liveServices ? { live: liveServices } : {}) });
+  if (url) return null;
   if (env.SEIRA_CONTROL_PLANE_URL?.trim()) return "SEIRA_CONTROL_PLANE_URL is set but is not an https address";
-  return "this Seira build has no account service for tunnel addresses and Seira Relay; set SEIRA_CONTROL_PLANE_URL to one you run, or serve with --domain, --tailscale or --public-url (behind your own tunnel or proxy)";
+  const service = purpose === "relay" ? "Seira Relay" : "tunnel addresses";
+  return `this Seira build has no account service for ${service}; set SEIRA_CONTROL_PLANE_URL to one you run, or serve with --domain, --tailscale or --public-url (behind your own tunnel or proxy)`;
 }
 
 export const FLEET_CREDENTIAL_ENV = "SEIRA_INSTALLATION_CREDENTIAL";
@@ -189,12 +224,13 @@ export function fleetCredential(env: NodeJS.ProcessEnv = process.env): string | 
   return value ? value : null;
 }
 
-export async function fleetAccess(options: { credential: string; version?: string; env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch }): Promise<ManagedTunnelAccess> {
+export async function fleetAccess(options: { credential: string; version?: string; env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch; liveServices?: readonly string[] }): Promise<ManagedTunnelAccess> {
   const env = options.env ?? process.env;
-  const problem = controlPlaneProblem(env);
+  const live = options.liveServices ? { live: options.liveServices } : {};
+  const problem = controlPlaneProblem(env, "tunnel", options.liveServices);
   if (problem) throw new Error(problem);
-  const controlPlane = resolveCompanionControlPlaneURL({ isPackaged: true, environment: env });
-  const client = createControlPlaneClient({ baseURL: controlPlane, fetchImpl: options.fetchImpl });
+  const controlPlane = resolveServerControlPlaneURL({ environment: env, ...live });
+  const client = withEndpointCheck(createControlPlaneClient({ baseURL: controlPlane, fetchImpl: options.fetchImpl }), env);
   try {
     const { endpoint, connectorToken } = await client.ensureEndpoint(options.credential, { appVersion: options.version, kind: "server" });
     return { endpoint: endpoint.url, token: connectorToken };

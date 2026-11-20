@@ -22,6 +22,10 @@ export declare function resolveCompanionControlPlaneURL(options?: {
   isPackaged?: boolean;
   environment?: NodeJS.ProcessEnv;
 }): string;
+export declare function resolveServerControlPlaneURL(options?: {
+  environment?: NodeJS.ProcessEnv;
+  live?: readonly string[];
+}): string;
 export declare function companionAccountCleanupPending(credentials: CredentialDocument): boolean;
 export declare function companionTunnelRetired(credentials: CredentialDocument): boolean;
 /** true while a pairing window is open or a paired device was seen in the

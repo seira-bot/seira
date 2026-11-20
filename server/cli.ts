@@ -506,7 +506,7 @@ export async function runLogin(options: CliOptions, io: CliIo = defaultIo()): Pr
     io.error(`${account.credentials.file} exists but could not be read; fix or remove it, then try again`);
     return 1;
   }
-  const problem = controlPlaneProblem();
+  const problem = controlPlaneProblem(process.env, options.relay === true ? "relay" : "tunnel");
   if (problem) { io.error(problem); return 1; }
   const existing = describeTunnelAccount(account.credentials.read());
   if (existing.address) io.log(`already signed in as ${existing.email ?? "?"} (${existing.address}); signing in again refreshes it`);

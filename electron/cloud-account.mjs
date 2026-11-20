@@ -2,32 +2,20 @@ import { createManagedDesktopStore, retryDelay, unreadableRecord } from "./manag
 import { CLOUD_MACHINE_CONNECTABLE, cloudUnreachableText, parseCloudCredit, parseCloudLanding, parseCloudOffer, parseCloudPurchase, parseCloudSummary, parseCloudTeams, parseCloudRoom, parseCloudTrial, parseCloudUsage, parsePairingGrant, parsePublicOffer, withoutTrial } from "./cloud-home.mjs";
 import { CLOUD_ID, CLOUD_SWATCHES, cleanCloudListName, ORGANIZATION_BLOCKS, otherOwnClouds, ownCloud, parseCloudList, parseCloudRenewal, parseOrganizations, releaseVersion } from "./cloud-list.mjs";
 import { planTeam, teamPlan } from "./cloud-team-plan.mjs";
-import { cleanCode, cleanEmail, parseSignInStart, SIGN_IN_START, SIGN_IN_TRIES, SIGN_IN_VERIFY, signInIdentity, startFailure, verifyFailure } from "./cloud-signin.mjs";
+import { CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN, cloudOriginFor, cloudOriginOf, cleanCode, cleanEmail, parseSignInStart, SIGN_IN_START, SIGN_IN_TRIES, SIGN_IN_VERIFY, signInIdentity, startFailure, verifyFailure } from "./cloud-signin.mjs";
 import { createHash } from "node:crypto";
 import nativeText from "./native-text.cjs";
-import { SEIRA_HOSTS, seiraOrigin } from "./seira-hosts.mjs";
 
 const { englishText } = nativeText;
 
-export const CLOUD_ORIGIN = seiraOrigin(SEIRA_HOSTS.cloud);
-/** The staging Admin (Dodo test mode, real test Clouds): a fixed address, on only with SEIRA_CLOUD_STAGING=1. */
-export const STAGING_CLOUD_ORIGIN = seiraOrigin(SEIRA_HOSTS.cloudStaging);
+export { CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN, cloudOriginOf };
 const FILES = (suffix) => ({ file: `cloud-account${suffix}.bin`, saved: `cloud-accounts${suffix}.bin`, places: `account-places${suffix}.json`, environments: `environments${suffix}.json`, sync: `cloud-sync${suffix}`, look: `cloud-home-look${suffix}.json` });
-/** An https origin, or http on the loopback address for development; null for anything else, including a path, a port-less lookalike or credentials. */
-export function cloudOriginOf(value) {
-  if (typeof value !== "string" || value.length > 253) return null;
-  let url;
-  try { url = new URL(value); } catch { return null; }
-  if (value !== url.origin || url.username || url.password) return null;
-  return url.protocol === "https:" || (url.protocol === "http:" && url.hostname === "127.0.0.1") ? value : null;
-}
 /** Which Cloud this app signs in to, and the files that depend on it (the sign-in, saved servers with the Cloud's entry,
  * Files' state, the Cloud's chosen name): each Cloud keeps its own, so one never reads or writes another's. The
  * environment picks it: SEIRA_CLOUD_ORIGIN (an https origin, or http://127.0.0.1) wins over SEIRA_CLOUD_STAGING=1, which wins
  * over Seira's own Cloud. An origin that is not valid is ignored. */
 export function cloudTarget(env = process.env) {
-  const asked = cloudOriginOf(env?.SEIRA_CLOUD_ORIGIN);
-  const origin = asked ?? (env?.SEIRA_CLOUD_STAGING === "1" ? STAGING_CLOUD_ORIGIN : CLOUD_ORIGIN);
+  const origin = cloudOriginFor(env);
   if (origin === STAGING_CLOUD_ORIGIN) return { origin, kind: "staging", staging: true, ...FILES("-staging") };
   if (origin === CLOUD_ORIGIN) return { origin, kind: "seira", staging: false, ...FILES("-seira") };
   return { origin, kind: "custom", staging: false, ...FILES(`-dev-${createHash("sha256").update(origin).digest("hex").slice(0, 10)}`) };

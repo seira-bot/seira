@@ -13,7 +13,9 @@ declare global {
       PUSH_MIGRATION_DB: D1Database;
       TEST_MIGRATIONS: D1Migration[];
       /** wrangler.jsonc's CLOUDFLARE_ENDPOINT_ACCOUNTS, as JSON. */
-      TEST_PRODUCTION_ENDPOINT_ACCOUNTS: string;
+      TEST_DEPLOYED_ENDPOINT_ACCOUNTS: string;
+      /** wrangler.jsonc's SEIRA_DNS_RECORD_LIMIT. */
+      TEST_DEPLOYED_DNS_RECORD_LIMIT: string;
     }
   }
 }
@@ -35,6 +37,7 @@ afterEach(async () => {
     // A missing row reads as an empty snapshot (never scanned, never refused).
     env.DB.prepare("DELETE FROM managed_endpoint_account_capacity"),
     env.DB.prepare("DELETE FROM managed_endpoint_reclaim_preview"),
+    env.DB.prepare("DELETE FROM account_blocks"),
     env.DB.prepare("DELETE FROM installation_credentials"),
     env.DB.prepare("DELETE FROM installations"),
     env.DB.prepare('DELETE FROM "session"'),
