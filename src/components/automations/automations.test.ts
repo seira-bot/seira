@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { saveWebhookCredential } from "@/lib/webhook-credentials";
 import type { Bot } from "@/state/store";
+import { resetWorkflowsForTest } from "@/state/workflows";
 
 const fixture = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
@@ -18,6 +19,7 @@ vi.mock("@/state/store", async (importOriginal) => ({
   api: (...args: unknown[]) => fixture.api(...args),
 }));
 vi.mock("@/lib/thread-preferences", () => ({ useShowThreads: () => false }));
+vi.mock("@/lib/live-events", () => ({ listenLiveFrames: () => () => {} }));
 const copied = vi.hoisted(() => ({ texts: [] as string[] }));
 const credentials = vi.hoisted(() => {
   const items = new Map<string, string>();
@@ -57,6 +59,7 @@ const button = (container: HTMLElement, label: string) => {
   return found;
 };
 beforeEach(() => {
+  resetWorkflowsForTest();
   fixture.dispatch.mockReset();
   fixture.api.mockReset();
   fixture.api.mockResolvedValue({});
@@ -154,6 +157,78 @@ describe("a routine's panel", () => {
     expect(container.querySelector("[data-testid=automation-instructions]")!.textContent).toBe(prompt);
     expect(container.textContent).not.toContain("(new…");
     expect(container.querySelector("[data-automation-status]")!.textContent).toBe("On");
+  });
+
+  describe("that runs a workflow", () => {
+    const flow = {
+      id: "wf1", name: "Morning round", createdAt: 1, updatedAt: 10,
+      steps: [
+        { id: "a", kind: "bot", botId: "bot-a", instruction: "Do it", position: { x: 0, y: 0 } },
+        { id: "b", kind: "bot", botId: "bot-b", instruction: "Then this", position: { x: 0, y: 200 } },
+      ],
+      connections: [{ id: "c1", from: "a", to: "b" }],
+    };
+    const detail = {
+      runId: "run-1", workflowId: "wf1", routineId: "routine-1", workflowName: "Morning round", status: "failed", graph: { steps: flow.steps, connections: flow.connections },
+      botIds: ["bot-a", "bot-b"], startStepId: "a", threads: {}, createdAt: now, updatedAt: now,
+      stepRuns: [{ stepId: "a", status: "done" }, { stepId: "b", status: "failed", errorCode: "turn_failed", botId: "bot-b" }],
+    };
+    const { graph: _graph, ...update } = detail;
+    const routine = { id: "routine-1", name: "Round", prompt: "1. Scout does it\n2. Ledger finishes", botId: "bot-a", runOn: "seira", enabled: true, createdAt: now, updatedAt: now,
+      schedule: { type: "daily", time: "09:00", weekdays: [1, 2, 3, 4, 5] }, nextRunAt: now + 86_400_000, durationMinutes: 30, workflowId: "wf1" };
+    const routineRun = { id: "run-1", routineId: "routine-1", routineName: "Round", target: "bot", botId: "bot-a", runOn: "seira", scheduledFor: now, startedAt: now, createdAt: now, status: "failed", manual: false, workflowId: "wf1" };
+    beforeEach(() => {
+      fixture.api.mockImplementation(async (path: unknown) => {
+        if (path === "/api/workflows") return { workflows: [flow] };
+        if (String(path).startsWith("/api/workflows/wf1/runs")) return { runs: [update] };
+        if (path === "/api/workflow-runs/run-1") return { run: detail };
+        return {};
+      });
+      fixture.state.routineRuns = [routineRun];
+    });
+    const panel = () => {
+      const [automation] = automationsFrom({ routines: [routine] as never, webhooks: [], runs: [routineRun] as never });
+      return mount(createElement(AutomationPanel, { automation: automation!, sentence: "s", onClose: vi.fn(), onEdit: vi.fn(), onDeleted: vi.fn() }));
+    };
+
+    it("shows the workflow a routine runs instead of its numbered instructions, with the last run's steps", async () => {
+      const container = panel();
+      expect(container.querySelector("[data-testid=automation-instructions]")).toBeNull();
+      expect(container.textContent).not.toContain("1. Scout does it");
+      await vi.waitFor(() => expect(container.querySelector("[data-workflow-run=run-1]")).not.toBeNull());
+      expect(container.textContent).toContain("Runs the workflow Morning round");
+      const rows = [...container.querySelectorAll("[data-workflow-run=run-1] li")];
+      expect(rows.map((row) => row.getAttribute("data-step-status"))).toEqual(["done", "failed"]);
+      expect(rows[0]!.textContent).toContain("Scout");
+      expect(rows[1]!.textContent).toContain("Ledger");
+    });
+
+    it("opens the run view from a run line of a workflow routine", () => {
+      const container = panel();
+      const line = [...container.querySelectorAll("section ul button")].find((candidate) => candidate.closest("section")?.querySelector("h3")?.textContent === "Recent runs")!;
+      expect(line.hasAttribute("disabled")).toBe(false);
+      flushSync(() => (line as HTMLButtonElement).click());
+      expect(fixture.dispatch).toHaveBeenCalledWith({ type: "showRoutines", view: "workflows", workflowId: "wf1", workflowRunId: "run-1" });
+    });
+
+    it("says nothing about the workflow until its list has loaded, then says the list couldn't load if it can't", async () => {
+      fixture.api.mockImplementation(async () => { throw new TypeError("offline"); });
+      const container = panel();
+      expect(container.textContent).not.toContain("Runs the workflow");
+      await vi.waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent).toContain("Couldn't load your workflows."));
+      expect(container.textContent).not.toContain("Runs the workflow");
+    });
+
+    it.each(["queued", "missed"])("opens the chat, not the run view, from the line of a %s run that has no steps", (status) => {
+      const waiting = { ...routineRun, status, threadId: "t-1" };
+      fixture.state.routineRuns = [waiting];
+      const [automation] = automationsFrom({ routines: [routine] as never, webhooks: [], runs: [waiting] as never });
+      const container = mount(createElement(AutomationPanel, { automation: automation!, sentence: "s", onClose: vi.fn(), onEdit: vi.fn(), onDeleted: vi.fn() }));
+      const line = [...container.querySelectorAll("section ul button")].find((candidate) => candidate.closest("section")?.querySelector("h3")?.textContent === "Recent runs")!;
+      expect(line.hasAttribute("disabled")).toBe(false);
+      flushSync(() => (line as HTMLButtonElement).click());
+      expect(fixture.dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ workflowRunId: expect.anything() }));
+    });
   });
 
   it("falls back to its sentence when it has no name", () => {
@@ -524,5 +599,75 @@ describe("a run that waits on the person", () => {
     expect(cancel(panel("failed"))).toBeNull();
     root?.unmount(); root = null; document.body.innerHTML = "";
     expect(cancel(panel("completed"))).toBeNull();
+  });
+});
+
+describe("the Workflows view", () => {
+  const page = () => mount(createElement(TriggersPage, { onBack: vi.fn(), onOpenRoom: vi.fn() }));
+  const listApi = () => fixture.api.mockImplementation(async (path: unknown) => (path === "/api/workflows" ? { workflows: [] } : {}));
+
+  it("offers Workflows beside List and Calendar, and opens it through the store", async () => {
+    listApi();
+    const container = page();
+    await vi.waitFor(() => expect(container.querySelector('[role=group] button[aria-pressed]')).not.toBeNull());
+    const labels = [...container.querySelectorAll('[role=group][aria-label="Show as"] button')].map((node) => node.textContent);
+    expect(labels).toEqual(["List", "Calendar", "Workflows"]);
+    flushSync(() => button(container, "Workflows").click());
+    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "showRoutines", view: "workflows", botId: undefined });
+  });
+
+  it("hides Workflows when workflows are unavailable", async () => {
+    const { ApiError } = await import("@/state/api");
+    fixture.api.mockImplementation(async (path: unknown) => {
+      if (path === "/api/workflows") throw new ApiError("not found", 404);
+      return {};
+    });
+    const container = page();
+    await vi.waitFor(() => expect([...container.querySelectorAll('[role=group][aria-label="Show as"] button')].map((node) => node.textContent)).toEqual(["List", "Calendar"]));
+  });
+
+  it("shows New workflow instead of New, and no automation panel, in the Workflows view", async () => {
+    listApi();
+    fixture.state.routinesFocus = { view: "workflows" };
+    const container = page();
+    await vi.waitFor(() => expect(container.textContent).toContain("You have no workflows."));
+    expect([...container.querySelectorAll("button")].some((node) => node.textContent?.trim() === "New workflow")).toBe(true);
+    expect([...container.querySelectorAll("button")].some((node) => node.textContent?.trim() === "New")).toBe(false);
+    expect(container.querySelector(`aside[aria-label="Automation"]`)).toBeNull();
+  });
+
+  it("creates an untitled workflow with New workflow and opens it", async () => {
+    fixture.state.routinesFocus = { view: "workflows" };
+    fixture.api.mockImplementation(async (path: unknown, init: unknown) => {
+      if (path === "/api/workflows" && (init as { method?: string } | undefined)?.method === "POST") {
+        const body = JSON.parse((init as { body: string }).body) as Record<string, unknown>;
+        return { workflow: { ...body, id: "wf-new", createdAt: 1, updatedAt: 1 } };
+      }
+      return path === "/api/workflows" ? { workflows: [] } : {};
+    });
+    const container = page();
+    await vi.waitFor(() => expect(container.textContent).toContain("You have no workflows."));
+    flushSync(() => [...container.querySelectorAll("button")].find((node) => node.textContent?.trim() === "New workflow")!.click());
+    await vi.waitFor(() => expect(fixture.dispatch).toHaveBeenCalledWith({ type: "showRoutines", view: "workflows", workflowId: "wf-new" }));
+    const post = fixture.api.mock.calls.find(([, init]) => (init as { method?: string } | undefined)?.method === "POST")!;
+    expect(JSON.parse((post[1] as { body: string }).body)).toEqual({ name: "Untitled workflow", steps: [], connections: [] });
+  });
+
+  it("creates one workflow when New workflow is clicked twice at once", async () => {
+    fixture.state.routinesFocus = { view: "workflows" };
+    let release: (value: unknown) => void = () => {};
+    fixture.api.mockImplementation((path: unknown, init: unknown) => {
+      if (path === "/api/workflows" && (init as { method?: string } | undefined)?.method === "POST") return new Promise((resolve) => { release = resolve; });
+      return Promise.resolve(path === "/api/workflows" ? { workflows: [] } : {});
+    });
+    const container = page();
+    await vi.waitFor(() => expect(container.textContent).toContain("You have no workflows."));
+    const header = [...container.querySelectorAll("button")].find((node) => node.textContent?.trim() === "New workflow")!;
+    flushSync(() => { header.click(); header.click(); });
+    const posts = () => fixture.api.mock.calls.filter(([, init]) => (init as { method?: string } | undefined)?.method === "POST");
+    expect(posts()).toHaveLength(1);
+    release({ workflow: { id: "wf-new", name: "Untitled workflow", steps: [], connections: [], createdAt: 1, updatedAt: 1 } });
+    await vi.waitFor(() => expect(fixture.dispatch).toHaveBeenCalledWith({ type: "showRoutines", view: "workflows", workflowId: "wf-new" }));
+    expect(posts()).toHaveLength(1);
   });
 });

@@ -2,7 +2,7 @@
 // never half moved, and nothing moves while an earlier version's server still holds its folder.
 import nodeFs from "node:fs";
 import nodePath from "node:path";
-import { legacyLeaseHeld } from "./data-dir-lease.mjs";
+import { describeDataDirLease, legacyLeaseHeld } from "./data-dir-lease.mjs";
 import {
   currentHomeFolder,
   LEGACY_CHILD_LEASE_FOLDER,
@@ -17,6 +17,7 @@ import {
 
 export const LEGACY_MOVE_RECEIPT = nodePath.join(".backups", "legacy-move.json");
 const DEFINITION_MARKERS = ["bots.json", "groups.json", "config.json"];
+const SETUP_MARKERS = ["config.json", "groups.json"];
 
 const OLD_FOLDER_IN_PATH = /(?<=[\\/])\.openmausbot(?![A-Za-z0-9_])/g;
 
@@ -49,6 +50,53 @@ function isDataFolder(fs, dir) {
   try { return DEFINITION_MARKERS.some((name) => fs.existsSync(nodePath.join(dir, name))); } catch { return false; }
 }
 
+const hasSetup = (fs, dir) => SETUP_MARKERS.some((name) => exists(fs, nodePath.join(dir, name)));
+
+/** Whether a server may run on `dir` now. A lease record that cannot be read counts as a running server. */
+function serverRunning(dir) {
+  try {
+    const { state } = describeDataDirLease(dir);
+    return state !== "none" && state !== "dead";
+  } catch {
+    return true;
+  }
+}
+
+/** Whether a person wrote in the chats of `dir`. A database that cannot be read counts as written. */
+function personWrote(dir) {
+  const file = nodePath.join(dir, "messages.db");
+  if (!nodeFs.existsSync(file)) return false;
+  let db;
+  try {
+    const { DatabaseSync } = process.getBuiltinModule("node:sqlite");
+    db = new DatabaseSync(file, { readOnly: true });
+    return db.prepare("SELECT 1 FROM messages WHERE role <> 'bot' LIMIT 1").get() !== undefined;
+  } catch {
+    return true;
+  } finally {
+    try { db?.close(); } catch {}
+  }
+}
+
+/**
+ * Moves the current data folder into the old one's .backups, so the old one can take its place, only when nobody set
+ * the current one up or wrote in its chats, no server runs on it, and the old one holds a setup. Returns the path of the
+ * moved folder, or null when the current folder stays.
+ */
+function setAsideUnusedFolder(fs, source, target, { running, wrote }) {
+  try {
+    if (!fs.lstatSync(source).isDirectory() || !fs.lstatSync(target).isDirectory()) return null;
+  } catch {
+    return null;
+  }
+  if (!hasSetup(fs, source) || hasSetup(fs, target) || running(target) || wrote(target)) return null;
+  const backups = nodePath.join(source, ".backups");
+  const aside = nodePath.join(backups, `${HOME_PREFIX.slice(1)}-before-move-${new Date().toISOString().replace(/[:.]/g, "-")}`);
+  fs.mkdirSync(backups, { recursive: true, mode: 0o700 });
+  fs.renameSync(target, aside);
+  return aside;
+}
+
 function rewriteFile(fs, file, log) {
   let text;
   try { text = fs.readFileSync(file, "utf8"); } catch { return false; }
@@ -72,25 +120,34 @@ function rewriteFile(fs, file, log) {
  * Moves each old folder in `home` to its current name when the current one is absent and no earlier-version server
  * holds the old one. Does nothing when SEIRA_DATA_DIR names a folder other than `<home>/.seira`. `rewriteFiles`: files outside the folders (the saved
  * servers, the desktop settings) whose paths name an old folder; rewritten after a data folder moved.
+ * `running` and `wrote` tell whether a server runs on a data folder and whether a person wrote in its chats.
  * Returns the moves made, as [from, to] folder names.
  */
-export function migrateHomeFolders({ home, env = process.env, fs = nodeFs, log = () => {}, held = legacyLeaseHeld, rewriteFiles = [] }) {
+export function migrateHomeFolders({ home, env = process.env, fs = nodeFs, log = () => {}, held = legacyLeaseHeld, rewriteFiles = [], running = serverRunning, wrote = personWrote }) {
   if (customDataDir(env, home)) return [];
   const moves = [];
   let dataMoved = false;
   for (const [from, to] of homeTargets(fs, home, env)) {
     const source = nodePath.join(home, from);
     const target = nodePath.join(home, to);
-    if (exists(fs, target)) {
-      log(`legacy migration: ${from} and ${to} both exist; both left as they are`);
-      continue;
-    }
     let stat;
     try { stat = fs.lstatSync(source); } catch { continue; }
     if (!stat.isDirectory() && !stat.isSymbolicLink()) continue;
     if (held(source)) {
       log(`legacy migration: ${from} is in use by an earlier version; left as it is`);
       continue;
+    }
+    let aside = null;
+    if (exists(fs, target)) {
+      try {
+        if (to === HOME_PREFIX) aside = setAsideUnusedFolder(fs, source, target, { running, wrote });
+      } catch (error) {
+        log(`legacy migration: could not move the unused ${to} aside: ${error?.message ?? error}`);
+      }
+      if (!aside) {
+        log(`legacy migration: ${from} and ${to} both exist; both left as they are`);
+        continue;
+      }
     }
     const receipt = stat.isDirectory() && isDataFolder(fs, source) ? nodePath.join(source, LEGACY_MOVE_RECEIPT) : null;
     try {
@@ -101,21 +158,24 @@ export function migrateHomeFolders({ home, env = process.env, fs = nodeFs, log =
       fs.renameSync(source, target);
     } catch (error) {
       if (receipt) try { fs.rmSync(receipt, { force: true }); } catch {}
+      if (aside) try { fs.renameSync(aside, target); } catch {}
       log(`legacy migration: could not move ${from} to ${to}: ${error?.message ?? error}`);
       continue;
     }
     moves.push([from, to]);
     if (receipt) dataMoved = true;
-    log(`legacy migration: moved ${from} to ${to}`);
+    log(aside
+      ? `legacy migration: moved ${from} to ${to}; the unused ${to} an earlier start made is now ${nodePath.join(to, nodePath.relative(source, aside))}`
+      : `legacy migration: moved ${from} to ${to}`);
   }
   if (dataMoved) for (const file of rewriteFiles) rewriteFile(fs, file, log);
   return moves;
 }
 
 /** Runs both migrations for a data folder; `log` defaults to a warning with the data-directory tag. */
-export function migrateLegacyData({ home, dataDir, log = (line) => console.warn(`[data-directory] ${line}`) }) {
-  migrateHomeFolders({ home, log });
-  migrateInnerFiles({ dataDir, home, log });
+export function migrateLegacyData({ home, dataDir, env = process.env, log = (line) => console.warn(`[data-directory] ${line}`) }) {
+  migrateHomeFolders({ home, env, log });
+  migrateInnerFiles({ dataDir, home, env, log });
 }
 
 /**

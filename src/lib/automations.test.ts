@@ -31,6 +31,20 @@ describe("the plain sentence", () => {
     expect(automationSentence(automation([]), "Scout")).toBe("Every weekday at 9 AM, Scout sends you a summary of your inbox");
   });
 
+  it("names the workflow and its bots for a routine that runs one", () => {
+    const flowing = automation([], { workflowId: "wf1" });
+    expect(automationSentence(flowing, "Scout", { name: "Morning round", bots: ["Scout", "Ledger"] })).toBe("Every weekday at 9 AM, Morning round runs with Scout and Ledger");
+  });
+
+  it("falls back to the bot starting a workflow when none of the workflow's bots is known", () => {
+    expect(automationSentence(automation([], { workflowId: "wf1" }), "Scout", { name: "Morning round", bots: [] })).toBe("Every weekday at 9 AM, Scout starts a workflow");
+  });
+
+  it("says the bot starts a workflow when the workflow is not known", () => {
+    expect(automationSentence(automation([], { workflowId: "wf1" }), "Scout")).toBe("Every weekday at 9 AM, Scout starts a workflow");
+    expect(automation([], { workflowId: "wf1" }).workflowId).toBe("wf1");
+  });
+
   it("says who sends and what the bot does for something another app sends", () => {
     const [hook] = automationsFrom({ routines: [], webhooks: [webhook()], runs: [] });
     expect(automationSentence(hook!, "Scout")).toBe("When your sales form sends something, Scout drafts a short follow-up email for the lead");

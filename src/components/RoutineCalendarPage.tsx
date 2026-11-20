@@ -83,8 +83,8 @@ import {
 } from "@/lib/routines"; import { ROUTINE_GOAL_RUN_LIMIT_MINUTES, ROUTINE_RUN_LIMIT_MAX_MINUTES, ROUTINE_RUN_LIMIT_MINUTES } from "@/lib/routines";
 import { api, openBotThread, openThread, useStore, type Bot, type Group } from "@/state/store";
 import { RoutineScheduleNote } from "./RoutineScheduleNote";
-import { routineEditorInput } from "./routines/routine-editor-input";
-import { WhatItDoes } from "./routines/WhatItDoes";
+import { choiceOf, routineEditorInput, workflowBlock, workflowClears, workflowIdOf } from "./routines/routine-editor-input";
+import { WhatItDoes, WorkflowRoutineSection } from "./routines/WhatItDoes";
 import { CalendarEventCard, HOUR_HEIGHT, statusState } from "./routines/CalendarEventCard";
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
@@ -111,7 +111,7 @@ export type EventSeed = {
   durationMinutes: number;
   botIds: string[];
   name?: string;
-  description?: string;
+  description?: string; workflowId?: string;
   resultsThreadId?: string | null;
   /** Dropped on an engine's reset marker: it runs when that limit resets, not at `at`. */
   limitReset?: { engine: string };
@@ -308,7 +308,7 @@ export function EventEditor({
   const [kind, setKind] = useState<EventKind>(routinesOnly ? "routine" : seed.kind);
   const [editorOpenedAt] = useState(() => Date.now());
   const [name, setName] = useState(existingRoutine?.name ?? existingCall?.name ?? seed.name ?? "");
-  const [description, setDescription] = useState(existingRoutine?.prompt ?? existingCall?.description ?? seed.description ?? "");
+  const [description, setDescription] = useState(existingRoutine?.prompt ?? existingCall?.description ?? seed.description ?? ""); const [workflowId, setWorkflowId] = useState<string | null>(existingRoutine?.workflowId ?? seed.workflowId ?? null);
   const initialAt = existingRoutine?.schedule.type === "once"
     ? existingRoutine.schedule.at
     : existingRoutine?.schedule.type === "daily"
@@ -494,7 +494,7 @@ export function EventEditor({
         const input = routineEditorInput({
           name, description, routineTarget, botId: lockedBotId ?? botIds[0] ?? "", groupId, runOn, existingRoutine, savedAt, schedule: nextSchedule,
           durationMinutes, timeoutMinutes, overlap, continuity, recurrenceIsOnce: recurrence === "none", runOnStartup,
-          attachments: attachments as RoutineContextAttachment[], resultsThreadId,
+          attachments: attachments as RoutineContextAttachment[], resultsThreadId, workflowId,
         });
         const response = await editorRequest(existingRoutine ? `/api/routines/${existingRoutine.id}` : "/api/routines", { method: existingRoutine ? "PATCH" : "POST", body: JSON.stringify(input) });
         dispatch({ type: "routinePatched", routine: response.routine });
@@ -525,7 +525,7 @@ export function EventEditor({
 
   const valid = Boolean(
     name.trim()
-    && (kind === "call" || description.trim())
+    && (kind === "call" || (workflowId !== null ? Boolean(workflowId) && !workflowBlock({ target: routineTarget, runOn, limitReset: recurrence === "limit_reset" }) : description.trim()))
     && (!lockedBotId || botIds[0] === lockedBotId)
     && (kind === "call"
       ? botIds.length > 0
@@ -932,8 +932,8 @@ export function EventEditor({
                   <div className="mb-2 text-[13px] font-medium text-ink">{kind === "routine" ? (advanced ? t("routines.event.assignBot") : t("routines.editor.who")) : t("routines.event.addGuests")}</div>
                   {bots.length > 0 ? (
                 <>
-                  <BotPicker bots={bots} selected={botIds} multiple={kind === "call"} locked={Boolean(lockedBotId)} onChange={selectBots} />
-                  <div className="mt-2 text-[12px] text-ink-secondary">{kind === "routine" ? t("routines.event.botOwnsRuns") : t(selectedBots.length === 0 ? "routines.event.invitedNone" : selectedBots.length === 1 ? "routines.event.invitedOne" : "routines.event.invitedMany", { count: selectedBots.length })}</div>{kind === "routine" && <RoutineAudience team={state.config?.team} bot={selectedBots[0]} value={resultsThreadId} madeIn={existingRoutine?.sourceThreadId} />}
+                  <BotPicker bots={bots} selected={botIds} multiple={kind === "call"} locked={Boolean(lockedBotId || workflowId)} onChange={selectBots} />
+                  <div className="mt-2 text-[12px] text-ink-secondary">{kind === "routine" ? t(workflowId ? "workflow.slot.botLocked" : "routines.event.botOwnsRuns") : t(selectedBots.length === 0 ? "routines.event.invitedNone" : selectedBots.length === 1 ? "routines.event.invitedOne" : "routines.event.invitedMany", { count: selectedBots.length })}</div>{kind === "routine" && <RoutineAudience team={state.config?.team} bot={selectedBots[0]} value={resultsThreadId} madeIn={existingRoutine?.sourceThreadId} />}
                 </>
               ) : (
                 <button type="button" onClick={() => { dispatch({ type: "newBot" }); onClose(); }} className="w-full rounded-xl border border-dashed border-accent/45 bg-accent/[0.06] px-4 py-4 text-left hover:bg-accent/10">
@@ -947,7 +947,7 @@ export function EventEditor({
           </div>
 
           {advanced && resultsControl}
-          <WhatItDoes value={description} onChange={setDescription} label={t("routines.editor.descriptionLabel")} placeholder={isRoomGoal ? t("routines.goal.instructionsPlaceholder") : kind === "routine" ? (advanced ? t("routines.event.instructionsPlaceholder") : t("routines.editor.instructionsPlaceholder")) : t("routines.event.agendaPlaceholder")} />
+          <WhatItDoes value={description} onChange={setDescription} label={t("routines.editor.descriptionLabel")} placeholder={isRoomGoal ? t("routines.goal.instructionsPlaceholder") : kind === "routine" ? (advanced ? t("routines.event.instructionsPlaceholder") : t("routines.editor.instructionsPlaceholder")) : t("routines.event.agendaPlaceholder")} workflow={kind === "routine" ? { choice: choiceOf(workflowId), onChange: (next, startBotId) => { setWorkflowId(workflowIdOf(next)); if (startBotId && !lockedBotId) selectBots([startBotId]); }, block: workflowBlock({ target: routineTarget, runOn, limitReset: recurrence === "limit_reset" }), lockedBotId, clears: workflowClears(existingRoutine) } : undefined} />
           {continuityControl}
 
           {advanced && attachmentsRow}
@@ -1445,7 +1445,7 @@ export function EventDetails({
             {routine?.schedule.type === "cron" && <div className="mt-2"><CronSchedulePreview schedule={routine.schedule} paused={!routine.enabled} /></div>}
           </DrawerField>
         )}
-        {description && <DrawerField label={isCall ? t("routines.drawer.agenda") : t("routines.drawer.what")}><div className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink">{description}</div></DrawerField>}
+        {(run ? run.workflowId : routine?.workflowId) && routineId ? <WorkflowRoutineSection routineId={routineId} workflowId={(run ? run.workflowId : routine?.workflowId)!} runId={run?.id} /> : description && <DrawerField label={isCall ? t("routines.drawer.agenda") : t("routines.drawer.what")}><div className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink">{description}</div></DrawerField>}
         {!isCall && (
           <DrawerField label={t("routines.drawer.runsOn")}>
             <div className="flex items-start gap-2 text-[13px] text-ink">{runOn === "cloud" ? <Cloud size={14} className="mt-0.5 shrink-0 text-ink-secondary" /> : <Laptop size={14} className="mt-0.5 shrink-0 text-ink-secondary" />}<span>{runsOn.label}</span></div>
@@ -1586,13 +1586,13 @@ export function RoutineEditor({
   routine,
   bots,
   lockedBotId, initialBotId,
-  defaultRunOn, plain,
+  defaultRunOn, plain, initialWorkflowId,
   onClose,
 }: {
   routine?: Routine;
   bots: Bot[];
   lockedBotId?: string; initialBotId?: string;
-  defaultRunOn?: RoutineRunOn; plain?: boolean;
+  defaultRunOn?: RoutineRunOn; plain?: boolean; initialWorkflowId?: string;
   onClose: () => void;
 }) {
   const at = routine?.schedule.type === "once"
@@ -1604,5 +1604,5 @@ export function RoutineEditor({
       : routine?.schedule.type === "cron"
         ? routine.nextRunAt ?? nextHour()
       : nextHour();
-  return <EventEditor seed={{ kind: "routine", at, durationMinutes: routine?.durationMinutes ?? 30, botIds: lockedBotId ? [lockedBotId] : routine ? [routine.botId] : initialBotId ? [initialBotId] : bots.length === 1 ? [bots[0]!.id] : [], routine }} bots={bots} lockedBotId={lockedBotId} defaultRunOn={defaultRunOn} plain={plain} onClose={onClose} onSavedCall={() => {}} />;
+  return <EventEditor seed={{ kind: "routine", at, durationMinutes: routine?.durationMinutes ?? 30, botIds: lockedBotId ? [lockedBotId] : routine ? [routine.botId] : initialBotId ? [initialBotId] : bots.length === 1 ? [bots[0]!.id] : [], routine, workflowId: initialWorkflowId }} bots={bots} lockedBotId={lockedBotId} defaultRunOn={defaultRunOn} plain={plain} onClose={onClose} onSavedCall={() => {}} />;
 }
