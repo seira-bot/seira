@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { createCompanyBackups } from "./company-backups.mjs";
+import { LEGACY_BACKUP_MAGIC } from "./legacy-names.mjs";
 
 const PART_BYTES = 64 * 1024 * 1024;
 const MAX_BYTES = 10 * 1024 * 1024 * 1024;
@@ -19,9 +20,10 @@ const SUMMARY = { format: "seira.workspace-backup", version: 1, id: UPLOAD_ID, b
 const partEtag = partNumber => `"${partNumber.toString(16).padStart(32, "0")}"`;
 
 // Synthetic opaque container bytes; the real encryption and replacement workflow is the server fixture's.
+let magic = MAGIC;
 function archiveChunk(offset, length) {
   const chunk = Buffer.alloc(length, 0xa5);
-  if (offset < MAGIC.length) MAGIC.copy(chunk, 0, offset, Math.min(MAGIC.length, offset + length));
+  if (offset < magic.length) magic.copy(chunk, 0, offset, Math.min(magic.length, offset + length));
   return chunk;
 }
 
@@ -239,6 +241,17 @@ test("restore verifies the downloaded archive and prepares only a local preview,
   assert(!f.localCalls.some(call => /\/restore(?:\/|$)/.test(call.route)));
   assertStorageIsolation(f.storageCalls);
   await f.clean();
+});
+
+test("restore accepts an archive that an earlier version made", async t => {
+  magic = Buffer.from(LEGACY_BACKUP_MAGIC);
+  try {
+    const f = await fixture(t);
+    assert.deepEqual(await f.restore(), { id: UPLOAD_ID, summary: SUMMARY });
+    await f.clean();
+  } finally {
+    magic = MAGIC;
+  }
 });
 
 for (const corruption of ["short", "long", "hash", "magic"]) {

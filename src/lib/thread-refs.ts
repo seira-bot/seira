@@ -1,3 +1,5 @@
+import { currentChatLink } from "../../electron/legacy-names.mjs";
+
 export interface ThreadRefCandidate {
   botId: string;
   botName: string;
@@ -154,7 +156,7 @@ export function takeThreadLinkFromLocation(): string | null {
 }
 
 export function parseThreadRefUrl(value: string): ThreadRefAddress | null {
-  const raw = value.trim();
+  const raw = currentChatLink(value.trim());
   if (!raw.toLowerCase().startsWith(THREAD_URL_PREFIX)) return null;
   let url: URL;
   try {
@@ -182,7 +184,7 @@ export function parseThreadRefUrl(value: string): ThreadRefAddress | null {
 }
 
 export function parseBotRefUrl(value: string): { botId: string } | null {
-  const raw = value.trim();
+  const raw = currentChatLink(value.trim());
   if (!raw.toLowerCase().startsWith(BOT_URL_PREFIX)) return null;
   let url: URL;
   try {
@@ -206,7 +208,7 @@ export function parseBotRefUrl(value: string): { botId: string } | null {
 
 /** Even a link that fails strict parsing must never reach the shell as an external link. */
 export function looksLikeThreadRefUrl(value: string): boolean {
-  return value.trim().toLowerCase().startsWith(THREAD_URL_PREFIX);
+  return currentChatLink(value.trim()).toLowerCase().startsWith(THREAD_URL_PREFIX);
 }
 
 export function isThreadUuid(value: string): boolean {

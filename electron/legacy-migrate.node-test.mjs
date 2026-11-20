@@ -146,3 +146,22 @@ test("rewriting leaves other names alone", () => {
   assert.equal(rewriteLegacyHomePaths("C:\\Users\\a\\.openmausbot\\x /a/.openmausbot-b/c .openmausbot /a/.openmausbotx"),
     "C:\\Users\\a\\.seira\\x /a/.seira-b/c .openmausbot /a/.openmausbotx");
 });
+
+test("a data folder set to the default one is still migrated", (t) => {
+  const base = home(t);
+  folder(base, ".openmausbot");
+  const moves = migrateHomeFolders({ home: base, env: { SEIRA_DATA_DIR: path.join(base, ".seira") }, held: never });
+  assert.deepEqual(moves, [[".openmausbot", ".seira"]]);
+  assert.equal(readFileSync(path.join(base, ".seira", "bots.json"), "utf8"), "old");
+  assert.ok(!existsSync(path.join(base, ".openmausbot")));
+});
+
+test("inner files move when the data folder is the default one in the given home", (t) => {
+  const base = home(t);
+  const dataDir = path.join(base, ".seira");
+  mkdirSync(dataDir);
+  writeFileSync(path.join(dataDir, ".omb-cloud-home.json"), "{}");
+  assert.equal(migrateInnerFiles({ dataDir, home: base, env: { SEIRA_DATA_DIR: dataDir }, held: never }).length, 1);
+  assert.ok(existsSync(path.join(dataDir, ".seira-cloud-home.json")));
+  assert.ok(!existsSync(path.join(dataDir, ".omb-cloud-home.json")));
+});

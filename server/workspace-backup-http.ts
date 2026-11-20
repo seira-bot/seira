@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { z } from "zod";
+import { LEGACY_BACKUP_UPLOAD_SUFFIX } from "../electron/legacy-names.mjs";
 import { WORKSPACE_BACKUP_CLIENT_KEYS } from "../shared/workspace-backup-client.ts";
 import {
   createWorkspaceBackup, stageWorkspaceBackup, commitPendingWorkspaceRestore,
@@ -70,7 +71,7 @@ export function createWorkspaceBackupRoutes(options: {
     const uploads = join(root, "uploads");
     if (!existsSync(uploads) || lstatSync(uploads).isSymbolicLink()) return;
     for (const entry of readdirSync(uploads, { withFileTypes: true })) {
-      if (!entry.isFile() || !/^[a-f0-9-]{36}\.seirabackup$/.test(entry.name)) continue;
+      if (!entry.isFile() || !/^[a-f0-9-]{36}$/.test(entry.name.slice(0, 36)) || ![".seirabackup", LEGACY_BACKUP_UPLOAD_SUFFIX].includes(entry.name.slice(36))) continue;
       const file = join(uploads, entry.name);
       if (statSync(file).mtimeMs + EXPIRES_MS <= Date.now()) { try { unlinkSync(file); } catch {} }
     }

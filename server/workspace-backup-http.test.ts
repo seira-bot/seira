@@ -1,6 +1,6 @@
 // Archive work is mocked so revocation can be held at a deterministic boundary.
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { createServer, request, type IncomingMessage, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -217,4 +217,19 @@ it("leaves the restart to the person where no launcher restarts the server", asy
   expect(restored.status).toBe(200);
   expect(await restored.json()).not.toHaveProperty("restarting");
   expect(await status()).toMatchObject({ pendingRestore: true });
+});
+
+it("clears an old upload leftover that an earlier version named, and keeps a recent one", async () => {
+  const uploads = join(dataDir, ".backups", "uploads");
+  mkdirSync(uploads, { recursive: true });
+  const old = join(uploads, `${randomUUID()}.ombbackup`);
+  const recent = join(uploads, `${randomUUID()}.ombbackup`);
+  const current = join(uploads, `${randomUUID()}.seirabackup`);
+  for (const file of [old, recent, current]) writeFileSync(file, "x");
+  const longAgo = new Date(Date.now() - 2 * 60 * 60_000);
+  for (const file of [old, current]) utimesSync(file, longAgo, longAgo);
+  await listen();
+  expect(existsSync(old)).toBe(false);
+  expect(existsSync(current)).toBe(false);
+  expect(existsSync(recent)).toBe(true);
 });

@@ -3,12 +3,14 @@ import { createReadStream, createWriteStream } from "node:fs";
 import { chmod, lstat, mkdir, mkdtemp, rm, statfs } from "node:fs/promises";
 import { isAbsolute, join, parse, resolve } from "node:path";
 import { Readable } from "node:stream";
+import { LEGACY_BACKUP_MAGIC } from "./legacy-names.mjs";
 import { pipeline } from "node:stream/promises";
 
 const MAX_BYTES = 10 * 1024 ** 3;
 const PART_BYTES = 64 * 1024 ** 2;
 const SPACE_MARGIN = 64 * 1024 ** 2;
 const MAGIC = Buffer.from("SEIRA-WORKSPACE-1\n");
+const LEGACY_MAGIC = Buffer.from(LEGACY_BACKUP_MAGIC);
 const HEADER_BYTES = MAGIC.length + 16 + 12;
 const MIN_BYTES = HEADER_BYTES + 16;
 const UUID = /^[a-f\d]{8}-[a-f\d]{4}-4[a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/;
@@ -115,7 +117,7 @@ export function createCompanyBackups({ localRequest, portalRequest, tempRoot, fe
       }
     }, createWriteStream(file, { flags: "wx", mode: 0o600 }), { signal });
     if (bytes !== expectedBytes) fail("invalid_archive", "The archive download was incomplete.");
-    if (!prefix.subarray(0, MAGIC.length).equals(MAGIC)) fail("invalid_archive", "This is not a supported encrypted installation backup.");
+    if (!prefix.subarray(0, MAGIC.length).equals(MAGIC) && !prefix.subarray(0, LEGACY_MAGIC.length).equals(LEGACY_MAGIC)) fail("invalid_archive", "This is not a supported encrypted installation backup.");
     return hash.digest("hex");
   }
   async function storageRequest(url, init) {

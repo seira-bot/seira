@@ -10,6 +10,7 @@ import {
   LEGACY_DATA_FILES,
   LEGACY_ENGINE_HOME_ENTRIES,
   LEGACY_LEASE_FILE,
+  HOME_PREFIX,
   LEGACY_MEET_FOLDER,
   MEET_FOLDER,
 } from "./legacy-names.mjs";
@@ -40,6 +41,10 @@ function homeTargets(fs, home, env) {
   return targets;
 }
 
+/** True when SEIRA_DATA_DIR names a folder other than the default one in `home`; a data folder set to the default is still migrated. */
+const customDataDir = (env, home) =>
+  Boolean(env.SEIRA_DATA_DIR) && (home === undefined || nodePath.resolve(env.SEIRA_DATA_DIR) !== nodePath.resolve(home, HOME_PREFIX));
+
 function isDataFolder(fs, dir) {
   try { return DEFINITION_MARKERS.some((name) => fs.existsSync(nodePath.join(dir, name))); } catch { return false; }
 }
@@ -65,12 +70,12 @@ function rewriteFile(fs, file, log) {
 
 /**
  * Moves each old folder in `home` to its current name when the current one is absent and no earlier-version server
- * holds the old one. Does nothing when SEIRA_DATA_DIR is set. `rewriteFiles`: files outside the folders (the saved
+ * holds the old one. Does nothing when SEIRA_DATA_DIR names a folder other than `<home>/.seira`. `rewriteFiles`: files outside the folders (the saved
  * servers, the desktop settings) whose paths name an old folder; rewritten after a data folder moved.
  * Returns the moves made, as [from, to] folder names.
  */
 export function migrateHomeFolders({ home, env = process.env, fs = nodeFs, log = () => {}, held = legacyLeaseHeld, rewriteFiles = [] }) {
-  if (env.SEIRA_DATA_DIR) return [];
+  if (customDataDir(env, home)) return [];
   const moves = [];
   let dataMoved = false;
   for (const [from, to] of homeTargets(fs, home, env)) {
@@ -109,10 +114,10 @@ export function migrateHomeFolders({ home, env = process.env, fs = nodeFs, log =
 
 /**
  * Inside a data folder already at its current name: renames the old marker files and engine-home folders, and removes
- * lease files left by an earlier version that no longer runs. Does nothing when SEIRA_DATA_DIR is set.
+ * lease files left by an earlier version that no longer runs. Does nothing when SEIRA_DATA_DIR is set, unless `home` is given and SEIRA_DATA_DIR is `<home>/.seira`.
  */
-export function migrateInnerFiles({ dataDir, env = process.env, fs = nodeFs, log = () => {}, held = legacyLeaseHeld }) {
-  if (env.SEIRA_DATA_DIR) return [];
+export function migrateInnerFiles({ dataDir, home, env = process.env, fs = nodeFs, log = () => {}, held = legacyLeaseHeld }) {
+  if (customDataDir(env, home)) return [];
   const moves = [];
   const rename = (dir, from, to) => {
     const source = nodePath.join(dir, from);

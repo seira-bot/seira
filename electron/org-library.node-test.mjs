@@ -91,6 +91,11 @@ async function fixture(t, { catalog = standard(), relayOk = true } = {}) {
   return f;
 }
 
+test("a catalog with the format id an earlier version used is read like a current one", () => {
+  assert.deepEqual(parseOrgLibraryCatalog({ ...standard(), format: "openmaus.org-library" }), parseOrgLibraryCatalog(standard()));
+  assert.notEqual(parseOrgLibraryCatalog({ ...standard(), format: "openmaus.org-library" }), null);
+});
+
 test("the catalog parser ignores unknown fields, drops a bad entry, and keeps Off and newer-format entries listed", () => {
   const extra = { ...entry(TEAM), future: { anything: true }, release: { ...release(teamBytes), mirror: "https://elsewhere.invalid" } };
   const parsed = parseOrgLibraryCatalog(catalogOf([extra, { ...entry(SKILLS), mode: "pinned" }, entry(OFF, { mode: "off" }), entry(NEWER, { release: release(teamBytes, { formatVersion: 4 }) })], { truncated: true, surprise: 1 }));

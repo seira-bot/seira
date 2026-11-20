@@ -453,7 +453,7 @@ function composioBrokerUrl() {
 const LOG_DIR = app.getPath("logs");
 // Before anything reads the data folder: an earlier version's folders move to the current names, once.
 migrateHomeFolders({ home: app.getPath("home"), log: line => console.warn(line), rewriteFiles: [environmentsFile(), path.join(app.getPath("userData"), "desktop-prefs.json")] });
-migrateInnerFiles({ dataDir: desktopDataDir(), log: line => console.warn(line) });
+migrateInnerFiles({ dataDir: desktopDataDir(), home: app.getPath("home"), log: line => console.warn(line) });
 const DESKTOP_CRASH_LOG = path.join(LOG_DIR, "desktop-crashes.log");
 const DESKTOP_CRASH_LOG_MAX_BYTES = 512 * 1024;
 let logStream = null;

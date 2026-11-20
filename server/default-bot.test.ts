@@ -38,6 +38,12 @@ describe("Seira, every person's helper", () => {
     expect(seededSeira(store.bots)?.id).toBe(seeded.id);
   });
 
+  it("adopts a first bot that an earlier install named MausBot, in any colour", () => {
+    const store = new Store(selection);
+    const seeded = store.createBot({ name: "MausBot", color: "blue" });
+    expect(seededSeira(store.bots)?.id).toBe(seeded.id);
+  });
+
   it("gives a fresh install one Seira, its Chief, in chrome, introduced once", () => {
     const store = new Store(selection);
     store.seedIfEmpty();

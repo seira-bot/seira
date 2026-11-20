@@ -9,4 +9,4 @@ interface MigrateOptions {
 }
 
 export declare function migrateHomeFolders(options: MigrateOptions & { home: string; rewriteFiles?: string[] }): [string, string][];
-export declare function migrateInnerFiles(options: MigrateOptions & { dataDir: string }): [string, string][];
+export declare function migrateInnerFiles(options: MigrateOptions & { dataDir: string; home?: string }): [string, string][];
