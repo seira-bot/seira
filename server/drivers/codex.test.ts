@@ -1576,7 +1576,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
     expect(seen.argv).toContain("features.shell_snapshot=false");
     expect(seen.calls.find((call: { method: string }) => call.method === "thread/start").params.config["shell_environment_policy.exclude"]).toEqual([
       "USER_SECRET_*", "SEIRA_REMOTE_MCP_CONFIG_*",
-      "ELECTRON_RUN_AS_NODE", "GITHUB_PERSONAL_ACCESS_TOKEN", "SEIRA_COMMS_TOKEN", "SEIRA_CONNECTORS_TOKEN", "SEIRA_PHONE_TOKEN", "OVERRIDDEN",
+      "ELECTRON_RUN_AS_NODE", "GITHUB_PERSONAL_ACCESS_TOKEN", "OVERRIDDEN", "SEIRA_COMMS_TOKEN", "SEIRA_CONNECTORS_TOKEN", "SEIRA_PHONE_TOKEN",
     ]);
   });
 

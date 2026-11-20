@@ -59,8 +59,8 @@ export const HEARTBEAT_INTERVAL_MS = 30_000;
 export const UPDATE_HEALTH_WINDOW_MS = 10 * 60_000;
 
 /** The only images a home may run, and the only ones the connector may become: our registry, pinned by digest. */
-export const HOME_IMAGE = /^ghcr\.io\/milind-soni\/seira-cloud-home@sha256:[0-9a-f]{64}$/;
-export const CONNECTOR_IMAGE = /^ghcr\.io\/milind-soni\/seira-connector@sha256:[0-9a-f]{64}$/;
+export const HOME_IMAGE = /^ghcr\.io\/milind-soni\/openmausbot-cloud-home@sha256:[0-9a-f]{64}$/;
+export const CONNECTOR_IMAGE = /^ghcr\.io\/milind-soni\/mausbot-connector@sha256:[0-9a-f]{64}$/;
 
 export interface ConnectorIdentity {
   version: string;
