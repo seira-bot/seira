@@ -4,6 +4,8 @@ import { existsSync, linkSync, mkdirSync, readdirSync, readFileSync, readlinkSyn
 import { homedir, hostname, uptime } from "node:os";
 import { dirname, join, posix } from "node:path";
 
+import { LEGACY_CHILD_LEASE_FOLDER, LEGACY_LEASE_FILE } from "./legacy-names.mjs";
+
 const LEASE_NAME = "seira-server.lease";
 const DELEGATED_CHILD_DIR = ".seira-server-child";
 // Internal parent-to-child capability, obtained only from utilityServerLeaseEnvironment(); never public configuration.
@@ -739,6 +741,35 @@ function acquireDataDirLeaseInternal(dataDir, options = {}) {
 
 export function acquireDataDirLease(dataDir, options = {}) {
   return acquireDataDirLeaseInternal(dataDir, options);
+}
+
+/**
+ * Whether a process of an earlier version may still use `dataDir` through its own lease record. A record that cannot be
+ * read, or that another host wrote, counts as held: only a dead owner on this host proves the folder free.
+ */
+export function legacyLeaseHeld(dataDir) {
+  for (const path of [join(dataDir, LEGACY_LEASE_FILE), join(dataDir, LEGACY_CHILD_LEASE_FOLDER, LEGACY_LEASE_FILE)]) {
+    let raw;
+    try {
+      raw = readFileSync(path, "utf8");
+    } catch (error) {
+      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") continue;
+      return true;
+    }
+    let owner;
+    try {
+      owner = JSON.parse(raw);
+    } catch {
+      return true;
+    }
+    if (!isLeaseOwner(owner) || owner.host !== hostname()) return true;
+    try {
+      if (ownerIsAlive(owner)) return true;
+    } catch {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
