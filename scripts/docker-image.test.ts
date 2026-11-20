@@ -289,6 +289,13 @@ describe("container images", () => {
     }
   });
 
+  it("keeps an earlier install's data volume when .env names its old project, as the update note says", () => {
+    const { name, volumes } = parse(readFileSync(new URL("../compose.yaml", import.meta.url), "utf8"));
+    expect(name).toBe("${COMPOSE_PROJECT_NAME:-seira}");
+    expect(volumes.data.name).toBe("${SEIRA_DATA_VOLUME:-${COMPOSE_PROJECT_NAME:-seira}_data}");
+    expect(readFileSync(new URL("../deploy/local/README.md", import.meta.url), "utf8")).toContain("add `COMPOSE_PROJECT_NAME=openmausbot`");
+  });
+
   // Caddy in the server's network (network_mode: service:seira) stayed in the old, dead one whenever the server's
   // container restarted alone, and HTTPS was refused while both looked healthy. It reaches the server over sockets in
   // a volume both mount instead, and the Caddyfile names the paths the server listens on.
