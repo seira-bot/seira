@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { LEGACY_PROFILE_RECORD } from "../../../electron/legacy-names.mjs";
 
 /** Every Chrome-related file Seira keeps lives under `<data dir>/browser`. */
 export function browserRoot(dataDir: string): string {
@@ -65,7 +66,7 @@ export interface ProfileRecord {
 const RECORD_FILE = "seira-profile.json";
 
 export function readProfileRecord(dir: string): ProfileRecord | null {
-  const record = readJson(join(dir, RECORD_FILE)) as ProfileRecord | null;
+  const record = (readJson(join(dir, RECORD_FILE)) ?? readJson(join(dir, LEGACY_PROFILE_RECORD))) as ProfileRecord | null;
   return record && typeof record.key === "string" ? record : null;
 }
 

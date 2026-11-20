@@ -1,3 +1,4 @@
+import { currentClientStateKeys } from "./legacy-storage";
 import { WORKSPACE_BACKUP_CLIENT_KEYS, type WorkspaceBackupClientState } from "../../shared/workspace-backup-client";
 
 export const WORKSPACE_RESTORE_MARKER = "seira-pending-workspace-restore";
@@ -14,7 +15,7 @@ export function collectWorkspaceClientState(storage: Pick<Storage, "getItem"> = 
 /** Replace only allowlisted keys; authentication and unrelated app state survive. */
 export function applyWorkspaceClientState(value: unknown, storage: Pick<Storage, "getItem" | "setItem" | "removeItem"> = localStorage): void {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid backup browser state");
-  const values = value as Record<string, unknown>;
+  const values = currentClientStateKeys(value as Record<string, unknown>);
   const allowed = new Set<string>(WORKSPACE_BACKUP_CLIENT_KEYS);
   if (Object.entries(values).some(([key, entry]) => !allowed.has(key) || typeof entry !== "string")) throw new Error("Invalid backup browser state");
   const original = collectWorkspaceClientState(storage);
