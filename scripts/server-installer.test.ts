@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -328,8 +328,33 @@ describe.skipIf(!posix)("deploy/install.sh", () => {
     // Not a terminal, as here: the admin's sign-in link is not made, so no log holds it, and the output says why.
     expect(result.stdout).toContain("(The link is not made here because this output is not a terminal");
     expect(result.docker.some((call) => call.includes("seira pair"))).toBe(false);
-    expect(result.stdout).toContain("Or open https://seira.example.com/pair and sign in with an emailed code as: owner@example.com");
+    expect(result.stdout).not.toContain("sign in with an emailed code as");
+    expect(result.stdout).toContain(`Signing in with an emailed code needs a mail server: set SEIRA_SIGNIN_SMTP_URL (and SEIRA_SIGNIN_SMTP_FROM) in ${result.install}/.env`);
     expect(result.stdout).toContain(`Your data: ${result.install}/data`);
+  });
+
+  it("offers an emailed sign-in only when .env names a mail server", () => {
+    const first = run(["--domain", "seira.example.com", "--email", "owner@example.com"]);
+    expect(first.status).toBe(0);
+    expect(first.stdout).toContain("needs a mail server");
+    appendFileSync(join(first.install, ".env"), "SEIRA_SIGNIN_SMTP_URL=smtps://user:secret@smtp.example.test:465\n");
+    const again = run(["--domain", "seira.example.com", "--email", "owner@example.com"], {}, { dir: first.dir });
+    expect(again.status).toBe(0);
+    expect(again.stdout).toContain("Or open https://seira.example.com/pair and sign in with an emailed code as: owner@example.com");
+    expect(again.stdout).not.toContain("needs a mail server:");
+  });
+
+  it("refuses a code when SEIRA_ADMIN_URL is not set, before it checks or changes anything", () => {
+    const result = run(["--domain", "seira.example.com", CODE], { env: { SEIRA_ADMIN_URL: "" } });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("A code needs SEIRA_ADMIN_URL, the address of the Seira service that gave it. To install Seira alone, run this again without the code.");
+    expect(result.calls).toEqual([]);
+    expect(existsSync(result.install)).toBe(false);
+    expect(run(["--usage-is-not-an-option"]).stderr).toContain("needs SEIRA_ADMIN_URL");
+  });
+
+  it("names no seira.bot address", () => {
+    expect(script).not.toContain("seira.bot");
   });
 
   it("says, before anything is downloaded, when the version it would install has no bots' sandbox", () => {
@@ -644,7 +669,7 @@ describe.skipIf(!posix)("deploy/install.sh", () => {
     const settings = (text: string) => [...text.matchAll(/^ {6}(SEIRA_[A-Z_]+:.*)$/gm)].map((match) => match[1]);
     expect(settings(written)).toEqual(settings(manual));
     // The sign-in lists and mail server are passed only when .env sets them: an empty one would still be set.
-    for (const name of ["SEIRA_SIGNIN_EMAILS", "SEIRA_SIGNIN_MEMBER_EMAILS", "SEIRA_SIGNIN_SMTP_URL", "SEIRA_SIGNIN_SMTP_FROM", "SEIRA_PHONE_RELAY"]) expect(settings(written)).toContain(`${name}:`);
+    for (const name of ["SEIRA_SIGNIN_EMAILS", "SEIRA_SIGNIN_MEMBER_EMAILS", "SEIRA_SIGNIN_SMTP_URL", "SEIRA_SIGNIN_SMTP_FROM", "SEIRA_CONTROL_PLANE_URL", "SEIRA_PHONE_RELAY"]) expect(settings(written)).toContain(`${name}:`);
     for (const line of ['test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q -e seira -e openmausbot"]', "init: true", "shm_size: 512m", '- "80:80"', '- "443:443"',
       "- edge:/run/seira", "type: tmpfs"]) {
       expect(written).toContain(line);

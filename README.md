@@ -201,7 +201,7 @@ It needs Node.js 24 or later.
 
 ```sh
 npx @seira-bot/seira setup              # once: AI access and a default model
-npx @seira-bot/seira serve --tailscale  # or --lan, --domain, --public-url, --tunnel
+npx @seira-bot/seira serve --tailscale  # or --lan, --domain, --public-url
 ```
 
 The server prints a pairing link. Open it in your browser or on your phone.

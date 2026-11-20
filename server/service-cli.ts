@@ -10,6 +10,7 @@ import {
 } from "./service-unit.ts";
 import { defaultSentinelOut, outRefusal } from "./sentinel/paths.ts";
 import { cliCommand } from "./cli-invocation.ts";
+import { controlPlaneProblem, fleetCredential } from "./tunnel.ts";
 
 export interface ServiceInstallInput {
   action: "install" | "uninstall";
@@ -65,6 +66,13 @@ export function runServiceCommand(input: ServiceInstallInput, io: ServiceIo): nu
   if (!plan) {
     io.error("services are written for Linux (systemd) and macOS (launchd); on Windows, use Task Scheduler to run `seira serve` at startup");
     return 1;
+  }
+  if (input.action === "install" && input.tunnel && !input.domain && !fleetCredential(input.env)) {
+    const problem = controlPlaneProblem(input.env);
+    if (problem) {
+      io.error(`--tunnel: ${problem}`);
+      return 1;
+    }
   }
   if (input.action === "uninstall") {
     io.log(`to stop and remove the service:`);

@@ -1,5 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { applyStartupPreferences, parseArgs, runAccess, runLogin, runOnboardingCommand, serverEntry, type CliOptions, verifyPhoneEndpoint } from "./cli.ts";
 import { browserSignInLines, formatSessions, pairingBlock, qrToString, untilText } from "./cli-pairing.ts";
+import { runServiceCommand } from "./service-cli.ts";
 import { reachableAddresses } from "./lan-address.ts";
 import { readAdminActivityRange } from "./admin-activity.ts";
 import { SetupCancelled } from "./cli-prompts.ts";
@@ -443,6 +444,65 @@ describe("phone endpoint identity", () => {
   });
 });
 
+describe("login without an account service", () => {
+  const login = async (args: string[]) => {
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-login-none-"));
+    const lines: string[] = [];
+    const io = { log: (line: string) => lines.push(line), error: (line: string) => lines.push(line), ask: async () => "nobody@example.test" };
+    const options = parseArgs(["login", ...args, "--data-dir", dataDir], {});
+    if ("error" in options) throw new Error(options.error);
+    try {
+      return { code: await runLogin(options, io), text: lines.join("\n") };
+    } finally {
+      await removeTempDir(dataDir);
+    }
+  };
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  for (const args of [[], ["--relay"]]) {
+    it(`seira login ${args.join(" ")} says that no account service is set up, and names the ways in that work`, async () => {
+      vi.stubEnv("SEIRA_CONTROL_PLANE_URL", undefined);
+      const { code, text } = await login(args);
+      expect(code).toBe(1);
+      for (const word of ["SEIRA_CONTROL_PLANE_URL", "--domain", "--tailscale", "--public-url"]) expect(text).toContain(word);
+      expect(text).not.toContain("is set but");
+    });
+  }
+
+  it("treats an empty SEIRA_CONTROL_PLANE_URL, as an .env line with no value passes it, as not set", async () => {
+    vi.stubEnv("SEIRA_CONTROL_PLANE_URL", "");
+    const { code, text } = await login([]);
+    expect(code).toBe(1);
+    expect(text).toContain("no account service");
+    expect(text).not.toContain("is set but");
+  });
+
+  it("keeps the https message when the variable is set to something else", async () => {
+    vi.stubEnv("SEIRA_CONTROL_PLANE_URL", "http://x");
+    const { code, text } = await login([]);
+    expect(code).toBe(1);
+    expect(text).toContain("SEIRA_CONTROL_PLANE_URL is set but is not an https address");
+  });
+
+  it("service install --tunnel refuses before it writes a unit, unless a control plane or the fleet credential exists", () => {
+    const dir = mkdtempSync(join(tmpdir(), "seira-service-tunnel-"));
+    const errors: string[] = [];
+    const io = { log: () => undefined, error: (line: string) => errors.push(line) };
+    const input = { action: "install" as const, dataDir: dir, port: 8799, tunnel: true, script: "/x/cli.js", node: "/x/node", platform: "linux" as const, home: dir, user: "seira" };
+    try {
+      expect(runServiceCommand({ ...input, env: {} }, io)).toBe(1);
+      expect(errors.join("\n")).toContain("--tunnel: this Seira build has no account service");
+      expect(existsSync(join(dir, "seira.service"))).toBe(false);
+      expect(runServiceCommand({ ...input, env: { SEIRA_CONTROL_PLANE_URL: "http://x" } }, io)).toBe(1);
+      expect(errors.at(-1)).toContain("is set but is not an https address");
+      expect(runServiceCommand({ ...input, env: { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test" } }, io)).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 const exited = (child: ChildProcess) => (child.exitCode !== null ? Promise.resolve(child.exitCode) : new Promise<number | null>((done) => child.once("exit", (code) => done(code))));
 
 describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
@@ -461,7 +521,10 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
     child.stderr?.on("data", (chunk) => (err += String(chunk)));
     try {
       expect(await exited(child)).toBe(1);
-      expect(err).toContain("run seira login first");
+      expect(err).toContain("--tunnel: this Seira build has no account service");
+      expect(err).toContain("SEIRA_CONTROL_PLANE_URL");
+      expect(err).toContain("--public-url");
+      expect(err).not.toContain("is set but");
       let dead = false;
       try {
         await fetch(`http://127.0.0.1:${port}/api/health`);

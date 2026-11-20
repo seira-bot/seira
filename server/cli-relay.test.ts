@@ -37,7 +37,10 @@ describe("seira serve --relay", () => {
 
   it("says why a phone cannot pair yet, in the person's terms", () => {
     expect(relayProblemLines(null, "seira")).toEqual(["Seira Relay is off on this server. Start it with: seira serve --relay"]);
-    expect(relayProblemLines(status({ grant: "signed-out", relay: "off" }), "seira")[0]).toMatch(/^Seira Relay needs this machine signed in to a Seira account: seira login --relay/);
+    expect(relayProblemLines(status({ grant: "signed-out", relay: "off" }), "seira", { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test" })[0]).toMatch(/^Seira Relay needs this machine signed in to a Seira account: seira login --relay/);
+    const noService = relayProblemLines(status({ grant: "signed-out", relay: "off" }), "seira", {}).join("\n");
+    expect(noService).toContain("this Seira build has no account service");
+    expect(noService).not.toContain("login --relay");
     expect(relayProblemLines(status({ grant: "unavailable", relay: "off" }), "npx @seira-bot/seira")[0]).toMatch(/not available for this machine right now\. The server keeps working here/);
     expect(relayProblemLines(status({ relay: "connecting", node: null }), "seira")[0]).toMatch(/^Can't reach Seira Relay yet\. The server keeps working here/);
     expect(relayProblemLines(status(), "seira")).toEqual([]);

@@ -11,7 +11,7 @@ Seira under **＋ → Connect to a server**.
 
 > **Security first:** the server listens on `127.0.0.1:8799`, and a program on
 > that machine counts as its owner. Never forward that port yourself. Let one
-> of the ways in below reach it: `--public-url`, `--domain`, `--tunnel`,
+> of the ways in below reach it: `--public-url`, `--domain`,
 > `--tailscale` or `--lan`. Every device that comes in through one of them has
 > to pair. If several people share one server, read
 > [Loopback trust](#loopback-trust-owner-or-service).
@@ -27,13 +27,18 @@ For server feature switches, defaults and configuration-file instructions, see
 | A domain name, and ports 80 and 443 open | `npx @seira-bot/seira serve --domain seira.example.com` | `https://seira.example.com/pair#code=…` |
 | Tailscale on the server and your devices | `npx @seira-bot/seira serve --tailscale` | `https://<machine>.<tailnet>.ts.net/pair#code=…` |
 | Only this network (home or office) | `npx @seira-bot/seira serve --lan` | `http://192.168.1.20:8799/pair#code=…` |
-| Nothing at all | `npx @seira-bot/seira login`, then `npx @seira-bot/seira serve --tunnel` | `https://c-….seira.bot/pair#code=…` |
-| Only the phone app, from anywhere (a machine with no tunnel address, for now) | `npx @seira-bot/seira login --relay`, then `npx @seira-bot/seira serve --relay` | a QR for the Seira app ([Seira Relay](phone-relay-server.md)) |
+| Your own Cloudflare Tunnel (a domain on Cloudflare, no open port) | `cloudflared`, then `npx @seira-bot/seira serve --public-url https://seira.example.com` ([steps](deploy-vps.md#path-a-your-own-cloudflare-tunnel)) | `https://seira.example.com/pair#code=…` |
+| An account service that you run yourself (`SEIRA_CONTROL_PLANE_URL`) | `npx @seira-bot/seira login`, then `npx @seira-bot/seira serve --tunnel` | `https://c-….example.net/pair#code=…` |
+| The same account service, for the phone app only | `npx @seira-bot/seira login --relay`, then `npx @seira-bot/seira serve --relay` | a QR for the Seira app ([Seira Relay](phone-relay-server.md)) |
 
 `--lan` can be added to any of the others. Plain `http://` is only for a
 private network: the desktop app accepts it on LAN addresses, Tailscale
 addresses and `*.local` names, and shows "Private network, not encrypted". It
 refuses plain http on the open internet.
+
+Seira builds have no account service by default. `login`, `--tunnel` and
+`--relay` need one that you run yourself, set with `SEIRA_CONTROL_PLANE_URL`.
+Without it, use one of the other ways in.
 
 ## Golden paths
 
@@ -43,7 +48,7 @@ On any machine with Node 24 or newer.
 
 ```sh
 npx @seira-bot/seira setup                                        # once: AI access and a default model
-npx @seira-bot/seira serve --public-url https://seira.example.com  # or --domain, --tailscale, --lan, --tunnel
+npx @seira-bot/seira serve --public-url https://seira.example.com  # or --domain, --tailscale, --lan
 ```
 
 In a terminal, `serve` checks the address and prints one pairing block:
@@ -69,7 +74,6 @@ Each way in has its own Reach line:
 
 - `--lan`: `http://192.168.1.20:8799   this network only, not encrypted`
 - `--tailscale`: `… · your tailnet`
-- `--tunnel`: `… · Seira web address`
 
 Paste the link into Seira: **＋ → Connect to a server**. The sheet names the
 server it found ("✓ hetzner-1 · Seira 0.1.147 · HTTPS"), and **Connect to
@@ -312,7 +316,7 @@ Runs fully on a server:
 - a browser for bots, once the engine is installed on the server
   (`npx @seira-bot/seira browser install`, or nothing to do in the Docker image,
   which ships it): each bot gets its own isolated, persistent session.
-  Watching it live from the app is the next step (docs/plans/browser-engine.md).
+  Watching it live from the app is the next step.
   It reaches the public internet and the dev servers a bot starts itself,
   not this server's network or other services unless `browserEngine.egress.allow`
   lists them ([what a bot's browser can reach](browser-packaging.md#what-a-bots-browser-can-reach)).
@@ -366,8 +370,11 @@ too.
   networks and VPN tunnels are skipped. A machine with no private address
   says so and stays on loopback. Plain http travels in clear, so use it only
   on a network you trust.
-- **`--tunnel`**: `npx @seira-bot/seira login` reserves an address like
-  `https://c-….seira.bot` for this machine (an emailed code signs it
+- **`--tunnel`**: needs an account service that you run yourself, set with
+  `SEIRA_CONTROL_PLANE_URL`. Seira builds have none by default, and `login` and
+  `serve --tunnel` stop with a message that says so. With one,
+  `npx @seira-bot/seira login` reserves an address like
+  `https://c-….example.net` for this machine (an emailed code signs it
   in). `serve --tunnel` connects it through a Cloudflare tunnel, the same one
   the desktop app uses for its companion. The first run downloads
   `cloudflared` (pinned version and digest) into the data dir. Only traffic
@@ -586,8 +593,9 @@ hold. The server image (`ghcr.io/seira-bot/seira`) is built for that:
     add `X-Forwarded-For` to every request (Caddy does): a loopback request
     with no forwarding header and a loopback `Host` is taken to be the
     server's owner.
-  - A tunnel that dials out, so nothing has to reach the container:
-    `seira serve --tunnel` as the start command ([`--tunnel`](#ways-in-in-detail)).
+  - A tunnel that dials out, so nothing has to reach the container: run
+    your own `cloudflared` beside it, and use
+    `seira serve --public-url https://seira.example.com` as the start command.
 
 **How many processes and how much memory.** A container's process limit
 (`pids.max`; Docker's `--pids-limit`, Kubernetes' `podPidsLimit`) counts
@@ -764,7 +772,7 @@ and enter the folder (mode 2770), and other users still cannot.
 For something durable, let the CLI write the service for you:
 
 ```sh
-npx @seira-bot/seira service install --domain seira.example.com   # or --public-url, --tunnel, --tailscale, --lan
+npx @seira-bot/seira service install --domain seira.example.com   # or --public-url, --tailscale, --lan
 ```
 
 It renders a systemd unit (Linux) or a launchd agent (macOS) that runs the
@@ -905,7 +913,7 @@ docker compose exec seira seira pair     # Docker
 
 It prints a 12-character pairing code (it works once, for 10 minutes, or up
 to a day with `--ttl 24h`) and the link with the code in it, built from the
-address the server is reached at (`--public-url`, `--domain`, `--tunnel`,
+address the server is reached at (`--public-url`, `--domain`,
 `--tailscale`, `--lan`, or `SEIRA_PUBLIC_URL`). Open the link, or open `/pair`
 on that address and type the code. The browser gets a session cookie (30
 days, renewed on use up to 180 days from pairing, revocable) and the app
@@ -1134,7 +1142,8 @@ second user for engines, a separate change.
 
 A pairing code is fine for the owner's own devices. For a workspace other
 people use every day, let them sign in with an emailed code instead: set an
-allow-list, and `/pair` on your server offers "Sign in with your email" first.
+allow-list and a mail server (below), and `/pair` on your server offers
+"Sign in with your email" first.
 
 ```sh
 SEIRA_SIGNIN_EMAILS="her@yourcompany.com, @yourcompany.com"   # full access
@@ -1162,17 +1171,8 @@ is bootstrapped; while it does, Settings refuses to change that list and says
 which variable to change instead. One that is empty, as `.env.example` and the
 Compose files leave them, leaves the list to Settings.
 
-The code itself comes from `accounts.seira.bot`, the Seira
-account service, so your server needs no email credentials. Your server asks
-it to send the code, checks the answer, and then issues its own session
-cookie: the browser only ever talks to your server, and who is welcome is
-decided only by your allow-list. Wrong codes count against a lockout of
-their own: ten in a minute from one address pause sign-in there for a minute. Sessions from a sign-in show the email in
-`seira devices` and can be revoked the same way.
-
-To send the codes through your own mail server instead, so nobody signs in
-through the account service and no Seira account is made, give the server
-an SMTP address:
+Emailed sign-in needs a mail server, so that your server can send the code.
+Give the server an SMTP address:
 
 ```sh
 SEIRA_SIGNIN_SMTP_URL="smtps://signin%40yourcompany.com:PASSWORD@smtp.yourcompany.com:465"
@@ -1182,11 +1182,14 @@ SEIRA_SIGNIN_SMTP_FROM="Seira <signin@yourcompany.com>"   # else the user name, 
 `smtps://` uses TLS from the start (port 465); `smtp://` upgrades with
 STARTTLS (port 587) and refuses a server that cannot, unless the mail server
 is on this machine (`smtp://localhost:25`). Write the user name and password
-URL-encoded (`@` is `%40`). Your server then makes each code itself: 8 digits,
+URL-encoded (`@` is `%40`). Your server makes each code itself: 8 digits,
 single use, ten minutes and five tries, kept only as a hash in memory (a
 restart ends the open ones), and at most one every 30 seconds per address.
-The allow-list, the lockout and the sessions work as above. Keep the URL in
-the service's environment file, never on a command line.
+Who is welcome is decided only by your allow-list. Wrong codes count against
+a lockout of their own: ten in a minute from one address pause sign-in there
+for a minute. Sessions from a sign-in show the email in `seira devices` and
+can be revoked the same way. Keep the URL in the service's environment file,
+never on a command line.
 
 ### Inviting people
 
@@ -1968,7 +1971,7 @@ update an earlier run left unfinished.
 For the npm service there is no one-command updater yet:
 [do the same steps by hand](deploy-vps.md#paths-a-and-c-npm-with-the-service-above-the-same-steps-by-hand),
 as the service user while the server is stopped. For a foreground invocation,
-`npx --yes @seira-bot/seira@X.Y.Z serve --tunnel` selects a particular published
+`npx --yes @seira-bot/seira@X.Y.Z serve --public-url https://seira.example.com` selects a particular published
 release; replace `X.Y.Z` with that version.
 
 The desktop and phone apps work with any server version that was the stable

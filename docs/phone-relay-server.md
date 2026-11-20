@@ -7,6 +7,12 @@ relay, and the relay passes sealed bytes it cannot open. It is the same
 end-to-end encrypted connection the desktop app gives phones; the wire spec is
 [`companion/src/e2e/README.md`](../companion/src/e2e/README.md).
 
+Seira Relay needs an account service that you run yourself. Set its address
+with `SEIRA_CONTROL_PLANE_URL`. Seira builds have no account service by default,
+so `login --relay` and `serve --relay` stop with a message that says so until
+you set one. To reach a server from a phone without it, use `--domain`,
+`--tailscale` or `--public-url`.
+
 It is off unless asked for, and it changes nothing about `--tunnel`, your own
 domain, `--public-url`, `--lan` or `--tailscale`.
 
@@ -247,7 +253,7 @@ The server keeps working on every other way in; the relay only adds one. What
 | The relay does not answer | Can't reach Seira Relay yet. The server keeps working here and keeps trying; phones pair once it connects. |
 
 The server log says `phone relay: connecting`, `phone relay: connected via
-relay2.seira.bot` and `phone relay: relay token …`. It redials at once,
+<relay node>` and `phone relay: relay token …`. It redials at once,
 then backs off to a minute, moves to the next node on a restart or refusal, and
 renews its token hourly; sessions already open survive a token renewal. A phone
 that cannot reach the relay shows "Can't reach Seira Relay right now. Trying

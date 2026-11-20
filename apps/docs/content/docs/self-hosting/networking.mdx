@@ -17,11 +17,10 @@ Seira separates its network surfaces by trust level.
 
 Never forward the harness port yourself. A self-hosted server is reached through one of `seira serve`'s ways in:
 
-- `--public-url https://…`: your own cloudflared tunnel, Caddy or nginx in front;
+- `--public-url https://…`: your own Cloudflare Tunnel, Caddy or nginx in front;
 - `--domain HOST`: a managed Caddy that gets the certificate;
 - `--tailscale`: your tailnet, with Tailscale's HTTPS when the tailnet has certificates turned on, otherwise plain http on this machine's own tailnet address;
 - `--lan`: this network only, plain http. It listens on every address, but answers only connections whose two ends are both private;
-- `--tunnel`: a free Seira web address.
 
 Each prints one pairing link; paste it into the desktop app under **＋ → Connect to a server**. The app accepts plain http only on private networks: LAN addresses, Tailscale's 100.64/10 and `*.ts.net`, and `*.local`.
 
