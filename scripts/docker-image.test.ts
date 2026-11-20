@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -233,6 +233,18 @@ describe("container images", () => {
     const runtime = chain("runtime");
     expect(runtime.slice(0, runtime.indexOf(browserRun()))).toContainEqual({ op: "ARG", args: "TARGETARCH" });
     expect(browserRun().args).toMatch(/if \[ "\$TARGETARCH" = arm64 \]; then .*apt-get install -y --no-install-recommends chromium .*ln -s \/usr\/lib\/chromium\/chromium \/opt\/seira-browser\/chrome; +else .*agent-browser install .*; +fi/);
+  });
+
+  it.skipIf(process.platform === "win32")("installs the in-container command as seira and under the name that earlier self-host guides give", () => {
+    const install = chain("runtime").find(step => step.op === "RUN" && step.args.includes("> /usr/local/bin/seira"))!;
+    const bin = mkdtempSync(join(tmpdir(), "seira-cli-"));
+    temporaryDirectories.push(bin);
+    const result = spawnSync("sh", ["-c", install.args.replaceAll("/usr/local/bin", bin)], { encoding: "utf8" });
+    expect(result.status, result.stderr).toBe(0);
+    for (const name of ["seira", "openmausbot"]) {
+      expect(readFileSync(join(bin, name), "utf8"), name).toBe('#!/bin/sh\nexec node /app/dist-server/seira.js "$@"\n');
+      expect(statSync(join(bin, name)).mode & 0o111, name).not.toBe(0);
+    }
   });
 
   it("keys the browser and engine layers on the versions they install, so a release rebuilds them", () => {
