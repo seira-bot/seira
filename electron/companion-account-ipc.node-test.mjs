@@ -16,6 +16,7 @@ const slice = (from, to) => {
 
 test("the desktop holds its address on demand, read from the running companion", async () => {
   let options;
+  let clientOptions;
   let running = false;
   let answer = async () => ({ enabled: true, devices: [], pairing: null });
   const stateReads = [];
@@ -23,7 +24,14 @@ test("the desktop holds its address on demand, read from the running companion",
   const context = vm.createContext({
     companionAccountService: null,
     resolveCompanionControlPlaneURL: () => "",
-    createControlPlaneClient: () => null,
+    resolveDesktopControlPlaneURL: () => "https://cp.example.test",
+    createSeiraCloudSignIn: () => ({ fixture: "cloud-sign-in" }),
+    cloudTarget: () => ({ origin: "https://cloud.example.test" }),
+    cloudAccount: { session: () => ({ accountToken: "omc_fixture", user: { id: "u", email: "a@example.test" } }) },
+    createControlPlaneClient: (passed) => {
+      clientOptions = passed;
+      return {};
+    },
     createCompanionAccountService: (passed) => {
       options = passed;
       return { fixture: true };
@@ -54,6 +62,8 @@ test("the desktop holds its address on demand, read from the running companion",
 
   assert.equal(options.onDemand, true);
   assert.equal(options.autoRecover, true);
+  assert.deepEqual(clientOptions.cloudSignIn, { fixture: "cloud-sign-in" });
+  assert.equal(options.cloudSession.current().accountToken, "omc_fixture");
   assert.equal(await options.managedEndpointNeeded(), null);
   assert.equal(stateReads.length, 0);
   // A new installation credential asks for the relay token at once.
