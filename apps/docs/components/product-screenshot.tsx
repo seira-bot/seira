@@ -1,6 +1,6 @@
 const screenshotNames = [
   'hero',
-  'byo-vps-0.1.151',
+  'byo-vps-picker',
   'model-picker',
   'computer-panel',
   'approval-card',
