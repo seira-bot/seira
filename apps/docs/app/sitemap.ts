@@ -6,5 +6,8 @@ import { siteUrl } from '@/lib/shared';
 export const dynamic = 'force-static';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  return source.getPages().map((page) => ({ url: `${siteUrl}${page.url}` }));
+  return source.getPages().map((page) => {
+    const lastModified = page.data.lastModified;
+    return { url: `${siteUrl}${page.url}`, ...(lastModified ? { lastModified } : {}) };
+  });
 }
