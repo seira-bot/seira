@@ -12,6 +12,7 @@ export const SEIRA_HOSTS = Object.freeze({
   stats: `stats.${ZONE}`,
   pages: `page.${ZONE}`,
   companion: `si.${ZONE}`,
+  push: `push.${ZONE}`,
   cloudStaging: "seira-cloud-staging.fly.dev",
   relayPattern: /^relay[1-9][0-9]?\.seira\.bot$/,
   relayNodePattern: /^(relay[1-9][0-9]?)\.seira\.bot$/,
@@ -28,6 +29,7 @@ export const SEIRA_SERVICE_OVERRIDE_ENV = Object.freeze({
   apps: "SEIRA_COMPOSIO_BROKER_URL",
   updates: "SEIRA_UPDATES_ORIGIN",
   accounts: "SEIRA_CONTROL_PLANE_URL",
+  push: "SEIRA_PUSH_RELAY_URL",
 });
 
 /** True when the service is in the live list, or the environment names an address for it. */
