@@ -148,7 +148,6 @@ import { attachedFileLine, attachForTurn, saveBotAttachment } from "./bot-attach
 import {
   cacheUntilConfigChanges,
   ensureDirs,
-  migrateLegacyNames,
   instanceConfigs,
   loadConfig,
   changedInstanceIds,
@@ -520,6 +519,8 @@ import {
   isTurnEventQuarantined, TURN_ENDED_REFUSAL,
 } from "./turn-dispatch-guard.ts";
 import { createGracefulShutdown } from "./graceful-shutdown.ts";
+import { migrateLegacyData } from "../electron/legacy-migrate.mjs";
+import { dataHome } from "./data-dir.ts";
 import { acquireDataDirLeaseForProcess, releaseOnceAtExit } from "./data-dir-lease.ts"; import { markEngineRunClean, startEngineRecords } from "./engine-records.ts";
 import { createWorkspaceAccess, describeEdition, editionForSettings, editionStatus, entitled, hostedWorkspaceConfiguration, hostedWorkspaceConfigured, licenseWarning, sharedWorkspaceFullAccessConfigured, loadEnterpriseLayer, workspaceMembership, type WorkspaceAccess } from "./enterprise.ts";
 import { environmentDescriptor, loadEnvironmentId, OWNER_LENDING, serverVersion } from "./environment.ts"; import { dataFormatAtStart } from "./data-format.ts"; import { doctorAtStart } from "./doctor/start.ts";
@@ -659,7 +660,7 @@ const WEBHOOK_PORT = Number(process.env.SEIRA_WEBHOOK_PORT || PORT + 1);
 const WEBHOOK_PUBLIC_URL = process.env.SEIRA_WEBHOOK_PUBLIC_URL || undefined;
 const STATIC_DIR = process.env.SEIRA_STATIC_DIR || null;
 
-migrateLegacyNames(); dataFormatAtStart("check", DATA_DIR, serverVersion()); ensureDirs();
+migrateLegacyData({ home: dataHome(), dataDir: DATA_DIR }); dataFormatAtStart("check", DATA_DIR, serverVersion()); ensureDirs();
 // Acquire before any durable identity, sessions, config or Store state is loaded.
 const dataDirLease = acquireDataDirLeaseForProcess(DATA_DIR); void startEngineRecords(DATA_DIR); // stops what an earlier server left
 repairLegacyHomePaths(DATA_DIR);

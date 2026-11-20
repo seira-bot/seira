@@ -1,9 +1,13 @@
 // BYO Linux VPS: Docker's SSH transport reaches the user's daemon; one Cua MCP container per bot.
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createConnection, createServer, type AddressInfo } from "node:net";
 import { OWN_GROUP, stopGroup } from "./group-exec.ts";
-import { LEGACY_VPS_CONTAINER_PREFIX, labelValue, legacyDockerLabel } from "../electron/legacy-names.mjs";
+import { labelValue, legacyDockerLabel } from "../electron/legacy-names.mjs";
+import {
+  MANAGED_VPS_CONTAINER_NAME, VPS_CONTAINER_LABEL, VPS_CONTAINER_PREFIX, VPS_ENVIRONMENT_LABEL, VPS_MANAGED_LABEL, VPS_VIEWER_LABEL,
+  inspectContainerOrLegacy, inspectImageOrLegacy, isMissingObjectMessage, isVpsContainerOf, vpsContainerName, vpsLegacyContainerName,
+} from "./vps-names.ts";
 import {
   BASE_IMAGE,
   CUA_DRIVER_VERSION,
@@ -33,11 +37,7 @@ import { SPAWNED_PROXIES } from "./proxy-paths.ts";
 import { dockerCliMissing, dockerCliMissingProblem } from "./vps-hints.ts";
 
 export const VPS_IMAGE = IMAGE;
-export const VPS_MANAGED_LABEL = "com.seira.vps";
-export const VPS_CONTAINER_LABEL = "com.seira.container";
-export const VPS_ENVIRONMENT_LABEL = "com.seira.environment";
-export const VPS_VIEWER_LABEL = "com.seira.vps-viewer";
-export const VPS_CONTAINER_PREFIX = "seira-vps";
+export { VPS_CONTAINER_LABEL, VPS_CONTAINER_PREFIX, VPS_ENVIRONMENT_LABEL, VPS_MANAGED_LABEL, VPS_VIEWER_LABEL, isVpsContainerOf, vpsContainerName };
 export { dockerCliInstallCommand, vpsStartsForTurn, vpsUnavailableHint } from "./vps-hints.ts";
 // Lazy: index must finish data migration and take the writer lease before this may create the data directory.
 let vpsEnvironmentIdCache: string | null = null;
@@ -49,7 +49,6 @@ function vpsEnvironmentId(): string {
 const CONTAINER_NAME = /^[a-zA-Z0-9][a-zA-Z0-9_.-]+$/;
 const CONTAINER_ID = /^[a-f0-9]{12,64}$/i;
 const FULL_CONTAINER_ID = /^[a-f0-9]{64}$/i;
-const MANAGED_VPS_CONTAINER_NAME = new RegExp(`^(?:${VPS_CONTAINER_PREFIX}|${LEGACY_VPS_CONTAINER_PREFIX})-[a-z0-9]{1,12}-[a-f0-9]{12}$`);
 const IMAGE_ID = /^sha256:[a-f0-9]{64}$/i;
 const SCREENSHOT_PATH = "/tmp/seira-vps-preview.png";
 // The Cua XFCE base ships Pillow in /opt/venv; a container without it returns the original PNG.
@@ -146,23 +145,6 @@ export interface ManagedVpsInventory {
   vpsAliases: string[];
   problem: string | null;
   instances: ManagedVpsInventoryInstance[];
-}
-
-function containerNamePart(botId: string): string {
-  return botId.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12) || "bot";
-}
-
-export function vpsContainerName(botId: string): string {
-  const hash = createHash("sha256").update(botId).digest("hex").slice(0, 12);
-  return `${VPS_CONTAINER_PREFIX}-${containerNamePart(botId)}-${hash}`;
-}
-
-function vpsLegacyContainerName(botId: string): string {
-  return vpsContainerName(botId).replace(VPS_CONTAINER_PREFIX, LEGACY_VPS_CONTAINER_PREFIX);
-}
-
-export function isVpsContainerOf(botId: string, containerName: string): boolean {
-  return containerName === vpsContainerName(botId) || containerName === vpsLegacyContainerName(botId);
 }
 
 export function vpsDockerArgs(alias: string, args: string[]): string[] {
@@ -314,11 +296,6 @@ function emptyStatus(botId: string, alias: string | null): VpsComputerStatus {
   };
 }
 
-/** Docker and Podman report "No such object/image/container"; any other inspect failure is transport, not absence. */
-function isMissingObjectMessage(message: string): boolean {
-  return /no such (object|image|container)/i.test(message);
-}
-
 function transportFailure(message: string): string {
   if (dockerCliMissing(message)) return dockerCliMissingProblem();
   if (/timed out/i.test(message)) {
@@ -410,10 +387,7 @@ async function computeVpsComputerStatus(
 
   let inspectedImageId: string | null = null;
   try {
-    const imageInspection = await inspect(["image", "inspect", VPS_IMAGE]).catch((error) => {
-      if (!isMissingObjectMessage(error instanceof Error ? error.message : String(error))) throw error;
-      return inspect(["image", "inspect", LEGACY_IMAGE]);
-    });
+    const imageInspection = await inspectImageOrLegacy(inspect, VPS_IMAGE, LEGACY_IMAGE);
     const inspected = JSON.parse(imageInspection.stdout) as Array<{
       Id?: string;
       id?: string;
@@ -438,19 +412,8 @@ async function computeVpsComputerStatus(
   }
 
   try {
-    const containerInspection = await inspect(["inspect", status.container_name]).catch((error) => {
-      if (!isMissingObjectMessage(error instanceof Error ? error.message : String(error))) throw error;
-      const legacyName = vpsLegacyContainerName(botId);
-      return inspect(["inspect", legacyName]).then(
-        (found) => {
-          status.container_name = legacyName;
-          return found;
-        },
-        () => {
-          throw error;
-        },
-      );
-    });
+    const { found: containerInspection, name: foundName } = await inspectContainerOrLegacy(inspect, botId, status.container_name);
+    status.container_name = foundName;
     const inspected = JSON.parse(containerInspection.stdout) as Array<{
       Config?: { Image?: string; Labels?: Record<string, string>; Env?: string[] };
       HostConfig?: DockerHardeningConfig & {

@@ -17,6 +17,7 @@ export function currentStorageKey(key: string): string | null;
 export function currentHomeFolder(name: string): string | null;
 export const LEGACY_BACKUP_MAGIC: string;
 export function currentFormat<T>(value: T): T | string;
+export function withCurrentFormat(value: unknown): unknown;
 export const LEGACY_PACKAGE_FILE_SUFFIX: string;
 export const LEGACY_TEAM_FILE_SUFFIX: string;
 export const LEGACY_TEAM_MANIFEST_FILE: string;

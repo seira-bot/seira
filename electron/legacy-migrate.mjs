@@ -112,6 +112,12 @@ export function migrateHomeFolders({ home, env = process.env, fs = nodeFs, log =
   return moves;
 }
 
+/** Runs both migrations for a data folder; `log` defaults to a warning with the data-directory tag. */
+export function migrateLegacyData({ home, dataDir, log = (line) => console.warn(`[data-directory] ${line}`) }) {
+  migrateHomeFolders({ home, log });
+  migrateInnerFiles({ dataDir, home, log });
+}
+
 /**
  * Inside a data folder already at its current name: renames the old marker files and engine-home folders, and removes
  * lease files left by an earlier version that no longer runs. Does nothing when SEIRA_DATA_DIR is set, unless `home` is given and SEIRA_DATA_DIR is `<home>/.seira`.

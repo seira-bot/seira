@@ -1,7 +1,7 @@
 // ~/.seira/config.json, with env vars overriding its credentials.
 import { readFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
 import { dataHome } from "./data-dir.ts";
-import { migrateHomeFolders, migrateInnerFiles } from "../electron/legacy-migrate.mjs";
+import { migrateLegacyData } from "../electron/legacy-migrate.mjs";
 import { signInFromEnv } from "./sign-in-env.ts";
 export { signInFromEnv };
 import { join } from "node:path";
@@ -696,13 +696,6 @@ const LEGACY_DATA_DIR = join(dataHome(), ".opengrokbot");
 export const EVENTS_DIR = join(DATA_DIR, "events");
 export const NATIVE_DIR = join(DATA_DIR, "native");
 
-/** Moves what an earlier version named differently to the current names; a no-op once done and whenever SEIRA_DATA_DIR names another folder than the default. */
-export function migrateLegacyNames(): void {
-  const log = (line: string): void => console.warn(`[data-directory] ${line}`);
-  migrateHomeFolders({ home: dataHome(), log });
-  migrateInnerFiles({ dataDir: DATA_DIR, home: dataHome(), log });
-}
-
 export function ensureDirs() {
   if (!existsSync(DATA_DIR) && existsSync(LEGACY_DATA_DIR)) {
     try {
@@ -710,7 +703,7 @@ export function ensureDirs() {
     } catch {
     }
   }
-  migrateLegacyNames();
+  migrateLegacyData({ home: dataHome(), dataDir: DATA_DIR });
   for (const dir of [DATA_DIR, EVENTS_DIR, NATIVE_DIR]) mkdirSync(dir, { recursive: true });
   migrateLegacyFeatureFlags(DATA_DIR);
 }

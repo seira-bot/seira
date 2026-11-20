@@ -7,7 +7,7 @@
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 
-import { currentFormat, currentRunOn } from "../electron/legacy-names.mjs";
+import { currentFormat, currentRunOn, withCurrentFormat } from "../electron/legacy-names.mjs";
 import { BOT_PROFILE_LIMITS, fitsOnOneLine } from "./bot-profile.ts";
 import { redactSecretsInText } from "./redact.ts";
 import { normalizeCronSchedule } from "./routine-schedule.ts";
@@ -726,13 +726,6 @@ export function isPackageDocument(value: unknown): boolean {
     currentFormat((value as { format?: unknown }).format) === PACKAGE_FORMAT;
 }
 
-/** A package object with the format id an earlier version wrote changed to the current one. */
-function withCurrentFormat(value: unknown): unknown {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
-  const format = (value as { format?: unknown }).format;
-  return currentFormat(format) === format ? value : { ...value, format: currentFormat(format) };
-}
-
 /** Parse exactly one v1 document (JSON object or Markdown) with the v1 rules. */
 export function parsePackageV1(value: unknown): PackageDocumentV1 {
   const source = withCurrentFormat(typeof value === "string" ? markdownDocument(value) : value);
@@ -743,7 +736,7 @@ export function parsePackageV1(value: unknown): PackageDocumentV1 {
 }
 
 function validateV2(source: unknown): PackageDocument {
-  const parsed = packageDocumentSchema.safeParse(source);
+  const parsed = packageDocumentSchema.safeParse(withCurrentFormat(source));
   if (!parsed.success) throw invalid(schemaSentence(parsed.error, source));
   checkV2References(parsed.data.package);
   return parsed.data;
@@ -784,8 +777,7 @@ export function parsePackageDocument(value: unknown, options: { trust?: PackageT
   if (typeof value === "string") {
     document = upgradeV1(parsePackageV1(value));
   } else {
-    value = withCurrentFormat(value);
-    if (!value || typeof value !== "object" || Array.isArray(value) || (value as { format?: unknown }).format !== PACKAGE_FORMAT) {
+    if (!value || typeof value !== "object" || Array.isArray(value) || currentFormat((value as { format?: unknown }).format) !== PACKAGE_FORMAT) {
       throw new PackageFormatError("not_a_package", "This is not a Seira package");
     }
     const version = (value as { version?: unknown }).version;

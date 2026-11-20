@@ -86,6 +86,13 @@ export function currentFormat(value) {
   return value;
 }
 
+/** A package object with the format id an earlier version wrote changed to the current one. */
+export function withCurrentFormat(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const format = value.format;
+  return currentFormat(format) === format ? value : { ...value, format: currentFormat(format) };
+}
+
 export const LEGACY_PACKAGE_FILE_SUFFIX = ".openmaus.json";
 export const LEGACY_TEAM_FILE_SUFFIX = ".mausteam.json";
 export const LEGACY_TEAM_MANIFEST_FILE = "team.mausteam.json";
