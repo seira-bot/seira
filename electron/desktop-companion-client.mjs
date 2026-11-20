@@ -7,9 +7,10 @@ import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 import path from "node:path";
 import { SEIRA_HOSTS } from "./seira-hosts.mjs";
+import { LEGACY_DEVICE_TOKEN_PREFIX } from "./legacy-names.mjs";
 
 export const DESKTOP_COMPANION_FIELD = "desktopCompanionRemote";
-const DEVICE_TOKEN = /^seira_[A-Za-z0-9_-]{43}$/;
+const DEVICE_TOKEN = new RegExp(`^(?:seira_|${LEGACY_DEVICE_TOKEN_PREFIX})[A-Za-z0-9_-]{43}$`);
 const DEVICE_ID = /^[0-9a-f-]{36}$/i;
 const PAIRING_CODE = /^\d{6}$/;
 const MAX_ERROR_BYTES = 64 * 1024;

@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import { saveConfig, type AppConfig } from "./config.ts";
+import { LEGACY_COMPOSIO_USER_PREFIX } from "../electron/legacy-names.mjs";
 import {
   apiBase,
   canonicalToolkitSlug,
@@ -171,7 +172,7 @@ async function earlierInstallationUser(apiKey: string): Promise<string | null> {
   const users = new Set<string>();
   let pages = 0;
   const enough = (page: ConnectedAccountResponse[]) => {
-    for (const { user_id } of page) if (user_id?.startsWith("seira_")) users.add(user_id);
+    for (const { user_id } of page) if (user_id?.startsWith("seira_") || user_id?.startsWith(LEGACY_COMPOSIO_USER_PREFIX)) users.add(user_id);
     pages += 1;
     return users.size > 1 || pages >= EARLIER_USER_PAGES;
   };

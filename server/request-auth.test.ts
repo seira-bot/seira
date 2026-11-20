@@ -1,5 +1,6 @@
 import type { IncomingMessage } from "node:http";
-import { mkdtempSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -932,5 +933,27 @@ describe("a browser on this machine is not the owner", () => {
     expect(pick({ ...dev, SEIRA_LOOPBACK_TRUST: "service" }, { fromSource: true }).localBrowsers).toBe(false);
     expect(pick({ SEIRA_DEV_TRUST_LOCAL_BROWSER: "true" }, { fromSource: true })).toEqual({ trust: "owner", reason: "self-hosted default", localBrowsers: false });
     expect(resolveLoopbackTrust({ env: dev, desktopManaged: false, hostedWorkspace: false, cloudHome: true, fromSource: true }).localBrowsers).toBe(false);
+  });
+});
+
+describe("a session token that an earlier version issued", () => {
+  it("still signs in from the sessions file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "seira-auth-legacy-"));
+    try {
+      const file = join(dir, "sessions.json");
+      const first = new SessionRegistry({ file });
+      const issued = first.issue({ label: "Script", scopes: ["admin", "client"] });
+      const earlier = issued.token.replace("seira_sess_", "omb_sess_");
+      const saved = JSON.parse(readFileSync(file, "utf8"));
+      saved.sessions[0].tokenHash = createHash("sha256").update(earlier).digest("hex");
+      writeFileSync(file, JSON.stringify(saved));
+      const sessions = new SessionRegistry({ file });
+      const result = resolveRequestAuth(request({ host: "127.0.0.1:8799", authorization: `Bearer ${earlier}` }), {
+        sessions, cookieName: "seira_session_8799_env", streamPath: "/api/events", url: new URL("/api/bots", "http://x"),
+      });
+      expect(result.auth).toMatchObject({ kind: "session" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

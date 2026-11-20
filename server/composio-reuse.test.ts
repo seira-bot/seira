@@ -81,6 +81,12 @@ describe("a fresh installation connecting a project an earlier installation used
     expect(accountQueries.every((query) => !query.has("user_ids"))).toBe(true);
   });
 
+  it("keeps a Composio user that an earlier version made", async () => {
+    accounts = [account("openmausbot_earlier", "gmail"), account("openmausbot_earlier", "slack")];
+    const prepared = await prepareFresh();
+    expect(prepared.userId).toBe("openmausbot_earlier");
+  });
+
   it("reads only a few pages, and starts a new user when the project is too big to tell", async () => {
     accounts = Array.from({ length: 30 }, (_, n) => account("seira_earlier", `app${n}`));
     const prepared = await prepareFresh();

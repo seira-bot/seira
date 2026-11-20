@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { parseJson, type JsonValue } from "./schema.ts";
 import type { WebhookManager } from "./webhooks.ts";
+import { LEGACY_WEBHOOK_AUTH_HEADER } from "../electron/legacy-names.mjs";
 import { IDLE_HTTP_SERVER } from "./due-timer.ts";
 
 export const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
@@ -71,7 +72,7 @@ export function header(req: IncomingMessage, name: string): string | undefined {
 export function bearerSecret(req: IncomingMessage): string {
   const authorization = header(req, "authorization") ?? "";
   const match = authorization.match(/^Bearer\s+(.+)$/i);
-  return match?.[1]?.trim() || header(req, "x-seira-secret")?.trim() || "";
+  return match?.[1]?.trim() || header(req, "x-seira-secret")?.trim() || header(req, LEGACY_WEBHOOK_AUTH_HEADER)?.trim() || "";
 }
 
 function deliveryId(req: IncomingMessage): string | undefined {

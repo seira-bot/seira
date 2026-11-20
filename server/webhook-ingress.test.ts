@@ -101,6 +101,15 @@ describe("webhook-only ingress", () => {
     expect(queued.at(-1)?.prompt).toContain('"ticket": "42"');
   });
 
+  it("accepts the secret header an earlier version sent", async () => {
+    const response = await fetch(`${ingress.baseUrl}/hooks/${endpointId}`, {
+      method: "POST",
+      headers: { "x-openmaus-secret": secret, "content-type": "application/x-www-form-urlencoded" },
+      body: "ticket=43&priority=high",
+    });
+    expect(response.status).toBe(202);
+  });
+
   it("awaits a room delivery and answers 202 only after the post lands; a failing sink is not 2xx", async () => {
     let finish: () => void = () => {};
     let gate = new Promise<void>((resolve) => (finish = resolve));

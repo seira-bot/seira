@@ -147,6 +147,8 @@ describe("desktop companion endpoint", () => {
 
     expect(desktopCompanionAccess({ [DESKTOP_COMPANION_FIELD]: access })).toEqual(access);
     expect(desktopCompanionAccess({ [DESKTOP_COMPANION_FIELD]: { ...access, token: "bad" } })).toBeNull();
+    const earlier = { ...access, token: `omb_${"a".repeat(43)}` };
+    expect(desktopCompanionAccess({ [DESKTOP_COMPANION_FIELD]: earlier })).toEqual(earlier);
     expect(withDesktopCompanionAccess({ existing: true }, access)).toEqual({
       existing: true,
       [DESKTOP_COMPANION_FIELD]: access,

@@ -1,5 +1,6 @@
 // The connected-apps service's app-event routes (cloudflare/composio-broker), called with this installation's token.
 import { z } from "zod";
+import { LEGACY_POLLER_HEADER } from "../electron/legacy-names.mjs";
 
 export interface BrokerAccess {
   url: string;
@@ -148,7 +149,7 @@ export function brokerClient(access: () => BrokerAccess | null, fetchImpl: typeo
     },
     async poll({ after, waitS, poller, signal }) {
       const query = new URLSearchParams({ after: String(after), wait: String(waitS), limit: "50" });
-      const response = await call(`/v1/events?${query}`, { headers: { "x-seira-poller": poller }, signal, timeoutMs: (waitS + 15) * 1000 });
+      const response = await call(`/v1/events?${query}`, { headers: { "x-seira-poller": poller, [LEGACY_POLLER_HEADER]: poller }, signal, timeoutMs: (waitS + 15) * 1000 });
       const body = pollSchema.parse(await json(response));
       // One malformed row must not stall the queue: it is skipped, and the cursor still moves past it.
       const events = body.events.flatMap((event) => {
