@@ -363,6 +363,11 @@ describe("shared sentences", () => {
     expect(CREDENTIAL_PROMPT).toContain("secure credential request");
     expect(CREDENTIAL_PROMPT).not.toContain("applied immediately");
   });
+
+  it("tells bots that a missing GH_TOKEN is not missing GitHub access, and how to check it", () => {
+    expect(CREDENTIAL_PROMPT).toContain("A missing GH_TOKEN does not mean no GitHub access.");
+    expect(CREDENTIAL_PROMPT).toContain("run gh auth status (never with -t) with the real HOME, not a test HOME");
+  });
 });
 
 describe("composioSystemPrompt", () => {

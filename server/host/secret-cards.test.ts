@@ -20,7 +20,7 @@ const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 
 /** `privateTo`: a Team Cloud's private chats, by conversation, and whose each is; any other conversation is the team's. */
-function fixture(language?: string, linked?: (vaultStore: VaultStore) => SecretCardsDeps["botLogins"], privateTo: Record<string, string> = {}) {
+function fixture(language?: string, linked?: (vaultStore: VaultStore) => SecretCardsDeps["botLogins"], privateTo: Record<string, string> = {}, extra: Partial<SecretCardsDeps> = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), "seira-secret-cards-"));
   dirs.push(dataDir);
   const lines: Message[] = [];
@@ -46,7 +46,7 @@ function fixture(language?: string, linked?: (vaultStore: VaultStore) => SecretC
     botLogins: linked?.(vaultStore) ?? { credentialConfig: (config) => ({ ...config, onePassword: { connected: false } }), linkedSecret: async () => null },
     phoneSecrets: { provide: async () => {}, open: () => {} } as never, phoneSecretSubmissions: { has: () => false } as never,
     connectorThread: () => ({ bot, group: undefined }), answerCardNode: (_thread, _id, text) => { resumed.push(text); return true; }, followCard: () => {}, dataDir, providerKeysRefused: false,
-    layerFolder: () => dataDir, turnVm: () => undefined, ...(language ? { threadLanguage: () => language } : {}),
+    layerFolder: () => dataDir, turnVm: () => undefined, ...(language ? { threadLanguage: () => language } : {}), ...extra,
   });
   return { cards, lines, bot, vaultStore, resumed, dataDir };
 }
@@ -99,6 +99,56 @@ describe("the card a bot asks for a key or secret with", () => {
     await cards.requestCredential(bot, "ledger-main", { label: "Notion token", reason: "For Notion's MCP server.", delivery: "ref" });
     expect(lines[0]!.text).toBe("Securely provide the Notion token from Seira on your phone or computer. It is never added to chat.");
     expect(lines[0]!.secret!.description).toBe("For Notion's MCP server. Ledger gets a one-use reference for Seira's own tools and never sees it. Seira keeps it safely, so Ledger can use it again without asking you.");
+  });
+});
+
+describe("a GitHub token a bot asks for on a computer that already has GitHub access", () => {
+  const github = (access: () => Promise<boolean>, extra: Partial<SecretCardsDeps> = {}) => {
+    const checks: number[] = [];
+    const one = fixture(undefined, undefined, {}, { githubAccess: () => { checks.push(Date.now()); return access(); }, ...extra });
+    return { ...one, checks };
+  };
+  const GITHUB_ASK = { label: "GitHub token", reason: "To push the fix branch.", delivery: "file" };
+
+  it("is refused with the reason, and the person gets no card", async () => {
+    const { cards, lines, bot, checks } = github(async () => true);
+    const answer = await cards.requestCredential(bot, "t1", GITHUB_ASK);
+    expect(answer.status).toBe(200);
+    expect(answer.body).toEqual({ label: "GitHub token", text: expect.stringContaining("gh is signed in to github.com") });
+    expect(String(answer.body.text)).toContain("do not run gh auth token or gh auth status -t");
+    expect(lines).toEqual([]);
+    expect(checks).toHaveLength(1);
+  });
+
+  it("shows the card as before while the computer has no GitHub access", async () => {
+    const { cards, lines, bot } = github(async () => false);
+    const answer = await cards.requestCredential(bot, "t1", GITHUB_ASK);
+    expect(answer.status).toBe(201);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.secret).toMatchObject({ target: "customSecret", label: "GitHub token", delivery: "file" });
+  });
+
+  it("shows the card when the check fails", async () => {
+    const { cards, lines, bot } = github(async () => { throw new Error("gh broke"); });
+    expect((await cards.requestCredential(bot, "t1", GITHUB_ASK)).status).toBe(201);
+    expect(lines).toHaveLength(1);
+  });
+
+  it.each([
+    ["another service's secret", { ...GITHUB_ASK, label: "Stripe secret key" }, {}],
+    ["a key for Seira's own tools", { ...GITHUB_ASK, delivery: "ref" }, {}],
+    ["a turn in a Local VM", GITHUB_ASK, { turnVm: () => "shared" }],
+  ] as const)("does not check and shows the card for %s", async (_name, ask, extra) => {
+    const { cards, lines, bot, checks } = github(async () => true, extra);
+    expect((await cards.requestCredential(bot, "t1", { ...ask })).status).toBe(201);
+    expect(lines).toHaveLength(1);
+    expect(checks).toEqual([]);
+  });
+
+  it("shows the card where the server does not offer the check", async () => {
+    const { cards, lines, bot } = fixture();
+    expect((await cards.requestCredential(bot, "t1", GITHUB_ASK)).status).toBe(201);
+    expect(lines).toHaveLength(1);
   });
 });
 
