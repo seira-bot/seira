@@ -16,11 +16,12 @@ that a workflow publishes is the npm package (see [Publish to npm](#publish-to-n
 
 Only the maintainers can release:
 
-- The `main` branch ruleset needs a pull request, a passing `CI` check, and a
-  review from the code owners. Squash merge is the only merge method.
+- The `main` branch ruleset needs a pull request and a review from the code
+  owners. Squash merge is the only merge method. The `main CI must pass`
+  ruleset needs a passing `CI` check and has no bypass.
 - The `release tags` ruleset blocks the creation, update, and deletion of `v*`
   tags for everyone except the organization admins.
-- GitHub Actions has no bypass on either ruleset, and its token can only read
+- GitHub Actions has no bypass on any of these rulesets, and its token can only read
   the repository (see [CI](ci.md)).
 - A new push to `main` cancels the older `main` CI run that is still going
   (see [CI](ci.md#fewer-runners)). When you release, rely on the `CI` check of
