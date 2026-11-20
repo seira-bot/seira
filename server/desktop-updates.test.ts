@@ -12,7 +12,7 @@ import {
   IMAGE_LAYER_LABEL,
   IMAGE_LAYER_VERSION,
   MANAGED_LABEL,
-  SEIRA_IMAGE,
+  LEGACY_IMAGE,
   TARGET_LABEL,
   WORKSPACE_LABEL,
   containerComputerAction,
@@ -56,7 +56,7 @@ describe("vpsDesktopOutdated", () => {
 });
 
 describe("createLocalVmUpdater", () => {
-  const target: LocalVmTarget = { key: "bot:abc", containerName: "seira-computer-abc", legacyContainerName: "seira-computer-abc", workspaceDir: "/nonexistent", viewerPort: null, label: "abc" };
+  const target: LocalVmTarget = { key: "bot:abc", containerName: "seira-computer-abc", legacyContainerName: "openmausbot-computer-abc", workspaceDir: "/nonexistent", viewerPort: null, label: "abc" };
   const setup = (opts: { held?: () => boolean } = {}) => {
     let current = status({ imageMatches: false, image: false });
     const calls: string[] = [];
@@ -139,7 +139,7 @@ describe("updating a desktop that still has the older name", () => {
       if (args[0] === "info") return { stdout: "29" };
       if (key === `docker image inspect ${IMAGE}`) return { stdout: imageInspect };
       if (key === `docker inspect ${target.legacyContainerName}` && present === "older") {
-        return { stdout: JSON.stringify([{ Config: { Image: SEIRA_IMAGE, Labels: { ...labels, [WORKSPACE_LABEL]: "1", [TARGET_LABEL]: target.label } }, State: { Running: false }, Image: "sha256:old-build" }]) };
+        return { stdout: JSON.stringify([{ Config: { Image: LEGACY_IMAGE, Labels: { ...labels, [WORKSPACE_LABEL]: "1", [TARGET_LABEL]: target.label } }, State: { Running: false }, Image: "sha256:old-build" }]) };
       }
       if (key === `docker inspect ${target.containerName}` && present === "new") {
         return { stdout: JSON.stringify([{ Config: { Image: IMAGE, Labels: { ...labels, [WORKSPACE_LABEL]: "1", [TARGET_LABEL]: target.label } }, State: { Running: true }, Image: "sha256:current-build" }]) };

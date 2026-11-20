@@ -1,4 +1,5 @@
 import { workspacePreparationDockerfile } from "./container-workspace.ts";
+import { LEGACY_IMAGE_REPOSITORY } from "../electron/legacy-names.mjs";
 
 export const CUA_DRIVER_VERSION = "0.37.0";
 export const BASE_IMAGE_REPOSITORY = "docker.io/trycua/xfce-cua";
@@ -11,7 +12,7 @@ export const IMAGE_REPOSITORY = "localhost/seira/cua-local-vm";
 export const IMAGE_LAYER_VERSION = "9";
 export const IMAGE_LAYER_LABEL = "com.seira.image-layer";
 export const IMAGE = `${IMAGE_REPOSITORY}:driver-${CUA_DRIVER_VERSION}-v${IMAGE_LAYER_VERSION}`;
-export const SEIRA_IMAGE = `localhost/seira/cua-local-vm:driver-${CUA_DRIVER_VERSION}-v${IMAGE_LAYER_VERSION}`;
+export const LEGACY_IMAGE = `${LEGACY_IMAGE_REPOSITORY}:driver-${CUA_DRIVER_VERSION}-v${IMAGE_LAYER_VERSION}`;
 export const MANAGED_LABEL = "com.seira.local-vm";
 export const DRIVER_LABEL = "com.seira.cua-driver";
 export const BASE_IMAGE_LABEL = "com.seira.cua-base";

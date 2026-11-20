@@ -644,6 +644,17 @@ services:
     }
   });
 
+  it("drops the copy that an earlier version made and labelled, once the new copy has been checked", () => {
+    const box = install();
+    const earlier = "deploy_data-before-update-20260101T000000Z";
+    mkdirSync(join(box.fake, "volumes", earlier), { recursive: true });
+    box.setState({ volumeLabels: { [earlier]: ["com.mausbot.role=update-backup", "com.mausbot.project=deploy", "com.mausbot.data=deploy_data"] } });
+    const done = box.run();
+    expect(done.status, done.stdout).toBe(0);
+    expect(box.copies()).toHaveLength(1);
+    expect(box.copies()).not.toContain(earlier);
+  });
+
   it("keeps the copy from the update before until the next copy has been checked", () => {
     const NEWER = { id: id("c"), refs: [`${REPO}@${id("3")}`, `${REPO}:v0.1.152`], version: "0.1.152", local: false, engine: true };
     const box = install();

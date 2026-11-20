@@ -57,6 +57,9 @@ RUNNER_COPY="com.seira.by=runner"
 RUNNER_STATE=${SEIRA_UPDATE_STATE_DIR:-/var/lib/seira-update}
 KEEP_TAG="seira-before-update:local"
 BACKUP_ROLE="com.seira.role=update-backup"
+# What earlier versions wrote on their copies: found and dropped like the current ones, never written.
+LEGACY_BACKUP_ROLE="com.mausbot.role=update-backup"
+LEGACY_RUNNER_COPY="com.mausbot.by=runner"
 
 # The install: --dir, else the folder this script is in when that holds a Compose file, else where the installer
 # (deploy/install.sh) puts one.
@@ -329,16 +332,24 @@ copy_aside() { # data backup image: copy, then check the copy against the data, 
 # Every copy of this install's data but the one this update made, dropped once that one has been checked. On a run the
 # server asked for, only the runner's own, and never the newest one before this: a server that damaged its data and then
 # asked would otherwise leave only the damaged copy.
+list_copies() { # [runner] → the copies of this install's data, newest name first, under the current and the earlier labels
+  local current=() earlier=()
+  [ "${1:-}" = runner ] && current=(--filter "label=$RUNNER_COPY") earlier=(--filter "label=$LEGACY_RUNNER_COPY")
+  {
+    docker volume ls -q --filter "label=$BACKUP_ROLE" --filter "label=com.seira.data=$J_data" ${current[@]+"${current[@]}"}
+    docker volume ls -q --filter "label=$LEGACY_BACKUP_ROLE" --filter "label=com.mausbot.data=$J_data" ${earlier[@]+"${earlier[@]}"}
+  } 2>/dev/null | LC_ALL=C sort -ru
+}
 drop_older_copies() {
   local volume keep=1
   if [ "$BY_RUNNER" = 1 ]; then
-    for volume in $(docker volume ls -q --filter "label=$BACKUP_ROLE" --filter "label=com.seira.data=$J_data" --filter "label=$RUNNER_COPY" 2>/dev/null | LC_ALL=C sort -r); do
+    for volume in $(list_copies runner); do
       [ "$volume" = "$J_backup" ] && continue
       if [ "$keep" -gt 0 ]; then keep=$((keep - 1)); else docker volume rm -f "$volume" >>"$LOG" 2>&1; fi
     done
     return 0
   fi
-  for volume in $(docker volume ls -q --filter "label=$BACKUP_ROLE" --filter "label=com.seira.data=$J_data" 2>/dev/null); do
+  for volume in $(list_copies); do
     [ "$volume" = "$J_backup" ] || docker volume rm -f "$volume" >>"$LOG" 2>&1
   done
 }

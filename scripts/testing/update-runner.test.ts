@@ -32,7 +32,7 @@ afterEach(() => {
 });
 
 /** A checkout's deploy/ folder running `running`, with root's folder as `--install` leaves it. */
-function install(options: { stable?: Image; running?: Image; updater?: "real" | "recorder"; earlierCopy?: boolean; runnerCopy?: boolean; freeKb?: number } = {}) {
+function install(options: { stable?: Image; running?: Image; updater?: "real" | "recorder"; earlierCopy?: boolean; runnerCopy?: boolean; earlierLabels?: boolean; freeKb?: number } = {}) {
   const running = options.running ?? OLD;
   const stable = options.stable ?? NEW;
   const root = mkdtempSync(join(tmpdir(), "seira-update-runner-"));
@@ -80,6 +80,7 @@ exec /usr/bin/stat "$@"
     writeFileSync(join(fake, "volumes", RUNNER_COPY, "the-last-good-data.txt"), "good");
     labels[RUNNER_COPY] = ["com.seira.role=update-backup", "com.seira.project=deploy", "com.seira.data=deploy_data", `com.seira.image=${running.id}`, "com.seira.by=runner"];
   }
+  if (options.earlierLabels) for (const [name, list] of Object.entries(labels)) labels[name] = list.map((label) => label.replace("com.seira.", "com.mausbot."));
   writeFileSync(join(fake, "state.json"), JSON.stringify({
     serial: 1, composeReadsPin: true, defaultImage: `${REPO}:latest`, dataVolume: "deploy_data", images, volumeLabels: labels,
     ...(options.freeKb === undefined ? {} : { freeKb: options.freeKb }),
@@ -267,6 +268,18 @@ describe.skipIf(!posix)("deploy/update-runner.sh", { timeout: hostTimeout(60_000
     expect(box.copies()).not.toContain(RUNNER_COPY);
     expect(box.copies()).toContain(EARLIER_COPY);
     expect(box.copies().filter((name) => name !== EARLIER_COPY)).toHaveLength(2);
+  });
+
+  it("keeps and drops the copies that an earlier version labelled like the current ones", () => {
+    const box = install({ earlierCopy: true, runnerCopy: true, earlierLabels: true });
+    box.ask();
+    expect(box.last()?.result).toBe("updated");
+    for (const kept of [RUNNER_COPY, EARLIER_COPY]) expect(box.copies(), kept).toContain(kept);
+    box.setStable(NEXT);
+    box.ask({ SEIRA_RUNNER_GAP_S: "0" });
+    expect(box.last()?.result).toBe("updated");
+    expect(box.copies()).not.toContain(RUNNER_COPY);
+    expect(box.copies()).toContain(EARLIER_COPY);
   });
 
   it("never tries a stable image again after it rolled back from it, until a person runs update.sh or another is out", () => {

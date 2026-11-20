@@ -8,6 +8,7 @@ import { join, resolve } from "node:path";
 
 import { augmentedPath, resolveCliSpawn } from "./env-path.ts";
 import { DATA_DIR } from "./config.ts";
+import { LEGACY_COMPUTER_CONTAINER, labelValue } from "../electron/legacy-names.mjs";
 import {
   applyResourcesBeforeStart,
   DEFAULT_DESKTOP_RESOURCES,
@@ -39,7 +40,7 @@ import {
   IMAGE_LAYER_VERSION,
   IMAGE_LAYER_LABEL,
   IMAGE,
-  SEIRA_IMAGE,
+  LEGACY_IMAGE,
   MANAGED_LABEL,
   DRIVER_LABEL,
   BASE_IMAGE_LABEL,
@@ -58,7 +59,7 @@ export {
   IMAGE_LAYER_VERSION,
   IMAGE_LAYER_LABEL,
   IMAGE,
-  SEIRA_IMAGE,
+  LEGACY_IMAGE,
   MANAGED_LABEL,
   DRIVER_LABEL,
   BASE_IMAGE_LABEL,
@@ -79,7 +80,6 @@ export type CommandRunner = (
 ) => Promise<{ stdout: string }>;
 
 export const CONTAINER = "seira-computer";
-export const SEIRA_CONTAINER = "seira-computer";
 export const WORKSPACE_LABEL = "com.seira.workspace";
 export const TARGET_LABEL = "com.seira.local-vm-target";
 export const VM_WORKSPACE_DIR = join(DATA_DIR, "vm-home");
@@ -110,7 +110,7 @@ export interface LocalVmTarget {
 export const SHARED_LOCAL_VM_TARGET: LocalVmTarget = {
   key: "shared",
   containerName: CONTAINER,
-  legacyContainerName: SEIRA_CONTAINER,
+  legacyContainerName: LEGACY_COMPUTER_CONTAINER,
   workspaceDir: VM_WORKSPACE_DIR,
   viewerPort: HOST_VIEWER_PORT,
   label: "shared",
@@ -123,7 +123,7 @@ export function perBotLocalVmTarget(botId: string): LocalVmTarget {
   return {
     key: `bot:${digest}`,
     containerName: `${CONTAINER}-${short}`,
-    legacyContainerName: `${SEIRA_CONTAINER}-${short}`,
+    legacyContainerName: `${LEGACY_COMPUTER_CONTAINER}-${short}`,
     workspaceDir: join(DATA_DIR, "vm-homes", short),
     viewerPort: null,
     label: digest,
@@ -135,7 +135,7 @@ export function poolLocalVmTarget(seat: number): LocalVmTarget {
   return {
     key: `pool:${seat}`,
     containerName: `${CONTAINER}-p${seat}`,
-    legacyContainerName: `${SEIRA_CONTAINER}-p${seat}`,
+    legacyContainerName: `${LEGACY_COMPUTER_CONTAINER}-p${seat}`,
     workspaceDir: join(DATA_DIR, "vm-homes", `pool-${seat}`),
     viewerPort: null,
     label: `pool-${seat}`,
@@ -149,7 +149,7 @@ export function localVmContainerName(target: LocalVmTarget): string {
 }
 
 function isLocalVmImageRef(ref: string | undefined): boolean {
-  return ref === IMAGE || ref === SEIRA_IMAGE;
+  return ref === IMAGE || ref === LEGACY_IMAGE;
 }
 
 /** Only provisioning creates this durable directory; idle shutdown keeps it. */
@@ -351,10 +351,10 @@ function existingContainerProblem(status: ContainerComputerStatus): string | nul
 
 export function imageLabelsMatch(labels: Record<string, string> | undefined): boolean {
   return (
-    labels?.[MANAGED_LABEL] === "1" &&
-    labels?.[DRIVER_LABEL] === CUA_DRIVER_VERSION &&
-    labels?.[BASE_IMAGE_LABEL] === BASE_IMAGE_DIGEST &&
-    labels?.[IMAGE_LAYER_LABEL] === IMAGE_LAYER_VERSION
+    labelValue(labels, MANAGED_LABEL) === "1" &&
+    labelValue(labels, DRIVER_LABEL) === CUA_DRIVER_VERSION &&
+    labelValue(labels, BASE_IMAGE_LABEL) === BASE_IMAGE_DIGEST &&
+    labelValue(labels, IMAGE_LAYER_LABEL) === IMAGE_LAYER_VERSION
   );
 }
 
@@ -364,11 +364,11 @@ function containerOwnershipLabelsMatch(
   target: LocalVmTarget,
 ): boolean {
   return (
-    labels?.[MANAGED_LABEL] === "1" &&
-    labels?.[WORKSPACE_LABEL] === "1" &&
+    labelValue(labels, MANAGED_LABEL) === "1" &&
+    labelValue(labels, WORKSPACE_LABEL) === "1" &&
     (target.key === SHARED_LOCAL_VM_TARGET.key
-      ? labels?.[TARGET_LABEL] === undefined || labels?.[TARGET_LABEL] === target.label
-      : labels?.[TARGET_LABEL] === target.label)
+      ? labelValue(labels, TARGET_LABEL) === undefined || labelValue(labels, TARGET_LABEL) === target.label
+      : labelValue(labels, TARGET_LABEL) === target.label)
   );
 }
 
@@ -563,7 +563,7 @@ export async function containerComputerStatus(
       status.imageMatches =
         isLocalVmImageRef(detail?.Config?.Image) &&
         imageLabelsMatch(detail?.Config?.Labels) &&
-        (!rootIsHostRoot || detail?.Config?.Labels?.[DESKTOP_FLAGS_LABEL] === DESKTOP_FLAGS_VERSION) &&
+        (!rootIsHostRoot || labelValue(detail?.Config?.Labels, DESKTOP_FLAGS_LABEL) === DESKTOP_FLAGS_VERSION) &&
         status.image_id !== null &&
         normalizeImageId(detail?.Image) === status.image_id;
       status.managed = containerOwnershipLabelsMatch(detail?.Config?.Labels, target);
@@ -850,9 +850,9 @@ async function imageHasManagedLabels(runtime: Runtime, runner: CommandRunner, re
 
 async function tagOlderImage(runtime: Runtime, runner: CommandRunner): Promise<boolean> {
   if (await imageHasManagedLabels(runtime, runner, IMAGE)) return false;
-  if (!(await imageHasManagedLabels(runtime, runner, SEIRA_IMAGE))) return false;
+  if (!(await imageHasManagedLabels(runtime, runner, LEGACY_IMAGE))) return false;
   try {
-    await runner(runtime, runtime === "container" ? ["image", "tag", SEIRA_IMAGE, IMAGE] : ["tag", SEIRA_IMAGE, IMAGE]);
+    await runner(runtime, runtime === "container" ? ["image", "tag", LEGACY_IMAGE, IMAGE] : ["tag", LEGACY_IMAGE, IMAGE]);
     return true;
   } catch {
     return false;

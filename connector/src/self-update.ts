@@ -8,6 +8,7 @@ import type { ContainerInfo, ContainerSpec, Docker } from "./docker.ts";
 import { digestPinnedOnly, type ImageCheck } from "./images.ts";
 import { errorText, type Log } from "./log.ts";
 import type { ConnectorIdentity, Job, JobReply } from "./protocol.ts";
+import { currentLabels, listContainers } from "./labels.ts";
 import { LABELS, NAMES } from "./settings.ts";
 import type { SelfUpdateRecord, StateStore } from "./state.ts";
 
@@ -32,7 +33,7 @@ export interface SelfUpdateDeps {
 
 /** The container a connector process runs in, found by the instance label install.sh (or a self-update) gave it. */
 export async function ownContainer(docker: Docker, instance: string): Promise<ContainerInfo | null> {
-  const [found] = await docker.listContainers({ [LABELS.instance]: instance });
+  const [found] = await listContainers(docker, { [LABELS.instance]: instance });
   return found ? docker.containerInspect(found.Id) : null;
 }
 
@@ -50,7 +51,7 @@ export function successorSpec(current: ContainerInfo, image: string, instance: s
     Image: image,
     Env: [...env, `${INSTANCE_ENV}=${instance}`, `${IMAGE_ENV}=${image}`],
     ...(current.Config.Cmd ? { Cmd: current.Config.Cmd } : {}),
-    Labels: { ...current.Config.Labels, [LABELS.instance]: instance, [LABELS.role]: "connector" },
+    Labels: { ...currentLabels(current.Config.Labels), [LABELS.instance]: instance, [LABELS.role]: "connector" },
     HostConfig: hostConfig as ContainerSpec["HostConfig"],
   };
 }

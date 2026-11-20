@@ -133,3 +133,24 @@ export const LEGACY_POLLER_HEADER = "x-omb-poller";
 /** The launchd label and systemd unit name of the Sentinel schedule that an earlier version installed. */
 export const LEGACY_SENTINEL_LAUNCHD_LABEL = "com.openmausbot.sentinel";
 export const LEGACY_SENTINEL_SYSTEMD_NAME = "openmausbot-sentinel";
+
+/** The Docker label prefix, container names and image repository that earlier versions wrote on the desktop and the VPS desktop. */
+export const LEGACY_DOCKER_LABEL_PREFIX = "com.openmausbot.";
+export const DOCKER_LABEL_PREFIX = "com.seira.";
+export const LEGACY_COMPUTER_CONTAINER = "openmausbot-computer";
+export const LEGACY_VPS_CONTAINER_PREFIX = "openmausbot-vps";
+export const LEGACY_IMAGE_REPOSITORY = "localhost/openmausbot/cua-local-vm";
+
+/** The name an earlier version gave a current Docker label, or null when the name is not a current label. */
+export function legacyDockerLabel(name) {
+  return name.startsWith(DOCKER_LABEL_PREFIX) ? LEGACY_DOCKER_LABEL_PREFIX + name.slice(DOCKER_LABEL_PREFIX.length) : null;
+}
+
+/** A label value under the current name, else under the name an earlier version used. */
+export function labelValue(labels, name) {
+  if (!labels || typeof labels !== "object") return undefined;
+  const current = labels[name];
+  if (current !== undefined) return current;
+  const old = legacyDockerLabel(name);
+  return old === null ? undefined : labels[old];
+}

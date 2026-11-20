@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { LEGACY_COMPUTER_CONTAINER, legacyDockerLabel } from "../electron/legacy-names.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,8 +17,7 @@ import {
   IMAGE_LAYER_LABEL,
   IMAGE_LAYER_VERSION,
   MANAGED_LABEL,
-  SEIRA_CONTAINER,
-  SEIRA_IMAGE,
+  LEGACY_IMAGE,
   TARGET_LABEL,
   VM_WORKSPACE_DIR,
   VM_WORKSPACE_GUEST,
@@ -1461,7 +1461,7 @@ describe("Local VM names after the Seira rename", () => {
   const stopped = { State: { Running: false, FinishedAt: "2026-10-01T12:00:00Z" } };
   const olderDesktop = (botId: string, overrides: Record<string, unknown> = {}) => {
     const detail = JSON.parse(perBotReadyInspect(botId, 6081))[0];
-    detail.Config.Image = SEIRA_IMAGE;
+    detail.Config.Image = LEGACY_IMAGE;
     return JSON.stringify([{ ...detail, ...stopped, ...overrides }]);
   };
 
@@ -1470,9 +1470,9 @@ describe("Local VM names after the Seira rename", () => {
     expect(SHARED_LOCAL_VM_TARGET.containerName).toBe("seira-computer");
     expect(perBotLocalVmTarget("bot-a").containerName).toMatch(/^seira-computer-[0-9a-f]{16}$/);
     expect(poolLocalVmTarget(3).containerName).toBe("seira-computer-p3");
-    expect(SHARED_LOCAL_VM_TARGET.legacyContainerName).toBe("seira-computer");
-    expect(perBotLocalVmTarget("bot-a").legacyContainerName).toBe(`seira-computer-${perBotLocalVmTarget("bot-a").containerName.slice("seira-computer-".length)}`);
-    expect(poolLocalVmTarget(3).legacyContainerName).toBe("seira-computer-p3");
+    expect(SHARED_LOCAL_VM_TARGET.legacyContainerName).toBe("openmausbot-computer");
+    expect(perBotLocalVmTarget("bot-a").legacyContainerName).toBe(`openmausbot-computer-${perBotLocalVmTarget("bot-a").containerName.slice("seira-computer-".length)}`);
+    expect(poolLocalVmTarget(3).legacyContainerName).toBe("openmausbot-computer-p3");
     for (const target of [SHARED_LOCAL_VM_TARGET, perBotLocalVmTarget("bot-a"), poolLocalVmTarget(3)]) {
       const args = containerRunArgs("docker", "pw", target);
       expect(args.slice(0, 4)).toEqual(["run", "-d", "--name", target.containerName]);
@@ -1511,12 +1511,12 @@ describe("Local VM names after the Seira rename", () => {
       if (key === "/usr/bin/which docker") return { stdout: "docker" };
       if (command === "/usr/bin/which") throw new Error("missing executable");
       if (args[0] === "info") return { stdout: "running" };
-      if (key === `docker image inspect ${SEIRA_IMAGE}`) return { stdout: preparedImageInspect() };
+      if (key === `docker image inspect ${LEGACY_IMAGE}`) return { stdout: preparedImageInspect() };
       if (key === `docker image inspect ${IMAGE}`) {
-        if (calls.includes(`docker tag ${SEIRA_IMAGE} ${IMAGE}`)) return { stdout: preparedImageInspect() };
+        if (calls.includes(`docker tag ${LEGACY_IMAGE} ${IMAGE}`)) return { stdout: preparedImageInspect() };
         throw new Error("missing image");
       }
-      if (key === `docker tag ${SEIRA_IMAGE} ${IMAGE}`) return { stdout: "" };
+      if (key === `docker tag ${LEGACY_IMAGE} ${IMAGE}`) return { stdout: "" };
       if (args[0] === "inspect") throw new Error("missing container");
       throw new Error(`unsupported command: ${key}`);
     };
@@ -1533,12 +1533,12 @@ describe("Local VM names after the Seira rename", () => {
       if (key === "/usr/bin/which container") return { stdout: "container" };
       if (command === "/usr/bin/which") throw new Error("missing executable");
       if (key === "container system status") return { stdout: "running" };
-      if (key === `container image inspect ${SEIRA_IMAGE}`) return { stdout: appleImageInspect([appleImageVariant(preparedLabels)]) };
+      if (key === `container image inspect ${LEGACY_IMAGE}`) return { stdout: appleImageInspect([appleImageVariant(preparedLabels)]) };
       if (key === `container image inspect ${IMAGE}`) {
-        if (calls.includes(`container image tag ${SEIRA_IMAGE} ${IMAGE}`)) return { stdout: appleImageInspect([appleImageVariant(preparedLabels)]) };
+        if (calls.includes(`container image tag ${LEGACY_IMAGE} ${IMAGE}`)) return { stdout: appleImageInspect([appleImageVariant(preparedLabels)]) };
         throw new Error("missing image");
       }
-      if (key === `container image tag ${SEIRA_IMAGE} ${IMAGE}`) return { stdout: "" };
+      if (key === `container image tag ${LEGACY_IMAGE} ${IMAGE}`) return { stdout: "" };
       if (args[0] === "inspect") throw new Error("missing container");
       throw new Error(`unsupported command: ${key}`);
     };
@@ -1555,7 +1555,7 @@ describe("Local VM names after the Seira rename", () => {
         if (key === "/usr/bin/which docker") return { stdout: "docker" };
         if (command === "/usr/bin/which") throw new Error("missing executable");
         if (args[0] === "info") return { stdout: "running" };
-        if (key === `docker image inspect ${SEIRA_IMAGE}`) {
+        if (key === `docker image inspect ${LEGACY_IMAGE}`) {
           return { stdout: failure === "labels" ? JSON.stringify([{ Id: "x", Config: { Labels: {} } }]) : preparedImageInspect() };
         }
         if (key === `docker image inspect ${IMAGE}`) {
@@ -1596,10 +1596,34 @@ describe("Local VM names after the Seira rename", () => {
     expect(fake.calls.some((call) => call.includes(target.containerName) && !call.startsWith("docker inspect"))).toBe(false);
   });
 
+  const earlierLabels = (labels: Record<string, string>) =>
+    Object.fromEntries(Object.entries(labels).map(([name, value]) => [legacyDockerLabel(name) ?? name, value]));
+
+  it("uses a desktop container that an earlier version labelled", async () => {
+    const target = perBotLocalVmTarget("earlier-labels");
+    const detail = JSON.parse(perBotReadyInspect("earlier-labels", 6081))[0];
+    detail.Config.Labels = earlierLabels(detail.Config.Labels);
+    Object.assign(detail, stopped);
+    const image = JSON.parse(preparedImageInspect());
+    image[0].Config.Labels = earlierLabels(image[0].Config.Labels);
+    const fake = runner({
+      ...docker,
+      [`docker image inspect ${IMAGE}`]: JSON.stringify(image),
+      [`docker inspect ${target.containerName}`]: JSON.stringify([detail]),
+    });
+    expect(await containerComputerStatus(fake.run, "linux", target)).toMatchObject({
+      container: "stopped",
+      managed: true,
+      image: true,
+      imageMatches: true,
+      container_name: target.containerName,
+    });
+  });
+
   it("resolves a shared older-named desktop for screens and exec, then returns to the new name once it is gone", async () => {
     const shared = SHARED_LOCAL_VM_TARGET;
     const olderShared = JSON.parse(readyInspect());
-    olderShared[0].Config.Image = SEIRA_IMAGE;
+    olderShared[0].Config.Image = LEGACY_IMAGE;
     Object.assign(olderShared[0], stopped);
     const present = runner({
       ...docker,
@@ -1607,10 +1631,10 @@ describe("Local VM names after the Seira rename", () => {
       [`docker inspect ${shared.containerName}`]: new Error("missing container"),
       [`docker inspect ${shared.legacyContainerName}`]: JSON.stringify(olderShared),
     });
-    expect(await containerComputerStatus(present.run, "linux", shared)).toMatchObject({ container: "stopped", container_name: SEIRA_CONTAINER });
+    expect(await containerComputerStatus(present.run, "linux", shared)).toMatchObject({ container: "stopped", container_name: LEGACY_COMPUTER_CONTAINER });
     const execs: string[][] = [];
     await containerExec(shared, "true", { runtime: "docker", exec: async (_command, args) => { execs.push(args); return { stdout: "", stderr: "", code: 0 }; } });
-    expect(execs[0]).toContain(SEIRA_CONTAINER);
+    expect(execs[0]).toContain(LEGACY_COMPUTER_CONTAINER);
     const gone = runner({
       ...docker,
       [`docker image inspect ${IMAGE}`]: preparedImageInspect(),
@@ -1679,7 +1703,7 @@ describe("Local VM names after the Seira rename", () => {
       [`container inspect ${shared.containerName}`]: new Error("missing container"),
       [`container inspect ${shared.legacyContainerName}`]: JSON.stringify([{
         configuration: {
-          image: { reference: SEIRA_IMAGE, descriptor: { digest: "sha256:managed-image-id" } },
+          image: { reference: LEGACY_IMAGE, descriptor: { digest: "sha256:managed-image-id" } },
           resources: { cpus: 2, memoryInBytes: 4 * 1024 ** 3 },
           publishedPorts: [{ hostAddress: "127.0.0.1", containerPort: 6901 }],
           labels: { ...preparedLabels, [WORKSPACE_LABEL]: "1", [DESKTOP_FLAGS_LABEL]: DESKTOP_FLAGS_VERSION },
@@ -1689,7 +1713,7 @@ describe("Local VM names after the Seira rename", () => {
       }]),
     });
     const status = await containerComputerStatus(fake.run, "darwin", shared);
-    expect(status).toMatchObject({ imageMatches: true, managed: true, container_name: SEIRA_CONTAINER });
+    expect(status).toMatchObject({ imageMatches: true, managed: true, container_name: LEGACY_COMPUTER_CONTAINER });
     const gone = runner({
       ...appleRuntime,
       [`container image inspect ${IMAGE}`]: appleImageInspect([appleImageVariant(preparedLabels)]),

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { APPARMOR_PROFILE, LABELS, NAMES, PATHS, SECCOMP_FILE } from "../src/settings.ts";
+import { APPARMOR_PROFILE, LABELS, LEGACY_LABELS, NAMES, PATHS, SECCOMP_FILE } from "../src/settings.ts";
 
 const SCRIPT = join(import.meta.dirname, "..", "install.sh");
 const script = readFileSync(SCRIPT, "utf8");
@@ -29,6 +29,8 @@ function run(args: string[], options: { uid?: number; env?: Record<string, strin
 case "$*" in
   "ps -aq --filter label=${LABELS.role}=helper") echo helper-1 ;;
   "volume ls -q --filter label=${LABELS.role}=backup") echo seira-backup-20261028-000000-ab12; echo seira-backup-20261029-000000-cd34 ;;
+  "ps -aq --filter label=${LEGACY_LABELS.role}=helper") echo helper-earlier ;;
+  "volume ls -q --filter label=${LEGACY_LABELS.role}=backup") echo mausbot-backup-20260101-000000-ee55 ;;
 esac`);
   tool("id", `echo ${options.uid ?? 0}`);
   tool("apparmor_parser", `echo "apparmor_parser $*" >> "${log}"`);
@@ -110,6 +112,12 @@ describe("install.sh", () => {
     expect(result.stdout).toContain(`Your data is kept in the Docker volume ${NAMES.dataVolume}, with its backups, and the audit log in ${result.audit}.`);
     expect(existsSync(join(result.audit, "audit.jsonl"))).toBe(true);
     expect(result.stdout).toContain("curl -fsSL https://cloud.example.test/install.sh | sudo sh -s -- uninstall --delete-data");
+  });
+
+  it.skipIf(!posix)("uninstall also removes the helpers and backups that an earlier version labelled", () => {
+    const result = run(["uninstall", "--delete-data"]);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.calls).toEqual(expect.arrayContaining(["docker rm -f helper-earlier", "docker volume rm mausbot-backup-20260101-000000-ee55"]));
   });
 
   it.skipIf(!posix)("deletes the data only when --delete-data is typed, and refuses anything else before touching a thing", () => {

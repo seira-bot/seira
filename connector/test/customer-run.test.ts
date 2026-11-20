@@ -380,6 +380,12 @@ describe("a customer-run server: the home its owner installed", () => {
     expect(fixture.docker.files(`seira-backup-${mine}`)).toEqual({ "chats.json": WRITTEN });
   });
 
+  it("lists a backup that an earlier version labelled", async () => {
+    const fixture = await server();
+    await fixture.docker.createVolume("seira-backup-20260101-000000-abcd", { "com.mausbot.role": "backup", "com.mausbot.created": "1767225600000", "com.mausbot.by": "admin" });
+    expect((await fixture.adopted.copies()).backups).toEqual([{ id: "20260101-000000-abcd", kind: "backup", createdAt: 1767225600000, image: null }]);
+  });
+
   it("puts the data back as it was when the connector restarts in the middle of a restore", async () => {
     const fixture = await server();
     await fixture.install();

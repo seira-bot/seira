@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { ContainerSpec } from "../src/docker.ts";
 import type { Job, JobReply } from "../src/protocol.ts";
 import { SelfUpdater, successorSpec } from "../src/self-update.ts";
+import { LEGACY_LABELS } from "../src/settings.ts";
 import { StateStore } from "../src/state.ts";
 import { FakeDocker, type FakeContainer } from "./fake-docker.ts";
 
@@ -33,7 +34,7 @@ function installed(instance: string): ContainerSpec {
   };
 }
 
-async function fixture() {
+async function fixture(labelled: ContainerSpec["Labels"] = undefined) {
   const dir = mkdtempSync(join(tmpdir(), "seira-connector-update-"));
   dirs.push(dir);
   const state = new StateStore(join(dir, "state"));
@@ -41,7 +42,7 @@ async function fixture() {
   docker.publish(OLD, null);
   docker.publish(NEW, null);
   await docker.pull(OLD);
-  await docker.createContainer("seira-connector", installed("instance-old"));
+  await docker.createContainer("seira-connector", labelled ? { ...installed("instance-old"), Labels: labelled } : installed("instance-old"));
   await docker.startContainer("seira-connector");
   let clock = 1_800_000_000_000;
   const lines: string[] = [];
@@ -93,6 +94,17 @@ describe("the connector replacing itself", () => {
     // Started again later, the new connector finds nothing left to do; the next update clears the record.
     expect((await f.updater(instance).atStart(async () => true)).role).toBe("none");
     expect([...f.docker.containers.keys()]).toEqual(["seira-connector"]);
+  });
+
+  it("replaces a connector that an earlier version labelled, and labels the new one with the current names", async () => {
+    const f = await fixture({ [LEGACY_LABELS.role]: "connector", [LEGACY_LABELS.instance]: "instance-old" });
+    f.docker.onConnectorStart = async (container) => {
+      await f.updater(envOf(container).SEIRA_INSTANCE).atStart(async () => true);
+    };
+    expect(await f.updater("instance-old").run(f.job, f.agent)).toBeNull();
+    const now = f.docker.container("seira-connector")!;
+    expect(now.spec.Image).toBe(NEW);
+    expect(now.spec.Labels).toEqual({ "com.seira.role": "connector", "com.seira.instance": envOf(now).SEIRA_INSTANCE });
   });
 
   it("keeps the running connector when the new one never connects, and removes the new one", async () => {
