@@ -1,4 +1,4 @@
-export type SeiraService = "site" | "cloud" | "apps" | "updates" | "admin" | "accounts" | "device" | "stats" | "pages" | "companion";
+export type SeiraService = "site" | "cloud" | "apps" | "updates" | "admin" | "accounts" | "device" | "stats" | "pages" | "companion" | "push";
 
 export declare const SEIRA_HOSTS: Readonly<Record<SeiraService, string> & {
   cloudStaging: string;

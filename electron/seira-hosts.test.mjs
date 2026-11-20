@@ -9,12 +9,13 @@ describe("seiraServiceLive", () => {
   });
 
   it("keeps a service that has no live host off", () => {
-    for (const name of ["admin", "accounts", "device", "stats", "pages", "companion"]) expect(seiraServiceLive(name, {})).toBe(false);
+    for (const name of ["admin", "accounts", "device", "stats", "pages", "companion", "push"]) expect(seiraServiceLive(name, {})).toBe(false);
   });
 
   it("turns a service on when the environment names an address for it", () => {
     expect(seiraServiceLive("accounts", { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test" })).toBe(true);
     expect(seiraServiceLive("accounts", { SEIRA_CONTROL_PLANE_URL: "  " })).toBe(false);
+    expect(seiraServiceLive("push", { SEIRA_PUSH_RELAY_URL: "https://push.example.test" })).toBe(true);
     expect(seiraServiceLive("admin", { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test" })).toBe(false);
   });
 });
