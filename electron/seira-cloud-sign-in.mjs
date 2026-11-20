@@ -1,6 +1,7 @@
 import { ControlPlaneError } from "./control-plane-client.mjs";
 import {
   cleanCode,
+  cloudOriginOf,
   cleanEmail,
   parseSignInStart,
   SIGN_IN_START,
@@ -9,7 +10,6 @@ import {
   startFailure,
   verifyFailure,
 } from "./cloud-signin.mjs";
-import { SEIRA_HOSTS, seiraOrigin } from "./seira-hosts.mjs";
 
 const SESSION_PATH = "/api/cloud/desktop/session";
 const TOKEN = /^omc_[A-Za-z0-9_-]{43}$/;
@@ -17,24 +17,6 @@ const DEVICE_NAME_MAX = 100;
 const REQUEST_MS = 15_000;
 // oxlint-disable-next-line no-control-regex
 const CONTROL = /[\x00-\x1f\x7f]/g;
-
-/** An https origin, or http on 127.0.0.1; null for anything else. */
-function originOf(value) {
-  if (typeof value !== "string" || value.length > 253) return null;
-  let url;
-  try {
-    url = new URL(value);
-  } catch {
-    return null;
-  }
-  if (value !== url.origin || url.username || url.password) return null;
-  return url.protocol === "https:" || (url.protocol === "http:" && url.hostname === "127.0.0.1") ? value : null;
-}
-
-/** The Seira Cloud that signs people in: SEIRA_CLOUD_ORIGIN when valid, else Seira's own. */
-export function seiraCloudSignInOrigin(env = process.env) {
-  return originOf(env?.SEIRA_CLOUD_ORIGIN) ?? seiraOrigin(SEIRA_HOSTS.cloud);
-}
 
 /** Host name and platform in the form Seira Cloud accepts for a device. */
 function cloudIdentity({ deviceName, platform, appVersion }) {
@@ -73,7 +55,7 @@ export function createSeiraCloudSignIn({
   fetchImpl = globalThis.fetch,
   timeoutSignal = (milliseconds) => AbortSignal.timeout(milliseconds),
 }) {
-  const base = originOf(origin);
+  const base = cloudOriginOf(origin);
   if (!base) throw new ControlPlaneError("control_plane_unavailable");
   let pending = null;
 

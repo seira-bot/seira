@@ -30,7 +30,8 @@ import {
   type ManagedTunnelAccess,
   type ManagedTunnelState,
 } from "../electron/managed-companion-tunnel.mjs";
-import { createSeiraCloudSignIn, seiraCloudSignInOrigin } from "../electron/seira-cloud-sign-in.mjs";
+import { cloudOriginFor } from "../electron/cloud-signin.mjs";
+import { createSeiraCloudSignIn } from "../electron/seira-cloud-sign-in.mjs";
 import { createSecureCredentialState } from "../electron/secure-credential-state.mjs";
 import { writeFileAtomic } from "./atomic.ts";
 
@@ -165,7 +166,7 @@ export function createTunnelAccount(options: {
   const controlPlane = resolveServerControlPlaneURL({ environment: env, ...(options.liveServices ? { live: options.liveServices } : {}) });
   const machineName = options.machineName ?? hostname();
   const cloudSignIn = createSeiraCloudSignIn({
-    origin: seiraCloudSignInOrigin(env),
+    origin: cloudOriginFor(env),
     identity: { deviceName: machineName, platform: process.platform, appVersion: options.version },
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
   });

@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createControlPlaneClient } from "./control-plane-client.mjs";
-import { createSeiraCloudSignIn, seiraCloudSignInOrigin } from "./seira-cloud-sign-in.mjs";
+import { cloudTarget } from "./cloud-account.mjs";
+import { cloudOriginFor } from "./cloud-signin.mjs";
+import { createSeiraCloudSignIn } from "./seira-cloud-sign-in.mjs";
 
 const CONTROL_PLANE = "https://control.example.test";
 const CLOUD = "https://cloud.example.test";
@@ -108,9 +110,17 @@ describe("sign-in through Seira Cloud", () => {
     expect(calls[0]).toMatchObject({ platform: "linux", appVersion: "0.0.0" });
   });
 
-  it("reads the Seira Cloud address from the environment, else Seira's own", () => {
-    expect(seiraCloudSignInOrigin({})).toBe("https://cloud.seira.bot");
-    expect(seiraCloudSignInOrigin({ SEIRA_CLOUD_ORIGIN: "https://cloud.example.test" })).toBe("https://cloud.example.test");
-    expect(seiraCloudSignInOrigin({ SEIRA_CLOUD_ORIGIN: "http://cloud.example.test" })).toBe("https://cloud.seira.bot");
+  it("signs in to the same Cloud as the desktop for every environment", () => {
+    for (const env of [
+      {},
+      { SEIRA_CLOUD_STAGING: "1" },
+      { SEIRA_CLOUD_ORIGIN: "https://cloud.example.test" },
+      { SEIRA_CLOUD_ORIGIN: "https://cloud.example.test", SEIRA_CLOUD_STAGING: "1" },
+      { SEIRA_CLOUD_ORIGIN: "http://cloud.example.test", SEIRA_CLOUD_STAGING: "1" },
+    ]) {
+      expect(cloudOriginFor(env), JSON.stringify(env)).toBe(cloudTarget(env).origin);
+    }
+    expect(cloudOriginFor({})).toBe("https://cloud.seira.bot");
+    expect(cloudOriginFor({ SEIRA_CLOUD_STAGING: "1" })).toBe("https://seira-cloud-staging.fly.dev");
   });
 });

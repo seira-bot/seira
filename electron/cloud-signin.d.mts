@@ -1,3 +1,7 @@
+export declare const CLOUD_ORIGIN: string;
+export declare const STAGING_CLOUD_ORIGIN: string;
+export declare function cloudOriginOf(value: unknown): string | null;
+export declare function cloudOriginFor(env?: Record<string, string | undefined>): string;
 export declare const SIGN_IN_START: string;
 export declare const SIGN_IN_VERIFY: string;
 export declare const SIGN_IN_TRIES: number;
