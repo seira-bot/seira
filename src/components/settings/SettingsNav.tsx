@@ -8,9 +8,8 @@ import { productName } from "@/lib/brand";
 import { setAdvancedMode, useAdvancedMode } from "@/lib/interface-mode";
 import { SIMPLE_ONLY } from "@/lib/simple-only";
 import { useStore } from "@/state/store";
-import { InitialsAvatar } from "../Avatar";
+import { PersonAvatar } from "../Avatar";
 import { PlaceMark } from "../PlacesRail";
-import { profileInitials } from "../SidebarProfileMenu";
 import { Switch, SettingsTag } from "../SettingsPrimitives";
 import { accountLine, useAccountSummary, useYou } from "./account-summary";
 import { usePhonePlaceState } from "./phone-status";
@@ -51,7 +50,7 @@ export function AppIcon({ size }: { size: number }) {
 
 export function YouAvatar({ size }: { size: number }) {
   const { profile } = useYou();
-  return <InitialsAvatar initials={profileInitials(profile)} avatarUrl={profile?.avatarUrl} size={size} fontSize={Math.round(size * 0.42)} className="bg-ink/[0.08]" />;
+  return <PersonAvatar profile={profile} size={size} />;
 }
 
 /** The place's one status line under its name: bots on This computer, power on a Cloud. */

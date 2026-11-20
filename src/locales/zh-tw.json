@@ -1643,6 +1643,7 @@
   "settings.profile.avatar.choose": "選擇相片",
   "settings.profile.avatar.uploading": "正在上傳…",
   "settings.profile.avatar.remove": "移除相片",
+  "settings.profile.avatar.shuffle": "隨機換一個",
   "settings.profile.avatar.cropTitle": "調整你的相片",
   "settings.profile.avatar.zoom": "縮放",
   "settings.profile.avatar.cancel": "取消",

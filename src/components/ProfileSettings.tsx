@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { api, useStore, type ConfigStatus } from "@/state/store";
 import { t } from "@/lib/i18n";
-import { avatarMarks } from "@/lib/avatar-marks";
 import { saveTeamProfile } from "@/lib/own-profile";
 import { IMAGE_MAX_BYTES, imageAttachmentFromFile, isImageFile } from "@/lib/composer-attachments";
 import type { LocaleKey } from "@/locales";
@@ -9,8 +8,9 @@ import { botAvatarUrlFromStoredPath } from "../../shared/bot-avatar";
 import { AboutMeSettings } from "./AboutMeSettings";
 import { EveryBotRules } from "./EveryBotRules";
 import { SETTINGS_INPUT, SettingsField } from "./SettingsPrimitives";
-import { profileInitials } from "./SidebarProfileMenu";
-import { User } from "lucide-react";
+import { PersonAvatar } from "./Avatar";
+import { randomPersonLook } from "../../shared/person-look";
+import { Shuffle } from "lucide-react";
 
 const PHOTO_MIN_SIDE = 64;
 const PHOTO_MAX_SIDE = 8192;
@@ -64,7 +64,7 @@ function croppedPhoto(file: File, zoom: number): Promise<File> {
 }
 
 /** The person's own picture beside their name in the sidebar. Kept in the app's attachment store; "" removes it. */
-function ProfilePhoto({ initials }: { initials: string }) {
+function ProfilePhoto() {
   const { state, dispatch } = useStore();
   const avatarUrl = state.config?.profile?.avatarUrl ?? "";
   const [busy, setBusy] = useState(false);
@@ -115,6 +115,14 @@ function ProfilePhoto({ initials }: { initials: string }) {
     setError(null);
     void store("").catch(() => setError(t("settings.profile.avatar.saveError")));
   };
+  const look = state.config?.profile?.look;
+  const shuffle = () => {
+    setError(null);
+    const next = randomPersonLook(Math.random, look);
+    void api<ConfigStatus>("/api/config", { method: "PUT", body: JSON.stringify({ profile: { look: next } }) })
+      .then((config) => dispatch({ type: "profileSaved", profile: { look: config.profile?.look ?? next } }))
+      .catch(() => setError(t("settings.profile.avatar.saveError")));
+  };
 
   return (
     <>
@@ -136,8 +144,7 @@ function ProfilePhoto({ initials }: { initials: string }) {
               <button type="button" className="rounded-md bg-control px-2 py-1 text-[12px] text-ink hover:bg-raised-hover" disabled={busy} onClick={() => save(draft)}>{t("settings.profile.avatar.save")}</button>
             </div>
           </div>
-        ) : avatarUrl ? <img {...avatarMarks("person", "picture")} src={avatarUrl} alt="" className="size-10 rounded-full object-cover" />
-          : <span {...avatarMarks("person", "initials")} aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-full bg-ink/[0.08] text-[14px] font-medium leading-[18px] text-ink-secondary">{initials}</span>}
+        ) : <PersonAvatar profile={state.config?.profile} size={40} />}
         <label className="ui-button ui-button-md cursor-pointer rounded-full">
           {busy ? t("settings.profile.avatar.uploading") : t(avatarUrl ? "settings.profile.avatar.change" : "settings.profile.avatar.choose")}
           <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" className="sr-only" disabled={busy} onChange={(event) => {
@@ -146,6 +153,11 @@ function ProfilePhoto({ initials }: { initials: string }) {
             pick(file);
           }} />
         </label>
+        {!team && !avatarUrl && !draft && (
+          <button type="button" className="ui-button ui-button-md inline-flex items-center gap-1.5 rounded-full" onClick={shuffle}>
+            <Shuffle size={14} aria-hidden="true" />{t("settings.profile.avatar.shuffle")}
+          </button>
+        )}
         {avatarUrl && !draft && <button type="button" data-danger="" className="settings-quiet cursor-pointer" onClick={remove}>{t("settings.profile.avatar.remove")}</button>}
       </div>
       {error && <div role="alert" className="text-[12px] text-danger">{error}</div>}
@@ -184,7 +196,7 @@ export function ProfileFields() {
 
   return (
     <div className="flex flex-col gap-4">
-      <ProfilePhoto initials={profileInitials({ name, email })} />
+      <ProfilePhoto />
       <SettingsField label={t("settings.profile.name")}>
         <input id="profile-name" aria-label={t("settings.profile.name")} value={name} onChange={(e) => setName(e.target.value)} onBlur={save} placeholder={t("settings.profile.name")} className={SETTINGS_INPUT} />
       </SettingsField>
@@ -206,18 +218,6 @@ export function ProfileFields() {
   );
 }
 
-function ProfileAvatar({ profile }: { profile?: { name?: string; email?: string; avatarUrl?: string } }) {
-  const [failed, setFailed] = useState<string | null>(null);
-  const initials = profileInitials(profile);
-  const photo = profile?.avatarUrl && failed !== profile.avatarUrl ? profile.avatarUrl : null;
-  return (
-    <span {...avatarMarks("person", photo ? "picture" : "initials")} className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-ink/[0.06] text-[15px] font-medium text-ink-secondary">
-      {photo ? <img src={photo} alt="" onError={() => setFailed(photo)} className="size-full object-cover" />
-        : initials !== "?" ? initials : <User size={20} aria-hidden="true" />}
-    </span>
-  );
-}
-
 export function ProfileSummaryRow() {
   const { state } = useStore();
   const [editing, setEditing] = useState(false);
@@ -232,7 +232,7 @@ export function ProfileSummaryRow() {
   return (
     <div data-profile-summary="" className="px-4 py-[13px]">
       <div className="flex min-w-0 items-center gap-3">
-        <ProfileAvatar profile={profile} />
+        <PersonAvatar profile={profile} size={44} />
         <div className="min-w-0 flex-1">
           {name || email ? <>
             <div className="truncate text-[14px] leading-5 text-ink">{name || email}</div>

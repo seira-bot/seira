@@ -1823,6 +1823,7 @@
   "settings.profile.avatar.choose": "Choose photo",
   "settings.profile.avatar.uploading": "Uploading…",
   "settings.profile.avatar.remove": "Remove photo",
+  "settings.profile.avatar.shuffle": "Shuffle",
   "settings.profile.avatar.cropTitle": "Adjust your photo",
   "settings.profile.avatar.zoom": "Zoom",
   "settings.profile.avatar.cancel": "Cancel",

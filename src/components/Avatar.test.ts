@@ -6,6 +6,7 @@ import {
   BotAvatar,
   InitialsAvatar,
   MausAvatar,
+  PersonAvatar,
   resolveBotAvatarOutcome,
   type BotAvatarProps,
   type MausAvatarProps,
@@ -95,6 +96,32 @@ describe("theme hooks on faces", () => {
   it("marks the person's picture and their initials", () => {
     expect(renderToStaticMarkup(createElement(InitialsAvatar, { initials: "AL", avatarUrl: "/api/attachments/me.png" }))).toMatch(/<img data-avatar="picture" data-avatar-kind="person"/);
     expect(renderToStaticMarkup(createElement(InitialsAvatar, { initials: "AL" }))).toMatch(/<div data-avatar="initials" data-avatar-kind="person"/);
+  });
+});
+
+describe("PersonAvatar", () => {
+  const look = { mascotBody: "bob" as const, mascotAccessories: ["glasses" as const], color: "teal" as const };
+  const person = (profile: { avatarUrl?: string; look?: typeof look } | undefined) => renderToStaticMarkup(createElement(PersonAvatar, { profile, size: 28 }));
+
+  it("draws the saved look with the bot avatar parts when there is no photo", () => {
+    const markup = person({ look });
+    expect(markup).toContain('data-avatar="mascot"');
+    expect(markup).toContain('data-avatar-kind="person"');
+    expect(markup).not.toBe(person({ look: { ...look, mascotBody: "spiky", mascotAccessories: [] } }));
+    expect(markup).not.toContain("?");
+  });
+
+  it("shows the photo over the look", () => {
+    const markup = person({ avatarUrl: "/api/attachments/me.png", look });
+    expect(markup).toMatch(/^<img data-avatar="picture" data-avatar-kind="person"/);
+    expect(markup).not.toContain("<svg");
+  });
+
+  it("draws a plain person, never initials or a question mark, when it has no look", () => {
+    for (const markup of [person(undefined), person({})]) {
+      expect(markup).toContain("<svg");
+      expect(markup).not.toContain("?");
+    }
   });
 });
 

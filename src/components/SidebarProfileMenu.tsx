@@ -23,7 +23,6 @@ import {
   Rocket,
   Settings as SettingsIcon,
   Smartphone,
-  UserRound,
   UsersRound,
   Zap,
 } from "lucide-react";
@@ -33,7 +32,7 @@ import { accountLine, useAccountSummary } from "./settings/account-summary";
 import { usePhonePlaceState, type PhonePlaceState } from "./settings/phone-status";
 import { useSettingsPlace } from "./settings/settings-place";
 import { AccountMoveStatus, useAccountMove, type AccountMoveKind } from "./AccountMove";
-import { InitialsAvatar } from "./Avatar";
+import { PersonAvatar } from "./Avatar";
 import { SignOutConfirm } from "./settings/SignOutConfirm";
 import { AboutDialog } from "./AboutDialog";
 import { CloudTile } from "./cloud-buy/parts";
@@ -68,19 +67,6 @@ import {
   type CloudPhoneDestination,
   type PhoneDestination,
 } from "@/lib/phone-pairing";
-
-export function profileInitials(profile?: { name?: string; email?: string }): string {
-  const name = profile?.name?.trim();
-  if (name) {
-    const words = name.split(/\s+/);
-    return words
-      .slice(0, 2)
-      .map((w) => w[0]!.toUpperCase())
-      .join("");
-  }
-  const email = profile?.email?.trim();
-  return email ? email[0]!.toUpperCase() : "?";
-}
 
 export function profileLabel(profile?: { name?: string; email?: string }): string {
   return profile?.name?.trim() || profile?.email?.trim() || t("sidebar.profile.you");
@@ -593,7 +579,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
     header: {
       name,
       line: accountLine({ ...summary, email: summary.email ?? (summary.plan ? profile?.email ?? null : null) }, { browser: !desktop, place: place.name, openSource }),
-      avatar: <InitialsAvatar initials={profileInitials(profile)} avatarUrl={profile?.avatarUrl} size={32} fontSize={13} className="bg-ink/[0.08]" />,
+      avatar: <PersonAvatar profile={profile} size={32} />,
       onOpen: () => openSettings("account"),
     },
     plan: planHere ? { key: "plan", label: t("settings.page.plan"), ...(planLine ? { subtitle: planLine } : {}), icon: <CreditCard size={16} />, onSelect: () => openSettings("plan") } : null,
@@ -633,8 +619,6 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
   });
   const noteworthy = update && updateNoteworthy(update.phase, update.pending) && !updateHasButton(update.phase);
   const needsYou = account?.automationsNeedYou === true;
-  const initials = profileInitials(profile);
-  const nameless = simple && initials === "?" ? <UserRound size={18} strokeWidth={1.75} aria-hidden /> : undefined;
   const label = accountLabel(name, { automationsNeedYou: needsYou, update: simple && noteworthy && update ? update.label : null, move: move.kind, announcements: news.unread });
   const dot = accountDot({ automationsNeedYou: needsYou, update: noteworthy ? (update.phase === "error" ? "failed" : "news") : null, move: move.kind, announcements: news.unread });
   // Advanced's full row has its own update badge: its avatar's dot is the move's and the announcements' alone.
@@ -654,7 +638,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         renderTrigger={({ open }) => simple && named ? (
           <span ref={triggerRef} data-sidebar-account="" className={cn("flex h-9 w-full min-w-0 items-center gap-2 rounded-lg px-1.5 transition-colors duration-150 motion-reduce:transition-none", open ? "bg-ink/[0.06]" : "hover:bg-ink/[0.05]")}>
             <span className="relative flex shrink-0">
-              <InitialsAvatar initials={initials} avatarUrl={profile?.avatarUrl} size={28} fallback={nameless} fontSize={11} />
+              <PersonAvatar profile={profile} size={28} />
               {dot && <span aria-hidden data-account-dot={dot} className={cn("absolute -right-0.5 -top-0.5 size-2.5 rounded-full ring-2 ring-panel", DOT_COLOR[dot])} />}
             </span>
             <span className="min-w-0 flex-1 truncate text-start text-[13px] font-medium text-ink">{name}</span>
@@ -665,7 +649,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
             data-sidebar-account=""
             className={cn("relative flex size-9 items-center justify-center rounded-full ring-2 transition-shadow", open ? "ring-ink/15" : "ring-transparent hover:ring-ink/10")}
           >
-            <InitialsAvatar initials={initials} avatarUrl={profile?.avatarUrl} size={36} fallback={nameless} fontSize={14} className="ring-1 ring-inset ring-ink/[0.04]" />
+            <PersonAvatar profile={profile} size={36} className="ring-1 ring-inset ring-ink/[0.04]" />
             {dot && <span aria-hidden data-account-dot={dot} className={cn("absolute -right-0.5 -top-0.5 size-2.5 rounded-full ring-2 ring-panel", DOT_COLOR[dot])} />}
           </span>
         ) : iconOnly ? (
@@ -678,7 +662,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
               open ? "bg-raised" : "hover:bg-raised/50",
             )}
           >
-            <InitialsAvatar initials={initials} avatarUrl={profile?.avatarUrl} size={rail ? 30 : circle ? 26 : 28} />
+            <PersonAvatar profile={profile} size={rail ? 30 : circle ? 26 : 28} />
             {dot && <span aria-hidden data-account-dot={dot} className={cn("absolute end-1 top-1 size-2.5 rounded-full ring-2 ring-app", DOT_COLOR[dot])} />}
           </span>
         ) : (
@@ -690,7 +674,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
             )}
           >
             <span className="relative flex shrink-0">
-              <InitialsAvatar initials={profileInitials(profile)} avatarUrl={profile?.avatarUrl} size={28} />
+              <PersonAvatar profile={profile} size={28} />
               {moveDot && <span aria-hidden data-account-dot={moveDot} className={cn("absolute -right-0.5 -top-0.5 size-2 rounded-full ring-2 ring-app", DOT_COLOR[moveDot])} />}
             </span>
             <span className="flex min-w-0 flex-1 flex-col">

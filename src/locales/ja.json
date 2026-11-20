@@ -1517,6 +1517,7 @@
   "settings.profile.avatar.choose": "写真を選択",
   "settings.profile.avatar.uploading": "アップロード中…",
   "settings.profile.avatar.remove": "写真を削除",
+  "settings.profile.avatar.shuffle": "シャッフル",
   "settings.profile.avatar.cropTitle": "写真を調整",
   "settings.profile.avatar.zoom": "ズーム",
   "settings.profile.avatar.cancel": "キャンセル",
