@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { recoverThreadGrantsOnce } from "./always-allow.ts";
 import { browserEngineEncryptionKey } from "./browser-engine.ts";
 import { DATA_DIR, ensureDirs, saveConfig } from "./config.ts";
-import { ensurePrivateDir } from "./data-dir.ts";
+import { ensurePrivateDir, otherTestRunner, TEST_HOME_PREFIX } from "./data-dir.ts";
 import { Store } from "./store.ts";
 
 const modeOf = (dir: string) => statSync(dir).mode & 0o7777;
@@ -148,5 +148,52 @@ describe("data folder creation", () => {
       .flatMap((file) => readFileSync(join(server, file), "utf8").split("\n")
         .flatMap((line, index) => (/\bmkdirSync\(\s*(?:DATA_DIR|dataDir)\s*[,)]/u.test(line) ? [`${file}:${index + 1}`] : [])));
     expect(direct).toEqual([]);
+  });
+});
+
+describe("a server test under another test runner", () => {
+  const node: NodeJS.ProcessVersions = { ...process.versions, bun: undefined };
+  const bun: NodeJS.ProcessVersions = { ...process.versions, bun: "1.4.4" };
+
+  it.each([
+    ["jest", { JEST_WORKER_ID: "1" }, node, ["node", "jest"], true],
+    ["node --test", { NODE_TEST_CONTEXT: "child-v8" }, node, ["node", "server/config.test.ts"], true],
+    ["bun test", { NODE_ENV: "test" }, bun, ["bun", "server/config.test.ts"], true],
+    ["bun test with NODE_ENV set before", { NODE_ENV: "production" }, bun, ["bun", "/repo/server/config.test.ts"], true],
+    ["vitest", { VITEST: "true", JEST_WORKER_ID: "1" }, node, ["node", "vitest"], false],
+    ["the server under bun", { NODE_ENV: "production" }, bun, ["bun", "server/seira.ts"], false],
+    ["the server under node", {}, node, ["node", "server/seira.ts"], false],
+  ])("under %s", (_name, env, versions, argv, found) => {
+    expect(otherTestRunner(env, versions, argv)).toBe(found);
+  });
+
+  describe.skipIf(process.platform === "win32")("with a home the suite did not make", () => {
+    let home: string;
+    beforeEach(() => {
+      home = mkdtempSync(join(tmpdir(), "foreign-home-"));
+      vi.stubEnv("VITEST", undefined);
+      vi.stubEnv("JEST_WORKER_ID", "1");
+      vi.stubEnv("HOME", home);
+      vi.resetModules();
+    });
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+      rmSync(home, { recursive: true, force: true });
+    });
+
+    it("stops the config import before it touches the data folder", async () => {
+      await expect(import("./config.ts")).rejects.toThrow("Run the server tests with vitest (pnpm test).");
+      expect(readdirSync(home)).toEqual([]);
+    });
+
+    it("goes on in a home the suite made", async () => {
+      const made = join(home, `${TEST_HOME_PREFIX}fixture`);
+      mkdirSync(made);
+      vi.stubEnv("HOME", made);
+      const { dataHome } = await import("./data-dir.ts");
+      expect(dataHome()).toBe(made);
+      expect(existsSync(join(made, ".seira"))).toBe(false);
+    });
   });
 });
