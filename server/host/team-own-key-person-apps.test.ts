@@ -1,6 +1,7 @@
 // A Team Cloud with its own Composio project key: each person's own apps go to that project as their own Composio user,
 // and nothing reaches the managed connected-apps service. The real Composio client code (server/composio.ts) runs against
 // a loopback project (SEIRA_COMPOSIO_API) beside a loopback service that records whatever reaches it.
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -234,6 +235,29 @@ describe("each person's own apps with the team's own Composio key", () => {
     const { as } = setup({ refuse: "Acme does not allow Gmail. Ask a team admin." });
     expect(await as(EMAILS.ada, "POST", "/api/team/my-connections/apps/gmail/connect")).toEqual({ status: 403, body: { error: "Acme does not allow Gmail. Ask a team admin.", code: "managed_policy" } });
     expect(project.requests).toEqual([]);
+    offService();
+  });
+});
+
+describe("what an earlier version stored for the team's project", () => {
+  it("keeps each member's Composio user, connections and waiting removals under the key mark an earlier version wrote", async () => {
+    const { host, stored, myGmail, ownCall } = setup();
+    const OLD_ADA = `omb_member_${"a".repeat(32)}`, OLD_CLEO = `omb_member_${"c".repeat(32)}`;
+    const adaAccount = project.connect(OLD_ADA, "gmail");
+    project.connect(OLD_CLEO, "gmail");
+    const oldMark = createHash("sha256").update("omb-project-apps\0").update(KEY).digest("hex").slice(0, 16);
+    (host.people as unknown as { write(name: string, value: unknown): void }).write("project-apps.json",
+      { v: 1, keyMark: oldMark, people: { [ADA]: { email: EMAILS.ada, userId: OLD_ADA } }, removals: [OLD_CLEO] });
+
+    expect(host.people.appsElsewhere(ADA)).toBe(false);
+    expect(await myGmail(EMAILS.ada)).toMatchObject({ connected: true });
+    expect((await ownCall("ada-chat", ADA)).text).toContain(adaAccount);
+    expect(stored().people[ADA]).toMatchObject({ userId: OLD_ADA });
+    expect(stored().people[ADA]).not.toHaveProperty("again");
+    expect(stored().removals).toEqual([OLD_CLEO]);
+    host.primeApps();
+    await expect.poll(() => project.accounts.map((account) => account.user_id)).toEqual([OLD_ADA]);
+    await expect.poll(() => stored().removals).toEqual([]);
     offService();
   });
 });
