@@ -735,7 +735,7 @@ function withCurrentFormat(value: unknown): unknown {
 
 /** Parse exactly one v1 document (JSON object or Markdown) with the v1 rules. */
 export function parsePackageV1(value: unknown): PackageDocumentV1 {
-  const source = typeof value === "string" ? markdownDocument(value) : value;
+  const source = withCurrentFormat(typeof value === "string" ? markdownDocument(value) : value);
   const parsed = packageDocumentV1Schema.safeParse(source);
   if (!parsed.success) throw new PackageFormatError("invalid", v1SchemaSentence(parsed.error));
   checkV1References(parsed.data.package);
