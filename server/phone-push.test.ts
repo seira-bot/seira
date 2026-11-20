@@ -203,7 +203,7 @@ describe("offering a notify frame", () => {
     expect(relay.sends()).toEqual([{
       path: "/v1/installations/self/push/send",
       authorization: `Bearer ${CREDENTIAL}`,
-      body: { v: 1, token: APNS, pairing: "pair-tag-0001", collapseId: "seira.th_1.42", notification: { kind: "approval", title: "Scout needs approval", botId: "bot_1", botName: "Scout", threadId: "th_1" } },
+      body: { v: 1, token: APNS, pairing: "pair-tag-0001", collapseId: "openmaus.th_1.42", notification: { kind: "approval", title: "Scout needs approval", botId: "bot_1", botName: "Scout", threadId: "th_1" } },
     }]);
     const raw = JSON.stringify(relay.calls);
     for (const secret of ["PRIVATE", "payroll", "sk-live", "API_KEY"]) expect(raw).not.toContain(secret);
