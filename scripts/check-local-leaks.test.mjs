@@ -32,6 +32,10 @@ describe("generic rules", () => {
       'GITHUB_TOKEN="Zq8xL2mN4pR7tV9wY3bC"',
       "DB_PASSWORD = s3cr3tP4ssw0rdValue",
       "SECRET='/ab+cd3/Ef9GhIjKlMnOp'",
+      "DB_PASSWORD=correcthorsebatterystaple",
+      'API_KEY = "ABCD1234EFGH5678IJKL"',
+      "SECRET=/abcDEF123ghiJKL456mno",
+      'SECRET="/AbCdEf123/GhIjKl456"',
     ]) {
       expect(one(text), text).toEqual(["docs/setup.md:1: secret value in an assignment"]);
     }
