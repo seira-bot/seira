@@ -654,6 +654,7 @@ import { connectorFileDeps, connectorFileScope, prepareConnectorFiles, withMissi
 import { createConnectorCards } from "./host/connector-cards.ts";
 import { createLoginMailCodes } from "./host/login-mail-codes.ts"; import { createLateToolResults } from "./host/late-tool-results.ts"; import { internalBodyRefusal } from "./host/internal-body-ids.ts";
 import { onThreadSeen, personAsks as personAskAt, sawThread } from "./thread-presence.ts"; import { createWarmSummaryHost, HARNESS_IDLE_FRACTION } from "./host/warm-summary-host.ts";
+import { acceptsWireName, sentWireName } from "../electron/phone-wire-names.mjs";
 
 const PORT = Number(process.env.SEIRA_PORT || process.env.OGB_PORT || 8799);
 const WEBHOOK_PORT = Number(process.env.SEIRA_WEBHOOK_PORT || PORT + 1);
@@ -12536,7 +12537,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     }
     // Two public routes come first; everything else needs the loopback owner or a paired session with the right scope.
     if (method === "GET" && !path.startsWith("/api/") && !path.startsWith("/.well-known/") && (moveFreeze.screen(path) ? (res.writeHead(302, { location: moveFreeze.screen(path)!, "cache-control": "no-store" }).end(), true) : serveStatic(res, path, STATIC_DIR))) return;
-    if (method === "GET" && path === "/.well-known/seira/environment") {
+    if (method === "GET" && acceptsWireName("environmentPath", path)) {
       return json(res, 200, environmentDescriptor({ environmentId: ENVIRONMENT_ID, ...TEAM_LABEL, desktopManaged: DESKTOP_MANAGED, emailSignIn: !HOSTED_WORKSPACE && !CLOUD_HOME && emailSignIn.enabled(), sharedComputers: lendingEnabled(), cloudHome: Boolean(CLOUD_HOME), cloudTeam: CLOUD_TEAM !== null, ownHome: ownHome.takesMove() }));
     }
     const domainCheck = /^\/\.well-known\/seira\/domain-check\/([a-f0-9]{64})$/.exec(path);
@@ -12631,7 +12632,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     }
     // Public reachability probe: a stranger learns only the app name; pid and the static flag stay behind the gate.
     if (method === "GET" && path === "/api/health" && !gate.auth) {
-      return json(res, 200, { app: "seira" });
+      return json(res, 200, { app: sentWireName("healthApp") });
     }
     // Public: the sign-in page needs the deployment's name and icon, and it holds nothing secret.
     if (method === "GET" && path === "/api/brand" && !gate.auth) {

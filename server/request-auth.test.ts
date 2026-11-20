@@ -940,14 +940,14 @@ describe("a browser on this machine is not the owner", () => {
   });
 });
 
-describe("a session token that an earlier version issued", () => {
-  it("still signs in from the sessions file", () => {
+describe("a session token with either prefix", () => {
+  it.each(["omb_sess_", "seira_sess_"])("signs in with %s from the sessions file", (prefix) => {
     const dir = mkdtempSync(join(tmpdir(), "seira-auth-legacy-"));
     try {
       const file = join(dir, "sessions.json");
       const first = new SessionRegistry({ file });
       const issued = first.issue({ label: "Script", scopes: ["admin", "client"] });
-      const earlier = issued.token.replace("seira_sess_", "omb_sess_");
+      const earlier = issued.token.replace(/^[a-z]+_sess_/, prefix);
       const saved = JSON.parse(readFileSync(file, "utf8"));
       saved.sessions[0].tokenHash = createHash("sha256").update(earlier).digest("hex");
       writeFileSync(file, JSON.stringify(saved));

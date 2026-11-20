@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { verificationServerArgs, verificationServerEnvironment } from "../../scripts/control-seira.ts";
 import { removeTempDir, waitForExit } from "./cleanup.ts";
 import { freePortBlock } from "./ports.ts";
+import { acceptedWireNames } from "../../electron/phone-wire-names.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -55,7 +56,7 @@ export async function launchRestartableServer(options: { scripted?: boolean; dat
       if (child.exitCode !== null) throw new Error(`the server exited before it was ready; see ${logPath}`);
       try {
         const body = await (await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(1_000) })).json() as { app?: string };
-        if (body.app === "seira") return;
+        if (acceptedWireNames("healthApp").includes(body.app ?? "")) return;
       } catch { /* not listening yet */ }
       if (Date.now() > deadline) throw new Error(`the server did not become ready; see ${logPath}`);
       await new Promise((resolve) => setTimeout(resolve, 150));

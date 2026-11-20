@@ -645,7 +645,7 @@ describe.skipIf(!posix)("deploy/install.sh", () => {
     expect(settings(written)).toEqual(settings(manual));
     // The sign-in lists and mail server are passed only when .env sets them: an empty one would still be set.
     for (const name of ["SEIRA_SIGNIN_EMAILS", "SEIRA_SIGNIN_MEMBER_EMAILS", "SEIRA_SIGNIN_SMTP_URL", "SEIRA_SIGNIN_SMTP_FROM", "SEIRA_PHONE_RELAY"]) expect(settings(written)).toContain(`${name}:`);
-    for (const line of ['test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q seira"]', "init: true", "shm_size: 512m", '- "80:80"', '- "443:443"',
+    for (const line of ['test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q -e seira -e openmausbot"]', "init: true", "shm_size: 512m", '- "80:80"', '- "443:443"',
       "- edge:/run/seira", "type: tmpfs"]) {
       expect(written).toContain(line);
       expect(manual).toContain(line);

@@ -7,6 +7,7 @@ import { cliCommand } from "../cli-invocation.ts";
 import { EXIT, flag, HeadlessError, usageError } from "./args.ts";
 import { namedServer } from "./client.ts";
 import type { VerbContext, VerbOutcome } from "./context.ts";
+import { sentWireName } from "../../electron/phone-wire-names.mjs";
 
 type Rec = Record<string, any>;
 
@@ -69,7 +70,7 @@ export async function connectVerb(ctx: VerbContext): Promise<VerbOutcome> {
   let origin = candidates[0]!;
   let described: { status: number; body: Rec } | null = null;
   for (const candidate of candidates) {
-    described = await call(candidate, "/.well-known/seira/environment").catch(() => null);
+    described = await call(candidate, sentWireName("environmentPath")).catch(() => null);
     origin = candidate;
     if (described?.status === 200 && typeof described.body.environmentId === "string") break;
   }

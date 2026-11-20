@@ -8,7 +8,7 @@ import { isIP } from "node:net";
 import { BOT_PROFILE_PATCH_FIELDS } from "./bot-profile.ts";
 import type { Scope, SessionRecord, SessionRegistry } from "./sessions.ts";
 import { denyReason as companionDenial, isCompanionNotice } from "../companion/src/routes.ts";
-import { LEGACY_SESSION_TOKEN_PREFIX } from "../electron/legacy-names.mjs";
+import { acceptedWireNames } from "../electron/phone-wire-names.mjs";
 
 /** `owner`: the machine's owner. `service`: a shared server where every bot's shell is a loopback caller too,
  * so loopback without a session may reach only SERVICE_ALLOW. */
@@ -660,7 +660,7 @@ export function resolveRequestAuth(req: IncomingMessage, options: ResolveOptions
   const ticket = path === options.streamPath ? options.url.searchParams.get("ticket") : null;
   let session: SessionRecord | null = null;
   let via: "bearer" | "cookie" | "ticket" | null = null;
-  if (bearer?.startsWith("seira_sess_") || bearer?.startsWith(LEGACY_SESSION_TOKEN_PREFIX)) {
+  if (bearer && acceptedWireNames("sessionTokenPrefix").some((prefix) => bearer.startsWith(prefix))) {
     session = options.sessions.authenticate(bearer);
     via = "bearer";
   } else if (ticket) {

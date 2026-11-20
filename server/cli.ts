@@ -66,7 +66,7 @@ import {
   type TunnelAccount,
   type TunnelRecovery,
 } from "./tunnel.ts";
-
+import { acceptedWireNames, sentWireName } from "../electron/phone-wire-names.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 export interface CliOptions {
@@ -270,7 +270,7 @@ function refusedAsService(status: number, body: any): boolean {
 async function serverUp(port: number, pid?: number): Promise<boolean> {
   try {
     const { status, body } = await api(port, "/api/health");
-    return status === 200 && body?.app === "seira" && (pid === undefined || body.pid === pid);
+    return status === 200 && !!body && acceptedWireNames("healthApp").includes(body.app) && (pid === undefined || body.pid === pid);
   } catch { return false; }
 }
 
@@ -278,9 +278,9 @@ async function serverUp(port: number, pid?: number): Promise<boolean> {
 export async function isWorkspaceRunning(options: CliOptions): Promise<boolean> {
   try {
     const { status, body } = await api(options.port, "/api/health");
-    if (status !== 200 || body?.app !== "seira") return false;
+    if (status !== 200 || !acceptedWireNames("healthApp").includes(body?.app)) return false;
     const expected = readFileSync(join(options.dataDir, "environment-id"), "utf8").trim();
-    const descriptor = await api(options.port, "/.well-known/seira/environment");
+    const descriptor = await api(options.port, sentWireName("environmentPath"));
     return /^[0-9a-f-]{36}$/i.test(expected) && descriptor.status === 200 && descriptor.body?.environmentId === expected;
   } catch { return false; }
 }
@@ -300,7 +300,7 @@ export async function openDashboard(port: number, env = process.env): Promise<bo
 }
 
 /** Something already answers there as a Seira server (before this one has started). */
-const answersAsSeira = async (origin: string) => typeof (await fetch(`${origin}/.well-known/seira/environment`, { signal: AbortSignal.timeout(3_000) }).then((r) => r.json() as Promise<{ environmentId?: unknown }>).catch(() => null))?.environmentId === "string";
+const answersAsSeira = async (origin: string) => typeof (await fetch(`${origin}${sentWireName("environmentPath")}`, { signal: AbortSignal.timeout(3_000) }).then((r) => r.json() as Promise<{ environmentId?: unknown }>).catch(() => null))?.environmentId === "string";
 
 /** Its public descriptor must identify this exact server; never sends a pairing code or credential. */
 export async function verifyPhoneEndpoint(port: number, origin: string): Promise<boolean> {
@@ -417,7 +417,7 @@ export async function runSessions(options: CliOptions): Promise<number> {
 }
 
 export async function runStatus(options: CliOptions, io: CliIo = defaultIo()): Promise<number> {
-  const body: any = await fetch(`http://127.0.0.1:${options.port}/.well-known/seira/environment`).then((r) => r.json()).catch(() => null);
+  const body: any = await fetch(`http://127.0.0.1:${options.port}${sentWireName("environmentPath")}`).then((r) => r.json()).catch(() => null);
   if (body && options.json) io.log(JSON.stringify(body, null, 2));
   if (!body) io.error(`No Seira server is running here. Start it: ${cliCommand("serve")}`);
   if (body && !options.json) {
@@ -848,7 +848,7 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
       void plan.account?.service.restore().catch(() => undefined);
     }
     const prefix = cliPrefix();
-    const described = await api(options.port, "/.well-known/seira/environment").catch(() => null);
+    const described = await api(options.port, sentWireName("environmentPath")).catch(() => null);
     const route: Route | null = plan ? "tunnel" : options.domain ? "domain" : tailscaleShare ? "tailscale" : publicUrl ? "public-url" : env.SEIRA_LAN === "1" ? "lan" : null;
     const origin = route === "lan" ? lanUrl(options.port, env) : publicUrl ?? null;
     log("");

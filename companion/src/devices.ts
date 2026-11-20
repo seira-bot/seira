@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { DATA_DIR, ensureDataDir, writeFileAtomic } from "./state.ts";
+import { sentWireName } from "./wire-names.ts";
 
 export interface DeviceRecord {
   id: string;
@@ -238,7 +239,7 @@ export class DeviceRegistry {
   private newWindow(): PairingWindow {
     return {
       code: String(randomInt(0, 1_000_000)).padStart(6, "0"),
-      token: `seira_pair_${randomBytes(32).toString("base64url")}`,
+      token: `${sentWireName("pairingCredentialPrefix")}${randomBytes(32).toString("base64url")}`,
       expiresAt: Date.now() + PAIRING_TTL_MS,
       attemptsLeft: MAX_PAIRING_ATTEMPTS,
     };

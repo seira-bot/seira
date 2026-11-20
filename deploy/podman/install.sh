@@ -391,7 +391,7 @@ Environment=SEIRA_PODMAN_SERVICE=$(shown_dir)
 ShmSize=512m
 # curl's own limit: Podman 4.9 does not end a check that hangs on a server that accepts and never answers. The port is
 # read in the container when the check runs (server.env's SEIRA_PORT); systemd turns the doubled dollar into one.
-HealthCmd=curl -sf --max-time 4 http://127.0.0.1:\$\${SEIRA_PORT:-8799}/api/health | grep -q seira
+HealthCmd=curl -sf --max-time 4 http://127.0.0.1:\$\${SEIRA_PORT:-8799}/api/health | grep -q -e seira -e openmausbot
 HealthInterval=30s
 HealthTimeout=5s
 HealthRetries=3
@@ -448,7 +448,7 @@ place_update() {
   note "update.sh could not be downloaded; run this again later to place it."
 }
 
-answers() { curl -sf --max-time 5 "http://127.0.0.1:$SERVER_PORT/api/health" 2>/dev/null | grep -q seira; }
+answers() { curl -sf --max-time 5 "http://127.0.0.1:$SERVER_PORT/api/health" 2>/dev/null | grep -q -e seira -e openmausbot; }
 
 wait_healthy() {
   waited=0

@@ -7,6 +7,7 @@ import { writeFileAtomic } from "./atomic.ts";
 import { teamSessionExpiresAt, type TeamMember, type TeamRole } from "./cloud-team.ts";
 import {
   formatPairingCode,
+  hasPairingCredentialPrefix,
   normalizePairingCode,
   PAIRING_CODE_ALPHABET,
   PAIRING_CODE_LENGTH,
@@ -17,6 +18,7 @@ import {
   type PairingErrorCode,
 } from "../shared/pairing-code.ts";
 import { userError, type UserError } from "./user-errors.ts";
+import { sentWireName } from "../electron/phone-wire-names.mjs";
 
 export type Scope = "admin" | "client";
 export const SCOPES: readonly Scope[] = ["admin", "client"];
@@ -176,7 +178,7 @@ export function generatePairingCredential(): string {
 }
 
 export function isPairingCredential(value: string): boolean {
-  return value.startsWith(PAIRING_CREDENTIAL_PREFIX);
+  return hasPairingCredentialPrefix(value);
 }
 
 function publicSession(record: SessionRecord, personName?: (record: SessionRecord) => string): PublicSession {
@@ -475,7 +477,7 @@ export class SessionRegistry {
     const [pairing] = this.pairings.splice(index, 1);
     this.codeFailures.delete(input.source);
     if (this.personal(pairing.scopes)) return { ok: false, status: 403, code: "cloud_personal", ...this.adminOnly! };
-    const token = `seira_sess_${randomBytes(32).toString("base64url")}`;
+    const token = `${sentWireName("sessionTokenPrefix")}${randomBytes(32).toString("base64url")}`;
     const checkedAt = pairing.memberCheckedAt ?? now;
     const record: SessionRecord = {
       id: randomUUID(),
@@ -554,7 +556,7 @@ export class SessionRegistry {
   issueMoveIn(input: { label: string; email: string; teamRole: TeamRole; bot: string }): { token: string; session: PublicSession } {
     this.prune();
     const now = this.now();
-    const token = `seira_sess_${randomBytes(32).toString("base64url")}`;
+    const token = `${sentWireName("sessionTokenPrefix")}${randomBytes(32).toString("base64url")}`;
     const record: SessionRecord = {
       id: randomUUID(), tokenHash: sha256(token), label: (deviceLabel(input.label) || "Moving a bot in").slice(0, 80), scopes: ["admin", "client"],
       createdAt: now, lastSeenAt: now, expiresAt: teamSessionExpiresAt(now, now + SESSION_TTL_MS),
@@ -587,7 +589,7 @@ export class SessionRegistry {
     this.refusePersonal(input.scopes);
     this.prune();
     const now = this.now();
-    const token = `seira_sess_${randomBytes(32).toString("base64url")}`;
+    const token = `${sentWireName("sessionTokenPrefix")}${randomBytes(32).toString("base64url")}`;
     const record: SessionRecord = {
       id: randomUUID(),
       tokenHash: sha256(token),

@@ -1,10 +1,20 @@
+import { acceptedWireNames, sentWireName } from "./wire-names.ts";
+
 /** The one kind of secret a device joins with: 12 symbols from this alphabet, shown as `7KQ2-M9XD-H4TP`. Dashes,
  * spaces and case never matter. A link or QR carries the same code with an address. */
 export const PAIRING_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 export const PAIRING_CODE_LENGTH = 12;
 /** The high-entropy credential a QR carries instead of the code; accepted wherever a code is, never shown. */
-export const PAIRING_CREDENTIAL_PREFIX = "seira_pair_";
-const PAIRING_CREDENTIAL = /^seira_pair_[A-Za-z0-9_-]{43}$/;
+export const PAIRING_CREDENTIAL_PREFIX = sentWireName("pairingCredentialPrefix");
+const PAIRING_CREDENTIAL = new RegExp(`^(?:${acceptedWireNames("pairingCredentialPrefix").join("|")})[A-Za-z0-9_-]{43}$`);
+
+export function hasPairingCredentialPrefix(value: string): boolean {
+  return acceptedWireNames("pairingCredentialPrefix").some((prefix) => value.startsWith(prefix));
+}
+
+export function isPairingCredentialShape(value: string): boolean {
+  return PAIRING_CREDENTIAL.test(value);
+}
 
 export function normalizePairingCode(input: string): string {
   return input
@@ -84,7 +94,7 @@ function fromLink(raw: string): string | null {
   return url.searchParams.get("token") ?? url.searchParams.get("code") ?? hash.get("code");
 }
 
-/** Reads a typed code, an `seira_pair_` credential, or a link that carries either (`seira://pair?…`,
+/** Reads a typed code, a pairing credential, or a link that carries either (`seira://pair?…` or the older scheme,
  * `…/pair#code=…`, `?code=…`). */
 export function readPairingInput(raw: string): PairingInput {
   let value = raw.trim();
@@ -94,8 +104,8 @@ export function readPairingInput(raw: string): PairingInput {
     if (!carried) return { kind: "wrong", problem: "notACode" };
     value = carried.trim();
   }
-  if (value.startsWith("seira_sess_")) return { kind: "wrong", problem: "scriptKey" };
-  if (value.startsWith(PAIRING_CREDENTIAL_PREFIX)) {
+  if (acceptedWireNames("sessionTokenPrefix").some((prefix) => value.startsWith(prefix))) return { kind: "wrong", problem: "scriptKey" };
+  if (hasPairingCredentialPrefix(value)) {
     return PAIRING_CREDENTIAL.test(value) ? { kind: "credential", credential: value } : { kind: "wrong", problem: "notACode" };
   }
   const digits = value.replace(/[\s-]/g, "");

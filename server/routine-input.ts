@@ -7,6 +7,7 @@ import { cleanSchedule } from "./routine-schedules.ts";
 import type { ModelSelection } from "../shared/wire.ts";
 import type { Routine, RoutineInput } from "./routines.ts";
 import { userErrorThrown } from "./user-errors.ts";
+import { currentRunOn } from "../electron/legacy-names.mjs";
 import { linkWorkflow, workflowRefusal, type WorkflowCopyLookup } from "./workflows/routine-link.ts";
 
 export { workflowLookupFor } from "./workflows/routine-link.ts";
@@ -61,7 +62,7 @@ export function sanitizeInput(input: RoutineInput, after: number, lookup?: Workf
   const target = input.target ?? "bot";
   if (target !== "bot" && target !== "room-goal") throw new Error("Choose a valid routine target");
   const groupId = typeof input.groupId === "string" ? input.groupId.trim() : "";
-  const runOn = input.runOn ?? "seira";
+  const runOn = currentRunOn(input.runOn ?? "seira");
   if (runOn !== "seira" && runOn !== "cloud") throw new Error("Choose where this routine runs");
   const attachments = cleanAttachments(input.attachments);
   const timeoutMinutes = cleanTimeoutMinutes(input.timeoutMinutes);
