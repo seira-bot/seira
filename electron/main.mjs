@@ -80,8 +80,7 @@ import {
   withoutDesktopCompanionAccess,
 } from "./desktop-companion-client.mjs";
 import { isKnownSkin, skinChrome } from "./skin-overlay.cjs";
-import { installCredentialStoreIpc, readSecureCredentials } from "./secure-credentials.mjs";
-import { decryptAfterCopiedSecrets } from "./old-key.mjs";
+import { installCredentialStoreIpc, readSecureCredentials } from "./secure-credentials.mjs"; import { decryptAfterCopiedSecrets } from "./old-key.mjs";
 import { createControlPlaneClient } from "./control-plane-client.mjs";
 import {
   companionAccountCleanupPending, companionTunnelRetired,
@@ -370,8 +369,7 @@ let companionE2E = null;
 let desktopRemoteAccess = null;
 let desktopCompanionRelay = null;
 
-const CREDENTIALS_FILE = path.join(app.getPath("userData"), "credentials.bin");
-const decryptSecret = decryptAfterCopiedSecrets({ app, safeStorage, log: slog });
+const CREDENTIALS_FILE = path.join(app.getPath("userData"), "credentials.bin"); const decryptSecret = decryptAfterCopiedSecrets({ app, safeStorage, log: slog });
 
 const nativeText = createDesktopText(app), nativeT = nativeText.t; const createCloudAccountClient = options => cloudAccountClient({ ...options, t: nativeT });
 /** True when the store could not be read, which is not the same as nothing saved. */
