@@ -572,8 +572,8 @@ describe("the public issue body that goes to Seira's service", () => {
     const diagnostics = String(bodies[0]!.diagnostics);
     expect(diagnostics).toContain("## Server warnings and errors, newest last");
     expect(diagnostics).toContain(`warn provider refused key «redacted ${apiKey.length} chars»`);
-    expect(diagnostics).toContain("Bearer «redacted");
-    expect(diagnostics).toContain("warn fetch https://files.example/… failed");
+    expect(diagnostics).toContain(`error upstream answered 401 to Authorization: «redacted ${`Bearer ${bearer}`.length} chars»`);
+    expect(diagnostics).toContain("warn fetch https://files.example/…«redacted URL parameters» failed");
     expect(diagnostics).toMatch(/-----BEGIN PRIVATE KEY-----\s+«redacted \d+ chars»\s+-----END PRIVATE KEY-----/);
     for (const secret of [apiKey, bearer, urlToken, pem, "page=2"]) expect(JSON.stringify(bodies[0])).not.toContain(secret);
     fx.stop();
