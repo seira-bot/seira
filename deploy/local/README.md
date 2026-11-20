@@ -76,3 +76,15 @@ Fresh installs create their volume automatically.
 
 Update with `docker compose build --pull` followed by `docker compose up -d`.
 Stop with `docker compose stop`. `docker compose down -v` deletes managed volumes.
+
+### Update from v0.1.181 or older
+
+Before v0.1.182, the default Compose project had a different name. Without
+the steps below, `docker compose up -d` starts a new project with a new, empty
+data volume. Your old volume stays, but Seira does not use it.
+
+1. In `.env` in the repository root, add `COMPOSE_PROJECT_NAME=openmausbot`.
+2. In the same file, change the start of each variable name from `OMB_` to `SEIRA_`.
+3. Run `docker compose build --pull`, then `docker compose up -d`.
+
+At its first start, Seira moves the data folder in the volume to its new name.
