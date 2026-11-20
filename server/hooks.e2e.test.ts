@@ -150,7 +150,7 @@ posixOnly("engine hooks e2e: full tool output that arrives after its turn ended"
     const bot = await h.runTurn();
     expect(bot.messages.find((m: Msg) => m.kind === "digest").digest?.hookCoverage).toBe("preview");
     const rows = async (): Promise<Msg[]> => (await h.getBot(bot.id)).messages.filter((m: Msg) => m.kind === "activity" && m.tool?.itemId);
-    const tokenDir = createHash("sha256").update(`${bot.id}\0${bot.threadId}`).digest("hex").slice(0, 24);
+    const tokenDir = createHash("sha256").update(`${bot.id}\0${bot.threadId}\0claude`).digest("hex").slice(0, 24);
     const bearer = { authorization: `Bearer ${readFileSync(join(h.home(), ".openmausbot", "hook-tokens", tokenDir, "token"), "utf8").trim()}` };
 
     // While the late outputs are still owed, the ended turn's bearer writes only into its own bot and conversation.
