@@ -32,6 +32,13 @@ describe("remoteScript", () => {
     expect(script).toContain("systemd-run --scope node scripts/pre-push-check.mjs");
   });
 
+  it("exits 3 after cleanup when the commit has no check script", () => {
+    const script = remoteScript({ dir: "x", sha: SHA, wrap: "" });
+    expect(script).toContain(`[ -f "$wt/scripts/pre-push-check.mjs" ] || { cleanup; exit 3; }`);
+    expect(script.indexOf("pre-push-check.mjs\" ] ||")).toBeGreaterThan(script.indexOf("git worktree add"));
+    expect(script.indexOf("pre-push-check.mjs\" ] ||")).toBeLessThan(script.indexOf("| node scripts/pre-push-check.mjs"));
+  });
+
   it("runs the check bare when no wrap is set", () => {
     expect(remoteScript({ dir: "x", sha: SHA, wrap: "" })).toContain("| node scripts/pre-push-check.mjs");
   });
@@ -81,7 +88,7 @@ describe("the hook with a remote host", () => {
     repo("config", "seira.prePushDir", "clone");
     mkdirSync(join(dir, "hooks"));
     mkdirSync(join(dir, "scripts"));
-    for (const [from, to] of [["git-hooks/pre-push", "hooks/pre-push"], ["pre-push-check.mjs", "scripts/pre-push-check.mjs"], ["pre-push-remote.mjs", "scripts/pre-push-remote.mjs"]]) {
+    for (const [from, to] of [["git-hooks/pre-push", "hooks/pre-push"], ["pre-push-check.mjs", "scripts/pre-push-check.mjs"], ["pre-push-remote.mjs", "scripts/pre-push-remote.mjs"], ["ci-heavy.mjs", "scripts/ci-heavy.mjs"]]) {
       copyFileSync(fileURLToPath(new URL(`./${from}`, import.meta.url)), join(dir, to));
     }
     chmodSync(join(dir, "hooks", "pre-push"), 0o755);

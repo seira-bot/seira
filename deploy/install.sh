@@ -670,7 +670,7 @@ services:
       SEIRA_CONTROL_PLANE_URL:
       SEIRA_PHONE_RELAY:
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q seira"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q -e seira -e openmausbot"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -958,7 +958,7 @@ wait_healthy() {
 }
 
 https_answers() {
-  curl -fsS --max-time 10 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health" 2>/dev/null | grep -q seira
+  curl -fsS --max-time 10 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health" 2>/dev/null | grep -q -e seira -e openmausbot
 }
 
 wait_https() {

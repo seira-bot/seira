@@ -19,6 +19,13 @@ describe("readPairingInput", () => {
     expect(readPairingInput(credential)).toEqual({ kind: "credential", credential });
   });
 
+  it("reads the older credential, link scheme and script key as well", () => {
+    const older = `omb_pair_${"Q".repeat(43)}`;
+    expect(readPairingInput(older)).toEqual({ kind: "credential", credential: older });
+    expect(readPairingInput(`openmausbot://pair?address=192.168.1.20%3A8810&token=${older}`)).toEqual({ kind: "credential", credential: older });
+    expect(readPairingInput(`omb_sess_${"a".repeat(43)}`)).toEqual({ kind: "wrong", problem: "scriptKey" });
+  });
+
   it("names the wrong kind of code instead of calling it wrong", () => {
     expect(readPairingInput("1234 5678")).toEqual({ kind: "wrong", problem: "emailCode" });
     expect(readPairingInput("123456")).toEqual({ kind: "wrong", problem: "oldCode" });

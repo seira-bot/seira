@@ -57,7 +57,7 @@ services:
       SEIRA_CONTROL_PLANE_URL:
       SEIRA_PHONE_RELAY:
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q seira"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q -e seira -e openmausbot"]
       interval: 30s
       timeout: 5s
       retries: 3

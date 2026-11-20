@@ -81,7 +81,7 @@ const pair = async (fixture: Fixture, label: string) => {
   const opened = await api(fixture, "POST", "/api/auth/pairing", { label, scopes: ["admin", "client"] });
   expect(opened.status).toBe(200);
   const paired = await api(fixture, "POST", "/api/auth/pair", { code: opened.body.code });
-  expect(paired.body.token).toMatch(/^seira_sess_/u);
+  expect(paired.body.token).toMatch(/^omb_sess_/u);
   return paired.body as { token: string; session: { id: string } };
 };
 
@@ -150,7 +150,7 @@ describe("phone push switched on", () => {
       v: 1,
       token: FCM_B,
       pairing: "pair-tag-bbbb",
-      collapseId: `seira.${herald.threadId}.${done.seq}`,
+      collapseId: `openmaus.${herald.threadId}.${done.seq}`,
       notification: { kind: "done", title: "Herald finished", botId: herald.id, botName: "Herald", threadId: herald.threadId },
     });
     const raw = JSON.stringify(stub.pushes);
@@ -161,7 +161,7 @@ describe("phone push switched on", () => {
     expect((await api(on, "POST", `/api/bots/${sage.id}/messages`, { text: "pick a colour for the banner" })).status).toBe(202);
     const question = await streamA.until((frame) => frame.kind === "notify" && frame.notification?.kind === "question" && frame.notification?.botId === sage.id, 30_000);
     await expect.poll(() => sends().length, { timeout: 15_000 }).toBe(2);
-    expect(sends()[1]!.body).toMatchObject({ token: FCM_B, collapseId: `seira.${question.notification.threadId}.${question.seq}`, notification: { kind: "question", title: "Sage has a question" } });
+    expect(sends()[1]!.body).toMatchObject({ token: FCM_B, collapseId: `openmaus.${question.notification.threadId}.${question.seq}`, notification: { kind: "question", title: "Sage has a question" } });
     await api(on, "POST", `/api/bots/${sage.id}/interrupt`, {}).catch(() => undefined);
 
     expect((await api(on, "POST", "/api/auth/logout", {}, phoneB.token)).status).toBe(200);

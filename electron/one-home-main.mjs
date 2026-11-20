@@ -20,6 +20,7 @@ import { myCloudOf } from "./cloud-list.mjs";
 import { teamPlan } from "./cloud-team-plan.mjs";
 import { installTeamMove } from "./team-move-main.mjs";
 import nativeText from "./native-text.cjs";
+import { sentWireName } from "./phone-wire-names.mjs";
 
 const MOVE_LABEL = "Move to My Cloud";
 const HOME_LABEL = "Bring My Cloud home";
@@ -190,7 +191,7 @@ export function installOneHome({ localRequest: anyServer, clean = null, account,
   /** This computer's installation (`installationOf`), once its server has said who it is; null until then. */
   const installation = async () => {
     if (known) return known;
-    const id = (await local.json("/.well-known/seira/environment").catch(() => null))?.environmentId;
+    const id = (await local.json(sentWireName("environmentPath")).catch(() => null))?.environmentId;
     if (typeof id === "string" && id) known = installationOf(id);
     return known;
   };
