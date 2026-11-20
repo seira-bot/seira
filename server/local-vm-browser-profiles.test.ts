@@ -143,7 +143,7 @@ cp -RP "${container}$src" "$3"
   return { runtime, log };
 }
 
-const target = (workspaceDir: string): LocalVmTarget => ({ key: "bot:x", containerName: "seira-computer-x", legacyContainerName: "seira-computer-x", workspaceDir, viewerPort: null, label: "x" });
+const target = (workspaceDir: string): LocalVmTarget => ({ key: "bot:x", containerName: "seira-computer-x", legacyContainerName: "openmausbot-computer-x", workspaceDir, viewerPort: null, label: "x" });
 
 describe.skipIf(process.platform === "win32")("rescueFirefoxProfile", () => {
   it("copies user-installed desktop apps into the durable area before replacement", async () => {
@@ -195,13 +195,13 @@ describe.skipIf(process.platform === "win32")("rescueFirefoxProfile", () => {
     writeFileSync(join(container, "home", "cua", ".mozilla", "cookies.sqlite"), "signed in");
     const workspace = join(dir, "workspace");
     mkdirSync(workspace);
-    const older = { ...target(workspace), key: "bot:older-name", containerName: "seira-computer-older", legacyContainerName: "seira-computer-older", label: "older" };
+    const older = { ...target(workspace), key: "bot:older-name", containerName: "seira-computer-older", legacyContainerName: "openmausbot-computer-older", label: "older" };
     const probe: CommandRunner = async (command, args) => {
       const key = [command, ...args].join(" ");
       if (key === "/usr/bin/which docker") return { stdout: "docker" };
       if (command === "/usr/bin/which") throw new Error("missing executable");
       if (args[0] === "info") return { stdout: "29" };
-      if (key === "docker inspect seira-computer-older") {
+      if (key === "docker inspect openmausbot-computer-older") {
         return { stdout: JSON.stringify([{ Config: { Labels: { [MANAGED_LABEL]: "1", [WORKSPACE_LABEL]: "1", [TARGET_LABEL]: "older" } }, State: { Running: false } }]) };
       }
       throw new Error(`unexpected command: ${key}`);
@@ -209,7 +209,7 @@ describe.skipIf(process.platform === "win32")("rescueFirefoxProfile", () => {
     await containerComputerStatus(probe, "linux", older);
     const { runtime, log } = fakeRuntime(dir, container);
     expect(await rescueFirefoxProfile(runtime, older)).toBe("rescued");
-    expect(readFileSync(log, "utf8")).toMatch(/^cp seira-computer-older:\/home\/cua\/\.mozilla /);
+    expect(readFileSync(log, "utf8")).toMatch(/^cp openmausbot-computer-older:\/home\/cua\/\.mozilla /);
   });
 
   it("never overwrites a profile already in the workspace, and leaves a desktop whose ~/.mozilla is already a link alone", async () => {

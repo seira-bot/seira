@@ -10,9 +10,10 @@ import { CUSTOMER_HOME_IMAGE, HOME_READS_COMMAND, VERSION_LABEL, boxReport, olde
 import type { ContainerInfo, Docker, Mount } from "./docker.ts";
 import { JobFailure } from "./failure.ts";
 import { backupId, helperSpec } from "./home.ts";
+import { labelValue, listVolumes } from "./labels.ts";
 import { errorText, type Log } from "./log.ts";
 import type { CopyInfo, HomeHealth, HomeReport, HomeState, JobError, JobReply, JobResults, ServerMode } from "./protocol.ts";
-import { BACKUPS_KEPT, HOME_STOP_TIMEOUT_S, LABELS, NAMES } from "./settings.ts";
+import { BACKUPS_KEPT, HOME_STOP_TIMEOUT_S, LABELS, MADE_BY_LABEL, NAMES } from "./settings.ts";
 import type { HomeRecord, Operation, StateStore } from "./state.ts";
 
 export const COMPOSE_PROJECT = "seira";
@@ -29,8 +30,6 @@ const DELETE_CAPS = ["DAC_OVERRIDE", "DAC_READ_SEARCH"];
 export const UPDATE_FILES = { runner: "runner", request: "request", result: "result" } as const;
 /** deploy/update.sh's exit codes; from the runner itself, 5 for an image older than the one running and 127 when the server has no update.sh. */
 const UPDATE_EXIT = { done: 0, rolledBack: 1, rollbackFailed: 2, busy: 3, notStarted: 4, older: 5, missing: 127 } as const;
-/** Who asked for a backup, kept on its volume: one sender's backups never push out the other's. */
-const MADE_BY_LABEL = "com.seira.by";
 
 const lastLine = (text: string) => text.trim().split("\n").pop()?.slice(0, 300) ?? "";
 const gb = (bytes: number) => Math.round((bytes / 1e9) * 10) / 10;
@@ -167,7 +166,7 @@ export class AdoptedHome {
   }
 
   async copies(): Promise<{ backups: CopyInfo[]; snapshot: CopyInfo | null }> {
-    const backups = (await this.docker.listVolumes({ [LABELS.role]: "backup" }))
+    const backups = (await listVolumes(this.docker, { [LABELS.role]: "backup" }))
       .filter((volume) => volume.Name.startsWith(NAMES.backupPrefix))
       .map((volume) => copyInfo(volume.Name.slice(NAMES.backupPrefix.length), "backup", volume.Labels))
       .sort((a, b) => b.createdAt - a.createdAt);
@@ -270,7 +269,7 @@ export class AdoptedHome {
       const helper = this.helperImage(container);
       const source = `${NAMES.backupPrefix}${id}`;
       const volume = await this.docker.volumeInspect(source);
-      if (!volume || volume.Labels?.[LABELS.role] !== "backup") throw new JobFailure("not_found", `There is no backup ${id} on this server.`);
+      if (!volume || labelValue(volume.Labels, LABELS.role) !== "backup") throw new JobFailure("not_found", `There is no backup ${id} on this server.`);
       await this.ensureRoomForCopy(helper, dataDir);
       const image = await this.imageOf(container);
       const wasRunning = container.State.Running;
@@ -376,8 +375,8 @@ export class AdoptedHome {
 
   /** The ids of the backups `by` asked for. A backup made before senders were recorded counts as the owner's. */
   private async backupsMadeBy(by: JobSource): Promise<Set<string>> {
-    const volumes = await this.docker.listVolumes({ [LABELS.role]: "backup" });
-    return new Set(volumes.filter((volume) => (volume.Labels?.[MADE_BY_LABEL] ?? "local") === by).map((volume) => volume.Name.slice(NAMES.backupPrefix.length)));
+    const volumes = await listVolumes(this.docker, { [LABELS.role]: "backup" });
+    return new Set(volumes.filter((volume) => (labelValue(volume.Labels, MADE_BY_LABEL) ?? "local") === by).map((volume) => volume.Name.slice(NAMES.backupPrefix.length)));
   }
 
   private async container(service: string): Promise<ContainerInfo | null> {
@@ -531,6 +530,6 @@ function updateFailure(code: number | null, previous: string | null): JobFailure
 }
 
 function copyInfo(id: string, kind: CopyInfo["kind"], labels: Record<string, string> | null): CopyInfo {
-  const created = Number(labels?.[LABELS.created]);
-  return { id, kind, createdAt: Number.isFinite(created) ? created : 0, image: labels?.[LABELS.image] ?? null };
+  const created = Number(labelValue(labels, LABELS.created));
+  return { id, kind, createdAt: Number.isFinite(created) ? created : 0, image: labelValue(labels, LABELS.image) ?? null };
 }

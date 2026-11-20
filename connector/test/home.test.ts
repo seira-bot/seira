@@ -425,6 +425,12 @@ describe("the home on an own server", () => {
     expect((await failure(f.home.restore("restore-2", "20260101-000000-0000"))).code).toBe("not_found");
   });
 
+  it("lists a backup that an earlier version labelled", async () => {
+    const f = fixture();
+    await f.docker.createVolume("seira-backup-20260101-000000-abcd", { "com.mausbot.role": "backup", "com.mausbot.created": "1767225600000", "com.mausbot.image": A });
+    expect((await f.home.copies()).backups).toEqual([{ id: "20260101-000000-abcd", kind: "backup", createdAt: 1767225600000, image: A }]);
+  });
+
   it("sends a gzip tar of /data to the Admin with the box's token for that job, with the home running again meanwhile, and leaves no archive behind", async () => {
     const f = fixture();
     await started(f);

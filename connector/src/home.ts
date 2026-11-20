@@ -7,6 +7,7 @@ import { DockerError, type ContainerSpec, type Docker, type Mount } from "./dock
 import { JobFailure } from "./failure.ts";
 import { publicHost, summarizeHealth, type HealthRead } from "./home-health.ts";
 import { digestPinnedOnly, type ImageCheck } from "./images.ts";
+import { labelValue, listVolumes } from "./labels.ts";
 import { errorText, registerSecret, type Log } from "./log.ts";
 import { EXPORT_PATH, UPDATE_HEALTH_WINDOW_MS, type CopyInfo, type HomeHealth, type HomeReport, type HomeState, type JobError, type JobReply, type JobResults } from "./protocol.ts";
 import {
@@ -217,7 +218,7 @@ export class Home {
   }
 
   async copies(): Promise<{ backups: CopyInfo[]; snapshot: CopyInfo | null }> {
-    const backups = (await this.docker.listVolumes({ [LABELS.role]: "backup" }))
+    const backups = (await listVolumes(this.docker, { [LABELS.role]: "backup" }))
       .filter((volume) => volume.Name.startsWith(NAMES.backupPrefix))
       .map((volume) => copyInfo(volume.Name.slice(NAMES.backupPrefix.length), "backup", volume.Labels))
       .sort((a, b) => b.createdAt - a.createdAt);
@@ -341,7 +342,7 @@ export class Home {
       const { image, env } = this.current();
       const source = `${NAMES.backupPrefix}${id}`;
       const volume = await this.docker.volumeInspect(source);
-      if (!volume || volume.Labels?.[LABELS.role] !== "backup") throw new JobFailure("not_found", `There is no backup ${id} on this server.`);
+      if (!volume || labelValue(volume.Labels, LABELS.role) !== "backup") throw new JobFailure("not_found", `There is no backup ${id} on this server.`);
       await this.ensureRoomForCopy(image);
       const wasRunning = (await this.docker.containerInspect(NAMES.home))?.State.Running === true;
       this.begin({ jobId, type: "restore", phase: "stop", previousImage: image, nextImage: null, target: source, dataAtRisk: false, wasRunning });
@@ -562,7 +563,7 @@ export class Home {
   private async ensureContainer(image: string, env: Record<string, string>): Promise<void> {
     const info = await this.docker.containerInspect(NAMES.home);
     const wanted = envDigest({ ...env, SEIRA_CLOUD_IMAGE: image });
-    if (info && info.Config.Image === image && info.Config.Labels?.[LABELS.env] === wanted) return;
+    if (info && info.Config.Image === image && labelValue(info.Config.Labels, LABELS.env) === wanted) return;
     await this.createContainer(image, env);
   }
 
@@ -760,8 +761,8 @@ export class Home {
 }
 
 function copyInfo(id: string, kind: CopyInfo["kind"], labels: Record<string, string> | null): CopyInfo {
-  const created = Number(labels?.[LABELS.created]);
-  return { id, kind, createdAt: Number.isFinite(created) ? created : 0, image: labels?.[LABELS.image] ?? null };
+  const created = Number(labelValue(labels, LABELS.created));
+  return { id, kind, createdAt: Number.isFinite(created) ? created : 0, image: labelValue(labels, LABELS.image) ?? null };
 }
 
 /** "20261028-104512-3fa9": sortable, and a valid `restore` id. */

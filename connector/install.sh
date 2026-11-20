@@ -29,6 +29,7 @@ DATA_VOLUME=seira-data
 STATE_VOLUME=seira-connector
 SNAPSHOT_VOLUME=seira-snapshot
 ROLE_LABEL=com.seira.role
+LEGACY_ROLE_LABEL=com.mausbot.role
 INSTALL_DIR="${SEIRA_INSTALL_DIR:-/opt/seira}"
 UPDATE_DIR="${SEIRA_UPDATE_DIR:-/var/lib/seira/update}"
 SBIN_DIR="${SEIRA_SBIN_DIR:-/usr/local/sbin}"
@@ -244,6 +245,16 @@ install_profiles() {
   fi
 }
 
+# The objects with a role (helper, backup), under this version's label and under the one earlier versions wrote.
+# Usage: by_role <role> <docker list command> (for example: by_role backup volume ls -q)
+by_role() {
+  role=$1
+  shift
+  for label in "$ROLE_LABEL" "$LEGACY_ROLE_LABEL"; do
+    docker "$@" --filter "label=$label=$role" 2>/dev/null || true
+  done
+}
+
 # A Seira its owner installed is here: the connector attaches to it and never starts a second one.
 own_server_here() {
   [ -f "$INSTALL_DIR/compose.yaml" ]
@@ -428,13 +439,13 @@ uninstall() {
   if own_server_here; then
     say "Disconnecting this server from Seira..."
     docker rm -f "$CONNECTOR" "$CONNECTOR_NEXT" >/dev/null 2>&1 || true
-    for container in $(docker ps -aq --filter "label=$ROLE_LABEL=helper" 2>/dev/null); do
+    for container in $(by_role helper ps -aq); do
       docker rm -f "$container" >/dev/null 2>&1 || true
     done
     remove_updater
     docker volume rm "$STATE_VOLUME" >/dev/null 2>&1 || true
     if [ "$delete" = yes ]; then
-      for volume in "$SNAPSHOT_VOLUME" $(docker volume ls -q --filter "label=$ROLE_LABEL=backup" 2>/dev/null); do
+      for volume in "$SNAPSHOT_VOLUME" $(by_role backup volume ls -q); do
         docker volume rm "$volume" >/dev/null 2>&1 || true
       done
       rm -rf "$AUDIT_DIR"
@@ -448,7 +459,7 @@ uninstall() {
   say "Stopping Seira on this server..."
   docker rm -f "$CONNECTOR" "$CONNECTOR_NEXT" >/dev/null 2>&1 || true
   docker stop -t 30 "$HOME_CONTAINER" >/dev/null 2>&1 || true
-  for container in "$HOME_CONTAINER" $(docker ps -aq --filter "label=$ROLE_LABEL=helper" 2>/dev/null); do
+  for container in "$HOME_CONTAINER" $(by_role helper ps -aq); do
     docker rm -f "$container" >/dev/null 2>&1 || true
   done
   if command -v apparmor_parser >/dev/null 2>&1 && [ -f "$APPARMOR_DIR/$PROFILE" ]; then apparmor_parser -R "$APPARMOR_DIR/$PROFILE" >/dev/null 2>&1 || true; fi
@@ -457,7 +468,7 @@ uninstall() {
   # The connector's own state (its key, the home's settings) is not your data: a new code makes a new key.
   docker volume rm "$STATE_VOLUME" >/dev/null 2>&1 || true
   if [ "$delete" = yes ]; then
-    for volume in "$DATA_VOLUME" "$SNAPSHOT_VOLUME" $(docker volume ls -q --filter "label=$ROLE_LABEL=backup" 2>/dev/null); do
+    for volume in "$DATA_VOLUME" "$SNAPSHOT_VOLUME" $(by_role backup volume ls -q); do
       docker volume rm "$volume" >/dev/null 2>&1 || true
     done
     rm -rf "$AUDIT_DIR"

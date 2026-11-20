@@ -22,6 +22,19 @@ export const LABELS = {
   env: "com.seira.env",
 } as const;
 
+/** Set on a backup that a job asked for, so the sender can find it again. */
+export const MADE_BY_LABEL = "com.seira.by";
+
+/** What earlier versions wrote for each label: read, never written. */
+export const LEGACY_LABELS = {
+  role: "com.mausbot.role",
+  instance: "com.mausbot.instance",
+  created: "com.mausbot.created",
+  image: "com.mausbot.image",
+  env: "com.mausbot.env",
+} as const;
+export const LEGACY_MADE_BY_LABEL = "com.mausbot.by";
+
 /** Backups the connector keeps; a newer one replaces the oldest. */
 export const BACKUPS_KEPT = 3;
 

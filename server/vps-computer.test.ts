@@ -27,8 +27,10 @@ import {
   DISPLAY,
   IMAGE_LAYER_LABEL,
   IMAGE_LAYER_VERSION,
+  LEGACY_IMAGE,
   MANAGED_LABEL,
 } from "./container-computer.ts";
+import { legacyDockerLabel } from "../electron/legacy-names.mjs";
 import { PIDS_LIMIT } from "./container-limits.ts";
 import type { AppConfig } from "./config.ts";
 import {
@@ -103,6 +105,7 @@ function fixture({
   cgroupnsMode,
   imageLabelsMatch = true,
   environmentId = null,
+  earlier = false,
 }: {
   image?: boolean;
   container?: boolean;
@@ -131,8 +134,13 @@ function fixture({
   cgroupnsMode?: string;
   imageLabelsMatch?: boolean;
   environmentId?: string | null;
+  /** The container, its image and its labels are what an earlier version made. */
+  earlier?: boolean;
 } = {}) {
   const name = vpsContainerName(BOT_ID);
+  const earlierName = name.replace(/^seira-vps/, "openmausbot-vps");
+  const earlierLabels = (labels: Record<string, string>) =>
+    earlier ? Object.fromEntries(Object.entries(labels).map(([key, value]) => [legacyDockerLabel(key) ?? key, value])) : labels;
   const provisioningArgs = vpsContainerRunArgs(name);
   const argValue = (flag: string) => {
     const index = provisioningArgs.indexOf(flag);
@@ -146,37 +154,38 @@ function fixture({
     const command = args[2];
     if (command === "image") {
       // The real daemon phrases a clean absence this way; anything else reads as a transport failure.
-      if (!state.image) throw new Error(`Error: No such image: ${VPS_IMAGE}`);
+      if (!state.image || (earlier && args[4] !== LEGACY_IMAGE)) throw new Error(`Error: No such image: ${args[4]}`);
       return {
         stdout: JSON.stringify([{
-          Config: { Labels: state.imageLabelsMatch ? {
+          Config: { Labels: state.imageLabelsMatch ? earlierLabels({
              [MANAGED_LABEL]: "1",
              [DRIVER_LABEL]: CUA_DRIVER_VERSION,
              [BASE_IMAGE_LABEL]: BASE_IMAGE_DIGEST,
              [IMAGE_LAYER_LABEL]: IMAGE_LAYER_VERSION,
-          } : { [MANAGED_LABEL]: "0" } },
+          }) : { [MANAGED_LABEL]: "0" } },
           Id: state.inspectedImageId,
         }]),
         stderr: "",
       };
     }
     if (command === "inspect") {
-      if (!state.container) throw new Error(`Error: No such object: ${name}`);
+      if (!state.container || (earlier && args[3] !== earlierName)) throw new Error(`Error: No such object: ${args[3]}`);
+      const containerName = earlier ? earlierName : name;
       return {
         stdout: JSON.stringify([{
           Config: {
-            Image: state.image ? VPS_IMAGE : "old-image",
+            Image: state.image ? (earlier ? LEGACY_IMAGE : VPS_IMAGE) : "old-image",
             Env: [`VNC_PW=${argValue("VNC_PW") || "viewer-secret"}`],
-            Labels: {
+            Labels: earlierLabels({
               [VPS_MANAGED_LABEL]: managed ? "1" : "0",
-              [VPS_CONTAINER_LABEL]: managed ? name : "other-container",
+              [VPS_CONTAINER_LABEL]: managed ? containerName : "other-container",
               [MANAGED_LABEL]: "1",
               [DRIVER_LABEL]: CUA_DRIVER_VERSION,
               [BASE_IMAGE_LABEL]: BASE_IMAGE_DIGEST,
               [IMAGE_LAYER_LABEL]: IMAGE_LAYER_VERSION,
               [VPS_VIEWER_LABEL]: "1",
               ...(environmentId ? { [VPS_ENVIRONMENT_LABEL]: environmentId } : {}),
-            },
+            }),
           },
            Id: containerId,
           Image: state.image ? state.containerImageId : "old-image-id",
@@ -311,6 +320,13 @@ describe("VPS computer", () => {
     expect(vpsSshTunnelArgs("production-vps", 45678, "172.17.0.5", null)[0]).toBe("-N");
     expect(() => vpsSshTunnelArgs("production-vps", 80, "172.17.0.5")).toThrow(/port/);
     expect(() => vpsSshTunnelArgs("production-vps", 45678, "203.0.113.8")).toThrow(/private/);
+  });
+
+  it("uses a VPS desktop that an earlier version labelled and named", async () => {
+    const fake = fixture({ earlier: true });
+    const status = await vpsComputerStatus(CONFIG, BOT_ID, fake.runner);
+    expect(status).toMatchObject({ image: true, imageMatches: true, managed: true, container: "running", ready: true });
+    expect(status.container_name).toMatch(/^openmausbot-vps-/);
   });
 
   it("reports a ready container only when image, labels, isolation, mounts, network, and Cua pass", async () => {
