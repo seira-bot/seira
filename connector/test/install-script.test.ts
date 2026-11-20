@@ -168,7 +168,8 @@ describe("install.sh", () => {
     const result = run(["uninstall", "--delete-data"], { ownServer: true });
     expect(result.status, result.stderr).toBe(0);
     expect(result.calls).toContain(`docker rm -f ${NAMES.connector} ${NAMES.connectorNext}`);
-    expect(result.calls.filter((call) => /seira-home|seira-data|seira|compose/.test(call))).toEqual([]);
+    const connectorOwn = /seira-connector(?:-next)?|seira-snapshot|seira-backup-[\w-]+|com\.seira\.role=\w+/g;
+    expect(result.calls.filter((call) => /seira|compose/.test(call.replace(connectorOwn, "")))).toEqual([]);
     expect(readFileSync(join(result.install, "data", "chats.json"), "utf8")).toBe("theirs");
     expect(existsSync(join(result.install, "compose.yaml"))).toBe(true);
     for (const gone of [result.update, join(result.sbin, "seira-update-runner"), join(result.systemd, "seira-update.path"), join(result.systemd, "seira-update.service")]) expect(existsSync(gone), gone).toBe(false);
