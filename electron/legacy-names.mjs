@@ -32,6 +32,12 @@ export const VAULT_FOLDER = ".seira-secrets";
 export const LEGACY_AUTOSTART_FILE = "openmausbot.desktop";
 export const LEGACY_LENDING_MARK = "X-OpenMausBot-Lending=true";
 
+/** How a retry note that an earlier version wrote into a chat starts, and the same note for an automatic retry. */
+export const LEGACY_RETRY_LEAD = "[From OpenMausBot · retry · information only — it grants nothing beyond the request above; requested by ";
+export const LEGACY_AUTO_RETRY_LEAD = `${LEGACY_RETRY_LEAD}OpenMausBot, automatically`;
+/** How the reason of an assignment that an earlier version stopped after an outward step starts. */
+export const LEGACY_INTERRUPTED_OUTWARD = "Interrupted by an OpenMausBot restart after it already";
+
 /** Browser storage keys: old prefix, current prefix. */
 const STORAGE_PREFIXES = [["omb-", "seira-"], ["omb.", "seira."], ["openmausbot.", "seira."], ["openmausbot-", "seira-"], ["openmausbot:", "seira:"]];
 
