@@ -129,6 +129,17 @@ describe.skipIf(process.platform !== "linux")("Linux DEB upgrade hook", () => {
     }
   });
 
+  it("unloads and removes the browser profile that an earlier version installed", () => {
+    const { appRoot, apparmorDir } = fixture();
+    const earlier = path.join(apparmorDir, "openmausbot-browser");
+    fs.writeFileSync(earlier, "profile earlier\n");
+    const result = runHook(appRoot);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain(`profile operation: -R ${earlier}`);
+    expect(fs.existsSync(earlier)).toBe(false);
+    expect(fs.existsSync(path.join(apparmorDir, "seira-browser"))).toBe(true);
+  });
+
   it("refuses to follow a replaced package directory symlink", () => {
     const { appRoot, resources } = fixture();
     const external = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "seira-deb-external-"));
