@@ -2,14 +2,15 @@ import type { Bot, InstanceInfo } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { engineDisplayName } from "@/lib/engine-name";
+import { modelPresetFor } from "@/lib/model-color";
 import { InstanceProviderMark } from "./ProviderIcons";
 
-export function botModel(bot: Pick<Bot, "modelSelection">, instances: InstanceInfo[]): { instance: InstanceInfo; label: string } | null {
+export function botModel(bot: Pick<Bot, "modelSelection">, instances: InstanceInfo[]): { instance: InstanceInfo; id: string; label: string } | null {
   const instance = instances.find((item) => item.instanceId === bot.modelSelection.instanceId);
   if (!instance) return null;
   const id = bot.modelSelection.model || instance.models?.default || "";
   const label = instance.models?.options?.find((option) => option.id === id)?.label ?? id;
-  return { instance, label: label || engineDisplayName(instance) };
+  return { instance, id, label: label || engineDisplayName(instance) };
 }
 
 export function botTooltip(bot: Pick<Bot, "name" | "title" | "chiefOfStaff" | "modelSelection">, instances: InstanceInfo[]): string {
@@ -20,6 +21,11 @@ export function botTooltip(bot: Pick<Bot, "name" | "title" | "chiefOfStaff" | "m
     bot.chiefOfStaff ? t("sidebar.bot.chiefOfStaff") : "",
     model ? t("sidebar.bot.modelBadge", { model: model.label, engine: model.instance.displayName }) : "",
   ].filter(Boolean).join(" · ");
+}
+
+function modelMarkInstance({ instance, id }: { instance: InstanceInfo; id: string }): Pick<InstanceInfo, "driverKind" | "icon"> {
+  const preset = modelPresetFor(id);
+  return preset ? { driverKind: instance.driverKind, icon: { kind: "preset", preset } } : instance;
 }
 
 export function BotModelBadge({ bot, instances, avatarSize }: {
@@ -35,7 +41,7 @@ export function BotModelBadge({ bot, instances, avatarSize }: {
     <span data-testid="model-badge" role="img" aria-label={description} title={model.label}
       className="absolute -bottom-0.5 -left-0.5 flex items-center justify-center rounded-full border-2 border-panel bg-panel"
       style={{ width: size, height: size }}>
-      <InstanceProviderMark instance={model.instance} size={size - 4} subtle />
+      <InstanceProviderMark instance={modelMarkInstance(model)} size={size - 4} subtle />
     </span>
   );
 }
@@ -47,7 +53,7 @@ export function BotEngineMark({ bot, instances, className }: { bot: Pick<Bot, "m
   return (
     <span data-testid="model-badge" role="img" aria-label={t("sidebar.bot.modelBadge", { model: model.label, engine: model.instance.displayName })}
       className={cn("flex shrink-0", className)}>
-      <InstanceProviderMark instance={model.instance} size={14} subtle />
+      <InstanceProviderMark instance={modelMarkInstance(model)} size={14} subtle />
     </span>
   );
 }

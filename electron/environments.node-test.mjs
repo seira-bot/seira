@@ -186,7 +186,7 @@ test("the places line names this computer's bots briefly, says nothing when its 
 
 test("native window identity distinguishes hosted HTML, companion data, and the local workspace", () => {
   const state = { environments: [{ id: "old", name: "Old team", origin: "https://old.example" }], activeId: "old" };
-  assert.equal(env.workspaceWindowTitle(state), "Seira — Hosted: Old team (old.example)");
+  assert.equal(env.workspaceWindowTitle(state), "Seira — Old team");
   assert.equal(env.workspaceWindowTitle(state, { serverName: "Office", endpoint: "https://c-office.seira.bot" }), "Seira — Connected to: Office (c-office.seira.bot)");
   assert.equal(env.workspaceWindowTitle(env.withActive(state, "local")), "Seira");
 });
@@ -382,7 +382,26 @@ test("once My Cloud is home the switcher lists whole places only: My Cloud first
   assert.equal(env.otherPlaces({ ...state, environments: state.environments.filter((entry) => entry.id !== "o") }, home), 0, "My Cloud alone: no switcher");
   assert.equal(env.workspaceWindowTitle(state, null, home), "Seira — My Cloud", "with another place besides, the window names the one it shows");
   assert.equal(env.workspaceWindowTitle({ ...state, environments: state.environments.filter((entry) => entry.id !== "o") }, null, home), "Seira", "the window onto home alone is simply the app");
-  assert.equal(env.workspaceWindowTitle({ ...state, activeId: "o" }, null, home), "Seira — Hosted: Office (office.example.test)");
+  assert.equal(env.workspaceWindowTitle({ ...state, activeId: "o" }, null, home), "Seira — Office");
+});
+
+test("the place menu shows the address of the shown saved server as one disabled line where sublabels fold", () => {
+  const home = "https://omb-t-1.fly.dev";
+  const state = { environments: [{ id: "o", kind: "remote", name: "Office", origin: "https://office.example.test" }, { id: "p", kind: "remote", name: "Plant", origin: "https://plant.example.test" },
+    { id: "c", kind: "remote", name: "My Cloud", origin: home }], activeId: "o" };
+  const base = { onSwitch() {}, onConnect() {}, onForget() {} };
+  const ids = (items) => items.map((item) => item.id);
+  for (const homeOrigin of [null, home]) {
+    const items = env.workspaceMenuTemplate(state, { ...base, foldSublabels: true, homeOrigin });
+    const at = ids(items).indexOf("workspace-o");
+    assert.ok(at >= 0);
+    assert.deepEqual(items[at + 1], { id: "workspace-address", label: "office.example.test", enabled: false });
+    assert.equal(ids(items).filter((id) => id === "workspace-address").length, 1, "inactive servers get no address line");
+    assert.ok(!ids(env.workspaceMenuTemplate(state, { ...base, foldSublabels: false, homeOrigin })).includes("workspace-address"));
+    assert.ok(!ids(env.workspaceMenuTemplate(state, { ...base, foldSublabels: true, homeOrigin, sublabels: { o: "Online" } })).includes("workspace-address"), "a status line replaces the address line");
+  }
+  const team = { ...state, environments: state.environments.map((entry) => (entry.id === "o" ? { ...entry, team: { id: "t", role: "admin" } } : entry)) };
+  assert.ok(!ids(env.workspaceMenuTemplate(team, { ...base, foldSublabels: true, homeOrigin: home })).includes("workspace-address"), "a listed place with a role gets none");
 });
 
 const TEAM = "https://seira-u-acme.fly.dev";

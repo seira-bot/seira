@@ -1,4 +1,5 @@
 // The connector token reaches cloudflared only through a private short-lived file: never argv, the environment, status or logs.
+import { acceptedWireNames } from "./phone-wire-names.mjs";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -276,7 +277,7 @@ async function verifyHostedEndpoint(
   const text = await response.text();
   if (Buffer.byteLength(text) > 4096) return false;
   try {
-    return JSON.parse(text)?.app === "seira";
+    return acceptedWireNames("healthApp").includes(JSON.parse(text)?.app);
   } catch {
     return false;
   }

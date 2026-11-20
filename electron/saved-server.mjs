@@ -2,6 +2,7 @@
 // doesn't (its name no longer resolves, nothing listens) is the person's choice: try again, remove it, or stay.
 
 import nativeText from "./native-text.cjs";
+import { sentWireName } from "./phone-wire-names.mjs";
 
 /** How long a server has to answer before it counts as not answering. */
 export const SERVER_LOOK_MS = 3_000;
@@ -9,7 +10,7 @@ export const SERVER_LOOK_MS = 3_000;
 /** Whether anything answers at `origin` (any HTTP status but a 5xx from a proxy in front of a stopped app). */
 export async function serverAnswers(origin, fetchImpl, timeoutMs = SERVER_LOOK_MS) {
   try {
-    const response = await fetchImpl(`${origin}/.well-known/seira/environment`, {
+    const response = await fetchImpl(`${origin}${sentWireName("environmentPath")}`, {
       cache: "no-store", redirect: "manual", credentials: "omit", signal: AbortSignal.timeout(timeoutMs), headers: { accept: "application/json" },
     });
     return response.status < 500;

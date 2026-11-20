@@ -9,7 +9,7 @@ images.
 
 Open a bot's profile, find **Avatar → Generate with AI**, optionally describe
 the image, then choose **Generate avatar**. The provider is the base (and
-backup) set in **Settings → Image generation**, the same one bots use for
+backup) set in **Settings → AI → Images**, the same one bots use for
 images in a chat; see [Image generation](image-generation.md).
 
 ## Deferred cleanup

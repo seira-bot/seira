@@ -2,7 +2,7 @@
 
 ## User path
 
-Settings → Import & export → **Export full backup** → password and confirmation →
+Settings → Import & export → Take things out → **Export full backup**, then password and confirmation →
 encrypted `.seirabackup` download. Import uses a native file input, password,
 validated preview and an explicit **REPLACE** confirmation. It is replacement,
 not an additive team import. Click **Restart and restore** on the local desktop

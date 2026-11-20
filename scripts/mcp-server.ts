@@ -4,6 +4,7 @@
 import readline from "node:readline";
 import { allowedServerOrigin, EXAMPLE_ADDRESS } from "../electron/server-address.mjs";
 import { isRecord, projectMessage } from "./mcp-message-projection.ts";
+import { acceptedWireNames } from "../electron/phone-wire-names.mjs";
 
 /** A server's base URL: https anywhere, http only on loopback or a private network (LAN, Tailscale). */
 export function validateBaseUrl(url: string): string {
@@ -95,7 +96,7 @@ export async function probeBaseUrls(candidates: string[]): Promise<string> {
       const health = await fetchJson(`${candidate}/api/health`, {
         signal: AbortSignal.timeout(Math.min(requestTimeoutMs(), 2_000)),
       });
-      if (health?.app !== "seira") {
+      if (!acceptedWireNames("healthApp").includes(health?.app)) {
         failures.push(`${candidate} answered, but it was not Seira`);
         continue;
       }
@@ -475,7 +476,6 @@ function parsePositiveLimit(raw: unknown, fallback = 30, maximum = 200): number 
   return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
 }
 
-
 function valueHasType(value: unknown, type: string): boolean {
   if (type === "null") return value === null;
   if (type === "array") return Array.isArray(value);
@@ -802,7 +802,7 @@ export async function handleToolCall(
   switch (name) {
     case "get_system_health": {
       const res = await fetcher("/api/health");
-      if (res?.app !== "seira") throw new Error("The configured endpoint is not a Seira server");
+      if (!acceptedWireNames("healthApp").includes(res?.app)) throw new Error("The configured endpoint is not a Seira server");
       return {
         status: "connected",
         endpoint: discoveredBaseUrl ?? SEIRA_BASE_URL,

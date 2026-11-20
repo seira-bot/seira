@@ -11,7 +11,7 @@ Seira under **＋ → Connect to a server**.
 
 > **Security first:** the server listens on `127.0.0.1:8799`, and a program on
 > that machine counts as its owner. Never forward that port yourself. Let one
-> of the ways in below reach it: `--public-url`, `--domain`, `--tunnel`,
+> of the ways in below reach it: `--public-url`, `--domain`,
 > `--tailscale` or `--lan`. Every device that comes in through one of them has
 > to pair. If several people share one server, read
 > [Loopback trust](#loopback-trust-owner-or-service).
@@ -27,13 +27,18 @@ For server feature switches, defaults and configuration-file instructions, see
 | A domain name, and ports 80 and 443 open | `npx @seira-bot/seira serve --domain seira.example.com` | `https://seira.example.com/pair#code=…` |
 | Tailscale on the server and your devices | `npx @seira-bot/seira serve --tailscale` | `https://<machine>.<tailnet>.ts.net/pair#code=…` |
 | Only this network (home or office) | `npx @seira-bot/seira serve --lan` | `http://192.168.1.20:8799/pair#code=…` |
-| Nothing at all | `npx @seira-bot/seira login`, then `npx @seira-bot/seira serve --tunnel` | `https://c-….seira.bot/pair#code=…` |
-| Only the phone app, from anywhere (a machine with no tunnel address, for now) | `npx @seira-bot/seira login --relay`, then `npx @seira-bot/seira serve --relay` | a QR for the Seira app ([Seira Relay](phone-relay-server.md)) |
+| Your own Cloudflare Tunnel (a domain on Cloudflare, no open port) | `cloudflared`, then `npx @seira-bot/seira serve --public-url https://seira.example.com` ([steps](deploy-vps.md#path-a-your-own-cloudflare-tunnel)) | `https://seira.example.com/pair#code=…` |
+| An account service that you run yourself (`SEIRA_CONTROL_PLANE_URL`) | `npx @seira-bot/seira login`, then `npx @seira-bot/seira serve --tunnel` | `https://c-….example.net/pair#code=…` |
+| The same account service, for the phone app only | `npx @seira-bot/seira login --relay`, then `npx @seira-bot/seira serve --relay` | a QR for the Seira app ([Seira Relay](phone-relay-server.md)) |
 
 `--lan` can be added to any of the others. Plain `http://` is only for a
 private network: the desktop app accepts it on LAN addresses, Tailscale
 addresses and `*.local` names, and shows "Private network, not encrypted". It
 refuses plain http on the open internet.
+
+Seira builds have no account service by default. `login`, `--tunnel` and
+`--relay` need one that you run yourself, set with `SEIRA_CONTROL_PLANE_URL`.
+Without it, use one of the other ways in.
 
 ## Golden paths
 
@@ -43,7 +48,7 @@ On any machine with Node 24 or newer.
 
 ```sh
 npx @seira-bot/seira setup                                        # once: AI access and a default model
-npx @seira-bot/seira serve --public-url https://seira.example.com  # or --domain, --tailscale, --lan, --tunnel
+npx @seira-bot/seira serve --public-url https://seira.example.com  # or --domain, --tailscale, --lan
 ```
 
 In a terminal, `serve` checks the address and prints one pairing block:
@@ -69,7 +74,6 @@ Each way in has its own Reach line:
 
 - `--lan`: `http://192.168.1.20:8799   this network only, not encrypted`
 - `--tailscale`: `… · your tailnet`
-- `--tunnel`: `… · Seira web address`
 
 Paste the link into Seira: **＋ → Connect to a server**. The sheet names the
 server it found ("✓ hetzner-1 · Seira 0.1.147 · HTTPS"), and **Connect to
@@ -312,7 +316,7 @@ Runs fully on a server:
 - a browser for bots, once the engine is installed on the server
   (`npx @seira-bot/seira browser install`, or nothing to do in the Docker image,
   which ships it): each bot gets its own isolated, persistent session.
-  Watching it live from the app is the next step (docs/plans/browser-engine.md).
+  Watching it live from the app is the next step.
   It reaches the public internet and the dev servers a bot starts itself,
   not this server's network or other services unless `browserEngine.egress.allow`
   lists them ([what a bot's browser can reach](browser-packaging.md#what-a-bots-browser-can-reach)).
@@ -366,8 +370,11 @@ too.
   networks and VPN tunnels are skipped. A machine with no private address
   says so and stays on loopback. Plain http travels in clear, so use it only
   on a network you trust.
-- **`--tunnel`**: `npx @seira-bot/seira login` reserves an address like
-  `https://c-….seira.bot` for this machine (an emailed code signs it
+- **`--tunnel`**: needs an account service that you run yourself, set with
+  `SEIRA_CONTROL_PLANE_URL`. Seira builds have none by default, and `login` and
+  `serve --tunnel` stop with a message that says so. With one,
+  `npx @seira-bot/seira login` reserves an address like
+  `https://c-….example.net` for this machine (an emailed code signs it
   in). `serve --tunnel` connects it through a Cloudflare tunnel, the same one
   the desktop app uses for its companion. The first run downloads
   `cloudflared` (pinned version and digest) into the data dir. Only traffic
@@ -393,7 +400,7 @@ service never downloads a new release on its own.
 ## Connect ChatGPT from the browser
 
 A browser paired with Full access can connect an installed Codex CLI without opening a
-terminal: **Settings → Engines → Codex → Connect ChatGPT**. Seira starts
+terminal: **Settings → AI → Providers**, **Connect ChatGPT** on the Codex card. Seira starts
 `codex login --device-auth` on the server and shows a one-time code. Choose
 **Open ChatGPT sign-in**, enter the code on OpenAI's page, and complete sign-in
 with your own account. Seira checks for completion and refreshes the model list.
@@ -418,8 +425,8 @@ pulled away; finish or cancel it first.
 
 ## Connect a custom domain in Settings
 
-For a self-hosted server, open **Settings → Remote access → Connect your
-domain** from a browser paired with Full access. This is an address-setting and verification
+For a self-hosted server, open **Address** on the server's own page in Settings (its first
+entry) from a browser paired with Full access. This is an address-setting and verification
 flow, not a DNS or hosting service. Enter the domain to see a compact DNS record
 with copy buttons for **Type**, **Name / Host**, and **Value / IP**. The full
 hostname is shown; providers that already append the DNS zone need only the
@@ -586,8 +593,9 @@ hold. The server image (`ghcr.io/seira-bot/seira`) is built for that:
     add `X-Forwarded-For` to every request (Caddy does): a loopback request
     with no forwarding header and a loopback `Host` is taken to be the
     server's owner.
-  - A tunnel that dials out, so nothing has to reach the container:
-    `seira serve --tunnel` as the start command ([`--tunnel`](#ways-in-in-detail)).
+  - A tunnel that dials out, so nothing has to reach the container: run
+    your own `cloudflared` beside it, and use
+    `seira serve --public-url https://seira.example.com` as the start command.
 
 **How many processes and how much memory.** A container's process limit
 (`pids.max`; Docker's `--pids-limit`, Kubernetes' `podPidsLimit`) counts
@@ -754,10 +762,17 @@ SEIRA_DATA_DIR="$HOME/.seira" SEIRA_PORT=8799 \
   node --experimental-strip-types server/index.ts
 ```
 
+The server keeps the data folder private to the account that runs it: at start it
+removes every group and other permission bit (mode 0700) from the folder and its
+subfolders, and stops with a message if it cannot, for example when another account
+owns the folder or the mount refuses `chmod`. When several accounts share one install
+on purpose, set `SEIRA_DATA_DIR_GROUP_ACCESS=1`: the owner's group may then read, write
+and enter the folder (mode 2770), and other users still cannot.
+
 For something durable, let the CLI write the service for you:
 
 ```sh
-npx @seira-bot/seira service install --domain seira.example.com   # or --public-url, --tunnel, --tailscale, --lan
+npx @seira-bot/seira service install --domain seira.example.com   # or --public-url, --tailscale, --lan
 ```
 
 It renders a systemd unit (Linux) or a launchd agent (macOS) that runs the
@@ -772,13 +787,13 @@ a terminal, the service writes no pairing code into its log: run
 `npx @seira-bot/seira pair` when you need one.
 
 Engine CLIs read their logins from the service user's home: sign them in
-from Settings → Engines (below), or as that user in a terminal, before you
+from Settings → AI → Providers (below), or as that user in a terminal, before you
 rely on routines running unattended.
 
 ## Installing the engines without a terminal
 
 Engines whose installer is an npm package (Claude Code, Codex, OpenCode,
-MiniMax, pi) can be installed and updated from **Settings → Engines** when
+MiniMax, pi) can be installed and updated from **Settings → AI → Providers** when
 npm is on the server's PATH. Seira runs `npm install -g` as its own user into
 `<data dir>/tools/npm`, so nothing needs sudo and nothing touches a global
 prefix; that folder goes ahead of everything else on the engines' PATH, so
@@ -788,14 +803,14 @@ by a `curl | bash` script still need the command on the server.
 
 ## Provider keys, billed per token
 
-**Settings → Connections → Model providers** takes the keys a whole workspace
+**Settings → AI → Other services** takes the keys a whole workspace
 runs on, for people who would rather pay per token than have every user sign
 in. Keys are write-only: the page shows connected-or-not and a **Test** button
 that makes one read-only request to the provider from the server.
 
 - **Anthropic API key**: while one is saved, every Claude bot runs on it and
   Claude Code reports the real cost per turn to the usage ledger. Nobody has
-  to sign in, and Settings → Engines shows "workspace API key" instead of a
+  to sign in, and Settings → AI → Providers shows "workspace API key" instead of a
   person. Remove the key to go back to personal logins. The server's own
   `ANTHROPIC_API_KEY` environment variable is deliberately ignored; use the
   page, `config.json`, or `SEIRA_ANTHROPIC_API_KEY`.
@@ -868,7 +883,7 @@ root instead, and `--dry-run` always prints.
 
 ## Signing the engines in without a terminal
 
-On a hosted server, the engine CLIs sign in from Settings → Engines:
+On a hosted server, the engine CLIs sign in from Settings → AI → Providers:
 
 - **Codex**: "Connect ChatGPT" shows a one-time code to enter on OpenAI's
   device page. Once connected, Settings names the account and offers
@@ -898,7 +913,7 @@ docker compose exec seira seira pair     # Docker
 
 It prints a 12-character pairing code (it works once, for 10 minutes, or up
 to a day with `--ttl 24h`) and the link with the code in it, built from the
-address the server is reached at (`--public-url`, `--domain`, `--tunnel`,
+address the server is reached at (`--public-url`, `--domain`,
 `--tailscale`, `--lan`, or `SEIRA_PUBLIC_URL`). Open the link, or open `/pair`
 on that address and type the code. The browser gets a session cookie (30
 days, renewed on use up to 180 days from pairing, revocable) and the app
@@ -928,15 +943,15 @@ the menu bar).
 everything (the server's owner), it asks once: **Let <server> use this
 computer?** with **Allow** or **Not now**. Allow lets the server's bots see and
 use the apps on this computer's screen, and run the MCP servers you keep for
-it, while the app is open. Folders and the terminal are added in **Settings →
-Servers**, where each server of yours has a **Share this computer** switch and
+it, while the app is open. Folders and the terminal are added in **Settings → This app → Your
+computers**, where each server of yours has a **Share this computer** switch and
 **Choose what it can use**; the switch turns it off at once, and the menu bar's
 Seira item pauses it with your Clouds. The server needs nothing turned on:
 it takes a computer from its owner's pairings only, and a phone code or another
 person's pairing is never asked. Set `features.sharedComputers` to `false` in the
 server's config to turn this off, or to `true` to let every paired session lend
 its computer. Nothing is shared without that Allow, unless you make the server
-your bots' home (below). In **Settings → Servers → Computer
+your bots' home (below). In **Settings → This app → Your computers**, then the server's **Computer
 access**, choose read-only folders and optionally allow edits. Unrestricted
 terminal and screen/app control are separate opt-ins, confirmed in a native
 dialog. They can access information outside the selected folders. Share only
@@ -969,9 +984,9 @@ People). A server other people sign in to keeps the explicit **Share this
 computer?** flow above, and its bots stay where they are. Both sides need this
 release: an older server says to update it first.
 
-To move by hand instead, export a backup from this computer in **Settings →
-Import & export → Export backup**, then import it on the server in **Settings → Import & export
-→ Import backup**. API keys, engine sign-ins and paired devices stay where they
+To move by hand instead, export a backup from this computer in **Settings → Import & export → Take things out → Export full
+backup**, then import it on the server in **Settings → Import & export → Bring things in → Import
+backup**. API keys, engine sign-ins and paired devices stay where they
 are on both sides; routines arrive paused. An older desktop app's **Copy this
 computer here** is answered with "Update Seira to bring your bots here by
 itself."
@@ -1127,14 +1142,15 @@ second user for engines, a separate change.
 
 A pairing code is fine for the owner's own devices. For a workspace other
 people use every day, let them sign in with an emailed code instead: set an
-allow-list, and `/pair` on your server offers "Sign in with your email" first.
+allow-list and a mail server (below), and `/pair` on your server offers
+"Sign in with your email" first.
 
 ```sh
 SEIRA_SIGNIN_EMAILS="her@yourcompany.com, @yourcompany.com"   # full access
 SEIRA_SIGNIN_MEMBER_EMAILS="freelancer@example.com"          # chat and approvals only
 ```
 
-Signed in as an admin? Settings → Remote access → **Who can sign in with an
+Signed in as an admin? Settings → People, under **Who can sign in with an
 email** edits the same list in the browser, no command line needed. With the
 npm package, the same thing from the command line, with the server running
 or not, no restart needed:
@@ -1155,17 +1171,8 @@ is bootstrapped; while it does, Settings refuses to change that list and says
 which variable to change instead. One that is empty, as `.env.example` and the
 Compose files leave them, leaves the list to Settings.
 
-The code itself comes from `accounts.seira.bot`, the Seira
-account service, so your server needs no email credentials. Your server asks
-it to send the code, checks the answer, and then issues its own session
-cookie: the browser only ever talks to your server, and who is welcome is
-decided only by your allow-list. Wrong codes count against a lockout of
-their own: ten in a minute from one address pause sign-in there for a minute. Sessions from a sign-in show the email in
-`seira devices` and can be revoked the same way.
-
-To send the codes through your own mail server instead, so nobody signs in
-through the account service and no Seira account is made, give the server
-an SMTP address:
+Emailed sign-in needs a mail server, so that your server can send the code.
+Give the server an SMTP address:
 
 ```sh
 SEIRA_SIGNIN_SMTP_URL="smtps://signin%40yourcompany.com:PASSWORD@smtp.yourcompany.com:465"
@@ -1175,11 +1182,14 @@ SEIRA_SIGNIN_SMTP_FROM="Seira <signin@yourcompany.com>"   # else the user name, 
 `smtps://` uses TLS from the start (port 465); `smtp://` upgrades with
 STARTTLS (port 587) and refuses a server that cannot, unless the mail server
 is on this machine (`smtp://localhost:25`). Write the user name and password
-URL-encoded (`@` is `%40`). Your server then makes each code itself: 8 digits,
+URL-encoded (`@` is `%40`). Your server makes each code itself: 8 digits,
 single use, ten minutes and five tries, kept only as a hash in memory (a
 restart ends the open ones), and at most one every 30 seconds per address.
-The allow-list, the lockout and the sessions work as above. Keep the URL in
-the service's environment file, never on a command line.
+Who is welcome is decided only by your allow-list. Wrong codes count against
+a lockout of their own: ten in a minute from one address pause sign-in there
+for a minute. Sessions from a sign-in show the email in `seira devices` and
+can be revoked the same way. Keep the URL in the service's environment file,
+never on a command line.
 
 ### Inviting people
 
@@ -1374,7 +1384,7 @@ For the proxy boundary and offline regression checks, see the
 ## Using it from your phone
 
 Signed in on a hosted server as an admin (with a pairing code or your
-email)? Settings → Remote access → **Pair a phone or another computer**
+email)? Settings → Phone & devices → **Pair a phone or another computer**
 creates a one-time code with a QR right in the browser, and lists every
 paired device with a sign-out button. Nobody needs the command line.
 
@@ -1417,7 +1427,7 @@ bot, which model and engine, tokens in and out, the cost the engine reported
 (real on a metered key, an equivalent on a subscription, absent when the
 engine reports none), and who asked: the email a person signed in with, the
 device label otherwise, a routine, another bot, or this computer. No message
-text is stored. **Settings → Usage → History** shows a period grouped by bot,
+text is stored. **Settings → Spending** shows a period grouped by bot,
 model, person, day or engine, and **Export CSV** downloads one line per turn.
 Owners can read the same over the API:
 
@@ -1435,7 +1445,7 @@ current month to date.
 
 By default nothing limits what the bots use. The owner can cap a day's and a
 month's usage, for the whole server and for each bot, in estimated dollars
-and in tokens, under **Settings → Usage → Usage caps**, in `config.json`, or
+and in tokens, under **Settings → Spending**, **Usage caps**, in `config.json`, or
 for the server's own caps in the environment
 (`SEIRA_USAGE_CAP_DAILY_USD`, `SEIRA_USAGE_CAP_MONTHLY_USD`,
 `SEIRA_USAGE_CAP_DAILY_TOKENS`, `SEIRA_USAGE_CAP_MONTHLY_TOKENS`,
@@ -1643,7 +1653,7 @@ request named or saved, so two admins changing things at the same moment are
 each credited with their own change. The desktop app, and a server one person
 uses, keep no such log.
 
-**Settings → Activity** (admins, in the browser) shows these rows together
+**Settings → Data → Activity** (admins, in the browser) shows these rows together
 with the cards people answered, filtered by who, what and when, and exports
 them as CSV. The same over the API:
 
@@ -1663,7 +1673,7 @@ which keeps its own activity log.
 
 ## Spend limits and sell prices (enterprise)
 
-With the `budgets` entitlement, **Settings → Usage → Monthly spend limit**
+With the `budgets` entitlement, **Settings → Spending**, **Monthly spend limit**
 caps the workspace: once the month's cost reaches it, no bot starts a turn,
 whether a person wrote, a routine fired, a peer asked or a webhook arrived,
 until an admin raises it. A warning shows at a configurable percentage, and
@@ -1935,7 +1945,7 @@ every release instead.
 
 A server installed with the [installer](deploy-vps.md#quick-start-one-command-on-your-own-domain)
 updates with `sudo /opt/seira/update.sh`, which the installer puts there.
-Its admins can also press **Update server** in **Settings → Updates**, which runs
+Its admins can also press **Update server** on the server's own page in **Settings** (its first entry), which runs
 that same script on the server; a Docker checkout gets the button with
 `sudo deploy/update-runner.sh --install`. Until the bots' sandbox is on for
 self-hosted servers, a bot can ask for the same update, so the runner allows only
@@ -1961,7 +1971,7 @@ update an earlier run left unfinished.
 For the npm service there is no one-command updater yet:
 [do the same steps by hand](deploy-vps.md#paths-a-and-c-npm-with-the-service-above-the-same-steps-by-hand),
 as the service user while the server is stopped. For a foreground invocation,
-`npx --yes @seira-bot/seira@X.Y.Z serve --tunnel` selects a particular published
+`npx --yes @seira-bot/seira@X.Y.Z serve --public-url https://seira.example.com` selects a particular published
 release; replace `X.Y.Z` with that version.
 
 The desktop and phone apps work with any server version that was the stable

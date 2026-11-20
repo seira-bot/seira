@@ -12,6 +12,7 @@ import {
   ToolCallsRow, UniversalPinsRow, UpdatesRow,
 } from "../../AppSettingsRows";
 import { ChromeRailRow } from "../../ChromeRailToggle";
+import { ConnectServerSheet } from "../../PlaceAddSheet";
 import { ConnectedWorkspacesSettings } from "../../ConnectedWorkspacesSettings";
 import { CustomThemesSettings } from "../../CustomThemesSettings";
 import { DiagnosticsRow } from "../../DiagnosticsRow";
@@ -88,10 +89,11 @@ export function AppPage() {
 
 /** A Cloud's page in the desktop window: the places list reads the rail through the workspaces bridge, which works on
  * every page; only the environments on this computer need This computer's own page. */
-function PlacesFromHere() {
+export function PlacesFromHere() {
   const { place } = useSettingsShell();
   const others = useOtherPlaces("app");
   const workspaces = window.ogb?.workspaces;
+  const [connecting, setConnecting] = useState(false);
   if (!workspaces) return null;
   return <>
     <SettingsGroup label={t("settings.app.computers")} description={t("settings.app.computersLine")} block="your-computers">
@@ -106,12 +108,13 @@ function PlacesFromHere() {
           </SettingRow>
         ))}
         {workspaces.add && <SettingsLinkRow title={t("connect.title")} leading={<span className="flex size-8 items-center justify-center rounded-full bg-ink/[0.05] text-ink-secondary"><Plus size={18} strokeWidth={1.75} aria-hidden="true" /></span>}
-          onClick={() => void workspaces.add?.("address")} data={{ "data-server-connect": "" }} />}
+          onClick={() => setConnecting(true)} data={{ "data-server-connect": "" }} />}
       </SettingsRows>
     </SettingsGroup>
     <SettingsGroup label={t("connectedWorkspaces.localTitle")} block="environments">
       <SettingsRows><InertRow title={t("connectedWorkspaces.newEnvironment")} /></SettingsRows>
     </SettingsGroup>
+    {connecting && <ConnectServerSheet onClose={() => setConnecting(false)} />}
   </>;
 }
 

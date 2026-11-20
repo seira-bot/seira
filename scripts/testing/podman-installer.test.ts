@@ -58,7 +58,7 @@ case "$*" in
   *channels/stable.json*) [ "\${FAKE_STABLE_CODE:-404}" = 000 ] && { printf 000; exit 7; }; printf '%s' "\${FAKE_STABLE_BODY:-}" >"$out"; printf '%s' "\${FAKE_STABLE_CODE:-404}" ;;
   *releases/latest*) printf '{"tag_name": "v0.1.151"}' ;;
   */deploy/update.sh*) echo "# the updater; it reads podman.unit" >"$out" ;;
-  */api/health*) [ -f "$FAKE/active" ] && echo '{"app":"seira"}' ;;
+  */api/health*) [ -f "$FAKE/active" ] && echo '{"app":"openmausbot"}' ;;
   *) exit 22 ;;
 esac`,
 };
@@ -113,7 +113,7 @@ describe.skipIf(!posix)("deploy/podman/install.sh", () => {
     const unit = box.unit()!;
     expect(unit).toContain(`Image=${DIGEST}\n`);
     // systemd turns $$ into $, so the container's shell reads SEIRA_PORT from server.env at each check.
-    expect(unit).toContain("HealthCmd=curl -sf --max-time 4 http://127.0.0.1:$${SEIRA_PORT:-8799}/api/health | grep -q seira\n");
+    expect(unit).toContain("HealthCmd=curl -sf --max-time 4 http://127.0.0.1:$${SEIRA_PORT:-8799}/api/health | grep -q -e seira -e openmausbot\n");
     expect(unit).not.toContain("8811");
     expect(box.read(join(box.dir, "server.env"))).toContain("SEIRA_PORT=8811\n");
     expect(unit).toContain(`EnvironmentFile=${box.dir}/server.env\n`);

@@ -3,6 +3,7 @@
 import qrcode from "qrcode-terminal";
 
 import { cliCommand } from "./cli-invocation.ts";
+import { controlPlaneProblem } from "./tunnel.ts";
 import type { PhoneRelayStatus } from "./phone-relay.ts";
 
 /** The desktop app owns this server, so only the app (or a paired device) may mint a code: say where pairing works instead. */
@@ -94,10 +95,14 @@ const isStatus = (value: unknown): value is PhoneRelayStatus =>
 export const RELAY_NOT_WITH_TUNNEL = "--relay cannot be used on a machine whose saved choice is a tunnel address: a relay token would make the tunnel go for good. Start with --local, or use the relay on a machine signed in with `seira login --relay`.";
 
 /** Why phones cannot pair through the relay yet, in words for the person at the terminal; empty when they can. */
-export function relayProblemLines(status: PhoneRelayStatus | null, prefix: string): string[] {
+export function relayProblemLines(status: PhoneRelayStatus | null, prefix: string, env: NodeJS.ProcessEnv = process.env): string[] {
   if (!status) return [`Seira Relay is off on this server. Start it with: ${prefix} serve --relay`];
   if (status.grant === "tunnel") return [`Seira Relay stays off here: ${status.reason ?? "this machine holds a tunnel address"}. A relay token would make that tunnel go for good; use the relay on a machine signed in with ${prefix} login --relay.`];
-  if (status.grant === "signed-out") return [`Seira Relay needs this machine signed in to a Seira account: ${prefix} login --relay (then leave the server running; it connects within a minute).`];
+  if (status.grant === "signed-out") {
+    const problem = controlPlaneProblem(env);
+    if (problem) return [`Seira Relay is not available: ${problem}.`];
+    return [`Seira Relay needs this machine signed in to a Seira account: ${prefix} login --relay (then leave the server running; it connects within a minute).`];
+  }
   if (status.grant === "unavailable") return ["Seira Relay is not available for this machine right now. The server keeps working here; it asks again every half hour."];
   if (status.grant === "failed") return ["The Seira account service did not answer. The server keeps working here and keeps trying."];
   if (status.grant === "waiting") return ["Still asking the Seira account service for a relay pass…"];

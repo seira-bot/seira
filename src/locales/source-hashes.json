@@ -34881,7 +34881,6 @@
       "native.role.front": "7e64cb6a48176de0d6812f2acc5fe331108f3a7594e07479aac45a2bef4000d9",
       "native.context.copyLink": "724e78a3254c899d16ef6324a7abc9a8f5240ffce8bff74976df397c68ce9d78",
       "native.title.connected": "ca18f2da29f7262993ea9c35786a1d388b561f9dd48d5748be332f77e9c14fac",
-      "native.title.hosted": "ee72e8a30b04bacbf88bc5b7a300e51807112ebb070c0942513f643e8b6771b4",
       "native.switcher.addCloudSub": "6826baea6fc53d609a023ab55fb5fbc968ba4e737b0c33056835f5a202dd6802",
       "native.switcher.forgetNamed": "4ce88d1269cafe6772c2ba64a4dc288660898ffe9de866ad3f680f187468a149",
       "native.switcher.andMore": "b9c56c1be9164bcc189a5b162c3683c7bcb490a0caeca53b5d3777b35d5d4cbc",
@@ -37599,7 +37598,9 @@
       "releaseNotes.items.whatsNew.title": "4ed04dddb704ad49a9cccc37dffd2b72378d3b85e8ba223ec3488d6a8bed2c32",
       "releaseNotes.items.whatsNew.body": "6f2369bcb75a8f15e160065b4b06996f504dae59b62e3f9adceff4a26fe1fa4a",
       "releaseNotes.items.flatpakEngine.title": "5e0d5d4575dd7779744604a7262c7ec7154d387902f9c0de492ed990984b51c4",
-      "releaseNotes.items.flatpakEngine.body": "c21c13dff0a50d6434f8f61cb6365218550c85f0374d547fce4b8c3089478bc7"
+      "releaseNotes.items.flatpakEngine.body": "c21c13dff0a50d6434f8f61cb6365218550c85f0374d547fce4b8c3089478bc7",
+      "releaseNotes.items.seiraName.title": "7d2c02cb91a01eeb1c92ad52d3a1a04684769114be72e9a95cfd1669a5efdef1",
+      "releaseNotes.items.seiraName.body": "1776ddc8b26a51a5700a28612ce267c70e1f9ec9cf81def5b5b62de3d5523775"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -46830,7 +46831,6 @@
       "native.role.front": "7e64cb6a48176de0d6812f2acc5fe331108f3a7594e07479aac45a2bef4000d9",
       "native.context.copyLink": "724e78a3254c899d16ef6324a7abc9a8f5240ffce8bff74976df397c68ce9d78",
       "native.title.connected": "ca18f2da29f7262993ea9c35786a1d388b561f9dd48d5748be332f77e9c14fac",
-      "native.title.hosted": "ee72e8a30b04bacbf88bc5b7a300e51807112ebb070c0942513f643e8b6771b4",
       "native.switcher.addCloudSub": "6826baea6fc53d609a023ab55fb5fbc968ba4e737b0c33056835f5a202dd6802",
       "native.switcher.forgetNamed": "4ce88d1269cafe6772c2ba64a4dc288660898ffe9de866ad3f680f187468a149",
       "native.switcher.andMore": "b9c56c1be9164bcc189a5b162c3683c7bcb490a0caeca53b5d3777b35d5d4cbc",
@@ -56467,7 +56467,6 @@
       "native.role.front": "7e64cb6a48176de0d6812f2acc5fe331108f3a7594e07479aac45a2bef4000d9",
       "native.context.copyLink": "724e78a3254c899d16ef6324a7abc9a8f5240ffce8bff74976df397c68ce9d78",
       "native.title.connected": "ca18f2da29f7262993ea9c35786a1d388b561f9dd48d5748be332f77e9c14fac",
-      "native.title.hosted": "ee72e8a30b04bacbf88bc5b7a300e51807112ebb070c0942513f643e8b6771b4",
       "native.switcher.addCloudSub": "6826baea6fc53d609a023ab55fb5fbc968ba4e737b0c33056835f5a202dd6802",
       "native.switcher.forgetNamed": "4ce88d1269cafe6772c2ba64a4dc288660898ffe9de866ad3f680f187468a149",
       "native.switcher.andMore": "b9c56c1be9164bcc189a5b162c3683c7bcb490a0caeca53b5d3777b35d5d4cbc",

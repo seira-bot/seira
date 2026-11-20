@@ -203,7 +203,7 @@ describe("offering a notify frame", () => {
     expect(relay.sends()).toEqual([{
       path: "/v1/installations/self/push/send",
       authorization: `Bearer ${CREDENTIAL}`,
-      body: { v: 1, token: APNS, pairing: "pair-tag-0001", collapseId: "seira.th_1.42", notification: { kind: "approval", title: "Scout needs approval", botId: "bot_1", botName: "Scout", threadId: "th_1" } },
+      body: { v: 1, token: APNS, pairing: "pair-tag-0001", collapseId: "openmaus.th_1.42", notification: { kind: "approval", title: "Scout needs approval", botId: "bot_1", botName: "Scout", threadId: "th_1" } },
     }]);
     const raw = JSON.stringify(relay.calls);
     for (const secret of ["PRIVATE", "payroll", "sk-live", "API_KEY"]) expect(raw).not.toContain(secret);
@@ -287,7 +287,7 @@ describe("offering a notify frame", () => {
     clock += PUSH_COALESCE_MS;
     push.offer({ notification: notification(), seq: 4 }, everyone);
     await push.flush();
-    expect(relay.sends().map((call) => call.body.collapseId)).toEqual(["seira.th_1.1", "seira.th_1.3", "seira.th_1.4"]);
+    expect(relay.sends().map((call) => call.body.collapseId)).toEqual(["openmaus.th_1.1", "openmaus.th_1.3", "openmaus.th_1.4"]);
   });
 
   it("stops a looping bot buzzing a pocket", async () => {
@@ -310,7 +310,7 @@ describe("the outbox", () => {
     push.offer({ notification: notification(), seq: 2 }, everyone);
     await push.flush();
     for (const wait of PUSH_RETRY_MS) await advance(push, wait);
-    expect(relay.sends().map((call) => call.body.collapseId)).toEqual(["seira.th_1.1", "seira.th_1.2", "seira.th_1.2", "seira.th_1.2"]);
+    expect(relay.sends().map((call) => call.body.collapseId)).toEqual(["openmaus.th_1.1", "openmaus.th_1.2", "openmaus.th_1.2", "openmaus.th_1.2"]);
     expect(push.pending()).toBe(0);
   });
 
@@ -367,7 +367,7 @@ describe("the outbox", () => {
     await advance(push, 119_000);
     expect(relay.sends()).toHaveLength(2);
     await advance(push, 1_000);
-    expect(relay.sends().at(-1)!.body.collapseId).toBe("seira.th_4.4");
+    expect(relay.sends().at(-1)!.body.collapseId).toBe("openmaus.th_4.4");
   });
 
   it("never throws into the server", async () => {
@@ -379,7 +379,7 @@ describe("the outbox", () => {
 
 describe("the push's identifier and title", () => {
   it("is the stream notification's own identifier when it fits APNs' 64 bytes", () => {
-    expect(phonePushCollapseId("th_1", 9)).toBe("seira.th_1.9");
+    expect(phonePushCollapseId("th_1", 9)).toBe("openmaus.th_1.9");
     expect(phonePushCollapseId("t".repeat(60), 9)).toBeUndefined();
     expect(phonePushCollapseId("th_1", -1)).toBeUndefined();
   });

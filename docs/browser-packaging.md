@@ -83,7 +83,7 @@ page, then the four public bot-test pages, read-only.
 
 ## Signed-in sites and My Chrome
 
-Each built-in browser lists its signed-in sites (Settings → Browser profiles,
+Each built-in browser lists its signed-in sites (Settings → Desktops & browser → Built-in browser,
 or a bot's Browser panel) with Sign out per site and Sign out of all. It works
 the same on desktop, a server and Cloud, for an open or a closed browser. A
 shared profile can instead use **My Chrome**, the person's own running Chrome,
@@ -95,8 +95,7 @@ default and dropped when lending is turned off; Chrome then travels over the
 device link, to the DevTools port the computer finds itself, and only the
 person's own conversations and routines use it. My Chrome works only on a
 personal Cloud home: on a Team Cloud and on self-hosted servers profiles stay
-built-in. Details: [the browser engine plan, step 5](plans/browser-engine.md)
-and [Seira Cloud](cloud-pro.md#your-chrome).
+built-in. Details: [Seira Cloud](cloud-pro.md#your-chrome).
 
 ## What a bot's browser can reach
 
@@ -110,8 +109,8 @@ loopback traffic through it too (`--proxy-bypass-list=<-loopback>`), and
 WebRTC sends no UDP around it. If the gate is not running, the browser
 connects nowhere.
 
-The owner can set an optional unauthenticated SOCKS5 upstream in Settings →
-Bot desktops → Built-in browser. The gate still resolves and checks every
+The owner can set an optional unauthenticated SOCKS5 upstream in Settings → Desktops & browser → Built-in
+browser. The gate still resolves and checks every
 destination locally, then passes only a checked public IP to that proxy; local,
 private, own-service, link-local and metadata destinations are never sent
 through it. New connections use the saved proxy immediately. My Chrome keeps
@@ -153,7 +152,7 @@ round, on that port only. Seira's own ports, metadata and
 link-local addresses stay closed whatever it lists, and Seira Cloud and shared
 company workspaces ignore it.
 
-Settings > Computer > "Open sites on this server" (`browserEngine.egress.localNetwork: true`, off by default and
+Settings → Desktops & browser → Built-in browser, "Open sites on this server" (`browserEngine.egress.localNetwork: true`, off by default and
 shown only to the server's owner or an admin; not on a shared company workspace, whose network is the operator's) opens this server's own sites and its local network without listing
 them. Seira's own ports, metadata and link-local addresses stay closed, also through a private address such as
 a Docker host's gateway, and a public name that resolves to loopback is still refused. It applies to new connections;

@@ -24,7 +24,7 @@ export function defaultDir(commonDir, home) {
 }
 
 /** The bash script that runs on the host: it reads the bundle from stdin, checks `sha` in a temporary worktree of the
- * clone at `dir` (under the home folder there) and removes everything it made. Exit 3 means it did not get to run. */
+ * clone at `dir` (under the home folder there) and removes everything it made. Exit 3 means it did not get to run, as when the commit has no scripts/pre-push-check.mjs. */
 export function remoteScript({ dir, sha, wrap }) {
   if (!SHA.test(sha)) throw new Error("the commit is not a full sha");
   return [
@@ -39,6 +39,7 @@ export function remoteScript({ dir, sha, wrap }) {
     `git fetch -q origin main >/dev/null 2>&1`,
     `if [ -s "$bundle" ]; then git bundle unbundle "$bundle" >/dev/null 2>&1 || { cleanup; exit 3; }; fi`,
     `git worktree add -q --detach "$wt" ${sha} >/dev/null 2>&1 || { cleanup; exit 3; }`,
+    `[ -f "$wt/scripts/pre-push-check.mjs" ] || { cleanup; exit 3; }`,
     `ln -s "$repo/node_modules" "$wt/node_modules" || { cleanup; exit 3; }`,
     `cd "$wt" && printf '%s\\n' 'pre-push ${sha} pre-push 0000000000000000000000000000000000000000' | ${wrap ? `${wrap} ` : ""}node scripts/pre-push-check.mjs`,
     `rc=$?; cleanup; exit $rc`,

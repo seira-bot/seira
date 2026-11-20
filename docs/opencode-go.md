@@ -11,7 +11,7 @@ same runtime as the other ACP engines.
    [OpenCode installation guide](https://opencode.ai/docs/).
 2. Connect the providers you want in the OpenCode app, run
    `opencode auth login`, or save the provider's key in Seira under
-   Settings → API keys → **Keys for other OpenCode providers**. On a Seira
+   Settings → AI → Other services, **Keys for other OpenCode providers**. On a Seira
    Cloud, which has no terminal, save the key there.
 3. Restart Seira. It reuses OpenCode's existing connections and model
    configuration automatically.
@@ -23,7 +23,7 @@ For OpenRouter, Fireworks AI, DeepSeek, Cline or your own provider, see
 
 OpenCode includes anonymous free models. A Zen, Go, OpenRouter, or other
 provider connection expands the catalog according to the installed CLI. An
-OpenCode API key can optionally be stored under Settings → API keys. It is
+OpenCode API key can optionally be stored under Settings → AI → Other services. It is
 write-only and injected as `OPENCODE_API_KEY` only into the OpenCode child
 process; it is not sent to the renderer, logs, analytics, snapshots, error
 messages, or command arguments.
@@ -76,8 +76,8 @@ allowance (a Go limit, or a monthly one) holds the whole account until its
 window resets, as with the other engines.
 
 The limit card and the plan panel read Go's rolling, weekly and monthly
-windows from `opencode.ai/zen/go/v1/usage` with the key saved under Settings →
-API keys, or the login `opencode auth login` keeps in `auth.json`. An OpenCode
+windows from `opencode.ai/zen/go/v1/usage` with the key saved under Settings → AI → Other
+services, or the login `opencode auth login` keeps in `auth.json`. An OpenCode
 2 install keeps its logins in its own database instead, so saving the key in
 Seira is what makes those windows readable there.
 
