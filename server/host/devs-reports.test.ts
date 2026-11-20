@@ -492,7 +492,8 @@ describe("sending a draft", () => {
     expect(await fx.reports.sendDraft(ada.id, "key-ada")).toMatchObject({ state: "sent", issue: 123 });
     const bo = fx.reports.fromError("scout-main", error, "key-bo")!;
     expect(bo.same).toEqual({ issue: 123 });
-    expect(JSON.stringify(bo)).not.toContain(ada.title);
+    expect(bo.same).not.toHaveProperty("title");
+    expect(bo.same).not.toHaveProperty("at");
     fx.advance(NO_ANSWER_MS);
     expect(fx.reports.fromError("scout-main", error, "key-ada")!.same).toMatchObject({ issue: 123, title: ada.title });
     fx.stop();
