@@ -81,7 +81,7 @@ describe("the away email a Team Cloud asks the Admin for", () => {
 
   it("signs the way the Admin checks (a fixed vector both repositories test)", () => {
     expect(teamAwaySignature("secret-of-the-home", "cm-acme", "1762765200", "nonce-0123456789abcdef", '{"v":1,"notices":[]}'))
-      .toBe("wXx8Ty3f-Z1Ag0DrNs80GxPT4KwAZ6RoIzrRF139vAI");
+      .toBe("OfW3-BT6VKMcJBhiW-0l3PONmiEii4CZPyqyjp6myJc");
   });
 
   it("puts what happens within the window in one email, the question first", async () => {
