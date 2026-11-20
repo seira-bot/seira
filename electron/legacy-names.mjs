@@ -124,3 +124,7 @@ export const LEGACY_COMPOSIO_USER_PREFIX = "openmausbot_";
 export const LEGACY_WEBHOOK_AUTH_HEADER = "x-openmaus-secret";
 /** The header the deployed event broker still reads the poller id from. */
 export const LEGACY_POLLER_HEADER = "x-omb-poller";
+
+/** The launchd label and systemd unit name of the Sentinel schedule that an earlier version installed. */
+export const LEGACY_SENTINEL_LAUNCHD_LABEL = "com.openmausbot.sentinel";
+export const LEGACY_SENTINEL_SYSTEMD_NAME = "openmausbot-sentinel";

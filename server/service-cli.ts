@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 import {
-  currentUser, launchdPlist, sentinelCommand, sentinelLaunchdPlist, sentinelServicePlan, sentinelSystemdService, sentinelSystemdTimer,
+  currentUser, earlierSentinelSchedule, launchdPlist, sentinelCommand, sentinelLaunchdPlist, sentinelServicePlan, sentinelSystemdService, sentinelSystemdTimer,
   servicePlan, shippedSentinelCli, systemdUnit, unstableInstallWarning,
 } from "./service-unit.ts";
 import { defaultSentinelOut, outRefusal } from "./sentinel/paths.ts";
@@ -153,6 +153,12 @@ function runSentinelService(input: ServiceInstallInput, platform: NodeJS.Platfor
   if (refusal) {
     io.error(refusal);
     return 1;
+  }
+  const earlier = earlierSentinelSchedule(platform, home, input.exists ?? existsSync);
+  if (earlier) {
+    io.log("first remove the schedule an earlier version installed:");
+    for (const line of earlier.deactivate) io.log(`  ${line}`);
+    io.log("");
   }
   const shipped = shippedSentinelCli(platform, home, input.exists ?? existsSync, input.hasSentinel ?? bundleHasSentinel);
   if (!shipped) {
