@@ -229,7 +229,7 @@ export function WorkspaceBackupSettings({ layout = BOTH_ROWS }: { layout?: (rows
           <p className="text-[13px] leading-[18px] text-ink-secondary">{t("backup.importHint")}</p>
           <SettingsField label={t("backup.file")}>
             <span className="flex items-center gap-3">
-              <input ref={fileInput} type="file" accept=".ombbackup" className="sr-only" tabIndex={-1} disabled={disabled}
+              <input ref={fileInput} type="file" accept=".seirabackup,.ombbackup" className="sr-only" tabIndex={-1} disabled={disabled}
                 onChange={(event) => { setFile(event.target.files?.[0] ?? null); setUploadedId(null); setPreview(null); setConfirmation(""); setImportPassword(""); setError(null); }} />
               <button type="button" className="ui-button shrink-0" disabled={disabled} onClick={() => fileInput.current?.click()}>{t("backup.chooseFile")}</button>
               <span className="min-w-0 truncate text-[13px] leading-5 text-ink-secondary">{file?.name ?? t("backup.noFile")}</span>

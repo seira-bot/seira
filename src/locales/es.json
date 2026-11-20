@@ -4678,7 +4678,7 @@
   "backup.exporting": "Creando la copia de seguridad cifrada…",
   "backup.downloadAgain": "Descargar {filename}",
   "backup.import": "Importar copia de seguridad",
-  "backup.importHint": "Elige un archivo .ombbackup cifrado y valídalo antes de cambiar nada. Las copias de seguridad admiten hasta 10 GB de datos de la instalación. Las copias de seguridad antiguas de equipos y las plantillas compartibles aún se pueden importar desde Plantillas.",
+  "backup.importHint": "Elige un archivo .seirabackup cifrado y valídalo antes de cambiar nada. Las copias de seguridad admiten hasta 10 GB de datos de la instalación. Las copias de seguridad antiguas de equipos y las plantillas compartibles aún se pueden importar desde Plantillas.",
   "backup.file": "Archivo de copia de seguridad",
   "backup.importPassword": "Contraseña de esta copia de seguridad",
   "backup.validate": "Validar la copia de seguridad",

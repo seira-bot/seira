@@ -20,11 +20,11 @@ import {
 } from "../shared/routines.ts";
 import type { PartPair, RoutinePart } from "./package-parts.ts";
 import {
-  composeExecutionPrompt, continuityCarry, ROUTINE_DEFERRAL_NOTICE_MS, ROUTINE_SUPERSEDED,
+  ROUTINE_DEFERRAL_NOTICE_MS, ROUTINE_SUPERSEDED,
   routineFailure, routineHostWarning, supersededBy,
 } from "./routine-execution.ts";
 import {
-  dispatchRefusal, engineFacts, nextScheduledRun, recoverRun, requeueOnce, startPrompt, weekRuns, type RoutineAlert, type RoutineFailureFacts, type RoutineOwnerMark, type RoutineOwnerNotice,
+  dispatchRefusal, engineFacts, nextScheduledRun, recoverRun, requeueOnce, weekRuns, type RoutineAlert, type RoutineFailureFacts, type RoutineOwnerMark, type RoutineOwnerNotice,
 } from "./routine-recovery.ts";
 import { askOf, settleAsk, waitingFor, type RoutineRunAsk } from "./routine-waits.ts";
 import { failsLikeLastOutcome, outcomesNewestFirst } from "./routine-outcomes.ts"; import { createRunGate, type RunPreparation } from "./routine-run-gate.ts";
@@ -38,6 +38,7 @@ import { loadInstalledPackage, matchingRequestReceipt, rememberRequest } from ".
 import { applyHolds, holdCauses, type AppliedHolds } from "./routine-holds.ts";
 import { cancelUnfinishedRuns, interruptRunTurns } from "./routine-stops.ts";
 import { sanitizeInput } from "./routine-input.ts";
+import { startRoutineWork } from "./routine-dispatch.ts";
 import { applyCheckResult, clipRunOutput, codedLine, routineLine, runLineFields, type RoutineLine, type RoutineLineCodes, type RoutineTroubleCode } from "./routine-lines.ts";
 import { checkHold, CHECK_BOOT_HOLD_MS, type CheckHold } from "./routine-check-pacing.ts";
 import { resolveRoutineResultsThread, routineRunDefinition, type ResultsThreadAllocation } from "./routine-run-definition.ts";
@@ -1163,35 +1164,7 @@ export class RoutineManager {
         try { this.save(); } catch (error) { Object.assign(run, { status: "queued", startedAt: undefined } satisfies Partial<RoutineRun>); throw error; }
         this.emitRun(run);
         try {
-          const prompt = run.prompt ?? this.routines.find((r) => r.id === run.routineId)?.prompt;
-          if (!prompt) {
-            this.failThread(task.threadId, "The routine was deleted before it could start", { cause: "refused" });
-            continue;
-          }
-          const triggerSource = run.triggerSource ?? (run.manual ? "manual" : "schedule");
-          if (run.target === "room-goal") {
-            if (!this.options.startGoal) {
-              this.failThread(task.threadId, "Room goal routines are unavailable");
-              continue;
-            }
-            await this.options.startGoal(
-              run.groupId,
-              task.threadId,
-              prompt,
-              run.botId,
-              run.id,
-              (message) => this.failThread(task.threadId, message, { cause: "refused" }),
-            );
-          } else {
-            await this.options.startTurn(
-              run.botId,
-              task.threadId,
-              startPrompt(run, prompt, composeExecutionPrompt({ id: run.routineId, name: run.routineName, trigger: triggerSource, runOn: run.runOn ?? "maus" }, prompt, run.attachments, continuityCarry(run, this.routines, this.runs)), (first) => this.options.promptSaid?.(task.threadId, first) === true),
-              run.runOn ?? "maus",
-              triggerSource,
-              (message) => this.failThread(task.threadId, message, { cause: "refused" }), run.id,
-            );
-          }
+          await startRoutineWork({ options: this.options, routines: this.routines, runs: this.runs, failThread: (threadId, message, facts) => this.failThread(threadId, message, facts) }, run, task.threadId);
         } catch (error) {
           this.failThread(task.threadId, error instanceof Error ? error.message : String(error), dispatchRefusal(error));
         }

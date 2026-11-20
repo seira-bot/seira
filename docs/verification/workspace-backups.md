@@ -3,7 +3,7 @@
 ## User path
 
 Settings → Import & export → **Export full backup** → password and confirmation →
-encrypted `.ombbackup` download. Import uses a native file input, password,
+encrypted `.seirabackup` download. Import uses a native file input, password,
 validated preview and an explicit **REPLACE** confirmation. It is replacement,
 not an additive team import. Click **Restart and restore** on the local desktop
 to quit and reopen it; closing only its window does not restart the server.

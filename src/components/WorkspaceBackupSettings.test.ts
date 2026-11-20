@@ -57,7 +57,7 @@ describe("Settings full backups", () => {
     render().nodes.find((node) => (node.type as { name?: string }).name === "LearnMore")!.props.onClick!();
     open("export"); open("import");
     html = render().html;
-    expect(html).toContain('type="file" accept=".ombbackup"');
+    expect(html).toContain('type="file" accept=".seirabackup,.ombbackup"');
     expect(html.match(/type="password"/g)).toHaveLength(3);
     expect(html).toContain("the disks of remote desktops");
     expect(html).toContain("Saved account credentials and connections are not included");
@@ -78,7 +78,7 @@ describe("Settings full backups", () => {
     view = render();
     const link = { href: "", download: "", click: vi.fn(), remove: vi.fn() };
     vi.stubGlobal("document", { createElement: () => link, body: { append: vi.fn() } });
-    fixture.api.mockResolvedValueOnce({ id: "download-id", filename: "fixture.ombbackup" });
+    fixture.api.mockResolvedValueOnce({ id: "download-id", filename: "fixture.seirabackup" });
     const form = formOf("backup-export");
     submit(form); submit(form); await flush();
     expect(fixture.api).toHaveBeenCalledTimes(2); // one status, one export
@@ -106,7 +106,7 @@ describe("Settings full backups", () => {
 
   it("uploads a raw file, validates it, and requires exact REPLACE with the staged ID", async () => {
     await ready();
-    const file = new File(["encrypted fixture"], "fixture.ombbackup");
+    const file = new File(["encrypted fixture"], "fixture.seirabackup");
     open("import");
     render().nodes.find((node) => node.props.type === "file")!.props.onChange!({ target: { files: [file] } });
     let view = render();
@@ -131,7 +131,7 @@ describe("Settings full backups", () => {
   it("does not offer a replacement after failed password validation", async () => {
     await ready();
     open("import");
-    render().nodes.find((node) => node.props.type === "file")!.props.onChange!({ target: { files: [new File(["archive"], "file.ombbackup")] } });
+    render().nodes.find((node) => node.props.type === "file")!.props.onChange!({ target: { files: [new File(["archive"], "file.seirabackup")] } });
     change(render().nodes.filter((node) => node.props.type === "password")[0], "wrong password");
     fixture.api.mockResolvedValueOnce({ id: "upload" }).mockRejectedValueOnce(new Error("Wrong password"));
     submit(formOf("backup-import")); await flush();
@@ -141,7 +141,7 @@ describe("Settings full backups", () => {
 
   it("reuploads the selected file if its upload or validated stage expires", async () => {
     await ready();
-    const file = new File(["archive"], "file.ombbackup");
+    const file = new File(["archive"], "file.seirabackup");
     open("import");
     render().nodes.find((node) => node.props.type === "file")!.props.onChange!({ target: { files: [file] } });
     const validate = async () => { change(render().nodes.filter((node) => node.props.type === "password")[0], "correct horse battery"); submit(formOf("backup-import")); await flush(); };

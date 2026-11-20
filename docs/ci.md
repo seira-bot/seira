@@ -12,6 +12,8 @@ A maintainer starts them by hand to build a desktop package (see
 A separate workflow, `.github/workflows/bug-reports.yml`, checks the bug report
 Worker. It starts only when the Worker changes (see
 [Bug report Worker workflow](#bug-report-worker-workflow)).
+A second one, `.github/workflows/push-relay.yml`, does the same for the phone
+push relay Worker (see [Push relay Worker workflow](#push-relay-worker-workflow)).
 
 ## Jobs
 
@@ -199,6 +201,30 @@ starts it.
 Do not add `bug-reports` to the `main` branch ruleset. A required check that
 does not run on every pull request keeps the pull requests that skip it
 waiting forever. Read the result on a pull request that changes the Worker.
+
+## Push relay Worker workflow
+
+`push-relay.yml` checks the Worker in `cloudflare/push-relay/`. It follows the
+same rules as the [Bug report Worker workflow](#bug-report-worker-workflow). It
+is not part of `ci.yml` and not part of the `CI` gate.
+
+| Start | What it does |
+| --- | --- |
+| A pull request, or a push to `main`, that changes `cloudflare/push-relay/**` or `push-relay.yml` | The job `push-relay`: `pnpm install --frozen-lockfile`, `pnpm push:check` (the type check), and `pnpm push:test` (the tests) |
+| Run by hand | The same job |
+
+`scripts/ci-workflow.test.ts` holds the same rules for it:
+
+- The workflow has one job. The job has no permission, no secret, and no
+  environment. The tests use a fake APNs, a fake FCM, and a fake database.
+- The job never deploys. Deploying the Worker stays a manual step (see the
+  [Worker README](../cloudflare/push-relay/README.md)).
+- The two `paths` filters name the Worker folder and the workflow file.
+- The job skips a draft pull request. A new push cancels the older run of the
+  same pull request or of `main`. A manual start never cancels or is cancelled.
+
+Do not add `push-relay` to the `main` branch ruleset. Read the result on a pull
+request that changes the Worker.
 
 ## Required check
 

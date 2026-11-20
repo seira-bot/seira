@@ -118,6 +118,14 @@ it("carries a fixed backup refusal and its redacted string path to the client", 
   expect(await response.json()).toEqual(userError("serverError.backup.recursiveLink", params));
 });
 
+it("names the exported file Seira-<date>.seirabackup in the reply and the download", async () => {
+  const exported = await post("/api/workspace-backup/export", { password: PASSWORD }).then((response) => response.json()) as { id: string; filename: string };
+  expect(exported.filename).toBe("Seira-2026-09-11.seirabackup");
+  const download = await fetch(`${url}/api/workspace-backup/download/${exported.id}`, { headers: { authorization: `Bearer ${admin.token}` } });
+  expect(download.headers.get("content-disposition")).toBe('attachment; filename="Seira-2026-09-11.seirabackup"');
+  await download.arrayBuffer();
+});
+
 it.each(["revoke", "logout"])("keeps session controls authenticated and usable during a held export (%s)", async (action) => {
   let started!: () => void;
   let release!: () => void;
