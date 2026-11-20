@@ -22,11 +22,12 @@ describe("ways in", () => {
   });
 
   it("offers --tunnel as a way in only while an account service is set", () => {
-    const without = noRouteLines(8799, "seira", {}).join("\n");
+    const without = noRouteLines(8799, "seira", { SEIRA_CONTROL_PLANE_URL: "" }).join("\n");
     expect(without).not.toContain("--tunnel");
     expect(without).not.toContain("seira login");
     for (const way of ["--public-url", "--domain", "--tailscale", "--lan"]) expect(without).toContain(way);
     expect(noRouteLines(8799, "seira", { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test" }).join("\n")).toContain("serve --tunnel");
+    expect(noRouteLines(8799, "seira", {}).join("\n")).toContain("serve --tunnel");
   });
 
   it("--lan on a machine with only public addresses says so", () => {

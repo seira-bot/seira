@@ -163,6 +163,40 @@ describe("companionPairingRoute", () => {
     ]);
   });
 
+  it("carries the seira.run route after the direct routes when signed in", () => {
+    const hosted = `https://c-${"a".repeat(32)}.seira.run`;
+    const route = companionPairingRoute({
+      port: 8810,
+      tailnetName: "mac.tail1234.ts.net",
+      lan: "192.168.1.42",
+      hosts: ["mac.tail1234.ts.net", "192.168.1.42"],
+      endpoints: [
+        { url: hosted, kind: "hosted", priority: 0 },
+        { url: "http://mac.tail1234.ts.net:8810", kind: "tailnet", priority: 100 },
+        { url: "http://192.168.1.42:8810", kind: "lan", priority: 200 },
+      ],
+    }, "local");
+
+    const link = phonePairingLink({ ...route!, code: "004209", token });
+    expect(decodedEndpoints(link!)).toEqual([
+      { url: "http://192.168.1.42:8810", kind: "lan", priority: 0 },
+      { url: hosted, kind: "hosted", priority: 100 },
+    ]);
+  });
+
+  it("carries no hosted route when signed out", () => {
+    const route = companionPairingRoute({
+      port: 8810,
+      lan: "192.168.1.42",
+      hosts: ["192.168.1.42"],
+      endpoints: [{ url: "http://192.168.1.42:8810", kind: "lan", priority: 200 }],
+    }, "local");
+
+    const link = phonePairingLink({ ...route!, code: "004209", token });
+    expect(decodedEndpoints(link!)?.some((endpoint: { kind: string }) => endpoint.kind === "hosted") ?? false).toBe(false);
+    expect(companionPairingRoute({ port: 8810, lan: "192.168.1.42", hosts: [], endpoints: [] }, "automatic")).toBeNull();
+  });
+
   it("keeps an explicitly selected Tailscale route off cleartext LAN fallbacks", () => {
     const route = companionPairingRoute({
       port: 8810,

@@ -5694,6 +5694,7 @@
   "computer.android.retry": "Tentar novamente",
   "computer.android.secureNote": "No Android 12 e posteriores, a tela de bloqueio e as páginas protegidas aparecem em preto aqui; faça essas etapas no celular.",
   "connectors.card.popupBlocked": "Seu navegador bloqueou a página de conexão. Permita pop-ups e tente novamente.",
+  "connectors.card.linkIfNotOpened": "Se a página de conexão não abriu, use o link abaixo.",
   "connectors.card.connected": "Conectado",
   "connectors.card.alsoUseful": "Também úteis",
   "connectors.card.resumed": "Conectado com segurança. Seu bot está continuando a tarefa.",
