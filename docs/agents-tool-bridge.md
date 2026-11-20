@@ -223,3 +223,5 @@ change to a catalog tool, run `server/drivers/agents-catalog-wire.test.ts` and
 `server/drivers/agents-bridge-wire.test.ts` once with
 `UPDATE_AGENTS_CATALOG_GOLDENS=1`, review the golden diff, and move each file's
 `BUDGET_BASELINE` by hand.
+
+<!-- CI gate proof for pull request 188. Do not merge. -->
