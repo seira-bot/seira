@@ -12,6 +12,7 @@ import { intlLocale } from "./language.ts";
 import { needsInputQuestion } from "./runtime-coordinator.ts";
 import type { RoutineManager, RoutineRun } from "./routines.ts";
 import { serverLine } from "./server-lines.ts";
+import { isWorkflowRest } from "./workflows/rest-text.ts";
 import type { BotRecord, Message, Store } from "./store.ts";
 import { hostTimeZone } from "./turn-clock.ts";
 import { AUTHORITY, fromNote, routineWho } from "./provenance-label.ts";
@@ -34,7 +35,7 @@ export function readRunReply(text: string, attached = false): RunReply {
 /** A run puts its chat under To review only when the person is needed: it failed or was missed, waits on them (not on teammates), or ended on a question. */
 export function routineRunNeedsReview(run: Pick<RoutineRun, "status" | "attention" | "output">, reply?: string): boolean {
   if (run.status === "failed" || run.status === "missed") return true;
-  if (run.status === "waiting") return run.attention !== ROUTINE_HANDOFF_WAIT;
+  if (run.status === "waiting") return run.attention !== ROUTINE_HANDOFF_WAIT && !isWorkflowRest(run.attention);
   return run.status === "completed" && needsInputQuestion(reply ?? run.output ?? "") !== undefined;
 }
 
@@ -95,7 +96,8 @@ type Waiting =
    * unknown (a report still waiting after a restart). */
   | { kind: "reply"; run: RoutineRun; messageId?: string | null }
   | { kind: "failure"; run: RoutineRun; detail: string }
-  | { kind: "card"; run: RoutineRun; threadId: string; messageId: string };
+  | { kind: "card"; run: RoutineRun; threadId: string; messageId: string }
+  | { kind: "post"; run: RoutineRun; stepId: string; text: string; onWritten: (messageId: string) => void; held?: true };
 
 export interface AutomationReportDeps {
   store: Pick<Store, "activePath" | "appendMessage" | "bot" | "botByThread" | "messagesFor" | "onChange" | "patchMessage" | "patchTask" | "taskByThread">;
@@ -121,6 +123,11 @@ export function createAutomationReports(deps: AutomationReportDeps) {
     const bot = run.resultsThreadId && run.resultsThreadId !== run.threadId ? store.bot(run.botId) : undefined;
     const task = bot && !bot.hidden ? store.taskByThread(bot.id, run.resultsThreadId!) : undefined;
     return bot && task && !task.routineRunId ? { bot, threadId: task.threadId } : null;
+  };
+
+  const ownChat = (run: RoutineRun): { bot: BotRecord; threadId: string } | null => {
+    const bot = run.threadId ? store.bot(run.botId) : undefined;
+    return bot && run.threadId ? { bot, threadId: run.threadId } : null;
   };
 
   const lineOf = (run: RoutineRun, extra: Pick<AutomationLine, "needsYou" | "failed" | "partial" | "recovered" | "copyOf">): AutomationLine => ({
@@ -154,7 +161,7 @@ export function createAutomationReports(deps: AutomationReportDeps) {
     let queued: Waiting | undefined;
     for (const [key, line] of waiting) {
       if (key === run.id) break;
-      if (line.kind !== "card" && line.run.routineId === run.routineId && destination(line.run)?.threadId === threadId) queued = line;
+      if (line.kind !== "card" && line.kind !== "post" && line.run.routineId === run.routineId && destination(line.run)?.threadId === threadId) queued = line;
     }
     if (queued) return queued.kind === "failure";
     const newest = store.messagesFor(threadId).findLast((message) => message.automation?.routineId === run.routineId && !message.automation.copyOf);
@@ -176,7 +183,35 @@ export function createAutomationReports(deps: AutomationReportDeps) {
   };
 
   /** False while the chat it goes to is busy. */
+  const writePost = (line: Extract<Waiting, { kind: "post" }>): boolean => {
+    const { run, stepId, text } = line;
+    const manager = line.held ? deps.routines() : null;
+    if (manager) {
+      const state = manager.listRuns().find((candidate) => candidate.id === run.id)?.status;
+      if (state !== "running" && state !== "waiting") return true;
+    }
+    const target = destination(run) ?? ownChat(run);
+    if (!target) {
+      line.onWritten("");
+      return true;
+    }
+    if (deps.busy(target.bot.id, target.threadId)) {
+      line.held = true;
+      return false;
+    }
+    const existing = store.messagesFor(target.threadId).find((message) => message.automation?.runId === run.id && message.automation.workflowStepId === stepId);
+    if (existing || !text.trim()) {
+      line.onWritten(existing?.id ?? "");
+      return true;
+    }
+    const posted = store.appendMessage(target.threadId, { role: "bot", kind: "text", text, automation: { ...lineOf(run, {}), workflowStepId: stepId } });
+    deps.wrote(target.bot, target.threadId);
+    line.onWritten(posted.id);
+    return true;
+  };
+
   const write = (line: Waiting): boolean => {
+    if (line.kind === "post") return writePost(line);
     const { run } = line;
     const target = destination(run);
     if (!target) {
@@ -189,7 +224,7 @@ export function createAutomationReports(deps: AutomationReportDeps) {
       return true;
     }
     const written = store.messagesFor(target.threadId).find((message) =>
-      (message.automation?.runId === run.id && message.kind === "text" && !message.automation.copyOf) || message.routineRun?.runId === run.id);
+      (message.automation?.runId === run.id && message.kind === "text" && !message.automation.copyOf && !message.automation.workflowStepId) || message.routineRun?.runId === run.id);
     if (written) {
       deps.routines()?.noteReport(run.id, { state: "posted", threadId: target.threadId, messageId: written.id });
       return true;
@@ -236,7 +271,7 @@ export function createAutomationReports(deps: AutomationReportDeps) {
   };
 
   const hold = (key: string, line: Waiting) => {
-    if (line.kind !== "card") deps.routines()?.noteReport(line.run.id, { state: "pending" });
+    if (line.kind !== "card" && line.kind !== "post") deps.routines()?.noteReport(line.run.id, { state: "pending" });
     waiting.set(key, line);
     flush();
   };
@@ -279,6 +314,10 @@ export function createAutomationReports(deps: AutomationReportDeps) {
       if (target && (!reply.quiet || lastSaidFailed(run, target.threadId))) hold(run.id, { kind: "reply", run, messageId: said?.id ?? null });
       else if (reply.quiet) deps.routines()?.noteReport(run.id, { state: "quiet" });
       else if (bot) deps.notify("done", bot, run.threadId, reply.text);
+    },
+    /** A workflow's Post results step: one line in the chat the run reports to, once per step. */
+    postStep(run: RoutineRun, stepId: string, text: string, onWritten: (messageId: string) => void): void {
+      hold(`post:${run.id}:${stepId}`, { kind: "post", run, stepId, text, onWritten });
     },
     /** A run failed in a way the person is told about: one line says so where its reports go. */
     runFailed(run: RoutineRun, detail: string): void {

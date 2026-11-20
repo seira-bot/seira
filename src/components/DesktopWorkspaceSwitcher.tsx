@@ -120,11 +120,10 @@ function Switcher({ compact = false, inline = false, pill = false, rail = false,
   const name = current?.profileName ?? (current?.local && !current.localPath ? t("place.local") : current?.name) ?? (cloudHome ? cloudName : t("sidebar.servers"));
   const Icon = current?.local === false || (cloudHome && !current) ? Cloud : Laptop;
   const shown = cloudHome ? withPower(name) : name;
-  const title = current?.origin ? `${shown} · ${current.origin}` : shown;
   const label = t("sidebar.switchServer", { name: shown });
   if (rail) return <div data-workspace-switcher="rail" className="relative">
     <button type="button" aria-label={label} aria-haspopup="menu" aria-expanded={open} data-cloud-home-indicator={cloudHome || undefined}
-      data-tour="server-switcher" title={title} onClick={openMenu} className={cn(SIMPLE_RAIL_BUTTON, "aria-expanded:bg-raised")}
+      data-tour="server-switcher" title={shown} onClick={openMenu} className={cn(SIMPLE_RAIL_BUTTON, "aria-expanded:bg-raised")}
       style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
       {cloudColor(current?.color) ? <CloudTile color={current?.color} size={18} /> : <Icon size={18} aria-hidden="true" />}
     </button>
@@ -133,7 +132,7 @@ function Switcher({ compact = false, inline = false, pill = false, rail = false,
   </div>;
   if (inline) return <div data-workspace-switcher="inline" className="flex min-w-0">
     <button type="button" aria-label={label} aria-haspopup="menu" aria-expanded={open} data-cloud-home-indicator={cloudHome || undefined}
-      data-tour="server-switcher" title={title} onClick={openMenu}
+      data-tour="server-switcher" title={shown} onClick={openMenu}
       className={pill
         ? "flex h-8 min-w-0 max-w-full items-center gap-1 overflow-hidden rounded-full bg-raised/50 pl-2.5 pr-1.5 text-left text-[13px] font-medium text-ink hover:bg-raised aria-expanded:bg-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
         : "flex h-7 min-w-0 max-w-full items-center gap-1.5 overflow-hidden rounded-md px-1.5 text-left text-[13px] font-medium text-ink hover:bg-control focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"}
@@ -147,7 +146,7 @@ function Switcher({ compact = false, inline = false, pill = false, rail = false,
   </div>;
   return <div className={cn("py-1.5", compact ? "px-2" : "px-3")}>
     <button type="button" aria-label={label} aria-haspopup="menu" aria-expanded={open} data-cloud-home-indicator={cloudHome || undefined}
-      data-tour="server-switcher" title={title}
+      data-tour="server-switcher" title={shown}
       onClick={openMenu}
       className={cn("flex w-full items-center gap-2 rounded-lg py-2 text-left text-[13px] font-medium text-ink hover:bg-control focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus", compact ? "justify-center px-1" : "px-2")}
       style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>

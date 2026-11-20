@@ -9,7 +9,7 @@ node --experimental-strip-types scripts/verify-claude-account.ts
 
 The launcher prints its API URL, preview URL, command log, disposable home,
 and `failLogoutMarker`. Run Doctor against that exact API URL, then open the
-preview. In Settings → Engines, the synthetic **Claude review** account is
+preview. In Settings → AI → Providers, the synthetic **Claude review** account is
 connected as `ada@example.test`.
 
 1. Open the account's **⋯** menu → **Sign out**. Cancel once and confirm the

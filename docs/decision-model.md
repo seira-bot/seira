@@ -19,7 +19,7 @@ that decides; picking Jev or OpenRouter does not choose whose key decides: the
 fixed order below does. To use Workers AI or OpenRouter while a
 Jev key is saved, clear the Jev key (an `SEIRA_JEV_API_KEY` in the environment
 replaces the saved one, so remove it too). OpenRouter needs no key here when
-you already saved one under **Settings → API keys**: the decision model uses
+you already saved one under **Settings → AI → Other services**: the decision model uses
 that one.
 
 With **Custom endpoint** picked, only the custom endpoint decides, and nothing
@@ -206,7 +206,7 @@ The log stays on this machine: workspace backups leave it out.
      (`decider.openrouterKey` or `SEIRA_OPENROUTER_DECIDER_KEY`): the optional
      "use a different key" override, which wins so a key saved before
      sharing keeps working;
-  2. the OpenRouter key under **Settings → API keys** (`openrouter.key` or
+  2. the OpenRouter key under **Settings → AI → Other services** (`openrouter.key` or
      `SEIRA_OPENROUTER_API_KEY`);
   3. none: it is off until one is saved.
 
@@ -281,8 +281,8 @@ receive the room's lines.
 Switch off **Use fast decisions and extraction** (**Use OpenRouter for fast
 decisions** when OpenRouter's key decides) to stop every decision. Clearing a
 key hands over to the next key in the order above (another key of yours,
-Cloud's included decisions, or the OpenRouter key under **Settings → API
-keys**); decisions stop only when no key is left. To keep the decision model
+Cloud's included decisions, or the OpenRouter key under **Settings → AI → Other
+services**); decisions stop only when no key is left. To keep the decision model
 on but stop room routing, switch off **Who answers in rooms**. To stop one
 room asking, set its responder to a lead, **Everyone responds** or **Only when
 mentioned**.
@@ -325,7 +325,7 @@ a decisions one). Settings sets it from the model picked, and saving a model
 without it makes it `chat`. `openrouterBaseUrl` points at another
 OpenRouter-compatible server instead of OpenRouter, with the same
 https-or-loopback rule and no Settings UI; only `openrouterKey` is sent there,
-never the key from **Settings → API keys**. A chat model's requests go to
+never the key from **Settings → AI → Other services**. A chat model's requests go to
 `{openrouterBaseUrl}/chat/completions` with `temperature: 0`, a strict JSON
 schema, and `provider.require_parameters`; no `reasoning` option is sent. A
 decisions model's go to `/alpha/decisions` beside it (for the default base,

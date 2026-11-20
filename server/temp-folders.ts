@@ -76,7 +76,8 @@ function escapeRegExp(text: string): string {
 
 /**
  * Removes the folders `<prefix><pid>-<random>` whose owner is not running and that are old enough. A name without an
- * owner (a folder of an older version, or another tool) stays: nothing says that its maker is gone.
+ * owner (a folder of an older version, or another tool) stays: nothing says that its maker is gone. A "seira-" prefix also
+ * matches the same name with "omb-", the name before v0.1.182.
  */
 export function sweepOrphanedTempFolders(prefix: string, options: OrphanSweepOptions = {}): OrphanSweepResult {
   const dir = options.dir ?? tmpdir();
@@ -86,7 +87,8 @@ export function sweepOrphanedTempFolders(prefix: string, options: OrphanSweepOpt
   const isAlive = options.isAlive ?? processIsAlive;
   const remove = options.remove ?? ((path: string) => rmSync(path, { recursive: true, force: true }));
   const result: OrphanSweepResult = { removed: [], failed: [] };
-  const own = new RegExp(`^${escapeRegExp(prefix)}(\\d+)-[A-Za-z0-9]{6}$`);
+  const prefixes = prefix.startsWith("seira-") ? [prefix, `omb-${prefix.slice("seira-".length)}`] : [prefix];
+  const own = new RegExp(`^(?:${prefixes.map(escapeRegExp).join("|")})(\\d+)-[A-Za-z0-9]{6}$`);
   let names: string[];
   try { names = readdirSync(dir); } catch { return result; }
   for (const name of names) {

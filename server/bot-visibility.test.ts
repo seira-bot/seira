@@ -18,6 +18,8 @@ import {
   routineVisible,
   sameAudience,
   webhookVisible,
+  workflowRunVisible,
+  workflowVisible,
   SEES_EVERYTHING,
   storedVisibility,
   viewerSees,
@@ -178,6 +180,33 @@ describe("VisibleSet", () => {
     expect(routineVisible({ botId: "pub", groupId: "room-mixed" }, bob)).toBe(false);
   });
 
+  it("hides a routine whose workflow names a bot the person cannot see", () => {
+    const bob = new VisibleSet(bots, groups, BOB);
+    expect(routineVisible({ botId: "pub", workflowBotIds: ["pub", "corp"] }, bob)).toBe(true);
+    expect(routineVisible({ botId: "pub", workflowBotIds: ["pub", "hr"] }, bob)).toBe(false);
+    expect(routineVisible({ botId: "pub", workflowBotIds: ["pub", 7] }, bob)).toBe(false);
+    expect(routineRunVisible({ botId: "pub", workflowBotIds: ["hr"] }, bob)).toBe(false);
+    expect(routineVisible({ botId: "pub", workflowBotIds: ["hr"] }, new VisibleSet(bots, groups, SEES_EVERYTHING))).toBe(true);
+  });
+
+  it("shows a workflow and its runs only when every bot in them is visible", () => {
+    const bob = new VisibleSet(bots, groups, BOB);
+    const step = (botId: unknown) => ({ id: "s", kind: "bot", botId, instruction: "go" });
+    expect(workflowVisible({ steps: [step("pub"), { id: "p", kind: "post" }, step("corp")] }, bob)).toBe(true);
+    expect(workflowVisible({ steps: [step("pub"), step("hr")] }, bob)).toBe(false);
+    expect(workflowVisible({ steps: [step(undefined)] }, bob)).toBe(false);
+    expect(workflowVisible({ steps: [step("hr")] }, new VisibleSet(bots, groups, SEES_EVERYTHING))).toBe(true);
+    expect(workflowRunVisible({ botIds: ["pub", "corp"], stepRuns: [] }, bob)).toBe(true);
+    expect(workflowRunVisible({ botIds: ["pub", "hr"], stepRuns: [] }, bob)).toBe(false);
+  });
+
+  it("hides a workflow run when any chat in its thread map is hidden", () => {
+    const seen = { everything: false, bot: () => true, hides: (threadId: string) => threadId === "t-private" } as unknown as VisibleSet;
+    const run = (threads: Record<string, string>) => ({ botIds: ["pub"], stepRuns: [{ stepId: "s1" }], threads });
+    expect(workflowRunVisible(run({ s1: "t-open" }), seen)).toBe(true);
+    expect(workflowRunVisible(run({ s1: "t-open", s2: "t-private" }), seen)).toBe(false);
+  });
+
   it("shows a room webhook only to someone who sees both its bot and its room", () => {
     const bob = new VisibleSet(bots, groups, BOB);
     expect(webhookVisible({ botId: "pub" }, bob)).toBe(true);
@@ -215,6 +244,8 @@ describe("live frames for a member", () => {
       { kind: "computer-control", botId: "adm", held: true },
       { kind: "routine", routine: { id: "r", botId: "hr" } },
       { kind: "routine.run", run: { id: "r", botId: "pub", groupId: "room-mixed" } },
+      { kind: "workflow", workflow: { id: "w", steps: [{ id: "s", kind: "bot", botId: "hr", instruction: "go" }] } },
+      { kind: "workflow.run", run: { runId: "r", botIds: ["pub", "hr"], stepRuns: [] } },
       { kind: "webhook", webhook: { id: "hook-hr", botId: "hr" } },
       { kind: "webhook.attempt", attempt: { webhookId: "hook-hr" } },
       { kind: "webhook", webhook: { id: "hook-room-mixed", botId: "pub", groupId: "room-mixed" } },
@@ -237,6 +268,12 @@ describe("live frames for a member", () => {
     expect(frameForMember({ kind: "groups.order", groupIds: ["room-mixed", "room-pub"] }, ctx, seen())).toEqual({ kind: "groups.order", groupIds: ["room-pub"] });
     const config = { kind: "config", membership: {} };
     expect(frameForMember(config, ctx, seen())).toBe(config);
+    const workflow = { kind: "workflow", workflow: { id: "w", steps: [{ id: "s", kind: "bot", botId: "pub", instruction: "go" }] } };
+    expect(frameForMember(workflow, ctx, seen())).toBe(workflow);
+    const workflowRun = { kind: "workflow.run", run: { runId: "r", botIds: ["pub"], stepRuns: [] } };
+    expect(frameForMember(workflowRun, ctx, seen())).toBe(workflowRun);
+    const deleted = { kind: "workflow.deleted", workflowId: "w" };
+    expect(frameForMember(deleted, ctx, seen())).toBe(deleted);
     expect(frameForMember({ kind: "bot", bot: { id: "corp", visibility: { people: ["@example.test"] } } }, ctx, seen()))
       .toEqual({ kind: "bot", bot: { id: "corp" } });
   });

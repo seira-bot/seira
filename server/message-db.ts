@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, openSync, readFileSync, renameSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { join } from "node:path";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 
@@ -37,7 +38,7 @@ let searchWorker: MessageSearchWorker | null = null;
 let closingSearch: Promise<void> = Promise.resolve();
 
 function open(): DatabaseSync {
-  mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+  ensurePrivateDir(DATA_DIR);
   const file = DB_FILE();
   // Transcripts are private: owner-only mode, also repairing an existing file's permissive umask.
   closeSync(openSync(file, "a", 0o600));

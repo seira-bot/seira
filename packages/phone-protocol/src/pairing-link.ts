@@ -1,6 +1,9 @@
-// The one `seira://pair` link builder, read by the Android and iOS
+// The one `<scheme>://pair` link builder, read by the Android and iOS
 // scanners (`PairingInvite.parse`). Every value is written with
 // encodeURIComponent, so a space is `%20`.
+
+import { isPairingCredentialShape } from "./pairing-code.ts";
+import { sentWireName } from "./wire-names.ts";
 
 export type CompanionEndpointKind = "hosted" | "tailnet" | "lan" | "bonjour";
 
@@ -174,7 +177,7 @@ export function phonePairingLink({
   e2e,
 }: PhonePairingLinkOptions): string | null {
   const dial = linkAddress(address, port);
-  if (!dial || !/^seira_pair_[A-Za-z0-9_-]{43}$/.test(token)) return null;
+  if (!dial || !isPairingCredentialShape(token)) return null;
   if (code !== undefined && !/^\d{6}$/.test(code)) return null;
 
   const fields: Array<[string, string]> = [["address", dial], ["token", token]];
@@ -194,5 +197,5 @@ export function phonePairingLink({
   const descriptor = encodePairingE2E(e2e);
   if (descriptor) fields.push(["e2e", descriptor]);
 
-  return `seira://pair?${fields.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join("&")}`;
+  return `${sentWireName("linkScheme")}://pair?${fields.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join("&")}`;
 }

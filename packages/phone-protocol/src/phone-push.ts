@@ -5,6 +5,8 @@
  * and the phone's own tag for the computer. Never message text, a reply, a file path or a secret. The phone fetches the
  * content from its computer when it opens. */
 
+import { sentWireName } from "./wire-names.ts";
+
 export const PHONE_PUSH_WIRE_VERSION = 1 as const;
 
 /** The phone's own route on its computer or Cloud: `PUT` registers or updates, `GET` reads back, `DELETE` removes. Keyed
@@ -112,10 +114,10 @@ export const PUSH_RELAY_ERRORS = {
   unavailable: "push_unavailable",
 } as const;
 
-/** `seira.<threadId>.<seq>`, the identifier the phone gives the notification the live stream would post for the
+/** `<prefix>.<threadId>.<seq>`, the identifier the phone gives the notification the live stream would post for the
  * same frame, so a push and that notification replace each other. Undefined when it would not fit. */
 export function phonePushCollapseId(threadId: string, seq: number): string | undefined {
-  const id = `seira.${threadId}.${seq}`;
+  const id = `${sentWireName("pushCollapsePrefix")}.${threadId}.${seq}`;
   return Number.isSafeInteger(seq) && seq >= 0 && PUSH_COLLAPSE_ID.test(id) ? id : undefined;
 }
 
@@ -156,7 +158,7 @@ export interface ActivityVisual {
 /** `PUT /api/push/activity`, from the phone. */
 export interface PhoneActivityRegistration {
   /** The app's URL scheme, for the chat link a pushed activity opens. */
-  scheme: "seira" | "seira-dev" | "seira-next";
+  scheme: "openmausbot" | "openmausbot-dev" | "openmausbot-next" | "seira" | "seira-dev" | "seira-next";
   /** The phone's own words, with `{name}` where the bot's name goes: "{name} needs you", "{name} is working". */
   headlines: Record<ActivityKind, string>;
   /** iOS: the app's Live Activity push-to-start token (hex). */

@@ -1,6 +1,7 @@
 import type { CompanionAccountState } from "../types/ogb";
 import { t } from "./i18n";
 import { companionPairingRoute, type CompanionEndpoint, type CompanionPairingRouteMode, type CompanionPairingRouteSource } from "./companion-pairing";
+import { isPairingCredentialShape } from "../../shared/pairing-code";
 
 export type PhoneSetupPhase = "intro" | "sign-in" | "verifying" | "qr" | "success";
 
@@ -361,7 +362,7 @@ export function companionPairingOpenFailure(
   if (
     !pairing
     || pairing.token === previousToken
-    || !/^seira_pair_[A-Za-z0-9_-]{43}$/.test(pairing.token)
+    || !isPairingCredentialShape(pairing.token)
     || !/^\d{6}$/.test(pairing.code ?? "")
     || !Number.isFinite(pairing.expiresAt)
     || (pairing.expiresAt ?? 0) <= now

@@ -86,7 +86,7 @@ test("a new language redraws main's menu, both trays, the window title and the b
     refreshApplicationMenu: () => calls.push(["menu", text.t("native.menu.server")]),
     applyUnreadBadge: () => calls.push(["badge", text.t("native.badge.none")]),
     mainWindow: { isDestroyed: () => false, setTitle: (title) => calls.push(["title", title]) },
-    environmentsState: { environments: [office], activeId: "o" }, desktopRemoteAccess: null,
+    environmentsState: { environments: [office], activeId: "o" }, desktopRemoteAccess: { serverName: "Office", endpoint: "https://office.example.test" },
     homeWindow: { cloudOrigin: () => null }, workspaceWindowTitle: environments.workspaceWindowTitle,
   });
   const start = MAIN.indexOf("function mainWindowTitle() {"), end = MAIN.indexOf("async function workspaceMenuAction(", start);
@@ -98,7 +98,7 @@ test("a new language redraws main's menu, both trays, the window title and the b
 
   text.set("pt-br");
   context.applyNativeLanguage();
-  assert.deepEqual(calls, [["menu", "Servidor"], ["title", "Seira — Hospedado: Office (office.example.test)"], ["badge", "Nenhuma conversa não lida"]]);
+  assert.deepEqual(calls, [["menu", "Servidor"], ["title", "Seira — Conectado a: Office (office.example.test)"], ["badge", "Nenhuma conversa não lida"]]);
   assert.deepEqual(said(trays[0]), ["Abrir o Seira", "Sair do Seira"]);
   assert.deepEqual(said(trays[1]), ["My Cloud com acesso a este PC", "Pausar", "Permitir que os Clouds executem comandos neste PC", "Ver atividade"]);
   assert.equal(trays[1].tip, "Seira: My Cloud com acesso a este PC");

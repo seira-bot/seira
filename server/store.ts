@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync, unlinkSync } from "node:fs";
+import { existsSync, rmSync, unlinkSync } from "node:fs"; import { ensurePrivateDir } from "./data-dir.ts";
 import { join } from "node:path"; import { isDeepStrictEqual } from "node:util";
 
 import { writeFileAtomic } from "./atomic.ts"; import { BOTS_FILE, JsonRegistry, persistedPin, type RegistryDurability, type RegistryStore } from "./registry-store.ts"; import { discardNativeLog } from "./drivers/native.ts";
@@ -288,7 +288,7 @@ export class Store {
     this.driverKindOf = driverKindOf;
     this.initialLanguage = initialLanguage;
     this.personName = personName;
-    mkdirSync(DATA_DIR, { recursive: true });
+    ensurePrivateDir(DATA_DIR);
     // An unreadable bots.json must never read as "every member was deleted".
     let botsLoaded = false;
     try {

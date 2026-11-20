@@ -172,7 +172,7 @@ off. It keeps the notes in shape without the bot having to decide to:
   moving. At most 20 lines move in one pass; each file's change
   is a journal row (*filed into topics*) that can be undone.
 - **About me.** A lasting fact about the person, taken from their own words,
-  is added to **Settings → General → About me**, which every bot reads, as a
+  is added to **Settings → You and your bots → About you**, which every bot reads, as a
   dated line `- 2026-09-25 · learned by Scout · …`. **Added by your bots**
   under About me lists each one with **Remove**; a removed fact is never
   added again. On a shared installation, another person's messages never add
@@ -290,7 +290,7 @@ capture, no review), and the server log says once why the helper is not
 used. The one job a turn waits for is the compaction summary, and a helper
 that hangs holds it for at most the summary's usual 20 seconds. Helper calls
 count toward the monthly spend limit and stop at it. Each is its own row in
-**Settings → Usage → History**, for the bot it wrote for, with the helper's
+**Settings → Spending**, for the bot it wrote for, with the helper's
 engine and model: group by **Person** to see them together as *Helper
 model*, which is also what the CSV's `triggered_by` column says.
 

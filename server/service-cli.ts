@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -9,6 +10,7 @@ import {
 } from "./service-unit.ts";
 import { defaultSentinelOut, outRefusal } from "./sentinel/paths.ts";
 import { cliCommand } from "./cli-invocation.ts";
+import { controlPlaneProblem, fleetCredential } from "./tunnel.ts";
 
 export interface ServiceInstallInput {
   action: "install" | "uninstall";
@@ -65,6 +67,13 @@ export function runServiceCommand(input: ServiceInstallInput, io: ServiceIo): nu
     io.error("services are written for Linux (systemd) and macOS (launchd); on Windows, use Task Scheduler to run `seira serve` at startup");
     return 1;
   }
+  if (input.action === "install" && input.tunnel && !input.domain && !fleetCredential(input.env)) {
+    const problem = controlPlaneProblem(input.env);
+    if (problem) {
+      io.error(`--tunnel: ${problem}`);
+      return 1;
+    }
+  }
   if (input.action === "uninstall") {
     io.log(`to stop and remove the service:`);
     for (const line of plan.deactivate) io.log(`  ${line}`);
@@ -88,7 +97,7 @@ export function runServiceCommand(input: ServiceInstallInput, io: ServiceIo): nu
     ...(script !== input.script ? { cliPrefix: "npx @seira-bot/seira" } : {}),
   };
   const rendered = platform === "darwin" ? launchdPlist(spec) : systemdUnit(spec);
-  mkdirSync(input.dataDir, { recursive: true, mode: 0o700 });
+  ensurePrivateDir(input.dataDir);
   writeFileSync(plan.file, rendered, { mode: 0o644 });
   io.log(`wrote ${plan.file}`);
   io.log("");

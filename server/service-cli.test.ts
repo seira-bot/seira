@@ -51,7 +51,7 @@ describe("seira service", () => {
   });
 
   it("writes a launchd agent on macOS and explains uninstall on both", () => {
-    expect(runServiceCommand({ action: "install", dataDir: dir, port: 8799, tunnel: true, script: "/opt/homebrew/lib/node_modules/seira/cli.js", node: "/opt/homebrew/bin/node", platform: "darwin", home: "/Users/seira" }, io)).toBe(0);
+    expect(runServiceCommand({ action: "install", dataDir: dir, port: 8799, tunnel: true, script: "/opt/homebrew/lib/node_modules/seira/cli.js", node: "/opt/homebrew/bin/node", platform: "darwin", home: "/Users/seira", env: { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test" } }, io)).toBe(0);
     expect(readFileSync(join(dir, "com.seira.serve.plist"), "utf8")).toContain("<string>--tunnel</string>");
     expect(out.join("\n")).toContain("launchctl bootstrap");
     out.length = 0;

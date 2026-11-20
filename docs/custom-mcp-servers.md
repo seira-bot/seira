@@ -121,7 +121,7 @@ conversations and leads. With **Full access** it can also add and delete
 knowledge and change the chatbot's instructions, widget, forms and webhook
 tools, so choose which bots get it under **Bot access**; **Read only** lists
 and runs only BubblaV's read-only tools. BubblaV saves the sign-in as an API
-key named **MCP Client** under **Settings → API Keys**, where revoking it ends
+key named **MCP Client** on BubblaV's **API Keys** page, where revoking it ends
 the connection. The key lasts one year, then the card asks you to sign in
 again. See [BubblaV's Seira guide](https://docs.bubblav.com/user-guide/integrations/seira).
 
@@ -491,7 +491,7 @@ notice with the exact command. `claude update` clears it.
 
 ## When your organization manages MCP servers
 
-If this computer is connected to an organization (Settings → Organization)
+If this computer is connected to an organization (Settings → Your account → Organization)
 and its Admin turns off custom MCP servers, only servers whose name or address
 is on the organization's approved list reach bots. Other configured servers
 stay in your list, marked **Managed by** your organization, but bots do not
