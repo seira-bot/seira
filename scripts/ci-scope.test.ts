@@ -331,6 +331,7 @@ describe("CI outputs", () => {
       "server/outside-lineage.e2e.test.ts",
       "server/same-name-mentions.e2e.test.ts",
       "server/skill-switch.test.ts",
+      "server/your-computer-consent.test.ts",
     ]);
     expect(out.vitest_matrix.include).toEqual([1, 2].map((shard) => ({
       os: "ubuntu-latest", part: `locale tests ${shard}/2`, shard, shards: 2,
