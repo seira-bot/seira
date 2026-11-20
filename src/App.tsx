@@ -43,9 +43,10 @@ import { useTeamChats } from "@/state/team-chats";
 import { needsYouVersion, useTeamPeopleLoader } from "@/state/team-people";
 import { useTeamPresence } from "@/state/team-presence";
 import { inboxVersion, useInboxLoader, useInboxPanel, useInboxReady } from "@/state/inbox";
+import { useWorkflowsUnavailable } from "@/state/workflows";
 import { InboxPanel } from "@/components/inbox/InboxPanel";
 import { PlacesRail } from "@/components/PlacesRail";
-import { NewLocalFromMenu } from "@/components/PlaceAddSheet";
+import { ConnectServerFromMenu, NewLocalFromMenu } from "@/components/PlaceAddSheet";
 import { CloudHowTo } from "@/components/CloudHowTo";
 import { DesktopCapabilitiesProvider, useCaptionChrome, useDesktopCapabilities, WindowDragStrip, windowFramed } from "@/components/DesktopCapabilities";
 import { WindowCaptionButtons } from "@/components/WindowCaptionButtons";
@@ -168,7 +169,8 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
   const roomPanelOpen = useRoomPanelShown({ group, state, simple: !advanced && !remoteClient, advanced: advanced && !remoteClient });
   const sidePanelOpen = (Boolean(bot) && (state.settingsOpen || state.computerOpen || state.inspectorOpen || state.activityOpen)) || Boolean(state.forkPanel) || roomPanelOpen || (notificationFeed && state.notificationsOpen) || inboxShown;
   const collapseSidebar = sidePanelOpen && !sidebarAndPanelFit;
-  const calendarFocus = state.activeView === "routines" && state.routinesFocus.view === "calendar";
+  const workflowsUnavailable = useWorkflowsUnavailable();
+  const calendarFocus = state.activeView === "routines" && (state.routinesFocus.view === "calendar" || (state.routinesFocus.view === "workflows" && !workflowsUnavailable));
   const notificationTray = notificationFeed && !calendarFocus;
 
   const noEngines =
@@ -364,6 +366,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
       )}
       {!calendarFocus && <PlacesRail />}
       <NewLocalFromMenu />
+      <ConnectServerFromMenu />
       {/* A framed window shows the app, its sidebar and the chat or page, in a rounded card under the top bar and beside
           the window's rail: its top corners and its bottom-left corner are round, and it runs to the window's right and
           bottom edges. */}

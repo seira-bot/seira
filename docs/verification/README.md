@@ -67,6 +67,7 @@ Use only mapped, tested commands:
 - [Saved steps: repeating a computer task without AI](saved-steps.md)
 - [Native dictation retention and send-to-stop](dictation.md)
 - [Proactive routines and the brief](proactive-routines.md)
+- [Workflows on a canvas](workflows.md)
 - [Waits: tell me when, with no AI while waiting](waits.md)
 - [A new Cloud's first hour](first-hour.md)
 - [Chat widgets](widgets.md)

@@ -2,6 +2,7 @@ import { APP_EXTENSION_KEY } from "../shared/app.ts";
 import { augmentedPath } from "./env-path.ts";
 import {
   PROVIDER_CREDENTIAL_ENV,
+  stripEnvNames,
   stripWorkspaceCredentialEnv,
 } from "./config.ts";
 import { createLineSplitter } from "./mcp-bridge.ts";
@@ -62,7 +63,7 @@ export const REMOTE_PROBE_TIMEOUT_MS = REMOTE_MCP_STARTUP_MS;
 export function probeEnvironment(server: Pick<StoredStdioMcpServer, "env">, source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...source, PATH: augmentedPath() };
   stripWorkspaceCredentialEnv(env);
-  for (const key of PROVIDER_CREDENTIAL_ENV) delete env[key];
+  stripEnvNames(env, PROVIDER_CREDENTIAL_ENV);
   return mcpCommandEnvironment(env, server.env);
 }
 

@@ -1,5 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { applyStartupPreferences, parseArgs, runAccess, runLogin, runOnboardingCommand, serverEntry, type CliOptions, verifyPhoneEndpoint } from "./cli.ts";
 import { browserSignInLines, formatSessions, pairingBlock, qrToString, untilText } from "./cli-pairing.ts";
+import { runServiceCommand } from "./service-cli.ts";
 import { reachableAddresses } from "./lan-address.ts";
 import { readAdminActivityRange } from "./admin-activity.ts";
 import { SetupCancelled } from "./cli-prompts.ts";
@@ -105,7 +106,7 @@ describe("seira command line", () => {
       expect(out).toContain("＋ → Connect to a server, paste the link");
       expect(out).toContain(qrToString(link));
       expect(out).toContain("For a phone (chat and approvals only)   npx @seira-bot/seira pair --phone");
-      expect(out).not.toMatch(/seira_pair_|phone app:|this computer:/);
+      expect(out).not.toMatch(/(?:omb|seira)_pair_|phone app:|this computer:/);
       expect(pairingBlock({ ...base, chatOnly: true })).toContain("· chat and approvals");
     });
 
@@ -443,6 +444,65 @@ describe("phone endpoint identity", () => {
   });
 });
 
+describe("login without an account service", () => {
+  const login = async (args: string[]) => {
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-login-none-"));
+    const lines: string[] = [];
+    const io = { log: (line: string) => lines.push(line), error: (line: string) => lines.push(line), ask: async () => "nobody@example.test" };
+    const options = parseArgs(["login", ...args, "--data-dir", dataDir], {});
+    if ("error" in options) throw new Error(options.error);
+    try {
+      return { code: await runLogin(options, io), text: lines.join("\n") };
+    } finally {
+      await removeTempDir(dataDir);
+    }
+  };
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  for (const args of [[], ["--relay"]]) {
+    it(`seira login ${args.join(" ")} says that no account service is set up, and names the ways in that work`, async () => {
+      vi.stubEnv("SEIRA_CONTROL_PLANE_URL", undefined);
+      const { code, text } = await login(args);
+      expect(code).toBe(1);
+      for (const word of ["SEIRA_CONTROL_PLANE_URL", "--domain", "--tailscale", "--public-url"]) expect(text).toContain(word);
+      expect(text).not.toContain("is set but");
+    });
+  }
+
+  it("treats an empty SEIRA_CONTROL_PLANE_URL, as an .env line with no value passes it, as not set", async () => {
+    vi.stubEnv("SEIRA_CONTROL_PLANE_URL", "");
+    const { code, text } = await login([]);
+    expect(code).toBe(1);
+    expect(text).toContain("no account service");
+    expect(text).not.toContain("is set but");
+  });
+
+  it("keeps the https message when the variable is set to something else", async () => {
+    vi.stubEnv("SEIRA_CONTROL_PLANE_URL", "http://x");
+    const { code, text } = await login([]);
+    expect(code).toBe(1);
+    expect(text).toContain("SEIRA_CONTROL_PLANE_URL is set but is not an https address");
+  });
+
+  it("service install --tunnel refuses before it writes a unit, unless a control plane or the fleet credential exists", () => {
+    const dir = mkdtempSync(join(tmpdir(), "seira-service-tunnel-"));
+    const errors: string[] = [];
+    const io = { log: () => undefined, error: (line: string) => errors.push(line) };
+    const input = { action: "install" as const, dataDir: dir, port: 8799, tunnel: true, script: "/x/cli.js", node: "/x/node", platform: "linux" as const, home: dir, user: "seira" };
+    try {
+      expect(runServiceCommand({ ...input, env: {} }, io)).toBe(1);
+      expect(errors.join("\n")).toContain("--tunnel: this Seira build has no account service");
+      expect(existsSync(join(dir, "seira.service"))).toBe(false);
+      expect(runServiceCommand({ ...input, env: { SEIRA_CONTROL_PLANE_URL: "http://x" } }, io)).toBe(1);
+      expect(errors.at(-1)).toContain("is set but is not an https address");
+      expect(runServiceCommand({ ...input, env: { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test" } }, io)).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 const exited = (child: ChildProcess) => (child.exitCode !== null ? Promise.resolve(child.exitCode) : new Promise<number | null>((done) => child.once("exit", (code) => done(code))));
 
 describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
@@ -461,7 +521,10 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
     child.stderr?.on("data", (chunk) => (err += String(chunk)));
     try {
       expect(await exited(child)).toBe(1);
-      expect(err).toContain("run seira login first");
+      expect(err).toContain("--tunnel: this Seira build has no account service");
+      expect(err).toContain("SEIRA_CONTROL_PLANE_URL");
+      expect(err).toContain("--public-url");
+      expect(err).not.toContain("is set but");
       let dead = false;
       try {
         await fetch(`http://127.0.0.1:${port}/api/health`);
@@ -473,6 +536,66 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
       await removeTempDir(home);
     }
   }, 30_000);
+
+  it("keeps serving without a tunnel when the control plane is full (FR-221)", async () => {
+    const home = mkdtempSync(join(tmpdir(), "seira-cli-tunnel-full-"));
+    const dataDir = join(home, "data");
+    mkdirSync(dataDir, { recursive: true });
+    const stub = await startControlPlaneStub();
+    const fake = join(home, "cloudflared");
+    writeFileSync(fake, "#!/bin/sh\nexec sleep 300\n", { mode: 0o755 });
+    // Signed in, but the first address request already meets a full zone.
+    stub.endpointAnswers.push({ status: 503, error: "endpoint_capacity", retryAfterSeconds: 600 });
+    vi.stubEnv("SEIRA_CONTROL_PLANE_URL", stub.url);
+    const quiet = { log: () => undefined, error: () => undefined, ask: async () => stub.otp };
+    expect(await runLogin({ command: "login", port: 1, dataDir, tailscale: false, tunnel: false, client: false, pair: true, json: false, email: "cli@example.test" }, quiet)).toBe(1);
+    vi.unstubAllEnvs();
+    stub.endpointAnswers.push({ status: 503, error: "endpoint_capacity", retryAfterSeconds: 600 });
+    const port = await freePortBlock([0, 1, 10_000]);
+    const originPort = port + 10_000;
+    const child = cli(["serve", "--tunnel", "--no-pair", "--port", String(port), "--data-dir", dataDir], {
+      HOME: home,
+      USERPROFILE: home,
+      SEIRA_WEBHOOK_PORT: String(port + 1),
+      SEIRA_BROWSER_CONNECTION: join(home, "browser-connection.json"),
+      SEIRA_CONTROL_PLANE_URL: stub.url,
+      SEIRA_CLOUDFLARED_PATH: fake,
+      SEIRA_TUNNEL_ORIGIN_PORT: String(originPort),
+    });
+    let out = "";
+    child.stdout?.on("data", (chunk) => (out += String(chunk)));
+    child.stderr?.on("data", (chunk) => (out += String(chunk)));
+    try {
+      let status = 0;
+      const deadline = Date.now() + 60_000;
+      while (Date.now() < deadline && status !== 200 && child.exitCode === null) {
+        try {
+          status = (await fetch(`http://127.0.0.1:${port}/api/health`)).status;
+        } catch {
+          status = 0;
+        }
+        if (status !== 200) await new Promise((r) => setTimeout(r, 250));
+      }
+      expect(status, out).toBe(200);
+      expect(out).toContain("tunnel: Secure HTTPS links are temporarily full. Try again in 10 minutes");
+      expect(out).toMatch(/no public address this time, so this server runs without one/);
+      expect(stub.endpointAnswers).toEqual([]);
+      await new Promise((r) => setTimeout(r, 1_000));
+      expect(child.exitCode).toBeNull();
+      let gatewayDead = false;
+      try {
+        await fetch(`http://127.0.0.1:${originPort}/api/health`);
+      } catch {
+        gatewayDead = true;
+      }
+      expect(gatewayDead).toBe(true);
+    } finally {
+      child.kill("SIGTERM");
+      await exited(child);
+      await stub.close();
+      await removeTempDir(home);
+    }
+  }, 120_000);
 
   it("a fleet credential in the environment serves --tunnel with no account file and no code", async () => {
     const home = mkdtempSync(join(tmpdir(), "seira-cli-fleet-"));
@@ -586,7 +709,7 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
       const stranger = await fetch(`${gateway}/api/bots`);
       expect(stranger.status).toBe(403);
       expect(((await stranger.json()) as { error: string }).error).toMatch(/through a proxy/);
-      expect(await (await fetch(`${gateway}/api/health`)).json()).toEqual({ app: "seira" });
+      expect(await (await fetch(`${gateway}/api/health`)).json()).toEqual({ app: "openmausbot" });
       expect(typeof ((await (await fetch(`http://127.0.0.1:${port}/api/health`)).json()) as { pid: unknown }).pid).toBe("number");
       const match = /Pairing code {3}([A-Z2-9-]+)/.exec(pairOut);
       expect(match).toBeTruthy();

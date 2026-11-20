@@ -6,6 +6,7 @@ import { hostname, networkInterfaces } from "node:os";
 
 import { lanInterfaces } from "./listener.ts";
 import { directRoutes, isPrivateLanAddress, isTailnetAddress, tailnetInterfaceAddresses } from "./direct-routes.ts";
+import { sentWireName } from "./wire-names.ts";
 
 const MDNS_ADDRESS = "224.0.0.251";
 const MDNS_PORT = 5353;
@@ -241,10 +242,10 @@ export function encodeResponse(
 export interface ServiceInfo {
   /** what a picker on the phone shows */
   name: string;
-  /** e.g. "_seira._tcp" */
+  /** e.g. "_openmausbot._tcp" */
   type: string;
   port: number;
-  /** the name our A records claim, e.g. "seira-1a2b3c4d.local" */
+  /** the name our A records claim, e.g. "openmausbot-1a2b3c4d.local" */
   host: string;
   addresses: string[];
   /** DNS-SD key=value pairs */
@@ -355,7 +356,7 @@ export function clampBytes(text: string, limit: number): string {
 /** Not `<hostname>.local`: on macOS mDNSResponder owns and defends that name. */
 export function defaultHostName(machine = hostname()): string {
   const digest = createHash("sha256").update(machine).digest("hex").slice(0, 8);
-  return `seira-${digest}.local`;
+  return `${sentWireName("mdnsHostPrefix")}-${digest}.local`;
 }
 
 /** macOS point-to-point tunnels: utun (every VPN, Tailscale, tun2socks),

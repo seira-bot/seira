@@ -19,6 +19,7 @@ import { pairedDestination } from "../lib/phone-pairing";
 import { t } from "../lib/i18n";
 import { formatPairingCode, PAIRING_INPUT_PROBLEM_KEY, readPairingInput } from "../../shared/pairing-code";
 import { isPrivateHost } from "../../shared/private-host";
+import { sentWireName } from "../../shared/phone-wire-names";
 
 const input = "mt-1 w-full rounded-md border border-hairline/40 bg-inset px-3 py-2 text-[14px] text-ink outline-none focus:border-accent-border";
 const button = "mt-5 w-full rounded-md bg-accent px-4 py-2 text-[14px] font-medium text-accent-ink disabled:opacity-50";
@@ -50,7 +51,7 @@ export function codeReady(code: string): boolean {
 export function openInAppLink(origin: string, code: string): string {
   const read = readPairingInput(code);
   const filled = read.kind === "code" ? `&code=${encodeURIComponent(formatPairingCode(read.code))}` : "";
-  return `seira://pair?address=${encodeURIComponent(origin)}${filled}`;
+  return `${sentWireName("linkScheme")}://pair?address=${encodeURIComponent(origin)}${filled}`;
 }
 
 /** Plain http to the open internet: the session cookie and every chat would cross it readable. */

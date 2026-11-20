@@ -300,7 +300,7 @@ describe("routine editor", () => {
     const html = editor(cronRoutine);
     expect(html).toContain('aria-expanded="true"');
     for (const text of hidden.filter((text) => text !== "Routine type")) expect(html, text).toContain(text);
-    expect(html).not.toMatch(/aria-pressed="true"/);
+    expect(html.replace(/<button[^>]*data-what-it-does[^>]*>/g, "")).not.toMatch(/aria-pressed="true"/);
   });
 
   it("shows a saved startup choice when the simple editor opens", () => {
@@ -360,6 +360,52 @@ describe("routine editor", () => {
     click(buttons(tree).get("Save"));
     const [, off] = fixture.api.mock.calls.at(-1) as unknown as [string, { body: string }];
     expect(JSON.parse(off.body)).toMatchObject({ continuity: false });
+  });
+
+  describe("that runs a workflow", () => {
+    const props = (extra: Record<string, unknown> = {}) => ({
+      seed: { kind: "routine" as const, at: Date.now() + 3_600_000, durationMinutes: 30, botIds: [bot.id], name: "Round", ...extra },
+      bots: [bot], onClose: vi.fn(), onSavedCall: vi.fn(),
+    });
+
+    it("sends the chosen workflow with the save request", () => {
+      fixture.values = [];
+      const tree = capture(() => EventEditor(props({ workflowId: "wf1" })));
+      const save = buttons(tree).get("Save")!;
+      expect(save.disabled).toBeFalsy();
+      click(save);
+      const [path, init] = fixture.api.mock.calls.at(-1) as unknown as [string, { method: string; body: string }];
+      expect(path).toBe("/api/routines");
+      expect(JSON.parse(init.body)).toMatchObject({ workflowId: "wf1" });
+    });
+
+    it("blocks Save when Workflow is chosen and no workflow is picked, and again once Instructions is empty", () => {
+      fixture.values = [];
+      const editorProps = props();
+      let tree = capture(() => EventEditor(editorProps));
+      const choose = (choice: unknown) => (tree.find(named("WhatItDoes"))!.props.workflow as { onChange: (next: unknown) => void }).onChange(choice);
+      choose({ mode: "workflow", id: null });
+      tree = capture(() => EventEditor(editorProps));
+      expect(buttons(tree).get("Save")!.disabled).toBe(true);
+      choose({ mode: "workflow", id: "wf1" });
+      tree = capture(() => EventEditor(editorProps));
+      expect(buttons(tree).get("Save")!.disabled).toBeFalsy();
+      choose({ mode: "instructions" });
+      tree = capture(() => EventEditor(editorProps));
+      expect(buttons(tree).get("Save")!.disabled).toBe(true);
+    });
+
+    it("locks the bot picker while a workflow is chosen", () => {
+      fixture.values = [];
+      const tree = capture(() => EventEditor(props({ workflowId: "wf1" })));
+      const captions = (found: Node[]) => found.map((node) => textOf(node.props.children as ReactNode));
+      expect(tree.find(named("BotPicker"))!.props.locked).toBe(true);
+      expect(captions(tree)).toContain("The workflow's first bot starts each run.");
+      fixture.values = [];
+      const free = capture(() => EventEditor(props()));
+      expect(free.find(named("BotPicker"))!.props.locked).toBe(false);
+      expect(captions(free)).toContain("This bot owns each scheduled run.");
+    });
   });
 
   it("turns a one-time routine that already happened back on when it is saved with a new time, and leaves any other's switch alone", async () => {

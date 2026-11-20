@@ -147,7 +147,7 @@ export function answerCustomerRunRequest(request: CustomerRunRequest, facts: Ser
 // fields: that it answers as Seira and whether its bot box is on or off, its version, and its seat count. Every other field of those answers (the
 // server's name among them) is dropped here and never kept.
 
-export const HOME_READS = ["/api/health", "/.well-known/seira/environment", "/api/seats"] as const;
+export const HOME_READS = ["/api/health", "/.well-known/openmausbot/environment", "/api/seats"] as const;
 const RECORD_END = "\u001e";
 /** Run inside the home's container: curl comes with the image, and the home listens on its own loopback only. */
 export const HOME_READS_COMMAND = [
@@ -175,7 +175,7 @@ const parsed = (text: string | undefined): Record<string, unknown> => {
 export function parseHomeReads(output: string): HomeFacts {
   const [health, environment, seats] = output.split(RECORD_END);
   const said = parsed(health);
-  return { answers: said.app === "seira", version: versionOrNull(parsed(environment).version), seats: seatsOrNull(parsed(seats).seats), box: boxOnOff(said.box) };
+  return { answers: said.app === "openmausbot" || said.app === "seira", version: versionOrNull(parsed(environment).version), seats: seatsOrNull(parsed(seats).seats), box: boxOnOff(said.box) };
 }
 
 // 4. WHAT LEAVES THE SERVER. The heartbeat (every 30 seconds) and each job's reply, rebuilt here field by field. A

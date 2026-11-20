@@ -10,7 +10,7 @@ import { qrToString } from "./cli-pairing.ts";
 const mocks = vi.hoisted(() => ({
   // the fleet path is off in these tests: no credential in the environment
   fleetCredential: vi.fn(() => null),
-  fleetAccess: vi.fn(),
+  fleetAccess: vi.fn(), controlPlaneProblem: vi.fn(() => null),
   FLEET_CREDENTIAL_ENV: "SEIRA_INSTALLATION_CREDENTIAL",
   denyLogOpen: false,
   spawn: vi.fn(),
@@ -39,6 +39,9 @@ vi.mock("./tailscale.ts", () => ({
   clearLeftoverTailscaleServe: mocks.clearLeftoverTailscaleServe, explainTailscaleFailure: (failure: string) => failure,
 }));
 vi.mock("./tunnel.ts", () => ({ ...mocks, describeTunnelState: () => "Fixture tunnel" }));
+vi.mock("./lan-address.ts", async (original) => ({
+  ...await original<typeof import("./lan-address.ts")>(), reachableAddresses: () => ({ lan: ["192.168.50.20"], shared: [], tailscale: [] }),
+}));
 vi.mock("./browser-engine.ts", () => ({
   browserEngineStatus: () => ({ kind: "ready" }), describeBrowserEngine: () => "Fixture browser ready",
 }));
@@ -212,6 +215,26 @@ describe("CLI startup lifecycle", () => {
     expect(running.stop).toHaveBeenCalledOnce();
   });
 
+  it("serves on the LAN without a tunnel when a signed-in machine gets no address (FR-221)", async () => {
+    const reason = "Secure HTTPS links are temporarily full. Try again in 10 minutes, or pair on this Wi-Fi or with Tailscale.";
+    const service = { retry: vi.fn(async () => ({ status: "error", message: reason })), restore: vi.fn(), dispose: vi.fn() };
+    mocks.createTunnelAccount.mockReturnValue({ credentials: { status: "available", read: () => ({}) }, service });
+    mocks.tunnelAccess.mockReturnValue(null);
+    let started: NodeJS.ProcessEnv = {};
+    mocks.spawn.mockImplementation((_command: string, _args: string[], spawned: { env: NodeJS.ProcessEnv }) => { started = spawned.env; throw new Error("Fixture spawn failure"); });
+    const log = vi.fn();
+    await expect(runServe({ ...options, tunnel: true, lan: true }, log)).rejects.toThrow("Fixture spawn failure");
+    expect(started.SEIRA_LAN).toBe("1");
+    expect(started.SEIRA_SERVES_TUNNEL).toBeUndefined();
+    expect(started.SEIRA_TUNNEL_SOCKET).toBeUndefined();
+    expect(mocks.ensureCloudflared).not.toHaveBeenCalled();
+    expect(mocks.startTunnel).not.toHaveBeenCalled();
+    expect(service.dispose).toHaveBeenCalled();
+    const lines = log.mock.calls.map(([line]) => String(line)).join("\n");
+    expect(lines).toContain(`tunnel: ${reason}`);
+    expect(lines).toMatch(/no public address this time, so this server runs without one/);
+  });
+
   it("reopens a matching desktop workspace even when its server PID differs from the lease owner", async () => {
     writeFileSync(join(dataDir, "environment-id"), workspaceId);
     writeFileSync(join(dataDir, "seira-server.lease"), JSON.stringify({
@@ -247,7 +270,7 @@ describe("CLI startup lifecycle", () => {
       if (address.endsWith("/api/health")) {
         return ++healthRequests === 1 ? Response.json({}, { status: 503 }) : Response.json({ app: "seira", pid: childPid });
       }
-      if (address.endsWith("/.well-known/seira/environment")) return Response.json({ environmentId: workspaceId, label: "fixture box" });
+      if (address.endsWith("/.well-known/openmausbot/environment")) return Response.json({ environmentId: workspaceId, label: "fixture box" });
       expect(address).toBe(`http://127.0.0.1:${options.port}/api/auth/pairing`);
       expect(init?.method).toBe("POST");
       pairings.push(JSON.parse(String(init?.body)));
@@ -283,7 +306,7 @@ describe("CLI startup lifecycle", () => {
     expect(await runServe({ ...options, pair: true, phone: "android", publicUrl: "https://fixture.example.test" }, log)).toBe(0);
     expect(log).toHaveBeenCalledWith(expect.stringContaining("no phone pairing code was created"));
     expect(requests.some((url) => url.includes("/api/auth/pairing"))).toBe(false);
-    expect(requests).toContain("https://fixture.example.test/.well-known/seira/environment");
+    expect(requests).toContain("https://fixture.example.test/.well-known/openmausbot/environment");
   });
 
   it("offers Android client pairing only after verifying the same workspace, without claiming it is connected", async () => {
@@ -291,9 +314,9 @@ describe("CLI startup lifecycle", () => {
     const code = "ABCD-EFGH-JKLM";
     const expiresAt = Date.now() + 300_000;
     const pairingUrl = `${origin}/pair#code=${code}`;
-    // A real server mints both encodings of one window; Android can only scan the seira:// one.
-    const credential = `seira_pair_${"a".repeat(43)}`;
-    const inviteUrl = `seira://pair?address=${encodeURIComponent(origin)}&token=${credential}&name=fixture`;
+    // A real server mints both encodings of one window; Android can only scan the openmausbot:// one.
+    const credential = `omb_pair_${"a".repeat(43)}`;
+    const inviteUrl = `openmausbot://pair?address=${encodeURIComponent(origin)}&token=${credential}&name=fixture`;
     let healthRequests = 0;
     const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const address = String(url);
@@ -308,7 +331,7 @@ describe("CLI startup lifecycle", () => {
         // the public address with --public-url and must build both from that.
         return Response.json({ code, url: null, expiresAt, credential, serverName: "fixture", hint: "set SEIRA_PUBLIC_URL" });
       }
-      expect(address).toMatch(/\/\.well-known\/seira\/environment$/);
+      expect(address).toMatch(/\/\.well-known\/openmausbot\/environment$/);
       expect(init?.method).not.toBe("POST");
       expect(init?.body).toBeUndefined();
       return Response.json({ environmentId: workspaceId });
@@ -319,9 +342,9 @@ describe("CLI startup lifecycle", () => {
     const requests = fetcher.mock.calls.map(([url]) => String(url));
     const pairingRequest = `http://127.0.0.1:${options.port}/api/auth/pairing`;
     expect(requests.filter((url) => url === pairingRequest)).toHaveLength(1);
-    expect(requests).toContain(`http://127.0.0.1:${options.port}/.well-known/seira/environment`);
-    expect(requests).toContain(`${origin}/.well-known/seira/environment`);
-    expect(requests.indexOf(`${origin}/.well-known/seira/environment`)).toBeLessThan(requests.indexOf(pairingRequest));
+    expect(requests).toContain(`http://127.0.0.1:${options.port}/.well-known/openmausbot/environment`);
+    expect(requests).toContain(`${origin}/.well-known/openmausbot/environment`);
+    expect(requests.indexOf(`${origin}/.well-known/openmausbot/environment`)).toBeLessThan(requests.indexOf(pairingRequest));
     const output = log.mock.calls.map(([line]) => line).join("\n");
     expect(output).toContain(`Pairing code   ${code}   works once, until`);
     expect(output).toContain("· chat and approvals");

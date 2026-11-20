@@ -18,3 +18,7 @@ it("cannot tell for a room goal's run or one with no conversation", () => {
   expect(live({}, { target: "room-goal" as const, threadId: "thread-1" })).toBeNull();
   expect(runTurnLive({ target: "bot", threadId: undefined }, () => IDLE)).toBeNull();
 });
+
+it("cannot tell for a workflow run: its runner owns every turn", () => {
+  expect(runTurnLive({ target: "bot", threadId: "thread-1", workflowId: "wf-1" }, () => ({ ...IDLE, busy: true }))).toBeNull();
+});

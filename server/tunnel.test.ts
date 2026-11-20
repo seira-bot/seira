@@ -12,6 +12,7 @@ import { startControlPlaneStub, type ControlPlaneStub } from "./testing/control-
 import { freePortBlock } from "./testing/ports.ts";
 import {
   cleanupTunnelOrigin,
+  controlPlaneProblem,
   createTunnelAccount,
   createTunnelOrigin,
   describeTunnelAccount,
@@ -404,10 +405,27 @@ describe("the control plane a server uses by default", () => {
     try {
       expect(createTunnelAccount({ dataDir: dir, version: "test", env: {}, liveServices: live }).controlPlane).toBe("https://accounts.seira.bot");
       expect(createTunnelAccount({ dataDir: dir, version: "test", env: { SEIRA_CONTROL_PLANE_URL: "https://cp.example.test" }, liveServices: live }).controlPlane).toBe("https://cp.example.test");
-      expect(createTunnelAccount({ dataDir: dir, version: "test", env: {} }).controlPlane).toBe("");
+      expect(createTunnelAccount({ dataDir: dir, version: "test", env: {}, liveServices: ["site"] }).controlPlane).toBe("");
     } finally {
       void removeTempDir(dir);
     }
+  });
+});
+
+describe("which commands get a control plane", () => {
+  const live = ["site", "cloud", "apps", "updates", "serverTunnel"];
+
+  it("gives login and --tunnel Seira's own once it is live, and keeps Seira Relay on SEIRA_CONTROL_PLANE_URL", () => {
+    expect(controlPlaneProblem({}, "tunnel", live)).toBeNull();
+    expect(controlPlaneProblem({}, "relay", live)).toContain("no account service for Seira Relay");
+    expect(controlPlaneProblem({ SEIRA_CONTROL_PLANE_URL: "https://cp.example.test" }, "relay", live)).toBeNull();
+  });
+
+  it("names the missing service and the ways in that work while nothing is set", () => {
+    const tunnel = controlPlaneProblem({}, "tunnel", ["site"]);
+    expect(tunnel).toContain("no account service for tunnel addresses");
+    for (const word of ["SEIRA_CONTROL_PLANE_URL", "--domain", "--tailscale", "--public-url"]) expect(tunnel).toContain(word);
+    expect(controlPlaneProblem({ SEIRA_CONTROL_PLANE_URL: "http://x" }, "tunnel", live)).toBe("SEIRA_CONTROL_PLANE_URL is set but is not an https address");
   });
 });
 

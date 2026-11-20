@@ -7,10 +7,11 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { TEST_HOME_PREFIX } from "../data-dir.ts";
 import { removeTempDir } from "./cleanup.ts";
 
+export { TEST_HOME_PREFIX };
 /** Only the suite makes folders with these prefixes: the sweep in stale-test-dirs.ts deletes these and nothing else. */
-export const TEST_HOME_PREFIX = "seira-test-home-";
 export const TEST_TMP_PREFIX = "seira-test-tmp-";
 
 /** Set by global-setup.ts to an id for the run. Not a SEIRA_ name: the tests that scrub the ambient SEIRA_ variables would delete it. */

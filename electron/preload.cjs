@@ -212,6 +212,11 @@ const bridge = {
       ipcRenderer.on("workspaces:new-local", handler);
       return () => ipcRenderer.removeListener("workspaces:new-local", handler);
     },
+    onConnectServer: (cb) => {
+      const handler = () => cb();
+      ipcRenderer.on("workspaces:connect-server", handler);
+      return () => ipcRenderer.removeListener("workspaces:connect-server", handler);
+    },
   },
   // The window's own rail (this app's page at /rail, beside every place's page): while a sheet of its own is open it
   // covers the window; the skin of the page beside it comes from main, and whether that page draws the window's frame.

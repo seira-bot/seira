@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 
 import { automationsFrom, automationSentence, automationStatus, orderAutomations, runLine, statusLine, type Automation } from "@/lib/automations";
@@ -9,6 +9,8 @@ import { saveWebhookCredential, webhookCredentialStore } from "@/lib/webhook-cre
 import { botInDepartment, filterableDepartments, GENERAL_DEPARTMENT } from "@/lib/department-filter";
 import { useStore } from "@/state/store";
 import { useAppTriggers } from "@/lib/app-triggers";
+import { botIdsOf, startSteps } from "@/lib/workflow-graph";
+import { useWorkflows } from "@/state/workflows";
 import { AppEventEditor } from "./automations/AppEventEditor";
 import { useAllAutomationActions } from "./automations/app-actions";
 import { AutomationPanel } from "./automations/AutomationPanel";
@@ -22,6 +24,8 @@ import { SeiraCharacter } from "./seira-character";
 import { Switch } from "./SettingsPrimitives";
 import { TOOL_PAGE_TITLE, ToolPage, ToolPageActions, ToolPageHeader } from "./ToolPageShell";
 import { WebhookEditor } from "./WebhookTrigger";
+import { useCreateWorkflow } from "./workflow/useCreateWorkflow";
+import { WorkflowsView } from "./workflow/WorkflowsView";
 import { schedulableBots, useTeamPeople } from "@/state/team-people";
 
 /** The bot filter earns its place only on a long list shared by several bots. */
@@ -34,12 +38,14 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
   const appTriggers = useAppTriggers();
   const backButtonRef = useRef<HTMLButtonElement>(null);
   const focus = state.routinesFocus;
-  const view = focus?.view === "calendar" ? "calendar" : "list";
+  const workflows = useWorkflows();
+  const view = focus?.view === "calendar" ? "calendar" : focus?.view === "workflows" && !workflows.unavailable ? "workflows" : "list";
   const [openId, setOpenId] = useState<string | null>(focus?.section !== "logs" ? focus?.routineId ?? null : null);
   const [botFilter, setBotFilter] = useState(focus?.botId ?? "all");
   const [department, setDepartment] = useState("all");
   const [newText, setNewText] = useState<string | null>(null);
-  const [editing, setEditing] = useState<{ kind: SetUpKind; id?: string; botId?: string } | null>(null);
+  const { create: createWorkflow, failed: workflowFailed } = useCreateWorkflow(useCallback((created) => dispatch({ type: "showRoutines", view: "workflows", workflowId: created.id }), [dispatch]));
+  const [editing, setEditing] = useState<{ kind: SetUpKind; id?: string; botId?: string; workflowId?: string } | null>(null);
   const routinesOnly = window.ogb?.remoteClient?.active === true;
   const visibleBots = state.bots.filter((bot) => !bot.hidden);
   const team = useTeamPeople();
@@ -67,7 +73,10 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
   const showFilter = all.length >= FILTER_FROM && new Set(all.map((automation) => automation.botId)).size > 1;
   const listed = orderAutomations(all.filter((automation) => inDepartment(automation.botId) && (!showFilter || botFilter === "all" || automation.botId === botFilter)));
   const open = all.find((automation) => automation.id === openId) ?? null;
-  const sentenceOf = (automation: Automation) => automationSentence(automation, botName(automation.botId));
+  const sentenceOf = (automation: Automation) => {
+    const workflow = automation.workflowId ? workflows.workflows.find((candidate) => candidate.id === automation.workflowId) : undefined;
+    return automationSentence(automation, botName(automation.botId), workflow && { name: workflow.name, bots: botIdsOf(workflow).flatMap((id) => state.bots.find((bot) => bot.id === id)?.name ?? []) });
+  };
 
   const editRoutine = editing?.kind === "schedule" ? state.routines.find((routine) => routine.id === editing.id) : undefined;
   const editWebhook = editing?.kind === "webhook" ? state.webhooks.find((webhook) => webhook.id === editing.id) : undefined;
@@ -78,7 +87,7 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
       <ToolPageHeader backLabel={t("automations.back")} onBack={onBack} backRef={backButtonRef} besideSidebar={view === "list"}>
           <h1 data-tour="automations-page" className={TOOL_PAGE_TITLE}>{t("automations.title")}</h1>
           <ToolPageActions>
-            {showDepartments && (
+            {showDepartments && view !== "workflows" && (
               <Select size="sm" aria-label={t("automations.allDepartments")} value={activeDepartment} onChange={(event) => { setDepartment(event.target.value); setBotFilter("all"); }} className="max-w-[180px]">
                 <option value="all">{t("automations.allDepartments")}</option>
                 {departments.names.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -92,19 +101,21 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
               </Select>
             )}
             <div role="group" aria-label={t("automations.view")} className="flex items-center rounded-lg border border-hairline/50 bg-panel p-0.5">
-              {(["list", "calendar"] as const).map((option) => (
+              {(["list", "calendar", ...(workflows.unavailable ? [] : ["workflows" as const])] as const).map((option) => (
                 <button key={option} type="button" aria-pressed={view === option} onClick={() => dispatch({ type: "showRoutines", view: option, botId: botFilter === "all" ? undefined : botFilter })}
                   className={cn("rounded-md px-3 py-1 text-[13px] font-medium", view === option ? "bg-raised text-ink shadow-sm" : "text-ink-secondary hover:text-ink")}>
-                  {option === "list" ? t("automations.list") : t("automations.calendar")}
+                  {option === "list" ? t("automations.list") : option === "calendar" ? t("automations.calendar") : t("workflow.view")}
                 </button>
               ))}
             </div>
-            <button type="button" onClick={() => setNewText("")} className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-semibold text-accent-ink hover:brightness-110"><Plus size={15} aria-hidden="true" />{t("automations.new")}</button>
+            <button type="button" onClick={view === "workflows" ? () => void createWorkflow() : () => setNewText("")} className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-semibold text-accent-ink hover:brightness-110"><Plus size={15} aria-hidden="true" />{view === "workflows" ? t("workflow.new") : t("automations.new")}</button>
           </ToolPageActions>
       </ToolPageHeader>
 
+      {workflowFailed && view === "workflows" && <p role="alert" className="shrink-0 px-4 pt-3 text-[13px] text-danger">{t("workflow.save.failed")}</p>}
       <div className="relative flex min-h-0 flex-1">
-        {view === "calendar" ? <AutomationsCalendar botFilter={botFilter} department={activeDepartment} selectedAutomationId={openId} onOpenAutomation={setOpenId} onOpenRoom={onOpenRoom} /> : (
+        {view === "calendar" ? <AutomationsCalendar botFilter={botFilter} department={activeDepartment} selectedAutomationId={openId} onOpenAutomation={setOpenId} onOpenRoom={onOpenRoom} /> : view === "workflows" ? <WorkflowsView workflowId={focus?.workflowId} workflowRunId={focus?.workflowRunId}
+          onUseInRoutine={(workflow) => { const start = startSteps(workflow)[0]; setEditing({ kind: "schedule", botId: start?.kind === "bot" ? start.botId : undefined, workflowId: workflow.id }); }} /> : (
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-3xl p-4 sm:p-6">
               <LimitWarnings botFilter={showFilter ? botFilter : "all"} />
@@ -150,7 +161,7 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
             </div>
           </div>
         )}
-        {open && (
+        {open && view !== "workflows" && (
           <div className="absolute inset-y-0 right-0 z-30 flex shadow-2xl lg:static lg:shadow-none">
             <AutomationPanel key={open.id} automation={open} sentence={sentenceOf(open)} onClose={() => setOpenId(null)} onDeleted={() => setOpenId(null)} onEdit={() => setEditing({ kind: open.kind, id: open.id })} />
           </div>
@@ -160,7 +171,7 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
       {newText !== null && (
         <NewAutomation initialText={newText} onClose={() => setNewText(null)} onSetUpYourself={(kind, botId) => { setNewText(null); setEditing({ kind, botId }); }} />
       )}
-      {editing?.kind === "schedule" && (editRoutine || !editing.id) && <RoutineEditor routine={editRoutine} bots={schedulableBots(visibleBots, team, editRoutine?.botId)} initialBotId={editing.botId} plain onClose={() => setEditing(null)} />}
+      {editing?.kind === "schedule" && (editRoutine || !editing.id) && <RoutineEditor routine={editRoutine} bots={schedulableBots(visibleBots, team, editRoutine?.botId)} initialBotId={editing.botId} initialWorkflowId={editing.workflowId} plain onClose={() => setEditing(null)} />}
       {editing?.kind === "webhook" && (editWebhook || !editing.id) && (
         <WebhookEditor webhook={editWebhook} bots={visibleBots} initialBotId={editing.botId} onClose={() => setEditing(null)} onCredential={(credential, id) => { saveWebhookCredential(webhookCredentialStore(), id, credential); setOpenId(id); }} />
       )}

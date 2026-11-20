@@ -1,5 +1,5 @@
-const SEIRA_CLOUD_TOKEN = /^omc_[A-Za-z0-9_-]{43}$/;
-const isSeiraCloudToken = (value) => typeof value === "string" && SEIRA_CLOUD_TOKEN.test(value);
+const CLOUD_TOKEN_SHAPE = /^omc_[A-Za-z0-9_-]{43}$/;
+const isSeiraCloudToken = (value) => typeof value === "string" && CLOUD_TOKEN_SHAPE.test(value);
 const INSTALLATION_CREDENTIAL =
   /^seira_install_[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}$/;
 const INSTALLATION_ID =

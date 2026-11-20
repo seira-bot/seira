@@ -6,10 +6,12 @@ import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/copy-text";
 import { t } from "@/lib/i18n";
 import { isRoutineProblemRun } from "@/lib/routines";
+import { stepsWorkflowId } from "@/lib/workflow-run";
 import { loadWebhookCredentials, webhookCredentialStore } from "@/lib/webhook-credentials";
 import { useStore } from "@/state/store";
 import { AppEventsSection } from "./AppEventsSection";
 import { useAllAutomationActions } from "./app-actions";
+import { WorkflowRoutineSection } from "../workflow/WorkflowRoutineSection";
 import { FixButton, StatusMark } from "./parts";
 
 const RECENT = 5;
@@ -118,7 +120,8 @@ export function AutomationPanel({ automation, sentence, onClose, onEdit, onDelet
           </section>
         )}
 
-        {name && instructions && <p data-testid="automation-instructions" className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-ink">{instructions}</p>}
+        {name && instructions && !automation.workflowId && <p data-testid="automation-instructions" className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-ink">{instructions}</p>}
+        {automation.workflowId && <WorkflowRoutineSection routineId={automation.id} workflowId={automation.workflowId} />}
 
         {automation.appTrigger && <AppEventsSection trigger={automation.appTrigger} />}
 
@@ -130,7 +133,7 @@ export function AutomationPanel({ automation, sentence, onClose, onEdit, onDelet
               const line = runLine(run);
               return (
                 <li key={run.id}>
-                  <button type="button" disabled={!run.threadId} onClick={() => actions.openRun(automation, run)} title={run.threadId ? t("automations.panel.open") : undefined}
+                  <button type="button" disabled={!run.threadId && !stepsWorkflowId(run)} onClick={() => { const workflowId = stepsWorkflowId(run); if (workflowId) dispatch({ type: "showRoutines", view: "workflows", workflowId, workflowRunId: run.id }); else actions.openRun(automation, run); }} title={run.threadId || stepsWorkflowId(run) ? t("automations.panel.open") : undefined}
                     className="flex w-full items-baseline gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-raised disabled:hover:bg-transparent">
                     <span className="shrink-0 text-ink-secondary">{line.when}</span>
                     <span className={cn("shrink-0 font-semibold", line.mark === "✓" ? "text-success" : line.mark === "✗" ? "text-danger" : "text-warning")}>{line.mark}</span>

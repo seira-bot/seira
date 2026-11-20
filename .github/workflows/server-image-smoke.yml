@@ -85,7 +85,7 @@ jobs:
           set -euo pipefail
           docker run -d -e SEIRA_COMPOSIO_BROKER=off --name seira seira-server:ci
           for i in $(seq 1 40); do
-            if docker exec seira curl -sf http://127.0.0.1:8799/api/health | grep -q seira; then break; fi
+            if docker exec seira curl -sf http://127.0.0.1:8799/api/health | grep -q -e seira -e openmausbot; then break; fi
             sleep 2
             if [ "$i" = "40" ]; then docker logs seira; echo "server never became healthy"; exit 1; fi
           done

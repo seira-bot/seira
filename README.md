@@ -98,7 +98,7 @@ The model picker shows each engine that is ready.
 | API and plan engines | Grok, Mistral, Groq, Cerebras, MiniMax, Greenference, ModelGo, Meta Muse, Muse Code, and any OpenAI-compatible endpoint |
 
 To add an ACP program or an endpoint that is not in this list, see [docs/custom-engines.md](docs/custom-engines.md).
-To use a custom build of an agent program, set it in **Settings → Engines**.
+To use a custom build of an agent program, set it in **Settings → AI → Providers**.
 
 ## Meet Seira
 
@@ -201,7 +201,7 @@ It needs Node.js 24 or later.
 
 ```sh
 npx @seira-bot/seira setup              # once: AI access and a default model
-npx @seira-bot/seira serve --tailscale  # or --lan, --domain, --public-url, --tunnel
+npx @seira-bot/seira serve --tailscale  # or --lan, --domain, --public-url
 ```
 
 The server prints a pairing link. Open it in your browser or on your phone.
@@ -291,7 +291,7 @@ They are anonymous and never include keys, names, addresses, or conversations.
 > [!IMPORTANT]
 > This repository has no analytics key.
 > A build made without `VITE_SEIRA_POSTHOG_TOKEN` has no analytics switch in Settings and sends nothing.
-> A build made with a key sends analytics until you turn off **Settings → General → Usage analytics**.
+> A build made with a key sends analytics until you turn off **Usage analytics** in **Settings → General → Privacy**.
 
 ## Documentation
 

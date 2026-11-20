@@ -31,7 +31,7 @@ const bot = (instanceId: string, model: string): Bot => ({
 
 describe("botModel", () => {
   it("names the bot's chosen model by its picker label", () => {
-    expect(botModel(bot("claude", "opus"), [claude])).toEqual({ instance: claude, label: "Opus 4.1" });
+    expect(botModel(bot("claude", "opus"), [claude])).toEqual({ instance: claude, id: "opus", label: "Opus 4.1" });
   });
 
   it("names the engine's default model when the bot has not chosen one", () => {
@@ -54,6 +54,26 @@ describe("BotModelBadge", () => {
     expect(markup).toContain('aria-label="Model: Opus 4.1 (Claude)"');
     expect(markup).toContain('title="Opus 4.1"');
     expect(markup).toContain("<svg");
+  });
+
+  const mark = (model: string) => renderToStaticMarkup(createElement(BotModelBadge, { bot: bot("claude", model), instances: [claude], avatarSize: 44 }));
+
+  it("draws the OpenAI mark for a GPT model on the Claude engine", () => {
+    const markup = mark("gpt-5");
+    expect(markup).toContain('viewBox="0 0 256 260"');
+    expect(markup).not.toContain("#d97757");
+  });
+
+  it("draws the Claude mark for the engine's own default model", () => {
+    const markup = mark("");
+    expect(markup).toContain("#d97757");
+    expect(markup).not.toContain('viewBox="0 0 256 260"');
+  });
+
+  it("falls back to the engine's mark for a model of an unknown family", () => {
+    const markup = mark("glm-4.6");
+    expect(markup).toContain("#d97757");
+    expect(markup).not.toContain('viewBox="0 0 256 260"');
   });
 
   it("draws nothing for an engine that is not installed", () => {

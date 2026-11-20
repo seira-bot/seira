@@ -1,3 +1,5 @@
+import { acceptedWireNames } from "./phone-wire-names.mjs";
+
 export const BOOT_PROBE_FAST_INTERVAL_MS = 25;
 export const BOOT_PROBE_FAST_WINDOW_MS = 5_000;
 export const BOOT_PROBE_INTERVAL_MS = 500;
@@ -81,7 +83,7 @@ export async function pollServerIdentity({
     const identified =
       res.ok &&
       expectedPid !== undefined &&
-      body?.app === "seira" &&
+      acceptedWireNames("healthApp").includes(body?.app) &&
       body.pid === expectedPid &&
       body.static;
     if (!identified) return { outcome: "foreign-owner" };

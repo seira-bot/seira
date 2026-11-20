@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { DevsReportPayload } from "./devs-report.ts";
-import { askReportStatus, bugReportEndpoint, bugReportsHomeSignature, bugReportStatusEndpoint, devsReportSender, devsStatusAsker, sendDevsReport } from "./devs-report-send.ts";
+import { askReportStatus, bugReportEndpoint, bugReportsHomeSignature, bugReportStatusEndpoint, devsReportSender, devsStatusAsker, BUG_REPORT_SERVICE, sendDevsReport } from "./devs-report-send.ts";
 
 const PAYLOAD: DevsReportPayload = {
   installId: "4b7c1f2e-0a9d-4c2b-9f1e-6d5a4b3c2d1e", source: "bot", description: "it broke", appVersion: "0.1.128", platform: "darwin arm64, desktop app",
@@ -68,14 +68,16 @@ describe("sending a @devs report", () => {
 });
 
 describe("where reports go", () => {
-  it("is a fixture's loopback or https address, else nowhere", () => {
+  it("is Seira's service when unset, a fixture's loopback or https address when set, else nowhere", () => {
     expect(bugReportEndpoint({ SEIRA_BUG_REPORT_URL: "http://127.0.0.1:4400/api/bug-reports" })).toBe("http://127.0.0.1:4400/api/bug-reports");
     expect(bugReportEndpoint({ SEIRA_BUG_REPORT_URL: " https://reports.example/api/bug-reports " })).toBe("https://reports.example/api/bug-reports");
     expect(bugReportEndpoint({ SEIRA_BUG_REPORT_URL: "http://192.0.2.1/api/bug-reports" })).toBeNull();
     expect(bugReportEndpoint({ SEIRA_BUG_REPORT_URL: "https://user:pw@evil.example/x" })).toBeNull();
     expect(bugReportEndpoint({ SEIRA_BUG_REPORT_URL: "not an address" })).toBeNull();
-    expect(bugReportEndpoint({ SEIRA_CLOUD_STAGING: "1" })).toBeNull();
-    expect(bugReportEndpoint({})).toBeNull();
+    expect(bugReportEndpoint({ SEIRA_BUG_REPORT_URL: "off" })).toBeNull();
+    expect(bugReportEndpoint({ SEIRA_CLOUD_STAGING: "1" })).toBe(BUG_REPORT_SERVICE);
+    expect(bugReportEndpoint({})).toBe(BUG_REPORT_SERVICE);
+    expect(bugReportEndpoint({ SEIRA_BUG_REPORT_URL: "  " })).toBe(BUG_REPORT_SERVICE);
   });
 
   it("sends nothing without an address and gives the person a prefilled issue form", async () => {
@@ -92,6 +94,50 @@ describe("where reports go", () => {
     const { sent, fetcher } = endpoint(answer(201, { id: "r9" }));
     expect(await devsReportSender("https://reports.example/api/bug-reports", fetcher)(PAYLOAD)).toEqual({ ok: true, id: "r9" });
     expect(sent.map(({ url }) => url)).toEqual(["https://reports.example/api/bug-reports"]);
+  });
+});
+
+describe("the default Seira bug report service", () => {
+  const DRAFT: DevsReportPayload = {
+    ...PAYLOAD, title: "The sheet step failed", fingerprint: { kind: "tool-failed", step: "read_sheet" },
+    diagnostics: "Seira @devs report\n\n## Recent problems in this conversation, newest last\ntool <file>.ts failed",
+  };
+
+  it("posts the report as the person read it, with no contact address, and says nobody replies by email", async () => {
+    const { sent, fetcher } = endpoint(answer(201, { id: "br_abcdefghijklmnopqrstuv", issue: 42 }));
+    expect(await devsReportSender(BUG_REPORT_SERVICE, fetcher)(DRAFT)).toEqual({ ok: true, id: "br_abcdefghijklmnopqrstuv", issue: 42, noReply: true });
+    expect(sent.map(({ url }) => url)).toEqual([BUG_REPORT_SERVICE]);
+    const { contactEmail: _email, contact: _contact, ...read } = DRAFT;
+    expect(sent[0]!.body).toEqual(read);
+    expect(JSON.stringify(sent[0]!.body)).not.toContain("ada@example.com");
+  });
+
+  it("keeps a report the service could not take, to go again later or be refused, never a form", async () => {
+    const outcomes = [];
+    for (const reply of [new TypeError("fetch failed"), answer(502, { error: "GitHub failed" }), answer(400, { error: "description must be text." })]) {
+      outcomes.push(await devsReportSender(BUG_REPORT_SERVICE, endpoint(reply).fetcher)(DRAFT));
+    }
+    expect(outcomes).toEqual([{ ok: false, retry: true, why: "offline" }, { ok: false, retry: true, why: "server" },
+      { ok: false, retry: false, why: "refused", detail: "description must be text." }]);
+  });
+
+  it("keeps a report the hourly limit held back, to go later", async () => {
+    const { fetcher } = endpoint(answer(429, { error: "Too many reports.", retryAfter: 120 }));
+    expect(await devsReportSender(BUG_REPORT_SERVICE, fetcher)(DRAFT)).toEqual({ ok: false, retry: true, why: "limited", retryAfterMs: 120_000 });
+  });
+
+  it("keeps the contact address for another address", async () => {
+    const { sent, fetcher } = endpoint(answer(201, { id: "r9" }));
+    expect(await devsReportSender("https://reports.example/api/bug-reports", fetcher)(DRAFT)).toEqual({ ok: true, id: "r9" });
+    expect(sent[0]!.body).toEqual(DRAFT);
+    expect(sent[0]!.body.contactEmail).toBe("ada@example.com");
+  });
+
+  it("asks its status unsigned, with no Cloud machine headers", async () => {
+    const { sent, fetcher } = endpoint(answer(200, { reports: [], notify: true }));
+    await devsStatusAsker(BUG_REPORT_SERVICE, { machineId: "m", bootstrapSecret: "s" }, fetcher)({ installId: PAYLOAD.installId, ids: ["br_x"] });
+    expect(sent[0]!.url).toBe("https://bugs.seira.bot/api/bug-reports/status");
+    expect(Object.keys(sent[0]!.init.headers as Record<string, string>).filter((name) => name.startsWith("x-omb-cloud"))).toEqual([]);
   });
 });
 

@@ -1,10 +1,21 @@
-import { createElement } from "react";
+// @vitest-environment happy-dom
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { RoutineRunCardData } from "../../shared/routine-run";
 import type { Message } from "@/state/store";
-import { hasRoutineExecutionTask, RoutineRunCard } from "./RoutineRunCard";
+
+const fixture = vi.hoisted(() => ({ state: {} as Record<string, unknown>, dispatch: vi.fn() }));
+vi.mock("@/state/store", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/state/store")>(),
+  useStore: () => ({ state: fixture.state, dispatch: fixture.dispatch }),
+}));
+
+const { hasRoutineExecutionTask, RoutineRunCard, RoutineRunRow } = await import("./RoutineRunCard");
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function message(
   status: RoutineRunCardData["status"],
@@ -153,5 +164,41 @@ describe("RoutineRunCard", () => {
     expect(hasRoutineExecutionTask(tasks, "execution-thread")).toBe(true);
     expect(hasRoutineExecutionTask(tasks, "deleted-thread")).toBe(false);
     expect(hasRoutineExecutionTask(undefined, "execution-thread")).toBe(false);
+  });
+
+  describe("Show steps", () => {
+    let root: Root | null = null;
+    afterEach(() => {
+      if (root) act(() => root!.unmount());
+      root = null;
+      document.body.innerHTML = "";
+    });
+    const mountRow = (routineRuns: unknown[]) => {
+      fixture.dispatch.mockReset();
+      fixture.state = { bots: [], routineRuns };
+      const container = document.createElement("div");
+      document.body.append(container);
+      root = createRoot(container);
+      act(() => root!.render(createElement(RoutineRunRow, { message: message("completed"), botId: "bot-1" })));
+      return container;
+    };
+
+    it("offers Show steps on the run card of a workflow routine and opens its run", () => {
+      const container = mountRow([{ id: "run-1", routineId: "routine-1", workflowId: "wf1" }]);
+      const button = container.querySelector<HTMLButtonElement>('button[aria-label="Show steps for Morning brief"]');
+      expect(button?.textContent).toContain("Show steps");
+      act(() => { button!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+      expect(fixture.dispatch).toHaveBeenCalledWith({ type: "showRoutines", view: "workflows", workflowId: "wf1", workflowRunId: "run-1" });
+    });
+
+    it.each(["queued", "missed"])("offers no Show steps for a %s run, which has no steps", (status) => {
+      const container = mountRow([{ id: "run-1", routineId: "routine-1", workflowId: "wf1", status }]);
+      expect(container.textContent).not.toContain("Show steps");
+    });
+
+    it("offers no Show steps for a routine without a workflow", () => {
+      const container = mountRow([{ id: "run-1", routineId: "routine-1" }]);
+      expect(container.textContent).not.toContain("Show steps");
+    });
   });
 });

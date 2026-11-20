@@ -14,8 +14,7 @@
 // This module only exports: seira.ts runs main(), so bundling this file into other entries never runs it twice.
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from "node:fs"; import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
@@ -34,8 +33,8 @@ import { runServiceCommand } from "./service-cli.ts";
 import { runSentinelCli } from "./sentinel/cli.ts";
 import { runConfigCli } from "./config-cli.ts";
 import { runFleetCommand, type FleetInput } from "./fleet-cli.ts";
-import { startFleetAgent } from "./fleet-agent.ts";
-import { fleetLayout } from "./fleet.ts";
+import { startFleetAgent } from "./fleet-agent.ts"; import { fleetLayout } from "./fleet.ts";
+import { migrateBeforeFirstWrite } from "./cli-data-move.ts";
 import { clearLeftoverTailscaleServe, explainTailscaleFailure, tailnetListenFallback, tailscaleServe, tailscaleStatus, type TailscaleStatus } from "./tailscale.ts";
 import { defaultSetupIo, SetupCancelled, type SetupIo } from "./cli-prompts.ts";
 import { HEADLESS_VERB_NAMES, usage } from "./cli-usage.ts";
@@ -47,26 +46,9 @@ import { lanUrl } from "./lan-address.ts";
 import { isLoopbackHost } from "../electron/server-address.mjs";
 import { parseDuration } from "./headless/args.ts";
 import { signInFromEnv, type AppConfig } from "./config.ts";
-import {
-  cleanupTunnelOrigin,
-  createTunnelAccount,
-  createTunnelOrigin,
-  describeTunnelAccount,
-  describeTunnelState,
-  ensureCloudflared,
-  FLEET_CREDENTIAL_ENV,
-  fleetAccess,
-  fleetCredential,
-  guardianEntry,
-  startTunnel,
-  tunnelAccess,
-  type CompanionOriginEndpoint,
-  type ManagedTunnelAccess,
-  type RunningTunnel,
-  type TunnelAccount,
-  type TunnelRecovery,
-} from "./tunnel.ts";
-
+import { cleanupTunnelOrigin, controlPlaneProblem, createTunnelAccount, describeTunnelAccount, describeTunnelState, FLEET_CREDENTIAL_ENV, fleetCredential, startTunnel, type RunningTunnel } from "./tunnel.ts";
+import { planTunnel, type TunnelPlan } from "./cli-tunnel-plan.ts";
+import { acceptedWireNames, sentWireName } from "../electron/phone-wire-names.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 export interface CliOptions {
@@ -270,7 +252,7 @@ function refusedAsService(status: number, body: any): boolean {
 async function serverUp(port: number, pid?: number): Promise<boolean> {
   try {
     const { status, body } = await api(port, "/api/health");
-    return status === 200 && body?.app === "seira" && (pid === undefined || body.pid === pid);
+    return status === 200 && !!body && acceptedWireNames("healthApp").includes(body.app) && (pid === undefined || body.pid === pid);
   } catch { return false; }
 }
 
@@ -278,9 +260,9 @@ async function serverUp(port: number, pid?: number): Promise<boolean> {
 export async function isWorkspaceRunning(options: CliOptions): Promise<boolean> {
   try {
     const { status, body } = await api(options.port, "/api/health");
-    if (status !== 200 || body?.app !== "seira") return false;
+    if (status !== 200 || !acceptedWireNames("healthApp").includes(body?.app)) return false;
     const expected = readFileSync(join(options.dataDir, "environment-id"), "utf8").trim();
-    const descriptor = await api(options.port, "/.well-known/seira/environment");
+    const descriptor = await api(options.port, sentWireName("environmentPath"));
     return /^[0-9a-f-]{36}$/i.test(expected) && descriptor.status === 200 && descriptor.body?.environmentId === expected;
   } catch { return false; }
 }
@@ -300,7 +282,7 @@ export async function openDashboard(port: number, env = process.env): Promise<bo
 }
 
 /** Something already answers there as a Seira server (before this one has started). */
-const answersAsSeira = async (origin: string) => typeof (await fetch(`${origin}/.well-known/seira/environment`, { signal: AbortSignal.timeout(3_000) }).then((r) => r.json() as Promise<{ environmentId?: unknown }>).catch(() => null))?.environmentId === "string";
+const answersAsSeira = async (origin: string) => typeof (await fetch(`${origin}${sentWireName("environmentPath")}`, { signal: AbortSignal.timeout(3_000) }).then((r) => r.json() as Promise<{ environmentId?: unknown }>).catch(() => null))?.environmentId === "string";
 
 /** Its public descriptor must identify this exact server; never sends a pairing code or credential. */
 export async function verifyPhoneEndpoint(port: number, origin: string): Promise<boolean> {
@@ -417,7 +399,7 @@ export async function runSessions(options: CliOptions): Promise<number> {
 }
 
 export async function runStatus(options: CliOptions, io: CliIo = defaultIo()): Promise<number> {
-  const body: any = await fetch(`http://127.0.0.1:${options.port}/.well-known/seira/environment`).then((r) => r.json()).catch(() => null);
+  const body: any = await fetch(`http://127.0.0.1:${options.port}${sentWireName("environmentPath")}`).then((r) => r.json()).catch(() => null);
   if (body && options.json) io.log(JSON.stringify(body, null, 2));
   if (!body) io.error(`No Seira server is running here. Start it: ${cliCommand("serve")}`);
   if (body && !options.json) {
@@ -506,10 +488,8 @@ export async function runLogin(options: CliOptions, io: CliIo = defaultIo()): Pr
     io.error(`${account.credentials.file} exists but could not be read; fix or remove it, then try again`);
     return 1;
   }
-  if (!account.controlPlane) {
-    io.error("SEIRA_CONTROL_PLANE_URL is set but is not an https address");
-    return 1;
-  }
+  const problem = controlPlaneProblem(process.env, options.relay === true ? "relay" : "tunnel");
+  if (problem) { io.error(problem); return 1; }
   const existing = describeTunnelAccount(account.credentials.read());
   if (existing.address) io.log(`already signed in as ${existing.email ?? "?"} (${existing.address}); signing in again refreshes it`);
   const email = (options.email ?? (await io.ask("Email for your Seira account: "))).trim();
@@ -533,7 +513,15 @@ export async function runLogin(options: CliOptions, io: CliIo = defaultIo()): Pr
   }
   const signedIn = describeTunnelAccount(account.credentials.read());
   if (!signedIn.address && !(options.relay && signedIn.installationId)) {
-    io.error(`signed in, but no public address was issued${state.message ? `: ${state.message}` : ""}`);
+    if (!signedIn.email) {
+      io.error(`sign-in failed${state.message ? `: ${state.message}` : ""}`);
+      return 1;
+    }
+    // FR-221: the sign-in stays; only the address is missing, and serve --tunnel asks for it again at each start.
+    io.log(`Signed in as ${signedIn.email}.`);
+    io.error(`No public address this time${state.message ? `: ${state.message}` : "."}`);
+    io.log(`${cliCommand("serve --tunnel")} asks for one again each time it starts, and serves without one until then.`);
+    io.log(`To pair a phone now, use ${cliCommand("serve --lan")} on this Wi-Fi or ${cliCommand("serve --tailscale")} on your tailnet.`);
     return 1;
   }
   io.log(`Signed in as ${signedIn.email ?? email}.`);
@@ -614,58 +602,6 @@ export function serverEntry(here = HERE): { command: string; args: string[]; sta
   return { command: process.execPath, args: ["--experimental-strip-types", source], staticDir, skillsDir: existsSync(join(root, "skills")) ? join(root, "skills") : null };
 }
 
-interface TunnelPlan {
-  access: ManagedTunnelAccess;
-  binary: string;
-  guardian: string;
-  origin: CompanionOriginEndpoint;
-  account: TunnelAccount | null;
-}
-
-/** Fails closed: never a silent fallback to a local-only server. */
-async function planTunnel(options: CliOptions, log: (line: string) => void, recovery: TunnelRecovery): Promise<TunnelPlan | { error: string }> {
-  let access: ManagedTunnelAccess | null = null;
-  let account: TunnelAccount | null = null;
-  const fail = (error: string) => {
-    account?.service.dispose();
-    return { error };
-  };
-  const credential = fleetCredential();
-  if (credential) {
-    log(`tunnel: using the installation credential from ${FLEET_CREDENTIAL_ENV}`);
-    try {
-      access = await fleetAccess({ credential, version: reportableServerVersion() });
-    } catch (error) {
-      return { error: `--tunnel: ${message(error)}` };
-    }
-  } else {
-    account = createTunnelAccount({ dataDir: options.dataDir, version: reportableServerVersion(), recovery, log: (line) => log(`tunnel: ${line}`) });
-    if (account.credentials.status === "unavailable") return fail(`${account.credentials.file} exists but could not be read; fix or remove it`);
-    if (!describeTunnelAccount(account.credentials.read()).email) {
-      return fail(`no account on this machine yet: run ${cliCommand("login")} first, then ${cliCommand("serve --tunnel")}`);
-    }
-    try {
-      const state = await account.service.retry();
-      const saved = tunnelAccess(account.credentials.read()) !== null;
-      if (state.status === "signed-out") log(`tunnel: the sign-in on this machine expired; run ${cliCommand("login")} to renew it${saved ? " (serving the saved address until then)" : ""}`);
-      else if (state.message) log(`tunnel: ${state.message}${saved ? " Serving the saved address for now." : ""}`);
-    } catch (error) {
-      log(`tunnel: control plane not reachable right now (${message(error)}); using the saved address`);
-    }
-    access = tunnelAccess(account.credentials.read());
-    if (!access) return fail(`this machine has no public address; run ${cliCommand("login")} again`);
-  }
-  let binary: string;
-  try {
-    binary = await ensureCloudflared({ dataDir: options.dataDir, log });
-  } catch (error) {
-    return fail(`--tunnel: ${message(error)}`);
-  }
-  const guardian = guardianEntry();
-  if (!guardian) return fail("--tunnel: the connector guardian is missing from this install");
-  return { access, binary, guardian, origin: createTunnelOrigin(), account };
-}
-
 export async function runServe(options: CliOptions, log: (line: string) => void = console.log): Promise<number> {
   const { browserEngineStatus, describeBrowserEngine } = await import("./browser-engine.ts");
   if (await serverUp(options.port)) {
@@ -691,9 +627,14 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
       console.error(planned.error);
       return 1;
     }
-    plan = planned;
-    if (publicUrl && publicUrl !== plan.access.endpoint) log(`note: --public-url is ignored with --tunnel; the address is ${plan.access.endpoint}`);
-    publicUrl = plan.access.endpoint;
+    if ("unavailable" in planned) {
+      log(`tunnel: ${planned.unavailable}`);
+      log(`tunnel: no public address this time, so this server runs without one. Start ${cliCommand("serve --tunnel")} again later to get one.`);
+    } else {
+      plan = planned;
+      if (publicUrl && publicUrl !== plan.access.endpoint) log(`note: --public-url is ignored with --tunnel; the address is ${plan.access.endpoint}`);
+      publicUrl = plan.access.endpoint;
+    }
   }
   let caddyBinary: string | null = null;
   if (options.domain) {
@@ -848,7 +789,7 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
       void plan.account?.service.restore().catch(() => undefined);
     }
     const prefix = cliPrefix();
-    const described = await api(options.port, "/.well-known/seira/environment").catch(() => null);
+    const described = await api(options.port, sentWireName("environmentPath")).catch(() => null);
     const route: Route | null = plan ? "tunnel" : options.domain ? "domain" : tailscaleShare ? "tailscale" : publicUrl ? "public-url" : env.SEIRA_LAN === "1" ? "lan" : null;
     const origin = route === "lan" ? lanUrl(options.port, env) : publicUrl ?? null;
     log("");
@@ -973,6 +914,7 @@ export async function runOnboardingCommand(
 }
 
 export async function main(argv = process.argv.slice(2)): Promise<number> {
+  migrateBeforeFirstWrite(argv);
   if (argv[0] === "sentinel") return runSentinelCli(argv.slice(1));
   if (argv[0] === "config") return runConfigCli(argv.slice(1));
   if (HEADLESS_VERB_NAMES.has(argv[0] ?? "") || (argv[0] === "help" && HEADLESS_VERB_NAMES.has(argv[1] ?? ""))) return (await import("./headless/main.ts")).runHeadless(argv);
