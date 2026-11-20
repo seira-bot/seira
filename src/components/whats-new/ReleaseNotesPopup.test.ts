@@ -9,7 +9,7 @@ vi.mock("../seira-character", () => ({ SeiraCharacter: () => createElement("i", 
 const { ReleaseNotesPopup } = await import("./ReleaseNotesPopup");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-const UPDATED: ReleaseNotesView = { version: "0.1.180", from: "0.1.179", items: [...RELEASE_NOTES[0]!.items] };
+const UPDATED: ReleaseNotesView = { version: "0.1.180", from: "0.1.179", items: [...RELEASE_NOTES.find(note => note.version === "0.1.180")!.items] };
 const TITLE = "What's new in Seira 0.1.180";
 
 let host: HTMLDivElement, root: Root, opener: HTMLButtonElement, openExternal: ReturnType<typeof vi.fn>;
