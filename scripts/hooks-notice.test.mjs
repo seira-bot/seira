@@ -42,4 +42,11 @@ describe("hooksAreActive", () => {
     expect(hooksAreActive("/repo", "/repo/scripts/git-hooks")).toBe(true);
     expect(hooksAreActive("/repo", "")).toBe(false);
   });
+
+  it("accepts the hooks folder of another checkout, as a git worktree has", () => {
+    const other = join(root, "main-checkout", "scripts", "git-hooks");
+    expect(hooksAreActive("/worktree", other, (path) => path === join(other, "pre-commit"))).toBe(true);
+    expect(hooksAreActive("/worktree", other, () => false)).toBe(false);
+    expect(hooksAreActive("/worktree", join(root, "my-scripts", "git-hooks"), () => true)).toBe(false);
+  });
 });

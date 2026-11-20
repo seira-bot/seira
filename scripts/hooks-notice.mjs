@@ -1,12 +1,15 @@
-// Tells a person or an agent that git does not run the repo hooks in this checkout. Needs only node and git.
 import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { join, resolve, sep } from "node:path";
 
 export const HOOKS_PATH = "scripts/git-hooks";
 export const HOOKS_COMMAND = `git config core.hooksPath ${HOOKS_PATH}`;
 
-export function hooksAreActive(root, configured) {
-  return configured !== "" && resolve(root, configured) === resolve(root, HOOKS_PATH);
+export function hooksAreActive(root, configured, exists = existsSync) {
+  if (configured === "") return false;
+  const path = resolve(root, configured);
+  if (path === resolve(root, HOOKS_PATH)) return true;
+  return path.endsWith(sep + join("scripts", "git-hooks")) && exists(join(path, "pre-commit"));
 }
 
 export function hooksNotice(root, env = process.env) {
