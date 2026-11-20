@@ -45,7 +45,7 @@ import { useTeamPresence } from "@/state/team-presence";
 import { inboxVersion, useInboxLoader, useInboxPanel, useInboxReady } from "@/state/inbox";
 import { InboxPanel } from "@/components/inbox/InboxPanel";
 import { PlacesRail } from "@/components/PlacesRail";
-import { NewLocalFromMenu } from "@/components/PlaceAddSheet";
+import { ConnectServerFromMenu, NewLocalFromMenu } from "@/components/PlaceAddSheet";
 import { CloudHowTo } from "@/components/CloudHowTo";
 import { DesktopCapabilitiesProvider, useCaptionChrome, useDesktopCapabilities, WindowDragStrip, windowFramed } from "@/components/DesktopCapabilities";
 import { WindowCaptionButtons } from "@/components/WindowCaptionButtons";
@@ -364,6 +364,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
       )}
       {!calendarFocus && <PlacesRail />}
       <NewLocalFromMenu />
+      <ConnectServerFromMenu />
       {/* A framed window shows the app, its sidebar and the chat or page, in a rounded card under the top bar and beside
           the window's rail: its top corners and its bottom-left corner are round, and it runs to the window's right and
           bottom edges. */}

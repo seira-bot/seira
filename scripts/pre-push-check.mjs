@@ -1,11 +1,14 @@
 // What the pre-push hook checks: only the files the push changes, in seconds. CI still checks everything. This stops
-// the failures that are certain on every platform before they cost a CI run. Only a finding about this push stops it: no
+// the failures that are certain on every platform before they cost a CI run. The tests of a Worker with fast tests run
+// when the push changes that Worker (WORKERS in scripts/ci-heavy.mjs). Only a finding about this push stops it: no
 // origin/main, a dependency out of step, the time budget running out or main's own red all leave the push to CI.
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { WORKERS } from "./ci-heavy.mjs";
 
 const BUDGET_MS = 30_000;
 const CODE = /\.[cm]?[jt]sx?$/;
@@ -32,33 +35,52 @@ export function checksFor(files) {
     ...(files.some((file) => WORDED.test(file) && !isTest(file)) ? ["src/locales/vocabulary.test.ts"] : []),
   ];
   if (guards.length > 0) checks.push({ name: "source guards", guards });
+  for (const { name, paths } of WORKERS.filter((worker) => worker.fast)) {
+    if (files.some((file) => file.startsWith(`cloudflare/${name}/`) || paths.includes(file))) checks.push({ name: `worker ${name}`, worker: name });
+  }
   return checks;
 }
 
 const git = (...args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
 
-/** Vitest's own verdict from its report, since a dependency out of step fails before any test runs. A guard reads the
- * whole tree, so a failure that names none of the push's files is main's own, and that is CI's to report. */
-function runGuards(guards, files, timeout) {
+/** Runs vitest with a json report in a temporary folder. The report is vitest's own verdict, since a dependency out of
+ * step fails before any test runs. Gives `unknown` with a reason when there is no verdict, else the run and its failed-test count. */
+function vitestReport(argsFor, timeout) {
   const dir = mkdtempSync(join(tmpdir(), "seira-pre-push-"));
   const report = join(dir, "report.json");
   try {
-    const run = spawnSync("node_modules/.bin/vitest", ["run", ...guards, "--reporter=default", "--reporter=json", `--outputFile.json=${report}`], { encoding: "utf8", timeout, maxBuffer: 16 * 1024 * 1024 });
+    const run = spawnSync("node_modules/.bin/vitest", ["run", ...argsFor(report)], { encoding: "utf8", timeout, maxBuffer: 16 * 1024 * 1024 });
     if (run.error) return { unknown: run.error.code === "ETIMEDOUT" ? `past ${BUDGET_MS / 1000} s` : run.error.code };
     if (!existsSync(report)) return { unknown: "it did not start" };
-    if (JSON.parse(readFileSync(report, "utf8")).numFailedTests === 0) return {};
-    const output = `${run.stdout}${run.stderr}`;
-    // The vocabulary test names a catalog's key, not the catalog.
-    if (files.some((file) => output.includes(file) || file === "src/locales/en.json")) {
-      console.error(output);
-      return { failed: true };
-    }
-    return { unknown: "a failure that names no file of this push, so main may be red" };
+    return { run, failedTests: JSON.parse(readFileSync(report, "utf8")).numFailedTests };
   } catch (error) {
     return { unknown: error.message };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+/** A guard reads the whole tree, so a failure that names none of the push's files is main's own, and that is CI's to report. */
+function runGuards(guards, files, timeout) {
+  const { run, failedTests, unknown } = vitestReport((report) => [...guards, "--reporter=default", "--reporter=json", `--outputFile.json=${report}`], timeout);
+  if (unknown) return { unknown };
+  if (failedTests === 0) return {};
+  const output = `${run.stdout}${run.stderr}`;
+  // The vocabulary test names a catalog's key, not the catalog.
+  if (files.some((file) => output.includes(file) || file === "src/locales/en.json")) {
+    console.error(output);
+    return { failed: true };
+  }
+  return { unknown: "a failure that names no file of this push, so main may be red" };
+}
+
+/** The Worker's vitest config sets the root to the Worker's folder, so the report path is absolute. */
+function runWorker(name, timeout) {
+  const { run, failedTests, unknown } = vitestReport((report) => ["--config", `cloudflare/${name}/vitest.config.ts`, "--reporter=default", "--reporter=json", `--outputFile.json=${report}`], timeout);
+  if (unknown) return { unknown };
+  if (failedTests === 0) return {};
+  console.error(`${run.stdout}${run.stderr}`);
+  return { failed: true };
 }
 
 function main() {
@@ -75,15 +97,15 @@ function main() {
     files = git("diff", "--name-only", "--no-renames", "--diff-filter=d", "-z", base, sha).split("\0").filter(Boolean);
   }
   const present = files.filter((file) => existsSync(file));
-  for (const { name, command, args, guards } of checksFor(present)) {
+  for (const { name, command, args, guards, worker } of checksFor(present)) {
     const left = BUDGET_MS - (Date.now() - started);
     if (left <= 0) {
       console.log(`pre-push: out of time before ${name}, so CI will check it`);
       break;
     }
     let bad;
-    if (guards) {
-      const verdict = runGuards(guards, present, left);
+    if (guards || worker) {
+      const verdict = guards ? runGuards(guards, present, left) : runWorker(worker, left);
       if (verdict.unknown) console.log(`pre-push: ${name} did not settle it (${verdict.unknown}), so CI will check them`);
       bad = verdict.failed;
     } else {

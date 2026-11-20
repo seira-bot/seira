@@ -172,8 +172,8 @@ would only send that person the same names and ids it can already read.
 ## Cloud homes
 
 A desktop has an installation credential once its owner turns on "Use your
-phone anywhere", and `seira serve` has one after `seira login` or
-from `SEIRA_INSTALLATION_CREDENTIAL`. A Cloud home has none, so today it cannot
+phone anywhere", and `seira serve` has one after `seira login` (which needs an account
+service set with `SEIRA_CONTROL_PLANE_URL`) or from `SEIRA_INSTALLATION_CREDENTIAL`. A Cloud home has none, so today it cannot
 send.
 
 The server code already reads a push-only credential from

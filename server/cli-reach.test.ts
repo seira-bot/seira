@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { checkReach, envPublicUrl, lanProblem, localLinkBase, publicUrlProblem, reachLines, waitForReach } from "./cli-reach.ts";
+import { checkReach, envPublicUrl, lanProblem, localLinkBase, noRouteLines, publicUrlProblem, reachLines, waitForReach } from "./cli-reach.ts";
 
 const descriptor = (environmentId: string) => Response.json({ environmentId });
 
@@ -19,6 +19,14 @@ describe("ways in", () => {
     expect(envPublicUrl({ SEIRA_PUBLIC_URL: "http://seira.example.com" }, (line) => said.push(line))).toBeUndefined();
     expect(envPublicUrl({}, (line) => said.push(line))).toBeUndefined();
     expect(said).toEqual([expect.stringContaining("SEIRA_PUBLIC_URL is ignored")]);
+  });
+
+  it("offers --tunnel as a way in only while an account service is set", () => {
+    const without = noRouteLines(8799, "seira", {}).join("\n");
+    expect(without).not.toContain("--tunnel");
+    expect(without).not.toContain("seira login");
+    for (const way of ["--public-url", "--domain", "--tailscale", "--lan"]) expect(without).toContain(way);
+    expect(noRouteLines(8799, "seira", { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test" }).join("\n")).toContain("serve --tunnel");
   });
 
   it("--lan on a machine with only public addresses says so", () => {

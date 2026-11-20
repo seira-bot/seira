@@ -8802,7 +8802,6 @@
   "native.role.front": "將全部移到最前",
   "native.context.copyLink": "拷貝連結",
   "native.title.connected": "Seira — 已連線到：{server}（{host}）",
-  "native.title.hosted": "Seira — 託管：{name}（{host}）",
   "native.switcher.addCloudSub": "讓你的機器人全天候運作",
   "native.switcher.forgetNamed": "忘記「{name}」…",
   "native.switcher.andMore": "{names} 和另外 {count} 個",

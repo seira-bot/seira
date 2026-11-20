@@ -1,4 +1,5 @@
 // The companion sidecar is the only part of the app that listens off-machine; the renderer never reaches its control port.
+import { acceptedWireNames } from "./phone-wire-names.mjs";
 import { app, utilityProcess } from "electron";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -395,7 +396,7 @@ export async function companionPairing(open, expectedToken) {
   if (!proc) return companionState();
   const conditionalClose = !open && expectedToken !== undefined;
   const candidate = String(expectedToken ?? "");
-  const token = /^seira_pair_[A-Za-z0-9_-]{43}$/.test(candidate)
+  const token = new RegExp(`^(?:${acceptedWireNames("pairingCredentialPrefix").join("|")})[A-Za-z0-9_-]{43}$`).test(candidate)
     ? candidate
     : "invalid-pairing-token";
   const path = conditionalClose

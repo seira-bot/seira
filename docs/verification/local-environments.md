@@ -32,7 +32,7 @@ They do not prove the user workflow — the recipe does.
 
 ## 1. Create an environment
 
-1. Open **Settings → Servers**. Under "Environments on this computer",
+1. Open **Settings → This app → Your computers**. Under "Environments on this computer",
    enter the name `APRS Chat`, leave the data folder empty, choose
    **Create**.
 2. Expect: a row `APRS Chat` with path `~/.seira-aprs-chat`, a
@@ -54,7 +54,7 @@ They do not prove the user workflow — the recipe does.
    28799, two passes), so a first boot on a cold disk can take longer.
 3. Expect on arrival: an **empty bot list** (fresh environment), the sidebar
    pill reading `APRS Chat`, and "APRS Chat" marked Current in
-   Settings → Servers.
+   Settings → This app → Your computers.
 4. Expect from a terminal: `~/.seira-aprs-chat/environment-id` exists
    and is a UUID **different** from `~/.seira/environment-id` — the
    two environments are distinct servers, and every state file lives under

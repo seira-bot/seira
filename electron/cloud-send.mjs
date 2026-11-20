@@ -21,7 +21,7 @@ import { createMoveKinds, mergeRoutines } from "./cloud-send-kinds.mjs";
 import { botsOnCloud } from "./cloud-logins.mjs";
 import { moveCheck, patientSession, rowIdChunks, unanswered } from "./cloud-send-check.mjs";
 import nativeText from "./native-text.cjs";
-
+import { sentWireName } from "./phone-wire-names.mjs";
 const LOCAL_ROUTE = /^\/api\/(?:cloud-send|cloud-send\?move=1|cloud-send\/manifest|cloud-send\/chats|cloud-send\/chats\?attachments=1|cloud-send\/kind\?key=[\w%.-]{1,300}|cloud-send\/memory|cloud-send\/memory\?bot=[\w-]{1,128}|cloud-send\/files|cloud-send\/files\?path=[\w%.()~!*'-]{1,12000}&offset=\d{1,16}&length=\d{1,9}|cloud-send\/chats\/rows\?thread=[\w-]{1,200}&after=\d{1,16}&id=[\w%.-]{0,600}|cloud-send\/chats\/ids\?thread=[\w-]{1,200}&from=\d{1,9}|cloud-send\/chats\/attachment\/[A-Za-z0-9-]{1,80}\.[A-Za-z0-9]{1,10}|cloud-connections|connectors\/connected|config|bots\?messages=0|bots\/[\w-]{1,128}\/(?:skills|skills\/[a-z0-9-]{1,64}|memory|memory\/file\?path=[\w%.-]{1,200})|attachments\/[A-Za-z0-9-]{1,80}\.(?:png|jpg|gif|webp))$/u;
 /** One request's chats: a few conversations' rows, well under My Cloud's body limit. */
 const CHATS_BATCH_BYTES = 4 * 1024 * 1024;
@@ -379,7 +379,7 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
 
   /** A move goes only to a Cloud that says it takes one: an older one would lose the owner's lines and the checks. */
   async function assertTakesMove(session) {
-    const described = await session.call("GET", "/.well-known/seira/environment");
+    const described = await session.call("GET", sentWireName("environmentPath"));
     if (described.status >= 500) throw Object.assign(new CloudSendError("unreachable", "My Cloud did not answer. Try again."), { status: described.status });
     if (!(Number(described.body?.capabilities?.move) >= 1)) throw new CloudSendError("outdated", OUTDATED_FOR_MOVE);
   }

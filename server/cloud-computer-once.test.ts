@@ -3,7 +3,7 @@
 // does with each answer, when it sends again) is tested against a model of the computer that the real shell is checked
 // against.
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -153,6 +153,20 @@ describe.skipIf(!POSIX_SH)(`a call's claim on the computer ${ONLY_POSIX}`, () =>
     expect(pc.runs()).toBe(1);
   });
 
+  it("stops a call as taken when only a folder of an earlier version holds its claim, and does not run the command", () => {
+    const pc = computer();
+    const legacy = [join(pc.root, "disk", "omb-once"), join(pc.root, "shm", "omb-once")];
+    for (const dir of legacy) {
+      mkdirSync(join(dir, KEY), { recursive: true });
+      expect(pc.sh(onceCommand(KEY, 1, pc.command, { ...pc.claims, legacy }))).toEqual({ exitCode: 75, stdout: `seira-once:${KEY}:taken\n` });
+      rmSync(join(dir, KEY), { recursive: true });
+    }
+    expect(pc.runs()).toBe(0);
+    expect(pc.sh(onceCommand(KEY, 1, pc.command, { ...pc.claims, legacy })).exitCode).toBe(0);
+    expect(existsSync(join(pc.claims.disk, KEY))).toBe(true);
+    expect(pc.runs()).toBe(1);
+  });
+
   it("gives each call its own claim", () => {
     const pc = computer();
     pc.sh(onceCommand(KEY, 1, pc.command, pc.claims));
@@ -208,6 +222,17 @@ describe.skipIf(!POSIX_SH)(`stopping the command a call started ${ONLY_POSIX}`, 
     bystander.kill();
   });
 
+  it("finds the process id in a folder of an earlier version when the current folders hold none", async () => {
+    const pc = computer();
+    const legacy = [join(pc.root, "disk", "omb-once"), join(pc.root, "shm", "omb-once")];
+    const victim = spawn("/bin/sh", ["-c", "sleep 30"], { stdio: "ignore" });
+    mkdirSync(join(legacy[1], KEY), { recursive: true });
+    writeFileSync(join(legacy[1], KEY, "pid"), `${victim.pid}\n`);
+    expect(stopCommand(KEY, { ...pc.claims, legacy })).toContain(`for d in "${legacy[0]}" "${legacy[1]}"`);
+    expect(pc.sh(stopCommand(KEY, { ...pc.claims, legacy })).exitCode).toBe(0);
+    expect(await until(() => !alive(victim.pid!))).toBe(true);
+  });
+
   it("does nothing, quietly, for a call that recorded no process", () => {
     const pc = computer();
     expect(pc.sh(stopCommand(KEY, pc.claims))).toEqual({ exitCode: 0, stdout: "" });
@@ -257,6 +282,14 @@ describe("a call the computer did not answer", () => {
     await expect(r.call()).resolves.toEqual({ kind: "lost" });
     expect(r.pc.runs()).toBe(1);
     expect(r.counters.snapshot(BOX)).toMatchObject({ lostAnswers: 1 });
+  });
+
+  it("treats the mark of an earlier version the same as the current mark, on a resend", async () => {
+    const taken = relay((send) => ({ delivered: true, answered: send > 0 }), () => true, { runs: () => 0, sh: () => ({ exitCode: 75, stdout: `omb-once:${KEY}:taken\n` }) });
+    await expect(taken.call()).resolves.toEqual({ kind: "lost" });
+    expect(taken.counters.snapshot(BOX)).toMatchObject({ lostAnswers: 1 });
+    const unclaimed = relay((send) => ({ delivered: true, answered: send > 0 }), () => true, { runs: () => 0, sh: () => ({ exitCode: 76, stdout: `omb-once:${KEY}:unclaimed\n` }) });
+    await expect(unclaimed.call()).resolves.toEqual({ kind: "unanswered", phase: "waking" });
   });
 
   it("is not run a second time when the first copy arrives late, after the resend already ran", async () => {

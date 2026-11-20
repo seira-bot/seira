@@ -23,10 +23,10 @@ Only the maintainers can release:
   tags for everyone except the organization admins.
 - GitHub Actions has no bypass on any of these rulesets, and its token can only read
   the repository (see [CI](ci.md)).
-- A new push to `main` cancels the older `main` CI run that is still going
-  (see [CI](ci.md#fewer-runners)). When you release, rely on the `CI` check of
-  the release pull request, or on the run of the newest `main` commit. A
-  cancelled run of an older commit is not a failure.
+- A newer push to `main` can replace a `main` CI run that still waits for a
+  runner (see [CI](ci.md#runs-on-main-and-in-the-merge-queue)). A cancelled
+  run proves nothing about the released tree. Step 4 runs a preflight that needs a successful `CI` run for
+  that tree.
 
 The server image `ghcr.io/seira-bot/seira:v<version>` comes from the
 `Server image` workflow after the release (step 7). The npm package
@@ -168,8 +168,10 @@ cd ../..
 ```sh
 gh pr merge <pr number> --squash
 git fetch origin
+node scripts/release-preflight.mjs --sha <merge commit sha> --version <version>
 git tag -a v<version> -m "Seira v<version>" <merge commit sha>
 git push origin v<version>
+node scripts/release-preflight.mjs --tag v<version>
 cd .seira-scratch/linux-upload
 gh release create v<version> --verify-tag --title "Seira v<version>" --generate-notes \
   Seira-<version>-x86_64.AppImage Seira-<version>-amd64.deb latest-linux.yml \
@@ -178,6 +180,18 @@ gh release create v<version> --verify-tag --title "Seira v<version>" --generate-
 
 Tag the squash commit on `main`, not the release branch's last commit. The
 tag push works only for an organization admin.
+
+The preflight reads GitHub with `gh api` and changes nothing. Stop when it
+exits with a failure.
+
+- It checks that the tag and the `package.json` version are the same, that
+  the commit is on `main`, and that no check on the commit failed or is still
+  running.
+- It checks that a successful `CI` run proves the tree of the release commit.
+  A cancelled run does not prove it. It also checks that `main` is green.
+- When the CI proof is missing, start CI on the tag with
+  `gh workflow run ci.yml --ref v<version>`. Wait for the run to succeed.
+  Then run the preflight again.
 
 ### Publish the Flatpak repo
 
