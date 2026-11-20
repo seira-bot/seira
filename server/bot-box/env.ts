@@ -65,7 +65,7 @@ export function boxEnvironmentAllows(name: string, deny: ReadonlySet<string> = n
   const own = upper.startsWith("SEIRA_");
   if (allow.has(name) && !own) return true;
   if (deny.has(name) || deny.has(upper)) return false;
-  if (own && name !== upper) return false;
+  if (own && !name.startsWith("SEIRA_")) return false;
   if (own) {
     return BOX_ENV_SEIRA_NAMES.has(name) || BOX_ENV_SEIRA_PREFIXES.some((prefix) => name.startsWith(prefix)) || BOX_ENV_SEIRA_ENGINE_KEY.test(name);
   }
