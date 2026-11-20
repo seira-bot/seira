@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { BOX_ENV_NAMES, BOX_ENV_NEVER, BOX_ENV_SEIRA_NAMES, BOX_ENV_SEIRA_PREFIXES, boxEnvironment, boxEnvironmentAllows, instanceEnvNames } from "./env.ts";
+import { BOX_ENV_NAMES, BOX_ENV_NEVER, BOX_ENV_SEIRA_ENGINE_KEY, BOX_ENV_SEIRA_NAMES, BOX_ENV_SEIRA_PREFIXES, boxEnvironment, boxEnvironmentAllows, instanceEnvNames } from "./env.ts";
 
 /** Every other `SEIRA_` name the server's code knows: decided to stay on the server, never in a bot's environment. A name
  * ending in `_` is a family (`SEIRA_CLOUD_*`). */
@@ -59,7 +59,16 @@ const SERVER_ONLY_SEIRA: ReadonlySet<string> = new Set([
   "SEIRA_WORKERS_AI_TOKEN", "SEIRA_XAI_TTS_API",
   "SEIRA_BURST_PART_MAX_RESTARTS", "SEIRA_CHIEF_INCIDENT_TURNS_PER_HOUR", "SEIRA_ROUTINE_FAILURES_BEFORE_SPACING", "SEIRA_ROUTINE_FAILURE_SPACING_MAX_MS",
   "SEIRA_ROUTINE_FAILURE_SPACING_MS", "SEIRA_ROUTINE_RESTART_STAGGER_MS", "SEIRA_STARTUP_ROUTINE_GAP_MS",
+  "SEIRA_ACP_PROMPT_IDLE_TIMEOUT_MS", "SEIRA_CUA_EMBEDDED", "SEIRA_CUA_SDK_LIBRARY", "SEIRA_DEEPSEEK_MODELS_TIMEOUT_MS",
+  "SEIRA_INTERNAL_DATA_DIR_LEASE", "SEIRA_OPENAI_COMPAT_IDLE_TIMEOUT_MS", "SEIRA_OPENAI_COMPAT_PROBE_MS", "SEIRA_PROBE_LOCAL_INJECT",
+  "SEIRA_PUSH_RELAY_URL", "SEIRA_TOKEN", "SEIRA_URL",
+  // Names in the code that are not variables: constants and tables.
+  "SEIRA_CLOUD_SALE_TIERS", "SEIRA_CODE", "SEIRA_COLORS", "SEIRA_COLOR_NAMES", "SEIRA_FILE", "SEIRA_HOSTED_COMPOSIO_BROKER_URL",
+  "SEIRA_HOSTS", "SEIRA_PERSONA", "SEIRA_SERVICE_OVERRIDE_ENV", "SEIRA_TOOL_DEFINITIONS", "SEIRA_TOOL_NAMES",
 ]);
+
+/** Where the code builds an engine key per provider or host, the scan finds only the start of the name. */
+const ENGINE_KEY_STEMS: ReadonlySet<string> = new Set(["SEIRA_CODEX_", "SEIRA_LOCAL_", "SEIRA_QWEN_"]);
 
 const ROOT = new URL("../../", import.meta.url);
 
@@ -85,7 +94,7 @@ describe("the box's environment allow-list", () => {
     });
     expect(Object.keys(kept).sort()).toEqual([
       "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "ELECTRON_RUN_AS_NODE", "HOME", "HTTPS_PROXY", "LANG", "LC_ALL",
-      "NO_PROXY", "NPM_CONFIG_LOGLEVEL", "SEIRA_COMMS_TOKEN", "SEIRA_HOOK_URL", "OPENAI_API_KEY", "PATH", "TERM", "TZ",
+      "NO_PROXY", "NPM_CONFIG_LOGLEVEL", "OPENAI_API_KEY", "PATH", "SEIRA_COMMS_TOKEN", "SEIRA_HOOK_URL", "TERM", "TZ",
     ]);
   });
 
@@ -137,8 +146,18 @@ describe("the box's environment allow-list", () => {
     expect(Object.keys(kept).sort()).toEqual(["SEIRA_EXTRA_PATH", "SEIRA_GATE_CONFIG_ab12", "SEIRA_HARNESS_URL", "SEIRA_MCP_TOKEN_BROWSER", "SEIRA_REMOTE_MCP_CONFIG_cd34"]);
   });
 
+  it("passes the key an engine reads for one provider or host, and no server setting that starts the same way", () => {
+    for (const name of ["SEIRA_CODEX_MYGW_TOKEN", "SEIRA_CODEX_MYGW_HEADER_1", "SEIRA_LOCAL_UNSLOTH_API_KEY", "SEIRA_QWEN_OMLX_API_KEY", "SEIRA_TRIAL_CREDIT_KEY", "SEIRA_COMPANY_API_KEY"]) {
+      expect(boxEnvironmentAllows(name), name).toBe(true);
+    }
+    for (const name of ["SEIRA_CODEX_LAUNCH_SLOTS", "SEIRA_LOCAL_VM_UPDATE_WAIT_MS", "SEIRA_CODEX_MYGW_SECRET", "SEIRA_LOCAL_UNSLOTH_API_KEY_FILE", "SEIRA_QWEN_"]) {
+      expect(boxEnvironmentAllows(name), name).toBe(false);
+    }
+    for (const stem of ENGINE_KEY_STEMS) expect(BOX_ENV_SEIRA_ENGINE_KEY.source).toContain(stem.slice("SEIRA_".length, -1));
+  });
+
   it("every SEIRA_ name the server knows has a decision: passed to a bot's box or kept on the server", () => {
-    const passed = (name: string) => BOX_ENV_SEIRA_NAMES.has(name) || BOX_ENV_SEIRA_PREFIXES.includes(name);
+    const passed = (name: string) => BOX_ENV_SEIRA_NAMES.has(name) || BOX_ENV_SEIRA_PREFIXES.includes(name) || ENGINE_KEY_STEMS.has(name);
     const undecided = knownSeiraNames().filter((name) => !passed(name) && !SERVER_ONLY_SEIRA.has(name));
     expect(undecided, "add each to BOX_ENV_SEIRA_NAMES in env.ts if a bot's engine, hook or MCP proxy reads it, else to SERVER_ONLY_SEIRA here").toEqual([]);
     expect([...BOX_ENV_SEIRA_NAMES].filter((name) => SERVER_ONLY_SEIRA.has(name))).toEqual([]);

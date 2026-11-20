@@ -115,6 +115,22 @@ export function currentRunOn(value) {
   return value === "maus" ? "seira" : value;
 }
 
+/** Keys that an earlier version saved in an engine's settings under its own name: [old name, current name]. */
+const ENGINE_KEY_NAMES = [["OPENMAUSBOT_CODEX_API_KEY", "SEIRA_CODEX_API_KEY"], ["OPENMAUSBOT_COMPANY_API_KEY", "SEIRA_COMPANY_API_KEY"]];
+
+/** An engine's saved environment with each old key name renamed; a value under the current name wins over the old one. */
+export function currentEngineEnvironment(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  let renamed = null;
+  for (const [old, current] of ENGINE_KEY_NAMES) {
+    if (!Object.hasOwn(value, old)) continue;
+    renamed ??= { ...value };
+    if (!Object.hasOwn(renamed, current)) renamed[current] = renamed[old];
+    delete renamed[old];
+  }
+  return renamed ?? value;
+}
+
 const LEGACY_LINK_SCHEME = "openmausbot";
 
 /** The current scheme of a saved phone link scheme: an earlier version saved "openmausbot", "openmausbot-dev" and "openmausbot-next". */
