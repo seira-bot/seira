@@ -10,7 +10,7 @@ import { qrToString } from "./cli-pairing.ts";
 const mocks = vi.hoisted(() => ({
   // the fleet path is off in these tests: no credential in the environment
   fleetCredential: vi.fn(() => null),
-  fleetAccess: vi.fn(),
+  fleetAccess: vi.fn(), controlPlaneProblem: vi.fn(() => null),
   FLEET_CREDENTIAL_ENV: "SEIRA_INSTALLATION_CREDENTIAL",
   denyLogOpen: false,
   spawn: vi.fn(),
