@@ -44,7 +44,8 @@ async function startBrowser(root: string): Promise<string> {
   let stderr = "";
   child.stderr!.on("data", (chunk) => { if (stderr.length < 8_192) stderr += String(chunk); });
   const portFile = join(profile, "DevToolsActivePort");
-  const deadline = Date.now() + 30_000;
+  // A cold start on a loaded CI runner took up to 29 s: it reads the browser from disk through about 1,500 page faults.
+  const deadline = Date.now() + 90_000;
   for (;;) {
     const lines = existsSync(portFile) ? readFileSync(portFile, "utf8").split("\n") : [];
     if (lines.length >= 2) return `ws://127.0.0.1:${lines[0]}${lines[1]}`;
