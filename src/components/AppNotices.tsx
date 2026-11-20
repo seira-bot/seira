@@ -3,7 +3,7 @@ import { Rocket, Star } from "lucide-react";
 import type { CloudAccountState } from "../../electron/cloud-account.mjs";
 import type { CloudOffer } from "../../electron/cloud-home.mjs";
 import { api, useStore } from "@/state/store";
-import { APP_REPOSITORY, appVersion } from "@/lib/app-links";
+import { APP_REPOSITORY, appVersion, desktopAppVersion } from "@/lib/app-links";
 import { track } from "@/lib/analytics";
 import { announcementConditions, announcementPlan, announcementPlatform, announcementSurface, markLaunchAnnouncement, pickAnnouncement, providersRestricted, rememberCardSeen, rememberSponsorDay,
   reportAnnouncement, SPONSOR_CARDS_FOR_TEAM_MEMBERS, useAnnouncementCards, type SeenRecord } from "@/lib/announcements";
@@ -12,7 +12,8 @@ import { buyOfferAllowed, cloudNoticeKind, cloudPlanView, cloudTrialNotice, clou
 import { jobRoutine, useCloudIntent } from "@/lib/cloud-intent";
 import { CLOUD_INTENT_GIVEN, cloudSetupStage } from "@/lib/cloud-setup";
 import { cornerPopupWaits, firstChatQuiet, firstReplyPending } from "@/lib/corner-popup";
-import { ANNOUNCEMENT_NOTICE, CLOUD_INTRO, CLOUD_NOTICE, CLOUD_TRIAL_NOTICE, dismissNotice, dismissNotices, GROK_MOVE_NOTICE, introShown, introStage, launchNotice, markLaunchNotice, nextNotice, noticeSeen, PHONE_UPDATE_NOTICE, phoneUpdateHint, PRODUCT_HUNT_NOTICE, PRODUCT_HUNT_UNTIL, PRODUCT_HUNT_URL, SIMPLE_MODE_NOTICE, STAR_NOTICE, TEAMS_NOTICE, TWO_PLACES_NOTICE, UPDATES_CONSENT_NOTICE, usedBefore, WHATS_NEW_NOTICE } from "@/lib/notices";
+import { ANNOUNCEMENT_NOTICE, CLOUD_INTRO, CLOUD_NOTICE, CLOUD_TRIAL_NOTICE, dismissNotice, dismissNotices, GROK_MOVE_NOTICE, introShown, introStage, launchNotice, markLaunchNotice, nextNotice, noticeSeen, PHONE_UPDATE_NOTICE, phoneUpdateHint, PRODUCT_HUNT_NOTICE, PRODUCT_HUNT_UNTIL, PRODUCT_HUNT_URL, RELEASE_NOTES_NOTICE, SIMPLE_MODE_NOTICE, STAR_NOTICE, TEAMS_NOTICE, TWO_PLACES_NOTICE, UPDATES_CONSENT_NOTICE, usedBefore, WHATS_NEW_NOTICE } from "@/lib/notices";
+import { noteVersion, releaseNotesHint, releaseNotesView, type VersionRecord } from "@/lib/release-notes";
 import { rememberNoticeSeen } from "@/lib/announcement-history";
 import { reportTeams, teamsAction } from "@/lib/teams-whats-new";
 import { useTwoPlaces } from "@/lib/two-places";
@@ -44,6 +45,7 @@ import { NewLookNotice, reportNewLook } from "./NewLookNotice";
 import { PhoneUpdateCard, phonesToTell, useRetiredLinkPhones } from "./PhoneUpdateNotice";
 import { reportSimpleModePrompt, SimpleModePrompt } from "./SimpleModePrompt";
 import { TwoPlacesCard } from "./TwoPlacesCard";
+import { ReleaseNotesPopup } from "./whats-new/ReleaseNotesPopup";
 import { TeamsPopup } from "./whats-new/TeamsPopup";
 import { WhatsNewPopup } from "./whats-new/WhatsNewPopup";
 import { cloudSells } from "@/lib/cloud-sale";
@@ -94,6 +96,8 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const [announcementShown, setAnnouncementShown] = useState<string | null>(null);
   const [grokShown, setGrokShown] = useState(false);
   const [grokOpen, setGrokOpen] = useState(false);
+  const [versions, setVersions] = useState<VersionRecord | null>(null);
+  const [notesShown, setNotesShown] = useState(false);
   const consentHere = (local || viewer?.cloudHome === true) && brandStatus().source !== "file";
   const consent = useUpdatesConsent(consentHere ? updatesConsentBridge() : undefined);
   const [consentDone, setConsentDone] = useState(false);
@@ -192,6 +196,16 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const afterWelcome = welcomeFinishedThisLaunch() || launchDialogShown() === "mausbot" || firstChat;
   const consentWaits = welcomeFinishedThisLaunch() || firstChat;
   const mausBotFirst = mausBot.due;
+  // The release notes: this computer's own desktop page only, once per version after an update; never on a Cloud page, a remote
+  // client or a branded build. The version record is taken once the bots have loaded, so a first install is told from an update.
+  const notesHere = !remote && local && Boolean(desktop) && brandStatus().source !== "file";
+  const appNow = desktopAppVersion();
+  useEffect(() => {
+    if (notesHere && firstChat !== null && !versions) setVersions(noteVersion(appNow, usedBefore(state.bots)));
+  }, [notesHere, firstChat, versions]);
+  const notesView = notesHere && versions ? releaseNotesView(versions, appNow) : undefined;
+  const notesSeen = notesView ? noticeSeen(record, releaseNotesHint(notesView.version)) : false;
+  const notesBlocked = useOtherDialogOpen(notesHere && notesView !== null && !notesSeen) || Boolean(state.liveCall && state.liveCall.status !== "ended");
   const consentNow = consentWaits === true || consentFact === false ? false : consentWaits === null || mausBotFirst ? null : consentFact;
   // The Grok Bot popup: once for everyone who can add a bot, never in the launch the welcome or MausBot's card took, and the
   // one thing a later first chat may be interrupted by. Nothing reads this computer for it: GrokMoveDialog does that, once opened.
@@ -233,11 +247,13 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   // FOLLOWERS); nothing else does.
   const notice = waits ? null
     : firstChatQuiet(state) ? (grokNow === true && (launch === null || launch === GROK_MOVE_NOTICE) ? GROK_MOVE_NOTICE : null)
-    : teamsHere || cards || whatsNewHere || consentHere || simpleDue || announcementNow !== false || twoFact !== false || grokNow !== false || phoneNow !== false ? nextNotice({
+    : teamsHere || cards || whatsNewHere || notesHere || consentHere || simpleDue || announcementNow !== false || twoFact !== false || grokNow !== false || phoneNow !== false ? nextNotice({
     [TEAMS_NOTICE]: teamsNow,
     [GROK_MOVE_NOTICE]: grokNow,
     [PHONE_UPDATE_NOTICE]: phoneNow,
     // As the What's new popup: never in the launch whose welcome just finished, nor over MausBot's first-launch card.
+    [RELEASE_NOTES_NOTICE]: !notesHere || notesView === null || notesSeen || moving || afterWelcome === true ? false
+      : notesView === undefined || !viewer || afterWelcome === null || mausBotFirst || moving === null || notesBlocked ? null : true,
     [SIMPLE_MODE_NOTICE]: !simpleDue || afterWelcome === true ? false : afterWelcome === null || mausBotFirst || simpleBlocked ? null : true,
     [WHATS_NEW_NOTICE]: whatsNewDue === false || whatsNewState === "none" || moving || afterWelcome === true ? false
       : whatsNewDue === null || whatsNewState === "loading" || !viewer || afterWelcome === null || mausBotFirst || moving === null || whatsNewBlocked ? null : true,
@@ -259,7 +275,7 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
     if (!shownKey || !notice) return;
     markLaunchNotice(notice);
     // The popups and the question own this launch: MausBot's first-launch card waits for a later one.
-    if (shownKey === TEAMS_NOTICE || shownKey === GROK_MOVE_NOTICE || shownKey === SIMPLE_MODE_NOTICE || shownKey === WHATS_NEW_NOTICE || shownKey === UPDATES_CONSENT_NOTICE) markLaunchDialog("notices");
+    if (shownKey === TEAMS_NOTICE || shownKey === GROK_MOVE_NOTICE || shownKey === SIMPLE_MODE_NOTICE || shownKey === RELEASE_NOTES_NOTICE || shownKey === WHATS_NEW_NOTICE || shownKey === UPDATES_CONSENT_NOTICE) markLaunchDialog("notices");
     if (shownKey === CLOUD_INTRO) {
       setIntroOpen(true);
       track("cloud_card_shown", { variant: view?.kind === "signed-out" ? "signed_out" : "free" });
@@ -277,6 +293,9 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
       markLaunchAnnouncement(announcement.id);
       reportAnnouncement(announcement, "shown");
       if (announcement.kind === "sponsor") rememberSponsorDay(seenRecord, now(), remembering);
+    } else if (shownKey === RELEASE_NOTES_NOTICE && notesView && !notesShown) {
+      setNotesShown(true);
+      track("release_notes", { action: "shown", version: notesView.version });
     } else if (shownKey === GROK_MOVE_NOTICE && !grokShown) {
       setGrokShown(true);
       reportGrokMovePopup("shown");
@@ -322,6 +341,12 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
     const report = (action: WhatsNewAction, slide: WhatsNewSlide) => reportWhatsNew(action, slide, whatsNew);
     const done = () => { close(); save(WHATS_NEW_NOTICE); void desktop.seen(WHATS_NEW_NOTICE).catch(() => {}); };
     return <WhatsNewPopup view={whatsNew} report={report} onDone={done} onBuy={slide => dispatch({ type: "openCloudAdd", source: WHATS_NEW_SOURCES[slide] })} />;
+  }
+
+  if (notice === RELEASE_NOTES_NOTICE && notesView) {
+    const { version } = notesView;
+    const done = (action: "continue" | "close") => { track("release_notes", { action, version }); close(); save(releaseNotesHint(version)); };
+    return <ReleaseNotesPopup view={notesView} onDone={done} onAllChanges={() => track("release_notes", { action: "all_changes", version })} />;
   }
 
   if (notice === UPDATES_CONSENT_NOTICE && consent.state) {

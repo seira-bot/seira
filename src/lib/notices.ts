@@ -21,6 +21,8 @@ export const PRODUCT_HUNT_UNTIL = Date.UTC(2026, 10, 1);
 export const GROK_MOVE_NOTICE = "grok-move-2026-11";
 /** Update MausBot on your phone: once per phone with an older app after this computer's secure link ended. */
 export const PHONE_UPDATE_NOTICE = "phone-app-update";
+/** What's new in this version, from the bundled release notes: once per version, after an update. */
+export const RELEASE_NOTES_NOTICE = "release-notes";
 /** A card from the project's announcements file (src/lib/announcements.ts keeps which ones each person saw, and allows one a
  * launch): after every notice someone must act on, and it may follow the launch's notice once that is closed, after the
  * product-updates question. */
@@ -34,6 +36,7 @@ export const NOTICES = [
   TEAMS_NOTICE,
   GROK_MOVE_NOTICE,
   PHONE_UPDATE_NOTICE,
+  RELEASE_NOTES_NOTICE,
   SIMPLE_MODE_NOTICE,
   WHATS_NEW_NOTICE,
   UPDATES_CONSENT_NOTICE,
