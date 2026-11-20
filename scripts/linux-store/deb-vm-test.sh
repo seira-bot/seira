@@ -171,7 +171,7 @@ if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /tmp/Seira-amd64.d
 else
   say "deb-install=FAIL"; tail -20 /tmp/deb-install.log | sed 's/^/RESULT   /'; exit 1
 fi
-say "deb-package: $(dpkg-query -W -f='${Package} ${Version} ${Status}' openmausbot)"
+say "deb-package: $(dpkg-query -W -f='${Package} ${Version} ${Status}' seira)"
 say "deb-chrome-sandbox=$(stat -c '%U:%G:%a' /opt/Seira/chrome-sandbox)"
 say "deb-browser-profile-loaded=$(sudo aa-status 2>/dev/null | grep -c seira-browser)"
 say "deb-desktop-entry=$(grep -h '^Exec=' /usr/share/applications/bot.seira.app.desktop)"

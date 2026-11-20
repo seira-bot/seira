@@ -1,9 +1,9 @@
 // The one place that names what earlier versions called things. Each name here exists only so a person who updates keeps
 // their data: folders and files are moved to the current name once, and old user files still open.
 
-/** Electron names the settings folder and the saved-key store item after the app name, so the app keeps this one. */
+/** The app name of an earlier version, which named its settings folder and its saved-key store item. The first start copies that folder. */
 export const LEGACY_APP_NAME = "openmausbot";
-/** dpkg and pacman replace an installed package only when its name stays the same. */
+/** The Linux package name of an earlier version, which the current package conflicts with, replaces and provides. */
 export const LEGACY_LINUX_PACKAGE = "openmausbot";
 /** Electron reopens a running app through the path it started from, so an earlier version still running during a Linux
  * update reopens itself here. Its login entry also starts it here. */
