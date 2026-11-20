@@ -9767,7 +9767,6 @@
   "native.context.cannotOpen": "This file can't be opened from here. Use Save As… instead.",
   "native.context.openFailed": "Couldn't open this file",
   "native.title.connected": "Seira — Connected to: {server} ({host})",
-  "native.title.hosted": "Seira — Hosted: {name} ({host})",
   "native.switcher.addCloudSub": "Keeps your bots running 24/7",
   "native.switcher.forgetNamed": "Forget “{name}”…",
   "native.switcher.andMore": "{names} and {count} more",

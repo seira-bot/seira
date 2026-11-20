@@ -9380,7 +9380,6 @@
   "native.role.front": "前置全部窗口",
   "native.context.copyLink": "拷贝链接",
   "native.title.connected": "Seira — 已连接到：{server}（{host}）",
-  "native.title.hosted": "Seira — 托管于：{name}（{host}）",
   "native.switcher.addCloudSub": "让你的机器人 24 小时持续运行",
   "native.switcher.forgetNamed": "忘记“{name}”…",
   "native.switcher.andMore": "{names} 以及另外 {count} 个",
