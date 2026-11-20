@@ -24,7 +24,7 @@ vi.mock("../DesktopCapabilities", async (importOriginal) => ({
   ...await importOriginal<typeof import("../DesktopCapabilities")>(),
   useCaptionChrome: () => ({ dragProps: {}, padClass: "" }),
 }));
-vi.mock("../Avatar", () => ({ BotAvatar: () => null, MausAvatar: () => null }));
+vi.mock("../Avatar", () => ({ BotAvatar: () => null, SeiraAvatar: () => null }));
 vi.mock("../bot-access/ShareBotButton", () => ({ ShareBotButton: () => null, useTeamName: () => null }));
 vi.mock("../bot-settings/useBotSettingsDerived", () => ({
   useBotSettingsDerived: () => ({

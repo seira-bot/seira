@@ -1,6 +1,7 @@
 // Model-shaped widget inputs, written the way a bot or ChatKit's Widget Builder
 // writes them, using every node type between them. Tests, the phone fixtures
 // and the verification recipe all read these.
+import { SEIRA_HOSTS, seiraOrigin } from "../electron/seira-hosts.mjs";
 
 const prRow = (number: number, title: string, detail: string, status: string, color: string) => ({
   type: "ListViewItem",
@@ -66,7 +67,7 @@ export const WIDGET_SAMPLES: Record<string, unknown> = {
   pullRequests: {
     type: "ListView",
     title: "Pull requests",
-    caption: "mausbot-mobile",
+    caption: "seira-mobile",
     meta: "3 open",
     children: [
       prRow(750, "iOS: mid-turn steer", "#750 · 4 files · passed 2h ago", "Ready", "success"),
@@ -80,7 +81,7 @@ export const WIDGET_SAMPLES: Record<string, unknown> = {
   buildStatus: {
     type: "Card",
     title: "Build 25 to TestFlight",
-    caption: "OpenMausMobile 1.4.0 (25)",
+    caption: "Seira 1.4.0 (25)",
     status: { text: "Uploading", icon: "upload" },
     children: [
       { type: "Progress", value: 0.62, label: "about 40s left" },
@@ -193,7 +194,7 @@ export const WIDGET_SAMPLES: Record<string, unknown> = {
       { type: "Text", value: "Body text with a longer line that wraps onto a second line when the card is narrow.", maxLines: 2 },
       { type: "Caption", value: "A caption in secondary ink", size: "sm" },
       { type: "Box", padding: 4, radius: "lg", background: "surface-secondary", children: [{ type: "Text", value: "Inside a box", weight: "semibold" }, { type: "Caption", value: "with padding and a surface" }] },
-      { type: "Image", src: "https://mausbot.com/og.png", alt: "Seira", aspectRatio: "16/9", radius: "lg", frame: true },
+      { type: "Image", src: `${seiraOrigin(SEIRA_HOSTS.site)}/og.png`, alt: "Seira", aspectRatio: "16/9", radius: "lg", frame: true },
       { type: "Transition", children: [{ type: "Text", value: "A transition wraps one child." }] },
       {
         type: "Form",
@@ -205,7 +206,7 @@ export const WIDGET_SAMPLES: Record<string, unknown> = {
           { type: "Input", name: "email", label: "Email", placeholder: "Optional: where Scout can reply" },
           { type: "Label", value: "Note", fieldName: "note" },
           { type: "Textarea", name: "note", placeholder: "Anything Scout should know?", rows: 3 },
-          { type: "Row", gap: 2, children: [{ type: "Button", label: "Send feedback", submit: true, style: "primary" }, { type: "Button", label: "Open the docs", variant: "outline", iconEnd: "external-link", onClickAction: { type: "open_url", payload: { url: "https://mausbot.com/docs" } } }, { type: "Button", label: "Ask me later", variant: "ghost", onClickAction: { type: "feedback.later" } }] },
+          { type: "Row", gap: 2, children: [{ type: "Button", label: "Send feedback", submit: true, style: "primary" }, { type: "Button", label: "Open the docs", variant: "outline", iconEnd: "external-link", onClickAction: { type: "open_url", payload: { url: "https://seira.com/docs" } } }, { type: "Button", label: "Ask me later", variant: "ghost", onClickAction: { type: "feedback.later" } }] },
         ],
       },
     ],

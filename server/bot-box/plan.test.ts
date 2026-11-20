@@ -5,7 +5,7 @@ import { engineInstallRoots } from "../engine-roots.ts";
 import { BOX_MUTATIONS, CPU_LIST_FILES, argvPaths, bwrapArgs, planBox, taskWorkspaceIds, under, visibleInBox, type BoxAudience, type BoxMutation, type BoxRequest, type BoxSetup } from "./plan.ts";
 
 const home = "/data";
-const dataDir = "/data/.openmausbot";
+const dataDir = "/data/.seira";
 const setup = (mutate?: BoxMutation[]): BoxSetup => ({
   dataDir, home, codeRoots: ["/app"], engineRoots: engineInstallRoots(dataDir), seccompFd: 3,
   bridges: [{ name: "egress", port: 3128, socket: `${dataDir}/box/egress.sock` }, { name: "harness", port: 8799, socket: `${dataDir}/box/harness.sock` }],
@@ -13,7 +13,7 @@ const setup = (mutate?: BoxMutation[]): BoxSetup => ({
 });
 const cwd = join(dataDir, "task-workspaces", "bot-a", "thread-1");
 const turn = (mutate?: BoxMutation[]) => planBox(setup(mutate), {
-  command: "/usr/local/bin/claude", args: ["-p", "--additional-mcp-config", "@/tmp/omb-copilot-mcp-x/config.json", "--append-system-prompt-file=/tmp/omb-system-y/prompt.txt"],
+  command: "/usr/local/bin/claude", args: ["-p", "--additional-mcp-config", "@/tmp/seira-copilot-mcp-x/config.json", "--append-system-prompt-file=/tmp/seira-system-y/prompt.txt"],
   cwd, env: { PATH: "/usr/bin", HOME: home, CLAUDE_CONFIG_DIR: "/data/.claude" }, rw: [join(dataDir, "perm-abc.sock")],
 });
 
@@ -26,7 +26,7 @@ describe("explicit read-only grants", () => {
     const home = join(process.cwd(), "box-fixture-home");
     const dataDir = join(home, "data");
     const profile = join(dataDir, "providers", "antigravity", "account");
-    const skills = join(profile, "omb-skills");
+    const skills = join(profile, "seira-skills");
     const plan = planBox({ dataDir, home, codeRoots: [], engineRoots: [], bridges: [] }, {
       command: "antigravity", args: [], cwd: join(dataDir, "task-workspaces", "bot", "thread"),
       env: { HOME: home, GEMINI_HOME: profile }, ro: [skills],
@@ -48,8 +48,8 @@ linuxBox("the box plan", () => {
     expect(visibleInBox(plan, join(dataDir, "workspaces", "bot-a", "MEMORY.md"))).toBe("rw");
     expect(visibleInBox(plan, join(dataDir, "perm-abc.sock"))).toBe("rw");
     expect(visibleInBox(plan, "/data/.claude/settings.json")).toBe("rw");
-    expect(visibleInBox(plan, "/tmp/omb-copilot-mcp-x/config.json")).toBe("ro");
-    expect(visibleInBox(plan, "/tmp/omb-system-y/prompt.txt")).toBe("ro");
+    expect(visibleInBox(plan, "/tmp/seira-copilot-mcp-x/config.json")).toBe("ro");
+    expect(visibleInBox(plan, "/tmp/seira-system-y/prompt.txt")).toBe("ro");
     expect(visibleInBox(plan, "/app/dist-server/index.js")).toBe("ro");
     expect(visibleInBox(plan, "/usr/local/bin/claude")).toBe("ro");
     for (const hidden of ["messages.db", "config.json", "logins.json", "providers/x", "tools/y", "box/egress.sock",
@@ -76,7 +76,7 @@ linuxBox("the box plan", () => {
   it("writes the bubblewrap argv in mount order, with its own namespaces and the bridged sockets", () => {
     const args = bwrapArgs(turn());
     const text = args.join(" ");
-    for (const flag of ["--unshare-user", "--unshare-pid", "--unshare-net", "--unshare-ipc", "--unshare-uts", "--die-with-parent", "--hostname omb-box", "--seccomp 3", `--chdir ${cwd}`]) expect(text).toContain(flag);
+    for (const flag of ["--unshare-user", "--unshare-pid", "--unshare-net", "--unshare-ipc", "--unshare-uts", "--die-with-parent", "--hostname seira-box", "--seccomp 3", `--chdir ${cwd}`]) expect(text).toContain(flag);
     expect(bwrapArgs(planBox({ ...setup(), seccompFd: undefined }, { command: "/usr/bin/x", args: [], env: {} })).join(" ")).not.toContain("--seccomp");
     expect(text).toContain("--ro-bind /usr /usr");
     expect(text).toContain("--symlink usr/bin /bin");
@@ -87,7 +87,7 @@ linuxBox("the box plan", () => {
     expect(args[order[1]! + 1]).toBe(dataDir);
     expect(order[0]).toBeLessThan(order[1]!);
     expect(order[1]).toBeLessThan(order[2]!);
-    expect(text).toContain(`--dir /run/omb --bind ${dataDir}/box/egress.sock /run/omb/egress.sock --bind ${dataDir}/box/harness.sock /run/omb/harness.sock`);
+    expect(text).toContain(`--dir /run/seira --bind ${dataDir}/box/egress.sock /run/seira/egress.sock --bind ${dataDir}/box/harness.sock /run/seira/harness.sock`);
     expect(text).not.toContain("--new-session");
   });
 
@@ -111,7 +111,7 @@ linuxBox("the box plan", () => {
     const args = bwrapArgs(turn());
     const engines = args.findIndex((arg, i) => arg === "--ro-bind-try" && args[i + 1] === prefix && args[i + 2] === prefix);
     expect(engines).toBeGreaterThan(args.findIndex((arg, i) => arg === "--tmpfs" && args[i + 1] === dataDir));
-    const lastWritable = args.reduce((last, arg, i) => (arg === "--bind" || arg === "--bind-try") && !args[i + 2]!.startsWith("/run/omb/") ? i : last, -1);
+    const lastWritable = args.reduce((last, arg, i) => (arg === "--bind" || arg === "--bind-try") && !args[i + 2]!.startsWith("/run/seira/") ? i : last, -1);
     expect(engines).toBeGreaterThan(lastWritable);
   });
 
@@ -119,9 +119,9 @@ linuxBox("the box plan", () => {
     const own = join(dataDir, "engine-homes", "member-aaaaaaaaaaaaaaaa");
     const team = planBox(setup(), { command: "opencode", args: [], cwd, env: { HOME: own }, home: own });
     expect(visibleInBox(team, join(dataDir, "tools", "npm", "bin", "opencode"))).toBe("ro");
-    const apart = planBox({ ...setup(), dataDir: "/srv/omb", home: "/home/maus", engineRoots: engineInstallRoots("/srv/omb") }, { command: "opencode", args: [], cwd: "/srv/omb/task-workspaces/b/t", env: {} });
-    expect(visibleInBox(apart, "/srv/omb/tools/npm/bin/opencode")).toBe("ro");
-    expect(visibleInBox(apart, "/srv/omb/messages.db")).toBe("none");
+    const apart = planBox({ ...setup(), dataDir: "/srv/seira", home: "/home/seira", engineRoots: engineInstallRoots("/srv/seira") }, { command: "opencode", args: [], cwd: "/srv/seira/task-workspaces/b/t", env: {} });
+    expect(visibleInBox(apart, "/srv/seira/tools/npm/bin/opencode")).toBe("ro");
+    expect(visibleInBox(apart, "/srv/seira/messages.db")).toBe("none");
   });
 
   it("TMPDIR never puts the host's /tmp back; another temp folder is put back", () => {
@@ -133,19 +133,19 @@ linuxBox("the box plan", () => {
   });
 
   it("a shared-network box (a browser) has no bridges and no network namespace", () => {
-    const plan = planBox(setup(), { command: "/opt/chrome", args: [], env: {}, net: "shared", rw: ["/data/.openmausbot/browser/profiles/p1"] });
+    const plan = planBox(setup(), { command: "/opt/chrome", args: [], env: {}, net: "shared", rw: ["/data/.seira/browser/profiles/p1"] });
     expect(plan.net).toBe("shared");
     expect(bwrapArgs(plan).join(" ")).not.toContain("--unshare-net");
-    expect(bwrapArgs(plan).join(" ")).not.toContain("/run/omb");
-    expect(visibleInBox(plan, "/data/.openmausbot/browser/profiles/p1/Default")).toBe("rw");
-    expect(visibleInBox(plan, "/data/.openmausbot/messages.db")).toBe("none");
+    expect(bwrapArgs(plan).join(" ")).not.toContain("/run/seira");
+    expect(visibleInBox(plan, "/data/.seira/browser/profiles/p1/Default")).toBe("rw");
+    expect(visibleInBox(plan, "/data/.seira/messages.db")).toBe("none");
   });
 
-  it("a relay socket goes in at /run/omb/relay.sock only for a box with its own network", () => {
+  it("a relay socket goes in at /run/seira/relay.sock only for a box with its own network", () => {
     const relay = `${dataDir}/box/relay-ab12.sock`;
     const plan = planBox(setup(), { command: "/usr/bin/agy", args: [], cwd, env: { HOME: home }, relay });
-    expect(bwrapArgs(plan).join(" ")).toContain(`--bind ${relay} /run/omb/relay.sock`);
-    expect(visibleInBox(plan, "/run/omb/relay.sock")).toBe("rw");
+    expect(bwrapArgs(plan).join(" ")).toContain(`--bind ${relay} /run/seira/relay.sock`);
+    expect(visibleInBox(plan, "/run/seira/relay.sock")).toBe("rw");
     expect(visibleInBox(plan, relay)).toBe("none");
     expect(visibleInBox(plan, `${dataDir}/box/egress.sock`)).toBe("none");
     const shared = planBox(setup(), { command: "/opt/chrome", args: [], env: {}, net: "shared", relay });
@@ -187,7 +187,7 @@ linuxBox("the box plan", () => {
   it("on a Team Cloud the turn's HOME is its audience's engine home: the server's HOME and every other audience's home are not there", () => {
     const own = join(dataDir, "engine-homes", "member-aaaaaaaaaaaaaaaa"), other = join(dataDir, "engine-homes", "member-bbbbbbbbbbbbbbbb");
     const plan = planBox(setup(), {
-      command: "/usr/local/bin/claude", args: [], cwd, env: { HOME: own, CLAUDE_CONFIG_DIR: `${own}/.claude-work`, CODEX_HOME: `${own}/.omb-folders/CODEX_HOME-abc` },
+      command: "/usr/local/bin/claude", args: [], cwd, env: { HOME: own, CLAUDE_CONFIG_DIR: `${own}/.claude-work`, CODEX_HOME: `${own}/.seira-folders/CODEX_HOME-abc` },
       home: own, shared: [{ source: "/data/.claude/.credentials.json", target: `${own}/.claude/.credentials.json` }, { source: "/data/x", target: "/elsewhere/x" }],
     });
     expect(visibleInBox(plan, `${own}/.claude/projects/p/s.jsonl`)).toBe("rw");
@@ -206,21 +206,21 @@ linuxBox("the box plan", () => {
     expect(at("--tmpfs", dataDir)).toBeLessThan(at("--bind", own));
     expect(at("--bind", own)).toBeLessThan(at("--bind-try", `${own}/.claude/.credentials.json`));
     expect(args.join(" ")).toContain(`--bind-try /data/.claude/.credentials.json ${own}/.claude/.credentials.json`);
-    expect(args.filter((arg) => arg.startsWith(`${own}/.omb-folders`) || arg === `${own}/.claude-work`)).toEqual([]);
+    expect(args.filter((arg) => arg.startsWith(`${own}/.seira-folders`) || arg === `${own}/.claude-work`)).toEqual([]);
     // Without an engine home (a My Cloud, a desktop) the box has the server's HOME as before.
     expect(visibleInBox(turn(), "/data/.claude/projects/p/s.jsonl")).toBe("rw");
   });
 
   it("a data folder outside HOME is simply not there", () => {
-    const plan = planBox({ ...setup(), dataDir: "/srv/omb", home: "/home/maus" }, { command: "/usr/bin/x", args: [], cwd: "/srv/omb/task-workspaces/b/t", env: {} });
-    expect(visibleInBox(plan, "/srv/omb/messages.db")).toBe("none");
-    expect(visibleInBox(plan, "/srv/omb/task-workspaces/b/t")).toBe("rw");
-    expect(visibleInBox(plan, "/srv/omb/workspaces/b")).toBe("rw");
-    expect(bwrapArgs(plan).join(" ")).not.toContain("--tmpfs /srv/omb");
+    const plan = planBox({ ...setup(), dataDir: "/srv/seira", home: "/home/seira" }, { command: "/usr/bin/x", args: [], cwd: "/srv/seira/task-workspaces/b/t", env: {} });
+    expect(visibleInBox(plan, "/srv/seira/messages.db")).toBe("none");
+    expect(visibleInBox(plan, "/srv/seira/task-workspaces/b/t")).toBe("rw");
+    expect(visibleInBox(plan, "/srv/seira/workspaces/b")).toBe("rw");
+    expect(bwrapArgs(plan).join(" ")).not.toContain("--tmpfs /srv/seira");
   });
 
   it("shows no path on the command line that is in the data folder or holds it, unless the caller named it", () => {
-    for (const { dataDir, home } of [{ dataDir: "/data/.openmausbot", home: "/data" }, { dataDir: "/srv/omb", home: "/home/maus" }]) {
+    for (const { dataDir, home } of [{ dataDir: "/data/.seira", home: "/data" }, { dataDir: "/srv/seira", home: "/home/seira" }]) {
       const server = ["config.json", "sessions.json", "messages.db", "workspaces/other/MEMORY.md"].map((file) => join(dataDir, file));
       const ask = (args: string[], ro: string[] = []) => planBox({ ...setup(), dataDir, home }, { command: "/bin/sh", args, cwd: join(dataDir, "task-workspaces", "b", "t"), env: {}, botId: "b", ro });
       for (const args of [server, [dataDir], [`--model=${server[0]}`], [`@${server[0]}`], [join(dataDir, "..")], [join(dataDir, "workspaces", "..")], ["/srv", "/var"]]) {
@@ -239,13 +239,13 @@ linuxBox("the box plan", () => {
         expect(visibleInBox(planBox({ ...setup(), dataDir, home }, { command: "ls", args: [all], env: {}, configured: true }), join(all, "other", "MEMORY.md"))).toBe("none");
       }
       expect(visibleInBox(ask(["--token", join(dataDir, "hook-tokens", "t", "token")], [join(dataDir, "hook-tokens", "t")]), join(dataDir, "hook-tokens", "t", "token"))).toBe("ro");
-      expect(visibleInBox(ask(["--mcp-config", "/tmp/omb-mcp-1/mcp.json"]), "/tmp/omb-mcp-1/mcp.json")).toBe("ro");
+      expect(visibleInBox(ask(["--mcp-config", "/tmp/seira-mcp-1/mcp.json"]), "/tmp/seira-mcp-1/mcp.json")).toBe("ro");
       expect(visibleInBox(ask([]), join(dataDir, "bots", "b", "SOUL.md"))).toBe("ro");
     }
   });
 
   it("makes nothing of the data folder writable for a configured server's environment, but the bot's own folders", () => {
-    const dataDir = "/data/.openmausbot";
+    const dataDir = "/data/.seira";
     const ask = (env: Record<string, string>, configured: boolean) => planBox({ ...setup(), dataDir, home: "/data" }, { command: "sh", args: [], cwd: join(dataDir, "task-workspaces", "b", "t"), env, botId: "b", configured });
     for (const value of [join(dataDir, "config.json"), join(dataDir, "box"), dataDir, join(dataDir, "workspaces", "other"), "/"]) {
       for (const name of ["XDG_CACHE_HOME", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "TMPDIR"]) {
@@ -254,7 +254,7 @@ linuxBox("the box plan", () => {
       }
     }
     expect(visibleInBox(ask({ XDG_CACHE_HOME: join(dataDir, "workspaces", "b", "cache") }, true), join(dataDir, "workspaces", "b", "cache", "x"))).toBe("rw");
-    // An engine OpenMausBot starts keeps the home it was given there.
+    // An engine Seira starts keeps the home it was given there.
     expect(visibleInBox(ask({ CODEX_HOME: join(dataDir, "providers", "codex-1") }, false), join(dataDir, "providers", "codex-1", "auth.json"))).toBe("rw");
   });
 
@@ -303,7 +303,7 @@ linuxBox("the box plan", () => {
       // Read-only after every read-write line, so nothing the caller lends can make it writable again.
       const args = bwrapArgs(plan);
       const readOnly = args.findIndex((arg, i) => arg === "--ro-bind-try" && args[i + 1] === team && args[i + 2] === team);
-      const lastWritable = args.reduce((last, arg, i) => (arg === "--bind" || arg === "--bind-try") && !args[i + 2]!.startsWith("/run/omb/") ? i : last, -1);
+      const lastWritable = args.reduce((last, arg, i) => (arg === "--bind" || arg === "--bind-try") && !args[i + 2]!.startsWith("/run/seira/") ? i : last, -1);
       expect(readOnly).toBeGreaterThan(lastWritable);
       expect(visibleInBox(ask({ teamReadOnly: true }, { rw: [team, join(team, "skills")] }), join(team, "skills", "x", "SKILL.md"))).toBe("ro");
     });

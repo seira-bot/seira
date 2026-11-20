@@ -9,7 +9,7 @@ import { moveStatus } from "./move-status.mjs";
 // another becomes My Cloud. The Admin's word on the Cloud moved to brings this computer home by itself, with every
 // automation off; nothing else does (an Admin that can't say, a session not verified, another account, a server of the
 // person's own). Every side is faked; nothing reaches the network.
-const GONE = "https://omb-trial-1.fly.dev", MINE = "https://omb-other-2.fly.dev";
+const GONE = "https://seira-trial-1.fly.dev", MINE = "https://seira-other-2.fly.dev";
 const reply = (status, body = {}) => ({ ok: status < 400, status, body });
 
 function computer({ journal = null, marker = { frozen: true, cloud: GONE }, admin = { [GONE]: "deleted" }, cloud = {} } = {}) {

@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 function fixtureHome() {
-  const home = mkdtempSync(join(tmpdir(), "omb-grok-home-"));
+  const home = mkdtempSync(join(tmpdir(), "seira-grok-home-"));
   homes.push(home);
   const put = (path: string, text: string) => {
     mkdirSync(dirname(join(home, path)), { recursive: true });

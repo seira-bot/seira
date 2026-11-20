@@ -57,12 +57,12 @@ const SLOW_RETRY_MS = 60 * 60_000;
 const MISSES_TO_FAIL = 2;
 const RESULT_TTL_MS = 24 * 60 * 60_000;
 
-/** On unless OMB_AI_CHECKS=0. Under vitest or a sealed test fixture (env-path.ts) only with OMB_AI_CHECKS=1, as
+/** On unless SEIRA_AI_CHECKS=0. Under vitest or a sealed test fixture (env-path.ts) only with SEIRA_AI_CHECKS=1, as
  * local-inject's probe: a fake engine's turn log then holds only the turns a test sends. */
 export function backgroundAiChecks(env: NodeJS.ProcessEnv = process.env): boolean {
-  const flag = env.OMB_AI_CHECKS?.trim();
+  const flag = env.SEIRA_AI_CHECKS?.trim();
   if (flag === "0") return false;
-  return (env.VITEST !== "true" && env.OMB_TEST_SEALED_PATH !== "1") || flag === "1";
+  return (env.VITEST !== "true" && env.SEIRA_TEST_SEALED_PATH !== "1") || flag === "1";
 }
 
 /** What makes an engine sign in: its driver, settings and environment (keys among them), never its name or icon. Kept as a

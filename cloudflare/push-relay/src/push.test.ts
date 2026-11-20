@@ -127,6 +127,7 @@ describe("send to APNs", () => {
     expect(call!.text).not.toContain("Hidden Bot Name");
     expect(call!.text).not.toContain("Launch plans");
     expect(call!.text).not.toContain("omb");
+    expect(call!.text).not.toContain("seira");
     expect(call!.text).not.toContain("\"body\"");
   });
 

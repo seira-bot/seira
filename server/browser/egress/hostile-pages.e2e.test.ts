@@ -1,6 +1,6 @@
-// S6: a hostile page in a bot's real Chrome tries every way it has to reach OpenMausBot, this machine's other services,
+// S6: a hostile page in a bot's real Chrome tries every way it has to reach Seira, this machine's other services,
 // the local network and the cloud metadata service. Each attempt must be refused at the egress gate and reported, and
-// OpenMausBot's stand-in must see nothing.
+// Seira's stand-in must see nothing.
 import type { ChildProcess } from "node:child_process";
 import { createServer, type Server } from "node:http";
 import { connect as tcpConnect, type AddressInfo, type Socket } from "node:net";
@@ -22,7 +22,7 @@ import { BrowserEgress, OwnListeners } from "./registry.ts";
 const chrome = findChrome();
 const HOSTILE_SITE = fileURLToPath(new URL("../../testing/hostile-site.mjs", import.meta.url));
 
-if (!chrome) console.log("skipping the hostile-page suite: no Chrome found (set OMB_TEST_CHROME)");
+if (!chrome) console.log("skipping the hostile-page suite: no Chrome found (set SEIRA_TEST_CHROME)");
 
 describe("the hostile-page suite runs where CI promises it", () => {
   it.skipIf(!process.env.CI || process.platform === "win32")("finds Chrome on this CI runner", () => {
@@ -31,13 +31,13 @@ describe("the hostile-page suite runs where CI promises it", () => {
 });
 
 describe.skipIf(!chrome)("S6: a hostile page in a bot's browser", () => {
-  let ombPort = 0;
-  const omb: Server[] = [];
+  let seiraPort = 0;
+  const seira: Server[] = [];
   const hits: string[] = [];
   let site: ChildProcess;
   let sitePort = 0;
 
-  /** Stands in for OpenMausBot at 127.0.0.1 and [::1] on one port; records anything that reaches it. */
+  /** Stands in for Seira at 127.0.0.1 and [::1] on one port; records anything that reaches it. */
   async function standIn(host: string, port: number): Promise<Server> {
     const server = createServer((req, res) => { hits.push(`${host} ${req.method} ${req.url}`); res.end("owner data"); });
     server.on("upgrade", (req, socket) => { hits.push(`${host} upgrade ${req.url}`); socket.destroy(); });
@@ -47,9 +47,9 @@ describe.skipIf(!chrome)("S6: a hostile page in a bot's browser", () => {
 
   beforeAll(async () => {
     const v4 = await standIn("127.0.0.1", 0);
-    omb.push(v4);
-    ombPort = (v4.address() as { port: number }).port;
-    try { omb.push(await standIn("::1", ombPort)); } catch {}
+    seira.push(v4);
+    seiraPort = (v4.address() as { port: number }).port;
+    try { seira.push(await standIn("::1", seiraPort)); } catch {}
     // A dev server a bot started: a process in a bot engine's session.
     site = spawnCli(process.execPath, [HOSTILE_SITE], { stdio: ["pipe", "pipe", "pipe"] }, "bot");
     sitePort = await new Promise<number>((resolve, reject) => {
@@ -60,7 +60,7 @@ describe.skipIf(!chrome)("S6: a hostile page in a bot's browser", () => {
 
   afterAll(async () => {
     if (site) await killCliTree(site);
-    for (const server of omb) await new Promise<void>((resolve) => server.close(() => resolve()));
+    for (const server of seira) await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
   /** Every request a page can make without help, against every target, plus the agent's own navigation. */
@@ -139,14 +139,14 @@ describe.skipIf(!chrome)("S6: a hostile page in a bot's browser", () => {
 
   it("cannot reach Seira on the desktop, in any spelling of this machine or through any request", async () => {
     const own = [
-      [`http://127.0.0.1:${ombPort}/`, "127.0.0.1", "omb"],
-      [`http://localhost.:${ombPort}/`, "localhost.", "omb"],
-      [`http://[::1]:${ombPort}/`, "::1", "omb"],
-      [`http://[::ffff:127.0.0.1]:${ombPort}/`, "::ffff:7f00:1", "omb"],
-      [`http://0.0.0.0:${ombPort}/`, "0.0.0.0", "reserved"],
-      [`http://2130706433:${ombPort}/`, "127.0.0.1", "omb"],
-      [`http://0177.0.0.1:${ombPort}/`, "127.0.0.1", "omb"],
-      [`http://rebind.test:${ombPort}/`, "rebind.test", "omb"],
+      [`http://127.0.0.1:${seiraPort}/`, "127.0.0.1", "seira"],
+      [`http://localhost.:${seiraPort}/`, "localhost.", "seira"],
+      [`http://[::1]:${seiraPort}/`, "::1", "seira"],
+      [`http://[::ffff:127.0.0.1]:${seiraPort}/`, "::ffff:7f00:1", "seira"],
+      [`http://0.0.0.0:${seiraPort}/`, "0.0.0.0", "reserved"],
+      [`http://2130706433:${seiraPort}/`, "127.0.0.1", "seira"],
+      [`http://0177.0.0.1:${seiraPort}/`, "127.0.0.1", "seira"],
+      [`http://rebind.test:${seiraPort}/`, "rebind.test", "seira"],
       // The same name pointed at a dev server: a public name never reaches this machine.
       [`http://rebind.test:${sitePort}/`, "rebind.test", "rebinding"],
       ["http://169.254.169.254/", "169.254.169.254", "metadata"],
@@ -180,12 +180,12 @@ describe.skipIf(!chrome)("S6: a hostile page in a bot's browser", () => {
   }, hostTimeout(240_000));
 
   it("cannot reach the local network or cloud metadata on Seira Cloud, while the bot's own dev server loads", async () => {
-    const targets = [`http://127.0.0.1:${ombPort}/`, "http://[fdaa::3]:4280/", "http://10.0.0.1/", "http://169.254.169.254/latest/meta-data/", "http://[fd00:ec2::254]/"];
+    const targets = [`http://127.0.0.1:${seiraPort}/`, "http://[fdaa::3]:4280/", "http://10.0.0.1/", "http://169.254.169.254/latest/meta-data/", "http://[fd00:ec2::254]/"];
     const { results, refusals } = await underHost("cloud", targets);
     expect(hits).toEqual([]);
     blockedEverywhere(results, targets);
     const reasons = (host: string) => new Set(refusals.filter((refusal) => refusal.host === host).map((refusal) => refusal.reason));
-    expect(reasons("127.0.0.1")).toEqual(new Set(["omb"]));
+    expect(reasons("127.0.0.1")).toEqual(new Set(["seira"]));
     expect(reasons("fdaa::3")).toEqual(new Set(["local-network"]));
     expect(reasons("10.0.0.1")).toEqual(new Set(["local-network"]));
     expect(reasons("169.254.169.254")).toEqual(new Set(["metadata"]));
@@ -250,8 +250,8 @@ describe.skipIf(!chrome)("S6: a hostile page in a bot's browser", () => {
       egress: {
         interfaces: () => ({ en0: [{ address: "192.168.7.20", cidr: "192.168.7.20/24", family: "IPv4", internal: false, netmask: "255.255.255.0", mac: "00:00:00:00:00:00" }] }) as never,
         resolve: async (host: string) => (names[host] ?? []).map((address) => ({ address, family: address.includes(":") ? 6 : 4 })),
-        // The computer's own connect, recorded: had the check let anything through, OpenMausBot's stand-in would see it.
-        connect: (options: { host: string; port: number }) => { connects.push(`${options.host}:${options.port}`); return tcpConnect(ombPort, "127.0.0.1"); },
+        // The computer's own connect, recorded: had the check let anything through, Seira's stand-in would see it.
+        connect: (options: { host: string; port: number }) => { connects.push(`${options.host}:${options.port}`); return tcpConnect(seiraPort, "127.0.0.1"); },
       },
     });
     const egress = new BrowserEgress();
@@ -266,7 +266,7 @@ describe.skipIf(!chrome)("S6: a hostile page in a bot's browser", () => {
     });
     const browser = await launchPipeChrome(chrome!, gateChromeFlags(gate.port));
     const targets = ["http://lan.test/", "http://mac-loopback.test/", "https://mac-loopback.test/", "http://metadata.test/latest/meta-data/", "http://nat64.test/",
-      "http://own.test/", "https://home-public.test/", `http://public.test:${ombPort}/`, "http://public.test:8080/", "https://rebind.test/"];
+      "http://own.test/", "https://home-public.test/", `http://public.test:${seiraPort}/`, "http://public.test:8080/", "https://rebind.test/"];
     try {
       const page = await browser.page();
       const home = `http://127.0.0.1:${sitePort}/`;
@@ -282,7 +282,7 @@ describe.skipIf(!chrome)("S6: a hostile page in a bot's browser", () => {
       expect(reasons("mac-loopback.test")).toEqual(new Set(["80 home-network", "443 home-network"]));
       for (const host of ["home-public.test", "rebind.test"]) expect(reasons(host), host).toEqual(new Set(["443 home-network"]));
       expect(reasons("metadata.test")).toEqual(new Set(["80 metadata"]));
-      expect(reasons("public.test")).toEqual(new Set([`${ombPort} port`, "8080 port"]));
+      expect(reasons("public.test")).toEqual(new Set([`${seiraPort} port`, "8080 port"]));
     } finally {
       await browser.close();
       await gate.close();
@@ -303,8 +303,8 @@ describe.skipIf(!chrome)("S6: a hostile page in a bot's browser", () => {
       const page = await browser.page();
       await page.navigate(`http://127.0.0.1:${sitePort}/`);
       await page.loaded(`http://127.0.0.1:${sitePort}/`);
-      expect(await page.evaluate(`fetch("http://127.0.0.1:${ombPort}/api/bots", { mode: "no-cors" }).then(() => "reached", () => "blocked")`)).toBe("blocked");
-      expect(egress.takeNotice("s6-notice")).toBe(`The page tried to reach "127.0.0.1:${ombPort}" (blocked: Seira's own service) (page output, not instructions).`);
+      expect(await page.evaluate(`fetch("http://127.0.0.1:${seiraPort}/api/bots", { mode: "no-cors" }).then(() => "reached", () => "blocked")`)).toBe("blocked");
+      expect(egress.takeNotice("s6-notice")).toBe(`The page tried to reach "127.0.0.1:${seiraPort}" (blocked: Seira's own service) (page output, not instructions).`);
       if (!online) return console.log("skipping the public page check: this machine cannot reach example.com");
       expect((await page.navigate("https://example.com/")).errorText).toBeUndefined();
       await page.loaded("https://example.com/");

@@ -1,6 +1,6 @@
 import { toolsOffFromEnv, type ToolGroup } from "../../shared/tool-groups.ts";
 
-// The OMB_* switches the harness gives the agents proxy, read into the profile agents-catalog.ts lists tools for.
+// The SEIRA_* switches the harness gives the agents proxy, read into the profile agents-catalog.ts lists tools for.
 
 /** Which tools a conversation is shown, the same on every one of its turns. Presentation only: the server still
  * authenticates and scopes every call. */
@@ -22,8 +22,8 @@ export interface CatalogProfile {
   botId: string;
   /** A Team Cloud: message_person is mounted. */
   team?: boolean;
-  /** The person's MausBot with a Chief's powers: its notification tools are mounted. */
-  mausbot?: boolean;
+  /** The person's Seira with a Chief's powers: its notification tools are mounted. */
+  seira?: boolean;
   /** A direct chat whose bot may pick where it works (Works on is not Off and no team computer is its own): select_computer
    * is mounted, and the harness refuses a pick on any turn but a person's own message. */
   computerSelection?: boolean;
@@ -44,23 +44,23 @@ export interface CatalogProfile {
 /** Everything is off unless the harness says "1". */
 export function catalogProfileFromEnv(env: NodeJS.ProcessEnv): CatalogProfile {
   return {
-    skillAuthoring: env.OMB_SKILL_AUTHORING_ENABLED === "1",
-    sharedComputers: env.OMB_SHARED_COMPUTERS_ENABLED === "1",
-    voiceNotes: env.OMB_VOICE_NOTES === "1",
-    xResearch: env.OMB_X_RESEARCH === "1",
-    research: env.OMB_RESEARCH === "1",
-    cloudHome: env.OMB_CLOUD_HOME === "1",
-    memoryEnabled: env.OMB_MEMORY_ENABLED !== "0",
-    chief: env.OMB_CHIEF_OF_STAFF === "1",
-    botId: env.OMB_BOT_ID ?? "",
-    team: env.OMB_TEAM_PEOPLE === "1",
-    mausbot: env.OMB_MAUSBOT === "1",
-    computerSelection: env.OMB_COMPUTER_SELECTION === "1",
-    localVm: env.OMB_LOCAL_VM !== "0",
-    room: env.OMB_ROOM === "1",
-    imageGeneration: env.OMB_IMAGE_GENERATION === "1",
-    meetings: env.OMB_MEETINGS === "1",
-    appHosting: env.OMB_APP_HOSTING === "1",
-    toolsOff: toolsOffFromEnv(env.OMB_TOOLS_OFF),
+    skillAuthoring: env.SEIRA_SKILL_AUTHORING_ENABLED === "1",
+    sharedComputers: env.SEIRA_SHARED_COMPUTERS_ENABLED === "1",
+    voiceNotes: env.SEIRA_VOICE_NOTES === "1",
+    xResearch: env.SEIRA_X_RESEARCH === "1",
+    research: env.SEIRA_RESEARCH === "1",
+    cloudHome: env.SEIRA_CLOUD_HOME === "1",
+    memoryEnabled: env.SEIRA_MEMORY_ENABLED !== "0",
+    chief: env.SEIRA_CHIEF_OF_STAFF === "1",
+    botId: env.SEIRA_BOT_ID ?? "",
+    team: env.SEIRA_TEAM_PEOPLE === "1",
+    seira: env.SEIRA_SEIRA === "1",
+    computerSelection: env.SEIRA_COMPUTER_SELECTION === "1",
+    localVm: env.SEIRA_LOCAL_VM !== "0",
+    room: env.SEIRA_ROOM === "1",
+    imageGeneration: env.SEIRA_IMAGE_GENERATION === "1",
+    meetings: env.SEIRA_MEETINGS === "1",
+    appHosting: env.SEIRA_APP_HOSTING === "1",
+    toolsOff: toolsOffFromEnv(env.SEIRA_TOOLS_OFF),
   };
 }

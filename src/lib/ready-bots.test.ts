@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { MAUS_COLORS } from "./mascot";
+import { SEIRA_COLORS } from "./mascot";
 import { CLASSIC_ROLE_IDS, READY_BOT_CATEGORIES, READY_BOTS, matchesReadyBot, readyBot, readyBotCopy, readyBotTemplate } from "./ready-bots";
 import { setLocale } from "./i18n";
 import en from "@/locales/en.json";
@@ -27,7 +27,7 @@ describe("ready-made bots", () => {
 
   it("each has a look the app can draw, a category, and something to try", () => {
     for (const bot of READY_BOTS) {
-      expect(Object.keys(MAUS_COLORS)).toContain(bot.look.color);
+      expect(Object.keys(SEIRA_COLORS)).toContain(bot.look.color);
       expect(PICKER_BODY_IDS).toContain(bot.look.mascotBody);
       expect(mascotAccessories(bot.look.mascotAccessories)).toEqual(bot.look.mascotAccessories);
       expect(READY_BOT_CATEGORIES).toContain(bot.category);

@@ -102,8 +102,8 @@ describe("chiefOfStaffSystemPrompt", () => {
   });
 
   it("limits the no-authority line to bots outside the team of a person's Chief", () => {
-    const personal = [{ id: "maus", name: "MausBot", chiefOfStaff: true, defaultBot: { person: "ada@example.test" } }, { id: "mail", name: "Mail" }];
-    const prompt = chiefOfStaffSystemPrompt("maus", personal, true);
+    const personal = [{ id: "seira", name: "Seira", chiefOfStaff: true, defaultBot: { person: "ada@example.test" } }, { id: "mail", name: "Mail" }];
+    const prompt = chiefOfStaffSystemPrompt("seira", personal, true);
     expect(prompt).toContain("Reaching a bot outside your team gives you no authority over it");
     expect(prompt).not.toContain("Reaching a bot gives you no authority over it");
   });
@@ -162,10 +162,10 @@ describe("chiefOfStaffSystemPrompt", () => {
   });
 
   it("tells a place's Seira that is not the Chief that the person's day and brief are its own, and a member's that they are not", () => {
-    const place = chiefOfStaffSystemPrompt("maus", [{ id: "maus", name: "MausBot", defaultBot: {} }], true);
+    const place = chiefOfStaffSystemPrompt("seira", [{ id: "seira", name: "Seira", defaultBot: {} }], true);
     expect(place).toContain("but you are not the Chief: team incidents stay with the Chief.");
     expect(place).toContain("Keeping an eye on the person's day and their daily brief are yours.");
-    const member = chiefOfStaffSystemPrompt("maus", [{ id: "maus", name: "MausBot", defaultBot: { person: "ada@example.test" } }], true);
+    const member = chiefOfStaffSystemPrompt("seira", [{ id: "seira", name: "Seira", defaultBot: { person: "ada@example.test" } }], true);
     expect(member).toContain("but you are not the Chief: the daily brief and team incidents stay with the Chief.");
     expect(member).not.toContain("daily brief are yours");
   });
@@ -182,7 +182,7 @@ describe("an @everyone line from the Team map", () => {
 
   it("says nothing of it to a Chief that cannot hand work on, or to a Seira that only holds the tools", () => {
     expect(chiefOfStaffSystemPrompt("chief", team, false)).not.toContain(EVERYONE_ON_THE_MAP);
-    const maus = [{ id: "maus", name: "MausBot", defaultBot: { person: "ada@example.test" } }, ...team.slice(1)];
-    expect(chiefOfStaffSystemPrompt("maus", maus, true)).not.toContain(EVERYONE_ON_THE_MAP);
+    const seira = [{ id: "seira", name: "Seira", defaultBot: { person: "ada@example.test" } }, ...team.slice(1)];
+    expect(chiefOfStaffSystemPrompt("seira", seira, true)).not.toContain(EVERYONE_ON_THE_MAP);
   });
 });

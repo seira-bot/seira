@@ -14,8 +14,22 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const PLACEHOLDERS = "node|runner|user|username|you|yourname|your-name|me|name|alice|bob|ubuntu|pi|app|seira|root|shared|public|default|guest";
+const PLACEHOLDERS = "node|runner|user|username|you|yourname|your-name|me|name|alice|bob|ubuntu|pi|app|seira|root|shared|public|default|guest|cua";
 const notPlaceholder = `(?!(?:${PLACEHOLDERS})(?:[/\\\\]|$))`;
+
+const NOT_A_SECRET_VALUE = [
+  "[$<{]",
+  "(?:[a-z]\\w*\\.)+[A-Z][A-Z0-9_]*(?:[^\\w.]|$)", // reads a variable by name: parentEnv.SEIRA_X_TOKEN
+  "[\"']?[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+[\"']?(?:[\\s;,)]|$)", // an environment variable name
+  "[\"']x-[a-z0-9-]+[\"']", // an HTTP header name
+  "/\\^|\\[", // a regex literal or an array
+  "[\"'](?:/[a-z0-9._@-]+){2,}[\"']", // an absolute path
+  "[a-z]+[A-Z][A-Za-z]*[;,)]", // a bare identifier in code
+  "\\S*(?:fixture|example)",
+];
+const SECRET_ASSIGNMENT = new RegExp(
+  `\\b[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD)[A-Z0-9_]*\\s*=\\s*(?!${NOT_A_SECRET_VALUE.join("|")})["']?[^\\s"'$<{]{16,}`,
+);
 
 export const GENERIC_RULES = [
   { label: "home folder path (Linux)", re: new RegExp(`(?<![\\w.:-])/home/${notPlaceholder}[A-Za-z0-9._-]+/`) },
@@ -24,8 +38,7 @@ export const GENERIC_RULES = [
   { label: "ls -l output with owner names", re: /(?:^|\s)[-dl][-rwxsStT]{9}[.+@]?\s+\d+\s+[A-Za-z0-9._-]+\s+[A-Za-z0-9._-]+\s+\d+\s/ },
   { label: "private key", re: /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----/ },
   { label: "provider API key", re: /\b(?:sk-(?:ant-|proj-)?[A-Za-z0-9_-]{32,}|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,}|AKIA[0-9A-Z]{16}|xox[abpr]-[A-Za-z0-9-]{20,})\b/ },
-  // A value like `parentEnv.OMB_X_TOKEN` reads a variable by name, so it is not a secret.
-  { label: "secret value in an assignment", re: /\b[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD)[A-Z0-9_]*\s*=\s*["']?(?![$<{])(?!(?:[a-z]\w*\.)+[A-Z][A-Z0-9_]*(?:[^\w.]|$))[^\s"'$<{]{16,}/ },
+  { label: "secret value in an assignment", re: SECRET_ASSIGNMENT },
 ];
 
 const EXEMPT = [

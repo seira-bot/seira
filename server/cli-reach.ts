@@ -5,7 +5,7 @@ import { reachableAddresses, type ReachableAddresses } from "./lan-address.ts";
 
 export type Route = "public-url" | "domain" | "tunnel" | "tailscale" | "lan";
 
-const DESCRIPTOR = "/.well-known/openmausbot/environment";
+const DESCRIPTOR = "/.well-known/seira/environment";
 
 /** `--public-url`: https anywhere, or http on a private network; never plain http on the open internet. */
 export function publicUrlProblem(url: string): string | null {
@@ -14,12 +14,12 @@ export function publicUrlProblem(url: string): string | null {
   return `--public-url ${url} is on the open internet, where plain http isn't encrypted: use its https:// address, or --lan for this network only`;
 }
 
-/** OMB_PUBLIC_URL set in the environment: the address a server behind the person's own proxy or tunnel prints. */
+/** SEIRA_PUBLIC_URL set in the environment: the address a server behind the person's own proxy or tunnel prints. */
 export function envPublicUrl(env: NodeJS.ProcessEnv, log: (line: string) => void): string | undefined {
-  const raw = env.OMB_PUBLIC_URL?.trim().replace(/\/+$/, "");
+  const raw = env.SEIRA_PUBLIC_URL?.trim().replace(/\/+$/, "");
   if (!raw) return undefined;
   const problem = publicUrlProblem(raw);
-  if (problem) log(`OMB_PUBLIC_URL is ignored: ${problem.replace(/^--public-url /, "")}`);
+  if (problem) log(`SEIRA_PUBLIC_URL is ignored: ${problem.replace(/^--public-url /, "")}`);
   return problem ? undefined : raw;
 }
 
@@ -83,7 +83,7 @@ export function noRouteLines(port: number, prefix: string): string[] {
     "",
     "Pick a way in and run again:",
     `  ${prefix} serve --public-url https://…     you already have HTTPS in front (cloudflared, Caddy)`,
-    `  ${prefix} serve --domain maus.example.com  we get the certificate (ports 80, 443)`,
+    `  ${prefix} serve --domain seira.example.com  we get the certificate (ports 80, 443)`,
     `  ${prefix} serve --tailscale                your tailnet (needs Tailscale)`,
     `  ${prefix} serve --lan                      this network only, not encrypted`,
     `  ${prefix} serve --tunnel                   a free Seira web address; sign in first: ${prefix} login`,
@@ -94,7 +94,7 @@ export function noRouteLines(port: number, prefix: string): string[] {
 /** Where a browser on the same machine opens a code's link: the configured loopback address (Docker's published port),
  * or this server's own port. */
 export function localLinkBase(publicUrl: string | null, port: number, env: NodeJS.ProcessEnv = process.env): { base: string; place: "machine" | "docker" } {
-  const docker = Boolean(env.OMB_CLI_PREFIX?.includes("docker"));
+  const docker = Boolean(env.SEIRA_CLI_PREFIX?.includes("docker"));
   if (publicUrl && isLoopbackHost(new URL(publicUrl).hostname)) return { base: publicUrl, place: docker ? "docker" : "machine" };
   return { base: `http://127.0.0.1:${port}`, place: "machine" };
 }

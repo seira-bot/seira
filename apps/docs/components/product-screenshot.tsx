@@ -1,27 +1,16 @@
-const screenshotNames = [
-  'hero',
-  'byo-vps-0.1.151',
-  'model-picker',
-  'computer-panel',
-  'approval-card',
-  'marketplace',
-  'composio-multi-account',
-  'context-menu',
-  'app-settings',
-  'ubuntu-computer-panel',
-  'docs-onboarding',
-  'docs-engine-detection',
-  'docs-fresh-bot',
-  'docs-model-picker',
-  'docs-computer-panel',
-  'docs-connected-apps',
-  'docs-automations',
-  'docs-my-cloud-compare',
-  'docs-my-cloud-strip',
-  'docs-my-cloud-switcher',
-] as const;
+// Pixel size of each image in docs/screenshots. The page keeps this space before the image loads.
+const screenshotSizes = {
+  'approval-card': [1980, 1470],
+  'byo-vps-picker': [717, 565],
+  'docs-automations': [2560, 1600],
+  'docs-computer-panel': [2560, 1600],
+  'docs-connected-apps': [2560, 1600],
+  'docs-engine-detection': [2560, 1600],
+  'docs-fresh-bot': [2560, 1600],
+  'docs-model-picker': [2560, 1600],
+} as const;
 
-type ScreenshotName = (typeof screenshotNames)[number];
+type ScreenshotName = keyof typeof screenshotSizes;
 
 export function ProductScreenshot({
   name,
@@ -34,13 +23,17 @@ export function ProductScreenshot({
   caption?: string;
   position?: 'center' | 'top';
 }) {
+  const [width, height] = screenshotSizes[name];
   return (
-    <figure className="omb-product-shot">
-      <div className="omb-product-shot-frame">
+    <figure className="seira-product-shot">
+      <div className="seira-product-shot-frame">
         <img
           src={`/screenshots/${name}.png`}
           alt={alt}
+          width={width}
+          height={height}
           loading="lazy"
+          decoding="async"
           className={position === 'top' ? 'object-top' : 'object-center'}
         />
       </div>

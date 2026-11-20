@@ -156,6 +156,8 @@ const connectedAccountsPageSchema = z.object({
   next_cursor: z.string().nullable().optional(),
 });
 
+/** `userId`'s connected accounts. An item Composio names with another user is left out: every ownership check
+ *  (triggers, disconnects, file uploads, adoption) reads this list. */
 export async function listConnectedAccounts(env: Env, userId: string, slugs: string[]) {
   const accounts: ConnectedAccountResponse[] = [];
   const seenCursors = new Set<string>();
@@ -172,7 +174,7 @@ export async function listConnectedAccounts(env: Env, userId: string, slugs: str
     const response = await composioRequest(env, `/connected_accounts?${params}`);
     if (!response.ok) throw new Error(await upstreamError(response, `Account lookup failed (${response.status})`));
     const body = connectedAccountsPageSchema.parse(await response.json());
-    accounts.push(...body.items);
+    accounts.push(...body.items.filter((account) => !account.user_id || account.user_id === userId));
     const next = body.next_cursor || undefined;
     if (!next || seenCursors.has(next)) return accounts;
     seenCursors.add(next);

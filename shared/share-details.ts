@@ -1,6 +1,7 @@
 // What a template brings, as its Details sheet and Import's preview show it. Pure: the server builds it for a folder it
 // read, and the renderer for a gallery team it fetched.
 import type { PackageDocument } from "./package-format.ts";
+import { currentFormat } from "../electron/legacy-names.mjs";
 import type { TemplateDetails, TemplateScope } from "./share-card.ts";
 
 const picture = (avatar: { mime: string; data: string } | undefined) => avatar ? `data:${avatar.mime};base64,${avatar.data}` : undefined;
@@ -37,10 +38,10 @@ export function packageDetails(document: PackageDocument, scope?: TemplateScope)
   };
 }
 
-/** A legacy team file (`openmaus.team`) as details; null when the value is not one. */
+/** A legacy team file (`seira.team`) as details; null when the value is not one. */
 export function manifestDetails(value: unknown): TemplateDetails | null {
   const team = (value as { format?: unknown; team?: { name?: unknown; description?: unknown; members?: unknown } } | null);
-  if (team?.format !== "openmaus.team" || typeof team.team?.name !== "string" || !Array.isArray(team.team.members) || !team.team.members.length) return null;
+  if (!team || currentFormat(team.format) !== "seira.team" || typeof team.team?.name !== "string" || !Array.isArray(team.team.members) || !team.team.members.length) return null;
   const members = team.team.members.flatMap((member: unknown, index: number) => {
     const entry = member as { key?: unknown; name?: unknown; title?: unknown; description?: unknown; appearance?: { color?: unknown } } | null;
     if (typeof entry?.name !== "string" || !entry.name.trim()) return [];

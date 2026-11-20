@@ -10,14 +10,14 @@ import type { PhoneRelayStatus } from "./phone-relay.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 import { startControlPlaneStub } from "./testing/control-plane-stub.ts";
 
-const status = (over: Partial<PhoneRelayStatus> = {}): PhoneRelayStatus => ({ relay: "connected", node: "relay1.openmausbot.com", grant: "ok", phones: 1, maxPhones: 20, ...over });
-const invite = "openmausbot://pair?address=relay-only.invalid%3A443&token=omb_pair_x&e2e=eyJ2IjoxfQ";
+const status = (over: Partial<PhoneRelayStatus> = {}): PhoneRelayStatus => ({ relay: "connected", node: "relay1.seira.bot", grant: "ok", phones: 1, maxPhones: 20, ...over });
+const invite = "seira://pair?address=relay-only.invalid%3A443&token=seira_pair_x&e2e=eyJ2IjoxfQ";
 
 describe("seira serve --relay", () => {
   it("is off unless asked for, joins any way in but --tunnel, and never a local start", () => {
     expect(parseArgs(["serve"], {})).not.toHaveProperty("relay");
     expect(parseArgs(["serve", "--relay"], {})).toMatchObject({ command: "serve", relay: true, tunnel: false });
-    expect(parseArgs(["serve", "--relay", "--domain", "maus.example.com"], {})).toMatchObject({ relay: true, domain: "maus.example.com" });
+    expect(parseArgs(["serve", "--relay", "--domain", "seira.example.com"], {})).toMatchObject({ relay: true, domain: "seira.example.com" });
     expect(parseArgs(["serve", "--tailscale", "--relay"], {})).toMatchObject({ relay: true, tailscale: true });
     expect(parseArgs(["service", "install", "--relay"], {})).toMatchObject({ command: "service", relay: true });
     expect(parseArgs(["serve", "--relay", "--tunnel"], {})).toEqual({ error: "choose one of --relay (phones through Seira Relay) and --tunnel (a public address)" });
@@ -32,7 +32,7 @@ describe("seira serve --relay", () => {
     expect(block).toContain("Paired phones: 1 of 20. Remove one: seira devices revoke ID");
     expect(relayPairingBlock(body, false, "seira")).toBeNull();
     expect(relayPairingBlock({ ...body, relay: undefined }, true, "seira")).toBeNull();
-    expect(relayPairingBlock({ ...body, inviteUrl: "openmausbot://pair?address=https%3A%2F%2Fmaus.example.com&token=omb_pair_x" }, true, "seira")).toBeNull();
+    expect(relayPairingBlock({ ...body, inviteUrl: "seira://pair?address=https%3A%2F%2Fseira.example.com&token=seira_pair_x" }, true, "seira")).toBeNull();
   });
 
   it("says why a phone cannot pair yet, in the person's terms", () => {
@@ -62,8 +62,8 @@ describe("seira serve --relay", () => {
 
   it("signs a machine in for the relay without reserving one of the scarce tunnel addresses", async () => {
     const stub = await startControlPlaneStub();
-    const dataDir = mkdtempSync(join(tmpdir(), "omb-login-relay-"));
-    vi.stubEnv("OMB_CONTROL_PLANE_URL", stub.url);
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-login-relay-"));
+    vi.stubEnv("SEIRA_CONTROL_PLANE_URL", stub.url);
     try {
       const lines: string[] = [];
       const io = { log: (line: string) => lines.push(line), error: (line: string) => lines.push(`error: ${line}`), ask: async () => stub.otp };
@@ -75,7 +75,7 @@ describe("seira serve --relay", () => {
       expect([...stub.installations.values()].map((installation) => installation.kind)).toEqual(["server"]);
       expect(stub.calls.filter((call) => call.includes("/endpoint"))).toEqual([]);
       const file = join(dataDir, "tunnel-account.json");
-      expect(JSON.parse(readFileSync(file, "utf8")).companionInstallationCredential).toMatch(/^omb_install_/);
+      expect(JSON.parse(readFileSync(file, "utf8")).companionInstallationCredential).toMatch(/^seira_install_/);
       if (process.platform !== "win32") expect(statSync(file).mode & 0o777).toBe(0o600);
     } finally {
       vi.unstubAllEnvs();
@@ -103,7 +103,7 @@ describe("seira serve --relay", () => {
     expect(applyStartupPreferences(start(["start", "--relay"]), undefined)).toMatchObject({ relay: true });
     expect(applyStartupPreferences(start(["start"]), { access: "tunnel" })).toMatchObject({ tunnel: true });
     expect(serviceServeArgs({ port: 8799, dataDir: "/d", relay: true })).toEqual(["--port", "8799", "--data-dir", "/d", "--relay"]);
-    expect(serviceServeArgs({ port: 8799, dataDir: "/d", domain: "maus.example.com", relay: true })).toEqual(["--port", "8799", "--data-dir", "/d", "--domain", "maus.example.com", "--relay"]);
+    expect(serviceServeArgs({ port: 8799, dataDir: "/d", domain: "seira.example.com", relay: true })).toEqual(["--port", "8799", "--data-dir", "/d", "--domain", "seira.example.com", "--relay"]);
     expect(serviceServeArgs({ port: 8799, dataDir: "/d" })).toEqual(["--port", "8799", "--data-dir", "/d"]);
   });
 });

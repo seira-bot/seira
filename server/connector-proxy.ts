@@ -1,4 +1,4 @@
-// Connection requests become OpenMausBot chat cards: the agent never authors an auth URL and credentials never pass
+// Connection requests become Seira chat cards: the agent never authors an auth URL and credentials never pass
 // through its transcript. stdout is the MCP transport: never log there.
 import readline from "node:readline";
 import { randomUUID } from "node:crypto";
@@ -22,11 +22,11 @@ import { capToolListResult, toolLimitFromEnv } from "./tool-count-limit.ts";
 
 type Json = Record<string, unknown>;
 
-const UPSTREAM = process.env.OMB_CONNECTOR_UPSTREAM_URL ?? "";
-const HARNESS = process.env.OMB_HARNESS_URL ?? "http://127.0.0.1:8799";
-const BOT_ID = process.env.OMB_BOT_ID ?? "";
-const THREAD_ID = process.env.OMB_THREAD_ID ?? "";
-const TOKEN = process.env.OMB_CONNECTOR_TOKEN ?? process.env.OMB_COMMS_TOKEN ?? "";
+const UPSTREAM = process.env.SEIRA_CONNECTOR_UPSTREAM_URL ?? "";
+const HARNESS = process.env.SEIRA_HARNESS_URL ?? "http://127.0.0.1:8799";
+const BOT_ID = process.env.SEIRA_BOT_ID ?? "";
+const THREAD_ID = process.env.SEIRA_THREAD_ID ?? "";
+const TOKEN = process.env.SEIRA_CONNECTOR_TOKEN ?? process.env.SEIRA_COMMS_TOKEN ?? "";
 const ALLOWED_TOOLS = parseConnectorAllowedToolsEnv(process.env[CONNECTOR_ALLOWED_TOOLS_ENV]);
 const SERVICE_SLUGS = parseConnectorServiceSlugsEnv(process.env[CONNECTOR_SERVICE_SLUGS_ENV]);
 const SCHEMA_PROFILE = toolSchemaProfileFromEnv(process.env);
@@ -41,7 +41,7 @@ const TOOLS_LIST_RELAY_TIMEOUT_MS = 5_000;
 
 function parsedHeaders(): Record<string, string> {
   try {
-    const value: unknown = JSON.parse(process.env.OMB_CONNECTOR_UPSTREAM_HEADERS ?? "{}");
+    const value: unknown = JSON.parse(process.env.SEIRA_CONNECTOR_UPSTREAM_HEADERS ?? "{}");
     if (!value || typeof value !== "object" || Array.isArray(value)) return {};
     return Object.fromEntries(
       Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
@@ -74,7 +74,7 @@ function initializeResult(id: unknown, protocolVersion: unknown): Json {
     result: {
       protocolVersion: typeof protocolVersion === "string" && protocolVersion ? protocolVersion : "2024-11-05",
       capabilities: { tools: {} },
-      serverInfo: { name: "openmausbot-connectors", version: "1" },
+      serverInfo: { name: "seira-connectors", version: "1" },
     },
   };
 }

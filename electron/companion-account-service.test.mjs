@@ -32,9 +32,9 @@ const UUID = "11111111-1111-4111-8111-111111111111";
 const INSTALLATION_ID = "22222222-2222-4222-8222-222222222222";
 const DUPLICATE_INSTALLATION_ID = "33333333-3333-4333-8333-333333333333";
 const ACCOUNT_TOKEN = `signed.${"a".repeat(80)}`;
-const INSTALLATION_CREDENTIAL = `omb_install_${"b".repeat(22)}.${"c".repeat(43)}`;
+const INSTALLATION_CREDENTIAL = `seira_install_${"b".repeat(22)}.${"c".repeat(43)}`;
 const CONNECTOR_TOKEN = `eyJ${"d".repeat(100)}`;
-const ENDPOINT = "https://c-opaque.openmausbot.com";
+const ENDPOINT = "https://c-opaque.seira.bot";
 
 function credentialStore(initial = {}) {
   let document = structuredClone(initial);
@@ -117,19 +117,19 @@ describe("Companion account service", () => {
     expect(resolveCompanionControlPlaneURL({ isPackaged: true, environment: {} })).toBe("");
     expect(resolveCompanionControlPlaneURL({
       isPackaged: true,
-      environment: { OMB_CONTROL_PLANE_URL: "https://accounts.openmausbot.com" },
-    })).toBe("https://accounts.openmausbot.com");
+      environment: { SEIRA_CONTROL_PLANE_URL: "https://accounts.seira.bot" },
+    })).toBe("https://accounts.seira.bot");
     expect(resolveCompanionControlPlaneURL({
       isPackaged: false,
-      environment: { OMB_CONTROL_PLANE_URL: "http://127.0.0.1:8787/" },
+      environment: { SEIRA_CONTROL_PLANE_URL: "http://127.0.0.1:8787/" },
     })).toBe("http://127.0.0.1:8787");
     expect(resolveCompanionControlPlaneURL({
       isPackaged: true,
-      environment: { OMB_CONTROL_PLANE_URL: "http://accounts.openmausbot.com" },
+      environment: { SEIRA_CONTROL_PLANE_URL: "http://accounts.seira.bot" },
     })).toBe("");
     expect(resolveCompanionControlPlaneURL({
       isPackaged: true,
-      environment: { OMB_CONTROL_PLANE_URL: new String("https://accounts.openmausbot.com") },
+      environment: { SEIRA_CONTROL_PLANE_URL: new String("https://accounts.seira.bot") },
     })).toBe("");
     expect(resolveCompanionControlPlaneURL({ isPackaged: false, environment: {} })).toBe("");
   });
@@ -1399,7 +1399,7 @@ function onDemandFixture({ initial = signedCredentials(), client = readyClient()
 describe("Companion account on demand", () => {
   it("reads the need from the running companion, and anything unclear as can't tell", () => {
     const answer = (overrides) => ({ enabled: true, devices: [], pairing: null, ...overrides });
-    const pairing = { code: "123456", token: `omb_pair_${"a".repeat(43)}`, expiresAt: LAUNCH_AT };
+    const pairing = { code: "123456", token: `seira_pair_${"a".repeat(43)}`, expiresAt: LAUNCH_AT };
     expect(managedEndpointNeed(answer({ devices: [{ id: "phone-1", name: "Ada" }] }))).toBe(true);
     expect(managedEndpointNeed(answer({ pairing }))).toBe(true);
     expect(managedEndpointNeed(answer())).toBe(false);
@@ -1419,7 +1419,7 @@ describe("Companion account on demand", () => {
   it("needs a tunnel only for an old phone seen this month once the encrypted connection is on", () => {
     const now = LAUNCH_AT;
     const on = (devices, extra = {}) => ({ enabled: true, devices, pairing: null, e2e: { enabled: true }, ...extra });
-    const pairing = { code: "123456", token: `omb_pair_${"a".repeat(43)}`, expiresAt: now };
+    const pairing = { code: "123456", token: `seira_pair_${"a".repeat(43)}`, expiresAt: now };
     expect(managedEndpointNeed(on([{ id: "old", lastSeenAt: now - HOUR_MS }]), now)).toBe(true);
     expect(managedEndpointNeed(on([{ id: "new", lastSeenAt: now, e2eAt: now - HOUR_MS }]), now)).toBe(false);
     expect(managedEndpointNeed(on([{ id: "stale", lastSeenAt: now - 31 * 24 * HOUR_MS }]), now)).toBe("unused");
@@ -1858,7 +1858,7 @@ describe("Companion account on demand", () => {
     expect(managedEndpointNeed(answer([old, phone(now - DAY_MS, "phone-2")]), now)).toBe(true);
     expect(managedEndpointNeed(answer([old], { connectedDeviceIds: ["phone-1"] }), now)).toBe(true);
     expect(managedEndpointNeed(answer([old], { connectedDeviceIds: ["phone-2"] }), now)).toBe("unused");
-    const pairing = { code: "123456", token: `omb_pair_${"a".repeat(43)}`, expiresAt: now };
+    const pairing = { code: "123456", token: `seira_pair_${"a".repeat(43)}`, expiresAt: now };
     expect(managedEndpointNeed(answer([old], { pairing }), now)).toBe(true);
     expect(managedEndpointNeed(answer([]), now)).toBe(false);
     for (const unknown of [undefined, null, 0, -1, Number.NaN, Number.POSITIVE_INFINITY, String(now - 90 * DAY_MS), now + DAY_MS]) {

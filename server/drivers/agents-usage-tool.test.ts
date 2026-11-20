@@ -11,8 +11,8 @@ const context = (answer: { ok: boolean; body: Record<string, unknown> }) => ({ c
 describe("the usage_limits tool", () => {
   it("is read-only and listed to every bot, Chief or not, in every conversation", () => {
     expect(isReadOnlyAgentTool(USAGE_LIMITS_TOOL)).toBe(true);
-    for (const env of [{}, { OMB_CHIEF_OF_STAFF: "1" }, { OMB_ROOM_TURN: "1" }, { OMB_TEAM_PEOPLE: "1" }]) {
-      const tools = availableTools(catalogProfileFromEnv({ OMB_BOT_ID: "bot", ...env })).map((tool) => tool.name);
+    for (const env of [{}, { SEIRA_CHIEF_OF_STAFF: "1" }, { SEIRA_ROOM_TURN: "1" }, { SEIRA_TEAM_PEOPLE: "1" }]) {
+      const tools = availableTools(catalogProfileFromEnv({ SEIRA_BOT_ID: "bot", ...env })).map((tool) => tool.name);
       expect(tools).toContain(USAGE_LIMITS_TOOL);
     }
   });

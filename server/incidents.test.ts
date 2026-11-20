@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import "./server-line-packs.ts";
-import { chiefForBot, INCIDENT_HARD_LIMIT, INCIDENT_RETRY_LIMIT, IncidentLedger, incidentChip, incidentRequest, incidentText, type Incident } from "./incidents.ts";
+import { AUTO_RETRY_LEAD, chiefForBot, INCIDENT_HARD_LIMIT, INCIDENT_RETRY_LIMIT, IncidentLedger, incidentChip, incidentRequest, incidentText, OLD_AUTO_RETRY_LEAD, OLD_RETRY_LEAD, RETRY_LEAD, type Incident } from "./incidents.ts";
 import { withPeerProvenance } from "./peer-provenance.ts";
 
 const bots = [
@@ -123,5 +123,14 @@ describe("incident wording", () => {
       .toBe("Ada hatte ein Problem: Die geplante Routine im Raum „Standup“ ist fehlgeschlagen: „exit_before_result“");
     expect(incidentChip({ ...incident, kind: "could-not-start", title: null, detail: "" }, "de")).toBe("Ada hatte ein Problem: Die Ausführung in der Hauptunterhaltung konnte nicht starten");
     expect(incidentText(incident, { count: 1, mayRetry: true, muted: false })).toContain("Ada's run in its thread #Invoice reconciliation failed");
+  });
+});
+
+describe("retry notes that an earlier version wrote", () => {
+  it("keeps their own words, so a retry an earlier version started is not started again", () => {
+    expect(OLD_RETRY_LEAD.startsWith("[From OpenMausBot · retry · ")).toBe(true);
+    expect(OLD_AUTO_RETRY_LEAD).toBe(`${OLD_RETRY_LEAD}OpenMausBot, automatically`);
+    expect(OLD_RETRY_LEAD).not.toBe(RETRY_LEAD);
+    expect(OLD_AUTO_RETRY_LEAD).not.toBe(AUTO_RETRY_LEAD);
   });
 });

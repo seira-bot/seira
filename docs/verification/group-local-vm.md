@@ -20,7 +20,7 @@ member handoff.
 
 Prepare the managed desktop image on an explicitly selected Podman test machine.
 Build the renderer (`node node_modules/vite/bin/vite.js build`), set
-`OMB_VERIFY_PODMAN` to the absolute executable path and `OMB_VERIFY_MACHINE` to that connection,
+`SEIRA_VERIFY_PODMAN` to the absolute executable path and `SEIRA_VERIFY_MACHINE` to that connection,
 then run:
 
 ```sh
@@ -33,7 +33,7 @@ creates only fixture-specific desktop targets and removes them afterward.
 Do not substitute a live application URL or data directory. The JSON receipt
 records the exact MCP target for each speaker, the computer-off case, and
 revocation of each settled speaker's computer capability. It is written to
-`.omb-scratch/verification-logs/group-vm-routing.json` only after cleanup succeeds.
+`.seira-scratch/verification-logs/group-vm-routing.json` only after cleanup succeeds.
 The script removes the previous dump before every send and requires every Goal,
 including computer-off, to settle. Cleanup errors fail the run.
 

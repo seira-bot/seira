@@ -23,6 +23,7 @@ import {
 import type { TemplateScope } from "./share-card.ts";
 import { skillFilePathProblem, type SkillFile } from "./skill-files.ts";
 import { isSkillName, parseSkillMd, SKILL_FILE_MAX_BYTES } from "./skill-md.ts";
+import { currentFormat, LEGACY_PACKAGE_FILE_SUFFIX, LEGACY_TEAM_MANIFEST_FILE } from "../electron/legacy-names.mjs";
 
 export type ShareFolderFiles = Record<string, string | Uint8Array>;
 
@@ -31,7 +32,7 @@ export const SHARE_FOLDER_MAX_FILES = 300;
 export const SHARE_FOLDER_MAX_BYTES = PACKAGE_MAX_BYTES + 1024 * 1024;
 export const MANIFEST_NAMES = { bot: "bot.md", department: "team.md" } as const satisfies Record<TemplateScope, string>;
 /** Older shapes a folder or repository may hold instead of bot.md or team.md. */
-const LEGACY_MARKDOWN = "botmrr.md", LEGACY_MANIFEST = "team.mausteam.json";
+const LEGACY_MARKDOWN = "botmrr.md", LEGACY_MANIFEST = "team.seirateam.json";
 
 const PICTURE_TYPES = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp" } as const;
 const PICTURE_EXTENSIONS: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
@@ -47,7 +48,7 @@ export function isSkillFilePath(path: string): boolean {
 
 export type ShareFolder =
   | { kind: "package"; scope: TemplateScope; document: PackageDocument }
-  /** A legacy team.mausteam.json, parsed by the server's team manifest reader. */
+  /** A legacy team.seirateam.json, parsed by the server's team manifest reader. */
   | { kind: "manifest"; manifest: unknown };
 
 const refuse = (message: string) => new PackageFormatError("invalid", message);
@@ -63,8 +64,8 @@ export function safeFolderPath(path: string): string | null {
 /** Whether the reader ever opens this path: the manifest, a skill, a file beside one or a picture. Everything else in a
  * folder is ignored. */
 export function isShareFolderPath(path: string): boolean {
-  return path === MANIFEST_NAMES.bot || path === MANIFEST_NAMES.department || path === LEGACY_MARKDOWN || path === LEGACY_MANIFEST ||
-    /^[\w.-]+\.openmaus\.json$/.test(path) || SKILL_PATH.test(path) || PICTURE_PATH.test(path) || isSkillFilePath(path);
+  return path === MANIFEST_NAMES.bot || path === MANIFEST_NAMES.department || path === LEGACY_MARKDOWN || path === LEGACY_MANIFEST || path === LEGACY_TEAM_MANIFEST_FILE ||
+    /^[\w.-]+\.seira\.json$/.test(path) || (path.endsWith(LEGACY_PACKAGE_FILE_SUFFIX) && /^[\w.-]+$/.test(path)) || SKILL_PATH.test(path) || PICTURE_PATH.test(path) || isSkillFilePath(path);
 }
 
 function textOf(value: string | Uint8Array | undefined): string | undefined {
@@ -211,7 +212,7 @@ export function readShareFolder(input: ShareFolderFiles): ShareFolder {
   }
   const legacy = textOf(files[LEGACY_MARKDOWN]);
   if (legacy !== undefined) return { kind: "package", scope: "department", document: parsePackageDocument(legacy, { trust: "file" }) };
-  const json = Object.keys(files).find((path) => path === LEGACY_MANIFEST || path.endsWith(".openmaus.json"));
+  const json = Object.keys(files).find((path) => path === LEGACY_MANIFEST || path === LEGACY_TEAM_MANIFEST_FILE || path.endsWith(".seira.json") || path.endsWith(LEGACY_PACKAGE_FILE_SUFFIX));
   if (json) {
     let value: unknown;
     try {
@@ -219,7 +220,7 @@ export function readShareFolder(input: ShareFolderFiles): ShareFolder {
     } catch {
       throw new PackageFormatError("not_a_package", `${json} is not valid JSON.`);
     }
-    const isPackage = Boolean(value) && typeof value === "object" && (value as { format?: unknown }).format === PACKAGE_FORMAT;
+    const isPackage = Boolean(value) && typeof value === "object" && currentFormat((value as { format?: unknown }).format) === PACKAGE_FORMAT;
     return isPackage ? { kind: "package", scope: "department", document: parsePackageDocument(value, { trust: "file" }) } : { kind: "manifest", manifest: value };
   }
   throw new PackageFormatError("not_a_package", "This folder has no bot.md or team.md.");

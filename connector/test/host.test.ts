@@ -55,7 +55,7 @@ describe("the server's facts and checks", () => {
   });
 
   it("runs the box probe from its own image with the home's security settings, as nobody, and says whose the fix is", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-connector-probe-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-connector-probe-"));
     dirs.push(dir);
     const docker = new FakeDocker(dir);
     const image = `ghcr.io/milind-soni/mausbot-connector@sha256:${"1".repeat(64)}`;
@@ -66,13 +66,13 @@ describe("the server's facts and checks", () => {
     docker.probe = { code: 1, output: "bwrap: Failed to make / slave: Permission denied\n" };
     expect(await probeBox(docker, image, "{}")).toEqual({ ok: false, fix: "Our bots' safety box can't start on this server yet: its AppArmor profile is not loaded. Run the install command again to repair it." });
     expect([...docker.containers.keys()]).toEqual([]);
-    const created = docker.calls.filter((call) => call.startsWith("create mausbot-probe-"));
+    const created = docker.calls.filter((call) => call.startsWith("create seira-probe-"));
     expect(created).toHaveLength(2);
     expect(boxProbeFix("bwrap: No permissions to create new namespace, likely because the kernel does not allow non-privileged user namespaces.")).toContain("its seccomp profile was not applied");
     expect(boxProbeFix("bwrap: Can't mount proc on /newroot/proc: Operation not permitted")).toContain("Docker here is too old");
     expect(boxProbeFix("bwrap: setting up uid map: Permission denied")).toContain("without its AppArmor profile");
     expect(boxProbeFix("bwrap: Creating new namespace failed: Operation not permitted")).toContain("user namespaces are switched off");
-    expect(boxProbeFix("OCI runtime create failed: apparmor failed to apply profile: profile omb-home-narrow not found")).toContain("its AppArmor profile is not loaded");
+    expect(boxProbeFix("OCI runtime create failed: apparmor failed to apply profile: profile seira-home-narrow not found")).toContain("its AppArmor profile is not loaded");
     expect(boxProbeFix("something else")).toBe("Our bots' safety box can't start on this server yet. Run the install command again to repair it.");
   });
 });

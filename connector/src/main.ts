@@ -1,4 +1,4 @@
-// mausbot-connector: `run` (the service), `enroll` (the code on stdin), `status`, `probe`, `job` (one job from root on this
+// seira-connector: `run` (the service), `enroll` (the code on stdin), `status`, `probe`, `job` (one job from root on this
 // server), `audit` (the audit log, checked), `pause` and `resume` (remote management, by the server's admin), `version`.
 import { existsSync, readFileSync, statfsSync } from "node:fs";
 import { join } from "node:path";
@@ -47,12 +47,12 @@ const reader: HostReader = {
 };
 
 const auditLog = () => new AuditLog(join(PATHS.audit, AUDIT_FILE));
-const identity = (): ConnectorIdentity => ({ version: CONNECTOR_VERSION, protocol: PROTOCOL_VERSION, image: process.env.MAUSBOT_CONNECTOR_IMAGE || null });
+const identity = (): ConnectorIdentity => ({ version: CONNECTOR_VERSION, protocol: PROTOCOL_VERSION, image: process.env.SEIRA_CONNECTOR_IMAGE || null });
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** The stricter of what the server was enrolled as and what install.sh started this container as. */
 function serverMode(record: AgentRecord | null): ServerMode {
-  return record?.mode === "customer-run" || process.env.MAUSBOT_MODE === "customer-run" ? "customer-run" : "operated";
+  return record?.mode === "customer-run" || process.env.SEIRA_MODE === "customer-run" ? "customer-run" : "operated";
 }
 
 /** The bot box's profiles belong to a home the connector makes; a home its owner installed is not given them. */
@@ -74,7 +74,7 @@ function hostReporter(docker: SocketDocker, admin: () => string | null, mode: Se
     return info.value;
   };
   const probe = async (fresh: boolean) => {
-    const image = process.env.MAUSBOT_CONNECTOR_IMAGE;
+    const image = process.env.SEIRA_CONNECTOR_IMAGE;
     if (!image || mode === "customer-run") return null;
     if (fresh || !box || Date.now() - box.at > 6 * 60 * 60_000) {
       let value: BoxProbeResult | null;
@@ -113,7 +113,7 @@ function hostReporter(docker: SocketDocker, admin: () => string | null, mode: Se
 async function run(): Promise<void> {
   const state = new StateStore(PATHS.state);
   const docker = new SocketDocker(PATHS.docker);
-  const instance = process.env.MAUSBOT_INSTANCE || "unknown";
+  const instance = process.env.SEIRA_INSTANCE || "unknown";
   log(`Seira connector ${CONNECTOR_VERSION} starting`);
   const audit = auditLog();
   const note = (event: Parameters<AuditLog["append"]>[0]) => {
@@ -149,7 +149,7 @@ async function run(): Promise<void> {
   const home = adopted ?? new Home({
     docker, state, log, readHealth, seccomp, transfer: httpTransfer,
     diskFree: () => reader.disk().free,
-    updateWindowMs: envSeconds("MAUSBOT_UPDATE_WAIT_S", 600, 60, 3600) * 1000,
+    updateWindowMs: envSeconds("SEIRA_UPDATE_WAIT_S", 600, 60, 3600) * 1000,
     onStep: ({ id, type, step, detail }) => note({ event: "step", id, type, step, ...(detail ? { detail } : {}) }),
   });
   // On a customer-run server only its owner replaces the connector, and never with an older one: one from before this
@@ -264,7 +264,7 @@ async function readStdin(): Promise<string> {
 }
 
 async function enrollCommand(): Promise<void> {
-  const admin = adminOrigin(process.env.MAUSBOT_ADMIN_URL);
+  const admin = adminOrigin(process.env.SEIRA_ADMIN_URL);
   const code = (await readStdin()).trim();
   const state = new StateStore(PATHS.state);
   const docker = new SocketDocker(PATHS.docker);
@@ -293,7 +293,7 @@ function statusCommand(): void {
 
 /**
  * One line per check for install.sh: `ok <id>`, `warn <id> <fix>` or `fail <id> <fix>`. With --json, one object
- * `{ok, checks}` for `openmausbot doctor --host`, which asks the connector on a server that runs one. Exits 1 when any
+ * `{ok, checks}` for `seira doctor --host`, which asks the connector on a server that runs one. Exits 1 when any
  * check fails.
  */
 async function probeCommand(): Promise<void> {
@@ -304,7 +304,7 @@ async function probeCommand(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  const image = process.env.MAUSBOT_CONNECTOR_IMAGE;
+  const image = process.env.SEIRA_CONNECTOR_IMAGE;
   let box: BoxProbeResult | null = null;
   try { box = image ? await probeBox(docker, image, seccomp()) : null; } catch (error) { box = { ok: false, fix: errorText(error) }; }
   const checks = hostChecks(await docker.info(), reader, { clockSkewS: null, box });
@@ -315,7 +315,7 @@ async function probeCommand(): Promise<void> {
 }
 
 const JOB_USAGE = [
-  "usage: mausbot-connector job <type> [args as JSON], for example:",
+  "usage: seira-connector job <type> [args as JSON], for example:",
   "  job status                                   the server's state, and its backups with their ids",
   "  job backup",
   "  job restore '{\"backupId\":\"<id>\"}'           put a backup back (root only on a server its owner runs); the id is one of job status's backups[].id",
@@ -354,14 +354,14 @@ function auditCommand(): void {
 function pauseCommand(paused: boolean): void {
   const state = new StateStore(PATHS.state);
   if (serverMode(state.agent()) !== "customer-run") {
-    throw new Error("Seira runs this server, so there is no remote management to pause here. To cut the connection: docker stop mausbot-connector");
+    throw new Error("Seira runs this server, so there is no remote management to pause here. To cut the connection: docker stop seira-connector");
   }
   if (state.paused() !== paused) {
     state.savePause(paused);
     auditLog().append({ event: "management", what: paused ? "paused" : "resumed", by: "local" });
   }
   console.log(paused
-    ? "Remote management is paused: this server refuses every job and request from Seira, and logs each one. It still reports its health. To allow them again: mausbot-connector resume"
+    ? "Remote management is paused: this server refuses every job and request from Seira, and logs each one. It still reports its health. To allow them again: seira-connector resume"
     : "Remote management is on again: Seira may run the jobs this server allows.");
 }
 
@@ -379,7 +379,7 @@ const commands: Record<string, () => Promise<void> | void> = {
 
 const command = commands[process.argv[2] ?? "run"];
 if (!command) {
-  console.error(`usage: mausbot-connector run | enroll | status | probe [--json] | job <type> [args] | audit [--tail N | --verify] | pause | resume | version\n${JOB_USAGE}`);
+  console.error(`usage: seira-connector run | enroll | status | probe [--json] | job <type> [args] | audit [--tail N | --verify] | pause | resume | version\n${JOB_USAGE}`);
   process.exitCode = 2;
 } else {
   Promise.resolve().then(command).catch((error) => {

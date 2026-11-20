@@ -25,7 +25,7 @@ each phase once, in this order:
 The app writes one line that starts with `startup timeline` to `server.log`
 when the main window is shown. The app does not change its behavior.
 
-Set `OMB_STARTUP_TIMELINE` to an absolute path to get the same marks as JSON.
+Set `SEIRA_STARTUP_TIMELINE` to an absolute path to get the same marks as JSON.
 The app writes `{ "marks": { "<name>": <ms> } }` to that path once. The app
 writes nothing when the value is empty or relative.
 
@@ -39,7 +39,7 @@ node --experimental-strip-types scripts/bench-startup.ts --cold 5 --warm 5 --out
 
 | Option | Meaning |
 |--------|---------|
-| `--executable PATH` | Packaged app. Default `release/linux-unpacked/openmausbot`. |
+| `--executable PATH` | Packaged app. Default `release/linux-unpacked/seira`. |
 | `--cold N` | Opens with a new data folder each time. Default 5. |
 | `--warm N` | Opens that reuse one data folder after one uncounted open. Default 5. |
 | `--prime-hold-ms N` | Time that the uncounted open stays open after the window shows. Default 12000. The server writes its compile cache 10 s after it starts, so warm opens use that cache. |
@@ -55,7 +55,7 @@ code 1 when an open fails. It exits with code 2 on other platforms.
 ## Isolation
 
 Each open uses a temporary `HOME` and temporary XDG folders. The app starts
-with no inherited `OMB_` variable. The managed broker is off. The updates origin
+with no inherited `SEIRA_` variable. The managed broker is off. The updates origin
 is a closed loopback address. A private network namespace holds only the
 loopback device, so the app never reaches the port of an installed app. The
 bench starts `xvfb-run` when `DISPLAY` is not set.

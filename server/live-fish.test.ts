@@ -18,9 +18,9 @@ function fakeFetch(status: number, body: unknown) {
 describe("the Fish Audio endpoint", () => {
   it("is Fish's API unless a loopback http override is set", () => {
     expect(fishLiveBaseUrl({})).toBe("https://api.fish.audio");
-    expect(fishLiveBaseUrl({ OMB_FISH_LIVE_URL: "http://127.0.0.1:4555" })).toBe("http://127.0.0.1:4555");
+    expect(fishLiveBaseUrl({ SEIRA_FISH_LIVE_URL: "http://127.0.0.1:4555" })).toBe("http://127.0.0.1:4555");
     for (const url of ["https://evil.example", "http://127.0.0.1.evil.example:80", "http://localhost:80", "http://127.0.0.1:80/x"]) {
-      expect(fishLiveBaseUrl({ OMB_FISH_LIVE_URL: url }), url).toBe("https://api.fish.audio");
+      expect(fishLiveBaseUrl({ SEIRA_FISH_LIVE_URL: url }), url).toBe("https://api.fish.audio");
     }
   });
 

@@ -8,7 +8,7 @@ export interface ManagedComposioAccess { url: string; token: string }
 
 export declare function managedComposioBrokerOff(environment?: Record<string, string | undefined>): boolean;
 export declare function ownComposioKey(credentials: ManagedComposioCredentials | null | undefined, environment?: Record<string, string | undefined>): boolean;
-export declare function managedComposioBrokerUrl(configured: string | undefined): string;
+export declare function managedComposioBrokerUrl(configured: string | undefined, options?: { packaged?: boolean }): string;
 export declare function normalizeManagedComposioBrokerUrl(value: unknown): string;
 export declare function managedComposioAccess(
   brokerUrl: string,

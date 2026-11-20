@@ -4,7 +4,7 @@ import { pagesAuthHeaders, type PagesAccess } from "./access.ts";
 export interface PageUsage { pages: number; limit: number }
 export type PagesFailure = {
   ok: false;
-  /** sign_in: no MausBot account here, or its sign-in ended. limit: the plan's pages are used up. gone: the page to update
+  /** sign_in: no Seira account here, or its sign-in ended. limit: the plan's pages are used up. gone: the page to update
    * or unpublish no longer exists (unpublished or taken down). refused: the page itself was refused (too big, a file type). */
   reason: "sign_in" | "limit" | "rate_limited" | "gone" | "refused" | "unavailable";
   message: string;

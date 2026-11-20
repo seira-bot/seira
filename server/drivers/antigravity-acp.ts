@@ -86,13 +86,13 @@ const REMOVED_ENVIRONMENT_KEYS = new Set([
   "CHROME_CRASHPAD_PIPE_NAME",
 ]);
 
-const BROWSER_MARKER = "__OPENMAUS_ANTIGRAVITY_AUTH_URL__";
+const BROWSER_MARKER = "__SEIRA_ANTIGRAVITY_AUTH_URL__";
 const browserHelperSource =
   `process.stderr.on("error",()=>process.exit(0)).write(` +
   `"${BROWSER_MARKER}"+JSON.stringify(process.argv[1])+"\\n",` +
   `()=>process.exit(0))`;
 
-const BROWSER_PREFLIGHT_URL = "https://example.invalid/openmaus-antigravity-browser-preflight";
+const BROWSER_PREFLIGHT_URL = "https://example.invalid/seira-antigravity-browser-preflight";
 const BROWSER_PREFLIGHT_MS = 30_000;
 const verifiedBrowserHelpers = new Set<string>();
 
@@ -238,7 +238,7 @@ export async function prepareAntigravityProfile(input: {
   const directory = resolve(input.profileDirectory ?? antigravityProfileDirectory(input.instanceId, input.baseDir));
   const acpDirectory = join(directory, "antigravity-acp");
   await mkdir(acpDirectory, { recursive: true, mode: 0o700 });
-  const skillsDirectory = join(directory, "omb-skills");
+  const skillsDirectory = join(directory, "seira-skills");
   await mkdir(skillsDirectory, { recursive: true, mode: 0o700 });
   if (!(await lstat(skillsDirectory)).isDirectory()) throw new Error("Antigravity staging path must be a real directory.");
   if (process.platform !== "win32") {
@@ -274,7 +274,7 @@ export async function prepareAntigravityProfile(input: {
     PYTHONUNBUFFERED: "1",
     ELECTRON_RUN_AS_NODE: "1",
   });
-  // On Windows the runtime unpacks 0.34-1.26 GB into TEMP per launch: one OMB folder per instance,
+  // On Windows the runtime unpacks 0.34-1.26 GB into TEMP per launch: one Seira folder per instance,
   // stable so the pooled spawn contract (which hashes this env) holds.
   let tempDirectory: string | undefined;
   if ((input.platform ?? process.platform) === "win32") {
@@ -343,7 +343,7 @@ export class AntigravityAcpClient {
     this.child = spawnCli(
       runtime.executablePath,
       process.platform === "linux" ? ["--uid="] : [],
-      { cwd, env: profile.environment, stdio: ["pipe", "pipe", "pipe"], box: { ro: [join(profile.directory, "omb-skills")], ...(relay ? { relay: relay.socketPath } : {}) } },
+      { cwd, env: profile.environment, stdio: ["pipe", "pipe", "pipe"], box: { ro: [join(profile.directory, "seira-skills")], ...(relay ? { relay: relay.socketPath } : {}) } },
       "bot",
     );
     this.child.stdout!.setEncoding("utf8");
@@ -714,7 +714,7 @@ const OPEN_MODEL_ACCESS_RELEASE = [1, 5, 1] as const;
 export function antigravityClientInfo(version: string | null | undefined, editorName = ANTIGRAVITY_EDITOR_CLIENT_NAME): { name: string; version: string } {
   const match = /^(\d+)\.(\d+)\.(\d+)/u.exec(version?.trim() ?? "");
   const open = match !== null && OPEN_MODEL_ACCESS_RELEASE.reduce((difference, part, index) => difference || Number(match[index + 1]) - part, 0) >= 0;
-  return open || !editorName ? { name: "openmausbot", version: "0.0.0" } : { name: "zed", version: "0.0.0" };
+  return open || !editorName ? { name: "seira", version: "0.0.0" } : { name: "zed", version: "0.0.0" };
 }
 
 const runtimeVersion = (value: unknown) => typeof value === "string" ? value.replace(/^agy_acp_server_/u, "").trim() : "";
@@ -756,7 +756,7 @@ export function isValidAntigravityInitializeResult(
 }
 
 export async function validateAntigravityRuntime(runtime: AntigravityRuntime, expectedVersion: string): Promise<void> {
-  const profileDirectory = await mkdtemp(join(tmpdir(), "openmaus-antigravity-verify-"));
+  const profileDirectory = await mkdtemp(join(tmpdir(), "seira-antigravity-verify-"));
   let client: AntigravityAcpClient | undefined;
   let tempDirectory: string | undefined;
   let failed = false;

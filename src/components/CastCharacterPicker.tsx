@@ -3,16 +3,16 @@ import { ChevronDown } from "lucide-react";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
-import type { MausColor } from "@/lib/mascot";
+import type { SeiraColor } from "@/lib/mascot";
 import { CAST_CHARACTERS, castCharacterOf } from "../../shared/cast-characters";
 import type { BrandBodyId } from "../../shared/carved-bodies";
 import type { MascotAccessoryId } from "../../shared/mascot-accessories";
-import { MausAvatar } from "./Avatar";
+import { SeiraAvatar } from "./Avatar";
 
 const FIRST_SHOWN = 10;
 
 export interface CastCharacterPatch {
-  color: MausColor;
+  color: SeiraColor;
   mascotBody: BrandBodyId;
   mascotAccessories: MascotAccessoryId[];
 }
@@ -58,7 +58,7 @@ export function CastCharacterPicker({ look, selectable, disabled, avatarSize = 4
                   : pressed ? "bg-control text-ink" : "hover:bg-control/60",
               )}
             >
-              <MausAvatar
+              <SeiraAvatar
                 color={character.color}
                 bodyId={character.mascotBody}
                 accessories={character.mascotAccessories}

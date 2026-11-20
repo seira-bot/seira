@@ -10,7 +10,7 @@ const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 
 function dataDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), "omb-mcp-bot-servers-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-mcp-bot-servers-"));
   dirs.push(dir);
   return dir;
 }

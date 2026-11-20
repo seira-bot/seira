@@ -3,12 +3,14 @@ import { createReadStream, createWriteStream } from "node:fs";
 import { chmod, lstat, mkdir, mkdtemp, rm, statfs } from "node:fs/promises";
 import { isAbsolute, join, parse, resolve } from "node:path";
 import { Readable } from "node:stream";
+import { LEGACY_BACKUP_MAGIC } from "./legacy-names.mjs";
 import { pipeline } from "node:stream/promises";
 
 const MAX_BYTES = 10 * 1024 ** 3;
 const PART_BYTES = 64 * 1024 ** 2;
 const SPACE_MARGIN = 64 * 1024 ** 2;
-const MAGIC = Buffer.from("OMB-WORKSPACE-1\n");
+const MAGIC = Buffer.from("SEIRA-WORKSPACE-1\n");
+const LEGACY_MAGIC = Buffer.from(LEGACY_BACKUP_MAGIC);
 const HEADER_BYTES = MAGIC.length + 16 + 12;
 const MIN_BYTES = HEADER_BYTES + 16;
 const UUID = /^[a-f\d]{8}-[a-f\d]{4}-4[a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/;
@@ -65,7 +67,7 @@ function liveExpiry(value) {
   if (!Number.isSafeInteger(value) || value <= Date.now() || value > Date.now() + 15 * 60_000) fail("invalid_response", "The storage link has expired or has an invalid lifetime. Try again.");
 }
 
-/** Transfer existing encrypted .ombbackup archives. Never commits a restore. */
+/** Transfer existing encrypted .seirabackup archives. Never commits a restore. */
 export function createCompanyBackups({ localRequest, portalRequest, tempRoot, fetchImpl = fetch, allowLoopbackForTests = false, availableBytes }) {
   if (typeof localRequest !== "function" || typeof portalRequest !== "function" || typeof fetchImpl !== "function" || typeof tempRoot !== "string" ||
       !isAbsolute(tempRoot) || resolve(tempRoot) === parse(resolve(tempRoot)).root) throw new Error("A private backup transfer directory and request adapters are required.");
@@ -115,7 +117,7 @@ export function createCompanyBackups({ localRequest, portalRequest, tempRoot, fe
       }
     }, createWriteStream(file, { flags: "wx", mode: 0o600 }), { signal });
     if (bytes !== expectedBytes) fail("invalid_archive", "The archive download was incomplete.");
-    if (!prefix.subarray(0, MAGIC.length).equals(MAGIC)) fail("invalid_archive", "This is not a supported encrypted installation backup.");
+    if (!prefix.subarray(0, MAGIC.length).equals(MAGIC) && !prefix.subarray(0, LEGACY_MAGIC.length).equals(LEGACY_MAGIC)) fail("invalid_archive", "This is not a supported encrypted installation backup.");
     return hash.digest("hex");
   }
   async function storageRequest(url, init) {
@@ -163,7 +165,7 @@ export function createCompanyBackups({ localRequest, portalRequest, tempRoot, fe
         if (typeof appVersion !== "string" || !/^[a-zA-Z\d][a-zA-Z\d ._+()-]{0,63}$/.test(appVersion)) fail("invalid_response", "The desktop app version is invalid.");
         await checkSpace(directory, exported.bytes);
         const response = await localRequest(`${LOCAL}/download/${exported.id}`, { method: "GET", signal: operationSignal, redirect: "error" });
-        const file = join(directory, "workspace.ombbackup");
+        const file = join(directory, "workspace.seirabackup");
         report("reading", 0, exported.bytes);
         const sha256 = await transferToFile(response, file, exported.bytes, operationSignal, report, "reading");
         let pendingId = null;
@@ -220,7 +222,7 @@ export function createCompanyBackups({ localRequest, portalRequest, tempRoot, fe
         await checkSpace(directory, backup.sizeBytes * 4);
         report("downloading", 0, backup.sizeBytes);
         const downloaded = await storageRequest(url, { method: "GET", signal: operationSignal });
-        const file = join(directory, "workspace.ombbackup");
+        const file = join(directory, "workspace.seirabackup");
         const sha256 = await transferToFile(downloaded, file, backup.sizeBytes, operationSignal, report, "downloading");
         report("validating", backup.sizeBytes, backup.sizeBytes);
         if (sha256 !== backup.sha256) fail("checksum_mismatch", "The downloaded backup checksum did not match. Nothing was uploaded locally or restored.");
@@ -235,7 +237,7 @@ export function createCompanyBackups({ localRequest, portalRequest, tempRoot, fe
         if (!identifier(receipt.id)) fail("invalid_response", "This installation returned an invalid upload receipt.");
         await checkSpace(directory, backup.sizeBytes * 2); operationSignal.throwIfAborted();
         const preview = await localJson(`${LOCAL}/preview`, { id: receipt.id, password }, operationSignal, true);
-        if (!identifier(preview.id) || !record(preview.summary) || preview.summary.format !== "openmaus.workspace-backup" || preview.summary.version !== 1 ||
+        if (!identifier(preview.id) || !record(preview.summary) || preview.summary.format !== "seira.workspace-backup" || preview.summary.version !== 1 ||
             !identifier(preview.summary.id) || !Number.isSafeInteger(preview.summary.bytes) || preview.summary.bytes < 0 || preview.summary.bytes > MAX_BYTES) fail("invalid_response", "This installation returned an invalid restore preview.");
         report("ready", backup.sizeBytes, backup.sizeBytes);
         return { id: preview.id, summary: preview.summary };

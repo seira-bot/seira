@@ -50,9 +50,9 @@ async function until(check: () => boolean, ms = 5_000): Promise<void> {
 
 /** A server its owner installed with deploy/install.sh: the Compose project, its data folder, and a home that answers on its own loopback. */
 async function server(options: { image?: string; seats?: number | null } = {}) {
-  const dir = mkdtempSync(join(tmpdir(), "omb-customer-run-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-customer-run-"));
   cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
-  const dataDir = join(dir, "opt-openmausbot", "data");
+  const dataDir = join(dir, "opt-seira", "data");
   const updateDir = join(dir, "update");
   mkdirSync(dataDir, { recursive: true });
   mkdirSync(updateDir);
@@ -63,7 +63,7 @@ async function server(options: { image?: string; seats?: number | null } = {}) {
   const image = options.image ?? RUNNING;
   for (const [ref, version] of [[image, "v0.1.151"], [NEXT, "v0.1.152"], [OLDER, "v0.1.150"], [UNNAMED, null], ["caddy:2", null]] as const) docker.publish(ref, version);
   for (const ref of [image, "caddy:2"]) await docker.pull(ref);
-  const compose = (service: string) => ({ "com.docker.compose.project": "openmausbot", "com.docker.compose.service": service });
+  const compose = (service: string) => ({ "com.docker.compose.project": "seira", "com.docker.compose.service": service });
   const home = { answers: true, seats: options.seats === undefined ? 7 : options.seats, execs: [] as string[][] };
   docker.onExec = (_container, command) => {
     home.execs.push(command);
@@ -71,7 +71,7 @@ async function server(options: { image?: string; seats?: number | null } = {}) {
     return {
       code: 0,
       output: [
-        JSON.stringify({ app: "openmausbot", pid: 41, owner: EMAIL, box: "on" }),
+        JSON.stringify({ app: "seira", pid: 41, owner: EMAIL, box: "on" }),
         JSON.stringify({ environmentId: "env-1", label: SERVER_NAME, version: "0.1.151", admin: EMAIL }),
         home.seats === null ? JSON.stringify({ error: "Not found" }) : JSON.stringify({ seats: home.seats, people: [EMAIL] }),
       ].map((answer) => `${answer}\n\u001e\n`).join(""),
@@ -85,10 +85,10 @@ async function server(options: { image?: string; seats?: number | null } = {}) {
     onStep: ({ id, step }) => steps.push(`${id} ${step}`),
   });
   const install = async () => {
-    await docker.createContainer("openmausbot-omb-1", { Image: image, Labels: compose("omb"), HostConfig: { Mounts: [{ Type: "bind", Source: dataDir, Target: "/data" }] } });
-    await docker.createContainer("openmausbot-caddy-1", { Image: "caddy:2", Labels: compose("caddy"), HostConfig: { NetworkMode: "container:omb" } });
-    await docker.startContainer("openmausbot-omb-1");
-    await docker.startContainer("openmausbot-caddy-1");
+    await docker.createContainer("seira-seira-1", { Image: image, Labels: compose("seira"), HostConfig: { Mounts: [{ Type: "bind", Source: dataDir, Target: "/data" }] } });
+    await docker.createContainer("seira-caddy-1", { Image: "caddy:2", Labels: compose("caddy"), HostConfig: { NetworkMode: "container:seira" } });
+    await docker.startContainer("seira-seira-1");
+    await docker.startContainer("seira-caddy-1");
     docker.folder(dataDir).files.set("chats.json", WRITTEN);
     docker.calls.length = 0;
   };
@@ -154,12 +154,12 @@ describe("a customer-run server: the jobs Seira may run", () => {
   });
 
   it("refuses a start that names an image or settings, and an update to anything but Seira's server image by digest", () => {
-    const env = { OMB_CLOUD_ROLE: "team", OMB_CLOUD_MACHINE_ID: "m", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test", OMB_PUBLIC_URL: "https://acme.example.test", OMB_CLOUD_BOOTSTRAP_SECRET: "s".repeat(40) };
+    const env = { SEIRA_CLOUD_ROLE: "team", SEIRA_CLOUD_MACHINE_ID: "m", SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test", SEIRA_PUBLIC_URL: "https://acme.example.test", SEIRA_CLOUD_BOOTSTRAP_SECRET: "s".repeat(40) };
     expect(checkJob({ id: "s1", type: "start", args: { image: CLOUD_HOME, env } })).toMatchObject({ ok: true });
     expect(checkCustomerRunJob({ id: "s1", type: "start", args: { image: CLOUD_HOME, env } }, "admin")).toMatchObject({ ok: false, id: "s1", code: "refused_by_mode" });
     expect(checkCustomerRunJob({ id: "s2", type: "start" }, "admin")).toEqual({ ok: true, job: { id: "s2", type: "start", args: {} } });
     expect(checkCustomerRunJob({ id: "u1", type: "update", args: { image: NEXT } }, "admin")).toEqual({ ok: true, job: { id: "u1", type: "update", args: { image: NEXT } } });
-    for (const image of [CLOUD_HOME, RUNNING, "ghcr.io/someone-else/openmausbot@sha256:" + "a".repeat(64)]) {
+    for (const image of [CLOUD_HOME, RUNNING, "ghcr.io/someone-else/seira@sha256:" + "a".repeat(64)]) {
       expect(checkCustomerRunJob({ id: "u2", type: "update", args: { image } }, "admin"), image).toMatchObject({ ok: false, code: "invalid_args" });
     }
     expect(checkCustomerRunJob({ id: "u3", type: "update", args: { image: NEXT, env } }, "admin")).toMatchObject({ ok: false, code: "invalid_args" });
@@ -240,14 +240,14 @@ describe("a customer-run server: what leaves it", () => {
 
   it("reads four fields from the home and drops everything else it answered", async () => {
     const fixture = await server();
-    expect(HOME_READS).toEqual(["/api/health", "/.well-known/openmausbot/environment", "/api/seats"]);
+    expect(HOME_READS).toEqual(["/api/health", "/.well-known/seira/environment", "/api/seats"]);
     const facts = parseHomeReads(fixture.docker.onExec!({} as never, []).output);
     expect(facts).toEqual({ answers: true, version: "0.1.151", seats: 7, box: "on" });
     expect(parseHomeReads("not json\n\u001e\n{\"version\":\"<script>\"}\n\u001e\n{\"seats\":\"seven\"}\n\u001e\n")).toEqual({ answers: false, version: null, seats: null, box: null });
     expect(parseHomeReads("")).toEqual({ answers: false, version: null, seats: null, box: null });
     // On or off, nothing else: a server without the field, or with anything else in it, says nothing about its box.
-    expect(parseHomeReads(`${JSON.stringify({ app: "openmausbot", box: "off" })}\n\u001e\n`).box).toBe("off");
-    expect(parseHomeReads(`${JSON.stringify({ app: "openmausbot", box: { checks: "33/33" } })}\n\u001e\n`).box).toBeNull();
+    expect(parseHomeReads(`${JSON.stringify({ app: "seira", box: "off" })}\n\u001e\n`).box).toBe("off");
+    expect(parseHomeReads(`${JSON.stringify({ app: "seira", box: { checks: "33/33" } })}\n\u001e\n`).box).toBeNull();
   });
 
   it("sends a heartbeat of versions, states, counts and the seat count, with no address, name or sentence in it", async () => {
@@ -281,7 +281,7 @@ describe("a customer-run server: what leaves it", () => {
 
   it("answers a failed job with its code and a fixed sentence: what Docker or the home said stays in the audit log", () => {
     const failed = reducedReply({ id: "j", ok: false, error: { code: "unhealthy", message: `The home stopped: startup failed: could not open ${EMAIL}'s chat "${WRITTEN}"`, image: RUNNING } });
-    expect(failed).toEqual({ id: "j", ok: false, error: { code: "unhealthy", message: "The server did not become healthy. The server's admin can read the reason with: mausbot-connector audit", image: RUNNING } });
+    expect(failed).toEqual({ id: "j", ok: false, error: { code: "unhealthy", message: "The server did not become healthy. The server's admin can read the reason with: seira-connector audit", image: RUNNING } });
     const odd = reducedReply({ id: "j", ok: false, error: { code: WRITTEN as never, message: EMAIL, image: EMAIL } });
     expect(odd).toMatchObject({ error: { code: "docker" } });
     expect(JSON.stringify([failed, odd])).not.toMatch(/@|Nightingale/);
@@ -310,7 +310,7 @@ describe("a customer-run server: the home its owner installed", () => {
     await fixture.install();
     expect(await standaloneServerPresent(fixture.docker)).toBe(true);
     expect(await findInstall(fixture.docker)).toMatchObject({ ok: true, install: { dataDir: fixture.dataDir } });
-    const built = await server({ image: "deploy-omb" });
+    const built = await server({ image: "deploy-seira" });
     await built.install();
     expect(await findInstall(built.docker)).toMatchObject({ ok: false, why: expect.stringContaining("was built here") });
   });
@@ -330,15 +330,15 @@ describe("a customer-run server: the home its owner installed", () => {
     const fixture = await server();
     await fixture.install();
     expect(await fixture.adopted.stop()).toEqual({ home: { state: "stopped", image: RUNNING, health: null } });
-    expect(fixture.docker.calls).toEqual(["stop openmausbot-caddy-1", "stop openmausbot-omb-1"]);
+    expect(fixture.docker.calls).toEqual(["stop seira-caddy-1", "stop seira-seira-1"]);
     fixture.docker.calls.length = 0;
     expect(await fixture.adopted.start()).toMatchObject({ home: { state: "running", health: { ok: true, version: "0.1.151" } } });
-    expect(fixture.docker.calls).toEqual(["start openmausbot-omb-1", "exec openmausbot-omb-1", "start openmausbot-caddy-1"]);
+    expect(fixture.docker.calls).toEqual(["start seira-seira-1", "exec seira-seira-1", "start seira-caddy-1"]);
     fixture.docker.calls.length = 0;
     await fixture.adopted.restart();
     expect(fixture.docker.calls.filter((call) => /^(create|rm|rename|pull|rmi) /.test(call))).toEqual([]);
-    expect(fixture.docker.container("mausbot-home")).toBeNull();
-    expect(fixture.docker.volumes.has("mausbot-data")).toBe(false);
+    expect(fixture.docker.container("seira-home")).toBeNull();
+    expect(fixture.docker.volumes.has("seira-data")).toBe(false);
   });
 
   it("says the home did not answer when it does not, within the wait", async () => {
@@ -354,13 +354,13 @@ describe("a customer-run server: the home its owner installed", () => {
     const fixture = await server();
     await fixture.install();
     const { backup } = await fixture.adopted.backup("b1", "local");
-    expect(fixture.docker.files(`mausbot-backup-${backup.id}`)).toEqual({ "chats.json": WRITTEN });
-    expect(fixture.docker.container("openmausbot-omb-1")?.status).toBe("running");
+    expect(fixture.docker.files(`seira-backup-${backup.id}`)).toEqual({ "chats.json": WRITTEN });
+    expect(fixture.docker.container("seira-seira-1")?.status).toBe("running");
     fixture.docker.folder(fixture.dataDir).files.set("chats.json", "changed since");
     fixture.docker.folder(fixture.dataDir).files.set("new.json", "made since");
     expect(await fixture.adopted.restore("r1", backup.id)).toMatchObject({ backupId: backup.id, home: { state: "running" } });
     expect(Object.fromEntries(fixture.docker.folder(fixture.dataDir).files)).toEqual({ "chats.json": WRITTEN });
-    expect(fixture.docker.files("mausbot-snapshot")).toEqual({ "chats.json": "changed since", "new.json": "made since" });
+    expect(fixture.docker.files("seira-snapshot")).toEqual({ "chats.json": "changed since", "new.json": "made since" });
     expect(fixture.steps).toEqual(["b1 stop", "b1 copy", "r1 stop", "r1 snapshot", "r1 copy", "r1 start"]);
     expect(fixture.state.home().operation).toBeNull();
     await expect(fixture.adopted.restore("r2", "20200101-000000-aaaa")).rejects.toMatchObject({ code: "not_found" });
@@ -377,7 +377,13 @@ describe("a customer-run server: the home its owner installed", () => {
     }
     const kept = (await fixture.adopted.copies()).backups.map((copy) => copy.id).sort();
     expect(kept).toEqual([mine, ...theirs.slice(2)].sort());
-    expect(fixture.docker.files(`mausbot-backup-${mine}`)).toEqual({ "chats.json": WRITTEN });
+    expect(fixture.docker.files(`seira-backup-${mine}`)).toEqual({ "chats.json": WRITTEN });
+  });
+
+  it("lists a backup that an earlier version labelled", async () => {
+    const fixture = await server();
+    await fixture.docker.createVolume("seira-backup-20260101-000000-abcd", { "com.mausbot.role": "backup", "com.mausbot.created": "1767225600000", "com.mausbot.by": "admin" });
+    expect((await fixture.adopted.copies()).backups).toEqual([{ id: "20260101-000000-abcd", kind: "backup", createdAt: 1767225600000, image: null }]);
   });
 
   it("puts the data back as it was when the connector restarts in the middle of a restore", async () => {
@@ -386,13 +392,13 @@ describe("a customer-run server: the home its owner installed", () => {
     const { backup } = await fixture.adopted.backup("b1", "local");
     const before = { "chats.json": "the newest chats" };
     fixture.docker.folder(fixture.dataDir).files.set("chats.json", before["chats.json"]);
-    await fixture.docker.createVolume("mausbot-snapshot", { "com.mausbot.role": "snapshot" });
-    fixture.docker.volume("mausbot-snapshot").files.set("chats.json", before["chats.json"]);
+    await fixture.docker.createVolume("seira-snapshot", { "com.seira.role": "snapshot" });
+    fixture.docker.volume("seira-snapshot").files.set("chats.json", before["chats.json"]);
     fixture.docker.folder(fixture.dataDir).files.clear();
-    fixture.state.saveHome({ ...fixture.state.home(), operation: { jobId: "r9", type: "restore", phase: "copy", previousImage: RUNNING, nextImage: null, target: `mausbot-backup-${backup.id}`, dataAtRisk: true, wasRunning: true, startedAt: 1 } });
+    fixture.state.saveHome({ ...fixture.state.home(), operation: { jobId: "r9", type: "restore", phase: "copy", previousImage: RUNNING, nextImage: null, target: `seira-backup-${backup.id}`, dataAtRisk: true, wasRunning: true, startedAt: 1 } });
     expect(await fixture.adopted.recover()).toEqual({ id: "r9", ok: false, error: { code: "interrupted", message: "The connector restarted during this restore; the data was put back as it was before, and the home was started again." } });
     expect(Object.fromEntries(fixture.docker.folder(fixture.dataDir).files)).toEqual(before);
-    expect(fixture.docker.container("openmausbot-omb-1")?.status).toBe("running");
+    expect(fixture.docker.container("seira-seira-1")?.status).toBe("running");
   });
 });
 
@@ -412,7 +418,7 @@ describe("a customer-run server: replacing the connector", () => {
 });
 
 describe("a customer-run server: updates go to the server's own updater", () => {
-  /** Stands in for mausbot-update-runner.sh: reads the request the connector left and answers with update.sh's exit code. */
+  /** Stands in for seira-update-runner.sh: reads the request the connector left and answers with update.sh's exit code. */
   const updater = (fixture: Awaited<ReturnType<typeof server>>, code: number, seen: string[] = []) => {
     writeFileSync(join(fixture.updateDir, UPDATE_FILES.runner), "1\n");
     const sleep = (fixture.adopted as unknown as { sleep: (ms: number) => Promise<void> }).sleep;
@@ -603,7 +609,7 @@ describe("a customer-run server: Seira's requests", () => {
     const { admin, record, refusals, handled } = await connected();
     admin.send({ job: admin.signJob(record.boxId, { id: "x1", type: "export-disk", args: {} }) });
     expect(await admin.replyTo("x1", 5_000)).toEqual({
-      id: "x1", ok: false, error: { code: "refused_by_mode", message: "This server is run by its owner, and this is not a job Seira may run on it. The server's admin can read the reason with: mausbot-connector audit" },
+      id: "x1", ok: false, error: { code: "refused_by_mode", message: "This server is run by its owner, and this is not a job Seira may run on it. The server's admin can read the reason with: seira-connector audit" },
     });
     admin.send({ job: admin.signJob(record.boxId, { id: "x2", type: "import-disk", args: { url: "https://storage.example.test/d.tar.gz" } }) });
     expect(await admin.replyTo("x2", 5_000)).toMatchObject({ ok: false, error: { code: "refused_by_mode" } });

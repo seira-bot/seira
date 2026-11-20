@@ -1,0 +1,15 @@
+// The public docs site: an assets-only Worker that serves the static export in out/ at docs.seira.bot.
+// It has no script, binding or secret. Deploy it by hand (README.md, "Deploy to Cloudflare").
+// The account id is not in this file: set CLOUDFLARE_ACCOUNT_ID when you deploy.
+{
+  "name": "seira-docs",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./out",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "routes": [{ "pattern": "docs.seira.bot", "custom_domain": true }]
+}

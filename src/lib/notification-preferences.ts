@@ -1,10 +1,10 @@
 import { useSyncExternalStore } from "react";
 import { windowPrefChanged } from "./window-pref-changes";
 
-export const NOTIFICATION_SOUNDS_KEY = "omb-notification-sounds";
-export const NOTIFICATION_FEED_KEY = "omb-notification-feed";
-export const FINISHED_NOTIFICATIONS_KEY = "omb-finished-notifications";
-export const NOTIFICATION_TRAY_PINNED_KEY = "omb-notification-tray-pinned";
+export const NOTIFICATION_SOUNDS_KEY = "seira-notification-sounds";
+export const NOTIFICATION_FEED_KEY = "seira-notification-feed";
+export const FINISHED_NOTIFICATIONS_KEY = "seira-finished-notifications";
+export const NOTIFICATION_TRAY_PINNED_KEY = "seira-notification-tray-pinned";
 
 let sessionChoice: boolean | undefined;
 let feedSessionChoice: boolean | undefined;

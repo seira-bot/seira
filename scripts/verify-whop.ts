@@ -61,8 +61,8 @@ try {
       res.writeHead(response.status, { "content-type": "application/json" }).end(JSON.stringify(body));
     } }],
   });
-  const { chromium } = await import(process.env.OMB_VERIFY_PLAYWRIGHT || "playwright");
-  browser = await chromium.launch({ headless: true, executablePath: process.env.OMB_VERIFY_BROWSER_CHROME || undefined });
+  const { chromium } = await import(process.env.SEIRA_VERIFY_PLAYWRIGHT || "playwright");
+  browser = await chromium.launch({ headless: true, executablePath: process.env.SEIRA_VERIFY_BROWSER_CHROME || undefined });
   const context = await (browser as any).newContext({ viewport: { width: 1100, height: 1000 } });
   const page = await context.newPage();
   const errors: string[] = [];
@@ -111,7 +111,7 @@ try {
   assert.equal(JSON.stringify(connected).includes(bearer), false, "The browser listing never includes the token");
   assert.equal(mcp.calls.length, 0, "Connecting never executes business tools");
   assert.equal((await status()).find((server: any) => server.name === "whop").command, "node");
-  const output = process.env.OMB_UI_EVIDENCE_DIR || "/tmp/omb-whop-evidence";
+  const output = process.env.SEIRA_UI_EVIDENCE_DIR || "/tmp/seira-whop-evidence";
   mkdirSync(output, { recursive: true });
   await page.screenshot({ path: join(output, "connected.png"), fullPage: true });
   await page.locator('[data-apps-filter="connected"]').click();

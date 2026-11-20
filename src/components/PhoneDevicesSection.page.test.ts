@@ -117,7 +117,7 @@ describe("Keep this computer awake", () => {
 
 describe("the HTTPS address row", () => {
   const current = { renewPairing: async () => state() };
-  const held = { available: true, status: "ready", endpoint: "https://c-0123456789abcdef0123456789abcdef.mausbot.si" };
+  const held = { available: true, status: "ready", endpoint: "https://c-0123456789abcdef0123456789abcdef.si.seira.bot" };
 
   it("is hidden on a build with the encrypted connection that holds no web address, whether or not the phone link is running", () => {
     expect(showHttpsAddressRow({ routes: routes({ wifi: true }) }, null, current)).toBe(false);
@@ -149,7 +149,7 @@ describe("the HTTPS address row", () => {
     f.state = state({ routes: routes({ https: true }), endpoints: [{ url: held.endpoint, kind: "hosted", priority: 0 }] });
     const html = page(true);
     expect(html).toMatch(/HTTPS address[\s\S]*?data-route-row="https"[\s\S]*?>Turn off</);
-    expect(html).toContain("On · c-0123456789abcdef0123456789abcdef.mausbot.si");
+    expect(html).toContain("On · c-0123456789abcdef0123456789abcdef.si.seira.bot");
   });
 });
 
@@ -194,7 +194,7 @@ describe("route words", () => {
 describe("open pairing codes", () => {
   it("lists a code still open, until when it works, with Revoke", () => {
     const expiresAt = new Date(2026, 10, 7, 11, 14).getTime();
-    const html = renderToStaticMarkup(createElement(OpenCodeRow, { c: c(), state: state({ pairing: { code: "123456", token: "omb_pair_x", expiresAt } }) }));
+    const html = renderToStaticMarkup(createElement(OpenCodeRow, { c: c(), state: state({ pairing: { code: "123456", token: "seira_pair_x", expiresAt } }) }));
     expect(html).toMatch(/Pairing code open · works until 11:14/);
     expect(html).toContain(">Revoke<");
     expect(html).not.toContain("123456");

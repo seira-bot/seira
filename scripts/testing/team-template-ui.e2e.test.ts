@@ -10,10 +10,10 @@ import { UI_TOOLS_DIR } from "./control-seira-ui.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const binary = resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env });
-const forced = process.env.OMB_UI_E2E === "1";
+const forced = process.env.SEIRA_UI_E2E === "1";
 const enabled = forced || Boolean(binary);
 const launchTimeout = forced && !binary ? 600_000 : 180_000;
-if (!enabled) console.log("skipping template UI e2e: set OMB_UI_E2E=1 to install the pinned browser");
+if (!enabled) console.log("skipping template UI e2e: set SEIRA_UI_E2E=1 to install the pinned browser");
 
 describe("additive template imports in the real renderer", () => {
   let child: ChildProcess | undefined;
@@ -47,7 +47,7 @@ describe("additive template imports in the real renderer", () => {
     // Viewing a chat marks it read at any moment; an import must leave everything else as it was.
     const withoutReadState = (value: unknown) => JSON.parse(JSON.stringify(value, (key, field) => key === "unread" || key === "lastReadMessageId" ? undefined : field));
     const transcript = await control("messages", "--bot", info!.botId, "--limit", "10");
-    const manifest = { format: "openmaus.team", version: 2, team: { name: "Sales crew", members: [
+    const manifest = { format: "seira.team", version: 2, team: { name: "Sales crew", members: [
       { key: "researcher", name: "Lead finder", appearance: { color: "cyan" } },
       { key: "writer", name: "Outreach writer", appearance: { color: "purple" } },
     ] } };
@@ -59,7 +59,7 @@ describe("additive template imports in the real renderer", () => {
       window.fetch = (input, init) => {
         const path = String(input);
         const reply = value => Promise.resolve(new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } }));
-        if (path === '/api/team-library/catalog') return reply({ format: 'openmaus.catalog', version: 1, repositoryUrl: '', teams: [{ slug: 'sales', name: 'Sales crew', summary: 'Fixture template', category: 'Sales', members: 2, skills: [], requires: { apps: [] } }] });
+        if (path === '/api/team-library/catalog') return reply({ format: 'seira.catalog', version: 1, repositoryUrl: '', teams: [{ slug: 'sales', name: 'Sales crew', summary: 'Fixture template', category: 'Sales', members: 2, skills: [], requires: { apps: [] } }] });
         if (path === '/api/team-library/teams/sales') return reply(window.templateFixture);
         return originalFetch(input, init);
       };
@@ -76,7 +76,7 @@ describe("additive template imports in the real renderer", () => {
       } else {
         await click("Import…");
         // A browser chooses a folder through the input's change handler, not the OS picker; a folder holding the legacy team file.
-        await evaluate(`(() => { const input = document.querySelector('[role=dialog] input[type=file]'); const transfer = new DataTransfer(); transfer.items.add(new File([JSON.stringify(window.templateFixture)], 'team.mausteam.json', { type: 'application/json' })); input.files = transfer.files; input.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+        await evaluate(`(() => { const input = document.querySelector('[role=dialog] input[type=file]'); const transfer = new DataTransfer(); transfer.items.add(new File([JSON.stringify(window.templateFixture)], 'team.seirateam.json', { type: 'application/json' })); input.files = transfer.files; input.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
         await expect.poll(snapshot, { timeout: 10_000 }).toContain("Outreach writer");
         await click("Add");
       }
@@ -89,7 +89,7 @@ describe("additive template imports in the real renderer", () => {
       expect(await snapshot()).toContain('button "Existing work"');
       expect(await snapshot()).toContain('button "Personal"');
     }
-    const evidence = join(ROOT, ".omb-scratch", "verify-evidence", "template-import-sections.png");
+    const evidence = join(ROOT, ".seira-scratch", "verify-evidence", "template-import-sections.png");
     await ui("screenshot", "--out", evidence);
     process.stdout.write(`${JSON.stringify({ fixture: info!, screenshot: evidence, libraryAndFolderImports: true, originalConversationUnchanged: true })}\n`);
   }, launchTimeout + 120_000);

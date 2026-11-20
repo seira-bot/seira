@@ -2,7 +2,7 @@
 // disposable fake-engine server; the desktop bridge's rail and add-a-Cloud answers are the preview's own fixtures.
 // Run: node --experimental-strip-types scripts/verify-cloud-rail.ts [--shots <dir> [--only <view,view>] [--size <width>x<height>]]
 // With --shots it photographs each view in a light and a dark skin with a headless Chrome in a throwaway profile
-// (OMB_CDP_CHROME, else the installed Google Chrome) at twice the window's size (1280x800 unless --size says) and
+// (SEIRA_CDP_CHROME, else the installed Google Chrome) at twice the window's size (1280x800 unless --size says) and
 // exits; without, it prints the preview's address and waits. With --shots it also checks that the sidebar's button for
 // the window's rail lands on the same spot with the rail shown and hidden, and fails if it doesn't.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -102,7 +102,7 @@ try {
     await parkUntilSignal();
   } else {
     mkdirSync(shots, { recursive: true });
-    const profile = mkdtempSync(join(tmpdir(), "omb-rail-chrome-"));
+    const profile = mkdtempSync(join(tmpdir(), "seira-rail-chrome-"));
     const chrome = await openChrome(profile);
     try {
       let banner = false;

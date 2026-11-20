@@ -1,7 +1,7 @@
 // A person's theme in a real browser against a real server (temporary home): it paints the window live, Settings lists
 // it, the reset keys and ?safe-look both get back to the default look. Runs where a Chromium and playwright-core are named:
-//   OMB_UI_CHROMIUM=<chrome or headless shell> OMB_UI_PLAYWRIGHT_CORE=<playwright-core dir> OMB_UI_DIST=<vite build dir>
-//   [OMB_UI_SHOTS=<folder for screenshots>] vitest run server/themes.ui.e2e.test.ts
+//   SEIRA_UI_CHROMIUM=<chrome or headless shell> SEIRA_UI_PLAYWRIGHT_CORE=<playwright-core dir> SEIRA_UI_DIST=<vite build dir>
+//   [SEIRA_UI_SHOTS=<folder for screenshots>] vitest run server/themes.ui.e2e.test.ts
 import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -9,7 +9,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { WELCOME_VERSION } from "../electron/onboarding-record.mjs";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 
-const { OMB_UI_CHROMIUM: chromiumPath, OMB_UI_PLAYWRIGHT_CORE: playwrightPath, OMB_UI_DIST: dist, OMB_UI_SHOTS: shots } = process.env;
+const { SEIRA_UI_CHROMIUM: chromiumPath, SEIRA_UI_PLAYWRIGHT_CORE: playwrightPath, SEIRA_UI_DIST: dist, SEIRA_UI_SHOTS: shots } = process.env;
 const ready = Boolean(chromiumPath && playwrightPath && dist);
 
 let fixture: Awaited<ReturnType<typeof launchVerificationServer>>;

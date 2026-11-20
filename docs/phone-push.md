@@ -71,7 +71,7 @@ carry it (`400 invalid_request`, not silently dropped).
 | thread id | `th_…` | which conversation to open |
 | room id, room name | `grp_…`, `Launch` | only in a room |
 | pairing | the phone's random tag for this computer | so a tap opens the right one of several saved computers |
-| collapse id | `openmaus.<thread>.<seq>` | see "No duplicates" |
+| collapse id | `seira.<thread>.<seq>` | see "No duplicates" |
 
 What the lock screen reads, by kind:
 
@@ -81,7 +81,7 @@ What the lock screen reads, by kind:
 - finished reply: "Scout finished"
 
 On iPhone the payload is `{aps: {alert: {title}, sound, thread-id, category,
-interruption-level}, omb: {...}, body: {...}}`. On Android it is a data-only
+interruption-level}, seira: {...}, body: {...}}`. On Android it is a data-only
 FCM message with `title`, `tag`, `channelId`, `categoryId`, `threadIdentifier`
 and `body` (the same fields as JSON), and no message text. The exact shapes are
 in `cloudflare/control-plane/README.md` ("Phone push relay").
@@ -105,7 +105,7 @@ of the two exists. They can meet at the edges: the app comes back and replays
 the frames it missed, or the stream closes just as an alert is sent.
 
 - The push carries the identifier the app would give its own notification for
-  the same frame: `openmaus.<threadId>.<seq>`. On iPhone this is the APNs
+  the same frame: `seira.<threadId>.<seq>`. On iPhone this is the APNs
   collapse id, which becomes the notification's identifier; on Android it is
   the notification's tag. A local notification with the same identifier
   replaces the push instead of adding a second one.
@@ -173,11 +173,11 @@ would only send that person the same names and ids it can already read.
 
 A desktop has an installation credential once its owner turns on "Use your
 phone anywhere", and `seira serve` has one after `seira login` or
-from `OMB_INSTALLATION_CREDENTIAL`. A Cloud home has none, so today it cannot
+from `SEIRA_INSTALLATION_CREDENTIAL`. A Cloud home has none, so today it cannot
 send.
 
 The server code already reads a push-only credential from
-`OMB_PUSH_CREDENTIAL`, so the smallest change on the home itself is nothing
+`SEIRA_PUSH_CREDENTIAL`, so the smallest change on the home itself is nothing
 but that variable. The open question is who issues it. Installation
 credentials last 90 days and are rotated with an account session, which a
 Cloud home does not have. Two ways:
@@ -193,7 +193,7 @@ Cloud home does not have. Two ways:
    a small Admin route, a control-plane route family beside the installation
    one, and a second relay transport in `server/phone-push.ts`.
 2. The Admin mints an installation per home under a service account and
-   passes it as `OMB_PUSH_CREDENTIAL`. No new code on the home or in the
+   passes it as `SEIRA_PUSH_CREDENTIAL`. No new code on the home or in the
    control plane, but the Admin must keep a control-plane account session
    alive to rotate every home's credential every 90 days.
 
@@ -330,13 +330,13 @@ What the owner provides and does, in order. Nothing here has been done.
 
 1. In the Apple Developer account, create an APNs auth key (`.p8`) with the
    Apple Push Notifications service enabled. Note its Key ID and the Team ID.
-2. Enable the Push Notifications capability on the App ID `com.openmausbot.app`
+2. Enable the Push Notifications capability on the App ID `com.seira.app`
    (and `.next` / `.dev` if those builds should get pushes), then regenerate
    the provisioning profiles.
 
 **Google**
 
-3. Create a Firebase project, add the Android app `com.openmausbot.companion`
+3. Create a Firebase project, add the Android app `com.seira.companion`
    (and the `.next` / `.dev` packages if wanted), and download
    `google-services.json`.
 4. In Project settings → Service accounts, generate a private key (the
@@ -351,7 +351,7 @@ What the owner provides and does, in order. Nothing here has been done.
    use the same APNs key (topic `<bundle id>.push-type.liveactivity`) and the
    same Firebase project.
 6. Set the secrets: `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_PRIVATE_KEY` (the
-   `.p8`), `APNS_BUNDLE_ID` (`com.openmausbot.app`), optionally
+   `.p8`), `APNS_BUNDLE_ID` (`com.seira.app`), optionally
    `APNS_ENVIRONMENTS=production,sandbox` to accept development builds, and
    `FCM_SERVICE_ACCOUNT` (the whole service-account JSON).
 7. Deploy the Worker. Until a platform's secrets are set its routes answer
@@ -360,8 +360,8 @@ What the owner provides and does, in order. Nothing here has been done.
 **Phone app** (`app/app.config.ts` in the phone repository)
 
 8. Put `google-services.json` where the build can read it (an EAS file secret
-   named by `MAUSBOT_GOOGLE_SERVICES_FILE`, or `app/google-services.json`).
-9. Build with `MAUSBOT_REMOTE_PUSH=1` (or set `REMOTE_PUSH = true`). This adds
+   named by `SEIRA_GOOGLE_SERVICES_FILE`, or `app/google-services.json`).
+9. Build with `SEIRA_REMOTE_PUSH=1` (or set `REMOTE_PUSH = true`). This adds
    the `aps-environment` entitlement (`production` for preview and production
    builds, `development` for development builds), Firebase on Android, and
    turns on token registration in the app. Update the store privacy answers
@@ -371,8 +371,8 @@ What the owner provides and does, in order. Nothing here has been done.
 **Desktop and server**
 
 10. Ship the server with phone push. It stays off until
-    `features.phonePush: true` is in `config.json`, or `OMB_PHONE_PUSH=1` is set
-    (`OMB_PHONE_PUSH=0` forces it off). This is the rollout flag: turn it on
+    `features.phonePush: true` is in `config.json`, or `SEIRA_PHONE_PUSH=1` is set
+    (`SEIRA_PHONE_PUSH=0` forces it off). This is the rollout flag: turn it on
     for one machine first, then flip the default in a release.
 11. For Cloud homes, build one of the two options under "Cloud homes".
 

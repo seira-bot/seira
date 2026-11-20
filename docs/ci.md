@@ -198,7 +198,7 @@ starts it.
   same pull request or of `main`. A manual start never cancels or is cancelled.
 - All the rules of [Fork pull requests](#fork-pull-requests) hold for it too.
 
-Do not add `bug-reports` to the `main` branch ruleset. A required check that
+Do not add `bug-reports` to the `main CI must pass` ruleset. A required check that
 does not run on every pull request keeps the pull requests that skip it
 waiting forever. Read the result on a pull request that changes the Worker.
 
@@ -228,7 +228,10 @@ request that changes the Worker.
 
 ## Required check
 
-The `main` branch ruleset requires the one check `CI`. The gate runs with
+The ruleset `main CI must pass` requires the one check `CI` and has no bypass
+actor, so no one can merge while `CI` fails or still runs. The `main` ruleset
+holds the pull request and review rules, and only those have the organization
+admin bypass. The gate runs with
 `if: ${{ !cancelled() }}`: GitHub counts a skipped required check as a pass,
 so the gate must run and fail when a job before it failed or was skipped.
 Before you rename the gate job, update the ruleset, or every pull request
@@ -251,7 +254,7 @@ together. A failure names the same shard on every run.
 - Files that run side by side never share a port: each worker picks from its
   own range (`server/testing/worker-port.ts`). Test and hook timeouts double
   when files share the CPU (`server/testing/host-timeout.ts`).
-- Linux runs every file, the e2e files too (`OMB_VITEST_E2E=all`).
+- Linux runs every file, the e2e files too (`SEIRA_VITEST_E2E=all`).
 
 To reproduce a failing shard:
 
@@ -262,7 +265,7 @@ To reproduce a failing shard:
 3. Run the same command and environment as the **Run tests** step:
 
 ```sh
-OMB_VITEST_E2E=all OMB_VITEST_SUBSET= OMB_VITEST_WORKERS=4 pnpm exec vitest run --shard=3/8
+SEIRA_VITEST_E2E=all SEIRA_VITEST_SUBSET= SEIRA_VITEST_WORKERS=4 pnpm exec vitest run --shard=3/8
 ```
 
 When a test file is deleted or renamed, remove or refresh its entry in the
@@ -304,7 +307,9 @@ Seira took over a larger CI from the project it forked. These parts are gone:
 | Contributor license check | Seira has no source-available folder. |
 
 The local `pre-push` hook still checks the files a push changes: lint, the
-locale check when a catalog changed, and the size and vocabulary guards.
+locale check when a catalog changed, and the size and vocabulary guards. A
+checkout without dependencies can run them on an ssh host instead (see
+[Contributing](contributing.md)).
 
 ## Repository settings for Actions
 
@@ -319,7 +324,7 @@ sets them in **Settings → Actions → General**:
 | Workflow permissions | Read repository contents |
 | Allow GitHub Actions to create and approve pull requests | Off |
 
-Then add the `CI` check (source: GitHub Actions) to the `main` branch ruleset.
+Then add the `CI` check (source: GitHub Actions) to a separate ruleset on the default branch with no bypass actor.
 
 ### The `release` environment
 

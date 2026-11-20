@@ -5,8 +5,8 @@ import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 // attachments.ts reads DATA_DIR at import time.
-const DATA_ROOT = mkdtempSync(join(tmpdir(), "omb-bot-attachment-"));
-process.env.OMB_DATA_DIR = join(DATA_ROOT, "data");
+const DATA_ROOT = mkdtempSync(join(tmpdir(), "seira-bot-attachment-"));
+process.env.SEIRA_DATA_DIR = join(DATA_ROOT, "data");
 const { attachForTurn, contentUploadId, deliveredCopy, guestWorkspaceToHost, saveBotAttachment } = await import("./bot-attachment.ts");
 const { ATTACHMENTS_DIR, FILE_MAX_BYTES, PREVIEW_MAX_BYTES } = await import("./attachments.ts");
 
@@ -222,7 +222,7 @@ describe("saveBotAttachment for an archive", () => {
 describe("saveBotAttachment for a file a turn saved outside its folders", () => {
   // Where a person might ask for output: outside every root, not hidden.
   const DESIGNS = join(DATA_ROOT, "Desktop", "designs", "2026-10-08_News");
-  const refuse = [process.env.OMB_DATA_DIR!];
+  const refuse = [process.env.SEIRA_DATA_DIR!];
   const hourAgo = () => new Date(Date.now() - 3_600_000);
   beforeAll(() => mkdirSync(DESIGNS, { recursive: true }));
 
@@ -267,9 +267,9 @@ describe("saveBotAttachment for a file a turn saved outside its folders", () => 
     const hidden = join(DATA_ROOT, ".ssh");
     mkdirSync(hidden, { recursive: true });
     writeFileSync(join(hidden, "key.pdf"), "%PDF-key");
-    mkdirSync(join(process.env.OMB_DATA_DIR!, "workspaces"), { recursive: true });
-    writeFileSync(join(process.env.OMB_DATA_DIR!, "workspaces", "MEMORY.md"), "# private");
-    for (const path of [join(hidden, "key.pdf"), join(process.env.OMB_DATA_DIR!, "workspaces", "MEMORY.md")]) {
+    mkdirSync(join(process.env.SEIRA_DATA_DIR!, "workspaces"), { recursive: true });
+    writeFileSync(join(process.env.SEIRA_DATA_DIR!, "workspaces", "MEMORY.md"), "# private");
+    for (const path of [join(hidden, "key.pdf"), join(process.env.SEIRA_DATA_DIR!, "workspaces", "MEMORY.md")]) {
       await expect(saveBotAttachment({ path, roots: [WORK], savedThisTurn: { since, refuse } }), path)
         .rejects.toMatchObject({ status: 403, code: "outside_workspace" });
     }
@@ -389,7 +389,7 @@ describe("deliveredCopy", () => {
   const bot = (id: string, parentId: string | null, extra: Partial<Message> = {}): Message =>
     ({ id, at: 1, parentId, role: "bot", kind: "text", text: "", ...extra }) as Message;
   const photo = { kind: "image" as const, path: "/store/copy.png", mime: "image/png", name: "sideboard.png" };
-  const renamed = { kind: "file" as const, path: "/store/copy.md", mime: "text/markdown; charset=utf-8", name: "团队技能包-README.md", source: "D:\\AI\\openmausbot-skills\\README.md" };
+  const renamed = { kind: "file" as const, path: "/store/copy.md", mime: "text/markdown; charset=utf-8", name: "团队技能包-README.md", source: "D:\\AI\\seira-skills\\README.md" };
   const ask = { id: "ask", at: 1, parentId: null, role: "user", kind: "text", text: "find a sideboard" } as Message;
 
   it("finds the picture the reply's turn delivered under the name its inline image uses", () => {
@@ -421,15 +421,15 @@ describe("deliveredCopy", () => {
 
   it("finds a renamed delivery by its source path", () => {
     const attached = bot("attached", "ask", { attachments: [renamed] });
-    const reply = bot("reply", "attached", { text: "[README](D:/AI/openmausbot-skills/README.md)" });
-    expect(deliveredCopy([ask, attached, reply], reply, "README.md", "D:\\AI\\openmausbot-skills\\README.md")).toEqual(renamed);
+    const reply = bot("reply", "attached", { text: "[README](D:/AI/seira-skills/README.md)" });
+    expect(deliveredCopy([ask, attached, reply], reply, "README.md", "D:\\AI\\seira-skills\\README.md")).toEqual(renamed);
   });
 
   it("finds the same source spelled as a file:// URL or with an encoded space", () => {
-    const spaced = { ...renamed, source: "D:\\AI\\openmausbot-skills\\my file.pdf", name: "团队技能包.pdf" };
+    const spaced = { ...renamed, source: "D:\\AI\\seira-skills\\my file.pdf", name: "团队技能包.pdf" };
     const attached = bot("attached", "ask", { attachments: [spaced] });
-    const reply = bot("reply", "attached", { text: "[pdf](file:///D:/AI/openmausbot-skills/my%20file.pdf)" });
-    expect(deliveredCopy([ask, attached, reply], reply, "my file.pdf", "file:///D:/AI/openmausbot-skills/my%20file.pdf")).toEqual(spaced);
+    const reply = bot("reply", "attached", { text: "[pdf](file:///D:/AI/seira-skills/my%20file.pdf)" });
+    expect(deliveredCopy([ask, attached, reply], reply, "my file.pdf", "file:///D:/AI/seira-skills/my%20file.pdf")).toEqual(spaced);
   });
 
   it("still finds a delivery by display name when the record has no source", () => {
@@ -443,13 +443,13 @@ describe("deliveredCopy", () => {
     const first = bot("first", "ask", { ...by("me"), attachments: [renamed] });
     const second = bot("second", "first", { ...by("me"), attachments: [{ ...renamed, path: "/store/copy-2.md" }] });
     const reply = bot("reply", "second", by("me"));
-    expect(deliveredCopy([ask, first, second, reply], reply, "README.md", "D:\\AI\\openmausbot-skills\\README.md")).toBeNull();
+    expect(deliveredCopy([ask, first, second, reply], reply, "README.md", "D:\\AI\\seira-skills\\README.md")).toBeNull();
   });
 
   it("ignores a different bot's delivery even when its source matches", () => {
     const by = (botId: string) => ({ from: { botId, name: botId, color: "blue" } }) as Partial<Message>;
     const peer = bot("peer", "ask", { ...by("other"), attachments: [renamed] });
     const reply = bot("reply", "peer", by("me"));
-    expect(deliveredCopy([ask, peer, reply], reply, "README.md", "D:\\AI\\openmausbot-skills\\README.md")).toBeNull();
+    expect(deliveredCopy([ask, peer, reply], reply, "README.md", "D:\\AI\\seira-skills\\README.md")).toBeNull();
   });
 });
