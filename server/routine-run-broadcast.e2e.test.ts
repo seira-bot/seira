@@ -100,7 +100,8 @@ posixOnly("a routine run's task on the event stream", () => {
     const up = await waitFor(async () => {
       if (child.exitCode !== null || child.signalCode !== null) throw new Error(`server exited before it was ready:\n${log}`);
       try {
-        return (await fetch(`${BASE}/api/health`)).ok;
+        const health = await fetch(`${BASE}/api/health`);
+        return health.ok && (await health.json() as { pid?: unknown }).pid === child.pid;
       } catch {
         return false;
       }

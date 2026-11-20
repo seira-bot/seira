@@ -58,7 +58,8 @@ async function start() {
   for (;;) {
     if (child.exitCode !== null || child.signalCode !== null) throw new Error(`server exited before it was ready:\n${log}`);
     try {
-      if ((await fetch(`${BASE}/api/health`)).ok) return;
+      const health = await fetch(`${BASE}/api/health`);
+      if (health.ok && (await health.json() as { pid?: unknown }).pid === child.pid) return;
     } catch {
     }
     if (Date.now() > deadline) throw new Error(`server never came up:\n${log}`);
