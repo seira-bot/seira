@@ -179,7 +179,7 @@ const say = (token: string, bot: { id: string }, text: string, threadId: string)
   api("POST", `/api/bots/${bot.id}/messages`, { token, body: { text, threadId } });
 
 it("boots with its secrets from the launcher's pipe: the Admin's signed pairing works", () => {
-  expect(owner).toMatch(/^omb_sess_/);
+  expect(owner).toMatch(/^seira_sess_/);
   expect(log).not.toContain("its secrets came in this process's environment");
 });
 

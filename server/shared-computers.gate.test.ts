@@ -107,7 +107,7 @@ async function paired(scopes: string[]): Promise<{ token: string; id: string }> 
   const opened = await api("POST", "/api/auth/pairing", { label: `Desktop ${scopes.join("+")}`, scopes });
   expect(opened.status).toBe(200);
   const pair = (await api("POST", "/api/auth/pair", { code: opened.body.code })).body as { token: string; session: { id: string } };
-  expect(pair.token).toMatch(/^omb_sess_/);
+  expect(pair.token).toMatch(/^seira_sess_/);
   return { token: pair.token, id: pair.session.id };
 }
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
