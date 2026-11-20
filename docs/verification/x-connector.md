@@ -8,8 +8,7 @@ the same function as the X tools' own routes.
 
 ## Isolated browser verification
 
-Use an installed Playwright module and Chromium executable, as for the
-[Whop fixture](whop.md), then run:
+Use an installed Playwright module and Chromium executable, then run:
 
 ```sh
 SEIRA_UI_EVIDENCE_DIR=/tmp/seira-x-connector-evidence \

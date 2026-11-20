@@ -140,15 +140,6 @@ The [MCP sign-in fixture](mcp-sign-in.md) checks remote sign-in, callback URL
 paste-back, MCP tools and logout cancellation through the real settings panel
 and a synthetic OAuth provider in a disposable workspace.
 
-The [Whop fixture](whop.md) checks its one-click setup, cancellation, denied
-consent, discovery failures, reconnect and disconnect using that same registry
-and a synthetic provider, without accessing a real Whop account.
-
-The [bot contact cards fixture](bot-contact-cards.md) checks the AgentMail,
-AgentPhone, Vapi and Telnyx cards: a pasted key that is refused, replaced and
-deleted on Disconnect, kept in a header and out of every listing, against a
-loopback stand-in for Vapi.
-
 The [Postiz fixture](postiz.md) checks the Apps page's Postiz card in the Social
 category: Postiz Cloud's sign-in and an API key for a person's own Postiz, the
 bot's turn getting the `postiz` tools with the token kept out of every answer,
