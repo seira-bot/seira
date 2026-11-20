@@ -3370,6 +3370,7 @@ describe("managed endpoints in several Cloudflare accounts", () => {
     const text = await response.text();
     expect(JSON.parse(text)).toEqual({
       ok: true,
+      accounts: "better-auth",
       service: "seira-control-plane",
       capacity: {
         status: "ok",

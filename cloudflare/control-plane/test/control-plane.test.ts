@@ -286,6 +286,7 @@ describe("control-plane migrations and health", () => {
     await expect(response.json()).resolves.toEqual({
       ok: true,
       service: "seira-control-plane",
+      accounts: "better-auth",
       capacity: {
         status: "unknown",
         checkedAt: null,

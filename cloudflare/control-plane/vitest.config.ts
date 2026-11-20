@@ -1,4 +1,5 @@
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 import { unstable_readConfig } from "wrangler";
@@ -9,7 +10,12 @@ const TEST_CLOUDFLARE_TOKEN = "test-only-cloudflare-api-token-with-no-real-acces
 const wranglerPath = fileURLToPath(new URL("./wrangler.jsonc", import.meta.url));
 // What the deployment file says, for the test that pins it.
 const deployedVars = unstable_readConfig({ config: wranglerPath }).vars;
-const TEST_CLOUDFLARE_ACCOUNT_ID = "0123456789abcdef0123456789abcdef";
+// Rows written before an account was recorded default to this account (migration 0007).
+const migrationsDir = fileURLToPath(new URL("./migrations/", import.meta.url));
+const accountMigration = readdirSync(migrationsDir).find((name) => name.startsWith("0007_"));
+const TEST_CLOUDFLARE_ACCOUNT_ID = /DEFAULT '([0-9a-f]{32})'/.exec(
+  readFileSync(`${migrationsDir}${accountMigration}`, "utf8"),
+)![1];
 const TEST_CLOUDFLARE_ZONE_ID = "fedcba9876543210fedcba9876543210";
 process.env.BETTER_AUTH_SECRET ??= TEST_AUTH_SECRET;
 process.env.CLOUDFLARE_API_TOKEN ??= TEST_CLOUDFLARE_TOKEN;
