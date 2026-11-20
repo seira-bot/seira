@@ -30,7 +30,7 @@ services:
       SEIRA_PUBLIC_URL: ${SEIRA_PUBLIC_URL:-http://localhost:8080}
       SEIRA_WEBHOOK_PUBLIC_URL: ${SEIRA_PUBLIC_URL:-http://localhost:8080}
     healthcheck:
-      test: [CMD-SHELL, 'curl -fsS http://127.0.0.1:$$SEIRA_PORT/api/health | grep -q seira']
+      test: [CMD-SHELL, 'curl -fsS http://127.0.0.1:$$SEIRA_PORT/api/health | grep -q -e seira -e openmausbot']
       interval: 15s
       timeout: 5s
       start_period: 30s

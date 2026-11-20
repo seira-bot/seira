@@ -31,7 +31,7 @@ fail() {
   exit 1
 }
 running_image() { docker inspect -f '{{.Image}}' "$(cd "$DIR" && docker compose ps -q seira)"; }
-version() { (cd "$DIR" && docker compose exec -T seira curl -sf http://127.0.0.1:8799/.well-known/seira/environment) | sed -n 's/.*"version":"\([^"]*\)".*/\1/p'; }
+version() { (cd "$DIR" && docker compose exec -T seira curl -sf http://127.0.0.1:8799/.well-known/openmausbot/environment) | sed -n 's/.*"version":"\([^"]*\)".*/\1/p'; }
 wait_version() { for _ in $(seq 1 60); do [ "$(version)" = "$1" ] && return 0; sleep 3; done; return 1; }
 in_data() { docker run --rm --network none --user 0:0 -v "$DATA:/d" --entrypoint sh "$REPO:v$FROM" -c "$1"; }
 # The copies of the data the updates made: one Docker volume each, and never more than one once an update is done.
@@ -94,7 +94,7 @@ services:
       SEIRA_PUBLIC_URL: https://${DOMAIN}
       SEIRA_COMPOSIO_BROKER: "off"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q seira"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q -e seira -e openmausbot"]
       interval: 30s
       timeout: 5s
       retries: 3

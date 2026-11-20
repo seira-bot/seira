@@ -42,7 +42,7 @@ fail() {
 through_caddy() { # what happened
   local _
   for _ in $(seq 1 60); do
-    if curl -sk --max-time 5 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health" 2>/dev/null | grep -qx '{"app":"seira"}' &&
+    if curl -sk --max-time 5 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health" 2>/dev/null | grep -qx -e '{"app":"seira"}' -e '{"app":"openmausbot"}' &&
       [ "$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/bots")" = 403 ]; then
       echo "HTTPS through Caddy answers after: $1"
       return 0
@@ -75,7 +75,7 @@ install_until_https() { # evidence-file [the install command, when not the usual
   [ "$status" = 1 ] || fail "the install exited $status, not 1"
   contains "$1" "Seira is running, but https://$DOMAIN did not answer within 20 seconds" "the install did not end at the certificate"
   [ "$(sudo docker inspect --format '{{.State.Health.Status}}' "$(cd "$DIR" && sudo docker compose ps -q seira)")" = healthy ] || fail "the server is not healthy"
-  (cd "$DIR" && sudo docker compose exec -T seira curl -sf http://127.0.0.1:8799/api/health) | grep -q seira || fail "the server does not answer inside its container"
+  (cd "$DIR" && sudo docker compose exec -T seira curl -sf http://127.0.0.1:8799/api/health) | grep -q -e seira -e openmausbot || fail "the server does not answer inside its container"
   curl -sS -o /dev/null -w '%{http_code}' --max-time 10 -H "Host: $DOMAIN" http://127.0.0.1/ | grep -qx 308 || fail "Caddy does not redirect port 80 to HTTPS"
   through_caddy "the install"
 }
@@ -253,7 +253,7 @@ services:
       SEIRA_SERVER_NAME: ${SEIRA_SERVER_NAME:-${DOMAIN}}
       SEIRA_COMPOSIO_BROKER: "off"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q seira"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q -e seira -e openmausbot"]
       interval: 30s
       timeout: 5s
       retries: 3
