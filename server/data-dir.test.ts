@@ -36,16 +36,17 @@ describe.skipIf(process.platform === "win32")("ensurePrivateDir", () => {
     expect(modeOf(dir)).toBe(0o700);
   });
 
-  it.each([0o755, 0o775])("tightens a folder left at the plain mkdir mode %o", (mode) => {
+  it.each(["755", "775"])("tightens a folder left at the plain mkdir mode %s", (octal) => {
     const dir = join(root, "data");
     mkdirSync(dir);
-    chmodSync(dir, mode);
+    chmodSync(dir, Number.parseInt(octal, 8));
     ensurePrivateDir(dir);
     expect(modeOf(dir)).toBe(0o700);
   });
 
-  it.each([0o700, 0o711, 0o750, 0o2770])("keeps the mode %o that its owner chose", (mode) => {
+  it.each(["700", "711", "750", "2770"])("keeps the mode %s that its owner chose", (octal) => {
     const dir = join(root, "data");
+    const mode = Number.parseInt(octal, 8);
     mkdirSync(dir);
     chmodSync(dir, mode);
     ensurePrivateDir(dir);
