@@ -39,13 +39,13 @@ Seira keeps the key in your operating system's secure storage.
 
 A Cloud needs the owner's Composio project key. Save it in **Settings → AI → Other services**, under **Apps and tools → Composio project key**.
 
-A Cloud uses a connected-apps service instead only when its environment names one with `OMB_COMPOSIO_BROKER_URL`.
+A Cloud uses a connected-apps service instead only when its environment names one with `SEIRA_COMPOSIO_BROKER_URL`.
 
 ## Source builds and your own service
 
 A source build uses your own Composio project and `COMPOSIO_API_KEY`. See [Self-hosted Composio](./self-hosted-composio.mdx).
 
-To run your own connected-apps service, set `OMB_COMPOSIO_BROKER_URL` to its address. Without that variable, the source build uses no service. The packaged desktop app and a self-hosted server installed from npm or Docker use Seira's service at `https://apps.seira.bot`, and `OMB_COMPOSIO_BROKER_URL` names another one. A self-hosted server registers with the service by itself, with no token to make by hand. Set `OMB_COMPOSIO_BROKER=off` to turn the service off. A saved project key always takes priority over a service, and then nothing is sent to it.
+To run your own connected-apps service, set `SEIRA_COMPOSIO_BROKER_URL` to its address. Without that variable, the source build uses no service. The packaged desktop app and a self-hosted server installed from npm or Docker use Seira's service at `https://apps.seira.bot`, and `SEIRA_COMPOSIO_BROKER_URL` names another one. A self-hosted server registers with the service by itself, with no token to make by hand. Set `SEIRA_COMPOSIO_BROKER=off` to turn the service off. A saved project key always takes priority over a service, and then nothing is sent to it.
 
 ## Connect X (Twitter)
 
@@ -76,7 +76,7 @@ Some apps, such as Xero and Buffer, have no sign-in that Composio provides, so t
 
 Seira finds the auth config by itself, switches on what Composio needs before it uses it ("enabled for Tool Router", which a config you made yourself can have off), and tells the bot which config it used. If you have several for one app, it uses the most recently created. A connection you made in the Composio dashboard itself is not visible to Seira, so connect the app once from Seira.
 
-A connected-apps service you name with `OMB_COMPOSIO_BROKER_URL` uses its own Composio project, which cannot use your OAuth app. Use your own project key for these apps.
+A connected-apps service you name with `SEIRA_COMPOSIO_BROKER_URL` uses its own Composio project, which cannot use your OAuth app. Use your own project key for these apps.
 
 ## Multiple accounts
 

@@ -7,11 +7,11 @@ import { readConfig } from "../src/config";
 import { createWorker } from "../src/index";
 import { FCM_SCOPE, GOOGLE_TOKEN_URL, forgetFcmAccessToken, readFcmConfig } from "../src/push-fcm";
 
-const BASE_URL = "https://auth.openmausbot.test";
+const BASE_URL = "https://auth.seira.test";
 const FCM_TOKEN = `cXyZ_1234567890-abc:APA91b${"F".repeat(140)}`;
 const OTHER_FCM_TOKEN = `dQwE_0987654321-xyz:APA91b${"G".repeat(140)}`;
 const APNS_TOKEN = "a1".repeat(32);
-const PROJECT = "mausbot-test-1";
+const PROJECT = "seira-test-1";
 
 type TestWorker = ReturnType<typeof createWorker>;
 
@@ -120,7 +120,7 @@ const registerFcm = (worker: TestWorker, environment: Env, credential: string, t
 const send = (worker: TestWorker, environment: Env, credential: string, body: Record<string, unknown> = {}) =>
   call(worker, environment, "/v1/installations/self/push/send", {
     token: credential,
-    body: { v: 1, token: FCM_TOKEN, pairing: "pair-tag-1", collapseId: "openmaus.th_1.42", notification, ...body },
+    body: { v: 1, token: FCM_TOKEN, pairing: "pair-tag-1", collapseId: "seira.th_1.42", notification, ...body },
   });
 
 const decode = (part: string) => JSON.parse(atob(part.replaceAll("-", "+").replaceAll("_", "/")));
@@ -134,7 +134,7 @@ describe("phone push relay, FCM", () => {
     const apnsOnly = testEnv({
       APNS_KEY_ID: "KEY1234567",
       APNS_TEAM_ID: "TEAM123456",
-      APNS_BUNDLE_ID: "com.example.mausbot",
+      APNS_BUNDLE_ID: "com.example.seira",
       APNS_PRIVATE_KEY: await apnsKeyPem(),
     });
     const { credential } = await installation(worker, apnsOnly, "fcm-unset@example.test");
@@ -176,7 +176,7 @@ describe("phone push relay, FCM", () => {
         token: FCM_TOKEN,
         data: {
           title: "Scout needs approval",
-          tag: "openmaus.th_1.42",
+          tag: "seira.th_1.42",
           channelId: "approval_question",
           categoryId: "OPENMAUS_APPROVAL",
           threadIdentifier: "th_1",
@@ -317,7 +317,7 @@ describe("phone push relay, FCM", () => {
     const environment = testEnv({
       APNS_KEY_ID: "KEY1234567",
       APNS_TEAM_ID: "TEAM123456",
-      APNS_BUNDLE_ID: "com.example.mausbot",
+      APNS_BUNDLE_ID: "com.example.seira",
       APNS_PRIVATE_KEY: await apnsKeyPem(),
     });
     const providers = fakeProviders();
@@ -326,7 +326,7 @@ describe("phone push relay, FCM", () => {
     await call(worker, environment, "/v1/installations/self/push/register", { token: credential, body: { v: 1, platform: "apns", token: APNS_TOKEN, environment: "production" } });
     expect((await send(worker, environment, credential, { token: APNS_TOKEN, notification: { ...notification, kind: "sign-in", title: "Scout needs you to sign in to a website" } })).status).toBe(202);
     const [apns] = providers.apns();
-    expect(apns!.headers["apns-collapse-id"]).toBe("openmaus.th_1.42");
+    expect(apns!.headers["apns-collapse-id"]).toBe("seira.th_1.42");
     expect(JSON.parse(apns!.text).aps).toMatchObject({ category: "OPENMAUS_UPDATE", "interruption-level": "time-sensitive" });
     const row = await env.DB.prepare("SELECT platform FROM installation_push_devices").first<{ platform: string }>();
     expect(row?.platform).toBe("apns");

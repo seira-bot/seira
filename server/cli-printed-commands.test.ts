@@ -7,8 +7,8 @@ import { noRouteLines, reachLines } from "./cli-reach.ts";
 import { HEADLESS_VERB_NAMES, usage } from "./cli-usage.ts";
 
 const PLACEHOLDERS: Record<string, string> = {
-  "https://…": "https://maus.example.com", "<id>": "a1", ID: "a1", NAME: "kitchen", FILE: "team.yaml", EMAIL: "you@example.com",
-  HOST: "maus.example.com", DIR: "/tmp/omb", N: "8800", CODE: "ABCD-EFGH-JKLM", BOT: "Chief", URL: "https://maus.example.com", "…": "",
+  "https://…": "https://seira.example.com", "<id>": "a1", ID: "a1", NAME: "kitchen", FILE: "team.yaml", EMAIL: "you@example.com",
+  HOST: "seira.example.com", DIR: "/tmp/seira", N: "8800", CODE: "ABCD-EFGH-JKLM", BOT: "Chief", URL: "https://seira.example.com", "…": "",
 };
 
 /** Each `seira …` a line prints, up to the end of the command (two spaces, a quote, a comma or the line's end). */
@@ -32,10 +32,10 @@ function accepted(words: string[]): string | null {
 describe("printed commands", () => {
   const now = Date.parse("2026-11-07T10:00:00");
   const outputs = [
-    pairingBlock({ code: "ABCD-EFGH-JKLM", expiresAt: now + 600_000, chatOnly: false, link: "https://maus.example.com/pair#code=ABCD-EFGH-JKLM", prefix: "seira", now }),
+    pairingBlock({ code: "ABCD-EFGH-JKLM", expiresAt: now + 600_000, chatOnly: false, link: "https://seira.example.com/pair#code=ABCD-EFGH-JKLM", prefix: "seira", now }),
     pairingBlock({ code: "ABCD-EFGH-JKLM", expiresAt: now + 600_000, chatOnly: false, link: null, localLink: "http://127.0.0.1:8799/pair#code=X", prefix: "seira", now }),
     noRouteLines(8799, "seira").join("\n"),
-    reachLines("public-url", "https://maus.example.com", 8799, "seira", { ok: false, kind: "unreachable", reason: "connection refused" }).join("\n"),
+    reachLines("public-url", "https://seira.example.com", 8799, "seira", { ok: false, kind: "unreachable", reason: "connection refused" }).join("\n"),
     browserSignInLines("http://127.0.0.1:8799/pair#code=X", "X", now),
     formatSessions([{ id: "a1", label: "phone", scopes: ["client"], lastSeenAt: now, expiresAt: now }], now),
   ];
@@ -56,7 +56,7 @@ describe("printed commands", () => {
       if (!command || HEADLESS_VERB_NAMES.has(command) || command === "fleet" || command === "sentinel") continue;
       for (const [flag] of line.matchAll(/--[a-z][a-z-]*/g)) {
         const bare = accepted([command, flag]);
-        const valued = accepted([command, flag, flag === "--public-url" ? "https://maus.example.com" : flag === "--port" ? "8800" : flag === "--ttl" ? "24h" : flag === "--phone" ? "ios" : "x"]);
+        const valued = accepted([command, flag, flag === "--public-url" ? "https://seira.example.com" : flag === "--port" ? "8800" : flag === "--ttl" ? "24h" : flag === "--phone" ? "ios" : "x"]);
         const unknown = (error: string | null) => error !== null && error.includes("unknown argument");
         expect([command, flag, unknown(bare) && unknown(valued)]).toEqual([command, flag, false]);
         checked.push(`${command} ${flag}`);
@@ -67,6 +67,6 @@ describe("printed commands", () => {
 
   it("writes commands the way the CLI was started", () => {
     expect(usage("npx @seira-bot/seira")).toContain("  npx @seira-bot/seira pair  [--label NAME]");
-    expect(noRouteLines(8799, "docker compose exec omb openmausbot").join("\n")).toContain("docker compose exec omb openmausbot serve --lan");
+    expect(noRouteLines(8799, "docker compose exec seira seira").join("\n")).toContain("docker compose exec seira seira serve --lan");
   });
 });

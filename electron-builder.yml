@@ -4,7 +4,7 @@ artifactName: Seira-${version}-${arch}.${ext}
 
 protocols:
   - name: Seira package install
-    schemes: [openmausbot]
+    schemes: [seira]
 
 # In-app auto-update reads latest-mac.yml + the .zip (macOS) or latest.yml +
 # the NSIS .exe (Windows) from the PUBLIC releases in this source repo.
@@ -42,13 +42,13 @@ files:
   - "!electron/resources/speech-helper-Info.plist"
   - "!electron/resources/Seira Speech.app/**"
   # A machine that built the helper under its old name may still hold that bundle; never ship it.
-  - "!electron/resources/OpenMausBot Speech.app/**"
+  - "!electron/resources/Seira Speech.app/**"
   # The Teach a skill recorder is gone, but a machine that once ran
   # `pnpm build:recorder` may still hold its helper build; never ship it.
   - "!electron/resources/recorder-helper"
   - "!electron/resources/recorder-helper.swift"
   - "!electron/resources/recorder-helper-Info.plist"
-  - "!electron/resources/OpenMausBot Recorder.app/**"
+  - "!electron/resources/Seira Recorder.app/**"
   - "!**/node_modules/**"
   - src/locales/*.json
   - "!src/locales/source-hashes.json"
@@ -59,11 +59,11 @@ asar: true
 extraResources:
   # Ship the app's own license terms in every desktop distribution.
   - from: LICENSE
-    to: licenses/OpenMausBot-LICENSE.txt
+    to: licenses/Seira-LICENSE.txt
   - from: NOTICE
-    to: licenses/OpenMausBot-NOTICE.txt
+    to: licenses/Seira-NOTICE.txt
   # cloudflared is distributed under Apache-2.0 as a separate executable.
-  # OpenMausBot itself uses the same full license text; ship another named
+  # Seira itself uses the same full license text; ship another named
   # copy so the third-party executable's terms remain unambiguous.
   - from: LICENSE
     to: licenses/cloudflared-LICENSE.txt
@@ -143,7 +143,7 @@ mac:
     NSAccessibilityUsageDescription: Seira uses Accessibility when you let a bot control this Mac.
     NSLocalNetworkUsageDescription: Seira connects to your phones and your other computers on this network and on Tailscale.
     NSBonjourServices:
-      - _openmausbot._tcp
+      - _seira._tcp
     NSScreenCaptureUsageDescription: Seira uses Screen Recording so bots can see this Mac before acting.
     NSDownloadsFolderUsageDescription: Seira looks in Downloads for the file your Grok Bot saved when you move it here.
   # Notarization runs manually after the build (notarytool + staple),
@@ -236,7 +236,7 @@ linux:
   # lone 1024px PNG is not indexed by GNOME's hicolor theme on Ubuntu 24.04.
   icon: build/icon.svg
   category: Utility
-  executableName: openmausbot
+  executableName: seira
   synopsis: Your own team of AI agents in one chat app
   description: A local-first chat app for running a team of AI agents.
   maintainer: Milind Soni <46266943+milind-soni@users.noreply.github.com>
@@ -253,8 +253,8 @@ linux:
       to: browser-engine
     - from: dist-native/duckdb/linux-x64/node_modules
       to: duckdb/node_modules
-    - from: build/linux-openmausbot-browser.apparmor
-      to: openmausbot-browser.apparmor
+    - from: build/linux-seira-browser.apparmor
+      to: seira-browser.apparmor
   desktop:
     entry:
       Name: Seira

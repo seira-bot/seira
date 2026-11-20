@@ -26,12 +26,12 @@ import { credentialStoreFlags } from "../../server/browser/egress/gate.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 /** Gitignored, persistent: the binary and its Chrome download once per checkout. */
-export const UI_TOOLS_DIR = join(ROOT, ".omb-scratch", "verify-tools");
+export const UI_TOOLS_DIR = join(ROOT, ".seira-scratch", "verify-tools");
 /** Verbs that change the fixture or the page; they take the explicit handle, never discovery. */
 export const UI_MUTATING = new Set(["click", "type", "press", "flag", "eval"]);
 export const ENABLE_ADVANCED_UI = `(() => {
-  localStorage.setItem("omb-advanced-mode", "1");
-  window.dispatchEvent(new StorageEvent("storage", { key: "omb-advanced-mode", storageArea: localStorage }));
+  localStorage.setItem("seira-advanced-mode", "1");
+  window.dispatchEvent(new StorageEvent("storage", { key: "seira-advanced-mode", storageArea: localStorage }));
   return true;
 })()`;
 /** The sidebar's Tools section starts open, and a click on its header closes it. */
@@ -164,7 +164,7 @@ export function installedChrome(toolsDir = UI_TOOLS_DIR, platform: NodeJS.Platfo
   return null;
 }
 
-/** OMB_AGENT_BROWSER_PATH, then the tools directory, then PATH; otherwise the
+/** SEIRA_AGENT_BROWSER_PATH, then the tools directory, then PATH; otherwise the
  * pinned download, verified by size and SHA-256. Chrome follows the same rule
  * with AGENT_BROWSER_EXECUTABLE_PATH. Both land once under UI_TOOLS_DIR. */
 export async function ensureUiBrowser(
@@ -187,7 +187,7 @@ export async function ensureUiBrowser(
   let chrome = installedChrome(toolsDir);
   if (!chrome) {
     const started = Date.now();
-    await ensureChrome(binary, { env: sessionEnv({ home: toolsDir, session: "omb-ui-install", chrome: null }, parentEnv), log });
+    await ensureChrome(binary, { env: sessionEnv({ home: toolsDir, session: "seira-ui-install", chrome: null }, parentEnv), log });
     log(`Chrome ready in ${Date.now() - started}ms`);
     chrome = installedChrome(toolsDir);
     if (!chrome) log("no Chrome for Testing under the tools directory; the session will use the browser agent-browser finds itself");
@@ -432,7 +432,7 @@ export async function launchUi(
   const values = parse("ui launch", args, { entry: { type: "string" }, "tool-calls": { type: "string" }, mode: { type: "string" }, engine: { type: "string" } });
   const extraEngines: Record<string, "codex" | "customAcp" | "cline" | "copilot" | "opencode"> = { codex: "codex", acp: "customAcp", cline: "cline", copilot: "copilot", opencode: "opencode" };
   if (values.engine !== undefined && !Object.hasOwn(extraEngines, String(values.engine))) {
-    throw new ControlSeiraError(`unknown --engine ${JSON.stringify(values.engine)}`, "the fake Claude CLI always runs; --engine codex adds the fake Codex app-server beside it, --engine acp, cline or copilot a fake ACP agent, --engine opencode the OpenCode at OMB_VERIFY_OPENCODE_CLI");
+    throw new ControlSeiraError(`unknown --engine ${JSON.stringify(values.engine)}`, "the fake Claude CLI always runs; --engine codex adds the fake Codex app-server beside it, --engine acp, cline or copilot a fake ACP agent, --engine opencode the OpenCode at SEIRA_VERIFY_OPENCODE_CLI");
   }
   const entryName = typeof values.entry === "string" ? values.entry : "threads";
   if (!Object.hasOwn(ENTRIES, entryName)) {
@@ -482,7 +482,7 @@ export async function launchUi(
     // notes would otherwise land there first.
     preview = await mountPreview(fixture, { ...entry, logLevel: "warn" });
     checkpoint();
-    const session: SessionEnv = { home: fixture.info.dataDir, session: `omb-ui-${new URL(fixture.info.url).port}`, chrome };
+    const session: SessionEnv = { home: fixture.info.dataDir, session: `seira-ui-${new URL(fixture.info.url).port}`, chrome };
     const env = sessionEnv(session, parentEnv);
     opened = { binary, env };
     await agentBrowser(binary, env, ["open", preview.previewUrl], 120_000);

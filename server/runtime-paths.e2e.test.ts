@@ -87,8 +87,8 @@ async function scenario(test: (f: any) => Promise<void>) {
         try {
           const dump = JSON.parse(readFileSync(session.fixtureDumpPath, "utf8"));
           const env = dump.mcpConfig?.mcpServers?.agents?.env;
-          if (env?.OMB_THREAD_ID !== threadId) return false;
-          found = env.OMB_COMMS_TOKEN;
+          if (env?.SEIRA_THREAD_ID !== threadId) return false;
+          found = env.SEIRA_COMMS_TOKEN;
           return Boolean(found);
         } catch { return false; }
       }, { timeout: 20_000 }).toBe(true);

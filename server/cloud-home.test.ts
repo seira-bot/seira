@@ -23,95 +23,95 @@ import { portableWorkspaceConfig, restoredWorkspaceConfig } from "./workspace-ba
 
 const directories: string[] = [];
 afterEach(async () => { for (const directory of directories.splice(0)) await removeTempDir(directory); });
-const directory = () => { const value = mkdtempSync(join(tmpdir(), "omb-cloud-home-")); directories.push(value); return value; };
+const directory = () => { const value = mkdtempSync(join(tmpdir(), "seira-cloud-home-")); directories.push(value); return value; };
 
-// Shapes exactly as openmaus-cloud's provisioner writes them.
+// Shapes exactly as seira-cloud's provisioner writes them.
 const secret = "S".repeat(43);
 const machineId = "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93";
 const contract = (extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({
-  OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: machineId, OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
-  OMB_PUBLIC_URL: "https://omb-u-1a2b3c4d5e6f.fly.dev", OMB_CLOUD_BOOTSTRAP_SECRET: secret, ...extra,
+  SEIRA_CLOUD_ROLE: "home", SEIRA_CLOUD_MACHINE_ID: machineId, SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test",
+  SEIRA_PUBLIC_URL: "https://seira-u-1a2b3c4d5e6f.fly.dev", SEIRA_CLOUD_BOOTSTRAP_SECRET: secret, ...extra,
 });
 // A platform gateway's settings, as an Admin from before Cloud Pro dropped
 // included AI wrote them. A Cloud home ignores them.
-const token = `omb_cloudai_${"t".repeat(43)}`;
+const token = `seira_cloudai_${"t".repeat(43)}`;
 const gatewayUrl = "https://cloud.example.test/api/cloud/gateway/g0123456789abcdef0123456789abcd";
-const withGateway = (extra: NodeJS.ProcessEnv = {}) => contract({ OMB_HOSTED_MODEL_URL: gatewayUrl, OMB_HOSTED_MODEL_TOKEN: token,
-  OMB_HOSTED_MODELS: JSON.stringify({ anthropic: ["claude-sonnet-5"], openai: ["gpt-5.6-sol"], openrouter: ["anthropic/claude-sonnet-5"] }), ...extra });
+const withGateway = (extra: NodeJS.ProcessEnv = {}) => contract({ SEIRA_HOSTED_MODEL_URL: gatewayUrl, SEIRA_HOSTED_MODEL_TOKEN: token,
+  SEIRA_HOSTED_MODELS: JSON.stringify({ anthropic: ["claude-sonnet-5"], openai: ["gpt-5.6-sol"], openrouter: ["anthropic/claude-sonnet-5"] }), ...extra });
 
 
 it("is off on every ordinary server and desktop", () => {
   expect(cloudHomeConfigured({})).toBe(false);
   expect(cloudHomeConfiguration({})).toBeNull();
-  expect(cloudHomeConfiguration({ OMB_PUBLIC_URL: "https://selfhosted.example.test", OMB_HOSTED_MODELS: "{}" })).toBeNull();
+  expect(cloudHomeConfiguration({ SEIRA_PUBLIC_URL: "https://selfhosted.example.test", SEIRA_HOSTED_MODELS: "{}" })).toBeNull();
 });
 
 it("reads the Admin's contract", () => {
   expect(cloudHomeConfiguration(contract())).toEqual({
-    role: "home", team: null, machineId, adminOrigin: "https://cloud.example.test", publicOrigin: "https://omb-u-1a2b3c4d5e6f.fly.dev", legacyOrigins: [], bootstrapSecret: secret,
+    role: "home", team: null, machineId, adminOrigin: "https://cloud.example.test", publicOrigin: "https://seira-u-1a2b3c4d5e6f.fly.dev", legacyOrigins: [], bootstrapSecret: secret,
     warnings: [],
   });
-  expect(cloudHomeConfiguration(contract({ OMB_CLOUD_ADMIN_URL: "https://cloud.example.test/" }))!.adminOrigin).toBe("https://cloud.example.test");
+  expect(cloudHomeConfiguration(contract({ SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test/" }))!.adminOrigin).toBe("https://cloud.example.test");
 });
 
 it("reads the addresses a moved home answered at before, exactly and once each, without its own", () => {
-  const legacy = (value: string) => cloudHomeConfiguration(contract({ OMB_CLOUD_LEGACY_ORIGINS: value }))!.legacyOrigins;
-  expect(legacy("https://omb-u-old.fly.dev")).toEqual(["https://omb-u-old.fly.dev"]);
-  expect(legacy(" https://omb-u-old.fly.dev/ , https://older.example.test,https://omb-u-old.fly.dev,https://omb-u-1a2b3c4d5e6f.fly.dev ,"))
-    .toEqual(["https://omb-u-old.fly.dev", "https://older.example.test"]);
+  const legacy = (value: string) => cloudHomeConfiguration(contract({ SEIRA_CLOUD_LEGACY_ORIGINS: value }))!.legacyOrigins;
+  expect(legacy("https://seira-u-old.fly.dev")).toEqual(["https://seira-u-old.fly.dev"]);
+  expect(legacy(" https://seira-u-old.fly.dev/ , https://older.example.test,https://seira-u-old.fly.dev,https://seira-u-1a2b3c4d5e6f.fly.dev ,"))
+    .toEqual(["https://seira-u-old.fly.dev", "https://older.example.test"]);
   expect(legacy("")).toEqual([]);
 });
 
 it.each([
-  ["an http origin", "http://omb-u-old.fly.dev"],
-  ["an origin with a path", "https://omb-u-old.fly.dev/app"],
-  ["an origin with credentials", "https://user:pass@omb-u-old.fly.dev"],
-  ["a host that is not written as its origin", "https://OMB-U-OLD.fly.dev"],
+  ["an http origin", "http://seira-u-old.fly.dev"],
+  ["an origin with a path", "https://seira-u-old.fly.dev/app"],
+  ["an origin with credentials", "https://user:pass@seira-u-old.fly.dev"],
+  ["a host that is not written as its origin", "https://SEIRA-U-OLD.fly.dev"],
   ["a loopback name", "https://localhost"],
   ["a loopback address", "https://127.0.0.1:8443"],
   ["too many", Array.from({ length: 9 }, (_, at) => `https://old-${at}.example.test`).join(",")],
 ])("refuses to start with %s as a former address", (_why, value) => {
-  expect(() => cloudHomeConfiguration(contract({ OMB_CLOUD_LEGACY_ORIGINS: value }))).toThrow(/Cloud home configuration is invalid: .*OMB_CLOUD_LEGACY_ORIGINS/);
+  expect(() => cloudHomeConfiguration(contract({ SEIRA_CLOUD_LEGACY_ORIGINS: value }))).toThrow(/Cloud home configuration is invalid: .*SEIRA_CLOUD_LEGACY_ORIGINS/);
 });
 
 it("ignores a platform gateway's settings with one warning, whatever they hold, and never serves them", () => {
   const all = cloudHomeConfiguration(withGateway())!;
   expect(Object.keys(all).sort()).toEqual(["adminOrigin", "bootstrapSecret", "legacyOrigins", "machineId", "publicOrigin", "role", "team", "warnings"]);
-  expect(all.warnings).toEqual(["ignoring OMB_HOSTED_MODEL_URL, OMB_HOSTED_MODEL_TOKEN, OMB_HOSTED_MODELS: Cloud Pro includes no AI; people sign in with their own Claude or ChatGPT account, or an API key"]);
-  for (const stray of [{ OMB_HOSTED_MODEL_TOKEN: token }, { OMB_HOSTED_MODEL_TOKEN: "sk-ant-api03-platform-key" }, { OMB_HOSTED_MODELS: "{not json" },
-    { OMB_HOSTED_MODEL_URL: "https://gateway.attacker.test/v1" }, { OMB_HOSTED_MODELS: "" }]) {
+  expect(all.warnings).toEqual(["ignoring SEIRA_HOSTED_MODEL_URL, SEIRA_HOSTED_MODEL_TOKEN, SEIRA_HOSTED_MODELS: Cloud Pro includes no AI; people sign in with their own Claude or ChatGPT account, or an API key"]);
+  for (const stray of [{ SEIRA_HOSTED_MODEL_TOKEN: token }, { SEIRA_HOSTED_MODEL_TOKEN: "sk-ant-api03-platform-key" }, { SEIRA_HOSTED_MODELS: "{not json" },
+    { SEIRA_HOSTED_MODEL_URL: "https://gateway.attacker.test/v1" }, { SEIRA_HOSTED_MODELS: "" }]) {
     const config = cloudHomeConfiguration(contract(stray))!;
     expect(config.warnings).toEqual([expect.stringMatching(new RegExp(`^ignoring ${Object.keys(stray)[0]}: Cloud Pro includes no AI`))]);
     const value = Object.values(stray)[0];
     if (value) expect(JSON.stringify(config)).not.toContain(value);
   }
   expect(hostedModelPolicy(directory(), withGateway())).toBeNull();
-  expect(hostedModelPolicy(directory(), contract({ OMB_HOSTED_MODEL_TOKEN: `omb_workspace_${"t".repeat(43)}`, OMB_HOSTED_MODELS: "{}" }))).toBeNull();
+  expect(hostedModelPolicy(directory(), contract({ SEIRA_HOSTED_MODEL_TOKEN: `seira_workspace_${"t".repeat(43)}`, SEIRA_HOSTED_MODELS: "{}" }))).toBeNull();
   expect(Object.keys(withoutIgnoredCloudKeys(withGateway())).filter((key) => (CLOUD_IGNORED_KEYS as readonly string[]).includes(key))).toEqual([]);
   expect(withoutIgnoredCloudKeys(withGateway())).toEqual(contract());
 });
 
 it.each<[string, NodeJS.ProcessEnv]>([
-  ["only one key", { OMB_CLOUD_MACHINE_ID: machineId }],
-  ["no role", { ...contract(), OMB_CLOUD_ROLE: undefined }],
-  ["the desktop role", contract({ OMB_CLOUD_ROLE: "desktop" })],
-  ["no public URL", { ...contract(), OMB_PUBLIC_URL: undefined }],
-  ["an http Admin", contract({ OMB_CLOUD_ADMIN_URL: "http://cloud.example.test" })],
-  ["an Admin URL with a path", contract({ OMB_CLOUD_ADMIN_URL: "https://cloud.example.test/api" })],
-  ["an Admin URL with credentials", contract({ OMB_CLOUD_ADMIN_URL: "https://user:pass@cloud.example.test" })],
-  ["an http public URL", contract({ OMB_PUBLIC_URL: "http://omb-u-1a2b3c4d5e6f.fly.dev" })],
-  ["a machine id with a slash", contract({ OMB_CLOUD_MACHINE_ID: "home/../x" })],
-  ["a short secret", contract({ OMB_CLOUD_BOOTSTRAP_SECRET: "S".repeat(42) })],
-  ["a secret with padding", contract({ OMB_CLOUD_BOOTSTRAP_SECRET: `${"S".repeat(42)}=` })],
-  ["the desktop app", contract({ OMB_DESKTOP_PARENT: "1" })],
-  ["a hosted team workspace too", contract({ OMB_ADMIN_URL: "https://cloud.example.test" })],
-  ["a hosted team workspace with a gateway", withGateway({ OMB_ADMIN_URL: "https://cloud.example.test", OMB_ADMIN_WORKSPACE: "acme", OMB_ADMIN_MEMBERSHIP: "portal" })],
+  ["only one key", { SEIRA_CLOUD_MACHINE_ID: machineId }],
+  ["no role", { ...contract(), SEIRA_CLOUD_ROLE: undefined }],
+  ["the desktop role", contract({ SEIRA_CLOUD_ROLE: "desktop" })],
+  ["no public URL", { ...contract(), SEIRA_PUBLIC_URL: undefined }],
+  ["an http Admin", contract({ SEIRA_CLOUD_ADMIN_URL: "http://cloud.example.test" })],
+  ["an Admin URL with a path", contract({ SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test/api" })],
+  ["an Admin URL with credentials", contract({ SEIRA_CLOUD_ADMIN_URL: "https://user:pass@cloud.example.test" })],
+  ["an http public URL", contract({ SEIRA_PUBLIC_URL: "http://seira-u-1a2b3c4d5e6f.fly.dev" })],
+  ["a machine id with a slash", contract({ SEIRA_CLOUD_MACHINE_ID: "home/../x" })],
+  ["a short secret", contract({ SEIRA_CLOUD_BOOTSTRAP_SECRET: "S".repeat(42) })],
+  ["a secret with padding", contract({ SEIRA_CLOUD_BOOTSTRAP_SECRET: `${"S".repeat(42)}=` })],
+  ["the desktop app", contract({ SEIRA_DESKTOP_PARENT: "1" })],
+  ["a hosted team workspace too", contract({ SEIRA_ADMIN_URL: "https://cloud.example.test" })],
+  ["a hosted team workspace with a gateway", withGateway({ SEIRA_ADMIN_URL: "https://cloud.example.test", SEIRA_ADMIN_WORKSPACE: "acme", SEIRA_ADMIN_MEMBERSHIP: "portal" })],
 ])("refuses to start with %s", (_why, env) => {
   expect(() => cloudHomeConfiguration(env)).toThrow(/Cloud home configuration is invalid/);
 });
 
 it("never echoes a secret or token in its refusal", () => {
-  for (const env of [contract({ OMB_CLOUD_BOOTSTRAP_SECRET: `${secret}!` }), withGateway({ OMB_CLOUD_BOOTSTRAP_SECRET: `${secret}!` })]) {
+  for (const env of [contract({ SEIRA_CLOUD_BOOTSTRAP_SECRET: `${secret}!` }), withGateway({ SEIRA_CLOUD_BOOTSTRAP_SECRET: `${secret}!` })]) {
     try { cloudHomeConfiguration(env); expect.unreachable(); }
     catch (error) { expect(String(error)).not.toContain(secret); expect(String(error)).not.toContain(token); }
   }
@@ -157,7 +157,7 @@ it("opens one ordinary pairing window for a correctly signed request", () => {
   expect(granted.status).toBe(200);
   expect(Object.keys(granted.body).sort()).toEqual(["code", "credential", "expiresAt"]);
   expect(granted.body.code).toMatch(/^[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/);
-  expect(granted.body.credential).toMatch(/^omb_pair_[A-Za-z0-9_-]{43}$/);
+  expect(granted.body.credential).toMatch(/^seira_pair_[A-Za-z0-9_-]{43}$/);
   expect(granted.body.expiresAt).toBe(f.now() + 300_000);
   const paired = f.exchange(granted.body.code as string);
   expect(paired).toMatchObject({ ok: true, session: { label: "Seira app (Cloud)", scopes: ["admin", "client"] } });
@@ -171,7 +171,7 @@ it("matches the Admin's signature byte for byte", () => {
 });
 
 it("signs a health read over its method, path and query, byte for byte as the Admin does", () => {
-  // Same vector in openmaus-cloud tests/cloud-health.test.ts:
+  // Same vector in seira-cloud tests/cloud-health.test.ts:
   // printf 'v1\n1800000000\nnonce-fixture-0001\nGET\n/api/cloud/health?after=0\n<b64url sha256 of the empty body>' | openssl dgst -sha256 -hmac k -binary | base64url
   expect(cloudRequestSignature("k", "1800000000", "nonce-fixture-0001", "GET", "/api/cloud/health?after=0", "")).toBe("qX07j43XUqYYi8T3l9T8WnC-hWLZSYuuvmRguJpbJKc");
   expect(cloudRequestSignature("k", "1800000000", "nonce-fixture-0001", "GET", "/api/cloud/health?after=1", "")).not.toBe("qX07j43XUqYYi8T3l9T8WnC-hWLZSYuuvmRguJpbJKc");
@@ -244,7 +244,7 @@ it("opens a browser sign-in only a browser redeems, by credential alone, for at 
   expect(f.mint(f.sign(JSON.stringify({ purpose: "browser", owner: "ada.o'neil+cloud@example-mail.test" }))).status).toBe(200);
   expect(granted.status).toBe(200);
   expect(Object.keys(granted.body).sort()).toEqual(["credential", "expiresAt", "purpose"]);
-  expect(granted.body).toMatchObject({ credential: expect.stringMatching(/^omb_pair_[A-Za-z0-9_-]{43}$/), expiresAt: f.now() + 120_000, purpose: "browser" });
+  expect(granted.body).toMatchObject({ credential: expect.stringMatching(/^seira_pair_[A-Za-z0-9_-]{43}$/), expiresAt: f.now() + 120_000, purpose: "browser" });
   const credential = granted.body.credential as string;
   expect(f.sessions.previewBrowserSignIn(credential)).toEqual({ owner: "ada@example.test", expiresAt: f.now() + 120_000 });
   expect(f.exchange(credential).ok).toBe(false);
@@ -286,7 +286,7 @@ it("treats a request the edge forwards as remote, whatever Host it claims", () =
     { host: "home-7f3k2.fly.dev", "x-forwarded-for": "203.0.113.9", "x-forwarded-proto": "https" },
     { host: "localhost:8799", "x-forwarded-for": "203.0.113.9", "x-forwarded-proto": "https" },
   ]) {
-    const result = resolveRequestAuth(request(headers), { sessions, cookieName: "omb_session_x", streamPath: "/api/events", url });
+    const result = resolveRequestAuth(request(headers), { sessions, cookieName: "seira_session_x", streamPath: "/api/events", url });
     expect(result.auth).toBeNull();
     expect(result.status).toBe(403);
   }
@@ -310,16 +310,16 @@ it("binds a fresh volume to its machine and refuses anyone else's data", () => {
 it("a new home on a kept volume clears the data-directory lease the previous machine left, once the volume is confirmed its own, and never this machine's or another Cloud's (2026-10-23)", () => {
   const home = directory(), dataDir = cloudHomeDataDir({}, home);
   // The image runs on Linux, so the server is given a POSIX path; here only where it sits under the home is the point.
-  expect(relative(home, dataDir)).toBe(".openmausbot");
-  expect(cloudHomeDataDir({}, "/data")).toBe("/data/.openmausbot");
-  expect(cloudHomeDataDir({ OMB_DATA_DIR: "/elsewhere" }, home)).toBe("/elsewhere");
+  expect(relative(home, dataDir)).toBe(".seira");
+  expect(cloudHomeDataDir({}, "/data")).toBe("/data/.seira");
+  expect(cloudHomeDataDir({ SEIRA_DATA_DIR: "/elsewhere" }, home)).toBe("/elsewhere");
   mkdirSync(join(home, "lost+found"));
   const locked: string[] = [];
   const lock = (volume: string) => { locked.push(volume); };
   expect(prepareCloudHomeData(home, dataDir, "home-7f3k2", lock)).toEqual({ volume: "new", cleared: [] });
   expect(locked).toEqual([home]);
   // The lease the home destroyed mid-boot left (its hostname is Fly's machine id), and the previous machine's own pid.
-  const lease = join(dataDir, "openmausbot-server.lease");
+  const lease = join(dataDir, "seira-server.lease");
   mkdirSync(dataDir, { recursive: true });
   const left = (host: string) => writeFileSync(lease, `${JSON.stringify({ version: 1, pid: 613, host, token: "0f5e6c4a-1b2c-4d3e-8f9a-0b1c2d3e4f5a", createdAt: 1, boot: "boot-of-the-old-machine", uptime: 44_000 })}\n`);
   left("d8d9e0f1a2b3c4");
@@ -372,90 +372,90 @@ it.skipIf(!existsSync("/usr/bin/flock"))("a second home on a volume a live home 
 it("lets nobody name the client on an own server unless its owner names a proxy, and only Fly's proxy on Fly", () => {
   const config = cloudHomeConfiguration(contract())!;
   const own = cloudHomeChildEnvironments(config, { ...contract(), PATH: "/usr/bin" }, "/data").edge;
-  expect(own).toMatchObject({ OMB_CLOUD_EDGE_CLIENT_IP_HEADER: "X-Forwarded-For", OMB_CLOUD_EDGE_TRUSTED_PROXIES: "" });
-  const fly = cloudHomeChildEnvironments(config, { ...contract(), PATH: "/usr/bin", FLY_APP_NAME: "omb-u-1a2b3c4d5e6f" }, "/data").edge;
-  expect(fly).toMatchObject({ OMB_CLOUD_EDGE_CLIENT_IP_HEADER: "Fly-Client-IP", OMB_CLOUD_EDGE_TRUSTED_PROXIES: "private_ranges" });
+  expect(own).toMatchObject({ SEIRA_CLOUD_EDGE_CLIENT_IP_HEADER: "X-Forwarded-For", SEIRA_CLOUD_EDGE_TRUSTED_PROXIES: "" });
+  const fly = cloudHomeChildEnvironments(config, { ...contract(), PATH: "/usr/bin", FLY_APP_NAME: "seira-u-1a2b3c4d5e6f" }, "/data").edge;
+  expect(fly).toMatchObject({ SEIRA_CLOUD_EDGE_CLIENT_IP_HEADER: "Fly-Client-IP", SEIRA_CLOUD_EDGE_TRUSTED_PROXIES: "private_ranges" });
   expect(edgeClientAddress({ FLY_APP_NAME: " " })).toEqual(edgeClientAddress({}));
   // Both values are written into the edge's config as they are, so the edge's own names are never taken from outside.
-  for (const env of [{}, { FLY_APP_NAME: "omb-u-1a2b3c4d5e6f" }, { OMB_CLOUD_EDGE_CLIENT_IP_HEADER: "X-Real-IP", OMB_CLOUD_EDGE_TRUSTED_PROXIES: "0.0.0.0/0" }]) {
+  for (const env of [{}, { FLY_APP_NAME: "seira-u-1a2b3c4d5e6f" }, { SEIRA_CLOUD_EDGE_CLIENT_IP_HEADER: "X-Real-IP", SEIRA_CLOUD_EDGE_TRUSTED_PROXIES: "0.0.0.0/0" }]) {
     const edge = cloudHomeChildEnvironments(config, { ...contract(), PATH: "/usr/bin", ...env }, "/data").edge;
-    expect(edge.OMB_CLOUD_EDGE_CLIENT_IP_HEADER).toMatch(/^(?:Fly-Client-IP|X-Forwarded-For)$/);
-    expect(edge.OMB_CLOUD_EDGE_TRUSTED_PROXIES).toMatch(/^(?:private_ranges|)$/);
+    expect(edge.SEIRA_CLOUD_EDGE_CLIENT_IP_HEADER).toMatch(/^(?:Fly-Client-IP|X-Forwarded-For)$/);
+    expect(edge.SEIRA_CLOUD_EDGE_TRUSTED_PROXIES).toMatch(/^(?:private_ranges|)$/);
   }
-  expect(cloudHomeChildEnvironments(config, { ...contract(), PATH: "/usr/bin", FLY_APP_NAME: "omb-u-1a2b3c4d5e6f" }, "/data").server).not.toHaveProperty("OMB_CLOUD_EDGE_CLIENT_IP_HEADER");
+  expect(cloudHomeChildEnvironments(config, { ...contract(), PATH: "/usr/bin", FLY_APP_NAME: "seira-u-1a2b3c4d5e6f" }, "/data").server).not.toHaveProperty("SEIRA_CLOUD_EDGE_CLIENT_IP_HEADER");
 });
 
 it("gives the edge only its routing name and the server the contract, never a gateway's settings or a secret", () => {
-  const relay = { OMB_CLOUD_BOAT_TOKEN: `box_omb_${"b".repeat(43)}`, OMB_CLOUD_VOICE_TOKEN: `omb_voice_${"v".repeat(43)}`, OMB_CLOUD_DECIDER_TOKEN: `omb_decide_${"d".repeat(43)}`,
-    OMB_CLOUD_AI_TOKEN: `omb_ai_${"a".repeat(43)}` };
+  const relay = { SEIRA_CLOUD_BOAT_TOKEN: `box_seira_${"b".repeat(43)}`, SEIRA_CLOUD_VOICE_TOKEN: `seira_voice_${"v".repeat(43)}`, SEIRA_CLOUD_DECIDER_TOKEN: `seira_decide_${"d".repeat(43)}`,
+    SEIRA_CLOUD_AI_TOKEN: `seira_ai_${"a".repeat(43)}` };
   const config = cloudHomeConfiguration(withGateway())!;
   const { server, edge, secrets } = cloudHomeChildEnvironments(config, { ...withGateway(), ...relay, PATH: "/usr/bin" }, "/data");
-  expect(server).toMatchObject({ HOME: "/data", OMB_DATA_DIR: "/data/.openmausbot", NODE_COMPILE_CACHE: "/data/.openmausbot/cache/node-compile", OMB_PORT: "8799", OMB_WEBHOOK_PORT: "8800",
-    OMB_PUBLIC_URL: "https://omb-u-1a2b3c4d5e6f.fly.dev", OMB_WEBHOOK_PUBLIC_URL: "https://omb-u-1a2b3c4d5e6f.fly.dev", OMB_CLOUD_SECRETS_FD: "3" });
+  expect(server).toMatchObject({ HOME: "/data", SEIRA_DATA_DIR: "/data/.seira", NODE_COMPILE_CACHE: "/data/.seira/cache/node-compile", SEIRA_PORT: "8799", SEIRA_WEBHOOK_PORT: "8800",
+    SEIRA_PUBLIC_URL: "https://seira-u-1a2b3c4d5e6f.fly.dev", SEIRA_WEBHOOK_PUBLIC_URL: "https://seira-u-1a2b3c4d5e6f.fly.dev", SEIRA_CLOUD_SECRETS_FD: "3" });
   for (const key of CLOUD_IGNORED_KEYS) expect(server).not.toHaveProperty(key);
   // The bot box switch reaches the server; an unknown name does not.
-  expect(cloudHomeChildEnvironments(config, { ...withGateway(), PATH: "/usr/bin", OMB_BOT_BOX: "0", OMB_SOMETHING_ELSE: "x" }, "/data").server).toMatchObject({ OMB_BOT_BOX: "0" });
-  expect(cloudHomeChildEnvironments(config, { ...withGateway(), PATH: "/usr/bin", OMB_SOMETHING_ELSE: "x" }, "/data").server).not.toHaveProperty("OMB_SOMETHING_ELSE");
+  expect(cloudHomeChildEnvironments(config, { ...withGateway(), PATH: "/usr/bin", SEIRA_BOT_BOX: "0", SEIRA_SOMETHING_ELSE: "x" }, "/data").server).toMatchObject({ SEIRA_BOT_BOX: "0" });
+  expect(cloudHomeChildEnvironments(config, { ...withGateway(), PATH: "/usr/bin", SEIRA_SOMETHING_ELSE: "x" }, "/data").server).not.toHaveProperty("SEIRA_SOMETHING_ELSE");
   expect(JSON.stringify(server)).not.toContain(token);
-  expect(secrets).toEqual({ OMB_CLOUD_BOOTSTRAP_SECRET: secret, ...relay });
+  expect(secrets).toEqual({ SEIRA_CLOUD_BOOTSTRAP_SECRET: secret, ...relay });
   for (const value of Object.values(secrets)) {
     expect(JSON.stringify(server)).not.toContain(value);
     expect(JSON.stringify(edge)).not.toContain(value);
   }
-  expect(edge.OMB_CLOUD_PUBLIC_HOST).toBe(cloudHomeHost(config));
+  expect(edge.SEIRA_CLOUD_PUBLIC_HOST).toBe(cloudHomeHost(config));
   expect(JSON.stringify(edge)).not.toContain(token);
   expect(JSON.stringify(edge)).not.toContain(secret);
-  expect(passwdIds("root:x:0:0::/root:/bin/sh\nmaus:x:1001:1002::/data:/bin/bash\n", "maus")).toEqual({ uid: 1001, gid: 1002 });
-  expect(passwdIds("root:x:0:0::/root:/bin/sh\n", "maus")).toBeNull();
+  expect(passwdIds("root:x:0:0::/root:/bin/sh\nseira:x:1001:1002::/data:/bin/bash\n", "seira")).toEqual({ uid: 1001, gid: 1002 });
+  expect(passwdIds("root:x:0:0::/root:/bin/sh\n", "seira")).toBeNull();
 });
 
 // The fallback CA's address is written into the edge's config, so nothing but a plain address may reach it.
 const fallbackIssuers = "cert_issuer acme\ncert_issuer acme https://acme.zerossl.com/v2/DV90 {\n\temail certs@example.test\n}";
 
 it("gives a home that ends TLS a fallback CA only when its operator names the account, Let's Encrypt first", () => {
-  const config = cloudHomeConfiguration(contract({ OMB_CLOUD_EDGE_TLS: "1" }))!;
-  const edge = (extra: NodeJS.ProcessEnv) => cloudHomeChildEnvironments(config, { ...contract({ OMB_CLOUD_EDGE_TLS: "1" }), PATH: "/usr/bin", ...extra }, "/data").edge;
-  expect(edge({}).OMB_CLOUD_EDGE_CERT_ISSUERS).toBe("");
-  expect(edge({ OMB_CLOUD_EDGE_ACME_EMAIL: "" }).OMB_CLOUD_EDGE_CERT_ISSUERS).toBe("");
-  expect(edge({ OMB_CLOUD_EDGE_ACME_EMAIL: "  " }).OMB_CLOUD_EDGE_CERT_ISSUERS).toBe("");
-  expect(edge({ OMB_CLOUD_EDGE_ACME_EMAIL: " certs@example.test " }).OMB_CLOUD_EDGE_CERT_ISSUERS).toBe(fallbackIssuers);
+  const config = cloudHomeConfiguration(contract({ SEIRA_CLOUD_EDGE_TLS: "1" }))!;
+  const edge = (extra: NodeJS.ProcessEnv) => cloudHomeChildEnvironments(config, { ...contract({ SEIRA_CLOUD_EDGE_TLS: "1" }), PATH: "/usr/bin", ...extra }, "/data").edge;
+  expect(edge({}).SEIRA_CLOUD_EDGE_CERT_ISSUERS).toBe("");
+  expect(edge({ SEIRA_CLOUD_EDGE_ACME_EMAIL: "" }).SEIRA_CLOUD_EDGE_CERT_ISSUERS).toBe("");
+  expect(edge({ SEIRA_CLOUD_EDGE_ACME_EMAIL: "  " }).SEIRA_CLOUD_EDGE_CERT_ISSUERS).toBe("");
+  expect(edge({ SEIRA_CLOUD_EDGE_ACME_EMAIL: " certs@example.test " }).SEIRA_CLOUD_EDGE_CERT_ISSUERS).toBe(fallbackIssuers);
   // Let's Encrypt's issuer has no address, so it keeps the account it already has on the volume.
   expect(fallbackIssuers.split("\n")[0]).toBe("cert_issuer acme");
-  expect(edge({ OMB_CLOUD_EDGE_ACME_EMAIL: "certs@example.test", OMB_CLOUD_EDGE_ACME_FALLBACK_ONLY: "1" }).OMB_CLOUD_EDGE_CERT_ISSUERS)
+  expect(edge({ SEIRA_CLOUD_EDGE_ACME_EMAIL: "certs@example.test", SEIRA_CLOUD_EDGE_ACME_FALLBACK_ONLY: "1" }).SEIRA_CLOUD_EDGE_CERT_ISSUERS)
     .toBe("cert_issuer acme https://acme.zerossl.com/v2/DV90 {\n\temail certs@example.test\n}");
-  expect(edge({ OMB_CLOUD_EDGE_ACME_EMAIL: "certs@example.test", OMB_CLOUD_EDGE_ACME_FALLBACK_ONLY: "0" }).OMB_CLOUD_EDGE_CERT_ISSUERS).toBe(fallbackIssuers);
+  expect(edge({ SEIRA_CLOUD_EDGE_ACME_EMAIL: "certs@example.test", SEIRA_CLOUD_EDGE_ACME_FALLBACK_ONLY: "0" }).SEIRA_CLOUD_EDGE_CERT_ISSUERS).toBe(fallbackIssuers);
   // The address is the edge's alone: the server never gets it.
-  expect(cloudHomeChildEnvironments(config, { ...contract({ OMB_CLOUD_EDGE_TLS: "1" }), PATH: "/usr/bin", OMB_CLOUD_EDGE_ACME_EMAIL: "certs@example.test" }, "/data").server)
-    .not.toHaveProperty("OMB_CLOUD_EDGE_ACME_EMAIL");
+  expect(cloudHomeChildEnvironments(config, { ...contract({ SEIRA_CLOUD_EDGE_TLS: "1" }), PATH: "/usr/bin", SEIRA_CLOUD_EDGE_ACME_EMAIL: "certs@example.test" }, "/data").server)
+    .not.toHaveProperty("SEIRA_CLOUD_EDGE_ACME_EMAIL");
   // Without edge TLS (Fly, or a server where something else ends TLS) it is not read at all.
-  for (const extra of [{}, { FLY_APP_NAME: "omb-u-1a2b3c4d5e6f" }]) {
-    const flyEdge = cloudHomeChildEnvironments(cloudHomeConfiguration(contract())!, { ...contract(), PATH: "/usr/bin", OMB_CLOUD_EDGE_ACME_EMAIL: "not an address", ...extra }, "/data").edge;
-    expect(flyEdge).not.toHaveProperty("OMB_CLOUD_EDGE_CERT_ISSUERS");
-    expect(flyEdge).not.toHaveProperty("OMB_CLOUD_EDGE_ACME_EMAIL");
+  for (const extra of [{}, { FLY_APP_NAME: "seira-u-1a2b3c4d5e6f" }]) {
+    const flyEdge = cloudHomeChildEnvironments(cloudHomeConfiguration(contract())!, { ...contract(), PATH: "/usr/bin", SEIRA_CLOUD_EDGE_ACME_EMAIL: "not an address", ...extra }, "/data").edge;
+    expect(flyEdge).not.toHaveProperty("SEIRA_CLOUD_EDGE_CERT_ISSUERS");
+    expect(flyEdge).not.toHaveProperty("SEIRA_CLOUD_EDGE_ACME_EMAIL");
   }
 });
 
 it("refuses a fallback CA setting the edge's config would read as more", () => {
-  const invalid = /OMB_CLOUD_EDGE_ACME_EMAIL must be one plain address/;
+  const invalid = /SEIRA_CLOUD_EDGE_ACME_EMAIL must be one plain address/;
   for (const value of ["certs", "certs@", "@example.test", "certs@example", "certs@example.test\ncert_issuer internal", "certs@example.test {", "a b@example.test", "a@b@example.test", "#a@example.test", "<<a@example.test", "a\"@example.test", `a${"b".repeat(260)}@example.test`]) {
-    expect(() => edgeCertIssuers({ OMB_CLOUD_EDGE_ACME_EMAIL: value }), value).toThrow(invalid);
+    expect(() => edgeCertIssuers({ SEIRA_CLOUD_EDGE_ACME_EMAIL: value }), value).toThrow(invalid);
   }
-  expect(() => edgeCertIssuers({ OMB_CLOUD_EDGE_ACME_EMAIL: "certs@example.test", OMB_CLOUD_EDGE_ACME_FALLBACK_ONLY: "yes" })).toThrow(/must be 1/);
-  expect(() => edgeCertIssuers({ OMB_CLOUD_EDGE_ACME_FALLBACK_ONLY: "1" })).toThrow(/needs OMB_CLOUD_EDGE_ACME_EMAIL/);
-  expect(edgeCertIssuers({ OMB_CLOUD_EDGE_ACME_FALLBACK_ONLY: "0" })).toBe("");
+  expect(() => edgeCertIssuers({ SEIRA_CLOUD_EDGE_ACME_EMAIL: "certs@example.test", SEIRA_CLOUD_EDGE_ACME_FALLBACK_ONLY: "yes" })).toThrow(/must be 1/);
+  expect(() => edgeCertIssuers({ SEIRA_CLOUD_EDGE_ACME_FALLBACK_ONLY: "1" })).toThrow(/needs SEIRA_CLOUD_EDGE_ACME_EMAIL/);
+  expect(edgeCertIssuers({ SEIRA_CLOUD_EDGE_ACME_FALLBACK_ONLY: "0" })).toBe("");
   expect(edgeCertIssuers({})).toBe("");
 });
 
-// `caddy validate` on the real template with what the launcher writes. Needs a Caddy: OMB_CADDY_BIN or one on the PATH (the
+// `caddy validate` on the real template with what the launcher writes. Needs a Caddy: SEIRA_CADDY_BIN or one on the PATH (the
 // image's own 2.10.2 runs the same check at build, in the Dockerfile). Skipped when there is none.
-const caddyBin = process.env.OMB_CADDY_BIN || (spawnSync("caddy", ["version"], { stdio: "ignore" }).status === 0 ? "caddy" : "");
+const caddyBin = process.env.SEIRA_CADDY_BIN || (spawnSync("caddy", ["version"], { stdio: "ignore" }).status === 0 ? "caddy" : "");
 it.skipIf(!caddyBin)("renders a Caddyfile.tls that Caddy accepts, with Let's Encrypt alone unless the setting is there", () => {
   const dir = directory();
   for (const file of ["Caddyfile.tls", "edge-routes.caddy"]) copyFileSync(join(import.meta.dirname, "../deploy/fly", file), join(dir, file));
-  const base = { PATH: "/usr/bin:/bin", HOME: dir, XDG_DATA_HOME: join(dir, "data"), XDG_CONFIG_HOME: join(dir, "config"), OMB_CLOUD_PUBLIC_HOST: "validate.example.com",
-    OMB_CLOUD_EDGE_STORAGE: join(dir, "edge"), OMB_CLOUD_EDGE_TRUSTED_PROXIES: "", OMB_CLOUD_EDGE_CLIENT_IP_HEADER: "X-Forwarded-For", OMB_CLOUD_EDGE_HOLD: "0s" };
+  const base = { PATH: "/usr/bin:/bin", HOME: dir, XDG_DATA_HOME: join(dir, "data"), XDG_CONFIG_HOME: join(dir, "config"), SEIRA_CLOUD_PUBLIC_HOST: "validate.example.com",
+    SEIRA_CLOUD_EDGE_STORAGE: join(dir, "edge"), SEIRA_CLOUD_EDGE_TRUSTED_PROXIES: "", SEIRA_CLOUD_EDGE_CLIENT_IP_HEADER: "X-Forwarded-For", SEIRA_CLOUD_EDGE_HOLD: "0s" };
   const run = (command: string, issuers?: string) => {
-    const result = spawnSync(caddyBin, [command, "--config", join(dir, "Caddyfile.tls"), "--adapter", "caddyfile"], { encoding: "utf8", env: { ...base, ...(issuers === undefined ? {} : { OMB_CLOUD_EDGE_CERT_ISSUERS: issuers }) } });
+    const result = spawnSync(caddyBin, [command, "--config", join(dir, "Caddyfile.tls"), "--adapter", "caddyfile"], { encoding: "utf8", env: { ...base, ...(issuers === undefined ? {} : { SEIRA_CLOUD_EDGE_CERT_ISSUERS: issuers }) } });
     expect(result.status, result.stderr).toBe(0);
     return result;
   };
@@ -468,59 +468,59 @@ it.skipIf(!caddyBin)("renders a Caddyfile.tls that Caddy accepts, with Let's Enc
   // A formatting warning would come at every boot of every home.
   for (const issuers of [undefined, ""]) expect(run("adapt", issuers).stderr).not.toMatch(/not formatted/);
   // Set: Let's Encrypt first, with no address, then the fallback with its account's.
-  const rendered = edgeCertIssuers({ OMB_CLOUD_EDGE_ACME_EMAIL: "certs@example.test" });
+  const rendered = edgeCertIssuers({ SEIRA_CLOUD_EDGE_ACME_EMAIL: "certs@example.test" });
   run("validate", rendered);
   expect(issuersOf(rendered)).toEqual([{ module: "acme" }, { ca: "https://acme.zerossl.com/v2/DV90", email: "certs@example.test", module: "acme" }]);
   // The live check's setting: the fallback alone.
-  const only = edgeCertIssuers({ OMB_CLOUD_EDGE_ACME_EMAIL: "certs@example.test", OMB_CLOUD_EDGE_ACME_FALLBACK_ONLY: "1" });
+  const only = edgeCertIssuers({ SEIRA_CLOUD_EDGE_ACME_EMAIL: "certs@example.test", SEIRA_CLOUD_EDGE_ACME_FALLBACK_ONLY: "1" });
   run("validate", only);
   expect(issuersOf(only)).toEqual([{ ca: "https://acme.zerossl.com/v2/DV90", email: "certs@example.test", module: "acme" }]);
 });
 
 it("holds requests at the edge while the server starts only when the Admin asked for it (a plan that sleeps)", () => {
   const config = cloudHomeConfiguration(withGateway())!;
-  expect(cloudHomeChildEnvironments(config, { ...withGateway(), PATH: "/usr/bin" }, "/data").edge.OMB_CLOUD_EDGE_HOLD).toBe("0s");
-  expect(cloudHomeChildEnvironments(config, { ...withGateway(), PATH: "/usr/bin", OMB_CLOUD_EDGE_HOLD: "30s" }, "/data").edge.OMB_CLOUD_EDGE_HOLD).toBe("30s");
-  expect(cloudHomeChildEnvironments(config, { ...withGateway(), PATH: "/usr/bin", OMB_CLOUD_EDGE_HOLD: "30s" }, "/data").server).not.toHaveProperty("OMB_CLOUD_EDGE_HOLD");
+  expect(cloudHomeChildEnvironments(config, { ...withGateway(), PATH: "/usr/bin" }, "/data").edge.SEIRA_CLOUD_EDGE_HOLD).toBe("0s");
+  expect(cloudHomeChildEnvironments(config, { ...withGateway(), PATH: "/usr/bin", SEIRA_CLOUD_EDGE_HOLD: "30s" }, "/data").edge.SEIRA_CLOUD_EDGE_HOLD).toBe("30s");
+  expect(cloudHomeChildEnvironments(config, { ...withGateway(), PATH: "/usr/bin", SEIRA_CLOUD_EDGE_HOLD: "30s" }, "/data").server).not.toHaveProperty("SEIRA_CLOUD_EDGE_HOLD");
   for (const raw of [undefined, "", "30", "1m", "-5s", "121s", "30s; respond 200", "9999s"]) expect(edgeHold(raw), String(raw)).toBe("0s");
   expect(edgeHold(" 045s ")).toBe("45s");
 });
 
 it("hands the server the Admin's export-only switch, so an ended Cloud started for its owner's export runs frozen", () => {
-  // Seen on a real staging test Cloud on Oct 22: the Admin booted the held Cloud with OMB_CLOUD_EXPORT_ONLY=1, the log said
-  // "not passed to the server: … OMB_CLOUD_EXPORT_ONLY …", and it ran its routines every 5 minutes for the whole export
+  // Seen on a real staging test Cloud on Oct 22: the Admin booted the held Cloud with SEIRA_CLOUD_EXPORT_ONLY=1, the log said
+  // "not passed to the server: … SEIRA_CLOUD_EXPORT_ONLY …", and it ran its routines every 5 minutes for the whole export
   // window while the computers that came home ran the same ones.
   const config = cloudHomeConfiguration(withGateway())!;
-  expect(cloudHomeChildEnvironments(config, { ...withGateway(), PATH: "/usr/bin", OMB_CLOUD_EXPORT_ONLY: "1" }, "/data").server).toMatchObject({ OMB_CLOUD_EXPORT_ONLY: "1" });
+  expect(cloudHomeChildEnvironments(config, { ...withGateway(), PATH: "/usr/bin", SEIRA_CLOUD_EXPORT_ONLY: "1" }, "/data").server).toMatchObject({ SEIRA_CLOUD_EXPORT_ONLY: "1" });
 });
 
 it("hands the server the addresses a moved home answered at before, and never its edge", () => {
-  const env = contract({ PATH: "/usr/bin", OMB_CLOUD_LEGACY_ORIGINS: "https://omb-u-old.fly.dev" });
+  const env = contract({ PATH: "/usr/bin", SEIRA_CLOUD_LEGACY_ORIGINS: "https://seira-u-old.fly.dev" });
   const children = cloudHomeChildEnvironments(cloudHomeConfiguration(env)!, env, "/data");
-  expect(children.server).toMatchObject({ OMB_CLOUD_LEGACY_ORIGINS: "https://omb-u-old.fly.dev" });
-  expect(children.edge).not.toHaveProperty("OMB_CLOUD_LEGACY_ORIGINS");
+  expect(children.server).toMatchObject({ SEIRA_CLOUD_LEGACY_ORIGINS: "https://seira-u-old.fly.dev" });
+  expect(children.edge).not.toHaveProperty("SEIRA_CLOUD_LEGACY_ORIGINS");
 });
 
 it("gives the server only an allow-listed environment: a secret added later, a test's key or anything unknown never reaches it", () => {
   const config = cloudHomeConfiguration(contract())!;
-  const env = { ...contract(), PATH: "/usr/bin", LANG: "C.UTF-8", LC_ALL: "C.UTF-8", NODE_ENV: "production", OMB_STATIC_DIR: "/app/dist",
-    OMB_CLOUD_BOAT_URL: "https://cloud.example.test/boat", OMB_TTS_DEFAULT_VOICE: "alloy", OMB_CLOUD_AI_URL: "https://cloud.example.test/api/cloud/services/ai",
-    OMB_COMPOSIO_BROKER_URL: "https://broker.example.test", OMB_COMPOSIO_BROKER_TOKEN: "b".repeat(64), OMB_COMPOSIO_BROKER: "off",
-    OMB_CLOUD_FUTURE_SECRET: "later", OMB_TEST_CLOUD_LEFT_BEHIND_KEY: "k".repeat(43), FLY_API_TOKEN: "fly", SOME_TOKEN: "t", HOME: "/root" };
+  const env = { ...contract(), PATH: "/usr/bin", LANG: "C.UTF-8", LC_ALL: "C.UTF-8", NODE_ENV: "production", SEIRA_STATIC_DIR: "/app/dist",
+    SEIRA_CLOUD_BOAT_URL: "https://cloud.example.test/boat", SEIRA_TTS_DEFAULT_VOICE: "alloy", SEIRA_CLOUD_AI_URL: "https://cloud.example.test/api/cloud/services/ai",
+    SEIRA_COMPOSIO_BROKER_URL: "https://broker.example.test", SEIRA_COMPOSIO_BROKER_TOKEN: "b".repeat(64), SEIRA_COMPOSIO_BROKER: "off",
+    SEIRA_CLOUD_FUTURE_SECRET: "later", SEIRA_TEST_CLOUD_LEFT_BEHIND_KEY: "k".repeat(43), FLY_API_TOKEN: "fly", SOME_TOKEN: "t", HOME: "/root" };
   const { server, dropped } = cloudHomeChildEnvironments(config, env, "/data");
-  expect(server).toMatchObject({ PATH: "/usr/bin", LANG: "C.UTF-8", LC_ALL: "C.UTF-8", NODE_ENV: "production", OMB_STATIC_DIR: "/app/dist",
-    OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: machineId, OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
-    OMB_CLOUD_BOAT_URL: "https://cloud.example.test/boat", OMB_TTS_DEFAULT_VOICE: "alloy", OMB_CLOUD_AI_URL: "https://cloud.example.test/api/cloud/services/ai", HOME: "/data",
+  expect(server).toMatchObject({ PATH: "/usr/bin", LANG: "C.UTF-8", LC_ALL: "C.UTF-8", NODE_ENV: "production", SEIRA_STATIC_DIR: "/app/dist",
+    SEIRA_CLOUD_ROLE: "home", SEIRA_CLOUD_MACHINE_ID: machineId, SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test",
+    SEIRA_CLOUD_BOAT_URL: "https://cloud.example.test/boat", SEIRA_TTS_DEFAULT_VOICE: "alloy", SEIRA_CLOUD_AI_URL: "https://cloud.example.test/api/cloud/services/ai", HOME: "/data",
     // A staging Cloud may name its connected-apps service; the Cloud registers its own token, never one from outside.
-    OMB_COMPOSIO_BROKER_URL: "https://broker.example.test", OMB_COMPOSIO_BROKER: "off" });
-  for (const name of ["OMB_CLOUD_FUTURE_SECRET", "OMB_TEST_CLOUD_LEFT_BEHIND_KEY", "FLY_API_TOKEN", "SOME_TOKEN", "OMB_COMPOSIO_BROKER_TOKEN"]) {
+    SEIRA_COMPOSIO_BROKER_URL: "https://broker.example.test", SEIRA_COMPOSIO_BROKER: "off" });
+  for (const name of ["SEIRA_CLOUD_FUTURE_SECRET", "SEIRA_TEST_CLOUD_LEFT_BEHIND_KEY", "FLY_API_TOKEN", "SOME_TOKEN", "SEIRA_COMPOSIO_BROKER_TOKEN"]) {
     expect(server).not.toHaveProperty(name);
     expect(dropped).toContain(name);
   }
-  expect(dropped).not.toContain("OMB_CLOUD_BOOTSTRAP_SECRET");
+  expect(dropped).not.toContain("SEIRA_CLOUD_BOOTSTRAP_SECRET");
 });
 
-it("the root supervisor runs and trusts only root's code, never the volume's or anything maus could rewrite", () => {
+it("the root supervisor runs and trusts only root's code, never the volume's or anything seira could rewrite", () => {
   const files = ["/usr/local/bin/node", "/app/dist-server/cloud-home-start.js", "/app/dist-server/index.js", "/usr/local/bin/caddy", "/app/cloud/Caddyfile"];
   const image = (overrides: Record<string, { uid: number; mode: number }> = {}) => (path: string) =>
     overrides[path] ?? { uid: 0, mode: path.includes(".") || path.endsWith("node") || path.endsWith("caddy") ? 0o100755 : 0o40755 };
@@ -539,11 +539,11 @@ it("ships an edge and a Fly template that keep the server private", () => {
   const caddy = edgeFile("edge-routes.caddy");
   expect(edgeFile("Caddyfile")).toMatch(/^:8080 \{\n\timport edge-routes\.caddy\n\}\n/m);
   expect(edgeFile("Caddyfile")).toMatch(/^\tauto_https off$/m);
-  expect(edgeFile("Caddyfile.tls")).toMatch(/^http:\/\/:8080 \{\n\timport edge-routes\.caddy\n\}\n\n\{\$OMB_CLOUD_PUBLIC_HOST\} \{\n\timport edge-routes\.caddy\n\}\n/m);
+  expect(edgeFile("Caddyfile.tls")).toMatch(/^http:\/\/:8080 \{\n\timport edge-routes\.caddy\n\}\n\n\{\$SEIRA_CLOUD_PUBLIC_HOST\} \{\n\timport edge-routes\.caddy\n\}\n/m);
   expect(edgeFile("Caddyfile.tunnel")).toMatch(/^:8080 \{\n\timport edge-routes\.caddy\n\}\n\n:8812 \{\n\tbind 127\.0\.0\.1\n\timport edge-routes\.caddy\n\}\n/m);
   // Only the edge that ends TLS issues certificates, and its issuers are the launcher's to say (edgeCertIssuers).
-  expect(edgeFile("Caddyfile.tls").match(/^\t\{\$OMB_CLOUD_EDGE_CERT_ISSUERS\}$/gm)).toHaveLength(1);
-  for (const config of [edgeFile("Caddyfile"), edgeFile("Caddyfile.tunnel")]) expect(config).not.toContain("OMB_CLOUD_EDGE_CERT_ISSUERS");
+  expect(edgeFile("Caddyfile.tls").match(/^\t\{\$SEIRA_CLOUD_EDGE_CERT_ISSUERS\}$/gm)).toHaveLength(1);
+  for (const config of [edgeFile("Caddyfile"), edgeFile("Caddyfile.tunnel")]) expect(config).not.toContain("SEIRA_CLOUD_EDGE_CERT_ISSUERS");
   // The tunnel's listener, on loopback alone, believes Cloudflare's header; :8080 believes only what the launcher says.
   expect(edgeFile("Caddyfile.tunnel")).toMatch(/^\tservers 127\.0\.0\.1:8812 \{\n\t\ttrusted_proxies static 127\.0\.0\.1\/32\n\t\ttrusted_proxies_strict\n\t\tclient_ip_headers Cf-Connecting-IP\n\t\}$/m);
   expect(edgeFile("Caddyfile.tunnel").match(/^\s*(?:trusted_proxies|client_ip_headers)\b/gm)).toHaveLength(4);
@@ -551,7 +551,7 @@ it("ships an edge and a Fly template that keep the server private", () => {
     expect(config.match(/^(?!#)\S[^\n]* \{$/gm)?.length, "every site imports the same routes").toBe(config.match(/^\timport edge-routes\.caddy$/gm)?.length);
     expect(config).not.toMatch(/reverse_proxy|respond/);
     // Who may name the client on :8080 and 443, and in which header, is the launcher's to say (edgeClientAddress).
-    expect(config).toMatch(/^\t\ttrusted_proxies static \{\$OMB_CLOUD_EDGE_TRUSTED_PROXIES\}\r?\n\t\ttrusted_proxies_strict\r?\n\t\tclient_ip_headers \{\$OMB_CLOUD_EDGE_CLIENT_IP_HEADER\}\r?\n/m);
+    expect(config).toMatch(/^\t\ttrusted_proxies static \{\$SEIRA_CLOUD_EDGE_TRUSTED_PROXIES\}\r?\n\t\ttrusted_proxies_strict\r?\n\t\tclient_ip_headers \{\$SEIRA_CLOUD_EDGE_CLIENT_IP_HEADER\}\r?\n/m);
   }
   for (const config of [edgeFile("Caddyfile"), edgeFile("Caddyfile.tls")]) expect(config.match(/^\s*(?:trusted_proxies|client_ip_headers)\b/gm)).toHaveLength(2);
   expect(caddy).not.toMatch(/trusted_proxies|client_ip_headers/);
@@ -565,7 +565,7 @@ it("ships an edge and a Fly template that keep the server private", () => {
   expect(caddy.slice(homeStart, homeEnd)).toContain("handle /hooks/* {");
   expect(caddy.match(/header_up X-Forwarded-For \{client_ip\}/g)).toHaveLength(upstreams.length);
   expect(caddy.match(/lb_try_interval 50ms/g)).toHaveLength(upstreams.length);
-  // The root supervisor's code is root's, maus owns only the volume; the image's last step refuses to build otherwise.
+  // The root supervisor's code is root's, seira owns only the volume; the image's last step refuses to build otherwise.
   const dockerfile = readFileSync(join(import.meta.dirname, "../Dockerfile"), "utf8");
   const image = dockerfile.slice(dockerfile.indexOf("FROM runtime AS cloud-home"), dockerfile.indexOf("FROM runtime AS server"));
   const check = image.indexOf('untrusted="$(find /app /usr/local/bin/caddy /usr/local/bin/cloudflared \\( ! -user root -o ! -type l -perm /022 \\) -print)"');
@@ -574,7 +574,7 @@ it("ships an edge and a Fly template that keep the server private", () => {
   expect(check).toBeLessThan(image.indexOf("CMD ["));
   expect(image).toContain("COPY deploy/fly/Caddyfile deploy/fly/Caddyfile.tls deploy/fly/Caddyfile.tunnel deploy/fly/edge-routes.caddy /app/cloud/");
   // The build's own Caddy validates Caddyfile.tls as the launcher renders it with a fallback CA.
-  expect(image).toContain('OMB_CLOUD_EDGE_CERT_ISSUERS="$(OMB_CLOUD_EDGE_ACME_EMAIL=validate@example.com node --input-type=module -e \'import { edgeCertIssuers } from "/app/dist-server/cloud-home-start.js"; process.stdout.write(edgeCertIssuers(process.env));\')" caddy validate --config /app/cloud/Caddyfile.tls');
+  expect(image).toContain('SEIRA_CLOUD_EDGE_CERT_ISSUERS="$(SEIRA_CLOUD_EDGE_ACME_EMAIL=validate@example.com node --input-type=module -e \'import { edgeCertIssuers } from "/app/dist-server/cloud-home-start.js"; process.stdout.write(edgeCertIssuers(process.env));\')" caddy validate --config /app/cloud/Caddyfile.tls');
   // The bot box (server/bot-box) needs bubblewrap and socat in the image; pnpm is what bots' projects ask for.
   expect(image).toMatch(/apt-get install -y --no-install-recommends [^\n]*\bbubblewrap\b[^\n]*\bsocat\b/);
   expect(image).toMatch(/npm install -g pnpm@10\.33\.0/);
@@ -588,14 +588,14 @@ it("ships an edge and a Fly template that keep the server private", () => {
   expect(fly).toMatch(/destination = "\/data"/);
   expect(fly).toMatch(/path = "\/api\/health"/);
   const env = /\[env\]([\s\S]*?)\n\[/.exec(fly)![1];
-  for (const secretKey of ["OMB_CLOUD_BOOTSTRAP_SECRET", "OMB_CLOUD_ADMIN_URL"]) expect(env).not.toMatch(new RegExp(`^\\s*${secretKey}\\s*=`, "m"));
-  expect(fly).not.toContain("OMB_HOSTED_");
+  for (const secretKey of ["SEIRA_CLOUD_BOOTSTRAP_SECRET", "SEIRA_CLOUD_ADMIN_URL"]) expect(env).not.toMatch(new RegExp(`^\\s*${secretKey}\\s*=`, "m"));
+  expect(fly).not.toContain("SEIRA_HOSTED_");
 });
 
 it("the Cloud launcher starts the server again when it asks to after a restore or after a crash (with a pause), and only a few times in a row", () => {
   const launcher = readFileSync(join(import.meta.dirname, "cloud-home-start.ts"), "utf8");
   expect(launcher).toContain("const policy = restartPolicy();");
-  // The volume is prepared (and the previous machine's lease cleared) through one helper, as `maus`, before any child starts.
+  // The volume is prepared (and the previous machine's lease cleared) through one helper, as `seira`, before any child starts.
   expect(launcher).toContain("const prepare = () => prepareCloudHomeData(home, cloudHomeDataDir(env, home), config.machineId);");
   expect(launcher.indexOf("prepared = prepare();")).toBeLessThan(launcher.indexOf("\n  runServer();"));
   expect(launcher).toContain("if (!policy.again(code, stopping, signal)) return false;");
@@ -624,7 +624,7 @@ it("records the first finished bot turn once, on a Cloud home only, and a moved 
 
 // The launcher only runs on Linux (the image); Windows passes descriptors differently.
 it.skipIf(process.platform === "win32")("hands the server its secrets over a pipe it reads once: never its environment, never a grandchild's", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "omb-cloud-secrets-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-cloud-secrets-"));
   try {
     const script = join(dir, "server.mjs");
     const out = join(dir, "out.json");
@@ -641,17 +641,17 @@ const parentEnviron = (pid) => process.platform === "linux"
 const child = spawnSync(process.execPath, ["-e", "process.stdout.write(JSON.stringify(process.env))"], { encoding: "utf8" });
 writeFileSync(${JSON.stringify(out)}, JSON.stringify({ secrets, env: process.env, own: parentEnviron(process.pid), child: child.stdout }));
 `);
-    const env: NodeJS.ProcessEnv = { PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}), OMB_CLOUD_SECRETS_FD: "3", VISIBLE_PROBE: "visible" };
-    const child = spawnWithSecrets(process.execPath, [script], env, { OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_CLOUD_BOAT_TOKEN: "box_omb_probe-token" });
+    const env: NodeJS.ProcessEnv = { PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}), SEIRA_CLOUD_SECRETS_FD: "3", VISIBLE_PROBE: "visible" };
+    const child = spawnWithSecrets(process.execPath, [script], env, { SEIRA_CLOUD_BOOTSTRAP_SECRET: secret, SEIRA_CLOUD_BOAT_TOKEN: "box_seira_probe-token" });
     await new Promise((resolve) => child.once("exit", resolve));
     const seen = JSON.parse(readFileSync(out, "utf8"));
-    expect(seen.secrets).toEqual({ OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_CLOUD_BOAT_TOKEN: "box_omb_probe-token" });
+    expect(seen.secrets).toEqual({ SEIRA_CLOUD_BOOTSTRAP_SECRET: secret, SEIRA_CLOUD_BOAT_TOKEN: "box_seira_probe-token" });
     if (process.platform !== "win32") expect(seen.own).toContain("VISIBLE_PROBE=visible");
     for (const where of [seen.own, JSON.stringify(seen.env), seen.child]) {
       expect(where).not.toContain(secret);
-      expect(where).not.toContain("box_omb_probe-token");
+      expect(where).not.toContain("box_seira_probe-token");
     }
-    expect(seen.child).not.toContain("OMB_CLOUD_SECRETS_FD");
+    expect(seen.child).not.toContain("SEIRA_CLOUD_SECRETS_FD");
   } finally {
     await removeTempDir(dir);
   }
@@ -663,7 +663,7 @@ it("captures a child's stdout and stderr when asked, and shares this process's o
   writeFileSync(script, `process.stdout.write("stdout marker"); process.stderr.write("stderr marker");`);
   const env: NodeJS.ProcessEnv = { PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}) };
   const run = async (capture: boolean) => {
-    const child = spawnWithSecrets(process.execPath, [script], env, { OMB_CLOUD_BOOTSTRAP_SECRET: secret }, undefined, capture);
+    const child = spawnWithSecrets(process.execPath, [script], env, { SEIRA_CLOUD_BOOTSTRAP_SECRET: secret }, undefined, capture);
     let out = "", err = "";
     child.stdout?.on("data", (chunk) => { out += chunk; });
     child.stderr?.on("data", (chunk) => { err += chunk; });
@@ -684,7 +684,7 @@ const capStatus = (bounding: string, effective = bounding) => `Name:\tnode\nCapI
 // CHOWN, KILL, SETGID, SETUID; with SETPCAP and SYS_ADMIN, as the connector grants an image that drops them.
 const FOUR = "00000000000000e1", WITH_SYS_ADMIN = "00000000002001e1";
 
-it("the Cloud supervisor hardens the host before anything runs as maus: hidepid on /proc and Fly's socket folder root-only, each a note, never fatal", () => {
+it("the Cloud supervisor hardens the host before anything runs as seira: hidepid on /proc and Fly's socket folder root-only, each a note, never fatal", () => {
   const calls: string[] = [];
   const run = (status: number, exists = true, files: Record<string, string> = {}) => ({
     exec: (command: string, args: string[]) => { calls.push(`${command} ${args.join(" ")}`); return { status, stderr: status ? "mount: permission denied\n" : "" }; },
@@ -695,7 +695,7 @@ it("the Cloud supervisor hardens the host before anything runs as maus: hidepid 
   expect(hardenHost({}, run(0))).toEqual({ notes: ["/proc: hidepid=invisible", "/.fly: root only"], dropCapabilities: false });
   expect(calls).toEqual(["mount -o remount,hidepid=invisible /proc", "chmod 700 /.fly"]);
   expect(hardenHost({}, run(32, false)).notes).toEqual(["/proc: hidepid not applied (mount: permission denied)"]);
-  expect(hardenHost({ OMB_CLOUD_HARDEN: "0" }, run(0))).toEqual({ notes: ["hardening skipped (OMB_CLOUD_HARDEN=0)"], dropCapabilities: false });
+  expect(hardenHost({ SEIRA_CLOUD_HARDEN: "0" }, run(0))).toEqual({ notes: ["hardening skipped (SEIRA_CLOUD_HARDEN=0)"], dropCapabilities: false });
   const failing = { ...run(0), chmod: () => { throw new Error("read-only"); } };
   expect(hardenHost({}, failing).notes).toEqual(["/proc: hidepid=invisible", "/.fly: left as is (read-only)"]);
   // Already hidden (the supervisor started again, or the platform mounted /proc so): no second remount, no false failure.
@@ -713,10 +713,10 @@ it("CAP_SYS_ADMIN serves only the hidepid remount: the supervisor starts again t
   expect(hardenHost({}, run(granted))).toEqual({ notes: ["/proc: hidepid=invisible"], dropCapabilities: true });
   // Started again: hidepid stays, and the capability is gone from every set it could come back from.
   const dropped = { "/proc/mounts": mounts("rw,hidepid=invisible"), "/proc/self/status": capStatus(FOUR) };
-  expect(hardenHost({ OMB_CLOUD_CAPS_DROPPED: "1" }, run(dropped))).toEqual({ notes: ["/proc: hidepid=invisible", "CAP_SYS_ADMIN dropped"], dropCapabilities: false });
+  expect(hardenHost({ SEIRA_CLOUD_CAPS_DROPPED: "1" }, run(dropped))).toEqual({ notes: ["/proc: hidepid=invisible", "CAP_SYS_ADMIN dropped"], dropCapabilities: false });
   // setpriv without CAP_SETPCAP exits 0 and drops nothing: the next start sees it and never loops.
   const kept = { "/proc/mounts": mounts("rw,hidepid=invisible"), "/proc/self/status": capStatus(WITH_SYS_ADMIN) };
-  expect(hardenHost({ OMB_CLOUD_CAPS_DROPPED: "1" }, run(kept))).toEqual({ notes: ["/proc: hidepid=invisible", "CAP_SYS_ADMIN kept: it could not be dropped (CAP_SETPCAP is missing)"], dropCapabilities: false });
+  expect(hardenHost({ SEIRA_CLOUD_CAPS_DROPPED: "1" }, run(kept))).toEqual({ notes: ["/proc: hidepid=invisible", "CAP_SYS_ADMIN kept: it could not be dropped (CAP_SETPCAP is missing)"], dropCapabilities: false });
   expect(hardenHost({}, run(granted, false)).notes).toEqual(["/proc: hidepid=invisible", "CAP_SYS_ADMIN kept: /usr/bin/setpriv is missing"]);
   // A remount that failed still drops a capability nothing needs.
   expect(hardenHost({}, { ...run(granted), exec: () => ({ status: 32, stderr: "mount: denied" }) }).dropCapabilities).toBe(true);
@@ -736,42 +736,42 @@ it("reads a capability bit the way the kernel writes it", () => {
 });
 
 it("takes an own server's secrets from the root-only file the connector mounts, and only the secrets it knows", () => {
-  const file = "/run/mausbot/secrets.json";
+  const file = "/run/seira/secrets.json";
   const fs = (overrides: { file?: { uid: number; mode: number; symlink?: boolean }; dir?: { uid: number; mode: number }; text?: string; exists?: boolean } = {}) => ({
     exists: () => overrides.exists ?? true,
     lstat: () => {
       const entry = overrides.file ?? { uid: 0, mode: 0o100400 };
       return { ...entry, isFile: () => !entry.symlink, isSymbolicLink: () => Boolean(entry.symlink) };
     },
-    stat: (path: string) => (path === file ? overrides.file ?? { uid: 0, mode: 0o100400 } : path === "/run/mausbot" ? overrides.dir ?? { uid: 0, mode: 0o40700 } : { uid: 0, mode: 0o40755 }),
+    stat: (path: string) => (path === file ? overrides.file ?? { uid: 0, mode: 0o100400 } : path === "/run/seira" ? overrides.dir ?? { uid: 0, mode: 0o40700 } : { uid: 0, mode: 0o40755 }),
     read: () => overrides.text ?? JSON.stringify({
-      OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_CLOUD_BOAT_TOKEN: `box_omb_${"b".repeat(43)}`, OMB_CLOUD_TUNNEL_TOKEN: "t".repeat(40),
-      OMB_PUBLIC_URL: "https://elsewhere.example", PATH: "/tmp",
+      SEIRA_CLOUD_BOOTSTRAP_SECRET: secret, SEIRA_CLOUD_BOAT_TOKEN: `box_seira_${"b".repeat(43)}`, SEIRA_CLOUD_TUNNEL_TOKEN: "t".repeat(40),
+      SEIRA_PUBLIC_URL: "https://elsewhere.example", PATH: "/tmp",
     }),
   });
-  expect(readCloudSecretsFile("/data", file, fs())).toEqual({ OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_CLOUD_BOAT_TOKEN: `box_omb_${"b".repeat(43)}`, OMB_CLOUD_TUNNEL_TOKEN: "t".repeat(40) });
+  expect(readCloudSecretsFile("/data", file, fs())).toEqual({ SEIRA_CLOUD_BOOTSTRAP_SECRET: secret, SEIRA_CLOUD_BOAT_TOKEN: `box_seira_${"b".repeat(43)}`, SEIRA_CLOUD_TUNNEL_TOKEN: "t".repeat(40) });
   expect(readCloudSecretsFile("/data", file, fs({ exists: false }))).toEqual({});
   expect(() => readCloudSecretsFile("/data", file, fs({ file: { uid: 0, mode: 0o100644 } }))).toThrow("readable by others than root");
   expect(() => readCloudSecretsFile("/data", file, fs({ file: { uid: 1001, mode: 0o100400 } }))).toThrow(`${file} is not root's`);
-  expect(() => readCloudSecretsFile("/data", file, fs({ dir: { uid: 0, mode: 0o40777 } }))).toThrow("/run/mausbot is writable by others than root");
+  expect(() => readCloudSecretsFile("/data", file, fs({ dir: { uid: 0, mode: 0o40777 } }))).toThrow("/run/seira is writable by others than root");
   expect(() => readCloudSecretsFile("/data", file, fs({ file: { uid: 0, mode: 0o120777, symlink: true } }))).toThrow("is not a plain file");
   expect(() => readCloudSecretsFile("/data", file, fs({ text: "[1]" }))).toThrow("is not a JSON object");
   expect(() => readCloudSecretsFile("/data", "/data/secrets.json", fs())).toThrow("is on the volume");
 });
 
 it("boots as a Team Cloud with the Admin's team id and name, and refuses a team without them", () => {
-  const team = cloudHomeConfiguration(contract({ OMB_CLOUD_ROLE: "team", OMB_CLOUD_TEAM_ID: "team-7f3a", OMB_CLOUD_TEAM_NAME: " Acme " }))!;
+  const team = cloudHomeConfiguration(contract({ SEIRA_CLOUD_ROLE: "team", SEIRA_CLOUD_TEAM_ID: "team-7f3a", SEIRA_CLOUD_TEAM_NAME: " Acme " }))!;
   expect(team).toMatchObject({ role: "team", team: { id: "team-7f3a", name: "Acme" } });
   expect(cloudHomeConfiguration(contract())).toMatchObject({ role: "home", team: null });
-  expect(() => cloudHomeConfiguration(contract({ OMB_CLOUD_ROLE: "team" }))).toThrow(/OMB_CLOUD_TEAM_ID/);
-  expect(() => cloudHomeConfiguration(contract({ OMB_CLOUD_ROLE: "team", OMB_CLOUD_TEAM_ID: "team-7f3a" }))).toThrow(/OMB_CLOUD_TEAM_NAME/);
-  expect(() => cloudHomeConfiguration(contract({ OMB_CLOUD_ROLE: "team", OMB_CLOUD_TEAM_ID: "../x", OMB_CLOUD_TEAM_NAME: "Acme" }))).toThrow(/OMB_CLOUD_TEAM_ID/);
-  expect(() => cloudHomeConfiguration(contract({ OMB_CLOUD_ROLE: "team", OMB_CLOUD_TEAM_ID: "t", OMB_CLOUD_TEAM_NAME: "a\nb" }))).toThrow(/OMB_CLOUD_TEAM_NAME/);
-  expect(() => cloudHomeConfiguration(contract({ OMB_CLOUD_ROLE: "team", OMB_CLOUD_TEAM_ID: "t", OMB_CLOUD_TEAM_NAME: "x".repeat(81) }))).toThrow(/OMB_CLOUD_TEAM_NAME/);
+  expect(() => cloudHomeConfiguration(contract({ SEIRA_CLOUD_ROLE: "team" }))).toThrow(/SEIRA_CLOUD_TEAM_ID/);
+  expect(() => cloudHomeConfiguration(contract({ SEIRA_CLOUD_ROLE: "team", SEIRA_CLOUD_TEAM_ID: "team-7f3a" }))).toThrow(/SEIRA_CLOUD_TEAM_NAME/);
+  expect(() => cloudHomeConfiguration(contract({ SEIRA_CLOUD_ROLE: "team", SEIRA_CLOUD_TEAM_ID: "../x", SEIRA_CLOUD_TEAM_NAME: "Acme" }))).toThrow(/SEIRA_CLOUD_TEAM_ID/);
+  expect(() => cloudHomeConfiguration(contract({ SEIRA_CLOUD_ROLE: "team", SEIRA_CLOUD_TEAM_ID: "t", SEIRA_CLOUD_TEAM_NAME: "a\nb" }))).toThrow(/SEIRA_CLOUD_TEAM_NAME/);
+  expect(() => cloudHomeConfiguration(contract({ SEIRA_CLOUD_ROLE: "team", SEIRA_CLOUD_TEAM_ID: "t", SEIRA_CLOUD_TEAM_NAME: "x".repeat(81) }))).toThrow(/SEIRA_CLOUD_TEAM_NAME/);
 });
 
 it("a Team Cloud takes the team's default language from the Admin, and boots in its own default when it is missing or unknown", () => {
-  const team = (language?: string) => cloudHomeConfiguration(contract({ OMB_CLOUD_ROLE: "team", OMB_CLOUD_TEAM_ID: "team-7f3a", OMB_CLOUD_TEAM_NAME: "Acme", ...(language === undefined ? {} : { OMB_CLOUD_TEAM_LANGUAGE: language }) }))!.team;
+  const team = (language?: string) => cloudHomeConfiguration(contract({ SEIRA_CLOUD_ROLE: "team", SEIRA_CLOUD_TEAM_ID: "team-7f3a", SEIRA_CLOUD_TEAM_NAME: "Acme", ...(language === undefined ? {} : { SEIRA_CLOUD_TEAM_LANGUAGE: language }) }))!.team;
   expect(team("de")).toEqual({ id: "team-7f3a", name: "Acme", language: "de" });
   expect(team(" PT-BR ")).toMatchObject({ language: "pt-br" });
   expect(team()).toEqual({ id: "team-7f3a", name: "Acme" });

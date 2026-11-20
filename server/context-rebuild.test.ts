@@ -158,7 +158,7 @@ describe("tool history in a rebuilt session", () => {
 
     it("leaves a bracket that opens no note alone", () => {
       expect(toolReplayLine({ name: "Read", ok: true, input: toolDetailPreview({ file_path: "app/[id]/page.tsx" })! })).toBe("[ran: Read: app/[id]/page.tsx — ok]");
-      expect(toolReplayLine({ name: "Bash", summary: "[ -f .env ] && echo [OMB-2470] found", ok: true })).toBe("[ran: Bash: [ -f .env ] && echo [OMB-2470] found — ok]");
+      expect(toolReplayLine({ name: "Bash", summary: "[ -f .env ] && echo [SEIRA-2470] found", ok: true })).toBe("[ran: Bash: [ -f .env ] && echo [SEIRA-2470] found — ok]");
     });
 
     it("carries no tool result, and nothing of the input preview but its target", () => {
@@ -385,7 +385,7 @@ describe("tool history in a rebuilt session", () => {
     it("returns nothing while the setting is off", () => {
       expect(replayToolCalls(thread, undefined, NO_ENV)).toEqual([]);
       expect(replayToolCalls(thread, { replayToolHistory: false }, NO_ENV)).toEqual([]);
-      expect(replayToolCalls(thread, ON, { OMB_REPLAY_TOOL_HISTORY: "0" })).toEqual([]);
+      expect(replayToolCalls(thread, ON, { SEIRA_REPLAY_TOOL_HISTORY: "0" })).toEqual([]);
     });
 
     it("lists each tool call after the message it followed, oldest first", () => {
@@ -396,7 +396,7 @@ describe("tool history in a rebuilt session", () => {
       ];
       // t0 ran before anything was said, so there is nothing to put it between
       expect(replayToolCalls(thread, ON, NO_ENV)).toEqual(expected);
-      expect(replayToolCalls(thread, undefined, { OMB_REPLAY_TOOL_HISTORY: "1" })).toEqual(expected);
+      expect(replayToolCalls(thread, undefined, { SEIRA_REPLAY_TOOL_HISTORY: "1" })).toEqual(expected);
     });
 
     it("never turns a message that is itself context into a tool line", () => {

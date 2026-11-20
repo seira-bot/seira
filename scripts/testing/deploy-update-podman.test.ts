@@ -32,25 +32,25 @@ function tree(dir: string, prefix = ""): Record<string, string> {
   return files;
 }
 
-const unitText = (image: string) => `[Container]\nContainerName=openmausbot\nImage=${image}\nNetwork=host\n\n[Service]\nRestart=on-failure\n`;
+const unitText = (image: string) => `[Container]\nContainerName=seira\nImage=${image}\nNetwork=host\n\n[Service]\nRestart=on-failure\n`;
 
 /** A Podman install on 0.1.150, its unit and settings as the installer writes them, and a stable channel naming `target`.
  * `extra`: the fake's own switches (failRestore); `old`: what the running version does when it is started again. */
 function install(target: Record<string, unknown> = {}, extra: Record<string, unknown> = {}, old: Record<string, unknown> = {}) {
-  const root = mkdtempSync(join(tmpdir(), "omb-update-podman-"));
+  const root = mkdtempSync(join(tmpdir(), "seira-update-podman-"));
   dirs.push(root);
-  const home = join(root, "share", "openmausbot");
-  const unit = join(root, "config", "containers", "systemd", "openmausbot.container");
+  const home = join(root, "share", "seira");
+  const unit = join(root, "config", "containers", "systemd", "seira.container");
   const fake = join(root, "fake");
   const data = join(fake, "volumes", "deploy_data");
   mkdirSync(join(root, "bin"));
   mkdirSync(home, { recursive: true });
   mkdirSync(join(root, "config", "containers", "systemd"), { recursive: true });
-  mkdirSync(join(data, ".openmausbot"), { recursive: true });
-  writeFileSync(join(data, ".openmausbot", "bots.json"), '[{"name":"Mira"}]');
+  mkdirSync(join(data, ".seira"), { recursive: true });
+  writeFileSync(join(data, ".seira", "bots.json"), '[{"name":"Mira"}]');
   writeFileSync(join(data, "started-by.txt"), "0.1.150\n");
   copyFileSync(SCRIPT, join(home, "update.sh"));
-  writeFileSync(join(home, ".env"), `OMB_IMAGE=${OLD.refs[1]}\n`, { mode: 0o600 });
+  writeFileSync(join(home, ".env"), `SEIRA_IMAGE=${OLD.refs[1]}\n`, { mode: 0o600 });
   writeFileSync(join(home, "podman.unit"), `${unit}\n`);
   writeFileSync(unit, unitText(OLD.refs[1]!));
   const node = JSON.stringify(process.execPath);
@@ -61,8 +61,8 @@ function install(target: Record<string, unknown> = {}, extra: Record<string, unk
   // Podman's own spelling of what the Compose fake answers: the unit's container by name, and exec without -T.
   shim("podman", [
     'case "$1" in',
-    `  ps) exec ${node} "${FAKE}" compose ps -aq omb ;;`,
-    `  exec) shift 2; exec ${node} "${FAKE}" compose exec -T omb "$@" ;;`,
+    `  ps) exec ${node} "${FAKE}" compose ps -aq seira ;;`,
+    `  exec) shift 2; exec ${node} "${FAKE}" compose exec -T seira "$@" ;;`,
     `  run) shift; [ "$1" = --security-opt ] && shift 2; exec ${node} "${FAKE}" run "$@" ;;`,
     `  compose) echo "a Podman install never runs compose" >&2; exit 64 ;;`,
     `  *) exec ${node} "${FAKE}" "$@" ;;`,
@@ -75,8 +75,8 @@ function install(target: Record<string, unknown> = {}, extra: Record<string, unk
     'case "$1" in',
     "  show-environment | daemon-reload) exit 0 ;;",
     // stop-fails-on-new: the new version, once started, cannot be stopped (a rollback's stop fails).
-    `  stop) if [ -f "$FAKE_DOCKER_DIR/stop-fails-on-new" ] && grep -qx "Image=${NEW.refs[0]}" "${unit}"; then echo "Failed to stop openmausbot.service" >&2; exit 1; fi; exec ${node} "${FAKE}" compose stop ;;`,
-    `  restart) OMB_IMAGE=$(sed -n 's/^Image=//p' "${unit}") exec ${node} "${FAKE}" compose up -d ;;`,
+    `  stop) if [ -f "$FAKE_DOCKER_DIR/stop-fails-on-new" ] && grep -qx "Image=${NEW.refs[0]}" "${unit}"; then echo "Failed to stop seira.service" >&2; exit 1; fi; exec ${node} "${FAKE}" compose stop ;;`,
+    `  restart) SEIRA_IMAGE=$(sed -n 's/^Image=//p' "${unit}") exec ${node} "${FAKE}" compose up -d ;;`,
     "esac",
     "exit 64",
   ].join("\n"));
@@ -85,7 +85,7 @@ function install(target: Record<string, unknown> = {}, extra: Record<string, unk
   shim("loginctl", '[ "$1" = show-user ] && echo "${FAKE_LINGER:-yes}"');
   writeFileSync(join(fake, "state.json"), JSON.stringify({
     ...extra, serial: 1, composeReadsPin: true, defaultImage: OLD.refs[1], dataVolume: "deploy_data", images: [{ ...OLD, ...old }, { ...NEW, ...target }],
-    containers: { omb: { id: "omb-1", image: OLD.id, status: "running", restarts: 0 } },
+    containers: { seira: { id: "seira-1", image: OLD.id, status: "running", restarts: 0 } },
   }));
   writeFileSync(join(root, "stable.json"), JSON.stringify({ channel: "stable", version: "0.1.151", image: NEW.refs[0], history: [] }));
   const run = (args: string[] = [], env: Record<string, string> = {}) => {
@@ -93,8 +93,8 @@ function install(target: Record<string, unknown> = {}, extra: Record<string, unk
       encoding: "utf8", input: "", timeout: 60_000,
       env: {
         PATH: `${join(root, "bin")}:/usr/bin:/bin:/usr/sbin:/sbin`, HOME: root, FAKE_DOCKER_DIR: fake, XDG_RUNTIME_DIR: root,
-        OMB_STABLE_URL: `file://${join(root, "stable.json")}`, OMB_NEWEST_URL: `file://${join(root, "newest.json")}`,
-        OMB_UPDATE_POLL_S: "0", OMB_UPDATE_WAIT_S: "120", OMB_UPDATE_ENGINE_WAIT_S: "1", ...env,
+        SEIRA_STABLE_URL: `file://${join(root, "stable.json")}`, SEIRA_NEWEST_URL: `file://${join(root, "newest.json")}`,
+        SEIRA_UPDATE_POLL_S: "0", SEIRA_UPDATE_WAIT_S: "120", SEIRA_UPDATE_ENGINE_WAIT_S: "1", ...env,
       },
     });
     return { ...result, said: result.stdout.trim().split("\n") };
@@ -115,7 +115,7 @@ describe.skipIf(!posix)("deploy/update.sh on a Podman install", () => {
     const before = tree(box.data);
     const done = box.run();
     expect(done.status, done.stdout + done.stderr).toBe(0);
-    expect(box.copies()).toEqual([expect.stringMatching(/^openmausbot_data-before-update-\d{8}T\d{6}Z$/)]);
+    expect(box.copies()).toEqual([expect.stringMatching(/^seira_data-before-update-\d{8}T\d{6}Z$/)]);
     expect(done.said).toEqual([
       "Downloading 0.1.151…",
       "Stopping the server and copying its data aside…",
@@ -125,13 +125,13 @@ describe.skipIf(!posix)("deploy/update.sh on a Podman install", () => {
       `The data from before the update is kept in the Podman volume ${box.copies()[0]} until the next update.`,
       "To go back to it: ./update.sh --rollback",
     ]);
-    expect(box.env()).toBe(`OMB_IMAGE=${NEW.refs[0]}\n`);
+    expect(box.env()).toBe(`SEIRA_IMAGE=${NEW.refs[0]}\n`);
     expect(box.unit()).toBe(unitText(NEW.refs[0]!));
-    expect(box.state().containers.omb).toMatchObject({ image: NEW.id, status: "running" });
+    expect(box.state().containers.seira).toMatchObject({ image: NEW.id, status: "running" });
     expect(tree(join(box.data, "..", box.copies()[0]!))).toEqual(before);
     const systemctl = box.log("systemctl");
-    expect(systemctl.indexOf("--user stop openmausbot.service")).toBeGreaterThanOrEqual(0);
-    expect(systemctl.indexOf("--user daemon-reload")).toBeLessThan(systemctl.indexOf("--user restart openmausbot.service"));
+    expect(systemctl.indexOf("--user stop seira.service")).toBeGreaterThanOrEqual(0);
+    expect(systemctl.indexOf("--user daemon-reload")).toBeLessThan(systemctl.indexOf("--user restart seira.service"));
     // The helpers copy the data with SELinux's label for the server's container out of their way, and with no network.
     expect(box.log("podman").find((call) => call.includes("--entrypoint cp"))).toMatch(/^run --security-opt label=disable --rm --network none --user 0:0 /);
     expect(box.log("podman").some((call) => call.startsWith("compose"))).toBe(false);
@@ -140,39 +140,39 @@ describe.skipIf(!posix)("deploy/update.sh on a Podman install", () => {
   it("puts back the old image in the unit, its settings and the data when the new version never answers", () => {
     const box = install({ behaviour: "silent" });
     const before = tree(box.data);
-    const failed = box.run([], { OMB_UPDATE_WAIT_S: "2" });
+    const failed = box.run([], { SEIRA_UPDATE_WAIT_S: "2" });
     expect(failed.status).toBe(1);
     expect(failed.said.slice(-3)).toEqual([
       "The update to 0.1.151 did not work: it did not answer within 2 seconds.",
       "Putting back the version and the data from before the update…",
       "Your server runs 0.1.150 again, with its data as it was before the update.",
     ]);
-    expect(box.env()).toBe(`OMB_IMAGE=${OLD.refs[1]}\n`);
+    expect(box.env()).toBe(`SEIRA_IMAGE=${OLD.refs[1]}\n`);
     expect(box.unit()).toBe(unitText(OLD.refs[1]!));
-    expect(box.state().containers.omb).toMatchObject({ image: OLD.id, status: "running" });
+    expect(box.state().containers.seira).toMatchObject({ image: OLD.id, status: "running" });
     expect(tree(box.data)).toEqual({ ...before, "started-by.txt": "0.1.150\n0.1.150\n" });
   });
 
   it("names systemctl and journalctl, never docker compose, when a person has to step in", () => {
     // The data cannot be put back: the way to run the server on the data as it is.
     const restore = install({ behaviour: "silent" }, { failRestore: true });
-    const failed = restore.run([], { OMB_UPDATE_WAIT_S: "2" });
+    const failed = restore.run([], { SEIRA_UPDATE_WAIT_S: "2" });
     expect(failed.status).toBe(2);
-    expect(failed.stdout).toContain("To run the server on the data as it is instead: systemctl --user start openmausbot (that starts 0.1.151 again).");
+    expect(failed.stdout).toContain("To run the server on the data as it is instead: systemctl --user start seira (that starts 0.1.151 again).");
     expect(failed.stdout).not.toContain("docker compose");
 
     // The old version is back but does not become healthy either: its log.
     const unhealthy = install({ behaviour: "silent" }, {}, { behaviour: "crashes", lastWords: "the old one fails too" });
-    const back = unhealthy.run([], { OMB_UPDATE_WAIT_S: "2" });
+    const back = unhealthy.run([], { SEIRA_UPDATE_WAIT_S: "2" });
     expect(back.status).toBe(2);
-    expect(back.said.at(-1)).toBe("0.1.150 and its data are back, but it did not become healthy either (it kept stopping as it started (the old one fails too)). See: journalctl --user -u openmausbot");
+    expect(back.said.at(-1)).toBe("0.1.150 and its data are back, but it did not become healthy either (it kept stopping as it started (the old one fails too)). See: journalctl --user -u seira");
 
     // The new version cannot be stopped to roll back: the command to stop it.
     const stuck = install({ behaviour: "silent" });
     writeFileSync(join(stuck.fake, "stop-fails-on-new"), "");
-    const kept = stuck.run([], { OMB_UPDATE_WAIT_S: "2" });
+    const kept = stuck.run([], { SEIRA_UPDATE_WAIT_S: "2" });
     expect(kept.status).toBe(2);
-    expect(kept.said.at(-1)).toContain("run ./update.sh --rollback again once systemctl --user stop openmausbot works.");
+    expect(kept.said.at(-1)).toContain("run ./update.sh --rollback again once systemctl --user stop seira works.");
   });
 
   it("says when the user's services stop at logout (linger off), and goes on", () => {

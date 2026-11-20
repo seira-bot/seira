@@ -124,11 +124,11 @@ isolated fakes.
 ## Dedicated shared-workspace operator policy
 
 An operator who explicitly authorizes Full access in a dedicated company
-workspace can provision `OMB_SHARED_WORKSPACE_FULL_ACCESS=1` at server startup.
-It is active only with a fully validated HTTPS `OMB_ADMIN_URL`,
-`OMB_PUBLIC_URL`, workspace slug `OMB_ADMIN_WORKSPACE`,
-`OMB_ADMIN_MEMBERSHIP=portal`, a loaded hosted-access hook and a live `admin`
-entitlement. `OMB_DESKTOP_PARENT=1` disallows it. HTTP settings cannot toggle it.
+workspace can provision `SEIRA_SHARED_WORKSPACE_FULL_ACCESS=1` at server startup.
+It is active only with a fully validated HTTPS `SEIRA_ADMIN_URL`,
+`SEIRA_PUBLIC_URL`, workspace slug `SEIRA_ADMIN_WORKSPACE`,
+`SEIRA_ADMIN_MEMBERSHIP=portal`, a loaded hosted-access hook and a live `admin`
+entitlement. `SEIRA_DESKTOP_PARENT=1` disallows it. HTTP settings cannot toggle it.
 
 Only while that policy is active does authenticated health advertise
 `capabilities.sharedWorkspaceFullAccess: 1`. A trusted loopback caller may then

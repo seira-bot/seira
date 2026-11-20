@@ -52,10 +52,10 @@ describe("About", () => {
   it("describes the app without naming the project it is built on; the license files carry the attribution", () => {
     const html = about({ location: { host: "bots.example.test" } });
     expect(html).toContain("A desktop home for your agents: open source, Apache 2.0 licensed.");
-    expect(html).not.toContain("OpenMausBot");
+    expect(html).not.toContain("Seira");
     expect(html).toContain(">License</button>");
     setLocale("pt-br");
-    expect(about({ location: { host: "bots.example.test" } })).not.toContain("OpenMausBot");
+    expect(about({ location: { host: "bots.example.test" } })).not.toContain("Seira");
   });
 
   it("names the server as it was saved, in the person's language", () => {

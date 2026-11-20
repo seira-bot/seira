@@ -6,7 +6,7 @@ import { checkAssets, checkManifest } from "./check-appx.mjs";
 
 const GOOD = `<?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10">
-  <Identity Name="openmausbot"
+  <Identity Name="seira"
     ProcessorArchitecture="x64"
     Publisher='CN=ms'
     Version="1.1.179.0" />
@@ -17,7 +17,7 @@ const GOOD = `<?xml version="1.0" encoding="utf-8"?>
   <Applications>
     <Application Id="Seira" Executable="Seira.exe" EntryPoint="Windows.FullTrustApplication">
       <Extensions>
-        <uap:Extension Category="windows.protocol"><uap:Protocol Name="openmausbot"><uap:DisplayName>Seira package install</uap:DisplayName></uap:Protocol></uap:Extension>
+        <uap:Extension Category="windows.protocol"><uap:Protocol Name="seira"><uap:DisplayName>Seira package install</uap:DisplayName></uap:Protocol></uap:Extension>
         <desktop:Extension Category="windows.startupTask" Executable="Seira.exe" EntryPoint="Windows.FullTrustApplication"><desktop:StartupTask TaskId="SeiraStartup" Enabled="false" DisplayName="Seira" /></desktop:Extension>
       </Extensions>
     </Application>
@@ -29,14 +29,14 @@ const check = (xml) => checkManifest(xml, { version: "0.1.179" });
 
 describe("checkManifest", () => {
   it("accepts the manifest and reports the identity", () => {
-    expect(check(GOOD)).toEqual({ errors: [], identity: { name: "openmausbot", publisher: "CN=ms" } });
+    expect(check(GOOD)).toEqual({ errors: [], identity: { name: "seira", publisher: "CN=ms" } });
   });
 
   it.each([
     ["the display name", GOOD.replace("<DisplayName>Seira</DisplayName>", "<DisplayName>Other</DisplayName>"), "DisplayName Seira"],
     ["the publisher name", GOOD.replace("PT GLOBAL RAYA ORIS WIJAYA", "Someone"), "PublisherDisplayName"],
     ["the version", GOOD.replace('Version="1.1.179.0"', 'Version="0.1.179.0"'), "Identity Version is 0.1.179.0, not 1.1.179.0"],
-    ["the protocol", GOOD.replace('Protocol Name="openmausbot"', 'Protocol Name="other"'), "windows.protocol"],
+    ["the protocol", GOOD.replace('Protocol Name="seira"', 'Protocol Name="other"'), "windows.protocol"],
     ["the full trust capability", GOOD.replace('Name="runFullTrust"', 'Name="internetClient"'), "runFullTrust"],
     ["the start-up task", GOOD.replace('TaskId="SeiraStartup"', 'TaskId="Other"'), "startup task SeiraStartup"],
     ["the start-up task being off", GOOD.replace('Enabled="false"', 'Enabled="true"'), "not off by default"],

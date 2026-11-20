@@ -143,7 +143,7 @@ export interface DevsReportsDeps {
   /** Timing lines for these conversations and bots: numbers, fixed codes and opaque ids only. */
   performance?(filter: { threadIds: readonly string[]; botIds: readonly string[] }): string[];
   send(payload: DevsReportPayload): Promise<SendOutcome>;
-  /** Asks the MausBot team about reports this app sent (devs-report-send.ts `askReportStatus`); null: no answer this time. */
+  /** Asks the Seira team about reports this app sent (devs-report-send.ts `askReportStatus`); null: no answer this time. */
   askStatus(question: ReportStatusQuestion): Promise<ReportStatusAnswer | null>;
   /** One notification about a line in this conversation; `person`, on a Team Cloud, the only one it reaches. */
   tell(threadId: string, text: string, person?: string): void;

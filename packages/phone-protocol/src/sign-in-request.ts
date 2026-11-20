@@ -1,6 +1,6 @@
 /**
  * A bot asking the person to sign in to a website themselves, in the place the
- * bot works. OpenMausBot never receives a website password: the person types it
+ * bot works. Seira never receives a website password: the person types it
  * into the page, and the bot uses the session the page keeps.
  */
 import type { Surface } from "./wire.ts";

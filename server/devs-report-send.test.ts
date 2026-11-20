@@ -69,12 +69,12 @@ describe("sending a @devs report", () => {
 
 describe("where reports go", () => {
   it("is a fixture's loopback or https address, else nowhere", () => {
-    expect(bugReportEndpoint({ OMB_BUG_REPORT_URL: "http://127.0.0.1:4400/api/bug-reports" })).toBe("http://127.0.0.1:4400/api/bug-reports");
-    expect(bugReportEndpoint({ OMB_BUG_REPORT_URL: " https://reports.example/api/bug-reports " })).toBe("https://reports.example/api/bug-reports");
-    expect(bugReportEndpoint({ OMB_BUG_REPORT_URL: "http://192.0.2.1/api/bug-reports" })).toBeNull();
-    expect(bugReportEndpoint({ OMB_BUG_REPORT_URL: "https://user:pw@evil.example/x" })).toBeNull();
-    expect(bugReportEndpoint({ OMB_BUG_REPORT_URL: "not an address" })).toBeNull();
-    expect(bugReportEndpoint({ OMB_CLOUD_STAGING: "1" })).toBeNull();
+    expect(bugReportEndpoint({ SEIRA_BUG_REPORT_URL: "http://127.0.0.1:4400/api/bug-reports" })).toBe("http://127.0.0.1:4400/api/bug-reports");
+    expect(bugReportEndpoint({ SEIRA_BUG_REPORT_URL: " https://reports.example/api/bug-reports " })).toBe("https://reports.example/api/bug-reports");
+    expect(bugReportEndpoint({ SEIRA_BUG_REPORT_URL: "http://192.0.2.1/api/bug-reports" })).toBeNull();
+    expect(bugReportEndpoint({ SEIRA_BUG_REPORT_URL: "https://user:pw@evil.example/x" })).toBeNull();
+    expect(bugReportEndpoint({ SEIRA_BUG_REPORT_URL: "not an address" })).toBeNull();
+    expect(bugReportEndpoint({ SEIRA_CLOUD_STAGING: "1" })).toBeNull();
     expect(bugReportEndpoint({})).toBeNull();
   });
 
@@ -107,18 +107,18 @@ describe("asking what became of the reports this app sent", () => {
     expect(desktop.sent[0]!.url).toBe("https://cloud.example/api/bug-reports/status");
     expect(desktop.sent[0]!.init).toMatchObject({ method: "POST", redirect: "error" });
     expect(desktop.sent[0]!.body).toEqual(QUESTION);
-    expect(Object.keys(desktop.sent[0]!.init.headers as Record<string, string>).filter((name) => name.startsWith("x-omb-cloud"))).toEqual([]);
+    expect(Object.keys(desktop.sent[0]!.init.headers as Record<string, string>).filter((name) => name.startsWith("x-seira-cloud"))).toEqual([]);
 
     const home = { machineId: "cm-test-home", bootstrapSecret: "s".repeat(43) }, cloud = endpoint(answer(200, ANSWER));
     expect(await askReportStatus("https://cloud.example/api/bug-reports/status", QUESTION, home, cloud.fetcher, () => 1_792_670_400_000)).toEqual(ANSWER);
     const headers = cloud.sent[0]!.init.headers as Record<string, string>, raw = String(cloud.sent[0]!.init.body);
-    expect(headers).toMatchObject({ "x-omb-cloud-machine": "cm-test-home", "x-omb-cloud-timestamp": "1792670400" });
-    expect(headers["x-omb-cloud-signature"]).toBe(`v1=${bugReportsHomeSignature(home.bootstrapSecret, home.machineId, "1792670400", headers["x-omb-cloud-nonce"]!, raw)}`);
+    expect(headers).toMatchObject({ "x-seira-cloud-machine": "cm-test-home", "x-seira-cloud-timestamp": "1792670400" });
+    expect(headers["x-seira-cloud-signature"]).toBe(`v1=${bugReportsHomeSignature(home.bootstrapSecret, home.machineId, "1792670400", headers["x-seira-cloud-nonce"]!, raw)}`);
     expect(JSON.stringify(cloud.sent)).not.toContain(home.bootstrapSecret);
   });
 
   it("signs exactly as the Admin checks it", () => {
-    // The same vector is pinned in openmaus-cloud tests/bug-report-fixes.test.ts.
+    // The same vector is pinned in seira-cloud tests/bug-report-fixes.test.ts.
     expect(bugReportsHomeSignature("s".repeat(43), "cm-test-home", "1792670400", "nonce-nonce-nonce-1", '{"installId":"install_0001","ids":[]}')).toBe("yk4dl82CpryMBfCaT18e_sJ6uihfo3dPHVP4prToXL8");
   });
 

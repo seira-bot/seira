@@ -24,7 +24,7 @@ const VERIFY = `<h1>Check your email</h1><p>We sent a 6-digit code to alice@exam
 const ACCOUNT = `<h1>Your account</h1><p>Signed in as alice@example.com</p><button id="cancel">Cancel subscription</button>`;
 
 async function fixtureWorld() {
-  const tools = mkdtempSync(join(tmpdir(), "omb-sign-in-code-e2e-"));
+  const tools = mkdtempSync(join(tmpdir(), "seira-sign-in-code-e2e-"));
   const inbox = join(tools, "inbox.txt");
   writeFileSync(inbox, "No new email.");
   const page = new FakeLoginPage(`${SHOP}/sign-in`, SIGN_IN);

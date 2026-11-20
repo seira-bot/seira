@@ -1,4 +1,4 @@
-// A new member's first look at a Team Cloud: the list that makes their own MausBot shows it whole, its main chat
+// A new member's first look at a Team Cloud: the list that makes their own Seira shows it whole, its main chat
 // included, the first time. Disposable homes and a synthetic Claude CLI; nothing leaves this machine.
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";

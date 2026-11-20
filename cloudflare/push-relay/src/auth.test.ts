@@ -34,7 +34,7 @@ describe("credentials", () => {
     const flipped = `${secret!.slice(0, -1)}${secret!.endsWith("A") ? "B" : "A"}`;
     const cases: Record<string, string | undefined> = {
       malformed: "not-a-credential",
-      "wrong prefix": `omb_install_${lookup}.${secret}`,
+      "wrong prefix": `seira_install_${lookup}.${secret}`,
       "too short": `seira_install_${lookup}.short`,
       unknown: `seira_install_${"A".repeat(22)}.${"B".repeat(43)}`,
       "wrong secret": `seira_install_${lookup}.${flipped}`,

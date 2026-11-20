@@ -393,7 +393,7 @@ export function createComputerSharing({ file, fetch: fetchImpl, environments, lo
     const response = await fetchImpl(`${env.origin}${route}`, {
       method: body === undefined ? "GET" : "POST", credentials: "include", redirect: "error", cache: "no-store",
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(35_000)]) : AbortSignal.timeout(10_000),
-      headers: { origin: env.origin, ...BACKGROUND_HEADERS, ...(body === undefined ? {} : { "content-type": "application/json" }), ...(secret ? { "x-omb-computer-secret": secret } : {}) },
+      headers: { origin: env.origin, ...BACKGROUND_HEADERS, ...(body === undefined ? {} : { "content-type": "application/json" }), ...(secret ? { "x-seira-computer-secret": secret } : {}) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     if (asleepAnswer(response)) {
@@ -411,7 +411,7 @@ export function createComputerSharing({ file, fetch: fetchImpl, environments, lo
     return json;
   };
   const describe = async (env, required = true) => {
-    const [auth, descriptor] = await Promise.all([request(env, "/api/auth/session"), request(env, "/.well-known/openmausbot/environment")])
+    const [auth, descriptor] = await Promise.all([request(env, "/api/auth/session"), request(env, "/.well-known/seira/environment")])
       .catch(error => { throw error.status === 401 || error.status === 403 ? Object.assign(error, { problem: "connect-first" }) : error; });
     if (auth.kind !== "session" || !uuid(auth.id) || !uuid(descriptor.environmentId)) throw Object.assign(new Error("Complete server pairing or sign-in first"), { problem: "connect-first" });
     // A server of the person's own says what it takes from them in their own sign-in's answer (`lending`), never before pairing.
@@ -473,7 +473,7 @@ export function createComputerSharing({ file, fetch: fetchImpl, environments, lo
       const ended = await runDeviceLink({
         url: linkUrl(env.origin, linkPath(grant.id)), signal, WebSocket: linkSocket, egress, traffic: traffic(env.id), onStream: browsed(env), chrome,
         lends: () => ({ internet: lendsInternet(grant), chrome: grant.chrome === true && supportsChrome.has(env.id) }),
-        headers: { ...signIn, origin: env.origin, ...BACKGROUND_HEADERS, "x-omb-computer-secret": grant.secret },
+        headers: { ...signIn, origin: env.origin, ...BACKGROUND_HEADERS, "x-seira-computer-secret": grant.secret },
         onOpen: () => { opened = true; failures = 0; linked.add(env.id); changed(); },
       });
       linked.delete(env.id); changed();

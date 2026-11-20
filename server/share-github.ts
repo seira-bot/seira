@@ -8,7 +8,7 @@ type Fetcher = typeof fetch;
 const RAW = "https://raw.githubusercontent.com";
 const MANIFEST_MAX_BYTES = 1_000_000;
 const FOLDER_MANIFESTS = ["bot.md", "team.md"] as const;
-const REPOSITORY_FILES = ["bot.md", "team.md", "botmrr.md", "team.mausteam.json"] as const;
+const REPOSITORY_FILES = ["bot.md", "team.md", "botmrr.md", "team.seirateam.json"] as const;
 
 export class GithubTemplateError extends Error {
   readonly status: number;
@@ -114,7 +114,7 @@ export async function fetchGithubTemplate(input: string, fetcher: Fetcher = fetc
   if (source.kind === "file") {
     const body = await fetchBody(source.url, MANIFEST_MAX_BYTES, fetcher, false);
     if (body === null) throw new GithubTemplateError("Nothing was found at that GitHub link.", 404);
-    const key = source.name.endsWith(".json") ? "team.mausteam.json" : "botmrr.md";
+    const key = source.name.endsWith(".json") ? "team.seirateam.json" : "botmrr.md";
     return readShareFolder({ [key]: body });
   }
   for (const folder of source.folders) {

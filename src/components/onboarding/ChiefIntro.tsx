@@ -6,7 +6,7 @@ import { SeiraCharacter } from "@/components/seira-character";
 import { cn } from "@/lib/cn";
 import { chiefChoices, chiefFor, createChiefPatch, myDefaultBot, setWelcomingBot, stageIntro, useViewerEmail } from "@/lib/default-bot";
 import { t } from "@/lib/i18n";
-import { FLIGHT_MS, landInSidebar } from "@/lib/mausbot-landing";
+import { FLIGHT_MS, landInSidebar } from "@/lib/seira-landing";
 import { useStore, type Bot } from "@/state/store";
 import { SeiraHero, takeOff } from "./SeiraHero";
 
@@ -39,9 +39,9 @@ export function ChiefIntro({ replay, onDone, onLeave }: { replay: boolean; onDon
   const { state, dispatch } = useStore();
   const reduced = usePrefersReducedMotion();
   const viewer = useViewerEmail();
-  const maus = myDefaultBot(state.bots, viewer);
-  const chief = chiefFor(state.bots, maus);
-  const choices = chiefChoices(state.bots, maus, viewer);
+  const seira = myDefaultBot(state.bots, viewer);
+  const chief = chiefFor(state.bots, seira);
+  const choices = chiefChoices(state.bots, seira, viewer);
   const [choosing, setChoosing] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -54,10 +54,10 @@ export function ChiefIntro({ replay, onDone, onLeave }: { replay: boolean; onDon
     return () => clearTimeout(timer);
   }, []);
   useEffect(() => {
-    if (!maus) return;
-    setWelcomingBot(maus.id);
+    if (!seira) return;
+    setWelcomingBot(seira.id);
     return () => setWelcomingBot(null);
-  }, [maus?.id]);
+  }, [seira?.id]);
   useEffect(() => {
     const first = dialog.current?.querySelector<HTMLElement>(choosing ? "[role=radio][tabindex='0']" : "[data-primary]");
     (first ?? dialog.current)?.focus({ preventScroll: true });
@@ -78,26 +78,26 @@ export function ChiefIntro({ replay, onDone, onLeave }: { replay: boolean; onDon
   };
 
   const create = () => {
-    if (leaving || !maus) return;
-    const patch = createChiefPatch(maus, chief);
-    if (!replay) stageIntro(maus.id);
+    if (leaving || !seira) return;
+    const patch = createChiefPatch(seira, chief);
+    if (!replay) stageIntro(seira.id);
     if (!reduced) takeOff(avatar.current);
     landInSidebar({
       from: avatar.current,
-      botId: maus.id,
+      botId: seira.id,
       reduced,
       commit: () => {
         setWelcomingBot(null);
-        dispatch({ type: "updateBot", botId: maus.id, patch });
+        dispatch({ type: "updateBot", botId: seira.id, patch });
       },
     });
-    leave(maus.id, reduced ? CHIEF_FADE_MS : FLIGHT_MS);
+    leave(seira.id, reduced ? CHIEF_FADE_MS : FLIGHT_MS);
   };
 
   const keep = (bot: Bot) => {
     if (leaving) return;
     setWelcomingBot(null);
-    if (maus && !maus.welcomed) dispatch({ type: "updateBot", botId: maus.id, patch: { welcomed: true } });
+    if (seira && !seira.welcomed) dispatch({ type: "updateBot", botId: seira.id, patch: { welcomed: true } });
     if (!bot.chiefOfStaff) dispatch({ type: "updateBot", botId: bot.id, patch: { chiefOfStaff: true } });
     leave(bot.id, CHIEF_FADE_MS);
   };
@@ -176,7 +176,7 @@ export function ChiefIntro({ replay, onDone, onLeave }: { replay: boolean; onDon
         <>
           <div className="flex flex-col items-center gap-4 px-6 pb-4 pt-6 text-center">
             <span ref={avatar} className="relative flex">
-              {maus ? <SeiraHero bot={maus} state="greet" size={CHARACTER_SIZE} /> : <SeiraCharacter state="greet" size={CHARACTER_SIZE} />}
+              {seira ? <SeiraHero bot={seira} state="greet" size={CHARACTER_SIZE} /> : <SeiraCharacter state="greet" size={CHARACTER_SIZE} />}
               <ChiefBadge />
             </span>
             <div className="flex flex-col gap-2">
@@ -190,7 +190,7 @@ export function ChiefIntro({ replay, onDone, onLeave }: { replay: boolean; onDon
                 <span className="truncate">{t("onboarding.chief.choose")}</span>
               </button>
             )}
-            <button type="button" data-primary="" data-chief-create="" onClick={create} disabled={!maus} className={cn(PRIMARY, "w-full min-w-0")}>
+            <button type="button" data-primary="" data-chief-create="" onClick={create} disabled={!seira} className={cn(PRIMARY, "w-full min-w-0")}>
               <span className="truncate">{t("onboarding.chief.create")}</span>
             </button>
           </div>

@@ -35,7 +35,7 @@ const scratch: string[] = [];
 const instances: ProviderInstance[] = [];
 
 function fakeRuntime(source?: string) {
-  const directory = mkdtempSync(join(tmpdir(), "omb-antigravity-sign-in-"));
+  const directory = mkdtempSync(join(tmpdir(), "seira-antigravity-sign-in-"));
   scratch.push(directory);
   const executable = join(directory, "fake-antigravity.ts");
   const harness = join(directory, process.platform === "win32" ? "localharness_external.exe" : "localharness_external");

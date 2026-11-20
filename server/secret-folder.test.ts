@@ -20,7 +20,7 @@ let workspace = "";
 let secret = "";
 
 beforeEach(() => {
-  data = mkdtempSync(join(tmpdir(), "omb-secret-folder-"));
+  data = mkdtempSync(join(tmpdir(), "seira-secret-folder-"));
   workspace = join(data, "workspaces", "atlas");
   mkdirSync(join(workspace, SECRET_FOLDER, "thread-1"), { recursive: true });
   secret = join(workspace, SECRET_FOLDER, "thread-1", "card-1");

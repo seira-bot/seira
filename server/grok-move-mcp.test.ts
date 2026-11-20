@@ -45,11 +45,11 @@ describe("the move MCP a Bot in Grok Bot talks to", () => {
       stray: "x",
     } });
     expect(sent).toEqual({ refused: false, text: "Arrived in Seira. Tango: 1 skill, 0 routines, 2 memories. Left out: 1 skill without instructions. Send those again with their full text if the Bot has it. The person can now import it in Seira, under Settings → Import & export." });
-    expect(call(to, "send_export", { document: JSON.stringify(document("Maus")) }).refused).toBe(false);
+    expect(call(to, "send_export", { document: JSON.stringify(document("Seira")) }).refused).toBe(false);
     expect(call(to, "send_export", { document: document("tango", { memories: ["more"] }) }).refused).toBe(false);
 
     expect(to.inbox.arrivals.map(({ seq, at, botNames }) => ({ seq, at, botNames }))).toEqual([
-      { seq: 1, at: 7, botNames: ["Tango"] }, { seq: 2, at: 7, botNames: ["Maus"] }, { seq: 3, at: 7, botNames: ["tango"] },
+      { seq: 1, at: 7, botNames: ["Tango"] }, { seq: 2, at: 7, botNames: ["Seira"] }, { seq: 3, at: 7, botNames: ["tango"] },
     ]);
     const kept = to.inbox.arrivals[0]!.text;
     expect(kept).not.toMatch(/stray|anything|sk-abcdefghij/);

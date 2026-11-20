@@ -32,7 +32,7 @@ describe("generic rules", () => {
       "TOKEN=${TOKEN}",
       "API_KEY=<your key>",
       "SECRET='$SECRET_FROM_VAULT'",
-      "childEnv.OMB_CLOUD_X_TOKEN = parentEnv.OMB_CLOUD_X_TOKEN;",
+      "childEnv.SEIRA_CLOUD_X_TOKEN = parentEnv.SEIRA_CLOUD_X_TOKEN;",
       "const DEPLOY_TOKEN = process.env.DEPLOY_TOKEN_VALUE",
     ]) {
       expect(one(text)).toEqual([]);

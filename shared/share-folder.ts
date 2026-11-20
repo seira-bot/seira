@@ -31,7 +31,7 @@ export const SHARE_FOLDER_MAX_FILES = 300;
 export const SHARE_FOLDER_MAX_BYTES = PACKAGE_MAX_BYTES + 1024 * 1024;
 export const MANIFEST_NAMES = { bot: "bot.md", department: "team.md" } as const satisfies Record<TemplateScope, string>;
 /** Older shapes a folder or repository may hold instead of bot.md or team.md. */
-const LEGACY_MARKDOWN = "botmrr.md", LEGACY_MANIFEST = "team.mausteam.json";
+const LEGACY_MARKDOWN = "botmrr.md", LEGACY_MANIFEST = "team.seirateam.json";
 
 const PICTURE_TYPES = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp" } as const;
 const PICTURE_EXTENSIONS: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
@@ -47,7 +47,7 @@ export function isSkillFilePath(path: string): boolean {
 
 export type ShareFolder =
   | { kind: "package"; scope: TemplateScope; document: PackageDocument }
-  /** A legacy team.mausteam.json, parsed by the server's team manifest reader. */
+  /** A legacy team.seirateam.json, parsed by the server's team manifest reader. */
   | { kind: "manifest"; manifest: unknown };
 
 const refuse = (message: string) => new PackageFormatError("invalid", message);
@@ -64,7 +64,7 @@ export function safeFolderPath(path: string): string | null {
  * folder is ignored. */
 export function isShareFolderPath(path: string): boolean {
   return path === MANIFEST_NAMES.bot || path === MANIFEST_NAMES.department || path === LEGACY_MARKDOWN || path === LEGACY_MANIFEST ||
-    /^[\w.-]+\.openmaus\.json$/.test(path) || SKILL_PATH.test(path) || PICTURE_PATH.test(path) || isSkillFilePath(path);
+    /^[\w.-]+\.seira\.json$/.test(path) || SKILL_PATH.test(path) || PICTURE_PATH.test(path) || isSkillFilePath(path);
 }
 
 function textOf(value: string | Uint8Array | undefined): string | undefined {
@@ -211,7 +211,7 @@ export function readShareFolder(input: ShareFolderFiles): ShareFolder {
   }
   const legacy = textOf(files[LEGACY_MARKDOWN]);
   if (legacy !== undefined) return { kind: "package", scope: "department", document: parsePackageDocument(legacy, { trust: "file" }) };
-  const json = Object.keys(files).find((path) => path === LEGACY_MANIFEST || path.endsWith(".openmaus.json"));
+  const json = Object.keys(files).find((path) => path === LEGACY_MANIFEST || path.endsWith(".seira.json"));
   if (json) {
     let value: unknown;
     try {

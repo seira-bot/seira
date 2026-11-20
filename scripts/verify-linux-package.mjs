@@ -164,7 +164,7 @@ function verifyCompliance(licenses, label) {
   const registryIds = new Set();
   for (const component of registry) {
     const packageId = component.properties?.find(
-      (property) => property.name === "openmausbot:cargo:package-id",
+      (property) => property.name === "seira:cargo:package-id",
     )?.value;
     if (typeof packageId !== "string" || !packageId.startsWith("registry+")) {
       fail(`${label} SBOM registry component has no exact Cargo package ID`);
@@ -398,7 +398,7 @@ function verifyCloudflaredResources(resources, label, { directoryMode = 0o755 } 
 const appImage = exactlyOne(".AppImage");
 const deb = exactlyOne(".deb");
 const unpacked = path.join(releaseDir, "linux-unpacked");
-const executable = path.join(unpacked, "openmausbot");
+const executable = path.join(unpacked, "seira");
 const resources = path.join(unpacked, "resources");
 
 requireExecutable(appImage);
@@ -422,7 +422,7 @@ const fields = execFileSync(
   { encoding: "utf8" },
 );
 for (const expected of [
-  "Package: openmausbot",
+  "Package: seira",
   "Architecture: amd64",
   "Maintainer: Milind Soni",
   "Section: utils",
@@ -431,7 +431,7 @@ for (const expected of [
   if (!fields.includes(expected)) fail(`DEB metadata is missing ${JSON.stringify(expected)}`);
 }
 
-const extracted = mkdtempSync(path.join(tmpdir(), "omb-deb-verify-"));
+const extracted = mkdtempSync(path.join(tmpdir(), "seira-deb-verify-"));
 try {
   execFileSync("dpkg-deb", ["--extract", deb, extracted]);
   const debAppRoot = path.join(extracted, "opt", "Seira");
@@ -467,15 +467,15 @@ try {
     "hicolor",
     "scalable",
     "apps",
-    "openmausbot.svg",
+    "seira.svg",
   );
   requireFile(desktopFile);
   requireFile(scalableIcon);
   const desktop = readFileSync(desktopFile, "utf8");
   for (const expected of [
     "Name=Seira",
-    "Exec=/opt/Seira/openmausbot %U",
-    "Icon=openmausbot",
+    "Exec=/opt/Seira/seira %U",
+    "Icon=seira",
     "StartupWMClass=bot.seira.app",
     "Categories=Utility;",
   ]) {
@@ -486,7 +486,7 @@ try {
   rmSync(extracted, { recursive: true, force: true });
 }
 
-const appImageExtracted = mkdtempSync(path.join(tmpdir(), "omb-appimage-verify-"));
+const appImageExtracted = mkdtempSync(path.join(tmpdir(), "seira-appimage-verify-"));
 try {
   const offset = execFileSync(appImage, ["--appimage-offset"], {
     encoding: "utf8",

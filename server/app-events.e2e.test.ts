@@ -19,7 +19,7 @@ beforeAll(async () => {
   broker = await startBrokerFake();
   owner = await broker.install();
   gmail = broker.account(owner.userId, "gmail", "sales");
-  fixture = await launchVerificationServer({ ...process.env, OMB_COMPOSIO_BROKER_URL: broker.url, OMB_COMPOSIO_BROKER_TOKEN: owner.token }, undefined, undefined, undefined, undefined, { scripted: true });
+  fixture = await launchVerificationServer({ ...process.env, SEIRA_COMPOSIO_BROKER_URL: broker.url, SEIRA_COMPOSIO_BROKER_TOKEN: owner.token }, undefined, undefined, undefined, undefined, { scripted: true });
   evidence.push({ fixture: fixture.info, broker: broker.url });
 }, 60_000);
 

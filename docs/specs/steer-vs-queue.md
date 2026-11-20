@@ -11,8 +11,8 @@ Native mid-turn steering EXISTS; no child kill or restart is needed.
   `/opt/homebrew/bin/codex.opencodex-real` -> `/opt/homebrew/Caskroom/codex/0.154.0/bin/codex`
   (native Rust build, Homebrew cask; not the npm package).
 - Live stdio probe of `codex.opencodex-real app-server` (transcript:
-  /private/tmp/omb-steer-probe2.log on this machine): server identifies as
-  `omb-probe/0.154.0`. `turn/steer`, `turn/interrupt`, and `thread/queue/add`
+  /private/tmp/seira-steer-probe2.log on this machine): server identifies as
+  `seira-probe/0.154.0`. `turn/steer`, `turn/interrupt`, and `thread/queue/add`
   all exist as JSON-RPC methods (empty params -> error `-32600` "Invalid
   request: missing field `threadId`"; an unknown method would return `-32601`).
   With a well-formed threadId, `turn/steer` dispatches without param errors.

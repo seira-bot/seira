@@ -1,4 +1,4 @@
-// Who this server publishes pages as: the MausBot account it is signed in to. One mechanism on every surface: ask the
+// Who this server publishes pages as: the Seira account it is signed in to. One mechanism on every surface: ask the
 // Admin for a short-lived upload token, then send the page to the pages Worker with it. Only the credential differs:
 //   a Cloud home signs its request with the bootstrap secret it already shares with the Admin;
 //   a desktop's main process fetches its sign-in's own pages token and hands it over on the private parent port.
@@ -12,22 +12,22 @@ export type PagesAccess =
   | { kind: "desktop"; url: string; token: string }
   | { kind: "home"; url: string; machineId: string; secret: string };
 
-/** Must match openmaus-cloud server/cloud-pages.ts `homeSignature`: each Admin route signs over a label of its own
- * (`omb-pages-v1` for page tokens, `omb-community-v1` for community submissions). */
-export function pagesHomeSignature(secret: string, machineId: string, timestamp: string, nonce: string, body: string, label = "omb-pages-v1"): string {
+/** Must match seira-cloud server/cloud-pages.ts `homeSignature`: each Admin route signs over a label of its own
+ * (`seira-pages-v1` for page tokens, `seira-community-v1` for community submissions). */
+export function pagesHomeSignature(secret: string, machineId: string, timestamp: string, nonce: string, body: string, label = "seira-pages-v1"): string {
   const bodyHash = createHash("sha256").update(body).digest("base64url");
   return createHmac("sha256", secret).update(`${label}\n${machineId}\n${timestamp}\n${nonce}\n${bodyHash}`).digest("base64url");
 }
 
 /** The headers that prove a request to an Admin route comes from this account. */
-export function pagesAuthHeaders(access: PagesAccess, body: string, now = Date.now(), label = "omb-pages-v1"): Record<string, string> {
+export function pagesAuthHeaders(access: PagesAccess, body: string, now = Date.now(), label = "seira-pages-v1"): Record<string, string> {
   if (access.kind === "desktop") return { authorization: `Bearer ${access.token}` };
   const timestamp = String(Math.floor(now / 1000)), nonce = randomBytes(18).toString("base64url");
   return {
-    "x-omb-cloud-machine": access.machineId,
-    "x-omb-cloud-timestamp": timestamp,
-    "x-omb-cloud-nonce": nonce,
-    "x-omb-cloud-signature": `v1=${pagesHomeSignature(access.secret, access.machineId, timestamp, nonce, body, label)}`,
+    "x-seira-cloud-machine": access.machineId,
+    "x-seira-cloud-timestamp": timestamp,
+    "x-seira-cloud-nonce": nonce,
+    "x-seira-cloud-signature": `v1=${pagesHomeSignature(access.secret, access.machineId, timestamp, nonce, body, label)}`,
   };
 }
 
@@ -46,10 +46,10 @@ function adminUrl(value: unknown): string | null {
   }
 }
 
-/** `{ type: "openmausbot:included-pages", access: { url, token } | null }` from the desktop's main process. True when it
+/** `{ type: "seira:included-pages", access: { url, token } | null }` from the desktop's main process. True when it
  * was one (then applied), false for any other message; a malformed one throws and changes nothing. */
 export function applyIncludedPagesMessage(message: unknown): boolean {
-  if (!message || typeof message !== "object" || (message as { type?: unknown }).type !== "openmausbot:included-pages") return false;
+  if (!message || typeof message !== "object" || (message as { type?: unknown }).type !== "seira:included-pages") return false;
   const access = (message as { access?: unknown }).access;
   if (access === null) {
     desktopPages = null;
@@ -58,7 +58,7 @@ export function applyIncludedPagesMessage(message: unknown): boolean {
   }
   const { url, token } = (access && typeof access === "object" ? access : {}) as { url?: unknown; token?: unknown };
   const target = adminUrl(url);
-  if (typeof token !== "string" || !/^omb_pd_[A-Za-z0-9_-]{43}$/.test(token) || !target) throw new Error("invalid pages access");
+  if (typeof token !== "string" || !/^seira_pd_[A-Za-z0-9_-]{43}$/.test(token) || !target) throw new Error("invalid pages access");
   desktopPages = { url: target, token };
   desktopPagesNotOffered = false;
   return true;
@@ -69,7 +69,7 @@ export function pagesNotOffered(home: unknown): boolean {
   return !home && !desktopPages && desktopPagesNotOffered;
 }
 
-/** A Cloud home's own credential, else a signed-in desktop's; null when this server is signed in to no MausBot account. */
+/** A Cloud home's own credential, else a signed-in desktop's; null when this server is signed in to no Seira account. */
 export function pagesAccess(home: { adminOrigin: string; machineId: string; bootstrapSecret: string } | null): PagesAccess | null {
   if (home) return { kind: "home", url: `${home.adminOrigin}${PAGES_TOKEN_PATH}`, machineId: home.machineId, secret: home.bootstrapSecret };
   return desktopPages ? { kind: "desktop", ...desktopPages } : null;

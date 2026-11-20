@@ -33,13 +33,13 @@ export function searchMessagesInDatabase(database: DatabaseSync, query: string, 
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
   // SQLite's built-in lower() folds ASCII only; match the query and snippet's Unicode lowercase rules.
-  database.function("omb_search_lower", { deterministic: true }, (value) => typeof value === "string" ? value.toLowerCase() : null);
+  database.function("seira_search_lower", { deterministic: true }, (value) => typeof value === "string" ? value.toLowerCase() : null);
   const pattern = `%${needle.replace(/([\\%_])/g, "\\$1")}%`;
   const scope = threadId ? "thread_id = ? AND " : "";
   const statement = database.prepare(
     "SELECT thread_id, id, at, role, kind, text, json_extract(json, '$.tool.name') AS tool_name, json_extract(json, '$.from.name') AS from_name FROM messages " +
-      `WHERE ${scope}((kind = 'text' AND text IS NOT NULL AND omb_search_lower(text) LIKE ? ESCAPE '\\') ` +
-      "   OR (kind = 'activity' AND tool_name IS NOT NULL AND omb_search_lower(tool_name) LIKE ? ESCAPE '\\')) " +
+      `WHERE ${scope}((kind = 'text' AND text IS NOT NULL AND seira_search_lower(text) LIKE ? ESCAPE '\\') ` +
+      "   OR (kind = 'activity' AND tool_name IS NOT NULL AND seira_search_lower(tool_name) LIKE ? ESCAPE '\\')) " +
       "ORDER BY at DESC LIMIT ?",
   );
   const rows = (threadId

@@ -15,7 +15,7 @@ import {
 export const CUSTOMER_RUN_JOBS = ["start", "stop", "restart", "update", "status", "host-health", "backup"] as const satisfies readonly JobType[];
 
 /**
- * Kinds only root on the server may run (`mausbot-connector job <kind>`), never the Admin:
+ * Kinds only root on the server may run (`seira-connector job <kind>`), never the Admin:
  * - `self-update` replaces the connector, and with it every rule in this file. An older connector does not know this
  *   mode at all, so the Admin asking for one would undo the mode. The owner replaces the connector, or nobody does.
  * - `restore` puts older data back over what is there.
@@ -31,7 +31,7 @@ export const CUSTOMER_RUN_LOCAL_JOBS = ["self-update", "restore"] as const satis
  * - `backup`: nothing. Copies the data to a Docker volume on this server; it never removes a copy the owner made.
  * - `status`, `host-health`: nothing. They read.
  */
-export const CUSTOMER_HOME_IMAGE = /^ghcr\.io\/milind-soni\/openmausbot@sha256:[0-9a-f]{64}$/;
+export const CUSTOMER_HOME_IMAGE = /^ghcr\.io\/milind-soni\/seira@sha256:[0-9a-f]{64}$/;
 
 /** Who sent a job: the Admin over the connection, or root on this server. */
 export type JobSource = "admin" | "local";
@@ -42,7 +42,7 @@ const allowed = (type: unknown, by: JobSource): boolean =>
 /** Why this server refuses a job of `type` sent by `by`, or null when the kind is on that sender's list. */
 export function customerRunRefusal(type: string, by: JobSource): string | null {
   if (allowed(type, by)) return null;
-  if (allowed(type, "local")) return `This server is run by its owner, and only they may run ${type} here: sudo docker exec mausbot-connector mausbot-connector job ${type}`;
+  if (allowed(type, "local")) return `This server is run by its owner, and only they may run ${type} here: sudo docker exec seira-connector seira-connector job ${type}`;
   return `This server is run by its owner, and ${JSON.stringify(type.slice(0, 32))} is not a job that may run on it.`;
 }
 
@@ -147,12 +147,12 @@ export function answerCustomerRunRequest(request: CustomerRunRequest, facts: Ser
 // fields: that it answers as Seira and whether its bot box is on or off, its version, and its seat count. Every other field of those answers (the
 // server's name among them) is dropped here and never kept.
 
-export const HOME_READS = ["/api/health", "/.well-known/openmausbot/environment", "/api/seats"] as const;
+export const HOME_READS = ["/api/health", "/.well-known/seira/environment", "/api/seats"] as const;
 const RECORD_END = "\u001e";
 /** Run inside the home's container: curl comes with the image, and the home listens on its own loopback only. */
 export const HOME_READS_COMMAND = [
   "sh", "-c",
-  `for path in ${HOME_READS.join(" ")}; do curl -s --max-time 5 "http://127.0.0.1:\${OMB_PORT:-8799}$path" || true; printf '\\n\\036\\n'; done`,
+  `for path in ${HOME_READS.join(" ")}; do curl -s --max-time 5 "http://127.0.0.1:\${SEIRA_PORT:-8799}$path" || true; printf '\\n\\036\\n'; done`,
 ] as const;
 
 export interface HomeFacts {
@@ -175,14 +175,14 @@ const parsed = (text: string | undefined): Record<string, unknown> => {
 export function parseHomeReads(output: string): HomeFacts {
   const [health, environment, seats] = output.split(RECORD_END);
   const said = parsed(health);
-  return { answers: said.app === "openmausbot", version: versionOrNull(parsed(environment).version), seats: seatsOrNull(parsed(seats).seats), box: boxOnOff(said.box) };
+  return { answers: said.app === "seira", version: versionOrNull(parsed(environment).version), seats: seatsOrNull(parsed(seats).seats), box: boxOnOff(said.box) };
 }
 
 // 4. WHAT LEAVES THE SERVER. The heartbeat (every 30 seconds) and each job's reply, rebuilt here field by field. A
 // field that is not copied below is not sent. No name, no address, no file name, no log line.
 
 const VERSION = /^v?\d{1,5}\.\d{1,5}\.\d{1,5}(?:-[0-9A-Za-z.]{1,32})?$/;
-const IMAGE = /^ghcr\.io\/milind-soni\/(?:openmausbot|mausbot-connector)(?:@sha256:[0-9a-f]{64}|:[0-9A-Za-z][0-9A-Za-z._-]{0,63})$/;
+const IMAGE = /^ghcr\.io\/milind-soni\/(?:seira|seira-connector)(?:@sha256:[0-9a-f]{64}|:[0-9A-Za-z][0-9A-Za-z._-]{0,63})$/;
 /** An operating system, kernel or Docker version as the machine names itself: letters, digits and version punctuation. */
 const MACHINE = /^[0-9A-Za-z][0-9A-Za-z ._:+~()/#-]{0,79}$/;
 const COPY_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -275,7 +275,7 @@ const FAILURES: Record<JobErrorCode, string> = {
   expired_job: "The job's signature was too old.",
   pending_box: "The team's Owner has not accepted this server in Seira yet.",
 };
-const AUDIT_HINT = " The server's admin can read the reason with: mausbot-connector audit";
+const AUDIT_HINT = " The server's admin can read the reason with: seira-connector audit";
 
 function reducedError(error: JobError): JobError {
   const code: JobErrorCode = Object.hasOwn(FAILURES, error.code) ? error.code : "docker";

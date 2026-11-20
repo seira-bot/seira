@@ -51,9 +51,9 @@ or taller than the card shows a box the app never draws.
 ## Setup
 
 - A packaged build of the branch installed beside, never over, the installed
-  Seira (maintainers: the OMB2 side-by-side build). Never touch
-  `/Applications/Seira.app` or `~/.openmausbot`.
-- Launch with `OMB_DATA_DIR=$HOME/.openmausbot-test` unless the check needs real
+  Seira (maintainers: the SEIRA2 side-by-side build). Never touch
+  `/Applications/Seira.app` or `~/.seira`.
+- Launch with `SEIRA_DATA_DIR=$HOME/.seira-test` unless the check needs real
   bots. Only one running app may hold the key: quit any other Seira first.
 - Use composer dictation once first so Microphone and Speech Recognition are
   granted.

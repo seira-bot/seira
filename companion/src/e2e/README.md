@@ -35,23 +35,23 @@ Everything a Node, Swift or Kotlin implementer needs. MUST and NEVER are binding
 
 | Name | What | Where it lives |
 |---|---|---|
-| `T` | The computer's **transport key**, a long-lived P-256 key pair separate from the HPKE credential key | Private half: Electron secure credential document field `e2eTransportKey` (same pattern as `phoneSecretHpke`, `electron/phone-secret-identity.mjs`), handed to the sidecar in memory. Standalone sidecar: `$OMB_COMPANION_DIR/e2e-key.json`, mode 0600 |
+| `T` | The computer's **transport key**, a long-lived P-256 key pair separate from the HPKE credential key | Private half: Electron secure credential document field `e2eTransportKey` (same pattern as `phoneSecretHpke`, `electron/phone-secret-identity.mjs`), handed to the sidecar in memory. Standalone sidecar: `$SEIRA_COMPANION_DIR/e2e-key.json`, mode 0600 |
 | `keyId` | `SHA256(T.pub)[0:16]` (16 bytes) | Derived |
 | `hostId` | 16 random bytes, made by the control plane once per installation | D1 `installations.relay_host_id`; Electron credential document |
-| `cred` | A device token `omb_…` (`electron/desktop-companion-client.mjs:11`), or the pairing token `omb_pair_…` while a window is open | Phone keychain; desktop stores only `SHA256(cred)` hex (`companion/src/devices.ts:54`) |
-| `psk` | `HMAC-SHA256(key = SHA256(cred), msg = "omb-e2e psk v1" ‖ keyId)` (32 bytes) | Derived on both sides; the desktop computes it from the stored hash |
-| `adm` | `HMAC-SHA256(key = SHA256(cred), msg = "omb-relay admission v1" ‖ hostId)` (32 bytes) | The phone sends it to the relay; the relay only ever holds `SHA256(adm)` |
+| `cred` | A device token `seira_…` (`electron/desktop-companion-client.mjs:11`), or the pairing token `seira_pair_…` while a window is open | Phone keychain; desktop stores only `SHA256(cred)` hex (`companion/src/devices.ts:54`) |
+| `psk` | `HMAC-SHA256(key = SHA256(cred), msg = "seira-e2e psk v1" ‖ keyId)` (32 bytes) | Derived on both sides; the desktop computes it from the stored hash |
+| `adm` | `HMAC-SHA256(key = SHA256(cred), msg = "seira-relay admission v1" ‖ hostId)` (32 bytes) | The phone sends it to the relay; the relay only ever holds `SHA256(adm)` |
 
 `SHA256(cred)` is the raw 32-byte digest of the token string's UTF-8 bytes. The desktop gets it by hex-decoding `tokenHash`. Knowing `adm`
 reveals nothing about `psk`: the two are separate HMAC outputs under different labels.
 
 ## 3. Pairing payload (QR link) and descriptors
 
-- **The QR link** (`openmausbot://pair?...`, built by `shared/pairing-link.ts`) keeps every field it has today and gains one query parameter:
+- **The QR link** (`seira://pair?...`, built by `shared/pairing-link.ts`) keeps every field it has today and gains one query parameter:
   `e2e=<b64u(JSON)>`, where the JSON is:
 
 ```json
-{"v":1,"k":"<b64u 65-byte T.pub, 87 chars>","h":"<b64u 16-byte hostId, 22 chars>","r":["relay1.openmausbot.com","relay2.openmausbot.com"]}
+{"v":1,"k":"<b64u 65-byte T.pub, 87 chars>","h":"<b64u 16-byte hostId, 22 chars>","r":["relay1.seira.bot","relay2.seira.bot"]}
 ```
 
 - **Field rules:**
@@ -60,7 +60,7 @@ reveals nothing about `psk`: the two are separate HMAC outputs under different l
   - `h` and `r` are present only when the computer has a relay token (signed in, relay enabled). A device restricted to "Wi-Fi and
     Tailscale only" still gets them: they admit nothing by themselves, and they let a restricted phone away from home probe the relay
     now and then (4404 until it is allowed again).
-  - `r` lists 1 to 4 hostnames in the order to try. Each MUST match `^relay[1-9][0-9]?\.openmausbot\.com$`.
+  - `r` lists 1 to 4 hostnames in the order to try. Each MUST match `^relay[1-9][0-9]?\.seira\.bot$`.
   - `routes` is optional, `"any"` or `"local"`. `"local"` means the computer restricted this device to Wi-Fi and
     Tailscale; it may come with `h` and `r` (an older computer sends it without them). Absent means `"any"`, so a
     descriptor without `h` and `r` and without `"local"` only says the computer has no relay right now (signed out, or
@@ -92,9 +92,9 @@ reveals nothing about `psk`: the two are separate HMAC outputs under different l
 
 | Route | URL the phone dials | WebSocket subprotocol | Prologue `transport` byte |
 |---|---|---|---|
-| Wi-Fi | `ws://<lan or bonjour host>:<port>/v1/e2e` | `omb-e2e.v1` | `0x02` (direct) |
-| Tailscale | `ws://<name>.ts.net:<port>/v1/e2e` | `omb-e2e.v1` | `0x02` (direct) |
-| Relay | `wss://<r[i]>/v1/phone` | `omb-relay.v1` | `0x01` (relay) |
+| Wi-Fi | `ws://<lan or bonjour host>:<port>/v1/e2e` | `seira-e2e.v1` | `0x02` (direct) |
+| Tailscale | `ws://<name>.ts.net:<port>/v1/e2e` | `seira-e2e.v1` | `0x02` (direct) |
+| Relay | `wss://<r[i]>/v1/phone` | `seira-relay.v1` | `0x01` (relay) |
 
 The sidecar serves `/v1/e2e` on its existing `:8810` upgrade handler (`companion/src/index.ts:145`). It refuses any upgrade that carries an
 `Origin` header, the same rule as `companion/src/proxy.ts:637-639`.
@@ -122,7 +122,7 @@ NKpsk0:
 - `MixHash`, `MixKey`, `MixKeyAndHash`, `EncryptAndHash` and `DecryptAndHash` are exactly as Noise defines them.
 - `ENCRYPT(k, n, ad, p)` is AES-256-GCM with nonce `0x00000000 ‖ uint64_be(n)` and AAD `ad`.
 
-**Prologue** (11 bytes): `"omb-e2e/1" ‖ 0x00 ‖ transport`, with `transport` from section 4.
+**Prologue** (11 bytes): `"seira-e2e/1" ‖ 0x00 ‖ transport`, with `transport` from section 4.
 
 **Initialization, both sides:** `MixHash(prologue)`, then `MixHash(T.pub)` for the responder's pre-message `s`.
 
@@ -205,7 +205,7 @@ This uses the yamux wire format (`hashicorp/yamux` spec): a 12-byte header of `v
 - **Phone side:**
   - **iOS:** a loopback listener per session, `NWListener` on `127.0.0.1:<random>`. Each accepted TCP connection becomes one stream.
     - Before opening the stream the listener reads the first request head (up to 16 KiB, 2 s deadline). The head MUST carry
-      `X-OMB-Loopback: <b64u 32-byte per-launch secret>`.
+      `X-SEIRA-Loopback: <b64u 32-byte per-launch secret>`.
     - Anything else is closed without opening a stream.
     - `CompanionClient` adds that header on every request for an E2E connection, including `viewerSocketRequest` and `BrowserLiveClient`.
   - **Android:** an in-process `javax.net.SocketFactory` that returns a `java.net.Socket` subclass backed by one stream. There is no port.
@@ -215,7 +215,7 @@ This uses the yamux wire format (`hashicorp/yamux` spec): a 12-byte header of `v
 
 ## 9. Relay protocol (outside the encryption)
 
-- **Hosts.** The relay nodes are `relay1.openmausbot.com` and `relay2.openmausbot.com`, WSS on 443. Caddy terminates TLS and proxies to the
+- **Hosts.** The relay nodes are `relay1.seira.bot` and `relay2.seira.bot`, WSS on 443. Caddy terminates TLS and proxies to the
   relay on `127.0.0.1:8080`. Auth is always the **first WebSocket message**, which works with every WebSocket client (Node's built-in client
   included).
 - **Pre-auth rules:**
@@ -223,7 +223,7 @@ This uses the yamux wire format (`hashicorp/yamux` spec): a 12-byte header of `v
   - Anything else before auth, a binary message included, closes with 4400.
   - The WebSocket `maxPayload` is 70,000 bytes on every socket, before and after auth (1009 if exceeded).
 
-**Host control socket** (`GET /v1/host`, subprotocol `omb-relay.v1`, text JSON only):
+**Host control socket** (`GET /v1/host`, subprotocol `seira-relay.v1`, text JSON only):
 
 | Dir | Message | Meaning |
 |---|---|---|
@@ -264,10 +264,10 @@ own the `sid`, and a `sid` is single-use with a 10 s life. The relay then splice
 - Payload: `{"v":1,"kid":"k1","hid":"<b64u>","iid":"<installation id>","iat":<s>,"exp":<s>}` with `exp = iat + 12 h`.
 - The relay holds public keys only: `RELAY_TOKEN_KEYS = {"k1":"<b64u 32-byte Ed25519 public key>"}`, up to 2 for rotation.
 
-**Control plane endpoint:** `POST /v1/installations/self/relay-token` with `Authorization: Bearer <omb_install_…>`.
+**Control plane endpoint:** `POST /v1/installations/self/relay-token` with `Authorization: Bearer <seira_install_…>`.
 - **Request body:** `{"appVersion":"0.1.150","devices":{"e2e":2,"legacy":1}}`. The counts are for adoption gates and carry no
   identifiers.
-- **200 response:** `{"token","hostId","nodes":["relay1.openmausbot.com","relay2.openmausbot.com"],"expiresAt","refreshAfter"}`.
+- **200 response:** `{"token","hostId","nodes":["relay1.seira.bot","relay2.seira.bot"],"expiresAt","refreshAfter"}`.
   - `refreshAfter = iat + 1 h`.
   - `nodes` is ordered by rendezvous hash: highest `SHA256(hostId ‖ nodeName)[0:8]` first. A future US node is ranked first when the
     request's `cf.continent` is NA or SA.

@@ -38,7 +38,7 @@ try {
     "#!/usr/bin/env node",
     'import { existsSync, readFileSync } from "node:fs";',
     'const at = process.argv.indexOf("--mcp-config");',
-    'const bot = at < 0 ? null : JSON.parse(readFileSync(process.argv[at + 1], "utf8")).mcpServers?.agents?.env?.OMB_BOT_ID;',
+    'const bot = at < 0 ? null : JSON.parse(readFileSync(process.argv[at + 1], "utf8")).mcpServers?.agents?.env?.SEIRA_BOT_ID;',
     `process.env.FAKE_CLAUDE_MODE = bot === ${JSON.stringify(miso.id)} ? "exit-early" : existsSync(${JSON.stringify(gate)}) ? "happy" : "slow";`,
     `process.env.FAKE_CLAUDE_SLOW_FINISH_GATE = ${JSON.stringify(gate)};`,
     `await import(${JSON.stringify(pathToFileURL(join(root, "server/testing/fake-claude-cli.ts")).href)});`,
@@ -75,7 +75,7 @@ try {
   } finally { await waitForExit(proxy, { signal: "SIGTERM" }); }
   writeFileSync(gate, "finish the isolated setup turn");
   await control(["wait", "--bot", pepper.id, "--timeout", "15"]);
-  const { project: resultsFolder } = await api("POST", `/api/bots/${pepper.id}/projects`, { name: "OMB management", emoji: "🛠️" });
+  const { project: resultsFolder } = await api("POST", `/api/bots/${pepper.id}/projects`, { name: "Seira management", emoji: "🛠️" });
   const { task: resultsTask } = await api("POST", `/api/bots/${pepper.id}/tasks`, { title: "Fleet health reports", projectId: resultsFolder.id });
   await api("POST", `/api/bots/${pepper.id}/tasks/${pepper.threadId}`, {});
   const manual = await api("POST", "/api/routines", {

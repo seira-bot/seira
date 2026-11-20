@@ -1269,7 +1269,7 @@
       "app_settings"
     ]
   },
-  "default+mausbot": {
+  "default+seira": {
     "bytes": 58998,
     "sha256": "4c097600267cc2f1bc3a9aa49cf55a1d20a6af7fd067e92df5d0a3443e0d508b",
     "tools": [
@@ -1328,7 +1328,7 @@
       "mark_notifications_read"
     ]
   },
-  "skills+shared+voice+mausbot": {
+  "skills+shared+voice+seira": {
     "bytes": 64365,
     "sha256": "4a284363e182637f8bc48db19ed9dc89dfa872af0f16c9108a33926bd6ae4e8c",
     "tools": [

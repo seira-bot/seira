@@ -1,4 +1,4 @@
-// The OpenMausBot package file ("openmaus.package"), v1, v2 or v3 (v2 with
+// The Seira package file ("seira.package"), v1, v2 or v3 (v2 with
 // more skills); every reader returns v2 or v3. The single validation gate for
 // the server, the renderer and the Admin upload, so it imports only zod, yaml,
 // croner and pure shared modules (no Buffer, no node:*). The schema has no
@@ -11,11 +11,11 @@ import { BOT_PROFILE_LIMITS, fitsOnOneLine } from "./bot-profile.ts";
 import { redactSecretsInText } from "./redact.ts";
 import { normalizeCronSchedule } from "./routine-schedule.ts";
 import { isToolGroup } from "./tool-groups.ts";
-import { MAUS_COLOR_NAMES } from "./wire.ts";
+import { SEIRA_COLOR_NAMES } from "./wire.ts";
 import { isSkillName, parseSkillMd, scanSkillText, SKILL_FILE_MAX_BYTES } from "./skill-md.ts";
 import { skillFilesSchema } from "./skill-files.ts";
 
-export const PACKAGE_FORMAT = "openmaus.package";
+export const PACKAGE_FORMAT = "seira.package";
 /** The newest version this module reads and writes. */
 export const PACKAGE_VERSION = 3;
 /** Every writer stamps v2 unless the package needs v3's larger skill cap, so
@@ -231,7 +231,7 @@ const packageDocumentV1Schema = z.object({
       description: optionalText(4_000),
       soul: soulSchema.optional(),
       appearance: z.object({
-        color: z.enum(MAUS_COLOR_NAMES, { error: "is not supported" }),
+        color: z.enum(SEIRA_COLOR_NAMES, { error: "is not supported" }),
         mascotExpression: optionalText(80),
         mascotBody: optionalText(40),
       }),
@@ -245,7 +245,7 @@ const packageDocumentV1Schema = z.object({
       name: requiredText(80),
       agent: key,
       prompt: requiredText(20_000),
-      runOn: z.enum(["maus", "cloud"]),
+      runOn: z.enum(["seira", "cloud"]),
       schedule: packageRoutineScheduleSchema,
       durationMinutes: z.number().int().min(5).max(240),
       timeoutMinutes: z.number().int().min(5).max(1_440).optional(),
@@ -318,7 +318,7 @@ const avatarSchema = z.object({
 });
 
 const appearanceSchema = z.object({
-  color: z.enum(MAUS_COLOR_NAMES, { error: "is not supported" }),
+  color: z.enum(SEIRA_COLOR_NAMES, { error: "is not supported" }),
   mascotExpression: optionalText(80),
   mascotBody: optionalText(40),
   avatar: avatarSchema.optional(),
@@ -374,13 +374,13 @@ const routineSchema = z.object({
   /** Present = a room goal (runs on this computer, no continuity). */
   room: key.optional(),
   prompt: requiredText(20_000),
-  runOn: z.enum(["maus", "cloud"]),
+  runOn: z.enum(["seira", "cloud"]),
   schedule: packageRoutineScheduleSchema,
   durationMinutes: z.number().int().min(5).max(240),
   timeoutMinutes: z.number().int().min(1).max(1_440).optional(),
   overlap: z.enum(["skip", "queue"]).optional(),
   continuity: z.boolean().optional(),
-  /** Also run once each time OpenMausBot starts. Repeating routines only. */
+  /** Also run once each time Seira starts. Repeating routines only. */
   runOnStartup: z.boolean().optional(),
   /** The publisher's intent. File imports always arrive paused. */
   enabledAfterInstall: z.boolean(),
@@ -685,7 +685,7 @@ function checkV2References(pkg: PackageDefinition): void {
     if (!agents.has(routine.agent)) throw invalid(`Routine ${routine.key} references unknown agent: ${routine.agent}`);
     if (routine.room === undefined) continue;
     if (!rooms.has(routine.room)) throw invalid(`Routine ${routine.key} references unknown group chat: ${routine.room}`);
-    if (routine.runOn !== "maus") throw invalid(`Routine ${routine.key} is a group chat goal, which only runs on this computer`);
+    if (routine.runOn !== "seira") throw invalid(`Routine ${routine.key} is a group chat goal, which only runs on this computer`);
     if (routine.continuity) throw invalid(`Routine ${routine.key} is a group chat goal, which cannot carry continuity`);
     // The goal scheduler refuses a lead who is not in the room.
     if (!roomMembers.get(routine.room)!.has(routine.agent)) {

@@ -9,16 +9,16 @@ export const BASE_IMAGE = `${BASE_IMAGE_REPOSITORY}@${BASE_IMAGE_DIGEST}`;
 // Image and container labels, not this mutable tag, decide compatibility.
 export const IMAGE_REPOSITORY = "localhost/seira/cua-local-vm";
 export const IMAGE_LAYER_VERSION = "9";
-export const IMAGE_LAYER_LABEL = "com.openmausbot.image-layer";
+export const IMAGE_LAYER_LABEL = "com.seira.image-layer";
 export const IMAGE = `${IMAGE_REPOSITORY}:driver-${CUA_DRIVER_VERSION}-v${IMAGE_LAYER_VERSION}`;
-export const OPENMAUSBOT_IMAGE = `localhost/openmausbot/cua-local-vm:driver-${CUA_DRIVER_VERSION}-v${IMAGE_LAYER_VERSION}`;
-export const MANAGED_LABEL = "com.openmausbot.local-vm";
-export const DRIVER_LABEL = "com.openmausbot.cua-driver";
-export const BASE_IMAGE_LABEL = "com.openmausbot.cua-base";
+export const SEIRA_IMAGE = `localhost/seira/cua-local-vm:driver-${CUA_DRIVER_VERSION}-v${IMAGE_LAYER_VERSION}`;
+export const MANAGED_LABEL = "com.seira.local-vm";
+export const DRIVER_LABEL = "com.seira.cua-driver";
+export const BASE_IMAGE_LABEL = "com.seira.cua-base";
 const GUEST_HOME = "/home/cua";
 export const VM_WORKSPACE_GUEST = `${GUEST_HOME}/workspace`;
-export const CUA_SOCKET = "/run/user/1000/openmausbot-cua.sock";
-export const CUA_EXECUTABLE = "/usr/local/libexec/openmausbot/cua-driver";
+export const CUA_SOCKET = "/run/user/1000/seira-cua.sock";
+export const CUA_EXECUTABLE = "/usr/local/libexec/seira/cua-driver";
 
 const LINUX_WHEELS = {
   x86_64: {
@@ -73,7 +73,7 @@ ${workspacePreparationDockerfile(VM_WORKSPACE_GUEST)}
 # A bot's own desktop: a 200 ms (not 800) watch for windows an action opens still sees Firefox popups; no cursor glide; plain logs; Chrome's own sandbox off, since it needs namespaces this hardened container (capabilities dropped, runtime seccomp) refuses and Chrome exits with code 21; the container is the isolation boundary here. --grant existing-profile lets the bot attach the browser tools to Chromium it opened on this desktop; without it every attach is refused with browser_consent_required.
 RUN printf '%s\\n' \\
       '#!/bin/sh' \\
-      '/usr/local/bin/prepare-openmausbot-workspace.sh' \\
+      '/usr/local/bin/prepare-seira-workspace.sh' \\
       'attempt=0' \\
       'until DISPLAY=:1 xset q >/dev/null 2>&1; do' \\
       '  attempt=$((attempt + 1))' \\
@@ -81,12 +81,12 @@ RUN printf '%s\\n' \\
       '  sleep 1' \\
       'done' \\
       'exec env CUA_DRIVER_BROWSER_NO_SANDBOX=1 CUA_DRIVER_INSTALL_CHANNEL=python_package CUA_DRIVER_RS_TELEMETRY_ENABLED=0 CUA_DRIVER_WINDOW_CHANGE_TIMEOUT_MS=200 NO_COLOR=1 ${CUA_EXECUTABLE} serve --socket ${CUA_SOCKET} --permission-mode standard --grant existing-profile --cursor-reduced-motion on' \\
-      > /usr/local/bin/start-openmausbot-cua-driver.sh \\
-    && chmod 0755 /usr/local/bin/start-openmausbot-cua-driver.sh
+      > /usr/local/bin/start-seira-cua-driver.sh \\
+    && chmod 0755 /usr/local/bin/start-seira-cua-driver.sh
 RUN printf '%s\\n' \\
       '' \\
-      '[program:openmausbot-cua-driver]' \\
-      'command=/usr/local/bin/start-openmausbot-cua-driver.sh' \\
+      '[program:seira-cua-driver]' \\
+      'command=/usr/local/bin/start-seira-cua-driver.sh' \\
       'user=cua' \\
       'environment=HOME="/home/cua",USER="cua",DISPLAY=":1"' \\
       'autorestart=true' \\

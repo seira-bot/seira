@@ -34,7 +34,7 @@ function world(overrides: Partial<CloudHealthDeps> = {}) {
   const listeners = new Set<(event: RuntimeEvent) => void>();
   const bus = { subscribe: (listener: (event: RuntimeEvent) => void) => { listeners.add(listener); return () => listeners.delete(listener); } };
   const health = createCloudHealth({
-    store, bus, dataDir: DATA_DIR, eventsDir: EVENTS_DIR, version: "0.1.120", image: `registry.fly.io/omb-cloud-home@sha256:${"b".repeat(64)}`,
+    store, bus, dataDir: DATA_DIR, eventsDir: EVENTS_DIR, version: "0.1.120", image: `registry.fly.io/seira-cloud-home@sha256:${"b".repeat(64)}`,
     engines: () => [{ instanceId: "claude", driverKind: "claudeAgent", snapshot: { state: "available", authenticated: true, version: "2.1.300" } }],
     connectors: () => null, browser: () => ({ available: true, installing: false, interrupted: 0 }), now, ...overrides,
   });
@@ -314,8 +314,8 @@ function routes(w: ReturnType<typeof world>) {
   let counter = 0;
   const sign = (target: string, options: { method?: string; key?: string; at?: number; nonce?: string; body?: string } = {}) => {
     const timestamp = String(Math.floor((options.at ?? w.now()) / 1000)), nonce = options.nonce ?? `nonce-${String(++counter).padStart(12, "0")}`;
-    return { "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
-      "x-omb-cloud-signature": `v1=${cloudRequestSignature(options.key ?? secret, timestamp, nonce, options.method ?? "GET", target, options.body ?? "")}` };
+    return { "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce,
+      "x-seira-cloud-signature": `v1=${cloudRequestSignature(options.key ?? secret, timestamp, nonce, options.method ?? "GET", target, options.body ?? "")}` };
   };
   const send = async (method: string, target: string, headers: Record<string, string>, body = "") => {
     const req = Object.assign(new PassThrough(), { method, url: target, headers, socket: { remoteAddress: "127.0.0.1" } }) as unknown as IncomingMessage;
@@ -381,8 +381,8 @@ describe("GET /api/cloud/health", () => {
     const healthSigned = sign(target);
     expect((await send("POST", CLOUD_PAIRING_PATH, { ...healthSigned, "content-type": "application/json" }, body)).status).toBe(401);
     const timestamp = String(Math.floor(w.now() / 1000)), nonce = "nonce-pairing-000001";
-    const paired = await send("POST", CLOUD_PAIRING_PATH, { "content-type": "application/json", "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
-      "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}` }, body);
+    const paired = await send("POST", CLOUD_PAIRING_PATH, { "content-type": "application/json", "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce,
+      "x-seira-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}` }, body);
     expect(paired.status).toBe(200);
     expect(paired.body.code).toMatch(/^[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/);
   });

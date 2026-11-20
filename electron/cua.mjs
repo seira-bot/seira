@@ -1,4 +1,4 @@
-// Packaged: an embedded cua-driver daemon, so macOS TCC grants attribute to OpenMausBot; dev attaches to CuaDriver.app.
+// Packaged: an embedded cua-driver daemon, so macOS TCC grants attribute to Seira; dev attaches to CuaDriver.app.
 // Agents use the stdio MCP proxy, which executes nothing; the host-owned daemon does.
 
 import { app, ipcMain } from "electron";
@@ -218,7 +218,7 @@ async function loadEmbeddedSdk() {
     return { ...embedded, ...permissions };
   }
   const isWindows = process.platform === "win32";
-  process.env.OPENMAUSBOT_CUA_SDK_LIBRARY = path.join(
+  process.env.SEIRA_CUA_SDK_LIBRARY = path.join(
     process.resourcesPath,
     "cua-sdk",
     "native",
@@ -261,9 +261,9 @@ async function attachStandalone(signal) {
 }
 
 function embeddedSocketPath() {
-  if (process.platform === "win32") return `\\\\.\\pipe\\cua-omb-${process.pid}`;
-  const preferred = path.join(os.tmpdir(), `cua-omb-${process.pid}.sock`);
-  return preferred.length < 100 ? preferred : `/tmp/cua-omb-${process.pid}.sock`;
+  if (process.platform === "win32") return `\\\\.\\pipe\\cua-seira-${process.pid}`;
+  const preferred = path.join(os.tmpdir(), `cua-seira-${process.pid}.sock`);
+  return preferred.length < 100 ? preferred : `/tmp/cua-seira-${process.pid}.sock`;
 }
 
 async function startEmbedded(binary, signal) {
@@ -334,7 +334,7 @@ export async function startCua({ attempt = 0 } = {}) {
   }
 
   const wantEmbedded =
-    process.platform === "win32" || app.isPackaged || process.env.OPENMAUSBOT_CUA_EMBEDDED === "1";
+    process.platform === "win32" || app.isPackaged || process.env.SEIRA_CUA_EMBEDDED === "1";
   let nextConnection;
 
   if (wantEmbedded) {

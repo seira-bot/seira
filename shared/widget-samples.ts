@@ -66,7 +66,7 @@ export const WIDGET_SAMPLES: Record<string, unknown> = {
   pullRequests: {
     type: "ListView",
     title: "Pull requests",
-    caption: "mausbot-mobile",
+    caption: "seira-mobile",
     meta: "3 open",
     children: [
       prRow(750, "iOS: mid-turn steer", "#750 · 4 files · passed 2h ago", "Ready", "success"),
@@ -205,7 +205,7 @@ export const WIDGET_SAMPLES: Record<string, unknown> = {
           { type: "Input", name: "email", label: "Email", placeholder: "Optional: where Scout can reply" },
           { type: "Label", value: "Note", fieldName: "note" },
           { type: "Textarea", name: "note", placeholder: "Anything Scout should know?", rows: 3 },
-          { type: "Row", gap: 2, children: [{ type: "Button", label: "Send feedback", submit: true, style: "primary" }, { type: "Button", label: "Open the docs", variant: "outline", iconEnd: "external-link", onClickAction: { type: "open_url", payload: { url: "https://mausbot.com/docs" } } }, { type: "Button", label: "Ask me later", variant: "ghost", onClickAction: { type: "feedback.later" } }] },
+          { type: "Row", gap: 2, children: [{ type: "Button", label: "Send feedback", submit: true, style: "primary" }, { type: "Button", label: "Open the docs", variant: "outline", iconEnd: "external-link", onClickAction: { type: "open_url", payload: { url: "https://seira.com/docs" } } }, { type: "Button", label: "Ask me later", variant: "ghost", onClickAction: { type: "feedback.later" } }] },
         ],
       },
     ],

@@ -19,7 +19,7 @@ The Worker answers on the custom domain `apps.seira.bot`.
 
 Forks should create their own D1 database and rate-limit namespaces, replace
 the IDs in `wrangler.jsonc`, deploy under their own Worker name, and set
-`OMB_COMPOSIO_BROKER_URL` in their packaged build. Running only the local
+`SEIRA_COMPOSIO_BROKER_URL` in their packaged build. Running only the local
 server with a Composio project key remains the no-Cloudflare self-host path.
 
 Set `REGISTRATION_MODE` to `closed` to stop issuing new installation tokens
@@ -28,7 +28,7 @@ without affecting existing users.
 ## App events (Composio triggers)
 
 The broker also receives Composio trigger events for every installation and
-queues them until the installation's OMB server collects them. A desktop
+queues them until the installation's Seira server collects them. A desktop
 needs no public URL: Composio posts to the broker, the server long-polls it.
 
 ```
@@ -46,8 +46,8 @@ Composio --signed POST--> /v1/composio/webhook --> D1 queue per installation <--
 | `PATCH /v1/triggers/:triggerId` `{enabled}` | installation token | Enables or disables the instance at Composio (only disabled once no other binding wants it). A config change is a new `POST` plus a `DELETE` of the old instance. |
 | `DELETE /v1/triggers/:triggerId` | installation token | Removes the binding, its queued events and drop counts, and the Composio instance once nothing else binds it. Also deletes an unbound instance of this installation's Composio user. |
 | `GET /v1/triggers` | installation token | Bindings beside Composio's view (`remote.state`: `enabled`, `disabled` or `missing`), `unbound` instances, drop counts per trigger, limits and today's usage: everything the server's reconciliation needs. |
-| `GET /v1/events?after=<seq>&wait=<0-25>&limit=<1-50>` + header `x-omb-poller` | installation token | Acks every event at or below `after`, then returns the next events in arrival order, holding up to `wait` seconds. One poller at a time per installation: another `x-omb-poller` gets 409 until the 90 s lease runs out. |
-| `POST /v1/events/test` `{triggerId, data}` | installation token | Queues a synthetic event (`type: "omb.test"`) through the same queue and limits. |
+| `GET /v1/events?after=<seq>&wait=<0-25>&limit=<1-50>` + header `x-seira-poller` | installation token | Acks every event at or below `after`, then returns the next events in arrival order, holding up to `wait` seconds. One poller at a time per installation: another `x-seira-poller` gets 409 until the 90 s lease runs out. |
+| `POST /v1/events/test` `{triggerId, data}` | installation token | Queues a synthetic event (`type: "seira.test"`) through the same queue and limits. |
 | `PUT /v1/installation/cloud` `{grant}` | installation token | Marks the installation as a paid Cloud's from an Admin-signed grant. |
 | `POST /v1/installation/share` `{for}` | installation token | A one-time code (10 minutes, only its hash kept) that lets the installation `for` act as this installation's Composio user. |
 | `POST /v1/installation/adopt` `{code}` | installation token | Redeems a code minted for this installation: from then on it acts as that Composio user (`shared_user_id`). Refused with 409 `has_connections` while it has active connected accounts of its own, which stay reachable. The code is spent either way. |
@@ -92,14 +92,14 @@ counts. Status events (`composio.trigger.disabled`,
 
 Registration is open, so a Cloud proves its plan with a grant the Cloud Admin
 signs. The grant is `v1.<machine id>.<signature>`, where the signature is
-`base64url(HMAC-SHA256(CLOUD_GRANT_SECRET, "omb-connected-apps-cloud:v1\n" + machineId))`:
+`base64url(HMAC-SHA256(CLOUD_GRANT_SECRET, "seira-connected-apps-cloud:v1\n" + machineId))`:
 
 ```js
 import { createHmac } from "node:crypto";
-const grant = `v1.${machineId}.${createHmac("sha256", CLOUD_GRANT_SECRET).update(`omb-connected-apps-cloud:v1\n${machineId}`).digest("base64url")}`;
+const grant = `v1.${machineId}.${createHmac("sha256", CLOUD_GRANT_SECRET).update(`seira-connected-apps-cloud:v1\n${machineId}`).digest("base64url")}`;
 ```
 
-The Admin sets it as the machine's `OMB_CLOUD_CONNECTED_APPS_GRANT` secret
+The Admin sets it as the machine's `SEIRA_CLOUD_CONNECTED_APPS_GRANT` secret
 for paid plans only. The Cloud's server presents it after registering
 (`server/cloud-connected-apps.ts`). One machine id holds the Cloud limit on one
 installation at a time: presenting the grant again moves it.
@@ -115,8 +115,8 @@ machine, at most once a minute per installation (`wake_requested_at`):
 ```
 POST <CLOUD_ADMIN_URL>/api/cloud/machines/wake
 content-type: application/json
-x-omb-wake-timestamp: <unix seconds>
-x-omb-wake-signature: v1=<base64url(HMAC-SHA256(CLOUD_GRANT_SECRET, "omb-cloud-wake:v1\n" + timestamp + "\n" + machineId))>
+x-seira-wake-timestamp: <unix seconds>
+x-seira-wake-signature: v1=<base64url(HMAC-SHA256(CLOUD_GRANT_SECRET, "seira-cloud-wake:v1\n" + timestamp + "\n" + machineId))>
 
 {"machineId":"<machine id>"}
 ```
@@ -159,7 +159,7 @@ changes nothing.
 6. Waking sleeping Clouds (at launch of a plan that sleeps): apply migration
    `0003_cloud_wake.sql` (step 1) before deploying the code that uses it, then
    set `CLOUD_ADMIN_URL` to the Cloud Admin's origin
-   (`https://cloud.openmausbot.com`). Either add it to `vars` in
+   (`https://cloud.seira.bot`). Either add it to `vars` in
    `wrangler.jsonc` in a PR, or `wrangler secret put CLOUD_ADMIN_URL`: a
    deploy replaces variables set in the dashboard, but keeps secrets. Without
    it (or without `CLOUD_GRANT_SECRET`) the broker never asks the Admin to wake

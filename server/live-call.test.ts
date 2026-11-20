@@ -169,7 +169,7 @@ describe("live startup context", () => {
     const text = liveInstructions({ name: "Rigel", title: "QA" }, { cloudHome: true });
     expect(text.split("\n")[0]).toBe(`You are Rigel, QA, an AI agent that runs on ${CLOUD_HOME_PLACE}.`);
     expect(text.split("\n")[0]).toBe("You are Rigel, QA, an AI agent that runs on the user's My Cloud, their always-on Seira in the cloud, not on their own computer.");
-    expect(text).not.toContain("OMB");
+    expect(text).not.toContain("Seira");
     expect(liveInstructions({ name: "Rigel" }, { cloudHome: false }).split("\n")[0]).toBe("You are Rigel, an AI agent that runs in Seira on the user's own computer.");
   });
 
@@ -243,12 +243,12 @@ describe("live URLs", () => {
   it("uses OpenAI unless a loopback test server is set", () => {
     expect(liveSessionsUrl(openAiLiveEndpoint({}))).toBe("https://api.openai.com/v1/live/sessions");
     expect(liveAttachUrl("sess_1", openAiLiveEndpoint({}))).toBe("wss://api.openai.com/v1/live/sessions/sess_1/attach");
-    const env = { OMB_OPENAI_LIVE_URL: "http://127.0.0.1:4555" };
+    const env = { SEIRA_OPENAI_LIVE_URL: "http://127.0.0.1:4555" };
     expect(liveSessionsUrl(openAiLiveEndpoint(env))).toBe("http://127.0.0.1:4555/v1/live/sessions");
     expect(liveAttachUrl("sess_1", openAiLiveEndpoint(env))).toBe("ws://127.0.0.1:4555/v1/live/sessions/sess_1/attach");
   });
   it("ignores an override that is not loopback", () => {
-    expect(liveBaseUrl({ OMB_OPENAI_LIVE_URL: "http://evil.example:80" })).toBe("https://api.openai.com");
+    expect(liveBaseUrl({ SEIRA_OPENAI_LIVE_URL: "http://evil.example:80" })).toBe("https://api.openai.com");
   });
   it("escapes the session id", () => {
     expect(liveAttachUrl("a/b", openAiLiveEndpoint({}))).toBe("wss://api.openai.com/v1/live/sessions/a%2Fb/attach");

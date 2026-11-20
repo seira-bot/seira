@@ -4,7 +4,7 @@ export type ServerPlatform = "aix" | "android" | "cygwin" | "darwin" | "freebsd"
 /** How an operator's server was installed. */
 export type ServerInstall = "npx" | "global" | "docker" | "source" | "podman-service";
 
-/** GET /.well-known/openmausbot/environment, served without auth, and the `environment` of a POST /api/auth/pair answer:
+/** GET /.well-known/seira/environment, served without auth, and the `environment` of a POST /api/auth/pair answer:
  * a saved connection checks it still reaches the same server. */
 export interface EnvironmentDescriptor {
   environmentId: string;
@@ -32,7 +32,7 @@ export interface EnvironmentDescriptor {
     fileEdits?: true;
     /** A lent computer may say it runs the MCP servers saved here that run on it (mcp_tools, mcp_call). Never a team Cloud. */
     lentMcp?: true;
-    /** A person's own OMB Cloud home. */
+    /** A person's own Seira Cloud home. */
     cloudHome?: true;
     /** A team's Cloud home: `label` is the team's name. */
     cloudTeam?: true;

@@ -132,7 +132,7 @@ afterEach(async () => {
 });
 
 async function fixture(script: Script, provider: Provider = "openai-compat", apiKey = API_KEY_CANARY) {
-  const directory = mkdtempSync(join(tmpdir(), "omb-chat-tools-"));
+  const directory = mkdtempSync(join(tmpdir(), "seira-chat-tools-"));
   const requests: ChatRequest[] = [];
   const rpcStarted = deferred<{ name: string; args: Record<string, unknown> }>();
   const server = createServer(async (request, response) => {
@@ -1526,7 +1526,7 @@ describe("a turn with the person's Windows computer, the built-in browser and th
       composio: catalog(syntheticToolNames("router", 7)), data: catalog(syntheticToolNames("table", 5)), ...more };
     const names = Object.entries(others).flatMap(([key, server]) => key === "localComputer" ? ["computer"] : key === "custom" ? Object.keys(server as object) : [key]);
     // Started once the turn's tool session has every other server in hand, so the ones that start in the background are listed from the first request.
-    const gates = mkdtempSync(join(tmpdir(), "omb-chat-tools-settled-"));
+    const gates = mkdtempSync(join(tmpdir(), "seira-chat-tools-settled-"));
     cleanups.push(() => removeTempDir(gates));
     mountSettled.gates = gates;
     return { ...others, agents: catalog(syntheticToolNames("agent", agents), { after: names.map((name) => join(gates, name)) }) };
@@ -1550,7 +1550,7 @@ describe("a turn with the person's Windows computer, the built-in browser and th
   });
 
   it("lists fewer tools when servers that joined after a tool call go past the provider's limit", async () => {
-    const gate = mkdtempSync(join(tmpdir(), "omb-chat-tools-gate-"));
+    const gate = mkdtempSync(join(tmpdir(), "seira-chat-tools-gate-"));
     cleanups.push(() => removeTempDir(gate));
     const go = join(gate, "go");
     const notes = catalog(syntheticToolNames("note", 5), { after: [go] });

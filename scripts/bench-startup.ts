@@ -28,9 +28,9 @@ export function launchEnv(base: NodeJS.ProcessEnv, sandboxDir: string, timelineP
   env.XDG_CACHE_HOME = join(sandboxDir, "cache");
   env.XDG_DATA_HOME = join(sandboxDir, "data");
   env.XDG_RUNTIME_DIR = join(sandboxDir, "run");
-  env.OMB_COMPOSIO_BROKER = "off";
-  env.OMB_UPDATES_ORIGIN = "http://127.0.0.1:9";
-  env.OMB_STARTUP_TIMELINE = timelinePath;
+  env.SEIRA_COMPOSIO_BROKER = "off";
+  env.SEIRA_UPDATES_ORIGIN = "http://127.0.0.1:9";
+  env.SEIRA_STARTUP_TIMELINE = timelinePath;
   return env;
 }
 
@@ -129,7 +129,7 @@ function newSandbox(): string {
 async function main(): Promise<void> {
   const { values } = parseArgs({
     options: {
-      executable: { type: "string", default: join(ROOT, "release/linux-unpacked/openmausbot") },
+      executable: { type: "string", default: join(ROOT, "release/linux-unpacked/seira") },
       cold: { type: "string", default: "5" },
       warm: { type: "string", default: "5" },
       out: { type: "string" },

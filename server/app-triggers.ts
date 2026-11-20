@@ -84,7 +84,7 @@ const storedSchema = z.object({
   name: z.string(),
   prompt: z.string(),
   botId: z.string().min(1),
-  runOn: z.enum(["maus", "cloud"]),
+  runOn: z.enum(["seira", "cloud"]),
   enabled: z.boolean(),
   app: z.string().min(1),
   appName: z.string(),
@@ -276,7 +276,7 @@ export class AppTriggerManager {
     const config = triggerConfig(type, input.config ?? {}, filter);
     const now = this.now();
     const trigger: StoredTrigger = {
-      id: input.id ?? randomUUID(), name, prompt, botId: input.botId, runOn: input.runOn ?? "maus", enabled: input.enabled ?? true,
+      id: input.id ?? randomUUID(), name, prompt, botId: input.botId, runOn: input.runOn ?? "seira", enabled: input.enabled ?? true,
       app, appName: appLabel(app), event: type.slug, eventName: type.name || type.slug, delivery: type.type === "poll" ? "poll" : "instant",
       accountId: account.id, ...(account.alias ? { accountLabel: account.alias } : {}), config, ...(filter ? { filter } : {}),
       remote: { state: "pending" }, ...(input.sourceThreadId ? { sourceThreadId: input.sourceThreadId } : {}),
@@ -415,7 +415,7 @@ export class AppTriggerManager {
   async runNow(id: string): Promise<{ via: "service" | "here"; runId?: string } | null> {
     const trigger = this.triggers.find((candidate) => candidate.id === id);
     if (!trigger) return null;
-    const data = { omb_test: true, note: "A test run started from Seira." };
+    const data = { seira_test: true, note: "A test run started from Seira." };
     if (trigger.remote.triggerId && trigger.remote.state === "active" && this.options.service().available) {
       try {
         await this.options.broker.testEvent(trigger.remote.triggerId, data);

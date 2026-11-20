@@ -26,7 +26,7 @@ type ModelRequest = { lastUser: string; toolsSinceUser: number };
 
 async function chiefJob(test: (f: any) => Promise<void>) {
   // The approval deadline and the stall window elapse only on marker files, never on their own.
-  const parentEnv = { ...process.env, OMB_TEST_APPROVAL_CLOCK: "1", OMB_TEST_STALL_CLOCK: "1" };
+  const parentEnv = { ...process.env, SEIRA_TEST_APPROVAL_CLOCK: "1", SEIRA_TEST_STALL_CLOCK: "1" };
   const requests: ModelRequest[] = [];
   let answer: (request: ModelRequest) => ModelAnswer = () => ({ say: "OK" });
   let callSerial = 0;
@@ -520,7 +520,7 @@ it("tells a teammate the person's job is its task, and a routine's handoff is no
   writeFileSync(join(userData, "cua-connection.json"), JSON.stringify({ mode: "embedded", status: "ready", socketPath: join(f.dataDir, "cua.sock"),
     mcpCommand: "/fixture/cua-driver", mcpArgs: ["mcp"], mcpEnv: {} }), { mode: 0o600 });
   // A call acts only if it got the computer within a second (production: 5).
-  await f.restart("SIGTERM", { OMB_TEST_DESKTOP_CUA_CONNECTION: join(userData, "cua-connection.json"), OMB_COMPUTER_CALL_ACT_WITHIN_MS: "1000" });
+  await f.restart("SIGTERM", { SEIRA_TEST_DESKTOP_CUA_CONNECTION: join(userData, "cua-connection.json"), SEIRA_COMPUTER_CALL_ACT_WITHIN_MS: "1000" });
   const kai = await f.bot("Kai", "Engineering");
   f.script(f.clive.id,
     { key: "S0", match: ["PHASE-SCREEN-MARCH"], steps: [{ arguments: { bot_ids: [f.mira.id], message: "EXPORT-MARCH: export March from the invoice app on screen." } }], reply: "S0: Mira is exporting March." },

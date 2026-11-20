@@ -3,7 +3,7 @@ import { Check, ChevronLeft, ChevronRight, Trash2, type LucideIcon } from "lucid
 
 import { cn } from "@/lib/cn";
 import { useAdvancedMode } from "@/lib/interface-mode";
-import { MAUS_COLORS, type MausColor } from "@/lib/mascot";
+import { SEIRA_COLORS, type SeiraColor } from "@/lib/mascot";
 import { Switch } from "../SettingsPrimitives";
 
 export const rowCls = "flex min-h-[46px] items-center gap-2.5 px-3.5 py-[11px]";
@@ -74,8 +74,8 @@ export function RowIcon({ icon: Icon }: { icon: LucideIcon }) {
   );
 }
 
-export function BotSwitch({ color, checked, ...props }: Parameters<typeof Switch>[0] & { color: MausColor }) {
-  return <Switch {...props} checked={checked} style={checked ? { backgroundColor: MAUS_COLORS[color] } : undefined} />;
+export function BotSwitch({ color, checked, ...props }: Parameters<typeof Switch>[0] & { color: SeiraColor }) {
+  return <Switch {...props} checked={checked} style={checked ? { backgroundColor: SEIRA_COLORS[color] } : undefined} />;
 }
 
 export function SwitchRow({ title, hint, icon, checked, onChange, disabled, color, label, tooltip, extra, ...rest }: {
@@ -85,7 +85,7 @@ export function SwitchRow({ title, hint, icon, checked, onChange, disabled, colo
   checked: boolean;
   onChange: () => void;
   disabled?: boolean;
-  color: MausColor;
+  color: SeiraColor;
   label?: string;
   tooltip?: string;
   extra?: ReactNode;

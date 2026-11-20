@@ -12,7 +12,7 @@ import { BUNDLED_MODEL_MANIFEST, bundledEngineCatalog, engineCatalogFrom } from 
 import { parseModelManifest, type ManifestEngine, type ManifestPrice, type ModelManifestData } from "./schema.ts";
 
 export const MODEL_MANIFEST_URL = "https://raw.githubusercontent.com/seira-bot/seira/main/server/model-manifest/model-manifest.json";
-export const MANIFEST_DISABLE_ENV = "OMB_DISABLE_MODEL_MANIFEST_FETCH";
+export const MANIFEST_DISABLE_ENV = "SEIRA_DISABLE_MODEL_MANIFEST_FETCH";
 export const MANIFEST_TTL_MS = 60 * 60 * 1000;
 /** GitHub's raw CDN caches about this long, so a shorter window buys nothing. */
 export const MANIFEST_ON_DEMAND_TTL_MS = 5 * 60 * 1000;

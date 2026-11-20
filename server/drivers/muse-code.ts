@@ -30,13 +30,13 @@ import { turnStdioMcpServers } from "./turn-mcp.ts";
 
 const DRIVER_KIND = "museCode";
 const PROVIDER_ID = "meta";
-const CLIENT_INFO = { name: "openmausbot", title: "Seira", version: "1" };
+const CLIENT_INFO = { name: "seira", title: "Seira", version: "1" };
 const MUSE_CONTEXT_WINDOW = 1_048_576;
 const RE_ANCHOR_TURNS = 8;
 const STARTUP_TIMEOUT_MS = 30_000;
 const MODEL_LIST_TIMEOUT_MS = 20_000;
 /** Each model list runs in an empty folder named after this process: one that is cut off at exit goes with the process or the next start. */
-const MODELS_FOLDER_PREFIX = "omb-muse-models-";
+const MODELS_FOLDER_PREFIX = "seira-muse-models-";
 const INTERRUPT_CONFIRM_MS = 5_000;
 const SHUTDOWN_DRAIN_MS = 10_000;
 const SHUTDOWN_KILL_GRACE_MS = 2_000;
@@ -337,7 +337,7 @@ export const MuseCodeDriver: ProviderDriver<MuseConfig> = {
       try {
         sweepOrphanedTempFoldersOnce(MODELS_FOLDER_PREFIX);
         cwd = makeOwnedTempFolder(MODELS_FOLDER_PREFIX);
-        host = await startHost(["serve", "--disable-shell", "--disable-write", "--no-session-log"], cwd, "models", false, "openmausbot");
+        host = await startHost(["serve", "--disable-shell", "--disable-write", "--no-session-log"], cwd, "models", false, "seira");
         const result = await Promise.race([
           host.connection.request("model/list", {}),
           new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error("Muse Code did not list its models.")), MODEL_LIST_TIMEOUT_MS).unref?.()),

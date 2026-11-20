@@ -32,7 +32,7 @@ try {
   });
   const info = { ...fixture.info, launcherPid: process.pid, previewUrl: ui.previewUrl };
   console.log(JSON.stringify(info));
-  if (process.env.OMB_HELPER_EVIDENCE) writeFileSync(process.env.OMB_HELPER_EVIDENCE, JSON.stringify(info, null, 2));
+  if (process.env.SEIRA_HELPER_EVIDENCE) writeFileSync(process.env.SEIRA_HELPER_EVIDENCE, JSON.stringify(info, null, 2));
   await parkUntilSignal();
 } finally {
   await ui?.close();

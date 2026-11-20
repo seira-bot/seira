@@ -81,7 +81,7 @@ try {
   controller.signal.throwIfAborted();
   ui = await createServer({
     root: fileURLToPath(new URL("..", import.meta.url)),
-    cacheDir: fileURLToPath(new URL("../.omb-scratch/engine-preview-vite", import.meta.url)),
+    cacheDir: fileURLToPath(new URL("../.seira-scratch/engine-preview-vite", import.meta.url)),
     // Own the HTTP listener so Vite never installs a process-exit handler.
     server: { middlewareMode: { server: httpServer }, hmr: { server: httpServer }, proxy: { "/api": { target: fixture.info.url } } },
     plugins: [{ name: "isolated-engines", configureServer(server) {

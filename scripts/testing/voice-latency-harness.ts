@@ -151,16 +151,16 @@ async function main(): Promise<void> {
 
   // Marker routing, not ordered slots: the driver replays a user message over
   // several CLI launches, and slot order would misalign replies across them.
-  const WARMUP_MARKER = "omb voice probe warmup";
-  const markerPath = join(mkdtempSync(join(tmpdir(), "omb-voice-latency-")), "marker-replies.json");
+  const WARMUP_MARKER = "seira voice probe warmup";
+  const markerPath = join(mkdtempSync(join(tmpdir(), "seira-voice-latency-")), "marker-replies.json");
   const markerReplies: Record<string, string> = { [WARMUP_MARKER]: WARMUP_REPLY };
-  for (const reply of selected) markerReplies[`omb voice probe ${reply.id}`] = reply.text;
+  for (const reply of selected) markerReplies[`seira voice probe ${reply.id}`] = reply.text;
   writeFileSync(markerPath, JSON.stringify(markerReplies));
   const fakeEnv: NodeJS.ProcessEnv = {
     FAKE_CLAUDE_MARKER_REPLIES: markerPath,
     FAKE_CLAUDE_TOOL_CALLS: "[]",
     FAKE_CLAUDE_STREAM_CADENCE: `${CADENCE.chunkChars}:${CADENCE.intervalMs}`,
-    OMB_ELEVENLABS_API: stub.url,
+    SEIRA_ELEVENLABS_API: stub.url,
   };
 
   let fixture: VerificationServer | undefined;
@@ -177,7 +177,7 @@ async function main(): Promise<void> {
     const serverEnv: NodeJS.ProcessEnv = { ...process.env, ...fakeEnv };
     // Keyless record run: an exported live key would otherwise ride the
     // parent env into measurement, even though nothing reads it here.
-    delete serverEnv.OMB_TTS_KEY;
+    delete serverEnv.SEIRA_TTS_KEY;
     fixture = await launchVerificationServer(serverEnv, stop.signal, undefined,
       { binaryPath: binary, executablePath: chrome ?? "" });
 
@@ -204,16 +204,16 @@ async function main(): Promise<void> {
       title: "Isolated Seira Chat",
       logLevel: "warn",
     });
-    const session = { home: fixture.info.dataDir, session: `omb-voice-${new URL(fixture.info.url).port}`, chrome };
+    const session = { home: fixture.info.dataDir, session: `seira-voice-${new URL(fixture.info.url).port}`, chrome };
     browserEnv = sessionEnv(session, process.env);
     // Headless Chrome otherwise refuses media playback without a user gesture.
     browserEnv.AGENT_BROWSER_ARGS = [browserEnv.AGENT_BROWSER_ARGS ?? "", "--autoplay-policy=no-user-gesture-required"].filter(Boolean).join("\n");
-    await agentBrowser(binary, browserEnv, ["open", `${preview.previewUrl}?ombVoiceProbe=1`], 120_000);
+    await agentBrowser(binary, browserEnv, ["open", `${preview.previewUrl}?seiraVoiceProbe=1`], 120_000);
 
     // The `open` verb drops the query string, so the sink is installed by
-    // eval; the preview entry's ?ombVoiceProbe hook stays as documentation.
-    await evalInPage(binary, browserEnv, "window.__ombVoiceProbe = window.__ombVoiceProbe ?? []");
-    if (await evalInPage(binary, browserEnv, "Array.isArray(window.__ombVoiceProbe)") !== true) {
+    // eval; the preview entry's ?seiraVoiceProbe hook stays as documentation.
+    await evalInPage(binary, browserEnv, "window.__seiraVoiceProbe = window.__seiraVoiceProbe ?? []");
+    if (await evalInPage(binary, browserEnv, "Array.isArray(window.__seiraVoiceProbe)") !== true) {
       throw new Error("voice probe sink failed to install in the page");
     }
     // The app must render (and hydrate its event stream) before the first
@@ -228,7 +228,7 @@ async function main(): Promise<void> {
     const seen = new Set<string>();
 
     const pullSamples = async (): Promise<VoiceProbeSample[]> => {
-      const raw = await evalInPage(binary, browserEnv!, "JSON.stringify(window.__ombVoiceProbe)");
+      const raw = await evalInPage(binary, browserEnv!, "JSON.stringify(window.__seiraVoiceProbe)");
       if (typeof raw !== "string") return [];
       return JSON.parse(raw) as VoiceProbeSample[];
     };
@@ -266,7 +266,7 @@ async function main(): Promise<void> {
           console.error(`${scope} timeout: samples=${samples.length} fresh=${fresh.length} quiet=${quiet} own=${own.length} expected=${expectedChars}c href=${JSON.stringify(href)}`);
           try {
             const tail = readFileSync(fixture!.info.logPath, "utf8").split("\n").filter((line) =>
-              line.includes("[omb-turn]") || line.includes("[omb-error]") || line.includes("tts")).slice(-10);
+              line.includes("[seira-turn]") || line.includes("[seira-error]") || line.includes("tts")).slice(-10);
             for (const line of tail) console.error(`  srv ${line.slice(0, 240)}`);
           } catch {}
           return null;
@@ -315,7 +315,7 @@ async function main(): Promise<void> {
       const expected = manifest.replies.find((row) => row.id === reply.id)?.blocks;
       if (!expected) throw new Error(`manifest has no block count for ${reply.id}`);
       const timeout = 45_000 + expected * 8_000;
-      const frames = await driveTurn(`reply ${reply.id}`, `omb voice probe ${reply.id}`, reply.text.length, timeout);
+      const frames = await driveTurn(`reply ${reply.id}`, `seira voice probe ${reply.id}`, reply.text.length, timeout);
       // The turn's other frames carry chunk-sized prefixes or trailing
       // auxiliary messages; the corpus reply is identified by its length.
       const audioFrame = frames?.filter((frame) => frame.textChars === reply.text.length)
@@ -351,7 +351,7 @@ async function main(): Promise<void> {
       label,
       corpusFixtureId: corpusSha,
       baseCommit: BASE_COMMIT,
-      measuredBuildCommit: process.env.OMB_MEASURED_COMMIT ?? "(unset: worktree HEAD)",
+      measuredBuildCommit: process.env.SEIRA_MEASURED_COMMIT ?? "(unset: worktree HEAD)",
       date: new Date().toISOString(),
       machine: { platform: process.platform, arch: process.arch, cpuModel: cpus()[0]?.model ?? null },
       configSummary: { provider: "elevenlabs (record stub)", model: STUB_MODEL, voice: STUB_VOICE },

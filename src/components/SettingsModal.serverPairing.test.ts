@@ -52,7 +52,7 @@ describe("Settings → Phone & devices: server pairing card visibility", () => {
     expect(html).not.toContain('data-settings-page="phone"');
   });
 
-  it("on an OMB Cloud home, which is personal, tells the card so and offers no People section to invite anyone", () => {
+  it("on a Seira Cloud home, which is personal, tells the card so and offers no People section to invite anyone", () => {
     vi.stubGlobal("window", {});
     expect(render()).toContain(">People<");
     fixture.config = { cloudHome: true };

@@ -15,7 +15,7 @@ const HOST_ID = "lz81isB3BuNV6rHgYgG3Wg";
 const grant = (overrides = {}) => ({
   token: "eyJ2IjoxfQ.c2lnbmF0dXJl",
   hostId: HOST_ID,
-  nodes: ["relay1.openmausbot.com", "relay2.openmausbot.com"],
+  nodes: ["relay1.seira.bot", "relay2.seira.bot"],
   expiresAt: 10 * 60 * 60_000,
   refreshAfter: 60 * 60_000,
   ...overrides,
@@ -38,9 +38,9 @@ describe("the connection key", () => {
 
   it("goes to the sidecar with the relay identity only once the computer holds a token", () => {
     const identity = createE2EIdentity();
-    expect(companionE2EMessage(identity, null)).toEqual({ type: "openmausbot:companion-e2e", transportKey: identity.privateKey, relay: null });
+    expect(companionE2EMessage(identity, null)).toEqual({ type: "seira:companion-e2e", transportKey: identity.privateKey, relay: null });
     expect(companionE2EMessage(identity, grant()).relay).toEqual({ hostId: HOST_ID, nodes: grant().nodes, relayToken: grant().token });
-    expect(companionE2EMessage(null, grant())).toEqual({ type: "openmausbot:companion-e2e", transportKey: null, relay: null });
+    expect(companionE2EMessage(null, grant())).toEqual({ type: "seira:companion-e2e", transportKey: null, relay: null });
   });
 });
 
@@ -165,7 +165,7 @@ describe("relay tokens", () => {
   it("reports only a fixed word: never a token, a server message or its code", async () => {
     const timers = manualTimers();
     const answers = [
-      () => Promise.reject(Object.assign(new Error("eyJ2IjoxfQ.c2lnbmF0dXJl leaked"), { code: "Bearer omb_install_secret" })),
+      () => Promise.reject(Object.assign(new Error("eyJ2IjoxfQ.c2lnbmF0dXJl leaked"), { code: "Bearer seira_install_secret" })),
       () => Promise.reject(Object.assign(new Error("busy"), { code: "rate_limited", status: 429 })),
     ];
     const service = createRelayTokenService({ fetchGrant: async () => answers.shift()(), onGrant: () => {}, ...timers, now: () => 0, random: () => 0.5 });
@@ -213,13 +213,13 @@ describe("the desktop's end-to-end connection", () => {
     await new Promise((resolve) => setImmediate(resolve));
     expect(e2e.enabled).toBe(true);
     expect(readE2EIdentity(document)?.publicKey).toBe(e2e.publicKey);
-    expect(posted.at(-1)).toMatchObject({ type: "openmausbot:companion-e2e", relay: { hostId: HOST_ID } });
+    expect(posted.at(-1)).toMatchObject({ type: "seira:companion-e2e", relay: { hostId: HOST_ID } });
     answer = Object.assign(new Error("off"), { code: "relay_unavailable" });
     e2e.tokenRejected();
     await new Promise((resolve) => setImmediate(resolve));
-    expect(posted.at(-1)).toEqual({ type: "openmausbot:companion-e2e", transportKey: readE2EIdentity(document).privateKey, relay: null });
+    expect(posted.at(-1)).toEqual({ type: "seira:companion-e2e", transportKey: readE2EIdentity(document).privateKey, relay: null });
     e2e.resumed();
-    expect(posted.at(-1)).toEqual({ type: "openmausbot:companion-e2e-redial" });
+    expect(posted.at(-1)).toEqual({ type: "seira:companion-e2e-redial" });
     e2e.stop();
   });
 

@@ -11,8 +11,8 @@ import { UI_TOOLS_DIR } from "./control-seira-ui.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const binary = resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env });
-const enabled = process.env.OMB_UI_E2E === "1" || Boolean(binary);
-if (!enabled) console.info("skipping computer panel focus UI e2e: set OMB_UI_E2E=1 to install the pinned browser");
+const enabled = process.env.SEIRA_UI_E2E === "1" || Boolean(binary);
+if (!enabled) console.info("skipping computer panel focus UI e2e: set SEIRA_UI_E2E=1 to install the pinned browser");
 
 (enabled ? it : it.skip)("hands the keyboard's open to the panel's tab, and the close back to the button", async () => {
   let child: ChildProcess | undefined;

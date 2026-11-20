@@ -1,7 +1,7 @@
 # Verifying Seira
 
 Seira has one development control surface: `pnpm control:seira`. It runs
-the published `openmausbot` verbs (docs/headless-cli.md), which call the MCP
+the published `seira` verbs (docs/headless-cli.md), which call the MCP
 tools in `scripts/mcp-server.ts`, so verification uses the same URL
 validation, task pinning, bounded transcripts, wait states, and redaction as
 external MCP clients and scripts.
@@ -24,10 +24,10 @@ that exact child. The parent shell and the user's Seira data are
 untouched. Only `FAKE_CLAUDE_*` variables cross from the launcher's
 environment into that child, so a recipe can script the fake engine's mode,
 replies and tool calls without writing a wrapper CLI. Live calls add one
-exception: `OMB_OPENAI_LIVE_URL` crosses when it is a loopback
+exception: `SEIRA_OPENAI_LIVE_URL` crosses when it is a loopback
 `http://127.0.0.1:PORT` (the fake GPT-Live that
 `node --experimental-strip-types server/testing/fake-openai-live.ts` prints),
-and `OMB_OPENAI_LIVE_KEY` crosses only with it, so that key can only ever
+and `SEIRA_OPENAI_LIVE_KEY` crosses only with it, so that key can only ever
 reach the fake.
 
 Pass the printed URL explicitly from a second terminal:
@@ -53,7 +53,7 @@ Use only mapped, tested commands:
 - [OpenCode model variants through ACP](opencode-variants.md)
 - [Bot setup, model scope, and file continuity](bot-continuity.md)
 - [Reviewed Chief team setup and scoped deletion](team-setup.md)
-- [Seira, everyone's helper](mausbot.md)
+- [Seira, everyone's helper](seira.md)
 - [Profile proposal and credential-card lifecycle](proposal-cards.md)
 - [Full Access without duplicate approvals](full-access.md)
 - [Bots changing app settings, and the guards Full access cannot skip](app-settings.md)

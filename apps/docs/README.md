@@ -17,8 +17,8 @@ The site opens at `http://localhost:3000`.
 
 ```bash
 pnpm docs:build
-pnpm --filter @openmausbot/docs types:check
-pnpm --filter @openmausbot/docs lint
+pnpm --filter @seira/docs types:check
+pnpm --filter @seira/docs lint
 ```
 
 The changelog reads published releases from `seira-bot/seira` and caches the

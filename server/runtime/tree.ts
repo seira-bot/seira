@@ -5,7 +5,7 @@ import { terminal, type Assignee, type Assignment, type Mode, type Owner, type T
 export const CUT_TWICE = "Interrupted by another Seira restart after resuming once; not resumed again. Some of its steps may already have taken effect.";
 
 export const INTERRUPTED_OUTWARD = "Interrupted by a Seira restart after it already";
-const OLD_INTERRUPTED_OUTWARD = "Interrupted by an OpenMausBot restart after it already";
+const OLD_INTERRUPTED_OUTWARD = "Interrupted by a Seira restart after it already";
 
 const OUTWARD_SHOWN = 4;
 const OUTWARD_LABEL_MAX = 48;

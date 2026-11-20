@@ -1,6 +1,6 @@
 // Once the person's bots moved to My Cloud, the desktop window is one window onto it: main's own handlers in a real
 // headless Chrome (testing/one-workspace-fixture.ts), My Cloud a real Cloud-mode server and this computer its real,
-// frozen server (testing/cloud-send-fixture.ts). Screenshots go to OMB_ONE_WORKSPACE_SHOTS, else the fixture's folder.
+// frozen server (testing/cloud-send-fixture.ts). Screenshots go to SEIRA_ONE_WORKSPACE_SHOTS, else the fixture's folder.
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -10,8 +10,8 @@ import { launchCloudSendFixture, type CloudSendFixture } from "./cloud-send-fixt
 import { ensureUiBrowser, UI_TOOLS_DIR } from "./control-seira-ui.ts";
 import { launchHomeWorld, shotsDir, welcomed, type HomeWorld } from "./one-workspace-fixture.ts";
 
-const enabled = process.env.OMB_UI_E2E === "1" || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
-if (!enabled) console.info("skipping the one-window UI e2e: set OMB_UI_E2E=1 to install the pinned browser");
+const enabled = process.env.SEIRA_UI_E2E === "1" || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
+if (!enabled) console.info("skipping the one-window UI e2e: set SEIRA_UI_E2E=1 to install the pinned browser");
 
 const PAIR_FORM = "Boolean(document.querySelector('form input') && /pairing code|Connect to|Sign in to/.test(document.body.innerText))";
 
@@ -230,7 +230,7 @@ const PAIR_FORM = "Boolean(document.querySelector('form input') && /pairing code
 
   it("chat links and the Settings key open on My Cloud's page", async () => {
     await onCloudPage();
-    expect(world.openLink(`openmausbot://bot/${nova}`)).toBe(true);
+    expect(world.openLink(`seira://bot/${nova}`)).toBe(true);
     await until(() => page<string | null>("document.querySelector('textarea[aria-label^=\"Message\"]')?.getAttribute('aria-label') ?? null"), (label) => label === "Message Nova", 20_000, "Nova's chat");
     expect(new URL(world.window.url).origin).toBe(world.cloudOrigin);
     await world.window.screenshot(join(shots, "6-chat-link.png"));
@@ -245,10 +245,10 @@ const PAIR_FORM = "Boolean(document.querySelector('form input') && /pairing code
     await page("window.__sameLoad = true");
     await new Promise((resolve) => setTimeout(resolve, 4_000));
     expect(await page("window.__sameLoad === true"), "no reload while the version stays").toBe(true);
-    await fx.relaunch({ kill: false, cloud: { OMB_APP_VERSION: "0.1.999" } });
+    await fx.relaunch({ kill: false, cloud: { SEIRA_APP_VERSION: "0.1.999" } });
     await until(() => page<boolean>("window.__sameLoad === true"), (same) => same === false, 30_000, "the page to reload");
     await onCloudPage();
-    expect(await page("fetch('/.well-known/openmausbot/environment').then((response) => response.json()).then((env) => env.version)")).toBe("0.1.999");
+    expect(await page("fetch('/.well-known/seira/environment').then((response) => response.json()).then((env) => env.version)")).toBe("0.1.999");
   }, hostTimeout(180_000));
 
   // T3: the team switcher. The session lists a team; its Cloud is the team server at world.teamOrigin.

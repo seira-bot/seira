@@ -13,7 +13,7 @@ export interface TestCertificate { key: string; cert: string }
 
 /** A self-signed certificate for `names`, or undefined where no openssl runs. */
 export function testCertificate(names: string[]): TestCertificate | undefined {
-  const dir = mkdtempSync(join(tmpdir(), "omb-fake-smtp-cert-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-fake-smtp-cert-"));
   try {
     // A config of its own, so no system openssl.cnf is needed (Windows).
     writeFileSync(join(dir, "openssl.cnf"), [

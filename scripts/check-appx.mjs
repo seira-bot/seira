@@ -9,7 +9,7 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const EXPECTED = Object.freeze({
   displayName: "Seira",
   publisherDisplayName: "PT GLOBAL RAYA ORIS WIJAYA",
-  protocol: "openmausbot",
+  protocol: "seira",
 });
 
 /** electron-builder 26.15.3 writes the Identity Publisher in single quotes. */

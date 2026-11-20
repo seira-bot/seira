@@ -16,7 +16,7 @@ import { COMPUTER_ASK_TOOL_DEFINITIONS, COMPUTER_ASK_TOOL_NAMES } from "./agents
 import { IMAGE_TOOL_DEFINITIONS, IMAGE_TOOL_NAMES } from "./agents-image-tools.ts";
 import { HOSTING_TOOL_DEFINITIONS, HOSTING_TOOL_NAMES } from "./agents-hosting-tools.ts";
 import { MEETING_TOOL_DEFINITIONS, MEETING_TOOL_NAMES } from "./agents-meeting-tools.ts";
-import { MAUSBOT_TOOL_DEFINITIONS } from "./agents-mausbot-tools.ts";
+import { SEIRA_TOOL_DEFINITIONS } from "./agents-seira-tools.ts";
 import { PERSON_TOOL_DEFINITIONS } from "./agents-person-tools.ts";
 import { RESEARCH_TOOL_DEFINITIONS, RESEARCH_TOOL_NAMES, X_TOOL_NAMES } from "./agents-research-tools.ts";
 import { SHARE_TOOL_DEFINITIONS } from "./agents-share-tool.ts";
@@ -96,8 +96,8 @@ const TRIGGER_FIELDS_SCHEMA = {
   run_on: {
     type: "string",
     // "box" is Boat's historical run_on destination id (agents wire contract).
-    enum: ["maus", "box"],
-    description: "Omit normally: maus (default) = the bot's configured computer, INCLUDING a self-hosted VPS; box = its cloud computer.",
+    enum: ["seira", "box"],
+    description: "Omit normally: seira (default) = the bot's configured computer, INCLUDING a self-hosted VPS; box = its cloud computer.",
   },
   timeout_minutes: { type: "integer", minimum: 5, maximum: 240, description: "Schedules: optional limit on a run, 5 to 240." },
   clear_timeout: { type: "boolean", description: "Update: true removes the limit." },
@@ -834,7 +834,7 @@ export function availableTools(profile: CatalogProfile) {
   return placed.map((tool) => ({ ...tool, inputSchema: advertisedSchema(tool.inputSchema, tool.description) }));
 }
 
-const FULL_INPUT_SCHEMAS = new Map<string, unknown>([...TOOL_DEFINITIONS, ...MAUSBOT_TOOL_DEFINITIONS].map((tool) => [tool.name, tool.inputSchema]));
+const FULL_INPUT_SCHEMAS = new Map<string, unknown>([...TOOL_DEFINITIONS, ...SEIRA_TOOL_DEFINITIONS].map((tool) => [tool.name, tool.inputSchema]));
 
 /** A tool's input schema as the catalog writes it, before tools/list leaves anything out: what every call is held to. */
 export function fullInputSchema(name: string): unknown {
@@ -868,5 +868,5 @@ function catalogTools(profile: CatalogProfile) {
       const properties = Object.fromEntries(Object.entries(tool.inputSchema.properties).filter(([key]) => !CHIEF_TARGET_FIELDS.has(key)));
       return { ...tool, description: tool.description.replace(CHIEF_PROFILE_TARGET, ""), inputSchema: { ...tool.inputSchema, properties } };
     });
-  return [...ROLE_TOOLS, ...(profile.mausbot === true ? MAUSBOT_TOOL_DEFINITIONS : [])];
+  return [...ROLE_TOOLS, ...(profile.seira === true ? SEIRA_TOOL_DEFINITIONS : [])];
 }

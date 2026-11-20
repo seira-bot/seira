@@ -30,7 +30,7 @@ export interface ServiceInstallInput {
   hasSentinel?: (script: string) => boolean;
   script: string;
   node: string;
-  /** Under npx: installs `openmausbot@version` into `prefix` and resolves whether npm succeeded. */
+  /** Under npx: installs `seira@version` into `prefix` and resolves whether npm succeeded. */
   installCopy?: (prefix: string, version: string) => boolean;
   platform?: NodeJS.Platform;
   home?: string;
@@ -96,8 +96,8 @@ export function runServiceCommand(input: ServiceInstallInput, io: ServiceIo): nu
   for (const line of plan.activate) io.log(`  ${line}`);
   io.log("");
   if (input.domain && platform === "linux") io.log("the unit grants Caddy the capability for ports 80 and 443, so no setcap is needed under the service");
-  io.log(`logs: ${platform === "darwin" ? `${input.dataDir}/logs/service.log` : "journalctl -u openmausbot -f"}`);
-  io.log(`change options later by running \`${cliCommand("service install")}\` again with the new ones, then: ${platform === "darwin" ? plan.activate[1] : "sudo systemctl daemon-reload && sudo systemctl restart openmausbot"}`);
+  io.log(`logs: ${platform === "darwin" ? `${input.dataDir}/logs/service.log` : "journalctl -u seira -f"}`);
+  io.log(`change options later by running \`${cliCommand("service install")}\` again with the new ones, then: ${platform === "darwin" ? plan.activate[1] : "sudo systemctl daemon-reload && sudo systemctl restart seira"}`);
   return 0;
 }
 
@@ -113,7 +113,7 @@ function pinnedCopy(input: ServiceInstallInput, io: ServiceIo): string | null {
   const command = `npm install --prefix ${prefix} @seira-bot/seira@${version ?? "latest"}`;
   io.log(`this run comes from npx's cache, which npm prunes: installing @seira-bot/seira ${version ?? ""} into ${prefix} for the service`.replace("  ", " "));
   const installed = (input.installCopy ?? installWithNpm)(prefix, version ?? "latest");
-  const script = join(prefix, "node_modules", "@seira-bot", "seira", "dist-server", "openmausbot.js");
+  const script = join(prefix, "node_modules", "@seira-bot", "seira", "dist-server", "seira.js");
   if (installed && (input.exists ?? existsSync)(script)) return script;
   io.error(`could not install that copy. Run this, then the same service install command again from it:\n  ${command}\n  node ${script} service install …`);
   return null;
@@ -186,7 +186,7 @@ function runSentinelService(input: ServiceInstallInput, platform: NodeJS.Platfor
   for (const line of plan.activate) io.log(`  ${line}`);
   io.log("");
   io.log(`issues: ${join(out, "issues.jsonl")}`);
-  io.log(`logs: ${platform === "darwin" ? join(out, "sentinel.log") : "journalctl --user -u openmausbot-sentinel"}`);
+  io.log(`logs: ${platform === "darwin" ? join(out, "sentinel.log") : "journalctl --user -u seira-sentinel"}`);
   io.log("after an app update or a Node upgrade, check the schedule still points at both: seira sentinel --check-install");
   return 0;
 }

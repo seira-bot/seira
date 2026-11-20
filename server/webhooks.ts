@@ -106,7 +106,7 @@ export const DEFAULT_MAX_PENDING_RUNS = 3;
 export const MAX_PENDING_RUNS_LIMIT = 50;
 const maxPendingRunsSchema = z.number().int().min(1).max(MAX_PENDING_RUNS_LIMIT);
 
-const runOnSchema = z.enum(["maus", "cloud"]);
+const runOnSchema = z.enum(["seira", "cloud"]);
 const deliverySchema = z.enum(["run", "post"]);
 const eventTypesSchema = z.array(z.string()).max(20).optional();
 export const PAYLOAD_FILTER_MAX_FIELDS = 10;
@@ -262,10 +262,10 @@ function cleanInput(input: WebhookTriggerInput): CleanWebhookInput {
   const name = input.name.trim().slice(0, 80);
   const prompt = input.prompt.trim().slice(0, 20_000);
   const botId = input.botId.trim();
-  const runOn = input.runOn ?? "maus";
+  const runOn = input.runOn ?? "seira";
   if (!name) fail(400, "Give the webhook a name");
   if (!botId) fail(400, "Choose a bot");
-  if (runOn !== "maus" && runOn !== "cloud") fail(400, "Choose where this webhook runs");
+  if (runOn !== "seira" && runOn !== "cloud") fail(400, "Choose where this webhook runs");
   const eventTypes = Array.from(new Set(
     (input.eventTypes ?? [])
       .map((value) => value.trim().slice(0, 200))
@@ -650,12 +650,12 @@ export class WebhookManager {
     this.recordRejectedForTrigger(trigger, status, error instanceof Error ? error.message : String(error), event);
   }
 
-  test(id: string, payload: JsonValue = { event: "openmaus.test", message: "Test webhook delivery" }): WebhookReceiveResult | null {
+  test(id: string, payload: JsonValue = { event: "seira.test", message: "Test webhook delivery" }): WebhookReceiveResult | null {
     const trigger = this.webhooks.find((candidate) => candidate.id === id);
     if (!trigger) return null;
     // A room delivery synthesizes voice and stores images asynchronously; the test route stays synchronous.
     if (trigger.delivery === "post" && trigger.groupId) fail(400, "a room webhook posts through its webhook URL, not the test button");
-    const eventName = trigger.eventTypes?.[0] ?? "openmaus.test";
+    const eventName = trigger.eventTypes?.[0] ?? "seira.test";
     // Run now is the person's own test: like a schedule's, it runs while paused.
     return this.dispatch(trigger, {
       payload,

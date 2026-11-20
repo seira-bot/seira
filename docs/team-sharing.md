@@ -22,7 +22,7 @@ A bot or a whole department can be shared as a **template**: a small folder anyo
 ```
 
 `bot.md` and `team.md` are BotMRR Markdown v2: YAML frontmatter with the template's fields, and a readable body any AI
-agent can follow when the file is pasted in. Older files (BotMRR v1 Markdown, `team.mausteam.json`, package JSON) still
+agent can follow when the file is pasted in. Older files (BotMRR v1 Markdown, `team.seirateam.json`, package JSON) still
 import.
 
 Never in a template: chats, memory, keys, passwords, tokens, connection addresses, models, approval levels, folders,
@@ -51,7 +51,7 @@ SKILL.md alone for now, so a published template leaves its scripts out; the othe
 
 **Your GitHub repo…** (in the card's **…**, and beside **Publish to community** in a department's Share) publishes to a
 repository the GitHub connection in Apps can write to: `owner/repo`, an optional folder, and the template goes in
-`<folder>/<slug>/` as one commit on a new branch `mausbot-<slug>-<6 hex>` with a pull request, or straight on the default
+`<folder>/<slug>/` as one commit on a new branch `seira-<slug>-<6 hex>` with a pull request, or straight on the default
 branch with **Commit directly to the default branch**. Files already in that folder under other names stay. Without a
 GitHub connection it says **Connect GitHub in Apps first** with **Open Apps**. On a Team Cloud it uses the team's GitHub,
 or the person's own when the team has each person connect GitHub; the team's Rules apply as to any app call.
