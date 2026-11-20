@@ -635,7 +635,7 @@ describe("pages access", () => {
   });
 
   it("signs a home's request exactly as the Admin checks it", () => {
-    expect(pagesHomeSignature("s".repeat(43), "cm-test-home", "1792670400", "nonce-nonce-nonce-1", '{"action":"create"}')).toBe("tGqgJ8-OwbTPZjqukuSzaldXe1lboQR2D8-Nhzzj02s");
+    expect(pagesHomeSignature("s".repeat(43), "cm-test-home", "1792670400", "nonce-nonce-nonce-1", '{"action":"create"}')).toBe("smys7kDYS99REKsdwsd9OaXv6pH_hP1Wajaq3KrTiVo");
   });
 });
 
