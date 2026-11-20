@@ -154,9 +154,11 @@ describe("an app that needs its own sign-in", () => {
     offerable: () => true, pickAvailable: () => true, decider: { choose } as never, now: () => clock,
   });
 
-  it("is left out of suggestions until it is connected", async () => {
+  it("is left out of suggestions and search until it is connected", async () => {
+    const bot = { id: "b1", name: "Sales" } as never;
     expect(slugs(await withCards({}).suggest({ limit: 5 }))).toEqual(["notion"]);
-    expect(slugs(await withCards({ linkedin: { connected: true } }).suggest({ limit: 5 }))).toContain("linkedin");
+    expect(await withCards({}).find({ query: "linkedin notion", bot, refusal: () => null })).not.toContain("linkedin");
+    expect(await withCards({ linkedin: { connected: true } }).find({ query: "linkedin notion", bot, refusal: () => null })).toContain("- linkedin: LinkedIn (connected).");
   });
 });
 
