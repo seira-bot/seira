@@ -485,6 +485,25 @@ describe("sending a draft", () => {
     fx.stop();
   });
 
+  it("shows only the public issue number when the earlier report is another person's, and the title when it is the same person's", async () => {
+    const fx = fixture({ outcomes: [{ ok: true, id: "report-7", issue: 123 }], reactorOf: (sender) => (sender === "p-ada" ? "key-ada" : "key-bo") });
+    const first = fx.person("scout-main", "@devs the calendar never syncs", { sender: { name: "Ada", id: "p-ada" } });
+    fx.advance(NO_ANSWER_MS);
+    await fx.settle();
+    await fx.press("scout-main", first.id, "key-ada");
+    const title = fx.offer("scout-main", first.id)!.title;
+    const second = fx.person("rover-main", "@devs the calendar never syncs", { sender: { name: "Bo", id: "p-bo" } });
+    fx.advance(NO_ANSWER_MS);
+    await fx.settle();
+    expect(fx.view("rover-main", second.id, "key-bo")!.same).toEqual({ issue: 123 });
+    expect(JSON.stringify(fx.view("rover-main", second.id, "key-bo"))).not.toContain(title);
+    const third = fx.person("scout-main", "@devs the calendar never syncs", { sender: { name: "Ada", id: "p-ada" } });
+    fx.advance(NO_ANSWER_MS);
+    await fx.settle();
+    expect(fx.view("scout-main", third.id, "key-ada")!.same).toMatchObject({ issue: 123, title });
+    fx.stop();
+  });
+
   it("is only for the person it is for: another reader cannot see it, send it or put it away", async () => {
     const fx = fixture({ reactorOf: (sender) => (sender === "p-ada" ? "key-ada" : "user") });
     const message = fx.person("scout-main", "@devs it broke", { sender: { name: "Ada", id: "p-ada" } });

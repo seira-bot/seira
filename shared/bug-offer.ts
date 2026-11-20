@@ -119,8 +119,8 @@ export interface BugDraftView {
   direct: boolean;
   /** A prefilled issue form with the same text, made on this machine. */
   formUrl: string;
-  /** An open report this app sent about the same error: this one is added to it. */
-  same?: { title: string; at: number; issue?: number };
+  /** An open report this app sent about the same error: this one is added to it. A report of another person carries only its public issue number. */
+  same?: { issue?: number; title?: string; at?: number };
 }
 
 /** A public issue on the Seira repository. */

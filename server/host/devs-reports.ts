@@ -426,7 +426,10 @@ export function createDevsReports(deps: DevsReportsDeps) {
 
   /** What the person reads before they send: the issue as it will be published, and what it carries. */
   function draftView(draft: Draft): BugDraftView {
-    const same = draft.hash ? drafts.find((one) => one !== draft && one.hash === draft.hash && (one.state === "sent" || one.state === "joined")) : undefined;
+    const reported = draft.hash ? drafts.filter((one) => one !== draft && one.hash === draft.hash && (one.state === "sent" || one.state === "joined")) : [];
+    const own = reported.find((one) => one.for === draft.for);
+    const other = own ? undefined : reported.find((one) => one.issue);
+    const same = own ? { title: own.title, at: own.at, ...(own.issue ? { issue: own.issue } : {}) } : other ? { issue: other.issue! } : undefined;
     const { payload } = draft;
     return {
       id: draft.id, from: draft.from, ...(draft.by ? { by: draft.by } : {}), state: draft.state, ...(draft.issue ? { issue: draft.issue } : {}),
@@ -434,7 +437,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
       included: { version: payload?.appVersion ?? deps.appVersion, platform: payload?.platform ?? "", ...(draft.model ? { model: draft.model } : {}), activity: draft.activity ?? 0 },
       direct: deps.direct ?? true,
       formUrl: payload ? bugReportIssueUrl(payload) : draft.issue ? bugIssueUrl(draft.issue) : "",
-      ...(same ? { same: { title: same.title, at: same.at, ...(same.issue ? { issue: same.issue } : {}) } } : {}),
+      ...(same ? { same } : {}),
     };
   }
 
