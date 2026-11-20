@@ -1,4 +1,5 @@
 const ZONE = "seira.bot";
+const TUNNEL_ZONE = "seira.run";
 
 /** Every Seira host. A name here is not a promise that a service answers: see LIVE_SEIRA_SERVICES. */
 export const SEIRA_HOSTS = Object.freeze({
@@ -13,6 +14,7 @@ export const SEIRA_HOSTS = Object.freeze({
   pages: `page.${ZONE}`,
   companion: `si.${ZONE}`,
   push: `push.${ZONE}`,
+  tunnel: TUNNEL_ZONE,
   // The staging Cloud is a Fly app; its name is the app name there.
   cloudStaging: "omb-cloud-staging.fly.dev",
   relayPattern: /^relay[1-9][0-9]?\.seira\.bot$/,
@@ -30,12 +32,13 @@ export const SEIRA_SERVICE_OVERRIDE_ENV = Object.freeze({
   apps: "SEIRA_COMPOSIO_BROKER_URL",
   updates: "SEIRA_UPDATES_ORIGIN",
   accounts: "SEIRA_CONTROL_PLANE_URL",
+  serverTunnel: "SEIRA_CONTROL_PLANE_URL",
   push: "SEIRA_PUSH_RELAY_URL",
 });
 
-/** True when the service is in the live list, or the environment names an address for it. */
-export function seiraServiceLive(name, env = {}) {
-  if (LIVE_SEIRA_SERVICES.includes(name)) return true;
+/** True when the service is in the live list (`live`, for tests), or the environment names an address for it. */
+export function seiraServiceLive(name, env = {}, live = LIVE_SEIRA_SERVICES) {
+  if (live.includes(name)) return true;
   const variable = SEIRA_SERVICE_OVERRIDE_ENV[name];
   return Boolean(variable) && typeof env?.[variable] === "string" && env[variable].trim() !== "";
 }
