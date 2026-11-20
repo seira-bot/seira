@@ -356,6 +356,7 @@ const Bubble = memo(function Bubble({
     viewRaw,
     onToggleRaw: () => setViewRaw((raw) => !raw),
     onRegenerate: !busy ? onRegenerate : undefined,
+    draw: !phone && !peer ? { threadId, reply: message, dispatch } : undefined,
     pin: remoteClient ? undefined : {
       pinned,
       onToggle: () => dispatch({ type: "updateTask", botId, threadId, patch: { pinnedMessageId: pinned ? "" : message.id } }),

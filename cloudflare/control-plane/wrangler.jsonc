@@ -25,7 +25,10 @@
     // new endpoints, and tell a tunnel-quota 429 from a rate limit, so keep
     // them equal to Cloudflare's real quotas. They never refuse an
     // allocation on their own. A Free zone added since September 2024
-    // allows 200 DNS records (README "Several Cloudflare accounts").
+    // allows 200 DNS records (README "Several Cloudflare accounts"). On
+    // 2026-11-20 the zone's DNS record usage API gave a quota of 200.
+    // Check it again after a plan change:
+    // GET /zones/<zone id>/dns_records/usage (field "record_quota").
     "SEIRA_TUNNEL_LIMIT": "1000",
     "SEIRA_DNS_RECORD_LIMIT": "200",
     // "on" marks idle tunnels for cleanup; "observe" only logs candidates.

@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 
-import type { Workflow, WorkflowGraph, WorkflowInput, WorkflowRun, WorkflowRunUpdate, WorkflowStepRun } from "../../shared/workflows";
+import type { DrawnWorkflow, Workflow, WorkflowGraph, WorkflowInput, WorkflowRun, WorkflowRunUpdate, WorkflowStepRun } from "../../shared/workflows";
 import type { ServerFrame } from "../../shared/wire";
 import { listenLiveFrames } from "@/lib/live-events";
 import type { RoutineRun } from "@/lib/routines";
@@ -206,6 +206,9 @@ export function runsOf(snapshot: WorkflowsState, workflowId: string, routineId?:
 const put = (workflow: Workflow) => applyWorkflowFrame({ kind: "workflow", workflow });
 
 export const workflowApi = {
+  draft(threadId: string, messageId: string): Promise<DrawnWorkflow> {
+    return api<DrawnWorkflow>(`/api/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/workflow-draft`);
+  },
   async create(input: WorkflowInput): Promise<Workflow> {
     const { workflow } = await api<{ workflow: Workflow }>("/api/workflows", { method: "POST", body: JSON.stringify(input) });
     put(workflow);

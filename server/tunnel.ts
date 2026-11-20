@@ -7,6 +7,7 @@ import { hostname } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { FRIENDLY_MESSAGES } from "../electron/companion-account-messages.mjs";
 import {
   COMPANION_ACCOUNT_EMAIL_FIELD,
   COMPANION_INSTALLATION_ID_FIELD,
@@ -14,6 +15,7 @@ import {
   resolveCompanionControlPlaneURL,
   resolveServerControlPlaneURL,
   type CompanionAccountService,
+  type CompanionAccountState,
   type CredentialDocument,
 } from "../electron/companion-account-service.mjs";
 import {
@@ -114,6 +116,29 @@ export function describeTunnelAccount(document: CredentialDocument): TunnelAccou
 export function tunnelAccess(document: CredentialDocument, env: NodeJS.ProcessEnv = process.env): ManagedTunnelAccess | null {
   const access = managedCompanionTunnelAccess(document);
   return access && serverTunnelEndpointAllowed(access.endpoint, env) ? access : null;
+}
+
+export interface TunnelAddressRefusal {
+  code: "endpoint_capacity" | "endpoint_limit" | "control_plane_unavailable";
+  message: string;
+}
+
+/** A friendly text with its "{wait}" filled in, and the error reference that can follow it. */
+const friendlyText = (template: string) =>
+  new RegExp(`^${template.split("{wait}").map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".+")}(?: Reference: .+\\.)?$`);
+const ADDRESS_REFUSALS = [
+  { code: "endpoint_capacity", problem: "busy", text: friendlyText(FRIENDLY_MESSAGES.endpoint_capacity) },
+  { code: "endpoint_limit", problem: "limit", text: friendlyText(FRIENDLY_MESSAGES.endpoint_limit) },
+] as const;
+
+/** FR-221: why the control plane gave this signed-in machine no seira.run address, read from the state that
+ * `account.service.retry()` returns. Null when an address is there, nobody is signed in, or the failure is another kind. */
+export function tunnelAddressRefusal(state: CompanionAccountState): TunnelAddressRefusal | null {
+  if (state.status !== "error" || state.endpoint) return null;
+  if (state.problem === "unreachable") return { code: "control_plane_unavailable", message: FRIENDLY_MESSAGES.control_plane_unavailable };
+  const message = state.message ?? "";
+  const refusal = ADDRESS_REFUSALS.find((entry) => entry.problem === state.problem && entry.text.test(message));
+  return refusal ? { code: refusal.code, message } : null;
 }
 
 /** Refuses an address outside the allowed zones before the caller stores its connector token or starts a connector. */

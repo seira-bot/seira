@@ -50,7 +50,7 @@ async function boot(extra: Record<string, string> = {}) {
   const started = spawn(process.execPath, verificationServerArgs(env), { env, stdio: ["ignore", fd, fd] });
   closeSync(fd);
   const url = `http://127.0.0.1:${port}`;
-  await waitFor(async () => (await fetch(`${url}/api/health`).then((r) => r.json(), () => null) as { app?: string } | null)?.app === "openmausbot", 30_000);
+  await waitFor(async () => (await fetch(`${url}/api/health`).then((r) => r.json(), () => null) as { app?: string } | null)?.app === "seira", 30_000);
   return { child: started, dataDir: dir, logPath: log, base: url };
 }
 

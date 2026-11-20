@@ -1691,7 +1691,7 @@ describe("harness HTTP API", () => {
       req.end();
     });
     expect(probe.status).toBe(200);
-    expect(probe.body).toEqual({ app: "openmausbot" });
+    expect(probe.body).toEqual({ app: "seira", legacyApp: "openmausbot" });
     const brand = await new Promise<{ status: number; body: unknown }>((resolve, reject) => {
       const req = request({ hostname: "127.0.0.1", port: PORT, path: "/api/brand", headers: { host: "example.com" } }, (res) => {
         let raw = "";
@@ -1720,7 +1720,7 @@ describe("harness HTTP API", () => {
   it("identifies itself on /api/health", async () => {
     const { status, body } = await api("GET", "/api/health");
     expect(status).toBe(200);
-    expect(body.app).toBe("openmausbot");
+    expect(body.app).toBe("seira");
     expect(typeof body.pid).toBe("number");
     expect(body.static).toBe(true);
   });

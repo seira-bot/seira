@@ -21,6 +21,7 @@ as [SECURITY.md](SECURITY.md) explains.
 
 ```sh
 git clone https://github.com/<you>/seira && cd seira
+git config core.hooksPath scripts/git-hooks
 pnpm install
 
 pnpm dev:server    # harness server on 127.0.0.1:8799
@@ -28,6 +29,9 @@ pnpm dev           # app on http://127.0.0.1:5199
 
 pnpm typecheck && pnpm lint && pnpm test
 ```
+
+The `git config` line turns on the commit and push hooks. It needs only git and node, so it works
+before `pnpm install`. Run it in every new clone, and in every checkout that skips `pnpm install`.
 
 You need Node 24+ and pnpm. To chat with a bot, you also need a logged-in
 [`claude`](https://claude.com/claude-code) or [`codex`](https://github.com/openai/codex) CLI.

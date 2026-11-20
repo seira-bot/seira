@@ -20,6 +20,7 @@ describe("OAuth tab reservation", () => {
     const launch = reserveConnectionPage();
     expect(open).toHaveBeenCalledWith("", "_blank");
     expect(page.opener).toBeNull();
+    expect(launch.confirms).toBe(true);
     expect(page.location.replace).not.toHaveBeenCalled();
     expect(await launch.open("https://auth.example.test/flow")).toBe(true);
     expect(page.location.replace).toHaveBeenCalledWith("https://auth.example.test/flow");
@@ -56,6 +57,7 @@ describe("OAuth tab reservation", () => {
     vi.stubGlobal("window", { ogb: { openExternal }, open });
     const launch = reserveConnectionPage();
     expect(open).not.toHaveBeenCalled();
+    expect(launch.confirms).toBe(true);
     expect(await launch.open("https://auth.example.test/flow")).toBe(true);
     expect(openExternal).toHaveBeenCalledWith("https://auth.example.test/flow");
   });
@@ -65,8 +67,14 @@ describe("OAuth tab reservation", () => {
     vi.stubGlobal("window", { ogb: { platform: "darwin" }, open });
     const launch = reserveConnectionPage();
     expect(open).not.toHaveBeenCalled();
+    expect(launch.confirms).toBe(false);
     expect(await launch.open("https://auth.example.test/flow")).toBe(true);
     expect(open).toHaveBeenCalledWith("https://auth.example.test/flow", "_blank", "noopener,noreferrer");
+  });
+
+  it("says the page did not open when a remote server's page cannot hand it to the desktop app", async () => {
+    vi.stubGlobal("window", { ogb: { platform: "win32" }, open: vi.fn(() => { throw new Error("refused"); }) });
+    expect(await reserveConnectionPage().open("https://auth.example.test/flow")).toBe(false);
   });
 
   it("says the page did not open when the desktop app refuses it", async () => {

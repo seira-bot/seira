@@ -28,6 +28,9 @@ export function reserveConnectionPage() {
     }
   }
   return {
+    /** False on a desktop page from another server, which has no openExternal. Electron 43 gives the window's open
+     * handler every window.open, with or without a click, and returns null whether the link opened or not. */
+    confirms: !appOpensLinks || Boolean(window.ogb?.openExternal),
     async open(url: string): Promise<boolean> {
       if (cancelled) return false;
       if (appOpensLinks) {

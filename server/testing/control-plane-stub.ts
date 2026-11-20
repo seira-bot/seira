@@ -29,6 +29,8 @@ export interface ControlPlaneStub {
   pushes: Array<{ path: string; body: Record<string, unknown> }>;
   /** The next push-relay answers, used in order; then 200/202/204 as the real relay answers. */
   pushAnswers: Array<{ status: number; error?: string }>;
+  /** The next answers to an endpoint provision (`POST /v1/installations/self/endpoint`), used in order; then 200. */
+  endpointAnswers: Array<{ status: number; error: string; retryAfterSeconds?: number }>;
   installations: Map<string, StubInstallation>;
   /** An installation the control plane already knows (as a fleet creates one): returns its credential. */
   seedInstallation(name?: string): string;
@@ -63,6 +65,7 @@ export async function startControlPlaneStub(options: { otp?: string; endpointUrl
   const cloudAttempt = randomBytes(32).toString("base64url");
   const pushes: ControlPlaneStub["pushes"] = [];
   const pushAnswers: ControlPlaneStub["pushAnswers"] = [];
+  const endpointAnswers: ControlPlaneStub["endpointAnswers"] = [];
   const pushDevices = new Map<string, Set<string>>();
   const publicView = (inst: StubInstallation) => ({
     id: inst.id,
@@ -161,6 +164,8 @@ export async function startControlPlaneStub(options: { otp?: string; endpointUrl
       if (method === "GET") return send(200, { endpoint: reclaimedUntilProvision ? null : endpoint() });
       if (method === "POST") {
         const body = await readJson(req);
+        const refusal = endpointAnswers.shift();
+        if (refusal) return send(refusal.status, { error: refusal.error }, refusal.retryAfterSeconds ? { "retry-after": String(refusal.retryAfterSeconds) } : {});
         if (typeof body.appVersion === "string") inst.appVersion = body.appVersion;
         if (typeof body.kind === "string") inst.kind = body.kind;
         if (reclaimedUntilProvision) issuedConnectorToken = reclaimedUntilProvision;
@@ -205,6 +210,7 @@ export async function startControlPlaneStub(options: { otp?: string; endpointUrl
     cloudAccountId,
     pushes,
     pushAnswers,
+    endpointAnswers,
     installations,
     seedInstallation: (name = "fleet box") => {
       const inst: StubInstallation = { id: randomUUID(), clientInstanceId: randomUUID(), name, platform: "linux", appVersion: null, credential: newCredential() };

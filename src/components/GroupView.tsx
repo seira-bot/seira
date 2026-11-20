@@ -186,6 +186,7 @@ function RoomTextMessage({
     canSpeak: true,
     viewRaw,
     onToggleRaw: () => setViewRaw((raw) => !raw),
+    draw: !phone && !roomThreadWorking(group, group.threadId) ? { threadId: group.threadId, reply: m, dispatch } : undefined,
     pin,
   });
   const replyGroup = useMemo(() => !user && !isLiveReply(m) && botText.trim() ? replyAttachmentGroup(botText, m.attachments) : null, [user, m, botText]);
