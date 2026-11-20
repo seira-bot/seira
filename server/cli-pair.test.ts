@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { serverPairingLink } from "../shared/pairing-link.ts";
 import { runPair, type CliOptions } from "./cli.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
@@ -185,6 +186,33 @@ describe("the phone-app link `seira pair --phone android` scans", () => {
     pairingResponse({ url: `https://proxy.example.test/seira/pair#code=${code}`, inviteUrl: null });
     expect(await runPair({ ...options, label: "Pixel" })).toBe(0);
     expect(printed()).toContain(`https://proxy.example.test/seira/pair#code=${code}`);
+  });
+});
+
+describe("the link a server with several routes sends", () => {
+  const tunnel = `https://c-${"a".repeat(32)}.seira.run`;
+  const routes = [{ url: "https://box.tail1234.ts.net", kind: "hosted" as const, priority: 0 }, { url: tunnel, kind: "hosted" as const, priority: 1 }];
+  const reply = (fields: Record<string, unknown>) => fetchMock.mockImplementation(async (input, init) => {
+    const url = String(input);
+    if (url === `http://127.0.0.1:${options.port}/api/health`) return Response.json({ app: "seira", pid: 12345 });
+    if (url === `http://127.0.0.1:${options.port}/api/auth/pairing`) {
+      return init?.method === "POST" ? Response.json({ code, expiresAt: Date.now() + 300_000, ...fields }) : Response.json({ pairings: [], publicUrl: null });
+    }
+    throw new Error(`Unexpected fixture request: ${url}`);
+  });
+
+  it("is printed as the server sent it, with every route", async () => {
+    const link = serverPairingLink({ base: tunnel, code, endpoints: routes })!;
+    reply({ url: link, inviteUrl: null });
+    expect(await runPair({ ...options, publicUrl: explicitOrigin })).toBe(0);
+    expect(printed()).toContain(link);
+    expect(printed()).not.toContain(`${explicitOrigin}/pair#code=`);
+  });
+
+  it("falls back to the CLI's own address when the server sends no link", async () => {
+    reply({ url: null, inviteUrl: null });
+    expect(await runPair({ ...options, publicUrl: explicitOrigin })).toBe(0);
+    expect(printed()).toContain(`${explicitOrigin}/pair#code=${code}`);
   });
 });
 
