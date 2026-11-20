@@ -476,7 +476,6 @@ function parsePositiveLimit(raw: unknown, fallback = 30, maximum = 200): number 
   return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
 }
 
-
 function valueHasType(value: unknown, type: string): boolean {
   if (type === "null") return value === null;
   if (type === "array") return Array.isArray(value);

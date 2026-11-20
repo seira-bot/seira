@@ -67,7 +67,6 @@ import {
   type TunnelRecovery,
 } from "./tunnel.ts";
 import { acceptedWireNames, sentWireName } from "../electron/phone-wire-names.mjs";
-
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 export interface CliOptions {
