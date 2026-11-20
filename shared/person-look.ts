@@ -3,20 +3,20 @@ import { z } from "zod";
 import { BRAND_BODY_IDS } from "./carved-bodies.ts";
 import { CAST_CHARACTERS } from "./cast-characters.ts";
 import { mascotAccessoriesSchema, type MascotAccessoryId } from "./mascot-accessories.ts";
-import { MAUS_COLOR_NAMES, type MausColor } from "./wire.ts";
+import { SEIRA_COLOR_NAMES, type SeiraColor } from "./wire.ts";
 import type { BrandBodyId } from "./carved-bodies.ts";
 
 /** The picture a person wears until they choose a photo: the parts a bot's avatar is made of. */
 export const personLookSchema = z.object({
   mascotBody: z.enum(BRAND_BODY_IDS),
   mascotAccessories: mascotAccessoriesSchema,
-  color: z.enum(MAUS_COLOR_NAMES),
+  color: z.enum(SEIRA_COLOR_NAMES),
 });
 
 export interface PersonLook {
   mascotBody: BrandBodyId;
   mascotAccessories: MascotAccessoryId[];
-  color: MausColor;
+  color: SeiraColor;
 }
 
 const key = (look: PersonLook) => `${look.mascotBody}|${look.color}|${[...look.mascotAccessories].sort().join(",")}`;
