@@ -526,6 +526,9 @@ Update with `git pull && ./update.sh`: it copies the data aside, starts the
 stable version, and puts the old version and the data back if the new one
 does not come up healthy ([what it does, step by step](deploy-vps.md#update)).
 A build from source updates with `git pull && docker compose up -d --build`.
+To update a build from v0.1.181 or older, first do the steps in
+[Update from v0.1.181 or older](../deploy/local/README.md#update-from-v01181-or-older),
+or Compose starts with an empty data volume.
 State (chats, routines, engine logins, paired sessions) is on the `data`
 volume; back that up.
 
