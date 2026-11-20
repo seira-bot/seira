@@ -117,6 +117,33 @@ describe("sidebar virtual sections", () => {
     expect(home.section).toBe("Home");
   });
 
+  it("flat lists every bot in one list in input order, with pinned bots apart and no department left over", () => {
+    const bots = [
+      { id: "main", chiefOfStaff: true },
+      { id: "work-chief", chiefOfStaff: true, section: "Work" },
+      { id: "plain" },
+      { id: "member", section: "Work" },
+      { id: "pinned-member", section: "Home", pinned: true },
+      { id: "hidden", section: "Home", hidden: true },
+    ];
+    const parts = partitionSidebarBots(bots, { flat: true });
+    expect(parts.pinnedBots.map((bot) => bot.id)).toEqual(["pinned-member"]);
+    expect(parts.unsectionedChief?.id).toBe("main");
+    expect(parts.sectionChiefs).toEqual([]);
+    expect(parts.sectionedBots).toEqual([]);
+    expect(parts.unsectionedBots.map((bot) => bot.id)).toEqual(["work-chief", "plain", "member"]);
+    expect(bots[1]!.section).toBe("Work");
+    expect(bots[3]!.section).toBe("Work");
+  });
+
+  it("flat rooms are one list, and the other lists are untouched", () => {
+    const rooms = [{ id: "a", section: "Work" }, { id: "b" }, { id: "dm", dm: true, section: "Work" }];
+    const parts = partitionSidebarGroups(rooms, { flat: true });
+    expect(parts.unsectionedRooms.map((group) => group.id)).toEqual(["a", "b"]);
+    expect(parts.sectionedRooms).toEqual([]);
+    expect(parts.botChats.map((group) => group.id)).toEqual(["dm"]);
+  });
+
   it("finds the viewer's own hidden Seira in a search, never someone else's", () => {
     const mine = { id: "nova", defaultBot: {}, sidebarHidden: true, section: "C Suite" };
     const theirs = { id: "theirs", defaultBot: { person: "sam@example.com" }, section: "C Suite" };

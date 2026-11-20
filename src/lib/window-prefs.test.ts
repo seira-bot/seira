@@ -24,6 +24,13 @@ describe("window preferences", () => {
     expect(await windowPrefValues()).toMatchObject({ "general.sendKey": "mod-enter", "general.notificationSounds": false, "appearance.pinnedCircles": true });
   });
 
+  it("reads the department grouping as on until it is turned off", async () => {
+    expect(await windowPrefValues()).toMatchObject({ "appearance.groupByDepartment": true });
+    applyWindowPref({ kind: "window-pref", id: "appearance.groupByDepartment", value: false });
+    expect(values.get("openmausbot.groupByDepartment")).toBe("false");
+    expect(await windowPrefValues()).toMatchObject({ "appearance.groupByDepartment": false });
+  });
+
   it("reports the window's values once after a burst of setters", async () => {
     vi.useFakeTimers();
     const fetched = vi.fn(async () => new Response("{}"));

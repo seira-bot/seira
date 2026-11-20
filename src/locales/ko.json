@@ -1495,6 +1495,8 @@
   "settings.runCard.show": "실행 카드 표시",
   "settings.pinnedCircles.title": "고정된 봇을 동그라미로",
   "settings.pinnedCircles.subtitle": "고정된 봇을 Grok Bot처럼 큰 아바타로 보여 줘요. 사이드바를 넓히면 한 줄에 더 많이 들어가요.",
+  "settings.groupByDepartment.title": "봇을 부서별로 묶기",
+  "settings.groupByDepartment.subtitle": "끄면 모든 봇과 그룹 채팅이 하나의 목록에 표시되고, 고정한 봇이 맨 위에 놓입니다.",
   "settings.universalPins.title": "전체 고정",
   "settings.universalPins.subtitle": "모든 그룹에서 고정한 봇을 그룹의 리더까지 포함해 사이드바 맨 위에 둬요. 나머지 목록을 스크롤해도 그 자리에 있어요.",
   "settings.notificationSounds.title": "알림 소리",

@@ -1403,6 +1403,8 @@
   "settings.runCard.show": "Mostra la scheda dell'esecuzione",
   "settings.pinnedCircles.title": "Bot fissati come cerchi",
   "settings.pinnedCircles.subtitle": "Mostra i bot fissati come avatar grandi, come Grok Bot. Allargando la barra laterale ne entrano di più in ogni riga.",
+  "settings.groupByDepartment.title": "Raggruppa i bot per reparto",
+  "settings.groupByDepartment.subtitle": "Se è disattivato, ogni bot e ogni chat di gruppo compare in un unico elenco, con i bot fissati in alto.",
   "settings.universalPins.title": "Fissati universali",
   "settings.universalPins.subtitle": "Tieni in cima alla barra laterale i bot fissati di ogni gruppo, capo del gruppo compreso. Restano lì mentre il resto dell'elenco scorre.",
   "settings.notificationSounds.title": "Suoni di notifica",

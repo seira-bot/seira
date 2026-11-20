@@ -9,7 +9,7 @@ import { AnalyticsRow } from "../../AnalyticsRow";
 import { ChatWidthRow, FontRow, SidebarToolsLayoutRow } from "../../AppearanceSelectRows";
 import {
   ColorUserBubblesRow, FollowUpRow, LanguageRow, PinnedCirclesRow, ReplayTourRow, RunCardRow, SendKeyRow, ShowThreadsRow,
-  ToolCallsRow, UniversalPinsRow, UpdatesRow,
+  ToolCallsRow, UniversalPinsRow, UpdatesRow, GroupByDepartmentRow,
 } from "../../AppSettingsRows";
 import { ChromeRailRow } from "../../ChromeRailToggle";
 import { ConnectedWorkspacesSettings } from "../../ConnectedWorkspacesSettings";
@@ -182,6 +182,7 @@ export function AppearancePage() {
         {ctx.advanced && <SidebarToolsLayoutRow />}
         {ctx.advanced && <PinnedCirclesRow />}
         {ctx.advanced && <UniversalPinsRow />}
+        {ctx.advanced && <GroupByDepartmentRow />}
       </SettingsRows>
     </SettingsGroup>}
     {ctx.advanced && <PinnedPanelsSettings />}

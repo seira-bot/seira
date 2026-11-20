@@ -4003,6 +4003,8 @@
   "settings.talk.title": "Говорити з Seira з будь-якого застосунку",
   "settings.theme.lightOrDark": "Світла чи темна",
   "settings.theme.title": "Тема",
+  "settings.groupByDepartment.title": "Групувати ботів за відділами",
+  "settings.groupByDepartment.subtitle": "Коли вимкнено, усі боти й групові чати показуються одним списком, закріплені боти вгорі.",
   "settings.universalPins.subtitle": "Тримати закріплених ботів з кожної групи вгорі бічної панелі, разом із головою групи. Вони лишаються там, поки решта списку прокручується.",
   "settings.universalPins.title": "Універсальні закріплення",
   "settings.userBubbles.aria": "Фарбувати мої повідомлення кольором бота",

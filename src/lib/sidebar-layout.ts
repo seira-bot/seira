@@ -109,7 +109,7 @@ export function pinnedCircleThreadListVisible(
 
 export function partitionSidebarBots<T extends SidebarBot>(
   bots: T[],
-  options?: { universalPins?: boolean; viewerEmail?: string | null; welcoming?: string | null; searching?: boolean },
+  options?: { universalPins?: boolean; viewerEmail?: string | null; welcoming?: string | null; searching?: boolean; flat?: boolean },
 ) {
   const universalPins = options?.universalPins === true;
   // A search also finds the viewer's own MausBot when it is hidden from the sidebar, so it can always be reached.
@@ -120,6 +120,10 @@ export function partitionSidebarBots<T extends SidebarBot>(
   const pinnedBots = visible.filter((bot) => Boolean(bot.pinned) && (universalPins || !bot.chiefOfStaff || Boolean(bot.section)));
   const pinnedIds = new Set(pinnedBots.map((bot) => bot.id));
   const unsectionedChief = visible.find((bot) => bot.chiefOfStaff && !bot.section && !pinnedIds.has(bot.id)) ?? null;
+  if (options?.flat === true) {
+    const unsectionedBots = visible.filter((bot) => !pinnedIds.has(bot.id) && bot !== unsectionedChief);
+    return { unsectionedChief, pinnedBots, sectionChiefs: [] as T[], sectionedBots: [] as T[], unsectionedBots };
+  }
   const sectionChiefs = visible.filter((bot) => bot.chiefOfStaff && Boolean(bot.section) && !pinnedIds.has(bot.id));
   const sectionedBots = visible.filter(
     (bot) => !bot.chiefOfStaff && Boolean(bot.section) && !pinnedIds.has(bot.id),
@@ -151,9 +155,10 @@ export function activeBotsFirst<T>(parts: { pinnedBots: T[]; sectionedBots: T[];
   return { pinnedBots: first(parts.pinnedBots), sectionedBots: first(parts.sectionedBots), unsectionedBots: first(parts.unsectionedBots) };
 }
 
-export function partitionSidebarGroups<T extends SidebarGroup>(groups: T[]) {
+export function partitionSidebarGroups<T extends SidebarGroup>(groups: T[], options?: { flat?: boolean }) {
   const botChats = groups.filter((group) => Boolean(group.dm));
   const rooms = groups.filter((group) => !group.dm);
+  if (options?.flat === true) return { botChats, sectionedRooms: [] as T[], unsectionedRooms: rooms };
   const sectionedRooms = rooms.filter((group) => Boolean(group.section));
   const unsectionedRooms = rooms.filter((group) => !group.section);
   return { botChats, sectionedRooms, unsectionedRooms };

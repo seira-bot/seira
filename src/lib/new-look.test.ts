@@ -20,7 +20,7 @@ async function boot(simpleOnly = true) {
 
 const ADVANCED_PREFS = {
   "omb-font": "serif", "omb-chat-width": "full", "omb-show-threads": "1", "openmausbot.sidebarToolsLayout": "toolbar",
-  "openmausbot.pinnedCircles": "1", "openmausbot.universalPins": "1", "omb-show-run-card": "0", "omb-web-panels": "[]",
+  "openmausbot.pinnedCircles": "1", "openmausbot.universalPins": "1", "openmausbot.groupByDepartment": "false", "omb-show-run-card": "0", "omb-web-panels": "[]",
 };
 const KEPT = { "omb-skin": "lagoon", "openmausbot.sidebarDensity": "avatars", "omb-drafts": "{}" };
 

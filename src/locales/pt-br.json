@@ -1767,6 +1767,8 @@
   "settings.runCard.show": "Mostrar o cartão de execução",
   "settings.pinnedCircles.title": "Bots fixados como círculos",
   "settings.pinnedCircles.subtitle": "Mostra os bots fixados como avatares grandes, como no Grok Bot. Com a barra lateral mais larga, cabem mais em cada linha.",
+  "settings.groupByDepartment.title": "Agrupar bots por departamento",
+  "settings.groupByDepartment.subtitle": "Desativado mostra todos os bots e conversas em grupo em uma única lista, com os bots fixados no topo.",
   "settings.universalPins.title": "Fixados de todas as equipes",
   "settings.universalPins.subtitle": "Mantém os bots fixados de todas as equipes no topo da barra lateral, inclusive o chefe de cada equipe. Eles ficam lá enquanto o resto da lista rola.",
   "settings.notificationSounds.title": "Sons de notificação",

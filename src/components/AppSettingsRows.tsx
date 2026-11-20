@@ -17,7 +17,7 @@ import { setColorUserBubbles, useColorUserBubbles } from "@/lib/user-bubble-pref
 import { setShowThreads, useShowThreadsChoice } from "@/lib/thread-preferences";
 import { setAdvancedMode, useAdvancedMode } from "@/lib/interface-mode";
 import { SIMPLE_ONLY } from "@/lib/simple-only";
-import { setPinnedCircles, setUniversalPins, usePinnedCircles, useUniversalPins } from "@/lib/sidebar-preferences";
+import { setGroupByDepartment, setPinnedCircles, setUniversalPins, useGroupByDepartment, usePinnedCircles, useUniversalPins } from "@/lib/sidebar-preferences";
 import { setShowRunCard, useShowRunCard } from "@/lib/run-card-preferences";
 import { parseSendKey, SEND_KEYS, sendKeyLabel, setSendKey, useSendKey } from "@/lib/send-key";
 import { alternateSendLabel, parseFollowUpDefault, setFollowUpDefault, useFollowUpDefault } from "@/lib/follow-up";
@@ -340,6 +340,19 @@ export function UniversalPinsRow() {
         checked={enabled}
         aria-label={t("settings.universalPins.title")}
         onClick={() => setUniversalPins(!enabled)}
+      />
+    </SettingRow>
+  );
+}
+
+export function GroupByDepartmentRow() {
+  const enabled = useGroupByDepartment();
+  return (
+    <SettingRow title={t("settings.groupByDepartment.title")} subtitle={t("settings.groupByDepartment.subtitle")}>
+      <Switch
+        checked={enabled}
+        aria-label={t("settings.groupByDepartment.title")}
+        onClick={() => setGroupByDepartment(!enabled)}
       />
     </SettingRow>
   );

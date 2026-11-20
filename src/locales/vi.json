@@ -984,6 +984,8 @@
   "settings.runCard.show": "Hiển thị thẻ lần chạy",
   "settings.pinnedCircles.title": "Bot đã ghim dưới dạng hình tròn",
   "settings.pinnedCircles.subtitle": "Hiển thị các bot đã ghim dưới dạng ảnh đại diện lớn, như Grok Bot. Mở rộng thanh bên sẽ chứa được nhiều bot hơn trên mỗi hàng.",
+  "settings.groupByDepartment.title": "Nhóm bot theo phòng ban",
+  "settings.groupByDepartment.subtitle": "Khi tắt, mọi bot và cuộc trò chuyện nhóm hiện trong một danh sách duy nhất, bot đã ghim nằm trên cùng.",
   "settings.universalPins.title": "Ghim chung",
   "settings.universalPins.subtitle": "Giữ các bot đã ghim từ mọi group chat ở đầu thanh bên, bao gồm cả bot phụ trách của group chat. Chúng sẽ cố định tại đó khi cuộn phần còn lại của danh sách.",
   "settings.notificationSounds.title": "Âm thanh thông báo",

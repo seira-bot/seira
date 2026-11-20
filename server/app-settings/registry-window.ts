@@ -25,6 +25,8 @@ export function windowEntries(windowPref: WindowPref): SettingEntry[] {
       "Show pinned bots as circles", "Show pinned bots as rows"),
     flag("appearance.universalPins", "Universal pins", "Pinned bots stay pinned in every place on the rail.", "layout", ["universal pins", "pins everywhere"],
       "Keep pinned bots pinned in every place", "Pin bots in each place on its own"),
+    flag("appearance.groupByDepartment", "Group by department", "Group the sidebar's bots and group chats under their department headers; off shows them in one list.", "layout", ["departments", "group by department", "flat list", "sections"],
+      "Group the sidebar by department", "Show every bot and group chat in one list"),
     windowPref("appearance.pinnedPages", "Pinned pages", "Web pages pinned beside the chat. Send the full list; chat pages pinned from a conversation stay.", "layout",
       ["pinned panels", "pinned pages", "web panel", "side page"], 'a list of up to 6 {"name","url"} with http(s) addresses; an empty list unpins every web page',
       { says: (pages: Array<{ name: string; url: string }>) => (pages.length ? `Pin these pages beside the chat: ${pages.map((page) => `${page.name} (${page.url})`).join(", ")}` : "Unpin every web page beside the chat") }),

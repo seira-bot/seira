@@ -3723,6 +3723,8 @@
   "settings.threadDisplay.show": "Afficher les fils",
   "settings.threadDisplay.title": "Fils",
   "settings.threads.title": "Fils en parallèle",
+  "settings.groupByDepartment.title": "Grouper les bots par département",
+  "settings.groupByDepartment.subtitle": "Désactivé affiche tous les bots et toutes les discussions de groupe dans une seule liste, les bots épinglés en haut.",
   "settings.universalPins.subtitle": "Garder les bots épinglés de chaque groupe en haut de la barre latérale, y compris le chef d'un groupe. Ils y restent pendant que le reste de la liste défile.",
   "settings.universalPins.title": "Épingles universelles",
   "settings.userBubbles.aria": "Colorer mes messages avec la couleur du bot",

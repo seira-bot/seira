@@ -984,6 +984,8 @@
   "settings.runCard.show": "Çalıştırma kartını göster",
   "settings.pinnedCircles.title": "Sabitlenen botlar daire olarak",
   "settings.pinnedCircles.subtitle": "Sabitlenmiş botları Grok Bot gibi büyük avatarlar olarak gösterin. Kenar çubuğunu genişletmek her satıra daha fazla sığdırır.",
+  "settings.groupByDepartment.title": "Botları departmana göre grupla",
+  "settings.groupByDepartment.subtitle": "Kapalıyken her bot ve grup sohbeti tek bir listede görünür, sabitlenmiş botlar en üstte yer alır.",
   "settings.universalPins.title": "Evrensel sabitlemeler",
   "settings.universalPins.subtitle": "Bir grubun lideri de dahil olmak üzere her gruptan sabitlenmiş botları kenar çubuğunun üst kısmında tutun. Listenin geri kalanı kaydırılırken onlar orada kalır.",
   "settings.notificationSounds.title": "Bildirim sesleri",

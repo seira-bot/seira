@@ -3577,6 +3577,8 @@
   "settings.threadDisplay.show": "थ्रेड्स दिखाएँ",
   "settings.threadDisplay.title": "थ्रेड्स",
   "settings.threads.title": "समानांतर थ्रेड्स",
+  "settings.groupByDepartment.title": "बॉट्स को विभाग के अनुसार समूहित करें",
+  "settings.groupByDepartment.subtitle": "बंद करने पर हर बॉट और ग्रुप चैट एक ही सूची में दिखते हैं, पिन किए गए बॉट सबसे ऊपर रहते हैं।",
   "settings.universalPins.subtitle": "हर समूह के पिन किए बॉट्स को साइडबार के ऊपर रखें, समूह के मुखिया समेत। बाकी सूची स्क्रॉल होने पर भी वे वहीं रहते हैं।",
   "settings.universalPins.title": "सार्वभौमिक पिन",
   "settings.userBubbles.aria": "मेरे संदेशों को बॉट के रंग में रंगें",

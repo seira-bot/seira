@@ -1704,6 +1704,8 @@
   "settings.runCard.show": "顯示執行卡片",
   "settings.pinnedCircles.title": "以圓形顯示釘選的機器人",
   "settings.pinnedCircles.subtitle": "以大型頭像顯示釘選的機器人，就像 Grok Bot 一樣。加寬側邊欄可讓每列容納更多頭像。",
+  "settings.groupByDepartment.title": "依部門將機器人分組",
+  "settings.groupByDepartment.subtitle": "關閉後，所有機器人與群組聊天會顯示在同一份清單中，已釘選的機器人排在最上面。",
   "settings.universalPins.title": "全域釘選",
   "settings.universalPins.subtitle": "將所有聊天室中釘選的機器人（包括聊天室的幕僚長）固定在側邊欄頂端。捲動其餘清單時，它們會保持在原位。",
   "settings.notificationSounds.title": "通知音效",

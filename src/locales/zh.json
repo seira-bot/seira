@@ -1814,6 +1814,8 @@
   "settings.runCard.show": "显示运行卡片",
   "settings.pinnedCircles.title": "以圆形显示置顶的机器人",
   "settings.pinnedCircles.subtitle": "把置顶的机器人显示为大头像，就像 Grok Bot 一样。加宽侧栏可让每行容纳更多。",
+  "settings.groupByDepartment.title": "按部门分组机器人",
+  "settings.groupByDepartment.subtitle": "关闭后，所有机器人和群聊会显示在同一个列表中，置顶的机器人排在最上面。",
   "settings.universalPins.title": "全局置顶",
   "settings.universalPins.subtitle": "把各群组中置顶的机器人（包括群组的参谋长）固定显示在侧栏顶部。列表其余部分滚动时，它们始终留在原位。",
   "settings.notificationSounds.title": "通知音效",

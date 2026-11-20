@@ -3924,6 +3924,8 @@
   "settings.threadDisplay.show": "Threads zeigen",
   "settings.threadDisplay.title": "Threads",
   "settings.threads.title": "Parallele Threads",
+  "settings.groupByDepartment.title": "Bots nach Abteilung gruppieren",
+  "settings.groupByDepartment.subtitle": "Aus zeigt jeden Bot und jeden Gruppenchat in einer Liste, angeheftete Bots oben.",
   "settings.universalPins.subtitle": "Angeheftete Bots aus jeder Gruppe oben in der Seitenleiste halten, auch den Chef einer Gruppe. Sie bleiben dort, während der Rest der Liste scrollt.",
   "settings.universalPins.title": "Universelle Anheftungen",
   "settings.userBubbles.aria": "Meine Nachrichten in der Farbe des Bots färben",

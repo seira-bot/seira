@@ -17,6 +17,7 @@ export const SIDEBAR_SECTION_ORDER_KEY = "openmausbot.sidebarSectionOrder.v1";
 export const SIMPLE_SIDEBAR_SECTION_ORDER_KEY = "openmausbot.sidebarSectionOrder.simple.v1";
 export const PINNED_CIRCLES_KEY = "openmausbot.pinnedCircles";
 export const UNIVERSAL_PINS_KEY = "openmausbot.universalPins";
+export const GROUP_BY_DEPARTMENT_KEY = "openmausbot.groupByDepartment";
 export const PINNED_CIRCLE_ORDER_KEY = "openmausbot.pinnedCircleOrder.v1";
 
 /** What the sidebar's key keeps for the column of avatars. The values an older app kept there ("compact", "icons") open
@@ -377,6 +378,75 @@ export function setUniversalPins(enabled: boolean): void {
 
 export function useUniversalPins(): boolean {
   return useSyncExternalStore(subscribeUniversalPins, loadUniversalPins, () => false);
+}
+
+export function parseGroupByDepartment(value: string | null): boolean {
+  return value !== "false";
+}
+
+let sessionGroupByDepartment: boolean | undefined;
+const groupByDepartmentListeners = new Set<() => void>();
+
+function notifyGroupByDepartment(): void {
+  for (const listener of groupByDepartmentListeners) listener();
+}
+
+function onGroupByDepartmentStorage(event: StorageEvent): void {
+  if (event.key !== GROUP_BY_DEPARTMENT_KEY && event.key !== null) return;
+  sessionGroupByDepartment = undefined;
+  notifyGroupByDepartment();
+}
+
+export function subscribeGroupByDepartment(listener: () => void): () => void {
+  groupByDepartmentListeners.add(listener);
+  if (
+    groupByDepartmentListeners.size === 1 &&
+    typeof window !== "undefined" &&
+    typeof window.addEventListener === "function"
+  ) {
+    window.addEventListener("storage", onGroupByDepartmentStorage);
+  }
+  return () => {
+    groupByDepartmentListeners.delete(listener);
+    if (
+      groupByDepartmentListeners.size === 0 &&
+      typeof window !== "undefined" &&
+      typeof window.removeEventListener === "function"
+    ) {
+      window.removeEventListener("storage", onGroupByDepartmentStorage);
+    }
+  };
+}
+
+export function loadGroupByDepartment(storage?: Pick<Storage, "getItem"> | null): boolean {
+  if (storage === undefined && sessionGroupByDepartment !== undefined) return sessionGroupByDepartment;
+  try {
+    const target = storage === undefined ? (globalThis.localStorage ?? null) : storage;
+    return parseGroupByDepartment(target?.getItem(GROUP_BY_DEPARTMENT_KEY) ?? null);
+  } catch {
+    return true;
+  }
+}
+
+export function saveGroupByDepartment(
+  enabled: boolean,
+  storage?: Pick<Storage, "setItem"> | null,
+): void {
+  try {
+    const target = storage === undefined ? (globalThis.localStorage ?? null) : storage;
+    target?.setItem(GROUP_BY_DEPARTMENT_KEY, enabled ? "true" : "false");
+  } catch {
+  }
+}
+
+export function setGroupByDepartment(enabled: boolean): void {
+  sessionGroupByDepartment = enabled;
+  saveGroupByDepartment(enabled);
+  notifyGroupByDepartment();
+}
+
+export function useGroupByDepartment(): boolean {
+  return useSyncExternalStore(subscribeGroupByDepartment, loadGroupByDepartment, () => true);
 }
 
 

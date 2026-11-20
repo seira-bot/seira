@@ -46,7 +46,7 @@ vi.mock("@/state/store", async (importOriginal) => {
 
 import { initialState } from "@/state/store";
 import { BOTS_SECTION_ID, CHANNELS_SECTION_ID, userSectionId } from "@/lib/sidebar-layout";
-import { SIDEBAR_DENSITY_KEY } from "@/lib/sidebar-preferences";
+import { GROUP_BY_DEPARTMENT_KEY, SIDEBAR_DENSITY_KEY } from "@/lib/sidebar-preferences";
 import { PHONE_LAYOUT } from "@/lib/use-media-query";
 import { BotContextMenu, BotListItem, Sidebar, TeamMenuItems } from "./Sidebar";
 const drawSidebar = (Sidebar as unknown as { type: (props: import("react").ComponentProps<typeof Sidebar>) => import("react").ReactNode }).type;
@@ -511,5 +511,31 @@ describe("deleting a Chief of Staff", () => {
     fixture.state = { ...fixture.state, bots: [chief] };
     askToDelete(chief);
     expect(openDialog()!.props.alternative).toBeUndefined();
+  });
+});
+
+describe("group by department turned off", () => {
+  const nameOf = (props: HeaderProps) => props.name;
+
+  it("lists every bot and group chat in one list in Advanced, with no department heading", () => {
+    fixture.advanced = true;
+    fixture.storage.set(GROUP_BY_DEPARTMENT_KEY, "false");
+    expect(headers().map(nameOf)).not.toContain("Work");
+    expect(sections().some((id) => String(id).startsWith("user:"))).toBe(false);
+    expect(listed()).toEqual(["atlas", "bea", "cleo", "dodo", "echo"]);
+    expect(fixture.state.bots.find((candidate) => candidate.id === "dodo")?.section).toBe("Work");
+  });
+
+  it("shows the departments again when it is back on", () => {
+    fixture.advanced = true;
+    fixture.storage.set(GROUP_BY_DEPARTMENT_KEY, "false");
+    render();
+    fixture.storage.set(GROUP_BY_DEPARTMENT_KEY, "true");
+    expect(headers().map(nameOf)).toContain("Work");
+  });
+
+  it("changes nothing in Simple, where the setting is not shown", () => {
+    fixture.storage.set(GROUP_BY_DEPARTMENT_KEY, "false");
+    expect(headers().map(nameOf)).toContain("Work");
   });
 });

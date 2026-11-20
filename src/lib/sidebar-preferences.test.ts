@@ -6,6 +6,7 @@ import {
   PINNED_CIRCLES_KEY,
   PINNED_CIRCLE_ORDER_KEY,
   SIDEBAR_ATTENTION_PINNED_KEY,
+  GROUP_BY_DEPARTMENT_KEY,
   UNIVERSAL_PINS_KEY,
   SIDEBAR_COLLAPSED_SECTIONS_KEY,
   SIDEBAR_DENSITY_KEY,
@@ -16,6 +17,7 @@ import {
   clampSidebarWidth,
   loadPinnedCircles,
   loadPinnedCircleOrder,
+  loadGroupByDepartment,
   loadUniversalPins,
   loadSidebarAttentionPinned,
   loadCollapsedSections,
@@ -25,6 +27,7 @@ import {
   loadSidebarToolsLayout,
   loadSidebarWidth,
   parsePinnedCircles,
+  parseGroupByDepartment,
   parseUniversalPins,
   parseSidebarAttentionPinned,
   parseSidebarDensity,
@@ -32,6 +35,7 @@ import {
   saveCollapsedSections,
   savePinnedCircles,
   setPinnedCircleOrder,
+  saveGroupByDepartment,
   saveUniversalPins,
   saveSectionOrder,
   saveSidebarAttentionPinned,
@@ -279,5 +283,26 @@ describe("sidebar tools layout preference", () => {
       unsubscribe();
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("group by department preference", () => {
+  it("defaults on, turns off only for the exact word false, and survives blocked storage", () => {
+    expect(parseGroupByDepartment(null)).toBe(true);
+    expect(parseGroupByDepartment("true")).toBe(true);
+    expect(parseGroupByDepartment("untrusted")).toBe(true);
+    expect(parseGroupByDepartment("false")).toBe(false);
+
+    const setItem = vi.fn();
+    saveGroupByDepartment(false, { setItem });
+    saveGroupByDepartment(true, { setItem });
+    expect(setItem).toHaveBeenNthCalledWith(1, GROUP_BY_DEPARTMENT_KEY, "false");
+    expect(setItem).toHaveBeenNthCalledWith(2, GROUP_BY_DEPARTMENT_KEY, "true");
+    expect(loadGroupByDepartment({ getItem: () => "false" })).toBe(false);
+    expect(loadGroupByDepartment({ getItem: () => null })).toBe(true);
+    expect(loadGroupByDepartment({ getItem: () => { throw new Error("blocked"); } })).toBe(true);
+    expect(loadGroupByDepartment(null)).toBe(true);
+    expect(() => saveGroupByDepartment(false, { setItem: () => { throw new Error("blocked"); } })).not.toThrow();
+    expect(() => saveGroupByDepartment(false, null)).not.toThrow();
   });
 });
