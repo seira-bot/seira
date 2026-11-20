@@ -4,7 +4,7 @@ import { Provider } from '@/components/provider';
 import { appName, siteUrl } from '@/lib/shared';
 import './global.css';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'], display: 'swap' });
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -20,8 +20,8 @@ export const metadata: Metadata = {
     type: 'website',
   },
   icons: {
-    icon: '/app-icon.svg',
-    apple: '/app-icon.svg',
+    icon: [{ url: '/app-icon-96.png', sizes: '96x96', type: 'image/png' }],
+    apple: '/apple-touch-icon.png',
   },
 };
 

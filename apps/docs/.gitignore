@@ -6,6 +6,9 @@
 /out
 /build
 /public/app-icon.svg
+/public/app-icon-192.png
+/public/app-icon-512.png
+/public/apple-touch-icon.png
 /public/screenshots
 *.tsbuildinfo
 .DS_Store
