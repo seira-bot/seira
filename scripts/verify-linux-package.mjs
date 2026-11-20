@@ -422,7 +422,7 @@ const fields = execFileSync(
   { encoding: "utf8" },
 );
 for (const expected of [
-  "Package: seira",
+  "Package: openmausbot",
   "Architecture: amd64",
   "Maintainer: Milind Soni",
   "Section: utils",

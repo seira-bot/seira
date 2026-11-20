@@ -17,7 +17,7 @@ const candidate = path.resolve(process.argv[2] ?? "");
 if (!candidate.endsWith(".deb") || !fs.existsSync(candidate)) fail("pass the newly built DEB path");
 
 try {
-  const status = execFileSync("dpkg-query", ["-W", "-f=${db:Status-Abbrev}", "seira"], {
+  const status = execFileSync("dpkg-query", ["-W", "-f=${db:Status-Abbrev}", "openmausbot"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
   }).trim();
@@ -100,7 +100,7 @@ try {
   ) {
     fail(`upgraded Chromium sandbox is not root:root 4755: ${chromiumSandbox}`);
   }
-  const installedVersion = execFileSync("dpkg-query", ["-W", "-f=${Version}", "seira"], {
+  const installedVersion = execFileSync("dpkg-query", ["-W", "-f=${Version}", "openmausbot"], {
     encoding: "utf8",
   }).trim();
   console.log(
