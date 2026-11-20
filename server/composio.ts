@@ -20,7 +20,8 @@ import {
   type ConnectedAccountResponse,
 } from "./composio-project.ts";
 import { MULTI_ACCOUNT_CONFIG, authConfigRefusal, ensureProjectSession, projectApiKey, raiseAccountCap, sessionForToolkit } from "./composio-session.ts";
-import { authConfigUseLine, noManagedAuthToolkit, withNoManagedAuthNote } from "./connector-auth-config-hint.ts";
+import { authConfigUseLine, needsOwnAuth, noManagedAuthToolkit, withNoManagedAuthNote } from "./connector-auth-config-hint.ts";
+import type { ToolkitCard } from "../shared/toolkit-card.ts";
 import { planAccountLink } from "../shared/connector-account-link.ts";
 import type { CuratedConnectorSlug } from "../shared/connector-curated.ts";
 import { CONNECTOR_TOOL_NAME_PATTERN, type ConnectorToolGrant } from "../shared/wire.ts";
@@ -836,16 +837,7 @@ export async function authorizeService(cfg: AppConfig, slug: string, requestedAl
   return { url: trustedAuthUrl(body.redirect_url, toolkit) };
 }
 
-export interface ToolkitCard {
-  slug: string;
-  label: string;
-  blurb: string;
-  logo: string | null;
-  /** Toolkits such as public search need no user authorization. */
-  noAuth?: boolean;
-  domain: string | null;
-  categories?: string[];
-}
+export type { ToolkitCard };
 
 /** Composio lists meta.categories as `{ id, name }` objects (older payloads: plain strings). */
 export function toolkitCategories(raw: unknown): string[] | undefined {
@@ -872,7 +864,7 @@ const CURATED: Array<ToolkitCard & { slug: CuratedConnectorSlug }> = [
   { slug: "sentry", label: "Sentry", blurb: "Errors and alerts", domain: "sentry.io", logo: null, categories: ["Developer tools"] },
   { slug: "posthog", label: "PostHog", blurb: "Analytics, feature flags, experiments", domain: "posthog.com", logo: null, categories: ["Analytics"] },
   { slug: "discord", label: "Discord", blurb: "Messages and channels", domain: "discord.com", logo: null, categories: ["Communication"] },
-  { slug: "twitter", label: "X (Twitter)", blurb: "Post and read on X", domain: "x.com", logo: null, categories: ["Social"] },
+  { slug: "twitter", label: "X (Twitter)", blurb: "Post and read on X", domain: "x.com", logo: null, needsOwnAuth: true, categories: ["Social"] },
   { slug: "reddit", label: "Reddit", blurb: "Browse and post", domain: "reddit.com", logo: null, categories: ["Social"] },
   { slug: "zapier", label: "Zapier", blurb: "Connect 9,000+ apps", domain: "zapier.com", logo: null, categories: ["Automation"] },
   { slug: "hubspot", label: "HubSpot", blurb: "CRM search & updates", domain: "hubspot.com", logo: null, categories: ["Sales and CRM"] },
@@ -991,6 +983,7 @@ export async function listToolkits(cfg: AppConfig): Promise<{ cards: ToolkitCard
           blurb: (t.meta?.description ?? t.description ?? "").slice(0, 90),
           logo: t.meta?.logo ?? t.logo ?? null,
           noAuth: t.no_auth === true,
+          ...(needsOwnAuth(t) ? { needsOwnAuth: true } : {}),
           domain: null,
           ...(toolkitCategories(t.meta?.categories) ? { categories: toolkitCategories(t.meta?.categories) } : {}),
         }));

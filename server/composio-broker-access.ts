@@ -63,7 +63,7 @@ const eraseResponseSchema = z.object({ erased: z.boolean().optional(), sharedUse
 
 /**
  * Erases this installation at the managed service and forgets its token here. A failure throws with the token kept, so
- * the call can be repeated. `clearStored` removes a token this process keeps on disk: a Cloud home's
+ * the call can be repeated. `clearStored` removes a token this process keeps on disk: the server's own
  * CLOUD_CONNECTED_APPS_FILE. `sharedUserKept` says connected apps stayed because another installation uses them.
  */
 export async function eraseManagedBrokerInstallation(clearStored?: () => void): Promise<{ sharedUserKept: boolean }> {

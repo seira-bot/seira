@@ -33,7 +33,7 @@ A Cloud uses a connected-apps service instead only when its environment names on
 
 A source build uses your own Composio project and `COMPOSIO_API_KEY`. See [Self-hosted Composio](./self-hosted-composio.mdx).
 
-To run your own connected-apps service, set `OMB_COMPOSIO_BROKER_URL` to its address. Without that variable, the source build uses no service. The packaged desktop app uses Seira's service at `https://apps.seira.bot`, and `OMB_COMPOSIO_BROKER_URL` names another one. Set `OMB_COMPOSIO_BROKER=off` to turn the service off. A saved project key always takes priority over a service, and then nothing is sent to it.
+To run your own connected-apps service, set `OMB_COMPOSIO_BROKER_URL` to its address. Without that variable, the source build uses no service. The packaged desktop app and a self-hosted server installed from npm or Docker use Seira's service at `https://apps.seira.bot`, and `OMB_COMPOSIO_BROKER_URL` names another one. A self-hosted server registers with the service by itself, with no token to make by hand. Set `OMB_COMPOSIO_BROKER=off` to turn the service off. A saved project key always takes priority over a service, and then nothing is sent to it.
 
 ## Connect X (Twitter)
 

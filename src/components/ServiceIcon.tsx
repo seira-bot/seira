@@ -1,16 +1,8 @@
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import type { ToolkitCard } from "../../shared/toolkit-card";
 
-/** One connectable app as the Apps catalog lists it. */
-export interface ToolkitCard {
-  slug: string;
-  label: string;
-  blurb: string;
-  logo: string | null;
-  noAuth?: boolean;
-  domain: string | null;
-  categories?: string[];
-}
+export type { ToolkitCard };
 
 /** An app's logo, then its site's favicon, then its initial. */
 export function ServiceIcon({ card, className = "size-11" }: { card: Pick<ToolkitCard, "logo" | "domain" | "label">; className?: string }) {
