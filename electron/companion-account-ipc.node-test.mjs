@@ -100,6 +100,7 @@ test("prepare is local-only, takes nothing from the page, and an organisation ca
       state: () => ({ status: "ready" }),
       requestCode: () => ({}),
       verifyCode: () => ({}),
+      useCloudSession: async () => { prepared.push("session"); },
       retry: () => ({}),
       signOut: () => ({}),
       prepare: (...args) => {
@@ -108,20 +109,20 @@ test("prepare is local-only, takes nothing from the page, and an organisation ca
       },
     }),
   });
-  vm.runInContext(slice('ipcMain.handle("companion-account:state"', "const workspaceOnly ="), context);
+  vm.runInContext(slice("const adoptCloudSession", "const workspaceOnly ="), context);
   const prepare = handlers.get("companion-account:prepare");
   assert.equal(typeof prepare, "function");
 
   const local = { senderFrame: { url: `${origin}/` } };
   assert.deepEqual(await prepare(local, { endpoint: "https://evil.example.test" }), { available: true, status: "ready" });
-  assert.deepEqual(prepared, [[]]);
+  assert.deepEqual(prepared, ["session", []], "the Seira Cloud session is used before the address is prepared");
   assert.deepEqual(routes, [["https", true]], "setting up the secure address is the person turning the HTTPS address on");
   assert.equal(primed.length, 1, "a person pairing asks for the relay token before a code opens");
   assert.throws(() => prepare({ senderFrame: { url: "https://remote.example.test/" } }), /only available/);
 
   refusal = "Example Org does not allow remote access to this computer.";
   assert.throws(() => prepare(local), /Example Org does not allow remote access/);
-  assert.equal(prepared.length, 1);
+  assert.equal(prepared.length, 2);
   assert.equal(primed.length, 1);
 });
 
