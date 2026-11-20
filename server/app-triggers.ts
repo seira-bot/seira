@@ -5,6 +5,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import { currentRunOn } from "../electron/legacy-names.mjs";
 
 import {
   APP_FILTER_MAX,
@@ -84,7 +85,7 @@ const storedSchema = z.object({
   name: z.string(),
   prompt: z.string(),
   botId: z.string().min(1),
-  runOn: z.enum(["seira", "cloud"]),
+  runOn: z.preprocess(currentRunOn, z.enum(["seira", "cloud"])),
   enabled: z.boolean(),
   app: z.string().min(1),
   appName: z.string(),

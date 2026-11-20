@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -524,5 +524,16 @@ describe("app-event automation that keeps one conversation", () => {
     await drain(triggers);
     expect(runsOf(trigger.id)[0]).toMatchObject({ deliveryId: "msg_same_2", status: "queued" });
     expect(runsOf(trigger.id)[0]).not.toHaveProperty("sameConversation");
+  });
+});
+
+describe("an app-triggers file an earlier version saved", () => {
+  it("loads an automation whose run-on value is the old one", async () => {
+    const trigger = await gmailTrigger(manager());
+    const file = join(dir, "app-triggers.json");
+    writeFileSync(file, readFileSync(file, "utf8").replace(/"runOn": ?"seira"/g, '"runOn": "maus"'));
+    expect(readFileSync(file, "utf8")).toContain('"maus"');
+    const reloaded = manager();
+    expect(reloaded.list()).toMatchObject([{ id: trigger.id, runOn: "seira" }]);
   });
 });

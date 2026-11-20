@@ -785,3 +785,13 @@ describe("webhook that keeps one conversation", () => {
     expect(h.queued.at(-1)?.sameConversation).toBeUndefined();
   });
 });
+
+describe("a webhooks file an earlier version saved", () => {
+  it("loads a webhook whose run-on value is the old one", () => {
+    const h = harness();
+    h.manager.create({ name: "Old", prompt: "Handle it", botId: "seira-sales", runOn: "seira" });
+    writeFileSync(h.file, readFileSync(h.file, "utf8").replace(/"runOn": ?"seira"/g, '"runOn": "maus"'));
+    const reloaded = new WebhookManager(h.options);
+    expect(reloaded.list()).toMatchObject([{ name: "Old", runOn: "seira" }]);
+  });
+});

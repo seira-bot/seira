@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { currentFormat } from "../electron/legacy-names.mjs";
+import { currentFormat, currentRunOn } from "../electron/legacy-names.mjs";
 import { mascotFaceColorSchema } from "./bot-avatar.ts";
 
 import { CONNECTOR_SLUG_PATTERN, CONNECTOR_TOOL_NAME_PATTERN, SEIRA_COLOR_NAMES } from "./wire.ts";
@@ -149,7 +149,7 @@ const backupSchema = z.object({
   routines: z.array(z.object({
     name, prompt: z.string().trim().min(1).max(200_000),
     target: z.enum(["bot", "room-goal"]), botId: key, groupId: key.optional(),
-    runOn: z.enum(["seira", "cloud"]), schedule,
+    runOn: z.preprocess(currentRunOn, z.enum(["seira", "cloud"])), schedule,
     durationMinutes: z.number().finite().positive(),
     timeoutMinutes: z.number().int().min(5).max(1_440).optional(),
     checks: z.array(z.enum(["calendar", "mail", "runs"])).max(3).optional(),
