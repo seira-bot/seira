@@ -7,7 +7,7 @@ import { citationAttachment, createCitationTextSelector } from "../../src/lib/ci
 import { composeMessage, pasteAttachment } from "../../src/lib/composer-attachments.ts";
 import "../server-line-packs.ts";
 import type { DevsReportPayload } from "../devs-report.ts";
-import { devsReportSender, type ReportStatusAnswer, ReportStatusQuestion, SendOutcome } from "../devs-report-send.ts";
+import { devsReportSender, type ReportStatusAnswer, ReportStatusQuestion, SEIRA_BUG_REPORT_URL, SendOutcome } from "../devs-report-send.ts";
 import type { Message, StoreChange } from "../store.ts";
 import { draftLine, laterLine, refusedLine } from "./devs-report-words.ts";
 import { createDevsReports, DEVS_REPORTS_FILE, fixedLine, LONGEST_WAIT_MS, NO_ANSWER_MS, RETRY_MS, STATUS_EVERY_MS, STATUS_FIRST_MS, TRACKED_MS,
@@ -25,7 +25,7 @@ const readyAnswer = (line: string) => `Ready for the person to review. Tell them
 const TOO_OLD_MS = 8 * 24 * 3_600_000;
 
 function fixture(options: { dataDir?: string; sections?: string[]; outcomes?: SendOutcome[]; automated?: boolean; lineLanguage?: DevsReportsDeps["lineLanguage"];
-  reactorOf?: DevsReportsDeps["reactorOf"]; direct?: boolean; appVersion?: string; clock?: number;
+  reactorOf?: DevsReportsDeps["reactorOf"]; direct?: boolean; appVersion?: string; clock?: number; recentLog?: string[];
   /** The conversations, kept across a restart (another fixture on the same data). */
   threads?: Map<string, Message[]>;
   /** The MausBot team's answer to each question about this app's reports; none: no answer (offline). */
@@ -73,7 +73,7 @@ function fixture(options: { dataDir?: string; sections?: string[]; outcomes?: Se
     engine: (instanceId) => ({ name: instanceId === "claude" ? "Claude Code" : "Codex", snapshot: { state: "available", authenticated: true } }),
     appsReady: () => false, language: () => "en", ...(options.lineLanguage ? { lineLanguage: options.lineLanguage } : {}),
     ...(options.reactorOf ? { reactorOf: options.reactorOf } : {}), ...(options.direct === undefined ? {} : { direct: options.direct }),
-    recentLog: () => ["2026-10-27T08:59:00.000Z warn engine probe slow"],
+    recentLog: () => options.recentLog ?? ["2026-10-27T08:59:00.000Z warn engine probe slow"],
     send: options.send ?? (async (payload) => { sent.push(payload); return outcomes.shift() ?? { ok: true, id: `report-${sent.length}` }; }),
     askStatus: async (question) => { asked.push(question); return options.answer?.(question) ?? null; },
     tell: (threadId, text, person) => { told.push({ threadId, text, ...(person ? { person } : {}) }); },
@@ -545,6 +545,37 @@ describe("sending a draft", () => {
     expect(fx.offer("scout-main", message.id)).toBeUndefined();
     expect(keptFile(fx).drafts).toEqual([]);
     expect(fx.sent).toEqual([]);
+    fx.stop();
+  });
+});
+
+describe("the public issue body that goes to Seira's service", () => {
+  it("masks the credentials in the server's warnings and errors that the owner's report carries", async () => {
+    const apiKey = `sk-ant-${"k".repeat(40)}`, bearer = "b".repeat(32), urlToken = "t0ken-in-the-address-123", pem = `MIIEv${"Q".repeat(60)}`;
+    const recentLog = [
+      `2026-10-27T08:58:00.000Z warn provider refused key ${apiKey}`,
+      `2026-10-27T08:58:30.000Z error upstream answered 401 to Authorization: Bearer ${bearer}`,
+      `2026-10-27T08:59:00.000Z warn fetch https://files.example/v1/get?token=${urlToken}&page=2 failed`,
+      `2026-10-27T08:59:30.000Z error bad key -----BEGIN PRIVATE KEY-----\n${pem}\n-----END PRIVATE KEY-----`,
+    ];
+    const bodies: Array<Record<string, unknown>> = [];
+    const fetcher = (async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      return new Response(JSON.stringify({ id: "br_log", issue: 7 }), { status: 201, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+    const fx = fixture({ recentLog, send: devsReportSender(SEIRA_BUG_REPORT_URL, fetcher) });
+    const message = fx.person("scout-main", "@devs the files step fails");
+    fx.advance(NO_ANSWER_MS);
+    await fx.settle();
+    expect(await fx.press("scout-main", message.id)).toMatchObject({ state: "sent", issue: 7 });
+    expect(bodies).toHaveLength(1);
+    const diagnostics = String(bodies[0]!.diagnostics);
+    expect(diagnostics).toContain("## Server warnings and errors, newest last");
+    expect(diagnostics).toContain(`warn provider refused key «redacted ${apiKey.length} chars»`);
+    expect(diagnostics).toContain("Bearer «redacted");
+    expect(diagnostics).toContain("warn fetch https://files.example/… failed");
+    expect(diagnostics).toMatch(/-----BEGIN PRIVATE KEY-----\s+«redacted \d+ chars»\s+-----END PRIVATE KEY-----/);
+    for (const secret of [apiKey, bearer, urlToken, pem, "page=2"]) expect(JSON.stringify(bodies[0])).not.toContain(secret);
     fx.stop();
   });
 });
