@@ -52,11 +52,11 @@ export function ReleaseNotesPopup({ view, onDone, onAllChanges }: {
     <div role="dialog" aria-modal="true" aria-labelledby={TITLE_ID} data-release-notes={view.version} tabIndex={-1}
       className={cn(SHEET, "animate-pop-in motion-reduce:animate-none relative flex max-h-full w-full max-w-[480px] flex-col overflow-hidden outline-none max-sm:max-w-none max-sm:rounded-b-none")}>
       <span aria-hidden="true" className="mx-auto mt-2 hidden h-1 w-9 shrink-0 rounded-full bg-ink/20 max-sm:block" />
-      <button type="button" onClick={() => end("close")} aria-label={t("releaseNotes.close")} className={cn(CLOSE, "absolute end-3 top-3")}><X size={16} /></button>
+      <button type="button" onClick={() => end("close")} aria-label={t("releaseNotes.close")} className={cn(CLOSE, "absolute end-3 top-3 max-sm:top-4 max-sm:size-10")}><X size={16} /></button>
       <div className="flex items-center gap-3 px-6 pt-6 pe-14">
         <SeiraCharacter state="happy" size={48} />
         <div className="flex flex-col gap-0.5">
-          <h2 id={TITLE_ID} className="text-[20px] font-semibold leading-[26px] tracking-[-0.01em] text-ink">{t("releaseNotes.title", { app: productName(), version: view.version })}</h2>
+          <h2 id={TITLE_ID} className="text-[20px] font-semibold leading-[26px] tracking-[-0.01em] text-ink max-sm:text-[17px] max-sm:leading-[22px]">{t("releaseNotes.title", { app: productName(), version: view.version })}</h2>
           {view.from && <p className="text-[12px] leading-4 text-ink-tertiary">{t("releaseNotes.updatedFrom", { version: view.from })}</p>}
         </div>
       </div>
