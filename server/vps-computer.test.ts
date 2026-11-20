@@ -1060,7 +1060,8 @@ describe("VPS computer", () => {
         return fake.runner(args, options);
       };
       expect((await vpsComputerStatus(CONFIG, BOT_ID, runner)).ready).toBe(false);
-      expect(attempts).toBe(1);
+      // A missing image is looked up once under the current name and once under the earlier one.
+      expect(attempts).toBe(message === "No such image" ? 2 : 1);
     },
   );
 
