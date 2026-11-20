@@ -6,7 +6,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-09-x-research-pro-relay-design.md`
 
-**Worktrees:** app `/Users/omkar/Desktop/seira/OpenGrokBot-x-research` (branch `feat/x-research-pro`, from local main a5406ed2); Admin `/Users/omkar/Desktop/seira/seira-cloud-x-relay` (branch `feat/x-research-relay`, from origin/main 82f1386). Node 24. Nothing is pushed or deployed.
+**Worktrees:** app `<repo root>` (branch `feat/x-research-pro`, from local main a5406ed2); Admin `<admin repo root>` (branch `feat/x-research-relay`, from origin/main 82f1386). Node 24. Nothing is pushed or deployed.
 
 ## Global Constraints
 
