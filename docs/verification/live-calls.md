@@ -32,12 +32,12 @@ is "The call id and the call row" in
 Live calls need no plan, from any client: the desktop app, a web browser, or a
 phone through the companion. Each call uses the person's own OpenAI key: the
 separate Live key when one is saved (`live.key`, `SEIRA_OPENAI_LIVE_KEY`, or the
-desktop credential `openaiLiveKey`), else the OpenAI API key from Settings →
-API keys (`openai.key`, `SEIRA_OPENAI_API_KEY`); `liveCallKey` in
+desktop credential `openaiLiveKey`), else the OpenAI API key from Settings → AI → Other
+services (`openai.key`, `SEIRA_OPENAI_API_KEY`); `liveCallKey` in
 `server/live-settings.ts`. `GET /api/config` reports `live.configured` and
 `live.keySource` (`live` or `openai`), never the key. Without either key,
 `POST /api/live/session` answers
-`409 { "error": "Live calls use your own OpenAI key. Add it in Settings → API keys.", "needsKey": true }`
+`409 { "error": "Live calls use your own OpenAI key. Add it in Settings → AI → Other services.", "needsKey": true }`
 before anything reaches OpenAI, and the companion passes it to the phones
 unchanged. The desktop and web app show that sentence under the call button
 with **Open API keys**, which opens Settings at API keys.
@@ -148,7 +148,7 @@ pnpm exec vitest run server/live-custom.test.ts server/live-call-controller.test
 ## Fish Audio Live 3 as the Live provider
 
 With `live.provider: "fish"` (`SEIRA_LIVE_PROVIDER=fish`) a call uses the Fish
-Audio key from Settings → API keys (`tts.fishKey`, `SEIRA_FISH_AUDIO_API_KEY`),
+Audio key from Settings → AI → Other services (`tts.fishKey`, `SEIRA_FISH_AUDIO_API_KEY`),
 the same key Fish voices use; nothing else is asked. On the first call the
 harness sets up an agent on that key's account (`server/live-fish.ts`
 `setUpFishAgent`): a client tool `delegate` (`POST /v1/agent/tools`), an agent

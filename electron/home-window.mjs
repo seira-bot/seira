@@ -13,6 +13,7 @@ import { cloudMachine, cloudState, myCloudOf, otherOwnClouds, ownCloud } from ".
 import { asleepAnswer, BACKGROUND_HEADERS, openSleepingCloud, SIGNED_IN_MS } from "./cloud-power.mjs";
 import nativeText from "./native-text.cjs";
 import { awayIn, parseJournal, sameCloud } from "./one-home.mjs";
+import { sentWireName } from "./phone-wire-names.mjs";
 
 export const HOME_SCREEN_PATH = "/home";
 /** The look at an awake My Cloud before the window moves there: under 3 s, so the offline screen shows within 3 s. */
@@ -641,7 +642,7 @@ export function createHomeWindow(deps) {
 
   async function version(origin) {
     try {
-      const response = await cookieFetch(`${origin}/.well-known/seira/environment`, { cache: "no-store", redirect: "error",
+      const response = await cookieFetch(`${origin}${sentWireName("environmentPath")}`, { cache: "no-store", redirect: "error",
         signal: AbortSignal.timeout(LOOK_MS), headers: { accept: "application/json", ...BACKGROUND_HEADERS } });
       const body = response.ok ? await response.json() : null;
       return typeof body?.version === "string" ? body.version : null;

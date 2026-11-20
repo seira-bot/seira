@@ -5,7 +5,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream, lstatSync, readdirSync, statSync, watch } from "node:fs";
 import { join } from "node:path";
-import { QUIET_MS, skipped, validWirePath } from "./cloud-sync-rules.mjs";
+import { QUIET_MS, SYNC_TEMP_NAME, skipped, validWirePath } from "./cloud-sync-rules.mjs";
 
 export function sha256File(file) {
   return new Promise((resolve, reject) => {
@@ -25,7 +25,7 @@ function* walkPc(root, wire = "", real = []) {
   const syncNames = new Map();
   for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
     const file = join(root, ...real, entry.name);
-    if (/\.seira-sync-[0-9a-f]+$/.test(entry.name)) {
+    if (SYNC_TEMP_NAME.test(entry.name)) {
       const stat = lstatSync(file, { throwIfNoEntry: false });
       if (stat?.isFile()) yield { temp: true, file, mtimeMs: stat.mtimeMs };
       continue;

@@ -10,6 +10,7 @@ import { createCloudSend } from "./cloud-send.mjs";
 import { freezeAnswer } from "./one-home-main.mjs";
 import { awayIn, createOneHome, parseJournal } from "./one-home.mjs";
 import nativeText from "./native-text.cjs";
+import { sentWireName } from "./phone-wire-names.mjs";
 
 const record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const ORIGIN = /^https?:\/\/[^/\s]+$/u;
@@ -56,7 +57,7 @@ export function serverRequests(place, fetchImpl) {
     call: async (method, route, body, options) => answer(await request(method, route, { ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
       ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }) })),
     async who() {
-      const [session, described] = await Promise.all([request("GET", "/api/auth/session").then(answer), request("GET", "/.well-known/seira/environment").then(answer)]);
+      const [session, described] = await Promise.all([request("GET", "/api/auth/session").then(answer), request("GET", sentWireName("environmentPath")).then(answer)]);
       const signedIn = session.ok && session.body?.kind === "session";
       return { signedIn, own: signedIn && session.body.own === true, environmentId: typeof described.body?.environmentId === "string" ? described.body.environmentId : null,
         takesMove: Number(described.body?.capabilities?.move) >= 1, status: session.status };

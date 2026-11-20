@@ -57,8 +57,8 @@ beforeEach(() => {
       if (init?.method === "POST") return Response.json({ code, expiresAt: Date.now() + 300_000, url: `${advertisedOrigin}/pair#code=${code}` });
       return Response.json({ pairings: [], publicUrl });
     }
-    if (url === `${local}/.well-known/seira/environment`) return Response.json({ environmentId: workspaceId });
-    if ([advertisedOrigin, explicitOrigin].some((origin) => url === `${origin}/.well-known/seira/environment`)) {
+    if (url === `${local}/.well-known/openmausbot/environment`) return Response.json({ environmentId: workspaceId });
+    if ([advertisedOrigin, explicitOrigin].some((origin) => url === `${origin}/.well-known/openmausbot/environment`)) {
       return Response.json({ environmentId: remoteWorkspaceId });
     }
     // No real network fallback is allowed, including stale saved addresses.

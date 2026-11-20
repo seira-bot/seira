@@ -19,7 +19,7 @@ import { LINK_ASLEEP, linkPath } from "./device-link-protocol.mjs";
 import { shareableDrive } from "./shared-drives.mjs";
 import nativeText from "./native-text.cjs";
 import { actingBot } from "./lending-indicator.mjs";
-
+import { sentWireName } from "./phone-wire-names.mjs";
 const uuid = value => typeof value === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value);
 const DATA_VOLUME = "/System/Volumes/Data";
 const identify = async candidate => { const info = await fsp.stat(candidate, { bigint: true }); return `${info.dev}:${info.ino}`; };
@@ -411,7 +411,7 @@ export function createComputerSharing({ file, fetch: fetchImpl, environments, lo
     return json;
   };
   const describe = async (env, required = true) => {
-    const [auth, descriptor] = await Promise.all([request(env, "/api/auth/session"), request(env, "/.well-known/seira/environment")])
+    const [auth, descriptor] = await Promise.all([request(env, "/api/auth/session"), request(env, sentWireName("environmentPath"))])
       .catch(error => { throw error.status === 401 || error.status === 403 ? Object.assign(error, { problem: "connect-first" }) : error; });
     if (auth.kind !== "session" || !uuid(auth.id) || !uuid(descriptor.environmentId)) throw Object.assign(new Error("Complete server pairing or sign-in first"), { problem: "connect-first" });
     // A server of the person's own says what it takes from them in their own sign-in's answer (`lending`), never before pairing.

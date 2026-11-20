@@ -529,6 +529,23 @@ services:
     expect(box.journal()).toBe(false);
   });
 
+  it("when the data cannot be put back at first: a restore later also clears the leftovers of an earlier version's restore", () => {
+    const box = install({ behaviour: "silent" }, { failRestore: true });
+    const before = tree(box.data);
+    expect(box.run().status).toBe(2);
+    // An earlier version (before v0.1.182) named its restore folders .omb-restore and .omb-replaced.
+    for (const name of [".omb-restore", ".omb-replaced"]) {
+      mkdirSync(join(box.data, name));
+      writeFileSync(join(box.data, name, "messages.db"), "leftover");
+    }
+    box.setState({ failRestore: false });
+    const back = box.run(["--rollback", "--yes"]);
+    expect(back.status, back.stdout).toBe(0);
+    expect(tree(box.data)).toEqual({ ...before, "started-by.txt": "0.1.150\n0.1.150\n" });
+    for (const name of [".omb-restore", ".omb-replaced", ".seira-restore", ".seira-replaced"]) expect(existsSync(join(box.data, name)), name).toBe(false);
+    expect(box.calls().some((call) => call.includes("/to/.omb-restore /to/.omb-replaced"))).toBe(true);
+  });
+
   it("updates to a named version, and --check changes nothing", () => {
     const box = install();
     const check = box.run(["--check"]);

@@ -19,7 +19,7 @@ spawn record to `<dataDir>/fake-claude-dump.json`; caller-supplied
 
 ## Settings section
 
-Open `previewUrl` from the launch evidence, then Settings → Engines. Expand the
+Open `previewUrl` from the launch evidence, then Settings → AI → Providers. Expand the
 Claude card.
 
 1. **Add endpoint** opens an empty form inside the card: name, base URL

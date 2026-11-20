@@ -47,7 +47,7 @@ switching and Stop can be exercised without a real provider or account.
    with the keyboard; end-of-list actions are disabled. Dropping a folder onto
    another bot must not move folders or sidebar sections. Escape closes the
    menu and returns focus to its trigger.
-10. In **Settings → General → Parallel threads**, select one. Start Gmail,
+10. In **Settings → You and your bots → Limits → Parallel threads**, select one. Start Gmail,
     then send in iCloud. The latter should show **Queued** in the sidebar and
     explain the free-slot wait above its composer, without a user message
     prematurely appearing in the transcript. Stop Gmail: iCloud should start

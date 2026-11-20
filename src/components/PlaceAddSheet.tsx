@@ -248,6 +248,20 @@ export function NewLocalFromMenu() {
   </RailSheet>;
 }
 
+/** The Connect step on a sheet of its own, for a page with no rail beside it: a link, or an address and a code. */
+export function ConnectServerSheet({ onClose }: { onClose: () => void }) {
+  return <RailSheet focusKey="server" onClose={onClose}>
+    <OwnServerLink onBack={null} onConnected={onClose} />
+  </RailSheet>;
+}
+
+/** The Server menu's Connect to a server…, where no rail stands beside this computer's own page. */
+export function ConnectServerFromMenu() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => (window.ogb?.remoteClient?.active ? undefined : window.ogb?.workspaces?.onConnectServer?.(() => setOpen(true))), []);
+  return open ? <ConnectServerSheet onClose={() => setOpen(false)} /> : null;
+}
+
 export function PlaceAddSheet({ choices, places = [], connect = null, onClose, onAccount }: { choices: RailAddChoices; places?: readonly RailPlace[]; connect?: { name: string } | null; onClose: () => void; onAccount?: () => void }) {
   const server = choices.link, organization = choices.organization === true, account = choices.account === true && Boolean(onAccount), local = choices.local === true;
   const several = [local, organization, choices.cloud, server, account].filter(Boolean).length > 1;

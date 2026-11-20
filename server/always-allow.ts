@@ -1,7 +1,8 @@
 // A bot's (and each of its threads') "Always allow" list has a fixed size. A grant past it is refused, never dropped,
 // so the approval card that asked to remember it stays waiting instead of being allowed as if it had been saved.
 // The bot's own list is the one the person sees and edits in Settings; each thread holds a copy that its turns read.
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { join } from "node:path";
 
 import { writeFileAtomic } from "./atomic.ts";
@@ -81,7 +82,7 @@ export function recoverThreadGrantsOnce(dataDir: string, bots: readonly GrantBot
     changed = true;
   }
   try {
-    mkdirSync(dataDir, { recursive: true });
+    ensurePrivateDir(dataDir);
     writeFileAtomic(marker, JSON.stringify({ recoveredAt: Date.now() }), { mode: 0o600 });
   } catch {
     // Not marked: the next start recovers again, which changes nothing that this start did not.

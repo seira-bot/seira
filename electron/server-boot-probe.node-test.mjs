@@ -94,6 +94,18 @@ test("an incomplete response body that reaches the deadline is a timeout", async
   assert.equal(outcome.outcome, "timeout");
 });
 
+test("the server is recognised under either app name", async () => {
+  for (const app of ["openmausbot", "seira"]) {
+    const outcome = await pollServerIdentity({
+      port: 8799,
+      pid: () => 4242,
+      bootTimeoutMs: 5_000,
+      fetchImpl: okFetch({ body: { app, pid: 4242, static: true } }),
+    });
+    assert.equal(outcome.outcome, "ready");
+  }
+});
+
 test("an identity mismatch (same payload shape, wrong pid) stays foreign", async () => {
   const outcome = await pollServerIdentity({
     port: 8799,

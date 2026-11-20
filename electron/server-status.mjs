@@ -1,6 +1,7 @@
 // How each server saved by hand is doing, for Settings → Servers: connected, reconnecting after a passing problem, or
 // blocked on something only the person can fix. Clouds and teams are the Admin's to report, never checked here.
 import { allowedServerOrigin } from "./server-address.mjs";
+import { sentWireName } from "./phone-wire-names.mjs";
 
 export const RECONNECT = Object.freeze({ baseMs: 2_000, capMs: 300_000, healthyMs: 60_000, cantReachAfterMs: 120_000, timeoutMs: 15_000, refocusMs: 5_000 });
 const INSTALLS = new Set(["npx", "global", "docker", "source", "podman-service"]);
@@ -33,7 +34,7 @@ export async function checkServer(origin, fetchImpl, timeoutMs = RECONNECT.timeo
   if (!allowedServerOrigin(origin)) return { kind: "blocked", reason: "insecure" };
   const get = (path, init = {}) => fetchImpl(`${origin}${path}`, { redirect: "error", cache: "no-store", signal: AbortSignal.timeout(timeoutMs), ...init });
   try {
-    const described = await get("/.well-known/seira/environment", { credentials: "omit" });
+    const described = await get(sentWireName("environmentPath"), { credentials: "omit" });
     const body = described.ok ? await described.json().catch(() => null) : null;
     if (typeof body?.environmentId !== "string") return { kind: "transient" };
     const session = await get("/api/auth/session", { credentials: "include", headers: { origin } });

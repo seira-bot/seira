@@ -39,7 +39,7 @@ const pair = async (label: string, scopes: string[]) => {
   const opened = await api("POST", "/api/auth/pairing", { label, scopes });
   expect(opened.status).toBe(200);
   const paired = (await api("POST", "/api/auth/pair", { code: opened.body.code })).body as typeof pairing;
-  expect(paired.token).toMatch(/^seira_sess_/u);
+  expect(paired.token).toMatch(/^omb_sess_/u);
   return paired;
 };
 const rpc = async (token: string, method: string, params: unknown = {}) => {

@@ -359,7 +359,7 @@ put_back() { # backup data image
   helper "$3" "$1:/from:ro" "$2:/to" -- "$VERIFY"'set -u
 stage=/to/.seira-restore
 old=/to/.seira-replaced
-rm -rf "$stage" "$old"
+rm -rf "$stage" "$old" /to/.omb-restore /to/.omb-replaced
 mkdir "$stage" || exit 1
 if ! cp -a /from/. "$stage"/ || ! same /from "$stage"; then rm -rf "$stage"; exit 1; fi
 mkdir "$old" || exit 1
@@ -459,10 +459,12 @@ services:
       SEIRA_SIGNIN_MEMBER_EMAILS:
       SEIRA_SIGNIN_SMTP_URL:
       SEIRA_SIGNIN_SMTP_FROM:
-      # "1": phones pair by QR through Seira Relay. Sign in once: docker compose exec seira seira login --relay
+      # "1": phones pair by QR through Seira Relay. Needs an account service (SEIRA_CONTROL_PLANE_URL), then sign in once:
+      # docker compose exec seira seira login --relay
+      SEIRA_CONTROL_PLANE_URL:
       SEIRA_PHONE_RELAY:
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q seira"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q -e seira -e openmausbot"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -535,9 +537,9 @@ stop_server() {
   [ -z "$cid" ] || [ "$(inspect '{{.State.Running}}' "$cid")" = false ]
 }
 
-answers() { compose exec -T "$SERVICE" sh -c 'curl -sf --max-time 5 "http://127.0.0.1:${SEIRA_PORT:-8799}/api/health"' 2>/dev/null | grep -q seira; }
+answers() { compose exec -T "$SERVICE" sh -c 'curl -sf --max-time 5 "http://127.0.0.1:${SEIRA_PORT:-8799}/api/health"' 2>/dev/null | grep -q -e seira -e openmausbot; }
 reported_version() {
-  compose exec -T "$SERVICE" sh -c 'curl -sf --max-time 5 "http://127.0.0.1:${SEIRA_PORT:-8799}/.well-known/seira/environment"' 2>/dev/null | json_top version
+  compose exec -T "$SERVICE" sh -c 'for name in seira openmausbot; do curl -sf --max-time 5 "http://127.0.0.1:${SEIRA_PORT:-8799}/.well-known/$name/environment" && break; done' 2>/dev/null | json_top version
 }
 # How many engines can start a bot, as the server counts them (GET /api/health/engines, which a hardened server answers
 # a local caller without a session); nothing from a version without that count.
