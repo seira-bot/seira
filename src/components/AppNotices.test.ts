@@ -1592,7 +1592,7 @@ describe("the Teams What's new", () => {
 });
 
 describe("the release notes after an update", () => {
-  const TITLE = "What's new in Seira 0.1.180", VERSIONS = "seira.versions", HINT = "release-notes:0.1.180";
+  const TITLE = "What&#x27;s new in Seira 0.1.180", VERSIONS = "seira.versions", HINT = "release-notes:0.1.180";
   let modal: boolean;
   const update = (before = "0.1.179") => storage.set(VERSIONS, JSON.stringify({ first: before, last: before, before: null }));
   const atVersion = (version: string) => { (window.ogb as Record<string, any>).app = { version, ownPage: true }; };
@@ -1635,9 +1635,9 @@ describe("the release notes after an update", () => {
 
   it("is not due for a version with no entry", async () => {
     atVersion("0.1.183"); update();
-    expect(await relaunch()).not.toContain("What's new in Seira");
+    expect(await relaunch()).not.toContain("new in Seira");
     atVersion("dev");
-    expect(await relaunch()).not.toContain("What's new in Seira");
+    expect(await relaunch()).not.toContain("new in Seira");
     expect(events()).toEqual([]);
   });
 
