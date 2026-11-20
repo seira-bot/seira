@@ -163,6 +163,11 @@ install_browser_apparmor_profile() {
     echo "Seira AppArmor policy directory is unsafe: $APPARMOR_DIR" >&2
     exit 1
   fi
+  # An earlier version installed this profile under another name; unload and remove it before the current one.
+  if [ -f "$APPARMOR_DIR/openmausbot-browser" ]; then
+    "$APPARMOR_PARSER" -R "$APPARMOR_DIR/openmausbot-browser" 2>/dev/null || true
+    rm -f -- "$APPARMOR_DIR/openmausbot-browser"
+  fi
   target=$APPARMOR_DIR/seira-browser
   if [ -L "$target" ] || { [ -e "$target" ] && [ ! -f "$target" ]; }; then
     echo "Seira AppArmor profile target is unsafe: $target" >&2

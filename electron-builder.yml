@@ -42,13 +42,14 @@ files:
   - "!electron/resources/speech-helper-Info.plist"
   - "!electron/resources/Seira Speech.app/**"
   # A machine that built the helper under its old name may still hold that bundle; never ship it.
-  - "!electron/resources/Seira Speech.app/**"
+  - "!electron/resources/OpenMausBot Speech.app/**"
   # The Teach a skill recorder is gone, but a machine that once ran
   # `pnpm build:recorder` may still hold its helper build; never ship it.
   - "!electron/resources/recorder-helper"
   - "!electron/resources/recorder-helper.swift"
   - "!electron/resources/recorder-helper-Info.plist"
   - "!electron/resources/Seira Recorder.app/**"
+  - "!electron/resources/OpenMausBot Recorder.app/**"
   - "!**/node_modules/**"
   - src/locales/*.json
   - "!src/locales/source-hashes.json"
@@ -262,6 +263,8 @@ linux:
       Keywords: AI;Agents;Chat;Productivity;
 
 deb:
+  # The package name stays the same across updates, so dpkg and pacman replace the installed package.
+  packageName: openmausbot
   packageCategory: utils
   priority: optional
   # Add the narrow browser policy's parser without replacing Electron's
@@ -283,6 +286,8 @@ snap:
   autoStart: false
 
 pacman:
+  # The package name stays the same across updates, so dpkg and pacman replace the installed package.
+  packageName: openmausbot
   packageCategory: utils
   fpm: ["--depends", "fuse3", "--depends", "gtk3", "--depends", "nss", "--depends", "alsa-lib", "--depends", "libcups", "--depends", "mesa"]
   afterInstall: build/linux-after-install.sh
