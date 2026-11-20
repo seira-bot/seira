@@ -17,7 +17,7 @@ import {
   COMPANION_ENDPOINT_RELEASE_PENDING_FIELD,
   COMPANION_TUNNEL_RETIRED_FIELD,
   COMPANION_TUNNEL_WAITING_FIELD,
-  UUID, accountProblem, createSharedSession,
+  UUID, accountProblem,
   companionAccountCleanupPending,
   companionTunnelRetired,
   ownString,
@@ -44,7 +44,7 @@ export {
   companionAccountCleanupPending,
   companionTunnelRetired,
 } from "./companion-account-documents.mjs";
-import { LIVE_SEIRA_SERVICES, SEIRA_HOSTS, seiraOrigin, seiraServiceLive } from "./seira-hosts.mjs";
+import { createSharedSession } from "./companion-cloud-session.mjs"; import { LIVE_SEIRA_SERVICES, SEIRA_HOSTS, seiraOrigin, seiraServiceLive } from "./seira-hosts.mjs";
 import { MANAGED_ENDPOINT_PHONES_UNUSED } from "./companion-endpoint-need.mjs";
 import { FRIENDLY_MESSAGES, friendlyCompanionAccountError } from "./companion-account-messages.mjs";
 export { friendlyCompanionAccountError };
