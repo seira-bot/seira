@@ -1,5 +1,5 @@
 // Departments in the sidebar of the real app, against a disposable fake-engine server: dragging a bot to reorder it,
-// onto another bot to start a department named in place, into and out of a department, and a bot's menu.
+// onto another bot to start a department named in place, into and out of a department, a bot's menu, and pinned bots.
 // Run: node --experimental-strip-types scripts/verify-sidebar-groups.ts [--shots <dir> [--only <view,view>]]
 // With --shots it photographs each view with a headless Chrome in a throwaway profile (OMB_CDP_CHROME, else the
 // installed Google Chrome) at twice 1280x800 and exits; without, it prints the preview's address and waits. Drags are
@@ -20,8 +20,13 @@ const CHROME = process.env.OMB_CDP_CHROME ?? "/Applications/Google Chrome.app/Co
 const [WIDTH, HEIGHT, CLIP] = [1280, 800, 640];
 const BOTS: Record<string, string> = { Research: "pink", Inbox: "teal", Writer: "yellow", Travel: "blue", Recipes: "coral" };
 const NAMES = Object.keys(BOTS);
+const EMPTY_BOTS: Array<{ name: string; title: string; color: string }> = [
+  { name: "Planner", title: "Project planning", color: "teal" },
+  { name: "Designer", title: "Frontend engineer", color: "pink" },
+  { name: "Tester", title: "", color: "yellow" },
+];
 
-type Setup = "plain" | "departments" | "full";
+type Setup = "plain" | "departments" | "full" | "pinned";
 /** Each view: the server's state, the mode, a script run in the page once a bot row shows, and what must show after. */
 const VIEWS: Array<{ name: string; setup: Setup; mode: "simple" | "advanced"; act?: string; ready?: string; skins?: string[]; wide?: true }> = [
   { name: "rest-simple", setup: "plain", mode: "simple", skins: ["daylight", "midnight"] },
@@ -40,6 +45,8 @@ const VIEWS: Array<{ name: string; setup: Setup; mode: "simple" | "advanced"; ac
   { name: "drag-line-advanced", setup: "departments", mode: "advanced", act: "start('Inbox'); over(row('Writer'), 0.85)", ready: "[data-bot-drop='after']", skins: ["midnight"] },
   { name: "rename-simple", setup: "departments", mode: "simple", act: "teamMenu('Work'); await pause(300); item('Rename department').click()", ready: "[data-section-name-field]" },
   { name: "delete-simple", setup: "departments", mode: "simple", act: "teamMenu('Work'); await pause(300); item('Delete department').click()", ready: "[role='dialog'], [role='alertdialog']", wide: true },
+  { name: "pinned-advanced", setup: "pinned", mode: "advanced", skins: ["daylight", "midnight"] },
+  { name: "pinned-simple", setup: "pinned", mode: "simple" },
 ];
 
 /** Page helpers the acts above call; bot ids come from the fixture. */
@@ -132,12 +139,18 @@ try {
   const ids = Object.fromEntries(NAMES.map((name) => [name, bots.find((bot) => bot.name === name)!.id]));
   for (const name of NAMES) await api("PATCH", `/api/bots/${ids[name]}`, { color: BOTS[name] });
   const fleet = bots.map((bot) => bot.id);
+  const emptyBots: string[] = [];
+  /** Kept ids make the server treat it as a bot sent from another computer, which arrives with no messages. */
+  const createEmptyBot = async (fields: { name: string; title: string; color: string }) =>
+    (await api("POST", "/api/bots", { id: `empty-${fields.name.toLowerCase()}`, ...fields }) as { bot: { id: string } }).bot.id;
   const setUp = async (setup: Setup) => {
     for (const section of (await api("GET", "/api/sidebar-sections")).sections as string[]) {
       await api("DELETE", `/api/sidebar-sections?section=${encodeURIComponent(section)}`);
     }
-    await api("PUT", "/api/bots/order", { botIds: fleet });
-    if (setup === "plain") return;
+    if (setup === "pinned" && !emptyBots.length) for (const fields of EMPTY_BOTS) emptyBots.push(await createEmptyBot(fields));
+    await api("PUT", "/api/bots/order", { botIds: [...fleet, ...emptyBots] });
+    for (const id of emptyBots) await api("PATCH", `/api/bots/${id}`, { pinned: setup === "pinned" });
+    if (setup === "plain" || setup === "pinned") return;
     await api("POST", "/api/sidebar-sections", { name: "Work", botIds: [ids.Research, ids.Writer, ...(setup === "full" ? [ids.Inbox] : [])] });
     await api("POST", "/api/sidebar-sections", { name: "Home", botIds: [ids.Travel, ids.Recipes] });
   };

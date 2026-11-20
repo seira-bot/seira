@@ -37,8 +37,8 @@ const threadMessages = async (threadId: string): Promise<Array<{ kind: string; c
 function brokerCandidates(threadId: string, botId: string): string[] {
   const dataDir = join(home, ".openmausbot");
   const prefix = threadId.replace(/[^\w-]/g, "").slice(0, 4);
-  const digest = createHash("sha256").update(`${botId}\0${threadId}`).digest("hex").slice(0, 4);
-  const scope = createHash("sha256").update(`${dataDir}\0${child.pid}\0${botId}\0${threadId}`).digest("hex").slice(0, 16);
+  const digest = createHash("sha256").update(`${botId}\0${threadId}\0claude`).digest("hex").slice(0, 4);
+  const scope = createHash("sha256").update(`${dataDir}\0${child.pid}\0${botId}\0${threadId}\0claude`).digest("hex").slice(0, 16);
   return [join(dataDir, `perm-${prefix}${digest}.sock`), join(tmpdir(), `omb-perm-${scope}.sock`)];
 }
 

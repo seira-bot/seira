@@ -43,7 +43,7 @@ export function BotRowPreview({ bot, visible, instances, last, advanced, advRow,
           {working ? (
             <SidebarWorkingStep bot={bot} last={last} />
           ) : (
-            <FadeLine>{waiting ? t("sidebar.preview.waiting") : teammateWait ? t("sidebar.preview.waitingOnTeammate") : queued && !failed ? t("task.queued") : failed ? lastLine(bot, visible, instances, advanced) : botPreview(bot, visible, instances, advanced)}</FadeLine>
+            <FadeLine>{waiting ? t("sidebar.preview.waiting") : teammateWait ? t("sidebar.preview.waitingOnTeammate") : queued && !failed ? t("task.queued") : failed ? lastLine(bot, visible, instances, advanced) : botPreview(bot, visible, instances, advanced) || bot.title.trim()}</FadeLine>
           )}
         </span>
       )}

@@ -62,6 +62,8 @@ COPY cloudflare/control-plane/package.json ./cloudflare/control-plane/package.js
 # it, and .dockerignore keeps .git out — so copy it in before install or the
 # whole build dies on MODULE_NOT_FOUND.
 COPY scripts/install-git-hooks.mjs ./scripts/install-git-hooks.mjs
+# pnpm reads every patchedDependencies file from package.json before it installs.
+COPY patches ./patches
 RUN pnpm install --frozen-lockfile
 COPY . .
 # The Cloud home runs these as root, so nobody else may write them. The web app's

@@ -76,15 +76,19 @@ describe("sidebar bot row", () => {
   });
   afterEach(() => { vi.unstubAllGlobals(); });
 
-  // Every density puts the badge on the avatar's bottom-left: the status dots own the bottom-right, and the row's right
-  // slot holds the time, which the hover actions (+, new folder, …) replace.
-  it.each<[SidebarDensity, string]>([["comfortable", "absolute -bottom-0.5 -left-0.5"], ["icons", "absolute -bottom-0.5 -left-0.5"]])(
-    "shows the model once in a %s row", (density, placement) => {
-      const found = badges(render(bot("claude", "opus"), density));
-      expect(found).toHaveLength(1);
-      expect(found[0]).toContain('aria-label="Model: Opus 4.1 (Claude)"');
-      expect(found[0]).toContain(placement);
-    });
+  it("shows the model once on the icon rail's avatar, clear of the status dot", () => {
+    const found = badges(render(bot("claude", "opus"), "icons"));
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain('aria-label="Model: Opus 4.1 (Claude)"');
+    expect(found[0]).toContain("absolute -bottom-0.5 -left-0.5");
+  });
+
+  it("keeps an Advanced row's avatar to its status dot and names the model in the name's tooltip", () => {
+    const markup = render(bot("claude", "opus"), "comfortable");
+    expect(badges(markup)).toHaveLength(0);
+    expect(markup).not.toContain("data-provider-mark");
+    expect(markup).toContain('title="Atlas · Model: Opus 4.1 (Claude)"');
+  });
 
   // Simple mode shows the mark too (the owner's ask, 2026-10-22): a person sees which provider each bot runs on at a glance.
   it.each<SidebarDensity>(["comfortable", "icons"])("shows the model once in a Simple mode %s row", (density) => {

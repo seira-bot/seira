@@ -149,11 +149,11 @@ describe("a Claude turn in the bot box", () => {
       for (const hook of hooks) expect(hook.authorization).toBe("Bearer hook-bearer-1");
       const boxed = wrap.mock.results.map((result) => result.value as WrappedSpawn | null).find((spawned) => spawned?.plan.botId === "bot-a");
       expect(boxed, "the engine ran in the box").toBeTruthy();
-      const token = hookTokenFile("t-boxed-hooks", "bot-a");
+      const token = hookTokenFile("t-boxed-hooks", "bot-a", "claude-box");
       expect(visibleInBox(boxed!.plan, token), "the conversation's token, read-only").toBe("ro");
       // Its own folder, not the file: a later turn renames a new token over the file, and a bind of the file would keep the old.
       expect(boxed!.plan.mounts).toContainEqual({ kind: "ro", source: dirname(token), target: dirname(token), optional: true });
-      expect(visibleInBox(boxed!.plan, hookTokenFile("t-another", "bot-a")), "another conversation's token").toBe("none");
+      expect(visibleInBox(boxed!.plan, hookTokenFile("t-another", "bot-a", "claude-box")), "another conversation's token").toBe("none");
       expect(visibleInBox(boxed!.plan, dirname(dirname(token))), "the folder of every token").toBe("none");
       expect(visibleInBox(boxed!.plan, join(DATA_DIR, "messages.db"))).toBe("none");
     } finally {

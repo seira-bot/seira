@@ -14,10 +14,13 @@ describe("limitBackupAllowed", () => {
     expect(limitBackupAllowed(claude, claude)).toBe(false);
     expect(limitBackupAllowed(claude, { instanceId: "claude-work", driverKind: "claudeAgent" }, {})).toBe(false);
     expect(limitBackupAllowed({ instanceId: "codex", driverKind: "codex" }, { instanceId: "codex-2", driverKind: "codex" })).toBe(false);
+    expect(limitBackupAllowed({ instanceId: "antigravity", driverKind: "antigravityAgent" }, { instanceId: "antigravity-2", driverKind: "antigravityAgent" })).toBe(false);
+    expect(limitBackupAllowed({ instanceId: "opencodeGo", driverKind: "opencodeGo" }, { instanceId: "opencodeGo-2", driverKind: "opencodeGo" })).toBe(false);
   });
 
   it("allows another engine, or the same engine on a pay-per-use key", () => {
     expect(limitBackupAllowed(claude, { instanceId: "codex", driverKind: "codex" })).toBe(true);
+    expect(limitBackupAllowed({ instanceId: "antigravity", driverKind: "antigravityAgent" }, { instanceId: "opencodeGo", driverKind: "opencodeGo" })).toBe(true);
     expect(limitBackupAllowed(claude, { instanceId: "claude-api", driverKind: "claudeAgent" }, { environment: { ANTHROPIC_API_KEY: "sk-test" } })).toBe(true);
     expect(limitBackupAllowed(claude, { instanceId: "claude-api", driverKind: "claudeAgent" }, { access: "api" })).toBe(true);
     expect(limitBackupAllowed(claude, { instanceId: "claude-api", driverKind: "claudeAgent" }, { environment: { ANTHROPIC_API_KEY: " " } })).toBe(false);
