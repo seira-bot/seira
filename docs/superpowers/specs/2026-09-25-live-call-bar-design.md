@@ -194,7 +194,7 @@ marks a user line an external interface sent through the guarded send route
 
 ### The call id and the call row
 
-Added 2026-10-06 (the harness half of SupaSeira/seira-mobile
+Added 2026-10-06 (the harness half of the phone-app repository
 `docs/superpowers/specs/2026-10-06-grok-style-live-calls-design.md`).
 
 - **Call id.** Every user line a call delivers carries `callId`, the call's
@@ -422,7 +422,7 @@ hold and the line they show:
   stay per platform. Presentation includes where the call lives on screen:
   the desktop keeps the call bar above the composer, and the phones may show
   an app-wide dock that opens into a full-screen call with a live transcript
-  (seira-mobile spec 2026-10-06-grok-style-live-calls-design). That
+  (phone-app spec 2026-10-06-grok-style-live-calls-design). That
   transcript is the phone's own data-channel captions, kept in memory for
   the current call only: the voice's words are still never stored or sent
   anywhere.

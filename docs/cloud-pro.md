@@ -21,7 +21,7 @@ person connects their own AI ([Trial Claude credit](#trial-claude-credit)).
 This page is the Seira half of a contract with three parties:
 
 - **the home machine**: this repository's `cloud-home` image (`Dockerfile`, `deploy/fly/`);
-- **the Admin** (seira-cloud, `docs/consumer-cloud.md` there): provisions
+- **the Admin** (the Seira Cloud service): provisions
   the app, holds the machine's signing secret, and answers the desktop's Cloud
   session;
 - **the desktop app**: signs in to Cloud, lists the machine under Servers,
@@ -1265,8 +1265,7 @@ provider outage. So on a Cloud home (`server/engine-memory.ts`):
 - **The day's pressure is reported** (`room` in the health report, below):
   tasks that waited for memory and how long, turns stopped for it, processes
   the kernel stopped, and minutes the machine stalled on memory (its `full
-  avg10` at 20% or more). The Admin offers a bigger plan from it
-  (seira-cloud `server/cloud-room.ts`).
+  avg10` at 20% or more). The Admin offers a bigger plan from it.
 
 ### Why the server stays on loopback
 
@@ -1386,7 +1385,7 @@ own Fly private network, so no machine can reach another's over 6PN.
 
 ## Boot contract
 
-Set by seira-cloud's provisioner (`server/cloud-machines.ts`). Any of the
+Set by the Cloud service's provisioner. Any of the
 first four switches the server into Cloud home mode; then all of them are
 required and the whole contract is validated. A partial or invalid contract
 stops the server before it serves, with a message that names the variable and

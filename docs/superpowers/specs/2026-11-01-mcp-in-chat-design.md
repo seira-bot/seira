@@ -2,7 +2,7 @@
 
 Date: 2026-11-01 · Status: awaiting review · Scope: server, desktop (macOS, Windows), iPhone, Android
 
-Repos: server and desktop in milind-soni/OpenMausBot; phone apps in SupaSeira/seira-mobile (separate PR).
+Repos: server and desktop in milind-soni/OpenMausBot; phone apps in the phone-app repository (separate PR).
 
 Mockup (approved): [assets/2026-11-01-mcp-in-chat/mockup.html](assets/2026-11-01-mcp-in-chat/mockup.html), four tabs with working buttons.
 
@@ -65,7 +65,7 @@ These would make it a failure even if it works:
    - A "Sign in to Linear" card. The card moves from waiting to "Signed in · Kiwi carried on".
    - A "Turn on Linear?" card that shows the address, or the command and "Runs on this computer".
    - Changes, keys and clean-up happen in the chat.
-3. **Phones are in this project.** The phone apps get their changes in a seira-mobile PR that pairs with the
+3. **Phones are in this project.** The phone apps get their changes in a phone-app PR that pairs with the
    Seira PR.
 
 Note for the builder. This is a deliberate exception to `server/direct-apply.ts`, which applies bot-requested
@@ -308,7 +308,7 @@ That card already exists on desktop and iPhone. **Android has no secret card tod
 UNKNOWN there, so an Android user sees only "Securely provide the … from Seira on your phone or computer." See
 open question 1.
 
-### Phones (seira-mobile PR)
+### Phones (phone-app PR)
 
 Function needs no phone change, because of the connector card and generic option card reuse. The phone PR is polish:
 
@@ -368,7 +368,7 @@ Each step ends in a check:
 3. Approval cards for Ask, Edits and Auto.
 4. Sign in card: connector `source: "mcp"`, card-scoped owner, `onSettled`, phone and paste-back refusals.
 5. Desktop wording and settings panel refresh.
-6. seira-mobile PR: wording, refusal text, fixtures and tests.
+6. phone-app PR: wording, refusal text, fixtures and tests.
 
 ## Left to the builder
 

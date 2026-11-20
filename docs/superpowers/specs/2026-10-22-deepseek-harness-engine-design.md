@@ -61,7 +61,7 @@ with the normal approval cards, model picker and reasoning-effort control.
 - "Full access" / "Auto-accept edits" approval levels (dsh has no modes; it
   stays ask/auto like Kimi and Hermes).
 - Phone apps: engines come from the server, phones only need a provider mark;
-  that is a separate seira-mobile change and is noted in the hand-over.
+  that is a separate phone-app change and is noted in the hand-over.
 - Managed download of dsh; npm is the install route.
 
 ## Anti-goals

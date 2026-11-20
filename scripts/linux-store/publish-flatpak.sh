@@ -177,6 +177,8 @@ if [ "$UPLOAD" = 1 ]; then
   if grep -qx 'config' <<<"$listing"; then
     mkdir -p "$CACHE_DIR"
     rc sync "$DEST/repo" "$CACHE_DIR" "${LOCAL_ONLY[@]}"
+    # R2 stores no empty folders, so the sync removes the empty ref folders that ostree needs.
+    mkdir -p "$CACHE_DIR/refs/heads" "$CACHE_DIR/refs/mirrors" "$CACHE_DIR/refs/remotes"
   else
     [ "$INIT_REPO" = 1 ] || die "the bucket has no repo. Use --init-repo for the first publish only."
     [ ! -e "$CACHE_DIR/config" ] || die "the bucket has no repo, but $CACHE_DIR has one. Move that folder away, or set SEIRA_FLATPAK_CACHE_DIR to an empty folder."

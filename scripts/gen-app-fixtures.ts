@@ -1,7 +1,7 @@
 // Writes the chat-app fixtures the phone apps test against, made by the server's own code, and copies the app
 // host page into both phone apps.
 //
-//   node --experimental-strip-types scripts/gen-app-fixtures.ts <seira-mobile checkout>
+//   node --experimental-strip-types scripts/gen-app-fixtures.ts <phone app checkout>
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";

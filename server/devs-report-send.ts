@@ -96,7 +96,7 @@ export async function sendDevsReport(endpoint: string, payload: DevsReportPayloa
   return { ok: false, retry: true, why: "server" };
 }
 
-/** What the app asks about the reports it sent (seira-cloud server/bug-report-contract.ts BugReportStatusRequest). */
+/** What the app asks about the reports it sent. */
 export const BUG_REPORT_STATUS_PATH = "/api/bug-reports/status";
 export const BUG_REPORT_STATUS_MAX_IDS = 50;
 export interface ReportStatusQuestion { installId: string; ids: string[] }
@@ -111,7 +111,7 @@ const statusAnswerSchema = z.object({
 /** A Cloud home's credential for its question: its machine and the bootstrap secret it shares with the Admin. */
 export interface ReportStatusHome { machineId: string; bootstrapSecret: string }
 
-/** Must match seira-cloud server/bug-reports.ts `bugReportsHomeSignature`: its own signing string, so no other signed
+/** Must match the Cloud service's bug-report signature: its own signing string, so no other signed
  * request can be replayed here or the other way. */
 export function bugReportsHomeSignature(secret: string, machineId: string, timestamp: string, nonce: string, body: string): string {
   const bodyHash = createHash("sha256").update(body).digest("base64url");

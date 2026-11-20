@@ -160,6 +160,19 @@ describe("authenticated browser viewer relay", () => {
     await rejected;
     expect(SocketFixture.instances).toHaveLength(0);
   });
+  it("ends a view its own client closed mid-connect as no longer available, without a warning or the install hint", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    execute.mockImplementationOnce((_command: string, _args: string[], options: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => reject(Object.assign(new Error("The operation was aborted"), { name: "AbortError", code: "ABORT_ERR" })), { once: true });
+    }));
+    const res = new ResponseFixture();
+    const opening = live.open({ botId: "bot-a", session: "profile-a", owner: "admin-a", isCurrent: () => true, res: res as unknown as ServerResponse, spec: { command: "/engine" } });
+    await expect.poll(() => execute.mock.calls.length).toBe(1);
+    res.emit("close");
+    await expect(opening).rejects.toMatchObject({ status: 409, message: "This browser view is no longer available." });
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
   it("closes every stream and upstream socket for a revoked owner without touching other owners", async () => {
     const a = await open();
     const b = await open({ botId: "bot-b", session: "profile-b" });

@@ -12,7 +12,7 @@ export type PagesAccess =
   | { kind: "desktop"; url: string; token: string }
   | { kind: "home"; url: string; machineId: string; secret: string };
 
-/** Must match seira-cloud server/cloud-pages.ts `homeSignature`: each Admin route signs over a label of its own
+/** Must match the Cloud service's home signature: each Admin route signs over a label of its own
  * (`omb-pages-v1` for page tokens, `omb-community-v1` for community submissions). */
 export function pagesHomeSignature(secret: string, machineId: string, timestamp: string, nonce: string, body: string, label = "omb-pages-v1"): string {
   const bodyHash = createHash("sha256").update(body).digest("base64url");
