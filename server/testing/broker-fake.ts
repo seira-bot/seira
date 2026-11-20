@@ -134,7 +134,7 @@ export async function startBrokerFake(): Promise<BrokerFake> {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   let accounts = 0;
-  const userFor = (installationId: string) => `omb_${installationId.replaceAll("-", "")}`;
+  const userFor = (installationId: string) => `seira_${installationId.replaceAll("-", "")}`;
   return {
     url,
     harness,
