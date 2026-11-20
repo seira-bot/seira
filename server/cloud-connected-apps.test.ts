@@ -497,7 +497,7 @@ describe("a self-hosted server", () => {
     begin(broker, { packaged: false });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(broker.calls).toEqual([]);
-    expect(applied).toEqual([null]);
+    expect(applied).toEqual([]);
     expect(existsSync(file())).toBe(false);
   });
 
