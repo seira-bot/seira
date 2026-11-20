@@ -35,6 +35,7 @@ import { companionOriginSocket, listenCompanionOrigin } from "./origin.ts";
 import { gzipTunnelReplies } from "./tunnel-gzip.ts";
 import { normalizedPhoneSecretPublicKey } from "./phone-secret-key.ts";
 import { machineNameFromConfig } from "./machine-name.ts";
+import { sentWireName } from "./wire-names.ts";
 
 // Only Electron supplies this port; Electron children fail closed until initialized.
 const parentPort = (process as NodeJS.Process & {
@@ -72,7 +73,7 @@ const HARNESS_PORT = num(process.env.SEIRA_PORT, 8799);
 const WEBHOOK_PORT = num(process.env.SEIRA_WEBHOOK_PORT, HARNESS_PORT + 1);
 const COMPANION_PORT = num(process.env.SEIRA_COMPANION_PORT, 8810);
 const CONTROL_PORT = num(process.env.SEIRA_CONTROL_PORT, 8811);
-const SERVICE_TYPE = "_seira._tcp";
+const SERVICE_TYPE = sentWireName("mdnsServiceType");
 let hostedUrl = hostedCompanionUrl(process.env.SEIRA_COMPANION_HOSTED_URL);
 directRoutesFromEnv(process.env);
 const PRIVATE_ORIGIN = companionOriginSocket(process.env.SEIRA_COMPANION_INTERNAL_ORIGIN);

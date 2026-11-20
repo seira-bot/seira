@@ -41,7 +41,7 @@ prompt or dialog: visibility is access control and the log is a record.
 - **Activity view.** `GET /api/admin-activity?from=&to=&who=&what=&limit=`
   and `GET /api/admin-activity.csv` (admin only) merge the admin rows with the
   decision log's answered cards (`what=decisions` adds automatic ones).
-  **Settings → Activity** shows them with who / what / when filters and a CSV
+  **Settings → Data → Activity** shows them with who / what / when filters and a CSV
   link, for admins in a browser.
 
 ## Driving it

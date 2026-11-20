@@ -59,18 +59,26 @@ export function buildWeights(samples, exists) {
 }
 
 export const RUNNER_PLATFORMS = { "ubuntu-latest": "linux", "windows-latest": "win32", "macos-latest": "darwin" };
-const VITEST_JOB = /^vitest \((ubuntu-latest|windows-latest|macos-latest), shard \d+\/\d+\)$/;
+const VITEST_JOB = /^vitest \(([\w-]+), shard \d+\/\d+\)$/;
+
+/** The platform of a vitest job, named by its platform ("vitest (linux, shard 1/8)") or by its runner. */
+export function jobPlatform(name) {
+  const label = VITEST_JOB.exec(name)?.[1];
+  if (label === undefined) return undefined;
+  if (Object.values(RUNNER_PLATFORMS).includes(label)) return label;
+  return Object.hasOwn(RUNNER_PLATFORMS, label) ? RUNNER_PLATFORMS[label] : undefined;
+}
 
 /** A run's vitest jobs by platform: one sample per platform, its shards together covering that platform's files once. */
 function runSamples(id) {
   const gh = (...args) => execFileSync("gh", args, { cwd: ROOT, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
   const samples = new Map();
   for (const job of JSON.parse(gh("run", "view", id, "--json", "jobs")).jobs) {
-    const runner = VITEST_JOB.exec(job.name)?.[1];
-    if (!runner) continue;
-    const platform = RUNNER_PLATFORMS[runner];
+    const platform = jobPlatform(job.name);
+    if (!platform) continue;
     const sample = samples.get(platform) ?? new Map();
-    for (const [file, seconds] of parseVitestLog(gh("run", "view", id, "--log", "--job", String(job.databaseId)))) sample.set(file, seconds);
+    // gh 2.45 `run view --log --job` prints nothing for these jobs; the REST endpoint returns the log.
+    for (const [file, seconds] of parseVitestLog(gh("api", `repos/{owner}/{repo}/actions/jobs/${job.databaseId}/logs`))) sample.set(file, seconds);
     samples.set(platform, sample);
   }
   if (samples.size === 0) throw new Error(`run ${id} has no vitest jobs`);

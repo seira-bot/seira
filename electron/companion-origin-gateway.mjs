@@ -1,4 +1,5 @@
 // The hosted connector never reaches the LAN listener on :8810, only this guardian-owned gateway to the exact sidecar's socket.
+import { acceptedWireNames } from "./phone-wire-names.mjs";
 import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
@@ -149,7 +150,7 @@ export function companionOriginHealth(
         response.on("end", () => {
           if (response.statusCode !== 200) return finish(false);
           try {
-            finish(JSON.parse(Buffer.concat(chunks).toString("utf8"))?.app === "seira");
+            finish(acceptedWireNames("healthApp").includes(JSON.parse(Buffer.concat(chunks).toString("utf8"))?.app));
           } catch {
             finish(false);
           }

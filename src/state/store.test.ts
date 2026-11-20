@@ -1468,6 +1468,13 @@ describe("routine receipt retention", () => {
     expect(plain.routinesFocus).toEqual({ section: "logs", view: undefined, botId: undefined, routineId: undefined, runStatus: undefined, nonce: 2 });
   });
 
+  it("opens a workflow and one of its runs in the Workflows view", () => {
+    const opened = reducer(initialState, { type: "showRoutines", view: "workflows", workflowId: "wf-1", workflowRunId: "run-1" });
+    expect(opened.routinesFocus).toEqual({
+      section: undefined, view: "workflows", botId: undefined, routineId: undefined, runStatus: undefined, workflowId: "wf-1", workflowRunId: "run-1", nonce: 1,
+    });
+  });
+
   it("leaves the bulk-seen sweep to the server's emitted receipts", () => {
     expect(reducer(initialState, { type: "markAllRoutineRunsSeen" })).toBe(initialState);
   });

@@ -1,4 +1,4 @@
-# Seira CI: one Linux lane for every pull request and every push to main (docs/ci.md).
+# Seira CI: one Linux lane for every pull request, every merge queue entry and every push to main (docs/ci.md).
 #
 # Fork pull requests run this workflow safely:
 # - the trigger is `pull_request`, never `pull_request_target`, so a fork run gets a read-only token and no secrets;
@@ -14,16 +14,18 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  # A new push to a pull request cancels that pull request's older run. A new push to main cancels the older main run
-  # that is still going, because the newer commit holds the older one. A manual start never cancels or is cancelled.
+  # A new push to a pull request cancels that pull request's older run. A run on main or in the merge queue is never
+  # cancelled, so every commit that lands gets a verdict. GitHub replaces only a run that still waits for a runner.
   group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   checks:
@@ -33,6 +35,8 @@ jobs:
     outputs:
       # "false" only for a pull request that changes documentation and pictures no source file reads (scripts/ci-heavy.mjs).
       heavy: ${{ steps.scope.outputs.heavy }}
+      # A JSON array of the Cloudflare Workers to check: all of them, except for a pull request that touches fewer.
+      workers: ${{ steps.scope.outputs.workers }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -40,12 +44,12 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
-      - name: Decide if the heavy jobs run
+      - name: Decide which jobs run
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
         run: node scripts/ci-heavy.mjs
       - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -59,17 +63,21 @@ jobs:
       - run: pnpm check:contrast
       - name: Validate the model manifest
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: node scripts/check-model-manifest.mjs --against "$BASE_SHA"
       - name: Validate the announcements file
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: node scripts/check-announcements.mjs --against "$BASE_SHA"
       - name: Find local machine details in added lines
         run: node scripts/check-local-leaks.mjs
+      - name: Find new files in private paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/check-public-paths.mjs --against "$BASE_SHA"
       - name: Source guards
         # The tests that only read the source. They finish in seconds, so a broken rule shows before the shards start.
-        run: pnpm exec vitest run scripts/ci-workflow.test.ts scripts/testing/verification-docs.test.ts src/locales/ scripts/testing/file-size-ratchet.test.ts scripts/testing/index-route-ratchet.test.ts scripts/testing/tighten-ratchets.test.ts scripts/testing/comment-history.test.ts scripts/testing/lazy-server-modules.test.ts scripts/testing/duration-sequencer.test.ts scripts/testing/host-e2e.test.ts scripts/testing/ci-retry-list.test.ts src/lib/copy-text.guard.test.ts src/components/Select.guard.test.ts --reporter=default --reporter=github-actions
+        run: pnpm exec vitest run scripts/ci-workflow.test.ts scripts/testing/verification-docs.test.ts scripts/check-public-paths.test.ts src/locales/ scripts/testing/file-size-ratchet.test.ts scripts/testing/index-route-ratchet.test.ts scripts/testing/tighten-ratchets.test.ts scripts/testing/comment-history.test.ts scripts/testing/lazy-server-modules.test.ts scripts/testing/duration-sequencer.test.ts scripts/testing/host-e2e.test.ts scripts/testing/ci-retry-list.test.ts src/lib/copy-text.guard.test.ts src/components/Select.guard.test.ts --reporter=default --reporter=github-actions
 
   build:
     name: build
@@ -90,6 +98,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm check:electron
+      - name: Electron unit tests
+        timeout-minutes: 5
+        run: pnpm test:electron
       - name: Build the web app
         run: pnpm exec vite build
 
@@ -132,17 +143,54 @@ jobs:
         env:
           SEIRA_VITEST_RETRY_LOG: ${{ runner.temp }}/vitest-retries.jsonl
         run: node scripts/testing/ci-retry-summary.mjs
-      - name: Broker and Electron unit tests
-        if: matrix.shard == 1
-        timeout-minutes: 5
-        run: pnpm broker:test && pnpm test:electron
+
+  workers:
+    # The type check and the tests of each Cloudflare Worker that the change can break (scripts/ci-heavy.mjs holds the
+    # list). The tests use fake services, so no job reads anything private, and no job deploys a Worker.
+    name: worker (${{ matrix.worker.name }})
+    needs: checks
+    # Skipped on a draft pull request, and when no Worker is in scope.
+    if: ${{ github.event.pull_request.draft != true && needs.checks.outputs.workers != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        worker: ${{ fromJSON(needs.checks.outputs.workers) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Type check
+        env:
+          CHECK: ${{ matrix.worker.check }}
+        run: pnpm run "$CHECK"
+      - name: Tests
+        env:
+          TEST: ${{ matrix.worker.test }}
+        run: pnpm run "$TEST"
+
+  server-image:
+    # Builds the server image on each platform and boots it (server-image-smoke.yml). The Dockerfile builds the server
+    # and the web app, so any change that runs the heavy jobs can break the image.
+    name: server image
+    needs: checks
+    if: ${{ github.event.pull_request.draft != true && needs.checks.outputs.heavy == 'true' }}
+    uses: ./.github/workflows/server-image-smoke.yml
 
   gate:
     # The one check that the main branch ruleset requires. It runs even when a job before it fails, and it fails then:
-    # a skipped required check counts as a pass, so the gate must not skip. Only `build` and `vitest` may be skipped,
-    # and only on a draft pull request or a pull request that changes documentation and pictures only (`checks` decides).
+    # a skipped required check counts as a pass, so the gate must not skip. A job may be skipped only when `checks`
+    # says so: `build`, `vitest` and `server-image` on a draft or a documentation-only pull request, `workers` on a
+    # draft or when no Worker is in scope. Any other skip, a failure, or a cancel fails the gate.
     name: CI
-    needs: [checks, build, vitest]
+    needs: [checks, build, vitest, workers, server-image]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -152,12 +200,14 @@ jobs:
           NEEDS: ${{ toJSON(needs) }}
           DRAFT: ${{ github.event.pull_request.draft }}
           HEAVY: ${{ needs.checks.outputs.heavy }}
+          WORKERS: ${{ needs.checks.outputs.workers }}
         run: |
           node --input-type=module -e '
             const needs = JSON.parse(process.env.NEEDS);
-            const mayStop = process.env.DRAFT === "true" || process.env.HEAVY === "false";
-            const stopped = (job, result) => mayStop && result === "skipped" && (job === "build" || job === "vitest");
+            const draft = process.env.DRAFT === "true";
+            const light = draft || process.env.HEAVY === "false";
+            const mayStop = { build: light, vitest: light, "server-image": light, workers: draft || process.env.WORKERS === "[]" };
             for (const [job, { result }] of Object.entries(needs)) console.log(`${result.padEnd(9)} ${job}`);
-            const bad = Object.entries(needs).filter(([job, { result }]) => result !== "success" && !stopped(job, result)).map(([job]) => job);
+            const bad = Object.entries(needs).filter(([job, { result }]) => result !== "success" && !(result === "skipped" && mayStop[job] === true)).map(([job]) => job);
             if (bad.length) { console.error(`\n${bad.length} job(s) did not pass: ${bad.join(", ")}`); process.exit(1); }
           '

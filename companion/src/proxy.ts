@@ -25,6 +25,7 @@ import { createJsonScrubber } from "./json-scrub.ts";
 import { acceptsGzip, gzipCandidate, sendTunnelJson, varyOnEncoding } from "./tunnel-gzip.ts";
 import { CompanionViewerRelay, requestTarget } from "./viewer-relay.ts";
 import { createSseScrubber, isJson, scrub } from "./wire.ts";
+import { acceptedWireNames, sentWireName } from "./wire-names.ts";
 
 export interface ProxyOptions {
   harnessPort: number;
@@ -553,13 +554,13 @@ export function createProxyHandler(options: ProxyOptions) {
             if (
               (harness.statusCode ?? 500) < 200 ||
               (harness.statusCode ?? 500) >= 300 ||
-              (identity as { app?: unknown } | null)?.app !== "seira"
+              !acceptedWireNames("healthApp").includes((identity as { app?: string } | null)?.app ?? "")
             ) {
               fail();
               return;
             }
             finished = true;
-            sendJson(res, 200, { app: "seira", ...(device && version ? { version } : {}) });
+            sendJson(res, 200, { app: sentWireName("healthApp"), ...(device && version ? { version } : {}) });
           });
           return;
         }

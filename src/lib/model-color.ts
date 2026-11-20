@@ -1,3 +1,4 @@
+import type { ProviderIconPreset } from "../../shared/provider-icon";
 import { contrastRatio, fromOklch, toOklch } from "./color-contrast";
 
 /**
@@ -100,6 +101,16 @@ export function modelFamily(groupKey: string): ModelFamily {
   const driver = driverOf(groupKey);
   const fallback = driver && DRIVER_FAMILIES.find(([pattern]) => pattern.test(driver))?.[1];
   return FAMILIES.find((family) => family.id === fallback) ?? FAMILIES.find((family) => family.id === "unknown")!;
+}
+
+const FAMILY_PRESETS: Readonly<Record<string, ProviderIconPreset>> = {
+  anthropic: "anthropic", openai: "openai", xai: "xai", deepseek: "deepseek", google: "google",
+  qwen: "qwen", mistral: "mistral", meta: "meta", cohere: "cohere", kimi: "moonshot",
+};
+
+/** The provider logo for a model id, or null when its family has no built-in logo. */
+export function modelPresetFor(modelId: string): ProviderIconPreset | null {
+  return FAMILY_PRESETS[modelFamily(modelId).id] ?? null;
 }
 
 /** Murmur3's mixing over the model name: a small change in the name moves the tone to an unrelated step. */

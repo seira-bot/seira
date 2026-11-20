@@ -89,7 +89,7 @@ describe("Muse Code driver", () => {
 const FAKE_MUSE_SERVE = `
 import { appendFileSync } from "node:fs";
 import { createInterface } from "node:readline";
-appendFileSync(process.env.FAKE_MUSE_LOG, JSON.stringify({ argv: process.argv.slice(2), home: process.env.HOME }) + "\\n");
+appendFileSync(process.env.FAKE_MUSE_LOG, JSON.stringify({ argv: process.argv.slice(2), home: process.env.HOME, workspaceKey: process.env.OMB_OPENAI_API_KEY ?? null }) + "\\n");
 const { FAKE_MUSE_TURN, FAKE_MUSE_INTERRUPT, FAKE_MUSE_EXIT_DELAY_MS } = process.env;
 const send = (frame) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...frame }) + "\\n");
 const input = createInterface({ input: process.stdin });
@@ -143,6 +143,20 @@ describe.skipIf(process.platform === "win32")("Muse Code's process", () => {
       vi.stubEnv("TMPDIR", previousTmp);
       await instance.refreshModels!();
       expect(instance.models.default).toBe("muse-fake-1.0");
+    } finally {
+      await instance.dispose();
+    }
+  });
+
+  it("keeps a workspace key stored under the old prefix out of the engine", async () => {
+    const { cli, log } = fakeMuse();
+    const instance = await MuseCodeDriver.create({ instanceId: "museCode", displayName: "Muse Code", enabled: true,
+      environment: { OMB_OPENAI_API_KEY: "old-prefix-should-not-leak" }, config: MuseCodeDriver.decodeConfig({ cli }) });
+    try {
+      await instance.refreshModels!();
+      const launches = readFileSync(log, "utf8").trim().split("\n").map((line) => JSON.parse(line) as { workspaceKey: string | null });
+      expect(launches.length).toBeGreaterThan(0);
+      for (const launch of launches) expect(launch.workspaceKey).toBeNull();
     } finally {
       await instance.dispose();
     }

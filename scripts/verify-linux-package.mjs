@@ -428,11 +428,15 @@ requireUpdaterTarget(resources, "linux-unpacked");
 
 const fields = execFileSync(
   "dpkg-deb",
-  ["--field", deb, "Package", "Version", "Architecture", "Maintainer", "Section", "Priority"],
+  ["--field", deb, "Package", "Version", "Architecture", "Maintainer", "Section", "Priority", "Conflicts", "Replaces", "Provides"],
   { encoding: "utf8" },
 );
+// An earlier version's package was named openmausbot; these fields let apt replace it with this one.
 for (const expected of [
-  "Package: openmausbot",
+  "Package: seira",
+  "Conflicts: openmausbot",
+  "Replaces: openmausbot",
+  "Provides: openmausbot",
   "Architecture: amd64",
   "Maintainer: Milind Soni",
   "Section: utils",

@@ -240,7 +240,7 @@ describe("a customer-run server: what leaves it", () => {
 
   it("reads four fields from the home and drops everything else it answered", async () => {
     const fixture = await server();
-    expect(HOME_READS).toEqual(["/api/health", "/.well-known/seira/environment", "/api/seats"]);
+    expect(HOME_READS).toEqual(["/api/health", "/.well-known/openmausbot/environment", "/api/seats"]);
     const facts = parseHomeReads(fixture.docker.onExec!({} as never, []).output);
     expect(facts).toEqual({ answers: true, version: "0.1.151", seats: 7, box: "on" });
     expect(parseHomeReads("not json\n\u001e\n{\"version\":\"<script>\"}\n\u001e\n{\"seats\":\"seven\"}\n\u001e\n")).toEqual({ answers: false, version: null, seats: null, box: null });

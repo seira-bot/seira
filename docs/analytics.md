@@ -27,7 +27,7 @@ you choose. Everything below describes a build that has a key.
 
 ## Turning it off
 
-**Settings → General → Usage analytics.** When it is off, nothing loads and nothing is sent: no events, no daily
+**Usage analytics** in **Settings → General → Privacy**. When it is off, nothing loads and nothing is sent: no events, no daily
 snapshot, and none of the snapshot's requests.
 
 The desktop app keeps the switch for this computer's page itself, so it holds whichever port the app serves that page on
@@ -146,8 +146,8 @@ use their own Boat key, and how many bots run on cloud computers, without sendin
 | `room_members_changed` | You change who is in a room | `members`, `added`, `removed`: counts |
 | `team_imported` | You import a team | `members`: count; `source`: `library`, `file`, `github`, `organization`, `scout`; `mode`: `add`, `project`; `format`: `team`, `package`, `backup` |
 | `bot_created` | You create a bot with New bot, or from a ready-made bot in Templates | `source`: `blank` (New bot), `template` (a starting role), `preset`; `template`: starting role, only when `source` is `template` |
-| `api_key_saved` | You save a key in Settings → API keys, in the Screen panel, in the model picker, on the X card in Apps, from a bot's request in a chat, or by adding an OpenAI-compatible server | `provider`: key provider; `via`: `settings`, `computer_panel`, `model_picker`, `apps`, `chat_request`; `result`: `ok` (the provider accepted it), `rejected` (the provider refused it), `unverified` (saved, not checked), `error` (not saved) |
-| `api_key_removed` | You clear a key of your own in Settings → API keys, the Screen panel, the model picker or the X card in Apps | `provider`: key provider; `via`: `settings`, `computer_panel`, `model_picker`, `apps` |
+| `api_key_saved` | You save a key in Settings → AI → Other services, in the Screen panel, in the model picker, on the X card in Apps, from a bot's request in a chat, or by adding an OpenAI-compatible server | `provider`: key provider; `via`: `settings`, `computer_panel`, `model_picker`, `apps`, `chat_request`; `result`: `ok` (the provider accepted it), `rejected` (the provider refused it), `unverified` (saved, not checked), `error` (not saved) |
+| `api_key_removed` | You clear a key of your own in Settings → AI → Other services, the Screen panel, the model picker or the X card in Apps | `provider`: key provider; `via`: `settings`, `computer_panel`, `model_picker`, `apps` |
 | `engine_signed_in` | You finish signing in to an engine inside the app | `engine`: `claude`, `codex`, `grok`, `kimi`; `method`: `code`, `device_code`, `browser` |
 | `connector_connect` | A Connect you started in Connected apps ends | `app`: app; `result`: `connected` (the account it added works), `failed` or `expired` (that account failed or expired), `timed_out` (neither within two minutes) |
 | `app_snapshot` | Once a day, as described above | The properties in the snapshot table |
@@ -169,7 +169,7 @@ use their own Boat key, and how many bots run on cloud computers, without sendin
 | `cloud_welcome_step` | A step of a new Cloud's welcome is shown | `step`: `bring`, `engine`, `files`, `done` |
 | `cloud_welcome_ended` | A new Cloud's welcome ends | `reason`: `done`, `skipped`; `at`: the step it ended on |
 | `product_hunt_card` | You act on the Product Hunt card | `action`: `upvote`, `not_now`, `close` |
-| `modelgo_offer` | ModelGo: its first-run option is shown, or you act on the first-run option or the ModelGo row in Settings → API keys | `action`: `shown` (the first-run option), `get_key` (ModelGo's site opened), `add_key` (Settings: a key was saved there; first run: you opened the ModelGo row to add one); `place`: `onboarding`, `settings` |
+| `modelgo_offer` | ModelGo: its first-run option is shown, or you act on the first-run option or the ModelGo row in Settings → AI → Other services | `action`: `shown` (the first-run option), `get_key` (ModelGo's site opened), `add_key` (Settings: a key was saved there; first run: you opened the ModelGo row to add one); `place`: `onboarding`, `settings` |
 | `announcement` | A card from the project's public announcements file (sponsor offers, product news, tips; [Announcements](https://github.com/seira-bot/seira/blob/main/docs/announcements.md)) is shown, or you act on it | `id`: the card's own id from that file, the same for everyone who sees the card; `kind`: `sponsor`, `product`, `tip`; `action`: `shown`, `primary` (its main button), `secondary` (its second button), `close` (Not now, the X or Escape) |
 | `simple_mode_prompt` | The Simple mode popup, shown once in each browser after an update when nothing else is on screen, is shown, its Simple mode switch is flipped, or it is closed (Done, the X, Escape or a click outside) | `action`: `shown`, `toggled`, `closed`; `mode`: `simple`, `advanced`, the mode it was shown or closed in, or the one a flip turned on |
 | `new_look_notice` | The notice that Simple is now the only look, shown once in each browser that was on Advanced mode, when nothing else is on screen, is shown or closed (Done, the X, Escape or a click outside) | `action`: `shown`, `closed` |

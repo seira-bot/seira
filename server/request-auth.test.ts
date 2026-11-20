@@ -178,6 +178,8 @@ describe("scopes", () => {
       ["PATCH", "/api/bots/x"], ["PATCH", "/api/bots/x/profile"], ["POST", "/api/attachments"], ["PUT", "/api/bots/order"],
       ["GET", "/api/attachments/a.png"], ["POST", "/api/routines"], ["POST", "/api/routines/r/run"],
       ["POST", "/api/routine-runs/seen-all"], ["POST", "/api/inbox/read-all"],
+      ["GET", "/api/workflows"], ["POST", "/api/workflows"], ["GET", "/api/workflows/w1"], ["PATCH", "/api/workflows/w1"], ["DELETE", "/api/workflows/w1"],
+      ["GET", "/api/workflows/w1/runs"], ["GET", "/api/workflow-runs/r1"], ["POST", "/api/workflow-runs/r1/steps/s1/run-again"],
       ["GET", "/api/bots"], ["GET", "/api/threads/t/messages"], ["GET", "/api/search"], ["GET", "/api/events"],
       ["GET", "/api/config"], ["GET", "/api/webhooks"], ["POST", "/api/tts/speak"],
       ["GET", "/api/auth/session"], ["POST", "/api/auth/stream-ticket"], ["POST", "/api/auth/logout"],
@@ -212,6 +214,8 @@ describe("scopes", () => {
       ["POST", "/api/bots/x/apps/m/rpc/extra"], ["DELETE", "/api/bots/x/apps/m/context"],
       ["PATCH", "/api/logins/1password/vaults/v1"], ["GET", "/api/bots/x/sign-in-cards/m/done"],
       ["GET", "/api/bots/x/queue/q/steer"], ["POST", "/api/bots/x/queue/q/steer/more"], ["POST", "/api/groups/g/queue/q/steer/more"],
+      ["PUT", "/api/workflows"], ["POST", "/api/workflows/w1"], ["PUT", "/api/workflows/w1"], ["POST", "/api/workflows/w1/runs"],
+      ["POST", "/api/workflow-runs/r1"], ["GET", "/api/workflow-runs/r1/steps/s1/run-again"], ["POST", "/api/workflow-runs/r1/steps/s1/run-again/extra"],
       ["POST", "/api/tts/voices/add"], ["GET", "/api/inbox/read-all"], ["PUT", "/api/inbox/read-all"], ["POST", "/api/inbox/read-all/extra"],
     ] as const) expect(requiredScope(method, path), `${method} ${path}`).toBe("admin");
   });
@@ -936,14 +940,14 @@ describe("a browser on this machine is not the owner", () => {
   });
 });
 
-describe("a session token that an earlier version issued", () => {
-  it("still signs in from the sessions file", () => {
+describe("a session token with either prefix", () => {
+  it.each(["omb_sess_", "seira_sess_"])("signs in with %s from the sessions file", (prefix) => {
     const dir = mkdtempSync(join(tmpdir(), "seira-auth-legacy-"));
     try {
       const file = join(dir, "sessions.json");
       const first = new SessionRegistry({ file });
       const issued = first.issue({ label: "Script", scopes: ["admin", "client"] });
-      const earlier = issued.token.replace("seira_sess_", "omb_sess_");
+      const earlier = issued.token.replace(/^[a-z]+_sess_/, prefix);
       const saved = JSON.parse(readFileSync(file, "utf8"));
       saved.sessions[0].tokenHash = createHash("sha256").update(earlier).digest("hex");
       writeFileSync(file, JSON.stringify(saved));

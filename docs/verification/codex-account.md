@@ -9,7 +9,7 @@ used here were synthetic; no live credentials or keyring were accessed.
 node --experimental-strip-types scripts/verify-codex-account.ts
 ```
 
-Open the printed preview URL, then Settings → Engines → Codex. The standard
+Open the printed preview URL, then Settings → AI → Providers, the Codex card. The standard
 verification launcher isolates the server, home, configuration, and fake CLI.
 The account is `ada@example.test`, supplied by fake `account/read`, with an
 empty credential directory. The script waits for Ctrl-C and cleans up.

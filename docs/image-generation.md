@@ -6,7 +6,7 @@ The image is attached to the bot's reply when its turn ends, like a voice note.
 
 ## Setup
 
-Open **Settings → Image generation** (an AI page shown in Advanced mode; a
+Open **Settings → AI → Images** (an AI page shown in Advanced mode; a
 link from the avatar editor opens it in Simple mode too). Choose:
 
 - **Base provider**: used first for every image.

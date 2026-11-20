@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isHarnessEnvName } from "../electron/legacy-env.mjs";
 
 import { RESERVED_MCP_NAMES, slugMcpName } from "../shared/mcp-name.ts";
 import type { McpServerSpec, RemoteMcpSpec, StdioMcpSpec } from "./contracts.ts";
@@ -142,7 +143,7 @@ const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/;
 
 /** Codex exposes MCP env names through one app-server process: a custom server claiming one could take a built-in proxy's bearer. */
 export function isHarnessOwnedMcpEnvName(name: string): boolean {
-  return name === "ELECTRON_RUN_AS_NODE" || name.startsWith("SEIRA_") || name.startsWith("OGB_");
+  return name === "ELECTRON_RUN_AS_NODE" || isHarnessEnvName(name) || name.startsWith("OGB_");
 }
 
 /** Codex shares one environment across MCP children: SEIRA_/OGB_ carry bearers, and ELECTRON_RUN_AS_NODE may only repeat the "1" the harness proxies need. */

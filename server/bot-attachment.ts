@@ -1,7 +1,8 @@
 // The source opens through the message-file route's hardened resolver (realpath containment, O_NOFOLLOW, size cap) and is
 // copied into the private store, so the chat never reaches into a bot's workspace or VM home afterwards.
 import { createHash, createHmac, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { basename, join, posix } from "node:path";
 import { DATA_DIR } from "./config.ts";
 import { openInboxFile, type InboxRead } from "./host/handoff-inbox.ts";
@@ -74,7 +75,7 @@ function contentNameKey(): Buffer {
   if (nameKey) return nameKey;
   const file = join(DATA_DIR, "attachment-names.key");
   try {
-    mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+    ensurePrivateDir(DATA_DIR);
     writeFileSync(file, randomBytes(32), { mode: 0o600, flag: "wx" });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;

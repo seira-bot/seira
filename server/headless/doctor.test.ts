@@ -18,7 +18,7 @@ function sharedServer(engines: number | "old server") {
       if (engines === "old server") throw refused(403);
       return { app: "seira", engines };
     }
-    if (path === "/.well-known/seira/environment") return { version: "0.1.160", label: "seira.example.com", capabilities: { jobs: true } };
+    if (path === "/.well-known/openmausbot/environment") return { version: "0.1.160", label: "seira.example.com", capabilities: { jobs: true } };
     if (path === "/api/auth/session") return { kind: "loopback", scopes: ["client"], trust: "service" };
     throw refused(403);
   });

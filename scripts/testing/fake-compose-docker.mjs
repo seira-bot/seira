@@ -75,7 +75,7 @@ function compose(rest) {
     if (serving.behaviour === "silent") fail("", 7);
     // A version with the count (`counts`) answers how many engines can start a bot; an older one has no such route.
     if (line.includes("/api/health/engines")) return serving.counts ? out(JSON.stringify({ app: "seira", engines: serving.engine ? 1 : 0 })) : fail("", 22);
-    if (line.includes("/api/health")) return out('{"app":"seira"}');
+    if (line.includes("/api/health")) return out('{"app":"openmausbot"}');
     if (line.includes("/environment")) return out(JSON.stringify({ environmentId: "e", version: serving.serves ?? serving.version }));
   }
   fail(`fake docker: unknown compose command: ${line}`, 64);

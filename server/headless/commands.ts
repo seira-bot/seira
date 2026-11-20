@@ -3,6 +3,7 @@ import { EXIT, flag, parseCount, parseDuration, requiredFlag, usageError } from 
 import { conversationFor, conversationTitle, newSendId, readMessage, resolveTarget, type Target, type VerbContext, type VerbOutcome } from "./context.ts";
 import { oneLine, shortId } from "./output.ts";
 import { stopConversation } from "./run.ts";
+import { acceptedWireNames, sentWireName } from "../../electron/phone-wire-names.mjs";
 
 type Rec = Record<string, any>;
 
@@ -30,13 +31,13 @@ async function doctorOnce(ctx: VerbContext): Promise<VerbOutcome> {
   const availableCount = typeof models?.counted === "number" ? models.counted : availableEngines.length;
   const quietly = <T>(read: Promise<T>) => read.catch(() => null);
   const [server, session, config] = await Promise.all([
-    quietly(client.json<Rec>("/.well-known/seira/environment")),
+    quietly(client.json<Rec>(sentWireName("environmentPath"))),
     quietly(client.json<Rec>("/api/auth/session")),
     quietly(client.json<Rec>("/api/config")),
   ]);
   const problems: string[] = [];
   const warnings: string[] = [];
-  const isSeira = health.app === "seira";
+  const isSeira = acceptedWireNames("healthApp").includes(health.app);
   if (!isSeira) problems.push(`${client.baseUrl} answered, but it is not Seira`);
   const tooOld = Boolean(server) && server!.capabilities?.jobs !== true;
   if (tooOld) problems.push(`Seira ${server!.version ?? "(unknown version)"} is too old for the headless commands: it cannot report a conversation's job`);

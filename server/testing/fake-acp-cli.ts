@@ -294,6 +294,7 @@ const dumpEnv = Object.fromEntries(
     "GROK_AGENT",
     "BOX_TOKEN",
     "SEIRA_TTS_KEY",
+    "OMB_TTS_KEY",
     "SEIRA_FISH_AUDIO_API_KEY",
     "SEIRA_CLOUD_READY_TOKEN",
     "SEIRA_CLOUD_BOOTSTRAP",

@@ -72,6 +72,16 @@ describe("the run limit", () => {
     expect(runOverLimit(row, clock, 3 * HOUR)).toEqual({ text: "Stopped: this run ran longer than the 3-hour limit", codes: { errorCode: "routines.server.overLimit", errorParams: { hours: 3 } } });
   });
 
+  it("gives a workflow run twelve hours of work, and not a minute for its waits", () => {
+    const row = run({ workflowId: "wf-1" }), clock = new RunClock();
+    clock.from(row, "workedMs", 0);
+    expect(passes(row, clock, MINUTE, 12 * HOUR - MINUTE)).toBeNull();
+    expect(runOverLimit(row, clock, 12 * HOUR)).toMatchObject({ codes: { errorCode: "routines.server.overLimit", errorParams: { hours: 12 } } });
+    const resting = run({ workflowId: "wf-1", status: "waiting", workedMs: 11 * HOUR });
+    expect(runOverLimit(resting, new RunClock(), 40 * HOUR)).toBeNull();
+    expect(runLimitAt(resting, 40 * HOUR)).toBeNull();
+  });
+
   it("gives a room goal's run, which stays running across its members' turns, twelve hours", () => {
     expect(ROUTINE_GOAL_RUN_LIMIT_MINUTES).toBe(720);
     const row = run({ target: "room-goal" }), clock = new RunClock();

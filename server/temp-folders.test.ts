@@ -87,6 +87,21 @@ describe("sweepOrphanedTempFolders", () => {
     expect(existsSync(running)).toBe(true);
   });
 
+  it("also sweeps the names that an earlier version made with omb- in place of seira-, and only for a seira- prefix", () => {
+    const { base, now } = fixture();
+    const rest = PREFIX.replace(/^seira-/, "");
+    const gone = folder(base, `omb-${rest}${DEAD}-abc123`, now, 2 * ORPHAN_MIN_AGE_MS);
+    const running = folder(base, `omb-${rest}${DEAD + 1}-abc123`, now, 2 * ORPHAN_MIN_AGE_MS);
+    const result = sweepOrphanedTempFolders(PREFIX, { dir: base, now, isAlive: (pid) => pid === DEAD + 1 });
+    expect(result.removed).toEqual([gone]);
+    expect(existsSync(gone)).toBe(false);
+    expect(existsSync(running)).toBe(true);
+
+    const other = folder(base, `omb-other-${DEAD}-abc123`, now, 2 * ORPHAN_MIN_AGE_MS);
+    expect(sweepOrphanedTempFolders("other-", { dir: base, now, isAlive: dead }).removed).toEqual([]);
+    expect(existsSync(other)).toBe(true);
+  });
+
   it("removes the content of the folder, not only the folder", () => {
     const { base, now } = fixture();
     const old = folder(base, `${PREFIX}${DEAD}-full12`, now, 2 * ORPHAN_MIN_AGE_MS);
