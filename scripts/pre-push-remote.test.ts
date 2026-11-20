@@ -52,12 +52,12 @@ describe("verdict", () => {
 
 describe("defaultDir", () => {
   it("gives the folder relative to the home folder", () => {
-    expect(defaultDir("/home/u/Project/seira/.git", "/home/u")).toBe("Project/seira");
+    expect(defaultDir("/users/u/Project/seira/.git", "/users/u")).toBe("Project/seira");
   });
 
   it("gives null for a folder outside the home folder", () => {
-    expect(defaultDir("/srv/seira/.git", "/home/u")).toBeNull();
-    expect(defaultDir("/home/u/.git", "/home/u")).toBeNull();
+    expect(defaultDir("/srv/seira/.git", "/users/u")).toBeNull();
+    expect(defaultDir("/users/u/.git", "/users/u")).toBeNull();
   });
 });
 
