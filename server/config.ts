@@ -313,8 +313,7 @@ const appConfigSchema = z.object({
   newBots: newBotsConfigSchema.optional(),
   /** CLI launch preferences; never enables remote access implicitly. */
   cliStartup: z.object({
-    access: z.enum(["local", "tunnel", "tailscale", "public-url"]),
-    tailscale: z.boolean().optional(),
+    access: z.enum(["local", "tunnel", "tailscale", "public-url"]), tailscale: z.boolean().optional(),
     publicUrl: z.string().url().optional(),
     phone: z.enum(["ios", "android"]).optional(),
   }).optional(),
@@ -442,8 +441,7 @@ export interface AppConfig extends HelperConfig {
   newBotDefaults?: NewBotDefaults;
   newBots?: { effort?: EffortLevel };
   cliStartup?: {
-    access: "local" | "tunnel" | "tailscale" | "public-url";
-    tailscale?: boolean;
+    access: "local" | "tunnel" | "tailscale" | "public-url"; tailscale?: boolean;
     publicUrl?: string;
     phone?: "ios" | "android";
   };

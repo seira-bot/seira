@@ -800,8 +800,7 @@ function savedCustomDomain(): string | null {
   try { return normalizeCustomDomain(cfg.customDomain); }
   catch { return null; }
 }
-const currentPhoneRoutes = () => phoneRoutes({ publicUrl: publicUrl(), tailnetOrigin: tailnetShare.origin(), customDomain: savedCustomDomain(), extra: phoneRoutesFromEnv(process.env) });
-function publicUrl(): string | null { return savedCustomDomain() ?? FALLBACK_PUBLIC_URL ?? tailnetShare.origin() ?? lanUrl(PORT); }
+const currentPhoneRoutes = () => phoneRoutes({ publicUrl: publicUrl(), tailnetOrigin: tailnetShare.origin(), customDomain: savedCustomDomain(), extra: phoneRoutesFromEnv(process.env) }); function publicUrl(): string | null { return savedCustomDomain() ?? FALLBACK_PUBLIC_URL ?? tailnetShare.origin() ?? lanUrl(PORT); }
 function customDomainStatus() {
   return {
     customDomain: savedCustomDomain(), publicUrl: publicUrl(), fallbackUrl: FALLBACK_PUBLIC_URL,
@@ -12716,8 +12715,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         if ((error as { code?: unknown }).code === "cloud_personal") return json(res, 403, { error: (error as Error).message, code: "cloud_personal", ...userErrorFields(error) });
         throw error;
       }
-      const routes = currentPhoneRoutes(); const several = routes.endpoints.length >= 2;
-      const base = (several ? routes.primary : null) ?? pairingLinkBase(publicUrl(), auth.kind === "session" ? requestOrigin(req) : null);
+      const routes = currentPhoneRoutes(), several = routes.endpoints.length >= 2; const base = (several ? routes.primary : null) ?? pairingLinkBase(publicUrl(), auth.kind === "session" ? requestOrigin(req) : null);
       const code = formatPairingCode(opened.code);
       // `inviteUrl` is the custom scheme the native companion scanners accept; they cannot take a typed code.
       const serverName = cfg.computerName || environmentDescriptor({ environmentId: ENVIRONMENT_ID, ...TEAM_LABEL, desktopManaged: DESKTOP_MANAGED }).label;
@@ -12735,9 +12733,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           : "this server has no public address to put in a link: set SEIRA_PUBLIC_URL, or open /pair on the address you use and type the code",
       });
     }
-    if (method === "GET" && path === "/api/companion/endpoints") {
-      return json(res, 200, { serverName: cfg.computerName || environmentDescriptor({ environmentId: ENVIRONMENT_ID, ...TEAM_LABEL, desktopManaged: DESKTOP_MANAGED }).label, endpoints: currentPhoneRoutes().endpoints, version: serverVersion() });
-    }
+    if (method === "GET" && path === "/api/companion/endpoints") return json(res, 200, { serverName: cfg.computerName || environmentDescriptor({ environmentId: ENVIRONMENT_ID, ...TEAM_LABEL, desktopManaged: DESKTOP_MANAGED }).label, endpoints: currentPhoneRoutes().endpoints, version: serverVersion() });
     if (method === "GET" && path === "/api/auth/pairing") return json(res, 200, { pairings: sessions.openPairings(), publicUrl: publicUrl(), ...(phoneRelay ? { relay: phoneRelay.status() } : {}) });
     m = path.match(/^\/api\/auth\/pairing\/([\w-]+)$/);
     if (m && method === "DELETE") {
