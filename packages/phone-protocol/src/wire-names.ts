@@ -29,3 +29,7 @@ export function acceptedWireNames(name: PhoneWireName): readonly [string, string
   const { legacy, seira } = PHONE_WIRE_NAMES[name];
   return [legacy, seira];
 }
+
+export function acceptsWireName(name: PhoneWireName, value: string): boolean {
+  return acceptedWireNames(name).includes(value);
+}

@@ -11,6 +11,8 @@ describe("the copies of the phone wire names", () => {
     for (const key of Object.keys(canonical.PHONE_WIRE_NAMES) as canonical.PhoneWireName[]) {
       expect(copy.sentWireName(key)).toBe(canonical.sentWireName(key));
       expect(copy.acceptedWireNames(key)).toEqual(canonical.acceptedWireNames(key));
+      for (const value of canonical.acceptedWireNames(key)) expect(copy.acceptsWireName(key, value)).toBe(true);
+      expect(copy.acceptsWireName(key, "")).toBe(false);
     }
   });
 

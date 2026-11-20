@@ -27,3 +27,7 @@ export function acceptedWireNames(name) {
   const { legacy, seira } = PHONE_WIRE_NAMES[name];
   return [legacy, seira];
 }
+
+export function acceptsWireName(name, value) {
+  return acceptedWireNames(name).includes(value);
+}
