@@ -11,6 +11,7 @@ import { parseArgs } from "node:util";
 
 const underRoot = (prefix) => (path) => path.startsWith(prefix);
 const baseName = (path) => path.slice(path.lastIndexOf("/") + 1);
+const isTemplate = (path) => path.endsWith(".example");
 
 /** Add one line here to make another path private. */
 export const PRIVATE_PATHS = [
@@ -23,8 +24,8 @@ export const PRIVATE_PATHS = [
   { test: (path) => /\.bak\d*$/.test(path), reason: "a backup is scratch" },
   { test: (path) => ["AGENTS.local.md", "CLAUDE.local.md"].includes(baseName(path)), reason: "a local note holds one machine's details" },
   { test: (path) => baseName(path).endsWith(".local"), reason: "a *.local file holds one machine's details" },
-  { test: (path) => /^\.dev\.vars(?:\..+)?$/.test(baseName(path)) && baseName(path) !== ".dev.vars.example", reason: "a .dev.vars file holds secrets" },
-  { test: (path) => /^\.env(?:\..+)?$/.test(baseName(path)) && baseName(path) !== ".env.example", reason: "an .env file holds secrets" },
+  { test: (path) => /^\.dev\.vars(?:\..+)?$/.test(baseName(path)) && !isTemplate(path), reason: "a .dev.vars file holds secrets" },
+  { test: (path) => /^\.env(?:\..+)?$/.test(baseName(path)) && !isTemplate(path), reason: "an .env file holds secrets" },
 ];
 
 export const MOVE_HINT = "Keep these files in internal/ (local only), in a private repository, or do not keep them. See \"Private by default\" in AGENTS.md.";

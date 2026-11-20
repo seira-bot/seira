@@ -31,7 +31,7 @@ describe("private paths", () => {
 
   it("passes the example files, the Vite entries and the preview pages", () => {
     for (const path of [
-      ".env.example", ".dev.vars.example", "cloudflare/control-plane/.dev.vars.example", "index.html", "rail.html",
+      ".env.example", ".env.local.example", ".dev.vars.example", ".dev.vars.production.example", "cloudflare/control-plane/.dev.vars.example", "index.html", "rail.html",
       "x-preview.html", "maus.ps1",
     ]) {
       expect(blocked(path), path).toEqual([]);

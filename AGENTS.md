@@ -56,7 +56,8 @@ Keep these out of the repository:
 
 - Code and config of hosted services that only the maintainers deploy. They
   live in a private repository.
-- Prices, quotas, costs and customer data.
+- Business numbers of the hosted service: its plan prices, quotas and costs.
+- Customer data.
 - Plans, specs, research and task notes. Put them in `internal/`.
 - Scratch files, backups and experiments.
 - Local files and env files.
