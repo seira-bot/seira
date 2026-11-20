@@ -41,7 +41,7 @@ function admin(roster: Record<string, string | null>, options: { status?: number
     if (options.down) throw new TypeError("fetch failed");
     expect(url).toBe(`${ADMIN}${TEAM_ROSTER_ADMIN_PATH}`);
     const headers = init.headers as Record<string, string>, body = String(init.body);
-    expect(headers["x-seira-cloud-signature"]).toBe(`v1=${teamRosterSignature(SECRET, "cm-home", headers["x-seira-cloud-timestamp"]!, headers["x-seira-cloud-nonce"]!, body)}`);
+    expect(headers["x-omb-cloud-signature"]).toBe(`v1=${teamRosterSignature(SECRET, "cm-home", headers["x-omb-cloud-timestamp"]!, headers["x-omb-cloud-nonce"]!, body)}`);
     const emails = (JSON.parse(body) as { emails: string[] }).emails;
     asked.push(emails);
     if (options.status) return Response.json({ error: "no" }, { status: options.status });
@@ -53,8 +53,8 @@ function admin(roster: Record<string, string | null>, options: { status?: number
 }
 
 describe("a Team Cloud's roster check", () => {
-  it("signs as seira-cloud's server/cloud-team-roster.ts does", () => {
-    // The same vector is pinned in seira-cloud tests/cloud-team-join.test.ts.
+  it("signs as the Cloud service does", () => {
+    // The same vector is pinned in the Cloud service's own tests.
     expect(teamRosterSignature(SECRET, "cm-test-home", "1792670400", "nonce-nonce-nonce-1", '{"v":1,"emails":["ada@acme.test"]}')).toBe("WvlpjOna5b6fkOkqkNZgLdv0c913uLp8ufS_2gFEI3Y");
   });
 

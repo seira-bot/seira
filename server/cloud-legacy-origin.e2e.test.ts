@@ -92,7 +92,7 @@ beforeAll(async () => {
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const granted = await raw("POST", "/api/cloud/pairing", {
     host: NEW_HOST, "x-forwarded-for": "203.0.113.9", "x-forwarded-proto": "https", "content-type": "application/json",
-    "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
+    "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
   }, body);
   const paired = await raw("POST", "/api/auth/pair", forwarded(OLD, { "content-type": "application/json" }), JSON.stringify({ code: granted.body.code, cookie: true }));
   expect(paired.status, launched.output().slice(-2000)).toBe(200);

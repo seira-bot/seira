@@ -31,7 +31,7 @@ test("My Cloud going to sleep: its 503 asleep answer holds Files back, and nothi
   const at = 1_792_355_000_000;
   let power = { state: "awake", since: at, sleeps: true }, calls = 0;
   const gate = createCloudPowerGate({ power: () => power });
-  const client = createSyncClient({ origin: ORIGIN, power: gate, fetch: async () => { calls++; return reply(503, { error: "asleep" }, { "x-seira-cloud-power": "asleep" }); } });
+  const client = createSyncClient({ origin: ORIGIN, power: gate, fetch: async () => { calls++; return reply(503, { error: "asleep" }, { "x-omb-cloud-power": "asleep" }); } });
   await assert.rejects(client.changes(0, 10, new AbortController().signal), CloudAsleepError);
   assert.equal(gate.asleep(), true);
   await assert.rejects(client.summary(), CloudAsleepError);

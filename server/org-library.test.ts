@@ -286,7 +286,7 @@ describe("adding from the shelf", () => {
     if (!outcome.ok || outcome.value.alreadyAdded) throw new Error(JSON.stringify(outcome));
     expect(outcome.status).toBe(201);
     const result = outcome.value.result;
-    const installId = createHash("sha256").update(`seira-install:v1\n${ADMIN}\n${ORG}\n${TEAM_ID}`).digest("hex").slice(0, 32);
+    const installId = createHash("sha256").update(`omb-install:v1\n${ADMIN}\n${ORG}\n${TEAM_ID}`).digest("hex").slice(0, 32);
     expect(result.installId).toBe(installId);
     const byKey = new Map(result.bots.map((bot) => [bot.installedPackage!.agentKey, app.store.bot(bot.id)!]));
     const scout = byKey.get("scout")!;

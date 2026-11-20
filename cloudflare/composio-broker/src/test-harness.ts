@@ -246,7 +246,7 @@ export function composioSignature(secret: string, id: string, timestamp: string 
 }
 
 export function cloudGrant(machineId: string, secret = CLOUD_GRANT_SECRET) {
-  return `v1.${machineId}.${createHmac("sha256", secret).update(`seira-connected-apps-cloud:v1\n${machineId}`).digest("base64url")}`;
+  return `v1.${machineId}.${createHmac("sha256", secret).update(`omb-connected-apps-cloud:v1\n${machineId}`).digest("base64url")}`;
 }
 
 /** A request body of `chunks` chunks of `chunkBytes` spaces, streamed without a Content-Length, that counts how much

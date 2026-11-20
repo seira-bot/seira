@@ -5,6 +5,9 @@
 export const LEGACY_APP_NAME = "openmausbot";
 /** dpkg and pacman replace an installed package only when its name stays the same. */
 export const LEGACY_LINUX_PACKAGE = "openmausbot";
+/** Electron reopens a running app through the path it started from, so an earlier version still running during a Linux
+ * update reopens itself here. Its login entry also starts it here. */
+export const LEGACY_LINUX_EXECUTABLE = "openmausbot";
 
 export const LEGACY_HOME_PREFIX = ".openmausbot";
 export const HOME_PREFIX = ".seira";
@@ -110,6 +113,22 @@ export const mentionsGoalTag = (text) => text.includes("seira-goal>") || text.in
 /** The current "run on" value of a saved one: an earlier version saved "maus" for this computer. */
 export function currentRunOn(value) {
   return value === "maus" ? "seira" : value;
+}
+
+/** Keys that an earlier version saved in an engine's settings under its own name: [old name, current name]. */
+const ENGINE_KEY_NAMES = [["OPENMAUSBOT_CODEX_API_KEY", "SEIRA_CODEX_API_KEY"], ["OPENMAUSBOT_COMPANY_API_KEY", "SEIRA_COMPANY_API_KEY"]];
+
+/** An engine's saved environment with each old key name renamed; a value under the current name wins over the old one. */
+export function currentEngineEnvironment(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  let renamed = null;
+  for (const [old, current] of ENGINE_KEY_NAMES) {
+    if (!Object.hasOwn(value, old)) continue;
+    renamed ??= { ...value };
+    if (!Object.hasOwn(renamed, current)) renamed[current] = renamed[old];
+    delete renamed[old];
+  }
+  return renamed ?? value;
 }
 
 const LEGACY_LINK_SCHEME = "openmausbot";

@@ -64,15 +64,13 @@ leave it off to reuse only an already-ready VPS.
 <Callout type="warn" title="Existing bots in 0.1.151 and 0.1.152">
   The Simple layout can hide this selector and show **Connect Boat first** even
   when your SSH alias works. A connected alias alone does not change the bot’s
-  backend. The selector regression is tracked in [upstream issue #5225](https://github.com/milind-soni/OpenMausBot/issues/5225),
-  with the UI fix in [upstream pull request #5228](https://github.com/milind-soni/OpenMausBot/pull/5228).
-  If your installed build still lacks the selector, use the stopped-app workaround
+  backend. If your installed build still lacks the selector, use the stopped-app workaround
   below. The older **Bot Settings → Access → Server (SSH alias)** directions do
   not apply to that layout.
 </Callout>
 
 <div className="mx-auto max-w-xs">
-  <ProductScreenshot name="byo-vps-0.1.151" alt="The existing-bot computer picker without a Self-hosted VPS selector" caption="The affected existing-bot picker before the selector fix. Setting up the SSH alias does not add the missing control." />
+  <ProductScreenshot name="byo-vps-picker" alt="A bot's computer picker in the Simple layout, with no Self-hosted VPS choice and Connect Boat first under Cloud desktop" caption="The picker without the selector. Setting up the SSH alias does not add the missing control." />
 </div>
 
 ## Workaround when the selector is missing

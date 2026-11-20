@@ -1,3 +1,4 @@
+export const LEGACY_LINUX_EXECUTABLE: string;
 export const LEGACY_HOME_PREFIX: string;
 export const HOME_PREFIX: string;
 export const LEGACY_COMPANION_FOLDER: string;
@@ -51,5 +52,6 @@ export declare const LEGACY_VPS_CONTAINER_PREFIX: string;
 export declare const LEGACY_IMAGE_REPOSITORY: string;
 export declare function legacyDockerLabel(name: string): string | null;
 export declare function labelValue(labels: unknown, name: string): string | undefined;
+export declare function currentEngineEnvironment<T>(value: T): T;
 export declare const LEGACY_ENV_PREFIX: string;
 export declare const ENV_PREFIX: string;

@@ -13,7 +13,7 @@ kill_timeout = "30s"
 [build]
   image = "{{IMAGE}}"
 
-# Not secret. The Admin (seira-cloud) sets these on the machine and
+# Not secret. The Admin (the Cloud service) sets these on the machine and
 # applies two Fly secrets, never in this file:
 #   SEIRA_CLOUD_ADMIN_URL         the Cloud origin, e.g. https://cloud.seira.bot
 #   SEIRA_CLOUD_BOOTSTRAP_SECRET  the key the Admin signs pairing requests with

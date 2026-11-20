@@ -89,8 +89,8 @@ beforeAll(async () => {
       const raw = Buffer.concat(chunks).toString("utf8"), headers = req.headers as Record<string, string>;
       const answer = (status: number, body: unknown) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
       if (req.url !== TEAM_SLACK_REPORT_PATH || req.method !== "POST") return answer(404, { error: "not found" });
-      const machine = headers["x-seira-cloud-machine"] ?? "", timestamp = headers["x-seira-cloud-timestamp"] ?? "", nonce = headers["x-seira-cloud-nonce"] ?? "";
-      const presented = /^v1=([A-Za-z0-9_-]{43})$/.exec(headers["x-seira-cloud-signature"] ?? "")?.[1];
+      const machine = headers["x-omb-cloud-machine"] ?? "", timestamp = headers["x-omb-cloud-timestamp"] ?? "", nonce = headers["x-omb-cloud-nonce"] ?? "";
+      const presented = /^v1=([A-Za-z0-9_-]{43})$/.exec(headers["x-omb-cloud-signature"] ?? "")?.[1];
       const expected = Buffer.from(teamSlackSignature(fx.secret, machine, timestamp, nonce, raw), "base64url"), given = Buffer.from(presented ?? "", "base64url");
       if (machine !== fx.cloudMachineId || Math.abs(Date.now() / 1000 - Number(timestamp)) > 300 || !/^[A-Za-z0-9_-]{16,128}$/.test(nonce) || given.length !== expected.length || !timingSafeEqual(given, expected)) {
         admin.refused++;
@@ -281,8 +281,8 @@ it("every report is signed in Slack's own context with the bootstrap secret, and
   expect(admin.refused).toBe(0);
   expect(admin.taken.length).toBeGreaterThan(10);
   for (const { headers, raw } of admin.taken) {
-    const [timestamp, nonce, signature] = [headers["x-seira-cloud-timestamp"]!, headers["x-seira-cloud-nonce"]!, headers["x-seira-cloud-signature"]!];
-    expect(headers["x-seira-cloud-machine"]).toBe(fx.cloudMachineId);
+    const [timestamp, nonce, signature] = [headers["x-omb-cloud-timestamp"]!, headers["x-omb-cloud-nonce"]!, headers["x-omb-cloud-signature"]!];
+    expect(headers["x-omb-cloud-machine"]).toBe(fx.cloudMachineId);
     expect(signature).toBe(`v1=${teamSlackSignature(fx.secret, fx.cloudMachineId, timestamp, nonce, raw)}`);
     expect(signature).not.toBe(`v1=${teamRosterSignature(fx.secret, fx.cloudMachineId, timestamp, nonce, raw)}`);
     expect(signature).not.toBe(`v1=${cloudRequestSignature(fx.secret, timestamp, nonce, "POST", TEAM_SLACK_REPORT_PATH, raw)}`);
@@ -291,7 +291,7 @@ it("every report is signed in Slack's own context with the bootstrap secret, and
   const { raw } = admin.taken[0]!;
   const send = (sign: (timestamp: string, nonce: string) => string) => {
     const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(18).toString("base64url");
-    return fetch(base, { method: "POST", body: raw, headers: { "content-type": "application/json", "x-seira-cloud-machine": fx.cloudMachineId, "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${sign(timestamp, nonce)}` } });
+    return fetch(base, { method: "POST", body: raw, headers: { "content-type": "application/json", "x-omb-cloud-machine": fx.cloudMachineId, "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${sign(timestamp, nonce)}` } });
   };
   expect((await send((timestamp, nonce) => teamSlackSignature(randomBytes(32).toString("base64url"), fx.cloudMachineId, timestamp, nonce, raw))).status).toBe(401);
   expect((await send((timestamp, nonce) => teamSlackSignature(fx.secret, fx.cloudMachineId, timestamp, nonce, raw))).status).toBe(200);

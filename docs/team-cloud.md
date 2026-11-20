@@ -1,7 +1,7 @@
 # Team Clouds: the `team` role and the audience rule
 
 A **Team Cloud** is one Cloud machine several people use: the shared home of a team's bots. The Admin
-(seira-cloud, `docs/team-cloud.md` there) makes it, invites people and signs each person's pairing. This page is the
+(the Seira Cloud service) makes it, invites people and signs each person's pairing. This page is the
 machine's side: what the `team` role changes against a My Cloud ([cloud-pro.md](cloud-pro.md)), and the one rule that
 keeps people apart on it. The bot box ([bot-box.md](bot-box.md)) is what makes that rule hold against a bot with a shell.
 
@@ -188,7 +188,7 @@ with who asked, and its news stays out of the owner's list. See [Verifying the I
 
 ## Rules
 
-The team's rules live on the Admin (seira-cloud `docs/team-cloud.md` "Rules"): one document, `{ schema: 1, limits }`, that
+The team's rules live on the Admin: one document, `{ schema: 1, limits }`, that
 only restricts. `server/cloud-team-policy.ts` fetches it at boot, every 5 minutes and when the Admin's signed `POST
 /api/cloud/team/policy-changed` nudges it, signed with the bootstrap secret (`POST /api/cloud/machines/team-policy`), and each
 request reports the fingerprint in force here. A change applies without a restart. A turn already running keeps its engine
@@ -246,7 +246,7 @@ What came in from outside (a webhook, an app's event) is confined, and the conve
 
 ## Team admin: the Admin's signed read
 
-The Admin's Team admin pages (seira-cloud docs/team-cloud.md "Team admin") show a team's Super admin and Admins what
+The Admin's Team admin pages show a team's Super admin and Admins what
 this server shares with every bot. It exists only on a Team Cloud.
 
 - `GET /api/cloud/team/admin`, signed like `/api/cloud/health` → `{ v: 1, apps: { available, services: [{ slug, status,
@@ -1055,7 +1055,7 @@ On a My Cloud and on a desktop there is one person: no People list, no presence,
 ## When you are away
 
 A member who has no live stream on the team (no app or phone open on it) is away, and three things reach them by one
-email, which the Admin sends (seira-cloud docs/team-cloud.md "When you are away"): a teammate or bot mentioned them
+email, which the Admin sends: a teammate or bot mentioned them
 or passed them a message; a question, approval or sign-in waits on their answer (routed to them, or in their own private
 chat) for at least 5 minutes; work they asked for in a shared chat or group chat, or a routine's report routed to them,
 finished or failed. The first thing opens a 10-minute window and everything in it goes in one email; finished work is
@@ -1064,7 +1064,7 @@ away. At least 30 minutes between two emails, at most 6 a day, and never the sam
 goes, answering, or opening the line drops it. `server/host/team-away.ts` decides; `team-away-events.ts` says what is
 worth one; "away" is one function (`here`) so presence can replace it.
 
-What leaves the machine is `POST /api/cloud/machines/team-away`, signed with the bootstrap secret (`seira-team-away-v1`):
+What leaves the machine is `POST /api/cloud/machines/team-away`, signed with the bootstrap secret (`omb-team-away-v1`):
 `{ v: 1, notices: [{ id, to, language?, items: [{ kind: "mention" | "waiting" | "finished" | "failed", key, who?, place?,
 routine?, private? }], more? }], prefs?: [{ to, on }] }`. `key` is a SHA-256 of what it is about; `who` a teammate's or
 bot's name; `place` a group chat's or the bot's name. Never a message's words, a title or an id. From someone's private

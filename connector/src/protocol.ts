@@ -25,7 +25,7 @@ export type ServerMode = "operated" | "customer-run";
 export const ENROLL_PATH = "/api/cloud/box/v1/enroll";
 /** `GET {admin}{CONNECT_PATH}`, upgraded to a WebSocket with subprotocol `CHANNEL_PROTOCOL` and header `x-seira-box`. */
 export const CONNECT_PATH = "/api/cloud/box/v1/connect";
-export const CHANNEL_PROTOCOL = "seira-box.v2";
+export const CHANNEL_PROTOCOL = "omb-box.v2";
 export const BOX_HEADER = "x-seira-box";
 /** `PUT {admin}{EXPORT_PATH}/<job id>`, `content-type: application/gzip`: an `export-disk` job's archive of `/data`. */
 export const EXPORT_PATH = "/api/cloud/box/v1/export";
@@ -270,7 +270,7 @@ export interface Auth {
 }
 
 export function authText(box: string, adminNonce: string, boxNonce: string, count: number): string {
-  return `seira-box auth v1\n${box}\n${adminNonce}\n${boxNonce}\n${count}`;
+  return `omb-box auth v1\n${box}\n${adminNonce}\n${boxNonce}\n${count}`;
 }
 
 /** Admin → connector, `{t: "hello", signed}`: an envelope (signed.ts) of this payload, under a key the connector pinned. */

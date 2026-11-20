@@ -678,8 +678,8 @@ posixOnly("Live call on the person's Cloud", () => {
     const pairing = JSON.stringify({ label: "Seira app (Cloud)", ttlSeconds: 300 });
     const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
     const granted = await request("POST", "/api/cloud/pairing", JSON.parse(pairing), {
-      "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce,
-      "x-seira-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, pairing)}`,
+      "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
+      "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, pairing)}`,
     });
     expect(granted.status, JSON.stringify(granted.body)).toBe(200);
     const paired = await request("POST", "/api/auth/pair", { code: granted.body.code });

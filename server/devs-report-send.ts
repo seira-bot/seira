@@ -96,7 +96,7 @@ export async function sendDevsReport(endpoint: string, payload: DevsReportPayloa
   return { ok: false, retry: true, why: "server" };
 }
 
-/** What the app asks about the reports it sent (seira-cloud server/bug-report-contract.ts BugReportStatusRequest). */
+/** What the app asks about the reports it sent. */
 export const BUG_REPORT_STATUS_PATH = "/api/bug-reports/status";
 export const BUG_REPORT_STATUS_MAX_IDS = 50;
 export interface ReportStatusQuestion { installId: string; ids: string[] }
@@ -111,11 +111,11 @@ const statusAnswerSchema = z.object({
 /** A Cloud home's credential for its question: its machine and the bootstrap secret it shares with the Admin. */
 export interface ReportStatusHome { machineId: string; bootstrapSecret: string }
 
-/** Must match seira-cloud server/bug-reports.ts `bugReportsHomeSignature`: its own signing string, so no other signed
+/** Must match the Cloud service's bug-report signature: its own signing string, so no other signed
  * request can be replayed here or the other way. */
 export function bugReportsHomeSignature(secret: string, machineId: string, timestamp: string, nonce: string, body: string): string {
   const bodyHash = createHash("sha256").update(body).digest("base64url");
-  return createHmac("sha256", secret).update(`seira-bug-reports-v1\n${machineId}\n${timestamp}\n${nonce}\n${bodyHash}`).digest("base64url");
+  return createHmac("sha256", secret).update(`omb-bug-reports-v1\n${machineId}\n${timestamp}\n${nonce}\n${bodyHash}`).digest("base64url");
 }
 
 /** The question's address: the report endpoint's origin, at BUG_REPORT_STATUS_PATH. */
@@ -126,8 +126,8 @@ export async function askReportStatus(endpoint: string, question: ReportStatusQu
   now = Date.now): Promise<ReportStatusAnswer | null> {
   const body = JSON.stringify({ installId: question.installId, ids: question.ids.slice(0, BUG_REPORT_STATUS_MAX_IDS) });
   const timestamp = String(Math.floor(now() / 1000)), nonce = randomBytes(18).toString("base64url");
-  const signed: Record<string, string> = home ? { "x-seira-cloud-machine": home.machineId, "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce,
-    "x-seira-cloud-signature": `v1=${bugReportsHomeSignature(home.bootstrapSecret, home.machineId, timestamp, nonce, body)}` } : {};
+  const signed: Record<string, string> = home ? { "x-omb-cloud-machine": home.machineId, "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
+    "x-omb-cloud-signature": `v1=${bugReportsHomeSignature(home.bootstrapSecret, home.machineId, timestamp, nonce, body)}` } : {};
   try {
     const response = await fetcher(endpoint, { method: "POST", redirect: "error", cache: "no-store", body, signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
       headers: { accept: "application/json", "content-type": "application/json", ...signed } });

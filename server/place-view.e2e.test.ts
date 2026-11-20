@@ -12,7 +12,7 @@ import { readRegistry, writeRegistry } from "./testing/registry.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
-/** The Admin relay's refusal envelope (boatError in seira-cloud). */
+/** The Admin relay's refusal envelope (the Cloud service's error shape). */
 const refusal = (status: number, code: string, message: string) =>
   ({ status, body: { ok: false, type: "sandbox.error", status, code, message, error: { code, message, status } } });
 const HOURS = refusal(429, "limit_reached", "Your Pro plan's 50 cloud computer hours for October are used up. They reset on 1 November.");

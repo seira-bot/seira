@@ -12,22 +12,22 @@ export type PagesAccess =
   | { kind: "desktop"; url: string; token: string }
   | { kind: "home"; url: string; machineId: string; secret: string };
 
-/** Must match seira-cloud server/cloud-pages.ts `homeSignature`: each Admin route signs over a label of its own
- * (`seira-pages-v1` for page tokens, `seira-community-v1` for community submissions). */
-export function pagesHomeSignature(secret: string, machineId: string, timestamp: string, nonce: string, body: string, label = "seira-pages-v1"): string {
+/** Must match the Cloud service's home signature: each Admin route signs over a label of its own
+ * (`omb-pages-v1` for page tokens, `omb-community-v1` for community submissions). */
+export function pagesHomeSignature(secret: string, machineId: string, timestamp: string, nonce: string, body: string, label = "omb-pages-v1"): string {
   const bodyHash = createHash("sha256").update(body).digest("base64url");
   return createHmac("sha256", secret).update(`${label}\n${machineId}\n${timestamp}\n${nonce}\n${bodyHash}`).digest("base64url");
 }
 
 /** The headers that prove a request to an Admin route comes from this account. */
-export function pagesAuthHeaders(access: PagesAccess, body: string, now = Date.now(), label = "seira-pages-v1"): Record<string, string> {
+export function pagesAuthHeaders(access: PagesAccess, body: string, now = Date.now(), label = "omb-pages-v1"): Record<string, string> {
   if (access.kind === "desktop") return { authorization: `Bearer ${access.token}` };
   const timestamp = String(Math.floor(now / 1000)), nonce = randomBytes(18).toString("base64url");
   return {
-    "x-seira-cloud-machine": access.machineId,
-    "x-seira-cloud-timestamp": timestamp,
-    "x-seira-cloud-nonce": nonce,
-    "x-seira-cloud-signature": `v1=${pagesHomeSignature(access.secret, access.machineId, timestamp, nonce, body, label)}`,
+    "x-omb-cloud-machine": access.machineId,
+    "x-omb-cloud-timestamp": timestamp,
+    "x-omb-cloud-nonce": nonce,
+    "x-omb-cloud-signature": `v1=${pagesHomeSignature(access.secret, access.machineId, timestamp, nonce, body, label)}`,
   };
 }
 
@@ -58,7 +58,7 @@ export function applyIncludedPagesMessage(message: unknown): boolean {
   }
   const { url, token } = (access && typeof access === "object" ? access : {}) as { url?: unknown; token?: unknown };
   const target = adminUrl(url);
-  if (typeof token !== "string" || !/^seira_pd_[A-Za-z0-9_-]{43}$/.test(token) || !target) throw new Error("invalid pages access");
+  if (typeof token !== "string" || !/^omb_pd_[A-Za-z0-9_-]{43}$/.test(token) || !target) throw new Error("invalid pages access");
   desktopPages = { url: target, token };
   desktopPagesNotOffered = false;
   return true;

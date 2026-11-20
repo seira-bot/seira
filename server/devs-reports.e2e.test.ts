@@ -67,7 +67,7 @@ beforeAll(async () => {
     request.on("end", () => {
       if (request.method === "POST" && request.url === "/api/bug-reports/status" && request.headers["content-type"] === "application/json") {
         const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as { installId: string; ids: string[] };
-        questions.push({ body, signed: "x-seira-cloud-signature" in request.headers });
+        questions.push({ body, signed: "x-omb-cloud-signature" in request.headers });
         const reports = body.ids.map((id) => ({ id, status: team.status, fixedIn: team.status === "fixed" ? team.fixedIn : null }));
         response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ reports, notify: team.notify }));
         return;

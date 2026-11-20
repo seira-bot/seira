@@ -42,9 +42,9 @@ describe("a page of a Cloud home that sleeps", () => {
   });
 
   it("knows the home's asleep answer and its sleeping frame", () => {
-    expect(asleepAnswer({ status: 503, headers: new Headers({ "x-seira-cloud-power": "asleep" }) })).toBe(true);
+    expect(asleepAnswer({ status: 503, headers: new Headers({ "x-omb-cloud-power": "asleep" }) })).toBe(true);
     expect(asleepAnswer({ status: 503, headers: new Headers() })).toBe(false);
-    expect(asleepAnswer({ status: 200, headers: new Headers({ "x-seira-cloud-power": "asleep" }) })).toBe(false);
+    expect(asleepAnswer({ status: 200, headers: new Headers({ "x-omb-cloud-power": "asleep" }) })).toBe(false);
     expect(sleepingFrame({ kind: "power", state: "sleeping" })).toBe(true);
     expect(sleepingFrame({ kind: "power", state: "awake" })).toBe(false);
     expect(sleepingFrame({ kind: "message" })).toBe(false);

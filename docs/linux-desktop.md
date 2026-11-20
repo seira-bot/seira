@@ -33,7 +33,7 @@ CUA supply-chain work is tracked in [upstream issue #113](https://github.com/mil
 Choose one Ubuntu 24.04 x86_64 package from the latest release:
 
 - [Debian package (`Seira-amd64.deb`)](https://github.com/seira-bot/seira/releases/latest/download/Seira-amd64.deb) — recommended; APT installs its desktop dependencies and configures the bundled bot browser's sandbox.
-- [Portable AppImage (`Seira.AppImage`)](https://github.com/seira-bot/seira/releases/latest/download/Seira.AppImage) — does not install system files.
+- [Portable AppImage (`Seira.AppImage`)](https://github.com/seira-bot/seira/releases/latest/download/Seira.AppImage) — does not install system files. It needs `fusermount` from your distribution's FUSE 3 package (`fuse3` on Ubuntu, Debian and Arch); minimal installs such as Debian netinst do not include it.
   It does not open on Ubuntu 24.04 with the default settings; use the Debian package there.
 - [SHA-256 checksums](https://github.com/seira-bot/seira/releases/latest/download/SHA256SUMS-linux-x64.txt)
 
@@ -61,7 +61,8 @@ The build creates:
 - `release/Seira-<version>-amd64.deb`
 - `release/Seira-<version>-x86_64.AppImage`
 
-The AppImage uses a static runtime and does not require the legacy `libfuse2` package.
+The AppImage uses a static runtime and does not require the legacy `libfuse2` package. It still needs `fusermount`
+from the FUSE 3 package (`fuse3`).
 
 ## Install and run
 

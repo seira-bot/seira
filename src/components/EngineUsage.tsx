@@ -176,7 +176,7 @@ export function UsageRows({ limit }: { limit: EngineLimit }) {
 
 /** One AI's rows, the bot's own to begin with. When another connected AI reports usage too, a ring for each sits above
  * the rows, and pressing a ring shows that AI's rows. */
-function UsageOverview({ engine }: { engine: string | undefined }) {
+function UsageOverview({ engine, onPick }: { engine: string | undefined; onPick?: (engine: string) => void }) {
   const limits = useEngineLimits().filter(reportsUsage);
   const [picked, setPicked] = useState<string>();
   const shown = limits.find((limit) => limit.engine === picked) ?? limits.find((limit) => limit.engine === engine);
@@ -187,7 +187,7 @@ function UsageOverview({ engine }: { engine: string | undefined }) {
         <div data-usage-rings role="group" aria-label={t("limits.title")} className="-mx-1.5 flex flex-wrap gap-1">
           {limits.map((limit) => (
             <button key={limit.engine} type="button" data-usage-engine={limit.engine} aria-pressed={limit === shown} aria-label={limitLine(limit, now, ", ")}
-              title={limitLine(limit, now)} onClick={() => setPicked(limit.engine)}
+              title={limitLine(limit, now)} onClick={() => { setPicked(limit.engine); onPick?.(limit.engine); }}
               className={cn("flex h-6 min-w-0 items-center gap-1.5 rounded-full px-1.5 text-[12px] leading-4",
                 limit === shown ? "bg-ink/[0.08] font-medium text-ink" : "text-ink-secondary hover:bg-ink/[0.06] hover:text-ink")}>
               <UsageRing limit={limit} />
@@ -258,9 +258,9 @@ export function UsageBars({ engine, compact = false, hover = true, className }: 
 export const USAGE_WARN_WIDENS = "@max-4xl/chathead:has-[[data-usage-warn]]:w-auto @max-4xl/chathead:has-[[data-usage-warn]]:gap-1.5 @max-4xl/chathead:has-[[data-usage-warn]]:px-2";
 
 /** The rows at the top of the open model menu, with a ring for every connected AI that reports usage. */
-export function UsageMenuRows({ engine }: { engine: string | undefined }) {
+export function UsageMenuRows({ engine, onPick }: { engine: string | undefined; onPick?: (engine: string) => void }) {
   if (!useEngineLimits().some(reportsUsage)) return null;
-  return <div data-usage-menu className="shrink-0 border-b-[0.5px] border-ink/10 px-3.5 py-2.5"><UsageOverview engine={engine} /></div>;
+  return <div data-usage-menu className="shrink-0 border-b-[0.5px] border-ink/10 px-3.5 py-2.5"><UsageOverview engine={engine} onPick={onPick} /></div>;
 }
 
 /** A phone's header has no model button: near or at the limit, the bars stand alone and open the bot's model. */

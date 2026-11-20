@@ -94,7 +94,7 @@ export function world({ clean = null, journal = done(), marker = null, state = c
       w.fetched.push([String(url).replace(base, atClient ? "client:" : atTeam ? "team:" : ""), init?.headers?.["x-seira-background"] ?? null]);
       if (server.down) throw new TypeError("fetch failed");
       const route = String(url).replace(base, "");
-      if (route === "/api/health") return new Response("", { status: server.health, headers: server.health === 503 ? { "x-seira-cloud-power": "asleep" } : {} });
+      if (route === "/api/health") return new Response("", { status: server.health, headers: server.health === 503 ? { "x-omb-cloud-power": "asleep" } : {} });
       if (route === "/api/auth/session") return server.signedIn ? json({ kind: "session", ...(server.expiresAt ? { expiresAt: server.expiresAt } : {}) }) : json({ error: "sign in" }, 401);
       if (route === "/api/auth/pair" && init?.method === "POST") {
         w.redeemed.push([atClient ? "client" : atTeam ? "team" : "cloud", JSON.parse(init.body)]);

@@ -107,18 +107,18 @@ describe("asking what became of the reports this app sent", () => {
     expect(desktop.sent[0]!.url).toBe("https://cloud.example/api/bug-reports/status");
     expect(desktop.sent[0]!.init).toMatchObject({ method: "POST", redirect: "error" });
     expect(desktop.sent[0]!.body).toEqual(QUESTION);
-    expect(Object.keys(desktop.sent[0]!.init.headers as Record<string, string>).filter((name) => name.startsWith("x-seira-cloud"))).toEqual([]);
+    expect(Object.keys(desktop.sent[0]!.init.headers as Record<string, string>).filter((name) => name.startsWith("x-omb-cloud"))).toEqual([]);
 
     const home = { machineId: "cm-test-home", bootstrapSecret: "s".repeat(43) }, cloud = endpoint(answer(200, ANSWER));
     expect(await askReportStatus("https://cloud.example/api/bug-reports/status", QUESTION, home, cloud.fetcher, () => 1_792_670_400_000)).toEqual(ANSWER);
     const headers = cloud.sent[0]!.init.headers as Record<string, string>, raw = String(cloud.sent[0]!.init.body);
-    expect(headers).toMatchObject({ "x-seira-cloud-machine": "cm-test-home", "x-seira-cloud-timestamp": "1792670400" });
-    expect(headers["x-seira-cloud-signature"]).toBe(`v1=${bugReportsHomeSignature(home.bootstrapSecret, home.machineId, "1792670400", headers["x-seira-cloud-nonce"]!, raw)}`);
+    expect(headers).toMatchObject({ "x-omb-cloud-machine": "cm-test-home", "x-omb-cloud-timestamp": "1792670400" });
+    expect(headers["x-omb-cloud-signature"]).toBe(`v1=${bugReportsHomeSignature(home.bootstrapSecret, home.machineId, "1792670400", headers["x-omb-cloud-nonce"]!, raw)}`);
     expect(JSON.stringify(cloud.sent)).not.toContain(home.bootstrapSecret);
   });
 
   it("signs exactly as the Admin checks it", () => {
-    // The same vector is pinned in seira-cloud tests/bug-report-fixes.test.ts.
+    // The same vector is pinned in the Cloud service's own tests.
     expect(bugReportsHomeSignature("s".repeat(43), "cm-test-home", "1792670400", "nonce-nonce-nonce-1", '{"installId":"install_0001","ids":[]}')).toBe("yk4dl82CpryMBfCaT18e_sJ6uihfo3dPHVP4prToXL8");
   });
 

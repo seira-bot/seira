@@ -29,7 +29,7 @@
 - Never address a replayed step by `x`/`y`. A recipe never holds `element_token`, `element_index`, `pid`, `window_id` or `session`; targets are resolved fresh.
 - Wire field: `WireMessage.savedSteps?: { recipeId: string; learned?: true; replayed?: true }`. Setting: `config.json` `features.savedSteps`, on unless `false`.
 - Copy (English, `src/locales/en.json`): chips "Saved these steps · next time no AI" / "Repeated saved steps · no AI" with a "Forget" button; setting title "Repeat computer tasks without AI".
-- Phones are untouched (no `seira-mobile` work); the forget route is not added to `CLIENT_ALLOW`.
+- Phones are untouched (no `phone-app` work); the forget route is not added to `CLIENT_ALLOW`.
 - Test commands: `pnpm exec vitest run <file>`; `pnpm typecheck`; `pnpm lint`; `pnpm i18n:check`.
 - Line numbers are those of commit `8a82b4a79`. A line an earlier task inserts shifts every later one, so find each edit by the code quoted beside it.
 

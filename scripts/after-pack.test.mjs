@@ -51,6 +51,14 @@ describe.skipIf(process.platform === "win32")("Linux afterPack permissions", () 
     }
   });
 
+  it("links the executable name that an earlier version ran from to the current executable", async () => {
+    const { appOutDir } = fixture();
+    for (let pass = 0; pass < 2; pass += 1) {
+      await afterPack({ electronPlatformName: "linux", appOutDir });
+      expect(fs.readlinkSync(path.join(appOutDir, "openmausbot"))).toBe("seira");
+    }
+  });
+
   it("fails closed when the runtime root is replaced by a symlink", async () => {
     const { appOutDir, cua } = fixture();
     const replacement = path.join(appOutDir, "replacement");
@@ -72,6 +80,7 @@ describe.skipIf(process.platform === "win32")("Linux afterPack permissions", () 
     const { appOutDir, cua } = fixture();
     await afterPack({ electronPlatformName: "darwin", appOutDir });
     expect(fs.lstatSync(cua).mode & 0o777).toBe(0o775);
+    expect(fs.lstatSync(path.join(appOutDir, "openmausbot"), { throwIfNoEntry: false })).toBeUndefined();
     expect(fs.lstatSync(path.join(cua, "cua-driver")).mode & 0o777).toBe(0o664);
   });
 });

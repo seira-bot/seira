@@ -704,7 +704,7 @@ describe("loopback trust: owner on one person's machine, service on a shared wor
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-  // Every call the deployed cloud Slack worker makes (seira-cloud server/slack-worker.ts, every released version): none may break.
+  // Every call the deployed cloud Slack worker makes (every released version): none may break.
   const SERVICE_CALLS: Array<[string, string]> = [
     ["GET", "/api/health"],
     ["GET", "/api/bots?messages=0"],

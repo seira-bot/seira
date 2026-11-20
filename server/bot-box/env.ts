@@ -30,21 +30,25 @@ export const BOX_ENV_SEIRA_NAMES: ReadonlySet<string> = new Set([
   "SEIRA_CONTROL_URL", "SEIRA_CONTROL_TOKEN", "SEIRA_COMPUTER_JOURNAL", "SEIRA_CUA_ARGS", "SEIRA_CUA_COMMAND", "SEIRA_CUA_PLATFORM", "SEIRA_HOST_FILES",
   "SEIRA_PHONE_TOKEN", "SEIRA_ADB_PATH", "SEIRA_RESOURCES_PATH", "SEIRA_CODEX_AUTH_SOCKET", "SEIRA_CODEX_AUTH_SECRET",
   "SEIRA_COPILOT_MCP_CONFIG", "SEIRA_BROWSER_PROFILE", "SEIRA_BOX_PROBE", "SEIRA_EXTRA_PATH", "SEIRA_TEST_SEALED_PATH",
+  "SEIRA_CODEX_API_KEY", "SEIRA_CHATGPT_TOKEN", "SEIRA_COMPANY_API_KEY", "SEIRA_TRIAL_CREDIT_KEY",
 ]);
 /** Families of the same, one variable per server or kind: a harness MCP server's token, a gated or remote server's config. */
 export const BOX_ENV_SEIRA_PREFIXES: readonly string[] = ["SEIRA_MCP_TOKEN_", "SEIRA_GATE_CONFIG_", "SEIRA_REMOTE_MCP_CONFIG_"];
+/** The key an engine reads for one provider or host: `SEIRA_CODEX_<provider>_TOKEN`, `SEIRA_CODEX_<provider>_HEADER_<n>`,
+ * `SEIRA_LOCAL_<host>_API_KEY`, `SEIRA_QWEN_<host>_API_KEY`. Security: the whole name must match, so a server setting
+ * that only starts the same way stays on the server. */
+export const BOX_ENV_SEIRA_ENGINE_KEY = /^SEIRA_(?:CODEX_[A-Z0-9_]+_(?:TOKEN|HEADER_\d+)|(?:LOCAL|QWEN)_[A-Z0-9_]+_API_KEY)$/;
 
 /** Prefixes of the engines' own settings and keys (T0b replaces the keys with per-turn broker tokens). */
 export const BOX_ENV_PREFIXES: readonly string[] = [
-  "LC_", "SEIRA_", "NPM_CONFIG_", "npm_config_",
+  "LC_", "NPM_CONFIG_", "npm_config_",
   "ANTHROPIC_", "CLAUDE_", "CODEX_", "OPENAI_", "OPENCODE_", "OPENROUTER_", "GEMINI_", "GOOGLE_", "GROK_", "XAI_",
   "MISTRAL_", "CEREBRAS_", "GROQ_", "GREENFERENCE_", "MODELGO_", "META_", "MINIMAX_", "KIMI_", "MOONSHOT_", "CURSOR_", "FACTORY_", "CLINE_", "HERMES_",
   "MUSE_", "PI_", "DWEB_", "UNSLOTH_", "FAKE_CLAUDE_", "MCP_", "ANTIGRAVITY_", "AGY_",
 ];
 
 /** Never, whatever the allow-list says: the control plane's settings and secrets, and the server's own placement. The
- * CLI's session token and server address (server/headless/client.ts) too: nothing in a box reads them, and one an
- * operator set on the server would otherwise pass under the engines' SEIRA_ prefix. */
+ * CLI's session token and server address (server/headless/client.ts) too: nothing in a box reads them. */
 export const BOX_ENV_NEVER: ReadonlySet<string> = new Set([
   "SEIRA_LICENSE_KEY", "SEIRA_INSTALLATION_CREDENTIAL", "SEIRA_LOOPBACK_TRUST", "SEIRA_CLOUD_SECRETS_FD",
   "SEIRA_DATA_DIR", "SEIRA_STATIC_DIR", "SEIRA_DUCKDB_DIR", "SEIRA_PORT", "SEIRA_WEBHOOK_PORT",
@@ -59,7 +63,9 @@ export function boxEnvironmentAllows(name: string, deny: ReadonlySet<string> = n
   if (BOX_ENV_NEVER.has(name) || BOX_ENV_NEVER_PREFIXES.some((prefix) => name.startsWith(prefix))) return false;
   if (allow.has(name) && !name.startsWith("SEIRA_")) return true;
   if (deny.has(name)) return false;
-  if (name.startsWith("SEIRA_")) return BOX_ENV_SEIRA_NAMES.has(name) || BOX_ENV_SEIRA_PREFIXES.some((prefix) => name.startsWith(prefix));
+  if (name.startsWith("SEIRA_")) {
+    return BOX_ENV_SEIRA_NAMES.has(name) || BOX_ENV_SEIRA_PREFIXES.some((prefix) => name.startsWith(prefix)) || BOX_ENV_SEIRA_ENGINE_KEY.test(name);
+  }
   return BOX_ENV_NAMES.has(name) || BOX_ENV_PREFIXES.some((prefix) => name.startsWith(prefix));
 }
 

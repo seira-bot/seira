@@ -656,7 +656,7 @@ test("pages access: this sign-in's own pages token on any plan, null without the
   assert.equal(await f.client.pagesAccess(), null);
   assert.equal(f.requests.length, before);
   await f.connect();
-  const token = `seira_pd_${"a".repeat(43)}`, url = `${f.origin}/api/cloud/pages/token`;
+  const token = `omb_pd_${"a".repeat(43)}`, url = `${f.origin}/api/cloud/pages/token`;
   f.pages = { status: 200, body: { cloudContractVersion: 1, url, token } };
   assert.deepEqual(await f.client.pagesAccess(), { url, token });
   assert.ok(f.requests.some(r => r.route === "/api/cloud/desktop/services/pages" && r.method === "POST" && r.token === `Bearer ${accessToken}`));

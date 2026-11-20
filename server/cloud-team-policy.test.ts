@@ -32,8 +32,8 @@ function world(fetchImpl: (body: { loaded: { fingerprint: string } | null; probl
 }
 
 describe("the document", () => {
-  it("computes the fingerprint and signature exactly as seira-cloud's server/cloud-team-policy.ts does", () => {
-    // The same vectors are pinned in seira-cloud tests/cloud-team-policy.test.ts.
+  it("computes the fingerprint and signature exactly as the Cloud service does", () => {
+    // The same vectors are pinned in the Cloud service's own tests.
     expect(teamPolicyFingerprint({ schema: 1, limits: { remoteAccess: "off", allowedEngines: ["claudeAgent", "codex"] } })).toBe("8341e89f9d7fc734");
     expect(teamPolicyFingerprint({ limits: { allowedEngines: ["claudeAgent", "codex"], remoteAccess: "off" }, schema: 1 })).toBe("8341e89f9d7fc734");
     expect(teamPolicySignature("s".repeat(43), "cm-test-home", "1792670400", "nonce-nonce-nonce-1", '{"v":1,"loaded":null,"problem":null}')).toBe("ZNkIYIIuPldLp7gQ4cy7s1zQJpBiWkyP8DOyRtRz03w");
@@ -79,7 +79,7 @@ describe("the fetch", () => {
       expect(url).toBe(`https://cloud.example.test${TEAM_POLICY_ADMIN_PATH}`);
       expect(init.redirect).toBe("error");
       const headers = init.headers as Record<string, string>;
-      expect(headers["x-seira-cloud-signature"]).toBe(`v1=${teamPolicySignature("s".repeat(43), "cm-test-home", headers["x-seira-cloud-timestamp"]!, headers["x-seira-cloud-nonce"]!, String(init.body))}`);
+      expect(headers["x-omb-cloud-signature"]).toBe(`v1=${teamPolicySignature("s".repeat(43), "cm-test-home", headers["x-omb-cloud-timestamp"]!, headers["x-omb-cloud-nonce"]!, String(init.body))}`);
       return answer(document);
     });
     await client.settled();

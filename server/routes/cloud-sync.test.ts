@@ -108,7 +108,7 @@ it("answers the desktop's held changes poll \"asleep\" when a Cloud home agrees 
   const answer = await held;
   expect(answer.status).toBe(503);
   expect(answer.body).toEqual({ error: "asleep" });
-  expect(answer.headers.get("x-seira-cloud-power")).toBe("asleep");
+  expect(answer.headers.get("x-omb-cloud-power")).toBe("asleep");
   expect((await call("GET", `/api/sync/changes?cursor=${cursor}&waitMs=60000`)).status).toBe(503);
   sleeping = false; abort = new AbortController();
   expect((await call("GET", `/api/sync/changes?cursor=${cursor}&waitMs=0`)).status).toBe(200);

@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Admin rules (seira-cloud AGENTS.md): schema only through `migrate()`, additive and idempotent; no edits to applied migrations or `runtime/`; tests never make paid calls; expected errors are a status and a plain sentence; never log bodies, tokens or emails.
+- Admin rules (the Cloud service's contributor rules): schema only through `migrate()`, additive and idempotent; no edits to applied migrations or `runtime/`; tests never make paid calls; expected errors are a status and a plain sentence; never log bodies, tokens or emails.
 - Relay endpoint allow-list is exactly the eight ids in the spec.
 - Allowances: personal 1,500, pro 5,000, max 15,000 per account per UTC month; unknown plan `SEIRA_CLOUD_X_CALLS_PER_MONTH` (default 1,500).
 - Token prefixes: home `seira_x_`, desktop `seira_xd_`. Env: `SEIRA_CLOUD_TREG_KEY` (Admin), `SEIRA_CLOUD_X_URL` + secret `SEIRA_CLOUD_X_TOKEN` (homes).
@@ -25,7 +25,7 @@
 4. Treg refusing our key must read as "temporarily unavailable" to the customer, never as their plan or token problem.
 5. Removing the person's token must not break loading an existing config.json that still contains `treg`.
 
-## Admin tasks (seira-cloud)
+## Admin tasks (Cloud service)
 
 ### Task C1: Tier allowance `xCallsPerMonth`
 - Files: `server/cloud-plans.ts`, `tests/cloud-plans.test.ts` (or the existing tier tests).
