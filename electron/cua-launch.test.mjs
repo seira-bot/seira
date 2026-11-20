@@ -268,7 +268,8 @@ describe.skipIf(process.platform !== "darwin")("async standalone CUA launch (iso
 it("does not add blocking subprocess calls to Electron runtime modules", () => {
   const root = dirname(fileURLToPath(import.meta.url));
   // These synchronous ownership checks need separate lifecycle work: the boot ID read, the Windows creation-time query, Linux group validation.
-  const allowed = { "data-dir-lease.mjs": 3, "cua-linux.cjs": 2 };
+  // The old-key reader checks its macOS parent before it takes the earlier app name, and that name must be set before the app is ready.
+  const allowed = { "data-dir-lease.mjs": 3, "cua-linux.cjs": 2, "old-key.mjs": 2 };
   for (const entry of readdirSync(root, { recursive: true })) {
     const name = String(entry).replaceAll("\\", "/");
     if (!/\.(?:mjs|cjs)$/.test(name) || /(?:\.test\.|\.node-test\.|^vendor\/|^build-)/.test(name)) continue;

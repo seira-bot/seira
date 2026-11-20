@@ -298,7 +298,8 @@ Debian 13 and Fedora), SELinux hosts and ARM64 have not been tried.
 
 ## Reference
 
-The rest of this page explains each part in detail.
+The rest of this page explains each part in detail. Settings read from the environment are listed in
+[Environment variables](environment-variables.md), including how to move from the old `OMB_` prefix.
 
 ## What works headless (and what doesn't)
 
@@ -1821,12 +1822,52 @@ is not a positive finite number (empty, `65m`, `0`, a negative number,
 `Infinity`, `1e309`) leaves the default. Set them in the server's environment
 and restart it; the restart stops every running turn.
 
+### Room turns
+
 A turn in a room also has a limit of its own, `rooms.turnTimeoutMinutes` in
-`config.json` (default 5 minutes, 1-1440, which one conversation can replace).
-It stops a member's turn that shows no progress for that long. While one of the
-turn's tools runs, the turn may show nothing for up to 60 minutes (the longest
-an MCP call can be set to take) or the room's limit if that is longer. These two
-settings do not change it.
+`config.json` (default 5 minutes, whole minutes from 1 to 1440). It stops a
+member's turn that shows no progress for that long, and says why in the room.
+It counts silence, not total running time: any event from the turn starts it
+over, and time spent waiting on a person or on the computer does not count.
+While one of the turn's tools runs, the turn may show nothing for up to 60
+minutes (the longest an MCP call can be set to take) or the room's limit if that
+is longer. `SEIRA_TURN_STALL_MS` and `SEIRA_TOOL_STALL_MS` do not change it.
+
+One conversation can replace the limit with its own value (the same 1 to 1440
+range; `null` returns it to the instance value). Both apply to turns that start
+after the change; a turn already running keeps the limit it began with. The
+instance value is in Settings, under the room turns card, and can also be
+changed through `PUT /api/config` with
+`{ "rooms": { "turnTimeoutMinutes": N } }`. A value outside the range, or one
+that is not a whole number, is rejected. The behavior is implemented in
+`server/room-turn-timeout.ts` and tested in `server/room-turn-timeout.test.ts`.
+
+### MCP calls
+
+One tool call from a bot to an MCP server may run for a limited time,
+`mcp.callTimeoutMinutes` in `config.json` (default 10 minutes, whole minutes
+from 1 to 60). Raise it for a tool that legitimately runs long, such as a full
+test run through a host-shell tool.
+
+```json
+{ "mcp": { "callTimeoutMinutes": 10 } }
+```
+
+- The section accepts only this key; an unknown key, a fractional or
+  non-numeric value, or one outside 1 to 60 is rejected.
+- It is the limit of one call, not of a turn. It is separate from the room turn
+  limit and from the silence limits above.
+- Each turn reads the value when it starts, so a change affects the next turn
+  and never moves the deadline of a call already running. No restart is needed.
+- It applies to the chat-MCP transport that API-model engines use to call their
+  tools (`mountChatTools` in `server/drivers/chat-mcp-tools.ts`).
+- A call past the limit fails with `MCP request timed out; execution outcome may
+  be uncertain`: the call may still have run, so check its effect before
+  repeating it.
+- Settings shows it as "MCP call timeout"; `GET /api/config` reports the
+  effective value and `PUT /api/config` with `{ "mcp": { "callTimeoutMinutes": N } }`
+  changes it. Tests: `server/config.test.ts`, `server/drivers/chat-mcp-tools.test.ts`
+  and `src/lib/mcp-call-timeout.test.ts`.
 
 ## Keeping unattended bots from spending on failures
 

@@ -19,20 +19,30 @@ Most Seira failures come from one of four layers: the desktop app, a local agent
 
 In any chat with a bot, on the desktop app or on the Cloud, type `@devs` (it is
 the last entry in the @ list) and a few words about what went wrong, then send.
-Typing it prepares the report. Nothing is sent until you submit it yourself.
 
-The bot answering the message adds a short summary: what you said went wrong,
+The bot answering the message writes a bug report: what you said went wrong,
 what it saw itself in the conversation, and steps to reproduce. Seira adds
 its own facts: the app version, the computer's system, whether it runs on the
 desktop or the Cloud, the bot's engine and model, recent errors in that
-conversation, the server's latest warnings and errors, and the conversation's
-ids. Keys, passwords, tokens, cookies and the parameters of web addresses are
-masked first. The rest of the conversation is never sent, and neither is any file.
+conversation, and the conversation's ids. When you run the app yourself, it
+also adds the server's latest warnings and errors. Keys, passwords, tokens,
+cookies and the parameters of web addresses are masked first. Your email
+address and the install id are not in it. The rest of the conversation is never
+sent, and neither is any file.
 
-The chat then shows a notice with an **Open on GitHub** button. It opens a
-prefilled issue form in the Seira repository on GitHub. Read the text, change it
-if you like, and submit it there. The issue is public once you submit it. Home
-folders show as `~`, and your email address and install id are not in it.
+Nothing is sent yet. Select **Review report** under your message and read the
+report. **Send report** sends it to the Seira team's bug tracker, where it
+becomes a public issue in the Seira repository on GitHub. **Not now** sends
+nothing and keeps no copy. **Write it on GitHub** opens a prefilled issue form
+that you can change and submit there yourself.
+
+Under the message you can follow a sent report: first *Got it, we're looking*,
+then *Fixed in 0.1.135* once the team closes the issue as fixed. When your app
+runs that version, you get one message in the same chat, *Fixed in 0.1.135.
+Want to try again?*
+
+If you are offline, or too many reports went out in the last hour, the report is
+saved. It goes on its own later.
 
 ## Collect useful evidence
 

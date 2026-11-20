@@ -54,16 +54,19 @@ export const BOX_ENV_NEVER: ReadonlySet<string> = new Set([
   "SEIRA_DATA_DIR", "SEIRA_STATIC_DIR", "SEIRA_DUCKDB_DIR", "SEIRA_PORT", "SEIRA_WEBHOOK_PORT",
   "SEIRA_TOKEN", "SEIRA_URL",
 ]);
-export const BOX_ENV_NEVER_PREFIXES: readonly string[] = ["SEIRA_CLOUD_"];
+export const BOX_ENV_NEVER_PREFIXES: readonly string[] = ["SEIRA_CLOUD_", "OMB_"];
 
 /** `allow` is what one spawn vouches for: the keys the person saved for its engine, under whatever name that engine reads
  * (NANO_GPT_API_KEY, OPENCODE_API_KEY). Security: it lifts the allow-list and `deny` for that process only, and never for
  * a name of Seira's own (`SEIRA_`) or one on the never-list. */
 export function boxEnvironmentAllows(name: string, deny: ReadonlySet<string> = new Set(), allow: ReadonlySet<string> = new Set()): boolean {
-  if (BOX_ENV_NEVER.has(name) || BOX_ENV_NEVER_PREFIXES.some((prefix) => name.startsWith(prefix))) return false;
-  if (allow.has(name) && !name.startsWith("SEIRA_")) return true;
-  if (deny.has(name)) return false;
-  if (name.startsWith("SEIRA_")) {
+  const upper = name.toUpperCase();
+  if (BOX_ENV_NEVER.has(upper) || BOX_ENV_NEVER_PREFIXES.some((prefix) => upper.startsWith(prefix))) return false;
+  const own = upper.startsWith("SEIRA_");
+  if (allow.has(name) && !own) return true;
+  if (deny.has(name) || deny.has(upper)) return false;
+  if (own && !name.startsWith("SEIRA_")) return false;
+  if (own) {
     return BOX_ENV_SEIRA_NAMES.has(name) || BOX_ENV_SEIRA_PREFIXES.some((prefix) => name.startsWith(prefix)) || BOX_ENV_SEIRA_ENGINE_KEY.test(name);
   }
   return BOX_ENV_NAMES.has(name) || BOX_ENV_PREFIXES.some((prefix) => name.startsWith(prefix));

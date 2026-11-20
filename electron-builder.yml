@@ -265,13 +265,14 @@ linux:
       Keywords: AI;Agents;Chat;Productivity;
 
 deb:
-  # The package name stays the same across updates, so dpkg and pacman replace the installed package.
-  packageName: openmausbot
+  # An earlier version used the package name openmausbot. Conflicts, Replaces and Provides let apt and dpkg
+  # remove it and install this package over it in one step.
+  packageName: seira
   packageCategory: utils
   priority: optional
   # Add the narrow browser policy's parser without replacing Electron's
   # default shared-library dependencies.
-  fpm: ["--depends", "apparmor"]
+  fpm: ["--depends", "apparmor", "--conflicts", "openmausbot", "--replaces", "openmausbot", "--provides", "openmausbot"]
   # dpkg can preserve legacy directory modes during an upgrade. This
   # idempotent hook repairs only the exact package-owned CUA path.
   afterInstall: build/linux-after-install.sh
@@ -288,10 +289,11 @@ snap:
   autoStart: false
 
 pacman:
-  # The package name stays the same across updates, so dpkg and pacman replace the installed package.
-  packageName: openmausbot
+  # The same replacement of the earlier package name for pacman.
+  packageName: seira
   packageCategory: utils
-  fpm: ["--depends", "fuse3", "--depends", "gtk3", "--depends", "nss", "--depends", "alsa-lib", "--depends", "libcups", "--depends", "mesa"]
+  fpm: ["--depends", "fuse3", "--depends", "gtk3", "--depends", "nss", "--depends", "alsa-lib", "--depends", "libcups", "--depends", "mesa",
+    "--conflicts", "openmausbot", "--replaces", "openmausbot", "--provides", "openmausbot"]
   afterInstall: build/linux-after-install.sh
   afterRemove: build/linux-after-remove.sh
 

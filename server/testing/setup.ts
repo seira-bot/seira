@@ -19,6 +19,8 @@ process.env.USERPROFILE = home;
 process.env.FAKE_OPENAI_COMPAT_RETRY_SCALE ??= "0.001";
 // SEIRA_DATA_DIR must never escape the throwaway home the suite deletes.
 delete process.env.SEIRA_DATA_DIR;
+// An ambient OMB_ name would be adopted as its SEIRA_ twin when config.ts loads, past the line above.
+for (const key of Object.keys(process.env)) if (key.toUpperCase().startsWith("OMB_")) delete process.env[key];
 // The model manifest comes from the bundled copy in tests; refreshing it would be a network call in every server boot.
 process.env.SEIRA_DISABLE_MODEL_MANIFEST_FETCH = "1";
 // Do not let a developer's Hermes global config path leak into per-test homes.

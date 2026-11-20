@@ -43,19 +43,40 @@ export const WORKSPACE_CREDENTIAL_ENV = [
 ] as const;
 
 /** Operator secrets only this process reads, plus every `SEIRA_CLOUD_` var (the underscore leaves out SEIRA_CLOUDFLARED_PATH). */
-export const CONTROL_PLANE_ENV = ["SEIRA_LICENSE_KEY", "SEIRA_INSTALLATION_CREDENTIAL"] as const;
+export const CONTROL_PLANE_ENV = ["SEIRA_LICENSE_KEY", "SEIRA_INSTALLATION_CREDENTIAL", "SEIRA_SIGNIN_SMTP_URL", "SEIRA_TOKEN"] as const;
 export const CONTROL_PLANE_ENV_PREFIX = "SEIRA_CLOUD_";
 
 /** Names compare case-insensitively because Windows environments do. */
 export function stripControlPlaneEnv(env: Record<string, string | undefined>): void {
   for (const key of Object.keys(env)) {
-    const name = key.toUpperCase();
+    const name = canonicalEnvName(key);
     if (name.startsWith(CONTROL_PLANE_ENV_PREFIX) || (CONTROL_PLANE_ENV as readonly string[]).includes(name)) delete env[key];
   }
 }
 
+/** An env name as filters compare it: in capitals (Windows environments are case-insensitive) with the old `OMB_` prefix read as `SEIRA_`. */
+export function canonicalEnvName(name: string): string {
+  const upper = name.toUpperCase();
+  return upper.startsWith("OMB_") ? `SEIRA_${upper.slice("OMB_".length)}` : upper;
+}
+
+/** Deletes every name of `env` that matches one of `names` under {@link canonicalEnvName}, except a name `keep` lists exactly (in capitals,
+ * and not under the old prefix). */
+export function stripEnvNames(env: Record<string, string | undefined>, names: readonly string[], keep: readonly string[] = []): void {
+  const denied = new Set(names.map(canonicalEnvName));
+  const kept = new Set(keep.map((name) => name.toUpperCase()));
+  for (const key of Object.keys(env)) {
+    if (denied.has(canonicalEnvName(key)) && !kept.has(key.toUpperCase())) delete env[key];
+  }
+}
+
+/** Removes every workspace credential in any letter case, and its `OMB_` twin. `keep` spares a name (in capitals), never its twin. */
+export function stripWorkspaceCredentialKeys(env: Record<string, string | undefined>, keep: ReadonlySet<string> = new Set()): void {
+  stripEnvNames(env, WORKSPACE_CREDENTIAL_ENV, [...keep]);
+}
+
 export function stripWorkspaceCredentialEnv(env: Record<string, string | undefined>): void {
-  for (const key of WORKSPACE_CREDENTIAL_ENV) delete env[key];
+  stripWorkspaceCredentialKeys(env);
   stripControlPlaneEnv(env);
 }
 

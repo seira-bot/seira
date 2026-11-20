@@ -127,9 +127,10 @@ Your server is a standalone Seira, and a standalone Seira talks to Seira in a fe
 
 - **Emailed sign-in codes**, unless you use your own mail server: the address being signed in goes to Seira's account service.
 - **An update check**, only when a person opens it in the app: it asks GitHub for the latest release.
+- **Bug reports**, only when a person reads a report and selects **Send report**: the report goes to Seira's bug report service, which files a public GitHub issue in `seira-bot/seira`. It carries only what the person read, with keys, passwords and tokens masked, and without their email address or the install id. While the report is open, the server asks for its status about once an hour. Set `SEIRA_BUG_REPORT_URL=off` to prepare a prefilled GitHub issue form instead. That sends nothing.
 - **In the browser:** [usage analytics](/docs/security/analytics), which each person can turn off.
 
-It does not send what a server Seira operates sends: no health report to the Admin, no team summary with members' addresses, no registration with Seira's connected-apps broker, no traffic through Seira's AI, voice or research hosts. A message that tags `@devs` sends nothing either: the app opens a prefilled GitHub issue that the person reads and submits.
+It does not send what a server Seira operates sends: no health report to the Admin, no team summary with members' addresses, no registration with Seira's connected-apps broker, no traffic through Seira's AI, voice or research hosts.
 
 Traffic to the AI providers, engines and apps you set up is between your server and them, and is not on this page.
 
