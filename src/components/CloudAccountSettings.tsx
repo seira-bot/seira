@@ -256,7 +256,7 @@ export function CloudAccountSettings({ linkRequest = 0, cloudHome = false, teamH
   const line = cloudPlanLine(view);
   const onTeamPlan = teamPlan(account), team = planTeam(account);
   const setUp: CloudMachine | undefined = view.kind === "paid" ? { status: "provisioning" } : undefined;
-  const machine: CloudMachine | undefined = onTeamPlan ? team?.machine ?? setUp : account?.status === "connected" ? account.machine ?? setUp : undefined;
+  const machine: CloudMachine | undefined = onTeamPlan ? team?.machine ?? undefined : account?.status === "connected" ? account.machine ?? setUp : undefined;
   const enrollment = account?.status === "connecting" ? account.enrollment : undefined;
   const moneyBack = moneyBackLine(offer);
   const signedOut = view.kind === "signed-out" || view.kind === "removed";

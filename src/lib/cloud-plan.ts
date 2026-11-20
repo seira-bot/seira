@@ -323,11 +323,10 @@ export type CloudAddView =
   | { kind: "settings" };
 
 function teamCloudView(team: ReturnType<typeof planTeam>): CloudAddView {
-  const machine = team?.machine ?? null;
-  if (!team || !machine || machine.status === "provisioning") {
-    return { kind: "team-starting", team: team?.name ?? null, step: machine?.setup?.step ?? null, slow: machine?.setup?.slow === true };
-  }
-  return machine.status === "ready" ? { kind: "team-ready", team: { id: team.id, name: team.name } } : { kind: "settings" };
+  if (!team) return { kind: "checking" };
+  const machine = team.machine ?? null;
+  if (machine?.status === "provisioning") return { kind: "team-starting", team: team.name, step: machine.setup?.step ?? null, slow: machine.setup?.slow === true };
+  return machine?.status === "ready" ? { kind: "team-ready", team: { id: team.id, name: team.name } } : { kind: "settings" };
 }
 
 /** The one state → view function of the buying sheet: every Cloud state is one message and one next step. */

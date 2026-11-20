@@ -559,8 +559,10 @@ it("a Team plan has no Cloud of its own: the team's Cloud under its name, Open {
   push(onTeam({ status: "provisioning", setup: { step: "storage" } }));
   html = render().html;
   all(html, ["Setting up your team&#x27;s Cloud", 'data-cloud-setup="storage"', "Reserving your machine"]); none(html, ["Open Acme", PHONE]);
-  push({ ...onTeam(null), teams: undefined });
-  all(render().html, ["Your team&#x27;s Cloud", "Setting up your team&#x27;s Cloud"]);
+  for (const state of [onTeam(null), { ...onTeam(null), teams: undefined }]) {
+    push(state);
+    none(render().html, ["Your team&#x27;s Cloud", "Setting up", "Reserving your machine", "data-cloud-home", "Open Acme"]);
+  }
   push({ ...onTeam({ status: "ready", origin: "https://seira-t-2.fly.dev" }), entitlement: { plan: "pro", tier: "pro", status: "active", expiresAt: 1_900_000_000_000, version: 3 } });
   all(render().html, ["Setting up the Cloud"]); none(render().html, ["data-cloud-phone"]);
 });

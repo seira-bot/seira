@@ -318,8 +318,8 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
       publish({ ...view("connected"), entitlement: access, ...(machine ? { machine } : {}), ...(teams.length ? { teams } : {}), ...(landing ? { landing } : {}), ...(purchase ? { purchase } : {}),
         ...(trial ? { trial } : {}), ...(credit ? { credit } : {}), ...(offer ? { offer } : {}), ...(usage ? { usage } : {}), ...(room ? { room } : {}), ...(renewingCloud ? { renewal } : {}),
         ...(clouds ? { clouds, addCloud: more } : {}), ...(organizations ? { organizations } : {}), ...(latest ? { latestVersion: latest } : {}), verifiedAt: now(), verifiedUntil });
-      const planCloud = teamPlan(value) ? planTeam(value)?.machine ?? null : machine;
-      const settingUp = planCloud?.status === "provisioning" || (access.status === "active" && !planCloud) || Boolean(purchase) || otherOwnClouds(clouds).some(cloud => cloud.status === "setting_up");
+      const listedTeam = planTeam(value), planCloud = teamPlan(value) ? listedTeam?.machine ?? null : machine;
+      const settingUp = planCloud?.status === "provisioning" || (access.status === "active" && !planCloud && !listedTeam) || Boolean(purchase) || otherOwnClouds(clouds).some(cloud => cloud.status === "setting_up");
       const added = adding ? clouds?.find(cloud => cloud.id === adding.cloudId) ?? null : null;
       const paying = watchingAdd() && Boolean(adding.url) && (!added || added.status === "checkout");
       const delay = (watching() && planCloud?.status !== "ready") || paying ? WATCH_REFRESH_MS : settingUp ? SETUP_REFRESH_MS : awaitingWake() ? ASLEEP_REFRESH_MS : REFRESH_MS;

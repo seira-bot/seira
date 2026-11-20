@@ -675,6 +675,13 @@ describe("the sheet", () => {
     expect(await buy("pro")).toContain("A checkout is already being prepared. Try again in a moment.");
   });
 
+  it("a Team plan whose team the Admin lists with no machine shows no setup: the sheet hands over to Settings and closes", async () => {
+    account = onTeam(null);
+    expect(await settle()).toBe("");
+    expect(f.dispatch).toHaveBeenCalledWith({ type: "closeCloudAdd" });
+    expect(f.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "cloudAccount" });
+  });
+
   it("payment problems and ended sign-ins are Settings' to say: the sheet hands over and closes", async () => {
     account = { status: "reauth-required", message: "expired", lastPlan: { tier: "pro", active: true } };
     expect(await settle()).toBe("");

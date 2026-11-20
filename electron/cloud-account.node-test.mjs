@@ -103,6 +103,8 @@ test("a Team plan's Cloud is its team's: its setup is followed every 15 seconds,
   state = await f.client.refresh();
   assert.equal(state.machine, undefined); assert.equal(f.delay, 60_000, "the team's Cloud is ready: nothing is being set up");
   f.teams = undefined; await f.client.refresh(); assert.equal(f.delay, 15_000, "no team listed yet: its setup");
+  f.teams = team(null); state = await f.client.refresh();
+  assert.equal(state.teams[0].machine, null); assert.equal(f.delay, 60_000, "the team has no machine: nothing is being set up");
 });
 
 test("a connection that fails while the Admin says My Cloud can't be reached says why, from the Admin's latest word; otherwise the request's own error", async t => {

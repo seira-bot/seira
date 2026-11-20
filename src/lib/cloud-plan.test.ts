@@ -376,8 +376,8 @@ describe("the buying sheet, one view per state", () => {
       .toEqual({ kind: "team-ready", team: { id: "team-acme", name: "Acme" } });
     expect(cloudAddView(onTeam("team", [team({ status: "provisioning", setup: { step: "storage", slow: true } })]), undefined, at), "the team's Cloud being set up: its own steps")
       .toEqual({ kind: "team-starting", team: "Acme", step: "storage", slow: true });
-    expect(cloudAddView(onTeam("business", [team(null)]), undefined, at), "the team has no machine yet").toEqual({ kind: "team-starting", team: "Acme", step: null, slow: false });
-    expect(cloudAddView(onTeam("team"), undefined, at), "no team listed yet").toEqual({ kind: "team-starting", team: null, step: null, slow: false });
+    expect(cloudAddView(onTeam("business", [team(null)]), undefined, at), "the Admin lists the team with no machine: nothing is being set up").toEqual({ kind: "settings" });
+    expect(cloudAddView(onTeam("team"), undefined, at), "no team listed yet: wait for the Admin, promise no machine").toEqual({ kind: "checking" });
     expect(cloudAddView(onTeam("team", [team({ status: "failed" })]), undefined, at), "a problem is Settings' to say").toEqual({ kind: "settings" });
     expect(cloudAddView(paid(), undefined, at).kind, "a personal plan with no Cloud yet: its setup").toBe("starting");
     expect(cloudAddView(paid({ teams: [team(up, { role: "member" })] }), undefined, at).kind, "a Pro plan's own Cloud, even for someone in a team").toBe("starting");
