@@ -742,10 +742,12 @@ Ubuntu is blocking its sandbox. [Chromium documents this restriction](https://ch
 Do not add `--no-sandbox` or disable `kernel.apparmor_restrict_unprivileged_userns` globally.
 
 For paths A and C, an administrator can allow only a trusted, root-owned Chrome
-copy. Find the service user's downloaded executable:
+copy. Run these steps from the administrator shell. `seira` is the service user
+from the setup above. Find its home and its downloaded executable:
 
 ```sh
-find $HOME/.agent-browser/browsers -type f -name chrome -executable
+service_home=$(getent passwd seira | cut -d: -f6)
+sudo find "$service_home/.agent-browser/browsers" -type f -name chrome -executable
 ```
 
 Use its actual `chrome-VERSION` directory in every path below; `VERSION` is a
@@ -754,7 +756,7 @@ libraries, to a new location that the service user cannot modify:
 
 ```sh
 sudo install -d -o root -g root -m 0755 /opt/seira-browser
-sudo cp -R $HOME/.agent-browser/browsers/chrome-VERSION /opt/seira-browser/
+sudo cp -R "$service_home/.agent-browser/browsers/chrome-VERSION" /opt/seira-browser/
 sudo chown -R root:root /opt/seira-browser/chrome-VERSION
 sudo chmod -R go-w /opt/seira-browser/chrome-VERSION
 ```
