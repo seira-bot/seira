@@ -1,22 +1,29 @@
 # Connect apps through Composio
 
-Seira uses one Composio project API key and one reusable Composio Session. That project key is the only Composio credential users need to provide. The Session enables Composio's multi-account mode with explicit account selection, so one Seira installation can keep several Slack, Gmail, Calendar, or other accounts connected without silently replacing the first one.
+Seira connects apps through one Composio project and one reusable Composio Session. By default the project belongs to Seira's connected-apps service, and users give no Composio credential. When the owner saves their own Composio project key, Seira uses that project instead. The Session enables Composio's multi-account mode with explicit account selection, so one Seira installation can keep several Slack, Gmail, Calendar, or other accounts connected without silently replacing the first one.
 
 ## Packaged desktop app
 
+The packaged desktop app uses Seira's connected-apps service at `https://apps.seira.bot`. It needs no Composio account and no key.
+
+1. Open **Apps** and choose Gmail, GitHub, Slack, or another service. Select **Connect**, then finish the authorization in your normal browser. The first account of an app needs no label.
+2. To connect another account for the same app, choose **Add account**, give it a unique label such as `work` or `personal`, and finish the second authorization in your browser.
+
+The Connected tab lists every account separately. **Disconnect** revokes only the account named on that row. Seira asks for a label for every account after the first and configures Composio to require explicit selection when more than one account could run a tool; a new OAuth flow never silently becomes the default for an existing connection.
+
+While the service is in use, apps with no Composio-managed sign-in, such as Xero and Buffer, do not show in **Apps** (see [Apps with no Composio-managed sign-in](#apps-with-no-composio-managed-sign-in)).
+
+To use your own Composio project instead:
+
 1. Open your project's [API Keys page](https://dashboard.composio.dev/~/project/settings/api-keys) in the Composio Dashboard (sign in or create a project first if asked).
 2. Create a project key there if the project has none, then copy it (it begins with `ak_`). The `ck_` key on the personal **Sessions & API Key** page is a different key and won't work.
-3. In Seira, open **Settings → API keys** and save it under **Apps and tools → Composio project key**.
-4. Open **Connected apps** and choose Gmail, GitHub, Slack, or another service. Enter a unique label such as `work` or `personal`, then finish the authorization in your normal browser.
-5. To connect another account for the same app, choose **Add account**, give it a unique label, and finish the second authorization in your browser.
+3. In Seira, open **Settings → AI → Other services** and save it under **Apps and tools → Composio project key**.
 
-The Connected tab lists every account separately. **Disconnect** revokes only the account named on that row. Seira asks for a label for every new account and configures Composio to require explicit selection when more than one account could run a tool; a new OAuth flow never silently becomes the default for an existing connection.
-
-The desktop app validates the key before saving it. The key is encrypted using Electron's operating-system-backed `safeStorage`; the local JSON configuration stores only the non-secret Composio user and Session identifiers.
+A saved key takes priority over the service, and then nothing goes to the service. The desktop app validates the key before saving it. The key is encrypted using Electron's operating-system-backed `safeStorage`; the local JSON configuration stores only the non-secret Composio user and Session identifiers.
 
 ## Seira Cloud
 
-Seira ships with no connected-apps service. A Cloud home needs the owner's Composio project key, saved under **Settings → API keys → Apps and tools → Composio project key**.
+A Cloud home uses no connected-apps service unless its environment names one. Without one, it needs the owner's Composio project key, saved in **Settings → AI → Other services** under **Apps and tools → Composio project key**.
 
 A Cloud home uses a connected-apps service only when `OMB_COMPOSIO_BROKER_URL` names one, for example your own deploy of `cloudflare/composio-broker`. Without it, the app behaves as if `OMB_COMPOSIO_BROKER=off`: connected apps need your own project key, and app-event automations are not available.
 
@@ -152,7 +159,7 @@ An account you connected in the Composio dashboard belongs to a different Compos
 
 A bot can also name one auth config for an app: `COMPOSIO_MANAGE_CONNECTIONS` with `"auth_config_id": "ac_…"` next to a single toolkit, or `toolkits: [{ "name": "xero", "action": "add", "auth_config_id": "ac_…" }]` (`auth_config_override` is read as well). Seira adds `auth_config_id` to the tool's description so bots can see it. It checks the id in your project before it shows the Connect card (it must exist, belong to that app and be enabled) and keeps the choice in `composio-auth-configs.json` in the data folder, so later Sessions use it while it stays usable.
 
-A connected-apps service named with `OMB_COMPOSIO_BROKER_URL` runs on its own Composio project, which cannot use an auth config in yours. For such an app it says so in one line: add your own Composio project key in **Settings → API keys**; Seira then uses your auth config for that app from that project.
+A connected-apps service named with `OMB_COMPOSIO_BROKER_URL` runs on its own Composio project, which cannot use an auth config in yours. For such an app it says so in one line: add your own Composio project key in **Settings → AI → Other services**; Seira then uses your auth config for that app from that project.
 
 ## Browser authorization recovery
 

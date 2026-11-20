@@ -4,28 +4,40 @@ description: Give bots secure, user-authorized tools for Gmail, GitHub, Slack, N
 icon: PlugZap
 ---
 
-Open **Connected apps** from the sidebar, choose a service, and complete its authorization in your normal browser. Seira turns the resulting connection into tools that supported agent engines can use.
+Open **Apps** from the sidebar, choose a service, and complete its authorization in your normal browser. Seira turns the resulting connection into tools that supported agent engines can use.
 
 <ProductScreenshot name="docs-connected-apps" alt="The clean Seira connected-app marketplace" caption="Search the marketplace or review every account from the Connected tab." />
 
 ## Desktop app
 
-Connected apps use your own Composio project key. A free Composio account is enough.
+The desktop app connects apps through Seira's connected-apps service. You need no Composio account and no key.
+
+1. Open **Apps** from the sidebar and find Gmail, GitHub, Slack, Notion, or another app.
+2. Select **Connect**.
+3. Finish the sign-in in the browser window that opens.
+4. Return to Seira and ask a bot to use the app.
+
+To connect a second account of the same app, select **Add account**, give it a label such as `work` or `personal`, and finish that sign-in too.
+
+The sign-in tokens of each app stay with Composio. Seira never writes them into bot prompts.
+
+Apps that need your own OAuth app, such as Xero and Buffer, do not show in the list. To connect them, use your own Composio project, as in [Apps that need your own OAuth app](#apps-that-need-your-own-oauth-app).
+
+### Use your own Composio project
+
+A saved Composio project key takes priority over Seira's service. Seira then sends nothing to the service.
 
 1. Create a free account at [composio.dev](https://composio.dev).
-2. Open the project's Settings → API Keys page: [API Keys page](https://dashboard.composio.dev/~/project/settings/api-keys).
+2. Open the project's [API Keys page](https://dashboard.composio.dev/~/project/settings/api-keys).
 3. Create a key. It starts with `ak_`.
-4. In Seira, open **Settings → API keys → Apps and tools → Composio project key**.
-5. Paste the key and save it.
-6. Open **Connected apps**, search for Gmail, GitHub, Slack, Notion, or another toolkit, and select **Connect**.
-7. Finish OAuth in the browser window that opens.
-8. Return to the app and ask a bot to use the service.
+4. In Seira, open **Settings → AI → Other services**.
+5. Under **Apps and tools**, paste the key into **Composio project key** and save it.
 
-Seira stores the key using Electron's operating-system-backed secure storage. Provider OAuth tokens remain with Composio and are not written into bot prompts or the renderer.
+Seira keeps the key in your operating system's secure storage.
 
 ## Seira Cloud
 
-A Cloud also needs the owner's Composio project key. Save it in the same place: **Settings → API keys → Apps and tools → Composio project key**.
+A Cloud needs the owner's Composio project key. Save it in **Settings → AI → Other services**, under **Apps and tools → Composio project key**.
 
 A Cloud uses a connected-apps service instead only when its environment names one with `OMB_COMPOSIO_BROKER_URL`.
 
@@ -49,8 +61,8 @@ The steps below are only needed to **post** to X through Composio. Composio does
 
 1. Create an app in the X Developer Portal.
 2. Create a `twitter` auth config in your Composio project using that app's credentials.
-3. Save the project's key under **Settings → API keys → Apps and tools → Composio project key**.
-4. Return to **Connected apps** and connect **X (Twitter)**.
+3. Save the project's key in **Settings → AI → Other services**, under **Apps and tools → Composio project key**.
+4. Return to **Apps** and connect **X (Twitter)**.
 
 Older Seira tasks that refer to the connector as `x` continue to work; Seira translates that alias to Composio's `twitter` toolkit automatically.
 
@@ -59,8 +71,8 @@ Older Seira tasks that refer to the connector as `x` continue to work; Seira tra
 Some apps, such as Xero and Buffer, have no sign-in that Composio provides, so they connect only with your own OAuth app:
 
 1. In your Composio project, create an auth config for the app (**Auth Configs → Create**) with your OAuth app's client ID and secret, and keep it enabled.
-2. Save the project's key under **Settings → API keys → Apps and tools → Composio project key**.
-3. Connect the app from **Connected apps**, or let a bot ask for it in chat.
+2. Save the project's key in **Settings → AI → Other services**, under **Apps and tools → Composio project key**.
+3. Connect the app from **Apps**, or let a bot ask for it in chat.
 
 Seira finds the auth config by itself, switches on what Composio needs before it uses it ("enabled for Tool Router", which a config you made yourself can have off), and tells the bot which config it used. If you have several for one app, it uses the most recently created. A connection you made in the Composio dashboard itself is not visible to Seira, so connect the app once from Seira.
 
@@ -81,7 +93,3 @@ Phones show each bot's grants read-only in its profile under **App tools**. Edit
 ## Disconnecting
 
 Disconnecting an account revokes the upstream grant. It does not only hide the account in the local UI. Other accounts for the same toolkit remain connected.
-
-<Callout type="info" title="No Connect key">
-  Connected apps need your own Composio project key. Save it under **Settings → API keys → Apps and tools → Composio project key**.
-</Callout>
