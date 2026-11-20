@@ -32,7 +32,9 @@ function loadRecords(file: string | undefined): Map<string, ThreadRecord> {
         records.set(threadId, { instanceId: record.instanceId, level: record.level!, until: record.until! });
       }
     }
-  } catch { }
+  } catch {
+    return records;
+  }
   return records;
 }
 

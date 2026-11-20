@@ -96,7 +96,7 @@ describe("pickPoolMember, even mode", () => {
 
   it("moves to the first unknown member when every known member is at or below the floor", () => {
     const members: PoolMemberState[] = [known(50), unknown(), unknown()];
-    expect(pickPoolMember({ mode: "even", levels: LEVELS, floor: 50, members, currentIndex: 0 })).toEqual({ index: 1, threadLevel: 50 });
+    expect(pickPoolMember({ mode: "even", levels: LEVELS, floor: 50, members, currentIndex: 0 })).toEqual({ index: 1, threadLevel: 50, reason: "low" });
   });
 
   it("stays when every known member is at or below the floor and nothing is unknown", () => {
