@@ -42,7 +42,7 @@ fail() {
 through_caddy() { # what happened
   local _
   for _ in $(seq 1 60); do
-    if curl -sk --max-time 5 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health" 2>/dev/null | grep -qx -e '{"app":"seira"}' -e '{"app":"openmausbot"}' &&
+    if curl -sk --max-time 5 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health" 2>/dev/null | grep -qx -e '{"app":"seira","legacyApp":"openmausbot"}' -e '{"app":"seira"}' -e '{"app":"openmausbot"}' &&
       [ "$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/bots")" = 403 ]; then
       echo "HTTPS through Caddy answers after: $1"
       return 0

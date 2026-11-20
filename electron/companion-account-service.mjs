@@ -44,7 +44,7 @@ export {
   companionAccountCleanupPending,
   companionTunnelRetired,
 } from "./companion-account-documents.mjs";
-import { SEIRA_HOSTS, seiraOrigin, seiraServiceLive } from "./seira-hosts.mjs";
+import { LIVE_SEIRA_SERVICES, SEIRA_HOSTS, seiraOrigin, seiraServiceLive } from "./seira-hosts.mjs";
 import { MANAGED_ENDPOINT_PHONES_UNUSED } from "./companion-endpoint-need.mjs";
 import { FRIENDLY_MESSAGES, friendlyCompanionAccountError } from "./companion-account-messages.mjs";
 export { friendlyCompanionAccountError };
@@ -103,6 +103,14 @@ export function resolveCompanionControlPlaneURL({
     return normalizeControlPlaneURL(environment.SEIRA_CONTROL_PLANE_URL);
   }
   return isPackaged ? DEFAULT_COMPANION_CONTROL_PLANE_URL : "";
+}
+
+/** The control plane of `login` and `serve --tunnel`: SEIRA_CONTROL_PLANE_URL when set (an invalid value gives ""), else Seira's own once the server tunnel service is live. `live` is for tests. */
+export function resolveServerControlPlaneURL({ environment = process.env, live = LIVE_SEIRA_SERVICES } = {}) {
+  if (Object.hasOwn(environment, "SEIRA_CONTROL_PLANE_URL")) {
+    return normalizeControlPlaneURL(environment.SEIRA_CONTROL_PLANE_URL);
+  }
+  return seiraServiceLive("serverTunnel", environment, live) ? seiraOrigin(SEIRA_HOSTS.accounts) : "";
 }
 
 /** Nothing this service returns may contain an account bearer, installation credential, connector token or Cloudflare resource id. */
@@ -223,10 +231,11 @@ export function createCompanionAccountService({
     return healthProbe;
   };
 
-  const requireHealthyControlPlane = async () => {
-    if (!(await probeControlPlane({ force: true }))) {
-      throw new ControlPlaneError("control_plane_unavailable");
+  const requireHealthyControlPlane = async ({ attempts = 1 } = {}) => {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      if (await probeControlPlane({ force: true })) return;
     }
+    throw new ControlPlaneError("control_plane_unavailable");
   };
 
   const settledState = () => {
@@ -560,7 +569,7 @@ export function createCompanionAccountService({
     phase = { status: "connecting", email };
     let verified;
     try {
-      await requireHealthyControlPlane();
+      await requireHealthyControlPlane({ attempts: 2 });
       verified = await client.verifyOTP(email, rawCode);
     } catch (error) {
       const message = failAction(error, { email, signedOut: true });

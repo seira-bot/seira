@@ -118,7 +118,7 @@ import { vpsLeftBehindNotice, vpsNotChosenReason } from "./cloud-backend.ts";
 import * as composio from "./composio.ts";
 import { appSandboxRule, connectorCallFromFrame, connectorRefusalText, connectorScopeRefusalText, connectorUnrecognizedText, evaluateConnectorTools } from "./connector-verdict.ts";
 import { signInCardText } from "./connector-card-text.ts";
-import { BOT_HELD_CODE, BOT_PAUSED_CODE } from "../shared/bot-limit.ts"; import { createBotHolds } from "./host/bot-holds.ts"; import { createBotHoldRoutes } from "./routes/bot-holds.ts"; import { createStarterAwake } from "./host/starter-awake.ts"; import { createStarterCaps } from "./host/starter-caps.ts"; import { createStarterAwakeRoutes } from "./routes/starter-awake.ts"; import { chiefOfStaffPrompt, chiefOfStaffSystemPrompt } from "./chief-of-staff.ts"; import { coordinateTooLong } from "./too-long.ts"; import { chiefAbsentFrom, createChiefRooms } from "./host/chief-rooms.ts"; import { chiefLevel, readTeamRolesWith } from "./chief-level.ts"; import { defaultBotRefusal, ensureDefaultBot } from "./default-bot.ts";
+import { BOT_HELD_CODE, BOT_PAUSED_CODE } from "../shared/bot-limit.ts"; import { createBotHolds } from "./host/bot-holds.ts"; import { createBotHoldRoutes } from "./routes/bot-holds.ts"; import { createStarterAwake } from "./host/starter-awake.ts"; import { createStarterCaps } from "./host/starter-caps.ts"; import { createStarterAwakeRoutes } from "./routes/starter-awake.ts"; import { chiefOfStaffPrompt, chiefOfStaffSystemPrompt } from "./chief-of-staff.ts"; import { coordinateTooLong } from "./too-long.ts"; import { chiefAbsentFrom, createChiefRooms } from "./host/chief-rooms.ts"; import { chiefLevel, readTeamRolesWith } from "./chief-level.ts"; import { defaultBotRefusal, ensureDefaultBot } from "./default-bot.ts"; import { ensureProfileLook } from "./person-look.ts";
 import { buildRecall, recallRooms, recallThreadIds, withRecalled } from "./recall.ts";
 import { hostTimeZone, takesTurnClock, turnClockLine, withTurnClock } from "./turn-clock.ts";
 import { createMemoryUpkeep, dreamConversations, upkeepEnabled } from "./memory-upkeep.ts";
@@ -610,7 +610,7 @@ import { createInternalThreadRoutes } from "./routes/internal-threads.ts";
 import { createBrowserEvidenceRoutes } from "./routes/browser-evidence.ts";
 import { createSignInCardRoutes } from "./routes/sign-in-cards.ts";
 import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { createOwnThreads } from "./host/own-threads.ts"; import { burstDefaultModel, burstProposalRefusal, createBurstHost } from "./host/burst-host.ts"; import { expandBurstTurnText } from "./burst/command.ts"; import { createBurstProposalRoutes, createBurstRoutes } from "./routes/burst.ts";
-import { createRoomHoldRoutes } from "./routes/room-holds.ts"; import { createWorkflowHost, type WorkflowHost } from "./host/workflow-host.ts"; import { createWorkflowRoutineEdits } from "./host/workflow-routine-edits.ts"; import { createWorkflowRoutes, workflowLinkRefusal, workflowTargetHidden } from "./routes/workflows.ts";
+import { createRoomHoldRoutes } from "./routes/room-holds.ts"; import { createWorkflowHost, type WorkflowHost } from "./host/workflow-host.ts"; import { createWorkflowRoutineEdits } from "./host/workflow-routine-edits.ts"; import { createWorkflowRoutes, workflowLinkRefusal, workflowTargetHidden } from "./routes/workflows.ts"; import { createWorkflowDraftRoutes } from "./routes/workflow-draft.ts";
 import { checkedGroupResponder, createGroupRoutes } from "./routes/groups.ts";
 import { createChannelRoutes } from "./routes/channels.ts";
 import { createTaskRoutes } from "./routes/tasks.ts";
@@ -655,7 +655,7 @@ import { connectorFileDeps, connectorFileScope, prepareConnectorFiles, withMissi
 import { createConnectorCards } from "./host/connector-cards.ts";
 import { createLoginMailCodes } from "./host/login-mail-codes.ts"; import { createLateToolResults } from "./host/late-tool-results.ts"; import { internalBodyRefusal } from "./host/internal-body-ids.ts";
 import { onThreadSeen, personAsks as personAskAt, sawThread } from "./thread-presence.ts"; import { createWarmSummaryHost, HARNESS_IDLE_FRACTION } from "./host/warm-summary-host.ts";
-import { acceptsWireName, sentWireName } from "../electron/phone-wire-names.mjs";
+import { PHONE_WIRE_NAMES, acceptsWireName, sentWireName } from "../electron/phone-wire-names.mjs";
 
 const PORT = Number(process.env.SEIRA_PORT || process.env.OGB_PORT || 8799);
 const WEBHOOK_PORT = Number(process.env.SEIRA_WEBHOOK_PORT || PORT + 1);
@@ -780,7 +780,7 @@ delete process.env.SEIRA_CLI_OWNER_STDIN;
 let desktopMutationToken: string | undefined = DESKTOP_MANAGED ? "" : undefined;
 let companionMutationToken: string | undefined = DESKTOP_MANAGED ? "" : undefined;
 const FALLBACK_PUBLIC_URL = process.env.SEIRA_PUBLIC_URL?.trim().replace(/\/+$/, "") || null; const tailnetShare = createTailnetShare({ port: PORT, handle: (req, res) => handleRequest(req, res), attach: (listener, handle) => upgrades.attach(listener, handle), log: (line) => console.log(line) });
-const cfg = loadConfig();
+const cfg = loadConfig(); if (!CLOUD_TEAM) ensureProfileLook(cfg);
 const hostedModels = hostedModelPolicy(DATA_DIR);
 const providerConfigs = () => hostedModels ? hostedModels.configs() : instanceConfigs(cfg);
 const decorateHostedProvider = hostedModels ? (instance: ProviderInstance) => hostedModels.decorate(instance) : undefined;
@@ -11472,7 +11472,7 @@ function claimPhoneSecretBotDeletion(botId: string): (() => void) | null {
 }
 
 const secretCards = createSecretCards({ store, cfg, botLogins, vaultStore: logins, vaultReader: vaultReaders.turn, phoneSecrets, phoneSecretSubmissions, connectorThread, answerCardNode, followCard: (threadId, from, to) => coordinator.followCard(threadId, from, to), threadLanguage, email: { connect: (request, reading) => emailService.connect(request, reading), refusal: () => emailService.status().reason, connected: (address) => { const one = emailService.store.get(address); return Boolean(one && !one.problem); }, sendingProblem: (address) => emailService.sendingProblem(address), account: (address) => emailService.status().accounts.find((one) => one.address.toLowerCase() === address.toLowerCase()), checkOutgoing: (address, fields) => emailService.checkOutgoing(address, fields), profileAddress: () => cfg.profile?.email?.trim() || undefined }, dataDir: DATA_DIR, providerKeysRefused: Boolean(hostedModels), layerFolder: (botId, threadId) => workspaceDir(teamHost.layer(botId, threadId)), turnVm: (threadId) => localVmThreadTargets.get(threadId)?.key });
-ROUTES.push(createWorkflowRoutes({ visible: (auth) => visibleTo(viewerFor(auth)), botName: (id) => store.bot(id)?.name, workflows: () => workflows, routines: () => routines, botsRefusal: botAccess.botsRefusal, routineNeeds: botAccess.routineNeeds, routineEdits: createWorkflowRoutineEdits({ refusal: (auth, routine) => { const visible = visibleTo(viewerFor(auth)); return !routineVisible(routine, visible) ? "no such routine" : hiddenRoutineTarget(routine, visible) ?? teamRoutines.bodyRefusal(auth, { botId: routine.botId })?.error ?? null; }, writer: (auth) => cloudOwnerSession(auth) && CLOUD_OWNER_KEY ? CLOUD_OWNER_KEY : auth.kind === "session" ? actorKey(auth) : CLOUD_NOBODY_KEY, withWriter: withRoutineWriter, current: (id) => routines?.listRoutines().find((routine) => routine.id === id), edited: (auth, routine, writer) => { phones.routineEdited(auth, routine, true); if (cloudRoutineAuthors) { if (cloudOwnerSession(auth)) cloudRoutineAuthors.record(routine.id, routine); else cloudRoutineAuthors.forget(routine.id); cloudRoutineAuthors.wrote(routine.id, writer); } } }) })); ROUTES.push(createBugReportRoutes({ reports: devsReports, person: (auth) => reactorFor(auth).by, sees: (auth, threadId) => visibleTo(viewerFor(auth)).thread(threadId) })); ROUTES.push(createBurstRoutes({ owner: (id) => burst.owner(id), sees: (auth, threadId) => visibleTo(viewerFor(auth)).thread(threadId), refusal: (auth, threadId, id) => cardAnswerRefusal(auth, threadId, id, "allow"), view: (id) => burst.view(id), run: (id) => burst.run(id), cancel: (id) => burst.cancel(id), retry: (id) => burst.retryFailed(id), edit: (id, plan) => burst.edit(id, plan) })); ROUTES.push(createSecretCardRoutes({ cards: secretCards, phoneSecretSubmissions, threadVisible: (auth, threadId) => visibleTo(viewerFor(auth)).thread(threadId), answerContext: (auth, botId, threadId) => ({ personalCloud: Boolean(CLOUD_PERSONAL), shared: sharedMembership(), owner: (CLOUD_TEAM ? teamOwners.routing.askedPerson(botId, threadId) : null) ?? threadStarters.get(threadId) ?? null, person: auth.kind === "session" ? personKey(auth.session) : null }) }));
+ROUTES.push(createWorkflowRoutes({ visible: (auth) => visibleTo(viewerFor(auth)), botName: (id) => store.bot(id)?.name, workflows: () => workflows, routines: () => routines, botsRefusal: botAccess.botsRefusal, routineNeeds: botAccess.routineNeeds, routineEdits: createWorkflowRoutineEdits({ refusal: (auth, routine) => { const visible = visibleTo(viewerFor(auth)); return !routineVisible(routine, visible) ? "no such routine" : hiddenRoutineTarget(routine, visible) ?? teamRoutines.bodyRefusal(auth, { botId: routine.botId })?.error ?? null; }, writer: (auth) => cloudOwnerSession(auth) && CLOUD_OWNER_KEY ? CLOUD_OWNER_KEY : auth.kind === "session" ? actorKey(auth) : CLOUD_NOBODY_KEY, withWriter: withRoutineWriter, current: (id) => routines?.listRoutines().find((routine) => routine.id === id), edited: (auth, routine, writer) => { phones.routineEdited(auth, routine, true); if (cloudRoutineAuthors) { if (cloudOwnerSession(auth)) cloudRoutineAuthors.record(routine.id, routine); else cloudRoutineAuthors.forget(routine.id); cloudRoutineAuthors.wrote(routine.id, writer); } } }) })); ROUTES.push(createBugReportRoutes({ reports: devsReports, person: (auth) => reactorFor(auth).by, sees: (auth, threadId) => visibleTo(viewerFor(auth)).thread(threadId) })); ROUTES.push(createBurstRoutes({ owner: (id) => burst.owner(id), sees: (auth, threadId) => visibleTo(viewerFor(auth)).thread(threadId), refusal: (auth, threadId, id) => cardAnswerRefusal(auth, threadId, id, "allow"), view: (id) => burst.view(id), run: (id) => burst.run(id), cancel: (id) => burst.cancel(id), retry: (id) => burst.retryFailed(id), edit: (id, plan) => burst.edit(id, plan) })); ROUTES.push(createSecretCardRoutes({ cards: secretCards, phoneSecretSubmissions, threadVisible: (auth, threadId) => visibleTo(viewerFor(auth)).thread(threadId), answerContext: (auth, botId, threadId) => ({ personalCloud: Boolean(CLOUD_PERSONAL), shared: sharedMembership(), owner: (CLOUD_TEAM ? teamOwners.routing.askedPerson(botId, threadId) : null) ?? threadStarters.get(threadId) ?? null, person: auth.kind === "session" ? personKey(auth.session) : null }) })); ROUTES.push(createWorkflowDraftRoutes({ store, coordinator, visible: (auth) => visibleTo(viewerFor(auth)), botsRefusal: botAccess.botsRefusal, workflows: () => workflows }));
 
 // By design Seira never receives a website password: the person signs in where the bot works, and the bot uses that session.
 
@@ -11704,7 +11704,7 @@ function configStatus() {
     decider: describeDecider(cfg), helpers: describeHelpers(cfg),
     imageGen: avatarImageStatus(cfg), savedKeys: nestedKeyStatus(cfg),
     live: liveSettingsFor(cfg, { codexAvailable: codexInstalled() }),
-    profile: CLOUD_TEAM ? NOBODY_PROFILE : { name: cfg.profile?.name ?? "", email: cfg.profile?.email ?? "", aboutMe: cfg.profile?.aboutMe ?? "", ...(cfg.profile?.avatarUrl ? { avatarUrl: cfg.profile.avatarUrl } : {}) },
+    profile: CLOUD_TEAM ? NOBODY_PROFILE : { name: cfg.profile?.name ?? "", email: cfg.profile?.email ?? "", aboutMe: cfg.profile?.aboutMe ?? "", ...(cfg.profile?.avatarUrl ? { avatarUrl: cfg.profile.avatarUrl } : {}), ...(cfg.profile?.look ? { look: cfg.profile.look } : {}) },
     managedPolicy: managedPolicy.summary(),
     ...(CLOUD_HOME ? { cloudHome: true } : {}), ...(CLOUD_TEAM ? { team: { id: CLOUD_TEAM.id, name: CLOUD_TEAM.name, ...(CLOUD_HOME ? { cloudPage: `${CLOUD_HOME.adminOrigin}/cloud` } : {}) } } : {}),
     language: appLanguage() ?? "", computerName: cfg.computerName ?? "", everyBotRules: cfg.everyBotRules ?? "",
@@ -11768,7 +11768,7 @@ function configForAccess(status: ReturnType<typeof configStatus>, admin: boolean
     signIn: { admins: [], members: [] }, live: liveSettingsForClient(status.live), everyBotRules: undefined,
     vps: { configured: status.vps.configured, sshAlias: "" },
     opencodeGo: { configured: status.opencodeGo.configured, providerKeys: [] },
-    ...(CLOUD_TEAM ? { onboarding } : {}), profile: CLOUD_TEAM ? profile : { name: profile.name, email: "", ...(profile.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}) },
+    ...(CLOUD_TEAM ? { onboarding } : {}), profile: CLOUD_TEAM ? profile : { name: profile.name, email: "", ...(profile.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}), ...(cfg.profile?.look ? { look: cfg.profile.look } : {}) },
     browserProfiles: status.browserProfiles.map((profile) => Object.fromEntries(Object.entries(profile).filter(([key]) => key !== "partitionId"))),
   };
 }
@@ -12633,7 +12633,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     }
     // Public reachability probe: a stranger learns only the app name; pid and the static flag stay behind the gate.
     if (method === "GET" && path === "/api/health" && !gate.auth) {
-      return json(res, 200, { app: sentWireName("healthApp") });
+      return json(res, 200, { app: sentWireName("healthApp"), legacyApp: PHONE_WIRE_NAMES.healthApp.legacy });
     }
     // Public: the sign-in page needs the deployment's name and icon, and it holds nothing secret.
     if (method === "GET" && path === "/api/brand" && !gate.auth) {

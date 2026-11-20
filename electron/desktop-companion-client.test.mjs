@@ -7,7 +7,6 @@ import path from "node:path";
 import {
   DESKTOP_COMPANION_FIELD,
   MANAGED_COMPANION_HOST_SUFFIXES,
-  NEXT_MANAGED_COMPANION_HOST_SUFFIX,
   desktopCompanionAccess,
   desktopCompanionRendererArguments,
   desktopCompanionProxyTarget,
@@ -60,56 +59,44 @@ describe("desktop companion endpoint", () => {
     expect(normalizeTailscaleCompanionEndpoint("http://HOST.example-tailnet.ts.net:9910/")).toBe(
       "http://host.example-tailnet.ts.net:9910",
     );
-    expect(normalizeDesktopCompanionEndpoint(`https://${LABEL}.seira.bot`)).toBe(
-      `https://${LABEL}.seira.bot`,
+    expect(normalizeDesktopCompanionEndpoint(`https://${LABEL}.seira.run`)).toBe(
+      `https://${LABEL}.seira.run`,
     );
-    expect(normalizeDesktopCompanionEndpoint(`${LABEL}.seira.bot`)).toBe(
-      `https://${LABEL}.seira.bot`,
-    );
-    // The control plane's second Cloudflare account gives addresses here.
-    expect(normalizeDesktopCompanionEndpoint(`https://${LABEL}.si.seira.bot`)).toBe(
-      `https://${LABEL}.si.seira.bot`,
-    );
-    expect(normalizeDesktopCompanionEndpoint(` ${LABEL.toUpperCase()}.si.seira.bot/ `)).toBe(
-      `https://${LABEL}.si.seira.bot`,
+    expect(normalizeDesktopCompanionEndpoint(` ${LABEL.toUpperCase()}.seira.run/ `)).toBe(
+      `https://${LABEL}.seira.run`,
     );
     for (const endpoint of [
       "https://unrelated.example.com",
-      `http://${LABEL}.seira.bot`,
+      `http://${LABEL}.seira.run`,
       "http://10.0.0.4:8810",
       "http://host.local:8810",
       "https://10.0.0.4",
       "http://host.example-tailnet.ts.net/path",
-      `https://${LABEL}.seira.bot/path`,
+      `https://${LABEL}.seira.run/path`,
       "http://user@host.example-tailnet.ts.net",
       "http://host.example-tailnet.ts.net.evil.test",
-      `https://${LABEL}.seira.bot.evil.test`,
-      `http://${LABEL}.si.seira.bot`,
-      `https://${LABEL}.si.seira.bot/path`,
-      `https://${LABEL}.si.seira.bot.evil.test`,
-      "https://si.seira.bot",
-      "si.seira.bot",
-      "https://evilsi.seira.bot",
-      `https://${LABEL}.evilsi.seira.bot`,
-      "https://www.si.seira.bot",
-      "https://app.si.seira.bot",
+      `https://${LABEL}.seira.run.evil.test`,
+      "https://seira.run",
+      "https://www.seira.run",
+      "https://app.seira.run",
+      `https://${LABEL}.seira.bot`,
+      `https://${LABEL}.si.seira.bot`,
+      `https://${LABEL}.openmausbot.com`,
+      `https://${LABEL}.mausbot.si`,
       "https://accounts.seira.bot",
-      "https://c-opaque.seira.bot",
-      "https://c-opaque.si.seira.bot",
-      `https://${LABEL.slice(0, -1)}.si.seira.bot`,
-      `https://${LABEL}0.si.seira.bot`,
-      `https://${LABEL.replace("c-", "d-")}.si.seira.bot`,
-      `https://${LABEL}.extra.si.seira.bot`,
-      `https://www.${LABEL}.si.seira.bot`,
+      "https://c-opaque.seira.run",
+      `https://${LABEL.slice(0, -1)}.seira.run`,
+      `https://${LABEL}0.seira.run`,
+      `https://${LABEL.replace("c-", "d-")}.seira.run`,
+      `https://${LABEL}.extra.seira.run`,
+      `https://www.${LABEL}.seira.run`,
     ]) {
       expect(normalizeDesktopCompanionEndpoint(endpoint), endpoint).toBe("");
     }
   });
 
   it("accepts one c-<32 hex> label under each listed domain, and only those", () => {
-    // The third domain is a one-line change; until the owner names it, nothing new is accepted.
-    expect(NEXT_MANAGED_COMPANION_HOST_SUFFIX).toBe("");
-    expect(MANAGED_COMPANION_HOST_SUFFIXES).toEqual(["seira.bot", "si.seira.bot"]);
+    expect(MANAGED_COMPANION_HOST_SUFFIXES).toEqual(["seira.run"]);
     expect(Object.isFrozen(MANAGED_COMPANION_HOST_SUFFIXES)).toBe(true);
     for (const suffix of MANAGED_COMPANION_HOST_SUFFIXES) {
       expect(suffix).toMatch(/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/);
@@ -127,22 +114,21 @@ describe("desktop companion endpoint", () => {
         expect(normalizeDesktopCompanionEndpoint(near), near).toBe("");
       }
     }
-    for (const unlisted of ["example.net", "seira.net", "seira.com", "si", "com", ""]) {
+    for (const unlisted of ["example.net", "seira.net", "seira.com", "seira.bot", "si.seira.bot", "openmausbot.com", "mausbot.si", "si", "com", ""]) {
       expect(normalizeDesktopCompanionEndpoint(`https://${LABEL}.${unlisted}`), unlisted).toBe("");
     }
   });
 
   it("validates, adds, and removes the encrypted credential document field", () => {
-    const hostedAccess = { ...access, endpoint: `https://${LABEL}.seira.bot` };
+    const hostedAccess = { ...access, endpoint: `https://${LABEL}.seira.run` };
     expect(desktopCompanionAccess({ [DESKTOP_COMPANION_FIELD]: hostedAccess })).toEqual(
       hostedAccess,
     );
-    const secondDomain = { ...access, endpoint: `https://${LABEL}.si.seira.bot` };
-    expect(desktopCompanionAccess({ [DESKTOP_COMPANION_FIELD]: secondDomain })).toEqual(
-      secondDomain,
-    );
     expect(
-      desktopCompanionAccess({ [DESKTOP_COMPANION_FIELD]: { ...access, endpoint: "https://app.si.seira.bot" } }),
+      desktopCompanionAccess({ [DESKTOP_COMPANION_FIELD]: { ...access, endpoint: `https://${LABEL}.si.seira.bot` } }),
+    ).toBeNull();
+    expect(
+      desktopCompanionAccess({ [DESKTOP_COMPANION_FIELD]: { ...access, endpoint: "https://app.seira.run" } }),
     ).toBeNull();
 
     expect(desktopCompanionAccess({ [DESKTOP_COMPANION_FIELD]: access })).toEqual(access);
@@ -195,41 +181,30 @@ describe("desktop companion pairing", () => {
       }),
     );
     const paired = await pairDesktopCompanion({
-      endpoint: `https://${LABEL}.seira.bot`,
+      endpoint: `https://${LABEL}.seira.run`,
       code: "654321",
       deviceName: "Desktop client",
       requestId: "request-https-01",
       fetchImpl,
     });
-    expect(paired).toEqual({ ...access, endpoint: `https://${LABEL}.seira.bot` });
+    expect(paired).toEqual({ ...access, endpoint: `https://${LABEL}.seira.run` });
     expect(fetchImpl).toHaveBeenCalledWith(
-      `https://${LABEL}.seira.bot/api/pair`,
+      `https://${LABEL}.seira.run/api/pair`,
       expect.objectContaining({ method: "POST" }),
     );
 
-    const secondDomain = await pairDesktopCompanion({
-      endpoint: `${LABEL}.si.seira.bot`,
-      code: "654321",
-      deviceName: "Desktop client",
-      requestId: "request-https-02",
-      fetchImpl,
-    });
-    expect(secondDomain).toEqual({ ...access, endpoint: `https://${LABEL}.si.seira.bot` });
-    expect(fetchImpl).toHaveBeenLastCalledWith(
-      `https://${LABEL}.si.seira.bot/api/pair`,
-      expect.objectContaining({ method: "POST" }),
-    );
-
-    await expect(
-      pairDesktopCompanion({
-        endpoint: "https://app.si.seira.bot",
-        code: "654321",
-        deviceName: "Desktop client",
-        requestId: "request-https-03",
-        fetchImpl,
-      }),
-    ).rejects.toThrow("Seira HTTPS companion address");
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    for (const endpoint of ["https://app.seira.run", `${LABEL}.si.seira.bot`, `${LABEL}.seira.bot`]) {
+      await expect(
+        pairDesktopCompanion({
+          endpoint,
+          code: "654321",
+          deviceName: "Desktop client",
+          requestId: "request-https-03",
+          fetchImpl,
+        }),
+      ).rejects.toThrow("Seira HTTPS companion address");
+    }
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it("rejects bad codes and surfaces a sidecar error without returning secrets", async () => {

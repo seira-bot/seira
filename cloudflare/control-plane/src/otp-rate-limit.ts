@@ -47,6 +47,7 @@ export async function limitedOTPResponse(request: Request, env: Env): Promise<Re
 
   const now = Date.now();
   const windowCutoff = now - RECIPIENT_WINDOW_MS;
+  if (!env.BETTER_AUTH_SECRET) throw new Error("BETTER_AUTH_SECRET is missing");
   const key = await recipientKey(email, env.BETTER_AUTH_SECRET);
   // The limit and its retention sweep share one D1 batch: one round trip and
   // one transaction. The sweep never removes a row this request just wrote.

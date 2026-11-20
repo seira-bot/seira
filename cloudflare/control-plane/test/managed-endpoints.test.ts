@@ -10,6 +10,7 @@ import { createWorker } from "../src/index";
 import { forgetCachedCapacity } from "../src/tunnel-capacity";
 import { rolloutBucket } from "../src/relay";
 import { forgetTunnelRelease } from "../src/tunnel-release";
+import { cloudAccountId, cloudToken, FakeSeiraCloud, seiraCloudEnv } from "./seira-cloud-stub";
 
 const BASE_URL = "https://auth.seira.test";
 const CONNECTOR_TOKEN = "eyJhbGciOiJIUzI1NiJ9.test-only-connector-token.signature";
@@ -675,9 +676,10 @@ describe("installation check-in round trips", () => {
       method: "POST",
       token: installation.credential,
     })).status).toBe(200);
-    expect(counted.trips.slice(0, 7)).toEqual([
+    expect(counted.trips.slice(0, 8)).toEqual([
       ...CHECK_IN,
       ["INSERT installation_action_rate_limits"],
+      ["SELECT installation_endpoints"],
       ["SELECT installation_endpoints"],
       ["INSERT installation_endpoints"],
       ["SELECT installation_endpoints"],
@@ -3369,6 +3371,7 @@ describe("managed endpoints in several Cloudflare accounts", () => {
     const text = await response.text();
     expect(JSON.parse(text)).toEqual({
       ok: true,
+      accounts: "better-auth",
       service: "seira-control-plane",
       capacity: {
         status: "ok",
@@ -4488,5 +4491,202 @@ describe("self-hosted servers keep their tunnel", () => {
     const old = await createInstallation(worker, owner.token, "desktop-old", "0.1.140");
     expect(await answer(await provision(worker, old.credential, { appVersion: "0.1.140", legacyDevices: 0 })))
       .toEqual({ status: 426, body: { error: "update_required" } });
+  });
+});
+
+describe("endpoints per account and blocked accounts", () => {
+  const TOKEN_A = cloudToken("A");
+  const TOKEN_B = cloudToken("B");
+
+  function deployment(vars: Record<string, string> = {}) {
+    const stub = new FakeSeiraCloud();
+    stub.add(TOKEN_A, cloudAccountId(1), "a@example.test");
+    stub.add(TOKEN_B, cloudAccountId(2), "b@example.test");
+    const cloudflare = new FakeCloudflare();
+    const cloudEnv = seiraCloudEnv(stub, { SEIRA_ENDPOINTS_PER_ACCOUNT: "3", ...vars });
+    return { cloudEnv, cloudflare, stub, worker: createWorker(cloudflare.fetch) };
+  }
+
+  type Deployment = ReturnType<typeof deployment>;
+
+  async function register(d: Deployment, token: string, clientInstanceId: string) {
+    const response = await call(d.worker, "/v1/installations", {
+      body: { clientInstanceId, name: "Server", platform: "linux", kind: "server" },
+      env: d.cloudEnv,
+      method: "POST",
+      token,
+    });
+    expect(response.status).toBe(201);
+    const body = await response.json<{ credential: string; installation: { id: string } }>();
+    return { credential: body.credential, id: body.installation.id };
+  }
+
+  const provision = (d: Deployment, credential: string) => call(d.worker, "/v1/installations/self/endpoint", {
+    env: d.cloudEnv,
+    method: "POST",
+    token: credential,
+  });
+
+  async function hostnameOf(installationId: string): Promise<string | null> {
+    const row = await env.DB.prepare("SELECT hostname FROM installation_endpoints WHERE installation_id = ?")
+      .bind(installationId).first<{ hostname: string }>();
+    return row?.hostname ?? null;
+  }
+
+  async function runCron(d: Deployment): Promise<void> {
+    const ctx = createExecutionContext();
+    await d.worker.scheduled(
+      createScheduledController({ cron: "*/5 * * * *", scheduledTime: Date.now() }),
+      d.cloudEnv,
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+  }
+
+  const block = (accountId: string) => env.DB.prepare(
+    "INSERT INTO account_blocks (user_id, reason, created_at) VALUES (?, 'abuse', ?)",
+  ).bind(accountId, Date.now()).run();
+
+  it("gives one account three endpoints, refuses a fourth before any provider call, and keeps the holders", async () => {
+    const d = deployment();
+    const owned = [];
+    for (const name of ["one", "two", "three", "four"]) owned.push(await register(d, TOKEN_A, `limit-${name}`));
+    for (const each of owned.slice(0, 3)) expect((await provision(d, each.credential)).status).toBe(200);
+    expect(d.cloudflare.tunnels.size).toBe(3);
+
+    const callsBefore = d.cloudflare.calls.length;
+    const refused = await provision(d, owned[3]!.credential);
+    expect(refused.status).toBe(429);
+    expect(await refused.json()).toEqual({ error: "endpoint_limit" });
+    expect(d.cloudflare.calls).toHaveLength(callsBefore);
+    expect(d.cloudflare.tunnels.size).toBe(3);
+    expect(d.cloudflare.dns.size).toBe(3);
+    expect(await hostnameOf(owned[3]!.id)).toBeNull();
+
+    // An installation that holds its endpoint keeps getting it.
+    const repeat = await provision(d, owned[0]!.credential);
+    expect(repeat.status).toBe(200);
+    expect((await repeat.json<{ endpoint: { hostname: string } }>()).endpoint.hostname)
+      .toBe(await hostnameOf(owned[0]!.id));
+
+    // Another account has its own allowance.
+    const other = await register(d, TOKEN_B, "limit-other");
+    expect((await provision(d, other.credential)).status).toBe(200);
+
+    // Giving one back makes room for the fourth.
+    expect((await call(d.worker, "/v1/installations/self/endpoint", {
+      env: d.cloudEnv,
+      method: "DELETE",
+      token: owned[1]!.credential,
+    })).status).toBe(204);
+    expect((await provision(d, owned[3]!.credential)).status).toBe(200);
+  });
+
+  it("lets an installation take back its own endpoint after a release, even with the account at its limit", async () => {
+    const d = deployment({ SEIRA_ENDPOINTS_PER_ACCOUNT: "2" });
+    const first = await register(d, TOKEN_A, "back-one");
+    const second = await register(d, TOKEN_A, "back-two");
+    const third = await register(d, TOKEN_A, "back-three");
+    expect((await provision(d, first.credential)).status).toBe(200);
+    expect((await provision(d, second.credential)).status).toBe(200);
+    expect((await provision(d, third.credential)).status).toBe(429);
+
+    const firstHost = await hostnameOf(first.id);
+    await env.DB.prepare(
+      "UPDATE installation_endpoints SET status = 'deleting', reclaim_requested_at = ? WHERE installation_id = ?",
+    ).bind(Date.now(), first.id).run();
+    const back = await provision(d, first.credential);
+    expect(back.status).toBe(200);
+    expect(await hostnameOf(first.id)).toBe(firstHost);
+  });
+
+  it("applies the limit in Better Auth mode too", async () => {
+    const cloudflare = new FakeCloudflare();
+    const worker = createWorker(cloudflare.fetch);
+    const limited = { ...env, SEIRA_ENDPOINTS_PER_ACCOUNT: "1" } as unknown as Env;
+    const owner = await signIn(worker, "limit-better-auth@example.com");
+    const first = await createInstallation(worker, owner.token, "ba-one");
+    const second = await createInstallation(worker, owner.token, "ba-two");
+    expect((await call(worker, "/v1/installations/self/endpoint", {
+      env: limited, method: "POST", token: first.credential,
+    })).status).toBe(200);
+    const refused = await call(worker, "/v1/installations/self/endpoint", {
+      env: limited, method: "POST", token: second.credential,
+    });
+    expect(refused.status).toBe(429);
+    expect(await refused.json()).toEqual({ error: "endpoint_limit" });
+  });
+
+  it("ends a blocked account's endpoints in the next cleanup run and leaves other accounts alone", async () => {
+    const d = deployment();
+    const blocked = [await register(d, TOKEN_A, "blocked-one"), await register(d, TOKEN_A, "blocked-two")];
+    const bystander = await register(d, TOKEN_B, "bystander");
+    for (const each of [...blocked, bystander]) expect((await provision(d, each.credential)).status).toBe(200);
+    const bystanderHost = await hostnameOf(bystander.id);
+    expect(d.cloudflare.tunnels.size).toBe(3);
+
+    await block(cloudAccountId(1));
+
+    for (const each of blocked) {
+      expect((await call(d.worker, "/v1/installations/self/endpoint", {
+        env: d.cloudEnv, token: each.credential,
+      })).status).toBe(401);
+      expect((await provision(d, each.credential)).status).toBe(401);
+    }
+    const refused = await call(d.worker, "/v1/installations", {
+      body: { clientInstanceId: "blocked-three", name: "Server", platform: "linux" },
+      env: d.cloudEnv,
+      method: "POST",
+      token: TOKEN_A,
+    });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toEqual({ error: "account_blocked" });
+
+    await runCron(d);
+
+    expect(d.cloudflare.tunnels.size).toBe(1);
+    expect(d.cloudflare.dns.size).toBe(1);
+    for (const each of blocked) {
+      expect(await endpointState(each.id)).toMatchObject({ dns_record_id: null, status: "deleted", tunnel_id: null });
+    }
+    expect(await endpointState(bystander.id)).toMatchObject({ status: "ready" });
+    expect(d.cloudflare.dns.has(bystanderHost ?? "")).toBe(true);
+  });
+
+  it("never gives one account's hostname to another installation, whatever happened to it", async () => {
+    const d = deployment();
+    const first = await register(d, TOKEN_A, "host-one");
+    const second = await register(d, TOKEN_B, "host-two");
+    expect((await provision(d, first.credential)).status).toBe(200);
+    expect((await provision(d, second.credential)).status).toBe(200);
+    const firstHost = await hostnameOf(first.id);
+    const secondHost = await hostnameOf(second.id);
+    expect(firstHost).not.toBeNull();
+    expect(secondHost).not.toBe(firstHost);
+
+    // The hostname column is unique, so no row can ever take another row's name.
+    await expect(env.DB.prepare(
+      "UPDATE installation_endpoints SET hostname = ? WHERE installation_id = ?",
+    ).bind(firstHost, second.id).run()).rejects.toThrow(/UNIQUE/);
+
+    // Owner release, then revoke: the second account's installation keeps its own hostname,
+    // and a new installation of either account gets a new one.
+    expect((await call(d.worker, "/v1/installations/self/endpoint", {
+      env: d.cloudEnv, method: "DELETE", token: first.credential,
+    })).status).toBe(204);
+    expect((await call(d.worker, `/v1/installations/${first.id}`, {
+      env: d.cloudEnv, method: "DELETE", token: TOKEN_A,
+    })).status).toBe(204);
+    await runCron(d);
+    expect(await hostnameOf(first.id)).toBe(firstHost);
+    expect(await hostnameOf(second.id)).toBe(secondHost);
+
+    const newcomers = [await register(d, TOKEN_A, "host-three"), await register(d, TOKEN_B, "host-four")];
+    for (const each of newcomers) {
+      expect((await provision(d, each.credential)).status).toBe(200);
+      const host = await hostnameOf(each.id);
+      expect([firstHost, secondHost]).not.toContain(host);
+    }
+    expect(await hostnameOf(first.id)).toBe(firstHost);
   });
 });

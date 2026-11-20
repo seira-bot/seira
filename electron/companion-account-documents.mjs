@@ -131,7 +131,7 @@ const PROBLEM_OF = {
   control_plane_unavailable: "unreachable", network_unavailable: "unreachable",
   unauthorized: "sign_in", forbidden: "sign_in", signed_out: "sign_in", invalid_otp: "sign_in", otp_expired: "sign_in", invalid_email: "sign_in",
   rate_limited: "busy", credential_rotation_rate_limited: "busy", endpoint_rate_limited: "busy", endpoint_busy: "busy", endpoint_capacity: "busy",
-  installation_limit_reached: "limit", update_required: "update",
+  installation_limit_reached: "limit", endpoint_limit: "limit", update_required: "update",
 };
 
 /** A control-plane error code as one of the renderer's few problem words; the code itself stays in the main process. */

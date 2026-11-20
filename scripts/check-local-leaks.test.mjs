@@ -41,6 +41,13 @@ describe("generic rules", () => {
     }
   });
 
+  it("finds the internal-only marker in text and in a path", () => {
+    const marker = ["INTERNAL", "ONLY"].join("-");
+    expect(one(`<!-- ${marker} -->`)).toEqual(["docs/setup.md:1: internal-only marker"]);
+    expect(one("ok", `docs/${marker}.md`)).toEqual([`docs/${marker}.md:1: internal-only marker`]);
+    expect(one("internal-only notes")).toEqual([]);
+  });
+
   it("allows an environment variable name", () => {
     expect(one('const CLOUD_SECRETS_FD_ENV = "SEIRA_CLOUD_SECRETS_FD";')).toEqual([]);
     expect(one("const CLOUD_SECRETS_FD_ENV = SEIRA_CLOUD_SECRETS_FD")).toEqual([]);

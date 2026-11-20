@@ -14,7 +14,7 @@ vi.mock("@/state/store", async (importOriginal) => ({
 vi.mock("./AboutMeSettings", () => ({ AboutMeSettings: () => null }));
 
 const { ProfileFields, profilePhotoFileProblem, profilePhotoSizeProblem } = await import("./ProfileSettings");
-const { InitialsAvatar } = await import("./Avatar");
+const { PersonAvatar } = await import("./Avatar");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLDivElement;
@@ -101,12 +101,48 @@ describe("the profile photo", () => {
     }
   });
 
-  it("falls back to the initials in the sidebar when the stored picture is gone", async () => {
-    await act(async () => root.render(createElement(InitialsAvatar, { initials: "AL", avatarUrl: photo })));
+  it("falls back to the plain person, never initials, when the stored picture is gone", async () => {
+    await act(async () => root.render(createElement(PersonAvatar, { profile: { avatarUrl: photo } })));
     const image = host.querySelector("img")!;
     expect(image.getAttribute("src")).toBe(photo);
     await act(async () => image.dispatchEvent(new Event("error")));
     expect(host.querySelector("img")).toBeNull();
-    expect(host.textContent).toBe("AL");
+    expect(host.querySelector("svg")).not.toBeNull();
+    expect(host.textContent).toBe("");
+  });
+});
+
+describe("the default look", () => {
+  const look = { mascotBody: "bob" as const, mascotAccessories: ["glasses" as const], color: "teal" as const };
+  const shuffleButton = () => [...host.querySelectorAll("button")].find((button) => button.textContent === "Shuffle");
+
+  it("shows the saved look next to the picture buttons, never a question mark", async () => {
+    fixture.config = { profile: { name: "", email: "", look } };
+    await act(async () => root.render(createElement(ProfileFields)));
+    expect(host.querySelector('[data-avatar="mascot"][data-avatar-kind="person"]')).not.toBeNull();
+    expect(host.textContent).not.toContain("?");
+  });
+
+  it("saves a different random look when Shuffle is pressed and shows it", async () => {
+    fixture.config = { profile: { name: "", email: "", look } };
+    fixture.api.mockImplementation((_path: string, init: { body: string }) => Promise.resolve({ profile: JSON.parse(init.body).profile }));
+    await act(async () => root.render(createElement(ProfileFields)));
+    await act(async () => shuffleButton()!.click());
+    expect(fixture.api).toHaveBeenCalledTimes(1);
+    const [path, init] = fixture.api.mock.calls[0]!;
+    const saved = JSON.parse(init.body).profile.look;
+    expect(path).toBe("/api/config");
+    expect(init.method).toBe("PUT");
+    expect(saved).not.toEqual(look);
+    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "profileSaved", profile: { look: saved } });
+  });
+
+  it("offers no Shuffle while a photo is set or on a team", async () => {
+    fixture.config = { profile: { name: "", email: "", avatarUrl: photo, look } };
+    await act(async () => root.render(createElement(ProfileFields)));
+    expect(shuffleButton()).toBeUndefined();
+    fixture.config = { team: { id: "team-acme-1", name: "Acme" }, profile: { name: "Bob", email: "bob@acme.test" } };
+    await act(async () => root.render(createElement(ProfileFields)));
+    expect(shuffleButton()).toBeUndefined();
   });
 });

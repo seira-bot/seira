@@ -1438,6 +1438,7 @@
   "settings.profile.avatar.choose": "사진 선택",
   "settings.profile.avatar.uploading": "업로드 중…",
   "settings.profile.avatar.remove": "사진 제거",
+  "settings.profile.avatar.shuffle": "섞기",
   "settings.profile.avatar.cropTitle": "사진 조정",
   "settings.profile.avatar.zoom": "확대/축소",
   "settings.profile.avatar.cancel": "취소",

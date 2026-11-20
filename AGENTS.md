@@ -42,10 +42,13 @@ describe one person's machine or private workflow.
   never link a public file to `internal/`.
 - Put notes for your own machine in `AGENTS.local.md` (gitignored). Read it when
   it exists.
+- Turn on the hooks right after you clone, and in every worktree or review checkout, even without
+  `pnpm install`: `git config core.hooksPath scripts/git-hooks`. The hooks need only git and node.
+  Without this line a commit is not checked, and the check scripts print a notice.
 - `node scripts/check-local-leaks.mjs` finds these details in the lines you add.
   The pre-commit hook in `scripts/git-hooks/` runs it on the staged lines. Put
   your own user name, host aliases and LAN addresses in `.leakcheck.local`, one
-  regular expression per line.
+  regular expression per line. A built-in rule also blocks the marker for an internal-only document.
 
 ## Private by default
 

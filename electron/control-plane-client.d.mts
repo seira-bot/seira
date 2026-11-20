@@ -43,8 +43,17 @@ export interface ControlPlaneEndpoint {
   lastErrorCode?: string | null;
 }
 
+/** The email-code sign-in of Seira Cloud (seira-cloud-sign-in.mjs). */
+export interface CloudSignIn {
+  start(email: string): Promise<{ email: string }>;
+  verify(email: string, code: string): Promise<{ accountToken: string; user: ControlPlaneUser }>;
+  signOut(token: string): Promise<void>;
+}
+
 export interface ControlPlaneClient {
   health(): Promise<unknown>;
+  /** "seira-cloud" when Seira Cloud holds the accounts; "better-auth" otherwise, also for an older control plane. */
+  accounts(): Promise<"seira-cloud" | "better-auth">;
   requestOTP(email: string): Promise<unknown>;
   verifyOTP(email: string, otp: string): Promise<{ accountToken: string; user: ControlPlaneUser }>;
   me(accountToken: string): Promise<ControlPlaneUser>;
@@ -82,4 +91,5 @@ export declare function createControlPlaneClient(options: {
   timeoutSignal?: (milliseconds: number) => AbortSignal;
   timeoutMs?: number;
   healthTimeoutMs?: number;
+  cloudSignIn?: CloudSignIn | null;
 }): ControlPlaneClient;

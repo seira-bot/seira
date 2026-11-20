@@ -45,7 +45,7 @@ import type { SessionRegistry } from "../sessions.ts";
 import type { Store } from "../store.ts";
 import type { BusyFlag, ConfigStatus } from "./config.ts";
 import { PASS, type RouteHandler } from "./table.ts";
-import { sentWireName } from "../../electron/phone-wire-names.mjs";
+import { PHONE_WIRE_NAMES, sentWireName } from "../../electron/phone-wire-names.mjs";
 
 export interface InstanceRouteDeps {
   store: Pick<Store, "bots" | "tasks">;
@@ -137,7 +137,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
     if (method === "GET" && path === "/api/health/engines") {
       const described = await describeInstances();
       const available = Array.isArray(described) ? described.filter((instance) => Object(Object(instance).snapshot).state === "available").length : 0;
-      return json(res, 200, { app: sentWireName("healthApp"), engines: available });
+      return json(res, 200, { app: sentWireName("healthApp"), legacyApp: PHONE_WIRE_NAMES.healthApp.legacy, engines: available });
     }
     const companyMutation = /^\/api\/instances\/(company\.[\w.-]+)(?:\/|$)/.exec(path);
     if (hostedModels && path.startsWith("/api/instances/") && method !== "GET") return json(res, 403, { error: HOSTED_PROVIDER_SETTINGS_ERROR });

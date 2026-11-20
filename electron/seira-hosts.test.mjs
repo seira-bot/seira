@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_COMPANION_CONTROL_PLANE_URL } from "./companion-account-service.mjs";
+import { DEFAULT_COMPANION_CONTROL_PLANE_URL, resolveCompanionControlPlaneURL, resolveServerControlPlaneURL } from "./companion-account-service.mjs";
 import { LIVE_SEIRA_SERVICES, SEIRA_HOSTS, seiraOrigin, seiraServiceLive } from "./seira-hosts.mjs";
 
 describe("seiraServiceLive", () => {
@@ -30,5 +30,35 @@ describe("SEIRA_HOSTS", () => {
 
   it("leaves the phone account service off in a build without a live account host", () => {
     expect(DEFAULT_COMPANION_CONTROL_PLANE_URL).toBe("");
+  });
+});
+
+describe("the server tunnel service", () => {
+  const live = [...LIVE_SEIRA_SERVICES, "serverTunnel"];
+
+  it("is not in the live list yet and has its own zone", () => {
+    expect(LIVE_SEIRA_SERVICES).not.toContain("serverTunnel");
+    expect(seiraServiceLive("serverTunnel", {})).toBe(false);
+    expect(SEIRA_HOSTS.tunnel).toBe("seira.run");
+  });
+
+  it("uses Seira's control plane when live and no address is set", () => {
+    expect(resolveServerControlPlaneURL({ environment: {}, live })).toBe("https://accounts.seira.bot");
+  });
+
+  it("lets SEIRA_CONTROL_PLANE_URL win, and an invalid value turns it off", () => {
+    expect(resolveServerControlPlaneURL({ environment: { SEIRA_CONTROL_PLANE_URL: "https://cp.example.test/" }, live })).toBe("https://cp.example.test");
+    expect(resolveServerControlPlaneURL({ environment: { SEIRA_CONTROL_PLANE_URL: "ftp://nope" }, live })).toBe("");
+  });
+
+  it("gives no control plane when it is not live and nothing is set", () => {
+    expect(resolveServerControlPlaneURL({ environment: {} })).toBe("");
+    expect(resolveServerControlPlaneURL({ environment: { SEIRA_CONTROL_PLANE_URL: "https://cp.example.test" } })).toBe("https://cp.example.test");
+  });
+
+  it("keeps the packaged desktop phone account off while only this service is live", () => {
+    expect(seiraServiceLive("accounts", {}, live)).toBe(false);
+    expect(DEFAULT_COMPANION_CONTROL_PLANE_URL).toBe("");
+    expect(resolveCompanionControlPlaneURL({ isPackaged: true, environment: {} })).toBe("");
   });
 });

@@ -43,14 +43,8 @@ const cleanLabel = (value, fallback) => {
   return label || fallback;
 };
 
-/** The third Cloudflare account's zone apex, "" until the owner names it. Set it, ship that release, and only then
- * add the control-plane entry with that release as its minAppVersion. */
-export const NEXT_MANAGED_COMPANION_HOST_SUFFIX = "";
-
-/** Every zone the control plane makes addresses in, lowercase apex names. Ship a new domain here first. */
-export const MANAGED_COMPANION_HOST_SUFFIXES = Object.freeze(
-  [SEIRA_HOSTS.site, SEIRA_HOSTS.companion, NEXT_MANAGED_COMPANION_HOST_SUFFIX].filter(Boolean),
-);
+/** The one zone the control plane makes addresses in. */
+export const MANAGED_COMPANION_HOST_SUFFIXES = Object.freeze([SEIRA_HOSTS.tunnel]);
 
 /** Only the control plane's `c-<32 hex>` names: any other name in those zones never receives a pairing code. */
 export function managedCompanionHostname(hostname) {

@@ -1,5 +1,25 @@
 // The email-code sign-in the phone apps use, typed into the app: it ends in
 // the same omc_ device token as the browser approval. The attempt and the token stay in main; the page sees outcomes only.
+import { SEIRA_HOSTS, seiraOrigin } from "./seira-hosts.mjs";
+
+export const CLOUD_ORIGIN = seiraOrigin(SEIRA_HOSTS.cloud);
+/** The staging Admin (Dodo test mode, real test Clouds): a fixed address, on only with SEIRA_CLOUD_STAGING=1. */
+export const STAGING_CLOUD_ORIGIN = seiraOrigin(SEIRA_HOSTS.cloudStaging);
+
+/** An https origin, or http on the loopback address for development; null for anything else, including a path, a port-less lookalike or credentials. */
+export function cloudOriginOf(value) {
+  if (typeof value !== "string" || value.length > 253) return null;
+  let url;
+  try { url = new URL(value); } catch { return null; }
+  if (value !== url.origin || url.username || url.password) return null;
+  return url.protocol === "https:" || (url.protocol === "http:" && url.hostname === "127.0.0.1") ? value : null;
+}
+
+/** The Cloud an environment names: SEIRA_CLOUD_ORIGIN when valid, else the staging Cloud with SEIRA_CLOUD_STAGING=1, else Seira's own. */
+export function cloudOriginFor(env = process.env) {
+  return cloudOriginOf(env?.SEIRA_CLOUD_ORIGIN) ?? (env?.SEIRA_CLOUD_STAGING === "1" ? STAGING_CLOUD_ORIGIN : CLOUD_ORIGIN);
+}
+
 export const SIGN_IN_START = "/api/cloud/app/sign-in/start";
 export const SIGN_IN_VERIFY = "/api/cloud/app/sign-in/verify";
 /** The Admin's code tries per email (Better Auth emailOTP `allowedAttempts`, server/auth.ts); the sixth answer is "expired". */

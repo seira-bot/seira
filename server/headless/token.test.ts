@@ -67,7 +67,7 @@ describe("token", () => {
     const made = await run(["token", "create", "Nightly CI", "--expires", "90d", "--out", file, "--json"]);
     expect(made.code).toBe(0);
     const token = readFileSync(file, "utf8").trim();
-    expect(token).toMatch(/^omb_sess_/);
+    expect(token).toMatch(/^seira_sess_/);
     if (process.platform !== "win32") expect(statSync(file).mode & 0o777).toBe(0o600);
     expect(JSON.stringify(made)).not.toContain(token);
     const result = JSON.parse(made.out[0]!);

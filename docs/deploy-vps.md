@@ -738,6 +738,8 @@ Read this before putting anything else in front of the server.
 
 **`serve --tunnel`, `seira login` or `--relay` says no account service is set up.** These need an account service that you run yourself, set with `SEIRA_CONTROL_PLANE_URL`. Use `--domain`, `--tailscale` or `--public-url` instead.
 
+**`serve --tunnel` says "no public address this time".** You are signed in, but Seira could not give this machine an address now: the secure links are full for a short time, your account already holds its addresses, or the service does not answer. The server keeps running on the routes you added (`--lan`, `--tailscale`), and on this machine at `http://127.0.0.1`. Start `serve --tunnel` again later to get an address. If the account limit is the cause, run `logout` on a machine you no longer use.
+
 **The server does not start and says its data "was written by a newer Seira".** An older version was started on data a newer one had already changed, which happens when a version is put back without its data. Nothing was changed. Install the version the message names (or a newer one), or put back the copy of the data from before that update.
 
 **Path A: the page never loads or shows an error from Cloudflare.** Check that `cloudflared` runs (`sudo systemctl status cloudflared`). Check that `serve` uses the same address as the `hostname` in `config.yml`. `sudo journalctl -u cloudflared` shows the reason.

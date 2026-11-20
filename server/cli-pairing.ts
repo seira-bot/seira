@@ -99,7 +99,7 @@ export function relayProblemLines(status: PhoneRelayStatus | null, prefix: strin
   if (!status) return [`Seira Relay is off on this server. Start it with: ${prefix} serve --relay`];
   if (status.grant === "tunnel") return [`Seira Relay stays off here: ${status.reason ?? "this machine holds a tunnel address"}. A relay token would make that tunnel go for good; use the relay on a machine signed in with ${prefix} login --relay.`];
   if (status.grant === "signed-out") {
-    const problem = controlPlaneProblem(env);
+    const problem = controlPlaneProblem(env, "relay");
     if (problem) return [`Seira Relay is not available: ${problem}.`];
     return [`Seira Relay needs this machine signed in to a Seira account: ${prefix} login --relay (then leave the server running; it connects within a minute).`];
   }

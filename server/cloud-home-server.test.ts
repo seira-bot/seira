@@ -200,7 +200,7 @@ async function mintBrowserSignIn(owner = "ada@example.test"): Promise<string> {
     "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
   }, body: JSON.parse(body) });
   expect(granted.status, JSON.stringify(granted.body)).toBe(200);
-  expect(granted.body).toMatchObject({ purpose: "browser", credential: expect.stringMatching(/^omb_pair_/) });
+  expect(granted.body).toMatchObject({ purpose: "browser", credential: expect.stringMatching(/^seira_pair_/) });
   expect(granted.body).not.toHaveProperty("code");
   return granted.body.credential as string;
 }

@@ -286,6 +286,7 @@ describe("control-plane migrations and health", () => {
     await expect(response.json()).resolves.toEqual({
       ok: true,
       service: "seira-control-plane",
+      accounts: "better-auth",
       capacity: {
         status: "unknown",
         checkedAt: null,
@@ -398,6 +399,9 @@ describe("control-plane migrations and health", () => {
       CLOUDFLARE_ZONE_ID: env.CLOUDFLARE_ZONE_ID,
       COMPANION_HOST_SUFFIX: env.COMPANION_HOST_SUFFIX,
       CLOUDFLARE_API_TOKEN: env.CLOUDFLARE_API_TOKEN,
+      ACCOUNT_SERVICE: env.ACCOUNT_SERVICE,
+      SEIRA_CLOUD: env.SEIRA_CLOUD,
+      SEIRA_ENDPOINTS_PER_ACCOUNT: env.SEIRA_ENDPOINTS_PER_ACCOUNT,
       CLOUDFLARE_ENDPOINT_ACCOUNTS: env.CLOUDFLARE_ENDPOINT_ACCOUNTS,
       CLOUDFLARE_API_TOKEN_SEIRA_SI: env.CLOUDFLARE_API_TOKEN_SEIRA_SI,
       SEIRA_TUNNEL_LIMIT: env.SEIRA_TUNNEL_LIMIT,
