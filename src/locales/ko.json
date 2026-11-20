@@ -5453,7 +5453,7 @@
   "backup.exporting": "암호화된 백업 만드는 중…",
   "backup.downloadAgain": "{filename} 다운로드",
   "backup.import": "백업 가져오기",
-  "backup.importHint": "암호화된 .ombbackup 파일을 고르고, 무엇이든 바꾸기 전에 검증하세요. 백업은 최대 10GB의 설치 데이터를 지원해요. 이전 팀 백업과 공유용 템플릿은 템플릿에서 계속 가져올 수 있어요.",
+  "backup.importHint": "암호화된 .seirabackup 파일을 고르고, 무엇이든 바꾸기 전에 검증하세요. 백업은 최대 10GB의 설치 데이터를 지원해요. 이전 팀 백업과 공유용 템플릿은 템플릿에서 계속 가져올 수 있어요.",
   "backup.file": "백업 파일",
   "backup.importPassword": "이 백업의 비밀번호",
   "backup.validate": "백업 검증",
