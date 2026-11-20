@@ -25,6 +25,7 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | { key: LocaleKey } | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
+  const [unconfirmed, setUnconfirmed] = useState(false);
   const [authorization, setAuthorization] = useState<(PendingAuthorization & { target: string }) | null>(null);
   const [label, setLabel] = useState("");
   const polling = useRef(false);
@@ -41,6 +42,7 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
     setBusy(false);
     setLocalError(null);
     setRefusal(null);
+    setUnconfirmed(false);
     setAuthorization(null);
     setLabel("");
     return () => {
@@ -92,6 +94,7 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
     setBusy(true);
     setLocalError(null);
     setRefusal(null);
+    setUnconfirmed(false);
     try {
       const reusableUrl = alias ? null : reusableConnectionUrl(pendingAuthorization);
       const createdAt = reusableUrl ? pendingAuthorization!.createdAt : Date.now();
@@ -103,9 +106,10 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
       const url = mcpSignInLink(typeof result.url === "string" ? result.url : null);
       if (!url) throw new Error(t("connectors.invalidAuthorizationUrl"));
       setAuthorization({ target, url, createdAt });
-      if (!await launch.open(url) && isCurrent()) {
-        setLocalError({ key: "connectors.card.popupBlocked" });
-      }
+      const opened = await launch.open(url);
+      if (!isCurrent()) return;
+      if (!opened) setLocalError({ key: "connectors.card.popupBlocked" });
+      else setUnconfirmed(!launch.confirms);
     } catch (error) {
       if (!isCurrent()) return;
       if (isMcp && error instanceof ApiError && error.status === 409) setRefusal(error.message);
@@ -231,6 +235,7 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
           />
         </form>
       ) : error && <p role="alert" className="mt-1.5 text-[12px] text-danger">{typeof error === "string" ? error : t(error.key)}</p>}
+      {authorizationUrl && unconfirmed && <p role="status" className="mt-1.5 text-[12px] text-ink-secondary">{t("connectors.card.linkIfNotOpened")}</p>}
       {authorizationUrl && (
         <a href={authorizationUrl} target="_blank" rel="noopener noreferrer" onClick={(event) => {
           if (!reusableConnectionUrl(pendingAuthorization)) {
