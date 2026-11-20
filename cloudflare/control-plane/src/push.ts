@@ -181,7 +181,7 @@ export async function apnsProviderToken(config: ApnsConfig, now = Date.now()): P
   return jwt;
 }
 
-function ombPayload(request: PushSendRequest) {
+function seiraPayload(request: PushSendRequest) {
   const notification = request.notification;
   return {
     v: 1,
@@ -203,10 +203,10 @@ export function pushChannel(kind: string): string {
   return BLOCKING_KINDS.has(kind) ? CHANNEL_BLOCKING : ROUTINE_KINDS.has(kind) ? CHANNEL_ROUTINES : CHANNEL_MESSAGES;
 }
 
-/** `body` repeats `omb` because expo-notifications (SDK 58) hands an app only a remote notification's `body` as its data. */
+/** `body` repeats `seira` because expo-notifications (SDK 58) hands an app only a remote notification's `body` as its data. */
 export function apnsPayload(request: PushSendRequest) {
   const notification = request.notification;
-  const omb = ombPayload(request);
+  const seira = seiraPayload(request);
   return {
     aps: {
       alert: { title: notification.title },
@@ -215,8 +215,8 @@ export function apnsPayload(request: PushSendRequest) {
       category: pushCategory(notification.kind),
       "interruption-level": NEEDS_YOU.has(notification.kind) ? "time-sensitive" : "active",
     },
-    omb,
-    body: omb,
+    seira,
+    body: seira,
   };
 }
 
@@ -234,7 +234,7 @@ export function fcmPayload(request: PushSendRequest, token: string, collapseId: 
         channelId: pushChannel(notification.kind),
         categoryId: pushCategory(notification.kind),
         threadIdentifier: notification.threadId,
-        body: JSON.stringify(ombPayload(request)),
+        body: JSON.stringify(seiraPayload(request)),
       },
       android: { priority: "HIGH", ttl: FCM_TTL },
     },

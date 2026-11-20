@@ -19,7 +19,7 @@ const ID = /^[\w-]{1,120}$/;
 const HEX = /^#[0-9A-Fa-f]{6}$/;
 const BODY = /^[a-z][a-z0-9-]{0,39}$/;
 /** A chat link in any of the app's schemes. */
-const LINK = /^openmausbot(?:-dev|-next)?:\/\/chat\/[A-Za-z0-9%_.-]{1,360}$/;
+const LINK = /^seira(?:-dev|-next)?:\/\/chat\/[A-Za-z0-9%_.-]{1,360}$/;
 
 function oneLine(max: number) {
   return z.string().min(1).max(max * 4).refine((value) => {
@@ -112,14 +112,14 @@ export function liveActivityPayload(request: ActivitySendRequest, now: number) {
   };
 }
 
-/** A data message the phone's own messaging service turns into its ongoing notification (`omb_kind: activity`). */
+/** A data message the phone's own messaging service turns into its ongoing notification (`seira_kind: activity`). */
 export function activityFcmPayload(request: ActivitySendRequest, now: number) {
   const { activity } = request;
   return {
     message: {
       token: request.token,
       data: {
-        omb_kind: "activity",
+        seira_kind: "activity",
         event: request.event,
         bot_id: activity.botId,
         bot_name: activity.botName,

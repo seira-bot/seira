@@ -25,7 +25,7 @@ vi.mock("@/state/store", () => ({ api: store.api, useStore: () => ({ state: stor
 vi.mock("@/lib/analytics", () => ({ emailGateDone: () => false }));
 // The gate's job is choosing; the flow itself has its own recipe.
 vi.mock("./WelcomeFlow", () => ({ WelcomeFlow: () => null }));
-vi.mock("@/components/Avatar", () => ({ MausAvatar: () => null }));
+vi.mock("@/components/Avatar", () => ({ SeiraAvatar: () => null }));
 import { resetSharedHint, SharedWorkspaceHint } from "./SharedWorkspaceHint";
 import { useWelcomeViewer, WelcomeGate } from "./WelcomeGate";
 import { WelcomeFlow } from "./WelcomeFlow";
@@ -88,7 +88,7 @@ describe("who gets the welcome flow", () => {
 
   it("lands in the chat with the bot the person chose on the Chief screen", () => {
     vi.stubGlobal("window", LOCAL_PAGE);
-    store.state = { ...store.state, bots: [{ id: "maus", chiefOfStaff: true }, { id: "research" }] };
+    store.state = { ...store.state, bots: [{ id: "seira", chiefOfStaff: true }, { id: "research" }] };
     gate(LOCAL_VIEWER).tree!.props.onDone!("research");
     expect(store.dispatch).toHaveBeenCalledWith({ type: "select", id: "research" });
     expect(store.dispatch).toHaveBeenCalledWith({ type: "toggleWelcome", open: false });
@@ -135,7 +135,7 @@ describe("who gets the welcome flow", () => {
     expect(tree?.props.hosted).toBe(true);
   });
 
-  it("leaves an OMB Cloud home's first run to its engine sign-in", () => {
+  it("leaves a Seira Cloud home's first run to its engine sign-in", () => {
     vi.stubGlobal("window", REMOTE_PAGE);
     expect(gate({ hosted: false, canSave: true, cloudHome: true }).tree).toBeNull();
     store.state = { ...store.state, welcomeOpen: true };
@@ -160,7 +160,7 @@ describe("who gets the welcome flow", () => {
     await flush();
     expect(store.api).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
-    expect(localStorage.getItem("omb.onboarding.sharedWorkspaceHint")).toBe("1");
+    expect(localStorage.getItem("seira.onboarding.sharedWorkspaceHint")).toBe("1");
     fixture.values = [];
     expect(render(() => SharedWorkspaceHint({ replay: false, onClose: vi.fn() })).html).toBe("");
     expect(gate({ hosted: true, canSave: false }).tree, "closed for the gate too").toBeNull();
@@ -214,7 +214,7 @@ describe("who gets the welcome flow", () => {
     expect(gate(LOCAL_VIEWER).tree).toBeNull();
   });
 
-  it("steps aside for OMB Cloud opened by the Cloud link, not for a normal visit there", () => {
+  it("steps aside for Seira Cloud opened by the Cloud link, not for a normal visit there", () => {
     vi.stubGlobal("window", LOCAL_PAGE);
     store.state = { ...store.state, appSettingsOpen: true, appSettingsSection: "cloudAccount", appSettingsCloudLink: 0 };
     expect(gate(LOCAL_VIEWER).tree).not.toBeNull();

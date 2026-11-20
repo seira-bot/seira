@@ -102,7 +102,7 @@ describe("skins", () => {
   it("has no Diwali skin, and a stored Diwali choice reads as the default", () => {
     expect(SKIN_IDS).not.toContain("diwali");
     expect(css).not.toContain('data-skin="diwali"');
-    vi.stubGlobal("localStorage", { getItem: (key: string) => (key === "omb-skin" ? "diwali" : null), setItem: () => undefined });
+    vi.stubGlobal("localStorage", { getItem: (key: string) => (key === "seira-skin" ? "diwali" : null), setItem: () => undefined });
     expect([DEFAULT_SKIN_CHOICE, PRIOR_INSTALL_SKIN]).toContain(readSkinChoice());
   });
 

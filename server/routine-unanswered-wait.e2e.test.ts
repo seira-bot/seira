@@ -41,7 +41,7 @@ it("starts the next scheduled run of a routine whose sign-in nobody answered, an
     'import { readFileSync } from "node:fs";',
     'import { join } from "node:path";',
     'const at = process.argv.indexOf("--mcp-config");',
-    'const thread = at < 0 ? "probe" : JSON.parse(readFileSync(process.argv[at + 1], "utf8")).mcpServers?.agents?.env?.OMB_THREAD_ID ?? "probe";',
+    'const thread = at < 0 ? "probe" : JSON.parse(readFileSync(process.argv[at + 1], "utf8")).mcpServers?.agents?.env?.SEIRA_THREAD_ID ?? "probe";',
     'process.env.FAKE_CLAUDE_MODE = thread === "probe" ? "happy" : "slow";',
     `process.env.FAKE_CLAUDE_SLOW_FINISH_GATE = join(${JSON.stringify(dataDir)}, thread + ".gate");`,
     `process.env.FAKE_CLAUDE_DUMP = join(${JSON.stringify(dataDir)}, thread + ".json");`,
@@ -62,7 +62,7 @@ it("starts the next scheduled run of a routine whose sign-in nobody answered, an
   await expect.poll(() => {
     try { launch = JSON.parse(readFileSync(join(dataDir, `${threadId}.json`), "utf8")); return true; } catch { return false; }
   }, { timeout: 15_000 }).toBe(true);
-  const asked = await raw("POST", "/api/internal/request-sign-in", { site: "example.com" }, launch.mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN);
+  const asked = await raw("POST", "/api/internal/request-sign-in", { site: "example.com" }, launch.mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN);
   expect(asked.status, JSON.stringify(asked.body)).toBe(201);
   writeFileSync(join(dataDir, `${threadId}.gate`), "finish");
   await expect.poll(async () => (await runs()).find((run) => run.id === first.id)?.status, { timeout: 15_000 }).toBe("waiting");

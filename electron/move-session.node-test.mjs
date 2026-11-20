@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { createMoveSession } from "./move-session.mjs";
 
-const A = { origin: "https://omb-t-1.fly.dev" }, B = { origin: "https://omb-t-2.fly.dev" };
+const A = { origin: "https://seira-t-1.fly.dev" }, B = { origin: "https://seira-t-2.fly.dev" };
 
 /** My Cloud's owner sessions as the move opens them: `refuse` answers 401 to a session's requests (My Cloud forgot it). */
 function cloud({ failOpen = 0, refuse = () => false } = {}) {

@@ -12,11 +12,11 @@ This skill holds the rules that you must not break.
 ## Rules
 
 - Use only an isolated fixture. Never drive a Seira app that a person uses,
-  and never read or change its data folder (`~/.openmausbot` or `OMB_DATA_DIR`).
+  and never read or change its data folder (`~/.seira` or `SEIRA_DATA_DIR`).
 - Use only the shared control surface: `scripts/control-seira.ts` and
   `pnpm control:seira`. Do not send raw API calls that the surface does not have.
-- Give every verb an explicit `--url`. Do not set `OPENMAUSBOT_URL` or
-  `OMB_PORT` in the shell: a mutating verb uses them, and port 8799 is the
+- Give every verb an explicit `--url`. Do not set `SEIRA_URL` or
+  `SEIRA_PORT` in the shell: a mutating verb uses them, and port 8799 is the
   default port of an installed app.
 - Use only flows that the map in the guide lists. If the surface cannot drive
   your flow, say so. Then use the smoke test or the recipe that the guide names

@@ -28,7 +28,7 @@ describe("the temp folder of a test file", () => {
   });
 
   it("holds the folders that the code under test makes with mkdtemp", () => {
-    const made = mkdtempSync(join(tmpdir(), "omb-leak-check-"));
+    const made = mkdtempSync(join(tmpdir(), "seira-leak-check-"));
     expect(made.startsWith(tmpdir() + sep)).toBe(true);
   });
 });

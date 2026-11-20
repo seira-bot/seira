@@ -9,7 +9,7 @@ import { SharedComputers, sharedComputerRegistration } from "./shared-computers.
 
 const dirs: string[] = [];
 afterEach(() => { vi.useRealTimers(); for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
-const file = () => { const dir = mkdtempSync(join(tmpdir(), "omb-lent-")); dirs.push(dir); return join(dir, "lent-computers.json"); };
+const file = () => { const dir = mkdtempSync(join(tmpdir(), "seira-lent-")); dirs.push(dir); return join(dir, "lent-computers.json"); };
 const secret = "a".repeat(64);
 const lend = (extra: Record<string, unknown> = {}) => ({ id: randomUUID(), name: "ASH-PC", environmentId: randomUUID(),
   folders: [{ id: randomUUID(), name: "Plans", write: false }], terminal: false, computer: true, ...extra });

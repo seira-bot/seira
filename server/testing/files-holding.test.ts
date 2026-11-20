@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { filesHolding } from "./files-holding.ts";
 
 let root: string;
-beforeEach(() => { root = mkdtempSync(join(tmpdir(), "omb-files-holding-")); });
+beforeEach(() => { root = mkdtempSync(join(tmpdir(), "seira-files-holding-")); });
 afterEach(() => { rmSync(root, { recursive: true, force: true }); });
 
 // What server/atomic.ts names the file it writes before the rename: <file>.<pid>.<uuid>.tmp
@@ -28,7 +28,7 @@ describe("filesHolding", () => {
   });
 
   it.skipIf(process.platform === "win32")("follows a link unless told not to", () => {
-    const outside = mkdtempSync(join(tmpdir(), "omb-files-holding-outside-"));
+    const outside = mkdtempSync(join(tmpdir(), "seira-files-holding-outside-"));
     try {
       writeFileSync(join(outside, "far.json"), "s3");
       mkdirSync(join(root, "real"));

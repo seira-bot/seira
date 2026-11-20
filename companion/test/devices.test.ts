@@ -29,7 +29,7 @@ describe("DeviceRegistry", () => {
     const registry = new DeviceRegistry();
     const { token, device } = pair(registry);
 
-    expect(token.startsWith("omb_")).toBe(true);
+    expect(token.startsWith("seira_")).toBe(true);
     expect(registry.authenticate(token)?.id).toBe(device.id);
 
     const raw = readFileSync(join(DATA_DIR, "devices.json"), "utf8");
@@ -117,7 +117,7 @@ describe("DeviceRegistry", () => {
 
     expect(registry.authenticate(undefined)).toBeNull();
     expect(registry.authenticate("")).toBeNull();
-    expect(registry.authenticate("omb_nope")).toBeNull();
+    expect(registry.authenticate("seira_nope")).toBeNull();
     expect(registry.authenticate(token.slice(0, -1))).toBeNull();
     expect(registry.authenticate(`${token}x`)).toBeNull();
   });
@@ -167,7 +167,7 @@ describe("DeviceRegistry", () => {
     expect(registry.redeem(credential, "iPhone", "different-request-id")).toMatchObject({
       error: expect.stringContaining("no pairing"),
     });
-    expect(registry.redeem("omb_pair_wrong", "iPhone", requestId)).toMatchObject({
+    expect(registry.redeem("seira_pair_wrong", "iPhone", requestId)).toMatchObject({
       error: expect.stringContaining("no pairing"),
     });
   });
@@ -239,7 +239,7 @@ describe("DeviceRegistry", () => {
     const registry = new DeviceRegistry();
     const { code, token } = registry.openPairing();
 
-    expect(token).toMatch(/^omb_pair_[A-Za-z0-9_-]{43}$/);
+    expect(token).toMatch(/^seira_pair_[A-Za-z0-9_-]{43}$/);
     expect(registry.redeem(token, "iPhone")).toHaveProperty("token");
     expect(registry.redeem(code, "iPad")).toMatchObject({
       error: expect.stringContaining("no pairing"),
@@ -395,21 +395,21 @@ describe("cleanDeviceName", () => {
 
 describe("bearerToken", () => {
   it("reads only a well-formed Bearer header", () => {
-    expect(bearerToken("Bearer omb_abc")).toBe("omb_abc");
-    expect(bearerToken("  Bearer omb_abc  ")).toBe("omb_abc");
-    expect(bearerToken("omb_abc")).toBeUndefined();
-    expect(bearerToken("Basic omb_abc")).toBeUndefined();
+    expect(bearerToken("Bearer seira_abc")).toBe("seira_abc");
+    expect(bearerToken("  Bearer seira_abc  ")).toBe("seira_abc");
+    expect(bearerToken("seira_abc")).toBeUndefined();
+    expect(bearerToken("Basic seira_abc")).toBeUndefined();
     expect(bearerToken(undefined)).toBeUndefined();
   });
 
   it("matches the scheme however it is cased", () => {
-    expect(bearerToken("bearer omb_abc")).toBe("omb_abc");
-    expect(bearerToken("BEARER omb_abc")).toBe("omb_abc");
-    expect(bearerToken("BeArEr omb_abc")).toBe("omb_abc");
-    expect(bearerToken("BeArEr\tomb_abc")).toBe("omb_abc");
+    expect(bearerToken("bearer seira_abc")).toBe("seira_abc");
+    expect(bearerToken("BEARER seira_abc")).toBe("seira_abc");
+    expect(bearerToken("BeArEr seira_abc")).toBe("seira_abc");
+    expect(bearerToken("BeArEr\tseira_abc")).toBe("seira_abc");
     expect(bearerToken("Bearer ")).toBeUndefined();
     expect(bearerToken("Bearer   ")).toBeUndefined();
-    expect(bearerToken("Beareromb_abc")).toBeUndefined();
+    expect(bearerToken("Bearerseira_abc")).toBeUndefined();
   });
 });
 
@@ -521,7 +521,7 @@ describe("re-pairing with the token a phone already holds", () => {
     const replaced: string[] = [];
     registry.onReplaced((id) => replaced.push(id));
     const plain = repair(registry);
-    for (const unknown of [`omb_${"A".repeat(43)}`, "", 42, { token: kept.token }, null]) {
+    for (const unknown of [`seira_${"A".repeat(43)}`, "", 42, { token: kept.token }, null]) {
       const result = repair(registry, unknown);
       expect(Object.keys(result).sort()).toEqual(Object.keys(plain).sort());
       expect(Object.keys(result.device).sort()).toEqual(Object.keys(plain.device).sort());
@@ -535,7 +535,7 @@ describe("re-pairing with the token a phone already holds", () => {
     const registry = new DeviceRegistry();
     const first = pair(registry);
     registry.openPairing();
-    expect(registry.redeem("omb_pair_wrong", "Thief", undefined, first.token)).toMatchObject({ code: "pairing_code_wrong" });
+    expect(registry.redeem("seira_pair_wrong", "Thief", undefined, first.token)).toMatchObject({ code: "pairing_code_wrong" });
     expect(registry.pairing()?.attemptsLeft).toBe(MAX_PAIRING_ATTEMPTS - 1);
     expect(registry.authenticate(first.token)?.id).toBe(first.device.id);
     registry.closePairing();
@@ -560,7 +560,7 @@ describe("re-pairing with the token a phone already holds", () => {
       error: "too many paired devices — remove an old phone on your computer first",
       code: "pairing_device_limit",
     });
-    expect(registry.redeem(credential, "One too many", undefined, `omb_${"B".repeat(43)}`)).toMatchObject({ code: "pairing_device_limit" });
+    expect(registry.redeem(credential, "One too many", undefined, `seira_${"B".repeat(43)}`)).toMatchObject({ code: "pairing_device_limit" });
     expect(registry.count()).toBe(MAX_DEVICES);
   });
 

@@ -56,7 +56,7 @@ test("adds the identity without changing other secure credentials", async () => 
 test("private key messages never contain the public pairing URL shape", async () => {
   const identity = await createPhoneSecretIdentity();
   assert.deepEqual(phoneSecretPrivateKeyMessage(identity), {
-    type: "openmausbot:phone-secret-key",
+    type: "seira:phone-secret-key",
     version: 1,
     keyId: identity.keyId,
     privateKey: identity.privateKey,
@@ -65,25 +65,25 @@ test("private key messages never contain the public pairing URL shape", async ()
 
 test("accepts only bounded private save requests", () => {
   assert.deepEqual(decodePhoneSecretSaveRequest({
-    type: "openmausbot:phone-secret-save",
+    type: "seira:phone-secret-save",
     requestId: "request_1",
     target: "xaiApiKey",
     value: "  secret  ",
   }), { requestId: "request_1", target: "xaiApiKey", value: "secret" });
   assert.equal(decodePhoneSecretSaveRequest({
-    type: "openmausbot:phone-secret-save",
+    type: "seira:phone-secret-save",
     requestId: "request_1",
     target: "xaiApiKey",
     value: " ",
   }), null);
   assert.equal(decodePhoneSecretSaveRequest({
-    type: "openmausbot:phone-secret-save",
+    type: "seira:phone-secret-save",
     requestId: "request_1",
     target: "xaiApiKey",
     value: "x".repeat(4_097),
   }), null);
   assert.equal(decodePhoneSecretSaveRequest({
-    type: "openmausbot:phone-secret-save",
+    type: "seira:phone-secret-save",
     requestId: 123,
     target: "xaiApiKey",
     value: "secret",
@@ -92,7 +92,7 @@ test("accepts only bounded private save requests", () => {
 
 test("save results expose only a bounded error", () => {
   assert.deepEqual(phoneSecretSaveResult("request_1", true), {
-    type: "openmausbot:phone-secret-save-result",
+    type: "seira:phone-secret-save-result",
     requestId: "request_1",
     ok: true,
   });
@@ -168,8 +168,8 @@ test("the save receiver ignores other messages and posts one result per save", a
   const posted = [];
   const receive = createPhoneSecretSaveReceiver(async (target, value) => { saved.push([target, value]); }, () => {});
   const proc = { postMessage: (message) => posted.push(message) };
-  assert.equal(receive(proc, { type: "openmausbot:other" }), false);
-  const message = { type: "openmausbot:phone-secret-save", requestId: "operation_1", target: "xaiApiKey", value: " secret " };
+  assert.equal(receive(proc, { type: "seira:other" }), false);
+  const message = { type: "seira:phone-secret-save", requestId: "operation_1", target: "xaiApiKey", value: " secret " };
   assert.equal(receive(proc, { data: message }), true);
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(saved, [["xaiApiKey", "secret"]]);
@@ -180,7 +180,7 @@ test("the save receiver logs a result that cannot reach the server", async () =>
   const logged = [];
   const receive = createPhoneSecretSaveReceiver(async () => {}, (line) => logged.push(line));
   const proc = { postMessage: () => { throw new Error("channel closed"); } };
-  const message = { type: "openmausbot:phone-secret-save", requestId: "operation_1", target: "xaiApiKey", value: "secret" };
+  const message = { type: "seira:phone-secret-save", requestId: "operation_1", target: "xaiApiKey", value: "secret" };
   assert.equal(receive(proc, message), true);
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(logged, ["phone credential save result failed: channel closed"]);

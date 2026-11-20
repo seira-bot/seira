@@ -6,9 +6,11 @@ import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 import path from "node:path";
+import { SEIRA_HOSTS } from "./seira-hosts.mjs";
+import { LEGACY_DEVICE_TOKEN_PREFIX } from "./legacy-names.mjs";
 
 export const DESKTOP_COMPANION_FIELD = "desktopCompanionRemote";
-const DEVICE_TOKEN = /^omb_[A-Za-z0-9_-]{43}$/;
+const DEVICE_TOKEN = new RegExp(`^(?:seira_|${LEGACY_DEVICE_TOKEN_PREFIX})[A-Za-z0-9_-]{43}$`);
 const DEVICE_ID = /^[0-9a-f-]{36}$/i;
 const PAIRING_CODE = /^\d{6}$/;
 const MAX_ERROR_BYTES = 64 * 1024;
@@ -16,8 +18,8 @@ const MAX_ERROR_BYTES = 64 * 1024;
 /** Losing either argument makes the renderer unsafe or makes a live relay look local. */
 export function desktopCompanionRendererArguments(localOrigin, remoteAccess) {
   return [
-    `--omb-local-origin=${localOrigin}`,
-    ...(remoteAccess ? ["--openmausbot-remote-client"] : []),
+    `--seira-local-origin=${localOrigin}`,
+    ...(remoteAccess ? ["--seira-remote-client"] : []),
   ];
 }
 
@@ -47,7 +49,7 @@ export const NEXT_MANAGED_COMPANION_HOST_SUFFIX = "";
 
 /** Every zone the control plane makes addresses in, lowercase apex names. Ship a new domain here first. */
 export const MANAGED_COMPANION_HOST_SUFFIXES = Object.freeze(
-  ["openmausbot.com", "mausbot.si", NEXT_MANAGED_COMPANION_HOST_SUFFIX].filter(Boolean),
+  [SEIRA_HOSTS.site, SEIRA_HOSTS.companion, NEXT_MANAGED_COMPANION_HOST_SUFFIX].filter(Boolean),
 );
 
 /** Only the control plane's `c-<32 hex>` names: any other name in those zones never receives a pairing code. */

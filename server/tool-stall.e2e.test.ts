@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 it("stops a silent turn but spares one whose tool is still running", async () => {
-  fixture = await launchVerificationServer({ ...process.env, OMB_TEST_STALL_CLOCK: "1", FAKE_CLAUDE_MODE: "hang" },
+  fixture = await launchVerificationServer({ ...process.env, SEIRA_TEST_STALL_CLOCK: "1", FAKE_CLAUDE_MODE: "hang" },
     undefined, undefined, undefined, undefined, undefined, ["cline"]);
   const { url, dataDir } = fixture.info;
   const cli = (...args: string[]) => runControlSeira([...args, "--url", url]) as Promise<any>;

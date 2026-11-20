@@ -34,8 +34,8 @@ export async function startRoutineWork(deps: RoutineDispatchDeps, run: RoutineRu
     await options.startTurn(
       run.botId,
       threadId,
-      startPrompt(run, prompt, composeExecutionPrompt({ id: run.routineId, name: run.routineName, trigger: triggerSource, runOn: run.runOn ?? "maus" }, prompt, run.attachments, continuityCarry(run, deps.routines, deps.runs)), (first) => options.promptSaid?.(threadId, first) === true),
-      run.runOn ?? "maus",
+      startPrompt(run, prompt, composeExecutionPrompt({ id: run.routineId, name: run.routineName, trigger: triggerSource, runOn: run.runOn ?? "seira" }, prompt, run.attachments, continuityCarry(run, deps.routines, deps.runs)), (first) => options.promptSaid?.(threadId, first) === true),
+      run.runOn ?? "seira",
       triggerSource,
       (message) => failThread(threadId, message, { cause: "refused" }), run.id,
     );

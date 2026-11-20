@@ -23,7 +23,7 @@ import { createUpgrades } from "./upgrades.ts";
 const SERIAL = "PHONE1";
 const STREAM = `/api/usb-phones/${SERIAL}/stream`;
 const OWNER_TOKEN = "owner-token-123";
-const DESKTOP_APP = { "x-openmausbot-desktop-owner": OWNER_TOKEN };
+const DESKTOP_APP = { "x-seira-desktop-owner": OWNER_TOKEN };
 const DEVICES = [
   usbPhoneLine(SERIAL),
   usbPhoneLine("LOCKED", "unauthorized"),
@@ -112,10 +112,10 @@ const neverOpens = () =>
   });
 
 async function serve({ flag = true, mode = "", devices = DEVICES, adbPath, serverFile }: { flag?: boolean; mode?: string; devices?: string; adbPath?: () => string | null; serverFile?: () => Promise<string> } = {}): Promise<Fixture> {
-  const home = mkdtempSync(join(tmpdir(), "omb-phone-screen-"));
+  const home = mkdtempSync(join(tmpdir(), "seira-phone-screen-"));
   folders.push(home);
   const phone = fakePhone({ mode, devices, under: home });
-  vi.stubEnv("OMB_ADB_PATH", phone.adbPath);
+  vi.stubEnv("SEIRA_ADB_PATH", phone.adbPath);
   const sessions = new SessionRegistry({ file: join(home, "sessions.json") });
   const upgrades = createUpgrades();
   const hold = createPhoneHold({ onChange: (held) => made.screen.holdChanged(held) });
@@ -150,7 +150,7 @@ async function serve({ flag = true, mode = "", devices = DEVICES, adbPath, serve
   };
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? "/", "http://localhost");
-    const { auth, status, error } = resolveRequestAuth(req, { sessions, cookieName: "omb_session", streamPath: "/api/events", url, loopbackMutationToken: OWNER_TOKEN });
+    const { auth, status, error } = resolveRequestAuth(req, { sessions, cookieName: "seira_session", streamPath: "/api/events", url, loopbackMutationToken: OWNER_TOKEN });
     if (!auth) return json(res, status, { error });
     if (!await dispatchRoutes([made.screen.route], { req, res, url, path: url.pathname, method: req.method ?? "GET", auth, json, readBody })) json(res, 404, { error: "no route" });
   };

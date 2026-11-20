@@ -6,10 +6,10 @@ import { join } from "node:path";
 
 const [scenario, cli] = process.argv.slice(2);
 const PREFIXES = {
-  muse: ["omb-muse-models-"],
-  acp: ["omb-acp-models-"],
-  background: ["omb-claude-background-"],
-  turn: ["omb-mcp-", "omb-system-"],
+  muse: ["seira-muse-models-"],
+  acp: ["seira-acp-models-"],
+  background: ["seira-claude-background-"],
+  turn: ["seira-mcp-", "seira-system-"],
 };
 
 if (scenario === "muse") {

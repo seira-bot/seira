@@ -47,7 +47,7 @@ describe("official ChatGPT plan OAuth", () => {
     return controller.get(flow.flowId!);
   }
   beforeEach(async () => {
-    home = mkdtempSync(join(tmpdir(), "omb-chatgpt-plan-"));
+    home = mkdtempSync(join(tmpdir(), "seira-chatgpt-plan-"));
     directory = join(home, "chatgpt-plan", "account-one");
     calls = []; controllers = []; mode = "success";
     const keys = await generateKeyPair("RS256"); key = keys.privateKey;

@@ -7,7 +7,7 @@ import { expect, it } from "vitest";
 import { removeTempDir, waitForExit } from "./cleanup.ts";
 
 it.each(["stream", "text", "text-fallback"])("%s capture stays complete while another process writes it", async (mode) => {
-  const home = mkdtempSync(join(tmpdir(), "omb-claude-dump-"));
+  const home = mkdtempSync(join(tmpdir(), "seira-claude-dump-"));
   const dump = join(home, "capture.json");
   const writing = join(home, "writing");
   const release = join(home, "release");
@@ -74,7 +74,7 @@ it.each(["stream", "text", "text-fallback"])("%s capture stays complete while an
 });
 
 it("keeps the server's connection check out of every turn and one-shot capture, logging it on its own", async () => {
-  const home = mkdtempSync(join(tmpdir(), "omb-claude-dump-"));
+  const home = mkdtempSync(join(tmpdir(), "seira-claude-dump-"));
   const dump = join(home, "capture.json");
   const textDump = join(home, "text.json");
   const textLog = join(home, "text.jsonl");
@@ -103,7 +103,7 @@ it("keeps the server's connection check out of every turn and one-shot capture, 
 });
 
 it("keeps a new bot's setup answers out of every turn and one-shot capture, failing at once without a reply file, and holds the reply back on request", async () => {
-  const home = mkdtempSync(join(tmpdir(), "omb-claude-dump-"));
+  const home = mkdtempSync(join(tmpdir(), "seira-claude-dump-"));
   const dump = join(home, "capture.json");
   const textDump = join(home, "text.json");
   const textLog = join(home, "text.jsonl");

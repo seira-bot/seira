@@ -20,24 +20,24 @@ describe("moving one memory layer's notes into another", () => {
   });
 
   it("moves the notes, topics, logs and journal, merging with what is there, and leaves an empty memory behind", async () => {
-    ensureWorkspace("maus");
-    put("maus", "MEMORY.md", "# Memory\n\n- old note\n");
-    put("maus", "memory/people.md", "- Ada likes tea\n");
-    put("maus", "memory/log/2026-11-01.md", "- talked about tea\n");
-    put("maus--member-p", "MEMORY.md", "# Memory\n\n- her own note\n");
-    put("maus--member-p", "memory/people.md", "- Ada is in Lisbon\n");
+    ensureWorkspace("seira");
+    put("seira", "MEMORY.md", "# Memory\n\n- old note\n");
+    put("seira", "memory/people.md", "- Ada likes tea\n");
+    put("seira", "memory/log/2026-11-01.md", "- talked about tea\n");
+    put("seira--member-p", "MEMORY.md", "# Memory\n\n- her own note\n");
+    put("seira--member-p", "memory/people.md", "- Ada is in Lisbon\n");
     mkdirSync(JOURNAL_DIR, { recursive: true });
-    writeFileSync(journalFile("maus"), `${JSON.stringify({ id: "j1", botId: "maus", at: 1, path: "MEMORY.md", before: "x", canRevert: true })}\n`);
+    writeFileSync(journalFile("seira"), `${JSON.stringify({ id: "j1", botId: "seira", at: 1, path: "MEMORY.md", before: "x", canRevert: true })}\n`);
 
-    expect(await moveMemoryLayer("maus", "maus--member-p")).toBe(true);
-    expect(readFileSync(at("maus--member-p", "MEMORY.md"), "utf8")).toMatch(/her own note[\s\S]*old note/);
-    expect(readFileSync(at("maus--member-p", "memory/people.md"), "utf8")).toMatch(/Lisbon[\s\S]*tea/);
-    expect(readFileSync(at("maus--member-p", "memory/log/2026-11-01.md"), "utf8")).toContain("talked about tea");
-    expect(isMemorySeed(readFileSync(at("maus", "MEMORY.md"), "utf8"))).toBe(true);
-    expect(existsSync(at("maus", "memory/people.md"))).toBe(false);
-    expect(existsSync(journalFile("maus"))).toBe(false);
-    const row = JSON.parse(readFileSync(journalFile("maus--member-p"), "utf8").trim());
-    expect(row).toMatchObject({ id: "j1", botId: "maus--member-p", before: null, canRevert: false });
+    expect(await moveMemoryLayer("seira", "seira--member-p")).toBe(true);
+    expect(readFileSync(at("seira--member-p", "MEMORY.md"), "utf8")).toMatch(/her own note[\s\S]*old note/);
+    expect(readFileSync(at("seira--member-p", "memory/people.md"), "utf8")).toMatch(/Lisbon[\s\S]*tea/);
+    expect(readFileSync(at("seira--member-p", "memory/log/2026-11-01.md"), "utf8")).toContain("talked about tea");
+    expect(isMemorySeed(readFileSync(at("seira", "MEMORY.md"), "utf8"))).toBe(true);
+    expect(existsSync(at("seira", "memory/people.md"))).toBe(false);
+    expect(existsSync(journalFile("seira"))).toBe(false);
+    const row = JSON.parse(readFileSync(journalFile("seira--member-p"), "utf8").trim());
+    expect(row).toMatchObject({ id: "j1", botId: "seira--member-p", before: null, canRevert: false });
   });
 
   it("moves nothing from a memory that holds nothing", async () => {

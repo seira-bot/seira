@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { createPhonePushAccessSync, phonePushAccessMessage, PHONE_PUSH_ACCESS_MESSAGE } from "./phone-push-access.mjs";
 
-const credential = `omb_install_${"a".repeat(22)}.${"b".repeat(43)}`;
-const controlPlane = "https://accounts.openmausbot.com";
+const credential = `seira_install_${"a".repeat(22)}.${"b".repeat(43)}`;
+const controlPlane = "https://accounts.seira.bot";
 
 describe("phone push access on the desktop", () => {
   it("hands over only the control plane and a well-formed installation credential", () => {
     expect(phonePushAccessMessage({ companionInstallationCredential: credential, companionAccountToken: "secret" }, controlPlane))
       .toEqual({ type: PHONE_PUSH_ACCESS_MESSAGE, access: { controlPlane, credential } });
     expect(phonePushAccessMessage({ companionInstallationCredential: credential }, "")).toEqual({ type: PHONE_PUSH_ACCESS_MESSAGE, access: null });
-    expect(phonePushAccessMessage({ companionInstallationCredential: "omb_install_short" }, controlPlane).access).toBeNull();
+    expect(phonePushAccessMessage({ companionInstallationCredential: "seira_install_short" }, controlPlane).access).toBeNull();
     expect(phonePushAccessMessage({ companionInstallationCredential: credential, companionAccountCleanupPending: true }, controlPlane).access).toBeNull();
     expect(phonePushAccessMessage(null, controlPlane).access).toBeNull();
   });

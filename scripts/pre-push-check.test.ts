@@ -46,7 +46,7 @@ describe("the hook in a checkout without dependencies", () => {
   afterAll(async () => { for (const dir of dirs) await removeTempDir(dir); });
 
   function checkout() {
-    const dir = mkdtempSync(join(tmpdir(), "omb-pre-push-hook-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-pre-push-hook-"));
     dirs.push(dir);
     const repo = (...args: string[]) => execFileSync("git", args, { cwd: dir, stdio: "ignore" });
     repo("init", "-q");
@@ -65,11 +65,37 @@ describe("the hook in a checkout without dependencies", () => {
     expect(run.stdout).toContain("no dependencies in this checkout");
   });
 
+  const without = (name: string) => Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== name));
+
   it.skipIf(process.platform === "win32")("stays out of the way when skipped", () => {
     const { dir, hook } = checkout();
     writeFileSync(join(dir, "ignored"), "");
-    const run = spawnSync(hook, { cwd: dir, encoding: "utf8", input: "", timeout: 10_000, env: { ...process.env, OMB_SKIP_HOOKS: "1" } });
+    const env = { ...without("OMB_SKIP_HOOKS"), SEIRA_SKIP_HOOKS: "1" };
+    const run = spawnSync(hook, { cwd: dir, encoding: "utf8", input: "", timeout: 10_000, env });
     expect(run.status).toBe(0);
     expect(run.stdout).toContain("skipped");
+    expect(run.stdout).not.toContain("deprecated");
+  });
+
+  it.skipIf(process.platform === "win32")("still skips for the old name, and says it will be removed", () => {
+    const { dir, hook } = checkout();
+    writeFileSync(join(dir, "ignored"), "");
+    const env = { ...without("SEIRA_SKIP_HOOKS"), OMB_SKIP_HOOKS: "1" };
+    const run = spawnSync(hook, { cwd: dir, encoding: "utf8", input: "", timeout: 10_000, env });
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain("skipped");
+    expect(run.stdout).toMatch(/OMB_SKIP_HOOKS.*deprecated.*removed/u);
+  });
+
+  it.skipIf(process.platform === "win32")("skips the commit hook for both names", () => {
+    const { dir } = checkout();
+    const hook = join(dir, "hooks", "pre-commit");
+    copyFileSync(fileURLToPath(new URL("./git-hooks/pre-commit", import.meta.url)), hook);
+    chmodSync(hook, 0o755);
+    for (const [set, other] of [["SEIRA_SKIP_HOOKS", "OMB_SKIP_HOOKS"], ["OMB_SKIP_HOOKS", "SEIRA_SKIP_HOOKS"]] as const) {
+      const run = spawnSync(hook, { cwd: dir, encoding: "utf8", timeout: 10_000, env: { ...without(other), [set]: "1" } });
+      expect(run.status).toBe(0);
+      expect(run.stdout).toContain(`skipped (${set} is set`);
+    }
   });
 });

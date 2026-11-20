@@ -1,13 +1,13 @@
 import { DEFER_TOOLS_ENV, claudeUpFrontBytes } from "../../server/drivers/agents-claude-defer.ts";
 import { agentsToolList } from "../../server/drivers/agents-mcp.ts";
 
-const BASE = { OMB_BOT_ID: "bot-context", OMB_CHIEF_OF_STAFF: "1", OMB_COMPUTER_SELECTION: "1" };
+const BASE = { SEIRA_BOT_ID: "bot-context", SEIRA_CHIEF_OF_STAFF: "1", SEIRA_COMPUTER_SELECTION: "1" };
 /** A Chief's direct chat with nothing extra, and with every switch the catalog has. */
 export const CONTEXT_PROFILES: Record<string, Record<string, string>> = {
   default: BASE,
   fullest: {
-    ...BASE, OMB_SKILL_AUTHORING_ENABLED: "1", OMB_SHARED_COMPUTERS_ENABLED: "1", OMB_VOICE_NOTES: "1", OMB_X_RESEARCH: "1", OMB_RESEARCH: "1",
-    OMB_TEAM_PEOPLE: "1", OMB_IMAGE_GENERATION: "1", OMB_APP_HOSTING: "1",
+    ...BASE, SEIRA_SKILL_AUTHORING_ENABLED: "1", SEIRA_SHARED_COMPUTERS_ENABLED: "1", SEIRA_VOICE_NOTES: "1", SEIRA_X_RESEARCH: "1", SEIRA_RESEARCH: "1",
+    SEIRA_TEAM_PEOPLE: "1", SEIRA_IMAGE_GENERATION: "1", SEIRA_APP_HOSTING: "1",
   },
 };
 

@@ -17,7 +17,7 @@ instructions to forbid that when memory must stay in another source of truth.
 ## Where it lives
 
 ```
-~/.openmausbot/workspaces/<botId>/
+~/.seira/workspaces/<botId>/
 ├── MEMORY.md            the notes that load into every conversation
 └── memory/
     ├── <topic>.md       longer notes the bot reads on demand
@@ -242,9 +242,9 @@ file, so adding the helper or taking it out again applies without a restart:
 { "helper": { "instanceId": "claude", "model": "claude-haiku-4-5" } }
 ```
 
-or set `OMB_HELPER_INSTANCE` (and, if you want, `OMB_HELPER_MODEL`) in the
+or set `SEIRA_HELPER_INSTANCE` (and, if you want, `SEIRA_HELPER_MODEL`) in the
 server's environment before it starts. The environment wins over the file,
-and an empty `OMB_HELPER_INSTANCE` switches a saved helper off. `instanceId` is the id of
+and an empty `SEIRA_HELPER_INSTANCE` switches a saved helper off. `instanceId` is the id of
 a connected instance as `config.json` and `GET /api/instances` name it, such
 as `claude`, `claudeApi`, `openai` or `openrouter`; it has to be Claude or an
 API model, the engines with a quick text call of their own. `model` is
@@ -377,7 +377,7 @@ agreed shows up in each member's next 1:1 brief.
 
 Every change to a memory file that the app can see is recorded — yours from
 the panel, the bot's during a task, an import, an undo — in
-`~/.openmausbot/memory-journal/<botId>.ndjson`. It lives *outside* the
+`~/.seira/memory-journal/<botId>.ndjson`. It lives *outside* the
 workspace on purpose: the bot's file tools point at the workspace, and a
 record the bot could edit would not be a record.
 

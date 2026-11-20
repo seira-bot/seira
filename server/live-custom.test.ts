@@ -157,10 +157,10 @@ describe("the key a custom endpoint's calls use", () => {
 
 describe("a custom endpoint from the environment", () => {
   it("reads the endpoint and model, and pairs a key set beside them", () => {
-    const env = { OMB_LIVE_PROVIDER: "custom", OMB_CUSTOM_LIVE_ENDPOINT: ` ${GATEWAY} `, OMB_CUSTOM_LIVE_MODEL: "m", OMB_OPENAI_LIVE_KEY: "gw" };
+    const env = { SEIRA_LIVE_PROVIDER: "custom", SEIRA_CUSTOM_LIVE_ENDPOINT: ` ${GATEWAY} `, SEIRA_CUSTOM_LIVE_MODEL: "m", SEIRA_OPENAI_LIVE_KEY: "gw" };
     expect(liveConfigWithEnv(undefined, env)).toEqual({ provider: "custom", customEndpoint: GATEWAY, customModel: "m", key: "gw", keyFor });
     expect(liveConfigWithEnv({ keyFor: "nowhere" }, env).keyFor).toBe("nowhere");
-    expect(liveSettingEnv(custom)).toEqual(expect.arrayContaining([[GATEWAY, "OMB_CUSTOM_LIVE_ENDPOINT"], ["gpt-live-1", "OMB_CUSTOM_LIVE_MODEL"]]));
+    expect(liveSettingEnv(custom)).toEqual(expect.arrayContaining([[GATEWAY, "SEIRA_CUSTOM_LIVE_ENDPOINT"], ["gpt-live-1", "SEIRA_CUSTOM_LIVE_MODEL"]]));
   });
 });
 

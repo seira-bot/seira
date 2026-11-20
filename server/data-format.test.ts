@@ -14,7 +14,7 @@ const { version: VERSION } = JSON.parse(readFileSync(join(ROOT, "package.json"),
 const released = JSON.parse(readFileSync(join(import.meta.dirname, "data-format-released.json"), "utf8")) as ReleasedDataFormat;
 const dirs: string[] = [];
 const dataDir = () => {
-  const dir = mkdtempSync(join(tmpdir(), "omb-data-format-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-data-format-"));
   dirs.push(dir);
   return dir;
 };
@@ -177,7 +177,7 @@ describe("a server starting on a data folder", () => {
       env: {
         ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
         ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-        HOME: dir, USERPROFILE: dir, OMB_DATA_DIR: join(dir, "data"), OMB_PORT: String(await freePortBlock([0, 1])),
+        HOME: dir, USERPROFILE: dir, SEIRA_DATA_DIR: join(dir, "data"), SEIRA_PORT: String(await freePortBlock([0, 1])),
       },
       stdio: ["ignore", "ignore", "pipe"],
     });

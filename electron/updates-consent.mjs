@@ -13,7 +13,7 @@ const text = (value, max) => typeof value === "string" && value.length > 0 && va
 const STATE_WAIT_MS = 8_000;
 
 /**
- * The record kept on this computer. `account`: the MausBot Cloud account the answer belongs to (given while signed in,
+ * The record kept on this computer. `account`: the Seira Cloud account the answer belongs to (given while signed in,
  * or carried over to it). `upstreamAccount`: in emailOnly mode, the upstream account that already holds an earlier answer
  * of this install; a declined or withdrawn answer is recorded there while that account is signed in. `email`: typed while signed out. `receipt`: the Admin's handle for that email-only answer,
  * the only way this computer can withdraw it. `replacedReceipts`: receipts of email-only opt-ins that a later answer

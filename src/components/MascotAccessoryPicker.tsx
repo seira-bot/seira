@@ -3,7 +3,7 @@ import { t } from "@/lib/i18n";
 import { accessoryName } from "@/lib/mascot-names";
 import type { Bot } from "@/state/store";
 import { MASCOT_ACCESSORY_IDS, mascotAccessories, toggleMascotAccessory } from "../../shared/mascot-accessories";
-import { MausAvatar } from "./Avatar";
+import { SeiraAvatar } from "./Avatar";
 import type { AvatarPatch } from "./avatar-editing";
 
 export function MascotAccessoryPicker({ bot, disabled, compact = false, onPatch }: {
@@ -34,7 +34,7 @@ export function MascotAccessoryPicker({ bot, disabled, compact = false, onPatch 
               on ? "bg-control text-ink ring-2 ring-accent-border" : "text-ink-secondary hover:bg-control/60",
             )}
           >
-            <MausAvatar
+            <SeiraAvatar
               color={bot.color}
               bodyId={bot.mascotBody ?? undefined}
               accessories={[id]}

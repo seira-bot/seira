@@ -17,7 +17,7 @@ import { startBrokerFake, type BrokerFake } from "./testing/broker-fake.ts";
 import { freePortBlock } from "./testing/ports.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
-const HOST = "omb-t-0f1e2d3c4b5a.fly.dev";
+const HOST = "seira-t-0f1e2d3c4b5a.fly.dev";
 const MACHINE = "7d2c9e4a-1b3f-4a6e-8c5d-0e9f8a7b6c51";
 const ZONE = "America/New_York";
 const MINUTE = 60_000;
@@ -76,8 +76,8 @@ describe("a new Cloud's first hour", () => {
 
   beforeAll(async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    home = mkdtempSync(join(tmpdir(), "omb-first-hour-"));
-    dataDir = join(home, ".openmausbot");
+    home = mkdtempSync(join(tmpdir(), "seira-first-hour-"));
+    dataDir = join(home, ".seira");
     mkdirSync(dataDir, { recursive: true });
     broker = await startBrokerFake();
     const markers = join(home, "markers.json");
@@ -105,10 +105,10 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     child = spawn(process.execPath, ["--import", offline, join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: {
-        PATH: process.env.PATH, HOME: home, USERPROFILE: home, TZ: ZONE, OMB_DATA_DIR: dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
-        OMB_CLOUD_ROLE: "home", OMB_BOT_BOX: "0", OMB_CLOUD_MACHINE_ID: MACHINE, OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
-        OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_PUBLIC_URL: `https://${HOST}`,
-        OMB_COMPOSIO_BROKER_URL: broker.url, OMB_CLOUD_CONNECTED_APPS_GRANT: broker.cloudGrant(MACHINE),
+        PATH: process.env.PATH, HOME: home, USERPROFILE: home, TZ: ZONE, SEIRA_DATA_DIR: dataDir, SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1),
+        SEIRA_CLOUD_ROLE: "home", SEIRA_BOT_BOX: "0", SEIRA_CLOUD_MACHINE_ID: MACHINE, SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test",
+        SEIRA_CLOUD_BOOTSTRAP_SECRET: secret, SEIRA_PUBLIC_URL: `https://${HOST}`,
+        SEIRA_COMPOSIO_BROKER_URL: broker.url, SEIRA_CLOUD_CONNECTED_APPS_GRANT: broker.cloudGrant(MACHINE),
       },
       stdio: ["ignore", "pipe", "pipe"],
     });

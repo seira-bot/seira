@@ -28,7 +28,7 @@ describe("ElevenLabs Live endpoint", () => {
   });
 
   it("uses the ElevenLabs API root ElevenLabs voices use", () => {
-    expect(elevenLabsLiveEndpoint("agent_1", { OMB_ELEVENLABS_API: "http://127.0.0.1:9124/v1/" }).apiBase).toBe("http://127.0.0.1:9124/v1/convai");
+    expect(elevenLabsLiveEndpoint("agent_1", { SEIRA_ELEVENLABS_API: "http://127.0.0.1:9124/v1/" }).apiBase).toBe("http://127.0.0.1:9124/v1/convai");
   });
 
   it("uses a saved agent only with the key of the account it was set up on", () => {
@@ -96,7 +96,7 @@ describe("an ElevenLabs Live call's session", () => {
   it("takes a loopback ws URL only from a loopback override", async () => {
     const local = "ws://127.0.0.1:9124/v1/convai/conversation?agent_id=agent_1";
     const fetchImpl = fakeElevenLabs({ "/v1/convai/conversation/get-signed-url": () => Response.json({ signed_url: local }) });
-    const loopback = elevenLabsLiveEndpoint("agent_1", { OMB_ELEVENLABS_API: "http://127.0.0.1:9124/v1" });
+    const loopback = elevenLabsLiveEndpoint("agent_1", { SEIRA_ELEVENLABS_API: "http://127.0.0.1:9124/v1" });
     expect((await create(fetchImpl, loopback)).signed_url).toBe(local);
     await expect(create(fetchImpl)).rejects.toMatchObject({ status: 502 });
   });

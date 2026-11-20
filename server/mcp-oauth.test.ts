@@ -825,7 +825,7 @@ describe("mcpCallbackOrigin", () => {
 
   it("returns null for plain http, a path or credentials", () => {
     expect(mcpCallbackOrigin("http://192.168.1.5:3000", [])).toBeNull();
-    expect(mcpCallbackOrigin(null, ["http://me.example", "https://me.example/omb", "https://user:pw@me.example", "not a url"])).toBeNull();
+    expect(mcpCallbackOrigin(null, ["http://me.example", "https://me.example/seira", "https://user:pw@me.example", "not a url"])).toBeNull();
     expect(mcpCallbackOrigin(null, [])).toBeNull();
   });
 });

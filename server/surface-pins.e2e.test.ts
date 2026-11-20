@@ -60,8 +60,8 @@ describe("surface pin provenance against the real server", () => {
   }, Boolean);
   const mountedComputer = (sent: any) => sent.mcpConfig.mcpServers.computer;
   // The first screen tools/call, exactly as the mounted proxy issues it: a claim and its pin land on use, not on mount.
-  const gate = (c: any) => fetch(c.env.OMB_CONTROL_URL, {
-    headers: { authorization: `Bearer ${c.env.OMB_CONTROL_TOKEN}` },
+  const gate = (c: any) => fetch(c.env.SEIRA_CONTROL_URL, {
+    headers: { authorization: `Bearer ${c.env.SEIRA_CONTROL_TOKEN}` },
   }).then(response => response.json() as Promise<any>);
   const threadState = (botId: string, threadId: string) =>
     api("GET", "/api/bots?messages=0").then(({ body }) =>
@@ -85,12 +85,12 @@ describe("surface pin provenance against the real server", () => {
       "--import", pathToFileURL(join(ROOT, "server/testing/desktop-parent.mjs")).href, join(ROOT, "server/index.ts")], {
       cwd: ROOT, env: {
         PATH: dirname(process.execPath), ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-        HOME: home, USERPROFILE: home, OMB_DATA_DIR: data,
+        HOME: home, USERPROFILE: home, SEIRA_DATA_DIR: data,
         APPDATA: join(home, "appdata"), LOCALAPPDATA: join(home, "localappdata"),
         TEMP: home, TMP: home, TMPDIR: home,
-        OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), OMB_STATIC_DIR: ui, OMB_TEST_VM_STATE: stateFile,
-        OMB_BOAT_API: boatApi, OMB_USER_DATA: join(home, "user-data"), OMB_TEST_DESKTOP_CUA_CONNECTION: cuaDescriptor,
-        ...(withBrowser ? { OMB_AGENT_BROWSER_PATH: inertBrowser, AGENT_BROWSER_EXECUTABLE_PATH: inertBrowser } : {}),
+        SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), SEIRA_STATIC_DIR: ui, SEIRA_TEST_VM_STATE: stateFile,
+        SEIRA_BOAT_API: boatApi, SEIRA_USER_DATA: join(home, "user-data"), SEIRA_TEST_DESKTOP_CUA_CONNECTION: cuaDescriptor,
+        ...(withBrowser ? { SEIRA_AGENT_BROWSER_PATH: inertBrowser, AGENT_BROWSER_EXECUTABLE_PATH: inertBrowser } : {}),
       }, stdio: ["ignore", "pipe", "pipe"],
     });
     child = proc;
@@ -115,7 +115,7 @@ describe("surface pin provenance against the real server", () => {
   }
 
   beforeAll(async () => {
-    home = mkdtempSync(join(tmpdir(), "omb-surface-pins-"));
+    home = mkdtempSync(join(tmpdir(), "seira-surface-pins-"));
     data = join(home, "data");
     ui = join(home, "static");
     stateFile = join(home, "vm.json");
@@ -380,7 +380,7 @@ describe("surface pin provenance against the real server", () => {
         await apiOk("POST", `/api/bots/${bot.id}/messages`, { text: "Stay where I pinned you.", threadId: task.threadId });
         const sent = await dump();
         expect(sent.systemPrompt).toContain("You can act on the user's computer");
-        expect(mountedComputer(sent).env.OMB_CUA_COMMAND).toBe("/fixture/cua-driver");
+        expect(mountedComputer(sent).env.SEIRA_CUA_COMMAND).toBe("/fixture/cua-driver");
         expect(mountedComputer(sent).args.some((arg: string) => arg.includes("container-mcp"))).toBe(false);
         writeFileSync(finishFile, "finish");
         await idle(bot.id, task.threadId);
@@ -404,7 +404,7 @@ describe("surface pin provenance against the real server", () => {
     resetTurn();
     await apiOk("POST", `/api/bots/${bot.id}/messages`, { text: "Open Chrome on the cloud computer.", threadId: task.threadId });
     const sent = await dump();
-    const token = sent.mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+    const token = sent.mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN;
     const selected = await fetch(base + "/api/internal/computer/select", { method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ surface: "cloud" }) });
     expect(await selected.json()).toMatchObject({ status: "pending", surface: "cloud" });
@@ -451,7 +451,7 @@ describe("surface pin provenance against the real server", () => {
       threadId: task.threadId, sendId: randomUUID(), text: "Check the dashboard on the cloud computer.", expectedActiveLeafId: null,
     });
     const sent = await dump();
-    const token = sent.mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+    const token = sent.mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN;
     const selected = await fetch(base + "/api/internal/computer/select", { method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ surface: "cloud" }) });
     expect(await selected.json()).toMatchObject({ status: "pending", surface: "cloud" });
@@ -482,7 +482,7 @@ describe("surface pin provenance against the real server", () => {
     const { task: own } = await apiOk("POST", `/api/bots/${asker.id}/tasks`, {});
     resetTurn();
     await apiOk("POST", `/api/bots/${asker.id}/messages`, { text: "Ask Tester to check the site.", threadId: own.threadId });
-    const askerToken = (await dump()).mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+    const askerToken = (await dump()).mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN;
     const handed = await fetch(base + "/api/internal/coordinate-bots", { method: "POST",
       headers: { authorization: `Bearer ${askerToken}`, "content-type": "application/json" },
       body: JSON.stringify({ botIds: [tester.id], message: "Sign in to the shop and check the order page." }) });
@@ -492,7 +492,7 @@ describe("surface pin provenance against the real server", () => {
       if (!existsSync(teammateDump)) return null;
       try { return JSON.parse(readFileSync(teammateDump, "utf8")); } catch { return null; }
     }, Boolean);
-    const token = (await teammateTurn()).mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+    const token = (await teammateTurn()).mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN;
     const select = (body?: unknown) => fetch(base + "/api/internal/computer/select", { method: body ? "POST" : "GET",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}) });
     const offered = await (await select()).json() as any;
@@ -515,7 +515,7 @@ describe("surface pin provenance against the real server", () => {
     expect(JSON.stringify(moved.prompt)).toContain("Continue the handed-off request");
     expect(moved.mcpConfig.mcpServers.browser).toBeDefined();
     expect(savedTask(tester.id, workThread)).toMatchObject({ surface: "browser" });
-    const resumedToken = (await dump()).mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+    const resumedToken = (await dump()).mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN;
     const resumedOffer = await (await fetch(base + "/api/internal/computer/select", {
       headers: { authorization: `Bearer ${resumedToken}` } })).json() as any;
     expect(resumedOffer.canSelect).not.toBe(true);

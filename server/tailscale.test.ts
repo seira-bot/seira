@@ -41,7 +41,7 @@ describe("serve --tailscale without HTTPS", () => {
     const fallback = tailnetListenFallback("https-not-enabled", status, 8799, interfaces);
     expect(fallback?.origin).toBe("http://nuc.tail1234.ts.net:8799");
     // The name alone: the server follows Tailscale's interface, so a restart of Tailscale needs no restart here.
-    expect(fallback?.env).toEqual({ OMB_TAILNET_NAME: "nuc.tail1234.ts.net" });
+    expect(fallback?.env).toEqual({ SEIRA_TAILNET_NAME: "nuc.tail1234.ts.net" });
     expect(fallback?.line).toContain("login.tailscale.com/admin/dns");
     expect(tailnetListenFallback("needs-operator", status, 8799, interfaces)?.line).toContain("--operator=$USER");
   });
@@ -71,7 +71,7 @@ describe("serve --tailscale", () => {
   };
 
   it("serves in the foreground, notes it, and turns it off when serve stops", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-ts-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-ts-"));
     try {
       const fake = fakeServe(null);
       const served = await tailscaleServe(status, 8799, { dataDir: dir, settleMs: 20, spawnImpl: fake.spawnImpl });
@@ -89,7 +89,7 @@ describe("serve --tailscale", () => {
   });
 
   it("checks first: HTTPS certificates on, and no other Seira server already on this name; a serve that exits says why", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-ts-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-ts-"));
     try {
       const fake = fakeServe(null);
       expect(await tailscaleServe({ ...status, httpsEnabled: false }, 8799, { dataDir: dir, spawnImpl: fake.spawnImpl })).toEqual({ failure: "https-not-enabled" });
@@ -105,7 +105,7 @@ describe("serve --tailscale", () => {
   });
 
   it("creates a missing data folder, private to this user, on a fresh install", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-ts-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-ts-"));
     try {
       const fresh = join(dir, "fresh");
       const served = await tailscaleServe(status, 8799, { dataDir: fresh, settleMs: 20, spawnImpl: fakeServe(null).spawnImpl });
@@ -119,7 +119,7 @@ describe("serve --tailscale", () => {
   });
 
   it("stops tailscale serve again when it cannot note the share", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-ts-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-ts-"));
     try {
       writeFileSync(join(dir, "file"), "");
       const fake = fakeServe(null);
@@ -131,7 +131,7 @@ describe("serve --tailscale", () => {
   });
 
   it("turns off a share a crashed run left behind, and nothing without its note", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-ts-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-ts-"));
     try {
       expect(await clearLeftoverTailscaleServe(dir)).toBe(false);
       writeFileSync(tailscaleMarker(dir), JSON.stringify({ cli: process.execPath, httpsPort: 443, localPort: 8799 }));

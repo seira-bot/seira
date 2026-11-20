@@ -8,7 +8,7 @@ import { runHeadless } from "./main.ts";
 import type { HeadlessIo } from "./output.ts";
 
 let fixture: VerificationServer;
-const dir = mkdtempSync(join(tmpdir(), "omb-connect-existing-"));
+const dir = mkdtempSync(join(tmpdir(), "seira-connect-existing-"));
 
 beforeAll(async () => { fixture = await launchVerificationServer(); }, 120_000);
 afterAll(async () => {
@@ -19,7 +19,7 @@ afterAll(async () => {
 async function api(path: string, body?: unknown) {
   const response = await fetch(fixture.info.url + path, {
     method: body === undefined ? "GET" : "POST",
-    headers: { "content-type": "application/json", "x-openmausbot-cli": "1", origin: fixture.info.url },
+    headers: { "content-type": "application/json", "x-seira-cli": "1", origin: fixture.info.url },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   expect(response.ok).toBe(true);

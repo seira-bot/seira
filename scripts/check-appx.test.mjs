@@ -17,7 +17,7 @@ const GOOD = `<?xml version="1.0" encoding="utf-8"?>
   <Applications>
     <Application Id="Seira" Executable="Seira.exe" EntryPoint="Windows.FullTrustApplication">
       <Extensions>
-        <uap:Extension Category="windows.protocol"><uap:Protocol Name="openmausbot"><uap:DisplayName>Seira package install</uap:DisplayName></uap:Protocol></uap:Extension>
+        <uap:Extension Category="windows.protocol"><uap:Protocol Name="seira"><uap:DisplayName>Seira package install</uap:DisplayName></uap:Protocol></uap:Extension>
         <desktop:Extension Category="windows.startupTask" Executable="Seira.exe" EntryPoint="Windows.FullTrustApplication"><desktop:StartupTask TaskId="SeiraStartup" Enabled="false" DisplayName="Seira" /></desktop:Extension>
       </Extensions>
     </Application>
@@ -35,10 +35,10 @@ describe("checkManifest", () => {
   it.each([
     ["the display name", GOOD.replace("<DisplayName>Seira</DisplayName>", "<DisplayName>Other</DisplayName>"), "DisplayName Seira"],
     ["the publisher name", GOOD.replace("PT Global Raya Oris Wijaya", "Someone"), "PublisherDisplayName"],
-    ["the identity name", GOOD.replace('Name="PTGLOBALRAYAORISWIJAYA.Seira"', 'Name="openmausbot"'), "Identity Name is openmausbot"],
+    ["the identity name", GOOD.replace('Name="PTGLOBALRAYAORISWIJAYA.Seira"', 'Name="seira"'), "Identity Name is seira"],
     ["the identity publisher", GOOD.replace("CN=9FC9B65D-F775-40DD-ACD9-79CFD31D124A", "CN=ms"), "Identity Publisher is CN=ms"],
     ["the version", GOOD.replace('Version="1.1.179.0"', 'Version="0.1.179.0"'), "Identity Version is 0.1.179.0, not 1.1.179.0"],
-    ["the protocol", GOOD.replace('Protocol Name="openmausbot"', 'Protocol Name="other"'), "windows.protocol"],
+    ["the protocol", GOOD.replace('Protocol Name="seira"', 'Protocol Name="other"'), "windows.protocol"],
     ["the full trust capability", GOOD.replace('Name="runFullTrust"', 'Name="internetClient"'), "runFullTrust"],
     ["the start-up task", GOOD.replace('TaskId="SeiraStartup"', 'TaskId="Other"'), "startup task SeiraStartup"],
     ["the start-up task being off", GOOD.replace('Enabled="false"', 'Enabled="true"'), "not off by default"],

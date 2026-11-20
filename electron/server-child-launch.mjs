@@ -30,5 +30,5 @@ export function serverChildLaunch({ resourcesPath, userData, env = process.env, 
     return real;
   }
   // Electron 43 utilityProcess ignores Node flags in execArgv, and a packaged Electron 43 app drops most NODE_OPTIONS, so --preserve-symlinks is not available.
-  return { entry: bootstrap, compileCacheDir, symlinkEnv: { OMB_SERVER_RESOURCES_LINK: fixed } };
+  return { entry: bootstrap, compileCacheDir, symlinkEnv: { SEIRA_SERVER_RESOURCES_LINK: fixed } };
 }

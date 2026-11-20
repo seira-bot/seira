@@ -60,9 +60,9 @@ const draft = { socialPost: [{ integrationId: "int_linkedin", date: "2026-11-02T
 beforeAll(async () => {
   cloud = await startFakePostiz();
   own = await startFakePostiz();
-  scratch = mkdtempSync(join(tmpdir(), "omb-postiz-e2e-"));
+  scratch = mkdtempSync(join(tmpdir(), "seira-postiz-e2e-"));
   writeFileSync(join(scratch, "tool-calls.json"), "[]");
-  fixture = await launchVerificationServer({ ...process.env, OMB_POSTIZ_CLOUD_URL: cloud.url, FAKE_CLAUDE_TOOL_CALLS_FILE: join(scratch, "tool-calls.json") });
+  fixture = await launchVerificationServer({ ...process.env, SEIRA_POSTIZ_CLOUD_URL: cloud.url, FAKE_CLAUDE_TOOL_CALLS_FILE: join(scratch, "tool-calls.json") });
 }, 60_000);
 
 afterAll(async () => {

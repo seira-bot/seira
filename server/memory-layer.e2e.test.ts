@@ -9,7 +9,7 @@ import { CAPTURE_MARKER } from "./memory-capture.ts";
 import { TIDY_MARKER } from "./memory-tidy.ts";
 
 it("recalls, captures, suggests, forgets and tidies a bot's memory", async () => {
-  const scratch = mkdtempSync(join(tmpdir(), "omb-memory-layer-"));
+  const scratch = mkdtempSync(join(tmpdir(), "seira-memory-layer-"));
   const routes = join(scratch, "routes.json");
   const prompts = join(scratch, "prompts.jsonl");
   const future = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);

@@ -1,4 +1,4 @@
-// MausBot on a real server in an isolated fixture: a new install's first bot, never deleted or archived, taken off the
+// Seira on a real server in an isolated fixture: a new install's first bot, never deleted or archived, taken off the
 // sidebar by its switch, and still holding a Chief's tools once another bot is the Chief. The fake engine holds its turn
 // open so this test can start the agents server that turn was handed and call create_bot the way the engine would.
 import { spawn } from "node:child_process";
@@ -6,7 +6,7 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { waitForExit } from "./testing/cleanup.ts";
-import { childEnv } from "./testing/omb-env.ts";
+import { childEnv } from "./testing/seira-env.ts";
 
 type McpServer = { command: string; args: string[]; env: Record<string, string> };
 type Answer = { id: number; result?: { content?: Array<{ text: string }>; isError?: boolean }; error?: { code: number; message: string } };
@@ -40,43 +40,43 @@ it("makes Seira a new install's first bot, never deleted, hidden by its switch, 
   const control = (args: string[]) => runControlSeira([...args, "--url", fixture.info.url]) as Promise<any>;
   const bots = async () => (await api("GET", "/api/bots")).body.bots as any[];
   try {
-    const [maus] = await bots();
-    // The fixture renames its starter; it is still the new install's MausBot.
-    expect(maus).toMatchObject({ color: "chrome", chiefOfStaff: true, defaultBot: {} });
-    expect(maus.messages.map((message: any) => [message.kind, message.helperIntro])).toEqual([["options", true]]);
+    const [seira] = await bots();
+    // The fixture renames its starter; it is still the new install's Seira.
+    expect(seira).toMatchObject({ color: "chrome", chiefOfStaff: true, defaultBot: {} });
+    expect(seira.messages.map((message: any) => [message.kind, message.helperIntro])).toEqual([["options", true]]);
 
-    const refused = await api("DELETE", `/api/bots/${maus.id}`);
+    const refused = await api("DELETE", `/api/bots/${seira.id}`);
     expect(refused.status).toBe(409);
-    expect(refused.body.error).toBe(`${maus.name} can't be deleted or archived. To take it off the sidebar, choose Hide in its menu, or turn off "Show ${maus.name} in the sidebar" in Settings → General.`);
-    expect((await api("PATCH", `/api/bots/${maus.id}`, { hidden: true })).status).toBe(400);
-    expect((await api("PATCH", `/api/bots/${maus.id}`, { sidebarHidden: true })).status).toBe(200);
-    expect((await bots()).find((bot) => bot.id === maus.id)?.sidebarHidden).toBe(true);
-    expect((await api("PATCH", `/api/bots/${maus.id}`, { sidebarHidden: false })).status).toBe(200);
-    expect((await bots()).find((bot) => bot.id === maus.id)?.sidebarHidden).toBe(false);
-    // A hidden MausBot comes back when it is renamed or moved to a department, unless the change itself says hidden.
+    expect(refused.body.error).toBe(`${seira.name} can't be deleted or archived. To take it off the sidebar, choose Hide in its menu, or turn off "Show ${seira.name} in the sidebar" in Settings → General.`);
+    expect((await api("PATCH", `/api/bots/${seira.id}`, { hidden: true })).status).toBe(400);
+    expect((await api("PATCH", `/api/bots/${seira.id}`, { sidebarHidden: true })).status).toBe(200);
+    expect((await bots()).find((bot) => bot.id === seira.id)?.sidebarHidden).toBe(true);
+    expect((await api("PATCH", `/api/bots/${seira.id}`, { sidebarHidden: false })).status).toBe(200);
+    expect((await bots()).find((bot) => bot.id === seira.id)?.sidebarHidden).toBe(false);
+    // A hidden Seira comes back when it is renamed or moved to a department, unless the change itself says hidden.
     const hiddenAfter = async (patch: Record<string, unknown>) => {
-      expect((await api("PATCH", `/api/bots/${maus.id}`, { sidebarHidden: true })).status).toBe(200);
-      expect((await api("PATCH", `/api/bots/${maus.id}`, patch)).status).toBe(200);
-      return (await bots()).find((bot) => bot.id === maus.id)?.sidebarHidden;
+      expect((await api("PATCH", `/api/bots/${seira.id}`, { sidebarHidden: true })).status).toBe(200);
+      expect((await api("PATCH", `/api/bots/${seira.id}`, patch)).status).toBe(200);
+      return (await bots()).find((bot) => bot.id === seira.id)?.sidebarHidden;
     };
     expect(await hiddenAfter({ color: "blue" })).toBe(true);
     expect(await hiddenAfter({ name: "Nova" })).toBe(false);
     expect(await hiddenAfter({ section: "C Suite" })).toBe(false);
     expect(await hiddenAfter({ section: "C Suite" })).toBe(true);
     expect(await hiddenAfter({ name: "Nova Two", sidebarHidden: true })).toBe(true);
-    expect((await api("PATCH", `/api/bots/${maus.id}`, { name: maus.name, section: null, sidebarHidden: false })).status).toBe(200);
+    expect((await api("PATCH", `/api/bots/${seira.id}`, { name: seira.name, section: null, sidebarHidden: false })).status).toBe(200);
 
     const { bot: clive } = await control(["new-bot", "--name", "Clive"]);
     expect((await api("PATCH", `/api/bots/${clive.id}`, { sidebarHidden: true })).status).toBe(400);
     expect((await api("PATCH", `/api/bots/${clive.id}`, { chiefOfStaff: true })).status).toBe(200);
-    expect((await bots()).find((bot) => bot.id === maus.id)?.chiefOfStaff).toBeFalsy();
+    expect((await bots()).find((bot) => bot.id === seira.id)?.chiefOfStaff).toBeFalsy();
 
-    await control(["send", "--bot", maus.id, "--text", "Stay active."]);
+    await control(["send", "--bot", seira.id, "--text", "Stay active."]);
     await expect.poll(() => existsSync(fixture.fixtureDumpPath), { timeout: 30_000 }).toBe(true);
     const launched = JSON.parse(readFileSync(fixture.fixtureDumpPath, "utf8")) as { systemPrompt: string; mcpConfig: { mcpServers: Record<string, McpServer> } };
     rmSync(fixture.fixtureDumpPath, { force: true });
     const agents = launched.mcpConfig.mcpServers.agents!;
-    expect(agents.env.OMB_CHIEF_OF_STAFF).toBe("1");
+    expect(agents.env.SEIRA_CHIEF_OF_STAFF).toBe("1");
     expect(launched.systemPrompt).toContain("You are also this person's Seira");
     expect(launched.systemPrompt).toContain("but you are not the Chief");
     const created = await callTool(agents, "create_bot", { name: "Scout", role: "Researcher", instructions: "Find what the person asks for." });
@@ -85,8 +85,8 @@ it("makes Seira a new install's first bot, never deleted, hidden by its switch, 
     const after = await bots();
     expect(after.find((bot) => bot.name === "Scout")?.chiefOfStaff).toBeFalsy();
     expect(after.filter((bot) => bot.chiefOfStaff).map((bot) => bot.id)).toEqual([clive.id]);
-    expect(after.filter((bot) => bot.defaultBot).map((bot) => bot.id)).toEqual([maus.id]);
-    await control(["interrupt", "--bot", maus.id]);
+    expect(after.filter((bot) => bot.defaultBot).map((bot) => bot.id)).toEqual([seira.id]);
+    await control(["interrupt", "--bot", seira.id]);
   } finally {
     await fixture.close();
   }
@@ -105,9 +105,9 @@ it("lets Seira read the unread notifications and mark finished work read, not on
   };
   const text = (answer: Answer) => answer.result?.content?.[0]?.text ?? "";
   try {
-    const [maus] = (await api("/api/bots")).bots as any[];
-    const agents = await launch(maus.id);
-    expect(agents.env.OMB_MAUSBOT).toBe("1");
+    const [seira] = (await api("/api/bots")).bots as any[];
+    const agents = await launch(seira.id);
+    expect(agents.env.SEIRA_SEIRA).toBe("1");
 
     const unread = await callTool(agents, "list_unread_notifications", {});
     expect(unread.result?.isError, text(unread)).toBeFalsy();
@@ -129,10 +129,10 @@ it("lets Seira read the unread notifications and mark finished work read, not on
 
     const { bot: clive } = await control(["new-bot", "--name", "Clive"]);
     const other = await launch(clive.id);
-    expect(other.env.OMB_MAUSBOT).toBe("0");
+    expect(other.env.SEIRA_SEIRA).toBe("0");
     expect((await callTool(other, "list_unread_notifications", {})).result?.isError ?? true).toBe(true);
     expect((await callTool(other, "mark_notifications_read", { ids: ["no-such-notification"] })).result?.isError ?? true).toBe(true);
-    await control(["interrupt", "--bot", maus.id]);
+    await control(["interrupt", "--bot", seira.id]);
     await control(["interrupt", "--bot", clive.id]);
   } finally {
     await fixture.close();

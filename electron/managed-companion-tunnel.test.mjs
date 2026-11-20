@@ -17,7 +17,7 @@ import {
 } from "./managed-companion-tunnel.mjs";
 
 const TOKEN = `eyJ${"a".repeat(120)}=`;
-const ENDPOINT = "https://c-installation.openmausbot.com";
+const ENDPOINT = "https://c-installation.seira.bot";
 const BINARY = "/trusted/cloudflared";
 const GUARDIAN = "/trusted/managed-companion-guardian.mjs";
 const RUNTIME = "/trusted/electron";
@@ -26,13 +26,13 @@ const ORIGIN_TARGET =
     ? {
         pid: 31337,
         socketPath:
-          "\\\\.\\pipe\\openmausbot-companion-origin-31337-12345678-1234-1234-1234-123456789abc",
+          "\\\\.\\pipe\\seira-companion-origin-31337-12345678-1234-1234-1234-123456789abc",
       }
-    : { pid: 31337, socketPath: "/tmp/omb-companion-origin-test/origin.sock" };
+    : { pid: 31337, socketPath: "/tmp/seira-companion-origin-test/origin.sock" };
 const temporaryDirectories = [];
 
 function temporaryDirectory() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omb-managed-tunnel-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "seira-managed-tunnel-"));
   temporaryDirectories.push(directory);
   return directory;
 }
@@ -68,7 +68,7 @@ function fakeChild(pid = 4242) {
 function healthyResponse() {
   return {
     ok: true,
-    text: async () => JSON.stringify({ app: "openmausbot" }),
+    text: async () => JSON.stringify({ app: "seira" }),
   };
 }
 
@@ -168,7 +168,7 @@ describe("cloudflared binary resolution", () => {
     const resourcesPath = path.join(
       path.parse(process.cwd()).root,
       "Applications",
-      "OpenMausBot",
+      "Seira",
       "Contents",
       "Resources",
     );
@@ -199,7 +199,7 @@ describe("cloudflared binary resolution", () => {
         appPath: "/checkout",
         platform: "linux",
         arch: "x64",
-        environment: { OMB_CLOUDFLARED_PATH: "./untrusted-cloudflared" },
+        environment: { SEIRA_CLOUDFLARED_PATH: "./untrusted-cloudflared" },
         exists: () => true,
       }),
     ).toBeNull();

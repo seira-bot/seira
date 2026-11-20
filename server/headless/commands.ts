@@ -19,7 +19,7 @@ const DAY = 24 * 3_600_000;
 async function doctorOnce(ctx: VerbContext): Promise<VerbOutcome> {
   const client = await ctx.client();
   // A shared server lets a local caller without a session count its engines, not list them: in the server's container
-  // (`docker compose exec omb openmausbot doctor`, as deploy/update.sh runs it) that count is the answer.
+  // (`docker compose exec seira seira doctor`, as deploy/update.sh runs it) that count is the answer.
   const counted = (refusal: unknown) => (refusal as { status?: unknown })?.status === 403
     ? client.json<Rec>("/api/health/engines").then((answer) => ({ counted: Number(answer?.engines) || 0 }), () => Promise.reject(refusal))
     : Promise.reject(refusal);
@@ -30,23 +30,23 @@ async function doctorOnce(ctx: VerbContext): Promise<VerbOutcome> {
   const availableCount = typeof models?.counted === "number" ? models.counted : availableEngines.length;
   const quietly = <T>(read: Promise<T>) => read.catch(() => null);
   const [server, session, config] = await Promise.all([
-    quietly(client.json<Rec>("/.well-known/openmausbot/environment")),
+    quietly(client.json<Rec>("/.well-known/seira/environment")),
     quietly(client.json<Rec>("/api/auth/session")),
     quietly(client.json<Rec>("/api/config")),
   ]);
   const problems: string[] = [];
   const warnings: string[] = [];
-  const isOmb = health.app === "openmausbot";
-  if (!isOmb) problems.push(`${client.baseUrl} answered, but it is not Seira`);
+  const isSeira = health.app === "seira";
+  if (!isSeira) problems.push(`${client.baseUrl} answered, but it is not Seira`);
   const tooOld = Boolean(server) && server!.capabilities?.jobs !== true;
   if (tooOld) problems.push(`Seira ${server!.version ?? "(unknown version)"} is too old for the headless commands: it cannot report a conversation's job`);
-  if (isOmb && !availableCount) problems.push("no engine is available: set one up with `seira engine set KIND --key-env VAR`");
+  if (isSeira && !availableCount) problems.push("no engine is available: set one up with `seira engine set KIND --key-env VAR`");
   if (session?.kind === "session" && typeof session.expiresAt === "number" && session.expiresAt - Date.now() < 14 * DAY) {
     warnings.push(`this session expires in ${Math.max(0, Math.floor((session.expiresAt - Date.now()) / DAY))} days: get a new one with seira connect`);
   }
   const browser = config?.browserEngine ?? null;
   if (browser && browser.kind !== "engine") warnings.push(`bots have no built-in browser here: ${browser.reason ?? "not installed"}${browser.installable ? " (install it with `seira browser install`)" : ""}`);
-  const ok = isOmb && !tooOld && availableCount > 0;
+  const ok = isSeira && !tooOld && availableCount > 0;
   const who = !session ? "unknown" : session.kind === "loopback"
     ? `this computer${session.trust === "service" ? " (as a local service, not the owner)" : " (the owner)"}`
     : `session "${session.label || "unnamed"}" with ${Array.isArray(session.scopes) && session.scopes.includes("admin") ? "full access" : "chat access"}${typeof session.expiresAt === "number" ? `, until ${new Date(session.expiresAt).toISOString().slice(0, 10)}` : ""}`;
@@ -58,7 +58,7 @@ async function doctorOnce(ctx: VerbContext): Promise<VerbOutcome> {
         ...(session.expiresAt !== undefined ? { expiresAt: session.expiresAt } : {}), ...(session.trust ? { trust: session.trust } : {}) } : null,
       browser, problems, warnings,
     },
-    exitCode: ok ? EXIT.done : isOmb && !tooOld ? EXIT.failed : EXIT.unreachable,
+    exitCode: ok ? EXIT.done : isSeira && !tooOld ? EXIT.failed : EXIT.unreachable,
     human: [
       `${server ? `Seira ${server.version} ("${server.label}")` : "Seira"} at ${client.baseUrl}: ${ok ? "ready" : "not ready"}`,
       `You are: ${who}`,

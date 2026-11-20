@@ -34,10 +34,10 @@ async function launch(port: number) {
   }, { timeout: 20_000, interval: 100 });
 }
 beforeAll(async () => {
-  home = mkdtempSync(join(tmpdir(), "omb-google-accounts-"));
+  home = mkdtempSync(join(tmpdir(), "seira-google-accounts-"));
   mkdirSync(join(home, "tmp"));
   const port = await freePortBlock([0, 1]); base = `http://127.0.0.1:${port}`;
-  logPath = join(tmpdir(), `omb-google-accounts-${port}-${process.pid}.log`);
+  logPath = join(tmpdir(), `seira-google-accounts-${port}-${process.pid}.log`);
   cli = join(home, "fake-antigravity.mjs");
   writeFileSync(cli, `#!/usr/bin/env node
 process.env.FAKE_ACP_AUTH_METHOD = "oauth-personal";

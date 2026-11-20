@@ -11,7 +11,7 @@ export const EXPECTED = Object.freeze({
   identityName: "PTGLOBALRAYAORISWIJAYA.Seira",
   publisher: "CN=9FC9B65D-F775-40DD-ACD9-79CFD31D124A",
   publisherDisplayName: "PT Global Raya Oris Wijaya",
-  protocol: "openmausbot",
+  protocol: "seira",
 });
 
 /** electron-builder 26.15.3 writes the Identity Publisher in single quotes. */

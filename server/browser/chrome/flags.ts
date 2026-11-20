@@ -150,6 +150,6 @@ export function chromeEnv(base: NodeJS.ProcessEnv, input: ChromeEnvInput, home: 
   }
   if (input.host !== "desktop" && input.timezone) env.TZ = input.timezone;
   if (input.sandboxHelper) env.CHROME_DEVEL_SANDBOX = input.sandboxHelper;
-  if (input.profileMarker) env.OMB_BROWSER_PROFILE = input.profileMarker;
+  if (input.profileMarker) env.SEIRA_BROWSER_PROFILE = input.profileMarker;
   return env;
 }

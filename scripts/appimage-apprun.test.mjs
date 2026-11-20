@@ -11,11 +11,11 @@ const { generateAppRunScript } = fromBuilder("app-builder-lib/out/targets/appima
 
 const SANDBOX_OFF = /--no-sandbox|--disable-setuid-sandbox|--disable-gpu-sandbox/;
 const appRun = generateAppRunScript({
-  DesktopFileName: "openmausbot.desktop",
-  ExecutableName: "openmausbot",
+  DesktopFileName: "seira.desktop",
+  ExecutableName: "seira",
   ProductName: "Seira",
   ProductFilename: "Seira",
-  ResourceName: "appimagekit-openmausbot",
+  ResourceName: "appimagekit-seira",
 });
 
 const dirs = [];
@@ -38,7 +38,7 @@ function launch(probeStatus, args) {
   const record = path.join(root, "electron-args");
   writeExecutable(path.join(appDir, "AppRun"), appRun);
   writeExecutable(
-    path.join(appDir, "openmausbot"),
+    path.join(appDir, "seira"),
     `#!/bin/sh\nfor arg in "$@"; do printf '%s\\n' "$arg"; done > ${JSON.stringify(record)}\n`,
   );
   writeExecutable(path.join(fakeBin, "unshare"), `#!/bin/sh\nexit ${probeStatus}\n`);
@@ -66,10 +66,10 @@ describe("AppImage AppRun", () => {
   });
 
   it("starts Electron with the arguments unchanged when user namespaces work", () => {
-    const run = launch(0, ["--first", "two words", "openmausbot://install?x=1"]);
+    const run = launch(0, ["--first", "two words", "seira://install?x=1"]);
     expect(run.status).toBe(0);
     expect(run.started).toBe(true);
-    expect(run.electronArgs).toEqual(["--first", "two words", "openmausbot://install?x=1"]);
+    expect(run.electronArgs).toEqual(["--first", "two words", "seira://install?x=1"]);
   });
 
   it("does not start Electron and names the Ubuntu package when user namespaces are blocked", () => {

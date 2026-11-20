@@ -28,11 +28,11 @@ function fixture(options: { dataDir?: string; sections?: string[]; outcomes?: Se
   reactorOf?: DevsReportsDeps["reactorOf"]; direct?: boolean; appVersion?: string; clock?: number;
   /** The conversations, kept across a restart (another fixture on the same data). */
   threads?: Map<string, Message[]>;
-  /** The MausBot team's answer to each question about this app's reports; none: no answer (offline). */
+  /** The Seira team's answer to each question about this app's reports; none: no answer (offline). */
   answer?: (question: ReportStatusQuestion) => ReportStatusAnswer | null;
   /** Replaces the sender that answers from `outcomes`. */
   send?: DevsReportsDeps["send"] } = {}) {
-  const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "omb-devs-reports-"));
+  const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "seira-devs-reports-"));
   if (!options.dataDir) dirs.push(dataDir);
   const listeners = new Set<(change: StoreChange) => void>();
   const threads = options.threads ?? new Map<string, Message[]>();
@@ -269,9 +269,9 @@ describe("a message that tags @devs", () => {
     const [words, rest] = description.split("\n\nWhat they wrote: ");
     expect(words).toBe(`help me send on it, my token is «redacted ${token.length} chars»`);
     expect(rest).toMatch(/^> Quoted message:\n> The relay failed\.\n> I only send a report when your message tags @devs\.\n/);
-    expect(JSON.stringify(fx.sent[0])).not.toContain("omb-citation");
+    expect(JSON.stringify(fx.sent[0])).not.toContain("seira-citation");
     expect(JSON.stringify(fx.sent[0])).not.toContain(token);
-    expect(readFileSync(join(fx.dataDir, DEVS_REPORTS_FILE), "utf8")).not.toContain("omb-citation");
+    expect(readFileSync(join(fx.dataDir, DEVS_REPORTS_FILE), "utf8")).not.toContain("seira-citation");
     fx.stop();
   });
 
@@ -362,15 +362,15 @@ describe("a message that tags @devs", () => {
   it("drops a marker it cannot read too, so nothing encoded slips past redaction", async () => {
     const fx = fixture();
     const token = `ghp_${"t".repeat(36)}`;
-    const message = fx.person("scout-main", `<!--omb-citation-v1:${Buffer.from(JSON.stringify({ comment: token })).toString("base64url")}-->\n@devs it broke`);
+    const message = fx.person("scout-main", `<!--seira-citation-v1:${Buffer.from(JSON.stringify({ comment: token })).toString("base64url")}-->\n@devs it broke`);
     fx.advance(NO_ANSWER_MS);
     await fx.settle();
-    expect(JSON.stringify(fx.view("scout-main", message.id))).not.toContain("omb-citation");
+    expect(JSON.stringify(fx.view("scout-main", message.id))).not.toContain("seira-citation");
     await fx.press("scout-main", message.id);
     expect(fx.sent).toHaveLength(1);
     expect(fx.sent[0]!.description.split("\n")[0]).toBe("it broke");
-    expect(JSON.stringify(fx.sent[0])).not.toContain("omb-citation");
-    expect(readFileSync(join(fx.dataDir, DEVS_REPORTS_FILE), "utf8")).not.toContain("omb-citation");
+    expect(JSON.stringify(fx.sent[0])).not.toContain("seira-citation");
+    expect(readFileSync(join(fx.dataDir, DEVS_REPORTS_FILE), "utf8")).not.toContain("seira-citation");
     fx.stop();
   });
 
@@ -645,7 +645,7 @@ describe("a report that cannot go yet", () => {
   });
 
   it("still sends a report an older version saved, with the older system lines in the person's language", async () => {
-    const dataDir = mkdtempSync(join(tmpdir(), "omb-devs-reports-"));
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-devs-reports-"));
     dirs.push(dataDir);
     const payload = { installId: "4b7c1f2e-0a9d-4c2b-9f1e-6d5a4b3c2d1e", source: "bot", description: "it broke", appVersion: "0.1.128", platform: "linux x64, desktop app", diagnostics: "Bot: Scout (scout)" };
     const due = Date.UTC(2026, 9, 27, 9, 0);
@@ -730,7 +730,7 @@ describe("a group chat", () => {
 });
 
 describe("closing the loop on a report", () => {
-  /** Every report asked about, answered as the MausBot team would: `fixedIn` for all of them, `notify` as given. */
+  /** Every report asked about, answered as the Seira team would: `fixedIn` for all of them, `notify` as given. */
   const team = (state: { status: "received" | "fixed"; fixedIn: string | null; notify: boolean }) => (question: ReportStatusQuestion): ReportStatusAnswer =>
     ({ reports: question.ids.map((id) => ({ id, status: state.status, fixedIn: state.fixedIn })), notify: state.notify });
   /** A report from Scout's chat by Bob, with Scout's summary, that Bob sent; the person's message. */
