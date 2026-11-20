@@ -1,5 +1,7 @@
 // ~/.seira/config.json, with env vars overriding its credentials.
 import { readFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
+import "../electron/legacy-env-boot.mjs";
+import { isHarnessEnvName } from "../electron/legacy-env.mjs";
 import { dataHome } from "./data-dir.ts";
 import { migrateLegacyData } from "../electron/legacy-migrate.mjs";
 import { signInFromEnv } from "./sign-in-env.ts";
@@ -842,7 +844,7 @@ function openCodeProviderKeyNameRefusal(name: string): string | undefined {
     return "Use the name the provider reads its key from: capitals, ending in _API_KEY, _KEY or _TOKEN, such as VENICE_API_KEY.";
   }
   if (name === "OPENCODE_API_KEY") return "Save the OpenCode key in the OpenCode API key box instead.";
-  const reserved = name.startsWith("OPENCODE_") || name.startsWith("SEIRA_")
+  const reserved = name.startsWith("OPENCODE_") || isHarnessEnvName(name)
     || (WORKSPACE_CREDENTIAL_ENV as readonly string[]).includes(name)
     || ((PROVIDER_CREDENTIAL_ENV as readonly string[]).includes(name) && !(OPENCODE_PROVIDER_ENV as readonly string[]).includes(name));
   return reserved ? `Seira keeps ${name} for itself, so OpenCode can't be given it here. Put this key in opencode.json instead.` : undefined;

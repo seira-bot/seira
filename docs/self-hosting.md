@@ -294,7 +294,8 @@ Debian 13 and Fedora), SELinux hosts and ARM64 have not been tried.
 
 ## Reference
 
-The rest of this page explains each part in detail.
+The rest of this page explains each part in detail. Settings read from the environment are listed in
+[Environment variables](environment-variables.md), including how to move from the old `OMB_` prefix.
 
 ## What works headless (and what doesn't)
 

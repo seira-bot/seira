@@ -50,7 +50,7 @@ export const BOX_ENV_NEVER: ReadonlySet<string> = new Set([
   "SEIRA_DATA_DIR", "SEIRA_STATIC_DIR", "SEIRA_DUCKDB_DIR", "SEIRA_PORT", "SEIRA_WEBHOOK_PORT",
   "SEIRA_TOKEN", "SEIRA_URL",
 ]);
-export const BOX_ENV_NEVER_PREFIXES: readonly string[] = ["SEIRA_CLOUD_"];
+export const BOX_ENV_NEVER_PREFIXES: readonly string[] = ["SEIRA_CLOUD_", "OMB_"];
 
 /** `allow` is what one spawn vouches for: the keys the person saved for its engine, under whatever name that engine reads
  * (NANO_GPT_API_KEY, OPENCODE_API_KEY). Security: it lifts the allow-list and `deny` for that process only, and never for

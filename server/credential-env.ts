@@ -49,13 +49,17 @@ export const CONTROL_PLANE_ENV_PREFIX = "SEIRA_CLOUD_";
 /** Names compare case-insensitively because Windows environments do. */
 export function stripControlPlaneEnv(env: Record<string, string | undefined>): void {
   for (const key of Object.keys(env)) {
-    const name = key.toUpperCase();
+    const upper = key.toUpperCase();
+    const name = upper.startsWith("OMB_") ? `SEIRA_${upper.slice("OMB_".length)}` : upper;
     if (name.startsWith(CONTROL_PLANE_ENV_PREFIX) || (CONTROL_PLANE_ENV as readonly string[]).includes(name)) delete env[key];
   }
 }
 
 export function stripWorkspaceCredentialEnv(env: Record<string, string | undefined>): void {
-  for (const key of WORKSPACE_CREDENTIAL_ENV) delete env[key];
+  for (const key of WORKSPACE_CREDENTIAL_ENV) {
+    delete env[key];
+    if (key.startsWith("SEIRA_")) delete env[`OMB_${key.slice("SEIRA_".length)}`];
+  }
   stripControlPlaneEnv(env);
 }
 
