@@ -57,6 +57,14 @@ test("an empty current value gives way to a set old value", () => {
   assert.deepEqual(both, { SEIRA_PORT: "" });
 });
 
+test("prefixes match without regard to letter case, and the adopted name is in capitals", () => {
+  assert.equal(isHarnessEnvName("Omb_Control_Token"), true);
+  assert.equal(isHarnessEnvName("seira_control_token"), true);
+  const env = { Omb_Data_Dir: "/fixture" };
+  adoptLegacyEnv(env);
+  assert.deepEqual(env, { SEIRA_DATA_DIR: "/fixture" });
+});
+
 test("a process that imports the boot module sees the old name under the new one, with a warning and no value", () => {
   const boot = fileURLToPath(new URL("./legacy-env-boot.mjs", import.meta.url));
   const fixture = mkdtempSync(join(tmpdir(), "seira-legacy-env-"));
