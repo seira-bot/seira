@@ -13,12 +13,12 @@ export interface ServiceSpec {
   home: string;
   bindsLowPorts: boolean;
   label?: string;
-  /** How the person runs the CLI by hand, when it isn't `openmausbot` (a copy installed for the service). */
+  /** How the person runs the CLI by hand, when it isn't `seira` (a copy installed for the service). */
   cliPrefix?: string;
 }
 
-export const SYSTEMD_UNIT_NAME = "openmausbot.service";
-export const LAUNCHD_LABEL = "com.openmausbot.serve";
+export const SYSTEMD_UNIT_NAME = "seira.service";
+export const LAUNCHD_LABEL = "com.seira.serve";
 
 function quoteSystemd(value: string): string {
   // systemd's ExecStart splits on whitespace and understands double quotes.
@@ -46,8 +46,8 @@ export function systemdUnit(spec: ServiceSpec): string {
     `User=${spec.user}`,
     `WorkingDirectory=${spec.home}`,
     `Environment=HOME=${spec.home}`,
-    `Environment=OMB_DATA_DIR=${spec.dataDir}`,
-    ...(spec.cliPrefix ? [`Environment=${quoteSystemd(`OMB_CLI_PREFIX=${spec.cliPrefix}`)}`] : []),
+    `Environment=SEIRA_DATA_DIR=${spec.dataDir}`,
+    ...(spec.cliPrefix ? [`Environment=${quoteSystemd(`SEIRA_CLI_PREFIX=${spec.cliPrefix}`)}`] : []),
     `ExecStart=${serviceCommand(spec).map(quoteSystemd).join(" ")}`,
     "Restart=always",
     "RestartSec=3",
@@ -84,9 +84,9 @@ export function launchdPlist(spec: ServiceSpec): string {
     "\t<dict>",
     "\t\t<key>HOME</key>",
     `\t\t<string>${xml(spec.home)}</string>`,
-    "\t\t<key>OMB_DATA_DIR</key>",
+    "\t\t<key>SEIRA_DATA_DIR</key>",
     `\t\t<string>${xml(spec.dataDir)}</string>`,
-    ...(spec.cliPrefix ? ["\t\t<key>OMB_CLI_PREFIX</key>", `\t\t<string>${xml(spec.cliPrefix)}</string>`] : []),
+    ...(spec.cliPrefix ? ["\t\t<key>SEIRA_CLI_PREFIX</key>", `\t\t<string>${xml(spec.cliPrefix)}</string>`] : []),
     "\t\t<key>PATH</key>",
     "\t\t<string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>",
     "\t</dict>",
@@ -137,8 +137,8 @@ export function servicePlan(platform: NodeJS.Platform, dataDir: string, home = h
   return null;
 }
 
-export const SENTINEL_LAUNCHD_LABEL = "com.openmausbot.sentinel";
-export const SENTINEL_SYSTEMD_NAME = "openmausbot-sentinel";
+export const SENTINEL_LAUNCHD_LABEL = "com.seira.sentinel";
+export const SENTINEL_SYSTEMD_NAME = "seira-sentinel";
 export const SENTINEL_INTERVAL_SECONDS = 120;
 
 export type SentinelServiceSpec = Pick<ServiceSpec, "node" | "script" | "dataDir" | "home"> & {
@@ -153,9 +153,9 @@ export function shippedSentinelCli(
 ): { node: string; script: string } | null {
   const candidates = platform === "darwin"
     ? ["/Applications/Seira.app", join(home, "Applications", "Seira.app")].map((app) => ({
-      node: join(app, "Contents", "MacOS", "Seira"), script: join(app, "Contents", "Resources", "server", "openmausbot.js"),
+      node: join(app, "Contents", "MacOS", "Seira"), script: join(app, "Contents", "Resources", "server", "seira.js"),
     }))
-    : platform === "linux" ? [{ node: "/opt/Seira/openmausbot", script: "/opt/Seira/resources/server/openmausbot.js" }] : [];
+    : platform === "linux" ? [{ node: "/opt/Seira/seira", script: "/opt/Seira/resources/server/seira.js" }] : [];
   return candidates.find((cli) => exists(cli.node) && exists(cli.script) && hasSentinel(cli.script)) ?? null;
 }
 
@@ -317,6 +317,6 @@ export function currentUser(): string {
   try {
     return userInfo().username;
   } catch {
-    return process.env.USER || process.env.USERNAME || "openmausbot";
+    return process.env.USER || process.env.USERNAME || "seira";
   }
 }

@@ -31,7 +31,7 @@ describe("the exchange with the control plane", () => {
     try {
       const signIn = createEmailSignIn({
         allow: { admins: ["her@example.test"], members: ["@team.test"] },
-        env: { ...process.env, OMB_CONTROL_PLANE_URL: stub.url },
+        env: { ...process.env, SEIRA_CONTROL_PLANE_URL: stub.url },
       });
       expect(signIn.enabled()).toBe(true);
       expect(await signIn.start("nobody@example.test")).toMatchObject({ ok: false, status: 403 });
@@ -60,16 +60,16 @@ describe("the exchange with the control plane", () => {
   it("is off with an empty allow-list and says so when the sign-in service is down", async () => {
     const off = createEmailSignIn({ allow: () => ({ admins: [], members: [] }) });
     expect(off.enabled()).toBe(false);
-    const down = createEmailSignIn({ allow: { admins: ["a@b.test"], members: [] }, env: { ...process.env, OMB_CONTROL_PLANE_URL: "http://127.0.0.1:9" } });
+    const down = createEmailSignIn({ allow: { admins: ["a@b.test"], members: [] }, env: { ...process.env, SEIRA_CONTROL_PLANE_URL: "http://127.0.0.1:9" } });
     expect(await down.start("a@b.test")).toMatchObject({ ok: false, status: 502 });
   });
 
   it("is off without a mail server and without a phone account service, and on with either one", () => {
     const allow = { admins: ["a@b.test"], members: [] };
     expect(createEmailSignIn({ allow, env: {} }).enabled()).toBe(false);
-    expect(createEmailSignIn({ allow, env: { OMB_CONTROL_PLANE_URL: "ftp://nope" } }).enabled()).toBe(false);
-    expect(createEmailSignIn({ allow, env: { OMB_CONTROL_PLANE_URL: "https://accounts.example.test" } }).enabled()).toBe(true);
+    expect(createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: "ftp://nope" } }).enabled()).toBe(false);
+    expect(createEmailSignIn({ allow, env: { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test" } }).enabled()).toBe(true);
     expect(createEmailSignIn({ allow, env: {}, client: {} as ControlPlaneClient }).enabled()).toBe(true);
-    expect(createEmailSignIn({ allow, env: { OMB_SIGNIN_SMTP_URL: "smtp://mail.example.test:25" } }).enabled()).toBe(true);
+    expect(createEmailSignIn({ allow, env: { SEIRA_SIGNIN_SMTP_URL: "smtp://mail.example.test:25" } }).enabled()).toBe(true);
   });
 });

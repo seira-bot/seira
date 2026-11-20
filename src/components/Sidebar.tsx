@@ -23,7 +23,7 @@ import type { LocaleKey } from "@/locales";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { BulkSelectFilters, ThreadListFooter, deleteThreadsInBulk, retitleThreadsInBulk, useBulkSelect } from "./BulkSelectBar";
 import { SidebarBotThreadsPeek } from "./SidebarBotThreadsPeek";
-import { RoomMark, StackedMauses } from "./StackedMauses";
+import { RoomMark, StackedSeiras } from "./StackedSeiras";
 import { SimpleRoomStack, SimpleRoomText } from "./SidebarSimpleRoom";
 import { LocalComputerAutoWarning } from "./LocalComputerAutoWarning";
 import { nextRename } from "@/lib/rename";
@@ -203,7 +203,7 @@ export const GroupListItem = memo(function GroupListItem({
       {advThread ? <AdvancedThreadText bot={members[0]} name={group.name} unread={group.unread} time={last && formatRowTime(last.at)} /> : advRow ? <>
         <AdvancedRoomStack members={members} />
         <AdvancedRoomText name={group.name} unread={group.unread} time={last && formatRowTime(last.at)} preview={group.description || groupPreview(group, bots, instances, advanced)} expanded={expanded} />
-      </> : simpleRow ? <SimpleRoomStack members={members} /> : group.dm ? <StackedMauses members={members} density={railTile ? "comfortable" : density} large={railTile} /> : <RoomMark density={railTile ? "comfortable" : density} large={simpleRow || railTile} />}
+      </> : simpleRow ? <SimpleRoomStack members={members} /> : group.dm ? <StackedSeiras members={members} density={railTile ? "comfortable" : density} large={railTile} /> : <RoomMark density={railTile ? "comfortable" : density} large={simpleRow || railTile} />}
       {advRow ? null : simpleRow ? <SimpleRoomText name={group.name} unread={group.unread} time={last && formatTime(last.at)} preview={group.description || groupPreview(group, bots, instances, advanced)} expanded={expanded} /> : (
       <div className={cn("min-w-0 flex-1", density === "icons" && "hidden")}>
         <div className="flex items-baseline justify-between gap-2">

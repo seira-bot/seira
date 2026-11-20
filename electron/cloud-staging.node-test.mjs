@@ -1,27 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { CLOUD_ORIGIN, SEIRA_CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN, checkoutDestination, cloudOrigin, cloudTarget, createCloudAccountClient } from "./cloud-account.mjs";
+import { CLOUD_ORIGIN, SEIRA_HOSTED_CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN, checkoutDestination, cloudOrigin, cloudTarget, createCloudAccountClient } from "./cloud-account.mjs";
 
 const accessToken = `omc_${"S".repeat(43)}`;
 
-test("OMB_CLOUD_STAGING=1, and only that, points the app at the fixed staging Admin with its own token file", () => {
+test("SEIRA_CLOUD_STAGING=1, and only that, points the app at the fixed staging Admin with its own token file", () => {
   assert.deepEqual(cloudTarget({}, "upstream"), { origin: CLOUD_ORIGIN, kind: "upstream", staging: false, file: "cloud-account.bin", saved: "cloud-accounts.bin", places: "account-places.json", environments: "environments.json", sync: "cloud-sync", look: "cloud-home-look.json" });
-  assert.deepEqual(cloudTarget({ OMB_CLOUD_STAGING: "1" }), { origin: "https://omb-cloud-staging.fly.dev", kind: "staging", staging: true, file: "cloud-account-staging.bin", saved: "cloud-accounts-staging.bin", places: "account-places-staging.json",
+  assert.deepEqual(cloudTarget({ SEIRA_CLOUD_STAGING: "1" }), { origin: "https://seira-cloud-staging.fly.dev", kind: "staging", staging: true, file: "cloud-account-staging.bin", saved: "cloud-accounts-staging.bin", places: "account-places-staging.json",
     environments: "environments-staging.json", sync: "cloud-sync-staging", look: "cloud-home-look-staging.json" });
-  const production = Object.values(cloudTarget({}, "upstream")), staging = Object.values(cloudTarget({ OMB_CLOUD_STAGING: "1" }));
+  const production = Object.values(cloudTarget({}, "upstream")), staging = Object.values(cloudTarget({ SEIRA_CLOUD_STAGING: "1" }));
   assert.ok(staging.filter(value => typeof value === "string").every(name => !production.includes(name)), "no file or address shared with production");
-  assert.equal(STAGING_CLOUD_ORIGIN, "https://omb-cloud-staging.fly.dev");
-  for (const value of ["0", "true", "yes", " 1", "1 ", "01", "2", "", "https://evil.example.test", "https://omb-cloud-staging.fly.dev"]) {
-    assert.deepEqual(cloudTarget({ OMB_CLOUD_STAGING: value }), cloudTarget({}), JSON.stringify(value));
+  assert.equal(STAGING_CLOUD_ORIGIN, "https://seira-cloud-staging.fly.dev");
+  for (const value of ["0", "true", "yes", " 1", "1 ", "01", "2", "", "https://evil.example.test", "https://seira-cloud-staging.fly.dev"]) {
+    assert.deepEqual(cloudTarget({ SEIRA_CLOUD_STAGING: value }), cloudTarget({}), JSON.stringify(value));
   }
-  assert.deepEqual(cloudTarget({ OMB_CLOUD_STAGING_URL: "https://evil.example.test" }), cloudTarget({}), "only OMB_CLOUD_ORIGIN names an address");
-  assert.deepEqual(cloudTarget(undefined).origin, process.env.OMB_CLOUD_STAGING === "1" ? STAGING_CLOUD_ORIGIN : SEIRA_CLOUD_ORIGIN);
+  assert.deepEqual(cloudTarget({ SEIRA_CLOUD_STAGING_URL: "https://evil.example.test" }), cloudTarget({}), "only SEIRA_CLOUD_ORIGIN names an address");
+  assert.deepEqual(cloudTarget(undefined).origin, process.env.SEIRA_CLOUD_STAGING === "1" ? STAGING_CLOUD_ORIGIN : SEIRA_HOSTED_CLOUD_ORIGIN);
 });
 
 test("the staging address is the one exact https origin; staging checkouts are only Dodo's test page", () => {
   assert.equal(cloudOrigin(STAGING_CLOUD_ORIGIN), STAGING_CLOUD_ORIGIN);
-  for (const value of ["http://omb-cloud-staging.fly.dev", `${STAGING_CLOUD_ORIGIN}/`, `${STAGING_CLOUD_ORIGIN}:8443`, "https://omb-cloud-staging.fly.dev.evil.test", "https://evil.fly.dev"]) {
+  for (const value of ["http://seira-cloud-staging.fly.dev", `${STAGING_CLOUD_ORIGIN}/`, `${STAGING_CLOUD_ORIGIN}:8443`, "https://seira-cloud-staging.fly.dev.evil.test", "https://evil.fly.dev"]) {
     assert.throws(() => cloudOrigin(value), /Invalid Seira Cloud address/, value);
   }
   const test = "https://test.checkout.dodopayments.com/session/cks_1", live = "https://checkout.dodopayments.com/session/cks_1";
@@ -46,7 +46,7 @@ test("a staging client talks only to the staging Admin, says it is staging, and 
     if (path === "/api/cloud/desktop/checkout") return answer(200, { cloudContractVersion: 1, url: checkoutUrl });
     return answer(404, { error: "not_found" });
   };
-  const client = createCloudAccountClient({ origin: cloudTarget({ OMB_CLOUD_STAGING: "1" }).origin, fetch, deviceName: "Staging VM", platform: "linux", appVersion: "0.1.113",
+  const client = createCloudAccountClient({ origin: cloudTarget({ SEIRA_CLOUD_STAGING: "1" }).origin, fetch, deviceName: "Staging VM", platform: "linux", appVersion: "0.1.113",
     store: { read: async () => saved, write: async value => { saved = value; } }, openBrowser: async url => { browsers.push(url); }, onState: state => states.push(state),
     setTimer: () => 1, clearTimer: () => {} });
   try {

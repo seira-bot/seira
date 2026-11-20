@@ -16,7 +16,7 @@ import { freePortBlock } from "./testing/ports.ts";
 import { readRegistry, writeRegistry } from "./testing/registry.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
-const HOST = "omb-t-0123456789ab.fly.dev";
+const HOST = "seira-t-0123456789ab.fly.dev";
 const PERSONAL = "My Cloud is personal: only your own devices can connect.";
 const secret = randomBytes(32).toString("base64url");
 let home = "", dataDir = "", base = "", port = 0, log = "";
@@ -44,7 +44,7 @@ async function adminPairing(): Promise<string> {
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const response = await fetch(`${base}/api/cloud/pairing`, { method: "POST", headers: {
     host: HOST, "x-forwarded-for": "203.0.113.9", "x-forwarded-proto": "https", "content-type": "application/json",
-    "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
+    "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
   }, body });
   const granted = await response.json() as { code: string };
   return (await api("POST", "/api/auth/pair", { body: { code: granted.code } })).body.token;
@@ -80,10 +80,10 @@ async function boot(asCloud: boolean) {
   child = spawn(process.execPath, ["--import", offlinePrelude, join(SERVER_DIR, "index.ts")], {
     cwd: join(SERVER_DIR, ".."),
     env: {
-      PATH: process.env.PATH, HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
+      PATH: process.env.PATH, HOME: home, USERPROFILE: home, SEIRA_DATA_DIR: dataDir, SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1),
       ...(asCloud ? {
-        OMB_CLOUD_ROLE: "home", OMB_BOT_BOX: "0", OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
-        OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_PUBLIC_URL: `https://${HOST}`,
+        SEIRA_CLOUD_ROLE: "home", SEIRA_BOT_BOX: "0", SEIRA_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test",
+        SEIRA_CLOUD_BOOTSTRAP_SECRET: secret, SEIRA_PUBLIC_URL: `https://${HOST}`,
       } : {}),
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -101,8 +101,8 @@ async function boot(asCloud: boolean) {
 async function shutdown() { if (child) await waitForExit(child, { signal: "SIGTERM" }); child = undefined; }
 
 beforeAll(async () => {
-  home = mkdtempSync(join(tmpdir(), "omb-cloud-personal-"));
-  dataDir = join(home, ".openmausbot");
+  home = mkdtempSync(join(tmpdir(), "seira-cloud-personal-"));
+  dataDir = join(home, ".seira");
   mkdirSync(dataDir, { recursive: true });
   mkdirSync(project(), { recursive: true });
   const cli = join(home, "held-claude.mjs");

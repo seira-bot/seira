@@ -150,7 +150,7 @@ test("locked or malformed storage is fail-closed and secret-free", async () => {
 });
 
 test("a saved schedule this computer can no longer decrypt is removed, and turning backups on again is the one next step", async t => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "omb-schedule-unreadable-")); t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "seira-schedule-unreadable-")); t.after(() => fs.rm(root, { recursive: true, force: true }));
   const file = path.join(root, "company-backup-schedule.bin");
   const encryption = { available: async () => true, encrypt: async text => Buffer.from(text).map(byte => byte ^ 0x33),
     decrypt: async () => { throw new Error("Error while decrypting the ciphertext provided to safeStorage.decryptString."); } };

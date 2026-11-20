@@ -159,7 +159,7 @@ try {
     await parkUntilSignal();
   } else {
     mkdirSync(shots, { recursive: true });
-    const profile = mkdtempSync(join(tmpdir(), "omb-frame-chrome-"));
+    const profile = mkdtempSync(join(tmpdir(), "seira-frame-chrome-"));
     const page = await openHeadlessChrome(profile);
     const wanted = (name: string) => !only || only.has(name);
     try {

@@ -1,4 +1,4 @@
-// Cua-backed Local VM: OMB owns only the sandbox boundary; desktop automation is Cua Driver's (`cua-driver mcp` in the container).
+// Cua-backed Local VM: Seira owns only the sandbox boundary; desktop automation is Cua Driver's (`cua-driver mcp` in the container).
 import { execFileInGroupAsync } from "./group-exec.ts";
 import { createHash, randomBytes } from "node:crypto";
 import { lstatSync } from "node:fs";
@@ -39,7 +39,7 @@ import {
   IMAGE_LAYER_VERSION,
   IMAGE_LAYER_LABEL,
   IMAGE,
-  OPENMAUSBOT_IMAGE,
+  SEIRA_IMAGE,
   MANAGED_LABEL,
   DRIVER_LABEL,
   BASE_IMAGE_LABEL,
@@ -58,7 +58,7 @@ export {
   IMAGE_LAYER_VERSION,
   IMAGE_LAYER_LABEL,
   IMAGE,
-  OPENMAUSBOT_IMAGE,
+  SEIRA_IMAGE,
   MANAGED_LABEL,
   DRIVER_LABEL,
   BASE_IMAGE_LABEL,
@@ -79,9 +79,9 @@ export type CommandRunner = (
 ) => Promise<{ stdout: string }>;
 
 export const CONTAINER = "seira-computer";
-export const OPENMAUSBOT_CONTAINER = "openmausbot-computer";
-export const WORKSPACE_LABEL = "com.openmausbot.workspace";
-export const TARGET_LABEL = "com.openmausbot.local-vm-target";
+export const SEIRA_CONTAINER = "seira-computer";
+export const WORKSPACE_LABEL = "com.seira.workspace";
+export const TARGET_LABEL = "com.seira.local-vm-target";
 export const VM_WORKSPACE_DIR = join(DATA_DIR, "vm-home");
 export const DISPLAY = ":1";
 
@@ -110,7 +110,7 @@ export interface LocalVmTarget {
 export const SHARED_LOCAL_VM_TARGET: LocalVmTarget = {
   key: "shared",
   containerName: CONTAINER,
-  legacyContainerName: OPENMAUSBOT_CONTAINER,
+  legacyContainerName: SEIRA_CONTAINER,
   workspaceDir: VM_WORKSPACE_DIR,
   viewerPort: HOST_VIEWER_PORT,
   label: "shared",
@@ -123,7 +123,7 @@ export function perBotLocalVmTarget(botId: string): LocalVmTarget {
   return {
     key: `bot:${digest}`,
     containerName: `${CONTAINER}-${short}`,
-    legacyContainerName: `${OPENMAUSBOT_CONTAINER}-${short}`,
+    legacyContainerName: `${SEIRA_CONTAINER}-${short}`,
     workspaceDir: join(DATA_DIR, "vm-homes", short),
     viewerPort: null,
     label: digest,
@@ -135,7 +135,7 @@ export function poolLocalVmTarget(seat: number): LocalVmTarget {
   return {
     key: `pool:${seat}`,
     containerName: `${CONTAINER}-p${seat}`,
-    legacyContainerName: `${OPENMAUSBOT_CONTAINER}-p${seat}`,
+    legacyContainerName: `${SEIRA_CONTAINER}-p${seat}`,
     workspaceDir: join(DATA_DIR, "vm-homes", `pool-${seat}`),
     viewerPort: null,
     label: `pool-${seat}`,
@@ -149,7 +149,7 @@ export function localVmContainerName(target: LocalVmTarget): string {
 }
 
 function isLocalVmImageRef(ref: string | undefined): boolean {
-  return ref === IMAGE || ref === OPENMAUSBOT_IMAGE;
+  return ref === IMAGE || ref === SEIRA_IMAGE;
 }
 
 /** Only provisioning creates this durable directory; idle shutdown keeps it. */
@@ -358,7 +358,7 @@ export function imageLabelsMatch(labels: Record<string, string> | undefined): bo
   );
 }
 
-/** Ownership ignores image/driver versions, so an older OMB container stays removable. */
+/** Ownership ignores image/driver versions, so an older Seira container stays removable. */
 function containerOwnershipLabelsMatch(
   labels: Record<string, string> | undefined,
   target: LocalVmTarget,
@@ -612,7 +612,7 @@ export async function containerComputerStatus(
       ) {
         throw new Error(`Cua health report is ${report.overall ?? "invalid"}`);
       }
-      const readinessShot = "/tmp/openmausbot-readiness.png";
+      const readinessShot = "/tmp/seira-readiness.png";
       await runner(
         status.runtime,
         cuaExecArgs([
@@ -850,9 +850,9 @@ async function imageHasManagedLabels(runtime: Runtime, runner: CommandRunner, re
 
 async function tagOlderImage(runtime: Runtime, runner: CommandRunner): Promise<boolean> {
   if (await imageHasManagedLabels(runtime, runner, IMAGE)) return false;
-  if (!(await imageHasManagedLabels(runtime, runner, OPENMAUSBOT_IMAGE))) return false;
+  if (!(await imageHasManagedLabels(runtime, runner, SEIRA_IMAGE))) return false;
   try {
-    await runner(runtime, runtime === "container" ? ["image", "tag", OPENMAUSBOT_IMAGE, IMAGE] : ["tag", OPENMAUSBOT_IMAGE, IMAGE]);
+    await runner(runtime, runtime === "container" ? ["image", "tag", SEIRA_IMAGE, IMAGE] : ["tag", SEIRA_IMAGE, IMAGE]);
     return true;
   } catch {
     return false;
@@ -976,7 +976,7 @@ export async function containerComputerFrame(
   }
   if (cacheable) screenshotStatusCache.set(target.key, { status, expiresAt: now + SCREENSHOT_STATUS_TTL_MS });
   try {
-    const screenshot = "/tmp/openmausbot-preview.png";
+    const screenshot = "/tmp/seira-preview.png";
     await runner(
       status.runtime,
       cuaExecArgs([
@@ -1114,7 +1114,7 @@ export function containerComputerMcp(
     // The control pair rides in env, not argv, which `ps` shows for the bridge's whole life.
     env: {
       ELECTRON_RUN_AS_NODE: "1",
-      ...(control ? { OMB_CONTROL_URL: control.url, OMB_CONTROL_TOKEN: control.token } : {}),
+      ...(control ? { SEIRA_CONTROL_URL: control.url, SEIRA_CONTROL_TOKEN: control.token } : {}),
     },
   };
 }

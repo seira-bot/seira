@@ -16,7 +16,7 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 const folder = () => {
-  const dir = mkdtempSync(join(tmpdir(), "omb-connector-audit-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-connector-audit-"));
   dirs.push(dir);
   return dir;
 };
@@ -51,8 +51,8 @@ describe("the audit log", () => {
   });
 
   it("records what a job asked for without a value that could be a secret", () => {
-    const start: Job = { id: "s1", type: "start", args: { image: HOME, env: { OMB_PUBLIC_URL: "https://acme.example", OMB_CLOUD_BOOTSTRAP_SECRET: SECRET } } };
-    expect(auditArgs(start)).toEqual({ image: HOME, env: ["OMB_CLOUD_BOOTSTRAP_SECRET", "OMB_PUBLIC_URL"] });
+    const start: Job = { id: "s1", type: "start", args: { image: HOME, env: { SEIRA_PUBLIC_URL: "https://acme.example", SEIRA_CLOUD_BOOTSTRAP_SECRET: SECRET } } };
+    expect(auditArgs(start)).toEqual({ image: HOME, env: ["SEIRA_CLOUD_BOOTSTRAP_SECRET", "SEIRA_PUBLIC_URL"] });
     expect(JSON.stringify(auditArgs(start))).not.toContain(SECRET);
     expect(auditArgs({ id: "i1", type: "import-disk", args: { url: "https://bucket.example/home.tar.gz?X-Signature=abcdef" } })).toEqual({ from: "https://bucket.example" });
     expect(auditArgs({ id: "r1", type: "restore", args: { backupId: "20261028-104512-3fa9" } })).toEqual({ backupId: "20261028-104512-3fa9" });

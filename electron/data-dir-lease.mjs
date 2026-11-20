@@ -4,10 +4,10 @@ import { existsSync, linkSync, mkdirSync, readdirSync, readFileSync, readlinkSyn
 import { homedir, hostname, uptime } from "node:os";
 import { dirname, join, posix } from "node:path";
 
-const LEASE_NAME = "openmausbot-server.lease";
-const DELEGATED_CHILD_DIR = ".openmausbot-server-child";
+const LEASE_NAME = "seira-server.lease";
+const DELEGATED_CHILD_DIR = ".seira-server-child";
 // Internal parent-to-child capability, obtained only from utilityServerLeaseEnvironment(); never public configuration.
-const CHILD_LEASE_ENV = "OPENMAUSBOT_INTERNAL_DATA_DIR_LEASE";
+const CHILD_LEASE_ENV = "SEIRA_INTERNAL_DATA_DIR_LEASE";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const MAX_PID = 0x7fffffff;
 const MAX_BOOT_ID = 128;
@@ -187,7 +187,7 @@ function machineId() {
     const raw = readRawMachineId();
     cachedMachineId = raw === null
       ? null
-      : createHash("sha256").update(`openmausbot-machine:${raw.toLowerCase()}`).digest("hex").slice(0, 32);
+      : createHash("sha256").update(`seira-machine:${raw.toLowerCase()}`).digest("hex").slice(0, 32);
   }
   return cachedMachineId;
 }
@@ -792,7 +792,7 @@ function clearRecords(dataDir, stale) {
 }
 
 /**
- * Who holds the data directory's lease, read only (`openmausbot doctor`): "none"; "alive", a running process on this
+ * Who holds the data directory's lease, read only (`seira doctor`): "none"; "alive", a running process on this
  * machine; "dead", a process of this machine that is gone, which the next acquireDataDirLease() retires; "other-machine";
  * or "invalid", a record that cannot be read, which acquireDataDirLease() refuses. Never changes a file.
  */

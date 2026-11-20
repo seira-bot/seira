@@ -61,9 +61,9 @@ describe("which engine runs a session", () => {
   });
 
   it("gives a bot its own profile, a shared profile's bots one profile, and a temporary browser its session's", () => {
-    expect(profileKey("a", "omb-a", { guest: false, partitionId: null })).toBe("bot:a");
-    expect(profileKey("a", "omb-p", { guest: false, partitionId: "p1" })).toBe("shared:p1");
-    expect(profileKey("a", "omb-a-guest-1", { guest: true, partitionId: null })).toBe("temp:omb-a-guest-1");
+    expect(profileKey("a", "seira-a", { guest: false, partitionId: null })).toBe("bot:a");
+    expect(profileKey("a", "seira-p", { guest: false, partitionId: "p1" })).toBe("shared:p1");
+    expect(profileKey("a", "seira-a-guest-1", { guest: true, partitionId: null })).toBe("temp:seira-a-guest-1");
   });
 });
 
@@ -259,7 +259,7 @@ describe("the new engine's minute", () => {
   });
 
   function engine() {
-    const dataDir = mkdtempSync(join(tmpdir(), "omb-chrome-engine-"));
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-chrome-engine-"));
     const value = new ChromeEngine({ dataDir, host: "container", env: {}, platform: "linux", egressPort: async () => 0, idleMs: () => 180_000, egressNotice: () => null });
     cleanups.push(async () => { await value.close(); await removeTempDir(dataDir); });
     const closeIdle = vi.spyOn(value.service, "closeIdle").mockResolvedValue([]);

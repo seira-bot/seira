@@ -1,7 +1,7 @@
 import { noticeSummary, type ChatNoticeKey } from "../chat-notices.ts";
 // The phone integration's per-turn pieces: the mount, the prompt part and the internal MCP handler (owner check, per-bot
 // verdict, decision rows, the phone job, write activity). A send waits on the person's Send tap on the phone, never on a
-// card of OpenMausBot's own.
+// card of Seira's own.
 import { isOutboundTool } from "../../shared/outbound.ts";
 import { PHONE_MCP_SERVER, phoneToolCapability, type PhoneCapability, type PhoneToolName } from "../../shared/phone-apps.ts";
 import { appendDecision } from "../decision-log.ts";
@@ -84,7 +84,7 @@ export function createPhoneHost(deps: PhoneHostDeps): PhoneHost {
       const token = mint();
       return {
         command: process.execPath, args: [SPAWNED_PROXIES.harnessMcp, PHONE_MCP_SERVER],
-        env: { ...AGENTS_NODE_FLAG, [harnessMcpTokenEnv("device")]: token, OMB_HARNESS_URL: harnessUrl },
+        env: { ...AGENTS_NODE_FLAG, [harnessMcpTokenEnv("device")]: token, SEIRA_HARNESS_URL: harnessUrl },
       };
     },
     prompt,

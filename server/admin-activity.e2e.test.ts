@@ -48,7 +48,7 @@ async function start() {
     env: {
       ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-      HOME: home, USERPROFILE: home, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
+      HOME: home, USERPROFILE: home, SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1),
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -101,8 +101,8 @@ const month = () => new Date().toISOString().slice(0, 7);
 
 posixOnly("admin activity log", () => {
   beforeAll(async () => {
-    home = mkdtempSync(join(tmpdir(), "omb-admin-activity-"));
-    data = join(home, ".openmausbot");
+    home = mkdtempSync(join(tmpdir(), "seira-admin-activity-"));
+    data = join(home, ".seira");
     mkdirSync(join(data, "decisions"), { recursive: true });
     writeFileSync(join(data, "config.json"), JSON.stringify({ signIn: { admins: [BOSS], members: [ADA] } }));
     // One card Ada answered earlier, as the decision log recorded it.
@@ -136,7 +136,7 @@ posixOnly("admin activity log", () => {
     expect((await api("PUT", "/api/config", { anthropic: { key: SECRET } }, BOSS)).status).toBe(200);
     expect((await api("PUT", "/api/config", { budgets: { monthlyUsd: 75 } }, BOSS)).status).toBe(200);
     expect((await api("PUT", "/api/config", { decisions: { retentionDays: 400 } })).status).toBe(200); // the owner, on this machine
-    expect((await api("PUT", "/api/config", { profile: { name: "Ops desk" } }, undefined, { "x-openmausbot-cli": "1" })).status).toBe(200);
+    expect((await api("PUT", "/api/config", { profile: { name: "Ops desk" } }, undefined, { "x-seira-cli": "1" })).status).toBe(200);
 
     const people = (await activity("?what=people"))[0];
     expect(people).toMatchObject({ type: "admin", who: BOSS, what: "people", action: "people.update", changed: ["signIn.members"],

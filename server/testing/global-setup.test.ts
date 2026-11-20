@@ -17,8 +17,8 @@ describe("global setup", () => {
 
       // What a worker leaves when every test of its file is skipped: the folder and the home inside it.
       const left = mkdtempSync(join(tmpdir(), `${TEST_TMP_PREFIX}${runId}-`));
-      mkdirSync(join(left, "omb-test-home-inner"));
-      writeFileSync(join(left, "omb-test-home-inner", "file.txt"), "x");
+      mkdirSync(join(left, "seira-test-home-inner"));
+      writeFileSync(join(left, "seira-test-home-inner", "file.txt"), "x");
       const otherRun = mkdtempSync(join(tmpdir(), `${TEST_TMP_PREFIX}ffffff-`));
 
       teardown();

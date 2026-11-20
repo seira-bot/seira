@@ -36,7 +36,7 @@ const DRIVER = "cua-driver-background.exe";
 const DEFENDER_EVENTS = [1006, 1007, 1008, 1015, 1116, 1117];
 const MPCMDRUN = path.join(process.env.ProgramFiles ?? "C:\\Program Files", "Windows Defender", "MpCmdRun.exe");
 /** The app's own files: a detection naming one of these is about us, anything else is the machine's. */
-const OURS = /openmausbot|cua-driver|cua_driver|cua-sdk/i;
+const OURS = /seira|cua-driver|cua_driver|cua-sdk/i;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
@@ -424,7 +424,7 @@ async function pressStart() {
 }
 
 function appLog() {
-  const folder = path.join(process.env.APPDATA ?? "", "openmausbot", "logs");
+  const folder = path.join(process.env.APPDATA ?? "", "seira", "logs");
   const file = path.join(folder, "server.log");
   if (!existsSync(file)) return { file, present: false, lines: [] };
   for (const name of readdirSync(folder)) {

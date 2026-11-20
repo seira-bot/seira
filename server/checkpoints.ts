@@ -28,7 +28,7 @@ const EXCLUDES = `# Seira checkpoint excludes — never snapshotted
 .git/
 .svn/
 .hg/
-.openmausbot-secrets/
+.seira-secrets/
 node_modules/
 bower_components/
 .pnpm-store/
@@ -194,9 +194,9 @@ function gitEnv(shadow: string, cwd: string): NodeJS.ProcessEnv {
   env.GIT_CONFIG_GLOBAL = join(shadow, "gitconfig");
   env.GIT_CONFIG_SYSTEM = join(shadow, "gitconfig_empty");
   env.GIT_AUTHOR_NAME = "Seira Checkpoint";
-  env.GIT_AUTHOR_EMAIL = "checkpoint@openmausbot.local";
+  env.GIT_AUTHOR_EMAIL = "checkpoint@seira.local";
   env.GIT_COMMITTER_NAME = "Seira Checkpoint";
-  env.GIT_COMMITTER_EMAIL = "checkpoint@openmausbot.local";
+  env.GIT_COMMITTER_EMAIL = "checkpoint@seira.local";
   return env;
 }
 
@@ -249,7 +249,7 @@ function serialize<T>(key: string, fn: () => Promise<T>): Promise<T> {
 }
 
 // A pin keeps a running turn's pre-turn commit reachable until release(): a collection after a sibling's snapshot would discard it.
-const LIVE_REFS = "refs/omb-live/";
+const LIVE_REFS = "refs/seira-live/";
 function liveRef(pin: string): string {
   return LIVE_REFS + createHash("sha256").update(pin).digest("hex").slice(0, 16);
 }

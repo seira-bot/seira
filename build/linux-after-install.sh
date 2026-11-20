@@ -2,14 +2,14 @@
 set -eu
 
 # dpkg preserves an existing directory's mode during an in-place upgrade.
-# OpenMausBot 0.1.7 installed the application ancestors as 0775, which makes
+# Seira 0.1.7 installed the application ancestors as 0775, which makes
 # the bundled Cua Driver correctly reject its own executable path. A configured
 # DEB also needs Electron's Chromium sandbox to be root-owned and setuid. The
 # bot's separate Chrome uses its normal user-namespace sandbox, with an exact
 # root-owned AppArmor allowlist on Ubuntu 24.04. Never disable the sandbox or
 # change the machine-wide user-namespace restriction.
-if [ -n "${OPENMAUSBOT_POSTINSTALL_TEST_ROOT:-}" ]; then
-  TEST_ROOT="$(realpath -e -- "$OPENMAUSBOT_POSTINSTALL_TEST_ROOT")"
+if [ -n "${SEIRA_POSTINSTALL_TEST_ROOT:-}" ]; then
+  TEST_ROOT="$(realpath -e -- "$SEIRA_POSTINSTALL_TEST_ROOT")"
   case "$TEST_ROOT" in
     /tmp/*) APP_ROOT=$TEST_ROOT ;;
     *)
@@ -119,7 +119,7 @@ in_container() {
 }
 
 install_browser_apparmor_profile() {
-  profile=$APP_ROOT/resources/openmausbot-browser.apparmor
+  profile=$APP_ROOT/resources/seira-browser.apparmor
   if [ -L "$profile" ] || [ ! -f "$profile" ] || [ "$(stat -c '%h' -- "$profile")" != 1 ]; then
     echo "Seira browser AppArmor profile is missing or unsafe: $profile" >&2
     exit 1
@@ -163,7 +163,7 @@ install_browser_apparmor_profile() {
     echo "Seira AppArmor policy directory is unsafe: $APPARMOR_DIR" >&2
     exit 1
   fi
-  target=$APPARMOR_DIR/openmausbot-browser
+  target=$APPARMOR_DIR/seira-browser
   if [ -L "$target" ] || { [ -e "$target" ] && [ ! -f "$target" ]; }; then
     echo "Seira AppArmor profile target is unsafe: $target" >&2
     exit 1

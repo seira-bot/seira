@@ -1,12 +1,12 @@
-// Sends a template folder to the MausBot Admin (openmaus-cloud server/community-submissions.ts), which opens a pull
+// Sends a template folder to the Seira Admin (seira-cloud server/community-submissions.ts), which opens a pull
 // request on the community repository from its own GitHub App: nobody needs a GitHub account. The request is signed the
-// way page publishing signs its token request: a desktop's MausBot sign-in token, or a Cloud home's machine signature
-// over the label `omb-community-v1`.
+// way page publishing signs its token request: a desktop's Seira sign-in token, or a Cloud home's machine signature
+// over the label `seira-community-v1`.
 import { COMMUNITY_REPOSITORY_URL } from "../shared/share-card.ts";
 import { pagesAuthHeaders, type PagesAccess } from "./pages/access.ts";
 
 export const COMMUNITY_SUBMISSIONS_PATH = "/api/cloud/community/submissions";
-export const COMMUNITY_SIGNATURE_LABEL = "omb-community-v1";
+export const COMMUNITY_SIGNATURE_LABEL = "seira-community-v1";
 /** The Admin's caps on one folder. */
 export const COMMUNITY_MAX_FILES = 200, COMMUNITY_MAX_BYTES = 4 * 1024 * 1024;
 const TIMEOUT_MS = 60_000;

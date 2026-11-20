@@ -22,7 +22,7 @@ let failNextEnqueue: "before-save" | "after-save" | null = null;
 beforeEach(async () => {
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
-  dir = mkdtempSync(join(tmpdir(), "omb-app-triggers-"));
+  dir = mkdtempSync(join(tmpdir(), "seira-app-triggers-"));
   broker = await startBrokerFake();
   owner = await broker.install();
   gmail = broker.account(owner.userId, "gmail", "sales");
@@ -487,7 +487,7 @@ describe("automations made before the owner kept the managed service out", () =>
   });
 
   it("the host reports the switch as off, for the app and for a bot's event list, and calls nothing", async () => {
-    vi.stubEnv("OMB_COMPOSIO_BROKER", "off");
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER", "off");
     try {
       const { createAppTriggerHost } = await import("./app-trigger-host.ts");
       const fetches = vi.fn();

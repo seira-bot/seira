@@ -9,7 +9,7 @@ import { SharedComputers, sharedComputerRegistration } from "./shared-computers.
 
 const dirs: string[] = [];
 afterEach(() => { vi.useRealTimers(); for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
-const file = () => { const dir = mkdtempSync(join(tmpdir(), "omb-lent-")); dirs.push(dir); return join(dir, "lent-computers.json"); };
+const file = () => { const dir = mkdtempSync(join(tmpdir(), "seira-lent-")); dirs.push(dir); return join(dir, "lent-computers.json"); };
 const secret = "a".repeat(64);
 const lend = (extra: Record<string, unknown> = {}) => ({ id: randomUUID(), name: "ASH-PC", environmentId: randomUUID(),
   folders: [{ id: randomUUID(), name: "Plans", write: false }], terminal: false, computer: true, ...extra });
@@ -66,7 +66,7 @@ describe("what a server remembers about computers lent to it", () => {
     // One of two away: the bot is told about it, without the sentence meant for a person with nothing online.
     const other = { ...record, id: randomUUID(), name: "ASH-MBP", platform: "darwin" as const };
     expect(awayNotice([record, other], new Set([other.id]))).toEqual({ offline: [{ name: "ASH-PC", device: "PC", lastOnline: "2026-10-07 14:02 UTC", lent: true }] });
-    for (const sentence of [awayNotice([record], new Set()).say!, awayNotice([{ ...record, stoppedAt: at }], new Set()).say!]) expect(sentence).not.toMatch(/this Mac|OMB Cloud|OpenMausBot Cloud/u);
+    for (const sentence of [awayNotice([record], new Set()).say!, awayNotice([{ ...record, stoppedAt: at }], new Set()).say!]) expect(sentence).not.toMatch(/this Mac|Seira Cloud|Seira Cloud/u);
   });
 });
 

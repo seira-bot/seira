@@ -17,9 +17,9 @@ import { readRegistry, writeRegistry } from "./testing/registry.ts";
 import { TRIAL_CREDIT_OWN_AI, TRIAL_CREDIT_REFUSED } from "./trial-credit.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
-const HOST = "omb-t-0123456789ab.fly.dev";
+const HOST = "seira-t-0123456789ab.fly.dev";
 const secret = randomBytes(32).toString("base64url");
-const TOKEN = `omb_ai_${randomBytes(32).toString("base64url")}`;
+const TOKEN = `seira_ai_${randomBytes(32).toString("base64url")}`;
 /** The Admin's relay path; the Cloud is given `<origin>${RELAY_PATH}/v1`. */
 const RELAY_PATH = "/api/cloud/services/ai";
 /** The Admin's list: its default first, Sonnet, with Haiku still offered. */
@@ -51,10 +51,10 @@ async function boot() {
       PATH: process.env.PATH,
       ...(process.env.PATHEXT ? { PATHEXT: process.env.PATHEXT } : {}),
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-      HOME: home, USERPROFILE: home, OMB_DATA_DIR: data, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), OMB_STATIC_DIR: join(home, "web"),
-      OMB_CLOUD_ROLE: "home", OMB_BOT_BOX: "0", OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
-      OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_PUBLIC_URL: `https://${HOST}`,
-      OMB_CLOUD_AI_URL: relayUrl, OMB_CLOUD_AI_TOKEN: TOKEN,
+      HOME: home, USERPROFILE: home, SEIRA_DATA_DIR: data, SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), SEIRA_STATIC_DIR: join(home, "web"),
+      SEIRA_CLOUD_ROLE: "home", SEIRA_BOT_BOX: "0", SEIRA_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test",
+      SEIRA_CLOUD_BOOTSTRAP_SECRET: secret, SEIRA_PUBLIC_URL: `https://${HOST}`,
+      SEIRA_CLOUD_AI_URL: relayUrl, SEIRA_CLOUD_AI_TOKEN: TOKEN,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -110,11 +110,11 @@ beforeAll(async () => {
     });
   });
   await new Promise<void>((resolve) => stub.listen(0, "127.0.0.1", resolve));
-  // OMB_CLOUD_AI_URL exactly as the Admin builds it: the origin, the relay path and `/v1`.
+  // SEIRA_CLOUD_AI_URL exactly as the Admin builds it: the origin, the relay path and `/v1`.
   const relay = `http://127.0.0.1:${(stub.address() as AddressInfo).port}${RELAY_PATH}/v1`;
 
-  home = mkdtempSync(join(tmpdir(), "omb-cloud-credit-"));
-  data = join(home, ".openmausbot");
+  home = mkdtempSync(join(tmpdir(), "seira-cloud-credit-"));
+  data = join(home, ".seira");
   mkdirSync(data, { recursive: true });
   // The person's own Claude Code, as on the image: signed out until the test
   // signs the person in. Each turn is a fresh process, which records its
@@ -163,8 +163,8 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
   const body = JSON.stringify({ label: "Seira app (Cloud)", ttlSeconds: 300 });
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const granted = await api("POST", "/api/cloud/pairing", { remote: true, headers: {
-    "content-type": "application/json", "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
-    "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
+    "content-type": "application/json", "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce,
+    "x-seira-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
   }, body: JSON.parse(body) });
   ownerToken = (await api("POST", "/api/auth/pair", { remote: true, body: { code: granted.body.code } })).body.token as string;
 }, 45_000);

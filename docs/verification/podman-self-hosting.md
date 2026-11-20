@@ -18,28 +18,28 @@ below. `repo` must be the candidate checkout's absolute Linux path, for example
 
 ```sh
 cd "$repo"
-podman build -f deploy/podman/Containerfile -t localhost/openmausbot-podman:verify .
-fixture=$(mktemp -d /tmp/omb-podman-verify-XXXXXXXX)
-mkdir -m 700 "$fixture/.openmausbot"
+podman build -f deploy/podman/Containerfile -t localhost/seira-podman:verify .
+fixture=$(mktemp -d /tmp/seira-podman-verify-XXXXXXXX)
+mkdir -m 700 "$fixture/.seira"
 cp server/testing/fake-claude-cli.ts "$fixture/fake-claude-cli.ts"
 # Windows checkouts may have CRLF; the fake is executed via its shebang on Linux.
 sed -i 's/\r$//' "$fixture/fake-claude-cli.ts"
 chmod 700 "$fixture/fake-claude-cli.ts"
-cat > "$fixture/.openmausbot/config.json" <<EOF
+cat > "$fixture/.seira/config.json" <<EOF
 {"profile":{"name":"Podman verification"},"instances":{"claude":{"driver":"claudeAgent","displayName":"Podman verification","config":{"cli":"$fixture/fake-claude-cli.ts"}}},"localVm":{"mode":"per-bot","maxInstances":2}}
 EOF
 cd deploy/podman
 umask 077
 cat > .env.fixture <<EOF
-COMPOSE_PROJECT_NAME=omb-podman-verify
-OMB_IMAGE_TAG=verify
-OMB_DATA_ROOT=$fixture
+COMPOSE_PROJECT_NAME=seira-podman-verify
+SEIRA_IMAGE_TAG=verify
+SEIRA_DATA_ROOT=$fixture
 PODMAN_SOCKET=/run/user/$(id -u)/podman/podman.sock
-OMB_PORT=28799
-OMB_WEBHOOK_PORT=28800
-OMB_HTTP_PORT=28880
-OMB_PUBLIC_URL=http://localhost:28880
-OMB_HTTPS_HOST=https-disabled.invalid
+SEIRA_PORT=28799
+SEIRA_WEBHOOK_PORT=28800
+SEIRA_HTTP_PORT=28880
+SEIRA_PUBLIC_URL=http://localhost:28880
+SEIRA_HTTPS_HOST=https-disabled.invalid
 ENGINES=
 EOF
 PODMAN_COMPOSE_PROVIDER=podman-compose podman compose --env-file .env.fixture -f compose.yaml up -d --no-build

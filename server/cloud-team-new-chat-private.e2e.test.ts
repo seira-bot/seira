@@ -1,6 +1,6 @@
 // A conversation a person opens on a Team Cloud is private to them from its first frame: another member and an admin,
 // listening on their streams while it is made, never get its id or its title in any frame, live or replayed, and their
-// copy of the bot (its threads, their labels, its main chat) does not change at all. A new member's own MausBot is theirs
+// copy of the bot (its threads, their labels, its main chat) does not change at all. A new member's own Seira is theirs
 // from its first frame too: nobody else is ever sent its main chat.
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";

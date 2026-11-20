@@ -1,5 +1,5 @@
 // The home on a customer-run server: the Seira server its owner installed with Docker Compose (deploy/install.sh:
-// project `openmausbot`, service `omb`, Caddy in front, the data in a folder beside the Compose file). The connector
+// project `seira`, service `seira`, Caddy in front, the data in a folder beside the Compose file). The connector
 // attaches to it and never makes a second one: it starts and stops those containers, copies that folder, and hands an
 // update to the server's own updater. It never writes the owner's settings and never picks the home's image itself.
 import { randomBytes } from "node:crypto";
@@ -15,8 +15,8 @@ import type { CopyInfo, HomeHealth, HomeReport, HomeState, JobError, JobReply, J
 import { BACKUPS_KEPT, HOME_STOP_TIMEOUT_S, LABELS, NAMES } from "./settings.ts";
 import type { HomeRecord, Operation, StateStore } from "./state.ts";
 
-export const COMPOSE_PROJECT = "openmausbot";
-const SERVICE = "omb";
+export const COMPOSE_PROJECT = "seira";
+const SERVICE = "seira";
 const FRONT = "caddy";
 const PROJECT_LABEL = "com.docker.compose.project";
 const SERVICE_LABEL = "com.docker.compose.service";
@@ -30,7 +30,7 @@ export const UPDATE_FILES = { runner: "runner", request: "request", result: "res
 /** deploy/update.sh's exit codes; from the runner itself, 5 for an image older than the one running and 127 when the server has no update.sh. */
 const UPDATE_EXIT = { done: 0, rolledBack: 1, rollbackFailed: 2, busy: 3, notStarted: 4, older: 5, missing: 127 } as const;
 /** Who asked for a backup, kept on its volume: one sender's backups never push out the other's. */
-const MADE_BY_LABEL = "com.mausbot.by";
+const MADE_BY_LABEL = "com.seira.by";
 
 const lastLine = (text: string) => text.trim().split("\n").pop()?.slice(0, 300) ?? "";
 const gb = (bytes: number) => Math.round((bytes / 1e9) * 10) / 10;
@@ -80,7 +80,7 @@ export interface AdoptedHomeOptions {
   log: Log;
   /** Free bytes where Docker keeps its volumes, so where a backup goes. */
   diskFree: () => number;
-  /** The folder shared with the server's updater (mausbot-update-runner.sh), as the connector sees it. */
+  /** The folder shared with the server's updater (seira-update-runner.sh), as the connector sees it. */
   updateDir: string;
   onStep?: (step: { id: string; type: Operation["type"]; step: string; detail?: Record<string, unknown> }) => void;
   now?: () => number;
@@ -452,7 +452,7 @@ export class AdoptedHome {
   }
 
   private async helper(image: string, mounts: Mount[], command: string[], caps: string[]): Promise<{ code: number; output: string }> {
-    const name = `mausbot-helper-${randomBytes(4).toString("hex")}`;
+    const name = `seira-helper-${randomBytes(4).toString("hex")}`;
     await this.docker.createContainer(name, helperSpec(image, mounts, command, caps));
     try {
       await this.docker.startContainer(name);

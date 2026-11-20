@@ -9,8 +9,8 @@ import { UI_TOOLS_DIR } from "./control-seira-ui.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const binary = resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env });
-const enabled = Boolean(binary) || process.env.OMB_UI_E2E === "1";
-if (!enabled) console.log("skipping draft visibility UI: set OMB_UI_E2E=1 to install the pinned browser");
+const enabled = Boolean(binary) || process.env.SEIRA_UI_E2E === "1";
+if (!enabled) console.log("skipping draft visibility UI: set SEIRA_UI_E2E=1 to install the pinned browser");
 
 (enabled ? it : it.skip)("creates a restricted ready-made bot from its review without widening its audience", async () => {
   let child: ChildProcess | undefined;

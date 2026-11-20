@@ -12,7 +12,7 @@ import {
   IMAGE_LAYER_LABEL,
   IMAGE_LAYER_VERSION,
   MANAGED_LABEL,
-  OPENMAUSBOT_IMAGE,
+  SEIRA_IMAGE,
   TARGET_LABEL,
   WORKSPACE_LABEL,
   containerComputerAction,
@@ -35,7 +35,7 @@ describe("localVmUpdateNeed", () => {
     expect(localVmUpdateNeed(status({ imageMatches: false }), true)).toBe("recreate");
     expect(localVmUpdateNeed(status({ imageMatches: false, image: false }), false)).toBe("image");
     expect(localVmUpdateNeed(status({ container: "missing", image: false, imageMatches: false }), true)).toBe("image");
-    // Nothing to update: a current desktop, a person who never used the VM, a container OpenMausBot did not make, no runtime.
+    // Nothing to update: a current desktop, a person who never used the VM, a container Seira did not make, no runtime.
     expect(localVmUpdateNeed(status({}), true)).toBeNull();
     expect(localVmUpdateNeed(status({ container: "missing", image: false, imageMatches: false }), false)).toBeNull();
     expect(localVmUpdateNeed(status({ managed: false, imageMatches: false }), true)).toBeNull();
@@ -56,7 +56,7 @@ describe("vpsDesktopOutdated", () => {
 });
 
 describe("createLocalVmUpdater", () => {
-  const target: LocalVmTarget = { key: "bot:abc", containerName: "seira-computer-abc", legacyContainerName: "openmausbot-computer-abc", workspaceDir: "/nonexistent", viewerPort: null, label: "abc" };
+  const target: LocalVmTarget = { key: "bot:abc", containerName: "seira-computer-abc", legacyContainerName: "seira-computer-abc", workspaceDir: "/nonexistent", viewerPort: null, label: "abc" };
   const setup = (opts: { held?: () => boolean } = {}) => {
     let current = status({ imageMatches: false, image: false });
     const calls: string[] = [];
@@ -125,7 +125,7 @@ describe("createLocalVmUpdater", () => {
 
 describe("updating a desktop that still has the older name", () => {
   it("keeps sign-ins and apps from the older container, removes it by that name, and creates the new one", async () => {
-    const workspace = mkdtempSync(join(tmpdir(), "omb-legacy-update-"));
+    const workspace = mkdtempSync(join(tmpdir(), "seira-legacy-update-"));
     const target = { ...perBotLocalVmTarget("legacy-update"), workspaceDir: workspace };
     const labels = { [MANAGED_LABEL]: "1", [DRIVER_LABEL]: CUA_DRIVER_VERSION, [BASE_IMAGE_LABEL]: BASE_IMAGE_DIGEST, [IMAGE_LAYER_LABEL]: IMAGE_LAYER_VERSION };
     const imageInspect = JSON.stringify([{ Id: "sha256:current-build", Config: { Labels: labels } }]);
@@ -139,7 +139,7 @@ describe("updating a desktop that still has the older name", () => {
       if (args[0] === "info") return { stdout: "29" };
       if (key === `docker image inspect ${IMAGE}`) return { stdout: imageInspect };
       if (key === `docker inspect ${target.legacyContainerName}` && present === "older") {
-        return { stdout: JSON.stringify([{ Config: { Image: OPENMAUSBOT_IMAGE, Labels: { ...labels, [WORKSPACE_LABEL]: "1", [TARGET_LABEL]: target.label } }, State: { Running: false }, Image: "sha256:old-build" }]) };
+        return { stdout: JSON.stringify([{ Config: { Image: SEIRA_IMAGE, Labels: { ...labels, [WORKSPACE_LABEL]: "1", [TARGET_LABEL]: target.label } }, State: { Running: false }, Image: "sha256:old-build" }]) };
       }
       if (key === `docker inspect ${target.containerName}` && present === "new") {
         return { stdout: JSON.stringify([{ Config: { Image: IMAGE, Labels: { ...labels, [WORKSPACE_LABEL]: "1", [TARGET_LABEL]: target.label } }, State: { Running: true }, Image: "sha256:current-build" }]) };

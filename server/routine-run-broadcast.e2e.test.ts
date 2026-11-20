@@ -74,8 +74,8 @@ function openStream() {
 posixOnly("a routine run's task on the event stream", () => {
   beforeAll(async () => {
     chmodSync(FAKE_CLI, 0o755);
-    home = mkdtempSync(join(tmpdir(), "omb-routine-broadcast-"));
-    const data = join(home, ".openmausbot");
+    home = mkdtempSync(join(tmpdir(), "seira-routine-broadcast-"));
+    const data = join(home, ".seira");
     mkdirSync(data, { recursive: true });
     writeFileSync(join(data, "config.json"), JSON.stringify({
       signIn: { admins: [OWNER], members: [] },
@@ -91,7 +91,7 @@ posixOnly("a routine run's task on the event stream", () => {
       cwd: join(SERVER_DIR, ".."),
       env: {
         ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
-        HOME: home, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
+        HOME: home, SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1),
       },
       stdio: ["ignore", "pipe", "pipe"],
     });

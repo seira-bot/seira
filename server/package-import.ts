@@ -124,7 +124,7 @@ export interface PackageImportResult {
 export type ImportResult = PackageImportResult | { alreadyAdded: true; installId: string };
 
 export function orgInstallId(adminOrigin: string, organizationId: string, packageId: string): string {
-  return createHash("sha256").update(`omb-install:v1\n${adminOrigin}\n${organizationId}\n${packageId}`, "utf8").digest("hex").slice(0, 32);
+  return createHash("sha256").update(`seira-install:v1\n${adminOrigin}\n${organizationId}\n${packageId}`, "utf8").digest("hex").slice(0, 32);
 }
 
 export function memberFromAgent(agent: PackageAgent): TeamManifestMember {

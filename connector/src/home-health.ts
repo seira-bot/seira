@@ -17,9 +17,9 @@ export function signedHeaders(secret: string, method: string, target: string, bo
   const timestamp = String(Math.floor(now / 1000));
   const nonce = randomBytes(18).toString("base64url");
   return {
-    "x-omb-cloud-timestamp": timestamp,
-    "x-omb-cloud-nonce": nonce,
-    "x-omb-cloud-signature": `v1=${cloudRequestSignature(secret, timestamp, nonce, method, target, body)}`,
+    "x-seira-cloud-timestamp": timestamp,
+    "x-seira-cloud-nonce": nonce,
+    "x-seira-cloud-signature": `v1=${cloudRequestSignature(secret, timestamp, nonce, method, target, body)}`,
   };
 }
 
@@ -75,5 +75,5 @@ export function summarizeHealth(status: number, report: Record<string, unknown> 
 
 /** The home's public name, which the edge answers for. */
 export function publicHost(env: Record<string, string>): string {
-  return new URL(env.OMB_PUBLIC_URL).hostname;
+  return new URL(env.SEIRA_PUBLIC_URL).hostname;
 }

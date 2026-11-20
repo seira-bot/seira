@@ -24,7 +24,7 @@ export const GENERIC_RULES = [
   { label: "ls -l output with owner names", re: /(?:^|\s)[-dl][-rwxsStT]{9}[.+@]?\s+\d+\s+[A-Za-z0-9._-]+\s+[A-Za-z0-9._-]+\s+\d+\s/ },
   { label: "private key", re: /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----/ },
   { label: "provider API key", re: /\b(?:sk-(?:ant-|proj-)?[A-Za-z0-9_-]{32,}|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,}|AKIA[0-9A-Z]{16}|xox[abpr]-[A-Za-z0-9-]{20,})\b/ },
-  // A value like `parentEnv.OMB_X_TOKEN` reads a variable by name, so it is not a secret.
+  // A value like `parentEnv.SEIRA_X_TOKEN` reads a variable by name, so it is not a secret.
   { label: "secret value in an assignment", re: /\b[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD)[A-Z0-9_]*\s*=\s*["']?(?![$<{])(?!(?:[a-z]\w*\.)+[A-Z][A-Z0-9_]*(?:[^\w.]|$))[^\s"'$<{]{16,}/ },
 ];
 

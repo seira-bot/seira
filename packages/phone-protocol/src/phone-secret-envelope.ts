@@ -5,7 +5,7 @@ import { z } from "zod";
 
 export const PHONE_SECRET_PROTOCOL_VERSION = 1 as const;
 /** HPKE info string shared with released phone apps. Changing it breaks every paired phone. */
-export const PHONE_SECRET_INFO = "OpenMausBot phone credential v1";
+export const PHONE_SECRET_INFO = "Seira phone credential v1";
 export const PHONE_SECRET_MAX_BYTES = 4_096;
 
 export const phoneSecretEnvelopeSchema = z.object({

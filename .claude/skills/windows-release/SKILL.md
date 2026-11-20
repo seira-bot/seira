@@ -8,7 +8,7 @@ description: Build, check, and attach the Seira Windows x64 installer and its up
 The full release guide is [`docs/releasing.md`](../../../docs/releasing.md).
 This skill covers its step 5 and the Windows update problems.
 A release goes only to [`seira-bot/seira`](https://github.com/seira-bot/seira/releases).
-Never upload a Seira build to an OpenMausBot repository.
+Never upload a Seira build to a Seira repository.
 
 ## Before you start
 
@@ -40,7 +40,7 @@ Before it uploads, the workflow does these checks. When one fails, the run fails
 ## 2. Download and check
 
 ```sh
-mkdir -p .omb-scratch/windows && cd .omb-scratch/windows
+mkdir -p .seira-scratch/windows && cd .seira-scratch/windows
 gh run download <run id> --repo seira-bot/seira --name seira-<version>-windows-x64
 sha256sum -c SHA256SUMS-windows-x64.txt
 ```
@@ -105,8 +105,8 @@ Find the cause in this order:
    SHA-512, and the size in `latest.yml` must match the installer. If they do
    not match, delete the five assets and attach the workflow files again.
 3. Ask for `updater.log` from the log folder of the app:
-   `%APPDATA%\openmausbot\logs`. The folder keeps its upstream name.
-4. Ask where the user installed the app from. An OpenMausBot installer from
+   `%APPDATA%\seira\logs`. The folder keeps its upstream name.
+4. Ask where the user installed the app from. A Seira installer from
    the upstream project reads the upstream releases. It never updates to Seira.
    The user must install `Seira-setup.exe` once.
 

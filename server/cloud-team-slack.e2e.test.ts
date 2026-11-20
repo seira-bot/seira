@@ -1,5 +1,5 @@
 // Slack for Team Clouds on a real Team Cloud (docs/team-slack.md). The Admin's part is played here: a session opened
-// for each member through the signed pairing (label "Slack (MausBot Cloud)"), the three routes called with it, and a
+// for each member through the signed pairing (label "Slack (Seira Cloud)"), the three routes called with it, and a
 // stand-in Admin that takes the Cloud's signed reports and checks them as the real one does. A channel message becomes
 // a shared conversation its writer asked in; a direct message their private chat; the app's own rules decide who may
 // ask, read and stop. Disposable homes and the synthetic Claude CLI; no Slack and no real Admin are reached.
@@ -64,7 +64,7 @@ let scout: Bot, reporter: Bot, vault: Bot, payroll: Bot, notes: Bot, priyaOwn: B
 const sockets: Socket[] = [];
 
 const file = (name: string) => join(team.home, name);
-const dataFile = (...rest: string[]) => join(team.home, ".openmausbot", ...rest);
+const dataFile = (...rest: string[]) => join(team.home, ".seira", ...rest);
 const bots = async (token: string) => (await team.as(token, "GET", "/api/bots?messages=0")).body.bots as Bot[];
 const taskOf = async (token: string, botId: string, threadId: string) => (await bots(token)).find((bot) => bot.id === botId)?.tasks?.find((task) => task.threadId === threadId);
 const rows = async (token: string, threadId: string) => ((await team.as(token, "GET", `/api/threads/${threadId}/messages?limit=200`)).body.messages ?? []) as Row[];
@@ -95,8 +95,8 @@ beforeAll(async () => {
       const raw = Buffer.concat(chunks).toString("utf8"), headers = req.headers as Record<string, string>;
       const answer = (status: number, body: unknown) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
       if (req.url !== TEAM_SLACK_REPORT_PATH || req.method !== "POST") return answer(404, { error: "not found" });
-      const machine = headers["x-omb-cloud-machine"] ?? "", timestamp = headers["x-omb-cloud-timestamp"] ?? "", nonce = headers["x-omb-cloud-nonce"] ?? "";
-      const presented = /^v1=([A-Za-z0-9_-]{43})$/.exec(headers["x-omb-cloud-signature"] ?? "")?.[1];
+      const machine = headers["x-seira-cloud-machine"] ?? "", timestamp = headers["x-seira-cloud-timestamp"] ?? "", nonce = headers["x-seira-cloud-nonce"] ?? "";
+      const presented = /^v1=([A-Za-z0-9_-]{43})$/.exec(headers["x-seira-cloud-signature"] ?? "")?.[1];
       const expected = Buffer.from(teamSlackSignature(team.secret, machine, timestamp, nonce, raw), "base64url"), given = Buffer.from(presented ?? "", "base64url");
       if (machine !== team.machineId || Math.abs(Date.now() / 1000 - Number(timestamp)) > 300 || !/^[A-Za-z0-9_-]{16,128}$/.test(nonce) || given.length !== expected.length || !timingSafeEqual(given, expected)) {
         admin.refused++;
@@ -112,7 +112,7 @@ beforeAll(async () => {
   });
   await new Promise<void>((resolve) => adminServer.listen(0, "127.0.0.1", resolve));
   fx = await launchCloudSendFixture({ onePasswordToken: `ops_fake-slack-${randomBytes(8).toString("hex")}`, team: { id: "team-acme-slack", name: "Acme", engine: ENGINE,
-    env: { OMB_BOT_BOX: "0", FIXTURE_ADMIN_STAND_IN: `http://127.0.0.1:${(adminServer.address() as AddressInfo).port}` } } });
+    env: { SEIRA_BOT_BOX: "0", FIXTURE_ADMIN_STAND_IN: `http://127.0.0.1:${(adminServer.address() as AddressInfo).port}` } } });
   team = fx.team!;
   writeFileSync(file("markers.json"), JSON.stringify(ANSWERS));
   writeFileSync(file("tool-calls.json"), "[]");
@@ -359,7 +359,7 @@ it("an approval is reported as waiting, sits in the member's inbox and conversat
   expect((await rows(priya, thread)).some((row) => row.card?.requestId === requestId)).toBe(true);
   const inbox = async () => ((await team.as(priya, "GET", "/api/inbox")).body.rows ?? []) as { card?: { requestId?: string; answered?: string }; tab?: string }[];
   await until(async () => (await inbox()).some((row) => row.card?.requestId === requestId && row.tab === "needs-you"));
-  // Slack's only other route, Stop, is not an answer; the card stays open until she answers it in MausBot.
+  // Slack's only other route, Stop, is not an answer; the card stays open until she answers it in Seira.
   expect(statuses(sent.id).filter((status) => status === "waiting")).toHaveLength(1);
   const allowed = await team.as(priya, "POST", `/api/threads/${thread}/respond`, { requestId, behavior: "allow" });
   expect(allowed.status, JSON.stringify(allowed.body)).toBe(200);
@@ -399,8 +399,8 @@ it("every report is signed in Slack's own context with the bootstrap secret, and
   expect(admin.refused).toBe(0);
   expect(admin.taken.length).toBeGreaterThan(10);
   for (const { headers, raw } of admin.taken) {
-    const [timestamp, nonce, signature] = [headers["x-omb-cloud-timestamp"]!, headers["x-omb-cloud-nonce"]!, headers["x-omb-cloud-signature"]!];
-    expect(headers["x-omb-cloud-machine"]).toBe(team.machineId);
+    const [timestamp, nonce, signature] = [headers["x-seira-cloud-timestamp"]!, headers["x-seira-cloud-nonce"]!, headers["x-seira-cloud-signature"]!];
+    expect(headers["x-seira-cloud-machine"]).toBe(team.machineId);
     expect(signature).toBe(`v1=${teamSlackSignature(team.secret, team.machineId, timestamp, nonce, raw)}`);
     expect(signature).not.toBe(`v1=${teamRosterSignature(team.secret, team.machineId, timestamp, nonce, raw)}`);
     expect(signature).not.toBe(`v1=${cloudRequestSignature(team.secret, timestamp, nonce, "POST", TEAM_SLACK_REPORT_PATH, raw)}`);
@@ -410,7 +410,7 @@ it("every report is signed in Slack's own context with the bootstrap secret, and
   const { raw } = admin.taken[0]!;
   const send = (sign: (timestamp: string, nonce: string) => string) => {
     const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(18).toString("base64url");
-    return fetch(base, { method: "POST", body: raw, headers: { "content-type": "application/json", "x-omb-cloud-machine": team.machineId, "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${sign(timestamp, nonce)}` } });
+    return fetch(base, { method: "POST", body: raw, headers: { "content-type": "application/json", "x-seira-cloud-machine": team.machineId, "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${sign(timestamp, nonce)}` } });
   };
   expect((await send((timestamp, nonce) => teamRosterSignature(team.secret, team.machineId, timestamp, nonce, raw))).status).toBe(401);
   expect((await send((timestamp, nonce) => teamSlackSignature(randomBytes(32).toString("base64url"), team.machineId, timestamp, nonce, raw))).status).toBe(401);

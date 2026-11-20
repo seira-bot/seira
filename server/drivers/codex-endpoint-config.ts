@@ -17,12 +17,12 @@ export function decodeRoutedCodexConfig(raw: object, label = "Company"): CodexEn
 }
 
 export function managedCodexArgs(config: CodexEndpointConfig): string[] {
-  return providerCodexArgs(config.url, "openmaus_company", "Company", "OPENMAUSBOT_COMPANY_API_KEY");
+  return providerCodexArgs(config.url, "seira_company", "Company", "SEIRA_COMPANY_API_KEY");
 }
 
 export function endpointCodexArgs(config: CodexEndpointConfig): string[] {
-  return [...providerCodexArgs(config.url, "openmaus_endpoint", "Direct API", "OPENMAUSBOT_CODEX_API_KEY"),
-    "-c", "model_providers.openmaus_endpoint.supports_websockets=false",
+  return [...providerCodexArgs(config.url, "seira_endpoint", "Direct API", "SEIRA_CODEX_API_KEY"),
+    "-c", "model_providers.seira_endpoint.supports_websockets=false",
     "-c", "features.tool_search=false"];
 }
 

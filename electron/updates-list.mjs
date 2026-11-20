@@ -4,10 +4,10 @@ const LOOPBACK = /^http:\/\/(?:127\.0\.0\.1|\[::1\]):([1-9][0-9]{0,4})$/;
 const RECEIPT = /^[A-Za-z0-9_-]{43}$/;
 const MAX_BODY = 64 * 1024;
 
-/** `OMB_UPDATES_ORIGIN` is honoured only for a loopback http fixture; any other value falls back to the public list. */
+/** `SEIRA_UPDATES_ORIGIN` is honoured only for a loopback http fixture; any other value falls back to the public list. */
 export function updatesListOrigin(env = process.env) {
-  const match = typeof env.OMB_UPDATES_ORIGIN === "string" ? LOOPBACK.exec(env.OMB_UPDATES_ORIGIN) : null;
-  return match && Number(match[1]) <= 65535 ? env.OMB_UPDATES_ORIGIN : UPDATES_LIST_ORIGIN;
+  const match = typeof env.SEIRA_UPDATES_ORIGIN === "string" ? LOOPBACK.exec(env.SEIRA_UPDATES_ORIGIN) : null;
+  return match && Number(match[1]) <= 65535 ? env.SEIRA_UPDATES_ORIGIN : UPDATES_LIST_ORIGIN;
 }
 
 export function createUpdatesList({ origin = UPDATES_LIST_ORIGIN, fetcher = fetch } = {}) {

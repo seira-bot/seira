@@ -131,7 +131,7 @@ chmod +x /tmp/Seira.AppImage /tmp/Seira-old.AppImage 2>/dev/null
 
 # 1. New AppImage, no display: the message goes to the terminal.
 started=$SECONDS
-env -u DISPLAY -u WAYLAND_DISPLAY OMB_DATA_DIR="$(mktemp -d)" timeout 20 /tmp/Seira.AppImage >/tmp/appimage.out 2>/tmp/appimage.err
+env -u DISPLAY -u WAYLAND_DISPLAY SEIRA_DATA_DIR="$(mktemp -d)" timeout 20 /tmp/Seira.AppImage >/tmp/appimage.out 2>/tmp/appimage.err
 code=$?
 say "appimage-terminal-exit=$code seconds=$((SECONDS - started))"
 say "appimage-terminal-message=$(grep -c "Seira can't open from this AppImage on this computer." /tmp/appimage.err)"
@@ -144,7 +144,7 @@ export DISPLAY=:99
 sleep 2
 
 # 2. New AppImage on a desktop: the message shows as a dialog. Close it the way a person would.
-OMB_DATA_DIR="$(mktemp -d)" /tmp/Seira.AppImage >/tmp/appimage-gui.out 2>/tmp/appimage-gui.err &
+SEIRA_DATA_DIR="$(mktemp -d)" /tmp/Seira.AppImage >/tmp/appimage-gui.out 2>/tmp/appimage-gui.err &
 GUI=$!
 for _ in $(seq 1 10); do pgrep -x zenity >/dev/null && break; sleep 1; done
 sleep 1
@@ -157,7 +157,7 @@ say "appimage-desktop-exit=$?"
 
 # 3. The older AppImage, when given: the unpatched AppRun on the same host.
 if [ -x /tmp/Seira-old.AppImage ]; then
-  OMB_DATA_DIR="$(mktemp -d)" /tmp/Seira-old.AppImage >/tmp/old-appimage.log 2>&1 &
+  SEIRA_DATA_DIR="$(mktemp -d)" /tmp/Seira-old.AppImage >/tmp/old-appimage.log 2>&1 &
   OLD=$!
   say "old-appimage-health-seconds=$(wait_health "$OLD" 150)"
   say "old-appimage-cmdline-has-no-sandbox=$(ps -eo args | grep -E '[/]tmp/\.mount_Seira' | grep -c -e '--no-sandbox')"
@@ -171,13 +171,13 @@ if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /tmp/Seira-amd64.d
 else
   say "deb-install=FAIL"; tail -20 /tmp/deb-install.log | sed 's/^/RESULT   /'; exit 1
 fi
-say "deb-package: $(dpkg-query -W -f='${Package} ${Version} ${Status}' openmausbot)"
+say "deb-package: $(dpkg-query -W -f='${Package} ${Version} ${Status}' seira)"
 say "deb-chrome-sandbox=$(stat -c '%U:%G:%a' /opt/Seira/chrome-sandbox)"
-say "deb-browser-profile-loaded=$(sudo aa-status 2>/dev/null | grep -c openmausbot-browser)"
+say "deb-browser-profile-loaded=$(sudo aa-status 2>/dev/null | grep -c seira-browser)"
 say "deb-desktop-entry=$(grep -h '^Exec=' /usr/share/applications/bot.seira.app.desktop)"
 
 DATA=$(mktemp -d)
-OMB_DATA_DIR="$DATA" /opt/Seira/openmausbot >/tmp/deb-electron.log 2>&1 &
+SEIRA_DATA_DIR="$DATA" /opt/Seira/seira >/tmp/deb-electron.log 2>&1 &
 APP=$!
 say "deb-health-seconds=$(wait_health "$APP" 150)"
 sleep 5
@@ -185,7 +185,7 @@ say "deb-process-alive=$(kill -0 "$APP" 2>/dev/null && echo yes || echo no)"
 say "deb-cmdline-has-no-sandbox=$(ps -eo args | grep -E '^/opt/Seira/' | grep -c -e '--no-sandbox')"
 say "deb-setuid-sandbox-procs=$(ps -eo args | grep -c '^/opt/Seira/chrome-sandbox')"
 seccomp=""
-for pid in $(pgrep -f -- '^/opt/Seira/openmausbot --type=renderer'); do
+for pid in $(pgrep -f -- '^/opt/Seira/seira --type=renderer'); do
   seccomp="$seccomp $(awk '/^Seccomp:/ { print $2 }' "/proc/$pid/status" 2>/dev/null)"
 done
 say "deb-renderer-seccomp-modes:${seccomp:- none}"

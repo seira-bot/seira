@@ -1,4 +1,4 @@
-// OMB Cloud Pro home machine. The server binds 127.0.0.1 behind an edge proxy and every request carries X-Forwarded-*
+// Seira Cloud Pro home machine. The server binds 127.0.0.1 behind an edge proxy and every request carries X-Forwarded-*
 // headers, so no network request is ever the loopback owner. The Admin never holds a session: it signs a request with the
 // bootstrap secret (HMAC-SHA256 over method, path and query, timestamp, nonce and body hash). A valid pairing request opens
 // one ordinary pairing window; a valid health request reads the content-free health report (server/cloud-health.ts).
@@ -15,9 +15,9 @@ import { isLoopbackHost } from "./request-auth.ts";
 import { formatPairingCode, type SessionRegistry } from "./sessions.ts";
 
 /** Any of these switches the server into Cloud home mode; then all are required. */
-export const CLOUD_HOME_KEYS = ["OMB_CLOUD_ROLE", "OMB_CLOUD_MACHINE_ID", "OMB_CLOUD_ADMIN_URL", "OMB_CLOUD_BOOTSTRAP_SECRET"] as const;
+export const CLOUD_HOME_KEYS = ["SEIRA_CLOUD_ROLE", "SEIRA_CLOUD_MACHINE_ID", "SEIRA_CLOUD_ADMIN_URL", "SEIRA_CLOUD_BOOTSTRAP_SECRET"] as const;
 /** A platform model gateway's settings: a Cloud home logs one warning, and neither it nor anything it starts sees them. */
-export const CLOUD_IGNORED_KEYS = ["OMB_HOSTED_MODEL_URL", "OMB_HOSTED_MODEL_TOKEN", "OMB_HOSTED_MODELS"] as const;
+export const CLOUD_IGNORED_KEYS = ["SEIRA_HOSTED_MODEL_URL", "SEIRA_HOSTED_MODEL_TOKEN", "SEIRA_HOSTED_MODELS"] as const;
 export const CLOUD_PAIRING_PATH = "/api/cloud/pairing";
 export const CLOUD_HEALTH_PATH = "/api/cloud/health";
 export const CLOUD_PAIRING_DEFAULT_TTL_S = 300;
@@ -31,7 +31,7 @@ export const CLOUD_PAIRING_SKEW_S = 300;
 /** How long a used nonce is refused. Longer than the whole accepted window. */
 export const CLOUD_PAIRING_NONCE_MS = 10 * 60_000;
 const MAX_NONCES = 10_000;
-export const CLOUD_HOME_MARKER = ".omb-cloud-home.json";
+export const CLOUD_HOME_MARKER = ".seira-cloud-home.json";
 
 export type CloudHomeRole = "home" | "team";
 
@@ -43,7 +43,7 @@ export interface CloudHomeConfig {
   machineId: string;
   adminOrigin: string;
   publicOrigin: string;
-  /** The addresses this home answered at before a move to another provider (OMB_CLOUD_LEGACY_ORIGINS), each an exact https
+  /** The addresses this home answered at before a move to another provider (SEIRA_CLOUD_LEGACY_ORIGINS), each an exact https
    * origin. The old address forwards here with Host rewritten to `publicOrigin`'s name, so a page or client still on it
    * sends that address as its Origin, which counts as this home's own. Empty for a home that never moved. */
   legacyOrigins: string[];
@@ -73,31 +73,31 @@ function exactHttpsOrigin(raw: string | undefined, name: string): string {
 
 export const MAX_LEGACY_ORIGINS = 8;
 
-/** OMB_CLOUD_LEGACY_ORIGINS, comma-separated: exact https origins only, never a loopback name (a loopback Origin means this
+/** SEIRA_CLOUD_LEGACY_ORIGINS, comma-separated: exact https origins only, never a loopback name (a loopback Origin means this
  * machine), at most MAX_LEGACY_ORIGINS; this home's own address among them is dropped. */
 function legacyOrigins(raw: string | undefined, publicOrigin: string): string[] {
   const entries = (raw ?? "").split(",").map((entry) => entry.trim()).filter(Boolean);
-  if (entries.length > MAX_LEGACY_ORIGINS) invalid(`OMB_CLOUD_LEGACY_ORIGINS names more than ${MAX_LEGACY_ORIGINS} origins`);
-  const origins = entries.map((entry) => exactHttpsOrigin(entry, "every OMB_CLOUD_LEGACY_ORIGINS entry"));
-  if (origins.some((origin) => isLoopbackHost(new URL(origin).host))) invalid("OMB_CLOUD_LEGACY_ORIGINS must not name a loopback address");
+  if (entries.length > MAX_LEGACY_ORIGINS) invalid(`SEIRA_CLOUD_LEGACY_ORIGINS names more than ${MAX_LEGACY_ORIGINS} origins`);
+  const origins = entries.map((entry) => exactHttpsOrigin(entry, "every SEIRA_CLOUD_LEGACY_ORIGINS entry"));
+  if (origins.some((origin) => isLoopbackHost(new URL(origin).host))) invalid("SEIRA_CLOUD_LEGACY_ORIGINS must not name a loopback address");
   return [...new Set(origins)].filter((origin) => origin !== publicOrigin);
 }
 
 /** Null on any machine that is not a Cloud home; throws, so the server refuses to start, on a partial or invalid one. */
 export function cloudHomeConfiguration(env: NodeJS.ProcessEnv = process.env): CloudHomeConfig | null {
   if (!cloudHomeConfigured(env)) return null;
-  if (env.OMB_DESKTOP_PARENT === "1") invalid("the desktop app cannot run as a Cloud home machine");
-  if (hostedWorkspaceConfigured(env)) invalid("a Cloud home is not a hosted team workspace; remove OMB_ADMIN_URL, OMB_ADMIN_WORKSPACE and OMB_ADMIN_MEMBERSHIP");
-  const role = env.OMB_CLOUD_ROLE;
-  if (role !== "home" && role !== "team") invalid('OMB_CLOUD_ROLE must be "home" or "team"; this image runs the home machine');
+  if (env.SEIRA_DESKTOP_PARENT === "1") invalid("the desktop app cannot run as a Cloud home machine");
+  if (hostedWorkspaceConfigured(env)) invalid("a Cloud home is not a hosted team workspace; remove SEIRA_ADMIN_URL, SEIRA_ADMIN_WORKSPACE and SEIRA_ADMIN_MEMBERSHIP");
+  const role = env.SEIRA_CLOUD_ROLE;
+  if (role !== "home" && role !== "team") invalid('SEIRA_CLOUD_ROLE must be "home" or "team"; this image runs the home machine');
   const team = role === "team" ? cloudTeamConfiguration(env) : null;
-  const machineId = env.OMB_CLOUD_MACHINE_ID ?? "";
-  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/.test(machineId)) invalid("OMB_CLOUD_MACHINE_ID must be the Admin's machine id (letters, digits, dashes)");
-  const adminOrigin = exactHttpsOrigin(env.OMB_CLOUD_ADMIN_URL, "OMB_CLOUD_ADMIN_URL");
-  const publicOrigin = exactHttpsOrigin(env.OMB_PUBLIC_URL, "OMB_PUBLIC_URL");
-  const legacy = legacyOrigins(env.OMB_CLOUD_LEGACY_ORIGINS, publicOrigin);
-  const bootstrapSecret = env.OMB_CLOUD_BOOTSTRAP_SECRET ?? "";
-  if (!/^[A-Za-z0-9_-]{43,128}$/.test(bootstrapSecret)) invalid("OMB_CLOUD_BOOTSTRAP_SECRET must be at least 256 bits of base64url");
+  const machineId = env.SEIRA_CLOUD_MACHINE_ID ?? "";
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/.test(machineId)) invalid("SEIRA_CLOUD_MACHINE_ID must be the Admin's machine id (letters, digits, dashes)");
+  const adminOrigin = exactHttpsOrigin(env.SEIRA_CLOUD_ADMIN_URL, "SEIRA_CLOUD_ADMIN_URL");
+  const publicOrigin = exactHttpsOrigin(env.SEIRA_PUBLIC_URL, "SEIRA_PUBLIC_URL");
+  const legacy = legacyOrigins(env.SEIRA_CLOUD_LEGACY_ORIGINS, publicOrigin);
+  const bootstrapSecret = env.SEIRA_CLOUD_BOOTSTRAP_SECRET ?? "";
+  if (!/^[A-Za-z0-9_-]{43,128}$/.test(bootstrapSecret)) invalid("SEIRA_CLOUD_BOOTSTRAP_SECRET must be at least 256 bits of base64url");
   const warnings: string[] = [];
   const ignored = CLOUD_IGNORED_KEYS.filter((key) => env[key] !== undefined);
   if (ignored.length) warnings.push(`ignoring ${ignored.join(", ")}: Cloud Pro includes no AI; people sign in with their own Claude or ChatGPT account, or an API key`);
@@ -111,12 +111,12 @@ const TEAM_LANGUAGE = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})?$/;
 
 /** A Team Cloud boots with the Admin's team id and the team's name, and answers by that name. */
 function cloudTeamConfiguration(env: NodeJS.ProcessEnv): CloudTeam {
-  const id = env.OMB_CLOUD_TEAM_ID ?? "";
-  if (!TEAM_ID.test(id)) invalid("OMB_CLOUD_TEAM_ID must be the Admin's team id (letters, digits, dashes)");
-  const name = (env.OMB_CLOUD_TEAM_NAME ?? "").trim();
-  if (!TEAM_NAME.test(name)) invalid("OMB_CLOUD_TEAM_NAME must be the team's name (1 to 80 characters)");
+  const id = env.SEIRA_CLOUD_TEAM_ID ?? "";
+  if (!TEAM_ID.test(id)) invalid("SEIRA_CLOUD_TEAM_ID must be the Admin's team id (letters, digits, dashes)");
+  const name = (env.SEIRA_CLOUD_TEAM_NAME ?? "").trim();
+  if (!TEAM_NAME.test(name)) invalid("SEIRA_CLOUD_TEAM_NAME must be the team's name (1 to 80 characters)");
   // A language the app doesn't know is ignored rather than refused: the Team Cloud still boots, in its own default.
-  const language = (env.OMB_CLOUD_TEAM_LANGUAGE ?? "").trim().toLowerCase();
+  const language = (env.SEIRA_CLOUD_TEAM_LANGUAGE ?? "").trim().toLowerCase();
   return { id, name, ...(TEAM_LANGUAGE.test(language) ? { language } : {}) };
 }
 
@@ -143,7 +143,7 @@ export function firstCloudTurnPatch(turn: { cloudHome: boolean; recorded: string
   return { onboarding: { firstTurnAt: (turn.now ?? new Date()).toISOString() } };
 }
 
-/** Must match openmaus-cloud's cloudRequestSignature. `target` is the path and query exactly as the Admin sent them. */
+/** Must match seira-cloud's cloudRequestSignature. `target` is the path and query exactly as the Admin sent them. */
 export function cloudRequestSignature(secret: string, timestamp: string, nonce: string, method: string, target: string, body: Buffer | string): string {
   const bodyHash = createHash("sha256").update(body).digest("base64url");
   return createHmac("sha256", secret).update(`v1\n${timestamp}\n${nonce}\n${method}\n${target}\n${bodyHash}`).digest("base64url");

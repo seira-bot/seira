@@ -13,11 +13,11 @@ const relaunchModule = join(here, "relaunch-after-exit.cjs");
 test("outside an AppImage the desktop restarts through Electron with the given arguments", () => {
   const { relaunchAfterExit } = createRequire(import.meta.url)(relaunchModule);
   const calls = [];
-  relaunchAfterExit({ relaunch: (options) => calls.push(options) }, ["--flag", "openmausbot://x"], {
+  relaunchAfterExit({ relaunch: (options) => calls.push(options) }, ["--flag", "seira://x"], {
     env: {},
     onError: (error) => assert.fail(error),
   });
-  assert.deepEqual(calls, [{ args: ["--flag", "openmausbot://x"] }]);
+  assert.deepEqual(calls, [{ args: ["--flag", "seira://x"] }]);
 });
 
 test("the desktop never calls Electron's relauncher directly", () => {
@@ -36,7 +36,7 @@ test("an AppImage desktop restarts its AppImage after exit, with its arguments a
   skip: process.platform !== "linux" && "AppImages run only on Linux",
   timeout: 45_000,
 }, async (t) => {
-  const workspace = mkdtempSync(join(tmpdir(), "omb-desktop-relaunch-"));
+  const workspace = mkdtempSync(join(tmpdir(), "seira-desktop-relaunch-"));
   t.after(() => rmSync(workspace, { recursive: true, force: true }));
   const launched = join(workspace, "Seira-1.0.0.AppImage");
   const receipt = join(workspace, "restarted.json");
@@ -51,7 +51,7 @@ test("an AppImage desktop restarts its AppImage after exit, with its arguments a
     const { readFileSync, writeFileSync } = require("node:fs");
     // A zombie has exited, though kill(pid, 0) still answers for it.
     let parentAlive = true;
-    try { parentAlive = !/^\\d+ \\(.*\\) [ZX] /.test(readFileSync("/proc/" + process.env.OMB_RELAUNCH_TEST_PARENT + "/stat", "utf8")); }
+    try { parentAlive = !/^\\d+ \\(.*\\) [ZX] /.test(readFileSync("/proc/" + process.env.SEIRA_RELAUNCH_TEST_PARENT + "/stat", "utf8")); }
     catch (error) { if (error.code === "ENOENT") parentAlive = false; else throw error; }
     writeFileSync(${JSON.stringify(receipt)}, JSON.stringify({ parentAlive, args: process.argv.slice(2),
       noNewPrivs: readFileSync("/proc/self/status", "utf8").match(/NoNewPrivs:\\s*(\\d)/)?.[1] }));
@@ -67,7 +67,7 @@ test("an AppImage desktop restarts its AppImage after exit, with its arguments a
       app.setPath("userData", ${JSON.stringify(join(workspace, "user-data"))});
       app.whenReady().then(() => {
         process.env.APPIMAGE = ${JSON.stringify(launched)};
-        process.env.OMB_RELAUNCH_TEST_PARENT = String(process.pid);
+        process.env.SEIRA_RELAUNCH_TEST_PARENT = String(process.pid);
         let cleaned = false;
         app.on("before-quit", event => {
           if (cleaned) return;
@@ -121,7 +121,7 @@ test("in a snap the desktop restarts through the snap's command, never Electron'
   const { relaunchAfterExit } = createRequire(import.meta.url)(relaunchModule);
   const calls = [];
   const errors = [];
-  const empty = mkdtempSync(join(tmpdir(), "omb-snap-path-"));
+  const empty = mkdtempSync(join(tmpdir(), "seira-snap-path-"));
   try {
     // With nothing in PATH the waiting shell cannot start: the failure goes to onError, so the path taken was the snap's.
     relaunchAfterExit({ relaunch: (options) => calls.push(options) }, ["--flag"], {

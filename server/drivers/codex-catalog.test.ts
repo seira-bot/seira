@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 function scratchHome(files: Record<string, string>, parent = tmpdir()): string {
-  const home = mkdtempSync(join(parent, "omb-codex-catalog-"));
+  const home = mkdtempSync(join(parent, "seira-codex-catalog-"));
   scratchDirs.push(home);
   const root = join(home, ".codex");
   mkdirSync(root, { recursive: true });
@@ -66,7 +66,7 @@ describe("decodeCodexSelection", () => {
 
 describe("readCodexModelCatalog", () => {
   it("returns the static cloud fallback when there is no config or CLI probe", async () => {
-    expect(await readCodexModelCatalog({ HOME: join(tmpdir(), "omb-codex-missing-home") })).toEqual(
+    expect(await readCodexModelCatalog({ HOME: join(tmpdir(), "seira-codex-missing-home") })).toEqual(
       STATIC_CODEX_MODELS,
     );
   });
@@ -74,7 +74,7 @@ describe("readCodexModelCatalog", () => {
   it("uses every visible page from the installed Codex app-server catalog", async () => {
     chmodSync(FAKE_CLI, 0o755);
     const catalog = await readCodexModelCatalog(
-      { HOME: join(tmpdir(), "omb-codex-app-server-models"), PATH: process.env.PATH },
+      { HOME: join(tmpdir(), "seira-codex-app-server-models"), PATH: process.env.PATH },
       fetch,
       FAKE_CLI,
     );
@@ -91,7 +91,7 @@ describe("readCodexModelCatalog", () => {
   it("adds a Fast row after each model that offers Fast and does not already run on it", async () => {
     chmodSync(FAKE_CLI, 0o755);
     const catalog = await readCodexModelCatalog(
-      { HOME: join(tmpdir(), "omb-codex-app-server-tiers"), PATH: process.env.PATH, FAKE_CODEX_TIERS: "1" },
+      { HOME: join(tmpdir(), "seira-codex-app-server-tiers"), PATH: process.env.PATH, FAKE_CODEX_TIERS: "1" },
       fetch,
       FAKE_CLI,
     );
@@ -168,7 +168,7 @@ name = "oMLX"
     const ignored = scratchHome({
       "config.toml": `model_provider = "omlx"\nmodel = "ignored"\n`,
     });
-    const parent = mkdtempSync(join(tmpdir(), "omb-codex-home-"));
+    const parent = mkdtempSync(join(tmpdir(), "seira-codex-home-"));
     scratchDirs.push(parent);
     const codexHome = join(parent, "codex");
     mkdirSync(codexHome, { recursive: true });

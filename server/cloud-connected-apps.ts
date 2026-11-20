@@ -40,7 +40,7 @@ export interface CloudConnectedAppsOptions {
   brokerUrl: string;
   /** composio.setManagedBrokerAccess, plus anything that tells clients. */
   apply(access: ManagedComposioAccess | null): void;
-  /** OMB_CLOUD_CONNECTED_APPS_GRANT: the Admin's proof that this is a paid Cloud, which raises its daily app-event limit. */
+  /** SEIRA_CLOUD_CONNECTED_APPS_GRANT: the Admin's proof that this is a paid Cloud, which raises its daily app-event limit. */
   cloudGrant?: string;
   /** Whether the owner's own Composio project key is saved; while it is, nothing is sent to the service. */
   ownKey?: () => boolean;
@@ -204,11 +204,11 @@ export function startCloudConnectedApps(options: CloudConnectedAppsOptions): Clo
 
 let started: CloudConnectedApps | null = null;
 /** The connected-apps service a Cloud home and a Team Cloud's members register with: only the one that
- * OMB_COMPOSIO_BROKER_URL names. "" for none. */
-export const cloudConnectedAppsBrokerUrl = (): string => managedComposioBrokerUrl(process.env.OMB_COMPOSIO_BROKER_URL);
+ * SEIRA_COMPOSIO_BROKER_URL names. "" for none. */
+export const cloudConnectedAppsBrokerUrl = (): string => managedComposioBrokerUrl(process.env.SEIRA_COMPOSIO_BROKER_URL);
 
 /** A Cloud home registers with the service its plan includes. A self-hosted release build registers too, with
- * Seira's service unless OMB_COMPOSIO_BROKER_URL names another. A token in OMB_COMPOSIO_BROKER_TOKEN replaces
+ * Seira's service unless SEIRA_COMPOSIO_BROKER_URL names another. A token in SEIRA_COMPOSIO_BROKER_TOKEN replaces
  * registration, and a source run, a desktop child and a hosted workspace register nothing. */
 export function startServerConnectedApps(input: {
   cloudHome: boolean;
@@ -221,13 +221,13 @@ export function startServerConnectedApps(input: {
 }): void {
   if (started) return;
   if (!input.cloudHome && !input.selfHosted) return;
-  if (!input.cloudHome && process.env.OMB_COMPOSIO_BROKER_TOKEN?.trim()) return;
+  if (!input.cloudHome && process.env.SEIRA_COMPOSIO_BROKER_TOKEN?.trim()) return;
   const say = (line: string) => (input.cloudHome ? `cloud home: ${line}` : line);
   if (managedComposioBrokerOff()) {
-    console.log(say("the connected-apps service is switched off (OMB_COMPOSIO_BROKER)"));
+    console.log(say("the connected-apps service is switched off (SEIRA_COMPOSIO_BROKER)"));
     return;
   }
-  const configured = process.env.OMB_COMPOSIO_BROKER_URL;
+  const configured = process.env.SEIRA_COMPOSIO_BROKER_URL;
   const brokerUrl = input.cloudHome
     ? cloudConnectedAppsBrokerUrl()
     : managedComposioBrokerUrl(configured, { packaged: input.packaged });

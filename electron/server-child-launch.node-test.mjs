@@ -14,7 +14,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 test("the packaged server forks the bootstrap with a compile cache under userData", () => {
   const resourcesPath = path.join("/Applications", "Seira.app", "Contents", "Resources");
-  const userData = path.join("/Users", "someone", "Library", "Application Support", "OpenMausBot");
+  const userData = path.join("/Users", "someone", "Library", "Application Support", "Seira");
   assert.deepEqual(serverChildLaunch({ resourcesPath, userData, env: {}, exists: () => true }), {
     entry: path.join(resourcesPath, "server", "desktop-entry.mjs"),
     compileCacheDir: path.join(userData, "server-compile-cache"),
@@ -23,8 +23,8 @@ test("the packaged server forks the bootstrap with a compile cache under userDat
 });
 
 test("a server tree without the bootstrap forks index.js with no cache, as before", () => {
-  const resourcesPath = path.join("/opt", "OpenMausBot", "resources");
-  assert.deepEqual(serverChildLaunch({ resourcesPath, userData: "/home/someone/.config/OpenMausBot", env: {}, exists: () => false }), {
+  const resourcesPath = path.join("/opt", "Seira", "resources");
+  assert.deepEqual(serverChildLaunch({ resourcesPath, userData: "/home/someone/.config/Seira", env: {}, exists: () => false }), {
     entry: path.join(resourcesPath, "server", "index.js"),
     compileCacheDir: null,
     symlinkEnv: null,
@@ -33,11 +33,11 @@ test("a server tree without the bootstrap forks index.js with no cache, as befor
 
 test("an AppImage forks the server through a fixed link, with the cache and the link name", () => {
   const resourcesPath = "/tmp/.mount_OpenMaXk3f9a/resources";
-  const userData = "/home/someone/.config/OpenMausBot";
+  const userData = "/home/someone/.config/Seira";
   const links = [];
   const launch = serverChildLaunch({
     resourcesPath, userData,
-    env: { APPIMAGE: "/home/someone/OpenMausBot.AppImage" },
+    env: { APPIMAGE: "/home/someone/Seira.AppImage" },
     exists: () => true,
     link: (from, to) => links.push([from, to]),
   });
@@ -45,15 +45,15 @@ test("an AppImage forks the server through a fixed link, with the cache and the 
   assert.deepEqual(launch, {
     entry: path.join(resourcesPath, "server", "desktop-entry.mjs"),
     compileCacheDir: path.join(userData, "server-compile-cache"),
-    symlinkEnv: { OMB_SERVER_RESOURCES_LINK: path.join(userData, "server-resources") },
+    symlinkEnv: { SEIRA_SERVER_RESOURCES_LINK: path.join(userData, "server-resources") },
   });
 });
 
 test("an AppImage whose link cannot be made forks the real bootstrap with no cache and no flags", () => {
   const resourcesPath = "/tmp/.mount_OpenMaXk3f9a/resources";
   assert.deepEqual(serverChildLaunch({
-    resourcesPath, userData: "/home/someone/.config/OpenMausBot",
-    env: { APPIMAGE: "/home/someone/OpenMausBot.AppImage" },
+    resourcesPath, userData: "/home/someone/.config/Seira",
+    env: { APPIMAGE: "/home/someone/Seira.AppImage" },
     exists: () => true,
     link: () => { throw new Error("EACCES"); },
   }), {
@@ -67,7 +67,7 @@ test("a translocated macOS app forks the real bootstrap with no cache and makes 
   const resourcesPath = "/private/var/folders/xy/T/AppTranslocation/2F1C/d/Seira.app/Contents/Resources";
   let linked = false;
   assert.deepEqual(serverChildLaunch({
-    resourcesPath, userData: "/Users/someone/Library/Application Support/OpenMausBot",
+    resourcesPath, userData: "/Users/someone/Library/Application Support/Seira",
     env: { APPIMAGE: "/x.AppImage" }, exists: () => true, link: () => { linked = true; },
   }), {
     entry: path.join(resourcesPath, "server", "desktop-entry.mjs"),
@@ -78,7 +78,7 @@ test("a translocated macOS app forks the real bootstrap with no cache and makes 
 });
 
 test("the default link function creates the link and replaces it on the next launch", { skip: process.platform === "win32" }, (t) => {
-  const dir = mkdtempSync(path.join(tmpdir(), "omb-link-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "seira-link-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const userData = path.join(dir, "userData");
   mkdirSync(userData);
@@ -99,7 +99,7 @@ test("main forks what the helper picks and hands only the server the cache direc
   const start = main.indexOf("async function startServerOn(port,");
   const body = main.slice(start, main.indexOf("utilityProcess.fork(entry", start));
   assert.match(body, /const \{ entry, compileCacheDir, symlinkEnv \} = serverChildLaunch\(\{\n\s+resourcesPath: process\.resourcesPath,\n\s+userData: app\.getPath\("userData"\),/);
-  assert.match(body, /delete childEnv\.OMB_SERVER_COMPILE_CACHE;\n\s+if \(compileCacheDir\) childEnv\.OMB_SERVER_COMPILE_CACHE = compileCacheDir;\n\s+if \(symlinkEnv\) Object\.assign\(childEnv, symlinkEnv\);/);
+  assert.match(body, /delete childEnv\.SEIRA_SERVER_COMPILE_CACHE;\n\s+if \(compileCacheDir\) childEnv\.SEIRA_SERVER_COMPILE_CACHE = compileCacheDir;\n\s+if \(symlinkEnv\) Object\.assign\(childEnv, symlinkEnv\);/);
   assert.doesNotMatch(body, /execArgv/);
   assert.doesNotMatch(body, /path\.join\(process\.resourcesPath, "server", "index\.js"\)/);
 });
@@ -110,13 +110,13 @@ test("every server child of one launch gets that launch's id, never one from the
   const start = main.indexOf("async function startServerOn(port,");
   const body = main.slice(start, main.indexOf("utilityProcess.fork(entry", start));
   const spread = body.indexOf("...process.env,");
-  const launch = body.indexOf("OMB_DESKTOP_LAUNCH_ID: desktopLaunchId,");
+  const launch = body.indexOf("SEIRA_DESKTOP_LAUNCH_ID: desktopLaunchId,");
   assert.ok(spread > 0 && launch > spread, "the launch id is set after, so over, the inherited environment");
 });
 
 // A staged copy of the bootstrap beside a stand-in index.js that reports what the server would see.
 function stage(t, indexSource = REPORTING_INDEX) {
-  const dir = mkdtempSync(path.join(tmpdir(), "omb-server-entry-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "seira-server-entry-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   mkdirSync(path.join(dir, "server"));
   copyFileSync(bootstrapSource, path.join(dir, "server", "desktop-entry.mjs"));
@@ -131,12 +131,12 @@ import { execFileSync } from "node:child_process";
 const later = globalThis.setTimeout;
 globalThis.setTimeout = (callback, _delay, ...args) => later(callback, 0, ...args);
 const child = JSON.parse(execFileSync(process.execPath, ["-e",
-  "process.stdout.write(JSON.stringify([process.env.OMB_SERVER_COMPILE_CACHE ?? null, process.env.NODE_COMPILE_CACHE ?? null]))"],
+  "process.stdout.write(JSON.stringify([process.env.SEIRA_SERVER_COMPILE_CACHE ?? null, process.env.NODE_COMPILE_CACHE ?? null]))"],
   { encoding: "utf8" }));
 later(() => console.log(JSON.stringify({
   started: true,
   cacheDir: module.getCompileCacheDir() ?? null,
-  env: [process.env.OMB_SERVER_COMPILE_CACHE ?? null, process.env.NODE_COMPILE_CACHE ?? null],
+  env: [process.env.SEIRA_SERVER_COMPILE_CACHE ?? null, process.env.NODE_COMPILE_CACHE ?? null],
   child,
 })), 300);
 `;
@@ -145,8 +145,8 @@ function runEntry(dir, cacheRoot, extraEnv = {}) {
   const env = { ...process.env };
   delete env.NODE_COMPILE_CACHE;
   delete env.NODE_DISABLE_COMPILE_CACHE;
-  if (cacheRoot !== undefined) env.OMB_SERVER_COMPILE_CACHE = cacheRoot;
-  else delete env.OMB_SERVER_COMPILE_CACHE;
+  if (cacheRoot !== undefined) env.SEIRA_SERVER_COMPILE_CACHE = cacheRoot;
+  else delete env.SEIRA_SERVER_COMPILE_CACHE;
   Object.assign(env, extraEnv);
   const result = spawnSync(process.execPath, [path.join(dir, "server", "desktop-entry.mjs")], { encoding: "utf8", env, timeout: 20_000 });
   const line = result.stdout.trim().split("\n").filter(Boolean).at(-1);
@@ -298,7 +298,7 @@ console.log(JSON.stringify({
   b: bUrl,
   c: cjs,
   c2: require("./lib/c.cjs"),
-  link: process.env.OMB_SERVER_RESOURCES_LINK ?? null,
+  link: process.env.SEIRA_SERVER_RESOURCES_LINK ?? null,
 }));
 `;
 const B_SOURCE = `
@@ -324,7 +324,7 @@ module.exports = __filename;
 `;
 
 function stageResources(t, name) {
-  const root = path.join(mkdtempSync(path.join(tmpdir(), "omb-resources-")), name);
+  const root = path.join(mkdtempSync(path.join(tmpdir(), "seira-resources-")), name);
   t.after(() => rmSync(path.dirname(root), { recursive: true, force: true }));
   mkdirSync(path.join(root, "server", "lib"), { recursive: true });
   copyFileSync(bootstrapSource, path.join(root, "server", "desktop-entry.mjs"));
@@ -355,7 +355,7 @@ test("the server loads its modules through the fixed link and reuses the cache a
   const b = stageResources(t, "mount-b");
   const link = path.join(path.dirname(a), "server-resources");
   const cache = path.join(path.dirname(a), "cache");
-  const env = { OMB_SERVER_COMPILE_CACHE: cache, OMB_SERVER_RESOURCES_LINK: link };
+  const env = { SEIRA_SERVER_COMPILE_CACHE: cache, SEIRA_SERVER_RESOURCES_LINK: link };
   symlinkSync(a, link, "dir");
   const first = runLinked(path.join(a, "server", "desktop-entry.mjs"), env);
   assert.ok(underLink(first.report, link), JSON.stringify(first.report));
@@ -374,7 +374,7 @@ test("the server loads its modules through the fixed link and reuses the cache a
 test("a missing link leaves the server on its real path", { skip: !hooksSupported }, (t) => {
   const real = stageResources(t, "mount-a");
   const missing = path.join(path.dirname(real), "no-such-link");
-  const { report } = runLinked(path.join(real, "server", "desktop-entry.mjs"), { OMB_SERVER_RESOURCES_LINK: missing });
+  const { report } = runLinked(path.join(real, "server", "desktop-entry.mjs"), { SEIRA_SERVER_RESOURCES_LINK: missing });
   assert.ok(underLink(report, realpathSync(real)), JSON.stringify(report));
   assert.equal(report.link, null);
 });
@@ -384,6 +384,6 @@ test("a link to another app leaves the server on its real path", { skip: !hooksS
   const other = stageResources(t, "mount-b");
   const link = path.join(path.dirname(real), "server-resources");
   symlinkSync(other, link, "dir");
-  const { report } = runLinked(path.join(real, "server", "desktop-entry.mjs"), { OMB_SERVER_RESOURCES_LINK: link });
+  const { report } = runLinked(path.join(real, "server", "desktop-entry.mjs"), { SEIRA_SERVER_RESOURCES_LINK: link });
   assert.ok(underLink(report, realpathSync(real)), JSON.stringify(report));
 });

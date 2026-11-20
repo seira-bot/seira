@@ -30,7 +30,7 @@ export interface TeamCatalogEntry {
 }
 
 export interface TeamCatalog {
-  format: "openmaus.catalog";
+  format: "seira.catalog";
   version: 1;
   repositoryUrl: typeof TEAM_LIBRARY_REPOSITORY;
   teams: TeamCatalogEntry[];
@@ -69,7 +69,7 @@ function stringList(value: unknown, field: string, maxItems: number): string[] {
 
 /** Validate the remotely maintained index before any of it reaches the renderer. */
 export function parseTeamCatalog(value: unknown): TeamCatalog {
-  if (!isRecord(value) || value.format !== "openmaus.catalog" || value.version !== 1) {
+  if (!isRecord(value) || value.format !== "seira.catalog" || value.version !== 1) {
     throw new Error("The team library catalog is not supported");
   }
   if (!Array.isArray(value.teams) || value.teams.length > 100) {
@@ -99,7 +99,7 @@ export function parseTeamCatalog(value: unknown): TeamCatalog {
       ...(raw.package !== undefined
         ? { package: relativeFile(raw.package, `${field}.package`, ".md", "packages/") }
         : {}),
-      manifest: relativeFile(raw.manifest, `${field}.manifest`, ".mausteam.json", prefix),
+      manifest: relativeFile(raw.manifest, `${field}.manifest`, ".seirateam.json", prefix),
       ...(raw.folder === `teams/${slug}` ? { folder: `teams/${slug}` } : {}),
       readme: relativeFile(raw.readme, `${field}.readme`, "README.md", prefix),
       members:
@@ -115,7 +115,7 @@ export function parseTeamCatalog(value: unknown): TeamCatalog {
     };
   });
   return {
-    format: "openmaus.catalog",
+    format: "seira.catalog",
     version: 1,
     repositoryUrl: TEAM_LIBRARY_REPOSITORY,
     teams,
@@ -245,10 +245,10 @@ export function githubManifestUrls(input: string): string[] {
       return [
         `https://raw.githubusercontent.com/${owner}/${repo}/main/botmrr.md`,
         `https://raw.githubusercontent.com/${owner}/${repo}/main/team.md`,
-        `https://raw.githubusercontent.com/${owner}/${repo}/main/team.mausteam.json`,
+        `https://raw.githubusercontent.com/${owner}/${repo}/main/team.seirateam.json`,
         `https://raw.githubusercontent.com/${owner}/${repo}/master/botmrr.md`,
         `https://raw.githubusercontent.com/${owner}/${repo}/master/team.md`,
-        `https://raw.githubusercontent.com/${owner}/${repo}/master/team.mausteam.json`,
+        `https://raw.githubusercontent.com/${owner}/${repo}/master/team.seirateam.json`,
       ];
     }
     if (parts.length >= 5 && (parts[2] === "blob" || parts[2] === "raw")) {

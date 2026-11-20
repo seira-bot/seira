@@ -1,4 +1,4 @@
-/** What MausBot is doing about a cloud computer that stopped answering, as `GET /api/bots/:id/computer/recovery` reports it.
+/** What Seira is doing about a cloud computer that stopped answering, as `GET /api/bots/:id/computer/recovery` reports it.
  * `not-responding`, `restoring`, `restarting` and `replacing` are under way; the others are how it ended. `restoring`: the
  * provider says the computer's disk is still being put back after a wake, so it is waited for before any restart. */
 export const CLOUD_COMPUTER_RECOVERY_STATES = [
@@ -36,7 +36,7 @@ export interface CloudComputerDisk {
   spaceClearedAt?: number;
 }
 
-/** What the bot is told, in place of a computer call, while its computer is not answering and MausBot is bringing it
+/** What the bot is told, in place of a computer call, while its computer is not answering and Seira is bringing it
  * back, and the call waited for that as long as it could. Says nothing of a replacement, which may be switched off. */
 export const CLOUD_COMPUTER_NOT_RESPONDING =
   "This bot's cloud computer isn't responding yet. Seira keeps trying to bring it back by itself, and this turn can go on once it answers. This call was not performed. Repeat it in a minute.";

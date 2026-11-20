@@ -15,8 +15,8 @@ archives and stages `dist-native/browser/PLATFORM-ARCH`, copied as
 Each package includes only its target architecture: macOS ARM64/x64,
 Windows x64, or Linux x64.
 
-The server receives `OMB_RESOURCES_PATH` from Electron. It resolves an explicit
-`OMB_AGENT_BROWSER_PATH` override first, then the complete bundled engine and
+The server receives `SEIRA_RESOURCES_PATH` from Electron. It resolves an explicit
+`SEIRA_AGENT_BROWSER_PATH` override first, then the complete bundled engine and
 browser, then a separately installed engine or PATH. An incomplete bundle
 fails closed with a reinstall/update message. An explicit
 `AGENT_BROWSER_EXECUTABLE_PATH` still overrides the browser executable.
@@ -52,8 +52,8 @@ Servers and the Docker image name their browser with
 Chrome for Testing `agent-browser install` put in place. A Linux server where
 agent-browser already finds a browser (Chrome, Chromium or Brave on `PATH`, or a
 complete Puppeteer or Playwright Chromium in their caches) keeps it; with none,
-it downloads its own as in step 2. `OMB_CHROME_PATH`
-names one explicitly. An `OMB_AGENT_BROWSER_PATH` engine keeps its own choice
+it downloads its own as in step 2. `SEIRA_CHROME_PATH`
+names one explicitly. An `SEIRA_AGENT_BROWSER_PATH` engine keeps its own choice
 unless a Chrome is named too.
 
 **Identity.** The chosen Chrome reports exactly what it reports headed, read
@@ -62,20 +62,20 @@ from the binary itself once per version: its own user agent without
 platform version, architecture). agent-browser runs a generated launcher
 (`browser/chrome-launcher.sh`, `.cmd` on Windows) that adds
 `--disable-blink-features=AutomationControlled`, that user agent, the primary
-display's size and, when OMB knows it, the language; on a server it also
+display's size and, when Seira knows it, the language; on a server it also
 passes the server's `TZ`. A bot's Chrome never touches the person's keychain
 or keyring (`--use-mock-keychain` on macOS, `--password-store=basic` on
 Linux), and on macOS it always runs with the person's own home, so no
 "keychain cannot be found" dialog can appear. A second DevTools connection gives every page,
 cross-site frame and worker the matching client hints before it runs.
 Nothing is invented: Chrome for Testing reports Chromium brands, Google Chrome
-its own. `OMB_BROWSER_SCREEN`, `OMB_BROWSER_LANG` and `OMB_BROWSER_TIMEZONE`
+its own. `SEIRA_BROWSER_SCREEN`, `SEIRA_BROWSER_LANG` and `SEIRA_BROWSER_TIMEZONE`
 override the display, language and zone.
 
 `seira browser status`, the server's startup log and the
 `browserEngine.chrome` field of its configuration status name the choice, for
 example `Google Chrome 155 (installed)`. **Rollback:** start the server with
-`OMB_BROWSER_LEGACY_SHELL=1` to run exactly the previous engine.
+`SEIRA_BROWSER_LEGACY_SHELL=1` to run exactly the previous engine.
 
 `node --experimental-strip-types scripts/verify-browser-identity.ts --public`
 checks what sites see, in a throwaway home: the identity on a loopback probe
@@ -117,7 +117,7 @@ private, own-service, link-local and metadata destinations are never sent
 through it. New connections use the saved proxy immediately. My Chrome keeps
 using the person's own Chrome settings. The built-in browser also follows the
 app's language setting for its Chrome locale and `Accept-Language`; an explicit
-`OMB_BROWSER_LANG` environment value takes precedence.
+`SEIRA_BROWSER_LANG` environment value takes precedence.
 
 | Destination | Desktop | Self-hosted server | Seira Cloud |
 |---|---|---|---|
@@ -266,7 +266,7 @@ Recording requires `ffmpeg` on the server's PATH, with `libvpx` for WebM or
 `libx264` for MP4. `agent-browser doctor` reports these optional dependencies.
 They are not bundled or required for normal browsing. Higher frame rates use
 more CPU and disk space; the actual distinct frames depend on page repaints.
-There is no recording control in OMB's browser panel.
+There is no recording control in Seira's browser panel.
 
 ## Linux sandbox
 
@@ -319,7 +319,7 @@ Windows uses an explicitly identified Seira build of agent-browser
 0.36.0, with the handle-inheritance fix from
 [upstream PR #1781](https://github.com/vercel-labs/agent-browser/pull/1781).
 The official 0.37.0 release does not contain this fix, so Windows stays on the
-native-verified `0.36.0-omb.1` revision and does not yet get the new recording
+native-verified `0.36.0-seira.1` revision and does not yet get the new recording
 options. Do not replace it with the unpatched 0.37.0 Windows binary.
 The original binary can hang when a newly started background browser holds
 the tool call's output connection open. The backport changes that Windows

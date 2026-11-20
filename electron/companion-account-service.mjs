@@ -93,13 +93,13 @@ const defaultSetTimer = (callback, milliseconds) => {
   return timer;
 };
 
-/** Only an exact origin in OMB_CONTROL_PLANE_URL turns the phone account service on, so an OTP or bearer never reaches an accidental host; an invalid value leaves it off. */
+/** Only an exact origin in SEIRA_CONTROL_PLANE_URL turns the phone account service on, so an OTP or bearer never reaches an accidental host; an invalid value leaves it off. */
 export function resolveCompanionControlPlaneURL({
   isPackaged,
   environment = process.env,
 } = {}) {
-  if (Object.hasOwn(environment, "OMB_CONTROL_PLANE_URL")) {
-    return normalizeControlPlaneURL(environment.OMB_CONTROL_PLANE_URL);
+  if (Object.hasOwn(environment, "SEIRA_CONTROL_PLANE_URL")) {
+    return normalizeControlPlaneURL(environment.SEIRA_CONTROL_PLANE_URL);
   }
   return isPackaged ? DEFAULT_COMPANION_CONTROL_PLANE_URL : "";
 }
@@ -127,7 +127,7 @@ export function createCompanionAccountService({
   firstEndpointCheckMs = DEFAULT_FIRST_ENDPOINT_CHECK_MS,
   onDemand = false,
   managedEndpointNeeded = async () => null,
-  /** MausBot Relay: `capable` makes a "no" need hold even right after sign-in; `legacyDevices` counts old phones. */
+  /** Seira Relay: `capable` makes a "no" need hold even right after sign-in; `legacyDevices` counts old phones. */
   relay = { capable: () => false, legacyDevices: async () => null },
   releaseGraceMs = DEFAULT_RELEASE_GRACE_MS,
   releaseJitterMs = DEFAULT_RELEASE_JITTER_MS,

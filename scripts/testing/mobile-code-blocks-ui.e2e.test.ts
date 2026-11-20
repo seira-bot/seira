@@ -8,8 +8,8 @@ import { ensureUiBrowser } from "./control-seira-ui.ts";
 import { fixtureApi, mountPreview, type MountedPreview } from "./preview-fixture.ts";
 import { NOTICES } from "../../src/lib/notices.ts";
 
-const enabled = process.env.OMB_UI_E2E === "1";
-if (!enabled) console.log("skipping mobile code-block UI: set OMB_UI_E2E=1 for isolated browser qualification");
+const enabled = process.env.SEIRA_UI_E2E === "1";
+if (!enabled) console.log("skipping mobile code-block UI: set SEIRA_UI_E2E=1 for isolated browser qualification");
 
 const snippets = [
   "  First plaintext block\n    Keep this indentation.\n\n",
@@ -78,7 +78,7 @@ async function connect(url: string) {
     const tools = await ensureUiBrowser();
     if (!tools.chrome) throw new Error("This recipe needs the pinned Chrome for Testing");
     fixture = await launchVerificationServer({ ...process.env, FAKE_CLAUDE_REPLIES: JSON.stringify([reply]) });
-    evidence = process.env.OMB_MOBILE_BLOCKS_EVIDENCE_DIR || join(process.env.OMB_UI_EVIDENCE_DIR || dirname(fixture.info.logPath), "mobile-code-blocks");
+    evidence = process.env.SEIRA_MOBILE_BLOCKS_EVIDENCE_DIR || join(process.env.SEIRA_UI_EVIDENCE_DIR || dirname(fixture.info.logPath), "mobile-code-blocks");
     mkdirSync(evidence, { recursive: true });
     const save = () => writeFileSync(join(evidence!, "receipt.json"), JSON.stringify(receipts, null, 2));
     const api = fixtureApi(fixture.info.url);

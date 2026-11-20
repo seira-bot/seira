@@ -78,7 +78,7 @@ export interface InternalMcpDeps {
   usedBy(name: string): string[];
   /** Shows the person a card for a change below Full access; the bot ends its turn and their answer resumes it. */
   requestApproval(proposal: { action: McpCardAction; name: string; subtitle: string; targetHash: string; fields?: McpUpdateFields }): { text: string };
-  /** Shows the person a Sign in card for a server reached by URL; the bot ends its turn and OpenMausBot resumes it when
+  /** Shows the person a Sign in card for a server reached by URL; the bot ends its turn and Seira resumes it when
    * they finish or set the card aside. */
   requestSignIn(name: string, server: StoredRemoteMcpServer): { posted: true } | { status: number; error: string };
   /** Whose lent computers this turn may use; null: nobody's. */

@@ -2,7 +2,7 @@
 
 A Cloud plan includes hosting for the sites and simple apps a bot builds, a number of apps per plan, on Seira's
 hosting account. The key to that account stays on the Admin. A Cloud home gets the Admin's relay address and a token
-of its own (`OMB_CLOUD_HOSTING_URL` and `OMB_CLOUD_HOSTING_TOKEN`), held in the server's memory and never given to a
+of its own (`SEIRA_CLOUD_HOSTING_URL` and `SEIRA_CLOUD_HOSTING_TOKEN`), held in the server's memory and never given to a
 bot, the bot box, a client, a record or a log. A bot publishes with the `publish_app` tool: the server reads the folder
 from the bot's own working folder, sends it through the relay and leaves a `.netlify-site.json` record
 (`skills/publish-to-netlify/site-record.md`, "Included hosting"), which the [Published apps](published-apps.md) page
@@ -78,11 +78,11 @@ of one app, the second publish is refused with the numbers and the offer of the 
 ## Renderer and server, end to end
 
 ```sh
-OMB_UI_EVIDENCE_DIR=evidence/included-hosting pnpm exec vitest run scripts/testing/included-hosting-ui.e2e.test.ts
+SEIRA_UI_EVIDENCE_DIR=evidence/included-hosting pnpm exec vitest run scripts/testing/included-hosting-ui.e2e.test.ts
 ```
 
 It runs when an agent-browser binary resolves, as in [Chat UI, driven headlessly](chat-ui.md), and is skipped
-otherwise. The launcher lets `OMB_CLOUD_HOSTING_URL` cross only when it is a loopback address, and the token only with
+otherwise. The launcher lets `SEIRA_CLOUD_HOSTING_URL` cross only when it is a loopback address, and the token only with
 it.
 
 - The empty page already says "0 of 3 apps included in your plan".

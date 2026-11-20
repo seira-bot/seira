@@ -14,15 +14,15 @@ afterEach(() => {
   for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true });
 });
 const scratch = () => {
-  const dir = mkdtempSync(join(tmpdir(), "omb-vm-profiles-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-vm-profiles-"));
   temporary.push(dir);
   return dir;
 };
 
-/** The exact printf the image runs to write prepare-openmausbot-workspace.sh, pointed at a scratch workspace. */
+/** The exact printf the image runs to write prepare-seira-workspace.sh, pointed at a scratch workspace. */
 function prepareScript(dir: string, workspace: string): string {
   const dockerfile = managedImageDockerfile();
-  const end = dockerfile.indexOf("> /usr/local/bin/prepare-openmausbot-workspace.sh");
+  const end = dockerfile.indexOf("> /usr/local/bin/prepare-seira-workspace.sh");
   const start = dockerfile.lastIndexOf("RUN printf", end);
   expect(start).toBeGreaterThan(-1);
   const script = join(dir, "prepare.sh");
@@ -135,7 +135,7 @@ printf '%s\\n' "$*" >> '${log}'
 [ "$1" = cp ] || { echo "unexpected: $*" >&2; exit 64; }
 ${opts.fail ? `echo '${opts.fail}' >&2; exit 1` : ""}
 src="\${2#*:}"
-[ -e "${container}$src" ] || [ -L "${container}$src" ] || { echo "Error response from daemon: Could not find the file $src in container omb" >&2; exit 1; }
+[ -e "${container}$src" ] || [ -L "${container}$src" ] || { echo "Error response from daemon: Could not find the file $src in container seira" >&2; exit 1; }
 [ -e "$3" ] && { echo "destination exists" >&2; exit 1; }
 cp -RP "${container}$src" "$3"
 `);
@@ -143,7 +143,7 @@ cp -RP "${container}$src" "$3"
   return { runtime, log };
 }
 
-const target = (workspaceDir: string): LocalVmTarget => ({ key: "bot:x", containerName: "seira-computer-x", legacyContainerName: "openmausbot-computer-x", workspaceDir, viewerPort: null, label: "x" });
+const target = (workspaceDir: string): LocalVmTarget => ({ key: "bot:x", containerName: "seira-computer-x", legacyContainerName: "seira-computer-x", workspaceDir, viewerPort: null, label: "x" });
 
 describe.skipIf(process.platform === "win32")("rescueFirefoxProfile", () => {
   it("copies user-installed desktop apps into the durable area before replacement", async () => {
@@ -195,13 +195,13 @@ describe.skipIf(process.platform === "win32")("rescueFirefoxProfile", () => {
     writeFileSync(join(container, "home", "cua", ".mozilla", "cookies.sqlite"), "signed in");
     const workspace = join(dir, "workspace");
     mkdirSync(workspace);
-    const older = { ...target(workspace), key: "bot:older-name", containerName: "seira-computer-older", legacyContainerName: "openmausbot-computer-older", label: "older" };
+    const older = { ...target(workspace), key: "bot:older-name", containerName: "seira-computer-older", legacyContainerName: "seira-computer-older", label: "older" };
     const probe: CommandRunner = async (command, args) => {
       const key = [command, ...args].join(" ");
       if (key === "/usr/bin/which docker") return { stdout: "docker" };
       if (command === "/usr/bin/which") throw new Error("missing executable");
       if (args[0] === "info") return { stdout: "29" };
-      if (key === "docker inspect openmausbot-computer-older") {
+      if (key === "docker inspect seira-computer-older") {
         return { stdout: JSON.stringify([{ Config: { Labels: { [MANAGED_LABEL]: "1", [WORKSPACE_LABEL]: "1", [TARGET_LABEL]: "older" } }, State: { Running: false } }]) };
       }
       throw new Error(`unexpected command: ${key}`);
@@ -209,7 +209,7 @@ describe.skipIf(process.platform === "win32")("rescueFirefoxProfile", () => {
     await containerComputerStatus(probe, "linux", older);
     const { runtime, log } = fakeRuntime(dir, container);
     expect(await rescueFirefoxProfile(runtime, older)).toBe("rescued");
-    expect(readFileSync(log, "utf8")).toMatch(/^cp openmausbot-computer-older:\/home\/cua\/\.mozilla /);
+    expect(readFileSync(log, "utf8")).toMatch(/^cp seira-computer-older:\/home\/cua\/\.mozilla /);
   });
 
   it("never overwrites a profile already in the workspace, and leaves a desktop whose ~/.mozilla is already a link alone", async () => {

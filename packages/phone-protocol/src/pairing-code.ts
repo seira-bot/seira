@@ -3,8 +3,8 @@
 export const PAIRING_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 export const PAIRING_CODE_LENGTH = 12;
 /** The high-entropy credential a QR carries instead of the code; accepted wherever a code is, never shown. */
-export const PAIRING_CREDENTIAL_PREFIX = "omb_pair_";
-const PAIRING_CREDENTIAL = /^omb_pair_[A-Za-z0-9_-]{43}$/;
+export const PAIRING_CREDENTIAL_PREFIX = "seira_pair_";
+const PAIRING_CREDENTIAL = /^seira_pair_[A-Za-z0-9_-]{43}$/;
 
 export function normalizePairingCode(input: string): string {
   return input
@@ -84,7 +84,7 @@ function fromLink(raw: string): string | null {
   return url.searchParams.get("token") ?? url.searchParams.get("code") ?? hash.get("code");
 }
 
-/** Reads a typed code, an `omb_pair_` credential, or a link that carries either (`openmausbot://pair?…`,
+/** Reads a typed code, an `seira_pair_` credential, or a link that carries either (`seira://pair?…`,
  * `…/pair#code=…`, `?code=…`). */
 export function readPairingInput(raw: string): PairingInput {
   let value = raw.trim();
@@ -94,7 +94,7 @@ export function readPairingInput(raw: string): PairingInput {
     if (!carried) return { kind: "wrong", problem: "notACode" };
     value = carried.trim();
   }
-  if (value.startsWith("omb_sess_")) return { kind: "wrong", problem: "scriptKey" };
+  if (value.startsWith("seira_sess_")) return { kind: "wrong", problem: "scriptKey" };
   if (value.startsWith(PAIRING_CREDENTIAL_PREFIX)) {
     return PAIRING_CREDENTIAL.test(value) ? { kind: "credential", credential: value } : { kind: "wrong", problem: "notACode" };
   }

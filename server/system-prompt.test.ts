@@ -428,7 +428,7 @@ describe("cloudHomePrompt", () => {
       expect(text).toMatch(/^ You run on the user's My Cloud, their always-on Seira in the cloud, not on their own computer\./);
       expect(text.startsWith(` You run on ${CLOUD_HOME_PLACE}.`)).toBe(true);
       expect(text).toContain("Offer what works here: the built-in browser and their cloud computer, a desktop in the cloud. Call it their cloud computer, as the app does.");
-      expect(text).not.toMatch(/\bOMB\b|\bBoat\b|\bbox\b/);
+      expect(text).not.toMatch(/\bSeira\b|\bBoat\b|\bbox\b/);
       expect(text).toContain("Never ask them to set up this computer or a Local VM; neither exists here.");
       expect(text).not.toMatch(/Computer panel|container runtime|configure/i);
     }
@@ -452,7 +452,7 @@ describe("cloudHomePrompt", () => {
     expect(cloudHomePrompt(false, [], [{ name: "Ash-MBP", platform: "darwin" }])).not.toContain("away_computers");
   });
 
-  // A Windows user was told to turn on "Let My Cloud use this Mac" on "this Mac", and the Cloud called "OMB Cloud".
+  // A Windows user was told to turn on "Let My Cloud use this Mac" on "this Mac", and the Cloud called "Seira Cloud".
   it("names the person's computer by its platform, never a Mac unless it is one, and the product by its name", () => {
     const pc = cloudHomePrompt(true, [], [{ name: "ASH-PC", platform: "win32" }]);
     expect(pc).toContain("If they ask for something on their PC (ASH-PC), check list_shared_computers");
@@ -460,7 +460,7 @@ describe("cloudHomePrompt", () => {
     const mac = cloudHomePrompt(false, [], [{ name: "Ash’s MacBook", platform: "darwin" }, { name: "ASH-PC", platform: "win32" }]);
     expect(mac).toContain("You cannot see or use their Mac (Ash’s MacBook), its screen or its files from here.");
     for (const text of [pc, mac, cloudHomePrompt(true), cloudHomePrompt(true, [], [{ name: "box", platform: "linux" }])]) {
-      expect(text).not.toMatch(/this Mac|OMB Cloud|OpenMausBot Cloud|Mac or PC/u);
+      expect(text).not.toMatch(/this Mac|Seira Cloud|Seira Cloud|Mac or PC/u);
       if (text.includes("Settings →")) expect(text).toContain("Settings → Seira Cloud");
     }
     expect(cloudHomePrompt(true, [], [{ name: "box", platform: "linux" }])).toContain("Call it their computer: never assume it is a Mac.");

@@ -27,7 +27,7 @@ For server feature switches, defaults and configuration-file instructions, see
 | A domain name, and ports 80 and 443 open | `npx @seira-bot/seira serve --domain seira.example.com` | `https://seira.example.com/pair#code=…` |
 | Tailscale on the server and your devices | `npx @seira-bot/seira serve --tailscale` | `https://<machine>.<tailnet>.ts.net/pair#code=…` |
 | Only this network (home or office) | `npx @seira-bot/seira serve --lan` | `http://192.168.1.20:8799/pair#code=…` |
-| Nothing at all | `npx @seira-bot/seira login`, then `npx @seira-bot/seira serve --tunnel` | `https://c-….openmausbot.com/pair#code=…` |
+| Nothing at all | `npx @seira-bot/seira login`, then `npx @seira-bot/seira serve --tunnel` | `https://c-….seira.bot/pair#code=…` |
 | Only the phone app, from anywhere (a machine with no tunnel address, for now) | `npx @seira-bot/seira login --relay`, then `npx @seira-bot/seira serve --relay` | a QR for the Seira app ([Seira Relay](phone-relay-server.md)) |
 
 `--lan` can be added to any of the others. Plain `http://` is only for a
@@ -50,7 +50,7 @@ In a terminal, `serve` checks the address and prints one pairing block:
 
 ```
 Seira 0.1.147 · server "hetzner-1"
-data: /home/seira/.openmausbot
+data: /home/seira/.seira
 Reach    https://seira.example.com   ✓ answers as this server (11:04)
 
 Pairing code   7KQ2-M9XD-H4TP   works once, until 11:14 · everything
@@ -78,7 +78,7 @@ hetzner-1** finishes. You can also type the address (`seira.example.com`,
 
 `serve` with no way in mints no code. It lists the ways in instead. Every
 command the CLI prints starts the way you started it (`npx @seira-bot/seira`,
-`openmausbot`, `pnpm omb`, or `docker compose exec omb openmausbot`), so you
+`seira`, `pnpm seira`, or `docker compose exec seira seira`), so you
 can paste it as is.
 
 ### Already have cloudflared, Caddy or nginx in front
@@ -92,7 +92,7 @@ Then:
 npx @seira-bot/seira serve --public-url https://seira.example.com
 ```
 
-Setting `OMB_PUBLIC_URL=https://seira.example.com` in the environment works the
+Setting `SEIRA_PUBLIC_URL=https://seira.example.com` in the environment works the
 same way. If the Reach line says
 `✗ https://seira.example.com doesn't reach this server`, the tunnel points
 somewhere else. Fix that, then run `npx @seira-bot/seira status` to check again.
@@ -103,15 +103,15 @@ From a checkout of the repository:
 
 ```sh
 docker compose up -d --build                  # http://localhost:8080 on this machine
-docker compose exec omb openmausbot pair      # a code, and a sign-in link for this machine's browser
+docker compose exec seira seira pair      # a code, and a sign-in link for this machine's browser
 ```
 
 To pair from other devices on the same network, publish the port there and
 name the address they use:
 
 ```sh
-OMB_BIND_ADDRESS=0.0.0.0 OMB_PUBLIC_URL=http://192.168.1.20:8080 docker compose up -d
-docker compose exec omb openmausbot pair      # Link http://192.168.1.20:8080/pair#code=…
+SEIRA_BIND_ADDRESS=0.0.0.0 SEIRA_PUBLIC_URL=http://192.168.1.20:8080 docker compose up -d
+docker compose exec seira seira pair      # Link http://192.168.1.20:8080/pair#code=…
 ```
 
 Do this only on a machine behind your router. A machine with a public address
@@ -121,16 +121,16 @@ would answer the whole internet over plain http. More options are in
 ### Docker with your own domain
 
 On a fresh Ubuntu 22.04 or 24.04 server (x86-64), one command checks the
-server, installs Seira under `/opt/openmausbot` and ends with HTTPS on your
+server, installs Seira under `/opt/seira` and ends with HTTPS on your
 domain:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh | sudo sh -s -- --domain seira.example.com
-cd /opt/openmausbot && sudo docker compose exec omb openmausbot pair   # Link https://<DOMAIN>/pair#code=…
+cd /opt/seira && sudo docker compose exec seira seira pair   # Link https://<DOMAIN>/pair#code=…
 ```
 
 Add `--check` to only check the server. Running it again repairs;
-`sudo /opt/openmausbot/update.sh` updates, with a copy of the data first;
+`sudo /opt/seira/update.sh` updates, with a copy of the data first;
 `--uninstall` stops the server and keeps your data. The checks, the files it
 writes and what it contacts are in
 [Deploy on a VPS](deploy-vps.md#quick-start-one-command-on-your-own-domain).
@@ -140,8 +140,8 @@ By hand, on any system with Docker:
 ```sh
 git clone https://github.com/seira-bot/seira && cd seira/deploy
 cp .env.example .env                          # set DOMAIN (and ENGINES)
-docker compose pull omb && docker compose up -d
-docker compose exec omb openmausbot pair      # Link https://<DOMAIN>/pair#code=…
+docker compose pull seira && docker compose up -d
+docker compose exec seira seira pair      # Link https://<DOMAIN>/pair#code=…
 ```
 
 Caddy gets the certificate. See [Docker (with HTTPS on your own domain)](#docker-with-https-on-your-own-domain).
@@ -183,10 +183,10 @@ service:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/podman/install.sh | sh
-podman exec -it openmausbot openmausbot pair      # a code, and a sign-in link for this machine's browser
+podman exec -it seira seira pair      # a code, and a sign-in link for this machine's browser
 ```
 
-It writes a Quadlet unit, `~/.config/containers/systemd/openmausbot.container`,
+It writes a Quadlet unit, `~/.config/containers/systemd/seira.container`,
 that runs the image pinned by its digest. systemd starts it again when it
 fails or stops answering its health check. It starts at boot once your user
 may run services without being logged in. The installer checks this and
@@ -221,12 +221,12 @@ uses; a `--dir` that names another folder is refused. It also refuses while
 
 | | Where |
 |---|---|
-| Data (chats, settings, engine logins) | `~/.local/share/openmausbot/data`, owned by your user on the host |
-| The server's settings | `~/.local/share/openmausbot/server.env`. Apply a change with `systemctl --user restart openmausbot` |
-| Log | `journalctl --user -u openmausbot -f` |
-| Status | `systemctl --user status openmausbot` |
+| Data (chats, settings, engine logins) | `~/.local/share/seira/data`, owned by your user on the host |
+| The server's settings | `~/.local/share/seira/server.env`. Apply a change with `systemctl --user restart seira` |
+| Log | `journalctl --user -u seira -f` |
+| Status | `systemctl --user status seira` |
 
-**Update.** `~/.local/share/openmausbot/update.sh` updates to the stable
+**Update.** `~/.local/share/seira/update.sh` updates to the stable
 version (`--version X.Y.Z` for another, `--check` to only look). It is
 `deploy/update.sh`, as for Docker installs: it downloads the image by digest,
 stops the service, copies the data into a Podman volume and checks the copy,
@@ -236,16 +236,16 @@ the copy of the data go back. `update.sh --rollback` goes back after an update
 that worked. Run it as your user, without `sudo`. The app's **Update server**
 button does not run it on this install yet: run `update.sh` yourself.
 When a rollback cannot find the old version by its digest, it names the
-copy it kept on this machine, `openmausbot-before-update:local`, in the
+copy it kept on this machine, `seira-before-update:local`, in the
 unit and in `.env`. Running the installer again never downloads that name:
 it pins the copy by the digest it came with, or, when it has none, keeps
 it as it is and says so, until the next `update.sh`.
 
 **Uninstall.** Run the same command with `--uninstall`. The data stays.
 Some of its files can belong to the container's other user ids, so remove
-it through Podman: `podman unshare rm -rf ~/.local/share/openmausbot`. The
+it through Podman: `podman unshare rm -rf ~/.local/share/seira`. The
 copy of the data the last update kept is a Podman volume:
-`podman volume ls --filter label=com.mausbot.role=update-backup`.
+`podman volume ls --filter label=com.seira.role=update-backup`.
 
 **What rootless does not do.**
 
@@ -253,7 +253,7 @@ copy of the data the last update kept is a Podman volume:
   not include bubblewrap, so bots run in the server's container, beside its
   data, as with the Docker image. Use this install on a machine only you
   sign in to. Bubblewrap itself can run in a rootless container, with the
-  repository's seccomp profile (`connector/profiles/seccomp-omb-home.json`)
+  repository's seccomp profile (`connector/profiles/seccomp-seira-home.json`)
   and `/proc` left uncovered (`--security-opt unmask=/proc/*`). There the
   box's self-check passes 31 of 32 checks; the kernel keyring stays
   reachable. This install sets neither.
@@ -290,7 +290,7 @@ Debian 13 and Fedora), SELinux hosts and ARM64 have not been tried.
 | `tailscale: HTTPS certificates are off for this tailnet, so this server listens on http://…` | Tailscale can't serve HTTPS yet, so the server listens on its own tailnet address. It works, and only your tailnet reaches it. | For an `https://` address, turn on HTTPS certificates at https://login.tailscale.com/admin/dns, then run `serve --tailscale` again. |
 | `No Seira server is running here. Start it: … serve` | `pair` found no server on this port. | Start it, or pass the server's `--port` and `--data-dir`. |
 | `Get a pairing code: seira pair` and no code | The server runs as a service or under `docker compose logs`, where codes stay out of logs. | Run that command in a terminal. |
-| "This shared server takes no pairing commands from this machine." | The server runs with `OMB_LOOPBACK_TRUST=service`. | Let people sign in with their email (`seira access add you@example.com`), or pair from a signed-in admin's Settings. |
+| "This shared server takes no pairing commands from this machine." | The server runs with `SEIRA_LOOPBACK_TRUST=service`. | Let people sign in with their email (`seira access add you@example.com`), or pair from a signed-in admin's Settings. |
 
 ## Reference
 
@@ -331,7 +331,7 @@ it (for services and scripts). The [setup guide](cli-onboarding.md) explains
 the choices. The npm package does not include engine CLIs (`claude`,
 `codex`, …); setup can install and sign in the supported ones. Run setup,
 engine sign-ins and the server as the same unprivileged user: engine
-credentials live in that user's home, not all under `.openmausbot`. For a
+credentials live in that user's home, not all under `.seira`. For a
 Linux service, the [VPS guide](deploy-vps.md#before-you-start) covers the
 account, engines and browser libraries. After installing browser libraries
 as administrator, run `npx @seira-bot/seira browser install` as the service user
@@ -339,7 +339,7 @@ too.
 
 - **`--public-url URL`**: you already have HTTPS in front. The address must
   be https, or http on a private network. After start, `serve` fetches
-  `URL/.well-known/openmausbot/environment` and prints whether it answers
+  `URL/.well-known/seira/environment` and prints whether it answers
   with this server's own id. The pairing link uses that address either way.
 - **`--domain NAME`**: point the domain's A record at this machine and open
   ports 80 and 443. The server downloads a pinned Caddy once into its data
@@ -367,7 +367,7 @@ too.
   says so and stays on loopback. Plain http travels in clear, so use it only
   on a network you trust.
 - **`--tunnel`**: `npx @seira-bot/seira login` reserves an address like
-  `https://c-….openmausbot.com` for this machine (an emailed code signs it
+  `https://c-….seira.bot` for this machine (an emailed code signs it
   in). `serve --tunnel` connects it through a Cloudflare tunnel, the same one
   the desktop app uses for its companion. The first run downloads
   `cloudflared` (pinned version and digest) into the data dir. Only traffic
@@ -376,9 +376,9 @@ too.
   never as the owner. That listener gzips JSON replies of 1 KB or more when
   the client accepts gzip; the loopback port never compresses.
   `npx @seira-bot/seira logout` releases the address. The account credentials
-  live in `~/.openmausbot/tunnel-account.json` (mode 0600). Started from a
+  live in `~/.seira/tunnel-account.json` (mode 0600). Started from a
   fleet or a container, where nobody can type an emailed code? Set
-  `OMB_INSTALLATION_CREDENTIAL` to the installation credential the fleet
+  `SEIRA_INSTALLATION_CREDENTIAL` to the installation credential the fleet
   issued and skip `login`. The address and connector token are fetched at
   every start, and nothing is written to disk. A rejected credential stops
   the start with a clear message rather than serving locally.
@@ -393,14 +393,14 @@ service never downloads a new release on its own.
 ## Connect ChatGPT from the browser
 
 A browser paired with Full access can connect an installed Codex CLI without opening a
-terminal: **Settings → Engines → Codex → Connect ChatGPT**. OMB starts
+terminal: **Settings → Engines → Codex → Connect ChatGPT**. Seira starts
 `codex login --device-auth` on the server and shows a one-time code. Choose
 **Open ChatGPT sign-in**, enter the code on OpenAI's page, and complete sign-in
-with your own account. OMB checks for completion and refreshes the model list.
+with your own account. Seira checks for completion and refreshes the model list.
 You can cancel or request a fresh code after it expires.
 
 The server still needs Codex installed and runs it as the same operating-system
-user as OMB. Your password never goes through OMB; Codex stores its credentials
+user as Seira. Your password never goes through Seira; Codex stores its credentials
 on the server. Treat server access and backups as sensitive. Device-code login
 may need enabling in ChatGPT security settings or by your workspace admin; see
 [OpenAI's headless authentication guide](https://learn.chatgpt.com/docs/auth#login-on-headless-devices).
@@ -409,7 +409,7 @@ other providers retain their existing sign-in methods.
 
 Once connected, Settings shows the account email when Codex can report it.
 To switch accounts, open **Manage account and sign-in** under that line
-and choose **Sign out of ChatGPT**: OMB runs `codex logout` on the server as
+and choose **Sign out of ChatGPT**: Seira runs `codex logout` on the server as
 the same user and confirms with `codex login status`. New ChatGPT tasks need
 a connected account. Stop running Codex tasks before switching: sign-out does
 not cancel work already in progress. API-key logins are not removed by this
@@ -429,7 +429,7 @@ relative name (or `@` at the zone root). Server/proxy instructions are under
 The IP comes from this server's network interfaces, never the browser, tunnel
 hostname or an IP-echo service. Only a single unambiguous public IPv4 is shown.
 For containers/NAT or hosts with multiple public addresses, an administrator can
-set `OMB_PUBLIC_IPV4` to the public IPv4 of the HTTPS proxy and restart OMB.
+set `SEIRA_PUBLIC_IPV4` to the public IPv4 of the HTTPS proxy and restart Seira.
 This is a display hint, not proof of reachability; verification still checks
 HTTPS and the workspace identity. If the IP is missing or invalid, the UI asks
 for administrator help instead of inventing a DNS value.
@@ -440,12 +440,12 @@ To configure the connection:
    Add **AAAA** only when IPv6 routes to the same server.
 2. Configure HTTPS with a reverse proxy such as Caddy. The Settings example uses
    your actual app and webhook ports; the [supplied Caddyfile](../deploy/Caddyfile)
-   is the reference. Keep OMB listening on loopback, forward the original Host
+   is the reference. Keep Seira listening on loopback, forward the original Host
    and proxy headers, and keep event streams unbuffered. Caddy needs incoming
    ports 80/443 for its usual certificate setup. For containers, follow the
    Docker recipe below so Caddy can reach the loopback listener.
 3. Enter `bots.yourcompany.com` (or its bare `https://` origin) and choose
-   **Connect domain**. OMB checks HTTPS and the workspace identity at that
+   **Connect domain**. Seira checks HTTPS and the workspace identity at that
    domain before saving it. An incorrect domain leaves the existing address
    unchanged.
 
@@ -454,7 +454,7 @@ address for **new server pairing links**. Removing it restores that fallback
 address, if any; neither action changes DNS, the proxy, bots, conversations, or
 existing sessions. A different browser origin needs its own pairing, so keep
 your original tab open until the new one works. The setting does not change
-`OMB_WEBHOOK_PUBLIC_URL`, existing webhook URLs, or the desktop companion's
+`SEIRA_WEBHOOK_PUBLIC_URL`, existing webhook URLs, or the desktop companion's
 managed connection. This feature is for self-hosted servers, not the desktop
 app's managed phone endpoint.
 
@@ -469,7 +469,7 @@ use the [local Compose setup](../deploy/local/README.md). It defaults to
 `http://localhost:8080` and supports optional `.env` overrides.
 
 On Ubuntu, the [installer](deploy-vps.md#quick-start-one-command-on-your-own-domain)
-sets this up with one command, keeping the data in `/opt/openmausbot/data`.
+sets this up with one command, keeping the data in `/opt/seira/data`.
 The rest of this section is the same setup by hand.
 
 One tenant = one container for the server plus Caddy for HTTPS.
@@ -479,7 +479,7 @@ ports 80/443 open.
 ```sh
 git clone https://github.com/seira-bot/seira && cd seira/deploy
 cp .env.example .env            # set DOMAIN
-docker compose pull omb && docker compose up -d
+docker compose pull seira && docker compose up -d
 ```
 
 That starts `ghcr.io/seira-bot/seira:latest`, the newest image a maintainer
@@ -493,15 +493,15 @@ the `data` volume, so they survive restarts and image upgrades) and mint a
 pairing code for your first device:
 
 ```sh
-docker compose exec omb claude                       # each CLI you listed in ENGINES
-docker compose exec omb openmausbot pair             # prints a code, a link and a QR
+docker compose exec seira claude                       # each CLI you listed in ENGINES
+docker compose exec seira seira pair             # prints a code, a link and a QR
 ```
 
 Paste the link (`https://<DOMAIN>/pair#code=…`) into Seira under **＋ →
 Connect to a server**, or open it in a browser, and it is paired; see "Using it from your computer" for what a session is. Webhook
 URLs (`https://<DOMAIN>/hooks/wh_…`) work without a session, and that is the
 base the app prints on new hooks because the stack sets
-`OMB_WEBHOOK_PUBLIC_URL`.
+`SEIRA_WEBHOOK_PUBLIC_URL`.
 
 What the stack does, so you can adapt it:
 
@@ -511,11 +511,11 @@ What the stack does, so you can adapt it:
   into the image.
 - [`deploy/docker-compose.yml`](../deploy/docker-compose.yml) runs Caddy
   in its own container. It reaches the server over two Unix sockets in a
-  shared in-memory volume (`OMB_TUNNEL_SOCKET`, `OMB_WEBHOOK_SOCKET`), so the
+  shared in-memory volume (`SEIRA_TUNNEL_SOCKET`, `SEIRA_WEBHOOK_SOCKET`), so the
   server never binds anything but loopback, and a request that comes through
   Caddy is a remote one, as one through any proxy is. Caddy used to share the
   server's network instead; then a server container restarted on its own (a
-  crash, `docker compose restart`, `stop omb`) came back in a new network and
+  crash, `docker compose restart`, `stop seira`) came back in a new network and
   left Caddy refusing HTTPS in the old one while both showed healthy.
 - [`deploy/Caddyfile`](../deploy/Caddyfile) terminates TLS and forwards
   the real `Host` plus `X-Forwarded-For`/`X-Forwarded-Proto`; the server's
@@ -535,7 +535,7 @@ installed first, because those layers sit beneath the app and stay cached
 across code changes. To pick up the current ones, rebuild with a new tag:
 
 ```sh
-docker compose build --build-arg CHROME_CACHE_TAG=$(date +%F) omb && docker compose up -d
+docker compose build --build-arg CHROME_CACHE_TAG=$(date +%F) seira && docker compose up -d
 ```
 
 ## Running on a container platform (Railway, Render, Kubernetes, Cloud Run)
@@ -553,9 +553,9 @@ hold. The server image (`ghcr.io/seira-bot/seira`) is built for that:
   starts itself again under the image's tini, which then stays process 1; an
   init of the platform's own on top (`docker run --init`, Compose's
   `init: true`) does no harm. A command you give the container runs as
-  written, so start it with `openmausbot …` or `node …`
-  (`docker run --rm ghcr.io/seira-bot/seira openmausbot --version`):
-  a bare `--version` or `dist-server/openmausbot.js`, which older images
+  written, so start it with `seira …` or `node …`
+  (`docker run --rm ghcr.io/seira-bot/seira seira --version`):
+  a bare `--version` or `dist-server/seira.js`, which older images
   passed on to Node, no longer starts.
 - **Chrome does not need a larger `/dev/shm`.** Where `/dev/shm` is under
   512 MB the bots' browser keeps its shared memory in `/tmp`, so there is
@@ -567,7 +567,7 @@ hold. The server image (`ghcr.io/seira-bot/seira`) is built for that:
 - **Give the platform a way in.** The server listens on `127.0.0.1` inside
   the container, which a proxy outside the container cannot reach. Any one
   of these works:
-  - `OMB_LAN=1`: the server listens on every IPv4 address, on `OMB_PORT`
+  - `SEIRA_LAN=1`: the server listens on every IPv4 address, on `SEIRA_PORT`
     (8799 unless you set it; point the platform there). It still drops any
     connection whose either end is not a private address (10/8, 172.16/12,
     192.168/16, 100.64/10, link-local), so it answers a proxy that reaches
@@ -577,7 +577,7 @@ hold. The server image (`ghcr.io/seira-bot/seira`) is built for that:
     a remote one and has to pair.
   - A proxy next to the server (a sidecar in the same Kubernetes pod or
     Cloud Run service): share an in-memory volume between the two, set
-    `OMB_TUNNEL_SOCKET` to a socket in it, and point the proxy at that
+    `SEIRA_TUNNEL_SOCKET` to a socket in it, and point the proxy at that
     socket, as [the Compose setup](#docker-with-https-on-your-own-domain)'s
     Caddy does. A sidecar can reach `127.0.0.1:8799` too, but then it must
     add `X-Forwarded-For` to every request (Caddy does): a loopback request
@@ -610,7 +610,7 @@ Leave room for the commands bots run: budget about 80 per working bot.
 
 The limit column includes two open browsers. A server opens more when its
 limits leave room for them (at most 40% of the process limit and of the memory
-go to browsers; `OMB_BROWSER_MAX_RUNNING` sets the number instead), and each
+go to browsers; `SEIRA_BROWSER_MAX_RUNNING` sets the number instead), and each
 new browser also waits for room for its processes, as a turn does. If
 your platform's limit is fixed and lower than the row you need, the server
 still works: fewer bots run at the same moment and the others wait.
@@ -647,7 +647,7 @@ engine would not fit, and starts it by itself when there is room:
   start, such as an engine that `npx` is still installing, is left to finish
   or to time out on its own.
 
-`OMB_TURNS_MAX_RUNNING` sets how many turns run at once on the whole server:
+`SEIRA_TURNS_MAX_RUNNING` sets how many turns run at once on the whole server:
 
 | Value | What it does |
 | --- | --- |
@@ -666,7 +666,7 @@ and a Seira Cloud keeps its own rules.
 On Kubernetes a pod's process limit (`podPidsLimit`) is set above the
 container, where the server cannot read it. The server then learns it from
 the first refused start and holds turns below that count for the next half
-hour; set `OMB_TURNS_MAX_RUNNING` to a number to avoid that first refusal.
+hour; set `SEIRA_TURNS_MAX_RUNNING` to a number to avoid that first refusal.
 
 **Reading how close the server is.** At start the server logs one line with
 what it found, for example `processes: process 1 is an init; limits:
@@ -698,10 +698,10 @@ using the most memory; `GET /api/diagnostics/bots` (admin only) lists every
 bot. Bot ids and numbers only.
 
 **Idle engines close sooner when room runs short.** A conversation's engine
-stays loaded after its turn (10 minutes by default, `OMB_SESSION_IDLE_MS`;
+stays loaded after its turn (10 minutes by default, `SEIRA_SESSION_IDLE_MS`;
 30 seconds for work nobody is watching), a bot's browser stays open for its
 idle time, and a process several bots share is recycled a minute after its
-last session (`OMB_ACP_SHARED_RECYCLE_MS`; this one stays fixed). Where turns
+last session (`SEIRA_ACP_SHARED_RECYCLE_MS`; this one stays fixed). Where turns
 wait for room, a conversation's engine time and a browser's idle time shrink
 as memory or the process limit fills, down to a tenth (never below their
 floor), and engines already kept are looked at again every few seconds.
@@ -716,7 +716,7 @@ that much for each). By default it only writes down a bot that stays over
 (for 30 seconds, or sooner while memory is short): the bot's id, the memory
 it used and how it was measured, the limit, its engines and the room left
 go to the server log and the health report. Nothing is stopped. To have the
-server act, set `OMB_BOT_MEMORY_MAX_MB` to a number of MB (any Linux host,
+server act, set `SEIRA_BOT_MEMORY_MAX_MB` to a number of MB (any Linux host,
 the desktop app included); `auto` is the default (watch only) and `off` turns
 the watching off. Even then it acts only while the server is short of
 memory, only on the bot using the most, and in steps: first what the bot
@@ -747,7 +747,7 @@ git clone https://github.com/seira-bot/seira && cd seira
 pnpm install
 
 # choose where data lives and start the server
-OMB_DATA_DIR="$HOME/.openmausbot" OMB_PORT=8799 \
+SEIRA_DATA_DIR="$HOME/.seira" SEIRA_PORT=8799 \
   node --experimental-strip-types server/index.ts
 ```
 
@@ -776,10 +776,10 @@ rely on routines running unattended.
 
 Engines whose installer is an npm package (Claude Code, Codex, OpenCode,
 MiniMax, pi) can be installed and updated from **Settings → Engines** when
-npm is on the server's PATH. OMB runs `npm install -g` as its own user into
+npm is on the server's PATH. Seira runs `npm install -g` as its own user into
 `<data dir>/tools/npm`, so nothing needs sudo and nothing touches a global
 prefix; that folder goes ahead of everything else on the engines' PATH, so
-the copy OMB installed is the one bots run. The package name comes from the
+the copy Seira installed is the one bots run. The package name comes from the
 engine's own install descriptor, never from the browser. Engines installed
 by a `curl | bash` script still need the command on the server.
 
@@ -795,7 +795,7 @@ that makes one read-only request to the provider from the server.
   to sign in, and Settings → Engines shows "workspace API key" instead of a
   person. Remove the key to go back to personal logins. The server's own
   `ANTHROPIC_API_KEY` environment variable is deliberately ignored; use the
-  page, `config.json`, or `OMB_ANTHROPIC_API_KEY`.
+  page, `config.json`, or `SEIRA_ANTHROPIC_API_KEY`.
 - **OpenAI-compatible API key and base URL**: OpenRouter by default, or Groq,
   Together, a gateway, or `https://api.openai.com/v1` for OpenAI itself. This
   powers the OpenAI-compatible engine. Codex has no key path by design and
@@ -819,7 +819,7 @@ Providers added with `opencode auth login` work everywhere.
 ## Many client workspaces on one server
 
 `seira fleet` runs one workspace per client on a single Linux server,
-each as its own OS user, its own `openmausbot@<name>` service on its own
+each as its own OS user, its own `seira@<name>` service on its own
 loopback ports, its own data folder, brand, sign-in list and provider key,
 reached at `<name>.<your domain>` through the system Caddy. Bots of one
 workspace cannot read another's files or reach its API: the data lives in a
@@ -835,7 +835,7 @@ seira fleet init --domain example.com
 ```
 
 That writes the template unit, the fence and its unit, the workspace folders,
-and adds `import /etc/caddy/omb.d/*.caddy` to `/etc/caddy/Caddyfile`. Then per
+and adds `import /etc/caddy/seira.d/*.caddy` to `/etc/caddy/Caddyfile`. Then per
 client:
 
 ```sh
@@ -855,10 +855,10 @@ root service on a Unix socket only that user may open. Your workspace then
 shows **Settings → Installations** (with the enterprise `admin` feature): create
 an installation, add or remove who may sign in, suspend, resume, delete, upgrade
 all, and see each one's spend this month. Every action goes through the
-agent's audit log at `/var/log/openmausbot/fleet.jsonl`.
+agent's audit log at `/var/log/seira/fleet.jsonl`.
 
 `https://acme.example.com` is up when `create` returns; the first admin signs
-in with an emailed code. `OMB_LICENSE_KEY` in the environment (or
+in with an emailed code. `SEIRA_LICENSE_KEY` in the environment (or
 `--license-key`) is carried into every workspace so a partner's white-label
 key covers them all. Not root? Every command prints the exact steps to run as
 root instead, and `--dry-run` always prints.
@@ -889,14 +889,14 @@ reach it. On the server:
 
 ```sh
 npx @seira-bot/seira pair                         # npm install
-pnpm omb pair                                # from a checkout
-docker compose exec omb openmausbot pair     # Docker
+pnpm seira pair                                # from a checkout
+docker compose exec seira seira pair     # Docker
 ```
 
 It prints a 12-character pairing code (it works once, for 10 minutes, or up
 to a day with `--ttl 24h`) and the link with the code in it, built from the
 address the server is reached at (`--public-url`, `--domain`, `--tunnel`,
-`--tailscale`, `--lan`, or `OMB_PUBLIC_URL`). Open the link, or open `/pair`
+`--tailscale`, `--lan`, or `SEIRA_PUBLIC_URL`). Open the link, or open `/pair`
 on that address and type the code. The browser gets a session cookie (30
 days, renewed on use up to 180 days from pairing, revocable) and the app
 loads. `npx @seira-bot/seira devices` lists the paired devices and
@@ -1008,7 +1008,7 @@ and take a 5-minute ticket from `POST /api/auth/stream-ticket` for the
 event stream, because `EventSource` cannot set headers:
 `GET /api/events?ticket=…`.
 
-`GET /.well-known/openmausbot/environment` is public and tells a client what
+`GET /.well-known/seira/environment` is public and tells a client what
 it is talking to: a stable `environmentId`, the label, the version and
 capabilities. Saved connections check the id so a reused address that now
 points at a different server is refused loudly.
@@ -1048,11 +1048,11 @@ its window adds the app's own per-launch owner header to every request and
 WebSocket it sends to its server, and no other Electron session may reach the
 server at all.
 
-For development, `pnpm dev:server` sets `OMB_DEV_TRUST_LOCAL_BROWSER=1`, so a
+For development, `pnpm dev:server` sets `SEIRA_DEV_TRUST_LOCAL_BROWSER=1`, so a
 browser on Vite's dev page (`pnpm dev`) is the owner as before. The server
 honours it only when it runs from source with owner trust, logs a warning, and
 ignores it in a build, the desktop app, a hosted workspace and Seira Cloud.
-Run `OMB_DEV_TRUST_LOCAL_BROWSER=0 pnpm dev:server` to try the sign-in.
+Run `SEIRA_DEV_TRUST_LOCAL_BROWSER=0 pnpm dev:server` to try the sign-in.
 
 ### Loopback trust: owner or service
 
@@ -1071,7 +1071,7 @@ local requests: service trust (hosted workspace); without a session, loopback ma
 | Trust | Default for | A session-less loopback request may |
 |---|---|---|
 | `owner` | a self-hosted server, the desktop app | do everything, as today |
-| `service` | a hosted workspace: any of `OMB_ADMIN_URL`, `OMB_ADMIN_WORKSPACE` or `OMB_ADMIN_MEMBERSHIP` set (shared-workspace Full access only works there, so it is covered too) | read health, who-am-I, the bot list, a thread's messages and a bot's picture; open a thread; send through the guarded route; watch and stop its exact request; withdraw a queued line; **decline** a card; use the bots' own capability routes (`/api/internal/*`, which check their own per-turn token) |
+| `service` | a hosted workspace: any of `SEIRA_ADMIN_URL`, `SEIRA_ADMIN_WORKSPACE` or `SEIRA_ADMIN_MEMBERSHIP` set (shared-workspace Full access only works there, so it is covered too) | read health, who-am-I, the bot list, a thread's messages and a bot's picture; open a thread; send through the guarded route; watch and stop its exact request; withdraw a queued line; **decline** a card; use the bots' own capability routes (`/api/internal/*`, which check their own per-turn token) |
 
 Under `service`, everything else from loopback needs a real session and
 answers 403: settings and keys (`/api/config`), instances, MCP servers,
@@ -1082,8 +1082,8 @@ local caller a hosted workspace has) needs nothing more and keeps working
 unchanged. Sessions — a portal sign-in, an email sign-in or a pairing — work
 exactly as before, with their own scopes.
 
-Set `OMB_LOOPBACK_TRUST=service` on a self-hosted server people share (with
-an email sign-in list, say), or `OMB_LOOPBACK_TRUST=owner` to opt a hosted
+Set `SEIRA_LOOPBACK_TRUST=service` on a self-hosted server people share (with
+an email sign-in list, say), or `SEIRA_LOOPBACK_TRUST=owner` to opt a hosted
 workspace back into the old behaviour (the log then warns). Any other value
 means `service`. The desktop app ignores the setting: its local changes
 already need the app's own per-launch capability. Seira Cloud ignores
@@ -1103,7 +1103,7 @@ With `service` on a self-hosted server:
   in with their email (`seira access add you@example.com`, which edits
   the sign-in list on disk).
 - A browser on an SSH tunnel gets the sign-in page instead of the app.
-- The MCP server script works with `OPENMAUSBOT_TOKEN` set to a paired session.
+- The MCP server script works with `SEIRA_TOKEN` set to a paired session.
 
 **What `service` does not close yet.** Any bot's shell can still do
 everything the Slack worker does, and on a shared workspace that is a real
@@ -1127,8 +1127,8 @@ people use every day, let them sign in with an emailed code instead: set an
 allow-list, and `/pair` on your server offers "Sign in with your email" first.
 
 ```sh
-OMB_SIGNIN_EMAILS="her@yourcompany.com, @yourcompany.com"   # full access
-OMB_SIGNIN_MEMBER_EMAILS="freelancer@example.com"          # chat and approvals only
+SEIRA_SIGNIN_EMAILS="her@yourcompany.com, @yourcompany.com"   # full access
+SEIRA_SIGNIN_MEMBER_EMAILS="freelancer@example.com"          # chat and approvals only
 ```
 
 Signed in as an admin? Settings → Remote access → **Who can sign in with an
@@ -1152,7 +1152,7 @@ is bootstrapped; while it does, Settings refuses to change that list and says
 which variable to change instead. One that is empty, as `.env.example` and the
 Compose files leave them, leaves the list to Settings.
 
-The code itself comes from `accounts.openmausbot.com`, the Seira
+The code itself comes from `accounts.seira.bot`, the Seira
 account service, so your server needs no email credentials. Your server asks
 it to send the code, checks the answer, and then issues its own session
 cookie: the browser only ever talks to your server, and who is welcome is
@@ -1165,8 +1165,8 @@ through the account service and no Seira account is made, give the server
 an SMTP address:
 
 ```sh
-OMB_SIGNIN_SMTP_URL="smtps://signin%40yourcompany.com:PASSWORD@smtp.yourcompany.com:465"
-OMB_SIGNIN_SMTP_FROM="Seira <signin@yourcompany.com>"   # else the user name, if it is an address
+SEIRA_SIGNIN_SMTP_URL="smtps://signin%40yourcompany.com:PASSWORD@smtp.yourcompany.com:465"
+SEIRA_SIGNIN_SMTP_FROM="Seira <signin@yourcompany.com>"   # else the user name, if it is an address
 ```
 
 `smtps://` uses TLS from the start (port 465); `smtp://` upgrades with
@@ -1188,7 +1188,7 @@ with the address filled in, and the one-time code still goes to that address.
 Roles change with one click; removing someone stops new sign-ins.
 
 On a hosted workspace whose members your organization's Admin manages
-(`OMB_ADMIN_MEMBERSHIP=portal`), this list decides nothing, so Settings →
+(`SEIRA_ADMIN_MEMBERSHIP=portal`), this list decides nothing, so Settings →
 People shows, read-only, who has signed in and what they spent, with a
 **Manage people in Admin** link to that workspace in Admin → People. Remote
 access there lists signed-in devices and offers no pairing codes, since a
@@ -1296,7 +1296,7 @@ and one link.
 When someone opens the app, the server downloads the project's public announcements file from GitHub
 (`raw.githubusercontent.com`, at most once an hour, a plain GET with nothing of yours in it) and its pages may show one of
 its cards in the corner: product news, a tip, or a sponsor's offer, each once per person
-([docs/announcements.md](announcements.md)). Set `OMB_DISABLE_ANNOUNCEMENTS=1` in the server's environment to never
+([docs/announcements.md](announcements.md)). Set `SEIRA_DISABLE_ANNOUNCEMENTS=1` in the server's environment to never
 download it and never show those cards.
 
 ## Attachment storage
@@ -1305,8 +1305,8 @@ Files people attach, and pictures a bot shows inline, live in the
 `attachments` folder of the data directory. Nothing there is deleted, since
 old messages still point at it, so the server stops taking new files once the
 folder holds 512 MB. A team fills that sooner: set
-`OMB_ATTACHMENTS_MAX_BYTES` in the server's environment and restart, for
-example `OMB_ATTACHMENTS_MAX_BYTES=4294967296` for 4 GB.
+`SEIRA_ATTACHMENTS_MAX_BYTES` in the server's environment and restart, for
+example `SEIRA_ATTACHMENTS_MAX_BYTES=4294967296` for 4 GB.
 
 One file can be up to 100 MB, whether a person sends it or a bot attaches it;
 that setting does not change it. It matches Cloudflare's upload ceiling, so a
@@ -1330,8 +1330,8 @@ Any reverse proxy works, given three things:
    `proxy_buffering off` in nginx); the UI streams events over SSE.
 
 Then start with `serve --public-url https://your.domain` (or set
-`OMB_PUBLIC_URL=https://your.domain`) so pairing links, and
-`OMB_WEBHOOK_PUBLIC_URL=https://your.domain` so hook URLs, are printed with
+`SEIRA_PUBLIC_URL=https://your.domain`) so pairing links, and
+`SEIRA_WEBHOOK_PUBLIC_URL=https://your.domain` so hook URLs, are printed with
 the public address. `serve` checks the address answers as this server and
 says so on its Reach line. [`deploy/Caddyfile`](../deploy/Caddyfile)
 is the reference implementation.
@@ -1390,7 +1390,7 @@ than present the old session to it.
 
 Both native apps pair this way. `seira pair --phone android` prints the
 app-scheme QR that Android's scanner needs, and the iOS app accepts either
-that QR or the web link, for example `docker compose exec omb openmausbot
+that QR or the web link, for example `docker compose exec seira seira
 pair --phone android --public-url https://your-domain`. `pair` never asks
 questions, so it works the same from a script. Nothing extra to install, and
 the phone becomes a session like any other.
@@ -1434,9 +1434,9 @@ By default nothing limits what the bots use. The owner can cap a day's and a
 month's usage, for the whole server and for each bot, in estimated dollars
 and in tokens, under **Settings → Usage → Usage caps**, in `config.json`, or
 for the server's own caps in the environment
-(`OMB_USAGE_CAP_DAILY_USD`, `OMB_USAGE_CAP_MONTHLY_USD`,
-`OMB_USAGE_CAP_DAILY_TOKENS`, `OMB_USAGE_CAP_MONTHLY_TOKENS`,
-`OMB_USAGE_CAP_STOPS`). A reached cap stops new unattended work (routines,
+(`SEIRA_USAGE_CAP_DAILY_USD`, `SEIRA_USAGE_CAP_MONTHLY_USD`,
+`SEIRA_USAGE_CAP_DAILY_TOKENS`, `SEIRA_USAGE_CAP_MONTHLY_TOKENS`,
+`SEIRA_USAGE_CAP_STOPS`). A reached cap stops new unattended work (routines,
 webhooks, app events, Bot API calls, hand-offs nobody is waiting on) until
 the day or month rolls over, and cuts nothing off mid-turn.
 [Usage caps](usage-caps.md) has every setting and what a person sees.
@@ -1482,7 +1482,7 @@ it in plain words. It is a usage limit when its words say so, or when it is a
 a shorter wait is a rate limit to try again after. A reply that only quotes
 such an error among other words stays a reply.
 
-This is on by default. Start the server with `OMB_QUOTA_SWITCH=0` to switch it
+This is on by default. Start the server with `SEIRA_QUOTA_SWITCH=0` to switch it
 off: then only the backups Automatic recovery names take over, and the
 notification says the bot waits. Any other value, or none, leaves it on. It
 has no setting in `config.json` yet.
@@ -1534,7 +1534,7 @@ or picks a model for it or one of its conversations: it moves only after a
 test result, only to an engine that answered, and only away from one whose
 latest test missed or that is signed out or turned off, or up to a better
 one. A status read that timed out moves nothing. No other bot ever moves. To stop the
-background test messages, start the server with `OMB_AI_CHECKS=0`.
+background test messages, start the server with `SEIRA_AI_CHECKS=0`.
 
 ### The decision log
 
@@ -1544,7 +1544,7 @@ device label, `loopback` for the owner, `worker` for a session-less local
 service) — is appended to `<data dir>/decisions/YYYY-MM.ndjson` (0600,
 credentials redacted). Month files are kept for at least 180 days; set
 `decisions.retentionDays` in `config.json` (or through `PUT /api/config`),
-or `OMB_DECISION_RETENTION_DAYS`, to keep them longer or shorter (1–3650
+or `SEIRA_DECISION_RETENTION_DAYS`, to keep them longer or shorter (1–3650
 days; the environment wins). A month is deleted only once all of it is older
 than the window. An older server's `decisions.ndjson` and `.1` are still read
 and age out the same way. Admins can read it back:
@@ -1571,7 +1571,7 @@ a filesystem in an image file or on a loop device is not on it.
 
 It is off unless you switch it on: set `safetyFloor.enabled` to `true` in
 `config.json` (or through `PUT /api/config`), or start the server with
-`OMB_SAFETY_FLOOR=1`, which turns it on whatever the file says.
+`SEIRA_SAFETY_FLOOR=1`, which turns it on whatever the file says.
 `GET /api/config` reports whether it is in force as `safetyFloor.enabled`.
 
 **It is not applied on a Windows server yet.** There the setting is accepted
@@ -1621,7 +1621,7 @@ list that names more than one person or a whole `@domain`, or a device paired
 (or a pairing code open) with chat-only access, whether before or after the
 change — every admin change is recorded beside the decision
 log, in `<data dir>/admin-activity/YYYY-MM.ndjson` (0600), and kept for the
-same window (`decisions.retentionDays` / `OMB_DECISION_RETENTION_DAYS`; a
+same window (`decisions.retentionDays` / `SEIRA_DECISION_RETENTION_DAYS`; a
 quiet server prunes on a timer, and pending rows are written out at
 shutdown): settings
 (which keys changed), sign-in lists and people, pairing codes and revoked
@@ -1708,8 +1708,8 @@ umask 077
 BOT_ID=your-bot-id
 THREAD_ID=your-existing-thread-id
 TOKEN=$(openssl rand -hex 32)
-printf '{ "%s": {"token":"%s","threadId":"%s"} }\n' "$BOT_ID" "$TOKEN" "$THREAD_ID" > ~/.openmausbot/external-runtimes.json
-chmod 600 ~/.openmausbot/external-runtimes.json
+printf '{ "%s": {"token":"%s","threadId":"%s"} }\n' "$BOT_ID" "$TOKEN" "$THREAD_ID" > ~/.seira/external-runtimes.json
+chmod 600 ~/.seira/external-runtimes.json
 ```
 
 Keep the file private (`600` on Unix; restrict its Windows file permissions).
@@ -1724,8 +1724,8 @@ The runtime runs the bundled MCP bridge from the source checkout with the same
 bot, thread and token (replace the port with your server's actual address):
 
 ```sh
-OMB_HARNESS_URL=http://127.0.0.1:8799 OMB_BOT_ID=$BOT_ID OMB_THREAD_ID=$THREAD_ID \
-  OMB_COMMS_TOKEN=$TOKEN OMB_EXTERNAL_RUNTIME=1 \
+SEIRA_HARNESS_URL=http://127.0.0.1:8799 SEIRA_BOT_ID=$BOT_ID SEIRA_THREAD_ID=$THREAD_ID \
+  SEIRA_COMMS_TOKEN=$TOKEN SEIRA_EXTERNAL_RUNTIME=1 \
   node --experimental-strip-types server/drivers/agents-proxy.ts
 ```
 
@@ -1763,14 +1763,14 @@ and 20 times in one turn. That notice only tells you. The loop guard, which is
 off by default, also tells the bot:
 
 - Set `loopGuard.enabled` to `true` in `config.json` (or through
-  `PUT /api/config`), or start the server with `OMB_LOOP_GUARD=1`. When the
+  `PUT /api/config`), or start the server with `SEIRA_LOOP_GUARD=1`. When the
   same whole shell command fails the same way five times in a row
   (`loopGuard.steerAt`, 2-1000), the server puts one short note into the
   running turn saying so. A command that succeeds, or that fails differently,
   ends the count, so a turn that re-runs its tests after each edit or polls a
   build is left alone.
 - Stopping the turn is a separate choice. Set `loopGuard.stopAt` (2-1000), or
-  `OMB_LOOP_GUARD_STOP_AT`, and the turn is stopped at that many identical
+  `SEIRA_LOOP_GUARD_STOP_AT`, and the turn is stopped at that many identical
   failures in a row, with a line in the chat that names the command and offers
   Retry. Leave it unset and the guard never stops a turn. A wait that fails
   until something is ready (`curl -f` against a server that is still starting)
@@ -1795,15 +1795,15 @@ that succeed. A tool call that was denied is never sent back.
 ## A turn that goes silent
 
 The server stops a turn that has sent it nothing for 20 minutes
-(`OMB_TURN_STALL_MS`) and says why in the chat. Engines report a tool only
+(`SEIRA_TURN_STALL_MS`) and says why in the chat. Engines report a tool only
 when it starts and when it ends, so while one of the turn's tools is still
-running the turn may stay silent for up to `OMB_TOOL_STALL_MS` (default 2
+running the turn may stay silent for up to `SEIRA_TOOL_STALL_MS` (default 2
 hours). Any event from the turn starts the silence over, and time spent waiting
 on a person or a computer never counts. Either way the turn stops with "no
 activity for N minutes".
 
-Both take whole milliseconds. `OMB_TURN_STALL_MS` is never below 60000 (one
-minute) and `OMB_TOOL_STALL_MS` never below `OMB_TURN_STALL_MS`. A value that
+Both take whole milliseconds. `SEIRA_TURN_STALL_MS` is never below 60000 (one
+minute) and `SEIRA_TOOL_STALL_MS` never below `SEIRA_TURN_STALL_MS`. A value that
 is not a positive finite number (empty, `65m`, `0`, a negative number,
 `Infinity`, `1e309`) leaves the default. Set them in the server's environment
 and restart it; the restart stops every running turn.
@@ -1844,13 +1844,13 @@ routine's run row, or in the Chief's "Problems to look at" chat.
 
 | Setting | Default | What it bounds |
 | --- | --- | --- |
-| `OMB_ROUTINE_FAILURES_BEFORE_SPACING` | `3` | The runs of one routine that may fail in a row before its next scheduled runs are spaced out. A run that completes, a change to the routine, turning it on again, or a run that failed only because the bot's AI is signed out, out of credit or at its usage limit ends the streak and the spacing. The skipped runs share one row: "Skipped 12 scheduled runs because its last runs failed, so its next tries are spaced out". From `1`. |
-| `OMB_ROUTINE_FAILURE_SPACING_MS` | `3600000` (1 hour) | How long after the failure that starts the spacing the next run waits. From `60000`. |
-| `OMB_ROUTINE_FAILURE_SPACING_MAX_MS` | `14400000` (4 hours) | How long after each later failure the next run waits. Never below `OMB_ROUTINE_FAILURE_SPACING_MS`. |
-| `OMB_CHIEF_INCIDENT_TURNS_PER_HOUR` | `6` | The turns a Chief of Staff is started for problems in an hour, across all the chats it hears about. Past that, the Chief is not started: you are notified of each such problem, and one line in its "Problems to look at" chat counts them, names the first five chats they came from and links the newest. From `1`. |
-| `OMB_STARTUP_ROUTINE_GAP_MS` | `1800000` (30 minutes) | On a server not started by the desktop app, how soon after the start that last ran them routines set to "Also run when Seira starts" may run again. A start within that time leaves one row per routine: "Not run at 4 starts because Seira started again soon after the start that last ran it". `0` runs them at every start. |
-| `OMB_ROUTINE_RESTART_STAGGER_MS` | `30000` (30 seconds) | The time between the runs a restart cut off as each starts again, so they do not all start at once. From `0`. |
-| `OMB_BURST_PART_MAX_RESTARTS` | `2` | The times a burst's part, or its merge, starts again after a restart cut it off. Past that the part fails with "Not started again: Seira restarted while this part ran 3 times.", and the parts are posted as they came instead of merged. From `0`. |
+| `SEIRA_ROUTINE_FAILURES_BEFORE_SPACING` | `3` | The runs of one routine that may fail in a row before its next scheduled runs are spaced out. A run that completes, a change to the routine, turning it on again, or a run that failed only because the bot's AI is signed out, out of credit or at its usage limit ends the streak and the spacing. The skipped runs share one row: "Skipped 12 scheduled runs because its last runs failed, so its next tries are spaced out". From `1`. |
+| `SEIRA_ROUTINE_FAILURE_SPACING_MS` | `3600000` (1 hour) | How long after the failure that starts the spacing the next run waits. From `60000`. |
+| `SEIRA_ROUTINE_FAILURE_SPACING_MAX_MS` | `14400000` (4 hours) | How long after each later failure the next run waits. Never below `SEIRA_ROUTINE_FAILURE_SPACING_MS`. |
+| `SEIRA_CHIEF_INCIDENT_TURNS_PER_HOUR` | `6` | The turns a Chief of Staff is started for problems in an hour, across all the chats it hears about. Past that, the Chief is not started: you are notified of each such problem, and one line in its "Problems to look at" chat counts them, names the first five chats they came from and links the newest. From `1`. |
+| `SEIRA_STARTUP_ROUTINE_GAP_MS` | `1800000` (30 minutes) | On a server not started by the desktop app, how soon after the start that last ran them routines set to "Also run when Seira starts" may run again. A start within that time leaves one row per routine: "Not run at 4 starts because Seira started again soon after the start that last ran it". `0` runs them at every start. |
+| `SEIRA_ROUTINE_RESTART_STAGGER_MS` | `30000` (30 seconds) | The time between the runs a restart cut off as each starts again, so they do not all start at once. From `0`. |
+| `SEIRA_BURST_PART_MAX_RESTARTS` | `2` | The times a burst's part, or its merge, starts again after a restart cut it off. Past that the part fails with "Not started again: Seira restarted while this part ran 3 times.", and the parts are posted as they came instead of merged. From `0`. |
 
 A routine every minute (`* * * * *`) is still accepted and is spaced out the
 same way. Identical failures are told to you and to the Chief once: two
@@ -1872,15 +1872,15 @@ its thread (and a routine's run row) gets one line saying which:
 
 | Setting | Default | What it bounds |
 | --- | --- | --- |
-| `OMB_UNATTENDED_TURN_MAX_MS` | `14400000` (4 hours) | The time one such turn may work. Time it waits on a person or a computer is not counted. From `60000`. |
-| `OMB_UNATTENDED_TURN_MAX_REQUESTS` | `400` | The requests one such turn may make to its AI. A usage report that names its call counts that call once however often it repeats; reports without a name count one call per step between tool calls; the tool calls count instead when that is the larger number. |
-| `OMB_UNATTENDED_TURN_MAX_DENIALS` | `5` | The permission requests of one such turn that may be denied or go unanswered (each unanswered one waits 15 minutes first). One a person denies is not counted. |
-| `loopGuard.unattendedStopAt`, or `OMB_LOOP_GUARD_UNATTENDED_STOP_AT` | `20` | The times in a row one shell command may fail the same way. For such a turn the loop guard (see "A bot stuck on a failing command") is on whatever `loopGuard.enabled` says, with its note at `loopGuard.steerAt` and its stop here, or at `loopGuard.stopAt` if that is lower. `2`-`1000`. |
-| `OMB_HANDOFF_MAX_FAILURES` | `5` | For work nobody is waiting on: work one request handed to other bots that may fail in a row, with none completing between. At that many the request is stopped with a line naming the last failure. |
-| `OMB_HANDOFF_MAX_TURNS` | `300` | For work nobody is waiting on: the turns one request may hand out in all, across every bot it hands work to. Nothing renews it. Past it no more work is handed out, and the bot that asked still gets one turn to wrap up what came back. |
+| `SEIRA_UNATTENDED_TURN_MAX_MS` | `14400000` (4 hours) | The time one such turn may work. Time it waits on a person or a computer is not counted. From `60000`. |
+| `SEIRA_UNATTENDED_TURN_MAX_REQUESTS` | `400` | The requests one such turn may make to its AI. A usage report that names its call counts that call once however often it repeats; reports without a name count one call per step between tool calls; the tool calls count instead when that is the larger number. |
+| `SEIRA_UNATTENDED_TURN_MAX_DENIALS` | `5` | The permission requests of one such turn that may be denied or go unanswered (each unanswered one waits 15 minutes first). One a person denies is not counted. |
+| `loopGuard.unattendedStopAt`, or `SEIRA_LOOP_GUARD_UNATTENDED_STOP_AT` | `20` | The times in a row one shell command may fail the same way. For such a turn the loop guard (see "A bot stuck on a failing command") is on whatever `loopGuard.enabled` says, with its note at `loopGuard.steerAt` and its stop here, or at `loopGuard.stopAt` if that is lower. `2`-`1000`. |
+| `SEIRA_HANDOFF_MAX_FAILURES` | `5` | For work nobody is waiting on: work one request handed to other bots that may fail in a row, with none completing between. At that many the request is stopped with a line naming the last failure. |
+| `SEIRA_HANDOFF_MAX_TURNS` | `300` | For work nobody is waiting on: the turns one request may hand out in all, across every bot it hands work to. Nothing renews it. Past it no more work is handed out, and the bot that asked still gets one turn to wrap up what came back. |
 
-The three `OMB_UNATTENDED_TURN_*` settings and
-`OMB_LOOP_GUARD_UNATTENDED_STOP_AT` also take `off`; `loopGuard.unattended:
+The three `SEIRA_UNATTENDED_TURN_*` settings and
+`SEIRA_LOOP_GUARD_UNATTENDED_STOP_AT` also take `off`; `loopGuard.unattended:
 false` in `config.json` does the same for the loop guard. Any other value that
 is not a whole number in range leaves the default. Set them in the server's
 environment and restart it.
@@ -1927,11 +1927,11 @@ own Clouds have run for 48 hours, named by the image tag `stable` and by
 [`stable.json`](https://raw.githubusercontent.com/seira-bot/seira/channels/stable.json).
 `latest` follows `main` and is not for a server you rely on. The update check
 (`GET /api/updates/check`, **Check for updates** in the app) compares the
-server with the stable version; `OMB_UPDATE_CHANNEL=newest` makes it follow
+server with the stable version; `SEIRA_UPDATE_CHANNEL=newest` makes it follow
 every release instead.
 
 A server installed with the [installer](deploy-vps.md#quick-start-one-command-on-your-own-domain)
-updates with `sudo /opt/openmausbot/update.sh`, which the installer puts there.
+updates with `sudo /opt/seira/update.sh`, which the installer puts there.
 Its admins can also press **Update server** in **Settings → Updates**, which runs
 that same script on the server; a Docker checkout gets the button with
 `sudo deploy/update-runner.sh --install`. Until the bots' sandbox is on for
@@ -1942,7 +1942,7 @@ what it can and cannot do](deploy-vps.md#from-the-app-update-server).
 
 ```sh
 cd deploy && git pull && ./update.sh                                    # Docker: copy the data, update, roll back on failure
-git pull && pnpm install && sudo systemctl restart openmausbot          # from source
+git pull && pnpm install && sudo systemctl restart seira          # from source
 ```
 
 `deploy/update.sh` is the whole routine for a Docker Compose install: the
@@ -1995,7 +1995,7 @@ You can run it yourself, as the server's user:
 seira doctor --data                 # check and report; changes nothing
 seira doctor --data --fix           # also apply the safe repairs (stop the server first)
 seira doctor --data --json          # the report as JSON
-docker compose exec omb openmausbot doctor --data   # Docker
+docker compose exec seira seira doctor --data   # Docker
 ```
 
 `--data-dir DIR` points it at another folder. It exits 0 when everything is
@@ -2006,7 +2006,7 @@ macOS).
 | Check | Looks at | Repaired by `--fix` |
 |---|---|---|
 | Data format | `data-format.json` | Never. Data from a newer version stops every repair: install that version, or roll back. |
-| Data folder lease | `openmausbot-server.lease` | A lease a dead process on this machine left is retired. A live server means nothing is changed. |
+| Data folder lease | `seira-server.lease` | A lease a dead process on this machine left is retired. A live server means nothing is changed. |
 | Folders | the data folder, `events`, `native` | Missing folders are made. |
 | Bots and rooms | `bots.json`, `groups.json` | A damaged file (not a whole list) is put back from the whole temp file of a save that was cut short. With no such copy, a copy of the damaged file is kept and you are told how to restore it. A file this user cannot read at all is reported as not checked and left alone. |
 | Unfinished saves | `<file>.<pid>.<id>.tmp` at the top of the data folder | Moved into the backup. |

@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// scripts/mcp-server.ts snapshots process.env at import time: scrub ambient OMB_* / OPENMAUSBOT_* values first.
-import "./testing/scrub-ambient-omb-env.ts";
+// scripts/mcp-server.ts snapshots process.env at import time: scrub ambient SEIRA_* / SEIRA_* values first.
+import "./testing/scrub-ambient-seira-env.ts";
 
 import {
   handleToolCall,
-  OpenMausBotApiError,
+  SeiraApiError,
   probeBaseUrls,
   processMcpMessage,
   request,
@@ -30,7 +30,7 @@ function jsonResponse(body: unknown, options: { ok?: boolean; status?: number; s
 afterEach(() => {
   vi.restoreAllMocks();
   globalThis.fetch = ORIGINAL_FETCH;
-  delete process.env.OPENMAUSBOT_TOKEN;
+  delete process.env.SEIRA_TOKEN;
 });
 
 describe("MCP JSON-RPC protocol", () => {
@@ -43,7 +43,7 @@ describe("MCP JSON-RPC protocol", () => {
     })))!);
     expect(supported.result).toMatchObject({
       protocolVersion: "2024-11-05",
-      serverInfo: { name: "openmausbot-mcp", version: "1.1.0" },
+      serverInfo: { name: "seira-mcp", version: "1.1.0" },
       capabilities: { tools: {} },
     });
 
@@ -659,7 +659,7 @@ describe("waiting on a conversation's job", () => {
   it("names an older server that cannot report a job, and a conversation that is gone as gone", async () => {
     const answering = (body: string) => vi.fn(async (path: string) => {
       if (path === "/api/bots?messages=0") return bot();
-      throw new OpenMausBotApiError(404, `Seira API error (404): ${body}`);
+      throw new SeiraApiError(404, `Seira API error (404): ${body}`);
     });
     await expect(handleToolCall("wait_for_conversation", { target_type: "bot", target_id: "bot-1" }, answering("not found")))
       .rejects.toThrow("cannot report a conversation's job");
@@ -704,10 +704,10 @@ describe("connection security and discovery", () => {
   it("accepts loopback HTTP and HTTPS origins, but rejects unsafe URL shapes", () => {
     expect(validateBaseUrl("http://127.0.0.1:8799/")).toBe("http://127.0.0.1:8799");
     expect(validateBaseUrl("http://[::1]:8799")).toBe("http://[::1]:8799");
-    expect(validateBaseUrl("https://maus.example.com")).toBe("https://maus.example.com");
-    expect(() => validateBaseUrl("ftp://maus.example.com")).toThrow("http:// or https://");
-    expect(() => validateBaseUrl("https://maus.example.com/api")).toThrow("origin without a path");
-    expect(() => validateBaseUrl("https://user:pass@maus.example.com")).toThrow("must not contain credentials");
+    expect(validateBaseUrl("https://seira.example.com")).toBe("https://seira.example.com");
+    expect(() => validateBaseUrl("ftp://seira.example.com")).toThrow("http:// or https://");
+    expect(() => validateBaseUrl("https://seira.example.com/api")).toThrow("origin without a path");
+    expect(() => validateBaseUrl("https://user:pass@seira.example.com")).toThrow("must not contain credentials");
     expect(() => validateBaseUrl("http://0.0.0.0:8799")).toThrow("open internet");
     expect(() => validateBaseUrl("http://203.0.113.9:8799")).toThrow("put HTTPS in front");
     expect(validateBaseUrl("http://192.168.1.20:8799")).toBe("http://192.168.1.20:8799");
@@ -717,20 +717,20 @@ describe("connection security and discovery", () => {
 
   it("skips a foreign process and discovers the real fallback port", async () => {
     globalThis.fetch = vi.fn(async (url: any) => {
-      if (String(url).includes(":8799")) return jsonResponse({ app: "not-openmausbot" });
-      if (String(url).includes(":18799")) return jsonResponse({ app: "openmausbot" });
+      if (String(url).includes(":8799")) return jsonResponse({ app: "not-seira" });
+      if (String(url).includes(":18799")) return jsonResponse({ app: "seira" });
       throw new Error("unexpected port");
     }) as any;
     await expect(probeBaseUrls(["http://127.0.0.1:8799", "http://127.0.0.1:18799"])).resolves.toBe("http://127.0.0.1:18799");
   });
 
   it("rejects successful non-JSON responses and sends an optional bearer token", async () => {
-    process.env.OPENMAUSBOT_TOKEN = "proxy-token";
+    process.env.SEIRA_TOKEN = "proxy-token";
     globalThis.fetch = vi.fn(async (_url: any, options: any) => {
       expect(new Headers(options.headers).get("Authorization")).toBe("Bearer proxy-token");
       return { ...jsonResponse({}), json: vi.fn(async () => { throw new Error("not json"); }) };
     }) as any;
-    await expect(request("/api/health", {}, "https://maus.example.com")).rejects.toThrow("non-JSON response");
+    await expect(request("/api/health", {}, "https://seira.example.com")).rejects.toThrow("non-JSON response");
   });
 
   it("explains how to authorize packaged write refusals", async () => {
@@ -755,8 +755,8 @@ describe("connection security and discovery", () => {
   });
 
   it("requires an explicit destination before sending a bearer token", async () => {
-    process.env.OPENMAUSBOT_TOKEN = "proxy-token";
-    await expect(resolveBaseUrl()).rejects.toThrow("OPENMAUSBOT_URL or OMB_PORT");
+    process.env.SEIRA_TOKEN = "proxy-token";
+    await expect(resolveBaseUrl()).rejects.toThrow("SEIRA_URL or SEIRA_PORT");
   });
 
   it("validates direct tool arguments", () => {

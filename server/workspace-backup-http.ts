@@ -70,7 +70,7 @@ export function createWorkspaceBackupRoutes(options: {
     const uploads = join(root, "uploads");
     if (!existsSync(uploads) || lstatSync(uploads).isSymbolicLink()) return;
     for (const entry of readdirSync(uploads, { withFileTypes: true })) {
-      if (!entry.isFile() || !/^[a-f0-9-]{36}\.ombbackup$/.test(entry.name)) continue;
+      if (!entry.isFile() || !/^[a-f0-9-]{36}\.seirabackup$/.test(entry.name)) continue;
       const file = join(uploads, entry.name);
       if (statSync(file).mtimeMs + EXPIRES_MS <= Date.now()) { try { unlinkSync(file); } catch {} }
     }
@@ -162,7 +162,7 @@ export function createWorkspaceBackupRoutes(options: {
           mkdirSync(directory, { recursive: true, mode: 0o700 });
           if (lstatSync(directory).isSymbolicLink()) throw failure("Backup storage must not be a symbolic link.");
           const id = randomUUID();
-          const file = join(directory, `${id}.ombbackup`);
+          const file = join(directory, `${id}.seirabackup`);
           let bytes = 0;
           try {
             const limit = new Transform({ transform(chunk, _encoding, callback) {

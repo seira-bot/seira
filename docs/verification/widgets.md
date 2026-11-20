@@ -39,19 +39,19 @@ FAKE_CLAUDE_SLOW_FINISH_GATE=/tmp/widget-gate \
   node --experimental-strip-types scripts/control-seira.ts ui launch --mode slow
 ```
 
-Send Pepper a message so a turn is open, read that turn's `OMB_COMMS_TOKEN`
+Send Pepper a message so a turn is open, read that turn's `SEIRA_COMMS_TOKEN`
 from `fake-claude-dump.json` in the printed data directory, and post two of
 the samples in `shared/widget-samples.ts` to `/api/internal/options-card` as
 `{"tool":"show_widget","widget":…}` with that bearer token. Create the gate
 file to let the turn finish, then:
 
 ```sh
-H=/tmp/openmausbot-verify-data-XXXXXX/ui.json
+H=/tmp/seira-verify-data-XXXXXX/ui.json
 pnpm control:seira ui snapshot --ui $H
 pnpm control:seira ui click --ui $H --name "Create routine"
 pnpm control:seira ui wait-settle --ui $H --timeout 60
 pnpm control:seira ui click --ui $H --name "Details"
-pnpm control:seira ui screenshot --ui $H --out .omb-scratch/verify-evidence/widgets.png
+pnpm control:seira ui screenshot --ui $H --out .seira-scratch/verify-evidence/widgets.png
 pnpm control:seira ui console --ui $H
 ```
 

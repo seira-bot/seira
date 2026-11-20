@@ -17,7 +17,7 @@ import { hostTimeout } from "./testing/host-timeout.ts";
 import { freePortBlock } from "./testing/ports.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
-const HOST = "omb-t-0123456789ab.fly.dev";
+const HOST = "seira-t-0123456789ab.fly.dev";
 const MAC_INSTALL = randomUUID();
 const secret = randomBytes(32).toString("base64url");
 let home = "";
@@ -49,7 +49,7 @@ async function adminPairing(): Promise<string> {
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const response = await fetch(`${base}/api/cloud/pairing`, { method: "POST", headers: {
     host: HOST, "x-forwarded-for": "203.0.113.9", "x-forwarded-proto": "https", "content-type": "application/json",
-    "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
+    "x-seira-cloud-timestamp": timestamp, "x-seira-cloud-nonce": nonce, "x-seira-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`,
   }, body });
   const granted = await response.json() as { code: string };
   const paired = await api("POST", "/api/auth/pair", { body: { code: granted.code } });
@@ -73,7 +73,7 @@ async function turnOf(name: string): Promise<Turn> {
   await expect.poll(() => {
     for (const [file, text] of readTurns()) {
       if (before.get(file) === text) continue;
-      try { const found = JSON.parse(text) as Turn; if (found.mcpConfig?.mcpServers?.agents?.env?.OMB_BOT_ID === bot.id) { turn = found; return true; } } catch {}
+      try { const found = JSON.parse(text) as Turn; if (found.mcpConfig?.mcpServers?.agents?.env?.SEIRA_BOT_ID === bot.id) { turn = found; return true; } } catch {}
     }
     return false;
   }, { timeout: 15_000 }).toBe(true);
@@ -106,8 +106,8 @@ async function connected(call: ReturnType<typeof engineFor>) {
 }
 
 beforeAll(async () => {
-  home = mkdtempSync(join(tmpdir(), "omb-cloud-lent-mcp-"));
-  const dataDir = join(home, ".openmausbot");
+  home = mkdtempSync(join(tmpdir(), "seira-cloud-lent-mcp-"));
+  const dataDir = join(home, ".seira");
   mkdirSync(dataDir, { recursive: true });
   mkdirSync(turnDumps());
   const cli = join(home, "fixture-claude.mjs");
@@ -128,9 +128,9 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     cwd: join(SERVER_DIR, ".."),
     env: {
       PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-      HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
-      OMB_CLOUD_ROLE: "home", OMB_BOT_BOX: "0", OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
-      OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_PUBLIC_URL: `https://${HOST}`,
+      HOME: home, USERPROFILE: home, SEIRA_DATA_DIR: dataDir, SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1),
+      SEIRA_CLOUD_ROLE: "home", SEIRA_BOT_BOX: "0", SEIRA_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test",
+      SEIRA_CLOUD_BOOTSTRAP_SECRET: secret, SEIRA_PUBLIC_URL: `https://${HOST}`,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -225,11 +225,11 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
   const answer = await call("tools/call", { name: "search_notes", arguments: { q: "plan" } });
   expect(answer.result).toEqual({ content: [{ type: "text", text: "On the Mac: plan" }] });
   // It reached the Mac's server from the Mac's connector, with the key saved on My Cloud.
-  expect(macRequests.filter((request) => request.method === "initialize").every((request) => request.client === "openmausbot-lent")).toBe(true);
+  expect(macRequests.filter((request) => request.method === "initialize").every((request) => request.client === "seira-lent")).toBe(true);
   expect(macRequests.every((request) => request.authorization === "Bearer mac-header-key")).toBe(true);
   expect(connector.activity(env.id).map((entry) => [entry.action, entry.ok])).toEqual(expect.arrayContaining([["mcp_tools", true], ["mcp_call", true]]));
 
-  // Were the Mac's own OpenMausBot server on that port, the Mac refuses the call itself, in words the bot reads, and
+  // Were the Mac's own Seira server on that port, the Mac refuses the call itself, in words the bot reads, and
   // nothing reaches the port.
   macServerPorts = [Number(new URL(macUrl).port)];
   const reached = macRequests.length;

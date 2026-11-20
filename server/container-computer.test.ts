@@ -16,8 +16,8 @@ import {
   IMAGE_LAYER_LABEL,
   IMAGE_LAYER_VERSION,
   MANAGED_LABEL,
-  OPENMAUSBOT_CONTAINER,
-  OPENMAUSBOT_IMAGE,
+  SEIRA_CONTAINER,
+  SEIRA_IMAGE,
   TARGET_LABEL,
   VM_WORKSPACE_DIR,
   VM_WORKSPACE_GUEST,
@@ -61,7 +61,7 @@ function runner(responses: Record<string, string | Error>) {
 }
 
 it("recognizes only a durable VM workspace directory as prior provisioning evidence", () => {
-  const root = mkdtempSync(join(tmpdir(), "omb-vm-workspace-"));
+  const root = mkdtempSync(join(tmpdir(), "seira-vm-workspace-"));
   const target = { ...perBotLocalVmTarget("workspace-fixture"), workspaceDir: join(root, "workspace") };
   try {
     expect(localVmWorkspaceExists(target)).toBe(false);
@@ -86,8 +86,8 @@ const statusProbe = `${driverExec} status --socket ${CUA_SOCKET}`;
 const healthProbe = `${driverExec} call health_report {} --socket ${CUA_SOCKET}`;
 const readinessProbe =
   `${driverExec} call get_desktop_state {} --socket ${CUA_SOCKET} ` +
-  "--screenshot-out-file /tmp/openmausbot-readiness.png";
-const readinessRead = `docker exec ${CONTAINER} base64 -w0 /tmp/openmausbot-readiness.png`;
+  "--screenshot-out-file /tmp/seira-readiness.png";
+const readinessRead = `docker exec ${CONTAINER} base64 -w0 /tmp/seira-readiness.png`;
 const validPng = Buffer.concat([
   Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
   Buffer.alloc(600),
@@ -333,10 +333,10 @@ describe("containerComputerStatus", () => {
     const derived = perBotLocalVmTarget("bot-win");
     const target: LocalVmTarget = {
       ...derived,
-      workspaceDir: "C:\\Users\\light\\.openmausbot\\vm-homes\\win-target",
+      workspaceDir: "C:\\Users\\light\\.seira\\vm-homes\\win-target",
     };
     const detail = JSON.parse(perBotReadyInspect("bot-win", 41629))[0];
-    detail.Mounts[0].Source = "/mnt/c/Users/light/.openmausbot/vm-homes/win-target";
+    detail.Mounts[0].Source = "/mnt/c/Users/light/.seira/vm-homes/win-target";
     detail.HostConfig = {
       ...detail.HostConfig,
       CapDrop: ["CAP_CHOWN", "CAP_DAC_OVERRIDE"],
@@ -367,8 +367,8 @@ describe("containerComputerStatus", () => {
         overall: "ok",
         checks: [],
       }),
-      [`${targetDriverExec} call get_desktop_state {} --socket ${CUA_SOCKET} --screenshot-out-file /tmp/openmausbot-readiness.png`]: "{}\n",
-      [`podman exec ${target.containerName} base64 -w0 /tmp/openmausbot-readiness.png`]: validPng.toString("base64"),
+      [`${targetDriverExec} call get_desktop_state {} --socket ${CUA_SOCKET} --screenshot-out-file /tmp/seira-readiness.png`]: "{}\n",
+      [`podman exec ${target.containerName} base64 -w0 /tmp/seira-readiness.png`]: validPng.toString("base64"),
     });
 
     const status = await containerComputerStatus(fake.run, "win32", target);
@@ -578,8 +578,8 @@ describe("containerComputerStatus", () => {
         overall: "ok",
         checks: [],
       }),
-      [`${targetDriverExec} call get_desktop_state {} --socket ${CUA_SOCKET} --screenshot-out-file /tmp/openmausbot-readiness.png`]: "{}\n",
-      [`docker exec ${target.containerName} base64 -w0 /tmp/openmausbot-readiness.png`]: validPng.toString("base64"),
+      [`${targetDriverExec} call get_desktop_state {} --socket ${CUA_SOCKET} --screenshot-out-file /tmp/seira-readiness.png`]: "{}\n",
+      [`docker exec ${target.containerName} base64 -w0 /tmp/seira-readiness.png`]: validPng.toString("base64"),
     });
 
     const status = await containerComputerStatus(fake.run, "linux", target);
@@ -968,7 +968,7 @@ describe("Cua integration", () => {
     expect(dockerfile).toContain(`CUA_DRIVER_WINDOW_CHANGE_TIMEOUT_MS=200 NO_COLOR=1 ${CUA_EXECUTABLE} serve`);
     // Without the grant every browser_prepare existing_profile is refused (browser_consent_required) and the bot asks the person to authorize it.
     expect(dockerfile).toContain(`--permission-mode standard --grant existing-profile --cursor-reduced-motion on'`);
-    expect(dockerfile).toContain("prepare-openmausbot-workspace.sh");
+    expect(dockerfile).toContain("prepare-seira-workspace.sh");
     expect(dockerfile).toContain('if ! chmod 0700 "$workspace"');
     expect(dockerfile).toContain('test -r "$directory" && test -w "$directory" && test -x "$directory"');
     expect(dockerfile).toContain('migrate_profile "$HOME/.config/google-chrome" google-chrome');
@@ -1012,7 +1012,7 @@ describe("Cua integration", () => {
   it("captures the preview through Cua Driver rather than xdotool or VNC", async () => {
     const screenshotCall =
       `${driverExec} call get_desktop_state {} --socket ${CUA_SOCKET} ` +
-      "--screenshot-out-file /tmp/openmausbot-preview.png";
+      "--screenshot-out-file /tmp/seira-preview.png";
     const png = validPng;
     const fake = runner({
       "/usr/bin/which docker": "docker\n",
@@ -1026,7 +1026,7 @@ describe("Cua integration", () => {
       [readinessProbe]: "{}\n",
       [readinessRead]: png.toString("base64"),
       [screenshotCall]: "{}\n",
-      [`docker exec ${CONTAINER} base64 -w0 /tmp/openmausbot-preview.png`]: png.toString("base64"),
+      [`docker exec ${CONTAINER} base64 -w0 /tmp/seira-preview.png`]: png.toString("base64"),
     });
 
     const image = await containerComputerScreenshot(fake.run, "linux");
@@ -1053,8 +1053,8 @@ describe("Cua integration", () => {
       [readinessProbe]: "{}\n",
       [readinessRead]: png.toString("base64"),
       [`${driverExec} call get_desktop_state {} --socket ${CUA_SOCKET} ` +
-        "--screenshot-out-file /tmp/openmausbot-preview.png"]: "{}\n",
-      [`docker exec ${CONTAINER} base64 -w0 /tmp/openmausbot-preview.png`]: png.toString("base64"),
+        "--screenshot-out-file /tmp/seira-preview.png"]: "{}\n",
+      [`docker exec ${CONTAINER} base64 -w0 /tmp/seira-preview.png`]: png.toString("base64"),
     });
 
     const frame = await containerComputerFrame(fake.run, "linux");
@@ -1275,7 +1275,7 @@ describe("setupCommands", () => {
       return;
     }
     expect(tail.slice(0, 2)).toEqual(["sh", "-c"]);
-    expect(tail.slice(3)).toEqual(["openmausbot-desktop", ...ids]);
+    expect(tail.slice(3)).toEqual(["seira-desktop", ...ids]);
     expect(tail[2]).toContain("exec /usr/bin/supervisord -c /etc/supervisor/supervisord.conf");
     const script = tail[2];
     expect(script.indexOf("find / -xdev"), "files move before /etc/passwd, so an interrupted start resumes")
@@ -1333,7 +1333,7 @@ describe("setupCommands", () => {
   it("uses an explicit local image name so Podman never resolves the managed build on Docker Hub", () => {
     expect(IMAGE).toMatch(/^localhost\/seira\/cua-local-vm:/);
     expect(setupCommands("podman", "darwin").run).toContain(IMAGE);
-    expect(setupCommands("podman", "darwin").run).not.toContain("docker.io/openmausbot");
+    expect(setupCommands("podman", "darwin").run).not.toContain("docker.io/seira");
   });
 
   it("generates Apple container lifecycle commands without Docker-only flags", () => {
@@ -1461,7 +1461,7 @@ describe("Local VM names after the Seira rename", () => {
   const stopped = { State: { Running: false, FinishedAt: "2026-10-01T12:00:00Z" } };
   const olderDesktop = (botId: string, overrides: Record<string, unknown> = {}) => {
     const detail = JSON.parse(perBotReadyInspect(botId, 6081))[0];
-    detail.Config.Image = OPENMAUSBOT_IMAGE;
+    detail.Config.Image = SEIRA_IMAGE;
     return JSON.stringify([{ ...detail, ...stopped, ...overrides }]);
   };
 
@@ -1470,9 +1470,9 @@ describe("Local VM names after the Seira rename", () => {
     expect(SHARED_LOCAL_VM_TARGET.containerName).toBe("seira-computer");
     expect(perBotLocalVmTarget("bot-a").containerName).toMatch(/^seira-computer-[0-9a-f]{16}$/);
     expect(poolLocalVmTarget(3).containerName).toBe("seira-computer-p3");
-    expect(SHARED_LOCAL_VM_TARGET.legacyContainerName).toBe("openmausbot-computer");
-    expect(perBotLocalVmTarget("bot-a").legacyContainerName).toBe(`openmausbot-computer-${perBotLocalVmTarget("bot-a").containerName.slice("seira-computer-".length)}`);
-    expect(poolLocalVmTarget(3).legacyContainerName).toBe("openmausbot-computer-p3");
+    expect(SHARED_LOCAL_VM_TARGET.legacyContainerName).toBe("seira-computer");
+    expect(perBotLocalVmTarget("bot-a").legacyContainerName).toBe(`seira-computer-${perBotLocalVmTarget("bot-a").containerName.slice("seira-computer-".length)}`);
+    expect(poolLocalVmTarget(3).legacyContainerName).toBe("seira-computer-p3");
     for (const target of [SHARED_LOCAL_VM_TARGET, perBotLocalVmTarget("bot-a"), poolLocalVmTarget(3)]) {
       const args = containerRunArgs("docker", "pw", target);
       expect(args.slice(0, 4)).toEqual(["run", "-d", "--name", target.containerName]);
@@ -1511,12 +1511,12 @@ describe("Local VM names after the Seira rename", () => {
       if (key === "/usr/bin/which docker") return { stdout: "docker" };
       if (command === "/usr/bin/which") throw new Error("missing executable");
       if (args[0] === "info") return { stdout: "running" };
-      if (key === `docker image inspect ${OPENMAUSBOT_IMAGE}`) return { stdout: preparedImageInspect() };
+      if (key === `docker image inspect ${SEIRA_IMAGE}`) return { stdout: preparedImageInspect() };
       if (key === `docker image inspect ${IMAGE}`) {
-        if (calls.includes(`docker tag ${OPENMAUSBOT_IMAGE} ${IMAGE}`)) return { stdout: preparedImageInspect() };
+        if (calls.includes(`docker tag ${SEIRA_IMAGE} ${IMAGE}`)) return { stdout: preparedImageInspect() };
         throw new Error("missing image");
       }
-      if (key === `docker tag ${OPENMAUSBOT_IMAGE} ${IMAGE}`) return { stdout: "" };
+      if (key === `docker tag ${SEIRA_IMAGE} ${IMAGE}`) return { stdout: "" };
       if (args[0] === "inspect") throw new Error("missing container");
       throw new Error(`unsupported command: ${key}`);
     };
@@ -1533,12 +1533,12 @@ describe("Local VM names after the Seira rename", () => {
       if (key === "/usr/bin/which container") return { stdout: "container" };
       if (command === "/usr/bin/which") throw new Error("missing executable");
       if (key === "container system status") return { stdout: "running" };
-      if (key === `container image inspect ${OPENMAUSBOT_IMAGE}`) return { stdout: appleImageInspect([appleImageVariant(preparedLabels)]) };
+      if (key === `container image inspect ${SEIRA_IMAGE}`) return { stdout: appleImageInspect([appleImageVariant(preparedLabels)]) };
       if (key === `container image inspect ${IMAGE}`) {
-        if (calls.includes(`container image tag ${OPENMAUSBOT_IMAGE} ${IMAGE}`)) return { stdout: appleImageInspect([appleImageVariant(preparedLabels)]) };
+        if (calls.includes(`container image tag ${SEIRA_IMAGE} ${IMAGE}`)) return { stdout: appleImageInspect([appleImageVariant(preparedLabels)]) };
         throw new Error("missing image");
       }
-      if (key === `container image tag ${OPENMAUSBOT_IMAGE} ${IMAGE}`) return { stdout: "" };
+      if (key === `container image tag ${SEIRA_IMAGE} ${IMAGE}`) return { stdout: "" };
       if (args[0] === "inspect") throw new Error("missing container");
       throw new Error(`unsupported command: ${key}`);
     };
@@ -1555,7 +1555,7 @@ describe("Local VM names after the Seira rename", () => {
         if (key === "/usr/bin/which docker") return { stdout: "docker" };
         if (command === "/usr/bin/which") throw new Error("missing executable");
         if (args[0] === "info") return { stdout: "running" };
-        if (key === `docker image inspect ${OPENMAUSBOT_IMAGE}`) {
+        if (key === `docker image inspect ${SEIRA_IMAGE}`) {
           return { stdout: failure === "labels" ? JSON.stringify([{ Id: "x", Config: { Labels: {} } }]) : preparedImageInspect() };
         }
         if (key === `docker image inspect ${IMAGE}`) {
@@ -1599,7 +1599,7 @@ describe("Local VM names after the Seira rename", () => {
   it("resolves a shared older-named desktop for screens and exec, then returns to the new name once it is gone", async () => {
     const shared = SHARED_LOCAL_VM_TARGET;
     const olderShared = JSON.parse(readyInspect());
-    olderShared[0].Config.Image = OPENMAUSBOT_IMAGE;
+    olderShared[0].Config.Image = SEIRA_IMAGE;
     Object.assign(olderShared[0], stopped);
     const present = runner({
       ...docker,
@@ -1607,10 +1607,10 @@ describe("Local VM names after the Seira rename", () => {
       [`docker inspect ${shared.containerName}`]: new Error("missing container"),
       [`docker inspect ${shared.legacyContainerName}`]: JSON.stringify(olderShared),
     });
-    expect(await containerComputerStatus(present.run, "linux", shared)).toMatchObject({ container: "stopped", container_name: OPENMAUSBOT_CONTAINER });
+    expect(await containerComputerStatus(present.run, "linux", shared)).toMatchObject({ container: "stopped", container_name: SEIRA_CONTAINER });
     const execs: string[][] = [];
     await containerExec(shared, "true", { runtime: "docker", exec: async (_command, args) => { execs.push(args); return { stdout: "", stderr: "", code: 0 }; } });
-    expect(execs[0]).toContain(OPENMAUSBOT_CONTAINER);
+    expect(execs[0]).toContain(SEIRA_CONTAINER);
     const gone = runner({
       ...docker,
       [`docker image inspect ${IMAGE}`]: preparedImageInspect(),
@@ -1679,7 +1679,7 @@ describe("Local VM names after the Seira rename", () => {
       [`container inspect ${shared.containerName}`]: new Error("missing container"),
       [`container inspect ${shared.legacyContainerName}`]: JSON.stringify([{
         configuration: {
-          image: { reference: OPENMAUSBOT_IMAGE, descriptor: { digest: "sha256:managed-image-id" } },
+          image: { reference: SEIRA_IMAGE, descriptor: { digest: "sha256:managed-image-id" } },
           resources: { cpus: 2, memoryInBytes: 4 * 1024 ** 3 },
           publishedPorts: [{ hostAddress: "127.0.0.1", containerPort: 6901 }],
           labels: { ...preparedLabels, [WORKSPACE_LABEL]: "1", [DESKTOP_FLAGS_LABEL]: DESKTOP_FLAGS_VERSION },
@@ -1689,7 +1689,7 @@ describe("Local VM names after the Seira rename", () => {
       }]),
     });
     const status = await containerComputerStatus(fake.run, "darwin", shared);
-    expect(status).toMatchObject({ imageMatches: true, managed: true, container_name: OPENMAUSBOT_CONTAINER });
+    expect(status).toMatchObject({ imageMatches: true, managed: true, container_name: SEIRA_CONTAINER });
     const gone = runner({
       ...appleRuntime,
       [`container image inspect ${IMAGE}`]: appleImageInspect([appleImageVariant(preparedLabels)]),
