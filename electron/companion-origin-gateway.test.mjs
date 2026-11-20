@@ -85,11 +85,11 @@ describe("managed Companion origin endpoint", () => {
     await expect(probe("close")).resolves.toBe(false);
   });
 
-  it("accepts the exact identity from a healthy private origin", async () => {
+  it.each(["openmausbot", "seira"])("accepts the exact identity %s from a healthy private origin", async (app) => {
     const allocated = endpoint();
     const target = createHttpServer((_request, response) => {
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ app: "seira" }));
+      response.end(JSON.stringify({ app }));
     });
     servers.push(target);
     await listen(target, allocated.socketPath);

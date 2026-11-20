@@ -1,6 +1,6 @@
 # ChatGPT plan sign-in
 
-The **ChatGPT plan** account in Settings → Engines is separate from the legacy
+The **ChatGPT plan** account in Settings → AI → Providers is separate from the legacy
 Codex login and Company models. Choose **Continue with ChatGPT**, authorize plan
 usage, then select a model from that account's refreshed catalog. The model slug
 is preserved exactly, including `gpt-6.1-sol` when OpenAI returns it. This does

@@ -34,10 +34,35 @@ test("main sets the ID before the app is ready", () => {
   assert.ok(ready > 0 && call < ready, "the call comes before app.whenReady()");
 });
 
-test("the app name and the Linux package name stay the ones that an earlier install used", () => {
+test("the app name is Seira, so the settings folder and the saved-key store item carry it", () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-  assert.equal(pkg.name, LEGACY_APP_NAME);
+  // Electron takes productName before name.
+  assert.equal(pkg.productName, "Seira");
+  assert.equal(pkg.name, "seira");
+  assert.notEqual(pkg.productName, LEGACY_APP_NAME);
+});
+
+test("the app starts at boot.mjs, which chooses the settings folder before it loads main.mjs", () => {
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(pkg.main, "electron/boot.mjs");
+  const boot = readFileSync(new URL("./boot.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(boot, /^import .*["']\.\/main\.mjs["']/m, "a static import would run main.mjs first");
+  const choose = boot.indexOf("chooseSettingsFolder(");
+  const main = boot.indexOf('import("./main.mjs")');
+  assert.ok(choose > 0 && main > choose, "boot.mjs chooses the folder, then loads main.mjs");
+});
+
+test("the deb and pacman packages are named seira and replace the package that an earlier install used", () => {
   const builder = readFileSync(new URL("../electron-builder.yml", import.meta.url), "utf8");
   const packageNames = [...builder.matchAll(/^\s+packageName:\s*(\S+)\s*$/gm)].map((match) => match[1]);
-  assert.deepEqual(packageNames, [LEGACY_LINUX_PACKAGE, LEGACY_LINUX_PACKAGE]);
+  assert.deepEqual(packageNames, ["seira", "seira"]);
+  for (const section of ["deb", "pacman"]) {
+    const block = new RegExp(`^${section}:\\n((?:[ #].*\\n|\\n)*)`, "m").exec(builder)?.[1] ?? "";
+    const fpm = /^\s+fpm:\s*(\[[^\]]*\])/m.exec(block)?.[1];
+    assert.ok(fpm, `${section} has fpm arguments`);
+    const args = JSON.parse(fpm);
+    for (const flag of ["--conflicts", "--replaces", "--provides"]) {
+      assert.equal(args[args.indexOf(flag) + 1], LEGACY_LINUX_PACKAGE, `${section} ${flag} ${LEGACY_LINUX_PACKAGE}`);
+    }
+  }
 });

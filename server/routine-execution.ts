@@ -20,7 +20,7 @@ function escapeAttachmentPath(value: string): string {
 }
 
 /** Formatting only: it does not stop a model from following injected text. */
-function fenceCarriedReport(output: string): string {
+export function fenceCarriedReport(output: string): string {
   return output.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
@@ -135,7 +135,7 @@ export const ROUTINE_DEFERRAL_NOTICE_MS = 30 * 60_000;
 export const ROUTINE_SUPERSEDED = "Stopped waiting: the next scheduled run of this routine started instead";
 
 /** Waiting since a notice window before its routine's next occurrence came due, with no hand-off still open: that occurrence starts instead. */
-export function supersededBy(dueAt: number, run: Pick<RoutineRun, "status" | "waitingSince" | "threadId">, handedOffWorkLive?: (threadId: string) => boolean): boolean {
-  return run.status === "waiting" && run.waitingSince !== undefined && run.waitingSince <= dueAt - ROUTINE_DEFERRAL_NOTICE_MS &&
+export function supersededBy(dueAt: number, run: Pick<RoutineRun, "status" | "waitingSince" | "threadId" | "workflowId">, handedOffWorkLive?: (threadId: string) => boolean): boolean {
+  return run.workflowId === undefined && run.status === "waiting" && run.waitingSince !== undefined && run.waitingSince <= dueAt - ROUTINE_DEFERRAL_NOTICE_MS &&
     !(run.threadId && handedOffWorkLive?.(run.threadId));
 }

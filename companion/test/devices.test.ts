@@ -239,7 +239,7 @@ describe("DeviceRegistry", () => {
     const registry = new DeviceRegistry();
     const { code, token } = registry.openPairing();
 
-    expect(token).toMatch(/^seira_pair_[A-Za-z0-9_-]{43}$/);
+    expect(token).toMatch(/^omb_pair_[A-Za-z0-9_-]{43}$/);
     expect(registry.redeem(token, "iPhone")).toHaveProperty("token");
     expect(registry.redeem(code, "iPad")).toMatchObject({
       error: expect.stringContaining("no pairing"),

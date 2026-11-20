@@ -6,6 +6,7 @@
 #   ... | sudo sh -s -- --check --domain seira.example.com    only checks the server; changes nothing
 #   ... | sudo sh -s -- --uninstall                          stops the server; keeps your data
 #   ... | sudo sh -s -- --domain seira.example.com <code>     also connects the server to Seira with a one-time code
+#                                                            (needs SEIRA_ADMIN_URL: the address of the service that gave the code)
 #
 # Nothing runs until the last line calls main, so a download that is cut off part-way runs nothing. It sends no
 # telemetry. The addresses it contacts are the ones the checks name: the image registries, Let's Encrypt, GitHub's
@@ -17,7 +18,7 @@ settings() {
   INSTALL_DIR="${SEIRA_INSTALL_DIR:-/opt/seira}"
   IMAGE_REPO=seira-bot/seira
   RELEASES_URL=https://api.github.com/repos/seira-bot/seira/releases/latest
-  ADMIN_URL="${SEIRA_ADMIN_URL:-https://cloud.seira.bot}"
+  ADMIN_URL="${SEIRA_ADMIN_URL:-}"
   SCRIPT_URL=https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh
   # Where the files this installer places come from: this repository at the tag of the version it installs, and at
   # main when that tag does not have them. SEIRA_INSTALL_SOURCE names one copy to use instead (https://… or file:///…).
@@ -77,11 +78,11 @@ usage() {
   say "       $(command_line '--uninstall')                        stops the server; keeps your data"
   say ""
   say "  --domain NAME      the name people will open, already pointing at this server"
-  say "  --email ADDRESS    the first admin's email, so they can sign in with an emailed code"
+  say "  --email ADDRESS    the first admin's email, so they can sign in with an emailed code (needs a mail server: SEIRA_SIGNIN_SMTP_URL in .env)"
   say "  --install-docker   install Docker with Docker's official script when it is missing, without asking"
   say "  --dir PATH         where the install lives (default /opt/seira)"
   say "  --no-sandbox       do not prepare this server for the bots' sandbox (only for a server you alone sign in to)"
-  say "  <code>             the one-time code Seira shows, to also connect this server to Seira"
+  say "  <code>             the one-time code Seira shows, to also connect this server to Seira (needs SEIRA_ADMIN_URL, the address of the service that gave the code)"
 }
 
 parse() {
@@ -128,6 +129,9 @@ parse() {
   case "$CODE" in
     *[!A-Za-z0-9-]*) fail "That code doesn't look right. Copy the install command from Seira again." ;;
   esac
+  if [ -n "$CODE" ] && [ -z "$ADMIN_URL" ]; then
+    fail "A code needs SEIRA_ADMIN_URL, the address of the Seira service that gave it. To install Seira alone, run this again without the code."
+  fi
   case "$INSTALL_DIR" in
     /?*) ;;
     *) fail "--dir needs a full path, like /opt/seira." ;;
@@ -395,9 +399,6 @@ check_outbound() {
     return
   fi
   ok "outbound: the image registries and Let's Encrypt are reachable"
-  if ! reachable https://accounts.seira.bot/; then
-    note "accounts.seira.bot is not reachable, so signing in with an emailed code needs a mail server of your own (SEIRA_SIGNIN_SMTP_URL). Pairing codes work without it."
-  fi
 }
 
 check_userns() {
@@ -664,10 +665,12 @@ services:
       SEIRA_SIGNIN_MEMBER_EMAILS:
       SEIRA_SIGNIN_SMTP_URL:
       SEIRA_SIGNIN_SMTP_FROM:
-      # "1": phones pair by QR through Seira Relay. Sign in once: docker compose exec seira seira login --relay
+      # "1": phones pair by QR through Seira Relay. Needs an account service (SEIRA_CONTROL_PLANE_URL), then sign in once:
+      # docker compose exec seira seira login --relay
+      SEIRA_CONTROL_PLANE_URL:
       SEIRA_PHONE_RELAY:
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q seira"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q -e seira -e openmausbot"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -955,7 +958,7 @@ wait_healthy() {
 }
 
 https_answers() {
-  curl -fsS --max-time 10 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health" 2>/dev/null | grep -q seira
+  curl -fsS --max-time 10 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health" 2>/dev/null | grep -q -e seira -e openmausbot
 }
 
 wait_https() {
@@ -1064,7 +1067,11 @@ finish() {
   fi
   admins=$(env_value SEIRA_SIGNIN_EMAILS)
   if [ -n "$admins" ]; then
-    say "Or open https://$DOMAIN/pair and sign in with an emailed code as: $admins"
+    if [ -n "$(env_value SEIRA_SIGNIN_SMTP_URL)" ]; then
+      say "Or open https://$DOMAIN/pair and sign in with an emailed code as: $admins"
+    else
+      say "Signing in with an emailed code needs a mail server: set SEIRA_SIGNIN_SMTP_URL (and SEIRA_SIGNIN_SMTP_FROM) in $INSTALL_DIR/.env, then run this again. The pairing link works without it."
+    fi
   fi
   say ""
   if [ -x "$INSTALL_DIR/update.sh" ]; then

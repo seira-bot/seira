@@ -193,7 +193,18 @@ exports.createClient = async ({ auth }) => {
  * `env`: more of both servers' environment. `cloudEngine`: lines run at the start of My Cloud's synthetic Claude CLI, to
  * script its turns (fake-claude-cli.ts). Every server runs without a bot box, as CI's runners do: a box refuses the
  * synthetic CLIs in the server's HOME and hides the test's files from its turns. To box a server, set `SEIRA_BOT_BOX`. */
-export async function launchCloudSendFixture({ onePasswordToken, cloudOnePasswordToken = onePasswordToken, onePasswordItems = [], bitwarden, toolCalls = 0, broker, env = {}, cloudEnv = {}, cloudEngine = "", desktopEngine = "", space, cloudSignedIn = true, team }: {
+export async function launchCloudSendFixture(options: Parameters<typeof launch>[0]): Promise<CloudSendFixture> {
+  const children = new Set<ChildProcess>();
+  try {
+    return await launch(options, children);
+  } catch (error) {
+    // The caller gets no close() from a setup that throws, so the servers it already started stop here.
+    for (const child of children) await waitForExit(child, { signal: "SIGKILL" });
+    throw error;
+  }
+}
+
+async function launch({ onePasswordToken, cloudOnePasswordToken = onePasswordToken, onePasswordItems = [], bitwarden, toolCalls = 0, broker, env = {}, cloudEnv = {}, cloudEngine = "", desktopEngine = "", space, cloudSignedIn = true, team }: {
   onePasswordToken: string; cloudOnePasswordToken?: string; toolCalls?: number;
   /** A fake Bitwarden tool already in each server's data folder, holding this one account (no download, no network). */
   bitwarden?: FakeBwAccount;
@@ -215,14 +226,13 @@ export async function launchCloudSendFixture({ onePasswordToken, cloudOnePasswor
   space?: { disk(): unknown; grow(sizeGb: number): Promise<unknown> };
   /** False: My Cloud's own Claude is signed out, as on a new Cloud. */
   cloudSignedIn?: boolean;
-}): Promise<CloudSendFixture> {
+}, children: Set<ChildProcess>): Promise<CloudSendFixture> {
   const root = mkdtempSync(join(tmpdir(), "seira-cloud-send-"));
   const secret = randomBytes(32).toString("base64url");
   const ownerCapability = randomBytes(32).toString("base64url");
   const answers: string[] = [];
   const labels: string[] = [];
   let logs = "";
-  const children = new Set<ChildProcess>();
   const remember = async (response: Response) => { answers.push(await response.clone().text()); return response; };
 
   async function start(name: string, own: NodeJS.ProcessEnv, port: number, extra: string[] = [], ipc = false, acceptedToken = onePasswordToken, calls = 0, engine = "", signedIn = true): Promise<ChildProcess> {
@@ -258,7 +268,8 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     const deadline = Date.now() + 30_000;
     for (;;) {
       if (child.exitCode !== null) throw new Error(`${name} exited:\n${logs}`);
-      try { if ((await fetch(`http://127.0.0.1:${port}/api/health`)).ok) return child; } catch {}
+      // Another process on this host can already listen on the port, so only this child's own pid counts as started.
+      try { if (((await (await fetch(`http://127.0.0.1:${port}/api/health`)).json()) as { pid?: number }).pid === child.pid) return child; } catch {}
       if (Date.now() > deadline) throw new Error(`${name} did not start:\n${logs}`);
       await new Promise((resolve) => setTimeout(resolve, 100));
     }

@@ -16,14 +16,20 @@ if (!runnerTemp || !path.isAbsolute(runnerTemp) || !fs.existsSync(runnerTemp)) {
 const candidate = path.resolve(process.argv[2] ?? "");
 if (!candidate.endsWith(".deb") || !fs.existsSync(candidate)) fail("pass the newly built DEB path");
 
-try {
-  const status = execFileSync("dpkg-query", ["-W", "-f=${db:Status-Abbrev}", "openmausbot"], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-  }).trim();
-  if (status.startsWith("ii")) fail("refusing to replace a pre-existing Seira installation");
-} catch (error) {
-  if (String(error?.message ?? error).includes("refusing to replace")) throw error;
+function packageStatus(name) {
+  try {
+    return execFileSync("dpkg-query", ["-W", "-f=${db:Status-Abbrev}", name], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "";
+  }
+}
+// An earlier version's package was named openmausbot. The fixture installs that name, so the test also proves that
+// the new package removes it.
+for (const name of ["openmausbot", "seira"]) {
+  if (packageStatus(name).startsWith("ii")) fail("refusing to replace a pre-existing Seira installation");
 }
 
 const temporary = fs.mkdtempSync(path.join(path.resolve(runnerTemp), "seira-deb-upgrade-"));
@@ -100,11 +106,14 @@ try {
   ) {
     fail(`upgraded Chromium sandbox is not root:root 4755: ${chromiumSandbox}`);
   }
-  const installedVersion = execFileSync("dpkg-query", ["-W", "-f=${Version}", "openmausbot"], {
+  const installedVersion = execFileSync("dpkg-query", ["-W", "-f=${Version}", "seira"], {
     encoding: "utf8",
   }).trim();
+  if (!packageStatus("seira").startsWith("ii")) fail("the seira package is not installed");
+  if (packageStatus("openmausbot").startsWith("ii")) fail("the earlier openmausbot package is still installed");
+  if (fs.existsSync("/opt/Seira/resources/legacy-upgrade-fixture")) fail("a file of the earlier package is still installed");
   console.log(
-    `[smoke-deb-upgrade] OK: 0.1.7 legacy modes repaired by ${installedVersion} without weakening the runtime path`,
+    `[smoke-deb-upgrade] OK: openmausbot 0.1.7 replaced by seira ${installedVersion}; legacy modes repaired without weakening the runtime path`,
   );
 } finally {
   fs.rmSync(temporary, { recursive: true, force: true });

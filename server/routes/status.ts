@@ -21,6 +21,7 @@ import type { ConfigStatus } from "./config.ts";
 import type { PrivateRecords } from "../host/private-records.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { sentWireName } from "../../electron/phone-wire-names.mjs";
 
 export interface StatusRouteDeps {
   store: Pick<Store, "bot" | "bots" | "tasks" | "groupByThread">;
@@ -55,7 +56,7 @@ export function createStatusRoutes(deps: StatusRouteDeps): RouteHandler {
     if (method === "GET" && path === "/api/health") {
       // The data checks of this version's first start (server/doctor/start.ts): counts and check names only.
       const doctor = doctorSummary();
-      return json(res, 200, { app: "seira", ...(version ? { version } : {}), pid: process.pid, static: Boolean(STATIC_DIR), capabilities: {
+      return json(res, 200, { app: sentWireName("healthApp"), ...(version ? { version } : {}), pid: process.pid, static: Boolean(STATIC_DIR), capabilities: {
         guardedMessages: 1, guardedRequests: 1, guardedFullAccess: 1, guardedOnBehalfOf: 1,
         ...(sharedWorkspaceFullAccessEnabled() ? { sharedWorkspaceFullAccess: 1 } : {}),
       }, ...(deps.boxOn ? { box: deps.boxOn() ? "on" : "off" } : {}), ...(doctor ? { doctor } : {}) });

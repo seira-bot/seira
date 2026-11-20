@@ -1,7 +1,8 @@
 // `seira serve --tunnel`: every public request arrives over an IPC listener, so request-auth always demands a paired session.
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, statSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { hostname } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +12,7 @@ import {
   COMPANION_ACCOUNT_EMAIL_FIELD,
   COMPANION_INSTALLATION_ID_FIELD,
   createCompanionAccountService,
+  resolveCompanionControlPlaneURL,
   resolveServerControlPlaneURL,
   type CompanionAccountService,
   type CompanionAccountState,
@@ -79,7 +81,7 @@ export function openTunnelCredentials(dataDir: string): TunnelCredentials {
     }
   }
   const persist = (next: CredentialDocument) => {
-    mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    ensurePrivateDir(dataDir);
     writeFileAtomic(file, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
   };
   const state = createSecureCredentialState(initial, persist, { writable: status !== "unavailable" });
@@ -225,6 +227,20 @@ export function createTunnelAccount(options: {
   return { service, credentials, controlPlane };
 }
 
+/** What the control plane is asked for. Seira's own control plane gives tunnel addresses, not Seira Relay. */
+export type ControlPlanePurpose = "tunnel" | "relay";
+
+/** Null when `purpose` has a control plane. Otherwise the reason that it cannot work, with the ways in that do. */
+export function controlPlaneProblem(env: NodeJS.ProcessEnv = process.env, purpose: ControlPlanePurpose = "tunnel", liveServices?: readonly string[]): string | null {
+  const url = purpose === "relay"
+    ? resolveCompanionControlPlaneURL({ isPackaged: true, environment: env })
+    : resolveServerControlPlaneURL({ environment: env, ...(liveServices ? { live: liveServices } : {}) });
+  if (url) return null;
+  if (env.SEIRA_CONTROL_PLANE_URL?.trim()) return "SEIRA_CONTROL_PLANE_URL is set but is not an https address";
+  const service = purpose === "relay" ? "Seira Relay" : "tunnel addresses";
+  return `this Seira build has no account service for ${service}; set SEIRA_CONTROL_PLANE_URL to one you run, or serve with --domain, --tailscale or --public-url (behind your own tunnel or proxy)`;
+}
+
 export const FLEET_CREDENTIAL_ENV = "SEIRA_INSTALLATION_CREDENTIAL";
 
 /** A fleet container's installation credential comes from the environment; nothing is written to disk. */
@@ -235,8 +251,10 @@ export function fleetCredential(env: NodeJS.ProcessEnv = process.env): string | 
 
 export async function fleetAccess(options: { credential: string; version?: string; env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch; liveServices?: readonly string[] }): Promise<ManagedTunnelAccess> {
   const env = options.env ?? process.env;
-  const controlPlane = resolveServerControlPlaneURL({ environment: env, ...(options.liveServices ? { live: options.liveServices } : {}) });
-  if (!controlPlane) throw new Error("no phone account service: set SEIRA_CONTROL_PLANE_URL to an https address");
+  const live = options.liveServices ? { live: options.liveServices } : {};
+  const problem = controlPlaneProblem(env, "tunnel", options.liveServices);
+  if (problem) throw new Error(problem);
+  const controlPlane = resolveServerControlPlaneURL({ environment: env, ...live });
   const client = withEndpointCheck(createControlPlaneClient({ baseURL: controlPlane, fetchImpl: options.fetchImpl }), env);
   try {
     const { endpoint, connectorToken } = await client.ensureEndpoint(options.credential, { appVersion: options.version, kind: "server" });

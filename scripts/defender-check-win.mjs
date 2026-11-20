@@ -424,7 +424,7 @@ async function pressStart() {
 }
 
 function appLog() {
-  const folder = path.join(process.env.APPDATA ?? "", "openmausbot", "logs");
+  const folder = path.join(process.env.APPDATA ?? "", "Seira", "logs");
   const file = path.join(folder, "server.log");
   if (!existsSync(file)) return { file, present: false, lines: [] };
   for (const name of readdirSync(folder)) {

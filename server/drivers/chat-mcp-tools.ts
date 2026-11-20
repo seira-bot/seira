@@ -4,7 +4,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { lstat, mkdir, readdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ValidateFunction } from "ajv";
-import { stripControlPlaneEnv } from "../config.ts";
+import { PROVIDER_CREDENTIAL_ENV, stripEnvNames, stripWorkspaceCredentialEnv } from "../config.ts";
 import type { SendTurnInput } from "../contracts.ts";
 import { cloudRole } from "../bot-box/detect.ts";
 import { redactSecretsInText } from "../redact.ts";
@@ -131,10 +131,11 @@ function mcpRefusalText(method: string | undefined, error: unknown): string {
   return `MCP request failed; inspect the configured integration (method ${method ?? "?"}, JSON-RPC code ${code})`;
 }
 
-/** A chat-runtime bot's tools never get the operator's control-plane secrets; the entry's own env is applied last. */
+/** A chat-runtime bot's tools never get the operator's control-plane secrets, workspace credentials or provider keys; the entry's own env is applied last. */
 export function chatMcpEnvironment(serverEnv: Record<string, string>, source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...source, PATH: augmentedPath() };
-  stripControlPlaneEnv(env);
+  stripWorkspaceCredentialEnv(env);
+  stripEnvNames(env, PROVIDER_CREDENTIAL_ENV);
   return mcpCommandEnvironment(env, serverEnv);
 }
 

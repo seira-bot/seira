@@ -2,6 +2,7 @@
 import { cliCommand } from "./cli-invocation.ts";
 import { reportableServerVersion } from "./environment.ts";
 import {
+  controlPlaneProblem,
   createTunnelAccount,
   createTunnelOrigin,
   describeTunnelAccount,
@@ -48,6 +49,7 @@ export async function planTunnel(options: { dataDir: string }, log: (line: strin
       return { error: `--tunnel: ${message(error)}` };
     }
   } else {
+    const problem = controlPlaneProblem(); if (problem) return { error: `--tunnel: ${problem}` };
     account = createTunnelAccount({ dataDir: options.dataDir, version: reportableServerVersion(), recovery, log: (line) => log(`tunnel: ${line}`) });
     if (account.credentials.status === "unavailable") return fail(`${account.credentials.file} exists but could not be read; fix or remove it`);
     if (!describeTunnelAccount(account.credentials.read()).email) {

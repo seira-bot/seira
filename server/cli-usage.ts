@@ -1,3 +1,5 @@
+import { resolveServerControlPlaneURL } from "../electron/companion-account-service.mjs";
+
 export { HEADLESS_VERBS as HEADLESS_VERB_NAMES } from "./headless/args.ts";
 
 export const HEADLESS_USAGE = `Drive a running workspace (scripts, CI, other agents):
@@ -22,9 +24,28 @@ export const HEADLESS_USAGE = `Drive a running workspace (scripts, CI, other age
   Token: SEIRA_TOKEN or --token-file FILE. --json prints one JSON document;
   progress goes to stderr (--quiet drops it). seira help VERB for the details.`;
 
-/** The usage text, its commands written the way this CLI was started (`npx @seira-bot/seira …`). */
-export function usage(prefix = "seira"): string {
-  return USAGE.split("\n").map((line) => line.replace(/^(\s+)seira(?= )/, `$1${prefix}`)).join("\n");
+const LOGIN_OWN = `login   signs this machine in to the account service at
+        SEIRA_CONTROL_PLANE_URL (an emailed code) and reserves its public
+        address for --tunnel; with --relay it reserves none, for serve
+        --relay. Fails when no account service is set.`;
+const LOGIN_SEIRA = `login   signs this machine in to your Seira account (an emailed code)
+        and reserves its public https://c-….seira.run address for --tunnel;
+        with --relay it reserves none, for serve --relay, which needs
+        SEIRA_CONTROL_PLANE_URL (an account service you run).`;
+const TUNNEL_OWN = `--tunnel     serve at the public address that an account service gives,
+             through a Cloudflare tunnel. Needs SEIRA_CONTROL_PLANE_URL (an
+             account service you run) and \`seira login\` once on this
+             machine first. Without one, use the ways above.`;
+const TUNNEL_SEIRA = `--tunnel     serve at the https://c-….seira.run address of your Seira
+             account, through a Cloudflare tunnel. Run \`seira login\` once
+             on this machine first. SEIRA_CONTROL_PLANE_URL points login
+             and --tunnel at an account service you run instead.`;
+
+/** The usage text, its commands written the way this CLI was started (`npx @seira-bot/seira …`). `live` is for tests. */
+export function usage(prefix = "seira", env: NodeJS.ProcessEnv = process.env, live?: readonly string[]): string {
+  const seiraTunnel = !Object.hasOwn(env, "SEIRA_CONTROL_PLANE_URL") && resolveServerControlPlaneURL({ environment: env, ...(live ? { live } : {}) }) !== "";
+  const text = seiraTunnel ? USAGE.replace(LOGIN_OWN, LOGIN_SEIRA).replace(TUNNEL_OWN, TUNNEL_SEIRA) : USAGE;
+  return text.split("\n").map((line) => line.replace(/^(\s+)seira(?= )/, `$1${prefix}`)).join("\n");
 }
 
 export const USAGE = `seira — your team of AI bots, ready in a few steps
@@ -33,7 +54,7 @@ export const USAGE = `seira — your team of AI bots, ready in a few steps
   seira setup [--data-dir DIR]
   seira start [the same options as serve]
   seira serve [--port 8799] [--data-dir DIR] [--label NAME]
-                    [--public-url https://host | --domain HOST | --tunnel | --tailscale] [--lan] [--relay]
+                    [--public-url https://host | --domain HOST | --tailscale | --tunnel] [--lan] [--relay]
   seira pair  [--label NAME] [--phone [ios|android]] [--ttl 24h] [--public-url https://host]
   seira devices [revoke ID]
   seira status
@@ -63,9 +84,7 @@ pair    a new pairing code for the running server, with its link and QR
 devices lists paired devices; "devices revoke ID" signs one out
 status  the running server, the address others reach it at, and whether
         that address answers as this server
-login   signs this machine in to a Seira account (an emailed code)
-        and reserves its public address for --tunnel; with --relay it
-        reserves none, for serve --relay
+${LOGIN_OWN}
 logout  releases that address and signs out
 access  who may sign in with an emailed code at /pair: an address or
         @domain; --chat-only gives chat and approvals without settings.
@@ -98,19 +117,18 @@ Ways in (pick one; --lan can join any):
              link uses this machine's MagicDNS name (needs Tailscale signed in
              and HTTPS certificates enabled for the tailnet); the share ends
              when serve stops
---tunnel     serve at a public https://c-… address through a
-             Cloudflare tunnel: no domain, no proxy, no open port. Run
-             \`seira login\` once on this machine first.
 --domain     serve at https://HOST on your own domain: a pinned Caddy is
              downloaded once and run alongside the server, and gets the
              certificate itself. Point the domain's DNS at this machine and
              open ports 80 and 443.
+${TUNNEL_OWN}
 
---relay      phones only, and it can join any of the above except --tunnel:
-             the Seira phone app pairs by QR through Seira Relay,
-             end-to-end encrypted, with no address, open port or VPN. Run
-             \`seira login --relay\` once on this machine first. Not on a
-             machine with a tunnel address: the relay stays off there.
+--relay      phones only, and it can join any of the ways in above except
+             --tunnel: the Seira phone app pairs by QR through Seira Relay,
+             end-to-end encrypted, with no address, open port or VPN. Needs
+             SEIRA_CONTROL_PLANE_URL and \`seira login --relay\` once on this
+             machine first. Not on a machine with a tunnel address: the
+             relay stays off there.
 
 --no-open   do not open a browser window
 --no-pair   do not print a pairing code

@@ -153,6 +153,23 @@ describe("encrypted full workspace backups", () => {
     expect(manifest.entries.some((entry: { path: string }) => entry.path === "notes.md")).toBe(true);
   });
 
+  it("carries the writes a workflow database still holds in its WAL, and leaves its WAL files behind", async () => {
+    const source = directory();
+    const db = new DatabaseSync(join(source, "workflows.db"));
+    try {
+      db.exec("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; CREATE TABLE marks(id TEXT PRIMARY KEY); INSERT INTO marks VALUES ('recent write');");
+      expect(statSync(join(source, "workflows.db-wal")).size).toBeGreaterThan(0);
+      const exported = await createWorkspaceBackup(source, { password: PASSWORD, appVersion: "test" });
+      const target = directory();
+      const staged = await stageWorkspaceBackup(target, exported.path, { password: PASSWORD });
+      const data = join(target, ".backups", staged.id, "staged", "data");
+      expect(existsSync(join(data, "workflows.db-wal"))).toBe(false);
+      expect(existsSync(join(data, "workflows.db-shm"))).toBe(false);
+      const restored = new DatabaseSync(join(data, "workflows.db"), { readOnly: true });
+      try { expect(restored.prepare("SELECT id FROM marks").all().map((row) => row.id)).toEqual(["recent write"]); } finally { restored.close(); }
+    } finally { db.close(); }
+  }, 60_000);
+
   it("round-trips WAL conversations, binary files, drafts and IDs; preserves destination identity and connections", async () => {
     const source = directory();
     const db = fixture(source);

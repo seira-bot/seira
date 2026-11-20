@@ -1,5 +1,6 @@
 // Main's side of the send that carries the one-time move to My Cloud (cloud-send.mjs): the Cloud sessions it uses, where
 // its state lives, and the move's line on either page (the notice).
+import { acceptedWireNames } from "./phone-wire-names.mjs";
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { BACKGROUND_HEADERS } from "./cloud-power.mjs";
 import { createLoginHandoffClient } from "./cloud-logins.mjs";
@@ -36,7 +37,7 @@ export async function openOwnerSession(target, fetchImpl, { label = SESSION_LABE
     method: "POST", redirect: "error", credentials: "omit", cache: "no-store", signal: AbortSignal.timeout(30_000),
     headers: { accept: "application/json", "content-type": "application/json", ...quiet }, body: JSON.stringify({ code: grant.code, label }),
   }));
-  if (!paired.ok || typeof paired.body?.token !== "string" || !paired.body.token.startsWith("seira_sess_")) throw Object.assign(new Error("This app could not sign in to My Cloud. Try again."), { status: paired.status });
+  if (!paired.ok || typeof paired.body?.token !== "string" || !acceptedWireNames("sessionTokenPrefix").some((prefix) => paired.body.token.startsWith(prefix))) throw Object.assign(new Error("This app could not sign in to My Cloud. Try again."), { status: paired.status });
   const token = paired.body.token;
   const request = (method, route, { timeoutMs = REQUEST_MS, ...init }) => fetchImpl(`${target.origin}${route}`, {
     method, redirect: "error", credentials: "omit", cache: "no-store", signal: AbortSignal.timeout(timeoutMs), ...init,

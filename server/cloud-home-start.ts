@@ -2,6 +2,8 @@
 // edge on 0.0.0.0:8080, the only listener the network reaches, always forwarding X-Forwarded-*, so no remote request gets
 // loopback trust. Secrets never ride a child's environment (/proc/<pid>/environ stays readable by the same user): the
 // server reads them from an inherited pipe. Root runs and trusts only the image's code, never the volume's.
+// Import first: it renames the deprecated OMB_ variables before this file reads a setting or starts a process.
+import "../electron/legacy-env-boot.mjs";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { chmodSync, chownSync, closeSync, existsSync, lstatSync, openSync, readFileSync, realpathSync, statSync, type Stats } from "node:fs";
 import { isIP } from "node:net";

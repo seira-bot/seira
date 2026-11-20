@@ -95,7 +95,7 @@ reports as failed when it started gets the conversation a new token on its next 
 reconnects; the chat says the server didn't connect and that it connects again on the next message. A request for the grant
 itself goes to the upstream exactly as it was given (a server at `/mcp` is reached at `/mcp`, never `/mcp/`, which a
 Cloudflare Worker answers with 404), anything below it below that address, with the client's query beside the
-upstream's own. MCP Settings → **Test** reaches a URL server the same way where turns are boxed
+upstream's own. The **Test** button under Apps → MCP servers reaches a URL server the same way where turns are boxed
 (`server/bot-box/broker-probe.ts`): a grant made like a turn's, through the broker's socket, revoked when the test
 ends. A server that answers directly but not through the broker fails the test with "Your bots can't reach this
 server", never "Connected", and says the fault is ours. A tool call a URL server refuses with HTTP 401 is answered by the
