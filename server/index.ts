@@ -6167,7 +6167,7 @@ function claimBotComputerLifecycle(botId: string, allowPreview = false): () => v
 }
 
 function claimManagedVpsMutation(containerName: string): () => void {
-  const owner = store.bots.find((candidate) => vps.vpsContainerName(candidate.id) === containerName);
+  const owner = store.bots.find((candidate) => vps.isVpsContainerOf(candidate.id, containerName));
   if (!owner) return () => {};
   const ownerState = managedBoatOwners().find((candidate) => candidate.botId === owner.id);
   if (ownerState?.inUse) {

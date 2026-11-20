@@ -59,6 +59,7 @@ import {
   reuseVps,
   dockerCliInstallCommand,
   listManagedVpsComputers,
+  isVpsContainerOf,
   type VpsCommandRunner,
 } from "./vps-computer.ts";
 
@@ -296,6 +297,12 @@ function mockTransport(runner: VpsCommandRunner): void {
 }
 
 describe("VPS computer", () => {
+  it("knows a bot's VPS desktop by its name and by the name an earlier version gave it", () => {
+    expect(isVpsContainerOf("ada", vpsContainerName("ada"))).toBe(true);
+    expect(isVpsContainerOf("ada", vpsContainerName("ada").replace(/^seira-vps-/, "openmausbot-vps-"))).toBe(true);
+    expect(isVpsContainerOf("ada", vpsContainerName("ben"))).toBe(false);
+  });
+
   it("uses a deterministic, bot-id-derived managed container name", () => {
     expect(vpsContainerName(BOT_ID)).toBe(vpsContainerName(BOT_ID));
     expect(vpsContainerName(BOT_ID)).not.toBe(vpsContainerName("another-bot"));

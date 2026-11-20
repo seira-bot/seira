@@ -161,6 +161,10 @@ function vpsLegacyContainerName(botId: string): string {
   return vpsContainerName(botId).replace(VPS_CONTAINER_PREFIX, LEGACY_VPS_CONTAINER_PREFIX);
 }
 
+export function isVpsContainerOf(botId: string, containerName: string): boolean {
+  return containerName === vpsContainerName(botId) || containerName === vpsLegacyContainerName(botId);
+}
+
 export function vpsDockerArgs(alias: string, args: string[]): string[] {
   if (!isValidSshAlias(alias)) {
     throw new Error("invalid VPS SSH config alias");
