@@ -65,7 +65,7 @@ describe("pickPoolMember, even mode", () => {
 
   it("leaves an unknown current member as soon as a known member is above a level", () => {
     const members: PoolMemberState[] = [unknown(true), known(95)];
-    expect(pickPoolMember({ mode: "even", levels: LEVELS, floor: 0, members, currentIndex: 0 })).toMatchObject({ index: 1, reason: "moreLeft" });
+    expect(pickPoolMember({ mode: "even", levels: LEVELS, floor: 0, members, currentIndex: 0 })).toMatchObject({ index: 1, reason: "payPerUse" });
   });
 
   it("keeps a plan with no reading while a known member is above a level", () => {
