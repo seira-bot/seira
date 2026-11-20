@@ -5,6 +5,11 @@ if [ -n "$SEIRA_SKIP_HOOKS" ]; then
   echo "pre-commit: skipped (SEIRA_SKIP_HOOKS is set)"
   exit 0
 fi
+# Temporary: the old name still skips, and says it will go.
+if [ -n "$OMB_SKIP_HOOKS" ]; then
+  echo "pre-commit: skipped (OMB_SKIP_HOOKS is set; that name is deprecated and will be removed, use SEIRA_SKIP_HOOKS)"
+  exit 0
+fi
 cd "$(git rev-parse --show-toplevel)" || exit 0
 if [ ! -f scripts/check-local-leaks.mjs ] || ! command -v node >/dev/null 2>&1; then
   echo "pre-commit: no node in this checkout, so the leak check did not run"
