@@ -10,6 +10,8 @@ import { withTourFinished } from "@/lib/guided-tour";
 import { setLocale } from "@/lib/i18n";
 import { EMPTY_ONBOARDING, LOCAL_VIEWER, markWelcomeFinished, MET_CHIEF_HINT, type WelcomeViewer } from "@/lib/onboarding";
 import { launchDialogShown, markLaunchDialog } from "@/lib/launch-dialogs";
+import { appVersion } from "@/lib/app-links";
+import { VERSIONS_KEY } from "@/lib/release-notes";
 import { createDesktopPrefs, registerDesktopPrefs } from "../../electron/desktop-prefs.mjs";
 import { createUpdatesConsent, registerUpdatesConsent } from "../../electron/updates-consent.mjs";
 
@@ -141,7 +143,7 @@ const press = (label: string) => {
 const FIRST_REPLY = [{ tasks: [{ threadId: "first", usage: { turns: 1 } }] }];
 let session: Map<string, string>;
 const returning = () => { f.state.bots = [{ tasks: [{ threadId: "t", createdAt: 1, usage: { turns: 2 } }] }]; };
-const launchCardsSeen = () => { desk.saved = { seen: [WHATS_NEW_NOTICE] }; storage.set(TEAMS_NOTICE, "1"); storage.set(GROK_MOVE_NOTICE, "1"); storage.set(PRODUCT_HUNT_NOTICE, "1"); storage.set(SIMPLE_MODE_PROMPT_KEY, "1"); };
+const launchCardsSeen = () => { desk.saved = { seen: [WHATS_NEW_NOTICE] }; storage.set(VERSIONS_KEY, JSON.stringify({ first: appVersion(), last: appVersion(), before: null })); storage.set(TEAMS_NOTICE, "1"); storage.set(GROK_MOVE_NOTICE, "1"); storage.set(PRODUCT_HUNT_NOTICE, "1"); storage.set(SIMPLE_MODE_PROMPT_KEY, "1"); };
 const hints = () => f.state.config.onboarding.hintsSeen as string[];
 const SHARED_HINT_CLOSED = "omb.onboarding.sharedWorkspaceHint";
 
@@ -1604,7 +1606,7 @@ describe("the release notes after an update", () => {
     return event;
   };
   beforeEach(() => {
-    modal = false; atVersion("0.1.180");
+    modal = false; atVersion("0.1.180"); storage.delete(VERSIONS);
     vi.stubGlobal("document", { activeElement: null, body: null, getElementById: () => null, querySelector: () => null,
       querySelectorAll: () => modal ? [{ closest: () => null, checkVisibility: () => true }] : [] });
   });
