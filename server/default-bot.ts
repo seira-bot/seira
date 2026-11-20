@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { LEGACY_DEFAULT_BOT_NAME } from "../electron/legacy-names.mjs";
 import { writeFileAtomic } from "./atomic.ts";
 import { DEFAULT_BOT_COLOR, DEFAULT_BOT_NAME, defaultBotPerson } from "../shared/default-bot.ts";
 import { takeImportName } from "../shared/import-name.ts";
@@ -14,7 +15,7 @@ const LEDGER = "default-bot.json";
 
 /** The colour a new install gave its Seira before Chrome, which an adopted Seira trades for Chrome. */
 const STARTER_COLOR = "silver";
-const SEEDED_NAMES = new Set([DEFAULT_BOT_NAME, "Seira"]);
+const SEEDED_NAMES = new Set([DEFAULT_BOT_NAME, LEGACY_DEFAULT_BOT_NAME]);
 
 export const HELPER_ASKS = ["What are my bots up to?", "Set up a bot for my inbox", "Make me a morning routine", "How do I connect my email?"];
 

@@ -43,3 +43,8 @@ test("finds the link among a second launch's arguments", () => {
   assert.equal(chatLinkFromCommandLine(["/usr/bin/seira", "--no-sandbox", BOT_LINK]), BOT_LINK);
   assert.equal(chatLinkFromCommandLine(["/usr/bin/seira", "seira://cloud"]), null);
 });
+
+test("reads a link that an earlier version wrote, and gives it the current scheme", () => {
+  assert.equal(chatLinkFrom(THREAD_LINK.replace("seira://", "openmausbot://")), THREAD_LINK);
+  assert.equal(chatLinkFrom(BOT_LINK.replace("seira://", "OpenMausBot://")), BOT_LINK);
+});

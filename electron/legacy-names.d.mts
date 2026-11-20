@@ -29,3 +29,6 @@ export declare function mentionsGoalTag(text: string): boolean;
 export const LEGACY_OUTPUTS_FOLDER: string;
 export declare function currentRunOn<T>(value: T): T | "seira";
 export declare function currentLinkScheme<T>(value: T): T | string;
+export declare const LEGACY_BACKUP_UPLOAD_SUFFIX: string;
+export declare function currentChatLink<T>(value: T): T | string;
+export declare const LEGACY_DEFAULT_BOT_NAME: string;

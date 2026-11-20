@@ -94,8 +94,23 @@ export function currentRunOn(value) {
   return value === "maus" ? "seira" : value;
 }
 
+const LEGACY_LINK_SCHEME = "openmausbot";
+
 /** The current scheme of a saved phone link scheme: an earlier version saved "openmausbot", "openmausbot-dev" and "openmausbot-next". */
 export function currentLinkScheme(value) {
-  if (typeof value !== "string" || !value.startsWith("openmausbot")) return value;
-  return `seira${value.slice("openmausbot".length)}`;
+  if (typeof value !== "string" || !value.startsWith(LEGACY_LINK_SCHEME)) return value;
+  return `seira${value.slice(LEGACY_LINK_SCHEME.length)}`;
 }
+
+/** A chat link an earlier version wrote into a message, with its scheme changed to the current one; other text is returned unchanged. */
+export function currentChatLink(value) {
+  if (typeof value !== "string") return value;
+  const link = value.trim();
+  return link.toLowerCase().startsWith(`${LEGACY_LINK_SCHEME}://`) ? `seira${link.slice(LEGACY_LINK_SCHEME.length)}` : value;
+}
+
+/** The ending of an encrypted workspace backup file that an earlier version wrote. */
+export const LEGACY_BACKUP_UPLOAD_SUFFIX = ".ombbackup";
+
+/** The name an earlier version gave the bot it seeded. */
+export const LEGACY_DEFAULT_BOT_NAME = "MausBot";

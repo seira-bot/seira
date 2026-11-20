@@ -3,6 +3,7 @@
 // bundled into the app. In a chat frame the shell transpiles the file itself with Sucrase; a published page carries
 // the server's transpiled code instead and loads no compiler.
 import { APP_THEME_STYLE } from "./helper.ts";
+import { LEGACY_APP_GLOBAL } from "../../electron/legacy-names.mjs";
 
 /** Exact versions, each at least two weeks old when pinned; `sucrase` matches the server's own dependency. */
 export const JSX_PAGE_LIBRARIES = {
@@ -27,6 +28,8 @@ export const JSX_PAGE_IMPORTS: Readonly<Record<string, string>> = {
   echarts: `${NPM}/echarts@${JSX_PAGE_LIBRARIES.echarts}/dist/echarts.esm.min.js`,
 };
 export const JSX_PAGE_MODULES: readonly string[] = [...Object.keys(JSX_PAGE_IMPORTS), "seira"];
+/** Other names a saved page may import a module by. */
+export const JSX_PAGE_ALIASES: Readonly<Record<string, string>> = { [LEGACY_APP_GLOBAL]: "seira" };
 
 const CODEC = `${NPM}/@jridgewell/sourcemap-codec`;
 /** Fixes for jsDelivr's on-demand ESM builds, by address. react-dom/client and lucide-react import React by its peer
@@ -60,6 +63,8 @@ export const JSX_RUNTIME_SOURCE = `(function (env) {
   "use strict";
   var doc = env.doc, win = env.win;
   var MODULES = ${scriptJson(JSX_PAGE_MODULES)};
+  var ALIASES = ${scriptJson(JSX_PAGE_ALIASES)};
+  var canonical = function (name) { return Object.prototype.hasOwnProperty.call(ALIASES, name) ? ALIASES[name] : name; };
   var OPTIONS = ${scriptJson(JSX_TRANSFORM_OPTIONS)};
   var html = doc.documentElement;
   var mount = doc.getElementById("seira-root");
@@ -183,7 +188,7 @@ export const JSX_RUNTIME_SOURCE = `(function (env) {
   };
   var run = function () {
     return compile().then(function (code) {
-      var names = wanted(code);
+      var names = wanted(code).map(canonical);
       var refused = names.filter(function (name) { return MODULES.indexOf(name) === -1; });
       if (refused.length) {
         throw fail("import", "It imports " + refused.join(", ") + ". A page can import only " + MODULES.join(", ") + ".");
@@ -203,6 +208,7 @@ export const JSX_RUNTIME_SOURCE = `(function (env) {
       Object.keys(ready.loaded).forEach(function (name) { modules[name] = wrap(ready.loaded[name]); });
       modules.seira = shellModule(React, ready.loaded.echarts);
       var require = function (name) {
+        name = canonical(name);
         if (!Object.prototype.hasOwnProperty.call(modules, name)) throw fail("import", "It imports " + name + ", which isn't loaded.");
         return modules[name];
       };

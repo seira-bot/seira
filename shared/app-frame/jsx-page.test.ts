@@ -132,6 +132,14 @@ export default function Page() { const theme = useTheme(); return <div><p id="th
     expect(fakeEcharts.made[0]).toMatchObject({ theme: "dark", options: [{ backgroundColor: "transparent", series: [{ type: "bar", data: [1, 2] }] }] });
   });
 
+  it("treats the old name of the shell's module as seira", async () => {
+    const source = `import { useTheme } from "mausbot";
+export default function Page() { return <p id="theme">{useTheme()}</p>; }`;
+    const { problems, rendered } = await start(source);
+    expect(problems).toEqual([]);
+    expect(rendered.querySelector("#theme")).not.toBeNull();
+  });
+
   it("runs a published page's transpiled code without loading the compiler", async () => {
     const compiled = transform(PRICING, { ...JSX_TRANSFORM_OPTIONS, transforms: [...JSX_TRANSFORM_OPTIONS.transforms] }).code;
     const page = new Function("require", "module", "exports", compiled);

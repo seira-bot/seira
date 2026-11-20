@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  looksLikeThreadRefUrl,
+  parseBotRefUrl,
   parseThreadRefUrl,
   remarkThreadRefs,
   resolveThreadRefAddress,
@@ -145,6 +147,12 @@ describe("a thread named in the web app's address", () => {
     expect(takeThreadLinkFromLocation()).toBe("seira://thread/t%201?bot=scout");
     expect(replaceState).toHaveBeenCalledWith(null, "", "/?lang=fr#top");
     expect(parseThreadRefUrl("seira://thread/t%201?bot=scout")).toEqual({ threadId: "t 1", botId: "scout" });
+  });
+
+  it("reads a chat link that an earlier version wrote into a message", () => {
+    expect(parseThreadRefUrl("openmausbot://thread/t%201?bot=scout")).toEqual({ threadId: "t 1", botId: "scout" });
+    expect(parseBotRefUrl("openmausbot://bot/scout")).toEqual({ botId: "scout" });
+    expect(looksLikeThreadRefUrl("openmausbot://thread/t-1")).toBe(true);
   });
 
   it("works without a bot, and does nothing when no thread is named", () => {

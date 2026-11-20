@@ -696,11 +696,11 @@ const LEGACY_DATA_DIR = join(dataHome(), ".opengrokbot");
 export const EVENTS_DIR = join(DATA_DIR, "events");
 export const NATIVE_DIR = join(DATA_DIR, "native");
 
-/** Moves what an earlier version named differently to the current names; a no-op once done and whenever SEIRA_DATA_DIR is set. */
+/** Moves what an earlier version named differently to the current names; a no-op once done and whenever SEIRA_DATA_DIR names another folder than the default. */
 export function migrateLegacyNames(): void {
   const log = (line: string): void => console.warn(`[data-directory] ${line}`);
   migrateHomeFolders({ home: dataHome(), log });
-  migrateInnerFiles({ dataDir: DATA_DIR, log });
+  migrateInnerFiles({ dataDir: DATA_DIR, home: dataHome(), log });
 }
 
 export function ensureDirs() {

@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
+import { currentFormat } from "./legacy-names.mjs";
 
 export const LIBRARY_CATALOG_MAX_BYTES = 256 * 1024;
 export const LIBRARY_BLOB_MAX_BYTES = 4 * 1024 * 1024;
@@ -74,7 +75,7 @@ export function parseOrgLibraryCatalog(input, { organizationId } = {}) {
   if (typeof input === "string" || input instanceof Uint8Array) {
     try { value = JSON.parse(typeof input === "string" ? input : new TextDecoder("utf-8", { fatal: true }).decode(input)); } catch { return null; }
   }
-  if (!record(value) || value.format !== "seira.org-library" || value.version !== 1 || !count(value.libraryVersion) || !record(value.organization) ||
+  if (!record(value) || currentFormat(value.format) !== "seira.org-library" || value.version !== 1 || !count(value.libraryVersion) || !record(value.organization) ||
       !matches(UUID, value.organization.id) || !safeText(value.organization.name, 100) || !Array.isArray(value.packages) || value.packages.length > CATALOG_MAX_ENTRIES) return null;
   if (organizationId !== undefined && value.organization.id !== organizationId) return null;
   const seen = new Set(), packages = [];
