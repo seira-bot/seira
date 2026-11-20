@@ -6,6 +6,7 @@ import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 import path from "node:path";
+import { SEIRA_HOSTS } from "./seira-hosts.mjs";
 
 export const DESKTOP_COMPANION_FIELD = "desktopCompanionRemote";
 const DEVICE_TOKEN = /^seira_[A-Za-z0-9_-]{43}$/;
@@ -47,7 +48,7 @@ export const NEXT_MANAGED_COMPANION_HOST_SUFFIX = "";
 
 /** Every zone the control plane makes addresses in, lowercase apex names. Ship a new domain here first. */
 export const MANAGED_COMPANION_HOST_SUFFIXES = Object.freeze(
-  ["seira.bot", "si.seira.bot", NEXT_MANAGED_COMPANION_HOST_SUFFIX].filter(Boolean),
+  [SEIRA_HOSTS.site, SEIRA_HOSTS.companion, NEXT_MANAGED_COMPANION_HOST_SUFFIX].filter(Boolean),
 );
 
 /** Only the control plane's `c-<32 hex>` names: any other name in those zones never receives a pairing code. */

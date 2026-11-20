@@ -1,6 +1,7 @@
 // Model-shaped widget inputs, written the way a bot or ChatKit's Widget Builder
 // writes them, using every node type between them. Tests, the phone fixtures
 // and the verification recipe all read these.
+import { SEIRA_HOSTS, seiraOrigin } from "../electron/seira-hosts.mjs";
 
 const prRow = (number: number, title: string, detail: string, status: string, color: string) => ({
   type: "ListViewItem",
@@ -193,7 +194,7 @@ export const WIDGET_SAMPLES: Record<string, unknown> = {
       { type: "Text", value: "Body text with a longer line that wraps onto a second line when the card is narrow.", maxLines: 2 },
       { type: "Caption", value: "A caption in secondary ink", size: "sm" },
       { type: "Box", padding: 4, radius: "lg", background: "surface-secondary", children: [{ type: "Text", value: "Inside a box", weight: "semibold" }, { type: "Caption", value: "with padding and a surface" }] },
-      { type: "Image", src: "https://seira.bot/og.png", alt: "Seira", aspectRatio: "16/9", radius: "lg", frame: true },
+      { type: "Image", src: `${seiraOrigin(SEIRA_HOSTS.site)}/og.png`, alt: "Seira", aspectRatio: "16/9", radius: "lg", frame: true },
       { type: "Transition", children: [{ type: "Text", value: "A transition wraps one child." }] },
       {
         type: "Form",

@@ -6,10 +6,11 @@ import { existsSync, readdirSync, readFileSync, statfsSync } from "node:fs";
 import { arch, cpus, homedir, release, totalmem } from "node:os";
 import { dirname, join, posix, resolve } from "node:path";
 
+import { SEIRA_HOSTS, seiraOrigin } from "../../electron/seira-hosts.mjs";
 import { EXIT, flag, usageError } from "./args.ts";
 import type { VerbContext, VerbOutcome } from "./context.ts";
 
-const CLOCK_ORIGIN = "https://seira.bot";
+const CLOCK_ORIGIN = seiraOrigin(SEIRA_HOSTS.site);
 
 export type HostStatus = "ok" | "warn" | "FAIL";
 

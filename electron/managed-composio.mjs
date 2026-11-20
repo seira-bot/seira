@@ -1,3 +1,5 @@
+import { SEIRA_HOSTS, seiraOrigin } from "./seira-hosts.mjs";
+
 const TOKEN = /^[0-9a-f]{64}$/;
 
 /** SEIRA_COMPOSIO_BROKER=off: nothing reaches the managed service, whatever else is set. */
@@ -10,7 +12,7 @@ export function ownComposioKey(credentials, environment = process.env) {
   return Boolean((typeof saved === "string" && saved.trim()) || environment.COMPOSIO_API_KEY?.trim());
 }
 
-export const SEIRA_HOSTED_COMPOSIO_BROKER_URL = "https://apps.seira.bot";
+export const SEIRA_HOSTED_COMPOSIO_BROKER_URL = seiraOrigin(SEIRA_HOSTS.apps);
 
 /** Return the service URL: a configured URL, else Seira's service in the packaged app, else "". */
 export function managedComposioBrokerUrl(configured, { packaged = false } = {}) {
