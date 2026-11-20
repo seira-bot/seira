@@ -75,11 +75,9 @@ const type = async (input: HTMLInputElement, value: string) => {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 };
-/** Presses Connect, names the account, and lets one poll read the answer. */
+/** Presses Connect, which signs in at once, and lets one poll read the answer. */
 const connectApollo = async () => {
   await click(tile().querySelector("button")!);
-  await type(tile().querySelector("form input") as HTMLInputElement, "work");
-  await act(async () => { tile().querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
   await flush();
   await settlePoll();
 };
