@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 
-import { WINDOWS_APP_ID, applyWindowsAppId } from "./app-identity.mjs";
+import { SOURCE_ICON, WINDOWS_APP_ID, applyWindowsAppId, sourceTaskbarIcon } from "./app-identity.mjs";
 import { LEGACY_APP_NAME, LEGACY_LINUX_PACKAGE } from "./legacy-names.mjs";
 
-const fakeApp = () => ({ ids: [], setAppUserModelId(id) { this.ids.push(id); } });
+const fakeApp = (isPackaged = true) => ({
+  ids: [], isPackaged, listeners: [],
+  getAppPath() { return "C:/src/seira"; },
+  setAppUserModelId(id) { this.ids.push(id); },
+  on(event, listener) { this.listeners.push([event, listener]); },
+});
+const fakeWindow = () => ({ details: [], icons: [], setAppDetails(d) { this.details.push(d); }, setIcon(i) { this.icons.push(i); } });
 
 test("win32 gives the process the ID that the installer's shortcut carries", () => {
   const app = fakeApp();
@@ -65,4 +72,43 @@ test("the deb and pacman packages are named seira and replace the package that a
       assert.equal(args[args.indexOf(flag) + 1], LEGACY_LINUX_PACKAGE, `${section} ${flag} ${LEGACY_LINUX_PACKAGE}`);
     }
   }
+});
+
+test("win32 from source gives each window the Seira icon and keeps the ID", () => {
+  const app = fakeApp(false);
+  applyWindowsAppId({ app, platform: "win32", iconPath: "C:/seira/icon.ico" });
+  assert.deepEqual(app.ids, ["bot.seira.app"]);
+  assert.equal(app.listeners.length, 1);
+  assert.equal(app.listeners[0][0], "browser-window-created");
+  const win = fakeWindow();
+  app.listeners[0][1]({}, win);
+  assert.deepEqual(win.details, [{
+    appId: "bot.seira.app",
+    appIconPath: "C:/seira/icon.ico",
+    appIconIndex: 0,
+    relaunchCommand: `"${process.execPath}" "C:/src/seira"`,
+    relaunchDisplayName: "Seira",
+  }]);
+  assert.deepEqual(win.icons, ["C:/seira/icon.ico"]);
+});
+
+test("win32 packaged changes nothing besides the ID", () => {
+  const app = fakeApp(true);
+  applyWindowsAppId({ app, platform: "win32" });
+  assert.deepEqual(app.ids, ["bot.seira.app"]);
+  assert.deepEqual(app.listeners, []);
+});
+
+test("Linux and macOS from source register nothing", () => {
+  for (const platform of ["darwin", "linux"]) {
+    const app = fakeApp(false);
+    applyWindowsAppId({ app, platform });
+    assert.deepEqual(app.listeners, [], platform);
+    assert.equal(sourceTaskbarIcon({ platform, isPackaged: false }), null, platform);
+  }
+});
+
+test("the source icon is the installer icon and exists in a checkout", () => {
+  assert.ok(SOURCE_ICON.endsWith(join("build", "icon.ico")));
+  assert.ok(readFileSync(SOURCE_ICON).length > 0);
 });

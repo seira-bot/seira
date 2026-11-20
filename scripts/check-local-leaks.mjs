@@ -14,6 +14,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { warnIfHooksOff } from "./hooks-notice.mjs";
+
 const PLACEHOLDERS = "node|runner|user|username|you|yourname|your-name|me|name|alice|bob|ubuntu|pi|app|seira|root|shared|public|default|guest|cua";
 const notPlaceholder = `(?!(?:${PLACEHOLDERS})(?:[/\\\\]|$))`;
 
@@ -39,6 +41,7 @@ export const GENERIC_RULES = [
   { label: "private key", re: /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----/ },
   { label: "provider API key", re: /\b(?:sk-(?:ant-|proj-)?[A-Za-z0-9_-]{32,}|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,}|AKIA[0-9A-Z]{16}|xox[abpr]-[A-Za-z0-9-]{20,})\b/ },
   { label: "secret value in an assignment", re: SECRET_ASSIGNMENT },
+  { label: "internal-only marker", re: /INTERNAL[-]ONLY/ },
 ];
 
 const EXEMPT = [
@@ -130,6 +133,7 @@ function main(argv) {
     return 2;
   }
   const root = git(["rev-parse", "--show-toplevel"], process.cwd()).trim();
+  warnIfHooksOff(root, "check-local-leaks");
   const localFile = join(root, ".leakcheck.local");
   const privateRules = existsSync(localFile) ? privatePatterns(readFileSync(localFile, "utf8")) : [];
   const merging = gitOk(["rev-parse", "-q", "--verify", "MERGE_HEAD"], root);

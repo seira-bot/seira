@@ -46,26 +46,8 @@ import { lanUrl } from "./lan-address.ts";
 import { isLoopbackHost } from "../electron/server-address.mjs";
 import { parseDuration } from "./headless/args.ts";
 import { signInFromEnv, type AppConfig } from "./config.ts";
-import {
-  cleanupTunnelOrigin,
-  controlPlaneProblem,
-  createTunnelAccount,
-  createTunnelOrigin,
-  describeTunnelAccount,
-  describeTunnelState,
-  ensureCloudflared,
-  FLEET_CREDENTIAL_ENV,
-  fleetAccess,
-  fleetCredential,
-  guardianEntry,
-  startTunnel,
-  tunnelAccess,
-  type CompanionOriginEndpoint,
-  type ManagedTunnelAccess,
-  type RunningTunnel,
-  type TunnelAccount,
-  type TunnelRecovery,
-} from "./tunnel.ts";
+import { cleanupTunnelOrigin, controlPlaneProblem, createTunnelAccount, describeTunnelAccount, describeTunnelState, FLEET_CREDENTIAL_ENV, fleetCredential, startTunnel, type RunningTunnel } from "./tunnel.ts";
+import { planTunnel, type TunnelPlan } from "./cli-tunnel-plan.ts";
 import { acceptedWireNames, sentWireName } from "../electron/phone-wire-names.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -531,7 +513,15 @@ export async function runLogin(options: CliOptions, io: CliIo = defaultIo()): Pr
   }
   const signedIn = describeTunnelAccount(account.credentials.read());
   if (!signedIn.address && !(options.relay && signedIn.installationId)) {
-    io.error(`signed in, but no public address was issued${state.message ? `: ${state.message}` : ""}`);
+    if (!signedIn.email) {
+      io.error(`sign-in failed${state.message ? `: ${state.message}` : ""}`);
+      return 1;
+    }
+    // FR-221: the sign-in stays; only the address is missing, and serve --tunnel asks for it again at each start.
+    io.log(`Signed in as ${signedIn.email}.`);
+    io.error(`No public address this time${state.message ? `: ${state.message}` : "."}`);
+    io.log(`${cliCommand("serve --tunnel")} asks for one again each time it starts, and serves without one until then.`);
+    io.log(`To pair a phone now, use ${cliCommand("serve --lan")} on this Wi-Fi or ${cliCommand("serve --tailscale")} on your tailnet.`);
     return 1;
   }
   io.log(`Signed in as ${signedIn.email ?? email}.`);
@@ -612,59 +602,6 @@ export function serverEntry(here = HERE): { command: string; args: string[]; sta
   return { command: process.execPath, args: ["--experimental-strip-types", source], staticDir, skillsDir: existsSync(join(root, "skills")) ? join(root, "skills") : null };
 }
 
-interface TunnelPlan {
-  access: ManagedTunnelAccess;
-  binary: string;
-  guardian: string;
-  origin: CompanionOriginEndpoint;
-  account: TunnelAccount | null;
-}
-
-/** Fails closed: never a silent fallback to a local-only server. */
-async function planTunnel(options: CliOptions, log: (line: string) => void, recovery: TunnelRecovery): Promise<TunnelPlan | { error: string }> {
-  let access: ManagedTunnelAccess | null = null;
-  let account: TunnelAccount | null = null;
-  const fail = (error: string) => {
-    account?.service.dispose();
-    return { error };
-  };
-  const credential = fleetCredential();
-  if (credential) {
-    log(`tunnel: using the installation credential from ${FLEET_CREDENTIAL_ENV}`);
-    try {
-      access = await fleetAccess({ credential, version: reportableServerVersion() });
-    } catch (error) {
-      return { error: `--tunnel: ${message(error)}` };
-    }
-  } else {
-    const problem = controlPlaneProblem(); if (problem) return { error: `--tunnel: ${problem}` };
-    account = createTunnelAccount({ dataDir: options.dataDir, version: reportableServerVersion(), recovery, log: (line) => log(`tunnel: ${line}`) });
-    if (account.credentials.status === "unavailable") return fail(`${account.credentials.file} exists but could not be read; fix or remove it`);
-    if (!describeTunnelAccount(account.credentials.read()).email) {
-      return fail(`no account on this machine yet: run ${cliCommand("login")} first, then ${cliCommand("serve --tunnel")}`);
-    }
-    try {
-      const state = await account.service.retry();
-      const saved = tunnelAccess(account.credentials.read()) !== null;
-      if (state.status === "signed-out") log(`tunnel: the sign-in on this machine expired; run ${cliCommand("login")} to renew it${saved ? " (serving the saved address until then)" : ""}`);
-      else if (state.message) log(`tunnel: ${state.message}${saved ? " Serving the saved address for now." : ""}`);
-    } catch (error) {
-      log(`tunnel: control plane not reachable right now (${message(error)}); using the saved address`);
-    }
-    access = tunnelAccess(account.credentials.read());
-    if (!access) return fail(`this machine has no public address; run ${cliCommand("login")} again`);
-  }
-  let binary: string;
-  try {
-    binary = await ensureCloudflared({ dataDir: options.dataDir, log });
-  } catch (error) {
-    return fail(`--tunnel: ${message(error)}`);
-  }
-  const guardian = guardianEntry();
-  if (!guardian) return fail("--tunnel: the connector guardian is missing from this install");
-  return { access, binary, guardian, origin: createTunnelOrigin(), account };
-}
-
 export async function runServe(options: CliOptions, log: (line: string) => void = console.log): Promise<number> {
   const { browserEngineStatus, describeBrowserEngine } = await import("./browser-engine.ts");
   if (await serverUp(options.port)) {
@@ -690,9 +627,14 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
       console.error(planned.error);
       return 1;
     }
-    plan = planned;
-    if (publicUrl && publicUrl !== plan.access.endpoint) log(`note: --public-url is ignored with --tunnel; the address is ${plan.access.endpoint}`);
-    publicUrl = plan.access.endpoint;
+    if ("unavailable" in planned) {
+      log(`tunnel: ${planned.unavailable}`);
+      log(`tunnel: no public address this time, so this server runs without one. Start ${cliCommand("serve --tunnel")} again later to get one.`);
+    } else {
+      plan = planned;
+      if (publicUrl && publicUrl !== plan.access.endpoint) log(`note: --public-url is ignored with --tunnel; the address is ${plan.access.endpoint}`);
+      publicUrl = plan.access.endpoint;
+    }
   }
   let caddyBinary: string | null = null;
   if (options.domain) {

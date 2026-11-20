@@ -405,7 +405,7 @@ describe("the control plane a server uses by default", () => {
     try {
       expect(createTunnelAccount({ dataDir: dir, version: "test", env: {}, liveServices: live }).controlPlane).toBe("https://accounts.seira.bot");
       expect(createTunnelAccount({ dataDir: dir, version: "test", env: { SEIRA_CONTROL_PLANE_URL: "https://cp.example.test" }, liveServices: live }).controlPlane).toBe("https://cp.example.test");
-      expect(createTunnelAccount({ dataDir: dir, version: "test", env: {} }).controlPlane).toBe("");
+      expect(createTunnelAccount({ dataDir: dir, version: "test", env: {}, liveServices: ["site"] }).controlPlane).toBe("");
     } finally {
       void removeTempDir(dir);
     }
