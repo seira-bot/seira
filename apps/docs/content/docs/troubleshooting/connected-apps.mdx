@@ -23,8 +23,8 @@ Check the bot's tool grants. A bot with an assigned grant list only sees the too
 
 ## Connected apps say the service is unavailable
 
-This message appears only when `OMB_COMPOSIO_BROKER_URL` names a connected-apps service. Check internet connectivity and try again later before reconnecting every account. The app keeps its installation identity through short outages. Deleting local credentials during an outage can separate existing grants from the installation. A Cloud keeps trying on its own.
+This message appears only when a connected-apps service is in use. Check internet connectivity and try again later before reconnecting every account. The app keeps its installation identity through short outages. Deleting local credentials during an outage can separate existing grants from the installation. A Cloud and a self-hosted server keep trying on their own.
 
 ## Connected apps ask for a project key
 
-Seira uses no connected-apps service unless `OMB_COMPOSIO_BROKER_URL` names one. Save your own Composio project key as described in [Self-hosted Composio](../connected-apps/self-hosted-composio.mdx).
+The packaged desktop app and a self-hosted server installed from npm or Docker use Seira's connected-apps service. A Cloud and a source build use none unless `OMB_COMPOSIO_BROKER_URL` names one. `OMB_COMPOSIO_BROKER=off` turns the service off. Without a service, save your own Composio project key as described in [Self-hosted Composio](../connected-apps/self-hosted-composio.mdx).

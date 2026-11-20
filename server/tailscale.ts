@@ -1,6 +1,6 @@
 // Never log Tailscale's raw stderr (it can contain auth keys and node names): failures are classified into a closed set.
 import { execFile, spawn } from "node:child_process";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
 
@@ -158,14 +158,23 @@ export async function tailscaleServe(
   const exited = new Promise<number | null>((done) => { child.once("exit", (code) => done(code)); child.once("error", () => done(-1)); });
   const early = await Promise.race([exited, new Promise<"running">((done) => setTimeout(() => done("running"), options.settleMs ?? 2_500))]);
   if (early !== "running") return { failure: early === -1 ? "not-installed" : classifyTailscaleStderr(stderr) };
-  writeFileSync(tailscaleMarker(options.dataDir), JSON.stringify({ cli: status.cli, httpsPort, localPort }), { mode: 0o600 });
+  const stopServe = async () => {
+    child.kill("SIGTERM");
+    const timer = setTimeout(() => child.kill("SIGKILL"), 3_000);
+    await exited;
+    clearTimeout(timer);
+  };
+  try {
+    mkdirSync(options.dataDir, { recursive: true, mode: 0o700 });
+    writeFileSync(tailscaleMarker(options.dataDir), JSON.stringify({ cli: status.cli, httpsPort, localPort }), { mode: 0o600 });
+  } catch (error) {
+    await stopServe();
+    throw error;
+  }
   return {
     origin,
     async stop() {
-      child.kill("SIGTERM");
-      const timer = setTimeout(() => child.kill("SIGKILL"), 3_000);
-      await exited;
-      clearTimeout(timer);
+      await stopServe();
       rmSync(tailscaleMarker(options.dataDir), { force: true });
     },
   };

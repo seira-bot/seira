@@ -168,7 +168,7 @@ beforeAll(async () => {
     }
 
     const apiKey = String(req.headers["x-api-key"] ?? "");
-    if (!["ak_test", "ak_catalog_a", "ak_catalog_b", "ak_catalog_pages", "ak_catalog_partial", "ak_catalog_stuck",
+    if (!["ak_test", "ak_catalog_a", "ak_catalog_b", "ak_catalog_auth", "ak_catalog_pages", "ak_catalog_partial", "ak_catalog_stuck",
         "ak_catalog_page_stuck", "ak_catalog_exhausted", "ak_catalog_stalled_total", "ak_catalog_end_short",
         "ak_catalog_http_no_total"].includes(apiKey)) {
       res.writeHead(401, { "content-type": "application/json" });
@@ -300,6 +300,14 @@ beforeAll(async () => {
       }
       if (apiKey === "ak_catalog_b") {
         return res.end(JSON.stringify({ items: [{ slug: "linear", name: "Catalog B" }] }));
+      }
+      if (apiKey === "ak_catalog_auth") {
+        return res.end(JSON.stringify({ items: [
+          { slug: "ownauth", name: "Own", composio_managed_auth_schemes: [] },
+          { slug: "managed", name: "Managed", composio_managed_auth_schemes: ["OAUTH2"] },
+          { slug: "unknown", name: "Unknown" },
+          { slug: "open", name: "Open", no_auth: true, composio_managed_auth_schemes: [] },
+        ] }));
       }
       return res.end(JSON.stringify({ items: [{ slug: "x", name: "X (Twitter)" }, { slug: "github", name: "GitHub" }] }));
     }
@@ -488,6 +496,16 @@ describe.sequential("Composio Sessions", () => {
       "ak_catalog_a",
       "ak_catalog_b",
     ]);
+  });
+
+  it("flags only the toolkits that Composio lists with no managed sign-in", async () => {
+    const { cards } = await listToolkits({ composio: { apiKey: "ak_catalog_auth" } });
+    const flagged = (slug: string) => cards.find((card) => card.slug === slug)!;
+
+    expect(flagged("ownauth").needsOwnAuth).toBe(true);
+    expect(flagged("managed")).not.toHaveProperty("needsOwnAuth");
+    expect(flagged("unknown")).not.toHaveProperty("needsOwnAuth");
+    expect(flagged("open")).not.toHaveProperty("needsOwnAuth");
   });
 
   it("pages the marketplace catalog past the first page", async () => {

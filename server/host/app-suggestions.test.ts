@@ -147,6 +147,21 @@ describe("the suggestions a person sees", () => {
   });
 });
 
+describe("an app that needs its own sign-in", () => {
+  const cards = [{ ...card("linkedin", "LinkedIn"), needsOwnAuth: true }, { ...card("notion", "Notion") }];
+  const withCards = (connected: Record<string, { connected: boolean }>) => createAppSuggestions({
+    dataDir, store: { bots, bot: () => null, onChange: () => () => {} } as never, configured: () => true, catalog: async () => ({ cards }), services: async () => connected,
+    offerable: () => true, pickAvailable: () => true, decider: { choose } as never, now: () => clock,
+  });
+
+  it("is left out of suggestions and search until it is connected", async () => {
+    const bot = { id: "b1", name: "Sales" } as never;
+    expect(slugs(await withCards({}).suggest({ limit: 5 }))).toEqual(["notion"]);
+    expect(await withCards({}).find({ query: "linkedin notion", bot, refusal: () => null })).not.toContain("- linkedin:");
+    expect(await withCards({ linkedin: { connected: true } }).find({ query: "linkedin notion", bot, refusal: () => null })).toContain("- linkedin: LinkedIn (connected).");
+  });
+});
+
 describe("a bot searching the catalog", () => {
   const bot = (extra = {}) => ({ id: "b1", name: "Sales", ...extra }) as never;
   const cards = [{ ...card("googlesheets", "Google Sheets"), blurb: "Read and update spreadsheets" }, { ...card("excel", "Excel"), blurb: "A spreadsheet tool" }, { ...card("hiddenapp", "Hidden"), blurb: "spreadsheet" }];

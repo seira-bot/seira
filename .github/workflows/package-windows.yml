@@ -110,7 +110,7 @@ jobs:
         # The smoke above runs a copy. This runs the packaged folder itself, where no node_modules exists.
         run: |
           res=release/win-unpacked/resources
-          HOME="$RUNNER_TEMP/seira-smoke" USERPROFILE="$RUNNER_TEMP/seira-smoke" OMB_PORT=21987 \
+          HOME="$RUNNER_TEMP/seira-smoke" USERPROFILE="$RUNNER_TEMP/seira-smoke" OMB_PORT=21987 OMB_COMPOSIO_BROKER=off \
             node "$res/server/index.js" > "$RUNNER_TEMP/server.log" 2>&1 &
           pid=$!
           for _ in $(seq 1 90); do

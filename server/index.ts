@@ -21,7 +21,7 @@ import { RoomContextTracker, roomResetNote } from "./room-context.ts";
 import { createRoomTranscript, GROUP_CONTEXT_MESSAGES } from "./host/room-transcript.ts";
 import { createRoomSessions } from "./host/room-sessions.ts";
 import { LentComputers, provenRequestPerson, SharedComputers, sharedComputerOperation } from "./shared-computers.ts"; import { lentScreenResult } from "./lent-screen-guidance.ts"; import { DeviceLinks } from "./device-links.ts"; import { createLentMcp, isLentMcpPath } from "./lent-mcp.ts";
-import { cloudHomeLendingRefusal, cloudHomeOwnTurnRefusal, createCloudRoutineAuthors, ownerOnlyConversation } from "./cloud-lending.ts"; import { createOwnHome, oneOwner, selfHostedPersonName } from "./own-home.ts"; import { createPlacesElsewhere } from "./places-elsewhere.ts"; import { createPlacesElsewhereRoutes } from "./routes/places-elsewhere.ts"; import { assertRoomFolder } from "./room-folder.ts"; import { cloudConnectedAppsBrokerUrl, startCloudHomeConnectedApps, stopCloudHomeConnectedApps } from "./cloud-connected-apps.ts"; import { createTeamConnectionsHost } from "./host/team-connections-host.ts"; import { createCloudLendingTurns } from "./host/cloud-lending-turns.ts"; import { createTeamConnectionRoutes } from "./routes/team-connections.ts";
+import { cloudHomeLendingRefusal, cloudHomeOwnTurnRefusal, createCloudRoutineAuthors, ownerOnlyConversation } from "./cloud-lending.ts"; import { createOwnHome, oneOwner, selfHostedPersonName } from "./own-home.ts"; import { createPlacesElsewhere } from "./places-elsewhere.ts"; import { createPlacesElsewhereRoutes } from "./routes/places-elsewhere.ts"; import { assertRoomFolder } from "./room-folder.ts"; import { cloudConnectedAppsBrokerUrl, startServerConnectedApps, stopServerConnectedApps } from "./cloud-connected-apps.ts"; import { createTeamConnectionsHost } from "./host/team-connections-host.ts"; import { createCloudLendingTurns } from "./host/cloud-lending-turns.ts"; import { createTeamConnectionRoutes } from "./routes/team-connections.ts";
 import { botMemoryFiles, createLendingMemory } from "./lending-memory.ts";
 import { SharedComputerControl } from "./shared-computer-control.ts";
 import { STATUS_REPLY_TIMEOUT_MS } from "./runtime/status-reply.ts"; import { createCoordinator, type ComposedTurn, type CoordinateBotsCall, type Coordinator, type HandoffOpener, type HandoffOptions, type HandoffView, type HostTurnResult } from "./coordinator.ts";
@@ -459,7 +459,7 @@ import { screenFrameHash, screenSurfaceForTool, screenTouchingTool, settledFrame
 import { asSchedule, RoutineRequestService } from "./routine-requests.ts"; import { ownerSpokeOnly } from "./cloud-routine-level.ts"; import { routineRunCard, routineRunFallbackText } from "./routine-run-card.ts";
 import { activeRoutinesContext } from "./active-routines-context.ts";
 import { createRefusedHandoffs } from "./host/refused-handoffs.ts"; import { automationContextText, createAutomationReports, newestAutomationLines, routineRunNeedsReview } from "./automation-reports.ts"; import { createAutomationDestinations } from "./automation-destinations.ts"; import { createTeamRoutines } from "./host/team-routines.ts"; import { botOwner } from "../shared/bot-owner.ts"; import { forgetMember } from "./bot-owners.ts"; import { createProactive } from "./host/proactive.ts"; import { createFirstHourHooks, startFirstHour, welcomeDonePatch } from "./host/first-hour-host.ts"; import { greetingMessage } from "./host/first-hour.ts"; import { READ_AND_DRAFT_PARTS, READ_AND_DRAFT_REFUSAL, READ_AND_DRAFT_TOOLS, recordsAnswer } from "./read-and-draft.ts"; import { createPresenceRoutes } from "./routes/presence.ts"; import { needsYouNow } from "./today.ts"; import { createTeamPresenceHost } from "./host/team-presence-host.ts";
-import { engineLabel, LimitResetClock, nearLimitNote } from "./limit-resets.ts"; import { loadPlanUsage, planAccountsFromInstances } from "./plan-usage.ts"; import { LimitFailovers, limitBackupAllowed } from "./limit-failover.ts"; import { createLimitResetRoutes } from "./routes/limit-resets.ts";
+import { engineLabel, LimitResetClock, nearLimitNote } from "./limit-resets.ts"; import { loadPlanUsage, planAccountsFromInstances } from "./plan-usage.ts"; import { LimitFailovers, billsEachUse, limitBackupAllowed } from "./limit-failover.ts"; import { createLimitResetRoutes } from "./routes/limit-resets.ts"; import { createAiPool } from "./host/ai-pool.ts"; import { poolReading } from "./ai-pool.ts";
 import { parseTriggerRequest, triggerTarget } from "./trigger-tools.ts"; import { WebhookRequestError, WebhookRequestService } from "./webhook-requests.ts"; import { createAppTriggerHost } from "./app-trigger-host.ts";
 import { appliesNow, directApply, UNDO_STALE, type DirectApply } from "./direct-apply.ts";
 import { createTeamMemoryRequests } from "./team-memory-requests.ts";
@@ -2536,6 +2536,7 @@ async function moveOffComputerEngine(): Promise<void> {
     saveConfig({ automaticRecovery: { enabled: false } });
     cfg.automaticRecovery = { enabled: false };
   }
+  if (cfg.aiPool?.members.some(named)) { const members = cfg.aiPool.members.filter((member) => !named(member)); cfg.aiPool = { ...cfg.aiPool, members, ...(members.length < 2 ? { enabled: false } : {}) }; saveConfig({ aiPool: cfg.aiPool }); }
   const defaults = named(cfg.defaultModelSelection) || named(cfg.newBotDefaults?.profile.modelSelection);
   if (!defaults && !store.bots.some(bot => named(bot.modelSelection) || bot.fallback?.some(named) ||
     store.tasks(bot.id).some(task => named(task.modelSelection)))) return;
@@ -7542,20 +7543,8 @@ async function beginTurn(
     };
   }
   healThreadModel(botId, threadId);
-  limitFailovers.restore(botId, threadId);
-  const bot = store.projectBotForTask(botId, threadId);
-  if (!bot) throw Object.assign(new Error("no such task"), { status: 404 });
-  if (bot.approvalGrant) {
-    throw Object.assign(new Error("this bot's approval level is still being confirmed — try again"), { status: 409, code: "settling" });
-  }
   const answer = turnAnswers(threadId, opts);
   let computerSkipped: string | undefined;
-  const transitionError = providerTransitionForTurn(bot, opts?.runOn, threadId);
-  if (transitionError && !answer.incident) throw Object.assign(new Error(transitionError), { status: 409 });
-  if (transitionError) computerSkipped = transitionError;
-  if (providerInstancesChanging.has(bot.modelSelection.instanceId)) {
-    throw Object.assign(new Error("this provider account is being updated — try again shortly"), { status: 409, code: "settling" });
-  }
   assertWithinBudget(cfg, DATA_DIR); if (!opts?.continuesRun) usageCapGate.assertTurn(botId, personWaiting({ ...opts, peerAsk: opts?.peerAsk ?? opts?.userMessage?.peerAsk }, threadStanding(botId, threadId)) || activeRoutineRunForThread(threadId)?.byPerson === true, threadLanguage(threadId));
   if (boatLifecycleBusyBots.has(botId)) {
     const changing = "this bot's cloud computer is being changed — wait for it to finish";
@@ -7569,6 +7558,14 @@ async function beginTurn(
   if (botAtThreadCapacity(botId, threadId, Boolean(opts?.coordination || opts?.peerAsk || opts?.commsDepth || opts?.cardContinuation || opts?.computerSelectionContinuation))) {
     throw Object.assign(new Error(botThreadLimitText(cfg, botThreadsHost(cloudPlanTier.starter()))), { status: 409, code: "thread_limit" });
   }
+  if (!limitFailovers.restore(botId, threadId) && !limitFailovers.holds(threadId) && !(opts?.continuesRun || opts?.compactOnly || opts?.cardContinuation || opts?.peerLimitResent || opts?.automaticRecoveryAttempted)) aiPool.place(botId, threadId);
+  const bot = store.projectBotForTask(botId, threadId);
+  if (!bot) throw Object.assign(new Error("no such task"), { status: 404 });
+  if (bot.approvalGrant) throw Object.assign(new Error("this bot's approval level is still being confirmed — try again"), { status: 409, code: "settling" });
+  const transitionError = providerTransitionForTurn(bot, opts?.runOn, threadId);
+  if (transitionError && !answer.incident) throw Object.assign(new Error(transitionError), { status: 409 });
+  if (transitionError) computerSkipped = transitionError;
+  if (providerInstancesChanging.has(bot.modelSelection.instanceId)) throw Object.assign(new Error("this provider account is being updated — try again shortly"), { status: 409, code: "settling" });
   // Revoke what a previous turn left behind before minting this turn's integrations.
   revokeEarlierTurnCapabilities(threadId);
   if (opts?.automationSource === "webhook" || opts?.unattended) markUnattended(bot.id, threadId);
@@ -8735,14 +8732,15 @@ async function stopBotForEmergencyApprovalDowngrade(botId: string): Promise<void
 
 const engineName = (engine: string) => engineLabel(engine, registry.get(engine) ?? undefined);
 const limitClock = new LimitResetClock({ file: join(DATA_DIR, "limit-holds.json"), accounts: () => planAccountsFromInstances(instanceConfigs(cfg)), onChange: () => routines?.retimeLimitResets(),
-  waiting: () => Boolean(routines?.listRoutines().some((routine) => routine.enabled && routine.schedule.type === "limit_reset")) }); const limitTakeover = createLimitTakeover({ file: join(DATA_DIR, "limit-notices.json"), holdsFile: join(DATA_DIR, "limit-takeover-holds.json"), configs: () => instanceConfigs(cfg), context: selectionContext, blockedUntil: (engine, model) => limitClock.blockedUntil(engine, model), resetAt: (engine, model) => limitClock.resetAt(engine, model), enabled: () => quotaSwitchEnabled(), where: CLOUD_HOME ? "on the Cloud" : "on this computer", signedOutNow: (id) => registry.knownSnapshot(id)?.authenticated === false, signedOutNoticed: () => registry.forgetSnapshots(), botsOn: (id) => store.bots.filter((bot) => !bot.hidden && bot.modelSelection.instanceId === id), engineName, engines: () => selectableInstances(registry.instances().map((engine) => ({ instanceId: engine.instanceId, driverKind: engine.driverKind, displayName: engine.displayName, enabled: engine.enabled, access: registry.access(engine.instanceId), models: engine.models, snapshot: registry.knownSnapshot(engine.instanceId) ?? { state: "unavailable" as const, reason: "not read yet" }, capabilities: engine.adapter.capabilities }))), chosen: (botId) => [...(store.bot(botId)?.fallback ?? []), ...(cfg.automaticRecovery?.backup ? [cfg.automaticRecovery.backup] : [])], signedOutChosen: (botId) => { const bot = store.bot(botId); return bot ? startupBackups(bot, cfg.automaticRecovery) : []; }, tell: (about, text) => notify(buildNoticeNotification(about, store.bot(about.id)?.threadId ?? "", text)), record: (failover) => { limitFailovers.record(failover); perf.noteFailover(failover.threadId, failover.why === "signed-out" ? "signed-out" : "limit"); } }); registry.onSignedIn((instanceId) => limitTakeover.signedIn(instanceId));
+  waiting: () => Boolean(cfg.aiPool?.enabled || routines?.listRoutines().some((routine) => routine.enabled && routine.schedule.type === "limit_reset")) }); const limitTakeover = createLimitTakeover({ file: join(DATA_DIR, "limit-notices.json"), holdsFile: join(DATA_DIR, "limit-takeover-holds.json"), configs: () => instanceConfigs(cfg), context: selectionContext, blockedUntil: (engine, model) => limitClock.blockedUntil(engine, model), resetAt: (engine, model) => limitClock.resetAt(engine, model), enabled: () => quotaSwitchEnabled(), where: CLOUD_HOME ? "on the Cloud" : "on this computer", signedOutNow: (id) => registry.knownSnapshot(id)?.authenticated === false, signedOutNoticed: () => registry.forgetSnapshots(), botsOn: (id) => store.bots.filter((bot) => !bot.hidden && bot.modelSelection.instanceId === id), engineName, engines: () => selectableInstances(registry.instances().map((engine) => ({ instanceId: engine.instanceId, driverKind: engine.driverKind, displayName: engine.displayName, enabled: engine.enabled, access: registry.access(engine.instanceId), models: engine.models, snapshot: registry.knownSnapshot(engine.instanceId) ?? { state: "unavailable" as const, reason: "not read yet" }, capabilities: engine.adapter.capabilities }))), chosen: (botId, from) => [...(store.bot(botId)?.fallback ?? []), ...aiPool.backupsFor(from), ...(cfg.automaticRecovery?.backup ? [cfg.automaticRecovery.backup] : [])], signedOutChosen: (botId) => { const bot = store.bot(botId); return bot ? startupBackups(bot, cfg.automaticRecovery) : []; }, tell: (about, text) => notify(buildNoticeNotification(about, store.bot(about.id)?.threadId ?? "", text)), record: (failover) => { limitFailovers.record(failover); perf.noteFailover(failover.threadId, failover.why === "signed-out" ? "signed-out" : "limit"); } }); registry.onSignedIn((instanceId) => limitTakeover.signedIn(instanceId));
+const moveThread = (botId: string, threadId: string, left: ModelSelection, to: ModelSelection) => { const current = store.projectBotForTask(botId, threadId), checked = current ? checkedTaskModelSwitch(current, to, false, false, true) : null; return Boolean(checked?.ok && store.switchTaskModel(botId, threadId, checked.selection, false, false, { ...hostedModels?.resetTask(left, checked.selection), rewound: true })); };
 const limitFailovers = new LimitFailovers({ file: join(DATA_DIR, "limit-failovers.json"), blockedUntil: (engine, model) => limitClock.blockedUntil(engine, model), signedOut: (engine) => limitTakeover.stillSignedOut(engine), engineName,
   threadModel: (botId, threadId) => store.projectBotForTask(botId, threadId)?.modelSelection ?? null,
   note: (threadId, line, text) => store.appendMessage(threadId, { role: "bot", kind: "activity", tool: { name: `recovery: ${line}`, ok: true, ...(text ? { nameCode: text.key, nameParams: text.params } : {}) } }),
-  switchBack: ({ botId, threadId, from, to }) => {
-    const current = store.projectBotForTask(botId, threadId), checked = current ? checkedTaskModelSwitch(current, from, false, false, true) : null;
-    return Boolean(checked?.ok && store.switchTaskModel(botId, threadId, checked.selection, false, false, { ...hostedModels?.resetTask(to, checked.selection), rewound: true }));
-  } });
+  switchBack: ({ botId, threadId, from, to }) => moveThread(botId, threadId, to, from) });
+const aiPool = createAiPool({ file: join(DATA_DIR, "ai-pool-threads.json"), config: () => cfg.aiPool, threadModel: (botId, threadId) => store.projectBotForTask(botId, threadId)?.modelSelection ?? null, botModel: (botId) => store.bot(botId)?.modelSelection ?? null, reading: (engine) => poolReading(limitClock.limit(engine), Date.now()), paid: (engine) => billsEachUse(instanceConfigs(cfg)[engine]), moveTo: moveThread, engineName,
+  canRun: (botId, threadId, from, to) => { const bot = store.projectBotForTask(botId, threadId), target = registry.get(to.instanceId), task = store.taskByThread(botId, threadId); return Boolean(bot && limitTakeover.canCarry(from, to, approvalModeFor(bot))) && (to.instanceId === from.instanceId || Boolean(target && (!(cloudGuestDriven(threadId) || botApiThread(threadId)) || target.adapter.capabilities.guestTurns === "confined") && !(hostedModels && !hostedModels.allows(to)) && task && (task.cwd || (task.cwd === undefined && Object.keys(task.resumeCursors).length === 0)))); },
+  note: (threadId, line) => store.appendMessage(threadId, { role: "bot", kind: "activity", tool: { name: `recovery: ${line}`, ok: true } }) });
 const automationDestinations = createAutomationDestinations({ store, mainThread: botMainThread, runs: () => routines?.listRuns() ?? [],
   cloud: CLOUD_HOME ? { owner: CLOUD_OWNER_KEY!, opener: (id, routine) => (routine && teamRoutines.opener(routine)) || routineOpener(id), reportFromOthers: cloudReportFromOthers, opened: (threadId, person) => threadStarters.set(threadId, person), outside: (threadId) => outsideLineage.mark(threadId) } : null });
 const routineModelChecks: RoutineModelChecks = { check: (raw) => checkedModelSelection(raw), bot: (botId) => store.bot(botId), engineSwitchNeedsAsk };
@@ -11706,7 +11704,7 @@ function configStatus() {
     language: appLanguage() ?? "", computerName: cfg.computerName ?? "", everyBotRules: cfg.everyBotRules ?? "",
     rooms: { turnTimeoutMinutes: roomTurnTimeoutMinutes(cfg) },
     mcp: { callTimeoutMinutes: mcpCallTimeoutMinutes(cfg) },
-    automaticRecovery: cfg.automaticRecovery ?? { enabled: false },
+    automaticRecovery: cfg.automaticRecovery ?? { enabled: false }, aiPool: cfg.aiPool ?? { enabled: false, mode: "even", members: [] },
     cacheKeepWarm: cacheKeepWarmSettings(cfg),
     newBots: cfg.newBots?.effort ? { effort: cfg.newBots.effort } : {},
     threads: {
@@ -15255,7 +15253,7 @@ botLink.start(); let pausedSent = starterAwake.paused().join(); store.onChange((
 server.listen(PORT, listenHost(server), async () => {
   companyRuntimeReady(); cloudHealth?.speed.ready(); void tailnetShare.start(process.env);
   console.log(`openmausbot server on http://127.0.0.1:${PORT}`);
-  personWaits.boot(); browserSweep.start(); startCloudTeamPolicy({ cloudHome: CLOUD_HOME, dataDir: DATA_DIR, managed: managedPolicy, sessions }); startCloudTeamRoster({ cloudHome: CLOUD_HOME, sessions }); moveFreeze.hold(() => appTriggers.start(), () => void appTriggers.stop()); startCloudHomeConnectedApps({ cloudHome: CLOUD_HOME !== null, dataDir: DATA_DIR, cloudGrant: CLOUD_ENV.OMB_CLOUD_CONNECTED_APPS_GRANT, ownKey: () => composio.connectionMode(cfg) === "self-hosted", apply: (access) => { composio.setManagedBrokerAccess(access); broadcast({ kind: "config", ...configStatus() }); } });
+  personWaits.boot(); browserSweep.start(); startCloudTeamPolicy({ cloudHome: CLOUD_HOME, dataDir: DATA_DIR, managed: managedPolicy, sessions }); startCloudTeamRoster({ cloudHome: CLOUD_HOME, sessions }); moveFreeze.hold(() => appTriggers.start(), () => void appTriggers.stop()); startServerConnectedApps({ cloudHome: CLOUD_HOME !== null, selfHosted: SELF_HOSTED && !DESKTOP_MANAGED, packaged: !import.meta.url.endsWith(".ts"), dataDir: DATA_DIR, cloudGrant: CLOUD_ENV.OMB_CLOUD_CONNECTED_APPS_GRANT, ownKey: () => composio.connectionMode(cfg) === "self-hosted", apply: (access) => { composio.setManagedBrokerAccess(access); broadcast({ kind: "config", ...configStatus() }); } });
   void afterFirstEngineRead().then(() => { if (builtInBrowserEnabled(cfg)) chromeLauncher.start(); });
   followupsReady = true; engineUpdates.start(); void afterFirstEngineRead().then(() => freeEngine.start());
   drainQueuedSends();
@@ -15338,7 +15336,7 @@ const gracefulShutdown = createGracefulShutdown({
       cacheKeepWarm.dispose(); warmSummaries.dispose();
       skillReview.stop();
       webhookIngress?.server.close(); webhookIngress?.socketServer?.close();
-      tunnelListener?.close(); void tailnetShare.close(); phoneRelay?.stop(); stopCloudHomeConnectedApps();
+      tunnelListener?.close(); void tailnetShare.close(); phoneRelay?.stop(); stopServerConnectedApps();
     },
     () => phoneScreen.closeAll(),
     async () => { await managedDesktop.close(); await registry.disposeAll(); },

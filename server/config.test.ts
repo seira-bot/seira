@@ -1700,6 +1700,19 @@ describe("credential env preference", () => {
     expect(loadConfig().profile).toEqual({ name: "Recovery fixture" });
   });
 
+  it("saves and loads the AI pool, and refuses levels that do not fall", () => {
+    const aiPool = { enabled: true, mode: "inOrder" as const, members: [{ instanceId: "claude", model: "a" }, { instanceId: "codex", model: "b" }], levels: [80, 50], floor: 10 };
+    saveConfig({ aiPool });
+    expect(loadConfig().aiPool).toEqual(aiPool);
+    expect(parseConfigPatch({ aiPool }).aiPool).toEqual(aiPool);
+    expect(reloaded({ aiPool })).toEqual([]);
+    expect(() => parseConfigPatch({ aiPool: { ...aiPool, levels: [50, 80] } })).toThrow("aiPool");
+    expect(() => parseConfigPatch({ aiPool: { ...aiPool, floor: 50 } })).toThrow("aiPool");
+    expect(() => parseConfigPatch({ aiPool: { ...aiPool, members: [aiPool.members[0]!] } })).toThrow("aiPool");
+    saveConfig({ aiPool: { enabled: false, mode: "even", members: [] } });
+    expect(loadConfig().aiPool).toEqual({ enabled: false, mode: "even", members: [] });
+  });
+
   it("persists a context change without losing the other context preferences", () => {
     saveConfig({ context: { rebuildBytes: 32_000, autoCompact: false } });
     saveConfig({ context: { compactAt: 0.75 } });

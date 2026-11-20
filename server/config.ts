@@ -17,7 +17,9 @@ import { withoutComputerEngine } from "./computer-engine-removal.ts";
 import { newBotDefaultsSchema, type NewBotDefaults } from "./new-bot-defaults.ts";
 import { replaySettings } from "./replay-settings.ts";
 import { EFFORT_LEVELS, type EffortLevel } from "../shared/wire.ts";
-import { isModelVariant, type InstanceConfigMap, type McpServerSpec, type ModelSelection } from "./contracts.ts";
+import { defaultModelSelectionSchema } from "./model-selection-schema.ts";
+import { aiPoolSchema, type AiPoolConfig } from "./ai-pool.ts";
+import { type InstanceConfigMap, type McpServerSpec, type ModelSelection } from "./contracts.ts";
 import { API_KEY_FLEET, DEFAULT_FLEET, OPENAI_API_INSTANCE, OPENROUTER_API_INSTANCE, CLAUDE_API_INSTANCE, PRODUCT_FLEET_ADDITIONS } from "./instance-fleets.ts";
 export { CLAUDE_API_INSTANCE, OPENAI_API_INSTANCE, OPENROUTER_API_INSTANCE, XAI_API_INSTANCE } from "./instance-fleets.ts";
 import { DEFAULT_WINDOW_MINUTES, MAX_WINDOW_MINUTES } from "./cache-keepwarm.ts";
@@ -268,13 +270,6 @@ const instanceConfigSchema = z.object({
   config: z.json().optional(),
 });
 const instanceConfigMapSchema = z.record(z.string(), instanceConfigSchema);
-const defaultModelSelectionSchema = z.object({
-  instanceId: z.string().trim().min(1).max(200),
-  model: z.string().trim().min(1).max(500),
-  effort: z.enum(EFFORT_LEVELS).optional(),
-  variant: z.string().refine(isModelVariant, "invalid model variant").optional(),
-}).refine((selection) => selection.variant === undefined || selection.effort === undefined,
-  "choose either a model variant or an effort level");
 const automaticRecoverySchema = z.object({
   enabled: z.boolean(),
   backup: defaultModelSelectionSchema.optional(),
@@ -311,6 +306,7 @@ const appConfigSchema = z.object({
   signIn: z.object({ admins: z.array(z.string().max(320)).max(500).optional(), members: z.array(z.string().max(320)).max(5000).optional() }).optional(),
   defaultModelSelection: defaultModelSelectionSchema.optional(),
   automaticRecovery: automaticRecoverySchema.optional(),
+  aiPool: aiPoolSchema.optional(),
   cacheKeepWarm: cacheKeepWarmSchema.optional(),
   newBotDefaults: newBotDefaultsSchema.optional(),
   newBots: newBotsConfigSchema.optional(),
@@ -438,6 +434,7 @@ export interface AppConfig extends HelperConfig {
   defaultModelSelection?: ModelSelection;
   /** Off by default; one backup attempt only before any work starts. */
   automaticRecovery?: { enabled: boolean; backup?: ModelSelection };
+  aiPool?: AiPoolConfig;
   cacheKeepWarm?: { enabled: boolean; windowMinutes?: number };
   /** UI creation template. Saving it never mutates a bot or grants access. */
   newBotDefaults?: NewBotDefaults;
@@ -925,6 +922,7 @@ export function saveConfig(
   if (checkedPatch.signIn !== undefined) disk.signIn = checkedPatch.signIn;
   // Replace the section so clearing a backup cannot revive the old selection.
   if (checkedPatch.automaticRecovery !== undefined) disk.automaticRecovery = checkedPatch.automaticRecovery;
+  if (checkedPatch.aiPool !== undefined) disk.aiPool = checkedPatch.aiPool;
   if (checkedPatch.cacheKeepWarm !== undefined) disk.cacheKeepWarm = checkedPatch.cacheKeepWarm; if (checkedPatch.usageCaps !== undefined) disk.usageCaps = checkedPatch.usageCaps;
   if (checkedPatch.defaultModelSelection !== undefined) {
     disk.defaultModelSelection = checkedPatch.defaultModelSelection;

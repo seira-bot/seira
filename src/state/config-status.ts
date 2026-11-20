@@ -80,6 +80,8 @@ export interface ConfigStatus {
   routinesUnreadable?: true;
   threads?: { maxConcurrentPerBot: number; eventLogMaxBytes?: number; eventLogRetentionDays?: number };
   automaticRecovery?: { enabled: boolean; backup?: ModelSelection };
+  /** Different AIs that share usage: a conversation on a member may move to another member at the start of a turn. */
+  aiPool?: { enabled: boolean; mode: "even" | "inOrder"; members: ModelSelection[]; levels?: number[]; floor?: number };
   /** Prompt-cache keep-warm for idle Claude threads. Absent from older servers. */
   cacheKeepWarm?: { enabled: boolean; windowMinutes: number };
   localVm: { mode: "shared" | "per-bot" | "pool"; maxInstances: number; idleTimeoutMinutes?: number; preserveInstalledApps?: boolean };

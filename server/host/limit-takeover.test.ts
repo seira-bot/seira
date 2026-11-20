@@ -455,3 +455,57 @@ it("sends a signed-out AI's turns only to the backups a turn its AI never starte
   startup = [on("codex", "gpt-6")];
   expect(instance.heldAtStart(KAI, on("claude", "claude-opus-5-5"))).toEqual({ scope: "signed-out" });
 });
+
+describe("canCarry", () => {
+  it("allows another AI, and refuses another plan sign-in of the same subscription", () => {
+    const otherClaude = engine("claude-two", "claudeAgent", ["claude-opus-5-5"]);
+    const { instance } = takeover({ engines: () => [CLAUDE, CODEX, otherClaude] });
+    expect(instance.canCarry(on("claude", "claude-opus-5-5"), on("codex", "gpt-6"))).toBe(true);
+    expect(instance.canCarry(on("claude", "claude-opus-5-5"), on("claude-two", "claude-opus-5-5"))).toBe(false);
+  });
+
+  it("allows a second sign-in of the same AI that bills each use", () => {
+    const apiClaude = engine("claude-api", "claudeAgent", ["claude-opus-5-5"], { access: "api" });
+    const keyed = { "claude-api": { access: "api" } } as unknown as InstanceConfigMap;
+    expect(takeover({ engines: () => [CLAUDE, apiClaude], configs: () => keyed }).instance.canCarry(on("claude", "claude-opus-5-5"), on("claude-api", "claude-opus-5-5"))).toBe(true);
+  });
+
+  it("lets a key that bills each use hand the conversation back to the plan, but never one plan to another", () => {
+    const apiClaude = engine("claude-api", "claudeAgent", ["claude-opus-5-5"], { access: "api" });
+    const otherClaude = engine("claude-two", "claudeAgent", ["claude-opus-5-5"]);
+    const keyed = { "claude-api": { access: "api" } } as unknown as InstanceConfigMap;
+    const { instance } = takeover({ engines: () => [CLAUDE, apiClaude, otherClaude], configs: () => keyed, chosen: () => [on("claude", "claude-opus-5-5")] });
+    expect(instance.canCarry(on("claude-api", "claude-opus-5-5"), on("claude", "claude-opus-5-5"))).toBe(true);
+    expect(instance.canCarry(on("claude-two", "claude-opus-5-5"), on("claude", "claude-opus-5-5"))).toBe(false);
+    expect(instance.backups("kai", on("claude-api", "claude-opus-5-5")), "a limit backup keeps the old rule").toEqual([]);
+  });
+
+  it("refuses a blocked AI, an unknown AI and an unknown model", () => {
+    const { instance } = takeover({ blockedUntil: (id) => (id === "codex" ? NOW + HOUR : null) });
+    expect(instance.canCarry(on("claude", "claude-opus-5-5"), on("codex", "gpt-6"))).toBe(false);
+    expect(instance.canCarry(on("claude", "claude-opus-5-5"), on("opencode", "nope"))).toBe(false);
+    expect(instance.canCarry(on("gone", "x"), on("codex", "gpt-6"))).toBe(false);
+  });
+
+  it("keeps a conversation on its own AI unless that AI is blocked, held or signed out", () => {
+    const own = on("claude", "claude-opus-5-5");
+    const unready = engine("claude", "claudeAgent", ["claude-opus-5-5"], { snapshot: { state: "unavailable", reason: "not read yet" } });
+    expect(takeover({ engines: () => [unready, CODEX] }).instance.canCarry(own, own)).toBe(true);
+    expect(takeover({ engines: () => [CODEX] }).instance.canCarry(own, own)).toBe(true);
+    expect(takeover({ blockedUntil: (id) => (id === "claude" ? NOW + HOUR : null) }).instance.canCarry(own, own)).toBe(false);
+    const held = takeover();
+    held.instance.holdModel(own, "model");
+    expect(held.instance.canCarry(own, own)).toBe(false);
+    const out = takeover();
+    out.instance.noteSignedOut("claude");
+    expect(out.instance.canCarry(own, own)).toBe(false);
+    expect(out.instance.canCarry(own, on("claude", "claude-sonnet-5"))).toBe(false);
+  });
+
+  it("hands the AI a conversation leaves to the chosen list", () => {
+    const chosen = vi.fn(() => [on("codex", "gpt-6")]);
+    const { instance } = takeover({ chosen });
+    instance.backups("kai", on("claude", "claude-opus-5-5"));
+    expect(chosen).toHaveBeenCalledWith("kai", on("claude", "claude-opus-5-5"));
+  });
+});

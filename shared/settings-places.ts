@@ -47,6 +47,7 @@ export const SETTINGS_PLACES = [
   {"id":"providers","path":"Settings → AI → Providers","words":["ollama","lm studio","local model","model providers","models","engines","claude","codex","sign in","subscription","cli","kimi","cursor","hidden providers","unhide"]},
   {"id":"keys","path":"Settings → AI → Other services","words":["api keys","api key","keys","key","openai","anthropic","xai","openrouter","router","base url","mistral","groq","cerebras","deepseek","opencode","composio","elevenlabs"]},
   {"id":"backup-model","path":"Settings → AI → Backup model → Automatic recovery","words":["backup model","fallback","recovery"],"advanced":true},
+  {"id":"ai-pool","path":"Settings → AI → AI pool → Share usage across AIs","words":["ai pool","share usage","usage limit","balance","spread"],"advanced":true},
   {"id":"routing","path":"Settings → AI → Routing and extraction","words":["decision and extraction","decision","extraction","routing","who answers","jev","typesafe","cloudflare","workers ai"],"advanced":true},
   {"id":"images","path":"Settings → AI → Images","words":["image generation","images","generate","picture"],"advanced":true},
   {"id":"about-you","path":"Settings → You and your bots → About you","words":["name","my name","photo","avatar","picture","profile","profile picture","about me","rules","rules for every bot"],"advanced":true},

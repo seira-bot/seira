@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -99,6 +99,32 @@ describe("serve --tailscale", () => {
       expect(await tailscaleServe(status, 8799, { dataDir: dir, settleMs: 500, spawnImpl: refused.spawnImpl })).toEqual({ failure: "needs-operator" });
       expect(existsSync(tailscaleMarker(dir))).toBe(false);
       expect(explainTailscaleFailure("other-server")).toContain("different Seira server");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("creates a missing data folder, private to this user, on a fresh install", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "omb-ts-"));
+    try {
+      const fresh = join(dir, "fresh");
+      const served = await tailscaleServe(status, 8799, { dataDir: fresh, settleMs: 20, spawnImpl: fakeServe(null).spawnImpl });
+      if ("failure" in served) throw new Error(served.failure);
+      expect(statSync(fresh).mode & 0o777).toBe(0o700);
+      expect(existsSync(tailscaleMarker(fresh))).toBe(true);
+      await served.stop();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("stops tailscale serve again when it cannot note the share", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "omb-ts-"));
+    try {
+      writeFileSync(join(dir, "file"), "");
+      const fake = fakeServe(null);
+      await expect(tailscaleServe(status, 8799, { dataDir: join(dir, "file", "data"), settleMs: 20, spawnImpl: fake.spawnImpl })).rejects.toMatchObject({ code: "ENOTDIR" });
+      expect(fake.children[0]!.killed).toEqual(["SIGTERM"]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

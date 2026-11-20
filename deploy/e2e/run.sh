@@ -251,6 +251,7 @@ services:
       OMB_WEBHOOK_PUBLIC_URL: https://${DOMAIN}
       OMB_PUBLIC_URL: https://${DOMAIN}
       OMB_SERVER_NAME: ${OMB_SERVER_NAME:-${DOMAIN}}
+      OMB_COMPOSIO_BROKER: "off"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q openmausbot"]
       interval: 30s
