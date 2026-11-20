@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -227,5 +227,14 @@ describe("pushing a bot's activity while the app is closed", () => {
     expect(earlier).toHaveLength(2);
     for (const body of earlier) expect(["version", "ask", "status", "waiting"].some((field) => field in body)).toBe(false);
     expect(activityRegistrationSchema.safeParse({ scheme: "seira", headlines: HEADLINES, statuses: { ...statuses, working: "Work\ning" } }).success).toBe(false);
+  });
+});
+
+describe("a push-activity file an earlier version saved", () => {
+  it("loads a registration whose link scheme is the old one", () => {
+    const registration = { scheme: "openmausbot-dev", headlines: HEADLINES };
+    writeFileSync(join(dataDir, "push-activity.json"), JSON.stringify({ version: 1, phones: [{ key: IPHONE, registration, updatedAt: 1 }] }));
+    const { activity } = harness();
+    expect(activity.registration(IPHONE)).toMatchObject({ scheme: "seira-dev" });
   });
 });

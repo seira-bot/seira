@@ -1,5 +1,6 @@
 import { userErrorThrown } from "./user-errors.ts";
 import { z } from "zod";
+import { currentRunOn } from "../electron/legacy-names.mjs";
 import { profilePatchSchema, fitsOnOneLine } from "./bot-profile.ts";
 import { EFFORT_LEVELS, SEIRA_COLOR_NAMES } from "../shared/wire.ts";
 import { isModelVariant } from "./contracts.ts";
@@ -83,7 +84,7 @@ const scheduleSchema = z.discriminatedUnion("type", [
 export const botRoutineTemplateSchema = z.object({
   name: z.string().trim().min(1).max(80), prompt: z.string().trim().min(1).max(20_000),
   schedule: scheduleSchema, enabled: z.boolean().optional(),
-  runOn: z.enum(["seira", "cloud"]).optional(),
+  runOn: z.preprocess(currentRunOn, z.enum(["seira", "cloud"])).optional(),
   durationMinutes: z.number().int().min(5).max(240).optional(),
   timeoutMinutes: z.number().min(1).max(1440).nullable().optional(),
   overlap: z.enum(["skip", "queue"]).optional(),

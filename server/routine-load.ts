@@ -2,6 +2,7 @@
 // edit or an older version left out of range is dropped, never trusted.
 import { z } from "zod";
 
+import { currentRunOn } from "../electron/legacy-names.mjs";
 import type { RoutineRequestOperation } from "../shared/routine-request.ts";
 import { ROUTINE_CHECKS, type RoutineCheck } from "../shared/routines.ts";
 import { isEffortLevel, type ModelSelection } from "../shared/wire.ts";
@@ -97,7 +98,7 @@ export function loadRoutine(routine: Routine, now: number): Routine | null {
     schedule,
     target,
     groupId: loadGroupId(routine.groupId, target),
-    runOn: routine.runOn ?? "seira",
+    runOn: currentRunOn(routine.runOn) === "cloud" ? "cloud" : "seira",
     timeoutMinutes: loadTimeoutMinutes(routine.timeoutMinutes),
     attachments: loadAttachments(routine.attachments),
     sourceThreadId: persistedSourceThreadId.parse(routine.sourceThreadId),
@@ -126,7 +127,7 @@ export function loadRun(run: RoutineRun): RoutineRun {
     target,
     goalStatus: loadGoalStatus(run.goalStatus, target),
     groupId: loadGroupId(run.groupId, target),
-    runOn: run.runOn ?? "seira",
+    runOn: currentRunOn(run.runOn) === "cloud" ? "cloud" : "seira",
     timeoutMinutes: loadTimeoutMinutes(run.timeoutMinutes),
     attachments: loadAttachments(run.attachments),
     sourceThreadId: persistedSourceThreadId.parse(run.sourceThreadId),

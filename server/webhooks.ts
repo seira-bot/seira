@@ -2,6 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID, 
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import { currentRunOn } from "../electron/legacy-names.mjs";
 
 import { defuse } from "./records-block.ts";
 
@@ -106,7 +107,7 @@ export const DEFAULT_MAX_PENDING_RUNS = 3;
 export const MAX_PENDING_RUNS_LIMIT = 50;
 const maxPendingRunsSchema = z.number().int().min(1).max(MAX_PENDING_RUNS_LIMIT);
 
-const runOnSchema = z.enum(["seira", "cloud"]);
+const runOnSchema = z.preprocess(currentRunOn, z.enum(["seira", "cloud"]));
 const deliverySchema = z.enum(["run", "post"]);
 const eventTypesSchema = z.array(z.string()).max(20).optional();
 export const PAYLOAD_FILTER_MAX_FIELDS = 10;

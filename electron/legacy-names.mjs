@@ -88,3 +88,14 @@ export function currentGoalTags(text) {
 }
 
 export const mentionsGoalTag = (text) => text.includes("seira-goal>") || text.includes(`${LEGACY_GOAL_TAG}>`);
+
+/** The current "run on" value of a saved one: an earlier version saved "maus" for this computer. */
+export function currentRunOn(value) {
+  return value === "maus" ? "seira" : value;
+}
+
+/** The current scheme of a saved phone link scheme: an earlier version saved "openmausbot", "openmausbot-dev" and "openmausbot-next". */
+export function currentLinkScheme(value) {
+  if (typeof value !== "string" || !value.startsWith("openmausbot")) return value;
+  return `seira${value.slice("openmausbot".length)}`;
+}

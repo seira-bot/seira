@@ -4450,3 +4450,18 @@ describe("schedule automations that keep one conversation", () => {
     expect(() => h.manager.create({ ...daily, sameConversation: true, schedule: { type: "limit_reset", engine: "claude" } as never })).toThrow("already continues its conversation");
   });
 });
+
+describe("a routines file an earlier version saved", () => {
+  it("loads a routine whose run-on value is the old one, and lets it be edited", () => {
+    const h = harness();
+    const created = h.manager.create({ name: "Old", prompt: "Do it", botId: "seira-1", schedule: { type: "interval", everyMinutes: 60, anchorAt: Date.now() } });
+    const file = h.options.file!;
+    const saved = JSON.parse(readFileSync(file, "utf8"));
+    saved.routines[0].runOn = "maus";
+    if (saved.runs?.[0]) saved.runs[0].runOn = "maus";
+    writeFileSync(file, JSON.stringify(saved));
+    const reloaded = new RoutineManager(h.options);
+    expect(reloaded.listRoutines()[0]).toMatchObject({ id: created.id, runOn: "seira" });
+    expect(reloaded.update(created.id, { name: "Renamed" })).toMatchObject({ name: "Renamed", runOn: "seira" });
+  });
+});

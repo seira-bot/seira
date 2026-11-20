@@ -2484,4 +2484,9 @@ describe("a key the desktop app hands the server as an environment variable", ()
     vi.stubEnv(variable, `fixture-${variable}`);
     expect(instanceConfigs(loadConfig())[instanceId]?.environment?.[engineEnv]).toBe(`fixture-${variable}`);
   });
+
+  it("reads a stored config whose new-bot routine template has the old run-on value", () => {
+    const stored = parseStoredConfig({ newBotDefaults: { routines: [{ name: "Old", prompt: "Do it", schedule: { type: "interval", everyMinutes: 60 }, runOn: "maus" }] } });
+    expect(stored.newBotDefaults?.routines[0]?.runOn).toBe("seira");
+  });
 });

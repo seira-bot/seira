@@ -7,7 +7,7 @@
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 
-import { currentFormat } from "../electron/legacy-names.mjs";
+import { currentFormat, currentRunOn } from "../electron/legacy-names.mjs";
 import { BOT_PROFILE_LIMITS, fitsOnOneLine } from "./bot-profile.ts";
 import { redactSecretsInText } from "./redact.ts";
 import { normalizeCronSchedule } from "./routine-schedule.ts";
@@ -246,7 +246,7 @@ const packageDocumentV1Schema = z.object({
       name: requiredText(80),
       agent: key,
       prompt: requiredText(20_000),
-      runOn: z.enum(["seira", "cloud"]),
+      runOn: z.preprocess(currentRunOn, z.enum(["seira", "cloud"])),
       schedule: packageRoutineScheduleSchema,
       durationMinutes: z.number().int().min(5).max(240),
       timeoutMinutes: z.number().int().min(5).max(1_440).optional(),
@@ -375,7 +375,7 @@ const routineSchema = z.object({
   /** Present = a room goal (runs on this computer, no continuity). */
   room: key.optional(),
   prompt: requiredText(20_000),
-  runOn: z.enum(["seira", "cloud"]),
+  runOn: z.preprocess(currentRunOn, z.enum(["seira", "cloud"])),
   schedule: packageRoutineScheduleSchema,
   durationMinutes: z.number().int().min(5).max(240),
   timeoutMinutes: z.number().int().min(1).max(1_440).optional(),

@@ -79,3 +79,10 @@ describe("new-bot templates", () => {
     expect(newBotDefaultsSchema.safeParse({ memory }).success).toBe(false);
   });
 });
+
+describe("new-bot defaults an earlier version saved", () => {
+  it("reads a routine template whose run-on value is the old one", () => {
+    const defaults = newBotDefaultsSchema.parse({ routines: [{ name: "Old", prompt: "Do it", schedule: { type: "interval", everyMinutes: 60 }, runOn: "maus" }] });
+    expect(defaults.routines[0]?.runOn).toBe("seira");
+  });
+});
