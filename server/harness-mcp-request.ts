@@ -1,4 +1,4 @@
-// One MCP request to OpenMausBot's own browser, computer, data, Email or phone tools, made with a turn's capability: the
+// One MCP request to Seira's own browser, computer, data, Email or phone tools, made with a turn's capability: the
 // stdio proxy an engine starts and the HTTP endpoint an engine reaches both answer through it.
 import { DATA_INSTRUCTIONS } from "./data/instructions.ts";
 import { EMAIL_INSTRUCTIONS } from "./email/instructions.ts";
@@ -74,7 +74,7 @@ export async function harnessMcpRequest(
   if (message.method === "initialize") return {
     jsonrpc: "2.0", id,
     result: {
-      protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: `openmausbot-${connection.kind}`, version: "1" },
+      protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: `seira-${connection.kind}`, version: "1" },
       ...(INSTRUCTIONS[connection.kind] ? { instructions: INSTRUCTIONS[connection.kind] } : {}),
     },
   };

@@ -1,7 +1,7 @@
 // A page and an MCP app shown in a room: two members' real room turns put them there through the internal card route
 // and the MCP gate, and the real renderer shows both to the room, view-only. A real mouse click on the page's send
 // button and on the app's server button posts nothing. Needs the pinned agent-browser binary: runs when one resolves
-// (tools directory, OMB_AGENT_BROWSER_PATH or PATH) or OMB_UI_E2E=1 asks for the verified download; otherwise skipped.
+// (tools directory, SEIRA_AGENT_BROWSER_PATH or PATH) or SEIRA_UI_E2E=1 asks for the verified download; otherwise skipped.
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,13 +19,13 @@ import { fixtureApi } from "./preview-fixture.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const FAKE_APP = join(ROOT, "server", "testing", "fake-stdio-app-server.ts");
-const forced = process.env.OMB_UI_E2E === "1";
+const forced = process.env.SEIRA_UI_E2E === "1";
 const enabled = forced || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
-if (!enabled) console.log("skipping room pages ui e2e: no agent-browser binary resolves; set OMB_UI_E2E=1 to install the pinned release");
+if (!enabled) console.log("skipping room pages ui e2e: no agent-browser binary resolves; set SEIRA_UI_E2E=1 to install the pinned release");
 const LAUNCH_TIMEOUT_MS = forced ? 600_000 : 180_000;
 
-const evidenceDir = process.env.OMB_UI_EVIDENCE_DIR ? resolve(ROOT, process.env.OMB_UI_EVIDENCE_DIR) : mkdtempSync(join(tmpdir(), "omb-ui-evidence-"));
-afterAll(async () => { if (!process.env.OMB_UI_EVIDENCE_DIR) await removeTempDir(evidenceDir); });
+const evidenceDir = process.env.SEIRA_UI_EVIDENCE_DIR ? resolve(ROOT, process.env.SEIRA_UI_EVIDENCE_DIR) : mkdtempSync(join(tmpdir(), "seira-ui-evidence-"));
+afterAll(async () => { if (!process.env.SEIRA_UI_EVIDENCE_DIR) await removeTempDir(evidenceDir); });
 
 /** The send button sits at a fixed place in the page, so a real mouse can find it inside the frame. What send() did
  * shows in the page. */
@@ -36,10 +36,10 @@ body{margin:0;font:15px/1.4 var(--font-sans);color:var(--color-text-primary)}
 #out{position:absolute;left:16px;top:104px;margin:0;font-weight:600}
 </style></head><body><p id="mode"></p><button id="send">Send "3 cups" to the bot</button><p id="out">Not clicked yet</p>
 <div id="room" style="height:160px"></div><script>
-document.getElementById("mode").textContent = "mausbot.room is " + window.mausbot.room + ": this page is view-only here";
+document.getElementById("mode").textContent = "seira.room is " + window.seira.room + ": this page is view-only here";
 document.getElementById("send").onclick = function () {
-  window.mausbot.setContext("3 cups on screen");
-  window.mausbot.send("I have had 3 cups").then(function () {
+  window.seira.setContext("3 cups on screen");
+  window.seira.send("I have had 3 cups").then(function () {
     document.getElementById("out").textContent = "Clicked: send() resolved and posted nothing";
     document.getElementById("room").style.height = "300px";
   }, function (error) {
@@ -79,7 +79,7 @@ async function until<T>(probe: () => Promise<T> | T, what: string, timeoutMs = 3
 }
 
 (enabled ? it : it.skip)("shows a member's page and another member's MCP app to the room, and a click in either posts nothing", async () => {
-  const scratch = mkdtempSync(join(tmpdir(), "omb-room-pages-"));
+  const scratch = mkdtempSync(join(tmpdir(), "seira-room-pages-"));
   const gate = join(scratch, "finish");
   const { child, info } = await launch({ ...process.env, FAKE_CLAUDE_SLOW_FINISH_GATE: gate, FAKE_CLAUDE_VERSION: "2.1.270" });
   let engineSide: ChildProcessWithoutNullStreams | undefined;
@@ -108,7 +108,7 @@ async function until<T>(probe: () => Promise<T> | T, what: string, timeoutMs = 3
     const transcript = async (): Promise<any[]> => (await api("GET", `/api/threads/${room.threadId}/messages`)).messages;
     const roomTurn = (botId: string) => until(() => {
       const env = dump()?.mcpConfig?.mcpServers?.agents?.env;
-      return env?.OMB_BOT_ID === botId && env?.OMB_THREAD_ID === room.threadId ? { token: env.OMB_COMMS_TOKEN as string, mounts: dump().mcpConfig.mcpServers } : null;
+      return env?.SEIRA_BOT_ID === botId && env?.SEIRA_THREAD_ID === room.threadId ? { token: env.SEIRA_COMMS_TOKEN as string, mounts: dump().mcpConfig.mcpServers } : null;
     }, `${botId}'s room turn`, 60_000);
     const settled = async () => {
       writeFileSync(gate, "finish");

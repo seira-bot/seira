@@ -99,8 +99,7 @@ Reference images:
 Seira started from OpenMausBot 0.1.169 on 18 November 2026.
 OpenMausBot and MausBot are trademarks of another company ([LICENSING.md](../LICENSING.md)).
 
-- Write the upstream names only in attribution (`LICENSING.md`, `NOTICE`, the README credits), in links to upstream issues, and in technical names that the code still uses.
-- [docs/upstream-names.md](../docs/upstream-names.md) lists the technical names that still come from upstream.
+- Write the upstream names only in attribution (`LICENSING.md`, `NOTICE`, the README credits) and in links to upstream issues.
 - Do not use the upstream names, logo, or mascot in product copy, screenshots, store listings, or posts.
 - Do not say or suggest that the upstream project endorses Seira.
 
@@ -109,7 +108,7 @@ OpenMausBot and MausBot are trademarks of another company ([LICENSING.md](../LIC
 Before you merge a change to docs or a listing, run this from the repository root:
 
 ```bash
-git grep -nE 'OpenMausBot|MausBot|OpenMaus|\bMaus\b' -- '*.md' '*.mdx' ':!docs/superpowers' ':!docs/plans' ':!third_party'
+git grep -nIiE 'OpenMausBot|MausBot|OpenMaus|\bMaus\b' -- '*.md' '*.mdx' ':!docs/superpowers' ':!docs/plans' ':!third_party'
 ```
 
-Every result must be attribution, an upstream link, or a name in the upstream names page.
+Every result must be attribution or an upstream link.

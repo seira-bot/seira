@@ -5,7 +5,7 @@ import { arrivedCounts, CHECK_PASSES, COPY_RETRY_MS, createOneHome, FAILING_LINE
 import { oneHomeCloud } from "./one-home-main.mjs";
 import nativeText from "./native-text.cjs";
 
-const CLOUD = "https://omb-t-1.fly.dev";
+const CLOUD = "https://seira-t-1.fly.dev";
 const reply = (status, body = {}) => ({ ok: status < 400, status, body });
 
 /**
@@ -531,7 +531,7 @@ test("one home reads the Admin's word: a ready Cloud the account may move to, an
   assert.equal(oneHomeCloud(state({ status: "stopped" })).ended, false, "stopped alone is not ended");
   assert.equal(oneHomeCloud(state({ status: "ready", origin: CLOUD }, { trial: { state: "active" } })).paid, false);
   assert.equal(oneHomeCloud({ ...state({ status: "ready", origin: CLOUD, moves: true }), status: "unavailable" }).ready, false);
-  const team = [{ id: "team-acme", name: "Acme", role: "owner", machine: { status: "ready", origin: "https://omb-t-2.fly.dev", moves: true } }];
+  const team = [{ id: "team-acme", name: "Acme", role: "owner", machine: { status: "ready", origin: "https://seira-t-2.fly.dev", moves: true } }];
   assert.deepEqual(oneHomeCloud(state(undefined, { entitlement: { plan: "pro", tier: "team", status: "active" }, teams: team })),
     { origin: null, account: "acct-1", machine: null, ready: false, moves: false, ended: false, paid: false, verified: true }, "a Team plan has no My Cloud: nothing moves, and nothing here counts as paid for");
 });
@@ -576,7 +576,7 @@ test("a move left off while My Cloud was away goes on as soon as it is back; a s
 });
 
 test("turning the switch back while the bots are on their way home is refused in the app's language", () => {
-  const journal = { v: 1, phase: "keeping", offThere: true, cloud: { origin: "https://omb-u-1.fly.dev", account: "acct-1" } };
+  const journal = { v: 1, phase: "keeping", offThere: true, cloud: { origin: "https://seira-u-1.fly.dev", account: "acct-1" } };
   const home = (t) => createOneHome({ journal: { read: () => journal, write: () => {} }, cloud: () => null, send: {}, local: {}, session: async () => ({}), keep: { read: () => null, write: () => {} }, ...(t ? { t } : {}) });
   assert.throws(() => home().keep(false), { message: "This computer's bots are on their way back. Try again once they're here." });
   const { t } = nativeText.createNativeText({ saved: "pt-br" });

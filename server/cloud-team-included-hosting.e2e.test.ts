@@ -1,4 +1,4 @@
-// The plan's included app hosting on a real Team Cloud (OMB_CLOUD_ROLE=team), tried as the people the rules must hold
+// The plan's included app hosting on a real Team Cloud (SEIRA_CLOUD_ROLE=team), tried as the people the rules must hold
 // against: two members, an Admin and the Owner. A bot publishes folders of its own through its tool's route; the relay
 // is a loopback stand-in, wired as the Admin wires a home. An app from a member's own chat is that member's alone, the
 // team's app is everyone's to see and an Admin's or its bot's person's to delete, and the count is the team's.
@@ -20,7 +20,7 @@ const ADMIN = { email: "ari@acme.test", role: "admin" as const };
 const ADA = { email: "ada@acme.test", role: "member" as const };
 const BEN = { email: "ben@acme.test", role: "member" as const };
 const GONE = { status: 404, body: { error: "No such published app.", code: "gone" } };
-const TOKEN = "omb_host_team_fixture_token_0123456789abcdef";
+const TOKEN = "seira_host_team_fixture_token_0123456789abcdef";
 
 type Bot = { id: string; name: string; threadId: string; mainThreadId?: string };
 
@@ -71,7 +71,7 @@ beforeAll(async () => {
   writeFileSync(replyFile, "Hello.");
   fake = await startFakeAppHosting(TOKEN, { apps: 20 });
   fx = await launchCloudSendFixture({ onePasswordToken: `ops_fake-team-${randomBytes(8).toString("hex")}`,
-    team: { id: "team-acme-hosting", name: "Acme", env: { OMB_CLOUD_HOSTING_URL: fake.url, OMB_CLOUD_HOSTING_TOKEN: TOKEN }, engine: `process.env.FAKE_CLAUDE_REPLY_FILE = ${JSON.stringify(replyFile)};` } });
+    team: { id: "team-acme-hosting", name: "Acme", env: { SEIRA_CLOUD_HOSTING_URL: fake.url, SEIRA_CLOUD_HOSTING_TOKEN: TOKEN }, engine: `process.env.FAKE_CLAUDE_REPLY_FILE = ${JSON.stringify(replyFile)};` } });
   team = fx.team!;
   owner = (await team.pair(OWNER)).token!;
   admin = (await team.pair(ADMIN)).token!;
@@ -83,7 +83,7 @@ beforeAll(async () => {
   benThread = (await team.as(ben, "POST", `/api/bots/${mira.id}/tasks`, { title: "Ben's plan" })).body.task.threadId;
   await turn(ada, mira, adaThread, "I'll build your portfolio.");
   await turn(ben, mira, benThread, "I'll draft your plan.");
-  data = join(team.home, ".openmausbot");
+  data = join(team.home, ".seira");
   expect(existsSync(join(data, "task-workspaces", mira.id, adaThread)), "a conversation's turns work in its own folder").toBe(true);
 }, hostTimeout(300_000));
 
@@ -133,7 +133,7 @@ it("shows each person the apps from conversations they can read, and everyone th
 it("answers another member, an Admin and the Owner guessing at a member's private app as if it did not exist", async () => {
   for (const [who, token] of [["Ben", ben], ["an Admin", admin], ["the Owner", owner]] as const) {
     expect(await team.as(token, "POST", "/api/published-apps/delete", { id: `included-${portfolio.key}` }), who).toEqual(GONE);
-    const framing = await team.as(token, "GET", `/api/published-apps/framing?url=${encodeURIComponent(portfolio.url)}&origin=${encodeURIComponent("https://acme.mausbot.cloud")}`);
+    const framing = await team.as(token, "GET", `/api/published-apps/framing?url=${encodeURIComponent(portfolio.url)}&origin=${encodeURIComponent("https://acme.cloud.seira.bot")}`);
     expect(framing.status, who).toBe(404);
   }
   expect(fake.apps.has(portfolio.key)).toBe(true);

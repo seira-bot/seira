@@ -1,4 +1,7 @@
-import { closeSync, fstatSync, readSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { closeSync, fstatSync, mkdirSync, mkdtempSync, readSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { distrustHomePrograms } from "./bot-box/program-trust.ts";
@@ -200,10 +203,11 @@ describe("host lookups", () => {
       expect(() => hostBridge({ command: "/home/u/.local/bin/claude", args: [] }, { env: { PATH: "/usr/bin" } }, FLATPAK_ENV)).toThrow(expect.objectContaining({ code: "EACCES" }));
     });
 
-    it("launches the checked target, not the link it found", () => {
-      hostFiles.set("/usr/bin/claude", "/opt/claude/bin/claude");
-      const bridged = hostBridge({ command: "claude", args: [] }, { env: { PATH: "/usr/bin" } }, FLATPAK_ENV);
-      expect(bridged?.args.at(-1)).toBe("/opt/claude/bin/claude");
+    it("launches the link it found, so a program that picks its tool by the name it runs as still gets that name", () => {
+      // mise puts `claude` on PATH as a link to its own program, which reads the name it was started as.
+      hostFiles.set("/usr/bin/claude", "/usr/bin/mise");
+      const bridged = hostBridge({ command: "claude", args: ["-p", "hi"] }, { env: { PATH: "/usr/bin" } }, FLATPAK_ENV);
+      expect(bridged?.args.slice(-3)).toEqual(["/usr/bin/claude", "-p", "hi"]);
     });
 
     it("looks again before a launch instead of trusting a cached answer", () => {
@@ -233,5 +237,38 @@ describe("host lookups", () => {
     it("reads nothing from nothing", () => {
       expect(parseHostPrograms("")).toEqual([]);
     });
+  });
+});
+
+// The lookup scripts run on a real shell here, as `flatpak-spawn --host` would run them on the host.
+describe.skipIf(process.platform === "win32")("host lookup scripts on a real shell", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "seira-host-"));
+    mkdirSync(join(dir, "bin"));
+    mkdirSync(join(dir, "tool"));
+    writeFileSync(join(dir, "tool", "mise"), "#!/bin/sh\n", { mode: 0o755 });
+    symlinkSync(join(dir, "tool", "mise"), join(dir, "bin", "claude"));
+    setHostRunnerForTests((argv) => {
+      expect(argv[0]).toBe("--host");
+      const result = spawnSync(argv[1]!, argv.slice(2), { cwd: dir, encoding: "utf8" });
+      return { status: result.status, stdout: result.stdout ?? "" };
+    });
+  });
+  afterEach(() => {
+    setHostRunnerForTests(null);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("finds a link on PATH with its target, and launches the link", () => {
+    expect(hostFindPrograms("claude", join(dir, "bin"))).toEqual([{ path: join(dir, "bin", "claude"), real: realpathSync(join(dir, "tool", "mise")) }]);
+    const bridged = hostBridge({ command: "claude", args: ["-p", "hi"] }, { env: { PATH: join(dir, "bin") } }, FLATPAK_ENV);
+    expect(bridged?.args.slice(-3)).toEqual([join(dir, "bin", "claude"), "-p", "hi"]);
+  });
+
+  it("skips a relative PATH folder, which would name another folder at launch", () => {
+    expect(hostFindPrograms("claude", "bin")).toEqual([]);
+    expect(hostFindPrograms("claude", `bin:${join(dir, "bin")}`).map((program) => program.path)).toEqual([join(dir, "bin", "claude")]);
   });
 });

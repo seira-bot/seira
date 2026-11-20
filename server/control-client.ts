@@ -62,8 +62,8 @@ export function createControlClient(options?: {
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
 }): ControlClient {
-  const url = options?.url ?? process.env.OMB_CONTROL_URL ?? "";
-  const token = options?.token ?? process.env.OMB_CONTROL_TOKEN ?? "";
+  const url = options?.url ?? process.env.SEIRA_CONTROL_URL ?? "";
+  const token = options?.token ?? process.env.SEIRA_CONTROL_TOKEN ?? "";
   const cacheMs = options?.cacheMs ?? 750;
   const timeoutMs = options?.timeoutMs ?? READ_TIMEOUT_MS;
   const fetchImpl = options?.fetchImpl ?? fetch;

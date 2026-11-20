@@ -8,9 +8,7 @@ import type { BusyFlag } from "./config.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 export interface SetupImportRouteDeps {
-  /** True only on the desktop app's own server. Never on `seira serve`, where any local process, a bot's shell
-   * among them, is the owner's loopback; nor on a Cloud home or a hosted organization server, whose files are not the
-   * person's own. */
+  /** See setupImportLocal. */
   local: boolean;
   cfg: Pick<AppConfig, "mcpServers" | "features">;
   mcpConfigBusy: BusyFlag;
@@ -20,6 +18,13 @@ export interface SetupImportRouteDeps {
   machine?: () => SetupMachine;
   dataDir?: string;
   grokMove?: GrokMove;
+}
+
+/** The desktop app's own server, or a development server run from source whose owner let this machine's browsers act as
+ * the owner. Never a built `seira serve`, where any local process, a bot's shell among them, is the owner's loopback; nor
+ * a Cloud home or a hosted organization server, whose files are not the person's own. */
+export function setupImportLocal(server: { desktopManaged: boolean; localBrowsers: boolean; cloudHome: boolean; hostedWorkspace: boolean }): boolean {
+  return (server.desktopManaged || server.localBrowsers) && !server.cloudHome && !server.hostedWorkspace;
 }
 
 export const SETUP_IMPORT_PATH = "/api/setup-import";

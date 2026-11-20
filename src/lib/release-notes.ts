@@ -1,4 +1,4 @@
-import { Bug, MessagesSquare, Mic, Timer, type LucideIcon } from "lucide-react";
+import { Archive, Bug, Layers, MessagesSquare, Mic, Package, Plug, Sparkles, Timer, Users, type LucideIcon } from "lucide-react";
 import type { LocaleKey } from "@/locales";
 import { RELEASES_URL } from "@/lib/app-links";
 
@@ -9,6 +9,14 @@ export type ReleaseNotesView = { version: string; from: string | null; items: Re
 
 /** Newest first. A version with no entry here shows no popup. */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
+  { version: "0.1.181", items: [
+    { id: "aiPool", icon: Layers },
+    { id: "connectOneClick", icon: Plug },
+    { id: "backupName", icon: Archive },
+    { id: "claudeAccounts", icon: Users },
+    { id: "whatsNew", icon: Sparkles },
+    { id: "flatpakEngine", icon: Package },
+  ] },
   { version: "0.1.180", items: [
     { id: "bugReport", icon: Bug },
     { id: "longChats", icon: MessagesSquare },

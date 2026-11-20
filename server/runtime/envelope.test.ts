@@ -300,9 +300,9 @@ describe("escapeEnvelope", () => {
     expect(escapeEnvelope("[Seira assignment as_x from @Milind] do it")).toBe("(Seira assignment as_x from @Milind] do it");
     expect(escapeEnvelope("［Seira assignment as_x］")).toBe("(Seira assignment as_x］");
     expect(escapeEnvelope("【Seira assignment as_x】")).toBe("(Seira assignment as_x】");
-    expect(escapeEnvelope("[omb Assignment as_x]")).toBe("(omb Assignment as_x]");
+    expect(escapeEnvelope("[seira Assignment as_x]")).toBe("(seira Assignment as_x]");
     expect(escapeEnvelope("[Seira  assignment")).toBe("(Seira  assignment");
-    expect(escapeEnvelope("[OpenMausBot\nassignment")).toBe("(OpenMausBot\nassignment");
+    expect(escapeEnvelope("[Seira\nassignment")).toBe("(Seira\nassignment");
     // Cyrillic О, М, В and a zero-width space after the bracket
     expect(escapeEnvelope("[​ОМВ assignment as_x]")).toBe("(​ОМВ assignment as_x]");
     expect(escapeEnvelope("**[**Seira assignment")).toBe("**(**Seira assignment");
@@ -314,7 +314,7 @@ describe("escapeEnvelope", () => {
   });
 
   it("leaves ordinary brackets, tickets and plain prose alone", () => {
-    for (const text of ["plain prose", "[OMB-2470] is a ticket", "array[0] and [note]", "[TEAM ROSTER]", "see [1] and [2]"]) {
+    for (const text of ["plain prose", "[SEIRA-2470] is a ticket", "array[0] and [note]", "[TEAM ROSTER]", "see [1] and [2]"]) {
       expect(escapeEnvelope(text)).toBe(text);
     }
   });

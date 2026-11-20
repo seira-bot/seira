@@ -43,7 +43,7 @@ const schema = { type: "object", properties: { value: { type: "string" } }, requ
 
 describe("configured MCP environment", () => {
   it("keeps an npm cache that works and preserves an explicit override", () => {
-    const cache = mkdtempSync(join(tmpdir(), "omb-npm-cache-"));
+    const cache = mkdtempSync(join(tmpdir(), "seira-npm-cache-"));
     try {
       const inherited = { npm_config_cache: cache, PATH: "/bin" };
       expect(chatMcpEnvironment({}, inherited).npm_config_cache).toBe(cache);
@@ -55,7 +55,7 @@ describe("configured MCP environment", () => {
 });
 
 function fixture(body = "", toolSchema: Record<string, unknown> = schema) {
-  const dir = mkdtempSync(join(tmpdir(), "omb-chat-mcp-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-chat-mcp-"));
   dirs.push(dir);
   const script = join(dir, "fake-mcp.mjs");
   const receipt = join(dir, "receipt.json");
@@ -76,7 +76,7 @@ function fixture(body = "", toolSchema: Record<string, unknown> = schema) {
         const line = buffer.slice(0, newline); buffer = buffer.slice(newline + 1);
         const message = JSON.parse(line);
         calls.push(message);
-        writeFileSync(receipt, JSON.stringify({pid:process.pid,path:process.env.PATH,omb:Object.fromEntries(Object.entries(process.env).filter(([name]) => name.startsWith("OMB_"))),calls}));
+        writeFileSync(receipt, JSON.stringify({pid:process.pid,path:process.env.PATH,seira:Object.fromEntries(Object.entries(process.env).filter(([name]) => name.startsWith("SEIRA_"))),calls}));
         ${body}
         if (message.method === "initialize") reply(message, {protocolVersion:"2024-11-05",capabilities:{tools:{}}});
         else if (message.method === "tools/list") reply(message, {tools:[{name:"write",description:"Fixture write",inputSchema:schema}]});
@@ -90,7 +90,7 @@ function fixture(body = "", toolSchema: Record<string, unknown> = schema) {
   const server: { command: string; args: string[]; env: Record<string, string> } = { command: script, args: [], env: { RECEIPT: receipt } };
   return {
     dir, receipt, controller, server,
-    read: () => JSON.parse(readFileSync(receipt, "utf8")) as { pid: number; path: string; omb: Record<string, string>; calls: Array<{ method: string; params?: { name?: string; arguments?: unknown } }> },
+    read: () => JSON.parse(readFileSync(receipt, "utf8")) as { pid: number; path: string; seira: Record<string, string>; calls: Array<{ method: string; params?: { name?: string; arguments?: unknown } }> },
     async mount(computerUse = false, localComputer = false, toolScope?: ToolScope, resultFolder?: string, serverName = "audit", scrub?: (text: string) => string) {
       const session = await mountChatTools(localComputer ? { localComputer: server } : { custom: { [serverName]: server } }, controller.signal, computerUse, toolScope,
         undefined, undefined, resultFolder, scrub);
@@ -277,14 +277,14 @@ describe("Chat MCP session", () => {
   });
 
   it("keeps the operator's control-plane secrets from a chat bot's tool servers, but not what the descriptor grants", async () => {
-    const secrets = ["OMB_CLOUD_READY_TOKEN", "OMB_CLOUD_BOOTSTRAP", "OMB_LICENSE_KEY", "OMB_INSTALLATION_CREDENTIAL"];
+    const secrets = ["SEIRA_CLOUD_READY_TOKEN", "SEIRA_CLOUD_BOOTSTRAP", "SEIRA_LICENSE_KEY", "SEIRA_INSTALLATION_CREDENTIAL"];
     for (const name of secrets) vi.stubEnv(name, "should-not-leak");
-    vi.stubEnv("OMB_CLOUDFLARED_PATH", "/usr/local/bin/cloudflared");
+    vi.stubEnv("SEIRA_CLOUDFLARED_PATH", "/usr/local/bin/cloudflared");
     const f = fixture();
-    f.server.env = { ...f.server.env, OMB_COMMS_TOKEN: "turn-capability" };
+    f.server.env = { ...f.server.env, SEIRA_COMMS_TOKEN: "turn-capability" };
     await f.mount();
-    const seen = f.read().omb;
-    expect(seen).toMatchObject({ OMB_CLOUDFLARED_PATH: "/usr/local/bin/cloudflared", OMB_COMMS_TOKEN: "turn-capability" });
+    const seen = f.read().seira;
+    expect(seen).toMatchObject({ SEIRA_CLOUDFLARED_PATH: "/usr/local/bin/cloudflared", SEIRA_COMMS_TOKEN: "turn-capability" });
     for (const name of secrets) expect(seen).not.toHaveProperty(name);
   });
 
@@ -468,8 +468,8 @@ describe("Chat MCP session", () => {
 
   describe("how long a server gets to start", () => {
     it("is about half a minute on a Cloud home, twenty seconds for the app's own servers on Windows and eight seconds elsewhere", () => {
-      expect(mcpStartupMs({ OMB_CLOUD_ROLE: "home" }, "win32")).toBe(30_000);
-      expect(mcpStartupMs({ OMB_CLOUD_ROLE: "team" }, "linux", false)).toBe(30_000);
+      expect(mcpStartupMs({ SEIRA_CLOUD_ROLE: "home" }, "win32")).toBe(30_000);
+      expect(mcpStartupMs({ SEIRA_CLOUD_ROLE: "team" }, "linux", false)).toBe(30_000);
       expect(mcpStartupMs({}, "win32")).toBe(20_000);
       expect(mcpStartupMs({}, "win32", false)).toBe(8_000);
       expect(mcpStartupMs({}, "darwin")).toBe(8_000);
@@ -637,7 +637,7 @@ describe("Chat MCP session", () => {
   describe("a result over 50KB with a working folder", () => {
     const big = "line of a big kDrive file as base64 text ".repeat(5000);
     const bigFixture = () => fixture(`if (message.method === "tools/call") { reply(message,{content:[{type:"text",text:${JSON.stringify(big)}}]}); continue; }`);
-    const workFolder = () => { const dir = mkdtempSync(join(tmpdir(), "omb-chat-mcp-work-")); dirs.push(dir); return dir; };
+    const workFolder = () => { const dir = mkdtempSync(join(tmpdir(), "seira-chat-mcp-work-")); dirs.push(dir); return dir; };
 
     it("is saved whole to a file there, and the model gets its start and the path", async () => {
       const f = bigFixture();
@@ -1521,7 +1521,7 @@ describe("Chat MCP servers starting in the background", () => {
   const names = (session: ChatToolSession) => session.definitions.map((definition) => definition.function.name);
   /** A file whose path a catalog server waits on: the test writes it once the server may start. */
   const gate = () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-chat-mcp-gate-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-chat-mcp-gate-"));
     dirs.push(dir);
     return join(dir, "go");
   };

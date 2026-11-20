@@ -25,7 +25,7 @@ export function createStartupTimeline({ now = () => performance.now(), env = pro
       try {
         log?.(`startup timeline ${[...marks].map(([key, ms]) => `${key}=${ms}ms`).join(" ")}`);
       } catch {}
-      const target = env.OMB_STARTUP_TIMELINE;
+      const target = env.SEIRA_STARTUP_TIMELINE;
       if (typeof target !== "string" || !target || !path.isAbsolute(target)) return;
       try {
         writeFile(target, JSON.stringify({ marks: Object.fromEntries(marks) }));

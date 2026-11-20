@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// MausBot's example asks live in its panel in Simple mode: a tap sends one.
+// Seira's example asks live in its panel in Simple mode: a tap sends one.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,7 +13,7 @@ vi.mock("../HelperIntro", () => ({ HELPER_ASK_KEYS: ["helperIntro.ask.overview",
 const { TryAsking } = await import("./TryAsking");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-const bot = (extra: Partial<Bot> = {}) => ({ id: "maus", threadId: "t", name: "MausBot", defaultBot: {}, ...extra }) as Bot;
+const bot = (extra: Partial<Bot> = {}) => ({ id: "seira", threadId: "t", name: "Seira", defaultBot: {}, ...extra }) as Bot;
 let host: HTMLDivElement, root: Root;
 const show = async (target: Bot) => { await act(async () => { root.render(createElement(TryAsking, { bot: target })); }); };
 
@@ -37,7 +37,7 @@ describe("Try asking", () => {
     expect(host.textContent).toContain("Try asking");
     expect(asks.map((ask) => ask.textContent)).toEqual(["What are my bots up to?", "Set up a bot for my inbox", "Make me a morning routine", "How do I connect my email?"]);
     await act(async () => { asks[1]!.click(); });
-    expect(f.dispatch).toHaveBeenCalledWith({ type: "send", botId: "maus", text: "Set up a bot for my inbox", threadId: "t" });
+    expect(f.dispatch).toHaveBeenCalledWith({ type: "send", botId: "seira", text: "Set up a bot for my inbox", threadId: "t" });
   });
 
   it("is Seira's alone, and Simple mode's", async () => {

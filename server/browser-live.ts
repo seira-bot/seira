@@ -579,6 +579,7 @@ export class BrowserLive {
       }
       return data;
     } catch (error) {
+      if (viewer.abort.signal.aborted || !this.current(viewer)) throw new BrowserLiveError("This browser view is no longer available.", 409);
       if (timedOut(error)) throw new BrowserBusyError();
       console.warn("browser-live:", error);
       if (browserLaunchFailure(error)) {
@@ -835,7 +836,7 @@ export class BrowserLive {
       }, HEARTBEAT_MS);
       viewer.heartbeat.unref();
     } catch (error) {
-      console.warn("browser-live:", error);
+      if (!viewer.closed) console.warn("browser-live:", error);
       if (error instanceof BrowserUnresponsiveError) this.startEvents(viewer);
       if (options.res.headersSent) {
         const busy = error instanceof BrowserBusyError;

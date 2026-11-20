@@ -32,7 +32,7 @@ const poll = async (read: () => Promise<unknown>, expected: unknown, label: stri
   assert.deepEqual(result, expected, label);
 };
 const textVisible = (text: string) => poll(async () => (await snapshot()).includes(text), true, text);
-const evidence = resolve(".omb-scratch/verify-evidence/onboarding");
+const evidence = resolve(".seira-scratch/verify-evidence/onboarding");
 mkdirSync(evidence, { recursive: true });
 const screenshot = (name: string) => ui("screenshot", "--out", resolve(evidence, `${name}.png`));
 const openSettings = async () => {
@@ -61,10 +61,10 @@ const holdConfigWrite = () => evaluate(`(() => {
 // suppression; only this fixture browser's localStorage is cleared. The name
 // is the one the person already gave (the welcome no longer asks for it).
 await evaluate("fetch('/api/config', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({profile:{name:'Onboarding fixture'}})}).then(r => r.ok)");
-// The standard fixture has MausBot met already (no first-launch card); a new install's has met nobody yet.
+// The standard fixture has Seira met already (no first-launch card); a new install's has met nobody yet.
 await evaluate("fetch('/api/bots').then(r => r.json()).then(data => Promise.all(data.bots.filter(bot => bot.defaultBot).map(bot => fetch('/api/bots/' + bot.id, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({welcomed:false})}).then(r => r.ok)))).then(oks => oks.length > 0 && oks.every(Boolean))");
 // A new install opens in Simple mode; this page's own writes after the clear would otherwise read as an earlier run.
-await evaluate("localStorage.clear(); sessionStorage.clear(); localStorage.setItem('omb-advanced-mode', '0'); setTimeout(() => { location.search = '?onboarding=1'; }, 0); true");
+await evaluate("localStorage.clear(); sessionStorage.clear(); localStorage.setItem('seira-advanced-mode', '0'); setTimeout(() => { location.search = '?onboarding=1'; }, 0); true");
 await textVisible("Meet Seira");
 await evaluate("document.documentElement.dataset.reducedMotion = 'true'; true");
 await screenshot("welcome");
@@ -115,8 +115,8 @@ assert.notEqual(selected?.snapshot.authenticated, false, "starter uses a connect
 assert.equal(starter.modelSelection.model, selected.models.default);
 // The failed save left the server's record empty: a browser without this one's local mark shows the welcome again,
 // and this time it is saved.
-// MausBot has met the person by now, so the Chief step is not shown again: Next lands in the Chief's chat.
-await evaluate("localStorage.removeItem('omb-email-gate'); setTimeout(() => location.reload(), 0); true");
+// Seira has met the person by now, so the Chief step is not shown again: Next lands in the Chief's chat.
+await evaluate("localStorage.removeItem('seira-email-gate'); setTimeout(() => location.reload(), 0); true");
 await textVisible("Meet Seira");
 await click("Next");
 await poll(() => evaluate("document.querySelectorAll('[data-welcome]').length"), 0, "Next lands in the chat");

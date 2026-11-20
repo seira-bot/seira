@@ -13,16 +13,16 @@ import afterAllArtifactBuild, {
   renameSnapYaml,
 } from "./finish-snap.mjs";
 
-const LAUNCHER = `#!/bin/bash -e\nexec "$SNAP/desktop-init.sh" "$SNAP/desktop-common.sh" "$SNAP/openmausbot" '--no-sandbox' "$@"`;
-const YAML = "base: core22\nconfinement: classic\nname: openmausbot\napps:\n  openmausbot:\n    command: command.sh\n";
-const DESKTOP = "[Desktop Entry]\nName=Seira\nExec=openmausbot %U\nIcon=${SNAP}/meta/gui/icon.png\n";
+const LAUNCHER = `#!/bin/bash -e\nexec "$SNAP/desktop-init.sh" "$SNAP/desktop-common.sh" "$SNAP/seira" '--no-sandbox' "$@"`;
+const YAML = "base: core22\nconfinement: classic\nname: seira\napps:\n  seira:\n    command: command.sh\n";
+const DESKTOP = "[Desktop Entry]\nName=Seira\nExec=seira %U\nIcon=${SNAP}/meta/gui/icon.png\n";
 
 const haveTools = ["unsquashfs", "mksquashfs"].every((tool) => spawnSync("which", [tool]).status === 0);
 const temporary = [];
 afterEach(() => temporary.splice(0).forEach((dir) => fs.rmSync(dir, { recursive: true, force: true })));
 
 function builtSnap({ launcher = LAUNCHER, yaml = YAML } = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omb-finish-snap-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seira-finish-snap-"));
   temporary.push(dir);
   const root = path.join(dir, "root");
   fs.mkdirSync(path.join(root, "meta", "gui"), { recursive: true });
@@ -39,23 +39,23 @@ describe("snap launcher edits", () => {
   it("removes the sandbox switch and keeps every other argument", () => {
     const fixed = dropSandboxSwitch(LAUNCHER);
     expect(fixed).not.toContain("--no-sandbox");
-    expect(fixed).toBe(`#!/bin/bash -e\nexec "$SNAP/desktop-init.sh" "$SNAP/desktop-common.sh" "$SNAP/openmausbot" "$@"`);
+    expect(fixed).toBe(`#!/bin/bash -e\nexec "$SNAP/desktop-init.sh" "$SNAP/desktop-common.sh" "$SNAP/seira" "$@"`);
   });
 
   it("starts the app binary directly, without the template helper scripts", () => {
-    expect(plainLauncher(LAUNCHER)).toBe(`#!/bin/bash -e\nexec "$SNAP/openmausbot" "$@"\n`);
+    expect(plainLauncher(LAUNCHER)).toBe(`#!/bin/bash -e\nexec "$SNAP/seira" "$@"\n`);
     expect(() => plainLauncher("#!/bin/bash\nexec true")).toThrow(/does not start an app binary/);
   });
 
   it("names the snap and its app seira, and fails when it cannot", () => {
-    const named = renameSnapYaml(YAML, "openmausbot");
+    const named = renameSnapYaml(YAML, "seira");
     expect(named).toContain("name: seira\n");
     expect(named).toContain("\n  seira:\n    command: command.sh");
-    expect(() => renameSnapYaml("name: other\n", "openmausbot")).toThrow(/does not name/);
+    expect(() => renameSnapYaml("name: other\n", "seira")).toThrow(/does not name/);
   });
 
   it("points the desktop entry at the seira command and the shipped icon", () => {
-    const entry = renameDesktopEntry(DESKTOP, "openmausbot");
+    const entry = renameDesktopEntry(DESKTOP, "seira");
     expect(entry).toContain("Exec=seira %U");
     expect(entry).toContain("Icon=${SNAP}/meta/gui/icon.svg");
   });
@@ -87,7 +87,7 @@ describe.skipIf(!haveTools)("a packed snap", () => {
   it("fails the build when the switch survives in the metadata, which the hook does not edit", () => {
     const snap = builtSnap({ yaml: `${YAML}    environment:\n      ELECTRON_EXTRA_LAUNCH_ARGS: --no-sandbox\n` });
     expect(() => finishSnap(snap)).toThrow(/snap\.yaml still turns the Chromium sandbox off/);
-    expect(readSnapFiles(snap, ["meta/snap.yaml"])["meta/snap.yaml"]).toContain("name: openmausbot");
+    expect(readSnapFiles(snap, ["meta/snap.yaml"])["meta/snap.yaml"]).toContain("name: seira");
   });
 
   it("fails the build when the snap ships a setuid file", () => {

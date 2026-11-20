@@ -1,15 +1,16 @@
 // `doctor --host`: can this Linux machine run the server and the bots' sandbox? It only looks: files under /proc and /sys,
 // version queries to docker, podman and timedatectl, the sockets already listening, and one HEAD request for the time. On
-// a server that runs the MausBot connector it also asks that for its own checks, which start one throwaway box probe.
+// a server that runs the Seira connector it also asks that for its own checks, which start one throwaway box probe.
 import { execFile } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statfsSync } from "node:fs";
 import { arch, cpus, homedir, release, totalmem } from "node:os";
 import { dirname, join, posix, resolve } from "node:path";
 
+import { SEIRA_HOSTS, seiraOrigin } from "../../electron/seira-hosts.mjs";
 import { EXIT, flag, usageError } from "./args.ts";
 import type { VerbContext, VerbOutcome } from "./context.ts";
 
-const CLOCK_ORIGIN = "https://seira.bot";
+const CLOCK_ORIGIN = seiraOrigin(SEIRA_HOSTS.site);
 
 export type HostStatus = "ok" | "warn" | "FAIL";
 
@@ -93,12 +94,12 @@ async function containerCheck(probe: HostProbe): Promise<HostCheck> {
   return fail("containers", "Neither Docker nor Podman is installed", "sudo apt-get install -y docker.io   (or podman)");
 }
 
-/** What the MausBot connector on this server says of it, when one runs there: its own checks (connector/src/host.ts). */
+/** What the Seira connector on this server says of it, when one runs there: its own checks (connector/src/host.ts). */
 export interface ConnectorReport {
   checks: { id: string; ok: boolean; warning?: boolean; fix?: string }[];
 }
 
-const CONNECTOR = "mausbot-connector";
+const CONNECTOR = "seira-connector";
 
 /** Asks the connector's container, as root may; null where none runs or it cannot be asked. */
 export async function connectorReport(probe: HostProbe): Promise<ConnectorReport | null> {
@@ -130,7 +131,7 @@ function userNamespaceCheck(probe: HostProbe, connector: ConnectorReport | null)
     return fail("userns", "Bot sandbox: this kernel has no user namespaces", "use a stock Ubuntu or Debian kernel (CONFIG_USER_NS)");
   }
   if (sysctl("kernel.apparmor_restrict_unprivileged_userns") === "1") {
-    // A MausBot home runs under its own AppArmor profile (omb-home-narrow), which allows them for that container alone.
+    // A Seira home runs under its own AppArmor profile (seira-home-narrow), which allows them for that container alone.
     if (connector?.checks.some((check) => check.id === "box" && check.ok)) {
       return ok("userns", "Unprivileged user namespaces: AppArmor restricts them here, and Seira's home has them through its own AppArmor profile");
     }
@@ -304,7 +305,7 @@ export function systemProbe(): HostProbe {
     async serverAnswers(port) {
       try {
         const response = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(2_000) });
-        return ((await response.json()) as { app?: unknown }).app === "openmausbot";
+        return ((await response.json()) as { app?: unknown }).app === "seira";
       } catch {
         return false;
       }
@@ -313,11 +314,11 @@ export function systemProbe(): HostProbe {
 }
 
 export async function hostDoctor(ctx: VerbContext, probe: HostProbe = systemProbe()): Promise<VerbOutcome> {
-  const rawPort = flag(ctx.flags, "port") ?? ctx.env.OMB_PORT ?? "8799";
+  const rawPort = flag(ctx.flags, "port") ?? ctx.env.SEIRA_PORT ?? "8799";
   const port = Number(rawPort);
   if (!Number.isInteger(port) || port < 1 || port > 65_535) throw usageError("--port must be 1-65535");
   // A Linux machine's path, also when the checks are tested on Windows.
-  const dataDir = posix.resolve(flag(ctx.flags, "data-dir") ?? (ctx.env.OMB_DATA_DIR || join(homedir(), ".openmausbot")));
+  const dataDir = posix.resolve(flag(ctx.flags, "data-dir") ?? (ctx.env.SEIRA_DATA_DIR || join(homedir(), ".seira")));
   const domain = flag(ctx.flags, "domain")?.trim().toLowerCase();
   return hostReport(await checkHost(probe, { dataDir, port, ...(domain ? { domain } : {}) }));
 }

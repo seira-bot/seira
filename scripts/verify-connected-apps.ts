@@ -23,7 +23,7 @@ let attempts = 0;
 const requestBodies: Array<{ alias?: string }> = [];
 const deletedAccounts: string[] = [];
 const services: Record<string, { connected: boolean; pending: boolean; status: string; accounts: Array<{ id: string; alias: string; status: string }> }> = {};
-const evidence = resolve(process.env.OMB_UI_EVIDENCE_DIR ?? ".omb-scratch/connected-apps-evidence");
+const evidence = resolve(process.env.SEIRA_UI_EVIDENCE_DIR ?? ".seira-scratch/connected-apps-evidence");
 mkdirSync(evidence, { recursive: true });
 const pauseAuthorize = (fail = false) => {
   failure = fail;
@@ -65,7 +65,7 @@ try {
         const slug = req.url?.startsWith("/api/connectors/") ? req.url.split("/")[3]! : null;
         if (!failed && slug) services[slug] = {
           connected: false, pending: true, status: "INITIALIZING",
-          accounts: [...(services[slug]?.accounts ?? []), { id: `ca-${attempt}`, alias: body.alias ?? `omb-retry-${attempt}`, status: "INITIALIZING" }],
+          accounts: [...(services[slug]?.accounts ?? []), { id: `ca-${attempt}`, alias: body.alias ?? `seira-retry-${attempt}`, status: "INITIALIZING" }],
         };
         await hold;
         res.writeHead(failed ? 503 : 200, { "content-type": "application/json" });

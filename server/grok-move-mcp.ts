@@ -76,7 +76,7 @@ function refusal(error: GrokImportError): string {
   }
 }
 
-/** What MausBot can use of one Bot, and what it cannot: a skill or routine without its text creates nothing. */
+/** What Seira can use of one Bot, and what it cannot: a skill or routine without its text creates nothing. */
 function received(bot: GrokBot): string {
   const skills = bot.skills.filter((skill) => skill.instructions).length;
   const routines = bot.routines.filter((routine) => routine.instruction).length;

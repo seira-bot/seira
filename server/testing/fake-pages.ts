@@ -1,5 +1,6 @@
-// A stand-in for MausBot's pages: the Admin's token route and the pages Worker, as one fetch. Pages, quotas and tokens
+// A stand-in for Seira's pages: the Admin's token route and the pages Worker, as one fetch. Pages, quotas and tokens
 // are kept in memory; nothing reaches the network.
+import { SEIRA_HOSTS } from "../../electron/seira-hosts.mjs";
 import { pagesHomeSignature } from "../pages/access.ts";
 
 export const FAKE_ADMIN = "https://cloud.example.test";
@@ -41,7 +42,7 @@ export function fakePagesService(options: { quota?: number; plan?: string; admin
       }
       const id = action === "create" ? newId() : pageId!, token = `fake-token-${minted.length}`;
       tokens.set(token, { action, pageId: id });
-      return Response.json({ token, pageId: id, action, uploadUrl: upload, pageUrl: `https://${id}.mausbot.page/`, plan: state.plan,
+      return Response.json({ token, pageId: id, action, uploadUrl: upload, pageUrl: `https://${id}.${SEIRA_HOSTS.pages}/`, plan: state.plan,
         limits: { pages: state.quota, bytes: 5 * 1024 * 1024, files: 200, perHour: 30 }, badge: state.plan === "free",
         ...(action === "create" ? { limit: { message: `You’ve used your ${state.quota} free pages.`, upgrade: true } } : {}) });
     }
@@ -59,7 +60,7 @@ export function fakePagesService(options: { quota?: number; plan?: string; admin
       const files = new Map<string, string>();
       for (const [index, file] of manifest.files.entries()) files.set(file.path, await (form.get(`f${index}`) as Blob).text());
       pages.set(page, { title: manifest.title, files });
-      return Response.json({ pageId: page, url: `https://${page}.mausbot.page/`, version: 1, badge: state.plan === "free", usage: usage() });
+      return Response.json({ pageId: page, url: `https://${page}.${SEIRA_HOSTS.pages}/`, version: 1, badge: state.plan === "free", usage: usage() });
     }
     throw new Error(`Unexpected request to ${url.href}`);
   };

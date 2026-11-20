@@ -210,7 +210,7 @@ To see a real issue, use a test repository and a test GitHub App.
    `pnpm exec wrangler d1 migrations apply seira-bug-reports --local --config cloudflare/bug-reports/wrangler.jsonc`
 3. Start the Worker:
    `pnpm exec wrangler dev --config cloudflare/bug-reports/wrangler.jsonc`
-4. Start the app with `OMB_BUG_REPORT_URL=http://127.0.0.1:8787/api/bug-reports`. The app accepts `https` or loopback `http`.
+4. Start the app with `SEIRA_BUG_REPORT_URL=http://127.0.0.1:8787/api/bug-reports`. The app accepts `https` or loopback `http`.
 5. Send a report with `@devs` in a conversation. Check the issue in the test repository.
    In dry-run mode, send a report with `curl` and read `issue`, `joined`, and `dryRun` in the answer:
    ```bash

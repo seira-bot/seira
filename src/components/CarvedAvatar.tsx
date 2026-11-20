@@ -8,7 +8,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { MAUS_COLORS, type MausColor, type MausMotion, type MausState } from "@/lib/mascot";
+import { SEIRA_COLORS, type SeiraColor, type SeiraMotion, type MascotState } from "@/lib/mascot";
 import { avatarMarks, type AvatarKind } from "@/lib/avatar-marks";
 import { CARVED_BODIES, type CarvedBody, type CarvedBodyId } from "../../shared/carved-bodies";
 import { mascotClock, usePrefersReducedMotion, type MascotTicket } from "./mascot-clock";
@@ -89,7 +89,7 @@ export function carvedGeometry(body: CarvedBody, p: CarvedPose): CarvedGeometry 
 }
 
 
-function moodFor(state: MausState): Partial<CarvedPose> & { glance?: number } {
+function moodFor(state: MascotState): Partial<CarvedPose> & { glance?: number } {
   switch (state) {
     case "surprised": case "alerting": case "scared": case "excited": case "celebrate": case "spawning": case "waking":
       return { wide: 1 };
@@ -115,7 +115,7 @@ function moodFor(state: MausState): Partial<CarvedPose> & { glance?: number } {
 const SETTLED = 0.001;
 const settled = (a: number, b: number) => Math.abs(a - b) < SETTLED;
 
-const STARTLE: ReadonlySet<MausMotion> = new Set(["arrive", "switch", "customize", "alert", "launch", "success", "celebrate", "surprise"]);
+const STARTLE: ReadonlySet<SeiraMotion> = new Set(["arrive", "switch", "customize", "alert", "launch", "success", "celebrate", "surprise"]);
 const GLANCES: ReadonlyArray<[number, number]> = [[0, 0], [0, 0], [-1, 0.25], [1, 0.25], [-0.8, 0.55], [0.8, 0.55], [-0.7, -0.4], [0.7, -0.4], [0, 0.5]];
 
 function mix(hex: string, toward: string, t: number): string {
@@ -142,19 +142,19 @@ export function vivid(hex: string): string {
   return `#${[ch(h + 1 / 3), ch(h), ch(h - 1 / 3)].map((v) => Math.round(v * 255).toString(16).padStart(2, "0")).join("")}`;
 }
 
-export function carvedFills(body: CarvedBody, color: MausColor): { body: string; accent: string } {
-  const accent = vivid(MAUS_COLORS[color] ?? MAUS_COLORS.green);
+export function carvedFills(body: CarvedBody, color: SeiraColor): { body: string; accent: string } {
+  const accent = vivid(SEIRA_COLORS[color] ?? SEIRA_COLORS.green);
   if (body.paint === "bone") return { body: body.bone ?? "#f1ede6", accent };
-  if (body.paint === "pale") return { body: mix(MAUS_COLORS[color] ?? MAUS_COLORS.green, "#ffffff", 0.86), accent };
+  if (body.paint === "pale") return { body: mix(SEIRA_COLORS[color] ?? SEIRA_COLORS.green, "#ffffff", 0.86), accent };
   if (body.paint === "hair") return { body: greyColor(color) ? body.bone ?? "#d3d8df" : accent, accent };
   return { body: accent, accent };
 }
 
-const greyColor = (color: MausColor) => color === "silver" || color === "chrome";
+const greyColor = (color: SeiraColor) => color === "silver" || color === "chrome";
 
 /** The tint laid over the rendered hair: none for the grey colours, whose hair stays as rendered. */
-export function hairTint(color: MausColor): string | null {
-  return greyColor(color) ? null : vivid(MAUS_COLORS[color] ?? MAUS_COLORS.green);
+export function hairTint(color: SeiraColor): string | null {
+  return greyColor(color) ? null : vivid(SEIRA_COLORS[color] ?? SEIRA_COLORS.green);
 }
 
 export interface CarvedAvatarHandle {
@@ -164,10 +164,10 @@ export interface CarvedAvatarHandle {
 
 export type CarvedAvatarProps = {
   body: CarvedBodyId;
-  color: MausColor;
+  color: SeiraColor;
   size?: number;
-  state?: MausState;
-  motion?: MausMotion;
+  state?: MascotState;
+  motion?: SeiraMotion;
   motionKey?: number;
   gaze?: { x?: number; y?: number };
   trackPointer?: boolean;
@@ -382,7 +382,7 @@ function CarvedAvatarComponent(
   );
 }
 
-function moodPose(state: MausState): CarvedPose {
+function moodPose(state: MascotState): CarvedPose {
   const m = moodFor(state);
   return { gx: m.gx ?? 0, gy: m.gy ?? 0, wide: m.wide ?? 0, shut: m.shut ?? 0, smile: m.smile ?? 1 };
 }

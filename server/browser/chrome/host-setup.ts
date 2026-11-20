@@ -1,12 +1,12 @@
 // Ported from T3 Code's apps/server/src/preview/PreviewBrowserHost.ts,
 // Copyright 2026 T3 Tools Inc., used under the MIT License
 // (third_party/t3-code/LICENSE). Modified: plain TypeScript instead of Effect,
-// OMB's command and environment names, and an AppArmor profile pinned to one
+// Seira's command and environment names, and an AppArmor profile pinned to one
 // exact executable instead of a wildcard path.
 //
-// OMB never turns Chrome's sandbox off by itself on a host. A host that cannot
+// Seira never turns Chrome's sandbox off by itself on a host. A host that cannot
 // give it one gets the manual setup steps instead (a container, that switch), and
-// only an operator's explicit OMB_BROWSER_SANDBOX=0 launches without it. The
+// only an operator's explicit SEIRA_BROWSER_SANDBOX=0 launches without it. The
 // computer container image (also run on a VPS) is the exception: it drops
 // capabilities, so its Chrome runs without its own sandbox and the container is
 // the isolation boundary.
@@ -30,12 +30,12 @@ const NAMESPACE_SIGNATURE = "Failed to move to new namespace";
 const CONTAINER_MARKERS = ["/.dockerenv", "/run/.containerenv"];
 
 export function sandboxDisabled(env: Readonly<Record<string, string | undefined>>): boolean {
-  return env.OMB_BROWSER_SANDBOX === "0";
+  return env.SEIRA_BROWSER_SANDBOX === "0";
 }
 
 /** Set on Ubuntu 23.10+: unprivileged user namespaces need an AppArmor profile. */
 export const USERNS_RESTRICTION = "/proc/sys/kernel/apparmor_restrict_unprivileged_userns";
-export const APPARMOR_PROFILE_NAME = "openmausbot-chrome";
+export const APPARMOR_PROFILE_NAME = "seira-chrome";
 export const APPARMOR_PROFILE_PATH = `/etc/apparmor.d/${APPARMOR_PROFILE_NAME}`;
 
 /**
@@ -97,7 +97,7 @@ export class BrowserHostError extends Error {
     super(kind === "sandbox"
       ? `This host blocks the sandbox the browser runs in (AppArmor on Ubuntu 23.10+). An administrator can allow it for one root-owned copy of Chrome, following ${SANDBOX_STEPS_URL}, then try again.`
       : kind === "container"
-      ? "Chrome's sandbox can't start in this container. The operator can set OMB_BROWSER_SANDBOX=0 to run the browser without it and rely on the container's isolation, then restart Seira."
+      ? "Chrome's sandbox can't start in this container. The operator can set SEIRA_BROWSER_SANDBOX=0 to run the browser without it and rely on the container's isolation, then restart Seira."
       : `This host is missing libraries the browser needs (${libraries.join(", ")}). Run \`${LIBRARIES_COMMAND}\` on the host to install them, then try again.`);
     this.name = "BrowserHostError";
     this.kind = kind;

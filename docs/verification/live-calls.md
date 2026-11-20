@@ -31,9 +31,9 @@ is "The call id and the call row" in
 
 Live calls need no plan, from any client: the desktop app, a web browser, or a
 phone through the companion. Each call uses the person's own OpenAI key: the
-separate Live key when one is saved (`live.key`, `OMB_OPENAI_LIVE_KEY`, or the
+separate Live key when one is saved (`live.key`, `SEIRA_OPENAI_LIVE_KEY`, or the
 desktop credential `openaiLiveKey`), else the OpenAI API key from Settings →
-API keys (`openai.key`, `OMB_OPENAI_API_KEY`); `liveCallKey` in
+API keys (`openai.key`, `SEIRA_OPENAI_API_KEY`); `liveCallKey` in
 `server/live-settings.ts`. `GET /api/config` reports `live.configured` and
 `live.keySource` (`live` or `openai`), never the key. Without either key,
 `POST /api/live/session` answers
@@ -55,16 +55,16 @@ then wins; neither key appears in the config or the log.
 
 ## Azure OpenAI as the Live provider
 
-With `live.provider: "azure"` (`OMB_LIVE_PROVIDER=azure`) a call creates its
+With `live.provider: "azure"` (`SEIRA_LIVE_PROVIDER=azure`) a call creates its
 GPT-Live session on the person's Azure OpenAI / Foundry resource:
 `POST {endpoint}/openai/v1/live/sessions` with the deployment name
-(`live.azureDeployment`, `OMB_AZURE_OPENAI_LIVE_DEPLOYMENT`, default
+(`live.azureDeployment`, `SEIRA_AZURE_OPENAI_LIVE_DEPLOYMENT`, default
 `gpt-live-1`) as `session.model`, and the sideband attaches to
 `wss://{endpoint}/openai/v1/live/sessions/{id}/attach`. Both send the resource
 key as `api-key`, never as a bearer token, and the session request refuses a
 redirect, since `fetch` would carry `api-key` to another host. The key is only
 `live.key`; the OpenAI API key is never used for Azure. `live.azureEndpoint`
-(`OMB_AZURE_OPENAI_LIVE_ENDPOINT`) must be `https` on an Azure OpenAI host
+(`SEIRA_AZURE_OPENAI_LIVE_ENDPOINT`) must be `https` on an Azure OpenAI host
 (`azureOpenAiRoot` in `server/live-call.ts`), and `PATCH /api/live/settings`
 refuses any other.
 
@@ -76,8 +76,8 @@ Service or changing the endpoint's host, through `PATCH /api/live/settings` or
 back (`liveSavePatch`). A new path or deployment on the same host keeps it.
 `keyFor` is never taken from a request. A key saved with Azure chosen and no
 endpoint answers `400`. A key with no `keyFor` is from before Azure was offered,
-so OpenAI's. In the environment, `OMB_OPENAI_LIVE_KEY` with `OMB_LIVE_PROVIDER=azure`
-and `OMB_AZURE_OPENAI_LIVE_ENDPOINT` is the operator's own pairing, unless the
+so OpenAI's. In the environment, `SEIRA_OPENAI_LIVE_KEY` with `SEIRA_LIVE_PROVIDER=azure`
+and `SEIRA_AZURE_OPENAI_LIVE_ENDPOINT` is the operator's own pairing, unless the
 file already says where the key may go. So a key the app forgot stays forgotten
 until one is saved again, including the desktop's copy in the OS store, and a
 different key in the environment takes no pairing from the file.
@@ -119,13 +119,13 @@ the full server with a made-up key and its `fetch` stubbed.
 
 ## A custom endpoint as the Live provider
 
-With `live.provider: "custom"` (`OMB_LIVE_PROVIDER=custom`) a call goes to a
+With `live.provider: "custom"` (`SEIRA_LIVE_PROVIDER=custom`) a call goes to a
 server the person names that speaks OpenAI's GPT-Live API, such as their own
 gateway: `POST {endpoint}/live/sessions` with `live.customModel`
-(`OMB_CUSTOM_LIVE_MODEL`, default `gpt-live-1`) as `session.model`, and the
+(`SEIRA_CUSTOM_LIVE_MODEL`, default `gpt-live-1`) as `session.model`, and the
 sideband attaches to `wss://{endpoint}/live/sessions/{id}/attach`. The request
 is OpenAI's own: the key goes as a bearer token and `session.client` is sent.
-`live.customEndpoint` (`OMB_CUSTOM_LIVE_ENDPOINT`) is read by
+`live.customEndpoint` (`SEIRA_CUSTOM_LIVE_ENDPOINT`) is read by
 `customLiveApiBase` in `server/live-call.ts`: `https` on any host, or `http`
 only on loopback (`127.0.0.1`, `localhost`, `[::1]`); no user name, password,
 query or fragment; a bare host or one ending in `/live/sessions` becomes
@@ -147,8 +147,8 @@ pnpm exec vitest run server/live-custom.test.ts server/live-call-controller.test
 
 ## Fish Audio Live 3 as the Live provider
 
-With `live.provider: "fish"` (`OMB_LIVE_PROVIDER=fish`) a call uses the Fish
-Audio key from Settings → API keys (`tts.fishKey`, `OMB_FISH_AUDIO_API_KEY`),
+With `live.provider: "fish"` (`SEIRA_LIVE_PROVIDER=fish`) a call uses the Fish
+Audio key from Settings → API keys (`tts.fishKey`, `SEIRA_FISH_AUDIO_API_KEY`),
 the same key Fish voices use; nothing else is asked. On the first call the
 harness sets up an agent on that key's account (`server/live-fish.ts`
 `setUpFishAgent`): a client tool `delegate` (`POST /v1/agent/tools`), an agent
@@ -158,7 +158,7 @@ white-label brand's name) on the `live3` engine in English with that tool (`POST
 publish. It saves the agent as `live.fishAgentId` with `live.fishAgentFor`, a
 short SHA-256 print of the key, so a key for another account sets up its own
 agent. A saved agent that Fish answers `404` for is set up again once.
-`OMB_FISH_LIVE_AGENT_ID` names an operator's own agent, used with any key and
+`SEIRA_FISH_LIVE_AGENT_ID` names an operator's own agent, used with any key and
 never replaced. A Fish key saved as the Live key (`keyFor: "fish"`) is read as
 the Fish Audio key while none is saved.
 
@@ -168,7 +168,7 @@ redirects refused. Fish answers with a LiveKit token, which goes to the client
 as `transport: { type: "fish", session, relayToken }`; the client joins with
 `@fishaudio/agent-client` 1.0.0, which holds the microphone and the agent's
 audio. The agent's voice is its own; the Voice setting is hidden. Hanging up
-also calls `POST /v1/agent/sessions/{id}/end`. `OMB_FISH_LIVE_URL` points the
+also calls `POST /v1/agent/sessions/{id}/end`. `SEIRA_FISH_LIVE_URL` points the
 harness at a fake Fish for tests and is honoured only as `http://127.0.0.1:<port>`;
 anything else falls back to Fish's own host.
 
@@ -249,7 +249,7 @@ standalone fake cannot be scripted from the shell, so nothing is asked on it:
 node --experimental-strip-types server/testing/fake-openai-live.ts
 # terminal 2: the renderer fixture, pointed at it (the key only ever reaches
 # the fake)
-OMB_OPENAI_LIVE_URL=http://127.0.0.1:FAKE_PORT OMB_OPENAI_LIVE_KEY=sk-fake \
+SEIRA_OPENAI_LIVE_URL=http://127.0.0.1:FAKE_PORT SEIRA_OPENAI_LIVE_KEY=sk-fake \
   node --experimental-strip-types scripts/control-seira.ts ui launch
 # terminal 3, with the url, botId and ui handle it prints
 pnpm control:seira messages --bot BOT_ID --url http://127.0.0.1:PORT
@@ -258,8 +258,8 @@ curl -s -X POST http://127.0.0.1:PORT/api/live/session -H 'content-type: applica
 curl -s http://127.0.0.1:PORT/api/live/call
 curl -s -X POST http://127.0.0.1:PORT/api/live/call/end -H 'content-type: application/json' \
   -d '{"callId":"CALL_ID"}'
-pnpm control:seira ui wait-settle --ui /tmp/openmausbot-verify-data-XXXXXX/ui.json --timeout 60
-pnpm control:seira ui snapshot --ui /tmp/openmausbot-verify-data-XXXXXX/ui.json
+pnpm control:seira ui wait-settle --ui /tmp/seira-verify-data-XXXXXX/ui.json --timeout 60
+pnpm control:seira ui snapshot --ui /tmp/seira-verify-data-XXXXXX/ui.json
 curl -s "http://127.0.0.1:PORT/api/threads/THREAD_ID/messages?limit=20"
 ```
 
@@ -286,9 +286,9 @@ no `title`, because nothing was asked; and the snapshot's transcript has
   upgrade and the retry is accepted.
 - Only one call runs at a time: while one is open, another start answers `409`.
   End a call a failed run left open, or restart the fixture.
-- `OMB_OPENAI_LIVE_URL` crosses into a fixture only when it is a loopback
-  `http://127.0.0.1:PORT`, and `OMB_OPENAI_LIVE_KEY` only with it.
-- Without `OMB_OPENAI_LIVE_KEY` the fixture answers every start with `409`
+- `SEIRA_OPENAI_LIVE_URL` crosses into a fixture only when it is a loopback
+  `http://127.0.0.1:PORT`, and `SEIRA_OPENAI_LIVE_KEY` only with it.
+- Without `SEIRA_OPENAI_LIVE_KEY` the fixture answers every start with `409`
   `needsKey`, and the desktop shows "Live calls use your own OpenAI key" with
   **Open API keys** under the call button. That is the way to see it by hand.
 
@@ -304,7 +304,7 @@ no `title`, because nothing was asked; and the snapshot's transcript has
   Electron shell. The e2e is POSIX-only (its fakes are shebang scripts), so
   Windows is not exercised.
 - Phone builds read the same wire fields and, when they do not know the kind,
-  the row's text; their own record is verified in SupaMaus/mausbot-mobile.
+  the row's text; their own record is verified in the phone apps' own tests.
 - Approval lines in a record ("Allowed", "Denied", "Expired", "by voice"), a
   hang-up while a turn is still working, a step that never reported how it went
   (running only while the chat works) and a call that began before the loaded

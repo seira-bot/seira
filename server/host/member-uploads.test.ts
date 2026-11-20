@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 function uploads() {
-  const dataDir = mkdtempSync(join(tmpdir(), "omb-member-uploads-"));
+  const dataDir = mkdtempSync(join(tmpdir(), "seira-member-uploads-"));
   made.push(dataDir);
   return uploadsFor(createUploadOwners(dataDir), false);
 }

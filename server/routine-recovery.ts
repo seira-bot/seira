@@ -126,7 +126,7 @@ export function dispatchRefusal(error: unknown): RoutineFailureFacts {
   return typeof code === "string" || (typeof status === "number" && status >= 400 && status < 500) ? { cause: "refused" } : {};
 }
 
-/** Whether OpenMausBot runs a failed teammate thread once more by itself before its Chief hears of it. */
+/** Whether Seira runs a failed teammate thread once more by itself before its Chief hears of it. */
 export function retriesTeammateThread(failure: string, facts: RoutineFailureFacts = {}): boolean {
   return classifyRoutineFailure(failure, facts).kind === "retry";
 }

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { ContainerSpec } from "../src/docker.ts";
 import type { Job, JobReply } from "../src/protocol.ts";
 import { SelfUpdater, successorSpec } from "../src/self-update.ts";
+import { LEGACY_LABELS } from "../src/settings.ts";
 import { StateStore } from "../src/state.ts";
 import { FakeDocker, type FakeContainer } from "./fake-docker.ts";
 
@@ -22,27 +23,27 @@ const envOf = (container: FakeContainer) => Object.fromEntries((container.spec.E
 function installed(instance: string): ContainerSpec {
   return {
     Image: OLD,
-    Env: [`MAUSBOT_INSTANCE=${instance}`, `MAUSBOT_CONNECTOR_IMAGE=${OLD}`, "MAUSBOT_UPDATE_WAIT_S=60", "PATH=/usr/local/bin:/usr/bin:/bin"],
+    Env: [`SEIRA_INSTANCE=${instance}`, `SEIRA_CONNECTOR_IMAGE=${OLD}`, "SEIRA_UPDATE_WAIT_S=60", "PATH=/usr/local/bin:/usr/bin:/bin"],
     Cmd: ["run"],
-    Labels: { "com.mausbot.role": "connector", "com.mausbot.instance": instance },
+    Labels: { "com.seira.role": "connector", "com.seira.instance": instance },
     HostConfig: {
-      Binds: ["/var/run/docker.sock:/var/run/docker.sock", "mausbot-connector:/state", "/etc/mausbot:/etc/mausbot:ro"],
+      Binds: ["/var/run/docker.sock:/var/run/docker.sock", "seira-connector:/state", "/etc/seira:/etc/seira:ro"],
       NetworkMode: "host", RestartPolicy: { Name: "unless-stopped" }, SecurityOpt: ["no-new-privileges=true"], CapDrop: ["ALL"], ReadonlyRootfs: true, Tmpfs: { "/tmp": "" },
       LogConfig: { Type: "json-file", Config: { "max-size": "10m", "max-file": "3" } },
     },
   };
 }
 
-async function fixture() {
-  const dir = mkdtempSync(join(tmpdir(), "omb-connector-update-"));
+async function fixture(labelled: ContainerSpec["Labels"] = undefined) {
+  const dir = mkdtempSync(join(tmpdir(), "seira-connector-update-"));
   dirs.push(dir);
   const state = new StateStore(join(dir, "state"));
   const docker = new FakeDocker(state.dir);
   docker.publish(OLD, null);
   docker.publish(NEW, null);
   await docker.pull(OLD);
-  await docker.createContainer("mausbot-connector", installed("instance-old"));
-  await docker.startContainer("mausbot-connector");
+  await docker.createContainer("seira-connector", labelled ? { ...installed("instance-old"), Labels: labelled } : installed("instance-old"));
+  await docker.startContainer("seira-connector");
   let clock = 1_800_000_000_000;
   const lines: string[] = [];
   const updater = (instance: string) => new SelfUpdater({
@@ -65,7 +66,7 @@ describe("the connector replacing itself", () => {
       checkImage: async (image, context) => { if (image === NEW && context.kind === "connector" && context.current === OLD) throw new Error("it is older than this one"); },
     });
     expect(await updater.run(f.job, f.agent)).toEqual({ id: "self-1", ok: false, error: { code: "image_refused", message: `${NEW} was refused (it is older than this one). The connector was not changed.` } });
-    expect([...f.docker.containers.keys()]).toEqual(["mausbot-connector"]);
+    expect([...f.docker.containers.keys()]).toEqual(["seira-connector"]);
     expect(f.agent).toMatchObject({ paused: 0, resumed: 0 });
   });
 
@@ -73,34 +74,45 @@ describe("the connector replacing itself", () => {
     const f = await fixture();
     let candidateReply: JobReply | null = null;
     f.docker.onConnectorStart = async (container) => {
-      const started = await f.updater(envOf(container).MAUSBOT_INSTANCE).atStart(async () => true);
+      const started = await f.updater(envOf(container).SEIRA_INSTANCE).atStart(async () => true);
       if (started.role === "candidate") candidateReply = started.reply;
     };
     const reply = await f.updater("instance-old").run(f.job, f.agent);
     expect(reply).toBeNull();
     expect(candidateReply).toEqual({ id: "self-1", ok: true, result: { connector: { version: "1.0.0", protocol: 2, image: NEW } } });
-    expect([...f.docker.containers.keys()]).toEqual(["mausbot-connector"]);
-    const now = f.docker.container("mausbot-connector")!;
+    expect([...f.docker.containers.keys()]).toEqual(["seira-connector"]);
+    const now = f.docker.container("seira-connector")!;
     expect(now.spec.Image).toBe(NEW);
-    const instance = envOf(now).MAUSBOT_INSTANCE;
+    const instance = envOf(now).SEIRA_INSTANCE;
     expect(instance).not.toBe("instance-old");
-    expect(envOf(now)).toEqual({ MAUSBOT_UPDATE_WAIT_S: "60", MAUSBOT_INSTANCE: instance, MAUSBOT_CONNECTOR_IMAGE: NEW });
-    expect(now.spec.Labels).toMatchObject({ "com.mausbot.role": "connector", "com.mausbot.instance": instance });
+    expect(envOf(now)).toEqual({ SEIRA_UPDATE_WAIT_S: "60", SEIRA_INSTANCE: instance, SEIRA_CONNECTOR_IMAGE: NEW });
+    expect(now.spec.Labels).toMatchObject({ "com.seira.role": "connector", "com.seira.instance": instance });
     expect(now.spec.HostConfig).toEqual(installed("x").HostConfig);
     expect(now.spec.Cmd).toEqual(["run"]);
     expect(f.agent).toMatchObject({ paused: 1, resumed: 0 });
     expect(readdirSync(f.state.dir).filter((name) => name.startsWith("self-update"))).toEqual(["self-update.confirmed.json"]);
     // Started again later, the new connector finds nothing left to do; the next update clears the record.
     expect((await f.updater(instance).atStart(async () => true)).role).toBe("none");
-    expect([...f.docker.containers.keys()]).toEqual(["mausbot-connector"]);
+    expect([...f.docker.containers.keys()]).toEqual(["seira-connector"]);
+  });
+
+  it("replaces a connector that an earlier version labelled, and labels the new one with the current names", async () => {
+    const f = await fixture({ [LEGACY_LABELS.role]: "connector", [LEGACY_LABELS.instance]: "instance-old" });
+    f.docker.onConnectorStart = async (container) => {
+      await f.updater(envOf(container).SEIRA_INSTANCE).atStart(async () => true);
+    };
+    expect(await f.updater("instance-old").run(f.job, f.agent)).toBeNull();
+    const now = f.docker.container("seira-connector")!;
+    expect(now.spec.Image).toBe(NEW);
+    expect(now.spec.Labels).toEqual({ "com.seira.role": "connector", "com.seira.instance": envOf(now).SEIRA_INSTANCE });
   });
 
   it("keeps the running connector when the new one never connects, and removes the new one", async () => {
     const f = await fixture();
     const reply = await f.updater("instance-old").run(f.job, f.agent);
     expect(reply).toEqual({ id: "self-1", ok: false, error: { code: "self_update_failed", message: "The new connector did not connect to Seira within 3 minutes; kept this one." } });
-    expect([...f.docker.containers.keys()]).toEqual(["mausbot-connector"]);
-    expect(f.docker.container("mausbot-connector")!.spec.Image).toBe(OLD);
+    expect([...f.docker.containers.keys()]).toEqual(["seira-connector"]);
+    expect(f.docker.container("seira-connector")!.spec.Image).toBe(OLD);
     expect(f.agent).toMatchObject({ paused: 1, resumed: 1 });
     expect(readdirSync(f.state.dir).filter((name) => name.startsWith("self-update"))).toEqual([]);
   });
@@ -109,27 +121,27 @@ describe("the connector replacing itself", () => {
     const f = await fixture();
     let role = "";
     f.docker.onConnectorStart = async (container) => {
-      role = (await f.updater(envOf(container).MAUSBOT_INSTANCE).atStart(async () => false)).role;
+      role = (await f.updater(envOf(container).SEIRA_INSTANCE).atStart(async () => false)).role;
     };
     const reply = await f.updater("instance-old").run(f.job, f.agent);
     expect(role).toBe("superseded");
     expect(reply).toMatchObject({ ok: false, error: { code: "self_update_failed" } });
-    expect(f.docker.container("mausbot-connector")!.spec.Image).toBe(OLD);
-    expect(f.docker.container("mausbot-connector-next")).toBeNull();
+    expect(f.docker.container("seira-connector")!.spec.Image).toBe(OLD);
+    expect(f.docker.container("seira-connector-next")).toBeNull();
   });
 
   it("an old connector started again mid-update waits for the outcome, and stands down only while the new one runs", async () => {
     const f = await fixture();
-    const candidate = successorSpec((await f.docker.containerInspect("mausbot-connector"))!, NEW, "instance-new");
+    const candidate = successorSpec((await f.docker.containerInspect("seira-connector"))!, NEW, "instance-new");
     await f.docker.pull(NEW);
-    await f.docker.createContainer("mausbot-connector-next", candidate);
-    await f.docker.startContainer("mausbot-connector-next");
-    const record = { jobId: "self-1", from: OLD, to: NEW, previousContainer: f.docker.container("mausbot-connector")!.id, candidateContainer: "mausbot-connector-next", candidateInstance: "instance-new", deadline: 1_800_000_060_000 };
+    await f.docker.createContainer("seira-connector-next", candidate);
+    await f.docker.startContainer("seira-connector-next");
+    const record = { jobId: "self-1", from: OLD, to: NEW, previousContainer: f.docker.container("seira-connector")!.id, candidateContainer: "seira-connector-next", candidateInstance: "instance-new", deadline: 1_800_000_060_000 };
     f.state.saveSelfUpdate(record);
     f.state.settleSelfUpdate("confirmed");
     expect((await f.updater("instance-old").atStart(async () => true)).role).toBe("superseded");
     // The record outlived the connector that won: it means nothing on its own.
-    await f.docker.removeContainer("mausbot-connector-next");
+    await f.docker.removeContainer("seira-connector-next");
     expect((await f.updater("instance-old").atStart(async () => true)).role).toBe("none");
     expect(existsSync(f.state.path("self-update.confirmed.json"))).toBe(false);
   });
@@ -140,7 +152,7 @@ describe("the connector replacing itself", () => {
     expect(await f.updater("instance-old").run({ ...f.job, args: { image: missing } }, f.agent)).toMatchObject({ ok: false, error: { code: "self_update_failed" } });
     expect(await f.updater("instance-old").run({ ...f.job, args: { image: OLD } }, f.agent)).toEqual({ id: "self-1", ok: true, result: { connector: { version: "1.0.0", protocol: 2, image: OLD } } });
     expect(f.agent).toMatchObject({ paused: 0, resumed: 0 });
-    expect([...f.docker.containers.keys()]).toEqual(["mausbot-connector"]);
+    expect([...f.docker.containers.keys()]).toEqual(["seira-connector"]);
     expect(await f.updater("instance-unknown").run(f.job, f.agent)).toMatchObject({ ok: false, error: { code: "self_update_failed", message: expect.stringContaining("cannot find its own container") } });
   });
 });

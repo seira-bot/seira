@@ -1,4 +1,4 @@
-// The upstream handshake is OMB's own, never the engine's: an engine's client adds capability fields a strict server
+// The upstream handshake is Seira's own, never the engine's: an engine's client adds capability fields a strict server
 // refuses. stdout carries only protocol frames.
 import { createInterface } from "node:readline";
 import { redactSecretsInText } from "../shared/redact.ts";
@@ -62,7 +62,7 @@ class Refusal extends Error {
   }
 }
 
-const SETTINGS = ["OMB_REMOTE_MCP_SERVER", "OMB_REMOTE_MCP_DIRECTORY", REMOTE_MCP_APPS_ENV];
+const SETTINGS = ["SEIRA_REMOTE_MCP_SERVER", "SEIRA_REMOTE_MCP_DIRECTORY", REMOTE_MCP_APPS_ENV];
 /** Codex hands every MCP child one shared environment, so a mount names its own record; settings leave this env once read. */
 function privateSettings(): Record<string, string | undefined> {
   if (process.argv.length === 2) {
@@ -85,7 +85,7 @@ function privateSettings(): Record<string, string | undefined> {
 
 const settings = privateSettings();
 let spec;
-try { spec = remoteMcpSpec(JSON.parse(settings.OMB_REMOTE_MCP_SERVER ?? "")); } catch {}
+try { spec = remoteMcpSpec(JSON.parse(settings.SEIRA_REMOTE_MCP_SERVER ?? "")); } catch {}
 if (!spec) fail("invalid remote MCP configuration");
 
 /** A selection that cannot be read must never widen to all tools. */
@@ -101,7 +101,7 @@ function directorySettings(raw: string | undefined): { server: string; scope: To
   } catch {}
   return fail("invalid tool directory configuration");
 }
-const directory = directorySettings(settings.OMB_REMOTE_MCP_DIRECTORY);
+const directory = directorySettings(settings.SEIRA_REMOTE_MCP_DIRECTORY);
 const observer = (() => {
   try {
     const mount = parseAppMount(settings[REMOTE_MCP_APPS_ENV]);

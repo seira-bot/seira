@@ -13,7 +13,7 @@ const FFPROBE_TIMEOUT_MS = 10_000;
 const FFMPEG_TIMEOUT_MS = 20_000;
 // Generous past any driver's turn timeout, so a slow tool loop still finds its frames; this is a leak bound, not a lease.
 const FRAME_CLEANUP_DELAY_MS = 10 * 60 * 1000;
-const FRAME_FOLDER_PREFIX = "omb-video-frame-";
+const FRAME_FOLDER_PREFIX = "seira-video-frame-";
 
 // Security invariant: an attachment comes from anyone who can reach a bot, and ffmpeg otherwise picks its reader from the
 // file's contents, so a playlist named .mp4 could read other files or the network into a frame the model sees.

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Model Context Protocol (MCP) server for OpenMausBot over JSON-RPC 2.0 stdio,
+// Model Context Protocol (MCP) server for Seira over JSON-RPC 2.0 stdio,
 // for external agents (Hermes, Claude Desktop, Cursor, etc.).
 import readline from "node:readline";
 import { allowedServerOrigin, EXAMPLE_ADDRESS } from "../electron/server-address.mjs";
@@ -18,7 +18,7 @@ export function validateBaseUrl(url: string): string {
     throw new Error("Seira URL must use http:// or https://");
   }
   if (parsed.username || parsed.password) {
-    throw new Error("Seira URL must not contain credentials; use OPENMAUSBOT_TOKEN instead");
+    throw new Error("Seira URL must not contain credentials; use SEIRA_TOKEN instead");
   }
   if ((parsed.pathname !== "/" && parsed.pathname !== "") || parsed.search || parsed.hash) {
     throw new Error("Seira URL must be an origin without a path, query, or fragment");
@@ -29,28 +29,28 @@ export function validateBaseUrl(url: string): string {
   return parsed.origin;
 }
 
-const configuredUrl = process.env.OPENMAUSBOT_URL ||
-  (process.env.OMB_PORT ? `http://127.0.0.1:${process.env.OMB_PORT}` : undefined);
+const configuredUrl = process.env.SEIRA_URL ||
+  (process.env.SEIRA_PORT ? `http://127.0.0.1:${process.env.SEIRA_PORT}` : undefined);
 
-export const OMB_BASE_URL = validateBaseUrl(configuredUrl || "http://127.0.0.1:8799");
+export const SEIRA_BASE_URL = validateBaseUrl(configuredUrl || "http://127.0.0.1:8799");
 const DISCOVERY_URLS = configuredUrl
-  ? [OMB_BASE_URL]
+  ? [SEIRA_BASE_URL]
   : [8799, 18799, 28799].map((port) => `http://127.0.0.1:${port}`);
 let discoveredBaseUrl: string | undefined;
 
 export function log(msg: string) {
-  process.stderr.write(`[openmausbot-mcp] ${msg}\n`);
+  process.stderr.write(`[seira-mcp] ${msg}\n`);
 }
 
 export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 function requestTimeoutMs(): number {
-  const raw = Number(process.env.OPENMAUSBOT_MCP_TIMEOUT_MS);
+  const raw = Number(process.env.SEIRA_MCP_TIMEOUT_MS);
   return Number.isFinite(raw) && raw >= 1_000 && raw <= 120_000 ? Math.floor(raw) : DEFAULT_REQUEST_TIMEOUT_MS;
 }
 
 function requestHeaders(options: RequestInit): NonNullable<RequestInit["headers"]> {
-  const token = process.env.OPENMAUSBOT_TOKEN?.trim();
+  const token = process.env.SEIRA_TOKEN?.trim();
   const headers = new Headers(options.headers);
   if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (token && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
@@ -58,7 +58,7 @@ function requestHeaders(options: RequestInit): NonNullable<RequestInit["headers"
 }
 
 /** A refusal from the API, with its HTTP status for callers that branch on it. */
-export class OpenMausBotApiError extends Error {
+export class SeiraApiError extends Error {
   readonly status: number;
   constructor(status: number, message: string) {
     super(message);
@@ -74,11 +74,11 @@ async function fetchJson(url: string, options: RequestInit = {}): Promise<any> {
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     if (response.status === 403 && !new Headers(headers).has("Authorization")) {
-      throw new OpenMausBotApiError(403, /on this shared server/.test(text) // the server says which kind refused it
-        ? "This is a shared server, so a program on it without a paired session token may only check its health. Set OPENMAUSBOT_TOKEN to a paired session (seira connect), as described in docs/mcp-server.md."
-        : "Seira refused this request because the installed desktop app requires a paired session token. Set OPENMAUSBOT_TOKEN as described in docs/mcp-server.md.");
+      throw new SeiraApiError(403, /on this shared server/.test(text) // the server says which kind refused it
+        ? "This is a shared server, so a program on it without a paired session token may only check its health. Set SEIRA_TOKEN to a paired session (seira connect), as described in docs/mcp-server.md."
+        : "Seira refused this request because the installed desktop app requires a paired session token. Set SEIRA_TOKEN as described in docs/mcp-server.md.");
     }
-    throw new OpenMausBotApiError(response.status, `Seira API error (${response.status}): ${text || response.statusText}`);
+    throw new SeiraApiError(response.status, `Seira API error (${response.status}): ${text || response.statusText}`);
   }
   try {
     return await response.json();
@@ -95,7 +95,7 @@ export async function probeBaseUrls(candidates: string[]): Promise<string> {
       const health = await fetchJson(`${candidate}/api/health`, {
         signal: AbortSignal.timeout(Math.min(requestTimeoutMs(), 2_000)),
       });
-      if (health?.app !== "openmausbot") {
+      if (health?.app !== "seira") {
         failures.push(`${candidate} answered, but it was not Seira`);
         continue;
       }
@@ -109,8 +109,8 @@ export async function probeBaseUrls(candidates: string[]): Promise<string> {
 
 export async function resolveBaseUrl(): Promise<string> {
   if (discoveredBaseUrl) return discoveredBaseUrl;
-  if (process.env.OPENMAUSBOT_TOKEN?.trim() && !configuredUrl) {
-    throw new Error("Set OPENMAUSBOT_URL or OMB_PORT when using OPENMAUSBOT_TOKEN so credentials are never sent during port discovery");
+  if (process.env.SEIRA_TOKEN?.trim() && !configuredUrl) {
+    throw new Error("Set SEIRA_URL or SEIRA_PORT when using SEIRA_TOKEN so credentials are never sent during port discovery");
   }
   discoveredBaseUrl = await probeBaseUrls(DISCOVERY_URLS);
   return discoveredBaseUrl;
@@ -750,7 +750,7 @@ function sendReceipt(receipt: unknown) {
   };
 }
 
-/** Hooks a caller can give a long tool call (the openmausbot CLI streams progress). */
+/** Hooks a caller can give a long tool call (the seira CLI streams progress). */
 export interface ToolCallHooks {
   /** Each new state of the job a wait watches. */
   onProgress?(job: Record<string, any>): void;
@@ -777,8 +777,8 @@ export async function waitForJob(
       ...(wait > 0 ? { wait: String(wait) } : {}), ...(version !== undefined ? { version } : {}) });
     const job: Record<string, any> = await fetcher(`/api/threads/${encodeURIComponent(threadId)}/job?${params.toString()}`,
       options.signal ? { signal: options.signal } : {}).catch((error: unknown) => { // a server without the route; a gone conversation is itself
-      throw error instanceof OpenMausBotApiError && error.status === 404 && !/no such conversation/.test(error.message)
-        ? new OpenMausBotApiError(404, "This Seira server cannot report a conversation's job (GET /api/threads/:id/job); update it, then wait again.") : error;
+      throw error instanceof SeiraApiError && error.status === 404 && !/no such conversation/.test(error.message)
+        ? new SeiraApiError(404, "This Seira server cannot report a conversation's job (GET /api/threads/:id/job); update it, then wait again.") : error;
     });
     since = Number(job.since);
     if (job.version !== version) options.onProgress?.(job);
@@ -802,11 +802,11 @@ export async function handleToolCall(
   switch (name) {
     case "get_system_health": {
       const res = await fetcher("/api/health");
-      if (res?.app !== "openmausbot") throw new Error("The configured endpoint is not a Seira server");
+      if (res?.app !== "seira") throw new Error("The configured endpoint is not a Seira server");
       return {
         status: "connected",
-        endpoint: discoveredBaseUrl ?? OMB_BASE_URL,
-        app: "openmausbot",
+        endpoint: discoveredBaseUrl ?? SEIRA_BASE_URL,
+        app: "seira",
         packaged: Boolean(res.static),
       };
     }
@@ -1277,7 +1277,7 @@ export async function processMcpMessage(
           tools: {},
         },
         serverInfo: {
-          name: "openmausbot-mcp",
+          name: "seira-mcp",
           version: "1.1.0",
         },
         instructions: "Use bounded read tools before mutating the Seira team. Approval grants, deletion, and computer lifecycle are intentionally unavailable.",

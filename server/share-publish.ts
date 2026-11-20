@@ -1,6 +1,6 @@
-// Sends a template folder to the MausBot Admin (openmaus-cloud server/community-submissions.ts), which opens a pull
+// Sends a template folder to the Seira Admin, which opens a pull
 // request on the community repository from its own GitHub App: nobody needs a GitHub account. The request is signed the
-// way page publishing signs its token request: a desktop's MausBot sign-in token, or a Cloud home's machine signature
+// way page publishing signs its token request: a desktop's Seira sign-in token, or a Cloud home's machine signature
 // over the label `omb-community-v1`.
 import { COMMUNITY_REPOSITORY_URL } from "../shared/share-card.ts";
 import { pagesAuthHeaders, type PagesAccess } from "./pages/access.ts";

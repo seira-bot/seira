@@ -10,24 +10,24 @@ const CACHE_MS = 60 * 60_000;
 const STALE_MS = 24 * 60 * 60_000;
 
 /** "managed" is a hosted or Cloud server that is updated for its owner. "podman" is deploy/podman's Compose recipe;
- * "podman-service" the rootless service deploy/podman/install.sh writes, whose unit sets OMB_PODMAN_SERVICE. */
+ * "podman-service" the rootless service deploy/podman/install.sh writes, whose unit sets SEIRA_PODMAN_SERVICE. */
 export type InstallKind = "desktop" | "managed" | "docker" | "podman" | "podman-service" | "npm" | "git" | "unknown";
 
 /** Where deploy/podman/install.sh puts the install unless told otherwise. */
-export const PODMAN_SERVICE_DIR = "~/.local/share/openmausbot";
+export const PODMAN_SERVICE_DIR = "~/.local/share/seira";
 
-/** The install's folder on the host, as the unit gives it in OMB_PODMAN_SERVICE (`~/…` or an absolute path). */
+/** The install's folder on the host, as the unit gives it in SEIRA_PODMAN_SERVICE (`~/…` or an absolute path). */
 export function podmanServiceDir(env: NodeJS.ProcessEnv = process.env): string {
-  const dir = env.OMB_PODMAN_SERVICE?.trim() ?? "";
+  const dir = env.SEIRA_PODMAN_SERVICE?.trim() ?? "";
   return /^(?:~\/|\/)[A-Za-z0-9/._@-]+$/.test(dir) && !dir.split("/").includes("..") ? dir.replace(/\/+$/, "") : PODMAN_SERVICE_DIR;
 }
 
 /** `stable` follows the promoted version; `newest` follows every release, as soon as it is published. */
 export type UpdateChannel = "stable" | "newest";
 
-/** OMB_UPDATE_CHANNEL: `newest` to hear of every release; anything else is `stable`. */
+/** SEIRA_UPDATE_CHANNEL: `newest` to hear of every release; anything else is `stable`. */
 export function updateChannel(env: NodeJS.ProcessEnv = process.env): UpdateChannel {
-  return env.OMB_UPDATE_CHANNEL?.trim().toLowerCase() === "newest" ? "newest" : "stable";
+  return env.SEIRA_UPDATE_CHANNEL?.trim().toLowerCase() === "newest" ? "newest" : "stable";
 }
 
 /**
@@ -56,7 +56,7 @@ export function installKind(input: {
   const exists = input.exists ?? existsSync;
   if (input.desktopManaged) return "desktop";
   if (input.managed) return "managed";
-  if ((input.env ?? process.env).OMB_PODMAN_SERVICE?.trim()) return "podman-service";
+  if ((input.env ?? process.env).SEIRA_PODMAN_SERVICE?.trim()) return "podman-service";
   if (exists("/.dockerenv")) return "docker";
   if (exists("/run/.containerenv")) return "podman";
   if (input.serverRoot.split(sep).includes("node_modules")) return "npm";
@@ -127,7 +127,7 @@ export function createUpdateChecker(options: {
     ...updateCommand(options.install),
   });
   const ask = (url: string) => fetchJson(url, {
-    headers: { accept: "application/vnd.github+json", "user-agent": "openmausbot-update-check" },
+    headers: { accept: "application/vnd.github+json", "user-agent": "seira-update-check" },
     signal: AbortSignal.timeout(8_000),
   });
 

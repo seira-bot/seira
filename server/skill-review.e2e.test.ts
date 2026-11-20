@@ -9,7 +9,7 @@ import { SKILL_REVIEW_MARKER } from "./skill-review.ts";
 const SKILL_MD = "---\nname: weekly-report\ndescription: Writes the weekly status report.\n---\n\n# Weekly report\n\nWrites the weekly status report from the project notes.\n\n## When to Use\n- \"write the weekly report\"\n\n## Procedure\n1. Read notes/status.md.\n2. Keep it to five bullets.\n\n## Pitfalls\n- Ask which week when the notes span two.\n\n## Verification\n- The report has at most five bullets.\n";
 
 it("reviews a conversation in the background once its tool steps reach the threshold", async () => {
-  const scratch = mkdtempSync(join(tmpdir(), "omb-skill-review-"));
+  const scratch = mkdtempSync(join(tmpdir(), "seira-skill-review-"));
   const routes = join(scratch, "routes.json");
   writeFileSync(routes, JSON.stringify({
     [SKILL_REVIEW_MARKER]: JSON.stringify({ changes: [{ action: "create", skill_md: SKILL_MD, gist: "Five-bullet weekly report." }], note: "one lesson" }),
@@ -66,9 +66,9 @@ it("reviews a conversation in the background once its tool steps reach the thres
   }
 }, 90_000);
 
-// On Codex, OMB's default engine, the review is Codex's own tool-free `codex exec` call.
+// On Codex, Seira's default engine, the review is Codex's own tool-free `codex exec` call.
 it("reviews a Codex bot's conversation through Codex's own background call", async () => {
-  const scratch = mkdtempSync(join(tmpdir(), "omb-skill-review-codex-"));
+  const scratch = mkdtempSync(join(tmpdir(), "seira-skill-review-codex-"));
   const routes = join(scratch, "routes.json");
   const textLog = join(scratch, "codex-exec.jsonl");
   writeFileSync(routes, JSON.stringify({
