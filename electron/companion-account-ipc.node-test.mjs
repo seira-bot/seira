@@ -24,11 +24,9 @@ test("the desktop holds its address on demand, read from the running companion",
   const context = vm.createContext({
     companionAccountService: null,
     resolveCompanionControlPlaneURL: () => "",
-    resolveDesktopControlPlaneURL: () => "https://cp.example.test",
-    createSeiraCloudSignIn: () => ({ fixture: "cloud-sign-in" }),
     cloudTarget: () => ({ origin: "https://cloud.example.test" }),
     cloudAccount: { session: () => ({ accountToken: "omc_fixture", user: { id: "u", email: "a@example.test" } }) },
-    createControlPlaneClient: (passed) => {
+    createDesktopControlPlaneClient: (passed) => {
       clientOptions = passed;
       return {};
     },
@@ -62,7 +60,9 @@ test("the desktop holds its address on demand, read from the running companion",
 
   assert.equal(options.onDemand, true);
   assert.equal(options.autoRecover, true);
-  assert.deepEqual(clientOptions.cloudSignIn, { fixture: "cloud-sign-in" });
+  assert.equal(clientOptions.isPackaged, true);
+  assert.equal(clientOptions.origin, "https://cloud.example.test");
+  assert.deepEqual(clientOptions.identity, { deviceName: "Fixture Mac", platform: "darwin", appVersion: "1.2.3" });
   assert.equal(options.cloudSession.current().accountToken, "omc_fixture");
   assert.equal(await options.managedEndpointNeeded(), null);
   assert.equal(stateReads.length, 0);

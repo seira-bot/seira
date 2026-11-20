@@ -82,8 +82,7 @@ import {
 } from "./desktop-companion-client.mjs";
 import { isKnownSkin, skinChrome } from "./skin-overlay.cjs";
 import { installCredentialStoreIpc, readSecureCredentials } from "./secure-credentials.mjs"; import { decryptAfterCopiedSecrets } from "./old-key.mjs";
-import { createControlPlaneClient } from "./control-plane-client.mjs";
-import { createSeiraCloudSignIn } from "./seira-cloud-sign-in.mjs"; import { resolveDesktopControlPlaneURL } from "./desktop-control-plane.mjs";
+import { createDesktopControlPlaneClient } from "./desktop-control-plane.mjs";
 import {
   companionAccountCleanupPending, companionTunnelRetired,
   createCompanionAccountService,
@@ -731,17 +730,12 @@ function installationDisplayName() {
 
 function ensureCompanionAccountService() {
   if (companionAccountService) return companionAccountService;
-  const baseURL = resolveDesktopControlPlaneURL({
+  const client = createDesktopControlPlaneClient({
     isPackaged: app.isPackaged,
     environment: process.env,
+    origin: cloudTarget(process.env).origin,
+    identity: { deviceName: installationDisplayName(), platform: process.platform, appVersion: app.getVersion() },
   });
-  let client = null;
-  if (baseURL) {
-    try {
-      client = createControlPlaneClient({ baseURL, cloudSignIn: createSeiraCloudSignIn({ origin: cloudTarget(process.env).origin, identity: { deviceName: installationDisplayName(), platform: process.platform, appVersion: app.getVersion() } }) });
-    } catch {
-    }
-  }
   companionAccountService = createCompanionAccountService({
     client,
     readCredentials: () => secureCredentialState?.read() ?? secureCredentials,

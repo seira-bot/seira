@@ -20,7 +20,7 @@ import {
   PHONE_UNUSED_RELEASE_MS,
   resolveCompanionControlPlaneURL,
 } from "./companion-account-service.mjs";
-import { resolveDesktopControlPlaneURL } from "./desktop-control-plane.mjs";
+import { createDesktopControlPlaneClient, resolveDesktopControlPlaneURL } from "./desktop-control-plane.mjs";
 import {
   MANAGED_COMPANION_ENDPOINT_FIELD,
   MANAGED_COMPANION_ORIGIN_VERSION,
@@ -279,6 +279,15 @@ describe("Companion account service", () => {
       environment: { SEIRA_CONTROL_PLANE_URL: "ftp://nope" },
       live,
     })).toBe("");
+  });
+
+  it("builds the desktop phone access client only with a control plane and a valid Seira Cloud origin", () => {
+    const identity = { deviceName: "Fixture", platform: "linux", appVersion: "1.0.0" };
+    const environment = { SEIRA_CONTROL_PLANE_URL: "https://cp.example.test" };
+    const origin = "https://cloud.example.test";
+    expect(createDesktopControlPlaneClient({ isPackaged: false, environment: {}, origin, identity })).toBeNull();
+    expect(createDesktopControlPlaneClient({ isPackaged: true, environment, origin: "https://cloud.example.test/path", identity })).toBeNull();
+    expect(createDesktopControlPlaneClient({ isPackaged: true, environment, origin, identity })?.origin).toBe("https://cp.example.test");
   });
 
   it("checks the control plane a second time before it gives up on a typed code", async () => {
