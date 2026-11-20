@@ -13,7 +13,7 @@ import { createPublishedApps, type PublishedAppsDeps } from "./published-apps.ts
 
 const ADA = "ada@acme.test", BEN = "ben@acme.test", OLIVE = "olive@acme.test";
 const KEYS: Record<string, string> = { [ADA]: "p_adaadaadaadaadaadaada1", [BEN]: "p_benbenbenbenbenbenben1", [OLIVE]: "p_oliveoliveoliveolive01" };
-const TOKEN = "omb_host_published_apps_token_0123456789abcdef";
+const TOKEN = "seira_host_published_apps_token_0123456789abcdef";
 
 const bots = [
   { id: "mira", name: "Mira", threadId: "main", tasks: [{ threadId: "main" }, { threadId: "ada-chat" }, { threadId: "ben-chat" }] },

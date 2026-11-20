@@ -18,13 +18,13 @@ function hasFfmpeg(): boolean {
   }
 }
 
-// These exercise the real ffmpeg/ffprobe on PATH (the same local build OpenMausBot would find), not a fake: this
+// These exercise the real ffmpeg/ffprobe on PATH (the same local build Seira would find), not a fake: this
 // module has nothing to fake ffmpeg's behaviour against. Skipped wherever neither is installed.
 describe.skipIf(!hasFfmpeg())("video frame sampling", () => {
   const temporary: string[] = [];
 
   const store = () => {
-    const root = mkdtempSync(join(tmpdir(), "omb-turn-video-"));
+    const root = mkdtempSync(join(tmpdir(), "seira-turn-video-"));
     temporary.push(root);
     return root;
   };
@@ -116,7 +116,7 @@ describe.skipIf(!hasFfmpeg())("video frame sampling", () => {
   });
 
   describe("the folder that holds the frames", () => {
-    const frameFolders = () => readdirSync(tmpdir()).filter((name) => name.startsWith("omb-video-frame-"));
+    const frameFolders = () => readdirSync(tmpdir()).filter((name) => name.startsWith("seira-video-frame-"));
     // The folders of the other tests wait for their delay, so each test looks only at what its own call made.
     const madeBy = async (call: () => Promise<unknown>) => {
       const before = new Set(frameFolders());
@@ -130,7 +130,7 @@ describe.skipIf(!hasFfmpeg())("video frame sampling", () => {
       const [folder, ...others] = await madeBy(async () => { frames = await videoFrameImages([clip]); });
 
       expect(others).toEqual([]);
-      expect(folder).toMatch(new RegExp(`^omb-video-frame-${process.pid}-[A-Za-z0-9]{6}$`));
+      expect(folder).toMatch(new RegExp(`^seira-video-frame-${process.pid}-[A-Za-z0-9]{6}$`));
       for (const frame of frames) {
         expect(dirname(frame.path)).toBe(join(tmpdir(), folder!));
         expect(existsSync(frame.path)).toBe(true);

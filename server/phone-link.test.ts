@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { applyPhoneLinkMessage, phoneLinkPart, phoneLinkPrompt } from "./phone-link.ts";
 import { buildSystemPrompt } from "./system-prompt.ts";
 
-const told = (olderPhoneApps: unknown) => applyPhoneLinkMessage({ type: "openmausbot:phone-link", olderPhoneApps });
+const told = (olderPhoneApps: unknown) => applyPhoneLinkMessage({ type: "seira:phone-link", olderPhoneApps });
 afterEach(() => { told(0); });
 
 describe("phoneLinkPrompt", () => {
@@ -20,7 +20,7 @@ describe("phoneLinkPrompt", () => {
     expect(one).toContain("this computer's secure link for older Seira phone apps has ended, and 1 phone paired with this computer has an older app");
     expect(one).toContain("connects on the same Wi-Fi only");
     expect(one).toContain("\"No route to your computer\"");
-    expect(one).toContain("\"Anywhere, through MausBot\" doesn't work");
+    expect(one).toContain("\"Anywhere, through Seira\" doesn't work");
     expect(one).toContain("update the Seira app on that phone, then open it once on the same Wi-Fi as this computer;"
       + " if that doesn't reconnect it, they pair it again in Settings → Phone & devices");
     expect(one.indexOf("open it once"), "the easy way first").toBeLessThan(one.indexOf("pair it again"));
@@ -30,7 +30,7 @@ describe("phoneLinkPrompt", () => {
   });
 
   it("takes main's word from the private parent port, and only a whole number of phones", () => {
-    expect(applyPhoneLinkMessage({ type: "openmausbot:included-x", access: null })).toBe(false);
+    expect(applyPhoneLinkMessage({ type: "seira:included-x", access: null })).toBe(false);
     expect(applyPhoneLinkMessage(null)).toBe(false);
     expect(told(1)).toBe(true);
     const built = buildSystemPrompt("You are Ada.", "", [phoneLinkPart()]);

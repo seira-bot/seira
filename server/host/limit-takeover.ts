@@ -12,7 +12,7 @@ import type { InstanceConfigMap, ProviderAdapter, RuntimeEvent } from "../contra
 import { readyToRun, type DefaultSelectionContext, type SelectableInstance } from "../default-model-selection.ts";
 import { engineFailureKind } from "../drivers/engine-errors.ts";
 import { classifyError } from "../drivers/retry.ts";
-import { failoverLine, limitBackupAllowed, signedOutLine, type LimitFailover } from "../limit-failover.ts";
+import { billsEachUse, failoverLine, limitBackupAllowed, signedOutLine, type LimitFailover } from "../limit-failover.ts";
 import { LimitNotices, limitNoticeText, signedOutNoticeText } from "../limit-notices.ts";
 import { UNNAMED_LIMIT_MS } from "../limit-resets.ts";
 import type { ModelSelection } from "../../shared/wire.ts";
@@ -55,7 +55,7 @@ export interface LimitTakeoverDeps {
   /** When this engine's limit resets, when that is known. */
   resetAt?(instanceId: string, model?: string): number | null;
   /** The backups the person chose for this bot, or for every bot. */
-  chosen(botId: string): ModelSelection[];
+  chosen(botId: string, from: ModelSelection): ModelSelection[];
   /** The backups a signed-out AI's turns go to, as for a turn its AI never started: the bot's own list, or the
    * installation's one backup while Automatic recovery is on. `chosen` when not given. */
   signedOutChosen?(botId: string): ModelSelection[];
@@ -63,7 +63,7 @@ export interface LimitTakeoverDeps {
   tell(bot: Bot, text: string): void;
   /** A conversation moved off a limited or signed-out AI: it goes back once that ends. */
   record(failover: LimitFailover): void;
-  /** OMB_QUOTA_SWITCH: off, nothing carries on by itself. */
+  /** SEIRA_QUOTA_SWITCH: off, nothing carries on by itself. */
   enabled?(): boolean;
   /** Where the AIs run, for the sign-out notice: "on the Cloud", "on this computer". */
   where?: string;
@@ -160,13 +160,14 @@ export function createLimitTakeover(deps: LimitTakeoverDeps) {
     notices.endedEverywhere(signedOutKey(instanceId));
   };
 
-  const usable = (engines: TakeoverEngine[], current: TakeoverEngine, selection: ModelSelection, scope: TakeoverScope, approval?: ApprovalMode): boolean => {
+  const usable = (engines: TakeoverEngine[], current: TakeoverEngine, selection: ModelSelection, scope: TakeoverScope | "pool", approval?: ApprovalMode): boolean => {
     const engine = engines.find((candidate) => candidate.instanceId === selection.instanceId);
     if (!engine || !readyToRun(engine, deps.context) || deps.blockedUntil(engine.instanceId, selection.model) !== null || modelHeld(selection) !== null) return false;
     if (engine.instanceId !== current.instanceId) {
       if (signedOutHeld(engine.instanceId)) return false;
-      // Another sign-in to the same plan never carries a limit (that rotates accounts); it may stand in for one signed out.
-      if (scope !== "signed-out" && !limitBackupAllowed(current, engine, deps.configs()[engine.instanceId])) return false;
+      // Another sign-in to the same plan never carries a limit (that rotates accounts); it may stand in for one signed out, and a pay-per-use key may hand the conversation back to the plan.
+      const keyHandsBack = scope === "pool" && billsEachUse(deps.configs()[current.instanceId]);
+      if (scope !== "signed-out" && !keyHandsBack && !limitBackupAllowed(current, engine, deps.configs()[engine.instanceId])) return false;
       // The same rule as switching by hand: a level the other AI has no such mode for needs the person first.
       if (approval && modelSwitchNeedsAsk(approval, current.driverKind, engine.driverKind)) return false;
     }
@@ -188,7 +189,7 @@ export function createLimitTakeover(deps: LimitTakeoverDeps) {
       if (usable(engines, current, selection, scope, approval)) out.push({ instanceId: selection.instanceId, model: selection.model });
     };
     if (scope === "model" || scope === "credits") add({ instanceId: current.instanceId, model: current.models.default });
-    for (const selection of scope === "signed-out" ? deps.signedOutChosen?.(botId) ?? deps.chosen(botId) : deps.chosen(botId)) add(selection);
+    for (const selection of scope === "signed-out" ? deps.signedOutChosen?.(botId) ?? deps.chosen(botId, from) : deps.chosen(botId, from)) add(selection);
     return out;
   }
 
@@ -232,6 +233,11 @@ export function createLimitTakeover(deps: LimitTakeoverDeps) {
 
   return {
     backups,
+    canCarry(from: ModelSelection, to: ModelSelection, approval?: ApprovalMode): boolean {
+      if (to.instanceId === from.instanceId) return deps.blockedUntil(to.instanceId, to.model) === null && modelHeld(to) === null && !signedOutHeld(to.instanceId);
+      const engines = deps.engines(), current = engines.find((engine) => engine.instanceId === from.instanceId);
+      return Boolean(current) && usable(engines, current!, to, "pool", approval);
+    },
     /** This model alone, held by its own limit; null when it is not. */
     modelHeld,
     /** This model's own limit refused a turn: it is held until the reset the limit named, an hour when it named none,

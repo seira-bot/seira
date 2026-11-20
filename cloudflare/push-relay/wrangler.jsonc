@@ -19,7 +19,7 @@
     {
       "binding": "DB",
       "database_name": "seira-push",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "fccc9097-c4fa-4f5f-9338-df7454bdbff9",
       "migrations_dir": "migrations"
     }
   ],

@@ -20,7 +20,7 @@ const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
 const setup = vi.hoisted(() => ({ runSetup: vi.fn(), isSetupComplete: vi.fn(), readCliStartup: vi.fn(), saveCliStartup: vi.fn() }));
 vi.mock("./cli-setup.ts", () => setup);
 
-describe("openmausbot command line", () => {
+describe("seira command line", () => {
   it("parses commands and flags, and explains mistakes", () => {
     const serve = parseArgs(["serve", "--port", "9001", "--data-dir", "/tmp/x", "--label", "cab mini", "--tailscale", "--no-pair"], {});
     // --data-dir is resolved against the platform: C:\tmp\x on Windows.
@@ -36,13 +36,13 @@ describe("openmausbot command line", () => {
     });
     expect(parseArgs(["fleet", "users", "acme", "add", "bob@acme.test", "--chat-only"], {})).toMatchObject({ command: "fleet", fleetAction: "users", slug: "acme", fleetUserAction: "add", email: "bob@acme.test", chatOnly: true });
     expect(parseArgs(["fleet", "delete", "acme", "--yes", "--keep-data"], {})).toMatchObject({ fleetAction: "delete", slug: "acme", yes: true, keepData: true });
-    expect(parseArgs(["fleet", "init", "--domain", "AgentAda.cc", "--operator", "maus"], {})).toMatchObject({ fleetAction: "init", domain: "agentada.cc", operator: "maus" });
-    expect(parseArgs(["fleet", "agent", "--socket", "/run/x.sock", "--group", "maus"], {})).toMatchObject({ fleetAction: "agent", socket: "/run/x.sock", group: "maus" });
+    expect(parseArgs(["fleet", "init", "--domain", "AgentAda.cc", "--operator", "seira"], {})).toMatchObject({ fleetAction: "init", domain: "agentada.cc", operator: "seira" });
+    expect(parseArgs(["fleet", "agent", "--socket", "/run/x.sock", "--group", "seira"], {})).toMatchObject({ fleetAction: "agent", socket: "/run/x.sock", group: "seira" });
     expect(parseArgs(["fleet"], {})).toMatchObject({ error: expect.stringContaining("fleet needs one of") });
     expect(parseArgs(["fleet", "create"], {})).toMatchObject({ error: "fleet create needs a workspace name" });
     expect(parseArgs(["fleet", "users", "acme"], {})).toMatchObject({ error: expect.stringContaining("add|remove") });
     expect(parseArgs(["fleet", "create", "acme", "--cap", "-5"], {})).toMatchObject({ error: expect.stringContaining("--cap") });
-    expect(parseArgs([], { OMB_PORT: "8123" })).toMatchObject({ command: "start", port: 8123 });
+    expect(parseArgs([], { SEIRA_PORT: "8123" })).toMatchObject({ command: "start", port: 8123 });
     expect(parseArgs(["--port", "8125", "--no-open", "--local"], {})).toMatchObject({ command: "start", port: 8125, open: false, local: true });
     expect(parseArgs(["--help"], {})).toMatchObject({ command: "help" });
     expect(parseArgs(["-h"], {})).toMatchObject({ command: "help" });
@@ -65,14 +65,14 @@ describe("openmausbot command line", () => {
     expect(parseArgs(["access", "list"], {})).toMatchObject({ command: "access", accessAction: "list" });
     expect(parseArgs(["access"], {})).toEqual({ error: "access needs one of: list, add EMAIL [--chat-only], remove EMAIL" });
     expect(parseArgs(["access", "add"], {})).toEqual({ error: "add needs a value" });
-    expect(parseArgs(["service", "install", "--domain", "maus.example.com", "--port", "8799"], {})).toMatchObject({ command: "service", serviceAction: "install", domain: "maus.example.com", port: 8799 });
+    expect(parseArgs(["service", "install", "--domain", "seira.example.com", "--port", "8799"], {})).toMatchObject({ command: "service", serviceAction: "install", domain: "seira.example.com", port: 8799 });
     expect(parseArgs(["service", "uninstall"], {})).toMatchObject({ command: "service", serviceAction: "uninstall" });
     expect(parseArgs(["service", "install", "--sentinel"], {})).toMatchObject({ command: "service", serviceAction: "install", sentinel: true });
     expect(parseArgs(["serve", "--sentinel"], {})).toEqual({ error: expect.stringContaining("--sentinel") });
     expect(parseArgs(["service"], {})).toEqual({ error: expect.stringContaining("service needs one of") });
-    expect(parseArgs(["serve", "--domain", "Maus.Example.com"], {})).toMatchObject({ command: "serve", domain: "maus.example.com" });
+    expect(parseArgs(["serve", "--domain", "Seira.Example.com"], {})).toMatchObject({ command: "serve", domain: "seira.example.com" });
     expect(parseArgs(["serve", "--domain", "localhost"], {})).toEqual({ error: expect.stringContaining("bare hostname") });
-    expect(parseArgs(["serve", "--domain", "maus.example.com", "--tunnel"], {})).toEqual({ error: expect.stringContaining("--domain already gives") });
+    expect(parseArgs(["serve", "--domain", "seira.example.com", "--tunnel"], {})).toEqual({ error: expect.stringContaining("--domain already gives") });
   });
 
   it("takes the phone kind non-interactively; --phone alone is a chat-only code for any phone", () => {
@@ -87,9 +87,9 @@ describe("openmausbot command line", () => {
   });
 
   it("--public-url takes https, or http on a private network only", () => {
-    expect(parseArgs(["serve", "--public-url", "https://maus.example.com"], {})).toMatchObject({ publicUrl: "https://maus.example.com" });
+    expect(parseArgs(["serve", "--public-url", "https://seira.example.com"], {})).toMatchObject({ publicUrl: "https://seira.example.com" });
     expect(parseArgs(["serve", "--public-url", "http://192.168.1.20:8799"], {})).toMatchObject({ publicUrl: "http://192.168.1.20:8799" });
-    expect(parseArgs(["serve", "--public-url", "http://maus.example.com"], {})).toEqual({ error: expect.stringContaining("plain http isn't encrypted") });
+    expect(parseArgs(["serve", "--public-url", "http://seira.example.com"], {})).toEqual({ error: expect.stringContaining("plain http isn't encrypted") });
     expect(parseArgs(["serve", "--lan"], {})).toMatchObject({ lan: true });
     expect(parseArgs(["serve", "--lan", "--local"], {})).toEqual({ error: expect.stringContaining("--local") });
   });
@@ -106,7 +106,7 @@ describe("openmausbot command line", () => {
       expect(out).toContain("＋ → Connect to a server, paste the link");
       expect(out).toContain(qrToString(link));
       expect(out).toContain("For a phone (chat and approvals only)   npx @seira-bot/seira pair --phone");
-      expect(out).not.toMatch(/omb_pair_|phone app:|this computer:/);
+      expect(out).not.toMatch(/seira_pair_|phone app:|this computer:/);
       expect(pairingBlock({ ...base, chatOnly: true })).toContain("· chat and approvals");
     });
 
@@ -121,7 +121,7 @@ describe("openmausbot command line", () => {
     });
 
     it("gives an Android phone the app-scheme QR, because its scanner rejects https", () => {
-      const invite = `openmausbot://pair?address=https%3A%2F%2Fmini.example&token=omb_pair_${"a".repeat(43)}&name=mini`;
+      const invite = `seira://pair?address=https%3A%2F%2Fmini.example&token=seira_pair_${"a".repeat(43)}&name=mini`;
       const out = pairingBlock({ ...base, chatOnly: true, inviteUrl: invite, phone: "android" });
       expect(out).toContain(qrToString(invite));
       expect(out).not.toContain(qrToString(link));
@@ -165,11 +165,11 @@ describe("openmausbot command line", () => {
   });
 
   it("serve: starts the server, prints the pairing link, and stops on SIGTERM", async () => {
-    const home = mkdtempSync(join(tmpdir(), "omb-cli-serve-"));
+    const home = mkdtempSync(join(tmpdir(), "seira-cli-serve-"));
     const port = workerPort(21000, 9000);
-    const child = spawn(process.execPath, ["--experimental-strip-types", join(SERVER_DIR, "openmausbot.ts"), "serve", "--port", String(port), "--data-dir", join(home, "data"), "--label", "cli test", "--public-url", "https://mini.example"], {
+    const child = spawn(process.execPath, ["--experimental-strip-types", join(SERVER_DIR, "seira.ts"), "serve", "--port", String(port), "--data-dir", join(home, "data"), "--label", "cli test", "--public-url", "https://mini.example"], {
       cwd: join(SERVER_DIR, ".."),
-      env: { PATH: process.env.PATH ?? "", HOME: home, USERPROFILE: home, OMB_WEBHOOK_PORT: String(port + 1), OMB_BROWSER_CONNECTION: join(home, "browser-connection.json") },
+      env: { PATH: process.env.PATH ?? "", HOME: home, USERPROFILE: home, SEIRA_WEBHOOK_PORT: String(port + 1), SEIRA_BROWSER_CONNECTION: join(home, "browser-connection.json") },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let out = "";
@@ -183,12 +183,12 @@ describe("openmausbot command line", () => {
       expect(out, "not a terminal: no code goes into a log").not.toMatch(/Pairing code {3}[A-Z2-9]{4}-/);
       expect(out).toContain("Get a pairing code: seira pair");
       expect(out).not.toContain("Ctrl+C");
-      const paired = spawnSync(process.execPath, ["--experimental-strip-types", join(SERVER_DIR, "openmausbot.ts"), "pair", "--port", String(port)], { cwd: join(SERVER_DIR, ".."), env: { PATH: process.env.PATH ?? "", HOME: home }, encoding: "utf8" });
+      const paired = spawnSync(process.execPath, ["--experimental-strip-types", join(SERVER_DIR, "seira.ts"), "pair", "--port", String(port)], { cwd: join(SERVER_DIR, ".."), env: { PATH: process.env.PATH ?? "", HOME: home }, encoding: "utf8" });
       expect(paired.stdout).toMatch(/Pairing code {3}[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4} {3}works once, until .+ · everything/);
       expect(paired.stdout).toContain("Link           https://mini.example/pair#code=");
       expect(paired.stdout).toMatch(/[▀▄█]/);
       expect(paired.stdout).toContain("The code works once the address answers.");
-      const descriptor: any = await (await fetch(`http://127.0.0.1:${port}/.well-known/openmausbot/environment`)).json();
+      const descriptor: any = await (await fetch(`http://127.0.0.1:${port}/.well-known/seira/environment`)).json();
       expect(descriptor.label).toBe("cli test");
       const pairing: any = await (await fetch(`http://127.0.0.1:${port}/api/auth/pairing`)).json();
       expect(pairing.pairings.length).toBeGreaterThanOrEqual(1);
@@ -210,11 +210,11 @@ describe("openmausbot command line", () => {
 describe("serve --lan", () => {
   it("answers on this network's address, never as the owner to another machine, and links to that address", async () => {
     const lan = reachableAddresses().lan[0];
-    const home = mkdtempSync(join(tmpdir(), "omb-cli-lan-"));
+    const home = mkdtempSync(join(tmpdir(), "seira-cli-lan-"));
     const port = workerPort(21000, 9000);
-    const child = spawn(process.execPath, ["--experimental-strip-types", join(SERVER_DIR, "openmausbot.ts"), "serve", "--lan", "--port", String(port), "--data-dir", join(home, "data")], {
+    const child = spawn(process.execPath, ["--experimental-strip-types", join(SERVER_DIR, "seira.ts"), "serve", "--lan", "--port", String(port), "--data-dir", join(home, "data")], {
       cwd: join(SERVER_DIR, ".."),
-      env: { PATH: process.env.PATH ?? "", HOME: home, USERPROFILE: home, OMB_WEBHOOK_PORT: String(port + 1), OMB_BROWSER_CONNECTION: join(home, "browser-connection.json") },
+      env: { PATH: process.env.PATH ?? "", HOME: home, USERPROFILE: home, SEIRA_WEBHOOK_PORT: String(port + 1), SEIRA_BROWSER_CONNECTION: join(home, "browser-connection.json") },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let out = "";
@@ -257,7 +257,7 @@ describe("terminal onboarding commands", () => {
   });
   const command = (name: "setup" | "start") => parseArgs([name, "--data-dir", join(process.env.HOME!, "onboarding"), "--port", "18451"], {}) as CliOptions;
   const io = () => ({ log: vi.fn(), error: vi.fn(), ask: vi.fn() });
-  const preserveEnv = () => vi.stubEnv("OMB_DATA_DIR", process.env.OMB_DATA_DIR);
+  const preserveEnv = () => vi.stubEnv("SEIRA_DATA_DIR", process.env.SEIRA_DATA_DIR);
   const phoneSetup = vi.fn<NonNullable<NonNullable<Parameters<typeof runOnboardingCommand>[3]>["phoneSetup"]>>();
   const running = vi.fn().mockResolvedValue(false);
   const open = vi.fn().mockResolvedValue(true);
@@ -275,7 +275,7 @@ describe("terminal onboarding commands", () => {
     const output = io();
     const serve = vi.fn();
     setup.runSetup.mockImplementation(async () => {
-      expect(process.env.OMB_DATA_DIR).toBe(options.dataDir);
+      expect(process.env.SEIRA_DATA_DIR).toBe(options.dataDir);
       return true;
     });
     expect(await runOnboardingCommand(options, output, serve, flow)).toBe(0);
@@ -430,23 +430,23 @@ describe("phone endpoint identity", () => {
     const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ environmentId: "fixture" }))
       .mockResolvedValueOnce(Response.json({ environmentId: "fixture" }));
     vi.stubGlobal("fetch", fetcher);
-    expect(await verifyPhoneEndpoint(18451, "https://maus.example.com")).toBe(true);
+    expect(await verifyPhoneEndpoint(18451, "https://seira.example.com")).toBe(true);
     expect(fetcher.mock.calls[1]![1]).toMatchObject({ redirect: "error" });
     expect(fetcher.mock.calls[1]![1]).not.toHaveProperty("headers");
   });
   it("refuses another server or unreachable origin", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(Response.json({ environmentId: "ours" }))
       .mockResolvedValueOnce(Response.json({ environmentId: "other" })));
-    expect(await verifyPhoneEndpoint(18451, "https://maus.example.com")).toBe(false);
+    expect(await verifyPhoneEndpoint(18451, "https://seira.example.com")).toBe(false);
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
-    expect(await verifyPhoneEndpoint(18451, "https://maus.example.com")).toBe(false);
+    expect(await verifyPhoneEndpoint(18451, "https://seira.example.com")).toBe(false);
     expect(await verifyPhoneEndpoint(18451, "https://localhost")).toBe(false);
   });
 });
 
 describe("login without an account service", () => {
   const login = async (args: string[]) => {
-    const dataDir = mkdtempSync(join(tmpdir(), "omb-login-none-"));
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-login-none-"));
     const lines: string[] = [];
     const io = { log: (line: string) => lines.push(line), error: (line: string) => lines.push(line), ask: async () => "nobody@example.test" };
     const options = parseArgs(["login", ...args, "--data-dir", dataDir], {});
@@ -462,16 +462,16 @@ describe("login without an account service", () => {
 
   for (const args of [[], ["--relay"]]) {
     it(`seira login ${args.join(" ")} says that no account service is set up, and names the ways in that work`, async () => {
-      vi.stubEnv("OMB_CONTROL_PLANE_URL", undefined);
+      vi.stubEnv("SEIRA_CONTROL_PLANE_URL", undefined);
       const { code, text } = await login(args);
       expect(code).toBe(1);
-      for (const word of ["OMB_CONTROL_PLANE_URL", "--domain", "--tailscale", "--public-url"]) expect(text).toContain(word);
+      for (const word of ["SEIRA_CONTROL_PLANE_URL", "--domain", "--tailscale", "--public-url"]) expect(text).toContain(word);
       expect(text).not.toContain("is set but");
     });
   }
 
-  it("treats an empty OMB_CONTROL_PLANE_URL, as an .env line with no value passes it, as not set", async () => {
-    vi.stubEnv("OMB_CONTROL_PLANE_URL", "");
+  it("treats an empty SEIRA_CONTROL_PLANE_URL, as an .env line with no value passes it, as not set", async () => {
+    vi.stubEnv("SEIRA_CONTROL_PLANE_URL", "");
     const { code, text } = await login([]);
     expect(code).toBe(1);
     expect(text).toContain("no account service");
@@ -479,24 +479,24 @@ describe("login without an account service", () => {
   });
 
   it("keeps the https message when the variable is set to something else", async () => {
-    vi.stubEnv("OMB_CONTROL_PLANE_URL", "http://x");
+    vi.stubEnv("SEIRA_CONTROL_PLANE_URL", "http://x");
     const { code, text } = await login([]);
     expect(code).toBe(1);
-    expect(text).toContain("OMB_CONTROL_PLANE_URL is set but is not an https address");
+    expect(text).toContain("SEIRA_CONTROL_PLANE_URL is set but is not an https address");
   });
 
   it("service install --tunnel refuses before it writes a unit, unless a control plane or the fleet credential exists", () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-service-tunnel-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-service-tunnel-"));
     const errors: string[] = [];
     const io = { log: () => undefined, error: (line: string) => errors.push(line) };
-    const input = { action: "install" as const, dataDir: dir, port: 8799, tunnel: true, script: "/x/cli.js", node: "/x/node", platform: "linux" as const, home: dir, user: "maus" };
+    const input = { action: "install" as const, dataDir: dir, port: 8799, tunnel: true, script: "/x/cli.js", node: "/x/node", platform: "linux" as const, home: dir, user: "seira" };
     try {
       expect(runServiceCommand({ ...input, env: {} }, io)).toBe(1);
       expect(errors.join("\n")).toContain("--tunnel: this Seira build has no account service");
-      expect(existsSync(join(dir, "openmausbot.service"))).toBe(false);
-      expect(runServiceCommand({ ...input, env: { OMB_CONTROL_PLANE_URL: "http://x" } }, io)).toBe(1);
+      expect(existsSync(join(dir, "seira.service"))).toBe(false);
+      expect(runServiceCommand({ ...input, env: { SEIRA_CONTROL_PLANE_URL: "http://x" } }, io)).toBe(1);
       expect(errors.at(-1)).toContain("is set but is not an https address");
-      expect(runServiceCommand({ ...input, env: { OMB_CONTROL_PLANE_URL: "https://accounts.example.test" } }, io)).toBe(0);
+      expect(runServiceCommand({ ...input, env: { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test" } }, io)).toBe(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -507,14 +507,14 @@ const exited = (child: ChildProcess) => (child.exitCode !== null ? Promise.resol
 
 describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
   const cli = (args: string[], env: NodeJS.ProcessEnv) =>
-    spawn(process.execPath, ["--experimental-strip-types", join(SERVER_DIR, "openmausbot.ts"), ...args], {
+    spawn(process.execPath, ["--experimental-strip-types", join(SERVER_DIR, "seira.ts"), ...args], {
       cwd: join(SERVER_DIR, ".."),
       env: { PATH: process.env.PATH ?? "", ...env },
       stdio: ["ignore", "pipe", "pipe"],
     });
 
   it("refuses without an account and says what to do; no local-only fallback", async () => {
-    const home = mkdtempSync(join(tmpdir(), "omb-cli-tunnel-none-"));
+    const home = mkdtempSync(join(tmpdir(), "seira-cli-tunnel-none-"));
     const port = workerPort(21000, 9000);
     const child = cli(["serve", "--tunnel", "--port", String(port), "--data-dir", join(home, "data")], { HOME: home, USERPROFILE: home });
     let err = "";
@@ -522,7 +522,7 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
     try {
       expect(await exited(child)).toBe(1);
       expect(err).toContain("--tunnel: this Seira build has no account service");
-      expect(err).toContain("OMB_CONTROL_PLANE_URL");
+      expect(err).toContain("SEIRA_CONTROL_PLANE_URL");
       expect(err).toContain("--public-url");
       expect(err).not.toContain("is set but");
       let dead = false;
@@ -538,7 +538,7 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
   }, 30_000);
 
   it("a fleet credential in the environment serves --tunnel with no account file and no code", async () => {
-    const home = mkdtempSync(join(tmpdir(), "omb-cli-fleet-"));
+    const home = mkdtempSync(join(tmpdir(), "seira-cli-fleet-"));
     const dataDir = join(home, "data");
     mkdirSync(dataDir, { recursive: true });
     const stub = await startControlPlaneStub();
@@ -549,15 +549,15 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
     const fleetEnv = {
       HOME: home,
       USERPROFILE: home,
-      OMB_WEBHOOK_PORT: String(port + 1),
-      OMB_BROWSER_CONNECTION: join(home, "browser-connection.json"),
-      OMB_CONTROL_PLANE_URL: stub.url,
-      OMB_CLOUDFLARED_PATH: fake,
-      OMB_TUNNEL_ORIGIN_PORT: String(originPort),
+      SEIRA_WEBHOOK_PORT: String(port + 1),
+      SEIRA_BROWSER_CONNECTION: join(home, "browser-connection.json"),
+      SEIRA_CONTROL_PLANE_URL: stub.url,
+      SEIRA_CLOUDFLARED_PATH: fake,
+      SEIRA_TUNNEL_ORIGIN_PORT: String(originPort),
     };
     const rejected = cli(["serve", "--tunnel", "--no-pair", "--port", String(port), "--data-dir", dataDir], {
       ...fleetEnv,
-      OMB_INSTALLATION_CREDENTIAL: `omb_install_${"x".repeat(22)}.${"y".repeat(43)}`,
+      SEIRA_INSTALLATION_CREDENTIAL: `seira_install_${"x".repeat(22)}.${"y".repeat(43)}`,
     });
     let err = "";
     rejected.stderr?.on("data", (chunk) => (err += String(chunk)));
@@ -566,7 +566,7 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
 
     const child = cli(["serve", "--tunnel", "--no-pair", "--port", String(port), "--data-dir", dataDir], {
       ...fleetEnv,
-      OMB_INSTALLATION_CREDENTIAL: stub.seedInstallation("fleet box"),
+      SEIRA_INSTALLATION_CREDENTIAL: stub.seedInstallation("fleet box"),
     });
     let out = "";
     child.stdout?.on("data", (chunk) => (out += String(chunk)));
@@ -575,14 +575,14 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
     try {
       const deadline = Date.now() + 60_000;
       while (!/^Reach /m.test(out) && Date.now() < deadline && child.exitCode === null) await new Promise((r) => setTimeout(r, 200));
-      expect(out).toContain("using the installation credential from OMB_INSTALLATION_CREDENTIAL");
+      expect(out).toContain("using the installation credential from SEIRA_INSTALLATION_CREDENTIAL");
       expect(out).toMatch(new RegExp(`^Reach .*${stub.endpointUrl.replace(/[.]/g, "\\.")}`, "m"));
       expect(existsSync(join(dataDir, "tunnel-account.json"))).toBe(false);
       let status = 0;
       const gatewayDeadline = Date.now() + 20_000;
       while (Date.now() < gatewayDeadline && status !== 200) {
         try {
-          status = (await fetch(`${gateway}/.well-known/openmausbot/environment`)).status;
+          status = (await fetch(`${gateway}/.well-known/seira/environment`)).status;
         } catch {
           status = 0;
         }
@@ -598,14 +598,14 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
   }, 120_000);
 
   it("serves at the account's public address through the gateway, where every request is remote", async () => {
-    const home = mkdtempSync(join(tmpdir(), "omb-cli-tunnel-"));
+    const home = mkdtempSync(join(tmpdir(), "seira-cli-tunnel-"));
     const dataDir = join(home, "data");
     mkdirSync(dataDir, { recursive: true });
     const stub = await startControlPlaneStub();
     const fake = join(home, "cloudflared");
     writeFileSync(fake, "#!/bin/sh\nexec sleep 300\n", { mode: 0o755 });
     // sign this data dir in, in-process, against the stub
-    vi.stubEnv("OMB_CONTROL_PLANE_URL", stub.url);
+    vi.stubEnv("SEIRA_CONTROL_PLANE_URL", stub.url);
     const quiet = { log: () => undefined, error: () => undefined, ask: async () => stub.otp };
     expect(await runLogin({ command: "login", port: 1, dataDir, tailscale: false, tunnel: false, client: false, pair: true, json: false, email: "cli@example.test" }, quiet)).toBe(0);
     vi.unstubAllEnvs();
@@ -614,11 +614,11 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
     const child = cli(["serve", "--tunnel", "--port", String(port), "--data-dir", dataDir, "--label", "tunnel test"], {
       HOME: home,
       USERPROFILE: home,
-      OMB_WEBHOOK_PORT: String(port + 1),
-      OMB_BROWSER_CONNECTION: join(home, "browser-connection.json"),
-      OMB_CONTROL_PLANE_URL: stub.url,
-      OMB_CLOUDFLARED_PATH: fake,
-      OMB_TUNNEL_ORIGIN_PORT: String(originPort),
+      SEIRA_WEBHOOK_PORT: String(port + 1),
+      SEIRA_BROWSER_CONNECTION: join(home, "browser-connection.json"),
+      SEIRA_CONTROL_PLANE_URL: stub.url,
+      SEIRA_CLOUDFLARED_PATH: fake,
+      SEIRA_TUNNEL_ORIGIN_PORT: String(originPort),
     });
     let out = "";
     child.stdout?.on("data", (chunk) => (out += String(chunk)));
@@ -629,7 +629,7 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
       while (!out.includes("Get a pairing code:") && Date.now() < deadline && child.exitCode === null) await new Promise((r) => setTimeout(r, 200));
       expect(out).toContain('server "tunnel test"');
       expect(out).toMatch(new RegExp(`^Reach .*${stub.endpointUrl.replace(/[.]/g, "\\.")}`, "m"));
-      const pairOut = spawnSync(process.execPath, ["--experimental-strip-types", join(SERVER_DIR, "openmausbot.ts"), "pair", "--port", String(port), "--data-dir", dataDir], { cwd: join(SERVER_DIR, ".."), env: { PATH: process.env.PATH ?? "", HOME: home }, encoding: "utf8" }).stdout;
+      const pairOut = spawnSync(process.execPath, ["--experimental-strip-types", join(SERVER_DIR, "seira.ts"), "pair", "--port", String(port), "--data-dir", dataDir], { cwd: join(SERVER_DIR, ".."), env: { PATH: process.env.PATH ?? "", HOME: home }, encoding: "utf8" }).stdout;
       expect(pairOut).toContain(`Link           ${stub.endpointUrl}/pair#code=`);
       expect(stub.calls).toContain("POST /v1/installations/self/endpoint");
 
@@ -637,7 +637,7 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
       const gatewayDeadline = Date.now() + 20_000;
       while (Date.now() < gatewayDeadline) {
         try {
-          descriptor = await fetch(`${gateway}/.well-known/openmausbot/environment`);
+          descriptor = await fetch(`${gateway}/.well-known/seira/environment`);
           if (descriptor.status === 200) break;
         } catch {
           descriptor = null;
@@ -649,7 +649,7 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
       const stranger = await fetch(`${gateway}/api/bots`);
       expect(stranger.status).toBe(403);
       expect(((await stranger.json()) as { error: string }).error).toMatch(/through a proxy/);
-      expect(await (await fetch(`${gateway}/api/health`)).json()).toEqual({ app: "openmausbot" });
+      expect(await (await fetch(`${gateway}/api/health`)).json()).toEqual({ app: "seira" });
       expect(typeof ((await (await fetch(`http://127.0.0.1:${port}/api/health`)).json()) as { pid: unknown }).pid).toBe("number");
       const match = /Pairing code {3}([A-Z2-9-]+)/.exec(pairOut);
       expect(match).toBeTruthy();
@@ -682,7 +682,7 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
 
 describe("seira access", () => {
   it("edits the sign-in allow-list in config.json without a running server", async () => {
-    const home = mkdtempSync(join(tmpdir(), "omb-cli-access-"));
+    const home = mkdtempSync(join(tmpdir(), "seira-cli-access-"));
     const dataDir = join(home, "data");
     const out: string[] = [];
     const err: string[] = [];
@@ -719,15 +719,15 @@ describe("seira access", () => {
 
 describe.skipIf(process.platform === "win32")("serve --domain", () => {
   it("runs a managed Caddy for the domain and serves the pairing link there", async () => {
-    const home = mkdtempSync(join(tmpdir(), "omb-cli-domain-"));
+    const home = mkdtempSync(join(tmpdir(), "seira-cli-domain-"));
     const dataDir = join(home, "data");
     mkdirSync(dataDir, { recursive: true });
     const fake = join(home, "fake-caddy");
     writeFileSync(fake, `#!/bin/sh\necho "$@" > "${join(home, "caddy-args.txt")}"\necho $$ > "${join(home, "caddy.pid")}"\nexec sleep 300\n`, { mode: 0o755 });
     const port = workerPort(21000, 9000);
-    const child = spawn(process.execPath, ["--experimental-strip-types", join(SERVER_DIR, "openmausbot.ts"), "serve", "--domain", "omb.example.test", "--port", String(port), "--data-dir", dataDir], {
+    const child = spawn(process.execPath, ["--experimental-strip-types", join(SERVER_DIR, "seira.ts"), "serve", "--domain", "seira.example.test", "--port", String(port), "--data-dir", dataDir], {
       cwd: join(SERVER_DIR, ".."),
-      env: { PATH: process.env.PATH ?? "", HOME: home, USERPROFILE: home, OMB_WEBHOOK_PORT: String(port + 1), OMB_BROWSER_CONNECTION: join(home, "browser-connection.json"), OMB_CADDY_PATH: fake },
+      env: { PATH: process.env.PATH ?? "", HOME: home, USERPROFILE: home, SEIRA_WEBHOOK_PORT: String(port + 1), SEIRA_BROWSER_CONNECTION: join(home, "browser-connection.json"), SEIRA_CADDY_PATH: fake },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let out = "";
@@ -736,14 +736,14 @@ describe.skipIf(process.platform === "win32")("serve --domain", () => {
     try {
       const deadline = Date.now() + 60_000;
       while (!out.includes("Get a pairing code:") && Date.now() < deadline && child.exitCode === null) await new Promise((r) => setTimeout(r, 200));
-      expect(out).toContain("https: Caddy serves https://omb.example.test");
-      expect(out).toMatch(/^Reach {4}… https:\/\/omb\.example\.test doesn't answer yet/m);
-      const pairOut = spawnSync(process.execPath, ["--experimental-strip-types", join(SERVER_DIR, "openmausbot.ts"), "pair", "--port", String(port), "--data-dir", dataDir], { cwd: join(SERVER_DIR, ".."), env: { PATH: process.env.PATH ?? "", HOME: home }, encoding: "utf8" }).stdout;
-      expect(pairOut).toContain("Link           https://omb.example.test/pair#code=");
+      expect(out).toContain("https: Caddy serves https://seira.example.test");
+      expect(out).toMatch(/^Reach {4}… https:\/\/seira\.example\.test doesn't answer yet/m);
+      const pairOut = spawnSync(process.execPath, ["--experimental-strip-types", join(SERVER_DIR, "seira.ts"), "pair", "--port", String(port), "--data-dir", dataDir], { cwd: join(SERVER_DIR, ".."), env: { PATH: process.env.PATH ?? "", HOME: home }, encoding: "utf8" }).stdout;
+      expect(pairOut).toContain("Link           https://seira.example.test/pair#code=");
       const args = readFileSync(join(home, "caddy-args.txt"), "utf8").trim();
       expect(args).toMatch(/^run --config .*Caddyfile --adapter caddyfile$/);
       const caddyfile = readFileSync(join(dataDir, "caddy", "Caddyfile"), "utf8");
-      expect(caddyfile).toContain("omb.example.test {");
+      expect(caddyfile).toContain("seira.example.test {");
       expect(caddyfile).toContain(`reverse_proxy 127.0.0.1:${port}`);
       expect(caddyfile).toContain(`reverse_proxy 127.0.0.1:${port + 1}`);
     } finally {

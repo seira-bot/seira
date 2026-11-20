@@ -4,7 +4,7 @@ description: Know what Seira stores locally and what to preserve.
 icon: DatabaseBackup
 ---
 
-Seira keeps its application state under `~/.openmausbot`, including configuration, transcripts, message attachments, device pairing state, and the SQLite message store.
+Seira keeps its application state under `~/.seira`, including configuration, transcripts, message attachments, device pairing state, and the SQLite message store.
 
 ## Copy from the desktop app
 
@@ -31,7 +31,7 @@ nearby.
 ## Export and import in Settings
 
 Open **Settings → Import & export → Export full backup**. Choose a password of at least
-12 characters and save the encrypted `.ombbackup` file. Keep the password
+12 characters and save the encrypted `.seirabackup` file. Keep the password
 separately: there is no password recovery.
 
 The backup contains this server workspace's bots, threads and complete message
@@ -69,7 +69,7 @@ replaced. Type **REPLACE** to confirm, then fully quit and reopen the desktop ap
 or restart the hosted server process. Closing a desktop window is not enough.
 
 Restore **replaces**, rather than combines, workspace data. The previous data is
-kept under `.openmausbot/.backups/safety-<restore-id>/`. A failed or interrupted
+kept under `.seira/.backups/safety-<restore-id>/`. A failed or interrupted
 replacement recovers the previous files before the server loads them. Keep that
 safety directory until you have checked the restored workspace. It contains
 private data; do not share it.
@@ -87,7 +87,7 @@ calls are not automatically restarted, and unfinished delegated work is not
 replayed. Review and re-enable automation deliberately after restoring.
 
 The old partial export is no longer offered in the sidebar. Existing
-`.mausbackup.json` files can still be imported through **Teams** as independent
+`.seirabackup.json` files can still be imported through **Teams** as independent
 copies. Shareable team templates remain separate from full backups.
 
 ## What stays outside a workspace backup
@@ -108,7 +108,7 @@ paths are not copied or rewritten; check them when moving between computers.
 
 ## Filesystem-level backups
 
-Close Seira before taking a filesystem-level backup so SQLite and configuration files are captured consistently. Preserve the entire `.openmausbot` directory rather than selecting individual database files.
+Close Seira before taking a filesystem-level backup so SQLite and configuration files are captured consistently. Preserve the entire `.seira` directory rather than selecting individual database files.
 
 Raw filesystem snapshots differ from Settings exports: they may include saved
 credentials, CLI homes and browser sessions. A Docker snapshot of the whole
@@ -120,7 +120,7 @@ Restore with the server stopped, preserving the original paths and ownership, th
 
 ## The settings file and its dated copies
 
-Every save of `~/.openmausbot/config.json` keeps a copy of the file as it was,
+Every save of `~/.seira/config.json` keeps a copy of the file as it was,
 named `config.json.bak.YYYYMMDD-HHMMSS`, beside it; the last ten are kept. A
 save never replaces a settings file it could not read or understand: it fails
 and says so, so a file that cannot be read is never overwritten by a partial

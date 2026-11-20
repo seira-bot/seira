@@ -88,12 +88,12 @@ seira doctor --data [--fix] [--data-dir DIR]
   connect: `seira connect [URL] [--code CODE] --out FILE [--label NAME] [--client] [--force]
   Get a token for a workspace you reach over the network, saved to FILE (only you can read it).
   On this computer's own server the code is made for you; elsewhere, get one from Settings → Phone & devices.
-  Then use it: --url URL --token-file FILE (or OPENMAUSBOT_URL and OPENMAUSBOT_TOKEN).`,
+  Then use it: --url URL --token-file FILE (or SEIRA_URL and SEIRA_TOKEN).`,
   mcp: "seira mcp\n  Serve the Seira MCP tools on stdin and stdout, for an agent (docs/mcp-server.md).",
   token: "seira token create NAME --out FILE … | token list | token revoke ID   (see help token create)",
   "token create": `seira token create NAME --out FILE [--scope client|admin] [--expires 90d] [--force]
   An access token for CI and scripts, saved to FILE (only you can read it) and never printed.
-  It ends on its date (--expires, at most the server's session limit: 180 days unless OMB_SESSION_MAX_DAYS)
+  It ends on its date (--expires, at most the server's session limit: 180 days unless SEIRA_SESSION_MAX_DAYS)
   and never renews. --scope client (the default) can chat and answer approvals; admin can change settings.
   Then: --url URL --token-file FILE. It is listed with seira sessions too.`,
   "token list": "seira token list\n  The access tokens, their scope, when each ends and when it was last used (never the token).",

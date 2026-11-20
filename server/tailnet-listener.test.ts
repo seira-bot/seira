@@ -32,10 +32,10 @@ describe("a tailnet share's configuration", () => {
 
   it("reads the environment seira serve --tailscale sets", () => {
     expect(tailnetShareFromEnv({})).toBeNull();
-    expect(tailnetShareFromEnv({ OMB_TAILNET_NAME: NAME, OMB_TAILNET_ADDRESSES: "100.101.102.103, fd7a:115c:a1e0::1" }))
+    expect(tailnetShareFromEnv({ SEIRA_TAILNET_NAME: NAME, SEIRA_TAILNET_ADDRESSES: "100.101.102.103, fd7a:115c:a1e0::1" }))
       .toEqual({ name: NAME, addresses: ["100.101.102.103", "fd7a:115c:a1e0::1"] });
-    expect(tailnetShareFromEnv({ OMB_TAILNET_NAME: NAME })).toEqual({ name: NAME, addresses: "interface" });
-    expect(tailnetShareFromEnv({ OMB_TAILNET_NAME: NAME, OMB_TAILNET_SERVED: `https://${NAME}` })).toEqual({ name: NAME, served: `https://${NAME}` });
+    expect(tailnetShareFromEnv({ SEIRA_TAILNET_NAME: NAME })).toEqual({ name: NAME, addresses: "interface" });
+    expect(tailnetShareFromEnv({ SEIRA_TAILNET_NAME: NAME, SEIRA_TAILNET_SERVED: `https://${NAME}` })).toEqual({ name: NAME, served: `https://${NAME}` });
   });
 });
 
@@ -142,9 +142,9 @@ describe("the listeners", () => {
     share = createTailnetShare({ port: port, handle: async () => {}, attach: () => {} });
     await share.start();
     const answers: object[] = [];
-    expect(share.receive({ type: "openmausbot:other" }, (answer) => answers.push(answer))).toBe(false);
-    const replied = new Promise<object>((resolve) => share!.receive({ type: "openmausbot:tailnet-share", share: { name: NAME, served: `https://${NAME}` } }, resolve));
-    expect(await replied).toEqual({ type: "openmausbot:tailnet-share-state", origin: `https://${NAME}`, listening: [], error: null });
+    expect(share.receive({ type: "seira:other" }, (answer) => answers.push(answer))).toBe(false);
+    const replied = new Promise<object>((resolve) => share!.receive({ type: "seira:tailnet-share", share: { name: NAME, served: `https://${NAME}` } }, resolve));
+    expect(await replied).toEqual({ type: "seira:tailnet-share-state", origin: `https://${NAME}`, listening: [], error: null });
     expect(answers).toEqual([]);
   });
 });

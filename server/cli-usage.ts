@@ -18,8 +18,8 @@ export const HEADLESS_USAGE = `Drive a running workspace (scripts, CI, other age
   seira token create NAME --out FILE [--expires 90d]          a token for CI that ends on its date (token list, token revoke ID)
   seira new-bot | new-channel | set-model | edit | mcp
 
-  Server: --url URL (or OPENMAUSBOT_URL), --port N (or OMB_PORT), else this computer's.
-  Token: OPENMAUSBOT_TOKEN or --token-file FILE. --json prints one JSON document;
+  Server: --url URL (or SEIRA_URL), --port N (or SEIRA_PORT), else this computer's.
+  Token: SEIRA_TOKEN or --token-file FILE. --json prints one JSON document;
   progress goes to stderr (--quiet drops it). seira help VERB for the details.`;
 
 /** The usage text, its commands written the way this CLI was started (`npx @seira-bot/seira …`). */
@@ -64,7 +64,7 @@ devices lists paired devices; "devices revoke ID" signs one out
 status  the running server, the address others reach it at, and whether
         that address answers as this server
 login   signs this machine in to the account service at
-        OMB_CONTROL_PLANE_URL (an emailed code) and reserves its public
+        SEIRA_CONTROL_PLANE_URL (an emailed code) and reserves its public
         address for --tunnel; with --relay it reserves none, for serve
         --relay. Fails when no account service is set.
 logout  releases that address and signs out
@@ -104,14 +104,14 @@ Ways in (pick one; --lan can join any):
              certificate itself. Point the domain's DNS at this machine and
              open ports 80 and 443.
 --tunnel     serve at the public address that an account service gives,
-             through a Cloudflare tunnel. Needs OMB_CONTROL_PLANE_URL (an
+             through a Cloudflare tunnel. Needs SEIRA_CONTROL_PLANE_URL (an
              account service you run) and \`seira login\` once on this
              machine first. Without one, use the ways above.
 
 --relay      phones only, and it can join any of the ways in above except
              --tunnel: the Seira phone app pairs by QR through Seira Relay,
              end-to-end encrypted, with no address, open port or VPN. Needs
-             OMB_CONTROL_PLANE_URL and \`seira login --relay\` once on this
+             SEIRA_CONTROL_PLANE_URL and \`seira login --relay\` once on this
              machine first. Not on a machine with a tunnel address: the
              relay stays off there.
 

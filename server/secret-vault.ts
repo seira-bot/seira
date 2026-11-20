@@ -1,6 +1,6 @@
 // How a bot is handed a secret from a card or the Vault without seeing it.
 // Security: a `ref` value stays in this process's memory, behind a one-use reference bound to the asking bot and
-// conversation that only OpenMausBot's own tools accept. A `file` value goes to an owner-only file in a private folder
+// conversation that only Seira's own tools accept. A `file` value goes to an owner-only file in a private folder
 // of that bot's own workspace (or the Local VM workspace its turn runs in); nothing that syncs, backs up, moves, links,
 // attaches, publishes or uploads workspace files carries that folder (inSecretFolder). Neither value is ever logged,
 // and while either lives, held-secret redaction masks it in transcripts, events and logs.
@@ -12,7 +12,7 @@ import { SECRET_VALUE_MAX_BYTES } from "../shared/vault.ts";
 import { vaultPointer } from "./vault/mcp-keys.ts";
 import { secretForms } from "./vault-store.ts";
 import { HELD_SECRET_MASK } from "./redact.ts";
-import { inSecretFolder, SECRET_FOLDER } from "./secret-folder.ts";
+import { adoptLegacySecretFolder, inSecretFolder, SECRET_FOLDER } from "./secret-folder.ts";
 
 export { inSecretFolder, SECRET_FOLDER, SECRET_VALUE_MAX_BYTES };
 /** From saving: room for a resume queued behind other work and the tool call after it, short enough that a ref the bot
@@ -108,7 +108,7 @@ export class SecretVault {
     return ref;
   }
 
-  /** Writes the card's value to `<home>/.openmausbot-secrets/<thread>/<card>` (0600, in 0700 folders); returns its path
+  /** Writes the card's value to `<home>/.seira-secrets/<thread>/<card>` (0600, in 0700 folders); returns its path
    * as the bot's commands see it. */
   saveFile(owner: SecretOwner, messageId: string, value: string, home: SecretFileHome): string {
     const saved = this.writeFile(owner, messageId, value, home);
@@ -116,7 +116,7 @@ export class SecretVault {
     return saved.file;
   }
 
-  /** Writes a Vault item's value to `<home>/.openmausbot-secrets/<thread>/vault-<item>`, replacing that conversation's
+  /** Writes a Vault item's value to `<home>/.seira-secrets/<thread>/vault-<item>`, replacing that conversation's
    * earlier copy, for another 24 hours. */
   mintFile(owner: SecretOwner, itemId: string, value: string, home: SecretFileHome): string {
     const name = `vault-${itemId}`;
@@ -128,6 +128,7 @@ export class SecretVault {
   private writeFile(owner: SecretOwner, name: string, value: string, home: SecretFileHome): { file: string; until: number } {
     if (!ID.test(owner.threadId) || !ID.test(name)) throw new Error("invalid conversation or file name");
     privateFolder(home.host, "all");
+    adoptLegacySecretFolder(home.host);
     const folder = join(home.host, SECRET_FOLDER);
     privateFolder(folder, "one");
     const threadFolder = join(folder, owner.threadId);
@@ -228,6 +229,7 @@ export class SecretVault {
   sweep(bases: readonly string[], savedAt: (threadId: string, messageId: string) => number | null, threadExists: (threadId: string) => boolean): void {
     const now = this.now();
     for (const base of bases) {
+      adoptLegacySecretFolder(base);
       const folder = join(base, SECRET_FOLDER);
       let names: string[];
       try {

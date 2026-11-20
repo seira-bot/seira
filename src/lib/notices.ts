@@ -1,6 +1,6 @@
 import { hintSeen, hintSeenPatch, type OnboardingStatus } from "@/lib/onboarding";
 
-/** "MausBot is better with your team": every person sees it once, on every surface but a branded build or an organization's
+/** "Seira is better with your team": every person sees it once, on every surface but a branded build or an organization's
  * desktop, ahead of every other notice. On a Team Cloud its record is each person's (TEAM_PERSONAL_HINTS). */
 export const TEAMS_NOTICE = "teams-2026-11";
 /** The What's new popup's campaign: each person sees it once. A new id shows it once more. */
@@ -15,12 +15,14 @@ export const STAR_NOTICE = "github-star-dismissed";
 /** Bots on this computer and on another place of the person's (two-places.ts): dismissed per place, by main. */
 export const TWO_PLACES_NOTICE = "two-places";
 export const PRODUCT_HUNT_NOTICE = "product-hunt-launch-2026-10";
-export const PRODUCT_HUNT_URL = "https://www.producthunt.com/products/mausbot";
+export const PRODUCT_HUNT_URL = "https://www.producthunt.com/products/seira";
 export const PRODUCT_HUNT_UNTIL = Date.UTC(2026, 10, 1);
 /** The Move from Grok Bot popup: each person sees it once, first of all, after their welcome. */
 export const GROK_MOVE_NOTICE = "grok-move-2026-11";
-/** Update MausBot on your phone: once per phone with an older app after this computer's secure link ended. */
+/** Update Seira on your phone: once per phone with an older app after this computer's secure link ended. */
 export const PHONE_UPDATE_NOTICE = "phone-app-update";
+/** What's new in this version, from the bundled release notes: once per version, after an update. */
+export const RELEASE_NOTES_NOTICE = "release-notes";
 /** A card from the project's announcements file (src/lib/announcements.ts keeps which ones each person saw, and allows one a
  * launch): after every notice someone must act on, and it may follow the launch's notice once that is closed, after the
  * product-updates question. */
@@ -34,6 +36,7 @@ export const NOTICES = [
   TEAMS_NOTICE,
   GROK_MOVE_NOTICE,
   PHONE_UPDATE_NOTICE,
+  RELEASE_NOTES_NOTICE,
   SIMPLE_MODE_NOTICE,
   WHATS_NEW_NOTICE,
   UPDATES_CONSENT_NOTICE,
@@ -78,7 +81,7 @@ export function nextNotice(facts: NoticeFacts, seen: (id: NoticeId) => boolean, 
   return null;
 }
 
-const LAUNCH_KEY = "omb.launch.notice";
+const LAUNCH_KEY = "seira.launch.notice";
 // Where browser storage is blocked, this page's memory stands in for it, so a claim still holds for the page.
 let launchMemory: NoticeId | null = null;
 const isNotice = (id: unknown): id is NoticeId => (NOTICES as readonly unknown[]).includes(id);

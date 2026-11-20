@@ -33,7 +33,7 @@ interface PhoneSecretIdentity {
 }
 
 type SendPrivateMessage = (message: {
-  type: "openmausbot:phone-secret-save";
+  type: "seira:phone-secret-save";
   requestId: string;
   target: string;
   value: string;
@@ -300,7 +300,7 @@ function decodeSaveResult(raw: unknown): { requestId: string; ok: boolean; error
   const message = (raw as { data?: unknown } | null)?.data ?? raw;
   if (!message || typeof message !== "object" || Array.isArray(message)) return null;
   const value = message as Record<string, unknown>;
-  if (value.type !== "openmausbot:phone-secret-save-result") return null;
+  if (value.type !== "seira:phone-secret-save-result") return null;
   if (typeof value.requestId !== "string" || !ROUTE_ID.test(value.requestId) || typeof value.ok !== "boolean") {
     return null;
   }
@@ -345,7 +345,7 @@ export class PhoneSecretBridge {
     const message = (raw as { data?: unknown } | null)?.data ?? raw;
     if (!message || typeof message !== "object" || Array.isArray(message)) return false;
     const record = message as Record<string, unknown>;
-    if (record.type === "openmausbot:phone-secret-key") {
+    if (record.type === "seira:phone-secret-key") {
       const identity = importIdentity(record);
       this.identity = identity;
       this.imported = false;
@@ -451,7 +451,7 @@ export class PhoneSecretBridge {
       timer.unref?.();
       this.pending.set(requestId, { resolve, reject, timer });
       if (this.send({
-        type: "openmausbot:phone-secret-save",
+        type: "seira:phone-secret-save",
         requestId,
         target: context.target,
         value,

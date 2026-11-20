@@ -8,7 +8,7 @@ end-to-end encrypted connection the desktop app gives phones; the wire spec is
 [`companion/src/e2e/README.md`](../companion/src/e2e/README.md).
 
 Seira Relay needs an account service that you run yourself. Set its address
-with `OMB_CONTROL_PLANE_URL`. Seira builds have no account service by default,
+with `SEIRA_CONTROL_PLANE_URL`. Seira builds have no account service by default,
 so `login --relay` and `serve --relay` stop with a message that says so until
 you set one. To reach a server from a phone without it, use `--domain`,
 `--tailscale` or `--public-url`.
@@ -24,7 +24,7 @@ A control plane that predates that rule gives back the tunnel of any
 installation that took a relay token in the last two days and then refuses it a
 tunnel for good, and a server may be pointed at one. So the server still keeps
 the relay off, and says why, when it serves `--tunnel`, runs on a fleet
-credential (`OMB_INSTALLATION_CREDENTIAL`), or holds a tunnel address from a
+credential (`SEIRA_INSTALLATION_CREDENTIAL`), or holds a tunnel address from a
 plain `seira login`.
 
 ## Use it
@@ -45,13 +45,13 @@ service prints no pairing QR into its log (the credential would sit in the
 journal); `serve --relay` shows it only at a terminal, and `pair --phone` makes
 one whenever asked.
 
-With Docker, set `OMB_PHONE_RELAY=1` in `.env` (`deploy/docker-compose.yml`,
+With Docker, set `SEIRA_PHONE_RELAY=1` in `.env` (`deploy/docker-compose.yml`,
 the root `compose.yaml` and the compose file the installer writes all pass it to
 the server container), `docker compose up -d`, then:
 
 ```sh
-docker compose exec omb openmausbot login --relay
-docker compose exec omb openmausbot pair --phone
+docker compose exec seira seira login --relay
+docker compose exec seira seira pair --phone
 ```
 
 A phone code is chat and approvals only (`pair --phone`), as on every other way
@@ -75,7 +75,7 @@ same code, imported from `companion/src/e2e/`) and hands each stream to its own
 request handler. It adds the `e2e` descriptor to the `/api/pair` answer and
 answers `/api/companion/endpoints` itself, as the sidecar does.
 
-The QR is the desktop's: an `openmausbot://pair` link with the one-time pairing
+The QR is the desktop's: an `seira://pair` link with the one-time pairing
 credential and `e2e={v:1,k,h,r}` (the server's connection key, its relay host
 id and the relay nodes). With a public HTTPS address it has the shape of the
 desktop's default QR: that address as the hosted endpoint, which a phone
@@ -134,7 +134,7 @@ declarations only.
 ## The control plane
 
 `seira login` registers the server as an installation (its platform, and
-`appVersion` the npm package's version) and keeps its `omb_install_…`
+`appVersion` the npm package's version) and keeps its `seira_install_…`
 credential in `tunnel-account.json`, mode 0600. Plain `login` also reserves a
 tunnel address; `login --relay` reserves none (the account service's on-demand
 path, the one the desktop takes when the relay carries its phones), so a
@@ -205,7 +205,7 @@ not paired.
 **Not a way around the server's sign-in.** A relayed request reaches the
 server's request handler with no peer address, which `request-auth.ts` always
 treats as remote; its `Host`, proxy headers, cookies and every
-`x-openmausbot-*` header are replaced or removed first. So it is never loopback,
+`x-seira-*` header are replaced or removed first. So it is never loopback,
 never owner or service trust: it needs a session bearer, the session's scopes
 apply (a chat-only phone stays chat-only), and a Team server's per-person rules
 apply. Inside one encrypted session only the session whose key opened it is

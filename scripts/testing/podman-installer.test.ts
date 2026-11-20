@@ -24,7 +24,7 @@ afterEach(() => {
 /** Each stand-in logs its call to $FAKE/<name>.log and answers from FAKE_ settings and files in $FAKE. */
 const STUBS: Record<string, string> = {
   uname: "echo Linux",
-  id: 'case "$1" in -u) echo 1000 ;; -un) echo maus-tester ;; *) echo 1000 ;; esac',
+  id: 'case "$1" in -u) echo 1000 ;; -un) echo seira-tester ;; *) echo 1000 ;; esac',
   sleep: ":",
   ss: ":",
   loginctl: 'echo "${FAKE_LINGER:-yes}"',
@@ -40,9 +40,9 @@ const STUBS: Record<string, string> = {
   *) echo "podman stand-in: $*" >&2; exit 64 ;;
 esac`,
   // Podman's generator: what it was given, and the service it makes of it.
-  quadlet: `cp "$QUADLET_UNIT_DIRS/openmausbot.container" "$FAKE/dryrun.container"; echo "$QUADLET_UNIT_DIRS" >"$FAKE/dryrun.dir"
-[ -z "\${FAKE_QUADLET_FAILS:-}" ] || { echo "quadlet-generator[1]: converting \\"openmausbot.container\\": unsupported key 'HealthOnFailure'"; exit 0; }
-echo "---openmausbot.service---"`,
+  quadlet: `cp "$QUADLET_UNIT_DIRS/seira.container" "$FAKE/dryrun.container"; echo "$QUADLET_UNIT_DIRS" >"$FAKE/dryrun.dir"
+[ -z "\${FAKE_QUADLET_FAILS:-}" ] || { echo "quadlet-generator[1]: converting \\"seira.container\\": unsupported key 'HealthOnFailure'"; exit 0; }
+echo "---seira.service---"`,
   systemctl: `[ "$1" = --user ] || exit 64
 case "$2" in
   show-environment | daemon-reload) ;;
@@ -58,13 +58,13 @@ case "$*" in
   *channels/stable.json*) [ "\${FAKE_STABLE_CODE:-404}" = 000 ] && { printf 000; exit 7; }; printf '%s' "\${FAKE_STABLE_BODY:-}" >"$out"; printf '%s' "\${FAKE_STABLE_CODE:-404}" ;;
   *releases/latest*) printf '{"tag_name": "v0.1.151"}' ;;
   */deploy/update.sh*) echo "# the updater; it reads podman.unit" >"$out" ;;
-  */api/health*) [ -f "$FAKE/active" ] && echo '{"app":"openmausbot"}' ;;
+  */api/health*) [ -f "$FAKE/active" ] && echo '{"app":"seira"}' ;;
   *) exit 22 ;;
 esac`,
 };
 
 function machine(options: { home?: string } = {}) {
-  const root = mkdtempSync(join(tmpdir(), "omb-podman-install-"));
+  const root = mkdtempSync(join(tmpdir(), "seira-podman-install-"));
   dirs.push(root);
   const bin = join(root, "bin");
   const fake = join(root, "fake");
@@ -78,12 +78,12 @@ function machine(options: { home?: string } = {}) {
     writeFileSync(join(bin, name), `#!/bin/sh\necho "$*" >>"$FAKE/${name}.log"\n${body}\n`);
     chmodSync(join(bin, name), 0o755);
   }
-  const dir = join(home, ".local", "share", "openmausbot");
-  const unitPath = join(home, ".config", "containers", "systemd", "openmausbot.container");
+  const dir = join(home, ".local", "share", "seira");
+  const unitPath = join(home, ".config", "containers", "systemd", "seira.container");
   const run = (args: string[] = [], env: Record<string, string> = {}) => {
     const result = spawnSync(SHELL, [SCRIPT, ...args], {
       encoding: "utf8", timeout: 30_000,
-      env: { PATH: bin, HOME: home, XDG_RUNTIME_DIR: root, FAKE: fake, OMB_INSTALL_QUADLET: join(bin, "quadlet"), OMB_INSTALL_HEALTH_WAIT_S: "6", ...env },
+      env: { PATH: bin, HOME: home, XDG_RUNTIME_DIR: root, FAKE: fake, SEIRA_INSTALL_QUADLET: join(bin, "quadlet"), SEIRA_INSTALL_HEALTH_WAIT_S: "6", ...env },
     });
     return { ...result, out: result.stdout + result.stderr };
   };
@@ -112,18 +112,18 @@ describe.skipIf(!posix)("deploy/podman/install.sh", () => {
     expect(box.pulled()).toEqual([`${REPO}:v0.1.151`]);
     const unit = box.unit()!;
     expect(unit).toContain(`Image=${DIGEST}\n`);
-    // systemd turns $$ into $, so the container's shell reads OMB_PORT from server.env at each check.
-    expect(unit).toContain("HealthCmd=curl -sf --max-time 4 http://127.0.0.1:$${OMB_PORT:-8799}/api/health | grep -q openmausbot\n");
+    // systemd turns $$ into $, so the container's shell reads SEIRA_PORT from server.env at each check.
+    expect(unit).toContain("HealthCmd=curl -sf --max-time 4 http://127.0.0.1:$${SEIRA_PORT:-8799}/api/health | grep -q seira\n");
     expect(unit).not.toContain("8811");
-    expect(box.read(join(box.dir, "server.env"))).toContain("OMB_PORT=8811\n");
+    expect(box.read(join(box.dir, "server.env"))).toContain("SEIRA_PORT=8811\n");
     expect(unit).toContain(`EnvironmentFile=${box.dir}/server.env\n`);
-    expect(unit).toContain("Environment=OMB_PODMAN_SERVICE=~/.local/share/openmausbot\n");
+    expect(unit).toContain("Environment=SEIRA_PODMAN_SERVICE=~/.local/share/seira\n");
     expect(unit).toContain("WARNING: this isolates less than the Docker install.");
     // The generator read a copy in a folder of its own, never the live unit's folder.
     expect(box.read(join(box.fake, "dryrun.container"))).toBe(unit);
     expect(box.read(join(box.fake, "dryrun.dir"))!.trim()).not.toBe(join(box.home, ".config", "containers", "systemd"));
-    expect(box.read(join(box.dir, ".env"))).toBe(`OMB_IMAGE=${DIGEST}\n`);
-    expect(done.stdout).toContain("Seira is running as your user's service (openmausbot), on http://127.0.0.1:8811.");
+    expect(box.read(join(box.dir, ".env"))).toBe(`SEIRA_IMAGE=${DIGEST}\n`);
+    expect(done.stdout).toContain("Seira is running as your user's service (seira), on http://127.0.0.1:8811.");
     expect(done.stdout).toContain("Warning: it shares this machine's network, which isolates less than the Docker install.");
     expect(done.stdout).toContain("Bots run unboxed, beside the data folder that holds the engines' logins.");
     expect(done.stdout).toContain("Bots reach every service on this machine's loopback: databases, other programs' admin ports.");
@@ -177,19 +177,19 @@ describe.skipIf(!posix)("deploy/podman/install.sh", () => {
     expect(other.stderr).toContain("cannot be pinned");
 
     for (const [image, words] of [
-      [`${REPO}:latest`, "OMB_INSTALL_IMAGE names the latest tag, which follows every commit."],
-      [REPO, "OMB_INSTALL_IMAGE needs a release tag"],
-      [`${REPO}:v1;rm`, "OMB_INSTALL_IMAGE is not an image name."],
+      [`${REPO}:latest`, "SEIRA_INSTALL_IMAGE names the latest tag, which follows every commit."],
+      [REPO, "SEIRA_INSTALL_IMAGE needs a release tag"],
+      [`${REPO}:v1;rm`, "SEIRA_INSTALL_IMAGE is not an image name."],
     ] as const) {
       const refused = machine();
-      const result = refused.run([], { OMB_INSTALL_IMAGE: image });
+      const result = refused.run([], { SEIRA_INSTALL_IMAGE: image });
       expect(result.status, image).toBe(1);
       expect(result.stderr).toContain(words);
       expect(refused.pulled()).toEqual([]);
     }
 
     const asked = machine();
-    const pinned = asked.run([], { OMB_INSTALL_IMAGE: `${REPO}:v0.1.150` });
+    const pinned = asked.run([], { SEIRA_INSTALL_IMAGE: `${REPO}:v0.1.150` });
     expect(pinned.status, pinned.out).toBe(0);
     expect(asked.unit()).toContain(`Image=${DIGEST}\n`);
   });
@@ -212,7 +212,7 @@ describe.skipIf(!posix)("deploy/podman/install.sh", () => {
     expect(box.log("systemctl")).toEqual([]);
     expect(box.unit()).toBe(unit);
     expect(box.read(join(box.dir, ".env"))).toBe(env);
-    expect(box.read(join(box.dir, "server.env"))).not.toContain("OMB_LAN=1");
+    expect(box.read(join(box.dir, "server.env"))).not.toContain("SEIRA_LAN=1");
 
     // A lock its process left behind is no update.
     const gone = spawnSync("sh", ["-c", "echo $$"], { encoding: "utf8" }).stdout.trim();
@@ -230,18 +230,18 @@ describe.skipIf(!posix)("deploy/podman/install.sh", () => {
 
   it("keeps the folder the service already uses when run again without --dir, and refuses a --dir that names another", () => {
     const box = machine();
-    const elsewhere = join(box.root, "srv", "omb");
+    const elsewhere = join(box.root, "srv", "seira");
     expect(box.run(["--dir", elsewhere]).status).toBe(0);
     const unit = box.unit()!;
     expect(unit).toContain(`Volume=${elsewhere}/data:/data\n`);
-    expect(unit).toContain(`Environment=OMB_PODMAN_SERVICE=${elsewhere}\n`);
+    expect(unit).toContain(`Environment=SEIRA_PODMAN_SERVICE=${elsewhere}\n`);
     writeFileSync(join(elsewhere, "data", "bots.json"), "[]");
 
     const again = box.run(["--lan"]);
     expect(again.status, again.out).toBe(0);
     expect(again.stdout).toContain(`note  The service already uses ${elsewhere}, so this run does too (--dir names it).`);
     expect(box.unit()).toBe(unit);
-    expect(box.read(join(elsewhere, "server.env"))).toContain("OMB_LAN=1\n");
+    expect(box.read(join(elsewhere, "server.env"))).toContain("SEIRA_LAN=1\n");
     expect(existsSync(box.dir)).toBe(false);
 
     // The same folder, spelled with a trailing slash, is the same folder.
@@ -268,14 +268,14 @@ describe.skipIf(!posix)("deploy/podman/install.sh", () => {
   it("refuses a Docker install's folder", () => {
     for (const file of ["compose.yaml", "docker-compose.yml"]) {
       const box = machine();
-      const docker = join(box.root, "opt", "openmausbot");
+      const docker = join(box.root, "opt", "seira");
       mkdirSync(docker, { recursive: true });
       writeFileSync(join(docker, file), "services: {}\n");
-      writeFileSync(join(docker, ".env"), "DOMAIN=maus.example.com\n");
+      writeFileSync(join(docker, ".env"), "DOMAIN=seira.example.com\n");
       const refused = box.run(["--dir", docker]);
       expect(refused.status).toBe(1);
       expect(refused.stderr).toContain(`${docker} holds a Docker install (compose.yaml or docker-compose.yml). Nothing was changed.`);
-      expect(readFileSync(join(docker, ".env"), "utf8")).toBe("DOMAIN=maus.example.com\n");
+      expect(readFileSync(join(docker, ".env"), "utf8")).toBe("DOMAIN=seira.example.com\n");
       expect(box.unit()).toBeNull();
     }
   });
@@ -295,12 +295,12 @@ describe.skipIf(!posix)("deploy/podman/install.sh", () => {
   });
 
   it("installs in a home with @ in its name (realmd and SSSD homes), and names the folder when its characters cannot go in a unit", () => {
-    const box = machine({ home: "home/maus@corp.example" });
+    const box = machine({ home: "home/seira@corp.example" });
     const done = box.run();
     expect(done.status, done.out).toBe(0);
     expect(box.unit()).toContain(`Volume=${box.dir}/data:/data\n`);
 
-    const spaced = machine({ home: "home/maus tester" });
+    const spaced = machine({ home: "home/seira tester" });
     const refused = spaced.run();
     expect(refused.status).toBe(1);
     expect(refused.stderr).toContain(`The folder ${spaced.dir} has characters this installer does not write into a service's unit. Name another with --dir PATH`);
@@ -309,8 +309,8 @@ describe.skipIf(!posix)("deploy/podman/install.sh", () => {
   it("keeps the image a rollback named by this machine's own name, pinned by the digest it came with, and never pulls that name", () => {
     const box = machine();
     expect(box.run().status).toBe(0);
-    const keep = "openmausbot-before-update:local";
-    writeFileSync(join(box.dir, ".env"), `OMB_IMAGE=${keep}\n`);
+    const keep = "seira-before-update:local";
+    writeFileSync(join(box.dir, ".env"), `SEIRA_IMAGE=${keep}\n`);
     writeFileSync(join(box.fake, "local"), `${keep}\n`);
     box.reset();
     const again = box.run();
@@ -320,7 +320,7 @@ describe.skipIf(!posix)("deploy/podman/install.sh", () => {
     expect(box.unit()).toContain(`Image=${DIGEST}\n`);
 
     // An image of this machine's own that no registry knows: kept as it is, and said so.
-    writeFileSync(join(box.dir, ".env"), `OMB_IMAGE=${keep}\n`);
+    writeFileSync(join(box.dir, ".env"), `SEIRA_IMAGE=${keep}\n`);
     box.reset();
     const local = box.run([], { FAKE_DIGESTS: "" });
     expect(local.status, local.out).toBe(0);
@@ -332,9 +332,9 @@ describe.skipIf(!posix)("deploy/podman/install.sh", () => {
   it("pins an image kept under this machine's own name by its digest from the old repository", () => {
     const box = machine();
     expect(box.run().status).toBe(0);
-    const keep = "openmausbot-before-update:local";
+    const keep = "seira-before-update:local";
     const legacy = `ghcr.io/milind-soni/openmausbot@sha256:${"3".repeat(64)}`;
-    writeFileSync(join(box.dir, ".env"), `OMB_IMAGE=${keep}\n`);
+    writeFileSync(join(box.dir, ".env"), `SEIRA_IMAGE=${keep}\n`);
     writeFileSync(join(box.fake, "local"), `${keep}\n`);
     box.reset();
     const again = box.run([], { FAKE_DIGESTS: legacy });

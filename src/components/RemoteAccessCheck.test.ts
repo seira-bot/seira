@@ -22,14 +22,14 @@ const state: CompanionState = {
   keepAwake: false,
   port: 8810,
   devices: [{ id: "device-secret-id", name: "Ana's iPhone", createdAt: 1, lastSeenAt: 1, cloudDesktopAccess: false }],
-  pairing: { code: "482913", token: "omb_pair_secret", expiresAt: 1 },
+  pairing: { code: "482913", token: "seira_pair_secret", expiresAt: 1 },
   lan: "192.168.1.34",
-  endpoints: [{ url: "http://192.168.1.34:8810", kind: "lan", priority: 0 }, { url: "https://c-opaque.openmausbot.com", kind: "hosted", priority: 1 }],
+  endpoints: [{ url: "http://192.168.1.34:8810", kind: "lan", priority: 0 }, { url: "https://c-opaque.seira.bot", kind: "hosted", priority: 1 }],
   routes: { wifi: { on: true, since: 1 }, relay: { on: true, since: 1 }, tailscale: { on: false, since: null }, https: { on: false, since: null } },
   e2e: { enabled: true, relay: "connecting", node: null, relayProblem: "no_answer", descriptor: null },
   relayToken: { state: "ready", code: null },
 };
-const account: CompanionAccountState = { available: true, status: "ready", email: "ada@example.com", endpoint: "https://c-opaque.openmausbot.com" };
+const account: CompanionAccountState = { available: true, status: "ready", email: "ada@example.com", endpoint: "https://c-opaque.seira.bot" };
 
 let host: HTMLDivElement;
 let root: Root;
@@ -58,7 +58,7 @@ describe("the connection check", () => {
     flushSync(() => button("Copy diagnostics")!.click());
     await vi.waitFor(() => expect(host.textContent).toContain("Copied"));
     expect(copied).toHaveLength(1);
-    for (const secret of ["ada@example.com", "c-opaque", "192.168.1.34", "482913", "omb_pair_secret", "device-secret-id", "Ana's iPhone"]) {
+    for (const secret of ["ada@example.com", "c-opaque", "192.168.1.34", "482913", "seira_pair_secret", "device-secret-id", "Ana's iPhone"]) {
       expect(copied[0]).not.toContain(secret);
       expect(host.textContent).not.toContain(secret);
     }

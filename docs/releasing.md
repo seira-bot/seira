@@ -16,11 +16,12 @@ that a workflow publishes is the npm package (see [Publish to npm](#publish-to-n
 
 Only the maintainers can release:
 
-- The `main` branch ruleset needs a pull request, a passing `CI` check, and a
-  review from the code owners. Squash merge is the only merge method.
+- The `main` branch ruleset needs a pull request and a review from the code
+  owners. Squash merge is the only merge method. The `main CI must pass`
+  ruleset needs a passing `CI` check and has no bypass.
 - The `release tags` ruleset blocks the creation, update, and deletion of `v*`
   tags for everyone except the organization admins.
-- GitHub Actions has no bypass on either ruleset, and its token can only read
+- GitHub Actions has no bypass on any of these rulesets, and its token can only read
   the repository (see [CI](ci.md)).
 - A new push to `main` cancels the older `main` CI run that is still going
   (see [CI](ci.md#fewer-runners)). When you release, rely on the `CI` check of
@@ -76,6 +77,9 @@ download the update and then reject it.
 
 ### 1. Bump the version in a pull request
 
+Add an entry for the new version to `RELEASE_NOTES` in `src/lib/release-notes.ts`,
+with its strings in `en.json` and `pt-br.json`. A version with no entry shows no popup.
+
 ```sh
 git switch -c release/v<version> origin/main
 npm pkg set version=<version>
@@ -106,7 +110,7 @@ Then package:
 
 ```sh
 export NODE_OPTIONS=--max-old-space-size=6144
-export TMPDIR="$PWD/.omb-scratch/tmp" && mkdir -p "$TMPDIR"
+export TMPDIR="$PWD/.seira-scratch/tmp" && mkdir -p "$TMPDIR"
 pnpm package:linux
 ```
 
@@ -139,7 +143,7 @@ Then put the files to upload, and the copies with stable names, in their own
 folder. Keep `release/` as the build wrote it.
 
 ```sh
-mkdir -p .omb-scratch/linux-upload && cd .omb-scratch/linux-upload
+mkdir -p .seira-scratch/linux-upload && cd .seira-scratch/linux-upload
 cp ../../release/Seira-<version>-x86_64.AppImage ../../release/Seira-<version>-amd64.deb ../../release/latest-linux.yml .
 cp Seira-<version>-x86_64.AppImage Seira.AppImage
 cp Seira-<version>-amd64.deb Seira-amd64.deb
@@ -166,7 +170,7 @@ gh pr merge <pr number> --squash
 git fetch origin
 git tag -a v<version> -m "Seira v<version>" <merge commit sha>
 git push origin v<version>
-cd .omb-scratch/linux-upload
+cd .seira-scratch/linux-upload
 gh release create v<version> --verify-tag --title "Seira v<version>" --generate-notes \
   Seira-<version>-x86_64.AppImage Seira-<version>-amd64.deb latest-linux.yml \
   Seira.AppImage Seira-amd64.deb SHA256SUMS-linux-x64.txt
@@ -214,7 +218,7 @@ token can only read the repository.
 gh workflow run package-windows.yml --repo seira-bot/seira -f ref=v<version>
 gh run list --repo seira-bot/seira --workflow package-windows.yml --limit 1
 gh run watch <run id> --repo seira-bot/seira --exit-status
-mkdir -p .omb-scratch/windows && cd .omb-scratch/windows
+mkdir -p .seira-scratch/windows && cd .seira-scratch/windows
 gh run download <run id> --repo seira-bot/seira --name seira-<version>-windows-x64
 sha256sum -c SHA256SUMS-windows-x64.txt
 gh release upload v<version> --repo seira-bot/seira \
@@ -259,7 +263,7 @@ sha256sum -c SHA256SUMS-windows-x64-store.txt
 Before it uploads the package, the workflow extracts it and checks that:
 
 - the manifest names the display name and the publisher display name of Seira;
-- the manifest declares the `openmausbot` protocol, the `runFullTrust`
+- the manifest declares the `seira` protocol, the `runFullTrust`
   capability, and a start-up task that is off by default;
 - the package version is the mapped version (see below);
 - each logo in `build/appx/` is in the package with the same SHA-256, and no
@@ -274,9 +278,9 @@ Rules for the package:
   the version. The app still reports `0.1.179`.
 - The package has no signature. The Store signs the package after you upload it.
   A person cannot install the file from the workflow without a test signature.
-- Before the first upload, set `appx.identityName` and `appx.publisher` in
-  `electron-builder.yml`. Copy both values from the Product identity page of
-  the product in Partner Center. The Store rejects a package with other values.
+- `appx.identityName` and `appx.publisher` in `electron-builder.yml` hold the
+  values from the Product identity page of the product in Partner Center. The
+  Store rejects a package with other values. `scripts/check-appx.mjs` checks them.
 - Upload the package to Partner Center by hand. Submit each release as a new
   submission of the same product.
 - The app does not update itself in this package. The Store delivers updates.
@@ -320,7 +324,7 @@ gh run list --repo seira-bot/seira --workflow package-macos.yml --limit 1
 # A person who is not a maintainer: open the run page, select "Review deployments",
 # and ask a maintainer to approve "release-approval".
 gh run watch <run id> --repo seira-bot/seira --exit-status
-mkdir -p .omb-scratch/macos && cd .omb-scratch/macos
+mkdir -p .seira-scratch/macos && cd .seira-scratch/macos
 gh run download <run id> --repo seira-bot/seira --name seira-<version>-macos
 sha256sum -c SHA256SUMS-mac.txt
 gh release upload v<version> --repo seira-bot/seira \
@@ -391,7 +395,7 @@ docker buildx imagetools inspect ghcr.io/seira-bot/seira:v<version>
 ### 8. Check what users download
 
 ```sh
-mkdir -p .omb-scratch/release-check && cd .omb-scratch/release-check
+mkdir -p .seira-scratch/release-check && cd .seira-scratch/release-check
 gh release download v<version> --repo seira-bot/seira
 sha256sum -c SHA256SUMS-linux-x64.txt
 sha256sum -c SHA256SUMS-windows-x64.txt

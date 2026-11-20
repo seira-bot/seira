@@ -66,7 +66,7 @@ jobs:
         run: node scripts/smoke-browser-bundle.mjs --resources "$GITHUB_WORKSPACE/release/win-unpacked/resources"
       - name: "Gate: the packaged server finds its browser"
         run: |
-          OMB_SMOKE_DIST="$GITHUB_WORKSPACE/release/win-unpacked/resources/server" \
+          SEIRA_SMOKE_DIST="$GITHUB_WORKSPACE/release/win-unpacked/resources/server" \
             node scripts/smoke-packaged-server.mjs --browser-bundle "$GITHUB_WORKSPACE/release/win-unpacked/resources/browser-engine"
       - name: Verify the packaged tree
         run: |
@@ -110,7 +110,7 @@ jobs:
         # The smoke above runs a copy. This runs the packaged folder itself, where no node_modules exists.
         run: |
           res=release/win-unpacked/resources
-          HOME="$RUNNER_TEMP/seira-smoke" USERPROFILE="$RUNNER_TEMP/seira-smoke" OMB_PORT=21987 \
+          HOME="$RUNNER_TEMP/seira-smoke" USERPROFILE="$RUNNER_TEMP/seira-smoke" SEIRA_PORT=21987 SEIRA_COMPOSIO_BROKER=off \
             node "$res/server/index.js" > "$RUNNER_TEMP/server.log" 2>&1 &
           pid=$!
           for _ in $(seq 1 90); do

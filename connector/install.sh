@@ -2,39 +2,40 @@
 # Seira on a server of your own: checks the server, installs the bot box's two security profiles, starts the Seira
 # connector and connects it to Seira with the one-time code Seira shows. Running it again repairs the install.
 #
-#   curl -fsSL https://cloud.openmausbot.com/install.sh | sudo sh -s -- <code>
+#   curl -fsSL https://cloud.seira.bot/install.sh | sudo sh -s -- <code>
 #
-# On a server where you already installed Seira yourself (deploy/install.sh, in /opt/openmausbot) it connects that
+# On a server where you already installed Seira yourself (deploy/install.sh, in /opt/seira) it connects that
 # Seira instead of starting another: the connector then runs in customer-run mode, where Seira may only start,
 # stop, update and back up your server and learns only its versions, health and seat count (connector/src/customer-run.ts).
 #
-#   curl -fsSL https://cloud.openmausbot.com/install.sh | sudo sh -s -- uninstall               (keeps your data)
-#   curl -fsSL https://cloud.openmausbot.com/install.sh | sudo sh -s -- uninstall --delete-data (deletes it too)
+#   curl -fsSL https://cloud.seira.bot/install.sh | sudo sh -s -- uninstall               (keeps your data)
+#   curl -fsSL https://cloud.seira.bot/install.sh | sudo sh -s -- uninstall --delete-data (deletes it too)
 #
 # Seira serves this file with its own address and the connector's image (pinned by digest) filled in below.
 set -eu
 
-ADMIN_URL="${MAUSBOT_ADMIN_URL:-@MAUSBOT_ADMIN_URL@}"
-CONNECTOR_IMAGE="${MAUSBOT_CONNECTOR_IMAGE:-@MAUSBOT_CONNECTOR_IMAGE@}"
+ADMIN_URL="${SEIRA_ADMIN_URL:-@SEIRA_ADMIN_URL@}"
+CONNECTOR_IMAGE="${SEIRA_CONNECTOR_IMAGE:-@SEIRA_CONNECTOR_IMAGE@}"
 
-ETC_DIR="${MAUSBOT_ETC_DIR:-/etc/mausbot}"
-AUDIT_DIR="${MAUSBOT_AUDIT_DIR:-/var/log/mausbot}"
-APPARMOR_DIR="${MAUSBOT_APPARMOR_DIR:-/etc/apparmor.d}"
-PROFILE=omb-home-narrow
-SECCOMP=seccomp-omb-home.json
-CONNECTOR=mausbot-connector
-CONNECTOR_NEXT=mausbot-connector-next
-HOME_CONTAINER=mausbot-home
-DATA_VOLUME=mausbot-data
-STATE_VOLUME=mausbot-connector
-SNAPSHOT_VOLUME=mausbot-snapshot
-ROLE_LABEL=com.mausbot.role
-INSTALL_DIR="${MAUSBOT_INSTALL_DIR:-/opt/openmausbot}"
-UPDATE_DIR="${MAUSBOT_UPDATE_DIR:-/var/lib/mausbot/update}"
-SBIN_DIR="${MAUSBOT_SBIN_DIR:-/usr/local/sbin}"
-SYSTEMD_DIR="${MAUSBOT_SYSTEMD_DIR:-/etc/systemd/system}"
-UPDATE_RUNNER=mausbot-update-runner
-UPDATE_UNIT=mausbot-update
+ETC_DIR="${SEIRA_ETC_DIR:-/etc/seira}"
+AUDIT_DIR="${SEIRA_AUDIT_DIR:-/var/log/seira}"
+APPARMOR_DIR="${SEIRA_APPARMOR_DIR:-/etc/apparmor.d}"
+PROFILE=seira-home-narrow
+SECCOMP=seccomp-seira-home.json
+CONNECTOR=seira-connector
+CONNECTOR_NEXT=seira-connector-next
+HOME_CONTAINER=seira-home
+DATA_VOLUME=seira-data
+STATE_VOLUME=seira-connector
+SNAPSHOT_VOLUME=seira-snapshot
+ROLE_LABEL=com.seira.role
+LEGACY_ROLE_LABEL=com.mausbot.role
+INSTALL_DIR="${SEIRA_INSTALL_DIR:-/opt/seira}"
+UPDATE_DIR="${SEIRA_UPDATE_DIR:-/var/lib/seira/update}"
+SBIN_DIR="${SEIRA_SBIN_DIR:-/usr/local/sbin}"
+SYSTEMD_DIR="${SEIRA_SYSTEMD_DIR:-/etc/systemd/system}"
+UPDATE_RUNNER=seira-update-runner
+UPDATE_UNIT=seira-update
 MODE=operated
 MIN_DOCKER=24
 MIN_CPUS=2
@@ -78,10 +79,10 @@ check_os() {
   case "$os_id $os_version" in
     "ubuntu 22.04" | "ubuntu 24.04" | "debian 12") note "operating system: $os_name" ;;
     *)
-      if [ "${MAUSBOT_ALLOW_UNTESTED_OS:-}" = 1 ]; then
+      if [ "${SEIRA_ALLOW_UNTESTED_OS:-}" = 1 ]; then
         note "operating system: $os_name (not one Seira is tested on; going on as asked)"
       else
-        fail "Seira runs on Ubuntu 22.04 or 24.04, or Debian 12. This server runs $os_name. Please pick one of those, or run again with MAUSBOT_ALLOW_UNTESTED_OS=1 to try anyway."
+        fail "Seira runs on Ubuntu 22.04 or 24.04, or Debian 12. This server runs $os_name. Please pick one of those, or run again with SEIRA_ALLOW_UNTESTED_OS=1 to try anyway."
       fi
       ;;
   esac
@@ -103,7 +104,7 @@ install_docker() {
 }
 
 offer_docker() { # what is wrong, in one sentence
-  if [ "${MAUSBOT_INSTALL_DOCKER:-}" = 1 ]; then
+  if [ "${SEIRA_INSTALL_DOCKER:-}" = 1 ]; then
     install_docker
     return
   fi
@@ -165,7 +166,7 @@ check_userns() {
   max=$(cat /proc/sys/user/max_user_namespaces 2>/dev/null || echo 1)
   clone=$(cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null || echo 1)
   if [ "$max" = 0 ] || [ "$clone" != 1 ]; then
-    fail "Your server switches off a Linux feature our bots' safety box needs. Run: printf 'user.max_user_namespaces=63000\\nkernel.unprivileged_userns_clone=1\\n' | sudo tee /etc/sysctl.d/90-mausbot.conf && sudo sysctl --system  and then run this command again."
+    fail "Your server switches off a Linux feature our bots' safety box needs. Run: printf 'user.max_user_namespaces=63000\\nkernel.unprivileged_userns_clone=1\\n' | sudo tee /etc/sysctl.d/90-seira.conf && sudo sysctl --system  and then run this command again."
   fi
 }
 
@@ -244,6 +245,16 @@ install_profiles() {
   fi
 }
 
+# The objects with a role (helper, backup), under this version's label and under the one earlier versions wrote.
+# Usage: by_role <role> <docker list command> (for example: by_role backup volume ls -q)
+by_role() {
+  role=$1
+  shift
+  for label in "$ROLE_LABEL" "$LEGACY_ROLE_LABEL"; do
+    docker "$@" --filter "label=$label=$role" 2>/dev/null || true
+  done
+}
+
 # A Seira its owner installed is here: the connector attaches to it and never starts a second one.
 own_server_here() {
   [ -f "$INSTALL_DIR/compose.yaml" ]
@@ -279,7 +290,7 @@ Description=Seira's updater ($INSTALL_DIR/update.sh), for an update the Seira co
 
 [Service]
 Type=oneshot
-Environment=MAUSBOT_UPDATE_DIR=$UPDATE_DIR MAUSBOT_INSTALL_DIR=$INSTALL_DIR
+Environment=SEIRA_UPDATE_DIR=$UPDATE_DIR SEIRA_INSTALL_DIR=$INSTALL_DIR
 ExecStart=$SBIN_DIR/$UPDATE_RUNNER
 UNIT
   systemctl daemon-reload >/dev/null 2>&1 || true
@@ -304,26 +315,26 @@ start_connector() {
   say "Starting the Seira connector..."
   docker volume create "$STATE_VOLUME" >/dev/null
   install -d -m 0755 "$ETC_DIR"
-  # The audit log: every job Seira runs here, root's, for you to read (mausbot-connector audit).
+  # The audit log: every job Seira runs here, root's, for you to read (seira-connector audit).
   install -d -m 0750 "$AUDIT_DIR"
   docker rm -f "$CONNECTOR" "$CONNECTOR_NEXT" >/dev/null 2>&1 || true
   instance=$(cat /proc/sys/kernel/random/uuid)
-  set -- --label "$ROLE_LABEL=connector" --label "com.mausbot.instance=$instance" \
-    -e "MAUSBOT_INSTANCE=$instance" -e "MAUSBOT_CONNECTOR_IMAGE=$CONNECTOR_IMAGE"
-  case "${MAUSBOT_UPDATE_WAIT_S:-}" in
+  set -- --label "$ROLE_LABEL=connector" --label "com.seira.instance=$instance" \
+    -e "SEIRA_INSTANCE=$instance" -e "SEIRA_CONNECTOR_IMAGE=$CONNECTOR_IMAGE"
+  case "${SEIRA_UPDATE_WAIT_S:-}" in
     '' | *[!0-9]*) ;;
-    *) set -- "$@" -e "MAUSBOT_UPDATE_WAIT_S=$MAUSBOT_UPDATE_WAIT_S" ;;
+    *) set -- "$@" -e "SEIRA_UPDATE_WAIT_S=$SEIRA_UPDATE_WAIT_S" ;;
   esac
   if [ "$MODE" = customer-run ]; then
-    set -- "$@" -e MAUSBOT_MODE=customer-run -v "$UPDATE_DIR:/var/lib/mausbot/update"
+    set -- "$@" -e SEIRA_MODE=customer-run -v "$UPDATE_DIR:/var/lib/seira/update"
   fi
   docker run -d --name "$CONNECTOR" --restart unless-stopped --network host \
     --security-opt no-new-privileges=true --cap-drop ALL --read-only --tmpfs /tmp \
-    -v /var/run/docker.sock:/var/run/docker.sock -v "$STATE_VOLUME:/state" -v "$ETC_DIR:/etc/mausbot:ro" -v "$AUDIT_DIR:/var/log/mausbot" \
+    -v /var/run/docker.sock:/var/run/docker.sock -v "$STATE_VOLUME:/state" -v "$ETC_DIR:/etc/seira:ro" -v "$AUDIT_DIR:/var/log/seira" \
     --log-opt max-size=10m --log-opt max-file=3 \
     "$@" "$CONNECTOR_IMAGE" run >/dev/null || fail "The Seira connector could not be started (Docker's message is above). Run this command again."
   for _ in 1 2 3 4 5 6 7 8 9 10; do
-    if docker exec "$CONNECTOR" mausbot-connector version >/dev/null 2>&1; then return; fi
+    if docker exec "$CONNECTOR" seira-connector version >/dev/null 2>&1; then return; fi
     sleep 1
   done
   fail "The Seira connector did not start. Its log: $(docker logs --tail 5 "$CONNECTOR" 2>&1 | tr '\n' ' ')"
@@ -331,7 +342,7 @@ start_connector() {
 
 check_box() {
   say "Checking that the bots' safety box works here..."
-  probe=$(docker exec "$CONNECTOR" mausbot-connector probe 2>&1 || true)
+  probe=$(docker exec "$CONNECTOR" seira-connector probe 2>&1 || true)
   problems=$(printf '%s\n' "$probe" | sed -n 's/^fail [a-z]* //p')
   warnings=$(printf '%s\n' "$probe" | sed -n 's/^warn [a-z]* //p')
   if [ -n "$warnings" ]; then printf '%s\n' "$warnings" | sed 's/^/  note: /'; fi
@@ -344,15 +355,15 @@ connect() {
   if [ -n "$code" ]; then
     say "Connecting to Seira..."
     # The code works once: its refusal is read from this one attempt.
-    if ! refusal=$(printf '%s\n' "$code" | docker exec -i -e "MAUSBOT_ADMIN_URL=$ADMIN_URL" "$CONNECTOR" mausbot-connector enroll 2>&1 >/dev/null); then
+    if ! refusal=$(printf '%s\n' "$code" | docker exec -i -e "SEIRA_ADMIN_URL=$ADMIN_URL" "$CONNECTOR" seira-connector enroll 2>&1 >/dev/null); then
       fail "$(printf '%s\n' "$refusal" | tail -n 1)"
     fi
-  elif ! docker exec "$CONNECTOR" mausbot-connector status | grep -q '"enrolled":true'; then
+  elif ! docker exec "$CONNECTOR" seira-connector status | grep -q '"enrolled":true'; then
     fail "Add the one-time code Seira shows next to the install command, like this: $(command_line '<code>')"
   fi
   waited=0
   while [ "$waited" -lt 60 ]; do
-    if docker exec "$CONNECTOR" mausbot-connector status 2>/dev/null | grep -q '"connected":true'; then return; fi
+    if docker exec "$CONNECTOR" seira-connector status 2>/dev/null | grep -q '"connected":true'; then return; fi
     sleep 1
     waited=$((waited + 1))
   done
@@ -363,7 +374,7 @@ install_connector() {
   code=""
   for arg in "$@"; do
     case "$arg" in
-      --install-docker) MAUSBOT_INSTALL_DOCKER=1 ;;
+      --install-docker) SEIRA_INSTALL_DOCKER=1 ;;
       --customer-run) MODE=customer-run ;;
       -*) fail "Unknown option $arg. Usage: $(command_line '<code>')" ;;
       *) code=$arg ;;
@@ -395,9 +406,9 @@ install_connector() {
     say ""
     say "Connected. Your server shows up in Seira in a minute, for your team's Owner to accept."
     say "You run this server: Seira can start, stop, update and back it up, and sees its versions, health and seat count."
-    say "  What it was asked to do:  sudo docker exec $CONNECTOR mausbot-connector audit"
-    say "  Pause remote management:  sudo docker exec $CONNECTOR mausbot-connector pause"
-    say "Only you can replace the connector or restore a backup: sudo docker exec $CONNECTOR mausbot-connector job <self-update|restore>"
+    say "  What it was asked to do:  sudo docker exec $CONNECTOR seira-connector audit"
+    say "  Pause remote management:  sudo docker exec $CONNECTOR seira-connector pause"
+    say "Only you can replace the connector or restore a backup: sudo docker exec $CONNECTOR seira-connector job <self-update|restore>"
     return
   fi
   check_apparmor
@@ -428,13 +439,13 @@ uninstall() {
   if own_server_here; then
     say "Disconnecting this server from Seira..."
     docker rm -f "$CONNECTOR" "$CONNECTOR_NEXT" >/dev/null 2>&1 || true
-    for container in $(docker ps -aq --filter "label=$ROLE_LABEL=helper" 2>/dev/null); do
+    for container in $(by_role helper ps -aq); do
       docker rm -f "$container" >/dev/null 2>&1 || true
     done
     remove_updater
     docker volume rm "$STATE_VOLUME" >/dev/null 2>&1 || true
     if [ "$delete" = yes ]; then
-      for volume in "$SNAPSHOT_VOLUME" $(docker volume ls -q --filter "label=$ROLE_LABEL=backup" 2>/dev/null); do
+      for volume in "$SNAPSHOT_VOLUME" $(by_role backup volume ls -q); do
         docker volume rm "$volume" >/dev/null 2>&1 || true
       done
       rm -rf "$AUDIT_DIR"
@@ -448,7 +459,7 @@ uninstall() {
   say "Stopping Seira on this server..."
   docker rm -f "$CONNECTOR" "$CONNECTOR_NEXT" >/dev/null 2>&1 || true
   docker stop -t 30 "$HOME_CONTAINER" >/dev/null 2>&1 || true
-  for container in "$HOME_CONTAINER" $(docker ps -aq --filter "label=$ROLE_LABEL=helper" 2>/dev/null); do
+  for container in "$HOME_CONTAINER" $(by_role helper ps -aq); do
     docker rm -f "$container" >/dev/null 2>&1 || true
   done
   if command -v apparmor_parser >/dev/null 2>&1 && [ -f "$APPARMOR_DIR/$PROFILE" ]; then apparmor_parser -R "$APPARMOR_DIR/$PROFILE" >/dev/null 2>&1 || true; fi
@@ -457,7 +468,7 @@ uninstall() {
   # The connector's own state (its key, the home's settings) is not your data: a new code makes a new key.
   docker volume rm "$STATE_VOLUME" >/dev/null 2>&1 || true
   if [ "$delete" = yes ]; then
-    for volume in "$DATA_VOLUME" "$SNAPSHOT_VOLUME" $(docker volume ls -q --filter "label=$ROLE_LABEL=backup" 2>/dev/null); do
+    for volume in "$DATA_VOLUME" "$SNAPSHOT_VOLUME" $(by_role backup volume ls -q); do
       docker volume rm "$volume" >/dev/null 2>&1 || true
     done
     rm -rf "$AUDIT_DIR"

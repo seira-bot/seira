@@ -2,7 +2,7 @@
 // where they overlap: elementFromPoint inside the entry returns the composer,
 // never the header. Real renderer against the fake-engine fixture. Needs the
 // pinned agent-browser binary: runs when one resolves (tools directory,
-// OMB_AGENT_BROWSER_PATH, or PATH) or OMB_UI_E2E=1 asks for the verified
+// SEIRA_AGENT_BROWSER_PATH, or PATH) or SEIRA_UI_E2E=1 asks for the verified
 // download; otherwise skipped.
 import { spawn, type ChildProcess } from "node:child_process";
 import { join } from "node:path";
@@ -15,8 +15,8 @@ import { UI_TOOLS_DIR } from "./control-seira-ui.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const binary = resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env });
-const enabled = process.env.OMB_UI_E2E === "1" || Boolean(binary);
-if (!enabled) console.info("skipping rich table composer UI e2e: set OMB_UI_E2E=1 to install the pinned browser");
+const enabled = process.env.SEIRA_UI_E2E === "1" || Boolean(binary);
+if (!enabled) console.info("skipping rich table composer UI e2e: set SEIRA_UI_E2E=1 to install the pinned browser");
 
 const ENTRY = 'textarea[aria-label="Message Pepper"]';
 // The list lines above the table leave the transcript headroom to scroll

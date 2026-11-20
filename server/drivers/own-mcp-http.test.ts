@@ -5,16 +5,16 @@ import { mountMcpServer } from "./codex-mcp-mount.ts";
 import { acpOwnMcpOverHttp, claudeOwnMcpOverHttp, loopbackUnproxied, noteAcpMcpHttp, OWN_MCP_HTTP_ENV, ownMcpHttpEnabled, withLoopbackNoProxy } from "./own-mcp-http.ts";
 
 const HARNESS = "http://127.0.0.1:8799";
-const agents = { command: process.execPath, args: [SPAWNED_PROXIES.agents], env: { OMB_HARNESS_URL: HARNESS, OMB_COMMS_TOKEN: "comms", OMB_BOT_ID: "b1", OMB_THREAD_ID: "t1", OMB_AGENTS_DEFER_TOOLS: "1", ELECTRON_RUN_AS_NODE: "1" } };
-const browser = { command: process.execPath, args: [SPAWNED_PROXIES.harnessMcp, "browser"], env: { OMB_HARNESS_URL: HARNESS, OMB_MCP_TOKEN_BROWSER: "browse", OMB_TOOL_LIMIT: "12" } };
+const agents = { command: process.execPath, args: [SPAWNED_PROXIES.agents], env: { SEIRA_HARNESS_URL: HARNESS, SEIRA_COMMS_TOKEN: "comms", SEIRA_BOT_ID: "b1", SEIRA_THREAD_ID: "t1", SEIRA_AGENTS_DEFER_TOOLS: "1", ELECTRON_RUN_AS_NODE: "1" } };
+const browser = { command: process.execPath, args: [SPAWNED_PROXIES.harnessMcp, "browser"], env: { SEIRA_HARNESS_URL: HARNESS, SEIRA_MCP_TOKEN_BROWSER: "browse", SEIRA_TOOL_LIMIT: "12" } };
 const ogb = { command: process.execPath, args: [SPAWNED_PROXIES.permission, "/tmp/perm.sock"], env: {}, alwaysLoad: true };
-const phone = { command: process.execPath, args: ["/app/phone-proxy.js"], env: { OMB_HARNESS_URL: HARNESS, OMB_PHONE_TOKEN: "p" } };
+const phone = { command: process.execPath, args: ["/app/phone-proxy.js"], env: { SEIRA_HARNESS_URL: HARNESS, SEIRA_PHONE_TOKEN: "p" } };
 const settings = (header: string) => JSON.parse(Buffer.from(header, "base64url").toString("utf8"));
 
 describe("the setting", () => {
-  it("is off unless OMB_OWN_MCP_HTTP=1, everywhere, and always off in the bot box", () => {
+  it("is off unless SEIRA_OWN_MCP_HTTP=1, everywhere, and always off in the bot box", () => {
     expect(ownMcpHttpEnabled({}, false)).toBe(false);
-    expect(ownMcpHttpEnabled({ OMB_CLOUD_ROLE: "home" }, false)).toBe(false);
+    expect(ownMcpHttpEnabled({ SEIRA_CLOUD_ROLE: "home" }, false)).toBe(false);
     expect(ownMcpHttpEnabled({ [OWN_MCP_HTTP_ENV]: "0" }, false)).toBe(false);
     expect(ownMcpHttpEnabled({ [OWN_MCP_HTTP_ENV]: "true" }, false)).toBe(false);
     expect(ownMcpHttpEnabled({ [OWN_MCP_HTTP_ENV]: "1" }, false)).toBe(true);
@@ -49,9 +49,9 @@ describe("Claude's --mcp-config", () => {
     const servers: Record<string, unknown> = { agents: { ...agents, alwaysLoad: true }, browser, ogb, phone, mine: { command: "npx", args: ["my-server"] } };
     expect(claudeOwnMcpOverHttp(servers, true)).toBe(true);
     expect(servers.agents).toEqual({ type: "http", url: `${HARNESS}/api/internal/mcp-http/agents`, alwaysLoad: true,
-      headers: { authorization: "Bearer comms", "x-omb-agents-env": expect.any(String) } });
-    expect(settings((servers.agents as { headers: Record<string, string> }).headers["x-omb-agents-env"]!)).toEqual({ OMB_BOT_ID: "b1", OMB_THREAD_ID: "t1", OMB_AGENTS_DEFER_TOOLS: "1" });
-    expect(servers.browser).toEqual({ type: "http", url: `${HARNESS}/api/internal/mcp-http/browser`, headers: { authorization: "Bearer browse", "x-omb-tool-limit": "12" } });
+      headers: { authorization: "Bearer comms", "x-seira-agents-env": expect.any(String) } });
+    expect(settings((servers.agents as { headers: Record<string, string> }).headers["x-seira-agents-env"]!)).toEqual({ SEIRA_BOT_ID: "b1", SEIRA_THREAD_ID: "t1", SEIRA_AGENTS_DEFER_TOOLS: "1" });
+    expect(servers.browser).toEqual({ type: "http", url: `${HARNESS}/api/internal/mcp-http/browser`, headers: { authorization: "Bearer browse", "x-seira-tool-limit": "12" } });
     expect(servers.ogb).toBe(ogb);
     expect(servers.phone).toBe(phone);
     expect(servers.mine).toEqual({ command: "npx", args: ["my-server"] });
@@ -74,12 +74,12 @@ describe("Codex's own servers", () => {
       mountMcpServer(args, env, "agents", agents, "approve");
       const joined = args.join(" ");
       expect(joined).toContain(`mcp_servers.agents.url="${HARNESS}/api/internal/mcp-http/agents"`);
-      expect(joined).toContain('mcp_servers.agents.bearer_token_env_var="OMB_COMMS_TOKEN"');
-      expect(joined).toContain('mcp_servers.agents.http_headers={ "x-omb-agents-env" = ');
+      expect(joined).toContain('mcp_servers.agents.bearer_token_env_var="SEIRA_COMMS_TOKEN"');
+      expect(joined).toContain('mcp_servers.agents.http_headers={ "x-seira-agents-env" = ');
       expect(joined).toContain('mcp_servers.agents.default_tools_approval_mode="approve"');
       expect(joined).not.toContain("comms");
       expect(joined).not.toContain("command=");
-      expect(env.OMB_COMMS_TOKEN).toBe("comms");
+      expect(env.SEIRA_COMMS_TOKEN).toBe("comms");
       expect([env.NO_PROXY, env.no_proxy]).toEqual(["corp.internal,127.0.0.1,localhost,::1", "corp.internal,127.0.0.1,localhost,::1"]);
       const stdio: string[] = [];
       const stdioEnv: Record<string, string | undefined> = {};

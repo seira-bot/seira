@@ -20,7 +20,7 @@ afterEach(async () => {
 });
 
 it("waits for the person, tells them at once, and stops saying nobody answered the approval when it went unanswered", async () => {
-  fixture = await launchVerificationServer({ ...process.env, OMB_TEST_APPROVAL_CLOCK: "1", FAKE_CLAUDE_MODE: "hang" });
+  fixture = await launchVerificationServer({ ...process.env, SEIRA_TEST_APPROVAL_CLOCK: "1", FAKE_CLAUDE_MODE: "hang" });
   const { url, dataDir } = fixture.info;
   const dump = join(dataDir, "claude-turn.json");
   const api = async (method: string, path: string, body?: unknown) => {

@@ -33,7 +33,7 @@ import {
   type PackageDocument,
 } from "../shared/package-format.ts";
 
-export const ORG_LIBRARY_FORMAT = "openmaus.org-library";
+export const ORG_LIBRARY_FORMAT = "seira.org-library";
 export const ORG_LIBRARY_CATALOG_MAX_BYTES = 256 * 1024;
 export const ORG_LIBRARY_MAX_ENTRIES = 100;
 export const ORG_LIBRARY_REPORT_MAX_ENTRIES = 100;
@@ -146,7 +146,7 @@ export interface OrgLibraryReportEntry {
 }
 
 export interface OrgLibraryStateMessage {
-  type: "openmausbot:managed-library-state";
+  type: "seira:managed-library-state";
   digest: string;
   packages: OrgLibraryReportEntry[];
 }
@@ -641,7 +641,7 @@ export class OrgLibrary {
   private report(): void {
     if (!this.library) return;
     const message: OrgLibraryStateMessage = {
-      type: "openmausbot:managed-library-state",
+      type: "seira:managed-library-state",
       digest: this.library.digest,
       packages: this.reportEntries(),
     };

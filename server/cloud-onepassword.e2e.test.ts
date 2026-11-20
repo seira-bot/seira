@@ -1,6 +1,6 @@
 // A real server started the way a Cloud home's root supervisor starts it: the environment is what cloudHomeChildEnvironments
 // hands the server from the image's ENV, and the secrets come over the launcher's pipe. The 1Password SDK is a fake kept
-// where the image keeps the real one, in the native-module tree OMB_DUCKDB_DIR names. Disposable home; no network.
+// where the image keeps the real one, in the native-module tree SEIRA_DUCKDB_DIR names. Disposable home; no network.
 import { randomBytes } from "node:crypto";
 import { type ChildProcess } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -19,7 +19,7 @@ import { hostTimeout } from "./testing/host-timeout.ts";
 import { freePortBlock } from "./testing/ports.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
-const HOST = "omb-t-0123456789ab.fly.dev";
+const HOST = "seira-t-0123456789ab.fly.dev";
 // Obvious fakes only.
 const TOKEN = `ops_fake-cloud-service-account-${randomBytes(12).toString("hex")}`;
 const VAULT_PASSWORD = `fake-vault-Passw0rd-${randomBytes(6).toString("hex")}`;
@@ -109,14 +109,14 @@ async function proxyFor(start: () => Promise<void>) {
 
 /** The server alone, as the supervisor starts it; resolves once it answers health. */
 async function startCloudHome(at: string, tree: string, port: number, onLog: (chunk: string) => void): Promise<ChildProcess> {
-  const contract = { OMB_CLOUD_ROLE: "home", OMB_BOT_BOX: "0", OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
-    OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_PUBLIC_URL: `https://${HOST}` };
+  const contract = { SEIRA_CLOUD_ROLE: "home", SEIRA_BOT_BOX: "0", SEIRA_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test",
+    SEIRA_CLOUD_BOOTSTRAP_SECRET: secret, SEIRA_PUBLIC_URL: `https://${HOST}` };
   // What the image's ENV sets for the native modules, then the supervisor's own allow-list and secrets pipe.
-  const imageEnv = { PATH: process.env.PATH, OMB_DUCKDB_DIR: tree, ...contract };
+  const imageEnv = { PATH: process.env.PATH, SEIRA_DUCKDB_DIR: tree, ...contract };
   const { server, secrets } = cloudHomeChildEnvironments(cloudHomeConfiguration(imageEnv)!, imageEnv, at);
   const offline = `data:text/javascript,${encodeURIComponent('const real = globalThis.fetch; globalThis.fetch = async (url, init) => String(url).startsWith("http://127.0.0.1:") ? real(url, init) : new Response("offline fixture", { status: 503 });')}`;
   const started = spawnWithSecrets(process.execPath, ["--import", offline, join(SERVER_DIR, "index.ts")], {
-    ...server, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), USERPROFILE: at,
+    ...server, SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), USERPROFILE: at,
     ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
   }, secrets, null, true);
   let seen = "";
@@ -133,8 +133,8 @@ async function startCloudHome(at: string, tree: string, port: number, onLog: (ch
 }
 
 beforeAll(async () => {
-  home = mkdtempSync(join(tmpdir(), "omb-cloud-1password-"));
-  const dataDir = join(home, ".openmausbot");
+  home = mkdtempSync(join(tmpdir(), "seira-cloud-1password-"));
+  const dataDir = join(home, ".seira");
   mkdirSync(dataDir, { recursive: true });
   const cli = join(home, "fixture-claude.mjs");
   writeFileSync(cli, `#!/usr/bin/env node
@@ -160,7 +160,7 @@ afterAll(async () => {
 });
 
 it("when an image lacks the SDK, says so plainly and never blames the token", async () => {
-  const other = mkdtempSync(join(tmpdir(), "omb-cloud-1password-missing-"));
+  const other = mkdtempSync(join(tmpdir(), "seira-cloud-1password-missing-"));
   const port = await freePortBlock([0, 1]);
   let missingLog = "";
   const started = await startCloudHome(other, join(other, "empty-tree"), port, (chunk) => { missingLog += chunk; });
@@ -216,6 +216,6 @@ it("a bot asks for the 1Password token through request_credential's own slot, an
   expect((await api("POST", "/api/logins/1password", { token: TOKEN })).status).toBe(200);
   expect(await provided()).toMatchObject({ status: 200, body: { provided: true } });
   expect((await tools.call("request_credential", { credential_id: "onePasswordToken" })).content[0].text).toBe("1Password service account token is already configured. Continue the task.");
-  expect(readFileSync(join(home, ".openmausbot", "config.json"), "utf8")).not.toContain(TOKEN);
+  expect(readFileSync(join(home, ".seira", "config.json"), "utf8")).not.toContain(TOKEN);
   for (const where of [...answers, log]) expect(where).not.toContain(TOKEN);
 });

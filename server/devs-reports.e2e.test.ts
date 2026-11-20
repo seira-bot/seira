@@ -1,4 +1,4 @@
-// @devs end to end: a fixture server with the synthetic Claude CLI and a fake MausBot team endpoint on loopback. A
+// @devs end to end: a fixture server with the synthetic Claude CLI and a fake Seira team endpoint on loopback. A
 // message that tags @devs makes exactly one bug report draft, with the bot's report_bug summary or, when the bot never
 // calls it, with the server's own facts. Nothing reaches the team until the person selects "Send report" (the draft
 // route); the draft shows the issue as it will be published, with secrets masked and the conversation itself left out.
@@ -81,12 +81,12 @@ beforeAll(async () => {
     });
   });
   await new Promise<void>((resolve) => endpoint.listen(0, "127.0.0.1", resolve));
-  script = mkdtempSync(join(tmpdir(), "omb-devs-e2e-"));
+  script = mkdtempSync(join(tmpdir(), "seira-devs-e2e-"));
   plan([], "Hello.");
   fixture = await launchVerificationServer({
     ...process.env,
-    OMB_BUG_REPORT_URL: `http://127.0.0.1:${(endpoint.address() as AddressInfo).port}/api/bug-reports`,
-    OMB_DEVS_STATUS_MS: "1500",
+    SEIRA_BUG_REPORT_URL: `http://127.0.0.1:${(endpoint.address() as AddressInfo).port}/api/bug-reports`,
+    SEIRA_DEVS_STATUS_MS: "1500",
     FAKE_CLAUDE_TOOL_CALLS_FILE: join(script, "tool-calls.json"),
     FAKE_CLAUDE_REPLY_FILE: join(script, "reply.txt"),
   });

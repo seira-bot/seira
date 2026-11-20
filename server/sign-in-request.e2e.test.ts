@@ -13,7 +13,7 @@ const SIGNED_IN_REPLY = "You are signed in, so I opened the dashboard.";
 
 /** A server whose bot asks for a sign-in on its first turn and reports the dashboard on its second. */
 async function signInFixture() {
-  const tools = mkdtempSync(join(tmpdir(), "omb-sign-in-e2e-"));
+  const tools = mkdtempSync(join(tmpdir(), "seira-sign-in-e2e-"));
   const binaryPath = join(tools, "agent-browser");
   // Answers the saved-login check the mount makes; every other command succeeds silently.
   writeFileSync(binaryPath, `#!/bin/sh\nif [ "$1" = session ] && [ "$2" = list ]; then printf '{"success":true,"data":{"sessions":[]}}'; fi\nexit 0\n`, { mode: 0o755 });

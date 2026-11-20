@@ -11,8 +11,8 @@ const release = (patch: Record<string, unknown> = {}) => ({
   url: "https://github.com/milind-soni/OpenMausBot/releases/tag/v0.1.151", ...patch,
 });
 const pinned = (name: string, letter: string) => `ghcr.io/milind-soni/${name}@sha256:${letter.repeat(64)}`;
-const IMAGE = pinned("openmausbot", "a");
-const HOME = pinned("openmausbot-cloud-home", "b");
+const IMAGE = pinned("seira", "a");
+const HOME = pinned("seira-cloud-home", "b");
 const index = (...platforms: string[]) => ({
   mediaType: "application/vnd.oci.image.index.v1+json",
   manifests: [...platforms, "unknown/unknown"].map((platform) => ({ platform: { os: platform.split("/")[0], architecture: platform.split("/")[1] } })),

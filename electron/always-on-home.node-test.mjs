@@ -18,7 +18,7 @@ function simpleLogin(world, available = true) {
 }
 
 function fixture(t, { login = false, battery = false, available = true, updates = "by-itself", platform = "darwin" } = {}) {
-  const dir = mkdtempSync(path.join(tmpdir(), "omb-always-on-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "seira-always-on-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const world = { login, battery, chose: [], held: new Set(), started: [], nextId: 1 };
   const loginItem = simpleLogin(world, available);
@@ -129,7 +129,7 @@ test("Settings' channels go through main's guard, and set takes only true as on"
 });
 
 test("in a Microsoft Store package the state points to Startup apps, and turning on adds no login item", (t) => {
-  const dir = mkdtempSync(path.join(tmpdir(), "omb-always-on-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "seira-always-on-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const writes = [];
   const app = { isPackaged: true, getLoginItemSettings: () => ({ openAtLogin: false, launchItems: [] }), setLoginItemSettings: (settings) => writes.push(settings) };

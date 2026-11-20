@@ -97,5 +97,5 @@ Team Cloud's test drives.
 
 That Slack delivers the events, that the Admin matches a Slack user to a member and opens their session, that its
 retries carry the same id, that its words for each answer and report read well in a thread, and that a Cloud asleep is
-woken for a message. The Admin's own tests in openmaus-cloud run it against a fake Cloud that follows the same
+woken for a message. The Admin's own tests run it against a fake Cloud that follows the same
 contract; no run has joined the real two.

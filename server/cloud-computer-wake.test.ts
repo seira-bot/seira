@@ -92,8 +92,8 @@ beforeAll(async () => {
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as { port: number };
-  vi.stubEnv("OMB_CLOUD_BOAT_URL", `http://127.0.0.1:${port}/relay/api/box/v1`);
-  vi.stubEnv("OMB_CLOUD_BOAT_TOKEN", "box_omb_synthetic");
+  vi.stubEnv("SEIRA_CLOUD_BOAT_URL", `http://127.0.0.1:${port}/relay/api/box/v1`);
+  vi.stubEnv("SEIRA_CLOUD_BOAT_TOKEN", "box_seira_synthetic");
 });
 afterAll(async () => {
   vi.unstubAllEnvs();
@@ -159,7 +159,7 @@ beforeEach(async () => {
   at += 30 * 24 * 60 * 60_000;
   told = []; logs = []; hooks = []; autoOn = true; inUseByOther = new Set(); personViewing = new Set();
   witness = false; probeTakesMs = 0; stalledLoop = false; sweepDeletes = false; wakeBudgetMs = 10_000;
-  dir = mkdtempSync(join(tmpdir(), "omb-wake-"));
+  dir = mkdtempSync(join(tmpdir(), "seira-wake-"));
   replacementsFile = join(dir, "boat-replacements.json");
   vi.resetModules();
   boat = await import("./boat.ts");

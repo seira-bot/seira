@@ -3,7 +3,8 @@ import { Building2, Check } from "lucide-react";
 import type { ManagedDesktopBridge, ManagedDesktopState } from "../../../../electron/managed-desktop.mjs";
 import { productName } from "@/lib/brand";
 import { t } from "@/lib/i18n";
-import { companyModelCount, DEFAULT_ADMIN_ORIGIN } from "@/lib/onboarding";
+import { companyModelCount } from "@/lib/onboarding";
+import { DEFAULT_ADMIN_ORIGIN } from "@/lib/organization-portal";
 import { staggerIndex } from "./shared";
 
 const linkClass = "w-fit text-[12px] text-ink-secondary underline-offset-2 transition-colors hover:text-ink hover:underline";

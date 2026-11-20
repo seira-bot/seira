@@ -6,11 +6,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Bot } from "@/state/store";
 
-vi.mock("./Avatar", () => ({ MausAvatar: () => null, BotAvatar: () => null }));
+vi.mock("./Avatar", () => ({ SeiraAvatar: () => null, BotAvatar: () => null }));
 vi.mock("./AvatarImageGenerator", () => ({ AvatarImageGenerator: () => null }));
 
 const { CastCharacterPicker } = await import("./CastCharacterPicker");
-const { MausBotCustomize } = await import("./MausBotCustomize");
+const { SeiraCustomize } = await import("./SeiraCustomize");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -92,7 +92,7 @@ describe("the welcome look editor", () => {
   const render = (bot: Bot) => {
     const onPatch = vi.fn();
     const image = { fileRef: createRef<HTMLInputElement>(), busy: false, uploading: false, generating: false, error: null, upload: vi.fn(), removeImage: vi.fn(), generate: vi.fn() };
-    flushSync(() => root.render(createElement(MausBotCustomize, {
+    flushSync(() => root.render(createElement(SeiraCustomize, {
       preview: bot, name: "", nameRef: createRef<HTMLInputElement>(), image: image as never, onName: vi.fn(), onPatch,
     })));
     return onPatch;
@@ -101,7 +101,7 @@ describe("the welcome look editor", () => {
   it("puts the characters above the hair and sends the look with the mascot crop", () => {
     const onPatch = render(preview);
     const group = host.querySelector('[role="group"][aria-label="Characters"]')!;
-    const hair = host.querySelector("[data-mausbot-welcome-body]");
+    const hair = host.querySelector("[data-seira-welcome-body]");
     if (hair) expect(group.compareDocumentPosition(hair) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(characters()).toHaveLength(10);
     click(host.querySelector('[data-cast-character="pippa"]'));

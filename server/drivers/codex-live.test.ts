@@ -42,7 +42,7 @@ const toStop: Array<{ stop(): Promise<void> }> = [];
 
 beforeEach(() => {
   chmodSync(FAKE, 0o755);
-  scratch = mkdtempSync(join(tmpdir(), "omb-codex-live-"));
+  scratch = mkdtempSync(join(tmpdir(), "seira-codex-live-"));
 });
 
 afterEach(async () => {
@@ -960,8 +960,8 @@ describe("CodexDriver startLiveVoice", () => {
     const dump = join(scratch, "driver-dump.json");
     const provider = await create({
       FAKE_CODEX_DUMP: dump,
-      OPENMAUSBOT_CHATGPT_TOKEN: "leak-plan-token",
-      OPENMAUSBOT_CODEX_API_KEY: "leak-api-key",
+      SEIRA_CHATGPT_TOKEN: "leak-plan-token",
+      SEIRA_CODEX_API_KEY: "leak-api-key",
       OPENAI_API_KEY: "leak-openai-key",
     });
     const session = await provider.startLiveVoice!(offer());
@@ -970,7 +970,7 @@ describe("CodexDriver startLiveVoice", () => {
     const seen = JSON.parse(readFileSync(dump, "utf8"));
     expect(seen.argv[0]).toBe("app-server");
     expect(seen.argv).toEqual(expect.arrayContaining(["features.plugins=false", "features.computer_use=false", "features.browser_use=false"]));
-    for (const name of ["OPENMAUSBOT_CHATGPT_TOKEN", "OPENMAUSBOT_CODEX_API_KEY", "OPENAI_API_KEY"]) expect(seen.env[name]).toBeUndefined();
+    for (const name of ["SEIRA_CHATGPT_TOKEN", "SEIRA_CODEX_API_KEY", "OPENAI_API_KEY"]) expect(seen.env[name]).toBeUndefined();
     expect(JSON.stringify(seen.env)).not.toContain("leak-");
     const start = seen.calls.find((call: { method: string }) => call.method === "thread/start");
     expect(start.params).toMatchObject({ cwd: scratch, approvalPolicy: "on-request", sandbox: "workspace-write", ephemeral: false });
@@ -1006,12 +1006,12 @@ describe("CodexDriver startLiveVoice", () => {
   });
 
   it("refuses the ChatGPT plan token, an endpoint and a managed key", async () => {
-    const endpoint = await create({ CODEX_HOME: join(scratch, "endpoint"), OPENMAUSBOT_CODEX_API_KEY: "synthetic-endpoint-key" },
+    const endpoint = await create({ CODEX_HOME: join(scratch, "endpoint"), SEIRA_CODEX_API_KEY: "synthetic-endpoint-key" },
       { endpoint: { url: "http://127.0.0.1:1/v1", models: ["gateway-model"] } });
     expect(await refusalOf(endpoint.startLiveVoice!(offer()))).toBe("unsupported-sign-in");
     await endpoint.dispose();
 
-    const managed = await create({ OPENMAUSBOT_COMPANY_API_KEY: "synthetic-company-fixture" },
+    const managed = await create({ SEIRA_COMPANY_API_KEY: "synthetic-company-fixture" },
       { managed: { url: "http://127.0.0.1:1/v1", models: ["company-codex-model"] } });
     expect(await refusalOf(managed.startLiveVoice!(offer()))).toBe("unsupported-sign-in");
     await managed.dispose();

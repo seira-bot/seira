@@ -10,6 +10,8 @@ import { withTourFinished } from "@/lib/guided-tour";
 import { setLocale } from "@/lib/i18n";
 import { EMPTY_ONBOARDING, LOCAL_VIEWER, markWelcomeFinished, MET_CHIEF_HINT, type WelcomeViewer } from "@/lib/onboarding";
 import { launchDialogShown, markLaunchDialog } from "@/lib/launch-dialogs";
+import { appVersion } from "@/lib/app-links";
+import { VERSIONS_KEY } from "@/lib/release-notes";
 import { createDesktopPrefs, registerDesktopPrefs } from "../../electron/desktop-prefs.mjs";
 import { createUpdatesConsent, registerUpdatesConsent } from "../../electron/updates-consent.mjs";
 
@@ -32,16 +34,16 @@ vi.mock("./whats-new/TeamPicture", () => ({ TeamPicture: () => null }));
 // This test fakes `document`, which the character reads for reduced motion; the character has its own tests.
 vi.mock("./seira-character", () => ({ SeiraCharacter: () => null }));
 vi.mock("@/lib/seira-cloud", () => ({ SEIRA_CLOUD_PLANS: ["pro", "team"] }));
-// Who MausBot belongs to: unknown (as before the session answers) unless a test says otherwise.
+// Who Seira belongs to: unknown (as before the session answers) unless a test says otherwise.
 vi.mock("@/lib/default-bot", async original => ({ ...await original<typeof import("@/lib/default-bot")>(), useViewerEmail: () => f.viewerEmail }));
 vi.mock("@/lib/brand", () => ({ brandStatus: () => ({ brand: { name: "Seira" }, source: f.brand, file: "" }), productName: () => "Seira" }));
-vi.mock("./Avatar", async original => ({ ...await original<typeof import("./Avatar")>(), MausAvatar: () => null }));
+vi.mock("./Avatar", async original => ({ ...await original<typeof import("./Avatar")>(), SeiraAvatar: () => null }));
 vi.mock("./lazy-screens", async original => ({ ...await original<typeof import("./lazy-screens")>(), GrokMoveDialog: () => "THE MOVE DIALOG" }));
 vi.mock("@/components/EngineLibrary", () => ({ engineReady: (instance: { snapshot: { state: string; authenticated?: boolean } }) =>
   instance.snapshot.state === "available" && instance.snapshot.authenticated !== false }));
 import { AppNotices } from "./AppNotices";
 import { TwoPlacesCard } from "./TwoPlacesCard";
-import { CLOUD_INTRO, GROK_MOVE_NOTICE, launchNotice, localDay, PRODUCT_HUNT_NOTICE, PRODUCT_HUNT_UNTIL, PRODUCT_HUNT_URL, STAR_NOTICE, TEAMS_NOTICE, WHATS_NEW_NOTICE } from "@/lib/notices";
+import { CLOUD_INTRO, GROK_MOVE_NOTICE, launchNotice, localDay, PRODUCT_HUNT_NOTICE, PRODUCT_HUNT_UNTIL, PRODUCT_HUNT_URL, RELEASE_NOTES_NOTICE, STAR_NOTICE, TEAMS_NOTICE, WHATS_NEW_NOTICE } from "@/lib/notices";
 import { track } from "@/lib/analytics";
 import { ADVANCED_MODE_KEY, setAdvancedMode } from "@/lib/interface-mode";
 import { SIMPLE_MODE_PROMPT_KEY } from "@/lib/simple-mode-prompt";
@@ -64,7 +66,7 @@ const STAR = "Enjoying Seira?";
 const signedOut: CloudAccountState = { status: "signed-out" };
 const free: CloudAccountState = { status: "connected", account: { id: "a", email: "person@example.test" }, entitlement: { plan: "free", status: "inactive", expiresAt: null, version: 1 } };
 const paid = (extra: Partial<CloudAccountState> = {}): CloudAccountState => ({ ...free, entitlement: { plan: "pro", tier: "pro", status: "active", expiresAt: NOW + 30 * DAY, version: 2 }, ...extra });
-const ready = { status: "ready" as const, origin: "https://omb-u-1.fly.dev" };
+const ready = { status: "ready" as const, origin: "https://seira-u-1.fly.dev" };
 const trial = (state: CloudTrial["state"], extra: Partial<CloudTrial> = {}): CloudTrial =>
   ({ state, tier: "pro", endsAt: NOW + DAY, amount: 4900, chargeAt: NOW + DAY, holdUntil: null, deleteAt: null, keep: "none", ...extra });
 
@@ -78,7 +80,7 @@ let accountListeners: Set<(next: CloudAccountState) => void>;
 let now: number;
 
 const PRELOAD = readFileSync(join(process.cwd(), "electron", "preload.cjs"), "utf8").replace(/\r\n/g, "\n");
-const LOCAL_ORIGIN = "http://127.0.0.1:8799", MY_CLOUD = "https://omb-u-1.fly.dev", VPS = "https://bots.example.test";
+const LOCAL_ORIGIN = "http://127.0.0.1:8799", MY_CLOUD = "https://seira-u-1.fly.dev", VPS = "https://bots.example.test";
 type Page = "local" | "cloud" | "server";
 type Handler = (event: { page: Page; returnValue?: unknown }, ...args: unknown[]) => unknown;
 interface Desktop {
@@ -105,7 +107,7 @@ function windowOn(origin: string, { click = true } = {}) {
   const page: Page = origin === LOCAL_ORIGIN ? "local" : origin === MY_CLOUD ? "cloud" : "server";
   let ogb: Record<string, unknown> = {};
   vm.runInNewContext(PRELOAD, {
-    process: { platform: "darwin", argv: [`--omb-local-origin=${LOCAL_ORIGIN}`, "--omb-company-desktop=1"] },
+    process: { platform: "darwin", argv: [`--seira-local-origin=${LOCAL_ORIGIN}`, "--seira-company-desktop=1"] },
     location: { origin }, navigator: { userActivation: { isActive: click } }, TextEncoder,
     require: () => ({ webUtils: {}, contextBridge: { exposeInMainWorld: (_name: string, value: Record<string, unknown>) => { ogb = value; } },
       ipcRenderer: { on() {}, removeListener() {}, send() {},
@@ -141,9 +143,9 @@ const press = (label: string) => {
 const FIRST_REPLY = [{ tasks: [{ threadId: "first", usage: { turns: 1 } }] }];
 let session: Map<string, string>;
 const returning = () => { f.state.bots = [{ tasks: [{ threadId: "t", createdAt: 1, usage: { turns: 2 } }] }]; };
-const launchCardsSeen = () => { desk.saved = { seen: [WHATS_NEW_NOTICE] }; storage.set(TEAMS_NOTICE, "1"); storage.set(GROK_MOVE_NOTICE, "1"); storage.set(PRODUCT_HUNT_NOTICE, "1"); storage.set(SIMPLE_MODE_PROMPT_KEY, "1"); };
+const launchCardsSeen = () => { desk.saved = { seen: [WHATS_NEW_NOTICE] }; storage.set(VERSIONS_KEY, JSON.stringify({ first: appVersion(), last: appVersion(), before: null })); storage.set(TEAMS_NOTICE, "1"); storage.set(GROK_MOVE_NOTICE, "1"); storage.set(PRODUCT_HUNT_NOTICE, "1"); storage.set(SIMPLE_MODE_PROMPT_KEY, "1"); };
 const hints = () => f.state.config.onboarding.hintsSeen as string[];
-const SHARED_HINT_CLOSED = "omb.onboarding.sharedWorkspaceHint";
+const SHARED_HINT_CLOSED = "seira.onboarding.sharedWorkspaceHint";
 
 beforeEach(() => {
   // The page's announcement cards live beside the component for the session; no test inherits another's.
@@ -510,13 +512,13 @@ describe("What's new after the update", () => {
   it("See the new Cloud and Start a Team open the Cloud website with their slide's tag, and end it for good", async () => {
     await launch();
     press("See the new Cloud"); await flush();
-    expect(window.ogb?.openExternal).toHaveBeenCalledWith("https://cloud.openmausbot.com/cloud?src=app_whats_new_pro");
+    expect(window.ogb?.openExternal).toHaveBeenCalledWith("https://cloud.seira.bot/cloud?src=app_whats_new_pro");
     expect(steps().at(-1)).toEqual(step("see_cloud", "pro"));
     await keptForGood();
     fresh(); vi.mocked(window.ogb!.openExternal!).mockClear();
     await relaunch(); press("Next");
     press("Start a Team"); await flush();
-    expect(window.ogb?.openExternal).toHaveBeenCalledWith("https://cloud.openmausbot.com/pro/buy?plan=team&src=app_whats_new_team");
+    expect(window.ogb?.openExternal).toHaveBeenCalledWith("https://cloud.seira.bot/pro/buy?plan=team&src=app_whats_new_team");
     expect(steps().at(-1)).toEqual(step("start_team", "team"));
     await keptForGood();
   });
@@ -592,7 +594,7 @@ describe("What's new after the update", () => {
     expect(on(await launch()), "the first chat, before its first reply").toBeNull();
     f.state.bots = structuredClone(FIRST_REPLY); markWelcomeFinished();
     expect(on(await launch()), "the launch the welcome finished in").toBeNull();
-    session.clear(); markLaunchDialog("mausbot");
+    session.clear(); markLaunchDialog("seira");
     expect(on(await launch()), "the launch Seira's first card took").toBeNull();
     expect(on(await relaunch())).toBe("pro");
   });
@@ -744,9 +746,9 @@ describe("the product-updates question after the update", () => {
 
   it("waits while Seira's first-launch card is due, then follows it in the same launch once it closes", async () => {
     f.viewerEmail = null;
-    f.state.bots = [{ ...structuredClone(FIRST_REPLY[0]), id: "maus", defaultBot: {} }];
+    f.state.bots = [{ ...structuredClone(FIRST_REPLY[0]), id: "seira", defaultBot: {} }];
     expect(await launch(), "the card is due: the question waits for it").not.toContain(QUESTION);
-    markLaunchDialog("mausbot"); f.state.bots[0].welcomed = true;
+    markLaunchDialog("seira"); f.state.bots[0].welcomed = true;
     const after = await launch();
     expect(after, "the card closed in this launch: the question follows it, as it follows the popup").toContain(QUESTION);
     expect(after, "the popup still waits for a later launch").not.toContain(POPUP);
@@ -1460,7 +1462,7 @@ describe("the Teams What's new", () => {
   const TITLE = "Seira is better with your team", GROK = "Move from Grok Bot";
   const POINTS = ["One shared bot for everyone: set it up once, everyone uses it.", "Team files and templates everyone&#x27;s bots can use.",
     "Private chats stay private, even from admins.", "$40 a month for 2 people, $20 for each extra person."];
-  const TEAM = { id: "team-acme", name: "Acme", cloudPage: "https://admin.openmausbot.com/cloud" };
+  const TEAM = { id: "team-acme", name: "Acme", cloudPage: "https://admin.seira.bot/cloud" };
   const steps = () => vi.mocked(track).mock.calls.filter(([event, props]) => event === "whats_new" && (props as { slide: string }).slide === "teams")
     .map(([, props]) => (props as { action: string }).action);
   let firstScreen: boolean;
@@ -1502,7 +1504,7 @@ describe("the Teams What's new", () => {
     expect(steps()).toContain("seen");
     expect(vi.mocked(track)).toHaveBeenCalledWith("whats_new", { action: "seen", slide: "teams", audience: "no_team", campaign: TEAMS_NOTICE });
     press("Start a team"); await flush();
-    expect(window.ogb?.openExternal).toHaveBeenCalledWith("https://cloud.openmausbot.com/pro/buy?plan=team&src=app_whats_new_teams");
+    expect(window.ogb?.openExternal).toHaveBeenCalledWith("https://cloud.seira.bot/pro/buy?plan=team&src=app_whats_new_teams");
     expect(steps().at(-1)).toBe("start_team");
     expect(hints()).toContain(TEAMS_NOTICE); expect(desktopMarks()).toContain(TEAMS_NOTICE);
     expect(render(), "nothing else that launch").toBe("");
@@ -1529,7 +1531,7 @@ describe("the Teams What's new", () => {
     for (const text of [TITLE, "Invite your team", "Not now"]) expect(html).toContain(text);
     expect(html).not.toContain("Start a team");
     press("Invite your team"); await flush();
-    expect(window.open, "a Cloud's page opens links as a browser does").toHaveBeenCalledWith("https://admin.openmausbot.com/cloud/team/team-acme/people?do=invite", "_blank", "noopener,noreferrer");
+    expect(window.open, "a Cloud's page opens links as a browser does").toHaveBeenCalledWith("https://admin.seira.bot/cloud/team/team-acme/people?do=invite", "_blank", "noopener,noreferrer");
     expect(vi.mocked(track)).toHaveBeenCalledWith("whats_new", { action: "invite", slide: "teams", audience: "team_admin", campaign: TEAMS_NOTICE });
     expect(wrote("/api/me/welcome")).toEqual([{ hints: [TEAMS_NOTICE] }]);
     expect(wrote("/api/config"), "never the team's record").toEqual([]);
@@ -1588,5 +1590,128 @@ describe("the Teams What's new", () => {
     expect(await launch(), "the launch the welcome finished in").not.toContain(TITLE);
     expect(steps()).toEqual([]);
     expect(await relaunch(), "the next launch").toContain(TITLE);
+  });
+});
+
+describe("the release notes after an update", () => {
+  const TITLE = "What&#x27;s new in Seira 0.1.180", VERSIONS = "seira.versions", HINT = "release-notes:0.1.180";
+  let modal: boolean;
+  const update = (before = "0.1.179") => storage.set(VERSIONS, JSON.stringify({ first: before, last: before, before: null }));
+  const atVersion = (version: string) => { (window.ogb as Record<string, any>).app = { version, ownPage: true }; };
+  const events = () => vi.mocked(track).mock.calls.filter(([event]) => event === "release_notes").map(([, props]) => props);
+  const keydown = (key: string) => {
+    const handler = vi.mocked(window.addEventListener).mock.calls.filter(([type]) => type === "keydown").at(-1)![1] as (event: unknown) => void;
+    const event = { key, shiftKey: false, preventDefault: vi.fn(), stopPropagation: vi.fn() };
+    handler(event);
+    return event;
+  };
+  beforeEach(() => {
+    modal = false; atVersion("0.1.180"); storage.delete(VERSIONS);
+    vi.stubGlobal("document", { activeElement: null, body: null, getElementById: () => null, querySelector: () => null,
+      querySelectorAll: () => modal ? [{ closest: () => null, checkVisibility: () => true }] : [] });
+  });
+
+  it("is due after an update: the version's items, where it came from, shown once, and the launch is its own", async () => {
+    update();
+    const html = await relaunch();
+    for (const text of [TITLE, "Updated from 0.1.179", 'data-release-notes="0.1.180"', 'aria-modal="true"', "Report a problem in one step", "Long chats open faster",
+      "Seira opens sooner", "A safer yes in a Live call", "See all changes", "Continue"]) expect(html).toContain(text);
+    expect(events()).toEqual([{ action: "shown", version: "0.1.180" }]);
+    expect(launchNotice()).toBe(RELEASE_NOTES_NOTICE);
+    expect(launchDialogShown()).toBe("notices");
+    expect(JSON.parse(storage.get(VERSIONS)!)).toEqual({ first: "0.1.179", last: "0.1.180", before: "0.1.179" });
+  });
+
+  it("is not due on a fresh install of the version, nor on its later launches", async () => {
+    expect(await relaunch()).not.toContain(TITLE);
+    expect(JSON.parse(storage.get(VERSIONS)!)).toEqual({ first: "0.1.180", last: "0.1.180", before: null });
+    expect(await relaunch()).not.toContain(TITLE);
+    expect(events()).toEqual([]);
+  });
+
+  it("is due, without where it came from, for a profile that ran an earlier version nobody recorded", async () => {
+    returning();
+    const html = await relaunch();
+    expect(html).toContain(TITLE); expect(html).not.toContain("Updated from");
+  });
+
+  it("is not due for a version with no entry", async () => {
+    atVersion("0.1.183"); update();
+    expect(await relaunch()).not.toContain("new in Seira");
+    atVersion("dev");
+    expect(await relaunch()).not.toContain("new in Seira");
+    expect(events()).toEqual([]);
+  });
+
+  it("waits for a live call, another dialog and a bot's turn, and comes back", async () => {
+    update();
+    const waits: Array<() => void> = [() => { f.state.liveCall = { status: "live" }; }, () => { modal = true; },
+      () => { f.state.bots = [{ busy: true, tasks: [{ threadId: "t", createdAt: 1, usage: { turns: 2 } }] }]; }];
+    for (const wait of waits) {
+      const saved = structuredClone(f.state); wait();
+      expect(await relaunch(), wait.toString()).not.toContain(TITLE);
+      f.state = saved; modal = false;
+    }
+    expect(events()).toEqual([]);
+    expect(await relaunch()).toContain(TITLE);
+    f.state.liveCall = { status: "live" };
+    expect(await settle(), "a call starts while it is up").not.toContain(TITLE);
+    f.state.liveCall = null;
+    expect(await settle()).toContain(TITLE);
+  });
+
+  it("is not for the first launch of a new install's welcome", async () => {
+    update(); markWelcomeFinished();
+    expect(await launch()).not.toContain(TITLE);
+    expect(await relaunch()).toContain(TITLE);
+  });
+
+  it("is never on a remote client, on a Cloud page, a saved server's page or a branded build", async () => {
+    update();
+    (window.ogb as Record<string, any>).remoteClient.active = true;
+    expect(await relaunch(), "remote client").not.toContain(TITLE);
+    showWindow(MY_CLOUD); atVersion("0.1.180");
+    expect(await relaunch(), "Cloud page").not.toContain(TITLE);
+    viewer = { hosted: true, canSave: true }; showWindow(VPS); atVersion("0.1.180");
+    expect(await relaunch(), "server page").not.toContain(TITLE);
+    viewer = LOCAL_VIEWER; showWindow(LOCAL_ORIGIN); atVersion("0.1.180"); f.brand = "file";
+    expect(await relaunch(), "branded build").not.toContain(TITLE);
+    expect(events()).toEqual([]);
+  });
+
+  it("Continue, the X, Escape and a click outside close it, report the action and keep it closed", async () => {
+    for (const how of ["Continue", "Close", "Escape", "outside"] as const) {
+      storage.delete(HINT); f.state.config.onboarding.hintsSeen = withTourFinished(undefined); vi.mocked(track).mockClear(); update();
+      expect(await relaunch(), how).toContain(TITLE);
+      if (how === "Escape") expect(keydown("Escape").preventDefault, how).toHaveBeenCalled();
+      else if (how === "outside") {
+        const backdrop = tree().find(node => typeof node.props.onMouseDown === "function")!;
+        backdrop.props.onMouseDown({ target: {}, currentTarget: backdrop });
+        expect(render(), "a press inside the dialog").toContain(TITLE);
+        backdrop.props.onMouseDown({ target: backdrop, currentTarget: backdrop });
+      } else press(how);
+      await flush();
+      expect(render()).toBe("");
+      expect(storage.get(HINT)).toBe("1"); expect(hints()).toContain(HINT);
+      expect(events().at(-1)).toEqual({ action: how === "Continue" ? "continue" : "close", version: "0.1.180" });
+      expect(await relaunch()).not.toContain(TITLE);
+    }
+  });
+
+  it("See all changes opens the version's tag page, reports it and keeps the popup open", async () => {
+    update();
+    expect(await relaunch()).toContain(TITLE);
+    press("See all changes"); await flush();
+    expect(window.ogb!.openExternal).toHaveBeenCalledWith("https://github.com/seira-bot/seira/releases/tag/v0.1.180");
+    expect(events().at(-1)).toEqual({ action: "all_changes", version: "0.1.180" });
+    expect(render()).toContain(TITLE);
+    expect(hints()).not.toContain(HINT);
+  });
+
+  it("a seen hint stops it, in the workspace record or in this browser", async () => {
+    update(); f.state.config.onboarding.hintsSeen = [...withTourFinished(undefined), HINT];
+    expect(await relaunch()).not.toContain(TITLE);
+    f.state.config.onboarding.hintsSeen = withTourFinished(undefined); storage.set(HINT, "1");
+    expect(await relaunch()).not.toContain(TITLE);
   });
 });

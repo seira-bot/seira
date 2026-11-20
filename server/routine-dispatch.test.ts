@@ -31,9 +31,9 @@ describe("startRoutineWork", () => {
     expect(startGoal).toHaveBeenCalledWith("g1", "thread-1", "Plan", "pepper", "run-1", expect.any(Function));
   });
 
-  it("starts a bot turn in the maus location by default", async () => {
+  it("starts a bot turn in the seira location by default", async () => {
     const d = deps();
     await startRoutineWork(d, run({ prompt: "Do it" }), "thread-1");
-    expect(d.options.startTurn).toHaveBeenCalledWith("pepper", "thread-1", expect.stringContaining("Do it"), "maus", "schedule", expect.any(Function), "run-1");
+    expect(d.options.startTurn).toHaveBeenCalledWith("pepper", "thread-1", expect.stringContaining("Do it"), "seira", "schedule", expect.any(Function), "run-1");
   });
 });

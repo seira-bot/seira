@@ -1,19 +1,20 @@
 import type { CloudAccountState } from "../../electron/cloud-account.mjs";
 import type { CloudOffer } from "../../electron/cloud-home.mjs";
 import { CLOUD_TEAM_TIERS } from "../../electron/cloud-team-plan.mjs";
+import { SEIRA_HOSTS, seiraOrigin } from "../../electron/seira-hosts.mjs";
 import { track } from "@/lib/analytics";
 import { cloudPlanView, moneyBackShort, offerPlanLabel, planPaidLine, planPrice, taxIncluded, trialRunning, trialTerms } from "@/lib/cloud-plan";
 import { SEIRA_CLOUD_PLANS } from "@/lib/seira-cloud";
 import { WHATS_NEW_NOTICE } from "@/lib/notices";
 
 export type WhatsNewSlide = "pro" | "team";
-/** Who the account is to MausBot Cloud: no plan, a plan of its own, in a team, or something else (being bought, needing
+/** Who the account is to Seira Cloud: no plan, a plan of its own, in a team, or something else (being bought, needing
  * attention, not checked). Null until the sign-in is restored and checked. */
 export type WhatsNewAudience = "none" | "own" | "team" | "other";
 
 /** Each slide's tag on the Cloud's funnel: `src` on its links, and `source` on the checkout the app opens from it. */
 export const WHATS_NEW_SOURCES = { pro: "app_whats_new_pro", team: "app_whats_new_team" } as const satisfies Record<WhatsNewSlide, string>;
-const CLOUD_SITE = "https://cloud.openmausbot.com", STAGING_SITE = "https://omb-cloud-staging.fly.dev";
+const CLOUD_SITE = seiraOrigin(SEIRA_HOSTS.cloud), STAGING_SITE = seiraOrigin(SEIRA_HOSTS.cloudStaging);
 
 /** The Cloud website's Home, which shows the plans to someone without one; `src` on /cloud opens that page. */
 export const newCloudUrl = (staging = false) => `${staging ? STAGING_SITE : CLOUD_SITE}/cloud?src=${WHATS_NEW_SOURCES.pro}`;

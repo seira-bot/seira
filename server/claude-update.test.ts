@@ -86,7 +86,7 @@ describe("updateClaudeCli", () => {
 
 describe("isAppInstalledClaude", () => {
   it("is true only when the claude a turn runs is the one in the app's engines folder", () => {
-    const root = mkdtempSync(join(tmpdir(), "omb-claude-update-"));
+    const root = mkdtempSync(join(tmpdir(), "seira-claude-update-"));
     try {
       const engines = join(root, "tools", "npm", "bin");
       const other = join(root, "elsewhere");

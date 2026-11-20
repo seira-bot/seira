@@ -3,21 +3,21 @@ import { describe, expect, it } from "vitest";
 import { launchEnv, summarize } from "../bench-startup.ts";
 
 describe("launchEnv", () => {
-  const base = { PATH: "/usr/bin", LANG: "C", DISPLAY: ":1", HOME: "/real/home", OMB_PORT: "1", OMB_DATA_DIR: "/real/data", SECRET_TOKEN: "x" };
+  const base = { PATH: "/usr/bin", LANG: "C", DISPLAY: ":1", HOME: "/real/home", SEIRA_PORT: "1", SEIRA_DATA_DIR: "/real/data", SECRET_TOKEN: "x" };
   const env = launchEnv(base, "/tmp/sandbox", "/tmp/sandbox/timeline.json");
 
-  it("does not inherit OMB_ variables or unrelated variables", () => {
-    expect(env.OMB_PORT).toBeUndefined();
-    expect(env.OMB_DATA_DIR).toBeUndefined();
+  it("does not inherit SEIRA_ variables or unrelated variables", () => {
+    expect(env.SEIRA_PORT).toBeUndefined();
+    expect(env.SEIRA_DATA_DIR).toBeUndefined();
     expect(env.SECRET_TOKEN).toBeUndefined();
     expect(env.PATH).toBe("/usr/bin");
     expect(env.DISPLAY).toBe(":1");
   });
 
   it("turns the broker off and points updates at a dead loopback origin", () => {
-    expect(env.OMB_COMPOSIO_BROKER).toBe("off");
-    expect(env.OMB_UPDATES_ORIGIN).toBe("http://127.0.0.1:9");
-    expect(env.OMB_STARTUP_TIMELINE).toBe("/tmp/sandbox/timeline.json");
+    expect(env.SEIRA_COMPOSIO_BROKER).toBe("off");
+    expect(env.SEIRA_UPDATES_ORIGIN).toBe("http://127.0.0.1:9");
+    expect(env.SEIRA_STARTUP_TIMELINE).toBe("/tmp/sandbox/timeline.json");
   });
 
   it("keeps every home and XDG folder inside the sandbox", () => {

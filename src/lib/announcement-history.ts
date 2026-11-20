@@ -22,7 +22,7 @@ export function announcementHistory({ cards, feedUpdatedAt, now }: { cards: read
 // ---- When the person last opened Announcements: this browser, this desktop's record for every page of its window, and
 // the place's record (on a Team Cloud, the person's own). The newest of them counts.
 
-const READ_KEY = "omb.announcements.read-at";
+const READ_KEY = "seira.announcements.read-at";
 const stored = (key: string): string | null => { try { return localStorage.getItem(key); } catch { return null; } };
 const store = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch {} };
 

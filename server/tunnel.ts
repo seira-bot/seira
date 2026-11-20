@@ -125,7 +125,7 @@ export interface TunnelRecovery {
 
 const STOPPED_TUNNEL: ManagedTunnelState = { status: "stopped", ready: false };
 
-/** A server's operator owns its environment, so OMB_CONTROL_PLANE_URL is always honoured here (the desktop: dev builds only). */
+/** A server's operator owns its environment, so SEIRA_CONTROL_PLANE_URL is always honoured here (the desktop: dev builds only). */
 export function createTunnelAccount(options: {
   dataDir: string;
   version: string | undefined;
@@ -133,7 +133,7 @@ export function createTunnelAccount(options: {
   fetchImpl?: typeof fetch;
   machineName?: string;
   recovery?: TunnelRecovery;
-  /** `login --relay`: sign in without reserving a public address; phones reach this machine through MausBot Relay. */
+  /** `login --relay`: sign in without reserving a public address; phones reach this machine through Seira Relay. */
   relayOnly?: boolean;
   log?: (line: string) => void;
   clock?: {
@@ -176,11 +176,11 @@ export function createTunnelAccount(options: {
 /** Null when a control plane is set. Otherwise the reason that tunnel, login and Seira Relay cannot work, with the ways in that do. */
 export function controlPlaneProblem(env: NodeJS.ProcessEnv = process.env): string | null {
   if (resolveCompanionControlPlaneURL({ isPackaged: true, environment: env })) return null;
-  if (env.OMB_CONTROL_PLANE_URL?.trim()) return "OMB_CONTROL_PLANE_URL is set but is not an https address";
-  return "this Seira build has no account service for tunnel addresses and Seira Relay; set OMB_CONTROL_PLANE_URL to one you run, or serve with --domain, --tailscale or --public-url (behind your own tunnel or proxy)";
+  if (env.SEIRA_CONTROL_PLANE_URL?.trim()) return "SEIRA_CONTROL_PLANE_URL is set but is not an https address";
+  return "this Seira build has no account service for tunnel addresses and Seira Relay; set SEIRA_CONTROL_PLANE_URL to one you run, or serve with --domain, --tailscale or --public-url (behind your own tunnel or proxy)";
 }
 
-export const FLEET_CREDENTIAL_ENV = "OMB_INSTALLATION_CREDENTIAL";
+export const FLEET_CREDENTIAL_ENV = "SEIRA_INSTALLATION_CREDENTIAL";
 
 /** A fleet container's installation credential comes from the environment; nothing is written to disk. */
 export function fleetCredential(env: NodeJS.ProcessEnv = process.env): string | null {
@@ -206,7 +206,7 @@ export async function fleetAccess(options: { credential: string; version?: strin
   }
 }
 
-/** OMB_CLOUDFLARED_PATH, then the copy this command downloaded into the data
+/** SEIRA_CLOUDFLARED_PATH, then the copy this command downloaded into the data
  * dir, then PATH. */
 export function cloudflaredPath(dataDir: string, env: NodeJS.ProcessEnv = process.env): string | null {
   return resolveCloudflaredBinary({ isPackaged: false, appPath: dataDir, environment: env });
@@ -233,7 +233,7 @@ export async function ensureCloudflared(options: {
   const env = options.env ?? process.env;
   const found = cloudflaredPath(options.dataDir, env);
   const staged = stagedCloudflaredPath({ appPath: options.dataDir });
-  const refreshStaged = !env.OMB_CLOUDFLARED_PATH?.trim() && found === staged;
+  const refreshStaged = !env.SEIRA_CLOUDFLARED_PATH?.trim() && found === staged;
   if (found && !refreshStaged) return found;
   options.log(
     refreshStaged
@@ -269,7 +269,7 @@ export interface RunningTunnel {
   stop(): Promise<void>;
 }
 
-/** The control plane points the tunnel at 127.0.0.1:8812 (OMB_TUNNEL_ORIGIN_PORT for tests); the gateway forwards to the IPC socket. */
+/** The control plane points the tunnel at 127.0.0.1:8812 (SEIRA_TUNNEL_ORIGIN_PORT for tests); the gateway forwards to the IPC socket. */
 export function startTunnel(options: {
   dataDir: string;
   access: ManagedTunnelAccess;
@@ -281,7 +281,7 @@ export function startTunnel(options: {
   onState?: (state: ManagedTunnelState) => void;
 }): RunningTunnel {
   const env = options.env ?? process.env;
-  const originPort = Number(env.OMB_TUNNEL_ORIGIN_PORT || MANAGED_COMPANION_ORIGIN_PORT);
+  const originPort = Number(env.SEIRA_TUNNEL_ORIGIN_PORT || MANAGED_COMPANION_ORIGIN_PORT);
   let current: ManagedTunnelState = { status: "stopped", ready: false };
   const tunnel = createManagedCompanionTunnel({
     binaryPath: options.binaryPath,

@@ -1,4 +1,4 @@
-// A real Cloud home and its agents tools: a bot asks for two secrets OpenMausBot does not keep, the person types each
+// A real Cloud home and its agents tools: a bot asks for two secrets Seira does not keep, the person types each
 // into its card, and the bot uses them. Each recognisable value is then searched for in everything the server wrote (the
 // data folder, its events, transcripts, usage spans and logs), every answer it gave, every tool result and its own log.
 // Both are saved to the Vault for the bot, sealed, so asking again needs no card. The file secret is found only in its
@@ -19,7 +19,7 @@ import { filesHolding as filesHoldingText } from "./testing/files-holding.ts";
 import { freePortBlock } from "./testing/ports.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
-const HOST = "omb-t-5ec2e7f1a0b9.fly.dev";
+const HOST = "seira-t-5ec2e7f1a0b9.fly.dev";
 const FILE_CANARY = `sk_test_FILECANARY${randomBytes(12).toString("hex")}`;
 const REF_CANARY = `ntn_REFCANARY${randomBytes(12).toString("hex")}`;
 const bootstrap = randomBytes(32).toString("base64url");
@@ -89,8 +89,8 @@ async function proxyFor(start: () => Promise<void>) {
 }
 
 beforeAll(async () => {
-  home = mkdtempSync(join(tmpdir(), "omb-secret-requests-"));
-  const dataDir = join(home, ".openmausbot");
+  home = mkdtempSync(join(tmpdir(), "seira-secret-requests-"));
+  const dataDir = join(home, ".seira");
   mkdirSync(dataDir, { recursive: true });
   const cli = join(home, "fixture-claude.mjs");
   writeFileSync(cli, `#!/usr/bin/env node
@@ -105,13 +105,13 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
   } }));
   const port = await freePortBlock([0, 1]);
   base = `http://127.0.0.1:${port}`;
-  const contract = { OMB_CLOUD_ROLE: "home", OMB_BOT_BOX: "0", OMB_CLOUD_MACHINE_ID: "7d1c3b5a-2e4f-4a6b-8c9d-0e1f2a3b4c5d", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
-    OMB_CLOUD_BOOTSTRAP_SECRET: bootstrap, OMB_PUBLIC_URL: `https://${HOST}` };
-  const imageEnv = { PATH: process.env.PATH, OMB_DUCKDB_DIR: join(home, "empty-tree"), ...contract };
+  const contract = { SEIRA_CLOUD_ROLE: "home", SEIRA_BOT_BOX: "0", SEIRA_CLOUD_MACHINE_ID: "7d1c3b5a-2e4f-4a6b-8c9d-0e1f2a3b4c5d", SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test",
+    SEIRA_CLOUD_BOOTSTRAP_SECRET: bootstrap, SEIRA_PUBLIC_URL: `https://${HOST}` };
+  const imageEnv = { PATH: process.env.PATH, SEIRA_DUCKDB_DIR: join(home, "empty-tree"), ...contract };
   const { server, secrets } = cloudHomeChildEnvironments(cloudHomeConfiguration(imageEnv)!, imageEnv, home);
   const offline = `data:text/javascript,${encodeURIComponent('const real = globalThis.fetch; globalThis.fetch = async (url, init) => String(url).startsWith("http://127.0.0.1:") ? real(url, init) : new Response("offline fixture", { status: 503 });')}`;
   child = spawnWithSecrets(process.execPath, ["--import", offline, join(SERVER_DIR, "index.ts")], {
-    ...server, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), USERPROFILE: home,
+    ...server, SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), USERPROFILE: home,
     ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
   }, secrets, null, true);
   child.stdout?.on("data", (chunk) => { log += chunk; });
@@ -157,7 +157,7 @@ it("keeps a file secret and a ref secret out of every record, and the bot uses e
   expect(await save(fileCard.id, "")).toMatchObject({ status: 400 });
   expect(await save(fileCard.id, FILE_CANARY)).toMatchObject({ status: 200, body: { provided: true } });
   expect(await save(fileCard.id, FILE_CANARY)).toMatchObject({ status: 409, body: { error: "this secret was already saved" } });
-  const cardFile = join(home, ".openmausbot", "workspaces", bot.id, ".openmausbot-secrets", bot.threadId, fileCard.id);
+  const cardFile = join(home, ".seira", "workspaces", bot.id, ".seira-secrets", bot.threadId, fileCard.id);
   expect(readFileSync(cardFile, "utf8")).toBe(FILE_CANARY);
   const fileText = (await tools.call("request_credential", { label: "Stripe secret key", reason: "To create test charges.", delivery: "file" })).text;
   expect((await cards()).at(-1).id, "the Vault answers with no card").toBe(fileCard.id);
@@ -175,14 +175,14 @@ it("keeps a file secret and a ref secret out of every record, and the bot uses e
   const refText = (await tools.call("request_credential", { label: "Notion key", reason: "For Notion's MCP server.", delivery: "ref" })).text;
   const ref = /secret-ref:[0-9a-f]{32}/u.exec(refText)?.[0];
   expect(ref, refText).toBeDefined();
-  // The person agreed to OpenMausBot's tools only: a file needs a new card.
+  // The person agreed to Seira's tools only: a file needs a new card.
   const asFile = await tools.call("request_credential", { label: "Notion key", reason: "For a script.", delivery: "file" });
   expect(asFile.text).toContain("not as a file for your commands (not a file request), so this card asks for it again");
   expect((await cards()).at(-1).secret).toMatchObject({ label: "Notion key", delivery: "file" });
 
   const added = await tools.call("mcp_server", { action: "add", name: "notion", url: "https://mcp.notion.test/mcp", headers: { Authorization: `Bearer ${ref}`, "Notion-Version": "2022-06-28" } });
   expect(added).toEqual({ isError: false, text: expect.stringMatching(/^Added MCP server notion and turned it on\. Test: /u) });
-  const config = JSON.parse(readFileSync(join(home, ".openmausbot", "config.json"), "utf8"));
+  const config = JSON.parse(readFileSync(join(home, ".seira", "config.json"), "utf8"));
   expect(config.mcpServers.notion.headers).toEqual({ Authorization: expect.stringMatching(/^Bearer vault:[0-9a-f-]{36}$/u), "Notion-Version": "2022-06-28" });
   expect(JSON.stringify(config)).not.toContain(REF_CANARY);
   const reused = await tools.call("mcp_server", { action: "add", name: "notion2", url: "https://mcp.notion.test/mcp", headers: { Authorization: `Bearer ${ref}` } });

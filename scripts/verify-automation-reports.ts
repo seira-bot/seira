@@ -51,7 +51,7 @@ try {
     reply("Nothing else from Acme.\nNOTHING NEW", "run-5"),
     { ...reply("NOTHING NEW", "later"), repeat: true },
   ] } }));
-  ui = await mountPreview(fixture, { entry: "/scripts/testing/threads-preview.tsx", route: "/__automations.html", title: "Isolated OpenMaus Automations", logLevel: "silent" });
+  ui = await mountPreview(fixture, { entry: "/scripts/testing/threads-preview.tsx", route: "/__automations.html", title: "Isolated Seira Automations", logLevel: "silent" });
   say({ ...fixture.info, previewUrl: ui.previewUrl, botId, mainThreadId: main });
 
   await control(["send", "--bot", botId, "--task", main, "--text", "Watch my inbox and tell me when Acme writes."]);
@@ -68,7 +68,7 @@ try {
         const current = (await runsOf())[3];
         if (current?.status !== "running" || !existsSync(fixture.fixtureDumpPath)) return null;
         const launch = JSON.parse(readFileSync(fixture.fixtureDumpPath, "utf8"));
-        return launch.mcpConfig?.mcpServers?.agents?.env?.OMB_THREAD_ID === current.threadId ? launch.mcpConfig.mcpServers.ogb.args.at(-1) as string : null;
+        return launch.mcpConfig?.mcpServers?.agents?.env?.SEIRA_THREAD_ID === current.threadId ? launch.mcpConfig.mcpServers.ogb.args.at(-1) as string : null;
       });
       broker = connect(started);
       broker.on("error", () => {});
