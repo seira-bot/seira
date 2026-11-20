@@ -11,6 +11,7 @@ import {
   type BotAvatarProps,
   type MausAvatarProps,
 } from "./Avatar";
+import type { PersonLook } from "../../shared/person-look";
 
 const render = (props: Partial<MausAvatarProps>) =>
   renderToStaticMarkup(createElement(MausAvatar, { color: "green", animated: false, ...props }));
@@ -100,8 +101,8 @@ describe("theme hooks on faces", () => {
 });
 
 describe("PersonAvatar", () => {
-  const look = { mascotBody: "bob" as const, mascotAccessories: ["glasses" as const], color: "teal" as const };
-  const person = (profile: { avatarUrl?: string; look?: typeof look } | undefined) => renderToStaticMarkup(createElement(PersonAvatar, { profile, size: 28 }));
+  const look: PersonLook = { mascotBody: "bob", mascotAccessories: ["glasses"], color: "teal" };
+  const person = (profile: { avatarUrl?: string; look?: PersonLook } | undefined) => renderToStaticMarkup(createElement(PersonAvatar, { profile, size: 28 }));
 
   it("draws the saved look with the bot avatar parts when there is no photo", () => {
     const markup = person({ look });

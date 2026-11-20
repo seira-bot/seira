@@ -40,7 +40,8 @@ describe("the person's default look", () => {
   });
 
   it("accepts only parts a bot can wear", () => {
-    const look = randomPersonLook(() => 0.5);
+    const generated = randomPersonLook(() => 0.5);
+    const look = JSON.parse(JSON.stringify(generated));
     expect(parseConfigPatch({ profile: { look } })).toEqual({ profile: { look } });
     expect(personLookSchema.safeParse({ ...look, color: "plaid" }).success).toBe(false);
     expect(personLookSchema.safeParse({ ...look, mascotBody: "dragon" }).success).toBe(false);
