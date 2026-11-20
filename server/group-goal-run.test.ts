@@ -393,3 +393,10 @@ describe("parseGroupGoalDecision still refuses contradictory or quoted decisions
     ).toEqual({ status: "continue", next: "Scout", instruction: "Verify" });
   });
 });
+
+describe("goal envelopes an earlier version wrote", () => {
+  it("are hidden like the current ones", async () => {
+    const { visibleCoordinatorText } = await import("./group-goal-run.ts");
+    expect(visibleCoordinatorText('Done <openmaus-goal>{"status":"done"}</openmaus-goal>')).toBe("Done");
+  });
+});

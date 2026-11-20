@@ -272,3 +272,10 @@ describe("team manifests", () => {
     ).toThrow("at most 200 members");
   });
 });
+
+describe("a team file an earlier version wrote", () => {
+  it("opens with the old format id", () => {
+    const manifest = createTeamManifest({ name: "T", memberIds: ["one"] }, [{ id: "one", name: "One", title: "", description: "", soul: "s", color: "blue" }]);
+    expect(parseTeamManifest({ ...manifest, format: "openmaus.team" } as typeof manifest).team.name).toBe("T");
+  });
+});
