@@ -459,7 +459,7 @@ import { screenFrameHash, screenSurfaceForTool, screenTouchingTool, settledFrame
 import { asSchedule, RoutineRequestService } from "./routine-requests.ts"; import { ownerSpokeOnly } from "./cloud-routine-level.ts"; import { routineRunCard, routineRunFallbackText } from "./routine-run-card.ts";
 import { activeRoutinesContext } from "./active-routines-context.ts";
 import { createRefusedHandoffs } from "./host/refused-handoffs.ts"; import { automationContextText, createAutomationReports, newestAutomationLines, routineRunNeedsReview } from "./automation-reports.ts"; import { createAutomationDestinations } from "./automation-destinations.ts"; import { createTeamRoutines } from "./host/team-routines.ts"; import { botOwner } from "../shared/bot-owner.ts"; import { forgetMember } from "./bot-owners.ts"; import { createProactive } from "./host/proactive.ts"; import { createFirstHourHooks, startFirstHour, welcomeDonePatch } from "./host/first-hour-host.ts"; import { greetingMessage } from "./host/first-hour.ts"; import { READ_AND_DRAFT_PARTS, READ_AND_DRAFT_REFUSAL, READ_AND_DRAFT_TOOLS, recordsAnswer } from "./read-and-draft.ts"; import { createPresenceRoutes } from "./routes/presence.ts"; import { needsYouNow } from "./today.ts"; import { createTeamPresenceHost } from "./host/team-presence-host.ts";
-import { engineLabel, LimitResetClock, nearLimitNote } from "./limit-resets.ts"; import { loadPlanUsage, planAccountsFromInstances } from "./plan-usage.ts"; import { LimitFailovers, limitBackupAllowed } from "./limit-failover.ts"; import { createLimitResetRoutes } from "./routes/limit-resets.ts"; import { createAiPool } from "./host/ai-pool.ts"; import { poolReading } from "./ai-pool.ts";
+import { engineLabel, LimitResetClock, nearLimitNote } from "./limit-resets.ts"; import { loadPlanUsage, planAccountsFromInstances } from "./plan-usage.ts"; import { LimitFailovers, billsEachUse, limitBackupAllowed } from "./limit-failover.ts"; import { createLimitResetRoutes } from "./routes/limit-resets.ts"; import { createAiPool } from "./host/ai-pool.ts"; import { poolReading } from "./ai-pool.ts";
 import { parseTriggerRequest, triggerTarget } from "./trigger-tools.ts"; import { WebhookRequestError, WebhookRequestService } from "./webhook-requests.ts"; import { createAppTriggerHost } from "./app-trigger-host.ts";
 import { appliesNow, directApply, UNDO_STALE, type DirectApply } from "./direct-apply.ts";
 import { createTeamMemoryRequests } from "./team-memory-requests.ts";
@@ -7543,20 +7543,8 @@ async function beginTurn(
     };
   }
   healThreadModel(botId, threadId);
-  limitFailovers.restore(botId, threadId); aiPool.place(botId, threadId);
-  const bot = store.projectBotForTask(botId, threadId);
-  if (!bot) throw Object.assign(new Error("no such task"), { status: 404 });
-  if (bot.approvalGrant) {
-    throw Object.assign(new Error("this bot's approval level is still being confirmed — try again"), { status: 409, code: "settling" });
-  }
   const answer = turnAnswers(threadId, opts);
   let computerSkipped: string | undefined;
-  const transitionError = providerTransitionForTurn(bot, opts?.runOn, threadId);
-  if (transitionError && !answer.incident) throw Object.assign(new Error(transitionError), { status: 409 });
-  if (transitionError) computerSkipped = transitionError;
-  if (providerInstancesChanging.has(bot.modelSelection.instanceId)) {
-    throw Object.assign(new Error("this provider account is being updated — try again shortly"), { status: 409, code: "settling" });
-  }
   assertWithinBudget(cfg, DATA_DIR); if (!opts?.continuesRun) usageCapGate.assertTurn(botId, personWaiting({ ...opts, peerAsk: opts?.peerAsk ?? opts?.userMessage?.peerAsk }, threadStanding(botId, threadId)) || activeRoutineRunForThread(threadId)?.byPerson === true, threadLanguage(threadId));
   if (boatLifecycleBusyBots.has(botId)) {
     const changing = "this bot's cloud computer is being changed — wait for it to finish";
@@ -7570,6 +7558,14 @@ async function beginTurn(
   if (botAtThreadCapacity(botId, threadId, Boolean(opts?.coordination || opts?.peerAsk || opts?.commsDepth || opts?.cardContinuation || opts?.computerSelectionContinuation))) {
     throw Object.assign(new Error(botThreadLimitText(cfg, botThreadsHost(cloudPlanTier.starter()))), { status: 409, code: "thread_limit" });
   }
+  if (!limitFailovers.restore(botId, threadId) && !(opts?.continuesRun || opts?.compactOnly || opts?.cardContinuation || opts?.peerLimitResent || opts?.automaticRecoveryAttempted)) aiPool.place(botId, threadId);
+  const bot = store.projectBotForTask(botId, threadId);
+  if (!bot) throw Object.assign(new Error("no such task"), { status: 404 });
+  if (bot.approvalGrant) throw Object.assign(new Error("this bot's approval level is still being confirmed — try again"), { status: 409, code: "settling" });
+  const transitionError = providerTransitionForTurn(bot, opts?.runOn, threadId);
+  if (transitionError && !answer.incident) throw Object.assign(new Error(transitionError), { status: 409 });
+  if (transitionError) computerSkipped = transitionError;
+  if (providerInstancesChanging.has(bot.modelSelection.instanceId)) throw Object.assign(new Error("this provider account is being updated — try again shortly"), { status: 409, code: "settling" });
   // Revoke what a previous turn left behind before minting this turn's integrations.
   revokeEarlierTurnCapabilities(threadId);
   if (opts?.automationSource === "webhook" || opts?.unattended) markUnattended(bot.id, threadId);
@@ -8742,8 +8738,8 @@ const limitFailovers = new LimitFailovers({ file: join(DATA_DIR, "limit-failover
   threadModel: (botId, threadId) => store.projectBotForTask(botId, threadId)?.modelSelection ?? null,
   note: (threadId, line, text) => store.appendMessage(threadId, { role: "bot", kind: "activity", tool: { name: `recovery: ${line}`, ok: true, ...(text ? { nameCode: text.key, nameParams: text.params } : {}) } }),
   switchBack: ({ botId, threadId, from, to }) => moveThread(botId, threadId, to, from) });
-const aiPool = createAiPool({ config: () => cfg.aiPool, threadModel: (botId, threadId) => store.projectBotForTask(botId, threadId)?.modelSelection ?? null, reading: (engine) => poolReading(limitClock.limit(engine)), moveTo: moveThread, engineName,
-  canRun: (botId, threadId, from, to) => { const bot = store.projectBotForTask(botId, threadId); return Boolean(bot && limitTakeover.canCarry(from, to, approvalModeFor(bot))); },
+const aiPool = createAiPool({ file: join(DATA_DIR, "ai-pool-threads.json"), config: () => cfg.aiPool, threadModel: (botId, threadId) => store.projectBotForTask(botId, threadId)?.modelSelection ?? null, botModel: (botId) => store.bot(botId)?.modelSelection ?? null, reading: (engine) => poolReading(limitClock.limit(engine), Date.now()), paid: (engine) => billsEachUse(instanceConfigs(cfg)[engine]), moveTo: moveThread, engineName,
+  canRun: (botId, threadId, from, to) => { const bot = store.projectBotForTask(botId, threadId), target = registry.get(to.instanceId); return Boolean(bot && limitTakeover.canCarry(from, to, approvalModeFor(bot))) && (to.instanceId === from.instanceId || Boolean(target && (!(cloudGuestDriven(threadId) || botApiThread(threadId)) || target.adapter.capabilities.guestTurns === "confined") && !(hostedModels && !hostedModels.allows(to)) && store.taskByThread(botId, threadId)?.cwd)); },
   note: (threadId, line) => store.appendMessage(threadId, { role: "bot", kind: "activity", tool: { name: `recovery: ${line}`, ok: true } }) });
 const automationDestinations = createAutomationDestinations({ store, mainThread: botMainThread, runs: () => routines?.listRuns() ?? [],
   cloud: CLOUD_HOME ? { owner: CLOUD_OWNER_KEY!, opener: (id, routine) => (routine && teamRoutines.opener(routine)) || routineOpener(id), reportFromOthers: cloudReportFromOthers, opened: (threadId, person) => threadStarters.set(threadId, person), outside: (threadId) => outsideLineage.mark(threadId) } : null });

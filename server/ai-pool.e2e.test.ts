@@ -94,13 +94,14 @@ const recoveryLines = (messages: any[]) => messages.filter((message) => message.
 const lastReply = (messages: any[]) => messages.findLast((message) => message.role === "bot" && message.kind === "text");
 
 /** A bot on Claude sends one message under the given pool; returns what the conversation shows afterwards. */
-async function oneTurn({ api, control }: Fixture, pool: (claude: { instanceId: string; model: string }) => unknown) {
+async function oneTurn({ api, control }: Fixture, pool: (claude: { instanceId: string; model: string }) => unknown, beforeSend?: (bot: { id: string }, threadId: string) => Promise<void>) {
   const { bot } = await control("new-bot", "--name", "Pooled");
   const threadId = bot.activeTaskId;
   const claude = { instanceId: "claude", model: (await api("GET", "/api/bots")).bots.find((entry: any) => entry.id === bot.id).modelSelection.model };
   await api("PATCH", "/api/config", { aiPool: pool(claude) });
   // The first read of every engine's usage, which the clock would make within a minute of its start.
   await api("GET", "/api/limit-resets?refresh=1");
+  await beforeSend?.(bot, threadId);
   await control("send", "--bot", bot.id, "--task", threadId, "--text", "Plan the week");
   expect((await control("wait", "--bot", bot.id, "--task", threadId, "--timeout", "30")).status).toBe("settled");
   const messages = await messagesOf(api, threadId);
@@ -146,5 +147,16 @@ it("moves nothing for a conversation whose AI is not in the pool", async () => {
     expect(model).toMatchObject({ instanceId: "claude" });
     expect(lastReply(messages)).toMatchObject({ text: "hello from fake claude" });
     expect(fixture.claudePrompts()).toHaveLength(1);
+  });
+}, 120_000);
+
+it("leaves a conversation alone whose model a person switched to a pool member that is not the bot's own", async () => {
+  await withPoolFixture({ claudeUsed: 10, codexUsed: 70 }, async (fixture) => {
+    const { messages, model } = await oneTurn(fixture, (claude) => ({ enabled: true, mode: "even", members: [claude, codex] }),
+      async (bot, threadId) => { await fixture.control("set-model", "--bot", bot.id, "--instance", codex.instanceId, "--model", codex.model, "--task", threadId); });
+    expect(recoveryLines(messages)).toEqual([]);
+    expect(model).toMatchObject({ instanceId: "codex" });
+    expect(lastReply(messages)).toMatchObject({ text: "done from fake codex" });
+    expect(fixture.claudePrompts()).toHaveLength(0);
   });
 }, 120_000);

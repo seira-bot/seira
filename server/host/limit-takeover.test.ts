@@ -487,6 +487,21 @@ describe("canCarry", () => {
     expect(instance.canCarry(on("gone", "x"), on("codex", "gpt-6"))).toBe(false);
   });
 
+  it("keeps a conversation on its own AI unless that AI is blocked, held or signed out", () => {
+    const own = on("claude", "claude-opus-5-5");
+    const unready = engine("claude", "claudeAgent", ["claude-opus-5-5"], { snapshot: { state: "unavailable", reason: "not read yet" } });
+    expect(takeover({ engines: () => [unready, CODEX] }).instance.canCarry(own, own)).toBe(true);
+    expect(takeover({ engines: () => [CODEX] }).instance.canCarry(own, own)).toBe(true);
+    expect(takeover({ blockedUntil: (id) => (id === "claude" ? NOW + HOUR : null) }).instance.canCarry(own, own)).toBe(false);
+    const held = takeover();
+    held.instance.holdModel(own, "model");
+    expect(held.instance.canCarry(own, own)).toBe(false);
+    const out = takeover();
+    out.instance.noteSignedOut("claude");
+    expect(out.instance.canCarry(own, own)).toBe(false);
+    expect(out.instance.canCarry(own, on("claude", "claude-sonnet-5"))).toBe(false);
+  });
+
   it("hands the AI a conversation leaves to the chosen list", () => {
     const chosen = vi.fn(() => [on("codex", "gpt-6")]);
     const { instance } = takeover({ chosen });

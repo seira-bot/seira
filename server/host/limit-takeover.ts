@@ -165,8 +165,7 @@ export function createLimitTakeover(deps: LimitTakeoverDeps) {
     if (!engine || !readyToRun(engine, deps.context) || deps.blockedUntil(engine.instanceId, selection.model) !== null || modelHeld(selection) !== null) return false;
     if (engine.instanceId !== current.instanceId) {
       if (signedOutHeld(engine.instanceId)) return false;
-      // Another sign-in to the same plan never carries a limit (that rotates accounts); it may stand in for one signed out.
-      // A pay-per-use key in the AI pool may hand the conversation back to the plan.
+      // Another sign-in to the same plan never carries a limit (that rotates accounts); it may stand in for one signed out, and a pay-per-use key may hand the conversation back to the plan.
       const keyHandsBack = scope === "pool" && billsEachUse(deps.configs()[current.instanceId]);
       if (scope !== "signed-out" && !keyHandsBack && !limitBackupAllowed(current, engine, deps.configs()[engine.instanceId])) return false;
       // The same rule as switching by hand: a level the other AI has no such mode for needs the person first.
@@ -234,8 +233,8 @@ export function createLimitTakeover(deps: LimitTakeoverDeps) {
 
   return {
     backups,
-    /** Whether a conversation on `from` may move to `to` for its next turn: the same checks as for a backup. */
     canCarry(from: ModelSelection, to: ModelSelection, approval?: ApprovalMode): boolean {
+      if (to.instanceId === from.instanceId) return deps.blockedUntil(to.instanceId, to.model) === null && modelHeld(to) === null && !signedOutHeld(to.instanceId);
       const engines = deps.engines(), current = engines.find((engine) => engine.instanceId === from.instanceId);
       return Boolean(current) && usable(engines, current!, to, "pool", approval);
     },
