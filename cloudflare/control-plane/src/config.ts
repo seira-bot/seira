@@ -51,7 +51,13 @@ export interface EndpointAccount {
   zoneId: string;
 }
 
+export type AccountServiceMode = "better-auth" | "seira-cloud";
+
 export interface ControlPlaneConfig {
+  /** Where account bearer tokens are checked. */
+  accountService: AccountServiceMode;
+  /** Active tunnels one account may hold across all its installations. */
+  endpointsPerAccount: number;
   authBaseURL: string;
   allowedOrigins: ReadonlySet<string>;
   capacity: CapacityConfig;
@@ -87,6 +93,10 @@ export const MAX_CLEANUP_SWEEP_LIMIT = 50;
  * cleanup rows x 14 calls + 3 x 2 + two Cache API deletes is the whole
  * 50-subrequest budget, and four accounts need the sweep limit at 2. */
 export const MAX_ENDPOINT_ACCOUNTS = 4;
+export const DEFAULT_ENDPOINTS_PER_ACCOUNT = 3;
+export const MAX_ENDPOINTS_PER_ACCOUNT = 100;
+/** Base for the capacity cache key in Seira Cloud mode. Nothing connects to it. */
+const SEIRA_CLOUD_CACHE_ORIGIN = "https://control-plane.invalid";
 
 function boundedIntegerVar(
   value: unknown,
@@ -294,15 +304,32 @@ export function readEndpointAccounts(
   return { accounts, issues };
 }
 
-export function readConfig(env: Env): ControlPlaneConfig {
-  if (!secretSchema.safeParse(env.BETTER_AUTH_SECRET).success) {
-    throw new Error("BETTER_AUTH_SECRET must contain at least 32 characters");
+function readAccountService(env: Env): AccountServiceMode {
+  const value = (env as unknown as Partial<Record<string, unknown>>).ACCOUNT_SERVICE;
+  if (value === undefined || value === null || value === "") return "better-auth";
+  if (value === "seira-cloud") {
+    const binding = (env as unknown as Partial<Record<string, unknown>>).SEIRA_CLOUD;
+    if (typeof (binding as { fetch?: unknown } | null | undefined)?.fetch !== "function") {
+      throw new Error("SEIRA_CLOUD must be a service binding");
+    }
+    return "seira-cloud";
   }
+  throw new Error("ACCOUNT_SERVICE must be empty or seira-cloud");
+}
 
-  const emailFrom = emailSchema.safeParse(env.EMAIL_FROM);
-  if (!emailFrom.success) throw new Error("EMAIL_FROM must be a valid email address");
-
-  const authBaseURL = exactHTTPSOrigin(env.BETTER_AUTH_URL, "BETTER_AUTH_URL");
+export function readConfig(env: Env): ControlPlaneConfig {
+  const accountService = readAccountService(env);
+  let emailFrom = "";
+  let authBaseURL = SEIRA_CLOUD_CACHE_ORIGIN;
+  if (accountService === "better-auth") {
+    if (!secretSchema.safeParse(env.BETTER_AUTH_SECRET).success) {
+      throw new Error("BETTER_AUTH_SECRET must contain at least 32 characters");
+    }
+    const parsedFrom = emailSchema.safeParse(env.EMAIL_FROM);
+    if (!parsedFrom.success) throw new Error("EMAIL_FROM must be a valid email address");
+    emailFrom = parsedFrom.data;
+    authBaseURL = exactHTTPSOrigin(env.BETTER_AUTH_URL ?? "", "BETTER_AUTH_URL");
+  }
   const origins = originsSchema.safeParse(env.ALLOWED_ORIGINS);
   if (!origins.success) throw new Error("ALLOWED_ORIGINS must be a comma-separated string");
   const values = origins.data.split(",")
@@ -312,7 +339,7 @@ export function readConfig(env: Env): ControlPlaneConfig {
     throw new Error("ALLOWED_ORIGINS contains too many entries");
   }
   const allowedOrigins = new Set(values.map((value) => exactHTTPSOrigin(value, "ALLOWED_ORIGINS")));
-  allowedOrigins.add(authBaseURL);
+  if (accountService === "better-auth") allowedOrigins.add(authBaseURL);
 
   if (!cloudflareResourceIdSchema.safeParse(env.CLOUDFLARE_ACCOUNT_ID).success) {
     throw new Error("CLOUDFLARE_ACCOUNT_ID must be a 32-character Cloudflare ID");
@@ -343,11 +370,19 @@ export function readConfig(env: Env): ControlPlaneConfig {
   const extra = readEndpointAccounts(vars, primary);
 
   return {
+    accountService,
+    endpointsPerAccount: boundedIntegerVar(
+      vars.SEIRA_ENDPOINTS_PER_ACCOUNT,
+      "SEIRA_ENDPOINTS_PER_ACCOUNT",
+      DEFAULT_ENDPOINTS_PER_ACCOUNT,
+      1,
+      MAX_ENDPOINTS_PER_ACCOUNT,
+    ),
     authBaseURL,
     allowedOrigins,
     capacity,
     cloudflare: primary,
-    emailFrom: emailFrom.data,
+    emailFrom,
     endpointAccounts: [primary, ...extra.accounts],
     endpointAccountIssues: extra.issues,
   };

@@ -285,6 +285,27 @@ function holdsTunnel(row: EndpointRow | null): boolean {
   return row !== null && row.tunnel_id !== null && row.status !== "deleting" && row.status !== "deleted";
 }
 
+/** An idle reclaim not yet swept: the tunnel still exists and the owner may take it back. */
+function takingBackReclaim(row: EndpointRow | null): boolean {
+  return row !== null && row.tunnel_id !== null && row.status === "deleting" && row.reclaim_requested_at !== null;
+}
+
+/** Tunnels the owner's other active installations hold. The check and the later tunnel creation are not one
+ * transaction, so concurrent first calls from several installations can pass together. */
+async function tunnelsHeldByOwnerElsewhere(env: Env, ownerUserId: string, installationId: string): Promise<number> {
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS held
+       FROM installation_endpoints e
+       JOIN installations i ON i.id = e.installation_id
+      WHERE i.owner_user_id = ?
+        AND i.revoked_at IS NULL
+        AND e.installation_id != ?
+        AND e.tunnel_id IS NOT NULL
+        AND e.status NOT IN ('deleting', 'deleted')`,
+  ).bind(ownerUserId, installationId).first<{ held: number }>();
+  return row?.held ?? 0;
+}
+
 async function enforceEndpointRateLimit(
   env: Env,
   installationId: string,
@@ -1267,6 +1288,10 @@ export async function provisionManagedEndpoint(
   const atCapacity = async () => (
     readsTunnelReason(policy, reportedVersion) && await onRelay() ? relayCapableResponse("full") : capacityResponse()
   );
+  if (!holdsTunnel(existing) && !takingBackReclaim(existing)) {
+    const held = await tunnelsHeldByOwnerElsewhere(env, installation.owner_user_id, installation.installation_id);
+    if (held >= config.endpointsPerAccount) throw new HTTPError(429, "endpoint_limit");
+  }
   // Only a new row chooses its account; an existing one keeps its own.
   const row = existing
     ?? await ensureEndpointRow(env, installation.installation_id, await newEndpointAccount(config, allocation));

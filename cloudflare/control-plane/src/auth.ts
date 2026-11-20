@@ -61,6 +61,7 @@ export function createAuth(
         async sendVerificationOTP(input) {
           await sendOTPEmail({
             async send(message) {
+              if (!env.EMAIL) throw new Error("EMAIL binding is missing");
               await env.EMAIL.send(message);
             },
           }, config.emailFrom, input, requestId);

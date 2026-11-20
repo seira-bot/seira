@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-import { accountSession, createAuth, deleteExpiredVerifications } from "./auth";
+import { createAccountService, requireAccount } from "./account-session";
+import { createAuth, deleteExpiredVerifications } from "./auth";
 import { readConfig, type ControlPlaneConfig } from "./config";
 import { errorResponse, HTTPError, json, preflight, secureResponse, withBoundedRequestBody } from "./http";
 import { limitedOTPResponse } from "./otp-rate-limit";
@@ -78,7 +79,8 @@ async function route(
   const url = new URL(request.url);
   if (request.method === "OPTIONS") return preflight(request, config);
 
-  if (url.pathname.startsWith("/api/auth/")) {
+  if (url.pathname === "/api/auth" || url.pathname.startsWith("/api/auth/")) {
+    if (config.accountService === "seira-cloud") return errorResponse(404, "not_found");
     const limited = await limitedOTPResponse(request, env);
     if (limited) return limited;
     const auth = createAuth(env, ctx, config, requestId);
@@ -103,24 +105,23 @@ async function route(
     return canonicalAuthResponse(response);
   }
 
-  const auth = createAuth(env, ctx, config, requestId);
+  const accounts = createAccountService(env, ctx, config, requestId);
   if (request.method === "GET" && url.pathname === "/v1/me") {
-    const session = await accountSession(request, auth);
-    if (!session) throw new HTTPError(401, "unauthorized");
+    const user = await requireAccount(request, env, accounts);
     return json({
       user: {
-        id: session.user.id,
-        email: session.user.email,
-        name: session.user.name,
-        emailVerified: session.user.emailVerified,
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        emailVerified: user.emailVerified,
       },
     });
   }
   if (request.method === "GET" && url.pathname === "/v1/installations") {
-    return listInstallations(request, env, auth);
+    return listInstallations(request, env, accounts);
   }
   if (request.method === "POST" && url.pathname === "/v1/installations") {
-    return createInstallation(request, env, auth);
+    return createInstallation(request, env, accounts);
   }
   if (request.method === "GET" && url.pathname === "/v1/installations/self") {
     return installationSelf(request, env);
@@ -154,11 +155,11 @@ async function route(
 
   const rotate = url.pathname.match(ROTATE_ROUTE);
   if (request.method === "POST" && rotate) {
-    return rotateInstallationCredential(request, rotate[1], env, auth);
+    return rotateInstallationCredential(request, rotate[1], env, accounts);
   }
   const installation = url.pathname.match(INSTALLATION_ROUTE);
   if (request.method === "DELETE" && installation) {
-    const response = await revokeInstallation(request, installation[1], env, auth);
+    const response = await revokeInstallation(request, installation[1], env, accounts);
     ctx.waitUntil(cleanupEndpointForInstallation(
       env,
       config,
@@ -201,6 +202,7 @@ export function createWorker(
         return secureResponse(json({
           ok: true,
           service: "seira-control-plane",
+          accounts: healthConfig.accountService,
           ...(capacity === null ? {} : { capacity }),
           ...(adoption === null ? {} : { relayAdoption: adoption }),
           ...(release === null ? {} : { tunnelRelease: release }),

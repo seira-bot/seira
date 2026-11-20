@@ -49,36 +49,10 @@ describe("endpoint account configuration", () => {
     }
   });
 
-  it("parses the production account list once its token is saved, and only then", () => {
-    const production = JSON.parse(env.TEST_PRODUCTION_ENDPOINT_ACCOUNTS) as unknown[];
-    const configured = readConfig(withAccounts(production));
-    expect(configured.endpointAccountIssues).toEqual([]);
-    expect(configured.endpointAccounts.slice(1).map(({ apiToken: _token, ...account }) => account)).toEqual([{
-      accountId: "bbb5305f06e28a6f2abaac299f3b09dc",
-      companionHostSuffix: "si.seira.bot",
-      dnsRecordLimit: 3500,
-      minAppVersion: "0.1.104",
-      newEndpoints: true,
-      tunnelLimit: 1000,
-      zoneId: "4ded3da43e7b2c3a5f27b0fb33e5bd7a",
-    }]);
-    // Deployed before its token: the entry is dropped and reported, nothing breaks.
-    const unsaved = readConfig(withAccounts(production, {}));
-    expect(unsaved.endpointAccounts).toEqual([unsaved.cloudflare]);
-    expect(unsaved.endpointAccountIssues).toEqual(["entry_1_token"]);
-  });
-
-  it("deploys every account's limits at its real Cloudflare quotas", () => {
-    // seira.bot and si.seira.bot are both Pro zones (3,500 DNS records;
-    // si.seira.bot was Free, 200, until Oct 21). Both accounts allow 1,000 tunnels.
-    const production = JSON.parse(env.TEST_PRODUCTION_ENDPOINT_ACCOUNTS) as unknown[];
-    const deployed = readConfig(withAccounts(production)).endpointAccounts;
-    expect(deployed.map(({ companionHostSuffix, dnsRecordLimit, tunnelLimit }) => (
-      { companionHostSuffix, dnsRecordLimit, tunnelLimit }
-    ))).toEqual([
-      { companionHostSuffix: "seira.bot", dnsRecordLimit: 3500, tunnelLimit: 1000 },
-      { companionHostSuffix: "si.seira.bot", dnsRecordLimit: 3500, tunnelLimit: 1000 },
-    ]);
+  it("deploys with the primary account alone and its real Cloudflare quota", () => {
+    // A Free zone added since September 2024 allows 200 DNS records.
+    expect(JSON.parse(env.TEST_DEPLOYED_ENDPOINT_ACCOUNTS)).toEqual([]);
+    expect(env.TEST_DEPLOYED_DNS_RECORD_LIMIT).toBe("200");
   });
 
   it("reads extra accounts from a JSON var, or the same JSON as a string or secret", () => {
