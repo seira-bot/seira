@@ -223,7 +223,7 @@ export function harness(options: Options = {}) {
   /** Enrolls from a new IP address each time, so the per-IP daily limit never gets in the way. */
   async function install(ip = `198.51.100.${(installs += 1)}`) {
     const response = await call("POST", "/v1/push/enroll", { body: { v: 1 }, ip });
-    const answer = (await response.json()) as { installationId: string; credential: string; expiresAt: number };
+    const answer = (await response.clone().json()) as { installationId: string; credential: string; expiresAt: number };
     return { response, ...answer };
   }
 

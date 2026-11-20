@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { handle } from "./index";
+import { forgetFcmAccessToken } from "./push-fcm";
 import { APNS_TOKEN, apnsPem, FCM_DEVICE, harness, NOTIFICATION, TEST_IP } from "./test-harness";
 
 const ROUTES: Array<[string, string]> = [
@@ -113,6 +114,7 @@ describe("logs", () => {
     expect((await h.send(credential, FCM_DEVICE)).status).toBe(502);
     h.providers.queues.apns.push({ status: 403, body: { reason: "InvalidProviderToken" } }, { status: 403, body: { reason: "InvalidProviderToken" } });
     expect((await h.send(credential, APNS_TOKEN)).status).toBe(503);
+    forgetFcmAccessToken();
     h.providers.queues.oauth.push({ status: 400, body: { error: "invalid_grant" } });
     expect((await h.send(credential, FCM_DEVICE)).status).toBe(503);
     expect((await h.send(`seira_install_${"A".repeat(22)}.${"B".repeat(43)}`, APNS_TOKEN)).status).toBe(401);

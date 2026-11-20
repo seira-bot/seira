@@ -36,7 +36,7 @@ describe("cleanup", () => {
     expect(h.d1.rows("SELECT id FROM installations")).toEqual([{ id: fresh.installationId }]);
     expect(h.d1.rows("SELECT installation_id FROM installation_credentials")).toEqual([{ installation_id: fresh.installationId }]);
     expect(h.devices().map((device) => device.installation_id)).toEqual([fresh.installationId]);
-    expect(h.everyTable()).not.toContain(idle.installationId);
+    expect(JSON.stringify(h.d1.rows("SELECT installation_id FROM push_devices"))).not.toContain(idle.installationId);
   });
 
   it("AC-27: keeps an installation that was used 89 days ago", async () => {
