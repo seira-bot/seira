@@ -226,7 +226,7 @@ describe("hostCandidates", () => {
   it("orders by reachability: tailnet name, then LAN, then the mDNS name last", () => {
     const hosts = hostCandidates(["100.121.5.6", "192.168.1.42", "10.0.0.7"], "macbook.tail1234.ts.net");
     expect(hosts.slice(0, 3)).toEqual(["macbook.tail1234.ts.net", "192.168.1.42", "10.0.0.7"]);
-    expect(hosts.at(-1)).toMatch(/^seira-[0-9a-f]{8}\.local$/);
+    expect(hosts.at(-1)).toMatch(/^openmausbot-[0-9a-f]{8}\.local$/);
     expect(hosts).not.toContain("100.121.5.6");
   });
 
@@ -242,7 +242,7 @@ describe("hostCandidates", () => {
     expect(Array.isArray(body.hosts)).toBe(true);
     expect(Array.isArray(body.endpoints)).toBe(true);
     expect(body.secretPublicKey).toBe("BIPBQ12_dWnF1DZLsTZO3Vg0NGjds5-jp9h3jhjr2To7bJelczS0LM82rfXV68PmSJhz2ePosj3fL974XckCpDU");
-    expect(body.hosts.at(-1)).toMatch(/^seira-[0-9a-f]{8}\.local$/);
+    expect(body.hosts.at(-1)).toMatch(/^openmausbot-[0-9a-f]{8}\.local$/);
     expect(body.endpoints.at(-1)).toMatchObject({ kind: "bonjour", priority: 300 });
     expect(body.endpoints.at(-1).url).toMatch(/^http:\/\/seira-[0-9a-f]{8}\.local:8810$/);
   });
