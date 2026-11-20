@@ -271,6 +271,25 @@ describe("BotListItem", () => {
     }
   });
 
+  const previewLine = (text: string) => `class="min-w-0 overflow-hidden whitespace-nowrap">${text}</span>`;
+
+  it("shows a new bot's role where its preview will go, until it has something to preview", () => {
+    expect(renderRow(bot({ title: "  Backend Engineer " }))).toContain(previewLine("Backend Engineer"));
+    const replied = renderRow(bot({ title: "Backend Engineer", messages: [{ id: "b1", role: "bot", kind: "text", text: "All set.", at: 1 }] as Bot["messages"] }));
+    expect(replied).toContain(previewLine("All set."));
+    expect(replied).not.toContain(previewLine("Backend Engineer"));
+  });
+
+  it("leaves a new bot's preview empty when it has no role", () => {
+    for (const title of ["", "  "]) expect(renderRow(bot({ title }))).toContain(previewLine(""));
+  });
+
+  it("says what a new bot is doing instead of its role", () => {
+    expect(renderRow(bot({ title: "Developer", activity: "waiting-on-you" }))).toContain(previewLine("Waiting for you…"));
+    expect(renderRow(bot({ title: "Developer", waitingForTeammates: true }))).toContain(previewLine("Waiting on a teammate…"));
+    expect(renderRow(bot({ title: "Developer", busy: true }))).not.toContain(previewLine("Developer"));
+  });
+
   it("gives the Chief of Staff the same row as every other bot", () => {
     const portrait = (markup: string) => /width="(\d+)px" height="\d+px"/.exec(markup)?.[1];
     const rowClass = (markup: string) => /data-sidebar-bot-row="atlas" class="([^"]*)"/.exec(markup)?.[1];
