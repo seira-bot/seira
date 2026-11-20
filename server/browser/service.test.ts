@@ -52,7 +52,7 @@ function documents(url: string): FakeDocument {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function setup(options: Partial<BrowserServiceOptions> = {}, startUrls?: string[]) {
-  const dataDir = mkdtempSync(join(tmpdir(), "omb-browser-service-"));
+  const dataDir = mkdtempSync(join(tmpdir(), "seira-browser-service-"));
   folders.push(dataDir);
   const backend = new FakeBackend(() => new FakeChrome({ documents, ...(startUrls ? { startUrls } : {}) }));
   backends.push(backend);

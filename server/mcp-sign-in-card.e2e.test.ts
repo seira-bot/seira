@@ -14,7 +14,7 @@ async function onSignInCard(run: (f: {
   messages: () => Promise<any[]>; card: () => Promise<any>; endTurn: () => Promise<void>;
 }) => Promise<void>) {
   const provider = await startFakePostiz();
-  const scratch = mkdtempSync(join(tmpdir(), "omb-mcp-sign-in-"));
+  const scratch = mkdtempSync(join(tmpdir(), "seira-mcp-sign-in-"));
   const gate = join(scratch, "finish");
   const fixture = await launchVerificationServer({ FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_SLOW_FINISH_GATE: gate });
   const api = async (method: string, path: string, body?: unknown, expected = 200, token?: string) => {
@@ -33,7 +33,7 @@ async function onSignInCard(run: (f: {
     await api("POST", `/api/bots/${iris.id}/messages`, { threadId: iris.threadId, text: "Connect Postiz", sendId: "mcp-sign-in-e2e-send-0001" }, 202);
     let first: any;
     await expect.poll(() => { first = dump(); return JSON.stringify(first?.prompt ?? "").includes("Connect Postiz"); }, { timeout: 20_000 }).toBe(true);
-    const token: string = first.mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
+    const token: string = first.mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN;
     const serverUrl = `${provider.url}/mcp-oauth-dynamic`;
     const added = await api("POST", "/api/internal/mcp-servers", { action: "add", name: "postiz", type: "http", url: serverUrl }, 201, token);
     expect(added.text).toContain("Test: needs sign-in. Call mcp_server with action sign_in and name postiz, then end your turn.");

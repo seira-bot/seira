@@ -1,4 +1,4 @@
-import "../testing/scrub-ambient-omb-env.ts";
+import "../testing/scrub-ambient-seira-env.ts";
 
 import { mkdtempSync, readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -11,7 +11,7 @@ import { removeTempDir } from "../testing/cleanup.ts";
 import { runHeadless, runHeadlessCommand } from "./main.ts";
 import type { HeadlessIo } from "./output.ts";
 
-const dir = mkdtempSync(join(tmpdir(), "omb-run-export-status-"));
+const dir = mkdtempSync(join(tmpdir(), "seira-run-export-status-"));
 let server: Server;
 let origin: string;
 let state = "completed";
@@ -64,7 +64,7 @@ async function run(programmatic = false) {
   const argv = ["run", "--bot", "lead", "--task", "t1", "Write the report", "--export", out, "--json"];
   const stdout: string[] = [];
   const io: HeadlessIo = { out: (text) => stdout.push(text), err: () => undefined, readStdin: async () => "" };
-  const options = { env: { OPENMAUSBOT_URL: origin }, io };
+  const options = { env: { SEIRA_URL: origin }, io };
   if (programmatic) return { result: await runHeadlessCommand(argv, options), out };
   const code = await runHeadless(argv, options);
   return { code, result: JSON.parse(stdout.join("\n")), out };

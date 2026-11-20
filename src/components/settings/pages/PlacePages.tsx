@@ -41,7 +41,7 @@ import { versionLine } from "../settings-context";
 import { useSettingsShell } from "../settings-shell";
 import { AdvancedSection } from "../AdvancedSection";
 
-const GROUPED_NOTE = "omb-settings-grouped-note";
+const GROUPED_NOTE = "seira-settings-grouped-note";
 const GROUPED_DAYS = 30;
 
 /** Shown for 30 days to a device that used Settings before it was grouped; never on a new install. */
@@ -53,7 +53,7 @@ function useGroupedNote(): [boolean, () => void] {
       if (raw === "dismissed") return;
       const first = raw ? Number(raw) : null;
       if (first === null) {
-        const before = ["omb-skin", "omb-advanced-mode", "omb-send-key"].some((key) => localStorage.getItem(key) !== null);
+        const before = ["seira-skin", "seira-advanced-mode", "seira-send-key"].some((key) => localStorage.getItem(key) !== null);
         if (!before) { localStorage.setItem(GROUPED_NOTE, "dismissed"); return; }
         localStorage.setItem(GROUPED_NOTE, String(Date.now()));
         setShown(true);

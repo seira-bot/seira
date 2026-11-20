@@ -5,7 +5,7 @@ import { cloudMachine, cloudSetupProgress, cloudState, homeLook, listedColors, M
 import environments from "./environments.cjs";
 import { createHomePlaces } from "./home-places.mjs";
 
-const HOME = "https://omb-u-1a2b3c4d5e6f.fly.dev", CLIENT_A = "https://omb-c-a.fly.dev", CLIENT_B = "https://omb-c-b.fly.dev", TEAM = "https://omb-t-acme.fly.dev";
+const HOME = "https://seira-u-1a2b3c4d5e6f.fly.dev", CLIENT_A = "https://seira-c-a.fly.dev", CLIENT_B = "https://seira-c-b.fly.dev", TEAM = "https://seira-t-acme.fly.dev";
 const cloud = (over = {}) => ({ id: "c-a", name: "Client A", color: "green", role: "owner", tier: "pro", runsOn: "cloud", status: "ready", origin: CLIENT_A,
   teamId: null, seats: null, renewsAt: null, cancelAtPeriodEnd: false, primary: false, ...over });
 const primary = cloud({ id: "c-home", name: "My Cloud", color: null, origin: HOME, primary: true });
@@ -20,7 +20,7 @@ test("the session's Clouds are read strictly: a malformed one is left out whole,
   ]);
   for (const bad of [
     { id: "" }, { id: "../x" }, { name: "" }, { name: "x".repeat(41) }, { name: "<b>" }, { role: "boss" }, { status: "sleeping" }, { runsOn: "moon" },
-    { primary: "yes" }, { origin: "http://omb-c-a.fly.dev" }, { origin: `${CLIENT_A}/path` }, { origin: "https://user@omb-c-a.fly.dev" }, { origin: null },
+    { primary: "yes" }, { origin: "http://seira-c-a.fly.dev" }, { origin: `${CLIENT_A}/path` }, { origin: "https://user@seira-c-a.fly.dev" }, { origin: null },
     { status: "offline", origin: null }, { teamId: "../team" }, { teamId: 7 },
   ]) assert.deepEqual(parseCloudList([cloud(bad)]), [], JSON.stringify(bad));
   const [shown] = parseCloudList([cloud({ color: "url(x)", tier: "PRO!", name: "  Client   A  " })]);
@@ -80,13 +80,13 @@ test("a server or computer of the person's own that signed in with their account
 
 test("the Admin's colour for My Cloud and each team's Cloud, once one was chosen there; the person's other Clouds take theirs with their place", () => {
   const list = parseCloudList([{ ...primary, color: "rose" }, cloud({ color: "amber" }), cloud({ id: "c-team", name: "Acme", teamId: "team-acme", role: "member", origin: TEAM, color: "slate" }),
-    cloud({ id: "c-t2", name: "Beta", teamId: "team-beta", role: "admin", origin: "https://omb-t-beta.fly.dev", color: null })]);
+    cloud({ id: "c-t2", name: "Beta", teamId: "team-beta", role: "admin", origin: "https://seira-t-beta.fly.dev", color: null })]);
   assert.deepEqual(listedColors(list), [{ home: true, color: "red" }, { teamId: "team-acme", color: null }], "slate is none; a team's Cloud with no colour chosen is not listed");
   assert.deepEqual(listedColors(null), []);
 });
 
 test("at most twenty Clouds, each once, and one primary only, of the person's own", () => {
-  const many = Array.from({ length: 25 }, (_, n) => cloud({ id: `c-${n}`, name: `Cloud ${n}`, origin: `https://omb-c-${n}.fly.dev` }));
+  const many = Array.from({ length: 25 }, (_, n) => cloud({ id: `c-${n}`, name: `Cloud ${n}`, origin: `https://seira-c-${n}.fly.dev` }));
   assert.equal(parseCloudList(many).length, MAX_CLOUDS);
   assert.equal(parseCloudList([cloud(), cloud({ name: "Again" })]).length, 1, "the same id twice is read once");
   const twice = parseCloudList([primary, cloud({ primary: true })]);
@@ -111,7 +111,7 @@ test("another Cloud of the person's own is a place of its own, read as the app's
 test("each other own Cloud is one saved place, named and coloured by the Admin; one hand-saved at its address becomes it; My Cloud's and a team's never do", () => {
   const home = { id: "home", kind: "remote", name: "Studio", origin: HOME, home: true, color: "purple" };
   const team = { id: "team", kind: "remote", name: "Acme", origin: TEAM, team: { id: "team-acme", role: "member" } };
-  const typed = { id: "typed", kind: "remote", name: "omb-c-b.fly.dev", origin: CLIENT_B, microphone: true };
+  const typed = { id: "typed", kind: "remote", name: "seira-c-b.fly.dev", origin: CLIENT_B, microphone: true };
   let ids = 0;
   const state = { environments: [home, team, typed], activeId: "home" };
   const next = environments.reconcileOwnClouds(state, [
@@ -210,7 +210,7 @@ test("the session's organizations: the Team plan this account runs them for, whe
 });
 
 test("once the account's machine is elsewhere, the place listed as home before leaves home: gone when the list has it ended or not at all, kept as a place of its own otherwise", () => {
-  const old = "https://omb-u-old.fly.dev", now = "https://omb-u-new.fly.dev";
+  const old = "https://seira-u-old.fly.dev", now = "https://seira-u-new.fly.dev";
   const garage = { id: "g", kind: "remote", name: "Garage", origin: "https://garage.example.test" };
   const saved = { environments: [{ id: "old", kind: "remote", name: "My Cloud", origin: old, home: true }, garage], activeId: "old" };
   const at = (clouds) => ({ status: "connected", machine: { status: "ready", origin: now }, clouds });
@@ -230,7 +230,7 @@ test("once the account's machine is elsewhere, the place listed as home before l
 });
 
 test("the saved place of My Cloud takes the name and colour the Admin lists it under", () => {
-  const now = "https://omb-u-new.fly.dev";
+  const now = "https://seira-u-new.fly.dev";
   const at = (clouds) => ({ status: "connected", machine: { status: "ready", origin: now }, clouds });
   assert.deepEqual(homeLook(at([cloud({ id: "c-new", name: "Anagama", color: "rose", origin: now, primary: true })])), { name: "Anagama", color: "red" });
   assert.equal(homeLook(at([cloud({ id: "c-new", name: "Anagama", origin: now, primary: true, role: "member" })])), null, "only the person's own");

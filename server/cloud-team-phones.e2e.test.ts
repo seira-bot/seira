@@ -1,4 +1,4 @@
-// A real Team Cloud (OMB_CLOUD_ROLE=team): the phones its members paired with "Open on your phone" are listed beside the
+// A real Team Cloud (SEIRA_CLOUD_ROLE=team): the phones its members paired with "Open on your phone" are listed beside the
 // code, each as its device and its member. A member sees and removes their own; the team's admins see and remove every
 // member's. Removing a phone ends its session, its open stream too. Nothing here runs a turn.
 import { randomBytes } from "node:crypto";

@@ -39,8 +39,8 @@ const free: CloudAccountState = { status: "connected", account: { id: "a", email
 const paid = (extra: Partial<CloudAccountState> = {}): CloudAccountState => ({ ...free, entitlement: { plan: "pro", tier: "pro", status: "active", expiresAt: NOW + 30 * DAY, version: 2 }, ...extra });
 const trial = (extra: Partial<CloudTrial> = {}): CloudTrial => ({ state: "active", tier: "pro", endsAt: NOW + 7 * DAY, amount: 4900, chargeAt: NOW + 7 * DAY, holdUntil: null, deleteAt: null, keep: "none", ...extra });
 const credit: CloudCredit = { grantedUsd: 5, remainingUsd: 5, state: "active" };
-const ready = { status: "ready" as const, origin: "https://omb-u-1.fly.dev" };
-const acme = (machine: CloudTeam["machine"] = { status: "ready", origin: "https://omb-t-2.fly.dev" }): CloudTeam => ({ id: "team-acme", name: "Acme", role: "owner", machine });
+const ready = { status: "ready" as const, origin: "https://seira-u-1.fly.dev" };
+const acme = (machine: CloudTeam["machine"] = { status: "ready", origin: "https://seira-t-2.fly.dev" }): CloudTeam => ({ id: "team-acme", name: "Acme", role: "owner", machine });
 const onTeam = (machine?: CloudTeam["machine"]): CloudAccountState => paid({ entitlement: { plan: "pro", tier: "team", status: "active", expiresAt: NOW + 30 * DAY, version: 2 }, teams: [acme(machine)] });
 
 type Node = ReactElement<Record<string, any>>;
@@ -415,8 +415,8 @@ describe("the sheet", () => {
   it("someone with a Cloud buys another in the same sheet, which sends where they started with its checkout", async () => {
     f.state = { ...f.state, cloudAdd: { source: "app_whats_new_team" } };
     account = { ...free, entitlement: { plan: "pro", tier: "pro", status: "active", expiresAt: NOW + 86_400_000, version: 2 },
-      machine: { status: "ready", origin: "https://omb-c1.fly.dev" } as CloudAccountState["machine"],
-      clouds: [{ id: "c1", name: "My Cloud", color: null, role: "owner", tier: "pro", runsOn: "cloud", status: "ready", origin: "https://omb-c1.fly.dev", teamId: null, primary: true, managed: true }] };
+      machine: { status: "ready", origin: "https://seira-c1.fly.dev" } as CloudAccountState["machine"],
+      clouds: [{ id: "c1", name: "My Cloud", color: null, role: "owner", tier: "pro", runsOn: "cloud", status: "ready", origin: "https://seira-c1.fly.dev", teamId: null, primary: true, managed: true }] };
     vi.stubGlobal("window", { ogb: { cloudAccount: bridge, cloudAdd: { state: vi.fn(), start: vi.fn() } }, addEventListener: vi.fn(), removeEventListener: vi.fn() });
     await settle();
     expect(render()).toContain('data-add-cloud-flow="app_whats_new_team"');

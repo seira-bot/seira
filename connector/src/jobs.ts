@@ -152,7 +152,7 @@ export function jobDesk(deps: DeskDeps): Desk {
       };
       const outsideMode = deps.mode === "customer-run" ? customerRunRefusal(job.type, by) : null;
       if (outsideMode) return refuse("refused_by_mode", outsideMode);
-      if (by === "admin" && deps.paused?.()) return refuse("paused", "This server's admin has paused remote management. They resume it with: mausbot-connector resume");
+      if (by === "admin" && deps.paused?.()) return refuse("paused", "This server's admin has paused remote management. They resume it with: seira-connector resume");
       const refusal = by === "admin" && deps.policyFile ? policyRefusal(job, readPolicy(deps.policyFile), deps.policyFile) : null;
       if (refusal) return refuse("refused_by_policy", refusal);
       const reply = await deps.run(job, by);

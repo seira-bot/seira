@@ -9,8 +9,8 @@ import { runControlSeira } from "../control-seira.ts";
 import { ENABLE_ADVANCED_UI, agentBrowser, sessionEnv, UI_TOOLS_DIR, type UiHandle } from "./control-seira-ui.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-const enabled = process.env.OMB_UI_E2E === "1" || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
-if (!enabled) console.log("skipping usage details UI: set OMB_UI_E2E=1 to install the pinned browser");
+const enabled = process.env.SEIRA_UI_E2E === "1" || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
+if (!enabled) console.log("skipping usage details UI: set SEIRA_UI_E2E=1 to install the pinned browser");
 
 (enabled ? it : it.skip)("renders separate cached input, uncached input and output after a real fixture turn", async () => {
   let child: ChildProcess | undefined;
@@ -86,7 +86,7 @@ if (!enabled) console.log("skipping usage details UI: set OMB_UI_E2E=1 to instal
     }
     await agentBrowser(browser.binary, sessionEnv(browser), ["set", "viewport", "1100", "900"]);
     await expect.poll(() => evaluate("innerWidth")).toBe(1100);
-    const density = await evaluate("localStorage.getItem('openmausbot.sidebarDensity')");
+    const density = await evaluate("localStorage.getItem('seira.sidebarDensity')");
     const activate = async (selector: string) => {
       await expect.poll(() => evaluate(`(() => {
         const button = document.querySelector(${JSON.stringify(selector)});
@@ -103,7 +103,7 @@ if (!enabled) console.log("skipping usage details UI: set OMB_UI_E2E=1 to instal
     };
     await openUsage();
     await expect.poll(() => evaluate("document.querySelector('[data-sidebar]').getBoundingClientRect().width")).toBe(80);
-    expect(await evaluate("localStorage.getItem('openmausbot.sidebarDensity')")).toBe(density);
+    expect(await evaluate("localStorage.getItem('seira.sidebarDensity')")).toBe(density);
     await expect.poll(() => evaluate("Boolean(document.querySelector('[role=dialog]'))"), { timeout: 10_000 }).toBe(true);
     await ui("screenshot", "--out", `${handle.logPath}.settings-1100.png`);
     await ui("press", "--keys", "Escape");

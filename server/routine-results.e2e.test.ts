@@ -109,7 +109,7 @@ it("reports every run into the bot's main thread while fresh executions, approva
     const active = await runState(pending.id);
     await expect.poll(() => {
       if (!existsSync(fixture.fixtureDumpPath)) return false;
-      return JSON.parse(readFileSync(fixture.fixtureDumpPath, "utf8")).mcpConfig?.mcpServers?.agents?.env?.OMB_THREAD_ID === active.threadId;
+      return JSON.parse(readFileSync(fixture.fixtureDumpPath, "utf8")).mcpConfig?.mcpServers?.agents?.env?.SEIRA_THREAD_ID === active.threadId;
     }, { timeout: 15_000 }).toBe(true);
     const launched = JSON.parse(readFileSync(fixture.fixtureDumpPath, "utf8"));
     const socketPath = launched.mcpConfig.mcpServers.ogb.args.at(-1);

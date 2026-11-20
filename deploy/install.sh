@@ -2,10 +2,10 @@
 # Seira on a server of your own: checks the server, then installs the Seira server with HTTPS on your domain.
 # Running it again repairs or updates the install and never touches your data.
 #
-#   curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh | sudo sh -s -- --domain maus.example.com
-#   ... | sudo sh -s -- --check --domain maus.example.com    only checks the server; changes nothing
+#   curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh | sudo sh -s -- --domain seira.example.com
+#   ... | sudo sh -s -- --check --domain seira.example.com    only checks the server; changes nothing
 #   ... | sudo sh -s -- --uninstall                          stops the server; keeps your data
-#   ... | sudo sh -s -- --domain maus.example.com <code>     also connects the server to Seira with a one-time code
+#   ... | sudo sh -s -- --domain seira.example.com <code>     also connects the server to Seira with a one-time code
 #
 # Nothing runs until the last line calls main, so a download that is cut off part-way runs nothing. It sends no
 # telemetry. The addresses it contacts are the ones the checks name: the image registries, Let's Encrypt, GitHub's
@@ -13,38 +13,38 @@
 set -eu
 
 settings() {
-  SYSROOT="${OMB_INSTALL_SYSROOT:-}"
-  INSTALL_DIR="${OMB_INSTALL_DIR:-/opt/openmausbot}"
+  SYSROOT="${SEIRA_INSTALL_SYSROOT:-}"
+  INSTALL_DIR="${SEIRA_INSTALL_DIR:-/opt/seira}"
   IMAGE_REPO=seira-bot/seira
   RELEASES_URL=https://api.github.com/repos/seira-bot/seira/releases/latest
-  ADMIN_URL="${MAUSBOT_ADMIN_URL:-https://cloud.openmausbot.com}"
+  ADMIN_URL="${SEIRA_ADMIN_URL:-https://cloud.seira.bot}"
   SCRIPT_URL=https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh
   # Where the files this installer places come from: this repository at the tag of the version it installs, and at
-  # main when that tag does not have them. OMB_INSTALL_SOURCE names one copy to use instead (https://… or file:///…).
+  # main when that tag does not have them. SEIRA_INSTALL_SOURCE names one copy to use instead (https://… or file:///…).
   REPOSITORY_FILES=https://raw.githubusercontent.com/seira-bot/seira
-  SOURCE_ASKED="${OMB_INSTALL_SOURCE:-}"
+  SOURCE_ASKED="${SEIRA_INSTALL_SOURCE:-}"
   SOURCE=""
   SOURCE_NAME=""
   # WARN-ONLY SANDBOX CHECKS. The self-check's results that do not stop an install when they fail: none of them lets a
   # bot reach what it must not, or stops bots working. Every other check, and any check this list has never heard
   # of, stops it. A result that carries its own "severity" says so itself and this list is not asked.
   SANDBOX_WARN_ONLY="keyring-denied hostname-private cpu-list-readable fly-api-hidden egress-public-allowed"
-  SECCOMP=seccomp-omb-home.json
-  APPARMOR_PROFILE=omb-home-narrow
-  PROJECT=openmausbot
+  SECCOMP=seccomp-seira-home.json
+  APPARMOR_PROFILE=seira-home-narrow
+  PROJECT=seira
   MIN_DOCKER=24
   MIN_CPUS=2
   MIN_MEMORY_MB=3500
   MIN_DISK_GB=20
   MAX_CLOCK_SKEW_S=300
-  HEALTH_WAIT_S="${OMB_INSTALL_HEALTH_WAIT_S:-240}"
-  HTTPS_WAIT_S="${OMB_INSTALL_HTTPS_WAIT_S:-180}"
+  HEALTH_WAIT_S="${SEIRA_INSTALL_HEALTH_WAIT_S:-240}"
+  HTTPS_WAIT_S="${SEIRA_INSTALL_HTTPS_WAIT_S:-180}"
 
   MODE=install
   DOMAIN=""
   EMAIL=""
   CODE=""
-  INSTALL_DOCKER="${OMB_INSTALL_DOCKER:-}"
+  INSTALL_DOCKER="${SEIRA_INSTALL_DOCKER:-}"
   SANDBOX=yes
   FAILED=0
   DOCKER_STATE=unknown
@@ -72,14 +72,14 @@ command_line() { # what to run again, as the person ran it
 }
 
 usage() {
-  say "Usage: $(command_line '--domain maus.example.com')"
-  say "       $(command_line '--check --domain maus.example.com')   only checks this server; changes nothing"
+  say "Usage: $(command_line '--domain seira.example.com')"
+  say "       $(command_line '--check --domain seira.example.com')   only checks this server; changes nothing"
   say "       $(command_line '--uninstall')                        stops the server; keeps your data"
   say ""
   say "  --domain NAME      the name people will open, already pointing at this server"
   say "  --email ADDRESS    the first admin's email, so they can sign in with an emailed code"
   say "  --install-docker   install Docker with Docker's official script when it is missing, without asking"
-  say "  --dir PATH         where the install lives (default /opt/openmausbot)"
+  say "  --dir PATH         where the install lives (default /opt/seira)"
   say "  --no-sandbox       do not prepare this server for the bots' sandbox (only for a server you alone sign in to)"
   say "  <code>             the one-time code Seira shows, to also connect this server to Seira"
 }
@@ -115,9 +115,9 @@ parse() {
   DOMAIN=$(printf '%s' "$DOMAIN" | tr '[:upper:]' '[:lower:]')
   case "$DOMAIN" in
     "") ;;
-    *[!a-z0-9.-]* | .* | *. | -* | *..*) fail "$DOMAIN is not a domain name. Give the name alone, like maus.example.com, without https:// or a path." ;;
+    *[!a-z0-9.-]* | .* | *. | -* | *..*) fail "$DOMAIN is not a domain name. Give the name alone, like seira.example.com, without https:// or a path." ;;
     *.*) ;;
-    *) fail "$DOMAIN is not a full domain name. Give a name like maus.example.com." ;;
+    *) fail "$DOMAIN is not a full domain name. Give a name like seira.example.com." ;;
   esac
   case "$EMAIL" in
     "") ;;
@@ -130,7 +130,7 @@ parse() {
   esac
   case "$INSTALL_DIR" in
     /?*) ;;
-    *) fail "--dir needs a full path, like /opt/openmausbot." ;;
+    *) fail "--dir needs a full path, like /opt/seira." ;;
   esac
   case "$INSTALL_DIR" in
     *[!A-Za-z0-9/._-]*) fail "--dir may hold only letters, digits, / . _ and -." ;;
@@ -196,10 +196,10 @@ check_os() {
   case "$os_id $os_version" in
     "ubuntu 22.04" | "ubuntu 24.04") ok "operating system: $os_name" ;;
     *)
-      if [ "${OMB_INSTALL_ALLOW_UNTESTED_OS:-}" = 1 ]; then
+      if [ "${SEIRA_INSTALL_ALLOW_UNTESTED_OS:-}" = 1 ]; then
         note "This server runs $os_name, which the installer is not tested on; going on as asked."
       else
-        fix "This server runs $os_name. Seira's installer runs on Ubuntu 22.04 or 24.04: pick one of those, or run again with OMB_INSTALL_ALLOW_UNTESTED_OS=1 to try anyway."
+        fix "This server runs $os_name. Seira's installer runs on Ubuntu 22.04 or 24.04: pick one of those, or run again with SEIRA_INSTALL_ALLOW_UNTESTED_OS=1 to try anyway."
       fi
       ;;
   esac
@@ -354,7 +354,7 @@ check_dns() {
     note "No --domain was given, so its DNS record was not checked."
     return
   fi
-  if [ "${OMB_INSTALL_SKIP_DNS:-}" = 1 ]; then
+  if [ "${SEIRA_INSTALL_SKIP_DNS:-}" = 1 ]; then
     note "The DNS record of $DOMAIN was not checked, as asked."
     return
   fi
@@ -374,7 +374,7 @@ check_dns() {
       fi
     done
   done
-  fix "$DOMAIN points at $resolved, not at this server ($target). Change its A record to $target (on Cloudflare, set the record to DNS only), then run this again; or set OMB_INSTALL_SKIP_DNS=1 if a load balancer forwards ports 80 and 443 here."
+  fix "$DOMAIN points at $resolved, not at this server ($target). Change its A record to $target (on Cloudflare, set the record to DNS only), then run this again; or set SEIRA_INSTALL_SKIP_DNS=1 if a load balancer forwards ports 80 and 443 here."
 }
 
 check_outbound() {
@@ -395,8 +395,8 @@ check_outbound() {
     return
   fi
   ok "outbound: the image registries and Let's Encrypt are reachable"
-  if ! reachable https://accounts.openmausbot.com/; then
-    note "accounts.openmausbot.com is not reachable, so signing in with an emailed code needs a mail server of your own (OMB_SIGNIN_SMTP_URL). Pairing codes work without it."
+  if ! reachable https://accounts.seira.bot/; then
+    note "accounts.seira.bot is not reachable, so signing in with an emailed code needs a mail server of your own (SEIRA_SIGNIN_SMTP_URL). Pairing codes work without it."
   fi
 }
 
@@ -404,7 +404,7 @@ check_userns() {
   max=$(cat "$SYSROOT/proc/sys/user/max_user_namespaces" 2>/dev/null || echo 1)
   clone=$(cat "$SYSROOT/proc/sys/kernel/unprivileged_userns_clone" 2>/dev/null || echo 1)
   if [ "$max" = 0 ] || [ "$clone" != 1 ]; then
-    fix "This server switches off user namespaces, which the bots' sandbox needs. Run: printf 'user.max_user_namespaces=63000\\nkernel.unprivileged_userns_clone=1\\n' | sudo tee /etc/sysctl.d/90-mausbot.conf && sudo sysctl --system  and then run this again."
+    fix "This server switches off user namespaces, which the bots' sandbox needs. Run: printf 'user.max_user_namespaces=63000\\nkernel.unprivileged_userns_clone=1\\n' | sudo tee /etc/sysctl.d/90-seira.conf && sudo sysctl --system  and then run this again."
   else
     ok "user namespaces: on"
   fi
@@ -477,7 +477,7 @@ registry_get() { # path-under-the-repository media-types: the registry's answer,
   printf 'header = "Authorization: Bearer %s"\n' "$REGISTRY_TOKEN" | curl -K - -fsSL --max-time 20 -H "Accept: $2" "https://ghcr.io/v2/$IMAGE_REPO/$1" 2>/dev/null
 }
 
-# Whether the image a tag or digest names runs the bots' sandbox (OMB_IMAGE=server in its settings), read from the
+# Whether the image a tag or digest names runs the bots' sandbox (SEIRA_IMAGE=server in its settings), read from the
 # registry without downloading it: yes, no, or nothing when the registry did not say.
 registry_sandbox() { # tag or sha256:digest
   [ -n "$REGISTRY_TOKEN" ] || REGISTRY_TOKEN=$(registry_token || true)
@@ -497,7 +497,7 @@ registry_sandbox() { # tag or sha256:digest
   [ -n "$config" ] || return 0
   case "$(registry_get "blobs/$config" "application/vnd.oci.image.config.v1+json, application/vnd.docker.container.image.v1+json")" in
     '') ;;
-    *'"OMB_IMAGE=server"'*) echo yes ;;
+    *'"SEIRA_IMAGE=server"'*) echo yes ;;
     *) echo no ;;
   esac
 }
@@ -516,25 +516,25 @@ newest_release() {
 
 # The stable channel when it is published, else the newest release. Never `latest`, which follows every commit.
 check_version() {
-  chosen="${OMB_INSTALL_IMAGE:-}"
+  chosen="${SEIRA_INSTALL_IMAGE:-}"
   if [ -n "$chosen" ]; then
     case "$chosen" in
       *[!A-Za-z0-9/:._@-]*)
-        fix "OMB_INSTALL_IMAGE is not an image name."
+        fix "SEIRA_INSTALL_IMAGE is not an image name."
         return
         ;;
     esac
     case "${chosen##*/}" in
-      *:latest) fix "OMB_INSTALL_IMAGE names the latest tag, which follows every commit. Name a release, like ghcr.io/$IMAGE_REPO:v0.1.151." ;;
+      *:latest) fix "SEIRA_INSTALL_IMAGE names the latest tag, which follows every commit. Name a release, like ghcr.io/$IMAGE_REPO:v0.1.151." ;;
       *:?*)
         IMAGE=$chosen
         ok "version: $IMAGE, as asked"
         ;;
-      *) fix "OMB_INSTALL_IMAGE needs a release tag, like ghcr.io/$IMAGE_REPO:v0.1.151." ;;
+      *) fix "SEIRA_INSTALL_IMAGE needs a release tag, like ghcr.io/$IMAGE_REPO:v0.1.151." ;;
     esac
     return
   fi
-  pinned=$(env_value OMB_IMAGE)
+  pinned=$(env_value SEIRA_IMAGE)
   case "$pinned" in
     *@sha256:*)
       IMAGE=$pinned
@@ -632,42 +632,42 @@ write_file() { # path, with the content on standard input: replaced in one step
 
 write_compose() {
   write_file "$INSTALL_DIR/compose.yaml" <<'COMPOSE'
-# Written by MausBot's installer (deploy/install.sh), and written again each time it runs: put your own settings in
+# Written by Seira's installer (deploy/install.sh), and written again each time it runs: put your own settings in
 # .env beside this file, which the installer keeps. The server only listens on loopback inside its container, and on
 # two Unix sockets in the `edge` volume, which Caddy, in its own container, reaches it through. A request on a socket is
 # always a remote one to the server. Caddy does not share the server's network: a server that restarted on its own came
 # back in a new one, and left Caddy refusing HTTPS in the old one.
-name: openmausbot
+name: seira
 services:
-  omb:
-    image: ${OMB_IMAGE:?run the installer again}
+  seira:
+    image: ${SEIRA_IMAGE:?run the installer again}
     restart: unless-stopped
     init: true
     shm_size: 512m
     volumes:
       - ./data:/data
-      - edge:/run/openmausbot
+      - edge:/run/seira
       # The Update server button (update-runner.sh, root's folder): the server leaves a request in the first, reads the
       # outcome in the second.
-      - /var/lib/openmausbot-update/request:/run/omb-update/request
-      - /var/lib/openmausbot-update/status:/run/omb-update/status:ro
+      - /var/lib/seira-update/request:/run/seira-update/request
+      - /var/lib/seira-update/status:/run/seira-update/status:ro
     environment:
-      OMB_PORT: "8799"
-      OMB_WEBHOOK_PORT: "8800"
-      OMB_TUNNEL_SOCKET: /run/openmausbot/http.sock
-      OMB_WEBHOOK_SOCKET: /run/openmausbot/hooks.sock
-      OMB_WEBHOOK_PUBLIC_URL: https://${DOMAIN}
-      OMB_PUBLIC_URL: https://${DOMAIN}
-      OMB_SERVER_NAME: ${OMB_SERVER_NAME:-${DOMAIN}}
+      SEIRA_PORT: "8799"
+      SEIRA_WEBHOOK_PORT: "8800"
+      SEIRA_TUNNEL_SOCKET: /run/seira/http.sock
+      SEIRA_WEBHOOK_SOCKET: /run/seira/hooks.sock
+      SEIRA_WEBHOOK_PUBLIC_URL: https://${DOMAIN}
+      SEIRA_PUBLIC_URL: https://${DOMAIN}
+      SEIRA_SERVER_NAME: ${SEIRA_SERVER_NAME:-${DOMAIN}}
       # Passed only when .env sets them: an empty one would still be set, and Settings' own lists are used when not.
-      OMB_SIGNIN_EMAILS:
-      OMB_SIGNIN_MEMBER_EMAILS:
-      OMB_SIGNIN_SMTP_URL:
-      OMB_SIGNIN_SMTP_FROM:
-      # "1": phones pair by QR through Seira Relay. Sign in once: docker compose exec omb openmausbot login --relay
-      OMB_PHONE_RELAY:
+      SEIRA_SIGNIN_EMAILS:
+      SEIRA_SIGNIN_MEMBER_EMAILS:
+      SEIRA_SIGNIN_SMTP_URL:
+      SEIRA_SIGNIN_SMTP_FROM:
+      # "1": phones pair by QR through Seira Relay. Sign in once: docker compose exec seira seira login --relay
+      SEIRA_PHONE_RELAY:
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q openmausbot"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q seira"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -681,13 +681,13 @@ services:
     # Started with the server, not after it is healthy: Caddy reaches it over the socket
     # whenever it answers, so `up` never waits on the server's health.
     depends_on:
-      omb:
+      seira:
         condition: service_started
     environment:
       DOMAIN: ${DOMAIN}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - edge:/run/openmausbot
+      - edge:/run/seira
       - ./caddy/data:/data
       - ./caddy/config:/config
 
@@ -711,7 +711,7 @@ write_caddyfile() {
 	# own per-hook secrets), so it sits outside any login. The path is passed
 	# through unchanged: the receiver routes on /hooks/<id>.
 	handle /hooks/* {
-		reverse_proxy unix//run/openmausbot/hooks.sock
+		reverse_proxy unix//run/seira/hooks.sock
 	}
 
 	handle {
@@ -721,7 +721,7 @@ write_caddyfile() {
 		#   }
 		# and set both variables in .env (hash with `caddy hash-password`,
 		# every `$` doubled for Compose).
-		reverse_proxy unix//run/openmausbot/http.sock {
+		reverse_proxy unix//run/seira/http.sock {
 			# SSE: stream events as they arrive
 			flush_interval -1
 			# Compression is `encode`'s job above; the server would gzip its
@@ -751,17 +751,17 @@ unset_env() { # name
 write_settings() {
   if [ ! -f "$INSTALL_DIR/.env" ]; then
     write_file "$INSTALL_DIR/.env" 600 <<'ENV'
-# Seira's settings on this server. The installer sets DOMAIN, OMB_IMAGE and COMPOSE_FILE and keeps every other line.
-# Who may sign in with an emailed code: OMB_SIGNIN_EMAILS (admins) and OMB_SIGNIN_MEMBER_EMAILS, comma-separated.
+# Seira's settings on this server. The installer sets DOMAIN, SEIRA_IMAGE and COMPOSE_FILE and keeps every other line.
+# Who may sign in with an emailed code: SEIRA_SIGNIN_EMAILS (admins) and SEIRA_SIGNIN_MEMBER_EMAILS, comma-separated.
 ENV
   fi
   set_env DOMAIN "$DOMAIN"
-  set_env OMB_IMAGE "$IMAGE"
+  set_env SEIRA_IMAGE "$IMAGE"
   if [ -n "$EMAIL" ]; then
-    current=$(env_value OMB_SIGNIN_EMAILS)
+    current=$(env_value SEIRA_SIGNIN_EMAILS)
     case ",$(printf '%s' "$current" | tr -d ' ')," in
       *",$EMAIL,"*) ;;
-      *) set_env OMB_SIGNIN_EMAILS "${current:+$current,}$EMAIL" ;;
+      *) set_env SEIRA_SIGNIN_EMAILS "${current:+$current,}$EMAIL" ;;
     esac
   fi
 }
@@ -848,10 +848,10 @@ fetch_sandbox() {
     fetch "connector/profiles/$APPARMOR_PROFILE.apparmor" "$INSTALL_DIR/box/profiles/$APPARMOR_PROFILE.apparmor"
 }
 
-# An image that runs the hardened profile says so in its settings (OMB_IMAGE=server).
+# An image that runs the hardened profile says so in its settings (SEIRA_IMAGE=server).
 image_has_sandbox() {
   case "$(docker image inspect -f '{{json .Config.Env}}' "$IMAGE" 2>/dev/null || true)" in
-    *'"OMB_IMAGE=server"'*) return 0 ;;
+    *'"SEIRA_IMAGE=server"'*) return 0 ;;
   esac
   return 1
 }
@@ -873,7 +873,7 @@ prepare_sandbox() {
   fi
   say "Preparing this server for the bots' sandbox..."
   note "The sandbox's files are $SOURCE_NAME."
-  MAUSBOT_PROFILES_DIR="$INSTALL_DIR/box/profiles" sh "$INSTALL_DIR/box/prepare-host.sh" >/dev/null ||
+  SEIRA_PROFILES_DIR="$INSTALL_DIR/box/profiles" sh "$INSTALL_DIR/box/prepare-host.sh" >/dev/null ||
     fail "This server could not be prepared for the bots' sandbox (the reason is above). Fix that and run this again; or add --no-sandbox to install without the sandbox, on a server you alone sign in to."
   set_env COMPOSE_FILE compose.yaml:compose.box.yaml
   SANDBOX=on
@@ -888,8 +888,8 @@ sandbox_field() { # result name: that field of one result of the self-check
 check_sandbox_runs() {
   [ "$SANDBOX" = on ] || return 0
   say "Checking that the bots' sandbox holds..."
-  see="See it with: cd $INSTALL_DIR && sudo docker compose exec omb node dist-server/bot-box/box-check.js --public=none  and send us what it prints."
-  report=$(compose exec -T omb node dist-server/bot-box/box-check.js --public=none 2>/dev/null | tr -d '\n' || true)
+  see="See it with: cd $INSTALL_DIR && sudo docker compose exec seira node dist-server/bot-box/box-check.js --public=none  and send us what it prints."
+  report=$(compose exec -T seira node dist-server/bot-box/box-check.js --public=none 2>/dev/null | tr -d '\n' || true)
   case "$report" in
     *'"box":"bwrap"'*'"results":[{'*) ;;
     *) fail "Seira is running, but its bots' sandbox gave no answer to its self-check, so bots may not be separated from the server. $see" ;;
@@ -946,7 +946,7 @@ prepare_data() {
 wait_healthy() {
   waited=0
   while [ "$waited" -lt "$HEALTH_WAIT_S" ]; do
-    container=$(compose ps -q omb 2>/dev/null | head -n 1 || true)
+    container=$(compose ps -q seira 2>/dev/null | head -n 1 || true)
     if [ -n "$container" ] && [ "$(docker inspect --format '{{.State.Health.Status}}' "$container" 2>/dev/null || true)" = healthy ]; then return 0; fi
     sleep 5
     waited=$((waited + 5))
@@ -955,7 +955,7 @@ wait_healthy() {
 }
 
 https_answers() {
-  curl -fsS --max-time 10 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health" 2>/dev/null | grep -q openmausbot
+  curl -fsS --max-time 10 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health" 2>/dev/null | grep -q seira
 }
 
 wait_https() {
@@ -1001,7 +1001,7 @@ install_server() {
   place_button
   say "Starting Seira..."
   compose_quietly up -d --remove-orphans || fail "Seira could not be started (Docker's message is above). Fix that, then run this again."
-  wait_healthy || fail "Seira started but did not report healthy within $HEALTH_WAIT_S seconds. Its log: cd $INSTALL_DIR && sudo docker compose logs omb --tail 50"
+  wait_healthy || fail "Seira started but did not report healthy within $HEALTH_WAIT_S seconds. Its log: cd $INSTALL_DIR && sudo docker compose logs seira --tail 50"
   check_sandbox_runs
   say "Waiting for the HTTPS certificate of $DOMAIN..."
   wait_https || fail "Seira is running, but https://$DOMAIN did not answer within $HTTPS_WAIT_S seconds, usually because the certificate could not be issued. Check that $DOMAIN points at this server and that ports 80 and 443 are open in your provider's firewall, then run this again. Caddy's reason: cd $INSTALL_DIR && sudo docker compose logs caddy --tail 30"
@@ -1012,7 +1012,7 @@ install_server() {
 connect_server() {
   say ""
   say "Connecting this server to Seira..."
-  connector_script="${MAUSBOT_CONNECTOR_INSTALLER:-}"
+  connector_script="${SEIRA_CONNECTOR_INSTALLER:-}"
   fetched=""
   if [ -z "$connector_script" ]; then
     fetched=$(mktemp)
@@ -1022,7 +1022,7 @@ connect_server() {
       fail "Seira is installed and running here, but the connector's installer could not be downloaded from $ADMIN_URL. Nothing needs reinstalling: run this again with your code once that address answers."
     fi
   fi
-  if ! grep -q 'mausbot-connector' "$connector_script" 2>/dev/null; then
+  if ! grep -q 'seira-connector' "$connector_script" 2>/dev/null; then
     [ -z "$fetched" ] || rm -f "$fetched"
     fail "Seira is installed and running here, but what $ADMIN_URL sent is not the connector's installer. Nothing needs reinstalling: copy the install command from Seira again."
   fi
@@ -1031,18 +1031,18 @@ connect_server() {
   # nothing is connected.
   status=0
   if [ "$INSTALL_DOCKER" = 1 ]; then
-    MAUSBOT_ADMIN_URL="$ADMIN_URL" MAUSBOT_INSTALL_DIR="$INSTALL_DIR" sh "$connector_script" "$CODE" --customer-run --install-docker || status=$?
+    SEIRA_ADMIN_URL="$ADMIN_URL" SEIRA_INSTALL_DIR="$INSTALL_DIR" sh "$connector_script" "$CODE" --customer-run --install-docker || status=$?
   else
-    MAUSBOT_ADMIN_URL="$ADMIN_URL" MAUSBOT_INSTALL_DIR="$INSTALL_DIR" sh "$connector_script" "$CODE" --customer-run || status=$?
+    SEIRA_ADMIN_URL="$ADMIN_URL" SEIRA_INSTALL_DIR="$INSTALL_DIR" sh "$connector_script" "$CODE" --customer-run || status=$?
   fi
   [ -z "$fetched" ] || rm -f "$fetched"
   [ "$status" = 0 ] || fail "Seira is installed and running here, but connecting it did not finish (the reason is above). Nothing needs reinstalling: fix that and run this again with a new code."
 }
 
-# The first admin's one-time sign-in link, as `openmausbot pair` prints it: its code line (until when it works) and the
+# The first admin's one-time sign-in link, as `seira pair` prints it: its code line (until when it works) and the
 # link. Nothing when the server would not make one.
 first_admin_link() {
-  made=$(compose exec -T omb openmausbot pair --label "First admin" 2>/dev/null) || return 1
+  made=$(compose exec -T seira seira pair --label "First admin" 2>/dev/null) || return 1
   lines=$(printf '%s\n' "$made" | grep -E '^(Pairing code|Link) ' || true)
   case "$lines" in *"Link "*"https://$DOMAIN/pair#code="*) printf '%s\n' "$lines" | sed 's/^/  /' ;; *) return 1 ;; esac
 }
@@ -1051,7 +1051,7 @@ finish() {
   say ""
   say "Seira is running at https://$DOMAIN"
   say ""
-  pair_command="cd $INSTALL_DIR && sudo docker compose exec omb openmausbot pair --label \"First admin\""
+  pair_command="cd $INSTALL_DIR && sudo docker compose exec seira seira pair --label \"First admin\""
   # Only to a terminal: in a log, the link would let whoever reads it sign in as the admin until it is used or expires.
   if [ -t 1 ] && link=$(first_admin_link); then
     say "To sign in as the first admin, open this one-time link in your browser. Anyone who has it can use it, once:"
@@ -1062,7 +1062,7 @@ finish() {
     say "  $pair_command"
     [ -t 1 ] || say "(The link is not made here because this output is not a terminal: a log must not hold a link that signs in as the admin.)"
   fi
-  admins=$(env_value OMB_SIGNIN_EMAILS)
+  admins=$(env_value SEIRA_SIGNIN_EMAILS)
   if [ -n "$admins" ]; then
     say "Or open https://$DOMAIN/pair and sign in with an emailed code as: $admins"
   fi
@@ -1077,9 +1077,9 @@ finish() {
 }
 
 run_install() {
-  need_root "--domain ${DOMAIN:-maus.example.com}"
+  need_root "--domain ${DOMAIN:-seira.example.com}"
   if [ -z "$DOMAIN" ]; then DOMAIN=$(env_value DOMAIN); fi
-  [ -n "$DOMAIN" ] || fail "Say which name people will open, like this: $(command_line '--domain maus.example.com')"
+  [ -n "$DOMAIN" ] || fail "Say which name people will open, like this: $(command_line '--domain seira.example.com')"
   preflight
   if [ "$FAILED" != 0 ]; then
     report_docker_missing
@@ -1114,10 +1114,10 @@ run_uninstall() {
   say "Your data is kept in $INSTALL_DIR/data, your settings in $INSTALL_DIR/.env and the HTTPS certificates in $INSTALL_DIR/caddy."
   say "To start it again: $(command_line "--domain $(env_value DOMAIN)")"
   say "This command never deletes your data. To delete it yourself: sudo rm -rf $INSTALL_DIR"
-  if [ -f "$SYSROOT/etc/mausbot/$SECCOMP" ]; then
-    say "The sandbox's two profiles stay on this server: /etc/mausbot/$SECCOMP and /etc/apparmor.d/$APPARMOR_PROFILE."
+  if [ -f "$SYSROOT/etc/seira/$SECCOMP" ]; then
+    say "The sandbox's two profiles stay on this server: /etc/seira/$SECCOMP and /etc/apparmor.d/$APPARMOR_PROFILE."
   fi
-  if [ -n "$(docker ps -aq --filter name=mausbot-connector 2>/dev/null || true)" ]; then
+  if [ -n "$(docker ps -aq --filter name=seira-connector 2>/dev/null || true)" ]; then
     say "This server is still connected to Seira. To disconnect it, run the uninstall command Seira shows for the connector."
   fi
 }

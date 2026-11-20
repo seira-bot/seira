@@ -6,7 +6,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { botSettingsFor, withBotSettings } from "./claude-bot-settings.ts";
 
-const root = mkdtempSync(join(tmpdir(), "omb-bot-settings-"));
+const root = mkdtempSync(join(tmpdir(), "seira-bot-settings-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 let count = 0;
@@ -89,13 +89,13 @@ describe("botSettingsFor", () => {
 
 describe("withBotSettings", () => {
   it("merges as Claude Code merges a project's settings under --settings: lists join, Seira's own values win", () => {
-    const ombStop = { matcher: "", hooks: [{ type: "command", command: "omb-hook", timeout: 5 }] };
+    const seiraStop = { matcher: "", hooks: [{ type: "command", command: "seira-hook", timeout: 5 }] };
     const botStop = { hooks: [{ type: "command", command: "/opt/notify.sh" }] };
     expect(withBotSettings(
       { hooks: { PreToolUse: [guard], Stop: [botStop] }, env: { GUARD_LEVEL: "strict", ENABLE_TOOL_SEARCH: "false" }, enabledPlugins: { "guard@team": true } },
-      { hooks: { Stop: [ombStop], PostToolUse: [ombStop] }, env: { ENABLE_TOOL_SEARCH: "true" }, claudeMdExcludes: ["/home/ada/.claude/CLAUDE.md"] },
+      { hooks: { Stop: [seiraStop], PostToolUse: [seiraStop] }, env: { ENABLE_TOOL_SEARCH: "true" }, claudeMdExcludes: ["/home/ada/.claude/CLAUDE.md"] },
     )).toEqual({
-      hooks: { PreToolUse: [guard], Stop: [botStop, ombStop], PostToolUse: [ombStop] },
+      hooks: { PreToolUse: [guard], Stop: [botStop, seiraStop], PostToolUse: [seiraStop] },
       env: { GUARD_LEVEL: "strict", ENABLE_TOOL_SEARCH: "true" },
       enabledPlugins: { "guard@team": true },
       claudeMdExcludes: ["/home/ada/.claude/CLAUDE.md"],

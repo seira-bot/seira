@@ -11,11 +11,11 @@ const REQUEST_TIMEOUT_MS = 8_000;
 const DISCOVERY_TIMEOUT_MS = 60_000;
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 /** Each discovery runs in an empty folder named after this process: one that is cut off at exit goes with the process or the next start. */
-const DISCOVERY_FOLDER_PREFIX = "omb-acp-models-";
+const DISCOVERY_FOLDER_PREFIX = "seira-acp-models-";
 const MAX_LINE_BYTES = 1024 * 1024;
 const MAX_MODELS = 128;
 /** The `clientInfo.name` every discovery session is opened with. */
-export const DISCOVERY_CLIENT_NAME = "openmausbot-model-discovery";
+export const DISCOVERY_CLIENT_NAME = "seira-model-discovery";
 
 export interface AcpDiscoveryOptions {
   /** A saved id listed first that leaves the native session's model unchanged; it becomes the default. */

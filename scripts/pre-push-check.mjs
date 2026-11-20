@@ -46,7 +46,7 @@ const git = (...args) => execFileSync("git", args, { encoding: "utf8", stdio: ["
 /** Runs vitest with a json report in a temporary folder. The report is vitest's own verdict, since a dependency out of
  * step fails before any test runs. Gives `unknown` with a reason when there is no verdict, else the run and its failed-test count. */
 function vitestReport(argsFor, timeout) {
-  const dir = mkdtempSync(join(tmpdir(), "omb-pre-push-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-pre-push-"));
   const report = join(dir, "report.json");
   try {
     const run = spawnSync("node_modules/.bin/vitest", ["run", ...argsFor(report)], { encoding: "utf8", timeout, maxBuffer: 16 * 1024 * 1024 });
@@ -115,7 +115,7 @@ function main() {
       if (bad) console.error(`${run.stdout}${run.stderr}`);
     }
     if (bad) {
-      console.error(`pre-push: ${name} failed. Fix it, or push with OMB_SKIP_HOOKS=1 to let CI report it.`);
+      console.error(`pre-push: ${name} failed. Fix it, or push with SEIRA_SKIP_HOOKS=1 to let CI report it.`);
       process.exitCode = 1;
       return;
     }

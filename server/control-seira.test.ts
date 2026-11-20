@@ -28,7 +28,7 @@ describe("control-seira command mapping", () => {
   });
 
   it("keeps every ui verb off discovery: the launch handle is required, whatever the environment says", async () => {
-    const env = { OPENMAUSBOT_URL: "http://127.0.0.1:19999", OMB_PORT: "19999" };
+    const env = { SEIRA_URL: "http://127.0.0.1:19999", SEIRA_PORT: "19999" };
     const verbs = [...UI_MUTATING, "snapshot", "screenshot", "console", "wait-settle"];
     expect(UI_MUTATING).toEqual(new Set(["click", "type", "press", "flag", "eval"]));
     for (const verb of verbs) {
@@ -46,11 +46,11 @@ describe("control-seira command mapping", () => {
   });
 
   it("refuses a handle whose launch has already been stopped", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-ui-handle-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-ui-handle-"));
     try {
       const handle = join(dir, "ui.json");
       writeFileSync(handle, JSON.stringify({
-        url: "http://127.0.0.1:19999", previewUrl: "http://127.0.0.1:5199/__threads.html", session: "omb-ui-19999",
+        url: "http://127.0.0.1:19999", previewUrl: "http://127.0.0.1:5199/__threads.html", session: "seira-ui-19999",
         binary: "/fixture/agent-browser", home: join(dir, "gone"), botId: "bot-1", logPath: "/fixture/server.log", chrome: null,
       }));
       await expect(runControlSeira(["ui", "snapshot", "--ui", handle])).rejects.toMatchObject({
@@ -65,7 +65,7 @@ describe("control-seira command mapping", () => {
   });
 
   it("finds the newest Chrome for Testing that agent-browser install unpacked", () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-ui-tools-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-ui-tools-"));
     try {
       expect(installedChrome(dir, "linux")).toBeNull();
       const browsers = join(dir, ".agent-browser", "browsers");
@@ -97,7 +97,7 @@ describe("control-seira command mapping", () => {
 
   it("composes doctor from the shared health and model tools", async () => {
     const callTool = vi.fn(async (name: string) => name === "get_system_health"
-      ? { status: "connected", app: "openmausbot" }
+      ? { status: "connected", app: "seira" }
       : {
           instances: [
             { instanceId: "ready", snapshot: { state: "available" } },
@@ -138,7 +138,7 @@ describe("control-seira command mapping", () => {
 
   it("maps bounded reads and dry-run actions without reimplementing them", async () => {
     const callTool = vi.fn(async (name: string, args: Record<string, unknown>) => ({ name, args }));
-    const env = { OPENMAUSBOT_URL: "http://127.0.0.1:19999" };
+    const env = { SEIRA_URL: "http://127.0.0.1:19999" };
     await expect(runControlSeira(["messages", "--channel", "room-1", "--limit", "20"], {
       callTool: callTool as any,
       env,
@@ -160,7 +160,7 @@ describe("control-seira command mapping", () => {
     // replay path, which is what compaction needs to be observable at all —
     // a cleanly resumed turn never compacts.
     const callTool = vi.fn(async (name: string, args: Record<string, unknown>) => ({ name, args }));
-    const env = { OPENMAUSBOT_URL: "http://127.0.0.1:19999" };
+    const env = { SEIRA_URL: "http://127.0.0.1:19999" };
     await expect(runControlSeira(
       ["edit", "--bot", "bot-1", "--message", "msg-9", "--text", "say that again"],
       { callTool: callTool as any, env },
@@ -190,7 +190,7 @@ describe("control-seira command mapping", () => {
 
   it("requires every part of an edit before calling the shared tool", async () => {
     const callTool = vi.fn();
-    const env = { OPENMAUSBOT_URL: "http://127.0.0.1:19999" };
+    const env = { SEIRA_URL: "http://127.0.0.1:19999" };
     for (const args of [
       ["edit", "--message", "m", "--text", "x"],
       ["edit", "--bot", "b", "--text", "x"],
@@ -214,7 +214,7 @@ describe("control-seira command mapping", () => {
 
   it("forwards pinned task IDs for sends, reads, waits, interrupts, and model changes", async () => {
     const callTool = vi.fn(async (name: string, args: Record<string, unknown>) => ({ name, args }));
-    const dependencies = { callTool: callTool as any, env: { OPENMAUSBOT_URL: "http://127.0.0.1:19999" } };
+    const dependencies = { callTool: callTool as any, env: { SEIRA_URL: "http://127.0.0.1:19999" } };
     for (const [command, tool, extra] of [
       ["send", "send_bot_message", ["--text", "hello"]],
       ["messages", "get_bot_messages", []],
@@ -249,12 +249,12 @@ describe("control-seira isolated verification loop", () => {
     const parentEnv = {
       ...process.env,
       COMPOSIO_API_KEY: "must-not-reach-the-fixture",
-      OMB_SKILLS_DIR: "/must/not/reach/the/fixture",
+      SEIRA_SKILLS_DIR: "/must/not/reach/the/fixture",
       XAI_API_KEY: "must-not-reach-the-fixture",
       FAKE_CLAUDE_PROBE: "fixture-scripting-knob",
     };
     const session = await launchVerificationServer(parentEnv);
-    const env = { OPENMAUSBOT_URL: session.info.url };
+    const env = { SEIRA_URL: session.info.url };
     try {
       const doctor = await runControlSeira(["doctor"], { env }) as any;
       expect(doctor.ok).toBe(true);
@@ -269,7 +269,7 @@ describe("control-seira isolated verification loop", () => {
       expect(transcript.messages.some((message: { role?: string }) => message.role === "bot")).toBe(true);
       const fixtureEnv = JSON.parse(readFileSync(session.fixtureDumpPath, "utf8")).env as Record<string, string>;
       expect(fixtureEnv).not.toHaveProperty("COMPOSIO_API_KEY");
-      expect(fixtureEnv).not.toHaveProperty("OMB_SKILLS_DIR");
+      expect(fixtureEnv).not.toHaveProperty("SEIRA_SKILLS_DIR");
       expect(fixtureEnv).not.toHaveProperty("XAI_API_KEY");
       expect(JSON.stringify(fixtureEnv)).not.toContain("must-not-reach-the-fixture");
       expect(fixtureEnv.FAKE_CLAUDE_PROBE).toBe("fixture-scripting-knob");
@@ -309,7 +309,7 @@ describe("control-seira isolated verification loop", () => {
       ...process.env,
       FAKE_CLAUDE_TOOL_CALLS: '[{"name":"Bash","input":{"command":"pnpm control:seira doctor","password":"fixture-secret"},"output":{"text":"fixture healthy","api_key":"fixture-output-secret"},"ok":true},{"name":"Bash","input":{"command":"false"},"output":"fixture command failed","ok":false}]',
     });
-    const env = { OPENMAUSBOT_URL: session.info.url };
+    const env = { SEIRA_URL: session.info.url };
     try {
       const created = await runControlSeira(["new-bot", "--name", "Tool Script Probe"], { env }) as any;
       const botId = created.bot.id as string;

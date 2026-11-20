@@ -19,8 +19,8 @@ it("starts a teammate's thread in the delegating bot's project folder by default
     expect(response.ok, `${method} ${path} ${response.status}: ${JSON.stringify(value)}`).toBe(true);
     return value;
   };
-  // A project lives outside OpenMausBot's data; folders inside it are bots' private workspaces.
-  const site = mkdtempSync(join(tmpdir(), "omb-site-"));
+  // A project lives outside Seira's data; folders inside it are bots' private workspaces.
+  const site = mkdtempSync(join(tmpdir(), "seira-site-"));
   const evidence = () => {
     try { return readFileSync(join(dataDir, "room-plan.json.evidence.jsonl"), "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)); } catch { return []; }
   };

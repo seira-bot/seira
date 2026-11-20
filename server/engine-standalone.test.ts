@@ -191,7 +191,7 @@ describe.skipIf(process.platform === "win32")("installing a standalone engine", 
   let originalPath: string | undefined;
 
   beforeEach(() => {
-    scratch = mkdtempSync(join(tmpdir(), "omb-standalone-"));
+    scratch = mkdtempSync(join(tmpdir(), "seira-standalone-"));
     base = join(scratch, "data");
     log = join(scratch, "runs.log");
     failFlag = join(scratch, "fail-for-this-machine");

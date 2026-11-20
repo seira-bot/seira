@@ -1,6 +1,6 @@
 // A run that is killed (out of memory, a memory limit, a dropped SSH session) never reaches its afterAll hooks and
-// leaves its throwaway folders behind. Each run sweeps the old ones. Other omb-* folders are not ours to delete: the
-// installed app keeps its sockets in omb-companion-origin-* and omb-ssh-* for longer than any run.
+// leaves its throwaway folders behind. Each run sweeps the old ones. Other seira-* folders are not ours to delete: the
+// installed app keeps its sockets in seira-companion-origin-* and seira-ssh-* for longer than any run.
 import { lstatSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

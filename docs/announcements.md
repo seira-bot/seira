@@ -194,7 +194,7 @@ Add a card to `announcements/announcements.json` as above. It is listed and rais
 
 ## Turning it off
 
-- **`OMB_DISABLE_ANNOUNCEMENTS=1`** in the server's environment stops the download and every remote card on that server's
+- **`SEIRA_DISABLE_ANNOUNCEMENTS=1`** in the server's environment stops the download and every remote card on that server's
   pages, the bundled ones included. For a self-hosted server or an open-source build that should never show them. The
   desktop app's own server inherits the app's environment, so it holds there when the app is started with it set.
 - **No in-app switch governs these cards.** The app has no setting for promotional popups: the product-updates question is
@@ -210,7 +210,7 @@ The `id` is the card's own id from this public file, the same for everyone. See 
 ## Tests and previews
 
 Tests never download the live file: `server/testing/setup.ts` and the verification server
-(`scripts/control-seira.ts`, which the renderer previews and UI tests run on) set `OMB_DISABLE_ANNOUNCEMENTS=1`, so their
+(`scripts/control-seira.ts`, which the renderer previews and UI tests run on) set `SEIRA_DISABLE_ANNOUNCEMENTS=1`, so their
 pages get no cards whatever `main` holds. The server's tests hand the store a fake fetch.
 
 ## Design notes

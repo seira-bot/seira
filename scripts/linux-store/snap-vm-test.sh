@@ -95,7 +95,7 @@ DATA=$(mktemp -d)
 Xvfb :99 -screen 0 1280x800x24 >/tmp/xvfb.log 2>&1 &
 export DISPLAY=:99
 sleep 2
-OMB_DATA_DIR="$DATA" /snap/bin/seira >/tmp/electron.log 2>&1 &
+SEIRA_DATA_DIR="$DATA" /snap/bin/seira >/tmp/electron.log 2>&1 &
 APP=$!
 up=no
 for _ in $(seq 1 150); do
@@ -105,7 +105,7 @@ for _ in $(seq 1 150); do
 done
 say "electron-server-answers=$up"; say "listening: $(ss -ltn | awk "NR>1{print \$4}" | tr "\n" " ")"; say "electron-procs: $(pgrep -fc seira)"
 say "electron-process-alive=$(kill -0 "$APP" 2>/dev/null && echo yes || echo no)"
-say "electron-cmdline-has-no-sandbox=$(ps -eo args | grep -E '[/]seira|[/]openmausbot' | grep -c -e '--no-sandbox')"
+say "electron-cmdline-has-no-sandbox=$(ps -eo args | grep -E '[/]seira|[/]seira' | grep -c -e '--no-sandbox')"
 say "electron-log-no-usable-sandbox=$(grep -ci 'no usable sandbox' /tmp/electron.log)"
 say "electron-log-sandbox-lines:"; grep -i 'sandbox\|namespace\|FATAL' /tmp/electron.log | head -10 | sed 's/^/RESULT   /'
 say "electron-log-head:"; tail -25 /tmp/electron.log | sed 's/^/RESULT   /'

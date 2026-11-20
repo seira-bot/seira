@@ -20,9 +20,9 @@ function nvmBinDirs(home: string): string[] {
   }
 }
 
-/** A sealed test fixture sees only its own PATH, OMB_EXTRA_PATH, app-managed dirs and its temporary home, never this machine's CLIs or keychain. */
+/** A sealed test fixture sees only its own PATH, SEIRA_EXTRA_PATH, app-managed dirs and its temporary home, never this machine's CLIs or keychain. */
 export function sealedFixture(): boolean {
-  return process.env.OMB_TEST_SEALED_PATH === "1";
+  return process.env.SEIRA_TEST_SEALED_PATH === "1";
 }
 
 function knownDirs(home: string = homedir()): string[] {
@@ -126,7 +126,7 @@ function buildPath(): string {
   const basePath = onHost ? hostBasePath() : process.env.PATH;
   return mergePaths([
     ...registeredDirs.filter((d) => existsSync(d)),
-    ...(process.env.OMB_EXTRA_PATH ? process.env.OMB_EXTRA_PATH.split(delimiter) : []),
+    ...(process.env.SEIRA_EXTRA_PATH ? process.env.SEIRA_EXTRA_PATH.split(delimiter) : []),
     ...(basePath ? basePath.split(delimiter) : []),
     // Keep the last login-shell result while a rescan re-probes, or rc-only CLIs vanish for the response that triggered it.
     ...(loginShellPath ? loginShellPath.split(delimiter) : []),
@@ -151,11 +151,11 @@ function probeLoginShellPath(): void {
   // -l -i: nvm and friends live in .zshrc/.bashrc, which only interactive shells read; a marker isolates $PATH from rc noise.
   execFile(
     shell,
-    ["-l", "-i", "-c", 'printf "__OMB_PATH__%s" "$PATH"'],
+    ["-l", "-i", "-c", 'printf "__SEIRA_PATH__%s" "$PATH"'],
     { timeout: 5000 },
     (err, stdout) => {
       if (err || !stdout) return;
-      const m = /__OMB_PATH__([^\n]*)/.exec(stdout);
+      const m = /__SEIRA_PATH__([^\n]*)/.exec(stdout);
       if (!m || !m[1]) return;
       loginShellPath = m[1];
       cached = buildPath();

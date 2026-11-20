@@ -8,8 +8,8 @@ import { runControlSeira } from "../control-seira.ts";
 import { UI_TOOLS_DIR } from "./control-seira-ui.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-const enabled = Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env })) || process.env.OMB_UI_E2E === "1";
-if (!enabled) console.log("skipping tool selection UI: set OMB_UI_E2E=1 to install the pinned browser");
+const enabled = Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env })) || process.env.SEIRA_UI_E2E === "1";
+if (!enabled) console.log("skipping tool selection UI: set SEIRA_UI_E2E=1 to install the pinned browser");
 interface SavedBot { id: string; name: string; toolScope?: { allow?: string[]; deny?: string[] }; busy?: boolean }
 
 (enabled ? it : it.skip)("saves, clears, rejects and duplicates owner tool selections without crossing bots", async () => {

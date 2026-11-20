@@ -8,7 +8,7 @@ import { buildZip } from "../testing/zip-fixture.ts";
 import { BITWARDEN_CLI_VERSION, BitwardenCliUnavailable, bitwardenCliPath, bitwardenCliPin, bitwardenCliUrl, bitwardenRunner, installBitwardenCli } from "./bitwarden-cli.ts";
 
 const dirs: string[] = [];
-const temp = () => { const dir = mkdtempSync(join(tmpdir(), "omb-bitwarden-cli-")); dirs.push(dir); return dir; };
+const temp = () => { const dir = mkdtempSync(join(tmpdir(), "seira-bitwarden-cli-")); dirs.push(dir); return dir; };
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 
 const TOOL = "#!/bin/sh\necho fake bw\n";
@@ -56,8 +56,8 @@ describe("Bitwarden's command line tool, fetched on first use", () => {
   it.skipIf(process.platform === "win32")("runs it as a separate process with secrets in its environment only, and none of the server's own", async () => {
     const dir = temp();
     const tool = join(dir, "bw");
-    writeFileSync(tool, `#!/bin/sh\necho "args=$*"\necho "secret=$BW_PASSWORD"\necho "dir=$BITWARDENCLI_APPDATA_DIR"\necho "server=$OMB_FAKE_SERVER_SECRET"\nexit 3\n`, { mode: 0o755 });
-    process.env.OMB_FAKE_SERVER_SECRET = "never-passed";
+    writeFileSync(tool, `#!/bin/sh\necho "args=$*"\necho "secret=$BW_PASSWORD"\necho "dir=$BITWARDENCLI_APPDATA_DIR"\necho "server=$SEIRA_FAKE_SERVER_SECRET"\nexit 3\n`, { mode: 0o755 });
+    process.env.SEIRA_FAKE_SERVER_SECRET = "never-passed";
     try {
       const run = bitwardenRunner({ executable: async () => tool, appDataDir: join(dir, "account") });
       const result = await run(["unlock", "--passwordenv", "BW_PASSWORD", "--raw"], { BW_PASSWORD: "fake-master" });
@@ -66,7 +66,7 @@ describe("Bitwarden's command line tool, fetched on first use", () => {
       const missing = bitwardenRunner({ executable: async () => join(dir, "nothing"), appDataDir: join(dir, "account") });
       expect((await missing(["status"])).code).toBe(127);
     } finally {
-      delete process.env.OMB_FAKE_SERVER_SECRET;
+      delete process.env.SEIRA_FAKE_SERVER_SECRET;
     }
   });
 });

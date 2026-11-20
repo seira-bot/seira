@@ -65,7 +65,7 @@ async function withPoolFixture(setup: { claudeUsed: number; codexUsed: number; s
     const log = openSync(logPath, "a", 0o600);
     server = spawn(process.execPath, ["--experimental-strip-types", fileURLToPath(new URL("./index.ts", import.meta.url))], {
       cwd: fileURLToPath(new URL("..", import.meta.url)),
-      env: { ...verificationServerEnvironment({}, dataDir, Number(new URL(url).port)), OMB_TEST_PLAN_USAGE_FILE: usageFile },
+      env: { ...verificationServerEnvironment({}, dataDir, Number(new URL(url).port)), SEIRA_TEST_PLAN_USAGE_FILE: usageFile },
       stdio: ["ignore", log, log],
     });
     closeSync(log);

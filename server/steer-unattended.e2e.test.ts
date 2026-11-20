@@ -35,11 +35,11 @@ const threadMessages = async (threadId: string): Promise<Array<{ kind: string; c
 
 /** Duplicated, not imported: DATA_DIR there is fixed at import time from this process's HOME. Keep in lockstep with claude.ts. */
 function brokerCandidates(threadId: string, botId: string): string[] {
-  const dataDir = join(home, ".openmausbot");
+  const dataDir = join(home, ".seira");
   const prefix = threadId.replace(/[^\w-]/g, "").slice(0, 4);
   const digest = createHash("sha256").update(`${botId}\0${threadId}\0claude`).digest("hex").slice(0, 4);
   const scope = createHash("sha256").update(`${dataDir}\0${child.pid}\0${botId}\0${threadId}\0claude`).digest("hex").slice(0, 16);
-  return [join(dataDir, `perm-${prefix}${digest}.sock`), join(tmpdir(), `omb-perm-${scope}.sock`)];
+  return [join(dataDir, `perm-${prefix}${digest}.sock`), join(tmpdir(), `seira-perm-${scope}.sock`)];
 }
 
 async function connectBroker(threadId: string, botId: string): Promise<Socket> {
@@ -78,8 +78,8 @@ function ask(conn: Socket, id: string, command: string): { answered: () => boole
 posixOnly("a steered message does not lift the unattended mark on its own", () => {
   beforeAll(async () => {
     chmodSync(FAKE_CLAUDE, 0o755);
-    home = mkdtempSync(join(tmpdir(), "omb-steer-unattended-"));
-    const data = join(home, ".openmausbot");
+    home = mkdtempSync(join(tmpdir(), "seira-steer-unattended-"));
+    const data = join(home, ".seira");
     mkdirSync(data, { recursive: true });
     finishGate = join(home, "finish.gate");
     writeFileSync(join(data, "config.json"), JSON.stringify({
@@ -100,8 +100,8 @@ posixOnly("a steered message does not lift the unattended mark on its own", () =
         ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
         HOME: home,
         USERPROFILE: home,
-        OMB_PORT: String(port),
-        OMB_WEBHOOK_PORT: String(port + 1),
+        SEIRA_PORT: String(port),
+        SEIRA_WEBHOOK_PORT: String(port + 1),
         // Under a deep HOME the broker falls back to os.tmpdir(); the child has to agree with this process about where that is.
         TMPDIR: tmpdir(),
       },
@@ -137,7 +137,7 @@ posixOnly("a steered message does not lift the unattended mark on its own", () =
       name: "Nightly build",
       prompt: "Handle the incoming build event",
       botId: bot.id,
-      runOn: "maus",
+      runOn: "seira",
     });
     expect(hook.status).toBe(201);
     const delivered = await fetch(hook.body.credential.url, {

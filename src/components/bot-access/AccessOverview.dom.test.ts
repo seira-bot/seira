@@ -32,7 +32,7 @@ const bot = (fields: Partial<Bot>): Bot => ({
 });
 const payroll = bot({ id: "payroll", name: "Payroll", reportsTo: CARA.email, access: { everyone: "none", people: { [BOB.email]: "view" } } });
 const helpdesk = bot({ id: "helpdesk", name: "Helpdesk", access: { everyone: "chat", people: {} } });
-const bobsOwn = bot({ id: "bobs", name: "MausBot", defaultBot: { person: BOB.email } });
+const bobsOwn = bot({ id: "bobs", name: "Seira", defaultBot: { person: BOB.email } });
 
 let host: HTMLDivElement;
 let root: Root;

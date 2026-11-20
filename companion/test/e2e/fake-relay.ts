@@ -47,7 +47,7 @@ export interface FakeRelay {
   close(): Promise<void>;
 }
 
-const PROTOCOL = "omb-relay.v1";
+const PROTOCOL = "seira-relay.v1";
 const toBuffer = (data: RawData): Buffer => (Array.isArray(data) ? Buffer.concat(data) : Buffer.from(data as ArrayBuffer));
 
 export async function startFakeRelay(options: FakeRelayOptions): Promise<FakeRelay> {

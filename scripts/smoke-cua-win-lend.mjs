@@ -28,8 +28,8 @@ for (const { from } of resources) {
   if (!existsSync(join(root, from))) throw new Error(`${from} is missing: run pnpm build:cua:win first`);
 }
 
-const work = mkdtempSync(join(tmpdir(), "omb-cua-lend-"));
-const installed = join(work, "OpenMausBot");
+const work = mkdtempSync(join(tmpdir(), "seira-cua-lend-"));
+const installed = join(work, "Seira");
 cpSync(dirname(createRequire(import.meta.url)("electron")), installed, { recursive: true });
 renameSync(join(installed, "electron.exe"), join(installed, "Seira.exe"));
 for (const { from, to } of resources) cpSync(join(root, from), join(installed, "resources", to), { recursive: true });
@@ -39,7 +39,7 @@ async function lendSmoke(label, code) {
   const run = join(work, label.replace(/\W+/g, "-"));
   mkdirSync(run, { recursive: true });
   const report = join(run, "report.json");
-  const env = { ...process.env, OMB_SMOKE_USER_DATA: join(run, "user-data"), OMB_SMOKE_REPORT: report, OMB_SMOKE_CODE: code, OMB_SMOKE_LABEL: label,
+  const env = { ...process.env, SEIRA_SMOKE_USER_DATA: join(run, "user-data"), SEIRA_SMOKE_REPORT: report, SEIRA_SMOKE_CODE: code, SEIRA_SMOKE_LABEL: label,
     CUA_DRIVER_RS_TELEMETRY_ENABLED: "0" };
   delete env.CUA_DRIVER_PATH;
   delete env.ELECTRON_RUN_AS_NODE;

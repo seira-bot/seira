@@ -4,15 +4,14 @@ import { CLOUD_ID, CLOUD_SWATCHES, cleanCloudListName, ORGANIZATION_BLOCKS, othe
 import { planTeam, teamPlan } from "./cloud-team-plan.mjs";
 import { cleanCode, cleanEmail, parseSignInStart, SIGN_IN_START, SIGN_IN_TRIES, SIGN_IN_VERIFY, signInIdentity, startFailure, verifyFailure } from "./cloud-signin.mjs";
 import { createHash } from "node:crypto";
-import { DEFAULT_CLOUD } from "./cloud-default.mjs";
 import nativeText from "./native-text.cjs";
+import { SEIRA_HOSTS, seiraOrigin } from "./seira-hosts.mjs";
 
 const { englishText } = nativeText;
 
-export const CLOUD_ORIGIN = "https://cloud.openmausbot.com";
-/** The staging Admin (Dodo test mode, real test Clouds): a fixed address, on only with OMB_CLOUD_STAGING=1. */
-export const STAGING_CLOUD_ORIGIN = "https://omb-cloud-staging.fly.dev";
-export const SEIRA_CLOUD_ORIGIN = "https://cloud.seira.bot";
+export const CLOUD_ORIGIN = seiraOrigin(SEIRA_HOSTS.cloud);
+/** The staging Admin (Dodo test mode, real test Clouds): a fixed address, on only with SEIRA_CLOUD_STAGING=1. */
+export const STAGING_CLOUD_ORIGIN = seiraOrigin(SEIRA_HOSTS.cloudStaging);
 const FILES = (suffix) => ({ file: `cloud-account${suffix}.bin`, saved: `cloud-accounts${suffix}.bin`, places: `account-places${suffix}.json`, environments: `environments${suffix}.json`, sync: `cloud-sync${suffix}`, look: `cloud-home-look${suffix}.json` });
 /** An https origin, or http on the loopback address for development; null for anything else, including a path, a port-less lookalike or credentials. */
 export function cloudOriginOf(value) {
@@ -24,14 +23,13 @@ export function cloudOriginOf(value) {
 }
 /** Which Cloud this app signs in to, and the files that depend on it (the sign-in, saved servers with the Cloud's entry,
  * Files' state, the Cloud's chosen name): each Cloud keeps its own, so one never reads or writes another's. The
- * environment picks it: OMB_CLOUD_ORIGIN (an https origin, or http://127.0.0.1) wins over OMB_CLOUD_STAGING=1, which wins
- * over the build's DEFAULT_CLOUD. An origin that is not valid is ignored. */
-export function cloudTarget(env = process.env, defaultCloud = DEFAULT_CLOUD) {
-  const asked = cloudOriginOf(env?.OMB_CLOUD_ORIGIN);
-  const origin = asked ?? (env?.OMB_CLOUD_STAGING === "1" ? STAGING_CLOUD_ORIGIN : defaultCloud === "seira" ? SEIRA_CLOUD_ORIGIN : CLOUD_ORIGIN);
-  if (origin === CLOUD_ORIGIN) return { origin, kind: "upstream", staging: false, ...FILES("") };
+ * environment picks it: SEIRA_CLOUD_ORIGIN (an https origin, or http://127.0.0.1) wins over SEIRA_CLOUD_STAGING=1, which wins
+ * over Seira's own Cloud. An origin that is not valid is ignored. */
+export function cloudTarget(env = process.env) {
+  const asked = cloudOriginOf(env?.SEIRA_CLOUD_ORIGIN);
+  const origin = asked ?? (env?.SEIRA_CLOUD_STAGING === "1" ? STAGING_CLOUD_ORIGIN : CLOUD_ORIGIN);
   if (origin === STAGING_CLOUD_ORIGIN) return { origin, kind: "staging", staging: true, ...FILES("-staging") };
-  if (origin === SEIRA_CLOUD_ORIGIN) return { origin, kind: "seira", staging: false, ...FILES("-seira") };
+  if (origin === CLOUD_ORIGIN) return { origin, kind: "seira", staging: false, ...FILES("-seira") };
   return { origin, kind: "custom", staging: false, ...FILES(`-dev-${createHash("sha256").update(origin).digest("hex").slice(0, 10)}`) };
 }
 const TOKEN = /^omc_[A-Za-z0-9_-]{43}$/;
@@ -93,7 +91,7 @@ export function checkoutDestination(value, { fixture = false, staging = false, o
  * main process chose from its own environment (`trusted`). */
 export function cloudOrigin(value = CLOUD_ORIGIN, fixture = false, trusted = false) {
   const url = new URL(value);
-  const known = [CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN, SEIRA_CLOUD_ORIGIN].includes(value);
+  const known = [CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN].includes(value);
   if (value !== url.origin || !(known || (trusted && cloudOriginOf(value)) || (fixture && url.protocol === "http:" && ["127.0.0.1", "[::1]"].includes(url.hostname)))) {
     throw new Error("Invalid Seira Cloud address.");
   }
@@ -123,7 +121,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
   setTimer = setTimeout, clearTimer = clearTimeout, warn = message => console.warn(message), awaitingWake = () => false, t = englishText.t }) {
   origin = cloudOrigin(origin, fixture, trusted);
   const staging = origin === STAGING_CLOUD_ORIGIN;
-  const own = origin === CLOUD_ORIGIN || staging || (fixture && !trusted) ? null : origin;
+  const own = staging || (fixture && !trusted) ? null : origin;
   let grant = null, issued = null, cleanup = null, pending = null, cleanupNeeded = false;
   let value = { status: "signed-out", message: "restoring" }, generation = 0, timer = null, closed = false, clearing = null, refreshing = null;
   let verifiedUntil = 0, restoring = false, controller = new AbortController(), failures = 0;
@@ -174,7 +172,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
   // it or write it over the one taking its place, whoever asks (a window coming to the front, Settings' Refresh).
   let quiet = false;
   const current = stamp => !closed && !quiet && generation === stamp;
-  const versionHeader = text(appVersion, 40) && /^[0-9A-Za-z][0-9A-Za-z.+-]{0,39}$/.test(appVersion) ? { "x-openmausbot-version": appVersion } : {};
+  const versionHeader = text(appVersion, 40) && /^[0-9A-Za-z][0-9A-Za-z.+-]{0,39}$/.test(appVersion) ? { "x-seira-version": appVersion } : {};
   async function request(route, { method = "GET", body, token, signal = controller.signal, path = `/api/cloud/desktop/${route}`, timeoutMs = 20_000 } = {}) {
     const response = await fetcher(`${origin}${path}`, {
       method, redirect: "error", credentials: "omit", cache: "no-store",
@@ -910,7 +908,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
       catch (error) { if (error?.status === 402 || error?.status === 404) return null; throw error; }
       let relay = null;
       try { relay = typeof result?.url === "string" ? new URL(result.url) : null; } catch { relay = null; }
-      if (result?.cloudContractVersion !== 1 || !relay || relay.origin !== origin || typeof result.token !== "string" || !/^omb_xd_[A-Za-z0-9_-]{43}$/.test(result.token)) {
+      if (result?.cloudContractVersion !== 1 || !relay || relay.origin !== origin || typeof result.token !== "string" || !/^seira_xd_[A-Za-z0-9_-]{43}$/.test(result.token)) {
         throw new Error("Invalid Cloud X research response.");
       }
       return { url: result.url, token: result.token };

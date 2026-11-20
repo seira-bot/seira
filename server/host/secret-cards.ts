@@ -272,7 +272,7 @@ export function createSecretCards(deps: SecretCardsDeps) {
 
   /** "Use a saved one" on a custom card: saved secrets and the bot's linked ones whose names could fit, never the one by
    * this very name the bot may already use (it would have had it with no card, so the bot wants a new value). A secret
-   * given only to OpenMausBot's own tools is never offered for a file. */
+   * given only to Seira's own tools is never offered for a file. */
   function savedChoices(botId: string, threadId: string, messageId: string): Array<VaultChoice & { use(): Promise<{ id: string; value: string }> }> {
     const message = openCustomCard(botId, threadId, messageId);
     if ("status" in message || message.secret!.delivery === "email") return [];

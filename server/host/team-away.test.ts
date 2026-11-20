@@ -18,7 +18,7 @@ type Answer = (request: AwayRequest) => Response | Promise<Response>;
 const ok: Answer = (request) => Response.json({ v: 1, results: request.notices.map(({ id }) => ({ id, state: "sent" })) });
 
 function world(options: { answer?: Answer; here?: Set<string>; members?: string[] } = {}) {
-  const dataDir = mkdtempSync(join(tmpdir(), "omb-team-away-"));
+  const dataDir = mkdtempSync(join(tmpdir(), "seira-team-away-"));
   dirs.push(dataDir);
   let clock = Date.UTC(2026, 10, 10, 9, 0, 0);
   const here = options.here ?? new Set<string>();

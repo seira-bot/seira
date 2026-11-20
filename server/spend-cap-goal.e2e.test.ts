@@ -12,14 +12,14 @@ describe("spend cap inside a team goal run", () => {
   let layerDir: string;
 
   beforeEach(async () => {
-    layerDir = mkdtempSync(join(tmpdir(), "omb-fake-layer-goal-"));
+    layerDir = mkdtempSync(join(tmpdir(), "seira-fake-layer-goal-"));
     mkdirSync(join(layerDir, "server"));
     writeFileSync(join(layerDir, "server", "index.js"), 'export async function register() { return { customer: "Fixture Co", features: ["budgets", "billing"], expiresAt: "2099-01-01" }; }\n');
     session = await launchVerificationServer({
       ...process.env,
       // FAKE_CLAUDE_REPLY_STATE unset: every invocation replays index 0, so an accidental retry would price another turn.
       FAKE_CLAUDE_REPLIES: JSON.stringify([
-        'The plan is ready.\n<openmaus-goal>{"status":"continue","next":"Worker","instruction":"Do the thing","detail":"Plan ready"}</openmaus-goal>',
+        'The plan is ready.\n<seira-goal>{"status":"continue","next":"Worker","instruction":"Do the thing","detail":"Plan ready"}</seira-goal>',
       ]),
     }, undefined, undefined, undefined, { dir: layerDir, licenseKey: "fixture-key" });
   }, 60_000);
@@ -92,14 +92,14 @@ describe("spend cap inside a one-on-one goal", () => {
   let layerDir: string;
 
   beforeEach(async () => {
-    layerDir = mkdtempSync(join(tmpdir(), "omb-fake-layer-solo-goal-"));
+    layerDir = mkdtempSync(join(tmpdir(), "seira-fake-layer-solo-goal-"));
     mkdirSync(join(layerDir, "server"));
     writeFileSync(join(layerDir, "server", "index.js"), 'export async function register() { return { customer: "Fixture Co", features: ["budgets", "billing"], expiresAt: "2099-01-01" }; }\n');
     session = await launchVerificationServer({
       ...process.env,
       // Every invocation replays index 0, so an accidental retry would price another turn.
       FAKE_CLAUDE_REPLIES: JSON.stringify([
-        'Half done.\n<openmaus-goal>{"status":"continue","next":"Solo","instruction":"Finish the thing","detail":"Half done"}</openmaus-goal>',
+        'Half done.\n<seira-goal>{"status":"continue","next":"Solo","instruction":"Finish the thing","detail":"Half done"}</seira-goal>',
       ]),
     }, undefined, undefined, undefined, { dir: layerDir, licenseKey: "fixture-key" });
   }, 60_000);

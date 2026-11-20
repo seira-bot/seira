@@ -1,6 +1,7 @@
-// ~/.openmausbot/config.json, with env vars overriding its credentials.
+// ~/.seira/config.json, with env vars overriding its credentials.
 import { readFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
 import { dataHome } from "./data-dir.ts";
+import { migrateLegacyData } from "../electron/legacy-migrate.mjs"; import { currentEngineEnvironment } from "../electron/legacy-names.mjs";
 import { signInFromEnv } from "./sign-in-env.ts";
 export { signInFromEnv };
 import { join } from "node:path";
@@ -247,7 +248,7 @@ const featureConfigSchema = z.object({
   /** Room jobs to several members run side by side, each in a thread of its own. On unless false. */
   parallelRoomJobs: z.boolean().optional(),
   acpPlanLines: z.boolean().optional(), // An ACP agent's plan as activity lines. Off unless true.
-}).extend({ agentsToolBridge: z.boolean().optional(), savedSteps: z.boolean().optional(), usbPhoneTakeover: z.boolean().optional(), cloudComputerAutoReplace: z.boolean().optional(), phonePush: z.boolean().optional() }); // cloudComputerAutoReplace: set a dead or silent cloud computer aside (kept seven days with its files) and give its bot a new one by itself, on unless false (OMB_CLOUD_COMPUTER_AUTO_REPLACE wins); agentsToolBridge: the find_tool / use_tool bridge, off unless true; savedSteps: repeat a computer task from its saved steps, on unless false; usbPhoneTakeover: watch and take over the bots' USB phone, off unless true; phonePush: wake a paired phone whose app is closed through the hosted push relay, off unless true (OMB_PHONE_PUSH wins)
+}).extend({ agentsToolBridge: z.boolean().optional(), savedSteps: z.boolean().optional(), usbPhoneTakeover: z.boolean().optional(), cloudComputerAutoReplace: z.boolean().optional(), phonePush: z.boolean().optional() }); // cloudComputerAutoReplace: set a dead or silent cloud computer aside (kept seven days with its files) and give its bot a new one by itself, on unless false (SEIRA_CLOUD_COMPUTER_AUTO_REPLACE wins); agentsToolBridge: the find_tool / use_tool bridge, off unless true; savedSteps: repeat a computer task from its saved steps, on unless false; usbPhoneTakeover: watch and take over the bots' USB phone, off unless true; phonePush: wake a paired phone whose app is closed through the hosted push relay, off unless true (SEIRA_PHONE_PUSH wins)
 const onboardingConfigSchema = z.object({
   completedAt: z.string().trim().max(40).optional(),
   version: z.number().int().min(0).max(1000).optional(),
@@ -264,7 +265,7 @@ const instanceConfigSchema = z.object({
     z.object({ kind: z.literal("custom"), dataUrl: z.string() }).strict()
       .refine((icon) => providerIconError(icon) === null, { message: "Invalid provider icon" }),
   ]).optional(),
-  environment: z.record(z.string(), z.string()).optional(),
+  environment: z.preprocess(currentEngineEnvironment, z.record(z.string(), z.string())).optional(),
   enabled: z.boolean().optional(), hidden: z.boolean().optional(),
   access: z.enum(["subscription", "custom", "api"]).optional(),
   config: z.json().optional(),
@@ -400,7 +401,7 @@ const appConfigSchema = z.object({
     tidyHour: z.number().int().min(0).max(23).optional(),
   }).strict().optional(),
   threads: threadsConfigSchema.optional(), /** Burst mode on an open-source install; a Cloud's plan sets it instead. `maxParallel`: burst threads running at once (default 10). */ burst: z.object({ maxParallel: z.number().int().min(1).max(100).optional() }).strict().optional(),
-  /** Minimum days of decision-log month files kept; OMB_DECISION_RETENTION_DAYS wins. */
+  /** Minimum days of decision-log month files kept; SEIRA_DECISION_RETENTION_DAYS wins. */
   decisions: z.object({ retentionDays: z.number().int().min(1).max(3650).optional() }).strict().optional(),
   loopGuard: loopGuardConfigSchema.optional(),
   safetyFloor: z.object({ enabled: z.boolean().optional() }).strict().optional(), // off by default: safetyFloorEnabled in server/safety-floor-gate.ts
@@ -690,7 +691,7 @@ export function changedInstanceIds(before: Record<string, unknown>, after: Recor
     .filter((id) => !isDeepStrictEqual(before[id], after[id]));
 }
 
-export const DATA_DIR = process.env.OMB_DATA_DIR || join(dataHome(), ".openmausbot");
+export const DATA_DIR = process.env.SEIRA_DATA_DIR || join(dataHome(), ".seira");
 const LEGACY_DATA_DIR = join(dataHome(), ".opengrokbot");
 export const EVENTS_DIR = join(DATA_DIR, "events");
 export const NATIVE_DIR = join(DATA_DIR, "native");
@@ -702,6 +703,7 @@ export function ensureDirs() {
     } catch {
     }
   }
+  migrateLegacyData({ home: dataHome(), dataDir: DATA_DIR });
   for (const dir of [DATA_DIR, EVENTS_DIR, NATIVE_DIR]) mkdirSync(dir, { recursive: true });
   migrateLegacyFeatureFlags(DATA_DIR);
 }
@@ -727,19 +729,19 @@ export function loadConfig(): AppConfig {
     }
   }
   // Env wins over the file for every credential: the desktop shell injects them as env at spawn.
-  for (const [name, env] of [["mistral", "MISTRAL_API_KEY"], ["cerebras", "CEREBRAS_API_KEY"], ["groq", "OMB_GROQ_API_KEY"], ["meta", "OMB_META_API_KEY"],
-    ["deepseek", "OMB_DEEPSEEK_API_KEY"], ["greenference", "OMB_GREENFERENCE_API_KEY"], ["modelgo", "OMB_MODELGO_API_KEY"], ["xai", "XAI_API_KEY"]] as const) {
+  for (const [name, env] of [["mistral", "MISTRAL_API_KEY"], ["cerebras", "CEREBRAS_API_KEY"], ["groq", "SEIRA_GROQ_API_KEY"], ["meta", "SEIRA_META_API_KEY"],
+    ["deepseek", "SEIRA_DEEPSEEK_API_KEY"], ["greenference", "SEIRA_GREENFERENCE_API_KEY"], ["modelgo", "SEIRA_MODELGO_API_KEY"], ["xai", "XAI_API_KEY"]] as const) {
     cfg[name] = { ...cfg[name], ...(process.env[env] !== undefined ? { key: process.env[env] } : {}) };
   }
-  if (process.env.OMB_TREG_KEY !== undefined) cfg.treg = { ...cfg.treg, key: process.env.OMB_TREG_KEY }; if (process.env.OMB_POSTIZ_API_KEY !== undefined) cfg.postiz = { ...cfg.postiz, key: process.env.OMB_POSTIZ_API_KEY };
+  if (process.env.SEIRA_TREG_KEY !== undefined) cfg.treg = { ...cfg.treg, key: process.env.SEIRA_TREG_KEY }; if (process.env.SEIRA_POSTIZ_API_KEY !== undefined) cfg.postiz = { ...cfg.postiz, key: process.env.SEIRA_POSTIZ_API_KEY };
   // Never ANTHROPIC_API_KEY: an operator's stray variable must not move every Claude bot onto API billing.
   cfg.anthropic = { ...cfg.anthropic };
-  if (process.env.OMB_ANTHROPIC_API_KEY !== undefined) cfg.anthropic.key = process.env.OMB_ANTHROPIC_API_KEY;
-  if (process.env.OMB_ANTHROPIC_API_URL !== undefined) cfg.anthropic.url = process.env.OMB_ANTHROPIC_API_URL;
+  if (process.env.SEIRA_ANTHROPIC_API_KEY !== undefined) cfg.anthropic.key = process.env.SEIRA_ANTHROPIC_API_KEY;
+  if (process.env.SEIRA_ANTHROPIC_API_URL !== undefined) cfg.anthropic.url = process.env.SEIRA_ANTHROPIC_API_URL;
   cfg.openai = { ...cfg.openai };
-  if (process.env.OMB_OPENAI_API_KEY !== undefined) cfg.openai.key = process.env.OMB_OPENAI_API_KEY;
+  if (process.env.SEIRA_OPENAI_API_KEY !== undefined) cfg.openai.key = process.env.SEIRA_OPENAI_API_KEY;
   cfg.openrouter = { ...cfg.openrouter };
-  if (process.env.OMB_OPENROUTER_API_KEY !== undefined) cfg.openrouter.key = process.env.OMB_OPENROUTER_API_KEY;
+  if (process.env.SEIRA_OPENROUTER_API_KEY !== undefined) cfg.openrouter.key = process.env.SEIRA_OPENROUTER_API_KEY;
   cfg.openaiCompat = { ...cfg.openaiCompat };
   if (process.env.OPENAI_COMPAT_API_KEY !== undefined) cfg.openaiCompat.key = process.env.OPENAI_COMPAT_API_KEY;
   if (process.env.OPENAI_COMPAT_URL !== undefined) cfg.openaiCompat.url = process.env.OPENAI_COMPAT_URL;
@@ -752,19 +754,19 @@ export function loadConfig(): AppConfig {
   cfg.opencodeGo = { ...cfg.opencodeGo };
   if (process.env.OPENCODE_API_KEY !== undefined) cfg.opencodeGo.apiKey = process.env.OPENCODE_API_KEY;
   cfg.tts = { ...cfg.tts };
-  if (process.env.OMB_TTS_KEY !== undefined) cfg.tts.key = process.env.OMB_TTS_KEY;
-  const presetVoice = process.env.OMB_TTS_DEFAULT_VOICE?.trim();
+  if (process.env.SEIRA_TTS_KEY !== undefined) cfg.tts.key = process.env.SEIRA_TTS_KEY;
+  const presetVoice = process.env.SEIRA_TTS_DEFAULT_VOICE?.trim();
   if (presetVoice && !cfg.tts.voice?.trim() && (cfg.tts.provider ?? "elevenlabs") === "elevenlabs") cfg.tts.voice = presetVoice;
-  if (process.env.OMB_FISH_AUDIO_API_KEY !== undefined) cfg.tts.fishKey = process.env.OMB_FISH_AUDIO_API_KEY;
-  if (process.env.OMB_GEMINI_API_KEY !== undefined) cfg.tts.geminiKey = process.env.OMB_GEMINI_API_KEY;
+  if (process.env.SEIRA_FISH_AUDIO_API_KEY !== undefined) cfg.tts.fishKey = process.env.SEIRA_FISH_AUDIO_API_KEY;
+  if (process.env.SEIRA_GEMINI_API_KEY !== undefined) cfg.tts.geminiKey = process.env.SEIRA_GEMINI_API_KEY;
   cfg.decider = { ...cfg.decider };
-  if (process.env.OMB_JEV_API_KEY !== undefined) cfg.decider.key = process.env.OMB_JEV_API_KEY; if (process.env.OMB_CUSTOM_DECIDER_KEY !== undefined) cfg.decider.customKey = process.env.OMB_CUSTOM_DECIDER_KEY;
-  if (process.env.OMB_OPENROUTER_DECIDER_KEY !== undefined) cfg.decider.openrouterKey = process.env.OMB_OPENROUTER_DECIDER_KEY; if (process.env.OMB_WORKERS_AI_TOKEN !== undefined) cfg.decider.workersAiToken = process.env.OMB_WORKERS_AI_TOKEN;
+  if (process.env.SEIRA_JEV_API_KEY !== undefined) cfg.decider.key = process.env.SEIRA_JEV_API_KEY; if (process.env.SEIRA_CUSTOM_DECIDER_KEY !== undefined) cfg.decider.customKey = process.env.SEIRA_CUSTOM_DECIDER_KEY;
+  if (process.env.SEIRA_OPENROUTER_DECIDER_KEY !== undefined) cfg.decider.openrouterKey = process.env.SEIRA_OPENROUTER_DECIDER_KEY; if (process.env.SEIRA_WORKERS_AI_TOKEN !== undefined) cfg.decider.workersAiToken = process.env.SEIRA_WORKERS_AI_TOKEN;
   cfg.live = liveConfigWithEnv(cfg.live); fishKeyFromLiveKey(cfg);
   cfg.imageGen = { ...cfg.imageGen };
-  if (process.env.OMB_OPENAI_IMAGE_KEY !== undefined) cfg.imageGen.key = process.env.OMB_OPENAI_IMAGE_KEY;
-  if (process.env.OMB_CUSTOM_IMAGE_KEY !== undefined) cfg.imageGen.customApiKey = process.env.OMB_CUSTOM_IMAGE_KEY;
-  if (process.env.OMB_GEMINI_IMAGE_KEY !== undefined) cfg.imageGen.geminiKey = process.env.OMB_GEMINI_IMAGE_KEY;
+  if (process.env.SEIRA_OPENAI_IMAGE_KEY !== undefined) cfg.imageGen.key = process.env.SEIRA_OPENAI_IMAGE_KEY;
+  if (process.env.SEIRA_CUSTOM_IMAGE_KEY !== undefined) cfg.imageGen.customApiKey = process.env.SEIRA_CUSTOM_IMAGE_KEY;
+  if (process.env.SEIRA_GEMINI_IMAGE_KEY !== undefined) cfg.imageGen.geminiKey = process.env.SEIRA_GEMINI_IMAGE_KEY;
   const signInEnv = signInFromEnv();
   if (signInEnv.admins || signInEnv.members) cfg.signIn = { ...cfg.signIn, ...signInEnv };
   return cfg;
@@ -787,27 +789,27 @@ export function syncCredentialEnv(patch: Partial<Omit<AppConfig, "threads" | "ne
   const secrets: Array<[value: string | undefined, name: string]> = [
     [patch.xai?.key, "XAI_API_KEY"],
     [patch.mistral?.key, "MISTRAL_API_KEY"],
-    [patch.cerebras?.key, "CEREBRAS_API_KEY"], [patch.treg?.key, "OMB_TREG_KEY"], [patch.postiz?.key, "OMB_POSTIZ_API_KEY"],
-    [patch.groq?.key, "OMB_GROQ_API_KEY"],
-    [patch.greenference?.key, "OMB_GREENFERENCE_API_KEY"], [patch.modelgo?.key, "OMB_MODELGO_API_KEY"],
-    [patch.meta?.key, "OMB_META_API_KEY"],
-    [patch.deepseek?.key, "OMB_DEEPSEEK_API_KEY"],
-    [patch.anthropic?.key, "OMB_ANTHROPIC_API_KEY"],
+    [patch.cerebras?.key, "CEREBRAS_API_KEY"], [patch.treg?.key, "SEIRA_TREG_KEY"], [patch.postiz?.key, "SEIRA_POSTIZ_API_KEY"],
+    [patch.groq?.key, "SEIRA_GROQ_API_KEY"],
+    [patch.greenference?.key, "SEIRA_GREENFERENCE_API_KEY"], [patch.modelgo?.key, "SEIRA_MODELGO_API_KEY"],
+    [patch.meta?.key, "SEIRA_META_API_KEY"],
+    [patch.deepseek?.key, "SEIRA_DEEPSEEK_API_KEY"],
+    [patch.anthropic?.key, "SEIRA_ANTHROPIC_API_KEY"],
     [patch.openaiCompat?.key, "OPENAI_COMPAT_API_KEY"],
-    [patch.openai?.key, "OMB_OPENAI_API_KEY"],
-    [patch.openrouter?.key, "OMB_OPENROUTER_API_KEY"],
+    [patch.openai?.key, "SEIRA_OPENAI_API_KEY"],
+    [patch.openrouter?.key, "SEIRA_OPENROUTER_API_KEY"],
     [patch.composio?.apiKey, "COMPOSIO_API_KEY"],
     [patch.box?.token, "BOX_TOKEN"],
     [patch.opencodeGo?.apiKey, "OPENCODE_API_KEY"],
-    [patch.tts?.key, "OMB_TTS_KEY"],
-    [patch.tts?.fishKey, "OMB_FISH_AUDIO_API_KEY"],
-    [patch.tts?.geminiKey, "OMB_GEMINI_API_KEY"],
-    [patch.decider?.key, "OMB_JEV_API_KEY"], [patch.decider?.customKey, "OMB_CUSTOM_DECIDER_KEY"],
-    [patch.decider?.openrouterKey, "OMB_OPENROUTER_DECIDER_KEY"], [patch.decider?.workersAiToken, "OMB_WORKERS_AI_TOKEN"],
-    [patch.imageGen?.key, "OMB_OPENAI_IMAGE_KEY"],
-    [patch.imageGen?.customApiKey, "OMB_CUSTOM_IMAGE_KEY"],
-    [patch.imageGen?.geminiKey, "OMB_GEMINI_IMAGE_KEY"],
-    [patch.live?.key, "OMB_OPENAI_LIVE_KEY"],
+    [patch.tts?.key, "SEIRA_TTS_KEY"],
+    [patch.tts?.fishKey, "SEIRA_FISH_AUDIO_API_KEY"],
+    [patch.tts?.geminiKey, "SEIRA_GEMINI_API_KEY"],
+    [patch.decider?.key, "SEIRA_JEV_API_KEY"], [patch.decider?.customKey, "SEIRA_CUSTOM_DECIDER_KEY"],
+    [patch.decider?.openrouterKey, "SEIRA_OPENROUTER_DECIDER_KEY"], [patch.decider?.workersAiToken, "SEIRA_WORKERS_AI_TOKEN"],
+    [patch.imageGen?.key, "SEIRA_OPENAI_IMAGE_KEY"],
+    [patch.imageGen?.customApiKey, "SEIRA_CUSTOM_IMAGE_KEY"],
+    [patch.imageGen?.geminiKey, "SEIRA_GEMINI_IMAGE_KEY"],
+    [patch.live?.key, "SEIRA_OPENAI_LIVE_KEY"],
   ];
   for (const [value, name] of secrets) {
     if (value === undefined) continue;
@@ -816,7 +818,7 @@ export function syncCredentialEnv(patch: Partial<Omit<AppConfig, "threads" | "ne
   }
   const settings: Array<[value: string | undefined, name: string]> = [
     [patch.openaiCompat?.url, "OPENAI_COMPAT_URL"],
-    [patch.anthropic?.url, "OMB_ANTHROPIC_API_URL"],
+    [patch.anthropic?.url, "SEIRA_ANTHROPIC_API_URL"],
     [patch.openaiCompat?.model, "OPENAI_COMPAT_MODEL"],
     [patch.openaiCompat?.provider, "OPENAI_COMPAT_PROVIDER"],
     ...liveSettingEnv(patch.live),
@@ -840,10 +842,10 @@ function openCodeProviderKeyNameRefusal(name: string): string | undefined {
     return "Use the name the provider reads its key from: capitals, ending in _API_KEY, _KEY or _TOKEN, such as VENICE_API_KEY.";
   }
   if (name === "OPENCODE_API_KEY") return "Save the OpenCode key in the OpenCode API key box instead.";
-  const reserved = name.startsWith("OPENCODE_") || name.startsWith("OMB_")
+  const reserved = name.startsWith("OPENCODE_") || name.startsWith("SEIRA_")
     || (WORKSPACE_CREDENTIAL_ENV as readonly string[]).includes(name)
     || ((PROVIDER_CREDENTIAL_ENV as readonly string[]).includes(name) && !(OPENCODE_PROVIDER_ENV as readonly string[]).includes(name));
-  return reserved ? `OpenMaus keeps ${name} for itself, so OpenCode can't be given it here. Put this key in opencode.json instead.` : undefined;
+  return reserved ? `Seira keeps ${name} for itself, so OpenCode can't be given it here. Put this key in opencode.json instead.` : undefined;
 }
 
 export function openCodeProviderKeys(cfg: Pick<AppConfig, "opencodeGo">): Record<string, string> {
@@ -1130,9 +1132,9 @@ function injectedEnvironment(cfg: AppConfig, instanceId: string, driver: string)
   if (driver === "grok" && cfg.xai?.key) environment.set("XAI_API_KEY", cfg.xai.key);
   if (driver === "claudeAgent") for (const [name, value] of Object.entries(anthropicKeyEnv(cfg.anthropic, instanceId === CLAUDE_API_INSTANCE))) environment.set(name, value);
   if (driver === "openai-compat" && instanceId === OPENAI_API_INSTANCE) {
-    if (cfg.openai?.key) environment.set("OMB_OPENAI_API_KEY", cfg.openai.key);
+    if (cfg.openai?.key) environment.set("SEIRA_OPENAI_API_KEY", cfg.openai.key);
   } else if (driver === "openai-compat" && instanceId === OPENROUTER_API_INSTANCE) {
-    if (cfg.openrouter?.key) environment.set("OMB_OPENROUTER_API_KEY", cfg.openrouter.key);
+    if (cfg.openrouter?.key) environment.set("SEIRA_OPENROUTER_API_KEY", cfg.openrouter.key);
   } else {
     if (driver === "openai-compat" && cfg.openaiCompat?.key)
       environment.set("OPENAI_COMPAT_API_KEY", cfg.openaiCompat.key);

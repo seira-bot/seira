@@ -44,3 +44,5 @@ export type DataDirLeaseHolder =
   | { state: "alive" | "dead" | "other-machine"; path: string; pid: number; host: string; createdAt: number };
 
 export declare function describeDataDirLease(dataDir: string): DataDirLeaseHolder;
+
+export declare function legacyLeaseHeld(dataDir: string): boolean;

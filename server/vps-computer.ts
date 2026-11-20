@@ -1,13 +1,19 @@
 // BYO Linux VPS: Docker's SSH transport reaches the user's daemon; one Cua MCP container per bot.
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createConnection, createServer, type AddressInfo } from "node:net";
 import { OWN_GROUP, stopGroup } from "./group-exec.ts";
+import { labelValue, legacyDockerLabel } from "../electron/legacy-names.mjs";
+import {
+  MANAGED_VPS_CONTAINER_NAME, VPS_CONTAINER_LABEL, VPS_CONTAINER_PREFIX, VPS_ENVIRONMENT_LABEL, VPS_MANAGED_LABEL, VPS_VIEWER_LABEL,
+  inspectContainerOrLegacy, inspectImageOrLegacy, isMissingObjectMessage, isVpsContainerOf, vpsContainerName, vpsLegacyContainerName,
+} from "./vps-names.ts";
 import {
   BASE_IMAGE,
   CUA_DRIVER_VERSION,
   CUA_SOCKET,
-  OPENMAUSBOT_IMAGE,
+  IMAGE,
+  LEGACY_IMAGE,
   cuaExecArgs,
   imageLabelsMatch,
   managedImageDockerfile,
@@ -30,12 +36,8 @@ import { loadEnvironmentId } from "./environment.ts";
 import { SPAWNED_PROXIES } from "./proxy-paths.ts";
 import { dockerCliMissing, dockerCliMissingProblem } from "./vps-hints.ts";
 
-export const VPS_IMAGE = OPENMAUSBOT_IMAGE;
-export const VPS_MANAGED_LABEL = "com.openmausbot.vps";
-export const VPS_CONTAINER_LABEL = "com.openmausbot.container";
-export const VPS_ENVIRONMENT_LABEL = "com.openmausbot.environment";
-export const VPS_VIEWER_LABEL = "com.openmausbot.vps-viewer";
-export const VPS_CONTAINER_PREFIX = "openmausbot-vps";
+export const VPS_IMAGE = IMAGE;
+export { VPS_CONTAINER_LABEL, VPS_CONTAINER_PREFIX, VPS_ENVIRONMENT_LABEL, VPS_MANAGED_LABEL, VPS_VIEWER_LABEL, isVpsContainerOf, vpsContainerName };
 export { dockerCliInstallCommand, vpsStartsForTurn, vpsUnavailableHint } from "./vps-hints.ts";
 // Lazy: index must finish data migration and take the writer lease before this may create the data directory.
 let vpsEnvironmentIdCache: string | null = null;
@@ -47,9 +49,8 @@ function vpsEnvironmentId(): string {
 const CONTAINER_NAME = /^[a-zA-Z0-9][a-zA-Z0-9_.-]+$/;
 const CONTAINER_ID = /^[a-f0-9]{12,64}$/i;
 const FULL_CONTAINER_ID = /^[a-f0-9]{64}$/i;
-const MANAGED_VPS_CONTAINER_NAME = /^openmausbot-vps-[a-z0-9]{1,12}-[a-f0-9]{12}$/;
 const IMAGE_ID = /^sha256:[a-f0-9]{64}$/i;
-const SCREENSHOT_PATH = "/tmp/openmausbot-vps-preview.png";
+const SCREENSHOT_PATH = "/tmp/seira-vps-preview.png";
 // The Cua XFCE base ships Pillow in /opt/venv; a container without it returns the original PNG.
 const SCREENSHOT_TRANSFER = `/opt/venv/bin/python -I -c 'import base64, io, sys
 from PIL import Image
@@ -144,15 +145,6 @@ export interface ManagedVpsInventory {
   vpsAliases: string[];
   problem: string | null;
   instances: ManagedVpsInventoryInstance[];
-}
-
-function containerNamePart(botId: string): string {
-  return botId.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12) || "bot";
-}
-
-export function vpsContainerName(botId: string): string {
-  const hash = createHash("sha256").update(botId).digest("hex").slice(0, 12);
-  return `${VPS_CONTAINER_PREFIX}-${containerNamePart(botId)}-${hash}`;
 }
 
 export function vpsDockerArgs(alias: string, args: string[]): string[] {
@@ -304,11 +296,6 @@ function emptyStatus(botId: string, alias: string | null): VpsComputerStatus {
   };
 }
 
-/** Docker and Podman report "No such object/image/container"; any other inspect failure is transport, not absence. */
-function isMissingObjectMessage(message: string): boolean {
-  return /no such (object|image|container)/i.test(message);
-}
-
 function transportFailure(message: string): string {
   if (dockerCliMissing(message)) return dockerCliMissingProblem();
   if (/timed out/i.test(message)) {
@@ -400,7 +387,8 @@ async function computeVpsComputerStatus(
 
   let inspectedImageId: string | null = null;
   try {
-    const inspected = JSON.parse((await inspect(["image", "inspect", VPS_IMAGE])).stdout) as Array<{
+    const imageInspection = await inspectImageOrLegacy(inspect, VPS_IMAGE, LEGACY_IMAGE);
+    const inspected = JSON.parse(imageInspection.stdout) as Array<{
       Id?: string;
       id?: string;
       Config?: { Labels?: Record<string, string> };
@@ -424,7 +412,9 @@ async function computeVpsComputerStatus(
   }
 
   try {
-    const inspected = JSON.parse((await inspect(["inspect", status.container_name])).stdout) as Array<{
+    const { found: containerInspection, name: foundName } = await inspectContainerOrLegacy(inspect, botId, status.container_name);
+    status.container_name = foundName;
+    const inspected = JSON.parse(containerInspection.stdout) as Array<{
       Config?: { Image?: string; Labels?: Record<string, string>; Env?: string[] };
       HostConfig?: DockerHardeningConfig & {
         Binds?: string[] | null;
@@ -448,15 +438,15 @@ async function computeVpsComputerStatus(
     status.imageMatches =
       status.image &&
       Boolean(status.container_id) &&
-      (detail?.Config?.Image === VPS_IMAGE || detail?.Config?.Image === inspectedImageId) &&
+      (detail?.Config?.Image === VPS_IMAGE || detail?.Config?.Image === LEGACY_IMAGE || detail?.Config?.Image === inspectedImageId) &&
       Boolean(inspectedImageId) &&
       detail?.Image === inspectedImageId &&
       imageLabelsMatch(labels) &&
-      labels?.[VPS_VIEWER_LABEL] === VIEWER_VERSION;
-    const environmentLabel = labels?.[VPS_ENVIRONMENT_LABEL];
+      labelValue(labels, VPS_VIEWER_LABEL) === VIEWER_VERSION;
+    const environmentLabel = labelValue(labels, VPS_ENVIRONMENT_LABEL);
     status.managed =
-      labels?.[VPS_MANAGED_LABEL] === "1" &&
-      labels?.[VPS_CONTAINER_LABEL] === status.container_name &&
+      labelValue(labels, VPS_MANAGED_LABEL) === "1" &&
+      labelValue(labels, VPS_CONTAINER_LABEL) === status.container_name &&
       (environmentLabel === undefined || environmentLabel === vpsEnvironmentId());
     if (status.managed && status.container_id) raisePidsLimit(status.container_id, detail?.HostConfig?.PidsLimit, run);
     status.network = hasNoPublishedPorts(detail?.HostConfig, detail?.NetworkSettings?.Networks) ? "private" : "unsafe";
@@ -611,16 +601,17 @@ async function scanManagedVpsAlias(
   runner: VpsCommandRunner,
 ): Promise<ManagedVpsAliasScan> {
   try {
-    const listed = await runner(vpsDockerArgs(alias, [
+    const listManaged = (label: string) => runner(vpsDockerArgs(alias, [
       "container",
       "ls",
       "--all",
       "--filter",
-      `label=${VPS_MANAGED_LABEL}=1`,
+      `label=${label}=1`,
       "--format",
       "{{.ID}}",
     ]), { timeoutMs: 20_000 });
-    const ids = [...new Set(listed.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean))];
+    const listed = [await listManaged(VPS_MANAGED_LABEL), await listManaged(legacyDockerLabel(VPS_MANAGED_LABEL)!)];
+    const ids = [...new Set(listed.flatMap((result) => result.stdout.split(/\r?\n/)).map((line) => line.trim()).filter(Boolean))];
     if (ids.length > VPS_INVENTORY_LIMIT || ids.some((id) => !CONTAINER_ID.test(id))) {
       throw new Error("the VPS returned an invalid or unexpectedly large managed-container list");
     }
@@ -637,7 +628,7 @@ async function scanManagedVpsAlias(
       throw new Error("the VPS returned an incomplete managed-container inventory");
     }
 
-    const ownerByName = new Map(owners.map((owner) => [vpsContainerName(owner.botId), owner]));
+    const ownerByName = new Map(owners.flatMap((owner) => [[vpsContainerName(owner.botId), owner], [vpsLegacyContainerName(owner.botId), owner]] as const));
     const seenIds = new Set<string>();
     const seenNames = new Set<string>();
     const containerIds = new Map<string, string>();
@@ -662,13 +653,13 @@ async function scanManagedVpsAlias(
         seenNames.has(name) ||
         !labels ||
         typeof labels !== "object" ||
-        (labels as Record<string, unknown>)[VPS_MANAGED_LABEL] !== "1" ||
-        (labels as Record<string, unknown>)[VPS_CONTAINER_LABEL] !== name
+        labelValue(labels, VPS_MANAGED_LABEL) !== "1" ||
+        labelValue(labels, VPS_CONTAINER_LABEL) !== name
       ) {
         throw new Error("the VPS returned a managed container whose identity could not be verified");
       }
       const owner = ownerByName.get(name);
-      const environmentLabel = (labels as Record<string, unknown>)[VPS_ENVIRONMENT_LABEL];
+      const environmentLabel = labelValue(labels, VPS_ENVIRONMENT_LABEL);
       seenIds.add(listedId);
       seenNames.add(name);
       // Another installation may share this daemon: never return an id that would make its container removable.
@@ -1263,7 +1254,7 @@ export async function vpsComputerScreenshot(
         "sh",
         "-c",
         SCREENSHOT_TRANSFER,
-        "openmausbot-preview",
+        "seira-preview",
         SCREENSHOT_PATH,
       ]), { timeoutMs: 30_000 })).stdout.trim();
       const checked = wholeScreenshot(Buffer.from(encoded, "base64"));

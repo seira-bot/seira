@@ -4,13 +4,13 @@ description: Run the harness and desktop app on infrastructure you control.
 icon: Server
 ---
 
-Seira is local-first by default: the harness listens on loopback, agent CLIs run on your machine, and application state lives under `~/.openmausbot`.
+Seira is local-first by default: the harness listens on loopback, agent CLIs run on your machine, and application state lives under `~/.seira`.
 
 If you only want to use a remote Docker desktop while Seira and its agents stay on your current computer, follow [Your own VPS (BYO)](/docs/computers/byo-vps) instead.
 
 ## On a server, with one command
 
-On a fresh Ubuntu 22.04 or 24.04 server (x86-64) with a domain name pointing at it, the installer checks the server, installs Seira with Docker under `/opt/openmausbot` and ends with HTTPS on your domain:
+On a fresh Ubuntu 22.04 or 24.04 server (x86-64) with a domain name pointing at it, the installer checks the server, installs Seira with Docker under `/opt/seira` and ends with HTTPS on your domain:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh | sudo sh -s -- --domain seira.example.com
@@ -38,7 +38,7 @@ A code works once, for 10 minutes. `npx @seira-bot/seira pair` makes another, an
 
 For a Linux service, the VPS guide covers [account setup](/docs/self-hosting/deploy-vps#before-you-start), [browser installation](/docs/self-hosting/deploy-vps#give-the-bots-a-browser-optional), and [unattended startup](/docs/self-hosting/deploy-vps#keep-it-running). Installing browser libraries as administrator still requires installing the browser in the service user's home. The service runs an installed, chosen release; upgrading it is an explicit step.
 
-Stop the server before a filesystem backup. Application state under `.openmausbot` is only part of a complete backup: preserve the service user's engine credentials, browser state, and external workspaces too. See [Data and backups](/docs/self-hosting/data-and-backups).
+Stop the server before a filesystem backup. Application state under `.seira` is only part of a complete backup: preserve the service user's engine credentials, browser state, and external workspaces too. See [Data and backups](/docs/self-hosting/data-and-backups).
 
 ## What is still third party
 

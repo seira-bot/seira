@@ -72,7 +72,7 @@ function resolvesInside(root: JsonObject, ref: string): boolean {
   return true;
 }
 
-/** A tool's parameters as a Chat Completions provider is handed them when OpenMausBot could not compile its schema: a
+/** A tool's parameters as a Chat Completions provider is handed them when Seira could not compile its schema: a
  * reference the schema does not hold itself is left out, since no provider fetches one and a strict one refuses the whole
  * request over it. The server still checks the call. The same object when nothing dangles. */
 export function withoutDanglingReferences(schema: JsonObject): JsonObject {

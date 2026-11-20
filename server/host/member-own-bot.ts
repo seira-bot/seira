@@ -1,4 +1,4 @@
-// A Team Cloud member's own MausBot when they leave (team-member-left.ts `stopBot` and `deleteBot`): every turn of it
+// A Team Cloud member's own Seira when they leave (team-member-left.ts `stopBot` and `deleteBot`): every turn of it
 // stops, then it is deleted the app's own way.
 import type { RoutineManager } from "../routines.ts";
 import type { BotRecord, Store } from "../store.ts";
@@ -37,7 +37,7 @@ export function createMemberOwnBot(deps: MemberOwnBotDeps) {
       ]);
       if (groupTurn) deps.closeOpenApprovals(groupTurn.threadId);
     },
-    /** Deletes a member's own MausBot, which stops being their default bot first; it is theirs again if that fails. */
+    /** Deletes a member's own Seira, which stops being their default bot first; it is theirs again if that fails. */
     async remove(botId: string): Promise<boolean> {
       const store = deps.store();
       const bot = store.bot(botId);

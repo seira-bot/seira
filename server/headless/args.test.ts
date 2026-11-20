@@ -36,7 +36,7 @@ describe("parseCommand", () => {
     expect(usage(() => parseCommand(["send", "Mira", "--text"]))).toMatchObject({ exitCode: 2 });
     expect(usage(() => parseCommand(["send", "Mira", "hello", "there"]))).toMatchObject({ exitCode: 2, message: expect.stringContaining("in quotes") });
     // there is deliberately no --token: a command line leaks
-    expect(usage(() => parseCommand(["doctor", "--token", "omb_sess_x"]))).toMatchObject({ exitCode: 2 });
+    expect(usage(() => parseCommand(["doctor", "--token", "seira_sess_x"]))).toMatchObject({ exitCode: 2 });
   });
 
   it("knows which verbs change something", () => {

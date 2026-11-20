@@ -1,4 +1,4 @@
-// 1Password on a real Team Cloud (OMB_CLOUD_ROLE=team) with a fake SDK: an Admin connects it in Settings → Vault for the
+// 1Password on a real Team Cloud (SEIRA_CLOUD_ROLE=team) with a fake SDK: an Admin connects it in Settings → Vault for the
 // whole team; a member's private chat and the bot's shared chat get its secrets by name and by op:// reference with no
 // card, never a Login's password; a member neither sees nor manages it; the Admin's signed report names the team's secrets
 // and 1Password's state, never a value, the token or a member's own secret. No value is ever printed.

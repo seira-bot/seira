@@ -1,5 +1,5 @@
 {
-  "name": "mausbot-connector",
+  "name": "seira-connector",
   "private": true,
   "type": "module",
   "description": "Runs a Seira Cloud home on a server of its owner's, under Seira's control, over one outbound connection.",

@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 function freshHome(more: Record<string, unknown> = {}): string {
-  const home = mkdtempSync(join(tmpdir(), "omb-boot-readiness-"));
+  const home = mkdtempSync(join(tmpdir(), "seira-boot-readiness-"));
   homes.push(home);
   mkdirSync(join(home, "tmp"), { recursive: true });
   writeFileSync(join(home, "config.json"), JSON.stringify({
@@ -102,7 +102,7 @@ it("answers on a later start while an engine CLI is still being probed, and runs
 }, 60_000);
 
 it.skipIf(process.platform === "win32")("runs a turn on a later start once its own engine has answered, while another engine's CLI is still being probed", async () => {
-  const scratch = mkdtempSync(join(tmpdir(), "omb-boot-slow-engine-"));
+  const scratch = mkdtempSync(join(tmpdir(), "seira-boot-slow-engine-"));
   homes.push(scratch);
   const slowProbes = join(scratch, "probes.log"), slowRelease = join(scratch, "release-version");
   const slowCli = join(scratch, "slow-claude");

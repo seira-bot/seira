@@ -106,7 +106,7 @@ describe("The run card in the chat pane", () => {
     );
     const markup = render([asked("cited", serializeCitation(citation))]);
     expect(markup).toContain("Open citation: source quote");
-    expect(markup).not.toContain("omb-citation-v1");
+    expect(markup).not.toContain("seira-citation-v1");
     expect(markup).not.toContain(`aria-label="${t("chat.editMessage")}"`);
   });
 

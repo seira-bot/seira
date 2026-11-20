@@ -1,12 +1,12 @@
 // The one idle policy for what the server keeps loaded between turns. Each kept thing has a scope, named as such here and
 // at each call site:
 //   per-chat  a conversation's engine session (Claude's stream, an ACP session in a process of its own), kept for that
-//             conversation's next turn: OMB_SESSION_IDLE_MS (10 minutes; 150 s on a box of 1.5 GB or less), 30 s for a
+//             conversation's next turn: SEIRA_SESSION_IDLE_MS (10 minutes; 150 s on a box of 1.5 GB or less), 30 s for a
 //             conversation no person has in front of them, and while a person asked a prompt-cache keep-warm, until then.
 //   per-bot   a bot's browser, kept for any of its conversations: the browser idle time (Settings, 10 minutes on the
 //             desktop, 3 on a Cloud home; host/browser.ts).
 //   shared    a process several bots' conversations use (a shared ACP process): recycled 60 s after its last session
-//             (OMB_ACP_SHARED_RECYCLE_MS), a fixed time that does not shrink.
+//             (SEIRA_ACP_SHARED_RECYCLE_MS), a fixed time that does not shrink.
 // Where turns wait for room (a Cloud home, a self-hosted Linux server), the per-chat and per-bot times shrink as memory or
 // the pids limit fills (EngineMemory.roomFactor: the signals admission reads), down to a tenth and never below their
 // floor, and per-chat engines already kept are looked at again every couple of seconds (sweepIdleEngines), not only when
@@ -42,8 +42,8 @@ function usableMilliseconds(raw: string | undefined): number | null {
   return Number.isFinite(value) && value > 0 && value <= MAX_TIMER_MS ? value : null;
 }
 
-/** Per-harness names (OMB_CLAUDE_SESSION_IDLE_*, OMB_ACP_SESSION_IDLE_*) win over OMB_SESSION_IDLE_MS /
- *  OMB_SESSION_IDLE_MIN_MS, which win over the box's default; the floor is the greater of ten seconds and any configured
+/** Per-harness names (SEIRA_CLAUDE_SESSION_IDLE_*, SEIRA_ACP_SESSION_IDLE_*) win over SEIRA_SESSION_IDLE_MS /
+ *  SEIRA_SESSION_IDLE_MIN_MS, which win over the box's default; the floor is the greater of ten seconds and any configured
  *  minimum. */
 export function sessionIdlePolicy(
   driverPrefix: string,
@@ -53,12 +53,12 @@ export function sessionIdlePolicy(
   const minimumMs = Math.max(
     MINIMUM_IDLE_MS,
     usableMilliseconds(
-      env[`OMB_${driverPrefix}_SESSION_IDLE_MIN_MS`] ?? env.OMB_SESSION_IDLE_MIN_MS,
+      env[`SEIRA_${driverPrefix}_SESSION_IDLE_MIN_MS`] ?? env.SEIRA_SESSION_IDLE_MIN_MS,
     ) ?? 0,
   );
   const configured =
     usableMilliseconds(
-      env[`OMB_${driverPrefix}_SESSION_IDLE_MS`] ?? env.OMB_SESSION_IDLE_MS,
+      env[`SEIRA_${driverPrefix}_SESSION_IDLE_MS`] ?? env.SEIRA_SESSION_IDLE_MS,
     ) ?? (boxBytes <= SMALL_BOX_BYTES ? SMALL_BOX_IDLE_MS : DEFAULT_IDLE_MS);
   return { idleMs: Math.max(minimumMs, configured), minimumMs };
 }

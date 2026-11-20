@@ -36,7 +36,7 @@ Full-to-Ask transitions, cancellation and a missing executable.
 To qualify the actual installed CLI without a paid provider or real account:
 
 ```sh
-OMB_CLINE_NATIVE_PATH=/path/to/cline pnpm exec vitest run scripts/testing/cline-native.e2e.test.ts
+SEIRA_CLINE_NATIVE_PATH=/path/to/cline pnpm exec vitest run scripts/testing/cline-native.e2e.test.ts
 ```
 
 This creates a disposable Cline home, configures a loopback API provider,
@@ -46,7 +46,7 @@ and unchanged provider settings. A second recipe requests harmless shell marker
 writes in Ask, Full and Ask again: only the explicitly approved Full turn may
 write its marker, and all three must emit canonical approval requests.
 Unexpected execution requests are denied. Metadata-only evidence is written
-under `.omb-scratch/verify-evidence/`; temporary homes are removed.
+under `.seira-scratch/verify-evidence/`; temporary homes are removed.
 
 The product workflow is also covered by `server/cline-engine.e2e.test.ts`: a
 Chief discovers Cline through `list_team_setup`, a Cline specialist is created,
@@ -54,7 +54,7 @@ and its turn settles through the normal harness. That workflow uses fake
 provider CLIs; only the optional native recipe above executes Cline itself.
 
 ```sh
-OMB_UI_E2E=1 pnpm exec vitest run scripts/testing/cline-ui.e2e.test.ts
+SEIRA_UI_E2E=1 pnpm exec vitest run scripts/testing/cline-ui.e2e.test.ts
 ```
 
 This recipe mounts the real chat renderer against a disposable server and fake

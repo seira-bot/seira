@@ -26,7 +26,7 @@ afterEach(async () => {
 });
 
 function freshHome(): string {
-  const home = mkdtempSync(join(tmpdir(), "omb-doctor-e2e-"));
+  const home = mkdtempSync(join(tmpdir(), "seira-doctor-e2e-"));
   homes.push(home);
   mkdirSync(join(home, "tmp"), { recursive: true });
   writeFileSync(join(home, "config.json"), JSON.stringify({
@@ -58,7 +58,7 @@ async function boot(home: string) {
 }
 
 function doctor(home: string, ...args: string[]) {
-  const done = spawnSync(process.execPath, ["--experimental-strip-types", join(ROOT, "server/openmausbot.ts"), "doctor", "--data", "--json", ...args], {
+  const done = spawnSync(process.execPath, ["--experimental-strip-types", join(ROOT, "server/seira.ts"), "doctor", "--data", "--json", ...args], {
     cwd: ROOT, env: verificationServerEnvironment(process.env, home, 1), encoding: "utf8", timeout: 120_000,
   });
   return { code: done.status, report: JSON.parse(done.stdout) as { ok: boolean; checks: { id: string; status: string; fixable: boolean }[]; backup: string | null } };
@@ -76,7 +76,7 @@ function damage(home: string): string {
   // Another save that never finished.
   writeFileSync(join(home, `webhooks.json.${dead}.${randomUUID()}.tmp`), "{}");
   // A lease a killed server left.
-  writeFileSync(join(home, "openmausbot-server.lease"), `${JSON.stringify({ version: 1, pid: dead, host: hostname(), token: randomUUID(), createdAt: Date.now() })}\n`, { mode: 0o600 });
+  writeFileSync(join(home, "seira-server.lease"), `${JSON.stringify({ version: 1, pid: dead, host: hostname(), token: randomUUID(), createdAt: Date.now() })}\n`, { mode: 0o600 });
   // A run record whose server.json was never written.
   mkdirSync(join(home, "engine-runs", "f".repeat(32)), { recursive: true });
   writeFileSync(join(home, "engine-runs", "f".repeat(32), "server.json"), "");

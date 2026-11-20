@@ -18,7 +18,7 @@ import { usePanelPage, type PanelPage } from "@/lib/page-open";
 import { PublishedPageCard } from "./PublishedPageCard";
 vi.mock("@/lib/seira-cloud", () => ({ SEIRA_CLOUD_PLANS: ["pro", "team"] })); // these tests cover the sale itself
 
-const URL = "https://abcdefghijklmnopqrstuvwxyz.mausbot.page/";
+const URL = "https://abcdefghijklmnopqrstuvwxyz.page.seira.bot/";
 const page = (card: Message["publishedPage"]): Message => ({ id: "m1", at: 1, role: "bot", kind: "text", text: "fallback", publishedPage: card });
 const live = page({ state: "live", title: "Bake sale", pageId: "abcdefghijklmnopqrstuvwxyz", url: URL, usage: { pages: 3, limit: 5 } });
 /** The app's state with Pepper's chat open; Pepper's browser is on and installed. */

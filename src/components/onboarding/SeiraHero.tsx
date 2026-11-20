@@ -1,12 +1,12 @@
 import { BotAvatar } from "@/components/Avatar";
 import { SeiraCharacter, type SeiraState } from "@/components/seira-character";
-import type { MausColor } from "@/lib/mascot";
+import type { SeiraColor } from "@/lib/mascot";
 import type { Bot } from "@/state/store";
 
-const GREY_HAIR: readonly MausColor[] = ["silver", "chrome"];
+const GREY_HAIR: readonly SeiraColor[] = ["silver", "chrome"];
 
 /** Seira keeps her own silver hair for the grey bot colors. */
-export const seiraHair = (color: MausColor): MausColor | undefined => (GREY_HAIR.includes(color) ? undefined : color);
+export const seiraHair = (color: SeiraColor): SeiraColor | undefined => (GREY_HAIR.includes(color) ? undefined : color);
 
 /**
  * The large character of a first-run step. The landing animation copies its element, and a copied canvas is blank,

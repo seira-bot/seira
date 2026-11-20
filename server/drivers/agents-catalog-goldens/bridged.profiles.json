@@ -540,7 +540,7 @@
       "use_tool"
     ]
   },
-  "default+mausbot": {
+  "default+seira": {
     "bytes": 17980,
     "sha256": "fbce5dd3f70374cc111ae43044fc52c6a371295eb10d094edd609035956abb68",
     "tools": [
@@ -564,7 +564,7 @@
       "use_tool"
     ]
   },
-  "skills+shared+voice+mausbot": {
+  "skills+shared+voice+seira": {
     "bytes": 18828,
     "sha256": "766603609eddd8762bb53c4ace9698acaf8a742e6a4e5a1cc429cd2dd787ad4b",
     "tools": [

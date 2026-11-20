@@ -13,7 +13,7 @@ import {
   sweepOrphanedTempFolders,
 } from "./temp-folders.ts";
 
-const PREFIX = "omb-sweep-check-";
+const PREFIX = "seira-sweep-check-";
 const DEAD = 2_147_483_000;
 const MINUTE = 60 * 1000;
 
@@ -134,7 +134,7 @@ describe("sweepOrphanedTempFolders", () => {
       folder(base, `${PREFIX}abc123`, now, 48 * 60 * MINUTE), // a name without an owner: an older version, or another tool
       folder(base, `${PREFIX}${DEAD}-toolong1`, now, 48 * 60 * MINUTE),
       folder(base, `x${PREFIX}${DEAD}-abc123`, now, 48 * 60 * MINUTE),
-      folder(base, `omb-other-kind-${DEAD}-abc123`, now, 48 * 60 * MINUTE),
+      folder(base, `seira-other-kind-${DEAD}-abc123`, now, 48 * 60 * MINUTE),
     ];
 
     const result = sweepOrphanedTempFolders(PREFIX, { dir: base, now, isAlive: dead });

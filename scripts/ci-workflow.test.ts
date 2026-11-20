@@ -244,10 +244,10 @@ describe("Server image smoke workflow", () => {
 
   it("boots the container and checks the server, the UI and the user", () => {
     const boot = stepsOf(build).find((step) => step.name === "Boot the container and prove the server and UI answer");
-    expect(boot?.run).toContain("docker run -d -e OMB_COMPOSIO_BROKER=off --name seira seira-server:ci");
+    expect(boot?.run).toContain("docker run -d -e SEIRA_COMPOSIO_BROKER=off --name seira seira-server:ci");
     expect(boot?.run).toContain("http://127.0.0.1:8799/api/health");
     expect(boot?.run).toContain("UI not served");
-    expect(boot?.run).toContain("server does not run as maus");
+    expect(boot?.run).toContain("server does not run as seira");
   });
 
   it("saves and uploads the image only when the caller asks", () => {
@@ -448,7 +448,7 @@ describe("CI vitest job", () => {
 
   it("runs the worker count that scripts/ci-scope.mjs names", () => {
     const tests = stepsOf(job).find((step) => step.run?.includes("--shard="));
-    expect(Number(tests?.env?.OMB_VITEST_WORKERS)).toBe(VITEST_WORKERS["ubuntu-latest"]);
+    expect(Number(tests?.env?.SEIRA_VITEST_WORKERS)).toBe(VITEST_WORKERS["ubuntu-latest"]);
   });
 });
 

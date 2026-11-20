@@ -62,7 +62,7 @@ async function startServer(home: string, engine: string) {
   const base = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, ["--experimental-strip-types", join(ROOT, "server/index.ts")], {
     cwd: ROOT,
-    env: { ...verificationServerEnvironment(process.env, home, port), XDG_CONFIG_HOME: join(home, ".config"), OMB_AGENT_BROWSER_PATH: engine },
+    env: { ...verificationServerEnvironment(process.env, home, port), XDG_CONFIG_HOME: join(home, ".config"), SEIRA_AGENT_BROWSER_PATH: engine },
     stdio: ["ignore", "pipe", "pipe"],
   });
   children.push(child);
@@ -86,7 +86,7 @@ async function startServer(home: string, engine: string) {
 
 describe.skipIf(process.platform !== "linux" || !existsSync(CHROMIUM))("importing sign-ins from Chrome", () => {
   it("copies chosen sites into a running bot browser, lists them, and signs out of them", async () => {
-    const home = mkdtempSync(join(tmpdir(), "omb-chrome-import-"));
+    const home = mkdtempSync(join(tmpdir(), "seira-chrome-import-"));
     folders.push(home);
     mkdirSync(join(home, "tmp"), { recursive: true });
     writeFileSync(join(home, "config.json"), JSON.stringify({

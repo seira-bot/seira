@@ -3,7 +3,7 @@
 // Cloud ends (one-home-again.mjs). The Admin's word decides: a move starts only for an account it lets move, to a Cloud
 // that is ready, and a Cloud it holds after it ended brings everything home, as does its word that the Cloud this computer
 // moved to is gone while My Cloud is another (`gone`). The person's own
-// choice to keep this computer's bots here (Settings → MausBot Cloud, Advanced) is kept beside the journal.
+// choice to keep this computer's bots here (Settings → Seira Cloud, Advanced) is kept beside the journal.
 import { createHash } from "node:crypto";
 import { createReadStream, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -28,7 +28,7 @@ const KEEP_LABEL = "Bring this computer's bots home";
 /** This computer as the Admin knows it, the same across sign-outs and sign-ins: a hash of its own server's identity, so
  * the identity itself never leaves it. */
 export function installationOf(environmentId) {
-  return createHash("sha256").update(`openmausbot-installation:${environmentId}`).digest("base64url");
+  return createHash("sha256").update(`seira-installation:${environmentId}`).digest("base64url");
 }
 
 /** One home's view of the person's Cloud, from the Admin's last verified word; null while nobody is signed in. An ended
@@ -127,7 +127,7 @@ async function answer(response) {
  *   clean?: import("./clean-workspace.mjs").CleanWorkspace | null,
  * }} deps `accountsHere`: how many accounts are signed in on this device: with more than one, which Cloud this computer's bots
  * belong in is the person's to say, so no first move starts by itself. `localRequest`: this computer's server, as its owner (main adds the owner's header), and only its own copy while `clean`
- * (the clean workspace) runs. `account`: the MausBot
+ * (the clean workspace) runs. `account`: the Seira
  * Cloud sign-in (cloud-account.mjs). `journal`: where the move's journal is kept, journalFile by default; `keep`: the
  * person's choice to keep this computer's bots here, one-home-keep.json beside it by default. `openTeam`:
  * shows a team's page, where a bot moved into it from My Cloud now lives (team-move-main.mjs, whose journal is
@@ -190,7 +190,7 @@ export function installOneHome({ localRequest: anyServer, clean = null, account,
   /** This computer's installation (`installationOf`), once its server has said who it is; null until then. */
   const installation = async () => {
     if (known) return known;
-    const id = (await local.json("/.well-known/openmausbot/environment").catch(() => null))?.environmentId;
+    const id = (await local.json("/.well-known/seira/environment").catch(() => null))?.environmentId;
     if (typeof id === "string" && id) known = installationOf(id);
     return known;
   };
@@ -341,7 +341,7 @@ export function installOneHome({ localRequest: anyServer, clean = null, account,
     keep: { state: keepState, set: (on) => home.keep(on === true) },
     /** Why the account signed in can't be left now: its move, or a bot of its own moving into a team, is under way. */
     holding: () => { const bot = teamMove.view()?.phase; return home.moving() || (bot && !["done", "failed"].includes(bot)) || botMove.moving().length ? "moving" : null; },
-    /** Goes on with the move, and with any bot moving into a team: at launch, and whenever the MausBot Cloud sign-in changes. */
+    /** Goes on with the move, and with any bot moving into a team: at launch, and whenever the Seira Cloud sign-in changes. */
     kick: () => {
       void teamMove.kick();
       void botMove.kick();

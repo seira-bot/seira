@@ -24,7 +24,7 @@ You get a reply as soon as possible, normally within a few days.
   guarded routes, so a bot's shell can post into an existing Full-access thread, or open one while
   shared Full access is on, and get Full-access work done without a card. A worker-only relay token
   is the planned fix.
-- API keys live in `~/.openmausbot/config.json` and are write-only through the API (`configured`
+- API keys live in `~/.seira/config.json` and are write-only through the API (`configured`
   booleans out, never values). The packaged desktop app keeps AI provider and service keys in an
   OS-encrypted store (`credentials.bin`) instead; OpenCode provider keys, per-engine `environment`
   or `key` values, MCP env and header values and `mcp-oauth.json` stay plaintext on every install,

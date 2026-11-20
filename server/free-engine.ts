@@ -24,9 +24,9 @@ interface FreeEngineState {
 const MAX_ATTEMPTS = 3;
 
 export function freeEngineInstallEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  const flag = env.OMB_FREE_ENGINE?.trim();
+  const flag = env.SEIRA_FREE_ENGINE?.trim();
   if (flag === "0") return false;
-  return (env.VITEST !== "true" && env.OMB_TEST_SEALED_PATH !== "1") || flag === "1";
+  return (env.VITEST !== "true" && env.SEIRA_TEST_SEALED_PATH !== "1") || flag === "1";
 }
 
 export function freeEngineDecision<T extends FreeEngineCandidate>(
