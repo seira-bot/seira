@@ -113,7 +113,7 @@ function boundedData(data: Record<string, unknown>): Record<string, unknown> {
   const encoded = utf8(JSON.stringify(data));
   if (encoded.byteLength <= MAX_EVENT_DATA_BYTES) return data;
   return {
-    seira_truncated: true,
+    omb_truncated: true,
     original_bytes: encoded.byteLength,
     preview: new TextDecoder().decode(encoded.slice(0, MAX_EVENT_DATA_BYTES)),
   };
@@ -483,7 +483,7 @@ export async function queueTestEvent(request: Request, installation: EventInstal
   const eventId = `test_${crypto.randomUUID()}`;
   const body = JSON.stringify({
     id: eventId,
-    type: "seira.test",
+    type: "omb.test",
     timestamp: new Date(now).toISOString(),
     metadata: { trigger_slug: bound.trigger_slug, trigger_id: triggerId, connected_account_id: bound.connected_account_id, user_id: actingUser(installation) },
     data: boundedData(data),
