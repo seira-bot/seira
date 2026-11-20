@@ -900,7 +900,7 @@ function ensureManagedDesktop() {
     available: async () => (await safeStorage.isAsyncEncryptionAvailable()) &&
       (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text"),
     encrypt: value => safeStorage.encryptStringAsync(value),
-    decrypt: decryptSecret,
+    decrypt: value => decryptSecret(value),
   };
   const store = createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-connection.bin"), encryption });
   orgLibrary = createOrgLibrary({
