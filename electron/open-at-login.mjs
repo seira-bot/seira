@@ -3,6 +3,7 @@
 // launch starts hidden: one the person set up themselves, here or in the system's settings, opens the window.
 import fs from "node:fs";
 import path from "node:path";
+import { LEGACY_AUTOSTART_FILE, LEGACY_LENDING_MARK } from "./legacy-names.mjs";
 import snap from "./snap-command.cjs";
 
 export const HIDDEN_ARG = "--seira-hidden";
@@ -83,6 +84,20 @@ export function createOpenAtLogin({ app, file, platform = process.platform, env 
         if (on && !set) { app.setLoginItemSettings({ openAtLogin: true }); remember(true); }
         else if (!on && set && added()) { app.setLoginItemSettings({ openAtLogin: false }); remember(false); }
         else if (!set && added()) remember(false);
+      } catch {}
+    },
+    /** Linux: an earlier version's autostart file becomes the current one, with the same lending or chosen kind, and the
+     * old file goes. Nothing happens when the current file already exists, or outside a packaged app. */
+    migrateLegacy() {
+      if (platform !== "linux" || !app.isPackaged) return;
+      const old = path.join(path.dirname(autostart), LEGACY_AUTOSTART_FILE);
+      try {
+        const text = fs.readFileSync(old, "utf8");
+        if (!fs.existsSync(autostart)) {
+          fs.mkdirSync(path.dirname(autostart), { recursive: true });
+          fs.writeFileSync(autostart, autostartEntry(launcher(), { lending: text.includes(LEGACY_LENDING_MARK) }));
+        }
+        fs.rmSync(old, { force: true });
       } catch {}
     },
     available: () => app.isPackaged && !packaged,

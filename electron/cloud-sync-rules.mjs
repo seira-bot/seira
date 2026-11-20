@@ -1,6 +1,7 @@
 // What Files never carries, and the name rules between a PC (Windows or macOS) and the Linux Cloud. One module for both
 // sides: the desktop imports it directly, the Cloud's server through its bundle.
 
+import { LEGACY_VAULT_FOLDER } from "./legacy-names.mjs";
 // Room this computer keeps free for itself while bots' work comes down.
 export const RESERVE_BYTES = 1024 ** 3;
 /** Room My Cloud keeps free for itself and its bots: shared files never fill it past this. */
@@ -11,7 +12,7 @@ export const QUIET_MS = 2_000;
 export const TRASH_DAYS = 30;
 
 // Security: .seira-secrets holds a bot's private secret files, which never leave the computer they were given on.
-const SKIP_DIRS = new Set(["node_modules", ".git", ".venv", "venv", "__pycache__", ".mypy_cache", ".pytest_cache", ".next", ".turbo", ".cache", ".seira-secrets"]);
+const SKIP_DIRS = new Set(["node_modules", ".git", ".venv", "venv", "__pycache__", ".mypy_cache", ".pytest_cache", ".next", ".turbo", ".cache", ".seira-secrets", LEGACY_VAULT_FOLDER]);
 const SKIP_FILES = new Set([".ds_store", "thumbs.db", "desktop.ini"]);
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WINDOWS_RESERVED = /^(?:con|prn|aux|nul|conin\$|conout\$|com[0-9\u00b9\u00b2\u00b3]|lpt[0-9\u00b9\u00b2\u00b3])(?:\..*)?$/i;

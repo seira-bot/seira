@@ -29,6 +29,7 @@ const EXCLUDES = `# Seira checkpoint excludes — never snapshotted
 .svn/
 .hg/
 .seira-secrets/
+.openmausbot-secrets/
 node_modules/
 bower_components/
 .pnpm-store/

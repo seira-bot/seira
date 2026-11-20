@@ -148,6 +148,7 @@ import { attachedFileLine, attachForTurn, saveBotAttachment } from "./bot-attach
 import {
   cacheUntilConfigChanges,
   ensureDirs,
+  migrateLegacyNames,
   instanceConfigs,
   loadConfig,
   changedInstanceIds,
@@ -525,7 +526,7 @@ import { environmentDescriptor, loadEnvironmentId, OWNER_LENDING, serverVersion 
 import { WorkspaceBackupMaintenance } from "./workspace-backup-maintenance.ts";
 import { createWorkspaceBackupRoutes, isWorkspaceBackupSessionControl } from "./workspace-backup-http.ts";
 import { applyPendingWorkspaceRestore, readLastWorkspaceRestore, type WorkspaceRestoreResult } from "./workspace-backup.ts";
-import { repairMovedWorkspacePaths } from "./moved-paths-repair.ts";
+import { repairLegacyHomePaths, repairMovedWorkspacePaths } from "./moved-paths-repair.ts";
 import { createCustomDomainVerifier, customDomainIpv4, normalizeCustomDomain } from "./custom-domain.ts";
 import { allowedScopes, createEmailSignIn, parseAllowList } from "./account-signin.ts";
 import { pairingLinkBase, signInMailTarget } from "./pairing-base.ts"; import { lanUrl, listenHost } from "./lan-address.ts"; import { createTailnetShare } from "./tailnet-listener.ts";
@@ -657,9 +658,10 @@ const WEBHOOK_PORT = Number(process.env.SEIRA_WEBHOOK_PORT || PORT + 1);
 const WEBHOOK_PUBLIC_URL = process.env.SEIRA_WEBHOOK_PUBLIC_URL || undefined;
 const STATIC_DIR = process.env.SEIRA_STATIC_DIR || null;
 
-dataFormatAtStart("check", DATA_DIR, serverVersion()); ensureDirs();
+migrateLegacyNames(); dataFormatAtStart("check", DATA_DIR, serverVersion()); ensureDirs();
 // Acquire before any durable identity, sessions, config or Store state is loaded.
 const dataDirLease = acquireDataDirLeaseForProcess(DATA_DIR); void startEngineRecords(DATA_DIR); // stops what an earlier server left
+repairLegacyHomePaths(DATA_DIR);
 const releaseDataDirLeaseAtExit = releaseOnceAtExit(dataDirLease);
 process.once("exit", releaseDataDirLeaseAtExit);
 // Restore before constructing any long-lived config, Store, session or provider objects.
