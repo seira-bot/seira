@@ -7,6 +7,7 @@
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 
+import { currentFormat } from "../electron/legacy-names.mjs";
 import { BOT_PROFILE_LIMITS, fitsOnOneLine } from "./bot-profile.ts";
 import { redactSecretsInText } from "./redact.ts";
 import { normalizeCronSchedule } from "./routine-schedule.ts";
@@ -722,7 +723,14 @@ function markdownDocument(markdown: string): unknown {
 export function isPackageDocument(value: unknown): boolean {
   if (typeof value === "string") return /^---\r?\n[\s\S]*?\bbotmrr:\s*1\b/m.test(value);
   return Boolean(value) && typeof value === "object" && !Array.isArray(value) &&
-    (value as { format?: unknown }).format === PACKAGE_FORMAT;
+    currentFormat((value as { format?: unknown }).format) === PACKAGE_FORMAT;
+}
+
+/** A package object with the format id an earlier version wrote changed to the current one. */
+function withCurrentFormat(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const format = (value as { format?: unknown }).format;
+  return currentFormat(format) === format ? value : { ...value, format: currentFormat(format) };
 }
 
 /** Parse exactly one v1 document (JSON object or Markdown) with the v1 rules. */
@@ -776,6 +784,7 @@ export function parsePackageDocument(value: unknown, options: { trust?: PackageT
   if (typeof value === "string") {
     document = upgradeV1(parsePackageV1(value));
   } else {
+    value = withCurrentFormat(value);
     if (!value || typeof value !== "object" || Array.isArray(value) || (value as { format?: unknown }).format !== PACKAGE_FORMAT) {
       throw new PackageFormatError("not_a_package", "This is not a Seira package");
     }

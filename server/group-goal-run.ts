@@ -1,4 +1,5 @@
 import type { ServerText } from "../shared/server-text.ts";
+import { currentGoalTags } from "../electron/legacy-names.mjs";
 import { noticeFailure } from "./chat-notices.ts";
 import type { GroupGoalRunStatus } from "../shared/group-goal-run.ts";
 import type { GroupDefaultResponder } from "./store.ts";
@@ -40,7 +41,7 @@ const bounded = (value: unknown, max: number): string =>
 
 /** A reply without its private goal envelopes; a turn outside the goal's own (a teammate's result waking the lead) can write one too. */
 export function visibleCoordinatorText(text: string): string {
-  let visible = text;
+  let visible = currentGoalTags(text);
   for (;;) {
     // An envelope ends at the earliest plain or escaped close tag, so an escaped
     // envelope is stripped exactly like a plain one and any visible text after it is kept.

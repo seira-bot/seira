@@ -1,4 +1,4 @@
-import { currentStorageKey } from "../../electron/legacy-names.mjs";
+import { currentStateKeys, currentStorageKey } from "../../electron/legacy-names.mjs";
 
 type Keyed = Pick<Storage, "getItem" | "setItem" | "removeItem" | "key" | "length">;
 
@@ -19,16 +19,8 @@ export function migrateLegacyStorage(storage: Keyed): void {
   }
 }
 
-/** The key as a backup written by an earlier version names it, mapped to the current name. Current names pass through. */
-export function currentClientStateKeys(values: Record<string, unknown>): Record<string, unknown> {
-  const mapped: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(values)) {
-    const current = currentStorageKey(key);
-    if (current !== null && !Object.hasOwn(values, current)) mapped[current] = value;
-    else if (current === null) mapped[key] = value;
-  }
-  return mapped;
-}
+/** The values of a backup written by an earlier version, under the current key names. */
+export const currentClientStateKeys = (values: Record<string, unknown>): Record<string, unknown> => currentStateKeys(values);
 
 try {
   if (typeof localStorage !== "undefined") migrateLegacyStorage(localStorage);

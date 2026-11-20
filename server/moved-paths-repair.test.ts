@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { repairMovedWorkspacePaths } from "./moved-paths-repair.ts";
+import { repairLegacyHomePaths, repairMovedWorkspacePaths } from "./moved-paths-repair.ts";
 
 const RESTORE_ID = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
 const WINDOWS = "C:\\Users\\Ada\\.seira";
@@ -129,5 +129,19 @@ describe("repairing paths a move to My Cloud left behind", () => {
     movedFromWindows(current);
     expect(repairMovedWorkspacePaths(current)).toBeNull();
     expect(text(join(current, "routines.json"))).toBe(before);
+  });
+});
+
+describe("repairLegacyHomePaths", () => {
+  it("rewrites the old data folder name once, keeping the earlier copy, and does nothing without a receipt", () => {
+    const dataDir = directory();
+    json(join(dataDir, "bots.json"), [{ id: "bot", cwd: "/home/ada/.openmausbot/workspaces/bot", soul: "Read /home/ada/.openmausbot-work/a.md" }]);
+    expect(repairLegacyHomePaths(dataDir)).toBeNull();
+    mkdirSync(join(dataDir, ".backups"), { recursive: true });
+    json(join(dataDir, ".backups", "legacy-move.json"), { from: "/home/ada/.openmausbot", to: "/home/ada/.seira", pathsRewritten: false });
+    expect(repairLegacyHomePaths(dataDir)).toEqual(["bots.json"]);
+    expect(readJson(join(dataDir, "bots.json"))[0]).toMatchObject({ cwd: "/home/ada/.seira/workspaces/bot", soul: "Read /home/ada/.seira-work/a.md" });
+    expect(text(join(dataDir, ".backups", "legacy-path-repair", "bots.json"))).toContain(".openmausbot/workspaces");
+    expect(repairLegacyHomePaths(dataDir)).toBeNull();
   });
 });

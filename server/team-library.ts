@@ -1,4 +1,5 @@
 import { parseJson, type JsonValue } from "./schema.ts";
+import { LEGACY_TEAM_MANIFEST_FILE } from "../electron/legacy-names.mjs";
 import { isBotPackage, parseBotPackage, parsePackageDocument, upgradeV1, type PackageDocument, type ParsedBotPackage } from "./bot-package.ts";
 import { PACKAGE_V1_VERSION } from "../shared/package-format.ts";
 import { fetchGithubFolder } from "./share-github.ts";
@@ -249,6 +250,8 @@ export function githubManifestUrls(input: string): string[] {
         `https://raw.githubusercontent.com/${owner}/${repo}/master/botmrr.md`,
         `https://raw.githubusercontent.com/${owner}/${repo}/master/team.md`,
         `https://raw.githubusercontent.com/${owner}/${repo}/master/team.seirateam.json`,
+        `https://raw.githubusercontent.com/${owner}/${repo}/main/${LEGACY_TEAM_MANIFEST_FILE}`,
+        `https://raw.githubusercontent.com/${owner}/${repo}/master/${LEGACY_TEAM_MANIFEST_FILE}`,
       ];
     }
     if (parts.length >= 5 && (parts[2] === "blob" || parts[2] === "raw")) {

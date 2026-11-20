@@ -63,3 +63,26 @@ describe("a bot's private secret files", () => {
     expect(uploadableFiles([join(workspace, "notes.txt")], [workspace])).toMatchObject({ files: [expect.stringContaining("notes.txt")] });
   });
 });
+
+describe("the secret folder of an earlier version", () => {
+  it("is renamed once when the current one is absent, and left alone when both exist", async () => {
+    const { existsSync } = await import("node:fs");
+    const { adoptLegacySecretFolder } = await import("./secret-folder.ts");
+    const base = join(data, "adopt");
+    mkdirSync(join(base, ".openmausbot-secrets", "t"), { recursive: true });
+    writeFileSync(join(base, ".openmausbot-secrets", "t", "card"), "value");
+    adoptLegacySecretFolder(base);
+    expect(existsSync(join(base, SECRET_FOLDER, "t", "card"))).toBe(true);
+    expect(existsSync(join(base, ".openmausbot-secrets"))).toBe(false);
+    mkdirSync(join(base, ".openmausbot-secrets"));
+    adoptLegacySecretFolder(base);
+    expect(existsSync(join(base, ".openmausbot-secrets"))).toBe(true);
+    adoptLegacySecretFolder(join(data, "none"));
+  });
+
+  it("is never carried by a sync, a backup or a link", async () => {
+    const { inSecretFolder } = await import("./secret-folder.ts");
+    expect(inSecretFolder("/w/.openmausbot-secrets/t/card")).toBe(true);
+    expect(skipped(".openmausbot-secrets", true)).toBe(true);
+  });
+});

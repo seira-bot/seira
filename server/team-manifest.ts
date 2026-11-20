@@ -7,6 +7,7 @@ import { takeImportName } from "../shared/import-name.ts";
 import { SEIRA_COLOR_NAMES } from "../shared/wire.ts";
 import { BOT_PROFILE_LIMITS } from "../shared/bot-profile.ts";
 import { optionalText, requiredText } from "../shared/package-format.ts";
+import { currentFormat } from "../electron/legacy-names.mjs";
 
 export const TEAM_MANIFEST_FORMAT = "seira.team" as const;
 export const TEAM_MANIFEST_VERSION = 2 as const;
@@ -143,7 +144,8 @@ interface ExportableTeam {
 export function parseTeamManifest(value: TeamManifestV2): TeamManifestV2;
 export function parseTeamManifest(value: TeamManifestInput): ParsedTeamManifest;
 export function parseTeamManifest(value: TeamManifestInput): ParsedTeamManifest {
-  const parsed = manifestSchema.safeParse(value);
+  const format = (value as { format?: unknown } | null)?.format;
+  const parsed = manifestSchema.safeParse(value && typeof value === "object" && currentFormat(format) !== format ? { ...value, format: currentFormat(format) } : value);
   if (!parsed.success) {
     const formatIssue = parsed.error.issues.find((issue) => issue.path[0] === "format");
     if (formatIssue) throw new Error(formatIssue.message);

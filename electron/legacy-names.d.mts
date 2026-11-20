@@ -22,3 +22,7 @@ export const LEGACY_TEAM_FILE_SUFFIX: string;
 export const LEGACY_TEAM_MANIFEST_FILE: string;
 export const LEGACY_GOAL_TAG: string;
 export const LEGACY_APP_GLOBAL: string;
+
+export declare function currentStateKeys<T>(values: Record<string, T>): Record<string, T>;
+export declare function currentGoalTags(text: string): string;
+export declare function mentionsGoalTag(text: string): boolean;

@@ -2,12 +2,13 @@
 // goal envelope out, credentials and held secrets masked), so the streamed bubble is swapped for the same words; and a
 // room reply's words naming the member who speaks them. Streamed words themselves go out as the engine writes them.
 import type { RuntimeEvent } from "../contracts.ts";
+import { mentionsGoalTag } from "../../electron/legacy-names.mjs";
 import { redactSecretsInText } from "../redact.ts";
 import { visibleCoordinatorText } from "../group-goal-run.ts";
 
 /** A finished reply as its saved message holds it. */
 export function savedReplyText(text: string): string {
-  return redactSecretsInText(text.includes("seira-goal>") ? visibleCoordinatorText(text) : text);
+  return redactSecretsInText(mentionsGoalTag(text) ? visibleCoordinatorText(text) : text);
 }
 
 export function publicReplyEvent(event: RuntimeEvent, speakerId?: string): RuntimeEvent {
