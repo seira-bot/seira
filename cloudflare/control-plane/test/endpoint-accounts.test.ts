@@ -131,7 +131,7 @@ describe("endpoint account configuration", () => {
       { value: [{ ...SECOND_ENTRY, apiTokenSecret: "BETTER_AUTH_SECRET" }], accounts: 1, issues: ["entry_1_shape"] },
       { value: [SECOND_ENTRY], secrets: {}, accounts: 1, issues: ["entry_1_token"] },
       { value: [SECOND_ENTRY], secrets: { [TOKEN_SECRET]: "short" }, accounts: 1, issues: ["entry_1_token"] },
-      { value: [{ ...SECOND_ENTRY, companionHostSuffix: "si.seira.bot" }], accounts: 1, issues: ["entry_1_suffix"] },
+      { value: [{ ...SECOND_ENTRY, companionHostSuffix: "Si.seira.bot" }], accounts: 1, issues: ["entry_1_suffix"] },
       { value: [{ ...SECOND_ENTRY, companionHostSuffix: "si" }], accounts: 1, issues: ["entry_1_suffix"] },
       { value: [{ ...SECOND_ENTRY, accountId: "not-an-account" }], accounts: 1, issues: ["entry_1_shape"] },
       { value: [{ ...SECOND_ENTRY, minAppVersion: "0.1" }], accounts: 1, issues: ["entry_1_shape"] },
