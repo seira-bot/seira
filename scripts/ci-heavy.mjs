@@ -22,6 +22,30 @@ export const isLightPath = (file) =>
   && LIGHT_PATHS.some((pattern) => pattern.test(file));
 
 /**
+ * The Cloudflare Workers that CI checks. `check` and `test` are root package scripts. `paths` are the files outside
+ * `cloudflare/<name>/` that the Worker reads. `fast` tests run on the root dependencies in seconds, so the pre-push
+ * check runs them too.
+ */
+export const WORKERS = [
+  { name: "bug-reports", check: "bugs:check", test: "bugs:test", fast: true, paths: [] },
+  { name: "composio-broker", check: "broker:check", test: "broker:test", fast: true, paths: ["shared/composio-storage.ts", "shared/connector-account-link.ts"] },
+  { name: "control-plane", check: "control-plane:check", test: "control-plane:test", fast: false, paths: ["companion/src/e2e/vectors/v1.json"] },
+  { name: "push-relay", check: "push:check", test: "push:test", fast: true, paths: [] },
+  { name: "updates", check: "updates:check", test: "updates:test", fast: true, paths: [] },
+];
+
+/** Files that every Worker reads: the dependencies, and the CI files that run the Workers. A path that ends in "/" is a folder. */
+export const WORKER_INPUTS = ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "patches/", ".github/workflows/ci.yml", "scripts/ci-heavy.mjs"];
+
+const matches = (path, file) => (path.endsWith("/") ? file.startsWith(path) : file === path);
+
+/** The Workers that a change to `files` can break. */
+export function workersFor(files) {
+  if (files.some((file) => WORKER_INPUTS.some((path) => matches(path, file)))) return [...WORKERS];
+  return WORKERS.filter((worker) => files.some((file) => file.startsWith(`cloudflare/${worker.name}/`) || worker.paths.some((path) => matches(path, file))));
+}
+
+/**
  * The reason a change needs the heavy jobs, or null when it does not.
  * `named(text)` tells whether a source file contains `text`. It is true when unsure.
  */
