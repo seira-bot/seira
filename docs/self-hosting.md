@@ -1820,7 +1820,7 @@ It counts silence, not total running time: any event from the turn starts it
 over, and time spent waiting on a person or on the computer does not count.
 While one of the turn's tools runs, the turn may show nothing for up to 60
 minutes (the longest an MCP call can be set to take) or the room's limit if that
-is longer. `OMB_TURN_STALL_MS` and `OMB_TOOL_STALL_MS` do not change it.
+is longer. `SEIRA_TURN_STALL_MS` and `SEIRA_TOOL_STALL_MS` do not change it.
 
 One conversation can replace the limit with its own value (the same 1 to 1440
 range; `null` returns it to the instance value). Both apply to turns that start

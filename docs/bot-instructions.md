@@ -58,7 +58,7 @@ authority.
   section.
 - Cards show before and after fields and a bounded line diff; a large change to
   the instructions shows the complete proposed text. Tool-returned display data
-  is scrubbed of secrets like persisted messages are.
+  is scrubbed of recognized secret patterns, as persisted messages are.
 - The standing-instructions block in the prompt tells the bot that the person
   manages them in settings and that they rank below the person's current request
   and safety boundaries. It grants no authority: the services check the caller.
@@ -73,7 +73,10 @@ authority.
 (`POST /api/bots/:id/history/rollback`) takes the immutable row id and the
 current profile revision, not a timestamp. A row whose earlier text had a secret
 removed carries `canRestore: false` with a reason and cannot be restored
-exactly. History does not archive plaintext credentials, is not an audit log of
+exactly. History does not deliberately archive plaintext credentials, but scrubbing is
+pattern-based and best effort: a secret written into the instructions in a form
+no rule recognizes can still be kept in a row, so keep credentials out of the
+instructions and use a secure credential card. History is not an audit log of
 every setting, and is not a substitute for execution receipts.
 
 ## Setup stays small

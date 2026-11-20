@@ -13,7 +13,7 @@ chosen, the network gate, signed-in sites, My Chrome and process hygiene are in
 ## Getting the engine
 
 `server/browser-engine.ts` resolves the engine binary: an explicit
-`OMB_AGENT_BROWSER_PATH`, then the bundled engine (`OMB_RESOURCES_PATH`), then
+`SEIRA_AGENT_BROWSER_PATH`, then the bundled engine (`SEIRA_RESOURCES_PATH`), then
 the pinned download under `tools/agent-browser/<version>/` in the data
 directory, then `PATH`. The download comes from the engine's GitHub release.
 Its size and SHA-256 are pinned per platform in
@@ -98,10 +98,11 @@ a CLI spawn.
 
 A relayed command outside the engine's launch-free list would start a dead
 Chrome again, so every pass begins with `stream_status` (250 ms,
-`PROBE_MS`) and reads only while Chrome is connected. No read, frame or probe
-ever starts a browser. If Chrome dies between the probe and the read, the answer
-says the engine launched (`launched`); the bot's next call sizes the page again
-and tells the bot its pages are gone.
+`PROBE_MS`) and reads only while Chrome is connected, so a read, frame or probe
+does not start a browser on its own. The probe cannot close the gap entirely: if
+Chrome dies between the probe and the read, the engine may launch a fresh one.
+The answer then says so (`launched`), and the bot's next call sizes the page
+again and tells the bot its pages are gone.
 
 `server/browser-lane.ts` allows one call per browser at a time, so a call's reads,
 its action and its reads stay together and another call's "empty the console"
@@ -163,6 +164,14 @@ value, on a page where the bot typed into a secret-looking field inside a frame
 blocks the page. Typing into a cross-origin frame records where it landed as
 unknown. A capture waits 12 s.
 
+Hiding secrets is pattern-based and best effort. A picture is a screenshot of
+the page, so it can show sensitive page content that no rule recognized, and
+scrubbing text can miss a secret it was not told about. Treat the evidence store
+as sensitive data: it stays on the server, is readable only through the
+conversation's own routes, and is deleted with the conversation. Credentials
+belong in a secure credential card or `fill_login`, never typed into a page or
+chat for the bot to enter.
+
 `server/browser-evidence.ts` stores them under
 `<data dir>/evidence/<thread>/<generation>/` as `steps.jsonl` and
 `step-NNNNNN.jpg` (folders 0700, files 0600). They are deleted with the
@@ -201,4 +210,4 @@ The close and sweep rules are in
   `server/browser-live-routes.test.ts`, `server/browser-runtime.test.ts`.
 - Tool argument shape: `server/browser-tool-shape.test.ts`.
 - Against the real engine and Chrome: `scripts/testing/browser-evidence.e2e.test.ts`
-  (`OMB_UI_E2E=1`) and `scripts/smoke-browser-bundle.mjs` for each packaged engine.
+  (`SEIRA_UI_E2E=1`) and `scripts/smoke-browser-bundle.mjs` for each packaged engine.
