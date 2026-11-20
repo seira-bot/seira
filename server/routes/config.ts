@@ -188,7 +188,14 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
         patch.automaticRecovery.backup = checked.selection;
       }
       if (patch.aiPool?.enabled) {
-        const checked = checkedAiPoolMembers(patch.aiPool.members, { check: (raw) => checkedModelSelection(raw, undefined, true), engine: (id) => registry.get(id) ?? undefined, configs: () => instanceConfigs(cfg), policyRefusal: policyModelRefusal });
+        const after = { ...cfg } as Record<string, unknown>;
+        for (const [key, section] of Object.entries(patch)) {
+          const kept = (cfg as Record<string, unknown>)[key];
+          if (section && typeof section === "object" && !Array.isArray(section) && kept && typeof kept === "object") after[key] = { ...kept, ...section };
+        }
+        const configs = instanceConfigs(after as typeof cfg);
+        const engine = (id: string) => { const found = registry.get(id); return found ? { instanceId: found.instanceId, driverKind: configs[id]?.driver ?? found.driverKind, enabled: found.enabled, displayName: found.displayName } : undefined; };
+        const checked = checkedAiPoolMembers(patch.aiPool.members, { check: (raw) => checkedModelSelection(raw, undefined, true), engine, configs: () => configs, policyRefusal: policyModelRefusal });
         if (!checked.ok) return json(res, checked.status, checked.body);
         patch.aiPool.members = checked.members;
       }
