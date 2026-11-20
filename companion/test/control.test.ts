@@ -244,7 +244,7 @@ describe("hostCandidates", () => {
     expect(body.secretPublicKey).toBe("BIPBQ12_dWnF1DZLsTZO3Vg0NGjds5-jp9h3jhjr2To7bJelczS0LM82rfXV68PmSJhz2ePosj3fL974XckCpDU");
     expect(body.hosts.at(-1)).toMatch(/^openmausbot-[0-9a-f]{8}\.local$/);
     expect(body.endpoints.at(-1)).toMatchObject({ kind: "bonjour", priority: 300 });
-    expect(body.endpoints.at(-1).url).toMatch(/^http:\/\/seira-[0-9a-f]{8}\.local:8810$/);
+    expect(body.endpoints.at(-1).url).toMatch(/^http:\/\/openmausbot-[0-9a-f]{8}\.local:8810$/);
   });
 
   it("says when its device list is only an unreadable file", async () => {

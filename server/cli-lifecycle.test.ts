@@ -308,7 +308,7 @@ describe("CLI startup lifecycle", () => {
         // the public address with --public-url and must build both from that.
         return Response.json({ code, url: null, expiresAt, credential, serverName: "fixture", hint: "set SEIRA_PUBLIC_URL" });
       }
-      expect(address).toMatch(/\/\.well-known\/seira\/environment$/);
+      expect(address).toMatch(/\/\.well-known\/openmausbot\/environment$/);
       expect(init?.method).not.toBe("POST");
       expect(init?.body).toBeUndefined();
       return Response.json({ environmentId: workspaceId });
