@@ -141,7 +141,7 @@ describe("the What's new popup", () => {
   it("an app on the staging Admin opens the staging Cloud website", async () => {
     await show({ ...BOTH, staging: true }); await click("Next");
     await click("Start a Team"); await flush();
-    expect(window.ogb!.openExternal).toHaveBeenCalledWith("https://seira-cloud-staging.fly.dev/pro/buy?plan=team&src=app_whats_new_team");
+    expect(window.ogb!.openExternal).toHaveBeenCalledWith("https://omb-cloud-staging.fly.dev/pro/buy?plan=team&src=app_whats_new_team");
   });
 
   it("a browser that won't open keeps it up and says so", async () => {

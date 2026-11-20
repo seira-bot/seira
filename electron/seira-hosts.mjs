@@ -13,7 +13,8 @@ export const SEIRA_HOSTS = Object.freeze({
   pages: `page.${ZONE}`,
   companion: `si.${ZONE}`,
   push: `push.${ZONE}`,
-  cloudStaging: "seira-cloud-staging.fly.dev",
+  // The staging Cloud is a Fly app; its name is the app name there.
+  cloudStaging: "omb-cloud-staging.fly.dev",
   relayPattern: /^relay[1-9][0-9]?\.seira\.bot$/,
   relayNodePattern: /^(relay[1-9][0-9]?)\.seira\.bot$/,
 });
