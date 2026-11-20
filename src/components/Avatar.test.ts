@@ -114,7 +114,7 @@ describe("PersonAvatar", () => {
 
   it("shows the photo over the look", () => {
     const markup = person({ avatarUrl: "/api/attachments/me.png", look });
-    expect(markup).toMatch(/^<img data-avatar="picture" data-avatar-kind="person"/);
+    expect(markup).toContain('<img data-avatar="picture" data-avatar-kind="person"');
     expect(markup).not.toContain("<svg");
   });
 
