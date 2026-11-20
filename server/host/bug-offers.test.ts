@@ -223,7 +223,7 @@ describe("sending a draft (AC-04, AC-05)", () => {
 
     expect(fx.reports.viewDraft(budiDraft.id, "budi")!.same).toBeUndefined();
     expect(await fx.reports.sendDraft(anaDraft.id, "ana")).toMatchObject({ state: "sent", issue: 41 });
-    expect(fx.reports.viewDraft(budiDraft.id, "budi")!.same).toMatchObject({ issue: 41, title: expect.stringContaining("Step read_sheet fails") });
+    expect(fx.reports.viewDraft(budiDraft.id, "budi")!.same).toEqual({ issue: 41 });
     expect(await fx.reports.sendDraft(budiDraft.id, "budi")).toMatchObject({ state: "joined", issue: 41 });
     expect(fx.line("room", second.answer.id)?.bugOffer).toMatchObject({ state: "joined", issue: 41 });
     expect(service.issues.size).toBe(1);
