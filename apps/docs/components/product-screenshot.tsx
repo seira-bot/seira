@@ -17,13 +17,11 @@ export function ProductScreenshot({
   alt,
   caption,
   position = 'center',
-  priority = false,
 }: {
   name: ScreenshotName;
   alt: string;
   caption?: string;
   position?: 'center' | 'top';
-  priority?: boolean;
 }) {
   const [width, height] = screenshotSizes[name];
   return (
@@ -34,9 +32,8 @@ export function ProductScreenshot({
           alt={alt}
           width={width}
           height={height}
-          loading={priority ? 'eager' : 'lazy'}
-          fetchPriority={priority ? 'high' : 'auto'}
-          decoding={priority ? 'sync' : 'async'}
+          loading="lazy"
+          decoding="async"
           className={position === 'top' ? 'object-top' : 'object-center'}
         />
       </div>
