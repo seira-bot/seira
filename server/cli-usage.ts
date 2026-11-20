@@ -35,11 +35,13 @@ const LOGIN_SEIRA = `login   signs this machine in to your Seira account (an ema
 const TUNNEL_OWN = `--tunnel     serve at the public address that an account service gives,
              through a Cloudflare tunnel. Needs SEIRA_CONTROL_PLANE_URL (an
              account service you run) and \`seira login\` once on this
-             machine first. Without one, use the ways above.`;
+             machine first. Without one, use the ways above. With
+             --tailscale too, phones also get the tailnet address.`;
 const TUNNEL_SEIRA = `--tunnel     serve at the https://c-….seira.run address of your Seira
              account, through a Cloudflare tunnel. Run \`seira login\` once
              on this machine first. SEIRA_CONTROL_PLANE_URL points login
-             and --tunnel at an account service you run instead.`;
+             and --tunnel at an account service you run instead. With
+             --tailscale too, phones also get the tailnet address.`;
 
 /** The usage text, its commands written the way this CLI was started (`npx @seira-bot/seira …`). `live` is for tests. */
 export function usage(prefix = "seira", env: NodeJS.ProcessEnv = process.env, live?: readonly string[]): string {
@@ -54,7 +56,7 @@ export const USAGE = `seira — your team of AI bots, ready in a few steps
   seira setup [--data-dir DIR]
   seira start [the same options as serve]
   seira serve [--port 8799] [--data-dir DIR] [--label NAME]
-                    [--public-url https://host | --domain HOST | --tailscale | --tunnel] [--lan] [--relay]
+                    [--public-url https://host | --domain HOST | --tailscale] [--tunnel] [--lan] [--relay]
   seira pair  [--label NAME] [--phone [ios|android]] [--ttl 24h] [--public-url https://host]
   seira devices [revoke ID]
   seira status
