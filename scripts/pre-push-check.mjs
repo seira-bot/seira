@@ -76,7 +76,7 @@ function runGuards(guards, files, timeout) {
 
 /** The Worker's vitest config sets the root to the Worker's folder, so the report path is absolute. */
 function runWorker(name, timeout) {
-  const { run, failedTests, unknown } = vitestReport((report) => ["--config", `cloudflare/${name}/vitest.config.ts`, "--reporter=json", `--outputFile=${report}`], timeout);
+  const { run, failedTests, unknown } = vitestReport((report) => ["--config", `cloudflare/${name}/vitest.config.ts`, "--reporter=default", "--reporter=json", `--outputFile.json=${report}`], timeout);
   if (unknown) return { unknown };
   if (failedTests === 0) return {};
   console.error(`${run.stdout}${run.stderr}`);
