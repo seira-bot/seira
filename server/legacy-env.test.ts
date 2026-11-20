@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { boxEnvironment, boxEnvironmentAllows } from "./bot-box/env.ts";
 import { stripControlPlaneEnv, stripWorkspaceCredentialEnv, stripWorkspaceCredentialKeys } from "./credential-env.ts";
 import { chatMcpEnvironment } from "./drivers/chat-mcp-tools.ts";
+import { probeEnvironment } from "./mcp-probe.ts";
 import { isHarnessOwnedMcpEnvName } from "./mcp-registry.ts";
 
 const fixtures: string[] = [];
@@ -110,6 +111,25 @@ describe("a chat tool server's environment", () => {
     expect(Object.keys(env).filter((name) => /openai|jev/i.test(name))).toEqual([]);
     expect(env.HOME).toBe("/h");
     expect(env.OWN_TOKEN).toBe("mine");
+  });
+
+  it("and a connection test's, drop the operator's mail and session names and provider keys in any case, under either prefix", () => {
+    const source = {
+      SEIRA_SIGNIN_SMTP_URL: "a", OMB_SIGNIN_SMTP_URL: "b", Seira_Signin_Smtp_Url: "c", SEIRA_TOKEN: "d", Omb_Token: "e", seira_token: "f",
+      ANTHROPIC_API_KEY: "g", Anthropic_Api_Key: "h", HOME: "/h",
+    };
+    for (const env of [chatMcpEnvironment({ OWN_TOKEN: "mine" }, source), probeEnvironment({ env: { OWN_TOKEN: "mine" } }, source)]) {
+      expect(Object.keys(env).filter((name) => /smtp|token|anthropic/i.test(name))).toEqual(["OWN_TOKEN"]);
+      expect(env.HOME).toBe("/h");
+      expect(env.OWN_TOKEN).toBe("mine");
+    }
+  });
+
+  it("lets the entry's own env name one of those variables, applied after the filter", () => {
+    const source = { SEIRA_TOKEN: "operator", ANTHROPIC_API_KEY: "operator" };
+    const entry = { SEIRA_TOKEN: "entry", ANTHROPIC_API_KEY: "entry" };
+    expect(chatMcpEnvironment(entry, source)).toMatchObject(entry);
+    expect(probeEnvironment({ env: entry }, source)).toMatchObject(entry);
   });
 });
 
