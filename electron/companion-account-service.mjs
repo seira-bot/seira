@@ -231,10 +231,11 @@ export function createCompanionAccountService({
     return healthProbe;
   };
 
-  const requireHealthyControlPlane = async () => {
-    if (!(await probeControlPlane({ force: true }))) {
-      throw new ControlPlaneError("control_plane_unavailable");
+  const requireHealthyControlPlane = async ({ attempts = 1 } = {}) => {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      if (await probeControlPlane({ force: true })) return;
     }
+    throw new ControlPlaneError("control_plane_unavailable");
   };
 
   const settledState = () => {
@@ -568,7 +569,7 @@ export function createCompanionAccountService({
     phase = { status: "connecting", email };
     let verified;
     try {
-      await requireHealthyControlPlane();
+      await requireHealthyControlPlane({ attempts: 2 });
       verified = await client.verifyOTP(email, rawCode);
     } catch (error) {
       const message = failAction(error, { email, signedOut: true });

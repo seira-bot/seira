@@ -202,6 +202,19 @@ describe("Companion account service", () => {
     await expect(service.state()).resolves.toEqual({ available: true, status: "signed-out" });
   });
 
+  it("checks the control plane a second time before it gives up on a typed code", async () => {
+    const health = vi
+      .fn()
+      .mockRejectedValueOnce(new ControlPlaneError("network_unavailable"))
+      .mockResolvedValue(true);
+    const client = readyClient({ health });
+    const { service } = serviceFixture({ client, healthCacheMs: 0 });
+
+    await expect(service.verifyCode("ada@example.com", "12345678")).resolves.toMatchObject({ status: "ready" });
+    expect(health).toHaveBeenCalledTimes(2);
+    expect(client.verifyOTP).toHaveBeenCalledOnce();
+  });
+
   it("shows a specific rate-limit message instead of the generic secure-access error", async () => {
     const requestId = "44444444-4444-4444-8444-444444444444";
     const client = readyClient({
