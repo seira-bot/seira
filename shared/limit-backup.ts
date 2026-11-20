@@ -1,5 +1,5 @@
 /** Engines a person signs in to with a subscription whose usage limit refuses turns. */
-const SUBSCRIPTION_DRIVERS: ReadonlySet<string> = new Set(["claudeAgent", "codex", "grokAgent"]);
+const SUBSCRIPTION_DRIVERS: ReadonlySet<string> = new Set(["claudeAgent", "codex", "grokAgent", "antigravityAgent", "opencodeGo"]);
 
 type Engine = { instanceId: string; driverKind: string };
 
