@@ -3,7 +3,6 @@ import { createContext, use, type KeyboardEvent, type MouseEvent, type ReactNode
 import { useCopyFeedback } from "@/lib/copy-text";
 import { t } from "@/lib/i18n";
 
-/** Inline code inside a link leaves the click to the link. */
 export const InsideLinkContext = createContext(false);
 
 const textOf = (node: ReactNode): string =>
@@ -11,7 +10,6 @@ const textOf = (node: ReactNode): string =>
     : Array.isArray(node) ? node.map(textOf).join("")
       : node && typeof node === "object" && "props" in node ? textOf((node.props as { children?: ReactNode }).children) : "";
 
-/** A short value in a reply: one click, tap, Enter or Space copies its exact text. A drag that selects text does not copy. */
 export function InlineCode({ children }: { children?: ReactNode }) {
   const insideLink = use(InsideLinkContext);
   const text = textOf(children);
