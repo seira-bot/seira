@@ -111,8 +111,8 @@ describe("the funnel", () => {
     expect(WHATS_NEW_SOURCES).toEqual({ pro: "app_whats_new_pro", team: "app_whats_new_team" });
     expect(newCloudUrl()).toBe("https://cloud.seira.bot/cloud?src=app_whats_new_pro");
     expect(startTeamUrl()).toBe("https://cloud.seira.bot/pro/buy?plan=team&src=app_whats_new_team");
-    expect(newCloudUrl(true)).toBe("https://seira-cloud-staging.fly.dev/cloud?src=app_whats_new_pro");
-    expect(startTeamUrl(true)).toBe("https://seira-cloud-staging.fly.dev/pro/buy?plan=team&src=app_whats_new_team");
+    expect(newCloudUrl(true)).toBe("https://omb-cloud-staging.fly.dev/cloud?src=app_whats_new_pro");
+    expect(startTeamUrl(true)).toBe("https://omb-cloud-staging.fly.dev/pro/buy?plan=team&src=app_whats_new_team");
     for (const tag of Object.values(WHATS_NEW_SOURCES)) expect(tag, "the Admin's tag form").toMatch(/^[a-z0-9_]{1,32}$/);
   });
 

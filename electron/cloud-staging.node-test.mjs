@@ -6,12 +6,12 @@ import { CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN, checkoutDestination, cloudOrigin, c
 const accessToken = `omc_${"S".repeat(43)}`;
 
 test("SEIRA_CLOUD_STAGING=1, and only that, points the app at the fixed staging Admin with its own token file", () => {
-  assert.deepEqual(cloudTarget({ SEIRA_CLOUD_STAGING: "1" }), { origin: "https://seira-cloud-staging.fly.dev", kind: "staging", staging: true, file: "cloud-account-staging.bin", saved: "cloud-accounts-staging.bin", places: "account-places-staging.json",
+  assert.deepEqual(cloudTarget({ SEIRA_CLOUD_STAGING: "1" }), { origin: "https://omb-cloud-staging.fly.dev", kind: "staging", staging: true, file: "cloud-account-staging.bin", saved: "cloud-accounts-staging.bin", places: "account-places-staging.json",
     environments: "environments-staging.json", sync: "cloud-sync-staging", look: "cloud-home-look-staging.json" });
   const production = Object.values(cloudTarget({})), staging = Object.values(cloudTarget({ SEIRA_CLOUD_STAGING: "1" }));
   assert.ok(staging.filter(value => typeof value === "string").every(name => !production.includes(name)), "no file or address shared with production");
-  assert.equal(STAGING_CLOUD_ORIGIN, "https://seira-cloud-staging.fly.dev");
-  for (const value of ["0", "true", "yes", " 1", "1 ", "01", "2", "", "https://evil.example.test", "https://seira-cloud-staging.fly.dev"]) {
+  assert.equal(STAGING_CLOUD_ORIGIN, "https://omb-cloud-staging.fly.dev");
+  for (const value of ["0", "true", "yes", " 1", "1 ", "01", "2", "", "https://evil.example.test", "https://omb-cloud-staging.fly.dev"]) {
     assert.deepEqual(cloudTarget({ SEIRA_CLOUD_STAGING: value }), cloudTarget({}), JSON.stringify(value));
   }
   assert.deepEqual(cloudTarget({ SEIRA_CLOUD_STAGING_URL: "https://evil.example.test" }), cloudTarget({}), "only SEIRA_CLOUD_ORIGIN names an address");
@@ -20,7 +20,7 @@ test("SEIRA_CLOUD_STAGING=1, and only that, points the app at the fixed staging 
 
 test("the staging address is the one exact https origin; staging checkouts are only Dodo's test page", () => {
   assert.equal(cloudOrigin(STAGING_CLOUD_ORIGIN), STAGING_CLOUD_ORIGIN);
-  for (const value of ["http://seira-cloud-staging.fly.dev", `${STAGING_CLOUD_ORIGIN}/`, `${STAGING_CLOUD_ORIGIN}:8443`, "https://seira-cloud-staging.fly.dev.evil.test", "https://evil.fly.dev"]) {
+  for (const value of ["http://omb-cloud-staging.fly.dev", `${STAGING_CLOUD_ORIGIN}/`, `${STAGING_CLOUD_ORIGIN}:8443`, "https://omb-cloud-staging.fly.dev.evil.test", "https://evil.fly.dev"]) {
     assert.throws(() => cloudOrigin(value), /Invalid Seira Cloud address/, value);
   }
   const test = "https://test.checkout.dodopayments.com/session/cks_1", live = "https://checkout.dodopayments.com/session/cks_1";
