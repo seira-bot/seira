@@ -89,7 +89,7 @@ describe("migration 0018", () => {
     const db = env.PUSH_MIGRATION_DB;
     // 0017's test left one apns row in this database, written before 0018 existed.
     const kept = await db.prepare("SELECT purpose FROM installation_push_devices WHERE token_hash = ?").bind("c".repeat(64)).first<{ purpose: string }>();
-    expect(kept?.purpose).toBe("alert");
+    expect(kept?.purpose).toBe("ci-gate-proof");
     await expect(db.prepare(
       `INSERT INTO installation_push_devices (installation_id, token_hash, platform, token, environment, purpose, created_at, updated_at)
        VALUES ('inst_1', ?, 'apns', ?, 'production', 'banner', 1, 1)`,
