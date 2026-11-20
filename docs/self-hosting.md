@@ -50,7 +50,7 @@ In a terminal, `serve` checks the address and prints one pairing block:
 
 ```
 Seira 0.1.147 · server "hetzner-1"
-data: /home/seira/.seira
+data: ~/.seira
 Reach    https://seira.example.com   ✓ answers as this server (11:04)
 
 Pairing code   7KQ2-M9XD-H4TP   works once, until 11:14 · everything
