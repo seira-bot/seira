@@ -23,7 +23,8 @@ interface Job {
   uses?: string;
   environment?: unknown;
   permissions?: Record<string, string> | string;
-  strategy?: { matrix?: { shard?: number[]; include?: Record<string, string>[] } };
+  strategy?: { "fail-fast"?: boolean; matrix?: { shard?: number[]; include?: Record<string, string>[]; worker?: string } };
+  with?: Record<string, unknown>;
   steps?: Step[];
 }
 
@@ -43,11 +44,9 @@ const packageFiles = files.filter((file) => /^package-[a-z0-9-]+\.yml$/.test(fil
 const packageWorkflows = packageFiles.map((file) => [file, workflows.get(file)!] as const);
 const IMAGE = "server-image.yml";
 const NPM = "npm-publish.yml";
-const BUGS = "bug-reports.yml";
-const PUSH = "push-relay.yml";
+const SMOKE = "server-image-smoke.yml";
 const image = workflows.get(IMAGE)!;
-const bugs = workflows.get(BUGS)!;
-const push = workflows.get(PUSH)!;
+const smoke = workflows.get(SMOKE)!;
 const LOGIN = "${{ secrets.GITHUB_TOKEN }}";
 const MAINTAINER_CHECK = "startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)";
 const NOT_MAINTAINER = `!(${MAINTAINER_CHECK})`;
@@ -65,13 +64,14 @@ const allRuns = () => allSteps().flatMap((step) => (step.run === undefined ? [] 
 const runs = (job: Job) => stepsOf(job).flatMap((step) => (step.run === undefined ? [] : [step.run]));
 
 describe("CI workflows", () => {
-  it("keeps the CI workflow, the two Worker workflows, the npm publish workflow, the package workflows and the server image workflow only", () => {
-    expect(files).toEqual([BUGS, "ci.yml", NPM, ...packageFiles, PUSH, IMAGE]);
+  it("keeps the CI workflow, the npm publish workflow, the package workflows and the two server image workflows only", () => {
+    expect(files).toEqual(["ci.yml", NPM, ...packageFiles, SMOKE, IMAGE]);
   });
 
-  it("runs on pull requests, pushes to main and manual starts only", () => {
-    expect(Object.keys(workflow.on).sort()).toEqual(["pull_request", "push", "workflow_dispatch"]);
+  it("runs on pull requests, merge queue entries, pushes to main and manual starts only", () => {
+    expect(Object.keys(workflow.on).sort()).toEqual(["merge_group", "pull_request", "push", "workflow_dispatch"]);
     expect(workflow.on.push).toEqual({ branches: ["main"] });
+    expect(workflow.on.merge_group).toEqual({ types: ["checks_requested"] });
     for (const [file, flow] of workflows) {
       for (const trigger of ["pull_request_target", "workflow_run", "issue_comment"]) {
         expect(flow.on, `${file} uses ${trigger}`).not.toHaveProperty(trigger);
@@ -171,13 +171,20 @@ describe("CI workflows", () => {
     for (const step of checkouts) expect(step.with?.["persist-credentials"]).toBe(false);
   });
 
-  it("pins every action to a full commit SHA", () => {
+  it("pins every action to a full commit SHA, and calls a workflow of this repository only by its path", () => {
     const uses = [...workflows.values()].flatMap((flow) => Object.values(flow.jobs).flatMap((job) => [
       ...(job.uses === undefined ? [] : [job.uses]),
       ...stepsOf(job).flatMap((step) => (step.uses === undefined ? [] : [step.uses])),
     ]));
     expect(uses.length).toBeGreaterThan(0);
-    for (const value of uses) expect(value).toMatch(/^[^@\s]+@[0-9a-f]{40}$/);
+    for (const value of uses) {
+      if (value.startsWith("./")) {
+        expect(value).toMatch(/^\.\/\.github\/workflows\/[a-z0-9-]+\.yml$/);
+        expect(files).toContain(value.replace("./.github/workflows/", ""));
+      } else {
+        expect(value).toMatch(/^[^@\s]+@[0-9a-f]{40}$/);
+      }
+    }
   });
 
   it("passes event values and inputs through env, never into a command line", () => {
@@ -202,18 +209,23 @@ describe("CI workflows", () => {
   });
 });
 
-describe("Server image workflow", () => {
-  const build = image.jobs.image!;
-  const approval = image.jobs.approval!;
-  const publish = image.jobs.publish!;
-  const ON_MAIN = "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'";
+describe("Server image smoke workflow", () => {
+  const build = smoke.jobs.image!;
 
-  it("starts on a pull request that changes the image, or by hand", () => {
-    expect(Object.keys(image.on).sort()).toEqual(["pull_request", "workflow_dispatch"]);
+  it("is called by other workflows only, with a tag and a save flag", () => {
+    expect(Object.keys(smoke.on)).toEqual(["workflow_call"]);
+    expect(smoke.on.workflow_call).toEqual({
+      inputs: {
+        tag: { description: expect.any(String), required: false, type: "string", default: "" },
+        save: { description: expect.any(String), required: false, type: "boolean", default: false },
+      },
+    });
+    expect(smoke.concurrency).toBeUndefined();
+    expect(Object.keys(smoke.jobs)).toEqual(["image"]);
   });
 
   it("uses GitHub's own actions only", () => {
-    const uses = Object.values(image.jobs).flatMap(stepsOf).flatMap((step) => (step.uses === undefined ? [] : [step.uses]));
+    const uses = stepsOf(build).flatMap((step) => (step.uses === undefined ? [] : [step.uses]));
     for (const value of uses) expect(value).toMatch(/^actions\//);
   });
 
@@ -222,18 +234,69 @@ describe("Server image workflow", () => {
       { arch: "amd64", runner: "ubuntu-24.04" },
       { arch: "arm64", runner: "ubuntu-24.04-arm" },
     ]);
+    expect(build.strategy?.["fail-fast"]).toBe(false);
     expect(build["runs-on"]).toBe("${{ matrix.runner }}");
     expect(build.permissions).toBeUndefined();
     expect(build.environment).toBeUndefined();
-    expect(JSON.stringify(build)).not.toContain("secrets.");
+    expect(JSON.stringify(smoke)).not.toContain("secrets.");
     expect(runs(build).join("\n")).not.toMatch(/docker (login|push)/);
   });
 
-  it("hands the image to the publish job only from a manual run on main", () => {
+  it("boots the container and checks the server, the UI and the user", () => {
+    const boot = stepsOf(build).find((step) => step.name === "Boot the container and prove the server and UI answer");
+    expect(boot?.run).toContain("docker run -d -e SEIRA_COMPOSIO_BROKER=off --name seira seira-server:ci");
+    expect(boot?.run).toContain("http://127.0.0.1:8799/api/health");
+    expect(boot?.run).toContain("UI not served");
+    expect(boot?.run).toContain("server does not run as seira");
+  });
+
+  it("saves and uploads the image only when the caller asks", () => {
     const uploads = stepsOf(build).filter((step) => step.uses?.startsWith("actions/upload-artifact@"));
     expect(uploads).toHaveLength(1);
-    expect(uploads[0]!.if).toBe(ON_MAIN);
+    expect(uploads[0]!.if).toBe("${{ inputs.save }}");
     expect(uploads[0]!.with?.["if-no-files-found"]).toBe("error");
+    expect(stepsOf(build).find((step) => step.name === "Save the image for the publish job")?.if).toBe("${{ inputs.save }}");
+  });
+
+  it("checks out a release tag only by its full tag name, and the commit of the caller when there is no tag", () => {
+    const checkouts = stepsOf(build).filter((step) => step.uses?.startsWith("actions/checkout@"));
+    expect(checkouts).toHaveLength(1);
+    expect(checkouts[0]!.with?.ref).toBe("${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || '' }}");
+  });
+
+  it("reads the tag only through env, and labels the image with the tag or main", () => {
+    for (const step of stepsOf(build)) {
+      if (step.run?.includes("TAG")) expect(step.env?.TAG, step.name).toBe("${{ inputs.tag }}");
+    }
+    expect(runs(build).join("\n")).toContain('--label "org.opencontainers.image.version=${TAG:-main}"');
+  });
+
+  it("uses no build cache", () => {
+    expect(stepsOf(build).some((step) => step.uses?.startsWith("actions/cache"))).toBe(false);
+    expect(runs(build).join("\n")).not.toMatch(/--cache-(from|to)\b/);
+  });
+});
+
+describe("Server image workflow", () => {
+  const build = image.jobs.image!;
+  const approval = image.jobs.approval!;
+  const publish = image.jobs.publish!;
+  const ON_MAIN = "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'";
+
+  it("starts by hand only", () => {
+    expect(Object.keys(image.on)).toEqual(["workflow_dispatch"]);
+  });
+
+  it("never cancels a publish that is running", () => {
+    expect(image.concurrency?.["cancel-in-progress"]).toBe(false);
+  });
+
+  it("calls the smoke workflow with the tag, and saves the images only on main", () => {
+    expect(build.uses).toBe("./.github/workflows/server-image-smoke.yml");
+    expect(build.with).toEqual({ tag: "${{ inputs.tag }}", save: "${{ github.ref == 'refs/heads/main' }}" });
+    expect(build.steps).toBeUndefined();
+    expect(build.permissions).toBeUndefined();
+    expect(build.environment).toBeUndefined();
   });
 
   it("asks a maintainer to approve a run that another person starts, after the build and only on main", () => {
@@ -261,14 +324,9 @@ describe("Server image workflow", () => {
     expect(Object.values(image.jobs).flatMap(runs).join("\n")).not.toMatch(/--cache-(from|to)\b/);
   });
 
-  it("checks out a release tag only by its full tag name", () => {
-    const checkouts = Object.values(image.jobs).flatMap(stepsOf).filter((step) => step.uses?.startsWith("actions/checkout@"));
-    expect(checkouts).toHaveLength(1);
-    expect(checkouts[0]!.with?.ref).toBe("${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}");
-  });
-
-  it("labels the image with the release tag, or main when there is none", () => {
-    expect(runs(build).join("\n")).toContain('--label "org.opencontainers.image.version=${TAG:-main}"');
+  it("downloads the images that the smoke workflow saved", () => {
+    const download = stepsOf(publish).find((step) => step.uses?.startsWith("actions/download-artifact@"));
+    expect(download?.with?.pattern).toBe("seira-server-*");
   });
 
   it("publishes to this repository's own package only", () => {
@@ -394,79 +452,55 @@ describe("CI vitest job", () => {
   });
 });
 
-describe("Bug report Worker workflow", () => {
-  const job = bugs.jobs.worker!;
-  const paths = ["cloudflare/bug-reports/**", ".github/workflows/bug-reports.yml"];
+describe("CI workers job", () => {
+  const job = workflow.jobs.workers!;
 
-  it("starts on a pull request or a push to main that changes the Worker or this file, or by hand", () => {
-    expect(Object.keys(bugs.on).sort()).toEqual(["pull_request", "push", "workflow_dispatch"]);
-    expect(bugs.on.pull_request).toEqual({ types: ["opened", "synchronize", "reopened", "ready_for_review"], paths });
-    expect(bugs.on.push).toEqual({ branches: ["main"], paths });
+  it("starts after checks and takes its matrix from the scope output", () => {
+    expect(job.needs).toBe("checks");
+    expect(job.strategy?.matrix?.worker).toBe("${{ fromJSON(needs.checks.outputs.workers) }}");
+    expect(job.strategy?.["fail-fast"]).toBe(false);
+    expect(job.name).toBe("worker (${{ matrix.worker.name }})");
+    expect(workflow.jobs.checks.outputs?.workers).toBe("${{ steps.scope.outputs.workers }}");
   });
 
-  it("skips a draft pull request, and cancels an older run of the same pull request or main but never a manual start", () => {
-    expect(job.if).toBe("${{ github.event.pull_request.draft != true }}");
-    expect(bugs.concurrency?.["cancel-in-progress"]).toBe("${{ github.event_name != 'workflow_dispatch' }}");
-    expect(bugs.concurrency?.group).toContain("format('pr-{0}', github.event.pull_request.number)");
-    expect(bugs.concurrency?.group).toContain("format('manual-{0}', github.run_id)");
-    expect(bugs.concurrency?.group).toContain("github.ref");
+  it("skips a draft pull request, and a run with no Worker in scope", () => {
+    expect(job.if).toBe("${{ github.event.pull_request.draft != true && needs.checks.outputs.workers != '[]' }}");
   });
 
-  it("runs the type check and the tests of the Worker", () => {
-    expect(runs(job)).toContain("pnpm bugs:check");
-    expect(runs(job)).toContain("pnpm bugs:test");
-    expect(scripts["bugs:check"]).toContain("cloudflare/bug-reports/tsconfig.json");
-    expect(scripts["bugs:test"]).toContain("cloudflare/bug-reports/vitest.config.ts");
+  it("runs the check and the test of the Worker through env", () => {
+    const check = stepsOf(job).find((step) => step.run === 'pnpm run "$CHECK"');
+    const test = stepsOf(job).find((step) => step.run === 'pnpm run "$TEST"');
+    expect(check?.env).toEqual({ CHECK: "${{ matrix.worker.check }}" });
+    expect(test?.env).toEqual({ TEST: "${{ matrix.worker.test }}" });
+    expect(runs(job).some((run) => run.includes("pnpm install --frozen-lockfile"))).toBe(true);
   });
 
-  it("has one job on a GitHub-hosted runner, with no permission, no secret and no environment", () => {
-    expect(Object.keys(bugs.jobs)).toEqual(["worker"]);
+  it("has a GitHub-hosted runner, no permission, no secret and no environment, and never deploys", () => {
     expect(job["runs-on"]).toBe("ubuntu-24.04");
     expect(job.permissions).toBeUndefined();
     expect(job.environment).toBeUndefined();
-    expect(JSON.stringify(bugs)).not.toContain("secrets.");
+    expect(JSON.stringify(job)).not.toContain("secrets.");
+    for (const run of runs(job)) expect(run).not.toMatch(/deploy|wrangler/);
   });
 
-  it("never deploys the Worker", () => {
-    for (const run of runs(job)) expect(run).not.toMatch(/deploy|wrangler/);
+  it("leaves the Worker tests out of the Vitest shards", () => {
+    const shardRuns = runs(workflow.jobs.vitest).join("\n");
+    expect(shardRuns).not.toContain("broker:test");
+    const electron = stepsOf(workflow.jobs.vitest).find((step) => step.name === "Electron unit tests");
+    expect(electron?.run).toBe("pnpm test:electron");
+    expect(electron?.if).toBe("matrix.shard == 1");
   });
 });
 
-describe("Push relay Worker workflow", () => {
-  const job = push.jobs.worker!;
-  const paths = ["cloudflare/push-relay/**", ".github/workflows/push-relay.yml"];
+describe("CI server image job", () => {
+  const job = workflow.jobs["server-image"]!;
 
-  it("starts on a pull request or a push to main that changes the Worker or this file, or by hand", () => {
-    expect(Object.keys(push.on).sort()).toEqual(["pull_request", "push", "workflow_dispatch"]);
-    expect(push.on.pull_request).toEqual({ types: ["opened", "synchronize", "reopened", "ready_for_review"], paths });
-    expect(push.on.push).toEqual({ branches: ["main"], paths });
-  });
-
-  it("skips a draft pull request, and cancels an older run of the same pull request or main but never a manual start", () => {
-    expect(job.if).toBe("${{ github.event.pull_request.draft != true }}");
-    expect(push.concurrency?.["cancel-in-progress"]).toBe("${{ github.event_name != 'workflow_dispatch' }}");
-    expect(push.concurrency?.group).toContain("format('pr-{0}', github.event.pull_request.number)");
-    expect(push.concurrency?.group).toContain("format('manual-{0}', github.run_id)");
-    expect(push.concurrency?.group).toContain("github.ref");
-  });
-
-  it("runs the type check and the tests of the Worker", () => {
-    expect(runs(job)).toContain("pnpm push:check");
-    expect(runs(job)).toContain("pnpm push:test");
-    expect(scripts["push:check"]).toContain("cloudflare/push-relay/tsconfig.json");
-    expect(scripts["push:test"]).toContain("cloudflare/push-relay/vitest.config.ts");
-  });
-
-  it("has one job on a GitHub-hosted runner, with no permission, no secret and no environment", () => {
-    expect(Object.keys(push.jobs)).toEqual(["worker"]);
-    expect(job["runs-on"]).toBe("ubuntu-24.04");
+  it("calls the smoke workflow when the heavy jobs run, and not for a draft", () => {
+    expect(job.uses).toBe("./.github/workflows/server-image-smoke.yml");
+    expect(job.needs).toBe("checks");
+    expect(job.if).toBe("${{ github.event.pull_request.draft != true && needs.checks.outputs.heavy == 'true' }}");
+    expect(job.with).toBeUndefined();
     expect(job.permissions).toBeUndefined();
-    expect(job.environment).toBeUndefined();
-    expect(JSON.stringify(push)).not.toContain("secrets.");
-  });
-
-  it("never deploys the Worker", () => {
-    for (const run of runs(job)) expect(run).not.toMatch(/deploy|wrangler/);
   });
 });
 
@@ -483,6 +517,8 @@ describe("CI required checks", () => {
   });
 });
 
+const SOME_WORKERS = '[{"name":"push-relay","check":"push:check","test":"push:test"}]';
+
 describe("CI gate", () => {
   const gate = workflow.jobs.gate;
   const others = Object.keys(workflow.jobs).filter((id) => id !== "gate");
@@ -493,7 +529,7 @@ describe("CI gate", () => {
     const script = /node --input-type=module -e '([^']+)'/.exec(command);
     expect(script).not.toBeNull();
     const check = spawnSync(process.execPath, ["--input-type=module", "-e", script![1]], {
-      env: { ...process.env, DRAFT: "", HEAVY: "true", ...extra, NEEDS: JSON.stringify(needs) },
+      env: { ...process.env, DRAFT: "", HEAVY: "true", WORKERS: SOME_WORKERS, ...extra, NEEDS: JSON.stringify(needs) },
       encoding: "utf8",
       timeout: 10_000,
     });
@@ -526,23 +562,32 @@ describe("CI gate", () => {
   });
 });
 
-describe("CI skips the heavy jobs only when it may", () => {
+describe("CI skips jobs only when it may", () => {
   const gate = workflow.jobs.gate;
-  const heavy = ["build", "vitest"];
-  const needs = (result: string) => ({ checks: { result: "success" }, build: { result }, vitest: { result } });
-  const run = (extra: Record<string, string>, jobs: Record<string, { result: string }>) => {
+  const heavy = ["build", "vitest", "server-image"];
+  const NONE = "[]";
+  type Needs = Record<string, { result: string }>;
+  const needs = (result: string): Needs => ({
+    checks: { result: "success" },
+    build: { result },
+    vitest: { result },
+    workers: { result },
+    "server-image": { result },
+  });
+  const run = (extra: Record<string, string>, jobs: Needs) => {
     const command = runs(gate).find((line) => line.includes("node --input-type=module")) as string;
     const script = /node --input-type=module -e '([^']+)'/.exec(command)![1];
     return spawnSync(process.execPath, ["--input-type=module", "-e", script], {
-      env: { ...process.env, DRAFT: "", HEAVY: "true", ...extra, NEEDS: JSON.stringify(jobs) }, encoding: "utf8", timeout: 10_000,
+      env: { ...process.env, DRAFT: "", HEAVY: "true", WORKERS: SOME_WORKERS, ...extra, NEEDS: JSON.stringify(jobs) }, encoding: "utf8", timeout: 10_000,
     });
   };
+  const skipped = (...ids: string[]): Needs => ({ ...needs("success"), ...Object.fromEntries(ids.map((id) => [id, { result: "skipped" }])) });
 
   it("listens for a draft that becomes ready, with the default types", () => {
     expect((workflow.on.pull_request as { types: string[] }).types).toEqual(["opened", "synchronize", "reopened", "ready_for_review"]);
   });
 
-  it("skips build and the shards on a draft, and on a pull request the path filter marks light", () => {
+  it("skips build, the shards and the image on a draft, and on a pull request that changes light files only", () => {
     for (const id of heavy) {
       const condition = String(workflow.jobs[id].if);
       expect(condition, id).toContain("github.event.pull_request.draft != true");
@@ -553,42 +598,69 @@ describe("CI skips the heavy jobs only when it may", () => {
     expect(workflow.jobs.checks.outputs?.heavy).toBe("${{ steps.scope.outputs.heavy }}");
   });
 
-  it("passes when a draft skipped build and the shards", () => {
+  it("passes when a draft skipped every job after checks", () => {
     expect(run({ DRAFT: "true" }, needs("skipped")).status).toBe(0);
   });
 
-  it("passes when the path filter skipped build and the shards", () => {
-    expect(run({ HEAVY: "false" }, needs("skipped")).status).toBe(0);
+  it("passes when the scope skipped the heavy jobs and no Worker is in scope", () => {
+    expect(run({ HEAVY: "false", WORKERS: NONE }, needs("skipped")).status).toBe(0);
+  });
+
+  it("passes when no Worker is in scope and the heavy jobs ran", () => {
+    expect(run({ WORKERS: NONE }, skipped("workers")).status).toBe(0);
+  });
+
+  it("passes when the heavy jobs were skipped and a Worker ran", () => {
+    expect(run({ HEAVY: "false" }, skipped(...heavy)).status).toBe(0);
+  });
+
+  it("fails when workers was skipped while a Worker is in scope", () => {
+    const check = run({}, skipped("workers"));
+    expect(check.status).toBe(1);
+    expect(check.stderr).toContain("workers");
+  });
+
+  it("fails when the server image was skipped while the heavy jobs run", () => {
+    const check = run({}, skipped("server-image"));
+    expect(check.status).toBe(1);
+    expect(check.stderr).toContain("server-image");
   });
 
   it("fails when build or the shards were skipped without a reason", () => {
-    const check = run({}, needs("skipped"));
+    const check = run({}, skipped("build", "vitest"));
     expect(check.status).toBe(1);
     expect(check.stderr).toContain("build, vitest");
   });
 
-  it("fails when checks did not pass, even on a draft", () => {
+  it("fails when checks did not pass, even on a draft, and when its outputs are empty", () => {
     for (const result of ["failure", "skipped", "cancelled"]) {
       expect(run({ DRAFT: "true" }, { ...needs("skipped"), checks: { result } }).status, result).toBe(1);
     }
+    expect(run({ HEAVY: "", WORKERS: "" }, { ...needs("skipped"), checks: { result: "failure" } }).status).toBe(1);
   });
 
-  it("fails when a heavy job failed, even on a draft", () => {
-    expect(run({ DRAFT: "true" }, { ...needs("skipped"), vitest: { result: "failure" } }).status).toBe(1);
-    expect(run({ HEAVY: "false" }, { ...needs("skipped"), build: { result: "cancelled" } }).status).toBe(1);
+  it.each(["failure", "cancelled"])("fails when any job ends as %s, even when it could be skipped", (result) => {
+    for (const id of ["build", "vitest", "workers", "server-image"]) {
+      expect(run({ DRAFT: "true" }, { ...needs("skipped"), [id]: { result } }).status, id).toBe(1);
+      expect(run({ HEAVY: "false", WORKERS: NONE }, { ...needs("skipped"), [id]: { result } }).status, id).toBe(1);
+    }
   });
 
-  it("cancels an older run of the same pull request or main, and never a manual start", () => {
-    expect(workflow.concurrency?.["cancel-in-progress"]).toBe("${{ github.event_name != 'workflow_dispatch' }}");
+  it("cancels an older run of the same pull request only, never a run on main, in the merge queue or a manual start", () => {
+    expect(workflow.concurrency?.["cancel-in-progress"]).toBe("${{ github.event_name == 'pull_request' }}");
     expect(workflow.concurrency?.group).toContain("format('pr-{0}', github.event.pull_request.number)");
     expect(workflow.concurrency?.group).toContain("format('manual-{0}', github.run_id)");
     expect(workflow.concurrency?.group).toContain("github.ref");
   });
 
-  it("decides the path filter from the base and head commits through env", () => {
+  it("decides the scope from the base and head commits of a pull request or a merge queue entry through env", () => {
     const step = stepsOf(workflow.jobs.checks).find((item) => item.id === "scope");
     expect(step?.run).toBe("node scripts/ci-heavy.mjs");
-    expect(step?.env).toMatchObject({ EVENT_NAME: "${{ github.event_name }}", BASE_SHA: "${{ github.event.pull_request.base.sha }}", HEAD_SHA: "${{ github.event.pull_request.head.sha }}" });
+    expect(step?.env).toEqual({
+      EVENT_NAME: "${{ github.event_name }}",
+      BASE_SHA: "${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}",
+      HEAD_SHA: "${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}",
+    });
   });
 });
 

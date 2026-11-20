@@ -1,0 +1,110 @@
+name: Server image smoke
+
+# Builds the server image on each platform and boots it. ci.yml calls this workflow for every change that runs the
+# heavy jobs, and server-image.yml calls it before it publishes. The workflow pushes nothing and reads nothing private.
+# With `save` set, each image goes to a workflow artifact for the publish job of server-image.yml.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: The release tag to build, like v0.1.173. Empty builds the commit of the caller.
+        required: false
+        type: string
+        default: ""
+      save:
+        description: Keep each image as a workflow artifact.
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: build and smoke (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - name: Check the release tag
+        env:
+          TAG: ${{ inputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          [ -n "$TAG" ] || exit 0
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "The tag must look like v0.1.173."
+            exit 1
+          fi
+          curl -fsS -o /dev/null "https://api.github.com/repos/$REPOSITORY/releases/tags/$TAG" || { echo "$TAG is not a published release."; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || '' }}
+          persist-credentials: false
+      - id: keys
+        # `agent-browser install` fetches Chrome for Testing's last-known-good
+        # Stable. An arm64 image takes Debian's Chromium instead. A failed lookup
+        # keys on today's date, so a build never keeps an old browser.
+        run: |
+          today="date-$(date -u +%F)"
+          chrome=$(curl -fsSL --max-time 30 https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | jq -er .channels.Stable.version) || chrome=""
+          [[ "$chrome" =~ ^[0-9]+(\.[0-9]+)+$ ]] || chrome=$today
+          chromium=$(curl -fsSL --max-time 30 'https://qa.debian.org/madison.php?package=chromium&s=bookworm,bookworm-security&a=arm64&text=on' | awk -F'|' '{gsub(/ /, "", $2); print $2}' | sort -V | tail -n 1) || chromium=""
+          [[ "$chromium" =~ ^[0-9][0-9A-Za-z.+~:-]*$ ]] || chromium=$today
+          { echo "chrome=$chrome"; echo "chromium=$chromium"; } | tee -a "$GITHUB_OUTPUT"
+      - name: Build image
+        # deploy/install.sh and deploy/update.sh read the version label: a
+        # release tag there means an image the app can update. Without
+        # attestations each platform is one manifest in either Docker image store.
+        env:
+          TAG: ${{ inputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+          ARCH: ${{ matrix.arch }}
+          CHROME: ${{ steps.keys.outputs.chrome }}
+          CHROMIUM: ${{ steps.keys.outputs.chromium }}
+        run: |
+          docker build --provenance=false --sbom=false \
+            --label "org.opencontainers.image.source=https://github.com/$REPOSITORY" \
+            --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" \
+            --label "org.opencontainers.image.version=${TAG:-main}" \
+            --build-arg "CHROME_CACHE_TAG=$CHROME" \
+            --build-arg "CHROMIUM_CACHE_TAG=$CHROMIUM" \
+            -t seira-server:ci .
+          [ "$(docker image inspect -f '{{.Architecture}}' seira-server:ci)" = "$ARCH" ] || { echo "The image is not an $ARCH image."; exit 1; }
+      - name: Boot the container and prove the server and UI answer
+        run: |
+          set -euo pipefail
+          docker run -d -e SEIRA_COMPOSIO_BROKER=off --name seira seira-server:ci
+          for i in $(seq 1 40); do
+            if docker exec seira curl -sf http://127.0.0.1:8799/api/health | grep -q seira; then break; fi
+            sleep 2
+            if [ "$i" = "40" ]; then docker logs seira; echo "server never became healthy"; exit 1; fi
+          done
+          docker exec seira curl -sf http://127.0.0.1:8799/ | grep -qi "<html" || { docker logs seira; echo "UI not served"; exit 1; }
+          test "$(docker exec seira id -un)" = seira || { docker logs seira; echo "server does not run as seira"; exit 1; }
+          docker logs seira | tail -5
+          docker rm -f seira >/dev/null
+      - name: Save the image for the publish job
+        if: ${{ inputs.save }}
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          docker tag seira-server:ci "seira-server:$ARCH"
+          docker save "seira-server:$ARCH" | gzip -1 > "seira-server-$ARCH.tar.gz"
+      - if: ${{ inputs.save }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: seira-server-${{ matrix.arch }}
+          path: seira-server-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
