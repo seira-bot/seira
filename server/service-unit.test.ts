@@ -165,7 +165,7 @@ describe("service units", () => {
     expect(checkSentinelInstall("darwin", "/Users/seira", fs())).toMatchObject({ status: "not_installed" });
     expect(earlierSentinelSchedule("darwin", "/Users/seira", () => false)).toBeNull();
     expect(earlierSentinelSchedule("win32", "C:\\Users\\seira", () => true)).toBeNull();
-    expect(earlierSentinelSchedule("linux", "/home/seira", fs(unit))?.files).toEqual([unit, timer]);
+    expect(earlierSentinelSchedule("linux", "/home/seira", (path) => path === unit)?.files).toEqual([unit, timer]);
   });
 
   it("keeps checking the current schedule when an earlier one is also installed", () => {
