@@ -7,6 +7,7 @@
     "prebuild": "pnpm assets:sync",
     "predev": "pnpm assets:sync",
     "build": "next build",
+    "postbuild": "node scripts/defer-scripts.mjs",
     "dev": "next dev",
     "start": "next start",
     "types:check": "next typegen && tsc --noEmit",
