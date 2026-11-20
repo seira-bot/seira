@@ -276,7 +276,7 @@ describe("bot-first sidebar", () => {
     expect(markup.match(/<span class="sr-only">Unread<\/span>/g)).toHaveLength(1);
   });
 
-  it("draws no engine mark for a bot with no AI yet or in a group chat, and a faded one in Advanced mode", () => {
+  it("draws no engine mark for a bot with no AI yet, in a group chat, or in an Advanced row", () => {
     fixture.showThreads = false;
     fixture.state = { ...fixture.state, instances: [{ instanceId: "fake", driverKind: "claudeAgent", displayName: "Claude" }] as unknown as AppState["instances"] };
     const candidate = { ...bot, tasks: [], projects: [] };
@@ -284,8 +284,7 @@ describe("bot-first sidebar", () => {
     const group: Group = { id: "room", threadId: "room-thread", name: "Launch", memberIds: [bot.id], messages: [], defaultResponder: { kind: "mentions" }, bulletin: "", unread: false, createdAt: 1 };
     expect(renderToStaticMarkup(createElement(GroupListItem, { group, density: "comfortable", onMenu: vi.fn() }))).not.toContain("data-provider-mark");
     fixture.advanced = true;
-    const advanced = renderToStaticMarkup(createElement(BotListItem, rowProps("comfortable", candidate)));
-    expect(advanced).toMatch(/data-testid="model-badge"[^>]*><span data-provider-mark="brand" class="[^"]*\bopacity-60\b/);
+    expect(renderToStaticMarkup(createElement(BotListItem, rowProps("comfortable", candidate)))).not.toContain("data-provider-mark");
   });
 
   it("keeps a Simple row to its name, preview and one faded engine mark, naming role, Chief and engine in its tooltip", () => {

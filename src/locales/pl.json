@@ -5034,7 +5034,7 @@
   "backup.exporting": "Tworzenie zaszyfrowanej kopii zapasowej…",
   "backup.downloadAgain": "Pobierz plik {filename}",
   "backup.import": "Importuj kopię zapasową",
-  "backup.importHint": "Wybierz zaszyfrowany plik .ombbackup i zweryfikuj go, zanim cokolwiek zmienisz. Kopie zapasowe obsługują do 10 GB danych instalacji. Starsze kopie zapasowe zespołu i szablony do udostępniania nadal można importować z Szablonów.",
+  "backup.importHint": "Wybierz zaszyfrowany plik .seirabackup i zweryfikuj go, zanim cokolwiek zmienisz. Kopie zapasowe obsługują do 10 GB danych instalacji. Starsze kopie zapasowe zespołu i szablony do udostępniania nadal można importować z Szablonów.",
   "backup.file": "Plik kopii zapasowej",
   "backup.importPassword": "Hasło do tej kopii zapasowej",
   "backup.validate": "Zweryfikuj kopię zapasową",

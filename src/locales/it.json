@@ -4899,7 +4899,7 @@
   "backup.exporting": "Creazione del backup cifrato…",
   "backup.downloadAgain": "Scarica {filename}",
   "backup.import": "Importa backup",
-  "backup.importHint": "Scegli un file .ombbackup cifrato e convalidalo prima di cambiare qualcosa. I backup arrivano fino a 10 GB di dati dell'installazione. I backup dei team più vecchi e i modelli condivisibili si possono ancora importare da Modelli.",
+  "backup.importHint": "Scegli un file .seirabackup cifrato e convalidalo prima di cambiare qualcosa. I backup arrivano fino a 10 GB di dati dell'installazione. I backup dei team più vecchi e i modelli condivisibili si possono ancora importare da Modelli.",
   "backup.file": "File di backup",
   "backup.importPassword": "Password di questo backup",
   "backup.validate": "Convalida backup",

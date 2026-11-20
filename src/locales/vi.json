@@ -4061,7 +4061,7 @@
   "backup.exporting": "Đang tạo bản sao lưu được mã hóa…",
   "backup.downloadAgain": "Tải về {filename}",
   "backup.import": "Nhập bản sao lưu",
-  "backup.importHint": "Chọn tệp .ombbackup đã mã hóa và xác thực tệp trước khi thay đổi bất kỳ điều gì. Bản sao lưu hỗ trợ tối đa 10 GB dữ liệu cài đặt. Các bản sao lưu team cũ hơn và mẫu có thể chia sẻ vẫn có thể được nhập từ Mẫu.",
+  "backup.importHint": "Chọn tệp .seirabackup đã mã hóa và xác thực tệp trước khi thay đổi bất kỳ điều gì. Bản sao lưu hỗ trợ tối đa 10 GB dữ liệu cài đặt. Các bản sao lưu team cũ hơn và mẫu có thể chia sẻ vẫn có thể được nhập từ Mẫu.",
   "backup.file": "Tệp sao lưu",
   "backup.importPassword": "Mật khẩu cho bản sao lưu này",
   "backup.validate": "Xác thực bản sao lưu",

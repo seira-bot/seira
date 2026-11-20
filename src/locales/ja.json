@@ -5680,7 +5680,7 @@
   "backup.exporting": "暗号化バックアップを作成中…",
   "backup.downloadAgain": "{filename} をダウンロード",
   "backup.import": "バックアップをインポート",
-  "backup.importHint": "暗号化された .ombbackup ファイルを選び、変更を加える前に検証してください。バックアップは最大 10 GB のインストールデータに対応します。旧形式のチームバックアップと共有用テンプレートは、引き続きテンプレートからインポートできます。",
+  "backup.importHint": "暗号化された .seirabackup ファイルを選び、変更を加える前に検証してください。バックアップは最大 10 GB のインストールデータに対応します。旧形式のチームバックアップと共有用テンプレートは、引き続きテンプレートからインポートできます。",
   "backup.file": "バックアップファイル",
   "backup.importPassword": "このバックアップのパスワード",
   "backup.validate": "バックアップを検証",

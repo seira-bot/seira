@@ -4061,7 +4061,7 @@
   "backup.exporting": "Şifrelenmiş yedek oluşturuluyor…",
   "backup.downloadAgain": "{filename} dosyasını tekrar indir",
   "backup.import": "Yedeği içe aktar",
-  "backup.importHint": "Şifrelenmiş bir .ombbackup dosyası seçin ve herhangi bir şeyi değiştirmeden önce doğrulayın. Yedeklemeler 10 GB'a kadar kurulum verisini destekler. Eski takım yedekleri ve paylaşılabilir şablonlar Şablonlar bölümünden içe aktarılmaya devam edebilir.",
+  "backup.importHint": "Şifrelenmiş bir .seirabackup dosyası seçin ve herhangi bir şeyi değiştirmeden önce doğrulayın. Yedeklemeler 10 GB'a kadar kurulum verisini destekler. Eski takım yedekleri ve paylaşılabilir şablonlar Şablonlar bölümünden içe aktarılmaya devam edebilir.",
   "backup.file": "Yedek dosyası",
   "backup.importPassword": "Bu yedeğin parolası",
   "backup.validate": "Yedeği doğrula",

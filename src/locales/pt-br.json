@@ -6124,7 +6124,7 @@
   "backup.exporting": "Criando backup criptografado…",
   "backup.downloadAgain": "Baixar {filename}",
   "backup.import": "Importar backup",
-  "backup.importHint": "Antes de alterar qualquer coisa, escolha e valide um arquivo .ombbackup criptografado. Os backups aceitam até 10 GB de dados da instalação. Você ainda pode importar backups de equipe mais antigos e modelos compartilháveis em Modelos.",
+  "backup.importHint": "Antes de alterar qualquer coisa, escolha e valide um arquivo .seirabackup criptografado. Os backups aceitam até 10 GB de dados da instalação. Você ainda pode importar backups de equipe mais antigos e modelos compartilháveis em Modelos.",
   "backup.file": "Arquivo de backup",
   "backup.importPassword": "Senha deste backup",
   "backup.validate": "Validar backup",

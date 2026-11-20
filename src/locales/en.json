@@ -6467,7 +6467,7 @@
   "backup.exporting": "Creating encrypted backup…",
   "backup.downloadAgain": "Download {filename}",
   "backup.import": "Import backup",
-  "backup.importHint": "Choose an encrypted .ombbackup file and validate it before changing anything. Backups support up to 10 GB of installation data. Older team backups and shareable templates can still be imported from Templates.",
+  "backup.importHint": "Choose an encrypted .seirabackup file and validate it before changing anything. Backups support up to 10 GB of installation data. Older team backups and shareable templates can still be imported from Templates.",
   "backup.file": "Backup file",
   "backup.importPassword": "Password for this backup",
   "backup.validate": "Validate backup",
