@@ -961,7 +961,7 @@ describe("a session token that an earlier version issued", () => {
 describe("an unpaired request that came through a proxy", () => {
   const sessions = new SessionRegistry({ file: join(mkdtempSync(join(tmpdir(), "seira-proxied-")), "sessions.json") });
   it("is refused on the phone route list and every private route, with an answer that names nothing", () => {
-    for (const headers of [{ "x-forwarded-for": "203.0.113.9" }, { "cf-connecting-ip": "203.0.113.9" }]) {
+    for (const headers of [{ "x-forwarded-for": "203.0.113.9" }, { "cf-connecting-ip": "203.0.113.9" }] as Array<Record<string, string>>) {
       for (const path of ["/api/companion/endpoints", "/api/bots", "/api/config", "/api/auth/session"]) {
         const answer = resolveRequestAuth(request({ host: "127.0.0.1:8799", ...headers }), {
           sessions, cookieName: "seira_session", streamPath: "/api/events", url: new URL(path, "http://localhost"),
