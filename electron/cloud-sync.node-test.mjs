@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { LEGACY_OUTPUTS_FOLDER } from "./legacy-names.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -206,9 +207,9 @@ function botWork(s) {
   s.cloud.put(folder.id, "plan.md", "the plan");
 }
 
-test("a computer that already has Documents/MausBot keeps using it: nothing there is moved, copied or removed", async (t) => {
-  const s = setup(t, { existing: ["MausBot"] });
-  const before = join(s.home, "Documents", "MausBot");
+test("a computer that already has its earlier folder in Documents keeps using it: nothing there is moved, copied or removed", async (t) => {
+  const s = setup(t, { existing: [LEGACY_OUTPUTS_FOLDER] });
+  const before = join(s.home, "Documents", LEGACY_OUTPUTS_FOLDER);
   writeFileSync(join(before, "mine.md"), "mine");
   botWork(s);
   await s.service.pass();
@@ -220,15 +221,15 @@ test("a computer that already has Documents/MausBot keeps using it: nothing ther
   assert.equal(s.restart().state().outputs.dir, before);
 });
 
-test("a new computer gets Documents/Seira, and a Documents/MausBot that shows up later does not move its work", async (t) => {
+test("a new computer gets Documents/Seira, and an earlier folder that shows up later does not move its work", async (t) => {
   const s = setup(t);
   const outputs = join(s.home, "Documents", "Seira");
   assert.equal(s.service.state().outputs.dir, outputs);
   botWork(s);
   await s.service.pass();
   assert.equal(readFileSync(join(outputs, "Owl", "Plan", "plan.md"), "utf8"), "the plan");
-  assert.equal(existsSync(join(s.home, "Documents", "MausBot")), false);
-  mkdirSync(join(s.home, "Documents", "MausBot"));
+  assert.equal(existsSync(join(s.home, "Documents", LEGACY_OUTPUTS_FOLDER)), false);
+  mkdirSync(join(s.home, "Documents", LEGACY_OUTPUTS_FOLDER));
   const again = s.restart();
   assert.equal(again.state().outputs.dir, outputs);
   await again.setOutputs(false);

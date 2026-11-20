@@ -9,6 +9,9 @@ export const LEGACY_MEET_FOLDER = ".mausbot-meet";
 export const MEET_FOLDER = ".seira-meet";
 export const LEGACY_PROFILES_FOLDER = ".openmausbot-profiles";
 
+/** The folder in Documents that a computer which already had it keeps using for what Cloud bots make. */
+export const LEGACY_OUTPUTS_FOLDER = "MausBot";
+
 export const LEGACY_LEASE_FILE = "openmausbot-server.lease";
 export const LEGACY_CHILD_LEASE_FOLDER = ".openmausbot-server-child";
 

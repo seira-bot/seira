@@ -26,3 +26,4 @@ export const LEGACY_APP_GLOBAL: string;
 export declare function currentStateKeys<T>(values: Record<string, T>): Record<string, T>;
 export declare function currentGoalTags(text: string): string;
 export declare function mentionsGoalTag(text: string): boolean;
+export const LEGACY_OUTPUTS_FOLDER: string;
