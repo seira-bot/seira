@@ -12,7 +12,7 @@ import { ChromeLauncher } from "../../server/browser/chrome/launcher.ts";
 import { chromeHost, installedGoogleChrome, isHeadlessShell } from "../../server/browser/chrome/resolve.ts";
 import { removeTempDir } from "../../server/testing/cleanup.ts";
 import { openOwnPageAsBot, withBotBrowser, type BotCall } from "../verify-browser-identity.ts";
-import { ensureUiBrowser, UI_TOOLS_DIR } from "./control-omb-ui.ts";
+import { ensureUiBrowser, UI_TOOLS_DIR } from "./control-seira-ui.ts";
 
 const enabled = process.env.OMB_UI_E2E === "1" || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
 if (!enabled) console.log("skipping browser passkey e2e: no agent-browser binary resolves; set OMB_UI_E2E=1 to install the pinned release");

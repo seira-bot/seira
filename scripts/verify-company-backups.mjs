@@ -409,7 +409,7 @@ if (process.versions.electron && process.argv.includes(flag)) {
   const { createServer } = await import("vite");
   const { default: react } = await import("@vitejs/plugin-react");
   const { default: tailwindcss } = await import("@tailwindcss/vite");
-  const { launchVerificationServer, runControlOmb } = await import("./control-omb.ts");
+  const { launchVerificationServer, runControlSeira } = await import("./control-seira.ts");
   const { waitForExit } = await import("../server/testing/cleanup.ts");
   const fixture = await launchVerificationServer({});
   let runtime = fixture.child, child, ui, restartTask;
@@ -440,7 +440,7 @@ if (process.versions.electron && process.argv.includes(flag)) {
     // The general harness HOME is portable data; backup fixtures put it under
     // excluded providers/ so no CLI-login directory can enter an archive.
     await restart();
-    const seeded = await runControlOmb(["new-bot", "--name", "Original cloud snapshot bot", "--url", fixture.info.url]);
+    const seeded = await runControlSeira(["new-bot", "--name", "Original cloud snapshot bot", "--url", fixture.info.url]);
     ui = await createServer({ configFile: false, root, resolve: { alias: { "@": join(root, "src") } }, define: { __APP_VERSION__: JSON.stringify("0.1.78") },
       server: { host: "127.0.0.1", port: 0, proxy: { "/api": { target: fixture.info.url } } }, plugins: [react(), tailwindcss(), {
         name: "company-backup-fixture", resolveId(id) { if (id === "virtual:company-backup-fixture") return `\0${id}`; },

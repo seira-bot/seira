@@ -72,7 +72,7 @@ Nothing is invented: Chrome for Testing reports Chromium brands, Google Chrome
 its own. `OMB_BROWSER_SCREEN`, `OMB_BROWSER_LANG` and `OMB_BROWSER_TIMEZONE`
 override the display, language and zone.
 
-`openmausbot browser status`, the server's startup log and the
+`seira browser status`, the server's startup log and the
 `browserEngine.chrome` field of its configuration status name the choice, for
 example `Google Chrome 155 (installed)`. **Rollback:** start the server with
 `OMB_BROWSER_LEGACY_SHELL=1` to run exactly the previous engine.
@@ -271,7 +271,7 @@ There is no recording control in OMB's browser panel.
 ## Linux sandbox
 
 Use the `.deb` on Ubuntu 24.04. Its package hooks install a narrowly scoped
-AppArmor policy for the root-owned browser executable under `/opt/OpenMausBot`.
+AppArmor policy for the root-owned browser executable under `/opt/Seira`.
 They do not disable the browser sandbox or change the global user-namespace
 restriction. See [Linux desktop](linux-desktop.md).
 
@@ -295,9 +295,9 @@ Run the real browser check against an unpacked app:
 node scripts/smoke-browser-bundle.mjs --resources /absolute/app/resources
 ```
 
-On macOS, use `/absolute/OpenMausBot.app/Contents/Resources`. On Linux, run as
+On macOS, use `/absolute/Seira.app/Contents/Resources`. On Linux, run as
 an unprivileged user against the installed `.deb` at
-`/opt/OpenMausBot/resources`. This check creates its own empty home and local
+`/opt/Seira/resources`. This check creates its own empty home and local
 web page, checks automatic discovery, navigation, typing/clicking, the
 loopback command relay the server reads, pictures and types through
 (`server/browser-relay.ts`), screenshot delivery and two-bot cookie/storage

@@ -3,8 +3,9 @@
 // bundle, then runs the server unchanged. Copied, not bundled: bundling would
 // inline index.js.
 import module from "node:module";
-import { lstatSync, readdirSync, rmSync, utimesSync } from "node:fs";
+import { lstatSync, readdirSync, realpathSync, rmSync, utimesSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const cacheRoot = process.env.OMB_SERVER_COMPILE_CACHE;
 // Engine CLIs, MCP servers and terminals the server spawns must not inherit
@@ -12,10 +13,34 @@ const cacheRoot = process.env.OMB_SERVER_COMPILE_CACHE;
 // nothing from this.
 delete process.env.OMB_SERVER_COMPILE_CACHE;
 
+const resourcesLink = process.env.OMB_SERVER_RESOURCES_LINK;
+delete process.env.OMB_SERVER_RESOURCES_LINK;
+
 let enabled = false;
 if (cacheRoot) {
   try {
     enabled = module.enableCompileCache(cacheRoot).status === module.constants.compileCacheStatus.ENABLED;
+  } catch {
+  }
+}
+
+// Node keys compile-cache entries by module URL, and an AppImage mounts at a new path at each launch.
+if (resourcesLink && typeof module.registerHooks === "function") {
+  try {
+    const realRoot = realpathSync(resourcesLink);
+    const here = dirname(realpathSync(fileURLToPath(import.meta.url)));
+    if (here === join(realRoot, "server")) {
+      const realPrefix = pathToFileURL(realRoot).href + "/";
+      const linkPrefix = pathToFileURL(resourcesLink).href + "/";
+      module.registerHooks({
+        resolve(specifier, context, nextResolve) {
+          const result = nextResolve(specifier, context);
+          return result.url?.startsWith(realPrefix)
+            ? { ...result, url: linkPrefix + result.url.slice(realPrefix.length), shortCircuit: true }
+            : result;
+        },
+      });
+    }
   } catch {
   }
 }

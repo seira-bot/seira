@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { rebuiltSessionNotice } from "./resume-recovery.ts";
 
 /** Pesto's account, as the CLI's rate_limit_event reported it on Oct 9. */
@@ -32,7 +32,7 @@ async function launch() {
     expect(response.ok, `${method} ${path} ${response.status}: ${JSON.stringify(value)}`).toBe(true);
     return value;
   };
-  const control = (args: string[]) => runControlOmb([...args, "--url", url]) as Promise<any>;
+  const control = (args: string[]) => runControlSeira([...args, "--url", url]) as Promise<any>;
   const messages = async (threadId: string) => (await api("GET", `/api/threads/${threadId}/messages?limit=100`)).messages as any[];
   const modes = join(dataDir, "fake-modes.json");
   writeFileSync(modes, "{}");

@@ -24,22 +24,22 @@ directs the bot to carry out its follow-up in that turn.
 ```sh
 W=$(mktemp -d)
 printf '[{"server":"agents","name":"wait_until","input":{"label":"the report","kind":"file_exists","path":"%s/report.txt","follow_up":"Say the report is ready."}}]' "$W" > "$W/calls.json"
-FAKE_CLAUDE_TOOL_CALLS_FILE="$W/calls.json" node --experimental-strip-types scripts/control-omb.ts launch
+FAKE_CLAUDE_TOOL_CALLS_FILE="$W/calls.json" node --experimental-strip-types scripts/control-seira.ts launch
 ```
 
 Second terminal (same `W`; `DATA` is the `dataDir` the launcher printed):
 
 ```sh
-pnpm control:omb new-bot --name Pepper --url http://127.0.0.1:PORT
-pnpm control:omb send --bot BOT_ID --text "Tell me when report.txt is there, then say so" --url http://127.0.0.1:PORT
-pnpm control:omb wait --bot BOT_ID --timeout 30 --url http://127.0.0.1:PORT
-pnpm control:omb messages --bot BOT_ID --limit 12 --url http://127.0.0.1:PORT
+pnpm control:seira new-bot --name Pepper --url http://127.0.0.1:PORT
+pnpm control:seira send --bot BOT_ID --text "Tell me when report.txt is there, then say so" --url http://127.0.0.1:PORT
+pnpm control:seira wait --bot BOT_ID --timeout 30 --url http://127.0.0.1:PORT
+pnpm control:seira messages --bot BOT_ID --limit 12 --url http://127.0.0.1:PORT
 touch "$W/report.txt"; sleep 25
-pnpm control:omb wait --bot BOT_ID --timeout 60 --url http://127.0.0.1:PORT
-pnpm control:omb messages --bot BOT_ID --limit 12 --url http://127.0.0.1:PORT
+pnpm control:seira wait --bot BOT_ID --timeout 60 --url http://127.0.0.1:PORT
+pnpm control:seira messages --bot BOT_ID --limit 12 --url http://127.0.0.1:PORT
 curl -s http://127.0.0.1:PORT/api/notifications
 cat "$DATA/waits.json"
-sleep 10; pnpm control:omb messages --bot BOT_ID --limit 12 --url http://127.0.0.1:PORT
+sleep 10; pnpm control:seira messages --bot BOT_ID --limit 12 --url http://127.0.0.1:PORT
 ```
 
 Expected:

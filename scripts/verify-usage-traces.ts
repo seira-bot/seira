@@ -3,13 +3,13 @@
 // a realistic job, plus two rows from before traces existed.
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { launchVerificationServer, runControlOmb } from "./control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "./control-seira.ts";
 import { fixtureApi, mountPreview, parkUntilSignal, type MountedPreview } from "./testing/preview-fixture.ts";
 
 const fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, { scripted: true });
 let ui: MountedPreview | undefined;
 const api = fixtureApi(fixture.info.url, { headers: { origin: fixture.info.url } });
-const control = (args: string[]) => runControlOmb([...args, "--url", fixture.info.url]) as Promise<any>;
+const control = (args: string[]) => runControlSeira([...args, "--url", fixture.info.url]) as Promise<any>;
 async function until<T>(check: () => T | Promise<T>): Promise<NonNullable<T>> {
   const deadline = Date.now() + 60_000;
   for (;;) {

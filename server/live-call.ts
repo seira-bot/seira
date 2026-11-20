@@ -13,6 +13,12 @@ export const LIVE_NEEDS_FISH = "Live calls through Fish Audio use your Fish Audi
 export const LIVE_NEEDS_GEMINI = "Live calls through Gemini use your Gemini API key. Add it in Settings → AI → Other services.";
 export const LIVE_NEEDS_CUSTOM = "Live calls through a custom endpoint need its address and its own key. Add them in Call settings.";
 export const LIVE_NEEDS_ELEVENLABS = "Live calls through ElevenLabs use your ElevenLabs API key. Add it in Settings → AI → Other services.";
+export const LIVE_CODEX_SIGN_IN = "Live calls through Codex need Codex signed in with your ChatGPT account. Sign in to Codex, then call again.";
+export const LIVE_CODEX_UPDATE = "Live calls through Codex need a newer Codex. Update Codex, then call again.";
+export const LIVE_CODEX_ENGINE = "Live calls through Codex work with a bot that runs on Codex with its own ChatGPT sign-in. Change this bot's engine, or choose another call service in Call settings.";
+export const LIVE_CODEX_PHONE = "Live calls through Codex work in the desktop app or a web browser, not in the phone app.";
+export const LIVE_CODEX_NO_ANSWER = "Codex did not answer in time. Try the call again.";
+export const LIVE_CODEX_CLOUD = "Live calls through Codex work when Seira runs on your own computer. Choose another call service in Call settings.";
 
 /** The client's data channel is untrusted: it may only hang up; every append goes over the sideband.
  * Exception: Azure OpenAI refuses `session.client`, so an Azure call goes without this list and its caller's channel keeps
@@ -56,13 +62,18 @@ export interface LiveEndpoint {
 
 export function liveProviderName(provider: LiveProvider): string {
   return provider === "azure" ? "Azure OpenAI" : provider === "fish" ? "Fish Audio" : provider === "gemini" ? "Gemini" : provider === "elevenlabs" ? "ElevenLabs"
-    : provider === "custom" ? "The custom endpoint" : "OpenAI";
+    : provider === "codex" ? "Codex" : provider === "custom" ? "The custom endpoint" : "OpenAI";
 }
 
 /** Only a loopback http URL is accepted, read at call time. */
 export function liveBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
   const override = env.OMB_OPENAI_LIVE_URL?.trim() ?? "";
   return /^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(override) ? override : OPENAI_BASE;
+}
+
+/** A marker, not an address: a Codex call never contacts `apiBase`; the Codex driver starts the voice session. */
+export function codexLiveEndpoint(): LiveEndpoint {
+  return { provider: "codex", apiBase: "codex:", model: "codex" };
 }
 
 export function openAiLiveEndpoint(env: NodeJS.ProcessEnv = process.env): LiveEndpoint {
@@ -169,18 +180,29 @@ export class LiveSessionError extends Error {
   }
 }
 
-export function liveInstructions(bot: LiveBot, { cloudHome = false }: { cloudHome?: boolean } = {}): string {
-  const name = oneLine(bot.name) || "the agent";
+export function liveBotName(bot: LiveBot): string {
+  return oneLine(bot.name) || "the agent";
+}
+
+export function liveIdentityLine(bot: LiveBot, { cloudHome = false }: { cloudHome?: boolean } = {}): string {
+  const name = liveBotName(bot);
   const title = oneLine(bot.title ?? "");
   const description = oneLine(bot.description ?? "").slice(0, 400);
   const where = cloudHome ? `runs on ${CLOUD_HOME_PLACE}` : "runs in Seira on the user's own computer";
+  return `You are ${name}${title ? `, ${title}` : ""}, an AI agent that ${where}.${description ? ` ${description}` : ""}`;
+}
+
+export const LIVE_STYLE_LINE = "Speak warmly and naturally, at an unhurried pace. Keep replies short: one or two sentences unless the user asks for more. Speak the language the user speaks.";
+
+export function liveInstructions(bot: LiveBot, { cloudHome = false }: { cloudHome?: boolean } = {}): string {
+  const name = liveBotName(bot);
   const changes = cloudHome ? "My Cloud" : "the computer";
   return [
-    `You are ${name}${title ? `, ${title}` : ""}, an AI agent that ${where}.${description ? ` ${description}` : ""}`,
+    liveIdentityLine(bot, { cloudHome }),
     `To the user you are one assistant, ${name}, and you speak in the first person. Your work — looking things up, using your tools, files and memory, researching, deciding, and answering anything that needs facts this conversation does not hold — happens when you delegate. Delegating is how you think and act; it is not someone else.`,
     "Never mention a backend, delegation, a voice layer, or another system or model doing the work, and never say you are only a voice. Say \"I\" about the work.",
     "Never ask the user whether you may look something up or check something. When it needs checking, delegate at once and say briefly that you are checking.",
-    "Speak warmly and naturally, at an unhurried pace. Keep replies short: one or two sentences unless the user asks for more. Speak the language the user speaks.",
+    LIVE_STYLE_LINE,
     "",
     "Backchannel policy: Use light backchannels. Acknowledge naturally without competing with the user.",
     "Interruption policy: Stop speaking when the user interrupts. Listen to what they say.",
@@ -217,7 +239,8 @@ export function spokenHangUp(text: string): boolean {
   return HANG_UP.test(text.trim().replace(/[\u2018\u2019]/g, "'").replace(HANG_UP_LEAD, ""));
 }
 
-export function liveInitialInput(history: LiveHistoryMessage[]) {
+/** The newest messages that fit the startup history caps, oldest first. */
+export function trimLiveHistory(history: LiveHistoryMessage[]): LiveHistoryMessage[] {
   const picked: LiveHistoryMessage[] = [];
   let total = 0;
   for (const message of [...history].reverse()) {
@@ -228,7 +251,11 @@ export function liveInitialInput(history: LiveHistoryMessage[]) {
     total += text.length;
     picked.unshift({ role: message.role, text });
   }
-  return picked.map((message) => message.role === "user"
+  return picked;
+}
+
+export function liveInitialInput(history: LiveHistoryMessage[]) {
+  return trimLiveHistory(history).map((message) => message.role === "user"
     ? { type: "message" as const, role: "user" as const, content: [{ type: "input_text" as const, text: message.text }] }
     : { type: "message" as const, role: "assistant" as const, content: [{ type: "output_text" as const, text: message.text }] });
 }

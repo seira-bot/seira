@@ -4,14 +4,15 @@
 // server wrote and said. Run it as server/email/real-server.test.ts says.
 import { randomBytes } from "node:crypto";
 import { type ChildProcess, spawn } from "node:child_process";
-import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ImapFlow } from "imapflow";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
+import { filesHolding as filesHoldingText } from "./testing/files-holding.ts";
 import { freePortBlock } from "./testing/ports.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
@@ -99,19 +100,8 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     if (home) await removeTempDir(home);
   });
 
-  function filesHolding(root: string, needle: string): string[] {
-    const found: string[] = [];
-    const walk = (folder: string) => {
-      for (const name of readdirSync(folder)) {
-        const path = join(folder, name);
-        const info = lstatSync(path);
-        if (info.isDirectory()) walk(path);
-        else if (info.isFile() && readFileSync(path).includes(needle)) found.push(relative(root, path));
-      }
-    };
-    walk(root);
-    return found;
-  }
+  /** The server is still running and saves through temp files it renames, so a name that was listed may be gone before it is read. */
+  const filesHolding = (root: string, needle: string): string[] => filesHoldingText(root, needle, { followLinks: false });
 
   it("from a bot's ask to real mail read and sent, with the password in no record", async () => {
     const bot = (await api("POST", "/api/bots", { name: "Postmeister", modelSelection: { instanceId: "claude", model: "claude-sonnet-5" } })).body.bot as { id: string; threadId: string };

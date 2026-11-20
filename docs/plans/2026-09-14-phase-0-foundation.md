@@ -399,7 +399,7 @@ baseline run in step 10 is executed for at least Claude, Codex and one ACP engin
 ## Verification
 
 Follow `docs/verification/README.md`: every claim below is proven against an isolated fixture
-(`scripts/control-omb.ts launch`), never the live app.
+(`scripts/control-seira.ts launch`), never the live app.
 
 - **Matrix tests are mandatory for every item.** Each e2e case below runs as `describe.each` over
   the fake engines (`fake-claude-cli`, `fake-codex-app-server`, `fake-acp-cli`, `fake-agy-cli`,

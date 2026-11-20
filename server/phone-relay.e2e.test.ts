@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, onTestFinished } from "vitest";
 
-import { verificationServerArgs, verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { verificationServerArgs, verificationServerEnvironment } from "../scripts/control-seira.ts";
 import { admission, b64u, credentialHash, ed25519RawPublicKey, fromB64u, keyId, mintRelayToken, psk } from "../companion/src/e2e/credentials.ts";
 import { TRANSPORT_RELAY } from "../companion/src/e2e/noise.ts";
 import { dial } from "../companion/src/e2e/phone.ts";
@@ -127,7 +127,7 @@ describe("serve --relay", () => {
     // Chat-only stays chat-only: the server's own scope rule answers.
     expect((await http(session, "POST", "/api/auth/pairing", { token: reply.token, body: "{}", headers: { "content-type": "application/json" } })).status).toBe(403);
 
-    // `openmausbot devices revoke`: the phone hears it inside the encryption.
+    // `seira devices revoke`: the phone hears it inside the encryption.
     expect((await owner(`/api/auth/sessions/${reply.device.id}`, { method: "DELETE" })).status).toBe(200);
     await session.closed;
     expect(session.removed).toBe(true);

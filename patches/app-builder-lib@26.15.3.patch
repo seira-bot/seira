@@ -1,0 +1,61 @@
+diff --git a/out/targets/appimage/appImageUtil.js b/out/targets/appimage/appImageUtil.js
+index 12f078abd42700857b239b0e53cd568c1b1836b7..b89a6f8ab65ccf887c252d1bc65ad9611f190381 100644
+--- a/out/targets/appimage/appImageUtil.js
++++ b/out/targets/appimage/appImageUtil.js
+@@ -210,18 +210,29 @@ for arg in "\${args[@]}" ; do
+   fi
+ done
+ NO_SANDBOX=()
+-# Use 'unshare -Ur true' as a heuristic to detect whether user namespaces are available.
+-# Notes:
+-#   - When running as root, this check will always succeed even if the sandbox configuration
+-#     actually relies on unprivileged user namespaces. In practice, Chrome/Electron usually
+-#     disables or adjusts the sandbox separately when running as root, so this probe is mostly
+-#     a no-op in that scenario.
+-#   - On minimal systems (e.g. Alpine or stripped-down containers) 'unshare' may not exist.
+-#     In that case the shell will return exit code 127 ("command not found"), which will cause
+-#     us to add '--no-sandbox'. This is an intentional fail-safe: we prefer the app to start
+-#     without sandboxing rather than crash on startup.
+-if [ $HAVE_NO_SANDBOX -eq 0 ] && ! unshare -Ur true 2>/dev/null ; then
+-  NO_SANDBOX=(--no-sandbox)
++# Seira: the Chromium sandbox needs unprivileged user namespaces, and an AppImage mount ignores the
++# setuid sandbox helper. Never start without the sandbox. When the probe fails, say what to install
++# instead and stop. Without unshare, skip the probe: Chromium itself refuses to start unsandboxed.
++if [ $HAVE_NO_SANDBOX -eq 0 ] && command -v unshare >/dev/null 2>&1 && ! unshare -Ur true 2>/dev/null ; then
++  trap - EXIT
++  SANDBOX_TEXT="Seira can't open from this AppImage on this computer.
++
++Install the Seira package for Ubuntu instead:
++1. Download Seira-amd64.deb from https://github.com/seira-bot/seira/releases/latest
++2. In the folder where you saved it, run: sudo apt install ./Seira-amd64.deb
++3. Open Seira from your app menu."
++  echo "$SANDBOX_TEXT" >&2
++  echo "Seira: this system blocks the user namespaces that the Chromium sandbox needs, and an AppImage cannot use the setuid sandbox helper. Seira does not start without its sandbox." >&2
++  if [ -n "$DISPLAY$WAYLAND_DISPLAY" ] ; then
++    if [ -x /usr/bin/zenity ] ; then
++      LD_LIBRARY_PATH="" zenity --error --title=Seira --width=640 --text="$SANDBOX_TEXT" 2>/dev/null || true
++    elif [ -x /usr/bin/kdialog ] ; then
++      LD_LIBRARY_PATH="" kdialog --title Seira --error "$SANDBOX_TEXT" 2>/dev/null || true
++    elif [ -x /usr/bin/notify-send ] ; then
++      LD_LIBRARY_PATH="" notify-send --app-name=Seira "Seira can't open" "$SANDBOX_TEXT" 2>/dev/null || true
++    fi
++  fi
++  exit 1
+ fi
+ 
+ atexit()
+diff --git a/out/targets/snap/coreLegacy.js b/out/targets/snap/coreLegacy.js
+index 63dc31fdbd0d49b5d5b7832f4faaa62bdb684e69..f3d7fba04897c4259d2121cbd1507af7e202ac31 100644
+--- a/out/targets/snap/coreLegacy.js
++++ b/out/targets/snap/coreLegacy.js
+@@ -246,8 +246,8 @@ class SnapCoreLegacy extends SnapTarget_1.SnapCore {
+         builder_util_1.log.info({ releaseName }, "downloading snap template");
+         const templateDir = await (0, electronGet_1.downloadBuilderToolset)({ releaseName, filenameWithExt, checksums, githubOrgRepo: "electron-userland/electron-builder-binaries" });
+         await this.stageSnapFiles({ stageDir, appOutDir, hooksDir, extraAppArgs, isTemplate: true });
+-        // Best-effort: remove chrome-sandbox from app dir before mksquashfs scans it.
+-        await (0, promises_1.rm)(path.join(appOutDir, "chrome-sandbox"), { force: true });
++        // Seira: keep chrome-sandbox in the shared app folder. The DEB built from the same folder needs it, and the
++        // mksquashfs file list below already leaves it out of the snap.
+         // chmod -R g-s to avoid setgid bits in final image
+         for (const dir of [stageDir, appOutDir, templateDir]) {
+             await (0, builder_util_1.exec)("chmod", ["-R", "g-s", dir]).catch(err => builder_util_1.log.warn({ error: err.message }, "chmod g-s failed"));

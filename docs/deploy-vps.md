@@ -2,7 +2,7 @@
 
 To keep Seira and its agents on your current computer and use a VPS only as a
 bot’s remote desktop, see [Bring Your Own VPS](byo-vps.md) and the
-[published setup guide](https://docs.openmausbot.com/docs/computers/byo-vps).
+[setup guide](../apps/docs/content/docs/computers/byo-vps.mdx).
 
 From a blank Linux server to Seira running on it around the clock, reachable from your laptop, the desktop app and your phone, with your bots working while every laptop is closed. It assumes nothing beyond being able to open a terminal and paste commands. About twenty minutes, most of it waiting.
 
@@ -11,10 +11,10 @@ From a blank Linux server to Seira running on it around the clock, reachable fro
 For a fresh Ubuntu 22.04 or 24.04 server (x86-64, at least 2 CPUs, 4 GB of memory and 20 GB of free disk) and a domain name whose A record already points at it:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/milind-soni/OpenMausBot/main/deploy/install.sh | sudo sh -s -- --domain maus.example.com
+curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh | sudo sh -s -- --domain seira.example.com
 ```
 
-The installer ([`deploy/install.sh`](https://github.com/seira-bot/seira/blob/main/deploy/install.sh)) does path B below for you and ends with Seira answering at `https://maus.example.com`.
+The installer ([`deploy/install.sh`](https://github.com/seira-bot/seira/blob/main/deploy/install.sh)) does path B below for you and ends with Seira answering at `https://seira.example.com`.
 
 **It checks the server first, and changes nothing while it checks.** Each check that fails prints one sentence saying what to fix, and nothing is installed until all pass:
 
@@ -36,7 +36,7 @@ The installer ([`deploy/install.sh`](https://github.com/seira-bot/seira/blob/mai
 To run only the checks, add `--check`:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/milind-soni/OpenMausBot/main/deploy/install.sh | sudo sh -s -- --check --domain maus.example.com
+curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh | sudo sh -s -- --check --domain seira.example.com
 ```
 
 If Docker is missing, the installer asks before installing it with Docker's official script (`get.docker.com`); `--install-docker` says yes ahead of time. It installs nothing else on the server.
@@ -54,7 +54,7 @@ If Docker is missing, the installer asks before installing it with Docker's offi
 
 `update.sh` and the sandbox's files are this repository's own, taken from the tag of the version being installed so they match it, and from `main` only when that tag does not have them. The installer says which it used.
 
-It runs the newest release, pinned by its version; once a `stable` channel is published it follows that instead. If that version has no bots' sandbox, the checks (`--check` too) say so before anything is downloaded. It never runs `latest`, which follows every commit. It then waits until the server reports healthy and `https://maus.example.com` answers with a valid certificate, and prints the address.
+It runs the newest release, pinned by its version; once a `stable` channel is published it follows that instead. If that version has no bots' sandbox, the checks (`--check` too) say so before anything is downloaded. It never runs `latest`, which follows every commit. It then waits until the server reports healthy and `https://seira.example.com` answers with a valid certificate, and prints the address.
 
 **The bots' sandbox.** A Seira version with the hardened profile runs every bot in a sandbox, away from the server's settings, keys and other bots' files, and Docker's defaults do not let a container build one. For such a version the installer prepares the server (a seccomp profile in `/etc/mausbot` and an AppArmor profile in `/etc/apparmor.d`, the two the Seira connector installs), starts the server with the four security settings in `compose.box.yaml` (no `--privileged`, no added capability), and then runs the server's own self-check, which among other things confirms that a bot cannot read `config.json`. If a check fails that means a bot could reach something it must not, or that bots would not work, the installer names it and does not report success; so does a self-check that gives no answer, or a check the installer has never heard of. Five checks that are about neither (the kernel keyring, the sandbox's host name, the CPU list, a hosting provider's address, and reaching the public internet) only print a note. For a version without the hardened profile it says the sandbox is not there yet; run the install command again after updating to one that has it. `--no-sandbox` skips all of this, for a server only you sign in to on a host without AppArmor.
 
@@ -87,7 +87,7 @@ Three ways to make the server reachable are covered. Pick one; the rest of the g
 | **B. Your own domain** (Docker + Caddy) | a domain name, ports 80/443 | anyone with a pairing code, over HTTPS | a permanent address you own |
 | **C. Your Tailscale network** (`serve --tailscale`) | Tailscale on the server and your devices | only your tailnet | the most private; nothing public at all |
 
-Only need the phone app? Add `--relay` to path B or C on a machine signed in with `openmausbot login --relay` (never on a machine with a path A address), or use it on its own: the app pairs by QR through Seira Relay, end-to-end encrypted, with no domain, open port or VPN. See [Phones through Seira Relay](phone-relay-server.md).
+Only need the phone app? Add `--relay` to path B or C on a machine signed in with `seira login --relay` (never on a machine with a path A address), or use it on its own: the app pairs by QR through Seira Relay, end-to-end encrypted, with no domain, open port or VPN. See [Phones through Seira Relay](phone-relay-server.md).
 
 Whichever you pick, the login is the same: you **pair** each device once with a short code and it stays signed in. A session lasts 30 days; using it with half that or less left renews it to a full 30, up to 180 days from pairing (`OMB_SESSION_TTL_DAYS` and `OMB_SESSION_MAX_DAYS` change both numbers). There is no password.
 
@@ -134,27 +134,27 @@ ssh root@YOUR_SERVER_IP
 ```
 
 For paths A and C, use the same unprivileged Linux account for setup and the
-running service. The examples below use `maus` with home `/home/maus`. From an
+running service. The examples below use `seira` with home `/home/seira`. From an
 administrator shell, create it if it does not already exist, then switch to it:
 
 ```sh
-sudo useradd --create-home --shell /bin/bash maus
-sudo -iu maus
+sudo useradd --create-home --shell /bin/bash seira
+sudo -iu seira
 ```
 
-The login shell also changes into `/home/maus`; run setup there, not from `/root`.
+The login shell also changes into `/home/seira`; run setup there, not from `/root`.
 Run the `npx` commands and engine sign-ins below in this account. Keep a separate
 administrator shell for system packages and systemd. If you already signed in as
-root, sign in again as `maus`; those accounts have different homes and credentials.
+root, sign in again as `seira`; those accounts have different homes and credentials.
 
 ## Path A: a public address with one command
 
 No domain, no proxy, no open port. The server gets an address like `https://c-7f3a9c.openmausbot.com` through a Cloudflare tunnel; only traffic through the tunnel reaches it, and that traffic still has to pair.
 
 ```sh
-npx openmausbot setup          # once: choose AI access, connect, and choose a model
-npx openmausbot login          # once: an emailed code signs this machine in and reserves its address
-npx openmausbot serve --tunnel # runs the server there and prints the pairing link with a QR code
+npx @seira-bot/seira setup          # once: choose AI access, connect, and choose a model
+npx @seira-bot/seira login          # once: an emailed code signs this machine in and reserves its address
+npx @seira-bot/seira serve --tunnel # runs the server there and prints the pairing link with a QR code
 ```
 
 `setup` connects an AI provider; it is separate from the Seira account.
@@ -163,17 +163,17 @@ chat-only connection. More engines can be added later. See [CLI setup](cli-onboa
 
 `login` asks for your email, sends an 8-digit code, and prints the address it reserved for this machine. `serve --tunnel` downloads `cloudflared` on the first run (a pinned version with a verified digest, into `~/.openmausbot`), starts the server, connects the tunnel, and after a few seconds prints `tunnel: live at https://…`. Leave it running; see "Keep it running" for a service.
 
-The account credentials live in `~/.openmausbot/tunnel-account.json`, readable only by your user. `npx openmausbot logout` releases the address.
+The account credentials live in `~/.openmausbot/tunnel-account.json`, readable only by your user. `npx @seira-bot/seira logout` releases the address.
 
 Skip to "Install and sign the engines in".
 
 ## Path B: your own domain, with Docker
 
-One container for the server plus Caddy for HTTPS at `https://maus.example.com`.
+One container for the server plus Caddy for HTTPS at `https://seira.example.com`.
 
 The [installer](#quick-start-one-command-on-your-own-domain) does these steps for you on Ubuntu. Do them by hand on another system, to build your own image with `ENGINES`, or to see what it does.
 
-1. **Point a name at the server.** In your DNS provider add an **A record** (name `maus`, value the server's public IP). After a few minutes `ping maus.example.com` should answer with that IP. Ports 80 and 443 must be open; most providers open them by default.
+1. **Point a name at the server.** In your DNS provider add an **A record** (name `seira`, value the server's public IP). After a few minutes `ping seira.example.com` should answer with that IP. Ports 80 and 443 must be open; most providers open them by default.
 2. **Install Docker:**
 
    ```sh
@@ -186,7 +186,7 @@ The [installer](#quick-start-one-command-on-your-own-domain) does these steps fo
    ```sh
    git clone https://github.com/seira-bot/seira && cd seira/deploy
    cp .env.example .env
-   nano .env                # DOMAIN=maus.example.com ; ENGINES=@anthropic-ai/claude-code @openai/codex
+   nano .env                # DOMAIN=seira.example.com ; ENGINES=@anthropic-ai/claude-code @openai/codex
    ```
 
    `ENGINES` lists the engine CLIs baked into your image, separated by spaces. Change it later and rebuild if you add one.
@@ -199,9 +199,9 @@ The [installer](#quick-start-one-command-on-your-own-domain) does these steps fo
    docker compose ps        # omb "healthy", caddy "running"
    ```
 
-   Caddy requests the certificate on its own; give it a minute. Then `https://maus.example.com` shows a page asking for a pairing code. That is correct: nothing works until you pair.
+   Caddy requests the certificate on its own; give it a minute. Then `https://seira.example.com` shows a page asking for a pairing code. That is correct: nothing works until you pair.
 
-In this path, every `npx openmausbot …` command below is run inside the container instead:
+In this path, every `npx @seira-bot/seira …` command below is run inside the container instead:
 
 ```sh
 docker compose exec omb openmausbot pair --label "My MacBook"
@@ -209,13 +209,13 @@ docker compose exec omb openmausbot pair --label "My MacBook"
 
 ## Path C: only your Tailscale network
 
-From the administrator shell, install Tailscale on the server and sign in (`curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up`). Enable HTTPS certificates for your tailnet once at https://login.tailscale.com/admin/dns (HTTPS Certificates), then run this from the `maus` shell:
+From the administrator shell, install Tailscale on the server and sign in (`curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up`). Enable HTTPS certificates for your tailnet once at https://login.tailscale.com/admin/dns (HTTPS Certificates), then run this from the `seira` shell:
 
 ```sh
-npx openmausbot serve --tailscale
+npx @seira-bot/seira serve --tailscale
 ```
 
-Tailscale terminates HTTPS with its own certificate and the pairing link uses the server's MagicDNS name (`https://maus.tail1234.ts.net`). `serve` runs `tailscale serve` in the foreground, so the share ends when it stops. Only devices on your tailnet can reach it, which is a very good property for a server that can run tools.
+Tailscale terminates HTTPS with its own certificate and the pairing link uses the server's MagicDNS name (`https://seira.tail1234.ts.net`). `serve` runs `tailscale serve` in the foreground, so the share ends when it stops. Only devices on your tailnet can reach it, which is a very good property for a server that can run tools.
 
 ## Give the bots a browser (optional)
 
@@ -224,13 +224,13 @@ the image. For paths A and C, install Linux system libraries once from the
 administrator shell:
 
 ```sh
-sudo -H npx --yes openmausbot browser install --with-deps
+sudo -H npx --yes @seira-bot/seira browser install --with-deps
 ```
 
-Then install the browser in the service account's home, from the `maus` shell:
+Then install the browser in the service account's home, from the `seira` shell:
 
 ```sh
-npx --yes openmausbot browser install
+npx --yes @seira-bot/seira browser install
 ```
 
 The administrator's browser download is in a different home; it does not install
@@ -246,7 +246,7 @@ gets its own isolated session whose logins persist across restarts.
 
 The npm Seira package does not install model engine CLIs. For paths A and C,
 install the engine you use in the service account, then sign it in. For example,
-from the `maus` shell, for Claude:
+from the `seira` shell, for Claude:
 
 ```sh
 npm install --global --prefix "$HOME/.local" @anthropic-ai/claude-code
@@ -268,7 +268,7 @@ restarting or upgrading. The systemd example below includes `~/.local/bin` in PA
 `serve` already printed a pairing block when it started in a terminal (a service prints none into its log). For another device later:
 
 ```sh
-npx openmausbot pair --label "Kitchen iPad"
+npx @seira-bot/seira pair --label "Kitchen iPad"
 ```
 
 ```
@@ -290,19 +290,19 @@ Worth knowing: a code works **once**, for **10 minutes** (`--ttl 24h` keeps it o
 Every paired device is a session:
 
 ```sh
-npx openmausbot devices               # id, device, scope, last seen, expires
-npx openmausbot devices revoke ID     # signs that device out and closes its stream at once
-npx openmausbot status                # the address others use, and whether it answers as this server
+npx @seira-bot/seira devices               # id, device, scope, last seen, expires
+npx @seira-bot/seira devices revoke ID     # signs that device out and closes its stream at once
+npx @seira-bot/seira status                # the address others use, and whether it answers as this server
 ```
 
 ## Keep it running
 
-`npx openmausbot serve` is a plain foreground process. `npx openmausbot service install --tunnel` (or `--tailscale`) writes a unit like the one below for you, with a copy of the release it runs beside your data. To write it by hand for systemd (paths A and C),
-install a chosen release first, from the `maus` shell. Replace `X.Y.Z` with the
+`npx @seira-bot/seira serve` is a plain foreground process. `npx @seira-bot/seira service install --tunnel` (or `--tailscale`) writes a unit like the one below for you, with a copy of the release it runs beside your data. To write it by hand for systemd (paths A and C),
+install a chosen release first, from the `seira` shell. Replace `X.Y.Z` with the
 published version you want to run:
 
 ```sh
-npm install --global --prefix "$HOME/.local" openmausbot@X.Y.Z
+npm install --global --prefix "$HOME/.local" @seira-bot/seira@X.Y.Z
 ```
 
 Stop the foreground server with Ctrl-C before enabling the service. From the
@@ -315,11 +315,11 @@ Description=Seira server
 After=network-online.target
 
 [Service]
-User=maus
-WorkingDirectory=/home/maus
-Environment=HOME=/home/maus
-Environment=PATH=/home/maus/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/home/maus/.local/bin/openmausbot serve --tunnel
+User=seira
+WorkingDirectory=/home/seira
+Environment=HOME=/home/seira
+Environment=PATH=/home/seira/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env seira serve --tunnel
 Restart=always
 RestartSec=5
 
@@ -332,7 +332,7 @@ sudo systemctl daemon-reload && sudo systemctl enable --now openmausbot
 journalctl -u openmausbot -f            # the server's log, including "tunnel: live at …"
 ```
 
-Use `--tailscale` instead of `--tunnel` for path C. A service is not a terminal, so `serve` writes no pairing code into the journal; mint one with `npx openmausbot pair` when you need it. Docker (path B) restarts on its own (`restart: unless-stopped`).
+Use `--tailscale` instead of `--tunnel` for path C. A service is not a terminal, so `serve` writes no pairing code into the journal; mint one with `npx @seira-bot/seira pair` when you need it. Docker (path B) restarts on its own (`restart: unless-stopped`).
 
 Adjust the account, home, and PATH if yours differ; Node 24 must be available on
 that PATH. The service runs the installed CLI directly, so a restart uses the
@@ -342,7 +342,7 @@ same release without an npm install prompt or an implicit upgrade.
 
 A self-hosted server follows the **stable** channel: a released version that
 Seira's own Clouds have run for 48 hours first. The image tag `stable` and
-[`stable.json`](https://raw.githubusercontent.com/milind-soni/OpenMausBot/channels/stable.json)
+[`stable.json`](https://raw.githubusercontent.com/seira-bot/seira/channels/stable.json)
 name it. The tag `latest` follows every change on `main`; it is for trying
 things out, not for a server you rely on. **Check for updates** in the app
 compares your server with the stable version. To hear of every release as soon
@@ -368,7 +368,7 @@ the app says so, with `sudo ./update.sh`, which moves it to the stable version
 once that is newer than the build.
 
 The installer sets this up, and every run of the installer refreshes it. In a
-checkout of this repository, add it from `OpenMausBot/deploy` (it needs
+checkout of this repository, add it from `seira/deploy` (it needs
 systemd, and restarts the server once), and run the same command again after
 each `git pull`: until you do, the button runs nothing and the app shows this
 command.
@@ -460,7 +460,7 @@ command to run on the server instead.
 
 ### Path B (Docker): one command, with a way back
 
-From `OpenMausBot/deploy`:
+From `seira/deploy`:
 
 ```sh
 git pull && ./update.sh
@@ -472,7 +472,7 @@ has no checkout, with its `compose.yaml`, `.env` and `data/` in one folder such
 as `/opt/openmausbot`, runs the same script on that folder:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/milind-soni/OpenMausBot/main/deploy/update.sh -o update.sh
+curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/update.sh -o update.sh
 sudo bash update.sh --dir /opt/openmausbot
 ```
 
@@ -508,7 +508,7 @@ every file's owner and mode either way. The script then:
 4. Waits, up to two minutes (`OMB_UPDATE_WAIT_S` for longer), until the new server answers `/api/health`
    steadily, says it is the new version, can still start a bot if it could
    before (the server's own count of ready engines, `GET /api/health/engines`,
-   which a hardened server answers too; `openmausbot doctor` on a version
+   which a hardened server answers too; `seira doctor` on a version
    without it), and Caddy runs again.
    If it does not, the new version's doctor runs on the data
    (`openmausbot doctor --data --fix`: in the server's container while it is up,
@@ -589,16 +589,16 @@ from **Settings → Engines** live on the data volume and survive either way.
 There is no one-command updater for an npm install yet. Do what the script
 does: copy the data first, install one named version, check it, and keep the
 way back. Take the stable version number from
-[`stable.json`](https://raw.githubusercontent.com/milind-soni/OpenMausBot/channels/stable.json)
-(`"version"`), and note the one you run now (`openmausbot --version`). From
+[`stable.json`](https://raw.githubusercontent.com/seira-bot/seira/channels/stable.json)
+(`"version"`), and note the one you run now (`seira --version`). From
 the administrator shell, replacing `X.Y.Z`:
 
 ```sh
 sudo systemctl stop openmausbot
-sudo -iu maus sh -c 'umask 077; tar czf ~/openmausbot-before-update.tgz -C ~ .openmausbot && chmod 600 ~/openmausbot-before-update.tgz'
-sudo -iu maus npm install --global --prefix /home/maus/.local openmausbot@X.Y.Z
+sudo -iu seira sh -c 'umask 077; tar czf ~/openmausbot-before-update.tgz -C ~ .openmausbot && chmod 600 ~/openmausbot-before-update.tgz'
+sudo -iu seira npm install --global --prefix ~seira/.local @seira-bot/seira@X.Y.Z
 sudo systemctl start openmausbot
-curl -sf http://127.0.0.1:8799/api/health && sudo -iu maus openmausbot doctor
+curl -sf http://127.0.0.1:8799/api/health && sudo -iu seira seira doctor
 ```
 
 If the install fails, or the last line does not end with the server answering
@@ -606,13 +606,13 @@ and an engine ready, go back (replace `OLD` with the version you noted):
 
 ```sh
 sudo systemctl stop openmausbot
-sudo -iu maus npm install --global --prefix /home/maus/.local openmausbot@OLD
-sudo -iu maus sh -c 'mv ~/.openmausbot ~/.openmausbot-failed-update && tar xzf ~/openmausbot-before-update.tgz -C ~'
+sudo -iu seira npm install --global --prefix ~seira/.local @seira-bot/seira@OLD
+sudo -iu seira sh -c 'mv ~/.openmausbot ~/.openmausbot-failed-update && tar xzf ~/openmausbot-before-update.tgz -C ~'
 sudo systemctl start openmausbot
 ```
 
 A service restart by itself does not update the installed package. For
-foreground `npx` usage, name the release: `npx --yes openmausbot@X.Y.Z serve --tunnel`.
+foreground `npx` usage, name the release: `npx --yes @seira-bot/seira@X.Y.Z serve --tunnel`.
 
 ### How far behind a server may fall
 
@@ -647,7 +647,7 @@ any configured home/data-directory overrides, and workspaces outside the app
 directory. These are not included in the command above.
 
 For path B, the whole `/data` volume includes the container's CLI homes. From
-`OpenMausBot/deploy`, stop the whole project before archiving, and start it
+`seira/deploy`, stop the whole project before archiving, and start it
 again after; `deploy_data` is the default volume name, so use your actual
 volume name if you changed the Compose project:
 
@@ -714,11 +714,11 @@ Read this before putting anything else in front of the server.
 
 ## Troubleshooting
 
-**`serve --tunnel` says "no account on this machine yet".** Run `npx openmausbot login` on this machine first; the credentials are per machine.
+**`serve --tunnel` says "no account on this machine yet".** Run `npx @seira-bot/seira login` on this machine first; the credentials are per machine.
 
 **The server does not start and says its data "was written by a newer Seira".** An older version was started on data a newer one had already changed, which happens when a version is put back without its data. Nothing was changed. Install the version the message names (or a newer one), or put back the copy of the data from before that update.
 
-**The tunnel stays on "retrying".** The server is running and usable locally; the public hop is not verified yet. Wait a minute (Cloudflare needs a moment on a fresh address), then check `journalctl`/the terminal for the reason. If it never comes up, `npx openmausbot logout && npx openmausbot login` issues a fresh address.
+**The tunnel stays on "retrying".** The server is running and usable locally; the public hop is not verified yet. Wait a minute (Cloudflare needs a moment on a fresh address), then check `journalctl`/the terminal for the reason. If it never comes up, `npx @seira-bot/seira logout && npx @seira-bot/seira login` issues a fresh address.
 
 **Path B: the page never loads or shows a certificate error.** Caddy could not get a certificate. Check that the name resolves to the server and that ports 80 and 443 are open; `docker compose logs caddy` shows the reason.
 
@@ -730,7 +730,7 @@ Read this before putting anything else in front of the server.
 
 **A bot says the engine is not signed in.** Sign that engine in again on the server.
 
-**What does the server think it is?** `https://<address>/.well-known/openmausbot/environment` is public and shows its id, label, version and capabilities; `npx openmausbot status` prints the same on the server.
+**What does the server think it is?** `https://<address>/.well-known/openmausbot/environment` is public and shows its id, label, version and capabilities; `npx @seira-bot/seira status` prints the same on the server.
 
 **Something else.** `journalctl -u openmausbot --since -10m` (or `docker compose logs omb --tail 100`) shows the server's startup lines. Paste them with your question in the community channel.
 
@@ -745,7 +745,7 @@ For paths A and C, an administrator can allow only a trusted, root-owned Chrome
 copy. Find the service user's downloaded executable:
 
 ```sh
-find /home/maus/.agent-browser/browsers -type f -name chrome -executable
+find /home/seira/.agent-browser/browsers -type f -name chrome -executable
 ```
 
 Use its actual `chrome-VERSION` directory in every path below; `VERSION` is a
@@ -754,7 +754,7 @@ libraries, to a new location that the service user cannot modify:
 
 ```sh
 sudo install -d -o root -g root -m 0755 /opt/openmausbot-browser
-sudo cp -R /home/maus/.agent-browser/browsers/chrome-VERSION /opt/openmausbot-browser/
+sudo cp -R /home/seira/.agent-browser/browsers/chrome-VERSION /opt/openmausbot-browser/
 sudo chown -R root:root /opt/openmausbot-browser/chrome-VERSION
 sudo chmod -R go-w /opt/openmausbot-browser/chrome-VERSION
 ```
@@ -787,7 +787,7 @@ Environment=AGENT_BROWSER_EXECUTABLE_PATH=/opt/openmausbot-browser/chrome-VERSIO
 ```
 
 For a foreground server, export `AGENT_BROWSER_EXECUTABLE_PATH` to that same
-path in the `maus` shell before starting `serve`. After a Chrome update, copy the
+path in the `seira` shell before starting `serve`. After a Chrome update, copy the
 new version and update both the AppArmor profile and service environment; the
 root-owned copy is not updated by the browser installer. Keep
 `kernel.apparmor_restrict_unprivileged_userns=1`.

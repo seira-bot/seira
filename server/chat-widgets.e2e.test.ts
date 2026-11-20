@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { WIDGET_SAMPLES } from "../shared/widget-samples.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
@@ -25,7 +25,7 @@ it("shows, replaces and answers a widget on a bot's own conversation, once per p
     return result;
   };
   const control = async (...args: string[]) => {
-    const result = await runControlOmb([...args, "--url", fixture.info.url]) as any;
+    const result = await runControlSeira([...args, "--url", fixture.info.url]) as any;
     evidence.push({ command: args, result });
     return result;
   };

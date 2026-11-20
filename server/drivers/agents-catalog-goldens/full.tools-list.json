@@ -1323,7 +1323,7 @@
     },
     {
       "name": "report_bug",
-      "description": "Send the person's bug report to the Seira team (Seira's developers) with the app's diagnostics. Only for a message that tags @devs, once. No passwords, keys, tokens or file contents.",
+      "description": "Write a draft of the person's bug report for the Seira team (Seira's developers), with the app's diagnostics. Nothing is sent: the person reads the draft and sends it. Only for a message that tags @devs, once. No passwords, keys, tokens or file contents.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,

@@ -167,8 +167,11 @@ element's job and never a pixel value:
 - **Control heights: 24, 28, 32 or 36px.** Menu rows are 30px. On touch
   screens, targets grow to 40–44px with the `touch:` variant. Two rows may be
   taller because they carry a face: the sidebar's chat rows and palette rows
-  (52px and 40px). The sidebar search field is 34px so it reads as a field,
-  not a button.
+  (52px and 40px). The Advanced sidebar's chat rows are 44px and its thread
+  rows 32px, with the same quiet nav rows, line headings and 52px top row
+  as Simple. The sidebar search field is 34px so it reads as a field, not a
+  button. A section count shows beside a heading only while that section is
+  closed.
 - **Group with space before you group with lines.** Add a divider only between
   groups that space alone can't separate. Never a divider under a heading.
 - **No cards inside cards.** If a card needs sections, use spacing and a group
@@ -182,7 +185,7 @@ element's job and never a pixel value:
 ## 7. Icons
 
 - **Use `lucide-react` only.** No emoji as icons, no icon fonts, no
-  hand-drawn SVGs for things Lucide has. Product marks (the Maus, third-party
+  hand-drawn SVGs for things Lucide has. Product marks (the Seira head, third-party
   logos) are the exception.
 - **Sizes:** 16px in menus, rows and toolbars; 14px next to 12–13px text.
 - **The composer's + and its round Send glyph are 18px,** because the bar holds
@@ -317,6 +320,13 @@ on. Simple is the default for new installs.
   threads as a tree under its row), Simple may offer a shortcut to the same
   thing there instead of a second copy of it: a menu that opens on a click
   of a small chevron, never on hover.
+- **The Advanced bot panel is a grouped list.** A hero (avatar, name, role, state), four quick actions, a search
+  field, then rows in five groups: Profile, Knowledge, Work, Channels, Admin. Each row is a 44px button with an
+  icon, a title, a short value that comes from state already on screen (left empty when there is none) and a
+  chevron that turns when the row is open. One row is open at a time. Groups with no match hide while searching.
+  The hero shows a 24px status pill only while the bot works, waits or has failed, in the words its sidebar row
+  uses. A group card has a 1px `hairline` ring so it shows on every skin. An open section drops the cards of its
+  own content (a card with its own border stays) so its fields sit flat inside the group card.
 - **Advanced uses Simple's composer card.** The field sits above one bar, and
   the round slot is voice, Send or Stop. Advanced fills the bar with quiet 28px
   chips (Goal, approval level, place, context) where Simple uses the + menu.

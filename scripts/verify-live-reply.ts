@@ -7,7 +7,7 @@
 //   node --experimental-strip-types scripts/verify-live-reply.ts [--engines claude,codex,acp,cline,copilot]
 //     [--cases short,long,...] [--skip-room] [--out DIR] [--cadence 4:30]
 //
-// Needs the pinned test browser (OMB_AGENT_BROWSER_PATH / AGENT_BROWSER_EXECUTABLE_PATH, as control-omb ui launch).
+// Needs the pinned test browser (OMB_AGENT_BROWSER_PATH / AGENT_BROWSER_EXECUTABLE_PATH, as control-seira ui launch).
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 import { caseTokens, LIVE_REPLY_CASES, liveReplyScripts, type LiveReplyCase } from "../server/testing/live-reply-cases.ts";
-import { runControlOmbUi } from "./testing/control-omb-ui.ts";
+import { runControlSeiraUi } from "./testing/control-seira-ui.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 /** The instance each engine's fixture adds, and the model Pepper is moved to. */
@@ -58,7 +58,7 @@ const cases = LIVE_REPLY_CASES.filter((entry) => !wanted || wanted.includes(entr
 /** How often a token appears: `T2M1` is not counted inside `T2M1z` (a row's time can follow a token directly). */
 const occurrences = (text: string, token: string) => (text.match(new RegExp(`${token}(?!z)`, "g")) ?? []).length;
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const ui = (handle: Handle, ...args: string[]) => runControlOmbUi([args[0]!, "--ui", handle.ui, ...args.slice(1)]) as Promise<any>;
+const ui = (handle: Handle, ...args: string[]) => runControlSeiraUi([args[0]!, "--ui", handle.ui, ...args.slice(1)]) as Promise<any>;
 const evaluate = async (handle: Handle, js: string): Promise<any> => {
   const result = await ui(handle, "eval", "--js", js);
   return result.result ?? result.data?.result;
@@ -73,7 +73,7 @@ const api = async (handle: Handle, method: string, path: string, body?: unknown)
 /** Starts a fixture and resolves with its handle once it has printed it. */
 function launch(engine: string): Promise<{ child: ChildProcess; handle: Handle }> {
   const flag = ENGINES[engine]!.flag;
-  const child = spawn(process.execPath, ["--experimental-strip-types", join(ROOT, "scripts", "control-omb.ts"), "ui", "launch", ...(flag ? ["--engine", flag] : [])], {
+  const child = spawn(process.execPath, ["--experimental-strip-types", join(ROOT, "scripts", "control-seira.ts"), "ui", "launch", ...(flag ? ["--engine", flag] : [])], {
     cwd: ROOT, env: { ...process.env, FAKE_STREAM_SCRIPT: scripts, FAKE_STREAM_CADENCE: values.cadence }, stdio: ["ignore", "pipe", "pipe"],
   });
   return new Promise((resolve, reject) => {

@@ -1,8 +1,5 @@
 const TOKEN = /^[0-9a-f]{64}$/;
 
-/** OpenMausBot's connected-apps service (cloudflare/composio-broker): the packaged desktop app and a Cloud home use it. */
-export const DEFAULT_MANAGED_COMPOSIO_BROKER_URL = "https://openmausbot-composio.milindsoni201.workers.dev";
-
 /** OMB_COMPOSIO_BROKER=off: nothing reaches the managed service, whatever else is set. */
 export function managedComposioBrokerOff(environment = process.env) {
   return /^(off|0|false|no)$/i.test(environment.OMB_COMPOSIO_BROKER?.trim() ?? "");
@@ -13,11 +10,13 @@ export function ownComposioKey(credentials, environment = process.env) {
   return Boolean((typeof saved === "string" && saved.trim()) || environment.COMPOSIO_API_KEY?.trim());
 }
 
-/** An explicit URL wins; otherwise the default, only for a shipped build, so development and tests never register. */
-export function managedComposioBrokerUrl(configured, shipped) {
+export const SEIRA_COMPOSIO_BROKER_URL = "https://apps.seira.bot";
+
+/** Return the service URL: a configured URL, else Seira's service in the packaged app, else "". */
+export function managedComposioBrokerUrl(configured, { packaged = false } = {}) {
   if (managedComposioBrokerOff()) return "";
-  const explicit = typeof configured === "string" ? configured.trim() : "";
-  return normalizeManagedComposioBrokerUrl(explicit || (shipped ? DEFAULT_MANAGED_COMPOSIO_BROKER_URL : ""));
+  if (typeof configured === "string" && configured.trim()) return normalizeManagedComposioBrokerUrl(configured);
+  return packaged ? SEIRA_COMPOSIO_BROKER_URL : "";
 }
 
 export function normalizeManagedComposioBrokerUrl(value) {
@@ -46,6 +45,7 @@ export function managedComposioChildEnvironment(brokerUrl, credentials, environm
   const next = { ...environment };
   delete next.OMB_COMPOSIO_BROKER_URL;
   delete next.OMB_COMPOSIO_BROKER_TOKEN;
+  if (!normalizeManagedComposioBrokerUrl(brokerUrl)) next.OMB_COMPOSIO_BROKER = "off";
   const access = managedComposioAccess(brokerUrl, credentials);
   if (access) {
     next.OMB_COMPOSIO_BROKER_URL = access.url;

@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { launchVerificationServer, runControlOmb } from "./control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "./control-seira.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const podman = process.env.OMB_VERIFY_PODMAN;
@@ -61,7 +61,7 @@ try {
     // A stale dump must never count as proof of this dispatch.
     rmSync(fixture.fixtureDumpPath, { force: true });
     await api(`/api/groups/${group.id}/messages`, { mode: "goal", text: "Reply once for isolated GUI routing verification." });
-    const wait = await runControlOmb(["wait", "--channel", group.id, "--timeout", "60", "--url", fixture.info.url]) as { status: string };
+    const wait = await runControlSeira(["wait", "--channel", group.id, "--timeout", "60", "--url", fixture.info.url]) as { status: string };
     controller.signal.throwIfAborted();
     assert.equal(wait.status, "settled", "Goal turn must settle");
     return { wait, dump: JSON.parse(readFileSync(fixture.fixtureDumpPath, "utf8")) };

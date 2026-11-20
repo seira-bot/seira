@@ -7,7 +7,7 @@ import { createServer, type Server } from "node:http";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { BOT_HTML_CSP } from "../shared/app-frame/csp.ts";
 import { CSP_META_PREFIX } from "../shared/app-frame/document.ts";
 import { FAKE_DESKTOP_TOKEN, fakePagesService } from "./testing/fake-pages.ts";
@@ -63,7 +63,7 @@ afterAll(async () => {
 });
 
 it("shows a jsx page, takes what the person pointed at to the bot as records, replaces the page, and publishes it as static HTML", async () => {
-  const cli = (...args: string[]) => runControlOmb(args, { env: { OPENMAUSBOT_URL: fixture.info.url } }) as Promise<any>;
+  const cli = (...args: string[]) => runControlSeira(args, { env: { OPENMAUSBOT_URL: fixture.info.url } }) as Promise<any>;
   const api = async (path: string, init: RequestInit = {}) => {
     const response = await fetch(`${fixture.info.url}${path}`, { ...init, headers: { "content-type": "application/json" } });
     return { status: response.status, body: await response.json() as any };

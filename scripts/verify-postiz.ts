@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { launchVerificationServer } from "./control-omb.ts";
+import { launchVerificationServer } from "./control-seira.ts";
 import { fixtureApi, mountPreview, type MountedPreview } from "./testing/preview-fixture.ts";
 import { FAKE_POSTIZ_KEY, startFakePostiz } from "../server/testing/fake-postiz.ts";
 

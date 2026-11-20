@@ -22,6 +22,7 @@ export function LiveKeySetup({ onSaved, onSaving, locked = false, compact = fals
   const fish = provider === "fish";
   const gemini = provider === "gemini";
   const elevenlabs = provider === "elevenlabs";
+  const codex = provider === "codex";
   const copy = liveKeyCopy(provider);
   const [key, setKey] = useState("");
   const [saving, setSaving] = useState(false);
@@ -66,7 +67,7 @@ export function LiveKeySetup({ onSaved, onSaving, locked = false, compact = fals
     >
       <div className="text-[14px] font-medium text-ink">{t(copy.title)}</div>
       <div className="text-[13px] leading-[1.45] text-ink-secondary">{t(copy.explain)}</div>
-      <div className="text-[13px] leading-[1.45] text-ink-secondary">{liveDisclosure({ cloudHome: state.config?.cloudHome === true, azure, custom, fish, gemini, elevenlabs })}</div>
+      <div className="text-[13px] leading-[1.45] text-ink-secondary">{liveDisclosure({ cloudHome: state.config?.cloudHome === true, azure, custom, fish, gemini, elevenlabs, codex })}</div>
       <input
         type="password"
         autoComplete="off"

@@ -22,11 +22,11 @@ The local preview does **not** give the bot control of this computer by itself. 
 the global **Enable local control** choice and assigning a bot to **This computer**; every action still enters the
 approval flow. On Wayland, local control is disabled and legacy opt-ins are cleared automatically. Automatic Wayland
 helper installation, native on-device dictation, and ARM64 remain unavailable and fail closed; follow their
-progress in [issue #29](https://github.com/milind-soni/OpenMausBot/issues/29) and the safety hold in
-[issue #345](https://github.com/milind-soni/OpenMausBot/issues/345). Bundled
-CUA supply-chain work is tracked in [issue #113](https://github.com/milind-soni/OpenMausBot/issues/113). Xorg is tracked in
-[issue #79](https://github.com/milind-soni/OpenMausBot/issues/79), and guarded GNOME/Wayland support in
-[issue #109](https://github.com/milind-soni/OpenMausBot/issues/109).
+progress in [upstream issue #29](https://github.com/milind-soni/OpenMausBot/issues/29) and the safety hold in
+[upstream issue #345](https://github.com/milind-soni/OpenMausBot/issues/345). Bundled
+CUA supply-chain work is tracked in [upstream issue #113](https://github.com/milind-soni/OpenMausBot/issues/113). Xorg is tracked in
+[upstream issue #79](https://github.com/milind-soni/OpenMausBot/issues/79), and guarded GNOME/Wayland support in
+[upstream issue #109](https://github.com/milind-soni/OpenMausBot/issues/109).
 
 ## Download packages
 
@@ -34,7 +34,8 @@ Choose one Ubuntu 24.04 x86_64 package from the latest release:
 
 - [Debian package (`Seira-amd64.deb`)](https://github.com/seira-bot/seira/releases/latest/download/Seira-amd64.deb) — recommended; APT installs its desktop dependencies and configures the bundled bot browser's sandbox.
 - [Portable AppImage (`Seira.AppImage`)](https://github.com/seira-bot/seira/releases/latest/download/Seira.AppImage) — does not install system files.
-- [SHA-256 checksums](https://github.com/seira-bot/seira/releases/latest/download/SHA256SUMS-ubuntu-x64.txt)
+  It does not open on Ubuntu 24.04 with the default settings; use the Debian package there.
+- [SHA-256 checksums](https://github.com/seira-bot/seira/releases/latest/download/SHA256SUMS-linux-x64.txt)
 
 Versioned packages and previous releases remain available on the
 [releases page](https://github.com/seira-bot/seira/releases).
@@ -127,6 +128,19 @@ The app checks for updates in the background and downloads them by itself. Nothi
   and opening a terminal, and says why. Set `OMB_UPDATE_INSTALL=terminal` to always use the terminal.
 - **AppImage.** The update replaces the AppImage when you restart; no password is needed.
 - **rpm and pacman packages** still use the terminal hand-off.
+- **Snap and Flatpak.** The store updates the app. Seira does not check, download or install updates itself, and
+  Settings says so instead of showing an update button.
+
+### Snap
+
+The snap is a classic snap: it uses the libraries of the host and runs with the same Chromium sandbox as the other
+packages. It never turns the sandbox off and ships no setuid helper. `electron-builder` adds `--no-sandbox` to every
+classic snap, so `scripts/finish-snap.mjs` removes it after the build and fails the build if the switch is still in the
+launcher or in `meta/snap.yaml`. Classic confinement needs a store review before a public release.
+
+Install a local build with `sudo snap install --dangerous --classic Seira-*.snap`, and start it with `seira`.
+`scripts/linux-store/snap-vm-test.sh` installs the snap in an Ubuntu 24.04 VM and records whether the app and the bot
+browser start with the sandbox on.
 
 ### Bundled bot browser on Ubuntu 24.04
 
@@ -136,10 +150,11 @@ package-owned files and loads an AppArmor rule for that exact executable. The br
 and the machine-wide user-namespace restriction is unchanged. Upgrades refresh the same rule; uninstalling
 the package removes it. Enabling a bot's browser and approving its actions remain explicit choices.
 
-An AppImage is portable and cannot install privileged system policy. On hosts restricting unprivileged
-user namespaces, its bundled browser can still report `No usable sandbox`. Install the `.deb` instead;
-do not add `--no-sandbox`, disable AppArmor globally, or allowlist arbitrary executables under your home
-directory. See [Chromium's explanation of the Ubuntu restriction](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
+An AppImage is portable and cannot install privileged system policy, and its mount ignores the setuid sandbox
+helper. On hosts that restrict unprivileged user namespaces, as Ubuntu 24.04 does by default, the AppImage does
+not open: it shows a message that points to the Debian package, and it never starts without the sandbox. Install
+the `.deb` instead; do not add `--no-sandbox`, disable AppArmor globally, change the user-namespace setting, or
+allowlist arbitrary executables under your home directory. See [Chromium's explanation of the Ubuntu restriction](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
 
 Application data remains local in `~/.openmausbot`. Electron browser data and window state use the normal XDG
 configuration directory (`~/.config/openmausbot` unless the environment overrides it).
@@ -183,6 +198,16 @@ OMB_EXTRA_PATH=/your/custom/bin ./release/Seira-*-x86_64.AppImage
 ```
 
 Restart Seira after installing or signing in to a CLI.
+
+## Flatpak
+
+`packaging/flatpak/` builds Seira as the Flatpak `bot.seira.Seira` from source, with no network during the build
+commands. See `packaging/flatpak/README.md` for the build steps and the permissions the app asks for.
+
+- Agent programs (`claude`, `codex` and the others) stay on the host. The server starts them through
+  `flatpak-spawn --host`, so install them on the host first.
+- Local control of the computer is off in the Flatpak.
+- The bundled bot browser, the computer-tools bundle and the tunnel program are not part of the Flatpak.
 
 ## Xorg and Wayland
 
@@ -321,7 +346,7 @@ pnpm smoke:linux-package
 The verifier checks `.deb` metadata, desktop identity, the exact dormant Cua resource tree and provenance,
 SquashFS/DEB directory modes, runtime path policy, and matching binary hashes across all artifacts. The local smoke
 launches the unpacked app and AppImage without `--no-sandbox`; CI first reproduces a `0.1.7` in-place DEB upgrade and
-then runs the same smoke against `/opt/OpenMausBot/openmausbot`. These lanes prove the embedded server and UI are
+then runs the same smoke against `/opt/Seira/openmausbot`. These lanes prove the embedded server and UI are
 usable while an optional Composio broker stalls, verify that an old local-control opt-in is cleared, and assert that
 no Cua executable starts on Xorg or simulated Wayland. Low-level runtime tests retain the future private-daemon
 contract without activating it in a packaged app. Only a real-seat acceptance matrix can authorize re-enablement.
@@ -362,6 +387,10 @@ file Seira-*-x86_64.AppImage
 
 Run it from a terminal once to collect the startup output. Do not install `libfuse2` just for this AppImage; the
 package is built with the static runtime.
+
+If it says `Seira can't open from this AppImage on this computer.`, the system blocks the user namespaces that the
+Chromium sandbox needs, as stock Ubuntu 24.04 does. Install the Debian package instead (see
+[Install and run](#install-and-run)). Do not add `--no-sandbox` or change the user-namespace setting.
 
 If it prints `No suitable fusermount binary found on the $PATH` or `Cannot mount AppImage, please check your FUSE
 setup`, install the distribution's FUSE 3 package (`fuse3` on Ubuntu, Debian and Arch). If it then names a missing

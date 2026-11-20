@@ -7,14 +7,12 @@ import { APP_REPOSITORY, appVersion } from "@/lib/app-links";
 import { track } from "@/lib/analytics";
 import { announcementConditions, announcementPlan, announcementPlatform, announcementSurface, markLaunchAnnouncement, pickAnnouncement, providersRestricted, rememberCardSeen, rememberSponsorDay,
   reportAnnouncement, SPONSOR_CARDS_FOR_TEAM_MEMBERS, useAnnouncementCards, type SeenRecord } from "@/lib/announcements";
-import { boatOfferRuns } from "@/lib/boat-offer";
-import { modelgoOfferable, reportModelgoOffer } from "@/lib/modelgo-offer";
 import { brandStatus } from "@/lib/brand";
 import { buyOfferAllowed, cloudNoticeKind, cloudPlanView, cloudTrialNotice, cloudTrialView, offerTrialDays } from "@/lib/cloud-plan";
 import { jobRoutine, useCloudIntent } from "@/lib/cloud-intent";
 import { CLOUD_INTENT_GIVEN, cloudSetupStage } from "@/lib/cloud-setup";
 import { cornerPopupWaits, firstChatQuiet, firstReplyPending } from "@/lib/corner-popup";
-import { ANNOUNCEMENT_NOTICE, BOAT_OFFER_NOTICE, CLOUD_INTRO, CLOUD_NOTICE, CLOUD_TRIAL_NOTICE, dismissNotice, dismissNotices, GROK_MOVE_NOTICE, introShown, introStage, launchNotice, markLaunchNotice, MODELGO_OFFER_NOTICE, nextNotice, noticeSeen, PHONE_UPDATE_NOTICE, phoneUpdateHint, PRODUCT_HUNT_NOTICE, PRODUCT_HUNT_UNTIL, PRODUCT_HUNT_URL, SIMPLE_MODE_NOTICE, STAR_NOTICE, TEAMS_NOTICE, TWO_PLACES_NOTICE, UPDATES_CONSENT_NOTICE, usedBefore, WHATS_NEW_NOTICE } from "@/lib/notices";
+import { ANNOUNCEMENT_NOTICE, CLOUD_INTRO, CLOUD_NOTICE, CLOUD_TRIAL_NOTICE, dismissNotice, dismissNotices, GROK_MOVE_NOTICE, introShown, introStage, launchNotice, markLaunchNotice, nextNotice, noticeSeen, PHONE_UPDATE_NOTICE, phoneUpdateHint, PRODUCT_HUNT_NOTICE, PRODUCT_HUNT_UNTIL, PRODUCT_HUNT_URL, SIMPLE_MODE_NOTICE, STAR_NOTICE, TEAMS_NOTICE, TWO_PLACES_NOTICE, UPDATES_CONSENT_NOTICE, usedBefore, WHATS_NEW_NOTICE } from "@/lib/notices";
 import { rememberNoticeSeen } from "@/lib/announcement-history";
 import { reportTeams, teamsAction } from "@/lib/teams-whats-new";
 import { useTwoPlaces } from "@/lib/two-places";
@@ -29,9 +27,7 @@ import { useUpdaterState } from "@/lib/updater";
 import { phonePairingSettingsAction } from "@/lib/phone-pairing";
 import { activeLocale, t } from "@/lib/i18n";
 import { AnnouncementCard, announcementPlaceAction } from "./AnnouncementCard";
-import { BoatOfferCard, reportBoatOffer, type BoatOfferAction } from "./BoatOffer";
 import { engineReady } from "./EngineLibrary";
-import { ModelgoOfferCard, type ModelgoCardAction } from "./ModelgoOffer";
 import { CLOUD_NOTICE_CARD, cloudNoticeStep, CloudNoticeCard } from "./CloudNotice";
 import { CloudTrialIntroCard } from "./CloudTrialIntro";
 import { useMoveQuiet } from "./CloudSendStrip";
@@ -73,8 +69,6 @@ function ProductHuntCard({ onDone }: { onDone: (action: "upvote" | "not_now" | "
 }
 
 const trialKey = (trial: { state: string; endsAt: number }) => `${trial.state}:${trial.endsAt}`;
-/** A first run lands in its Chief's chat, whose first messages arrive one at a time; the Grok Bot popup follows them. */
-const FIRST_MESSAGES_MS = 6_000;
 
 export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { quiet?: boolean; viewer?: WelcomeViewer | null; now?: () => number }) {
   const { state, dispatch } = useStore();
@@ -97,12 +91,9 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [simpleShown, setSimpleShown] = useState(false);
-  const [boatShown, setBoatShown] = useState(false);
-  const [modelgoShown, setModelgoShown] = useState(false);
   const [announcementShown, setAnnouncementShown] = useState<string | null>(null);
   const [grokShown, setGrokShown] = useState(false);
   const [grokOpen, setGrokOpen] = useState(false);
-  const [grokLanded, setGrokLanded] = useState(false);
   const consentHere = (local || viewer?.cloudHome === true) && brandStatus().source !== "file";
   const consent = useUpdatesConsent(consentHere ? updatesConsentBridge() : undefined);
   const [consentDone, setConsentDone] = useState(false);
@@ -173,8 +164,6 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const simpleBlocked = useOtherDialogOpen(simpleDue) || Boolean(state.liveCall && state.liveCall.status !== "ended");
   // A sponsor's card is for whoever chooses a team's providers: its Owner and Admins, never its members.
   const sponsorsHere = SPONSOR_CARDS_FOR_TEAM_MEMBERS || !state.config?.team || viewer?.canSave === true;
-  const boatHere = sponsorsHere && boatOfferRuns(now()) && brandStatus().source !== "file";
-  const modelgoHere = sponsorsHere && modelgoOfferable(state.config?.managedPolicy);
 
   const trial = plan?.trial;
   const key = trial ? trialKey(trial) : null;
@@ -204,24 +193,14 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const consentWaits = welcomeFinishedThisLaunch() || firstChat;
   const mausBotFirst = mausBot.due;
   const consentNow = consentWaits === true || consentFact === false ? false : consentWaits === null || mausBotFirst ? null : consentFact;
-  // The Grok Bot popup: once for everyone who can add a bot, the one thing a first chat may be interrupted by. Nothing reads
-  // this computer for it: GrokMoveDialog does that, once opened.
+  // The Grok Bot popup: once for everyone who can add a bot, never in the launch the welcome or MausBot's card took, and the
+  // one thing a later first chat may be interrupted by. Nothing reads this computer for it: GrokMoveDialog does that, once opened.
   const grokDue = !remote && viewer?.canSave !== false && !state.config?.team && brandStatus().source !== "file" && organization !== true && moving !== true
-    && launchDialogShown() !== "mausbot" && !noticeSeen(record, GROK_MOVE_NOTICE) && !desktopState?.seen.includes(GROK_MOVE_NOTICE);
+    && !welcomeFinishedThisLaunch() && launchDialogShown() !== "mausbot" && !noticeSeen(record, GROK_MOVE_NOTICE) && !desktopState?.seen.includes(GROK_MOVE_NOTICE);
   const grokBlocked = useOtherDialogOpen(grokDue) || Boolean(state.liveCall && state.liveCall.status !== "ended");
-  const grokLanding = welcomeFinishedThisLaunch() && !grokLanded;
-  useEffect(() => {
-    if (!grokDue || !grokLanding || waits) return;
-    const timer = setTimeout(() => setGrokLanded(true), FIRST_MESSAGES_MS);
-    return () => clearTimeout(timer);
-  }, [grokDue, grokLanding, waits]);
   const grokNow = !grokDue ? false
-    : !viewer || (desktop && !desktopState) || organization === null || firstChat === null || mausBotFirst || moving === null || grokLanding || grokBlocked ? null : true;
-  // Everyone, whether or not a bot has answered yet (so not `afterWelcome`, which holds until one has), but never in the launch
-  // the welcome or MausBot's card took, or during a live call.
-  const modelgoNow = !modelgoHere || moving || welcomeFinishedThisLaunch() || launchDialogShown() === "mausbot" || desktopState?.seen.includes(MODELGO_OFFER_NOTICE) ? false
-    : organization === null || moving === null || firstChat === null || mausBotFirst || (state.liveCall && state.liveCall.status !== "ended") || (desktop && !desktopState) ? null : true;
-  // A card from the project's announcements file: the built-in sponsor card's exclusions, and src/lib/announcements.ts's rules for
+    : !viewer || (desktop && !desktopState) || organization === null || firstChat === null || mausBotFirst || moving === null || grokBlocked ? null : true;
+  // A card from the project's announcements file: never in the welcome's launch, during a call or a move, and src/lib/announcements.ts's rules for
   // which card and for whom (once per person, one sponsor card a week, none on a branded build).
   const branded = brandStatus().source === "file", team = Boolean(state.config?.team);
   const remoteCards = useAnnouncementCards(!branded);
@@ -250,11 +229,11 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const phoneNow = retiredPhones?.length === 0 ? false
     : retiredPhones === undefined || !viewer || mausBotFirst || (state.liveCall && state.liveCall.status !== "ended") ? null : true;
   const launch = launchNotice();
-  // After a closed popup only the product-updates question and ModelGo's card may follow in this launch (nextNotice's
+  // After a closed popup only the product-updates question and an announcement card may follow in this launch (nextNotice's
   // FOLLOWERS); nothing else does.
   const notice = waits ? null
     : firstChatQuiet(state) ? (grokNow === true && (launch === null || launch === GROK_MOVE_NOTICE) ? GROK_MOVE_NOTICE : null)
-    : teamsHere || cards || whatsNewHere || consentHere || simpleDue || boatHere || modelgoHere || announcementNow !== false || twoFact !== false || grokNow !== false || phoneNow !== false ? nextNotice({
+    : teamsHere || cards || whatsNewHere || consentHere || simpleDue || announcementNow !== false || twoFact !== false || grokNow !== false || phoneNow !== false ? nextNotice({
     [TEAMS_NOTICE]: teamsNow,
     [GROK_MOVE_NOTICE]: grokNow,
     [PHONE_UPDATE_NOTICE]: phoneNow,
@@ -270,13 +249,10 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
     [CLOUD_TRIAL_NOTICE]: planBridge && plan === null ? null : Boolean(key && (trialDue || trialOpen === key)),
     [CLOUD_NOTICE]: !view ? false : view.kind === "unknown" ? null
       : Boolean(kind && !noticeSeen(record, CLOUD_NOTICE_CARD[kind].dismissed)),
-    [MODELGO_OFFER_NOTICE]: modelgoNow,
-    [BOAT_OFFER_NOTICE]: !boatHere || moving || afterWelcome === true || !usedBefore(state.bots) || desktopState?.seen.includes(BOAT_OFFER_NOTICE) ? false
-      : organization === null || moving === null || afterWelcome === null || mausBotFirst || (desktop && !desktopState) ? null : !organization,
     [ANNOUNCEMENT_NOTICE]: announcementNow,
     [STAR_NOTICE]: !bridge || moving || brandStatus().source === "file" || !usedBefore(state.bots) ? false : moving === null ? null : true,
   }, id => id === TEAMS_NOTICE ? teamsSeen : id === CLOUD_INTRO ? stage === "done" && !introOpen
-    : id === STAR_NOTICE || id === PRODUCT_HUNT_NOTICE || id === BOAT_OFFER_NOTICE || id === MODELGO_OFFER_NOTICE ? noticeSeen(record, id) : false, launch, closed) : null;
+    : id === STAR_NOTICE || id === PRODUCT_HUNT_NOTICE ? noticeSeen(record, id) : false, launch, closed) : null;
 
   const shownKey = notice === CLOUD_TRIAL_NOTICE ? key : notice === ANNOUNCEMENT_NOTICE ? `${notice}:${announcement?.id}` : notice;
   useEffect(() => {
@@ -296,12 +272,6 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
       setSimpleShown(true);
       if (SIMPLE_ONLY || advancedBack) reportNewLook("shown", advancedBack);
       else reportSimpleModePrompt("shown");
-    } else if (shownKey === BOAT_OFFER_NOTICE && !boatShown) {
-      setBoatShown(true);
-      reportBoatOffer("shown", "card");
-    } else if (shownKey === MODELGO_OFFER_NOTICE && !modelgoShown) {
-      setModelgoShown(true);
-      reportModelgoOffer("shown", "popup");
     } else if (notice === ANNOUNCEMENT_NOTICE && announcement && announcementShown !== announcement.id) {
       setAnnouncementShown(announcement.id);
       markLaunchAnnouncement(announcement.id);
@@ -390,20 +360,6 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   }
   if (notice === PRODUCT_HUNT_NOTICE) {
     return <ProductHuntCard onDone={action => { track("product_hunt_card", { action }); close(); save(PRODUCT_HUNT_NOTICE); }} />;
-  }
-  if (notice === BOAT_OFFER_NOTICE) {
-    const done = (action: BoatOfferAction) => {
-      reportBoatOffer(action, "card"); close(); save(BOAT_OFFER_NOTICE);
-      void desktop?.seen(BOAT_OFFER_NOTICE).catch(() => {});
-    };
-    return <BoatOfferCard onDone={done} />;
-  }
-  if (notice === MODELGO_OFFER_NOTICE) {
-    const done = (action: ModelgoCardAction) => {
-      reportModelgoOffer(action, "popup"); close(); save(MODELGO_OFFER_NOTICE);
-      void desktop?.seen(MODELGO_OFFER_NOTICE).catch(() => {});
-    };
-    return <ModelgoOfferCard onDone={done} />;
   }
   if (notice === ANNOUNCEMENT_NOTICE && announcement) {
     const done = (action: "primary" | "secondary" | "close") => {

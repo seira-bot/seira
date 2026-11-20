@@ -1,11 +1,11 @@
 // Shared local-host inject: probe oMLX / Ollama / EXO / LM Studio / Unsloth, list what they serve
 // under Custom, and decode a pick into a host + API id.
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { ModelCatalog, ProviderInstance } from "../contracts.ts";
 import { isContextName, pickedName, servedModel, serveWithWindow } from "./ollama-context.ts";
+import { userHome } from "../env-path.ts";
 
 export interface LocalHost {
   id: string;
@@ -177,7 +177,7 @@ function firstUnslothToken(row: unknown): string | null {
 }
 
 function readUnslothKey(env: Record<string, string | undefined>): string | null {
-  const home = env.HOME || env.USERPROFILE || homedir();
+  const home = userHome(env);
   try {
     const raw = JSON.parse(readFileSync(join(home, ".unsloth", "studio", "auth", "agent_api_key.json"), "utf8")) as {
       api_key?: unknown;

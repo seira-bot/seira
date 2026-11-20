@@ -14,7 +14,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const PLACEHOLDERS = "node|runner|user|username|you|yourname|your-name|me|name|alice|bob|ubuntu|pi|app|root|shared|public|default|guest";
+const PLACEHOLDERS = "node|runner|user|username|you|yourname|your-name|me|name|alice|bob|ubuntu|pi|app|seira|root|shared|public|default|guest";
 const notPlaceholder = `(?!(?:${PLACEHOLDERS})(?:[/\\\\]|$))`;
 
 export const GENERIC_RULES = [
@@ -24,7 +24,8 @@ export const GENERIC_RULES = [
   { label: "ls -l output with owner names", re: /(?:^|\s)[-dl][-rwxsStT]{9}[.+@]?\s+\d+\s+[A-Za-z0-9._-]+\s+[A-Za-z0-9._-]+\s+\d+\s/ },
   { label: "private key", re: /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----/ },
   { label: "provider API key", re: /\b(?:sk-(?:ant-|proj-)?[A-Za-z0-9_-]{32,}|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,}|AKIA[0-9A-Z]{16}|xox[abpr]-[A-Za-z0-9-]{20,})\b/ },
-  { label: "secret value in an assignment", re: /\b[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD)[A-Z0-9_]*\s*=\s*["']?(?![$<{])[^\s"'$<{]{16,}/ },
+  // A value like `parentEnv.OMB_X_TOKEN` reads a variable by name, so it is not a secret.
+  { label: "secret value in an assignment", re: /\b[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD)[A-Z0-9_]*\s*=\s*["']?(?![$<{])(?!(?:[a-z]\w*\.)+[A-Z][A-Z0-9_]*(?:[^\w.]|$))[^\s"'$<{]{16,}/ },
 ];
 
 const EXEMPT = [

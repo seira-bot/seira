@@ -13,7 +13,7 @@ still missing. The app tour starts only from Settings → Replay app tour.
 Launch the isolated full-app fixture following [Chat UI](chat-ui.md):
 
 ```sh
-node --experimental-strip-types scripts/control-omb.ts ui launch
+node --experimental-strip-types scripts/control-seira.ts ui launch
 ```
 
 In a second terminal, pass its exact printed handle:

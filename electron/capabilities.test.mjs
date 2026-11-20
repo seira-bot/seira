@@ -217,6 +217,23 @@ describe("desktop capabilities", () => {
     });
   });
 
+  it("keeps local control off inside a Flatpak, on X11 and with the Hyprland plugin", () => {
+    const flatpak = { FLATPAK_ID: "bot.seira.Seira" };
+    expect(linuxLocalControlSupport("linux", { ...flatpak, XDG_SESSION_TYPE: "x11", DISPLAY: ":0" })).toMatchObject({
+      available: false,
+      reasonCode: "flatpak-sandbox",
+    });
+    expect(
+      linuxLocalControlSupport(
+        "linux",
+        { ...flatpak, XDG_SESSION_TYPE: "wayland", WAYLAND_DISPLAY: "wayland-1", XDG_CURRENT_DESKTOP: "Hyprland", HYPRLAND_INSTANCE_SIGNATURE: "x" },
+        { hyprlandPlugin: "active" },
+      ),
+    ).toMatchObject({ available: false, reasonCode: "flatpak-sandbox" });
+    expect(linuxLocalControlSupport("linux", { ...flatpak, DISPLAY: ":0", XDG_SESSION_TYPE: "x11" }).message).not.toMatch(/flatpak|sandbox/i);
+    expect(linuxLocalControlSupport("linux", { XDG_SESSION_TYPE: "x11", DISPLAY: ":0" })).toEqual({ available: true, session: "x11" });
+  });
+
   describe("Omarchy (Hyprland) detection matrix", () => {
     const hyprland = {
       XDG_SESSION_TYPE: "wayland",

@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { launchVerificationServer, runControlOmb } from "./control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "./control-seira.ts";
 import { readQwenModelCatalog } from "../server/drivers/acp/qwen.ts";
 
 const fixture = await launchVerificationServer();
 const { url, dataDir } = fixture.info;
-const control = (args: string[]) => runControlOmb([...args, "--url", url]);
+const control = (args: string[]) => runControlSeira([...args, "--url", url]);
 const evidence: unknown[] = [];
 try {
   mkdirSync(join(dataDir, ".qwen"));

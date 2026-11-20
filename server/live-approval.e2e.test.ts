@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { isTitleCall } from "./testing/title-call.ts";
 
 // The fixture can only append to one fixed file in the launcher's disposable home: provider arguments cannot select a path.
@@ -56,7 +56,7 @@ it("applies a level picked while the bot is working to its next tool call, and l
   if (!address || typeof address === "string") throw new Error("fixture provider address missing");
   const fixture = await launchVerificationServer();
   const { url, dataDir } = fixture.info;
-  const control = (args: string[]) => runControlOmb([...args, "--url", url]) as Promise<any>;
+  const control = (args: string[]) => runControlSeira([...args, "--url", url]) as Promise<any>;
   const api = async (method: string, path: string, body?: unknown) => {
     const response = await fetch(url + path, { method, headers: { origin: url, "content-type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     const value = await response.json() as any;

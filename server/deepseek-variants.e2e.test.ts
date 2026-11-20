@@ -3,7 +3,7 @@ import { closeSync, existsSync, openSync, readFileSync, writeFileSync } from "no
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb, verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, verificationServerEnvironment } from "../scripts/control-seira.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 
 it("offers DeepSeek thinking before a prompt and retains catalog and chosen effort across restart", async () => {
@@ -24,7 +24,7 @@ it("offers DeepSeek thinking before a prompt and retains catalog and chosen effo
     return result;
   };
   const control = async (...args: string[]) => {
-    const result = await runControlOmb([...args, "--url", url]) as any;
+    const result = await runControlSeira([...args, "--url", url]) as any;
     evidence.push({ command: args, result });
     return result;
   };

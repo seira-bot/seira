@@ -14,8 +14,8 @@ Open a bot's model picker or Settings → Engines.
 ## Driving it
 
 ```sh
-pnpm control:omb doctor --url http://127.0.0.1:PORT
-pnpm control:omb models --url http://127.0.0.1:PORT
+pnpm control:seira doctor --url http://127.0.0.1:PORT
+pnpm control:seira models --url http://127.0.0.1:PORT
 ```
 
 `doctor.ok` is true only when the endpoint is Seira and at least one

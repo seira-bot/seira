@@ -28,3 +28,10 @@ it("shows this app's update where the desktop app answers, with no Download step
   expect(ready).toContain("Restart and install");
   expect(render({ status: "downloaded", version: "0.2.0", installMode: "handoff" })).toContain("Seira 0.2.0 is ready. Install it in a terminal.");
 });
+
+it("offers no update action when an app store updates this install, and says so in plain words", () => {
+  const html = render({ status: "idle", managedByStore: true });
+  expect(html).toContain("Updates come with your package or store.");
+  expect(html).not.toContain("<button");
+  expect(html).not.toContain("Check for updates");
+});

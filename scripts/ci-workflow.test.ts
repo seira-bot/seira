@@ -5,6 +5,7 @@ import { parse } from "yaml";
 import { VITEST_SHARDS, VITEST_WORKERS } from "./ci-scope.mjs";
 
 interface Step {
+  id?: string;
   name?: string;
   uses?: string;
   run?: string;
@@ -18,6 +19,7 @@ interface Job {
   "runs-on"?: string | string[];
   needs?: string | string[];
   if?: string;
+  outputs?: Record<string, string>;
   uses?: string;
   environment?: unknown;
   permissions?: Record<string, string> | string;
@@ -27,6 +29,7 @@ interface Job {
 
 interface Workflow {
   on: Record<string, unknown>;
+  concurrency?: Record<string, string>;
   permissions?: Record<string, string>;
   jobs: Record<string, Job>;
 }
@@ -39,10 +42,17 @@ const workflow = workflows.get("ci.yml")!;
 const packageFiles = files.filter((file) => /^package-[a-z0-9-]+\.yml$/.test(file));
 const packageWorkflows = packageFiles.map((file) => [file, workflows.get(file)!] as const);
 const IMAGE = "server-image.yml";
+const NPM = "npm-publish.yml";
+const BUGS = "bug-reports.yml";
 const image = workflows.get(IMAGE)!;
+const bugs = workflows.get(BUGS)!;
 const LOGIN = "${{ secrets.GITHUB_TOKEN }}";
-const NOT_MAINTAINER = "!contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)";
-const APPROVED = "needs.approval.result == 'success' || needs.approval.result == 'skipped'";
+const MAINTAINER_CHECK = "startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)";
+const NOT_MAINTAINER = `!(${MAINTAINER_CHECK})`;
+const IS_MAINTAINER = `(${MAINTAINER_CHECK})`;
+const APPROVED_NOW = "needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt";
+const MACOS = "package-macos.yml";
+const READ_TOKEN = "GH_TOKEN: ${{ github.token }}";
 const scripts = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
   scripts: Record<string, string>;
 }).scripts;
@@ -53,8 +63,8 @@ const allRuns = () => allSteps().flatMap((step) => (step.run === undefined ? [] 
 const runs = (job: Job) => stepsOf(job).flatMap((step) => (step.run === undefined ? [] : [step.run]));
 
 describe("CI workflows", () => {
-  it("keeps the CI workflow, the package workflows and the server image workflow only", () => {
-    expect(files).toEqual(["ci.yml", ...packageFiles, IMAGE]);
+  it("keeps the CI workflow, the bug report Worker workflow, the npm publish workflow, the package workflows and the server image workflow only", () => {
+    expect(files).toEqual([BUGS, "ci.yml", NPM, ...packageFiles, IMAGE]);
   });
 
   it("runs on pull requests, pushes to main and manual starts only", () => {
@@ -88,15 +98,33 @@ describe("CI workflows", () => {
         expect(job.permissions, where).toEqual({});
         expect(JSON.stringify(job), where).not.toContain("secrets.");
         expect(job.if, where).toContain(NOT_MAINTAINER);
-        expect(String(job.if).replace("${{ ", "").replace(" }}", "").split(" && ").filter((part) => part.includes("RELEASE_MAINTAINERS")), where).toEqual([NOT_MAINTAINER]);
+        expect(job.outputs, where).toEqual({ attempt: "${{ github.run_attempt }}" });
+        const condition = String(job.if).replace("${{ ", "").replace(" }}", "");
+        expect(condition.endsWith(NOT_MAINTAINER), where).toBe(true);
+        expect(condition.split("RELEASE_MAINTAINERS"), where).toHaveLength(3);
       }
     }
   });
 
-  it("reads no token, except the server image workflow once, to sign in to the registry", () => {
+  it("runs a job behind the release environment only for a maintainer or after an approval in the same attempt", () => {
+    const gated = [...workflows].flatMap(([file, flow]) =>
+      Object.entries(flow.jobs)
+        .filter(([, job]) => job.environment === "release")
+        .map(([id, job]) => ({ where: `${file} job ${id}`, job })),
+    );
+    expect(gated.length).toBeGreaterThan(0);
+    for (const { where, job } of gated) {
+      expect([job.needs].flat(), where).toContain("approval");
+      expect(job.if, where).toContain(`(${IS_MAINTAINER} || (${APPROVED_NOW}))`);
+      expect(job.if, where).not.toContain("'skipped'");
+    }
+  });
+
+  it("reads no token, except the server image workflow once to sign in to the registry and the macOS commit step once to read the repository", () => {
     expect(texts.get(IMAGE)!.split(LOGIN)).toHaveLength(2);
+    expect(texts.get(MACOS)!.split(READ_TOKEN)).toHaveLength(2);
     for (const [file, original] of texts) {
-      const text = file === IMAGE ? original.replace(LOGIN, "") : original;
+      const text = file === IMAGE ? original.replace(LOGIN, "") : file === MACOS ? original.replace(READ_TOKEN, "") : original;
       for (const forbidden of ["github.token", "GITHUB_TOKEN", "GH_TOKEN"]) {
         expect(text, `${file} reads ${forbidden}`).not.toContain(forbidden);
       }
@@ -154,12 +182,13 @@ describe("CI workflows", () => {
     for (const run of allRuns()) expect(run).not.toMatch(/\$\{\{[^}]*\b(github\.event|github\.head_ref|inputs\.)/);
   });
 
-  it("never creates a tag or publishes a release or a package from a command line, except the server image publish job", () => {
+  it("never creates a tag or publishes a release or a package from a command line, except the server image and npm publish jobs", () => {
     for (const [file, flow] of workflows) {
       for (const [id, job] of Object.entries(flow.jobs)) {
         const publishes = file === IMAGE && id === "publish";
+        const publishesToNpm = file === NPM && id === "publish";
         for (const run of runs(job)) {
-          for (const forbidden of ["gh release", "git tag", "git push", "npm publish"]) expect(run).not.toContain(forbidden);
+          for (const forbidden of ["gh release", "git tag", "git push", ...(publishesToNpm ? [] : ["npm publish"])]) expect(run).not.toContain(forbidden);
           if (!publishes) {
             expect(run, `${file} job ${id}`).not.toContain("docker push");
             expect(run, `${file} job ${id}`).not.toContain("imagetools create");
@@ -216,7 +245,7 @@ describe("Server image workflow", () => {
   it("publishes only from a manual run on main, after a successful build and the approval, behind the release environment", () => {
     expect(publish.needs).toEqual(["image", "approval"]);
     expect(publish.if).toBe(
-      `\${{ !cancelled() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.image.result == 'success' && (${APPROVED}) }}`,
+      `\${{ !cancelled() && ${ON_MAIN} && needs.image.result == 'success' && (${IS_MAINTAINER} || (${APPROVED_NOW})) }}`,
     );
     expect(publish.environment).toBe("release");
     expect(publish.permissions).toEqual({ contents: "read", packages: "write" });
@@ -284,10 +313,12 @@ describe("Package workflows", () => {
       if (gated.length === 0) continue;
       expect(flow.jobs.approval?.environment, file).toBe("release-approval");
       expect(flow.jobs.approval?.if, file).toBe(`\${{ ${NOT_MAINTAINER} }}`);
-      expect(flow.jobs.approval?.needs, file).toBeUndefined();
+      expect(flow.jobs.approval?.needs, file).toBe("commit");
       for (const [id, job] of gated) {
-        expect(job.needs, `${file} job ${id}`).toBe("approval");
-        expect(job.if, `${file} job ${id}`).toBe(`\${{ !cancelled() && (${APPROVED}) }}`);
+        expect(job.needs, `${file} job ${id}`).toEqual(["commit", "approval"]);
+        expect(job.if, `${file} job ${id}`).toBe(
+          `\${{ !cancelled() && needs.commit.result == 'success' && (${IS_MAINTAINER} || (${APPROVED_NOW})) }}`,
+        );
       }
     }
   });
@@ -328,9 +359,19 @@ describe("Package workflows", () => {
   it("upload their packages as one workflow artifact and fail when no file matches", () => {
     for (const [file, flow] of packageWorkflows) {
       const uploads = Object.values(flow.jobs).flatMap(stepsOf).filter((step) => step.uses?.startsWith("actions/upload-artifact@"));
-      expect(uploads.length, file).toBe(1);
-      expect(uploads[0].with?.["if-no-files-found"], file).toBe("error");
+      expect(uploads.length, file).toBe(file === "package-windows.yml" ? 2 : 1);
+      for (const upload of uploads) expect(upload.with?.["if-no-files-found"], file).toBe("error");
     }
+  });
+
+  it("upload the Microsoft Store package apart from the Windows installer", () => {
+    const uploads = Object.values(workflows.get("package-windows.yml")!.jobs).flatMap(stepsOf).filter((step) => step.uses?.startsWith("actions/upload-artifact@"));
+    expect(uploads.map((step) => step.with?.name)).toEqual([
+      "seira-${{ steps.version.outputs.version }}-windows-x64",
+      "seira-${{ steps.version.outputs.version }}-windows-x64-store",
+    ]);
+    expect(uploads[1].with?.path).toBe("${{ runner.temp }}/seira-windows-x64-store/");
+    expect(uploads[1].with?.["retention-days"]).toBe(14);
   });
 });
 
@@ -348,6 +389,44 @@ describe("CI vitest job", () => {
   it("runs the worker count that scripts/ci-scope.mjs names", () => {
     const tests = stepsOf(job).find((step) => step.run?.includes("--shard="));
     expect(Number(tests?.env?.OMB_VITEST_WORKERS)).toBe(VITEST_WORKERS["ubuntu-latest"]);
+  });
+});
+
+describe("Bug report Worker workflow", () => {
+  const job = bugs.jobs.worker!;
+  const paths = ["cloudflare/bug-reports/**", ".github/workflows/bug-reports.yml"];
+
+  it("starts on a pull request or a push to main that changes the Worker or this file, or by hand", () => {
+    expect(Object.keys(bugs.on).sort()).toEqual(["pull_request", "push", "workflow_dispatch"]);
+    expect(bugs.on.pull_request).toEqual({ types: ["opened", "synchronize", "reopened", "ready_for_review"], paths });
+    expect(bugs.on.push).toEqual({ branches: ["main"], paths });
+  });
+
+  it("skips a draft pull request, and cancels an older run of the same pull request or main but never a manual start", () => {
+    expect(job.if).toBe("${{ github.event.pull_request.draft != true }}");
+    expect(bugs.concurrency?.["cancel-in-progress"]).toBe("${{ github.event_name != 'workflow_dispatch' }}");
+    expect(bugs.concurrency?.group).toContain("format('pr-{0}', github.event.pull_request.number)");
+    expect(bugs.concurrency?.group).toContain("format('manual-{0}', github.run_id)");
+    expect(bugs.concurrency?.group).toContain("github.ref");
+  });
+
+  it("runs the type check and the tests of the Worker", () => {
+    expect(runs(job)).toContain("pnpm bugs:check");
+    expect(runs(job)).toContain("pnpm bugs:test");
+    expect(scripts["bugs:check"]).toContain("cloudflare/bug-reports/tsconfig.json");
+    expect(scripts["bugs:test"]).toContain("cloudflare/bug-reports/vitest.config.ts");
+  });
+
+  it("has one job on a GitHub-hosted runner, with no permission, no secret and no environment", () => {
+    expect(Object.keys(bugs.jobs)).toEqual(["worker"]);
+    expect(job["runs-on"]).toBe("ubuntu-24.04");
+    expect(job.permissions).toBeUndefined();
+    expect(job.environment).toBeUndefined();
+    expect(JSON.stringify(bugs)).not.toContain("secrets.");
+  });
+
+  it("never deploys the Worker", () => {
+    for (const run of runs(job)) expect(run).not.toMatch(/deploy|wrangler/);
   });
 });
 
@@ -369,12 +448,12 @@ describe("CI gate", () => {
   const others = Object.keys(workflow.jobs).filter((id) => id !== "gate");
 
   /** Run the real gate script, not a copy of its logic. */
-  function runGate(needs: Record<string, { result: string }>) {
+  function runGate(needs: Record<string, { result: string }>, extra: Record<string, string> = {}) {
     const command = runs(gate).find((run) => run.includes("node --input-type=module")) as string;
     const script = /node --input-type=module -e '([^']+)'/.exec(command);
     expect(script).not.toBeNull();
     const check = spawnSync(process.execPath, ["--input-type=module", "-e", script![1]], {
-      env: { ...process.env, NEEDS: JSON.stringify(needs) },
+      env: { ...process.env, DRAFT: "", HEAVY: "true", ...extra, NEEDS: JSON.stringify(needs) },
       encoding: "utf8",
       timeout: 10_000,
     });
@@ -404,5 +483,154 @@ describe("CI gate", () => {
     const check = runGate({ ...allWith("success"), [others[0]]: { result } });
     expect(check.status).toBe(1);
     expect(check.stderr).toContain(others[0]);
+  });
+});
+
+describe("CI skips the heavy jobs only when it may", () => {
+  const gate = workflow.jobs.gate;
+  const heavy = ["build", "vitest"];
+  const needs = (result: string) => ({ checks: { result: "success" }, build: { result }, vitest: { result } });
+  const run = (extra: Record<string, string>, jobs: Record<string, { result: string }>) => {
+    const command = runs(gate).find((line) => line.includes("node --input-type=module")) as string;
+    const script = /node --input-type=module -e '([^']+)'/.exec(command)![1];
+    return spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+      env: { ...process.env, DRAFT: "", HEAVY: "true", ...extra, NEEDS: JSON.stringify(jobs) }, encoding: "utf8", timeout: 10_000,
+    });
+  };
+
+  it("listens for a draft that becomes ready, with the default types", () => {
+    expect((workflow.on.pull_request as { types: string[] }).types).toEqual(["opened", "synchronize", "reopened", "ready_for_review"]);
+  });
+
+  it("skips build and the shards on a draft, and on a pull request the path filter marks light", () => {
+    for (const id of heavy) {
+      const condition = String(workflow.jobs[id].if);
+      expect(condition, id).toContain("github.event.pull_request.draft != true");
+      expect(condition, id).toContain("needs.checks.outputs.heavy == 'true'");
+      expect(workflow.jobs[id].needs, id).toBe("checks");
+    }
+    expect(workflow.jobs.checks.if).toBeUndefined();
+    expect(workflow.jobs.checks.outputs?.heavy).toBe("${{ steps.scope.outputs.heavy }}");
+  });
+
+  it("passes when a draft skipped build and the shards", () => {
+    expect(run({ DRAFT: "true" }, needs("skipped")).status).toBe(0);
+  });
+
+  it("passes when the path filter skipped build and the shards", () => {
+    expect(run({ HEAVY: "false" }, needs("skipped")).status).toBe(0);
+  });
+
+  it("fails when build or the shards were skipped without a reason", () => {
+    const check = run({}, needs("skipped"));
+    expect(check.status).toBe(1);
+    expect(check.stderr).toContain("build, vitest");
+  });
+
+  it("fails when checks did not pass, even on a draft", () => {
+    for (const result of ["failure", "skipped", "cancelled"]) {
+      expect(run({ DRAFT: "true" }, { ...needs("skipped"), checks: { result } }).status, result).toBe(1);
+    }
+  });
+
+  it("fails when a heavy job failed, even on a draft", () => {
+    expect(run({ DRAFT: "true" }, { ...needs("skipped"), vitest: { result: "failure" } }).status).toBe(1);
+    expect(run({ HEAVY: "false" }, { ...needs("skipped"), build: { result: "cancelled" } }).status).toBe(1);
+  });
+
+  it("cancels an older run of the same pull request or main, and never a manual start", () => {
+    expect(workflow.concurrency?.["cancel-in-progress"]).toBe("${{ github.event_name != 'workflow_dispatch' }}");
+    expect(workflow.concurrency?.group).toContain("format('pr-{0}', github.event.pull_request.number)");
+    expect(workflow.concurrency?.group).toContain("format('manual-{0}', github.run_id)");
+    expect(workflow.concurrency?.group).toContain("github.ref");
+  });
+
+  it("decides the path filter from the base and head commits through env", () => {
+    const step = stepsOf(workflow.jobs.checks).find((item) => item.id === "scope");
+    expect(step?.run).toBe("node scripts/ci-heavy.mjs");
+    expect(step?.env).toMatchObject({ EVENT_NAME: "${{ github.event_name }}", BASE_SHA: "${{ github.event.pull_request.base.sha }}", HEAD_SHA: "${{ github.event.pull_request.head.sha }}" });
+  });
+});
+
+describe("Release job conditions", () => {
+  type Result = "success" | "failure" | "skipped";
+  interface Case {
+    name: string;
+    actor: string;
+    attempt: number;
+    approval: Result;
+    approvalAttempt?: number;
+    variable?: string;
+    first?: Result;
+    runs: boolean;
+  }
+
+  const MAINTAINERS = '["maint"]';
+  const cases: Case[] = [
+    { name: "runs when a maintainer starts it", actor: "maint", attempt: 1, approval: "skipped", runs: true },
+    { name: "runs when another person starts it and a maintainer approves", actor: "other", attempt: 1, approval: "success", approvalAttempt: 1, runs: true },
+    { name: "does not run when the approval is rejected", actor: "other", attempt: 1, approval: "failure", runs: false },
+    { name: "does not run when another person re-runs a maintainer's run", actor: "other", attempt: 2, approval: "skipped", runs: false },
+    { name: "does not run when another person re-runs an approved run", actor: "other", attempt: 2, approval: "success", approvalAttempt: 1, runs: false },
+    { name: "runs when another person re-runs all jobs and a maintainer approves again", actor: "other", attempt: 2, approval: "success", approvalAttempt: 2, runs: true },
+    { name: "runs when a maintainer re-runs another person's approved run", actor: "maint", attempt: 2, approval: "success", approvalAttempt: 1, runs: true },
+    { name: "does not run when the maintainer list is missing and nobody approved", actor: "other", attempt: 1, approval: "skipped", variable: undefined, runs: false },
+    { name: "does not run when the maintainer list is not a JSON array, even if it holds the login", actor: "maint", attempt: 1, approval: "skipped", variable: '"maint"', runs: false },
+    { name: "does not run when the first job failed, even for a maintainer", actor: "maint", attempt: 1, approval: "skipped", first: "failure", runs: false },
+  ];
+
+  const evaluate = (condition: string, scope: Record<string, unknown>) => {
+    const expression = condition.trim().replace(/^\$\{\{/, "").replace(/\}\}$/, "");
+    const contains = (search: unknown, item: unknown) =>
+      Array.isArray(search)
+        ? search.some((each) => String(each).toLowerCase() === String(item).toLowerCase())
+        : String(search).toLowerCase().includes(String(item).toLowerCase());
+    const startsWith = (text: unknown, start: unknown) =>
+      String(text ?? "").toLowerCase().startsWith(String(start).toLowerCase());
+    const names = ["needs", "github", "vars", "cancelled", "fromJSON", "contains", "startsWith"];
+    const values = [scope.needs, scope.github, scope.vars, () => false, JSON.parse, contains, startsWith];
+    return Boolean(new Function(...names, `return (${expression});`)(...values));
+  };
+
+  const flows = [
+    { file: MACOS, job: "package", first: "commit", extra: {} },
+    { file: NPM, job: "publish", first: "commit", extra: {} },
+    { file: IMAGE, job: "publish", first: "image", extra: { event_name: "workflow_dispatch", ref: "refs/heads/main" } },
+  ];
+
+  for (const flow of flows) {
+    describe(`${flow.file} job ${flow.job}`, () => {
+      it.each(cases)("$name", (each) => {
+        const needs: Record<string, unknown> = {
+          [flow.first]: { result: each.first ?? "success", outputs: {} },
+          approval: {
+            result: each.approval,
+            outputs: each.approvalAttempt === undefined ? {} : { attempt: each.approvalAttempt },
+          },
+        };
+        const vars = !("variable" in each)
+          ? { RELEASE_MAINTAINERS: MAINTAINERS }
+          : each.variable === undefined
+            ? {}
+            : { RELEASE_MAINTAINERS: each.variable };
+        const github = { triggering_actor: each.actor, run_attempt: each.attempt, ...flow.extra };
+        const condition = workflows.get(flow.file)!.jobs[flow.job]!.if!;
+        expect(evaluate(condition, { needs, github, vars })).toBe(each.runs);
+      });
+    });
+  }
+
+  it.each([
+    { name: "a maintainer", variable: '["maint"]', asks: false },
+    { name: "another person", variable: '["maint", "boss"]', asks: true, actor: "other" },
+    { name: "a maintainer when the list is missing", variable: undefined, asks: true },
+    { name: "a maintainer when the list is a JSON string that holds the login", variable: '"maintainers"', asks: true },
+  ])("asks for approval for $name: $asks", ({ variable, asks, actor }) => {
+    for (const flow of flows) {
+      const vars = variable === undefined ? {} : { RELEASE_MAINTAINERS: variable };
+      const github = { triggering_actor: actor ?? "maint", run_attempt: 1, ...flow.extra };
+      const condition = workflows.get(flow.file)!.jobs.approval!.if!;
+      expect(evaluate(condition, { needs: {}, github, vars }), flow.file).toBe(asks);
+    }
   });
 });

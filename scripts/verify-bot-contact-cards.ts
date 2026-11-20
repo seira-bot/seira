@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { launchVerificationServer } from "./control-omb.ts";
+import { launchVerificationServer } from "./control-seira.ts";
 import { fixtureApi, mountPreview, type MountedPreview } from "./testing/preview-fixture.ts";
 import { startFakeHttpMcp } from "../server/testing/fake-http-mcp-server.ts";
 

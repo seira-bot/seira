@@ -2,7 +2,7 @@ import { existsSync, lstatSync, mkdtempSync, readFileSync, readlinkSync, symlink
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { launchVerificationServer, type VerificationServer } from "../../scripts/control-omb.ts";
+import { launchVerificationServer, type VerificationServer } from "../../scripts/control-seira.ts";
 import { removeTempDir } from "../testing/cleanup.ts";
 import { runHeadless } from "./main.ts";
 import type { HeadlessIo } from "./output.ts";

@@ -1,6 +1,28 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import type { ContainerComputerStatus, LocalVmTarget } from "./container-computer.ts";
+import {
+  BASE_IMAGE_DIGEST,
+  BASE_IMAGE_LABEL,
+  CUA_DRIVER_VERSION,
+  DRIVER_LABEL,
+  IMAGE,
+  IMAGE_LAYER_LABEL,
+  IMAGE_LAYER_VERSION,
+  MANAGED_LABEL,
+  OPENMAUSBOT_IMAGE,
+  TARGET_LABEL,
+  WORKSPACE_LABEL,
+  containerComputerAction,
+  containerComputerStatus,
+  localVmContainerName,
+  perBotLocalVmTarget,
+  type CommandRunner,
+  type ContainerComputerStatus,
+  type LocalVmTarget,
+} from "./container-computer.ts";
 import { createLocalVmUpdater, localVmUpdateNeed, vpsDesktopOutdated } from "./desktop-updates.ts";
 
 const status = (over: Partial<ContainerComputerStatus>) => ({
@@ -34,7 +56,7 @@ describe("vpsDesktopOutdated", () => {
 });
 
 describe("createLocalVmUpdater", () => {
-  const target: LocalVmTarget = { key: "bot:abc", containerName: "openmausbot-computer-abc", workspaceDir: "/nonexistent", viewerPort: null, label: "abc" };
+  const target: LocalVmTarget = { key: "bot:abc", containerName: "seira-computer-abc", legacyContainerName: "openmausbot-computer-abc", workspaceDir: "/nonexistent", viewerPort: null, label: "abc" };
   const setup = (opts: { held?: () => boolean } = {}) => {
     let current = status({ imageMatches: false, image: false });
     const calls: string[] = [];
@@ -98,5 +120,60 @@ describe("createLocalVmUpdater", () => {
     expect(announced).toHaveLength(1);
     expect(announced[0]).toMatch(/^Updating this bot's desktop to the new version/);
     held = false;
+  });
+});
+
+describe("updating a desktop that still has the older name", () => {
+  it("keeps sign-ins and apps from the older container, removes it by that name, and creates the new one", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "omb-legacy-update-"));
+    const target = { ...perBotLocalVmTarget("legacy-update"), workspaceDir: workspace };
+    const labels = { [MANAGED_LABEL]: "1", [DRIVER_LABEL]: CUA_DRIVER_VERSION, [BASE_IMAGE_LABEL]: BASE_IMAGE_DIGEST, [IMAGE_LAYER_LABEL]: IMAGE_LAYER_VERSION };
+    const imageInspect = JSON.stringify([{ Id: "sha256:current-build", Config: { Labels: labels } }]);
+    let present: "older" | "none" | "new" = "older";
+    const calls: string[] = [];
+    const run: CommandRunner = async (command, args) => {
+      const key = [command, ...args].join(" ");
+      calls.push(key);
+      if (key === "/usr/bin/which docker") return { stdout: "docker" };
+      if (command === "/usr/bin/which") throw new Error("missing executable");
+      if (args[0] === "info") return { stdout: "29" };
+      if (key === `docker image inspect ${IMAGE}`) return { stdout: imageInspect };
+      if (key === `docker inspect ${target.legacyContainerName}` && present === "older") {
+        return { stdout: JSON.stringify([{ Config: { Image: OPENMAUSBOT_IMAGE, Labels: { ...labels, [WORKSPACE_LABEL]: "1", [TARGET_LABEL]: target.label } }, State: { Running: false }, Image: "sha256:old-build" }]) };
+      }
+      if (key === `docker inspect ${target.containerName}` && present === "new") {
+        return { stdout: JSON.stringify([{ Config: { Image: IMAGE, Labels: { ...labels, [WORKSPACE_LABEL]: "1", [TARGET_LABEL]: target.label } }, State: { Running: true }, Image: "sha256:current-build" }]) };
+      }
+      if (args[0] === "inspect") throw new Error("missing container");
+      if (key === `docker rm -f ${target.legacyContainerName}`) { present = "none"; return { stdout: "" }; }
+      if (args[0] === "run") { present = "new"; return { stdout: "id" }; }
+      throw new Error(`unexpected command: ${key}`);
+    };
+    const kept: string[] = [];
+    const updater = createLocalVmUpdater({
+      status: (t) => containerComputerStatus(run, "linux", t),
+      act: (action, t) => containerComputerAction(action, run, "linux", t),
+      keepSignIns: async (t) => { kept.push(`sign-ins ${localVmContainerName(t)}`); return "rescued"; },
+      keepApps: async (t) => { kept.push(`apps ${localVmContainerName(t)}`); return "rescued"; },
+      imageBusy: { get: () => false, set: () => {} },
+      provisionBusy: { get: () => false, set: () => {} },
+      lifecycleBusy: new Set<string>(),
+      inUse: () => false,
+      updated: () => {},
+      workspaceExists: () => true,
+      pollMs: 5,
+    });
+    try {
+      expect(updater.observe(target, await containerComputerStatus(run, "linux", target))).toBe(true);
+      await updater.sweep();
+      expect(kept).toEqual([`sign-ins ${target.legacyContainerName}`, `apps ${target.legacyContainerName}`]);
+      expect(calls).toContain(`docker rm -f ${target.legacyContainerName}`);
+      const runCall = calls.find((call) => call.startsWith("docker run "));
+      expect(runCall).toContain(`--name ${target.containerName} `);
+      expect(calls.indexOf(`docker rm -f ${target.legacyContainerName}`)).toBeLessThan(calls.indexOf(runCall!));
+      expect(localVmContainerName(target)).toBe(target.containerName);
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
   });
 });

@@ -521,7 +521,7 @@ if (!serviceTrustReport || serviceTrustReport.error || serviceTrustReport.servin
 console.log(`packaged server started with no node_modules in reach (port ${port}) ✓`);
 console.log(`all ${count} spawned proxy paths resolve inside the packaged server dir ✓`);
 console.log("packaged MCP stdio server reached the API and flushed its final frames ✓");
-console.log("packaged openmausbot doctor and bots answered from the bundle ✓");
+console.log("packaged seira doctor and bots answered from the bundle ✓");
 console.log("packaged backup worker exported an encrypted archive ✓");
 console.log("packaged loopback trust gate: health serves, a public mutation is refused at service trust ✓");
 if (launcherReport) console.log("packaged container launcher ran the server as its child and stopped it cleanly ✓");

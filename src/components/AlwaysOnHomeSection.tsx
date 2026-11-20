@@ -23,10 +23,16 @@ const UPDATE_LINE = {
   none: "alwaysOn.updates.none",
 } as const satisfies Record<AlwaysOnHomeState["updates"], LocaleKey>;
 
+function loginLineKey(state: AlwaysOnHomeState): LocaleKey {
+  if (state.openAtLogin) return "alwaysOn.login.on";
+  if (state.startupApps) return "alwaysOn.login.startupApps";
+  return state.available ? "alwaysOn.login.off" : "alwaysOn.login.unavailable";
+}
+
 /** What the switch turned on, one line each, as main reads it now. */
 export function alwaysOnLines(state: AlwaysOnHomeState): Line[] {
   return [
-    { key: state.openAtLogin ? "alwaysOn.login.on" : state.available ? "alwaysOn.login.off" : "alwaysOn.login.unavailable", good: state.openAtLogin },
+    { key: loginLineKey(state), good: state.openAtLogin },
     { key: state.awake === "holding" ? "alwaysOn.awake.on" : "alwaysOn.awake.battery", good: state.awake === "holding" },
     { key: UPDATE_LINE[state.updates], good: state.updates === "by-itself" },
     { key: state.platform === "linux" ? "alwaysOn.windowClosedLinux" : "alwaysOn.windowClosed", good: true },

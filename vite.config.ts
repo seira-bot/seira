@@ -82,10 +82,11 @@ export default defineConfig({
     // clients that resolve IPv4 first
     host: "127.0.0.1",
     port: Number(process.env.OMB_UI_PORT) || 5199,
-    // packager output lands inside the repo — its HTML files must never
-    // trigger dev full-page reloads
+    // Build and packager output lands inside the repo. Its HTML files must not
+    // reload the dev page, and on Windows the Vite 7 watcher crashes the dev
+    // server with EBUSY when it watches a binary a prepare script holds open.
     watch: {
-      ignored: ["**/release/**", "**/build/**", "**/dist/**", "**/electron/resources/**"],
+      ignored: ["**/release/**", "**/build/**", "**/dist/**", "**/dist-*/**", "**/electron/resources/**"],
     },
     // the harness server owns every provider process; the app only ever
     // talks to /api — clients hold no transports

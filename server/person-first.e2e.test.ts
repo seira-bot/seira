@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 
@@ -31,7 +31,7 @@ it("stops a turn that keeps the person's message unread in a long tool call, and
         ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
       return { status: response.status, body: await response.json() as any };
     };
-    const bot = ((await runControlOmb(["new-bot", "--name", "Scout", "--url", fixture.info.url])) as { bot: { id: string; activeTaskId: string } }).bot;
+    const bot = ((await runControlSeira(["new-bot", "--name", "Scout", "--url", fixture.info.url])) as { bot: { id: string; activeTaskId: string } }).bot;
     const threadId = bot.activeTaskId;
     const transcript = async (): Promise<any[]> => (await api("GET", `/api/threads/${threadId}/messages?limit=100`)).body.messages;
     const busy = async () => (await api("GET", "/api/bots?messages=0")).body.bots.find((entry: { id: string }) => entry.id === bot.id)?.busy === true;

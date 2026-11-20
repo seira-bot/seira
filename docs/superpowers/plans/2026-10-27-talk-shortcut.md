@@ -65,7 +65,7 @@
 **Interfaces:**
 - Produces: `POST /api/bots/:id/tasks` body `{ title?: string, select?: boolean, … }`; `select: false` creates without selecting; non-boolean `select` → 400 `{ error: "select must be a boolean" }`. Response unchanged: 201 `{ bot, task }`.
 
-- [ ] **Step 1: Write the failing test** (`launchVerificationServer` from `scripts/control-omb.ts`, same `api()` helper as `server/bot-projects-api.test.ts:12-21`, `beforeAll` 90 s timeout)
+- [ ] **Step 1: Write the failing test** (`launchVerificationServer` from `scripts/control-seira.ts`, same `api()` helper as `server/bot-projects-api.test.ts:12-21`, `beforeAll` 90 s timeout)
 
 ```ts
 it("creates a chat without switching the bot's open chat when select is false", async () => {

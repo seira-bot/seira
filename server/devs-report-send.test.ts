@@ -30,6 +30,16 @@ describe("sending a @devs report", () => {
     expect(sent[0]!.body).toEqual(PAYLOAD);
   });
 
+  it("reads the public issue's number, and whether the report joined an open issue, only when the relay says them well", async () => {
+    const { fetcher } = endpoint(answer(201, { id: "r1", issue: 41 }), answer(201, { id: "r2", issue: 41, joined: true }),
+      answer(201, { id: "r3", issue: "41", joined: "yes" }), answer(201, { id: "r4", issue: -2 }));
+    const send = () => sendDevsReport("https://cloud.example/api/bug-reports", PAYLOAD, fetcher);
+    expect(await send()).toEqual({ ok: true, id: "r1", issue: 41 });
+    expect(await send()).toEqual({ ok: true, id: "r2", issue: 41, joined: true });
+    expect(await send()).toEqual({ ok: true, id: "r3" });
+    expect(await send()).toEqual({ ok: true, id: "r4" });
+  });
+
   it("sends again without the address when the endpoint refuses only that", async () => {
     const { sent, fetcher } = endpoint(answer(400, { error: "contactEmail must be an email address of at most 254 characters, or left out." }), answer(201, { id: "r2" }));
     expect(await sendDevsReport("https://cloud.example/api/bug-reports", PAYLOAD, fetcher)).toEqual({ ok: true, id: "r2" });
@@ -88,47 +98,38 @@ describe("where reports go", () => {
 });
 
 describe("the default Seira bug report service", () => {
-  const RICH: DevsReportPayload = {
-    ...PAYLOAD,
-    description: "it broke in /home/ada/work, write to ada@example.com",
-    diagnostics: [`Seira @devs report`, `Install: ${PAYLOAD.installId}`, "", "## Recent problems in this conversation, newest last", "tool Bash failed in /home/ada/x", "",
-      "## Server warnings and errors, newest last", "teammate Grace opened a file", "", "## Cloud computers since the server started", "computer cc-1", "", "## Performance", "turn took 4200 ms"].join("\n"),
+  const DRAFT: DevsReportPayload = {
+    ...PAYLOAD, title: "The sheet step failed", fingerprint: { kind: "tool-failed", step: "read_sheet" },
+    diagnostics: "Seira @devs report\n\n## Recent problems in this conversation, newest last\ntool <file>.ts failed",
   };
-  const ISSUE_URL = "https://github.com/seira-bot/seira/issues/new?template=bug_report.yml";
 
-  it("posts only the public form of the report and says nobody replies by email", async () => {
-    const { sent, fetcher } = endpoint(answer(201, { id: "br_abcdefghijklmnopqrstuv" }));
-    expect(await devsReportSender(SEIRA_BUG_REPORT_URL, fetcher)(RICH)).toEqual({ ok: true, id: "br_abcdefghijklmnopqrstuv", noReply: true });
+  it("posts the report as the person read it, with no contact address, and says nobody replies by email", async () => {
+    const { sent, fetcher } = endpoint(answer(201, { id: "br_abcdefghijklmnopqrstuv", issue: 42 }));
+    expect(await devsReportSender(SEIRA_BUG_REPORT_URL, fetcher)(DRAFT)).toEqual({ ok: true, id: "br_abcdefghijklmnopqrstuv", issue: 42, noReply: true });
     expect(sent.map(({ url }) => url)).toEqual([SEIRA_BUG_REPORT_URL]);
-    const body = sent[0]!.body, text = JSON.stringify(body);
-    expect("contactEmail" in body || "contact" in body).toBe(false);
-    expect(text).not.toContain("ada@example.com");
-    expect(body.installId).toBe(PAYLOAD.installId);
-    expect(`${String(body.description)}\n${String(body.diagnostics)}`).not.toContain(PAYLOAD.installId);
-    expect(text).not.toContain("Install:");
-    for (const section of ["Server warnings and errors", "Cloud computers", "Performance", "teammate Grace"]) expect(text).not.toContain(section);
-    expect(text).not.toContain("/home/ada");
-    expect(body.description).toBe("it broke in ~/work, write to");
-    expect(String(body.diagnostics)).toContain("tool Bash failed in ~/x");
+    const { contactEmail: _email, contact: _contact, ...read } = DRAFT;
+    expect(sent[0]!.body).toEqual(read);
+    expect(JSON.stringify(sent[0]!.body)).not.toContain("ada@example.com");
   });
 
-  it("gives the person the prefilled issue form when the service cannot file the report", async () => {
+  it("keeps a report the service could not take, to go again later or be refused, never a form", async () => {
+    const outcomes = [];
     for (const reply of [new TypeError("fetch failed"), answer(502, { error: "GitHub failed" }), answer(400, { error: "description must be text." })]) {
-      const outcome = await devsReportSender(SEIRA_BUG_REPORT_URL, endpoint(reply).fetcher)(RICH);
-      expect(outcome).toMatchObject({ ok: true });
-      expect("issueUrl" in outcome && outcome.issueUrl.startsWith(ISSUE_URL)).toBe(true);
+      outcomes.push(await devsReportSender(SEIRA_BUG_REPORT_URL, endpoint(reply).fetcher)(DRAFT));
     }
+    expect(outcomes).toEqual([{ ok: false, retry: true, why: "offline" }, { ok: false, retry: true, why: "server" },
+      { ok: false, retry: false, why: "refused", detail: "description must be text." }]);
   });
 
   it("keeps a report the hourly limit held back, to go later", async () => {
     const { fetcher } = endpoint(answer(429, { error: "Too many reports.", retryAfter: 120 }));
-    expect(await devsReportSender(SEIRA_BUG_REPORT_URL, fetcher)(RICH)).toEqual({ ok: false, retry: true, why: "limited", retryAfterMs: 120_000 });
+    expect(await devsReportSender(SEIRA_BUG_REPORT_URL, fetcher)(DRAFT)).toEqual({ ok: false, retry: true, why: "limited", retryAfterMs: 120_000 });
   });
 
-  it("does not fall back or strip anything for another address", async () => {
-    const { sent, fetcher } = endpoint(answer(502, { error: "down" }));
-    expect(await devsReportSender("https://reports.example/api/bug-reports", fetcher)(RICH)).toEqual({ ok: false, retry: true, why: "server" });
-    expect(sent[0]!.body).toEqual(RICH);
+  it("keeps the contact address for another address", async () => {
+    const { sent, fetcher } = endpoint(answer(201, { id: "r9" }));
+    expect(await devsReportSender("https://reports.example/api/bug-reports", fetcher)(DRAFT)).toEqual({ ok: true, id: "r9" });
+    expect(sent[0]!.body).toEqual(DRAFT);
     expect(sent[0]!.body.contactEmail).toBe("ada@example.com");
   });
 

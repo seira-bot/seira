@@ -5,7 +5,7 @@
 // private files; the ref secret only in the MCP server settings it was saved into.
 import { randomBytes } from "node:crypto";
 import { type ChildProcess, spawn } from "node:child_process";
-import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { createInterface } from "node:readline";
@@ -15,6 +15,7 @@ import { cloudHomeConfiguration, cloudPairingSignature } from "./cloud-home.ts";
 import { cloudHomeChildEnvironments, spawnWithSecrets } from "./cloud-home-start.ts";
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
+import { filesHolding as filesHoldingText } from "./testing/files-holding.ts";
 import { freePortBlock } from "./testing/ports.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
@@ -104,7 +105,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
   } }));
   const port = await freePortBlock([0, 1]);
   base = `http://127.0.0.1:${port}`;
-  const contract = { OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: "7d1c3b5a-2e4f-4a6b-8c9d-0e1f2a3b4c5d", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
+  const contract = { OMB_CLOUD_ROLE: "home", OMB_BOT_BOX: "0", OMB_CLOUD_MACHINE_ID: "7d1c3b5a-2e4f-4a6b-8c9d-0e1f2a3b4c5d", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
     OMB_CLOUD_BOOTSTRAP_SECRET: bootstrap, OMB_PUBLIC_URL: `https://${HOST}` };
   const imageEnv = { PATH: process.env.PATH, OMB_DUCKDB_DIR: join(home, "empty-tree"), ...contract };
   const { server, secrets } = cloudHomeChildEnvironments(cloudHomeConfiguration(imageEnv)!, imageEnv, home);
@@ -131,20 +132,9 @@ afterAll(async () => {
   if (home) await removeTempDir(home);
 });
 
-/** Every file under `root` that holds `needle`, as a path from `root`; links are not followed. */
-function filesHolding(root: string, needle: string): string[] {
-  const found: string[] = [];
-  const walk = (folder: string) => {
-    for (const name of readdirSync(folder)) {
-      const path = join(folder, name);
-      const info = lstatSync(path);
-      if (info.isDirectory()) walk(path);
-      else if (info.isFile() && readFileSync(path).includes(needle)) found.push(relative(root, path));
-    }
-  };
-  walk(root);
-  return found;
-}
+/** Every file under `root` that holds `needle`, as a path from `root`; links are not followed. The server is still running and
+ * saves through temp files it renames, so a name that was listed may be gone before it is read. */
+const filesHolding = (root: string, needle: string): string[] => filesHoldingText(root, needle, { followLinks: false });
 
 it("keeps a file secret and a ref secret out of every record, and the bot uses each once", async () => {
   const bot = (await api("POST", "/api/bots", { name: "Ledger", modelSelection: { instanceId: "claude", model: "claude-sonnet-5" } })).body.bot;

@@ -9,6 +9,7 @@ import {
   upstreamError,
   type InstallationRow,
 } from "./common";
+import { foldUsage } from "./limits";
 import { deleteRemote, listRemoteInstances, otherBindings } from "./triggers";
 
 /** Workers on the free plan get 50 subrequests and 50 D1 queries per request: a larger erase is finished by further calls. */
@@ -90,6 +91,7 @@ export async function eraseInstallation(installation: InstallationRow, env: Env)
   const outcome = await eraseAtComposio(env, id, erasable);
   if (outcome === "more") return json({ erased: false, more: true }, 202);
   if (outcome !== "done") return outcome;
+  await foldUsage(env, id);
   await env.DB.batch([
     env.DB.prepare("DELETE FROM trigger_bindings WHERE installation_id = ?").bind(id),
     env.DB.prepare("DELETE FROM events WHERE installation_id = ?").bind(id),

@@ -3,7 +3,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { launchVerificationServer, runControlOmb } from "./control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "./control-seira.ts";
 import { fixtureApi, mountPreview, parkUntilSignal, type MountedPreview } from "./testing/preview-fixture.ts";
 
 const fixture = await launchVerificationServer();
@@ -44,7 +44,7 @@ try {
   };
   writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
   await api("PUT", "/api/config", { defaultModelSelection: { instanceId: "codex", model: "gpt-6-astra" } });
-  await runControlOmb(["new-bot", "--name", "Codex Account Fixture", "--url", fixture.info.url]);
+  await runControlSeira(["new-bot", "--name", "Codex Account Fixture", "--url", fixture.info.url]);
   const { instances } = await api("GET", "/api/instances");
   const codex = instances.find((instance: { instanceId: string }) => instance.instanceId === "codex");
   if (codex?.snapshot.authenticated !== true || codex.snapshot.account?.email !== "ada@example.test") {

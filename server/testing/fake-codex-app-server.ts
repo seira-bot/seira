@@ -31,6 +31,19 @@
 //   FAKE_CODEX_APPROVAL_REQUEST  JSON {method, params} override in approval mode
 //   FAKE_CODEX_ACCOUNT_EMAIL  synthetic ChatGPT identity (default ada@example.test)
 //   FAKE_CODEX_ACCOUNT_MODE  chatgpt (default) | api-key | none | unsupported | error | hang
+//   FAKE_CODEX_ACCOUNT  chatgpt (default) | apikey | none; wins over FAKE_CODEX_ACCOUNT_MODE
+//   FAKE_CODEX_REALTIME_MODE  thread/realtime/start: answer (default: sdp, then started) | silent (no sdp) | error (sdp, started, then
+//     thread/realtime/error) | exit (sdp, started, then exit 1) | approval (sdp, started, then a command approval request; each
+//     appendSpeech comes back as an assistant transcript/done, then 100 ms later as the user's answer) | turn-answer (sdp, started,
+//     then an agent message and turn/completed) |
+//     working (sdp, started, then turn/started, item/started, item/completed and turn/completed of the call thread, no transcript) |
+//     working-other-thread (the same steps for another thread) | closed-early (thread/realtime/closed with no sdp) |
+//     error-early (thread/realtime/error with no sdp)
+//   FAKE_CODEX_REALTIME_REPLY  approval mode: the user's spoken answer (default "yes", empty: no answer); turn-answer mode: the agent message
+//   FAKE_CODEX_REALTIME_APPROVAL  approval mode: JSON {method, params} merged over the default command request
+//   FAKE_CODEX_REALTIME_STALE  approval mode: "1" sends the user's answer as an utterance that began before the question
+//   FAKE_CODEX_REALTIME_COMMAND  approval mode: the command Codex asks about (default "rm -rf scratch")
+//   FAKE_CODEX_REALTIME_ITEM  approval mode: JSON params merged over {threadId, turnId} of an item/started sent before the request
 //   FAKE_CODEX_RESUME_ERROR  JSON-RPC error rejecting thread/resume
 //   FAKE_CODEX_ARCHIVED  "1": thread/resume says the session is archived until thread/unarchive; "unarchive-fails": unarchive is refused too
 //   FAKE_CODEX_STARTUP_DELAY_MS  hold the initialize reply this long, like a loaded host
@@ -214,6 +227,9 @@ const logStartup = (event: string) => {
   if (process.env.FAKE_CODEX_STARTUP_LOG) appendFileSync(process.env.FAKE_CODEX_STARTUP_LOG, `${JSON.stringify({ pid: process.pid, at: Date.now(), event })}\n`);
 };
 let decision: unknown = null;
+const REALTIME_APPROVAL_ID = 200;
+const FAKE_REALTIME_SDP = "v=0\r\no=fake-codex-answer\r\ns=-\r\nt=0 0\r\n";
+const realtimeMode = process.env.FAKE_CODEX_REALTIME_MODE ?? "answer";
 let experimentalApi = false;
 
 const out = (obj: unknown) => process.stdout.write(JSON.stringify(obj) + "\n");
@@ -516,6 +532,12 @@ process.stdin.on("data", (chunk) => {
       continue;
     }
 
+    if (msg.id === REALTIME_APPROVAL_ID && (msg.result !== undefined || msg.error !== undefined)) {
+      decision = msg.result ?? { error: msg.error };
+      dump();
+      continue;
+    }
+
     if ((msg.id === 100 || msg.id === 101) && (msg.result !== undefined || msg.error !== undefined)) {
       decision = msg.result ?? { error: msg.error };
       if ((mode === "question" || mode === "multi-question" || mode === "empty-question") && process.env.FAKE_CODEX_ASK_HOLD === "1") {
@@ -549,7 +571,7 @@ process.stdin.on("data", (chunk) => {
         break;
       case "account/read": {
         dump();
-        const accountMode = process.env.FAKE_CODEX_ACCOUNT_MODE;
+        const accountMode = process.env.FAKE_CODEX_ACCOUNT === "apikey" ? "api-key" : process.env.FAKE_CODEX_ACCOUNT ?? process.env.FAKE_CODEX_ACCOUNT_MODE;
         if (accountMode === "hang") break;
         if (accountMode === "unsupported" || accountMode === "error") {
           out({ jsonrpc: "2.0", id: msg.id, error: {
@@ -1120,6 +1142,71 @@ process.stdin.on("data", (chunk) => {
         }
         break;
       }
+      case "thread/realtime/start": {
+        dump();
+        const threadId = msg.params?.threadId;
+        out({ jsonrpc: "2.0", id: msg.id, result: {} });
+        if (realtimeMode === "silent") break;
+        if (realtimeMode === "closed-early") { notify("thread/realtime/closed", { threadId, reason: "quota" }); break; }
+        if (realtimeMode === "error-early") { notify("thread/realtime/error", { threadId, message: "fake early error" }); break; }
+        notify("thread/realtime/sdp", { threadId, sdp: FAKE_REALTIME_SDP });
+        notify("thread/realtime/started", { threadId, sessionId: threadId, version: "v3" });
+        if (realtimeMode === "error") {
+          notify("thread/realtime/error", { threadId, message: "fake realtime error" });
+        } else if (realtimeMode === "exit") {
+          setTimeout(() => process.exit(1), 50);
+        } else if (realtimeMode === "approval") {
+          const override = process.env.FAKE_CODEX_REALTIME_APPROVAL ? JSON.parse(process.env.FAKE_CODEX_REALTIME_APPROVAL) : {};
+          if (process.env.FAKE_CODEX_REALTIME_STALE === "1") notify("thread/realtime/transcript/delta", { threadId, role: "user", delta: "ye" });
+          if (process.env.FAKE_CODEX_REALTIME_ITEM) {
+            notify("item/started", { threadId, turnId: "realtime-turn-1", ...JSON.parse(process.env.FAKE_CODEX_REALTIME_ITEM) });
+          }
+          out({
+            jsonrpc: "2.0", id: REALTIME_APPROVAL_ID, method: override.method ?? "item/commandExecution/requestApproval",
+            params: { threadId, turnId: "realtime-turn-1", itemId: "realtime-item-1", command: process.env.FAKE_CODEX_REALTIME_COMMAND ?? "rm -rf scratch", cwd: process.cwd(), ...override.params },
+          });
+          if (process.env.FAKE_CODEX_REALTIME_STALE === "1") {
+            setTimeout(() => notify("thread/realtime/transcript/done", { threadId, role: "user", text: "yes" }), 100);
+          }
+        } else if (realtimeMode === "working" || realtimeMode === "working-other-thread") {
+          const target = realtimeMode === "working" ? threadId : "other-thread";
+          notify("turn/started", { threadId: target, turn: { status: "inProgress" } });
+          notify("item/started", { threadId: target, item: { id: "c1", type: "commandExecution" } });
+          notify("item/completed", { threadId: target, item: { id: "c1", type: "commandExecution" } });
+          notify("turn/completed", { threadId: target, turn: { status: "completed" } });
+        } else if (realtimeMode === "turn-answer") {
+          notify("thread/realtime/transcript/delta", { threadId, role: "user", delta: "spoken question" });
+          notify("thread/realtime/transcript/delta", { threadId, role: "assistant", delta: "spoken reply" });
+          notify("item/completed", { threadId, item: { id: "m1", type: "agentMessage", text: process.env.FAKE_CODEX_REALTIME_REPLY ?? "fake spoken answer" } });
+          notify("turn/completed", { threadId, turn: { status: "completed" } });
+        }
+        break;
+      }
+      case "thread/realtime/appendSpeech": {
+        dump();
+        out({ jsonrpc: "2.0", id: msg.id, result: {} });
+        if (realtimeMode !== "approval") break;
+        const threadId = msg.params?.threadId;
+        notify("thread/realtime/transcript/delta", { threadId, role: "assistant", delta: msg.params?.text });
+        notify("thread/realtime/transcript/done", { threadId, role: "assistant", text: msg.params?.text });
+        const spoken = process.env.FAKE_CODEX_REALTIME_REPLY ?? "yes";
+        if (spoken && process.env.FAKE_CODEX_REALTIME_STALE !== "1") {
+          setTimeout(() => {
+            notify("thread/realtime/transcript/delta", { threadId, role: "user", delta: spoken });
+            notify("thread/realtime/transcript/done", { threadId, role: "user", text: spoken });
+          }, 100);
+        }
+        break;
+      }
+      case "thread/realtime/appendText":
+      case "thread/realtime/stop":
+        dump();
+        out({ jsonrpc: "2.0", id: msg.id, result: {} });
+        break;
+      case "thread/realtime/listVoices":
+        dump();
+        out({ jsonrpc: "2.0", id: msg.id, result: { voices: [] } });
+        break;
       default:
         if (msg.id !== undefined) out({ jsonrpc: "2.0", id: msg.id, result: {} });
     }

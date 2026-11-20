@@ -3,7 +3,8 @@
 // fake engine, and a headless Chrome with its own profile. Prints one JSON object, so a change can show before/after.
 //   node --experimental-strip-types scripts/bench-desktop.ts [--only bundle,server,start,screens,idle,stream,big,routines]
 //     [--chrome PATH] [--idle-seconds 30] [--bots 150] [--threads 300] [--messages 2000] [--advanced] [--out FILE] [--keep]
-//     [--screenshots DIR]
+//     [--screenshots DIR] [--budgets FILE] [--budget-kinds count,time,memory]
+// With --budgets, the run exits 1 when a measured metric is above its limit; --budget-kinds checks only those kinds.
 // bundle: the production build's first-load JavaScript and which libraries it pulls in eagerly.
 // server: fixture server spawn to /api/health, from source and as the packaged bundle with its compile cache; timer
 //   callbacks and CPU with no page open; child processes each engine-list read (a window focus) starts.
@@ -24,8 +25,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { gzipSync } from "node:zlib";
 
-import { runControlOmb, verificationServerArgs, verificationServerEnvironment } from "./control-omb.ts";
-import { installedChrome } from "./testing/control-omb-ui.ts";
+import { runControlSeira, verificationServerArgs, verificationServerEnvironment } from "./control-seira.ts";
+import { budgetExitCode, checkBudgets, formatReport, loadBudgets, parseKinds } from "./testing/bench-budgets.ts";
+import { installedChrome } from "./testing/control-seira-ui.ts";
 import { FRAMES_START, FRAMES_STOP, launchChrome, switchExpression, TRANSCRIPT_BOX, type Chrome, type Page } from "./testing/bench-desktop-page.ts";
 import { removeTempDir, waitForExit } from "../server/testing/cleanup.ts";
 import { freePortBlock } from "../server/testing/ports.ts";
@@ -44,12 +46,16 @@ const { values } = parseArgs({
     out: { type: "string" },
     keep: { type: "boolean", default: false },
     screenshots: { type: "string" },
+    budgets: { type: "string" },
+    "budget-kinds": { type: "string" },
   },
 });
 const only = new Set((values.only ?? PHASES.join(",")).split(",").map((phase) => phase.trim()).filter(Boolean));
 for (const phase of only) if (!(PHASES as readonly string[]).includes(phase)) throw new Error(`unknown phase ${phase}; phases: ${PHASES.join(", ")}`);
+const budgets = values.budgets ? loadBudgets(values.budgets) : undefined;
+const budgetKinds = parseKinds(values["budget-kinds"]);
 const IDLE_MS = Number(values["idle-seconds"]) * 1000;
-const STORAGE = { "omb-analytics-opt-out": "1", "omb-email-gate": "skipped", "omb-simple-mode-prompt": "1", "grok-move-2026-11": "1", "teams-2026-11": "1", "modelgo-offer-2026-11": "1", "omb-advanced-mode": values.advanced ? "1" : "0" };
+const STORAGE = { "omb-analytics-opt-out": "1", "omb-email-gate": "skipped", "omb-simple-mode-prompt": "1", "grok-move-2026-11": "1", "teams-2026-11": "1", "omb-advanced-mode": values.advanced ? "1" : "0" };
 const log = (line: string) => process.stderr.write(`bench-desktop: ${line}\n`);
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const round = (value: number, digits = 1) => Math.round(value * 10 ** digits) / 10 ** digits;
@@ -442,7 +448,7 @@ async function idleWindow(chrome: Chrome, pages: Record<string, Page>, fixture: 
 }
 
 async function waitTurn(fixture: Fixture, botId: string) {
-  return await runControlOmb(["wait", "--bot", botId, "--timeout", "180", "--for", "turn", "--url", fixture.url]) as { status?: string; messages?: Array<{ id?: string; kind?: string; role?: string }> };
+  return await runControlSeira(["wait", "--bot", botId, "--timeout", "180", "--for", "turn", "--url", fixture.url]) as { status?: string; messages?: Array<{ id?: string; kind?: string; role?: string }> };
 }
 
 /** One streamed reply with tool calls into `botId`'s open chat, measured in the page, Chrome and the server. */
@@ -452,7 +458,7 @@ async function streamTurn(chrome: Chrome, page: Page, fixture: Fixture, botId: s
   const cpu0 = await chrome.cpu();
   const tally0 = await fixture.tally();
   const started = performance.now();
-  await runControlOmb(["send", "--bot", botId, "--text", "Write the long report, please.", "--url", fixture.url]);
+  await runControlSeira(["send", "--bot", botId, "--text", "Write the long report, please.", "--url", fixture.url]);
   await sleep(4_000);
   const animationsMidTurn = await page.evaluate<Record<string, number>>(RUNNING_ANIMATIONS);
   const settled = await waitTurn(fixture, botId);
@@ -491,7 +497,7 @@ async function streamTurn(chrome: Chrome, page: Page, fixture: Fixture, botId: s
 }
 
 async function newBot(fixture: Fixture, name: string): Promise<string> {
-  const created = await runControlOmb(["new-bot", "--name", name, "--url", fixture.url]) as { bot: { id: string } };
+  const created = await runControlSeira(["new-bot", "--name", name, "--url", fixture.url]) as { bot: { id: string } };
   return created.bot.id;
 }
 
@@ -580,7 +586,7 @@ async function main() {
 
   let chrome: Chrome | undefined;
   if (needsUi) {
-    if (!chromePath) throw new Error("no Chrome: run `control-omb ui launch` once, or pass --chrome PATH");
+    if (!chromePath) throw new Error("no Chrome: run `control-seira ui launch` once, or pass --chrome PATH");
     chrome = await launchChrome(chromePath);
     cleanups.push(() => chrome!.close());
   }
@@ -833,6 +839,12 @@ async function main() {
   const json = JSON.stringify(result, null, 2);
   if (values.out) writeFileSync(values.out, `${json}\n`);
   process.stdout.write(`${json}\n`);
+
+  if (budgets) {
+    const report = checkBudgets(result, budgets, budgetKinds);
+    for (const line of formatReport(report).split("\n")) log(line);
+    if (budgetExitCode(report)) exitCode = 1;
+  }
 }
 
 let exitCode = 0;

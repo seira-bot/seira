@@ -37,6 +37,15 @@ function linuxLocalControlSupport(platform, env, { hyprlandPlugin } = {}) {
     });
   }
   const session = linuxSession(platform, env);
+  // A Flatpak cannot give the helper the whole desktop, so the one-session answer would be wrong.
+  if (env?.FLATPAK_ID) {
+    return Object.freeze({
+      available: false,
+      session,
+      reasonCode: "flatpak-sandbox",
+      message: "Local control is not available in this version of Seira. Use the download from the Seira website to control this computer.",
+    });
+  }
   if (session === "x11") return Object.freeze({ available: true, session });
   // Hyprland with Cua's plugin is the one Wayland desktop allowed: the plugin gives the bot seats of its own inside the
   // compositor. Every other Wayland desktop keeps the seat-safety block.

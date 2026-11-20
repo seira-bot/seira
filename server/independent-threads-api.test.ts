@@ -7,7 +7,7 @@ import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, type VerificationServer } from "../scripts/control-seira.ts";
 import { handleToolCall, request } from "../scripts/mcp-server.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 import { memoryDate } from "./workspace.ts";
@@ -35,7 +35,7 @@ describe("independent bot tasks through the isolated control surface", () => {
     return result;
   };
   const control = async (args: string[]) => {
-    const result = await runControlOmb([...args, "--url", session.info.url]);
+    const result = await runControlSeira([...args, "--url", session.info.url]);
     evidence.push({ command: args, result });
     return result as any;
   };

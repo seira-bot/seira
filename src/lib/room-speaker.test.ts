@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Message } from "@/state/store";
 import { groupActivityRuns } from "./activity-runs";
-import { botTextShowsSpeaker, runShowsSpeaker } from "./room-speaker";
+import { botTextShowsSpeaker, laterTextOf, runShowsSpeaker } from "./room-speaker";
 
 const day = 1_700_000_000_000;
 
@@ -85,5 +85,24 @@ describe("room speaker labels", () => {
     expect(botTextShowsSpeaker(items, 2)).toBe(true);
     const hidden = groupActivityRuns(messages.filter((message) => message.kind !== "activity"));
     expect(botTextShowsSpeaker(hidden, 1)).toBe(false);
+  });
+});
+
+describe("room speaker labels with the head above the work card", () => {
+  const headFirst = { showToolCalls: true };
+
+  it("names the run, then keeps the answer after it unnamed", () => {
+    const items = groupActivityRuns([text("u", "user", "look"), tool("t1", ada), tool("t2", ada, day + 1), text("a", "bot", "found it", ada, day + 2)]);
+    const run = items.findIndex((item) => item.kind === "run");
+    const reply = items.findIndex((item) => item.kind === "message" && item.message.id === "a");
+    expect(runShowsSpeaker(items, run, true, true)).toBe(true);
+    expect(botTextShowsSpeaker(items, reply, headFirst)).toBe(false);
+    expect(botTextShowsSpeaker(items, reply)).toBe(true);
+    expect(laterTextOf(items, run, "ada", day)?.id).toBe("a");
+  });
+
+  it("names a reply that follows another bots run", () => {
+    const items = groupActivityRuns([text("u", "user", "go"), tool("t1", kai), tool("t2", kai, day + 1), text("a", "bot", "back", ada, day + 2)]);
+    expect(botTextShowsSpeaker(items, 2, headFirst)).toBe(true);
   });
 });

@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, type VerificationServer } from "../scripts/control-seira.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 
 let fixture: VerificationServer | undefined;
@@ -31,7 +31,7 @@ const outside = async (endpoint: string, key: string, message: string) => {
   const response = await fetch(endpoint, { method: "POST", headers: { authorization: `Bearer ${key}`, "content-type": "application/json" }, body: JSON.stringify({ message }) });
   return { status: response.status, retryAfter: response.headers.get("retry-after"), body: await response.json() as any };
 };
-const newBot = async (url: string, name: string) => (await runControlOmb(["new-bot", "--name", name, "--url", url]) as { bot: { id: string; activeTaskId: string } }).bot;
+const newBot = async (url: string, name: string) => (await runControlSeira(["new-bot", "--name", name, "--url", url]) as { bot: { id: string; activeTaskId: string } }).bot;
 const replies = async (ok: ReturnType<typeof client>["ok"], threadId: string) =>
   ((await ok("GET", `/api/threads/${threadId}/messages?limit=200`)).messages as any[]).filter((line) => line.role === "bot" && line.kind === "text").length;
 
@@ -89,7 +89,7 @@ it("stops unattended work at a reached cap with one line each and one notice, ke
   // In a room too: the owner's line gets its answer from the capped bot.
   const room = (await ok("POST", "/api/groups", { name: "Desk", memberIds: [scout.id, other.id], setup: { bulletin: "", defaultResponder: { kind: "member", botId: scout.id } } })).group;
   expect((await call("POST", `/api/groups/${room.id}/messages`, { text: "Scout, are you there?" })).status).toBe(202);
-  await runControlOmb(["wait", "--channel", room.id, "--timeout", "60", "--url", url]);
+  await runControlSeira(["wait", "--channel", room.id, "--timeout", "60", "--url", url]);
   const roomLines = (await ok("GET", `/api/threads/${room.threadId}/messages?limit=50`)).messages as any[];
   expect(roomLines.filter((line) => line.role === "bot" && line.kind === "text" && line.from?.botId === scout.id)).toHaveLength(1);
   expect(roomLines.filter((line) => /usage cap/.test(line.tool?.name ?? ""))).toEqual([]);
@@ -111,7 +111,7 @@ it("stops unattended work at a reached cap with one line each and one notice, ke
   expect(stopped.body.error).toContain("Scout’s daily usage cap ($0.01) is reached");
 
   expect((await call("POST", `/api/groups/${room.id}/messages`, { text: "And in here?" })).status).toBe(202);
-  await runControlOmb(["wait", "--channel", room.id, "--timeout", "60", "--url", url]);
+  await runControlSeira(["wait", "--channel", room.id, "--timeout", "60", "--url", url]);
   const refusedInRoom = ((await ok("GET", `/api/threads/${room.threadId}/messages?limit=50`)).messages as any[]).filter((line) => /usage cap/.test(line.tool?.name ?? ""));
   expect(refusedInRoom).toHaveLength(1);
   expect(refusedInRoom[0].tool.name).toContain("Scout’s daily usage cap ($0.01) is reached");

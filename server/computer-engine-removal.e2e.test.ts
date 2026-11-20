@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { runControlOmb } from "../scripts/control-omb.ts";
+import { runControlSeira } from "../scripts/control-seira.ts";
 import { SNAPSHOT_REUSE_MS } from "./harness/registry.ts";
 import { freePortBlock } from "./testing/ports.ts";
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
@@ -39,7 +39,7 @@ function install(home: string, boatPort: () => number) {
     expect(response.status, `${method} ${path}: ${JSON.stringify(result)}`).toBeLessThan(400);
     return result;
   };
-  const control = (args: string[]) => runControlOmb([...args, "--url", base]) as Promise<any>;
+  const control = (args: string[]) => runControlSeira([...args, "--url", base]) as Promise<any>;
   const send = (botId: string, threadId: string, text: string) => fetch(`${base}/api/bots/${botId}/messages`, {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, threadId }),
   }).then(response => response.status);

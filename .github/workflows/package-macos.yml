@@ -7,6 +7,9 @@
 # - it uploads the packages as a workflow artifact. A maintainer attaches the artifact to the release by hand.
 # A run that a person outside the repository variable RELEASE_MAINTAINERS starts waits for a maintainer's approval in the `release-approval` environment.
 # A maintainer's run does not wait.
+# The `package` job runs only if a maintainer started this attempt, or if the approval came in this same attempt.
+# A re-run by another person therefore never reuses an approval of an earlier attempt.
+# The `commit` job finds the commit of the ref before the approval. The `package` job builds that commit only.
 # The `release` environment accepts `main` only and holds the five Apple secrets (docs/ci.md):
 # - all five set: Developer ID signature, notarization, staple, and a Gatekeeper check;
 # - none set: ad-hoc signed apps for tests only, in an artifact named NOT-FOR-RELEASE with no update feed;
@@ -27,20 +30,53 @@ permissions:
   contents: read
 
 jobs:
+  commit:
+    name: find the commit to build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - name: Find the commit of the ref
+        id: sha
+        shell: bash
+        env:
+          REF: ${{ inputs.ref }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -z "$REF" ] || [[ "$REF" == -* ]] || [[ "$REF" == *..* ]] || [[ "$REF" =~ [^A-Za-z0-9._/-] ]]; then
+            echo "::error::The ref is not a tag, branch or commit name."
+            exit 1
+          fi
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$REF" --jq .sha) || {
+            echo "::error::The repository has no commit for this ref."
+            exit 1
+          }
+          if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The commit id is not a 40-character SHA."
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Ref \`$REF\` is commit \`$sha\`." >> "$GITHUB_STEP_SUMMARY"
+
   approval:
     name: approval for a person outside the maintainers
-    if: ${{ !contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor) }}
+    needs: commit
+    if: ${{ !(startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: release-approval
     permissions: {}
+    outputs:
+      attempt: ${{ github.run_attempt }}
     steps:
       - run: echo "A maintainer approved this run."
 
   package:
     name: macOS arm64 and x64 apps
-    needs: approval
-    if: ${{ !cancelled() && (needs.approval.result == 'success' || needs.approval.result == 'skipped') }}
+    needs: [commit, approval]
+    if: ${{ !cancelled() && needs.commit.result == 'success' && ((startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)) || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
     runs-on: macos-15
     timeout-minutes: 120
     environment: release
@@ -74,7 +110,7 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ needs.commit.outputs.sha }}
           persist-credentials: false
       - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

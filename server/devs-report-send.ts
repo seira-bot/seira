@@ -1,22 +1,23 @@
-// Preparing one @devs report. By default it is posted to Seira's bug report service, in the strict public form
-// (publicReport), and its answer read: 201 {id}; 400 or 413 {error}; 429 {error, retryAfter} (seconds, also Retry-After).
-// When that service cannot file it, or OMB_BUG_REPORT_URL is off, the report becomes a prefilled issue form the person
-// opens and submits themselves (devs-report-issue.ts). Another OMB_BUG_REPORT_URL address gets the full report, with no
-// fallback. The same address is asked what became of the reports this app sent (POST /api/bug-reports/status), which a
-// Cloud also signs with the bootstrap secret it shares with its Admin.
+// Sending one @devs report, after the person reads its draft and sends it. By default it goes to Seira's bug report
+// service, which files a public GitHub issue; OMB_BUG_REPORT_URL names another https address (or http on this machine's
+// loopback, for fixtures), and `off` or any other value keeps the report as a prefilled issue form the person opens and
+// submits themselves (devs-report-issue.ts). The endpoint answers 201 {id, issue?, joined?}; 400 or 413 {error}; 429
+// {error, retryAfter} (seconds, also Retry-After). The same address is asked what became of the reports this app sent
+// (POST /api/bug-reports/status), which a Cloud also signs with the bootstrap secret it shares with its Admin.
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { z } from "zod";
 
 import { DEVS_REPORT_LIMITS, withoutContact, type DevsReportPayload } from "./devs-report.ts";
-import { bugReportIssueUrl, publicReport } from "./devs-report-issue.ts";
+import { bugReportIssueUrl } from "./devs-report-issue.ts";
 
 export const SEIRA_BUG_REPORT_URL = "https://bugs.seira.bot/api/bug-reports";
 const SEND_TIMEOUT_MS = 20_000;
 const ANSWER_MAX_BYTES = 16 * 1024;
 
 export type SendOutcome =
-  /** `noReply`: the endpoint keeps no contact address, so nobody replies by email. */
-  | { ok: true; id: string; noReply?: true }
+  /** `issue`: the public issue's number, and `joined`: the report became a comment on an open issue, when the relay says so.
+   * `noReply`: the endpoint keeps no contact address, so nobody replies by email. */
+  | { ok: true; id: string; issue?: number; joined?: boolean; noReply?: true }
   /** Nothing was sent: the report is a prefilled issue form that the person opens and submits. */
   | { ok: true; issueUrl: string }
   /** Worth sending again later: offline, a server error, or the endpoint's hourly limit. */
@@ -77,10 +78,9 @@ async function post(endpoint: string, payload: DevsReportPayload, fetcher: typeo
 export const devsReportSender = (endpoint: string | null, fetcher: typeof fetch = fetch) => async (payload: DevsReportPayload): Promise<SendOutcome> => {
   if (endpoint === null) return { ok: true, issueUrl: bugReportIssueUrl(payload) };
   if (endpoint !== SEIRA_BUG_REPORT_URL) return sendDevsReport(endpoint, payload, fetcher);
-  const outcome = await sendDevsReport(endpoint, publicReport(payload), fetcher);
-  if (outcome.ok && "id" in outcome) return { ...outcome, noReply: true };
-  if (!outcome.ok && outcome.why === "limited") return outcome;
-  return outcome.ok ? outcome : { ok: true, issueUrl: bugReportIssueUrl(payload) };
+  // Seira's service files a public issue: no contact address goes there, even in a report an older version queued.
+  const outcome = await sendDevsReport(endpoint, withoutContact(payload), fetcher);
+  return outcome.ok && "id" in outcome ? { ...outcome, noReply: true } : outcome;
 };
 
 export async function sendDevsReport(endpoint: string, payload: DevsReportPayload, fetcher: typeof fetch = fetch): Promise<SendOutcome> {
@@ -93,7 +93,9 @@ export async function sendDevsReport(endpoint: string, payload: DevsReportPayloa
   const { status, body, headers } = answer;
   if (status >= 200 && status < 300) {
     const id = typeof body.id === "string" ? body.id.trim() : "";
-    return /^[A-Za-z0-9_-]{1,64}$/.test(id) ? { ok: true, id } : { ok: false, retry: true, why: "server" };
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) return { ok: false, retry: true, why: "server" };
+    const issue = Number.isSafeInteger(body.issue) && (body.issue as number) > 0 ? body.issue as number : undefined;
+    return { ok: true, id, ...(issue ? { issue } : {}), ...(body.joined === true ? { joined: true } : {}) };
   }
   if (status === 429) {
     const seconds = Number(body.retryAfter ?? headers.get("retry-after"));

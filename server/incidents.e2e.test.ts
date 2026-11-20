@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 import { openSse } from "./testing/sse.ts";
 
@@ -22,7 +22,7 @@ async function launch(boat?: string, enterprise?: { dir: string; licenseKey: str
     expect(response.status, `${method} ${path}: ${JSON.stringify(value)}`).toBe(expectedStatus);
     return value;
   };
-  const control = (args: string[]) => runControlOmb([...args, "--url", url]) as Promise<any>;
+  const control = (args: string[]) => runControlSeira([...args, "--url", url]) as Promise<any>;
   const file = (threadId: string, extension: string) => join(dataDir, `${threadId}.${extension}`);
   const dump = async (threadId: string) => {
     await expect.poll(() => existsSync(file(threadId, "json")), { timeout: 20_000 }).toBe(true);

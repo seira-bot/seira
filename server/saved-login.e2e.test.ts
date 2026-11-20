@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 import { FakeLoginPage, LOGIN_FORM } from "./testing/fake-login-page.ts";
 import { freePortBlock } from "./testing/ports.ts";
@@ -118,7 +118,7 @@ it.skipIf(process.platform === "win32")("saves a login from the sign-in card wit
       { steps: [{ tool: "fill_login", arguments: {} }], reply: `Signed in. The password was ${PASSWORD}.` },
     ] } }));
 
-    await runControlOmb(["send", "--bot", bot.id, "--task", bot.threadId, "--text", "Download this month's invoices.", "--url", browser.base]);
+    await runControlSeira(["send", "--bot", bot.id, "--task", bot.threadId, "--text", "Download this month's invoices.", "--url", browser.base]);
     await expect.poll(() => evidence().length, { timeout: 20_000 }).toBe(1);
     const messages = async () => (await api("GET", `/api/threads/${bot.threadId}/messages`)).body.messages as any[];
     await expect.poll(async () => (await messages()).some((message) => message.kind === "signin"), { timeout: 15_000 }).toBe(true);
@@ -173,9 +173,9 @@ it.skipIf(process.platform === "win32")("fills a login saved for example.com on 
       { steps: [{ tool: "fill_login", arguments: {}, expectError: true }], reply: "The site refused it." },
     ] } }));
     const turn = async (text: string, count: number) => {
-      await runControlOmb(["send", "--bot", bot.id, "--task", bot.threadId, "--text", text, "--url", browser.base]);
+      await runControlSeira(["send", "--bot", bot.id, "--task", bot.threadId, "--text", text, "--url", browser.base]);
       await expect.poll(() => evidence().length, { timeout: 20_000 }).toBe(count);
-      expect(await runControlOmb(["wait", "--bot", bot.id, "--task", bot.threadId, "--timeout", "20", "--url", browser.base])).toMatchObject({ status: "settled" });
+      expect(await runControlSeira(["wait", "--bot", bot.id, "--task", bot.threadId, "--timeout", "20", "--url", browser.base])).toMatchObject({ status: "settled" });
     };
 
     await turn("Sign in to example.com.", 1);
@@ -216,7 +216,7 @@ it.skipIf(process.platform === "win32")("fills a login kept to one bot on its gu
     expect(logins).toEqual([expect.objectContaining({ bots: [capacity.id] })]);
     writeFileSync(browser.planPath, JSON.stringify({ [capacity.id]: { turns: [{ steps: [{ tool: "fill_login", arguments: { submit: false } }], reply: "Filled." }] } }));
 
-    await runControlOmb(["send", "--bot", capacity.id, "--task", capacity.threadId, "--text", "Sign in to example.com.", "--url", browser.base]);
+    await runControlSeira(["send", "--bot", capacity.id, "--task", capacity.threadId, "--text", "Sign in to example.com.", "--url", browser.base]);
     await expect.poll(() => evidence().length, { timeout: 20_000 }).toBe(1);
     expect(answered(0, "fill_login")[0].isError).toBeFalsy();
     expect(evidence()[0].system).toContain(`example.com (${USERNAME})`);
@@ -246,7 +246,7 @@ it.runIf(process.platform === "darwin")("on Auto, signs in in the bot's own brow
       { steps: [{ tool: "fill_login", arguments: {} }], reply: "Signed in." },
     ] } }));
 
-    await runControlOmb(["send", "--bot", bot.id, "--task", bot.threadId, "--text", "Sign in to example.com and get the invoices.", "--url", browser.base]);
+    await runControlSeira(["send", "--bot", bot.id, "--task", bot.threadId, "--text", "Sign in to example.com and get the invoices.", "--url", browser.base]);
     await expect.poll(() => evidence().length, { timeout: 20_000 }).toBe(1);
     const [turn] = evidence();
     expect(turn.system).toContain("Two surfaces are mounted");

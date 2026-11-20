@@ -27,7 +27,7 @@ const companionState = (devices = 0, computers = false): CompanionState => ({
   routes: { wifi: { on: true, since: 1 }, relay: off, tailscale: computers ? { on: true, since: 1, name: "mini", computers: true } : off, https: off } as CompanionState["routes"],
 });
 const home = (over: Partial<AlwaysOnHomeState> = {}): AlwaysOnHomeState =>
-  ({ available: true, on: false, platform: "darwin", openAtLogin: false, awake: "off", updates: "by-itself", ...over });
+  ({ available: true, on: false, platform: "darwin", openAtLogin: false, startupApps: false, awake: "off", updates: "by-itself", ...over });
 
 let host: HTMLDivElement;
 let root: Root;
@@ -62,6 +62,11 @@ describe("what the switch says it did", () => {
     expect(alwaysOnLines(home({ on: true, awake: "battery", updates: "package", available: false })).map((line) => line.key)).toEqual([
       "alwaysOn.login.unavailable", "alwaysOn.awake.battery", "alwaysOn.updates.package", "alwaysOn.windowClosed", "alwaysOn.restarts",
     ]);
+  });
+
+  it("on Windows in a Microsoft Store package, the login line points to Startup apps", () => {
+    expect(alwaysOnLines(home({ on: true, available: false, startupApps: true, platform: "win32" }))[0]).toEqual({ key: "alwaysOn.login.startupApps", good: false });
+    expect(alwaysOnLines(home({ on: true, available: false, startupApps: true, openAtLogin: true }))[0].key).toBe("alwaysOn.login.on");
   });
 
   it("names the Mac's own settings on a Mac only", () => {

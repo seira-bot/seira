@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { TEMPLATE_SHARE_MESSAGE } from "../shared/share-card.ts";
 
 const KEY = "sk-ant-api03-SHAREFIXTUREKEY000000000000000000";
@@ -16,7 +16,7 @@ let fixture: Awaited<ReturnType<typeof launchVerificationServer>>;
 let work: string;
 let calls: string;
 let api: (method: string, path: string, body?: unknown) => Promise<{ status: number; body: any }>;
-const command = (...args: string[]) => runControlOmb([...args, "--url", fixture.info.url]) as Promise<any>;
+const command = (...args: string[]) => runControlSeira([...args, "--url", fixture.info.url]) as Promise<any>;
 const toolCalls = (list: unknown[]) => writeFileSync(calls, JSON.stringify(list));
 const messages = async (threadId: string) => (await api("GET", `/api/threads/${threadId}/messages?limit=200`)).body.messages as any[];
 async function say(botId: string, text: string) {

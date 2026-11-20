@@ -49,8 +49,9 @@ export interface LiveCallRecord {
  * resource, a Fish Audio Live 3 agent the harness sets up on the person's Fish Audio account, whose session the client joins with Fish's SDK,
  * the Gemini Live API on the person's Gemini key, which the client reaches with a single-use token the harness creates, or an
  * ElevenLabs agent the harness sets up on the person's ElevenLabs account, which the client reaches with a signed URL, or
- * "custom": an OpenAI-compatible server the person names (a gateway that serves the GPT-Live API), reached like OpenAI. */
-export type LiveProvider = "openai" | "azure" | "fish" | "gemini" | "elevenlabs" | "custom";
+ * "custom": an OpenAI-compatible server the person names (a gateway that serves the GPT-Live API), reached like OpenAI, or
+ * "codex": the voice of Codex's own ChatGPT sign-in on the computer that runs the called bot, reached like OpenAI with a WebRTC offer. */
+export type LiveProvider = "openai" | "azure" | "fish" | "gemini" | "elevenlabs" | "custom" | "codex";
 
 /** `live`: the key saved for Live calls only; `openai`: the OpenAI API key from Settings → API keys, used when there is no `live` key;
  * `fishAudio`: the Fish Audio key from Settings → API keys, the only key a Fish Audio call uses;
@@ -64,8 +65,10 @@ export interface LiveSettings {
   configured: boolean;
   keySource?: LiveKeySource;
   /** Absent means "openai". With "azure" or "custom" only the `live` key is used, with "fish" only the Fish Audio key, with "gemini" only the
-   * Gemini key and with "elevenlabs" only the ElevenLabs key, never the OpenAI API key. */
+   * Gemini key and with "elevenlabs" only the ElevenLabs key, and with "codex" no key at all, never the OpenAI API key. */
   provider?: LiveProvider;
+  /** The Codex engine is installed here, so "codex" is offered as a provider. Absent means not known. */
+  codexAvailable?: boolean;
   /** The Azure resource endpoint as saved, e.g. `https://my-resource.openai.azure.com`. Not a secret. */
   azureEndpoint?: string;
   /** The Azure deployment of gpt-live-1; empty means "gpt-live-1". */

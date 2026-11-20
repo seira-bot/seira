@@ -1349,7 +1349,7 @@ too). Only the named peers are believed, and only the last address they add,
 so a client's own `X-Forwarded-For` or `Cf-Connecting-IP` changes nothing.
 
 **No inbound port: a Cloudflare tunnel.** The same managed tunnel as
-`openmausbot serve --tunnel`, one per server: the control plane's
+`seira serve --tunnel`, one per server: the control plane's
 `ensureEndpoint`, called with the server's installation credential
 (`fleetAccess` in `server/tunnel.ts`), returns the address
 (`https://c-<32 hex>.<zone>`) and the connector token, which go into
@@ -1541,18 +1541,21 @@ computers belong to this machine on every request.
 
 ### Included connected apps
 
-Connected apps (Gmail, Outlook, Slack, LinkedIn, Calendly and the rest of the
-catalog) come with the plan through Seira's managed connection service,
-the same one the packaged desktop app uses. The Admin sets nothing for it: at
-every start the server registers the Cloud's own installation if it has none,
-keeps the token owner-only in `/data/.openmausbot/connected-apps-installation.json`
-(never in a backup, a move or `config.json`), checks it with the service, and
-retries with backoff while the service is down, without holding up the start.
-An owner's own Composio project key still wins. The details are in
-[composio.md](composio.md#mausbot-cloud). `OMB_COMPOSIO_BROKER_URL` (env, not
-secret, optional) points a Cloud at another service, such as a staging one.
+The plan includes connected apps (Gmail, Outlook, Slack, LinkedIn, Calendly and
+the rest of the catalog) only when the Cloud image names a connected-apps
+service with `OMB_COMPOSIO_BROKER_URL` (env, not secret). Without it, the
+Cloud behaves as if `OMB_COMPOSIO_BROKER=off`: the owner adds a Composio
+project key under **Settings → API keys → Apps and tools → Composio project key**.
 
-For a paid plan the Admin also sets `OMB_CLOUD_CONNECTED_APPS_GRANT` (secret):
+When a service is named, the Admin sets nothing else for it: at every start the
+server registers the Cloud's own installation if it has none, keeps the token
+owner-only in `/data/.openmausbot/connected-apps-installation.json` (never in a
+backup, a move or `config.json`), checks it with the service, and retries with
+backoff while the service is down, without holding up the start. An owner's own
+Composio project key still wins. The details are in
+[composio.md](composio.md#seira-cloud).
+
+For a paid plan with a named service the Admin also sets `OMB_CLOUD_CONNECTED_APPS_GRANT` (secret):
 a grant it signs for the machine id, which the server presents to the service
 once it holds its token. The service then gives this installation a paid
 Cloud's app-event limit (2,000 a day instead of a desktop's 500). Without it a
@@ -2148,8 +2151,8 @@ first one due shows, and it takes the launch (`launchNotice`, kept for the
 window's session, so a reload is the same launch). After it, only the
 product-updates question may follow in that launch; every other notice waits for
 a later launch, in the list's order. A new notice is one entry in `NOTICES` and
-its fact in AppNotices. So What's new and Boat's credit offer never share a
-launch: What's new comes first, and the Boat card waits for a later one.
+its fact in AppNotices. So What's new and the Grok Bot move never share a
+launch: the one first in `NOTICES` shows, and the other waits for a later one.
 
 1. **What's new** (`whats-new/WhatsNewPopup`, campaign id `whats-new-2026-11`):
    one centered popup with slides, **Next** and **Back**, its dots and the arrow

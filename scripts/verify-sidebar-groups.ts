@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { launchVerificationServer, runControlOmb } from "./control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "./control-seira.ts";
 import { fixtureApi, mountPreview, parkUntilSignal, type MountedPreview } from "./testing/preview-fixture.ts";
 
 const at = process.argv.indexOf("--shots");
@@ -126,7 +126,7 @@ const fixture = await launchVerificationServer();
 let ui: MountedPreview | undefined;
 try {
   const api = fixtureApi(fixture.info.url, { headers: { origin: fixture.info.url } });
-  for (const name of NAMES) await runControlOmb(["new-bot", "--name", name, "--url", fixture.info.url]);
+  for (const name of NAMES) await runControlSeira(["new-bot", "--name", name, "--url", fixture.info.url]);
   await api("PATCH", "/api/config", { language: "en" });
   const { bots } = await api("GET", "/api/bots?messages=0") as { bots: Array<{ id: string; name: string }> };
   const ids = Object.fromEntries(NAMES.map((name) => [name, bots.find((bot) => bot.name === name)!.id]));

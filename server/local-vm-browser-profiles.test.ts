@@ -6,7 +6,7 @@ import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { VM_WORKSPACE_GUEST, managedImageDockerfile, type LocalVmTarget } from "./container-computer.ts";
+import { MANAGED_LABEL, TARGET_LABEL, VM_WORKSPACE_GUEST, WORKSPACE_LABEL, containerComputerStatus, managedImageDockerfile, type CommandRunner, type LocalVmTarget } from "./container-computer.ts";
 import { keepFirefoxProfileBeforeRemove, rescueFirefoxProfile, rescueInstalledApps } from "./local-vm-profiles.ts";
 
 const temporary: string[] = [];
@@ -143,7 +143,7 @@ cp -RP "${container}$src" "$3"
   return { runtime, log };
 }
 
-const target = (workspaceDir: string): LocalVmTarget => ({ key: "bot:x", containerName: "openmausbot-computer-x", workspaceDir, viewerPort: null, label: "x" });
+const target = (workspaceDir: string): LocalVmTarget => ({ key: "bot:x", containerName: "seira-computer-x", legacyContainerName: "openmausbot-computer-x", workspaceDir, viewerPort: null, label: "x" });
 
 describe.skipIf(process.platform === "win32")("rescueFirefoxProfile", () => {
   it("copies user-installed desktop apps into the durable area before replacement", async () => {
@@ -182,10 +182,34 @@ describe.skipIf(process.platform === "win32")("rescueFirefoxProfile", () => {
     expect(await rescueFirefoxProfile(runtime, target(workspace))).toBe("rescued");
     expect(readFileSync(join(workspace, ".browser-profiles", "mozilla", "firefox", "abc.default-esr", "cookies.sqlite"), "utf8")).toBe("signed in");
     const [copy] = readFileSync(log, "utf8").trim().split("\n");
-    expect(copy).toMatch(/^cp openmausbot-computer-x:\/home\/cua\/\.mozilla \S+\/\.mozilla-rescue-[0-9a-f]+$/);
-    expect(copy.startsWith(`cp openmausbot-computer-x:/home/cua/.mozilla ${workspace}/.mozilla-rescue-`)).toBe(true);
+    expect(copy).toMatch(/^cp seira-computer-x:\/home\/cua\/\.mozilla \S+\/\.mozilla-rescue-[0-9a-f]+$/);
+    expect(copy.startsWith(`cp seira-computer-x:/home/cua/.mozilla ${workspace}/.mozilla-rescue-`)).toBe(true);
     expect(readdirSync(join(workspace, ".browser-profiles"))).toEqual(["mozilla"]);
     expect(readdirSync(workspace)).toEqual([".browser-profiles"]);
+  });
+
+  it("copies from the older-named container while that container serves the target", async () => {
+    const dir = scratch();
+    const container = join(dir, "container");
+    mkdirSync(join(container, "home", "cua", ".mozilla"), { recursive: true });
+    writeFileSync(join(container, "home", "cua", ".mozilla", "cookies.sqlite"), "signed in");
+    const workspace = join(dir, "workspace");
+    mkdirSync(workspace);
+    const older = { ...target(workspace), key: "bot:older-name", containerName: "seira-computer-older", legacyContainerName: "openmausbot-computer-older", label: "older" };
+    const probe: CommandRunner = async (command, args) => {
+      const key = [command, ...args].join(" ");
+      if (key === "/usr/bin/which docker") return { stdout: "docker" };
+      if (command === "/usr/bin/which") throw new Error("missing executable");
+      if (args[0] === "info") return { stdout: "29" };
+      if (key === "docker inspect openmausbot-computer-older") {
+        return { stdout: JSON.stringify([{ Config: { Labels: { [MANAGED_LABEL]: "1", [WORKSPACE_LABEL]: "1", [TARGET_LABEL]: "older" } }, State: { Running: false } }]) };
+      }
+      throw new Error(`unexpected command: ${key}`);
+    };
+    await containerComputerStatus(probe, "linux", older);
+    const { runtime, log } = fakeRuntime(dir, container);
+    expect(await rescueFirefoxProfile(runtime, older)).toBe("rescued");
+    expect(readFileSync(log, "utf8")).toMatch(/^cp openmausbot-computer-older:\/home\/cua\/\.mozilla /);
   });
 
   it("never overwrites a profile already in the workspace, and leaves a desktop whose ~/.mozilla is already a link alone", async () => {

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { teamRoleScopes, type TeamRole } from "./cloud-team.ts";
-import { azureLiveCallRefusal, elevenLabsLiveCallRefusal, fishLiveCallRefusal, geminiLiveCallRefusal, LIVE_AZURE_REFUSAL, LIVE_ELEVENLABS_REFUSAL, LIVE_FISH_REFUSAL, LIVE_GEMINI_REFUSAL, liveScopeRefusal } from "./live-access.ts";
+import { azureLiveCallRefusal, elevenLabsLiveCallRefusal, fishLiveCallRefusal, geminiLiveCallRefusal, LIVE_AZURE_REFUSAL, LIVE_CODEX_REFUSAL, LIVE_ELEVENLABS_REFUSAL, LIVE_FISH_REFUSAL, LIVE_GEMINI_REFUSAL, liveScopeRefusal } from "./live-access.ts";
 import { requiredScope, resolveRequestAuth, type RequestAuth, type ResolveOptions } from "./request-auth.ts";
 import { SessionRegistry, type Scope, type SessionRecord } from "./sessions.ts";
 import { moveInRefusal } from "./team-move-in.ts";
@@ -27,7 +27,7 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-interface Place { resolve?: Partial<ResolveOptions>; othersOnLoopback?: boolean; provider?: "azure" | "openai" | "fish" | "gemini" | "elevenlabs" }
+interface Place { resolve?: Partial<ResolveOptions>; othersOnLoopback?: boolean; provider?: "azure" | "openai" | "fish" | "gemini" | "elevenlabs" | "codex" }
 
 /** "gets a call", or the words the person reads and who said them. */
 function verdict(headers: Record<string, string>, place: Place = {}): string {
@@ -181,6 +181,11 @@ describe("the words for a session without the admin scope", () => {
     expect(liveScopeRefusal({ live: { provider: "fish" } }, "POST", "/api/live/relay")).toBeNull();
     expect(liveScopeRefusal({ live: { provider: "gemini" } }, "POST", LIVE)).toBe(LIVE_GEMINI_REFUSAL);
     expect(liveScopeRefusal({ live: { provider: "elevenlabs" } }, "POST", LIVE)).toBe(LIVE_ELEVENLABS_REFUSAL);
+    expect(liveScopeRefusal({ live: { provider: "codex" } }, "POST", LIVE)).toBe(LIVE_CODEX_REFUSAL);
+    expect(liveScopeRefusal({ live: { provider: "codex" } }, "GET", "/api/live/call")).toBeNull();
+  });
+  it("name Codex for a chat-only session", () => {
+    expect(verdict(device(["client"]), { provider: "codex" })).toBe(`sign-in gate 403: ${LIVE_CODEX_REFUSAL}`);
   });
   it("change no one's scope: every Live route stays closed to a client session", () => {
     for (const [method, path] of [["POST", LIVE], ["POST", "/api/live/call/end"], ["GET", "/api/live/call"], ["PATCH", "/api/live/settings"], ["POST", "/api/live/device-revoked"], ["POST", "/api/live/relay"]] as const) {

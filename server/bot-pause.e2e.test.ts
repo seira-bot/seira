@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
-import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira, type VerificationServer } from "../scripts/control-seira.ts";
 
 let fixture: VerificationServer;
 const call = async (method: string, path: string, body?: unknown) => {
@@ -16,7 +16,7 @@ const ok = async (method: string, path: string, body?: unknown) => {
   expect(answer.status, `${method} ${path}: ${JSON.stringify(answer.body)}`).toBeLessThan(300);
   return answer.body;
 };
-const newBot = async (name: string) => (await runControlOmb(["new-bot", "--name", name, "--url", fixture.info.url]) as { bot: { id: string; activeTaskId: string } }).bot;
+const newBot = async (name: string) => (await runControlSeira(["new-bot", "--name", name, "--url", fixture.info.url]) as { bot: { id: string; activeTaskId: string } }).bot;
 const send = (bot: { id: string; activeTaskId: string }, text: string) => call("POST", `/api/bots/${bot.id}/messages`, { text, threadId: bot.activeTaskId, sendId: randomUUID() });
 const busy = async (botId: string) => ((await ok("GET", "/api/bots")).bots as Array<{ id: string; tasks?: Array<{ busy?: boolean }> }>)
   .find((bot) => bot.id === botId)?.tasks?.some((task) => task.busy) === true;

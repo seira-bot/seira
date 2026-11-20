@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
 // The first run: two screens, then the chat. Meeting the app (and connecting an AI when none works), then the Chief of
 // Staff over the app; what it saves, where it lands, and what a reload or a replay does.
+import { Window } from "happy-dom";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { introStaged, stageIntro, useChiefStepOpen } from "@/lib/default-bot";
 import { setLocale } from "@/lib/i18n";
@@ -13,6 +15,12 @@ import type { InstanceInfo } from "@/state/store";
 
 const f = vi.hoisted(() => ({ state: {} as Record<string, unknown>, dispatch: vi.fn(), api: vi.fn(), landed: vi.fn(), onDone: vi.fn(),
   checks: [] as string[] }));
+const chrome = vi.hoisted(() => ({ value: "native" as "win-caption" | "mac-inset" | "native" }));
+vi.mock("@/lib/desktop", async (original) => {
+  const real = await original<typeof import("@/lib/desktop")>();
+  const capabilities = () => ({ ...real.initialDesktopCapabilities(), windowChrome: chrome.value });
+  return { ...real, initialDesktopCapabilities: capabilities, loadDesktopCapabilities: async () => capabilities(), cacheDesktopCapabilities: (value: unknown) => value };
+});
 vi.mock("@/state/store", () => ({ useStore: () => ({ state: f.state, dispatch: f.dispatch }), api: f.api }));
 vi.mock("@/lib/analytics", () => ({ track: vi.fn(), setEmailGateDone: vi.fn() }));
 vi.mock("@/components/Avatar", () => ({ BotAvatar: () => null, MausAvatar: () => null }));
@@ -24,6 +32,7 @@ vi.mock("@/components/EngineSetup", async (original) => {
 });
 vi.mock("@/lib/default-bot", async (original) => ({ ...(await original<typeof import("@/lib/default-bot")>()), useViewerEmail: () => null }));
 vi.mock("@/lib/mausbot-landing", () => ({ FLIGHT_MS: 700, landInSidebar: (input: { botId: string; commit: () => void }) => { f.landed(input.botId); input.commit(); } }));
+const { DesktopCapabilitiesProvider } = await import("@/components/DesktopCapabilities");
 const { WelcomeFlow } = await import("./WelcomeFlow");
 const { CHIEF_FADE_MS, CHIEF_GUARD_MS } = await import("./ChiefIntro");
 
@@ -55,7 +64,8 @@ const key = async (name: string) => {
   await act(async () => { screen.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true })); });
 };
 const show = async (extra: Record<string, unknown> = {}) => {
-  await act(async () => { root.render([createElement(Watch, { key: "w" }), createElement(WelcomeFlow, { key: "f", onDone: f.onDone, ...extra })]); });
+  await act(async () => { root.render([createElement(Watch, { key: "w" }),
+    createElement(DesktopCapabilitiesProvider, { key: "f", children: createElement(WelcomeFlow, { onDone: f.onDone, ...extra }) })]); });
 };
 /** Next, the first screen's 100 ms fade, and the Chief dialog's input guard. */
 const toChief = async (label = "Next") => {
@@ -80,6 +90,7 @@ beforeEach(() => {
   f.onDone.mockReset();
   f.api.mockReset();
   f.checks = [];
+  chrome.value = "native";
   f.api.mockImplementation(async (path: string, init?: { body?: string }) => {
     if (path.endsWith("/check")) { f.checks.push(path); return { ok: true }; }
     return path === "/api/instances" ? { instances: f.state.instances } : JSON.parse(init?.body ?? "{}");
@@ -93,6 +104,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  delete (window as { ogb?: unknown }).ogb;
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -271,5 +283,102 @@ describe("other first runs", () => {
     await act(async () => {});
     expect(saved()[0].onboarding).not.toHaveProperty("hintsSeen");
     expect(introStaged("maus"), "a replay lands in a chat that may be long under way").toBe(false);
+  });
+});
+
+describe("the window's own controls over the first run", () => {
+  const controls = () => ({ minimize: vi.fn(async () => true), toggleMaximize: vi.fn(async () => true), close: vi.fn(async () => true),
+    state: async () => ({ maximized: false }), onMaximizedChanged: () => () => {} });
+  const bridge = (windowControls: ReturnType<typeof controls> | undefined) => Object.assign(window, { ogb: { windowControls } });
+  const caption = (label: string) => host.querySelector<HTMLButtonElement>(`[data-welcome] button[aria-label="${label}"]`);
+  const strip = () => host.querySelector<HTMLElement>("[data-welcome] [data-window-drag-strip]");
+  // happy-dom drops the Electron-only style property when React sets it on a live node, so the drag regions are read off
+  // the server-rendered page, as window-drag-regions.test.ts does.
+  const region = (node: Element | null) => /(?:^|;)\s*-webkit-app-region:\s*([^;]+)/.exec(node?.getAttribute("style") ?? "")?.[1].trim();
+  const staticPage = () => {
+    const page = new Window();
+    page.document.body.innerHTML = renderToStaticMarkup(createElement(DesktopCapabilitiesProvider, null, createElement(WelcomeFlow, { onDone: f.onDone })));
+    return page.document as unknown as Document;
+  };
+  const FOLLOWING = 4; // Node.DOCUMENT_POSITION_FOLLOWING
+
+  it("shows the minimize, maximize and close buttons on a Windows window, and each calls its control", async () => {
+    chrome.value = "win-caption";
+    const own = controls();
+    bridge(own);
+    await show();
+    for (const label of ["Minimize", "Maximize", "Close"]) expect(caption(label), label).not.toBeNull();
+    await act(async () => { caption("Minimize")!.click(); });
+    await act(async () => { caption("Maximize")!.click(); });
+    await act(async () => { caption("Close")!.click(); });
+    expect(own.minimize).toHaveBeenCalledOnce();
+    expect(own.toggleMaximize).toHaveBeenCalledOnce();
+    expect(own.close).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the buttons through the Chief of Staff screen, which covers the app the same way", async () => {
+    chrome.value = "win-caption";
+    bridge(controls());
+    await show();
+    await toChief();
+    expect(host.querySelector("[data-welcome]")!.className).toContain("ui-scrim");
+    for (const label of ["Minimize", "Maximize", "Close"]) expect(caption(label), label).not.toBeNull();
+  });
+
+  it("shows no buttons without the window's controls, and none beside a native title bar", async () => {
+    chrome.value = "win-caption";
+    bridge(undefined);
+    await show();
+    expect(caption("Close")).toBeNull();
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    chrome.value = "native";
+    bridge(controls());
+    await show();
+    expect(caption("Close")).toBeNull();
+  });
+
+  it.each(["win-caption", "mac-inset"] as const)("drags the window from its top edge on %s, with the controls cut back out after it", (kind) => {
+    chrome.value = kind;
+    bridge(controls());
+    const page = staticPage();
+    const strip = page.querySelector("[data-welcome] [data-window-drag-strip]");
+    expect(region(strip)).toBe("drag");
+    const title = page.querySelector("h1")!;
+    expect(strip!.compareDocumentPosition(title) & FOLLOWING, "the strip comes before the screen's own controls").toBeTruthy();
+    if (kind === "win-caption") {
+      const close = page.querySelector('[data-welcome] button[aria-label="Close"]')!;
+      expect(title.compareDocumentPosition(close) & FOLLOWING, "the caption buttons come after every drag region").toBeTruthy();
+      let node: Element | null = close;
+      while (node && region(node) !== "no-drag") node = node.parentElement;
+      expect(region(node), "the buttons opt out of dragging").toBe("no-drag");
+    }
+  });
+
+  it("has no drag strip beside a native title bar", async () => {
+    chrome.value = "native";
+    await show();
+    expect(strip()).toBeNull();
+  });
+
+  it("leaves a first run shown inside a page alone: no buttons and no drag strip", async () => {
+    chrome.value = "win-caption";
+    bridge(controls());
+    await show({ embedded: true });
+    expect(strip()).toBeNull();
+    expect(caption("Close")).toBeNull();
+    expect(host.querySelector("[data-window-drag-strip]")).toBeNull();
+  });
+
+  it("keeps the buttons on screen when a short window scrolls", async () => {
+    chrome.value = "win-caption";
+    bridge(controls());
+    await show();
+    const close = caption("Close")!;
+    let fixed = false;
+    for (let node: Element | null = close; node && node !== host.querySelector("[data-welcome]"); node = node.parentElement) {
+      if (node.classList.contains("fixed")) fixed = true;
+    }
+    expect(fixed, "the buttons are positioned against the window, not against the scrolling screen").toBe(true);
   });
 });

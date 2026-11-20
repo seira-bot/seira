@@ -363,7 +363,7 @@ export async function composioWebhook(request: Request, env: Env, ctx?: Pick<Exe
   return json({ received: true });
 }
 
-function intParam(url: URL, name: string, fallback: number, max: number) {
+export function intParam(url: URL, name: string, fallback: number, max: number) {
   const value = url.searchParams.get(name);
   if (value === null) return fallback;
   const number = /^\d{1,16}$/.test(value) ? Number(value) : NaN;
@@ -548,7 +548,7 @@ export async function runHourly(env: Env, now = Date.now()) {
   await env.DB.prepare("DELETE FROM app_event_days WHERE day < ?").bind(utcDay(now - COUNT_RETENTION_DAYS * DAY_MS)).run();
 }
 
-function sameDigest(a: string, b: string) {
+export function sameDigest(a: string, b: string) {
   let difference = a.length ^ b.length;
   for (let index = 0; index < Math.min(a.length, b.length); index += 1) difference |= a.charCodeAt(index) ^ b.charCodeAt(index);
   return difference === 0;

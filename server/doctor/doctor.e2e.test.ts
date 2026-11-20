@@ -1,4 +1,4 @@
-// Real server: a data folder damaged in every way the doctor repairs, then repaired by `openmausbot doctor --data --fix`
+// Real server: a data folder damaged in every way the doctor repairs, then repaired by `seira doctor --data --fix`
 // or by the server's own first start of a new version, after which the server starts with its bots back.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, expect, it } from "vitest";
 
-import { verificationServerEnvironment } from "../../scripts/control-omb.ts";
+import { verificationServerEnvironment } from "../../scripts/control-seira.ts";
 import { removeTempDir, waitForExit } from "../testing/cleanup.ts";
 import { freePortBlock } from "../testing/ports.ts";
 
@@ -109,7 +109,7 @@ async function serverHasItsBots(home: string, bots: string) {
   return server;
 }
 
-it("openmausbot doctor --data finds each problem, --fix repairs them all, and the server starts with its bots", async () => {
+it("seira doctor --data finds each problem, --fix repairs them all, and the server starts with its bots", async () => {
   const home = freshHome();
   const first = await boot(home);
   await first.stop();

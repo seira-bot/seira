@@ -13,7 +13,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { expect, it } from "vitest";
-import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import type { WireMessage } from "../shared/wire.ts";
 import { createToolBridge, type BridgeTool } from "./drivers/agents-bridge.ts";
 import { ALWAYS_LOAD_META, DEFER_TOOLS_ENV } from "./drivers/agents-claude-defer.ts";
@@ -48,7 +48,7 @@ async function withFixture(run: (helpers: {
         const response = await fetch(`${fixture.info.url}${path}`, { method, headers: { "content-type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
         return { status: response.status, body: await response.json() };
       },
-      control: (args) => runControlOmb([...args, "--url", fixture.info.url]),
+      control: (args) => runControlSeira([...args, "--url", fixture.info.url]),
       launched: async () => {
         await expect.poll(() => existsSync(fixture.fixtureDumpPath), { timeout: 30_000 }).toBe(true);
         const value = JSON.parse(readFileSync(fixture.fixtureDumpPath, "utf8")) as Launched;
