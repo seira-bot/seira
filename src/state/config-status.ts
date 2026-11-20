@@ -4,6 +4,7 @@ import type { ImageComplexity, ImageProvider } from "../../shared/image-generati
 import type { ToolGroup } from "../../shared/tool-groups";
 import type { OnboardingStatus } from "@/lib/onboarding";
 import type { ModelSelection } from "./store";
+import type { PersonLook } from "../../shared/person-look";
 
 /** A saved credential: whether it is set and, for admins, its last four characters. The key itself never comes back. */
 export interface SavedKey { configured: boolean; last4?: string }
@@ -158,7 +159,7 @@ export interface ConfigStatus {
     openrouterConfigured?: boolean;
   };
   /** who's using the app — collected in onboarding, shown in the sidebar */
-  profile?: { name: string; email: string; aboutMe?: string; avatarUrl?: string };
+  profile?: { name: string; email: string; aboutMe?: string; avatarUrl?: string; look?: PersonLook };
   /** Rules every bot follows, ahead of its department's context and its own instructions; sent to admins only. */
   everyBotRules?: string;
   /** UI language override; "" (or absent) follows the system language. */

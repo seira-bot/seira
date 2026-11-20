@@ -242,7 +242,7 @@ describe("the sidecar in front of an unmodified harness", () => {
   it("serves a minimal, non-cacheable companion health identity", async () => {
     const health = await device("GET", "/api/health", { token: null });
     expect(health.status).toBe(200);
-    expect(health.body).toEqual({ app: "openmausbot" });
+    expect(health.body).toEqual({ app: "seira" });
     expect(health.headers.get("cache-control")).toBe("private, no-store");
     expect(health.headers.get("cdn-cache-control")).toBe("no-store");
     expect(JSON.stringify(health.body)).not.toContain("pid");
@@ -250,9 +250,9 @@ describe("the sidecar in front of an unmodified harness", () => {
   });
 
   it("tells a paired device the desktop's version, and nobody else", async () => {
-    expect(await fetch(`${HARNESS}/api/health`).then((reply) => reply.json())).toMatchObject({ app: "openmausbot", version: DESKTOP_VERSION });
-    expect((await device("GET", "/api/health")).body).toEqual({ app: "openmausbot", version: DESKTOP_VERSION });
-    expect((await device("GET", "/api/health", { token: "seira_wrong" })).body).toEqual({ app: "openmausbot" });
+    expect(await fetch(`${HARNESS}/api/health`).then((reply) => reply.json())).toMatchObject({ app: "seira", version: DESKTOP_VERSION });
+    expect((await device("GET", "/api/health")).body).toEqual({ app: "seira", version: DESKTOP_VERSION });
+    expect((await device("GET", "/api/health", { token: "seira_wrong" })).body).toEqual({ app: "seira" });
     expect((await device("GET", "/api/companion/endpoints")).body).toEqual({ serverName: "Test computer", endpoints: [], version: DESKTOP_VERSION });
   });
 
@@ -801,7 +801,7 @@ describe("pairing, end to end", () => {
         token: string;
       };
       expect(opened.code).toMatch(/^\d{6}$/);
-      expect(opened.token).toMatch(/^omb_pair_[A-Za-z0-9_-]{43}$/);
+      expect(opened.token).toMatch(/^seira_pair_[A-Za-z0-9_-]{43}$/);
 
       const wrong = await fetch(`${base}/api/pair`, {
         method: "POST",

@@ -174,7 +174,7 @@ describe("before pairing", () => {
     expect(response.body).toEqual({ error: "invalid request URL" });
     const health = await call("/api/health");
     expect(health.status).toBe(200);
-    expect(health.body).toMatchObject({ app: "openmausbot", pid: child.pid });
+    expect(health.body).toMatchObject({ app: "seira", pid: child.pid });
     expect(child.exitCode).toBeNull();
   });
 
@@ -278,7 +278,7 @@ describe("pairing", () => {
       body: JSON.stringify({ code: opened.code.toLowerCase() }),
     });
     expect(paired.status).toBe(200);
-    expect(paired.body.token).toMatch(/^omb_sess_/);
+    expect(paired.body.token).toMatch(/^seira_sess_/);
     expect(paired.body.session.label).toBe("Safari on Mac");
     expect(paired.body.environment.label).toBe("cab mini");
     const again = await call("/api/auth/pair", { method: "POST", headers: remote("10.0.0.3"), body: JSON.stringify({ code: opened.code }) });
@@ -322,7 +322,7 @@ describe("pairing", () => {
     expect(res.status).toBe(200);
     expect(res.body.token).toBeUndefined();
     const setCookie = header(res.headers, "set-cookie");
-    expect(setCookie).toMatch(new RegExp(`^seira_session_${PORT}_[a-f0-9]{12}=omb_sess_`));
+    expect(setCookie).toMatch(new RegExp(`^seira_session_${PORT}_[a-f0-9]{12}=seira_sess_`));
     expect(setCookie).toContain("HttpOnly");
     expect(setCookie).toContain("SameSite=Lax");
     expect(setCookie).toContain("Secure");
@@ -350,7 +350,7 @@ describe("pairing", () => {
 
   it("pairs a native companion app on its own route, with the body shape it sends", async () => {
     const opened = await pairingCode(["client"]);
-    expect(opened.credential).toMatch(/^omb_pair_[A-Za-z0-9_-]{43}$/);
+    expect(opened.credential).toMatch(/^seira_pair_[A-Za-z0-9_-]{43}$/);
 
     const paired = await call("/api/pair", {
       method: "POST",
@@ -360,7 +360,7 @@ describe("pairing", () => {
     expect(paired.status).toBe(200);
     // Exactly the fields android/core's PairResponseSerializer requires.
     expect(typeof paired.body.token).toBe("string");
-    expect(paired.body.token.startsWith("omb_sess_")).toBe(true);
+    expect(paired.body.token.startsWith("seira_sess_")).toBe(true);
     expect(paired.body.serverName).toBe(opened.serverName);
     expect(paired.body.device.name).toBe("Pixel 9");
     expect(typeof paired.body.device.id).toBe("string");
@@ -391,7 +391,7 @@ describe("pairing", () => {
     expect(opened.inviteUrl).not.toBeNull();
     const invite = new URL(opened.inviteUrl!);
     // Android's PairingInvite.parse accepts only this exact scheme and host (android/core Connection.kt).
-    expect(invite.protocol).toBe("openmausbot:");
+    expect(invite.protocol).toBe("seira:");
     expect(invite.host).toBe("pair");
     expect(invite.searchParams.get("address")).toBe(PUBLIC_URL);
     expect(invite.searchParams.get("token")).toBe(opened.credential);
@@ -510,7 +510,7 @@ describe("pairing", () => {
       expect(config.savedKeys.openaiLiveKey).toEqual({ configured: true });
       expect(JSON.stringify(config)).not.toContain("last4");
       expect(config.opencodeGo).toEqual({ configured: false, providerKeys: [] });
-      expect(config.profile).toEqual({ name: "Updated fixture", email: "" });
+      expect(config.profile).toEqual({ name: "Updated fixture", email: "", look: expect.any(Object) });
       expect(config.vps).toEqual({ configured: true, sshAlias: "" });
       expect(config.browserProfiles).toEqual([{ id: "fixture", name: "Fixture browser" }]);
     }
@@ -518,7 +518,7 @@ describe("pairing", () => {
       expect(config.openai).toEqual({ configured: true, last4: "a1b2" });
       expect(config.savedKeys.openaiLiveKey).toEqual({ configured: true, last4: "b2c3" });
       expect(config.opencodeGo).toEqual({ configured: false, providerKeys: ["VENICE_API_KEY"] });
-      expect(config.profile).toEqual({ name: "Updated fixture", email: "updated-private@example.invalid", aboutMe: "" });
+      expect(config.profile).toEqual({ name: "Updated fixture", email: "updated-private@example.invalid", aboutMe: "", look: expect.any(Object) });
       expect(config.vps).toEqual({ configured: true, sshAlias: "fixture-private-host" });
       expect(config.browserProfiles).toEqual([{ id: "fixture", name: "Fixture browser", partitionId: "fixture-private-partition" }]);
     }

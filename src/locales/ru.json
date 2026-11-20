@@ -1380,6 +1380,7 @@
   "settings.profile.avatar.choose": "Выбрать фото",
   "settings.profile.avatar.uploading": "Загрузка…",
   "settings.profile.avatar.remove": "Удалить фото",
+  "settings.profile.avatar.shuffle": "Перемешать",
   "settings.profile.avatar.cropTitle": "Настройте фото",
   "settings.profile.avatar.zoom": "Масштаб",
   "settings.profile.avatar.cancel": "Отмена",

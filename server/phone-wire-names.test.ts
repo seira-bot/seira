@@ -7,13 +7,23 @@ import * as canonical from "../packages/phone-protocol/src/wire-names.ts";
 describe("the copies of the phone wire names", () => {
   it.each([["companion", companion], ["electron", electron]] as const)("the %s copy equals the table", (_name, copy) => {
     expect(copy.PHONE_WIRE_NAMES).toEqual(canonical.PHONE_WIRE_NAMES);
-    expect(copy.PHONE_WIRE_SEND).toBe(canonical.PHONE_WIRE_SEND);
+    expect(copy.PHONE_WIRE_SEND).toEqual(canonical.PHONE_WIRE_SEND);
     for (const key of Object.keys(canonical.PHONE_WIRE_NAMES) as canonical.PhoneWireName[]) {
       expect(copy.sentWireName(key)).toBe(canonical.sentWireName(key));
       expect(copy.acceptedWireNames(key)).toEqual(canonical.acceptedWireNames(key));
       for (const value of canonical.acceptedWireNames(key)) expect(copy.acceptsWireName(key, value)).toBe(true);
       expect(copy.acceptsWireName(key, "")).toBe(false);
     }
+  });
+
+  it("sends the Seira value for six names and the old value for the path and the push id", () => {
+    expect(canonical.PHONE_WIRE_SEND).toEqual({
+      pairingCredentialPrefix: "seira", linkScheme: "seira", environmentPath: "legacy", healthApp: "seira",
+      pushCollapsePrefix: "legacy", mdnsServiceType: "seira", mdnsHostPrefix: "seira", sessionTokenPrefix: "seira",
+    });
+    expect(canonical.sentWireName("environmentPath")).toBe("/.well-known/openmausbot/environment");
+    expect(canonical.sentWireName("pushCollapsePrefix")).toBe("openmaus");
+    expect(canonical.sentWireName("sessionTokenPrefix")).toBe("seira_sess_");
   });
 
   it("every name has an old and a Seira value, and a phone reads both", () => {

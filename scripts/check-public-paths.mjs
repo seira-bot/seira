@@ -9,6 +9,8 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
+import { warnIfHooksOff } from "./hooks-notice.mjs";
+
 const underRoot = (prefix) => (path) => path.startsWith(prefix);
 const baseName = (path) => path.slice(path.lastIndexOf("/") + 1);
 const isTemplate = (path) => path.endsWith(".example");
@@ -86,6 +88,7 @@ function main(argv) {
     return 2;
   }
   const root = git(["rev-parse", "--show-toplevel"], process.cwd()).trim();
+  warnIfHooksOff(root, "check-public-paths");
   if (gitOk(["rev-parse", "-q", "--verify", "MERGE_HEAD"], root)) return 0;
   const found = findPrivatePaths(addedPaths(values, root));
   for (const { path, reason } of found) console.log(`${path}: ${reason}`);

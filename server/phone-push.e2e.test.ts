@@ -81,7 +81,7 @@ const pair = async (fixture: Fixture, label: string) => {
   const opened = await api(fixture, "POST", "/api/auth/pairing", { label, scopes: ["admin", "client"] });
   expect(opened.status).toBe(200);
   const paired = await api(fixture, "POST", "/api/auth/pair", { code: opened.body.code });
-  expect(paired.body.token).toMatch(/^omb_sess_/u);
+  expect(paired.body.token).toMatch(/^seira_sess_/u);
   return paired.body as { token: string; session: { id: string } };
 };
 

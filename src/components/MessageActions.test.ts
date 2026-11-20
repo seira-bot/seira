@@ -1,7 +1,10 @@
+// @vitest-environment happy-dom
 import { createElement } from "react";
+import { flushSync } from "react-dom";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MessageActions, type MessageMenuItem } from "./MessageActions";
+import { ChatBusyContext, MessageActions, type MessageMenuItem } from "./MessageActions";
 
 type Props = Parameters<typeof MessageActions>[0];
 
@@ -50,5 +53,22 @@ describe("MessageActions", () => {
   it("mirrors the row on the user side so it starts at the bubble", () => {
     expect(render({ side: "user" })).toContain("flex-row-reverse");
     expect(render({ side: "bot" })).not.toContain("flex-row-reverse");
+  });
+
+  it("drops idle-only items from an open menu while the chat's turn runs", () => {
+    const draw: MessageMenuItem = { key: "draw", icon: null, label: "Draw as workflow", onSelect: () => {}, idleOnly: true };
+    const labels = (busy: boolean) => {
+      const host = document.createElement("div");
+      document.body.append(host);
+      const root = createRoot(host);
+      flushSync(() => root.render(createElement(ChatBusyContext, { value: busy }, createElement(MessageActions, { side: "bot", menu: [draw, pin] }))));
+      flushSync(() => host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!.click());
+      const found = [...host.querySelectorAll("[role=menuitem]")].map((item) => item.textContent);
+      flushSync(() => root.unmount());
+      host.remove();
+      return found;
+    };
+    expect(labels(false)).toEqual(["Draw as workflow", "Pin message"]);
+    expect(labels(true)).toEqual(["Pin message"]);
   });
 });

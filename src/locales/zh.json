@@ -1753,6 +1753,7 @@
   "settings.profile.avatar.choose": "选择照片",
   "settings.profile.avatar.uploading": "正在上传…",
   "settings.profile.avatar.remove": "移除照片",
+  "settings.profile.avatar.shuffle": "随机换一个",
   "settings.profile.avatar.cropTitle": "调整照片",
   "settings.profile.avatar.zoom": "缩放",
   "settings.profile.avatar.cancel": "取消",

@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import type { IncomingMessage } from "node:http";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -40,31 +41,40 @@ afterAll(async () => {
 });
 
 describe("what the server and the desktop send to a phone", () => {
-  it("pair links, credentials and push ids use the names of the released phone apps", () => {
+  it("pair links and credentials use the Seira names, and a push id keeps the old name", () => {
     const credential = generatePairingCredential();
-    expect(credential).toMatch(/^omb_pair_[A-Za-z0-9_-]{43}$/);
+    expect(credential).toMatch(/^seira_pair_[A-Za-z0-9_-]{43}$/);
     const link = phonePairingLink({ address: "192.168.1.20", port: 8810, token: credential });
-    expect(link).toMatch(/^openmausbot:\/\/pair\?/);
-    expect(new URL(link!).searchParams.get("token")).toMatch(/^omb_pair_/);
+    expect(link).toMatch(/^seira:\/\/pair\?/);
+    expect(new URL(link!).searchParams.get("token")).toMatch(/^seira_pair_/);
     expect(phonePushCollapseId("th_1", 4)).toBe("openmaus.th_1.4");
   });
 
-  it("the companion announces the old service type and host name", () => {
-    expect(companionNames.sentWireName("mdnsServiceType")).toBe("_openmausbot._tcp");
-    expect(defaultHostName("a-machine")).toMatch(/^openmausbot-[0-9a-f]{8}\.local$/);
+  it("the companion announces the Seira service type and host name", () => {
+    expect(companionNames.sentWireName("mdnsServiceType")).toBe("_seira._tcp");
+    expect(defaultHostName("a-machine")).toMatch(/^seira-[0-9a-f]{8}\.local$/);
   });
 
-  it("the server describes itself at the old path and answers health with the old name", async () => {
+  it("the server describes itself at the old path and answers health with the Seira name", async () => {
     const described = await api("GET", sentWireName("environmentPath"));
     expect(described.status).toBe(200);
     expect(sentWireName("environmentPath")).toBe("/.well-known/openmausbot/environment");
-    expect((await api("GET", "/api/health")).body.app).toBe("openmausbot");
+    const health = (await api("GET", "/api/health")).body;
+    expect(health.app).toBe("seira");
+    expect(health.legacyApp).toBe("openmausbot");
   });
 
-  it("a new session token starts with the old prefix", async () => {
+  it("the health answer passes the old and the new Docker health check", async () => {
+    const text = await (await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(30_000) })).text();
+    const run = (check: string) => spawnSync("sh", ["-c", check], { input: text }).status;
+    expect(run("grep -q openmausbot")).toBe(0);
+    expect(run("grep -q -e seira -e openmausbot")).toBe(0);
+  });
+
+  it("a new session token starts with the Seira prefix", async () => {
     const opened = await api("POST", "/api/auth/pairing", { label: "Phone", scopes: ["client"] });
     const paired = await api("POST", "/api/auth/pair", { code: opened.body.code });
-    expect(paired.body.token).toMatch(/^omb_sess_/);
+    expect(paired.body.token).toMatch(/^seira_sess_/);
     expect((await api("GET", "/api/auth/session", undefined, paired.body.token)).status).toBe(200);
   });
 });
