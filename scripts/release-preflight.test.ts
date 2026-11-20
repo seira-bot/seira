@@ -288,7 +288,7 @@ describe("preflight", () => {
     const pages = [[run("a", "success")], [run("b", "failure", { id: 2 })]];
     const base = stub();
     const api = async (path: string) => {
-      const page = /page=(\d+)/.exec(path);
+      const page = /[?&]page=(\d+)/.exec(path);
       if (page) return { total_count: 2, check_runs: pages[Number(page[1]) - 1] };
       return base(path);
     };
