@@ -76,6 +76,9 @@ download the update and then reject it.
 
 ### 1. Bump the version in a pull request
 
+Add an entry for the new version to `RELEASE_NOTES` in `src/lib/release-notes.ts`,
+with its strings in `en.json` and `pt-br.json`. A version with no entry shows no popup.
+
 ```sh
 git switch -c release/v<version> origin/main
 npm pkg set version=<version>

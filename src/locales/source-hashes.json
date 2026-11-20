@@ -37394,7 +37394,20 @@
       "room.panel.botsAndYouOne": "9e3950c977e2438c08314e009cce3650ca6d54e4043a19ebe2655c793c500c56",
       "room.panel.botsAndYouMany": "453c41c11b20e378839b69cab2cd28e66d90a7c36793aecee8ed7b7f2f205f47",
       "room.panel.addBot": "4cc11408e76c022d8be4be213b7573c4ba49ffcdfe07996a60fc22ba21eccad6",
-      "room.panel.lead": "645978287991a6f40bcaf5840f5653b89b75b3bd1ea78cf9f39192e2400ac23e"
+      "room.panel.lead": "645978287991a6f40bcaf5840f5653b89b75b3bd1ea78cf9f39192e2400ac23e",
+      "releaseNotes.title": "dcd1c315e037428706e5d77fe4791a2d86d5f856ea2695d0c53efeb6a696965f",
+      "releaseNotes.updatedFrom": "2bb71edbde5a843dd11dd4e6988e26b52874d5ec48701784401ec0bbafe4e2b3",
+      "releaseNotes.allChanges": "570bb2a22ade1aaf17b4e411c77a8f47fd6355d748903f048f442d0274867ef2",
+      "releaseNotes.continue": "31fbef162594de01bab0cd525c51f74de7bcb15063029fa1a54b2cf5944c80d8",
+      "releaseNotes.close": "7d9eb7acb13e24625c404401d8e88b2350e32162455885f18276cf802f7701ed",
+      "releaseNotes.items.bugReport.title": "89b099eee1833c67aa0af5f919a9fb15f40fda4f8c62b436467f051cceadd9e6",
+      "releaseNotes.items.bugReport.body": "377b240bb47719627da94fb9c292e75a2a2140fd7db4562b5d1e3927449bbce0",
+      "releaseNotes.items.longChats.title": "fdb80e175ed4837c5d8d1fa79bd4c7d4bed52ad762b09ce5f095abbaa44df9e9",
+      "releaseNotes.items.longChats.body": "5440f7da7700aa4143aeecd53db0934f5c66a695243b6f61be8bf62ea74228ad",
+      "releaseNotes.items.fasterStart.title": "54c182f7fb0b2444f16fc43141b7644525620981f1e5450e898ed056d493c58f",
+      "releaseNotes.items.fasterStart.body": "c864be41e9cb1457c380aa53c0cf47f78829188e93804c2428eb98bda98adb0a",
+      "releaseNotes.items.liveYes.title": "9bec3e3b57f0c8d3d0d71f0f8d145fb011e950f14805dd117a70c558a8623d67",
+      "releaseNotes.items.liveYes.body": "fd4890f15c30c8388ae4ccc4b5af5af3e85fcca10772e9966e58aada2b145526"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
