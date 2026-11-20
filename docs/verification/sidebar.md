@@ -129,6 +129,8 @@ the page's own drag events, and exits.
    Designer and Tester, which have no messages, as a bot a Chief sets up. In
    Advanced each row shows the bot's role as its second line; Tester has no
    role, so its second line stays empty. Simple shows them as named tiles.
+   An Advanced row's avatar has no model logo; hovering the name shows the
+   model. Avatars on the collapsed icon rail keep the logo.
 
 `src/lib/sidebar-bot-drop.test.ts` covers where a drop lands,
 `src/components/Sidebar.departments.test.ts` the sidebar's wiring, and
