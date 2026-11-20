@@ -6037,6 +6037,7 @@
   "computer.android.retry": "Retry",
   "computer.android.secureNote": "On Android 12 and later, the lock screen and protected pages appear black here; do those steps on the phone.",
   "connectors.card.popupBlocked": "Your browser blocked the connection page. Allow pop-ups, then try again.",
+  "connectors.card.linkIfNotOpened": "If the connection page didn't open, use the link below.",
   "connectors.card.connected": "Connected",
   "connectors.card.alsoUseful": "Also useful",
   "connectors.card.resumed": "Connected securely. Your bot is continuing the task.",

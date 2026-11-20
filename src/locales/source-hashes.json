@@ -37602,7 +37602,8 @@
       "releaseNotes.items.flatpakEngine.body": "c21c13dff0a50d6434f8f61cb6365218550c85f0374d547fce4b8c3089478bc7",
       "releaseNotes.items.seiraName.title": "7d2c02cb91a01eeb1c92ad52d3a1a04684769114be72e9a95cfd1669a5efdef1",
       "releaseNotes.items.seiraName.body": "1776ddc8b26a51a5700a28612ce267c70e1f9ec9cf81def5b5b62de3d5523775",
-      "settings.profile.avatar.shuffle": "317cb3a7efadd989cf93430f492995c8a33f10a31ea74699f2c0152bb6c3b9fb"
+      "settings.profile.avatar.shuffle": "317cb3a7efadd989cf93430f492995c8a33f10a31ea74699f2c0152bb6c3b9fb",
+      "connectors.card.linkIfNotOpened": "1be5a958a1fb0ae682695ffac85e83e784fb4a85fbdfaf91db36a02e6ff5155b"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
