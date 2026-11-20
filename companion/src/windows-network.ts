@@ -4,6 +4,8 @@
 // the Public network, so the pairing panel can say what to change.
 import { execFile } from "node:child_process";
 
+import { backgroundAnswer } from "./background-answer.ts";
+
 /** One line per connected network: "<InterfaceAlias>\t<NetworkCategory>". The
  * alias is the adapter name `os.networkInterfaces()` reports. UTF-8 output so a
  * localized alias survives the pipe; no quote characters, since the script
@@ -37,8 +39,8 @@ const getNetConnectionProfile = (): Promise<string> =>
  * who switches the network to Private sees the hint go within this long. */
 const MAX_AGE_MS = 15_000;
 
-/** Never waits: returns the last answer and, when stale, asks Windows again in
- * the background (a PowerShell process). Off Windows the set stays empty. */
+/** Never waits (see `backgroundAnswer`); each fresh answer is a PowerShell
+ * process. Off Windows the set stays empty. */
 export function createPublicNetworkCheck({
   platform = process.platform,
   run = getNetConnectionProfile,
@@ -50,23 +52,10 @@ export function createPublicNetworkCheck({
   now?: () => number;
   maxAgeMs?: number;
 } = {}): () => ReadonlySet<string> {
-  let known: ReadonlySet<string> = new Set();
-  let checkedAt = Number.NEGATIVE_INFINITY;
-  let asking = false;
-  return () => {
-    if (platform !== "win32" || asking || now() - checkedAt < maxAgeMs) return known;
-    asking = true;
-    run()
-      .then(
-        (output) => { known = publicNetworkAliases(output); },
-        () => { known = new Set(); },
-      )
-      .finally(() => {
-        checkedAt = now();
-        asking = false;
-      });
-    return known;
-  };
+  const none: ReadonlySet<string> = new Set();
+  if (platform !== "win32") return () => none;
+  const answer = backgroundAnswer(async () => publicNetworkAliases(await run()), none, { now, maxAgeMs });
+  return () => answer(undefined);
 }
 
 export const publicNetworks = createPublicNetworkCheck();
