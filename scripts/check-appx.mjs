@@ -8,7 +8,9 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 export const EXPECTED = Object.freeze({
   displayName: "Seira",
-  publisherDisplayName: "PT GLOBAL RAYA ORIS WIJAYA",
+  identityName: "PTGLOBALRAYAORISWIJAYA.Seira",
+  publisher: "CN=9FC9B65D-F775-40DD-ACD9-79CFD31D124A",
+  publisherDisplayName: "PT Global Raya Oris Wijaya",
   protocol: "openmausbot",
 });
 
@@ -23,6 +25,8 @@ export function checkManifest(xml, { version }) {
   const identityTag = /<Identity\b[^>]*>/.exec(xml)?.[0] ?? "";
   const identity = { name: attribute(identityTag, "Name"), publisher: attribute(identityTag, "Publisher") };
 
+  if (identity.name !== EXPECTED.identityName) errors.push(`Identity Name is ${identity.name ?? "missing"}, not ${EXPECTED.identityName}`);
+  if (identity.publisher !== EXPECTED.publisher) errors.push(`Identity Publisher is ${identity.publisher ?? "missing"}, not ${EXPECTED.publisher}`);
   if (!xml.includes(`<DisplayName>${EXPECTED.displayName}</DisplayName>`)) errors.push(`the manifest has no DisplayName ${EXPECTED.displayName}`);
   if (!xml.includes(`<PublisherDisplayName>${EXPECTED.publisherDisplayName}</PublisherDisplayName>`)) {
     errors.push(`the manifest has no PublisherDisplayName ${EXPECTED.publisherDisplayName}`);
