@@ -34,7 +34,7 @@ const SITE: PublishedApp = {
   publishedAt: NOW - 2 * 3_600_000, access: "public", manageUrl: "https://app.netlify.com/projects/bright-bakery", canDelete: true,
 };
 const PAGE: PublishedApp = {
-  id: "page-abcdefghijklmnopqrstuvwxyz", source: "page", title: "Sales report", url: "https://abcdefghijklmnopqrstuvwxyz.mausbot.page/", bot: { id: "mira", name: "Mira" }, threadId: "main",
+  id: "page-abcdefghijklmnopqrstuvwxyz", source: "page", title: "Sales report", url: "https://abcdefghijklmnopqrstuvwxyz.page.seira.bot/", bot: { id: "mira", name: "Mira" }, threadId: "main",
   publishedAt: NOW - 3 * 86_400_000, access: "link", canDelete: true,
 };
 const TEAM_ONLY: PublishedApp = { ...SITE, id: "netlify-mira-s2", title: "Staff rota", url: "https://staff-rota.netlify.app/", access: "netlify-team", canDelete: false, threadId: "room-thread" };

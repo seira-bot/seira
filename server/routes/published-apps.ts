@@ -5,7 +5,10 @@ import type { VisibleSet } from "../bot-visibility.ts";
 import type { PublishedApps } from "../host/published-apps.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { checkFraming, type Framing } from "../web-panel-framing.ts";
+import { SEIRA_HOSTS } from "../../electron/seira-hosts.mjs";
 import { PASS, type RouteHandler } from "./table.ts";
+
+const PAGES_SUFFIX = `.${SEIRA_HOSTS.pages}`;
 
 export interface PublishedAppsRouteDeps {
   apps: PublishedApps;
@@ -19,7 +22,7 @@ function isPageUrl(value: string): boolean {
   let url: URL;
   try { url = new URL(value); } catch { return false; }
   const host = url.hostname.toLowerCase();
-  return url.protocol === "https:" && !url.username && !url.password && !url.port && host.endsWith(".mausbot.page") && PAGE_ID.test(host.slice(0, -".mausbot.page".length));
+  return url.protocol === "https:" && !url.username && !url.password && !url.port && host.endsWith(PAGES_SUFFIX) && PAGE_ID.test(host.slice(0, -PAGES_SUFFIX.length));
 }
 
 const deleteBody = z.object({ id: z.string().min(1).max(300) }).strict();

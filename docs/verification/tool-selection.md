@@ -10,7 +10,7 @@ pnpm exec vitest run shared/tool-scope.test.ts server/mcp-gate.test.ts server/mc
 pnpm exec vitest run server/store.test.ts server/tool-scope.e2e.test.ts server/drivers/tool-scope-coverage.test.ts server/drivers/acp/tool-scope.test.ts
 pnpm exec vitest run server/drivers/pi.test.ts server/drivers/pi-mcp-extension.test.ts server/drivers/chat-mcp-tools.test.ts server/drivers/openai-chat.test.ts server/openai-tools.e2e.test.ts
 pnpm exec vitest run src/components/bot-settings/AccessSection.test.ts src/state/store.test.ts src/lib/create-configured-bot.test.ts src/lib/bot-creation-draft.test.ts
-OMB_UI_E2E=1 pnpm exec vitest run scripts/testing/tool-selection-ui.e2e.test.ts
+SEIRA_UI_E2E=1 pnpm exec vitest run scripts/testing/tool-selection-ui.e2e.test.ts
 ```
 
 The UI check opens the actual bot settings and saves, clears, rejects invalid
@@ -152,7 +152,7 @@ the disposable agent data removed afterward.
 Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm check:electron` and
 `pnpm i18n:check`. On a Mac with Node installed outside standard locations,
 the installer tests' fake PATH may not find Node. A temporary link to Node
-in pnpm's existing `node_modules/.bin` can supply it through `OMB_EXTRA_PATH`.
+in pnpm's existing `node_modules/.bin` can supply it through `SEIRA_EXTRA_PATH`.
 First verify that directory contains no npm executable, so the fixture's fake
 npm remains selected. Use the same leading directory in the test process's
 inherited PATH; the PATH contract test intentionally checks that order.

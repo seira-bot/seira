@@ -18,7 +18,7 @@ let home = "";
 let base = "";
 let stderr = "";
 
-const envelope = (payload: Record<string, string>) => `<openmaus-goal>${JSON.stringify(payload)}</openmaus-goal>`;
+const envelope = (payload: Record<string, string>) => `<seira-goal>${JSON.stringify(payload)}</seira-goal>`;
 
 // turn 1 assigns the worker that never frees up; turn 2 (after the harness note) reassigns to the helper; turn 3 completes
 const reassignLeadReplies = [
@@ -44,8 +44,8 @@ const fixture = (displayName: string, environment: Record<string, string>) => ({
 });
 
 beforeAll(async () => {
-  home = mkdtempSync(join(tmpdir(), "omb-goal-wait-cap-"));
-  const data = join(home, ".openmausbot");
+  home = mkdtempSync(join(tmpdir(), "seira-goal-wait-cap-"));
+  const data = join(home, ".seira");
   const staticDir = join(home, "static");
   mkdirSync(data, { recursive: true });
   mkdirSync(join(staticDir, "assets"), { recursive: true });
@@ -76,11 +76,11 @@ beforeAll(async () => {
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home,
       USERPROFILE: home,
-      OMB_PORT: String(port),
-      OMB_WEBHOOK_PORT: String(port + 1),
-      OMB_STATIC_DIR: staticDir,
+      SEIRA_PORT: String(port),
+      SEIRA_WEBHOOK_PORT: String(port + 1),
+      SEIRA_STATIC_DIR: staticDir,
       // seconds, not minutes: the point of this file is the cap firing
-      OMB_GOAL_WAIT_MAX_MS: "1500",
+      SEIRA_GOAL_WAIT_MAX_MS: "1500",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

@@ -2,6 +2,7 @@
 // T3 Tools Inc. (full text in third_party/t3-code/LICENSE); modified: the steps are this computer's own (phone link,
 // account, relay, the phone's way in) read from the state the desktop already holds, every line is localised, and the
 // copied text carries only fixed words and codes.
+import { SEIRA_HOSTS } from "../../electron/seira-hosts.mjs";
 import type { CompanionAccountState } from "../types/ogb";
 import { companionPairingRoute, type CompanionPairingRouteSource } from "./companion-pairing";
 import type { CompanionState } from "./companion-types";
@@ -41,7 +42,7 @@ type Problem = { reason: string; next: string[] };
 type AccountProblem = NonNullable<CompanionAccountState["problem"]>;
 
 const VERSION = /^\d{1,4}\.\d{1,4}\.\d{1,6}(?:-[0-9A-Za-z.]{1,32})?$/;
-const RELAY_NODE = /^(relay[1-9][0-9]?)\.openmausbot\.com$/;
+const RELAY_NODE = SEIRA_HOSTS.relayNodePattern;
 const ACCOUNT_PROBLEMS: ReadonlySet<string> = new Set<AccountProblem>(["unconfigured", "unreachable", "sign_in", "busy", "limit", "update", "address", "failed"]);
 const TOKEN_CODES: ReadonlySet<string> = new Set(["unavailable", "sign_in", "busy", "unreachable", "failed"]);
 const RELAY_PROBLEMS: ReadonlySet<string> = new Set(["no_answer", "token_refused", "busy", "unreachable", "replaced"]);

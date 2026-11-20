@@ -5,7 +5,7 @@ type BackgroundFlag = "--tools" | "--no-session-persistence" | "--strict-mcp-con
 
 export const BACKGROUND_CALL_TIMEOUT_MS = 60_000;
 
-const CWD_PREFIX = "omb-claude-background-";
+const CWD_PREFIX = "seira-claude-background-";
 
 /** No extended thinking and none of the person's hooks. Claude CLI 2.1.303: only this setting keeps Haiku 5.5 from thinking;
  * MAX_THINKING_TOKENS=0 still left it thinking on about half the calls, and any --effort turns thinking back on. */
@@ -16,7 +16,7 @@ export function backgroundCallArgs(input: {
   model: string;
   outputFormat: "json" | "text";
   supports: (flag: BackgroundFlag) => boolean;
-  /** False while OMB_CLAUDE_INHERIT_USER_CONFIG asks for the person's own setup. */
+  /** False while SEIRA_CLAUDE_INHERIT_USER_CONFIG asks for the person's own setup. */
   isolated: boolean;
 }): string[] {
   const args = ["-p", "--model", input.model, "--output-format", input.outputFormat, "--settings", BACKGROUND_SETTINGS];

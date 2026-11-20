@@ -12,7 +12,7 @@ import { hostTimeout } from "./testing/host-timeout.ts";
 const FAKE_MCP = fileURLToPath(new URL("./testing/fake-mcp-server.ts", import.meta.url));
 
 it("restart keeps the key and replaces the warm process, and so does turning the server off and on in one turn", async () => {
-  const scratch = mkdtempSync(join(tmpdir(), "omb-mcp-restart-"));
+  const scratch = mkdtempSync(join(tmpdir(), "seira-mcp-restart-"));
   const gate = join(scratch, "finish");
   const fixture = await launchVerificationServer({ FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_SLOW_FINISH_GATE: gate });
   const api = async (method: string, path: string, body?: unknown, token?: string) => {
@@ -26,7 +26,7 @@ it("restart keeps the key and replaces the warm process, and so does turning the
   /** The key the server itself starts with, behind the tool gate the turn mounts it through. */
   const mailKey = (started: any): string | undefined => {
     const mounted = started.mcpConfig.mcpServers.mail;
-    return (mounted.env.OMB_GATE_UPSTREAM ? JSON.parse(mounted.env.OMB_GATE_UPSTREAM) : mounted).env.MAIL_KEY;
+    return (mounted.env.SEIRA_GATE_UPSTREAM ? JSON.parse(mounted.env.SEIRA_GATE_UPSTREAM) : mounted).env.MAIL_KEY;
   };
   let sends = 0;
   let bot: { id: string; threadId: string };
@@ -38,7 +38,7 @@ it("restart keeps the key and replaces the warm process, and so does turning the
     expect((await api("POST", `/api/bots/${bot.id}/messages`, { threadId: bot.threadId, text, sendId: `restart-e2e-send-${String(sends).padStart(4, "0")}` })).status).toBe(202);
     await expect.poll(() => { try { return JSON.stringify(dump().prompt).includes(text); } catch { return false; } }, { timeout: 30_000 }).toBe(true);
     const started = dump();
-    const internal = (path: string, body: unknown) => api("POST", path, body, started.mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN);
+    const internal = (path: string, body: unknown) => api("POST", path, body, started.mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN);
     const done = async () => {
       writeFileSync(gate, "");
       await expect.poll(async () => (await api("GET", "/api/bots?messages=0")).body.bots.find((one: any) => one.id === bot.id).busy, { timeout: 20_000 }).toBe(false);

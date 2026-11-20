@@ -30,7 +30,7 @@ describe("which of a Starter Cloud's bots stay awake", () => {
     expect(createStarterAwake({ dataDir: dataDir(), starter: () => true, bots: () => bots(5) }).paused()).toEqual([]);
     const off = createStarterAwake({ dataDir: dataDir(), starter: () => false, bots: () => bots(30) });
     expect([off.limit(), off.paused()]).toEqual([undefined, []]);
-    const list: AwakeBot[] = [...bots(5), { id: "maus", defaultBot: {}, createdAt: 0 }, { id: "chief", chiefOfStaff: true, createdAt: 0 }, { id: "gone", hidden: true, createdAt: 0 }];
+    const list: AwakeBot[] = [...bots(5), { id: "seira", defaultBot: {}, createdAt: 0 }, { id: "chief", chiefOfStaff: true, createdAt: 0 }, { id: "gone", hidden: true, createdAt: 0 }];
     expect(createStarterAwake({ dataDir: dataDir(), starter: () => true, bots: () => list }).paused()).toEqual([]);
   });
 

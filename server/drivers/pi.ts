@@ -465,7 +465,7 @@ export const PiDriver: ProviderDriver<PiConfig> = {
       // Written on every turn: the extension also carries ask_user.
       const mcpServers = buildMcpServers(turn);
       const askUser = toolScope === undefined || allowsTool(toolScope, { kind: "native", name: ASK_USER_TOOL });
-      const mcpTempDir = mkdtempSync(join(tmpdir(), "omb-pi-mcp-"));
+      const mcpTempDir = mkdtempSync(join(tmpdir(), "seira-pi-mcp-"));
       const scopeReadyPath = toolScope !== undefined ? join(mcpTempDir, "scope-ready.json") : undefined;
       try {
         writeFileSync(join(mcpTempDir, "mcp.json"), JSON.stringify({ mcpServers: mcpServers ?? {}, toolScope, scopeReadyPath, approvalMode: turn.approvalMode, askUser }), { mode: 0o600 });
@@ -487,7 +487,7 @@ export const PiDriver: ProviderDriver<PiConfig> = {
             env: piEnvironment({
               ...process.env,
               ...input.environment,
-              OMB_MCP_CONFIG: join(mcpTempDir, "mcp.json"),
+              SEIRA_MCP_CONFIG: join(mcpTempDir, "mcp.json"),
             }),
           }, "bot");
         } catch (err) {

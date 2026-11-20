@@ -13,7 +13,7 @@ import { writeFileAtomic } from "../atomic.ts";
 import { DATA_DIR } from "../config.ts";
 
 /** "1" stops the download and every remote card on this server's pages, the bundled ones included. */
-export const ANNOUNCEMENTS_DISABLE_ENV = "OMB_DISABLE_ANNOUNCEMENTS";
+export const ANNOUNCEMENTS_DISABLE_ENV = "SEIRA_DISABLE_ANNOUNCEMENTS";
 export const ANNOUNCEMENTS_TTL_MS = 60 * 60 * 1000;
 /** Back off failed fetches, so an offline computer does not try on every page load. */
 export const ANNOUNCEMENTS_RETRY_MS = 5 * 60 * 1000;
@@ -167,7 +167,7 @@ export class AnnouncementStore {
     const timer = setTimeout(() => controller.abort(), this.options.timeoutMs ?? ANNOUNCEMENTS_FETCH_TIMEOUT_MS);
     try {
       const response = await (this.options.fetch ?? fetch)(ANNOUNCEMENTS_URL, {
-        headers: { accept: "application/json", "user-agent": "OpenMausBot" },
+        headers: { accept: "application/json", "user-agent": "Seira" },
         // Nothing of the person's goes with it.
         credentials: "omit",
         referrerPolicy: "no-referrer",

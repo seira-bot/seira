@@ -13,7 +13,7 @@ const NOW = 1_000_000;
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 const fileIn = () => {
-  const dir = mkdtempSync(join(tmpdir(), "omb-ai-pool-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-ai-pool-"));
   dirs.push(dir);
   return join(dir, "ai-pool-threads.json");
 };

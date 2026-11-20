@@ -12,7 +12,7 @@ import { SETTINGS_CARDS } from "./cards.ts";
 import { createAppSettings, WRITE_BUDGET } from "./host.ts";
 
 const ADDRESS = "macmini.tail1234.ts.net";
-const SECRETS = [ADDRESS, "http://", "https://", "/pair#code=", "ABCD-EFGH-IJKL", "omb_pair_"];
+const SECRETS = [ADDRESS, "http://", "https://", "/pair#code=", "ABCD-EFGH-IJKL", "seira_pair_"];
 const dirs: string[] = [];
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });

@@ -66,7 +66,7 @@ at the official HTTP endpoint are recognized rather than replaced.
 Whop currently requests admin access across businesses your Whop account can
 manage, and its own consequential-action confirmations still apply. See the
 [official Whop MCP documentation](https://github.com/whopio/whop-mcp-server).
-This is an optional connected tool, not a change to OMB's subscription billing.
+This is an optional connected tool, not a change to Seira's subscription billing.
 
 ### Agentcard
 
@@ -123,7 +123,7 @@ tools, so choose which bots get it under **Bot access**; **Read only** lists
 and runs only BubblaV's read-only tools. BubblaV saves the sign-in as an API
 key named **MCP Client** under **Settings → API Keys**, where revoking it ends
 the connection. The key lasts one year, then the card asks you to sign in
-again. See [BubblaV's Seira guide](https://docs.bubblav.com/user-guide/integrations/openmausbot).
+again. See [BubblaV's Seira guide](https://docs.bubblav.com/user-guide/integrations/seira).
 
 ### Servers that ask you to sign in
 
@@ -153,7 +153,7 @@ has nothing to work on. Background checks never do this.
   turn until someone signs in from this page. A signed-in server gets
   `Authorization: Bearer …` in place of any `Authorization` header you set,
   so every engine that reaches URL servers can use it.
-- **Tokens are kept apart.** They live in `~/.openmausbot/mcp-oauth.json`
+- **Tokens are kept apart.** They live in `~/.seira/mcp-oauth.json`
   (owner-only), never in `config.json` or an API response, and are left out of
   workspace backups. They belong to the server's address: changing the
   address or removing the server drops them. **Sign out** revokes them when
@@ -172,7 +172,7 @@ computer, where Seira is not, so sign-in comes back another way:
   address you are using Seira at, at `/mcp-oauth/callback`, and the tab
   says **Signed in. You can close this tab and return to Seira.** Nothing
   to copy. Whop works this way. The address is the server's public address
-  (a Cloud or hosted workspace's own, a connected domain, or `OMB_PUBLIC_URL`)
+  (a Cloud or hosted workspace's own, a connected domain, or `SEIRA_PUBLIC_URL`)
   when you are on it, or the https address your browser is on when none is
   set. If you reach the server at an https address it does not list, sign-in
   returns to its listed public address instead.
@@ -191,7 +191,7 @@ in from another computer?** for an SSH tunnel or a browser elsewhere. **Open
 sign-in page** reopens the approval page if your browser blocked the first
 attempt.
 
-Keep the redirect URL private. Complete the flow in the same OMB browser/session
+Keep the redirect URL private. Complete the flow in the same Seira browser/session
 that started it, within five minutes. Cancellation or logging out ends the
 pending flow; a URL cannot be reused, and a return to the https address works
 once, for that sign-in only.
@@ -421,7 +421,7 @@ computer. Each tool call it gets names the bot and conversation that made it,
 in the call's `_meta`:
 
 ```json
-{ "_meta": { "openmausbot/caller": { "botId": "…", "threadId": "…", "verified": false } } }
+{ "_meta": { "seira/caller": { "botId": "…", "threadId": "…", "verified": false } } }
 ```
 
 It is a hint for the server's own logs or per-bot settings, never proof of
@@ -480,7 +480,7 @@ bot or team package.
 
 The switch drops the CLI flag `--strict-mcp-config` (Claude Code 1.0.60+)
 while keeping `--setting-sources project` (1.0.122+). The environment variable
-`OMB_CLAUDE_INHERIT_USER_CONFIG=1` on the Seira process remains the full
+`SEIRA_CLAUDE_INHERIT_USER_CONFIG=1` on the Seira process remains the full
 escape hatch back to the old launch: it restores everything, for every Claude
 bot, until you remove it. The harness also picks the session's compaction
 window with `--autocompact` (2.1.122+). Seira reads `claude --version`
@@ -517,7 +517,7 @@ its engine list. Company Codex uses its own separate home, without your
 
 ## Advanced: edit the file
 
-The same registry lives in `~/.openmausbot/config.json`:
+The same registry lives in `~/.seira/config.json`:
 
 ```json
 {
@@ -559,7 +559,7 @@ engine can mount custom MCP servers gets the enabled tools on its next task.
   `browser`, `phone`, `dweb`, `ogb`, …) so a custom entry can never shadow
   a built-in tool surface. Names are lowercase letters/digits/`_`/`-`, max
   32 chars, starting with a letter.
-- **Environment names are checked.** `OMB_*` and `OGB_*` are refused: Codex
+- **Environment names are checked.** `SEIRA_*` and `OGB_*` are refused: Codex
   hands MCP children their variables from one shared environment, and those
   names carry Seira's own routing and bearers. `ELECTRON_RUN_AS_NODE`
   is accepted as `1` only — the value Seira's own proxies use — so a
@@ -603,7 +603,7 @@ engine can mount custom MCP servers gets the enabled tools on its next task.
   `https://` address with no credentials in it; header names must be valid
   HTTP field names and values a single line.
 - **The result gate covers commands.** An oversized tool result from a stdio
-  server never reaches the model whole (`OMB_MCP_RESULT_BUDGET`, 8,000
+  server never reaches the model whole (`SEIRA_MCP_RESULT_BUDGET`, 8,000
   characters by default). A JSON result is *shaped*: the gate keeps the whole
   payload on its side, shows the model its shape (keys, array sizes, item
   keys) and the first records, and lists one read-only tool beside the

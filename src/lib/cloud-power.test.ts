@@ -38,7 +38,7 @@ describe("a page of a Cloud home that sleeps", () => {
     expect(fetch).toHaveBeenCalledOnce();
     const [path, init] = fetch.mock.calls[0];
     expect(path).toBe("/api/auth/session");
-    expect(new Headers(init?.headers).get("x-omb-background")).toBeNull();
+    expect(new Headers(init?.headers).get("x-seira-background")).toBeNull();
   });
 
   it("knows the home's asleep answer and its sleeping frame", () => {

@@ -15,7 +15,7 @@ afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 describe("upload links for connected-app files", () => {
   it("asks Composio with the project key, and the service for a member's own installation", async () => {
-    vi.stubEnv("OMB_COMPOSIO_API", undefined);
+    vi.stubEnv("SEIRA_COMPOSIO_API", undefined);
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     vi.stubGlobal("fetch", answering({ key: "projects/p/requests/googledrive/report.pdf", new_presigned_url: "https://storage.composio.dev/p/report.pdf?X-Amz-Signature=1" }, calls));
     await expect(requestFileUpload(withKey, request)).resolves.toEqual({ key: "projects/p/requests/googledrive/report.pdf", url: "https://storage.composio.dev/p/report.pdf?X-Amz-Signature=1" });
@@ -28,7 +28,7 @@ describe("upload links for connected-app files", () => {
   });
 
   it("refuses a link anywhere but Composio's storage over HTTPS", async () => {
-    vi.stubEnv("OMB_COMPOSIO_API", undefined);
+    vi.stubEnv("SEIRA_COMPOSIO_API", undefined);
     for (const link of ["https://attacker.example/put", "http://storage.composio.dev/put", "http://127.0.0.1:8787/put", "https://169.254.169.254/x", "https://storage.composio.dev.evil.example/x"]) {
       vi.stubGlobal("fetch", answering({ key: "k", new_presigned_url: link }));
       await expect(requestFileUpload(withKey, request), link).rejects.toThrow("not on its storage");

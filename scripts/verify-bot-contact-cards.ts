@@ -40,8 +40,8 @@ try {
       } },
     ],
   });
-  const { chromium } = await import(process.env.OMB_VERIFY_PLAYWRIGHT || "playwright");
-  browser = await chromium.launch({ headless: true, executablePath: process.env.OMB_VERIFY_BROWSER_CHROME || undefined });
+  const { chromium } = await import(process.env.SEIRA_VERIFY_PLAYWRIGHT || "playwright");
+  browser = await chromium.launch({ headless: true, executablePath: process.env.SEIRA_VERIFY_BROWSER_CHROME || undefined });
   const context = await (browser as any).newContext({ viewport: { width: 1100, height: 1000 } });
   const page = await context.newPage();
   const errors: string[] = [];
@@ -49,7 +49,7 @@ try {
   await page.goto(ui.previewUrl);
   assert.equal(await page.evaluate(async (code: string) => (await fetch("/api/auth/pair", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code, cookie: true, label: "Contact cards fixture" }) })).status, pairing.code), 200);
   await page.reload();
-  const output = process.env.OMB_UI_EVIDENCE_DIR || "/tmp/omb-contact-cards-evidence";
+  const output = process.env.SEIRA_UI_EVIDENCE_DIR || "/tmp/seira-contact-cards-evidence";
   mkdirSync(output, { recursive: true });
   const status = async () => (await api("GET", "/api/mcp/servers")).servers as Array<Record<string, unknown>>;
   const vapi = page.locator('[data-app-tile="vapi"]');

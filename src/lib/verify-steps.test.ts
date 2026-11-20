@@ -50,7 +50,7 @@ describe("parseControlCommand", () => {
     ["node scripts\\control-seira.ts doctor", "doctor"],
     ["FOO=1 pnpm control:seira wait --bot b", "wait"],
     ["timeout 30 npx tsx ./scripts/control-seira.ts screenshot > out.png 2>&1", "screenshot"],
-    ["sudo -u maus pnpm control:seira doctor", "doctor"],
+    ["sudo -u seira pnpm control:seira doctor", "doctor"],
   ])("accepts %s as a control-CLI invocation of %s", (command, subcommand) => {
     expect(parseControlCommand(command)).toEqual({ subcommand, dryRun: false });
   });
@@ -119,7 +119,7 @@ describe("parseRunCommand", () => {
     ["npx tsx scripts/x.ts", "npx"],
     ["./node_modules/.bin/vitest run", "vitest"],
     ["FOO=1 timeout 30 git push", "git push"],
-    ["sudo -u maus systemctl restart omb", "systemctl"],
+    ["sudo -u seira systemctl restart seira", "systemctl"],
   ])("%s is a step labelled %s", (command, label) => {
     expect(parseRunCommand(command)).toEqual({ label, verified: false, dryRun: false });
   });

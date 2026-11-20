@@ -351,7 +351,7 @@ describe("Simple-mode sidebar layout", () => {
   it("opens the command palette from the rail's search button and leaves the rail as it is", () => {
     setSidebarDensity("icons");
     const opened = vi.fn();
-    window.addEventListener("omb:open-command-palette", opened);
+    window.addEventListener("seira:open-command-palette", opened);
     railSearch(render().tree)();
     expect(opened).toHaveBeenCalledOnce();
     expect(render().tree.some((node) => node.type === SimpleRailFooter)).toBe(true);
@@ -359,7 +359,7 @@ describe("Simple-mode sidebar layout", () => {
 
   it("opens the command palette instead when a side panel holds the sidebar collapsed", () => {
     const opened = vi.fn();
-    window.addEventListener("omb:open-command-palette", opened);
+    window.addEventListener("seira:open-command-palette", opened);
     const search = railSearch(render(true).tree);
     expect(edge(render(true).tree), "no edge to drag while a side panel holds it collapsed").toBeUndefined();
     search();

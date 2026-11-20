@@ -62,7 +62,7 @@ function intervalScheduleText(
   return restrictions.length ? `${cadence}; ${restrictions.join("; ")}` : cadence;
 }
 
-/** The body is complete enough for any Chief-of-Staff agent to run without OpenMausBot or a proprietary parser. */
+/** The body is complete enough for any Chief-of-Staff agent to run without Seira or a proprietary parser. */
 export function renderBotPackageMarkdown(document: ParsedBotPackage): string {
   const pkg = parseBotPackage(document).package;
   const frontmatter = stringifyYaml({ botmrr: BOTMRR_MARKDOWN_VERSION, ...pkg }, { lineWidth: 0 }).trim();

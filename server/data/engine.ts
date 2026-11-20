@@ -53,9 +53,9 @@ export interface DataEngineOptions {
 
 /** Null means the server's own node_modules. */
 export function duckdbDirectory(env: NodeJS.ProcessEnv = process.env): string | null {
-  if (env.OMB_DUCKDB_DIR) return env.OMB_DUCKDB_DIR;
-  if (env.OMB_RESOURCES_PATH) {
-    const staged = join(env.OMB_RESOURCES_PATH, "duckdb");
+  if (env.SEIRA_DUCKDB_DIR) return env.SEIRA_DUCKDB_DIR;
+  if (env.SEIRA_RESOURCES_PATH) {
+    const staged = join(env.SEIRA_RESOURCES_PATH, "duckdb");
     if (existsSync(staged)) return staged;
   }
   return null;
@@ -63,7 +63,7 @@ export function duckdbDirectory(env: NodeJS.ProcessEnv = process.env): string | 
 
 /** createRequire resolves upwards from the anchor, so one inside <dir>/node_modules finds the staged @duckdb and @resvg first. */
 export function nativeRequire(directory: string | null = duckdbDirectory()): NodeJS.Require {
-  return createRequire(directory ? join(directory, "node_modules", "openmausbot-duckdb-anchor.js") : import.meta.url);
+  return createRequire(directory ? join(directory, "node_modules", "seira-duckdb-anchor.js") : import.meta.url);
 }
 
 function loadBinding(directory: string | null): Binding {
@@ -77,15 +77,15 @@ export function instanceSettings(folder: string, dataDir: string, duckdbVersion:
   const quarterOfRam = Math.floor(box.memoryBytes / 4);
   const memoryMiB = Math.max(256, Math.floor(Math.min(2 * 1024 ** 3, quarterOfRam) / 1024 ** 2));
   return {
-    memory_limit: env.OMB_DUCKDB_MEMORY_LIMIT || `${memoryMiB}MiB`,
+    memory_limit: env.SEIRA_DUCKDB_MEMORY_LIMIT || `${memoryMiB}MiB`,
     temp_directory: join(folder, DATA_TMP_DIR),
-    max_temp_directory_size: env.OMB_DUCKDB_MAX_TEMP_SIZE || "20GB",
+    max_temp_directory_size: env.SEIRA_DUCKDB_MAX_TEMP_SIZE || "20GB",
     threads: String(Math.max(1, Math.min(4, Math.floor(box.cpus) || 1))),
     // Extensions are tied to the exact DuckDB version.
     extension_directory: join(dataDir, "duckdb-extensions", duckdbVersion),
     autoinstall_known_extensions: "false",
     autoload_known_extensions: "true",
-    // Persistent secrets sit unencrypted on disk; OMB's broker issues temporary ones.
+    // Persistent secrets sit unencrypted on disk; Seira's broker issues temporary ones.
     allow_persistent_secrets: "false",
     preserve_insertion_order: "false",
   };
@@ -527,7 +527,7 @@ class BotDb implements BotDatabase {
     // identifiers were recognized here (for example, Order Items).
     const displayName = /^[\w."$ -]+$/.test(text) && !/\s(?:from|select|with|values)\s/i.test(text) && !/^(?:select|with|from|values|pivot|unpivot|show|describe)\b/i.test(text);
     if (tableIdentifierParts(text) || displayName) return this.resolveTable(text);
-    return `(${text}) AS omb_described`;
+    return `(${text}) AS seira_described`;
   }
 
   async describe(target: string, options: RunOptions): Promise<DescribeResult> {
@@ -582,14 +582,14 @@ class BotDb implements BotDatabase {
     const result: DataHistogram = { table: this.displayName(entry), column: found.name, bins: [] };
 
     if (numeric || temporal) {
-      const sourceId = `omb_source.${id}`;
+      const sourceId = `seira_source.${id}`;
       const value = numeric ? `CAST(${sourceId} AS DOUBLE)` : `epoch(CAST(${sourceId} AS TIMESTAMP))`;
       // NaN/infinity cannot define a finite bucket. Infinite dates produce
       // NULL epochs; they must not be counted in the constant/first bucket.
       const finite = `isfinite(${value})`;
-      const sql = `WITH omb_range AS (SELECT min(${value}) AS lo, max(${value}) AS hi FROM ${from} AS omb_source WHERE ${finite})
-SELECT LEAST(coalesce(floor((${value} - omb_range.lo) / nullif(omb_range.hi - omb_range.lo, 0) * ${bins}), 0), ${bins - 1})::INTEGER AS bin, count(*) AS n, min(omb_range.lo), min(omb_range.hi)
-FROM ${from} AS omb_source, omb_range WHERE ${finite} GROUP BY bin ORDER BY bin`;
+      const sql = `WITH seira_range AS (SELECT min(${value}) AS lo, max(${value}) AS hi FROM ${from} AS seira_source WHERE ${finite})
+SELECT LEAST(coalesce(floor((${value} - seira_range.lo) / nullif(seira_range.hi - seira_range.lo, 0) * ${bins}), 0), ${bins - 1})::INTEGER AS bin, count(*) AS n, min(seira_range.lo), min(seira_range.hi)
+FROM ${from} AS seira_source, seira_range WHERE ${finite} GROUP BY bin ORDER BY bin`;
       const rows = (await this.statement("panel", sql, options, (o, conn) => this.read(o, conn, sql))).rows;
       if (!rows.length) return result;
       const lo = Number(rows[0][2]);
@@ -735,8 +735,8 @@ class Engine implements DataEngine {
       const detail = (error instanceof Error ? error.message : String(error)).split("\n")[0].trim();
       const where = directory ? `from ${directory}` : "from the server's node_modules";
       const action = directory
-        ? "Reinstall Seira, or point OMB_DUCKDB_DIR at a folder holding node_modules/@duckdb."
-        : "Run pnpm install, or set OMB_DUCKDB_DIR to a folder holding node_modules/@duckdb.";
+        ? "Reinstall Seira, or point SEIRA_DUCKDB_DIR at a folder holding node_modules/@duckdb."
+        : "Run pnpm install, or set SEIRA_DUCKDB_DIR to a folder holding node_modules/@duckdb.";
       this.loaded = { reason: `DuckDB did not load ${where}: ${detail}. ${action}` };
     }
     return this.loaded;

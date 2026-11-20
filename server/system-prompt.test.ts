@@ -452,7 +452,7 @@ describe("cloudHomePrompt", () => {
     expect(cloudHomePrompt(false, [], [{ name: "Ash-MBP", platform: "darwin" }])).not.toContain("away_computers");
   });
 
-  // A Windows user was told to turn on "Let My Cloud use this Mac" on "this Mac", and the Cloud called "OMB Cloud".
+  // A Windows user was told to turn on "Let My Cloud use this Mac" on "this Mac", and the Cloud called by an old name.
   it("names the person's computer by its platform, never a Mac unless it is one, and the product by its name", () => {
     const pc = cloudHomePrompt(true, [], [{ name: "ASH-PC", platform: "win32" }]);
     expect(pc).toContain("If they ask for something on their PC (ASH-PC), check list_shared_computers");

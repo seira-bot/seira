@@ -130,7 +130,7 @@ it("stops unattended work at a reached cap with one line each and one notice, ke
 }, hostTimeout(300_000));
 
 it("takes a headless server's caps from the environment, and they win over the saved ones", async () => {
-  fixture = await launchVerificationServer({ ...process.env, FAKE_CLAUDE_VERSION: "2.1.284", OMB_USAGE_CAP_DAILY_TOKENS: "1", OMB_USAGE_CAP_STOPS: "unattended" });
+  fixture = await launchVerificationServer({ ...process.env, FAKE_CLAUDE_VERSION: "2.1.284", SEIRA_USAGE_CAP_DAILY_TOKENS: "1", SEIRA_USAGE_CAP_STOPS: "unattended" });
   const { url } = fixture.info;
   const { ok } = client(url);
   const scout = await newBot(url, "Scout");

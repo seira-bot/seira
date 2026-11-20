@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { CAST_CHARACTERS, castCharacterOf } from "./cast-characters.ts";
 import { mascotAccessories } from "./mascot-accessories.ts";
-import { MAUS_COLOR_NAMES } from "./wire.ts";
+import { SEIRA_COLOR_NAMES } from "./wire.ts";
 
 interface Preset {
   id: string;
@@ -36,7 +36,7 @@ describe("cast characters", () => {
   it("wears only valid accessories and colours", () => {
     for (const character of CAST_CHARACTERS) {
       expect(mascotAccessories([...character.mascotAccessories])).toEqual(character.mascotAccessories);
-      expect(MAUS_COLOR_NAMES).toContain(character.color);
+      expect(SEIRA_COLOR_NAMES).toContain(character.color);
     }
   });
 

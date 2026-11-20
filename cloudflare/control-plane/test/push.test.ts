@@ -13,7 +13,7 @@ import {
   readApnsConfig,
 } from "../src/push";
 
-const BASE_URL = "https://auth.openmausbot.test";
+const BASE_URL = "https://auth.seira.test";
 const TOKEN_A = "a1".repeat(32);
 const TOKEN_B = "b2".repeat(32);
 
@@ -64,7 +64,7 @@ async function pushEnv(privateKeyPem: string, extra: Record<string, string> = {}
     ...env,
     APNS_KEY_ID: "KEY1234567",
     APNS_TEAM_ID: "TEAM123456",
-    APNS_BUNDLE_ID: "com.example.mausbot",
+    APNS_BUNDLE_ID: "com.example.seira",
     APNS_PRIVATE_KEY: privateKeyPem,
     APNS_ENVIRONMENTS: "production,sandbox",
     ...extra,
@@ -167,7 +167,7 @@ describe("phone push relay", () => {
     expect((await send(worker, testEnv, credential, { notification: { ...notification, requestId: "req-7" } })).status).toBe(202);
     const [sent] = apns.calls;
     const data = { v: 1, kind: "approval", botId: "bot_1", botName: "Scout", threadId: "th_1", roomId: "grp_1", roomName: "Launch", requestId: "req-7", pairing: "pair-tag-1" };
-    expect(sent!.body).toMatchObject({ omb: data, body: data });
+    expect(sent!.body).toMatchObject({ seira: data, body: data });
     expect((await send(worker, testEnv, credential, { notification: { ...notification, requestId: "has space" } })).status).toBe(400);
     expect(apns.calls).toHaveLength(1);
   });
@@ -186,7 +186,7 @@ describe("phone push relay", () => {
     const [sent] = apns.calls;
     expect(sent!.url).toBe(`https://api.sandbox.push.apple.com/3/device/${TOKEN_A}`);
     expect(sent!.headers).toMatchObject({
-      "apns-topic": "com.example.mausbot",
+      "apns-topic": "com.example.seira",
       "apns-push-type": "alert",
       "apns-priority": "10",
     });
@@ -199,11 +199,11 @@ describe("phone push relay", () => {
         category: "OPENMAUS_APPROVAL",
         "interruption-level": "time-sensitive",
       },
-      omb: { v: 1, kind: "approval", botId: "bot_1", botName: "Scout", threadId: "th_1", roomId: "grp_1", roomName: "Launch", pairing: "pair-tag-1" },
+      seira: { v: 1, kind: "approval", botId: "bot_1", botName: "Scout", threadId: "th_1", roomId: "grp_1", roomName: "Launch", pairing: "pair-tag-1" },
       body: { v: 1, kind: "approval", botId: "bot_1", botName: "Scout", threadId: "th_1", roomId: "grp_1", roomName: "Launch", pairing: "pair-tag-1" },
     });
 
-    expect((sent!.body as { omb: object }).omb).not.toHaveProperty("requestId");
+    expect((sent!.body as { seira: object }).seira).not.toHaveProperty("requestId");
 
     const jwt = sent!.headers.authorization!.replace(/^bearer /, "");
     const [header, claims, signature] = jwt.split(".");

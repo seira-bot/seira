@@ -250,14 +250,14 @@ jobs:
             *) exit 1 ;;
           esac
           node scripts/smoke-browser-bundle.mjs --resources "$resources"
-          OMB_SMOKE_DIST="$resources/server" node scripts/smoke-packaged-server.mjs --browser-bundle "$resources/browser-engine"
+          SEIRA_SMOKE_DIST="$resources/server" node scripts/smoke-packaged-server.mjs --browser-bundle "$resources/browser-engine"
 
       - name: "Gate: both packaged servers start and every helper path resolves"
         run: |
           for app in release/mac-arm64/Seira.app release/mac/Seira.app; do
             res="$app/Contents/Resources"
             # The server is plain JavaScript, so the runner's Node starts the x64 copy too.
-            OMB_SMOKE_DIST="$res/server" node scripts/smoke-packaged-server.mjs \
+            SEIRA_SMOKE_DIST="$res/server" node scripts/smoke-packaged-server.mjs \
               || { echo "::error::the packaged server in $app did not start"; exit 1; }
             node scripts/check-module-scopes.mjs "$res"
             node --input-type=module - "$res/server" <<'EOF'

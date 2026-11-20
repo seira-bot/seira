@@ -5,12 +5,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { LEGACY_SENTINEL_LAUNCHD_LABEL } from "../../electron/legacy-names.mjs";
 import { removeTempDir } from "../testing/cleanup.ts";
 import { parseSentinelArgs, runSentinelCli } from "./cli.ts";
 import { runScan } from "./scan.ts";
 import { fixtureDataDir, turnCompleted, type FixtureDataDir } from "./testing.ts";
 
-const ENTRY = join(dirname(fileURLToPath(import.meta.url)), "..", "openmausbot.ts");
+const ENTRY = join(dirname(fileURLToPath(import.meta.url)), "..", "seira.ts");
 const PRIVATE = "Example Client Ltd";
 
 function sentinel(...args: string[]): { status: number | null; stdout: string; stderr: string } {
@@ -22,7 +23,7 @@ describe("seira sentinel", () => {
   let dir: string;
   let fixture: FixtureDataDir;
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "omb-sentinel-cli-"));
+    dir = mkdtempSync(join(tmpdir(), "seira-sentinel-cli-"));
     fixture = fixtureDataDir(join(dir, "data"), [{ id: "b1", name: "Probe", threadId: "t1" }]);
   });
   afterEach(() => {
@@ -85,10 +86,10 @@ describe("seira sentinel", () => {
   });
 
   it("parses its options and defaults the output to a folder of its own, outside the data", () => {
-    const parsed = parseSentinelArgs(["--data-dir", "/data/omb"], {});
-    expect(parsed).toMatchObject({ dataDir: expect.stringMatching(/omb$/), out: expect.stringMatching(/openmausbot-sentinel[\\/]data-[0-9a-f]{12}$/), json: false });
-    expect("out" in parsed && parsed.out.includes(join("data", "omb"))).toBe(false);
-    expect(parseSentinelArgs(["--queue-wait", "600", "--cost", "2.5", "--json"], { OMB_DATA_DIR: "/d" })).toMatchObject({ queueWaitMs: 600_000, costUsd: 2.5, json: true });
+    const parsed = parseSentinelArgs(["--data-dir", "/data/seira"], {});
+    expect(parsed).toMatchObject({ dataDir: expect.stringMatching(/seira$/), out: expect.stringMatching(/seira-sentinel[\\/]data-[0-9a-f]{12}$/), json: false });
+    expect("out" in parsed && parsed.out.includes(join("data", "seira"))).toBe(false);
+    expect(parseSentinelArgs(["--queue-wait", "600", "--cost", "2.5", "--json"], { SEIRA_DATA_DIR: "/d" })).toMatchObject({ queueWaitMs: 600_000, costUsd: 2.5, json: true });
     expect(parseSentinelArgs(["--cost", "-1"], {})).toEqual({ error: expect.stringContaining("--cost"), json: false });
     // an unset variable in a script is an error, not a threshold of 0
     expect(parseSentinelArgs(["--cost", ""], {})).toEqual({ error: expect.stringContaining("--cost"), json: false });
@@ -128,16 +129,32 @@ describe("seira sentinel", () => {
   it("--check-install reports a schedule whose node or script has moved", () => {
     const lines: string[] = [];
     const io = { log: (line: string) => lines.push(line), error: (line: string) => lines.push(line) };
-    const unit = "/Users/maus/Library/LaunchAgents/com.openmausbot.sentinel.plist";
-    const plist = `<key>ProgramArguments</key>\n<array>\n<string>/old/node</string>\n<string>/Applications/Seira.app/Contents/Resources/server/openmausbot.js</string>\n<string>sentinel</string>\n</array>`;
-    const host = (present: string[]) => ({ platform: "darwin" as const, home: "/Users/maus", exists: (path: string) => path === unit || present.includes(path), read: () => plist });
-    expect(runSentinelCli(["--check-install"], io, {}, host(["/Applications/Seira.app/Contents/Resources/server/openmausbot.js"]))).toBe(1);
-    expect(lines.join("\n")).toContain("stale install: /Users/maus/Library/LaunchAgents/com.openmausbot.sentinel.plist needs /old/node, which no longer exists; rerun seira service install --sentinel");
+    const unit = "/Users/seira/Library/LaunchAgents/com.seira.sentinel.plist";
+    const plist = `<key>ProgramArguments</key>\n<array>\n<string>/old/node</string>\n<string>/Applications/Seira.app/Contents/Resources/server/seira.js</string>\n<string>sentinel</string>\n</array>`;
+    const host = (present: string[]) => ({ platform: "darwin" as const, home: "/Users/seira", exists: (path: string) => path === unit || present.includes(path), read: () => plist });
+    expect(runSentinelCli(["--check-install"], io, {}, host(["/Applications/Seira.app/Contents/Resources/server/seira.js"]))).toBe(1);
+    expect(lines.join("\n")).toContain("stale install: /Users/seira/Library/LaunchAgents/com.seira.sentinel.plist needs /old/node, which no longer exists; rerun seira service install --sentinel");
     lines.length = 0;
-    expect(runSentinelCli(["--check-install", "--json"], io, {}, host(["/old/node", "/Applications/Seira.app/Contents/Resources/server/openmausbot.js"]))).toBe(0);
+    expect(runSentinelCli(["--check-install", "--json"], io, {}, host(["/old/node", "/Applications/Seira.app/Contents/Resources/server/seira.js"]))).toBe(0);
     expect(JSON.parse(lines[0]!)).toMatchObject({ ok: true, status: "ok", node: "/old/node" });
     lines.length = 0;
     expect(runSentinelCli(["--check-install"], io, {}, { ...host([]), exists: () => false })).toBe(1);
     expect(lines.join("\n")).toContain("install one with seira service install --sentinel");
+  });
+
+  it("--check-install points to the schedule an earlier version installed, without running anything", () => {
+    const lines: string[] = [];
+    const io = { log: (line: string) => lines.push(line), error: (line: string) => lines.push(line) };
+    const old = `/Users/seira/Library/LaunchAgents/${LEGACY_SENTINEL_LAUNCHD_LABEL}.plist`;
+    const host = { platform: "darwin" as const, home: "/Users/seira", exists: (path: string) => path === old, read: () => "" };
+    expect(runSentinelCli(["--check-install"], io, {}, host)).toBe(1);
+    const text = lines.join("\n");
+    expect(text).toContain("a Sentinel schedule from an earlier version is installed");
+    expect(text).toContain(`launchctl bootout gui/$(id -u)/${LEGACY_SENTINEL_LAUNCHD_LABEL}`);
+    expect(text).toContain(`rm ${old}`);
+    expect(text).toContain("seira service install --sentinel");
+    lines.length = 0;
+    expect(runSentinelCli(["--check-install", "--json"], io, {}, host)).toBe(1);
+    expect(JSON.parse(lines[0]!)).toMatchObject({ ok: false, status: "earlier_version", unit: old, deactivate: [expect.stringContaining("bootout"), `rm ${old}`] });
   });
 });

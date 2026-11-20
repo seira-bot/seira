@@ -3,7 +3,7 @@
 //   [From <who> · <what> · <authority>]
 //
 // `who` names the sender and what it is: "Ada (person)", "Ada (person, Admin)", "Ada (person, relayed by another
-// app)", "@Sales (bot)", "an app, through the API", "routine \"Daily brief\"", "webhook \"Stripe\"", "OpenMausBot".
+// app)", "@Sales (bot)", "an app, through the API", "routine \"Daily brief\"", "webhook \"Stripe\"", "Seira".
 // `what` says what the line is: message, assignment, consultation, report, question, answer, event, run, notice.
 // `authority` is exactly one of three. Only a person's own typed or spoken line is their own request; work handed on
 // that traces to a person's request or their routine is on their behalf at the reader's level; everything else is

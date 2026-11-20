@@ -5,9 +5,14 @@
 # `git config seira.prePushHost` names an ssh host: then scripts/pre-push-remote.mjs runs the same checks there.
 #
 # Installed by `pnpm install` through scripts/install-git-hooks.mjs (sets core.hooksPath). Skip once with
-# `git push --no-verify`, or for a session with OMB_SKIP_HOOKS=1.
+# `git push --no-verify`, or for a session with SEIRA_SKIP_HOOKS=1.
+if [ -n "$SEIRA_SKIP_HOOKS" ]; then
+  echo "pre-push: skipped (SEIRA_SKIP_HOOKS is set)"
+  exit 0
+fi
+# Temporary: the old name still skips, and says it will go.
 if [ -n "$OMB_SKIP_HOOKS" ]; then
-  echo "pre-push: skipped (OMB_SKIP_HOOKS is set)"
+  echo "pre-push: skipped (OMB_SKIP_HOOKS is set; that name is deprecated and will be removed, use SEIRA_SKIP_HOOKS)"
   exit 0
 fi
 cd "$(git rev-parse --show-toplevel)" || exit 0

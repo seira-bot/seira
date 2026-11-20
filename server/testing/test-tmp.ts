@@ -1,5 +1,5 @@
 // One temp folder per test file for everything the test and the code under test put in tmpdir(): the file's
-// afterAll deletes it, so no omb-* folder outlives the file. It sits in the real temp folder, not in the
+// afterAll deletes it, so no seira-* folder outlives the file. It sits in the real temp folder, not in the
 // throwaway home, so paths keep the "under /tmp, not under $HOME" shape that product code and tests expect.
 // A file whose tests are all skipped never runs its afterAll, and vitest kills the worker without an exit event,
 // so the folder also carries the id of the run: global-setup.ts removes every folder of its run at the end.
@@ -10,10 +10,10 @@ import { join } from "node:path";
 import { removeTempDir } from "./cleanup.ts";
 
 /** Only the suite makes folders with these prefixes: the sweep in stale-test-dirs.ts deletes these and nothing else. */
-export const TEST_HOME_PREFIX = "omb-test-home-";
-export const TEST_TMP_PREFIX = "omb-test-tmp-";
+export const TEST_HOME_PREFIX = "seira-test-home-";
+export const TEST_TMP_PREFIX = "seira-test-tmp-";
 
-/** Set by global-setup.ts to an id for the run. Not an OMB_ name: the tests that scrub the ambient OMB_ variables would delete it. */
+/** Set by global-setup.ts to an id for the run. Not a SEIRA_ name: the tests that scrub the ambient SEIRA_ variables would delete it. */
 export const TEST_RUN_ID_VARIABLE = "TEST_TMP_RUN_ID";
 
 /** The start of the name of every test-file folder of one run; without a run id (no global setup) the plain prefix. */

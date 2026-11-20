@@ -29,7 +29,7 @@ export function setupAction(step: SetupStep): Action {
   }
 }
 
-/** What is left to set up, under MausBot's intro on a new install (Advanced mode). */
+/** What is left to set up, under Seira's intro on a new install (Advanced mode). */
 export function HelperSetup() {
   const { state, dispatch } = useStore();
   const steps = setupSteps({
@@ -79,7 +79,7 @@ export function chipAction(chip: Exclude<IntroChip, "ai">): Action {
   }
 }
 
-/** What is still missing, as chips under MausBot's follow-up (Simple mode): at most INTRO_CHIPS, and one that was tapped
+/** What is still missing, as chips under Seira's follow-up (Simple mode): at most INTRO_CHIPS, and one that was tapped
  * leaves for the next. */
 export function IntroChips({ chips }: { chips: readonly IntroChip[] }) {
   const { dispatch } = useStore();

@@ -1,7 +1,7 @@
 // Closed-app phone alerts. A paired phone registers its APNs or FCM device token here; when an approval, a question, a
 // sign-in request or a finished reply would reach a phone that holds no live event stream, this asks the push relay in
 // the hosted control plane to wake it, with the installation credential this server already has. The push is
-// content-free: kind, a title from names alone, opaque ids. Off unless `features.phonePush` (or OMB_PHONE_PUSH=1).
+// content-free: kind, a title from names alone, opaque ids. Off unless `features.phonePush` (or SEIRA_PHONE_PUSH=1).
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
@@ -33,12 +33,12 @@ import { writeFileAtomic } from "./atomic.ts";
 import { conversationLanguage, serverLine, type ServerLineKey } from "./server-lines.ts";
 
 export const PHONE_PUSH_FILE = "push-devices.json";
-export const PHONE_PUSH_ENV = "OMB_PHONE_PUSH";
+export const PHONE_PUSH_ENV = "SEIRA_PHONE_PUSH";
 /** A push-only installation credential, for a server that holds no other (a Cloud home). */
-export const PHONE_PUSH_CREDENTIAL_ENV = "OMB_PUSH_CREDENTIAL";
-export const PHONE_PUSH_DESKTOP_MESSAGE = "openmausbot:phone-push-access";
+export const PHONE_PUSH_CREDENTIAL_ENV = "SEIRA_PUSH_CREDENTIAL";
+export const PHONE_PUSH_DESKTOP_MESSAGE = "seira:phone-push-access";
 
-const INSTALLATION_CREDENTIAL = /^omb_install_[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}$/;
+const INSTALLATION_CREDENTIAL = /^seira_install_[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}$/;
 /** As routes/phones.ts `phoneKey` mints them. */
 export const PUSH_DEVICE_KEY = /^(companion|session):[\w-]{1,128}$/;
 export const MAX_PUSH_DEVICES = 50;
@@ -62,7 +62,7 @@ const TITLES: Record<PushKind, ServerLineKey> = {
   done: "server.notify.done",
 };
 
-/** On only when switched on: OMB_PHONE_PUSH=1 or 0 wins over `features.phonePush` in config.json. */
+/** On only when switched on: SEIRA_PHONE_PUSH=1 or 0 wins over `features.phonePush` in config.json. */
 export function phonePushEnabled(cfg: { features?: { phonePush?: boolean } }, env: NodeJS.ProcessEnv = process.env): boolean {
   if (env[PHONE_PUSH_ENV] === "1") return true;
   if (env[PHONE_PUSH_ENV] === "0") return false;
@@ -452,8 +452,8 @@ export function phonePushAccess(controlPlane: unknown, credential: unknown): Pho
 }
 
 /** Where this server's control-plane access comes from, first match wins: the desktop app's private message (its
- * credential lives in the OS store this process cannot read), OMB_PUSH_CREDENTIAL, a fleet's
- * OMB_INSTALLATION_CREDENTIAL, `seira login`'s tunnel-account.json. OMB_CONTROL_PLANE_URL overrides the origin. */
+ * credential lives in the OS store this process cannot read), SEIRA_PUSH_CREDENTIAL, a fleet's
+ * SEIRA_INSTALLATION_CREDENTIAL, `seira login`'s tunnel-account.json. SEIRA_CONTROL_PLANE_URL overrides the origin. */
 export class PhonePushAccessSource {
   private desktop: PhonePushAccess | null | undefined;
   private readonly env: NodeJS.ProcessEnv;
@@ -475,13 +475,13 @@ export class PhonePushAccessSource {
   }
 
   private controlPlane(): string {
-    if (Object.hasOwn(this.env, "OMB_CONTROL_PLANE_URL")) return normalizeControlPlaneURL(this.env.OMB_CONTROL_PLANE_URL ?? "");
+    if (Object.hasOwn(this.env, "SEIRA_CONTROL_PLANE_URL")) return normalizeControlPlaneURL(this.env.SEIRA_CONTROL_PLANE_URL ?? "");
     return this.options.defaultControlPlane;
   }
 
   current(): PhonePushAccess | null {
     if (this.desktop !== undefined) return this.desktop;
-    const fromEnv = this.env[PHONE_PUSH_CREDENTIAL_ENV]?.trim() || this.env.OMB_INSTALLATION_CREDENTIAL?.trim();
+    const fromEnv = this.env[PHONE_PUSH_CREDENTIAL_ENV]?.trim() || this.env.SEIRA_INSTALLATION_CREDENTIAL?.trim();
     if (fromEnv) return phonePushAccess(this.controlPlane(), fromEnv);
     let document: unknown;
     try {

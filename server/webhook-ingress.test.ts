@@ -30,7 +30,7 @@ let manager: WebhookManager;
 const queued: Array<Record<string, unknown>> = [];
 
 beforeAll(async () => {
-  dir = mkdtempSync(join(tmpdir(), "omb-webhook-ingress-"));
+  dir = mkdtempSync(join(tmpdir(), "seira-webhook-ingress-"));
   manager = new WebhookManager({
     file: join(dir, "webhooks.json"),
     botState: () => "ready",
@@ -39,7 +39,7 @@ beforeAll(async () => {
       return { id: `run-${queued.length}` };
     },
   });
-  const created = manager.create({ name: "Build event", prompt: "Review the build", botId: "maus-1" });
+  const created = manager.create({ name: "Build event", prompt: "Review the build", botId: "seira-1" });
   endpointId = created.webhook.endpointId;
   secret = created.secret;
   ingress = await listenWebhookIngress(manager, { port: 0 });
@@ -70,7 +70,7 @@ describe("webhook-only ingress", () => {
   it("exposes health but nothing from the main Seira API", async () => {
     const health = await fetch(`${ingress.baseUrl}/health`);
     expect(health.status).toBe(200);
-    expect(await health.json()).toEqual({ app: "openmausbot-webhooks", ready: true });
+    expect(await health.json()).toEqual({ app: "seira-webhooks", ready: true });
     expect((await fetch(`${ingress.baseUrl}/api/bots`)).status).toBe(404);
   });
 
@@ -101,10 +101,19 @@ describe("webhook-only ingress", () => {
     expect(queued.at(-1)?.prompt).toContain('"ticket": "42"');
   });
 
+  it("accepts the secret header an earlier version sent", async () => {
+    const response = await fetch(`${ingress.baseUrl}/hooks/${endpointId}`, {
+      method: "POST",
+      headers: { "x-openmaus-secret": secret, "content-type": "application/x-www-form-urlencoded" },
+      body: "ticket=43&priority=high",
+    });
+    expect(response.status).toBe(202);
+  });
+
   it("awaits a room delivery and answers 202 only after the post lands; a failing sink is not 2xx", async () => {
     let finish: () => void = () => {};
     let gate = new Promise<void>((resolve) => (finish = resolve));
-    const roomDir = mkdtempSync(join(tmpdir(), "omb-webhook-room-"));
+    const roomDir = mkdtempSync(join(tmpdir(), "seira-webhook-room-"));
     const roomQueued: unknown[] = [];
     const posts: Array<{ payload: Record<string, unknown> }> = [];
     let sinkFails = true;
@@ -123,7 +132,7 @@ describe("webhook-only ingress", () => {
         return { posted: true, attachments: 1, threadId: "room-7-thread" };
       },
     });
-    const created = rooms.create({ name: "Room brief", prompt: "", botId: "maus-1", delivery: "post", groupId: "room-7" });
+    const created = rooms.create({ name: "Room brief", prompt: "", botId: "seira-1", delivery: "post", groupId: "room-7" });
     const receiver = await listenWebhookIngress(rooms, { port: 0 });
     const send = (deliveryId: string) => fetch(`${receiver.baseUrl}/hooks/${created.webhook.endpointId}/${created.secret}`, {
       method: "POST",
@@ -172,7 +181,7 @@ describe("webhook-only ingress", () => {
   });
 
   it("captures a verification event without queueing work", async () => {
-    const created = manager.create({ name: "Verify", prompt: "", botId: "maus-1", enabled: false, verificationPending: true });
+    const created = manager.create({ name: "Verify", prompt: "", botId: "seira-1", enabled: false, verificationPending: true });
     const before = queued.length;
     const response = await fetch(webhookCredential(ingress.baseUrl, created.webhook.endpointId, created.secret).url, {
       method: "POST",
@@ -241,7 +250,7 @@ describe("requests with a wrong secret", () => {
   });
 
   it("neither evicts real deliveries nor rewrites the file for each request", async () => {
-    const floodDir = mkdtempSync(join(tmpdir(), "omb-webhook-flood-"));
+    const floodDir = mkdtempSync(join(tmpdir(), "seira-webhook-flood-"));
     const file = join(floodDir, "webhooks.json");
     const emitted = new Set<string>();
     let runs = 0;
@@ -251,7 +260,7 @@ describe("requests with a wrong secret", () => {
       enqueue: () => ({ id: `flood-run-${++runs}` }),
       emit: (frame) => { if (frame.kind === "webhook.attempt") emitted.add(frame.attempt.id); },
     });
-    const created = flooded.create({ name: "CI", prompt: "Review", botId: "maus-1" });
+    const created = flooded.create({ name: "CI", prompt: "Review", botId: "seira-1" });
     const receiver = await listenWebhookIngress(flooded, { port: 0 });
     const url = `${receiver.baseUrl}/hooks/${created.webhook.endpointId}`;
     const deliver = (id: string) => fetch(url, {
@@ -323,7 +332,7 @@ describe("advertised base URL", () => {
         sent.on("error", reject);
         sent.end(method === "POST" ? "{}" : undefined);
       });
-      expect(await viaSocket("/health")).toEqual({ status: 200, body: JSON.stringify({ app: "openmausbot-webhooks", ready: true }) });
+      expect(await viaSocket("/health")).toEqual({ status: 200, body: JSON.stringify({ app: "seira-webhooks", ready: true }) });
       expect((await viaSocket("/api/bots")).status).toBe(404);
       const before = queued.length;
       expect((await viaSocket(`/hooks/${endpointId}/${secret}`, "POST")).status).toBe(202);

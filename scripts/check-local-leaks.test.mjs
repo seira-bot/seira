@@ -26,13 +26,56 @@ describe("generic rules", () => {
     expect(one("DEPLOY_TOKEN = config.f4c2a7e1b3d5f6a8c9e")).toEqual(["docs/setup.md:1: secret value in an assignment"]);
   });
 
+  it("still reports real secret shapes", () => {
+    for (const text of [
+      'API_KEY = "a8f3k29dk3l2p0qz7x1m"',
+      'GITHUB_TOKEN="Zq8xL2mN4pR7tV9wY3bC"',
+      "DB_PASSWORD = s3cr3tP4ssw0rdValue",
+      "SECRET='/ab+cd3/Ef9GhIjKlMnOp'",
+      "DB_PASSWORD=correcthorsebatterystaple",
+      'API_KEY = "ABCD1234EFGH5678IJKL"',
+      "SECRET=/abcDEF123ghiJKL456mno",
+      'SECRET="/AbCdEf123/GhIjKl456"',
+    ]) {
+      expect(one(text), text).toEqual(["docs/setup.md:1: secret value in an assignment"]);
+    }
+  });
+
+  it("allows an environment variable name", () => {
+    expect(one('const CLOUD_SECRETS_FD_ENV = "SEIRA_CLOUD_SECRETS_FD";')).toEqual([]);
+    expect(one("const CLOUD_SECRETS_FD_ENV = SEIRA_CLOUD_SECRETS_FD")).toEqual([]);
+  });
+
+  it("allows an HTTP header name", () => {
+    expect(one('const CONTROL_TOKEN_HEADER = "x-seira-control-token";')).toEqual([]);
+  });
+
+  it("allows a regex literal and an array", () => {
+    expect(one("const TOKEN = /^seira_t0_[a-f0-9]{48}$/;")).toEqual([]);
+    expect(one("const CLOUD_SECRETS_FILE_KEYS = [...CLOUD_HOME_SECRET_KEYS, 'a'];")).toEqual([]);
+  });
+
+  it("allows an absolute path", () => {
+    expect(one('const CLOUD_SECRETS_FILE = "/run/seira/secrets.json";')).toEqual([]);
+  });
+
+  it("allows a bare identifier", () => {
+    expect(one("env.SEIRA_PHONE_SECRET_PUBLIC_KEY = secretPublicKey;")).toEqual([]);
+    expect(one("const API_KEY = apiKeyFromConfig,")).toEqual([]);
+  });
+
+  it("allows a fixture or example value", () => {
+    expect(one('const PLAN_TOKEN = "seira_x_verify_fixture";')).toEqual([]);
+    expect(one("API_KEY=example-key-for-the-docs")).toEqual([]);
+  });
+
   it("allows references to a secret", () => {
     for (const text of [
       "API_KEY=",
       "TOKEN=${TOKEN}",
       "API_KEY=<your key>",
       "SECRET='$SECRET_FROM_VAULT'",
-      "childEnv.OMB_CLOUD_X_TOKEN = parentEnv.OMB_CLOUD_X_TOKEN;",
+      "childEnv.SEIRA_CLOUD_X_TOKEN = parentEnv.SEIRA_CLOUD_X_TOKEN;",
       "const DEPLOY_TOKEN = process.env.DEPLOY_TOKEN_VALUE",
     ]) {
       expect(one(text)).toEqual([]);
