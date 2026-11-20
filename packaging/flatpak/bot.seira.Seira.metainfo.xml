@@ -18,8 +18,15 @@
     </ul>
     <p>The Flatpak package starts agent programs on your computer, outside the Flatpak sandbox. Install these programs on your computer first. Seira does not include them.</p>
   </description>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Meet Seira: hand off any task to your team of bots</caption>
+      <image type="source" width="840" height="578">https://raw.githubusercontent.com/seira-bot/seira/main/packaging/flatpak/screenshots/welcome.png</image>
+    </screenshot>
+  </screenshots>
   <launchable type="desktop-id">bot.seira.Seira.desktop</launchable>
   <url type="homepage">https://seira.bot</url>
+  <url type="contact">https://seira.bot</url>
   <url type="bugtracker">https://github.com/seira-bot/seira/issues</url>
   <url type="vcs-browser">https://github.com/seira-bot/seira</url>
   <categories>
