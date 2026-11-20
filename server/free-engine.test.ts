@@ -15,11 +15,11 @@ const never = () => false;
 describe("freeEngineInstallEnabled", () => {
   it("is on outside tests, off for 0, and on in tests only for 1", () => {
     expect(freeEngineInstallEnabled({})).toBe(true);
-    expect(freeEngineInstallEnabled({ OMB_FREE_ENGINE: "0" })).toBe(false);
+    expect(freeEngineInstallEnabled({ SEIRA_FREE_ENGINE: "0" })).toBe(false);
     expect(freeEngineInstallEnabled({ VITEST: "true" })).toBe(false);
-    expect(freeEngineInstallEnabled({ OMB_TEST_SEALED_PATH: "1" })).toBe(false);
-    expect(freeEngineInstallEnabled({ VITEST: "true", OMB_FREE_ENGINE: "1" })).toBe(true);
-    expect(freeEngineInstallEnabled({ VITEST: "true", OMB_FREE_ENGINE: "0" })).toBe(false);
+    expect(freeEngineInstallEnabled({ SEIRA_TEST_SEALED_PATH: "1" })).toBe(false);
+    expect(freeEngineInstallEnabled({ VITEST: "true", SEIRA_FREE_ENGINE: "1" })).toBe(true);
+    expect(freeEngineInstallEnabled({ VITEST: "true", SEIRA_FREE_ENGINE: "0" })).toBe(false);
   });
 });
 

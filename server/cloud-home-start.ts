@@ -1,4 +1,4 @@
-// The Cloud home image's entry point: a root supervisor of two `maus` children, the server on 127.0.0.1:8799 and the Caddy
+// The Cloud home image's entry point: a root supervisor of two `seira` children, the server on 127.0.0.1:8799 and the Caddy
 // edge on 0.0.0.0:8080, the only listener the network reaches, always forwarding X-Forwarded-*, so no remote request gets
 // loopback trust. Secrets never ride a child's environment (/proc/<pid>/environ stays readable by the same user): the
 // server reads them from an inherited pipe. Root runs and trusts only the image's code, never the volume's.
@@ -17,7 +17,7 @@ import { clearRecordsFromOtherMachines } from "./data-dir-lease.ts";
 import { OOM_SCORE, protectInit, protectSupervisor, spawnWithOomScore } from "./oom-score.ts";
 import { restartLine, restartPolicy } from "./restart.ts";
 
-const SERVICE_USER = "maus";
+const SERVICE_USER = "seira";
 const SECRETS_FD = 3;
 
 /** uid/gid from /etc/passwd; Node has no getpwnam. */
@@ -30,33 +30,33 @@ export function passwdIds(passwd: string, name: string): { uid: number; gid: num
 }
 
 /** An allow-list by name, so a secret the platform adds later never reaches the server. Every setting the image's ENV
- * gives the server belongs here too (docker-image.test.ts checks): without OMB_DUCKDB_DIR the server found neither the
+ * gives the server belongs here too (docker-image.test.ts checks): without SEIRA_DUCKDB_DIR the server found neither the
  * 1Password SDK nor DuckDB, which the image keeps in /app/duckdb, and said 1Password was "not available in this build". */
 const SERVER_ENV_NAMES = new Set([
   "PATH", "SHELL", "HOSTNAME", "LANG", "LANGUAGE", "TZ", "TERM", "TMPDIR", "NO_COLOR", "NODE_ENV", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "SSL_CERT_DIR",
-  "AGENT_BROWSER_EXECUTABLE_PATH", "OMB_STATIC_DIR", "OMB_DATA_DIR", "OMB_DUCKDB_DIR",
-  "OMB_CLOUD_ROLE", "OMB_CLOUD_MACHINE_ID", "OMB_CLOUD_ADMIN_URL", "OMB_CLOUD_IMAGE", "OMB_PUBLIC_URL", "OMB_WEBHOOK_PUBLIC_URL",
-  "OMB_CLOUD_TEAM_ID", "OMB_CLOUD_TEAM_NAME", "OMB_CLOUD_BOAT_URL", "OMB_CLOUD_VOICE_URL", "OMB_CLOUD_DECIDER_URL", "OMB_CLOUD_AI_URL", "OMB_CLOUD_X_URL", "OMB_CLOUD_HOSTING_URL", "OMB_TTS_DEFAULT_VOICE",
-  "OMB_COMPOSIO_BROKER_URL", "OMB_COMPOSIO_BROKER",
+  "AGENT_BROWSER_EXECUTABLE_PATH", "SEIRA_STATIC_DIR", "SEIRA_DATA_DIR", "SEIRA_DUCKDB_DIR",
+  "SEIRA_CLOUD_ROLE", "SEIRA_CLOUD_MACHINE_ID", "SEIRA_CLOUD_ADMIN_URL", "SEIRA_CLOUD_IMAGE", "SEIRA_PUBLIC_URL", "SEIRA_WEBHOOK_PUBLIC_URL",
+  "SEIRA_CLOUD_TEAM_ID", "SEIRA_CLOUD_TEAM_NAME", "SEIRA_CLOUD_BOAT_URL", "SEIRA_CLOUD_VOICE_URL", "SEIRA_CLOUD_DECIDER_URL", "SEIRA_CLOUD_AI_URL", "SEIRA_CLOUD_X_URL", "SEIRA_CLOUD_HOSTING_URL", "SEIRA_TTS_DEFAULT_VOICE",
+  "SEIRA_COMPOSIO_BROKER_URL", "SEIRA_COMPOSIO_BROKER",
   // The addresses a home answered at before it moved to another provider, which still forward to it.
-  "OMB_CLOUD_LEGACY_ORIGINS",
+  "SEIRA_CLOUD_LEGACY_ORIGINS",
   // The bot box switch (server/bot-box/detect.ts): the Admin may turn a home's box off for support.
-  "OMB_BOT_BOX",
+  "SEIRA_BOT_BOX",
   // An ended Cloud started only for its owner's export: the server runs frozen (server/move-freeze.ts).
-  "OMB_CLOUD_EXPORT_ONLY",
+  "SEIRA_CLOUD_EXPORT_ONLY",
 ]);
 export function serverEnvironmentAllowed(name: string): boolean {
   return SERVER_ENV_NAMES.has(name) || name.startsWith("LC_");
 }
 
-/** Caddy duration for OMB_CLOUD_EDGE_HOLD: whole seconds, at most 120; anything else is no hold (0s). */
+/** Caddy duration for SEIRA_CLOUD_EDGE_HOLD: whole seconds, at most 120; anything else is no hold (0s). */
 export function edgeHold(raw: string | undefined): string {
   const match = /^(\d{1,3})s$/.exec(raw?.trim() ?? "");
   return match && Number(match[1]) <= 120 ? `${Number(match[1])}s` : "0s";
 }
 
 /** How a home on its owner's server is reached (docs/cloud-pro.md, "On your own server"); never set on Fly. */
-export const OWN_SERVER_EDGE_KEYS = ["OMB_CLOUD_EDGE_TLS", "OMB_CLOUD_TRUSTED_PROXIES", "OMB_CLOUD_CLIENT_IP_HEADER", "OMB_CLOUD_TUNNEL_TOKEN"] as const;
+export const OWN_SERVER_EDGE_KEYS = ["SEIRA_CLOUD_EDGE_TLS", "SEIRA_CLOUD_TRUSTED_PROXIES", "SEIRA_CLOUD_CLIENT_IP_HEADER", "SEIRA_CLOUD_TUNNEL_TOKEN"] as const;
 const EDGE_CONFIG_DIR = "/app/cloud";
 export const EDGE_ROUTES_FILE = "edge-routes.caddy";
 const MAX_TRUSTED_PROXIES = 32;
@@ -67,10 +67,10 @@ function invalidEdge(why: string): never {
 
 const onFly = (env: NodeJS.ProcessEnv) => Boolean(env.FLY_APP_NAME?.trim());
 
-/** OMB_CLOUD_EDGE_TLS=1: the edge gets and renews the certificate for OMB_PUBLIC_URL's name and serves it on 443. */
+/** SEIRA_CLOUD_EDGE_TLS=1: the edge gets and renews the certificate for SEIRA_PUBLIC_URL's name and serves it on 443. */
 export function edgeTerminatesTls(env: NodeJS.ProcessEnv): boolean {
-  const raw = env.OMB_CLOUD_EDGE_TLS?.trim() ?? "";
-  if (raw !== "" && raw !== "0" && raw !== "1") invalidEdge("OMB_CLOUD_EDGE_TLS must be 1 (the home serves HTTPS on its own domain) or 0");
+  const raw = env.SEIRA_CLOUD_EDGE_TLS?.trim() ?? "";
+  if (raw !== "" && raw !== "0" && raw !== "1") invalidEdge("SEIRA_CLOUD_EDGE_TLS must be 1 (the home serves HTTPS on its own domain) or 0");
   return raw === "1";
 }
 
@@ -80,46 +80,46 @@ const ZEROSSL_ACME_DIRECTORY = "https://acme.zerossl.com/v2/DV90";
 const ACME_EMAIL = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
 
 /**
- * What Caddyfile.tls gets for OMB_CLOUD_EDGE_CERT_ISSUERS, when the home ends TLS itself: nothing (Caddy's default, Let's
- * Encrypt alone) until OMB_CLOUD_EDGE_ACME_EMAIL names the account for a fallback CA. Then Let's Encrypt first and ZeroSSL
+ * What Caddyfile.tls gets for SEIRA_CLOUD_EDGE_CERT_ISSUERS, when the home ends TLS itself: nothing (Caddy's default, Let's
+ * Encrypt alone) until SEIRA_CLOUD_EDGE_ACME_EMAIL names the account for a fallback CA. Then Let's Encrypt first and ZeroSSL
  * after it, tried only when Let's Encrypt has just refused that certificate (50 new ones a week per registered domain).
  * Let's Encrypt keeps today's account, which has no address; only the fallback gets it. Either certificate stays on the
- * volume and is served and renewed from there, whichever CA issued it. OMB_CLOUD_EDGE_ACME_FALLBACK_ONLY=1 uses the
+ * volume and is served and renewed from there, whichever CA issued it. SEIRA_CLOUD_EDGE_ACME_FALLBACK_ONLY=1 uses the
  * fallback alone: for a live check that it issues (the Admin never sets it).
  */
 export function edgeCertIssuers(env: NodeJS.ProcessEnv): string {
-  const email = env.OMB_CLOUD_EDGE_ACME_EMAIL?.trim() ?? "";
-  const only = env.OMB_CLOUD_EDGE_ACME_FALLBACK_ONLY?.trim() ?? "";
-  if (only !== "" && only !== "0" && only !== "1") invalidEdge("OMB_CLOUD_EDGE_ACME_FALLBACK_ONLY must be 1 (only the fallback CA issues, for a live check of it) or 0");
+  const email = env.SEIRA_CLOUD_EDGE_ACME_EMAIL?.trim() ?? "";
+  const only = env.SEIRA_CLOUD_EDGE_ACME_FALLBACK_ONLY?.trim() ?? "";
+  if (only !== "" && only !== "0" && only !== "1") invalidEdge("SEIRA_CLOUD_EDGE_ACME_FALLBACK_ONLY must be 1 (only the fallback CA issues, for a live check of it) or 0");
   if (!email) {
-    if (only === "1") invalidEdge("OMB_CLOUD_EDGE_ACME_FALLBACK_ONLY needs OMB_CLOUD_EDGE_ACME_EMAIL: the fallback CA's account address");
+    if (only === "1") invalidEdge("SEIRA_CLOUD_EDGE_ACME_FALLBACK_ONLY needs SEIRA_CLOUD_EDGE_ACME_EMAIL: the fallback CA's account address");
     return "";
   }
-  if (email.length > 254 || !ACME_EMAIL.test(email)) invalidEdge("OMB_CLOUD_EDGE_ACME_EMAIL must be one plain address, such as certificates@example.com");
+  if (email.length > 254 || !ACME_EMAIL.test(email)) invalidEdge("SEIRA_CLOUD_EDGE_ACME_EMAIL must be one plain address, such as certificates@example.com");
   const fallback = `cert_issuer acme ${ZEROSSL_ACME_DIRECTORY} {\n\temail ${email}\n}`;
   return only === "1" ? fallback : `cert_issuer acme\n${fallback}`;
 }
 
 /**
- * OMB_CLOUD_TUNNEL_TOKEN: the connector token of this home's Cloudflare tunnel, for a server with no inbound port. The
- * home runs cloudflared itself and OMB_PUBLIC_URL is the tunnel's address. Only cloudflared ever reads the token.
+ * SEIRA_CLOUD_TUNNEL_TOKEN: the connector token of this home's Cloudflare tunnel, for a server with no inbound port. The
+ * home runs cloudflared itself and SEIRA_PUBLIC_URL is the tunnel's address. Only cloudflared ever reads the token.
  */
 export function edgeTunnelToken(env: NodeJS.ProcessEnv): string | null {
-  const token = env.OMB_CLOUD_TUNNEL_TOKEN?.trim() ?? "";
+  const token = env.SEIRA_CLOUD_TUNNEL_TOKEN?.trim() ?? "";
   if (!token) return null;
-  if (!/^[A-Za-z0-9+/_=-]{32,4096}$/.test(token)) invalidEdge("OMB_CLOUD_TUNNEL_TOKEN must be the tunnel's connector token");
-  if (edgeTerminatesTls(env)) invalidEdge("OMB_CLOUD_EDGE_TLS and OMB_CLOUD_TUNNEL_TOKEN are two ways to reach the home; set one");
+  if (!/^[A-Za-z0-9+/_=-]{32,4096}$/.test(token)) invalidEdge("SEIRA_CLOUD_TUNNEL_TOKEN must be the tunnel's connector token");
+  if (edgeTerminatesTls(env)) invalidEdge("SEIRA_CLOUD_EDGE_TLS and SEIRA_CLOUD_TUNNEL_TOKEN are two ways to reach the home; set one");
   return token;
 }
 
 /**
- * The proxies an owner puts in front of the home, from OMB_CLOUD_TRUSTED_PROXIES: addresses, CIDR ranges or Caddy's
+ * The proxies an owner puts in front of the home, from SEIRA_CLOUD_TRUSTED_PROXIES: addresses, CIDR ranges or Caddy's
  * `private_ranges`, separated by spaces or commas. Each is written into the edge's config as a token, so anything else is
  * refused; so is a /0 range, which would let any client name itself and step round the pairing lockout.
  */
 export function trustedProxyList(raw: string | undefined): string[] {
   const entries = (raw ?? "").split(/[\s,]+/).filter(Boolean);
-  if (entries.length > MAX_TRUSTED_PROXIES) invalidEdge(`OMB_CLOUD_TRUSTED_PROXIES names more than ${MAX_TRUSTED_PROXIES} proxies`);
+  if (entries.length > MAX_TRUSTED_PROXIES) invalidEdge(`SEIRA_CLOUD_TRUSTED_PROXIES names more than ${MAX_TRUSTED_PROXIES} proxies`);
   return entries.map((entry) => {
     if (entry === "private_ranges") return entry;
     const [address, prefix, extra] = entry.split("/");
@@ -127,7 +127,7 @@ export function trustedProxyList(raw: string | undefined): string[] {
     const bits = family === 4 ? 32 : 128;
     const width = prefix === undefined ? bits : /^\d{1,3}$/.test(prefix) ? Number(prefix) : NaN;
     if (!family || extra !== undefined || !(width >= 1 && width <= bits)) {
-      invalidEdge(`OMB_CLOUD_TRUSTED_PROXIES must list proxy addresses or ranges such as 10.0.0.5 or 10.0.0.0/24 ("${entry.slice(0, 64)}" is not one, and /0 is refused)`);
+      invalidEdge(`SEIRA_CLOUD_TRUSTED_PROXIES must list proxy addresses or ranges such as 10.0.0.5 or 10.0.0.0/24 ("${entry.slice(0, 64)}" is not one, and /0 is refused)`);
     }
     return `${address}/${width}`;
   });
@@ -137,32 +137,32 @@ export function trustedProxyList(raw: string | undefined): string[] {
  * Who may name the client to the edge, and in which header (deploy/fly/Caddyfile). On Fly only Fly's proxy reaches the
  * edge, from its private ranges, and it overwrites Fly-Client-IP. On an own server nobody may: the client is the TCP
  * peer, so a header from a stranger, a local process or a bot is ignored. Only the proxies its owner names in
- * OMB_CLOUD_TRUSTED_PROXIES may, in OMB_CLOUD_CLIENT_IP_HEADER (X-Forwarded-For unless set). The address feeds the
+ * SEIRA_CLOUD_TRUSTED_PROXIES may, in SEIRA_CLOUD_CLIENT_IP_HEADER (X-Forwarded-For unless set). The address feeds the
  * pairing lockout, never authorization.
  */
-export function edgeClientAddress(env: NodeJS.ProcessEnv): { OMB_CLOUD_EDGE_CLIENT_IP_HEADER: string; OMB_CLOUD_EDGE_TRUSTED_PROXIES: string } {
+export function edgeClientAddress(env: NodeJS.ProcessEnv): { SEIRA_CLOUD_EDGE_CLIENT_IP_HEADER: string; SEIRA_CLOUD_EDGE_TRUSTED_PROXIES: string } {
   if (onFly(env)) {
     const set = OWN_SERVER_EDGE_KEYS.filter((key) => env[key]?.trim());
     if (set.length) invalidEdge(`${set.join(", ")} ${set.length === 1 ? "is" : "are"} for a home on its own server; on Fly, Fly's proxy ends TLS and names the client`);
-    return { OMB_CLOUD_EDGE_CLIENT_IP_HEADER: "Fly-Client-IP", OMB_CLOUD_EDGE_TRUSTED_PROXIES: "private_ranges" };
+    return { SEIRA_CLOUD_EDGE_CLIENT_IP_HEADER: "Fly-Client-IP", SEIRA_CLOUD_EDGE_TRUSTED_PROXIES: "private_ranges" };
   }
-  const proxies = trustedProxyList(env.OMB_CLOUD_TRUSTED_PROXIES);
-  const header = env.OMB_CLOUD_CLIENT_IP_HEADER?.trim() ?? "";
-  if (header && !/^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/.test(header)) invalidEdge("OMB_CLOUD_CLIENT_IP_HEADER must be one header name, such as X-Forwarded-For");
-  if (header && !proxies.length) invalidEdge("OMB_CLOUD_CLIENT_IP_HEADER needs OMB_CLOUD_TRUSTED_PROXIES: the proxies allowed to send it");
-  return { OMB_CLOUD_EDGE_CLIENT_IP_HEADER: header || "X-Forwarded-For", OMB_CLOUD_EDGE_TRUSTED_PROXIES: proxies.join(" ") };
+  const proxies = trustedProxyList(env.SEIRA_CLOUD_TRUSTED_PROXIES);
+  const header = env.SEIRA_CLOUD_CLIENT_IP_HEADER?.trim() ?? "";
+  if (header && !/^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/.test(header)) invalidEdge("SEIRA_CLOUD_CLIENT_IP_HEADER must be one header name, such as X-Forwarded-For");
+  if (header && !proxies.length) invalidEdge("SEIRA_CLOUD_CLIENT_IP_HEADER needs SEIRA_CLOUD_TRUSTED_PROXIES: the proxies allowed to send it");
+  return { SEIRA_CLOUD_EDGE_CLIENT_IP_HEADER: header || "X-Forwarded-For", SEIRA_CLOUD_EDGE_TRUSTED_PROXIES: proxies.join(" ") };
 }
 
 /** The edge's config, and the file every config imports: both run as root's trusted code. */
 export function edgeConfigFiles(env: NodeJS.ProcessEnv): { config: string; routes: string } {
   const name = edgeTunnelToken(env) ? "Caddyfile.tunnel" : edgeTerminatesTls(env) ? "Caddyfile.tls" : "Caddyfile";
-  const config = env.OMB_CLOUD_EDGE_CONFIG || posix.join(EDGE_CONFIG_DIR, name);
+  const config = env.SEIRA_CLOUD_EDGE_CONFIG || posix.join(EDGE_CONFIG_DIR, name);
   return { config, routes: posix.join(posix.dirname(config), EDGE_ROUTES_FILE) };
 }
 
 /** Where the edge keeps its certificate and ACME account: on the volume, never /tmp, so a new container reuses them. */
 export function edgeCertificateStorage(home: string): string {
-  return posix.join(home, ".omb-edge", "caddy");
+  return posix.join(home, ".seira-edge", "caddy");
 }
 
 export function tunnelRestartDelay(previousMs: number, ranForMs: number): number {
@@ -171,9 +171,9 @@ export function tunnelRestartDelay(previousMs: number, ranForMs: number): number
 }
 
 /** The user cloudflared runs as. Its token rides its environment (TUNNEL_TOKEN), which only that user and root can read:
- * never `maus`, whose bots could otherwise copy it and serve the home's address elsewhere. cloudflared 2026.10 can't
+ * never `seira`, whose bots could otherwise copy it and serve the home's address elsewhere. cloudflared 2026.10 can't
  * read --token-file from an inherited socket, which is all Node's stdio gives a child. */
-export const TUNNEL_USER = "omb-tunnel";
+export const TUNNEL_USER = "seira-tunnel";
 
 export function tunnelCommand(bin: string, token: string): { command: string; args: string[]; env: NodeJS.ProcessEnv } {
   return {
@@ -185,7 +185,7 @@ export function tunnelCommand(bin: string, token: string): { command: string; ar
 
 /** The server's data directory on the volume. */
 export function cloudHomeDataDir(env: NodeJS.ProcessEnv, home: string): string {
-  return env.OMB_DATA_DIR || posix.join(home, ".openmausbot");
+  return env.SEIRA_DATA_DIR || posix.join(home, ".seira");
 }
 
 /** flock(1)'s exit status when another process holds the lock (its --conflict-exit-code). */
@@ -201,7 +201,7 @@ const flockVolume: VolumeLock = (fd) => spawnSync("/usr/bin/flock", ["--exclusiv
  * Locks the volume for as long as this process lives, or refuses: a second home on the same volume must never start.
  * Docker lets any number of containers mount one volume, each in its own pid namespace, so no pid or lease record can
  * tell a live home from a dead one; a kernel lock on the volume can, and the kernel drops it when this process dies.
- * The lock is flock(2) on the volume's root, an inode `maus` cannot replace. flock(1) takes it on this process's own
+ * The lock is flock(2) on the volume's root, an inode `seira` cannot replace. flock(1) takes it on this process's own
  * open descriptor, which keeps it after flock exits.
  */
 export function holdVolume(home: string, lock: VolumeLock = flockVolume): void {
@@ -239,27 +239,27 @@ export function cloudHomeChildEnvironments(config: CloudHomeConfig, env: NodeJS.
   const dropped = Object.keys(offered).filter((name) => !serverEnvironmentAllowed(name) && name !== "HOME" && name !== CAPS_DROPPED_ENV).sort();
   const dataDir = cloudHomeDataDir(env, home);
   const server: NodeJS.ProcessEnv = {
-    ...allowed, HOME: home, OMB_DATA_DIR: dataDir,
+    ...allowed, HOME: home, SEIRA_DATA_DIR: dataDir,
     // Node keys the entries by its own version and the file's hash, so a stale entry is never used after an image upgrade.
     NODE_COMPILE_CACHE: posix.join(dataDir, "cache", "node-compile"),
-    OMB_PORT: "8799", OMB_WEBHOOK_PORT: "8800", OMB_PUBLIC_URL: config.publicOrigin,
-    OMB_WEBHOOK_PUBLIC_URL: env.OMB_WEBHOOK_PUBLIC_URL || config.publicOrigin,
+    SEIRA_PORT: "8799", SEIRA_WEBHOOK_PORT: "8800", SEIRA_PUBLIC_URL: config.publicOrigin,
+    SEIRA_WEBHOOK_PUBLIC_URL: env.SEIRA_WEBHOOK_PUBLIC_URL || config.publicOrigin,
     [CLOUD_SECRETS_FD_ENV]: String(SECRETS_FD),
   };
   const edge: NodeJS.ProcessEnv = {
-    PATH: env.PATH ?? "/usr/local/bin:/usr/bin:/bin", HOME: "/tmp/omb-edge",
-    XDG_DATA_HOME: "/tmp/omb-edge/data", XDG_CONFIG_HOME: "/tmp/omb-edge/config",
-    OMB_CLOUD_PUBLIC_HOST: cloudHomeHost(config),
+    PATH: env.PATH ?? "/usr/local/bin:/usr/bin:/bin", HOME: "/tmp/seira-edge",
+    XDG_DATA_HOME: "/tmp/seira-edge/data", XDG_CONFIG_HOME: "/tmp/seira-edge/config",
+    SEIRA_CLOUD_PUBLIC_HOST: cloudHomeHost(config),
     // A plan whose home sleeps: requests wait this long for the server while it starts (deploy/fly/Caddyfile). Unset: 0s.
-    OMB_CLOUD_EDGE_HOLD: edgeHold(env.OMB_CLOUD_EDGE_HOLD),
+    SEIRA_CLOUD_EDGE_HOLD: edgeHold(env.SEIRA_CLOUD_EDGE_HOLD),
     ...edgeClientAddress(env),
-    ...(edgeTerminatesTls(env) ? { OMB_CLOUD_EDGE_STORAGE: edgeCertificateStorage(home), OMB_CLOUD_EDGE_CERT_ISSUERS: edgeCertIssuers(env) } : {}),
+    ...(edgeTerminatesTls(env) ? { SEIRA_CLOUD_EDGE_STORAGE: edgeCertificateStorage(home), SEIRA_CLOUD_EDGE_CERT_ISSUERS: edgeCertIssuers(env) } : {}),
   };
   return { server, edge, edgeFiles: edgeConfigFiles(env), tunnelToken: edgeTunnelToken(env), secrets: cloudHomeSecrets(env), dropped };
 }
 
 /** Set in the supervisor's own environment once it has started again without CAP_SYS_ADMIN, so it never loops. */
-export const CAPS_DROPPED_ENV = "OMB_CLOUD_CAPS_DROPPED";
+export const CAPS_DROPPED_ENV = "SEIRA_CLOUD_CAPS_DROPPED";
 const CAP_SYS_ADMIN = 21;
 const SETPRIV = "/usr/bin/setpriv";
 
@@ -275,9 +275,9 @@ export interface HostHardening {
   dropCapabilities: boolean;
 }
 
-/** What root does to the machine before anything runs as `maus` (docs/bot-box.md, "What each layer stops"): /proc hides
- * other users' processes (`hidepid=invisible`), so no `maus` process lists root's, and Fly's local API socket folder is
- * root's alone. Each step is one command; a failure is logged, never fatal, and OMB_CLOUD_HARDEN=0 skips them all.
+/** What root does to the machine before anything runs as `seira` (docs/bot-box.md, "What each layer stops"): /proc hides
+ * other users' processes (`hidepid=invisible`), so no `seira` process lists root's, and Fly's local API socket folder is
+ * root's alone. Each step is one command; a failure is logged, never fatal, and SEIRA_CLOUD_HARDEN=0 skips them all.
  * CAP_SYS_ADMIN, which an own server's connector grants only for the remount, must not outlive it. */
 export function hardenHost(env: NodeJS.ProcessEnv, run: {
   exec: (command: string, args: string[]) => { status: number | null; stderr?: string };
@@ -288,7 +288,7 @@ export function hardenHost(env: NodeJS.ProcessEnv, run: {
   exec: (command, args) => spawnSync(command, args, { stdio: ["ignore", "ignore", "pipe"], encoding: "utf8", timeout: 10_000 }), chmod: chmodSync, exists: existsSync,
   read: (path) => { try { return readFileSync(path, "utf8"); } catch { return ""; } },
 }): HostHardening {
-  if (env.OMB_CLOUD_HARDEN === "0") return { notes: ["hardening skipped (OMB_CLOUD_HARDEN=0)"], dropCapabilities: false };
+  if (env.SEIRA_CLOUD_HARDEN === "0") return { notes: ["hardening skipped (SEIRA_CLOUD_HARDEN=0)"], dropCapabilities: false };
   const notes: string[] = [];
   if (procHidepid(() => run.read("/proc/mounts"))) notes.push("/proc: hidepid=invisible");
   else {
@@ -329,9 +329,9 @@ function dropCapabilities(env: NodeJS.ProcessEnv): string {
 }
 
 /** Where an own server's connector mounts the home's secrets, read-only, instead of putting them in its environment. */
-export const CLOUD_SECRETS_FILE = "/run/mausbot/secrets.json";
+export const CLOUD_SECRETS_FILE = "/run/seira/secrets.json";
 /** What the file may hold: the server's secrets, and the tunnel's token, which only cloudflared gets. */
-export const CLOUD_SECRETS_FILE_KEYS = [...CLOUD_HOME_SECRET_KEYS, "OMB_CLOUD_TUNNEL_TOKEN"] as const;
+export const CLOUD_SECRETS_FILE_KEYS = [...CLOUD_HOME_SECRET_KEYS, "SEIRA_CLOUD_TUNNEL_TOKEN"] as const;
 
 /** The secrets in CLOUD_SECRETS_FILE, when it is there: root's, readable by root alone, off the volume; known names only. */
 export function readCloudSecretsFile(home: string, file = CLOUD_SECRETS_FILE, fs: {
@@ -353,8 +353,8 @@ export function readCloudSecretsFile(home: string, file = CLOUD_SECRETS_FILE, fs
   return Object.fromEntries(CLOUD_SECRETS_FILE_KEYS.flatMap((key) => (typeof record[key] === "string" && record[key] ? [[key, record[key] as string]] : [])));
 }
 
-/** Each file and every folder above it must be root's and not writable by others, and never on the `maus`-owned volume:
- * otherwise `maus` could rewrite what runs as root at the next start. */
+/** Each file and every folder above it must be root's and not writable by others, and never on the `seira`-owned volume:
+ * otherwise `seira` could rewrite what runs as root at the next start. */
 export function codeTrustProblem(files: readonly string[], home: string, stat: (path: string) => Pick<Stats, "uid" | "mode"> = statSync): string | null {
   const volume = posix.join(home, "/");
   for (const file of files) {
@@ -412,7 +412,7 @@ export function startCloudHome(processEnv: NodeJS.ProcessEnv = process.env) {
     const stat = statSync(home);
     if (stat.uid !== ids.uid || stat.gid !== ids.gid) chownSync(home, ids.uid, ids.gid);
     process.setgroups?.([]);
-    // The volume is prepared as `maus`, so what it creates is theirs.
+    // The volume is prepared as `seira`, so what it creates is theirs.
     process.setegid!(ids.gid);
     process.seteuid!(ids.uid);
     try { prepared = prepare(); } finally {
@@ -424,8 +424,8 @@ export function startCloudHome(processEnv: NodeJS.ProcessEnv = process.env) {
   }
   for (const record of prepared.cleared) console.log(`cloud home: cleared a stale data-directory record machine ${record.host} (process ${record.pid}) left on this volume: ${record.path}`);
   const here = dirname(fileURLToPath(import.meta.url));
-  const edgeBin = env.OMB_CLOUD_EDGE_BIN || "/usr/local/bin/caddy";
-  const tunnelBin = env.OMB_CLOUD_TUNNEL_BIN || "/usr/local/bin/cloudflared";
+  const edgeBin = env.SEIRA_CLOUD_EDGE_BIN || "/usr/local/bin/caddy";
+  const tunnelBin = env.SEIRA_CLOUD_TUNNEL_BIN || "/usr/local/bin/cloudflared";
   const tunnelIds = ids && tunnelToken ? passwdIds(readFileSync("/etc/passwd", "utf8"), TUNNEL_USER) : null;
   if (ids && tunnelToken && !tunnelIds) throw new Error(`The ${TUNNEL_USER} user is missing from this image, so its tunnel cannot start.`);
   if (ids) {

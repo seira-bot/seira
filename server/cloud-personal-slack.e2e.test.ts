@@ -1,5 +1,5 @@
 // Slack on a personal Cloud (docs/team-slack.md): a My Cloud, with no team. The Admin's part is played here: a session
-// opened for the owner through the signed pairing (label "Slack (MausBot Cloud)"), the three routes called with it,
+// opened for the owner through the signed pairing (label "Slack (Seira Cloud)"), the three routes called with it,
 // and a stand-in Admin that takes the Cloud's signed reports and checks them as the real one does. A channel message
 // and a direct message each become an ordinary conversation of the owner's. Disposable homes and the synthetic Claude
 // CLI; no Slack and no real Admin are reached.
@@ -48,10 +48,10 @@ const admin = {
 };
 let adminServer: Server, fx: CloudSendFixture;
 let owner = "", ownerSlack = "";
-let scout: Bot, mausbot: Bot;
+let scout: Bot, seira: Bot;
 
 const file = (name: string) => join(fx.root, "cloud", name);
-const dataFile = (name: string) => join(fx.root, "cloud", ".openmausbot", name);
+const dataFile = (name: string) => join(fx.root, "cloud", ".seira", name);
 async function as(token: string | null, method: string, path: string, body?: unknown): Promise<{ status: number; body: any }> {
   const response = await fetch(`${fx.cloudBase}${path}`, { method, headers: { ...fx.edge, ...(token ? { authorization: `Bearer ${token}` } : {}),
     ...(body === undefined ? {} : { "content-type": "application/json" }) }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -105,7 +105,7 @@ beforeAll(async () => {
   });
   await new Promise<void>((resolve) => adminServer.listen(0, "127.0.0.1", resolve));
   fx = await launchCloudSendFixture({ onePasswordToken: `ops_fake-slack-${randomBytes(8).toString("hex")}`, cloudEngine: ENGINE,
-    cloudEnv: { OMB_BOT_BOX: "0", FIXTURE_ADMIN_STAND_IN: `http://127.0.0.1:${(adminServer.address() as AddressInfo).port}` } });
+    cloudEnv: { SEIRA_BOT_BOX: "0", FIXTURE_ADMIN_STAND_IN: `http://127.0.0.1:${(adminServer.address() as AddressInfo).port}` } });
   writeFileSync(file("markers.json"), JSON.stringify(ANSWERS));
   writeFileSync(file("tool-calls.json"), "[]");
   writeFileSync(file("release"), "");
@@ -117,8 +117,8 @@ beforeAll(async () => {
   const created = await as(owner, "POST", "/api/bots", { name: "Scout" });
   expect(created.status, JSON.stringify(created.body)).toBe(201);
   scout = created.body.bot as Bot;
-  mausbot = (await bots()).find((bot) => bot.defaultBot)!;
-  expect(mausbot, "a My Cloud has its Seira").toBeTruthy();
+  seira = (await bots()).find((bot) => bot.defaultBot)!;
+  expect(seira, "a My Cloud has its Seira").toBeTruthy();
 }, hostTimeout(180_000));
 
 afterEach(async () => {
@@ -139,7 +139,7 @@ it("the owner's session lists every bot, each usable in a channel; no session is
   expect(mine.status, JSON.stringify(mine.body)).toBe(200);
   const listed = mine.body.bots as { id: string; name: string; shared: boolean }[];
   expect(listed.find((bot) => bot.id === scout.id)).toEqual({ id: scout.id, name: "Scout", shared: true });
-  expect(listed.find((bot) => bot.id === mausbot.id)).toEqual({ id: mausbot.id, name: mausbot.name, shared: true });
+  expect(listed.find((bot) => bot.id === seira.id)).toEqual({ id: seira.id, name: seira.name, shared: true });
   for (const refused of [await as(null, "GET", "/api/slack/team/bots"), await slack(null, { audience: "team", text: "hello" })]) {
     expect(refused.status).toBe(403);
     expect(refused.body.bots ?? refused.body.accepted).toBeUndefined();
@@ -196,11 +196,11 @@ it("the same id again starts nothing new and answers as the first did", async ()
 it("a direct message is an ordinary conversation too, with the owner's Seira by default; either audience continues a conversation", async () => {
   const sent = await slack(ownerSlack, { audience: "member", bot: { default: true }, text: "Private notes please" });
   expect(sent.status, JSON.stringify(sent.body)).toBe(202);
-  expect(sent.body.bot).toEqual({ id: mausbot.id, name: mausbot.name });
+  expect(sent.body.bot).toEqual({ id: seira.id, name: seira.name });
   directThread = sent.body.conversationId;
   await finished(sent.id);
   expect(lastReport(sent.id).text).toBe(ANSWERS["Private notes please"]);
-  expect(await taskOf(mausbot.id, directThread)).toMatchObject({ title: "Slack DM: Private notes please" });
+  expect(await taskOf(seira.id, directThread)).toMatchObject({ title: "Slack DM: Private notes please" });
   expect((await rows(directThread)).find((row) => row.role === "user")).toMatchObject({ text: "Private notes please" });
 
   const named = await slack(ownerSlack, { audience: "member", bot: { name: "SCOUT" }, conversationId: null, text: "Is the report out?" });

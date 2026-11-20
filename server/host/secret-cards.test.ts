@@ -21,7 +21,7 @@ afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: tru
 
 /** `privateTo`: a Team Cloud's private chats, by conversation, and whose each is; any other conversation is the team's. */
 function fixture(language?: string, linked?: (vaultStore: VaultStore) => SecretCardsDeps["botLogins"], privateTo: Record<string, string> = {}) {
-  const dataDir = mkdtempSync(join(tmpdir(), "omb-secret-cards-"));
+  const dataDir = mkdtempSync(join(tmpdir(), "seira-secret-cards-"));
   dirs.push(dataDir);
   const lines: Message[] = [];
   let ids = 0;
@@ -164,7 +164,7 @@ describe("a secret a card saves to the Vault", () => {
     const one = fixture();
     const item = one.vaultStore.saveSecret({ name: "Stripe secret key", value: KEY, source: "settings", bots: "all" });
     const answer = await ask(one, "t1", { delivery: "file" });
-    const file = join(one.dataDir, ".openmausbot-secrets", "t1", `vault-${item.id}`);
+    const file = join(one.dataDir, ".seira-secrets", "t1", `vault-${item.id}`);
     expect(answer).toMatchObject({ status: 200, body: { text: expect.stringContaining(`to the file ${file}`) } });
     expect(readFileSync(file, "utf8")).toBe(KEY);
     rmSync(file);
@@ -293,7 +293,7 @@ describe("the mailbox card", () => {
   const ACCOUNT = { address: "me@shop.example", imapHost: "imap.shop.example", smtpHost: "smtp.shop.example", connectedAt: "2026-11-04T00:00:00.000Z" };
   function mail(options: { refusal?: string; connected?: boolean; sendingProblem?: string; profile?: string; connect?: (request: Record<string, unknown>, reading?: (host: string) => void) => unknown;
     account?: Record<string, unknown>; checkOutgoing?: (fields: Record<string, unknown>) => unknown } = {}) {
-    const dataDir = mkdtempSync(join(tmpdir(), "omb-secret-cards-"));
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-secret-cards-"));
     dirs.push(dataDir);
     const lines: Message[] = [];
     let ids = 0;
@@ -534,7 +534,7 @@ describe("a secret a linked 1Password holds", () => {
     const one = linked();
     const answer = await ask(one, { delivery: "file" });
     const file = /to the file (\S+)\. /u.exec(String(answer.body.text))?.[1];
-    expect(file?.startsWith(join(one.dataDir, ".openmausbot-secrets", "t1", "vault-linked-"))).toBe(true);
+    expect(file?.startsWith(join(one.dataDir, ".seira-secrets", "t1", "vault-linked-"))).toBe(true);
     expect(readFileSync(file!, "utf8")).toBe(NOTION);
     if (process.platform !== "win32") expect(statSync(file!).mode & 0o777).toBe(0o600);
   });

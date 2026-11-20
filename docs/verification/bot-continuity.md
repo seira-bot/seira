@@ -2,7 +2,7 @@
 
 ```sh
 pnpm exec vitest run server/setup-mode.test.ts server/bot-setup.e2e.test.ts server/bot-continuity.e2e.test.ts server/independent-threads-api.test.ts
-OMB_UI_E2E=1 pnpm exec vitest run scripts/testing/control-seira-ui.e2e.test.ts
+SEIRA_UI_E2E=1 pnpm exec vitest run scripts/testing/control-seira-ui.e2e.test.ts
 pnpm exec electron scripts/smoke-approval-modes.cjs --model-ui-only
 ```
 
@@ -38,7 +38,7 @@ default without changing another existing Custom thread. HTTP cannot bypass
 Custom; ordinary Full switches may use the atomic HTTP downgrade. A fresh
 thread adopts the new default, and a sample engineering-handoff request sent
 through the composer completes with the fake provider reply. Screenshots stay
-in `.omb-scratch/verify-evidence/model-switch/`. This proves settings and turn
+in `.seira-scratch/verify-evidence/model-switch/`. This proves settings and turn
 dispatch, not the quality of a real model's engineering output. The store test
 also simulates a failed disk write and confirms neither scope changes.
 
@@ -118,6 +118,6 @@ only Read inside the disposable working directories.
 An arithmetic control using the old automatic-setup block also answered `42`.
 This does **not** reproduce every reported refusal, establish malicious intent,
 or prove every provider behaves identically. The verified regression is the
-unrequested coaching sent by OMB; live results confirm ordinary work, explicit
+unrequested coaching sent by Seira; live results confirm ordinary work, explicit
 setup and cross-folder reading on the tested Claude model. Group model routing
 and UI persistence use the offline provider. No real bots or files were moved.

@@ -36,7 +36,7 @@ const cleanup: Array<() => Promise<void> | void> = [];
 afterEach(async () => { for (const step of cleanup.splice(0).reverse()) await step(); });
 
 function setup(options: { keys?: Parameters<typeof createChatAppsMcp>[0]["keys"]; servers?: Record<string, Record<string, unknown>>; scope?: BotRecord["toolScope"]; approval?: "ask" | "full"; needsSignIn?: string[]; probe?: typeof probeMcpServer; oauth?: ChatAppsMcpOAuth; startupProbes?: boolean; probeAs?: (server: { bot?: string }) => { id?: string; cwd?: string } } = {}) {
-  const dataDir = mkdtempSync(join(tmpdir(), "omb-chat-apps-mcp-"));
+  const dataDir = mkdtempSync(join(tmpdir(), "seira-chat-apps-mcp-"));
   cleanup.push(() => removeTempDir(dataDir));
   const threads = new Map<string, Message[]>();
   const rows = (threadId: string) => threads.get(threadId) ?? threads.set(threadId, []).get(threadId)!;
@@ -378,6 +378,21 @@ describe("mounts and probes", () => {
     mcp.forgetServer("draw");
     expect(mcp.catalog.get("draw", draw)).toBeUndefined();
   }, 30_000);
+
+  it("probes a server once when the startup probe comes while that server's probe is running", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    cleanup.push(() => { vi.useRealTimers(); });
+    let finish!: () => void;
+    const probe = vi.fn<typeof probeMcpServer>(() => new Promise((resolve) => { finish = () => resolve({ ok: false as const, error: "offline" }); }));
+    const { mcp, lines } = setup({ servers: { draw: { type: "http", url: "https://mcp.example.test/mcp", enabled: true } }, probe, startupProbes: true });
+    mcp.serverChanged("draw");
+    await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(20_000);
+    finish();
+    await vi.waitFor(() => expect(lines).toContain("probed draw: failed"));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(probe).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("a server whose key is kept in the Vault", () => {
@@ -418,7 +433,7 @@ describe("a server that lists tools before anyone signs in", () => {
   async function startupProbe(servers: Record<string, Record<string, unknown>>) {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     cleanup.push(() => { vi.useRealTimers(); });
-    const dataDir = mkdtempSync(join(tmpdir(), "omb-mcp-oauth-"));
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-mcp-oauth-"));
     cleanup.push(() => removeTempDir(dataDir));
     const oauth = new McpOAuthManager({ file: join(dataDir, "mcp-oauth.json") });
     cleanup.push(() => oauth.dispose());
@@ -446,7 +461,7 @@ describe("a server that lists tools before anyone signs in", () => {
     const issuer = await startFakeOAuth();
     const fake = await startFakeHttpMcp({ guard: "every-request", acceptBearer: () => false, wwwAuthenticate: issuer.challenge, tools: [buy] });
     cleanup.push(() => fake.close(), () => issuer.close());
-    const dataDir = mkdtempSync(join(tmpdir(), "omb-mcp-oauth-"));
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-mcp-oauth-"));
     cleanup.push(() => removeTempDir(dataDir));
     const oauth = new McpOAuthManager({ file: join(dataDir, "mcp-oauth.json") });
     cleanup.push(() => oauth.dispose());

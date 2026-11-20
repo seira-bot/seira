@@ -17,11 +17,11 @@ import {
 } from "./package-install-command.mjs";
 
 test("the Ubuntu command resolves dependencies", () => {
-  const command = packageInstallCommand("deb", "/home/u/.cache/openmausbot-updater/pending/x.deb");
+  const command = packageInstallCommand("deb", "/home/u/.cache/seira-updater/pending/x.deb");
 
   assert.equal(
     command,
-    "sudo apt-get install -y '/home/u/.cache/openmausbot-updater/pending/x.deb'",
+    "sudo apt-get install -y '/home/u/.cache/seira-updater/pending/x.deb'",
   );
   // electron-updater ran `dpkg -i`, which installs nothing when a release adds a dependency; only apt resolves virtual Provides.
   assert.doesNotMatch(command, /dpkg/);
@@ -41,9 +41,9 @@ test("inherited Object names are not install commands", () => {
 });
 
 test("a staged path that is gone is not used", () => {
-  const workspace = mkdtempSync(join(tmpdir(), "omb-staged-"));
+  const workspace = mkdtempSync(join(tmpdir(), "seira-staged-"));
   try {
-    const present = join(workspace, "OpenMausBot.deb");
+    const present = join(workspace, "Seira.deb");
     writeFileSync(present, "x");
     const missing = join(workspace, "gone.deb");
 
@@ -73,7 +73,7 @@ const posixShell = existsSync("/bin/sh") ? false : "needs /bin/sh";
 
 // The path lives under $HOME, so it can carry whatever a directory name can.
 test("the quoted path survives a shell round-trip", { skip: posixShell }, () => {
-  const workspace = mkdtempSync(join(tmpdir(), "omb-quote-"));
+  const workspace = mkdtempSync(join(tmpdir(), "seira-quote-"));
   try {
     for (const name of ["plain.deb", "with space.deb", "o'brien.deb", "a;b&c.deb", "$(echo bad).deb"]) {
       const file = join(workspace, name);
@@ -90,7 +90,7 @@ test("the quoted path survives a shell round-trip", { skip: posixShell }, () => 
 });
 
 test("the whole command parses into the arguments apt-get would receive", { skip: posixShell }, () => {
-  const file = "/home/o'brien/.cache/openmausbot-updater/pending/OpenMausBot-0.1.44-amd64.deb";
+  const file = "/home/o'brien/.cache/seira-updater/pending/Seira-0.1.44-amd64.deb";
   const command = packageInstallCommand("deb", file);
 
   // The privileged verb is replaced with a printer, so the shell shows exactly the flags and the one path it would pass.
@@ -115,7 +115,7 @@ test("the package marker decides the install path", () => {
     linuxPackageType({
       platform: "linux",
       resourcesPath: "/tmp/squashfs-root/resources",
-      appImage: "/home/u/OpenMausBot.AppImage",
+      appImage: "/home/u/Seira.AppImage",
       readMarker: marker(null),
     }),
     "AppImage",
@@ -125,7 +125,7 @@ test("the package marker decides the install path", () => {
     linuxPackageType({
       platform: "linux",
       resourcesPath: "/opt/app/resources",
-      appImage: "/home/u/OpenMausBot.AppImage",
+      appImage: "/home/u/Seira.AppImage",
       readMarker: marker("deb"),
     }),
     "deb",

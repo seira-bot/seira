@@ -1,11 +1,11 @@
 // "Since this turn began" is read from event ids (one global order), never timestamps: a clock can step back.
+import { LEGACY_INTERRUPTED_OUTWARD } from "../../electron/legacy-names.mjs";
 import type { RuntimeStore } from "./store.ts";
 import { terminal, type Assignee, type Assignment, type Mode, type Owner, type TurnEvidence } from "./types.ts";
 
 export const CUT_TWICE = "Interrupted by another Seira restart after resuming once; not resumed again. Some of its steps may already have taken effect.";
 
 export const INTERRUPTED_OUTWARD = "Interrupted by a Seira restart after it already";
-const OLD_INTERRUPTED_OUTWARD = "Interrupted by an OpenMausBot restart after it already";
 
 const OUTWARD_SHOWN = 4;
 const OUTWARD_LABEL_MAX = 48;
@@ -34,7 +34,7 @@ export function outwardDetail(labels: readonly string[]): string {
 }
 
 export const outwardInterrupted = (a: Assignment): boolean =>
-  a.outcome === "interrupted" && [INTERRUPTED_OUTWARD, OLD_INTERRUPTED_OUTWARD].some((lead) => a.outcomeDetail?.startsWith(lead));
+  a.outcome === "interrupted" && [INTERRUPTED_OUTWARD, LEGACY_INTERRUPTED_OUTWARD].some((lead) => a.outcomeDetail?.startsWith(lead));
 
 export const NO_PROGRESS_STRIKES = 2;
 export const SAME_ERROR_STRIKES = 3;

@@ -158,7 +158,7 @@ const __APP_VERSION__: string;
       desktopProfile?: { systemName(): Promise<string | null> };
       desktopAnalytics?: import("../../electron/desktop-prefs.mjs").DesktopAnalyticsBridge;
       desktopLanguage?: import("../../electron/desktop-prefs.mjs").DesktopLanguageBridge;
-      /** This computer's page and My Cloud's own page: the one-time "Get MausBot updates?" answer. */
+      /** This computer's page and My Cloud's own page: the one-time "Get Seira updates?" answer. */
       updatesConsent?: import("../../electron/updates-consent.mjs").UpdatesConsentBridge;
       companyBackups?: {
         state(): Promise<CompanyBackupState>;
@@ -195,7 +195,7 @@ const __APP_VERSION__: string;
          * address, `code` the pairing code typed apart; without `link`, the clipboard's), or type its address. With `code`
          * (even empty) it resolves with the outcome; without, false when the person cancels Connect. */
         add?: (choice: "cloud" | "link" | "address", link?: string, code?: string) => Promise<import("../../electron/server-probe.mjs").ConnectOutcome | boolean | void>;
-        /** Finds the MausBot server at what the Connect sheet holds, without connecting. Absent on an older app. */
+        /** Finds the Seira server at what the Connect sheet holds, without connecting. Absent on an older app. */
         probe?: (address: string, code?: string) => Promise<import("../../electron/server-probe.mjs").ServerProbe>;
         /** The colour of the place this page is (This computer's too), and whether it can be changed here. Absent on an
          * older app. */
@@ -405,19 +405,19 @@ const __APP_VERSION__: string;
         state(): Promise<{ maximized: boolean }>;
         onMaximizedChanged(cb: (maximized: boolean) => void): () => void;
       };
-      /** Receives a GitHub package URL opened through openmausbot://install. */
+      /** Receives a GitHub package URL opened through seira://install. */
       onPackageInstall?(cb: (url: string) => void): () => void;
-      /** Receives a chat link (openmausbot://thread/… or openmausbot://bot/…)
+      /** Receives a chat link (seira://thread/… or seira://bot/…)
        * opened from outside the app. */
       onChatLink?(cb: (link: string) => void): () => void;
       /** The desktop shell's app-menu Preferences… item was activated; open
        * app Settings. Every server's page in the window receives it, and the
        * bridge is absent in the browser. "cloud" is the
-       * openmausbot://cloud link (Settings → OMB Cloud, opened by the link). */
+       * seira://cloud link (Settings → Seira Cloud, opened by the link). */
       onOpenAppSettings?(cb: (section?: "organization" | "cloud" | "cloud-settings" | "cloud-add" | "cloud-add-howto" | import("../state/store").SettingsPageId) => void): () => void;
       /** Updates the native Dock/taskbar unread indicator. */
       setUnreadCount?(count: number): void;
-      /** Opens a live desktop as a sandboxed window owned by OpenMausBot. */
+      /** Opens a live desktop as a sandboxed window owned by Seira. */
       desktopViewer?: {
         open(url: string, title: string, contextId: string): Promise<boolean>;
         /** Closes the live-desktop window, but only when it belongs to this bot. */
@@ -449,7 +449,7 @@ const __APP_VERSION__: string;
       /** Writes the redacted diagnostics report to a user-chosen file;
        * resolves the path, or null when cancelled. */
       exportDiagnostics?(): Promise<string | null>;
-      /** Asks where to save a bot-created file (inside ~/.openmausbot), copies
+      /** Asks where to save a bot-created file (inside ~/.seira), copies
        * it there and reveals it. Resolves the chosen path, or null if the
        * user cancelled the dialog. */
       saveFile?(filePath: string): Promise<string | null>;

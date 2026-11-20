@@ -1,7 +1,7 @@
 import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import type { OmbChartSpec } from "./types.ts";
+import type { SeiraChartSpec } from "./types.ts";
 import { compileChart } from "./chart-compiler.ts";
 
 let instance: DuckDBInstance;
@@ -16,7 +16,7 @@ afterAll(() => {
   instance?.closeSync();
 });
 
-async function chartRows(sql: string, spec: OmbChartSpec) {
+async function chartRows(sql: string, spec: SeiraChartSpec) {
   const source = `(${sql})`;
   const described = await connection.run(`SELECT * FROM ${source} LIMIT 0`);
   const columns = Array.from({ length: described.columnCount }, (_, i) => ({

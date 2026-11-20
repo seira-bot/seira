@@ -27,7 +27,7 @@ const poll = async (read: () => Promise<unknown>, expected: unknown, label: stri
 const visible = (text: string) => poll(async () => (await snapshot()).includes(text), true, text);
 const activeLabel = () => evaluate("document.activeElement?.getAttribute('aria-label')");
 const dialogOpen = () => evaluate("[...document.querySelectorAll('[role=dialog]')].some(e => e.querySelector('h2')?.textContent === 'Command allowlist')");
-const evidenceDir = resolve(".omb-scratch/verify-evidence/command-allowlist");
+const evidenceDir = resolve(".seira-scratch/verify-evidence/command-allowlist");
 mkdirSync(evidenceDir, { recursive: true });
 const screenshot = (name: string) => ui("screenshot", "--out", resolve(evidenceDir, `${name}.png`));
 

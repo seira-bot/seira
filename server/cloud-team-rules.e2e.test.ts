@@ -101,8 +101,8 @@ beforeAll(async () => {
   broker = await startBrokerFake();
   const relayBase = `http://127.0.0.1:${(relay.address() as AddressInfo).port}`;
   fx = await launchCloudSendFixture({ onePasswordToken: "ops_fake-rules", broker, team: { id: "team-acme-1", name: "Acme", engine: ENGINE, env: {
-    OMB_BOT_BOX: "0", FIXTURE_ADMIN_STAND_IN: `http://127.0.0.1:${(adminServer.address() as AddressInfo).port}`,
-    OMB_CLOUD_BOAT_URL: `${relayBase}/relay/api/box/v1`, OMB_CLOUD_BOAT_TOKEN: "box_omb_rules",
+    SEIRA_BOT_BOX: "0", FIXTURE_ADMIN_STAND_IN: `http://127.0.0.1:${(adminServer.address() as AddressInfo).port}`,
+    SEIRA_CLOUD_BOAT_URL: `${relayBase}/relay/api/box/v1`, SEIRA_CLOUD_BOAT_TOKEN: "box_seira_rules",
   } } });
   team = fx.team!;
   owner = (await team.pair(OWNER)).token!;
@@ -285,7 +285,7 @@ it("remote access off refuses a phone code and signs phones out, while every mem
 it("a kept policy applies at once after a restart with the Admin unreachable, and never lapses; a document it can't read keeps the last good one and says so", async () => {
   const policy = publish({ allowedEngines: ["codex"] })!;
   await nudged(policy.fingerprint);
-  const kept = JSON.parse(readFileSync(join(team.home, ".openmausbot", TEAM_POLICY_FILE), "utf8"));
+  const kept = JSON.parse(readFileSync(join(team.home, ".seira", TEAM_POLICY_FILE), "utf8"));
   expect(kept).toMatchObject({ teamId: team.id, fingerprint: policy.fingerprint, version: policy.version });
 
   admin.answer = { status: 503, body: "down", type: "text/plain" };
@@ -312,7 +312,7 @@ it("a kept policy applies at once after a restart with the Admin unreachable, an
   admin.answer = { status: 404, body: { error: "Not found." }, type: "application/json" };
   await team.signed("POST", "/api/cloud/team/policy-changed", {});
   await expect.poll(async () => (await team.as(owner, "GET", "/api/config")).body.managedPolicy, { timeout: 15_000, interval: 100 }).toBeNull();
-  expect(existsSync(join(team.home, ".openmausbot", TEAM_POLICY_FILE))).toBe(false);
+  expect(existsSync(join(team.home, ".seira", TEAM_POLICY_FILE))).toBe(false);
 }, hostTimeout(120_000));
 
 it("require a fresh policy: with none to be had, new turns are refused in plain words; a good fetch lets them through", async () => {
@@ -322,7 +322,7 @@ it("require a fresh policy: with none to be had, new turns are refused in plain 
   expect(engineRan()).toBe(true);
 
   // A restart long after the last good fetch, with the Admin down: the kept rules say a fresh one is required.
-  const file = join(team.home, ".openmausbot", TEAM_POLICY_FILE);
+  const file = join(team.home, ".seira", TEAM_POLICY_FILE);
   admin.answer = { status: 503, body: "down", type: "text/plain" };
   await team.relaunch();
   writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), fetchedAt: Date.now() - 3_600_000 }));

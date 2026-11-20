@@ -48,8 +48,8 @@ export { intervalHasRestrictions } from "./routine-intervals.ts";
 export { nextOccurrence, RoutineScheduleError } from "./routine-schedules.ts";
 export type { RoutineIntervalSchedule, RoutineIntervalScheduleInput, RoutineSchedule, RoutineScheduleInput } from "./routine-schedules.ts";
 
-/** `cloud` runs the agent inside the bot's Boat VM; `maus` runs the bot's own provider and borrows only its computer tools. */
-export type RoutineRunOn = "maus" | "cloud";
+/** `cloud` runs the agent inside the bot's Boat VM; `seira` runs the bot's own provider and borrows only its computer tools. */
+export type RoutineRunOn = "seira" | "cloud";
 export type RoutineTarget = "bot" | "room-goal";
 export type RoutineGoalStatus = Exclude<GroupGoalRunStatus, "working">;
 
@@ -781,7 +781,7 @@ export class RoutineManager {
     const existing = this.webhookRunReceipt(input.webhookId, input.deliveryId);
     if (existing) return existing;
     if (this.options.botState(input.botId) === "missing") {
-      throw Object.assign(new Error("The assigned MAUS no longer exists"), { status: 410 });
+      throw Object.assign(new Error("The assigned bot no longer exists"), { status: 410 });
     }
     const run: RoutineRun = {
       id: randomUUID(), routineId: input.webhookId, routineName: input.webhookName, prompt: input.prompt, target: "bot",

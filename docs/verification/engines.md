@@ -158,7 +158,7 @@ with `muse login`. It spends that account's Muse usage, so it runs only when
 asked:
 
 ```sh
-OMB_LIVE_MUSE=1 pnpm exec vitest run server/drivers/muse-code.live.test.ts
+SEIRA_LIVE_MUSE=1 pnpm exec vitest run server/drivers/muse-code.live.test.ts
 ```
 
 It lists the account's models (Muse Wonder 1.0), answers on Muse Wonder, runs

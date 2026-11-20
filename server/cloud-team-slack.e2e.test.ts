@@ -1,5 +1,5 @@
 // Slack for Team Clouds on a real Team Cloud (docs/team-slack.md). The Admin's part is played here: a session opened
-// for each member through the signed pairing (label "Slack (MausBot Cloud)"), the three routes called with it, and a
+// for each member through the signed pairing (label "Slack (Seira Cloud)"), the three routes called with it, and a
 // stand-in Admin that takes the Cloud's signed reports and checks them as the real one does. A channel message becomes
 // a shared conversation its writer asked in; a direct message their private chat; the app's own rules decide who may
 // ask, read and stop. Disposable homes and the synthetic Claude CLI; no Slack and no real Admin are reached.
@@ -64,7 +64,7 @@ let scout: Bot, reporter: Bot, vault: Bot, payroll: Bot, notes: Bot, priyaOwn: B
 const sockets: Socket[] = [];
 
 const file = (name: string) => join(team.home, name);
-const dataFile = (...rest: string[]) => join(team.home, ".openmausbot", ...rest);
+const dataFile = (...rest: string[]) => join(team.home, ".seira", ...rest);
 const bots = async (token: string) => (await team.as(token, "GET", "/api/bots?messages=0")).body.bots as Bot[];
 const taskOf = async (token: string, botId: string, threadId: string) => (await bots(token)).find((bot) => bot.id === botId)?.tasks?.find((task) => task.threadId === threadId);
 const rows = async (token: string, threadId: string) => ((await team.as(token, "GET", `/api/threads/${threadId}/messages?limit=200`)).body.messages ?? []) as Row[];
@@ -112,7 +112,7 @@ beforeAll(async () => {
   });
   await new Promise<void>((resolve) => adminServer.listen(0, "127.0.0.1", resolve));
   fx = await launchCloudSendFixture({ onePasswordToken: `ops_fake-slack-${randomBytes(8).toString("hex")}`, team: { id: "team-acme-slack", name: "Acme", engine: ENGINE,
-    env: { OMB_BOT_BOX: "0", FIXTURE_ADMIN_STAND_IN: `http://127.0.0.1:${(adminServer.address() as AddressInfo).port}` } } });
+    env: { SEIRA_BOT_BOX: "0", FIXTURE_ADMIN_STAND_IN: `http://127.0.0.1:${(adminServer.address() as AddressInfo).port}` } } });
   team = fx.team!;
   writeFileSync(file("markers.json"), JSON.stringify(ANSWERS));
   writeFileSync(file("tool-calls.json"), "[]");
@@ -359,7 +359,7 @@ it("an approval is reported as waiting, sits in the member's inbox and conversat
   expect((await rows(priya, thread)).some((row) => row.card?.requestId === requestId)).toBe(true);
   const inbox = async () => ((await team.as(priya, "GET", "/api/inbox")).body.rows ?? []) as { card?: { requestId?: string; answered?: string }; tab?: string }[];
   await until(async () => (await inbox()).some((row) => row.card?.requestId === requestId && row.tab === "needs-you"));
-  // Slack's only other route, Stop, is not an answer; the card stays open until she answers it in MausBot.
+  // Slack's only other route, Stop, is not an answer; the card stays open until she answers it in Seira.
   expect(statuses(sent.id).filter((status) => status === "waiting")).toHaveLength(1);
   const allowed = await team.as(priya, "POST", `/api/threads/${thread}/respond`, { requestId, behavior: "allow" });
   expect(allowed.status, JSON.stringify(allowed.body)).toBe(200);

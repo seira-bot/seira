@@ -9,7 +9,7 @@ import { collectAppFiles, createAppPublisher, needsOwnNetlify, publishable, type
 import { createIncludedHosting, DEFAULT_HOSTING_LIMITS } from "./included-hosting.ts";
 import { SITE_FILE } from "./netlify-sites.ts";
 
-const TOKEN = "omb_host_publisher_test_token_0123456789abcdef";
+const TOKEN = "seira_host_publisher_test_token_0123456789abcdef";
 const PAGE = (title: string) => `<!doctype html><title>${title}</title><link rel="stylesheet" href="style.css"><h1>${title}</h1>`;
 
 /** Windows makes a file link only with a privilege CI lacks; a folder junction needs none. */
@@ -204,13 +204,13 @@ describe("what never leaves the bot's folder", () => {
   it("leaves out dotfiles, env files, keys, node_modules and links, and says which", async () => {
     site("mira", "bakery");
     write("otto", "notes.txt", "otto's private notes");
-    for (const path of [".env", ".git/config", ".openmausbot-secrets/netlify", "prod.env", "server.pem", "id_rsa", "credentials.json", "node_modules/pkg/index.js", "Thumbs.db", ...(ODD_NAMES ? ["what?.html"] : [])]) write("mira", `bakery/${path}`, "SECRET");
+    for (const path of [".env", ".git/config", ".seira-secrets/netlify", "prod.env", "server.pem", "id_rsa", "credentials.json", "node_modules/pkg/index.js", "Thumbs.db", ...(ODD_NAMES ? ["what?.html"] : [])]) write("mira", `bakery/${path}`, "SECRET");
     write("mira", "bakery/.well-known/security.txt", "Contact: hello@example.test");
     if (FILE_LINKS) symlinkSync(join(workspace("otto"), "notes.txt"), join(workspace("mira"), "bakery", "linked.txt"));
     folderLink(workspace("otto"), join(workspace("mira"), "bakery", "linked-folder"));
     const answer = await publisher().publisher.publish({ botId: "mira", roots: roots("mira"), path: "bakery", title: "Bakery order page" });
     expect(answer.body).toMatchObject({ ok: true, live: true, files: 3 });
-    expect((answer.body.skipped as string[]).sort()).toEqual([".env", ".git", ".openmausbot-secrets", "Thumbs.db", "credentials.json", "id_rsa", "linked-folder", ...(FILE_LINKS ? ["linked.txt"] : []),
+    expect((answer.body.skipped as string[]).sort()).toEqual([".env", ".git", ".seira-secrets", "Thumbs.db", "credentials.json", "id_rsa", "linked-folder", ...(FILE_LINKS ? ["linked.txt"] : []),
       "node_modules", "prod.env", "server.pem", ...(ODD_NAMES ? ["what?.html"] : [])]);
     expect(Object.keys([...fake.apps.values()][0]!.files).sort()).toEqual([".well-known/security.txt", "index.html", "style.css"]);
     expect(fake.uploads.sort()).toEqual([".well-known/security.txt", "index.html", "style.css"]);
@@ -268,11 +268,11 @@ describe("what never leaves the bot's folder", () => {
   });
 
   it("refuses the secret folder, a file, a missing folder and a folder with no index.html in plain words", async () => {
-    write("mira", ".openmausbot-secrets/site/index.html", "x");
+    write("mira", ".seira-secrets/site/index.html", "x");
     write("mira", "notes/readme.md", "x");
     const { publisher: made } = publisher();
     const ask = async (path: string, title = "Site") => (await made.publish({ botId: "mira", roots: roots("mira"), path, title })).body.error;
-    expect(await ask(".openmausbot-secrets/site")).toContain("holds a secret the person gave");
+    expect(await ask(".seira-secrets/site")).toContain("holds a secret the person gave");
     expect(await ask("notes/readme.md")).toBe("notes/readme.md is a file. Publish the folder that holds the app's index.html.");
     expect(await ask("nowhere")).toBe("No folder was found at nowhere. Pass the exact path of the folder to publish.");
     expect(await ask("notes")).toBe("notes has no index.html at its top. Publish the built output folder.");

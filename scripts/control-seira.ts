@@ -1,5 +1,5 @@
 #!/usr/bin/env -S node --experimental-strip-types
-// The openmausbot headless verbs for verifying an isolated fixture. A verb that
+// The seira headless verbs for verifying an isolated fixture. A verb that
 // changes something never runs on a server it merely found.
 import { spawn, type ChildProcess } from "node:child_process";
 import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, writeFileSync } from "node:fs";
@@ -47,7 +47,7 @@ export const HELP_UI = `renderer (needs a ui launch handle; every verb takes --u
   ui wait-settle --ui HANDLE [--timeout 30]
   ui help`;
 
-export const HELP = `control-seira — the openmausbot headless verbs (docs/headless-cli.md), for verifying a fixture
+export const HELP = `control-seira — the seira headless verbs (docs/headless-cli.md), for verifying a fixture
 
 read-only (every verb also takes --url URL):
   doctor
@@ -61,7 +61,7 @@ read-only (every verb also takes --url URL):
   export --thread ID --out DIR
   events --job THREAD_ID --until-settled
 
-mutating (an explicit --url or OPENMAUSBOT_URL/OMB_PORT is required):
+mutating (an explicit --url or SEIRA_URL/SEIRA_PORT is required):
   new-bot --name NAME [--section TEAM]
   new-channel --name NAME --members ID,ID
   send --bot ID --text TEXT [--task ID] [--dry-run]
@@ -150,9 +150,9 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
     TMP: fixtureTemp,
     TMPDIR: fixtureTemp,
     HERMES_HOME: join(dataDir, ".hermes"),
-    OMB_DATA_DIR: dataDir,
-    OMB_PORT: String(port),
-    OMB_WEBHOOK_PORT: String(port + 1),
+    SEIRA_DATA_DIR: dataDir,
+    SEIRA_PORT: String(port),
+    SEIRA_WEBHOOK_PORT: String(port + 1),
     // A caller's FAKE_CLAUDE_MODE overrides this below to drive failure paths.
     FAKE_CLAUDE_MODE: parentEnv.FAKE_CLAUDE_MODE || "happy",
     FAKE_CLAUDE_DUMP: join(dataDir, "fake-claude-dump.json"),
@@ -161,9 +161,9 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
     PATH: dirname(process.execPath),
     // Without it the server also scans /opt/homebrew/bin, /usr/local/bin and the
     // login shell's PATH, finding a developer's own engine CLIs that CI lacks.
-    OMB_TEST_SEALED_PATH: "1",
+    SEIRA_TEST_SEALED_PATH: "1",
     // The project's live announcement cards would sit over the corner the UI tests click in.
-    OMB_DISABLE_ANNOUNCEMENTS: "1",
+    SEIRA_DISABLE_ANNOUNCEMENTS: "1",
   });
   // The fake engines' knobs are the one thing a caller may script into the child.
   for (const [key, value] of Object.entries(parentEnv)) {
@@ -171,97 +171,97 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
     if ((key.startsWith("FAKE_CLAUDE_") || key.startsWith("FAKE_CODEX_TEXT_") || key.startsWith("FAKE_CODEX_COMMAND") || key.startsWith("FAKE_STREAM_") || key === "FAKE_ACP_HANG_ON") && key !== "FAKE_CLAUDE_DUMP" && value) childEnv[key] = value;
   }
   // Enables POST /api/testing/org-library; the route does not exist without it.
-  if (parentEnv.OMB_TEST_ORG_LIBRARY_KEY) childEnv.OMB_TEST_ORG_LIBRARY_KEY = parentEnv.OMB_TEST_ORG_LIBRARY_KEY;
+  if (parentEnv.SEIRA_TEST_ORG_LIBRARY_KEY) childEnv.SEIRA_TEST_ORG_LIBRARY_KEY = parentEnv.SEIRA_TEST_ORG_LIBRARY_KEY;
   // Enables POST /api/testing/internal-capability (a bot's own tool routes, such as publish_page); the route refuses without it.
-  if (parentEnv.OMB_TEST_INTERNAL_CAPABILITY_KEY) childEnv.OMB_TEST_INTERNAL_CAPABILITY_KEY = parentEnv.OMB_TEST_INTERNAL_CAPABILITY_KEY;
+  if (parentEnv.SEIRA_TEST_INTERNAL_CAPABILITY_KEY) childEnv.SEIRA_TEST_INTERNAL_CAPABILITY_KEY = parentEnv.SEIRA_TEST_INTERNAL_CAPABILITY_KEY;
   // One log line per browser call and preview frame.
-  if (parentEnv.OMB_BROWSER_TIMING === "1") childEnv.OMB_BROWSER_TIMING = "1";
+  if (parentEnv.SEIRA_BROWSER_TIMING === "1") childEnv.SEIRA_BROWSER_TIMING = "1";
   // A share on the tailnet (server/tailnet-listener.ts): a test names one of this machine's own addresses as its stand-in.
-  for (const key of ["OMB_TAILNET_NAME", "OMB_TAILNET_ADDRESSES", "OMB_TEST_TAILNET_STAND_IN"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
+  for (const key of ["SEIRA_TAILNET_NAME", "SEIRA_TAILNET_ADDRESSES", "SEIRA_TEST_TAILNET_STAND_IN"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
   // The limits of a turn nobody is watching (server/host/unattended-turns.ts), brought within a test's reach.
-  for (const key of ["OMB_UNATTENDED_TURN_MAX_MS", "OMB_UNATTENDED_TURN_MAX_REQUESTS", "OMB_UNATTENDED_TURN_MAX_DENIALS", "OMB_LOOP_GUARD_UNATTENDED_STOP_AT"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
+  for (const key of ["SEIRA_UNATTENDED_TURN_MAX_MS", "SEIRA_UNATTENDED_TURN_MAX_REQUESTS", "SEIRA_UNATTENDED_TURN_MAX_DENIALS", "SEIRA_LOOP_GUARD_UNATTENDED_STOP_AT"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
   // Warm summaries' minutes as seconds (server/warm-summary.ts), and the switch that turns them off.
-  for (const key of ["OMB_WARM_SUMMARY_TIME_SCALE", "OMB_WARM_SUMMARY"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
+  for (const key of ["SEIRA_WARM_SUMMARY_TIME_SCALE", "SEIRA_WARM_SUMMARY"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
   // A headless server's usage caps (server/usage-caps.ts).
-  for (const key of ["OMB_USAGE_CAP_DAILY_USD", "OMB_USAGE_CAP_MONTHLY_USD", "OMB_USAGE_CAP_DAILY_TOKENS", "OMB_USAGE_CAP_MONTHLY_TOKENS", "OMB_USAGE_CAP_STOPS"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
+  for (const key of ["SEIRA_USAGE_CAP_DAILY_USD", "SEIRA_USAGE_CAP_MONTHLY_USD", "SEIRA_USAGE_CAP_DAILY_TOKENS", "SEIRA_USAGE_CAP_MONTHLY_TOKENS", "SEIRA_USAGE_CAP_STOPS"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
   // Claude Code's tool search (server/drivers/claude-tool-search.ts): a test turns it off to see a bridged Claude turn.
   if (parentEnv.ENABLE_TOOL_SEARCH) childEnv.ENABLE_TOOL_SEARCH = parentEnv.ENABLE_TOOL_SEARCH;
   // A loopback fake only: the key never reaches a real provider.
-  const liveUrl = parentEnv.OMB_OPENAI_LIVE_URL?.trim() ?? "";
+  const liveUrl = parentEnv.SEIRA_OPENAI_LIVE_URL?.trim() ?? "";
   if (/^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(liveUrl)) {
-    childEnv.OMB_OPENAI_LIVE_URL = liveUrl;
-    if (parentEnv.OMB_OPENAI_LIVE_KEY) childEnv.OMB_OPENAI_LIVE_KEY = parentEnv.OMB_OPENAI_LIVE_KEY;
+    childEnv.SEIRA_OPENAI_LIVE_URL = liveUrl;
+    if (parentEnv.SEIRA_OPENAI_LIVE_KEY) childEnv.SEIRA_OPENAI_LIVE_KEY = parentEnv.SEIRA_OPENAI_LIVE_KEY;
   }
   // A loopback stand-in for Postiz Cloud only (server/testing/fake-postiz.ts): no test signs in to the real one.
-  const postizUrl = parentEnv.OMB_POSTIZ_CLOUD_URL?.trim() ?? "";
-  if (/^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(postizUrl)) childEnv.OMB_POSTIZ_CLOUD_URL = postizUrl;
+  const postizUrl = parentEnv.SEIRA_POSTIZ_CLOUD_URL?.trim() ?? "";
+  if (/^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(postizUrl)) childEnv.SEIRA_POSTIZ_CLOUD_URL = postizUrl;
   // A loopback stand-in for Netlify only (server/testing/fake-netlify.ts): the Published apps page then lists and
   // deletes sites there, never on Netlify.
-  const netlifyUrl = parentEnv.OMB_NETLIFY_API_URL?.trim() ?? "";
-  if (/^http:\/\/127\.0\.0\.1:\d{1,5}\/api\/v1$/.test(netlifyUrl)) childEnv.OMB_NETLIFY_API_URL = netlifyUrl;
+  const netlifyUrl = parentEnv.SEIRA_NETLIFY_API_URL?.trim() ?? "";
+  if (/^http:\/\/127\.0\.0\.1:\d{1,5}\/api\/v1$/.test(netlifyUrl)) childEnv.SEIRA_NETLIFY_API_URL = netlifyUrl;
   // A loopback connected-apps service only (server/testing/broker-fake.ts): its token never reaches the real one.
-  const brokerUrl = parentEnv.OMB_COMPOSIO_BROKER_URL?.trim() ?? "";
-  if (/^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(brokerUrl) && parentEnv.OMB_COMPOSIO_BROKER_TOKEN) {
-    childEnv.OMB_COMPOSIO_BROKER_URL = brokerUrl;
-    childEnv.OMB_COMPOSIO_BROKER_TOKEN = parentEnv.OMB_COMPOSIO_BROKER_TOKEN;
+  const brokerUrl = parentEnv.SEIRA_COMPOSIO_BROKER_URL?.trim() ?? "";
+  if (/^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(brokerUrl) && parentEnv.SEIRA_COMPOSIO_BROKER_TOKEN) {
+    childEnv.SEIRA_COMPOSIO_BROKER_URL = brokerUrl;
+    childEnv.SEIRA_COMPOSIO_BROKER_TOKEN = parentEnv.SEIRA_COMPOSIO_BROKER_TOKEN;
   }
   // Research against loopback stubs only (server/x-research.e2e.test.ts): the relay token crosses only with its stub,
   // and a treg stand-in replaces treg.to, so no test reaches a real relay or treg.
-  const xUrl = parentEnv.OMB_CLOUD_X_URL?.trim() ?? "";
+  const xUrl = parentEnv.SEIRA_CLOUD_X_URL?.trim() ?? "";
   if (/^http:\/\/127\.0\.0\.1:\d{1,5}(?:\/[A-Za-z0-9_-]+)*$/.test(xUrl)) {
-    childEnv.OMB_CLOUD_X_URL = xUrl;
-    if (parentEnv.OMB_CLOUD_X_TOKEN) childEnv.OMB_CLOUD_X_TOKEN = parentEnv.OMB_CLOUD_X_TOKEN;
+    childEnv.SEIRA_CLOUD_X_URL = xUrl;
+    if (parentEnv.SEIRA_CLOUD_X_TOKEN) childEnv.SEIRA_CLOUD_X_TOKEN = parentEnv.SEIRA_CLOUD_X_TOKEN;
   }
   // Included app hosting against a loopback stand-in only (server/testing/fake-app-hosting.ts): its token crosses only with it.
-  const hostingUrl = parentEnv.OMB_CLOUD_HOSTING_URL?.trim() ?? "";
-  if (/^http:\/\/127\.0\.0\.1:\d{1,5}(?:\/[A-Za-z0-9_-]+)*$/.test(hostingUrl) && parentEnv.OMB_CLOUD_HOSTING_TOKEN) {
-    childEnv.OMB_CLOUD_HOSTING_URL = hostingUrl;
-    childEnv.OMB_CLOUD_HOSTING_TOKEN = parentEnv.OMB_CLOUD_HOSTING_TOKEN;
+  const hostingUrl = parentEnv.SEIRA_CLOUD_HOSTING_URL?.trim() ?? "";
+  if (/^http:\/\/127\.0\.0\.1:\d{1,5}(?:\/[A-Za-z0-9_-]+)*$/.test(hostingUrl) && parentEnv.SEIRA_CLOUD_HOSTING_TOKEN) {
+    childEnv.SEIRA_CLOUD_HOSTING_URL = hostingUrl;
+    childEnv.SEIRA_CLOUD_HOSTING_TOKEN = parentEnv.SEIRA_CLOUD_HOSTING_TOKEN;
   }
-  // @devs reports reach a loopback fake only, else a closed port: never the MausBot team.
-  const bugReportUrl = parentEnv.OMB_BUG_REPORT_URL?.trim() ?? "";
-  childEnv.OMB_BUG_REPORT_URL = /^http:\/\/127\.0\.0\.1:\d{1,5}\/[A-Za-z0-9/_-]*$/.test(bugReportUrl) ? bugReportUrl : "http://127.0.0.1:9/api/bug-reports";
-  const tregUrl = parentEnv.OMB_TREG_URL?.trim() ?? "";
-  if (/^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(tregUrl)) childEnv.OMB_TREG_URL = tregUrl;
+  // @devs reports reach a loopback fake only, else a closed port: never the Seira team.
+  const bugReportUrl = parentEnv.SEIRA_BUG_REPORT_URL?.trim() ?? "";
+  childEnv.SEIRA_BUG_REPORT_URL = /^http:\/\/127\.0\.0\.1:\d{1,5}\/[A-Za-z0-9/_-]*$/.test(bugReportUrl) ? bugReportUrl : "http://127.0.0.1:9/api/bug-reports";
+  const tregUrl = parentEnv.SEIRA_TREG_URL?.trim() ?? "";
+  if (/^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(tregUrl)) childEnv.SEIRA_TREG_URL = tregUrl;
   // Loopback only, for harness mechanics: a fake ElevenLabs the measurement
   // substrate can drive without a key. Never a real address.
-  const elevenApi = parentEnv.OMB_ELEVENLABS_API?.trim() ?? "";
-  if (/^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(elevenApi)) childEnv.OMB_ELEVENLABS_API = elevenApi;
+  const elevenApi = parentEnv.SEIRA_ELEVENLABS_API?.trim() ?? "";
+  if (/^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(elevenApi)) childEnv.SEIRA_ELEVENLABS_API = elevenApi;
   // Live calls need Pro; without it the fixture refuses a call with 402 needsPro.
-  if (parentEnv.OMB_PRO_PLAN?.trim() === "1") childEnv.OMB_PRO_PLAN = "1";
+  if (parentEnv.SEIRA_PRO_PLAN?.trim() === "1") childEnv.SEIRA_PRO_PLAN = "1";
   // Arms the one-shot audio-append failure inside the fixture server.
-  if (parentEnv.OMB_TEST_FAIL_AUDIO_APPEND_ONCE) {
-    childEnv.OMB_TEST_FAIL_AUDIO_APPEND_ONCE = parentEnv.OMB_TEST_FAIL_AUDIO_APPEND_ONCE;
+  if (parentEnv.SEIRA_TEST_FAIL_AUDIO_APPEND_ONCE) {
+    childEnv.SEIRA_TEST_FAIL_AUDIO_APPEND_ONCE = parentEnv.SEIRA_TEST_FAIL_AUDIO_APPEND_ONCE;
   }
   // The Claude broker's approval deadline fires on a marker file, not after 15 minutes.
-  if (parentEnv.OMB_TEST_APPROVAL_CLOCK === "1") childEnv.OMB_TEST_APPROVAL_CLOCK = "1";
+  if (parentEnv.SEIRA_TEST_APPROVAL_CLOCK === "1") childEnv.SEIRA_TEST_APPROVAL_CLOCK = "1";
   // The stall watchdog fires on a marker file, not after 20 minutes of silence.
-  if (parentEnv.OMB_TEST_STALL_CLOCK === "1") childEnv.OMB_TEST_STALL_CLOCK = "1";
+  if (parentEnv.SEIRA_TEST_STALL_CLOCK === "1") childEnv.SEIRA_TEST_STALL_CLOCK = "1";
   // Date.now() jumps when a marker file says so, as it does when a suspended machine wakes; timers don't.
-  if (parentEnv.OMB_TEST_RESUME_CLOCK === "1") childEnv.OMB_TEST_RESUME_CLOCK = "1";
+  if (parentEnv.SEIRA_TEST_RESUME_CLOCK === "1") childEnv.SEIRA_TEST_RESUME_CLOCK = "1";
   // The memory gate runs here too, on the memory a fixture file says this machine has.
-  if (parentEnv.OMB_TEST_MEMORY_GATE === "1") childEnv.OMB_TEST_MEMORY_GATE = "1";
+  if (parentEnv.SEIRA_TEST_MEMORY_GATE === "1") childEnv.SEIRA_TEST_MEMORY_GATE = "1";
   // The first-reply rescue's delay in ms, so a check need not sit through 20 s of silence.
-  if (/^\d{1,6}$/.test(parentEnv.OMB_FIRST_REPLY_NOTICE_MS ?? "")) childEnv.OMB_FIRST_REPLY_NOTICE_MS = parentEnv.OMB_FIRST_REPLY_NOTICE_MS;
+  if (/^\d{1,6}$/.test(parentEnv.SEIRA_FIRST_REPLY_NOTICE_MS ?? "")) childEnv.SEIRA_FIRST_REPLY_NOTICE_MS = parentEnv.SEIRA_FIRST_REPLY_NOTICE_MS;
   // How long a tool call may hold the person's message unread, in ms, so a check need not sit through a minute.
-  if (/^\d{1,6}$/.test(parentEnv.OMB_PERSON_FIRST_MS ?? "")) childEnv.OMB_PERSON_FIRST_MS = parentEnv.OMB_PERSON_FIRST_MS;
+  if (/^\d{1,6}$/.test(parentEnv.SEIRA_PERSON_FIRST_MS ?? "")) childEnv.SEIRA_PERSON_FIRST_MS = parentEnv.SEIRA_PERSON_FIRST_MS;
   // How often @devs reports are asked about, in ms, so a check sees a fix arrive without an hour's wait.
-  if (/^\d{1,7}$/.test(parentEnv.OMB_DEVS_STATUS_MS ?? "")) childEnv.OMB_DEVS_STATUS_MS = parentEnv.OMB_DEVS_STATUS_MS;
+  if (/^\d{1,7}$/.test(parentEnv.SEIRA_DEVS_STATUS_MS ?? "")) childEnv.SEIRA_DEVS_STATUS_MS = parentEnv.SEIRA_DEVS_STATUS_MS;
   // The quiet-status knobs in ms, so a long tool call shows its sign of life without a minute's wait.
-  for (const knob of ["OMB_ACP_QUIET_NOTICE_MS", "OMB_ACP_QUIET_TICK_MS"] as const) {
+  for (const knob of ["SEIRA_ACP_QUIET_NOTICE_MS", "SEIRA_ACP_QUIET_TICK_MS"] as const) {
     if (/^\d{1,7}$/.test(parentEnv[knob] ?? "")) childEnv[knob] = parentEnv[knob];
   }
-  // The UI checks drive this fixture from a real browser, as `pnpm dev` does; OMB_DEV_TRUST_LOCAL_BROWSER=0 tests the sign-in.
-  if (parentEnv.OMB_DEV_TRUST_LOCAL_BROWSER !== "0") childEnv.OMB_DEV_TRUST_LOCAL_BROWSER = "1";
+  // The UI checks drive this fixture from a real browser, as `pnpm dev` does; SEIRA_DEV_TRUST_LOCAL_BROWSER=0 tests the sign-in.
+  if (parentEnv.SEIRA_DEV_TRUST_LOCAL_BROWSER !== "0") childEnv.SEIRA_DEV_TRUST_LOCAL_BROWSER = "1";
   // Desktop mode: the owner capability the app would hand the server.
-  if (parentEnv.OMB_TEST_DESKTOP_OWNER_TOKEN) {
-    childEnv.OMB_TEST_DESKTOP_OWNER_TOKEN = parentEnv.OMB_TEST_DESKTOP_OWNER_TOKEN;
-    childEnv.OMB_DESKTOP_PARENT = "1";
-    if (parentEnv.OMB_TEST_DESKTOP_PAGES_ACCESS) childEnv.OMB_TEST_DESKTOP_PAGES_ACCESS = parentEnv.OMB_TEST_DESKTOP_PAGES_ACCESS;
-    if (parentEnv.OMB_TEST_DESKTOP_TAILNET_SHARE) childEnv.OMB_TEST_DESKTOP_TAILNET_SHARE = parentEnv.OMB_TEST_DESKTOP_TAILNET_SHARE;
+  if (parentEnv.SEIRA_TEST_DESKTOP_OWNER_TOKEN) {
+    childEnv.SEIRA_TEST_DESKTOP_OWNER_TOKEN = parentEnv.SEIRA_TEST_DESKTOP_OWNER_TOKEN;
+    childEnv.SEIRA_DESKTOP_PARENT = "1";
+    if (parentEnv.SEIRA_TEST_DESKTOP_PAGES_ACCESS) childEnv.SEIRA_TEST_DESKTOP_PAGES_ACCESS = parentEnv.SEIRA_TEST_DESKTOP_PAGES_ACCESS;
+    if (parentEnv.SEIRA_TEST_DESKTOP_TAILNET_SHARE) childEnv.SEIRA_TEST_DESKTOP_TAILNET_SHARE = parentEnv.SEIRA_TEST_DESKTOP_TAILNET_SHARE;
   }
   // The driver record the app hands its own server: without it, no server may use this computer.
-  if (parentEnv.OMB_TEST_DESKTOP_CUA_CONNECTION) childEnv.OMB_TEST_DESKTOP_CUA_CONNECTION = parentEnv.OMB_TEST_DESKTOP_CUA_CONNECTION;
+  if (parentEnv.SEIRA_TEST_DESKTOP_CUA_CONNECTION) childEnv.SEIRA_TEST_DESKTOP_CUA_CONNECTION = parentEnv.SEIRA_TEST_DESKTOP_CUA_CONNECTION;
   return childEnv;
 }
 
@@ -270,12 +270,12 @@ export function verificationServerArgs(childEnv: NodeJS.ProcessEnv): string[] {
   const hook = (file: string) => ["--import", pathToFileURL(join(ROOT, "server", "testing", file)).href];
   return [
     "--experimental-strip-types",
-    ...(childEnv.OMB_TEST_FAIL_AUDIO_APPEND_ONCE === "1" ? hook("fail-audio-append-once.mjs") : []),
-    ...(childEnv.OMB_TEST_DESKTOP_OWNER_TOKEN || childEnv.OMB_TEST_DESKTOP_CUA_CONNECTION ? hook("desktop-parent.mjs") : []),
-    ...(childEnv.OMB_TEST_APPROVAL_CLOCK === "1" ? hook("approval-clock-hooks.mjs") : []),
-    ...(childEnv.OMB_TEST_STALL_CLOCK === "1" ? hook("stall-clock-hooks.mjs") : []),
-    ...(childEnv.OMB_TEST_RESUME_CLOCK === "1" ? hook("resume-clock-hooks.mjs") : []),
-    ...(childEnv.OMB_TEST_MEMORY_GATE === "1" ? hook("memory-gate-hooks.mjs") : []),
+    ...(childEnv.SEIRA_TEST_FAIL_AUDIO_APPEND_ONCE === "1" ? hook("fail-audio-append-once.mjs") : []),
+    ...(childEnv.SEIRA_TEST_DESKTOP_OWNER_TOKEN || childEnv.SEIRA_TEST_DESKTOP_CUA_CONNECTION ? hook("desktop-parent.mjs") : []),
+    ...(childEnv.SEIRA_TEST_APPROVAL_CLOCK === "1" ? hook("approval-clock-hooks.mjs") : []),
+    ...(childEnv.SEIRA_TEST_STALL_CLOCK === "1" ? hook("stall-clock-hooks.mjs") : []),
+    ...(childEnv.SEIRA_TEST_RESUME_CLOCK === "1" ? hook("resume-clock-hooks.mjs") : []),
+    ...(childEnv.SEIRA_TEST_MEMORY_GATE === "1" ? hook("memory-gate-hooks.mjs") : []),
     join(ROOT, "server", "index.ts"),
   ];
 }
@@ -310,21 +310,21 @@ export async function launchVerificationServer(
       throw new ControlSeiraError("Local VM verification requires an explicit loopback Podman machine");
     }
   }
-  // OMB_TEST_PORTS=19975-19999 keeps a recipe's fixture in a range of its own.
-  const range = /^(\d+)-(\d+)$/.exec((parentEnv.OMB_TEST_PORTS ?? process.env.OMB_TEST_PORTS)?.trim() ?? "");
+  // SEIRA_TEST_PORTS=19975-19999 keeps a recipe's fixture in a range of its own.
+  const range = /^(\d+)-(\d+)$/.exec((parentEnv.SEIRA_TEST_PORTS ?? process.env.SEIRA_TEST_PORTS)?.trim() ?? "");
   const port = range ? await freePortBlock([0, 1], Number(range[1]), Number(range[2]) - Number(range[1])) : await freePortBlock([0, 1]);
   if (signal?.aborted) throw new ControlSeiraError("verification launch cancelled");
   const url = `http://127.0.0.1:${port}`;
   // Native browser daemons use UNIX sockets, and a macOS temp home can exceed
   // their path limit.
-  const dataDir = mkdtempSync(join(browser && process.platform !== "win32" ? "/tmp" : tmpdir(), "openmausbot-verify-data-"));
+  const dataDir = mkdtempSync(join(browser && process.platform !== "win32" ? "/tmp" : tmpdir(), "seira-verify-data-"));
   const fixtureTemp = join(dataDir, "tmp");
   const fixtureDumpPath = join(dataDir, "fake-claude-dump.json");
   mkdirSync(fixtureTemp, { recursive: true });
-  const evidenceDir = join(tmpdir(), "openmausbot-verification-evidence");
+  const evidenceDir = join(tmpdir(), "seira-verification-evidence");
   mkdirSync(evidenceDir, { recursive: true });
   const logPath = join(evidenceDir, `server-${Date.now()}-${process.pid}.log`);
-  const imageApi = parentEnv.OMB_FAKE_IMAGE_API_URL?.trim() ?? "";
+  const imageApi = parentEnv.SEIRA_FAKE_IMAGE_API_URL?.trim() ?? "";
   const imageGen = /^http:\/\/127\.0\.0\.1:\d{1,5}\/v1$/.test(imageApi)
     ? { primary: { provider: "openai" }, fallback: { provider: "custom", model: "fixture-image" }, customUrl: imageApi }
     : undefined;
@@ -354,8 +354,8 @@ export async function launchVerificationServer(
           FAKE_ACP_DUMP: join(dataDir, "copilot-launch.json") },
       } } : {}),
       // A real OpenCode the recipe downloaded and verified itself; it runs in this fixture's temporary home.
-      ...(extraProviders.includes("opencode") && parentEnv.OMB_VERIFY_OPENCODE_CLI ? { opencode: {
-        driver: "opencodeGo", displayName: "Verification OpenCode", config: { cli: parentEnv.OMB_VERIFY_OPENCODE_CLI },
+      ...(extraProviders.includes("opencode") && parentEnv.SEIRA_VERIFY_OPENCODE_CLI ? { opencode: {
+        driver: "opencodeGo", displayName: "Verification OpenCode", config: { cli: parentEnv.SEIRA_VERIFY_OPENCODE_CLI },
       } } : {}),
       ...(extraProviders.includes("customAcp") ? { myAgent: {
         driver: "customAcp", displayName: "Verification custom ACP",
@@ -376,18 +376,18 @@ export async function launchVerificationServer(
   // Opt-in live Local VM fixture: keep the temporary home and fake engine,
   // granting only the explicitly selected machine connection and static UI.
   if (localVm) Object.assign(childEnv, {
-    OMB_EXTRA_PATH: [localVm.binDir, ...(process.platform === "win32" ? [join(childEnv.SYSTEMROOT || "C:\\Windows", "System32")] : [])].join(delimiter),
+    SEIRA_EXTRA_PATH: [localVm.binDir, ...(process.platform === "win32" ? [join(childEnv.SYSTEMROOT || "C:\\Windows", "System32")] : [])].join(delimiter),
     CONTAINER_HOST: localVm.host,
     CONTAINER_SSHKEY: localVm.sshKey,
-    OMB_STATIC_DIR: localVm.staticDir,
+    SEIRA_STATIC_DIR: localVm.staticDir,
   });
-  if (enterprise) Object.assign(childEnv, { OMB_ENTERPRISE_DIR: enterprise.dir, OMB_LICENSE_KEY: enterprise.licenseKey });
+  if (enterprise) Object.assign(childEnv, { SEIRA_ENTERPRISE_DIR: enterprise.dir, SEIRA_LICENSE_KEY: enterprise.licenseKey });
   if (browser) Object.assign(childEnv, {
-    OMB_AGENT_BROWSER_PATH: browser.binaryPath,
+    SEIRA_AGENT_BROWSER_PATH: browser.binaryPath,
     AGENT_BROWSER_EXECUTABLE_PATH: browser.executablePath,
   });
-  if (boatFixtureApi) childEnv.OMB_BOAT_API = boatFixtureApi;
-  if (staticDir) childEnv.OMB_STATIC_DIR = staticDir;
+  if (boatFixtureApi) childEnv.SEIRA_BOAT_API = boatFixtureApi;
+  if (staticDir) childEnv.SEIRA_STATIC_DIR = staticDir;
   const child = spawn(process.execPath, verificationServerArgs(childEnv), {
     cwd: ROOT,
     env: childEnv,
@@ -416,7 +416,7 @@ export async function launchVerificationServer(
           signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
         });
         const body = response.ok ? await response.json() as { app?: string } : null;
-        if (body?.app === "openmausbot") break;
+        if (body?.app === "seira") break;
       } catch {
       }
       if (Date.now() >= deadline) throw new Error(`verification server did not become ready; see ${logPath}${logTail()}`);

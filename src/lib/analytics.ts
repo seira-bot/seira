@@ -5,7 +5,7 @@ import { appVersion } from "@/lib/app-links";
 import { readAdvancedMode } from "@/lib/interface-mode";
 
 // Read before init(): an opted-out install must never call posthog.init(), so no request leaves the machine.
-const OPT_OUT_KEY = "omb-analytics-opt-out";
+const OPT_OUT_KEY = "seira-analytics-opt-out";
 // The desktop app's own page is served on whichever of its ports was free, and each port has its own storage.
 const desktopSwitch = () => globalThis.window?.ogb?.desktopAnalytics;
 
@@ -114,8 +114,8 @@ function start(posthog: PostHog) {
   client = posthog;
   posthog.register({ app_version: appVersion(), surface: analyticsSurface() });
   const platform = pagePlatform();
-  if (!localStorage.getItem("omb-installed")) {
-    localStorage.setItem("omb-installed", new Date().toISOString());
+  if (!localStorage.getItem("seira-installed")) {
+    localStorage.setItem("seira-installed", new Date().toISOString());
     posthog.capture("app_first_open", { platform });
   }
   posthog.capture("app_opened", { platform });
@@ -127,7 +127,7 @@ function pagePlatform() {
   return navigator.userAgent.includes("Electron") ? "desktop" : "browser";
 }
 
-const ACTIVE_DAY_KEY = "omb-analytics-active-day";
+const ACTIVE_DAY_KEY = "seira-analytics-active-day";
 const ACTIVE_CHECK_MS = 10 * 60_000;
 
 function localDay(now = new Date()): string {
@@ -203,7 +203,7 @@ export function track(event: string, props?: Record<string, unknown>) {
   whenReady((ph) => ph.capture(event, props));
 }
 
-const GATE_KEY = "omb-email-gate";
+const GATE_KEY = "seira-email-gate";
 export function emailGateDone(): boolean {
   return Boolean(localStorage.getItem(GATE_KEY));
 }

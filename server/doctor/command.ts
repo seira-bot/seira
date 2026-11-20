@@ -29,6 +29,6 @@ export function dataDoctorOutcome(report: DoctorReport): VerbOutcome {
 }
 
 export async function dataDoctor(ctx: VerbContext): Promise<VerbOutcome> {
-  const dataDir = resolve(flag(ctx.flags, "data-dir") ?? (ctx.env.OMB_DATA_DIR || join(dataHome(), ".openmausbot")));
+  const dataDir = resolve(flag(ctx.flags, "data-dir") ?? (ctx.env.SEIRA_DATA_DIR || join(dataHome(), ".seira")));
   return dataDoctorOutcome(runDoctor({ dataDir, version: serverVersion(), mode: "command", fix: ctx.flags.fix === true }));
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { cn } from "@/lib/cn";
-import { MAUS_COLORS, type MausColor } from "@/lib/mascot";
+import { SEIRA_COLORS, type SeiraColor } from "@/lib/mascot";
 import type { SeiraBot } from "../../../brand/mascot/runtime/bot.js";
 import { mascotClock, usePrefersReducedMotion } from "../mascot-clock";
 import { SEIRA_SCRIPTS, type SeiraState } from "./states";
@@ -13,7 +13,7 @@ export interface SeiraCharacterProps {
   /** A hair style id of the character kit. Without it, Seira keeps her own hair. */
   hairStyle?: string;
   /** A bot color for the hair. Without it, Seira keeps her own silver hair, and the other styles take silver. */
-  hairColor?: MausColor;
+  hairColor?: SeiraColor;
   /** Accessory ids, at most one for each slot. */
   accessories?: readonly string[];
   /** Screen reader text. Without it, the character is decorative and hidden from screen readers. */
@@ -44,8 +44,8 @@ function useReducedMotion(): boolean {
   return media || root;
 }
 
-function hairPaint(hairStyle: string, hairColor: MausColor | undefined): string | null {
-  if (hairColor) return MAUS_COLORS[hairColor];
+function hairPaint(hairStyle: string, hairColor: SeiraColor | undefined): string | null {
+  if (hairColor) return SEIRA_COLORS[hairColor];
   return hairStyle === SEIRA_STYLE ? null : SEIRA_SILVER;
 }
 

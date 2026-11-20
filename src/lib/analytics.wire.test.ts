@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// @vitest-environment-options {"url":"https://tenant-secret.mausbot.cloud/rooms/ROOM-ID-777?share-computer=COMPUTER-ID-123&utm_source=newsletter","settings":{"disableJavaScriptFileLoading":true,"disableJavaScriptEvaluation":true,"disableCSSFileLoading":true,"disableIframePageLoading":true}}
+// @vitest-environment-options {"url":"https://tenant-secret.cloud.seira.bot/rooms/ROOM-ID-777?share-computer=COMPUTER-ID-123&utm_source=newsletter","settings":{"disableJavaScriptFileLoading":true,"disableJavaScriptEvaluation":true,"disableCSSFileLoading":true,"disableIframePageLoading":true}}
 // The real posthog-js behind a recording network stub. One flow: posthog-js is a single instance per process.
 import { gunzipSync } from "node:zlib";
 import { expect, it, vi } from "vitest";
@@ -7,7 +7,7 @@ import { expect, it, vi } from "vitest";
 const TOKEN = "phc_test_token_for_the_wire_test";
 vi.stubEnv("VITE_SEIRA_POSTHOG_TOKEN", TOKEN);
 const STORED = `ph_${TOKEN}_posthog`;
-const FIRST_PAGE = "https://first-tenant.mausbot.cloud/rooms/FIRST-ROOM?share-computer=FIRST-COMPUTER&utm_source=first-campaign";
+const FIRST_PAGE = "https://first-tenant.cloud.seira.bot/rooms/FIRST-ROOM?share-computer=FIRST-COMPUTER&utm_source=first-campaign";
 const REFERRER = "https://referrer.example/search?q=SECRET-REFERRER";
 const SECRETS = [
   "first-tenant", "FIRST-ROOM", "FIRST-COMPUTER", "first-campaign", "referrer.example", "SECRET-REFERRER",

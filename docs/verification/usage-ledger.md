@@ -84,7 +84,7 @@ teammate that calls two agents tools, then reads `GET /api/usage/traces` and
 `GET /api/usage/traces/:id`: one root, the teammate's turn and the Chief's resumed
 turn nested under the first, each tool timed by the server, and totals that add
 up. The unit tests cover nesting, timing, a tool still open at the end of its
-turn, OMB receipts against engine events, Codex's thread totals, old untimed
+turn, Seira receipts against engine events, Codex's thread totals, old untimed
 rows, groups, a parent loop, 2,000 tool calls in one turn and a 500-span trace
 read from disk.
 
@@ -104,7 +104,7 @@ its preview URL.
 The chat header's input/output breakdown has a separate real-renderer fixture:
 
 ```sh
-OMB_UI_E2E=1 pnpm exec vitest run scripts/testing/usage-details-ui.e2e.test.ts
+SEIRA_UI_E2E=1 pnpm exec vitest run scripts/testing/usage-details-ui.e2e.test.ts
 ```
 
 It launches a disposable app, sends one scripted-engine turn through the composer,

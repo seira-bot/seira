@@ -1,47 +1,42 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CLOUD_ORIGIN, SEIRA_CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN, checkoutDestination, cloudOrigin, cloudTarget, createCloudAccountClient } from "./cloud-account.mjs";
+import { CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN, checkoutDestination, cloudOrigin, cloudTarget, createCloudAccountClient } from "./cloud-account.mjs";
 import { parseCloudOffer, parsePublicOffer } from "./cloud-home.mjs";
 
 const filesOf = target => [target.file, target.saved, target.places, target.environments, target.sync, target.look];
 
 test("with no setting the app signs in to Seira's Cloud", () => {
-  assert.equal(cloudTarget({}).origin, SEIRA_CLOUD_ORIGIN);
+  assert.equal(cloudTarget({}).origin, CLOUD_ORIGIN);
   assert.equal(cloudTarget({}).kind, "seira");
-  assert.equal(cloudTarget({}, "upstream").origin, CLOUD_ORIGIN);
-  assert.equal(cloudTarget({}, "upstream").kind, "upstream");
 });
 
-test("the build default is Seira's Cloud, and the environment still wins", () => {
-  const seira = cloudTarget({}, "seira");
-  assert.equal(seira.origin, SEIRA_CLOUD_ORIGIN);
+test("Seira's Cloud is the default, and the environment still wins", () => {
+  const seira = cloudTarget({});
+  assert.equal(seira.origin, CLOUD_ORIGIN);
   assert.equal(seira.kind, "seira");
   assert.equal(seira.staging, false);
-  assert.equal(cloudTarget({ OMB_CLOUD_STAGING: "1" }, "seira").origin, STAGING_CLOUD_ORIGIN);
-  assert.equal(cloudTarget({ OMB_CLOUD_ORIGIN: CLOUD_ORIGIN }, "seira").origin, CLOUD_ORIGIN);
-  assert.equal(cloudTarget({ OMB_CLOUD_ORIGIN: CLOUD_ORIGIN }).origin, CLOUD_ORIGIN);
-  assert.equal(cloudTarget({ OMB_CLOUD_ORIGIN: SEIRA_CLOUD_ORIGIN }, "upstream").origin, SEIRA_CLOUD_ORIGIN);
-  assert.equal(cloudTarget({ OMB_CLOUD_ORIGIN: SEIRA_CLOUD_ORIGIN, OMB_CLOUD_STAGING: "1" }).origin, SEIRA_CLOUD_ORIGIN);
+  assert.equal(cloudTarget({ SEIRA_CLOUD_STAGING: "1" }).origin, STAGING_CLOUD_ORIGIN);
+  assert.equal(cloudTarget({ SEIRA_CLOUD_ORIGIN: CLOUD_ORIGIN }).origin, CLOUD_ORIGIN);
+  assert.equal(cloudTarget({ SEIRA_CLOUD_ORIGIN: CLOUD_ORIGIN, SEIRA_CLOUD_STAGING: "1" }).origin, CLOUD_ORIGIN);
 });
 
-test("OMB_CLOUD_ORIGIN takes an https origin or http://127.0.0.1, and refuses anything else", () => {
-  assert.equal(cloudTarget({ OMB_CLOUD_ORIGIN: "https://cloud.example.test" }).origin, "https://cloud.example.test");
-  assert.equal(cloudTarget({ OMB_CLOUD_ORIGIN: "https://cloud.example.test:8443" }).origin, "https://cloud.example.test:8443");
-  assert.equal(cloudTarget({ OMB_CLOUD_ORIGIN: "http://127.0.0.1:18899" }).origin, "http://127.0.0.1:18899");
+test("SEIRA_CLOUD_ORIGIN takes an https origin or http://127.0.0.1, and refuses anything else", () => {
+  assert.equal(cloudTarget({ SEIRA_CLOUD_ORIGIN: "https://cloud.example.test" }).origin, "https://cloud.example.test");
+  assert.equal(cloudTarget({ SEIRA_CLOUD_ORIGIN: "https://cloud.example.test:8443" }).origin, "https://cloud.example.test:8443");
+  assert.equal(cloudTarget({ SEIRA_CLOUD_ORIGIN: "http://127.0.0.1:18899" }).origin, "http://127.0.0.1:18899");
   for (const value of ["http://cloud.example.test", "http://localhost:3000", "http://192.168.1.5", "ftp://cloud.example.test", "https://cloud.example.test/", "https://cloud.example.test/path",
     "https://user:pass@cloud.example.test", "https://cloud.example.test?x=1", "cloud.example.test", "", " https://cloud.example.test", "javascript:alert(1)", "file:///etc/passwd"]) {
-    assert.deepEqual(cloudTarget({ OMB_CLOUD_ORIGIN: value }), cloudTarget({}), JSON.stringify(value));
-    assert.deepEqual(cloudTarget({ OMB_CLOUD_ORIGIN: value }, "seira"), cloudTarget({}, "seira"), `${JSON.stringify(value)} keeps the build default`);
+    assert.deepEqual(cloudTarget({ SEIRA_CLOUD_ORIGIN: value }), cloudTarget({}), JSON.stringify(value));
   }
 });
 
 test("each Cloud keeps its own files, so one never reads or writes another's", () => {
-  const targets = [cloudTarget({}, "upstream"), cloudTarget({ OMB_CLOUD_STAGING: "1" }), cloudTarget({}), cloudTarget({ OMB_CLOUD_ORIGIN: "https://cloud.example.test" }),
-    cloudTarget({ OMB_CLOUD_ORIGIN: "https://other.example.test" }), cloudTarget({ OMB_CLOUD_ORIGIN: "http://127.0.0.1:18899" })];
+  const targets = [cloudTarget({ SEIRA_CLOUD_STAGING: "1" }), cloudTarget({}), cloudTarget({ SEIRA_CLOUD_ORIGIN: "https://cloud.example.test" }),
+    cloudTarget({ SEIRA_CLOUD_ORIGIN: "https://other.example.test" }), cloudTarget({ SEIRA_CLOUD_ORIGIN: "http://127.0.0.1:18899" })];
   const names = targets.flatMap(filesOf);
   assert.equal(new Set(names).size, names.length, "no file name is shared between two Clouds");
-  assert.deepEqual(filesOf(cloudTarget({}, "upstream")), ["cloud-account.bin", "cloud-accounts.bin", "account-places.json", "environments.json", "cloud-sync", "cloud-home-look.json"], "upstream's files keep their names");
-  assert.deepEqual(cloudTarget({ OMB_CLOUD_ORIGIN: "https://cloud.example.test" }), cloudTarget({ OMB_CLOUD_ORIGIN: "https://cloud.example.test" }), "the same origin keeps the same files");
+  assert.deepEqual(filesOf(cloudTarget({})), ["cloud-account-seira.bin", "cloud-accounts-seira.bin", "account-places-seira.json", "environments-seira.json", "cloud-sync-seira", "cloud-home-look-seira.json"]);
+  assert.deepEqual(cloudTarget({ SEIRA_CLOUD_ORIGIN: "https://cloud.example.test" }), cloudTarget({ SEIRA_CLOUD_ORIGIN: "https://cloud.example.test" }), "the same origin keeps the same files");
 });
 
 test("an origin the environment chose is trusted by the client only when main says so", () => {
@@ -49,11 +44,11 @@ test("an origin the environment chose is trusted by the client only when main sa
   assert.throws(() => cloudOrigin(origin), /Invalid Seira Cloud address/);
   assert.equal(cloudOrigin(origin, false, true), origin);
   assert.throws(() => cloudOrigin("http://cloud.example.test", false, true), /Invalid Seira Cloud address/);
-  assert.equal(cloudOrigin(SEIRA_CLOUD_ORIGIN), SEIRA_CLOUD_ORIGIN);
+  assert.equal(cloudOrigin(CLOUD_ORIGIN), CLOUD_ORIGIN);
 });
 
 test("Seira's Cloud sells on its own page and nowhere else", () => {
-  const own = SEIRA_CLOUD_ORIGIN, page = `${own}/bayar/${"a".repeat(43)}`;
+  const own = CLOUD_ORIGIN, page = `${own}/bayar/${"a".repeat(43)}`;
   assert.equal(checkoutDestination(page, { own }), page);
   for (const value of [`${own}/bayar/`, `${own}/akun`, `${page}?x=1`, `${page}#x`, `http://cloud.seira.bot/bayar/${"a".repeat(43)}`, `https://evil.example.test/bayar/${"a".repeat(43)}`,
     `https://cloud.seira.bot.evil.test/bayar/${"a".repeat(43)}`, "https://checkout.dodopayments.com/session/cks_1", `https://u:p@cloud.seira.bot/bayar/${"a".repeat(43)}`]) {
@@ -66,7 +61,7 @@ const answer = (status, body) => new Response(JSON.stringify(body), { status, he
 const identity = { expiresAt: Date.now() + 86400_000, device: { id: "device-1" }, account: { id: "account-1", email: "tester@example.test" } };
 const token = `omc_${"S".repeat(43)}`;
 
-async function seiraClient({ version = 1, checkoutUrl = `${SEIRA_CLOUD_ORIGIN}/bayar/${"b".repeat(43)}` } = {}) {
+async function seiraClient({ version = 1, checkoutUrl = `${CLOUD_ORIGIN}/bayar/${"b".repeat(43)}` } = {}) {
   const requests = [], browsers = []; let saved = null;
   const fetch = async (url) => {
     requests.push(url);
@@ -77,7 +72,7 @@ async function seiraClient({ version = 1, checkoutUrl = `${SEIRA_CLOUD_ORIGIN}/b
     if (path === "/api/cloud/desktop/checkout") return answer(200, { cloudContractVersion: version, url: checkoutUrl });
     return answer(404, { error: "not_found" });
   };
-  const client = createCloudAccountClient({ origin: SEIRA_CLOUD_ORIGIN, fetch, deviceName: "Test", platform: "linux", appVersion: "0.1.113",
+  const client = createCloudAccountClient({ origin: CLOUD_ORIGIN, fetch, deviceName: "Test", platform: "linux", appVersion: "0.1.113",
     store: { read: async () => saved, write: async value => { saved = value; } }, openBrowser: async url => { browsers.push(url); }, setTimer: () => 1, clearTimer: () => {} });
   return { client, requests, browsers, saved: () => saved };
 }
@@ -88,10 +83,10 @@ test("a client on Seira's Cloud talks only to it, keeps its sign-in tied to it, 
     await client.start();
     assert.equal((await client.emailStart("tester@example.test")).outcome, "sent");
     assert.equal((await client.emailVerify("12345678")).outcome, "signed-in");
-    assert.equal(saved().origin, SEIRA_CLOUD_ORIGIN);
+    assert.equal(saved().origin, CLOUD_ORIGIN);
     assert.equal((await client.checkout("pro", "app_menu")).outcome, "opened");
-    assert.deepEqual(browsers, [`${SEIRA_CLOUD_ORIGIN}/bayar/${"b".repeat(43)}`]);
-    assert.ok(requests.every(url => url.startsWith(`${SEIRA_CLOUD_ORIGIN}/`)));
+    assert.deepEqual(browsers, [`${CLOUD_ORIGIN}/bayar/${"b".repeat(43)}`]);
+    assert.ok(requests.every(url => url.startsWith(`${CLOUD_ORIGIN}/`)));
   } finally { client.close(); }
   const dodo = await seiraClient({ checkoutUrl: "https://checkout.dodopayments.com/session/cks_1" });
   try {

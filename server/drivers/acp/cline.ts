@@ -1,4 +1,4 @@
-// Cline owns its saved provider/model configuration; no static OMB catalog switches providers.
+// Cline owns its saved provider/model configuration; no static Seira catalog switches providers.
 import { readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -105,7 +105,7 @@ const SUPPORT: AcpSupport = {
   },
 };
 
-const MCP_FOLDER_PREFIX = "omb-cline-mcp-";
+const MCP_FOLDER_PREFIX = "seira-cline-mcp-";
 
 export const ClineAgentDriver = {
   ...createAcpDriver(SUPPORT),

@@ -5,11 +5,11 @@
 #   ... | sh -s -- --lan                 also answer other devices on this network (private addresses only)
 #   ... | sh -s -- --uninstall           stops and removes the service; keeps your data
 #
-# It writes a Quadlet unit (~/.config/containers/systemd/openmausbot.container) that runs the published server image,
+# It writes a Quadlet unit (~/.config/containers/systemd/seira.container) that runs the published server image,
 # pinned by its digest, as your user: systemd restarts it when it fails, and starts it at boot once your user may run
 # services without being logged in (it prints the one `loginctl enable-linger` line for that; it never runs sudo).
-# Your data stays in ~/.local/share/openmausbot/data. Running it again repairs the install and never touches your data.
-# Updates, with a copy of the data first and a way back: ~/.local/share/openmausbot/update.sh
+# Your data stays in ~/.local/share/seira/data. Running it again repairs the install and never touches your data.
+# Updates, with a copy of the data first and a way back: ~/.local/share/seira/update.sh
 #
 # WARNING: the server shares this machine's network, with less isolation than the Docker install (docs/self-hosting.md,
 # Podman). A port a bot or tool opens on 0.0.0.0 is open on every address of the machine; bots reach every service on
@@ -26,11 +26,11 @@ settings() {
   REPOSITORY_FILES=https://raw.githubusercontent.com/seira-bot/seira
   PINNED='^ghcr\.io/seira-bot/seira@sha256:[0-9a-f]{64}$'
   # One copy of this repository's files to use instead (https://… or file:///…), as deploy/install.sh takes it.
-  SOURCE_ASKED="${OMB_INSTALL_SOURCE:-}"
-  INSTALL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/openmausbot"
+  SOURCE_ASKED="${SEIRA_INSTALL_SOURCE:-}"
+  INSTALL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/seira"
   UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/containers/systemd"
-  NAME=openmausbot
-  HEALTH_WAIT_S="${OMB_INSTALL_HEALTH_WAIT_S:-240}"
+  NAME=seira
+  HEALTH_WAIT_S="${SEIRA_INSTALL_HEALTH_WAIT_S:-240}"
   MODE=install
   DIR_GIVEN=no
   LAN=""
@@ -54,7 +54,7 @@ usage() {
   say "  --local            answer this machine only again (the default)"
   say "  --port N           the server's port on this machine (default 8799; webhooks use the next one)"
   say "  --public-url URL   the HTTPS address a proxy or tunnel in front of it serves, for pairing links"
-  say "  --dir PATH         where the data and settings live (default ~/.local/share/openmausbot)"
+  say "  --dir PATH         where the data and settings live (default ~/.local/share/seira)"
   say "  --uninstall        stop and remove the service; keeps the data"
 }
 
@@ -91,9 +91,9 @@ parse() {
   esac
   case "$PUBLIC_URL" in
     "" | https://*) ;;
-    *) fail "--public-url takes the https:// address people open, like https://maus.example.com." ;;
+    *) fail "--public-url takes the https:// address people open, like https://seira.example.com." ;;
   esac
-  case "$PUBLIC_URL" in *[!A-Za-z0-9:/._-]*) fail "--public-url takes a plain address, like https://maus.example.com." ;; esac
+  case "$PUBLIC_URL" in *[!A-Za-z0-9:/._-]*) fail "--public-url takes a plain address, like https://seira.example.com." ;; esac
   UNIT="$UNIT_DIR/$NAME.container"
 }
 
@@ -112,7 +112,7 @@ choose_dir() {
   INSTALL_DIR=$(printf '%s' "$INSTALL_DIR" | sed 's|//*$||')
   case "$INSTALL_DIR" in
     /?*) ;;
-    *) fail "--dir takes an absolute path of a folder, like /srv/openmausbot." ;;
+    *) fail "--dir takes an absolute path of a folder, like /srv/seira." ;;
   esac
   existing=$(installed_dir || true)
   if [ -n "$existing" ] && [ "$existing" != "$INSTALL_DIR" ]; then
@@ -157,7 +157,7 @@ user_systemd() {
 }
 
 quadlet_binary() {
-  for candidate in ${OMB_INSTALL_QUADLET:-} /usr/libexec/podman/quadlet /usr/lib/podman/quadlet /usr/local/libexec/podman/quadlet; do
+  for candidate in ${SEIRA_INSTALL_QUADLET:-} /usr/libexec/podman/quadlet /usr/lib/podman/quadlet /usr/local/libexec/podman/quadlet; do
     if [ -x "$candidate" ]; then
       printf '%s' "$candidate"
       return 0
@@ -226,26 +226,26 @@ unset_env() { # file name
 # The image by digest: the one update.sh pinned, else the stable channel's, else the newest release's (only while no
 # version is stable: the channel answers 404). As update.sh decides it, and never a tag that moves (`latest`).
 choose_image() {
-  asked="${OMB_INSTALL_IMAGE:-}"
-  pinned=$(env_value "$INSTALL_DIR/.env" OMB_IMAGE)
+  asked="${SEIRA_INSTALL_IMAGE:-}"
+  pinned=$(env_value "$INSTALL_DIR/.env" SEIRA_IMAGE)
   if [ -n "$asked" ]; then
-    case "$asked" in *[!A-Za-z0-9/:._@-]*) fail "OMB_INSTALL_IMAGE is not an image name." ;; esac
+    case "$asked" in *[!A-Za-z0-9/:._@-]*) fail "SEIRA_INSTALL_IMAGE is not an image name." ;; esac
     case "${asked##*/}" in
       *@sha256:*) ;;
-      *:latest) fail "OMB_INSTALL_IMAGE names the latest tag, which follows every commit. Name a release, like $IMAGE_REPO:v0.1.151." ;;
+      *:latest) fail "SEIRA_INSTALL_IMAGE names the latest tag, which follows every commit. Name a release, like $IMAGE_REPO:v0.1.151." ;;
       *:?*) ;;
-      *) fail "OMB_INSTALL_IMAGE needs a release tag, like $IMAGE_REPO:v0.1.151." ;;
+      *) fail "SEIRA_INSTALL_IMAGE needs a release tag, like $IMAGE_REPO:v0.1.151." ;;
     esac
     IMAGE=$asked
     ok "version: $IMAGE, as asked"
   elif [ -n "$pinned" ]; then
-    case "$pinned" in *[!A-Za-z0-9/:._@-]*) fail "OMB_IMAGE in $INSTALL_DIR/.env is not an image name." ;; esac
+    case "$pinned" in *[!A-Za-z0-9/:._@-]*) fail "SEIRA_IMAGE in $INSTALL_DIR/.env is not an image name." ;; esac
     IMAGE=$pinned
     case "$IMAGE" in
       *@sha256:*) ;;
       *)
         # update.sh's rollback can name the image that ran before by a name of this machine's own
-        # (openmausbot-before-update:local), which no registry has: never pulled, pinned by the digest it came with.
+        # (seira-before-update:local), which no registry has: never pulled, pinned by the digest it came with.
         if podman image exists "$IMAGE" 2>/dev/null; then
           digest=$(podman image inspect -f '{{range .RepoDigests}}{{println .}}{{end}}' "$IMAGE" 2>/dev/null | grep -E "^(${IMAGE_REPO}|ghcr\.io/milind-soni/openmausbot)@sha256:[0-9a-f]{64}$" | head -n 1 || true)
           if [ -z "$digest" ]; then
@@ -275,7 +275,7 @@ choose_image() {
           ;;
         esac
       done
-      [ -n "$digest" ] || fail "Seira $IMAGE was downloaded, but Podman did not say its digest, so it cannot be pinned (a tag moves, a digest does not). Nothing was changed. Run this again, or name the image by its digest: OMB_INSTALL_IMAGE=$repo@sha256:..."
+      [ -n "$digest" ] || fail "Seira $IMAGE was downloaded, but Podman did not say its digest, so it cannot be pinned (a tag moves, a digest does not). Nothing was changed. Run this again, or name the image by its digest: SEIRA_INSTALL_IMAGE=$repo@sha256:..."
       IMAGE=$digest
       ;;
   esac
@@ -290,7 +290,7 @@ stable_image() {
   rm -f "$body"
   case "$code" in
     200)
-      printf '%s' "$IMAGE" | grep -Eq "$PINNED" || fail "The stable channel ($STABLE_URL) names no image this installer accepts. Nothing was changed. Run this again later, or name a version: OMB_INSTALL_IMAGE=$IMAGE_REPO:v0.1.151"
+      printf '%s' "$IMAGE" | grep -Eq "$PINNED" || fail "The stable channel ($STABLE_URL) names no image this installer accepts. Nothing was changed. Run this again later, or name a version: SEIRA_INSTALL_IMAGE=$IMAGE_REPO:v0.1.151"
       ok "version: the stable channel"
       ;;
     404)
@@ -303,7 +303,7 @@ stable_image() {
   esac
 }
 
-# The image's own user and group (its `maus`): the container runs as them, mapped to this user by keep-id, so the data
+# The image's own user and group (its `seira`): the container runs as them, mapped to this user by keep-id, so the data
 # folder stays this user's own on the host. Never a recursive chown (`:U`).
 image_user() {
   RUN_UID=$(podman run --rm --network none --entrypoint id "$IMAGE" -u 2>/dev/null || true)
@@ -323,30 +323,30 @@ write_settings() {
   [ -d "$DATA_DIR" ] || mkdir -m 700 "$DATA_DIR"
   if [ ! -f "$INSTALL_DIR/server.env" ]; then
     write_file "$INSTALL_DIR/server.env" 600 <<'ENV'
-# The server's settings (docs/self-hosting.md). The Podman installer sets OMB_PORT, OMB_WEBHOOK_PORT, OMB_LAN and
-# OMB_PUBLIC_URL when asked, and keeps every other line. Apply a change with: systemctl --user restart openmausbot
-OMB_PORT=8799
-OMB_WEBHOOK_PORT=8800
-OMB_SERVER_NAME=mausbot-podman
-OMB_CLI_PREFIX=podman exec -it openmausbot openmausbot
+# The server's settings (docs/self-hosting.md). The Podman installer sets SEIRA_PORT, SEIRA_WEBHOOK_PORT, SEIRA_LAN and
+# SEIRA_PUBLIC_URL when asked, and keeps every other line. Apply a change with: systemctl --user restart seira
+SEIRA_PORT=8799
+SEIRA_WEBHOOK_PORT=8800
+SEIRA_SERVER_NAME=seira-podman
+SEIRA_CLI_PREFIX=podman exec -it seira seira
 ENV
   fi
   if [ -n "$PORT" ]; then
-    set_env "$INSTALL_DIR/server.env" OMB_PORT "$PORT"
-    set_env "$INSTALL_DIR/server.env" OMB_WEBHOOK_PORT "$((PORT + 1))"
+    set_env "$INSTALL_DIR/server.env" SEIRA_PORT "$PORT"
+    set_env "$INSTALL_DIR/server.env" SEIRA_WEBHOOK_PORT "$((PORT + 1))"
   fi
   case "$LAN" in
-    1) set_env "$INSTALL_DIR/server.env" OMB_LAN 1 ;;
-    0) unset_env "$INSTALL_DIR/server.env" OMB_LAN ;;
+    1) set_env "$INSTALL_DIR/server.env" SEIRA_LAN 1 ;;
+    0) unset_env "$INSTALL_DIR/server.env" SEIRA_LAN ;;
   esac
   if [ -n "$PUBLIC_URL" ]; then
-    set_env "$INSTALL_DIR/server.env" OMB_PUBLIC_URL "$PUBLIC_URL"
-    set_env "$INSTALL_DIR/server.env" OMB_WEBHOOK_PUBLIC_URL "$PUBLIC_URL"
+    set_env "$INSTALL_DIR/server.env" SEIRA_PUBLIC_URL "$PUBLIC_URL"
+    set_env "$INSTALL_DIR/server.env" SEIRA_WEBHOOK_PUBLIC_URL "$PUBLIC_URL"
   fi
-  SERVER_PORT=$(env_value "$INSTALL_DIR/server.env" OMB_PORT)
+  SERVER_PORT=$(env_value "$INSTALL_DIR/server.env" SEIRA_PORT)
   SERVER_PORT=${SERVER_PORT:-8799}
   # The install's own settings, which update.sh reads and pins: the image, nothing else.
-  set_env "$INSTALL_DIR/.env" OMB_IMAGE "$IMAGE"
+  set_env "$INSTALL_DIR/.env" SEIRA_IMAGE "$IMAGE"
   # update.sh knows this install by this file: the unit it updates.
   printf '%s\n' "$UNIT" | write_file "$INSTALL_DIR/podman.unit" 600
 }
@@ -373,7 +373,7 @@ Documentation=https://github.com/seira-bot/seira/blob/main/docs/self-hosting.md#
 [Container]
 ContainerName=$NAME
 Image=$IMAGE
-# The host's network, as a server started with npx has it: it listens on 127.0.0.1 (OMB_LAN=1: private addresses too),
+# The host's network, as a server started with npx has it: it listens on 127.0.0.1 (SEIRA_LAN=1: private addresses too),
 # and every other device pairs. No port is forwarded into a container.
 # WARNING: this isolates less than the Docker install. Any port a bot or a tool opens on 0.0.0.0 is open on every
 # address of this machine, a VPS's public one too, whatever --local says; bots run unboxed beside the data folder that
@@ -386,12 +386,12 @@ UserNS=keep-id:uid=$RUN_UID,gid=$RUN_GID
 Volume=$DATA_DIR:/data$label
 EnvironmentFile=$INSTALL_DIR/server.env
 # How the app knows this install, for the update command it shows: $(shown_dir)/update.sh
-Environment=OMB_PODMAN_SERVICE=$(shown_dir)
+Environment=SEIRA_PODMAN_SERVICE=$(shown_dir)
 # Chrome's shared memory, as the Docker install gives it. The image brings its own init (tini).
 ShmSize=512m
 # curl's own limit: Podman 4.9 does not end a check that hangs on a server that accepts and never answers. The port is
-# read in the container when the check runs (server.env's OMB_PORT); systemd turns the doubled dollar into one.
-HealthCmd=curl -sf --max-time 4 http://127.0.0.1:\$\${OMB_PORT:-8799}/api/health | grep -q openmausbot
+# read in the container when the check runs (server.env's SEIRA_PORT); systemd turns the doubled dollar into one.
+HealthCmd=curl -sf --max-time 4 http://127.0.0.1:\$\${SEIRA_PORT:-8799}/api/health | grep -q seira
 HealthInterval=30s
 HealthTimeout=5s
 HealthRetries=3
@@ -448,7 +448,7 @@ place_update() {
   note "update.sh could not be downloaded; run this again later to place it."
 }
 
-answers() { curl -sf --max-time 5 "http://127.0.0.1:$SERVER_PORT/api/health" 2>/dev/null | grep -q openmausbot; }
+answers() { curl -sf --max-time 5 "http://127.0.0.1:$SERVER_PORT/api/health" 2>/dev/null | grep -q seira; }
 
 wait_healthy() {
   waited=0
@@ -478,9 +478,9 @@ start_service() {
 finish() {
   say ""
   say "Seira is running as your user's service ($NAME), on http://127.0.0.1:$SERVER_PORT."
-  if [ "$(env_value "$INSTALL_DIR/server.env" OMB_LAN)" = 1 ]; then say "Its port $SERVER_PORT also answers other devices on this network, from private addresses only, over plain http; each device pairs."; fi
+  if [ "$(env_value "$INSTALL_DIR/server.env" SEIRA_LAN)" = 1 ]; then say "Its port $SERVER_PORT also answers other devices on this network, from private addresses only, over plain http; each device pairs."; fi
   say ""
-  say "  Pair a device   podman exec -it $NAME openmausbot pair"
+  say "  Pair a device   podman exec -it $NAME seira pair"
   say "  Log             journalctl --user -u $NAME -f"
   say "  Update          $INSTALL_DIR/update.sh"
   say "  Data            $DATA_DIR"
@@ -528,7 +528,7 @@ run_uninstall() {
   say "Seira's service is stopped and removed. Your data stays in $DATA_DIR."
   say "To remove the data too (some files belong to the container's other ids, so through Podman):"
   say "  podman unshare rm -rf $INSTALL_DIR"
-  say "The copies of the data update.sh kept: podman volume ls --filter label=com.mausbot.role=update-backup"
+  say "The copies of the data update.sh kept: podman volume ls --filter label=com.seira.role=update-backup"
   say "The downloaded images: podman image ls ghcr.io/seira-bot/seira"
 }
 

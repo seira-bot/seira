@@ -197,7 +197,7 @@ export type RelayPairingSnapshot = PhoneSetupCompanionSnapshot & CompanionPairin
   e2e?: { enabled: boolean };
 };
 
-/** Automatic pairing goes through MausBot Relay instead of waiting on an HTTPS address only when the relay can carry
+/** Automatic pairing goes through Seira Relay instead of waiting on an HTTPS address only when the relay can carry
  * the phone and the code has a direct route to open on: the account is signed in, the phone link runs with Anywhere
  * on and the encrypted connection on (so the QR pins this computer's key and carries the relay), and Same Wi-Fi has
  * an address. Otherwise the pairing waits for the HTTPS address, as before: a plain Wi-Fi code is never opened
@@ -361,7 +361,7 @@ export function companionPairingOpenFailure(
   if (
     !pairing
     || pairing.token === previousToken
-    || !/^omb_pair_[A-Za-z0-9_-]{43}$/.test(pairing.token)
+    || !/^seira_pair_[A-Za-z0-9_-]{43}$/.test(pairing.token)
     || !/^\d{6}$/.test(pairing.code ?? "")
     || !Number.isFinite(pairing.expiresAt)
     || (pairing.expiresAt ?? 0) <= now

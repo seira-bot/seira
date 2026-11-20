@@ -13,7 +13,7 @@ import { REMEMBER_AND_FORGET } from "./workspace.ts";
 type Step = { tool: string; arguments: Record<string, unknown> };
 
 it("remembers at once, learns only what the person said, forgets everywhere, and words a routine plainly", async () => {
-  const scratch = mkdtempSync(join(tmpdir(), "omb-reply-behaviour-"));
+  const scratch = mkdtempSync(join(tmpdir(), "seira-reply-behaviour-"));
   const routes = join(scratch, "routes.json");
   const learnerLog = join(scratch, "learner.jsonl");
   writeFileSync(routes, JSON.stringify({

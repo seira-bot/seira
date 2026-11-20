@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { parseJson, type JsonValue } from "./schema.ts";
 import type { WebhookManager } from "./webhooks.ts";
+import { LEGACY_WEBHOOK_AUTH_HEADER } from "../electron/legacy-names.mjs";
 import { IDLE_HTTP_SERVER } from "./due-timer.ts";
 
 export const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
@@ -12,7 +13,7 @@ const serverAddressSchema = z.object({ port: z.number().int().min(1).max(65_535)
 
 export interface WebhookIngress {
   server: Server;
-  /** The same receiver on a Unix socket (OMB_WEBHOOK_SOCKET), for a proxy in another container: the compose files' Caddy. */
+  /** The same receiver on a Unix socket (SEIRA_WEBHOOK_SOCKET), for a proxy in another container: the compose files' Caddy. */
   socketServer?: Server;
   host: string;
   port: number;
@@ -71,7 +72,7 @@ export function header(req: IncomingMessage, name: string): string | undefined {
 export function bearerSecret(req: IncomingMessage): string {
   const authorization = header(req, "authorization") ?? "";
   const match = authorization.match(/^Bearer\s+(.+)$/i);
-  return match?.[1]?.trim() || header(req, "x-openmaus-secret")?.trim() || "";
+  return match?.[1]?.trim() || header(req, "x-seira-secret")?.trim() || header(req, LEGACY_WEBHOOK_AUTH_HEADER)?.trim() || "";
 }
 
 function deliveryId(req: IncomingMessage): string | undefined {
@@ -104,7 +105,7 @@ export function createWebhookIngressHandler(manager: WebhookManager, claimReques
       return json(res, 400, { error: "Invalid request URL" });
     }
     if (req.method === "GET" && url.pathname === "/health") {
-      return json(res, 200, { app: "openmausbot-webhooks", ready: true });
+      return json(res, 200, { app: "seira-webhooks", ready: true });
     }
     if (door && await door(req, res, url)) return;
     const match = url.pathname.match(/^\/hooks\/(wh_[A-Za-z0-9_-]+)(?:\/([^/]+))?$/);

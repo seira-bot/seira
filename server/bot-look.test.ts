@@ -54,7 +54,7 @@ describe("the plain look older builds gave", () => {
     expect(wearsPlainLook({ color: "red", avatarUrl: "/api/attachments/a.png" })).toBe(false);
   });
 
-  it("is never the MausBot's", () => {
+  it("is never the Seira's", () => {
     expect(wearsPlainLook({ color: "chrome", defaultBot: {} })).toBe(false);
   });
 });
@@ -62,7 +62,7 @@ describe("the plain look older builds gave", () => {
 describe("giving plain bots a character", () => {
   const dirs: string[] = [];
   const dataDir = () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-bot-look-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-bot-look-"));
     dirs.push(dir);
     return dir;
   };

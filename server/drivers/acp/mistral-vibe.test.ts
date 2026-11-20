@@ -21,7 +21,7 @@ describe("Mistral (Vibe) ACP driver", () => {
 
   beforeEach(() => {
     ensureDirs();
-    scratch = mkdtempSync(join(tmpdir(), "omb-mistral-vibe-contract-"));
+    scratch = mkdtempSync(join(tmpdir(), "seira-mistral-vibe-contract-"));
   });
 
   afterEach(async () => {
@@ -39,7 +39,7 @@ describe("Mistral (Vibe) ACP driver", () => {
       enabled: true,
       environment: {
         VIBE_HOME: join(scratch, "vibe-home"),
-        VIBE_KEYCHAIN_SERVICE: "omb-test-no-such-entry",
+        VIBE_KEYCHAIN_SERVICE: "seira-test-no-such-entry",
         FAKE_ACP_AUTH_METHOD: "browser-auth",
         FAKE_ACP_IMAGE_CAPABILITY: "1",
         FAKE_ACP_AGENT_NAME: "@mistralai/mistral-vibe",

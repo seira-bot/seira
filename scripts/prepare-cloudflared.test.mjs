@@ -25,7 +25,7 @@ describe("cloudflared download retries", () => {
 
   function mockDownload() {
     vi.useFakeTimers();
-    vi.stubEnv("OMB_CLOUDFLARED_ARCHIVE_DIR", "");
+    vi.stubEnv("SEIRA_CLOUDFLARED_ARCHIVE_DIR", "");
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -159,7 +159,7 @@ describe("pinned cloudflared packaging", () => {
     expect(() => parsePrepareCloudflaredArgs(["--all"])).toThrow(/Usage:/);
     expect(() => parsePrepareCloudflaredArgs(["--current", "--current"])).toThrow(/Usage:/);
     // `seira serve --tunnel` stages into its data dir
-    expect(parsePrepareCloudflaredArgs(["--current", "--root", "/srv/omb"])).toEqual({ current: true, root: "/srv/omb" });
+    expect(parsePrepareCloudflaredArgs(["--current", "--root", "/srv/seira"])).toEqual({ current: true, root: "/srv/seira" });
     expect(() => parsePrepareCloudflaredArgs(["--root"])).toThrow(/Usage:/);
     expect(() => parsePrepareCloudflaredArgs(["--root", "/a", "--root", "/b"])).toThrow(/Usage:/);
   });

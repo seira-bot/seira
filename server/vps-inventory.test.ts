@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { legacyDockerLabel } from "../electron/legacy-names.mjs";
 import { DATA_DIR, type AppConfig } from "./config.ts";
 import { loadEnvironmentId } from "./environment.ts";
 import {
@@ -130,10 +131,24 @@ describe("managed VPS inventory", () => {
     });
     expect(fake.calls.map((call) => call.slice(0, 2))).toEqual([
       ["container", "ls"],
+      ["container", "ls"],
       ["container", "inspect"],
     ]);
     expect(fake.calls.some((call) => ["run", "start", "stop", "exec"].includes(call[0]!))).toBe(false);
     expect(JSON.stringify(inventory)).not.toMatch(/\b[ab]{64}\b|VNC_PW|172\.17\.0\.9/);
+  });
+
+  it("lists a VPS computer that an earlier version labelled and named", async () => {
+    const earlierName = vpsContainerName(OWNER.botId).replace(/^seira-vps/, "openmausbot-vps");
+    const earlierLabels = Object.fromEntries(Object.entries(labels(earlierName)).map(([key, value]) => [legacyDockerLabel(key) ?? key, value]));
+    const fake = inventoryRunner([{ id: "e".repeat(64), name: earlierName, labels: earlierLabels }]);
+
+    const inventory = await listManagedVpsComputers(CONFIG, [OWNER], fake.runner);
+
+    expect(inventory.instances).toEqual([
+      expect.objectContaining({ name: earlierName, ownerBotId: OWNER.botId, orphaned: false }),
+    ]);
+    expect(fake.calls.some((call) => call.includes(`label=${legacyDockerLabel(VPS_MANAGED_LABEL)}=1`))).toBe(true);
   });
 
   it("keeps local legacy owners but excludes foreign and ownerless legacy rows", async () => {

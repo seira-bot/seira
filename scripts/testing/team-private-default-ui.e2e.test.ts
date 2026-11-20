@@ -1,10 +1,10 @@
-// A team bot is its maker's until they share it, in the real app on a real Team Cloud (OMB_CLOUD_ROLE=team, each person
+// A team bot is its maker's until they share it, in the real app on a real Team Cloud (SEIRA_CLOUD_ROLE=team, each person
 // paired with the Admin's signed claim) in headless Chrome. Rui, a User, makes a bot with New bot: it is private, under
 // Just me only, and Marta, another User, neither sees it nor reaches it by id. Rui shares it with Marta from the Share
 // button at the top right of the chat: her face shows beside it, she gets one line in her inbox and can chat, and a
 // third User still sees nothing. Rui's menu deletes a bot of his own, and says why it can't while the bot is shared. An
 // admin's Templates form states who can use a new bot, preset to Just me. `/?connect=bots` opens Bot access for an admin
-// and nothing for a User. Run with OMB_UI_E2E=1; OMB_TEAM_PRIVATE_SHOTS=DIR keeps the screenshots.
+// and nothing for a User. Run with SEIRA_UI_E2E=1; SEIRA_TEAM_PRIVATE_SHOTS=DIR keeps the screenshots.
 import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -19,16 +19,16 @@ import { launchCloudSendFixture, type CloudSendFixture, type CloudTeamFixture } 
 import { agentBrowser, ensureUiBrowser, sessionEnv } from "./control-seira-ui.ts";
 import { mountPreview, REPO_ROOT } from "./preview-fixture.ts";
 
-const enabled = process.env.OMB_UI_E2E === "1";
-if (!enabled) console.info("skipping the private-until-shared UI e2e: set OMB_UI_E2E=1");
+const enabled = process.env.SEIRA_UI_E2E === "1";
+if (!enabled) console.info("skipping the private-until-shared UI e2e: set SEIRA_UI_E2E=1");
 
-const SHOTS = process.env.OMB_TEAM_PRIVATE_SHOTS || join(REPO_ROOT, ".omb-scratch", "team-private-default");
+const SHOTS = process.env.SEIRA_TEAM_PRIVATE_SHOTS || join(REPO_ROOT, ".seira-scratch", "team-private-default");
 const DESKTOP = ["1280", "800"] as const, PHONE = ["390", "844"] as const;
 const PEOPLE = { olive: "owner", ada: "admin", rui: "member", marta: "member", ben: "member" } as const;
 type Who = keyof typeof PEOPLE;
 const address = (who: Who) => `${who}@acme.test`;
 
-/** A new member is offered their own MausBot in a dialog over the app; this run leaves it for later. */
+/** A new member is offered their own Seira in a dialog over the app; this run leaves it for later. */
 const DISMISS = `(() => { [...document.querySelectorAll('[role="dialog"] button, dialog button')].find((button) => button.textContent.trim() === "Not now")?.click(); return true; })()`;
 
 type Access = { everyone: string; people: Record<string, string> };

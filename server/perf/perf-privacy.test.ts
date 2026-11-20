@@ -16,7 +16,7 @@ const START = 1_800_000_000_000;
 const SECRETS = [
   "sk-ant-api03-PRIVATEPRIVATEPRIVATE1234567890", "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", "hunter2-password", "ada@example.test",
   "/Users/ada/Projects/acme-merger/plan.md", "acme-merger", "https://intranet.acme.test/q?token=abc", "intranet.acme.test",
-  "Summarize the merger plan", "acme-internal", "Tallyspoon", "OMB_SECRET_VALUE_42", "lookup_customer", "Ada's Claude",
+  "Summarize the merger plan", "acme-internal", "Tallyspoon", "SEIRA_SECRET_VALUE_42", "lookup_customer", "Ada's Claude",
 ];
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
@@ -77,7 +77,7 @@ async function seeded() {
     emit(threadId, { type: "runtime.error", message: SECRETS.join(" "), limit: "engine", limitResetsAt: START + 7_200_000 });
     perf.noteFailover(threadId, "limit");
     advance(10_000);
-    emit(threadId, { type: "turn.completed", ok: false, stopReason: "OMB_SECRET_VALUE_42 at /Users/ada/Projects/acme-merger/plan.md" });
+    emit(threadId, { type: "turn.completed", ok: false, stopReason: "SEIRA_SECRET_VALUE_42 at /Users/ada/Projects/acme-merger/plan.md" });
   }
   const poisoned = { provider: "claudeAgent --token sk-ant-api03-PRIVATEPRIVATEPRIVATE1234567890", turnId: "turn_poisoned" };
   emit("thread_ok", { type: "turn.started", ...poisoned });

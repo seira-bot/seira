@@ -390,7 +390,7 @@ describe("CI vitest job", () => {
 
   it("runs the worker count that scripts/ci-scope.mjs names", () => {
     const tests = stepsOf(job).find((step) => step.run?.includes("--shard="));
-    expect(Number(tests?.env?.OMB_VITEST_WORKERS)).toBe(VITEST_WORKERS["ubuntu-latest"]);
+    expect(Number(tests?.env?.SEIRA_VITEST_WORKERS)).toBe(VITEST_WORKERS["ubuntu-latest"]);
   });
 });
 

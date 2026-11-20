@@ -2,12 +2,14 @@ import { createMDX } from 'fumadocs-mdx/next';
 
 const withMDX = createMDX();
 
-/** @type {import('next').NextConfig} */
+/**
+ * The site builds to static files in out/, which the seira-docs Worker serves (wrangler.jsonc).
+ * A static export has no server, so redirects live in public/_redirects.
+ * @type {import('next').NextConfig}
+ */
 const config = {
+  output: 'export',
   reactStrictMode: true,
-  redirects() {
-    return [{ source: '/docs/byo-vps', destination: '/docs/computers/byo-vps', permanent: true }];
-  },
 };
 
 export default withMDX(config);

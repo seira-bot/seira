@@ -1,5 +1,6 @@
 // The shapes a routine request takes: the tool input a bot sends, and the normalized operation a card stores.
 import { z } from "zod";
+import { currentRunOn } from "../electron/legacy-names.mjs";
 
 import { normalizeCronSchedule } from "../shared/routine-schedule.ts";
 import type { JsonValue } from "./schema.ts";
@@ -44,7 +45,7 @@ export const routineToolDefinitionSchema = z.object({
   name: z.string().max(80),
   instructions: z.string().max(20_000),
   schedule: routineToolScheduleSchema,
-  runOn: z.enum(["maus", "cloud"]).optional(),
+  runOn: z.preprocess(currentRunOn, z.enum(["seira", "cloud"])).optional(),
   durationMinutes: z.number().optional(),
   timeoutMinutes: z.number().nullable().optional(),
   continuity: z.boolean().optional(),
@@ -174,7 +175,7 @@ export const storedDefinitionSchema = z.object({
   name: z.string().trim().min(1).max(80),
   instructions: z.string().trim().min(1).max(20_000),
   schedule: storedScheduleSchema,
-  runOn: z.enum(["maus", "cloud"]),
+  runOn: z.preprocess(currentRunOn, z.enum(["seira", "cloud"])),
   durationMinutes: z.number().int().min(5).max(240),
   timeoutMinutes: z.number().int().min(5).max(1_440).optional(),
   continuity: z.boolean().optional(),

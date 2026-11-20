@@ -75,5 +75,5 @@ export function summarizeHealth(status: number, report: Record<string, unknown> 
 
 /** The home's public name, which the edge answers for. */
 export function publicHost(env: Record<string, string>): string {
-  return new URL(env.OMB_PUBLIC_URL).hostname;
+  return new URL(env.SEIRA_PUBLIC_URL).hostname;
 }

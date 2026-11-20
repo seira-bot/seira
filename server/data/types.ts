@@ -6,10 +6,10 @@ import type {
   DataPage,
   DataReduction,
   DataSource,
-  OmbChartSpec,
+  SeiraChartSpec,
 } from "../../shared/data-surface.ts";
 
-export type { DataColumn, DataColumnStats, DataError, DataHistogram, DataPage, DataReduction, DataSource, OmbChartSpec };
+export type { DataColumn, DataColumnStats, DataError, DataHistogram, DataPage, DataReduction, DataSource, SeiraChartSpec };
 
 export class DataFailure extends Error {
   readonly error: DataError;
@@ -41,7 +41,7 @@ export interface RunResult {
 }
 
 export interface MaterialiseResult {
-  /** Fully qualified: `omb_results.<name>`. */
+  /** Fully qualified: `seira_results.<name>`. */
   table: string;
   columns: DataColumn[];
   rowCount: number;
@@ -85,7 +85,7 @@ export interface CompiledChart {
   reduction: Omit<DataReduction, "inputRows" | "outputRows">;
 }
 
-export type ChartCompiler = (spec: OmbChartSpec, columns: DataColumn[], from: string) => CompiledChart;
+export type ChartCompiler = (spec: SeiraChartSpec, columns: DataColumn[], from: string) => CompiledChart;
 
 /** The JSON schema, no inline data, then one headless render; throws DataFailure(spec_invalid) with the validator's message. */
 export type VegaLiteValidator = (spec: unknown) => Promise<Record<string, unknown>>;

@@ -18,7 +18,7 @@ describe("workspace credential migration", () => {
     } }, {});
     expect(result.credentials).toEqual({ openaiImageApiKey: "openai-only", customImageApiKey: "router-only" });
     expect(result.config.imageGen).toEqual({ provider: "custom", customUrl: "http://127.0.0.1:4000/v1", customModel: "local/image" });
-    expect(workspaceCredentialEnv(result.credentials)).toEqual({ OMB_OPENAI_IMAGE_KEY: "openai-only", OMB_CUSTOM_IMAGE_KEY: "router-only" });
+    expect(workspaceCredentialEnv(result.credentials)).toEqual({ SEIRA_OPENAI_IMAGE_KEY: "openai-only", SEIRA_CUSTOM_IMAGE_KEY: "router-only" });
   });
   it("moves every plaintext secret into the store and deletes the field", () => {
     const config = {
@@ -60,9 +60,9 @@ describe("workspace credential migration", () => {
     expect(result.config.decider).toEqual({ provider: "openrouter", openrouterModel: "openai/gpt-4o-mini", enabled: true });
     expect(result.config.openrouter).toEqual({});
     expect(workspaceCredentialEnv(result.credentials)).toEqual({
-      OMB_JEV_API_KEY: "jev-secret",
-      OMB_OPENROUTER_DECIDER_KEY: "sk-or-secret",
-      OMB_OPENROUTER_API_KEY: "engine-openrouter-key",
+      SEIRA_JEV_API_KEY: "jev-secret",
+      SEIRA_OPENROUTER_DECIDER_KEY: "sk-or-secret",
+      SEIRA_OPENROUTER_API_KEY: "engine-openrouter-key",
     });
   });
 
@@ -72,7 +72,7 @@ describe("workspace credential migration", () => {
     }, {});
     expect(result.credentials).toEqual({ customDeciderKey: "gw-secret" });
     expect(result.config.decider).toEqual({ provider: "custom", customBaseUrl: "https://gw.example.com/v1", customModel: "m-1", customApi: "decisions" });
-    expect(workspaceCredentialEnv(result.credentials)).toEqual({ OMB_CUSTOM_DECIDER_KEY: "gw-secret" });
+    expect(workspaceCredentialEnv(result.credentials)).toEqual({ SEIRA_CUSTOM_DECIDER_KEY: "gw-secret" });
   });
 
   it("is idempotent: a second boot over migrated output changes nothing", () => {
@@ -151,10 +151,10 @@ describe("workspace credential env", () => {
     ).toEqual({
       XAI_API_KEY: "xai-secret",
       BOX_TOKEN: "boat-secret",
-      OMB_TTS_KEY: "tts-secret",
-      OMB_FISH_AUDIO_API_KEY: "fish-secret",
+      SEIRA_TTS_KEY: "tts-secret",
+      SEIRA_FISH_AUDIO_API_KEY: "fish-secret",
       OPENCODE_API_KEY: "ocg-secret",
-      OMB_OPENAI_IMAGE_KEY: "image-secret",
+      SEIRA_OPENAI_IMAGE_KEY: "image-secret",
     });
   });
 
@@ -172,16 +172,16 @@ describe("workspace credential env", () => {
 });
 
 const AI_PROVIDER_KEYS = [
-  ["openai", "openaiApiKey", "OMB_OPENAI_API_KEY"],
-  ["anthropic", "anthropicApiKey", "OMB_ANTHROPIC_API_KEY"],
-  ["openrouter", "openrouterApiKey", "OMB_OPENROUTER_API_KEY"],
+  ["openai", "openaiApiKey", "SEIRA_OPENAI_API_KEY"],
+  ["anthropic", "anthropicApiKey", "SEIRA_ANTHROPIC_API_KEY"],
+  ["openrouter", "openrouterApiKey", "SEIRA_OPENROUTER_API_KEY"],
   ["mistral", "mistralApiKey", "MISTRAL_API_KEY"],
   ["cerebras", "cerebrasApiKey", "CEREBRAS_API_KEY"],
-  ["groq", "groqApiKey", "OMB_GROQ_API_KEY"],
-  ["greenference", "greenferenceApiKey", "OMB_GREENFERENCE_API_KEY"],
-  ["modelgo", "modelgoApiKey", "OMB_MODELGO_API_KEY"],
-  ["meta", "metaApiKey", "OMB_META_API_KEY"],
-  ["deepseek", "deepseekApiKey", "OMB_DEEPSEEK_API_KEY"],
+  ["groq", "groqApiKey", "SEIRA_GROQ_API_KEY"],
+  ["greenference", "greenferenceApiKey", "SEIRA_GREENFERENCE_API_KEY"],
+  ["modelgo", "modelgoApiKey", "SEIRA_MODELGO_API_KEY"],
+  ["meta", "metaApiKey", "SEIRA_META_API_KEY"],
+  ["deepseek", "deepseekApiKey", "SEIRA_DEEPSEEK_API_KEY"],
   ["openaiCompat", "openaiCompatApiKey", "OPENAI_COMPAT_API_KEY"],
 ];
 
@@ -208,7 +208,7 @@ describe("AI provider keys in the encrypted store", () => {
 describe("migrating config.json on disk", () => {
   const folders = [];
   const configFile = (config) => {
-    const folder = mkdtempSync(join(tmpdir(), "omb-workspace-credentials-"));
+    const folder = mkdtempSync(join(tmpdir(), "seira-workspace-credentials-"));
     folders.push(folder);
     const path = join(folder, "config.json");
     writeFileSync(path, JSON.stringify(config));

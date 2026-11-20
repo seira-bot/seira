@@ -29,6 +29,8 @@ vi.mock("react", async (original) => ({ ...await original<typeof import("react")
 vi.mock("@/state/store", async (original) => ({ ...await original<typeof import("@/state/store")>(),
   useStore: () => ({ state: { bots: fixture.store.bots, instances: fixture.store.instances }, dispatch: fixture.store.dispatch, flushBotPatches: fixture.store.flushBotPatches }),
 }));
+const portal = vi.hoisted(() => ({ offered: true }));
+vi.mock("@/lib/organization-portal", async (original) => ({ ...await original<typeof import("@/lib/organization-portal")>(), defaultPortalOffered: () => portal.offered }));
 import { OrganizationSettings } from "./OrganizationSettings";
 import { CompanyModels } from "./CompanyModels";
 
@@ -103,6 +105,17 @@ describe("optional desktop Organisation settings", () => {
     expect(bridge.begin).not.toHaveBeenCalled();
   });
 
+  it("offers only the custom address while no default portal is open to people", async () => {
+    portal.offered = false;
+    try {
+      await ready();
+      const view = render();
+      expect(view.nodes.some(node => node.type === "button" && (node.props as { "data-organization-sign-in"?: string })["data-organization-sign-in"] === "")).toBe(false);
+      expect(view.html).toContain("Custom Admin portal URL");
+      expect(view.html).not.toContain("seira.bot");
+    } finally { portal.offered = true; }
+  });
+
   it("uses the default portal from one sign-in action and keeps custom setup in a fold", async () => {
     await ready();
     let view = render();
@@ -113,7 +126,7 @@ describe("optional desktop Organisation settings", () => {
     expect(bridge.begin).not.toHaveBeenCalled();
     const signIn = () => view.nodes.find(node => node.type === "button" && (node.props as { "data-organization-sign-in"?: string })["data-organization-sign-in"] === "")!.props.onClick!();
     signIn(); signIn(); await flush();
-    expect(bridge.begin).toHaveBeenCalledExactlyOnceWith({ portalOrigin: "https://admin.openmausbot.com" });
+    expect(bridge.begin).toHaveBeenCalledExactlyOnceWith({ portalOrigin: "https://admin.seira.bot" });
     expect(fetch).not.toHaveBeenCalled();
     const progress = render().html;
     expect(progress).toContain("Finish signing in through your browser");

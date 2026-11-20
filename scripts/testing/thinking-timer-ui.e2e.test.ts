@@ -1,7 +1,7 @@
 // The Thinking readout counts from the server's turn-start stamp (for a group,
 // its speaker's claim), not from when the conversation was last selected.
 // Needs the pinned agent-browser binary: runs when one resolves (tools
-// directory, OMB_AGENT_BROWSER_PATH or PATH) or OMB_UI_E2E=1 asks for the
+// directory, SEIRA_AGENT_BROWSER_PATH or PATH) or SEIRA_UI_E2E=1 asks for the
 // verified download; otherwise skipped.
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -18,19 +18,19 @@ import { fixtureApi } from "./preview-fixture.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const CLI = join(ROOT, "scripts", "control-seira.ts");
-const forced = process.env.OMB_UI_E2E === "1";
+const forced = process.env.SEIRA_UI_E2E === "1";
 const binary = resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env });
 const enabled = forced || Boolean(binary);
 if (!enabled) {
-  console.log(`skipping thinking-timer ui e2e: no agent-browser binary resolves (looked in ${UI_TOOLS_DIR}, OMB_AGENT_BROWSER_PATH and PATH); set OMB_UI_E2E=1 to install the pinned release`);
+  console.log(`skipping thinking-timer ui e2e: no agent-browser binary resolves (looked in ${UI_TOOLS_DIR}, SEIRA_AGENT_BROWSER_PATH and PATH); set SEIRA_UI_E2E=1 to install the pinned release`);
 }
 const run = enabled ? it : it.skip;
 // A cold run downloads the binary and Chrome; a warm one launches in seconds.
 const LAUNCH_TIMEOUT_MS = forced ? 600_000 : 180_000;
 
-// OMB_UI_EVIDENCE_DIR keeps the screenshot (CI uploads it); otherwise it is temporary.
-const evidenceDir = process.env.OMB_UI_EVIDENCE_DIR ? resolve(ROOT, process.env.OMB_UI_EVIDENCE_DIR) : mkdtempSync(join(tmpdir(), "omb-ui-evidence-"));
-const ownsEvidenceDir = !process.env.OMB_UI_EVIDENCE_DIR;
+// SEIRA_UI_EVIDENCE_DIR keeps the screenshot (CI uploads it); otherwise it is temporary.
+const evidenceDir = process.env.SEIRA_UI_EVIDENCE_DIR ? resolve(ROOT, process.env.SEIRA_UI_EVIDENCE_DIR) : mkdtempSync(join(tmpdir(), "seira-ui-evidence-"));
+const ownsEvidenceDir = !process.env.SEIRA_UI_EVIDENCE_DIR;
 
 interface Launched {
   child: ReturnType<typeof spawn>;

@@ -34,7 +34,7 @@ function world(overrides: Partial<CloudHealthDeps> = {}) {
   const listeners = new Set<(event: RuntimeEvent) => void>();
   const bus = { subscribe: (listener: (event: RuntimeEvent) => void) => { listeners.add(listener); return () => listeners.delete(listener); } };
   const health = createCloudHealth({
-    store, bus, dataDir: DATA_DIR, eventsDir: EVENTS_DIR, version: "0.1.120", image: `registry.fly.io/omb-cloud-home@sha256:${"b".repeat(64)}`,
+    store, bus, dataDir: DATA_DIR, eventsDir: EVENTS_DIR, version: "0.1.120", image: `registry.fly.io/seira-cloud-home@sha256:${"b".repeat(64)}`,
     engines: () => [{ instanceId: "claude", driverKind: "claudeAgent", snapshot: { state: "available", authenticated: true, version: "2.1.300" } }],
     connectors: () => null, browser: () => ({ available: true, installing: false, interrupted: 0 }), now, ...overrides,
   });

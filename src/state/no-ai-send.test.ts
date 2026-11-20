@@ -37,7 +37,7 @@ it("keeps the news of a Send with no AI until the person acts, and hands the mes
     const line = "Olive needs to connect an AI before bots can answer. I've told them.";
     answering(409, { error: line, code: "no_ai" });
     const onError = vi.fn();
-    store.dispatch({ type: "send", botId: "maus", threadId: "t", text: "Hello", onError });
+    store.dispatch({ type: "send", botId: "seira", threadId: "t", text: "Hello", onError });
     await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
     await vi.waitFor(() => expect(store.state.notice).toEqual({ kind: "no-ai", botName: null, text: line }));
     expect(store.state.error).toBeNull();
@@ -63,7 +63,7 @@ it("lets an old notice's timer leave a newer notice alone", async () => {
 it("shows any other refusal as the error it is", async () => {
   answering(409, { error: "this thread is already working", code: "thread_busy" });
   const onError = vi.fn();
-  store.dispatch({ type: "send", botId: "maus", threadId: "t", text: "Hello", onError });
+  store.dispatch({ type: "send", botId: "seira", threadId: "t", text: "Hello", onError });
   await vi.waitFor(() => expect(store.state.error).toBe("this thread is already working"));
   expect(store.state.notice).toBeNull();
 });

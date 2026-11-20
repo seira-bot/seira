@@ -35,6 +35,7 @@ import { t } from "@/lib/i18n";
 import { COMPACT_SQUARE } from "@/lib/compact-chip";
 import { useAiSwitch } from "@/lib/ai-switch";
 import { usePickerPane } from "@/lib/model-picker-pane";
+import { useModelGroups } from "@/hooks/use-model-groups";
 import { threadsOnOwnModel } from "../../shared/thread-model";
 import { ThreadModelsLine } from "./ThreadModelsLine";
 import { USAGE_WARN_WIDENS, UsageBars, UsageMenuRows } from "./EngineUsage";
@@ -226,7 +227,6 @@ export function ModelPicker({
   const [loadingInstances, setLoadingInstances] = useState(false);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [probing, setProbing] = useState<ReadonlySet<string>>(() => new Set());
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const [scope, setScope] = useState<"bot" | "thread">("thread");
   const advanced = useAdvancedMode();
   const ownerOrAdmin = useOwnerOrAdmin();
@@ -240,6 +240,7 @@ export function ModelPicker({
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const groups = useModelGroups<InstanceInfo>(menuRef, (instance) => lookForLocalIn(instance));
   const refreshingRef = useRef(false);
   const lastClaudeIdRef = useRef<string | null>(null);
   const lastOpenaiIdRef = useRef<string | null>(null);
@@ -385,6 +386,11 @@ export function ModelPicker({
     if (offersLocalModels(instance, instance.models.options.filter((option) => option.custom).length)) lookForLocal(instance);
   };
 
+  const revealGroup = (engine: string) => {
+    const group = simpleMenu?.groups.find((entry) => entry.instance.instanceId === engine);
+    if (group && !bot.busy && engine !== selection.instanceId) groups.reveal(group.instance);
+  };
+
   const openLocalModels = (instance: InstanceInfo) => {
     setPane("custom");
     resetList();
@@ -417,7 +423,7 @@ export function ModelPicker({
     setRailId(initial?.instanceId ?? null);
     setChangedBotModel(false);
     setFullView(false);
-    setExpanded(new Set());
+    groups.collapseAll();
     setPlacement(null);
     openFor(initial);
     focusOnPlace.current = "";
@@ -677,7 +683,7 @@ export function ModelPicker({
     selection,
     bot: { name: profile.name, selection: profile.modelSelection, follows }, updatesBotDefault: !threadId || simpleUpdatesBotDefault,
     query,
-    expanded,
+    expanded: groups.expanded,
     probing,
     loading: loadingInstances,
     refreshing: refreshingId,
@@ -961,7 +967,7 @@ export function ModelPicker({
       } : { width: popoverWidth }}
       className={cn("menu-surface z-[80] flex flex-col overflow-hidden", motion.className)}
     >
-      <UsageMenuRows engine={selection.instanceId} />
+      <UsageMenuRows engine={selection.instanceId} onPick={revealGroup} />
       {bot.busy ? <BusyModelMenu bot={shown} threadId={threadId} updateBotDefault={busyUpdatesBotDefault} variants={Boolean(active?.capabilities?.modelVariants)} /> : simpleMenu ? (
         <SimpleModelMenu
           menu={simpleMenu}
@@ -974,16 +980,7 @@ export function ModelPicker({
           onPick={pick}
           onPickCurrent={() => close(true)}
           onFollowBot={pickBotModel}
-          onToggle={(instance) => {
-            const opening = !expanded.has(instance.instanceId);
-            setExpanded((current) => {
-              const next = new Set(current);
-              if (opening) next.add(instance.instanceId);
-              else next.delete(instance.instanceId);
-              return next;
-            });
-            if (opening) lookForLocalIn(instance);
-          }}
+          onToggle={groups.toggle}
           onSetUp={openFull}
           onCheckAgain={(instance) => refreshModels(instance.instanceId)}
           onManage={remote ? undefined : openEngines}

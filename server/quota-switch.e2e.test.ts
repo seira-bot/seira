@@ -29,9 +29,9 @@ async function withQuotaFixture(
 ) {
   const port = await freePortBlock([0, 1]);
   const url = `http://127.0.0.1:${port}`;
-  const dataDir = mkdtempSync(join(tmpdir(), "openmausbot-quota-switch-"));
+  const dataDir = mkdtempSync(join(tmpdir(), "seira-quota-switch-"));
   mkdirSync(join(dataDir, "tmp"), { recursive: true });
-  const evidenceDir = join(tmpdir(), "openmausbot-verification-evidence");
+  const evidenceDir = join(tmpdir(), "seira-verification-evidence");
   mkdirSync(evidenceDir, { recursive: true });
   const logPath = join(evidenceDir, `quota-switch-${Date.now()}-${process.pid}.log`);
   const backupFile = join(dataDir, "backup-prompts.jsonl");
@@ -167,8 +167,8 @@ it("moves nothing when no backup is chosen, though another AI is set up: it says
   });
 }, 240_000);
 
-it("moves nothing when OMB_QUOTA_SWITCH=0 switches it off", async () => {
-  await withQuotaFixture({ env: { OMB_QUOTA_SWITCH: "0" } }, async ({ api, control, backupPrompts }) => {
+it("moves nothing when SEIRA_QUOTA_SWITCH=0 switches it off", async () => {
+  await withQuotaFixture({ env: { SEIRA_QUOTA_SWITCH: "0" } }, async ({ api, control, backupPrompts }) => {
     const { bot, threadId, messages, state } = await meetTheLimit(api, control, "NO_MOVE_WHEN_OFF_2B");
     const mine = async () => (await api("GET", "/api/notifications")).notifications.filter((entry: any) => entry.kind === "notice" && entry.botId === bot.id);
     await expect.poll(async () => (await mine()).length, { timeout: 20_000 }).toBe(1);

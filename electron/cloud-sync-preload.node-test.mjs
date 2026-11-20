@@ -9,8 +9,8 @@ function load({ remote, active = true }) {
   const invoked = [];
   let bridge;
   const context = vm.createContext({
-    process: { platform: "fixture", argv: [`--omb-local-origin=${origin}`, "--omb-company-desktop=1"] },
-    location: { origin: remote ? "https://omb-u-aaaaaaaaaaaa.fly.dev" : origin }, TextEncoder,
+    process: { platform: "fixture", argv: [`--seira-local-origin=${origin}`, "--seira-company-desktop=1"] },
+    location: { origin: remote ? "https://seira-u-aaaaaaaaaaaa.fly.dev" : origin }, TextEncoder,
     navigator: { userActivation: { isActive: active } },
     localStorage: { getItem: () => null },
     require: () => ({ webUtils: {}, contextBridge: { exposeInMainWorld: (_key, value) => { bridge = value; } }, ipcRenderer: {

@@ -57,7 +57,7 @@ try {
   assert.match(String(await evaluate("document.body.innerText")), /Sign-in required/);
   assert.equal(await evaluate("document.querySelector('[data-engine-card=kimi]').open"), true);
   assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth"), true);
-  const evidence = join(import.meta.dirname, "..", ".omb-scratch", "provider-setup");
+  const evidence = join(import.meta.dirname, "..", ".seira-scratch", "provider-setup");
   mkdirSync(evidence, { recursive: true });
   await command("screenshot", join(evidence, "sign-in.png"));
   engine.snapshot = { state: "available", authenticated: true, version: "fixture 1.0.0" };
