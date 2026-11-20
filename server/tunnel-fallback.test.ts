@@ -8,7 +8,7 @@ import { runLogin, type CliIo, type CliOptions } from "./cli.ts";
 import { planTunnel } from "./cli-tunnel-plan.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 import { startControlPlaneStub, type ControlPlaneStub } from "./testing/control-plane-stub.ts";
-import { describeTunnelAccount, openTunnelCredentials, tunnelAccess } from "./tunnel.ts";
+import { createTunnelAccount, describeTunnelAccount, openTunnelCredentials, tunnelAccess, tunnelAddressRefusal } from "./tunnel.ts";
 
 const CAPACITY = { status: 503, error: "endpoint_capacity", retryAfterSeconds: 600 };
 const LIMIT = { status: 429, error: "endpoint_limit" };
@@ -96,5 +96,57 @@ describe("no seira.run address this time", () => {
   it("a machine with no account is still a setup error, not a quiet local server", async () => {
     const { planned } = await plan();
     expect(planned).toMatchObject({ error: expect.stringMatching(/login first/) });
+  });
+
+  it.each([
+    ["503", CAPACITY, "busy", { code: "endpoint_capacity", message: capacityText }],
+    ["429", LIMIT, "limit", { code: "endpoint_limit", message: limitText }],
+  ])("tunnelAddressRefusal names the refusal after a %s from the control plane", async (_name, answer, problem, refusal) => {
+    await signInWithoutAddress();
+    stub.endpointAnswers.push(answer);
+    const account = createTunnelAccount({ dataDir: dir, version: "test" });
+    try {
+      const state = await account.service.retry();
+      expect(state).toMatchObject({ status: "error", problem });
+      expect(tunnelAddressRefusal(state)).toEqual(refusal);
+    } finally {
+      account.service.dispose();
+    }
+  });
+
+  it("tunnelAddressRefusal names the refusal when the control plane does not answer", async () => {
+    await signInWithoutAddress();
+    await stub.close();
+    const account = createTunnelAccount({ dataDir: dir, version: "test" });
+    try {
+      expect(tunnelAddressRefusal(await account.service.retry())).toEqual({ code: "control_plane_unavailable", message: downText });
+    } finally {
+      account.service.dispose();
+    }
+  });
+});
+
+describe("tunnelAddressRefusal", () => {
+  const signedIn = { available: true, email: "milind@example.test" };
+  const otherWait = "Secure HTTPS links are temporarily full. Try again in 45 seconds, or pair on this Wi-Fi or with Tailscale. Reference: req-7.";
+
+  it("reads the capacity text with another wait and an error reference", () => {
+    expect(tunnelAddressRefusal({ ...signedIn, status: "error", problem: "busy", message: otherWait })).toEqual({ code: "endpoint_capacity", message: otherWait });
+  });
+
+  it("gives the control plane text for every unreachable failure", () => {
+    const network = "Seira could not reach its secure connection service. Check your internet and try again.";
+    expect(tunnelAddressRefusal({ ...signedIn, status: "error", problem: "unreachable", message: network })).toEqual({ code: "control_plane_unavailable", message: downText });
+  });
+
+  it.each([
+    ["an address is ready", { ...signedIn, status: "ready", endpoint: "https://c-0123.seira.run" }],
+    ["the saved address still serves", { ...signedIn, status: "error", problem: "unreachable", endpoint: "https://c-0123.seira.run", message: downText }],
+    ["nobody is signed in", { available: false, status: "signed-out", problem: "unreachable", message: downText }],
+    ["the service is busy for another reason", { ...signedIn, status: "error", problem: "busy", message: "Too many attempts were made. Wait a little, then try again." }],
+    ["the computer limit is reached", { ...signedIn, status: "error", problem: "limit", message: "This account has reached its computer limit. Remove an old computer and try again." }],
+    ["the failure is of another kind", { ...signedIn, status: "error", problem: "failed", message: capacityText }],
+  ] as const)("is null when %s", (_name, state) => {
+    expect(tunnelAddressRefusal(state)).toBeNull();
   });
 });
