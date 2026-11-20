@@ -20,11 +20,11 @@ const notPlaceholder = `(?!(?:${PLACEHOLDERS})(?:[/\\\\]|$))`;
 const NOT_A_SECRET_VALUE = [
   "[$<{]",
   "(?:[a-z]\\w*\\.)+[A-Z][A-Z0-9_]*(?:[^\\w.]|$)", // reads a variable by name: parentEnv.SEIRA_X_TOKEN
-  "[\"']?[A-Z][A-Z0-9_]*[\"']?(?:[\\s;,)]|$)", // an environment variable name
+  "[\"']?[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+[\"']?(?:[\\s;,)]|$)", // an environment variable name
   "[\"']x-[a-z0-9-]+[\"']", // an HTTP header name
-  "[/\\[]", // a regex literal or an array
-  "[\"']/[\\w.@/-]*[\"']", // an absolute path
-  "[a-z][A-Za-z]*(?:[;,)]|\\s*$)", // a bare identifier
+  "/\\^|\\[", // a regex literal or an array
+  "[\"'](?:/[a-z0-9._@-]+){2,}[\"']", // an absolute path
+  "[a-z]+[A-Z][A-Za-z]*[;,)]", // a bare identifier in code
   "\\S*(?:fixture|example)",
 ];
 const SECRET_ASSIGNMENT = new RegExp(
