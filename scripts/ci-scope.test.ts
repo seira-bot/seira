@@ -317,6 +317,7 @@ describe("CI outputs", () => {
       "server/two-places.e2e.test.ts",
       "scripts/ci-workflow.test.ts",
       "scripts/pre-push-check.test.ts",
+      "scripts/pre-push-remote.test.ts",
       "server/host/wait-words.test.ts",
       "server/place-inbox.e2e.test.ts",
       "server/bot-api-team.e2e.test.ts",

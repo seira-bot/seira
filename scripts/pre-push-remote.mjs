@@ -90,7 +90,7 @@ function main() {
     let input = "";
     if (head !== base) {
       const bundle = join(tmp, "push.bundle");
-      git("bundle", "create", bundle, head, `^${base}`);
+      git("bundle", "create", bundle, "HEAD", `^${base}`);
       input = readFileSync(bundle);
     }
     const run = spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host, `bash -lc ${shellQuote(script)}`], { input, stdio: ["pipe", "inherit", "inherit"], timeout: TIMEOUT_MS });
