@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { contrastRatio, toOklch } from "./color-contrast";
-import { MODEL_PALETTE, modelColor, modelFamily, modelIdOf } from "./model-color";
+import { MODEL_PALETTE, modelColor, modelFamily, modelIdOf, modelPresetFor } from "./model-color";
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const SURFACES = ["#ffffff", "#3a322d"] as const;
@@ -110,5 +110,19 @@ describe("model colours", () => {
       expect(color, model).toMatch(HEX);
       for (const surface of SURFACES) expect(contrastRatio(color, surface), `${model} on ${surface}`).toBeGreaterThanOrEqual(3);
     }
+  });
+});
+
+describe("modelPresetFor", () => {
+  it.each([
+    ["claude-sonnet-4-5", "anthropic"], ["gpt-5", "openai"], ["grok-4", "xai"], ["deepseek-v4", "deepseek"],
+    ["gemini-2.5-pro", "google"], ["qwen3-coder", "qwen"], ["mistral-large", "mistral"], ["llama-4", "meta"],
+    ["command-r-plus", "cohere"], ["kimi-k2", "moonshot"], ["openrouter/anthropic/claude-opus-4:free", "anthropic"],
+  ])("maps %s to the %s logo", (model, preset) => {
+    expect(modelPresetFor(model)).toBe(preset);
+  });
+
+  it.each(["glm-4.6", "minimax-m2", "my-local-model", ""])("has no logo for '%s'", (model) => {
+    expect(modelPresetFor(model)).toBeNull();
   });
 });

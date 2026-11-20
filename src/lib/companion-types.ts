@@ -55,6 +55,9 @@ export interface CompanionState {
   discovery?: { advertising: boolean; name: string };
   /** Windows has that network down as Public, where its firewall drops a phone's connection. */
   publicNetwork?: string;
+  /** ufw or firewalld on this Linux computer drops the phone's connection (`certain`), or may, when its rules are
+   * unreadable; `command` lets the phone in. Asked only while pairing is open. */
+  linuxFirewall?: { certain: boolean; command: string };
   /** The end-to-end connection; absent or `enabled: false` until this computer serves it. */
   e2e?: {
     enabled: boolean;

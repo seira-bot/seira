@@ -71,9 +71,13 @@ jobs:
         run: node scripts/check-announcements.mjs --against "$BASE_SHA"
       - name: Find local machine details in added lines
         run: node scripts/check-local-leaks.mjs
+      - name: Find new files in private paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/check-public-paths.mjs --against "$BASE_SHA"
       - name: Source guards
         # The tests that only read the source. They finish in seconds, so a broken rule shows before the shards start.
-        run: pnpm exec vitest run scripts/ci-workflow.test.ts scripts/testing/verification-docs.test.ts src/locales/ scripts/testing/file-size-ratchet.test.ts scripts/testing/index-route-ratchet.test.ts scripts/testing/tighten-ratchets.test.ts scripts/testing/comment-history.test.ts scripts/testing/lazy-server-modules.test.ts scripts/testing/duration-sequencer.test.ts scripts/testing/host-e2e.test.ts scripts/testing/ci-retry-list.test.ts src/lib/copy-text.guard.test.ts src/components/Select.guard.test.ts --reporter=default --reporter=github-actions
+        run: pnpm exec vitest run scripts/ci-workflow.test.ts scripts/testing/verification-docs.test.ts scripts/check-public-paths.test.ts src/locales/ scripts/testing/file-size-ratchet.test.ts scripts/testing/index-route-ratchet.test.ts scripts/testing/tighten-ratchets.test.ts scripts/testing/comment-history.test.ts scripts/testing/lazy-server-modules.test.ts scripts/testing/duration-sequencer.test.ts scripts/testing/host-e2e.test.ts scripts/testing/ci-retry-list.test.ts src/lib/copy-text.guard.test.ts src/components/Select.guard.test.ts --reporter=default --reporter=github-actions
 
   build:
     name: build

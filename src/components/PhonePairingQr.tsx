@@ -5,6 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { t } from "@/lib/i18n";
 import { copyText } from "@/lib/copy-text";
 import { productName } from "@/lib/brand";
+import { PhoneFirewallNotes } from "./PhoneFirewallNotes";
 import type { PhoneSetupController } from "./PhoneSetupFlow";
 
 /** A fresh code while this screen is open; the previous one stays valid to its two-minute end, so a phone mid-scan
@@ -59,11 +60,7 @@ export function PhonePairingQr({ c, signedIn }: { c: PhoneSetupController; signe
           value={relay ? t("phone.code.e2e.fromAnywhere") : signedIn ? t("phone.code.e2e.relayOff") : t("phone.code.e2e.signIn")}
         />
       </div>
-      {c.localFallback && state.publicNetwork && (
-        <p role="note" className="mt-3 w-full rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-left text-[12px] leading-relaxed text-warning">
-          {t("phone.code.publicNetwork", { network: state.publicNetwork })}
-        </p>
-      )}
+      {c.localFallback && <PhoneFirewallNotes state={state} />}
       <p className="mt-4 flex items-start gap-1.5 px-2 text-left text-[12px] text-ink-tertiary">
         <Lock size={12} className="mt-0.5 shrink-0" />
         {t("phone.code.e2e.encrypted")}

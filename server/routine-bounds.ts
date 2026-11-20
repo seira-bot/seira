@@ -59,8 +59,8 @@ export class RunClock {
   }
 }
 
-type Started = Pick<RoutineRun, "status" | "startedAt" | "timeoutMinutes" | "waitedMs" | "workedMs" | "asked" | "target">;
-const defaultLimitMs = (run: Pick<RoutineRun, "target">) => (run.target === "room-goal" ? ROUTINE_GOAL_RUN_LIMIT_MINUTES : ROUTINE_RUN_LIMIT_MINUTES) * 60_000;
+type Started = Pick<RoutineRun, "status" | "startedAt" | "timeoutMinutes" | "waitedMs" | "workedMs" | "asked" | "target" | "workflowId">;
+const defaultLimitMs = (run: Pick<RoutineRun, "target" | "workflowId">) => (run.target === "room-goal" || run.workflowId !== undefined ? ROUTINE_GOAL_RUN_LIMIT_MINUTES : ROUTINE_RUN_LIMIT_MINUTES) * 60_000;
 const started = (run: Started) => run.startedAt != null && (run.status === "running" || run.status === "waiting");
 
 /** When the scheduler must next look at a started run: when a routine's own limit is reached, or, under the default
