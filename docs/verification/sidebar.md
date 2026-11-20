@@ -126,9 +126,9 @@ the page's own drag events, and exits.
 7. Switch to Advanced: the same departments and order show, and rows drag the
    same way.
 8. The `pinned-advanced` and `pinned-simple` views add and pin Planner,
-   Designer and Tester, which have no messages, as a bot a Chief sets up. Each
-   row shows the bot's role as its second line; Tester has no role, so its
-   second line stays empty.
+   Designer and Tester, which have no messages, as a bot a Chief sets up. In
+   Advanced each row shows the bot's role as its second line; Tester has no
+   role, so its second line stays empty. Simple shows them as named tiles.
 
 `src/lib/sidebar-bot-drop.test.ts` covers where a drop lands,
 `src/components/Sidebar.departments.test.ts` the sidebar's wiring, and
