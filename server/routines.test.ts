@@ -5,14 +5,16 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { GroupGoalRunStatus } from "../shared/group-goal-run.ts";
-import { isRoutineProblemRun } from "../shared/routines.ts";
+import { isRoutineProblemRun, ROUTINE_CHECKS } from "../shared/routines.ts";
 import { ROUTINE_SUPERSEDED } from "./routine-execution.ts";
+import { loadRoutine } from "./routine-load.ts";
 import { noStartSpacing } from "./routine-no-start.ts";
 import { RUN_PROGRESS_WINDOW_MS } from "./routine-progress-save.ts";
 import {
   nextOccurrence,
   RoutineManager,
   RoutineScheduleError,
+  type Routine,
   type RoutineManagerOptions,
   type RoutineRun,
   type RoutineSchedule,
@@ -4448,6 +4450,133 @@ describe("schedule automations that keep one conversation", () => {
     const h = harness();
     expect(() => h.manager.create({ ...daily, sameConversation: true, target: "room-goal", botId: "chief-1", groupId: "room-1" })).toThrow("Room goals do not keep one conversation");
     expect(() => h.manager.create({ ...daily, sameConversation: true, schedule: { type: "limit_reset", engine: "claude" } as never })).toThrow("already continues its conversation");
+  });
+});
+
+describe("a routine linked to a workflow", () => {
+  const start = Date.parse("2026-11-16T08:00:00Z");
+  const copy = { workflowId: "wf-1", prompt: 'This routine runs the workflow "Morning".\n1. Ana: Collect', botId: "ana", botIds: ["ana", "ben"] };
+  const setup = () => {
+    const h = harness(start);
+    const startWorkflow = vi.fn(async () => {});
+    let found: typeof copy | null = copy;
+    Object.assign(h.options, { workflowCopy: () => found, startWorkflow });
+    const input = { name: "Morning", workflowId: "wf-1", prompt: "ignored", botId: "ignored", schedule: { type: "interval" as const, everyMinutes: 60, anchorAt: start } };
+    return { h, startWorkflow, input, gone: () => { found = null; } };
+  };
+  const event = (threadId: string, type: "turn.completed" | "turn.started" = "turn.completed") => ({ eventId: "e", provider: "fake", threadId, createdAt: new Date(0).toISOString(), type, ok: true }) as never;
+
+  it("takes its prompt and bot from the workflow's copy and sends its run to the workflow, not to a bot turn", async () => {
+    const { h, startWorkflow, input } = setup();
+    const routine = h.manager.create(input);
+    expect(routine).toMatchObject({ workflowId: "wf-1", prompt: copy.prompt, botId: "ana", workflowBotIds: ["ana", "ben"] });
+    h.manager.runNow(routine.id); await h.manager.tick();
+    expect(h.started).toEqual([]);
+    expect(startWorkflow).toHaveBeenCalledTimes(1);
+    expect(h.manager.listRuns()[0]).toMatchObject({ workflowId: "wf-1", workflowBotIds: ["ana", "ben"], target: "bot", status: "running", prompt: copy.prompt });
+  });
+
+  it("refuses a workflow that is gone, and settings a workflow cannot honour", () => {
+    const { h, input, gone } = setup();
+    expect(() => h.manager.create({ ...input, runOn: "cloud" as never })).toThrow("A workflow runs on this computer.");
+    gone();
+    expect(() => h.manager.create(input)).toThrow("That workflow is gone. Choose another one.");
+  });
+
+  it("refuses read-only access, whose fence covers one chat only", () => {
+    const { h, input } = setup();
+    expect(() => h.manager.create({ ...input, access: "read-and-draft" })).toThrow("A workflow can't use read-only access.");
+  });
+
+  it("refuses checks", () => {
+    const { h, input } = setup();
+    expect(() => h.manager.create({ ...input, checks: [ROUTINE_CHECKS[0]!] })).toThrow("A workflow can't use checks.");
+  });
+
+  it("keeps the copy when the routine is updated, and drops the link on null", () => {
+    const { h, input } = setup();
+    const routine = h.manager.create(input);
+    expect(h.manager.update(routine.id, { name: "Renamed" })).toMatchObject({ workflowId: "wf-1", prompt: copy.prompt });
+    const plain = h.manager.update(routine.id, { workflowId: null, prompt: "Plain prompt", botId: "ana" });
+    expect(plain?.workflowId).toBeUndefined();
+    expect(plain?.workflowBotIds).toBeUndefined();
+    expect(plain?.prompt).toBe("Plain prompt");
+  });
+
+  it("can still be paused, renamed and moved when its workflow can no longer run", () => {
+    const { h, input, gone } = setup();
+    const routine = h.manager.create(input);
+    gone();
+    expect(h.manager.update(routine.id, { enabled: false })).toMatchObject({ enabled: false, workflowId: "wf-1", prompt: copy.prompt, botId: "ana", workflowBotIds: ["ana", "ben"] });
+    expect(h.manager.update(routine.id, { name: "Renamed" })).toMatchObject({ name: "Renamed", workflowId: "wf-1", prompt: copy.prompt });
+  });
+
+  it("looks the workflow up again only when the edit names it or asks for a rewrite", () => {
+    const { h, input, gone } = setup();
+    const routine = h.manager.create(input);
+    gone();
+    expect(() => h.manager.update(routine.id, { rewriteWorkflow: true })).toThrow("That workflow is gone. Choose another one.");
+    expect(() => h.manager.update(routine.id, { workflowId: "wf-1" })).toThrow("That workflow is gone. Choose another one.");
+  });
+
+  it("refuses a setting a workflow cannot honour on a routine that is already linked", () => {
+    const { h, input } = setup();
+    const routine = h.manager.create(input);
+    expect(() => h.manager.update(routine.id, { access: "read-and-draft" })).toThrow("A workflow can't use read-only access.");
+  });
+
+  it("loses its link at load when it holds a setting a workflow refuses", () => {
+    const schedule = { type: "interval" as const, everyMinutes: 60, anchorAt: start };
+    const linked = { id: "r1", name: "Morning", prompt: copy.prompt, target: "bot", botId: "ana", runOn: "seira", enabled: true, schedule, durationMinutes: 30, attachments: [], workflowId: "wf-1", workflowBotIds: ["ana", "ben"], createdAt: 1, updatedAt: 1, nextRunAt: null } as unknown as Routine;
+    expect(loadRoutine(linked, start)).toMatchObject({ workflowId: "wf-1", workflowBotIds: ["ana", "ben"] });
+    for (const change of [{ access: "read-and-draft" }, { checks: [ROUTINE_CHECKS[0]!] }, { runOn: "cloud" }, { sameConversation: true }, { deliver: "brief" }]) {
+      const loaded = loadRoutine({ ...linked, ...change } as unknown as Routine, start)!;
+      expect(loaded, JSON.stringify(change)).not.toHaveProperty("workflowId");
+      expect(loaded).not.toHaveProperty("workflowBotIds");
+      expect(loaded.prompt).toBe(copy.prompt);
+    }
+  });
+
+  it("waits at load instead of being retried, and goes on to be ended by its workflow", async () => {
+    const { h, startWorkflow, input } = setup();
+    const routine = h.manager.create(input);
+    h.manager.runNow(routine.id); await h.manager.tick();
+    const again = new RoutineManager(h.options);
+    expect(again.listRuns()[0]).toMatchObject({ status: "waiting", workflowId: "wf-1" });
+    await again.tick();
+    expect(startWorkflow).toHaveBeenCalledTimes(1);
+    expect(h.started).toEqual([]);
+  });
+
+  it("is ended, advanced and failed through workflowRunState, and only while it is live", async () => {
+    const { h, input } = setup();
+    const routine = h.manager.create(input);
+    const runId = h.manager.runNow(routine.id)!.id;
+    await h.manager.tick();
+    expect(h.manager.workflowRunState(runId, "waiting", "Waiting 5 minutes")).toMatchObject({ status: "waiting", attention: "Waiting 5 minutes" });
+    expect(h.manager.workflowRunState(runId, "working")).toMatchObject({ status: "running", attention: undefined });
+    expect(h.manager.workflowRunState(runId, "completed", "All done")).toMatchObject({ status: "completed", output: "All done" });
+    expect(h.manager.workflowRunState(runId, "failed", "late")).toBeNull();
+    expect(h.manager.workflowRunState("missing", "completed")).toBeNull();
+  });
+
+  it("fails with the step's words", async () => {
+    const { h, input } = setup();
+    const routine = h.manager.create(input);
+    const runId = h.manager.runNow(routine.id)!.id;
+    await h.manager.tick();
+    expect(h.manager.workflowRunState(runId, "failed", "Ben could not start")).toMatchObject({ status: "failed", error: "Ben could not start" });
+    expect(h.failed).toHaveLength(1);
+  });
+
+  it("ignores a bot turn's events: only its workflow ends it", async () => {
+    const { h, input } = setup();
+    const routine = h.manager.create(input);
+    const run = h.manager.runNow(routine.id)!;
+    await h.manager.tick();
+    const threadId = h.manager.listRuns()[0]!.threadId!;
+    expect(h.manager.handleRuntimeEvent(event(threadId))).toBeNull();
+    expect(h.manager.listRuns()[0]).toMatchObject({ id: run.id, status: "running" });
   });
 });
 

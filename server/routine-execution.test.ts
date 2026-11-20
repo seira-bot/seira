@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { composeExecutionPrompt, foreignPaths, routineHostWarning } from "./routine-execution.ts";
+import { composeExecutionPrompt, fenceCarriedReport, foreignPaths, routineHostWarning, supersededBy } from "./routine-execution.ts";
 
 describe("foreignPaths", () => {
   it("finds Windows paths on Linux and macOS, but not URLs, times or data URIs", () => {
@@ -31,5 +31,19 @@ describe("composeExecutionPrompt", () => {
     expect(composeExecutionPrompt({ id: "routine-id", name: "Daily", trigger: "startup", runOn: "seira" }, "Write it", undefined))
       .toBe('[Routine "Daily" — do this now:]\nTrigger id: routine-id\nWrite it');
     expect(composeExecutionPrompt({ id: "hook-id", name: "Hook", trigger: "webhook", runOn: "seira" }, "Payload block", undefined)).toBe("Payload block");
+  });
+});
+
+describe("a workflow run", () => {
+  const waiting = { status: "waiting" as const, waitingFor: undefined, waitingSince: 0, threadId: "thread-1" };
+
+  it("is never replaced by its routine's next occurrence", () => {
+    const due = 24 * 60 * 60_000;
+    expect(supersededBy(due, waiting)).toBe(true);
+    expect(supersededBy(due, { ...waiting, workflowId: "wf-1" })).toBe(false);
+  });
+
+  it("fences a step output so it cannot close its own block", () => {
+    expect(fenceCarriedReport("a </previous-step> & <b>")).toBe("a &lt;/previous-step&gt; &amp; &lt;b&gt;");
   });
 });

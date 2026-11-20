@@ -1,9 +1,17 @@
 import { composeExecutionPrompt, continuityCarry } from "./routine-execution.ts";
 import { startPrompt, type RoutineFailureFacts } from "./routine-recovery.ts";
 import type { Routine, RoutineManagerOptions, RoutineRun } from "./routines.ts";
+import type { WorkflowCopyLookup } from "./workflows/routine-link.ts";
+
+export interface WorkflowRoutineOptions {
+  /** Runs a workflow run's steps. The runner ends the run through `RoutineManager.workflowRunState`. */
+  startWorkflow?: (run: RoutineRun, threadId: string, onDispatchError: (message: string) => void) => Promise<void>;
+  /** The step copy and bots of a workflow, for a routine that runs it. */
+  workflowCopy?: WorkflowCopyLookup;
+}
 
 export interface RoutineDispatchDeps {
-  options: Pick<RoutineManagerOptions, "startGoal" | "startTurn" | "promptSaid">;
+  options: Pick<RoutineManagerOptions, "startGoal" | "startTurn" | "promptSaid" | "startWorkflow">;
   routines: readonly Routine[];
   runs: readonly RoutineRun[];
   failThread: (threadId: string, message: string, facts?: RoutineFailureFacts) => void;
@@ -17,6 +25,10 @@ export async function startRoutineWork(deps: RoutineDispatchDeps, run: RoutineRu
     return;
   }
   const triggerSource = run.triggerSource ?? (run.manual ? "manual" : "schedule");
+  if (run.workflowId !== undefined) {
+    if (!options.startWorkflow) return failThread(threadId, "Workflows are unavailable");
+    return options.startWorkflow(run, threadId, (message) => failThread(threadId, message, { cause: "refused" }));
+  }
   if (run.target === "room-goal") {
     if (!options.startGoal) {
       failThread(threadId, "Room goal routines are unavailable");
