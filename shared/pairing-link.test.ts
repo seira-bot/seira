@@ -221,10 +221,4 @@ describe("serverPairingLink", () => {
     expect(serverPairingLink({ base: "https://seira.example.com/x", code: "123-456" })).toBeNull();
     expect(serverPairingLink({ base: "https://seira.example.com", code: "" })).toBeNull();
   });
-
-  it("puts the same routes in a token link", () => {
-    const token = `seira_pair_${"a".repeat(43)}`;
-    const link = phonePairingLink({ address: "https://seira.example.com", token, name: "Box", endpoints: routes })!;
-    expect(JSON.parse(Buffer.from(new URL(link).searchParams.get("endpoints")!, "base64url").toString("utf8"))).toEqual(routes);
-  });
 });

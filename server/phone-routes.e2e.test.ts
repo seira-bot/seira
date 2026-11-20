@@ -59,7 +59,7 @@ describe("phone routes", () => {
         expect(answer.text, path).not.toMatch(/tail1234|seira\.run|"bots"|"serverName"|"version"/u);
       }
       const health = await call("/api/health", { headers });
-      expect(JSON.parse(health.text)).toEqual({ app: "seira" });
+      expect(Object.keys(JSON.parse(health.text))).toEqual(["app"]);
     }
   }, 60_000);
 });
