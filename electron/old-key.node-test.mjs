@@ -7,7 +7,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { LEGACY_APP_NAME } from "./legacy-names.mjs";
-import { OLD_KEY_READER, moveCopiedSecrets, oldKeyReader, readerSwitches, runOldKeyReader, secretFiles, startedByThisApp } from "./old-key.mjs";
+import { OLD_KEY_READER, decryptAfterCopiedSecrets, moveCopiedSecrets, oldKeyReader, readerSwitches, runOldKeyReader, secretFiles, startedByThisApp } from "./old-key.mjs";
 import { SETTINGS_MOVE_RECEIPT } from "./settings-folder.mjs";
 
 function folder(t) {
@@ -52,9 +52,10 @@ test("a copied secret is opened with the earlier name and encrypted again under 
   copied(dir);
   const calls = [];
   const logs = [];
-  const result = await moveCopiedSecrets({ userData: dir, encryption: keyStore("new"), readOld: readWithOldKey(calls), log: line => logs.push(line) });
+  const { replaced, ...result } = await moveCopiedSecrets({ userData: dir, encryption: keyStore("new"), readOld: readWithOldKey(calls), log: line => logs.push(line) });
 
   assert.deepEqual(result, { status: "done", moved: 2, failed: [] });
+  assert.equal(replaced.size, 2);
   assert.deepEqual(calls, [["cloud-account-seira.bin", "credentials.bin"]], "only secrets the current key cannot open go to the reader");
   assert.equal(await opened(dir, "credentials.bin"), '{"openaiApiKey":"sk-test"}');
   assert.equal(await opened(dir, "cloud-account-seira.bin"), '{"token":"t"}');
@@ -85,7 +86,7 @@ test("when the key store cannot be read, the secrets stay as they are, and after
   const logs = [];
   const run = () => moveCopiedSecrets({ userData: dir, encryption: keyStore("new"), readOld: broken, log: line => logs.push(line) });
 
-  assert.deepEqual(await run(), { status: "pending", moved: 0, failed: ["cloud-account-seira.bin", "credentials.bin"] });
+  assert.deepEqual(await run(), { status: "pending", moved: 0, failed: ["cloud-account-seira.bin", "credentials.bin"], replaced: new Map() });
   assert.deepEqual(readFileSync(path.join(dir, "credentials.bin")), before, "the file is left for the store, never removed here");
   assert.equal(receiptOf(dir).attempts, 1);
   assert.match(logs[0], /could not be read/);
@@ -100,8 +101,9 @@ test("a reader that opens only some secrets moves those, and keeps trying the re
   const dir = folder(t);
   copied(dir);
   const partial = async () => ({ "credentials.bin": '{"openaiApiKey":"sk-test"}', "cloud-account-seira.bin": "not json" });
-  const result = await moveCopiedSecrets({ userData: dir, encryption: keyStore("new"), readOld: partial });
+  const { replaced, ...result } = await moveCopiedSecrets({ userData: dir, encryption: keyStore("new"), readOld: partial });
   assert.deepEqual(result, { status: "pending", moved: 1, failed: ["cloud-account-seira.bin"] });
+  assert.deepEqual([...replaced.keys()], [sealed("old", '{"openaiApiKey":"sk-test"}').toString("base64")]);
   assert.equal(await opened(dir, "credentials.bin"), '{"openaiApiKey":"sk-test"}');
 });
 
@@ -112,6 +114,22 @@ test("while the key store is not available, nothing is read and no attempt is co
   assert.deepEqual(await moveCopiedSecrets({ userData: dir, encryption: keyStore("new", { available: false }), readOld: readWithOldKey(calls) }), { status: "pending" });
   assert.deepEqual(calls, []);
   assert.equal(receiptOf(dir).attempts, 0);
+});
+
+test("a store that read a copied file before the keys moved still opens it after the move", async t => {
+  const dir = folder(t);
+  copied(dir);
+  const store = keyStore("new");
+  let ready;
+  const app = { whenReady: () => new Promise(resolve => { ready = resolve; }), getPath: () => dir };
+  const safeStorage = { isAsyncEncryptionAvailable: store.available, encryptStringAsync: store.encrypt, decryptStringAsync: store.decrypt };
+  const decrypt = decryptAfterCopiedSecrets({ app, safeStorage, readOld: readWithOldKey([]) });
+
+  const early = decrypt(readFileSync(path.join(dir, "credentials.bin")));
+  ready();
+  assert.deepEqual(await early, { shouldReEncrypt: false, result: '{"openaiApiKey":"sk-test"}' });
+  assert.equal((await decrypt(readFileSync(path.join(dir, "company-connection.bin")))).result, '{"saved":"after the update"}');
+  await assert.rejects(decrypt(sealed("other", "{}")), /decrypting/, "a secret that no key opens still fails for its store");
 });
 
 test("only small top-level .bin files with a safeStorage prefix count as secrets", t => {

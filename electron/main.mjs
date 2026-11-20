@@ -80,8 +80,7 @@ import {
 } from "./desktop-companion-client.mjs";
 import { isKnownSkin, skinChrome } from "./skin-overlay.cjs";
 import { installCredentialStoreIpc, readSecureCredentials } from "./secure-credentials.mjs";
-import { moveCopiedSecrets, oldKeyReader, readerSwitches } from "./old-key.mjs";
-import { settingsFolderChoice } from "./settings-folder.mjs";
+import { decryptAfterCopiedSecrets } from "./old-key.mjs";
 import { createControlPlaneClient } from "./control-plane-client.mjs";
 import {
   companionAccountCleanupPending, companionTunnelRetired,
@@ -371,21 +370,7 @@ let desktopRemoteAccess = null;
 let desktopCompanionRelay = null;
 
 const CREDENTIALS_FILE = path.join(app.getPath("userData"), "credentials.bin");
-// A secret copied from the earlier settings folder opens only after it is encrypted again under the current name.
-const copiedSecrets = app.whenReady().then(() => {
-  const choice = settingsFolderChoice();
-  if (choice?.copied || choice?.reason) slog(`settings folder: ${choice.copied ? "copied from the earlier name" : `kept the earlier name (${choice.reason})`}`);
-  return moveCopiedSecrets({
-    userData: app.getPath("userData"),
-    encryption: { available: () => safeStorage.isAsyncEncryptionAvailable(), encrypt: value => safeStorage.encryptStringAsync(value), decrypt: value => safeStorage.decryptStringAsync(value) },
-    readOld: oldKeyReader({ appArgs: app.isPackaged ? [] : [app.getAppPath()], switches: readerSwitches(app.commandLine) }),
-    log: slog,
-  });
-}).catch(error => slog(`saved keys: moving copied secrets failed (${error?.message ?? error})`));
-const decryptSecret = async value => {
-  await copiedSecrets;
-  return safeStorage.decryptStringAsync(value);
-};
+const decryptSecret = decryptAfterCopiedSecrets({ app, safeStorage, log: slog });
 
 const nativeText = createDesktopText(app), nativeT = nativeText.t; const createCloudAccountClient = options => cloudAccountClient({ ...options, t: nativeT });
 /** True when the store could not be read, which is not the same as nothing saved. */
@@ -911,16 +896,10 @@ const announceCloudReady = createCloudReadyNotice({ Notification, focused: () =>
 function ensureManagedDesktop() {
   if (managedDesktop) return managedDesktop;
   if (!app.isPackaged || desktopRemoteAccess) throw new Error("Organization sign-in requires the installed desktop app running on this computer.");
-  const encryption = {
-    available: async () => (await safeStorage.isAsyncEncryptionAvailable()) &&
-      (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text"),
-    encrypt: value => safeStorage.encryptStringAsync(value),
-    decrypt: decryptSecret,
-  };
-  const store = createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-connection.bin"), encryption });
+  const store = createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-connection.bin"), encryption: cloudEncryption });
   orgLibrary = createOrgLibrary({
     dataDir: path.join(desktopDataDir(), "org-library"),
-    store: createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-library.bin"), encryption }),
+    store: createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-library.bin"), encryption: cloudEncryption }),
     fetchBytes: (route, maxBytes, options) => managedDesktop.fetchLibraryBytes(route, maxBytes, options),
     relay: library => managedDesktopRelay.sendLibrary(serverProc, library),
     appVersion: app.getVersion(),
@@ -953,7 +932,7 @@ function ensureManagedDesktop() {
     },
   });
   companyBackupSchedule = createCompanyBackupSchedule({
-    store: createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-backup-schedule.bin"), encryption }),
+    store: createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-backup-schedule.bin"), encryption: cloudEncryption }),
     scope: companyBackupScope,
     run: async (signal, scope) => {
       if (companyBackupController || preparedCompanyRestore || companyRestoreCommitting || desktopShutdownStarted) throw companyBackupDeferred();

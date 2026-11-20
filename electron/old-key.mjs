@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { LEGACY_APP_NAME } from "./legacy-names.mjs";
-import { SETTINGS_MOVE_RECEIPT } from "./settings-folder.mjs";
+import { SETTINGS_MOVE_RECEIPT, settingsFolderChoice } from "./settings-folder.mjs";
 
 export const OLD_KEY_READER = "--seira-read-old-key";
 const ANSWER = "seira-old-key:";
@@ -68,6 +68,7 @@ export async function moveCopiedSecrets({ userData, encryption, readOld, fsApi =
   }
 
   const failed = [];
+  const replaced = new Map();
   if (waiting.length) {
     let texts = {};
     try {
@@ -75,7 +76,7 @@ export async function moveCopiedSecrets({ userData, encryption, readOld, fsApi =
     } catch (error) {
       log(`saved keys: the earlier key could not be read (${error?.message ?? error})`);
     }
-    for (const { name } of waiting) {
+    for (const { name, data } of waiting) {
       const text = texts?.[name];
       if (!json(text)) {
         failed.push(name);
@@ -83,8 +84,10 @@ export async function moveCopiedSecrets({ userData, encryption, readOld, fsApi =
       }
       const file = path.join(userData, name);
       const temporary = `${file}.${process.pid}.tmp`;
-      fsApi.writeFileSync(temporary, await encryption.encrypt(text), { mode: 0o600 });
+      const encrypted = await encryption.encrypt(text);
+      fsApi.writeFileSync(temporary, encrypted, { mode: 0o600 });
       fsApi.renameSync(temporary, file);
+      replaced.set(Buffer.from(data).toString("base64"), encrypted);
     }
   }
 
@@ -94,7 +97,7 @@ export async function moveCopiedSecrets({ userData, encryption, readOld, fsApi =
   fsApi.writeFileSync(temporary, `${JSON.stringify({ ...receipt, keys, attempts })}\n`, { mode: 0o600 });
   fsApi.renameSync(temporary, receiptFile);
   log(`saved keys: ${waiting.length - failed.length} moved to the current name, ${failed.length} unreadable (${keys})`);
-  return { status: keys, moved: waiting.length - failed.length, failed };
+  return { status: keys, moved: waiting.length - failed.length, failed, replaced };
 }
 
 /** Chromium switches the reader needs to pick the same key store and sandbox as this process. */
@@ -153,6 +156,29 @@ export function oldKeyReader({ execPath = process.execPath, appArgs = [], switch
     } finally {
       fsApi.rmSync(work, { recursive: true, force: true });
     }
+  };
+}
+
+/**
+ * Returns the decrypt that every saved-key store uses. It waits until secrets copied from the earlier settings folder are
+ * encrypted again under the current name. A store can read a file before it calls decrypt, so a copied ciphertext that
+ * was encrypted again is opened from its replacement.
+ */
+export function decryptAfterCopiedSecrets({ app, safeStorage, log = () => {}, readOld = null }) {
+  const copied = app.whenReady().then(() => {
+    const choice = settingsFolderChoice();
+    if (choice?.copied || choice?.reason) log(`settings folder: ${choice.copied ? "copied from the earlier name" : `kept the earlier name (${choice.reason})`}`);
+    return moveCopiedSecrets({
+      userData: app.getPath("userData"),
+      encryption: { available: () => safeStorage.isAsyncEncryptionAvailable(), encrypt: value => safeStorage.encryptStringAsync(value),
+        decrypt: value => safeStorage.decryptStringAsync(value) },
+      readOld: readOld ?? oldKeyReader({ appArgs: app.isPackaged ? [] : [app.getAppPath()], switches: readerSwitches(app.commandLine) }),
+      log,
+    });
+  }).catch(error => log(`saved keys: moving copied secrets failed (${error?.message ?? error})`));
+  return async value => {
+    const fresh = (await copied)?.replaced?.get(Buffer.from(value).toString("base64"));
+    return safeStorage.decryptStringAsync(fresh ?? value);
   };
 }
 
