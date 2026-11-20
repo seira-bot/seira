@@ -25,8 +25,8 @@ export function ProductScreenshot({
 }) {
   const [width, height] = screenshotSizes[name];
   return (
-    <figure className="omb-product-shot">
-      <div className="omb-product-shot-frame">
+    <figure className="seira-product-shot">
+      <div className="seira-product-shot-frame">
         <img
           src={`/screenshots/${name}.png`}
           alt={alt}

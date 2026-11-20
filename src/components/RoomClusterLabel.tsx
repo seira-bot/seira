@@ -4,12 +4,12 @@ import { BotAvatar } from "./Avatar";
 import { BotTurnHead } from "./BotTurnHead";
 import { BOT_TURN_INDENT } from "./chat-bubble";
 import { cn } from "@/lib/cn";
-import { MAUS_COLOR_NAMES, normalizeState, type MausColor } from "@/lib/mascot";
+import { SEIRA_COLOR_NAMES, normalizeState, type SeiraColor } from "@/lib/mascot";
 import type { RoomAddressee } from "@/lib/room-addressees";
 import type { Bot } from "@/state/store";
 
-export function isPaletteColor(color: string | undefined): color is MausColor {
-  return (MAUS_COLOR_NAMES as readonly string[]).includes(color ?? "");
+export function isPaletteColor(color: string | undefined): color is SeiraColor {
+  return (SEIRA_COLOR_NAMES as readonly string[]).includes(color ?? "");
 }
 
 export function SpeakerName({ name, color }: { name: string; color?: string }) {

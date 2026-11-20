@@ -56,7 +56,7 @@ interface Options {
 }
 
 function fixture(options: Options = {}) {
-  const dataDir = mkdtempSync(join(tmpdir(), "omb-internal-mcp-"));
+  const dataDir = mkdtempSync(join(tmpdir(), "seira-internal-mcp-"));
   const cfg: Pick<AppConfig, "mcpServers" | "postiz"> = { mcpServers: structuredClone(options.servers ?? {}) };
   const mcpOAuth = new McpOAuthManager({ file: join(dataDir, "mcp-oauth.json") });
   let busy = false;
@@ -161,7 +161,7 @@ function fixture(options: Options = {}) {
   const card = () => chat.at(-1)?.card;
   const respond = (behavior: "allow" | "deny") => cards.respond({ botId: BOT, threadId: THREAD, requestId: card()!.requestId!, behavior }, true);
   const later = (ms: number) => { clock += ms; };
-  /** A fresh request service over the same chat, as after OpenMausBot restarts. */
+  /** A fresh request service over the same chat, as after Seira restarts. */
   const restart = () => { cards = service(); };
   return { cfg, config, mcpOAuth, deps, sender, call, post, stored, ref, listedOn, decided, lines, dataDir, setBusy, chat, card, respond, answers, decisions, later, signIns, restart };
 }
@@ -927,7 +927,7 @@ describe("internal mcp_server route, below Full access", () => {
 
   it("a client-id-only update does not say the destination changed, and a url change still names it", async () => {
     probeWith({ ok: true, tools: [] });
-    const app = { ...linear, oauth: { clientId: "omb-app", clientSecret: "old-client-secret" } };
+    const app = { ...linear, oauth: { clientId: "seira-app", clientSecret: "old-client-secret" } };
     const idOnly = await fixture({ servers: { linear: app } }).post({ action: "update", name: "linear", oauth: { clientId: "other-app" } });
     expect(idOnly.body.dropped).toEqual(["oauth client secret"]);
     expect(idOnly.body.text).toContain("OAuth client id changed");
@@ -939,13 +939,13 @@ describe("internal mcp_server route, below Full access", () => {
 
   it("a new literal OAuth client secret shows as its own change line without its value", async () => {
     probeWith({ ok: true, tools: [] });
-    const signedApp = { ...linear, enabled: false, oauth: { clientId: "omb-app", clientSecret: "old-client-secret" } };
+    const signedApp = { ...linear, enabled: false, oauth: { clientId: "seira-app", clientSecret: "old-client-secret" } };
     const { post, respond, stored, card } = fixture({ full: false, servers: { linear: signedApp } });
     expect((await post({ action: "update", name: "linear", oauth: { clientSecret: "new-client-secret" } })).status).toBe(202);
     expect(card()?.subtitle).toBe("new OAuth client secret");
     expect(JSON.stringify(card())).not.toMatch(/new-client-secret|old-client-secret/);
     await respond("allow");
-    expect(stored("linear")).toMatchObject({ oauth: { clientId: "omb-app", clientSecret: "new-client-secret" } });
+    expect(stored("linear")).toMatchObject({ oauth: { clientId: "seira-app", clientSecret: "new-client-secret" } });
   });
 
   it("a Change card lists each field as old → new with no secret value, and allow merges onto the server as it is then", async () => {

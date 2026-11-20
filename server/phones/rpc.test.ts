@@ -1,5 +1,5 @@
 // The device kind's MCP entry: tools/list follows the phone's apps and the bot's grant, a call becomes a job that a
-// scripted phone leases and answers, a send goes to the phone with no card of OpenMausBot's own (the person taps Send
+// scripted phone leases and answers, a send goes to the phone with no card of Seira's own (the person taps Send
 // there), and only the owner's own turns reach a phone.
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -41,7 +41,7 @@ const call = (name: string, args: Record<string, unknown> = {}) => ({ method: "t
 const text = (result: PhoneToolsList | PhoneToolResult) => (result as PhoneToolResult).content[0]!.text;
 
 function harness(options: { bot?: () => BotRecord | null } = {}) {
-  const dir = mkdtempSync(join(tmpdir(), "omb-phone-rpc-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-phone-rpc-"));
   dirs.push(dir);
   const clock = { now: 1_800_000_000_000 };
   const registry = new PhoneRegistry(join(dir, "phones.json"), () => clock.now);
@@ -96,7 +96,7 @@ describe("phone MCP host", () => {
     expect(h.host.mounts(bot({ phoneApps: { messages: "write" } }), OWNER)).toBe(false);
     expect(h.host.integration(chief, OWNER, () => "turn-token", "http://127.0.0.1:1")).toEqual({
       command: process.execPath, args: [SPAWNED_PROXIES.harnessMcp, "device"],
-      env: { ...AGENTS_NODE_FLAG, OMB_MCP_TOKEN_DEVICE: "turn-token", OMB_HARNESS_URL: "http://127.0.0.1:1" },
+      env: { ...AGENTS_NODE_FLAG, SEIRA_MCP_TOKEN_DEVICE: "turn-token", SEIRA_HARNESS_URL: "http://127.0.0.1:1" },
     });
     expect(h.host.prompt(chief, OWNER)).toContain("Omkar's iPhone is an iPhone; this bot may use: Calendar.");
     expect(h.host.prompt(chief, OWNER)).not.toContain("Guest Pixel");

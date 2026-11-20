@@ -347,7 +347,7 @@ describe("after a restart", () => {
     restarted.close();
   });
 
-  it("in a crash loop, starts a part or its merge at most OMB_BURST_PART_MAX_RESTARTS more times, then fails the part with one line and posts what is left", () => {
+  it("in a crash loop, starts a part or its merge at most SEIRA_BURST_PART_MAX_RESTARTS more times, then fails the part with one line and posts what is left", () => {
     const one = fresh({ limits: { parallel: 2, maxTasks: 50, smallPlan: false } });
     const { manager, started, store } = one;
     const { burstId } = one.propose(items(2));

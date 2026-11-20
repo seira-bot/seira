@@ -16,7 +16,7 @@ import { hostTimeout } from "./testing/host-timeout.ts";
 import { stagedWorkspaceData, stageWorkspaceBackup } from "./workspace-backup.ts";
 
 const posix = process.platform !== "win32";
-const boxed = posix && detectBox({ env: { ...process.env, OMB_CLOUD_ROLE: "team" } }).box === "bwrap";
+const boxed = posix && detectBox({ env: { ...process.env, SEIRA_CLOUD_ROLE: "team" } }).box === "bwrap";
 const TOKEN = `ops_fake-team-files-${randomBytes(8).toString("hex")}`;
 const PASSWORD = "correct horse battery staple";
 const OLIVE = { email: "olive@acme.test", role: "owner" as const };
@@ -68,10 +68,10 @@ const upload = (token: string, path: string, name: string, text: string) =>
 
 beforeAll(async () => {
   if (!posix) return;
-  const box = { OMB_BOT_BOX: boxed ? "1" : "0" };
+  const box = { SEIRA_BOT_BOX: boxed ? "1" : "0" };
   fx = await launchCloudSendFixture({ onePasswordToken: TOKEN, team: { id: "team-acme-files", name: "Acme", engine: SHELL, env: box }, cloudEngine: SHELL, cloudEnv: box });
   team = fx.team!;
-  dataDir = join(team.home, ".openmausbot");
+  dataDir = join(team.home, ".seira");
   olive = (await team.pair(OLIVE)).token!;
   mira = (await team.pair(MIRA)).token!;
   ben = (await team.pair(BEN)).token!;
@@ -157,9 +157,9 @@ it.runIf(posix)("the Owner's export carries the team's files and who changed the
   expect(made.status, JSON.stringify(made.body)).toBe(200);
   const download = await fetch(`${team.base}/api/workspace-backup/download/${made.body.id}`, { headers: { ...fx.edge, authorization: `Bearer ${olive}` } });
   expect(download.status).toBe(200);
-  const unpack = mkdtempSync(join(tmpdir(), "omb-team-files-export-"));
+  const unpack = mkdtempSync(join(tmpdir(), "seira-team-files-export-"));
   try {
-    const archive = join(unpack, "export.ombbackup");
+    const archive = join(unpack, "export.seirabackup");
     writeFileSync(archive, Buffer.from(await download.arrayBuffer()));
     const staged = await stageWorkspaceBackup(unpack, archive, { password: PASSWORD, currentAppVersion: made.body.summary.appVersion });
     const { data } = stagedWorkspaceData(unpack, staged.id);
@@ -182,5 +182,5 @@ it.runIf(posix)("Mira leaving takes nothing of team files: what she wrote stays 
 it.runIf(posix)("a personal Cloud has no team files at all", async () => {
   expect((await fx.onCloud("GET", "/api/team-files")).status).toBe(404);
   expect((await fx.onCloud("POST", "/api/team-files/folder", { path: "x" })).status).toBe(404);
-  expect(existsSync(join(team.home, "..", "cloud", ".openmausbot", "team-files"))).toBe(false);
+  expect(existsSync(join(team.home, "..", "cloud", ".seira", "team-files"))).toBe(false);
 }, hostTimeout(60_000));

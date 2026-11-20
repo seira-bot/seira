@@ -5,7 +5,7 @@ import { hostedMember, type WelcomeViewer } from "@/lib/onboarding";
 import { invitedToTeam, teamWelcomeAhead, useTeamWelcomeRecord } from "@/lib/team-welcome";
 import { useStore } from "@/state/store";
 
-const DISMISSED_KEY = "omb.onboarding.sharedWorkspaceHint";
+const DISMISSED_KEY = "seira.onboarding.sharedWorkspaceHint";
 let closedHere = false;
 const listeners = new Set<() => void>();
 

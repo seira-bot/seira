@@ -1,5 +1,5 @@
-// Server: --url, --port, OPENMAUSBOT_URL or OMB_PORT, else the desktop ports. A credential never travels while a server
-// is being looked for; it comes from OPENMAUSBOT_TOKEN or --token-file only (a command line leaks).
+// Server: --url, --port, SEIRA_URL or SEIRA_PORT, else the desktop ports. A credential never travels while a server
+// is being looked for; it comes from SEIRA_TOKEN or --token-file only (a command line leaks).
 import { readFileSync } from "node:fs";
 
 import { EXIT, flag, HeadlessError, usageError, type Flags } from "./args.ts";
@@ -27,7 +27,7 @@ export async function loadMcp(): Promise<McpModule> {
     return await mcpModule;
   } catch (error) {
     mcpModule = undefined;
-    throw usageError(`OPENMAUSBOT_URL is not usable: ${error instanceof Error ? error.message : String(error)}`);
+    throw usageError(`SEIRA_URL is not usable: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -53,7 +53,7 @@ export function readToken(flags: Flags, env: NodeJS.ProcessEnv): string | undefi
     if (!token) throw usageError(`--token-file ${file} is empty`);
     return token;
   }
-  return env.OPENMAUSBOT_TOKEN?.trim() || undefined;
+  return env.SEIRA_TOKEN?.trim() || undefined;
 }
 
 export function namedServer(flags: Flags, env: NodeJS.ProcessEnv): { url: string } | { port: string } | undefined {
@@ -61,8 +61,8 @@ export function namedServer(flags: Flags, env: NodeJS.ProcessEnv): { url: string
   if (url) return { url };
   const port = flag(flags, "port")?.trim();
   if (port) return { port };
-  if (env.OPENMAUSBOT_URL?.trim()) return { url: env.OPENMAUSBOT_URL.trim() };
-  return env.OMB_PORT?.trim() ? { port: env.OMB_PORT.trim() } : undefined;
+  if (env.SEIRA_URL?.trim()) return { url: env.SEIRA_URL.trim() };
+  return env.SEIRA_PORT?.trim() ? { port: env.SEIRA_PORT.trim() } : undefined;
 }
 
 export async function openClient(flags: Flags, deps: ClientDeps, mutating: boolean): Promise<HeadlessClient> {
@@ -86,13 +86,13 @@ export async function openClient(flags: Flags, deps: ClientDeps, mutating: boole
     }
     if (token) {
       throw usageError("a token needs a named server, so it is never sent while looking for one",
-        "pass --url (or --port), or set OPENMAUSBOT_URL or OMB_PORT");
+        "pass --url (or --port), or set SEIRA_URL or SEIRA_PORT");
     }
     try {
       baseUrl = await mcp.probeBaseUrls(DISCOVERY_PORTS.map((port) => `http://127.0.0.1:${port}`));
     } catch {
       throw new HeadlessError(`no Seira server answered on 127.0.0.1 ports ${DISCOVERY_PORTS.join(", ")}`, EXIT.unreachable,
-        "start one with `seira serve`, or name one with --url or OPENMAUSBOT_URL");
+        "start one with `seira serve`, or name one with --url or SEIRA_URL");
     }
   }
   const request = deps.request ?? mcp.request;
@@ -137,7 +137,7 @@ export async function explain(error: unknown, baseUrl?: string): Promise<Headles
   const status = typeof (error as { status?: unknown })?.status === "number" ? (error as { status: number }).status : undefined;
   if (status === 401) {
     return new HeadlessError("this server needs a credential and did not accept the one given", EXIT.unreachable,
-      "get one with `seira connect URL --out FILE`, then pass --token-file FILE or set OPENMAUSBOT_TOKEN");
+      "get one with `seira connect URL --out FILE`, then pass --token-file FILE or set SEIRA_TOKEN");
   }
   if (status === 403) {
     return new HeadlessError(`not allowed: ${message}`, EXIT.unreachable,

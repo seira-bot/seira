@@ -1,6 +1,6 @@
 import { transform } from "sucrase";
 
-import { JSX_PAGE_MODULES, JSX_TRANSFORM_OPTIONS } from "../shared/app-frame/jsx-page.ts";
+import { JSX_PAGE_ALIASES, JSX_PAGE_MODULES, JSX_TRANSFORM_OPTIONS } from "../shared/app-frame/jsx-page.ts";
 
 export type JsxCompiled = { ok: true; code: string } | { ok: false; error: string };
 
@@ -16,7 +16,7 @@ export function compileJsxPage(source: string): JsxCompiled {
     return { ok: false, error: `jsx: ${where}${message}. Fix it and send the whole file again.` };
   }
   const refused = [...new Set([...code.matchAll(/\brequire\((["'])([^"']+)\1\)/g)].map((match) => match[2]!))]
-    .filter((name) => !JSX_PAGE_MODULES.includes(name));
+    .filter((name) => !JSX_PAGE_MODULES.includes(name) && !Object.hasOwn(JSX_PAGE_ALIASES, name));
   if (refused.length) return { ok: false, error: `jsx: imports ${refused.join(", ")}; a page can import only ${JSX_PAGE_MODULES.join(", ")}.` };
   return { ok: true, code };
 }

@@ -8,7 +8,7 @@ import { runControlSeira } from "../control-seira.ts";
 import { UI_TOOLS_DIR } from "./control-seira-ui.ts";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
-const enabled = process.env.OMB_UI_E2E === "1" || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
+const enabled = process.env.SEIRA_UI_E2E === "1" || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
 
 describe("dictation in the isolated real browser", () => {
   let child: ChildProcess | undefined;

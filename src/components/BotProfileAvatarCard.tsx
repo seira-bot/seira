@@ -4,16 +4,16 @@ import type { Bot } from "@/state/store";
 import { cn } from "@/lib/cn";
 import {
   PICKABLE_STATES,
-  MAUS_COLOR_LABEL,
+  SEIRA_COLOR_LABEL,
   colorSwatch,
-  MAUS_COLOR_NAMES,
-  type MausMotion,
-  type MausState,
+  SEIRA_COLOR_NAMES,
+  type SeiraMotion,
+  type MascotState,
 } from "@/lib/mascot";
 import { mascotAccessories } from "../../shared/mascot-accessories";
 import { BOT_AVATAR_CROPS } from "../../shared/bot-avatar";
 import { PICKER_BODY_IDS, botBodyId, type BotBodyId } from "../../shared/bot-body";
-import { BotAvatar, MausAvatar } from "./Avatar";
+import { BotAvatar, SeiraAvatar } from "./Avatar";
 import { CastCharacterPicker } from "./CastCharacterPicker";
 import { AvatarImageGenerator } from "./AvatarImageGenerator";
 import { AvatarFraming, OrganizationAvatarIcons, RESET_MASCOT_PATCH, useAvatarImage, type AvatarPatch } from "./avatar-editing";
@@ -28,8 +28,8 @@ export function BotProfileAvatarCard({
   onPatch,
 }: {
   bot: Bot;
-  activeState: MausState;
-  mascotMotion: { kind: Exclude<MausMotion, "none">; nonce: number } | null;
+  activeState: MascotState;
+  mascotMotion: { kind: Exclude<SeiraMotion, "none">; nonce: number } | null;
   onPatch: (patch: AvatarPatch) => void;
 }) {
   const { fileRef, crop, uploading, generating, busy, error, upload, removeImage, generate } = useAvatarImage(bot, onPatch);
@@ -143,7 +143,7 @@ export function BotProfileAvatarCard({
           {t("botIdentity.color")}
         </div>
         <div className="flex flex-wrap gap-2.5">
-          {MAUS_COLOR_NAMES.map((color) => (
+          {SEIRA_COLOR_NAMES.map((color) => (
             <button
               key={color}
               type="button"
@@ -155,7 +155,7 @@ export function BotProfileAvatarCard({
                 bot.color === color && "ring-2 ring-accent-border ring-offset-2 ring-offset-card",
               )}
               style={{ background: colorSwatch(color) }}
-              title={t(MAUS_COLOR_LABEL[color])}
+              title={t(SEIRA_COLOR_LABEL[color])}
               aria-label={t("mascot.useColor", { color: colorName(color) })}
             />
           ))}
@@ -185,7 +185,7 @@ export function BotProfileAvatarCard({
                   title={expressionName(expression)}
                   aria-label={t("mascot.useExpression", { expression: expressionName(expression) })}
                 >
-                  <MausAvatar color={bot.color} bodyId={bot.mascotBody ?? undefined} accessories={mascotAccessories(bot.mascotAccessories)} state={expression} size={42} animated={false} />
+                  <SeiraAvatar color={bot.color} bodyId={bot.mascotBody ?? undefined} accessories={mascotAccessories(bot.mascotAccessories)} state={expression} size={42} animated={false} />
                 </button>
               ))}
             </div>
@@ -225,7 +225,7 @@ function BodyButton({ id, name, bot, busy, onPatch }: {
         selected ? "bg-control text-ink" : "text-ink-secondary hover:bg-control/60",
       )}
     >
-      <MausAvatar color={bot.color} bodyId={id} size={34} animated={false} trackPointer={false} />
+      <SeiraAvatar color={bot.color} bodyId={id} size={34} animated={false} trackPointer={false} />
     </button>
   );
 }

@@ -10,7 +10,7 @@ const fixture = (name: string): any => JSON.parse(readFileSync(join(FIXTURES, na
 let home: string;
 
 async function installation(options: { refuse?: (name: string) => string | undefined; servers?: Record<string, unknown> } = {}) {
-  home = mkdtempSync(join(tmpdir(), "omb-package-import-"));
+  home = mkdtempSync(join(tmpdir(), "seira-package-import-"));
   vi.resetModules();
   vi.stubEnv("HOME", home);
   vi.stubEnv("USERPROFILE", home);
@@ -246,7 +246,7 @@ describe("importing past five bots, and the workspace's ceiling", () => {
   it("adds a template's manifest past five bots", async () => {
     const app = await withBots(19, 100);
     const { parseTeamManifest } = await import("./team-manifest.ts");
-    const manifest = parseTeamManifest({ format: "openmaus.team", version: 2, team: { name: "Desk", members: [{ key: "helper", name: "Helper", appearance: { color: "blue" } }] } });
+    const manifest = parseTeamManifest({ format: "seira.team", version: 2, team: { name: "Desk", members: [{ key: "helper", name: "Helper", appearance: { color: "blue" } }] } });
     app.importer.importTeamManifest(manifest, { mode: "add", cwd: null }, app.deps);
     expect(app.store.bots).toHaveLength(20);
   });

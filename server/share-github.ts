@@ -2,13 +2,14 @@
 // raw), or an older single file (a BotMRR Markdown playbook, a team or package JSON). Security: only https to github.com
 // links, fetched from raw.githubusercontent.com with no redirects, no token, a timeout and byte caps, and only the files
 // the manifest names (shared/share-folder.ts decides which paths those may be).
+import { LEGACY_TEAM_MANIFEST_FILE } from "../electron/legacy-names.mjs";
 import { namedFolderFiles, readShareFolder, SHARE_FOLDER_MAX_BYTES, type ShareFolder, type ShareFolderFiles } from "../shared/share-folder.ts";
 
 type Fetcher = typeof fetch;
 const RAW = "https://raw.githubusercontent.com";
 const MANIFEST_MAX_BYTES = 1_000_000;
 const FOLDER_MANIFESTS = ["bot.md", "team.md"] as const;
-const REPOSITORY_FILES = ["bot.md", "team.md", "botmrr.md", "team.mausteam.json"] as const;
+const REPOSITORY_FILES = ["bot.md", "team.md", "botmrr.md", "team.seirateam.json", LEGACY_TEAM_MANIFEST_FILE] as const;
 
 export class GithubTemplateError extends Error {
   readonly status: number;
@@ -114,7 +115,7 @@ export async function fetchGithubTemplate(input: string, fetcher: Fetcher = fetc
   if (source.kind === "file") {
     const body = await fetchBody(source.url, MANIFEST_MAX_BYTES, fetcher, false);
     if (body === null) throw new GithubTemplateError("Nothing was found at that GitHub link.", 404);
-    const key = source.name.endsWith(".json") ? "team.mausteam.json" : "botmrr.md";
+    const key = source.name.endsWith(".json") ? "team.seirateam.json" : "botmrr.md";
     return readShareFolder({ [key]: body });
   }
   for (const folder of source.folders) {

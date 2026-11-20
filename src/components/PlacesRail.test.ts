@@ -285,7 +285,7 @@ it("Connect to a server says how another computer's desktop app is opened from h
   const code = form.querySelector("[data-connect-problem]")?.textContent ?? "";
   expect(code).toContain("That code is for the phone app. To open that computer from here, turn on Tailscale and Your other computers in its Settings → Phone & devices, then use the link shown there.");
   expect(code).toContain("My Cloud");
-  expect(code).not.toMatch(/can't connect to another|older MausBot/);
+  expect(code).not.toMatch(/can't connect to another|older Seira/);
 });
 
 it("an address typed key by key stays in its box; a pasted one moves on to the code", async () => {
@@ -295,12 +295,12 @@ it("an address typed key by key stays in its box; a pasted one moves on to the c
   const form = document.querySelector('[data-place-add="own-server"]')!;
   const address = form.querySelector("[data-own-server-link]") as HTMLInputElement;
   const afterTimers = () => act(async () => { await new Promise((done) => setTimeout(done, 0)); });
-  for (const key of "maus.local") {
+  for (const key of "seira.local") {
     const focused = document.activeElement as HTMLInputElement;
     await type(focused, focused.value + key);
     await afterTimers();
   }
-  expect([address.value, (form.querySelector("[data-own-server-code]") as HTMLInputElement).value]).toEqual(["maus.local", ""]);
+  expect([address.value, (form.querySelector("[data-own-server-code]") as HTMLInputElement).value]).toEqual(["seira.local", ""]);
   expect(document.activeElement).toBe(address);
   await type(address, "");
   await act(async () => {

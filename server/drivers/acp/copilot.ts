@@ -231,19 +231,19 @@ const SUPPORT: AcpSupport = {
 // and names an MCP server's namespace after its config key: only those two keys get a prefix, so other servers keep theirs.
 const COPILOT_RESERVED_SERVER_NAMES: ReadonlySet<string> = new Set(["browser", "computer"]);
 
-/** The config key Copilot gets for each server, in order: a reserved name becomes `maus_<name>` (numbered if taken). */
+/** The config key Copilot gets for each server, in order: a reserved name becomes `seira_<name>` (numbered if taken). */
 export function copilotServerNames(names: readonly string[]): string[] {
   const taken = new Set(names);
   return names.map((name) => {
     if (!COPILOT_RESERVED_SERVER_NAMES.has(name.toLowerCase())) return name;
-    let key = `maus_${name}`;
-    for (let n = 2; taken.has(key); n++) key = `maus_${name}_${n}`;
+    let key = `seira_${name}`;
+    for (let n = 2; taken.has(key); n++) key = `seira_${name}_${n}`;
     taken.add(key);
     return key;
   });
 }
 
-const MCP_FOLDER_PREFIX = "omb-copilot-mcp-";
+const MCP_FOLDER_PREFIX = "seira-copilot-mcp-";
 
 export const CopilotAgentDriver = {
   ...createAcpDriver(SUPPORT),
@@ -266,10 +266,10 @@ export const CopilotAgentDriver = {
             : { type: server.type, url: server.url,
               headers: Object.fromEntries(server.headers.map(({ name, value }) => [name, value])), tools: ["*"] }]));
           writeFileAtomicIfChanged(path, JSON.stringify({ mcpServers: servers }), { mode: 0o600, durable: false });
-          env.OMB_COPILOT_MCP_CONFIG = path;
+          env.SEIRA_COPILOT_MCP_CONFIG = path;
         },
         resolveCommand(env, config) {
-          const path = env.OMB_COPILOT_MCP_CONFIG;
+          const path = env.SEIRA_COPILOT_MCP_CONFIG;
           if (!path) throw new Error("GitHub Copilot's tool configuration was not prepared.");
           return Promise.resolve({ command: config.cli, args: ["--additional-mcp-config", `@${path}`] });
         },

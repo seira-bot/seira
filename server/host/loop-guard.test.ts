@@ -790,24 +790,24 @@ describe("loop guard setting", () => {
 
   it("stops only when a stop count is set, in the file or the environment", () => {
     expect(loopGuardSettings({ loopGuard: { enabled: true, steerAt: 3, stopAt: 8 } }, {})).toEqual({ enabled: true, steerAt: 3, stopAt: 8 });
-    expect(loopGuardSettings({ loopGuard: { enabled: true } }, { OMB_LOOP_GUARD_STOP_AT: "12" })).toEqual({ enabled: true, steerAt: 5, stopAt: 12 });
+    expect(loopGuardSettings({ loopGuard: { enabled: true } }, { SEIRA_LOOP_GUARD_STOP_AT: "12" })).toEqual({ enabled: true, steerAt: 5, stopAt: 12 });
     // the environment wins over the file when it is a count in range
-    expect(loopGuardSettings({ loopGuard: { enabled: true, stopAt: 8 } }, { OMB_LOOP_GUARD_STOP_AT: " 20 " }).stopAt).toBe(20);
+    expect(loopGuardSettings({ loopGuard: { enabled: true, stopAt: 8 } }, { SEIRA_LOOP_GUARD_STOP_AT: " 20 " }).stopAt).toBe(20);
     for (const junk of ["", "ten", "1", "2.5", "1001", "-4"]) {
-      expect(loopGuardSettings({ loopGuard: { enabled: true, stopAt: 8 } }, { OMB_LOOP_GUARD_STOP_AT: junk }).stopAt).toBe(8);
-      expect("stopAt" in loopGuardSettings({ loopGuard: { enabled: true } }, { OMB_LOOP_GUARD_STOP_AT: junk })).toBe(false);
+      expect(loopGuardSettings({ loopGuard: { enabled: true, stopAt: 8 } }, { SEIRA_LOOP_GUARD_STOP_AT: junk }).stopAt).toBe(8);
+      expect("stopAt" in loopGuardSettings({ loopGuard: { enabled: true } }, { SEIRA_LOOP_GUARD_STOP_AT: junk })).toBe(false);
     }
     // null is how a patch takes the stop back out
     expect("stopAt" in loopGuardSettings({ loopGuard: { enabled: true, stopAt: null } }, {})).toBe(false);
     // a stop count does not switch the guard on
-    expect(loopGuardSettings({ loopGuard: { stopAt: 8 } }, { OMB_LOOP_GUARD_STOP_AT: "12" }).enabled).toBe(false);
+    expect(loopGuardSettings({ loopGuard: { stopAt: 8 } }, { SEIRA_LOOP_GUARD_STOP_AT: "12" }).enabled).toBe(false);
   });
 
-  it("is switched on by OMB_LOOP_GUARD=1, over the file, still without a stop", () => {
-    expect(loopGuardSettings({}, { OMB_LOOP_GUARD: "1" })).toEqual({ enabled: true, steerAt: 5 });
-    expect(loopGuardSettings({ loopGuard: { enabled: false, stopAt: 20 } }, { OMB_LOOP_GUARD: "1" })).toEqual({ enabled: true, steerAt: 5, stopAt: 20 });
-    expect(loopGuardSettings({}, { OMB_LOOP_GUARD: "yes" }).enabled).toBe(false);
-    expect(loopGuardSettings({ loopGuard: { enabled: true } }, { OMB_LOOP_GUARD: "0" }).enabled).toBe(true);
+  it("is switched on by SEIRA_LOOP_GUARD=1, over the file, still without a stop", () => {
+    expect(loopGuardSettings({}, { SEIRA_LOOP_GUARD: "1" })).toEqual({ enabled: true, steerAt: 5 });
+    expect(loopGuardSettings({ loopGuard: { enabled: false, stopAt: 20 } }, { SEIRA_LOOP_GUARD: "1" })).toEqual({ enabled: true, steerAt: 5, stopAt: 20 });
+    expect(loopGuardSettings({}, { SEIRA_LOOP_GUARD: "yes" }).enabled).toBe(false);
+    expect(loopGuardSettings({ loopGuard: { enabled: true } }, { SEIRA_LOOP_GUARD: "0" }).enabled).toBe(true);
   });
 
   it("validates a patch", () => {
@@ -826,7 +826,7 @@ describe("loop guard setting", () => {
     expect(correctiveRounds({ loopGuard: { enabled: true } }, {})).toBe(0);
     expect(correctiveRounds({ loopGuard: { correctiveRounds: 2 } }, {})).toBe(0);
     expect(correctiveRounds({ loopGuard: { enabled: true, correctiveRounds: 2 } }, {})).toBe(2);
-    expect(correctiveRounds({ loopGuard: { correctiveRounds: 2 } }, { OMB_LOOP_GUARD: "1" })).toBe(2);
+    expect(correctiveRounds({ loopGuard: { correctiveRounds: 2 } }, { SEIRA_LOOP_GUARD: "1" })).toBe(2);
     expect(parseConfigPatch({ loopGuard: { correctiveRounds: 5 } })).toEqual({ loopGuard: { correctiveRounds: 5 } });
     for (const bad of [-1, 1.5, 6, "2", null]) expect(() => parseConfigPatch({ loopGuard: { correctiveRounds: bad } })).toThrow();
   });

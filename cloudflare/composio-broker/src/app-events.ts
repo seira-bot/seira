@@ -433,11 +433,11 @@ async function resumeSweptTriggers(env: Env, installationId: string) {
   }
 }
 
-/** GET /v1/events?after=<seq>&wait=<0-25>&limit=<1-50>, with header x-omb-poller. */
+/** GET /v1/events?after=<seq>&wait=<0-25>&limit=<1-50>, with header x-seira-poller. */
 export async function pollEvents(request: Request, url: URL, installation: EventInstallation, env: Env, ctx: ExecutionContext) {
   if (!(await env.EVENTS_LIMITER.limit({ key: installation.id })).success) return json({ error: "too many event requests" }, 429);
-  const poller = request.headers.get("x-omb-poller") ?? "";
-  if (!POLLER_ID.test(poller)) return json({ error: "x-omb-poller must be the server's stable id: 8-64 letters, digits, - or _" }, 400);
+  const poller = request.headers.get("x-seira-poller") ?? request.headers.get("x-omb-poller") ?? "";
+  if (!POLLER_ID.test(poller)) return json({ error: "x-seira-poller must be the server's stable id: 8-64 letters, digits, - or _" }, 400);
   const after = intParam(url, "after", 0, Number.MAX_SAFE_INTEGER);
   const wait = intParam(url, "wait", 0, POLL_MAX_WAIT_S);
   const limit = intParam(url, "limit", POLL_MAX_LIMIT, POLL_MAX_LIMIT);

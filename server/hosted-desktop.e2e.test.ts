@@ -86,7 +86,7 @@ it("keeps the bot's own engine on the cloud computer, and a failed place never b
   const address = upstream.address();
   if (!address || typeof address === "string") throw new Error("fixture failed to bind");
   const origin = `http://127.0.0.1:${address.port}`;
-  const gate = join(await import("node:os").then(os => os.tmpdir()), `omb-hosted-desktop-gate-${process.pid}-${Date.now()}`);
+  const gate = join(await import("node:os").then(os => os.tmpdir()), `seira-hosted-desktop-gate-${process.pid}-${Date.now()}`);
   // Each turn uses the cloud computer as a real model would: its first computer call creates or wakes the Boat.
   const fixture = await launchVerificationServer({ FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_SLOW_FINISH_GATE: gate, FAKE_CLAUDE_USES_CLOUD_COMPUTER: "1" },
     undefined, undefined, undefined, undefined, undefined, [], origin).catch(async error => {
@@ -131,14 +131,14 @@ it("keeps the bot's own engine on the cloud computer, and a failed place never b
     expect(sent.systemPrompt).toContain("You control the assigned cloud computer");
     const computer = sent.mcpConfig.mcpServers.computer;
     expect(computer.args).toEqual([expect.stringMatching(/harness-mcp-proxy\.(?:ts|js)$/), "computer"]);
-    expect(computer.env.OMB_MCP_TOKEN_COMPUTER).toEqual(expect.any(String));
-    expect(computer.env.OMB_HARNESS_URL).toBe(fixture.info.url);
+    expect(computer.env.SEIRA_MCP_TOKEN_COMPUTER).toEqual(expect.any(String));
+    expect(computer.env.SEIRA_HARNESS_URL).toBe(fixture.info.url);
     expect(JSON.stringify(sent)).not.toContain(BOAT_TOKEN);
-    expect(Object.keys(sent.env).filter(key => /BOAT|BOX_TOKEN|OMB_CLOUD/.test(key))).toEqual([]);
+    expect(Object.keys(sent.env).filter(key => /BOAT|BOX_TOKEN|SEIRA_CLOUD/.test(key))).toEqual([]);
     expect(sent.argv[sent.argv.indexOf("--allowedTools") + 1].split(",")).toContain("mcp__computer");
     const client = mcpClient(computer);
     try {
-      expect((await client.request("initialize", { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "fixture", version: "1" } })).result.serverInfo.name).toBe("openmausbot-computer");
+      expect((await client.request("initialize", { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "fixture", version: "1" } })).result.serverInfo.name).toBe("seira-computer");
       const listed = (await client.request("tools/list")).result.tools;
       expect(listed).toHaveLength(13);
       expect(listed.find((tool: { name: string }) => tool.name === "exec").description)

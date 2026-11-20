@@ -95,7 +95,7 @@ it("a failed re-check keeps the plan, Cloud and Connect, and only says it is che
   all(html, [">Max<", "Checking with Seira Cloud…", "Open My Cloud", "Manage subscription"]);
   none(html, [...BUY, ...ALARM]);
 });
-it("OMB Cloud out of reach: the plan last verified stays named, calmly, with no offer to buy", async () => {
+it("Seira Cloud out of reach: the plan last verified stays named, calmly, with no offer to buy", async () => {
   await ready({ status: "unavailable", message: "unreachable", account: { id: "fixture", email: "person@example.test" }, lastPlan: { tier: "personal", active: true } });
   let html = render().html;
   all(html, ["Personal · checking with Seira Cloud…", "be reached right now, so this app", "Nothing has changed with your plan", "Manage subscription"]);
@@ -550,7 +550,7 @@ it("a Team plan has no Cloud of its own: the team's Cloud under its name, Open {
   const onTeam = (machine: Machine): CloudAccountState => ({ ...free, entitlement: { plan: "pro", tier: "team", status: "active", expiresAt: 1_900_000_000_000, version: 2 },
     teams: [{ id: "team-acme", name: "Acme", role: "owner", machine }] });
   bridge.openTeam = vi.fn().mockResolvedValue(undefined);
-  await ready(onTeam({ status: "ready", origin: "https://omb-t-2.fly.dev" }));
+  await ready(onTeam({ status: "ready", origin: "https://seira-t-2.fly.dev" }));
   let html = render().html;
   all(html, ['data-cloud-team="true"', "Acme is ready. It keeps your team&#x27;s bots running 24/7", "Open Acme"]);
   none(html, ["Setting up", "Reserving your machine", "Open My Cloud", PHONE, "is not ready yet"]);
@@ -561,6 +561,6 @@ it("a Team plan has no Cloud of its own: the team's Cloud under its name, Open {
   all(html, ["Setting up your team&#x27;s Cloud", 'data-cloud-setup="storage"', "Reserving your machine"]); none(html, ["Open Acme", PHONE]);
   push({ ...onTeam(null), teams: undefined });
   all(render().html, ["Your team&#x27;s Cloud", "Setting up your team&#x27;s Cloud"]);
-  push({ ...onTeam({ status: "ready", origin: "https://omb-t-2.fly.dev" }), entitlement: { plan: "pro", tier: "pro", status: "active", expiresAt: 1_900_000_000_000, version: 3 } });
+  push({ ...onTeam({ status: "ready", origin: "https://seira-t-2.fly.dev" }), entitlement: { plan: "pro", tier: "pro", status: "active", expiresAt: 1_900_000_000_000, version: 3 } });
   all(render().html, ["Setting up the Cloud"]); none(render().html, ["data-cloud-phone"]);
 });

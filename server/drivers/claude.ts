@@ -139,7 +139,7 @@ function claudeEnvironment(
 /** Escape hatch: the bot inherits this machine's Claude Code setup (MCP servers, connectors,
  * skills, agents, hooks, personal CLAUDE.md). */
 function inheritsUserConfig(env: NodeJS.ProcessEnv): boolean {
-  return env.OMB_CLAUDE_INHERIT_USER_CONFIG === "1";
+  return env.SEIRA_CLAUDE_INHERIT_USER_CONFIG === "1";
 }
 
 export function claudeInheritWarning(env: NodeJS.ProcessEnv): ProviderSnapshot["warning"] | undefined {
@@ -147,7 +147,7 @@ export function claudeInheritWarning(env: NodeJS.ProcessEnv): ProviderSnapshot["
   return {
     title: "Bots inherit this machine's Claude Code setup",
     message:
-      "OMB_CLAUDE_INHERIT_USER_CONFIG=1 is set on the Seira process, so every Claude bot also loads this " +
+      "SEIRA_CLAUDE_INHERIT_USER_CONFIG=1 is set on the Seira process, so every Claude bot also loads this " +
       "computer's own MCP servers, connectors, skills, hooks and personal CLAUDE.md on every turn — often thousands " +
       "of extra tokens per model call, and tools nobody gave the bot. Unless a bot genuinely needs a server from " +
       "your user-scope Claude config, remove the variable and restart; add the server under the Apps panel → MCP servers " +
@@ -180,10 +180,10 @@ export function readClaudeAuthSettings(
   }
 }
 
-/** OMB_CLAUDE_AUTOCOMPACT: a token count, "auto" (the CLI's own window) or "off". The CLI rejects
+/** SEIRA_CLAUDE_AUTOCOMPACT: a token count, "auto" (the CLI's own window) or "off". The CLI rejects
  * a window outside 100k-1M as an argument error, so a configured value is clamped. */
 export function autoCompactWindow(env: NodeJS.ProcessEnv): string | null {
-  const raw = (env.OMB_CLAUDE_AUTOCOMPACT ?? "").trim().toLowerCase();
+  const raw = (env.SEIRA_CLAUDE_AUTOCOMPACT ?? "").trim().toLowerCase();
   if (raw === "off") return null;
   if (raw === "auto") return "auto";
   const parsed = raw ? Number(raw) : DEFAULT_AUTOCOMPACT_TOKENS;
@@ -322,8 +322,8 @@ const HOOK_HELPER_PATH = SPAWNED_PROXIES.hook;
 const NODE_ENV_FLAG = { ELECTRON_RUN_AS_NODE: "1" };
 
 /** The launch folders (MCP config, system prompt) are named after this process: one that is cut off at exit goes with the process or the next start. */
-const MCP_FOLDER_PREFIX = "omb-mcp-";
-const SYSTEM_FOLDER_PREFIX = "omb-system-";
+const MCP_FOLDER_PREFIX = "seira-mcp-";
+const SYSTEM_FOLDER_PREFIX = "seira-system-";
 
 function makeLaunchFolder(prefix: string, name: string): string {
   sweepOrphanedTempFoldersOnce(prefix);
@@ -433,7 +433,7 @@ export function brokerSocketCandidates(threadId: string, botId?: string, account
       .update(`${DATA_DIR}\0${process.pid}\0${botId ?? ""}\0${threadId}${account ? `\0${account}` : ""}`)
       .digest("hex")
       .slice(0, 16);
-    return [base, join(tmpdir(), `omb-perm-${scope}.sock`)];
+    return [base, join(tmpdir(), `seira-perm-${scope}.sock`)];
   }
   return [
     base,
@@ -771,7 +771,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
       claudeEnvironment(config.managed ? undefined : model, { ...process.env, ...input.environment }, config.configDir, input.environment, Boolean(config.endpointModels), config.bedrock === true);
     const catalogEnv = environment();
     if (inheritsUserConfig(catalogEnv)) {
-      console.error(`claude (${instanceId}): OMB_CLAUDE_INHERIT_USER_CONFIG=1 — bots inherit this machine's Claude Code MCP servers, skills, hooks and CLAUDE.md on every turn; remove it unless a bot needs a user-scope server`);
+      console.error(`claude (${instanceId}): SEIRA_CLAUDE_INHERIT_USER_CONFIG=1 — bots inherit this machine's Claude Code MCP servers, skills, hooks and CLAUDE.md on every turn; remove it unless a bot needs a user-scope server`);
     }
     let cliVersion: ClaudeCliVersion | null = null;
     let cliVersionChecked = false;
@@ -1132,7 +1132,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
       if (permissionMode !== "bypassPermissions") {
         args.push("--permission-prompt-tool", "mcp__ogb__approve");
       }
-      const permissionEnv = { ...NODE_ENV_FLAG, ...(turn.toolScope !== undefined ? { OMB_PERMISSION_TOOL_SCOPE: JSON.stringify(turn.toolScope) } : {}) };
+      const permissionEnv = { ...NODE_ENV_FLAG, ...(turn.toolScope !== undefined ? { SEIRA_PERMISSION_TOOL_SCOPE: JSON.stringify(turn.toolScope) } : {}) };
       mcpServers.ogb = { command: process.execPath, args: [PERM_PROXY_PATH, socketPath], env: permissionEnv, alwaysLoad: true };
       allowed.push("mcp__ogb", ...gateQueryTools(mcpServers));
       // A guest pre-allows only harness tools; anything else (the browser can open file:) asks.
@@ -1155,8 +1155,8 @@ export const ClaudeDriver: ProviderDriver<ClaudeConfig> = {
       if (hooks && hookTokenPath) {
         mkdirSync(dirname(hookTokenPath), { recursive: true, mode: 0o700 });
         writeFileAtomicIfChanged(hookTokenPath, hooks.token, { mode: 0o600, durable: false });
-        env.OMB_HOOK_URL = hooks.url;
-        env.OMB_HOOK_TOKEN_FILE = hookTokenPath;
+        env.SEIRA_HOOK_URL = hooks.url;
+        env.SEIRA_HOOK_TOKEN_FILE = hookTokenPath;
         // in the packaged app process.execPath is Electron — run the helper as node
         if (process.versions.electron) env.ELECTRON_RUN_AS_NODE = "1";
       }

@@ -9,7 +9,7 @@ import { launchVerificationServer, runControlSeira, type VerificationServer } fr
 const SENTINEL = "SENTINEL-e2e-credential-51c0";
 
 it("is refused on a server that is not the desktop app's own, where any local process is the owner's loopback", async () => {
-  const headless = await launchVerificationServer({ ...process.env, OMB_DEV_TRUST_LOCAL_BROWSER: "0" });
+  const headless = await launchVerificationServer({ ...process.env, SEIRA_DEV_TRUST_LOCAL_BROWSER: "0" });
   try {
     mkdirSync(join(headless.info.dataDir, ".claude", "skills", "notes"), { recursive: true });
     writeFileSync(join(headless.info.dataDir, ".claude", "skills", "notes", "SKILL.md"), "---\nname: notes\ndescription: Takes notes.\n---\n\nWrite it down.\n");
@@ -76,8 +76,8 @@ describe("bringing in another AI tool's setup through the desktop app's own serv
 
   beforeAll(async () => {
     globalThis.fetch = (input, init = {}) => realFetch(input, { ...init,
-      headers: { ...Object.fromEntries(new Headers(init.headers)), "x-openmausbot-desktop-owner": owner } });
-    fixture = await launchVerificationServer({ ...process.env, OMB_TEST_DESKTOP_OWNER_TOKEN: owner });
+      headers: { ...Object.fromEntries(new Headers(init.headers)), "x-seira-desktop-owner": owner } });
+    fixture = await launchVerificationServer({ ...process.env, SEIRA_TEST_DESKTOP_OWNER_TOKEN: owner });
   });
   afterAll(async () => {
     globalThis.fetch = realFetch;

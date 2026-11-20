@@ -6,7 +6,7 @@ import appxManifestCreated, { rewriteManifest, storeVersion } from "./appx-manif
 
 const MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">
-  <Identity Name="openmausbot" Publisher="CN=ms" Version="0.1.179.0" ProcessorArchitecture="x64" />
+  <Identity Name="seira" Publisher="CN=ms" Version="0.1.179.0" ProcessorArchitecture="x64" />
   <Applications>
     <Application Id="Seira" Executable="Seira.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements DisplayName="Seira" />
@@ -15,7 +15,7 @@ const MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
   </Applications>
 </Package>`;
 
-const PROTOCOL = `<Extensions><uap:Extension Category="windows.protocol"><uap:Protocol Name="openmausbot" /></uap:Extension></Extensions>`;
+const PROTOCOL = `<Extensions><uap:Extension Category="windows.protocol"><uap:Protocol Name="seira" /></uap:Extension></Extensions>`;
 
 function count(text, needle) {
   return text.split(needle).length - 1;

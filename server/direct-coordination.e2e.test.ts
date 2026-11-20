@@ -18,18 +18,18 @@ const told = (turn: any): string => {
   return `${turn.system}\n${typeof content === "string" ? content : JSON.stringify(content ?? "")}`;
 };
 
-/** With OMB_TEST_DESKTOP_OWNER_TOKEN it runs as the desktop app runs it, every change carrying the app's owner capability. */
+/** With SEIRA_TEST_DESKTOP_OWNER_TOKEN it runs as the desktop app runs it, every change carrying the app's owner capability. */
 async function fixture(test: (f: any) => Promise<void>, fakeEnv: NodeJS.ProcessEnv = {}) {
-  const desktopOwner = fakeEnv.OMB_TEST_DESKTOP_OWNER_TOKEN;
+  const desktopOwner = fakeEnv.SEIRA_TEST_DESKTOP_OWNER_TOKEN;
   const realFetch = globalThis.fetch;
   if (desktopOwner) globalThis.fetch = (input, init = {}) => realFetch(input, { ...init,
-    headers: { ...Object.fromEntries(new Headers(init.headers)), "x-openmausbot-desktop-owner": desktopOwner } });
+    headers: { ...Object.fromEntries(new Headers(init.headers)), "x-seira-desktop-owner": desktopOwner } });
   try { await fixtureSession(test, fakeEnv); } finally { globalThis.fetch = realFetch; }
 }
 
 async function fixtureSession(test: (f: any) => Promise<void>, fakeEnv: NodeJS.ProcessEnv) {
   const session = await launchVerificationServer({ ...process.env, ...fakeEnv }, undefined, undefined, undefined, undefined, { scripted: true });
-  const cli = (...args: string[]) => runControlSeira(args, { env: { OPENMAUSBOT_URL: session.info.url } }) as Promise<any>;
+  const cli = (...args: string[]) => runControlSeira(args, { env: { SEIRA_URL: session.info.url } }) as Promise<any>;
   const api = (path: string, body?: unknown, method = "POST") => request(path, body === undefined ? {} : { method, body: JSON.stringify(body) }, session.info.url) as Promise<any>;
   try {
     const chief = (await cli("new-bot", "--name", "Clive", "--section", "Leadership")).bot;
@@ -480,7 +480,7 @@ it("does not treat self-opened work or an abandoned human branch as new human au
 }), 45_000);
 
 it("returns a nested coordinated result after Claude retries a transient provider exit", async () => {
-  const scratch = mkdtempSync(join(tmpdir(), "omb-coordination-retry-"));
+  const scratch = mkdtempSync(join(tmpdir(), "seira-coordination-retry-"));
   try {
     await fixture(async f => {
       await f.start();
@@ -575,10 +575,10 @@ it("continues one recipient thread for every follow-up from the same conversatio
 
 it.each<[string, NodeJS.ProcessEnv]>([
   ["a headless server", {}],
-  ["the desktop app", { OMB_TEST_DESKTOP_OWNER_TOKEN: randomBytes(32).toString("base64url") }],
+  ["the desktop app", { SEIRA_TEST_DESKTOP_OWNER_TOKEN: randomBytes(32).toString("base64url") }],
 ])("on %s, hands a follow-up sent while the teammate still works to its running turn, and one result comes back", (_where, env) => fixture(async f => {
-  expect((await f.api("/.well-known/openmausbot/environment", undefined, "GET")).capabilities.selfUpdate)
-    .toBe(env.OMB_TEST_DESKTOP_OWNER_TOKEN ? "desktop-managed" : "operator");
+  expect((await f.api("/.well-known/seira/environment", undefined, "GET")).capabilities.selfUpdate)
+    .toBe(env.SEIRA_TEST_DESKTOP_OWNER_TOKEN ? "desktop-managed" : "operator");
   const gate = join(f.session.info.dataDir, "first-request.gate");
   f.plan[f.lead.id] = { turns: [{ gateFile: gate, reply: "Export implemented, with the header row" }] };
   f.plan[f.chief.id] = { turns: [
@@ -1075,7 +1075,7 @@ it("tells the Chief a teammate's turn stopped because its engine's settings chan
 
 // The small model's word is the fixture's: what matters here is what the runtime does with it.
 const withStatusAnswer = (answer: string) => {
-  const routes = join(mkdtempSync(join(tmpdir(), "omb-status-reply-")), "routes.json");
+  const routes = join(mkdtempSync(join(tmpdir(), "seira-status-reply-")), "routes.json");
   writeFileSync(routes, JSON.stringify({ "<teammate_reply>": answer }));
   return { FAKE_CLAUDE_TEXT_ROUTES: routes };
 };

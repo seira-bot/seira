@@ -237,9 +237,9 @@ describe("Your bots' work", () => {
     expect(page()).toContain("Documents › Seira is full.");
   });
 
-  it("names the folder this computer really uses: Documents › MausBot where it was already there, and on Windows too", async () => {
-    await mount({ ...base, outputs: { ...base.outputs, dir: "/Users/ada/Documents/MausBot" } });
-    expect(page()).toContain("In Documents › MausBot, one folder for each bot.");
+  it("names the folder this computer really uses: Documents › Seira where it was already there, and on Windows too", async () => {
+    await mount({ ...base, outputs: { ...base.outputs, dir: "/Users/ada/Documents/Seira" } });
+    expect(page()).toContain("In Documents › Seira, one folder for each bot.");
     await act(async () => emit({ ...base, outputs: { ...base.outputs, dir: "C:\\Users\\Ada\\Documents\\Seira" } }));
     expect(page()).toContain("In Documents › Seira, one folder for each bot.");
   });

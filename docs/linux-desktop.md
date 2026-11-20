@@ -101,7 +101,7 @@ pnpm package:arch
 sudo pacman -U release/Seira-<version>-x64.pacman
 ```
 
-Replace `<version>` with the built version (for example, `0.1.149`). Then launch `openmausbot` from the application launcher or command line.
+Replace `<version>` with the built version (for example, `0.1.149`). Then launch `seira` from the application launcher or command line.
 
 #### Portable AppImage
 A minimal Arch install lacks the FUSE helper and some desktop libraries the AppImage needs, so install them first:
@@ -126,7 +126,7 @@ The app checks for updates in the background and downloads them by itself. Nothi
   root-only folder and checked against the checksum in the update feed first; a file that does not match is
   refused and nothing is installed. Closing the prompt leaves the update ready to try again. If the session cannot
   show a prompt (SSH, no desktop, no `pkexec`), the app falls back to copying the `sudo apt-get install` command
-  and opening a terminal, and says why. Set `OMB_UPDATE_INSTALL=terminal` to always use the terminal.
+  and opening a terminal, and says why. Set `SEIRA_UPDATE_INSTALL=terminal` to always use the terminal.
 - **AppImage.** The update replaces the AppImage when you restart; no password is needed.
 - **rpm and pacman packages** still use the terminal hand-off.
 - **Snap and Flatpak.** The store updates the app. Seira does not check, download or install updates itself, and
@@ -157,7 +157,7 @@ not open: it shows a message that points to the Debian package, and it never sta
 the `.deb` instead; do not add `--no-sandbox`, disable AppArmor globally, change the user-namespace setting, or
 allowlist arbitrary executables under your home directory. See [Chromium's explanation of the Ubuntu restriction](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
 
-Application data remains local in `~/.openmausbot`. Electron browser data and window state use the normal XDG
+Application data remains local in `~/.seira`. Electron browser data and window state use the normal XDG
 configuration directory (`~/.config/openmausbot` unless the environment overrides it).
 
 ## Develop the desktop shell
@@ -174,7 +174,7 @@ For a package-shaped build without creating `.deb` or AppImage artifacts:
 
 ```sh
 pnpm package:linux:dir
-./release/linux-unpacked/openmausbot
+./release/linux-unpacked/seira
 ```
 
 ## Agent CLI discovery
@@ -195,7 +195,7 @@ It also probes the login shell in the background. If a CLI still is not detected
 path before launching the app from a terminal and verify it there:
 
 ```sh
-OMB_EXTRA_PATH=/your/custom/bin ./release/Seira-*-x86_64.AppImage
+SEIRA_EXTRA_PATH=/your/custom/bin ./release/Seira-*-x86_64.AppImage
 ```
 
 Restart Seira after installing or signing in to a CLI.
@@ -239,8 +239,8 @@ to **This computer**. No driver download, terminal command, `chmod`, or daemon s
 starts with `--no-overlay`, so Cua's decorative full-screen X11 cursor surface is never created. Seira also
 uses Electron software rendering when the NVIDIA driver is loaded, to avoid the reproduced NVIDIA/libGLES
 GPU-process failure that could leave an invisible focused app window receiving input. Other GPUs keep hardware
-acceleration, because software rendering costs about a CPU core while the window animates. Set `OMB_LINUX_GPU=off`
-to force software rendering or `OMB_LINUX_GPU=on` to force the GPU.
+acceleration, because software rendering costs about a CPU core while the window animates. Set `SEIRA_LINUX_GPU=off`
+to force software rendering or `SEIRA_LINUX_GPU=on` to force the GPU.
 
 Cua actions use a private logical cursor. With the decorative overlay disabled, `move_cursor` does not move the
 user's physical pointer; approved click and typing actions still target the requested window, while the user's own
@@ -347,7 +347,7 @@ pnpm smoke:linux-package
 The verifier checks `.deb` metadata, desktop identity, the exact dormant Cua resource tree and provenance,
 SquashFS/DEB directory modes, runtime path policy, and matching binary hashes across all artifacts. The local smoke
 launches the unpacked app and AppImage without `--no-sandbox`; CI first reproduces a `0.1.7` in-place DEB upgrade and
-then runs the same smoke against `/opt/Seira/openmausbot`. These lanes prove the embedded server and UI are
+then runs the same smoke against `/opt/Seira/seira`. These lanes prove the embedded server and UI are
 usable while an optional Composio broker stalls, verify that an old local-control opt-in is cleared, and assert that
 no Cua executable starts on Xorg or simulated Wayland. Low-level runtime tests retain the future private-daemon
 contract without activating it in a packaged app. Only a real-seat acceptance matrix can authorize re-enablement.
@@ -357,7 +357,7 @@ contract without activating it in a packaged app. Only a real-seat acceptance ma
 ### An agent CLI is missing
 
 Run the CLI directly in a terminal, finish its sign-in flow, then restart Seira. If it lives outside the
-common directories above, use `OMB_EXTRA_PATH` while testing and report the install location so it can be
+common directories above, use `SEIRA_EXTRA_PATH` while testing and report the install location so it can be
 considered for automatic discovery.
 
 ### A bot needs computer tools

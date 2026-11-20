@@ -4,16 +4,17 @@
 // update this rewrites it as a move does now, keeping the earlier copy of each file it changes.
 import { constants, copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, type Dirent } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { LEGACY_MOVE_RECEIPT, rewriteLegacyHomePaths } from "../electron/legacy-migrate.mjs";
 import { writeFileAtomic } from "./atomic.ts";
 import { INSTRUCTION_FILE, restorePaths } from "./workspace-backup-paths.ts";
 
 const DEFINITIONS = ["bots.json", "groups.json", "config.json", "routines.json", "calendar-calls.json"];
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const MAX_FILE_BYTES = 16 * 1024 ** 2;
-// The folder a desktop keeps its data in by default, <home>\.openmausbot or <home>/.openmausbot, where a path ends.
+// The folder a desktop keeps its data in by default, <home>\.seira or <home>/.seira, where a path ends.
 const END = String.raw`(?=[.,;:!?)\]}]*(?:[\s"'\x60<>|]|$)|[\\/])`;
-const WINDOWS_DATA_FOLDER = new RegExp(String.raw`(?<![\w\\/])[A-Za-z]:(?:[\\/][^\\/:*?"<>|\r\n]+?)*?[\\/]\.openmausbot${END}`, "gi");
-const POSIX_DATA_FOLDER = new RegExp(String.raw`(?<![\w.:\\/-])\/(?:[^/\s"'\x60<>|]+\/)*?\.openmausbot${END}`, "g");
+const WINDOWS_DATA_FOLDER = new RegExp(String.raw`(?<![\w\\/])[A-Za-z]:(?:[\\/][^\\/:*?"<>|\r\n]+?)*?[\\/]\.seira${END}`, "gi");
+const POSIX_DATA_FOLDER = new RegExp(String.raw`(?<![\w.:\\/-])\/(?:[^/\s"'\x60<>|]+\/)*?\.seira${END}`, "g");
 
 type Paths = ReturnType<typeof restorePaths>;
 
@@ -135,6 +136,45 @@ export function repairMovedWorkspacePaths(dataDir: string): string[] | null {
     const changed = repair(resolve(dataDir), String(receipt.id));
     writeFileAtomic(receiptPath, JSON.stringify({ ...receipt, pathsRewritten: true }), { mode: 0o600 });
     return changed;
+  } catch (error) {
+    console.error(`[moved-paths] the repair stopped: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
+
+/** Call once the server's data folder has been moved to its current name by migrateHomeFolders: rewrites the old folder
+ * name in the definitions and instruction files, keeping the earlier copy of each file it changes. Once per move: the
+ * files it changed, relative to the data folder, or null when there was no move to repair. Never throws. */
+export function repairLegacyHomePaths(dataDir: string): string[] | null {
+  const receiptPath = join(dataDir, LEGACY_MOVE_RECEIPT);
+  let receipt: Record<string, unknown>;
+  try {
+    if (!lstatSync(receiptPath).isFile()) return null;
+    const value: unknown = JSON.parse(readFileSync(receiptPath, "utf8"));
+    if (!record(value) || value.pathsRewritten === true) return null;
+    receipt = value;
+  } catch { return null; }
+  try {
+    const root = resolve(dataDir);
+    const names = [...DEFINITIONS, ...instructionFiles(root)];
+    const edits: Array<[string, string]> = [];
+    for (const name of names) {
+      const text = readText(root, name);
+      if (text === null) continue;
+      const after = rewriteLegacyHomePaths(text);
+      if (after !== text) edits.push([name, after]);
+    }
+    const kept = join(root, ".backups", "legacy-path-repair");
+    for (const [path, text] of edits) {
+      const live = join(root, path);
+      const copy = join(kept, path);
+      mkdirSync(dirname(copy), { recursive: true, mode: 0o700 });
+      if (!existsSync(copy)) copyFileSync(live, copy, constants.COPYFILE_EXCL);
+      writeFileAtomic(live, text, { mode: lstatSync(live).mode & 0o777 });
+    }
+    writeFileAtomic(receiptPath, JSON.stringify({ ...receipt, pathsRewritten: true }), { mode: 0o600 });
+    if (edits.length) console.log(`[moved-paths] updated the data folder name in ${edits.length} files; the earlier copies are in .backups/legacy-path-repair`);
+    return edits.map(([path]) => path);
   } catch (error) {
     console.error(`[moved-paths] the repair stopped: ${error instanceof Error ? error.message : String(error)}`);
     return null;

@@ -69,7 +69,7 @@ pnpm exec vitest run server/runtime/ server/runtime-coordinator.test.ts server/d
 pnpm exec vitest run server/delta-context.e2e.test.ts -t "restart"
 pnpm exec vitest run server/full-access-workflows.e2e.test.ts server/room-recovery.e2e.test.ts
 pnpm exec vitest run server/room-roots.e2e.test.ts
-OMB_UI_E2E=1 pnpm exec vitest run scripts/testing/direct-coordination-ui.e2e.test.ts
+SEIRA_UI_E2E=1 pnpm exec vitest run scripts/testing/direct-coordination-ui.e2e.test.ts
 ```
 
 The long-running Chief suite plays one Chief of Staff job per scenario through
@@ -360,7 +360,7 @@ pnpm exec vitest run server/direct-coordination.e2e.test.ts --maxWorkers=1
 pnpm exec vitest run server/turn-dispatch-guard.test.ts
 pnpm exec vitest run server/comms.test.ts server/thread-aware-bots.e2e.test.ts server/routine-delegation.e2e.test.ts server/independent-threads-api.test.ts server/steer-queue.test.ts
 pnpm exec vitest run server/runtime-paths.e2e.test.ts server/notification-routing.e2e.test.ts server/post-to-room.test.ts
-OMB_UI_E2E=1 pnpm exec vitest run scripts/testing/direct-coordination-ui.e2e.test.ts
+SEIRA_UI_E2E=1 pnpm exec vitest run scripts/testing/direct-coordination-ui.e2e.test.ts
 ```
 
 The integration suite launches the disposable control fixture and drives the
@@ -479,7 +479,7 @@ nodes were completed and reported. Nora actually executed the tests. The exact
 CSV output, a rerun of the generated test, and two independent held-out cases
 all passed. The actual renderer also passed receipt navigation and Chief grant
 checks. Evidence (fixture and temporary auth copy removed):
-`/tmp/omb-live-team-0913.MwRY2k/nested-gpt-5.6-sol-1789255210986/result.json`
+`/tmp/seira-live-team-0913.MwRY2k/nested-gpt-5.6-sol-1789255210986/result.json`
 and `independent-checks.json` beside it.
 
 Two isolated `gpt-5.6-sol` trials used temporary work folders and real tools:
@@ -487,16 +487,16 @@ Two isolated `gpt-5.6-sol` trials used temporary work folders and real tools:
 - Delivery: Clive consulted Mira, assigned Patch, requested Nora's independent
   checks and then Quill's launch copy. The actual CSV exporter and tests passed;
   no deployment or publishing was requested. Evidence:
-  `/tmp/omb-live-team-0913.MwRY2k/delivery-gpt-5.6-sol-1789253057867/result.json`
+  `/tmp/seira-live-team-0913.MwRY2k/delivery-gpt-5.6-sol-1789253057867/result.json`
   and `transcripts.json` beside it.
 - Nested: Clive could reach only Patch; Patch could reach only Nora. The durable
   tree was Clive → Patch → Nora, all completed and reported. Nora executed the
   unittest suite, exact export command and schema/email checks. Patch then
   resumed, followed by Clive, in about 146 seconds. Evidence:
-  `/tmp/omb-live-team-0913.MwRY2k/nested-gpt-5.6-sol-1789253398198/result.json`.
+  `/tmp/seira-live-team-0913.MwRY2k/nested-gpt-5.6-sol-1789253398198/result.json`.
 
 The first run also exposed a model-quality limitation: Patch claimed Nora had
-verified its work without a corresponding OMB handoff. Clive correctly treated
+verified its work without a corresponding Seira handoff. Clive correctly treated
 that claim as insufficient and requested an actual independent check. Prompts
 now explicitly require real coordination receipts for named-bot participation;
 this is guidance, not a guarantee that every model report is truthful. The

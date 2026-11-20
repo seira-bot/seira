@@ -49,11 +49,11 @@ test("a response over 64 KB is refused", async () => {
 test("the origin is the public list unless a loopback http fixture is named", () => {
   assert.equal(UPDATES_LIST_ORIGIN, "https://updates.seira.bot");
   assert.equal(updatesListOrigin({}), UPDATES_LIST_ORIGIN);
-  assert.equal(updatesListOrigin({ OMB_UPDATES_ORIGIN: "http://127.0.0.1:18801" }), "http://127.0.0.1:18801");
-  assert.equal(updatesListOrigin({ OMB_UPDATES_ORIGIN: "http://[::1]:18801" }), "http://[::1]:18801");
+  assert.equal(updatesListOrigin({ SEIRA_UPDATES_ORIGIN: "http://127.0.0.1:18801" }), "http://127.0.0.1:18801");
+  assert.equal(updatesListOrigin({ SEIRA_UPDATES_ORIGIN: "http://[::1]:18801" }), "http://[::1]:18801");
   for (const value of ["https://127.0.0.1:18801", "http://localhost:18801", "http://127.0.0.1", "http://127.0.0.1:18801/", "http://127.0.0.1:99999",
     "http://example.test:80", "http://127.0.0.1:18801@example.test", "https://evil.example"]) {
-    assert.equal(updatesListOrigin({ OMB_UPDATES_ORIGIN: value }), UPDATES_LIST_ORIGIN, value);
+    assert.equal(updatesListOrigin({ SEIRA_UPDATES_ORIGIN: value }), UPDATES_LIST_ORIGIN, value);
   }
 });
 

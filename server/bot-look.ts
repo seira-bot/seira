@@ -4,14 +4,14 @@ import { join } from "node:path";
 import { CAST_CHARACTERS } from "../shared/cast-characters.ts";
 import type { BrandBodyId } from "../shared/carved-bodies.ts";
 import type { MascotAccessoryId } from "../shared/mascot-accessories.ts";
-import { MAUS_COLOR_NAMES, type MausColor } from "../shared/wire.ts";
+import { SEIRA_COLOR_NAMES, type SeiraColor } from "../shared/wire.ts";
 import { writeFileAtomic } from "./atomic.ts";
 
-export const STARTER_COLORS: readonly MausColor[] = MAUS_COLOR_NAMES.filter((color) => color !== "silver" && color !== "chrome");
-const ROTATION: readonly MausColor[] = ["green", "blue", "red", "orange", "purple", "cyan", "pink", "yellow", "teal", "coral"];
+export const STARTER_COLORS: readonly SeiraColor[] = SEIRA_COLOR_NAMES.filter((color) => color !== "silver" && color !== "chrome");
+const ROTATION: readonly SeiraColor[] = ["green", "blue", "red", "orange", "purple", "cyan", "pink", "yellow", "teal", "coral"];
 
 /** The colour of the bot made `index`-th when nothing else picks one. */
-export const rotationColor = (index: number): MausColor => ROTATION[index % ROTATION.length]!;
+export const rotationColor = (index: number): SeiraColor => ROTATION[index % ROTATION.length]!;
 
 export interface StarterCharacter {
   mascotBody: BrandBodyId;
@@ -26,13 +26,13 @@ export const STARTER_CHARACTERS: readonly StarterCharacter[] = CAST_CHARACTERS.m
 }));
 
 export interface WornLook {
-  color: MausColor;
+  color: SeiraColor;
   mascotBody?: string | null;
   mascotAccessories?: readonly string[] | null;
 }
 
 export interface FreshLook extends StarterCharacter {
-  color: MausColor;
+  color: SeiraColor;
 }
 
 const characterKey = (body: string | null | undefined, accessories: readonly string[] | null | undefined) =>
@@ -61,7 +61,7 @@ export function freshLook(bots: readonly WornLook[], random: () => number = Math
 /** Hair styles that older builds gave a new bot by default: no style, the old triangle, and Seira's own. */
 const PLAIN_BODIES: ReadonlySet<string | null | undefined> = new Set([undefined, null, "", "cursor", "seira"]);
 
-/** A bot that still wears the look older builds gave every new bot: not the MausBot, no hair style of its own, no
+/** A bot that still wears the look older builds gave every new bot: not the Seira, no hair style of its own, no
  * accessories, and no picture. */
 export function wearsPlainLook(bot: WornLook & { defaultBot?: object; avatarUrl?: string | null }): boolean {
   return !bot.defaultBot && !bot.avatarUrl && PLAIN_BODIES.has(bot.mascotBody) && !bot.mascotAccessories?.length;

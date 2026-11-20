@@ -110,7 +110,7 @@ export interface ThemeHistoryItem extends LookChange {
 export const THEME_EXPORT_VERSION = 1;
 /** One file: the theme with its files inlined as data: addresses. */
 export const themeExportSchema = z.object({
-  mausbotTheme: z.literal(THEME_EXPORT_VERSION),
+  seiraTheme: z.literal(THEME_EXPORT_VERSION),
   id: z.string().regex(THEME_ID).optional(),
   theme: themeFileSchema,
   assets: z.record(z.string().regex(THEME_ASSET_NAME), z.string().max(Math.ceil(THEME_LIMITS.assetBytes * 1.4)).regex(/^data:[\w/+.-]+;base64,[A-Za-z0-9+/=]+$/)).optional(),

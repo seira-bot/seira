@@ -43,7 +43,7 @@ let lines: string[];
 let applied: ({ url: string; token: string } | null)[];
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), "omb-cloud-connected-apps-"));
+  dataDir = mkdtempSync(join(tmpdir(), "seira-cloud-connected-apps-"));
   timers = [];
   lines = [];
   applied = [];
@@ -273,7 +273,7 @@ describe("a Cloud home's connected-apps installation", () => {
 });
 
 describe("a paid Cloud's grant", () => {
-  const GRANT = `v1.omb-machine-1.${"g".repeat(43)}`;
+  const GRANT = `v1.seira-machine-1.${"g".repeat(43)}`;
   const grantCalls = (calls: Call[]) => calls.filter((call) => call.path === "/v1/installation/cloud");
 
   it("presents the Admin's grant with the installation's token, once", async () => {
@@ -365,12 +365,12 @@ describe("a Cloud kept off the managed service", () => {
     expect(broker.registrations()).toBe(1);
   });
 
-  it("OMB_COMPOSIO_BROKER=off: a Cloud home registers nothing and shows the needs-a-key state, even with a token on the volume", async () => {
+  it("SEIRA_COMPOSIO_BROKER=off: a Cloud home registers nothing and shows the needs-a-key state, even with a token on the volume", async () => {
     store(OLD);
     const fetchSpy = vi.fn(async () => new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchSpy);
-    vi.stubEnv("OMB_COMPOSIO_BROKER_URL", BROKER);
-    vi.stubEnv("OMB_COMPOSIO_BROKER", "off");
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER_URL", BROKER);
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER", "off");
     const apply = vi.fn();
     startServerConnectedApps({ cloudHome: true, selfHosted: false, packaged: true, dataDir, apply, cloudGrant: GRANT });
     expect(apply).not.toHaveBeenCalled();
@@ -388,23 +388,23 @@ describe("a Cloud kept off the managed service", () => {
   });
 
   it("the switch also wins over a token named in the server's environment", async () => {
-    vi.stubEnv("OMB_COMPOSIO_BROKER_URL", BROKER);
-    vi.stubEnv("OMB_COMPOSIO_BROKER_TOKEN", OLD);
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER_URL", BROKER);
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER_TOKEN", OLD);
     vi.resetModules();
     const fresh = await import("./composio-broker-access.ts");
     expect(fresh.brokerAccess()).toEqual({ url: BROKER, token: OLD });
-    vi.stubEnv("OMB_COMPOSIO_BROKER", "off");
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER", "off");
     expect(fresh.brokerAccess()).toBeNull();
   });
 
-  it("OMB_COMPOSIO_BROKER=off: a Team Cloud member's own apps report unavailable, and the member's installation is kept", async () => {
+  it("SEIRA_COMPOSIO_BROKER=off: a Team Cloud member's own apps report unavailable, and the member's installation is kept", async () => {
     const person = `p_${"a".repeat(22)}`;
     const fetchImpl = vi.fn(async () => json(201, { installationId: "install-p", token: NEW }));
     const people = new PeopleConnections({ dataDir, brokerUrl: () => BROKER, clients: () => undefined, isOwnerLive: () => true, fetchImpl: fetchImpl as unknown as typeof fetch });
     await expect(people.ensureAppsAccess(person, "m@example.test")).resolves.toEqual({ url: BROKER, token: NEW });
     expect(fetchImpl).toHaveBeenCalledOnce();
 
-    vi.stubEnv("OMB_COMPOSIO_BROKER", "off");
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER", "off");
     expect(people.appsAccess(person)).toBeNull();
     expect(people.appsPeople()).toEqual([]);
     await expect(people.ensureAppsAccess(`p_${"b".repeat(22)}`, "n@example.test")).resolves.toBeNull();
@@ -468,8 +468,8 @@ describe("a self-hosted server", () => {
     if (process.platform !== "win32") expect(statSync(file()).mode & 0o777).toBe(0o600);
   });
 
-  it("registers where OMB_COMPOSIO_BROKER_URL points, not at Seira's service", async () => {
-    vi.stubEnv("OMB_COMPOSIO_BROKER_URL", BROKER);
+  it("registers where SEIRA_COMPOSIO_BROKER_URL points, not at Seira's service", async () => {
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER_URL", BROKER);
     const broker = fakeBroker({ "POST /v1/installations": [registered(NEW, "install-new")] });
     begin(broker);
     await until(() => existsSync(file()));
@@ -501,8 +501,8 @@ describe("a self-hosted server", () => {
     expect(existsSync(file())).toBe(false);
   });
 
-  it("a source run still registers where OMB_COMPOSIO_BROKER_URL points", async () => {
-    vi.stubEnv("OMB_COMPOSIO_BROKER_URL", BROKER);
+  it("a source run still registers where SEIRA_COMPOSIO_BROKER_URL points", async () => {
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER_URL", BROKER);
     const broker = fakeBroker({ "POST /v1/installations": [registered(NEW)] });
     begin(broker, { packaged: false });
     await until(() => existsSync(file()));
@@ -516,19 +516,19 @@ describe("a self-hosted server", () => {
     expect(broker.calls).toEqual([]);
   });
 
-  it("OMB_COMPOSIO_BROKER=off registers nothing and says so once", async () => {
-    vi.stubEnv("OMB_COMPOSIO_BROKER", "off");
+  it("SEIRA_COMPOSIO_BROKER=off registers nothing and says so once", async () => {
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER", "off");
     const broker = fakeBroker({});
     begin(broker);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(broker.calls).toEqual([]);
     expect(applied).toEqual([]);
     expect(console.log).toHaveBeenCalledTimes(1);
-    expect(console.log).toHaveBeenCalledWith("the connected-apps service is switched off (OMB_COMPOSIO_BROKER)");
+    expect(console.log).toHaveBeenCalledWith("the connected-apps service is switched off (SEIRA_COMPOSIO_BROKER)");
   });
 
   it("a token named in the environment replaces registration", async () => {
-    vi.stubEnv("OMB_COMPOSIO_BROKER_TOKEN", OLD);
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER_TOKEN", OLD);
     const broker = fakeBroker({});
     begin(broker);
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -545,7 +545,7 @@ describe("a self-hosted server", () => {
   });
 
   it("a URL that is neither HTTPS nor loopback is refused with one warning", async () => {
-    vi.stubEnv("OMB_COMPOSIO_BROKER_URL", "http://broker.example");
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER_URL", "http://broker.example");
     const broker = fakeBroker({});
     begin(broker);
     await new Promise((resolve) => setTimeout(resolve, 20));

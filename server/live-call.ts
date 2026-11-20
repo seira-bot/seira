@@ -67,7 +67,7 @@ export function liveProviderName(provider: LiveProvider): string {
 
 /** Only a loopback http URL is accepted, read at call time. */
 export function liveBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
-  const override = env.OMB_OPENAI_LIVE_URL?.trim() ?? "";
+  const override = env.SEIRA_OPENAI_LIVE_URL?.trim() ?? "";
   return /^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(override) ? override : OPENAI_BASE;
 }
 

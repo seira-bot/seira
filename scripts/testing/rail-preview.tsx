@@ -158,7 +158,7 @@ if (params.has("railpage")) {
     workspaces: {
       state: async () => (computer ? { local: true, name: "This computer" }
         : onTeam ? { local: false, name: teamName, origin: "https://acme.example", color: "purple", role: "Admin" }
-          : { local: false, name: "My Cloud", origin: "https://omb-u-1.fly.dev", color: "blue" }),
+          : { local: false, name: "My Cloud", origin: "https://seira-u-1.fly.dev", color: "blue" }),
       menu: ok, line: async () => null, open: ok, add: ok,
       places: async () => (hidden ? { ...rail, places: [] } : chrome ? { ...rail, places: [], beside: true as const } : rail),
       onChanged: (heard: () => void) => { placesHeard.add(heard); return () => { placesHeard.delete(heard); }; },

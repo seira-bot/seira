@@ -26,7 +26,7 @@ async function setup(hang: boolean, fakeEnv: NodeJS.ProcessEnv) {
       return result;
     };
     const cli = async (...args: string[]) => {
-      const result = await runControlSeira(args, { env: { OPENMAUSBOT_URL: session.info.url } }) as any;
+      const result = await runControlSeira(args, { env: { SEIRA_URL: session.info.url } }) as any;
       evidence.push({ command: args, result });
       return result;
     };
@@ -166,7 +166,7 @@ it.each([
     await f.restart(() => {
       const path = join(f.session.info.dataDir, "config.json");
       const config = JSON.parse(readFileSync(path, "utf8"));
-      config.instances.claude.environment.OMB_CLAUDE_AUTOCOMPACT = native;
+      config.instances.claude.environment.SEIRA_CLAUDE_AUTOCOMPACT = native;
       writeFileSync(path, JSON.stringify(config));
     });
   }

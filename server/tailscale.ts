@@ -121,7 +121,7 @@ const LISTEN_INSTEAD: Partial<Record<TailscaleFailure, [why: string, fix: string
  * name, or no Tailscale interface here (userspace networking, as in most containers).
  */
 export function tailnetListenFallback(failure: TailscaleFailure, status: TailscaleStatus, port: number, interfaces: NodeJS.Dict<Array<{ address: string }>> = networkInterfaces()):
-  { origin: string; env: { OMB_TAILNET_NAME: string }; line: string } | null {
+  { origin: string; env: { SEIRA_TAILNET_NAME: string }; line: string } | null {
   const reason = LISTEN_INSTEAD[failure];
   const local = tailnetInterfaceAddresses(interfaces);
   const addresses = status.addresses.filter((address) => local.includes(address.toLowerCase()));
@@ -129,7 +129,7 @@ export function tailnetListenFallback(failure: TailscaleFailure, status: Tailsca
   const origin = tailnetOrigin(status.dnsName, port);
   return {
     origin,
-    env: { OMB_TAILNET_NAME: status.dnsName },
+    env: { SEIRA_TAILNET_NAME: status.dnsName },
     line: `tailscale: ${reason[0]}, so this server listens on ${origin} itself (only your tailnet can reach it, and WireGuard encrypts it). For an https:// address, ${reason[1]}.`,
   };
 }
@@ -140,7 +140,7 @@ export const tailscaleMarker = (dataDir: string) => join(dataDir, "tailscale-ser
 /**
  * `tailscale serve` in the foreground: the share ends with this process. Before serving, the tailnet must have HTTPS
  * certificates (`CertDomains`), or serve waits on an enablement link forever; and the name must not already front a
- * different MausBot server. Resolves once serve has run for `settleMs` without exiting.
+ * different Seira server. Resolves once serve has run for `settleMs` without exiting.
  */
 export async function tailscaleServe(
   status: TailscaleStatus,

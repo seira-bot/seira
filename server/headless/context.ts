@@ -1,3 +1,4 @@
+import { cliCommand } from "../cli-invocation.ts";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -45,7 +46,7 @@ export async function resolveTarget(ctx: VerbContext, positional: string | undef
   const what = allow === "bot" ? "a bot" : allow === "channel" ? "a room" : "a bot or room";
   if (named.length !== 1) {
     throw usageError(named.length ? `name exactly one ${what.slice(2)}` : `${what} is required`,
-      `openmausbot ${ctx.verb} NAME, or --bot ID${allow === "bot" ? "" : ", --channel ID"} or --thread ID`);
+      `${cliCommand(`${ctx.verb} NAME`)}, or --bot ID${allow === "bot" ? "" : ", --channel ID"} or --thread ID`);
   }
   const task = flag(ctx.flags, "task")?.trim();
   const withTask = (target: Target): Target => {
@@ -101,7 +102,7 @@ export async function readMessage(ctx: VerbContext, positional: string | undefin
   const sources = [positional !== undefined, text !== undefined, file !== undefined].filter(Boolean).length;
   if (sources !== 1) {
     throw usageError(sources ? "give the message one way: TEXT, --text TEXT, --message-file FILE or -" : "a message is required",
-      `openmausbot ${ctx.verb} TARGET "what to do", or --message-file FILE, or - to read it from stdin`);
+      `${cliCommand(`${ctx.verb} TARGET "what to do"`)}, or --message-file FILE, or - to read it from stdin`);
   }
   let message: string;
   if (file !== undefined) {
