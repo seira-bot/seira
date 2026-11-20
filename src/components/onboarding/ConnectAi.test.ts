@@ -29,6 +29,8 @@ vi.mock("@/components/EngineSetup", async () => {
 });
 // The row has its own tests; here only whether the first screen offers it.
 vi.mock("./beats/OrganisationRow", () => ({ OrganisationRow: (props: NonNullable<typeof f.row>) => { f.row = props; return null; } }));
+const portal = vi.hoisted(() => ({ offered: true }));
+vi.mock("@/lib/organization-portal", async (original) => ({ ...await original<typeof import("@/lib/organization-portal")>(), defaultPortalOffered: () => portal.offered }));
 const { ConnectAi, ConnectAiDialog } = await import("./ConnectAi");
 const { useWelcomeAi } = await import("./welcome-ai");
 const { useStore } = await import("@/state/store");
@@ -288,6 +290,15 @@ describe("connecting an AI on the first screen", () => {
     f.row!.onOpenSettings();
     expect(f.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "organization" });
     delete window.ogb;
+  });
+
+  it("shows no organization sign-in while no default portal is open to people", async () => {
+    portal.offered = false;
+    try {
+      window.ogb = { organization: bridge } as unknown as typeof window.ogb;
+      await show();
+      expect(f.row).toBeNull();
+    } finally { portal.offered = true; delete window.ogb; }
   });
 
   it("opens as the Connect an AI dialog, which Escape and a click outside close", async () => {
