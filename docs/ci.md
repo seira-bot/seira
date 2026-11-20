@@ -292,6 +292,9 @@ Nothing else is retried, and a local run never retries.
   (`scripts/testing/ci-retry-summary.mjs`).
 - Fix the test, then delete its entry. `scripts/testing/ci-retry-list.test.ts`
   fails on an entry whose test no longer exists.
+- Add an entry only when the cause is outside this repository, and give the
+  run ids that prove it. A retry or a longer timeout does not fix a flaky test:
+  find the cause and fix it. The list can be empty.
 
 ## What CI does not run
 
