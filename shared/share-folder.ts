@@ -64,8 +64,8 @@ export function safeFolderPath(path: string): string | null {
 /** Whether the reader ever opens this path: the manifest, a skill, a file beside one or a picture. Everything else in a
  * folder is ignored. */
 export function isShareFolderPath(path: string): boolean {
-  return path === MANIFEST_NAMES.bot || path === MANIFEST_NAMES.department || path === LEGACY_MARKDOWN || path === LEGACY_MANIFEST ||
-    /^[\w.-]+\.seira\.json$/.test(path) || SKILL_PATH.test(path) || PICTURE_PATH.test(path) || isSkillFilePath(path);
+  return path === MANIFEST_NAMES.bot || path === MANIFEST_NAMES.department || path === LEGACY_MARKDOWN || path === LEGACY_MANIFEST || path === LEGACY_TEAM_MANIFEST_FILE ||
+    /^[\w.-]+\.seira\.json$/.test(path) || (path.endsWith(LEGACY_PACKAGE_FILE_SUFFIX) && /^[\w.-]+$/.test(path)) || SKILL_PATH.test(path) || PICTURE_PATH.test(path) || isSkillFilePath(path);
 }
 
 function textOf(value: string | Uint8Array | undefined): string | undefined {
