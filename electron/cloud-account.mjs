@@ -121,7 +121,7 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
   setTimer = setTimeout, clearTimer = clearTimeout, warn = message => console.warn(message), awaitingWake = () => false, t = englishText.t }) {
   origin = cloudOrigin(origin, fixture, trusted);
   const staging = origin === STAGING_CLOUD_ORIGIN;
-  const own = origin === CLOUD_ORIGIN || staging || (fixture && !trusted) ? null : origin;
+  const own = staging || (fixture && !trusted) ? null : origin;
   let grant = null, issued = null, cleanup = null, pending = null, cleanupNeeded = false;
   let value = { status: "signed-out", message: "restoring" }, generation = 0, timer = null, closed = false, clearing = null, refreshing = null;
   let verifiedUntil = 0, restoring = false, controller = new AbortController(), failures = 0;
