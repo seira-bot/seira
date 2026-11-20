@@ -138,6 +138,8 @@ export const LEGACY_SESSION_TOKEN_PREFIX = "omb_sess_";
 export const LEGACY_DEVICE_TOKEN_PREFIX = "omb_";
 /** The start of a Composio user id that an earlier version made for an installation. */
 export const LEGACY_COMPOSIO_USER_PREFIX = "openmausbot_";
+/** The salt that an earlier version hashed a team's Composio project key with, for the key mark it stored. */
+export const LEGACY_PROJECT_APPS_SALT = "omb-project-apps\0";
 /** The header an earlier version sent a webhook secret in. */
 export const LEGACY_WEBHOOK_AUTH_HEADER = "x-openmaus-secret";
 /** The header the deployed event broker still reads the poller id from. */

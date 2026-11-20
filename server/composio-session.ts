@@ -168,11 +168,15 @@ const EARLIER_USER_PAGES = 4;
 /** The one Seira Composio user in this project, when it still has a live connection, so a fresh installation (a
  * reinstall, another computer) gets that installation's apps back; null when there is none, more than one (even with
  * only expired connections, since it can't tell whose is whose), or Composio can't say. */
+/** Security: only the id an installation makes for itself. A team member's id or a connected-apps service user on the
+ * same key is never adopted. */
+const INSTALLATION_USER = new RegExp(`^(?:seira_|${LEGACY_COMPOSIO_USER_PREFIX})[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$`, "u");
+
 async function earlierInstallationUser(apiKey: string): Promise<string | null> {
   const users = new Set<string>();
   let pages = 0;
   const enough = (page: ConnectedAccountResponse[]) => {
-    for (const { user_id } of page) if (user_id?.startsWith("seira_") || user_id?.startsWith(LEGACY_COMPOSIO_USER_PREFIX)) users.add(user_id);
+    for (const { user_id } of page) if (user_id && INSTALLATION_USER.test(user_id)) users.add(user_id);
     pages += 1;
     return users.size > 1 || pages >= EARLIER_USER_PAGES;
   };

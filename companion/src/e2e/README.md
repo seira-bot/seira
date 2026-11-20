@@ -122,7 +122,7 @@ NKpsk0:
 - `MixHash`, `MixKey`, `MixKeyAndHash`, `EncryptAndHash` and `DecryptAndHash` are exactly as Noise defines them.
 - `ENCRYPT(k, n, ad, p)` is AES-256-GCM with nonce `0x00000000 ‖ uint64_be(n)` and AAD `ad`.
 
-**Prologue** (11 bytes): `"seira-e2e/1" ‖ 0x00 ‖ transport`, with `transport` from section 4.
+**Prologue** (13 bytes): `"seira-e2e/1" ‖ 0x00 ‖ transport`, with `transport` from section 4.
 
 **Initialization, both sides:** `MixHash(prologue)`, then `MixHash(T.pub)` for the responder's pre-message `s`.
 

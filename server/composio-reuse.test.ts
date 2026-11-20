@@ -64,46 +64,59 @@ beforeEach(() => {
 
 const account = (user_id: string, slug: string, status = "ACTIVE") => ({ id: `ca_${user_id}_${slug}`, user_id, status, toolkit: { slug } });
 const NEW_USER = /^seira_[0-9a-f-]{36}$/u;
+/** Installation users as an installation makes them: the prefix and a random UUID. */
+const EARLIER = "seira_0b5a6c1e-2f3d-4a5b-8c6d-7e8f9a0b1c2d", OLD_EARLIER = "openmausbot_5e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a4b";
+const GONE = "seira_1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f", OTHER = "seira_2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a";
+const ONE = "seira_3e4f5a6b-7c8d-4e9f-0a1b-2c3d4e5f6a7b", TWO = "seira_4f5a6b7c-8d9e-4f0a-1b2c-3d4e5f6a7b8c";
 const prepareFresh = () => prepareProjectSession("ak_reuse", undefined, undefined, { reuseEarlierUser: true });
 
 describe("a fresh installation connecting a project an earlier installation used", () => {
   it("keeps the earlier installation's Composio user, so its connected apps come back", async () => {
     accounts = [
-      account("seira_earlier", "gmail"),
-      account("seira_earlier", "github"),
-      account("seira_earlier", "slack"),
+      account(EARLIER, "gmail"),
+      account(EARLIER, "github"),
+      account(EARLIER, "slack"),
       account("someone_elses_app", "notion"),
     ];
     const prepared = await prepareFresh();
-    expect(prepared.userId).toBe("seira_earlier");
-    expect(sessionUsers).toEqual(["seira_earlier"]);
+    expect(prepared.userId).toBe(EARLIER);
+    expect(sessionUsers).toEqual([EARLIER]);
     expect(accountQueries.length).toBe(2);
     expect(accountQueries.every((query) => !query.has("user_ids"))).toBe(true);
   });
 
   it("keeps a Composio user that an earlier version made", async () => {
-    accounts = [account("openmausbot_earlier", "gmail"), account("openmausbot_earlier", "slack")];
+    accounts = [account(OLD_EARLIER, "gmail"), account(OLD_EARLIER, "slack")];
     const prepared = await prepareFresh();
-    expect(prepared.userId).toBe("openmausbot_earlier");
+    expect(prepared.userId).toBe(OLD_EARLIER);
+  });
+
+  it("never adopts a team member's Composio user or a connected-apps service user on the same key", async () => {
+    for (const user of [`seira_member_${"a".repeat(32)}`, `seira_${"b".repeat(32)}`, `omb_member_${"c".repeat(32)}`, `omb_${"d".repeat(32)}`, `${EARLIER}-x`]) {
+      accounts = [account(user, "gmail"), account(user, "slack")];
+      const prepared = await prepareFresh();
+      expect(prepared.userId, user).toMatch(NEW_USER);
+      expect(prepared.userId, user).not.toBe(user);
+    }
   });
 
   it("reads only a few pages, and starts a new user when the project is too big to tell", async () => {
-    accounts = Array.from({ length: 30 }, (_, n) => account("seira_earlier", `app${n}`));
+    accounts = Array.from({ length: 30 }, (_, n) => account(EARLIER, `app${n}`));
     const prepared = await prepareFresh();
     expect(prepared.userId).toMatch(NEW_USER);
     expect(accountQueries.length).toBe(4);
   });
 
   it("starts a new user when the project has no earlier installation's live connections", async () => {
-    accounts = [account("someone_elses_app", "notion"), account("seira_gone", "gmail", "EXPIRED")];
+    accounts = [account("someone_elses_app", "notion"), account(GONE, "gmail", "EXPIRED")];
     const prepared = await prepareFresh();
     expect(prepared.userId).toMatch(NEW_USER);
   });
 
   it("starts a new user when several earlier installations share the project, since it can't tell whose apps are whose", async () => {
     accounts = [
-      account("seira_one", "gmail"),
-      account("seira_two", "github"),
+      account(ONE, "gmail"),
+      account(TWO, "github"),
       account("someone_elses_app", "notion"),
       account("someone_elses_app", "slack"),
     ];
@@ -113,7 +126,7 @@ describe("a fresh installation connecting a project an earlier installation used
   });
 
   it("starts a new user when another installation's connections have only expired", async () => {
-    accounts = [account("seira_earlier", "gmail"), account("seira_other", "github", "EXPIRED")];
+    accounts = [account(EARLIER, "gmail"), account(OTHER, "github", "EXPIRED")];
     const prepared = await prepareFresh();
     expect(prepared.userId).toMatch(NEW_USER);
   });
@@ -126,7 +139,7 @@ describe("a fresh installation connecting a project an earlier installation used
   });
 
   it("never looks for another user when this installation already has one", async () => {
-    accounts = [account("seira_earlier", "gmail")];
+    accounts = [account(EARLIER, "gmail")];
     const prepared = await prepareProjectSession("ak_reuse", { userId: "seira_mine" }, undefined, { reuseEarlierUser: true });
     expect(prepared.userId).toBe("seira_mine");
     expect(accountQueries).toEqual([]);
@@ -134,7 +147,7 @@ describe("a fresh installation connecting a project an earlier installation used
 });
 
 describe("who may look for an earlier installation's user", () => {
-  const earlier = () => { accounts = [account("seira_earlier", "gmail"), account("seira_earlier", "slack")]; };
+  const earlier = () => { accounts = [account(EARLIER, "gmail"), account(EARLIER, "slack")]; };
 
   // Composio refuses the Session, so the route answers before it saves anything.
   async function saveKeyThroughConfigRoute(shared: boolean) {
@@ -184,6 +197,6 @@ describe("who may look for an earlier installation's user", () => {
     earlier();
     await saveKeyThroughConfigRoute(false);
     expect(accountQueries.length).toBeGreaterThan(0);
-    expect(sessionUsers).toEqual(["seira_earlier"]);
+    expect(sessionUsers).toEqual([EARLIER]);
   });
 });
