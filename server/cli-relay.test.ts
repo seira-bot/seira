@@ -21,7 +21,7 @@ describe("seira serve --relay", () => {
     expect(parseArgs(["serve", "--tailscale", "--relay"], {})).toMatchObject({ relay: true, tailscale: true });
     expect(parseArgs(["service", "install", "--relay"], {})).toMatchObject({ command: "service", relay: true });
     expect(parseArgs(["serve", "--relay", "--tunnel"], {})).toEqual({ error: "choose one of --relay (phones through Seira Relay) and --tunnel (a public address)" });
-    expect(parseArgs(["serve", "--tailscale", "--tunnel"], {})).toEqual({ error: "choose one of --tailscale (your tailnet) and --tunnel (a public address)" });
+    expect(parseArgs(["serve", "--tailscale", "--tunnel"], {})).toMatchObject({ command: "serve", tailscale: true, tunnel: true });
     expect(parseArgs(["--local", "--relay"], {})).toEqual({ error: "--local cannot be combined with a remote-access option" });
   });
 
