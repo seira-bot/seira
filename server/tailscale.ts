@@ -158,14 +158,22 @@ export async function tailscaleServe(
   const exited = new Promise<number | null>((done) => { child.once("exit", (code) => done(code)); child.once("error", () => done(-1)); });
   const early = await Promise.race([exited, new Promise<"running">((done) => setTimeout(() => done("running"), options.settleMs ?? 2_500))]);
   if (early !== "running") return { failure: early === -1 ? "not-installed" : classifyTailscaleStderr(stderr) };
-  writeFileSync(tailscaleMarker(options.dataDir), JSON.stringify({ cli: status.cli, httpsPort, localPort }), { mode: 0o600 });
+  const stopServe = async () => {
+    child.kill("SIGTERM");
+    const timer = setTimeout(() => child.kill("SIGKILL"), 3_000);
+    await exited;
+    clearTimeout(timer);
+  };
+  try {
+    writeFileSync(tailscaleMarker(options.dataDir), JSON.stringify({ cli: status.cli, httpsPort, localPort }), { mode: 0o600 });
+  } catch (error) {
+    await stopServe();
+    throw error;
+  }
   return {
     origin,
     async stop() {
-      child.kill("SIGTERM");
-      const timer = setTimeout(() => child.kill("SIGKILL"), 3_000);
-      await exited;
-      clearTimeout(timer);
+      await stopServe();
       rmSync(tailscaleMarker(options.dataDir), { force: true });
     },
   };
