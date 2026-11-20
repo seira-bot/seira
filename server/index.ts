@@ -7558,7 +7558,7 @@ async function beginTurn(
   if (botAtThreadCapacity(botId, threadId, Boolean(opts?.coordination || opts?.peerAsk || opts?.commsDepth || opts?.cardContinuation || opts?.computerSelectionContinuation))) {
     throw Object.assign(new Error(botThreadLimitText(cfg, botThreadsHost(cloudPlanTier.starter()))), { status: 409, code: "thread_limit" });
   }
-  if (!limitFailovers.restore(botId, threadId) && !(opts?.continuesRun || opts?.compactOnly || opts?.cardContinuation || opts?.peerLimitResent || opts?.automaticRecoveryAttempted)) aiPool.place(botId, threadId);
+  if (!limitFailovers.restore(botId, threadId) && !limitFailovers.holds(threadId) && !(opts?.continuesRun || opts?.compactOnly || opts?.cardContinuation || opts?.peerLimitResent || opts?.automaticRecoveryAttempted)) aiPool.place(botId, threadId);
   const bot = store.projectBotForTask(botId, threadId);
   if (!bot) throw Object.assign(new Error("no such task"), { status: 404 });
   if (bot.approvalGrant) throw Object.assign(new Error("this bot's approval level is still being confirmed — try again"), { status: 409, code: "settling" });

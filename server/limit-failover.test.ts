@@ -120,6 +120,17 @@ describe("LimitFailovers", () => {
     expect(new LimitFailovers(kept.deps).list()).toEqual([expect.objectContaining({ threadId: "t", from, to })]);
   });
 
+  it("holds a thread from the failover until it goes back or is forgotten", () => {
+    const f = fixture();
+    expect(f.failovers.holds("t")).toBe(false);
+    f.failovers.record({ botId: "scout", threadId: "t", from, to, resetsAt: NOW + HOUR, at: NOW });
+    expect(f.failovers.holds("t")).toBe(true);
+    expect(f.failovers.holds("other")).toBe(false);
+    f.at(NOW + HOUR + 1);
+    f.failovers.restore("scout", "t");
+    expect(f.failovers.holds("t")).toBe(false);
+  });
+
   it("a second failover still goes back to the engine the conversation started on", () => {
     const f = fixture({ current: { instanceId: "grok", model: "grok-5" } });
     f.failovers.record({ botId: "scout", threadId: "t", from, to, resetsAt: NOW + HOUR, at: NOW });

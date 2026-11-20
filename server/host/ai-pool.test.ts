@@ -21,7 +21,7 @@ const fileIn = () => {
 interface Over {
   pool?: Partial<AiPoolConfig> | null; thread?: ModelSelection | null; bot?: ModelSelection | null;
   usage?: Record<string, number | null>; resets?: Record<string, number | null>; blocked?: string[]; paid?: string[]; moveOk?: boolean;
-  file?: string; now?: () => number;
+  file?: string; now?: () => number; maxTracked?: number;
 }
 
 function setup(over: Over = {}) {
@@ -36,6 +36,7 @@ function setup(over: Over = {}) {
   const note = vi.fn();
   const make = () => createAiPool({
     ...(over.file ? { file: over.file } : {}),
+    ...(over.maxTracked ? { maxTrackedThreads: over.maxTracked } : {}),
     config: () => pool,
     threadModel: () => state.thread,
     botModel: () => (over.bot === undefined ? own : over.bot),
@@ -45,7 +46,7 @@ function setup(over: Over = {}) {
     moveTo, note, engineName: (id) => NAMES[id] ?? id,
     now: over.now ?? (() => NOW),
   });
-  return { instance: make(), make, moveTo, note, state };
+  return { instance: make(), make, moveTo, note, state, pool };
 }
 
 describe("AI pool placement", () => {
@@ -103,6 +104,12 @@ describe("AI pool placement", () => {
     const low = setup({ usage: { a: 0, b: null, c: null } });
     low.instance.place("bot", "t");
     expect(low.note).toHaveBeenCalledWith("t", "Alpha is low on usage, so this conversation moved to Beta.");
+    const inOrderLow = setup({ pool: { mode: "inOrder", floor: 10 }, usage: { a: 5, b: 100, c: 100 } });
+    inOrderLow.instance.place("bot", "t");
+    expect(inOrderLow.note).toHaveBeenCalledWith("t", "Alpha is low on usage, so this conversation moved to Beta.");
+    const payPerUse = setup({ paid: ["a"], usage: { a: null, b: 80, c: 60 } });
+    payPerUse.instance.place("bot", "t");
+    expect(payPerUse.note).toHaveBeenCalledWith("t", "Alpha is pay-per-use, so this conversation moved to Beta.");
   });
 });
 
@@ -147,8 +154,8 @@ describe("AI pool records", () => {
     const file = fileIn();
     const first = setup({ file });
     first.instance.place("bot", "t");
-    const saved = JSON.parse(readFileSync(file, "utf8")) as Record<string, { instanceId: string; level: number; until: number | null }>;
-    expect(saved.t).toEqual({ instanceId: "b", level: 70, until: null });
+    const saved = JSON.parse(readFileSync(file, "utf8")) as Record<string, { instanceId: string; model: string; level: number; until: number | null }>;
+    expect(saved.t).toEqual({ instanceId: "b", model: "b-model", level: 70, until: null });
     const second = first.make();
     first.state.usage = { a: 20, b: 20, c: 60 };
     expect(second.place("bot", "t"), "the record says the pool placed it").toBe(true);
@@ -171,6 +178,44 @@ describe("AI pool records", () => {
     expect(saved.t0).toBeUndefined();
     expect(saved.t2001).toBeDefined();
   }, 60_000);
+});
+
+describe("AI pool levels and models", () => {
+  it("does not pin a conversation that was placed with no level of its own", () => {
+    const { instance, moveTo, state, pool } = setup({ pool: { mode: "inOrder", floor: 10, members: [on("a"), on("b")] }, usage: { a: 100, b: 100 } });
+    expect(instance.place("bot", "t")).toBe(false);
+    pool!.mode = "even";
+    state.usage = { a: 20, b: 100 };
+    expect(instance.place("bot", "t")).toBe(true);
+    expect(moveTo).toHaveBeenCalledWith("bot", "t", expect.anything(), on("b"));
+  });
+
+  it("keeps the model the person chose inside the same AI, and drops the record", () => {
+    const file = fileIn();
+    const { instance, moveTo, state } = setup({ file, usage: { a: 95, b: 96, c: 96 } });
+    expect(instance.place("bot", "t")).toBe(false);
+    expect(JSON.parse(readFileSync(file, "utf8")).t).toMatchObject({ instanceId: "a", model: "mine" });
+    state.thread = { instanceId: "a", model: "sonnet" };
+    state.usage = { a: 20, b: 80, c: 60 };
+    expect(instance.place("bot", "t")).toBe(false);
+    expect(moveTo).not.toHaveBeenCalled();
+    expect(JSON.parse(readFileSync(file, "utf8")).t).toBeUndefined();
+  });
+
+  it("drops a saved record that has no model", () => {
+    const file = fileIn();
+    writeFileSync(file, JSON.stringify({ t: { instanceId: "b", level: 70, until: null } }));
+    const { instance, moveTo } = setup({ file, thread: on("b"), bot: { instanceId: "a", model: "mine" } });
+    expect(instance.place("bot", "t")).toBe(false);
+    expect(moveTo).not.toHaveBeenCalled();
+  });
+
+  it("does not evict a conversation that is placed again", () => {
+    const file = fileIn();
+    const { instance } = setup({ file, maxTracked: 3, usage: { a: 95, b: 96, c: 96 } });
+    for (const id of ["t1", "t2", "t3", "t1", "t4"]) instance.place("bot", id);
+    expect(Object.keys(JSON.parse(readFileSync(file, "utf8"))).sort()).toEqual(["t1", "t3", "t4"]);
+  });
 });
 
 describe("AI pool backups", () => {
