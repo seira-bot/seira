@@ -217,6 +217,23 @@ describe("the bars", () => {
     expect(tracks(windows(95, 20))).toEqual(["bg-warning", "bg-success"]);
   });
 
+  it("only switch the rows when a ring in the hover card is pressed, and leave the model button closed", async () => {
+    const codex: EngineLimit = { ...claude(91), engine: "codex", name: "Codex", driver: "codex", window: "weekly", windows: [{ window: "weekly", usedPercent: 91, resetsAt: RESET }] };
+    serve([windows(38, 80), codex]);
+    const opened = vi.fn();
+    const scroll = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
+    const container = mount(createElement("button", { type: "button", onClick: opened }, createElement(UsageBars, { engine: "claude" })));
+    hover(container.querySelector("[data-usage-bars]")!, "mouse");
+    await wait(HOVER_MS);
+    const card = document.querySelector<HTMLElement>("[data-usage-card]")!;
+    flushSync(() => card.querySelector<HTMLButtonElement>('[data-usage-engine="codex"]')!.click());
+    expect([...card.querySelectorAll("[data-usage-row]")].map((row) => row.getAttribute("data-usage-row"))).toEqual(["weekly"]);
+    expect(card.querySelector('[data-usage-engine="codex"]')?.getAttribute("aria-pressed")).toBe("true");
+    expect(scroll).not.toHaveBeenCalled();
+    expect(opened).not.toHaveBeenCalled();
+    scroll.mockRestore();
+  });
+
   it("open every window in a card on a mouse hover, never on a touch, and keep the card's clicks from the model button", async () => {
     serve([windows(38, 80)]);
     const opened = vi.fn();

@@ -227,6 +227,7 @@ export function ModelPicker({
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [probing, setProbing] = useState<ReadonlySet<string>>(() => new Set());
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const [reveal, setReveal] = useState<{ instance: string; id: number }>();
   const [scope, setScope] = useState<"bot" | "thread">("thread");
   const advanced = useAdvancedMode();
   const ownerOrAdmin = useOwnerOrAdmin();
@@ -384,6 +385,23 @@ export function ModelPicker({
   const lookForLocalIn = (instance: InstanceInfo) => {
     if (offersLocalModels(instance, instance.models.options.filter((option) => option.custom).length)) lookForLocal(instance);
   };
+
+  const revealGroup = (engine: string) => {
+    const group = simpleMenu?.groups.find((entry) => entry.instance.instanceId === engine);
+    if (!group || bot.busy || engine === selection.instanceId) return;
+    if (!expanded.has(engine)) {
+      setExpanded((current) => new Set(current).add(engine));
+      lookForLocalIn(group.instance);
+    }
+    setReveal((current) => ({ instance: engine, id: (current?.id ?? 0) + 1 }));
+  };
+  useEffect(() => {
+    if (!reveal) return;
+    const group = [...(menuRef.current?.querySelectorAll<HTMLElement>("[data-simple-provider]") ?? [])].find((node) => node.dataset.simpleProvider === reveal.instance);
+    if (!group) return;
+    group.scrollIntoView({ block: "start" });
+    group.querySelector<HTMLElement>("[data-menu-row]")?.focus({ preventScroll: true });
+  }, [reveal]);
 
   const openLocalModels = (instance: InstanceInfo) => {
     setPane("custom");
@@ -961,7 +979,7 @@ export function ModelPicker({
       } : { width: popoverWidth }}
       className={cn("menu-surface z-[80] flex flex-col overflow-hidden", motion.className)}
     >
-      <UsageMenuRows engine={selection.instanceId} />
+      <UsageMenuRows engine={selection.instanceId} onPick={revealGroup} />
       {bot.busy ? <BusyModelMenu bot={shown} threadId={threadId} updateBotDefault={busyUpdatesBotDefault} variants={Boolean(active?.capabilities?.modelVariants)} /> : simpleMenu ? (
         <SimpleModelMenu
           menu={simpleMenu}
