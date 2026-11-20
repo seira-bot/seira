@@ -11,13 +11,13 @@ import type { Bot, InstanceInfo } from "@/state/store";
 
 const fixture = vi.hoisted(() => ({
   advanced: false,
-  extra: [] as InstanceInfo[],
+  instances: [] as InstanceInfo[],
   api: vi.fn(async (..._args: unknown[]) => ({}) as unknown),
 }));
 vi.mock("@/state/store", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/state/store")>()),
   useStore: () => ({
-    state: { instances: [claude, ...fixture.extra], bots: [], modelVariantSessions: {}, config: {} },
+    state: { instances: fixture.instances, bots: [], modelVariantSessions: {}, config: {} },
     dispatch: vi.fn(),
     refreshInstances: () => Promise.resolve(),
     refreshModels: () => Promise.resolve(),
@@ -63,7 +63,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(NOW);
   fixture.advanced = false;
-  fixture.extra = [];
+  fixture.instances = [claude];
   remember([usage(38)]);
   document.documentElement.dataset.reducedMotion = "true";
   vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
@@ -199,7 +199,7 @@ describe("the model menu's usage rings", () => {
     const groupOf = (menu: HTMLElement, id: string) => menu.querySelector<HTMLElement>(`[data-simple-provider="${id}"]`)!;
 
     it("move the model list to that account's group when its ring is pressed", async () => {
-      fixture.extra = [second];
+      fixture.instances = [claude, second];
       remember([usage(38), secondUsage()]);
       const scroll = vi.mocked(HTMLElement.prototype.scrollIntoView);
       const menu = await openMenu();
@@ -213,7 +213,7 @@ describe("the model menu's usage rings", () => {
     });
 
     it("show that account's usage rows as well", async () => {
-      fixture.extra = [second];
+      fixture.instances = [claude, second];
       remember([usage(38), secondUsage()]);
       const menu = await openMenu();
       flushSync(() => rings(menu)[1]!.click());
@@ -224,7 +224,7 @@ describe("the model menu's usage rings", () => {
     });
 
     it("leave the list alone when the bot's own account ring is pressed", async () => {
-      fixture.extra = [second];
+      fixture.instances = [claude, second];
       remember([usage(38), secondUsage()]);
       const scroll = vi.mocked(HTMLElement.prototype.scrollIntoView);
       const menu = await openMenu();
