@@ -1,4 +1,6 @@
 export const TRANSCRIPT_WINDOW_SIZE = 120;
+export const TRANSCRIPT_OPEN_SIZE = 40;
+export const TRANSCRIPT_STEP_SIZE = 40;
 
 export interface TranscriptWindow<T> {
   visible: T[];
@@ -13,20 +15,20 @@ export interface TranscriptWindowRange {
   end: number;
 }
 
-export function tailWindowStart(total: number, size: number = TRANSCRIPT_WINDOW_SIZE): number {
+export function tailWindowStart(total: number, size: number = TRANSCRIPT_OPEN_SIZE): number {
   return Math.max(0, total - size);
 }
 
 export function followWindowStart(messages: readonly { role?: string }[], start: number): number {
   const tail = tailWindowStart(messages.length);
-  const oldest = Math.max(start, tail - TRANSCRIPT_WINDOW_SIZE);
+  const oldest = Math.max(start, messages.length - 2 * TRANSCRIPT_WINDOW_SIZE);
   for (let index = messages.length - 1; index >= oldest; index--) {
     if (messages[index].role === "user") return Math.min(tail, index);
   }
   return tail;
 }
 
-export function expandWindowStart(startIndex: number, size: number = TRANSCRIPT_WINDOW_SIZE): number {
+export function expandWindowStart(startIndex: number, size: number = TRANSCRIPT_STEP_SIZE): number {
   return Math.max(0, startIndex - size);
 }
 
@@ -45,7 +47,7 @@ export function focusWindowRange(
 export function resolveTranscriptWindow<T>(
   messages: readonly T[],
   startIndex: number,
-  size: number = TRANSCRIPT_WINDOW_SIZE,
+  size: number = TRANSCRIPT_OPEN_SIZE,
   endIndex: number | null = null,
 ): TranscriptWindow<T> {
   const requestedEnd = endIndex === null ? messages.length : Math.max(0, Math.min(messages.length, endIndex));

@@ -35,6 +35,9 @@ const teamOwners = new Set<string>();
 const watched = new Set<string>();
 const deleteSpans: Array<{ boxId: string; start: number; end: number }> = [];
 const pendingDeletes = new Set<string>();
+/** Called each time the recovery reads one computer (GET /boxes/:id). It then has no probe of that computer under way:
+ * its steps for one computer come one after another. So the clock moves only here while the recovery works on it. */
+let onLook: ((boxId: string) => void) | null = null;
 
 const send = (res: import("node:http").ServerResponse, status: number, body: unknown) => {
   res.writeHead(status, { "content-type": "application/json" });
@@ -72,6 +75,7 @@ beforeAll(async () => {
       if (!match || !box) return send(res, 404, { ok: false, code: "not_found", message: "That cloud computer does not exist." });
       const action = match[2];
       if (!action && method === "GET") {
+        onLook?.(box.id);
         const status = boxReadStatus.get(box.id) ?? 200;
         return status === 200 ? send(res, 200, { ok: true, box }) : send(res, status, { ok: false, code: "upstream_unavailable" });
       }
@@ -151,14 +155,16 @@ function start() {
 beforeEach(async () => {
   boxes = []; requests = []; commandStatus = new Map(); boxReadStatus = new Map(); listStatus = 200; deleteCompletes = true; resumeAnswers = new Set();
   pendingDeletes.clear();
-  deleteDelayMs = 0; autoOn = true; deleteSpans.length = 0; teamOwners.clear(); watched.clear(); stopRefused = new Set(); deletesAllowed = false;
+  deleteDelayMs = 0; autoOn = true; deleteSpans.length = 0; teamOwners.clear(); watched.clear(); stopRefused = new Set(); deletesAllowed = false; onLook = null;
   at += 24 * 60 * 60_000;
   file = join(mkdtempSync(join(tmpdir(), "omb-repl-")), "boat-replacements.json");
   await load();
   start();
 });
-afterEach(() => {
-  recovery.close();
+afterEach(async () => {
+  // Waits for the recovery's work under way: else it runs on into the next test, reads that test's clock, and its requests
+  // land in that test's record.
+  await recovery.close();
   if (!deletesAllowed) expect(requests.filter((request) => request.method === "DELETE")).toEqual([]);
 });
 
@@ -183,11 +189,18 @@ const setAside = (boxId: string) => {
   const box = boxes.find((candidate) => candidate.id === boxId);
   return Boolean(box && SET_ASIDE_NAME.test(box.name) && box.state === "archived");
 };
-/** While `check` is not yet true, moves the test's clock on and keeps `witness` answering, as other bots' work would. */
-const ticking = (witness: string | null, stepMs = 30_000, stopAt = Infinity) => {
-  const timer = setInterval(() => { if (at + stepMs <= stopAt) at += stepMs; if (witness) health.answered(witness); }, 15);
-  return () => clearInterval(timer);
+/** Until stopped, each time the recovery reads `boxId`, moves the test's clock on (never past `stopAt`) and keeps `witness`
+ * answering, as other bots' work would. Never while a probe of `boxId` is under way: the probe would seem held up for
+ * minutes by this process (stalledProbe), count neither way, and end the recovery's wait. */
+const ticking = (boxId: string, witness: string | null, stepMs = 30_000, stopAt = Infinity) => {
+  onLook = (id) => { if (id !== boxId) return; if (at + stepMs <= stopAt) at += stepMs; if (witness) health.answered(witness); };
+  return () => { onLook = null; };
 };
+/** Moves the test's clock on by `ms` the next time the recovery reads `boxId`, then runs `then`; for the same reason as
+ * `ticking`, never while a probe of it is under way. */
+const laterOnLook = (boxId: string, ms: number, then?: () => void) => new Promise<void>((resolve) => {
+  onLook = (id) => { if (id !== boxId) return; onLook = null; at += ms; then?.(); resolve(); };
+});
 const until = async (check: () => boolean, ms = 20_000) => {
   for (const end = Date.now() + ms; Date.now() < end; await new Promise((resolve) => setTimeout(resolve, 20))) if (check()) return;
   throw new Error("timed out");
@@ -320,7 +333,7 @@ describe("a cloud computer the provider reports in error", () => {
     await expect(boat.provisionBoat(cfg, botId, "Bot")).rejects.toMatchObject({ code: journal.BOAT_DELETING });
     expect(told).toEqual([[botId, "needsPerson"], [botId, "replaced"]]);
 
-    recovery.close();
+    await recovery.close();
     await load();
     start();
     deleteCompletes = true;
@@ -335,7 +348,7 @@ describe("a cloud computer the provider reports in error", () => {
   it("keeps every guard for a replacement recorded before its delete was sent, without counting it twice", async () => {
     const { botId, box } = await botWith("error");
     writeFileSync(file, JSON.stringify([{ owner: botId, boxId: box.id, at: now() - 60_000 }]));
-    recovery.close();
+    await recovery.close();
     start();
     await boat.findBoat(cfg, botId);
     await deadTwice(botId);
@@ -358,7 +371,7 @@ describe("a cloud computer that says it is ready but does not answer", () => {
     expect(recovery.refusal(box.id, "before")).toBe(words.CLOUD_COMPUTER_NOT_RESPONDING);
     await until(() => recovery.verdict(botId) === "restart-failed");
     // Minutes of probes after the restart, with the other computer answering throughout.
-    const stop = ticking(witness.box.id, 10_000);
+    const stop = ticking(box.id, witness.box.id, 10_000);
     try { await until(() => recovery.status(botId)?.state === "replaced"); } finally { stop(); }
     const order = requests.filter((request) => request.path.startsWith(`/boxes/${box.id}`)).map((request) => `${request.method} ${request.path.replace(`/boxes/${box.id}`, "") || "/"}`);
     expect(order.indexOf("POST /commands")).toBeLessThan(order.indexOf("POST /stop"));
@@ -410,7 +423,7 @@ describe("a cloud computer that says it is ready but does not answer", () => {
     await until(() => recovery.verdict(botId) === "restart-failed");
     // Minutes more of silence, probed again and again: still no witness, and the clock stops well short of half an hour.
     const limit = health.silentSince(box.id)! + 25 * 60_000;
-    const stop = ticking(null, 20_000, limit);
+    const stop = ticking(box.id, null, 20_000, limit);
     try { await until(() => at + 20_000 > limit); } finally { stop(); }
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(stops().map((request) => request.path)).toEqual([`/boxes/${box.id}/stop`]);
@@ -584,7 +597,7 @@ describe("before a silent computer is restarted by itself", () => {
     await until(() => requests.filter((request) => request.path === `/boxes/${box.id}/commands`).length >= 3);
     expect(recovery.status(botId)?.state).toBe("not-responding");
     expect(stops()).toHaveLength(0);
-    at += 5 * 60_000;
+    await laterOnLook(box.id, 5 * 60_000);
     await until(() => recovery.status(botId)?.state === "restarted");
     expect(stops()).toHaveLength(1);
   });
@@ -606,7 +619,7 @@ describe("before a silent computer is restarted by itself", () => {
     const witness = await botWith("ready");
     commandStatus.set(box.id, 502);
     await boat.findBoat(cfg, botId);
-    recovery.close();
+    await recovery.close();
     told = [];
     recovery = recoveryModule.createBoatRecovery({ cfg: () => cfg, tell: (owner, line) => told.push([owner, line]), log: () => {}, file, now, health, pollMs: 5, recheckMs: 20,
       autoReplace: () => false, read: async () => null,
@@ -616,8 +629,7 @@ describe("before a silent computer is restarted by itself", () => {
     await until(() => requests.filter((request) => request.path === `/boxes/${box.id}/commands`).length >= 3);
     expect(recovery.status(botId)?.state).toBe("not-responding");
     expect(stops()).toHaveLength(0);
-    at += 11 * 60_000;
-    health.answered(witness.box.id);
+    await laterOnLook(box.id, 11 * 60_000, () => health.answered(witness.box.id));
     await until(() => recovery.status(botId)?.state === "needs-person");
     expect(stops()).toHaveLength(0);
     expect(deletes()).toHaveLength(0);
@@ -892,6 +904,36 @@ describe("with automatic replacement switched off", () => {
     const created = await provisioned(botId);
     expect(created.boxId).not.toBe(box.id);
     expect(recovery.notice(created.boxId)).toBe(words.CLOUD_COMPUTER_REPLACED_BY_PERSON);
+  });
+});
+
+describe("closing the recovery", () => {
+  it("waits for the work under way, which then restarts nothing and sends nothing more", async () => {
+    const { botId, box } = await botWith("ready");
+    const witness = await botWith("ready");
+    commandStatus.set(box.id, 502);
+    await boat.findBoat(cfg, botId);
+    watched.add(botId);
+    stopsAnswering(box.id);
+    health.answered(witness.box.id);
+    await until(() => recovery.status(botId)?.state === "needs-person");
+    // Closed while it looks at the computer again, with nothing left that would keep a restart back.
+    let asked = false;
+    let closing: Promise<void> | void = undefined;
+    onLook = (id) => {
+      if (id !== box.id || asked) return;
+      asked = true;
+      watched.clear();
+      at += 2 * 60 * 60_000;
+      health.answered(witness.box.id);
+      closing = recovery.close();
+    };
+    await until(() => asked);
+    await closing;
+    const sent = requests.length;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(requests).toHaveLength(sent);
+    expect(stops()).toHaveLength(0);
   });
 });
 

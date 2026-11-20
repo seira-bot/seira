@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  TRANSCRIPT_OPEN_SIZE,
+  TRANSCRIPT_STEP_SIZE,
   TRANSCRIPT_WINDOW_SIZE,
   expandWindowStart,
   focusWindowRange,
@@ -18,11 +20,12 @@ describe("tailWindowStart", () => {
   });
 
   it("shows everything when the thread is exactly one window", () => {
-    expect(tailWindowStart(TRANSCRIPT_WINDOW_SIZE)).toBe(0);
+    expect(tailWindowStart(TRANSCRIPT_OPEN_SIZE)).toBe(0);
   });
 
-  it("starts one window back from the tail of a long thread", () => {
-    expect(tailWindowStart(300)).toBe(180);
+  it("starts one opening window back from the tail of a long thread", () => {
+    expect(tailWindowStart(300)).toBe(300 - TRANSCRIPT_OPEN_SIZE);
+    expect(tailWindowStart(2_000)).toBe(2_000 - TRANSCRIPT_OPEN_SIZE);
   });
 
   it("is zero for an empty thread", () => {
@@ -31,45 +34,48 @@ describe("tailWindowStart", () => {
 });
 
 describe("followWindowStart", () => {
+  const tail = 300 - TRANSCRIPT_OPEN_SIZE;
   const turn = (asked: number, total: number) =>
     Array.from({ length: total }, (_, i) => ({ role: i === asked ? "user" : "bot" }));
 
   it("is the tail window when the newest message is inside it", () => {
-    expect(followWindowStart(turn(250, 300), 0)).toBe(180);
+    expect(followWindowStart(turn(tail + 10, 300), 0)).toBe(tail);
   });
 
   it("stops at the newest message when a long turn follows it", () => {
-    expect(followWindowStart(turn(100, 300), 0)).toBe(100);
+    expect(followWindowStart(turn(tail - 100, 300), 0)).toBe(tail - 100);
   });
 
-  it("stops at most one more window back", () => {
-    expect(followWindowStart(turn(60, 300), 0)).toBe(60);
-    expect(followWindowStart(turn(59, 300), 0)).toBe(180);
+  it("stops at most two full windows back from the end", () => {
+    const limit = 300 - 2 * TRANSCRIPT_WINDOW_SIZE;
+    expect(followWindowStart(turn(limit, 300), 0)).toBe(limit);
+    expect(followWindowStart(turn(limit - 1, 300), 0)).toBe(tail);
   });
 
   it("does not stop at a message that is already above the window", () => {
-    expect(followWindowStart(turn(100, 300), 150)).toBe(180);
+    expect(followWindowStart(turn(100, 300), tail - 10)).toBe(tail);
   });
 
   it("is the tail window when the person has not written", () => {
-    expect(followWindowStart(turn(-1, 300), 0)).toBe(180);
+    expect(followWindowStart(turn(-1, 300), 0)).toBe(tail);
     expect(followWindowStart([], 0)).toBe(0);
   });
 
   it("moves back to the tail when the thread got shorter than the boundary allows", () => {
-    expect(followWindowStart(turn(450, 560), 500)).toBe(440);
-    expect(followWindowStart(turn(520, 560), 500)).toBe(440);
+    const shorter = 560 - TRANSCRIPT_OPEN_SIZE;
+    expect(followWindowStart(turn(450, 560), 500)).toBe(shorter);
+    expect(followWindowStart(turn(shorter + 1, 560), 500)).toBe(shorter);
     expect(followWindowStart(turn(-1, 20), 500)).toBe(0);
   });
 });
 
 describe("expandWindowStart", () => {
-  it("pulls the boundary back by one window per click", () => {
-    expect(expandWindowStart(300)).toBe(180);
+  it("pulls the boundary back by one step per click", () => {
+    expect(expandWindowStart(300)).toBe(300 - TRANSCRIPT_STEP_SIZE);
   });
 
   it("clamps an expansion past the start of the thread to zero", () => {
-    expect(expandWindowStart(60)).toBe(0);
+    expect(expandWindowStart(TRANSCRIPT_STEP_SIZE - 1)).toBe(0);
   });
 
   it("stays at zero once fully expanded", () => {
@@ -88,41 +94,41 @@ describe("resolveTranscriptWindow", () => {
 
   it("windows a long thread to its tail", () => {
     const result = resolveTranscriptWindow(thread(300), tailWindowStart(300));
-    expect(result.visible).toHaveLength(TRANSCRIPT_WINDOW_SIZE);
-    expect(result.visible[0]).toBe(180);
+    expect(result.visible).toHaveLength(TRANSCRIPT_OPEN_SIZE);
+    expect(result.visible[0]).toBe(300 - TRANSCRIPT_OPEN_SIZE);
     expect(result.visible.at(-1)).toBe(299);
-    expect(result.hiddenCount).toBe(180);
+    expect(result.hiddenCount).toBe(300 - TRANSCRIPT_OPEN_SIZE);
   });
 
   it("grows the window when messages append past an anchored boundary", () => {
     const start = tailWindowStart(300);
     const result = resolveTranscriptWindow(thread(310), start);
     expect(result.startIndex).toBe(start);
-    expect(result.visible).toHaveLength(130);
+    expect(result.visible).toHaveLength(TRANSCRIPT_OPEN_SIZE + 10);
     expect(result.visible.at(-1)).toBe(309);
   });
 
-  it("expands by one window per step until the start of the thread", () => {
-    const messages = thread(300);
-    const once = resolveTranscriptWindow(messages, expandWindowStart(180));
-    expect(once.visible).toHaveLength(240);
-    expect(once.hiddenCount).toBe(60);
+  it("expands by one step per call until the start of the thread", () => {
+    const messages = thread(100);
+    const once = resolveTranscriptWindow(messages, expandWindowStart(tailWindowStart(100)));
+    expect(once.visible).toHaveLength(TRANSCRIPT_OPEN_SIZE + TRANSCRIPT_STEP_SIZE);
+    expect(once.hiddenCount).toBe(100 - TRANSCRIPT_OPEN_SIZE - TRANSCRIPT_STEP_SIZE);
     const twice = resolveTranscriptWindow(messages, expandWindowStart(once.startIndex));
-    expect(twice.visible).toHaveLength(300);
+    expect(twice.visible).toHaveLength(100);
     expect(twice.hiddenCount).toBe(0);
   });
 
   it("falls back to a tail window when the thread shrinks under the boundary", () => {
     const result = resolveTranscriptWindow(thread(150), 180);
-    expect(result.startIndex).toBe(30);
-    expect(result.visible).toHaveLength(TRANSCRIPT_WINDOW_SIZE);
-    expect(result.hiddenCount).toBe(30);
+    expect(result.startIndex).toBe(150 - TRANSCRIPT_OPEN_SIZE);
+    expect(result.visible).toHaveLength(TRANSCRIPT_OPEN_SIZE);
+    expect(result.hiddenCount).toBe(150 - TRANSCRIPT_OPEN_SIZE);
   });
 
   it("resets a boundary sitting exactly at the end of the thread", () => {
-    const result = resolveTranscriptWindow(thread(100), 100);
+    const result = resolveTranscriptWindow(thread(TRANSCRIPT_OPEN_SIZE), TRANSCRIPT_OPEN_SIZE);
     expect(result.startIndex).toBe(0);
-    expect(result.visible).toHaveLength(100);
+    expect(result.visible).toHaveLength(TRANSCRIPT_OPEN_SIZE);
   });
 
   it("resolves an empty thread to an empty window", () => {
@@ -179,7 +185,7 @@ describe("withRestingCard", () => {
   });
 
   it("adds nothing when the newest resting card is already in the range", () => {
-    expect(withRestingCard(rows, range.visible, range.startIndex, (row) => row === 10 || row === 250)).toBe(range.visible);
+    expect(withRestingCard(rows, range.visible, range.startIndex, (row) => row === 10 || row === 300 - TRANSCRIPT_OPEN_SIZE + 10)).toBe(range.visible);
   });
 
   it("adds nothing when no card rests on the person", () => {

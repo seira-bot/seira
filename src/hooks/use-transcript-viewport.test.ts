@@ -83,7 +83,8 @@ vi.mock("@/state/store", () => ({ useStore: () => store }));
 vi.mock("@/lib/focus-message", () => ({ useFocusMessage: () => {} }));
 
 import { useTranscriptViewport } from "./use-transcript-viewport";
-import { forgetTranscriptPositions } from "@/lib/transcript-follow";
+import { forgetTranscriptPositions, rememberTranscriptPosition } from "@/lib/transcript-follow";
+import { TRANSCRIPT_OPEN_SIZE, TRANSCRIPT_STEP_SIZE, TRANSCRIPT_WINDOW_SIZE } from "@/lib/transcript-window";
 import { noteLiveReplyEvent, resetLiveReplies } from "@/state/live-reply";
 import type { RuntimeEvent } from "../../shared/runtime-events";
 
@@ -256,40 +257,40 @@ describe("transcript viewport", () => {
 
   it("mounts only the last window of a long thread and re-tails it when another thread opens", () => {
     const view = mount({ messages: rows(300) });
-    expect(view.current.windowedMessages).toHaveLength(120);
-    expect(view.current.hiddenCount).toBe(180);
+    expect(view.current.windowedMessages).toHaveLength(TRANSCRIPT_OPEN_SIZE);
+    expect(view.current.hiddenCount).toBe(300 - TRANSCRIPT_OPEN_SIZE);
 
     view.act(() => view.current.showEarlier());
-    expect(view.current.hiddenCount).toBe(60);
+    expect(view.current.hiddenCount).toBe(300 - TRANSCRIPT_OPEN_SIZE - TRANSCRIPT_STEP_SIZE);
 
     view.rerender({ threadId: "other", messages: [{ id: "ask", role: "user" }, ...rows(299, 1_001)] });
     expect(view.current.transcriptKey).toBe("bot:other");
-    expect(view.current.hiddenCount).toBe(180);
-    expect(view.current.windowedMessages[0]?.id).toBe("m1180");
+    expect(view.current.hiddenCount).toBe(300 - TRANSCRIPT_OPEN_SIZE);
+    expect(view.current.windowedMessages[0]?.id).toBe(`m${1_000 + 300 - TRANSCRIPT_OPEN_SIZE}`);
   });
 
   it("keeps the open card work rests on drawn however many rows follow it", () => {
     const rests = (row: Row) => row.id === "card";
     const thread = [...rows(5), { id: "card" }, ...rows(200, 5)];
     const view = mount({ messages: thread, rests });
-    expect(view.current.hiddenCount).toBe(thread.length - 120);
+    expect(view.current.hiddenCount).toBe(thread.length - TRANSCRIPT_OPEN_SIZE);
     expect(view.current.windowedMessages[0]?.id).toBe("card");
-    expect(view.current.windowedMessages.slice(1)).toEqual(thread.slice(-120));
+    expect(view.current.windowedMessages.slice(1)).toEqual(thread.slice(-TRANSCRIPT_OPEN_SIZE));
 
     view.rerender({ messages: thread, rests: () => false });
-    expect(view.current.windowedMessages).toEqual(thread.slice(-120));
+    expect(view.current.windowedMessages).toEqual(thread.slice(-TRANSCRIPT_OPEN_SIZE));
   });
 
   it("keeps the window bounded while the reader follows new rows", () => {
     const view = mount({ messages: rows(300) });
     for (let total = 301; total <= 900; total++) {
       view.rerender({ messages: rows(total) });
-      expect(view.current.windowedMessages.length).toBeLessThanOrEqual(120);
+      expect(view.current.windowedMessages.length).toBeLessThanOrEqual(TRANSCRIPT_OPEN_SIZE);
       expect(scroller.scrollTop).toBe(scroller.bottom);
     }
-    expect(view.current.windowedMessages[0]?.id).toBe("m780");
+    expect(view.current.windowedMessages[0]?.id).toBe(`m${900 - TRANSCRIPT_OPEN_SIZE}`);
     expect(view.current.windowedMessages.at(-1)?.id).toBe("m899");
-    expect(view.current.hiddenCount).toBe(780);
+    expect(view.current.hiddenCount).toBe(900 - TRANSCRIPT_OPEN_SIZE);
   });
 
   it("keeps the person's newest message mounted while a long turn follows it", () => {
@@ -305,7 +306,7 @@ describe("transcript viewport", () => {
     expect(view.current.windowedMessages).toHaveLength(151);
 
     view.rerender({ messages: [...thread, { id: "ask2", role: "user" }] });
-    expect(view.current.windowedMessages).toHaveLength(120);
+    expect(view.current.windowedMessages).toHaveLength(TRANSCRIPT_OPEN_SIZE);
     expect(view.current.windowedMessages.at(-1)?.id).toBe("ask2");
   });
 
@@ -323,23 +324,23 @@ describe("transcript viewport", () => {
     for (let step = 0; step < 600; step++) {
       thread = [...thread, { id: `step${step}`, role: "bot" }];
       view.rerender({ messages: thread });
-      expect(view.current.windowedMessages.length).toBeLessThanOrEqual(2 * 120);
+      expect(view.current.windowedMessages.length).toBeLessThanOrEqual(2 * TRANSCRIPT_WINDOW_SIZE);
       expect(view.current.following).toBe(true);
       expect(scroller.scrollTop).toBe(scroller.bottom);
-      if (thread.length <= 2 * 120) expect(view.current.windowedMessages[0]?.id).toBe("ask");
+      if (thread.length <= 2 * TRANSCRIPT_WINDOW_SIZE) expect(view.current.windowedMessages[0]?.id).toBe("ask");
     }
-    expect(view.current.windowedMessages).toHaveLength(120);
+    expect(view.current.windowedMessages).toHaveLength(TRANSCRIPT_OPEN_SIZE);
     expect(view.current.windowedMessages.at(-1)?.id).toBe("step599");
   });
 
   it("does not hold for a message that is already above the window", () => {
     let thread: Row[] = [...rows(30), { id: "ask", role: "user" }, ...rows(200, 1_000)];
     const view = mount({ messages: thread });
-    expect(view.current.hiddenCount).toBe(111);
+    expect(view.current.hiddenCount).toBe(thread.length - TRANSCRIPT_OPEN_SIZE);
     for (let step = 0; step < 300; step++) {
       thread = [...thread, { id: `step${step}`, role: "bot" }];
       view.rerender({ messages: thread });
-      expect(view.current.windowedMessages.length).toBeLessThanOrEqual(120);
+      expect(view.current.windowedMessages.length).toBeLessThanOrEqual(TRANSCRIPT_OPEN_SIZE);
       expect(scroller.scrollTop).toBe(scroller.bottom);
     }
     expect(view.current.windowedMessages.at(-1)?.id).toBe("step299");
@@ -348,25 +349,25 @@ describe("transcript viewport", () => {
   it("holds the reader's rows and grows the window once they have scrolled away", () => {
     const view = mount({ messages: rows(300) });
     view.act(() => view.current.scrollHandlers.onWheel({ deltaY: -40 } as never));
-    scroller.scrollTop = 2_000;
+    scroller.scrollTop = 1_000;
     for (let total = 301; total <= 900; total++) view.rerender({ messages: rows(total) });
-    expect(view.current.hiddenCount).toBe(180);
-    expect(view.current.windowedMessages).toHaveLength(720);
-    expect(scroller.scrollTop).toBe(2_000);
+    expect(view.current.hiddenCount).toBe(300 - TRANSCRIPT_OPEN_SIZE);
+    expect(view.current.windowedMessages).toHaveLength(900 - 300 + TRANSCRIPT_OPEN_SIZE);
+    expect(scroller.scrollTop).toBe(1_000);
   });
 
   it("slides back to the latest window when the reader returns to the bottom", () => {
     const view = mount({ messages: rows(300) });
     view.act(() => view.current.showEarlier());
     view.rerender({ messages: rows(301) });
-    expect(view.current.hiddenCount).toBe(60);
+    expect(view.current.hiddenCount).toBe(300 - TRANSCRIPT_OPEN_SIZE - TRANSCRIPT_STEP_SIZE);
 
     view.act(() => {
       scroller.scrollTop = scroller.bottom;
       view.current.scrollHandlers.onScroll();
     });
     expect(view.current.following).toBe(true);
-    expect(view.current.hiddenCount).toBe(181);
+    expect(view.current.hiddenCount).toBe(301 - TRANSCRIPT_OPEN_SIZE);
     expect(scroller.scrollTop).toBe(scroller.bottom);
   });
 
@@ -374,8 +375,8 @@ describe("transcript viewport", () => {
     const view = mount({ messages: rows(300) });
     view.rerender({ messages: rows(400) });
     view.rerender({ messages: rows(150) });
-    expect(view.current.hiddenCount).toBe(30);
-    expect(view.current.windowedMessages).toHaveLength(120);
+    expect(view.current.hiddenCount).toBe(150 - TRANSCRIPT_OPEN_SIZE);
+    expect(view.current.windowedMessages).toHaveLength(TRANSCRIPT_OPEN_SIZE);
 
     view.act(() => press("PageUp"));
     view.rerender({ messages: rows(20) });
@@ -386,26 +387,26 @@ describe("transcript viewport", () => {
   it("re-tails a following window when the thread shrinks but still reaches past its start", () => {
     const view = mount({ messages: rows(300) });
     view.rerender({ messages: rows(620) });
-    expect(view.current.hiddenCount).toBe(500);
+    expect(view.current.hiddenCount).toBe(620 - TRANSCRIPT_OPEN_SIZE);
 
-    const branch: Row[] = [...rows(450), { id: "ask", role: "user" }, ...rows(109, 2_000)];
+    const branch: Row[] = [...rows(530), { id: "ask", role: "user" }, ...rows(29, 2_000)];
     view.rerender({ messages: branch });
-    expect(view.current.hiddenCount).toBe(440);
-    expect(view.current.windowedMessages).toHaveLength(120);
+    expect(view.current.hiddenCount).toBe(560 - TRANSCRIPT_OPEN_SIZE);
+    expect(view.current.windowedMessages).toHaveLength(TRANSCRIPT_OPEN_SIZE);
     expect(view.current.windowedMessages.map((row) => row.id)).toContain("ask");
     expect(scroller.scrollTop).toBe(scroller.bottom);
 
     view.act(() => press("PageUp"));
     view.rerender({ messages: rows(500) });
-    expect(view.current.hiddenCount).toBe(440);
+    expect(view.current.hiddenCount).toBe(500 - TRANSCRIPT_OPEN_SIZE);
   });
 
   it("shows earlier rows without moving the row under the reader", () => {
     const view = mount({ messages: rows(300) });
     scroller.scrollTop = 1_000;
     view.act(() => view.current.showEarlier());
-    expect(view.current.windowedMessages[0]?.id).toBe("m60");
-    expect(scroller.scrollTop).toBe(1_000 + 120 * ROW);
+    expect(view.current.windowedMessages[0]?.id).toBe(`m${300 - TRANSCRIPT_OPEN_SIZE - TRANSCRIPT_STEP_SIZE}`);
+    expect(scroller.scrollTop).toBe(1_000 + TRANSCRIPT_STEP_SIZE * ROW);
     expect(view.current.following).toBe(false);
   });
 
@@ -452,12 +453,12 @@ describe("transcript viewport", () => {
     store.state.focusMessage = { threadId: "thread", messageId: "m10", nonce: 1, consumed: false };
     const view = mount({ messages: rows(300) });
     expect(view.current.windowedMessages.map((row) => row.id)).toContain("m10");
-    expect(view.current.windowedMessages).toHaveLength(120);
-    expect(view.current.laterCount).toBe(180);
+    expect(view.current.windowedMessages).toHaveLength(TRANSCRIPT_WINDOW_SIZE);
+    expect(view.current.laterCount).toBe(300 - TRANSCRIPT_WINDOW_SIZE);
     expect(view.current.following).toBe(false);
 
     view.act(() => view.current.showLater());
-    expect(view.current.laterCount).toBe(60);
+    expect(view.current.laterCount).toBe(300 - TRANSCRIPT_WINDOW_SIZE - TRANSCRIPT_STEP_SIZE);
   });
 
   it("keeps a search result's window when the reader scrolls to its end", () => {
@@ -480,8 +481,8 @@ describe("transcript viewport", () => {
 
     view.act(() => view.current.jumpToLatest());
     expect(view.current.following).toBe(true);
-    expect(view.current.hiddenCount).toBe(180);
-    expect(scroller.calls.at(-1)).toEqual({ top: 120 * ROW, behavior: "smooth" });
+    expect(view.current.hiddenCount).toBe(300 - TRANSCRIPT_OPEN_SIZE);
+    expect(scroller.calls.at(-1)).toEqual({ top: TRANSCRIPT_OPEN_SIZE * ROW, behavior: "smooth" });
   });
 
   it("jumps without the smooth animation when motion is reduced", () => {
@@ -494,7 +495,7 @@ describe("transcript viewport", () => {
     });
     view.act(() => view.current.jumpToLatest());
     expect(view.current.following).toBe(true);
-    expect(scroller.calls.at(-1)).toEqual({ top: 120 * ROW, behavior: "auto" });
+    expect(scroller.calls.at(-1)).toEqual({ top: TRANSCRIPT_OPEN_SIZE * ROW, behavior: "auto" });
   });
 
   it("keeps following a transcript too short to scroll, so Jump to latest never shows over nothing", () => {
@@ -511,10 +512,10 @@ describe("transcript viewport", () => {
   it("reveals earlier rows on an upward scroll when the shown rows are too short to scroll (#4365)", () => {
     // Hidden tool steps can leave a whole window shorter than the screen: no scrollbar, so no scroll events.
     scroller.clientHeight = 20_000;
-    const view = mount({ messages: rows(300) });
-    expect(view.current.hiddenCount).toBe(180);
+    const view = mount({ messages: rows(100) });
+    expect(view.current.hiddenCount).toBe(100 - TRANSCRIPT_OPEN_SIZE);
     view.act(() => view.current.scrollHandlers.onWheel({ deltaY: -40 } as never));
-    expect(view.current.hiddenCount).toBe(60);
+    expect(view.current.hiddenCount).toBe(100 - TRANSCRIPT_OPEN_SIZE - TRANSCRIPT_STEP_SIZE);
     view.act(() => view.current.scrollHandlers.onTouchStart({ touches: [{ clientY: 100 }] } as never));
     view.act(() => view.current.scrollHandlers.onTouchMove({ touches: [{ clientY: 200 }] } as never));
     expect(view.current.hiddenCount).toBe(0);
@@ -522,7 +523,7 @@ describe("transcript viewport", () => {
 
   it("loads an older page on an upward scroll when the whole thread so far is too short to scroll (#4365)", () => {
     scroller.clientHeight = 10_000;
-    const view = mount({ messages: rows(50), hasMore: true });
+    const view = mount({ messages: rows(TRANSCRIPT_OPEN_SIZE), hasMore: true });
     view.act(() => view.current.scrollHandlers.onWheel({ deltaY: -40 } as never));
     expect(dispatched).toEqual([{ type: "loadOlderMessages", threadId: "thread" }]);
   });
@@ -579,7 +580,7 @@ describe("transcript viewport", () => {
 
   it("automatically expands earlier windowed messages when user scrolls near the top", () => {
     const view = mount({ messages: rows(300) });
-    expect(view.current.hiddenCount).toBe(180);
+    expect(view.current.hiddenCount).toBe(300 - TRANSCRIPT_OPEN_SIZE);
 
     view.act(() => {
       scroller.scrollTop = 200;
@@ -587,11 +588,11 @@ describe("transcript viewport", () => {
       view.current.scrollHandlers.onScroll();
     });
 
-    expect(view.current.hiddenCount).toBe(60);
+    expect(view.current.hiddenCount).toBe(300 - TRANSCRIPT_OPEN_SIZE - TRANSCRIPT_STEP_SIZE);
   });
 
   it("automatically loads older messages from server when at top of window and hasMore is true", () => {
-    const view = mount({ messages: rows(50), hasMore: true });
+    const view = mount({ messages: rows(TRANSCRIPT_OPEN_SIZE), hasMore: true });
     expect(view.current.hiddenCount).toBe(0);
 
     view.act(() => {
@@ -696,5 +697,54 @@ describe("following a reply and coming back to a conversation", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("opening a very long conversation", () => {
+  const TOTAL = 2_000;
+  const idAt = (index: number) => `m${index}`;
+
+  it("mounts only the newest opening window", () => {
+    const view = mount({ messages: rows(TOTAL) });
+    expect(view.current.windowedMessages).toHaveLength(TRANSCRIPT_OPEN_SIZE);
+    expect(view.current.windowedMessages[0]?.id).toBe(idAt(TOTAL - TRANSCRIPT_OPEN_SIZE));
+    expect(view.current.windowedMessages.at(-1)?.id).toBe(idAt(TOTAL - 1));
+    expect(view.current.hiddenCount).toBe(TOTAL - TRANSCRIPT_OPEN_SIZE);
+    expect(scroller.scrollTop).toBe(scroller.bottom);
+  });
+
+  it("adds exactly one step on an upward scroll and keeps the first visible row on screen", () => {
+    const view = mount({ messages: rows(TOTAL) });
+    scroller.scrollTop = 200;
+    const before = view.current.windowedMessages[200 / ROW]!.id;
+    view.act(() => {
+      view.current.scrollHandlers.onWheel({ deltaY: -40 } as never);
+      view.current.scrollHandlers.onScroll();
+    });
+    expect(view.current.windowedMessages).toHaveLength(TRANSCRIPT_OPEN_SIZE + TRANSCRIPT_STEP_SIZE);
+    expect(view.current.hiddenCount).toBe(TOTAL - TRANSCRIPT_OPEN_SIZE - TRANSCRIPT_STEP_SIZE);
+    expect(scroller.scrollTop).toBe(200 + TRANSCRIPT_STEP_SIZE * ROW);
+    expect(view.current.windowedMessages[scroller.scrollTop / ROW]!.id).toBe(before);
+  });
+
+  it("puts a remembered row far above the end back at the same offset", () => {
+    rememberTranscriptPosition("bot:thread", { atEnd: false, rowId: idAt(500), offsetWithinRow: 12, windowStart: 440, windowEnd: null });
+    const view = mount({ messages: rows(TOTAL) });
+    expect(view.current.following).toBe(false);
+    expect(view.current.windowedMessages[0]?.id).toBe(idAt(440));
+    expect(scroller.scrollTop).toBe((500 - 440) * ROW + 12);
+    expect(view.current.windowedMessages[Math.floor(scroller.scrollTop / ROW)]?.id).toBe(idAt(500));
+  });
+
+  it("shows the newest message when Jump to latest follows an expansion", () => {
+    const view = mount({ messages: rows(TOTAL) });
+    view.act(() => view.current.showEarlier());
+    view.act(() => view.current.showEarlier());
+    expect(view.current.hiddenCount).toBe(TOTAL - TRANSCRIPT_OPEN_SIZE - 2 * TRANSCRIPT_STEP_SIZE);
+    view.act(() => view.current.jumpToLatest());
+    expect(view.current.following).toBe(true);
+    expect(view.current.hiddenCount).toBe(TOTAL - TRANSCRIPT_OPEN_SIZE);
+    expect(view.current.windowedMessages.at(-1)?.id).toBe(idAt(TOTAL - 1));
+    expect(scroller.calls.at(-1)?.top).toBe(TRANSCRIPT_OPEN_SIZE * ROW);
   });
 });

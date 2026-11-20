@@ -254,6 +254,7 @@ export function createBoatRecovery(deps: BoatRecoveryDeps) {
   /** `no-answer`: it woke, and its wait for an answer ran out, the only restart that did not help. `not-ready`: the
    * provider did not report it ready again in time, which says nothing about the machine. */
   async function restart(owner: string, boxId: string, manual = false): Promise<"answers" | "no-answer" | "not-ready" | "refused"> {
+    if (closed) return "refused";
     const cfg = deps.cfg();
     set(owner, boxId, "restarting", manual);
     restarts.set(boxId, now());
@@ -392,6 +393,7 @@ export function createBoatRecovery(deps: BoatRecoveryDeps) {
    * provider reports it broken; one that cannot even be stopped is deleted instead, as before. The caller checked the
    * other guards. Never sends a DELETE for a computer that could be stopped. */
   async function setAside(owner: string, target: Dead, opts: { dead?: boolean; onReplacing?: () => void } = {}): Promise<SetAsideResult> {
+    if (closed) return "held";
     const cfg = deps.cfg();
     if (unreadable) { needsPerson(owner, target.boxId); return "held"; }
     const limit = limited(owner, target.boxId);
@@ -529,6 +531,8 @@ export function createBoatRecovery(deps: BoatRecoveryDeps) {
     if (typeof state !== "string" || !READY.has(state)) return now() - since < DEAD_COMPUTER.replaceAfterMs ? later("not-responding") : decide(owner, boxId);
     if (boatSignals(box).restoring === true && now() - since < READY_WAIT.restorePatienceMs) return later("restoring");
     if (!witnessed && now() - since < SOLO_SILENCE_MS) return later("not-responding");
+    // Closed while it looked: the work under way ends here, and no restart starts.
+    if (closed) return;
     const lastRestart = restarts.get(boxId);
     const limitedNow = (lastRestart !== undefined && now() - lastRestart < HOUR_MS) || now() - lastAutoRestartAt < DEAD_COMPUTER.restartGapMs;
     if (limitedNow || personBusy(owner, boxId)) {
@@ -786,13 +790,16 @@ export function createBoatRecovery(deps: BoatRecoveryDeps) {
     },
     /** Deletes set-aside computers whose time is up; runs by itself every hour. */
     sweep,
-    close(): void {
+    /** Stops it: no computer is restarted, set aside or replaced by itself from now on. Resolves once the work already
+     * under way has ended, so nothing it still sends comes after. */
+    close(): Promise<void> {
       closed = true;
       clearInterval(sweeper);
       unsubscribe();
       boat.onDeadBoat(null);
       for (const timer of timers.values()) clearTimeout(timer);
       timers.clear();
+      return Promise.allSettled(lanes.values()).then(() => undefined);
     },
   };
 }

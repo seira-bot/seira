@@ -13,7 +13,8 @@ import {
 import { BOTTOM_FOLLOW_THRESHOLD, followBottomGrowth, useBottomFollowResize } from "@/lib/bottom-follow";
 import { useFocusMessage } from "@/lib/focus-message";
 import {
-  TRANSCRIPT_WINDOW_SIZE,
+  TRANSCRIPT_OPEN_SIZE,
+  TRANSCRIPT_STEP_SIZE,
   expandWindowStart,
   focusWindowRange,
   followWindowStart,
@@ -118,7 +119,7 @@ export function useTranscriptViewport<T extends { id: string; role?: string }>({
     startIndex,
     endIndex,
   } = useMemo(() => {
-    const range = resolveTranscriptWindow(messages, transcriptWindow.start, TRANSCRIPT_WINDOW_SIZE, transcriptWindow.end);
+    const range = resolveTranscriptWindow(messages, transcriptWindow.start, TRANSCRIPT_OPEN_SIZE, transcriptWindow.end);
     return { ...range, visible: withRestingCard(messages, range.visible, range.startIndex, rests) };
   }, [messages, transcriptWindow.start, transcriptWindow.end, rests]);
   const windowRef = useRef(transcriptWindow);
@@ -251,7 +252,7 @@ export function useTranscriptViewport<T extends { id: string; role?: string }>({
   };
   const showLater = () => {
     setBottomFollow(false);
-    const nextEnd = Math.min(messages.length, endIndex + TRANSCRIPT_WINDOW_SIZE);
+    const nextEnd = Math.min(messages.length, endIndex + TRANSCRIPT_STEP_SIZE);
     setTranscriptWindow((w) => ({ ...w, end: nextEnd >= messages.length ? null : nextEnd }));
   };
   const loadOlder = () => {
