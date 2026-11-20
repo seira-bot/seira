@@ -33,6 +33,18 @@ describe("what a push's changed files call for", () => {
     expect(guards(["server/a.test.ts", "server/testing/fake.ts"])).toEqual([]);
   });
 
+  it("runs a fast Worker's tests when the push changes that Worker or a file it reads", () => {
+    expect(names(["cloudflare/push-relay/src/x.ts"])).toContain("worker push-relay");
+    expect(names(["shared/composio-storage.ts"])).toContain("worker composio-broker");
+    expect(checksFor(["cloudflare/updates/src/x.ts"]).find((check: { worker?: string }) => check.worker)?.worker).toBe("updates");
+  });
+
+  it("runs no Worker's tests for a slow Worker or a shared input", () => {
+    for (const file of ["cloudflare/control-plane/src/x.ts", "package.json", "docs/ci.md"]) {
+      expect(names([file]).filter((name: string) => name.startsWith("worker "))).toEqual([]);
+    }
+  });
+
   it("reads the pushed commits, and a deleted branch sends none", () => {
     const sha = "a".repeat(40);
     expect(pushedCommits(`refs/heads/x ${sha} refs/heads/x ${"0".repeat(40)}\n`)).toEqual([sha]);
@@ -58,11 +70,30 @@ describe("the hook in a checkout without dependencies", () => {
     return { dir, hook };
   }
 
-  it.skipIf(process.platform === "win32")("lets the push go and says CI will check it", () => {
-    const { dir, hook } = checkout();
-    const run = spawnSync(hook, { cwd: dir, encoding: "utf8", input: "", timeout: 10_000 });
-    expect(run.status).toBe(0);
-    expect(run.stdout).toContain("no dependencies in this checkout");
+  const run = ({ dir, hook }: { dir: string; hook: string }) => spawnSync(hook, { cwd: dir, encoding: "utf8", input: "", timeout: 10_000 });
+
+  it.skipIf(process.platform === "win32")("stops the push and says no check ran when no host is set", () => {
+    const result = run(checkout());
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("no check ran");
+    expect(result.stdout).toContain("seira.prePushHost");
+  });
+
+  it.skipIf(process.platform === "win32")("runs the remote script next to the hooks folder when the checkout has none", () => {
+    const repo = checkout();
+    execFileSync("git", ["config", "seira.prePushHost", "fakehost"], { cwd: repo.dir });
+    writeFileSync(join(repo.dir, "pre-push-remote.mjs"), 'console.log("remote stub ran");\n');
+    const result = run(repo);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("remote stub ran");
+  });
+
+  it.skipIf(process.platform === "win32")("stops the push when a host is set and no remote script exists", () => {
+    const repo = checkout();
+    execFileSync("git", ["config", "seira.prePushHost", "fakehost"], { cwd: repo.dir });
+    const result = run(repo);
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("no check ran");
   });
 
   const without = (name: string) => Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== name));
