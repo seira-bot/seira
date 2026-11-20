@@ -1,7 +1,7 @@
 // ~/.seira/config.json, with env vars overriding its credentials.
 import { readFileSync, existsSync, renameSync } from "node:fs";
 import { dataHome, ensurePrivateDir } from "./data-dir.ts";
-import { migrateLegacyData } from "../electron/legacy-migrate.mjs"; import { currentEngineEnvironment } from "../electron/legacy-names.mjs";
+import "../electron/legacy-env-boot.mjs"; import { isHarnessEnvName } from "../electron/legacy-env.mjs"; import { migrateLegacyData } from "../electron/legacy-migrate.mjs"; import { currentEngineEnvironment } from "../electron/legacy-names.mjs";
 import { signInFromEnv } from "./sign-in-env.ts";
 export { signInFromEnv };
 import { join } from "node:path";
@@ -830,8 +830,8 @@ export function syncCredentialEnv(patch: Partial<Omit<AppConfig, "threads" | "ne
   }
 }
 
-import { WORKSPACE_CREDENTIAL_ENV, CONTROL_PLANE_ENV, CONTROL_PLANE_ENV_PREFIX, stripControlPlaneEnv, stripWorkspaceCredentialEnv, PROVIDER_CREDENTIAL_ENV, OPENCODE_PROVIDER_ENV } from "./credential-env.ts";
-export { WORKSPACE_CREDENTIAL_ENV, CONTROL_PLANE_ENV, CONTROL_PLANE_ENV_PREFIX, stripControlPlaneEnv, stripWorkspaceCredentialEnv, PROVIDER_CREDENTIAL_ENV, OPENCODE_PROVIDER_ENV };
+import { WORKSPACE_CREDENTIAL_ENV, CONTROL_PLANE_ENV, CONTROL_PLANE_ENV_PREFIX, stripControlPlaneEnv, stripWorkspaceCredentialEnv, stripEnvNames, stripWorkspaceCredentialKeys, PROVIDER_CREDENTIAL_ENV, OPENCODE_PROVIDER_ENV } from "./credential-env.ts";
+export { WORKSPACE_CREDENTIAL_ENV, CONTROL_PLANE_ENV, CONTROL_PLANE_ENV_PREFIX, stripControlPlaneEnv, stripWorkspaceCredentialEnv, stripEnvNames, stripWorkspaceCredentialKeys, PROVIDER_CREDENTIAL_ENV, OPENCODE_PROVIDER_ENV };
 
 export const OPENCODE_PROVIDER_KEY_LIMIT = 20;
 const OPENCODE_PROVIDER_KEY_NAME = /^[A-Z][A-Z0-9_]{0,59}_(?:API_KEY|KEY|TOKEN)$/;
@@ -842,8 +842,8 @@ function openCodeProviderKeyNameRefusal(name: string): string | undefined {
     return "Use the name the provider reads its key from: capitals, ending in _API_KEY, _KEY or _TOKEN, such as VENICE_API_KEY.";
   }
   if (name === "OPENCODE_API_KEY") return "Save the OpenCode key in the OpenCode API key box instead.";
-  const reserved = name.startsWith("OPENCODE_") || name.startsWith("SEIRA_")
-    || (WORKSPACE_CREDENTIAL_ENV as readonly string[]).includes(name)
+  const reserved = name.startsWith("OPENCODE_") || isHarnessEnvName(name)
+    || (WORKSPACE_CREDENTIAL_ENV as readonly string[]).includes(name.toUpperCase())
     || ((PROVIDER_CREDENTIAL_ENV as readonly string[]).includes(name) && !(OPENCODE_PROVIDER_ENV as readonly string[]).includes(name));
   return reserved ? `Seira keeps ${name} for itself, so OpenCode can't be given it here. Put this key in opencode.json instead.` : undefined;
 }

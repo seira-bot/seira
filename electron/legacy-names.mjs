@@ -188,3 +188,7 @@ export function labelValue(labels, name) {
   const old = legacyDockerLabel(name);
   return old === null ? undefined : labels[old];
 }
+
+/** Environment variables: the prefix an earlier version read, and the current one. Seira reads the old one only as a deprecated fallback. */
+export const LEGACY_ENV_PREFIX = "OMB_";
+export const ENV_PREFIX = "SEIRA_";

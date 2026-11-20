@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { Connection, MspError, type DuplexTransport } from "@muse-code/sdk";
 import { z } from "zod";
 import { instanceEnvNames } from "../bot-box/env.ts";
-import { PROVIDER_CREDENTIAL_ENV, stripControlPlaneEnv, WORKSPACE_CREDENTIAL_ENV } from "../config.ts";
+import { PROVIDER_CREDENTIAL_ENV, stripControlPlaneEnv, stripEnvNames, stripWorkspaceCredentialKeys } from "../config.ts";
 import type {
   ModelCatalog, ProviderDriver, ProviderInstance, ProviderSnapshot, RequestOutcome, RuntimeEvent,
   RuntimeEventListener, SendTurnInput, SteerOutcome,
@@ -280,7 +280,8 @@ export const MuseCodeDriver: ProviderDriver<MuseConfig> = {
     /** `muse login`'s saved sign-in; META_API_KEY only when this instance was given one. */
     const childEnv = (): NodeJS.ProcessEnv => {
       const env: Record<string, string | undefined> = { ...process.env, ...input.environment, PATH: augmentedPath(), MUSE_NO_AUTO_UPDATE: "1" };
-      for (const key of [...PROVIDER_CREDENTIAL_ENV, ...WORKSPACE_CREDENTIAL_ENV]) delete env[key];
+      stripEnvNames(env, PROVIDER_CREDENTIAL_ENV);
+      stripWorkspaceCredentialKeys(env);
       stripControlPlaneEnv(env);
       if (input.environment.META_API_KEY) env.META_API_KEY = input.environment.META_API_KEY;
       return env;
