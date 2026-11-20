@@ -1,4 +1,3 @@
-// Import first: it renames the deprecated OMB_ variables before any module reads one.
 import "../electron/legacy-env-boot.mjs";
 // Import first: it reads a Cloud home's secrets off the launcher's pipe before any module can start a process.
 import { BOOT_CLOUD_SECRETS } from "./cloud-secrets-boot.ts";
