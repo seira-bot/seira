@@ -537,6 +537,8 @@
   "releaseNotes.items.fasterStart.body": "A janela aparece na hora, enquanto o resto se prepara.",
   "releaseNotes.items.liveYes.title": "Um sim mais seguro em uma chamada Live",
   "releaseNotes.items.liveYes.body": "Um sim falado só aprova um comando depois que o Seira diz tudo, inclusive as opções.",
+  "releaseNotes.items.seiraName.title": "Seira em todo lugar",
+  "releaseNotes.items.seiraName.body": "O app agora usa o nome Seira em todo lugar. Suas conversas, bots e configurações vêm junto, sem nada a fazer.",
   "releaseNotes.items.aiPool.title": "Divida o trabalho entre várias IAs",
   "releaseNotes.items.aiPool.body": "Divida o trabalho entre várias IAs, como um plano e uma chave de pagamento por uso. Ative em Configurações, IA.",
   "releaseNotes.items.connectOneClick.title": "Conecte um app com um clique",

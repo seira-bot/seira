@@ -561,6 +561,8 @@
   "releaseNotes.items.fasterStart.body": "The window shows right away, while the rest gets ready.",
   "releaseNotes.items.liveYes.title": "A safer yes in a Live call",
   "releaseNotes.items.liveYes.body": "A spoken yes approves a command only after Seira says all of it, flags included.",
+  "releaseNotes.items.seiraName.title": "Seira in every place",
+  "releaseNotes.items.seiraName.body": "The app now uses the Seira name everywhere. Your chats, bots and settings come with you, with nothing to do.",
   "releaseNotes.items.aiPool.title": "Share work across several AIs",
   "releaseNotes.items.aiPool.body": "Spread your work across several AIs, such as a plan and a pay-per-use key. Turn it on under Settings, AI.",
   "releaseNotes.items.connectOneClick.title": "Connect an app in one click",
