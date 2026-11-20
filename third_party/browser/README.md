@@ -57,15 +57,15 @@ downloads, then records a complete file/symlink inventory. Missing, modified,
 or incomplete staged resources fail the pre-signing package check.
 
 Archives and extracted binaries are generated build output, not git content.
-Set `OMB_BROWSER_ARCHIVE_DIR` to a directory of reviewed vendor assets for an
+Set `SEIRA_BROWSER_ARCHIVE_DIR` to a directory of reviewed vendor assets for an
 offline build; cached bytes are still verified. Browser dependencies are
-updated through reviewed OpenMausBot releases, not a silent browser updater.
+updated through reviewed Seira releases, not a silent browser updater.
 
-On macOS, release signing applies OpenMausBot's Developer ID to native
+On macOS, release signing applies Seira's Developer ID to native
 executables and libraries after validating the upstream bytes. The original
 notices remain intact. Packaged browser profiles, cookies and downloads are
 never included here; those belong in the user's isolated bot data directory.
 
 Google, Chromium and Vercel are their owners' names; their inclusion does not
-imply endorsement of OpenMausBot. This provenance record is not legal advice
+imply endorsement of Seira. This provenance record is not legal advice
 or a replacement for the included upstream licenses.
