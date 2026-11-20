@@ -1,10 +1,15 @@
 # The bots' browser
 
-Every bot browser is driven by [agent-browser](https://github.com/vercel-labs/agent-browser)
+By default every bot browser is driven by [agent-browser](https://github.com/vercel-labs/agent-browser)
 (Apache-2.0), a pinned Rust daemon that controls Chrome over the DevTools
 protocol. The same engine and the same tools run on the desktop app, on a
 self-hosted server and in the Docker image, so a skill written on one runs on
-the others. This page covers how Seira uses it. Packaging, which Chrome is
+the others. This page covers how Seira uses it.
+
+`browserEngine.engine: "chrome"` in `config.json` runs the bots' browsers on
+Seira's own Chrome driver in `server/browser/` instead. It is an early test.
+The routers in `server/browser/engines.ts` keep the agent-browser engine's API,
+so the callers below do not change. Packaging, which Chrome is
 chosen, the network gate, signed-in sites, My Chrome and process hygiene are in
 [Browser-ready desktop packages](browser-packaging.md); live-view checks are in
 [Live browser and profiles](verification/browser-live.md) and
