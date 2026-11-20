@@ -1,6 +1,11 @@
 // The one place that names what earlier versions called things. Each name here exists only so a person who updates keeps
 // their data: folders and files are moved to the current name once, and old user files still open.
 
+/** Electron names the settings folder and the saved-key store item after the app name, so the app keeps this one. */
+export const LEGACY_APP_NAME = "openmausbot";
+/** dpkg and pacman replace an installed package only when its name stays the same. */
+export const LEGACY_LINUX_PACKAGE = "openmausbot";
+
 export const LEGACY_HOME_PREFIX = ".openmausbot";
 export const HOME_PREFIX = ".seira";
 

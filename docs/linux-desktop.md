@@ -74,7 +74,7 @@ sudo apt install ./Seira-amd64.deb
 Then open **Seira** from the GNOME application launcher. To remove it:
 
 ```sh
-sudo apt remove seira
+sudo apt remove openmausbot
 ```
 
 The portable AppImage does not install system files:
@@ -157,7 +157,7 @@ the `.deb` instead; do not add `--no-sandbox`, disable AppArmor globally, change
 allowlist arbitrary executables under your home directory. See [Chromium's explanation of the Ubuntu restriction](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
 
 Application data remains local in `~/.seira`. Electron browser data and window state use the normal XDG
-configuration directory (`~/.config/seira` unless the environment overrides it).
+configuration directory (`~/.config/openmausbot` unless the environment overrides it).
 
 ## Develop the desktop shell
 

@@ -83,7 +83,7 @@ const installed = inContainer(
   [
     prepare,
     command,
-    'dpkg-query -W -f="INSTALLED=\\${Version} \\${db:Status-Abbrev}\\n" seira',
+    'dpkg-query -W -f="INSTALLED=\\${Version} \\${db:Status-Abbrev}\\n" openmausbot',
     'test -x /opt/Seira/seira && echo "EXECUTABLE=yes"',
   ].join("\n"),
 );

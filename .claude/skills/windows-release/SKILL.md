@@ -105,7 +105,7 @@ Find the cause in this order:
    SHA-512, and the size in `latest.yml` must match the installer. If they do
    not match, delete the five assets and attach the workflow files again.
 3. Ask for `updater.log` from the log folder of the app:
-   `%APPDATA%\seira\logs`. The folder keeps its upstream name.
+   `%APPDATA%\openmausbot\logs`. The folder keeps its upstream name.
 4. Ask where the user installed the app from. A Seira installer from
    the upstream project reads the upstream releases. It never updates to Seira.
    The user must install `Seira-setup.exe` once.
