@@ -596,15 +596,65 @@ describe("Better Auth email OTP and bearer boundary", () => {
     expect((await call("/v1/me", { token: acceptedBody.token })).status).toBe(401);
   });
 
-  it("builds both plain-text and HTML OTP mail and redacts send failures", async () => {
-    const message = buildOTPEmail("noreply@example.com", {
-      email: "recipient@example.com",
-      otp: "12345678",
-      type: "sign-in",
-    });
-    expect(message.text).toContain("12345678");
-    expect(message.html).toContain("12345678");
+  it("builds the sign-in code mail in the approved design", () => {
+    const message = buildOTPEmail("noreply@example.com", { email: "recipient@example.com", otp: "12345678", type: "sign-in" });
+    expect(message.subject).toBe("Your Seira sign-in code");
+    expect(message.to).toBe("recipient@example.com");
+    expect(message.text).toBe([
+      "Your Seira sign-in code", "", "Enter this code in the Seira app:", "", "12345678", "",
+      "Do not share this code with anyone. The Seira team never asks for it.",
+      "Did not ask for this code? Ignore this email. Nothing changes.", "",
+      "--", "Seira \u00b7 seira.bot", "",
+    ].join("\n"));
+    expect(message.html).toContain(">12345678<");
+    expect(message.html).toContain("Enter this code in the Seira app:");
+    expect(message.html).toContain("Do not share this code with anyone. The Seira team never asks for it.");
+    expect(message.html).toContain('href="https://seira.bot"');
+    expect(message.html).not.toMatch(/<img/i);
+  });
 
+  it("names the recipient in the verification and change-email mail", () => {
+    const verify = buildOTPEmail("noreply@example.com", { email: "new@example.com", otp: "87654321", type: "email-verification" });
+    expect(verify.subject).toBe("Verify your Seira email");
+    expect(verify.text).toContain("Enter this code in Seira to confirm that new@example.com is your email:");
+    expect(verify.html).toContain("Verify your email");
+    expect(verify.html).toContain("new@example.com");
+    expect(verify.text).toContain("Did not ask for this? Ignore this email. Nothing changes.");
+    const change = buildOTPEmail("noreply@example.com", { email: "new@example.com", otp: "87654321", type: "change-email" });
+    expect(change.subject).toBe("Confirm your new Seira email");
+    expect(change.text).toContain("Enter this code in Seira to use new@example.com for your Seira account:");
+    expect(change.html).toContain("Confirm your new email");
+    expect(change.html).toContain("new@example.com");
+    expect(change.text).toContain("Your account keeps its current email.");
+  });
+
+  it("never mentions a code lifetime", () => {
+    for (const type of ["sign-in", "email-verification", "change-email"] as const) {
+      const message = buildOTPEmail("noreply@example.com", { email: "recipient@example.com", otp: "12345678", type });
+      for (const body of [message.text, message.html]) {
+        expect(body).not.toMatch(/expires/i);
+        expect(body).not.toMatch(/minutes/i);
+      }
+    }
+  });
+
+  it("escapes the address in the HTML mail", () => {
+    const message = buildOTPEmail("noreply@example.com", { email: "a<b>@example.com", otp: "12345678", type: "email-verification" });
+    expect(message.html).toContain("a&lt;b&gt;@example.com");
+    expect(message.html).not.toContain("a<b>@example.com");
+  });
+
+  it("sends no mail for a password-reset code", async () => {
+    const send = vi.fn(async () => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await sendOTPEmail({ send }, "noreply@example.com",
+      { email: "recipient@example.com", otp: "12345678", type: "forget-password" }, "request-reset");
+    expect(send).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  it("redacts send failures", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     await sendOTPEmail({ send: async () => { throw new Error("recipient@example.com 12345678"); } },
       "noreply@example.com",
