@@ -32,3 +32,8 @@ export declare function currentLinkScheme<T>(value: T): T | string;
 export declare const LEGACY_BACKUP_UPLOAD_SUFFIX: string;
 export declare function currentChatLink<T>(value: T): T | string;
 export declare const LEGACY_DEFAULT_BOT_NAME: string;
+export declare const LEGACY_SESSION_TOKEN_PREFIX: string;
+export declare const LEGACY_DEVICE_TOKEN_PREFIX: string;
+export declare const LEGACY_COMPOSIO_USER_PREFIX: string;
+export declare const LEGACY_WEBHOOK_AUTH_HEADER: string;
+export declare const LEGACY_POLLER_HEADER: string;

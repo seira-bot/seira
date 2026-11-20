@@ -385,6 +385,11 @@ describe("long-poll", () => {
     h.limits.events = false;
     expect((await h.poll(owner)).status).toBe(429);
   });
+
+  it("reads the poller id from the header an earlier server sends", async () => {
+    const { owner } = await withTrigger();
+    expect((await h.call(owner, "/v1/events", { headers: { "x-omb-poller": "poller-main-0001" } })).status).toBe(200);
+  });
 });
 
 describe("limits", () => {

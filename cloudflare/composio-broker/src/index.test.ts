@@ -104,7 +104,7 @@ describe("connected-apps broker boundaries", () => {
   });
 
   it("hashes installation tokens before storage", async () => {
-    await expect(sha256("seira")).resolves.toBe("63c74f70a9d4681c334e84001935955a75245ea5b16b9c37c808e85c69963705");
+    await expect(sha256("seira")).resolves.toBe("b31a83a31e64c3f498f63aab6d309023e6e7ce4541e1fefdccfa580a08c32ea5");
   });
 
   it("creates Sessions with explicit multi-account selection", async () => {

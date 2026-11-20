@@ -114,3 +114,13 @@ export const LEGACY_BACKUP_UPLOAD_SUFFIX = ".ombbackup";
 
 /** The name an earlier version gave the bot it seeded. */
 export const LEGACY_DEFAULT_BOT_NAME = "MausBot";
+
+/** The start of a bearer token that an earlier version issued for a session, and for a paired device. */
+export const LEGACY_SESSION_TOKEN_PREFIX = "omb_sess_";
+export const LEGACY_DEVICE_TOKEN_PREFIX = "omb_";
+/** The start of a Composio user id that an earlier version made for an installation. */
+export const LEGACY_COMPOSIO_USER_PREFIX = "openmausbot_";
+/** The header an earlier version sent a webhook secret in. */
+export const LEGACY_WEBHOOK_AUTH_HEADER = "x-openmaus-secret";
+/** The header the deployed event broker still reads the poller id from. */
+export const LEGACY_POLLER_HEADER = "x-omb-poller";
