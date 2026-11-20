@@ -179,7 +179,7 @@ describe("canonical thread links", () => {
       `seira://thread/${uuid}/extra?bot=scout`,
       `seira://thread/${uuid}?bot=scout&x=1`,
       `seira://thread/${uuid}?bot=`,
-      `seira://thread/${uuid}?bot=scout`,
+      `omb://thread/${uuid}?bot=scout`,
       "https://thread/" + uuid,
     ]) {
       expect(parseThreadRefUrl(miss)).toBeNull();
