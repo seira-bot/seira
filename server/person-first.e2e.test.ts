@@ -16,14 +16,14 @@ const QUESTION = "Is the PR up yet?";
 const ANSWER = "Yes: PR #42 is up. CI is still running, and I will tell you when it is done.";
 
 it("stops a turn that keeps the person's message unread in a long tool call, and answers it next", async () => {
-  const folder = mkdtempSync(join(tmpdir(), "omb-person-first-"));
+  const folder = mkdtempSync(join(tmpdir(), "seira-person-first-"));
   const calls = join(folder, "calls.json"), markers = join(folder, "markers.json");
   writeFileSync(markers, JSON.stringify({ [QUESTION]: ANSWER }));
   const owner = randomBytes(32).toString("base64url");
   const realFetch = globalThis.fetch;
   globalThis.fetch = (input, init = {}) => realFetch(input, { ...init,
-    headers: { ...Object.fromEntries(new Headers(init.headers)), "x-openmausbot-desktop-owner": owner } });
-  const fixture = await launchVerificationServer({ ...process.env, OMB_TEST_DESKTOP_OWNER_TOKEN: owner, OMB_PERSON_FIRST_MS: "1500",
+    headers: { ...Object.fromEntries(new Headers(init.headers)), "x-seira-desktop-owner": owner } });
+  const fixture = await launchVerificationServer({ ...process.env, SEIRA_TEST_DESKTOP_OWNER_TOKEN: owner, SEIRA_PERSON_FIRST_MS: "1500",
     FAKE_CLAUDE_TOOL_CALLS_FILE: calls, FAKE_CLAUDE_MARKER_REPLIES: markers });
   try {
     const api = async (method: string, path: string, body?: unknown) => {

@@ -30,15 +30,15 @@ const HIDING_BWRAP = `#!/bin/sh
 shown=1
 while [ "$1" != "--" ]; do
   case "$1" in
-    --bind|--bind-try|--ro-bind|--ro-bind-try) case "$OMB_HOOK_TOKEN_FILE" in "$3"|"$3"/*) shown=1;; esac; shift 3;;
-    --tmpfs|--dir|--proc|--dev) case "$OMB_HOOK_TOKEN_FILE" in "$2"|"$2"/*) shown=0;; esac; shift 2;;
+    --bind|--bind-try|--ro-bind|--ro-bind-try) case "$SEIRA_HOOK_TOKEN_FILE" in "$3"|"$3"/*) shown=1;; esac; shift 3;;
+    --tmpfs|--dir|--proc|--dev) case "$SEIRA_HOOK_TOKEN_FILE" in "$2"|"$2"/*) shown=0;; esac; shift 2;;
     --symlink) shift 3;;
     --chdir|--hostname|--seccomp) shift 2;;
     *) shift;;
   esac
 done
 shift
-if [ "$shown" = 0 ] && [ -n "$OMB_HOOK_TOKEN_FILE" ]; then OMB_HOOK_TOKEN_FILE="$OMB_HOOK_TOKEN_FILE.not-in-the-box"; export OMB_HOOK_TOKEN_FILE; fi
+if [ "$shown" = 0 ] && [ -n "$SEIRA_HOOK_TOKEN_FILE" ]; then SEIRA_HOOK_TOKEN_FILE="$SEIRA_HOOK_TOKEN_FILE.not-in-the-box"; export SEIRA_HOOK_TOKEN_FILE; fi
 exec "$@"
 `;
 /** Like bubblewrap, it stops before the command when a required (not -try) bind's source is missing. */
@@ -73,7 +73,7 @@ describe("a Claude turn in the bot box", () => {
   it.skipIf(process.platform === "win32")("puts the turn's permission socket in the box, so the bot's question reaches the person", async () => {
     ensureDirs();
     chmodSync(FAKE_CLI, 0o755);
-    const scratch = mkdtempSync(join(tmpdir(), "omb-claude-box-"));
+    const scratch = mkdtempSync(join(tmpdir(), "seira-claude-box-"));
     dirs.push(scratch);
     // A stand-in for bubblewrap: no namespaces, it runs what follows `--`; the plan it was given is what the test reads.
     const fakeBwrap = join(scratch, "fake-bwrap.sh");
@@ -111,7 +111,7 @@ describe("a Claude turn in the bot box", () => {
   it.skipIf(process.platform === "win32")("puts only the conversation's hook token in the box, read-only, so its hooks fire from inside", async () => {
     ensureDirs();
     chmodSync(FAKE_CLI, 0o755);
-    const scratch = mkdtempSync(join(tmpdir(), "omb-claude-box-hooks-"));
+    const scratch = mkdtempSync(join(tmpdir(), "seira-claude-box-hooks-"));
     dirs.push(scratch);
     const fakeBwrap = join(scratch, "fake-bwrap.sh");
     writeFileSync(fakeBwrap, HIDING_BWRAP);
@@ -149,11 +149,11 @@ describe("a Claude turn in the bot box", () => {
       for (const hook of hooks) expect(hook.authorization).toBe("Bearer hook-bearer-1");
       const boxed = wrap.mock.results.map((result) => result.value as WrappedSpawn | null).find((spawned) => spawned?.plan.botId === "bot-a");
       expect(boxed, "the engine ran in the box").toBeTruthy();
-      const token = hookTokenFile("t-boxed-hooks", "bot-a");
+      const token = hookTokenFile("t-boxed-hooks", "bot-a", "claude-box");
       expect(visibleInBox(boxed!.plan, token), "the conversation's token, read-only").toBe("ro");
       // Its own folder, not the file: a later turn renames a new token over the file, and a bind of the file would keep the old.
       expect(boxed!.plan.mounts).toContainEqual({ kind: "ro", source: dirname(token), target: dirname(token), optional: true });
-      expect(visibleInBox(boxed!.plan, hookTokenFile("t-another", "bot-a")), "another conversation's token").toBe("none");
+      expect(visibleInBox(boxed!.plan, hookTokenFile("t-another", "bot-a", "claude-box")), "another conversation's token").toBe("none");
       expect(visibleInBox(boxed!.plan, dirname(dirname(token))), "the folder of every token").toBe("none");
       expect(visibleInBox(boxed!.plan, join(DATA_DIR, "messages.db"))).toBe("none");
     } finally {
@@ -165,7 +165,7 @@ describe("a Claude turn in the bot box", () => {
   it.skipIf(process.platform === "win32" || process.cwd().startsWith(tmpdir()))("makes a custom endpoint's own Claude folder before the box binds it", async () => {
     ensureDirs();
     chmodSync(FAKE_CLI, 0o755);
-    const scratch = mkdtempSync(join(tmpdir(), "omb-claude-box-endpoint-"));
+    const scratch = mkdtempSync(join(tmpdir(), "seira-claude-box-endpoint-"));
     dirs.push(scratch);
     const fakeBwrap = join(scratch, "fake-bwrap.sh");
     writeFileSync(fakeBwrap, STRICT_BWRAP);
@@ -177,7 +177,7 @@ describe("a Claude turn in the bot box", () => {
     const wrap = vi.spyOn(botBox, "wrap");
     delete process.env.TMPDIR;
     // Outside /tmp and HOME, like a server's data folder: the box binds it on its own line, as it does on a Cloud.
-    const dataOutsideTmp = mkdtempSync(join(process.cwd(), ".omb-test-endpoint-"));
+    const dataOutsideTmp = mkdtempSync(join(process.cwd(), ".seira-test-endpoint-"));
     dirs.push(dataOutsideTmp);
     const configDir = join(dataOutsideTmp, "providers", "claude-endpoint");
     expect(existsSync(configDir)).toBe(false);
@@ -205,7 +205,7 @@ describe("a Claude turn in the bot box", () => {
   it.skipIf(process.platform === "win32")("defers the agents tools in the box as outside it", async () => {
     ensureDirs();
     chmodSync(FAKE_CLI, 0o755);
-    const scratch = mkdtempSync(join(tmpdir(), "omb-claude-box-defer-"));
+    const scratch = mkdtempSync(join(tmpdir(), "seira-claude-box-defer-"));
     dirs.push(scratch);
     const fakeBwrap = join(scratch, "fake-bwrap.sh");
     writeFileSync(fakeBwrap, `#!/bin/sh\nwhile [ "$1" != "--" ]; do shift; done; shift\nexec "$@"\n`);
@@ -225,7 +225,7 @@ describe("a Claude turn in the bot box", () => {
 
     await instance.adapter.sendTurn({
       threadId: "t-boxed-defer", botId: "bot-a", text: "hi", approvalMode: "full", cwd,
-      integrations: { agents: { command: process.execPath, args: ["/fake/agents-proxy.js"], env: { OMB_BOT_ID: "bot-a" } } },
+      integrations: { agents: { command: process.execPath, args: ["/fake/agents-proxy.js"], env: { SEIRA_BOT_ID: "bot-a" } } },
     });
     await recorder.until((event) => event.type === "turn.completed", 30_000);
 

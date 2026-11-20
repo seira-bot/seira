@@ -3,9 +3,9 @@
 import { CONNECTOR_SLUG_PATTERN, CONNECTOR_TOOL_NAME_PATTERN, type ConnectorToolGrant } from "../shared/wire.ts";
 import { APP_SANDBOX_SERVICE, APP_SANDBOX_TOOLS, serviceSlugFor, serviceSlugForCandidates } from "./connector-verdict.ts";
 
-export const CONNECTOR_ALLOWED_TOOLS_ENV = "OMB_CONNECTOR_ALLOWED_TOOLS";
+export const CONNECTOR_ALLOWED_TOOLS_ENV = "SEIRA_CONNECTOR_ALLOWED_TOOLS";
 
-export const CONNECTOR_SERVICE_SLUGS_ENV = "OMB_CONNECTOR_SERVICE_SLUGS";
+export const CONNECTOR_SERVICE_SLUGS_ENV = "SEIRA_CONNECTOR_SERVICE_SLUGS";
 
 /** Past this the env var is omitted: mounting must never depend on catalog size. */
 export const CONNECTOR_ALLOWED_TOOLS_MAX_BYTES = 32 * 1024;
@@ -141,7 +141,7 @@ const FIND_PARAMETER = {
     + "Searches every app that can be connected and lists their slugs. Use it when you are not sure of an app's exact slug.",
 };
 
-/** COMPOSIO_MANAGE_CONNECTIONS as OpenMausBot's connection cards read it: Composio's schema has no auth config id and no
+/** COMPOSIO_MANAGE_CONNECTIONS as Seira's connection cards read it: Composio's schema has no auth config id and no
  * search, and a search names no toolkits. */
 export function withConnectionParameters(frame: Record<string, unknown>): Record<string, unknown> {
   const result = frame.result;

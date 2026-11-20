@@ -26,7 +26,7 @@ export function buildSpendNotification(
   return { kind: "spend", botId: bot.id, botName: bot.name, threadId, title: text.title, body: summarize(text.body, 200) };
 }
 
-/** Something OpenMausBot did on its own about `bot` that the person hears once, in one plain line. */
+/** Something Seira did on its own about `bot` that the person hears once, in one plain line. */
 export function buildNoticeNotification(bot: Pick<NotifyBot, "id" | "name">, threadId: string, text: string): Notification {
   return { kind: "notice", botId: bot.id, botName: bot.name, threadId, title: bot.name, body: summarize(text, 240) };
 }
@@ -49,7 +49,7 @@ export function buildNotification(
   bot: Omit<NotifyBot, "threadId"> & { threadId?: string },
   threadId: string,
   detail: string,
-  extra?: { avatarUrl?: string; group?: { id: string; name: string }; site?: string; label?: string; app?: string },
+  extra?: { avatarUrl?: string; group?: { id: string; name: string }; site?: string; label?: string; app?: string; requestId?: string },
 ): Notification | null {
   if (bot.notifications === false) return null;
 
@@ -67,6 +67,7 @@ export function buildNotification(
   const notification: Notification = { kind, botId: bot.id, botName: bot.name, threadId, title, body };
   if (extra?.avatarUrl) notification.avatarUrl = extra.avatarUrl;
   if (extra?.group) notification.groupId = extra.group.id;
+  if (extra?.requestId) notification.requestId = extra.requestId;
   return notification;
 }
 

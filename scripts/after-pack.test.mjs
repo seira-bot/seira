@@ -9,7 +9,7 @@ import { LICENSE_FILES } from "./cua-linux-release.mjs";
 const temporaryDirectories = [];
 
 function fixture() {
-  const appOutDir = fs.mkdtempSync(path.join(os.tmpdir(), "omb-after-pack-"));
+  const appOutDir = fs.mkdtempSync(path.join(os.tmpdir(), "seira-after-pack-"));
   temporaryDirectories.push(appOutDir);
   const resources = path.join(appOutDir, "resources");
   const cua = path.join(resources, "cua-linux-x64");
@@ -51,6 +51,14 @@ describe.skipIf(process.platform === "win32")("Linux afterPack permissions", () 
     }
   });
 
+  it("links the executable name that an earlier version ran from to the current executable", async () => {
+    const { appOutDir } = fixture();
+    for (let pass = 0; pass < 2; pass += 1) {
+      await afterPack({ electronPlatformName: "linux", appOutDir });
+      expect(fs.readlinkSync(path.join(appOutDir, "openmausbot"))).toBe("seira");
+    }
+  });
+
   it("fails closed when the runtime root is replaced by a symlink", async () => {
     const { appOutDir, cua } = fixture();
     const replacement = path.join(appOutDir, "replacement");
@@ -72,6 +80,7 @@ describe.skipIf(process.platform === "win32")("Linux afterPack permissions", () 
     const { appOutDir, cua } = fixture();
     await afterPack({ electronPlatformName: "darwin", appOutDir });
     expect(fs.lstatSync(cua).mode & 0o777).toBe(0o775);
+    expect(fs.lstatSync(path.join(appOutDir, "openmausbot"), { throwIfNoEntry: false })).toBeUndefined();
     expect(fs.lstatSync(path.join(cua, "cua-driver")).mode & 0o777).toBe(0o664);
   });
 });
@@ -102,7 +111,7 @@ describe.skipIf(!canBuildMachO)("macOS afterPack platform-tools slices", () => {
   const archs = (file) => execFileSync("/usr/bin/lipo", ["-archs", file], { encoding: "utf8" }).trim();
 
   beforeAll(() => {
-    directory = fs.mkdtempSync(path.join(os.tmpdir(), "omb-macho-"));
+    directory = fs.mkdtempSync(path.join(os.tmpdir(), "seira-macho-"));
     fs.writeFileSync(path.join(directory, "main.c"), "int main(void) { return 0; }\n");
     for (const arch of ["arm64", "x86_64"]) {
       binaries[arch] = path.join(directory, arch);
@@ -114,7 +123,7 @@ describe.skipIf(!canBuildMachO)("macOS afterPack platform-tools slices", () => {
   afterAll(() => fs.rmSync(directory, { recursive: true, force: true }));
 
   function macApp() {
-    const appOutDir = fs.mkdtempSync(path.join(os.tmpdir(), "omb-after-pack-mac-"));
+    const appOutDir = fs.mkdtempSync(path.join(os.tmpdir(), "seira-after-pack-mac-"));
     temporaryDirectories.push(appOutDir);
     const tools = path.join(appOutDir, "Seira.app", "Contents", "Resources", "android-platform-tools", "darwin");
     fs.mkdirSync(path.join(tools, "lib64"), { recursive: true });

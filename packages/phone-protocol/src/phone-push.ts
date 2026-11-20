@@ -11,7 +11,7 @@ export const PHONE_PUSH_WIRE_VERSION = 1 as const;
  * by what authenticated the request (a paired session, or the device the companion vouched for), never by the body. */
 export const PHONE_PUSH_ROUTE = "/api/push/device";
 
-/** The relay's paths, under the control plane's origin. Each takes `Authorization: Bearer <omb_install_…>`. */
+/** The relay's paths, under the control plane's origin. Each takes `Authorization: Bearer <seira_install_…>`. */
 export const PHONE_PUSH_RELAY_PATHS = {
   register: "/v1/installations/self/push/register",
   unregister: "/v1/installations/self/push/unregister",
@@ -79,6 +79,9 @@ export interface PhonePushNotification {
   threadId: string;
   roomId?: string;
   roomName?: string;
+  /** The request an approval, question, secret or sign-in waits on: `Notification.requestId`, so a tap on the alert
+   * can answer that exact request. An opaque id; a relay that predates it rejects a send that carries it. */
+  requestId?: string;
 }
 
 export interface PushRelaySendRequest {
@@ -98,6 +101,7 @@ export interface PhonePushData {
   threadId: string;
   roomId?: string;
   roomName?: string;
+  requestId?: string;
   pairing?: string;
 }
 
@@ -108,10 +112,10 @@ export const PUSH_RELAY_ERRORS = {
   unavailable: "push_unavailable",
 } as const;
 
-/** `openmaus.<threadId>.<seq>`, the identifier the phone gives the notification the live stream would post for the
+/** `seira.<threadId>.<seq>`, the identifier the phone gives the notification the live stream would post for the
  * same frame, so a push and that notification replace each other. Undefined when it would not fit. */
 export function phonePushCollapseId(threadId: string, seq: number): string | undefined {
-  const id = `openmaus.${threadId}.${seq}`;
+  const id = `seira.${threadId}.${seq}`;
   return Number.isSafeInteger(seq) && seq >= 0 && PUSH_COLLAPSE_ID.test(id) ? id : undefined;
 }
 
@@ -152,7 +156,7 @@ export interface ActivityVisual {
 /** `PUT /api/push/activity`, from the phone. */
 export interface PhoneActivityRegistration {
   /** The app's URL scheme, for the chat link a pushed activity opens. */
-  scheme: "openmausbot" | "openmausbot-dev" | "openmausbot-next";
+  scheme: "seira" | "seira-dev" | "seira-next";
   /** The phone's own words, with `{name}` where the bot's name goes: "{name} needs you", "{name} is working". */
   headlines: Record<ActivityKind, string>;
   /** iOS: the app's Live Activity push-to-start token (hex). */

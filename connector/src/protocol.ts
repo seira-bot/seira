@@ -23,10 +23,10 @@ export type ServerMode = "operated" | "customer-run";
 
 /** `POST {admin}{ENROLL_PATH}` with an `EnrollRequest`; answers an `EnrollResponse`. The code is single use. */
 export const ENROLL_PATH = "/api/cloud/box/v1/enroll";
-/** `GET {admin}{CONNECT_PATH}`, upgraded to a WebSocket with subprotocol `CHANNEL_PROTOCOL` and header `x-omb-box`. */
+/** `GET {admin}{CONNECT_PATH}`, upgraded to a WebSocket with subprotocol `CHANNEL_PROTOCOL` and header `x-seira-box`. */
 export const CONNECT_PATH = "/api/cloud/box/v1/connect";
 export const CHANNEL_PROTOCOL = "omb-box.v2";
-export const BOX_HEADER = "x-omb-box";
+export const BOX_HEADER = "x-seira-box";
 /** `PUT {admin}{EXPORT_PATH}/<job id>`, `content-type: application/gzip`: an `export-disk` job's archive of `/data`. */
 export const EXPORT_PATH = "/api/cloud/box/v1/export";
 /** `Authorization: Box <envelope>` on a transfer to or from the Admin: a `TransferPayload` the box signed. */
@@ -353,18 +353,18 @@ export interface TransferPayload {
 const JOB_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const BACKUP_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const OPAQUE_ID = /^[A-Za-z0-9_-]{1,128}$/;
-const ENV_NAME = /^OMB_[A-Z0-9_]{1,60}$/;
+const ENV_NAME = /^SEIRA_[A-Z0-9_]{1,60}$/;
 // oxlint-disable-next-line no-control-regex
 const ENV_VALUE = /^[^\0\r\n]{0,8192}$/;
 const MAX_ENV = 64;
 
 /** The home's boot contract: without these the home refuses to start. */
-export const REQUIRED_HOME_ENV = ["OMB_CLOUD_ROLE", "OMB_CLOUD_MACHINE_ID", "OMB_CLOUD_ADMIN_URL", "OMB_PUBLIC_URL", "OMB_CLOUD_BOOTSTRAP_SECRET"] as const;
+export const REQUIRED_HOME_ENV = ["SEIRA_CLOUD_ROLE", "SEIRA_CLOUD_MACHINE_ID", "SEIRA_CLOUD_ADMIN_URL", "SEIRA_PUBLIC_URL", "SEIRA_CLOUD_BOOTSTRAP_SECRET"] as const;
 
 /** Settings the image owns, or that make sense only on Fly; a home on an own server never takes them from outside. */
 export const REFUSED_HOME_ENV = new Set([
-  "OMB_CLOUD_EDGE_HOLD", "OMB_CLOUD_EDGE_BIN", "OMB_CLOUD_EDGE_CONFIG", "OMB_CLOUD_HARDEN",
-  "OMB_DATA_DIR", "OMB_STATIC_DIR", "OMB_DUCKDB_DIR", "OMB_PORT", "OMB_WEBHOOK_PORT", "OMB_CLOUD_SECRETS_FD", "OMB_CLOUD_CAPS_DROPPED", "OMB_CLOUD_TUNNEL_BIN",
+  "SEIRA_CLOUD_EDGE_HOLD", "SEIRA_CLOUD_EDGE_BIN", "SEIRA_CLOUD_EDGE_CONFIG", "SEIRA_CLOUD_HARDEN",
+  "SEIRA_DATA_DIR", "SEIRA_STATIC_DIR", "SEIRA_DUCKDB_DIR", "SEIRA_PORT", "SEIRA_WEBHOOK_PORT", "SEIRA_CLOUD_SECRETS_FD", "SEIRA_CLOUD_CAPS_DROPPED", "SEIRA_CLOUD_TUNNEL_BIN",
 ]);
 
 export type Checked<T> = { ok: true; value: T } | { ok: false; message: string };
@@ -390,20 +390,20 @@ function httpsOrigin(value: string): boolean {
   }
 }
 
-/** The home's environment: names are `OMB_*` and never one the image owns; values are one line. Never echoes a value. */
+/** The home's environment: names are `SEIRA_*` and never one the image owns; values are one line. Never echoes a value. */
 export function checkHomeEnv(env: unknown): Checked<Record<string, string>> {
   if (!plainObject(env)) return { ok: false, message: "env must be an object of names and values" };
   const entries = Object.entries(env);
   if (entries.length > MAX_ENV) return { ok: false, message: `env has more than ${MAX_ENV} names` };
   for (const [name, value] of entries) {
-    if (!ENV_NAME.test(name)) return { ok: false, message: `env name ${JSON.stringify(name.slice(0, 64))} is not an OMB_ setting` };
+    if (!ENV_NAME.test(name)) return { ok: false, message: `env name ${JSON.stringify(name.slice(0, 64))} is not a SEIRA_ setting` };
     if (REFUSED_HOME_ENV.has(name)) return { ok: false, message: `env name ${name} is the image's own setting` };
     if (typeof value !== "string" || !ENV_VALUE.test(value)) return { ok: false, message: `env value of ${name} must be one line of at most 8192 characters` };
   }
   for (const name of REQUIRED_HOME_ENV) if (typeof env[name] !== "string" || !env[name]) return { ok: false, message: `env must set ${name}` };
-  if (env.OMB_CLOUD_ROLE !== "home" && env.OMB_CLOUD_ROLE !== "team") return { ok: false, message: 'OMB_CLOUD_ROLE must be "home" or "team"' };
-  if (!httpsOrigin(env.OMB_PUBLIC_URL as string)) return { ok: false, message: "OMB_PUBLIC_URL must be an https origin" };
-  if (!httpsOrigin(env.OMB_CLOUD_ADMIN_URL as string)) return { ok: false, message: "OMB_CLOUD_ADMIN_URL must be an https origin" };
+  if (env.SEIRA_CLOUD_ROLE !== "home" && env.SEIRA_CLOUD_ROLE !== "team") return { ok: false, message: 'SEIRA_CLOUD_ROLE must be "home" or "team"' };
+  if (!httpsOrigin(env.SEIRA_PUBLIC_URL as string)) return { ok: false, message: "SEIRA_PUBLIC_URL must be an https origin" };
+  if (!httpsOrigin(env.SEIRA_CLOUD_ADMIN_URL as string)) return { ok: false, message: "SEIRA_CLOUD_ADMIN_URL must be an https origin" };
   return { ok: true, value: Object.fromEntries(entries) as Record<string, string> };
 }
 

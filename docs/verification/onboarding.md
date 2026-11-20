@@ -19,7 +19,7 @@ node --experimental-strip-types scripts/control-seira.ts ui launch
 In a second terminal, pass its exact printed handle:
 
 ```sh
-node --experimental-strip-types scripts/verify-onboarding-ui.ts /tmp/openmausbot-verify-data-XXXXXX/ui.json
+node --experimental-strip-types scripts/verify-onboarding-ui.ts /tmp/seira-verify-data-XXXXXX/ui.json
 ```
 
 Use a fresh fixture. The recipe clears only its browser storage, then enables
@@ -37,7 +37,7 @@ starter-model selection and a successful first composer message without opening
 the model picker; every app tour step from Settings, persistence after reload,
 Settings replay, skipping while Next is saving, closing a welcome replay while
 its save is pending, and replay on legacy installs with a failed-save retry.
-Screenshots are retained in `.omb-scratch/verify-evidence/onboarding/` with a
+Screenshots are retained in `.seira-scratch/verify-evidence/onboarding/` with a
 PASS line for each workflow. Actual provider authentication and native Electron
 permissions remain covered by their separate platform recipes, not this browser
 fixture.
@@ -98,7 +98,7 @@ tests above, not by a rerun. In that run, "Got it" made no `/api/config`
 write, and the note stayed away after a reload. Connect an AI was mounted from the Vite preview with a fake
 `window.ogb.organization` injected before mount; it showed the row signed out,
 then connecting with the code, then connected. `begin` ran once, with the
-default Admin. Screenshots are in `.omb-scratch/verify-evidence/onboarding/`.
+default Admin. Screenshots are in `.seira-scratch/verify-evidence/onboarding/`.
 
 Not covered here: the real Electron preload bridge and a real Admin enrolment
 (see [organization connection](organization-settings.md), not rerun for this
@@ -154,8 +154,8 @@ touches, and checks that none of them was listed or opened and that the
 sentinel reaches no answer, saved server or copied skill. The route test
 refuses a paired device, a service loopback and a hosted or Cloud server; the
 end-to-end test runs the real server from `launchVerificationServer` against a
-planted home, as the desktop app runs it (`OMB_TEST_DESKTOP_OWNER_TOKEN`), checks
-that a headless server (`openmausbot serve`) refuses the step, and checks that the starter bot and a bot made afterwards both
+planted home, as the desktop app runs it (`SEIRA_TEST_DESKTOP_OWNER_TOKEN`), checks
+that a headless server (`seira serve`) refuses the step, and checks that the starter bot and a bot made afterwards both
 get the skills in their turn's index, task folder links and `/name`, that a
 Claude turn with "Also use my Claude Code skills" on sees a Claude Code skill
 once, and that a bot can switch one off for itself. The rows, working, failed
@@ -167,7 +167,7 @@ window itself.
 ## Two screens, then the chat (Oct 27 2026)
 
 ```sh
-pnpm exec vitest run src/lib/onboarding.test.ts src/lib/welcome-draft.test.ts src/lib/default-bot.test.ts src/lib/corner-popup.test.ts src/components/onboarding src/components/HelperIntro.test.ts src/components/AppNotices.test.ts src/components/MausBotWelcome.gate.test.ts
+pnpm exec vitest run src/lib/onboarding.test.ts src/lib/welcome-draft.test.ts src/lib/default-bot.test.ts src/lib/corner-popup.test.ts src/components/onboarding src/components/HelperIntro.test.ts src/components/AppNotices.test.ts src/components/SeiraWelcome.gate.test.ts
 ```
 
 - `src/components/onboarding/WelcomeFlow.test.ts` renders the flow in
@@ -189,7 +189,7 @@ pnpm exec vitest run src/lib/onboarding.test.ts src/lib/welcome-draft.test.ts sr
 - `src/lib/corner-popup.test.ts` and `src/components/AppNotices.test.ts` keep
   every corner notice out of the first conversation until a reply;
   `src/components/onboarding/FirstConversationTour.test.ts` keeps its
-  spotlights off; `src/components/MausBotWelcome.gate.test.ts` keeps Seira's
+  spotlights off; `src/components/SeiraWelcome.gate.test.ts` keeps Seira's
   first-launch card for older installs only.
 - `src/components/onboarding/GuidedTour.test.ts` and
   `src/components/onboarding/WelcomeGate.test.ts` check the app tour never

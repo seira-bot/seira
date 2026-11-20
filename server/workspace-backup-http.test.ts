@@ -1,6 +1,6 @@
 // Archive work is mocked so revocation can be held at a deterministic boundary.
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { createServer, request, type IncomingMessage, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,15 +31,15 @@ function fakeArchive() {
   const id = randomUUID();
   const directory = join(dataDir, ".backups", id);
   mkdirSync(directory, { recursive: true, mode: 0o700 });
-  const path = join(directory, "workspace.ombbackup");
+  const path = join(directory, "workspace.seirabackup");
   writeFileSync(path, "fixture encrypted bytes", { mode: 0o600 });
-  const summary: WorkspaceBackupSummary = { format: "openmaus.workspace-backup", version: 1, id, createdAt: "2026-09-11T00:00:00Z", appVersion: "0.1.71", files: 1, directories: 0, bytes: 23, bots: 0, groups: 0, threads: 0, messages: 0, exclusions: [], warnings: [] };
+  const summary: WorkspaceBackupSummary = { format: "seira.workspace-backup", version: 1, id, createdAt: "2026-09-11T00:00:00Z", appVersion: "0.1.71", files: 1, directories: 0, bytes: 23, bots: 0, groups: 0, threads: 0, messages: 0, exclusions: [], warnings: [] };
   return { id, path, summary };
 }
 
 beforeEach(async () => {
   vi.resetAllMocks();
-  dataDir = mkdtempSync(join(tmpdir(), "omb-backup-http-"));
+  dataDir = mkdtempSync(join(tmpdir(), "seira-backup-http-"));
   maintenance = new WorkspaceBackupMaintenance();
   sessions = new SessionRegistry({ file: join(dataDir, "sessions.json") });
   admin = sessions.issue({ label: "Fixture admin", scopes: ["admin", "client"] });
@@ -118,6 +118,14 @@ it("carries a fixed backup refusal and its redacted string path to the client", 
   expect(await response.json()).toEqual(userError("serverError.backup.recursiveLink", params));
 });
 
+it("names the exported file Seira-<date>.seirabackup in the reply and the download", async () => {
+  const exported = await post("/api/workspace-backup/export", { password: PASSWORD }).then((response) => response.json()) as { id: string; filename: string };
+  expect(exported.filename).toBe("Seira-2026-09-11.seirabackup");
+  const download = await fetch(`${url}/api/workspace-backup/download/${exported.id}`, { headers: { authorization: `Bearer ${admin.token}` } });
+  expect(download.headers.get("content-disposition")).toBe('attachment; filename="Seira-2026-09-11.seirabackup"');
+  await download.arrayBuffer();
+});
+
 it.each(["revoke", "logout"])("keeps session controls authenticated and usable during a held export (%s)", async (action) => {
   let started!: () => void;
   let release!: () => void;
@@ -166,11 +174,11 @@ it("keeps a validated stage after rejecting a malformed or oversized upload", as
 });
 
 it("accepts drafts between 1 and 2 MiB and enforces the preference cap in UTF-8 bytes", async () => {
-  const clientState = { "omb-drafts": "a".repeat(1536 * 1024) };
+  const clientState = { "seira-drafts": "a".repeat(1536 * 1024) };
   expect((await post("/api/workspace-backup/export", { password: PASSWORD, clientState })).status).toBe(200);
   expect(archive.create.mock.calls[0][1].clientState).toEqual(clientState);
   // Fits the request framing allowance but exceeds the preference byte cap; string.length alone would accept it.
-  const tooLarge = { "omb-drafts": "é".repeat(1024 ** 2) };
+  const tooLarge = { "seira-drafts": "é".repeat(1024 ** 2) };
   const rejected = await post("/api/workspace-backup/export", { password: PASSWORD, clientState: tooLarge });
   expect(rejected.status).toBe(413);
   expect((await rejected.json() as { error: string }).error).toContain("2 MB backup preference limit");
@@ -209,4 +217,19 @@ it("leaves the restart to the person where no launcher restarts the server", asy
   expect(restored.status).toBe(200);
   expect(await restored.json()).not.toHaveProperty("restarting");
   expect(await status()).toMatchObject({ pendingRestore: true });
+});
+
+it("clears an old upload leftover that an earlier version named, and keeps a recent one", async () => {
+  const uploads = join(dataDir, ".backups", "uploads");
+  mkdirSync(uploads, { recursive: true });
+  const old = join(uploads, `${randomUUID()}.ombbackup`);
+  const recent = join(uploads, `${randomUUID()}.ombbackup`);
+  const current = join(uploads, `${randomUUID()}.seirabackup`);
+  for (const file of [old, recent, current]) writeFileSync(file, "x");
+  const longAgo = new Date(Date.now() - 2 * 60 * 60_000);
+  for (const file of [old, current]) utimesSync(file, longAgo, longAgo);
+  await listen();
+  expect(existsSync(old)).toBe(false);
+  expect(existsSync(current)).toBe(false);
+  expect(existsSync(recent)).toBe(true);
 });

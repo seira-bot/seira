@@ -69,7 +69,9 @@ export function createPersonWaits(deps: PersonWaitsDeps) {
     const bot = askerOf(threadId, wait);
     if (!bot) return null;
     const group = store.groupByThread(threadId);
-    const extra = { avatarUrl: bot.avatarUrl, ...(group ? { group: { id: group.id, name: group.name } } : {}) };
+    const cardKind = wait.kind === "password" || wait.kind === "sign-in" || wait.kind === "connect";
+    const requestId = cardKind ? wait.messageId : store.activePath(threadId).find((row) => row.id === wait.messageId)?.card?.requestId;
+    const extra = { avatarUrl: bot.avatarUrl, ...(requestId ? { requestId } : {}), ...(group ? { group: { id: group.id, name: group.name } } : {}) };
     const target = { ...bot, threadId };
     switch (wait.kind) {
       case "password": return buildNotification("secret", target, threadId, detail, { ...extra, label: wait.label });

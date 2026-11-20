@@ -1,4 +1,4 @@
-// A Team Cloud person's inbox: their own conversation with their own Chief of Staff, or with their own MausBot while they
+// A Team Cloud person's inbox: their own conversation with their own Chief of Staff, or with their own Seira while they
 // crowned none. Everything addressed to them lands there as one line that says who it is from and where it came from:
 // a message a bot or a teammate passed them, an @mention, a question or approval card a bot asks them (a copy, answered
 // here as there), a routine's report and a failure routed to them. Each line is one notification, sent from there.
@@ -113,7 +113,7 @@ export interface PersonInboxDeps {
   representative?: Representative;
   /** A bot's shared notes (its team layer). */
   notes(botId: string): string;
-  /** Gives a member who has neither a Chief nor a MausBot yet the MausBot every member gets. */
+  /** Gives a member who has neither a Chief nor a Seira yet the Seira every member gets. */
   ensureOwnBot?(email: string): void;
   /** What waits on this inbox's person may have changed: its bot goes out to them again. */
   changed?(threadId: string): void;
@@ -148,7 +148,7 @@ export function createPersonInbox(deps: PersonInboxDeps) {
   };
 
   const ownerKey = (bot: BotRecord) => { const email = botOwner(bot); return email ? deps.personKeyOf(email) : null; };
-  /** The person's own Chief, else their own MausBot. */
+  /** The person's own Chief, else their own Seira. */
   function representativeOf(person: string): BotRecord | null {
     const own = (bot: BotRecord) => !bot.hidden && ownerKey(bot) === person;
     return store.bots.find((bot) => bot.chiefOfStaff && own(bot)) ?? store.bots.find((bot) => Boolean(bot.defaultBot?.person) && own(bot)) ?? null;
@@ -401,8 +401,8 @@ export function createPersonInbox(deps: PersonInboxDeps) {
     if (!delivered) return notification;
     const bot = store.bot(delivered.botId);
     if (!bot || bot.notifications === false) return null;
-    const { groupId: _room, avatarUrl: _face, ...rest } = notification;
-    return { ...rest, botId: bot.id, botName: bot.name, threadId: delivered.threadId, forPerson: person, ...(bot.avatarUrl ? { avatarUrl: bot.avatarUrl } : {}) };
+    const { groupId: _room, avatarUrl: _face, requestId, ...rest } = notification;
+    return { ...rest, ...(requestId && card?.requestId === requestId ? { requestId } : {}), botId: bot.id, botName: bot.name, threadId: delivered.threadId, forPerson: person, ...(bot.avatarUrl ? { avatarUrl: bot.avatarUrl } : {}) };
   }
 
   /** Where an answer to a card in this conversation goes: an inbox's copy answers the conversation that asked. */

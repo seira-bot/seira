@@ -5,6 +5,8 @@ import { join } from "node:path";
 
 import type { ContainerInfo, ContainerSpec, ContainerSummary, Docker, DockerInfo, DockerVersion, ImageInfo, VolumeInfo } from "../src/docker.ts";
 import { DockerError } from "../src/docker.ts";
+import { labelValue } from "../src/labels.ts";
+import { LABELS } from "../src/settings.ts";
 
 export interface FakeContainer {
   id: string;
@@ -153,7 +155,7 @@ export class FakeDocker implements Docker {
     if (container.status === "running") return;
     container.status = "running";
     container.startedAt = this.now();
-    const role = container.spec.Labels?.["com.mausbot.role"];
+    const role = labelValue(container.spec.Labels, LABELS.role);
     if (role === "helper") this.runHelper(container);
     else if (role === "home") this.onHomeStart?.(container);
     else if (role === "connector") await this.onConnectorStart?.(container);
@@ -213,7 +215,7 @@ export class FakeDocker implements Docker {
   }
 
   async volumeInspect(name: string): Promise<VolumeInfo | null> {
-    if (name === "mausbot-connector") return { Name: name, Labels: {}, Mountpoint: this.stateDir };
+    if (name === "seira-connector") return { Name: name, Labels: {}, Mountpoint: this.stateDir };
     const volume = this.volumes.get(name);
     return volume ? { Name: name, Labels: volume.labels, Mountpoint: `/var/lib/docker/volumes/${name}/_data` } : null;
   }

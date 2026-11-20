@@ -1,5 +1,5 @@
 // The client of the plan's included app hosting: a Cloud home asks the Admin's relay to publish a bot's site on
-// MausBot's hosting account, a number of apps per plan, so the person needs no hosting account of their own.
+// Seira's hosting account, a number of apps per plan, so the person needs no hosting account of their own.
 //
 // Security: the relay token is read from the server's held credential for each call and goes only to the relay address
 // the Admin gave this home. It is never in what these functions return or throw, in a record, or in a log line. What the

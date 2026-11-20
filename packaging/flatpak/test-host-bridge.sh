@@ -2,7 +2,7 @@
 # Start-up under Xvfb, then the host bridge with a dummy agent program.
 # Needs the app installed as bot.seira.Seira and no other Seira on port 8799.
 set -eu
-log="$HOME/.var/app/bot.seira.Seira/config/openmausbot/logs/server.log"
+log="$HOME/.var/app/bot.seira.Seira/config/seira/logs/server.log"
 bin="$HOME/.local/bin"
 run=$(mktemp)
 before=$(wc -l <"$log" 2>/dev/null || echo 0)

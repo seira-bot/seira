@@ -16,7 +16,7 @@ function env(limited = false) {
           bind() {
             return {
               run: async () => ({ meta: { changes: 1 } }),
-              first: async () => (sql.includes("FROM installations") ? { id: "install-1", composio_user_id: "omb_user", session_id: "trs_files", disabled_at: null } : null),
+              first: async () => (sql.includes("FROM installations") ? { id: "install-1", composio_user_id: "seira_user", session_id: "trs_files", disabled_at: null } : null),
             };
           },
         };
@@ -52,7 +52,7 @@ describe("file uploads for connected-app tools", () => {
     await expect(response.json()).resolves.toEqual({ key: "proj/googledrive/report.pdf", url: "https://storage.composio.dev/put?sig=1" });
     expect(calls).toHaveLength(2);
     expect(calls[0]!.url).toContain("/connected_accounts?");
-    expect(new URL(calls[0]!.url).searchParams.get("user_ids")).toBe("omb_user");
+    expect(new URL(calls[0]!.url).searchParams.get("user_ids")).toBe("seira_user");
     expect(calls[1]!.url).toBe("https://backend.composio.dev/api/v3.1/files/upload/request");
     expect(new Headers(calls[1]!.init?.headers).get("x-api-key")).toBe("ak_test");
     expect(JSON.parse(String(calls[1]!.init?.body))).toEqual(upload);

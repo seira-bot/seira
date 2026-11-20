@@ -16,14 +16,14 @@ const github = (newest: string, stable: string | null) => vi.fn(async (url: stri
 describe("server update check", () => {
   it("tells how this server was installed", () => {
     const none = () => false;
-    const root = ["", "srv", "OpenMausBot", "server"].join(sep);
+    const root = ["", "srv", "Seira", "server"].join(sep);
     expect(installKind({ desktopManaged: true, managed: false, serverRoot: root, exists: () => true })).toBe("desktop");
     expect(installKind({ desktopManaged: false, managed: true, serverRoot: root, exists: () => true })).toBe("managed");
     expect(installKind({ desktopManaged: false, managed: false, serverRoot: root, exists: (path) => path === "/.dockerenv" })).toBe("docker");
     expect(installKind({ desktopManaged: false, managed: false, serverRoot: root, exists: (path) => path === "/run/.containerenv" })).toBe("podman");
     expect(installKind({
       desktopManaged: false, managed: false, exists: none,
-      serverRoot: ["", "usr", "lib", "node_modules", "openmausbot", "dist-server"].join(sep),
+      serverRoot: ["", "usr", "lib", "node_modules", "seira", "dist-server"].join(sep),
     })).toBe("npm");
     expect(installKind({ desktopManaged: false, managed: false, serverRoot: root, exists: (path) => path === join(root, "..", ".git") })).toBe("git");
     expect(installKind({ desktopManaged: false, managed: false, serverRoot: root, exists: none })).toBe("unknown");
@@ -31,16 +31,16 @@ describe("server update check", () => {
 
   it("knows the rootless Podman service by its unit's mark, and gives its own update.sh, not the Compose recipe", () => {
     const root = ["", "app", "dist-server"].join(sep);
-    const env = { OMB_PODMAN_SERVICE: "~/.local/share/openmausbot" };
+    const env = { SEIRA_PODMAN_SERVICE: "~/.local/share/seira" };
     expect(installKind({ desktopManaged: false, managed: false, serverRoot: root, exists: (path) => path === "/run/.containerenv", env })).toBe("podman-service");
     expect(installKind({ desktopManaged: false, managed: false, serverRoot: root, exists: (path) => path === "/run/.containerenv", env: {} })).toBe("podman");
     expect(installKind({ desktopManaged: false, managed: true, serverRoot: root, exists: () => false, env })).toBe("managed");
-    expect(updateCommand("podman-service", undefined, env)).toEqual({ command: "~/.local/share/openmausbot/update.sh", restart: false });
-    expect(updateCommand("podman-service", { version: "0.1.170", stable: false }, env)?.command).toBe("~/.local/share/openmausbot/update.sh --version 0.1.170");
-    expect(updateCommand("podman-service", { version: "0.1.170", stable: true }, { OMB_PODMAN_SERVICE: "/srv/omb@corp/" })?.command).toBe("/srv/omb@corp/update.sh");
+    expect(updateCommand("podman-service", undefined, env)).toEqual({ command: "~/.local/share/seira/update.sh", restart: false });
+    expect(updateCommand("podman-service", { version: "0.1.170", stable: false }, env)?.command).toBe("~/.local/share/seira/update.sh --version 0.1.170");
+    expect(updateCommand("podman-service", { version: "0.1.170", stable: true }, { SEIRA_PODMAN_SERVICE: "/srv/seira@corp/" })?.command).toBe("/srv/seira@corp/update.sh");
     // Anything but a plain path stands for nothing: the installer's own folder.
     for (const bad of ["1", "~/x; rm -rf /", "/srv/../etc", "relative/dir", "$(id)"]) {
-      expect(updateCommand("podman-service", undefined, { OMB_PODMAN_SERVICE: bad })?.command, bad).toBe("~/.local/share/openmausbot/update.sh");
+      expect(updateCommand("podman-service", undefined, { SEIRA_PODMAN_SERVICE: bad })?.command, bad).toBe("~/.local/share/seira/update.sh");
     }
     expect(updateCommand("docker", { version: "0.1.170", stable: false })?.command).toBe("git pull && ./update.sh --version 0.1.170");
     expect(updateCommand("docker", { version: "0.1.170", stable: true })?.command).toBe("git pull && ./update.sh");
@@ -95,8 +95,8 @@ describe("server update check", () => {
     expect(await createUpdateChecker({ current: "0.1.92", install: "docker", channel: "newest", fetch })()).toMatchObject({ channel: "newest", latest: "0.1.95" });
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(updateChannel({})).toBe("stable");
-    expect(updateChannel({ OMB_UPDATE_CHANNEL: " Newest " })).toBe("newest");
-    expect(updateChannel({ OMB_UPDATE_CHANNEL: "latest" })).toBe("stable");
+    expect(updateChannel({ SEIRA_UPDATE_CHANNEL: " Newest " })).toBe("newest");
+    expect(updateChannel({ SEIRA_UPDATE_CHANNEL: "latest" })).toBe("stable");
   });
 
   it("says nothing is available while the repository has no release", async () => {

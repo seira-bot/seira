@@ -11,7 +11,7 @@ from a GitHub link or a folder.
 ```sh
 pnpm exec vitest run shared/share-folder.test.ts shared/skill-files.test.ts server/share.test.ts server/share-github.test.ts server/share-skill-files.test.ts server/share-team-templates.test.ts src/components/TemplateCard.test.ts src/components/ImportDialog.test.ts src/lib/template-share.test.ts
 pnpm exec vitest run server/share.e2e.test.ts server/cloud-team-templates.e2e.test.ts --silent=false
-OMB_UI_E2E=1 pnpm exec vitest run scripts/testing/team-share-ui.e2e.test.ts scripts/testing/team-template-ui.e2e.test.ts --maxWorkers=1
+SEIRA_UI_E2E=1 pnpm exec vitest run scripts/testing/team-share-ui.e2e.test.ts scripts/testing/team-template-ui.e2e.test.ts --maxWorkers=1
 ```
 
 `server/share.e2e.test.ts` launches an isolated fixture. Its fake engine calls the `share` tool when the bot is asked to

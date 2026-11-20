@@ -13,7 +13,7 @@ import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 import { freePortBlock } from "./testing/ports.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
-const HOST = "omb-t-0123456789ab.fly.dev";
+const HOST = "seira-t-0123456789ab.fly.dev";
 const secret = randomBytes(32).toString("base64url");
 const TEAM = { id: "team-7f3a", name: "Acme" };
 let home = "", dataDir = "", base = "", log = "";
@@ -30,8 +30,8 @@ function signed(method: "GET" | "POST", path: string, body = "") {
 }
 
 beforeAll(async () => {
-  home = mkdtempSync(join(tmpdir(), "omb-team-admin-"));
-  dataDir = join(home, ".openmausbot");
+  home = mkdtempSync(join(tmpdir(), "seira-team-admin-"));
+  dataDir = join(home, ".seira");
   mkdirSync(dataDir, { recursive: true });
   const cli = join(home, "fixture-claude.mjs");
   writeFileSync(cli, `#!/usr/bin/env node
@@ -59,9 +59,9 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     cwd: join(SERVER_DIR, ".."),
     env: {
       PATH: process.env.PATH, ...(process.env.PATHEXT ? { PATHEXT: process.env.PATHEXT } : {}), ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-      HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), OMB_STATIC_DIR: join(home, "web"),
-      OMB_CLOUD_ROLE: "team", OMB_BOT_BOX: "0", OMB_CLOUD_TEAM_ID: TEAM.id, OMB_CLOUD_TEAM_NAME: TEAM.name, OMB_CLOUD_TEAM_LANGUAGE: "de",
-      OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test", OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_PUBLIC_URL: `https://${HOST}`,
+      HOME: home, USERPROFILE: home, SEIRA_DATA_DIR: dataDir, SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), SEIRA_STATIC_DIR: join(home, "web"),
+      SEIRA_CLOUD_ROLE: "team", SEIRA_BOT_BOX: "0", SEIRA_CLOUD_TEAM_ID: TEAM.id, SEIRA_CLOUD_TEAM_NAME: TEAM.name, SEIRA_CLOUD_TEAM_LANGUAGE: "de",
+      SEIRA_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test", SEIRA_CLOUD_BOOTSTRAP_SECRET: secret, SEIRA_PUBLIC_URL: `https://${HOST}`,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -119,7 +119,7 @@ it("an Owner or Admin's paired session (as the Admin holds one) sets a team key 
   expect(JSON.stringify(summary)).not.toContain("never-shown");
   const saved = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
   expect([saved.openai?.key, saved.mcpServers, saved.language]).toEqual(["sk-team-key-never-shown", {}, undefined]);
-  // The language is the team's (OMB_CLOUD_TEAM_LANGUAGE), though config.json sets none.
+  // The language is the team's (SEIRA_CLOUD_TEAM_LANGUAGE), though config.json sets none.
   const settings = await admin("GET", "/api/config");
   expect([settings.status, settings.body.language]).toEqual([200, "de"]);
 }, 30_000);

@@ -250,7 +250,7 @@ export class ComputerAsks {
     const task = store.projectBotForTask(input.bot.id, input.threadId);
     if (task?.busy) store.setTaskActivity(input.bot.id, input.threadId, "waiting-on-you");
     this.deps.notify?.(buildNotification("approval", input.bot, input.threadId, cardWords(view, input.bot.name).title, {
-      avatarUrl: input.bot.avatarUrl, ...(room && !room.dm ? { group: { id: room.id, name: room.name } } : {}),
+      avatarUrl: input.bot.avatarUrl, requestId: id, ...(room && !room.dm ? { group: { id: room.id, name: room.name } } : {}),
     }));
     this.bump();
     return ask;

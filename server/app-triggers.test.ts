@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,7 +22,7 @@ let failNextEnqueue: "before-save" | "after-save" | null = null;
 beforeEach(async () => {
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
-  dir = mkdtempSync(join(tmpdir(), "omb-app-triggers-"));
+  dir = mkdtempSync(join(tmpdir(), "seira-app-triggers-"));
   broker = await startBrokerFake();
   owner = await broker.install();
   gmail = broker.account(owner.userId, "gmail", "sales");
@@ -487,7 +487,7 @@ describe("automations made before the owner kept the managed service out", () =>
   });
 
   it("the host reports the switch as off, for the app and for a bot's event list, and calls nothing", async () => {
-    vi.stubEnv("OMB_COMPOSIO_BROKER", "off");
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER", "off");
     try {
       const { createAppTriggerHost } = await import("./app-trigger-host.ts");
       const fetches = vi.fn();
@@ -524,5 +524,16 @@ describe("app-event automation that keeps one conversation", () => {
     await drain(triggers);
     expect(runsOf(trigger.id)[0]).toMatchObject({ deliveryId: "msg_same_2", status: "queued" });
     expect(runsOf(trigger.id)[0]).not.toHaveProperty("sameConversation");
+  });
+});
+
+describe("an app-triggers file an earlier version saved", () => {
+  it("loads an automation whose run-on value is the old one", async () => {
+    const trigger = await gmailTrigger(manager());
+    const file = join(dir, "app-triggers.json");
+    writeFileSync(file, readFileSync(file, "utf8").replace(/"runOn": ?"seira"/g, '"runOn": "maus"'));
+    expect(readFileSync(file, "utf8")).toContain('"maus"');
+    const reloaded = manager();
+    expect(reloaded.list()).toMatchObject([{ id: trigger.id, runOn: "seira" }]);
   });
 });

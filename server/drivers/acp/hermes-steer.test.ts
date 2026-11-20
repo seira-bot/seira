@@ -34,7 +34,7 @@ let recorder: EventRecorder | undefined;
 
 beforeEach(() => {
   ensureDirs();
-  scratch = mkdtempSync(join(tmpdir(), "omb-hermes-steer-"));
+  scratch = mkdtempSync(join(tmpdir(), "seira-hermes-steer-"));
 });
 
 afterEach(async () => {
@@ -50,7 +50,7 @@ const fixtureEnv = (extra: Record<string, string> = {}) => ({
   USERPROFILE: scratch,
   HERMES_HOME: join(scratch, ".hermes"),
   KIMI_CODE_HOME: join(scratch, ".kimi"),
-  OPENMAUSBOT_PROBE_LOCAL_INJECT: "0",
+  SEIRA_PROBE_LOCAL_INJECT: "0",
   FAKE_ACP_MODE: "hermes-steer",
   FAKE_ACP_RPC_APPEND_FILE: join(scratch, "rpc.jsonl"),
   ...extra,

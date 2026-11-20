@@ -50,7 +50,7 @@ const capability = async (
     "POST",
     "/api/testing/internal-capability",
     { botId, threadId, kind },
-    { "x-openmausbot-test-capability": TEST_CAPABILITY_KEY },
+    { "x-seira-test-capability": TEST_CAPABILITY_KEY },
   );
   expect(minted.status).toBe(201);
   return { authorization: `Bearer ${minted.body.token}` };
@@ -88,8 +88,8 @@ const cleanup = async (groupIds: Array<string | undefined>, botIds: string[]) =>
 beforeAll(async () => {
   chmodSync(FAKE_CLAUDE, 0o755);
   chmodSync(FAKE_ACP, 0o755);
-  home = mkdtempSync(join(tmpdir(), "omb-notification-routing-"));
-  const data = join(home, ".openmausbot");
+  home = mkdtempSync(join(tmpdir(), "seira-notification-routing-"));
+  const data = join(home, ".seira");
   mkdirSync(data, { recursive: true });
   dumpFile = join(home, "quick-dump.json");
   writeFileSync(join(data, "config.json"), JSON.stringify({
@@ -158,9 +158,9 @@ beforeAll(async () => {
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home,
       USERPROFILE: home,
-      OMB_PORT: String(port),
-      OMB_WEBHOOK_PORT: String(port + 1),
-      OMB_TEST_INTERNAL_CAPABILITY_KEY: TEST_CAPABILITY_KEY,
+      SEIRA_PORT: String(port),
+      SEIRA_WEBHOOK_PORT: String(port + 1),
+      SEIRA_TEST_INTERNAL_CAPABILITY_KEY: TEST_CAPABILITY_KEY,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -354,7 +354,7 @@ describe("a reply that tags the person", () => {
 });
 
 describe("bot-to-bot coordination is recorded, not announced", () => {
-  const handoffs = () => readHandoffs(join(home, ".openmausbot"));
+  const handoffs = () => readHandoffs(join(home, ".seira"));
   const consultation = async (requestId: string) => {
     await expect.poll(() => handoffs().some((node) => node.id === requestId), { timeout: 15_000 }).toBe(true);
     return handoffs().find((node) => node.id === requestId)!;
@@ -618,6 +618,7 @@ describe("bot-to-bot coordination is recorded, not announced", () => {
         (message: { kind: string; card?: { title?: string } }) => message.kind === "options" && Boolean(message.card),
       );
       expect(card?.card).toMatchObject({ title: "Your bot has a question", subtitle: "Which color?" });
+      expect(frame.notification.requestId).toBe(card?.card.requestId);
       expect(((await botState(peer.id))?.messages ?? []).some(
         (message: { kind: string; card?: { subtitle?: string } }) => message.kind === "options" && message.card?.subtitle === "Which color?",
       )).toBe(false);

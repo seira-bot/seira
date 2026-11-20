@@ -6,8 +6,8 @@ import { DEFAULT_SKIN_CHOICE, SKIN_IDS, applySkinChoice, readSkin, resolveSkin, 
 import { accentPalette, canvasPalette, modeOf } from "./palette";
 import { applyThemeCss } from "./theme-css";
 
-const CACHE_KEY = "omb-theme";
-const SAFE_KEY = "omb-safe-look";
+const CACHE_KEY = "seira-theme";
+const SAFE_KEY = "seira-safe-look";
 
 export type WornTheme = { id: string; theme: ThemeFile };
 

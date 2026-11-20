@@ -147,7 +147,7 @@ export function createLendingLifts(deps: LendingLiftDeps) {
       });
       deps.decide({ threadId, requestId, botId, botName: bot?.name, tool: TOOL, summary: title, decision: "card-shown", source: "question" });
       if (store.projectBotForTask(botId, threadId)?.busy) store.setTaskActivity(botId, threadId, "waiting-on-you");
-      if (bot) deps.notify(buildNotification("approval", bot, threadId, title));
+      if (bot) deps.notify(buildNotification("approval", bot, threadId, title, { requestId }));
       return "open";
     },
 

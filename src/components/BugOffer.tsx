@@ -149,7 +149,7 @@ export function BugDraftBody({ view, advanced, sending = false, failure = null, 
           <p className="text-[12px] font-medium text-ink-secondary">{t("bugOffer.same.title")}</p>
           <p dir="auto" className="mt-0.5 break-words font-medium">
             {same.issue ? <a href={bugIssueUrl(same.issue)} target="_blank" rel="noreferrer" className={LINK}>#{same.issue}</a> : null}
-            {same.issue ? " " : null}{same.title}
+            {same.issue && same.title ? " " : null}{same.title}
           </p>
           <p className="text-[12px] text-ink-tertiary">{t("bugOffer.same.looking")}</p>
         </div>

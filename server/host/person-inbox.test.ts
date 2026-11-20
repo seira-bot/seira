@@ -123,6 +123,24 @@ describe("pending assistant answers", () => {
 });
 
 describe("asks routed to a person", () => {
+  it("keeps the request id on the notification it sends from the inbox, and the inbox answers that id where it was asked", () => {
+    const f = fixture();
+    f.bots.find((bot) => bot.id === "reporter")!.tasks.push({ threadId: "rep-shared", title: "Weekly numbers" });
+    f.store.appendMessage("rep-shared", { role: "bot", kind: "options", text: "Run a command?", card: card("req-1") });
+    const sent = f.team.route({ ...ask("reporter", "Reporter", "rep-shared"), requestId: "req-1" });
+    const inbox = f.inboxOf(BEN);
+    expect(sent).toMatchObject({ threadId: inbox.threadId, requestId: "req-1", forPerson: key(BEN.email) });
+    expect(f.team.inbox.answeredIn(inbox.threadId, sent!.requestId!)).toBe("rep-shared");
+  });
+
+  it("leaves the request id off a notification it moves to the inbox when the inbox holds no card for it", () => {
+    const f = fixture();
+    f.bots.find((bot) => bot.id === "reporter")!.tasks.push({ threadId: "rep-shared", title: "Weekly numbers" });
+    const sent = f.team.route({ ...ask("reporter", "Reporter", "rep-shared", "secret"), requestId: "msg-secret-1" });
+    expect(sent).toMatchObject({ threadId: f.inboxOf(BEN).threadId, forPerson: key(BEN.email) });
+    expect(sent).not.toHaveProperty("requestId");
+  });
+
   it("copies an approval Ben owns into his inbox, sends the one notification from there, and answers the copy where it was asked", () => {
     const f = fixture();
     f.bots.find((bot) => bot.id === "reporter")!.tasks.push({ threadId: "rep-shared", title: "Weekly numbers" });

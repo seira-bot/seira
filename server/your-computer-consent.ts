@@ -106,7 +106,7 @@ export function askToUseYourComputer(
       const task = store.projectBotForTask(bot.id, owner.threadId);
       if (task?.busy) store.setTaskActivity(bot.id, owner.threadId, "waiting-on-you");
       bus.notify?.(buildNotification("approval", bot, owner.threadId, title, {
-        avatarUrl: bot.avatarUrl, ...(room && !room.dm ? { group: { id: room.id, name: room.name } } : {}),
+        avatarUrl: bot.avatarUrl, requestId, ...(room && !room.dm ? { group: { id: room.id, name: room.name } } : {}),
       }));
     }
   });

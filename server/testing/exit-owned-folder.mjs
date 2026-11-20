@@ -3,10 +3,10 @@
 import { mkdirSync } from "node:fs";
 
 const { makeOwnedTempFolder, releaseOwnedTempFolder, removeOwnedTempFolder } = await import("../temp-folders.ts");
-const kept = makeOwnedTempFolder("omb-exit-check-");
-const released = makeOwnedTempFolder("omb-exit-check-");
+const kept = makeOwnedTempFolder("seira-exit-check-");
+const released = makeOwnedTempFolder("seira-exit-check-");
 releaseOwnedTempFolder(released);
-const removed = makeOwnedTempFolder("omb-exit-check-");
+const removed = makeOwnedTempFolder("seira-exit-check-");
 removeOwnedTempFolder(removed);
 mkdirSync(removed);
 process.stdout.write(`${JSON.stringify({ kept, released, removed })}\n`);

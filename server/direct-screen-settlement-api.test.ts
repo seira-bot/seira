@@ -37,7 +37,7 @@ describe.skipIf(process.platform === "win32")("direct final-screen settlement", 
     expect((await api("POST", `/api/bots/${botId}/messages`, { text: "FIRST_SCREEN", threadId })).status).toBe(202);
     await expect.poll(() => existsSync(join(fixture, "provider.json")), { timeout: 10_000 }).toBe(true);
     const dump = JSON.parse(readFileSync(join(fixture, "provider.json"), "utf8"));
-    const token = dump.mcpConfig.mcpServers.browser.env.OMB_MCP_TOKEN_BROWSER;
+    const token = dump.mcpConfig.mcpServers.browser.env.SEIRA_MCP_TOKEN_BROWSER;
     expect((await api("POST", "/api/internal/browser/mcp", {
       method: "tools/call", params: { name: "agent_browser_screenshot", arguments: {} },
     }, token)).status).toBe(200);
@@ -49,7 +49,7 @@ describe.skipIf(process.platform === "win32")("direct final-screen settlement", 
   };
 
   beforeEach(async () => {
-    fixture = mkdtempSync(join(tmpdir(), "omb-screen-settle-"));
+    fixture = mkdtempSync(join(tmpdir(), "seira-screen-settle-"));
     evidence = [];
     const browser = join(fixture, "agent-browser");
     // The harness takes every picture over the engine's loopback relay

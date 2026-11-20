@@ -84,63 +84,67 @@ async function sandbox(req: IncomingMessage, res: ServerResponse, url: URL) {
   res.writeHead(405); res.end();
 }
 
+async function boatApi(req: IncomingMessage, res: ServerResponse) {
+  const url = new URL(req.url ?? "/", base);
+  if (url.pathname.startsWith("/sandbox/")) {
+    calls.push({ method: req.method ?? "", path: url.pathname.replace(/\/[^/]+$/, "/<token>"), body: null, authorization: req.headers.authorization, contentLength: req.headers["content-length"] });
+    // A copy stopped mid-transfer closes its request; the sandbox just lets it go.
+    await sandbox(req, res, url).catch(() => res.destroy());
+    return;
+  }
+  const chunks: Buffer[] = [];
+  for await (const part of req) chunks.push(part as Buffer);
+  const text = Buffer.concat(chunks).toString("utf8");
+  calls.push({ method: req.method ?? "", path: url.pathname, body: text ? JSON.parse(text) : null, authorization: req.headers.authorization });
+  const kind = /\/(?:sandboxes|boxes)\/bx_[a-z0-9]+\/files\/(download-url|upload-url)$/.exec(url.pathname)?.[1];
+  if (kind && req.method === "POST") {
+    const answer = mintAnswer?.(kind);
+    if (answer) { res.writeHead(answer.status, { "content-type": "application/json" }); res.end(JSON.stringify(answer.body)); return; }
+    const body = JSON.parse(text);
+    const path = body.path.startsWith("/") ? body.path : `/home/user/${body.path}`;
+    const token = Buffer.from(`${path}|${randomBytes(12).toString("hex")}`).toString("base64url");
+    const link = `${base}/sandbox/${kind === "download-url" ? "get" : "put"}/${token}`;
+    minted.push(token);
+    res.end(JSON.stringify({ ok: true, type: kind === "download-url" ? "file.download_url" : "file.upload_url", url: link, method: kind === "download-url" ? "GET" : "PUT", path, expiresAt: new Date(Date.now() + 300_000).toISOString() }));
+    return;
+  }
+  res.writeHead(404); res.end();
+}
+
 beforeAll(async () => {
-  dataDir = mkdtempSync(join(tmpdir(), "omb-computer-files-data-"));
-  vi.stubEnv("OMB_DATA_DIR", dataDir);
-  server = createServer(async (req, res) => {
-    const url = new URL(req.url ?? "/", base);
-    if (url.pathname.startsWith("/sandbox/")) {
-      calls.push({ method: req.method ?? "", path: url.pathname.replace(/\/[^/]+$/, "/<token>"), body: null, authorization: req.headers.authorization, contentLength: req.headers["content-length"] });
-      // A copy stopped mid-transfer closes its request; the sandbox just lets it go.
-      await sandbox(req, res, url).catch(() => res.destroy());
-      return;
-    }
-    const chunks: Buffer[] = [];
-    for await (const part of req) chunks.push(part as Buffer);
-    const text = Buffer.concat(chunks).toString("utf8");
-    calls.push({ method: req.method ?? "", path: url.pathname, body: text ? JSON.parse(text) : null, authorization: req.headers.authorization });
-    const kind = /\/(?:sandboxes|boxes)\/bx_[a-z0-9]+\/files\/(download-url|upload-url)$/.exec(url.pathname)?.[1];
-    if (kind && req.method === "POST") {
-      const answer = mintAnswer?.(kind);
-      if (answer) { res.writeHead(answer.status, { "content-type": "application/json" }); res.end(JSON.stringify(answer.body)); return; }
-      const body = JSON.parse(text);
-      const path = body.path.startsWith("/") ? body.path : `/home/user/${body.path}`;
-      const token = Buffer.from(`${path}|${randomBytes(12).toString("hex")}`).toString("base64url");
-      const link = `${base}/sandbox/${kind === "download-url" ? "get" : "put"}/${token}`;
-      minted.push(token);
-      res.end(JSON.stringify({ ok: true, type: kind === "download-url" ? "file.download_url" : "file.upload_url", url: link, method: kind === "download-url" ? "GET" : "PUT", path, expiresAt: new Date(Date.now() + 300_000).toISOString() }));
-      return;
-    }
-    res.writeHead(404); res.end();
-  });
-  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  if (!address || typeof address === "string") throw new Error("fixture did not bind");
-  base = `http://127.0.0.1:${address.port}`;
+  dataDir = mkdtempSync(join(tmpdir(), "seira-computer-files-data-"));
+  vi.stubEnv("SEIRA_DATA_DIR", dataDir);
   files = await import("./cloud-computer-files.ts");
   tools = await import("./cloud-computer-tools.ts");
   journal = await import("./boat-delete-journal.ts");
 });
-beforeEach(() => {
-  vi.stubEnv("OMB_BOAT_API", `${base}/boat/api/v1`);
-  vi.stubEnv("OMB_CLOUD_BOAT_URL", `${base}/relay/api/box/v1`);
-  vi.stubEnv("OMB_CLOUD_BOAT_TOKEN", INCLUDED);
+beforeEach(async () => {
+  server = createServer((req, res) => { boatApi(req, res).catch(() => res.destroy()); });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("fixture did not bind");
+  base = `http://127.0.0.1:${address.port}`;
+  vi.stubEnv("SEIRA_BOAT_API", `${base}/boat/api/v1`);
+  vi.stubEnv("SEIRA_CLOUD_BOAT_URL", `${base}/relay/api/box/v1`);
+  vi.stubEnv("SEIRA_CLOUD_BOAT_TOKEN", INCLUDED);
   calls.length = 0;
   disk.clear();
   uploads.clear();
   expireLinks = false;
   mintAnswer = duringDownload = midDownload = onFirstUploadChunk = stall = undefined;
-  root = mkdtempSync(join(tmpdir(), "omb-computer-files-"));
+  root = mkdtempSync(join(tmpdir(), "seira-computer-files-"));
   folder = join(root, "folder");
   outside = join(root, "outside");
   mkdirSync(folder);
   mkdirSync(outside);
 });
-afterEach(() => { rmSync(root, { recursive: true, force: true }); });
-afterAll(async () => {
-  vi.unstubAllEnvs();
+afterEach(async () => {
   server.closeAllConnections();
   await new Promise<void>(resolve => server.close(() => resolve()));
+  rmSync(root, { recursive: true, force: true });
+});
+afterAll(() => {
+  vi.unstubAllEnvs();
   rmSync(dataDir, { recursive: true, force: true });
 });
 
@@ -199,7 +203,7 @@ describe("copy_from_computer", () => {
     ["an absolute path", "/etc/escaped.json", /relative to your working folder/],
     ["a Windows absolute path", "C:\\escaped.json", /relative to your working folder/],
     ["the folder itself", ".", /not the folder itself/],
-    ["the secret folder", ".openmausbot-secrets/token.txt", /holds a secret/],
+    ["the secret folder", ".seira-secrets/token.txt", /holds a secret/],
   ])("refuses %s before asking the Boat", async (_label, place, message) => {
     disk.set("/tmp/x", { bytes: Buffer.from("x") });
     expect(await from("/tmp/x", place)).toEqual({ error: expect.stringMatching(message) });
@@ -334,15 +338,15 @@ describe("copy_to_computer", () => {
     writeFileSync(join(outside, "secret.txt"), "private");
     symlinkSync(join(outside, "secret.txt"), join(folder, "linked.txt"));
     symlinkSync(outside, join(folder, "linked"));
-    mkdirSync(join(folder, ".openmausbot-secrets"));
-    writeFileSync(join(folder, ".openmausbot-secrets", "token"), "secret");
+    mkdirSync(join(folder, ".seira-secrets"));
+    writeFileSync(join(folder, ".seira-secrets", "token"), "secret");
     mkdirSync(join(folder, "dir"));
     for (const [source, message] of [
       ["../outside/secret.txt", /without "\.\."/],
       [join(outside, "secret.txt"), /relative to your working folder/],
       ["linked.txt", /leads outside/],
       ["linked/secret.txt", /leads outside/],
-      [".openmausbot-secrets/token", /holds a secret/],
+      [".seira-secrets/token", /holds a secret/],
       ["dir", /is not a file/],
       ["missing.txt", /is not in your working folder/],
     ] as const) {

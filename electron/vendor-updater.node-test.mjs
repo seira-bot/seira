@@ -102,12 +102,12 @@ test("the shipped installer replaces the AppImage and starts it after the old pr
   skip: process.platform !== "linux" && "AppImage updates run only on Linux",
   timeout: 20_000,
 }, async (t) => {
-  const workspace = mkdtempSync(join(tmpdir(), "omb-appimage-install-"));
+  const workspace = mkdtempSync(join(tmpdir(), "seira-appimage-install-"));
   t.after(() => rmSync(workspace, { recursive: true, force: true }));
 
   // The user launches a versioned filename — the case upstream renames.
-  const launched = join(workspace, "OpenMausBot-0.1.43-x86_64.AppImage");
-  const staged = join(workspace, "pending", "OpenMausBot-0.1.44-x86_64.AppImage");
+  const launched = join(workspace, "Seira-0.1.43-x86_64.AppImage");
+  const staged = join(workspace, "pending", "Seira-0.1.44-x86_64.AppImage");
   const installer = join(workspace, "installer.cjs");
   const installed = join(workspace, "installed.json");
   const keepAlive = join(workspace, "keep-alive.txt");
@@ -121,7 +121,7 @@ test("the shipped installer replaces the AppImage and starts it after the old pr
     (async () => {
       // A zombie has exited, though kill(pid, 0) still answers for it.
       let parentAlive = true;
-      try { parentAlive = !/^\\d+ \\(.*\\) [ZX] /.test(readFileSync("/proc/" + process.env.OMB_UPDATER_TEST_PARENT + "/stat", "utf8")); }
+      try { parentAlive = !/^\\d+ \\(.*\\) [ZX] /.test(readFileSync("/proc/" + process.env.SEIRA_UPDATER_TEST_PARENT + "/stat", "utf8")); }
       catch (error) { if (error.code === "ENOENT") parentAlive = false; else throw error; }
       const descriptors = readdirSync("/proc/self/fd").map((fd) => { try { return readlinkSync("/proc/self/fd/" + fd); } catch { return null; } });
       const { acquireDataDirLease } = await import(${JSON.stringify(leaseModule)});
@@ -145,7 +145,7 @@ test("the shipped installer replaces the AppImage and starts it after the old pr
       const lease = acquireDataDirLease(${JSON.stringify(data)});
       writeFileSync(${JSON.stringify(keepAlive)}, readlinkSync("/proc/self/fd/3"));
       process.env.APPIMAGE = ${JSON.stringify(launched)};
-      process.env.OMB_UPDATER_TEST_PARENT = String(process.pid);
+      process.env.SEIRA_UPDATER_TEST_PARENT = String(process.pid);
       const silent = process.env.APPIMAGE_SILENT_INSTALL;
       const { AppImageUpdater } = require(${JSON.stringify(join(root, "electron/vendor/electron-updater.cjs"))});
       const renames = [];
@@ -191,7 +191,7 @@ test("the shipped installer replaces the AppImage and starts it after the old pr
   assert.equal(readFileSync(launched, "utf8"), `#!${process.execPath}\n${replacement}`, "the update must land on the launched path");
   assert.equal(existsSync(staged), false, "the staged download must be consumed");
   assert.deepEqual(readdirSync(workspace).sort(),
-    ["OpenMausBot-0.1.43-x86_64.AppImage", "data", "installed.json", "installer.cjs", "keep-alive.txt", "pending", "restarted.json"]);
+    ["Seira-0.1.43-x86_64.AppImage", "data", "installed.json", "installer.cjs", "keep-alive.txt", "pending", "restarted.json"]);
 });
 
 test("a failed AppImage restart is reported without quitting the desktop", {
@@ -202,9 +202,9 @@ test("a failed AppImage restart is reported without quitting the desktop", {
   Module._load = (request, ...rest) => request === "electron" ? electron : load(request, ...rest);
   t.after(() => { Module._load = load; });
   const { AppImageUpdater, BaseUpdater } = createRequire(import.meta.url)("./vendor/electron-updater.cjs");
-  const workspace = mkdtempSync(join(tmpdir(), "omb-appimage-relaunch-failed-"));
+  const workspace = mkdtempSync(join(tmpdir(), "seira-appimage-relaunch-failed-"));
   t.after(() => rmSync(workspace, { recursive: true, force: true }));
-  const launched = join(workspace, "OpenMausBot.AppImage");
+  const launched = join(workspace, "Seira.AppImage");
   const staged = join(workspace, "pending.AppImage");
   writeFileSync(launched, "old");
   writeFileSync(staged, "new");
@@ -247,10 +247,10 @@ test("the running AppImage is never removed before its replacement is in place",
   });
 
   const { AppImageUpdater } = createRequire(import.meta.url)("./vendor/electron-updater.cjs");
-  const workspace = mkdtempSync(join(tmpdir(), "omb-appimage-failed-"));
+  const workspace = mkdtempSync(join(tmpdir(), "seira-appimage-failed-"));
   t.after(() => rmSync(workspace, { recursive: true, force: true }));
 
-  const launched = join(workspace, "OpenMausBot-0.1.43-x86_64.AppImage");
+  const launched = join(workspace, "Seira-0.1.43-x86_64.AppImage");
   writeFileSync(launched, "the app the user has", { mode: 0o755 });
 
   const previous = process.env.APPIMAGE;
@@ -298,10 +298,10 @@ test("the AppImage restart waits for deferred cleanup, keeps setuid fusermount u
       : false,
   timeout: 45_000,
 }, async (t) => {
-  const workspace = mkdtempSync(join(tmpdir(), "omb-appimage-relaunch-"));
+  const workspace = mkdtempSync(join(tmpdir(), "seira-appimage-relaunch-"));
   t.after(() => rmSync(workspace, { recursive: true, force: true }));
-  const launched = join(workspace, "OpenMausBot-1.0.0.AppImage");
-  const staged = join(workspace, "OpenMausBot-2.0.0.AppImage");
+  const launched = join(workspace, "Seira-1.0.0.AppImage");
+  const staged = join(workspace, "Seira-2.0.0.AppImage");
   const receipt = join(workspace, "restarted.json");
   const fixture = join(workspace, "main.cjs");
   mkdirSync(join(workspace, "user-data"));
@@ -311,7 +311,7 @@ test("the AppImage restart waits for deferred cleanup, keeps setuid fusermount u
     (async () => {
       // A zombie has exited, though kill(pid, 0) still answers for it.
       let parentAlive = true;
-      try { parentAlive = !/^\\d+ \\(.*\\) [ZX] /.test(readFileSync("/proc/" + process.env.OMB_UPDATER_TEST_PARENT + "/stat", "utf8")); }
+      try { parentAlive = !/^\\d+ \\(.*\\) [ZX] /.test(readFileSync("/proc/" + process.env.SEIRA_UPDATER_TEST_PARENT + "/stat", "utf8")); }
       catch (error) { if (error.code === "ENOENT") parentAlive = false; else throw error; }
       const { acquireDataDirLease } = await import(${JSON.stringify(leaseModule)});
       const lease = acquireDataDirLease(${JSON.stringify(join(workspace, "data"))});
@@ -333,7 +333,7 @@ test("the AppImage restart waits for deferred cleanup, keeps setuid fusermount u
       const { acquireDataDirLease } = await import(${JSON.stringify(leaseModule)});
       const lease = acquireDataDirLease(${JSON.stringify(join(workspace, "data"))});
       process.env.APPIMAGE = ${JSON.stringify(launched)};
-      process.env.OMB_UPDATER_TEST_PARENT = String(process.pid);
+      process.env.SEIRA_UPDATER_TEST_PARENT = String(process.pid);
       autoUpdater.on("before-quit-for-update", () => app.releaseSingleInstanceLock());
       let cleaned = false;
       app.on("before-quit", event => {

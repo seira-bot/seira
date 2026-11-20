@@ -14,10 +14,13 @@ describe("limitBackupAllowed", () => {
     expect(limitBackupAllowed(claude, claude)).toBe(false);
     expect(limitBackupAllowed(claude, { instanceId: "claude-work", driverKind: "claudeAgent" }, {})).toBe(false);
     expect(limitBackupAllowed({ instanceId: "codex", driverKind: "codex" }, { instanceId: "codex-2", driverKind: "codex" })).toBe(false);
+    expect(limitBackupAllowed({ instanceId: "antigravity", driverKind: "antigravityAgent" }, { instanceId: "antigravity-2", driverKind: "antigravityAgent" })).toBe(false);
+    expect(limitBackupAllowed({ instanceId: "opencodeGo", driverKind: "opencodeGo" }, { instanceId: "opencodeGo-2", driverKind: "opencodeGo" })).toBe(false);
   });
 
   it("allows another engine, or the same engine on a pay-per-use key", () => {
     expect(limitBackupAllowed(claude, { instanceId: "codex", driverKind: "codex" })).toBe(true);
+    expect(limitBackupAllowed({ instanceId: "antigravity", driverKind: "antigravityAgent" }, { instanceId: "opencodeGo", driverKind: "opencodeGo" })).toBe(true);
     expect(limitBackupAllowed(claude, { instanceId: "claude-api", driverKind: "claudeAgent" }, { environment: { ANTHROPIC_API_KEY: "sk-test" } })).toBe(true);
     expect(limitBackupAllowed(claude, { instanceId: "claude-api", driverKind: "claudeAgent" }, { access: "api" })).toBe(true);
     expect(limitBackupAllowed(claude, { instanceId: "claude-api", driverKind: "claudeAgent" }, { environment: { ANTHROPIC_API_KEY: " " } })).toBe(false);
@@ -35,7 +38,7 @@ describe("LimitFailovers", () => {
   const from = { instanceId: "claude", model: "claude-sonnet-5" };
   const to = { instanceId: "codex", model: "gpt-fake-default" };
   function fixture(options: { blocked?: number | null; current?: typeof from | null; allowed?: boolean; signedOut?: () => boolean } = {}) {
-    const dir = mkdtempSync(join(tmpdir(), "omb-limit-failovers-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-limit-failovers-"));
     dirs.push(dir);
     let now = NOW;
     const state = { blocked: options.blocked ?? null, current: options.current === undefined ? to : options.current };
@@ -115,6 +118,17 @@ describe("LimitFailovers", () => {
     const kept = fixture();
     kept.failovers.record({ botId: "scout", threadId: "t", from, to, resetsAt: NOW + HOUR, at: NOW });
     expect(new LimitFailovers(kept.deps).list()).toEqual([expect.objectContaining({ threadId: "t", from, to })]);
+  });
+
+  it("holds a thread from the failover until it goes back or is forgotten", () => {
+    const f = fixture();
+    expect(f.failovers.holds("t")).toBe(false);
+    f.failovers.record({ botId: "scout", threadId: "t", from, to, resetsAt: NOW + HOUR, at: NOW });
+    expect(f.failovers.holds("t")).toBe(true);
+    expect(f.failovers.holds("other")).toBe(false);
+    f.at(NOW + HOUR + 1);
+    f.failovers.restore("scout", "t");
+    expect(f.failovers.holds("t")).toBe(false);
   });
 
   it("a second failover still goes back to the engine the conversation started on", () => {

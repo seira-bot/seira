@@ -27,7 +27,7 @@ import { callComputerAskTool, COMPUTER_ASK_TOOL_NAMES } from "./agents-computer-
 import { callImageTool, IMAGE_TOOL_NAMES } from "./agents-image-tools.ts";
 import { callHostingTool, HOSTING_TOOL_NAMES } from "./agents-hosting-tools.ts";
 import { callMeetingTool, MEETING_TOOL_NAMES } from "./agents-meeting-tools.ts";
-import { callMausBotTool, MAUSBOT_TOOL_NAMES } from "./agents-mausbot-tools.ts";
+import { callSeiraTool, SEIRA_TOOL_NAMES } from "./agents-seira-tools.ts";
 import { callPageTool, PAGE_TOOL_NAMES } from "./agents-pages-tools.ts";
 import { callShareTool, SHARE_TOOL_NAMES } from "./agents-share-tool.ts";
 import { callPersonTool, PERSON_TOOL_NAMES } from "./agents-person-tools.ts";
@@ -53,8 +53,8 @@ export function toolCallContextFromEnv(env: NodeJS.ProcessEnv): ToolCallContext 
   const profile = catalogProfileFromEnv(env);
   return {
     botId: profile.botId,
-    threadId: env.OMB_THREAD_ID ?? "",
-    externalRuntime: env.OMB_EXTERNAL_RUNTIME === "1",
+    threadId: env.SEIRA_THREAD_ID ?? "",
+    externalRuntime: env.SEIRA_EXTERNAL_RUNTIME === "1",
     sharedComputers: profile.sharedComputers,
     client: harnessClientFromEnv(env),
   };
@@ -249,7 +249,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
   if (IMAGE_TOOL_NAMES.has(name)) return callImageTool(name, args, context);
   if (HOSTING_TOOL_NAMES.has(name)) return callHostingTool(name, args, context);
   if (MEETING_TOOL_NAMES.has(name)) return callMeetingTool(name, args, context);
-  if (MAUSBOT_TOOL_NAMES.has(name)) return callMausBotTool(name, args, context);
+  if (SEIRA_TOOL_NAMES.has(name)) return callSeiraTool(name, args, context);
   if (PAGE_TOOL_NAMES.has(name)) return callPageTool(name, args, context);
   if (SHARE_TOOL_NAMES.has(name)) return callShareTool(args, context);
   if (PERSON_TOOL_NAMES.has(name)) return callPersonTool(name, args, context);

@@ -36,7 +36,7 @@ export type GithubConnection =
 export const CONNECT_GITHUB = "Connect GitHub in Apps first.";
 const MANIFEST_MAX_BYTES = 1_000_000;
 const MULTI_EXECUTE = "COMPOSIO_MULTI_EXECUTE_TOOL";
-const CALL_ID = "omb-share-github";
+const CALL_ID = "seira-share-github";
 const OWNER = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 const REPO = /^[A-Za-z0-9._-]{1,100}$/;
 const SEGMENT = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}$/;
@@ -107,8 +107,8 @@ export function githubSession(connection: Extract<GithubConnection, { ok: true }
   let opened: Promise<string | undefined> | undefined;
   const open = async (signal: AbortSignal) => {
     const init = await connection.relay({
-      jsonrpc: "2.0", id: "omb-share-init", method: "initialize",
-      params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "openmausbot-templates", version: "1" } },
+      jsonrpc: "2.0", id: "seira-share-init", method: "initialize",
+      params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "seira-templates", version: "1" } },
     }, undefined, signal);
     if (init.status !== 200) throw new GithubTemplateError(`GitHub couldn't be reached through Apps (HTTP ${init.status}). Try again in a few minutes.`, 502);
     await connection.relay({ jsonrpc: "2.0", method: "notifications/initialized" }, init.transportSessionId, signal).catch(() => undefined);
@@ -237,7 +237,7 @@ export async function publishToRepo(connection: Extract<GithubConnection, { ok: 
     if (moved === session.missing) throw new GithubTemplateError(`${base} couldn't be updated. Try a pull request instead.`, 409);
     return { kind: "commit", url: link(base), link: link(base), branch: base };
   }
-  const branch = `mausbot-${input.slug}-${randomBytes(3).toString("hex")}`;
+  const branch = `seira-${input.slug}-${randomBytes(3).toString("hex")}`;
   const made = await session.call(GITHUB_TOOLS.createRef, { owner, repo, ref: `refs/heads/${branch}`, sha: commit });
   if (made === session.missing) throw new GithubTemplateError("The new branch couldn't be made.", 502);
   const pull = await session.call(GITHUB_TOOLS.pullRequest, {

@@ -1,0 +1,35 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "seira-push",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-25",
+  "workers_dev": false,
+  "routes": [{ "pattern": "push.seira.bot", "custom_domain": true }],
+  "vars": {
+    "PUSH_PAUSED": "false",
+    "ENROLL_PAUSED": "false",
+    "APNS_ENVIRONMENTS": "production",
+    "ENROLL_PER_IP_DAILY": "5",
+    "ENROLL_GLOBAL_DAILY": "2000",
+    "SEND_GLOBAL_HOURLY": "20000",
+    "TOKEN_DAILY": "300"
+  },
+  "secrets": { "required": ["IP_HASH_KEY"] },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "seira-push",
+      "database_id": "fccc9097-c4fa-4f5f-9338-df7454bdbff9",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "ratelimits": [
+    { "name": "ENROLL_LIMITER", "namespace_id": "18130001", "simple": { "limit": 3, "period": 60 } },
+    { "name": "REQUEST_LIMITER", "namespace_id": "18130002", "simple": { "limit": 300, "period": 60 } }
+  ],
+  "triggers": { "crons": ["17 3 * * *"] },
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 }
+  }
+}

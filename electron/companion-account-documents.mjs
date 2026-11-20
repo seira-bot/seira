@@ -27,7 +27,7 @@ export const COMPANION_TUNNEL_WAITING_FIELD = "companionTunnelWaiting";
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const INSTALLATION_ID = UUID;
-const INSTALLATION_CREDENTIAL = /^omb_install_[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}$/;
+const INSTALLATION_CREDENTIAL = /^seira_install_[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}$/;
 export const ownString = (document, field) =>
   typeof document?.[field] === "string" ? document[field] : "";
 

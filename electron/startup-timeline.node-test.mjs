@@ -32,7 +32,7 @@ test("a second mark with the same name is ignored", () => {
 });
 
 test("finish runs once and later marks are ignored", () => {
-  const t = setup({ OMB_STARTUP_TIMELINE: "/tmp/timeline.json" });
+  const t = setup({ SEIRA_STARTUP_TIMELINE: "/tmp/timeline.json" });
   t.timeline.start(t.log);
   t.at(5); t.timeline.finish("window-shown");
   t.at(6); t.timeline.mark("late");
@@ -45,14 +45,14 @@ test("finish runs once and later marks are ignored", () => {
 });
 
 test("an absolute path receives the JSON once", () => {
-  const t = setup({ OMB_STARTUP_TIMELINE: "/tmp/timeline.json" });
+  const t = setup({ SEIRA_STARTUP_TIMELINE: "/tmp/timeline.json" });
   t.at(1); t.timeline.start(t.log);
   t.at(2); t.timeline.finish("window-shown");
   assert.deepEqual(t.files, [["/tmp/timeline.json", JSON.stringify({ marks: { "app-ready": 1, "window-shown": 2 } })]]);
 });
 
 test("an empty, missing or relative path writes nothing", () => {
-  for (const env of [{}, { OMB_STARTUP_TIMELINE: "" }, { OMB_STARTUP_TIMELINE: "timeline.json" }, { OMB_STARTUP_TIMELINE: "./a/b.json" }]) {
+  for (const env of [{}, { SEIRA_STARTUP_TIMELINE: "" }, { SEIRA_STARTUP_TIMELINE: "timeline.json" }, { SEIRA_STARTUP_TIMELINE: "./a/b.json" }]) {
     const t = setup(env);
     t.timeline.start(t.log);
     t.timeline.finish("window-shown");
@@ -64,7 +64,7 @@ test("an empty, missing or relative path writes nothing", () => {
 test("a throwing log or file write does not escape finish", () => {
   const timeline = createStartupTimeline({
     now: () => 1,
-    env: { OMB_STARTUP_TIMELINE: "/tmp/timeline.json" },
+    env: { SEIRA_STARTUP_TIMELINE: "/tmp/timeline.json" },
     writeFile: () => { throw new Error("disk full"); },
   });
   timeline.start(() => { throw new Error("log closed"); });

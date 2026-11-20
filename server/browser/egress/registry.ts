@@ -1,4 +1,4 @@
-// OpenMausBot's own listening ports, which no bot's browser may reach, and one egress gate per running browser.
+// Seira's own listening ports, which no bot's browser may reach, and one egress gate per running browser.
 import { subscribe } from "node:diagnostics_channel";
 import type { Server } from "node:net";
 
@@ -18,7 +18,7 @@ const DEFAULT_PORTS = [8799, 18799, 28799, 8800, 8798, 18798, 28798, 8810, 8811,
 const FLEET_WORKSPACES = 100;
 /** A server's edge, Caddy's admin API, and the workspaces a fleet host runs side by side (server and webhooks). */
 const SERVER_PORTS = [8080, 2019, ...Array.from({ length: FLEET_WORKSPACES }, (_, n) => FLEET_FIRST_PORT + FLEET_PORT_STRIDE * n).flatMap((port) => [port, port + 1])];
-const PORT_ENV = ["OMB_PORT", "OMB_WEBHOOK_PORT", "OMB_COMPANION_PORT", "OMB_CONTROL_PORT"];
+const PORT_ENV = ["SEIRA_PORT", "SEIRA_WEBHOOK_PORT", "SEIRA_COMPANION_PORT", "SEIRA_CONTROL_PORT"];
 const DEVTOOLS_SCAN_MS = 2_000;
 const NOTICE_LIMIT = 20;
 const NOTICE_SHOWN = 3;
@@ -54,7 +54,7 @@ function hearDesktopReports(): void {
   hearingReports = true;
   parentPort.on("message", ({ data }) => {
     const message = data as { type?: unknown; ports?: unknown } | undefined;
-    if (message?.type !== "openmausbot:own-listeners" || !Array.isArray(message.ports) || message.ports.length > 256) return;
+    if (message?.type !== "seira:own-listeners" || !Array.isArray(message.ports) || message.ports.length > 256) return;
     reportedPorts = new Set(message.ports.filter(validPort));
   });
 }
@@ -92,7 +92,7 @@ export interface EgressSetup {
   ownership?: ListenerOwnership;
   /** How a gate looks names up: the system's resolver unless a test passes one. */
   resolve?(host: string): Promise<ResolvedAddress[]>;
-  /** MausBot Cloud: the person's own computer while it lends its internet connection, which device is away, or that
+  /** Seira Cloud: the person's own computer while it lends its internet connection, which device is away, or that
    * none of the person's computers shares it; null where this browser may not use a computer's connection. Only the
    * sites that turn away data centres (home-sites.ts) go through it. */
   device?(session: string): GateUpstream | { away: string } | { unshared: true } | null;
@@ -127,12 +127,12 @@ export class BrowserEgress {
     };
   }
 
-  /** Why a destination is refused by its name alone on this host: Reddit, from MausBot Cloud. */
+  /** Why a destination is refused by its name alone on this host: Reddit, from Seira Cloud. */
   nameRefusal(name: string): Refusal | null {
     return this.setup && refusesReddit(this.setup.host, name) ? "reddit" : null;
   }
 
-  /** What a browser tool call that would open Reddit from MausBot Cloud is told instead of running, or null. */
+  /** What a browser tool call that would open Reddit from Seira Cloud is told instead of running, or null. */
   callRefusal(params: unknown): string | null {
     return this.setup && opensReddit(this.setup.host, params) ? REDDIT_REFUSAL : null;
   }
@@ -150,7 +150,7 @@ export class BrowserEgress {
     };
   }
 
-  /** The way out for one of `session`'s connections to a site that turns away data centres: on MausBot Cloud the
+  /** The way out for one of `session`'s connections to a site that turns away data centres: on Seira Cloud the
    * person's computer while it lends its connection, else this server's own (when that computer is away, or none shares
    * its connection, the bot is told once). Every other site always goes this server's own way. */
   private through(session: string): GateUpstream | null {

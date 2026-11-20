@@ -1,0 +1,53 @@
+# CI for the push relay Worker (cloudflare/push-relay, docs/ci.md).
+#
+# This workflow is separate from ci.yml and is not part of the `CI` gate. It starts only when the Worker or this file changes,
+# so a pull request that does not touch the Worker adds no job. It runs the type check and the tests of the Worker.
+# The tests use a fake APNs, a fake FCM, and a fake database, so no job reads a secret. No job deploys the Worker:
+# a deploy stays a manual step (cloudflare/push-relay/README.md).
+# The rules of ci.yml hold here: a read-only token, no secret, credentials dropped at checkout, and every action pinned to a
+# full commit SHA. scripts/ci-workflow.test.ts holds these rules.
+name: Push relay Worker
+
+on:
+  pull_request:
+    # A draft pull request does not start the job. Marking it ready does, like the heavy jobs of ci.yml.
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "cloudflare/push-relay/**"
+      - ".github/workflows/push-relay.yml"
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare/push-relay/**"
+      - ".github/workflows/push-relay.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # The same rule as ci.yml: a new push cancels the older run of the same pull request or of main. A manual start never cancels or is cancelled.
+  group: push-relay-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  worker:
+    name: push-relay
+    # Skipped on a draft pull request. The job is not a required check, so a skipped job blocks nothing.
+    if: ${{ github.event.pull_request.draft != true }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Type check
+        run: pnpm push:check
+      - name: Tests
+        run: pnpm push:test

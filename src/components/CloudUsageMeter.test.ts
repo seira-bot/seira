@@ -110,7 +110,7 @@ describe("Upgrade", () => {
     const after = render();
     expect([after.confirming, after.note]).toEqual([false, { tone: "good", text: "You're on Max now. Your new allowances are ready." }]);
     // Every meter on the page reads the plan again at once.
-    expect(dispatchEvent.mock.calls.map(([event]) => (event as Event).type)).toEqual(["omb:cloud-plan-changed"]);
+    expect(dispatchEvent.mock.calls.map(([event]) => (event as Event).type)).toEqual(["seira:cloud-plan-changed"]);
   });
   it("reads the trial's end from the plan when the preview has no date, so a longer trial still hears nothing is charged today", async () => {
     const DAY = 86_400_000;

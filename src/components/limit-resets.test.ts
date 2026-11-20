@@ -45,7 +45,7 @@ const HOUR = 3_600_000;
 const claude = (used: number, blocked = false): EngineLimit => ({ engine: "claude", name: "Claude", driver: "claude", window: "5-hour", usedPercent: used, resetsAt: RESET, blocked });
 const bot = { id: "scout", name: "Scout", hidden: false, threadId: "t-main", modelSelection: { instanceId: "claude", model: "claude-sonnet-5" }, tasks: [] } as unknown as Bot;
 const routine = (id: string, nextRunAt: number, extra: Partial<Routine> = {}): Routine => ({
-  id, name: id, prompt: "Finish the report.", target: "bot", botId: "scout", runOn: "maus", enabled: true,
+  id, name: id, prompt: "Finish the report.", target: "bot", botId: "scout", runOn: "seira", enabled: true,
   schedule: { type: "daily", time: "11:00", weekdays: [0, 1, 2, 3, 4, 5, 6] }, durationMinutes: 30, nextRunAt, createdAt: 0, updatedAt: 0, ...extra,
 });
 
@@ -217,6 +217,23 @@ describe("the bars", () => {
     expect(tracks(windows(95, 20))).toEqual(["bg-warning", "bg-success"]);
   });
 
+  it("only switch the rows when a ring in the hover card is pressed, and leave the model button closed", async () => {
+    const codex: EngineLimit = { ...claude(91), engine: "codex", name: "Codex", driver: "codex", window: "weekly", windows: [{ window: "weekly", usedPercent: 91, resetsAt: RESET }] };
+    serve([windows(38, 80), codex]);
+    const opened = vi.fn();
+    const scroll = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
+    const container = mount(createElement("button", { type: "button", onClick: opened }, createElement(UsageBars, { engine: "claude" })));
+    hover(container.querySelector("[data-usage-bars]")!, "mouse");
+    await wait(HOVER_MS);
+    const card = document.querySelector<HTMLElement>("[data-usage-card]")!;
+    flushSync(() => card.querySelector<HTMLButtonElement>('[data-usage-engine="codex"]')!.click());
+    expect([...card.querySelectorAll("[data-usage-row]")].map((row) => row.getAttribute("data-usage-row"))).toEqual(["weekly"]);
+    expect(card.querySelector('[data-usage-engine="codex"]')?.getAttribute("aria-pressed")).toBe("true");
+    expect(scroll).not.toHaveBeenCalled();
+    expect(opened).not.toHaveBeenCalled();
+    scroll.mockRestore();
+  });
+
   it("open every window in a card on a mouse hover, never on a touch, and keep the card's clicks from the model button", async () => {
     serve([windows(38, 80)]);
     const opened = vi.fn();
@@ -338,9 +355,9 @@ describe("the calendar", () => {
     const onCreate = vi.fn();
     const container = grid(onDropOnReset, onCreate);
     const shown = container.querySelector('[data-limit-marker="claude"]')!;
-    drop(shown, "application/x-openmaus-bot", "scout");
+    drop(shown, "application/x-seira-bot", "scout");
     expect(onDropOnReset).toHaveBeenLastCalledWith({ botId: "scout" }, marker);
-    drop(shown, "application/x-openmaus-calendar-event", JSON.stringify({ kind: "routine", id: "brief", at: NOW + HOUR }));
+    drop(shown, "application/x-seira-calendar-event", JSON.stringify({ kind: "routine", id: "brief", at: NOW + HOUR }));
     expect(onDropOnReset).toHaveBeenLastCalledWith({ event: { kind: "routine", id: "brief", at: NOW + HOUR } }, marker);
     expect(onCreate).not.toHaveBeenCalled();
   });

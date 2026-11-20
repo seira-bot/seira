@@ -7,7 +7,7 @@ import { citationAttachment, createCitationTextSelector } from "../../src/lib/ci
 import { composeMessage, pasteAttachment } from "../../src/lib/composer-attachments.ts";
 import "../server-line-packs.ts";
 import type { DevsReportPayload } from "../devs-report.ts";
-import { devsReportSender, type ReportStatusAnswer, ReportStatusQuestion, SEIRA_BUG_REPORT_URL, SendOutcome } from "../devs-report-send.ts";
+import { devsReportSender, type ReportStatusAnswer, ReportStatusQuestion, SEIRA_BUG_REPORT_SERVICE, SendOutcome } from "../devs-report-send.ts";
 import type { Message, StoreChange } from "../store.ts";
 import { draftLine, laterLine, refusedLine } from "./devs-report-words.ts";
 import { createDevsReports, DEVS_REPORTS_FILE, fixedLine, LONGEST_WAIT_MS, NO_ANSWER_MS, RETRY_MS, STATUS_EVERY_MS, STATUS_FIRST_MS, TRACKED_MS,
@@ -28,11 +28,11 @@ function fixture(options: { dataDir?: string; sections?: string[]; outcomes?: Se
   reactorOf?: DevsReportsDeps["reactorOf"]; direct?: boolean; appVersion?: string; clock?: number; recentLog?: string[];
   /** The conversations, kept across a restart (another fixture on the same data). */
   threads?: Map<string, Message[]>;
-  /** The MausBot team's answer to each question about this app's reports; none: no answer (offline). */
+  /** The Seira team's answer to each question about this app's reports; none: no answer (offline). */
   answer?: (question: ReportStatusQuestion) => ReportStatusAnswer | null;
   /** Replaces the sender that answers from `outcomes`. */
   send?: DevsReportsDeps["send"] } = {}) {
-  const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "omb-devs-reports-"));
+  const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "seira-devs-reports-"));
   if (!options.dataDir) dirs.push(dataDir);
   const listeners = new Set<(change: StoreChange) => void>();
   const threads = options.threads ?? new Map<string, Message[]>();
@@ -269,9 +269,9 @@ describe("a message that tags @devs", () => {
     const [words, rest] = description.split("\n\nWhat they wrote: ");
     expect(words).toBe(`help me send on it, my token is «redacted ${token.length} chars»`);
     expect(rest).toMatch(/^> Quoted message:\n> The relay failed\.\n> I only send a report when your message tags @devs\.\n/);
-    expect(JSON.stringify(fx.sent[0])).not.toContain("omb-citation");
+    expect(JSON.stringify(fx.sent[0])).not.toContain("seira-citation");
     expect(JSON.stringify(fx.sent[0])).not.toContain(token);
-    expect(readFileSync(join(fx.dataDir, DEVS_REPORTS_FILE), "utf8")).not.toContain("omb-citation");
+    expect(readFileSync(join(fx.dataDir, DEVS_REPORTS_FILE), "utf8")).not.toContain("seira-citation");
     fx.stop();
   });
 
@@ -362,15 +362,15 @@ describe("a message that tags @devs", () => {
   it("drops a marker it cannot read too, so nothing encoded slips past redaction", async () => {
     const fx = fixture();
     const token = `ghp_${"t".repeat(36)}`;
-    const message = fx.person("scout-main", `<!--omb-citation-v1:${Buffer.from(JSON.stringify({ comment: token })).toString("base64url")}-->\n@devs it broke`);
+    const message = fx.person("scout-main", `<!--seira-citation-v1:${Buffer.from(JSON.stringify({ comment: token })).toString("base64url")}-->\n@devs it broke`);
     fx.advance(NO_ANSWER_MS);
     await fx.settle();
-    expect(JSON.stringify(fx.view("scout-main", message.id))).not.toContain("omb-citation");
+    expect(JSON.stringify(fx.view("scout-main", message.id))).not.toContain("seira-citation");
     await fx.press("scout-main", message.id);
     expect(fx.sent).toHaveLength(1);
     expect(fx.sent[0]!.description.split("\n")[0]).toBe("it broke");
-    expect(JSON.stringify(fx.sent[0])).not.toContain("omb-citation");
-    expect(readFileSync(join(fx.dataDir, DEVS_REPORTS_FILE), "utf8")).not.toContain("omb-citation");
+    expect(JSON.stringify(fx.sent[0])).not.toContain("seira-citation");
+    expect(readFileSync(join(fx.dataDir, DEVS_REPORTS_FILE), "utf8")).not.toContain("seira-citation");
     fx.stop();
   });
 
@@ -485,6 +485,20 @@ describe("sending a draft", () => {
     fx.stop();
   });
 
+  it("shows only the public issue number when the earlier report is another person's, and the title when it is the same person's", async () => {
+    const fx = fixture({ outcomes: [{ ok: true, id: "report-7", issue: 123 }] });
+    const error = "TypeError: x is not a function";
+    const ada = fx.reports.fromError("scout-main", error, "key-ada")!;
+    expect(await fx.reports.sendDraft(ada.id, "key-ada")).toMatchObject({ state: "sent", issue: 123 });
+    const bo = fx.reports.fromError("scout-main", error, "key-bo")!;
+    expect(bo.same).toEqual({ issue: 123 });
+    expect(bo.same).not.toHaveProperty("title");
+    expect(bo.same).not.toHaveProperty("at");
+    fx.advance(NO_ANSWER_MS);
+    expect(fx.reports.fromError("scout-main", error, "key-ada")!.same).toMatchObject({ issue: 123, title: ada.title });
+    fx.stop();
+  });
+
   it("is only for the person it is for: another reader cannot see it, send it or put it away", async () => {
     const fx = fixture({ reactorOf: (sender) => (sender === "p-ada" ? "key-ada" : "user") });
     const message = fx.person("scout-main", "@devs it broke", { sender: { name: "Ada", id: "p-ada" } });
@@ -563,7 +577,7 @@ describe("the public issue body that goes to Seira's service", () => {
       bodies.push(JSON.parse(String(init.body)));
       return new Response(JSON.stringify({ id: "br_log", issue: 7 }), { status: 201, headers: { "content-type": "application/json" } });
     }) as unknown as typeof fetch;
-    const fx = fixture({ recentLog, send: devsReportSender(SEIRA_BUG_REPORT_URL, fetcher) });
+    const fx = fixture({ recentLog, send: devsReportSender(SEIRA_BUG_REPORT_SERVICE, fetcher) });
     const message = fx.person("scout-main", "@devs the files step fails");
     fx.advance(NO_ANSWER_MS);
     await fx.settle();
@@ -582,7 +596,7 @@ describe("the public issue body that goes to Seira's service", () => {
 
 describe("a report that the endpoint keeps no contact address for", () => {
   it("tells the plain later line when a report an older version saved goes there", async () => {
-    const dataDir = mkdtempSync(join(tmpdir(), "omb-devs-reports-"));
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-devs-reports-"));
     dirs.push(dataDir);
     const due = Date.UTC(2026, 9, 27, 9, 0);
     const payload = { installId: "4b7c1f2e-0a9d-4c2b-9f1e-6d5a4b3c2d1e", source: "bot", description: "it broke", appVersion: "0.1.128", platform: "linux x64, desktop app",
@@ -680,7 +694,7 @@ describe("a report that cannot go yet", () => {
   });
 
   it("still sends a report an older version saved, with the older system lines in the person's language", async () => {
-    const dataDir = mkdtempSync(join(tmpdir(), "omb-devs-reports-"));
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-devs-reports-"));
     dirs.push(dataDir);
     const payload = { installId: "4b7c1f2e-0a9d-4c2b-9f1e-6d5a4b3c2d1e", source: "bot", description: "it broke", appVersion: "0.1.128", platform: "linux x64, desktop app", diagnostics: "Bot: Scout (scout)" };
     const due = Date.UTC(2026, 9, 27, 9, 0);
@@ -765,7 +779,7 @@ describe("a group chat", () => {
 });
 
 describe("closing the loop on a report", () => {
-  /** Every report asked about, answered as the MausBot team would: `fixedIn` for all of them, `notify` as given. */
+  /** Every report asked about, answered as the Seira team would: `fixedIn` for all of them, `notify` as given. */
   const team = (state: { status: "received" | "fixed"; fixedIn: string | null; notify: boolean }) => (question: ReportStatusQuestion): ReportStatusAnswer =>
     ({ reports: question.ids.map((id) => ({ id, status: state.status, fixedIn: state.fixedIn })), notify: state.notify });
   /** A report from Scout's chat by Bob, with Scout's summary, that Bob sent; the person's message. */

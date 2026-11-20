@@ -1,6 +1,24 @@
 import { describe, expect, it } from "vitest";
 
-import { claimWithYourComputerConsent, yourComputerCallFrom, YourComputerDeclined } from "./your-computer-consent.ts";
+import type { Notification } from "./notify.ts";
+import type { Store } from "./store.ts";
+import { askToUseYourComputer, claimWithYourComputerConsent, yourComputerCallFrom, YourComputerDeclined } from "./your-computer-consent.ts";
+import "./server-line-packs.ts";
+
+describe("askToUseYourComputer", () => {
+  it("tells the person, naming the card that waits on them", () => {
+    const rows: Array<{ id: string; card?: { requestId?: string } }> = [];
+    const sent: Array<Notification | null> = [];
+    const store = {
+      groupByThread: () => undefined,
+      appendMessage: (_threadId: string, row: object) => { const added = { id: `m${rows.length}`, ...row }; rows.push(added); return added; },
+      projectBotForTask: () => null,
+    } as unknown as Store;
+    void askToUseYourComputer({ store, notify: (notification) => sent.push(notification) }, { id: "b1", name: "Scout", color: "green", notifications: true }, { threadId: "t1", generation: "g1" }).catch(() => undefined);
+    expect(sent).toEqual([expect.objectContaining({ kind: "approval", threadId: "t1", requestId: rows[0]!.card!.requestId })]);
+    expect(rows[0]!.card!.requestId).toEqual(expect.any(String));
+  });
+});
 
 describe("claimWithYourComputerConsent", () => {
   const run = (levels: boolean[], answer: "allow" | "deny" = "allow") => {

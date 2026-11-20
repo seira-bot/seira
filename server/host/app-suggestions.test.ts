@@ -31,7 +31,7 @@ const picked = (choice: string) => ({ ok: true, provider: "jev", latencyMs: 1, a
 const connectCard = (slug: string, status = "required", resumeKey = "resume-key") => listener!({ type: "message", threadId: "t", message: { connector: { slug, status, resumeKey, label: slug, description: "" } } });
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), "omb-app-suggestions-"));
+  dataDir = mkdtempSync(join(tmpdir(), "seira-app-suggestions-"));
   services = { gmail: { connected: true } };
   bots = [{ id: "b1", name: "Sales", title: "Sales lead" }];
   offerable = () => true;
@@ -144,6 +144,21 @@ describe("the suggestions a person sees", () => {
       offerable: () => true, pickAvailable: () => true, decider: { choose } as never,
     });
     await expect(suggestions.suggest({ limit: 3 })).resolves.toEqual({ cards: [], pick: "available" });
+  });
+});
+
+describe("an app that needs its own sign-in", () => {
+  const cards = [{ ...card("linkedin", "LinkedIn"), needsOwnAuth: true }, { ...card("notion", "Notion") }];
+  const withCards = (connected: Record<string, { connected: boolean }>) => createAppSuggestions({
+    dataDir, store: { bots, bot: () => null, onChange: () => () => {} } as never, configured: () => true, catalog: async () => ({ cards }), services: async () => connected,
+    offerable: () => true, pickAvailable: () => true, decider: { choose } as never, now: () => clock,
+  });
+
+  it("is left out of suggestions and search until it is connected", async () => {
+    const bot = { id: "b1", name: "Sales" } as never;
+    expect(slugs(await withCards({}).suggest({ limit: 5 }))).toEqual(["notion"]);
+    expect(await withCards({}).find({ query: "linkedin notion", bot, refusal: () => null })).not.toContain("- linkedin:");
+    expect(await withCards({ linkedin: { connected: true } }).find({ query: "linkedin notion", bot, refusal: () => null })).toContain("- linkedin: LinkedIn (connected).");
   });
 });
 

@@ -71,7 +71,7 @@ FAKE_CLAUDE_REPLY_STATE=/tmp/reactions-reply-state \
 Then, with the printed handle:
 
 ```sh
-H=/tmp/openmausbot-verify-data-XXXXXX/ui.json
+H=/tmp/seira-verify-data-XXXXXX/ui.json
 pnpm control:seira ui type --ui $H --name "Message Pepper" --text "Draft an email to Sam about Friday."
 pnpm control:seira ui press --ui $H --keys Enter
 pnpm control:seira ui wait-settle --ui $H --timeout 60
@@ -85,7 +85,7 @@ keyboard focus; hover it first with `ui eval` (a `pointerenter` with
 
 ```sh
 pnpm control:seira ui click --ui $H --ref @eN
-pnpm control:seira ui screenshot --ui $H --out .omb-scratch/verify-evidence/reactions-open.png
+pnpm control:seira ui screenshot --ui $H --out .seira-scratch/verify-evidence/reactions-open.png
 pnpm control:seira ui click --ui $H --name "Thumbs up: yes, go ahead"
 pnpm control:seira ui wait-settle --ui $H --timeout 60
 pnpm control:seira ui snapshot --ui $H

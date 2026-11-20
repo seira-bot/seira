@@ -17,32 +17,33 @@ The site opens at `http://localhost:3000`.
 
 ```bash
 pnpm docs:build
-pnpm --filter @openmausbot/docs types:check
-pnpm --filter @openmausbot/docs lint
+pnpm --filter @seira/docs types:check
+pnpm --filter @seira/docs lint
 ```
 
-The changelog reads published releases from `seira-bot/seira` and caches the
-result for five minutes. If GitHub is unavailable, the page links directly to the
-releases.
+The build writes a static site to `out/`. No server runs: search uses a static
+index, and the redirects are in `public/_redirects`.
 
-## Deploy to Vercel
+The changelog reads published releases from `seira-bot/seira` during the build.
+It shows the releases that exist when the site was last built. If GitHub is
+unavailable during the build, the page links directly to the releases.
 
-This deploys only the public documentation. It does not deploy the Electron app,
-local harness, credentials, agents, or user data. The changelog page uses Next.js
-incremental regeneration so published releases appear without a source commit.
+## Deploy to Cloudflare
 
-Create a Vercel project for the docs:
+The `seira-docs` Worker serves `out/` at `docs.seira.bot` (`wrangler.jsonc`).
+It is an assets-only Worker with no script, binding or secret. This deploys
+only the public documentation. It does not deploy the Electron app, local
+harness, credentials, agents, or user data.
 
-1. Import the `seira-bot/seira` repository.
-2. Set **Root Directory** to `apps/docs`.
-3. Keep the detected **Next.js** framework settings.
-4. Set the production branch to `main` and deploy.
-5. Add `docs.seira.bot` under **Settings → Domains**.
+A merge to `main` does not deploy the site. Deploy by hand from a clean checkout
+of `main`, with `CLOUDFLARE_ACCOUNT_ID` set to the account that holds the
+`seira.bot` zone:
 
-For an immediate changelog refresh after each desktop release, create a Vercel
-Deploy Hook for the production branch and save it in the GitHub repository as
-the `DOCS_DEPLOY_HOOK_URL` Actions secret. Without the optional hook, the next
-normal docs deployment still pulls the current published releases.
+```bash
+pnpm install --frozen-lockfile
+pnpm docs:build
+cd apps/docs && pnpm dlx wrangler@4.123.0 deploy
+```
 
-Vercel will build the Next.js docs app, publish every push to `main`, and create
-preview URLs for documentation pull requests.
+Deploy again after a docs change merges and after each desktop release, so the
+changelog lists the new release.

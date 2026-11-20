@@ -80,7 +80,7 @@ describe("message-db", () => {
   it("finds the first-reply rescue rows that never settled or ended", () => {
     const rescue = (id: string, state: Record<string, true> = {}) => msg(id, "", {
       role: "bot", kind: "activity",
-      tool: { name: "notice: Maus hasn't heard back from OpenCode yet.", ok: true,
+      tool: { name: "notice: Seira hasn't heard back from OpenCode yet.", ok: true,
         rescue: { botId: "b", threadId: "t1", turnId: id, instanceId: "opencodeGo", ai: "OpenCode", ...state } },
     });
     insertMessage("t1", rescue("open"));
@@ -590,6 +590,25 @@ describe("notification_log", () => {
     const logged = logNotification({ kind: "question", botId: "bot-1", botName: "Scout", threadId: "thread-1", title: "Scout asks", body: "Which?" });
     expect(logged).toMatchObject({ kind: "question", read: false });
     expect(recentNotificationLog()).toEqual([logged]);
+  });
+
+  it("returns the request a notification waits on in the feed, as the live frame carries it", () => {
+    const logged = logNotification({ kind: "approval", botId: "bot-1", botName: "Scout", threadId: "thread-1", title: "Scout needs approval", body: "Run it", requestId: "req-1" });
+    expect(logged.requestId).toBe("req-1");
+    expect(recentNotificationLog()).toEqual([logged]);
+    expect(logNotification({ kind: "done", botId: "bot-1", botName: "Scout", threadId: "thread-1", title: "Scout finished", body: "ok" })).not.toHaveProperty("requestId");
+  });
+
+  it("reads a feed made before request ids were recorded, without the field", () => {
+    closeMessageDb();
+    for (const suffix of ["", "-wal", "-shm"]) rmSync(join(DATA_DIR, `messages.db${suffix}`), { force: true });
+    const old = new DatabaseSync(join(DATA_DIR, "messages.db"));
+    old.exec("CREATE TABLE notification_log (id TEXT PRIMARY KEY, at INTEGER NOT NULL, kind TEXT NOT NULL, bot_id TEXT NOT NULL, bot_name TEXT NOT NULL, thread_id TEXT NOT NULL, group_id TEXT, title TEXT NOT NULL, body TEXT NOT NULL, avatar_url TEXT, read INTEGER NOT NULL DEFAULT 0)");
+    old.exec("INSERT INTO notification_log VALUES ('before', 1, 'approval', 'bot-1', 'Scout', 'thread-1', NULL, 'Scout needs approval', 'Run it', NULL, 0)");
+    old.close();
+    const rows = recentNotificationLog();
+    expect(rows).toEqual([expect.objectContaining({ id: "before", kind: "approval" })]);
+    expect(rows[0]).not.toHaveProperty("requestId");
   });
 
   it("keeps the one person a notification is for, in a feed made before that was recorded too", () => {

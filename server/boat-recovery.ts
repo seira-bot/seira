@@ -64,11 +64,11 @@ interface Replacement {
 
 const ON = new Set(["1", "true", "on", "yes"]), OFF = new Set(["0", "false", "off", "no"]);
 
-/** Whether a silent computer is set aside and replaced without the person. On unless OMB_CLOUD_COMPUTER_AUTO_REPLACE is
+/** Whether a silent computer is set aside and replaced without the person. On unless SEIRA_CLOUD_COMPUTER_AUTO_REPLACE is
  * off ("0", "false", "off" or "no") or config.json has `"features": {"cloudComputerAutoReplace": false}`; the
  * environment wins. Off, a silent computer is still restarted, and otherwise waits for the person's Replace computer. */
 export function cloudComputerAutoReplace(cfg: Pick<AppConfig, "features">, env: NodeJS.ProcessEnv = process.env): boolean {
-  const override = env.OMB_CLOUD_COMPUTER_AUTO_REPLACE?.trim().toLowerCase();
+  const override = env.SEIRA_CLOUD_COMPUTER_AUTO_REPLACE?.trim().toLowerCase();
   if (override && ON.has(override)) return true;
   if (override && OFF.has(override)) return false;
   return cfg.features?.cloudComputerAutoReplace !== false;
@@ -575,7 +575,7 @@ export function createBoatRecovery(deps: BoatRecoveryDeps) {
 
   /** A computer woken, created or restarted for a turn that did not answer in the wake's patience: restarted (its files
    * kept) and waited for again, then set aside only if every condition holds. Otherwise left as it is, and the turn's
-   * claim fails as a passing failure that says MausBot keeps trying, which the background recovery then does. */
+   * claim fails as a passing failure that says Seira keeps trying, which the background recovery then does. */
   async function wakeTimedOut(owner: string, boxId: string, ctx: WakeTimeoutContext = {}): Promise<WakeTimeoutOutcome> {
     const outcome = await wakeTimedOutOnce(owner, boxId, ctx);
     if (outcome.kind === "kept" && eligible(owner) && !retired.has(boxId)) followUp(owner, boxId);

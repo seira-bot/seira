@@ -21,8 +21,8 @@ import {
   type PhonePushOptions,
 } from "./phone-push.ts";
 
-const CREDENTIAL = `omb_install_${"a".repeat(22)}.${"b".repeat(43)}`;
-const ACCESS = { controlPlane: "https://accounts.openmausbot.test", credential: CREDENTIAL };
+const CREDENTIAL = `seira_install_${"a".repeat(22)}.${"b".repeat(43)}`;
+const ACCESS = { controlPlane: "https://accounts.seira.test", credential: CREDENTIAL };
 const APNS = "ab".repeat(32);
 const APNS_2 = "cd".repeat(32);
 const FCM = `fcmInstance_1:APA91b${"x".repeat(140)}`;
@@ -53,7 +53,7 @@ let clock: number;
 let timers: Array<{ run: () => void; at: number }>;
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), "omb-phone-push-"));
+  dataDir = mkdtempSync(join(tmpdir(), "seira-phone-push-"));
   clock = 1_000_000;
   timers = [];
 });
@@ -109,12 +109,12 @@ const notification = (overrides: Record<string, unknown> = {}) => ({
 const everyone = () => true;
 
 describe("phone push switch", () => {
-  it("is off unless config or OMB_PHONE_PUSH turns it on, and the variable wins", () => {
+  it("is off unless config or SEIRA_PHONE_PUSH turns it on, and the variable wins", () => {
     expect(phonePushEnabled({}, {})).toBe(false);
     expect(phonePushEnabled({ features: { phonePush: true } }, {})).toBe(true);
-    expect(phonePushEnabled({ features: { phonePush: true } }, { OMB_PHONE_PUSH: "0" })).toBe(false);
-    expect(phonePushEnabled({}, { OMB_PHONE_PUSH: "1" })).toBe(true);
-    expect(phonePushEnabled({ features: { phonePush: false } }, { OMB_PHONE_PUSH: "yes" })).toBe(false);
+    expect(phonePushEnabled({ features: { phonePush: true } }, { SEIRA_PHONE_PUSH: "0" })).toBe(false);
+    expect(phonePushEnabled({}, { SEIRA_PHONE_PUSH: "1" })).toBe(true);
+    expect(phonePushEnabled({ features: { phonePush: false } }, { SEIRA_PHONE_PUSH: "yes" })).toBe(false);
   });
 
   it("switched off, keeps nothing, sends nothing and says so", async () => {
@@ -203,10 +203,52 @@ describe("offering a notify frame", () => {
     expect(relay.sends()).toEqual([{
       path: "/v1/installations/self/push/send",
       authorization: `Bearer ${CREDENTIAL}`,
-      body: { v: 1, token: APNS, pairing: "pair-tag-0001", collapseId: "openmaus.th_1.42", notification: { kind: "approval", title: "Scout needs approval", botId: "bot_1", botName: "Scout", threadId: "th_1" } },
+      body: { v: 1, token: APNS, pairing: "pair-tag-0001", collapseId: "seira.th_1.42", notification: { kind: "approval", title: "Scout needs approval", botId: "bot_1", botName: "Scout", threadId: "th_1" } },
     }]);
     const raw = JSON.stringify(relay.calls);
     for (const secret of ["PRIVATE", "payroll", "sk-live", "API_KEY"]) expect(raw).not.toContain(secret);
+  });
+
+  it.each(["approval", "question", "sign-in"])("carries the request a %s waits on, so a tap answers that one", async (kind) => {
+    const { push, relay } = harness();
+    await push.register(PHONE, { platform: "apns", token: APNS });
+    push.offer({ notification: notification({ kind, requestId: "req-7" }), seq: 3 }, everyone);
+    await push.flush();
+    expect(relay.sends().map((call) => (call.body.notification as { requestId?: string }).requestId)).toEqual(["req-7"]);
+  });
+
+  it("sends the push without a request id that is not an id the relay takes, and with none given", async () => {
+    const { push, relay } = harness();
+    await push.register(PHONE, { platform: "apns", token: APNS });
+    push.offer({ notification: notification({ requestId: "has space & symbols" }), seq: 1 }, everyone);
+    push.offer({ notification: notification({ threadId: "th_2" }), seq: 2 }, everyone);
+    push.offer({ notification: notification({ threadId: "th_3", requestId: 42 }), seq: 3 }, everyone);
+    await push.flush();
+    const sent = relay.sends().map((call) => call.body.notification as Record<string, unknown>);
+    expect(sent).toHaveLength(3);
+    for (const one of sent) expect(one).not.toHaveProperty("requestId");
+  });
+
+  it("sends the push again without the request id when a relay that does not know it refuses the body", async () => {
+    const { push, relay } = harness();
+    await push.register(PHONE, { platform: "apns", token: APNS });
+    relay.answers.push({ status: 400, error: "invalid_request" });
+    push.offer({ notification: notification({ requestId: "req-7" }), seq: 5 }, everyone);
+    await push.flush();
+    const sends = relay.sends().map((call) => call.body.notification as Record<string, unknown>);
+    expect(sends).toHaveLength(2);
+    expect(sends[0]).toMatchObject({ requestId: "req-7" });
+    expect(sends[1]).not.toHaveProperty("requestId");
+    expect(sends[1]).toMatchObject({ kind: "approval", threadId: "th_1" });
+  });
+
+  it("does not send a push twice when the refusal had nothing to do with a request id", async () => {
+    const { push, relay } = harness();
+    await push.register(PHONE, { platform: "apns", token: APNS });
+    relay.answers.push({ status: 400, error: "invalid_request" });
+    push.offer({ notification: notification(), seq: 5 }, everyone);
+    await push.flush();
+    expect(relay.sends()).toHaveLength(1);
   });
 
   it("wakes the phone for approvals, questions, sign-ins and finished replies only, as the phone chose", async () => {
@@ -245,7 +287,7 @@ describe("offering a notify frame", () => {
     clock += PUSH_COALESCE_MS;
     push.offer({ notification: notification(), seq: 4 }, everyone);
     await push.flush();
-    expect(relay.sends().map((call) => call.body.collapseId)).toEqual(["openmaus.th_1.1", "openmaus.th_1.3", "openmaus.th_1.4"]);
+    expect(relay.sends().map((call) => call.body.collapseId)).toEqual(["seira.th_1.1", "seira.th_1.3", "seira.th_1.4"]);
   });
 
   it("stops a looping bot buzzing a pocket", async () => {
@@ -268,7 +310,7 @@ describe("the outbox", () => {
     push.offer({ notification: notification(), seq: 2 }, everyone);
     await push.flush();
     for (const wait of PUSH_RETRY_MS) await advance(push, wait);
-    expect(relay.sends().map((call) => call.body.collapseId)).toEqual(["openmaus.th_1.1", "openmaus.th_1.2", "openmaus.th_1.2", "openmaus.th_1.2"]);
+    expect(relay.sends().map((call) => call.body.collapseId)).toEqual(["seira.th_1.1", "seira.th_1.2", "seira.th_1.2", "seira.th_1.2"]);
     expect(push.pending()).toBe(0);
   });
 
@@ -325,7 +367,7 @@ describe("the outbox", () => {
     await advance(push, 119_000);
     expect(relay.sends()).toHaveLength(2);
     await advance(push, 1_000);
-    expect(relay.sends().at(-1)!.body.collapseId).toBe("openmaus.th_4.4");
+    expect(relay.sends().at(-1)!.body.collapseId).toBe("seira.th_4.4");
   });
 
   it("never throws into the server", async () => {
@@ -337,7 +379,7 @@ describe("the outbox", () => {
 
 describe("the push's identifier and title", () => {
   it("is the stream notification's own identifier when it fits APNs' 64 bytes", () => {
-    expect(phonePushCollapseId("th_1", 9)).toBe("openmaus.th_1.9");
+    expect(phonePushCollapseId("th_1", 9)).toBe("seira.th_1.9");
     expect(phonePushCollapseId("t".repeat(60), 9)).toBeUndefined();
     expect(phonePushCollapseId("th_1", -1)).toBeUndefined();
   });
@@ -353,22 +395,22 @@ describe("where the relay credential comes from", () => {
 
   it("prefers the desktop app's message, including its 'none'", () => {
     writeFileSync(tunnelFile(), JSON.stringify({ companionInstallationCredential: CREDENTIAL }));
-    const source = new PhonePushAccessSource({ env: { OMB_PUSH_CREDENTIAL: CREDENTIAL }, tunnelFile: tunnelFile(), defaultControlPlane: "https://accounts.openmausbot.com" });
+    const source = new PhonePushAccessSource({ env: { SEIRA_PUSH_CREDENTIAL: CREDENTIAL }, tunnelFile: tunnelFile(), defaultControlPlane: "https://accounts.seira.bot" });
     expect(source.receive({ type: "something-else" })).toBe(false);
-    expect(source.receive({ type: PHONE_PUSH_DESKTOP_MESSAGE, access: { controlPlane: "https://accounts.openmausbot.com/", credential: CREDENTIAL } })).toBe(true);
-    expect(source.current()).toEqual({ controlPlane: "https://accounts.openmausbot.com", credential: CREDENTIAL });
+    expect(source.receive({ type: PHONE_PUSH_DESKTOP_MESSAGE, access: { controlPlane: "https://accounts.seira.bot/", credential: CREDENTIAL } })).toBe(true);
+    expect(source.current()).toEqual({ controlPlane: "https://accounts.seira.bot", credential: CREDENTIAL });
     source.receive({ type: PHONE_PUSH_DESKTOP_MESSAGE, access: null });
     expect(source.current()).toBeNull();
     source.receive({ type: PHONE_PUSH_DESKTOP_MESSAGE, access: { controlPlane: "http://evil.example", credential: CREDENTIAL } });
     expect(source.current()).toBeNull();
   });
 
-  it("then OMB_PUSH_CREDENTIAL, a fleet's credential, then `seira login`'s file", () => {
-    const at = (env: NodeJS.ProcessEnv) => new PhonePushAccessSource({ env, tunnelFile: tunnelFile(), defaultControlPlane: "https://accounts.openmausbot.com" }).current();
+  it("then SEIRA_PUSH_CREDENTIAL, a fleet's credential, then `seira login`'s file", () => {
+    const at = (env: NodeJS.ProcessEnv) => new PhonePushAccessSource({ env, tunnelFile: tunnelFile(), defaultControlPlane: "https://accounts.seira.bot" }).current();
     expect(at({})).toBeNull();
     writeFileSync(tunnelFile(), JSON.stringify({ companionInstallationCredential: CREDENTIAL }));
-    expect(at({})).toEqual({ controlPlane: "https://accounts.openmausbot.com", credential: CREDENTIAL });
-    expect(at({ OMB_PUSH_CREDENTIAL: "not-a-credential" })).toBeNull();
-    expect(at({ OMB_INSTALLATION_CREDENTIAL: CREDENTIAL, OMB_CONTROL_PLANE_URL: "http://127.0.0.1:8787" })).toEqual({ controlPlane: "http://127.0.0.1:8787", credential: CREDENTIAL });
+    expect(at({})).toEqual({ controlPlane: "https://accounts.seira.bot", credential: CREDENTIAL });
+    expect(at({ SEIRA_PUSH_CREDENTIAL: "not-a-credential" })).toBeNull();
+    expect(at({ SEIRA_INSTALLATION_CREDENTIAL: CREDENTIAL, SEIRA_CONTROL_PLANE_URL: "http://127.0.0.1:8787" })).toEqual({ controlPlane: "http://127.0.0.1:8787", credential: CREDENTIAL });
   });
 });

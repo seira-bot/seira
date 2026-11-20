@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { cloudConnectedAppsBrokerUrl, CLOUD_CONNECTED_APPS_FILE, startCloudConnectedApps, startCloudHomeConnectedApps, stopCloudHomeConnectedApps, type CloudConnectedAppsOptions } from "./cloud-connected-apps.ts";
+import { cloudConnectedAppsBrokerUrl, CLOUD_CONNECTED_APPS_FILE, startCloudConnectedApps, startServerConnectedApps, stopServerConnectedApps, type CloudConnectedAppsOptions } from "./cloud-connected-apps.ts";
 import { brokerAccess, connectionMode, connectorSetup, listToolkits, setManagedBrokerAccess } from "./composio.ts";
 import { PeopleConnections } from "./team-connections.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
@@ -43,7 +43,7 @@ let lines: string[];
 let applied: ({ url: string; token: string } | null)[];
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), "omb-cloud-connected-apps-"));
+  dataDir = mkdtempSync(join(tmpdir(), "seira-cloud-connected-apps-"));
   timers = [];
   lines = [];
   applied = [];
@@ -52,7 +52,7 @@ beforeEach(() => {
 afterEach(async () => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
-  stopCloudHomeConnectedApps();
+  stopServerConnectedApps();
   setManagedBrokerAccess(null);
   await removeTempDir(dataDir);
 });
@@ -273,7 +273,7 @@ describe("a Cloud home's connected-apps installation", () => {
 });
 
 describe("a paid Cloud's grant", () => {
-  const GRANT = `v1.omb-machine-1.${"g".repeat(43)}`;
+  const GRANT = `v1.seira-machine-1.${"g".repeat(43)}`;
   const grantCalls = (calls: Call[]) => calls.filter((call) => call.path === "/v1/installation/cloud");
 
   it("presents the Admin's grant with the installation's token, once", async () => {
@@ -365,14 +365,14 @@ describe("a Cloud kept off the managed service", () => {
     expect(broker.registrations()).toBe(1);
   });
 
-  it("OMB_COMPOSIO_BROKER=off: a Cloud home registers nothing and shows the needs-a-key state, even with a token on the volume", async () => {
+  it("SEIRA_COMPOSIO_BROKER=off: a Cloud home registers nothing and shows the needs-a-key state, even with a token on the volume", async () => {
     store(OLD);
     const fetchSpy = vi.fn(async () => new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchSpy);
-    vi.stubEnv("OMB_COMPOSIO_BROKER_URL", BROKER);
-    vi.stubEnv("OMB_COMPOSIO_BROKER", "off");
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER_URL", BROKER);
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER", "off");
     const apply = vi.fn();
-    startCloudHomeConnectedApps({ cloudHome: true, dataDir, apply, cloudGrant: GRANT });
+    startServerConnectedApps({ cloudHome: true, selfHosted: false, packaged: true, dataDir, apply, cloudGrant: GRANT });
     expect(apply).not.toHaveBeenCalled();
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -388,23 +388,23 @@ describe("a Cloud kept off the managed service", () => {
   });
 
   it("the switch also wins over a token named in the server's environment", async () => {
-    vi.stubEnv("OMB_COMPOSIO_BROKER_URL", BROKER);
-    vi.stubEnv("OMB_COMPOSIO_BROKER_TOKEN", OLD);
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER_URL", BROKER);
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER_TOKEN", OLD);
     vi.resetModules();
     const fresh = await import("./composio-broker-access.ts");
     expect(fresh.brokerAccess()).toEqual({ url: BROKER, token: OLD });
-    vi.stubEnv("OMB_COMPOSIO_BROKER", "off");
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER", "off");
     expect(fresh.brokerAccess()).toBeNull();
   });
 
-  it("OMB_COMPOSIO_BROKER=off: a Team Cloud member's own apps report unavailable, and the member's installation is kept", async () => {
+  it("SEIRA_COMPOSIO_BROKER=off: a Team Cloud member's own apps report unavailable, and the member's installation is kept", async () => {
     const person = `p_${"a".repeat(22)}`;
     const fetchImpl = vi.fn(async () => json(201, { installationId: "install-p", token: NEW }));
     const people = new PeopleConnections({ dataDir, brokerUrl: () => BROKER, clients: () => undefined, isOwnerLive: () => true, fetchImpl: fetchImpl as unknown as typeof fetch });
     await expect(people.ensureAppsAccess(person, "m@example.test")).resolves.toEqual({ url: BROKER, token: NEW });
     expect(fetchImpl).toHaveBeenCalledOnce();
 
-    vi.stubEnv("OMB_COMPOSIO_BROKER", "off");
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER", "off");
     expect(people.appsAccess(person)).toBeNull();
     expect(people.appsPeople()).toEqual([]);
     await expect(people.ensureAppsAccess(`p_${"b".repeat(22)}`, "n@example.test")).resolves.toBeNull();
@@ -412,5 +412,170 @@ describe("a Cloud kept off the managed service", () => {
 
     vi.unstubAllEnvs();
     expect(people.appsAccess(person)).toEqual({ url: BROKER, token: NEW });
+  });
+});
+
+describe("a self-hosted server", () => {
+  const SEIRA = "https://apps.seira.bot";
+  const nothing = () => {};
+
+  async function until(done: () => boolean) {
+    for (let waited = 0; !done() && waited < 2_000; waited += 10) await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  let urls: string[];
+
+  function begin(broker: ReturnType<typeof fakeBroker>, over: Partial<Parameters<typeof startServerConnectedApps>[0]> = {}) {
+    vi.stubGlobal("fetch", (async (input: string | URL | Request, init?: RequestInit) => {
+      urls.push(String(input));
+      return broker.fetchImpl(input, init);
+    }) as typeof fetch);
+    startServerConnectedApps({
+      cloudHome: false,
+      selfHosted: true,
+      packaged: true,
+      dataDir,
+      apply: (access) => {
+        applied.push(access);
+        setManagedBrokerAccess(access);
+      },
+      ...over,
+    });
+  }
+
+  const seiraFile = () => ({ version: 1, brokerUrl: SEIRA, installationId: "install-new", token: NEW });
+
+  beforeEach(() => {
+    urls = [];
+    vi.spyOn(console, "log").mockImplementation(nothing);
+    vi.spyOn(console, "warn").mockImplementation(nothing);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("a release build registers at Seira's service when nothing names another", async () => {
+    const broker = fakeBroker({ "POST /v1/installations": [registered(NEW, "install-new")] });
+    begin(broker);
+    await until(() => existsSync(file()));
+
+    expect(broker.registrations()).toBe(1);
+    expect(urls).toEqual([`${SEIRA}/v1/installations`]);
+    expect(applied.at(-1)).toEqual({ url: SEIRA, token: NEW });
+    expect(stored()).toEqual(seiraFile());
+    if (process.platform !== "win32") expect(statSync(file()).mode & 0o777).toBe(0o600);
+  });
+
+  it("registers where SEIRA_COMPOSIO_BROKER_URL points, not at Seira's service", async () => {
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER_URL", BROKER);
+    const broker = fakeBroker({ "POST /v1/installations": [registered(NEW, "install-new")] });
+    begin(broker);
+    await until(() => existsSync(file()));
+
+    expect(urls).toEqual([`${BROKER}/v1/installations`]);
+    expect(stored().brokerUrl).toBe(BROKER);
+    expect(applied.at(-1)).toEqual({ url: BROKER, token: NEW });
+  });
+
+  it("after a restart it serves the stored token at once and never registers again", async () => {
+    store(NEW, SEIRA);
+    const broker = fakeBroker({ "GET /v1/me": [json(200, { installationId: "install-old" })] });
+    begin(broker);
+    expect(applied).toEqual([{ url: SEIRA, token: NEW }]);
+    await until(() => broker.calls.length > 0);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(broker.registrations()).toBe(0);
+    expect(broker.calls.map((call) => `${call.method} ${call.path}`)).toEqual(["GET /v1/me"]);
+    expect(stored().token).toBe(NEW);
+  });
+
+  it("a source run with no URL registers nothing", async () => {
+    const broker = fakeBroker({});
+    begin(broker, { packaged: false });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(broker.calls).toEqual([]);
+    expect(applied).toEqual([]);
+    expect(existsSync(file())).toBe(false);
+  });
+
+  it("a source run still registers where SEIRA_COMPOSIO_BROKER_URL points", async () => {
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER_URL", BROKER);
+    const broker = fakeBroker({ "POST /v1/installations": [registered(NEW)] });
+    begin(broker, { packaged: false });
+    await until(() => existsSync(file()));
+    expect(broker.registrations()).toBe(1);
+  });
+
+  it("the owner's own Composio key keeps it from sending anything", async () => {
+    const broker = fakeBroker({});
+    begin(broker, { ownKey: () => true });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(broker.calls).toEqual([]);
+  });
+
+  it("SEIRA_COMPOSIO_BROKER=off registers nothing and says so once", async () => {
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER", "off");
+    const broker = fakeBroker({});
+    begin(broker);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(broker.calls).toEqual([]);
+    expect(applied).toEqual([]);
+    expect(console.log).toHaveBeenCalledTimes(1);
+    expect(console.log).toHaveBeenCalledWith("the connected-apps service is switched off (SEIRA_COMPOSIO_BROKER)");
+  });
+
+  it("a token named in the environment replaces registration", async () => {
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER_TOKEN", OLD);
+    const broker = fakeBroker({});
+    begin(broker);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(broker.calls).toEqual([]);
+    expect(applied).toEqual([]);
+  });
+
+  it("a desktop child or a hosted workspace registers nothing", async () => {
+    const broker = fakeBroker({});
+    begin(broker, { selfHosted: false });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(broker.calls).toEqual([]);
+    expect(applied).toEqual([]);
+  });
+
+  it("a URL that is neither HTTPS nor loopback is refused with one warning", async () => {
+    vi.stubEnv("SEIRA_COMPOSIO_BROKER_URL", "http://broker.example");
+    const broker = fakeBroker({});
+    begin(broker);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(broker.calls).toEqual([]);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    expect(console.warn).toHaveBeenCalledWith("connected-apps service URL rejected: HTTPS or a loopback HTTP URL is required");
+  });
+
+  it("an answer of HTTP 503 applies nothing and sets a retry that then registers", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const broker = fakeBroker({ "POST /v1/installations": [json(503, { error: "registration is temporarily closed" }), registered(NEW, "install-new")] });
+    begin(broker);
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(broker.registrations()).toBe(1);
+    expect(applied).toEqual([null]);
+    expect(existsSync(file())).toBe(false);
+    expect(vi.getTimerCount()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(40_000);
+    expect(broker.registrations()).toBe(2);
+    expect(applied.at(-1)).toEqual({ url: SEIRA, token: NEW });
+    expect(stored()).toEqual(seiraFile());
+  });
+
+  it("a Cloud home with no URL registers nothing, even in a release build", async () => {
+    const broker = fakeBroker({});
+    begin(broker, { cloudHome: true, selfHosted: false, packaged: true });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(broker.calls).toEqual([]);
+    expect(applied).toEqual([]);
   });
 });

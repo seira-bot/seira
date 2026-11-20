@@ -18,7 +18,7 @@ afterEach(() => {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 function setup(options: { start?: string; connected?: { gmail?: boolean; googlecalendar?: boolean } } = {}) {
-  const dir = mkdtempSync(join(tmpdir(), "omb-first-hour-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-first-hour-"));
   dirs.push(dir);
   let now = Date.parse(options.start ?? "2026-10-27T15:00:00Z");
   const store = new Store(() => ({ instanceId: "claude", model: "claude-sonnet-5" }));
@@ -282,9 +282,9 @@ describe("a new Cloud's first hour", () => {
     other.begin();
     t.ledger.add("drafted", 1);
     t.world.runs.push(
-      { id: "r1", routineId: "news", routineName: "News", target: "bot", botId: t.chief.id, runOn: "maus", scheduledFor: 0, status: "completed", manual: false, createdAt: 0, finishedAt: t.now() + HOUR, report: { state: "posted", threadId: "x", messageId: "y" } },
-      { id: "r2", routineId: "watch", routineName: "Keep an eye on my day", target: "bot", botId: t.chief.id, runOn: "maus", scheduledFor: 0, status: "completed", manual: false, createdAt: 0, finishedAt: t.now() + HOUR, deliver: "brief", report: { state: "posted", threadId: "x", messageId: "y" } },
-      { id: "r3", routineId: "news", routineName: "News", target: "bot", botId: t.chief.id, runOn: "maus", scheduledFor: 0, status: "completed", manual: false, createdAt: 0, finishedAt: t.now() + HOUR, report: { state: "quiet" } },
+      { id: "r1", routineId: "news", routineName: "News", target: "bot", botId: t.chief.id, runOn: "seira", scheduledFor: 0, status: "completed", manual: false, createdAt: 0, finishedAt: t.now() + HOUR, report: { state: "posted", threadId: "x", messageId: "y" } },
+      { id: "r2", routineId: "watch", routineName: "Keep an eye on my day", target: "bot", botId: t.chief.id, runOn: "seira", scheduledFor: 0, status: "completed", manual: false, createdAt: 0, finishedAt: t.now() + HOUR, deliver: "brief", report: { state: "posted", threadId: "x", messageId: "y" } },
+      { id: "r3", routineId: "news", routineName: "News", target: "bot", botId: t.chief.id, runOn: "seira", scheduledFor: 0, status: "completed", manual: false, createdAt: 0, finishedAt: t.now() + HOUR, report: { state: "quiet" } },
     );
     t.set("2026-10-28T09:00:00Z");
     other.tick();

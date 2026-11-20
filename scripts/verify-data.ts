@@ -47,7 +47,7 @@ async function startServer() {
   const log = openSync(logPath, "a", 0o600);
   server = spawn(process.execPath, ["--experimental-strip-types", join(root, "server/index.ts")], {
     cwd: root,
-    env: { ...verificationServerEnvironment({}, dataDir, Number(new URL(url).port)), OMB_TEST_INTERNAL_CAPABILITY_KEY: capabilityKey },
+    env: { ...verificationServerEnvironment({}, dataDir, Number(new URL(url).port)), SEIRA_TEST_INTERNAL_CAPABILITY_KEY: capabilityKey },
     stdio: ["ignore", log, log],
   });
   closeSync(log);
@@ -63,7 +63,7 @@ try {
   await startServer();
   await api("PATCH", "/api/config", { language: "en" });
   const { bot } = await runControlSeira(["new-bot", "--name", "Data review", "--url", url]) as { bot: { id: string; activeTaskId: string } };
-  const minted = await api("POST", "/api/testing/internal-capability", { botId: bot.id, threadId: bot.activeTaskId, kind: "data" }, { "x-openmausbot-test-capability": capabilityKey });
+  const minted = await api("POST", "/api/testing/internal-capability", { botId: bot.id, threadId: bot.activeTaskId, kind: "data" }, { "x-seira-test-capability": capabilityKey });
   const mcp = async (method: string, params?: unknown) =>
     (await api("POST", "/api/internal/data/mcp", { method, params }, { authorization: `Bearer ${minted.token}` })).result;
   const call = async (name: string, args: Record<string, unknown>) => {
@@ -121,7 +121,7 @@ try {
   assert(restored.tables.some((table: { name: string }) => table.name === "regional_totals"));
   assert.equal((await api("POST", DATA_ROUTES.page(bot.id), { cardId: latest.id, offset: 99_999, limit: 1 })).rows[0][7], "Final order");
 
-  preview = await mountPreview(fixture, { entry: "/scripts/testing/threads-preview.tsx", route: "/__data.html", title: "Isolated OMB Data", logLevel: "warn" });
+  preview = await mountPreview(fixture, { entry: "/scripts/testing/threads-preview.tsx", route: "/__data.html", title: "Isolated Seira Data", logLevel: "warn" });
   const { binary, chrome } = await ensureUiBrowser(process.env, (line) => console.error(`Data fixture: ${line}`));
   // The private HOME isolates sessions; one letter fits macOS's socket-path limit.
   handle = { url, previewUrl: preview.previewUrl, binary, chrome, home: dataDir, session: "d", botId: bot.id, logPath };

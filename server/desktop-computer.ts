@@ -2,12 +2,12 @@ import { userErrorThrown } from "./user-errors.ts";
 // "This computer" is the desktop app's own computer, and only the server the app launched may drive it. The app proves
 // that by handing the driver connection to that one child over Electron's private utility-process port, which only the
 // app's main process can write to and which plain Node never has. No file, environment variable or HTTP route supplies
-// it, so a second OpenMausBot server on the same computer (a copy run from source, a demo, a test) never finds this
+// it, so a second Seira server on the same computer (a copy run from source, a demo, a test) never finds this
 // computer, even with the app's own record of its driver in reach. A Mac shared with My Cloud goes through lending, not here.
 import { THIS_COMPUTER_NOT_READY } from "../shared/your-computer.ts";
 import { cuaUnavailableReason, decodeCuaConnection, type LocalComputerConnection } from "./local-computer.ts";
 
-export const DESKTOP_COMPUTER_GRANT = "openmausbot:local-computer";
+export const DESKTOP_COMPUTER_GRANT = "seira:local-computer";
 
 export interface DesktopComputer {
   /** Only ever called with a message from the parent port; true when it was this grant. */

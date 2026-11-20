@@ -11,7 +11,7 @@ import { driverFailure } from "./cua-failure.mjs";
 import nativeText from "./native-text.cjs";
 
 const embedded = (extra = {}) => ({
-  mode: "embedded", socketPath: "\\\\.\\pipe\\cua-driver-1234", mcpCommand: "C:\\Program Files\\OpenMausBot\\resources\\cua-driver.exe",
+  mode: "embedded", socketPath: "\\\\.\\pipe\\cua-driver-1234", mcpCommand: "C:\\Program Files\\Seira\\resources\\cua-driver.exe",
   mcpArgs: ["mcp", "--embedded", "--socket", "\\\\.\\pipe\\cua-driver-1234"], mcpEnv: { CUA_DRIVER_EMBEDDED: "1", CUA_DRIVER_HOST_BUNDLE_ID: "bot.seira.app" }, ...extra,
 });
 

@@ -32,7 +32,7 @@ export type NotifyKind =
   | "brief"
   /** A wait a bot set up (wait_until) fired: what it was waiting for happened. */
   | "wait"
-  /** Something OpenMausBot changed on its own that the person hears about
+  /** Something Seira changed on its own that the person hears about
    * once: a tool turned off for the bots it doesn't start for. */
   | "notice";
 
@@ -53,6 +53,17 @@ export interface Notification {
   /** On a Team Cloud, the one person this is for (their person key): a teammate tagged by name, or the person a bot
    * passed a message to. It reaches nobody else, an admin included. */
   forPerson?: string;
+  /** The request this notification waits on, so a phone can answer that exact request from the banner. It is set for
+   * `approval`, `question`, `secret` and `sign-in`, and absent for every other kind, for a request with no card, and for a
+   * client that predates it. Answer it in the conversation named by `threadId`.
+   * - `approval` and `question`: the card's `requestId`. `POST /api/threads/:threadId/respond` with
+   *   `{ requestId, behavior: "allow" | "deny" | "answer", message? }`.
+   * - `secret`: the secure card's message id. `POST /api/bots/:botId/secret-cards/:requestId/(provide|save|use|resume|dismiss)`
+   *   with `threadId` in the body.
+   * - `sign-in`: the card's message id. For a website, `POST /api/bots/:botId/sign-in-cards/:requestId/(done|cancel)`; for an
+   *   app connection, `POST /api/bots/:botId/connector-cards/:requestId/(authorize|resume|dismiss)`; `threadId` in the body.
+   * A phone that cannot find the request any more (it settled elsewhere) opens `threadId` instead. */
+  requestId?: string;
 }
 
 /** A `Notification` as the feed stores it: the live `notify` frame and `GET /api/notifications` carry the same entry. */

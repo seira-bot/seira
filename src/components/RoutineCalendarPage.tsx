@@ -45,7 +45,6 @@ import { intlLocale, t } from "@/lib/i18n";
 import { intakeFilesWithNotice } from "@/lib/attach-notice";
 import { useModalDialog } from "@/hooks/use-modal-dialog";
 import type { CalendarCall, CalendarCallAttachment, CalendarCallInput } from "@/lib/calendar-calls";
-import { isDone } from "@/lib/automations";
 import { cn } from "@/lib/cn";
 import {
   imageAttachmentFromFile,
@@ -84,6 +83,8 @@ import {
 } from "@/lib/routines"; import { ROUTINE_GOAL_RUN_LIMIT_MINUTES, ROUTINE_RUN_LIMIT_MAX_MINUTES, ROUTINE_RUN_LIMIT_MINUTES } from "@/lib/routines";
 import { api, openBotThread, openThread, useStore, type Bot, type Group } from "@/state/store";
 import { RoutineScheduleNote } from "./RoutineScheduleNote";
+import { routineEditorInput } from "./routines/routine-editor-input";
+import { WhatItDoes } from "./routines/WhatItDoes";
 import { CalendarEventCard, HOUR_HEIGHT, statusState } from "./routines/CalendarEventCard";
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
@@ -355,7 +356,7 @@ export function EventEditor({
   };
   const [routineTarget, setRoutineTarget] = useState<RoutineTarget>(existingRoutine?.target ?? "bot");
   const [groupId, setGroupId] = useState(existingRoutine?.groupId ?? "");
-  const [runOn, setRunOn] = useState<RoutineRunOn>(existingRoutine?.runOn ?? defaultRunOn ?? "maus");
+  const [runOn, setRunOn] = useState<RoutineRunOn>(existingRoutine?.runOn ?? defaultRunOn ?? "seira");
   const [attachments, setAttachments] = useState<Array<RoutineContextAttachment | CalendarCallAttachment>>(
     existingRoutine?.target === "room-goal" ? [] : existingRoutine?.attachments ?? existingCall?.attachments ?? [],
   );
@@ -435,7 +436,7 @@ export function EventEditor({
       setGroupId("");
       return;
     }
-    setRunOn("maus");
+    setRunOn("seira");
     setAttachments([]);
     setAttachmentNotice("");
     const room = selectedRoom ?? rooms[0];
@@ -463,7 +464,7 @@ export function EventEditor({
       const added = toContextAttachments(result.attachments);
       if (added.length) {
         setAttachments((current) => [...current, ...added].slice(0, 20));
-        if (runOn === "cloud") setRunOn("maus");
+        if (runOn === "cloud") setRunOn("seira");
       }
       if (result.notice) setAttachmentNotice(result.notice);
     } finally {
@@ -490,23 +491,11 @@ export function EventEditor({
           endsAt: intervalEndsAt,
         });
         if (!nextSchedule) throw new Error(cron?.error || t("routines.error.invalidSchedule"));
-        const input: RoutineInput = {
-          name,
-          prompt: description,
-          target: routineTarget,
-          botId: lockedBotId ?? botIds[0] ?? "",
-          groupId: routineTarget === "room-goal" && groupId ? groupId : null,
-          runOn: routineTarget === "room-goal" ? "maus" : runOn,
-          enabled: existingRoutine && (existingRoutine.enabled || !isDone(existingRoutine, savedAt)) ? undefined : true,
-          schedule: nextSchedule,
-          durationMinutes,
-          timeoutMinutes,
-          overlap,
-          continuity: routineTarget === "bot" && recurrence !== "none" && continuity,
-          runOnStartup: recurrence !== "none" && runOnStartup,
-          attachments: routineTarget === "room-goal" ? [] : attachments as RoutineContextAttachment[],
-          ...(routineTarget === "bot" ? { resultsThreadId } : {}),
-        };
+        const input = routineEditorInput({
+          name, description, routineTarget, botId: lockedBotId ?? botIds[0] ?? "", groupId, runOn, existingRoutine, savedAt, schedule: nextSchedule,
+          durationMinutes, timeoutMinutes, overlap, continuity, recurrenceIsOnce: recurrence === "none", runOnStartup,
+          attachments: attachments as RoutineContextAttachment[], resultsThreadId,
+        });
         const response = await editorRequest(existingRoutine ? `/api/routines/${existingRoutine.id}` : "/api/routines", { method: existingRoutine ? "PATCH" : "POST", body: JSON.stringify(input) });
         dispatch({ type: "routinePatched", routine: response.routine });
       } else {
@@ -845,7 +834,7 @@ export function EventEditor({
                     <div className="mt-1 text-[11px] leading-relaxed text-ink-secondary">{t("routines.editor.roomGoalKept")}</div>
                   </div>
                 ) : <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => setRunOn("maus")} className={cn("rounded-xl border p-3 text-left", runOn === "maus" ? "border-accent/60 bg-accent/10" : "border-hairline/50 bg-inset hover:bg-raised")}><div className="text-[13px] font-medium text-ink">{t("routines.editor.currentSetup")}</div><div className="mt-1 text-[11px] text-ink-secondary">Keeps its model and configured computer, including a self-hosted VPS.</div></button>
+                  <button type="button" onClick={() => setRunOn("seira")} className={cn("rounded-xl border p-3 text-left", runOn === "seira" ? "border-accent/60 bg-accent/10" : "border-hairline/50 bg-inset hover:bg-raised")}><div className="text-[13px] font-medium text-ink">{t("routines.editor.currentSetup")}</div><div className="mt-1 text-[11px] text-ink-secondary">Keeps its model and configured computer, including a self-hosted VPS.</div></button>
                   <button type="button" disabled={!cloudReady || attachments.length > 0} onClick={() => setRunOn("cloud")} className={cn("rounded-xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-45", runOn === "cloud" ? "border-accent/60 bg-accent/10" : "border-hairline/50 bg-inset hover:bg-raised")}><div className="text-[13px] font-medium text-ink">{t("routines.runsOn.boat")}</div><div className="mt-1 text-[11px] text-ink-secondary">{t(cloudHome ? "routines.runsOn.boatHintCloudHome" : "routines.runsOn.boatHint")}</div></button>
                 </div>}
               </div>
@@ -958,10 +947,7 @@ export function EventEditor({
           </div>
 
           {advanced && resultsControl}
-          <div className="flex items-start gap-4">
-            <FileText size={18} className="mt-2.5 shrink-0 text-ink-secondary" />
-            <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={5} aria-label={t("routines.editor.descriptionLabel")} placeholder={isRoomGoal ? t("routines.goal.instructionsPlaceholder") : kind === "routine" ? (advanced ? t("routines.event.instructionsPlaceholder") : t("routines.editor.instructionsPlaceholder")) : t("routines.event.agendaPlaceholder")} className="min-w-0 flex-1 resize-y rounded-xl border border-hairline/50 bg-inset px-3.5 py-3 text-[13px] leading-relaxed text-ink outline-none placeholder:text-ink-tertiary focus:border-accent" />
-          </div>
+          <WhatItDoes value={description} onChange={setDescription} label={t("routines.editor.descriptionLabel")} placeholder={isRoomGoal ? t("routines.goal.instructionsPlaceholder") : kind === "routine" ? (advanced ? t("routines.event.instructionsPlaceholder") : t("routines.editor.instructionsPlaceholder")) : t("routines.event.agendaPlaceholder")} />
           {continuityControl}
 
           {advanced && attachmentsRow}
@@ -1079,7 +1065,7 @@ export function QuickComposer({
             name,
             prompt: description,
             botId: botIds[0],
-            runOn: "maus",
+            runOn: "seira",
             enabled: true,
             schedule: seed.limitReset ? { type: "limit_reset", engine: seed.limitReset.engine, repeat: "once" } : { type: "once", at: seed.at },
             durationMinutes,

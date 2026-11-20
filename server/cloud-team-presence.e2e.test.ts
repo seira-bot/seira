@@ -48,7 +48,7 @@ const peopleOf = async (token: string) => (await team.as(token, "GET", "/api/tea
 const lastList = (who: string, threadId: string) => streams[who]!.frames().filter((frame) => frame.kind === "thread.presence" && frame.threadId === threadId).at(-1)?.people;
 
 beforeAll(async () => {
-  fx = await launchCloudSendFixture({ onePasswordToken: `ops_fake-team-${randomBytes(8).toString("hex")}`, team: { id: "team-acme-1", name: "Acme", env: { OMB_TEAM_PRESENCE_GRACE_MS: String(GRACE_MS) } } });
+  fx = await launchCloudSendFixture({ onePasswordToken: `ops_fake-team-${randomBytes(8).toString("hex")}`, team: { id: "team-acme-1", name: "Acme", env: { SEIRA_TEAM_PRESENCE_GRACE_MS: String(GRACE_MS) } } });
   team = fx.team!;
   owner = (await team.pair(OWNER)).token!;
   admin = (await team.pair(ADMIN)).token!;
@@ -89,13 +89,13 @@ it("the people in a shared chat see each other there; Bob's private chat is name
   const bobPrivate = await here(bob, bobThread);
   expect(bobPrivate.status).toBe(200);
   expect(bobPrivate.body).toEqual({ ok: true });
-  await until(() => lastList("owner", scout.mainThreadId)?.length === 2);
+  await until(() => lastList("owner", scout.mainThreadId)?.length === 2 && lastList("admin", scout.mainThreadId)?.length === 2);
   expect(lastList("owner", scout.mainThreadId)).toEqual([ADMIN.email, OWNER.email]);
   expect(lastList("admin", scout.mainThreadId)).toEqual([ADMIN.email, OWNER.email]);
 
   // Bob joins the shared chat, and everyone in it sees all three.
   await here(bob, scout.mainThreadId);
-  await until(() => lastList("owner", scout.mainThreadId)?.length === 3 && lastList("bob", scout.mainThreadId)?.length === 3);
+  await until(() => ["owner", "admin", "bob"].every((who) => lastList(who, scout.mainThreadId)?.length === 3));
   expect(lastList("admin", scout.mainThreadId)).toEqual([ADMIN.email, BOB.email, OWNER.email]);
 
   // Back to his private chat: the shared chat just loses him.
@@ -120,7 +120,7 @@ it("the people in a shared chat see each other there; Bob's private chat is name
 it("a group chat's list reaches the people in it, and a bot Bob may not use keeps him out of its chat", async () => {
   await here(owner, roomThread);
   await here(bob, roomThread);
-  await until(() => lastList("bob", roomThread)?.length === 2);
+  await until(() => lastList("bob", roomThread)?.length === 2 && lastList("owner", roomThread)?.length === 2);
   expect(lastList("owner", roomThread)).toEqual([BOB.email, OWNER.email]);
 
   await here(owner, payroll.mainThreadId);

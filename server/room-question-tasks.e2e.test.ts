@@ -13,7 +13,7 @@ import type { GroupTask, WireBot, WireGroup, WireMessage } from "../shared/wire.
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 
 it("keeps live room questions fenced but allows task changes after their turn settles and restarts", async () => {
-  const gates = mkdtempSync(join(tmpdir(), "omb-room-question-gates-"));
+  const gates = mkdtempSync(join(tmpdir(), "seira-room-question-gates-"));
   const finishGate = join(gates, "finish");
   const env = { FAKE_CLAUDE_MODE: "hang", FAKE_CLAUDE_FINISH_GATE: finishGate };
   const fixture = await launchVerificationServer(env);

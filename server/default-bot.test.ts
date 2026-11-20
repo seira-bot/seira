@@ -7,21 +7,21 @@ import { MOVE_BOT_FIELDS, moveKindsRoute, type MoveKindsDeps } from "./cloud-sen
 import { chiefLevel, readTeamRolesWith } from "./chief-level.ts";
 import { DATA_DIR } from "./config.ts";
 import type { ModelSelection } from "./contracts.ts";
-import { defaultBotPatchRefusal, ensureDefaultBot, seededMausBot } from "./default-bot.ts";
+import { defaultBotPatchRefusal, ensureDefaultBot, seededSeira } from "./default-bot.ts";
 import * as mdb from "./message-db.ts";
 import { Store, type BotRecord } from "./store.ts";
 import { availableTools, catalogProfileFromEnv } from "./drivers/agents-catalog.ts";
 import { createBrief } from "./host/brief.ts";
 
 const selection = (): ModelSelection => ({ instanceId: "claude", model: "claude-sonnet-5" });
-const placeMausBots = (store: Store) => store.bots.filter((bot) => bot.defaultBot && !bot.defaultBot.person);
+const placeSeiras = (store: Store) => store.bots.filter((bot) => bot.defaultBot && !bot.defaultBot.person);
 const intros = (store: Store, bot: BotRecord) => (bot.tasks ?? []).flatMap((task) => store.messagesFor(task.threadId)).filter((message) => message.helperIntro);
 const boot = (store: Store) => ensureDefaultBot(store, { dataDir: DATA_DIR });
 /** Who the daily brief comes from, as the server picks it. */
 const briefChief = (store: Store) => createBrief({ store, dataDir: DATA_DIR, hosted: false, watching: () => true, mainThread: (id) => store.bot(id)?.threadId,
   threadBusy: () => false, notify: () => {}, runs: () => [], needsYou: () => [], engineName: () => "Claude", hostTimeZone: () => "UTC", language: () => undefined, session: () => null,
   address: () => undefined, failRun: () => {}, keep: () => {}, items: () => null }).chief();
-/** A new install from before MausBot was marked: its first bot was MausBot in silver, made its Chief. */
+/** A new install from before Seira was marked: its first bot was Seira in silver, made its Chief. */
 function seededBefore(store: Store): BotRecord {
   const seeded = store.createBot({ name: "Seira", color: "silver" });
   store.setChiefOfStaff(seeded.id);
@@ -32,10 +32,16 @@ describe("Seira, every person's helper", () => {
   beforeEach(() => rmSync(DATA_DIR, { recursive: true, force: true }));
   afterEach(() => readTeamRolesWith(() => null));
 
+  it("adopts a first bot that an earlier install named Seira, in any colour", () => {
+    const store = new Store(selection);
+    const seeded = store.createBot({ name: "Seira", color: "blue" });
+    expect(seededSeira(store.bots)?.id).toBe(seeded.id);
+  });
+
   it("adopts a first bot that an earlier install named MausBot, in any colour", () => {
     const store = new Store(selection);
     const seeded = store.createBot({ name: "MausBot", color: "blue" });
-    expect(seededMausBot(store.bots)?.id).toBe(seeded.id);
+    expect(seededSeira(store.bots)?.id).toBe(seeded.id);
   });
 
   it("gives a fresh install one Seira, its Chief, in chrome, introduced once", () => {
@@ -47,9 +53,9 @@ describe("Seira, every person's helper", () => {
     again.seedIfEmpty();
     boot(again);
     expect(again.bots).toHaveLength(1);
-    const maus = placeMausBots(again)[0]!;
-    expect(maus).toMatchObject({ name: "Seira", color: "chrome", chiefOfStaff: true, defaultBot: {} });
-    expect(intros(again, maus)).toHaveLength(1);
+    const seira = placeSeiras(again)[0]!;
+    expect(seira).toMatchObject({ name: "Seira", color: "chrome", chiefOfStaff: true, defaultBot: {} });
+    expect(intros(again, seira)).toHaveLength(1);
   });
 
   it("leaves a Team Cloud member's Seira uncrowned: only its person's own requests reach a bot everyone sees, and it manages none", () => {
@@ -68,15 +74,15 @@ describe("Seira, every person's helper", () => {
     store.setChiefOfStaff(chief.id);
     store.createBot({ name: "Writer", title: "Writer", soul: "Write." });
     const before = structuredClone(store.bot(chief.id));
-    const maus = boot(store)!;
-    expect(maus).toMatchObject({ name: "Seira", color: "chrome", defaultBot: {} });
-    expect(maus.chiefOfStaff).toBeFalsy();
-    expect(chiefLevel(maus)).toBe(true);
+    const seira = boot(store)!;
+    expect(seira).toMatchObject({ name: "Seira", color: "chrome", defaultBot: {} });
+    expect(seira.chiefOfStaff).toBeFalsy();
+    expect(chiefLevel(seira)).toBe(true);
     expect(store.bot(chief.id)).toEqual(before);
-    expect(intros(store, maus)).toHaveLength(1);
+    expect(intros(store, seira)).toHaveLength(1);
     const restarted = new Store(selection);
     boot(restarted);
-    expect(placeMausBots(restarted).map((bot) => bot.id)).toEqual([maus.id]);
+    expect(placeSeiras(restarted).map((bot) => bot.id)).toEqual([seira.id]);
     expect(restarted.bots).toHaveLength(3);
     expect(restarted.bots.filter((bot) => bot.chiefOfStaff).map((bot) => bot.id)).toEqual([chief.id]);
   });
@@ -111,10 +117,10 @@ describe("Seira, every person's helper", () => {
   it("makes Seira the Chief of a place that has none, so the brief has someone to come from", () => {
     const store = new Store(selection);
     store.createBot({ name: "Pixel" });
-    const maus = boot(store)!;
-    expect(store.bot(maus.id)?.chiefOfStaff).toBe(true);
-    expect(briefChief(store)?.id).toBe(maus.id);
-    expect(intros(store, maus)[0]?.text).toContain("Hey! I'm Seira. I'm new here. I'm here to be your Chief of Staff. I can manage your other bots.");
+    const seira = boot(store)!;
+    expect(store.bot(seira.id)?.chiefOfStaff).toBe(true);
+    expect(briefChief(store)?.id).toBe(seira.id);
+    expect(intros(store, seira)[0]?.text).toContain("Hey! I'm Seira. I'm new here. I'm here to be your Chief of Staff. I can manage your other bots.");
   });
 
   it("makes an adopted Seira the Chief when its place has none left", () => {
@@ -131,53 +137,53 @@ describe("Seira, every person's helper", () => {
     const store = new Store(selection);
     const chief = store.createBot({ name: "Clive" });
     store.setChiefOfStaff(chief.id);
-    const maus = boot(store)!;
-    expect(store.bot(maus.id)?.chiefOfStaff).toBeFalsy();
-    expect(briefChief(store)?.id).toBe(maus.id);
-    expect(intros(store, maus)[0]?.text).toContain("your helper for everything here");
-    expect(intros(store, maus)[0]?.text).toContain("keep an eye on your day");
-    expect(intros(store, maus)[0]?.text).not.toContain("Chief of Staff");
+    const seira = boot(store)!;
+    expect(store.bot(seira.id)?.chiefOfStaff).toBeFalsy();
+    expect(briefChief(store)?.id).toBe(seira.id);
+    expect(intros(store, seira)[0]?.text).toContain("your helper for everything here");
+    expect(intros(store, seira)[0]?.text).toContain("keep an eye on your day");
+    expect(intros(store, seira)[0]?.text).not.toContain("Chief of Staff");
   });
 
   it("keeps a Seira Chief hidden from the sidebar working as the Chief", () => {
     const store = new Store(selection);
-    const maus = boot(store)!;
-    store.patchBot(maus.id, { sidebarHidden: true });
+    const seira = boot(store)!;
+    store.patchBot(seira.id, { sidebarHidden: true });
     const restarted = new Store(selection);
     boot(restarted);
-    expect(restarted.bot(maus.id)).toMatchObject({ chiefOfStaff: true, sidebarHidden: true });
-    expect(briefChief(restarted)?.id).toBe(maus.id);
+    expect(restarted.bot(seira.id)).toMatchObject({ chiefOfStaff: true, sidebarHidden: true });
+    expect(briefChief(restarted)?.id).toBe(seira.id);
   });
 
   it("shows a hidden Seira again after a profile rename or a department move", () => {
     const store = new Store(selection);
-    const maus = boot(store)!;
+    const seira = boot(store)!;
     const hiddenAfter = (change: () => unknown) => {
-      store.patchBot(maus.id, { sidebarHidden: true });
+      store.patchBot(seira.id, { sidebarHidden: true });
       change();
-      return store.bot(maus.id)?.sidebarHidden;
+      return store.bot(seira.id)?.sidebarHidden;
     };
-    expect(hiddenAfter(() => store.patchBotProfile(maus.id, { title: "Helper" }))).toBe(true);
-    expect(hiddenAfter(() => store.patchBotProfile(maus.id, { name: "Nova" }))).toBe(false);
-    expect(hiddenAfter(() => store.setBotsSection([maus.id], "Work"))).toBe(false);
-    expect(hiddenAfter(() => store.setBotsSection([maus.id], "Work"))).toBe(true);
-    expect(hiddenAfter(() => store.updateTeamMembers("Work", [], [maus.id]))).toBe(false);
-    expect(hiddenAfter(() => store.updateTeamMembers("Work", [maus.id], []))).toBe(false);
+    expect(hiddenAfter(() => store.patchBotProfile(seira.id, { title: "Helper" }))).toBe(true);
+    expect(hiddenAfter(() => store.patchBotProfile(seira.id, { name: "Nova" }))).toBe(false);
+    expect(hiddenAfter(() => store.setBotsSection([seira.id], "Work"))).toBe(false);
+    expect(hiddenAfter(() => store.setBotsSection([seira.id], "Work"))).toBe(true);
+    expect(hiddenAfter(() => store.updateTeamMembers("Work", [], [seira.id]))).toBe(false);
+    expect(hiddenAfter(() => store.updateTeamMembers("Work", [seira.id], []))).toBe(false);
   });
 
   it("shows a hidden Seira again after its department is deleted or a reviewed setup renames it", () => {
     const store = new Store(selection);
-    const maus = boot(store)!;
-    store.setBotsSection([maus.id], "Work");
-    store.patchBot(maus.id, { sidebarHidden: true });
+    const seira = boot(store)!;
+    store.setBotsSection([seira.id], "Work");
+    store.patchBot(seira.id, { sidebarHidden: true });
     expect(store.deleteSection("Work")).toBeUndefined();
-    expect(store.bot(maus.id)?.sidebarHidden).toBe(false);
-    store.patchBot(maus.id, { sidebarHidden: true });
-    store.applyTeamSetup({ version: 1, requestId: "setup-rename", botId: maus.id, threadId: maus.threadId,
+    expect(store.bot(seira.id)?.sidebarHidden).toBe(false);
+    store.patchBot(seira.id, { sidebarHidden: true });
+    store.applyTeamSetup({ version: 1, requestId: "setup-rename", botId: seira.id, threadId: seira.threadId,
       reason: "Requested", createdAt: 1, requesterRevision: "fixture", newTeams: [], operations: [
-        { action: "update", botId: maus.id, fields: { name: "Nova" } },
+        { action: "update", botId: seira.id, fields: { name: "Nova" } },
       ] });
-    expect(store.bot(maus.id)).toMatchObject({ name: "Nova", sidebarHidden: false });
+    expect(store.bot(seira.id)).toMatchObject({ name: "Nova", sidebarHidden: false });
   });
 
   it("knows a renamed Seira by its mark: no second one on update, Chief tools kept", () => {
@@ -185,77 +191,77 @@ describe("Seira, every person's helper", () => {
     store.createBot({ name: "Writer" });
     const chief = store.createBot({ name: "Clive" });
     store.setChiefOfStaff(chief.id);
-    const maus = boot(store)!;
-    store.patchBot(maus.id, { name: "Jarvis", color: "blue" });
+    const seira = boot(store)!;
+    store.patchBot(seira.id, { name: "Jarvis", color: "blue" });
     const restarted = new Store(selection);
     boot(restarted);
-    expect(placeMausBots(restarted).map((bot) => [bot.id, bot.name])).toEqual([[maus.id, "Jarvis"]]);
-    expect(chiefLevel(restarted.bot(maus.id))).toBe(true);
+    expect(placeSeiras(restarted).map((bot) => [bot.id, bot.name])).toEqual([[seira.id, "Jarvis"]]);
+    expect(chiefLevel(restarted.bot(seira.id))).toBe(true);
     expect(restarted.bots).toHaveLength(3);
   });
 
   it("never takes a first bot that is not a new install's Seira: it gets a Seira beside it", () => {
     const store = new Store(selection);
     const pixel = store.createBot({ name: "Pixel" });
-    const maus = boot(store)!;
-    expect(maus.id).not.toBe(pixel.id);
+    const seira = boot(store)!;
+    expect(seira.id).not.toBe(pixel.id);
     expect(store.bot(pixel.id)?.defaultBot).toBeUndefined();
   });
 
   it("introduces itself once: not again after the asks were answered or dismissed, nor after a restart", () => {
     const store = new Store(selection);
-    const maus = boot(store)!;
-    const [intro] = intros(store, maus);
+    const seira = boot(store)!;
+    const [intro] = intros(store, seira);
     expect(intro?.card?.options).toHaveLength(4);
-    store.appendMessage(maus.threadId, { role: "user", kind: "text", text: "What can you do?" });
-    expect(store.messagesFor(maus.threadId).find((message) => message.id === intro!.id)?.card?.dismissed).toBe(true);
+    store.appendMessage(seira.threadId, { role: "user", kind: "text", text: "What can you do?" });
+    expect(store.messagesFor(seira.threadId).find((message) => message.id === intro!.id)?.card?.dismissed).toBe(true);
     for (let restart = 0; restart < 2; restart++) boot(new Store(selection));
     const after = new Store(selection);
-    expect(intros(after, after.bot(maus.id)!)).toHaveLength(1);
+    expect(intros(after, after.bot(seira.id)!)).toHaveLength(1);
   });
 
   it("never counts its intro as something that needs the person", () => {
     const store = new Store(selection);
-    const maus = boot(store)!;
-    expect(intros(store, maus)).toHaveLength(1);
+    const seira = boot(store)!;
+    expect(intros(store, seira)).toHaveLength(1);
     expect(mdb.attentionRows(0).filter((row) => row.kind === "options")).toEqual([]);
   });
 
   it("is hidden, never deleted or archived, and a hidden Seira is never made again", () => {
     const store = new Store(selection);
-    const maus = boot(store)!;
+    const seira = boot(store)!;
     const other = store.createBot({ name: "Writer" });
-    expect(() => store.deleteBot(maus.id)).toThrow(/Seira can't be deleted or archived/);
-    expect(store.bot(maus.id)).toBeTruthy();
-    expect(defaultBotPatchRefusal(maus, { hidden: true })).toMatch(/Show Seira in the sidebar/);
+    expect(() => store.deleteBot(seira.id)).toThrow(/Seira can't be deleted or archived/);
+    expect(store.bot(seira.id)).toBeTruthy();
+    expect(defaultBotPatchRefusal(seira, { hidden: true })).toMatch(/Show Seira in the sidebar/);
     expect(defaultBotPatchRefusal(other, { sidebarHidden: true })).toMatch(/Only Seira/);
-    expect(defaultBotPatchRefusal(maus, { sidebarHidden: "yes" })).toBe("sidebarHidden must be true or false");
-    expect(defaultBotPatchRefusal(maus, { sidebarHidden: true })).toBeNull();
-    store.patchBot(maus.id, { sidebarHidden: true });
+    expect(defaultBotPatchRefusal(seira, { sidebarHidden: "yes" })).toBe("sidebarHidden must be true or false");
+    expect(defaultBotPatchRefusal(seira, { sidebarHidden: true })).toBeNull();
+    store.patchBot(seira.id, { sidebarHidden: true });
     const restarted = new Store(selection);
     boot(restarted);
-    expect(placeMausBots(restarted).map((bot) => [bot.id, bot.sidebarHidden])).toEqual([[maus.id, true]]);
-    restarted.patchBot(maus.id, { sidebarHidden: false });
-    expect(new Store(selection).bot(maus.id)?.sidebarHidden).toBe(false);
+    expect(placeSeiras(restarted).map((bot) => [bot.id, bot.sidebarHidden])).toEqual([[seira.id, true]]);
+    restarted.patchBot(seira.id, { sidebarHidden: false });
+    expect(new Store(selection).bot(seira.id)?.sidebarHidden).toBe(false);
   });
 
   it("demotes to a regular bot on defaultBot: null, then it can be deleted", () => {
     const store = new Store(selection);
-    const maus = boot(store)!;
+    const seira = boot(store)!;
     const other = store.createBot({ name: "Writer" });
-    expect(defaultBotPatchRefusal(maus, { defaultBot: {} })).toMatch(/only be cleared/);
-    expect(defaultBotPatchRefusal(maus, { defaultBot: null })).toBeNull();
+    expect(defaultBotPatchRefusal(seira, { defaultBot: {} })).toMatch(/only be cleared/);
+    expect(defaultBotPatchRefusal(seira, { defaultBot: null })).toBeNull();
     expect(defaultBotPatchRefusal(other, { defaultBot: null })).toBeNull();
-    store.patchBot(maus.id, { defaultBot: undefined });
-    expect(store.bot(maus.id)?.defaultBot).toBeUndefined();
-    expect(() => store.deleteBot(maus.id)).not.toThrow();
-    expect(store.bot(maus.id)).toBeNull();
+    store.patchBot(seira.id, { defaultBot: undefined });
+    expect(store.bot(seira.id)?.defaultBot).toBeUndefined();
+    expect(() => store.deleteBot(seira.id)).not.toThrow();
+    expect(store.bot(seira.id)).toBeNull();
   });
 
   it("is never made twice for one place, even once its mark is gone", () => {
     const store = new Store(selection);
-    const maus = boot(store)!;
-    store.patchBot(maus.id, { defaultBot: undefined });
+    const seira = boot(store)!;
+    store.patchBot(seira.id, { defaultBot: undefined });
     expect(boot(store)).toBeNull();
     expect(store.bots).toHaveLength(1);
   });
@@ -266,7 +272,7 @@ describe("Seira, every person's helper", () => {
     const second = store.createBot({ name: "Seira 2" });
     store.patchBot(second.id, { defaultBot: {} });
     expect(boot(store)?.id).toBe(first.id);
-    expect(placeMausBots(store).map((bot) => bot.id)).toEqual([first.id]);
+    expect(placeSeiras(store).map((bot) => bot.id)).toEqual([first.id]);
   });
 
   it("gives each Team Cloud member their own private Seira, and the team no Seira of its own", () => {
@@ -291,7 +297,7 @@ describe("Seira, every person's helper", () => {
     const place = boot(store)!;
     const member = ensureDefaultBot(store, { dataDir: DATA_DIR, person: "user@example.com", team: "Acme" })!;
     const admin = ensureDefaultBot(store, { dataDir: DATA_DIR, person: "admin@example.com", team: "Acme" })!;
-    const tools = (bot: BotRecord) => availableTools(catalogProfileFromEnv({ OMB_CHIEF_OF_STAFF: chiefLevel(bot) ? "1" : "0", OMB_BOT_ID: bot.id })).map((tool) => tool.name);
+    const tools = (bot: BotRecord) => availableTools(catalogProfileFromEnv({ SEIRA_CHIEF_OF_STAFF: chiefLevel(bot) ? "1" : "0", SEIRA_BOT_ID: bot.id })).map((tool) => tool.name);
     expect(tools(place)).toEqual(expect.arrayContaining(["create_bot", "propose_team_setup", "retry_thread", "manage_room"]));
     expect([chiefLevel(member), chiefLevel(admin)]).toEqual([false, false]);
     readTeamRolesWith((email) => email === "admin@example.com" ? "admin" : email === "user@example.com" ? "member" : null);
@@ -308,7 +314,7 @@ describe("Seira, every person's helper", () => {
       let status = 0;
       await moveKindsRoute(deps(store), { path: "/api/cloud-send/kind", method: "PUT", url: new URL("http://127.0.0.1/api/cloud-send/kind"), auth: {} as never, req: {} as never,
         res: { setHeader() {} } as never, json: ((_res: unknown, code: number) => { status = code; }) as never,
-        readBody: (async () => ({ v: 1, key: `bot:${id}`, dataDir: "/Users/amit/.openmausbot", record, ...(computer ? { computer } : {}), ...extra })) as never });
+        readBody: (async () => ({ v: 1, key: `bot:${id}`, dataDir: "/Users/amit/.seira", record, ...(computer ? { computer } : {}), ...extra })) as never });
       return status;
     }
     const fields = (bot: Record<string, unknown>) => Object.fromEntries(MOVE_BOT_FIELDS.map((name) => [name, bot[name] ?? null]));
@@ -317,11 +323,11 @@ describe("Seira, every person's helper", () => {
       const cloud = new Store(selection);
       cloud.seedIfEmpty();
       boot(cloud);
-      const starter = placeMausBots(cloud)[0]!;
-      const arrivingMaus = cloud.createBot({ name: "Seira" }, { id: "desk-maus-000001", seedMessages: false });
-      expect(await arrive(cloud, arrivingMaus.id, fields({ defaultBot: {}, sidebarHidden: true, welcomed: true }))).toBe(200);
-      expect(placeMausBots(cloud).map((bot) => bot.id)).toEqual([arrivingMaus.id]);
-      expect(cloud.bot(arrivingMaus.id)).toMatchObject({ sidebarHidden: true, welcomed: true });
+      const starter = placeSeiras(cloud)[0]!;
+      const arrivingSeira = cloud.createBot({ name: "Seira" }, { id: "desk-seira-000001", seedMessages: false });
+      expect(await arrive(cloud, arrivingSeira.id, fields({ defaultBot: {}, sidebarHidden: true, welcomed: true }))).toBe(200);
+      expect(placeSeiras(cloud).map((bot) => bot.id)).toEqual([arrivingSeira.id]);
+      expect(cloud.bot(arrivingSeira.id)).toMatchObject({ sidebarHidden: true, welcomed: true });
       expect(cloud.bot(starter.id)).toMatchObject({ chiefOfStaff: true });
       expect(cloud.bot(starter.id)?.hidden).toBeFalsy();
       const pixel = cloud.createBot({ name: "Pixel" }, { id: "desk-chief-00001", seedMessages: false });
@@ -329,19 +335,19 @@ describe("Seira, every person's helper", () => {
       expect(cloud.bot(starter.id)).toMatchObject({ hidden: true });
       expect(cloud.bot(starter.id)?.defaultBot).toBeUndefined();
       expect(cloud.bots.filter((bot) => bot.chiefOfStaff).map((bot) => bot.id)).toEqual([pixel.id]);
-      expect(placeMausBots(cloud).map((bot) => bot.id)).toEqual([arrivingMaus.id]);
+      expect(placeSeiras(cloud).map((bot) => bot.id)).toEqual([arrivingSeira.id]);
     });
 
     it("still makes one Seira on My Cloud when this computer's arrives renamed and with its own picture", async () => {
       const cloud = new Store(selection);
       cloud.seedIfEmpty();
       boot(cloud);
-      const starter = placeMausBots(cloud)[0]!;
+      const starter = placeSeiras(cloud)[0]!;
       cloud.patchBot(starter.id, { name: "Starter" });
-      const arriving = cloud.createBot({ name: "Jarvis" }, { id: "desk-maus-000003", seedMessages: false });
+      const arriving = cloud.createBot({ name: "Jarvis" }, { id: "desk-seira-000003", seedMessages: false });
       cloud.patchBot(arriving.id, { avatarUrl: "/api/attachments/jarvis.png", avatarCrop: "circle" });
       expect(await arrive(cloud, arriving.id, fields({ defaultBot: {}, welcomed: true }))).toBe(200);
-      expect(placeMausBots(cloud).map((bot) => [bot.id, bot.name, bot.avatarUrl])).toEqual([[arriving.id, "Jarvis", "/api/attachments/jarvis.png"]]);
+      expect(placeSeiras(cloud).map((bot) => [bot.id, bot.name, bot.avatarUrl])).toEqual([[arriving.id, "Jarvis", "/api/attachments/jarvis.png"]]);
       expect(cloud.bot(starter.id)?.defaultBot).toBeUndefined();
     });
 
@@ -350,9 +356,9 @@ describe("Seira, every person's helper", () => {
       cloud.seedIfEmpty();
       const theirs = boot(cloud)!;
       cloud.appendMessage(theirs.threadId, { role: "user", kind: "text", text: "Hi" });
-      const arriving = cloud.createBot({ name: "Seira" }, { id: "desk-maus-000002", seedMessages: false });
+      const arriving = cloud.createBot({ name: "Seira" }, { id: "desk-seira-000002", seedMessages: false });
       expect(await arrive(cloud, arriving.id, fields({ defaultBot: {}, sidebarHidden: true }), "Amit's MacBook")).toBe(200);
-      expect(placeMausBots(cloud).map((bot) => bot.id)).toEqual([theirs.id]);
+      expect(placeSeiras(cloud).map((bot) => bot.id)).toEqual([theirs.id]);
       expect(cloud.bot(theirs.id)).toMatchObject({ name: "Seira", chiefOfStaff: true });
       expect(cloud.bot(theirs.id)?.hidden).toBeFalsy();
       const moved = cloud.bot(arriving.id)!;
@@ -361,21 +367,21 @@ describe("Seira, every person's helper", () => {
       expect(defaultBotPatchRefusal(moved, { hidden: true })).toBeNull();
       expect(defaultBotPatchRefusal(cloud.bot(theirs.id), { hidden: true })).toContain("can't be deleted or archived");
       expect(boot(cloud)?.id).toBe(theirs.id);
-      // A Mac MausBot that was the Chief there doesn't take the crown from the one kept here.
-      const chief = cloud.createBot({ name: "Seira" }, { id: "desk-maus-000006", seedMessages: false });
+      // A Mac Seira that was the Chief there doesn't take the crown from the one kept here.
+      const chief = cloud.createBot({ name: "Seira" }, { id: "desk-seira-000006", seedMessages: false });
       expect(await arrive(cloud, chief.id, fields({ defaultBot: {}, chiefOfStaff: true }), "Amit's MacBook")).toBe(200);
       expect(cloud.bots.filter((bot) => bot.chiefOfStaff).map((bot) => bot.id)).toEqual([theirs.id]);
-      // Nor on a later pass that sends only its Chief fields: the computer it comes from says it is the MausBot there.
+      // Nor on a later pass that sends only its Chief fields: the computer it comes from says it is the Seira there.
       expect(await arrive(cloud, chief.id, { chiefOfStaff: true, managedSections: ["General"] }, "Amit's MacBook", { sourceDefault: true })).toBe(200);
       expect(cloud.bots.filter((bot) => bot.chiefOfStaff).map((bot) => bot.id)).toEqual([theirs.id]);
-      expect(placeMausBots(cloud).map((bot) => bot.id)).toEqual([theirs.id]);
-      // Nor from a Chief here that is not the MausBot.
+      expect(placeSeiras(cloud).map((bot) => bot.id)).toEqual([theirs.id]);
+      // Nor from a Chief here that is not the Seira.
       const lee = cloud.createBot({ name: "Lee" }, { id: "cloud-lee-000008", seedMessages: false });
       cloud.setChiefOfStaff(lee.id);
-      const third = cloud.createBot({ name: "Seira" }, { id: "desk-maus-000009", seedMessages: false });
+      const third = cloud.createBot({ name: "Seira" }, { id: "desk-seira-000009", seedMessages: false });
       expect(await arrive(cloud, third.id, fields({ defaultBot: {}, chiefOfStaff: true, managedSections: ["General"] }), "Amit's MacBook")).toBe(200);
       expect(cloud.bots.filter((bot) => bot.chiefOfStaff).map((bot) => bot.id)).toEqual([lee.id]);
-      // A Chief that is not a MausBot takes the crown.
+      // A Chief that is not a Seira takes the crown.
       const ada = cloud.createBot({ name: "Ada" }, { id: "desk-ada-000007", seedMessages: false });
       expect(await arrive(cloud, ada.id, { chiefOfStaff: true }, "Amit's MacBook")).toBe(200);
       expect(cloud.bots.filter((bot) => bot.chiefOfStaff).map((bot) => bot.id)).toEqual([ada.id]);
@@ -385,21 +391,21 @@ describe("Seira, every person's helper", () => {
       const cloud = new Store(selection);
       const theirs = boot(cloud)!;
       cloud.patchBot(theirs.id, { soul: "Answer in French." });
-      const jarvis = cloud.createBot({ name: "Jarvis" }, { id: "desk-maus-000004", seedMessages: false });
+      const jarvis = cloud.createBot({ name: "Jarvis" }, { id: "desk-seira-000004", seedMessages: false });
       expect(await arrive(cloud, jarvis.id, fields({ defaultBot: {} }), "Amit's MacBook")).toBe(200);
       expect(cloud.bot(jarvis.id)).toMatchObject({ name: "Jarvis" });
       expect(cloud.bot(jarvis.id)?.defaultBot).toBeUndefined();
-      const unnamed = cloud.createBot({ name: "Seira" }, { id: "desk-maus-000005", seedMessages: false });
+      const unnamed = cloud.createBot({ name: "Seira" }, { id: "desk-seira-000005", seedMessages: false });
       expect(await arrive(cloud, unnamed.id, fields({ defaultBot: {} }))).toBe(200);
       expect(cloud.bot(unnamed.id)).toMatchObject({ name: "Seira (from another computer)" });
-      expect(placeMausBots(cloud).map((bot) => bot.id)).toEqual([theirs.id]);
+      expect(placeSeiras(cloud).map((bot) => bot.id)).toEqual([theirs.id]);
     });
 
     it("comes home to exactly the one Seira My Cloud had, and makes none", () => {
       const cloud = new Store(selection);
       cloud.seedIfEmpty();
-      const mausOnCloud = boot(cloud)!;
-      cloud.patchBot(mausOnCloud.id, { name: "Jarvis", sidebarHidden: true });
+      const seiraOnCloud = boot(cloud)!;
+      cloud.patchBot(seiraOnCloud.id, { name: "Jarvis", sidebarHidden: true });
       const backup = readFileSync(join(DATA_DIR, "bots.json"), "utf8");
       for (const file of ["bots.json", "default-bot.json"]) rmSync(join(DATA_DIR, file), { force: true });
       const desk = new Store(selection);
@@ -410,8 +416,8 @@ describe("Seira, every person's helper", () => {
       const home = new Store(selection);
       home.seedIfEmpty();
       boot(home);
-      expect(home.bots.map((bot) => bot.id)).toEqual([mausOnCloud.id]);
-      expect(placeMausBots(home)[0]).toMatchObject({ name: "Jarvis", sidebarHidden: true });
+      expect(home.bots.map((bot) => bot.id)).toEqual([seiraOnCloud.id]);
+      expect(placeSeiras(home)[0]).toMatchObject({ name: "Jarvis", sidebarHidden: true });
     });
   });
 });

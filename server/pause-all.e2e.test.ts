@@ -10,7 +10,7 @@ import { launchVerificationServer, runControlSeira, type VerificationServer } fr
 import { removeTempDir } from "./testing/cleanup.ts";
 
 let fixture: VerificationServer;
-const logDir = mkdtempSync(join(tmpdir(), "omb-pause-all-"));
+const logDir = mkdtempSync(join(tmpdir(), "seira-pause-all-"));
 const promptLog = join(logDir, "prompts.jsonl");
 const modelRequests = () => {
   try { return readFileSync(promptLog, "utf8").split("\n").filter(Boolean).length; } catch { return 0; }

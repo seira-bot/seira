@@ -49,7 +49,7 @@ export function createOutsideWrites(deps: OutsideWriteDeps) {
       card: { title, subtitle, options: [serverLine(language, "server.outside.save"), serverLine(language, "server.outside.skip")], requestId, tool: TOOL, outsideWrite: write },
     });
     deps.decide({ threadId, requestId, botId: from.id, botName: from.name, tool: TOOL, summary: title, decision: "card-shown", source: "outside-write" });
-    deps.notify(buildNotification("approval", { id: from.id, name: from.name }, threadId, title));
+    deps.notify(buildNotification("approval", { id: from.id, name: from.name }, threadId, title, { requestId }));
     return { status: 201, body: { status: "proposed", state: "pending", requestId, messageId: message.id, message: "This came from outside work, so it is not saved yet: a person sees a card and decides. Do not wait for it and do not try another way." } };
   }
 

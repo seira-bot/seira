@@ -7,20 +7,20 @@ import { CREDENTIAL_TARGETS, credentialConfigPatch, desktopCredentialSlot, isCon
 import { KEY_CATALOG, KEY_SECTIONS, keyEntry, keyForInstance, keyHidden, keyMatches, looksLikeOtherKey, savedState, shownKeyEntry, type KeyId } from "./key-catalog";
 
 const NOT_A_PERSONS_KEY: Record<string, string> = {
-  OMB_ANTHROPIC_API_URL: "the address the Anthropic key goes to, set by a hosted install",
-  OMB_HOSTED_MODEL_TOKEN: "a hosted install's model token",
-  OMB_HOSTED_MODELS: "a hosted install's model list",
-  OMB_COMPOSIO_BROKER_TOKEN: "Seira Cloud's connected-apps broker",
-  OMB_CLOUD_BOAT_TOKEN: "Seira Cloud's included computers",
-  OMB_CLOUD_VOICE_TOKEN: "Seira Cloud's included voice",
-  OMB_CLOUD_DECIDER_TOKEN: "Seira Cloud's included decisions",
-  OMB_CLOUD_AI_TOKEN: "Seira Cloud's included AI",
-  OMB_CLOUD_X_TOKEN: "Seira Cloud's included X research",
-  OMB_CLOUD_HOSTING_TOKEN: "Seira Cloud's included app hosting",
-  OMB_CLOUD_CONNECTED_APPS_GRANT: "Seira Cloud's connected apps",
-  OMB_BROWSER_CONNECTION: "the app's own browser, not a credential",
-  OMB_USER_DATA: "the app's own data folder, not a credential",
-  OMB_BOAT_API: "the Boat address, not a credential",
+  SEIRA_ANTHROPIC_API_URL: "the address the Anthropic key goes to, set by a hosted install",
+  SEIRA_HOSTED_MODEL_TOKEN: "a hosted install's model token",
+  SEIRA_HOSTED_MODELS: "a hosted install's model list",
+  SEIRA_COMPOSIO_BROKER_TOKEN: "Seira Cloud's connected-apps broker",
+  SEIRA_CLOUD_BOAT_TOKEN: "Seira Cloud's included computers",
+  SEIRA_CLOUD_VOICE_TOKEN: "Seira Cloud's included voice",
+  SEIRA_CLOUD_DECIDER_TOKEN: "Seira Cloud's included decisions",
+  SEIRA_CLOUD_AI_TOKEN: "Seira Cloud's included AI",
+  SEIRA_CLOUD_X_TOKEN: "Seira Cloud's included X research",
+  SEIRA_CLOUD_HOSTING_TOKEN: "Seira Cloud's included app hosting",
+  SEIRA_CLOUD_CONNECTED_APPS_GRANT: "Seira Cloud's connected apps",
+  SEIRA_BROWSER_CONNECTION: "the app's own browser, not a credential",
+  SEIRA_USER_DATA: "the app's own data folder, not a credential",
+  SEIRA_BOAT_API: "the Boat address, not a credential",
 };
 
 const electron = (file: string) => readFileSync(new URL(`../../../electron/${file}`, import.meta.url), "utf8");

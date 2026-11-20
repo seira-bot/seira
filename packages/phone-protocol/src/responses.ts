@@ -31,7 +31,7 @@ export interface PairedDevice {
 
 /** POST /api/pair's body. A computer, a server and a Cloud all accept it; fields one does not know are ignored. */
 export interface PairRequest {
-  /** The QR's `omb_pair_` credential or the typed code. */
+  /** The QR's `seira_pair_` credential or the typed code. */
   credential: string;
   deviceName: string;
   /** Lets the same request, retried through another address within the pairing window, get the same reply. */

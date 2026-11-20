@@ -3,7 +3,7 @@
 Files is a top-level page in the desktop app, for people with a Seira Cloud ("My Cloud"). It does two jobs:
 
 - **Lent folders, even while this computer sleeps.** Every folder lent to My Cloud (each moved bot's project folder, a folder added here) also gets a copy on My Cloud, kept up to date while this computer is on. The home folder, which this computer lends My Cloud by itself (`docs/cloud-pro.md`, "This computer works for your Clouds"), is too broad for a copy and stays live only. While it is away, bots read that copy, and a change to a folder lent with editing waits on My Cloud and lands here when the computer is back. Nobody chooses anything: what fits is copied, the rest stays live only.
-- **Your bots' work.** What Cloud bots make comes down to `Documents/Seira/<bot>/<conversation>` on this computer. A computer that already has `Documents/MausBot` keeps using that folder, and Seira does not move it.
+- **Your bots' work.** What Cloud bots make comes down to `Documents/Seira/<bot>/<conversation>` on this computer. A computer that already has `Documents/Seira` keeps using that folder, and Seira does not move it.
 
 It never merges two sides. Nothing on this computer is deleted because of something that happened on My Cloud, and a bot changes the person's files only in a folder lent with editing, by the same rules whether the computer is on or away.
 
@@ -55,7 +55,7 @@ Folders shared from the Files page before lent folders keep working. Once this c
 - **Folders that are never shared:**
   - the home folder or anything above it;
   - a drive root or a mount point;
-  - Seira's own folders: its data folder and the folder for the bots' work (`Documents/Seira`, or `Documents/MausBot` where it was already there);
+  - Seira's own folders: its data folder and the folder for the bots' work (`Documents/Seira`, or `Documents/Seira` where it was already there);
   - folders of keys and settings: `.ssh`, `.aws`, `.gnupg`, `.config`, `Library`, `AppData` and similar;
   - a folder inside, or around, one already shared.
 - **This computer's version always wins.** A file new or changed here is uploaded. If a bot edits the copy anyway, the next pass puts this computer's version back, and the bot's version stays in My Cloud's trash. Files a bot adds to the copy stay on My Cloud and never come down.
@@ -88,7 +88,7 @@ Folders shared from the Files page before lent folders keep working. Once this c
 - **Access.** `/api/sync/*` answers only on a Cloud home, and only to the owner's admin session.
 - **Where things live:**
   - Shared copies are under `/data/Synced/<computer>/<folder>`, outside the data folder, so workspace backups and Move to Cloud don't carry them, and bots read them there.
-  - Copies of lent folders are under `/data/.openmausbot/sync/lent/<computer>/<folder>` (`lentRoot`): in the data folder, which no bot's box shows, so only `shared_computer`, with lending's own rules (the owner's own conversations and routines, never a webhook or a guest), reaches them, and the prompt never names them. A folder shared from the Files page before it was lent keeps its copy in `/data/Synced`, where it was.
+  - Copies of lent folders are under `/data/.seira/sync/lent/<computer>/<folder>` (`lentRoot`): in the data folder, which no bot's box shows, so only `shared_computer`, with lending's own rules (the owner's own conversations and routines, never a webhook or a guest), reaches them, and the prompt never names them. A folder shared from the Files page before it was lent keeps its copy in `/data/Synced`, where it was.
   - Both are on My Cloud's disk, in its daily backups.
   - Sync's own records (`sync/`) are left out of backups: `sync/lent.json` (what each computer lends and how fresh each copy is) and `sync/staged/` (bots' changes waiting for their computer) included.
 - **Changes.** Nothing watches the disk. When a bot's turn ends, `index.ts` tells the sync service (`noteSyncBotTurn`), which wakes the desktop's long poll for that conversation's folder. The desktop also runs a full pass every 5 minutes.

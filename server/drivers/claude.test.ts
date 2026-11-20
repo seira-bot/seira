@@ -92,18 +92,18 @@ function answerQueue(conn: ReturnType<typeof connect>) {
 }
 
 const CONTROL_PLANE_FIXTURE = {
-  OMB_CLOUD_READY_TOKEN: "ready-should-not-leak", OMB_CLOUD_BOOTSTRAP: "bootstrap-should-not-leak",
-  OMB_LICENSE_KEY: "license-should-not-leak", OMB_INSTALLATION_CREDENTIAL: "fleet-should-not-leak",
+  SEIRA_CLOUD_READY_TOKEN: "ready-should-not-leak", SEIRA_CLOUD_BOOTSTRAP: "bootstrap-should-not-leak",
+  SEIRA_LICENSE_KEY: "license-should-not-leak", SEIRA_INSTALLATION_CREDENTIAL: "fleet-should-not-leak",
 };
 
 describe("ClaudeDriver.decodeConfig", () => {
   it("quotes hook paths as shell data rather than JSON strings", () => {
-    const settings = claudeHookSettings("/tmp/it's $OMB_HOOK_TEST `literal`/helper.ts", "linux") as { PostToolUse: Array<{ hooks: Array<{ command: string }> }> };
-    expect(settings.PostToolUse[0]!.hooks[0]!.command).toContain("'/tmp/it'\\''s $OMB_HOOK_TEST `literal`/helper.ts'");
+    const settings = claudeHookSettings("/tmp/it's $SEIRA_HOOK_TEST `literal`/helper.ts", "linux") as { PostToolUse: Array<{ hooks: Array<{ command: string }> }> };
+    expect(settings.PostToolUse[0]!.hooks[0]!.command).toContain("'/tmp/it'\\''s $SEIRA_HOOK_TEST `literal`/helper.ts'");
   });
 
   it("starts the hook helper without a shell on Windows, where Git Bash or PowerShell would read the command line", () => {
-    const helper = "C:\\Users\\it's $OMB_HOOK_TEST `literal`\\helper.ts";
+    const helper = "C:\\Users\\it's $SEIRA_HOOK_TEST `literal`\\helper.ts";
     const settings = claudeHookSettings(helper, "win32") as { PostToolUseFailure: Array<{ hooks: unknown[] }> };
     expect(settings.PostToolUseFailure[0]!.hooks).toEqual([{ type: "command", command: process.execPath, args: [helper], timeout: 5 }]);
   });
@@ -230,7 +230,7 @@ describe("ClaudeDriver.decodeConfig", () => {
 
   it.skipIf(process.platform !== "win32")("names permission pipes per harness process", () => {
     expect(permissionSocketPath("thread-abc")).toMatch(
-      new RegExp(`^\\\\\\\\\\.\\\\pipe\\\\openmausbot-perm-${process.pid}-thre[0-9a-f]{4}$`),
+      new RegExp(`^\\\\\\\\\\.\\\\pipe\\\\seira-perm-${process.pid}-thre[0-9a-f]{4}$`),
     );
   });
 
@@ -281,7 +281,7 @@ describe("ClaudeDriver.decodeConfig", () => {
   });
 
   it("disposes its account controller while a logout is running", async () => {
-    const home = mkdtempSync(join(tmpdir(), "omb-claude-logout-dispose-"));
+    const home = mkdtempSync(join(tmpdir(), "seira-claude-logout-dispose-"));
     const cli = join(home, "fake-logout.mjs");
     const pidPath = join(home, "logout-pid");
     writeFileSync(cli, [
@@ -327,7 +327,7 @@ describe("ClaudeDriver.decodeConfig", () => {
       expect(new Set(candidates).size).toBe(candidates.length);
     } else {
       expect(candidates).toHaveLength(2);
-      expect(candidates[1]).toMatch(/omb-perm-[0-9a-f]{16}\.sock$/);
+      expect(candidates[1]).toMatch(/seira-perm-[0-9a-f]{16}\.sock$/);
       expect(candidates[1]).not.toBe(candidates[0]);
     }
   });
@@ -336,7 +336,7 @@ describe("ClaudeDriver.decodeConfig", () => {
   it.skipIf(process.platform === "win32")(
     "binds the next candidate when the first is unbindable, and asks round-trip on it",
     async () => {
-      const dir = mkdtempSync(join(tmpdir(), "omb-broker-fallback-"));
+      const dir = mkdtempSync(join(tmpdir(), "seira-broker-fallback-"));
       const held = join(dir, "held.sock");
       // A directory squats the path the way a hung child holds a pipe.
       mkdirSync(held);
@@ -377,7 +377,7 @@ describe("ClaudeDriver.decodeConfig", () => {
   it.skipIf(process.platform === "win32")(
     "keeps a large non-ASCII ask whole across socket reads",
     async () => {
-      const dir = mkdtempSync(join(tmpdir(), "omb-broker-utf8-"));
+      const dir = mkdtempSync(join(tmpdir(), "seira-broker-utf8-"));
       const socketPath = join(dir, "broker.sock");
       const asks: Array<{ input: unknown }> = [];
       const broker = await createPermissionBroker({
@@ -410,7 +410,7 @@ describe("ClaudeDriver.decodeConfig", () => {
   it.skipIf(process.platform === "win32")(
     "rejects instead of returning an occupied path when every candidate is unavailable",
     async () => {
-      const dir = mkdtempSync(join(tmpdir(), "omb-broker-unavailable-"));
+      const dir = mkdtempSync(join(tmpdir(), "seira-broker-unavailable-"));
       const heldOne = join(dir, "held-one.sock");
       const heldTwo = join(dir, "held-two.sock");
       mkdirSync(heldOne);
@@ -428,6 +428,62 @@ describe("ClaudeDriver.decodeConfig", () => {
       }
     },
   );
+
+  it("gives each Claude account its own socket and hook token path", () => {
+    expect(permissionSocketPath("t1", "b1", "claude")).not.toBe(permissionSocketPath("t1", "b1", "claude-x"));
+    expect(hookTokenFile("t1", "b1", "claude")).not.toBe(hookTokenFile("t1", "b1", "claude-x"));
+    expect(brokerSocketCandidates("t1", "b1", "claude")[0]).toBe(permissionSocketPath("t1", "b1", "claude"));
+    expect(brokerSocketCandidates("t1", "b1", "claude")[1]).not.toBe(brokerSocketCandidates("t1", "b1", "claude-x")[1]);
+    expect(permissionSocketPath("t1", "b1")).toBe(permissionSocketPath("t1", "b1", undefined));
+    expect(hookTokenFile("t1", "b1")).toBe(hookTokenFile("t1", "b1", undefined));
+    expect(brokerSocketCandidates("t1", "b1")[0]).toBe(permissionSocketPath("t1", "b1"));
+  });
+
+  const askThrough = async (socketPath: string, id: string) => {
+    const conn = await new Promise<Socket>((resolve, reject) => {
+      const c = connect(socketPath);
+      c.once("connect", () => resolve(c));
+      c.once("error", reject);
+    });
+    conn.write(JSON.stringify({ t: "ask", id, tool: "Bash", input: { command: "echo hi" } }) + "\n");
+    return conn;
+  };
+
+  it.skipIf(process.platform === "win32")("keeps a second account's broker reachable after the first account's broker on the same thread closes", async () => {
+    const asks: Array<{ id: string }> = [];
+    const firstPaths = brokerSocketCandidates("t-two-accounts", "bot-two-accounts", "claude");
+    const secondPaths = brokerSocketCandidates("t-two-accounts", "bot-two-accounts", "claude-x");
+    mkdirSync(dirname(firstPaths[0]), { recursive: true });
+    const first = await createPermissionBroker({ socketPaths: firstPaths, onAsk: () => {}, onResolve: () => {} });
+    const second = await createPermissionBroker({ socketPaths: secondPaths, onAsk: (ask) => asks.push(ask), onResolve: () => {} });
+    try {
+      expect([first.socketPath, second.socketPath]).toEqual([firstPaths[0], secondPaths[0]]);
+      first.close();
+      const conn = await askThrough(second.socketPath, "ask-two-accounts");
+      await expect.poll(() => asks.length, { timeout: 5_000 }).toBe(1);
+      conn.destroy();
+    } finally {
+      second.close();
+    }
+  });
+
+  it.skipIf(process.platform === "win32")("a second close leaves the socket of a broker that replaced it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "seira-broker-again-"));
+    const path = join(dir, "perm.sock");
+    const asks: Array<{ id: string }> = [];
+    const first = await createPermissionBroker({ socketPaths: [path], onAsk: () => {}, onResolve: () => {} });
+    first.close();
+    const second = await createPermissionBroker({ socketPaths: [path], onAsk: (ask) => asks.push(ask), onResolve: () => {} });
+    try {
+      first.close();
+      const conn = await askThrough(second.socketPath, "ask-after-second-close");
+      await expect.poll(() => asks.length, { timeout: 5_000 }).toBe(1);
+      conn.destroy();
+    } finally {
+      second.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("spawnContractDiff", () => {
@@ -481,6 +537,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
   let instance: ProviderInstance;
   let recorder: EventRecorder;
   let scratch: string;
+  const driverSocket = (threadId: string, botId?: string) => permissionSocketPath(threadId, botId, "claude-test");
 
   const create = async (
     mode?: string,
@@ -505,7 +562,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
   beforeEach(() => {
     ensureDirs();
     chmodSync(FAKE_CLI, 0o755);
-    scratch = mkdtempSync(join(tmpdir(), "omb-claude-test-"));
+    scratch = mkdtempSync(join(tmpdir(), "seira-claude-test-"));
   });
 
   it("refuses an unsupported native selection before launching, even with instance tools and Full access", async () => {
@@ -526,7 +583,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(seen.argv).toContain("--restricted");
     expect(seen.argv[seen.argv.indexOf("--disallowedTools") + 1]).toBe("Write");
     expect(seen.mcpConfig.mcpServers).not.toHaveProperty("browser");
-    expect(JSON.parse(seen.mcpConfig.mcpServers.agents.env.OMB_GATE_TOOL_SCOPE)).toEqual({ allow: ["native:*", "mcp:agents:list_bots"] });
+    expect(JSON.parse(seen.mcpConfig.mcpServers.agents.env.SEIRA_GATE_TOOL_SCOPE)).toEqual({ allow: ["native:*", "mcp:agents:list_bots"] });
   });
 
   it("keeps a bot's tool selection working with the person's own skills", async () => {
@@ -563,10 +620,10 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     delete process.env.COMPOSIO_API_KEY;
     delete process.env.BOX_TOKEN;
     delete process.env.OPENCODE_API_KEY;
-    delete process.env.OMB_TTS_KEY;
+    delete process.env.SEIRA_TTS_KEY;
     for (const name of Object.keys(CONTROL_PLANE_FIXTURE)) delete process.env[name];
-    delete process.env.OMB_CLAUDE_SESSION_IDLE_MS;
-    delete process.env.OMB_CLAUDE_SESSION_IDLE_MIN_MS;
+    delete process.env.SEIRA_CLAUDE_SESSION_IDLE_MS;
+    delete process.env.SEIRA_CLAUDE_SESSION_IDLE_MIN_MS;
     recorder?.stop();
     await instance?.dispose();
     await removeTempDir(scratch);
@@ -950,15 +1007,15 @@ describe("ClaudeDriver turns (fake CLI)", () => {
   });
 
   it("hands a hosted tenant's CLI the hosted model token but none of the operator's control-plane secrets", async () => {
-    await create(undefined, { ANTHROPIC_API_KEY: "omb_workspace_fixture", ANTHROPIC_AUTH_TOKEN: "omb_workspace_fixture" });
+    await create(undefined, { ANTHROPIC_API_KEY: "seira_workspace_fixture", ANTHROPIC_AUTH_TOKEN: "seira_workspace_fixture" });
     const dump = join(scratch, "dump-hosted.json");
     process.env.FAKE_CLAUDE_DUMP = dump;
     Object.assign(process.env, CONTROL_PLANE_FIXTURE);
     await instance.adapter.sendTurn({ threadId: "t-hosted-env", text: "hello" });
     await recorder.until((e) => e.type === "turn.completed");
     const seen = JSON.parse(readFileSync(dump, "utf8"));
-    expect(seen.env.ANTHROPIC_API_KEY).toBe("omb_workspace_fixture");
-    expect(seen.env.ANTHROPIC_AUTH_TOKEN).toBe("omb_workspace_fixture");
+    expect(seen.env.ANTHROPIC_API_KEY).toBe("seira_workspace_fixture");
+    expect(seen.env.ANTHROPIC_AUTH_TOKEN).toBe("seira_workspace_fixture");
     for (const name of Object.keys(CONTROL_PLANE_FIXTURE)) expect(seen.env[name]).toBeUndefined();
   });
 
@@ -969,7 +1026,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     process.env.ANTHROPIC_API_KEY = "sk-should-not-leak";
     process.env.XAI_API_KEY = "xai-should-not-leak";
     process.env.BOX_TOKEN = "box-should-not-leak";
-    process.env.OMB_TTS_KEY = "tts-should-not-leak";
+    process.env.SEIRA_TTS_KEY = "tts-should-not-leak";
 
     await instance.adapter.sendTurn({ threadId: "t-hygiene", text: "the secret prompt", system: "You are Testy." });
     await recorder.until((e) => e.type === "turn.completed");
@@ -987,7 +1044,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(seen.env.CLAUDE_CODE_ENTRYPOINT).toBeUndefined();
     expect(seen.env.XAI_API_KEY).toBeUndefined();
     expect(seen.env.BOX_TOKEN).toBeUndefined();
-    expect(seen.env.OMB_TTS_KEY).toBeUndefined();
+    expect(seen.env.SEIRA_TTS_KEY).toBeUndefined();
   });
 
   it("per-bot Ask restores the broker on a legacy bypass instance", async () => {
@@ -1032,7 +1089,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
   it("keeps questions answerable in per-bot Full access", async () => {
     await create("hang");
     await instance.adapter.sendTurn({ threadId: "t-full-question", text: "go", approvalMode: "full" });
-    const conn = await connectSocket(permissionSocketPath("t-full-question"));
+    const conn = await connectSocket(driverSocket("t-full-question"));
     try {
       conn.write(JSON.stringify({ t: "ask", kind: "question", id: "full-question", tool: "ask_user", input: { question: "Which account?" } }) + "\n");
       const opened = await recorder.until((e) => e.type === "request.opened");
@@ -1047,7 +1104,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     // MiniMax M3 (through the Anthropic-compatible endpoint) answers ask_user with AskUserQuestion-shaped rows.
     await create("hang");
     await instance.adapter.sendTurn({ threadId: "t-object-choices", text: "go" });
-    const conn = await connectSocket(permissionSocketPath("t-object-choices"));
+    const conn = await connectSocket(driverSocket("t-object-choices"));
     try {
       conn.write(JSON.stringify({
         t: "ask",
@@ -1074,7 +1131,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     // In Full access the CLI has no permission prompt tool, so ask_user is the only way to ask.
     await create("hang");
     await instance.adapter.sendTurn({ threadId: "t-multi-ask", text: "go", approvalMode: "full" });
-    const conn = await connectSocket(permissionSocketPath("t-multi-ask"));
+    const conn = await connectSocket(driverSocket("t-multi-ask"));
     try {
       const questions = [{ question: "Which fruits?", multiSelect: true, options: [{ label: "Apple" }, { label: "Cherry" }] }];
       conn.write(JSON.stringify({
@@ -1094,7 +1151,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     // The CLI routes AskUserQuestion through --permission-prompt-tool like any other tool use.
     await create("hang");
     await instance.adapter.sendTurn({ threadId: "t-structured-ask", text: "go" });
-    const conn = await connectSocket(permissionSocketPath("t-structured-ask"));
+    const conn = await connectSocket(driverSocket("t-structured-ask"));
     try {
       conn.write(JSON.stringify({
         t: "ask",
@@ -1136,7 +1193,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: "t-perm-lbl", text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = await connectSocket(permissionSocketPath("t-perm-lbl"));
+    const conn = await connectSocket(driverSocket("t-perm-lbl"));
     // The companion maps every label but "Allow" to a denial, so model-authored labels would all deny.
     conn.write(
       JSON.stringify({
@@ -1167,7 +1224,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: "t-perm-raw", text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = await connectSocket(permissionSocketPath("t-perm-raw"));
+    const conn = await connectSocket(driverSocket("t-perm-raw"));
     conn.write(
       JSON.stringify({ t: "ask", id: "ask-raw", tool: "mcp__x__wire", input: { amount: 4200, to: "acct-9" } }) + "\n",
     );
@@ -1362,7 +1419,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     }
   });
 
-  it.each([["ask", "0"], ["auto", "0"], ["ask", "1"], ["auto", "1"]] as const)("pre-allows the agents comms proxy while retaining native %s approval (OMB_OWN_MCP_HTTP=%s)", async (approvalMode, http) => {
+  it.each([["ask", "0"], ["auto", "0"], ["ask", "1"], ["auto", "1"]] as const)("pre-allows the agents comms proxy while retaining native %s approval (SEIRA_OWN_MCP_HTTP=%s)", async (approvalMode, http) => {
     vi.stubEnv(OWN_MCP_HTTP_ENV, http);
     await create();
     const dump = join(scratch, "dump.json");
@@ -1376,7 +1433,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
         agents: {
           command: process.execPath,
           args: ["/fake/agents-proxy.js"],
-          env: { OMB_HARNESS_URL: "http://127.0.0.1:1", OMB_BOT_ID: "b1", OMB_COMMS_TOKEN: "tok" },
+          env: { SEIRA_HARNESS_URL: "http://127.0.0.1:1", SEIRA_BOT_ID: "b1", SEIRA_COMMS_TOKEN: "tok" },
         },
       },
     });
@@ -1387,7 +1444,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
       // By URL: the same capability and settings as headers, and the loopback past any proxy the engine was given.
       const agents = seen.mcpConfig.mcpServers.agents;
       expect(agents).toMatchObject({ type: "http", alwaysLoad: true, url: "http://127.0.0.1:1/api/internal/mcp-http/agents", headers: { authorization: "Bearer tok" } });
-      expect(JSON.parse(Buffer.from(agents.headers["x-omb-agents-env"], "base64url").toString("utf8"))).toMatchObject({ OMB_BOT_ID: "b1", [DEFER_TOOLS_ENV]: "1" });
+      expect(JSON.parse(Buffer.from(agents.headers["x-seira-agents-env"], "base64url").toString("utf8"))).toMatchObject({ SEIRA_BOT_ID: "b1", [DEFER_TOOLS_ENV]: "1" });
       // Windows keeps one spelling of an environment name, so the engine sees NO_PROXY or no_proxy there, never both.
       const noProxy = Object.entries(seen.env as Record<string, string>).filter(([name]) => name.toLowerCase() === "no_proxy");
       expect(noProxy.map(([name]) => name).sort()).toEqual(process.platform === "win32" ? [expect.stringMatching(/^no_proxy$/i)] : ["NO_PROXY", "no_proxy"]);
@@ -1396,7 +1453,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
       expect(seen.mcpConfig.mcpServers.agents).toMatchObject({
         alwaysLoad: true,
         args: ["/fake/agents-proxy.js"],
-        env: { OMB_BOT_ID: "b1", OMB_COMMS_TOKEN: "tok", [DEFER_TOOLS_ENV]: "1" },
+        env: { SEIRA_BOT_ID: "b1", SEIRA_COMMS_TOKEN: "tok", [DEFER_TOOLS_ENV]: "1" },
       });
     }
     expect(seen.env.CLAUDE_CODE_DISABLE_CRON, "a deferred trigger must not lose to CronCreate").toBe("1");
@@ -1411,7 +1468,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
   it("rewrites the hook token file only when the bearer changes", async () => {
     await create();
     const threadId = "t-hook-token";
-    const file = hookTokenFile(threadId, "b-hook");
+    const file = hookTokenFile(threadId, "b-hook", "claude-test");
     const turn = async (token: string) => {
       const { turnId } = await instance.adapter.sendTurn({
         threadId, botId: "b-hook", text: "hi",
@@ -1721,18 +1778,18 @@ describe("ClaudeDriver turns (fake CLI)", () => {
   });
 
   it("clamps a configured compaction window into the range the CLI accepts", () => {
-    expect(autoCompactWindow({ OMB_CLAUDE_AUTOCOMPACT: "50000" })).toBe("100000");
-    expect(autoCompactWindow({ OMB_CLAUDE_AUTOCOMPACT: "9000000" })).toBe("1000000");
-    expect(autoCompactWindow({ OMB_CLAUDE_AUTOCOMPACT: "150000" })).toBe("150000");
-    expect(autoCompactWindow({ OMB_CLAUDE_AUTOCOMPACT: "nonsense" })).toBe("200000");
+    expect(autoCompactWindow({ SEIRA_CLAUDE_AUTOCOMPACT: "50000" })).toBe("100000");
+    expect(autoCompactWindow({ SEIRA_CLAUDE_AUTOCOMPACT: "9000000" })).toBe("1000000");
+    expect(autoCompactWindow({ SEIRA_CLAUDE_AUTOCOMPACT: "150000" })).toBe("150000");
+    expect(autoCompactWindow({ SEIRA_CLAUDE_AUTOCOMPACT: "nonsense" })).toBe("200000");
     expect(autoCompactWindow({})).toBe("200000");
-    expect(autoCompactWindow({ OMB_CLAUDE_AUTOCOMPACT: "auto" })).toBe("auto");
-    expect(autoCompactWindow({ OMB_CLAUDE_AUTOCOMPACT: "off" })).toBe(null);
+    expect(autoCompactWindow({ SEIRA_CLAUDE_AUTOCOMPACT: "auto" })).toBe("auto");
+    expect(autoCompactWindow({ SEIRA_CLAUDE_AUTOCOMPACT: "off" })).toBe(null);
   });
 
   it("passes no compaction window when it is turned off", async () => {
     const dump = join(scratch, "compact-off.json");
-    await create(undefined, { FAKE_CLAUDE_DUMP: dump, OMB_CLAUDE_AUTOCOMPACT: "off" });
+    await create(undefined, { FAKE_CLAUDE_DUMP: dump, SEIRA_CLAUDE_AUTOCOMPACT: "off" });
     await instance.adapter.sendTurn({ threadId: "t-compact-off", text: "hi" });
     await recorder.until((e) => e.type === "turn.completed");
     expect(JSON.parse(readFileSync(dump, "utf8")).argv).not.toContain("--autocompact");
@@ -1870,13 +1927,13 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(seen.argv).toContain("--strict-mcp-config");
     expect(seen.argv[seen.argv.indexOf("--setting-sources") + 1]).toBe("project");
     expect(seen.settings.claudeMdExcludes).toEqual([join(homedir(), ".claude", "CLAUDE.md")]);
-    // A bot's memory is OpenMausBot's: the CLI's per-folder one would split notes by thread and break the cached prompt.
+    // A bot's memory is Seira's: the CLI's per-folder one would split notes by thread and break the cached prompt.
     expect(seen.settings.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY).toBe("1");
   });
 
   it("inherits the machine's configuration again when the escape hatch is set", async () => {
     const dump = join(scratch, "inherit.json");
-    await create(undefined, { FAKE_CLAUDE_DUMP: dump, OMB_CLAUDE_INHERIT_USER_CONFIG: "1" });
+    await create(undefined, { FAKE_CLAUDE_DUMP: dump, SEIRA_CLAUDE_INHERIT_USER_CONFIG: "1" });
 
     await instance.adapter.sendTurn({ threadId: "t-inherit", text: "hi" });
     await recorder.until((e) => e.type === "turn.completed");
@@ -1960,7 +2017,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(await turn("t-ungated-url", { custom: { docs } })).toBe(String(UNGATED_MCP_OUTPUT_TOKENS));
   });
 
-  // Claude Code advertises no MCP Apps UI extension and keeps tool results to itself, so only OMB's
+  // Claude Code advertises no MCP Apps UI extension and keeps tool results to itself, so only Seira's
   // remote proxy can observe a URL app server.
   it("mounts a url app server through the proxy and a url server without apps natively, unchanged", async () => {
     await create();
@@ -1969,7 +2026,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     const docs = { type: "http" as const, url: "https://docs.example/mcp", headers: { Authorization: "Bearer tok-docs" } };
     const draw = { type: "http" as const, url: "https://mcp.excalidraw.com/mcp", headers: { Authorization: "Bearer tok-draw" } };
     const board = { command: "board-mcp", args: [], env: {} };
-    const agents = { command: process.execPath, args: ["agents-proxy.js"], env: { OMB_HARNESS_URL: "http://127.0.0.1:8799", OMB_COMMS_TOKEN: "comms-fixture" } };
+    const agents = { command: process.execPath, args: ["agents-proxy.js"], env: { SEIRA_HARNESS_URL: "http://127.0.0.1:8799", SEIRA_COMMS_TOKEN: "comms-fixture" } };
     await instance.adapter.sendTurn({
       threadId: "t-app-mcp", text: "hi",
       integrations: { agents, custom: { docs, draw, board }, mcpApps: { draw: { extension: true }, board: { extension: true } } },
@@ -1979,11 +2036,11 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(seen.mcpConfig.mcpServers.docs).toEqual(docs);
     const proxy = seen.mcpConfig.mcpServers.draw;
     expect(proxy.args[0]).toContain("mcp-remote-proxy");
-    expect(JSON.parse(proxy.env.OMB_REMOTE_MCP_SERVER)).toEqual(draw);
-    expect(JSON.parse(proxy.env.OMB_REMOTE_MCP_APPS)).toEqual({ server: "draw", harnessUrl: "http://127.0.0.1:8799", token: "comms-fixture", extension: true });
+    expect(JSON.parse(proxy.env.SEIRA_REMOTE_MCP_SERVER)).toEqual(draw);
+    expect(JSON.parse(proxy.env.SEIRA_REMOTE_MCP_APPS)).toEqual({ server: "draw", harnessUrl: "http://127.0.0.1:8799", token: "comms-fixture", extension: true });
     const gate = seen.mcpConfig.mcpServers.board;
     expect(gate.args[0]).toContain("mcp-gate");
-    expect(JSON.parse(gate.env.OMB_GATE_APPS)).toMatchObject({ server: "board", extension: true });
+    expect(JSON.parse(gate.env.SEIRA_GATE_APPS)).toMatchObject({ server: "board", extension: true });
     expect(JSON.stringify(seen.argv)).not.toContain("tok-draw");
     expect(JSON.stringify(seen.argv)).not.toContain("comms-fixture");
   });
@@ -2011,16 +2068,16 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await recorder.until((e) => e.type === "turn.completed");
     const docs = JSON.parse(readFileSync(dump, "utf8")).mcpConfig.mcpServers.docs;
     expect(docs.args[0]).toContain("mcp-gate");
-    expect(docs.env).not.toHaveProperty("OMB_GATE_DIRECTORY");
-    const upstream = JSON.parse(docs.env.OMB_GATE_UPSTREAM);
+    expect(docs.env).not.toHaveProperty("SEIRA_GATE_DIRECTORY");
+    const upstream = JSON.parse(docs.env.SEIRA_GATE_UPSTREAM);
     expect(upstream.args[0]).toContain("mcp-remote-proxy");
-    expect(upstream.env).not.toHaveProperty("OMB_REMOTE_MCP_DIRECTORY");
+    expect(upstream.env).not.toHaveProperty("SEIRA_REMOTE_MCP_DIRECTORY");
   });
 
   it("preserves only the selected account's auth settings in a private file", async () => {
     const account = join(scratch, "account");
     mkdirSync(account);
-    const settings = { apiKeyHelper: "echo synthetic-helper-key", env: { ANTHROPIC_BASE_URL: "http://127.0.0.1:9", ANTHROPIC_AUTH_TOKEN: "synthetic-token", OMB_TTS_KEY: "must-not-leak" }, hooks: { SessionStart: [{ command: "must-not-run" }] }, permissions: { defaultMode: "bypassPermissions" } };
+    const settings = { apiKeyHelper: "echo synthetic-helper-key", env: { ANTHROPIC_BASE_URL: "http://127.0.0.1:9", ANTHROPIC_AUTH_TOKEN: "synthetic-token", SEIRA_TTS_KEY: "must-not-leak" }, hooks: { SessionStart: [{ command: "must-not-run" }] }, permissions: { defaultMode: "bypassPermissions" } };
     writeFileSync(join(account, "settings.json"), JSON.stringify(settings));
     const dump = join(scratch, "account.json");
     await create(undefined, { FAKE_CLAUDE_DUMP: dump }, { configDir: account });
@@ -2129,7 +2186,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect((await turn("project", project)).settings.env.ENABLE_TOOL_SEARCH).toBe("auto:100");
   });
 
-  it("does not mix a personal helper/endpoint with an explicitly configured OMB connection", async () => {
+  it("does not mix a personal helper/endpoint with an explicitly configured Seira connection", async () => {
     const account = join(scratch, "account");
     mkdirSync(account);
     writeFileSync(join(account, "settings.json"), JSON.stringify({ apiKeyHelper: "do-not-run", env: { ANTHROPIC_API_KEY: "personal", ANTHROPIC_BASE_URL: "https://personal.invalid" } }));
@@ -2472,18 +2529,18 @@ describe("ClaudeDriver turns (fake CLI)", () => {
   });
 
   it("warns on the Engines page while the escape hatch is set", async () => {
-    await create(undefined, { FAKE_CLAUDE_VERSION: "2.1.267", OMB_CLAUDE_INHERIT_USER_CONFIG: "1" });
+    await create(undefined, { FAKE_CLAUDE_VERSION: "2.1.267", SEIRA_CLAUDE_INHERIT_USER_CONFIG: "1" });
     expect(await instance.snapshot()).toMatchObject({
       state: "available",
       warning: {
         title: "Bots inherit this machine's Claude Code setup",
-        message: expect.stringContaining("OMB_CLAUDE_INHERIT_USER_CONFIG"),
+        message: expect.stringContaining("SEIRA_CLAUDE_INHERIT_USER_CONFIG"),
       },
     });
   });
 
   it("does not warn when the escape hatch is set to anything but 1", async () => {
-    await create(undefined, { FAKE_CLAUDE_VERSION: "2.1.267", OMB_CLAUDE_INHERIT_USER_CONFIG: "true" });
+    await create(undefined, { FAKE_CLAUDE_VERSION: "2.1.267", SEIRA_CLAUDE_INHERIT_USER_CONFIG: "true" });
     expect((await instance.snapshot()).warning).toBeUndefined();
   });
 
@@ -2573,7 +2630,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await recorder.until((e) => e.type === "turn.completed");
 
     const seen = JSON.parse(readFileSync(dump, "utf8"));
-    expect(JSON.parse(seen.mcpConfig.mcpServers.shop.env.OMB_GATE_UPSTREAM)).toMatchObject({
+    expect(JSON.parse(seen.mcpConfig.mcpServers.shop.env.SEIRA_GATE_UPSTREAM)).toMatchObject({
       command: "npx",
       args: ["-y", "mcp-remote", "https://example.test/shop"],
     });
@@ -2601,13 +2658,13 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     const seen = JSON.parse(readFileSync(dump, "utf8"));
     const shop = seen.mcpConfig.mcpServers.shop;
     expect(shop.args[0]).toContain("mcp-gate");
-    expect(JSON.parse(shop.env.OMB_GATE_UPSTREAM)).toMatchObject({
+    expect(JSON.parse(shop.env.SEIRA_GATE_UPSTREAM)).toMatchObject({
       command: "npx",
       args: ["-y", "mcp-remote", "https://example.test/shop"],
       env: { SHOP_TOKEN: "secret" },
     });
-    expect(shop.env.OMB_GATE_NAME).toBe("shop");
-    expect(Number(shop.env.OMB_GATE_BUDGET)).toBeGreaterThan(0);
+    expect(shop.env.SEIRA_GATE_NAME).toBe("shop");
+    expect(Number(shop.env.SEIRA_GATE_BUDGET)).toBeGreaterThan(0);
     expect(JSON.stringify(seen.argv)).not.toContain("secret");
     expect(seen.mcpConfig.mcpServers.ogb.args[0]).not.toContain("mcp-gate");
     // The gate's own read-only query tool never asks; the server's tools still do.
@@ -2618,7 +2675,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
 
   it("mounts bot servers directly when the result budget is turned off", async () => {
     const dump = join(scratch, "gate-off.json");
-    await create(undefined, { FAKE_CLAUDE_DUMP: dump, OMB_MCP_RESULT_BUDGET: "0" });
+    await create(undefined, { FAKE_CLAUDE_DUMP: dump, SEIRA_MCP_RESULT_BUDGET: "0" });
 
     await instance.adapter.sendTurn({
       threadId: "t-gate-off",
@@ -2634,7 +2691,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
 
   it("gives each bot server its own result budget, over the app-wide one", async () => {
     const dump = join(scratch, "gate-own.json");
-    await create(undefined, { FAKE_CLAUDE_DUMP: dump, OMB_MCP_RESULT_BUDGET: "0" });
+    await create(undefined, { FAKE_CLAUDE_DUMP: dump, SEIRA_MCP_RESULT_BUDGET: "0" });
 
     await instance.adapter.sendTurn({
       threadId: "t-gate-own",
@@ -2647,7 +2704,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await recorder.until((e) => e.type === "turn.completed");
 
     const seen = JSON.parse(readFileSync(dump, "utf8"));
-    expect(seen.mcpConfig.mcpServers.motion.env.OMB_GATE_BUDGET).toBe("40000");
+    expect(seen.mcpConfig.mcpServers.motion.env.SEIRA_GATE_BUDGET).toBe("40000");
     // the others keep the app-wide setting (here: off)
     expect(seen.mcpConfig.mcpServers.shop).toMatchObject({ command: "npx", args: ["shop"] });
   });
@@ -2667,7 +2724,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await recorder.until((e) => e.type === "turn.completed");
 
     const seen = JSON.parse(readFileSync(dump, "utf8"));
-    expect(seen.mcpConfig.mcpServers.motion.env.OMB_GATE_BUDGET).toBe("40000");
+    expect(seen.mcpConfig.mcpServers.motion.env.SEIRA_GATE_BUDGET).toBe("40000");
     expect(seen.mcpConfig.mcpServers.docs).toEqual({ type: "http", url: "https://docs.example.test/mcp", headers: {} });
   });
 
@@ -2735,7 +2792,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await recorder.until((e) => e.type === "content.delta" && e.delta === "parent still working");
     expect(recorder.events.filter((e) => e.type === "turn.completed")).toHaveLength(0);
     expect(instance.adapter.hasSession("t-background-result")).toBe(true);
-    const conn = await connectSocket(permissionSocketPath("t-background-result"));
+    const conn = await connectSocket(driverSocket("t-background-result"));
     try {
       const answer = answerQueue(conn)();
       conn.write(JSON.stringify({ t: "ask", id: "network-after-background", tool: "WebFetch", input: { url: "https://example.com" } }) + "\n");
@@ -2768,19 +2825,19 @@ describe("ClaudeDriver turns (fake CLI)", () => {
         agents: {
           command: process.execPath,
           args: ["/fake/agents-proxy.js"],
-          env: { OMB_HARNESS_URL: "http://127.0.0.1:1", OMB_BOT_ID: "b1", OMB_COMMS_TOKEN: "tok" },
+          env: { SEIRA_HARNESS_URL: "http://127.0.0.1:1", SEIRA_BOT_ID: "b1", SEIRA_COMMS_TOKEN: "tok" },
         },
       },
     });
     await recorder.until((e) => e.type === "turn.completed");
 
     const seen = JSON.parse(readFileSync(dump, "utf8"));
-    expect(JSON.parse(seen.mcpConfig.mcpServers.notes.env.OMB_GATE_UPSTREAM)).toMatchObject({
+    expect(JSON.parse(seen.mcpConfig.mcpServers.notes.env.SEIRA_GATE_UPSTREAM)).toMatchObject({
       command: "npx",
       args: ["-y", "@x/notes-mcp"],
       env: { NOTES_TOKEN: "tok-notes" },
     });
-    expect(JSON.parse(seen.mcpConfig.mcpServers.constructor.env.OMB_GATE_UPSTREAM)).toMatchObject({ command: "fixture-constructor" });
+    expect(JSON.parse(seen.mcpConfig.mcpServers.constructor.env.SEIRA_GATE_UPSTREAM)).toMatchObject({ command: "fixture-constructor" });
     const allowed = seen.argv[seen.argv.indexOf("--allowedTools") + 1].split(",");
     expect(allowed).toContain("mcp__agents");
     expect(allowed).not.toContain("mcp__notes");
@@ -2816,7 +2873,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(seen.argv[seen.argv.indexOf("--disallowedTools") + 1].split(",")).toEqual(["Workflow", "ScheduleWakeup", "ReportFindings", "ListAgents"]);
 
     const inherited = join(scratch, "built-ins-inherit.json");
-    await create(undefined, { FAKE_CLAUDE_DUMP: inherited, OMB_CLAUDE_INHERIT_USER_CONFIG: "1" });
+    await create(undefined, { FAKE_CLAUDE_DUMP: inherited, SEIRA_CLAUDE_INHERIT_USER_CONFIG: "1" });
     await instance.adapter.sendTurn({ threadId: "t-built-ins-inherit", text: "hi" });
     await recorder.until((event) => event.type === "turn.completed");
     expect(JSON.parse(readFileSync(inherited, "utf8")).argv).not.toContain("--disallowedTools");
@@ -2828,14 +2885,14 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     setNativeSkillEnabled("bot-skills-off", "hatch-pet", false);
     try {
       const dump = join(scratch, "skills-off.json");
-      await create(undefined, { FAKE_CLAUDE_DUMP: dump, OMB_CLAUDE_INHERIT_USER_CONFIG: "1" });
+      await create(undefined, { FAKE_CLAUDE_DUMP: dump, SEIRA_CLAUDE_INHERIT_USER_CONFIG: "1" });
       await instance.adapter.sendTurn({ threadId: "t-skills-off", botId: "bot-skills-off", text: "hi" });
       await recorder.until((event) => event.type === "turn.completed");
       const seen = JSON.parse(readFileSync(dump, "utf8"));
       expect(seen.argv[seen.argv.indexOf("--disallowedTools") + 1].split(",")).toEqual(["Skill(hatch-pet)", "Skill(pdf)"]);
 
       const other = join(scratch, "skills-other.json");
-      await create(undefined, { FAKE_CLAUDE_DUMP: other, OMB_CLAUDE_INHERIT_USER_CONFIG: "1" });
+      await create(undefined, { FAKE_CLAUDE_DUMP: other, SEIRA_CLAUDE_INHERIT_USER_CONFIG: "1" });
       await instance.adapter.sendTurn({ threadId: "t-skills-other", botId: "bot-skills-on", text: "hi" });
       await recorder.until((event) => event.type === "turn.completed");
       expect(JSON.parse(readFileSync(other, "utf8")).argv).not.toContain("--disallowedTools");
@@ -2889,7 +2946,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
         composio: {
           command: process.execPath,
           args: ["/tmp/connector-proxy.js"],
-          env: { OMB_CONNECTOR_UPSTREAM_URL: "https://example.test/mcp" },
+          env: { SEIRA_CONNECTOR_UPSTREAM_URL: "https://example.test/mcp" },
         },
       },
     });
@@ -2899,7 +2956,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(seen.mcpConfig.mcpServers.composio).toMatchObject({
       command: process.execPath,
       args: ["/tmp/connector-proxy.js"],
-      env: { OMB_CONNECTOR_UPSTREAM_URL: "https://example.test/mcp" },
+      env: { SEIRA_CONNECTOR_UPSTREAM_URL: "https://example.test/mcp" },
     });
     expect(JSON.stringify(seen.argv)).not.toContain("ak_test");
     expect(seen.argv[seen.argv.indexOf("--allowedTools") + 1]).toContain("mcp__composio");
@@ -2920,7 +2977,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
         composio: {
           command: process.execPath,
           args: ["/tmp/connector-proxy.js"],
-          env: { OMB_CONNECTOR_UPSTREAM_URL: "https://example.test/mcp" },
+          env: { SEIRA_CONNECTOR_UPSTREAM_URL: "https://example.test/mcp" },
         },
       },
     });
@@ -2930,7 +2987,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
       const seen = JSON.parse(readFileSync(dump, "utf8"));
       return seen.argv[seen.argv.indexOf("--mcp-config") + 1] as string;
     })();
-    expect(basename(dirname(configPath))).toMatch(new RegExp(`^omb-mcp-${process.pid}-[A-Za-z0-9]{6}$`));
+    expect(basename(dirname(configPath))).toMatch(new RegExp(`^seira-mcp-${process.pid}-[A-Za-z0-9]{6}$`));
     expect(existsSync(configPath)).toBe(false);
     expect(existsSync(dirname(configPath))).toBe(false);
   });
@@ -3091,7 +3148,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await recorder.until((e) => e.type === "item.completed" && e.itemType === "tool" && e.turnId === running.turnId);
     const stoppedPid = JSON.parse(readFileSync(dump, "utf8")).pid;
     // Holds the interrupt-before-exit window open: the pipe stays writable until the kill is released.
-    const conn = await connectSocket(permissionSocketPath(threadId));
+    const conn = await connectSocket(driverSocket(threadId));
     const nextAnswer = answerQueue(conn);
     const kill = procs.killCliTree;
     const delayedKill = vi.spyOn(procs, "killCliTree").mockImplementation(async () => false);
@@ -3691,7 +3748,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: "t-retained-late", text: "one" });
     await recorder.until((e) => e.type === "turn.completed");
 
-    const conn = await connectSocket(permissionSocketPath("t-retained-late"));
+    const conn = await connectSocket(driverSocket("t-retained-late"));
     const nextAnswer = answerQueue(conn);
     const opensBefore = recorder.events.filter((e) => e.type === "request.opened").length;
     const answer = nextAnswer();
@@ -3803,8 +3860,8 @@ describe("ClaudeDriver turns (fake CLI)", () => {
 
   it("closes an idle session after the configured window", async () => {
     // Ten seconds is the floor; poll the native log for the close instead of sleeping past it.
-    process.env.OMB_CLAUDE_SESSION_IDLE_MIN_MS = "10000";
-    process.env.OMB_CLAUDE_SESSION_IDLE_MS = "10000";
+    process.env.SEIRA_CLAUDE_SESSION_IDLE_MIN_MS = "10000";
+    process.env.SEIRA_CLAUDE_SESSION_IDLE_MS = "10000";
     await create();
     await instance.adapter.sendTurn({ threadId: "t-idle", text: "one" });
     await recorder.until((e) => e.type === "turn.completed");
@@ -4067,7 +4124,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     process.env.FAKE_CLAUDE_AUTO_UNAVAILABLE_MODELS = "claude-haiku-4-5";
     await create("hang", {}, { permissionMode: "bypassPermissions" });
     const raise = async (threadId: string, id: string) => {
-      const conn = connect(permissionSocketPath(threadId));
+      const conn = connect(driverSocket(threadId));
       await new Promise<void>((resolve, reject) => {
         conn.on("connect", resolve);
         conn.on("error", reject);
@@ -4095,7 +4152,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await create("hang");
     const threadId = "t-command-descriptor";
     await instance.adapter.sendTurn({ threadId, text: "go", cwd: scratch });
-    const conn = await connectSocket(permissionSocketPath(threadId));
+    const conn = await connectSocket(driverSocket(threadId));
     const command = `printf '  ${"complete input ".repeat(30)}'\n  pwd  `;
     try {
       for (const [index, ask] of [
@@ -4138,7 +4195,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = connect(permissionSocketPath("t-perm-abc"));
+    const conn = connect(driverSocket("t-perm-abc"));
     const answered = new Promise<{ behavior: string }>((resolve) => {
       let buf = "";
       conn.on("data", (c) => {
@@ -4199,7 +4256,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await create("hang");
     const dump = join(scratch, "dump.json");
     process.env.FAKE_CLAUDE_DUMP = dump;
-    const basePath = permissionSocketPath("t-perm-squat");
+    const basePath = driverSocket("t-perm-squat");
     // Squat the deterministic path like a hung child: POSIX steals the socket file, Windows must bind a fallback.
     const squatter = createNetServer(() => {});
     await new Promise<void>((resolve, reject) => {
@@ -4245,7 +4302,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: "t-perm-stop", text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = connect(permissionSocketPath("t-perm-stop"));
+    const conn = connect(driverSocket("t-perm-stop"));
     await new Promise<void>((resolve, reject) => {
       conn.on("connect", resolve);
       conn.on("error", reject);
@@ -4265,7 +4322,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: COLLISION_THREAD_IDS[0], text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = await connectSocket(permissionSocketPath(COLLISION_THREAD_IDS[0]));
+    const conn = await connectSocket(driverSocket(COLLISION_THREAD_IDS[0]));
     const nextAnswer = answerQueue(conn);
 
     conn.write(JSON.stringify({ t: "ask", id: "dup-1", tool: "Bash", input: { command: "echo one" } }) + "\n");
@@ -4294,11 +4351,11 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: COLLISION_THREAD_IDS[1], text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn1 = await connectSocket(permissionSocketPath(COLLISION_THREAD_IDS[1]));
+    const conn1 = await connectSocket(driverSocket(COLLISION_THREAD_IDS[1]));
     conn1.write(JSON.stringify({ t: "ask", id: "dup-2", tool: "Bash", input: { command: "echo one" } }) + "\n");
     await recorder.until((e) => e.type === "request.opened" && e.requestId === "dup-2");
 
-    const conn2 = await connectSocket(permissionSocketPath(COLLISION_THREAD_IDS[1]));
+    const conn2 = await connectSocket(driverSocket(COLLISION_THREAD_IDS[1]));
     const conn2Answer = answerQueue(conn2)();
     conn2.write(JSON.stringify({ t: "ask", id: "dup-2", tool: "Bash", input: { command: "echo two" } }) + "\n");
     expect(await conn2Answer).toMatchObject({
@@ -4323,7 +4380,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: COLLISION_THREAD_IDS[2], text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = await connectSocket(permissionSocketPath(COLLISION_THREAD_IDS[2]));
+    const conn = await connectSocket(driverSocket(COLLISION_THREAD_IDS[2]));
 
     conn.write(JSON.stringify({ t: "ask", id: "dup-3", tool: "Bash", input: { command: "echo one" } }) + "\n");
     await recorder.until((e) => e.type === "request.opened" && e.requestId === "dup-3" && e.summary === "echo one");
@@ -4347,7 +4404,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: COLLISION_THREAD_IDS[3], text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = await connectSocket(permissionSocketPath(COLLISION_THREAD_IDS[3]));
+    const conn = await connectSocket(driverSocket(COLLISION_THREAD_IDS[3]));
     const nextAnswer = answerQueue(conn);
 
     conn.write(JSON.stringify({ t: "ask", id: "dup-4", kind: "question", tool: "ask_user", input: { question: "one?" } }) + "\n");
@@ -4376,7 +4433,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: "t-perm-late", text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = await connectSocket(permissionSocketPath("t-perm-late"));
+    const conn = await connectSocket(driverSocket("t-perm-late"));
     const nextAnswer = answerQueue(conn);
     const initialReply = nextAnswer();
     conn.write(JSON.stringify({ t: "ask", id: "ask-ready", tool: "Bash", input: { command: "echo ready" } }) + "\n");
@@ -4409,7 +4466,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await instance.adapter.sendTurn({ threadId: "t-question-late", text: "go" });
     await recorder.until((e) => e.type === "session.started");
 
-    const conn = await connectSocket(permissionSocketPath("t-question-late"));
+    const conn = await connectSocket(driverSocket("t-question-late"));
     const nextAnswer = answerQueue(conn);
     const initialReply = nextAnswer();
     conn.write(JSON.stringify({ t: "ask", kind: "question", id: "q-ready", tool: "ask_user", input: { question: "ready?" } }) + "\n");
@@ -4468,7 +4525,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await create(undefined, { CLAUDE_CONFIG_DIR: instanceConfigDir });
     const dump = join(scratch, "generate-text-env.json");
     process.env.FAKE_CLAUDE_DUMP = dump;
-    const names = ["XAI_API_KEY", "COMPOSIO_API_KEY", "BOX_TOKEN", "OPENCODE_API_KEY", "OMB_TTS_KEY"] as const;
+    const names = ["XAI_API_KEY", "COMPOSIO_API_KEY", "BOX_TOKEN", "OPENCODE_API_KEY", "SEIRA_TTS_KEY"] as const;
     for (const name of names) process.env[name] = `${name}-must-not-leak`;
 
     await expect(instance.generateText?.("summarize safely")).resolves.toBe("fake generated text");
@@ -4500,7 +4557,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(seen.argv).toContain("--strict-mcp-config");
     expect(seen.argv[seen.argv.indexOf("--setting-sources") + 1]).toBe("project");
     expect(seen.argv).toContain("--no-session-persistence");
-    expect(basename(seen.cwd)).toMatch(new RegExp(`^omb-claude-background-${process.pid}-[A-Za-z0-9]{6}$`));
+    expect(basename(seen.cwd)).toMatch(new RegExp(`^seira-claude-background-${process.pid}-[A-Za-z0-9]{6}$`));
     expect(existsSync(seen.cwd)).toBe(false);
   });
 
@@ -4550,7 +4607,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
       "-p", "--model", "claude-haiku-5-5", "--output-format", "text", "--settings", BACKGROUND_SETTINGS,
       "--tools", "", "--no-session-persistence", "--strict-mcp-config", "--setting-sources", "project",
     ]);
-    // OMB_CLAUDE_INHERIT_USER_CONFIG keeps the person's own setup, still without tools
+    // SEIRA_CLAUDE_INHERIT_USER_CONFIG keeps the person's own setup, still without tools
     expect(backgroundCallArgs({ ...base, supports: cli([2, 1, 296]), isolated: false })).not.toContain("--strict-mcp-config");
     expect(backgroundCallArgs({ ...base, supports: cli([1, 0, 100]), isolated: true })).toEqual([
       "-p", "--model", "claude-haiku-5-5", "--output-format", "text", "--settings", BACKGROUND_SETTINGS, "--strict-mcp-config",
@@ -4681,7 +4738,7 @@ describe("ClaudeDriver resume recovery (fake CLI)", () => {
   beforeEach(async () => {
     ensureDirs();
     chmodSync(FAKE_CLI, 0o755);
-    scratch = mkdtempSync(join(tmpdir(), "omb-claude-recover-"));
+    scratch = mkdtempSync(join(tmpdir(), "seira-claude-recover-"));
     process.env.FAKE_CLAUDE_MODE = "dead-session";
     instance = await ClaudeDriver.create({
       instanceId: "claude-test",

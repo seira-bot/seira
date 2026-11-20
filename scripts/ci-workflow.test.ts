@@ -44,8 +44,10 @@ const packageWorkflows = packageFiles.map((file) => [file, workflows.get(file)!]
 const IMAGE = "server-image.yml";
 const NPM = "npm-publish.yml";
 const BUGS = "bug-reports.yml";
+const PUSH = "push-relay.yml";
 const image = workflows.get(IMAGE)!;
 const bugs = workflows.get(BUGS)!;
+const push = workflows.get(PUSH)!;
 const LOGIN = "${{ secrets.GITHUB_TOKEN }}";
 const MAINTAINER_CHECK = "startsWith(vars.RELEASE_MAINTAINERS || '[]', '[') && contains(fromJSON(vars.RELEASE_MAINTAINERS || '[]'), github.triggering_actor)";
 const NOT_MAINTAINER = `!(${MAINTAINER_CHECK})`;
@@ -63,8 +65,8 @@ const allRuns = () => allSteps().flatMap((step) => (step.run === undefined ? [] 
 const runs = (job: Job) => stepsOf(job).flatMap((step) => (step.run === undefined ? [] : [step.run]));
 
 describe("CI workflows", () => {
-  it("keeps the CI workflow, the bug report Worker workflow, the npm publish workflow, the package workflows and the server image workflow only", () => {
-    expect(files).toEqual([BUGS, "ci.yml", NPM, ...packageFiles, IMAGE]);
+  it("keeps the CI workflow, the two Worker workflows, the npm publish workflow, the package workflows and the server image workflow only", () => {
+    expect(files).toEqual([BUGS, "ci.yml", NPM, ...packageFiles, PUSH, IMAGE]);
   });
 
   it("runs on pull requests, pushes to main and manual starts only", () => {
@@ -388,7 +390,7 @@ describe("CI vitest job", () => {
 
   it("runs the worker count that scripts/ci-scope.mjs names", () => {
     const tests = stepsOf(job).find((step) => step.run?.includes("--shard="));
-    expect(Number(tests?.env?.OMB_VITEST_WORKERS)).toBe(VITEST_WORKERS["ubuntu-latest"]);
+    expect(Number(tests?.env?.SEIRA_VITEST_WORKERS)).toBe(VITEST_WORKERS["ubuntu-latest"]);
   });
 });
 
@@ -423,6 +425,44 @@ describe("Bug report Worker workflow", () => {
     expect(job.permissions).toBeUndefined();
     expect(job.environment).toBeUndefined();
     expect(JSON.stringify(bugs)).not.toContain("secrets.");
+  });
+
+  it("never deploys the Worker", () => {
+    for (const run of runs(job)) expect(run).not.toMatch(/deploy|wrangler/);
+  });
+});
+
+describe("Push relay Worker workflow", () => {
+  const job = push.jobs.worker!;
+  const paths = ["cloudflare/push-relay/**", ".github/workflows/push-relay.yml"];
+
+  it("starts on a pull request or a push to main that changes the Worker or this file, or by hand", () => {
+    expect(Object.keys(push.on).sort()).toEqual(["pull_request", "push", "workflow_dispatch"]);
+    expect(push.on.pull_request).toEqual({ types: ["opened", "synchronize", "reopened", "ready_for_review"], paths });
+    expect(push.on.push).toEqual({ branches: ["main"], paths });
+  });
+
+  it("skips a draft pull request, and cancels an older run of the same pull request or main but never a manual start", () => {
+    expect(job.if).toBe("${{ github.event.pull_request.draft != true }}");
+    expect(push.concurrency?.["cancel-in-progress"]).toBe("${{ github.event_name != 'workflow_dispatch' }}");
+    expect(push.concurrency?.group).toContain("format('pr-{0}', github.event.pull_request.number)");
+    expect(push.concurrency?.group).toContain("format('manual-{0}', github.run_id)");
+    expect(push.concurrency?.group).toContain("github.ref");
+  });
+
+  it("runs the type check and the tests of the Worker", () => {
+    expect(runs(job)).toContain("pnpm push:check");
+    expect(runs(job)).toContain("pnpm push:test");
+    expect(scripts["push:check"]).toContain("cloudflare/push-relay/tsconfig.json");
+    expect(scripts["push:test"]).toContain("cloudflare/push-relay/vitest.config.ts");
+  });
+
+  it("has one job on a GitHub-hosted runner, with no permission, no secret and no environment", () => {
+    expect(Object.keys(push.jobs)).toEqual(["worker"]);
+    expect(job["runs-on"]).toBe("ubuntu-24.04");
+    expect(job.permissions).toBeUndefined();
+    expect(job.environment).toBeUndefined();
+    expect(JSON.stringify(push)).not.toContain("secrets.");
   });
 
   it("never deploys the Worker", () => {

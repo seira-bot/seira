@@ -105,10 +105,12 @@ export function createAskCards(deps: AskCardsDeps) {
   const askersLines = (node: Pick<HandoffView, "threadId" | "botId" | "groupId">) => store.messagesFor(node.threadId)
     .filter((message) => !node.groupId || message.from?.botId === node.botId);
 
+  const questionRequestId = (node: Pick<HandoffView, "id" | "executions">) => `${OPEN_QUESTION}${node.id}-${node.executions}`;
+
   /** The card a parked question asks with, in place of its NEEDS INPUT line; `card` presets its state. False when it was
    * there already. */
   function questionCard(node: HandoffView, question: string, card: Partial<OptionCardData> = {}): boolean {
-    const requestId = `${OPEN_QUESTION}${node.id}-${node.executions}`;
+    const requestId = questionRequestId(node);
     if (store.messagesFor(node.threadId).some((message) => message.card?.requestId === requestId)) return false;
     const asked = withDefault(question);
     const bot = store.bot(node.botId);
@@ -170,7 +172,7 @@ export function createAskCards(deps: AskCardsDeps) {
     if (node.cards?.length) return;
     const room = node.groupId ? store.group(node.groupId) : undefined;
     notify(buildNotification(asksWithCard ? "question" : "delegation-settled", bot, node.threadId, withDefault(question).question,
-      { avatarUrl: bot.avatarUrl, ...(room ? { group: { id: room.id, name: room.name } } : {}) }));
+      { avatarUrl: bot.avatarUrl, ...(asksWithCard ? { requestId: questionRequestId(node) } : {}), ...(room ? { group: { id: room.id, name: room.name } } : {}) }));
   }
 
   /** Work handed on has waited a day on the person: one notification says what it needs and when it closes. Its open card
@@ -183,7 +185,10 @@ export function createAskCards(deps: AskCardsDeps) {
     const room = node.groupId ? store.group(node.groupId) : undefined;
     const body = node.cards?.length ? serverLine(language, "server.teammates.stillWaitingCard", { days })
       : serverLine(language, "server.teammates.stillWaiting", { days, question: withDefault(node.question ?? "").question.slice(0, 180) });
-    notify(buildNotification("question", bot, node.threadId, body, { avatarUrl: bot.avatarUrl, ...(room ? { group: { id: room.id, name: room.name } } : {}) }));
+    const open = askersLines(node).findLast((message) => message.card?.requestId?.startsWith(`${OPEN_QUESTION}${node.id}-`) && !message.card.answered);
+    notify(buildNotification("question", bot, node.threadId, body, {
+      avatarUrl: bot.avatarUrl, ...(open?.card?.requestId ? { requestId: open.card.requestId } : {}), ...(room ? { group: { id: room.id, name: room.name } } : {}),
+    }));
     if (room) store.patchGroup(room.id, { unread: true });
     else store.patchTask(bot.id, node.threadId, { unread: true });
   }

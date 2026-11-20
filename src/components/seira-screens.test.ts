@@ -38,7 +38,7 @@ describe("screens with an empty, waiting, error or success moment", () => {
   }
 
   it("the sidebar's stacked faces are bot avatars, which wear Seira unless the person chose another body", () => {
-    expect(source("StackedMauses.tsx")).toContain("<BotAvatar");
-    expect(source("StackedMauses.tsx")).not.toMatch(/steel-body|mausbot-steel/);
+    expect(source("StackedSeiras.tsx")).toContain("<BotAvatar");
+    expect(source("StackedSeiras.tsx")).not.toMatch(/steel-body|seira-steel/);
   });
 });

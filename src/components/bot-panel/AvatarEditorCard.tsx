@@ -5,11 +5,11 @@ import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { bodyName, colorName } from "@/lib/mascot-names";
 import type { LocaleKey } from "@/locales";
-import { colorSwatch, MAUS_COLOR_LABEL, MAUS_COLOR_NAMES, PICKABLE_STATES, type MausState } from "@/lib/mascot";
+import { colorSwatch, SEIRA_COLOR_LABEL, SEIRA_COLOR_NAMES, PICKABLE_STATES, type MascotState } from "@/lib/mascot";
 import { useStore, type Bot } from "@/state/store";
 import { mayRename, useTeamPeople } from "@/state/team-people";
 import { PICKER_BODY_IDS, botBodyId, type BotBodyId } from "../../../shared/bot-body";
-import { MausAvatar } from "../Avatar";
+import { SeiraAvatar } from "../Avatar";
 import { CastCharacterPicker } from "../CastCharacterPicker";
 import { AvatarImageGenerator } from "../AvatarImageGenerator";
 import { AvatarFraming, OrganizationAvatarIcons, RESET_MASCOT_PATCH, useAvatarImage, type AvatarPatch } from "../avatar-editing";
@@ -31,7 +31,7 @@ const CROP_KEY: Record<(typeof IMAGE_CROPS)[number], LocaleKey> = {
   square: "botPanel.avatar.square",
 };
 
-const FACE_KEY: Partial<Record<MausState, LocaleKey>> = {
+const FACE_KEY: Partial<Record<MascotState, LocaleKey>> = {
   idle: "botPanel.face.idle",
   happy: "botPanel.face.happy",
   curious: "botPanel.face.curious",
@@ -44,14 +44,14 @@ const FACE_KEY: Partial<Record<MausState, LocaleKey>> = {
   proud: "botPanel.face.proud",
 };
 
-const faceLabel = (state: MausState) => {
+const faceLabel = (state: MascotState) => {
   const key = FACE_KEY[state];
   return key ? t(key) : state;
 };
 
 export function AvatarEditorCard({ bot, activeState, onPatch, onClose }: {
   bot: Bot;
-  activeState: MausState;
+  activeState: MascotState;
   onPatch: (patch: AvatarPatch) => void;
   onClose: () => void;
 }) {
@@ -85,7 +85,7 @@ export function AvatarEditorCard({ bot, activeState, onPatch, onClose }: {
         !showsImage && body === id ? "bg-ink/[0.08] ring-[1.5px] ring-inset ring-ink/25" : "hover:bg-ink/[0.05]",
       )}
     >
-      <MausAvatar color={bot.color} bodyId={id} size={40} animated={false} trackPointer={false} />
+      <SeiraAvatar color={bot.color} bodyId={id} size={40} animated={false} trackPointer={false} />
     </button>
   );
 
@@ -156,14 +156,14 @@ export function AvatarEditorCard({ bot, activeState, onPatch, onClose }: {
               </button>
             )}
             <div className="flex flex-wrap justify-center gap-2 px-1 pb-1 pt-3.5">
-              {MAUS_COLOR_NAMES.map((color) => (
+              {SEIRA_COLOR_NAMES.map((color) => (
                 <button
                   key={color}
                   type="button"
                   disabled={busy}
                   aria-pressed={bot.color === color}
                   aria-label={t("mascot.useColor", { color: colorName(color) })}
-                  title={t(MAUS_COLOR_LABEL[color])}
+                  title={t(SEIRA_COLOR_LABEL[color])}
                   onClick={() => pickMascot({ color })}
                   className={cn(
                     "size-6 rounded-full disabled:opacity-50",

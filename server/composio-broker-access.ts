@@ -28,7 +28,7 @@ export function applyManagedBrokerMessage(message: unknown): boolean {
   const parsed = managedBrokerMessageSchema.safeParse(message);
   if (
     !parsed.success ||
-    parsed.data.type !== "openmausbot:managed-composio" ||
+    parsed.data.type !== "seira:managed-composio" ||
     !Object.hasOwn(parsed.data, "access")
   ) {
     return false;
@@ -50,8 +50,8 @@ export type BrokerAccess = { url: string; token: string }; // `as` below: a Team
 export function brokerAccess(): BrokerAccess | null {
   if (managedComposioBrokerOff()) return null;
   if (managedBrokerAccess !== undefined) return managedBrokerAccess;
-  const url = process.env.OMB_COMPOSIO_BROKER_URL?.trim();
-  const token = process.env.OMB_COMPOSIO_BROKER_TOKEN?.trim();
+  const url = process.env.SEIRA_COMPOSIO_BROKER_URL?.trim();
+  const token = process.env.SEIRA_COMPOSIO_BROKER_TOKEN?.trim();
   if (!url || !token) return null;
   if (!managedBrokerToken.test(token)) throw new Error("The connected-apps service token is invalid");
   return { url: normalizeManagedBrokerUrl(url), token };
@@ -63,7 +63,7 @@ const eraseResponseSchema = z.object({ erased: z.boolean().optional(), sharedUse
 
 /**
  * Erases this installation at the managed service and forgets its token here. A failure throws with the token kept, so
- * the call can be repeated. `clearStored` removes a token this process keeps on disk: a Cloud home's
+ * the call can be repeated. `clearStored` removes a token this process keeps on disk: the server's own
  * CLOUD_CONNECTED_APPS_FILE. `sharedUserKept` says connected apps stayed because another installation uses them.
  */
 export async function eraseManagedBrokerInstallation(clearStored?: () => void): Promise<{ sharedUserKept: boolean }> {
