@@ -178,6 +178,8 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
   if (parentEnv.SEIRA_BROWSER_TIMING === "1") childEnv.SEIRA_BROWSER_TIMING = "1";
   // A share on the tailnet (server/tailnet-listener.ts): a test names one of this machine's own addresses as its stand-in.
   for (const key of ["SEIRA_TAILNET_NAME", "SEIRA_TAILNET_ADDRESSES", "SEIRA_TEST_TAILNET_STAND_IN"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
+  // The addresses a phone link names (server/phone-routes.ts).
+  for (const key of ["SEIRA_PUBLIC_URL", "SEIRA_PHONE_ROUTES"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
   // The limits of a turn nobody is watching (server/host/unattended-turns.ts), brought within a test's reach.
   for (const key of ["SEIRA_UNATTENDED_TURN_MAX_MS", "SEIRA_UNATTENDED_TURN_MAX_REQUESTS", "SEIRA_UNATTENDED_TURN_MAX_DENIALS", "SEIRA_LOOP_GUARD_UNATTENDED_STOP_AT"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
   // Warm summaries' minutes as seconds (server/warm-summary.ts), and the switch that turns them off.

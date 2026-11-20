@@ -3,7 +3,7 @@
 //   seira setup [--data-dir ~/.seira]
 //   seira start [serve options]
 //   seira serve [--port 8799] [--data-dir ~/.seira] [--label "cab mini"]
-//                     [--public-url https://host] [--tailscale | --tunnel | --domain HOST] [--relay] [--no-pair]
+//                     [--public-url https://host] [--tailscale] [--tunnel] [--domain HOST] [--relay] [--no-pair]
 //   seira pair  [--label "My MacBook"] [--client] [--public-url https://host]
 //   seira sessions [revoke <id>]
 //   seira status
@@ -36,6 +36,7 @@ import { runConfigCli } from "./config-cli.ts";
 import { runFleetCommand, type FleetInput } from "./fleet-cli.ts";
 import { startFleetAgent } from "./fleet-agent.ts";
 import { fleetLayout } from "./fleet.ts";
+import { phoneRoutesFromEnv } from "./phone-routes.ts";
 import { clearLeftoverTailscaleServe, explainTailscaleFailure, tailnetListenFallback, tailscaleServe, tailscaleStatus, type TailscaleStatus } from "./tailscale.ts";
 import { defaultSetupIo, SetupCancelled, type SetupIo } from "./cli-prompts.ts";
 import { HEADLESS_VERB_NAMES, usage } from "./cli-usage.ts";
@@ -212,7 +213,7 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
   if (!Number.isInteger(options.port) || options.port < 1 || options.port > 65_535) return { error: "--port must be 1-65535" };
   const publicUrlRefusal = options.publicUrl ? publicUrlProblem(options.publicUrl) : null;
   if (publicUrlRefusal) return { error: publicUrlRefusal };
-  if (options.tunnel && (options.tailscale || options.relay)) return { error: options.relay ? "choose one of --relay (phones through Seira Relay) and --tunnel (a public address)" : "choose one of --tailscale (your tailnet) and --tunnel (a public address)" };
+  if (options.tunnel && options.relay) return { error: "choose one of --relay (phones through Seira Relay) and --tunnel (a public address)" };
   if (options.command === "access" && !options.accessAction) return { error: "access needs one of: list, add EMAIL [--chat-only], remove EMAIL" };
   if (options.command === "service" && !options.serviceAction) return { error: "service needs one of: install [the same options as serve], uninstall" };
   if (options.domain && (options.tailscale || options.tunnel || options.publicUrl)) return { error: "--domain already gives the server its address; drop --tailscale, --tunnel and --public-url" };
@@ -315,7 +316,7 @@ export function applyStartupPreferences(options: CliOptions, saved: AppConfig["c
   }
   return {
     ...options,
-    tunnel: saved.access === "tunnel", tailscale: saved.access === "tailscale",
+    tunnel: saved.access === "tunnel", tailscale: saved.access === "tailscale" || (saved.access === "tunnel" && saved.tailscale === true),
     publicUrl: saved.access === "public-url" ? saved.publicUrl : undefined,
     phone: saved.access === "local" ? undefined : saved.phone,
   };
@@ -327,6 +328,7 @@ function startupPreferences(options: CliOptions): NonNullable<AppConfig["cliStar
   if (access === "public-url" && !publicUrl) throw new Error("Use an HTTPS origin without a password, path or query for saved phone access. The address was not saved.");
   return {
     access,
+    ...(access === "tunnel" && options.tailscale ? { tailscale: true } : {}),
     ...(publicUrl ? { publicUrl } : {}),
     ...(!options.local && options.phone ? { phone: options.phone } : {}),
   };
@@ -353,8 +355,9 @@ async function mintPairing(port: number, options: { label?: string; client?: boo
   const refusal = refusedAsService(status, body) ? SERVICE_TRUST_HELP : desktopOwnedRefusal(status, body);
   if (refusal || status !== 200) throw new Error(refusal ?? `server refused to mint a pairing code: ${typeof body?.error === "string" ? body.error : status}`);
   const reachable = options.publicUrl && !isLoopbackHost(new URL(options.publicUrl).hostname) ? options.publicUrl : null;
-  const link = reachable ? `${reachable}/pair#code=${body.code}` : typeof body.url === "string" && !isLoopbackHost(new URL(body.url).hostname) ? body.url : null;
-  const invite = (reachable && typeof body.credential === "string" ? phonePairingLink({ address: reachable, token: body.credential, name: typeof body.serverName === "string" ? body.serverName : undefined }) : null) ?? (typeof body.inviteUrl === "string" ? body.inviteUrl : null);
+  const serverLink = typeof body.url === "string" && !isLoopbackHost(new URL(body.url).hostname) ? body.url : null;
+  const link = serverLink ?? (reachable ? `${reachable}/pair#code=${body.code}` : null);
+  const invite = (typeof body.inviteUrl === "string" ? body.inviteUrl : null) ?? (reachable && typeof body.credential === "string" ? phonePairingLink({ address: reachable, token: body.credential, name: typeof body.serverName === "string" ? body.serverName : undefined }) : null);
   const local = localLinkBase(options.publicUrl ?? null, port);
   if (options.guided) return browserSignInLines(`${local.base}/pair#code=${body.code}`, body.code, body.expiresAt);
   return relayPairingBlock(body, chatOnly, cliPrefix()) ?? pairingBlock({ code: body.code, expiresAt: body.expiresAt, chatOnly, link, localLink: `${local.base}/pair#code=${body.code}`, localPlace: local.place, inviteUrl: invite, phone: options.phone, prefix: cliPrefix() });
@@ -748,7 +751,9 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
       const listening = "failure" in served ? tailnetListenFallback(served.failure, tailscale, options.port) : null;
       tailscaleShare = "failure" in served ? listening && { origin: listening.origin, stop: async () => {} } : served;
       if (startupCancelled || !tailscaleShare) throw startupCancelled ? new SetupCancelled() : new Error(`--tailscale: ${explainTailscaleFailure("failure" in served ? served.failure : "unknown")}`);
-      Object.assign(env, listening?.env); publicUrl = tailscaleShare.origin;
+      Object.assign(env, listening?.env);
+      if (plan) env.SEIRA_PHONE_ROUTES = [tailscaleShare.origin, ...phoneRoutesFromEnv(process.env)].join(",");
+      else publicUrl = tailscaleShare.origin;
       log(listening?.line ?? `tailscale: serving https://${tailscale.dnsName} → http://127.0.0.1:${options.port} (only your tailnet can reach it)`);
     }
     if (startupCancelled) throw new SetupCancelled();

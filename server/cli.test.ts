@@ -59,7 +59,8 @@ describe("seira command line", () => {
     expect(parseArgs(["browser", "install", "--with-deps"], {})).toMatchObject({ command: "browser", browserAction: "install", withDeps: true });
     expect(parseArgs(["browser", "status"], {})).toMatchObject({ command: "browser", browserAction: "status" });
     expect(parseArgs(["browser"], {})).toEqual({ error: "browser needs an action: install or status" });
-    expect(parseArgs(["serve", "--tailscale", "--tunnel"], {})).toEqual({ error: "choose one of --tailscale (your tailnet) and --tunnel (a public address)" });
+    expect(parseArgs(["serve", "--tailscale", "--tunnel"], {})).toMatchObject({ command: "serve", tailscale: true, tunnel: true });
+    expect(parseArgs(["serve", "--domain", "seira.example.com", "--tailscale", "--tunnel"], {})).toEqual({ error: expect.stringContaining("--domain already gives") });
     expect(parseArgs(["access", "add", "her@example.test", "--chat-only"], {})).toMatchObject({ command: "access", accessAction: "add", email: "her@example.test", chatOnly: true });
     expect(parseArgs(["access", "list"], {})).toMatchObject({ command: "access", accessAction: "list" });
     expect(parseArgs(["access"], {})).toEqual({ error: "access needs one of: list, add EMAIL [--chat-only], remove EMAIL" });
@@ -413,6 +414,10 @@ describe("saved startup access", () => {
   it("keeps local launches local and supports a one-time local override", () => {
     expect(applyStartupPreferences(options(), { access: "local" })).toMatchObject({ tunnel: false, tailscale: false, publicUrl: undefined });
     expect(applyStartupPreferences({ ...options(), local: true }, { access: "tunnel", phone: "ios" })).toMatchObject({ tunnel: false, phone: undefined });
+  });
+  it("restores a saved tunnel together with the tailnet, and saves both", () => {
+    expect(applyStartupPreferences(options(), { access: "tunnel", tailscale: true })).toMatchObject({ tunnel: true, tailscale: true });
+    expect(applyStartupPreferences(options(), { access: "tunnel" })).toMatchObject({ tunnel: true, tailscale: false });
   });
   it("explicit route flags take priority over saved settings", () => {
     expect(applyStartupPreferences({ ...options(), tailscale: true }, { access: "tunnel" })).toMatchObject({ tailscale: true, tunnel: false });

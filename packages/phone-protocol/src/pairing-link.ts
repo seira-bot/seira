@@ -196,3 +196,21 @@ export function phonePairingLink({
 
   return `seira://pair?${fields.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join("&")}`;
 }
+
+export interface ServerPairingLinkOptions {
+  /** The origin the link opens first: the server's primary route. */
+  base: string;
+  code: string;
+  /** Every route the server has. The link carries them only when there are two or more. */
+  endpoints?: CompanionEndpoint[];
+}
+
+/** The link a server hands out for a typed code: `<base>/pair#code=<code>`, plus `&endpoints=<base64url JSON>` when the
+ * server has two or more https routes. The browser page reads only the code; the phone apps read the routes. Null when
+ * `base` is not a plain http(s) origin. */
+export function serverPairingLink({ base, code, endpoints }: ServerPairingLinkOptions): string | null {
+  const origin = /^https?:\/\//i.test(base.trim()) ? linkAddress(base, undefined) : null;
+  if (!origin || !code) return null;
+  const routes = qrEndpoints(endpoints);
+  return `${origin}/pair#code=${code}${routes.length >= 2 ? `&endpoints=${encodeEndpoints(routes)}` : ""}`;
+}
