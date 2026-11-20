@@ -39,6 +39,9 @@ vi.mock("./tailscale.ts", () => ({
   clearLeftoverTailscaleServe: mocks.clearLeftoverTailscaleServe, explainTailscaleFailure: (failure: string) => failure,
 }));
 vi.mock("./tunnel.ts", () => ({ ...mocks, describeTunnelState: () => "Fixture tunnel" }));
+vi.mock("./lan-address.ts", async (original) => ({
+  ...await original<typeof import("./lan-address.ts")>(), reachableAddresses: () => ({ lan: ["192.168.50.20"], shared: [], tailscale: [] }),
+}));
 vi.mock("./browser-engine.ts", () => ({
   browserEngineStatus: () => ({ kind: "ready" }), describeBrowserEngine: () => "Fixture browser ready",
 }));
@@ -210,6 +213,26 @@ describe("CLI startup lifecycle", () => {
     expect(recovery().running()).toBeNull();
     expect(service.dispose).toHaveBeenCalled();
     expect(running.stop).toHaveBeenCalledOnce();
+  });
+
+  it("serves on the LAN without a tunnel when a signed-in machine gets no address (FR-221)", async () => {
+    const reason = "Secure HTTPS links are temporarily full. Try again in 10 minutes, or pair on this Wi-Fi or with Tailscale.";
+    const service = { retry: vi.fn(async () => ({ status: "error", message: reason })), restore: vi.fn(), dispose: vi.fn() };
+    mocks.createTunnelAccount.mockReturnValue({ credentials: { status: "available", read: () => ({}) }, service });
+    mocks.tunnelAccess.mockReturnValue(null);
+    let started: NodeJS.ProcessEnv = {};
+    mocks.spawn.mockImplementation((_command: string, _args: string[], spawned: { env: NodeJS.ProcessEnv }) => { started = spawned.env; throw new Error("Fixture spawn failure"); });
+    const log = vi.fn();
+    await expect(runServe({ ...options, tunnel: true, lan: true }, log)).rejects.toThrow("Fixture spawn failure");
+    expect(started.SEIRA_LAN).toBe("1");
+    expect(started.SEIRA_SERVES_TUNNEL).toBeUndefined();
+    expect(started.SEIRA_TUNNEL_SOCKET).toBeUndefined();
+    expect(mocks.ensureCloudflared).not.toHaveBeenCalled();
+    expect(mocks.startTunnel).not.toHaveBeenCalled();
+    expect(service.dispose).toHaveBeenCalled();
+    const lines = log.mock.calls.map(([line]) => String(line)).join("\n");
+    expect(lines).toContain(`tunnel: ${reason}`);
+    expect(lines).toMatch(/no public address this time, so this server runs without one/);
   });
 
   it("reopens a matching desktop workspace even when its server PID differs from the lease owner", async () => {

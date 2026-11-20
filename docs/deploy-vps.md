@@ -716,6 +716,8 @@ Read this before putting anything else in front of the server.
 
 **`serve --tunnel` says "no account on this machine yet".** Run `npx @seira-bot/seira login` on this machine first; the credentials are per machine.
 
+**`serve --tunnel` says "no public address this time".** You are signed in, but Seira could not give this machine an address now: the secure links are full for a short time, your account already holds its addresses, or the service does not answer. The server keeps running on the routes you added (`--lan`, `--tailscale`), and on this machine at `http://127.0.0.1`. Start `serve --tunnel` again later to get an address. If the account limit is the cause, run `logout` on a machine you no longer use.
+
 **The server does not start and says its data "was written by a newer Seira".** An older version was started on data a newer one had already changed, which happens when a version is put back without its data. Nothing was changed. Install the version the message names (or a newer one), or put back the copy of the data from before that update.
 
 **The tunnel stays on "retrying".** The server is running and usable locally; the public hop is not verified yet. Wait a minute (Cloudflare needs a moment on a fresh address), then check `journalctl`/the terminal for the reason. If it never comes up, `npx @seira-bot/seira logout && npx @seira-bot/seira login` issues a fresh address.

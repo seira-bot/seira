@@ -533,7 +533,15 @@ export async function runLogin(options: CliOptions, io: CliIo = defaultIo()): Pr
   }
   const signedIn = describeTunnelAccount(account.credentials.read());
   if (!signedIn.address && !(options.relay && signedIn.installationId)) {
-    io.error(`signed in, but no public address was issued${state.message ? `: ${state.message}` : ""}`);
+    if (!signedIn.email) {
+      io.error(`sign-in failed${state.message ? `: ${state.message}` : ""}`);
+      return 1;
+    }
+    // FR-221: the sign-in stays; only the address is missing, and serve --tunnel asks for it again at each start.
+    io.log(`Signed in as ${signedIn.email}.`);
+    io.error(`No public address this time${state.message ? `: ${state.message}` : "."}`);
+    io.log(`${cliCommand("serve --tunnel")} asks for one again each time it starts, and serves without one until then.`);
+    io.log(`To pair a phone now, use ${cliCommand("serve --lan")} on this Wi-Fi or ${cliCommand("serve --tailscale")} on your tailnet.`);
     return 1;
   }
   io.log(`Signed in as ${signedIn.email ?? email}.`);
@@ -622,8 +630,12 @@ interface TunnelPlan {
   account: TunnelAccount | null;
 }
 
-/** Fails closed: never a silent fallback to a local-only server. */
-async function planTunnel(options: CliOptions, log: (line: string) => void, recovery: TunnelRecovery): Promise<TunnelPlan | { error: string }> {
+/**
+ * A setup problem (no account, unreadable credentials, no connector) is an `error`, and serve stops.
+ * A signed-in machine that gets no address this time (capacity, account limit, control plane down) is
+ * `unavailable`, and serve keeps its other routes with the reason in the log (FR-221).
+ */
+export async function planTunnel(options: CliOptions, log: (line: string) => void, recovery: TunnelRecovery): Promise<TunnelPlan | { error: string } | { unavailable: string }> {
   let access: ManagedTunnelAccess | null = null;
   let account: TunnelAccount | null = null;
   const fail = (error: string) => {
@@ -644,16 +656,20 @@ async function planTunnel(options: CliOptions, log: (line: string) => void, reco
     if (!describeTunnelAccount(account.credentials.read()).email) {
       return fail(`no account on this machine yet: run ${cliCommand("login")} first, then ${cliCommand("serve --tunnel")}`);
     }
+    let notice: { reason: string; withSaved: string } | null = null;
     try {
       const state = await account.service.retry();
-      const saved = tunnelAccess(account.credentials.read()) !== null;
-      if (state.status === "signed-out") log(`tunnel: the sign-in on this machine expired; run ${cliCommand("login")} to renew it${saved ? " (serving the saved address until then)" : ""}`);
-      else if (state.message) log(`tunnel: ${state.message}${saved ? " Serving the saved address for now." : ""}`);
+      if (state.status === "signed-out") notice = { reason: `the sign-in on this machine expired; run ${cliCommand("login")} to renew it`, withSaved: " (serving the saved address until then)" };
+      else if (state.message) notice = { reason: state.message, withSaved: " Serving the saved address for now." };
     } catch (error) {
-      log(`tunnel: control plane not reachable right now (${message(error)}); using the saved address`);
+      notice = { reason: `control plane not reachable right now (${message(error)})`, withSaved: "; using the saved address" };
     }
     access = tunnelAccess(account.credentials.read());
-    if (!access) return fail(`this machine has no public address; run ${cliCommand("login")} again`);
+    if (!access) {
+      account.service.dispose();
+      return { unavailable: notice?.reason ?? "no public address was issued" };
+    }
+    if (notice) log(`tunnel: ${notice.reason}${notice.withSaved}`);
   }
   let binary: string;
   try {
@@ -691,9 +707,14 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
       console.error(planned.error);
       return 1;
     }
-    plan = planned;
-    if (publicUrl && publicUrl !== plan.access.endpoint) log(`note: --public-url is ignored with --tunnel; the address is ${plan.access.endpoint}`);
-    publicUrl = plan.access.endpoint;
+    if ("unavailable" in planned) {
+      log(`tunnel: ${planned.unavailable}`);
+      log(`tunnel: no public address this time, so this server runs without one. Start ${cliCommand("serve --tunnel")} again later to get one.`);
+    } else {
+      plan = planned;
+      if (publicUrl && publicUrl !== plan.access.endpoint) log(`note: --public-url is ignored with --tunnel; the address is ${plan.access.endpoint}`);
+      publicUrl = plan.access.endpoint;
+    }
   }
   let caddyBinary: string | null = null;
   if (options.domain) {
