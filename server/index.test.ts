@@ -1753,7 +1753,7 @@ describe("harness HTTP API", () => {
         if (Date.now() > deadline) throw new Error(`competing server did not exit:\n${contenderStderr}`);
         const serving = await fetch(`http://127.0.0.1:${contenderPort}/api/health`).then((res) => res.ok, () => false);
         if (serving) throw new Error(`competing server started serving the shared data directory:\n${contenderStderr}`);
-        result = await Promise.race([closed, new Promise<undefined>((resolve) => setTimeout(resolve, 200))]);
+        result = await Promise.race([closed, new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 200))]);
       }
       expect(result.code).not.toBe(0);
       expect(result.signal).toBeNull();
