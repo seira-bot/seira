@@ -16,3 +16,4 @@ export const refusedLine = (detail: string, language: string | undefined) => ser
 export const fullLine = (count: number, language: string | undefined) => serverLine(language, "server.reports.full", { count });
 export const droppedLine = (language: string | undefined) => serverLine(language, "server.reports.dropped");
 export const readyLine = (language: string | undefined) => serverLine(language, "server.reports.ready");
+export const draftLine = (language: string | undefined) => serverLine(language, "server.reports.draft");

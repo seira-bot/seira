@@ -43,6 +43,8 @@ import type { PlaceRow } from "../../shared/place-view";
 import { trialCreditKind, type TrialCreditRefusal } from "../../shared/trial-credit";
 import { TrialCreditNotice } from "./TrialCreditNotice";
 import { PartlyDoneRow } from "./PartlyDoneRow";
+import { BugOfferLine, ReviewReportButton } from "./BugOffer";
+import type { BugOffer } from "../../shared/devs-report-status";
 import { isPureLeakedSystemHarnessMessage, stripLeakedSystemHarnessMessages } from "../../shared/system-message-guard.ts";
 import { ConversationalReply, QuickModelNote, isConversational, useReplySegments, useThreadOpenedAt } from "./ConversationalReply";
 import type { LocaleKey } from "@/locales";
@@ -170,7 +172,7 @@ export function ErrorRow({
   message,
   headline: plainHeadline,
   onRetry,
-  action, control,
+  action, control, review,
   setupInstance,
   claudeUpdateInstance,
 }: {
@@ -178,6 +180,7 @@ export function ErrorRow({
   headline?: string;
   onRetry?: () => void;
   action?: { label: string; onClick: () => void } | null; /** a setting's own control that fixes this failure, below the row's action */ control?: ReactNode;
+  /** a text button after the retry or action button */ review?: ReactNode;
   setupInstance?: InstanceInfo;
   claudeUpdateInstance?: InstanceInfo;
 }) {
@@ -233,7 +236,7 @@ export function ErrorRow({
               <RefreshCw size={12} /> {t("chat.retry")}
             </button>
           )
-        )}{control}
+        )}{review}{control}
       </div>
     </div>
   );
@@ -265,14 +268,16 @@ function TrialCreditFailedRow({ kind, onRetry }: { kind: TrialCreditRefusal; onR
   return <ErrorRow message={t(TRIAL_CREDIT_LINE[kind])} action={{ label: t("chat.error.connectOwnAi"), onClick: () => dispatch({ type: "toggleAppSettings", open: true, section: "engines" }) }} />;
 }
 
-export function FailedTurnRow({ tool, engine, onRetry, botId, threadId, messageAt }: { tool: NonNullable<Message["tool"]>; engine: InstanceInfo | undefined; onRetry?: () => void; botId?: string; threadId?: string; messageAt?: number }) {
+export function FailedTurnRow({ tool, engine, onRetry, botId, threadId, messageAt, offer }: { tool: NonNullable<Message["tool"]>; engine: InstanceInfo | undefined; onRetry?: () => void; botId?: string; threadId?: string; messageAt?: number; offer?: BugOffer }) {
+  const viewer = useReactor();
   const resume = useLimitResetContinue(botId, threadId, tool.limitResetsAt), fix = useFailedTurnFix(tool, botId, threadId);
   const past = usePastLimitNotice(tool, messageAt);
   if (tool.place && botId) return <PlaceFailedRow place={tool.place} botId={botId} threadId={threadId} onRetry={onRetry} />;
   const credit = trialCreditKind(failedTurnCause(tool.name) ?? "");
   if (credit) return <TrialCreditFailedRow kind={credit} onRetry={onRetry} />;
   const { cause, notice } = failedTurnNotice(tool);
-  if (tool.partial) return <PartlyDoneRow cause={notice ?? cause} onRetry={onRetry} />;
+  const reviewId = offer?.state === "offer" && offer.for === viewer ? offer.id : undefined;
+  if (tool.partial) return <PartlyDoneRow cause={notice ?? cause} onRetry={onRetry} review={reviewId && <ReviewReportButton offerId={reviewId} tone="warning" />} />;
   if (past) return past;
   const signedOut = signedOutEngine(tool, engine);
   return (
@@ -281,6 +286,7 @@ export function FailedTurnRow({ tool, engine, onRetry, botId, threadId, messageA
       headline={signedOut ? t("chat.error.signedOut", { name: signedOut.displayName }) : notice ?? plainErrorLine(cause)}
       onRetry={onRetry}
       action={resume ?? fix.action} control={fix.control}
+      review={reviewId && <ReviewReportButton offerId={reviewId} tone="danger" />}
       setupInstance={tool.setup ? engine : undefined}
       claudeUpdateInstance={tool.claudeUpdate ? claudeUpdateTarget(engine) : undefined}
     />
@@ -737,6 +743,7 @@ const MessagesList = memo(function MessagesList({
                     engine={engine}
                     botId={botId}
                     threadId={threadId}
+                    offer={m.bugOffer}
                     onRetry={m.id === lookups.retryableId && canRetryLast ? onRegenerate : undefined}
                   />
                 );
@@ -783,7 +790,7 @@ const MessagesList = memo(function MessagesList({
             {newDay && <DaySeparator at={m.at} today={today} simple={simple} />}
             {divider}
             {m.automation && <AutomationCaption message={m} line={m.automation} botId={botId} />}{m.inbox && <InboxCaption message={m} />}
-            {isLiveReply(m) ? <StreamingReplyContext value>{row}</StreamingReplyContext> : row}<PublishedSiteCards message={m} />{m.inbox?.answers && <InboxAnswers message={m} />}{m.inbox && <InboxCardSlot threadId={threadId} messageId={m.id} />}{m.setupOffer && <SetupOffer botId={botId} threadId={threadId} message={m} transcript={transcript} />}{m.savedSteps && <SavedStepsChip botId={botId} message={m} />}
+            {isLiveReply(m) ? <StreamingReplyContext value>{row}</StreamingReplyContext> : row}<PublishedSiteCards message={m} />{m.inbox?.answers && <InboxAnswers message={m} />}{m.inbox && <InboxCardSlot threadId={threadId} messageId={m.id} />}{m.setupOffer && <SetupOffer botId={botId} threadId={threadId} message={m} transcript={transcript} />}{m.bugOffer && m.role !== "user" && <BugOfferLine message={m} hideOfferLine={m.kind === "activity" && !!m.tool && failedTurnCause(m.tool.name) !== null} />}{m.savedSteps && <SavedStepsChip botId={botId} message={m} />}
           </div>
         );
       })}
@@ -1116,7 +1123,7 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
       </div>}
       {findOpen && <ChatFindBar threadId={bot.threadId} inForkPanel={inForkPanel} onClose={() => setFindOpen(false)} />}
 
-      <ChatErrorBanner message={state.error} onDismiss={() => dispatch({ type: "error", message: null })} />
+      <ChatErrorBanner threadId={bot.threadId} message={state.error} onDismiss={() => dispatch({ type: "error", message: null })} />
       <ChatNotice notice={state.notice} />
 
       </GlassBar>

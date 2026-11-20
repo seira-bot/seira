@@ -1,42 +1,50 @@
-// @devs: a person's message that tags it sends exactly one bug report to the MausBot team. The bot answering it is
+// @devs: a person's message that tags it makes exactly one bug report draft for the Seira team. The bot answering it is
 // asked (a note on its turn, and report_bug) to add a summary; when none comes, because its engine has no tools, its
-// turn failed, it never called report_bug or no bot answered, the server sends the report with its own facts once
-// nothing runs in the conversation any more. The person's message and that summary are the only words that go, never
-// the conversation. A report that cannot go yet waits in devs-reports.json and is sent again on its own.
+// turn failed, it never called report_bug or no bot answered, the server writes the draft with its own facts once
+// nothing runs in the conversation any more. The person's message and that summary are the only words in it, never
+// the conversation.
 //
-// Closing the loop: each report sent is followed (`tracked`, in the same file). The person's message shows its status
-// ("Got it, we're looking", then "Fixed in 0.1.x"), and this server asks the MausBot team about its open reports at each
+// After Seira's own error (shared/bug-offer.ts says which count) the server also writes a draft on its own, from fixed
+// sentences and the error's facts (bug-offer-report.ts), at most once a day for the same error and person.
+//
+// A draft never leaves this machine until the person it is for reads it and selects "Send report". Only that person
+// sees its line in the chat (`bugOffer`, their reaction key). A report that cannot go yet waits in devs-reports.json
+// and goes again on its own.
+//
+// Closing the loop: each report sent is followed (`tracked`, in the same file). Its line shows its status
+// ("Got it, we're looking", then "Fixed in 0.1.x"), and this server asks the Seira team about its open reports at each
 // start and about hourly, at the address it sends them to (devs-report-send.ts `askReportStatus`): one way on the desktop
 // and on a Cloud, so nothing ever has to reach this server, or wake a sleeping Cloud. Once it runs the fix's release, and
 // the team's answer says it may (never a former customer's Cloud), the person gets one line in the chat they reported in,
 // "Fixed in 0.1.x. Want to try again?", with one notification, and the bot's next turn there is told why. Never twice.
+import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { ServerResponse } from "node:http";
 import { arch, platform, release } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 
+import { bugIssueUrl, isSeiraTool, seiraOwnsError, type BugDraftView, type ErrorFacts } from "../../shared/bug-offer.ts";
 import { tagsDevs, withoutDevsTags } from "../../shared/devs-mention.ts";
-import { versionAtLeast, type BugReportStatus } from "../../shared/devs-report-status.ts";
+import { versionAtLeast, type BugOffer, type BugReportStatus } from "../../shared/devs-report-status.ts";
 import { failedTurnCause } from "../../shared/failed-turn.ts";
-import type { ResolvedSender } from "../../shared/wire.ts";
 import { splitTranscriptCitations } from "../../src/lib/citations.ts";
 import { PASTED_TEXT_CLOSE, PASTED_TEXT_OPEN } from "../../src/lib/composer-attachments.ts";
 import { writeFileAtomic } from "../atomic.ts";
+import { buildOfferReport, publicDevsReport, type OfferReportInput } from "../bug-offer-report.ts";
 import { startDueTimer } from "../due-timer.ts";
 import type { ProviderSnapshot } from "../contracts.ts";
-import { buildDevsReport, contactAddress, environmentSecrets, redactReportText, type BotSummary, type DevsReportPayload, type ReportedBot } from "../devs-report.ts";
+import { buildDevsReport, environmentSecrets, redactReportText, type BotSummary, type DevsReportPayload, type ReportedBot } from "../devs-report.ts";
+import { bugReportIssueUrl, bugReportTitle } from "../devs-report-issue.ts";
 import { BUG_REPORT_STATUS_MAX_IDS, type ReportStatusAnswer, type ReportStatusQuestion, type SendOutcome } from "../devs-report-send.ts";
 import { DEVS_REPORT_PATH } from "../drivers/agents-devs-tools.ts";
 import type { json as sendJson } from "../harness/http.ts";
-import { personKey } from "../person-key.ts";
 import type { RecentLog } from "../recent-log.ts";
 import { PASS } from "../routes/table.ts";
 import { serverLine, type LineLanguage } from "../server-lines.ts";
 import { cloudComputerCounters } from "../cloud-computer-counters.ts";
-import type { PublicSession } from "../sessions.ts";
 import type { BotRecord, Message, Store, StoreChange } from "../store.ts";
-import { droppedLine, fullLine, laterLine, notYetLine, readyLine, refusedLine, sentLine } from "./devs-report-words.ts";
+import { draftLine, droppedLine, fullLine, laterLine, readyLine, refusedLine } from "./devs-report-words.ts";
 import { clip } from "./text-clip.ts";
 
 export const DEVS_REPORTS_FILE = "devs-reports.json";
@@ -62,21 +70,44 @@ export const TRACKED_MS = 90 * 24 * 3_600_000;
 /** After its fix line went, a report is kept this long for the note on the bot's next turn there. */
 const TOLD_KEPT_MS = 7 * 24 * 3_600_000;
 export const MAX_TRACKED = 100;
+/** A draft nobody sent is let go after this, and its line goes with it. */
+export const OFFER_KEPT_MS = 7 * 24 * 3_600_000;
+/** A draft that went is kept this long: its line, and "an open report about the same error". */
+const SENT_KEPT_MS = 30 * 24 * 3_600_000;
+export const MAX_DRAFTS = 100;
+/** One person's drafts: more push out only their own oldest, never another person's. */
+export const MAX_DRAFTS_EACH = 20;
+/** The reaction key of the person who runs this app. Only their drafts carry the server's own log, which they can read anyway. */
+const OWNER = "user";
+/** The same error is offered to the same person at most once in this time. */
+export const OFFER_EVERY_MS = 24 * 3_600_000;
+const MAX_OFFERED = 200;
 
 const id = z.string().min(1).max(200);
 const waitingSchema = z.object({ messageId: id, threadId: id, at: z.number(), text: z.string().max(20_000), words: z.string().max(20_000),
   sender: z.object({ name: z.string().max(200), id: z.string().max(200).optional() }).optional() });
+const draftId = z.string().regex(/^[A-Za-z0-9_-]{8,64}$/);
+const fingerprintSchema = z.object({ kind: z.string().max(200), step: z.string().max(200).optional(), frame: z.string().max(200).optional() });
 const payloadSchema = z.object({ installId: z.string(), source: z.literal("bot"), description: z.string(), appVersion: z.string(), platform: z.string(),
-  diagnostics: z.string(), contactEmail: z.string().optional(), contact: z.string().optional() });
+  diagnostics: z.string(), contactEmail: z.string().optional(), contact: z.string().optional(), title: z.string().max(200).optional(), fingerprint: fingerprintSchema.optional() });
 const queuedSchema = z.object({ messageId: id, threadId: id, payload: payloadSchema, firstAt: z.number(), attempts: z.number().int().min(0), nextAt: z.number(),
   /** Who wrote @devs, so a later try's line reads in their language. */
-  person: z.string().max(200).optional() });
+  person: z.string().max(200).optional(),
+  /** The draft the person sent: a later try updates its line and tells nothing more. */
+  draftId: draftId.optional() });
+/** A report a bot wrote. `for`: the reaction key of the one person who may read and send it. `sender`: their person key, for
+ * the fix line's language and notification. `payload`: the issue as it will be published, kept until the relay takes it. */
+const draftSchema = z.object({ id: draftId, threadId: id, anchorId: id.optional(), for: z.string().min(1).max(200), sender: z.string().max(200).optional(),
+  from: z.enum(["error", "devs"]), by: z.string().max(200).optional(), at: z.number(), hash: z.string().max(64).optional(), title: z.string().max(200),
+  state: z.enum(["offer", "saved", "sent", "joined", "opened"]), issue: z.number().int().positive().optional(), payload: payloadSchema.optional(),
+  activity: z.number().int().min(0).optional(), model: z.string().max(200).optional(), words: z.string().max(400).optional() });
+const offeredSchema = z.object({ hash: z.string().max(64), for: z.string().max(200), at: z.number() });
 /** A report sent, followed until its fix runs here: `person` the reporter's key, `words` theirs (redacted, short) for the bot's note. */
 const trackedSchema = z.object({ reportId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/), threadId: id, messageId: id, installId: z.string().max(64), at: z.number(),
   person: z.string().max(200).optional(), words: z.string().max(400).optional(), status: z.enum(["received", "fixed"]),
   fixedIn: z.string().max(40).nullable().optional(), running: z.boolean().optional(), told: z.number().optional(), noted: z.boolean().optional() });
 const fileSchema = z.object({ version: z.literal(1), waiting: z.array(waitingSchema).max(MAX_WAITING), outbox: z.array(queuedSchema).max(MAX_OUTBOX),
-  tracked: z.array(trackedSchema).max(MAX_TRACKED).optional() });
+  tracked: z.array(trackedSchema).max(MAX_TRACKED).optional(), drafts: z.array(draftSchema).max(MAX_DRAFTS).optional(), offered: z.array(offeredSchema).max(MAX_OFFERED).optional() });
 const bodySchema = z.object({
   went_wrong: z.string().trim().min(1).max(2_000), you_saw: z.string().trim().max(3_000).optional(), steps: z.string().trim().max(2_000).optional(),
 }).strict();
@@ -84,9 +115,13 @@ const bodySchema = z.object({
 type Waiting = z.infer<typeof waitingSchema> & { answered?: boolean; offered?: boolean; restored?: boolean };
 type Queued = z.infer<typeof queuedSchema>;
 type Tracked = z.infer<typeof trackedSchema>;
-/** What the person is told, and the words in a bot's reply that show it already told them. */
-type Told = { ok: boolean; line: string; marker: string; link?: string };
+type Draft = z.infer<typeof draftSchema>;
+/** A line in the chat about a report that went later: what it says, and the issue form when nothing was sent. */
+type Told = { ok: boolean; line: string; link?: string };
 type Author = { bot: BotRecord; summary: BotSummary } | { why: string };
+/** A failed row that may be Seira's own error, read once nothing runs in the conversation. */
+type Pending = { threadId: string; rowId: string; at: number };
+export type DraftRefusal = { error: "gone" } | { error: "busy" } | { error: "refused"; detail?: string };
 
 export interface DevsReportsDeps {
   dataDir: string;
@@ -101,12 +136,6 @@ export interface DevsReportsDeps {
   automated(threadId: string): boolean;
   engine(instanceId: string): { name: string; snapshot?: ProviderSnapshot } | null;
   appsReady(): boolean;
-  sessions(): PublicSession[];
-  /** My Cloud's owner key: the owner's lines carry it instead of their session's person key. */
-  ownerKey: string | null;
-  /** On a Team Cloud the server's profile is nobody's, so only a session's address counts. */
-  team: boolean;
-  profileEmail(): string | undefined;
   language(): string | undefined;
   /** The language a line for this person is written in; absent, the one set on this server. */
   lineLanguage?: LineLanguage;
@@ -118,6 +147,12 @@ export interface DevsReportsDeps {
   askStatus(question: ReportStatusQuestion): Promise<ReportStatusAnswer | null>;
   /** One notification about a line in this conversation; `person`, on a Team Cloud, the only one it reaches. */
   tell(threadId: string, text: string, person?: string): void;
+  /** The reaction key of a line's sender: "user" where one person uses the workspace; null when no one person may see it. */
+  reactorOf?(senderId: string | undefined): string | null;
+  /** Names of this workspace's people: removed from a report wherever they appear. */
+  personNames?(): string[];
+  /** The relay takes a report in one click; false: the person opens a prefilled issue form and submits it there. */
+  direct?: boolean;
   /** How often to ask about open reports (tests and fixtures; STATUS_EVERY_MS otherwise). */
   statusEveryMs?: number;
   now?: () => number;
@@ -141,8 +176,6 @@ export const fixedLine = (version: string, language?: string) => serverLine(lang
 /** Rides on the bot's next turn in that chat, once, so an answer to the line above makes sense to it. */
 const fixedNote = (entry: Tracked, version: string) => `\n\n[From Seira, not the person: the problem they reported with @devs on ${new Date(entry.at).toISOString().slice(0, 10)}${
   entry.words ? ` ("${entry.words}")` : ""} is fixed in ${version}, which this app now runs. The chat told them so and asked whether they want to try again; if their message answers that, help them try it again.]`;
-/** A failure line names Seira in every language: a bot reply that does has passed it on. */
-const FAILED_MARKER = "Seira";
 
 /** The person's own words: the text outside quotes and each quote's comment. Only a @devs there tags the message,
  * never one inside a message they quoted. */
@@ -169,7 +202,7 @@ function withoutPastes(message: string): string {
 }
 
 /** Rides on the turn that answers a @devs message. */
-const TURN_NOTE = "\n\n[From Seira, not the person: this message tags @devs, so it is a bug report for the Seira team, Seira's developers. Call report_bug once, first: what the person says went wrong; what you saw yourself in this conversation (errors, failed tools, stuck steps), or that you saw nothing unusual; and steps to reproduce. Leave out passwords, keys, tokens and file contents; Seira adds the app's own diagnostics. Then tell the person, word for word, the line report_bug returns, and help with the problem if you can.]";
+const TURN_NOTE = "\n\n[From Seira, not the person: this message tags @devs, so it is a bug report for the Seira team, Seira's developers. Call report_bug once, first: what the person says went wrong; what you saw yourself in this conversation (errors, failed tools, stuck steps), or that you saw nothing unusual; and steps to reproduce. Leave out passwords, keys, tokens and file contents; Seira adds the app's own diagnostics. report_bug writes a draft: nothing goes until the person reads it and sends it. Then tell the person, word for word, the line report_bug returns, and help with the problem if you can.]";
 
 const iso = (at: number) => new Date(at).toISOString();
 /** The report goes out even when the timings fail: their lines, or one saying they are missing. */
@@ -211,28 +244,35 @@ export function createDevsReports(deps: DevsReportsDeps) {
   const { store } = deps;
   const now = deps.now ?? Date.now;
   const file = join(deps.dataDir, DEVS_REPORTS_FILE);
+  const reactorOf = deps.reactorOf ?? (() => "user");
   let waiting: Waiting[] = [];
   let outbox: Queued[] = [];
   let tracked: Tracked[] = [];
+  let drafts: Draft[] = [];
+  let offered: Array<z.infer<typeof offeredSchema>> = [];
   try {
     const parsed = fileSchema.safeParse(JSON.parse(readFileSync(file, "utf8")));
     if (parsed.success) {
       outbox = parsed.data.outbox;
       waiting = parsed.data.waiting.map((entry) => ({ ...entry, restored: true }));
       tracked = parsed.data.tracked ?? [];
+      drafts = parsed.data.drafts ?? [];
+      offered = parsed.data.offered ?? [];
     } else console.warn(`devs reports: ${file} is not a reports file; starting fresh`);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.warn(`devs reports: ${file} is unreadable; starting fresh`);
   }
-  const inFlight = new Map<string, Promise<Told>>();
+  const sending = new Map<string, Promise<BugDraftView | DraftRefusal>>();
   const retrying = new Set<Queued>();
-  let told: Array<{ threadId: string; messageId: string; said: Told; until: number }> = [];
-  const lastSent = new Map<string, { reportId?: string; at: number }>();
+  const lastSent = new Map<string, { at: number }>();
   const seen = new Set<string>();
+  /** Failed rows already read for an offer, so a patch to the same row is not read again. */
+  const considered = new Set<string>();
+  let pending: Pending[] = [];
 
   const save = () => {
     try {
-      writeFileAtomic(file, `${JSON.stringify({ version: 1, waiting: waiting.map(({ answered: _a, offered: _o, restored: _r, ...entry }) => entry), outbox, tracked })}\n`, { mode: 0o600 });
+      writeFileAtomic(file, `${JSON.stringify({ version: 1, waiting: waiting.map(({ answered: _a, offered: _o, restored: _r, ...entry }) => entry), outbox, tracked, drafts, offered })}\n`, { mode: 0o600 });
     } catch (error) {
       console.warn(`devs reports: could not save ${file}: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -252,7 +292,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
   const show = (entry: Tracked) => {
     try { store.patchMessage(entry.threadId, entry.messageId, { bugReport: view(entry) }); } catch { /* the conversation is gone */ }
   };
-  /** A report the team took: followed from now, and the person's message says "Got it". */
+  /** A report the team took: followed from now, and its line says "Got it". */
   function track(entry: { messageId: string; threadId: string }, reportId: string, payload: DevsReportPayload, person: string | undefined, words: string) {
     const kept: Tracked = { reportId, threadId: entry.threadId, messageId: entry.messageId, installId: payload.installId.slice(0, 64), at: now(),
       ...(person ? { person: person.slice(0, 200) } : {}), ...(words ? { words: clip(words.replace(/\s+/g, " ").trim(), 300) } : {}), status: "received" };
@@ -311,14 +351,6 @@ export function createDevsReports(deps: DevsReportsDeps) {
     tracked = tracked.filter((entry) => entry.told === undefined ? now() - entry.at < TRACKED_MS : now() - entry.told < TOLD_KEPT_MS);
   };
 
-  function contactFor(sender: ResolvedSender | undefined): string | undefined {
-    const person = sender?.id;
-    const own = person ? deps.sessions()
-      .filter((session) => session.email && (personKey(session) === person || (person === deps.ownerKey && session.scopes.includes("admin"))))
-      .sort((a, b) => b.lastSeenAt - a.lastSeenAt)[0]?.email : undefined;
-    return contactAddress(own) ?? (deps.team ? undefined : contactAddress(deps.profileEmail()));
-  }
-
   function reported(bot: BotRecord, threadId: string): ReportedBot {
     const effective = store.projectBotForTask(bot.id, threadId) ?? bot;
     const { instanceId, model, effort, variant } = effective.modelSelection;
@@ -345,54 +377,193 @@ export function createDevsReports(deps: DevsReportsDeps) {
     return { bots: owner ? [owner] : [], where: owner ? `a chat with ${owner.name}` : "a conversation" };
   }
 
-  function build(entry: Waiting, author: Author): { payload: DevsReportPayload; contact?: string } {
+  function build(entry: Waiting, author: Author): { payload: DevsReportPayload; bots: ReportedBot[]; problems: number; log: number } {
     const { bots, where, groupId } = botsFor(entry, author);
-    const contact = contactFor(entry.sender);
     const runsOn = deps.runsOn;
+    const problems = conversationProblems(store.activePath(entry.threadId)), log = deps.recentLog();
+    const shown = bots.map((bot) => reported(bot, entry.threadId));
     const payload = buildDevsReport({
       installId: deps.installId, appVersion: deps.appVersion, platform: `${platform()} ${arch()}, ${runsOn}`, os: `${platform()} ${release()} ${arch()}`,
       runsOn, node: process.version, uptimeSeconds: Math.round(process.uptime()), language: deps.language(), now: now(),
       threadId: entry.threadId, messageId: entry.messageId, ...(groupId ? { groupId } : {}), where, message: entry.text, words: entry.words,
-      bots: bots.map((bot) => reported(bot, entry.threadId)),
+      bots: shown,
       ...("bot" in author ? { summary: { by: author.bot.name, text: author.summary } } : { noSummary: author.why }),
-      problems: conversationProblems(store.activePath(entry.threadId)), log: deps.recentLog(), cloudComputers: cloudComputerCounters.lines(), contactEmail: contact,
+      problems, log, cloudComputers: cloudComputerCounters.lines(),
       ...(deps.performance ? { performance: performanceLines(deps.performance, entry.threadId, bots.map((bot) => bot.id)) } : {}),
     }, secrets());
-    return { payload, ...(contact ? { contact } : {}) };
+    return { payload, bots: shown, problems: problems.length, log: log.length };
   }
 
-  /** The words for the person after one attempt; a report worth trying again joins the outbox, a report taken is followed. */
-  function settle(entry: Waiting, payload: DevsReportPayload, outcome: SendOutcome, contact?: string): Told {
-    const person = entry.sender?.id, language = languageFor(person);
-    if (outcome.ok) {
-      if ("issueUrl" in outcome) {
-        lastSent.set(entry.threadId, { at: now() });
-        return { ok: true, line: readyLine(language), marker: "", link: outcome.issueUrl };
-      }
-      lastSent.set(entry.threadId, { reportId: outcome.id, at: now() });
-      track(entry, outcome.id, payload, person, entry.words);
-      return { ok: true, line: sentLine(outcome.id, contact, language), marker: outcome.id };
+  const offerOf = (draft: Draft): BugOffer => ({ id: draft.id, for: draft.for, from: draft.from, ...(draft.by ? { by: draft.by } : {}), state: draft.state,
+    ...(draft.issue ? { issue: draft.issue } : {}) });
+  /** The draft's line under its anchor: written whenever its state changes, removed when the draft goes. */
+  const showOffer = (draft: Draft) => {
+    if (!draft.anchorId) return;
+    try { store.patchMessage(draft.threadId, draft.anchorId, { bugOffer: offerOf(draft) }); } catch { /* the conversation is gone */ }
+  };
+  const hideOffer = (draft: Draft) => {
+    if (!draft.anchorId) return;
+    try { store.patchMessage(draft.threadId, draft.anchorId, { bugOffer: undefined }); } catch { /* the conversation is gone */ }
+  };
+  const newDraftId = () => randomBytes(12).toString("base64url");
+
+  function keepDraft(draft: Draft): Draft {
+    drafts.push(draft);
+    const drop = (oldest: Draft) => {
+      drafts = drafts.filter((one) => one !== oldest);
+      if (oldest.state === "offer") hideOffer(oldest);
+    };
+    for (let own = drafts.filter((one) => one.for === draft.for); own.length > MAX_DRAFTS_EACH; own = own.slice(1)) {
+      const oldest = own.find((one) => one.state !== "saved" && !sending.has(one.id)) ?? own[0]!;
+      own = [oldest, ...own.filter((one) => one !== oldest)];
+      drop(oldest);
     }
-    if (!outcome.retry) return { ok: false, line: refusedLine(outcome.detail, language), marker: FAILED_MARKER };
-    if (outbox.length >= MAX_OUTBOX) return { ok: false, line: fullLine(MAX_OUTBOX, language), marker: FAILED_MARKER };
-    outbox.push({ messageId: entry.messageId, threadId: entry.threadId, payload, firstAt: now(), attempts: 1,
-      nextAt: now() + (outcome.retryAfterMs ?? RETRY_MS[0]), ...(person ? { person } : {}) });
-    timer?.poke();
-    return { ok: false, line: notYetLine(outcome, language), marker: FAILED_MARKER };
+    while (drafts.length > MAX_DRAFTS) drop(drafts.find((one) => one.state !== "saved" && !sending.has(one.id)) ?? drafts[0]!);
+    save();
+    showOffer(draft);
+    return draft;
   }
 
-  function deliver(entry: Waiting, author: Author): Promise<Told> {
-    const running = inFlight.get(entry.messageId);
+  /** What the person reads before they send: the issue as it will be published, and what it carries. */
+  function draftView(draft: Draft): BugDraftView {
+    const same = draft.hash ? drafts.find((one) => one !== draft && one.hash === draft.hash && (one.state === "sent" || one.state === "joined")) : undefined;
+    const { payload } = draft;
+    return {
+      id: draft.id, from: draft.from, ...(draft.by ? { by: draft.by } : {}), state: draft.state, ...(draft.issue ? { issue: draft.issue } : {}),
+      title: draft.title, description: payload?.description ?? "", diagnostics: payload?.diagnostics ?? "",
+      included: { version: payload?.appVersion ?? deps.appVersion, platform: payload?.platform ?? "", ...(draft.model ? { model: draft.model } : {}), activity: draft.activity ?? 0 },
+      direct: deps.direct ?? true,
+      formUrl: payload ? bugReportIssueUrl(payload) : draft.issue ? bugIssueUrl(draft.issue) : "",
+      ...(same ? { same: { title: same.title, at: same.at, ...(same.issue ? { issue: same.issue } : {}) } } : {}),
+    };
+  }
+
+  /** @devs: the draft for the person's message, written from the bot's summary or the server's own facts. Nothing is sent. */
+  function prepare(entry: Waiting, author: Author): Draft | null {
+    waiting = waiting.filter((one) => one.messageId !== entry.messageId);
+    lastSent.set(entry.threadId, { at: now() });
+    // A message nobody can be named for gets no draft: nobody could read or send it.
+    const person = reactorOf(entry.sender?.id);
+    if (person === null) return null;
+    const built = build(entry, author);
+    const path = store.activePath(entry.threadId);
+    const payload = publicDevsReport(built.payload, secrets(), { names: peopleNamed(path), whole: person === OWNER });
+    const model = built.bots[0]?.model;
+    return keepDraft({ id: newDraftId(), threadId: entry.threadId, anchorId: entry.messageId, for: person,
+      ...(entry.sender?.id ? { sender: entry.sender.id } : {}), from: "devs", ...("bot" in author ? { by: author.bot.name } : {}), at: now(),
+      title: bugReportTitle(payload), state: "offer", payload, activity: built.problems + built.log, ...(model ? { model: clip(model, 200) } : {}),
+      ...(entry.words ? { words: clip(entry.words.replace(/\s+/g, " ").trim(), 300) } : {}) });
+  }
+
+  /** The bot-written report about one error in this conversation, with the facts the server has about it. */
+  /** The people named in the conversation and in this workspace: no public issue holds their names. */
+  const peopleNamed = (path: readonly Message[]) => [...path.flatMap((line) => (line.sender?.name ? [line.sender.name] : [])), ...(deps.personNames?.() ?? [])];
+
+  function errorReport(threadId: string, path: readonly Message[], at: number, facts: ErrorFacts, where: OfferReportInput["where"], recovered: boolean, botId: string | undefined, person: string) {
+    const start = path.slice(0, at).findLastIndex((line) => line.role === "user");
+    const steps = path.slice(start + 1, at + 1).flatMap((line) => line.kind === "activity" && line.tool && failedTurnCause(line.tool.name) === null
+      && !/^(stopped|notice|recovery):/.test(line.tool.name) ? [{ tool: line.tool.name, ok: line.tool.ok !== false }] : []);
+    const bot = (botId ? store.bot(botId) : undefined) ?? store.botByThread(threadId);
+    const shown = bot ? reported(bot, threadId) : undefined;
+    const names = peopleNamed(path);
+    const messages = path.flatMap((line) => (line.role === "user" && line.text ? [line.text] : []));
+    return buildOfferReport({
+      installId: deps.installId, appVersion: deps.appVersion, platform: `${platform()} ${arch()}, ${deps.runsOn}`, os: `${platform()} ${release()} ${arch()}`,
+      runsOn: deps.runsOn, node: process.version, ...(deps.language() ? { language: deps.language() } : {}), error: facts, where, recovered, steps,
+      ...(shown ? { engine: { name: shown.engine, model: shown.model, health: shown.health } } : {}),
+      // The server's log holds other conversations too: only the person who runs the app reads it in a draft.
+      problems: conversationProblems(path), log: person === OWNER ? deps.recentLog() : [], names, messages,
+    }, secrets());
+  }
+
+  /** A failed row, read once nothing runs in its conversation: when the error is Seira's own, a draft for the person who asked. */
+  function offerAfter(one: Pending): void {
+    const path = store.activePath(one.threadId);
+    const at = path.findIndex((line) => line.id === one.rowId);
+    const row = path[at];
+    if (!row?.tool) return;
+    const cause = failedTurnCause(row.tool.name);
+    const after = path.slice(at + 1);
+    let facts: ErrorFacts, where: OfferReportInput["where"], anchor: Message;
+    if (cause !== null) {
+      const { setup, claudeUpdate, limitResetsAt, place, nameCode } = row.tool;
+      facts = { text: cause, setup, claudeUpdate, limitResetsAt, place, nameCode };
+      where = row.tool.partial ? "step" : "turn";
+      anchor = row;
+    } else {
+      // The turn's failed row speaks for the whole turn.
+      const end = after.findIndex((line) => line.role === "user");
+      const turn = end < 0 ? after : after.slice(0, end);
+      if (turn.some((line) => line.kind === "activity" && line.tool && failedTurnCause(line.tool.name) !== null)) return;
+      facts = { text: row.tool.output ?? "", tool: row.tool.name };
+      where = "step";
+      anchor = turn.findLast((line) => line.role === "bot" && line.kind === "text") ?? row;
+    }
+    if (anchor.bugOffer || !seiraOwnsError(facts)) return;
+    const asker = path.slice(0, at).findLast((line) => line.role === "user");
+    const person = reactorOf(asker?.sender?.id);
+    if (person === null) return;
+    const report = errorReport(one.threadId, path, at, facts, where, cause !== null ? Boolean(row.tool.partial) : anchor !== row, row.from?.botId, person);
+    offered = offered.filter((entry) => now() - entry.at < OFFER_EVERY_MS);
+    if (offered.some((entry) => entry.hash === report.hash && entry.for === person)) return;
+    offered = [...offered, { hash: report.hash, for: person, at: now() }].slice(-MAX_OFFERED);
+    const bot = (row.from?.botId ? store.bot(row.from.botId) : undefined) ?? store.botByThread(one.threadId);
+    keepDraft({ id: newDraftId(), threadId: one.threadId, anchorId: anchor.id, for: person, ...(asker?.sender?.id ? { sender: asker.sender.id } : {}),
+      from: "error", ...(bot ? { by: bot.name } : {}), at: now(), hash: report.hash, title: report.title, state: "offer", payload: report.payload,
+      activity: report.activity, ...(report.model ? { model: clip(report.model, 200) } : {}), words: report.title });
+  }
+
+  /** A failed row in a conversation: kept to read once its turn is over. */
+  function failedRow(threadId: string, line: Message): void {
+    const tool = line.tool;
+    if (!tool || tool.ok !== false || considered.has(line.id) || now() - line.at > FRESH_MS) return;
+    const turnFailed = failedTurnCause(tool.name) !== null;
+    if (!turnFailed && !(isSeiraTool(tool.name) && (tool.output ?? "").trim())) return;
+    considered.add(line.id);
+    if (considered.size > 1_000) considered.delete(considered.values().next().value!);
+    pending.push({ threadId, rowId: line.id, at: now() });
+    timer?.poke();
+  }
+
+  /** The person's answer to a draft: it goes now, waits in the outbox, or (refused) stays a draft they may send again. */
+  function settleDraft(draft: Draft, payload: DevsReportPayload, outcome: SendOutcome): DraftRefusal | null {
+    if (outcome.ok) {
+      if ("issueUrl" in outcome) draft.state = "opened";
+      else {
+        draft.state = outcome.joined ? "joined" : "sent";
+        if (outcome.issue) draft.issue = outcome.issue;
+        if (draft.anchorId) track({ messageId: draft.anchorId, threadId: draft.threadId }, outcome.id, payload, draft.sender, draft.words ?? draft.title);
+        delete draft.payload;
+      }
+      return null;
+    }
+    if (!outcome.retry) return { error: "refused", detail: outcome.detail };
+    if (outbox.length >= MAX_OUTBOX) return { error: "refused" };
+    outbox.push({ messageId: draft.anchorId ?? draft.id, threadId: draft.threadId, payload, firstAt: now(), attempts: 1,
+      nextAt: now() + (outcome.retryAfterMs ?? RETRY_MS[0]), ...(draft.sender ? { person: draft.sender } : {}), draftId: draft.id });
+    draft.state = "saved";
+    timer?.poke();
+    return null;
+  }
+
+  /** "Send report": the one place a draft leaves this machine, and only for the person it is for. */
+  function sendDraft(id: string, person: string): Promise<BugDraftView | DraftRefusal> {
+    const draft = drafts.find((one) => one.id === id && one.for === person);
+    if (!draft) return Promise.resolve({ error: "gone" });
+    const running = sending.get(id);
     if (running) return running;
-    const attempt = (async () => {
-      const { payload, contact } = build(entry, author);
+    const payload = draft.payload;
+    if (draft.state !== "offer" || !payload) return Promise.resolve(draftView(draft));
+    const attempt = (async (): Promise<BugDraftView | DraftRefusal> => {
       const outcome = await deps.send(payload).catch((): SendOutcome => ({ ok: false, retry: true, why: "offline" }));
-      waiting = waiting.filter((one) => one.messageId !== entry.messageId);
-      const said = settle(entry, payload, outcome, contact);
+      if (!drafts.includes(draft)) return { error: "gone" };
+      const refused = settleDraft(draft, payload, outcome);
+      if (refused) return refused;
       save();
-      return said;
-    })().finally(() => inFlight.delete(entry.messageId));
-    inFlight.set(entry.messageId, attempt);
+      showOffer(draft);
+      return draftView(draft);
+    })().finally(() => sending.delete(id));
+    sending.set(id, attempt);
     return attempt;
   }
 
@@ -410,23 +581,37 @@ export function createDevsReports(deps: DevsReportsDeps) {
   async function retry(queued: Queued): Promise<void> {
     retrying.add(queued);
     const outcome = await deps.send(queued.payload).catch((): SendOutcome => ({ ok: false, retry: true, why: "offline" })).finally(() => retrying.delete(queued));
+    if (queued.draftId !== undefined) {
+      // A draft the person sent: its line follows what happens, and no other line is added.
+      const draft = drafts.find((one) => one.id === queued.draftId);
+      const gone = !outcome.ok && (!outcome.retry || now() - queued.firstAt > KEPT_MS);
+      if (outcome.ok || gone) {
+        outbox = outbox.filter((one) => one !== queued);
+        if (draft && outcome.ok) settleDraft(draft, queued.payload, outcome);
+        else if (draft) { draft.state = "offer"; draft.payload = queued.payload; }
+        if (draft) showOffer(draft);
+      } else {
+        queued.attempts += 1;
+        queued.nextAt = now() + (outcome.retryAfterMs ?? RETRY_MS[Math.min(queued.attempts - 1, RETRY_MS.length - 1)]!);
+      }
+      save();
+      return;
+    }
     const contact = queued.payload.contactEmail ?? queued.payload.contact, language = languageFor(queued.person);
     if (outcome.ok) {
       outbox = outbox.filter((one) => one !== queued);
       if ("issueUrl" in outcome) {
-        lastSent.set(queued.threadId, { at: now() });
-        notice(queued.threadId, { ok: true, line: readyLine(language), marker: "", link: outcome.issueUrl });
+        notice(queued.threadId, { ok: true, line: readyLine(language), link: outcome.issueUrl });
       } else {
-        lastSent.set(queued.threadId, { reportId: outcome.id, at: now() });
         track(queued, outcome.id, queued.payload, queued.person, queued.payload.description.split("\n")[0] ?? "");
-        notice(queued.threadId, { ok: true, line: laterLine(outcome.id, contact, language), marker: outcome.id });
+        notice(queued.threadId, { ok: true, line: laterLine(outcome.id, contact, language) });
       }
     } else if (!outcome.retry) {
       outbox = outbox.filter((one) => one !== queued);
-      notice(queued.threadId, { ok: false, line: refusedLine(outcome.detail, language), marker: "" });
+      notice(queued.threadId, { ok: false, line: refusedLine(outcome.detail, language) });
     } else if (now() - queued.firstAt > KEPT_MS) {
       outbox = outbox.filter((one) => one !== queued);
-      notice(queued.threadId, { ok: false, line: droppedLine(language), marker: "" });
+      notice(queued.threadId, { ok: false, line: droppedLine(language) });
     } else {
       queued.attempts += 1;
       queued.nextAt = now() + (outcome.retryAfterMs ?? RETRY_MS[Math.min(queued.attempts - 1, RETRY_MS.length - 1)]!);
@@ -434,53 +619,53 @@ export function createDevsReports(deps: DevsReportsDeps) {
     save();
   }
 
+  /** Drafts nobody sent in OFFER_KEPT_MS, and those that went SENT_KEPT_MS ago, are let go. */
+  function expire(): void {
+    const old = drafts.filter((draft) => !sending.has(draft.id) && draft.state !== "saved"
+      && now() - draft.at > (draft.state === "offer" ? OFFER_KEPT_MS : SENT_KEPT_MS));
+    if (!old.length) return;
+    drafts = drafts.filter((draft) => !old.includes(draft));
+    for (const draft of old) if (draft.state === "offer") hideOffer(draft);
+    save();
+  }
+
   function tick(): void {
     for (const entry of waiting) {
-      if (inFlight.has(entry.messageId)) continue;
       if (deps.working(entry.threadId)) {
         entry.answered = true;
-        if (now() - entry.at >= LONGEST_WAIT_MS) void deliver(entry, { why: "its turn was still running after 10 minutes" }).then((said) => notice(entry.threadId, said));
+        if (now() - entry.at >= LONGEST_WAIT_MS) prepare(entry, { why: "its turn was still running after 10 minutes" });
         continue;
       }
       if (!entry.answered && !entry.restored && now() - entry.at < NO_ANSWER_MS) continue;
-      void deliver(entry, { why: why(entry) }).then((said) => notice(entry.threadId, said));
+      prepare(entry, { why: why(entry) });
     }
-    const quiet = told.filter((one) => !deps.working(one.threadId) || now() >= one.until);
-    told = told.filter((one) => !quiet.includes(one));
-    for (const one of quiet) {
-      const path = store.activePath(one.threadId);
-      const after = path.slice(path.findIndex((line) => line.id === one.messageId) + 1);
-      const marker = one.said.marker.toLowerCase();
-      if (!after.some((line) => line.role === "bot" && line.kind === "text" && (line.text ?? "").toLowerCase().includes(marker))) notice(one.threadId, one.said);
+    for (const one of pending) {
+      if (deps.working(one.threadId) && now() - one.at < LONGEST_WAIT_MS) continue;
+      pending = pending.filter((other) => other !== one);
+      try { offerAfter(one); } catch (error) {
+        console.warn(`devs reports: could not write a bug report draft: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
     for (const queued of outbox) if (now() >= queued.nextAt && !retrying.has(queued)) void retry(queued);
     if (!asking && now() >= nextAskAt) {
       nextAskAt = now() + everyMs;
       prune();
+      expire();
       if (tracked.some(open)) asking = ask().catch(() => {}).finally(() => { asking = null; prune(); save(); });
     }
   }
 
-  /** report_bug from the bot answering a @devs message in this conversation. */
-  async function fromBot(botId: string, threadId: string, summary: BotSummary): Promise<{ status: number; text: string }> {
+  /** report_bug from the bot answering a @devs message in this conversation: the draft, never a send. */
+  function fromBot(botId: string, threadId: string, summary: BotSummary): { status: number; text: string } {
     const bot = store.bot(botId);
     const entry = waiting.filter((one) => one.threadId === threadId).at(-1);
     if (!bot || !entry) {
       const last = lastSent.get(threadId);
-      if (last && now() - last.at < REPEAT_MS) return { status: 200, text: last.reportId
-        ? `Already sent as report ${last.reportId}: report_bug sends once per @devs message. Do not call it again for it.`
-        : "Already prepared: report_bug prepares one report per @devs message. Do not call it again for it." };
-      return { status: 409, text: "report_bug sends only for a message that tags @devs, once per message. To report a problem to the Seira team, the person types @devs and a few words about what went wrong." };
+      if (last && now() - last.at < REPEAT_MS) return { status: 200, text: "Already prepared: report_bug writes one draft per @devs message. Do not call it again for it." };
+      return { status: 409, text: "report_bug works only for a message that tags @devs, once per message. To report a problem to the Seira team, the person types @devs and a few words about what went wrong." };
     }
-    const fallingBack = inFlight.has(entry.messageId);
-    const said = await deliver(entry, { bot, summary });
-    if (said.link) {
-      if (!fallingBack) notice(threadId, said);
-      return { status: 200, text: `Ready. Tell the person this line in your reply, word for word: "${said.line}"` };
-    }
-    if (!fallingBack) told.push({ threadId, messageId: entry.messageId, said, until: now() + LONGEST_WAIT_MS });
-    timer?.poke();
-    return { status: 200, text: `${said.ok ? "Sent" : "Not sent"}. Tell the person this line in your reply, word for word: "${said.line}"` };
+    if (!prepare(entry, { bot, summary })) return { status: 200, text: "No draft: nobody in this conversation can read and send it. Do not call report_bug again for it." };
+    return { status: 200, text: `Ready for the person to review. Tell them this line in your reply, word for word: "${draftLine(languageFor(entry.sender?.id))}"` };
   }
 
   function personWrote(threadId: string, line: Message): void {
@@ -493,7 +678,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
     const own = ownWords(line.text);
     seen.add(line.id);
     if (seen.size > 1_000) seen.delete(seen.values().next().value!);
-    if (waiting.length >= MAX_WAITING) return notice(threadId, { ok: false, line: fullLine(MAX_OUTBOX, languageFor(line.sender?.id)), marker: "" });
+    if (waiting.length >= MAX_WAITING) return notice(threadId, { ok: false, line: fullLine(MAX_OUTBOX, languageFor(line.sender?.id)) });
     const redact = (text: string) => clip(redactReportText(text, secrets()), 3_000);
     waiting.push({ messageId: line.id, threadId, at: line.at, text: redact(line.text), words: redact(own.map((part) => withoutDevsTags(part, names)).filter(Boolean).join("\n\n")),
       ...(line.sender ? { sender: { name: line.sender.name, ...(line.sender.id ? { id: line.sender.id } : {}) } } : {}) });
@@ -502,39 +687,77 @@ export function createDevsReports(deps: DevsReportsDeps) {
   }
 
   const unsubscribe = store.onChange((change: StoreChange) => {
-    if (change.type === "message") {
+    if (change.type === "message" || change.type === "message.patch") {
       const line = change.message;
-      if (line.role === "user" && line.kind === "text" && !line.peerAsk && !line.aside) personWrote(change.threadId, line);
+      if (change.type === "message" && line.role === "user" && line.kind === "text" && !line.peerAsk && !line.aside) personWrote(change.threadId, line);
+      if (line.kind === "activity") failedRow(change.threadId, line);
     } else if (change.type === "thread.deleted") {
-      const before = waiting.length + tracked.length;
+      const before = waiting.length + tracked.length + drafts.length + pending.length;
       waiting = waiting.filter((entry) => entry.threadId !== change.threadId);
       tracked = tracked.filter((entry) => entry.threadId !== change.threadId);
-      if (waiting.length + tracked.length !== before) save();
+      drafts = drafts.filter((entry) => entry.threadId !== change.threadId);
+      pending = pending.filter((entry) => entry.threadId !== change.threadId);
+      if (waiting.length + tracked.length + drafts.length + pending.length !== before) save();
     }
   });
-  // A waiting @devs line polls whether its turn is still running; otherwise nothing is due before a retry or a status ask.
+  // A waiting @devs line or failed row polls whether its turn is still running; otherwise nothing is due before a retry or a status ask.
   const timer = deps.timer === false ? null : startDueTimer({ run: tick, now, retryMs: TICK_MS,
-    next: () => waiting.length || told.length ? now() : Math.min(nextAskAt, ...outbox.map((queued) => queued.nextAt)) });
+    next: () => waiting.length || pending.length ? now() : Math.min(nextAskAt, ...outbox.map((queued) => queued.nextAt)) });
 
   return {
     /** The note on a turn in this conversation while a @devs message waits for its summary (none for a turn without
-     * OpenMausBot's tools); and, on the first turn after its line, that a report's fix runs here now. Empty otherwise. */
+     * Seira's tools); and, on the first turn after its line, that a report's fix runs here now. Empty otherwise. */
     note(threadId: string, tools: boolean): string {
       const fixed = tracked.filter((one) => one.threadId === threadId && one.told !== undefined && !one.noted);
       for (const one of fixed) one.noted = true;
       if (fixed.length) save();
       const notes = fixed.map((one) => fixedNote(one, one.fixedIn ?? "")).join("");
-      const entry = waiting.filter((one) => one.threadId === threadId && !inFlight.has(one.messageId)).at(-1);
+      const entry = waiting.filter((one) => one.threadId === threadId).at(-1);
       if (!entry) return notes;
       entry.answered = true;
       entry.offered = entry.offered === true || tools;
       return notes + (tools ? TURN_NOTE : "");
     },
-    /** A Team Cloud's member left: their reports are no longer followed, so nothing is told about them. */
+    /** A Team Cloud's member left: their reports are no longer followed, and their drafts nobody sent are let go. */
     forget(person: string) {
-      const before = tracked.length;
+      const before = tracked.length + drafts.length;
       tracked = tracked.filter((entry) => entry.person !== person);
-      if (tracked.length !== before) save();
+      const theirs = drafts.filter((draft) => draft.state === "offer" && (draft.sender === person || draft.for === person));
+      drafts = drafts.filter((draft) => !theirs.includes(draft));
+      for (const draft of theirs) hideOffer(draft);
+      if (tracked.length + drafts.length !== before) save();
+    },
+    /** The conversation a draft belongs to, so a route checks the reader may see it before anything else. */
+    draftThread(id: string): string | null {
+      return drafts.find((draft) => draft.id === id)?.threadId ?? null;
+    },
+    viewDraft(id: string, person: string): BugDraftView | null {
+      const draft = drafts.find((one) => one.id === id && one.for === person);
+      return draft ? draftView(draft) : null;
+    },
+    sendDraft,
+    /** "Not now": the draft and its line go, and nothing is kept to send later. */
+    dismissDraft(id: string, person: string): "ok" | "gone" | "busy" {
+      const draft = drafts.find((one) => one.id === id && one.for === person);
+      if (!draft) return "gone";
+      if (draft.state !== "offer" || sending.has(id)) return "busy";
+      drafts = drafts.filter((one) => one !== draft);
+      hideOffer(draft);
+      save();
+      return "ok";
+    },
+    /** A request in the app failed (the chat's error banner): a draft without a line, when the error is Seira's own. */
+    fromError(threadId: string, text: string, person: string): BugDraftView | null {
+      const facts: ErrorFacts = { text: clip(text, 4_000) };
+      if (!seiraOwnsError(facts)) return null;
+      let path: readonly Message[] = [];
+      try { path = store.activePath(threadId); } catch { /* no conversation: the report has no steps */ }
+      const report = errorReport(threadId, path, path.length, facts, "request", false, undefined, person);
+      const earlier = drafts.find((draft) => draft.from === "error" && draft.for === person && draft.hash === report.hash && draft.state === "offer" && now() - draft.at < OFFER_EVERY_MS);
+      if (earlier) return draftView(earlier);
+      const bot = store.botByThread(threadId);
+      return draftView(keepDraft({ id: newDraftId(), threadId, for: person, from: "error", ...(bot ? { by: bot.name } : {}), at: now(), hash: report.hash,
+        title: report.title, state: "offer", payload: report.payload, activity: report.activity, ...(report.model ? { model: clip(report.model, 200) } : {}), words: report.title }));
     },
     /** The internal call behind report_bug, inside index.ts's /api/internal/ block: the bot and the conversation are the
      * capability's, never a body field. */
@@ -544,13 +767,13 @@ export function createDevsReports(deps: DevsReportsDeps) {
       const body = bodySchema.safeParse(await ctx.readBody());
       if (!body.success) return ctx.json(ctx.res, 400, { error: "report_bug needs went_wrong (up to 2,000 characters), and may add you_saw and steps." });
       const { went_wrong: wentWrong, you_saw: seenByBot, steps } = body.data;
-      const answer = await fromBot(ctx.botId, ctx.threadId, { wentWrong, ...(seenByBot ? { seen: seenByBot } : {}), ...(steps ? { steps } : {}) });
+      const answer = fromBot(ctx.botId, ctx.threadId, { wentWrong, ...(seenByBot ? { seen: seenByBot } : {}), ...(steps ? { steps } : {}) });
       return ctx.json(ctx.res, answer.status, answer.status === 200 ? { text: answer.text } : { error: answer.text });
     },
     tick,
     /** Tests: settles every send and question in flight. */
     idle: async () => {
-      while (inFlight.size || retrying.size || asking) await Promise.allSettled([...inFlight.values(), asking]).then(() => new Promise((resolve) => setImmediate(resolve)));
+      while (sending.size || retrying.size || asking) await Promise.allSettled([...sending.values(), asking]).then(() => new Promise((resolve) => setImmediate(resolve)));
     },
     stop() { unsubscribe(); timer?.stop(); },
   };

@@ -27,7 +27,9 @@ export function autostartEntry(exec, { lending = true } = {}) {
  * The always-on home (always-on-home.mjs) has its own calls: `hold(on)` keeps the item while lending stops, `homeAdd()`
  * adds the person's kind of item, and `homeRelease()` takes away only that one, or gives it to lending.
  */
-export function createOpenAtLogin({ app, file, platform = process.platform, env = process.env, home, argv = process.argv, execPath = process.execPath }) {
+export function createOpenAtLogin({ app, file, platform = process.platform, env = process.env, home, argv = process.argv, execPath = process.execPath, windowsStore = process.windowsStore }) {
+  /** Inside an MSIX package Windows redirects writes to the Run key, so only the Startup apps list can start the app. */
+  const packaged = platform === "win32" && windowsStore === true;
   const autostart = path.join(env.XDG_CONFIG_HOME || path.join(home, ".config"), "autostart", "openmausbot.desktop");
   const saved = () => { try { return JSON.parse(fs.readFileSync(file, "utf8")) ?? {}; } catch { return {}; } };
   const store = (fields) => { try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify({ ...saved(), ...fields })); } catch {} };
@@ -43,7 +45,7 @@ export function createOpenAtLogin({ app, file, platform = process.platform, env 
   let holding = false;
   let whenChosen = () => {};
   function choose(on) {
-    if (!app.isPackaged) return;
+    if (!app.isPackaged || packaged) return;
     if (platform === "linux") {
       if (on) {
         fs.mkdirSync(path.dirname(autostart), { recursive: true });
@@ -62,7 +64,7 @@ export function createOpenAtLogin({ app, file, platform = process.platform, env 
   }
   const login = {
     follow(on) {
-      if (!app.isPackaged || (!on && holding)) return;
+      if (!app.isPackaged || packaged || (!on && holding)) return;
       try {
         if (platform === "linux") {
           if (on && !fs.existsSync(autostart)) {
@@ -83,8 +85,11 @@ export function createOpenAtLogin({ app, file, platform = process.platform, env 
         else if (!set && added()) remember(false);
       } catch {}
     },
-    available: () => app.isPackaged,
+    available: () => app.isPackaged && !packaged,
+    /** True while the person can start the app at sign-in only from the Startup apps list of Windows Settings. */
+    startupApps: () => app.isPackaged && packaged,
     chosen() {
+      if (packaged) return false;
       try {
         if (platform === "linux") return fs.existsSync(autostart) && !ours();
         if (platform === "win32") return windowsStartsApp().length > 0;
@@ -102,6 +107,7 @@ export function createOpenAtLogin({ app, file, platform = process.platform, env 
     hold(on) { holding = on === true; },
     /** Anything starts the app at login: the person's item, lending's or the home's. */
     starts() {
+      if (packaged) return false;
       try {
         if (platform === "linux") return fs.existsSync(autostart);
         if (platform === "win32") return windowsStartsApp().length > 0;
@@ -111,6 +117,7 @@ export function createOpenAtLogin({ app, file, platform = process.platform, env 
     /** The home adds the person's kind of item; it returns what Windows had saved about the person turning it off (null
      * elsewhere), for `homeRelease` to put back. */
     homeAdd() {
+      if (packaged) return null;
       const declined = platform === "win32" ? saved().declined === true : null;
       choose(true);
       return declined;
@@ -118,7 +125,7 @@ export function createOpenAtLogin({ app, file, platform = process.platform, env 
     /** Takes away only the item `homeAdd` added (on Windows its own entry, and the saved word put back), or, while
      * `lending`, gives it to lending, which then removes it once it stops. */
     homeRelease({ declined = null, lending = false } = {}) {
-      if (!app.isPackaged) return;
+      if (!app.isPackaged || packaged) return;
       if (platform === "linux") {
         if (!fs.existsSync(autostart) || ours()) return;
         if (lending) fs.writeFileSync(autostart, autostartEntry(launcher()));
@@ -148,7 +155,7 @@ export function createOpenAtLogin({ app, file, platform = process.platform, env 
 /** Settings' switch, on this computer's own page or My Cloud's page once it is home (`guard`); `changed` redraws the
  * app menu's item. */
 export function installOpenAtLogin({ ipcMain, guard, loginItem, changed }) {
-  const state = () => ({ available: loginItem.available(), on: loginItem.chosen() });
+  const state = () => ({ available: loginItem.available(), on: loginItem.chosen(), startupApps: loginItem.startupApps() });
   ipcMain.handle("open-at-login:state", guard("open-at-login:state", state));
   ipcMain.handle("open-at-login:set", guard("open-at-login:set", (_event, on) => { loginItem.choose(on === true); changed(); return state(); }));
 }

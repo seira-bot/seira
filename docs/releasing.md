@@ -205,8 +205,10 @@ uploads anything:
 - it makes sure that `latest.yml` names the installer with the correct
   SHA-512 and size.
 
-It uploads the five Windows assets as one workflow artifact. It cannot publish
-them: its token can only read the repository.
+It uploads the five Windows assets as one workflow artifact. It uploads the
+Microsoft Store package as a second artifact (see
+[Microsoft Store (MSIX)](#microsoft-store-msix)). It cannot publish them: its
+token can only read the repository.
 
 ```sh
 gh workflow run package-windows.yml --repo seira-bot/seira -f ref=v<version>
@@ -241,6 +243,48 @@ without a certificate. electron-updater checks the update signature only when
 `publisherName` is set, so every installed app would reject every update. When
 Seira gets a certificate, keep its subject the same for each later
 certificate, or list the old and the new subject in `publisherName`.
+
+#### Microsoft Store (MSIX)
+
+The same workflow builds an MSIX package for the Microsoft Store. The file is
+`Seira-<version>-x64.appx`. It is in a separate artifact,
+`seira-<version>-windows-x64-store`, with `SHA256SUMS-windows-x64-store.txt`.
+Do not attach this package to the GitHub release.
+
+```sh
+gh run download <run id> --repo seira-bot/seira --name seira-<version>-windows-x64-store
+sha256sum -c SHA256SUMS-windows-x64-store.txt
+```
+
+Before it uploads the package, the workflow extracts it and checks that:
+
+- the manifest names the display name and the publisher display name of Seira;
+- the manifest declares the `openmausbot` protocol, the `runFullTrust`
+  capability, and a start-up task that is off by default;
+- the package version is the mapped version (see below);
+- each logo in `build/appx/` is in the package with the same SHA-256, and no
+  sample logo of electron-builder is in the package.
+
+Rules for the package:
+
+- The Store rejects a version that starts with 0, and it needs a last part
+  of 0. The build maps `<major>.<minor>.<patch>` to
+  `<major+1>.<minor>.<patch>.0`. Version `0.1.179` becomes `1.1.179.0`.
+  `scripts/appx-manifest.mjs` does this. The build stops when it cannot map
+  the version. The app still reports `0.1.179`.
+- The package has no signature. The Store signs the package after you upload it.
+  A person cannot install the file from the workflow without a test signature.
+- Before the first upload, set `appx.identityName` and `appx.publisher` in
+  `electron-builder.yml`. Copy both values from the Product identity page of
+  the product in Partner Center. The Store rejects a package with other values.
+- Upload the package to Partner Center by hand. Submit each release as a new
+  submission of the same product.
+- The app does not update itself in this package. The Store delivers updates.
+- The app does not write a Windows Run entry in this package, because Windows
+  redirects that write. A person turns on Open at login in Startup apps in
+  Windows Settings. Settings tells the person this.
+- Change the logos only in `brand/build_logo.py`. Run `python3 brand/build_logo.py`
+  and `python3 brand/check_logo.py`, and commit the files in `build/appx/`.
 
 ### 6. Build and attach the macOS apps
 

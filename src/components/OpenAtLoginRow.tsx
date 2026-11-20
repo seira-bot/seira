@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { t } from "@/lib/i18n";
 import { SettingRow, Switch } from "./SettingsPrimitives";
 
-type OpenAtLogin = { available: boolean; on: boolean };
+type OpenAtLogin = { available: boolean; on: boolean; startupApps?: boolean };
 
 export function OpenAtLoginRow({ simple = false }: { simple?: boolean }) {
   const bridge = window.ogb?.openAtLogin;
@@ -14,7 +14,9 @@ export function OpenAtLoginRow({ simple = false }: { simple?: boolean }) {
     void bridge?.state().then((next) => { if (alive) setState(next); }).catch(() => {});
     return () => { alive = false; };
   }, [bridge]);
-  if (!bridge || !state?.available) return null;
+  if (!bridge || !state) return null;
+  if (state.startupApps) return <SettingRow title={t("settings.openAtLogin.title")} subtitle={t("settings.openAtLogin.startupApps")}>{null}</SettingRow>;
+  if (!state.available) return null;
   const set = (on: boolean) => {
     setBusy(true); setFailed(false);
     void bridge.set(on).then(setState, () => setFailed(true)).finally(() => setBusy(false));

@@ -13,7 +13,8 @@ const SEND_TIMEOUT_MS = 20_000;
 const ANSWER_MAX_BYTES = 16 * 1024;
 
 export type SendOutcome =
-  | { ok: true; id: string }
+  /** `issue`: the public issue's number, and `joined`: the report became a comment on an open issue, when the relay says so. */
+  | { ok: true; id: string; issue?: number; joined?: boolean }
   /** Nothing was sent: the report is a prefilled issue form that the person opens and submits. */
   | { ok: true; issueUrl: string }
   /** Worth sending again later: offline, a server error, or the endpoint's hourly limit. */
@@ -83,7 +84,9 @@ export async function sendDevsReport(endpoint: string, payload: DevsReportPayloa
   const { status, body, headers } = answer;
   if (status >= 200 && status < 300) {
     const id = typeof body.id === "string" ? body.id.trim() : "";
-    return /^[A-Za-z0-9_-]{1,64}$/.test(id) ? { ok: true, id } : { ok: false, retry: true, why: "server" };
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) return { ok: false, retry: true, why: "server" };
+    const issue = Number.isSafeInteger(body.issue) && (body.issue as number) > 0 ? body.issue as number : undefined;
+    return { ok: true, id, ...(issue ? { issue } : {}), ...(body.joined === true ? { joined: true } : {}) };
   }
   if (status === 429) {
     const seconds = Number(body.retryAfter ?? headers.get("retry-after"));

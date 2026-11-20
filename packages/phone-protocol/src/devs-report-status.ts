@@ -13,9 +13,28 @@ export interface BugReportStatus {
   running?: true;
 }
 
+/** A bug report a bot wrote and the person has not sent yet, or what became of it once they sent it. Nothing in it is the
+ * report itself: the person who may read the draft asks the server for it by `id`. */
+export interface BugOffer {
+  id: string;
+  /** The person who may see and send it: their reaction key, "user" where one person uses the workspace. */
+  for: string;
+  /** `error`: Seira offered it after its own error. `devs`: the person asked for it with @devs. */
+  from: "error" | "devs";
+  /** The bot that wrote it. */
+  by?: string;
+  /** `offer`: waiting for the person. `saved`: sent while offline, goes on its own. `sent`: a new issue. `joined`: added to
+   * an open issue about the same error. `opened`: no relay here, so the person opened a prefilled issue form. */
+  state: "offer" | "saved" | "sent" | "joined" | "opened";
+  /** The public issue's number, when the relay said it. */
+  issue?: number;
+}
+
 export interface BugReportField {
   /** On a person's message that tagged @devs: its report's status. On the one notice that tells them the fix runs here: the same, `running` set. */
   bugReport?: BugReportStatus;
+  /** On the line a bug report draft hangs under: a failed turn, the turn's reply, or the person's @devs message. */
+  bugOffer?: BugOffer;
 }
 
 const VERSION = /^v?(\d{1,6})\.(\d{1,6})\.(\d{1,6})(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;

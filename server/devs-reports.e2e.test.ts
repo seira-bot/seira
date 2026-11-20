@@ -1,6 +1,7 @@
 // @devs end to end: a fixture server with the synthetic Claude CLI and a fake MausBot team endpoint on loopback. A
-// message that tags @devs sends exactly one report, with the bot's report_bug summary or, when the bot never calls it,
-// with the server's own facts; secrets are masked, the conversation itself never goes, and the person sees the line.
+// message that tags @devs makes exactly one bug report draft, with the bot's report_bug summary or, when the bot never
+// calls it, with the server's own facts. Nothing reaches the team until the person selects "Send report" (the draft
+// route); the draft shows the issue as it will be published, with secrets masked and the conversation itself left out.
 // Then the loop closes: the server asks the team about its reports (every 1.5 s here), the person's message shows each
 // one's status, and once the team says it is fixed in the version this server runs, one line says so, once.
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -17,7 +18,9 @@ const KEY = `sk-ant-${"k".repeat(40)}`;
 const TOKEN = `ghp_${"t".repeat(36)}`;
 type Report = Record<string, string>;
 type BugReport = { id: string; status: string; fixedIn?: string; running?: boolean };
-type Row = { id: string; role: string; kind: string; text?: string; tool?: { name: string; ok?: boolean; output?: string }; bugReport?: BugReport };
+type BugOffer = { id: string; for: string; from: string; by?: string; state: string; issue?: number };
+type Row = { id: string; role: string; kind: string; text?: string; tool?: { name: string; ok?: boolean; output?: string }; bugReport?: BugReport; bugOffer?: BugOffer };
+type Draft = { id: string; from: string; by?: string; state: string; title: string; description: string; diagnostics: string; direct: boolean };
 /** What the fake team says about every report it is asked about, and every question it got. */
 const team = { status: "received", fixedIn: null as string | null, notify: true };
 const questions: Array<{ body: { installId: string; ids: string[] }; signed: boolean }> = [];
@@ -48,6 +51,9 @@ async function until(done: () => Promise<boolean> | boolean, timeoutMs = 60_000)
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
 }
+/** The draft line under the person's message that starts with `prefix`. */
+const offerUnder = async (prefix: string) => (await rows()).find((row) => row.role === "user" && row.text?.startsWith(prefix))?.bugOffer;
+const settleTime = () => new Promise((resolve) => setTimeout(resolve, 3_000));
 async function say(text: string, reply: string) {
   const sent = await api("POST", `/api/bots/${scout.id}/messages`, { text, threadId: scout.threadId });
   expect(sent.status, JSON.stringify(sent.body)).toBe(202);
@@ -97,22 +103,48 @@ afterAll(async () => {
   if (script) rmSync(script, { recursive: true, force: true });
 });
 
-it("sends one report with the bot's report_bug summary and the facts, redacted, and the person sees where it went", async () => {
+it("makes one draft with the bot's report_bug summary and the facts, redacted, sends nothing, and sends it when the person selects Send report", async () => {
   plan([
     { name: "Bash", input: { command: "convert in.png out.webp" }, ok: false, output: `convert: command not found (OPENAI_API_KEY=${KEY})` },
     { name: "report_bug", server: "agents", input: { went_wrong: "Pictures never load", you_saw: `Bash failed: convert: command not found; token ${TOKEN}`, steps: "1. Attach a picture\n2. Send it" } },
-  ], "I sent your report to the team.");
-  await say(`@devs pictures never load (my key is ${KEY})`, "I sent your report to the team.");
-  await until(() => received.length === 1);
+  ], "I prepared your report.");
+  await say(`@devs pictures never load (my key is ${KEY})`, "I prepared your report.");
+  await until(async () => (await offerUnder("@devs pictures never load")) !== undefined);
+  await settleTime();
+  expect(received).toHaveLength(0);
+
+  const offer = (await offerUnder("@devs pictures never load"))!;
+  expect(offer).toEqual({ id: expect.stringMatching(/^[A-Za-z0-9_-]{8,64}$/), for: "user", from: "devs", by: "Scout", state: "offer" });
+  const dump = JSON.parse(readFileSync(fixture.fixtureDumpPath, "utf8")) as { prompt: unknown };
+  expect(JSON.stringify(dump.prompt)).toContain("this message tags @devs, so it is a bug report for the Seira team");
+  const tool = (await rows()).find((row) => row.kind === "activity" && row.tool?.name === "report_bug");
+  expect(tool?.tool?.output).toContain("Your bug report is ready. Review it under your message and select Send report. Nothing is sent before that.");
+
+  // The person reads the draft before anything is sent.
+  const read = await api("GET", `/api/bug-reports/drafts/${offer.id}`);
+  expect(read.status).toBe(200);
+  const draft = read.body as Draft;
+  expect(draft).toMatchObject({ id: offer.id, from: "devs", by: "Scout", state: "offer", direct: true });
+  expect(draft.title).not.toBe("");
+  expect(draft.description.split("\n")[0]).toBe(`pictures never load (my key is «redacted ${KEY.length} chars»)`);
+  expect(draft.description).toContain("Scout's summary: Pictures never load");
+  expect(draft.diagnostics).toContain(`Conversation: ${scout.threadId}`);
+  expect(draft.diagnostics).not.toMatch(/^\s*Install:/m);
+  for (const secret of [KEY, TOKEN]) expect(JSON.stringify(draft)).not.toContain(secret);
+  expect(received).toHaveLength(0);
+
+  const sent = await api("POST", `/api/bug-reports/drafts/${offer.id}/send`, {});
+  expect(sent.status, JSON.stringify(sent.body)).toBe(200);
+  expect(sent.body.state).toBe("sent");
+  expect(received).toHaveLength(1);
 
   const [report] = received;
-  expect(Object.keys(report!).sort()).toEqual(["appVersion", "contact", "contactEmail", "description", "diagnostics", "installId", "platform", "source"]);
-  expect(report).toMatchObject({ source: "bot", contactEmail: "ada@example.com", contact: "ada@example.com" });
+  expect(Object.keys(report!).sort()).toEqual(["appVersion", "description", "diagnostics", "installId", "platform", "source"]);
+  expect(report).toMatchObject({ source: "bot" });
   expect(report!.installId).toMatch(/^[A-Za-z0-9_-]{8,64}$/);
   expect(report!.appVersion).toMatch(/^\d+\.\d+\.\d+/);
   expect(report!.platform).toMatch(/^(darwin|linux|win32) \w+, self-hosted server$/);
-  expect(report!.description.split("\n")[0]).toBe(`pictures never load (my key is «redacted ${KEY.length} chars»)`);
-  expect(report!.description).toContain("Scout's summary: Pictures never load");
+  expect(report!.description).toBe(draft.description);
   expect(report!.description).toContain("Steps to reproduce: 1. Attach a picture\n2. Send it");
   expect(report!.diagnostics).toContain(`Conversation: ${scout.threadId}`);
   expect(report!.diagnostics).toContain("Bot: Scout");
@@ -121,33 +153,40 @@ it("sends one report with the bot's report_bug summary and the facts, redacted, 
   expect(report!.diagnostics).toContain("Summary from a bot: yes, by Scout (report_bug)");
   const whole = JSON.stringify(report);
   for (const secret of [KEY, TOKEN]) expect(whole).not.toContain(secret);
-  expect(whole).not.toContain("I sent your report to the team.");
+  expect(whole).not.toContain("ada@example.com");
+  expect(whole).not.toContain("I prepared your report.");
   expect(whole).not.toContain("convert in.png out.webp");
 
-  const dump = JSON.parse(readFileSync(fixture.fixtureDumpPath, "utf8")) as { prompt: unknown };
-  expect(JSON.stringify(dump.prompt)).toContain("this message tags @devs, so it is a bug report for the Seira team");
-  const line = "Sent to the Seira team (report report-1). They will reply to ada@example.com.";
-  await until(async () => (await rows()).some((row) => row.kind === "activity" && row.tool?.name === `notice: ${line}`), 20_000);
-  const tool = (await rows()).find((row) => row.kind === "activity" && row.tool?.name === "report_bug");
-  expect(tool?.tool?.output).toContain(line);
+  await until(async () => (await offerUnder("@devs pictures never load"))?.state === "sent", 20_000);
+  expect((await rows()).filter((row) => row.kind === "activity" && row.tool?.name.startsWith("notice:"))).toEqual([]);
 }, hostTimeout(120_000));
 
-it("still sends the report, with the server's facts, when the bot never calls report_bug, and only once", async () => {
+it("still makes the draft, with the server's facts, when the bot never calls report_bug, and only once", async () => {
   plan([], "Sorry, I am not sure what happened.");
   await say("@devs the send button froze again", "Sorry, I am not sure what happened.");
-  await until(() => received.length === 2, 30_000);
-  const report = received[1]!;
-  expect(report.description.split("\n")[0]).toBe("the send button froze again");
-  expect(report.description).toContain("No summary from a bot: the bot did not call report_bug.");
-  expect(report.diagnostics).toContain("tool Bash failed: convert: command not found");
-  expect(report.diagnostics).toContain("notice: Sent to the Seira team (report report-1)");
-  const line = "Sent to the Seira team (report report-2). They will reply to ada@example.com.";
-  await until(async () => (await rows()).some((row) => row.kind === "activity" && row.tool?.name === `notice: ${line}`), 20_000);
+  await until(async () => (await offerUnder("@devs the send button froze again")) !== undefined, 30_000);
+  await settleTime();
+  expect(received).toHaveLength(1);
+  const offer = (await offerUnder("@devs the send button froze again"))!;
+  expect(offer).toEqual({ id: expect.any(String), for: "user", from: "devs", state: "offer" });
+  const draft = (await api("GET", `/api/bug-reports/drafts/${offer.id}`)).body as Draft;
+  expect(draft.description.split("\n")[0]).toBe("the send button froze again");
+  expect(draft.description).toContain("No summary from a bot: the bot did not call report_bug.");
+  expect(draft.diagnostics).toContain("tool Bash failed: convert: command not found");
+  expect(draft.diagnostics).not.toContain("notice:");
+  expect(received).toHaveLength(1);
+
+  expect((await api("POST", `/api/bug-reports/drafts/${offer.id}/send`, {})).status).toBe(200);
+  expect(received).toHaveLength(2);
+  expect(received[1]!.description.split("\n")[0]).toBe("the send button froze again");
+  expect(received[1]!.description).toContain("No summary from a bot: the bot did not call report_bug.");
+  await until(async () => (await offerUnder("@devs the send button froze again"))?.state === "sent", 20_000);
 
   plan([], "Noted.");
   await say("a message without the tag, and `@devs` in code", "Noted.");
-  await new Promise((resolve) => setTimeout(resolve, 5_000));
+  await settleTime();
   expect(received).toHaveLength(2);
+  expect((await rows()).filter((row) => row.bugOffer)).toHaveLength(2);
 }, hostTimeout(120_000));
 
 it("shows each report's status on the message that sent it, and once the team fixes it in the version this server runs, says so once", async () => {

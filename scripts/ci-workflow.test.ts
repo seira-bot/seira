@@ -359,9 +359,19 @@ describe("Package workflows", () => {
   it("upload their packages as one workflow artifact and fail when no file matches", () => {
     for (const [file, flow] of packageWorkflows) {
       const uploads = Object.values(flow.jobs).flatMap(stepsOf).filter((step) => step.uses?.startsWith("actions/upload-artifact@"));
-      expect(uploads.length, file).toBe(1);
-      expect(uploads[0].with?.["if-no-files-found"], file).toBe("error");
+      expect(uploads.length, file).toBe(file === "package-windows.yml" ? 2 : 1);
+      for (const upload of uploads) expect(upload.with?.["if-no-files-found"], file).toBe("error");
     }
+  });
+
+  it("upload the Microsoft Store package apart from the Windows installer", () => {
+    const uploads = Object.values(workflows.get("package-windows.yml")!.jobs).flatMap(stepsOf).filter((step) => step.uses?.startsWith("actions/upload-artifact@"));
+    expect(uploads.map((step) => step.with?.name)).toEqual([
+      "seira-${{ steps.version.outputs.version }}-windows-x64",
+      "seira-${{ steps.version.outputs.version }}-windows-x64-store",
+    ]);
+    expect(uploads[1].with?.path).toBe("${{ runner.temp }}/seira-windows-x64-store/");
+    expect(uploads[1].with?.["retention-days"]).toBe(14);
   });
 });
 

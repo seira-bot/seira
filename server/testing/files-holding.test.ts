@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -25,6 +25,19 @@ describe("filesHolding", () => {
     writeFileSync(join(root, "keep.json"), "s3");
     writeFileSync(join(root, "dump.json"), "s3");
     expect(filesHolding(root, "s3", { skip: (_path, name) => name === "dump.json" })).toEqual(["keep.json"]);
+  });
+
+  it.skipIf(process.platform === "win32")("follows a link unless told not to", () => {
+    const outside = mkdtempSync(join(tmpdir(), "omb-files-holding-outside-"));
+    try {
+      writeFileSync(join(outside, "far.json"), "s3");
+      mkdirSync(join(root, "real"));
+      writeFileSync(join(root, "real", "near.json"), "s3");
+      symlinkSync(join(root, "real", "near.json"), join(root, "file-link.json"));
+      symlinkSync(outside, join(root, "folder-link"));
+      expect(filesHolding(root, "s3")).toEqual(["file-link.json", join("folder-link", "far.json"), join("real", "near.json")]);
+      expect(filesHolding(root, "s3", { followLinks: false })).toEqual([join("real", "near.json")]);
+    } finally { rmSync(outside, { recursive: true, force: true }); }
   });
 
   it("counts the temp file of an atomic write as the file it becomes, once", () => {

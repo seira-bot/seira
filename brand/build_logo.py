@@ -55,6 +55,10 @@ SPLASH_BOX = (190, 224)
 
 ICNS_SIZES = (16, 32, 64, 128, 256, 512, 1024)
 ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
+APPX_SQUARE = {"StoreLogo": 50, "Square150x150Logo": 150, "Square44x44Logo": 44}
+APPX_TARGET_SIZES = (16, 24, 32, 48, 256)
+APPX_WIDE = (310, 150)
+
 ICONSET_SIZES = ((16, 1), (16, 2), (32, 1), (32, 2), (64, 1), (64, 2), (128, 1), (128, 2),
                 (256, 1), (256, 2), (512, 1), (512, 2))
 
@@ -305,6 +309,22 @@ def build_splash(master):
     return canvas
 
 
+def write_appx_logos(tile):
+    out = ROOT / "build/appx"
+    for name, base in APPX_SQUARE.items():
+        for scale in (100, 200):
+            size = base * scale // 100
+            write_png(out / f"{name}.scale-{scale}.png", tile.resize((size, size), LANCZOS))
+    for size in APPX_TARGET_SIZES:
+        icon = tile.resize((size, size), LANCZOS)
+        write_png(out / f"Square44x44Logo.targetsize-{size}.png", icon)
+        write_png(out / f"Square44x44Logo.targetsize-{size}_altform-unplated.png", icon)
+    for scale in (100, 200):
+        width, height = APPX_WIDE[0] * scale // 100, APPX_WIDE[1] * scale // 100
+        canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        canvas.alpha_composite(tile.resize((height, height), LANCZOS), ((width - height) // 2, 0))
+        write_png(out / f"Wide310x150Logo.scale-{scale}.png", canvas)
+
 def main():
     master = build_master()
     write_png(LOGO / "seira-head.png", master)
@@ -340,6 +360,8 @@ def main():
     ico_tiles[-1].save(ROOT / "build/icon.ico", format="ICO", sizes=[(s, s) for s in ICO_SIZES],
                        append_images=ico_tiles[:-1])
     tiles[1024].save(ROOT / "build/icon.icns", format="ICNS", append_images=[tiles[s] for s in ICNS_SIZES[:-1]])
+
+    write_appx_logos(tile)
 
     svg = icon_svg(tiles[512])
     write_text(ROOT / "build/icon.svg", svg)

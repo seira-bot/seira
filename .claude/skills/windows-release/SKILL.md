@@ -73,6 +73,21 @@ gh release upload v<version> --repo seira-bot/seira \
 - Then do step 8 of `docs/releasing.md`: download the release and check every
   checksum file.
 
+## Microsoft Store package
+
+The same run builds `Seira-<version>-x64.appx` for the Microsoft Store. It is in
+the artifact `seira-<version>-windows-x64-store`. Do not attach it to the GitHub
+release. Upload it to Partner Center by hand. The Store signs it.
+
+- The build maps version `0.1.179` to `1.1.179.0`, because the Store rejects a
+  first part of 0.
+- Set `appx.identityName` and `appx.publisher` in `electron-builder.yml` from
+  the Product identity page in Partner Center before the first upload.
+- In this package the app does not update itself and does not write a Run key.
+  The Store updates it, and the person turns on Open at login in Startup apps.
+- The workflow checks the manifest and the logos. `docs/releasing.md` lists the
+  checks.
+
 ## Each release has Windows files
 
 A release without `latest.yml` leaves every installed Windows app on its old

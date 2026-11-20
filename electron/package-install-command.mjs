@@ -4,10 +4,15 @@ import { join } from "node:path";
 // Never installs the package itself: stock Ubuntu 24.04 hands a .deb to App Center, which may not install a local one.
 
 /** Package types whose store updates the app: the app never checks, downloads or installs an update itself there. */
-export const STORE_PACKAGE_TYPES = Object.freeze(["snap", "flatpak"]);
+export const STORE_PACKAGE_TYPES = Object.freeze(["snap", "flatpak", "msix"]);
 
 export function managedByStore(packageType) {
   return STORE_PACKAGE_TYPES.includes(packageType);
+}
+
+/** Electron sets process.windowsStore when the app runs from an AppX or MSIX package. */
+export function windowsPackageType({ platform = process.platform, windowsStore = process.windowsStore } = {}) {
+  return platform === "win32" && windowsStore === true ? "msix" : null;
 }
 
 /** A Flatpak sandbox sets FLATPAK_ID and mounts /.flatpak-info; a snap sets SNAP and runs from under that directory. */

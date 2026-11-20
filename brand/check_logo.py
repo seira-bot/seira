@@ -166,6 +166,29 @@ def check_png_set():
     open_image(splash, (198, 232), "RGBA")
 
 
+def check_appx():
+    out = ROOT / "build/appx"
+    squares = {"StoreLogo": 50, "Square150x150Logo": 150, "Square44x44Logo": 44}
+    wanted = []
+    for name, base in squares.items():
+        for scale in (100, 200):
+            wanted.append((out / f"{name}.scale-{scale}.png", base * scale // 100, base * scale // 100))
+    for size in (16, 24, 32, 48, 256):
+        wanted.append((out / f"Square44x44Logo.targetsize-{size}.png", size, size))
+        wanted.append((out / f"Square44x44Logo.targetsize-{size}_altform-unplated.png", size, size))
+    for scale in (100, 200):
+        wanted.append((out / f"Wide310x150Logo.scale-{scale}.png", 310 * scale // 100, 150 * scale // 100))
+    for path, width, height in wanted:
+        im = open_image(path, (width, height), "RGBA")
+        if im and height >= 128:
+            left = (width - height) // 2
+            square = im.crop((left, 0, left + height, height))
+            check_face(square, rel(path), scaled_visor(height, ICON_HEAD_SCALE), 3)
+    if out.exists():
+        for path in sorted(out.iterdir()):
+            if path.suffix != ".png":
+                fail(f"{rel(path)}: build/appx holds only images")
+
 def embedded_png(path):
     if not path.exists():
         fail(f"missing file: {rel(path)}")
@@ -236,6 +259,7 @@ def check_no_flat_files():
 
 def main():
     check_png_set()
+    check_appx()
     check_svgs()
     check_containers()
     check_no_flat_files()

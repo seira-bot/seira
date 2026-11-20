@@ -16,11 +16,17 @@ const fixture = vi.hoisted(() => ({
   opened: [] as string[],
   dispatched: [] as unknown[],
   withStore: true,
+  cardDraws: 0,
 }));
 vi.mock("@/state/store", () => ({ useStore: () => ({ state: fixture.state, dispatch: () => {} }) }));
 vi.mock("@/state/store-ref", () => ({ useOptionalStoreRef: () => (fixture.withStore ? { dispatch: (action: unknown) => fixture.dispatched.push(action), state: () => fixture.state } : null) }));
 vi.mock("@/state/api", () => ({ api: fixture.api }));
 vi.mock("@/lib/app-links", () => ({ openExternalLink: async (url: string) => { fixture.opened.push(url); } }));
+
+vi.mock("@/lib/own-published-apps", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/own-published-apps")>();
+  return { ...original, useKnownPublishedApps: () => { fixture.cardDraws++; return original.useKnownPublishedApps(); } };
+});
 
 const { closeAppPreview } = await import("@/lib/app-preview");
 const { rememberPublishedApps, SITE_FRAME_SANDBOX } = await import("@/lib/published-apps");
@@ -219,5 +225,17 @@ describe("a published site's card in the chat", () => {
     await show(reply(`Live: ${SITE}`));
     expect(cards()[0]!.className).toContain("w-full");
     expect(cards()[0]!.className).toContain("max-md:max-w-none");
+  });
+
+  it("draws again only for the message whose object changed", async () => {
+    const list = (messages: Message[]) => createElement(Fragment, null, messages.map((message) => createElement(PublishedSiteCards, { key: message.id, message })));
+    const first = reply("one", { id: "m1" });
+    const second = reply("two", { id: "m2" });
+    await act(async () => { root.render(list([first, second])); });
+    const before = fixture.cardDraws;
+    await act(async () => { root.render(list([first, second])); });
+    expect(fixture.cardDraws).toBe(before);
+    await act(async () => { root.render(list([first, { ...second, text: "two, longer" }])); });
+    expect(fixture.cardDraws).toBe(before + 1);
   });
 });

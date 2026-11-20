@@ -1,5 +1,5 @@
-// The agents catalog's report_bug tool: a person's message that tags @devs is a bug report for the MausBot team, and
-// the bot answering it writes the summary that goes with it.
+// The agents catalog's report_bug tool: a person's message that tags @devs is a bug report for the Seira team, and
+// the bot answering it writes the summary in its draft. The person reads the draft and sends it themselves.
 import type { ToolCallContext, ToolCallResult } from "./agents-call.ts";
 import type { Json } from "./agents-client.ts";
 
@@ -12,14 +12,14 @@ export async function callDevsTool(_name: string, args: Json, context: ToolCallC
   if (!wentWrong) return { text: "report_bug needs went_wrong: what the person says went wrong.", isError: true };
   const body = { went_wrong: wentWrong, ...(text(args.you_saw) ? { you_saw: text(args.you_saw) } : {}), ...(text(args.steps) ? { steps: text(args.steps) } : {}) };
   const { ok, body: answer } = await context.client.apiResponse(DEVS_REPORT_PATH, { method: "POST", body: JSON.stringify(body) });
-  return ok ? { text: String(answer.text ?? "Sent.") } : { text: String(answer.error ?? "The report could not be sent. Try again shortly."), isError: true };
+  return ok ? { text: String(answer.text ?? "Ready for the person to review.") } : { text: String(answer.error ?? "The report could not be written. Try again shortly."), isError: true };
 }
 
 export const DEVS_TOOL_DEFINITIONS = [
   {
     name: "report_bug",
     description:
-      "Send the person's bug report to the Seira team (Seira's developers) with the app's diagnostics. Only for a message that tags @devs, once. No passwords, keys, tokens or file contents.",
+      "Write a draft of the person's bug report for the Seira team (Seira's developers), with the app's diagnostics. Nothing is sent: the person reads the draft and sends it. Only for a message that tags @devs, once. No passwords, keys, tokens or file contents.",
     inputSchema: {
       type: "object",
       additionalProperties: false,

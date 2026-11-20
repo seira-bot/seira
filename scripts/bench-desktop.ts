@@ -3,7 +3,8 @@
 // fake engine, and a headless Chrome with its own profile. Prints one JSON object, so a change can show before/after.
 //   node --experimental-strip-types scripts/bench-desktop.ts [--only bundle,server,start,screens,idle,stream,big,routines]
 //     [--chrome PATH] [--idle-seconds 30] [--bots 150] [--threads 300] [--messages 2000] [--advanced] [--out FILE] [--keep]
-//     [--screenshots DIR]
+//     [--screenshots DIR] [--budgets FILE] [--budget-kinds count,time,memory]
+// With --budgets, the run exits 1 when a measured metric is above its limit; --budget-kinds checks only those kinds.
 // bundle: the production build's first-load JavaScript and which libraries it pulls in eagerly.
 // server: fixture server spawn to /api/health, from source and as the packaged bundle with its compile cache; timer
 //   callbacks and CPU with no page open; child processes each engine-list read (a window focus) starts.
@@ -25,6 +26,7 @@ import { parseArgs } from "node:util";
 import { gzipSync } from "node:zlib";
 
 import { runControlSeira, verificationServerArgs, verificationServerEnvironment } from "./control-seira.ts";
+import { budgetExitCode, checkBudgets, formatReport, loadBudgets, parseKinds } from "./testing/bench-budgets.ts";
 import { installedChrome } from "./testing/control-seira-ui.ts";
 import { FRAMES_START, FRAMES_STOP, launchChrome, switchExpression, TRANSCRIPT_BOX, type Chrome, type Page } from "./testing/bench-desktop-page.ts";
 import { removeTempDir, waitForExit } from "../server/testing/cleanup.ts";
@@ -44,10 +46,14 @@ const { values } = parseArgs({
     out: { type: "string" },
     keep: { type: "boolean", default: false },
     screenshots: { type: "string" },
+    budgets: { type: "string" },
+    "budget-kinds": { type: "string" },
   },
 });
 const only = new Set((values.only ?? PHASES.join(",")).split(",").map((phase) => phase.trim()).filter(Boolean));
 for (const phase of only) if (!(PHASES as readonly string[]).includes(phase)) throw new Error(`unknown phase ${phase}; phases: ${PHASES.join(", ")}`);
+const budgets = values.budgets ? loadBudgets(values.budgets) : undefined;
+const budgetKinds = parseKinds(values["budget-kinds"]);
 const IDLE_MS = Number(values["idle-seconds"]) * 1000;
 const STORAGE = { "omb-analytics-opt-out": "1", "omb-email-gate": "skipped", "omb-simple-mode-prompt": "1", "grok-move-2026-11": "1", "teams-2026-11": "1", "omb-advanced-mode": values.advanced ? "1" : "0" };
 const log = (line: string) => process.stderr.write(`bench-desktop: ${line}\n`);
@@ -833,6 +839,12 @@ async function main() {
   const json = JSON.stringify(result, null, 2);
   if (values.out) writeFileSync(values.out, `${json}\n`);
   process.stdout.write(`${json}\n`);
+
+  if (budgets) {
+    const report = checkBudgets(result, budgets, budgetKinds);
+    for (const line of formatReport(report).split("\n")) log(line);
+    if (budgetExitCode(report)) exitCode = 1;
+  }
 }
 
 let exitCode = 0;
