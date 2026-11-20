@@ -173,6 +173,13 @@ export function createTunnelAccount(options: {
   return { service, credentials, controlPlane };
 }
 
+/** Null when a control plane is set. Otherwise the reason that tunnel, login and Seira Relay cannot work, with the ways in that do. */
+export function controlPlaneProblem(env: NodeJS.ProcessEnv = process.env): string | null {
+  if (resolveCompanionControlPlaneURL({ isPackaged: true, environment: env })) return null;
+  if (env.OMB_CONTROL_PLANE_URL?.trim()) return "OMB_CONTROL_PLANE_URL is set but is not an https address";
+  return "this Seira build has no account service for tunnel addresses and Seira Relay; set OMB_CONTROL_PLANE_URL to one you run, or serve with --domain, --tailscale or --public-url (behind your own tunnel or proxy)";
+}
+
 export const FLEET_CREDENTIAL_ENV = "OMB_INSTALLATION_CREDENTIAL";
 
 /** A fleet container's installation credential comes from the environment; nothing is written to disk. */
@@ -183,8 +190,9 @@ export function fleetCredential(env: NodeJS.ProcessEnv = process.env): string | 
 
 export async function fleetAccess(options: { credential: string; version?: string; env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch }): Promise<ManagedTunnelAccess> {
   const env = options.env ?? process.env;
+  const problem = controlPlaneProblem(env);
+  if (problem) throw new Error(problem);
   const controlPlane = resolveCompanionControlPlaneURL({ isPackaged: true, environment: env });
-  if (!controlPlane) throw new Error("no phone account service: set OMB_CONTROL_PLANE_URL to an https address");
   const client = createControlPlaneClient({ baseURL: controlPlane, fetchImpl: options.fetchImpl });
   try {
     const { endpoint, connectorToken } = await client.ensureEndpoint(options.credential, { appVersion: options.version, kind: "server" });

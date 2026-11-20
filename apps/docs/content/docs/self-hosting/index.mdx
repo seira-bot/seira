@@ -32,7 +32,7 @@ Add `--check` to only check the server; it changes nothing. Run the command agai
 | A domain name, ports 80 and 443 open | `npx @seira-bot/seira serve --domain seira.example.com` |
 | Tailscale | `npx @seira-bot/seira serve --tailscale` |
 | Only this network | `npx @seira-bot/seira serve --lan` |
-| Nothing at all | `npx @seira-bot/seira login`, then `npx @seira-bot/seira serve --tunnel` |
+| Your own Cloudflare Tunnel | `cloudflared`, then `npx @seira-bot/seira serve --public-url https://seira.example.com` |
 
 A code works once, for 10 minutes. `npx @seira-bot/seira pair` makes another, and `npx @seira-bot/seira devices` lists the paired devices. See [Deploy on a VPS](/docs/self-hosting/deploy-vps) for a server from scratch, and [Networking](/docs/self-hosting/networking).
 
