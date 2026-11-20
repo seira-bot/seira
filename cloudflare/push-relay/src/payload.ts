@@ -46,7 +46,7 @@ const PAIRING = /^[A-Za-z0-9_-]{8,64}$/;
 function oneLine(max: number) {
   return z.string().min(1).max(max * 4).refine((value) => {
     if (value.trim() !== value || [...value].length > max) return false;
-    return !/[\p{Cc}  ]/u.test(value);
+    return !/[\p{Cc}\u2028\u2029]/u.test(value);
   });
 }
 
