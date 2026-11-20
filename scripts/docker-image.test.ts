@@ -236,7 +236,7 @@ describe("container images", () => {
   });
 
   it.skipIf(process.platform === "win32")("installs the in-container command as seira and under the name that earlier self-host guides give", () => {
-    const install = chain("runtime").find(step => step.op === "RUN" && step.args.includes("> /usr/local/bin/seira"))!;
+    const install = chain("server").find(step => step.op === "RUN" && step.args.includes("> /usr/local/bin/seira"))!;
     const bin = mkdtempSync(join(tmpdir(), "seira-cli-"));
     temporaryDirectories.push(bin);
     const result = spawnSync("sh", ["-c", install.args.replaceAll("/usr/local/bin", bin)], { encoding: "utf8" });
