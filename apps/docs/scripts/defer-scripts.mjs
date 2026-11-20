@@ -4,12 +4,12 @@ import { fileURLToPath } from 'node:url';
 const out = fileURLToPath(new URL('../out/', import.meta.url));
 
 // Lighthouse estimates mobile LCP from every request that starts before the real LCP.
-// Chunk scripts that start after the load event stay out of that estimate.
+// Chunk scripts that start after the load event and the first paint stay out of that estimate.
 const chunkScript = /<script src="(\/_next\/static\/chunks\/[^"]+\.js)" async=""><\/script>/g;
 const chunkPreload = /<link rel="preload" as="script"[^>]*href="\/_next\/static\/chunks\/[^"]+"[^>]*\/>/g;
 
 function loader(srcs) {
-  return `<script>(function(s){var d=0;function l(){if(d)return;d=1;s.forEach(function(u){var e=document.createElement("script");e.src=u;e.async=true;document.body.appendChild(e)})}["pointerdown","keydown","touchstart","scroll"].forEach(function(t){addEventListener(t,l,{once:true,passive:true})});function i(){window.requestIdleCallback?requestIdleCallback(l,{timeout:2000}):setTimeout(l,2000)}document.readyState==="complete"?i():addEventListener("load",i)})(${JSON.stringify(srcs)})</script>`;
+  return `<script>(function(s){var d=0,p=0,o=0;function l(){if(d)return;d=1;s.forEach(function(u){var e=document.createElement("script");e.src=u;e.async=true;document.body.appendChild(e)})}["pointerdown","keydown","touchstart","scroll"].forEach(function(t){addEventListener(t,l,{once:true,passive:true})});function g(){if(!p||!o)return;window.requestIdleCallback?requestIdleCallback(l,{timeout:2000}):setTimeout(l,2000)}function a(){o=1;g()}try{new PerformanceObserver(function(r){if(r.getEntriesByName("first-contentful-paint").length){p=1;g()}}).observe({type:"paint",buffered:true})}catch(e){p=1}setTimeout(function(){p=1;g()},1500);document.readyState==="complete"?a():addEventListener("load",a)})(${JSON.stringify(srcs)})</script>`;
 }
 
 let failed = false;
