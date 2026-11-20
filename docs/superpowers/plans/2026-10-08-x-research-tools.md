@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-08-x-research-tools-design.md`
 
-**Worktree:** `/Users/omkar/Desktop/seira/OpenGrokBot-x-research`, branch `feat/x-research-tools`. Run every command from there. Never push.
+**Worktree:** `<repo root>`, branch `feat/x-research-tools`. Run every command from there. Never push.
 
 ## Global Constraints
 

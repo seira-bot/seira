@@ -17,7 +17,7 @@ tool", "What a bot may touch", "Error handling") are the requirements.
 
 ## Global Constraints
 
-- Work only in `/Users/omkar/Desktop/seira/OpenGrokBot-mcp-in-chat` (branch `feat/mcp-in-chat`). Never touch the
+- Work only in `<repo root>` (branch `feat/mcp-in-chat`). Never touch the
   `OpenGrokBot/` checkout.
 - Phone work goes only in a seira-mobile worktree, never in Seira.
 - Never push and never open a PR. Commit locally only.
