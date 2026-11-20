@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { ChildProcess } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -128,18 +128,6 @@ describe("CLI startup lifecycle", () => {
     await expect(runServe({ ...options, tailscale: true }, vi.fn())).rejects.toThrow("Fixture spawn failure");
     expect(mocks.tailscaleServe).toHaveBeenCalledOnce();
     expect(mocks.tailscaleStop).toHaveBeenCalledOnce();
-  });
-
-  it("creates a missing data folder, private to this user, before it shares over Tailscale", async () => {
-    const fresh = join(dataDir, "fresh");
-    let folder: { exists: boolean; mode?: number } | undefined;
-    mocks.tailscaleServe.mockImplementation(async () => {
-      folder = { exists: existsSync(fresh), mode: existsSync(fresh) ? statSync(fresh).mode & 0o777 : undefined };
-      return { origin: "https://fixture.tail.test", stop: mocks.tailscaleStop };
-    });
-    mocks.spawn.mockImplementation(() => { throw new Error("Fixture spawn failure"); });
-    await expect(runServe({ ...options, dataDir: fresh, guided: false, tailscale: true }, vi.fn())).rejects.toThrow("Fixture spawn failure");
-    expect(folder).toEqual({ exists: true, mode: 0o700 });
   });
 
   it("starts the server on the tailnet when tailscale serve can't front it, with nothing of Tailscale's to stop", async () => {

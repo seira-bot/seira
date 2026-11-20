@@ -1,6 +1,6 @@
 // Never log Tailscale's raw stderr (it can contain auth keys and node names): failures are classified into a closed set.
 import { execFile, spawn } from "node:child_process";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
 
@@ -165,6 +165,7 @@ export async function tailscaleServe(
     clearTimeout(timer);
   };
   try {
+    mkdirSync(options.dataDir, { recursive: true, mode: 0o700 });
     writeFileSync(tailscaleMarker(options.dataDir), JSON.stringify({ cli: status.cli, httpsPort, localPort }), { mode: 0o600 });
   } catch (error) {
     await stopServe();

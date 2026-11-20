@@ -672,7 +672,6 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
     console.error(`something already answers on http://127.0.0.1:${options.port}; use ${cliCommand("pair")} against it, or --port for a second server`);
     return 1;
   }
-  mkdirSync(options.dataDir, { recursive: true, mode: 0o700 });
   let publicUrl = options.publicUrl ?? (options.local ? undefined : envPublicUrl(process.env, log));
   let tailscale: TailscaleStatus | null = null;
   if (await clearLeftoverTailscaleServe(options.dataDir) && !options.tailscale) log(`Turned off a Tailscale share an earlier run left on. Add --tailscale to share again.`);
