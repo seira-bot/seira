@@ -50,7 +50,7 @@ function entry(packageId: string, rel: { document: any; bytes: string; sha256: s
 }
 
 function catalog(packages: unknown[], extra: Record<string, unknown> = {}) {
-  return { format: "openmaus.org-library", version: 1, libraryVersion: 3, organization: { id: ORG, name: "Customer Co" }, packages, ...extra };
+  return { format: "seira.org-library", version: 1, libraryVersion: 3, organization: { id: ORG, name: "Customer Co" }, packages, ...extra };
 }
 
 function relay(body: unknown, overrides: Record<string, unknown> = {}) {
@@ -59,7 +59,7 @@ function relay(body: unknown, overrides: Record<string, unknown> = {}) {
 }
 
 function snapshot(): string {
-  const copy = mkdtempSync(join(tmpdir(), "omb-org-library-crash-"));
+  const copy = mkdtempSync(join(tmpdir(), "seira-org-library-crash-"));
   homes.push(copy);
   cpSync(home, copy, { recursive: true });
   return copy;
@@ -70,13 +70,13 @@ async function installation(from?: string) {
     (await import("./message-db.ts")).closeMessageDb();
     home = from;
   } else {
-    home = mkdtempSync(join(tmpdir(), "omb-org-library-"));
+    home = mkdtempSync(join(tmpdir(), "seira-org-library-"));
     homes.push(home);
   }
   vi.resetModules();
   vi.stubEnv("HOME", home);
   vi.stubEnv("USERPROFILE", home);
-  vi.stubEnv("OMB_DATA_DIR", join(home, ".openmausbot"));
+  vi.stubEnv("SEIRA_DATA_DIR", join(home, ".seira"));
   const { Store } = await import("./store.ts");
   const { RoutineManager } = await import("./routines.ts");
   const skills = await import("./skills.ts");
@@ -266,7 +266,7 @@ describe("the relay", () => {
     expect(existsSync(app.statePath)).toBe(false);
     await library.settled();
     expect(Date.now() - started).toBeLessThan(15_000);
-    expect(app.posted).toEqual([{ type: "openmausbot:managed-library-state", digest: sha(JSON.stringify(body)), packages: [] }]);
+    expect(app.posted).toEqual([{ type: "seira:managed-library-state", digest: sha(JSON.stringify(body)), packages: [] }]);
     expect(app.readState()).toMatchObject({ version: 1, source: { adminOrigin: ADMIN, organizationId: ORG }, appliedDigest: sha(JSON.stringify(body)), installs: {} });
   });
 });

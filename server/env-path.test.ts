@@ -22,7 +22,7 @@ const posixIt = it.skipIf(process.platform === "win32");
 
 describe("augmentedPath", () => {
   afterEach(() => {
-    delete process.env.OMB_EXTRA_PATH;
+    delete process.env.SEIRA_EXTRA_PATH;
     resetPathCacheForTests();
   });
 
@@ -30,16 +30,16 @@ describe("augmentedPath", () => {
     resetPathCacheForTests();
     const path = augmentedPath();
     const firstExisting = (process.env.PATH ?? "").split(delimiter).filter(Boolean)[0];
-    // OMB_EXTRA_PATH is unset here, so the inherited PATH leads
+    // SEIRA_EXTRA_PATH is unset here, so the inherited PATH leads
     expect(path.split(delimiter)[0]).toBe(firstExisting);
   });
 
-  it("prepends OMB_EXTRA_PATH and dedupes", () => {
-    process.env.OMB_EXTRA_PATH = ["/tmp/omb-extra", "/tmp/omb-extra"].join(delimiter);
+  it("prepends SEIRA_EXTRA_PATH and dedupes", () => {
+    process.env.SEIRA_EXTRA_PATH = ["/tmp/seira-extra", "/tmp/seira-extra"].join(delimiter);
     resetPathCacheForTests();
     const parts = augmentedPath().split(delimiter);
-    expect(parts[0]).toBe("/tmp/omb-extra");
-    expect(parts.filter((p) => p === "/tmp/omb-extra")).toHaveLength(1);
+    expect(parts[0]).toBe("/tmp/seira-extra");
+    expect(parts.filter((p) => p === "/tmp/seira-extra")).toHaveLength(1);
   });
 
   posixIt("includes nvm bin dirs from the home dir, newest node first", () => {
@@ -68,14 +68,14 @@ describe("augmentedPath", () => {
   posixIt("makes a CLI in a known install dir spawnable despite a bare PATH", async () => {
     const bin = join(homedir(), ".local", "bin");
     mkdirSync(bin, { recursive: true });
-    const fake = join(bin, "omb-fake-cli");
+    const fake = join(bin, "seira-fake-cli");
     writeFileSync(fake, "#!/bin/sh\necho found-me\n");
     chmodSync(fake, 0o755);
     resetPathCacheForTests();
 
     const stdout = await new Promise<string>((resolve, reject) => {
       execFile(
-        "omb-fake-cli",
+        "seira-fake-cli",
         [],
         // bare GUI-style PATH + our augmentation — the augmentation must win
         { env: { PATH: augmentedPath() } },
@@ -88,7 +88,7 @@ describe("augmentedPath", () => {
   posixIt("keeps the last login-shell PATH available during a rescan", async () => {
     const shell = join(homedir(), "fake-login-shell");
     const rcOnlyBin = join(homedir(), "rc-only", "bin");
-    writeFileSync(shell, `#!/bin/sh\nprintf '__OMB_PATH__%s' '${rcOnlyBin}'\n`);
+    writeFileSync(shell, `#!/bin/sh\nprintf '__SEIRA_PATH__%s' '${rcOnlyBin}'\n`);
     chmodSync(shell, 0o755);
 
     const previousShell = process.env.SHELL;
@@ -117,7 +117,7 @@ describe("augmentedPath", () => {
     mkdirSync(knownBin, { recursive: true });
     const shell = join(homedir(), "fake-login-shell");
     const rcOnlyBin = join(homedir(), "rc-only", "bin");
-    writeFileSync(shell, `#!/bin/sh\nprintf '__OMB_PATH__%s' '${rcOnlyBin}'\n`);
+    writeFileSync(shell, `#!/bin/sh\nprintf '__SEIRA_PATH__%s' '${rcOnlyBin}'\n`);
     chmodSync(shell, 0o755);
 
     const saved = { PATH: process.env.PATH, SHELL: process.env.SHELL, VITEST: process.env.VITEST };
@@ -153,7 +153,7 @@ describe("augmentedPath", () => {
     const shell = join(homedir(), "fake-login-shell");
     const ran = join(homedir(), "login-shell-ran");
     const rcOnlyBin = join(homedir(), "rc-only", "bin");
-    writeFileSync(shell, `#!/bin/sh\n: > '${ran}'\nprintf '__OMB_PATH__%s' '${rcOnlyBin}'\n`);
+    writeFileSync(shell, `#!/bin/sh\n: > '${ran}'\nprintf '__SEIRA_PATH__%s' '${rcOnlyBin}'\n`);
     chmodSync(shell, 0o755);
 
     const saved = { PATH: process.env.PATH, SHELL: process.env.SHELL, VITEST: process.env.VITEST };
@@ -168,13 +168,13 @@ describe("augmentedPath", () => {
       delete process.env.VITEST;
 
       // Control: unsealed, the product scans both dirs; that is the leak.
-      delete process.env.OMB_TEST_SEALED_PATH;
+      delete process.env.SEIRA_TEST_SEALED_PATH;
       resetPathCacheForTests();
       expect(augmentedPath().split(delimiter)).toEqual(expect.arrayContaining(machineDirs));
       await vi.waitFor(() => expect(augmentedPath().split(delimiter)).toContain(rcOnlyBin));
       rmSync(ran);
 
-      process.env.OMB_TEST_SEALED_PATH = "1";
+      process.env.SEIRA_TEST_SEALED_PATH = "1";
       resetPathCacheForTests();
       const sealed = augmentedPath().split(delimiter);
       for (const dir of machineDirs) expect(sealed).not.toContain(dir);
@@ -184,7 +184,7 @@ describe("augmentedPath", () => {
       expect(existsSync(ran)).toBe(false);
       expect(augmentedPath().split(delimiter)).not.toContain(rcOnlyBin);
     } finally {
-      delete process.env.OMB_TEST_SEALED_PATH;
+      delete process.env.SEIRA_TEST_SEALED_PATH;
       restore("PATH");
       restore("SHELL");
       restore("VITEST");
@@ -201,7 +201,7 @@ describe("augmentedPath", () => {
 
   it.skipIf(process.platform !== "win32")("finds Antigravity installed after launch", () => {
     const previous = process.env.LOCALAPPDATA;
-    const localAppData = mkdtempSync(join(tmpdir(), "omb-localappdata-"));
+    const localAppData = mkdtempSync(join(tmpdir(), "seira-localappdata-"));
     try {
       process.env.LOCALAPPDATA = localAppData;
       const agyBin = join(localAppData, "agy", "bin");
@@ -218,7 +218,7 @@ describe("augmentedPath", () => {
 
   it.skipIf(process.platform !== "win32")("finds Docker Desktop's bin dir (#2117)", () => {
     const previous = process.env.ProgramFiles;
-    const programFiles = mkdtempSync(join(tmpdir(), "omb-programfiles-"));
+    const programFiles = mkdtempSync(join(tmpdir(), "seira-programfiles-"));
     try {
       process.env.ProgramFiles = programFiles;
       const dockerBin = join(programFiles, "Docker", "Docker", "resources", "bin");
@@ -260,7 +260,7 @@ describe("augmentedPath", () => {
   it("finds Cursor installed after launch on Windows", () => {
     const realPlatform = process.platform;
     const previous = { LOCALAPPDATA: process.env.LOCALAPPDATA, PATHEXT: process.env.PATHEXT };
-    const localAppData = mkdtempSync(join(tmpdir(), "omb-localappdata-"));
+    const localAppData = mkdtempSync(join(tmpdir(), "seira-localappdata-"));
     try {
       Object.defineProperty(process, "platform", { value: "win32" });
       process.env.LOCALAPPDATA = localAppData;
@@ -287,7 +287,7 @@ describe("augmentedPath", () => {
   it("finds Podman installed after launch on Windows", () => {
     const realPlatform = process.platform;
     const previous = { ProgramFiles: process.env.ProgramFiles, PATHEXT: process.env.PATHEXT };
-    const programFiles = mkdtempSync(join(tmpdir(), "omb-programfiles-"));
+    const programFiles = mkdtempSync(join(tmpdir(), "seira-programfiles-"));
     try {
       Object.defineProperty(process, "platform", { value: "win32" });
       process.env.ProgramFiles = programFiles;
@@ -354,7 +354,7 @@ EXIT /b
 :start
 SETLOCAL
 CALL :find_dp0
-"%dp0%\\node_modules\\pkg\\bin\\ombfake.exe"   %*
+"%dp0%\\node_modules\\pkg\\bin\\seirafake.exe"   %*
 `;
 
 // ...and for one whose bin is a node script (the "_prog" dance)
@@ -374,7 +374,7 @@ IF EXIST "%dp0%\\node.exe" (
   SET PATHEXT=%PATHEXT:;.JS;=;%
 )
 
-endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\pkg\\bin\\ombfake.js" %*
+endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\pkg\\bin\\seirafake.js" %*
 `;
 
 // ...and for one whose bin is an extensionless `#!/usr/bin/env node` script — cmd-shim keeps the
@@ -395,7 +395,7 @@ IF EXIST "%dp0%\\node.exe" (
   SET PATHEXT=%PATHEXT:;.JS;=;%
 )
 
-endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\pkg\\bin\\ombfake" %*
+endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\pkg\\bin\\seirafake" %*
 `;
 
 // ...and npm's own npm.cmd / npx.cmd, which Node's installer puts beside
@@ -435,7 +435,7 @@ describe("resolveCli", () => {
 winOnly("resolveCli (Windows)", () => {
   let dir: string;
   const onPath = () => {
-    process.env.OMB_EXTRA_PATH = dir;
+    process.env.SEIRA_EXTRA_PATH = dir;
     resetPathCacheForTests();
   };
   const shimWith = (name: string, body: string, target: string, targetBody: string) => {
@@ -445,10 +445,10 @@ winOnly("resolveCli (Windows)", () => {
   };
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "omb-shim-"));
+    dir = mkdtempSync(join(tmpdir(), "seira-shim-"));
   });
   afterEach(async () => {
-    delete process.env.OMB_EXTRA_PATH;
+    delete process.env.SEIRA_EXTRA_PATH;
     resetPathCacheForTests();
     // These tests spawn the shims out of this directory; a just-exited one can
     // still be holding it for a beat after the call returns.
@@ -456,22 +456,22 @@ winOnly("resolveCli (Windows)", () => {
   });
 
   it("parses an npm .cmd shim down to the .exe it wraps", () => {
-    shimWith("ombfake.cmd", EXE_SHIM, "ombfake.exe", "MZ-not-really");
+    shimWith("seirafake.cmd", EXE_SHIM, "seirafake.exe", "MZ-not-really");
     onPath();
-    expect(resolveCli("ombfake", ["-p", "hi"])).toEqual({
-      command: join(dir, "node_modules", "pkg", "bin", "ombfake.exe"),
+    expect(resolveCli("seirafake", ["-p", "hi"])).toEqual({
+      command: join(dir, "node_modules", "pkg", "bin", "seirafake.exe"),
       args: ["-p", "hi"],
     });
   });
 
   it("uses the supplied PATH and PATHEXT without depending on the app environment", () => {
-    shimWith("ombfake.cmd", EXE_SHIM, "ombfake.exe", "MZ-not-really");
-    expect(resolveCli("ombfake", ["acp"], { Path: dir, PATHEXT: ".CMD" })).toEqual({
-      command: join(dir, "node_modules", "pkg", "bin", "ombfake.exe"),
+    shimWith("seirafake.cmd", EXE_SHIM, "seirafake.exe", "MZ-not-really");
+    expect(resolveCli("seirafake", ["acp"], { Path: dir, PATHEXT: ".CMD" })).toEqual({
+      command: join(dir, "node_modules", "pkg", "bin", "seirafake.exe"),
       args: ["acp"],
     });
     onPath();
-    expect(resolveCli("ombfake", [], { PATH: "", PATHEXT: ".CMD" })).toEqual({ command: "ombfake", args: [] });
+    expect(resolveCli("seirafake", [], { PATH: "", PATHEXT: ".CMD" })).toEqual({ command: "seirafake", args: [] });
   });
 
   it("preserves the DeepSeek desktop shim's Electron CLI entry point", () => {
@@ -495,10 +495,10 @@ winOnly("resolveCli (Windows)", () => {
   });
 
   it("parses an npm .cmd shim down to `node <cli.js>`, never the shim's own node.exe", async () => {
-    shimWith("ombfake.cmd", JS_SHIM, "ombfake.js", "console.log('js target ' + process.argv.slice(2).join(','));\n");
+    shimWith("seirafake.cmd", JS_SHIM, "seirafake.js", "console.log('js target ' + process.argv.slice(2).join(','));\n");
     onPath();
-    const r = resolveCli("ombfake", ["-p", "hi"]);
-    expect(r.args).toEqual([join(dir, "node_modules", "pkg", "bin", "ombfake.js"), "-p", "hi"]);
+    const r = resolveCli("seirafake", ["-p", "hi"]);
+    expect(r.args).toEqual([join(dir, "node_modules", "pkg", "bin", "seirafake.js"), "-p", "hi"]);
     expect(r.command.toLowerCase()).toMatch(/node\.exe$/);
     const stdout = await new Promise<string>((resolve, reject) =>
       execFile(r.command, r.args, (err, out) => (err ? reject(err) : resolve(out))),
@@ -507,11 +507,11 @@ winOnly("resolveCli (Windows)", () => {
   });
 
   it("parses an npm .cmd shim down to the extensionless node script it wraps (#3594)", async () => {
-    shimWith("ombfake.cmd", EXTENSIONLESS_SHIM, "ombfake", "#!/usr/bin/env node\nconsole.log('shim target ' + process.argv.slice(2).join(','));\n");
+    shimWith("seirafake.cmd", EXTENSIONLESS_SHIM, "seirafake", "#!/usr/bin/env node\nconsole.log('shim target ' + process.argv.slice(2).join(','));\n");
     onPath();
-    const r = resolveCli("ombfake", ["-p", "hi"]);
+    const r = resolveCli("seirafake", ["-p", "hi"]);
     expect(r.command.toLowerCase()).toMatch(/node(\.exe)?$/);
-    expect(r.args).toEqual([join(dir, "node_modules", "pkg", "bin", "ombfake"), "-p", "hi"]);
+    expect(r.args).toEqual([join(dir, "node_modules", "pkg", "bin", "seirafake"), "-p", "hi"]);
     const stdout = await new Promise<string>((resolve, reject) =>
       execFile(r.command, r.args, (err, out) => (err ? reject(err) : resolve(out))),
     );
@@ -535,14 +535,14 @@ winOnly("resolveCli (Windows)", () => {
   });
 
   it("prefers the PATHEXT hit over the extensionless sibling npm installs beside it", () => {
-    shimWith("ombfake.cmd", EXE_SHIM, "ombfake.exe", "MZ-not-really");
-    writeFileSync(join(dir, "ombfake"), "#!/bin/sh\n# the POSIX shim — unrunnable here\n");
+    shimWith("seirafake.cmd", EXE_SHIM, "seirafake.exe", "MZ-not-really");
+    writeFileSync(join(dir, "seirafake"), "#!/bin/sh\n# the POSIX shim — unrunnable here\n");
     onPath();
-    expect(resolveCli("ombfake", []).command).toBe(join(dir, "node_modules", "pkg", "bin", "ombfake.exe"));
+    expect(resolveCli("seirafake", []).command).toBe(join(dir, "node_modules", "pkg", "bin", "seirafake.exe"));
   });
 
   it("runs a #!node script through node — Windows has no shebang support", async () => {
-    const script = join(dir, "ombfake-cli.ts");
+    const script = join(dir, "seirafake-cli.ts");
     writeFileSync(script, "#!/usr/bin/env node\nconsole.log('shebang ' + process.argv.slice(2).join(','));\n");
     const r = resolveCli(script, ["a", "b"]);
     expect(r.command.toLowerCase()).toMatch(/node(\.exe)?$/);
@@ -587,11 +587,11 @@ winOnly("resolveCli (Windows)", () => {
   });
 
   it("leaves a non-sibling or -Command PowerShell launcher as the .cmd", () => {
-    const outside = join(dir, "..", "omb-outside.ps1");
+    const outside = join(dir, "..", "seira-outside.ps1");
     const escaped = join(dir, "escaped.cmd");
     const commanded = join(dir, "commanded.cmd");
     writeFileSync(outside, "Write-Output no\r\n");
-    writeFileSync(escaped, '%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -File "%SCRIPT_DIR%\\..\\omb-outside.ps1" %*\r\n');
+    writeFileSync(escaped, '%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -File "%SCRIPT_DIR%\\..\\seira-outside.ps1" %*\r\n');
     writeFileSync(commanded, 'powershell.exe -Command "Write-Output hi"\r\n');
     writeFileSync(join(dir, "ok.ps1"), "Write-Output ok\r\n");
     const mixedCommand = join(dir, "mixed-command.cmd");
@@ -610,7 +610,7 @@ winOnly("resolveCli (Windows)", () => {
   });
 
   it("never crosses the no-shell boundary for an unparseable shim", () => {
-    const shim = join(dir, "ombfake.cmd");
+    const shim = join(dir, "seirafake.cmd");
     writeFileSync(shim, "@ECHO OFF\ncustom-launcher %*\n");
     onPath();
     const payload = JSON.stringify({
@@ -622,7 +622,7 @@ winOnly("resolveCli (Windows)", () => {
         },
       },
     });
-    const resolved = resolveCli("ombfake", ["--mcp-config", payload]);
+    const resolved = resolveCli("seirafake", ["--mcp-config", payload]);
     expect(resolved.command.toLowerCase()).toBe(shim.toLowerCase());
     expect(resolved.args).toEqual(["--mcp-config", payload]);
   });
@@ -695,7 +695,7 @@ describe("resolveCli with wrapper commands", () => {
     const bin = join(homedir(), ".local", "bin");
     mkdirSync(bin, { recursive: true });
     // simulate "/Applications/My Tools/claude": a real file at a spaced path
-    const spacedDir = join(bin, "omb space dir");
+    const spacedDir = join(bin, "seira space dir");
     mkdirSync(spacedDir, { recursive: true });
     const spaced = join(spacedDir, "myclaude");
     writeFileSync(spaced, "#!/bin/sh\n");
@@ -705,7 +705,7 @@ describe("resolveCli with wrapper commands", () => {
     });
     // a NONEXISTENT spaced string still splits (wrapper interpretation)
     expect(resolveCli(join(spacedDir, "nope two words"), ["--version"])).toEqual({
-      command: join(bin, "omb"),
+      command: join(bin, "seira"),
       args: ["space", "dir/nope", "two", "words", "--version"],
     });
   });
@@ -715,7 +715,7 @@ describe("registerPathDir", () => {
   afterEach(() => resetPathCacheForTests());
 
   it("puts an app-managed directory ahead of PATH once it exists, and survives a rescan", () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-registered-path-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-registered-path-"));
     const missing = join(dir, "not-yet");
     try {
       registerPathDir(missing);
@@ -739,7 +739,7 @@ describe("registerFallbackPathDir", () => {
   });
 
   posixIt("keeps an app-installed directory last even when the inherited PATH already lists it first", () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-fallback-path-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-fallback-path-"));
     originalPath = process.env.PATH;
     try {
       const own = join(dir, "own-bin");
@@ -759,7 +759,7 @@ describe("registerFallbackPathDir", () => {
   });
 
   posixIt("puts an app-installed directory after PATH and the vendors' own folders, so a person's copy wins", () => {
-    const dir = mkdtempSync(join(tmpdir(), "omb-fallback-path-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-fallback-path-"));
     originalPath = process.env.PATH;
     try {
       const own = join(dir, "own-bin");

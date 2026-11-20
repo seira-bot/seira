@@ -10,8 +10,8 @@ packaged releases may differ, including which controls Settings shows.
 
 ## Change a switch
 
-The default file is `~/.openmausbot/config.json` on the machine running the server.
-If the server uses `OMB_DATA_DIR`, edit `config.json` in that directory instead.
+The default file is `~/.seira/config.json` on the machine running the server.
+If the server uses `SEIRA_DATA_DIR`, edit `config.json` in that directory instead.
 Stop that server (or quit the app if it runs the server), back up the file, merge
 only the keys you want into its existing `features` object, then start it again.
 Keep the other configuration, including engine instances and credentials.
@@ -101,8 +101,8 @@ shell. For these two switches, exactly `1` or `0` overrides the saved value:
 
 | Variable | Overrides |
 | --- | --- |
-| `OMB_AGENTS_TOOL_BRIDGE` | `features.agentsToolBridge`. `0` also disables the automatic local-model opt-in. Eligibility and tool-selection safeguards still apply when it is `1`. |
-| `OMB_ACP_PLAN_LINES` | `features.acpPlanLines`. |
+| `SEIRA_AGENTS_TOOL_BRIDGE` | `features.agentsToolBridge`. `0` also disables the automatic local-model opt-in. Eligibility and tool-selection safeguards still apply when it is `1`. |
+| `SEIRA_ACP_PLAN_LINES` | `features.acpPlanLines`. |
 
 Other strings do not act as these overrides. Restart the server after changing
 its launch environment.

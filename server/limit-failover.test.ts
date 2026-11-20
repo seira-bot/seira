@@ -38,7 +38,7 @@ describe("LimitFailovers", () => {
   const from = { instanceId: "claude", model: "claude-sonnet-5" };
   const to = { instanceId: "codex", model: "gpt-fake-default" };
   function fixture(options: { blocked?: number | null; current?: typeof from | null; allowed?: boolean; signedOut?: () => boolean } = {}) {
-    const dir = mkdtempSync(join(tmpdir(), "omb-limit-failovers-"));
+    const dir = mkdtempSync(join(tmpdir(), "seira-limit-failovers-"));
     dirs.push(dir);
     let now = NOW;
     const state = { blocked: options.blocked ?? null, current: options.current === undefined ? to : options.current };

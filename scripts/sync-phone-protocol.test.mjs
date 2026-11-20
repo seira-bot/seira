@@ -14,7 +14,7 @@ const blob = (path) => execFileSync("git", ["cat-file", "blob", `HEAD:${path}`],
 
 const made = [];
 const scratch = () => {
-  const dir = mkdtempSync(join(tmpdir(), "omb-phone-protocol-sync-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-phone-protocol-sync-"));
   made.push(dir);
   return dir;
 };

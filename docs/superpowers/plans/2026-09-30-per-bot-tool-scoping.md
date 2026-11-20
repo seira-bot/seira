@@ -21,7 +21,7 @@
 - No new runtime dependency, branding change, generated `dist-server` edits, or release changes.
 - Node 24 and portable process launching; no shell commands in production process launches.
 - All verification uses disposable fixtures and explicit isolated targets.
-- Leave other projects and live OpenMausBot data untouched.
+- Leave other projects and live Seira data untouched.
 - No new upstream submission until behavior and validation are reviewable; never merge.
 
 ## Review Focus
@@ -66,7 +66,7 @@
 
 **Files:** Modify `server/mcp-gate.ts`, `server/mcp-gate.test.ts`, `server/mcp-gate-config.ts`; create `server/mcp-gate-config.test.ts`.
 
-**Consumes:** Task 1 parser/matcher. **Produces:** `gateServer` accepts optional scope; private `OMB_GATE_TOOL_SCOPE` config enforces lists and calls even at budget zero.
+**Consumes:** Task 1 parser/matcher. **Produces:** `gateServer` accepts optional scope; private `SEIRA_GATE_TOOL_SCOPE` config enforces lists and calls even at budget zero.
 
 - [x] Add real-process tests with two tools and an upstream call log: filtered paginated discovery, allowed execution, no blocked execution marker, malformed scope exit before upstream startup, malformed frames fail closed, legacy pass-through, budget-zero enforcement, typed request-ID correlation and scope env not leaked upstream.
 - [x] Run the two gate test files; expect behavioral failures on current code.

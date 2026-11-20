@@ -115,7 +115,7 @@ const support: AcpSupport = {
       command: runtime.executablePath,
       args: process.platform === "linux" ? ["--uid="] : [],
       env: profile.environment,
-      ro: [join(profile.directory, "omb-skills")],
+      ro: [join(profile.directory, "seira-skills")],
     };
   },
 

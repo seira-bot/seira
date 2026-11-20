@@ -5,7 +5,7 @@
 // The fake is a CLI new enough to promise strict resume (FAKE_CLAUDE_VERSION),
 // which is what makes a room turn eligible at all. The setting itself is
 // switched with PATCH /api/config: the fixture's environment is sealed, so
-// OMB_ROOM_SESSIONS never reaches it (that override is unit-tested).
+// SEIRA_ROOM_SESSIONS never reaches it (that override is unit-tested).
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -68,7 +68,7 @@ async function build(session: Awaited<ReturnType<typeof launchVerificationServer
     'const mode = (after("--resume") ? modes.resume : modes.fresh) ?? modes.any;',
     "if (mode) process.env.FAKE_CLAUDE_MODE = mode;",
     "let botId = null;",
-    'try { for (const s of Object.values(JSON.parse(readFileSync(after("--mcp-config"), "utf8")).mcpServers ?? {})) botId = s?.env?.OMB_BOT_ID ?? botId; } catch {}',
+    'try { for (const s of Object.values(JSON.parse(readFileSync(after("--mcp-config"), "utf8")).mcpServers ?? {})) botId = s?.env?.SEIRA_BOT_ID ?? botId; } catch {}',
     // every prompt a bot's engine consumed, for a fake that runs without the room plan
     `if (botId) process.env.FAKE_CLAUDE_PROMPTS = ${JSON.stringify(join(dataDir, "consumed-"))} + botId + ".jsonl";`,
     'if (after("--resume") || after("--session-id")) {',

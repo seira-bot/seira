@@ -4,9 +4,9 @@ import { activeLocale, t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { Card, LearnMore, SETTINGS_INPUT, SettingRow, SettingsField, SettingsFoldRow, SettingsRows } from "./SettingsPrimitives";
 import { CompanyModels } from "./CompanyModels";
+import { DEFAULT_ADMIN_ORIGIN, defaultPortalOffered } from "@/lib/organization-portal";
 
 const providerNames: Record<string, string> = { anthropic: "Anthropic", openai: "OpenAI", openrouter: "OpenRouter" };
-const DEFAULT_PORTAL_ORIGIN = "https://admin.openmausbot.com";
 const STATUS_TEXT: Record<ManagedMessageCode, LocaleKey> = {
   clearFailed: "organization.status.clearFailed",
   disconnected: "organization.status.disconnected",
@@ -41,7 +41,8 @@ export function OrganizationSettings({ simple = false }: { simple?: boolean } = 
   const [error, setError] = useState("");
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [more, setMore] = useState(false);
-  const [custom, setCustom] = useState(false);
+  const portalOffered = defaultPortalOffered();
+  const [custom, setCustom] = useState(!portalOffered);
   const pending = useRef(false);
   const generation = useRef(0);
   const revision = useRef(0);
@@ -114,9 +115,9 @@ export function OrganizationSettings({ simple = false }: { simple?: boolean } = 
           {licenseExpired && <span role="alert" className="block text-ink">{t("organization.licenseExpired")}</span>}
           {error && <span role="alert" className="block text-danger">{error}</span>}
         </>}>
-        <button type="button" disabled={busy} className="ui-button" data-organization-sign-in="" onClick={() => void perform(() => bridge.begin({ portalOrigin: DEFAULT_PORTAL_ORIGIN }))}>
+        {portalOffered && <button type="button" disabled={busy} className="ui-button" data-organization-sign-in="" onClick={() => void perform(() => bridge.begin({ portalOrigin: DEFAULT_ADMIN_ORIGIN }))}>
           {busy ? t("organization.working") : t("organization.useWorkSignIn")}
-        </button>
+        </button>}
       </SettingRow>
       <SettingsFoldRow id="organization-address" title={t("organization.customTitle")} open={custom} onToggle={() => setCustom((open) => !open)}>
         <form className="flex flex-col gap-2 px-4 py-3" onSubmit={(event) => {
@@ -125,7 +126,7 @@ export function OrganizationSettings({ simple = false }: { simple?: boolean } = 
         }}>
           <SettingsField label={t("organization.address")} hint={t("organization.advancedHelp")}>
             <input type="url" required value={address} disabled={busy} onChange={(event) => setAddress(event.target.value)}
-              placeholder={DEFAULT_PORTAL_ORIGIN} autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false} maxLength={2048}
+              placeholder="https://admin.example.com" autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false} maxLength={2048}
               className={SETTINGS_INPUT} />
           </SettingsField>
           <button type="submit" disabled={busy || !address.trim()} className="ui-button self-end">{t("organization.customSignIn")}</button>

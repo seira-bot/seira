@@ -8,7 +8,7 @@ import { setLocale } from "@/lib/i18n";
 import type { TeamsAction } from "@/lib/teams-whats-new";
 
 const avatars = vi.hoisted(() => [] as Array<{ animated?: boolean }>);
-vi.mock("@/components/Avatar", () => ({ MausAvatar: (props: { animated?: boolean }) => { avatars.push(props); return null; } }));
+vi.mock("@/components/Avatar", () => ({ SeiraAvatar: (props: { animated?: boolean }) => { avatars.push(props); return null; } }));
 const { TeamsPopup, TEAMS_POPUP } = await import("./TeamsPopup");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

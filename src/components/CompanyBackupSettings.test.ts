@@ -78,7 +78,7 @@ const readyEntry: CompanyBackupEntry = {
   createdAt: Date.parse("2026-09-12T10:00:00Z"), completedAt: Date.parse("2026-09-12T10:01:00Z"),
 };
 const summary: WorkspaceBackupSummary = {
-  format: "openmaus.workspace-backup", version: 1, id: READY_ID, createdAt: "2026-09-12T10:00:00Z",
+  format: "seira.workspace-backup", version: 1, id: READY_ID, createdAt: "2026-09-12T10:00:00Z",
   appVersion: "0.0.0-fixture", files: 9, directories: 3, bytes: 4096, bots: 2, groups: 1, threads: 4,
   messages: 8, warnings: ["Fixture archive warning"], exclusions: ["Saved account credentials and connections"],
 };
@@ -319,8 +319,8 @@ describe("optional Company cloud backup settings", () => {
 
   it("requires an explicit backup dialog without passwords, then exports only allowlisted local preferences", async () => {
     await ready();
-    storage.set("omb-drafts", "private fixture draft"); storage.set("omb-skin", "fixture-theme");
-    storage.set("auth-token", "fixture auth secret"); storage.set("omb-webhook-credentials", "fixture connection secret");
+    storage.set("seira-drafts", "private fixture draft"); storage.set("seira-skin", "fixture-theme");
+    storage.set("auth-token", "fixture auth secret"); storage.set("seira-webhook-credentials", "fixture connection secret");
     button("Back up this installation").props.onClick!();
     expect(bridge.create).not.toHaveBeenCalled(); expect(passwords()).toHaveLength(0);
     expect(render().nodes.some(node => node.type === "dialog")).toBe(true);
@@ -330,7 +330,7 @@ describe("optional Company cloud backup settings", () => {
     const submitButton = () => render().nodes.find(node => node.type === "button" && node.props.type === "submit")!;
     expect(submitButton().props.disabled).toBe(false);
     const createForm = form(); submit(createForm); submit(createForm); await flush();
-    expect(bridge.create).toHaveBeenCalledExactlyOnceWith({ clientState: { "omb-drafts": "private fixture draft", "omb-skin": "fixture-theme" } });
+    expect(bridge.create).toHaveBeenCalledExactlyOnceWith({ clientState: { "seira-drafts": "private fixture draft", "seira-skin": "fixture-theme" } });
     expect([...storage.values()]).not.toContain(PASSWORD);
     expect(render().html).not.toContain(PASSWORD);
     expect(fetch).not.toHaveBeenCalled();

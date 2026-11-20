@@ -3,10 +3,11 @@
 // launch starts hidden: one the person set up themselves, here or in the system's settings, opens the window.
 import fs from "node:fs";
 import path from "node:path";
+import { LEGACY_AUTOSTART_FILE, LEGACY_LENDING_MARK } from "./legacy-names.mjs";
 import snap from "./snap-command.cjs";
 
-export const HIDDEN_ARG = "--omb-hidden";
-const MARK = "X-OpenMausBot-Lending=true";
+export const HIDDEN_ARG = "--seira-hidden";
+const MARK = "X-Seira-Lending=true";
 /** Windows keeps one Run entry per name, so the person's own entry has a name apart from lending's (the app's). */
 const CHOSEN_NAME = "Seira at login";
 
@@ -30,13 +31,13 @@ export function autostartEntry(exec, { lending = true } = {}) {
 export function createOpenAtLogin({ app, file, platform = process.platform, env = process.env, home, argv = process.argv, execPath = process.execPath, windowsStore = process.windowsStore }) {
   /** Inside an MSIX package Windows redirects writes to the Run key, so only the Startup apps list can start the app. */
   const packaged = platform === "win32" && windowsStore === true;
-  const autostart = path.join(env.XDG_CONFIG_HOME || path.join(home, ".config"), "autostart", "openmausbot.desktop");
+  const autostart = path.join(env.XDG_CONFIG_HOME || path.join(home, ".config"), "autostart", "seira.desktop");
   const saved = () => { try { return JSON.parse(fs.readFileSync(file, "utf8")) ?? {}; } catch { return {}; } };
   const store = (fields) => { try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify({ ...saved(), ...fields })); } catch {} };
   const added = () => saved().added === true;
   const remember = (value) => store({ added: value });
   /** Electron 43.7 on Windows: `openAtLogin` compares the Run entry's arguments with the `args` asked about (none by
-   * default), so lending's `--omb-hidden` entry reads as off; `launchItems` lists the entries that start this executable,
+   * default), so lending's `--seira-hidden` entry reads as off; `launchItems` lists the entries that start this executable,
    * each with its name, arguments and whether Task Manager has it enabled. */
   const windowsStartsApp = () => (app.getLoginItemSettings().launchItems ?? []).filter(item => item.enabled !== false);
   /** An AppImage and a snap run from a path that changes: the AppImage file, or the snap's own command. */
@@ -83,6 +84,20 @@ export function createOpenAtLogin({ app, file, platform = process.platform, env 
         if (on && !set) { app.setLoginItemSettings({ openAtLogin: true }); remember(true); }
         else if (!on && set && added()) { app.setLoginItemSettings({ openAtLogin: false }); remember(false); }
         else if (!set && added()) remember(false);
+      } catch {}
+    },
+    /** Linux: an earlier version's autostart file becomes the current one, with the same lending or chosen kind, and the
+     * old file goes. Nothing happens when the current file already exists, or outside a packaged app. */
+    migrateLegacy() {
+      if (platform !== "linux" || !app.isPackaged) return;
+      const old = path.join(path.dirname(autostart), LEGACY_AUTOSTART_FILE);
+      try {
+        const text = fs.readFileSync(old, "utf8");
+        if (!fs.existsSync(autostart)) {
+          fs.mkdirSync(path.dirname(autostart), { recursive: true });
+          fs.writeFileSync(autostart, autostartEntry(launcher(), { lending: text.includes(LEGACY_LENDING_MARK) }));
+        }
+        fs.rmSync(old, { force: true });
       } catch {}
     },
     available: () => app.isPackaged && !packaged,

@@ -1,4 +1,4 @@
-// A real Team Cloud home (OMB_CLOUD_ROLE=team) whose idle windows are a quarter second (the power clock): it agrees to
+// A real Team Cloud home (SEIRA_CLOUD_ROLE=team) whose idle windows are a quarter second (the power clock): it agrees to
 // the Admin's sleep request once nobody uses it, waits while a member does, and waits for work one bot handed another
 // until it is done. The engine is the synthetic Claude CLI with each bot's tool calls scripted; nothing leaves loopback.
 import { randomBytes } from "node:crypto";
@@ -14,7 +14,7 @@ import { hostTimeout } from "./testing/host-timeout.ts";
 import { freePortBlock } from "./testing/ports.ts";
 
 const SERVER_DIR = fileURLToPath(new URL("./", import.meta.url));
-const HOST = "omb-t-3f2e1d0c9b8a.fly.dev";
+const HOST = "seira-t-3f2e1d0c9b8a.fly.dev";
 const MACHINE = "8e2f4a6b-1c3d-4e5f-8a7b-9c0d1e2f3a4b";
 const TEAM = { id: "team-sleep-1", name: "Harbor" };
 const OWNER = { email: "olive@harbor.test", role: "owner" as const }, MEMBER = { email: "ada@harbor.test", role: "member" as const };
@@ -73,7 +73,7 @@ async function sleepsWithin(ms: number) {
 }
 
 beforeAll(async () => {
-  home = mkdtempSync(join(tmpdir(), "omb-cloud-team-sleep-"));
+  home = mkdtempSync(join(tmpdir(), "seira-cloud-team-sleep-"));
   const cli = join(home, "fixture-claude.mjs");
   writeFileSync(cli, `#!/usr/bin/env node
 import { readdirSync } from "node:fs";
@@ -91,10 +91,10 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
   child = spawn(process.execPath, ["--import", offline, "--import", new URL("./testing/power-clock-hooks.mjs", import.meta.url).href, join(SERVER_DIR, "index.ts")], {
     cwd: join(SERVER_DIR, ".."),
     env: {
-      PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}), HOME: home, USERPROFILE: home, OMB_DATA_DIR: home,
-      OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), OMB_CLOUD_ROLE: "team", OMB_BOT_BOX: "0", OMB_CLOUD_TEAM_ID: TEAM.id, OMB_CLOUD_TEAM_NAME: TEAM.name,
-      OMB_CLOUD_MACHINE_ID: MACHINE, OMB_CLOUD_ADMIN_URL: "https://cloud.example.test", OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_PUBLIC_URL: `https://${HOST}`,
-      OMB_TEST_POWER_CLOCK: "1",
+      PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}), HOME: home, USERPROFILE: home, SEIRA_DATA_DIR: home,
+      SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), SEIRA_CLOUD_ROLE: "team", SEIRA_BOT_BOX: "0", SEIRA_CLOUD_TEAM_ID: TEAM.id, SEIRA_CLOUD_TEAM_NAME: TEAM.name,
+      SEIRA_CLOUD_MACHINE_ID: MACHINE, SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test", SEIRA_CLOUD_BOOTSTRAP_SECRET: secret, SEIRA_PUBLIC_URL: `https://${HOST}`,
+      SEIRA_TEST_POWER_CLOCK: "1",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

@@ -8,7 +8,7 @@ export function leaseCheck(describe: (dataDir: string) => DataDirLeaseHolder = d
   return {
     id: "lease",
     title: "Data folder lease",
-    looksAt: "openmausbot-server.lease",
+    looksAt: "seira-server.lease",
     check(ctx) {
       if (ctx.mode === "start") return { status: "ok", summary: "This server holds it." };
       const holder = describe(ctx.dataDir);

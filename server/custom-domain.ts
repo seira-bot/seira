@@ -7,8 +7,8 @@ import { networkInterfaces } from "node:os";
 
 const CHECK_TIMEOUT_MS = 8_000;
 const MAX_RESPONSE_BYTES = 16_384;
-const DESCRIPTOR_PATH = "/.well-known/openmausbot/environment";
-export const CUSTOM_DOMAIN_CHALLENGE_PATH = "/.well-known/openmausbot/domain-check/";
+const DESCRIPTOR_PATH = "/.well-known/seira/environment";
+export const CUSTOM_DOMAIN_CHALLENGE_PATH = "/.well-known/seira/domain-check/";
 
 export class CustomDomainError extends Error {
   readonly status: number;
@@ -64,7 +64,7 @@ export function isPublicDomainAddress(address: string): boolean {
 /** Local interfaces only: a tunnel/CDN address or an IP-echo service does not identify where the customer's HTTPS proxy runs. */
 export function customDomainIpv4(
   interfaces = networkInterfaces(),
-  configured = process.env.OMB_PUBLIC_IPV4,
+  configured = process.env.SEIRA_PUBLIC_IPV4,
 ): string | null {
   if (configured?.trim()) {
     const address = configured.trim();
@@ -102,7 +102,7 @@ function requestJson(url: URL, address: LookupAddress, signal: AbortSignal): Pro
     };
     const request = httpsRequest(url, {
       method: "GET", agent: false, lookup, signal, rejectUnauthorized: true,
-      headers: { Accept: "application/json", "User-Agent": "OpenMausBot-domain-check" },
+      headers: { Accept: "application/json", "User-Agent": "Seira-domain-check" },
     }, (response) => {
       // Node's HTTPS client does not follow Location redirects.
       if (response.statusCode !== 200) {

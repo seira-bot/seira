@@ -81,7 +81,7 @@ async function server(env: NodeJS.ProcessEnv = {}) {
 }
 
 it("never starts a routine again that the turn watchdog stopped as stalled: it fails at once, and its owner hears once", async () => {
-  const s = await server({ OMB_TEST_STALL_CLOCK: "1" });
+  const s = await server({ SEIRA_TEST_STALL_CLOCK: "1" });
   s.engine("hang");
   const { id } = await s.runNow((await s.routine()).id);
   await s.engineHas();

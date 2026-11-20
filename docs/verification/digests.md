@@ -8,7 +8,7 @@ actions transactional, nor authorize a deployment.
 
 ```sh
 pnpm exec vitest run server/digest-control.e2e.test.ts
-pnpm exec vitest run server/commands.test.ts server/store.test.ts server/message-db.test.ts server/digest.test.ts server/checkpoints.test.ts server/hooks/omb-hook.test.ts server/hooks.e2e.test.ts server/digest.e2e.test.ts
+pnpm exec vitest run server/commands.test.ts server/store.test.ts server/message-db.test.ts server/digest.test.ts server/checkpoints.test.ts server/hooks/seira-hook.test.ts server/hooks.e2e.test.ts server/digest.e2e.test.ts
 ```
 
 The first test starts `launchVerificationServer`, then uses the shared
@@ -109,6 +109,6 @@ that the empty receipt is absent, and saves `digest-only-recorded-work.png`.
 - `full` means every recorded tool row delivered an untruncated result through
   the hook. It does not mean tests passed. Otherwise evidence is `preview` or
   `none`. Hooks have their own four-second timeout, a bounded input and no
-  redirects. `OMB_HOOKS=0` disables them.
+  redirects. `SEIRA_HOOKS=0` disables them.
 - Desktop chips and native mobile presentation need their respective renderer
   checks. These server tests do not prove layout or a real provider's hooks.

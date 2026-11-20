@@ -26,7 +26,7 @@ afterEach(async () => {
 });
 
 function fixtureHome(): string {
-  const home = mkdtempSync(join(tmpdir(), "omb-setup-import-home-"));
+  const home = mkdtempSync(join(tmpdir(), "seira-setup-import-home-"));
   homes.push(home);
   return home;
 }

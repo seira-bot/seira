@@ -13,7 +13,7 @@ import { IMPORTED_SKILLS_DIR, importedSkillsFor } from "../imported-skills.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { thisMachine } from "../setup-import.ts";
 import { removeTempDir } from "../testing/cleanup.ts";
-import { createSetupImportRoutes } from "./setup-import.ts";
+import { createSetupImportRoutes, setupImportLocal } from "./setup-import.ts";
 import { dispatchRoutes } from "./table.ts";
 
 const servers: Server[] = [];
@@ -33,7 +33,7 @@ const AUTH: Record<string, RequestAuth> = {
 
 /** A fixture home with one skill and one MCP server; never the real one. */
 function fixtureHome() {
-  const home = mkdtempSync(join(tmpdir(), "omb-setup-route-home-"));
+  const home = mkdtempSync(join(tmpdir(), "seira-setup-route-home-"));
   homes.push(home);
   const put = (path: string, text: string) => {
     mkdirSync(dirname(join(home, path)), { recursive: true });
@@ -88,6 +88,21 @@ async function serve({ local = true, home = fixtureHome(), dataDir, grokMove = f
   });
   return { call, cfg, bot };
 }
+
+describe("which servers count as the person's own computer for an import", () => {
+  const server = { desktopManaged: false, localBrowsers: false, cloudHome: false, hostedWorkspace: false };
+  it("is the desktop app's own server, or a development server run from source that trusts this machine's browsers", () => {
+    expect(setupImportLocal({ ...server, desktopManaged: true })).toBe(true);
+    expect(setupImportLocal({ ...server, localBrowsers: true })).toBe(true);
+  });
+  it("is never a built seira serve, a Cloud home or a hosted workspace", () => {
+    expect(setupImportLocal(server)).toBe(false);
+    for (const where of [{ cloudHome: true }, { hostedWorkspace: true }]) {
+      expect(setupImportLocal({ ...server, desktopManaged: true, ...where })).toBe(false);
+      expect(setupImportLocal({ ...server, localBrowsers: true, ...where })).toBe(false);
+    }
+  });
+});
 
 describe("the setup import routes", () => {
   it("hands out what Grok Bot left on this computer only to the owner's own loopback there", async () => {

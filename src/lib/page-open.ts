@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, type MouseEvent } from "react";
+import { SEIRA_HOSTS } from "../../electron/seira-hosts.mjs";
 import { isNetlifySiteUrl } from "../../shared/published-apps";
 import { PAGE_ID } from "../../shared/published-page";
 import type { Bot } from "@/state/store";
@@ -8,9 +9,9 @@ import { openAppPreview, type AppPreview } from "./app-preview";
 import { browserAvailable, builtInBrowserEnabled, type FeatureFlagConfig } from "./feature-flags";
 import { knownPublishedApp, showable } from "./published-apps";
 
-export const PAGES_DOMAIN = "mausbot.page";
+export const PAGES_DOMAIN = SEIRA_HOSTS.pages;
 
-/** A link to a page a bot published: https://<page id>.mausbot.page/… Never an app, chat or prompt link. */
+/** A link to a page a bot published: https://<page id>.<pages host>/… Never an app, chat or prompt link. */
 export function isPublishedPageUrl(value: string | null | undefined): value is string {
   if (typeof value !== "string") return false;
   let url: URL;

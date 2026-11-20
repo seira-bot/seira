@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -112,7 +112,7 @@ describe("container images", () => {
     expect(home.filter(step => step.args.includes("--from=build")).map(step => step.args)).toEqual([
       "/src/dist-native/duckdb/target ./duckdb", "/src/dist-server ./dist-server", "/src/dist ./dist", "/src/skills ./skills",
     ].map(path => `--from=build ${path}`));
-    expect(chain("server").filter(step => step.args.includes("--from=build")).every(step => step.args.startsWith("--from=build --chown=maus:maus "))).toBe(true);
+    expect(chain("server").filter(step => step.args.includes("--from=build")).every(step => step.args.startsWith("--from=build --chown=seira:seira "))).toBe(true);
   });
 
   it("installs the pinned Grok in Cloud home only, beneath the engines and the app, from a home the same step removes", () => {
@@ -136,7 +136,7 @@ describe("container images", () => {
   it("keeps each image's runtime contract", () => {
     const last = (steps: Step[], op: string) => steps.filter(step => step.op === op).at(-1)?.args;
     const server = chain("server");
-    expect(last(server, "USER")).toBe("maus");
+    expect(last(server, "USER")).toBe("seira");
     expect(last(server, "VOLUME")).toBe('["/data"]');
     expect(last(server, "CMD")).toBe('["node", "dist-server/server-launcher.js"]');
     // A container platform runs the image with no --init: the image is its own.
@@ -151,23 +151,23 @@ describe("container images", () => {
     // A host that starts a Cloud home with a plain `docker run` gives it no init either.
     expect(last(home, "ENTRYPOINT")).toBe('["/usr/bin/tini", "-s", "--"]');
     expect(last(home, "HEALTHCHECK")).toContain("http://127.0.0.1:8080/api/health");
-    expect(last(chain("runtime"), "ENV")).toMatch(/^AGENT_BROWSER_EXECUTABLE_PATH=\/opt\/openmausbot-browser\/chrome .*NODE_ENV=production$/);
+    expect(last(chain("runtime"), "ENV")).toMatch(/^AGENT_BROWSER_EXECUTABLE_PATH=\/opt\/seira-browser\/chrome .*NODE_ENV=production$/);
   });
 
   it("hands the Cloud home's server every setting the image's ENV gives it", () => {
     // The root supervisor passes the server an allow-listed environment; a setting the image sets but the list drops is
-    // lost silently (OMB_DUCKDB_DIR was: the server then found neither the 1Password SDK nor DuckDB in /app/duckdb).
+    // lost silently (SEIRA_DUCKDB_DIR was: the server then found neither the 1Password SDK nor DuckDB in /app/duckdb).
     const image: Record<string, string> = {};
     for (const step of chain("cloud-home").filter(step => step.op === "ENV")) {
       for (const [, name, value] of step.args.matchAll(/(?:^|\s)([A-Z][A-Z0-9_]*)=(\S*)/g)) image[name] = value;
     }
-    expect(image.OMB_DUCKDB_DIR).toBe("/app/duckdb");
-    const contract = { OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
-      OMB_PUBLIC_URL: "https://omb-u-1a2b3c4d5e6f.fly.dev", OMB_CLOUD_BOOTSTRAP_SECRET: "S".repeat(43) };
+    expect(image.SEIRA_DUCKDB_DIR).toBe("/app/duckdb");
+    const contract = { SEIRA_CLOUD_ROLE: "home", SEIRA_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", SEIRA_CLOUD_ADMIN_URL: "https://cloud.example.test",
+      SEIRA_PUBLIC_URL: "https://seira-u-1a2b3c4d5e6f.fly.dev", SEIRA_CLOUD_BOOTSTRAP_SECRET: "S".repeat(43) };
     const { server } = cloudHomeChildEnvironments(cloudHomeConfiguration(contract)!, { ...image, ...contract }, "/data");
     // The launcher sets HOME, the ports and the data folder itself; everything else must come through unchanged.
     for (const name of Object.keys(image)) expect(server, name).toHaveProperty(name);
-    expect(server.OMB_DUCKDB_DIR).toBe("/app/duckdb");
+    expect(server.SEIRA_DUCKDB_DIR).toBe("/app/duckdb");
   });
 
   it("never runs a build step with HOME on the volume, so nothing lands in what a fresh volume starts with", () => {
@@ -187,7 +187,7 @@ describe("container images", () => {
     expect(end).toBeGreaterThan(start);
     const prune = args.slice(start, end);
     const run = (target: string, elf = true) => {
-      const root = mkdtempSync(join(tmpdir(), "omb-agent-browser-"));
+      const root = mkdtempSync(join(tmpdir(), "seira-agent-browser-"));
       temporaryDirectories.push(root);
       const bin = join(root, "lib/node_modules/agent-browser/bin");
       mkdirSync(bin, { recursive: true });
@@ -218,11 +218,11 @@ describe("container images", () => {
     expect(build.steps.indexOf(stage)).toBeGreaterThan(declared);
     if (process.platform !== "win32") {
       for (const [targetArch, arch] of [["amd64", "x64"], ["arm64", "arm64"], ["", "x64"]]) {
-        const root = mkdtempSync(join(tmpdir(), "omb-duckdb-arch-"));
+        const root = mkdtempSync(join(tmpdir(), "seira-duckdb-arch-"));
         temporaryDirectories.push(root);
         mkdirSync(join(root, "scripts"));
         // A stand-in for the staging script: it stages the CPU it is told to, and records which.
-        writeFileSync(join(root, "scripts/prepare-duckdb.mjs"), 'import { mkdirSync, writeFileSync } from "node:fs"; const d = `dist-native/duckdb/linux-${process.env.OMB_DUCKDB_ARCH}`; mkdirSync(d, { recursive: true }); writeFileSync(`${d}/arch`, process.env.OMB_DUCKDB_ARCH);');
+        writeFileSync(join(root, "scripts/prepare-duckdb.mjs"), 'import { mkdirSync, writeFileSync } from "node:fs"; const d = `dist-native/duckdb/linux-${process.env.SEIRA_DUCKDB_ARCH}`; mkdirSync(d, { recursive: true }); writeFileSync(`${d}/arch`, process.env.SEIRA_DUCKDB_ARCH);');
         const result = spawnSync("sh", ["-c", stage.args], { cwd: root, env: { PATH: process.env.PATH, TARGETARCH: targetArch }, encoding: "utf8" });
         expect(result.status, `${targetArch}: ${result.stderr}`).toBe(0);
         expect(readdirSync(join(root, "dist-native/duckdb")), targetArch).toEqual(["target"]);
@@ -232,7 +232,19 @@ describe("container images", () => {
     // Chrome for Testing has no Linux ARM64 build: an arm64 image takes Debian's Chromium at the same path.
     const runtime = chain("runtime");
     expect(runtime.slice(0, runtime.indexOf(browserRun()))).toContainEqual({ op: "ARG", args: "TARGETARCH" });
-    expect(browserRun().args).toMatch(/if \[ "\$TARGETARCH" = arm64 \]; then .*apt-get install -y --no-install-recommends chromium .*ln -s \/usr\/lib\/chromium\/chromium \/opt\/openmausbot-browser\/chrome; +else .*agent-browser install .*; +fi/);
+    expect(browserRun().args).toMatch(/if \[ "\$TARGETARCH" = arm64 \]; then .*apt-get install -y --no-install-recommends chromium .*ln -s \/usr\/lib\/chromium\/chromium \/opt\/seira-browser\/chrome; +else .*agent-browser install .*; +fi/);
+  });
+
+  it.skipIf(process.platform === "win32")("installs the in-container command as seira and under the name that earlier self-host guides give", () => {
+    const install = chain("server").find(step => step.op === "RUN" && step.args.includes("> /usr/local/bin/seira"))!;
+    const bin = mkdtempSync(join(tmpdir(), "seira-cli-"));
+    temporaryDirectories.push(bin);
+    const result = spawnSync("sh", ["-c", install.args.replaceAll("/usr/local/bin", bin)], { encoding: "utf8" });
+    expect(result.status, result.stderr).toBe(0);
+    for (const name of ["seira", "openmausbot"]) {
+      expect(readFileSync(join(bin, name), "utf8"), name).toBe('#!/bin/sh\nexec node /app/dist-server/seira.js "$@"\n');
+      expect(statSync(join(bin, name)).mode & 0o111, name).not.toBe(0);
+    }
   });
 
   it("keys the browser and engine layers on the versions they install, so a release rebuilds them", () => {
@@ -255,7 +267,7 @@ describe("container images", () => {
     const engines = all.find(s => s.name === "cloud-home")!.steps.find(step => npmInstall(step) && step.args.includes("$CLOUD_HOME_ENGINES"))!;
     // `broken` lists what each install leaves out: one line per npm run, read in turn.
     const run = (broken: string[], packages = "@anthropic-ai/claude-code@2.1.291 @openai/codex@0.160.1") => {
-      const root = mkdtempSync(join(tmpdir(), "omb-engines-"));
+      const root = mkdtempSync(join(tmpdir(), "seira-engines-"));
       temporaryDirectories.push(root);
       writeFileSync(join(root, "plan"), broken.join("\n") + "\n");
       writeFileSync(join(root, "npm"), `#!/bin/sh\necho "$*" >> "${root}/npm.log"\nsed -n "$(wc -l < "${root}/npm.log")p" "${root}/plan" > "${root}/broken"\n`, { mode: 0o755 });
@@ -280,32 +292,39 @@ describe("container images", () => {
   });
 
   // An init collects browser processes whose parents exit, and Chrome gets the
-  // shared memory OpenMausBot's desktop containers give it.
+  // shared memory Seira's desktop containers give it.
   it("runs every compose service of the server image with an init and Chrome's shared memory", () => {
     for (const file of ["../compose.yaml", "../deploy/docker-compose.yml", "../deploy/podman/compose.yaml"]) {
-      const service = parse(readFileSync(new URL(file, import.meta.url), "utf8")).services.omb;
+      const service = parse(readFileSync(new URL(file, import.meta.url), "utf8")).services.seira;
       expect(service.init, file).toBe(true);
       expect(service.shm_size, file).toBe("512m");
     }
   });
 
-  // Caddy in the server's network (network_mode: service:omb) stayed in the old, dead one whenever the server's
+  it("keeps an earlier install's data volume when .env names its old project, as the update note says", () => {
+    const { name, volumes } = parse(readFileSync(new URL("../compose.yaml", import.meta.url), "utf8"));
+    expect(name).toBe("${COMPOSE_PROJECT_NAME:-seira}");
+    expect(volumes.data.name).toBe("${SEIRA_DATA_VOLUME:-${COMPOSE_PROJECT_NAME:-seira}_data}");
+    expect(readFileSync(new URL("../deploy/local/README.md", import.meta.url), "utf8")).toContain("add `COMPOSE_PROJECT_NAME=openmausbot`");
+  });
+
+  // Caddy in the server's network (network_mode: service:seira) stayed in the old, dead one whenever the server's
   // container restarted alone, and HTTPS was refused while both looked healthy. It reaches the server over sockets in
   // a volume both mount instead, and the Caddyfile names the paths the server listens on.
   it("runs Caddy in its own container, reaching the server's sockets, never in the server's network", () => {
     for (const [file, caddyfile] of [["../compose.yaml", "../deploy/local/Caddyfile"], ["../deploy/docker-compose.yml", "../deploy/Caddyfile"]]) {
       const { services, volumes } = parse(readFileSync(new URL(file, import.meta.url), "utf8"));
       expect(services.caddy.network_mode, file).toBeUndefined();
-      // `OMB_PHONE_RELAY=1` in .env reaches the server, never Caddy.
-      expect(Object.keys(services.omb.environment), file).toContain("OMB_PHONE_RELAY");
-      expect(Object.keys(services.caddy.environment ?? {}), file).not.toContain("OMB_PHONE_RELAY");
-      expect(services.omb.ports, file).toBeUndefined();
+      // `SEIRA_PHONE_RELAY=1` in .env reaches the server, never Caddy.
+      expect(Object.keys(services.seira.environment), file).toContain("SEIRA_PHONE_RELAY");
+      expect(Object.keys(services.caddy.environment ?? {}), file).not.toContain("SEIRA_PHONE_RELAY");
+      expect(services.seira.ports, file).toBeUndefined();
       expect(services.caddy.ports.length, file).toBeGreaterThan(0);
-      expect(services.omb.volumes, file).toContain("edge:/run/openmausbot");
-      expect(services.caddy.volumes, file).toContain("edge:/run/openmausbot");
+      expect(services.seira.volumes, file).toContain("edge:/run/seira");
+      expect(services.caddy.volumes, file).toContain("edge:/run/seira");
       expect(volumes.edge.driver_opts.type, file).toBe("tmpfs");
-      const { OMB_TUNNEL_SOCKET: api, OMB_WEBHOOK_SOCKET: hooks } = services.omb.environment;
-      expect([api, hooks], file).toEqual(["/run/openmausbot/http.sock", "/run/openmausbot/hooks.sock"]);
+      const { SEIRA_TUNNEL_SOCKET: api, SEIRA_WEBHOOK_SOCKET: hooks } = services.seira.environment;
+      expect([api, hooks], file).toEqual(["/run/seira/http.sock", "/run/seira/hooks.sock"]);
       // The local Caddyfile proxies the API twice: once for the trusted TLS terminator, once for everyone else.
       const proxied = [...new Set([...readFileSync(new URL(caddyfile, import.meta.url), "utf8").matchAll(/reverse_proxy (\S+)/g)].map((m) => m[1]))];
       expect(proxied, caddyfile).toEqual([`unix/${hooks}`, `unix/${api}`]);

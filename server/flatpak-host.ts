@@ -191,10 +191,10 @@ export function probeHostLoginPath(done: (path: string | null) => void): void {
     if (error || !shell) return fail();
     execFile(
       FLATPAK_SPAWN,
-      ["--host", shell, "-l", "-i", "-c", 'printf "__OMB_PATH__%s" "$PATH"'],
+      ["--host", shell, "-l", "-i", "-c", 'printf "__SEIRA_PATH__%s" "$PATH"'],
       { timeout: HOST_PROBE_TIMEOUT_MS },
       (err, out) => {
-        const match = err ? null : /__OMB_PATH__([^\n]*)/.exec(String(out ?? ""));
+        const match = err ? null : /__SEIRA_PATH__([^\n]*)/.exec(String(out ?? ""));
         done(match?.[1] || null);
       },
     );

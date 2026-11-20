@@ -29,7 +29,7 @@ afterEach(async () => {
 
 /** `team`: a Team Cloud, where each call says who makes it (`as`: "admin" or "member", and their person key). */
 async function serve(onePasswordToken: string | null = null, team = false) {
-  const dir = mkdtempSync(join(tmpdir(), "omb-vault-routes-"));
+  const dir = mkdtempSync(join(tmpdir(), "seira-vault-routes-"));
   dirs.push(dir);
   const store = new VaultStore({ dataDir: dir });
   const { sdk } = fakeOnePasswordSdk({ token: "ops_fake-route-token", vaults: { v1: { title: "Shared", items: [

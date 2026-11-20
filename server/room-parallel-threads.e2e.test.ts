@@ -10,7 +10,7 @@ type Message = { role: string; kind: string; text?: string; tool?: { name?: stri
 
 describe.skipIf(process.platform === "win32")("parallel room threads", () => {
   it("runs threads side by side, stops one thread alone, and queues a shared bot thread by thread", async () => {
-    const gateDir = mkdtempSync(join(tmpdir(), "omb-parallel-threads-"));
+    const gateDir = mkdtempSync(join(tmpdir(), "seira-parallel-threads-"));
     const gate = join(gateDir, "finish.gate");
     const fixture = await launchVerificationServer({
       ...process.env,

@@ -254,7 +254,7 @@ together. A failure names the same shard on every run.
 - Files that run side by side never share a port: each worker picks from its
   own range (`server/testing/worker-port.ts`). Test and hook timeouts double
   when files share the CPU (`server/testing/host-timeout.ts`).
-- Linux runs every file, the e2e files too (`OMB_VITEST_E2E=all`).
+- Linux runs every file, the e2e files too (`SEIRA_VITEST_E2E=all`).
 
 To reproduce a failing shard:
 
@@ -265,7 +265,7 @@ To reproduce a failing shard:
 3. Run the same command and environment as the **Run tests** step:
 
 ```sh
-OMB_VITEST_E2E=all OMB_VITEST_SUBSET= OMB_VITEST_WORKERS=4 pnpm exec vitest run --shard=3/8
+SEIRA_VITEST_E2E=all SEIRA_VITEST_SUBSET= SEIRA_VITEST_WORKERS=4 pnpm exec vitest run --shard=3/8
 ```
 
 When a test file is deleted or renamed, remove or refresh its entry in the

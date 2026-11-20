@@ -1,14 +1,15 @@
 import { z } from "zod";
 
 import { schemaIssue, type JsonValue } from "./schema.ts";
-import type { MausColor } from "./store.ts";
+import type { SeiraColor } from "./store.ts";
 import { botBodyId, type BotBodyId } from "../shared/bot-body.ts";
 import { takeImportName } from "../shared/import-name.ts";
-import { MAUS_COLOR_NAMES } from "../shared/wire.ts";
+import { SEIRA_COLOR_NAMES } from "../shared/wire.ts";
 import { BOT_PROFILE_LIMITS } from "../shared/bot-profile.ts";
 import { optionalText, requiredText } from "../shared/package-format.ts";
+import { currentFormat } from "../electron/legacy-names.mjs";
 
-export const TEAM_MANIFEST_FORMAT = "openmaus.team" as const;
+export const TEAM_MANIFEST_FORMAT = "seira.team" as const;
 export const TEAM_MANIFEST_VERSION = 2 as const;
 export const LEGACY_TEAM_MANIFEST_VERSION = 1 as const;
 export const MAX_TEAM_MEMBERS = 200;
@@ -39,7 +40,7 @@ const memberSchema = z.object({
     error: "standing instructions must be at most 24000 bytes",
   }).optional(),
   appearance: z.object({
-    color: z.enum(MAUS_COLOR_NAMES, { error: "is not supported" }),
+    color: z.enum(SEIRA_COLOR_NAMES, { error: "is not supported" }),
     mascotExpression: optionalText(80),
     mascotBody: optionalText(40),
   }),
@@ -52,7 +53,7 @@ const membersSchema = z
 
 const manifestSchema = z.discriminatedUnion("version", [
   z.object({
-    format: z.literal(TEAM_MANIFEST_FORMAT, { error: "This is not an OpenMaus team file" }),
+    format: z.literal(TEAM_MANIFEST_FORMAT, { error: "This is not a Seira team file" }),
     version: z.literal(LEGACY_TEAM_MANIFEST_VERSION),
     team: z.object({
       name: requiredText(100),
@@ -66,7 +67,7 @@ const manifestSchema = z.discriminatedUnion("version", [
     }),
   }),
   z.object({
-    format: z.literal(TEAM_MANIFEST_FORMAT, { error: "This is not an OpenMaus team file" }),
+    format: z.literal(TEAM_MANIFEST_FORMAT, { error: "This is not a Seira team file" }),
     version: z.literal(TEAM_MANIFEST_VERSION),
     team: z.object({
       name: requiredText(100),
@@ -83,7 +84,7 @@ export interface TeamManifestMember {
   description: string;
   soul?: string;
   appearance: {
-    color: MausColor;
+    color: SeiraColor;
     mascotExpression?: string;
     mascotBody?: string;
   };
@@ -130,7 +131,7 @@ interface ExportableBot {
   title: string;
   description: string;
   soul?: string;
-  color: MausColor;
+  color: SeiraColor;
   mascotExpression?: string | null;
   mascotBody?: string | null;
 }
@@ -143,7 +144,8 @@ interface ExportableTeam {
 export function parseTeamManifest(value: TeamManifestV2): TeamManifestV2;
 export function parseTeamManifest(value: TeamManifestInput): ParsedTeamManifest;
 export function parseTeamManifest(value: TeamManifestInput): ParsedTeamManifest {
-  const parsed = manifestSchema.safeParse(value);
+  const format = (value as { format?: unknown } | null)?.format;
+  const parsed = manifestSchema.safeParse(value && typeof value === "object" && currentFormat(format) !== format ? { ...value, format: currentFormat(format) } : value);
   if (!parsed.success) {
     const formatIssue = parsed.error.issues.find((issue) => issue.path[0] === "format");
     if (formatIssue) throw new Error(formatIssue.message);
@@ -200,7 +202,7 @@ export interface ImportedMemberProfile {
   title: string;
   description: string;
   soul?: string;
-  color: MausColor;
+  color: SeiraColor;
   mascotExpression?: string;
   mascotBody?: BotBodyId;
 }

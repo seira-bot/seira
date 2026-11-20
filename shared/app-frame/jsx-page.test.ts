@@ -40,12 +40,13 @@ afterEach(() => {
   for (const root of roots.splice(0)) root.unmount();
   document.body.innerHTML = "";
   document.documentElement.removeAttribute("data-theme");
-  delete (window as { mausbot?: unknown }).mausbot;
+  delete (window as { seira?: unknown }).seira;
   fakeEcharts.made = [];
 });
 
 async function start(source: string, more: Record<string, unknown> = {}) {
-  document.body.innerHTML = "<div id=\"mausbot-root\"></div>";
+  document.body.innerHTML = "<div id=\"seira-root\"></div>";
+  const rendered = document.body.firstElementChild as HTMLElement;
   const problems: Problem[] = [];
   const loads: string[] = [];
   const root = await runtime({
@@ -55,8 +56,10 @@ async function start(source: string, more: Record<string, unknown> = {}) {
     ...more,
   }) as { unmount(): void } | null;
   if (root) roots.push(root);
-  await new Promise((resolve) => setTimeout(resolve, 30));
-  return { problems, loads, overlay: document.querySelector<HTMLElement>("[data-page-problem]"), rendered: document.getElementById("mausbot-root")! };
+  await vi.waitFor(() => {
+    if (root && !rendered.hasChildNodes() && !document.querySelector("[data-page-problem]")) throw new Error("React has not committed the page yet.");
+  });
+  return { problems, loads, overlay: document.querySelector<HTMLElement>("[data-page-problem]"), rendered };
 }
 
 const PRICING = `import { useState } from "react";
@@ -79,13 +82,12 @@ describe("a jsx page in the shell", () => {
     expect([...rendered.querySelectorAll("h2")].map((heading) => heading.textContent)).toEqual(["Starter", "Pro"]);
     expect(rendered.querySelectorAll("svg")).toHaveLength(2);
     rendered.querySelectorAll("button")[1]!.click();
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(rendered.querySelector("#picked")?.textContent).toBe("Pro");
+    await vi.waitFor(() => expect(rendered.querySelector("#picked")?.textContent).toBe("Pro"));
   });
 
   it("shows a syntax error as a readable overlay with the line, and tells the bot through the page's context", async () => {
     const setContext = vi.fn(async () => {});
-    (window as { mausbot?: unknown }).mausbot = { send: vi.fn(), open: vi.fn(), setContext };
+    (window as { seira?: unknown }).seira = { send: vi.fn(), open: vi.fn(), setContext };
     const { problems, overlay } = await start("export default function Page() {\n  const total = ;\n  return <p>{total}</p>;\n}");
     expect(problems).toHaveLength(1);
     expect(problems[0]).toMatchObject({ kind: "syntax", message: "Unexpected token", line: 2 });
@@ -120,16 +122,24 @@ describe("a jsx page in the shell", () => {
     expect(overlay?.getAttribute("data-page-problem")).toBe("offline");
   });
 
-  it("gives the page mausbot's Chart and useTheme, drawing ECharts in the chat's theme", async () => {
+  it("gives the page seira's Chart and useTheme, drawing ECharts in the chat's theme", async () => {
     document.documentElement.setAttribute("data-theme", "dark");
-    const source = `import { Chart, useTheme } from "mausbot";
+    const source = `import { Chart, useTheme } from "seira";
 export default function Page() { const theme = useTheme(); return <div><p id="theme">{theme}</p><Chart label="Sales" option={{ series: [{ type: "bar", data: [1, 2] }] }} /></div>; }`;
     const { problems, loads, rendered } = await start(source);
     expect(problems).toEqual([]);
     expect(loads).toContain("echarts");
     expect(rendered.querySelector("#theme")?.textContent).toBe("dark");
     expect(rendered.querySelector("[role=img]")?.getAttribute("aria-label")).toBe("Sales");
-    expect(fakeEcharts.made[0]).toMatchObject({ theme: "dark", options: [{ backgroundColor: "transparent", series: [{ type: "bar", data: [1, 2] }] }] });
+    await vi.waitFor(() => expect(fakeEcharts.made[0]).toMatchObject({ theme: "dark", options: [{ backgroundColor: "transparent", series: [{ type: "bar", data: [1, 2] }] }] }));
+  });
+
+  it("treats the old name of the shell's module as seira", async () => {
+    const source = `import { useTheme } from "mausbot";
+export default function Page() { return <p id="theme">{useTheme()}</p>; }`;
+    const { problems, rendered } = await start(source);
+    expect(problems).toEqual([]);
+    expect(rendered.querySelector("#theme")).not.toBeNull();
   });
 
   it("runs a published page's transpiled code without loading the compiler", async () => {
@@ -150,7 +160,7 @@ describe("the shell's HTML", () => {
       expect(url, url).toMatch(/\/npm\/(@[\w-]+\/)?[\w.-]+@\d+\.\d+\.\d+\//);
     }
     expect(JSX_PAGE_LIBRARIES.sucrase).toBe(packageJson.dependencies.sucrase);
-    expect(JSX_PAGE_MODULES).toEqual(["react", "react/jsx-runtime", "react-dom", "react-dom/client", "lucide-react", "echarts", "mausbot"]);
+    expect(JSX_PAGE_MODULES).toEqual(["react", "react/jsx-runtime", "react-dom", "react-dom/client", "lucide-react", "echarts", "seira"]);
   });
 
   it("carries the file as JSON no script element can be closed by, with the import map and Tailwind ahead of it", () => {
@@ -171,7 +181,7 @@ describe("the shell's HTML", () => {
     const compiled = "\"use strict\";exports.default = function () { return \"</script>\"; };";
     const html = jsxPublishedHtml({ title: "Pricing", compiled });
     expect(html.startsWith("<!DOCTYPE html>")).toBe(true);
-    expect(html).toContain("window.__mausbotPage=function(require,module,exports){\"use strict\";exports.default = function () { return \"<\\/script>\"; };");
+    expect(html).toContain("window.__seiraPage=function(require,module,exports){\"use strict\";exports.default = function () { return \"<\\/script>\"; };");
     expect(html).toContain("--color-text-primary:light-dark(");
     expect(html).not.toContain("source:");
     expect(html.match(/<\/script>/g)).toHaveLength(4);

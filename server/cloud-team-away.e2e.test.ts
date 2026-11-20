@@ -68,7 +68,7 @@ beforeAll(async () => {
   });
   await new Promise<void>((resolve) => adminServer.listen(0, "127.0.0.1", resolve));
   fx = await launchCloudSendFixture({ onePasswordToken: "ops_fake-away", team: { id: "team-acme-1", name: "Acme", engine: ENGINE, env: {
-    OMB_BOT_BOX: "0", FIXTURE_ADMIN_STAND_IN: `http://127.0.0.1:${(adminServer.address() as AddressInfo).port}`, OMB_TEAM_AWAY_WINDOW_MS: String(WINDOW_MS),
+    SEIRA_BOT_BOX: "0", FIXTURE_ADMIN_STAND_IN: `http://127.0.0.1:${(adminServer.address() as AddressInfo).port}`, SEIRA_TEAM_AWAY_WINDOW_MS: String(WINDOW_MS),
   } } });
   team = fx.team!;
   cleo = (await team.pair(CLEO)).token!;

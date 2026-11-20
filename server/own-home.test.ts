@@ -38,7 +38,7 @@ describe("a server of one person's own", () => {
   });
 
   it("is that person's home once a move from them arrived, while it stays theirs alone", () => {
-    const dataDir = mkdtempSync(join(tmpdir(), "omb-own-home-"));
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-own-home-"));
     dirs.push(dataDir);
     let facts = solo;
     const home = createOwnHome({ dataDir, facts: () => facts });

@@ -18,7 +18,7 @@ import { DATA_DIR } from "./config.ts";
 export const DEFAULT_BACKEND_ORIGIN = "https://backend.composio.dev";
 
 export function apiBase() {
-  return (process.env.OMB_COMPOSIO_API ?? `${DEFAULT_BACKEND_ORIGIN}/api/v3.1`).replace(/\/$/, "");
+  return (process.env.SEIRA_COMPOSIO_API ?? `${DEFAULT_BACKEND_ORIGIN}/api/v3.1`).replace(/\/$/, "");
 }
 
 export function projectHeaders(apiKey: string, json = false) {
@@ -98,7 +98,7 @@ export interface AuthConfigChoice {
 }
 
 export interface ProjectAuthConfigs {
-  /** Toolkit -> the config OpenMausBot uses for it: the one a bot named while it stays usable, else the most recently created. */
+  /** Toolkit -> the config Seira uses for it: the one a bot named while it stays usable, else the most recently created. */
   choices: Record<string, AuthConfigChoice>;
   /** The choices a Session can name now, being on for Tool Router. */
   configs: AuthConfigMap;

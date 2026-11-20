@@ -31,7 +31,7 @@ describe("GitHub Copilot ACP driver", () => {
 
   beforeEach(() => {
     ensureDirs();
-    scratch = mkdtempSync(join(tmpdir(), "omb-copilot-contract-"));
+    scratch = mkdtempSync(join(tmpdir(), "seira-copilot-contract-"));
   });
   afterEach(async () => {
     recorder?.stop();
@@ -199,27 +199,27 @@ describe("GitHub Copilot ACP driver", () => {
   it("removes only the session folder the discovery itself left behind", async () => {
     const home = join(scratch, "copilot-home");
     // The fields and their plain-scalar style are Copilot CLI 1.0.105's own workspace.yaml.
-    const session = (id: string, cwd: string, client = "openmausbot-model-discovery") => {
+    const session = (id: string, cwd: string, client = "seira-model-discovery") => {
       mkdirSync(join(home, "session-state", id, "checkpoints"), { recursive: true });
       writeFileSync(join(home, "session-state", id, "workspace.yaml"), `id: ${id}\ncwd: ${cwd}\nclient_name: ${client}\nuser_named: false\n`
         + "summary_count: 0\nfork_count: 0\ncreated_at: 2026-10-28T01:45:38.058Z\nupdated_at: 2026-10-28T01:45:38.116Z\n");
       return join(home, "session-state", id);
     };
     const env = { COPILOT_HOME: home };
-    const ours = session("ours", join(scratch, "omb-acp-models-x"));
-    await forgetCopilotDiscoverySession({ sessionId: "ours", cwd: join(scratch, "omb-acp-models-x"), env });
+    const ours = session("ours", join(scratch, "seira-acp-models-x"));
+    await forgetCopilotDiscoverySession({ sessionId: "ours", cwd: join(scratch, "seira-acp-models-x"), env });
     expect(existsSync(ours)).toBe(false);
     // A quoted value, a trailing separator or (on Windows) another case still names the same folder.
-    const quoted = session("quoted", JSON.stringify(join(scratch, "omb-acp-models-y")));
-    await forgetCopilotDiscoverySession({ sessionId: "quoted", cwd: join(scratch, "omb-acp-models-y"), env });
-    const spelled = session("spelled", `${process.platform === "win32" ? join(scratch, "OMB-ACP-MODELS-Z") : join(scratch, "omb-acp-models-z")}${sep}`);
-    await forgetCopilotDiscoverySession({ sessionId: "spelled", cwd: join(scratch, "omb-acp-models-z"), env });
+    const quoted = session("quoted", JSON.stringify(join(scratch, "seira-acp-models-y")));
+    await forgetCopilotDiscoverySession({ sessionId: "quoted", cwd: join(scratch, "seira-acp-models-y"), env });
+    const spelled = session("spelled", `${process.platform === "win32" ? join(scratch, "SEIRA-ACP-MODELS-Z") : join(scratch, "seira-acp-models-z")}${sep}`);
+    await forgetCopilotDiscoverySession({ sessionId: "spelled", cwd: join(scratch, "seira-acp-models-z"), env });
     expect([existsSync(quoted), existsSync(spelled)]).toEqual([false, false]);
     const person = session("person", join(scratch, "project"), "copilot-cli");
     await forgetCopilotDiscoverySession({ sessionId: "person", cwd: join(scratch, "project"), env });
     const elsewhere = session("elsewhere", join(scratch, "other"));
-    await forgetCopilotDiscoverySession({ sessionId: "elsewhere", cwd: join(scratch, "omb-acp-models-x"), env });
-    await forgetCopilotDiscoverySession({ sessionId: "../copilot-home", cwd: join(scratch, "omb-acp-models-x"), env });
+    await forgetCopilotDiscoverySession({ sessionId: "elsewhere", cwd: join(scratch, "seira-acp-models-x"), env });
+    await forgetCopilotDiscoverySession({ sessionId: "../copilot-home", cwd: join(scratch, "seira-acp-models-x"), env });
     expect([existsSync(person), existsSync(elsewhere), existsSync(home)]).toEqual([true, true, true]);
   });
 
@@ -279,9 +279,9 @@ describe("GitHub Copilot ACP driver", () => {
         threadId: "copilot-tools", text: "Which automation controls are available?", model: "auto",
         integrations: {
           agents: { command: process.execPath, args: [SPAWNED_PROXIES.agents],
-            env: { OMB_HARNESS_URL: "http://127.0.0.1:1", OMB_COMMS_TOKEN: "fixture-token", OMB_BOT_ID: "fixture" } },
+            env: { SEIRA_HARNESS_URL: "http://127.0.0.1:1", SEIRA_COMMS_TOKEN: "fixture-token", SEIRA_BOT_ID: "fixture" } },
           browser: { command: process.execPath, args: [SPAWNED_PROXIES.mcpRemote],
-            env: { OMB_REMOTE_MCP_SERVER: JSON.stringify({ type: "http", url: browser.url }) } },
+            env: { SEIRA_REMOTE_MCP_SERVER: JSON.stringify({ type: "http", url: browser.url }) } },
         },
       });
       expect(await recorder.until((event) => event.type === "turn.completed" && event.turnId === turnId)).toMatchObject({ ok: true });
@@ -290,16 +290,16 @@ describe("GitHub Copilot ACP driver", () => {
       expect(text).toContain("trigger");
       expect(text).toContain("trigger_info");
       // Copilot refuses functions in its reserved `browser` namespace, so the built-in browser server is renamed for it.
-      expect(text).toContain("maus_browser: agent_browser_open");
+      expect(text).toContain("seira_browser: agent_browser_open");
       const launch = JSON.parse(readFileSync(join(scratch, "launch.json"), "utf8"));
       const path = launch.argv[launch.argv.indexOf("--additional-mcp-config") + 1].slice(1) as string;
-      expect(Object.keys(JSON.parse(readFileSync(path, "utf8")).mcpServers).sort()).toEqual(["agents", "maus_browser"]);
+      expect(Object.keys(JSON.parse(readFileSync(path, "utf8")).mcpServers).sort()).toEqual(["agents", "seira_browser"]);
     } finally { await browser.close(); }
   });
 
   it("keeps Copilot's MCP server names out of its reserved browser and computer namespaces", () => {
-    expect(copilotServerNames(["agents", "browser", "computer", "data"])).toEqual(["agents", "maus_browser", "maus_computer", "data"]);
-    expect(copilotServerNames(["browser", "maus_browser", "Computer"])).toEqual(["maus_browser_2", "maus_browser", "maus_Computer"]);
+    expect(copilotServerNames(["agents", "browser", "computer", "data"])).toEqual(["agents", "seira_browser", "seira_computer", "data"]);
+    expect(copilotServerNames(["browser", "seira_browser", "Computer"])).toEqual(["seira_browser_2", "seira_browser", "seira_Computer"]);
     expect(copilotServerNames(["agents", "my_browser", "computers"])).toEqual(["agents", "my_browser", "computers"]);
   });
 
@@ -307,7 +307,7 @@ describe("GitHub Copilot ACP driver", () => {
     const launches = join(scratch, "launches.txt");
     const { instance, recorder } = await create({ FAKE_ACP_MODE: "mcp-tools", FAKE_ACP_LAUNCH_COUNT_FILE: launches });
     const agents = (token: string) => ({ agents: { command: process.execPath, args: [SPAWNED_PROXIES.agents],
-      env: { OMB_HARNESS_URL: "http://127.0.0.1:1", OMB_COMMS_TOKEN: token, OMB_BOT_ID: "fixture" } } });
+      env: { SEIRA_HARNESS_URL: "http://127.0.0.1:1", SEIRA_COMMS_TOKEN: token, SEIRA_BOT_ID: "fixture" } } });
     const run = async (threadId: string, token: string, allow: string[], resumeCursor?: string) => {
       const { turnId } = await instance.adapter.sendTurn({
         threadId, text: "List tools", model: "auto", resumeCursor, integrations: agents(token), toolScope: { allow },
@@ -341,7 +341,7 @@ describe("GitHub Copilot ACP driver", () => {
     expect(Number(readFileSync(launches, "utf8"))).toBe(before + 1);
     expect(JSON.parse(readFileSync(join(scratch, "launch.json.mcp.json"), "utf8"))).toEqual([]);
     // The folder is named after this process, so a later process can tell it from one that a live process uses.
-    expect(basename(dirname(first.path))).toMatch(new RegExp(`^omb-copilot-mcp-${process.pid}-[A-Za-z0-9]{6}$`));
+    expect(basename(dirname(first.path))).toMatch(new RegExp(`^seira-copilot-mcp-${process.pid}-[A-Za-z0-9]{6}$`));
     await instance.dispose();
     expect(existsSync(first.path)).toBe(false);
     expect(existsSync(dirname(first.path))).toBe(false);

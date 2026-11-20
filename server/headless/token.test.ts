@@ -1,4 +1,4 @@
-import "../testing/scrub-ambient-omb-env.ts";
+import "../testing/scrub-ambient-seira-env.ts";
 
 import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -12,7 +12,7 @@ import { removeTempDir } from "../testing/cleanup.ts";
 import type { HeadlessIo } from "./output.ts";
 import { runHeadless } from "./main.ts";
 
-const dir = mkdtempSync(join(tmpdir(), "omb-token-"));
+const dir = mkdtempSync(join(tmpdir(), "seira-token-"));
 let server: Server;
 let origin: string;
 let registry: SessionRegistry;
@@ -67,7 +67,7 @@ describe("token", () => {
     const made = await run(["token", "create", "Nightly CI", "--expires", "90d", "--out", file, "--json"]);
     expect(made.code).toBe(0);
     const token = readFileSync(file, "utf8").trim();
-    expect(token).toMatch(/^omb_sess_/);
+    expect(token).toMatch(/^seira_sess_/);
     if (process.platform !== "win32") expect(statSync(file).mode & 0o777).toBe(0o600);
     expect(JSON.stringify(made)).not.toContain(token);
     const result = JSON.parse(made.out[0]!);
@@ -115,6 +115,6 @@ describe("token", () => {
   it("passes on the server's own limit on a token's term", async () => {
     const made = await run(["token", "create", "CI", "--expires", "3000d", "--out", join(dir, "long-token")]);
     expect(made.code).toBe(1);
-    expect(made.err[0]).toContain("OMB_SESSION_MAX_DAYS");
+    expect(made.err[0]).toContain("SEIRA_SESSION_MAX_DAYS");
   });
 });

@@ -21,7 +21,7 @@ afterEach(async () => {
 });
 
 function freshHome(): string {
-  const home = mkdtempSync(join(tmpdir(), "omb-engine-status-"));
+  const home = mkdtempSync(join(tmpdir(), "seira-engine-status-"));
   homes.push(home);
   mkdirSync(join(home, "tmp"), { recursive: true });
   writeFileSync(join(home, "config.json"), JSON.stringify({

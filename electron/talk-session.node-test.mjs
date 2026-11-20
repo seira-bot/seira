@@ -51,7 +51,7 @@ test("the box's words and timings are fixed", () => {
     busy: "Voice is in use in Seira",
     serverDown: "Open Seira to talk",
     starting: "Seira is still starting. Try again in a moment.",
-    noMausbot: "Set up Seira first, then try again.",
+    noSeira: "Set up Seira first, then try again.",
     moved: "Seira lives on My Cloud now — talk to it there",
     permission: "Talking needs Microphone + Speech Recognition access — System Settings → Privacy & Security.",
     dictationOff: "Turn on Dictation in System Settings → Keyboard, then try again.",
@@ -181,9 +181,9 @@ test("permission and setup problems say what to fix, in the composer's words: on
 
 test("a server that can't take asks says why and stops listening: down, still starting, no Seira, or moved to My Cloud", async () => {
   const notices = [
-    ["server-down", "Open Seira to talk", "native.talk.openMausBot"],
+    ["server-down", "Open Seira to talk", "native.talk.seira"],
     ["starting", TALK_TEXT.starting, "native.talk.starting"],
-    ["no-mausbot", TALK_TEXT.noMausbot, "native.talk.setUpFirst"],
+    ["no-seira", TALK_TEXT.noSeira, "native.talk.setUpFirst"],
     ["moved", "Seira lives on My Cloud now — talk to it there", "native.talk.movedToCloud"],
   ];
   for (const [code, text, textCode] of notices) {
@@ -207,12 +207,12 @@ test("a server that goes away as the words are sent says Open Seira to talk", as
   fail(new TalkServerError("server-down")); await flush();
   assert.deepEqual(late.stops, []);
   assert.equal(late.asks.length, 0);
-  assert.deepEqual(late.views.at(-1), { state: "error", text: TALK_TEXT.serverDown, textCode: "native.talk.openMausBot" });
+  assert.deepEqual(late.views.at(-1), { state: "error", text: TALK_TEXT.serverDown, textCode: "native.talk.seira" });
   mock.timers.tick(TALK_TIMING.noticeHideMs); assert.equal(late.closed, 1);
 
   const gone = harness({ ask: async () => { throw new TalkServerError("server-down"); } });
   gone.session.press(); say(gone, "hello"); release(gone); await flush();
-  assert.deepEqual(gone.views.at(-1), { state: "error", text: TALK_TEXT.serverDown, textCode: "native.talk.openMausBot" });
+  assert.deepEqual(gone.views.at(-1), { state: "error", text: TALK_TEXT.serverDown, textCode: "native.talk.seira" });
   mock.timers.tick(TALK_TIMING.noticeHideMs); assert.equal(gone.closed, 1);
 
   const moved = harness({ ask: async () => { throw new TalkServerError("moved"); } });

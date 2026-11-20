@@ -4,7 +4,7 @@ import { addHeldSecretScrubber, HELD_SECRET_MASK } from "../../shared/redact.ts"
 import { checkInvariants } from "./invariants.ts";
 import { PROGRESS_WRITE_MS, RERUN_BURST, RERUN_GAP_MS, RERUN_HELD, RERUN_SUPERSEDED, Runtime, type BeginRequest } from "./runtime.ts";
 import { openRuntimeStore, type RuntimeStore } from "./store.ts";
-import { CUT_TWICE, INTERRUPTED_OUTWARD, loopStop, nextGuard, outwardDetail } from "./tree.ts";
+import { CUT_TWICE, INTERRUPTED_OUTWARD, loopStop, nextGuard, outwardDetail, outwardInterrupted } from "./tree.ts";
 import type { Assignment, Clock, EnqueueRequest, Limits, RunInput, RunResult, TurnRunner } from "./types.ts";
 
 const flush = () => new Promise<void>(resolve => setImmediate(resolve));
@@ -1220,6 +1220,13 @@ describe("Runtime: a cut turn that already acted outward (contract §5)", () => 
 });
 
 describe("tree.ts: the outward wording and the loop guard", () => {
+  it("outwardInterrupted knows the reason that an earlier version wrote", () => {
+    const stopped = (outcomeDetail: string) => ({ outcome: "interrupted", outcomeDetail }) as unknown as Parameters<typeof outwardInterrupted>[0];
+    expect(outwardInterrupted(stopped(outwardDetail(["git push"])))).toBe(true);
+    expect(outwardInterrupted(stopped("Interrupted by an OpenMausBot restart after it already pushed (git push); not resumed, so nothing is done twice."))).toBe(true);
+    expect(outwardInterrupted(stopped("Interrupted by a restart."))).toBe(false);
+  });
+
   it("outwardDetail dedupes, trims and clips the labels, names at most four as verb phrases, and keeps the exact prefix and close", () => {
     expect(outwardDetail(["git push", "git push", "  GMAIL_SEND_EMAIL  "]))
       .toBe("Interrupted by a Seira restart after it already pushed (git push), sent an email (GMAIL_SEND_EMAIL); not resumed, so nothing is done twice.");

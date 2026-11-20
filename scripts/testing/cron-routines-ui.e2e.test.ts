@@ -10,7 +10,7 @@ import { runControlSeira } from "../control-seira.ts";
 import { ENABLE_ADVANCED_UI, UI_TOOLS_DIR } from "./control-seira-ui.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-const enabled = process.env.OMB_UI_E2E === "1" || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
+const enabled = process.env.SEIRA_UI_E2E === "1" || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
 let child: ChildProcess | undefined;
 afterAll(() => waitForExit(child, { signal: "SIGINT", graceMs: 30_000 }));
 
@@ -109,7 +109,7 @@ afterAll(() => waitForExit(child, { signal: "SIGINT", graceMs: 30_000 }));
   // The API models a bot-created arbitrary schedule. Editing only its title
   // must not collapse its ranges, weekdays, or non-local timezone to a preset.
   const customSchedule = { type: "cron", expression: "15 9-17/2 * * 1-5", timeZone: "America/New_York" };
-  const response = await fetch(`${fixture.url}/api/routines`, { method: "POST", headers: { "content-type": "application/json", origin: fixture.url }, body: JSON.stringify({ name: "Business-hours report", prompt: "Use only the fixture.", botId: monthly.botId, enabled: false, runOn: "maus", schedule: customSchedule }) });
+  const response = await fetch(`${fixture.url}/api/routines`, { method: "POST", headers: { "content-type": "application/json", origin: fixture.url }, body: JSON.stringify({ name: "Business-hours report", prompt: "Use only the fixture.", botId: monthly.botId, enabled: false, runOn: "seira", schedule: customSchedule }) });
   expect(response.status).toBe(201);
   const custom = (await response.json()).routine;
   await expect.poll(() => evaluate(`document.querySelector('li[data-automation="${custom.id}"]')?.dataset.automationStatus`)).toBe("paused");

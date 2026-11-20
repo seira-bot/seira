@@ -9,7 +9,7 @@ import { AGENTS_TOOL_ALIASES } from "../../shared/agents-tool-names.ts";
 import type { Json } from "./agents-client.ts";
 
 /** The proxy's switch: "1" lists through the bridge, anything else lists the whole catalog. */
-export const TOOL_BRIDGE_ENV = "OMB_AGENTS_TOOL_BRIDGE";
+export const TOOL_BRIDGE_ENV = "SEIRA_AGENTS_TOOL_BRIDGE";
 export const FIND_TOOL = "find_tool";
 export const USE_TOOL = "use_tool";
 

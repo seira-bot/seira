@@ -1,3 +1,5 @@
+import { SEIRA_HOSTS, seiraOrigin } from "../../electron/seira-hosts.mjs";
+
 export const APP_NAME = "Seira";
 export const APP_REPOSITORY = "https://github.com/seira-bot/seira";
 export const DOCS_URL = `${APP_REPOSITORY}/tree/main/docs`;
@@ -6,11 +8,12 @@ export const APPROVAL_LEVELS_URL = `${APP_REPOSITORY}/blob/main/docs/approval-le
 export const PASSKEY_HELP_URL = `${APP_REPOSITORY}/blob/main/apps/docs/content/docs/troubleshooting/google-sign-in-cloud-browser.mdx`;
 export const FEEDBACK_URL = `${APP_REPOSITORY}/issues`;
 export const RELEASES_URL = `${APP_REPOSITORY}/releases`;
-export const PRICING_URL = "https://seira.bot/#pricing";
-export const PRIVACY_URL = "https://seira.bot/privacy";
-export const TERMS_URL = "https://seira.bot/terms";
-export const CLOUD_PLAN_URL = "https://cloud.openmausbot.com/cloud";
-/** The Admin's team People page (openmaus-cloud docs/team-seats.md): people, seats and roles are managed there, never in
+const SITE = seiraOrigin(SEIRA_HOSTS.site);
+export const PRICING_URL = `${SITE}/#pricing`;
+export const PRIVACY_URL = `${SITE}/privacy`;
+export const TERMS_URL = `${SITE}/terms`;
+export const CLOUD_PLAN_URL = `${seiraOrigin(SEIRA_HOSTS.cloud)}/cloud`;
+/** The Admin's team People page: people, seats and roles are managed there, never in
  * the app. `invite` opens its invite box (Owner and Admins); `seats` its seat stepper (the Owner, whose card pays). */
 export const TEAM_PEOPLE_PAGES = { invite: "people?do=invite", seats: "people?do=seats" } as const;
 /** `cloudPage`: the Admin's Cloud pages for this team's Cloud (`<admin origin>/cloud`), sent by the server. */

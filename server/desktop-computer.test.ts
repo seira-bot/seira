@@ -8,11 +8,11 @@ import { createDesktopComputer, DESKTOP_COMPUTER_GRANT, thisComputerNotReady } f
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const READY = { mode: "embedded", status: "ready", socketPath: "/fixture/cua.sock", mcpCommand: "/fixture/cua-driver", mcpArgs: ["mcp"], mcpEnv: {} };
-const saved = { userData: process.env.OMB_USER_DATA, parent: process.env.OMB_DESKTOP_PARENT, home: process.env.HOME };
+const saved = { userData: process.env.SEIRA_USER_DATA, parent: process.env.SEIRA_DESKTOP_PARENT, home: process.env.HOME };
 const folders: string[] = [];
 
 afterEach(() => {
-  for (const [key, value] of [["OMB_USER_DATA", saved.userData], ["OMB_DESKTOP_PARENT", saved.parent], ["HOME", saved.home]] as const) {
+  for (const [key, value] of [["SEIRA_USER_DATA", saved.userData], ["SEIRA_DESKTOP_PARENT", saved.parent], ["HOME", saved.home]] as const) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   }
@@ -21,13 +21,13 @@ afterEach(() => {
 
 describe("this computer, only for the desktop app's own server", () => {
   it("finds nothing on a server the app did not launch, though the app's record, its folder and the desktop flag are all there", () => {
-    const home = mkdtempSync(join(tmpdir(), "omb-desktop-computer-"));
+    const home = mkdtempSync(join(tmpdir(), "seira-desktop-computer-"));
     folders.push(home);
-    for (const folder of [join(home, "user-data"), join(home, "Library", "Application Support", "OpenMausBot")]) {
+    for (const folder of [join(home, "user-data"), join(home, "Library", "Application Support", "Seira")]) {
       mkdirSync(folder, { recursive: true, mode: 0o700 });
       writeFileSync(join(folder, "cua-connection.json"), JSON.stringify(READY), { mode: 0o600 });
     }
-    Object.assign(process.env, { OMB_USER_DATA: join(home, "user-data"), OMB_DESKTOP_PARENT: "1", HOME: home });
+    Object.assign(process.env, { SEIRA_USER_DATA: join(home, "user-data"), SEIRA_DESKTOP_PARENT: "1", HOME: home });
     for (const platform of ["darwin", "win32", "linux"] as const) {
       const desktop = createDesktopComputer({ platform });
       expect(desktop.connection(), platform).toBeNull();
@@ -67,7 +67,7 @@ describe("this computer, only for the desktop app's own server", () => {
 
   it("ignores every other parent message and refuses a malformed grant", () => {
     const desktop = createDesktopComputer({ platform: "darwin" });
-    for (const message of [null, "x", [], { type: "openmausbot:desktop-mutation-token", token: "t" }, { connection: READY }]) {
+    for (const message of [null, "x", [], { type: "seira:desktop-mutation-token", token: "t" }, { connection: READY }]) {
       expect(desktop.receive(message)).toBe(false);
     }
     expect(() => desktop.receive({ type: DESKTOP_COMPUTER_GRANT, connection: "/path/to/cua-connection.json" })).toThrow();

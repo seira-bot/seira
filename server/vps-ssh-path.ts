@@ -14,5 +14,5 @@ export function vpsSshSharedControlDirectory(sshDir: string): string | null {
   if (uid === undefined || Buffer.byteLength(join(sshDir, `cm-${"0".repeat(40)}`)) <= 80) return null;
   const id = createHash("sha256").update(resolve(sshDir)).digest("hex").slice(0, 12);
   // /tmp, not tmpdir(): macOS TMPDIR is often too long for a control socket.
-  return `/tmp/omb-ssh-${uid}-${id}`;
+  return `/tmp/seira-ssh-${uid}-${id}`;
 }

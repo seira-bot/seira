@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { CarvedAvatar, REST_POSE, carvedFills, carvedGeometry, hairTint } from "./CarvedAvatar";
-import { MausAvatar } from "./Avatar";
+import { SeiraAvatar } from "./Avatar";
 import { BRAND_BODY_IDS, CARVED_BODIES, CARVED_BODY_IDS } from "../../shared/carved-bodies";
 import { hairGradientMap } from "@/lib/seira-hair";
 import { accessorySprites } from "@/lib/seira-accessories";
@@ -121,14 +121,14 @@ describe("CarvedAvatar", () => {
     expect(red![12]).toBeGreaterThan(red![10]!);
   });
 
-  it.each(["seira-long", "bob", "none"] as const)("is what MausAvatar wears for the %s body", (bodyId) => {
-    const markup = renderToStaticMarkup(createElement(MausAvatar, { color: "orange", bodyId, animated: false }));
+  it.each(["seira-long", "bob", "none"] as const)("is what SeiraAvatar wears for the %s body", (bodyId) => {
+    const markup = renderToStaticMarkup(createElement(SeiraAvatar, { color: "orange", bodyId, animated: false }));
     expect(markup).toContain(`data-carved-body="${bodyId}"`);
     expect(markup).not.toContain("linearGradient");
   });
 
   it.each(["cursor", "pumpkin", "laddu"] as const)("draws Seira for the old %s body", (bodyId) => {
-    const markup = renderToStaticMarkup(createElement(MausAvatar, { color: "orange", bodyId, animated: false }));
+    const markup = renderToStaticMarkup(createElement(SeiraAvatar, { color: "orange", bodyId, animated: false }));
     expect(markup).toContain('data-carved-body="seira"');
     expect(markup).not.toContain("linearGradient");
   });

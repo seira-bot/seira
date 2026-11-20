@@ -28,7 +28,7 @@ function desktop() {
       pairing: vi.fn(async (open: boolean) => {
         companion = {
           ...companion,
-          pairing: open ? { code: "123456", token: `omb_pair_${"a".repeat(43)}`, expiresAt: Date.now() + 120_000 } : null,
+          pairing: open ? { code: "123456", token: `seira_pair_${"a".repeat(43)}`, expiresAt: Date.now() + 120_000 } : null,
         };
         return companion;
       }),

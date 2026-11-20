@@ -5,21 +5,21 @@ import { describe, expect, it } from "vitest";
 import {
   BotAvatar,
   InitialsAvatar,
-  MausAvatar,
+  SeiraAvatar,
   resolveBotAvatarOutcome,
   type BotAvatarProps,
-  type MausAvatarProps,
+  type SeiraAvatarProps,
 } from "./Avatar";
 
-const render = (props: Partial<MausAvatarProps>) =>
-  renderToStaticMarkup(createElement(MausAvatar, { color: "green", animated: false, ...props }));
+const render = (props: Partial<SeiraAvatarProps>) =>
+  renderToStaticMarkup(createElement(SeiraAvatar, { color: "green", animated: false, ...props }));
 
 const renderBot = (bot: Partial<BotAvatarProps["bot"]>) =>
   renderToStaticMarkup(
     createElement(BotAvatar, { bot: { color: "green", ...bot }, animated: false }),
   );
 
-describe("MausAvatar body", () => {
+describe("SeiraAvatar body", () => {
   it("wears Seira when no body is given", () => {
     expect(render({})).toBe(render({ bodyId: "seira" }));
   });
@@ -31,7 +31,7 @@ describe("MausAvatar body", () => {
   it("falls back to Seira for an unknown body", () => {
     // SAFETY: "hexagram" is deliberately not a BotBodyId, to exercise the runtime fallback for persisted or streamed
     // data.
-    expect(render({ bodyId: "hexagram" as MausAvatarProps["bodyId"] })).toBe(render({ bodyId: "seira" }));
+    expect(render({ bodyId: "hexagram" as SeiraAvatarProps["bodyId"] })).toBe(render({ bodyId: "seira" }));
   });
 });
 

@@ -120,4 +120,4 @@ were removed after the run; only bounded result evidence was retained.
 The combined main-based integration was repeated with real Luna after the
 registry/import fixes: exactly one review created all three requested bots with
 the selected model and Chief grants, then the Chief continued. Evidence:
-`/tmp/omb-live-team-0913.MwRY2k/setup-gpt-5.6-luna-1789255036346/result.json`.
+`/tmp/seira-live-team-0913.MwRY2k/setup-gpt-5.6-luna-1789255036346/result.json`.

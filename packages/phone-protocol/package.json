@@ -1,5 +1,5 @@
 {
-  "name": "@openmausbot/phone-protocol",
+  "name": "@seira/phone-protocol",
   "private": true,
   "version": "0.0.0",
   "description": "The wire contract a Seira phone app shares with the desktop: frame and response types, cards, widgets, mascot and pairing.",

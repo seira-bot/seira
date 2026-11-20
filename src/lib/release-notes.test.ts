@@ -18,10 +18,14 @@ const NOTES: ReleaseNote[] = [
 ];
 
 describe("release notes data", () => {
-  it("starts with 0.1.180 and its four items in order", () => {
-    expect(RELEASE_NOTES[0]!.version).toBe("0.1.180");
-    expect(RELEASE_NOTES[0]!.items.map(entry => entry.id)).toEqual(["bugReport", "longChats", "fasterStart", "liveYes"]);
-    expect(RELEASE_NOTES[0]!.items[3]!.icon).toBe(Mic);
+  it("starts with 0.1.181 and its six items in order", () => {
+    expect(RELEASE_NOTES[0]!.version).toBe("0.1.181");
+    expect(RELEASE_NOTES[0]!.items.map(entry => entry.id)).toEqual(["aiPool", "connectOneClick", "backupName", "claudeAccounts", "whatsNew", "flatpakEngine"]);
+  });
+  it("keeps 0.1.180 with its four items in order", () => {
+    const entry = RELEASE_NOTES.find(note => note.version === "0.1.180")!;
+    expect(entry.items.map(item => item.id)).toEqual(["bugReport", "longChats", "fasterStart", "liveYes"]);
+    expect(entry.items[3]!.icon).toBe(Mic);
   });
   it("names the strings of an item, the hint and the tag link", () => {
     expect(releaseNoteKeys("bugReport")).toEqual({ title: "releaseNotes.items.bugReport.title", body: "releaseNotes.items.bugReport.body" });

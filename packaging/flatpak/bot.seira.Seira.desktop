@@ -7,6 +7,6 @@ Icon=bot.seira.Seira
 Terminal=false
 Categories=Utility;
 Keywords=AI;Agents;Chat;Productivity;
-MimeType=x-scheme-handler/openmausbot;
+MimeType=x-scheme-handler/seira;
 StartupWMClass=Seira
 StartupNotify=true

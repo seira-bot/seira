@@ -14,7 +14,7 @@ The whole list of what the Admin may run, ask and learn in this mode is one file
 
 ## The connector
 
-- One container, `mausbot-connector`, from `ghcr.io/milind-soni/mausbot-connector`, pinned by digest.
+- One container, `seira-connector`, from `ghcr.io/milind-soni/mausbot-connector`, pinned by digest.
 - It only calls out: one HTTPS request to enrol, then one WebSocket to the Admin. It opens no port.
 - It makes its own Ed25519 key at enrolment. The private key stays on your server. It pins the Admin's signing keys.
 - It runs with every Linux capability dropped, a read-only file system and no new privileges.
@@ -23,7 +23,7 @@ The whole list of what the Admin may run, ask and learn in this mode is one file
 
 ## It connects the server you installed
 
-The connector attaches to the Seira the [server installer](/docs/self-hosting/deploy-vps) made in `/opt/openmausbot`: the same containers, the same `data` folder, the same settings. Nothing is reinstalled and no data moves. Two limits:
+The connector attaches to the Seira the [server installer](/docs/self-hosting/deploy-vps) made in `/opt/seira`: the same containers, the same `data` folder, the same settings. Nothing is reinstalled and no data moves. Two limits:
 
 - It attaches only to that layout: Docker Compose, the published image, the data in a folder beside the Compose file. A server built from source, or run without Docker, cannot be connected yet.
 - A connector started the other way (the mode Seira uses on servers it operates itself) refuses to enrol on a machine where your Seira already runs, so there are never two.
@@ -35,7 +35,7 @@ Every job is signed by the Admin for your server alone and is refused 15 minutes
 | Job | What it does on your server |
 |---|---|
 | `start`, `stop`, `restart` | Starts or stops your server's containers, with your settings. A `start` that names an image or a setting is refused |
-| `update` | Hands one image, Seira's server image pinned by digest, to your server's own updater: `update.sh` in `/opt/openmausbot`, the command you run by hand. It copies the data aside, starts the new version, checks it, and puts the old version and the copy back when the check fails |
+| `update` | Hands one image, Seira's server image pinned by digest, to your server's own updater: `update.sh` in `/opt/seira`, the command you run by hand. It copies the data aside, starts the new version, checks it, and puts the old version and the copy back when the check fails |
 | `status` | Reads the server's state, the two versions and the list of backups |
 | `backup` | Copies the data folder to a Docker volume on your server. Seira's three newest are kept; a backup you made is never removed to make room |
 | `host-health` | Reads the server's size, load and checks (below) |
@@ -44,7 +44,7 @@ Three things to know:
 
 - **Not on the list, so refused:** `export-disk` (uploads an archive of the data to Seira) and `import-disk` (replaces the data with an archive from elsewhere). They exist in the connector for servers Seira operates itself.
 - **`update` only moves forward.** An image whose version is older than the one your server runs, or that names no version, is refused: once by the connector, and again by the updater's runner on your server, outside any container. Seira cannot roll your server back to an earlier release. A second floor, the first release with the hardened profile, is **planned**: no release has that profile yet.
-- **`update` needs your updater.** It works only when `update.sh` is in `/opt/openmausbot` and the connector's installer has set up the small systemd unit that runs it. Without either, the job is refused and nothing changes. A server installer that puts `update.sh` there is not released yet: **planned**.
+- **`update` needs your updater.** It works only when `update.sh` is in `/opt/seira` and the connector's installer has set up the small systemd unit that runs it. Without either, the job is refused and nothing changes. A server installer that puts `update.sh` there is not released yet: **planned**.
 
 ## What only you can do: two more jobs
 
@@ -56,8 +56,8 @@ Two jobs exist on your server and are refused when Seira sends them. Root on the
 | `restore` | It puts older data back over what is there, after a safety copy |
 
 ```sh
-docker exec mausbot-connector mausbot-connector job self-update '{"image":"ghcr.io/milind-soni/mausbot-connector@sha256:…"}'
-docker exec mausbot-connector mausbot-connector job restore '{"backupId":"20261028-104512-3fa9"}'
+docker exec seira-connector seira-connector job self-update '{"image":"ghcr.io/milind-soni/mausbot-connector@sha256:…"}'
+docker exec seira-connector seira-connector job restore '{"backupId":"20261028-104512-3fa9"}'
 ```
 
 Connector images are pinned by digest and come from Seira's registry, but they are not signed yet. Checking a signature before a connector is replaced is **planned**. Going back to an older server version is also yours alone: `./update.sh --rollback` or `./update.sh --version` on the server.
@@ -82,32 +82,32 @@ There is no pairing: the Admin cannot open a sign-in on your server, as a member
 People sign in to your server with your server's own sign-in: a pairing code you make on the server, or a code emailed to an address on your sign-in list. Neither passes through the connector or the Admin.
 
 - **Pairing codes** work with Seira unreachable.
-- **Emailed codes** are sent through Seira's account service unless you set your own mail server (`OMB_SIGNIN_SMTP_URL`). With your own mail server they also work with Seira unreachable.
+- **Emailed codes** are sent through Seira's account service unless you set your own mail server (`SEIRA_SIGNIN_SMTP_URL`). With your own mail server they also work with Seira unreachable.
 - Sessions already open keep working either way.
 
 ## Your log, your rules, your switch
 
-- **The audit log.** Every job, each of its steps, its result, every request and every refusal is one line in `/var/log/mausbot/audit.jsonl` on your server, owned by root. Each line carries the hash of the line before it, so a removed or changed line shows. A job that would change something is refused when the log cannot be written. A failed job's full reason is here; only its code leaves the server.
+- **The audit log.** Every job, each of its steps, its result, every request and every refusal is one line in `/var/log/seira/audit.jsonl` on your server, owned by root. Each line carries the hash of the line before it, so a removed or changed line shows. A job that would change something is refused when the log cannot be written. A failed job's full reason is here; only its code leaves the server.
 
   ```sh
-  docker exec mausbot-connector mausbot-connector audit --tail 50
-  docker exec mausbot-connector mausbot-connector audit --verify
+  docker exec seira-connector seira-connector audit --tail 50
+  docker exec seira-connector seira-connector audit --verify
   ```
 
 - **Pause.** One command makes the connector refuse every job and every request from Seira, and log each one. The server keeps running, people keep signing in, and the heartbeat below still goes out, saying that you paused. A switch in Settings is **planned**.
 
   ```sh
-  docker exec mausbot-connector mausbot-connector pause
-  docker exec mausbot-connector mausbot-connector resume
+  docker exec seira-connector seira-connector pause
+  docker exec seira-connector seira-connector resume
   ```
 
-- **Your policy.** `/etc/mausbot/policy.json`, which only root on your server can write, narrows the seven jobs further and can hold updates. The connector reads it before every job and never writes it.
+- **Your policy.** `/etc/seira/policy.json`, which only root on your server can write, narrows the seven jobs further and can hold updates. The connector reads it before every job and never writes it.
 
   ```json
   { "jobs": ["status", "host-health", "update", "backup"], "updates": "hold" }
   ```
 
-- **Cutting Seira off.** `docker stop mausbot-connector` ends the connection and the heartbeat. Your server, its sign-in and its bots are not affected.
+- **Cutting Seira off.** `docker stop seira-connector` ends the connection and the heartbeat. Your server, its sign-in and its bots are not affected.
 
 ## What the connector sends
 

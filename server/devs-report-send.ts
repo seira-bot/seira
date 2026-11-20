@@ -1,4 +1,4 @@
-// Preparing one @devs report. Without OMB_BUG_REPORT_URL nothing leaves this machine: the report becomes a prefilled
+// Preparing one @devs report. Without SEIRA_BUG_REPORT_URL nothing leaves this machine: the report becomes a prefilled
 // issue form the person opens and submits themselves (devs-report-issue.ts). With it, the report is posted to that
 // address and its answer read: 201 {id}; 400 or 413 {error}; 429 {error, retryAfter} (seconds, also Retry-After). The same
 // address is asked what became of the reports this app sent (POST /api/bug-reports/status), which a Cloud also signs
@@ -22,9 +22,9 @@ export type SendOutcome =
   /** The endpoint refused this report; sending it again would be refused again. */
   | { ok: false; retry: false; why: "refused"; detail: string };
 
-/** OMB_BUG_REPORT_URL (an https address, or http on this machine's loopback, for fixtures); otherwise null. */
+/** SEIRA_BUG_REPORT_URL (an https address, or http on this machine's loopback, for fixtures); otherwise null. */
 export function bugReportEndpoint(env: NodeJS.ProcessEnv): string | null {
-  const explicit = env.OMB_BUG_REPORT_URL?.trim();
+  const explicit = env.SEIRA_BUG_REPORT_URL?.trim();
   if (!explicit) return null;
   try {
     const url = new URL(explicit);
@@ -96,7 +96,7 @@ export async function sendDevsReport(endpoint: string, payload: DevsReportPayloa
   return { ok: false, retry: true, why: "server" };
 }
 
-/** What the app asks about the reports it sent (openmaus-cloud server/bug-report-contract.ts BugReportStatusRequest). */
+/** What the app asks about the reports it sent. */
 export const BUG_REPORT_STATUS_PATH = "/api/bug-reports/status";
 export const BUG_REPORT_STATUS_MAX_IDS = 50;
 export interface ReportStatusQuestion { installId: string; ids: string[] }
@@ -111,7 +111,7 @@ const statusAnswerSchema = z.object({
 /** A Cloud home's credential for its question: its machine and the bootstrap secret it shares with the Admin. */
 export interface ReportStatusHome { machineId: string; bootstrapSecret: string }
 
-/** Must match openmaus-cloud server/bug-reports.ts `bugReportsHomeSignature`: its own signing string, so no other signed
+/** Must match the Cloud service's bug-report signature: its own signing string, so no other signed
  * request can be replayed here or the other way. */
 export function bugReportsHomeSignature(secret: string, machineId: string, timestamp: string, nonce: string, body: string): string {
   const bodyHash = createHash("sha256").update(body).digest("base64url");

@@ -8,13 +8,13 @@ import { journalUrl } from "./saved-steps/journal-tap.ts";
 import { COMPUTER_HELPER_STOPPED } from "../shared/your-computer.ts";
 
 const {
-  OMB_CUA_COMMAND: command,
-  OMB_CUA_ARGS: encodedArgs,
-  OMB_CUA_PLATFORM: platform,
-  OMB_CONTROL_URL: url,
-  OMB_CONTROL_TOKEN: token,
-  OMB_COMPUTER_JOURNAL: journal,
-  OMB_HOST_FILES: hostFiles,
+  SEIRA_CUA_COMMAND: command,
+  SEIRA_CUA_ARGS: encodedArgs,
+  SEIRA_CUA_PLATFORM: platform,
+  SEIRA_CONTROL_URL: url,
+  SEIRA_CONTROL_TOKEN: token,
+  SEIRA_COMPUTER_JOURNAL: journal,
+  SEIRA_HOST_FILES: hostFiles,
   ...childEnv
 } = process.env;
 

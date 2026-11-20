@@ -8,7 +8,7 @@ description: Build, check, and attach the Seira Windows x64 installer and its up
 The full release guide is [`docs/releasing.md`](../../../docs/releasing.md).
 This skill covers its step 5 and the Windows update problems.
 A release goes only to [`seira-bot/seira`](https://github.com/seira-bot/seira/releases).
-Never upload a Seira build to an OpenMausBot repository.
+Never upload a Seira build to a Seira repository.
 
 ## Before you start
 
@@ -40,7 +40,7 @@ Before it uploads, the workflow does these checks. When one fails, the run fails
 ## 2. Download and check
 
 ```sh
-mkdir -p .omb-scratch/windows && cd .omb-scratch/windows
+mkdir -p .seira-scratch/windows && cd .seira-scratch/windows
 gh run download <run id> --repo seira-bot/seira --name seira-<version>-windows-x64
 sha256sum -c SHA256SUMS-windows-x64.txt
 ```
@@ -81,8 +81,8 @@ release. Upload it to Partner Center by hand. The Store signs it.
 
 - The build maps version `0.1.179` to `1.1.179.0`, because the Store rejects a
   first part of 0.
-- Set `appx.identityName` and `appx.publisher` in `electron-builder.yml` from
-  the Product identity page in Partner Center before the first upload.
+- `appx.identityName` and `appx.publisher` in `electron-builder.yml` come from
+  the Product identity page in Partner Center. The workflow checks them.
 - In this package the app does not update itself and does not write a Run key.
   The Store updates it, and the person turns on Open at login in Startup apps.
 - The workflow checks the manifest and the logos. `docs/releasing.md` lists the
@@ -106,7 +106,7 @@ Find the cause in this order:
    not match, delete the five assets and attach the workflow files again.
 3. Ask for `updater.log` from the log folder of the app:
    `%APPDATA%\openmausbot\logs`. The folder keeps its upstream name.
-4. Ask where the user installed the app from. An OpenMausBot installer from
+4. Ask where the user installed the app from. A Seira installer from
    the upstream project reads the upstream releases. It never updates to Seira.
    The user must install `Seira-setup.exe` once.
 
