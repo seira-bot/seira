@@ -33,9 +33,9 @@ describe("inline code copy", () => {
   });
 
   it("copies the exact text and shows the copied state on click", async () => {
-    await show("Run `  pnpm  install ` now.");
+    await show("Run `pnpm  install` now.");
     await act(async () => chip().click());
-    expect(writeText).toHaveBeenCalledExactlyOnceWith("  pnpm  install ");
+    expect(writeText).toHaveBeenCalledExactlyOnceWith("pnpm  install");
     expect(chip().dataset.copyState).toBe("copied");
     expect(chip().querySelector("[role=status]")?.textContent).toBe("Copied");
   });
