@@ -1,24 +1,12 @@
 const screenshotNames = [
-  'hero',
-  'byo-vps-picker',
-  'model-picker',
-  'computer-panel',
   'approval-card',
-  'marketplace',
-  'composio-multi-account',
-  'context-menu',
-  'app-settings',
-  'ubuntu-computer-panel',
-  'docs-onboarding',
+  'byo-vps-picker',
+  'docs-automations',
+  'docs-computer-panel',
+  'docs-connected-apps',
   'docs-engine-detection',
   'docs-fresh-bot',
   'docs-model-picker',
-  'docs-computer-panel',
-  'docs-connected-apps',
-  'docs-automations',
-  'docs-my-cloud-compare',
-  'docs-my-cloud-strip',
-  'docs-my-cloud-switcher',
 ] as const;
 
 type ScreenshotName = (typeof screenshotNames)[number];
