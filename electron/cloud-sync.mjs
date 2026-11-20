@@ -1,5 +1,5 @@
 // Files, the desktop service: the folders the person shared go to My Cloud, and what Cloud bots make comes to
-// Documents/Seira (Documents/Seira on a computer that already had it). This computer decides what is shared (settings.shared); a folder My Cloud names is never synced
+// Documents/Seira (Documents/MausBot on a computer that already had it). This computer decides what is shared (settings.shared); a folder My Cloud names is never synced
 // unless this computer registered it. It drives every pass over the Cloud sign-in the window holds.
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -25,8 +25,8 @@ const PRIVATE = [".ssh", ".aws", ".gnupg", ".kube", ".docker", ".config", ".loca
 
 const within = (child, parent, platform) => pathKey(child, platform) === pathKey(parent, platform) || pathKey(child, platform).startsWith(`${pathKey(parent, platform)}/`);
 
-/** What Cloud bots make goes in Documents/Seira. A computer that already has Documents/Seira keeps that folder, so nothing moves. */
-const OUTPUTS_FOLDER = "Seira", OUTPUTS_FOLDER_BEFORE = "Seira";
+/** What Cloud bots make goes in Documents/Seira. A computer that already has Documents/MausBot keeps that folder, so nothing moves. */
+const OUTPUTS_FOLDER = "Seira", OUTPUTS_FOLDER_BEFORE = "MausBot";
 const isOutputsFolder = (name) => name === OUTPUTS_FOLDER || name === OUTPUTS_FOLDER_BEFORE;
 function hasFolder(dir) {
   try { return fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() === true; } catch { return false; }
