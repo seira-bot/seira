@@ -224,6 +224,8 @@ const __APP_VERSION__: string;
         };
         /** The Server menu's New workspace on this computer: this computer's own page asks its name. */
         onNewLocal?: (callback: () => void) => () => void;
+        /** The Server menu's Connect to a server…: this computer's own page opens the Connect sheet. */
+        onConnectServer?: (callback: () => void) => () => void;
       };
       /** Buying another Cloud from the rail's ＋, on this app's page or a hosted Cloud's; absent on an older app. */
       cloudAdd?: {
