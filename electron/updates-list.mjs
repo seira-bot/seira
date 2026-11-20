@@ -1,5 +1,7 @@
 // Seira's own list for the product-updates question: the address a person gives, and nothing else.
-export const UPDATES_LIST_ORIGIN = "https://updates.seira.bot";
+import { SEIRA_HOSTS, seiraOrigin } from "./seira-hosts.mjs";
+
+export const UPDATES_LIST_ORIGIN = seiraOrigin(SEIRA_HOSTS.updates);
 const LOOPBACK = /^http:\/\/(?:127\.0\.0\.1|\[::1\]):([1-9][0-9]{0,4})$/;
 const RECEIPT = /^[A-Za-z0-9_-]{43}$/;
 const MAX_BODY = 64 * 1024;

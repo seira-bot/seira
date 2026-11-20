@@ -5,12 +5,13 @@ import { planTeam, teamPlan } from "./cloud-team-plan.mjs";
 import { cleanCode, cleanEmail, parseSignInStart, SIGN_IN_START, SIGN_IN_TRIES, SIGN_IN_VERIFY, signInIdentity, startFailure, verifyFailure } from "./cloud-signin.mjs";
 import { createHash } from "node:crypto";
 import nativeText from "./native-text.cjs";
+import { SEIRA_HOSTS, seiraOrigin } from "./seira-hosts.mjs";
 
 const { englishText } = nativeText;
 
-export const CLOUD_ORIGIN = "https://cloud.seira.bot";
+export const CLOUD_ORIGIN = seiraOrigin(SEIRA_HOSTS.cloud);
 /** The staging Admin (Dodo test mode, real test Clouds): a fixed address, on only with SEIRA_CLOUD_STAGING=1. */
-export const STAGING_CLOUD_ORIGIN = "https://seira-cloud-staging.fly.dev";
+export const STAGING_CLOUD_ORIGIN = seiraOrigin(SEIRA_HOSTS.cloudStaging);
 const FILES = (suffix) => ({ file: `cloud-account${suffix}.bin`, saved: `cloud-accounts${suffix}.bin`, places: `account-places${suffix}.json`, environments: `environments${suffix}.json`, sync: `cloud-sync${suffix}`, look: `cloud-home-look${suffix}.json` });
 /** An https origin, or http on the loopback address for development; null for anything else, including a path, a port-less lookalike or credentials. */
 export function cloudOriginOf(value) {

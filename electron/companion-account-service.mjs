@@ -44,13 +44,14 @@ export {
   companionAccountCleanupPending,
   companionTunnelRetired,
 } from "./companion-account-documents.mjs";
+import { SEIRA_HOSTS, seiraOrigin, seiraServiceLive } from "./seira-hosts.mjs";
 import { MANAGED_ENDPOINT_PHONES_UNUSED } from "./companion-endpoint-need.mjs";
 import { FRIENDLY_MESSAGES, friendlyCompanionAccountError } from "./companion-account-messages.mjs";
 export { friendlyCompanionAccountError };
 
 export { managedEndpointNeed, PHONE_UNUSED_RELEASE_MS } from "./companion-endpoint-need.mjs";
 
-export const DEFAULT_COMPANION_CONTROL_PLANE_URL = "";
+export const DEFAULT_COMPANION_CONTROL_PLANE_URL = seiraServiceLive("accounts") ? seiraOrigin(SEIRA_HOSTS.accounts) : "";
 
 const DEFAULT_HEALTH_CACHE_MS = 30_000;
 const DEFAULT_AUTO_RETRY_BASE_MS = 10 * 60_000;
