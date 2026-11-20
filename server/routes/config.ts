@@ -17,6 +17,7 @@ import {
   builtInBrowserEnabled,
   changedInstanceIds,
   engineLaunches,
+  instanceConfigs,
   loadConfig,
   localVmMode,
   mergeOpenCodeProviderKeys,
@@ -27,6 +28,7 @@ import {
 } from "../config.ts";
 import type { InstanceConfigMap, ModelSelection } from "../contracts.ts";
 import type { RequestAuth } from "../request-auth.ts";
+import { checkedAiPoolMembers } from "./ai-pool-patch.ts";
 import { parseConfigPatchForPerson } from "../decider/config-errors.ts";
 import { teamPersonalHint } from "../../shared/cloud-hints.ts";
 import { DECIDER_KEY_ERROR, deciderIncludedHere, deciderPatchKey, deciderSavePatch, deciderBorrowedKey, type Decider } from "../decider/index.ts";
@@ -184,6 +186,11 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
         const refusal = policyModelRefusal(target);
         if (refusal) return json(res, 403, { error: refusal, code: "managed_policy" });
         patch.automaticRecovery.backup = checked.selection;
+      }
+      if (patch.aiPool?.enabled) {
+        const checked = checkedAiPoolMembers(patch.aiPool.members, { check: (raw) => checkedModelSelection(raw, undefined, true), engine: (id) => registry.get(id) ?? undefined, configs: () => instanceConfigs(cfg), policyRefusal: policyModelRefusal });
+        if (!checked.ok) return json(res, checked.status, checked.body);
+        patch.aiPool.members = checked.members;
       }
       if (!Object.keys(patch).length) return json(res, 400, { error: "nothing to save" });
       if (patch.decider) {

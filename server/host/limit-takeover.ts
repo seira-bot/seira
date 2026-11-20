@@ -55,7 +55,7 @@ export interface LimitTakeoverDeps {
   /** When this engine's limit resets, when that is known. */
   resetAt?(instanceId: string, model?: string): number | null;
   /** The backups the person chose for this bot, or for every bot. */
-  chosen(botId: string): ModelSelection[];
+  chosen(botId: string, from: ModelSelection): ModelSelection[];
   /** The backups a signed-out AI's turns go to, as for a turn its AI never started: the bot's own list, or the
    * installation's one backup while Automatic recovery is on. `chosen` when not given. */
   signedOutChosen?(botId: string): ModelSelection[];
@@ -188,7 +188,7 @@ export function createLimitTakeover(deps: LimitTakeoverDeps) {
       if (usable(engines, current, selection, scope, approval)) out.push({ instanceId: selection.instanceId, model: selection.model });
     };
     if (scope === "model" || scope === "credits") add({ instanceId: current.instanceId, model: current.models.default });
-    for (const selection of scope === "signed-out" ? deps.signedOutChosen?.(botId) ?? deps.chosen(botId) : deps.chosen(botId)) add(selection);
+    for (const selection of scope === "signed-out" ? deps.signedOutChosen?.(botId) ?? deps.chosen(botId, from) : deps.chosen(botId, from)) add(selection);
     return out;
   }
 
@@ -232,6 +232,11 @@ export function createLimitTakeover(deps: LimitTakeoverDeps) {
 
   return {
     backups,
+    /** Whether a conversation on `from` may move to `to` for its next turn: the same checks as for a backup. */
+    canCarry(from: ModelSelection, to: ModelSelection, approval?: ApprovalMode): boolean {
+      const engines = deps.engines(), current = engines.find((engine) => engine.instanceId === from.instanceId);
+      return Boolean(current) && usable(engines, current!, to, "engine", approval);
+    },
     /** This model alone, held by its own limit; null when it is not. */
     modelHeld,
     /** This model's own limit refused a turn: it is held until the reset the limit named, an hour when it named none,
