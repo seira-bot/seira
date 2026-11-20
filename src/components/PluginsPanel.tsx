@@ -395,7 +395,7 @@ export function PluginsPanel() {
   const searching = search.trim().length > 0;
   /** A search covers the whole catalog, whichever view it was typed in. */
   const listing: AppsFilter = searching && filter === "connected" ? "all" : filter;
-  const shownHosted = new Set(HOSTED_MCP_APPS.filter((app) => hostedShown(app, search, hostedConnected, filter)).map((app) => app.id));
+  const shownHosted = new Set(HOSTED_MCP_APPS.filter((app) => hostedShown(app, search, hostedConnected, listing)).map((app) => app.id));
   const searchMatches = (text: string) => !search || text.toLowerCase().includes(search.toLowerCase().trim());
   const showEmail = emailConnected === true && searchMatches(`email mail imap smtp mailbox ${t("email.description")}`);
   const showX = xConnected === true && searchMatches(`${X_CARD_SEARCH} ${t("apps.x.description")}`);
