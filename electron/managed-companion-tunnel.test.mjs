@@ -12,6 +12,8 @@ import {
   managedCompanionTunnelAccess,
   normalizeManagedCompanionEndpoint,
   resolveCloudflaredBinary,
+  serverTunnelEndpointAllowed,
+  serverTunnelHostSuffixes,
   withManagedCompanionTunnelAccess,
   withoutManagedCompanionTunnelAccess,
 } from "./managed-companion-tunnel.mjs";
@@ -402,5 +404,50 @@ describe("managed connector lifecycle", () => {
     expect(fs.existsSync(stale)).toBe(false);
     expect(fs.existsSync(live)).toBe(true);
     expect(fs.existsSync(unrelated)).toBe(true);
+  });
+});
+
+describe("server tunnel address check", () => {
+  const HEX = "0123456789abcdef0123456789abcdef";
+  const OWN = { SEIRA_CONTROL_PLANE_URL: "https://cp.example.test", SEIRA_TUNNEL_HOST_SUFFIX: "Tunnel.Example.test" };
+
+  it("accepts exactly one c-<32 hex> label under seira.run", () => {
+    expect(serverTunnelEndpointAllowed(`https://c-${HEX}.seira.run`, {})).toBe(true);
+    expect(serverTunnelEndpointAllowed(`https://c-${HEX}.seira.run/`, {})).toBe(true);
+  });
+
+  it("refuses every other shape", () => {
+    for (const value of [
+      `https://c-${HEX}.seira.bot`,
+      `https://c-${HEX}.si.seira.bot`,
+      `https://c-${HEX.slice(1)}.seira.run`,
+      `https://c-${HEX}0.seira.run`,
+      `https://c-${HEX.toUpperCase()}.seira.run`,
+      `https://c-${HEX}.extra.seira.run`,
+      `https://www.c-${HEX}.seira.run`,
+      `http://c-${HEX}.seira.run`,
+      `https://c-${HEX}.seira.run:8443`,
+      `https://c-${HEX}.seira.run/path`,
+      `https://c-${HEX}.seira.run.evil.test`,
+      "https://seira.run",
+      "",
+      null,
+    ]) {
+      expect(serverTunnelEndpointAllowed(value, {}), String(value)).toBe(false);
+    }
+  });
+
+  it("takes a self-hosted suffix only together with SEIRA_CONTROL_PLANE_URL", () => {
+    expect(serverTunnelHostSuffixes(OWN)).toEqual(["seira.run", "tunnel.example.test"]);
+    expect(serverTunnelEndpointAllowed(`https://c-${HEX}.tunnel.example.test`, OWN)).toBe(true);
+    expect(serverTunnelEndpointAllowed(`https://c-${HEX}.seira.run`, OWN)).toBe(true);
+    expect(serverTunnelEndpointAllowed(`https://c-${HEX}.tunnel.example.test`, { SEIRA_TUNNEL_HOST_SUFFIX: "tunnel.example.test" })).toBe(false);
+    expect(serverTunnelEndpointAllowed(`https://c-${HEX}.tunnel.example.test`, { ...OWN, SEIRA_CONTROL_PLANE_URL: " " })).toBe(false);
+  });
+
+  it("ignores a suffix that is not a domain name", () => {
+    for (const suffix of ["", "no_dots", "a b.test", "https://x.test", ".test", "x..test", "x.test/", "-a.test"]) {
+      expect(serverTunnelHostSuffixes({ ...OWN, SEIRA_TUNNEL_HOST_SUFFIX: suffix }), suffix).toEqual(["seira.run"]);
+    }
   });
 });

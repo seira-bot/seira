@@ -21,6 +21,10 @@ export interface ControlPlaneStub {
   connectorToken: string;
   /** "METHOD /path", in order. */
   calls: string[];
+  /** The JSON bodies of the Seira Cloud sign-in calls (`accounts: "seira-cloud"`), in order. */
+  cloudBodies: Array<{ path: string; body: Record<string, unknown> }>;
+  /** The Seira Cloud account id the stub signs in. */
+  cloudAccountId: string;
   /** The bodies of the push relay's calls, in order (`/v1/installations/self/push/*`). */
   pushes: Array<{ path: string; body: Record<string, unknown> }>;
   /** The next push-relay answers, used in order; then 200/202/204 as the real relay answers. */
@@ -44,15 +48,19 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? Object.fromEntries(Object.entries(parsed)) : {};
 }
 
-export async function startControlPlaneStub(options: { otp?: string; endpointUrl?: string } = {}): Promise<ControlPlaneStub> {
+/** `accounts: "seira-cloud"`: /healthz says so, and the stub also plays Seira Cloud's email-code sign-in (same origin). */
+export async function startControlPlaneStub(options: { otp?: string; endpointUrl?: string; accounts?: "seira-cloud" } = {}): Promise<ControlPlaneStub> {
   const otp = options.otp ?? "24681357";
-  const endpointUrl = options.endpointUrl ?? "https://c-stub.seira.invalid";
+  const endpointUrl = options.endpointUrl ?? "https://c-00000000000000000000000000000000.seira.run";
   const connectorToken = `stub-connector-${randomBytes(48).toString("base64url")}`;
   let issuedConnectorToken = connectorToken;
   let reclaimedUntilProvision: string | null = null;
   const accountTokens = new Set<string>();
   const installations = new Map<string, StubInstallation>();
   const calls: string[] = [];
+  const cloudBodies: ControlPlaneStub["cloudBodies"] = [];
+  const cloudAccountId = "acct_cloud_stub";
+  const cloudAttempt = randomBytes(32).toString("base64url");
   const pushes: ControlPlaneStub["pushes"] = [];
   const pushAnswers: ControlPlaneStub["pushAnswers"] = [];
   const pushDevices = new Map<string, Set<string>>();
@@ -89,7 +97,19 @@ export async function startControlPlaneStub(options: { otp?: string; endpointUrl
     const byCredential = () => [...installations.values()].find((inst) => inst.credential === bearer) ?? null;
     const account = accountTokens.has(bearer);
 
-    if (method === "GET" && path === "/healthz") return send(200, { ok: true, service: "seira-control-plane" });
+    if (method === "GET" && path === "/healthz") return send(200, { ok: true, service: "seira-control-plane", ...(options.accounts ? { accounts: options.accounts } : {}) });
+    if (options.accounts === "seira-cloud" && path.startsWith("/api/cloud/")) {
+      if (method === "DELETE" && path === "/api/cloud/desktop/session") return send(204);
+      const body = await readJson(req);
+      cloudBodies.push({ path, body });
+      if (path === "/api/cloud/app/sign-in/start") return send(200, { cloudContractVersion: 1, attempt: cloudAttempt, expiresIn: 600, resendAfter: 30, signupOpen: true });
+      if (path === "/api/cloud/app/sign-in/verify") {
+        if (body.attempt !== cloudAttempt || body.code !== otp) return send(400, { error: "invalid_code" });
+        const token = `omc_${randomBytes(32).toString("base64url")}`;
+        accountTokens.add(token);
+        return send(200, { accessToken: token, expiresAt: Date.now() + NINETY_DAYS, device: { id: "device_stub" }, account: { id: cloudAccountId, email: "milind@example.test" } });
+      }
+    }
     if (method === "POST" && path === "/api/auth/email-otp/send-verification-otp") {
       await readJson(req);
       return send(200, { success: true });
@@ -181,6 +201,8 @@ export async function startControlPlaneStub(options: { otp?: string; endpointUrl
     endpointUrl,
     connectorToken,
     calls,
+    cloudBodies,
+    cloudAccountId,
     pushes,
     pushAnswers,
     installations,
