@@ -71,7 +71,7 @@ describe("the per-launch control token", () => {
     for (const [method, path] of [["POST", "/pairing"], ["GET", "/state"], ["DELETE", "/pairing"], ["PUT", "/routes"], ["POST", "/devices/x/browser-control"], ["DELETE", "/devices/x"]]) {
       const tokenless = await ask(method, path, { origin: `http://127.0.0.1:${port}` }, undefined, {});
       expect(tokenless.status, `${method} ${path}`).toBe(403);
-      expect(JSON.stringify(tokenless.body)).not.toMatch(/seira_pair_|"code"/);
+      expect(JSON.stringify(tokenless.body)).not.toMatch(/(?:omb|seira)_pair_|"code"/);
     }
     expect((await ask("POST", "/pairing", {}, undefined, { "x-seira-control-token": "d".repeat(43) })).status).toBe(403);
     expect((await ask("POST", "/pairing", {}, undefined, { "x-seira-control-token": CONTROL_TOKEN.slice(1) })).status).toBe(403);

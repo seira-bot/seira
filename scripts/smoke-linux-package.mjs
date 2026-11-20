@@ -283,7 +283,7 @@ try {
     location,
     title,
   } = result;
-  if (health?.app !== "seira" || health.static !== true) {
+  if (!["openmausbot", "seira"].includes(health?.app) || health.static !== true) {
     throw new Error(`unexpected embedded health response: ${JSON.stringify(health)}`);
   }
   if (!/\bSeira\b/.test(String(title))) throw new Error(`unexpected renderer title: ${title}`);

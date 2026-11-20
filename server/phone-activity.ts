@@ -5,7 +5,6 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import { currentLinkScheme } from "../electron/legacy-names.mjs";
 
 import {
   APNS_TOKEN,
@@ -41,7 +40,7 @@ const headline = z.string().min(1).max(HEADLINE_MAX).refine((value) => value.inc
 const status = z.string().min(1).max(80).refine((value) => value.trim() === value && !/[\p{Cc}\u2028\u2029]/u.test(value));
 
 export const activityRegistrationSchema = z.object({
-  scheme: z.preprocess(currentLinkScheme, z.enum(["seira", "seira-dev", "seira-next"])),
+  scheme: z.enum(["openmausbot", "openmausbot-dev", "openmausbot-next", "seira", "seira-dev", "seira-next"]),
   headlines: z.object({ needsYou: headline, working: headline }).strict(),
   startToken: z.string().trim().toLowerCase().regex(APNS_TOKEN).optional(),
   activities: z.array(z.object({ botId: z.string().regex(PUSH_ID), token: z.string().trim().toLowerCase().regex(APNS_TOKEN) }).strict()).max(MAX_ACTIVITIES).optional(),

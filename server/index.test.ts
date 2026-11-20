@@ -230,7 +230,7 @@ const waitForIsolatedServer = async (
       if (response.status === 200) {
         const health = await response.json() as { app?: unknown; pid?: unknown; static?: unknown };
         lastObservedHealth = JSON.stringify(health);
-        if (health.app === "seira" && health.pid === serverChild.pid && health.static === true) return;
+        if (["openmausbot", "seira"].includes(String(health.app)) && health.pid === serverChild.pid && health.static === true) return;
       }
     } catch {
     }
@@ -1691,7 +1691,7 @@ describe("harness HTTP API", () => {
       req.end();
     });
     expect(probe.status).toBe(200);
-    expect(probe.body).toEqual({ app: "seira" });
+    expect(probe.body).toEqual({ app: "openmausbot" });
     const brand = await new Promise<{ status: number; body: unknown }>((resolve, reject) => {
       const req = request({ hostname: "127.0.0.1", port: PORT, path: "/api/brand", headers: { host: "example.com" } }, (res) => {
         let raw = "";

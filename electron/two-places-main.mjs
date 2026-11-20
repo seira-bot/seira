@@ -9,6 +9,7 @@ import { handSaved, serverRequests } from "./own-home-main.mjs";
 import { teamPlaces } from "./team-places.mjs";
 import { createTwoPlaces, installTwoPlaces } from "./two-places.mjs";
 import nativeText from "./native-text.cjs";
+import { sentWireName } from "./phone-wire-names.mjs";
 
 /** How often main looks whether the places changed (a server said it is the person's own, My Cloud became ready). */
 const WATCH_MS = 60_000;
@@ -73,7 +74,7 @@ export function installTwoPlacesMain({ ipcMain, guard, localRequest, fetch: fetc
   const twoPlaces = createTwoPlaces({
     local: async () => (moved() ? null : json(await localRequest("/api/cloud-send?move=1", { signal: AbortSignal.timeout(10_000) }))),
     here: {
-      name: async () => (label ??= (await json(await localRequest("/.well-known/seira/environment", { signal: AbortSignal.timeout(10_000) })))?.label ?? null),
+      name: async () => (label ??= (await json(await localRequest(sentWireName("environmentPath"), { signal: AbortSignal.timeout(10_000) })))?.label ?? null),
       tell: async (payload) => sent(await localRequest(ROUTE, { ...put(payload), headers: { "content-type": "application/json" } }), t("rail.thisComputer")),
     },
     t, places, settled, quiet: () => !settled() && !moved(), dismissed, onChange: tell, log });
