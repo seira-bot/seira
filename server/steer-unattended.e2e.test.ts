@@ -43,17 +43,20 @@ function brokerCandidates(threadId: string, botId: string): string[] {
 }
 
 async function connectBroker(threadId: string, botId: string): Promise<Socket> {
-  await expect.poll(() => brokerCandidates(threadId, botId).some((path) => existsSync(path)), { timeout: 20_000 }).toBe(true);
-  for (const path of brokerCandidates(threadId, botId)) {
-    if (!existsSync(path)) continue;
-    const socket = await new Promise<Socket | null>((resolve) => {
-      const conn = connect(path);
-      conn.once("connect", () => resolve(conn));
-      conn.once("error", () => resolve(null));
-    });
-    if (socket) return socket;
-  }
-  throw new Error(`no broker socket among ${brokerCandidates(threadId, botId).join(", ")}`);
+  let socket: Socket | null = null;
+  await expect.poll(async () => {
+    for (const path of brokerCandidates(threadId, botId)) {
+      if (!existsSync(path)) continue;
+      socket = await new Promise<Socket | null>((resolve) => {
+        const conn = connect(path);
+        conn.once("connect", () => resolve(conn));
+        conn.once("error", () => resolve(null));
+      });
+      if (socket) return true;
+    }
+    return false;
+  }, { timeout: 20_000, message: `no broker socket among ${brokerCandidates(threadId, botId).join(", ")}` }).toBe(true);
+  return socket!;
 }
 
 function ask(conn: Socket, id: string, command: string): { answered: () => boolean } {

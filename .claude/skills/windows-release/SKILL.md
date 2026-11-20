@@ -81,8 +81,8 @@ release. Upload it to Partner Center by hand. The Store signs it.
 
 - The build maps version `0.1.179` to `1.1.179.0`, because the Store rejects a
   first part of 0.
-- Set `appx.identityName` and `appx.publisher` in `electron-builder.yml` from
-  the Product identity page in Partner Center before the first upload.
+- `appx.identityName` and `appx.publisher` in `electron-builder.yml` come from
+  the Product identity page in Partner Center. The workflow checks them.
 - In this package the app does not update itself and does not write a Run key.
   The Store updates it, and the person turns on Open at login in Startup apps.
 - The workflow checks the manifest and the logos. `docs/releasing.md` lists the

@@ -370,8 +370,10 @@ export function createChatAppsMcp(deps: ChatAppsMcpDeps): ChatAppsMcp {
   // the background for a turn whose bot may use it (that turn starts it anyway).
 
   const queued = new Set<string>();
+  let probingName: string | null = null;
   const lastAutomatic = new Map<string, number>();
   const probeStale = (name: string) => {
+    if (probingName === name) return;
     const last = lastAutomatic.get(name);
     if (last !== undefined && now() - last < AUTOMATIC_PROBE_EVERY_MS) return;
     lastAutomatic.set(name, now());
@@ -401,6 +403,7 @@ export function createChatAppsMcp(deps: ChatAppsMcpDeps): ChatAppsMcp {
     queued.add(name);
     probing = probing.then(async () => {
       queued.delete(name);
+      probingName = name;
       if (closed || deps.personMcp?.().includes(name)) return;
       const stored = storedServer(name, deps.storedServers()[name]);
       if (!stored?.enabled || stored.apps === false || stored.runsOn) return;
@@ -414,7 +417,7 @@ export function createChatAppsMcp(deps: ChatAppsMcpDeps): ChatAppsMcp {
       const result = await probe(probed, BACKGROUND_PROBE_MS, undefined, { ...probeOptions(name, keyed.server), ...(isRemoteMcpServer(probed) ? {} : { asBot: asBot(name) }) });
       if (!result.ok && result.auth === "required" && isRemoteMcpServer(probed) && !sendsCredentials(probed)) deps.oauth.requireSignIn(name, probed.url);
       log(`probed ${name}: ${result.ok ? `apps=${catalog.get(name, stored)?.apps === true}` : result.auth === "required" ? "needs sign-in" : "failed"}`);
-    }).catch((error: unknown) => log(`probe of ${name} failed: ${String(error)}`));
+    }).finally(() => { probingName = null; }).catch((error: unknown) => log(`probe of ${name} failed: ${String(error)}`));
   }
 
   function turnMounts(custom: Record<string, McpServerSpec>, toolScope?: unknown): { mcpApps?: Record<string, { extension: boolean }> } {

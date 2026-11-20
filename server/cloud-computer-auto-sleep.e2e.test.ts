@@ -61,6 +61,8 @@ describe("a cloud computer goes to sleep after use and wakes on the next", () =>
   const stopsOf = (id: string) => calls.filter(call => call.method === "POST" && call.path === `/boxes/${id}/stop`);
   const resumesOf = (id: string) => calls.filter(call => call.method === "POST" && call.path === `/boxes/${id}/resume`);
   const rowOf = (name: string | undefined) => rows.find(row => row.name === name)!;
+  const asleep = (computerId: string) => until(() => apiOk("GET", "/api/team-computers"),
+    body => body.computers.find((computer: Row) => computer.id === computerId)?.state === "archived");
   const task = async (botId: string) => (await apiOk("GET", "/api/bots?messages=0")).bots.find((bot: any) => bot.id === botId);
   const idle = (botId: string) => until(() => task(botId), bot => bot?.busy === false);
   const busy = (botId: string) => until(() => task(botId), bot => bot?.busy === true);
@@ -271,6 +273,7 @@ describe("a cloud computer goes to sleep after use and wakes on the next", () =>
     teamBox = rows.at(-1)!.id;
     ada = await newBot("Ada", { ...model("uses"), section: "Ops" });
     ben = await newBot("Ben", { ...model("slow"), section: "Ops", computer: "off" });
+    await asleep(requestId);
     await apiOk("PATCH", `/api/team-computers/${requestId}`, { section: "Ops", acknowledgeSharedAccess: true });
 
     rmSync(gate, { force: true });

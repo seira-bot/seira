@@ -37587,7 +37587,19 @@
       "releaseNotes.items.fasterStart.title": "54c182f7fb0b2444f16fc43141b7644525620981f1e5450e898ed056d493c58f",
       "releaseNotes.items.fasterStart.body": "c864be41e9cb1457c380aa53c0cf47f78829188e93804c2428eb98bda98adb0a",
       "releaseNotes.items.liveYes.title": "9bec3e3b57f0c8d3d0d71f0f8d145fb011e950f14805dd117a70c558a8623d67",
-      "releaseNotes.items.liveYes.body": "fd4890f15c30c8388ae4ccc4b5af5af3e85fcca10772e9966e58aada2b145526"
+      "releaseNotes.items.liveYes.body": "fd4890f15c30c8388ae4ccc4b5af5af3e85fcca10772e9966e58aada2b145526",
+      "releaseNotes.items.aiPool.title": "d288dec7f894a9623d396c6cc5668ea410b8f9096bf5c3471d1fa5c2519152de",
+      "releaseNotes.items.aiPool.body": "b6019c2c62919ede088cc3157f2c92f92cb1e7e745d6103c272727e30f4e67fe",
+      "releaseNotes.items.connectOneClick.title": "839b78da8f8b92ce0995d046830092afe3c0a63b89d3dbfdb62ae1e2dd45bbbb",
+      "releaseNotes.items.connectOneClick.body": "db08f5cf459548ae233d073adc17a772ae64a916e3112c92f9cbd20b0ede6c37",
+      "releaseNotes.items.backupName.title": "d88051bcc7449d1618164a7f13584bae6634feb3459dbfe4784d5f18108c7628",
+      "releaseNotes.items.backupName.body": "81f888bae78e97ff68385f83a40934f70780ec9ed2b42f2e9759037f91d45f51",
+      "releaseNotes.items.claudeAccounts.title": "3afaf9b898541303d59fb479a2a9e7e438ce5ba3c6a509e114c0307c83be8993",
+      "releaseNotes.items.claudeAccounts.body": "c6a116ff3930de42ec23535b10198f4cc6852cf423532846da9b8c199fd6d391",
+      "releaseNotes.items.whatsNew.title": "4ed04dddb704ad49a9cccc37dffd2b72378d3b85e8ba223ec3488d6a8bed2c32",
+      "releaseNotes.items.whatsNew.body": "6f2369bcb75a8f15e160065b4b06996f504dae59b62e3f9adceff4a26fe1fa4a",
+      "releaseNotes.items.flatpakEngine.title": "5e0d5d4575dd7779744604a7262c7ec7154d387902f9c0de492ed990984b51c4",
+      "releaseNotes.items.flatpakEngine.body": "c21c13dff0a50d6434f8f61cb6365218550c85f0374d547fce4b8c3089478bc7"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",

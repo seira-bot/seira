@@ -278,9 +278,9 @@ Rules for the package:
   the version. The app still reports `0.1.179`.
 - The package has no signature. The Store signs the package after you upload it.
   A person cannot install the file from the workflow without a test signature.
-- Before the first upload, set `appx.identityName` and `appx.publisher` in
-  `electron-builder.yml`. Copy both values from the Product identity page of
-  the product in Partner Center. The Store rejects a package with other values.
+- `appx.identityName` and `appx.publisher` in `electron-builder.yml` hold the
+  values from the Product identity page of the product in Partner Center. The
+  Store rejects a package with other values. `scripts/check-appx.mjs` checks them.
 - Upload the package to Partner Center by hand. Submit each release as a new
   submission of the same product.
 - The app does not update itself in this package. The Store delivers updates.

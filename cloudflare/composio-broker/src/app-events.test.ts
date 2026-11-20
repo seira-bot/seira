@@ -93,6 +93,7 @@ describe("Composio webhook signature", () => {
   });
 
   it("refuses a timestamp more than 300 s old or ahead, so a captured delivery cannot be replayed later", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
     const { owner, triggerId } = await withTrigger();
     const now = Math.floor(Date.now() / 1000);
     expect((await h.deliver(message(triggerId, owner.userId), { timestamp: now - 301 })).status).toBe(401);

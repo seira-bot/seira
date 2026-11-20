@@ -378,6 +378,21 @@ describe("mounts and probes", () => {
     mcp.forgetServer("draw");
     expect(mcp.catalog.get("draw", draw)).toBeUndefined();
   }, 30_000);
+
+  it("probes a server once when the startup probe comes while that server's probe is running", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    cleanup.push(() => { vi.useRealTimers(); });
+    let finish!: () => void;
+    const probe = vi.fn<typeof probeMcpServer>(() => new Promise((resolve) => { finish = () => resolve({ ok: false as const, error: "offline" }); }));
+    const { mcp, lines } = setup({ servers: { draw: { type: "http", url: "https://mcp.example.test/mcp", enabled: true } }, probe, startupProbes: true });
+    mcp.serverChanged("draw");
+    await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(20_000);
+    finish();
+    await vi.waitFor(() => expect(lines).toContain("probed draw: failed"));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(probe).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("a server whose key is kept in the Vault", () => {

@@ -41,9 +41,9 @@ afterEach(() => { vi.restoreAllMocks(); rmSync(dir, { recursive: true, force: tr
 describe("the native-app encoding of a pairing window", () => {
   it("redeems the same window as the typed code, and consumes it", () => {
     const { code, credential } = registry.openPairing({ label: "Pixel" });
-    // The Android companion's parser demands the 9-character prefix plus exactly 43 base64url characters (Connection.kt).
+    // The Android companion's parser demands the 11-character prefix plus exactly 43 base64url characters (Connection.kt).
     expect(credential.startsWith("seira_pair_")).toBe(true);
-    expect(credential.length).toBe(52);
+    expect(credential.length).toBe(54);
     expect(credential.slice("seira_pair_".length)).toMatch(/^[A-Za-z0-9_-]{43}$/);
 
     const paired = registry.exchange({ code: credential, label: "Pixel", source: "10.0.0.9" });
@@ -55,7 +55,7 @@ describe("the native-app encoding of a pairing window", () => {
   it("never normalizes a credential", () => {
     // A credential containing every symbol normalizePairingCode folds (0, 1, _ and -): it must be hashed exactly as presented.
     const trap = "seira_pair_0123456789-_abcdefghijklmnopqrstuvwxyzABCDE";
-    expect(trap.length).toBe(52);
+    expect(trap.length).toBe(54);
     expect(normalizePairingCode(trap)).not.toBe(trap);
     expect(isPairingCredential(trap)).toBe(true);
 
