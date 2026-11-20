@@ -29,6 +29,7 @@ import { MarkdownImagePreview, MessageFolderFiles, OutsideWorkspaceFile, saveFai
 import { ThreadLink, ThreadRefsContext, threadLinkFromProps, type ThreadRefsValue } from "./ThreadRefs";
 import { MarkdownTable } from "./MarkdownTable";
 import { CodeBlock, CodePlate, codeHash } from "./CodeBlock";
+import { InlineCode, InsideLinkContext } from "./InlineCode";
 export { CodeBlock, HIGHLIGHT_CACHE_MAX, HIGHLIGHT_CACHE_MAX_CHARS, HIGHLIGHT_MAX_CHARS, type CodeBlockProps } from "./CodeBlock";
 import { FilePreviewButton } from "./FilePreviewButton";
 import { SaveIconButton, useHtmlPreview } from "./HtmlFilePreview";
@@ -638,7 +639,11 @@ function MarkdownImage(props: ComponentProps<"img"> & ExtraProps) {
   );
 }
 
-function MarkdownLink({ href, children, ...rest }: { href?: string; children?: ReactNode }) {
+function MarkdownLink(props: { href?: string; children?: ReactNode }) {
+  return <InsideLinkContext value={true}><MarkdownLinkBody {...props} /></InsideLinkContext>;
+}
+
+function MarkdownLinkBody({ href, children, ...rest }: { href?: string; children?: ReactNode }) {
   // SAFETY: react-markdown hands hast data-* attributes through as string props
   const props = rest as Record<string, unknown>;
   const { threads, currentBotId, message, delivered, originals } = useContext(MessageScopeContext);
@@ -683,11 +688,7 @@ function MarkdownLink({ href, children, ...rest }: { href?: string; children?: R
 const MARKDOWN_COMPONENTS: Components = {
   pre: MarkdownCode,
   img: MarkdownImage,
-  code({ children }: { children?: ReactNode }) {
-    return (
-      <code dir="ltr" className="ui-code-chip break-words [unicode-bidi:isolate]">{children}</code>
-    );
-  },
+  code: InlineCode,
   span(props) {
     // SAFETY: react-markdown hands hast data-* attributes through as string props
     const link = threadLinkFromProps(props as Record<string, unknown>);

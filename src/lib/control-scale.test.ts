@@ -51,7 +51,9 @@ describe("control scale", () => {
     };
     expect(renderToStaticMarkup(createElement(DigestChip, { message }))).toMatch(/class="ui-chip /);
     const html = renderToStaticMarkup(createElement(ChatMarkdown, { text: "run `pnpm test` now" }));
-    expect(html).toContain('class="ui-code-chip break-words [unicode-bidi:isolate]"');
+    expect(html).toContain('class="ui-code-chip break-words [unicode-bidi:isolate] relative cursor-pointer hover:bg-ink/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"');
+    const linked = renderToStaticMarkup(createElement(ChatMarkdown, { text: "see [`pnpm test`](https://example.com)" }));
+    expect(linked).toContain('class="ui-code-chip break-words [unicode-bidi:isolate]"');
     expect(html).not.toContain("text-[13px]");
   });
 });
