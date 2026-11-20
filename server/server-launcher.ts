@@ -1,3 +1,4 @@
+import "../electron/legacy-env-boot.mjs";
 // Container entry: restarts the server in place on RESTART_EXIT_CODE, so a restart the server asks for keeps the container.
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";

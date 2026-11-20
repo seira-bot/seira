@@ -66,7 +66,7 @@ const LIMIT_WAIT_MS = 12 * 60 * 60_000;
 const AFTER_RESET_MS = 60_000;
 const DAY_MS = 24 * 60 * 60_000, WEEK_MS = 7 * DAY_MS;
 /** startTurn's codes for a bot or thread that is busy for now. */
-const BUSY_CODES = new Set(["thread_busy", "thread_limit", "workspace_busy", "settling"]);
+export const BUSY_CODES: ReadonlySet<string> = new Set(["thread_busy", "thread_limit", "workspace_busy", "settling"]);
 /** Stop reasons of a turn someone ended on purpose (Stop, a typed "stop", a settings change that cut it short), the AI
  * declined, or a tool call the person denied or that failed after its corrective rounds: a second start would undo or
  * repeat it. */

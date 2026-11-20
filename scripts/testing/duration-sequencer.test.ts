@@ -11,7 +11,7 @@ import viteConfig from "../../vite.config.ts";
 import { VITEST_SHARDS } from "../ci-scope.mjs";
 import { DurationSequencer, SHARD_WEIGHTS_FILE, loadPlatformShardWeights, loadShardWeights, planShards, weightKey } from "./duration-sequencer.ts";
 import { isPortableE2e } from "./host-e2e.ts";
-import { buildWeights, mergePlatformWeights, parseVitestLog, RUNNER_PLATFORMS } from "./update-shard-weights.mjs";
+import { buildWeights, jobPlatform, mergePlatformWeights, parseVitestLog, RUNNER_PLATFORMS } from "./update-shard-weights.mjs";
 
 const ROOT = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const WEIGHTS = loadShardWeights(ROOT);
@@ -148,6 +148,14 @@ describe("update-shard-weights", () => {
       "scripts/testing/cloud-preview.e2e.test.ts": 0,
       "server/c.test.ts": 9,
     });
+  });
+
+  it("finds a vitest job's platform by its platform name or its runner name", () => {
+    expect(jobPlatform("vitest (linux, shard 3/8)")).toBe("linux");
+    expect(jobPlatform("vitest (ubuntu-latest, shard 3/8)")).toBe("linux");
+    expect(jobPlatform("vitest (windows-latest, shard 4/4)")).toBe("win32");
+    expect(jobPlatform("vitest (solaris, shard 1/2)")).toBeUndefined();
+    expect(jobPlatform("build")).toBeUndefined();
   });
 
   it("rebuilds the platforms a run sampled and keeps the others", () => {

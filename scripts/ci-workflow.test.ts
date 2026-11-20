@@ -483,12 +483,13 @@ describe("CI workers job", () => {
     for (const run of runs(job)) expect(run).not.toMatch(/deploy|wrangler/);
   });
 
-  it("leaves the Worker tests out of the Vitest shards", () => {
+  it("leaves the Worker and Electron unit tests out of the Vitest shards", () => {
     const shardRuns = runs(workflow.jobs.vitest).join("\n");
     expect(shardRuns).not.toContain("broker:test");
-    const electron = stepsOf(workflow.jobs.vitest).find((step) => step.name === "Electron unit tests");
+    expect(shardRuns).not.toContain("test:electron");
+    const electron = stepsOf(workflow.jobs.build).find((step) => step.name === "Electron unit tests");
     expect(electron?.run).toBe("pnpm test:electron");
-    expect(electron?.if).toBe("matrix.shard == 1");
+    expect(electron?.if).toBeUndefined();
   });
 });
 

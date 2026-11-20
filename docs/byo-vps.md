@@ -61,7 +61,7 @@ transport runs it. Podman cannot replace the Docker CLI here: this backend only 
 ## The required SSH config alias
 
 Seira connects only through a named alias in your `~/.ssh/config` — you type the alias into
-Settings → API keys, nothing else. Every bot action becomes a `docker exec` over SSH, so the app
+Settings → AI → Other services, nothing else. Every bot action becomes a `docker exec` over SSH, so the app
 supplies connection sharing and fail-fast timeouts itself: it runs each VPS command through its own
 `ssh_config` (under `~/.seira/ssh/`) that includes your file first and fills in `ControlMaster`,
 `ControlPersist`, keepalives and a connect timeout wherever your alias leaves them unset. Anything your
@@ -93,7 +93,7 @@ Host my-vps
 
 ### One server per bot
 
-The app-level alias (Settings → API keys) is the default server for every bot. A bot can also be pointed at
+The app-level alias (Settings → AI → Other services) is the default server for every bot. A bot can also be pointed at
 its own alias through the `vpsAlias` field in `bots.json`; omit the field to use the default.
 The older Advanced layout exposes this as Bot Settings → Access → **Server (SSH alias)**.
 If the selector is missing, follow the stopped-app workaround in the published guide.
@@ -103,8 +103,8 @@ computer tools, and deletion cleanup. The Settings inventory spans every server 
 computer with the alias that holds it.
 
 A bot cannot be moved to another server while its computer still lives on the old one, and the default alias
-cannot change while any computer it manages still exists: remove the computer first from Settings → Local VM →
-Self-hosted VPS computers (or by hand: `docker -H ssh://old-server rm -f seira-vps-<bot>-<hash>`). A server
+cannot change while any computer it manages still exists: remove the computer first from Settings → Desktops & browser →
+Desktops (or by hand: `docker -H ssh://old-server rm -f seira-vps-<bot>-<hash>`). A server
 that cannot be reached never traps a bot: moving the bot to another server, switching its computer, or deleting
 it goes ahead, and the app says what may be left on that server and the command that removes it once the server
 is back. (Changing the default alias still waits until its server can be listed.) Any alias from your
@@ -155,7 +155,7 @@ still gets its own managed desktop container on that machine; it does not take o
 
 3. Check it by hand as in [Troubleshooting](#troubleshooting): `ssh home-box true`, then
    `docker -H ssh://home-box info`.
-4. Enter `home-box` as the alias in Settings → API keys (or as one bot's own server), then choose
+4. Enter `home-box` as the alias in Settings → AI → Other services (or as one bot's own server), then choose
    **Self-hosted VPS** for the bot.
 
 The same trust rules apply: the bot gets full control of what Docker can reach on that machine, so prefer one

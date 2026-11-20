@@ -1,5 +1,6 @@
 // Facts bots added to About me on their own; a removed fact is remembered by identity and never added again.
-import { mkdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -49,7 +50,7 @@ function load(): LearnedFile {
 }
 
 function save(file: LearnedFile): void {
-  mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+  ensurePrivateDir(DATA_DIR);
   writeFileAtomic(filePath(), `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 });
 }
 

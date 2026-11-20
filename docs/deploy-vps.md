@@ -64,7 +64,7 @@ It runs the newest release, pinned by its version; once a `stable` channel is pu
 cd /opt/seira && sudo docker compose exec seira seira pair --label "First admin"
 ```
 
-Open the link it prints, or paste it into the desktop app under **＋ → Connect to a server**. To sign in with an emailed code instead, run the installer with `--email you@example.com`.
+Open the link it prints, or paste it into the desktop app under **＋ → Connect to a server**. To sign in with an emailed code instead, run the installer with `--email you@example.com`. Emailed sign-in needs a mail server: set `SEIRA_SIGNIN_SMTP_URL` in `/opt/seira/.env`.
 
 - **Update:** `sudo /opt/seira/update.sh`, which backs the data up, checks the new version's health and puts the old one back if it fails. The installer places it once this repository has it and prints the command when it finishes; until then, running the install command again moves to the newest release. `update.sh` pins the version by digest in `.env`, and a later run of the installer keeps that pin.
 - **Repair:** run the install command again. It checks the server, rewrites its own files and leaves `.env` and `data/` alone. That also moves an install made before Caddy got its own container: Caddy then shared the server's network, and HTTPS went down whenever the server restarted without it.
@@ -73,7 +73,7 @@ Open the link it prints, or paste it into the desktop app under **＋ → Connec
 - **What the installer contacts:** the registries and Let's Encrypt from the table, GitHub's release list, this repository's files on `raw.githubusercontent.com`, and `cloudflare.com/cdn-cgi/trace` to learn the server's public address for the DNS check. It sends no telemetry.
 - **Behind a load balancer or NAT** that forwards ports 80 and 443 to the server, set `SEIRA_INSTALL_SKIP_DNS=1` to skip the DNS check.
 
-The installer also accepts the one-time code of a server connected to Seira. That offering is not available yet.
+The installer also accepts the one-time code of a server connected to an account service. That code needs `SEIRA_ADMIN_URL`. Without it, the installer refuses.
 
 Not on Ubuntu, or prefer to do it by hand? Use one of the three ways below.
 
@@ -83,31 +83,13 @@ Three ways to make the server reachable are covered. Pick one; the rest of the g
 
 | | You need | Who can reach it | Best for |
 |---|---|---|---|
-| **A. Public address, no domain** (`serve --tunnel`) | a Seira account (email code) | anyone with a pairing code, over HTTPS | the fastest path; a phone on cellular |
+| **A. Your own Cloudflare Tunnel** (`serve --public-url`) | a domain on Cloudflare | anyone with a pairing code, over HTTPS | a public address with no open port |
 | **B. Your own domain** (Docker + Caddy) | a domain name, ports 80/443 | anyone with a pairing code, over HTTPS | a permanent address you own |
 | **C. Your Tailscale network** (`serve --tailscale`) | Tailscale on the server and your devices | only your tailnet | the most private; nothing public at all |
 
-Only need the phone app? Add `--relay` to path B or C on a machine signed in with `seira login --relay` (never on a machine with a path A address), or use it on its own: the app pairs by QR through Seira Relay, end-to-end encrypted, with no domain, open port or VPN. See [Phones through Seira Relay](phone-relay-server.md).
+Only need the phone app? Seira Relay pairs a phone by QR, end-to-end encrypted, with no domain, open port or VPN. It needs an account service that you run yourself, set with `SEIRA_CONTROL_PLANE_URL`. Seira builds have none by default. See [Phones through Seira Relay](phone-relay-server.md).
 
 Whichever you pick, the login is the same: you **pair** each device once with a short code and it stays signed in. A session lasts 30 days; using it with half that or less left renews it to a full 30, up to 180 days from pairing (`SEIRA_SESSION_TTL_DAYS` and `SEIRA_SESSION_MAX_DAYS` change both numbers). There is no password.
-
-## Hetzner launch check (2026-09-07)
-
-Path A was exercised on a blank Hetzner CX43 (x86-64, Ubuntu 24.04), using
-Node 24.20.0 and Codex 0.153.4. The published 0.1.60 baseline was followed by
-local candidate fixes from this change; these results do not certify the
-unmodified published 0.1.60 package.
-
-The paired web UI completed a real GPT-6-Astra chat, two automatically
-scheduled routine runs, and a browser title/screenshot test. The browser
-needed the Ubuntu sandbox setup below. A full reboot restored the service
-and managed tunnel automatically; the existing paired device, bots, chats,
-and paused schedule remained available. A new real chat turn also succeeded.
-
-A stopped application-data backup restored with matching file hashes and
-SQLite integrity. The restored copy was not started; provider reauthentication
-and browser-login migration were not tested. Docker, Tailscale, ARM64, other
-providers, and capacity limits were outside this run.
 
 ## What runs on a server, and what does not
 
@@ -147,23 +129,63 @@ Run the `npx` commands and engine sign-ins below in this account. Keep a separat
 administrator shell for system packages and systemd. If you already signed in as
 root, sign in again as `seira`; those accounts have different homes and credentials.
 
-## Path A: a public address with one command
+## Path A: your own Cloudflare Tunnel
 
-No domain, no proxy, no open port. The server gets an address like `https://c-7f3a9c.seira.bot` through a Cloudflare tunnel; only traffic through the tunnel reaches it, and that traffic still has to pair.
+No open port and no proxy. You need a domain whose DNS is on Cloudflare. Your own `cloudflared` reaches the server from the same machine. Only traffic through the tunnel reaches the server, and that traffic still has to pair.
 
-```sh
-npx @seira-bot/seira setup          # once: choose AI access, connect, and choose a model
-npx @seira-bot/seira login          # once: an emailed code signs this machine in and reserves its address
-npx @seira-bot/seira serve --tunnel # runs the server there and prints the pairing link with a QR code
-```
+1. From the `seira` shell, set up an AI provider once:
 
-`setup` connects an AI provider; it is separate from the Seira account.
-Use Codex's device-code option over SSH, or enter a hidden API key for a
-chat-only connection. More engines can be added later. See [CLI setup](cli-onboarding.md).
+   ```sh
+   npx @seira-bot/seira setup
+   ```
 
-`login` asks for your email, sends an 8-digit code, and prints the address it reserved for this machine. `serve --tunnel` downloads `cloudflared` on the first run (a pinned version with a verified digest, into `~/.seira`), starts the server, connects the tunnel, and after a few seconds prints `tunnel: live at https://…`. Leave it running; see "Keep it running" for a service.
+2. From the administrator shell, install `cloudflared` from Cloudflare's own package:
 
-The account credentials live in `~/.seira/tunnel-account.json`, readable only by your user. `npx @seira-bot/seira logout` releases the address.
+   ```sh
+   sudo mkdir -p --mode=0755 /usr/share/keyrings
+   curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+   echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' | sudo tee /etc/apt/sources.list.d/cloudflared.list
+   sudo apt-get update && sudo apt-get install -y cloudflared
+   ```
+
+3. From the `seira` shell, sign in to Cloudflare, create the tunnel and point a name at it:
+
+   ```sh
+   cloudflared tunnel login
+   cloudflared tunnel create seira
+   cloudflared tunnel route dns seira seira.example.com
+   ```
+
+   `tunnel login` prints a link. Open it in a browser and choose your domain. `tunnel create` prints the tunnel ID and writes its credentials file in `~/.cloudflared/`.
+
+4. Save this as `~/.cloudflared/config.yml`. Replace `TUNNEL_ID` with the ID from step 3:
+
+   ```yaml
+   tunnel: TUNNEL_ID
+   credentials-file: /etc/cloudflared/TUNNEL_ID.json
+   ingress:
+     - hostname: seira.example.com
+       service: http://127.0.0.1:8799
+     - service: http_status:404
+   ```
+
+5. From the administrator shell, copy both files and run `cloudflared` as a service:
+
+   ```sh
+   sudo mkdir -p /etc/cloudflared
+   sudo cp /home/seira/.cloudflared/config.yml /home/seira/.cloudflared/TUNNEL_ID.json /etc/cloudflared/
+   sudo cloudflared service install
+   ```
+
+6. From the `seira` shell, start the server with your address:
+
+   ```sh
+   npx @seira-bot/seira serve --public-url https://seira.example.com
+   ```
+
+   `serve` prints the pairing link for that address, with a QR code. Leave it running, or see "Keep it running" for a service.
+
+For more on tunnels, see [Cloudflare's tunnel guide](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/).
 
 Skip to "Install and sign the engines in".
 
@@ -239,7 +261,7 @@ the service account's browser. Both commands must finish successfully.
 On Ubuntu 24.04, AppArmor may also require [administrator sandbox setup](#ubuntu-2404-browser-sandbox).
 The one-click installer downloads the browser; it does not grant these OS permissions.
 
-Then turn the browser on under Settings → Computers, and per bot. Each bot
+Then turn the browser on under Settings → Desktops & browser → Built-in browser, and per bot. Each bot
 gets its own isolated session whose logins persist across restarts.
 
 ## Install and sign the engines in
@@ -273,7 +295,7 @@ npx @seira-bot/seira pair --label "Kitchen iPad"
 
 ```
 Pairing code   RR8Y-BLR6-H939   works once, until 10:59 · everything
-Link           https://c-7f3a9c.seira.bot/pair#code=RR8Y-BLR6-H939
+Link           https://seira.example.com/pair#code=RR8Y-BLR6-H939
 
   Desktop app   ＋ → Connect to a server, paste the link
   Phone         scan with your camera or the Seira app
@@ -297,7 +319,7 @@ npx @seira-bot/seira status                # the address others use, and whether
 
 ## Keep it running
 
-`npx @seira-bot/seira serve` is a plain foreground process. `npx @seira-bot/seira service install --tunnel` (or `--tailscale`) writes a unit like the one below for you, with a copy of the release it runs beside your data. To write it by hand for systemd (paths A and C),
+`npx @seira-bot/seira serve` is a plain foreground process. `npx @seira-bot/seira service install --tailscale` (or `--public-url https://seira.example.com`) writes a unit like the one below for you, with a copy of the release it runs beside your data. To write it by hand for systemd (paths A and C),
 install a chosen release first, from the `seira` shell. Replace `X.Y.Z` with the
 published version you want to run:
 
@@ -319,7 +341,7 @@ User=seira
 WorkingDirectory=/home/seira
 Environment=HOME=/home/seira
 Environment=PATH=/home/seira/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/usr/bin/env seira serve --tunnel
+ExecStart=/usr/bin/env seira serve --public-url https://seira.example.com
 Restart=always
 RestartSec=5
 
@@ -329,10 +351,10 @@ WantedBy=multi-user.target
 
 ```sh
 sudo systemctl daemon-reload && sudo systemctl enable --now seira
-journalctl -u seira -f            # the server's log, including "tunnel: live at …"
+journalctl -u seira -f            # the server's log
 ```
 
-Use `--tailscale` instead of `--tunnel` for path C. A service is not a terminal, so `serve` writes no pairing code into the journal; mint one with `npx @seira-bot/seira pair` when you need it. Docker (path B) restarts on its own (`restart: unless-stopped`).
+Use `--tailscale` instead of `--public-url …` for path C. Path A also needs the `cloudflared` service from its steps. A service is not a terminal, so `serve` writes no pairing code into the journal; mint one with `npx @seira-bot/seira pair` when you need it. Docker (path B) restarts on its own (`restart: unless-stopped`).
 
 Adjust the account, home, and PATH if yours differ; Node 24 must be available on
 that PATH. The service runs the installed CLI directly, so a restart uses the
@@ -351,8 +373,8 @@ environment.
 
 ### From the app: Update server
 
-On a Docker install, the server's admins can update it from **Settings →
-Updates → Update server**, in the desktop app or a browser. It runs the
+On a Docker install, the server's admins can update it from **Update server** on the server's own page in Settings (its first
+entry), in the desktop app or a browser. It runs the
 `update.sh` described below: the stable version, a copy of the data first, and
 the old version and its data back when the new one is not healthy. The app asks
 first (the server restarts, so anything running stops, and it says how many
@@ -582,7 +604,7 @@ If you built the image yourself (`docker compose up -d --build`, with
 keep updating with `git pull && docker compose up -d --build`, or move to the
 published image with `./update.sh --replace-local-build`. Building needs about 6 GB of memory:
 on a smaller server, add swap first or use the published image. Engines you install
-from **Settings → Engines** live on the data volume and survive either way.
+from **Settings → AI → Providers** live on the data volume and survive either way.
 
 ### Paths A and C (npm with the service above): the same steps by hand
 
@@ -612,7 +634,7 @@ sudo systemctl start seira
 ```
 
 A service restart by itself does not update the installed package. For
-foreground `npx` usage, name the release: `npx --yes @seira-bot/seira@X.Y.Z serve --tunnel`.
+foreground `npx` usage, name the release: `npx --yes @seira-bot/seira@X.Y.Z serve --public-url https://seira.example.com`.
 
 ### How far behind a server may fall
 
@@ -630,8 +652,8 @@ process, or `sudo systemctl stop seira` from the administrator shell for
 the service above. Stop any engine processes and managed desktops still writing
 files you intend to back up.
 
-For paths A and C, this backs up application state (bots, chats, routines, tunnel
-credentials, and paired sessions). Run it from the service account's shell:
+For paths A and C, this backs up application state (bots, chats, routines,
+and paired sessions). Run it from the service account's shell:
 
 ```sh
 umask 077
@@ -714,11 +736,11 @@ Read this before putting anything else in front of the server.
 
 ## Troubleshooting
 
-**`serve --tunnel` says "no account on this machine yet".** Run `npx @seira-bot/seira login` on this machine first; the credentials are per machine.
+**`serve --tunnel`, `seira login` or `--relay` says no account service is set up.** These need an account service that you run yourself, set with `SEIRA_CONTROL_PLANE_URL`. Use `--domain`, `--tailscale` or `--public-url` instead.
 
 **The server does not start and says its data "was written by a newer Seira".** An older version was started on data a newer one had already changed, which happens when a version is put back without its data. Nothing was changed. Install the version the message names (or a newer one), or put back the copy of the data from before that update.
 
-**The tunnel stays on "retrying".** The server is running and usable locally; the public hop is not verified yet. Wait a minute (Cloudflare needs a moment on a fresh address), then check `journalctl`/the terminal for the reason. If it never comes up, `npx @seira-bot/seira logout && npx @seira-bot/seira login` issues a fresh address.
+**Path A: the page never loads or shows an error from Cloudflare.** Check that `cloudflared` runs (`sudo systemctl status cloudflared`). Check that `serve` uses the same address as the `hostname` in `config.yml`. `sudo journalctl -u cloudflared` shows the reason.
 
 **Path B: the page never loads or shows a certificate error.** Caddy could not get a certificate. Check that the name resolves to the server and that ports 80 and 443 are open; `docker compose logs caddy` shows the reason.
 
@@ -742,10 +764,12 @@ Ubuntu is blocking its sandbox. [Chromium documents this restriction](https://ch
 Do not add `--no-sandbox` or disable `kernel.apparmor_restrict_unprivileged_userns` globally.
 
 For paths A and C, an administrator can allow only a trusted, root-owned Chrome
-copy. Find the service user's downloaded executable:
+copy. Run these steps from the administrator shell. `seira` is the service user
+from the setup above. Find its home and its downloaded executable:
 
 ```sh
-find $HOME/.agent-browser/browsers -type f -name chrome -executable
+service_home=$(getent passwd seira | cut -d: -f6)
+sudo find "$service_home/.agent-browser/browsers" -type f -name chrome -executable
 ```
 
 Use its actual `chrome-VERSION` directory in every path below; `VERSION` is a
@@ -754,7 +778,7 @@ libraries, to a new location that the service user cannot modify:
 
 ```sh
 sudo install -d -o root -g root -m 0755 /opt/seira-browser
-sudo cp -R $HOME/.agent-browser/browsers/chrome-VERSION /opt/seira-browser/
+sudo cp -R "$service_home/.agent-browser/browsers/chrome-VERSION" /opt/seira-browser/
 sudo chown -R root:root /opt/seira-browser/chrome-VERSION
 sudo chmod -R go-w /opt/seira-browser/chrome-VERSION
 ```

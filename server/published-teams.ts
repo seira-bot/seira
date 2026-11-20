@@ -1,5 +1,6 @@
 // Package keys never come from names once they exist: the first export records them and every later export reuses them.
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { join } from "node:path";
 import { z } from "zod";
 
@@ -34,7 +35,7 @@ function load(): Map<string, PublishedTeam> {
 }
 
 function save(teams: Map<string, PublishedTeam>): void {
-  mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+  ensurePrivateDir(DATA_DIR);
   const out: Record<string, PublishedTeam> = Object.create(null);
   for (const [section, entry] of teams) out[section] = entry;
   writeFileAtomic(PUBLISHED_TEAMS_FILE, JSON.stringify({ version: 1, teams: out }, null, 2), { mode: 0o600 });

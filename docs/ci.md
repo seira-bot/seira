@@ -14,8 +14,8 @@ A maintainer starts them by hand to build a desktop package (see
 | Job | What it does |
 | --- | --- |
 | `checks` | `pnpm install --frozen-lockfile`, `pnpm i18n:check`, `pnpm lint`, `pnpm check:contrast`, the model manifest and announcements checks, `node scripts/check-local-leaks.mjs`, and the source guards (tests that only read the source) |
-| `build` | `pnpm typecheck`, `pnpm check:electron`, and a production web build (`pnpm exec vite build`) |
-| `vitest (linux, shard n/8)` | The whole Vitest suite in 8 shards, 4 files at once per shard. Shard 1 also runs `pnpm test:electron`. |
+| `build` | `pnpm typecheck`, `pnpm check:electron`, the Electron unit tests (`pnpm test:electron`), and a production web build (`pnpm exec vite build`) |
+| `vitest (linux, shard n/8)` | The whole Vitest suite in 8 shards, 4 files at once per shard. |
 | `worker (<name>)` | One job for each Cloudflare Worker in scope: `pnpm install --frozen-lockfile`, the type check of the Worker, and its tests. The Worker list is `WORKERS` in `scripts/ci-heavy.mjs`. No job deploys a Worker. |
 | `server image` | The image build and boot check of `server-image-smoke.yml`: build the server image on `linux/amd64` and `linux/arm64`, start it, and check the server, the UI, and the user. |
 | `CI` | The gate. It passes only when every job before it passed or was skipped for an allowed reason. See [Skipped jobs](#skipped-jobs). |
@@ -285,6 +285,9 @@ Nothing else is retried, and a local run never retries.
   (`scripts/testing/ci-retry-summary.mjs`).
 - Fix the test, then delete its entry. `scripts/testing/ci-retry-list.test.ts`
   fails on an entry whose test no longer exists.
+- Add an entry only when the cause is outside this repository, and give the
+  run ids that prove it. A retry or a longer timeout does not fix a flaky test:
+  find the cause and fix it. The list can be empty.
 
 ## What CI does not run
 
@@ -307,7 +310,7 @@ checkout without dependencies can run them on an ssh host instead (see
 ## Repository settings for Actions
 
 These settings keep CI safe for a public repository. An organization admin
-sets them in **Settings → Actions → General**:
+sets them in GitHub **Settings → Actions → General**:
 
 | Setting | Value |
 | --- | --- |
@@ -324,7 +327,7 @@ Then add the `CI` check (source: GitHub Actions) to a separate ruleset on the de
 `package-macos.yml` reads the Apple signing secrets from the environment
 `release`, the `publish` job of `server-image.yml` uses it to write to
 `ghcr.io`, and the `publish` job of `npm-publish.yml` uses it to publish to
-npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin creates it in **Settings → Environments**:
+npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin creates it in GitHub **Settings → Environments**:
 
 | Setting | Value |
 | --- | --- |
@@ -344,7 +347,7 @@ npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin create
 
 The `approval` jobs of `package-macos.yml` and `server-image.yml` use the
 `release-approval` environment. An organization admin creates it in
-**Settings → Environments**:
+GitHub **Settings → Environments**:
 
 | Setting | Value |
 | --- | --- |

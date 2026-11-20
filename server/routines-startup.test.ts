@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 
-import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
+import { launchVerificationServer, runControlSeira, verificationServerArgs } from "../scripts/control-seira.ts";
 import { RoutineManager, type RoutineRun } from "./routines.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
@@ -74,8 +74,13 @@ it("recovers queued/due work and a waiting routine's imported hand-off after res
     expect(scheduler.listRuns().find((run) => run.id === queued.id)?.status).toBe("queued");
     const disk = JSON.parse(readFileSync(file, "utf8"));
     disk.startupLaunchId = "previous-desktop-launch";
-    const dueAt = Date.now() - 1_000;
-    const cronDueAt = Math.floor(Date.now() / 60_000) * 60_000 - 5 * 60_000;
+    // The restarted server's clock starts half a second into a minute. The next minute of the every-minute rule
+    // cannot come due before the 60 s test timeout, so the result does not depend on the wall clock.
+    const skew = 60_000 - (Date.now() % 60_000) + 500;
+    writeFileSync(join(dataDir, "resume-clock-ms"), String(skew));
+    const serverNow = () => Date.now() + skew;
+    const dueAt = serverNow() - 1_000;
+    const cronDueAt = Math.floor(serverNow() / 60_000) * 60_000 - 5 * 60_000;
     disk.routines.find((routine: { id: string }) => routine.id === cron.id).enabled = true;
     disk.routines.find((routine: { id: string }) => routine.id === cron.id).nextRunAt = cronDueAt;
     disk.routines.find((routine: { id: string }) => routine.id === scheduled.id).schedule.at = dueAt;
@@ -119,9 +124,10 @@ it("recovers queued/due work and a waiting routine's imported hand-off after res
       SEIRA_PORT: new URL(url).port, SEIRA_WEBHOOK_PORT: String(Number(new URL(url).port) + 1),
       PATH: dirname(process.execPath), FAKE_CLAUDE_MODE: "happy",
       SEIRA_DESKTOP_LAUNCH_ID: "previous-desktop-launch",
+      SEIRA_TEST_RESUME_CLOCK: "1",
     });
     const log = openSync(logPath, "a", 0o600);
-    restarted = spawn(process.execPath, ["--experimental-strip-types", fileURLToPath(new URL("./index.ts", import.meta.url))], {
+    restarted = spawn(process.execPath, verificationServerArgs(env), {
       cwd: fileURLToPath(new URL("..", import.meta.url)), env, stdio: ["ignore", log, log],
     });
     closeSync(log);
@@ -168,7 +174,7 @@ it("recovers queued/due work and a waiting routine's imported hand-off after res
     expect(runs.filter(run => run.routineId === cron.id && run.scheduledFor < ranFor)).toHaveLength(1);
     const restoredCron = (await api("GET", "/api/routines")).routines.find((routine: { id: string }) => routine.id === cron.id);
     expect(restoredCron.schedule).toEqual(cron.schedule);
-    expect(restoredCron.nextRunAt).toBeGreaterThan(Date.now());
+    expect(restoredCron.nextRunAt).toBeGreaterThan(serverNow());
     const recoveredPeer = (await api("GET", "/api/bots")).bots.find((bot: { id: string }) => bot.id === orphanPeer.id);
     expect(recoveredPeer.messages.some((message: { text?: string }) => message.text?.includes("This waiting routine's hand-off survives the restart"))).toBe(true);
     await expect.poll(async () => Boolean((await api("GET", "/api/bots?messages=0")).bots.find((bot: { id: string }) => bot.id === orphanPeer.id).busy), { timeout: 15_000 }).toBe(false);

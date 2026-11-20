@@ -1,3 +1,4 @@
+import "../electron/legacy-env-boot.mjs";
 // Alias for `seira pair`: docs and images reference dist-server/pair-cli.js.
 import { main } from "./cli.ts";
 import { endQuietlyOnClosedPipe, exitAfterFlush } from "./exit.ts";

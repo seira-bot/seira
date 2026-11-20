@@ -459,7 +459,9 @@ services:
       SEIRA_SIGNIN_MEMBER_EMAILS:
       SEIRA_SIGNIN_SMTP_URL:
       SEIRA_SIGNIN_SMTP_FROM:
-      # "1": phones pair by QR through Seira Relay. Sign in once: docker compose exec seira seira login --relay
+      # "1": phones pair by QR through Seira Relay. Needs an account service (SEIRA_CONTROL_PLANE_URL), then sign in once:
+      # docker compose exec seira seira login --relay
+      SEIRA_CONTROL_PLANE_URL:
       SEIRA_PHONE_RELAY:
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q -e seira -e openmausbot"]

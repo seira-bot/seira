@@ -1,5 +1,6 @@
 {
-  "name": "openmausbot",
+  "name": "seira",
+  "productName": "Seira",
   "private": true,
   "version": "0.1.182",
   "description": "A local-first chat app for running a team of AI agents.",
@@ -18,7 +19,7 @@
   "license": "Apache-2.0",
   "desktopName": "bot.seira.app.desktop",
   "type": "module",
-  "main": "electron/main.mjs",
+  "main": "electron/boot.mjs",
   "engines": {
     "node": ">=24"
   },

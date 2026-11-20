@@ -9,7 +9,7 @@
 
 ## User path
 
-Open a bot's model picker or Settings → Engines.
+Open a bot's model picker or Settings → AI → Providers.
 
 ## Driving it
 
@@ -36,7 +36,7 @@ mutations. Updating an idle sibling must preserve the busy bot's process and
 subsequent events. No real provider login is required.
 
 For a renderer check, open the isolated launcher's app in a browser, dismiss
-onboarding, and go to **Settings → Engines**. Add Work and Personal, inspect
+onboarding, and go to **Settings → AI → Providers**. Add Work and Personal, inspect
 their distinct sign-in commands, and select one account per bot from the model
 picker's single Claude entry and nested Account dropdown. Choose a model to
 save the selection. Reload and revisit both bots. Confirm the account labels persist,
@@ -63,7 +63,7 @@ The following is a one-time author qualification against OMP 18.13.1, not a chec
 
 ## Mistral Vibe
 
-Install `vibe-acp` from `mistral.ai/vibe/install.sh` (the vendor's `mistral-vibe` package through uv), from [github.com/mistralai/mistral-vibe/releases](https://github.com/mistralai/mistral-vibe/releases), or through the app's install pin (`mistral-vibe-release.ts`), then either run a first `vibe` session once so the browser sign-in saves `$VIBE_HOME/whoami_cache.json`, or let the workspace Mistral key from Settings → Connections reach the CLI as `MISTRAL_API_KEY`. Seira launches `vibe-acp` (ACP by default, no extra arguments), picks the `browser-auth` method when the sign-in gate fires — the CLI opens the browser itself and the authenticate request blocks until the person finishes — and selects models through session/new's `model` config option. Model refresh runs in a temporary working directory and never sends a prompt, so it leaves no record in the person's Vibe history, and threads resume their native Vibe sessions.
+Install `vibe-acp` from `mistral.ai/vibe/install.sh` (the vendor's `mistral-vibe` package through uv), from [github.com/mistralai/mistral-vibe/releases](https://github.com/mistralai/mistral-vibe/releases), or through the app's install pin (`mistral-vibe-release.ts`), then either run a first `vibe` session once so the browser sign-in saves `$VIBE_HOME/whoami_cache.json`, or let the workspace Mistral key from Settings → AI → Other services reach the CLI as `MISTRAL_API_KEY`. Seira launches `vibe-acp` (ACP by default, no extra arguments), picks the `browser-auth` method when the sign-in gate fires — the CLI opens the browser itself and the authenticate request blocks until the person finishes — and selects models through session/new's `model` config option. Model refresh runs in a temporary working directory and never sends a prompt, so it leaves no record in the person's Vibe history, and threads resume their native Vibe sessions.
 
 ```sh
 pnpm exec vitest run server/drivers/acp/mistral-vibe.test.ts server/drivers/acp/custom-model-catalog.test.ts server/runtime/capabilities.test.ts server/drivers/tool-scope-coverage.test.ts server/built-in-instances.test.ts src/lib/analytics-allowlist.test.ts server/engine-memory.test.ts server/config.test.ts
@@ -105,7 +105,7 @@ usage, tool approval/denial/cancellation, and clearing the key. They never call
 Groq or verify a real account's quota, model access, or inference.
 
 For a renderer check, use an isolated server with a synthetic Groq endpoint.
-Open **Settings → API keys**, paste its fixture key and save it, and check that
+Open **Settings → AI → Other services**, paste its fixture key and save it, and check that
 the row reports catalog reachability without claiming chat authentication. Select a
 Groq model in the bot's picker, send a fixture turn, then clear the key and
 confirm the engine is unavailable. Never use the live app or a real key for

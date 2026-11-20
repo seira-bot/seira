@@ -26,7 +26,7 @@ export interface ThreadAudiences {
   readers?(threadId: string): readonly string[] | null;
 }
 
-export type RoutineRef = { botId?: unknown; groupId?: unknown; name?: unknown; sourceThreadId?: unknown; resultsThreadId?: unknown };
+export type RoutineRef = { botId?: unknown; groupId?: unknown; name?: unknown; sourceThreadId?: unknown; resultsThreadId?: unknown; workflowBotIds?: unknown };
 
 /** `all`: every bot and room. On a Team Cloud an admin session is `all` with its address, and still sees only the
  * conversations its person may (audience.ts): its own private chats, never another person's. */
@@ -599,6 +599,10 @@ export function frameForMember(payload: Record<string, unknown>, ctx: FrameConte
       const run = field("run");
       return routineRunVisible(run, visible) ? payload : undefined;
     }
+    case "workflow":
+      return workflowVisible(field("workflow"), visible) ? payload : undefined;
+    case "workflow.run":
+      return workflowRunVisible(field("run"), visible) ? payload : undefined;
     case "webhook":
       return webhookVisible(field("webhook"), visible) ? payload : undefined;
     case "webhook.attempt": {
@@ -621,6 +625,7 @@ export function frameForMember(payload: Record<string, unknown>, ctx: FrameConte
     }
     case "config":
     case "routine.deleted":
+    case "workflow.deleted":
     case "webhook.deleted":
       return payload;
     default:
@@ -653,6 +658,7 @@ export function webhookVisible(value: { botId?: unknown; groupId?: unknown }, vi
 export function routineVisible(value: RoutineRef, visible: VisibleSet): boolean {
   if (visible.everything) return true;
   if (!visible.routineShown(value)) return false;
+  if (Array.isArray(value.workflowBotIds) && !value.workflowBotIds.every((id) => typeof id === "string" && visible.bot(id))) return false;
   if (typeof value.groupId === "string" && value.groupId) return visible.group(value.groupId);
   return typeof value.botId === "string" && visible.bot(value.botId);
 }
@@ -670,7 +676,25 @@ export function routineForViewer<T extends { sourceThreadId?: unknown; resultsTh
 
 /** A run's prompt and output are its conversation's words: on a Team Cloud a run that went into someone's private chat
  * is theirs alone. */
-export function routineRunVisible(run: { botId?: unknown; groupId?: unknown; threadId?: unknown; resultsThreadId?: unknown; sourceThreadId?: unknown }, visible: VisibleSet): boolean {
+export function routineRunVisible(run: { botId?: unknown; groupId?: unknown; threadId?: unknown; resultsThreadId?: unknown; sourceThreadId?: unknown; workflowBotIds?: unknown }, visible: VisibleSet): boolean {
   if (!routineVisible(run, visible)) return false;
   return [run.threadId, run.resultsThreadId, run.sourceThreadId].every((id) => typeof id !== "string" || !id || !visible.hides(id));
+}
+
+/** A workflow names its bots in its steps: it is shown only to someone who sees every one of them. */
+export function workflowVisible(workflow: { steps?: unknown }, visible: VisibleSet): boolean {
+  if (visible.everything) return true;
+  const steps = Array.isArray(workflow.steps) ? workflow.steps : [];
+  return steps.every((step) => (step as { kind?: unknown } | null)?.kind !== "bot" || visible.bot(typeof (step as { botId?: unknown }).botId === "string" ? (step as { botId: string }).botId : ""));
+}
+
+/** A workflow run carries its steps' outputs: every bot it used must be visible, and none of its chats hidden. */
+export function workflowRunVisible(run: { botIds?: unknown; stepRuns?: unknown; threads?: unknown }, visible: VisibleSet): boolean {
+  if (visible.everything) return true;
+  const botIds = Array.isArray(run.botIds) ? run.botIds : [];
+  if (!botIds.every((id) => typeof id === "string" && visible.bot(id))) return false;
+  const stepRuns = Array.isArray(run.stepRuns) ? run.stepRuns : [];
+  const threads = run.threads && typeof run.threads === "object" ? Object.values(run.threads) : [];
+  const hidden = (threadId: unknown) => typeof threadId === "string" && visible.hides(threadId);
+  return stepRuns.every((step) => !hidden((step as { threadId?: unknown } | null)?.threadId)) && !threads.some(hidden);
 }

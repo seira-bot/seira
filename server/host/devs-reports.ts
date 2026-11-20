@@ -607,7 +607,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
         notice(queued.threadId, { ok: true, line: readyLine(language), link: outcome.issueUrl });
       } else {
         track(queued, outcome.id, queued.payload, queued.person, queued.payload.description.split("\n")[0] ?? "");
-        notice(queued.threadId, { ok: true, line: laterLine(outcome.id, contact, language) });
+        notice(queued.threadId, { ok: true, line: laterLine(outcome.id, outcome.noReply ? undefined : contact, language) });
       }
     } else if (!outcome.retry) {
       outbox = outbox.filter((one) => one !== queued);

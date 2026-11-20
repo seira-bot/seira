@@ -49,6 +49,7 @@ import { parseDuration } from "./headless/args.ts";
 import { signInFromEnv, type AppConfig } from "./config.ts";
 import {
   cleanupTunnelOrigin,
+  controlPlaneProblem,
   createTunnelAccount,
   createTunnelOrigin,
   describeTunnelAccount,
@@ -506,10 +507,8 @@ export async function runLogin(options: CliOptions, io: CliIo = defaultIo()): Pr
     io.error(`${account.credentials.file} exists but could not be read; fix or remove it, then try again`);
     return 1;
   }
-  if (!account.controlPlane) {
-    io.error("SEIRA_CONTROL_PLANE_URL is set but is not an https address");
-    return 1;
-  }
+  const problem = controlPlaneProblem();
+  if (problem) { io.error(problem); return 1; }
   const existing = describeTunnelAccount(account.credentials.read());
   if (existing.address) io.log(`already signed in as ${existing.email ?? "?"} (${existing.address}); signing in again refreshes it`);
   const email = (options.email ?? (await io.ask("Email for your Seira account: "))).trim();
@@ -639,6 +638,7 @@ async function planTunnel(options: CliOptions, log: (line: string) => void, reco
       return { error: `--tunnel: ${message(error)}` };
     }
   } else {
+    const problem = controlPlaneProblem(); if (problem) return { error: `--tunnel: ${problem}` };
     account = createTunnelAccount({ dataDir: options.dataDir, version: reportableServerVersion(), recovery, log: (line) => log(`tunnel: ${line}`) });
     if (account.credentials.status === "unavailable") return fail(`${account.credentials.file} exists but could not be read; fix or remove it`);
     if (!describeTunnelAccount(account.credentials.read()).email) {

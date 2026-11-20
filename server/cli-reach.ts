@@ -3,6 +3,7 @@
 import { allowedServerOrigin, isLoopbackHost } from "../electron/server-address.mjs";
 import { reachableAddresses, type ReachableAddresses } from "./lan-address.ts";
 import { sentWireName } from "../electron/phone-wire-names.mjs";
+import { controlPlaneProblem } from "./tunnel.ts";
 
 export type Route = "public-url" | "domain" | "tunnel" | "tailscale" | "lan";
 
@@ -78,7 +79,8 @@ export function reachLines(route: Route, origin: string, port: number, prefix: s
 }
 
 /** `serve` with no way in: nothing to pair from elsewhere yet, so no code; the ways in, as commands that paste. */
-export function noRouteLines(port: number, prefix: string): string[] {
+export function noRouteLines(port: number, prefix: string, env: NodeJS.ProcessEnv = process.env): string[] {
+  const tunnel = controlPlaneProblem(env) === null ? [`  ${prefix} serve --tunnel                   a public address from your account service; sign in first: ${prefix} login`] : [];
   return [
     `Listening on 127.0.0.1:${port}, reachable from this machine only.`,
     "",
@@ -87,7 +89,7 @@ export function noRouteLines(port: number, prefix: string): string[] {
     `  ${prefix} serve --domain seira.example.com  we get the certificate (ports 80, 443)`,
     `  ${prefix} serve --tailscale                your tailnet (needs Tailscale)`,
     `  ${prefix} serve --lan                      this network only, not encrypted`,
-    `  ${prefix} serve --tunnel                   a free Seira web address; sign in first: ${prefix} login`,
+    ...tunnel,
     `Sign in from a browser on this machine with the link from: ${prefix} pair`,
   ];
 }
