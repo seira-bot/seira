@@ -676,9 +676,10 @@ describe("installation check-in round trips", () => {
       method: "POST",
       token: installation.credential,
     })).status).toBe(200);
-    expect(counted.trips.slice(0, 7)).toEqual([
+    expect(counted.trips.slice(0, 8)).toEqual([
       ...CHECK_IN,
       ["INSERT installation_action_rate_limits"],
+      ["SELECT installation_endpoints"],
       ["SELECT installation_endpoints"],
       ["INSERT installation_endpoints"],
       ["SELECT installation_endpoints"],
