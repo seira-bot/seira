@@ -9,6 +9,7 @@ import { isAbsolute, join, parse, posix, relative, resolve, sep, win32 } from "n
 import { backup, DatabaseSync } from "node:sqlite";
 import { pipeline } from "node:stream/promises";
 import { Worker } from "node:worker_threads";
+import { currentFormat, currentStateKeys, LEGACY_BACKUP_MAGIC } from "../electron/legacy-names.mjs";
 import { writeFileAtomic } from "./atomic.ts";
 import { userErrorFields, userErrorThrown } from "./user-errors.ts";
 import { WORKSPACE_BACKUP_CLIENT_KEYS } from "../shared/workspace-backup-client.ts";
@@ -26,6 +27,7 @@ export const MAX_WORKSPACE_BACKUP_FILES = 100_000;
 export const MAX_WORKSPACE_BACKUP_UPLOAD_BYTES = MAX_WORKSPACE_BACKUP_BYTES + 256 * 1024 ** 2;
 const MAX_METADATA_BYTES = 16 * 1024 ** 2;
 const MAGIC = Buffer.from("SEIRA-WORKSPACE-1\n");
+const LEGACY_MAGIC = Buffer.from(LEGACY_BACKUP_MAGIC);
 const HEADER_BYTES = MAGIC.length + 16 + 12;
 const TAG_BYTES = 16;
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -469,6 +471,10 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
 }
 
 function validateManifest(value: unknown): Manifest {
+  if (record(value) && record(value.summary)) {
+    value.summary.format = currentFormat(value.summary.format);
+    if (record(value.clientState)) value.clientState = currentStateKeys(value.clientState);
+  }
   if (!record(value) || !record(value.summary) || value.summary.format !== "seira.workspace-backup" || value.summary.version !== 1 ||
     typeof value.summary.id !== "string" || !ID.test(value.summary.id) || typeof value.summary.createdAt !== "string" ||
     !Number.isFinite(Date.parse(value.summary.createdAt)) || typeof value.summary.appVersion !== "string" ||
@@ -520,16 +526,21 @@ async function decryptArchive(inputPath: string, plaintext: string, password: st
   try {
     const stat = fstatSync(fd);
     if (!stat.isFile() || stat.size < HEADER_BYTES + TAG_BYTES || stat.size > MAX_WORKSPACE_BACKUP_UPLOAD_BYTES) throw new Error("Invalid or oversized workspace backup file.");
-    const header = Buffer.alloc(HEADER_BYTES);
+    const opening = Buffer.alloc(MAGIC.length);
+    readSync(fd, opening, 0, opening.length, 0);
+    const magic = opening.equals(MAGIC) ? MAGIC : opening.subarray(0, LEGACY_MAGIC.length).equals(LEGACY_MAGIC) ? LEGACY_MAGIC : null;
+    if (magic === null) throw new Error("This is not a supported encrypted workspace backup.");
+    const headerBytes = magic.length + 16 + 12;
+    const header = Buffer.alloc(headerBytes);
     const tag = Buffer.alloc(TAG_BYTES);
-    if (readSync(fd, header, 0, header.length, 0) !== header.length || !header.subarray(0, MAGIC.length).equals(MAGIC) ||
+    if (readSync(fd, header, 0, header.length, 0) !== header.length ||
       readSync(fd, tag, 0, tag.length, stat.size - TAG_BYTES) !== tag.length) throw new Error("This is not a supported encrypted workspace backup.");
-    key = await passwordKey(password, header.subarray(MAGIC.length, MAGIC.length + 16));
-    const decipher = createDecipheriv("aes-256-gcm", key, header.subarray(MAGIC.length + 16));
+    key = await passwordKey(password, header.subarray(magic.length, magic.length + 16));
+    const decipher = createDecipheriv("aes-256-gcm", key, header.subarray(magic.length + 16));
     decipher.setAAD(header);
     decipher.setAuthTag(tag);
     try {
-      await pipeline(createReadStream(inputPath, { fd, autoClose: false, start: HEADER_BYTES, end: stat.size - TAG_BYTES - 1 }), decipher,
+      await pipeline(createReadStream(inputPath, { fd, autoClose: false, start: headerBytes, end: stat.size - TAG_BYTES - 1 }), decipher,
         createWriteStream(plaintext, { flags: "wx", mode: 0o600 }));
     } catch {
       throw new Error("The backup password is incorrect, or the backup file is damaged. Nothing was restored.");

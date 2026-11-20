@@ -16,6 +16,8 @@
 // A page pasted from an SDK build runs its own App beside this one: the helper's request ids are strings
 // ("seira:1"), never the SDK's numeric ones, and it answers no host request but teardown, so it never
 // races the SDK's answer.
+import { LEGACY_APP_GLOBAL } from "../../electron/legacy-names.mjs";
+
 import { APP_PROTOCOL_VERSION } from "../app.ts";
 
 export const APP_THEME_STYLE = [
@@ -306,6 +308,7 @@ const helperSource = (room: boolean) => `(function () {
     }).then(function () {});
   };
   Object.defineProperty(window, "seira", { value: api, enumerable: true });
+  Object.defineProperty(window, "${LEGACY_APP_GLOBAL}", { value: api });
 })();`;
 
 export const APP_HELPER_SOURCE = helperSource(false);

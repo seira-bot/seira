@@ -34,6 +34,17 @@ export function currentStorageKey(key) {
   return null;
 }
 
+/** A map of saved browser values with each old key renamed; a value under the current key wins over the old one. */
+export function currentStateKeys(values) {
+  const mapped = {};
+  for (const [key, value] of Object.entries(values)) {
+    const current = currentStorageKey(key);
+    if (current === null) mapped[key] = value;
+    else if (!Object.hasOwn(values, current)) mapped[current] = value;
+  }
+  return mapped;
+}
+
 /** The current name of an old home-level folder (`.openmausbot`, `.openmausbot-work`), or null. */
 export function currentHomeFolder(name) {
   if (name === LEGACY_HOME_PREFIX) return HOME_PREFIX;
@@ -67,3 +78,10 @@ export const LEGACY_TEAM_MANIFEST_FILE = "team.mausteam.json";
 
 export const LEGACY_GOAL_TAG = "openmaus-goal";
 export const LEGACY_APP_GLOBAL = "mausbot";
+
+/** Text with the goal envelope tags an earlier version wrote changed to the current ones. */
+export function currentGoalTags(text) {
+  return text.includes(`${LEGACY_GOAL_TAG}>`) ? text.replaceAll(LEGACY_GOAL_TAG, "seira-goal") : text;
+}
+
+export const mentionsGoalTag = (text) => text.includes("seira-goal>") || text.includes(`${LEGACY_GOAL_TAG}>`);

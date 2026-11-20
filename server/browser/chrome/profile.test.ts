@@ -67,3 +67,19 @@ describe("profiles", () => {
     expect(versionOf("Chrome/153.0.8010.12")).toBe("153.0.8010.12");
   });
 });
+
+describe("the profile record of an earlier version", () => {
+  it("is read when the current one is absent", async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { readProfileRecord } = await import("./profile.ts");
+    const dir = mkdtempSync(join(tmpdir(), "seira-profile-"));
+    try {
+      writeFileSync(join(dir, "omb-profile.json"), JSON.stringify({ key: "k", chromeVersion: null, createdAt: "2026-01-01" }));
+      expect(readProfileRecord(dir)?.key).toBe("k");
+      writeFileSync(join(dir, "seira-profile.json"), JSON.stringify({ key: "new", chromeVersion: null, createdAt: "2026-01-01" }));
+      expect(readProfileRecord(dir)?.key).toBe("new");
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+});

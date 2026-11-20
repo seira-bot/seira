@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { currentFormat } from "../electron/legacy-names.mjs";
 import { mascotFaceColorSchema } from "./bot-avatar.ts";
 
 import { CONNECTOR_SLUG_PATTERN, CONNECTOR_TOOL_NAME_PATTERN, SEIRA_COLOR_NAMES } from "./wire.ts";
@@ -163,7 +164,8 @@ export type BackupTask = z.infer<typeof task>;
 /** Validate the whole reference graph before an import can write anything.
  * All keys are file-local; none are ever used as destination record IDs. */
 export function parseTeamBackup(input: unknown): TeamBackup {
-  const parsed = backupSchema.safeParse(input);
+  const format = (input as { format?: unknown } | null)?.format;
+  const parsed = backupSchema.safeParse(input && typeof input === "object" && currentFormat(format) !== format ? { ...input, format: currentFormat(format) } : input);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     throw new Error(`Invalid backup: ${issue.path.join(".") || "file"}: ${issue.message}`);

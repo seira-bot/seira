@@ -6,6 +6,7 @@
 // The export's shape, the repairs for what a chat window does to it and its credential refusal adapt an MIT-licensed
 // importer; see NOTICE.
 import {
+import { currentFormat } from "../electron/legacy-names.mjs";
   AGENT_MAX_SKILLS, PACKAGE_FORMAT, PACKAGE_MAX_CONNECTIONS, PACKAGE_V2_VERSION, SEED_FILE_MAX_BYTES,
   parsePackageDocument, utf8Bytes, type PackageDocument, type PackageRoutineSchedule,
 } from "./package-format.ts";
@@ -177,7 +178,7 @@ function bracedObjects(text: string): string[] {
 }
 
 const isExportDocument = (value: unknown): value is Record<string, unknown> =>
-  isRecord(value) && (value.format === GROK_EXPORT_FORMAT || value.format === OLD_EXPORT_FORMAT || Array.isArray(value.bots));
+  isRecord(value) && (value.format === GROK_EXPORT_FORMAT || currentFormat(value.format) === OLD_EXPORT_FORMAT || Array.isArray(value.bots));
 const looksLikeBot = (value: unknown): value is Record<string, unknown> =>
   isRecord(value) && Boolean(str(value.name)) && ["instructions", "memories", "user_facts", "skills", "routines", "apps"].some((key) => key in value);
 

@@ -23,6 +23,7 @@ import {
 import type { TemplateScope } from "./share-card.ts";
 import { skillFilePathProblem, type SkillFile } from "./skill-files.ts";
 import { isSkillName, parseSkillMd, SKILL_FILE_MAX_BYTES } from "./skill-md.ts";
+import { currentFormat, LEGACY_PACKAGE_FILE_SUFFIX, LEGACY_TEAM_MANIFEST_FILE } from "../electron/legacy-names.mjs";
 
 export type ShareFolderFiles = Record<string, string | Uint8Array>;
 
@@ -211,7 +212,7 @@ export function readShareFolder(input: ShareFolderFiles): ShareFolder {
   }
   const legacy = textOf(files[LEGACY_MARKDOWN]);
   if (legacy !== undefined) return { kind: "package", scope: "department", document: parsePackageDocument(legacy, { trust: "file" }) };
-  const json = Object.keys(files).find((path) => path === LEGACY_MANIFEST || path.endsWith(".seira.json"));
+  const json = Object.keys(files).find((path) => path === LEGACY_MANIFEST || path === LEGACY_TEAM_MANIFEST_FILE || path.endsWith(".seira.json") || path.endsWith(LEGACY_PACKAGE_FILE_SUFFIX));
   if (json) {
     let value: unknown;
     try {
@@ -219,7 +220,7 @@ export function readShareFolder(input: ShareFolderFiles): ShareFolder {
     } catch {
       throw new PackageFormatError("not_a_package", `${json} is not valid JSON.`);
     }
-    const isPackage = Boolean(value) && typeof value === "object" && (value as { format?: unknown }).format === PACKAGE_FORMAT;
+    const isPackage = Boolean(value) && typeof value === "object" && currentFormat((value as { format?: unknown }).format) === PACKAGE_FORMAT;
     return isPackage ? { kind: "package", scope: "department", document: parsePackageDocument(value, { trust: "file" }) } : { kind: "manifest", manifest: value };
   }
   throw new PackageFormatError("not_a_package", "This folder has no bot.md or team.md.");
