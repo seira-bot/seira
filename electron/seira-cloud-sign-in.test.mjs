@@ -121,6 +121,6 @@ describe("sign-in through Seira Cloud", () => {
       expect(cloudOriginFor(env), JSON.stringify(env)).toBe(cloudTarget(env).origin);
     }
     expect(cloudOriginFor({})).toBe("https://cloud.seira.bot");
-    expect(cloudOriginFor({ SEIRA_CLOUD_STAGING: "1" })).toBe("https://seira-cloud-staging.fly.dev");
+    expect(cloudOriginFor({ SEIRA_CLOUD_STAGING: "1" })).toBe("https://omb-cloud-staging.fly.dev");
   });
 });
