@@ -62,11 +62,10 @@ export function botsWithLimitedServiceTools(bots: Bot[], instances: InstanceInfo
   });
 }
 
-/** Whether a hosted app's card shows: it matches the search, and the filter is All, or Connected and it isn't known to be
- * disconnected (unknown while its servers load). */
-export function hostedShown(app: HostedApp, search: string, filter: AppsFilter, connected: HostedConnections | null): boolean {
+/** Whether a hosted app's card shows: it matches the search and the person has it connected. */
+export function hostedShown(app: HostedApp, search: string, connected: HostedConnections | null): boolean {
   const matches = !search || `${app.label} ${app.keywords} ${t(app.description)}`.toLowerCase().includes(search.toLowerCase().trim());
-  return matches && (filter === "all" || (filter === "connected" && connected?.[app.id] !== false));
+  return matches && connected?.[app.id] === true;
 }
 
 export type ConnectorSetup = "ready" | "needs-setup" | "service-unavailable";
@@ -389,17 +388,18 @@ export function PluginsPanel() {
       .finally(() => setBusySlug(null));
   };
 
-  const matching = (cards ?? []).filter((c) => (!managedConnectorUnavailableReason(mode, c.slug) || hasActiveConnection(status[c.slug]))
-    && matchesCatalogSearch(`${c.label} ${c.slug} ${connectorDescription(c)} ${(c.categories ?? []).join(" ")}`, search));
+  const offered = (cards ?? []).filter((c) => hasActiveConnection(status[c.slug]) || (!c.needsOwnAuth && !managedConnectorUnavailableReason(mode, c.slug)));
+  const matching = offered.filter((c) => matchesCatalogSearch(`${c.label} ${c.slug} ${connectorDescription(c)} ${(c.categories ?? []).join(" ")}`, search));
   const isConnected = (slug: string) => Boolean(status[slug]?.connected || status[slug]?.accounts?.length);
   const filter: AppsFilter = surface === "mcp" ? "mcp" : tab === "connected" ? "connected" : "all";
   const searching = search.trim().length > 0;
   /** A search covers the whole catalog, whichever view it was typed in. */
   const listing: AppsFilter = searching && filter === "connected" ? "all" : filter;
-  const shownHosted = new Set(HOSTED_MCP_APPS.filter((app) => hostedShown(app, search, listing, hostedConnected)).map((app) => app.id));
-  const showEmail = (!search || `email mail imap smtp mailbox ${t("email.description")}`.toLowerCase().includes(search.toLowerCase().trim())) && (listing === "all" || (listing === "connected" && emailConnected !== false));
-  const showX = (!search || `${X_CARD_SEARCH} ${t("apps.x.description")}`.toLowerCase().includes(search.toLowerCase().trim())) && (listing === "all" || (listing === "connected" && xConnected !== false));
-  const showPostiz = (!search || `${POSTIZ_SEARCH} ${t("postiz.description")}`.toLowerCase().includes(search.toLowerCase().trim())) && (listing === "all" || (listing === "connected" && postizConnected !== false));
+  const shownHosted = new Set(HOSTED_MCP_APPS.filter((app) => hostedShown(app, search, hostedConnected)).map((app) => app.id));
+  const searchMatches = (text: string) => !search || text.toLowerCase().includes(search.toLowerCase().trim());
+  const showEmail = emailConnected === true && searchMatches(`email mail imap smtp mailbox ${t("email.description")}`);
+  const showX = xConnected === true && searchMatches(`${X_CARD_SEARCH} ${t("apps.x.description")}`);
+  const showPostiz = postizConnected === true && searchMatches(`${POSTIZ_SEARCH} ${t("postiz.description")}`);
   const visible = (listing === "connected" ? matching.filter((card) => isConnected(card.slug)) : matching)
     .map((card, index) => ({ card, index }))
     .sort((a, b) => Number(isConnected(b.card.slug)) - Number(isConnected(a.card.slug)) || a.index - b.index)
@@ -421,7 +421,7 @@ export function PluginsPanel() {
     if (surface !== "apps") dispatch({ type: "togglePlugins", open: true, surface: "apps" });
   };
 
-  const ranked = rankCategories([...(cards ?? []), POSTIZ_CATALOG_CARD], undefined, POSTIZ_CATALOG_CARD.categories);
+  const ranked = rankCategories(offered);
   const moreCategories = ranked.more;
   const categoryInMore = category !== null && moreCategories.includes(category);
   const inCategoryView = filter === "all" && category !== null && !searching;
@@ -838,6 +838,8 @@ export function PluginsPanel() {
                 }
               } else if (reconnect) {
                 void connect(card.slug, reconnect.alias, reconnect);
+              } else if (accounts.length === 0) {
+                void connect(card.slug);
               } else {
                 setAliasSlug((current) => current === card.slug ? null : card.slug);
                 setAliasDraft("");
