@@ -7,12 +7,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { SessionRegistry } from "./sessions.ts";
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
-import { workerPort } from "./testing/worker-port.ts";
+import { freePortBlock } from "./testing/ports.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
 const FAKE_CLI = join(SERVER_DIR, "testing", "fake-acp-cli.ts");
-const PORT = workerPort(28800, 10_000);
-const BASE = `http://127.0.0.1:${PORT}`;
+let BASE = "";
 const OWNER = "owner@example.test";
 const posixOnly = describe.skipIf(process.platform === "win32");
 
@@ -86,17 +85,20 @@ posixOnly("a routine run's task on the event stream", () => {
     token = registry.issue({ label: "Owner's laptop", email: OWNER, scopes: ["admin", "client"] }).token;
     registry.close();
 
+    const port = await freePortBlock([0, 1]);
+    BASE = `http://127.0.0.1:${port}`;
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: {
         ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
-        HOME: home, OMB_PORT: String(PORT), OMB_WEBHOOK_PORT: String(PORT + 1),
+        HOME: home, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
     child.stdout!.on("data", (c) => (log += c));
     child.stderr!.on("data", (c) => (log += c));
     const up = await waitFor(async () => {
+      if (child.exitCode !== null || child.signalCode !== null) throw new Error(`server exited before it was ready:\n${log}`);
       try {
         return (await fetch(`${BASE}/api/health`)).ok;
       } catch {

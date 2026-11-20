@@ -62,13 +62,15 @@ function probing(name: string, fake: string, extra: string): string {
   const cli = join(home, `${name}-cli.mjs`);
   writeFileSync(cli, `#!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
 const environ = (pid) => { try {
   return process.platform === "linux" ? readFileSync("/proc/" + pid + "/environ", "utf8")
     : execFileSync("ps", ["eww", "-p", String(pid), "-o", "command="]).toString();
 } catch (error) { return "unreadable: " + error.message; } };
 if (process.argv[2] !== "--version" && process.argv[2] !== "auth") {
-  writeFileSync(${JSON.stringify(probeOf(name))}, JSON.stringify({ parent: environ(process.ppid), own: JSON.stringify(process.env) }));
+  const probe = ${JSON.stringify(probeOf(name))}, partial = probe + "." + process.pid + ".tmp";
+  writeFileSync(partial, JSON.stringify({ parent: environ(process.ppid), own: JSON.stringify(process.env) }));
+  renameSync(partial, probe);
 }
 ${extra}
 await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", fake)).href)});
