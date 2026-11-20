@@ -304,7 +304,7 @@ export function brokerHarness(options: { migrations?: number } = {}) {
     async install(): Promise<Installation> {
       const response = await fetchBroker("/v1/installations", { method: "POST", body: "{}" });
       const body = await response.json() as { installationId: string; token: string };
-      return { id: body.installationId, token: body.token, userId: `omb_${body.installationId.replaceAll("-", "")}` };
+      return { id: body.installationId, token: body.token, userId: `seira_${body.installationId.replaceAll("-", "")}` };
     },
     account(owner: Installation, toolkit = "gmail", status = "ACTIVE") {
       const id = `ca_${toolkit}_${++accountCount}`;

@@ -409,7 +409,7 @@ async function register(request: Request, env: Env) {
   const now = Date.now();
   await env.DB.prepare(
     "INSERT INTO installations (id, token_hash, composio_user_id, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)",
-  ).bind(installationId, await sha256(token), `omb_${installationId.replaceAll("-", "")}`, now, now).run();
+  ).bind(installationId, await sha256(token), `seira_${installationId.replaceAll("-", "")}`, now, now).run();
   console.log(JSON.stringify({ message: "installation registered", installationId }));
   return json({ installationId, token }, 201);
 }
