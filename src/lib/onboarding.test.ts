@@ -134,12 +134,14 @@ describe("organisation sign-in in the engines beat", () => {
   const bridge = { begin: () => {} };
 
   it("is offered only by the packaged local desktop", () => {
-    expect(organisationSignIn({ organization: bridge }, { hosted: false })).toBe(bridge);
-    expect(organisationSignIn(undefined, { hosted: false })).toBeUndefined();
-    expect(organisationSignIn({}, { hosted: false })).toBeUndefined();
-    expect(organisationSignIn({ organization: bridge, remoteClient: { active: true } }, { hosted: false })).toBeUndefined();
-    expect(organisationSignIn({ organization: bridge }, { hosted: true })).toBeUndefined();
-    expect(organisationSignIn({ organization: bridge, remoteClient: { active: false } }, { hosted: false })).toBe(bridge);
+    expect(organisationSignIn({ organization: bridge }, { hosted: false, portalOffered: true })).toBe(bridge);
+    expect(organisationSignIn(undefined, { hosted: false, portalOffered: true })).toBeUndefined();
+    expect(organisationSignIn({}, { hosted: false, portalOffered: true })).toBeUndefined();
+    expect(organisationSignIn({ organization: bridge, remoteClient: { active: true } }, { hosted: false, portalOffered: true })).toBeUndefined();
+    expect(organisationSignIn({ organization: bridge }, { hosted: true, portalOffered: true })).toBeUndefined();
+    expect(organisationSignIn({ organization: bridge, remoteClient: { active: false } }, { hosted: false, portalOffered: true })).toBe(bridge);
+    expect(organisationSignIn({ organization: bridge }, { hosted: false, portalOffered: false })).toBeUndefined();
+    expect(organisationSignIn({ organization: bridge }, { hosted: false })).toBeUndefined();
   });
 
   it("counts the models the organisation approved", () => {
@@ -240,17 +242,17 @@ describe("persistence patches", () => {
 describe("the first run's screens", () => {
   it("is two screens, meeting the app and then the Chief of Staff, whatever this computer has", () => {
     expect(beatsFor({})).toEqual(["meet", "chief"]);
-    expect(beatsFor({ hosted: false })).toEqual(["meet", "chief"]);
+    expect(beatsFor({ hosted: false, portalOffered: true })).toEqual(["meet", "chief"]);
   });
 
   it("gives a hosted place's admin only the first: their team's bots and Chief are set up already", () => {
-    expect(beatsFor({ hosted: true })).toEqual(["meet"]);
+    expect(beatsFor({ hosted: true, portalOffered: true })).toEqual(["meet"]);
   });
 
   it("resumes the saved screen while it is offered, else starts at the first", () => {
     expect(resumeBeat(beatsFor({}), "chief")).toBe("chief");
     expect(resumeBeat(beatsFor({}), undefined)).toBe("meet");
-    expect(resumeBeat(beatsFor({ hosted: true }), "chief")).toBe("meet");
+    expect(resumeBeat(beatsFor({ hosted: true, portalOffered: true }), "chief")).toBe("meet");
     expect(resumeBeat(beatsFor({}), "engines" as never), "a step from the longer welcome").toBe("meet");
   });
 });

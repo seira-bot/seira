@@ -1,5 +1,6 @@
 import { ONBOARDING_CLOUD_HINT, WELCOME_VERSION } from "../../electron/onboarding-record.mjs";
 import { freeFallback, rankAis, type AiTestState, type RankableAi } from "../../shared/ai-ranking";
+import { defaultPortalOffered } from "./organization-portal";
 
 export interface OnboardingStatus {
   completedAt: string;
@@ -147,12 +148,11 @@ export function welcomeFinishedThisLaunch(): boolean {
   }
 }
 
-export const DEFAULT_ADMIN_ORIGIN = "https://admin.seira.bot";
-
 export function organisationSignIn<Bridge>(
   ogb: { organization?: Bridge; remoteClient?: { active?: boolean } } | undefined,
-  options: { hosted: boolean },
+  options: { hosted: boolean; portalOffered?: boolean },
 ): Bridge | undefined {
+  if (!(options.portalOffered ?? defaultPortalOffered())) return undefined;
   if (options.hosted || !ogb || ogb.remoteClient?.active === true) return undefined;
   return ogb.organization;
 }
