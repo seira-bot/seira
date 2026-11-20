@@ -53,7 +53,8 @@ export async function withNoManagedAuthNote(
   return withFailedCallHint(bytes, contentType, NO_MANAGED_AUTH, () => note, []);
 }
 
-/** True when Composio lists the toolkit with no managed sign-in scheme and it is not a no-auth toolkit. */
+/** A Composio session refuses a toolkit whose catalog entry lists no managed auth scheme, unless the project holds its
+ * own auth config for it. */
 export function needsOwnAuth(item: { no_auth?: unknown; composio_managed_auth_schemes?: unknown }): boolean {
   return item.no_auth !== true && Array.isArray(item.composio_managed_auth_schemes) && item.composio_managed_auth_schemes.length === 0;
 }
