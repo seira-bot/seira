@@ -1,7 +1,8 @@
-// A Cloud home's own installation on OpenMausBot's connected-apps service, which its plan includes. The server registers
-// it the way the desktop app registers itself (electron/managed-composio.mjs), keeps the token in a 0600 file on the
-// volume that no backup carries, and hands it to the one managed path (composio.setManagedBrokerAccess). A Composio
-// project key the owner saves still wins: composio.connectionMode checks it first.
+// A server's own installation on Seira's connected-apps service: a Cloud home's, which its plan includes, and a
+// self-hosted release build's. The server registers it the way the desktop app registers itself
+// (electron/managed-composio.mjs), keeps the token in a 0600 file on the data folder that no backup carries, and hands
+// it to the one managed path (composio.setManagedBrokerAccess). A Composio project key the owner saves still wins:
+// composio.connectionMode checks it first.
 import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
@@ -15,7 +16,7 @@ import {
 import { writeFileAtomic } from "./atomic.ts";
 import { managedComposioBrokerUrl } from "../electron/managed-composio.mjs";
 
-/** In the data folder; excluded from backups (workspace-backup-policy.ts), so a restore keeps the Cloud's own. */
+/** In the data folder; excluded from backups (workspace-backup-policy.ts), so a restore keeps the server's own. */
 export const CLOUD_CONNECTED_APPS_FILE = "connected-apps-installation.json";
 /** Between attempts while the Cloud holds no token, each with up to a fifth of jitter; the last one repeats. */
 export const CLOUD_CONNECTED_APPS_RETRY_MS: readonly number[] = [30_000, 60_000, 120_000, 300_000, 600_000, 1_800_000];
@@ -201,28 +202,50 @@ export function startCloudConnectedApps(options: CloudConnectedAppsOptions): Clo
   };
 }
 
-let cloudHome: CloudConnectedApps | null = null;
+let started: CloudConnectedApps | null = null;
 /** The connected-apps service a Cloud home and a Team Cloud's members register with: only the one that
  * OMB_COMPOSIO_BROKER_URL names. "" for none. */
 export const cloudConnectedAppsBrokerUrl = (): string => managedComposioBrokerUrl(process.env.OMB_COMPOSIO_BROKER_URL);
 
-/** A Cloud home's plan includes the connected-apps service, so it registers itself. */
-export function startCloudHomeConnectedApps(input: { cloudHome: boolean; dataDir: string; apply: CloudConnectedAppsOptions["apply"]; cloudGrant?: string; ownKey?: () => boolean }): void {
-  if (!input.cloudHome || cloudHome) return;
+/** A Cloud home registers with the service its plan includes. A self-hosted release build registers too, with
+ * Seira's service unless OMB_COMPOSIO_BROKER_URL names another. A token in OMB_COMPOSIO_BROKER_TOKEN replaces
+ * registration, and a source run, a desktop child and a hosted workspace register nothing. */
+export function startServerConnectedApps(input: {
+  cloudHome: boolean;
+  selfHosted: boolean;
+  packaged: boolean;
+  dataDir: string;
+  apply: CloudConnectedAppsOptions["apply"];
+  cloudGrant?: string;
+  ownKey?: () => boolean;
+}): void {
+  if (started) return;
+  if (!input.cloudHome && !input.selfHosted) return;
+  if (!input.cloudHome && process.env.OMB_COMPOSIO_BROKER_TOKEN?.trim()) return;
+  const say = (line: string) => (input.cloudHome ? `cloud home: ${line}` : line);
   if (managedComposioBrokerOff()) {
-    console.log("cloud home: the connected-apps service is switched off (OMB_COMPOSIO_BROKER)");
+    console.log(say("the connected-apps service is switched off (OMB_COMPOSIO_BROKER)"));
     return;
   }
   const configured = process.env.OMB_COMPOSIO_BROKER_URL;
-  const brokerUrl = cloudConnectedAppsBrokerUrl();
+  const brokerUrl = input.cloudHome
+    ? cloudConnectedAppsBrokerUrl()
+    : managedComposioBrokerUrl(configured, { packaged: input.packaged });
   if (!brokerUrl) {
-    if (configured?.trim()) console.warn("cloud home: connected-apps service URL rejected: HTTPS or a loopback HTTP URL is required");
+    if (configured?.trim()) console.warn(say("connected-apps service URL rejected: HTTPS or a loopback HTTP URL is required"));
     return;
   }
-  cloudHome = startCloudConnectedApps({ dataDir: input.dataDir, brokerUrl, apply: input.apply, cloudGrant: input.cloudGrant, ownKey: input.ownKey, log: (line) => console.log(`cloud home: ${line}`) });
+  started = startCloudConnectedApps({
+    dataDir: input.dataDir,
+    brokerUrl,
+    apply: input.apply,
+    ownKey: input.ownKey,
+    ...(input.cloudHome ? { cloudGrant: input.cloudGrant } : {}),
+    log: (line) => console.log(say(line)),
+  });
 }
 
-export function stopCloudHomeConnectedApps(): void {
-  cloudHome?.stop();
-  cloudHome = null;
+export function stopServerConnectedApps(): void {
+  started?.stop();
+  started = null;
 }

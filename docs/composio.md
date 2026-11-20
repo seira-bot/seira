@@ -28,13 +28,26 @@ When a service is named, at every start a Cloud home's server makes sure it has 
 - The file never goes into a backup or a move to another computer, and a restore keeps the Cloud's own (`server/workspace-backup-policy.ts`): its connected accounts belong to that installation.
 - A Composio project key the owner saves under **Apps and tools → Composio project key** still wins, and while it is saved the server sends the service nothing, not even its start-up check. Clearing it returns to the named service, within about a minute.
 
-The packaged desktop app uses Seira's connected-apps service at `https://apps.seira.bot` by default. `OMB_COMPOSIO_BROKER_URL` names another service. The app run from source and a server use a service only when `OMB_COMPOSIO_BROKER_URL` names one.
+The packaged desktop app and a self-hosted server installed from the npm package or the Docker image use Seira's connected-apps service at `https://apps.seira.bot` by default. `OMB_COMPOSIO_BROKER_URL` names another service. The app and a server run from source use a service only when `OMB_COMPOSIO_BROKER_URL` names one.
+
+## Self-hosted server
+
+A self-hosted server (`seira serve` from the npm package, or the Docker image) registers its own installation on the connected-apps service, the same way a Cloud home does. No token is made by hand:
+
+- The service is `https://apps.seira.bot`, or the one `OMB_COMPOSIO_BROKER_URL` names. A server run from source registers only when `OMB_COMPOSIO_BROKER_URL` names one.
+- The token is kept in `connected-apps-installation.json` in the data folder, owner-only (0600). It is kept across restarts, checked with `GET /v1/me` at each start, and never goes into a backup.
+- A Composio project key the owner saves still wins: while it is saved, the server sends the service nothing.
+- `OMB_COMPOSIO_BROKER_TOKEN`, set together with `OMB_COMPOSIO_BROKER_URL`, is used as it is, and the server registers nothing.
+- A server that the desktop app starts uses the desktop app's installation and registers nothing itself.
+- `OMB_COMPOSIO_BROKER=off` turns the service off.
+
+On Seira's service, a self-hosted server has the same daily limits as the desktop app.
 
 ## App events
 
 An app-event automation runs a bot when something happens in a connected app: a new Gmail message, a Slack
 message in a channel, a HubSpot deal changing stage. It uses Composio triggers through a connected-apps service, so
-it applies only when `OMB_COMPOSIO_BROKER_URL` names one. It works on the desktop, a headless server and a Cloud alike:
+it applies only while a service is in use. It works on the desktop, a headless server and a Cloud alike:
 
 1. `trigger` (`action: "create"`, `when: "app_event"`) or the editor saves the automation in `app-triggers.json` in the data
    folder and creates its trigger on the service (`POST /v1/triggers`), which checks that the connected account
@@ -62,11 +75,11 @@ schedule that checks the app, or a webhook, does the job instead.
 
 ## Keeping traffic off the managed service
 
-**With no service named**, the packaged desktop app uses Seira's service at `https://apps.seira.bot`. The app run from source sends nothing to a service: it gives its server `OMB_COMPOSIO_BROKER=off`, and connected apps go to Composio directly with your own project key. Until a key is saved, Connected apps shows the setup message.
+**With no service named**, the packaged desktop app and a self-hosted server installed from npm or Docker use Seira's service at `https://apps.seira.bot`. The app run from source sends nothing to a service: it gives its server `OMB_COMPOSIO_BROKER=off`, and connected apps go to Composio directly with your own project key. A server run from source sends nothing either. Until a key is saved, Connected apps shows the setup message.
 
-**With your own project key saved** and a service in use, the desktop app and a Cloud home do not register or check in with the service, and connected apps go to Composio directly. An app-event automation made before the key was saved can still be paused, deleted or restored, but only here: its copy on the service is left alone and removed if you later go back to the service.
+**With your own project key saved** and a service in use, the desktop app, a self-hosted server and a Cloud home do not register or check in with the service, and connected apps go to Composio directly. An app-event automation made before the key was saved can still be paused, deleted or restored, but only here: its copy on the service is left alone and removed if you later go back to the service.
 
-**`OMB_COMPOSIO_BROKER=off`** in the environment of the desktop app, a server or a Cloud home turns a service off, Seira's default included, whether or not a key is saved: no registration, check-in, tool calls or app events. Connected apps then need your own key, and show the setup message until there is one. A saved installation is kept for if the switch is removed. `OMB_COMPOSIO_BROKER_URL` is not a switch: left blank, the packaged desktop app uses Seira's service and other builds use none.
+**`OMB_COMPOSIO_BROKER=off`** in the environment of the desktop app, a server or a Cloud home turns a service off, Seira's default included, whether or not a key is saved: no registration, check-in, tool calls or app events. Connected apps then need your own key, and show the setup message until there is one. A saved installation is kept for if the switch is removed. `OMB_COMPOSIO_BROKER_URL` is not a switch: left blank, the packaged desktop app and a self-hosted server installed from npm or Docker use Seira's service, a Cloud home and builds run from source use none.
 
 A Team Cloud's per-person apps (**each person connects their own**) follow the same rule when a service is named. With the team's key saved, each member is their own Composio user in the team's project (`omb_member_…`, made from the team's id and a hash of the person, never their address), and their connect links, connections, tool calls and disconnects go to Composio with the team's key. A member who leaves has that user's connections removed from the project; if Composio can't be reached then, it is tried again at the next start. App events are not available for them, as for the team's own apps with a key.
 

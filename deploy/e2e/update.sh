@@ -92,6 +92,7 @@ services:
       OMB_PORT: "8799"
       OMB_WEBHOOK_PORT: "8800"
       OMB_PUBLIC_URL: https://${DOMAIN}
+      OMB_COMPOSIO_BROKER: "off"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q openmausbot"]
       interval: 30s

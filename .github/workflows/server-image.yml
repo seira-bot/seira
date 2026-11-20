@@ -91,7 +91,7 @@ jobs:
       - name: Boot the container and prove the server and UI answer
         run: |
           set -euo pipefail
-          docker run -d --name seira seira-server:ci
+          docker run -d -e OMB_COMPOSIO_BROKER=off --name seira seira-server:ci
           for i in $(seq 1 40); do
             if docker exec seira curl -sf http://127.0.0.1:8799/api/health | grep -q openmausbot; then break; fi
             sleep 2

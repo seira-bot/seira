@@ -77,6 +77,7 @@ const fixtureEnv = {
   OMB_DATA_DIR: join(home, ".openmausbot"),
   OMB_PORT: String(port),
   OMB_WEBHOOK_PORT: String(webhookPort),
+  OMB_COMPOSIO_BROKER: "off",
   // Not a genuine key: enough to make the server look for its enterprise layer.
   OMB_LICENSE_KEY: "omb1.not.real",
   ...(browserBundle ? {
