@@ -189,6 +189,7 @@ Download the app from the [latest release](https://github.com/seira-bot/seira/re
   ```
 
   On Ubuntu 24.04 the AppImage does not open, because the system blocks the sandbox it needs. Use the Debian package there.
+  If it says `No suitable fusermount binary found`, install your distribution's `fuse3` package.
 
 The app updates itself. Each release also has a `SHA256SUMS` file for each system, to check your download.
 There is no macOS download yet. On macOS, run the server with Node, or build Seira from source.
