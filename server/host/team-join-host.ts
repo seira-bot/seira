@@ -1,6 +1,5 @@
-// What a Team Cloud tells one signed-in person about joining it (seira-cloud docs/team-cloud.md "Getting an invited
-// person in"): their own welcome record inside the onboarding record, and their team page on Seira Cloud, where they open
-// the team in a browser again. Told to a signed-in session only, never before sign-in.
+// What a Team Cloud tells one signed-in person about joining it: their own welcome record inside the
+// onboarding record, and their team page on Seira Cloud, where they open the team in a browser again. Told to a signed-in session only, never before sign-in.
 import { personalHints } from "../../shared/cloud-hints.ts";
 import type { CloudHomeConfig } from "../cloud-home.ts";
 import { personKey } from "../person-key.ts";

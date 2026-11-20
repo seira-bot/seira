@@ -1,8 +1,7 @@
 # Slack for Team Clouds: the Team Cloud's side
 
 People in a company's Slack write `@Seira` in a channel, or message it directly, and the team's bots answer there. One
-Seira Slack app is installed per company. Slack's events arrive at the Admin (seira-cloud, `docs/team-slack.md`
-there), which works out the team member who wrote and hands each message to that team's Cloud **with a session it opened
+Seira Slack app is installed per company. Slack's events arrive at the Admin (the Seira Cloud service), which works out the team member who wrote and hands each message to that team's Cloud **with a session it opened
 for that member**. This page is the Cloud's side: three routes the Admin calls, and one signed report back. The Slack bot
 token never reaches this machine, and this machine never talks to Slack.
 

@@ -13,7 +13,7 @@ export const PRICING_URL = `${SITE}/#pricing`;
 export const PRIVACY_URL = `${SITE}/privacy`;
 export const TERMS_URL = `${SITE}/terms`;
 export const CLOUD_PLAN_URL = `${seiraOrigin(SEIRA_HOSTS.cloud)}/cloud`;
-/** The Admin's team People page (seira-cloud docs/team-seats.md): people, seats and roles are managed there, never in
+/** The Admin's team People page: people, seats and roles are managed there, never in
  * the app. `invite` opens its invite box (Owner and Admins); `seats` its seat stepper (the Owner, whose card pays). */
 export const TEAM_PEOPLE_PAGES = { invite: "people?do=invite", seats: "people?do=seats" } as const;
 /** `cloudPage`: the Admin's Cloud pages for this team's Cloud (`<admin origin>/cloud`), sent by the server. */

@@ -136,8 +136,8 @@ used.
   not restoring the saved policy on start; removing the `bindTurnComputer`
   guard; replacing instances on a renewal; skipping the legacy-id rename;
   forgetting instead of adopting a legacy backup key.
-- Against the Admin itself (in the seira-cloud `feat/desktop-lifecycle`
-  worktree, disposable fixtures): this client enrolled, reported its version
+- Against the Admin itself (in a disposable worktree of the Cloud service,
+  with disposable fixtures): this client enrolled, reported its version
   and policy, renewed a week later to now + 30 days with the same device,
   stayed connected past the original 30 days and showed `license-expired`
   after the grace period; against the current Admin `main` it made no renewal
