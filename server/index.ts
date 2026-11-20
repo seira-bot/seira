@@ -654,7 +654,7 @@ import { connectorFileDeps, connectorFileScope, prepareConnectorFiles, withMissi
 import { createConnectorCards } from "./host/connector-cards.ts";
 import { createLoginMailCodes } from "./host/login-mail-codes.ts"; import { createLateToolResults } from "./host/late-tool-results.ts"; import { internalBodyRefusal } from "./host/internal-body-ids.ts";
 import { onThreadSeen, personAsks as personAskAt, sawThread } from "./thread-presence.ts"; import { createWarmSummaryHost, HARNESS_IDLE_FRACTION } from "./host/warm-summary-host.ts";
-import { acceptsWireName, sentWireName } from "../electron/phone-wire-names.mjs";
+import { PHONE_WIRE_NAMES, acceptsWireName, sentWireName } from "../electron/phone-wire-names.mjs";
 
 const PORT = Number(process.env.SEIRA_PORT || process.env.OGB_PORT || 8799);
 const WEBHOOK_PORT = Number(process.env.SEIRA_WEBHOOK_PORT || PORT + 1);
@@ -12632,7 +12632,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     }
     // Public reachability probe: a stranger learns only the app name; pid and the static flag stay behind the gate.
     if (method === "GET" && path === "/api/health" && !gate.auth) {
-      return json(res, 200, { app: sentWireName("healthApp") });
+      return json(res, 200, { app: sentWireName("healthApp"), legacyApp: PHONE_WIRE_NAMES.healthApp.legacy });
     }
     // Public: the sign-in page needs the deployment's name and icon, and it holds nothing secret.
     if (method === "GET" && path === "/api/brand" && !gate.auth) {
