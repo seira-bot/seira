@@ -619,6 +619,10 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
       if (result?.ok !== true) throw new Error("Invalid Cloud response.");
     },
     homeTarget,
+    /** The signed-in session for services that sign in with the same account, or null. The token stays in main. */
+    session: () => grant && value.status === "connected"
+      ? { accountToken: grant.token, user: { id: grant.account.id, email: grant.account.email.trim().toLowerCase() } }
+      : null,
     /** The Admin's last verified word on a Cloud whose plan sleeps, kept while a re-check fails; null for any other. */
     power: () => (value.status === "connected" ? value.machine?.power ?? null : null),
     /** The same for the Cloud at `origin`: My Cloud's `cloud.power`, or another's from the Clouds list (contract v1, Oct 30). */

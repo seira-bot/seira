@@ -462,7 +462,7 @@ describe("login without an account service", () => {
 
   for (const args of [[], ["--relay"]]) {
     it(`seira login ${args.join(" ")} says that no account service is set up, and names the ways in that work`, async () => {
-      vi.stubEnv("SEIRA_CONTROL_PLANE_URL", undefined);
+      vi.stubEnv("SEIRA_CONTROL_PLANE_URL", "");
       const { code, text } = await login(args);
       expect(code).toBe(1);
       for (const word of ["SEIRA_CONTROL_PLANE_URL", "--domain", "--tailscale", "--public-url"]) expect(text).toContain(word);
@@ -491,12 +491,13 @@ describe("login without an account service", () => {
     const io = { log: () => undefined, error: (line: string) => errors.push(line) };
     const input = { action: "install" as const, dataDir: dir, port: 8799, tunnel: true, script: "/x/cli.js", node: "/x/node", platform: "linux" as const, home: dir, user: "seira" };
     try {
-      expect(runServiceCommand({ ...input, env: {} }, io)).toBe(1);
+      expect(runServiceCommand({ ...input, env: { SEIRA_CONTROL_PLANE_URL: "" } }, io)).toBe(1);
       expect(errors.join("\n")).toContain("--tunnel: this Seira build has no account service");
       expect(existsSync(join(dir, "seira.service"))).toBe(false);
       expect(runServiceCommand({ ...input, env: { SEIRA_CONTROL_PLANE_URL: "http://x" } }, io)).toBe(1);
       expect(errors.at(-1)).toContain("is set but is not an https address");
       expect(runServiceCommand({ ...input, env: { SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test" } }, io)).toBe(0);
+      expect(runServiceCommand({ ...input, env: {} }, io)).toBe(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -516,7 +517,7 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
   it("refuses without an account and says what to do; no local-only fallback", async () => {
     const home = mkdtempSync(join(tmpdir(), "seira-cli-tunnel-none-"));
     const port = workerPort(21000, 9000);
-    const child = cli(["serve", "--tunnel", "--port", String(port), "--data-dir", join(home, "data")], { HOME: home, USERPROFILE: home });
+    const child = cli(["serve", "--tunnel", "--port", String(port), "--data-dir", join(home, "data")], { HOME: home, USERPROFILE: home, SEIRA_CONTROL_PLANE_URL: "" });
     let err = "";
     child.stderr?.on("data", (chunk) => (err += String(chunk)));
     try {

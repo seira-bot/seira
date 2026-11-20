@@ -4,7 +4,7 @@ import { LIVE_SEIRA_SERVICES, SEIRA_HOSTS, seiraOrigin, seiraServiceLive } from 
 
 describe("seiraServiceLive", () => {
   it("lists the services that answer today", () => {
-    expect([...LIVE_SEIRA_SERVICES].sort()).toEqual(["apps", "cloud", "site", "updates"]);
+    expect([...LIVE_SEIRA_SERVICES].sort()).toEqual(["apps", "cloud", "serverTunnel", "site", "updates"]);
     for (const name of LIVE_SEIRA_SERVICES) expect(seiraServiceLive(name)).toBe(true);
   });
 
@@ -36,9 +36,9 @@ describe("SEIRA_HOSTS", () => {
 describe("the server tunnel service", () => {
   const live = [...LIVE_SEIRA_SERVICES, "serverTunnel"];
 
-  it("is not in the live list yet and has its own zone", () => {
-    expect(LIVE_SEIRA_SERVICES).not.toContain("serverTunnel");
-    expect(seiraServiceLive("serverTunnel", {})).toBe(false);
+  it("is in the live list and has its own zone", () => {
+    expect(LIVE_SEIRA_SERVICES).toContain("serverTunnel");
+    expect(seiraServiceLive("serverTunnel", {})).toBe(true);
     expect(SEIRA_HOSTS.tunnel).toBe("seira.run");
   });
 
@@ -52,7 +52,7 @@ describe("the server tunnel service", () => {
   });
 
   it("gives no control plane when it is not live and nothing is set", () => {
-    expect(resolveServerControlPlaneURL({ environment: {} })).toBe("");
+    expect(resolveServerControlPlaneURL({ environment: {}, live: ["site"] })).toBe("");
     expect(resolveServerControlPlaneURL({ environment: { SEIRA_CONTROL_PLANE_URL: "https://cp.example.test" } })).toBe("https://cp.example.test");
   });
 

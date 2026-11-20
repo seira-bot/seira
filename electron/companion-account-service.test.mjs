@@ -20,6 +20,7 @@ import {
   PHONE_UNUSED_RELEASE_MS,
   resolveCompanionControlPlaneURL,
 } from "./companion-account-service.mjs";
+import { createDesktopControlPlaneClient, resolveDesktopControlPlaneURL } from "./desktop-control-plane.mjs";
 import {
   MANAGED_COMPANION_ENDPOINT_FIELD,
   MANAGED_COMPANION_ORIGIN_VERSION,
@@ -200,6 +201,93 @@ describe("Companion account service", () => {
 
     await expect(service.state()).resolves.toMatchObject({ available: false });
     await expect(service.state()).resolves.toEqual({ available: true, status: "signed-out" });
+  });
+
+  it("signs in with the Seira Cloud session the app already holds, with no email code", async () => {
+    const session = { accountToken: ACCOUNT_TOKEN, user: { id: "user-1", email: "ada@example.com" } };
+    const { client, service, store } = serviceFixture({ cloudSession: { current: () => session } });
+
+    await expect(service.useCloudSession()).resolves.toMatchObject({ status: "ready", email: "ada@example.com" });
+
+    expect(client.requestOTP).not.toHaveBeenCalled();
+    expect(client.verifyOTP).not.toHaveBeenCalled();
+    expect(client.ensureInstallation).toHaveBeenCalledWith(expect.objectContaining({ accountToken: ACCOUNT_TOKEN }));
+    expect(store.read()[MANAGED_COMPANION_ENDPOINT_FIELD]).toBe(ENDPOINT);
+  });
+
+  it("does nothing when the app holds no Seira Cloud session", async () => {
+    const { client, service } = serviceFixture({ cloudSession: { current: () => null } });
+
+    await expect(service.useCloudSession()).resolves.toMatchObject({ status: "signed-out" });
+
+    expect(client.ensureInstallation).not.toHaveBeenCalled();
+  });
+
+  it("does not repeat the sign-in when an account is already stored", async () => {
+    const session = { accountToken: ACCOUNT_TOKEN, user: { id: "user-1", email: "ada@example.com" } };
+    const { client, service } = serviceFixture({ initial: signedCredentials(), cloudSession: { current: () => session } });
+
+    await service.useCloudSession();
+
+    expect(client.ensureInstallation).not.toHaveBeenCalled();
+  });
+
+  it("keeps the Seira Cloud session alive when phone access signs out", async () => {
+    const session = { accountToken: ACCOUNT_TOKEN, user: { id: "user-1", email: "ada@example.com" } };
+    const { client, service } = serviceFixture({ cloudSession: { current: () => session } });
+    await service.useCloudSession();
+
+    await service.signOut();
+
+    expect(client.revokeInstallation).toHaveBeenCalled();
+    expect(client.signOut).not.toHaveBeenCalled();
+  });
+
+  it("still signs out a session that phone access created itself", async () => {
+    const { client, service } = serviceFixture();
+    await service.verifyCode("ada@example.com", "12345678");
+
+    await service.signOut();
+
+    expect(client.signOut).toHaveBeenCalledWith(ACCOUNT_TOKEN);
+  });
+
+  it("uses the renewed Seira Cloud token when it retries", async () => {
+    const renewed = `omc_${"r".repeat(43)}`;
+    let session = { accountToken: ACCOUNT_TOKEN, user: { id: "user-1", email: "ada@example.com" } };
+    const { client, service } = serviceFixture({ cloudSession: { current: () => session } });
+    await service.useCloudSession();
+    session = { ...session, accountToken: renewed };
+
+    await service.retry();
+
+    expect(client.ensureInstallation).toHaveBeenLastCalledWith(expect.objectContaining({ accountToken: renewed }));
+  });
+
+  it("turns desktop phone access on with the server tunnel gate", () => {
+    const live = ["site", "serverTunnel"];
+    expect(resolveDesktopControlPlaneURL({ isPackaged: true, environment: {}, live })).toBe("https://accounts.seira.bot");
+    expect(resolveDesktopControlPlaneURL({ isPackaged: true, environment: {}, live: ["site"] })).toBe("");
+    expect(resolveDesktopControlPlaneURL({ isPackaged: false, environment: {}, live })).toBe("");
+    expect(resolveDesktopControlPlaneURL({
+      isPackaged: true,
+      environment: { SEIRA_CONTROL_PLANE_URL: "https://cp.example.test" },
+      live: ["site"],
+    })).toBe("https://cp.example.test");
+    expect(resolveDesktopControlPlaneURL({
+      isPackaged: true,
+      environment: { SEIRA_CONTROL_PLANE_URL: "ftp://nope" },
+      live,
+    })).toBe("");
+  });
+
+  it("builds the desktop phone access client only with a control plane and a valid Seira Cloud origin", () => {
+    const identity = { deviceName: "Fixture", platform: "linux", appVersion: "1.0.0" };
+    const environment = { SEIRA_CONTROL_PLANE_URL: "https://cp.example.test" };
+    const origin = "https://cloud.example.test";
+    expect(createDesktopControlPlaneClient({ isPackaged: false, environment: {}, origin, identity })).toBeNull();
+    expect(createDesktopControlPlaneClient({ isPackaged: true, environment, origin: "https://cloud.example.test/path", identity })).toBeNull();
+    expect(createDesktopControlPlaneClient({ isPackaged: true, environment, origin, identity })?.origin).toBe("https://cp.example.test");
   });
 
   it("checks the control plane a second time before it gives up on a typed code", async () => {

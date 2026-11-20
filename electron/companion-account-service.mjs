@@ -44,7 +44,7 @@ export {
   companionAccountCleanupPending,
   companionTunnelRetired,
 } from "./companion-account-documents.mjs";
-import { LIVE_SEIRA_SERVICES, SEIRA_HOSTS, seiraOrigin, seiraServiceLive } from "./seira-hosts.mjs";
+import { createSharedSession } from "./companion-cloud-session.mjs"; import { LIVE_SEIRA_SERVICES, SEIRA_HOSTS, seiraOrigin, seiraServiceLive } from "./seira-hosts.mjs";
 import { MANAGED_ENDPOINT_PHONES_UNUSED } from "./companion-endpoint-need.mjs";
 import { FRIENDLY_MESSAGES, friendlyCompanionAccountError } from "./companion-account-messages.mjs";
 export { friendlyCompanionAccountError };
@@ -143,10 +143,12 @@ export function createCompanionAccountService({
   forcedCheckIntervalMs = DEFAULT_FORCED_CHECK_INTERVAL_MS,
   /** A new installation credential was stored: the relay token can be asked for now. */
   installationChanged = () => {},
+  cloudSession = null,
   // Only the code, HTTP status, request id and retry delay: never an email, token, credential or address.
   log = () => {},
 } = {}) {
   const configured = Boolean(client);
+  const shared = createSharedSession(cloudSession);
   let healthy = false;
   let lastHealthCheck = null;
   let healthProbe = null;
@@ -384,7 +386,7 @@ export function createCompanionAccountService({
       }
     }
     try {
-      await client.signOut(account.accountToken);
+      if (!shared.owns(account.accountToken)) await client.signOut(account.accountToken);
     } catch {
     }
     await clearAfterCleanup();
@@ -562,7 +564,7 @@ export function createCompanionAccountService({
     return settledState();
   });
 
-  const verifyCode = (rawEmail, rawCode) => serialize(async () => {
+  const verifyCode = (rawEmail, rawCode, session = null) => serialize(async () => {
     if (!configured) throw new Error(FRIENDLY_MESSAGES.control_plane_unavailable);
     requestedAt = now();
     const email = normalizeAccountEmail(rawEmail);
@@ -570,7 +572,7 @@ export function createCompanionAccountService({
     let verified;
     try {
       await requireHealthyControlPlane({ attempts: 2 });
-      verified = await client.verifyOTP(email, rawCode);
+      verified = session ?? await client.verifyOTP(email, rawCode);
     } catch (error) {
       const message = failAction(error, { email, signedOut: true });
       throw new Error(message);
@@ -609,7 +611,7 @@ export function createCompanionAccountService({
       }
       return await provision(verified);
     } catch (error) {
-      if (!authenticatedPersisted) await client.signOut(verified.accountToken).catch(() => {});
+      if (!authenticatedPersisted && !shared.owns(verified.accountToken)) await client.signOut(verified.accountToken).catch(() => {});
       failAction(error, {
         email: authenticatedPersisted ? verified.user.email : previous?.email ?? email,
         expiredSessionIsSignedOut: authenticatedPersisted,
@@ -619,6 +621,11 @@ export function createCompanionAccountService({
     }
   });
 
+  const useCloudSession = () => {
+    const session = shared.current();
+    if (!configured || !session || storedAccount(credentials())) return Promise.resolve(settledState());
+    return verifyCode(session.user.email, null, session).catch(() => settledState());
+  };
   const retryWork = async ({ addressGone = false } = {}) => {
     if (!configured) return settledState();
     const account = storedAccount(credentials());
@@ -640,7 +647,7 @@ export function createCompanionAccountService({
     try {
       await requireHealthyControlPlane();
       return await provision({
-        accountToken: account.accountToken,
+        accountToken: shared.tokenFor(account),
         user: { id: account.userId, email: account.email },
         addressGone: addressGone === true,
       });
@@ -981,6 +988,7 @@ export function createCompanionAccountService({
     },
     requestCode,
     verifyCode,
+    useCloudSession,
     retry,
     prepare,
     checkStoredAddress,

@@ -82,7 +82,7 @@ import {
 } from "./desktop-companion-client.mjs";
 import { isKnownSkin, skinChrome } from "./skin-overlay.cjs";
 import { installCredentialStoreIpc, readSecureCredentials } from "./secure-credentials.mjs"; import { decryptAfterCopiedSecrets } from "./old-key.mjs";
-import { createControlPlaneClient } from "./control-plane-client.mjs";
+import { createDesktopControlPlaneClient } from "./desktop-control-plane.mjs";
 import {
   companionAccountCleanupPending, companionTunnelRetired,
   createCompanionAccountService,
@@ -730,17 +730,12 @@ function installationDisplayName() {
 
 function ensureCompanionAccountService() {
   if (companionAccountService) return companionAccountService;
-  const baseURL = resolveCompanionControlPlaneURL({
+  const client = createDesktopControlPlaneClient({
     isPackaged: app.isPackaged,
     environment: process.env,
+    origin: cloudTarget(process.env).origin,
+    identity: { deviceName: installationDisplayName(), platform: process.platform, appVersion: app.getVersion() },
   });
-  let client = null;
-  if (baseURL) {
-    try {
-      client = createControlPlaneClient({ baseURL });
-    } catch {
-    }
-  }
   companionAccountService = createCompanionAccountService({
     client,
     readCredentials: () => secureCredentialState?.read() ?? secureCredentials,
@@ -765,6 +760,7 @@ function ensureCompanionAccountService() {
     managedEndpointNeeded: async () =>
       companionRunning() ? managedEndpointNeed(await companionState().catch(() => null)) : null,
     relay: { capable: () => companionE2E?.enabled === true, legacyDevices: async () => (companionRunning() ? deviceCounts(await companionState().catch(() => null)).legacy : null) }, installationChanged: () => void companionE2E?.prime(),
+    cloudSession: { current: () => cloudAccount?.session() ?? null },
     log: (line) => slog(line),
   });
   return companionAccountService;
@@ -2439,7 +2435,8 @@ ipcMain.handle("desktop-remote:disconnect", localOnly("desktop-remote:disconnect
 }));
 
 // Auth and connector credentials never cross this boundary.
-ipcMain.handle("companion-account:state", localOnly("companion-account:state", () => ensureCompanionAccountService().state()));
+const adoptCloudSession = async () => { const service = ensureCompanionAccountService(); await service.useCloudSession().catch(() => {}); return service; };
+ipcMain.handle("companion-account:state", localOnly("companion-account:state", async () => (await adoptCloudSession()).state()));
 ipcMain.handle("companion-account:request-code", localOnly("companion-account:request-code", (_event, email) =>
   ensureCompanionAccountService().requestCode(email),
 ));
@@ -2450,7 +2447,7 @@ ipcMain.handle("companion-account:retry", localOnly("companion-account:retry", (
 ipcMain.handle("companion-account:prepare", localOnly("companion-account:prepare", () => {
   const refusal = managedRemoteAccessRefusal(); if (refusal) throw new Error(refusal);
   void companionE2E?.prime(); // a person is pairing: with Anywhere on, the encrypted connection starts before a code opens
-  return rememberCompanionRoute("https", true).then(() => ensureCompanionAccountService().prepare());
+  return rememberCompanionRoute("https", true).then(adoptCloudSession).then(service => service.prepare());
 }));
 ipcMain.handle("companion-account:sign-out", localOnly("companion-account:sign-out", () => ensureCompanionAccountService().signOut()));
 
