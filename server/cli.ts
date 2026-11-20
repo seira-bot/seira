@@ -353,8 +353,8 @@ async function mintPairing(port: number, options: { label?: string; client?: boo
   const refusal = refusedAsService(status, body) ? SERVICE_TRUST_HELP : desktopOwnedRefusal(status, body);
   if (refusal || status !== 200) throw new Error(refusal ?? `server refused to mint a pairing code: ${typeof body?.error === "string" ? body.error : status}`);
   const reachable = options.publicUrl && !isLoopbackHost(new URL(options.publicUrl).hostname) ? options.publicUrl : null;
-  const link = (typeof body.url === "string" && !isLoopbackHost(new URL(body.url).hostname) ? body.url : null) ?? (reachable ? `${reachable}/pair#code=${body.code}` : null);
-  const invite = (typeof body.inviteUrl === "string" ? body.inviteUrl : null) ?? (reachable && typeof body.credential === "string" ? phonePairingLink({ address: reachable, token: body.credential, name: typeof body.serverName === "string" ? body.serverName : undefined }) : null);
+  const link = (typeof body.url === "string" && body.url.includes("&endpoints=") && !isLoopbackHost(new URL(body.url).hostname) ? body.url : null) ?? (reachable ? `${reachable}/pair#code=${body.code}` : typeof body.url === "string" && !isLoopbackHost(new URL(body.url).hostname) ? body.url : null);
+  const invite = (typeof body.inviteUrl === "string" && body.inviteUrl.includes("endpoints=") ? body.inviteUrl : null) ?? (reachable && typeof body.credential === "string" ? phonePairingLink({ address: reachable, token: body.credential, name: typeof body.serverName === "string" ? body.serverName : undefined }) : null) ?? (typeof body.inviteUrl === "string" ? body.inviteUrl : null);
   const local = localLinkBase(options.publicUrl ?? null, port);
   if (options.guided) return browserSignInLines(`${local.base}/pair#code=${body.code}`, body.code, body.expiresAt);
   return relayPairingBlock(body, chatOnly, cliPrefix()) ?? pairingBlock({ code: body.code, expiresAt: body.expiresAt, chatOnly, link, localLink: `${local.base}/pair#code=${body.code}`, localPlace: local.place, inviteUrl: invite, phone: options.phone, prefix: cliPrefix() });
