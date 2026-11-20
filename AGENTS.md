@@ -46,3 +46,23 @@ describe one person's machine or private workflow.
   The pre-commit hook in `scripts/git-hooks/` runs it on the staged lines. Put
   your own user name, host aliases and LAN addresses in `.leakcheck.local`, one
   regular expression per line.
+
+## Private by default
+
+This repository is public. Before you add a file, decide if every user or
+contributor needs it. If not, the file does not go here.
+
+Keep these out of the repository:
+
+- Code and config of hosted services that only the maintainers deploy. They
+  live in a private repository.
+- Business numbers of the hosted service: its plan prices, quotas and costs.
+- Customer data.
+- Plans, specs, research and task notes. Put them in `internal/`.
+- Scratch files, backups and experiments.
+- Local files and env files.
+
+When you are unsure, keep the file local and ask the maintainer.
+
+`node scripts/check-public-paths.mjs` blocks a new file under a known private
+path. The pre-commit hook and CI run it.

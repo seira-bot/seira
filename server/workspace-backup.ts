@@ -38,7 +38,7 @@ const EXCLUDED = new Set([
   // Slack messages a Cloud took from the Admin (team-slack.ts): this machine's own, of no use anywhere else.
   "team-slack-messages.json",
   "seira-server.lease", "box-create-requests.lock", "messages.db-wal", "messages.db-shm",
-  "runtime.db-wal", "runtime.db-shm",
+  "runtime.db-wal", "runtime.db-shm", "workflows.db-wal", "workflows.db-shm",
   "decider-log",
   "cloud-owner.json",
   "sync",
@@ -112,7 +112,8 @@ function preserved(name: string): boolean {
   const folded = name.toLowerCase();
   return excluded(folded) && !LIVE_DATABASE_SIDECARS.has(folded) && folded !== WAITS_FILE;
 }
-const SNAPSHOT_DATABASES: Record<string, string> = { "messages.db": "messages-snapshot.db", "runtime.db": "runtime-snapshot.db" };
+const SNAPSHOT_DATABASES: Record<string, string> = { "messages.db": "messages-snapshot.db", "runtime.db": "runtime-snapshot.db", "workflows.db": "workflows-snapshot.db" };
+const DATABASE_LABELS: Record<string, string> = { "messages.db": "message", "runtime.db": "runtime", "workflows.db": "workflow" };
 const LIVE_DATABASE_SIDECARS = new Set(Object.keys(SNAPSHOT_DATABASES).flatMap((name) => [`${name}-wal`, `${name}-shm`]));
 function keptInPlace(name: string): boolean {
   return preserved(name) || name.toLowerCase() === "sessions.json.open";
@@ -337,7 +338,7 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
     for (const [name, snapshotName] of Object.entries(SNAPSHOT_DATABASES)) {
       const sourceDb = join(root, name);
       if (!existsSync(sourceDb)) continue;
-      if (lstatSync(sourceDb).isSymbolicLink()) throw new Error(`The ${name === "messages.db" ? "message" : "runtime"} database must not be a symbolic link.`);
+      if (lstatSync(sourceDb).isSymbolicLink()) throw new Error(`The ${DATABASE_LABELS[name]} database must not be a symbolic link.`);
       // Another connection may open this database meanwhile; without a busy timeout the backup fails at once ("database is locked").
       const db = new DatabaseSync(sourceDb, { readOnly: true, timeout: 5_000 });
       // Node 26's native backup completion can wait on unrelated event-loop activity after an async scrypt; this pulse keeps it moving.
@@ -349,10 +350,9 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
     }
     const teamPrivate = teamPrivateThreads({ starters: join(root, "thread-starters.json"), groups: join(root, "groups.json"), bots: join(root, "bots.json") });
     const privacy = teamPrivate && { ...teamPrivate, attachments: teamPrivateAttachments(root, join(snapshot, SNAPSHOT_DATABASES["messages.db"]!), teamPrivate) };
-    if (privacy) {
-      stripTeamPrivate({ messages: join(snapshot, SNAPSHOT_DATABASES["messages.db"]!), runtime: join(snapshot, SNAPSHOT_DATABASES["runtime.db"]!) }, privacy);
-      warnings.push(TEAM_PRIVATE_NOTE);
-    }
+    const snapshotOf = (name: string) => join(snapshot, SNAPSHOT_DATABASES[name]!);
+    const privateWorkflowRuns = privacy ? stripTeamPrivate({ messages: snapshotOf("messages.db"), runtime: snapshotOf("runtime.db"), workflows: snapshotOf("workflows.db") }, privacy) : new Set<string>();
+    if (privacy) warnings.push(TEAM_PRIVATE_NOTE);
     const walk = (directory: string, prefix = "", chain: string[] = [root]) => {
       for (const name of readdirSync(directory).sort()) {
         if (!prefix && excluded(name)) continue;
@@ -418,7 +418,7 @@ export async function createWorkspaceBackupSnapshot(dataDir: string, options: Cr
             const value = privateJson(source);
             if (path === "config.json") writeJson(destination, portableWorkspaceConfig(value));
             else if (path === "bots.json") writeJson(destination, withoutTeamPrivate(value, privacy!));
-            else if (path === "routines.json") writeJson(destination, routinesWithoutTeamPrivate(value, privateJson(join(root, "bots.json")), privacy!));
+            else if (path === "routines.json") writeJson(destination, routinesWithoutTeamPrivate(value, privateJson(join(root, "bots.json")), privacy!, privateWorkflowRuns));
             else {
               if (!record(value)) throw new Error("Invalid webhook definitions in workspace backup.");
               if (Array.isArray(value.webhooks)) for (const webhook of value.webhooks) if (record(webhook)) { delete webhook.secretHash; delete webhook.sealedSecret; }

@@ -1,4 +1,5 @@
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { join } from "node:path";
 
 import { writeFileAtomic } from "./atomic.ts";
@@ -130,7 +131,7 @@ function loadState(): UpkeepState {
 /** Answers whether the file on disk is now current; a failed write stays pending for the next flush. */
 function saveState(state: UpkeepState): boolean {
   try {
-    mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+    ensurePrivateDir(DATA_DIR);
     writeFileAtomic(statePath(), `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
     return true;
   } catch {
@@ -161,7 +162,7 @@ function savePending(batches: readonly CaptureBatch[]): void {
     batches: [...byThread.values()].slice(-MAX_PENDING_THREADS).map((entry) => ({ ...entry, turnIds: entry.turnIds.slice(-CAPTURE_MAX_TURNS) })),
   };
   try {
-    mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+    ensurePrivateDir(DATA_DIR);
     writeFileAtomic(pendingPath(), `${JSON.stringify(state)}\n`, { mode: 0o600 });
   } catch {
   }

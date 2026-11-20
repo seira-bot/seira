@@ -9,6 +9,7 @@ import { dirname, join, posix, resolve } from "node:path";
 import { SEIRA_HOSTS, seiraOrigin } from "../../electron/seira-hosts.mjs";
 import { EXIT, flag, usageError } from "./args.ts";
 import type { VerbContext, VerbOutcome } from "./context.ts";
+import { acceptedWireNames } from "../../electron/phone-wire-names.mjs";
 
 const CLOCK_ORIGIN = seiraOrigin(SEIRA_HOSTS.site);
 
@@ -305,7 +306,7 @@ export function systemProbe(): HostProbe {
     async serverAnswers(port) {
       try {
         const response = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(2_000) });
-        return ((await response.json()) as { app?: unknown }).app === "seira";
+        return acceptedWireNames("healthApp").includes(String(((await response.json()) as { app?: unknown }).app));
       } catch {
         return false;
       }

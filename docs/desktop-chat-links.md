@@ -53,5 +53,5 @@ seira://bot/<bot-id>
 Like the `seira://cloud` and `seira://organization` links, these are
 local-shell actions: a page loaded from a remote server never receives them, and
 the browser build has no such links at all. An app connected to another
-computer as its companion (**Settings → Remote access → Connect to another
-computer**) opens them against that computer's chats, the ones it shows.
+computer as its companion (**Settings → Phone & devices → Your other
+computers**) opens them against that computer's chats, the ones it shows.

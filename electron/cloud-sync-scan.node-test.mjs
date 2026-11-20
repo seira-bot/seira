@@ -31,6 +31,15 @@ test("lists files as wire paths with hashes, keeping links and hard links as pre
   assert.deepEqual(temps.map((temp) => temp.file), [join(dir, ".a.txt.seira-sync-1a2b3c4d")]);
 });
 
+test("a temporary file that an earlier version left, named omb-sync, counts as a temp and not as a file", async (t) => {
+  const dir = folder(t);
+  writeFileSync(join(dir, "a.txt"), "one");
+  writeFileSync(join(dir, ".b.txt.omb-sync-1a2b3c4d"), "half");
+  const { entries, temps } = await scanPc(dir, new Map(), { now: LATER });
+  assert.deepEqual(temps.map((temp) => temp.file), [join(dir, ".b.txt.omb-sync-1a2b3c4d")]);
+  assert.deepEqual([...entries.keys()], ["a.txt"]);
+});
+
 test("reuses the base's hash when size and modified time match, and hashes again when they do not", async (t) => {
   const dir = folder(t);
   writeFileSync(join(dir, "a.txt"), "one");

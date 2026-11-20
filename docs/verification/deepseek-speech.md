@@ -34,7 +34,7 @@ and the Voice settings picker.
 Contract: [TTS](https://api-docs.deepseek.com/guides/tts/) and
 [ASR](https://api-docs.deepseek.com/guides/asr/).
 
-For a manual desktop check, save a DeepSeek key under Settings → API keys,
+For a manual desktop check, save a DeepSeek key under Settings → AI → Other services,
 choose DeepSeek in a bot's Voice settings, pick Tide and play the sample.
 Enable spoken replies, send a message, and request a voice note. Dictate into
 the composer and take a turn in a call, on macOS and on Windows. This verifies

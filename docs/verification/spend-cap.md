@@ -22,7 +22,7 @@
 
 ## User path
 
-Settings → Usage → **Monthly spend limit** and **Sell prices** (enterprise).
+Settings → Spending, **Monthly spend limit** and **Sell prices** (enterprise).
 The History card shows a billable column once prices exist; the composer's
 send is refused with the limit message once the cap is reached.
 

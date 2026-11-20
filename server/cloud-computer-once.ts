@@ -31,21 +31,29 @@ const UNCLAIMED_EXIT = 76;
 const KEY = /^[0-9a-f]{16}$/;
 const takenMark = (key: string) => `seira-once:${key}:taken`;
 const unclaimedMark = (key: string) => `seira-once:${key}:unclaimed`;
+// Name before v0.1.182; a call that an earlier version sent left its claim and its marks under it.
+const legacyTakenMark = (key: string) => `omb-once:${key}:taken`;
+const legacyUnclaimedMark = (key: string) => `omb-once:${key}:unclaimed`;
 
 /** Shell words, expanded on the computer. */
-const CLAIM_DIRS = { disk: "${HOME:-/tmp}/.cache/seira-once", memory: "/dev/shm/seira-once" };
+type ClaimDirs = { disk: string; memory: string; legacy?: readonly string[] };
+// `legacy` holds the claim folders of earlier versions (name before v0.1.182). A claim there stops a call; nothing new goes there.
+const CLAIM_DIRS: ClaimDirs = { disk: "${HOME:-/tmp}/.cache/seira-once", memory: "/dev/shm/seira-once", legacy: ["${HOME:-/tmp}/.cache/omb-once", "/dev/shm/omb-once"] };
+const quoted = (words: readonly string[]) => words.map((word) => `"${word}"`).join(" ");
 
 export const newCallKey = (): string => randomBytes(8).toString("hex");
 
 /** `command` behind its claim. The claim lives on the computer's disk, which outlasts a stop and resume, and in
  * /dev/shm when the disk refuses it (full, read-only). A first send runs even with no claim, as it always did; a
  * resend that cannot claim does not run. */
-export function onceCommand(key: string, attempt: number, command: string, dirs: { disk: string; memory: string } = CLAIM_DIRS): string {
+export function onceCommand(key: string, attempt: number, command: string, dirs: ClaimDirs = CLAIM_DIRS): string {
   if (!KEY.test(key)) throw new RangeError("a call key is 16 hex characters");
+  const legacy = dirs.legacy ?? [];
   return [
     `k=${key}; a="${dirs.disk}"; b="${dirs.memory}"`,
     `taken() { echo ${takenMark(key)}; exit ${TAKEN_EXIT}; }`,
     'if [ -d "$a/$k" ] || [ -d "$b/$k" ]; then taken; fi',
+    ...(legacy.length ? [`for d in ${quoted(legacy)}; do if [ -d "$d/$k" ]; then taken; fi; done`] : []),
     'mkdir -p "$a" 2>/dev/null',
     'if ! mkdir "$a/$k" 2>/dev/null; then',
     '  if [ -d "$a/$k" ]; then taken; fi',
@@ -57,7 +65,7 @@ export function onceCommand(key: string, attempt: number, command: string, dirs:
     "fi",
     // The shell's own process id, kept beside the claim: `exec` below keeps it, so it names the command.
     'echo $$ > "$a/$k/pid" 2>/dev/null || echo $$ > "$b/$k/pid" 2>/dev/null',
-    ...(key.endsWith("0") ? ['find "$a" "$b" -mindepth 1 -maxdepth 1 -type d -mmin +1440 -exec rmdir {} + 2>/dev/null'] : []),
+    ...(key.endsWith("0") ? [`find "$a" "$b"${legacy.map((dir) => ` "${dir}"`).join("")} -mindepth 1 -maxdepth 1 -type d -mmin +1440 -exec rmdir {} + 2>/dev/null`] : []),
     command,
   ].join("\n");
 }
@@ -65,10 +73,11 @@ export function onceCommand(key: string, attempt: number, command: string, dirs:
 /** Ends the command a call started and everything it started, by the process id the call recorded: Boat has no call
  * this app knows of that stops a command by its processId (unverified). Only that process and its descendants are
  * signalled, never a process group, which could hold the computer's own agent. */
-export function stopCommand(key: string, dirs: { disk: string; memory: string } = CLAIM_DIRS): string {
+export function stopCommand(key: string, dirs: ClaimDirs = CLAIM_DIRS): string {
   if (!KEY.test(key)) throw new RangeError("a call key is 16 hex characters");
   return [
     `k=${key}; p=; for d in "${dirs.disk}" "${dirs.memory}"; do if [ -f "$d/$k/pid" ]; then p=$(cat "$d/$k/pid"); break; fi; done`,
+    ...(dirs.legacy?.length ? [`if [ -z "$p" ]; then for d in ${quoted(dirs.legacy)}; do if [ -f "$d/$k/pid" ]; then p=$(cat "$d/$k/pid"); break; fi; done; fi`] : []),
     '[ -n "$p" ] || exit 0',
     'stop() { for c in $(pgrep -P "$1" 2>/dev/null); do stop "$c"; done; kill -TERM "$1" 2>/dev/null; }',
     'stop "$p"; exit 0',
@@ -139,11 +148,11 @@ export async function runOnce(cfg: AppConfig, boxId: string, command: string, op
       if (deps.now() >= lastSend()) return { kind: "late" };
     }
     if (result && !result.unanswered && !result.busy) {
-      if (result.exitCode === TAKEN_EXIT && result.stdout.includes(takenMark(key))) {
+      if (result.exitCode === TAKEN_EXIT && (result.stdout.includes(takenMark(key)) || result.stdout.includes(legacyTakenMark(key)))) {
         deps.counters.count(boxId, "lostAnswers");
         return { kind: "lost" };
       }
-      if (result.exitCode === UNCLAIMED_EXIT && result.stdout.includes(unclaimedMark(key))) return { kind: "unanswered", phase: "waking" };
+      if (result.exitCode === UNCLAIMED_EXIT && (result.stdout.includes(unclaimedMark(key)) || result.stdout.includes(legacyUnclaimedMark(key)))) return { kind: "unanswered", phase: "waking" };
       return { kind: "ran", result, resent, stop };
     }
     deps.counters.count(boxId, "unanswered");

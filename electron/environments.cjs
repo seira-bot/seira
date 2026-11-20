@@ -43,13 +43,13 @@ function workspaceSummary(state) {
 }
 
 /** Native identity must not depend on a hosted renderer's version/title. `homeOrigin`: My Cloud once it is the person's
- * home: alone, it is simply the app; with a team or another place besides, the window names the place it shows. */
+ * home: alone, it is simply the app; with a team or another place besides, the window names the place it shows. A saved
+ * server shows its name only; its address is in the place menu. */
 function workspaceWindowTitle(state, companion, homeOrigin = null, t = englishText.t) {
   if (companion) return t("native.title.connected", { server: companion.serverName, host: new URL(companion.endpoint).host });
   const active = activeEnvironment(state);
   if (listedPlace(active)) return `Seira — ${active.name}`;
-  if (active && active.kind !== "local" && active.origin !== homeOrigin) return t("native.title.hosted", { name: active.name, host: new URL(active.origin).host });
-  if (active && homeOrigin && active.origin === homeOrigin && otherPlaces(state, homeOrigin) > 0) return `Seira — ${active.name}`;
+  if (active && active.kind !== "local" && (active.origin !== homeOrigin || otherPlaces(state, homeOrigin) > 0)) return `Seira — ${active.name}`;
   return "Seira";
 }
 
@@ -85,14 +85,15 @@ function workspaceMenuTemplate(state, { onSwitch, onConnect, onForget, onAddClou
     ...(places ? [{ id: "workspace-places", label: places, enabled: false }, { type: "separator" }] : []),
     { id: "workspace-local", label: t("place.local"), type: "radio", checked: !active && !own.some((item) => item.checked), ...(iconFor && cleanColor(state.localColor) ? { icon: iconFor(state.localColor) } : {}), click: () => onSwitch(LOCAL_ID) },
     ...own,
-    ...[...state.environments].sort((a, b) => listedPlace(b) - listedPlace(a)).map((entry) => {
+    ...[...state.environments].sort((a, b) => listedPlace(b) - listedPlace(a)).flatMap((entry) => {
       const icon = iconFor && cleanColor(entry.color) ? iconFor(entry.color) : null;
       const status = Object.hasOwn(sublabels, entry.id) ? sublabels[entry.id] : entry.team ? teamRoleLabel(entry.team.role, t) : null;
-      return {
+      const checked = entry.id === state.activeId;
+      return [{
         id: `workspace-${entry.id}`, label: foldSublabels && status ? `${entry.name} · ${status}` : entry.name,
         sublabel: status ?? (entry.kind === "local" ? entry.dataDir : new URL(entry.origin).host),
-        ...(icon ? { icon } : {}), type: "radio", checked: entry.id === state.activeId, click: () => onSwitch(entry.id),
-      };
+        ...(icon ? { icon } : {}), type: "radio", checked, click: () => onSwitch(entry.id),
+      }, ...(foldSublabels && checked && !status && entry.kind !== "local" ? [{ id: "workspace-address", label: new URL(entry.origin).host, enabled: false }] : [])];
     }),
     ...(copyToCloud ? [{ id: "workspace-copy-to-cloud", label: copyToCloud.label, click: copyToCloud.click }] : []),
     ...(onAddCloud ? [{ id: "workspace-add-cloud", label: t("native.menu.addCloud"), sublabel: t("native.switcher.addCloudSub"), click: onAddCloud }] : []),
@@ -112,13 +113,14 @@ function homeMenuTemplate(state, { onSwitch, onForget, sublabels, iconFor, foldS
   const shown = own.some((item) => item.checked);
   return [
     ...own,
-    ...places.map((entry) => {
+    ...places.flatMap((entry) => {
       const icon = iconFor && cleanColor(entry.color) ? iconFor(entry.color) : null;
       const status = Object.hasOwn(sublabels, entry.id) ? sublabels[entry.id] : entry.team ? teamRoleLabel(entry.team.role, t) : null;
-      return {
+      const checked = entry.id === state.activeId && !shown;
+      return [{
         id: `workspace-${entry.id}`, label: foldSublabels && status ? `${entry.name} · ${status}` : entry.name, sublabel: status ?? new URL(entry.origin).host,
-        ...(icon ? { icon } : {}), type: "radio", checked: entry.id === state.activeId && !shown, click: () => onSwitch(entry.id),
-      };
+        ...(icon ? { icon } : {}), type: "radio", checked, click: () => onSwitch(entry.id),
+      }, ...(foldSublabels && checked && !status ? [{ id: "workspace-address", label: new URL(entry.origin).host, enabled: false }] : [])];
     }),
     ...(fresh.length ? [{ type: "separator" }, ...fresh] : []),
     ...(active && active.origin !== homeOrigin && !listedPlace(active) ? [{ type: "separator" }, { id: "workspace-forget", label: t("native.switcher.forgetNamed", { name: active.name }), click: () => onForget(active.id) }] : []),

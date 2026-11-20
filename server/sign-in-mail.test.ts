@@ -9,7 +9,7 @@ const URL_ = "smtps://signin%40example.test:p%40ss@smtp.example.test:465";
 
 function mailbox() {
   const sent: MailMessage[] = [];
-  return { sent, transport: { sendMail: async (message: MailMessage) => { sent.push(message); } }, code: () => /(\d{4}) (\d{4})/.exec(sent.at(-1)!.text)!.slice(1).join("") };
+  return { sent, transport: { sendMail: async (message: MailMessage) => { sent.push(message); } }, code: () => /^(\d{8})$/m.exec(sent.at(-1)!.text)![1]! };
 }
 
 describe("sign-in codes through the server's own mail server", () => {
@@ -39,7 +39,35 @@ describe("sign-in codes through the server's own mail server", () => {
     const box = mailbox();
     await createSignInMail({ url: URL_, transport: box.transport }).send("her@example.test", "seira.example.com");
     expect(box.sent[0]).toMatchObject({ subject: "Your Seira sign-in code for seira.example.com" });
-    expect(box.sent[0]?.text).toContain("to sign in to seira.example.com is");
+  });
+
+  it("writes the approved plain-text mail, with and without a server name", async () => {
+    const box = mailbox();
+    const mail = createSignInMail({ url: URL_, transport: box.transport });
+    await mail.send("her@example.test", "kantor.acme.id");
+    const code = box.code();
+    expect(box.sent[0]?.text).toBe([
+      "Your code to sign in to kantor.acme.id:", "", code, "",
+      "Do not share this code with anyone.",
+      "Did not ask for this code? Ignore this email. Nothing changes.", "",
+      "--", "Sent by the Seira server at kantor.acme.id", "seira.bot", "",
+    ].join("\n"));
+    await mail.send("other@example.test");
+    const plain = box.sent[1]!.text;
+    expect(plain.split("\n")[0]).toBe("Your code to sign in to Seira:");
+    expect(plain).not.toContain("Sent by");
+    for (const message of box.sent) expect(message.text).not.toMatch(/minutes|\bten\b/i);
+  });
+
+  it("accepts a code typed with a space or a hyphen", async () => {
+    const box = mailbox();
+    const mail = createSignInMail({ url: URL_, transport: box.transport });
+    await mail.send("her@example.test");
+    const code = box.code();
+    expect(mail.check("her@example.test", `${code.slice(0, 4)} ${code.slice(4)}`)).toBe("ok");
+    await mail.send("his@example.test");
+    const next = box.code();
+    expect(mail.check("his@example.test", `${next.slice(0, 4)}-${next.slice(4)}`)).toBe("ok");
   });
 
   it("ends a code after ten minutes or five wrong tries, and sends at most one every 30 seconds", async () => {
@@ -134,7 +162,7 @@ describe("a real SMTP conversation", () => {
     expect(await mail.send("her@example.test")).toBe("sent");
     const message = received.join("\n");
     expect(message).toContain("To: her@example.test");
-    const code = /(\d{4}) (\d{4})/.exec(message)!.slice(1).join("");
+    const code = /^(\d{8})$/m.exec(message)![1]!;
     expect(mail.check("her@example.test", code)).toBe("ok");
   });
 });

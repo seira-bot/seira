@@ -1,8 +1,10 @@
 #!/bin/sh
-# Runs before every push, in seconds: lint on the files this push changes, the locale check when a catalog changed, and
-# the size and vocabulary guards when a source they read changed (scripts/pre-push-check.mjs). The typecheck and the
-# suite stay in CI. A checkout without dependencies, as an agent's worktree often is, checks nothing and lets the push go, unless
-# `git config seira.prePushHost` names an ssh host: then scripts/pre-push-remote.mjs runs the same checks there.
+# Runs before every push, in seconds: lint on the files this push changes, the locale check when a catalog changed, the
+# size and vocabulary guards when a source they read changed, and the fast Cloudflare Worker tests for a Worker the push
+# changes (scripts/pre-push-check.mjs). The typecheck and the full suite stay in CI.
+# A checkout without dependencies, as an agent's worktree often is, runs the same checks over ssh through
+# scripts/pre-push-remote.mjs when `git config seira.prePushHost` names a host. That script comes from the checkout, or
+# else from the checkout that holds this hook. With no host, or with no node or no script, no check can run and the push stops.
 #
 # Installed by `pnpm install` through scripts/install-git-hooks.mjs (sets core.hooksPath). Skip once with
 # `git push --no-verify`, or for a session with SEIRA_SKIP_HOOKS=1.
@@ -15,12 +17,24 @@ if [ -n "$OMB_SKIP_HOOKS" ]; then
   echo "pre-push: skipped (OMB_SKIP_HOOKS is set; that name is deprecated and will be removed, use SEIRA_SKIP_HOOKS)"
   exit 0
 fi
+hooks="$(cd "$(dirname "$0")" && pwd)"
 cd "$(git rev-parse --show-toplevel)" || exit 0
 if [ ! -x node_modules/.bin/oxlint ] || [ ! -f scripts/pre-push-check.mjs ] || ! command -v node >/dev/null 2>&1; then
-  if [ -f scripts/pre-push-remote.mjs ] && command -v node >/dev/null 2>&1 && [ -n "$(git config --get seira.prePushHost)" ]; then
-    exec node scripts/pre-push-remote.mjs
+  if ! command -v node >/dev/null 2>&1; then
+    echo "pre-push: no check ran, because node is not on PATH. Install node, then push again."
+    exit 1
   fi
-  echo "pre-push: no dependencies in this checkout, so CI will check this push"
-  exit 0
+  if [ -n "$(git config --get seira.prePushHost)" ]; then
+    if [ -f scripts/pre-push-remote.mjs ]; then
+      exec node scripts/pre-push-remote.mjs
+    fi
+    if [ -f "$hooks/../pre-push-remote.mjs" ]; then
+      exec node "$hooks/../pre-push-remote.mjs"
+    fi
+    echo "pre-push: no check ran, because scripts/pre-push-remote.mjs is in neither this checkout nor the hooks folder's checkout."
+    exit 1
+  fi
+  echo "pre-push: no check ran, because this checkout has no dependencies. Run pnpm install, or set git config seira.prePushHost to an ssh host (see docs/contributing.md)."
+  exit 1
 fi
 exec node scripts/pre-push-check.mjs

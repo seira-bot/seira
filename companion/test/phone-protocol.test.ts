@@ -3,6 +3,7 @@ import { describe, expectTypeOf, it } from "vitest";
 import type { Notification, NotificationLogEntry } from "../../packages/phone-protocol/src/notification.ts";
 import type { PhonePushData, PhonePushNotification } from "../../packages/phone-protocol/src/phone-push.ts";
 import type { CompanionEndpointsSnapshot, PairResponse, ServerFrame } from "../../packages/phone-protocol/src/wire.ts";
+import type { Workflow, WorkflowRunUpdate } from "../../packages/phone-protocol/src/workflows.ts";
 import type { PairingErrorCode } from "../../packages/phone-protocol/src/pairing-code.ts";
 import type { PairingRefusal, PublicDevice } from "../src/devices.ts";
 import type { E2EDescriptor } from "../src/e2e/descriptor.ts";
@@ -26,5 +27,11 @@ describe("the phone protocol's types", () => {
     expectTypeOf<NonNullable<PhonePushNotification["requestId"]>>().toEqualTypeOf<string>();
     expectTypeOf<NonNullable<PhonePushData["requestId"]>>().toEqualTypeOf<string>();
     expectTypeOf<Omit<PhonePushNotification, "requestId">>().toExtend<PhonePushNotification>();
+  });
+
+  it("carry a workflow and its run on the frame stream", () => {
+    expectTypeOf<{ kind: "workflow"; workflow: Workflow }>().toExtend<ServerFrame>();
+    expectTypeOf<{ kind: "workflow.deleted"; workflowId: string }>().toExtend<ServerFrame>();
+    expectTypeOf<{ kind: "workflow.run"; run: WorkflowRunUpdate }>().toExtend<ServerFrame>();
   });
 });

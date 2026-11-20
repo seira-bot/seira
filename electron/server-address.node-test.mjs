@@ -69,6 +69,17 @@ test("the wrong kind of code says what it is, in either field", () => {
   assert.deepEqual(readPairingCode(`seira_pair_${"a".repeat(43)}`), { kind: "credential", credential: `seira_pair_${"a".repeat(43)}` });
 });
 
+test("a credential, a link and a script key are read with the old names and the Seira names", () => {
+  for (const prefix of ["omb_pair_", "seira_pair_"]) {
+    const token = `${prefix}${"d".repeat(43)}`;
+    assert.deepEqual(readPairingCode(token), { kind: "credential", credential: token });
+    for (const scheme of ["openmausbot", "seira"]) {
+      assert.equal(parseServerInput(`${scheme}://pair?address=${encodeURIComponent("http://192.168.1.20:8799")}&token=${token}`).credential, token);
+    }
+  }
+  assert.equal(parseServerInput(`omb_sess_${"a".repeat(43)}`).problem, "scriptKey");
+});
+
 test("app links naming a server are read; a phone's link to a computer is named", () => {
   const parsed = parseServerInput(`seira://pair?address=${encodeURIComponent("https://seira.example.com")}&code=${CODE}`);
   assert.deepEqual(parsed, { ok: true, candidates: ["https://seira.example.com"], code: CODE, credential: null });

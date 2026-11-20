@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { linkSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { linkSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { join } from "node:path";
 
 import { writeFileAtomic } from "./atomic.ts";
@@ -158,7 +159,7 @@ function loadFresh(): BoatDeletionRecord[] {
 
 function save(records: BoatDeletionRecord[]): void {
   try {
-    mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+    ensurePrivateDir(DATA_DIR);
     writeFileAtomic(FILE, `${JSON.stringify({ version: 1, records }, null, 2)}\n`, { mode: 0o600 });
   } catch (error) {
     throw stateError("unavailable", error);
@@ -306,7 +307,7 @@ function reapDeadLock(expected: JournalLockOwner): boolean {
 
 function acquireJournalLock(): JournalLockOwner {
   try {
-    mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+    ensurePrivateDir(DATA_DIR);
   } catch (error) {
     throw stateError("lock directory is unavailable", error);
   }

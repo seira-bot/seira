@@ -230,11 +230,18 @@ describe("pushing a bot's activity while the app is closed", () => {
   });
 });
 
-describe("a push-activity file an earlier version saved", () => {
-  it("loads a registration whose link scheme is the old one", () => {
-    const registration = { scheme: "openmausbot-dev", headlines: HEADLINES };
-    writeFileSync(join(dataDir, "push-activity.json"), JSON.stringify({ version: 1, phones: [{ key: IPHONE, registration, updatedAt: 1 }] }));
+describe("a link scheme the phone registers", () => {
+  it.each(["openmausbot", "openmausbot-dev", "openmausbot-next", "seira", "seira-dev", "seira-next"])("keeps %s", (scheme) => {
+    const saved = { scheme, headlines: HEADLINES };
+    writeFileSync(join(dataDir, "push-activity.json"), JSON.stringify({ version: 1, phones: [{ key: IPHONE, registration: saved, updatedAt: 1 }] }));
     const { activity } = harness();
-    expect(activity.registration(IPHONE)).toMatchObject({ scheme: "seira-dev" });
+    expect(activity.registration(IPHONE)).toMatchObject({ scheme });
+  });
+
+  it("builds each chat link with the scheme the phone sent", async () => {
+    const { activity, activityCalls, step } = harness();
+    await activity.register(IPHONE, registration({ scheme: "openmausbot", activities: [{ botId: "bot_1", token: ACT }], visuals: { bot_1: VISUAL } }));
+    await step({ busy: true }, runtime("turn.started"));
+    expect(activityCalls()[0]).toMatchObject({ activity: { link: "openmausbot://chat/th_1" } });
   });
 });

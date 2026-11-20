@@ -144,6 +144,7 @@ mac:
     NSAccessibilityUsageDescription: Seira uses Accessibility when you let a bot control this Mac.
     NSLocalNetworkUsageDescription: Seira connects to your phones and your other computers on this network and on Tailscale.
     NSBonjourServices:
+      - _openmausbot._tcp
       - _seira._tcp
     NSScreenCaptureUsageDescription: Seira uses Screen Recording so bots can see this Mac before acting.
     NSDownloadsFolderUsageDescription: Seira looks in Downloads for the file your Grok Bot saved when you move it here.

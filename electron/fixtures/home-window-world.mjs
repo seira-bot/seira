@@ -1,6 +1,7 @@
 // The window onto My Cloud with fakes on every side (home-window.mjs): the world each home-window test runs in, shared by
 // home-window.node-test.mjs and home-window-states.node-test.mjs.
 import { createHomeWindow } from "../home-window.mjs";
+import { acceptedWireNames } from "../phone-wire-names.mjs";
 
 export const CLOUD = "https://seira-t-1.fly.dev";
 export const TEAM = "https://seira-u-acme.fly.dev";
@@ -100,7 +101,7 @@ export function world({ clean = null, journal = done(), marker = null, state = c
         w.redeemed.push([atClient ? "client" : atTeam ? "team" : "cloud", JSON.parse(init.body)]);
         return server.redeems === false ? json({ error: "invalid code" }, 400) : json({ kind: "session" });
       }
-      if (route === "/.well-known/seira/environment") return json({ version: server.version });
+      if (acceptedWireNames("environmentPath").includes(route)) return json({ version: server.version });
       return json({}, 404);
     },
     power: { asleep: () => w.power?.state === "asleep", hold: () => { w.power = { state: "asleep", since: 1 }; }, woke: () => w.calls.push("woke") },

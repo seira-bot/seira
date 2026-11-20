@@ -95,7 +95,7 @@ RUN apt-get update \
     libxshmfence1 libgbm1 fonts-noto-color-emoji fonts-noto-cjk fonts-freefont-ttf \
   && rm -rf /var/lib/apt/lists/* \
   && useradd --create-home --home-dir /data --shell /bin/bash seira
-# The bots' browser (docs/plans/browser-engine.md): the pinned agent-browser
+# The bots' browser: the pinned agent-browser
 # and a Chrome for Testing with its libraries, so a server bot can browse.
 # Pin here and in server/browser-engine-release.ts together.
 ARG AGENT_BROWSER_VERSION=0.37.0
@@ -235,7 +235,7 @@ VOLUME ["/data"]
 EXPOSE 8080
 # Fly uses the checks in fly.toml; this one serves a plain `docker run`.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
-  CMD curl -sf http://127.0.0.1:8080/api/health | grep -q seira || exit 1
+  CMD curl -sf http://127.0.0.1:8080/api/health | grep -q -e seira -e openmausbot || exit 1
 # Starts as root: hands a fresh volume to `seira`, runs the server and the edge
 # as `seira`, and hands the server its secrets over a pipe, never an
 # environment `seira` could read (server/cloud-home-start.ts). It runs only
@@ -267,7 +267,7 @@ ENV HOME=/data \
 VOLUME ["/data"]
 USER seira
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD curl -sf http://127.0.0.1:8799/api/health | grep -q seira || exit 1
+  CMD curl -sf http://127.0.0.1:8799/api/health | grep -q -e seira -e openmausbot || exit 1
 # The launcher runs dist-server/index.js and starts it again when it asks to
 # (a copied workspace committing, server/restart.ts), so the container, and a
 # Caddy sharing its network, stays up through that restart.

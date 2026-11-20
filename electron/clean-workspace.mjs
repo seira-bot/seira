@@ -22,6 +22,7 @@ import path from "node:path";
 
 import { WELCOME_VERSION } from "./onboarding-record.mjs";
 import nativeText from "./native-text.cjs";
+import { acceptedWireNames } from "./phone-wire-names.mjs";
 
 /** This first conversation stays quiet: no corner notices until a reply, no spotlights (src/lib/onboarding.ts MET_CHIEF_HINT). */
 const QUIET_HINT = "met-chief-v1";
@@ -149,7 +150,7 @@ export function createCleanWorkspace({ dataDir, running, swap, allowed = () => t
         if (ownCopy()) return request(route, init);
         if ((init?.method ?? "GET").toUpperCase() === "GET") {
           if (route === "/api/move/freeze") return Response.json(marker());
-          if (route === "/.well-known/seira/environment") {
+          if (acceptedWireNames("environmentPath").includes(route)) {
             const id = readOwn("environment-id")?.trim();
             return Response.json(id ? { environmentId: id } : {});
           }

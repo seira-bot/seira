@@ -36,4 +36,21 @@ describe("startRoutineWork", () => {
     await startRoutineWork(d, run({ prompt: "Do it" }), "thread-1");
     expect(d.options.startTurn).toHaveBeenCalledWith("pepper", "thread-1", expect.stringContaining("Do it"), "seira", "schedule", expect.any(Function), "run-1");
   });
+
+  it("sends a workflow run to startWorkflow, not to a bot turn", async () => {
+    const startWorkflow = vi.fn(async (_run: RoutineRun, _threadId: string, _fail: (message: string) => void) => {});
+    const d = deps({ startWorkflow });
+    await startRoutineWork(d, run({ prompt: "1. Ana: Do it", workflowId: "wf-1" }), "thread-1");
+    expect(startWorkflow).toHaveBeenCalledWith(expect.objectContaining({ id: "run-1", workflowId: "wf-1" }), "thread-1", expect.any(Function));
+    expect(d.options.startTurn).not.toHaveBeenCalled();
+    startWorkflow.mock.calls[0]![2]("The workflow is gone");
+    expect(d.failThread).toHaveBeenCalledWith("thread-1", "The workflow is gone", { cause: "refused" });
+  });
+
+  it("fails the thread when workflows are unavailable", async () => {
+    const d = deps();
+    await startRoutineWork(d, run({ prompt: "1. Ana: Do it", workflowId: "wf-1" }), "thread-1");
+    expect(d.failThread).toHaveBeenCalledWith("thread-1", "Workflows are unavailable");
+    expect(d.options.startTurn).not.toHaveBeenCalled();
+  });
 });

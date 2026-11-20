@@ -25,7 +25,7 @@ not prove a customer's real DNS, certificate, or reverse proxy is configured.
    explicit URL.
 2. Start Vite on a separate free port with `SEIRA_PORT` set to the printed harness
    port. Do not let it proxy to the default port or the user's live app.
-3. For domain UI, open Settings → Remote access → Connect your domain. Enter
+3. For domain UI, open Address on the server's own page in Settings (its first entry). Enter
    `bots.example.com`: confirm the Type/Name/Value rows and that copy buttons do
    not submit the form. Technical guidance must remain collapsed under
    **Advanced server setup**. The launcher deliberately strips operator
@@ -52,7 +52,7 @@ not prove a customer's real DNS, certificate, or reverse proxy is configured.
    provider registry and refresh the preview. Never substitute the real Codex
    executable. The fixture requires an explicit opt-in and makes no network
    requests.
-5. Settings → Engines → Connect ChatGPT should display `TEST-12345`, the
+5. Settings → AI → Providers, Connect ChatGPT should display `TEST-12345`, the
    official link, expiry, and Cancel. **Do not enter the fake code at OpenAI.**
    Cancel and restart, then switch Settings sections and return; Connect should
    recover the same active flow without spawning a second login.
