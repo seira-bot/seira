@@ -57,7 +57,7 @@ describe("Settings full backups", () => {
     render().nodes.find((node) => (node.type as { name?: string }).name === "LearnMore")!.props.onClick!();
     open("export"); open("import");
     html = render().html;
-    expect(html).toContain('type="file" accept=".seirabackup"');
+    expect(html).toContain('type="file" accept=".seirabackup,.ombbackup"');
     expect(html.match(/type="password"/g)).toHaveLength(3);
     expect(html).toContain("the disks of remote desktops");
     expect(html).toContain("Saved account credentials and connections are not included");
