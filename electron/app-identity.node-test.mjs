@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 
 import { SOURCE_ICON, WINDOWS_APP_ID, applyWindowsAppId, sourceTaskbarIcon } from "./app-identity.mjs";
@@ -7,6 +8,7 @@ import { LEGACY_APP_NAME, LEGACY_LINUX_PACKAGE } from "./legacy-names.mjs";
 
 const fakeApp = (isPackaged = true) => ({
   ids: [], isPackaged, listeners: [],
+  getAppPath() { return "C:/src/seira"; },
   setAppUserModelId(id) { this.ids.push(id); },
   on(event, listener) { this.listeners.push([event, listener]); },
 });
@@ -80,7 +82,13 @@ test("win32 from source gives each window the Seira icon and keeps the ID", () =
   assert.equal(app.listeners[0][0], "browser-window-created");
   const win = fakeWindow();
   app.listeners[0][1]({}, win);
-  assert.deepEqual(win.details, [{ appId: "bot.seira.app", appIconPath: "C:/seira/icon.ico", appIconIndex: 0 }]);
+  assert.deepEqual(win.details, [{
+    appId: "bot.seira.app",
+    appIconPath: "C:/seira/icon.ico",
+    appIconIndex: 0,
+    relaunchCommand: `"${process.execPath}" "C:/src/seira"`,
+    relaunchDisplayName: "Seira",
+  }]);
   assert.deepEqual(win.icons, ["C:/seira/icon.ico"]);
 });
 
@@ -101,6 +109,6 @@ test("Linux and macOS from source register nothing", () => {
 });
 
 test("the source icon is the installer icon and exists in a checkout", () => {
-  assert.ok(SOURCE_ICON.endsWith("build/icon.ico"));
+  assert.ok(SOURCE_ICON.endsWith(join("build", "icon.ico")));
   assert.ok(readFileSync(SOURCE_ICON).length > 0);
 });
