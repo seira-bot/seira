@@ -196,7 +196,7 @@ starts it.
   same pull request or of `main`. A manual start never cancels or is cancelled.
 - All the rules of [Fork pull requests](#fork-pull-requests) hold for it too.
 
-Do not add `bug-reports` to a separate ruleset on the default branch with no bypass actor. A required check that
+Do not add `bug-reports` to the `main CI must pass` ruleset. A required check that
 does not run on every pull request keeps the pull requests that skip it
 waiting forever. Read the result on a pull request that changes the Worker.
 
