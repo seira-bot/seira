@@ -13,7 +13,7 @@ import { execFile, execFileSync, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-export const ENGINE_TAG_ENV = "OMB_ENGINE_TAG";
+export const ENGINE_TAG_ENV = "SEIRA_ENGINE_TAG";
 /** In the data folder; this machine's own, never backed up or moved. */
 export const ENGINE_RUNS_DIR = "engine-runs";
 const TAG = /^[0-9a-f]{32}$/;

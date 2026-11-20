@@ -24,7 +24,7 @@ export const sharedComputerRegistration = z.object({
   fileEdits: z.literal(true).optional(),
   /** It runs the MCP servers this server keeps for it (mcp_tools, mcp_call); sent only to a server that advertises lentMcp. */
   mcpServers: z.literal(true).optional(),
-  /** The environment ids of its own OpenMausBot installs, which an MCP server's `runsOn` names; sent with mcpServers. */
+  /** The environment ids of its own Seira installs, which an MCP server's `runsOn` names; sent with mcpServers. */
   environments: z.array(z.string().uuid()).max(8).optional(),
   /** It passes an MCP call's caller on to the MCP server; sent only to a server that advertises mcpCaller. */
   mcpCaller: z.literal(true).optional(),

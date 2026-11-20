@@ -46,9 +46,9 @@ describe("routineEditorInput", () => {
     });
   });
 
-  it("builds a room goal with the group, the maus location and no attachments", () => {
+  it("builds a room goal with the group, the seira location and no attachments", () => {
     const input = routineEditorInput(fields({ routineTarget: "room-goal" }));
-    expect(input).toMatchObject({ target: "room-goal", groupId: "group-1", runOn: "maus", attachments: [], continuity: false });
+    expect(input).toMatchObject({ target: "room-goal", groupId: "group-1", runOn: "seira", attachments: [], continuity: false });
     expect("resultsThreadId" in input).toBe(false);
   });
 

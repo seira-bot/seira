@@ -7,6 +7,7 @@ import { DockerError, type ContainerSpec, type Docker, type Mount } from "./dock
 import { JobFailure } from "./failure.ts";
 import { publicHost, summarizeHealth, type HealthRead } from "./home-health.ts";
 import { digestPinnedOnly, type ImageCheck } from "./images.ts";
+import { labelValue, listVolumes } from "./labels.ts";
 import { errorText, registerSecret, type Log } from "./log.ts";
 import { EXPORT_PATH, UPDATE_HEALTH_WINDOW_MS, type CopyInfo, type HomeHealth, type HomeReport, type HomeState, type JobError, type JobReply, type JobResults } from "./protocol.ts";
 import {
@@ -47,9 +48,9 @@ export function launcherOf(version: readonly number[] | null): Launcher {
  * environment.
  */
 export function homeSpec(image: string, env: Record<string, string>, seccomp: string, options: { secretsDir?: string | null; dropsCapabilities?: boolean } = {}): ContainerSpec {
-  const environment = { ...env, OMB_CLOUD_IMAGE: image };
+  const environment = { ...env, SEIRA_CLOUD_IMAGE: image };
   const secret = new Set<string>(options.secretsDir ? HOME_SECRET_ENV : []);
-  const tls = env.OMB_CLOUD_EDGE_TLS === "1";
+  const tls = env.SEIRA_CLOUD_EDGE_TLS === "1";
   return {
     Image: image,
     Env: Object.entries(environment).filter(([name]) => !secret.has(name)).map(([name, value]) => `${name}=${value}`),
@@ -128,7 +129,7 @@ export interface HomeOptions {
   state: StateStore;
   log: Log;
   readHealth: HealthRead;
-  /** The seccomp profile install.sh put in /etc/mausbot, as JSON text. */
+  /** The seccomp profile install.sh put in /etc/seira, as JSON text. */
   seccomp: () => string;
   /** Free bytes where Docker keeps its volumes. */
   diskFree: () => number;
@@ -211,13 +212,13 @@ export class Home {
     const env = this.state.homeEnv();
     const info = await this.docker.containerInspect(NAMES.home);
     if (!env || !info?.State.Running) return this.lastHealth;
-    const { status, report } = await this.options.readHealth({ port: HOME_PORT, publicHost: publicHost(env), secret: env.OMB_CLOUD_BOOTSTRAP_SECRET });
+    const { status, report } = await this.options.readHealth({ port: HOME_PORT, publicHost: publicHost(env), secret: env.SEIRA_CLOUD_BOOTSTRAP_SECRET });
     this.lastHealth = summarizeHealth(status, report, info.Config.Image, this.now());
     return this.lastHealth;
   }
 
   async copies(): Promise<{ backups: CopyInfo[]; snapshot: CopyInfo | null }> {
-    const backups = (await this.docker.listVolumes({ [LABELS.role]: "backup" }))
+    const backups = (await listVolumes(this.docker, { [LABELS.role]: "backup" }))
       .filter((volume) => volume.Name.startsWith(NAMES.backupPrefix))
       .map((volume) => copyInfo(volume.Name.slice(NAMES.backupPrefix.length), "backup", volume.Labels))
       .sort((a, b) => b.createdAt - a.createdAt);
@@ -341,7 +342,7 @@ export class Home {
       const { image, env } = this.current();
       const source = `${NAMES.backupPrefix}${id}`;
       const volume = await this.docker.volumeInspect(source);
-      if (!volume || volume.Labels?.[LABELS.role] !== "backup") throw new JobFailure("not_found", `There is no backup ${id} on this server.`);
+      if (!volume || labelValue(volume.Labels, LABELS.role) !== "backup") throw new JobFailure("not_found", `There is no backup ${id} on this server.`);
       await this.ensureRoomForCopy(image);
       const wasRunning = (await this.docker.containerInspect(NAMES.home))?.State.Running === true;
       this.begin({ jobId, type: "restore", phase: "stop", previousImage: image, nextImage: null, target: source, dataAtRisk: false, wasRunning });
@@ -561,8 +562,8 @@ export class Home {
   /** Keeps a container made from the same image and environment; anything else is made again. */
   private async ensureContainer(image: string, env: Record<string, string>): Promise<void> {
     const info = await this.docker.containerInspect(NAMES.home);
-    const wanted = envDigest({ ...env, OMB_CLOUD_IMAGE: image });
-    if (info && info.Config.Image === image && info.Config.Labels?.[LABELS.env] === wanted) return;
+    const wanted = envDigest({ ...env, SEIRA_CLOUD_IMAGE: image });
+    if (info && info.Config.Image === image && labelValue(info.Config.Labels, LABELS.env) === wanted) return;
     await this.createContainer(image, env);
   }
 
@@ -610,7 +611,7 @@ export class Home {
     if ((await this.docker.containersUsing(NAMES.dataVolume)).some((container) => container.State === "running" || container.State === "paused")) return;
     const cleared = await this.helper(image, [DATA], [
       "find", "/data", "-maxdepth", "3", "(",
-      "-path", "/data/.openmausbot/openmausbot-server.lease*", "-o", "-path", "/data/.openmausbot/.openmausbot-server-child/openmausbot-server.lease",
+      "-path", "/data/.seira/seira-server.lease*", "-o", "-path", "/data/.seira/.seira-server-child/seira-server.lease",
       ")", "-print", "-delete",
     ], DELETE_CAPS);
     const paths = cleared.output.split("\n").map((line) => line.trim()).filter((line) => line.startsWith("/data/"));
@@ -629,7 +630,7 @@ export class Home {
         const why = info ? await this.startupFailure(info.State.ExitCode) : "its container is gone";
         return { ok: false, reason: `the home stopped: ${why}` };
       }
-      const { status, report } = await this.options.readHealth({ port: HOME_PORT, publicHost: publicHost(env), secret: env.OMB_CLOUD_BOOTSTRAP_SECRET });
+      const { status, report } = await this.options.readHealth({ port: HOME_PORT, publicHost: publicHost(env), secret: env.SEIRA_CLOUD_BOOTSTRAP_SECRET });
       this.lastHealth = summarizeHealth(status, report, image, this.now());
       if (this.lastHealth.ok) {
         if (!box) return { ok: true };
@@ -660,7 +661,7 @@ export class Home {
   }
 
   private async helper(image: string, mounts: Mount[], command: string[], caps: string[]): Promise<{ code: number; output: string }> {
-    const name = `mausbot-helper-${randomBytes(4).toString("hex")}`;
+    const name = `seira-helper-${randomBytes(4).toString("hex")}`;
     await this.docker.createContainer(name, helperSpec(image, mounts, command, caps));
     try {
       await this.docker.startContainer(name);
@@ -760,8 +761,8 @@ export class Home {
 }
 
 function copyInfo(id: string, kind: CopyInfo["kind"], labels: Record<string, string> | null): CopyInfo {
-  const created = Number(labels?.[LABELS.created]);
-  return { id, kind, createdAt: Number.isFinite(created) ? created : 0, image: labels?.[LABELS.image] ?? null };
+  const created = Number(labelValue(labels, LABELS.created));
+  return { id, kind, createdAt: Number.isFinite(created) ? created : 0, image: labelValue(labels, LABELS.image) ?? null };
 }
 
 /** "20261028-104512-3fa9": sortable, and a valid `restore` id. */

@@ -9,10 +9,10 @@ prompt to a real model provider.
 Supply an absolute path to an independently verified OpenCode 1.18.31 binary:
 
 ```sh
-OMB_OPENCODE_E2E_CLI=/absolute/path/to/opencode pnpm exec vitest run server/opencode-variants.e2e.test.ts
+SEIRA_OPENCODE_E2E_CLI=/absolute/path/to/opencode pnpm exec vitest run server/opencode-variants.e2e.test.ts
 ```
 
-Without `OMB_OPENCODE_E2E_CLI`, Vitest reports this test as skipped. A skip does
+Without `SEIRA_OPENCODE_E2E_CLI`, Vitest reports this test as skipped. A skip does
 not verify the feature. The test performs no dependency installation or binary
 download. OpenCode 1.18.31 is required because this recipe exercises its ACP
 `default` effort option, which removes the explicit session variant override.
@@ -38,7 +38,7 @@ It does not retain full provider request bodies, authorization headers or MCP
 tokens. The fixture closes its own children and loopback server, then removes
 its disposable home. The log and evidence paths are printed by the test.
 
-This proves API persistence and actual OMB → ACP → OpenCode → SDK transport
+This proves API persistence and actual Seira → ACP → OpenCode → SDK transport
 against a simulated provider. It does not establish acceptance by any real
 provider, an upstream gateway's routing, or the Seira GUI. The fixture
 rejects `none` at its simulated provider as a guard; real model capabilities
@@ -57,7 +57,7 @@ OpenCode 2.1.4 binary (`@opencode/cli`) and a loopback stand-in for the Copilot
 API:
 
 ```sh
-OMB_OPENCODE2_E2E_CLI=/absolute/path/to/opencode pnpm exec vitest run server/opencode-copilot-efforts.e2e.test.ts
+SEIRA_OPENCODE2_E2E_CLI=/absolute/path/to/opencode pnpm exec vitest run server/opencode-copilot-efforts.e2e.test.ts
 ```
 
 The test imports a synthetic Copilot credential whose `apiEndpoint` is the

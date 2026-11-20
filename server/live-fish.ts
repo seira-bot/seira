@@ -24,7 +24,7 @@ export const RELAY_POLL_MS = 15_000;
 
 /** Only a loopback http URL is accepted, read at call time. */
 export function fishLiveBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
-  const override = env.OMB_FISH_LIVE_URL?.trim() ?? "";
+  const override = env.SEIRA_FISH_LIVE_URL?.trim() ?? "";
   return /^http:\/\/127\.0\.0\.1:\d{1,5}$/.test(override) ? override : FISH_BASE;
 }
 

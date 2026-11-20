@@ -1,8 +1,10 @@
+import { SEIRA_HOSTS, seiraOrigin } from "./seira-hosts.mjs";
+
 const TOKEN = /^[0-9a-f]{64}$/;
 
-/** OMB_COMPOSIO_BROKER=off: nothing reaches the managed service, whatever else is set. */
+/** SEIRA_COMPOSIO_BROKER=off: nothing reaches the managed service, whatever else is set. */
 export function managedComposioBrokerOff(environment = process.env) {
-  return /^(off|0|false|no)$/i.test(environment.OMB_COMPOSIO_BROKER?.trim() ?? "");
+  return /^(off|0|false|no)$/i.test(environment.SEIRA_COMPOSIO_BROKER?.trim() ?? "");
 }
 
 export function ownComposioKey(credentials, environment = process.env) {
@@ -10,13 +12,13 @@ export function ownComposioKey(credentials, environment = process.env) {
   return Boolean((typeof saved === "string" && saved.trim()) || environment.COMPOSIO_API_KEY?.trim());
 }
 
-export const SEIRA_COMPOSIO_BROKER_URL = "https://apps.seira.bot";
+export const SEIRA_HOSTED_COMPOSIO_BROKER_URL = seiraOrigin(SEIRA_HOSTS.apps);
 
 /** Return the service URL: a configured URL, else Seira's service in the packaged app, else "". */
 export function managedComposioBrokerUrl(configured, { packaged = false } = {}) {
   if (managedComposioBrokerOff()) return "";
   if (typeof configured === "string" && configured.trim()) return normalizeManagedComposioBrokerUrl(configured);
-  return packaged ? SEIRA_COMPOSIO_BROKER_URL : "";
+  return packaged ? SEIRA_HOSTED_COMPOSIO_BROKER_URL : "";
 }
 
 export function normalizeManagedComposioBrokerUrl(value) {
@@ -43,13 +45,13 @@ export function managedComposioAccess(brokerUrl, credentials) {
 
 export function managedComposioChildEnvironment(brokerUrl, credentials, environment) {
   const next = { ...environment };
-  delete next.OMB_COMPOSIO_BROKER_URL;
-  delete next.OMB_COMPOSIO_BROKER_TOKEN;
-  if (!normalizeManagedComposioBrokerUrl(brokerUrl)) next.OMB_COMPOSIO_BROKER = "off";
+  delete next.SEIRA_COMPOSIO_BROKER_URL;
+  delete next.SEIRA_COMPOSIO_BROKER_TOKEN;
+  if (!normalizeManagedComposioBrokerUrl(brokerUrl)) next.SEIRA_COMPOSIO_BROKER = "off";
   const access = managedComposioAccess(brokerUrl, credentials);
   if (access) {
-    next.OMB_COMPOSIO_BROKER_URL = access.url;
-    next.OMB_COMPOSIO_BROKER_TOKEN = access.token;
+    next.SEIRA_COMPOSIO_BROKER_URL = access.url;
+    next.SEIRA_COMPOSIO_BROKER_TOKEN = access.token;
   }
   return next;
 }

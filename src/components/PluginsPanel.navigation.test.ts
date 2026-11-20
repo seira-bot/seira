@@ -119,8 +119,9 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Apps pop-up", () => {
-  it("connects each hosted app inside the apps grid without a Composio key or MCP detour", () => {
+  it("shows each connected hosted app inside the apps grid without a Composio key or MCP detour", () => {
     fixture.overrides.set(CONFIGURED, false);
+    fixture.overrides.set(HOSTED_CONNECTED, Object.fromEntries(HOSTED_MCP_APPS.map((app) => [app.id, true])));
     const { html, nodes: tree } = render();
     const grid = tree.find((node) => node.props["data-apps-grid"] !== undefined)!;
     expect(nodes(grid).some((node) => node.props.hostedCards !== undefined)).toBe(true);
@@ -129,6 +130,15 @@ describe("Apps pop-up", () => {
       expect(html).not.toContain(`Set up ${app.label}`);
     }
     expect(fixture.dispatch).not.toHaveBeenCalled();
+  });
+  it("hides every hosted app that is not connected, in All and in Connected", () => {
+    for (const hostedConnected of [null, Object.fromEntries(HOSTED_MCP_APPS.map((app) => [app.id, false]))]) {
+      fixture.overrides.set(HOSTED_CONNECTED, hostedConnected);
+      for (const tab of ["marketplace", "connected"]) {
+        fixture.overrides.set(TAB, tab);
+        expect(render().html).not.toContain("data-hosted-app=");
+      }
+    }
   });
   it("links the Privacy Policy and the Terms of Service below the apps", () => {
     const { html } = render();
@@ -144,20 +154,21 @@ describe("Apps pop-up", () => {
     expect(render().html).toContain("2 connected");
   });
   it.each(HOSTED_MCP_APPS)("finds $label by its own name and shows no other hosted card", (app) => {
+    fixture.overrides.set(HOSTED_CONNECTED, Object.fromEntries(HOSTED_MCP_APPS.map((one) => [one.id, true])));
     fixture.overrides.set(SEARCH, app.label.toLowerCase());
     const html = render().html;
     expect(html).toContain(`data-hosted-app="${app.id}"`);
     expect(html.match(/data-hosted-app="/g)).toHaveLength(1);
   });
-  it("shows a hosted card under Connected only while it is not known to be disconnected", () => {
+  it("shows only the connected hosted card under Connected", () => {
     fixture.overrides.set(TAB, "connected");
-    expect(render().html).toContain(`data-hosted-app="${HOSTED_MCP_APPS[0].id}"`);
     fixture.overrides.set(HOSTED_CONNECTED, Object.fromEntries(HOSTED_MCP_APPS.map((app) => [app.id, app === HOSTED_MCP_APPS[0]])));
     const html = render().html;
     expect(html).toContain(`data-hosted-app="${HOSTED_MCP_APPS[0].id}"`);
     for (const other of HOSTED_MCP_APPS.slice(1)) expect(html).not.toContain(`data-hosted-app="${other.id}"`);
   });
   it.each(["agentcard", "opencommerce"])("finds Agentcard by %s and shows no other hosted card", (word) => {
+    fixture.overrides.set(HOSTED_CONNECTED, Object.fromEntries(HOSTED_MCP_APPS.map((one) => [one.id, true])));
     fixture.overrides.set(SEARCH, word);
     const html = render().html;
     expect(html).toContain('data-hosted-app="agentcard"');
@@ -177,18 +188,16 @@ describe("Apps pop-up", () => {
     const html = render().html;
     expect(html).toContain(`Connected: ${new Intl.ListFormat("en", { style: "long", type: "conjunction" }).format(HOSTED_MCP_APPS.map((app) => app.label))}.`);
   });
-  it("shows the Postiz card in the grid and under Social, with a Social pill, and counts it once connected", () => {
+  it("hides the Postiz card until it is connected, then shows it in the grid and under Social", () => {
     const wrapper = (tree: Node[]) => tree.find((node) => node.props["data-native-card"] === "postiz")!;
     const { html, nodes: tree } = render();
-    expect(wrapper(tree).props.className).toBe("contents");
-    expect(tree.filter((node) => node.props["data-apps-category"]).map((node) => node.props["data-apps-category"])).toContain("Social");
+    expect(wrapper(tree).props.className).toBe("hidden");
     expect(html).toContain("1 connected");
     fixture.overrides.set(POSTIZ_CONNECTED, true);
     expect(render().html).toContain("2 connected");
+    expect(wrapper(render().nodes).props.className).toBe("contents");
     fixture.overrides.set(CATEGORY, "Social");
-    const social = render();
-    expect(wrapper(social.nodes).props.className).toBe("contents");
-    expect([...social.html.matchAll(/<h3 id="[^"]*"[^>]*>([^<]*)/g)].map((match) => match[1])).toEqual(["Social"]);
+    expect(wrapper(render().nodes).props.className).toBe("contents");
     fixture.overrides.set(CATEGORY, "Productivity");
     expect(wrapper(render().nodes).props.className).toBe("hidden");
     fixture.overrides.set(CATEGORY, null);
@@ -197,41 +206,48 @@ describe("Apps pop-up", () => {
     fixture.overrides.set(SEARCH, "gmail");
     expect(wrapper(render().nodes).props.className).toBe("hidden");
   });
-  it("shows the X card in the grid for every install and counts it once bots have X", () => {
+  it("hides the X card until it is connected, then shows it in the grid and under Connected", () => {
     const wrapper = (tree: Node[]) => tree.find((node) => node.props["data-native-card"] === "x")!;
     const { html, nodes: tree } = render();
     expect(nodes(wrapper(tree)).some((node) => node.props.onConnection !== undefined && node.props.refreshKey !== undefined)).toBe(true);
-    expect(wrapper(tree).props.className).toBe("contents");
+    expect(wrapper(tree).props.className).toBe("hidden");
     expect(html).toContain("1 connected");
+    fixture.overrides.set(TAB, "connected");
+    expect(wrapper(render().nodes).props.className).toBe("hidden");
     fixture.overrides.set(X_CONNECTED, true);
     expect(render().html).toContain("2 connected");
-    fixture.overrides.set(TAB, "connected");
     expect(wrapper(render().nodes).props.className).toBe("contents");
-    fixture.overrides.set(X_CONNECTED, false);
-    expect(wrapper(render().nodes).props.className).toBe("hidden");
     fixture.overrides.set(TAB, "marketplace");
+    expect(wrapper(render().nodes).props.className).toBe("contents");
     fixture.overrides.set(SEARCH, "twitter");
     expect(wrapper(render().nodes).props.className).toBe("contents");
     fixture.overrides.set(SEARCH, "gmail");
     expect(wrapper(render().nodes).props.className).toBe("hidden");
   });
-  it("shows the email card in the grid for every install and counts it once a mailbox is connected", () => {
+  it("hides the email card until a mailbox is connected, then shows it in the grid and under Connected", () => {
     const wrapper = (tree: Node[]) => tree.find((node) => node.props["data-native-card"] === "email")!;
     const { html, nodes: tree } = render();
     expect(nodes(wrapper(tree)).some((node) => node.props.onConnection !== undefined && node.props.refreshKey !== undefined)).toBe(true);
-    expect(wrapper(tree).props.className).toBe("contents");
+    expect(wrapper(tree).props.className).toBe("hidden");
     expect(html).toContain("1 connected");
+    fixture.overrides.set(TAB, "connected");
+    expect(wrapper(render().nodes).props.className).toBe("hidden");
     fixture.overrides.set(EMAIL_CONNECTED, true);
     expect(render().html).toContain("2 connected");
-    fixture.overrides.set(TAB, "connected");
     expect(wrapper(render().nodes).props.className).toBe("contents");
-    fixture.overrides.set(EMAIL_CONNECTED, false);
-    expect(wrapper(render().nodes).props.className).toBe("hidden");
     fixture.overrides.set(TAB, "marketplace");
+    expect(wrapper(render().nodes).props.className).toBe("contents");
     fixture.overrides.set(SEARCH, "imap");
     expect(wrapper(render().nodes).props.className).toBe("contents");
     fixture.overrides.set(SEARCH, "twitter");
     expect(wrapper(render().nodes).props.className).toBe("hidden");
+  });
+  it("leaves a card that needs its own sign-in out of the grid unless it is connected", () => {
+    const tile = (tree: Node[]) => tree.find((node) => node.props["data-app-tile"] === "linkedin");
+    fixture.overrides.set(CARDS, [card("gmail"), { ...card("linkedin"), needsOwnAuth: true }]);
+    expect(tile(render().nodes)).toBeUndefined();
+    fixture.overrides.set(STATUS, { linkedin: { connected: true, accounts: [{ id: "ca_l", status: "ACTIVE" }] } });
+    expect(tile(render().nodes)).toBeDefined();
   });
   it("leaves out the managed install's dead Twitter tile, which the X card replaces, unless it is already connected", () => {
     const tile = (tree: Node[]) => tree.find((node) => node.props["data-app-tile"] === "twitter");
@@ -555,9 +571,8 @@ describe("Apps pop-up", () => {
     ]);
     const { html, nodes: tree } = render();
     const headings = [...html.matchAll(/<h3 id="[^"]*"[^>]*>([^<]*)/g)].map((match) => match[1]);
-    // Postiz's own card lives in Social, so Social counts it beside the catalog's one social app.
-    expect(headings).toEqual(["Connected", "Productivity", "Communication", "Social", "All apps"]);
-    expect(tree.filter((node) => node.props["data-apps-category"]).map((node) => node.props["data-apps-category"])).toEqual(["Productivity", "Communication", "Social", "Analytics", "Design"]);
+    expect(headings).toEqual(["Connected", "Productivity", "Communication", "Analytics", "All apps"]);
+    expect(tree.filter((node) => node.props["data-apps-category"]).map((node) => node.props["data-apps-category"])).toEqual(["Productivity", "Communication", "Analytics", "Design", "Files"]);
     expect(html).toContain('aria-label="More categories"');
     // The dialog clips overflow, so the menu must portal out of it rather than open in place.
     expect(tree.find((node) => node.props.ariaLabel === "More categories")!.props.placement).toBeUndefined();

@@ -44,8 +44,8 @@ describe("sweepStaleTestDirs", () => {
   it("deletes the content of an old folder, not only the folder", () => {
     const { base, now } = fixture();
     const old = folder(base, `${TEST_HOME_PREFIX}full`, now, 5 * HOUR);
-    mkdirSync(join(old, ".openmausbot", "deep"), { recursive: true });
-    writeFileSync(join(old, ".openmausbot", "deep", "file.txt"), "x");
+    mkdirSync(join(old, ".seira", "deep"), { recursive: true });
+    writeFileSync(join(old, ".seira", "deep", "file.txt"), "x");
     // Writing into the folder moves its mtime: put it back so it is old again.
     const when = new Date(now - 5 * HOUR);
     utimesSync(old, when, when);
@@ -58,10 +58,10 @@ describe("sweepStaleTestDirs", () => {
   it("keeps a folder that the suite did not make, however old", () => {
     const { base, now } = fixture();
     const kept = [
-      folder(base, "omb-companion-origin-abc", now, 48 * HOUR),
-      folder(base, "omb-ssh-1000-abc", now, 48 * HOUR),
-      folder(base, "omb-box-check-abc", now, 48 * HOUR),
-      folder(base, "omb-muse-models-abc", now, 48 * HOUR),
+      folder(base, "seira-companion-origin-abc", now, 48 * HOUR),
+      folder(base, "seira-ssh-1000-abc", now, 48 * HOUR),
+      folder(base, "seira-box-check-abc", now, 48 * HOUR),
+      folder(base, "seira-muse-models-abc", now, 48 * HOUR),
       folder(base, "other-dir", now, 48 * HOUR),
       folder(base, `x${TEST_HOME_PREFIX}abc`, now, 48 * HOUR),
     ];
@@ -142,8 +142,8 @@ describe("removeRunTestDirs", () => {
     const { base, now } = fixture();
     const fresh = folder(base, `${TEST_TMP_PREFIX}a1b2c3-fresh1`, now, 0);
     const old = folder(base, `${TEST_TMP_PREFIX}a1b2c3-old001`, now, 9 * HOUR);
-    mkdirSync(join(fresh, `${TEST_HOME_PREFIX}inner`, ".openmausbot"), { recursive: true });
-    writeFileSync(join(fresh, `${TEST_HOME_PREFIX}inner`, ".openmausbot", "file.txt"), "x");
+    mkdirSync(join(fresh, `${TEST_HOME_PREFIX}inner`, ".seira"), { recursive: true });
+    writeFileSync(join(fresh, `${TEST_HOME_PREFIX}inner`, ".seira", "file.txt"), "x");
 
     const result = removeRunTestDirs("a1b2c3", base);
 
@@ -153,14 +153,14 @@ describe("removeRunTestDirs", () => {
     expect(existsSync(old)).toBe(false);
   });
 
-  it("keeps the folders of another run, a folder without a run id, and other omb-* folders", () => {
+  it("keeps the folders of another run, a folder without a run id, and other seira-* folders", () => {
     const { base, now } = fixture();
     const kept = [
       folder(base, `${TEST_TMP_PREFIX}d4e5f6-other1`, now, 0),
       folder(base, `${TEST_TMP_PREFIX}a1b2c3d-longer`, now, 0),
       folder(base, `${TEST_TMP_PREFIX}plain1`, now, 0),
       folder(base, `${TEST_HOME_PREFIX}a1b2c3-home01`, now, 0),
-      folder(base, "omb-ssh-1000-0123456789ab", now, 0),
+      folder(base, "seira-ssh-1000-0123456789ab", now, 0),
     ];
 
     expect(removeRunTestDirs("a1b2c3", base)).toEqual({ removed: [], failed: [] });

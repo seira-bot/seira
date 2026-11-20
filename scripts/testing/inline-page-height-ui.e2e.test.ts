@@ -1,6 +1,6 @@
 // Bot pages in the real <App/> through `control-seira ui`: a page drawn to its window keeps a page's height in the chat,
 // and a page that flows keeps sizing to its content. Needs the pinned agent-browser binary: runs when one resolves or
-// OMB_UI_E2E=1 asks for the verified download; otherwise skipped.
+// SEIRA_UI_E2E=1 asks for the verified download; otherwise skipped.
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,14 +14,14 @@ import { runControlSeira } from "../control-seira.ts";
 import { UI_TOOLS_DIR, agentBrowser, sessionEnv, type UiHandle } from "./control-seira-ui.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-const forced = process.env.OMB_UI_E2E === "1";
+const forced = process.env.SEIRA_UI_E2E === "1";
 const enabled = forced || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
-if (!enabled) console.log("skipping inline page height UI e2e: set OMB_UI_E2E=1 to install the pinned browser");
+if (!enabled) console.log("skipping inline page height UI e2e: set SEIRA_UI_E2E=1 to install the pinned browser");
 const LAUNCH_TIMEOUT_MS = forced ? 600_000 : 180_000;
-const evidenceDir = process.env.OMB_UI_EVIDENCE_DIR
-  ? join(resolve(ROOT, process.env.OMB_UI_EVIDENCE_DIR), "inline-page-height")
-  : mkdtempSync(join(tmpdir(), "omb-page-height-"));
-const ownsEvidenceDir = !process.env.OMB_UI_EVIDENCE_DIR;
+const evidenceDir = process.env.SEIRA_UI_EVIDENCE_DIR
+  ? join(resolve(ROOT, process.env.SEIRA_UI_EVIDENCE_DIR), "inline-page-height")
+  : mkdtempSync(join(tmpdir(), "seira-page-height-"));
+const ownsEvidenceDir = !process.env.SEIRA_UI_EVIDENCE_DIR;
 
 const SIZE_LABEL = "c.fillStyle='#1d3557';c.font='bold 13px sans-serif';c.fillText('frame '+w+' x '+h,w-150,22);";
 

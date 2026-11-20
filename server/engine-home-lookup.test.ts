@@ -37,7 +37,7 @@ describe("the profile folder", () => {
 
 describe("what reads the profile folder follows it", () => {
   let root: string;
-  beforeEach(() => { root = mkdtempSync(join(tmpdir(), "omb-engine-home-")); });
+  beforeEach(() => { root = mkdtempSync(join(tmpdir(), "seira-engine-home-")); });
   afterEach(async () => { await removeTempDir(root); });
 
   it("puts Claude's account folder under USERPROFILE on Windows, and under HOME elsewhere", () => {

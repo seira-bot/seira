@@ -9,7 +9,7 @@ import { z } from "zod";
 import { rankAppSuggestions, searchCatalog, type AppPickState } from "../../shared/app-suggestions.ts";
 import { FIRST_HOUR_OFFER_KEY } from "../../shared/person-wait.ts";
 import { writeFileAtomic } from "../atomic.ts";
-import type { ToolkitCard } from "../composio.ts";
+import type { ToolkitCard } from "../../shared/toolkit-card.ts";
 import { pickApps } from "../decider/app-picks.ts";
 import type { Decider } from "../decider/index.ts";
 import { BOT_DECIDE_LIMITS } from "../decider/relay.ts";
@@ -93,7 +93,8 @@ export function createAppSuggestions(deps: AppSuggestionDeps) {
     try {
       const [{ cards }, services] = await Promise.all([deps.catalog(), deps.services()]);
       const connected = Object.entries(services).filter(([, service]) => service.connected).map(([app]) => app).sort();
-      return { cards, connected, held: Object.keys(services), key: pickKey(connected, roles()) };
+      const offered = cards.filter((card) => !card.needsOwnAuth || connected.includes(card.slug));
+      return { cards: offered, connected, held: Object.keys(services), key: pickKey(connected, roles()) };
     } catch {
       return null;
     }

@@ -83,12 +83,12 @@ function install(home: string, boatPort: () => number) {
     const proc = spawn(process.execPath, [join(ROOT, "server/index.ts")], {
       cwd: ROOT, env: {
         PATH: dirname(process.execPath), ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-        HOME: home, USERPROFILE: home, OMB_DATA_DIR: data,
+        HOME: home, USERPROFILE: home, SEIRA_DATA_DIR: data,
         APPDATA: join(home, "appdata"), LOCALAPPDATA: join(home, "localappdata"),
         TEMP: home, TMP: home, TMPDIR: home,
-        OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), OMB_STATIC_DIR: join(home, "static"),
-        OMB_BOAT_API: `http://127.0.0.1:${boatPort()}`,
-        OMB_USER_DATA: join(home, "user-data"),
+        SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), SEIRA_STATIC_DIR: join(home, "static"),
+        SEIRA_BOAT_API: `http://127.0.0.1:${boatPort()}`,
+        SEIRA_USER_DATA: join(home, "user-data"),
       }, stdio: ["ignore", "pipe", "pipe"],
     });
     child = proc;
@@ -129,7 +129,7 @@ describe("removing the Computer engine", () => {
   const agentCalls: string[] = [];
   const boatPort = () => (boatServer.address() as { port: number }).port;
   const fresh = () => {
-    const home = mkdtempSync(join(tmpdir(), "omb-computer-engine-"));
+    const home = mkdtempSync(join(tmpdir(), "seira-computer-engine-"));
     homes.push(home);
     const server = install(home, boatPort);
     running.push(server);

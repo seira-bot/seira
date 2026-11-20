@@ -29,7 +29,7 @@ export function routineEditorInput(fields: RoutineEditorFields): RoutineInput {
     target: routineTarget,
     botId: fields.botId,
     groupId: routineTarget === "room-goal" && fields.groupId ? fields.groupId : null,
-    runOn: routineTarget === "room-goal" ? "maus" : fields.runOn,
+    runOn: routineTarget === "room-goal" ? "seira" : fields.runOn,
     enabled: existingRoutine && (existingRoutine.enabled || !isDone(existingRoutine, savedAt)) ? undefined : true,
     schedule: fields.schedule,
     durationMinutes: fields.durationMinutes,

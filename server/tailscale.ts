@@ -1,6 +1,6 @@
 // Never log Tailscale's raw stderr (it can contain auth keys and node names): failures are classified into a closed set.
 import { execFile, spawn } from "node:child_process";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
 
@@ -121,7 +121,7 @@ const LISTEN_INSTEAD: Partial<Record<TailscaleFailure, [why: string, fix: string
  * name, or no Tailscale interface here (userspace networking, as in most containers).
  */
 export function tailnetListenFallback(failure: TailscaleFailure, status: TailscaleStatus, port: number, interfaces: NodeJS.Dict<Array<{ address: string }>> = networkInterfaces()):
-  { origin: string; env: { OMB_TAILNET_NAME: string }; line: string } | null {
+  { origin: string; env: { SEIRA_TAILNET_NAME: string }; line: string } | null {
   const reason = LISTEN_INSTEAD[failure];
   const local = tailnetInterfaceAddresses(interfaces);
   const addresses = status.addresses.filter((address) => local.includes(address.toLowerCase()));
@@ -129,7 +129,7 @@ export function tailnetListenFallback(failure: TailscaleFailure, status: Tailsca
   const origin = tailnetOrigin(status.dnsName, port);
   return {
     origin,
-    env: { OMB_TAILNET_NAME: status.dnsName },
+    env: { SEIRA_TAILNET_NAME: status.dnsName },
     line: `tailscale: ${reason[0]}, so this server listens on ${origin} itself (only your tailnet can reach it, and WireGuard encrypts it). For an https:// address, ${reason[1]}.`,
   };
 }
@@ -140,7 +140,7 @@ export const tailscaleMarker = (dataDir: string) => join(dataDir, "tailscale-ser
 /**
  * `tailscale serve` in the foreground: the share ends with this process. Before serving, the tailnet must have HTTPS
  * certificates (`CertDomains`), or serve waits on an enablement link forever; and the name must not already front a
- * different MausBot server. Resolves once serve has run for `settleMs` without exiting.
+ * different Seira server. Resolves once serve has run for `settleMs` without exiting.
  */
 export async function tailscaleServe(
   status: TailscaleStatus,
@@ -158,14 +158,23 @@ export async function tailscaleServe(
   const exited = new Promise<number | null>((done) => { child.once("exit", (code) => done(code)); child.once("error", () => done(-1)); });
   const early = await Promise.race([exited, new Promise<"running">((done) => setTimeout(() => done("running"), options.settleMs ?? 2_500))]);
   if (early !== "running") return { failure: early === -1 ? "not-installed" : classifyTailscaleStderr(stderr) };
-  writeFileSync(tailscaleMarker(options.dataDir), JSON.stringify({ cli: status.cli, httpsPort, localPort }), { mode: 0o600 });
+  const stopServe = async () => {
+    child.kill("SIGTERM");
+    const timer = setTimeout(() => child.kill("SIGKILL"), 3_000);
+    await exited;
+    clearTimeout(timer);
+  };
+  try {
+    mkdirSync(options.dataDir, { recursive: true, mode: 0o700 });
+    writeFileSync(tailscaleMarker(options.dataDir), JSON.stringify({ cli: status.cli, httpsPort, localPort }), { mode: 0o600 });
+  } catch (error) {
+    await stopServe();
+    throw error;
+  }
   return {
     origin,
     async stop() {
-      child.kill("SIGTERM");
-      const timer = setTimeout(() => child.kill("SIGKILL"), 3_000);
-      await exited;
-      clearTimeout(timer);
+      await stopServe();
       rmSync(tailscaleMarker(options.dataDir), { force: true });
     },
   };

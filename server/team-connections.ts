@@ -13,6 +13,7 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } f
 import { join } from "node:path";
 import { z } from "zod";
 
+import { LEGACY_PROJECT_APPS_SALT } from "../electron/legacy-names.mjs";
 import { ensureManagedComposioCredentials, managedComposioAccess } from "../electron/managed-composio.mjs";
 import { writeFileAtomic } from "./atomic.ts";
 import type { AppConfig } from "./config.ts";
@@ -114,13 +115,13 @@ export const isProjectAccess = (access: PersonAppsAccess | null | undefined): ac
 export const asPerson = (cfg: AppConfig, access?: PersonAppsAccess | null): [AppConfig, BrokerAccess | undefined] =>
   isProjectAccess(access) ? [{ ...cfg, composio: access.composio }, undefined] : [cfg, access ?? undefined];
 
-const keyMarkOf = (apiKey: string) => createHash("sha256").update("omb-project-apps\0").update(apiKey).digest("hex").slice(0, 16);
+const keyMarkOf = (apiKey: string, salt = "seira-project-apps\0") => createHash("sha256").update(salt).update(apiKey).digest("hex").slice(0, 16);
 
 /** A member's Composio user id in the team's project: the same at every start, from the team's id and the person key (a
  * hash), so Composio is given no address.
- * Security: never `openmausbot_…`, the prefix a personal installation on the same key may adopt as its own user. */
+ * Security: never `seira_<uuid>`, the shape a personal installation on the same key may adopt as its own user. */
 export function memberComposioUser(teamId: string, person: string): string {
-  return `omb_member_${createHash("sha256").update("omb-team-member\0").update(teamId).update("\0").update(person).digest("hex").slice(0, 32)}`;
+  return `seira_member_${createHash("sha256").update("seira-team-member\0").update(teamId).update("\0").update(person).digest("hex").slice(0, 32)}`;
 }
 
 export interface PeopleConnectionsOptions {
@@ -188,6 +189,11 @@ export class PeopleConnections {
     const file = this.stored("project-apps.json", projectAppsSchema);
     if (!file) return { v: 1, keyMark, people: {}, removals: [] };
     if (file.keyMark === keyMark) return file;
+    if (file.keyMark === keyMarkOf(apiKey, LEGACY_PROJECT_APPS_SALT)) {
+      const same: ProjectAppsFile = { ...file, keyMark };
+      this.write("project-apps.json", same);
+      return same;
+    }
     if (file.removals.length) console.warn(`[team connections] the Composio project key changed: ${file.removals.length} member(s) who left still have connections in the earlier project, which can't be removed from here`);
     this.projectUsers.clear();
     const moved: ProjectAppsFile = { v: 1, keyMark, removals: [], people: Object.fromEntries(Object.entries(file.people).map(([person, record]) => [person, { email: record.email, userId: record.userId, again: true as const }])) };

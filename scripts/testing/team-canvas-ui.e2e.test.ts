@@ -11,8 +11,8 @@ import { fixtureApi } from "./preview-fixture.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const binary = resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env });
-const enabled = process.env.OMB_UI_E2E === "1" || Boolean(binary);
-if (!enabled) console.info("skipping team canvas UI e2e: set OMB_UI_E2E=1 to install the pinned browser");
+const enabled = process.env.SEIRA_UI_E2E === "1" || Boolean(binary);
+if (!enabled) console.info("skipping team canvas UI e2e: set SEIRA_UI_E2E=1 to install the pinned browser");
 
 type BotRecord = {
   id: string; name: string; title?: string; section?: string; threadId: string;
@@ -332,7 +332,7 @@ type BotRecord = {
       });
     })()`)).toBe(true);
 
-    const layout = await evaluate("Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith('omb-team-canvas:')))");
+    const layout = await evaluate("Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith('seira-team-canvas:')))");
     expect(Object.keys(layout)).toHaveLength(2);
     expect(Object.keys(layout).filter(key => key.endsWith(":bot-order"))).toHaveLength(1);
     receipts.layout = layout;
@@ -341,7 +341,7 @@ type BotRecord = {
     await openMap();
     await expect.poll(() => teamPosition("Delivery"), { timeout: 10_000 }).toEqual(arranged);
     await expect.poll(() => cardOrder("Delivery"), { timeout: 10_000 }).toEqual(reordered);
-    expect(await evaluate("Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith('omb-team-canvas:')))"))
+    expect(await evaluate("Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith('seira-team-canvas:')))"))
       .toEqual(layout);
     expect((await savedBot(ben.id)).section).toBe("Delivery");
     expect(await messages(ben.id)).toEqual(transcript);

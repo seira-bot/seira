@@ -1,7 +1,8 @@
-import { chmod, lstat, readFile, readdir } from "node:fs/promises";
+import { chmod, lstat, readFile, readdir, rm, symlink } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { LICENSE_FILES } from "./cua-linux-release.mjs";
+import { LEGACY_LINUX_EXECUTABLE } from "../electron/legacy-names.mjs";
 import {
   executableTarget,
   verifyCloudflaredExecutable,
@@ -153,4 +154,7 @@ export default async function afterPack(context) {
   for (const license of LICENSE_FILES) {
     await requireRegularFile(path.join(licenses, license), 0o644);
   }
+  const legacyExecutable = path.join(context.appOutDir, LEGACY_LINUX_EXECUTABLE);
+  await rm(legacyExecutable, { force: true });
+  await symlink(context.packager?.executableName ?? "seira", legacyExecutable);
 }

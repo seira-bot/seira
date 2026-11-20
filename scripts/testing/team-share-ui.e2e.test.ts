@@ -10,10 +10,10 @@ import { UI_TOOLS_DIR } from "./control-seira-ui.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const binary = resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env });
-const forced = process.env.OMB_UI_E2E === "1";
+const forced = process.env.SEIRA_UI_E2E === "1";
 const enabled = forced || Boolean(binary);
 const launchTimeout = forced && !binary ? 600_000 : 180_000;
-if (!enabled) console.log("skipping share-team UI e2e: set OMB_UI_E2E=1 to install the pinned browser");
+if (!enabled) console.log("skipping share-team UI e2e: set SEIRA_UI_E2E=1 to install the pinned browser");
 
 describe("Share a department in the real renderer", () => {
   let child: ChildProcess | undefined;
@@ -57,7 +57,7 @@ describe("Share a department in the real renderer", () => {
     const dialog = await snapshot();
     for (const line of ["Share Sales desk", "Quote list prices only.", "Publishing isn't available here", "Upload on GitHub", "Save folder…"]) expect(dialog).toContain(line);
     expect(await evaluate("document.querySelector('[data-share-department]').closest('[role=dialog]').querySelectorAll('input, textarea, select, [role=checkbox]').length")).toBe(0);
-    await ui("screenshot", "--out", join(ROOT, ".omb-scratch", "verify-evidence", "share-department.png"));
+    await ui("screenshot", "--out", join(ROOT, ".seira-scratch", "verify-evidence", "share-department.png"));
     await click("Save folder…");
     await expect.poll(() => evaluate("window.__shareDownload ?? null"), { timeout: 10_000 }).toBe("Sales desk.zip");
     await evaluate("window.__shareBlob.arrayBuffer().then((buffer) => { window.__shareText = new TextDecoder('latin1').decode(buffer); }); true");

@@ -86,9 +86,8 @@ if (startsServer) {
     } else {
       phone.close();
       control = socket;
-      if (mode === "drops-control") socket.end("unread");
       // scrcpy 5.0.1 stops when its control connection closes.
-      else {
+      if (mode !== "drops-control") {
         socket.on("data", (bytes) => appendFileSync(state("control.hex"), bytes.toString("hex"))).on("close", () => {
           writeFileSync(state("control.closed"), "");
           process.exit();
@@ -107,6 +106,7 @@ if (startsServer) {
     phone.close();
     writeInTurns(viewer, video.subarray(1), () => {
       if (mode === "hangs-up") viewer.end();
+      if (mode === "drops-control") control.end("unread");
       if (mode === "resets-control") control.resetAndDestroy();
       socket.end();
     });

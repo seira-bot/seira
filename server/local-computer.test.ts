@@ -97,16 +97,16 @@ describe("local computer descriptor contract", () => {
     };
     const gated = gatedLocalComputer(connection, { url: "http://127.0.0.1:1234/control", token: "fixture-token" });
     expect(gated).toMatchObject({ command: process.execPath, args: ["--experimental-strip-types", SPAWNED_PROXIES.localComputer], platform: "linux", scope: "local-computer", generation: connection.generation });
-    expect(gated.env).toEqual({ ...connection.env, ELECTRON_RUN_AS_NODE: "1", OMB_CUA_COMMAND: connection.command, OMB_CUA_ARGS: JSON.stringify(connection.args), OMB_CUA_PLATFORM: "linux", OMB_CONTROL_URL: "http://127.0.0.1:1234/control", OMB_CONTROL_TOKEN: "fixture-token", OMB_COMPUTER_JOURNAL: "0" });
+    expect(gated.env).toEqual({ ...connection.env, ELECTRON_RUN_AS_NODE: "1", SEIRA_CUA_COMMAND: connection.command, SEIRA_CUA_ARGS: JSON.stringify(connection.args), SEIRA_CUA_PLATFORM: "linux", SEIRA_CONTROL_URL: "http://127.0.0.1:1234/control", SEIRA_CONTROL_TOKEN: "fixture-token", SEIRA_COMPUTER_JOURNAL: "0" });
     expect(gated.args.join(" ")).not.toContain("fixture-token");
-    expect(connection.env).not.toHaveProperty("OMB_CONTROL_TOKEN");
+    expect(connection.env).not.toHaveProperty("SEIRA_CONTROL_TOKEN");
   });
   it("records computer calls for saved steps only when the mount asks", () => {
-    const connection = { command: "/trusted/cua-driver", args: ["mcp"], env: { OMB_COMPUTER_JOURNAL: "1" }, platform: "darwin" as const, scope: "local-computer" as const };
+    const connection = { command: "/trusted/cua-driver", args: ["mcp"], env: { SEIRA_COMPUTER_JOURNAL: "1" }, platform: "darwin" as const, scope: "local-computer" as const };
     const control = { url: "http://127.0.0.1:1234/control", token: "fixture-token" };
-    expect(gatedLocalComputer({ ...connection, env: {} }, control, true).env.OMB_COMPUTER_JOURNAL).toBe("1");
-    expect(gatedLocalComputer({ ...connection, env: {} }, control).env.OMB_COMPUTER_JOURNAL).toBe("0");
-    expect(gatedLocalComputer(connection, control, false).env.OMB_COMPUTER_JOURNAL).toBe("0");
+    expect(gatedLocalComputer({ ...connection, env: {} }, control, true).env.SEIRA_COMPUTER_JOURNAL).toBe("1");
+    expect(gatedLocalComputer({ ...connection, env: {} }, control).env.SEIRA_COMPUTER_JOURNAL).toBe("0");
+    expect(gatedLocalComputer(connection, control, false).env.SEIRA_COMPUTER_JOURNAL).toBe("0");
   });
   it("owns the helper's Node mode even when the daemon environment disagrees", () => {
     const gated = gatedLocalComputer({ command: "/trusted/cua-driver", args: ["mcp"], env: { ELECTRON_RUN_AS_NODE: "0" }, platform: "darwin", scope: "local-computer" }, { url: "http://127.0.0.1:1234/control", token: "fixture-token" });
@@ -122,7 +122,7 @@ const temporaryDirectories: string[] = [];
 
 function privateUserData(name: string) {
   const base = process.platform === "win32" ? tmpdir() : realpathSync("/tmp");
-  const root = mkdtempSync(join(base, "omb-local-computer-"));
+  const root = mkdtempSync(join(base, "seira-local-computer-"));
   temporaryDirectories.push(root);
   const userData = join(root, name);
   mkdirSync(userData, { recursive: true, mode: 0o700 });

@@ -25,12 +25,12 @@ export interface HelperConfig {
 /** Goes into a CLI's argv: never a leading dash, no space or control character. */
 const HELPER_MODEL_ID = /^[A-Za-z0-9][\x21-\x7e]*$/;
 
-/** OMB_HELPER_INSTANCE / OMB_HELPER_MODEL win over the file; an empty OMB_HELPER_INSTANCE switches a saved helper off.
+/** SEIRA_HELPER_INSTANCE / SEIRA_HELPER_MODEL win over the file; an empty SEIRA_HELPER_INSTANCE switches a saved helper off.
  * An invalid model switches the helper off rather than writing with a model the person did not name. */
 export function helperSelection(cfg: HelperConfig, env: Record<string, string | undefined> = process.env): { instanceId: string; model?: string } | null {
-  const instanceId = (env.OMB_HELPER_INSTANCE ?? cfg.helper?.instanceId)?.trim();
+  const instanceId = (env.SEIRA_HELPER_INSTANCE ?? cfg.helper?.instanceId)?.trim();
   if (!instanceId) return null;
-  const model = (env.OMB_HELPER_MODEL ?? cfg.helper?.model)?.trim();
+  const model = (env.SEIRA_HELPER_MODEL ?? cfg.helper?.model)?.trim();
   if (!model) return { instanceId };
   return HELPER_MODEL_ID.test(model) ? { instanceId, model } : null;
 }

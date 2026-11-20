@@ -8,18 +8,19 @@ import type { ContainerInfo, ContainerSpec, Docker } from "./docker.ts";
 import { digestPinnedOnly, type ImageCheck } from "./images.ts";
 import { errorText, type Log } from "./log.ts";
 import type { ConnectorIdentity, Job, JobReply } from "./protocol.ts";
+import { currentLabels, listContainers } from "./labels.ts";
 import { LABELS, NAMES } from "./settings.ts";
 import type { SelfUpdateRecord, StateStore } from "./state.ts";
 
 export const SELF_UPDATE_DEADLINE_MS = 3 * 60_000;
-const INSTANCE_ENV = "MAUSBOT_INSTANCE";
-const IMAGE_ENV = "MAUSBOT_CONNECTOR_IMAGE";
+const INSTANCE_ENV = "SEIRA_INSTANCE";
+const IMAGE_ENV = "SEIRA_CONNECTOR_IMAGE";
 
 export interface SelfUpdateDeps {
   docker: Docker;
   state: StateStore;
   log: Log;
-  /** This connector's MAUSBOT_INSTANCE, also its container's instance label. */
+  /** This connector's SEIRA_INSTANCE, also its container's instance label. */
   instance: string;
   identity: () => ConnectorIdentity;
   /** The connector's next image, once pulled and before it runs. */
@@ -32,25 +33,25 @@ export interface SelfUpdateDeps {
 
 /** The container a connector process runs in, found by the instance label install.sh (or a self-update) gave it. */
 export async function ownContainer(docker: Docker, instance: string): Promise<ContainerInfo | null> {
-  const [found] = await docker.listContainers({ [LABELS.instance]: instance });
+  const [found] = await listContainers(docker, { [LABELS.instance]: instance });
   return found ? docker.containerInspect(found.Id) : null;
 }
 
 const HOST_CONFIG_KEYS = ["Binds", "Mounts", "NetworkMode", "RestartPolicy", "SecurityOpt", "CapAdd", "CapDrop", "ReadonlyRootfs", "Tmpfs", "Init", "LogConfig"] as const;
 
 /**
- * The same container as `current`, on `image`, with a new instance id. Only the connector's own MAUSBOT_ settings carry
+ * The same container as `current`, on `image`, with a new instance id. Only the connector's own SEIRA_ settings carry
  * over: the rest of an inspected environment is the old image's own ENV, which the new image sets for itself.
  */
 export function successorSpec(current: ContainerInfo, image: string, instance: string): ContainerSpec {
-  const env = (current.Config.Env ?? []).filter((entry) => entry.startsWith("MAUSBOT_") && !entry.startsWith(`${INSTANCE_ENV}=`) && !entry.startsWith(`${IMAGE_ENV}=`));
+  const env = (current.Config.Env ?? []).filter((entry) => entry.startsWith("SEIRA_") && !entry.startsWith(`${INSTANCE_ENV}=`) && !entry.startsWith(`${IMAGE_ENV}=`));
   const hostConfig: Record<string, unknown> = {};
   for (const key of HOST_CONFIG_KEYS) if (current.HostConfig[key] !== undefined && current.HostConfig[key] !== null) hostConfig[key] = current.HostConfig[key];
   return {
     Image: image,
     Env: [...env, `${INSTANCE_ENV}=${instance}`, `${IMAGE_ENV}=${image}`],
     ...(current.Config.Cmd ? { Cmd: current.Config.Cmd } : {}),
-    Labels: { ...current.Config.Labels, [LABELS.instance]: instance, [LABELS.role]: "connector" },
+    Labels: { ...currentLabels(current.Config.Labels), [LABELS.instance]: instance, [LABELS.role]: "connector" },
     HostConfig: hostConfig as ContainerSpec["HostConfig"],
   };
 }

@@ -47,6 +47,7 @@ vi.mock("./EmailCard", () => ({
 }));
 vi.mock("./Avatar", () => ({ BotAvatar: () => null }));
 
+import { api } from "@/state/store";
 import { AppGrantNotice, connectAppFromBot, showAppGrantNotice } from "./AppGrantPrompt";
 const { PluginsPanel } = await import("./PluginsPanel");
 
@@ -75,11 +76,9 @@ const type = async (input: HTMLInputElement, value: string) => {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 };
-/** Presses Connect, names the account, and lets one poll read the answer. */
+/** Presses Connect, which signs in at once, and lets one poll read the answer. */
 const connectApollo = async () => {
   await click(tile().querySelector("button")!);
-  await type(tile().querySelector("form input") as HTMLInputElement, "work");
-  await act(async () => { tile().querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
   await flush();
   await settlePoll();
 };
@@ -106,6 +105,31 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.useRealTimers();
+});
+
+describe("Connect on an app tile", () => {
+  const authorizeCalls = () => vi.mocked(api).mock.calls.filter(([path]) => String(path).endsWith("/authorize"));
+
+  it("signs in at once for the first account, without a label form", async () => {
+    await open();
+    vi.mocked(api).mockClear();
+    await click(button(tile(), "Connect"));
+    await flush();
+    expect(tile().querySelector("form")).toBeNull();
+    expect(tile().querySelector("input")).toBeNull();
+    expect(authorizeCalls()).toHaveLength(1);
+    expect(authorizeCalls()[0]![0]).toBe("/api/connectors/apollo/authorize");
+    expect(authorizeCalls()[0]![1]?.body).toBeUndefined();
+  });
+
+  it("asks for a label first when an account already exists", async () => {
+    fixture.services = { apollo: { connected: true, accounts: [{ id: "ca_old", status: "ACTIVE" }] } };
+    await open();
+    vi.mocked(api).mockClear();
+    await click(button(tile(), "Add account"));
+    expect(tile().querySelector("form input")).not.toBeNull();
+    expect(authorizeCalls()).toHaveLength(0);
+  });
 });
 
 describe("after connecting an app", () => {
@@ -194,8 +218,6 @@ describe("after connecting an app", () => {
     await act(async () => root.render(createElement(Fragment, null, createElement(PluginsPanel), createElement(AppGrantNotice))));
     await mounted();
     await click(tile().querySelector("button")!);
-    await type(tile().querySelector("form input") as HTMLInputElement, "work");
-    await act(async () => { tile().querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
     await mounted();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5_000);
@@ -329,7 +351,7 @@ describe("on a Team Cloud", () => {
   });
 
   it("gives an admin's team app to the team's bots without asking, never to a person's own helper", async () => {
-    fixture.state.bots = [bot("scout", { connectorScopes: { apps: {} } }), bot("maus", { connectorScopes: { apps: {} }, defaultBot: { person: "ada@acme.test" } } as Partial<Bot>)];
+    fixture.state.bots = [bot("scout", { connectorScopes: { apps: {} } }), bot("seira", { connectorScopes: { apps: {} }, defaultBot: { person: "ada@acme.test" } } as Partial<Bot>)];
     await open();
     await connectApollo();
     expect(prompt()).toBeNull();
@@ -338,11 +360,11 @@ describe("on a Team Cloud", () => {
   });
 
   it("leaves each person's own helper out of the choice", async () => {
-    fixture.state.bots = [bot("scout"), bot("maus", { defaultBot: { person: "ada@acme.test" } } as Partial<Bot>)];
+    fixture.state.bots = [bot("scout"), bot("seira", { defaultBot: { person: "ada@acme.test" } } as Partial<Bot>)];
     fixture.services = { apollo: { connected: true, accounts: [{ id: "ca_old", status: "ACTIVE" }] } };
     await open();
     await click(button(tile(), "Which bots can use Apollo?"));
-    expect(switchOf("Maus")).toBeNull();
+    expect(switchOf("Seira")).toBeNull();
     expect(switchOf("Scout")).not.toBeNull();
   });
 });

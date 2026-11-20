@@ -7,14 +7,14 @@ import { lstatSync, readdirSync, realpathSync, rmSync, utimesSync } from "node:f
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const cacheRoot = process.env.OMB_SERVER_COMPILE_CACHE;
+const cacheRoot = process.env.SEIRA_SERVER_COMPILE_CACHE;
 // Engine CLIs, MCP servers and terminals the server spawns must not inherit
 // it. enableCompileCache does not set NODE_COMPILE_CACHE, so they inherit
 // nothing from this.
-delete process.env.OMB_SERVER_COMPILE_CACHE;
+delete process.env.SEIRA_SERVER_COMPILE_CACHE;
 
-const resourcesLink = process.env.OMB_SERVER_RESOURCES_LINK;
-delete process.env.OMB_SERVER_RESOURCES_LINK;
+const resourcesLink = process.env.SEIRA_SERVER_RESOURCES_LINK;
+delete process.env.SEIRA_SERVER_RESOURCES_LINK;
 
 let enabled = false;
 if (cacheRoot) {

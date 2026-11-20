@@ -48,8 +48,8 @@ it("creates and manages an own-section room through the mounted Chief MCP proxy"
         agents: z.object({ command: z.string(), args: z.array(z.string()), env: z.record(z.string(), z.string()) }),
       }) }) }).parse(JSON.parse(readFileSync(fixture.fixtureDumpPath, "utf8")));
       const mounted = mcpConfig.mcpServers.agents;
-      expect(mounted.env.OMB_BOT_ID).toBe(bot.id);
-      expect(mounted.env.OMB_HARNESS_URL).toBe(fixture.info.url);
+      expect(mounted.env.SEIRA_BOT_ID).toBe(bot.id);
+      expect(mounted.env.SEIRA_HARNESS_URL).toBe(fixture.info.url);
       return mounted;
     };
     const connect = (mounted: Mounted) => {
@@ -76,7 +76,7 @@ it("creates and manages an own-section room through the mounted Chief MCP proxy"
       (await rpc<{ tools: Array<{ name: string }> }>("tools/list")).tools.map((entry) => entry.name);
 
     const peerMount = await mount(peer, "Say hello.");
-    expect(peerMount.env.OMB_CHIEF_OF_STAFF).toBe("0");
+    expect(peerMount.env.SEIRA_CHIEF_OF_STAFF).toBe("0");
     const peerTools = await toolNames(connect(peerMount));
     expect(peerTools).toContain("list_rooms");
     expect(CHIEF_ONLY_TOOLS.filter((name) => peerTools.includes(name))).toEqual([]);
@@ -84,7 +84,7 @@ it("creates and manages an own-section room through the mounted Chief MCP proxy"
     await control(["interrupt", "--bot", peer.id]);
 
     const mounted = await mount(chief, "Set up a small room for the team.");
-    expect(mounted.env.OMB_CHIEF_OF_STAFF).toBe("1");
+    expect(mounted.env.SEIRA_CHIEF_OF_STAFF).toBe("1");
     const rpc = connect(mounted);
     expect(await toolNames(rpc)).toEqual(expect.arrayContaining(CHIEF_ONLY_TOOLS));
     const tool = async (name: string, args: Record<string, unknown>, denied = false) => {

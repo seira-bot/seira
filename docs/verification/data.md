@@ -19,7 +19,7 @@ review** and the **Data** tab if needed. The printed `ui` path also works with
 the shared [chat UI controls](chat-ui.md):
 
 ```sh
-H=/tmp/openmausbot-verify-data-XXXXXX/ui.json
+H=/tmp/seira-verify-data-XXXXXX/ui.json
 pnpm control:seira ui snapshot --ui "$H" --interactive
 pnpm control:seira ui click --ui "$H" --name History
 pnpm control:seira ui snapshot --ui "$H" --interactive
@@ -28,7 +28,7 @@ pnpm control:seira ui click --ui "$H" --ref @eN
 pnpm control:seira ui click --ui "$H" --name Table
 pnpm control:seira ui click --ui "$H" --name Chart
 pnpm control:seira ui click --ui "$H" --name "Enter fullscreen"
-pnpm control:seira ui screenshot --ui "$H" --out .omb-scratch/data-fullscreen.png
+pnpm control:seira ui screenshot --ui "$H" --out .seira-scratch/data-fullscreen.png
 pnpm control:seira ui click --ui "$H" --name "Exit fullscreen"
 ```
 

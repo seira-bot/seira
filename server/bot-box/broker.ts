@@ -11,7 +11,7 @@ import type { Socket } from "node:net";
 import { MAX_REFUSABLE_CALL_BYTES, refusedCallAnswer } from "./broker-mcp-refusal.ts";
 import type { McpServerApp } from "../mcp-server-app.ts";
 
-export const BROKER_TOKEN_PREFIX = "omb_t0_";
+export const BROKER_TOKEN_PREFIX = "seira_t0_";
 /** A token minted for a process lives this long at most; the process's exit ends it sooner. */
 export const BROKER_PROCESS_TTL_MS = 24 * 60 * 60_000;
 /** A grant bound to a conversation (an MCP server's headers) slides this long past the last turn that used it. */
@@ -43,7 +43,7 @@ interface Stored { hash: Buffer; botId: string | null; threadId: string | null; 
 /** Credential headers a client may send; the broker never forwards them. */
 const CREDENTIAL_HEADERS = new Set(["authorization", "x-api-key", "x-goog-api-key", "proxy-authorization", "cookie"]);
 const HOP_BY_HOP = new Set(["connection", "keep-alive", "transfer-encoding", "te", "trailer", "upgrade", "proxy-connection", "host"]);
-const TOKEN = /^omb_t0_[a-f0-9]{48}$/;
+const TOKEN = /^seira_t0_[a-f0-9]{48}$/;
 const GRANT = /^[a-z][a-z0-9_-]{0,63}$/;
 
 export interface CredentialBrokerOptions {

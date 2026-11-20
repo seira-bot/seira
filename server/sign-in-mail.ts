@@ -1,4 +1,4 @@
-// Email sign-in codes sent through the server's own mail server (OMB_SIGNIN_SMTP_URL) instead of the OpenMausBot account
+// Email sign-in codes sent through the server's own mail server (SEIRA_SIGNIN_SMTP_URL) instead of the Seira account
 // service. A code is 8 digits, works once for ten minutes and for five tries, and only its hash is kept, in memory.
 import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 
@@ -38,9 +38,9 @@ export function smtpOptions(url: string) {
   try {
     parsed = new URL(url);
   } catch {
-    throw new SignInMailError("OMB_SIGNIN_SMTP_URL is not a URL such as smtps://user:password@smtp.example.com:465");
+    throw new SignInMailError("SEIRA_SIGNIN_SMTP_URL is not a URL such as smtps://user:password@smtp.example.com:465");
   }
-  if (parsed.protocol !== "smtps:" && parsed.protocol !== "smtp:") throw new SignInMailError("OMB_SIGNIN_SMTP_URL must start with smtps:// or smtp://");
+  if (parsed.protocol !== "smtps:" && parsed.protocol !== "smtp:") throw new SignInMailError("SEIRA_SIGNIN_SMTP_URL must start with smtps:// or smtp://");
   const secure = parsed.protocol === "smtps:";
   const user = decodeURIComponent(parsed.username);
   return {
@@ -59,7 +59,7 @@ export function createSignInMail(options: { url: string; from?: string; now?: ()
   let transport: Promise<MailTransport> | undefined = options.transport ? Promise.resolve(options.transport) : undefined;
   const from = (): string => {
     const named = options.from?.trim() || smtpOptions(options.url).auth?.user || "";
-    if (!named.includes("@")) throw new SignInMailError("set OMB_SIGNIN_SMTP_FROM to the address sign-in codes come from");
+    if (!named.includes("@")) throw new SignInMailError("set SEIRA_SIGNIN_SMTP_FROM to the address sign-in codes come from");
     return named;
   };
   const prune = () => {

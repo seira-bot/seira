@@ -9,10 +9,10 @@ import { applySkinChoice, readSkinChoice } from "../../src/lib/skins";
 import "../../src/styles.css";
 
 // This entry point is served only by the disposable verification launcher.
-// The voice-latency harness opts in with ?ombVoiceProbe=1; the recorder in
+// The voice-latency harness opts in with ?seiraVoiceProbe=1; the recorder in
 // src/lib/voice-latency-probe stays inert without this sink.
-if (new URLSearchParams(location.search).has("ombVoiceProbe")) {
-  (window as typeof window & { __ombVoiceProbe?: unknown[] }).__ombVoiceProbe = [];
+if (new URLSearchParams(location.search).has("seiraVoiceProbe")) {
+  (window as typeof window & { __seiraVoiceProbe?: unknown[] }).__seiraVoiceProbe = [];
 }
 setAnalyticsEnabled(false);
 // Tests use English accessibility names from the first render, including after a reload.

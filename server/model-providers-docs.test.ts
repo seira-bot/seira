@@ -42,7 +42,7 @@ afterEach(async () => {
 describe("Claude Code section", () => {
   // Shell exports as copied into the env block, plus FireConnect's header and model settings. Every value is fake.
   const settingsHome = (env: Record<string, string>, extra: Record<string, unknown> = {}) => {
-    const home = scratch("omb-docs-claude-");
+    const home = scratch("seira-docs-claude-");
     mkdirSync(join(home, ".claude"), { recursive: true });
     writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify({ ...extra, env }));
     return home;
@@ -125,7 +125,7 @@ describe("Claude Code section", () => {
 
 describe("OpenCode 2.x section", () => {
   it("lists provider models from ACP even when OpenCode 2 rejects models --verbose", async () => {
-    const dir = scratch("omb-docs-opencode2-");
+    const dir = scratch("seira-docs-opencode2-");
     const catalog = await discoverOpenCodeModels({
       ...process.env, HOME: dir, USERPROFILE: dir,
       XDG_CONFIG_HOME: join(dir, "config"), XDG_DATA_HOME: join(dir, "data"),
@@ -149,7 +149,7 @@ describe("OpenCode config file", () => {
     return block![1]!.replace(/^ {3}/gmu, "");
   };
   const configHome = (content: string) => {
-    const home = scratch("omb-docs-opencode-json-");
+    const home = scratch("seira-docs-opencode-json-");
     const dir = join(home, ".config", "opencode");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "opencode.json"), content);

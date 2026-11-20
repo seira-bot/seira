@@ -7,7 +7,7 @@ import { launchVerificationServer, runControlSeira } from "../scripts/control-se
 
 it("gives each member three turns in order and tells it the last one is final", async () => {
   const session = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, { scripted: true });
-  const env = { OPENMAUSBOT_URL: session.info.url };
+  const env = { SEIRA_URL: session.info.url };
   const cli = (...args: string[]) => runControlSeira(args, { env }) as Promise<any>;
   const api = async (method: string, path: string, body?: unknown) => {
     const response = await fetch(`${session.info.url}${path}`, {

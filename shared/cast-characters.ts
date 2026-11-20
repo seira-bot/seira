@@ -1,13 +1,13 @@
 import type { BrandBodyId } from "./carved-bodies.ts";
 import type { MascotAccessoryId } from "./mascot-accessories.ts";
-import type { MausColor } from "./wire.ts";
+import type { SeiraColor } from "./wire.ts";
 
 export interface CastCharacter {
   id: string;
   name: string;
   mascotBody: BrandBodyId;
   mascotAccessories: readonly MascotAccessoryId[];
-  color: MausColor;
+  color: SeiraColor;
 }
 
 /** The cast of brand/mascot/cast/cast.json without Seira, as a look a bot can wear. Ids, names, hair styles and

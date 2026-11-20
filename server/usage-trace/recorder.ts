@@ -1,4 +1,4 @@
-// Records each turn's AI steps and tool calls from the runtime events every engine emits, plus the receipts OMB's own tools
+// Records each turn's AI steps and tool calls from the runtime events every engine emits, plus the receipts Seira's own tools
 // send, and hands the turn's timing, parent and outcome to its usage row when the turn is booked.
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { RuntimeEvent } from "../../shared/runtime-events.ts";
@@ -25,7 +25,7 @@ export interface TurnTraceFields {
   usageStatus: TraceUsageStatus;
 }
 
-/** A tool call OMB itself served, timed on the server whatever engine made it. */
+/** A tool call Seira itself served, timed on the server whatever engine made it. */
 export interface ToolReceipt {
   name: string;
   startedAt: number;
@@ -330,7 +330,7 @@ export function createTraceRecorder(options: { dataDir: string; now?: () => numb
     }
   }
 
-  /** OMB's own record of a tool it served: its timing replaces the engine's, or it stands alone when the engine reported none. */
+  /** Seira's own record of a tool it served: its timing replaces the engine's, or it stands alone when the engine reported none. */
   function receipt(threadId: string, served: ToolReceipt): void {
     receiptFor(live.get(threadId) ?? ended.get(threadId)?.turn, served);
   }
@@ -347,11 +347,11 @@ export function createTraceRecorder(options: { dataDir: string; now?: () => numb
       span = tool;
       span.startedAt = served.startedAt;
       span.endedAt = served.endedAt;
-      span.timedBy = "omb";
+      span.timedBy = "seira";
     } else {
-      const id = `${turn.threadId}:${turn.turnId}:omb-${served.startedAt}-${turn.tools.size}`;
+      const id = `${turn.threadId}:${turn.turnId}:seira-${served.startedAt}-${turn.tools.size}`;
       span = { kind: "tool", id, threadId: turn.threadId, turnId: turn.turnId, name: served.name, startedAt: served.startedAt,
-        endedAt: served.endedAt, status: "ok", timedBy: "omb" };
+        endedAt: served.endedAt, status: "ok", timedBy: "seira" };
       turn.tools.set(id, span);
       turn.receipts.push(span);
       const step = turn.openStep;
@@ -398,7 +398,7 @@ export function createTraceRecorder(options: { dataDir: string; now?: () => numb
     };
   }
 
-  /** Times one MCP request OMB serves itself (browser, computer, data, connected apps): a receipt once its answer is sent. */
+  /** Times one MCP request Seira serves itself (browser, computer, data, connected apps): a receipt once its answer is sent. */
   function timeServed(req: IncomingMessage, res: ServerResponse, threadId: string): void {
     const startedAt = now();
     // A response can arrive after this turn settled or another one began.

@@ -22,7 +22,7 @@ afterEach(async () => {
 const server = (url: string, extra: object = {}) => ({ driver: "openai-compat", ...extra, config: { url, managedModels: ["fixture-model"] } });
 
 it("lists an OpenAI-compatible server with its provider's mark, and a stored icon over it", async () => {
-  const home = mkdtempSync(join(tmpdir(), "omb-instance-icons-"));
+  const home = mkdtempSync(join(tmpdir(), "seira-instance-icons-"));
   homes.push(home);
   mkdirSync(join(home, "tmp"), { recursive: true });
   writeFileSync(join(home, "config.json"), JSON.stringify({
