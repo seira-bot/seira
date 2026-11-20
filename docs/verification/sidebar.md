@@ -21,7 +21,7 @@ in `src/components/SidebarBotListItem.test.ts` checks dialog semantics/copy,
 chief labels, role badges, and working/waiting indicators. The interaction checks
 above are manual browser verification, not assertions made by those unit tests.
 This fixture covers the sidebar confirmation and bot-row result only; it does
-not exercise Settings > Computers deletion or provider completion polling.
+not exercise Settings → Desktops & browser → Desktops deletion or provider completion polling.
 Those paths are covered by the computer-section and server Boat inventory tests.
 
 ## Mark all of a bot's conversations as read

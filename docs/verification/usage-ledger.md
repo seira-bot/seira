@@ -26,7 +26,7 @@
 
 ## User path
 
-Settings → Usage (in Simple mode, on Account) shows the period's totals, where
+Settings → Spending (Advanced mode) shows the period's totals, where
 the money went by bot and by model (with a switch for person, day, provider and
 routine), and every run. Opening a run shows its trace waterfall. In a chat, each
 turn's work line reads "Worked for …" with **View trace** beside it. **Export
@@ -69,7 +69,7 @@ pnpm control:seira wait --bot BOT_ID --timeout 30 --url http://127.0.0.1:PORT
 cat DATA_DIR/usage/$(date -u +%Y-%m).jsonl
 ```
 
-Then open the printed preview, go to Settings → Usage, and confirm the run is
+Then open the printed preview, go to Settings → Spending, and confirm the run is
 listed with its bot, and that **Where it went** shows it under **Bot** and under
 **Person** as "This computer".
 

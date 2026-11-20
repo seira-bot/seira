@@ -52,7 +52,7 @@ loopback without one. A hosted or shared server with service loopback trust
 session for almost every tool, reads included. To authorize an external MCP
 client:
 
-1. In Seira, open **Settings → Phone → Set up a phone** and reveal the
+1. In Seira, open **Settings → Phone & devices → Pair a phone** and reveal the
    one-time pairing code.
 2. Exchange it locally (remove spaces from the displayed code):
 
@@ -74,7 +74,7 @@ client:
    }
    ```
 
-The paired client appears with phones under **Settings → Phone** and can be
+The paired client appears with phones under **Settings → Phone & devices** and can be
 revoked there. Do not share the token or commit it to a repository.
 
 ## From the installed desktop app

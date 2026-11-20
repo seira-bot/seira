@@ -41,7 +41,7 @@ instance at it:
 ```
 
 - **`config.cli`** is the whole command, args included (`"npx -y some-agent acp"`
-  works). You can also set it from the app: Settings → Engines → *Set CLI…* on
+  works). You can also set it from the app: Settings → AI → Providers, then *Set CLI…* on
   the instance's row. An instance without a command shows up with exactly that
   hint instead of failing at first message.
 - **Sign in first.** The driver has no auth flow of its own — run the CLI once

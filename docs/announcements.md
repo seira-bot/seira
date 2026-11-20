@@ -125,9 +125,9 @@ characters and characters that reorder or hide text are refused.
 
 - `{ "open_url": "https://…" }`: opens the page outside the app (https only, no user name or password in it), with
   nothing added to the address. Put any campaign parameters in the address yourself.
-- `{ "open": "<place>" }`: opens one of the app's own places: `api_keys` (Settings → API keys), `ai_engines` (Settings →
-  AI engines), `connected_apps` (Connected apps), `new_bot` (makes a new bot, as the sidebar's New bot does) or `my_cloud`
-  (Settings → Seira Cloud). `api_keys`, `ai_engines` and `new_bot` change a place's settings, so a card with one of them
+- `{ "open": "<place>" }`: opens one of the app's own places: `api_keys` (Settings → AI → Other services), `ai_engines` (Settings → AI →
+  Providers), `connected_apps` (Connected apps), `new_bot` (makes a new bot, as the sidebar's New bot does) or `my_cloud`
+  (Settings → Your account). `api_keys`, `ai_engines` and `new_bot` change a place's settings, so a card with one of them
   is not shown to someone who cannot (a Team Cloud's members).
 
 Anything else makes the card invalid.

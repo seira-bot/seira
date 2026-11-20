@@ -13,8 +13,8 @@ it keeps working while the computer is off.
 
 1. Install Seira on your phone from the App Store or Google Play.
 2. In the desktop app, open the menu under your name and choose **Connect
-   your phone · to your Cloud (always on)**. (**Settings → Seira Cloud → Use
-   My Cloud on your phone** does the same.) The app opens your Cloud in its
+   your phone · to your Cloud (always on)**. (**Settings → Phone & devices** on the Cloud's own
+   page does the same.) The app opens your Cloud in its
    window, at the Cloud's phone pairing.
 3. Choose **Create pairing code** and scan the QR code with the phone app.
 
@@ -252,8 +252,8 @@ and the LAN port are sent as they always were.
    computer, manual address, or six-digit code.
 5. Revoking the phone on the Mac removes its access and lets it pair again.
 
-To add another Mac, open **Settings → Computers → Connect another computer**
-on the iPhone and scan that Mac's QR. The existing computer stays usable if
+To add another Mac, open the iPhone app's **Settings → Computers → Connect another computer**
+and scan that Mac's QR. The existing computer stays usable if
 the new pairing fails or is cancelled. Switching computers replaces the live
 event stream and in-memory chat state, but keeps every saved pairing; removing
 one computer deletes only that computer's Keychain credential from the phone.

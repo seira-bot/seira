@@ -42,7 +42,7 @@ The smoke checks:
 - The 390px layout has no horizontal overflow.
 - A remote-origin page gets neither the organization bridge nor Node access.
 - The actual fresh app still opens its existing optional welcome flow, not an
-  organization sign-in wall. Explicit Settings → Organization works before
+  organization sign-in wall. Explicit Settings → Your account → Organization works before
   completing local provider onboarding.
 - A persisted old hosted selection loads the old server's page without an
   organization bridge. Cancelling native organization sign-in leaves the saved
@@ -219,7 +219,7 @@ from `index.ts` each failed a test, then was restored.
 
 Copy only; no behaviour, identifier, menu id, IPC channel, query parameter or
 locale key changed. The app now says **Organization** (US spelling, as Admin
-does), **Settings → Servers** / **Server → Connect to a server…** for saved
+does), **Settings → This app → Your computers** / **Server → Connect to a server…** for saved
 remote servers, **Settings → Installations** for the fleet screen, "this
 installation" for the whole app and its data, and "folder" for bot and task
 folders. The Anthropic Console's "workspace API key" and ChatGPT's "workspace

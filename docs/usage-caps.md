@@ -49,7 +49,7 @@ answers a card it asked, or one a restart picks up again.
 
 **At 80% of a cap:** one line in the server log
 (`usage cap at 81%: server:day:usd $8.10 of $10.00`), and the cap's bar on
-Settings → Usage turns amber with "At 81% of the cap". Nothing else: no
+Settings → Spending turns amber with "At 81% of the cap". Nothing else: no
 notification, no card.
 
 **When a cap is reached:** one notice in the owner's notifications for that
@@ -87,7 +87,7 @@ skipped meanwhile are not made up; a one-time run that waited runs now.
 
 ## Where it is set
 
-**Settings → Usage → Usage caps**, shown to the owner only (the `admin`
+**Settings → Spending**, **Usage caps**, shown to the owner only (the `admin`
 scope; on a Team Cloud, its admins). The card shows each cap's use now, and
 saves `stops`, the server's caps and each bot's.
 
@@ -127,7 +127,7 @@ The API, for the owner:
   them, never the environment's.
 - `PUT /api/usage/caps` with `{ stops, server, bots }` replaces the saved
   caps. On a server other people sign in to, the change is recorded in
-  Settings → Activity like any other settings change.
+  Settings → Data → Activity like any other settings change.
 
 ## With the licensed monthly spend limit
 

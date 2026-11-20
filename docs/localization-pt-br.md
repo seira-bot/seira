@@ -243,7 +243,7 @@ the whole catalog in the same change.
 | instructions | instruções | “standing instructions” → “instruções permanentes”. |
 | Live | Ao vivo | |
 | Local VM | VM local | Technical screens only. Everyday screens: “desktop privado”. |
-| Logins (saved site logins) | Logins | A single one is `login`. “Settings → Logins” → “Configurações → Logins”. |
+| Logins (saved site logins) | Logins | A single one is `login`. |
 | Marketplace | Marketplace | Masculine. |
 | model | modelo | AI model. Template is also `modelo` (see template). |
 | model provider | provedor de modelos | “provider” alone → `provedor`. |

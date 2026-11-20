@@ -97,7 +97,7 @@ OpenCode, `opencode auth login` also keeps its sign-in in OpenCode's own setting
 
 The chat engine uses one provider at a time.
 
-1. Open **Settings → Connections → Model providers**.
+1. Open **Settings → AI → Other services**.
 2. Paste your key into **OpenAI-compatible API key** and set
    **OpenAI-compatible base URL**:
 
@@ -162,7 +162,7 @@ broker, including Full Access. Native Cline tool selection is not supported.
 The **Anthropic API key** in Connections is for Anthropic only.
 
 To run Claude bots on DeepSeek, GLM or another host that speaks Claude
-Code's API, add a **custom endpoint** in Settings → Engines, in the Claude
+Code's API, add a **custom endpoint** in Settings → AI → Providers, in the Claude
 card:
 
 - **Add endpoint** takes a name, the host's base URL, its API key and,
@@ -206,7 +206,7 @@ DeepSeek, and your Claude bots follow it:
 
 Codex bots can also run on an API key instead of a ChatGPT sign-in:
 
-1. Open **Settings → Engines** and expand the Codex/ChatGPT card.
+1. Open **Settings → AI → Providers** and expand the Codex/ChatGPT card.
 2. Under **Codex direct API**, choose **Add endpoint**.
 3. Leave the base URL empty for OpenAI, or enter another gateway's URL, such
    as `https://gateway.example.com/v1`.
@@ -245,7 +245,7 @@ list only over HTTPS or to this computer. Check that:
 
 ## Ollama
 
-To add Ollama, open **Settings → AI → API keys → Your own model servers** and find the
+To add Ollama, open **Settings → AI → Other services**, under **Your own model servers** and find the
 **Ollama** row. Seira looks for Ollama on this computer by itself. Press
 **Add Ollama** to use what it found, or enter another computer's address and
 press **Check again**.
@@ -300,7 +300,7 @@ called `opencode`.
 
 - If you installed OpenCode from Seira's Settings, bots use that copy.
   Otherwise they use the first `opencode` on your PATH, which is 2.x if you
-  installed `@opencode/cli`. **Settings → Engines** shows the version in use.
+  installed `@opencode/cli`. **Settings → AI → Providers** shows the version in use.
 - Differences from 1.x:
   - Some 2.x releases have reported missing configured providers in new
     ACP sessions ([upstream report #50236](https://github.com/anomalyco/opencode/issues/50236)).

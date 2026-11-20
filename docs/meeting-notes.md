@@ -29,7 +29,7 @@ instead.
 
 Everyone else uses their own keys, in this order, from the keys already in Settings (nothing new to enter):
 
-1. their **ElevenLabs** key (Settings → Voice): realtime transcription;
+1. their **ElevenLabs** key (Settings → AI → Other services): realtime transcription;
 2. their **Groq** key: `whisper-large-v3-turbo`;
 3. their **OpenAI** key: `whisper-1`;
 4. otherwise **Whisper on the cloud computer** (faster-whisper `small.en`, CPU), which installs itself on first use;

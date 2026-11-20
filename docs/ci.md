@@ -314,7 +314,7 @@ checkout without dependencies can run them on an ssh host instead (see
 ## Repository settings for Actions
 
 These settings keep CI safe for a public repository. An organization admin
-sets them in **Settings → Actions → General**:
+sets them in GitHub **Settings → Actions → General**:
 
 | Setting | Value |
 | --- | --- |
@@ -331,7 +331,7 @@ Then add the `CI` check (source: GitHub Actions) to a separate ruleset on the de
 `package-macos.yml` reads the Apple signing secrets from the environment
 `release`, the `publish` job of `server-image.yml` uses it to write to
 `ghcr.io`, and the `publish` job of `npm-publish.yml` uses it to publish to
-npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin creates it in **Settings → Environments**:
+npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin creates it in GitHub **Settings → Environments**:
 
 | Setting | Value |
 | --- | --- |
@@ -351,7 +351,7 @@ npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin create
 
 The `approval` jobs of `package-macos.yml` and `server-image.yml` use the
 `release-approval` environment. An organization admin creates it in
-**Settings → Environments**:
+GitHub **Settings → Environments**:
 
 | Setting | Value |
 | --- | --- |

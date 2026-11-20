@@ -59,13 +59,13 @@ keeps people apart on it. The bot box ([bot-box.md](bot-box.md)) is what makes t
   remembers about you (the bot panel's What it remembers, `/api/bots/<bot>/memory/mine`); nobody else can. "About you" is yours alone: `GET`/`PUT /api/me`
   (the app's Profile on a team), read into your own conversations only.
 - **Profile.** "You" is the person signed in: your own name, picture and About you (`people/<person>/profile.json` and
-  `about.json`, `GET`/`PUT /api/me`), with the address of your verified sign-in, which nothing here changes. Settings →
-  Profile saves yours only (an older app's `PUT /api/config` `profile` lands on the caller's own too), and `GET
+  `about.json`, `GET`/`PUT /api/me`), with the address of your verified sign-in, which nothing here changes. Settings → You and your bots → About
+  you saves yours only (an older app's `PUT /api/config` `profile` lands on the caller's own too), and `GET
   /api/config` and every config frame on your stream carry yours. Your lines, cards and reactions carry your name; a bot
   names you in your private chat, each speaker on a group chat's lines, and a routine's run its writer. config.json's one
   `profile` is nobody's on a team: it is never shown or read as anyone, and when the person whose address it names signs
   in it becomes theirs (filling only what they have not set) and is cleared. When the desktop app opens a team, the name
-  and picture of that computer's own Settings → Profile fill what the person's team profile lacks (`PUT /api/me` with
+  and picture of that computer's own Settings → You and your bots → About you fill what the person's team profile lacks (`PUT /api/me` with
   `fillEmpty: true`, the picture uploaded first as their own attachment): each field once (`GET /api/me` lists the
   `seeded` ones), never over what they set on the team and never again after they clear it there. Nothing else goes up.
   **A teammate's name and picture are visible to everyone in the team, like any team app. About you and everything
@@ -106,7 +106,7 @@ keeps people apart on it. The bot box ([bot-box.md](bot-box.md)) is what makes t
   member signed in to in their chat never opens signed in for another member. The live view shows the browser of the
   conversation it is opened from, to whoever may read that conversation (a member's own browser to that member alone);
   with no conversation named (a phone) it is the person's own. Every Chrome runs in its own box (below).
-- **Phones.** Settings → *Open on your phone* (and *Connect your phone* in the account menu) shows a code made for the
+- **Phones.** Settings → Phone & devices (*Open on your phone*) (and *Connect your phone* in the account menu) shows a code made for the
   person signed in. The phone app scans it as any `/pair#code=` link and gets that person's session: their address,
   their role, their chats, never another member's. The phone stays signed in while it is used: the Cloud's roster check
   (below, "Signed in without a desktop") asks the Admin about its person, as the desktop's re-pairing always did. Under the code,
@@ -304,7 +304,7 @@ this server shares with every bot. It exists only on a Team Cloud.
   toward the person's and the team's totals (`server/host/private-records.ts`). What a person changes on their own
   Seira is never recorded in admin activity.
 - For a business sign-in (Claude or ChatGPT on this server), the Admin opens this server's own pages signed in as that
-  admin (a browser sign-in with the member's claim) at `/?connect=ai` (or `apps`, `mcp`, `keys`, and `bots` for Settings → Bot access, which opens for an admin only).
+  admin (a browser sign-in with the member's claim) at `/?connect=ai` (or `apps`, `mcp`, `keys`, and `bots` for Settings → People → Bot access, which opens for an admin only).
 
 ## Connections: the team's or each person's
 

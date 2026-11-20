@@ -32,7 +32,7 @@ pnpm exec vitest run server/cloud-team-bot-access.e2e.test.ts server/bot-access.
   changes the bot, a relayed message, and who may be added.
 - `server/host/access-requests.test.ts`: the admins decide when the owner is gone, one admin's Allow settles every
   copy, the owner alone decides while on the team, Not now gives nothing.
-- `src/components/bot-access/AccessOverview.dom.test.ts`: Settings → Bot access lists each team bot (no one's own
+- `src/components/bot-access/AccessOverview.dom.test.ts`: Settings → People → Bot access lists each team bot (no one's own
   Seira) with its owner, a plain summary and a stack of faces (+N past four); a row opens the Share dialog; the search
   takes a bot's name or owner; By person lists each User, and opening one gives their bots at the same level menus, with
   Remove only for their own access; the empty states; "Ask Cara to chat" asks and says so, "Ask an admin to chat" when

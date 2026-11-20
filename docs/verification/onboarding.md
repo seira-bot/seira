@@ -8,7 +8,7 @@ Choose an existing bot where the person has bots). The Chief step shows only
 for a Seira not yet introduced where no other bot is the Chief. It lands in
 the Chief's chat, where Seira's three lines, its follow-up (written once by
 the server, `POST /api/bots/:id/helper-followup`) and chips offer only what is
-still missing. The app tour starts only from Settings → Replay app tour.
+still missing. The app tour starts only from Replay app tour in Settings → This app → Help.
 
 Launch the isolated full-app fixture following [Chat UI](chat-ui.md):
 

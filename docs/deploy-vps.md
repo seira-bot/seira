@@ -239,7 +239,7 @@ the service account's browser. Both commands must finish successfully.
 On Ubuntu 24.04, AppArmor may also require [administrator sandbox setup](#ubuntu-2404-browser-sandbox).
 The one-click installer downloads the browser; it does not grant these OS permissions.
 
-Then turn the browser on under Settings → Computers, and per bot. Each bot
+Then turn the browser on under Settings → Desktops & browser → Built-in browser, and per bot. Each bot
 gets its own isolated session whose logins persist across restarts.
 
 ## Install and sign the engines in
@@ -351,8 +351,8 @@ environment.
 
 ### From the app: Update server
 
-On a Docker install, the server's admins can update it from **Settings →
-Updates → Update server**, in the desktop app or a browser. It runs the
+On a Docker install, the server's admins can update it from **Update server** on the server's own page in Settings (its first
+entry), in the desktop app or a browser. It runs the
 `update.sh` described below: the stable version, a copy of the data first, and
 the old version and its data back when the new one is not healthy. The app asks
 first (the server restarts, so anything running stops, and it says how many
@@ -582,7 +582,7 @@ If you built the image yourself (`docker compose up -d --build`, with
 keep updating with `git pull && docker compose up -d --build`, or move to the
 published image with `./update.sh --replace-local-build`. Building needs about 6 GB of memory:
 on a smaller server, add swap first or use the published image. Engines you install
-from **Settings → Engines** live on the data volume and survive either way.
+from **Settings → AI → Providers** live on the data volume and survive either way.
 
 ### Paths A and C (npm with the service above): the same steps by hand
 

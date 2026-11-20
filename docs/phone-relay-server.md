@@ -258,7 +258,7 @@ again…".
 - WebSocket routes through the relay (Local VM and computer viewing, live
   browser): they need the upgrade path to accept a socket that is not a TCP
   socket. Medium.
-- The web UI: a relay QR in the server's own Settings → Remote access, and the
+- The web UI: a relay QR in the server's own Settings → Phone & devices → Pair a phone, and the
   relay's state there. Medium.
 - `seira setup` and `start` offering the relay, `status` showing it, and
   saving it with the startup choices. Small.

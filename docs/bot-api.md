@@ -11,7 +11,7 @@ The key is shown that once and kept hashed; when the card is opened again the
 command shows `YOUR_KEY` in its place. **New key** replaces the key (apps using
 the old one stop working); switching the card off forgets it. Only someone who
 may edit the bot can switch it on, mint a key or switch it off; each of those
-is a **Bot API** row in Settings → Activity.
+is a **Bot API** row in Settings → Data → Activity.
 
 ## Plans
 
@@ -115,7 +115,7 @@ Who and where:
 - Never for guest links or webhooks: only a Bot API key carries it.
 - **New key** starts without the mark, and switching the API off forgets it.
   Marking and unmarking, including the mark a new key or switching the API off
-  clears, are **Bot API** rows in Settings → Activity, a call
+  clears, are **Bot API** rows in Settings → Data → Activity, a call
   taken this way shows "as you" among the card's calls, and every viewer of
   the card sees whether the key acts as the owner.
 
