@@ -84,15 +84,15 @@ describe("AiPoolSettings", () => {
     expect(view.toggle.props.checked).toBe(false);
     expect(view.mode).toBeUndefined();
     expect(view.addEngine).toBeUndefined();
-    expect(view.html).toContain("Each new turn goes to the AI with the most usage left.");
+    expect(view.html).toContain("Use more than one AI for your conversations, so you run out of usage less often.");
     expect(view.html).toContain("Learn more");
     expect(view.html).not.toContain("Two sign-ins");
     fixture.values[MORE] = true;
     const more = render().html;
     expect(more).toContain("Even: a conversation moves to another AI in the pool");
-    expect(more).toContain("In order: a conversation uses the first AI until it can&#x27;t run, then the next one.");
+    expect(more).toContain("In order: each turn uses the first AI in the list that has usage left. A conversation goes back to an earlier AI when it has usage left again.");
     expect(more).toContain("Two sign-ins to the same AI plan can&#x27;t share a pool.");
-    expect(more).toContain("A pay-per-use key is used only when the AIs with a plan are low, and it may cost money.");
+    expect(more).toContain("In even mode, a pay-per-use key is used only when the AIs with a plan are low. A key may cost money.");
   });
 
   it("turns on and saves at once when two AIs are already in the pool", async () => {
