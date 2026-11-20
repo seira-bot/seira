@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { boxEnvironment, boxEnvironmentAllows } from "./bot-box/env.ts";
-import { stripControlPlaneEnv, stripWorkspaceCredentialEnv } from "./credential-env.ts";
+import { stripControlPlaneEnv, stripWorkspaceCredentialEnv, stripWorkspaceCredentialKeys } from "./credential-env.ts";
 import { isHarnessOwnedMcpEnvName } from "./mcp-registry.ts";
 
 const fixtures: string[] = [];
@@ -69,6 +69,9 @@ describe("variables the harness keeps for itself, under either prefix", () => {
     };
     stripWorkspaceCredentialEnv(env);
     expect(env).toEqual({ PATH: "/bin" });
+    const kept: Record<string, string | undefined> = { SEIRA_OPENAI_API_KEY: "a", OMB_OPENAI_API_KEY: "b", SEIRA_JEV_API_KEY: "c", OMB_JEV_API_KEY: "d" };
+    stripWorkspaceCredentialKeys(kept, new Set(["SEIRA_OPENAI_API_KEY"]));
+    expect(kept).toEqual({ SEIRA_OPENAI_API_KEY: "a" });
     const control: Record<string, string | undefined> = { OMB_CLOUD_BOAT_URL: "x", OMB_INSTALLATION_CREDENTIAL: "y", HOME: "/h" };
     stripControlPlaneEnv(control);
     expect(control).toEqual({ HOME: "/h" });

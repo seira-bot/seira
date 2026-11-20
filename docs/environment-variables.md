@@ -11,9 +11,12 @@ fallback:
 - At start, Seira renames each `OMB_<NAME>` to `SEIRA_<NAME>` inside its own process, so engines, tools and child
   processes only ever see the `SEIRA_` name.
 - Each old name prints one warning per process that names the variable and never its value.
-- When both names are set to different values, `SEIRA_<NAME>` wins and a warning says so.
+- When both names are set to different values, `SEIRA_<NAME>` wins and a warning says so. An empty `SEIRA_<NAME>` counts as not set.
 - The fallback is removed two minor releases after v0.1.182. Rename the variables in your service files, `.env` files and
   scripts before then.
+
+In Docker, rename `OMB_*` to `SEIRA_*` in your `.env` file. The server image sets some variables itself, such as
+`SEIRA_DATA_DIR` and `SEIRA_PORT`, and the fallback never applies to those: your `OMB_` value loses to the image's value.
 
 To find what still uses the old prefix on a server, start it and search its log for `is deprecated`.
 

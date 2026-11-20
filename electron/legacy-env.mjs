@@ -4,7 +4,8 @@ export const LEGACY_ENV_REMOVAL = "two minor releases after v0.1.182";
 
 /** Security: a filter that refuses `SEIRA_` names must refuse the old `OMB_` ones too, which may still sit in an operator's environment. */
 export function isHarnessEnvName(name) {
-  return name.startsWith(ENV_PREFIX) || name.startsWith(LEGACY_ENV_PREFIX);
+  const upper = name.toUpperCase();
+  return upper.startsWith(ENV_PREFIX) || upper.startsWith(LEGACY_ENV_PREFIX);
 }
 
 const warned = new Set();
@@ -22,7 +23,7 @@ export function adoptLegacyEnv(env = process.env, warn) {
     delete env[legacy];
     if (value === undefined) continue;
     const current = ENV_PREFIX + legacy.slice(LEGACY_ENV_PREFIX.length);
-    if (env[current] === undefined) {
+    if (env[current] === undefined || (env[current] === "" && value !== "")) {
       env[current] = value;
       report.adopted.push(legacy);
       announce(`adopted:${legacy}`, `${legacy} is deprecated and stops working ${LEGACY_ENV_REMOVAL}; rename it to ${current}.`);

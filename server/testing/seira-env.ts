@@ -1,4 +1,4 @@
-// A shell exporting SEIRA_* / SEIRA_* leaks them into every child and import-time env snapshot.
+// A shell exporting SEIRA_* / OMB_* leaks them into every child and import-time env snapshot.
 
 const AMBIENT_PREFIXES = ["SEIRA_", "OMB_"] as const;
 

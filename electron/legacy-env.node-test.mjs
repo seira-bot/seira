@@ -42,6 +42,21 @@ test("a name under either prefix is the harness's", () => {
   assert.equal(isHarnessEnvName("OPENAI_API_KEY"), false);
 });
 
+test("a name matches the harness prefixes in any letter case", () => {
+  assert.equal(isHarnessEnvName("seira_mcp_token_x"), true);
+  assert.equal(isHarnessEnvName("Omb_control_token"), true);
+});
+
+test("an empty current value gives way to a set old value", () => {
+  const env = { SEIRA_DATA_DIR: "", OMB_DATA_DIR: "/tmp/fixture-old" };
+  const report = adoptLegacyEnv(env);
+  assert.deepEqual(env, { SEIRA_DATA_DIR: "/tmp/fixture-old" });
+  assert.deepEqual(report.adopted, ["OMB_DATA_DIR"]);
+  const both = { SEIRA_PORT: "", OMB_PORT: "" };
+  adoptLegacyEnv(both);
+  assert.deepEqual(both, { SEIRA_PORT: "" });
+});
+
 test("a process that imports the boot module sees the old name under the new one, with a warning and no value", () => {
   const boot = fileURLToPath(new URL("./legacy-env-boot.mjs", import.meta.url));
   const fixture = mkdtempSync(join(tmpdir(), "seira-legacy-env-"));

@@ -307,6 +307,7 @@ describe("ACP turns (fake CLI)", () => {
     delete process.env.CURSOR_AUTH_TOKEN;
     delete process.env.BOX_TOKEN;
     delete process.env.SEIRA_TTS_KEY;
+    delete process.env.OMB_TTS_KEY;
     if (savedAgyModel !== undefined) process.env.AGY_ACP_DEFAULT_MODEL = savedAgyModel;
     else delete process.env.AGY_ACP_DEFAULT_MODEL;
     for (const name of Object.keys(CONTROL_PLANE_FIXTURE)) delete process.env[name];
@@ -1156,6 +1157,7 @@ describe("ACP turns (fake CLI)", () => {
     process.env.CURSOR_AUTH_TOKEN = "cursor-token-should-not-leak";
     process.env.BOX_TOKEN = "box-should-not-leak";
     process.env.SEIRA_TTS_KEY = "tts-should-not-leak";
+    process.env.OMB_TTS_KEY = "old-tts-should-not-leak";
     Object.assign(process.env, CONTROL_PLANE_FIXTURE);
 
     await instance.adapter.sendTurn({ threadId: "t-hygiene", text: "go" });
@@ -1172,6 +1174,7 @@ describe("ACP turns (fake CLI)", () => {
     expect(seen.env.CURSOR_AUTH_TOKEN).toBeUndefined();
     expect(seen.env.BOX_TOKEN).toBeUndefined();
     expect(seen.env.SEIRA_TTS_KEY).toBeUndefined();
+    expect(seen.env.OMB_TTS_KEY).toBeUndefined();
     for (const name of Object.keys(CONTROL_PLANE_FIXTURE)) expect(seen.env[name]).toBeUndefined();
   });
 

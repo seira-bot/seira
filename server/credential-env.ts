@@ -55,11 +55,16 @@ export function stripControlPlaneEnv(env: Record<string, string | undefined>): v
   }
 }
 
-export function stripWorkspaceCredentialEnv(env: Record<string, string | undefined>): void {
+/** Removes every workspace credential and its `OMB_` twin, which an instance env may still carry. `keep` spares a name, never its twin. */
+export function stripWorkspaceCredentialKeys(env: Record<string, string | undefined>, keep: ReadonlySet<string> = new Set()): void {
   for (const key of WORKSPACE_CREDENTIAL_ENV) {
-    delete env[key];
+    if (!keep.has(key)) delete env[key];
     if (key.startsWith("SEIRA_")) delete env[`OMB_${key.slice("SEIRA_".length)}`];
   }
+}
+
+export function stripWorkspaceCredentialEnv(env: Record<string, string | undefined>): void {
+  stripWorkspaceCredentialKeys(env);
   stripControlPlaneEnv(env);
 }
 
