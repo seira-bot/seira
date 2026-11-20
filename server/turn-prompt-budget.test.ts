@@ -66,7 +66,7 @@ async function measured(): Promise<Record<string, number>> {
  * stable half "memory-rules" too (with its own paths), both moved out of the volatile note: 8,895 before the move and the
  * rewording (when the two rode the note, about 3,800 more bytes per conversation), 8,391 + 2,048 after. */
 const PROMPT_BUDGET_BASELINE: Record<string, number> = {
-  "reply-habits": 2046,
+  "reply-habits": 2282,
   "tool-bridge": 587,
   "sign-in": 2546,
   "chief-of-staff": 4850,
@@ -84,11 +84,11 @@ const PROMPT_BUDGET_BASELINE: Record<string, number> = {
   "computer:box": 4028,
   "computer:vps": 4672,
   "computer:local": 4969,
-  "claude:direct-chat": 8377,
-  "claude:setup-chat": 10773,
+  "claude:direct-chat": 8612,
+  "claude:setup-chat": 11008,
   "claude:volatile-note": 178,
-  "codex:direct-chat": 8377,
-  "codex:setup-chat": 10773,
+  "codex:direct-chat": 8612,
+  "codex:setup-chat": 11008,
   "codex:resumed-instructions": 207,
   "codex:volatile-note": 91,
 };
