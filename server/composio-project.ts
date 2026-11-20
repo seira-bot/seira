@@ -7,7 +7,8 @@
 // https://docs.composio.dev/reference/api-reference/auth-configs/getAuthConfigs
 // https://docs.composio.dev/reference/api-reference/auth-configs/patchAuthConfigsByNanoid
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { join } from "node:path";
 import { z } from "zod";
 
@@ -279,7 +280,7 @@ export async function keepAuthConfigPick(apiKey: string, toolkit: string, id: st
   const project = projectFingerprint(apiKey);
   authConfigPicks(project);
   picks = { ...picks, [project]: { ...picks?.[project], [toolkit]: id } };
-  mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+  ensurePrivateDir(DATA_DIR);
   writeFileAtomic(picksFile(), `${JSON.stringify({ version: 1, projects: picks }, null, 2)}\n`, { mode: 0o600 });
   forgetProjectAuthConfigs(apiKey);
 }

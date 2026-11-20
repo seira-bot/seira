@@ -1,6 +1,6 @@
 // ~/.openmausbot/config.json, with env vars overriding its credentials.
-import { readFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
-import { dataHome } from "./data-dir.ts";
+import { readFileSync, existsSync, renameSync } from "node:fs";
+import { dataHome, ensurePrivateDir } from "./data-dir.ts";
 import { signInFromEnv } from "./sign-in-env.ts";
 export { signInFromEnv };
 import { join } from "node:path";
@@ -705,7 +705,7 @@ export function ensureDirs() {
     } catch {
     }
   }
-  for (const dir of [DATA_DIR, EVENTS_DIR, NATIVE_DIR]) mkdirSync(dir, { recursive: true });
+  for (const dir of [DATA_DIR, EVENTS_DIR, NATIVE_DIR]) ensurePrivateDir(dir);
   migrateLegacyFeatureFlags(DATA_DIR);
 }
 
@@ -1001,7 +1001,7 @@ export function saveConfig(
       (disk.instances as JsonObject).openaiCompat = { ...entry.data, config: nextConfig };
     }
   }
-  mkdirSync(DATA_DIR, { recursive: true });
+  ensurePrivateDir(DATA_DIR);
   if (read.state === "ok" && !writeConfigBackup(p, read.text)) throw configBackupRefusal(p);
   writeFileAtomic(p, JSON.stringify(disk, null, 2), { mode: 0o600 });
   storedConfig.forget();

@@ -2,6 +2,7 @@
 import { execFile, spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { chmodSync, constants, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 
@@ -519,7 +520,7 @@ export function browserEngineEncryptionKey(dataDir = DATA_DIR): string {
   } catch {
   }
   const key = randomBytes(32).toString("hex");
-  mkdirSync(dataDir, { recursive: true });
+  ensurePrivateDir(dataDir);
   writeFileAtomic(file, `${key}\n`, { mode: 0o600 });
   return key;
 }

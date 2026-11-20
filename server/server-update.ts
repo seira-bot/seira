@@ -8,7 +8,8 @@
 // client or from this server reaches the host. The route is an admin's only, but the folder is the server's user's:
 // until the bots' sandbox is on for self-hosted servers, a bot can leave the same file, and gets that same update.
 import { randomUUID } from "node:crypto";
-import { accessSync, constants, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { accessSync, constants, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { join } from "node:path";
 
 import type { ServerUpdateOutcome, ServerUpdateReason, ServerUpdateRun, ServerUpdateStatus } from "../shared/server-update.ts";
@@ -111,7 +112,7 @@ export function readPending(dataDir: string): PendingUpdate | null {
 }
 
 function writePending(dataDir: string, pending: PendingUpdate): void {
-  mkdirSync(dataDir, { recursive: true });
+  ensurePrivateDir(dataDir);
   const file = join(dataDir, PENDING_FILE);
   writeFileSync(`${file}.tmp`, JSON.stringify(pending), { mode: 0o600 });
   renameSync(`${file}.tmp`, file);

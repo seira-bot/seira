@@ -1,7 +1,8 @@
 // `seira serve --tunnel`: every public request arrives over an IPC listener, so request-auth always demands a paired session.
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, statSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { hostname } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -74,7 +75,7 @@ export function openTunnelCredentials(dataDir: string): TunnelCredentials {
     }
   }
   const persist = (next: CredentialDocument) => {
-    mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    ensurePrivateDir(dataDir);
     writeFileAtomic(file, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
   };
   const state = createSecureCredentialState(initial, persist, { writable: status !== "unavailable" });
