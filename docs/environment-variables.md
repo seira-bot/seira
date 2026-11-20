@@ -26,3 +26,4 @@ Both prefixes are reserved, and names are matched without regard to letter case,
 box never receives an `OMB_` variable, and a `SEIRA_` variable reaches the box only when it is on the box's allow-list
 (`server/bot-box/env.ts`). Provider keys such as `SEIRA_OPENAI_API_KEY` and the control-plane settings are removed from every
 engine's environment and from the tools of a chat bot.
+Stdio MCP servers in chat no longer inherit provider keys (for example `ANTHROPIC_API_KEY`) from the parent environment; put a key the server needs in that server's own env.
