@@ -10,7 +10,7 @@ import { z } from "zod";
 import { DEVS_REPORT_LIMITS, withoutContact, type DevsReportPayload } from "./devs-report.ts";
 import { bugReportIssueUrl } from "./devs-report-issue.ts";
 
-export const SEIRA_BUG_REPORT_SERVICE = "https://bugs.seira.bot/api/bug-reports";
+export const BUG_REPORT_SERVICE = "https://bugs.seira.bot/api/bug-reports";
 const SEND_TIMEOUT_MS = 20_000;
 const ANSWER_MAX_BYTES = 16 * 1024;
 
@@ -29,7 +29,7 @@ export type SendOutcome =
  * for fixtures) when set; null for anything else, such as `off`, which keeps reports as issue forms. */
 export function bugReportEndpoint(env: NodeJS.ProcessEnv): string | null {
   const explicit = env.SEIRA_BUG_REPORT_URL?.trim();
-  if (!explicit) return SEIRA_BUG_REPORT_SERVICE;
+  if (!explicit) return BUG_REPORT_SERVICE;
   try {
     const url = new URL(explicit);
     const loopback = url.protocol === "http:" && ["127.0.0.1", "[::1]", "localhost"].includes(url.hostname);
@@ -77,7 +77,7 @@ async function post(endpoint: string, payload: DevsReportPayload, fetcher: typeo
 
 export const devsReportSender = (endpoint: string | null, fetcher: typeof fetch = fetch) => async (payload: DevsReportPayload): Promise<SendOutcome> => {
   if (endpoint === null) return { ok: true, issueUrl: bugReportIssueUrl(payload) };
-  if (endpoint !== SEIRA_BUG_REPORT_SERVICE) return sendDevsReport(endpoint, payload, fetcher);
+  if (endpoint !== BUG_REPORT_SERVICE) return sendDevsReport(endpoint, payload, fetcher);
   // Seira's service files a public issue: no contact address goes there, even in a report an older version queued.
   const outcome = await sendDevsReport(endpoint, withoutContact(payload), fetcher);
   return outcome.ok && "id" in outcome ? { ...outcome, noReply: true } : outcome;
@@ -150,4 +150,4 @@ export async function askReportStatus(endpoint: string, question: ReportStatusQu
 
 export const devsStatusAsker = (reportEndpoint: string | null, home: ReportStatusHome | null, fetcher: typeof fetch = fetch) =>
   (question: ReportStatusQuestion): Promise<ReportStatusAnswer | null> =>
-    reportEndpoint === null ? Promise.resolve(null) : askReportStatus(bugReportStatusEndpoint(reportEndpoint), question, reportEndpoint === SEIRA_BUG_REPORT_SERVICE ? null : home, fetcher);
+    reportEndpoint === null ? Promise.resolve(null) : askReportStatus(bugReportStatusEndpoint(reportEndpoint), question, reportEndpoint === BUG_REPORT_SERVICE ? null : home, fetcher);

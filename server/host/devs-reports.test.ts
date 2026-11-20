@@ -7,7 +7,7 @@ import { citationAttachment, createCitationTextSelector } from "../../src/lib/ci
 import { composeMessage, pasteAttachment } from "../../src/lib/composer-attachments.ts";
 import "../server-line-packs.ts";
 import type { DevsReportPayload } from "../devs-report.ts";
-import { devsReportSender, type ReportStatusAnswer, ReportStatusQuestion, SEIRA_BUG_REPORT_SERVICE, SendOutcome } from "../devs-report-send.ts";
+import { devsReportSender, type ReportStatusAnswer, ReportStatusQuestion, BUG_REPORT_SERVICE, SendOutcome } from "../devs-report-send.ts";
 import type { Message, StoreChange } from "../store.ts";
 import { draftLine, laterLine, refusedLine } from "./devs-report-words.ts";
 import { createDevsReports, DEVS_REPORTS_FILE, fixedLine, LONGEST_WAIT_MS, NO_ANSWER_MS, RETRY_MS, STATUS_EVERY_MS, STATUS_FIRST_MS, TRACKED_MS,
@@ -577,7 +577,7 @@ describe("the public issue body that goes to Seira's service", () => {
       bodies.push(JSON.parse(String(init.body)));
       return new Response(JSON.stringify({ id: "br_log", issue: 7 }), { status: 201, headers: { "content-type": "application/json" } });
     }) as unknown as typeof fetch;
-    const fx = fixture({ recentLog, send: devsReportSender(SEIRA_BUG_REPORT_SERVICE, fetcher) });
+    const fx = fixture({ recentLog, send: devsReportSender(BUG_REPORT_SERVICE, fetcher) });
     const message = fx.person("scout-main", "@devs the files step fails");
     fx.advance(NO_ANSWER_MS);
     await fx.settle();
