@@ -451,6 +451,9 @@ function composioBrokerUrl() {
 
 // Finder/Explorer launches have no usable stdio, so the server child's output goes to server.log here.
 const LOG_DIR = app.getPath("logs");
+// Before anything reads the data folder: an earlier version's folders move to the current names, once.
+migrateHomeFolders({ home: app.getPath("home"), log: line => console.warn(line), rewriteFiles: [path.join(app.getPath("userData"), "environments.json"), path.join(app.getPath("userData"), "desktop-prefs.json")] });
+migrateInnerFiles({ dataDir: desktopDataDir(), log: line => console.warn(line) });
 const DESKTOP_CRASH_LOG = path.join(LOG_DIR, "desktop-crashes.log");
 const DESKTOP_CRASH_LOG_MAX_BYTES = 512 * 1024;
 let logStream = null;
@@ -459,6 +462,7 @@ import { companionAdvertisedHostedUrl, companionEnabledAtRest, companionOriginTa
   companionBrowserControlAccess, companionRevoke, companionRunning, companionSettings, companionState, rememberCompanionKeepAwake, setCompanionHostedUrl, setCompanionLifecycleListener, startCompanion, stopCompanion } from "./companion.mjs";
 import { createDesktopCompanionE2E, deviceCounts } from "./companion-e2e-desktop.mjs"; import { startCheckedManagedConnection } from "./managed-companion-start.mjs";
 import { autoStartCompanion } from "./companion-autostart.mjs";
+import { migrateHomeFolders, migrateInnerFiles } from "./legacy-migrate.mjs";
 import { createPhoneLinkRoutes } from "./phone-link-routes.mjs"; import { reachableForKeepAwake } from "./keep-awake.mjs";
 import { createRoutineWakeHold, rememberRoutineWake, routineWakeSettings } from "./routine-wake.mjs";
 import { CREDENTIAL_PATCH, credentialSaveError } from "./credential-patch.mjs";
@@ -1450,6 +1454,7 @@ function reconnectCloud(origin) {
   return signInCloudSession({ origin, mine: other ? origin : myCloud(), pair: () => ensureCloudAccount().pairHome(other?.id ?? null), fetch: (...args) => session.defaultSession.fetch(...args) });
 }
 const loginItem = createOpenAtLogin({ app, file: path.join(app.getPath("userData"), "open-at-login.json"), home: os.homedir() });
+loginItem.migrateLegacy();
 installOpenAtLogin({ ipcMain, guard: localOrHome, loginItem, changed: refreshApplicationMenu }); const alwaysOnHome = installAlwaysOnHome({ ipcMain, guard: localOnly, loginItem, changed: refreshApplicationMenu, file: path.join(app.getPath("userData"), "always-on-home.json"), blocker: powerSaveBlocker, isOnBattery: () => powerMonitor.isOnBatteryPower(), updates: unattendedUpdates, lending: () => computerSharing?.lendingSomewhere() === true, log: slog });
 let hiddenStart = false;
 

@@ -12,7 +12,7 @@ import { SECRET_VALUE_MAX_BYTES } from "../shared/vault.ts";
 import { vaultPointer } from "./vault/mcp-keys.ts";
 import { secretForms } from "./vault-store.ts";
 import { HELD_SECRET_MASK } from "./redact.ts";
-import { inSecretFolder, SECRET_FOLDER } from "./secret-folder.ts";
+import { adoptLegacySecretFolder, inSecretFolder, SECRET_FOLDER } from "./secret-folder.ts";
 
 export { inSecretFolder, SECRET_FOLDER, SECRET_VALUE_MAX_BYTES };
 /** From saving: room for a resume queued behind other work and the tool call after it, short enough that a ref the bot
@@ -128,6 +128,7 @@ export class SecretVault {
   private writeFile(owner: SecretOwner, name: string, value: string, home: SecretFileHome): { file: string; until: number } {
     if (!ID.test(owner.threadId) || !ID.test(name)) throw new Error("invalid conversation or file name");
     privateFolder(home.host, "all");
+    adoptLegacySecretFolder(home.host);
     const folder = join(home.host, SECRET_FOLDER);
     privateFolder(folder, "one");
     const threadFolder = join(folder, owner.threadId);
@@ -228,6 +229,7 @@ export class SecretVault {
   sweep(bases: readonly string[], savedAt: (threadId: string, messageId: string) => number | null, threadExists: (threadId: string) => boolean): void {
     const now = this.now();
     for (const base of bases) {
+      adoptLegacySecretFolder(base);
       const folder = join(base, SECRET_FOLDER);
       let names: string[];
       try {

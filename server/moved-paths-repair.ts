@@ -4,6 +4,7 @@
 // update this rewrites it as a move does now, keeping the earlier copy of each file it changes.
 import { constants, copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, type Dirent } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { LEGACY_MOVE_RECEIPT, rewriteLegacyHomePaths } from "../electron/legacy-migrate.mjs";
 import { writeFileAtomic } from "./atomic.ts";
 import { INSTRUCTION_FILE, restorePaths } from "./workspace-backup-paths.ts";
 
@@ -135,6 +136,45 @@ export function repairMovedWorkspacePaths(dataDir: string): string[] | null {
     const changed = repair(resolve(dataDir), String(receipt.id));
     writeFileAtomic(receiptPath, JSON.stringify({ ...receipt, pathsRewritten: true }), { mode: 0o600 });
     return changed;
+  } catch (error) {
+    console.error(`[moved-paths] the repair stopped: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
+
+/** Call once the server's data folder has been moved to its current name by migrateHomeFolders: rewrites the old folder
+ * name in the definitions and instruction files, keeping the earlier copy of each file it changes. Once per move: the
+ * files it changed, relative to the data folder, or null when there was no move to repair. Never throws. */
+export function repairLegacyHomePaths(dataDir: string): string[] | null {
+  const receiptPath = join(dataDir, LEGACY_MOVE_RECEIPT);
+  let receipt: Record<string, unknown>;
+  try {
+    if (!lstatSync(receiptPath).isFile()) return null;
+    const value: unknown = JSON.parse(readFileSync(receiptPath, "utf8"));
+    if (!record(value) || value.pathsRewritten === true) return null;
+    receipt = value;
+  } catch { return null; }
+  try {
+    const root = resolve(dataDir);
+    const names = [...DEFINITIONS, ...instructionFiles(root)];
+    const edits: Array<[string, string]> = [];
+    for (const name of names) {
+      const text = readText(root, name);
+      if (text === null) continue;
+      const after = rewriteLegacyHomePaths(text);
+      if (after !== text) edits.push([name, after]);
+    }
+    const kept = join(root, ".backups", "legacy-path-repair");
+    for (const [path, text] of edits) {
+      const live = join(root, path);
+      const copy = join(kept, path);
+      mkdirSync(dirname(copy), { recursive: true, mode: 0o700 });
+      if (!existsSync(copy)) copyFileSync(live, copy, constants.COPYFILE_EXCL);
+      writeFileAtomic(live, text, { mode: lstatSync(live).mode & 0o777 });
+    }
+    writeFileAtomic(receiptPath, JSON.stringify({ ...receipt, pathsRewritten: true }), { mode: 0o600 });
+    if (edits.length) console.log(`[moved-paths] updated the data folder name in ${edits.length} files; the earlier copies are in .backups/legacy-path-repair`);
+    return edits.map(([path]) => path);
   } catch (error) {
     console.error(`[moved-paths] the repair stopped: ${error instanceof Error ? error.message : String(error)}`);
     return null;

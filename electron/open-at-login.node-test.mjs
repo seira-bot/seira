@@ -183,3 +183,36 @@ test("a Store package on another system, or a build that is not packaged, keeps 
   const dev = createOpenAtLogin({ app: { ...windowsApp(), isPackaged: false }, file: path.join(dir, "dev.json"), platform: "win32", home: dir, windowsStore: true });
   assert.equal(dev.startupApps(), false);
 });
+
+test("Linux: an earlier version's autostart file becomes the current one, keeping its kind", async t => {
+  const dir = await temp(t);
+  const config = path.join(dir, "config");
+  const autostart = path.join(config, "autostart");
+  const make = () => createOpenAtLogin({ app: fakeApp(), file: path.join(dir, "migrate.json"), platform: "linux", home: dir, env: { XDG_CONFIG_HOME: config, APPIMAGE: "/home/me/Seira.AppImage" } });
+  const { mkdirSync, writeFileSync, readFileSync } = await import("node:fs");
+  mkdirSync(autostart, { recursive: true });
+  writeFileSync(path.join(autostart, "openmausbot.desktop"), "[Desktop Entry]\nExec=\"/old\" --hidden\nX-OpenMausBot-Lending=true\n");
+  make().migrateLegacy();
+  assert.ok(!existsSync(path.join(autostart, "openmausbot.desktop")));
+  assert.equal(readFileSync(path.join(autostart, "seira.desktop"), "utf8"), autostartEntry("/home/me/Seira.AppImage", { lending: true }));
+  make().migrateLegacy();
+  assert.equal(readFileSync(path.join(autostart, "seira.desktop"), "utf8"), autostartEntry("/home/me/Seira.AppImage", { lending: true }), "a second run changes nothing");
+});
+
+test("Linux: the person's own old autostart file stays a chosen item, and the current file is never replaced", async t => {
+  const dir = await temp(t);
+  const config = path.join(dir, "config");
+  const autostart = path.join(config, "autostart");
+  const login = createOpenAtLogin({ app: fakeApp(), file: path.join(dir, "migrate.json"), platform: "linux", home: dir, env: { XDG_CONFIG_HOME: config, APPIMAGE: "/home/me/Seira.AppImage" } });
+  const { mkdirSync, writeFileSync, readFileSync } = await import("node:fs");
+  mkdirSync(autostart, { recursive: true });
+  writeFileSync(path.join(autostart, "openmausbot.desktop"), "[Desktop Entry]\nExec=\"/old\"\n");
+  login.migrateLegacy();
+  assert.equal(readFileSync(path.join(autostart, "seira.desktop"), "utf8"), autostartEntry("/home/me/Seira.AppImage", { lending: false }));
+  assert.equal(login.chosen(), true);
+  writeFileSync(path.join(autostart, "openmausbot.desktop"), "[Desktop Entry]\nExec=\"/old\"\nX-OpenMausBot-Lending=true\n");
+  writeFileSync(path.join(autostart, "seira.desktop"), "kept");
+  login.migrateLegacy();
+  assert.equal(readFileSync(path.join(autostart, "seira.desktop"), "utf8"), "kept");
+  assert.ok(!existsSync(path.join(autostart, "openmausbot.desktop")));
+});
