@@ -80,6 +80,8 @@ import {
 } from "./desktop-companion-client.mjs";
 import { isKnownSkin, skinChrome } from "./skin-overlay.cjs";
 import { installCredentialStoreIpc, readSecureCredentials } from "./secure-credentials.mjs";
+import { moveCopiedSecrets, oldKeyReader, readerSwitches } from "./old-key.mjs";
+import { settingsFolderChoice } from "./settings-folder.mjs";
 import { createControlPlaneClient } from "./control-plane-client.mjs";
 import {
   companionAccountCleanupPending, companionTunnelRetired,
@@ -369,6 +371,21 @@ let desktopRemoteAccess = null;
 let desktopCompanionRelay = null;
 
 const CREDENTIALS_FILE = path.join(app.getPath("userData"), "credentials.bin");
+// A secret copied from the earlier settings folder opens only after it is encrypted again under the current name.
+const copiedSecrets = app.whenReady().then(() => {
+  const choice = settingsFolderChoice();
+  if (choice?.copied || choice?.reason) slog(`settings folder: ${choice.copied ? "copied from the earlier name" : `kept the earlier name (${choice.reason})`}`);
+  return moveCopiedSecrets({
+    userData: app.getPath("userData"),
+    encryption: { available: () => safeStorage.isAsyncEncryptionAvailable(), encrypt: value => safeStorage.encryptStringAsync(value), decrypt: value => safeStorage.decryptStringAsync(value) },
+    readOld: oldKeyReader({ appArgs: app.isPackaged ? [] : [app.getAppPath()], switches: readerSwitches(app.commandLine) }),
+    log: slog,
+  });
+}).catch(error => slog(`saved keys: moving copied secrets failed (${error?.message ?? error})`));
+const decryptSecret = async value => {
+  await copiedSecrets;
+  return safeStorage.decryptStringAsync(value);
+};
 
 const nativeText = createDesktopText(app), nativeT = nativeText.t; const createCloudAccountClient = options => cloudAccountClient({ ...options, t: nativeT });
 /** True when the store could not be read, which is not the same as nothing saved. */
@@ -379,7 +396,7 @@ async function loadSecureCredentials() {
     exists: () => fs.existsSync(CREDENTIALS_FILE),
     isAvailable: () => safeStorage.isAsyncEncryptionAvailable(),
     readFile: () => fs.readFileSync(CREDENTIALS_FILE),
-    decrypt: (buffer) => safeStorage.decryptStringAsync(buffer),
+    decrypt: decryptSecret,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   });
   credentialStoreUnavailable = result.status === "unavailable";
@@ -802,7 +819,7 @@ function syncPhoneSecretKey(proc) {
   if (message) postToServer(proc, message, "phone credential key sync", slog);
 }
 
-const cloudEncryption = { available: async () => (await safeStorage.isAsyncEncryptionAvailable()) && (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text"), encrypt: value => safeStorage.encryptStringAsync(value), decrypt: value => safeStorage.decryptStringAsync(value) }; let activeSignIn = null; const cloudAccountStore = () => (activeSignIn ??= createCloudAccountStore({ file: path.join(app.getPath("userData"), cloudTarget(process.env).file), encryption: cloudEncryption }));
+const cloudEncryption = { available: async () => (await safeStorage.isAsyncEncryptionAvailable()) && (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text"), encrypt: value => safeStorage.encryptStringAsync(value), decrypt: decryptSecret }; let activeSignIn = null; const cloudAccountStore = () => (activeSignIn ??= createCloudAccountStore({ file: path.join(app.getPath("userData"), cloudTarget(process.env).file), encryption: cloudEncryption }));
 function ensureCloudAccount() {
   if (cloudAccount) return cloudAccount;
   if (!app.isPackaged || desktopRemoteAccess) throw new Error("Seira Cloud sign-in requires the local desktop app.");
@@ -898,7 +915,7 @@ function ensureManagedDesktop() {
     available: async () => (await safeStorage.isAsyncEncryptionAvailable()) &&
       (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text"),
     encrypt: value => safeStorage.encryptStringAsync(value),
-    decrypt: value => safeStorage.decryptStringAsync(value),
+    decrypt: decryptSecret,
   };
   const store = createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-connection.bin"), encryption });
   orgLibrary = createOrgLibrary({
