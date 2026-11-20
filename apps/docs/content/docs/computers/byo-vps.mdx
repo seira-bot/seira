@@ -27,7 +27,7 @@ Podman and a Windows Docker host do not replace this VPS backend.
    docker -H ssh://my-vps info
    ```
 
-3. In **App Settings → API keys**, enter that alias for the self-hosted VPS.
+3. In **Settings → AI → Other services**, enter that alias for the self-hosted VPS.
    Use the alias name, not a password, private key, URL or SSH command.
 
 Docker access is root-equivalent on that server. Use a dedicated VPS, keep its
@@ -47,7 +47,7 @@ Host home-box
 ```
 
 Check `ssh home-box true` and `docker -H ssh://home-box info`, then enter
-`home-box` in **App Settings → API keys**. The bot gets its own desktop
+`home-box` in **Settings → AI → Other services**. The bot gets its own desktop
 container there, not that machine's own screen, and the same Docker trust rules
 apply. Tailscale does not close ports that are already open, so firewall the machine to accept SSH and Docker only from the tailnet.
 

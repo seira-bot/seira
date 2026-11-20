@@ -32,7 +32,7 @@ Contract version: `1` (`cloudContractVersion` on the wire).
 ## What the person sees
 
 1. They subscribe on the Cloud site. The Admin creates the Fly app and machine.
-2. They open the desktop app, go to **Settings → Seira Cloud** and sign in (the
+2. They open the desktop app, go to **Settings → Your account** and sign in (the
    existing device sign-in). A **Your Cloud** card says **Setting up** until
    the machine is up.
 3. When it is ready, the machine appears under **Servers** as **My Cloud**, and
@@ -65,9 +65,8 @@ Contract version: `1` (`cloudContractVersion` on the wire).
       credit lasts and nothing of the person's own can run, a line says so
       (with the amount where the desktop app knows it), and **Use my credit for
       now** moves on.
-   3. **Files and apps**, optional: **Share folders** opens Settings → Seira
-      Cloud in this computer's window, one click from Files (a browser is told
-      to use the desktop app), and **Connect apps** opens Connected apps on the
+   3. **Files and apps**, optional: **Share folders** says how: on your own Cloud in the app, this computer is lent by itself; elsewhere the desktop app shares folders under
+      Files, and **Connect apps** opens Connected apps on the
       Cloud.
    4. **{name} is ready**: **Say hi to your Chief of Staff** (or to the first
       bot) opens its chat, and **Give it a job** asks the first-job question.
@@ -115,8 +114,8 @@ Contract version: `1` (`cloudContractVersion` on the wire).
    - **Grok**: the same device-code flow for Grok Build on a grok.com
      subscription (`grok login --device-auth`, run on the Cloud computer),
      offered only when the image carries the Grok CLI;
-   - **Use an API key**: the existing model-provider keys in **Settings →
-     API keys** (Anthropic, xAI, or an OpenAI-compatible key such as
+   - **Use an API key**: the existing model-provider keys in **Settings → AI → Other
+     services** (Anthropic, xAI, or an OpenAI-compatible key such as
      OpenRouter).
 
    It says plainly that the person's AI plan limits apply to bots that work
@@ -141,13 +140,13 @@ sign-in instead of the welcome flow, which describes the person's own computer
 
 1. Install Seira on your phone from the App Store or Google Play.
 2. The menu under your name → **Connect your phone · to your Cloud (always on)**, or
-   **Settings → Seira Cloud → Use My Cloud on your phone**. The Cloud opens in
+   **Settings → Phone & devices** on the Cloud's own page. The Cloud opens in
    the app window at its phone pairing.
 3. **Create pairing code**, and scan the QR code with the phone app.
 
 How it fits together (`src/lib/phone-pairing.ts`):
 
-- **Connect your phone** opens Settings → Remote access at the pairing that
+- **Connect your phone** opens Settings → Phone & devices → Pair a phone, at the pairing that
   fits the window, with focus on the button that shows the code: this
   computer's phone flow in the desktop app on its own computer, the Cloud's
   own pairing code (`ServerPairingCard`) on a Cloud home, and any other
@@ -158,14 +157,14 @@ How it fits together (`src/lib/phone-pairing.ts`):
   Cloud (always on)* first, which does what **Use My Cloud on your phone**
   does, then *to this computer*. A paid plan whose Cloud is not Ready keeps
   the single *to this computer* line, with a note that the Cloud will show
-  there. A failed switch opens Settings → Seira Cloud.
+  there. A failed switch opens Settings → Your account.
 - **Use My Cloud on your phone** shows for a paid plan. With a Ready Cloud it
   calls `cloud-account:connectHomeForPhone`, which takes no arguments and
   connects as **Open My Cloud** does, adding the one fixed request
   `?desktop-settings=phone` (on `/pair` too, which carries it on once paired).
   The Cloud's page opens Settings on its phone pairing. It never makes a code
   by itself. Before the Cloud is Ready, or if opening it failed, the card
-  lists the two steps instead. On the Cloud itself, Settings → Seira Cloud
+  lists the two steps instead. On the Cloud itself, Settings → Phone & devices
   offers the same button and opens the pairing directly.
 
 ### Only your own devices
@@ -292,8 +291,8 @@ bot's memory files, the bot as a whole cannot use the Mac until the owner
 reviews the change (the bot's **Memory** panel, **Mark reviewed**). Starting
 new conversations avoids it.
 
-At the first personal start the log also says to review **Settings → Remote
-access → Paired devices**, which now shows only admin devices, and to sign
+At the first personal start the log also says to review **Settings → Phone & devices →
+Paired**, which now shows only admin devices, and to sign
 out any that isn't the owner's: a device paired with full access before is
 the owner's from then on, and nothing can tell otherwise.
 
@@ -387,7 +386,7 @@ the Cloud (see "This computer works for your Clouds"), through the
 shared-computer tools.
 
 - Neither place is listed in the Computer panel, the composer's place chip, a
-  bot's Works on setting or Settings → Computers (the config answers
+  bot's Works on setting or Settings → Desktops & browser → Desktops (the config answers
   `"cloudHome": true`), nor in `select_computer`, which also drops `vm_exec`.
   Auto never lands on either.
 - A bot still set to either (an older or imported setting) has each task
@@ -420,11 +419,11 @@ microphone for a Live call, as this computer's own page does. That is the
 microphone only, never the camera or screen capture, and only for the main
 frame of the app's window at the exact origin of the person's Cloud
 (`electron/app-permissions.mjs`, `appPermissionHandlers`). One rule says which
-Cloud that is, for the microphone and the Cloud page's Settings → Plan alike
+Cloud that is, for the microphone and the Cloud page's Settings → Plan & billing alike
 (`electron/cloud-home.mjs`, `myCloudOrigin`): the machine the Cloud sign-in
 verified or, failing that, the one this same account last verified in this
 app session. That last one counts while a check is pending or has failed, and
-also after the sign-in has ended or expired, when Settings → Plan on the Cloud
+also after the sign-in has ended or expired, when Settings → Plan & billing on the Cloud
 says "sign in again on your computer". A check that names no machine for the
 account ends it (a stopped machine named without its address does not). A
 call placed while a saved sign-in is still restoring, in the first seconds
@@ -436,7 +435,7 @@ stays refused. In a web browser, the browser asks for the microphone for
 the Cloud's address.
 
 - **The key is the person's own.** No Cloud plan includes the key, and no plan
-  is needed for Live calls: they use the OpenAI key in Settings → API keys, or
+  is needed for Live calls: they use the OpenAI key in Settings → AI → Other services, or
   a separate Live key, from a project with GPT-Live access. It is saved on the
   Cloud (`PUT /api/config`, as a server page has no credential store), and the
   Live copy says so.
@@ -472,7 +471,7 @@ decides everything from its own verified state (`electron/cloud-entry.mjs`).
    that arrives before the app is ready). If the window already shows
    **My Cloud**, coming forward is all it does.
 2. Otherwise the window returns to this computer (a hosted server that was
-   showing stays saved under **Servers**) and opens **Settings → Seira Cloud**.
+   showing stays saved under **Servers**) and opens **Settings → Your account**.
    Before that view acts, the app gives a saved Cloud sign-in up to five
    seconds to finish restoring, so it is never mistaken for signed out.
 3. Opened this way, the view acts on its own, with no confirmation:
@@ -490,7 +489,7 @@ sign-out in that view starts nothing) and one automatic connection per link.
 A failed connection shows the card's error; clicking the link again retries.
 Closing Settings or choosing another section ends it. While it is open, the
 first-run welcome waits, as it does for Organization settings. A normal visit
-to **Settings → Seira Cloud** never signs in or connects by itself.
+to **Settings → Your account** never signs in or connects by itself.
 
 The link does nothing in development builds, and in companion client mode it
 explains that the app must be disconnected from the other computer first.
@@ -707,7 +706,7 @@ Anyone else gets the automatic grant at the next start. A grant kept from before
 keeps its folders, gains the home folder, the internet connection and Chrome, and
 keeps a terminal it had: when every grant of one account lent the terminal and
 nobody said no to lending, **Let Clouds run commands on this Mac** starts on for
-that account and no other; a **Settings → Servers → Computer access** grant kept for
+that account and no other; a **Computer access** grant in **Settings → This app → Your computers** kept for
 a Cloud's own entry gives way to it. Only a kept grant that already lends what it
 should runs as it is: one that doesn't never connects, even for a moment.
 
@@ -1438,7 +1437,7 @@ For each service the Admin has configured, it also sets:
 | `SEIRA_TTS_DEFAULT_VOICE` | env | An ElevenLabs voice id, used until the person picks a voice or another speech provider in Settings. |
 | `SEIRA_CLOUD_DECIDER_URL` | env | `https://cloud.seira.bot/api/cloud/services/decider`, the Admin's Jev relay. It is a Jev base URL, used as it is: the decider adds `/v1/systemone`, so every included decision goes to exactly `<SEIRA_CLOUD_DECIDER_URL>/v1/systemone`, and extraction adds `/v1/extract`. |
 | `SEIRA_CLOUD_DECIDER_TOKEN` | secret | This machine's decision relay token (`seira_decide_…`). It is not a Jev key and works only through the relay. |
-| `SEIRA_CLOUD_X_URL` | env | `https://cloud.seira.bot/api/cloud/services/x`, the Admin's treg relay; the client calls `<SEIRA_CLOUD_X_URL>/call/<endpoint>` for the X tools' eight endpoints, `/research/search`, `/research/endpoints/<id>` and `/research/call/<id>` for the research tools, and `GET /usage` for the month's calls on the Apps page's X card (`GET /api/x/status`). The home asks `GET /research/search` with no job at start, which spends nothing: a 400 means research is on, an off answer hides the research tools (x_search stays) until an hour later or a restart, and a research call refused as off does the same. A person's own treg key (Settings → API keys) wins over it and goes straight to treg. |
+| `SEIRA_CLOUD_X_URL` | env | `https://cloud.seira.bot/api/cloud/services/x`, the Admin's treg relay; the client calls `<SEIRA_CLOUD_X_URL>/call/<endpoint>` for the X tools' eight endpoints, `/research/search`, `/research/endpoints/<id>` and `/research/call/<id>` for the research tools, and `GET /usage` for the month's calls on the Apps page's X card (`GET /api/x/status`). The home asks `GET /research/search` with no job at start, which spends nothing: a 400 means research is on, an off answer hides the research tools (x_search stays) until an hour later or a restart, and a research call refused as off does the same. A person's own treg key (Settings → AI → Other services) wins over it and goes straight to treg. |
 | `SEIRA_CLOUD_X_TOKEN` | secret | This machine's X research relay token (`seira_x_…`). Not a treg key; it works only through the relay, within the plan's monthly X research calls. A signed-in desktop gets its own (`seira_xd_…`) from `POST /api/cloud/desktop/services/x` and hands it to its server in memory. |
 | `SEIRA_CLOUD_HOSTING_URL` | env | `https://cloud.seira.bot/api/cloud/services/hosting/v1`, the Admin's app hosting relay, set only where the Admin has included app hosting on and the plan is paid. The server lists the Cloud's apps and the plan's count (`GET /apps`), publishes a bot's folder (`PUT /apps/<key>`, then each file the relay asks for) and deletes (`DELETE /apps/<key>`); `server/host/included-hosting.ts`. Absent: bots publish to the person's own Netlify account, as on a computer. |
 | `SEIRA_CLOUD_HOSTING_TOKEN` | secret | This machine's app hosting relay token (`seira_host_…`). Not a Netlify token; it works only through the relay, within the plan's apps and monthly publishes. Bots never get it: they call `publish_app`, and the server publishes. |
@@ -1544,7 +1543,7 @@ The plan includes connected apps (Gmail, Outlook, Slack, LinkedIn, Calendly and
 the rest of the catalog) only when the Cloud image names a connected-apps
 service with `SEIRA_COMPOSIO_BROKER_URL` (env, not secret). Without it, the
 Cloud behaves as if `SEIRA_COMPOSIO_BROKER=off`: the owner adds a Composio
-project key under **Settings → API keys → Apps and tools → Composio project key**.
+project key in **Settings → AI → Other services**, under **Apps and tools** (**Composio project key**).
 
 When a service is named, the Admin sets nothing else for it: at every start the
 server registers the Cloud's own installation if it has none, keeps the token
@@ -2239,12 +2238,12 @@ restoring or connecting.
 
 In the Server menu, **My Cloud** goes through the same connection as
 **Open My Cloud** (no pairing code to type); when it cannot, the app
-opens **Settings → Seira Cloud**, which says the next step. In the desktop app a
+opens **Settings → Your account**, which says the next step. In the desktop app a
 `/pair#code=` link connects without a second click; a browser still asks. On a
 Cloud home the pairing page says where its connection starts (the environment
 descriptor's `capabilities.cloudHome`).
 
-On the person's own Cloud, open in the app's window, **Settings → Seira Cloud**
+On the person's own Cloud, open in the app's window, **Settings → Plan & billing**
 shows the plan read only (`cloud-plan:*`: its name and whether it is active,
 **Manage in your browser** and **Switch to this computer**). It is listed only
 on a Seira Cloud home (`config.cloudHome`), never on another server open in the
@@ -2302,7 +2301,7 @@ page alike (`ogb.cloudPlan`), so the meter reads the same on both (`src/componen
   month at this level: it comes back when one reaches 100%, and next month. Never shown in a browser, without a paid plan,
   or on a Team Cloud unless the plan whose usage it is is that team's (only the person who pays for a team sees its usage;
   its members never do).
-- **Settings → General → Seira Cloud usage**, while there is a paid plan: every allowance with its meter, when they
+- **Settings → Plan & billing → This week**, while there is a paid plan: every allowance with its meter, when they
   start over, and Upgrade to the next plan (the others as links), "You're on the top plan" on Max, or "To change your
   team's plan, write to us" on a team's plan.
 - **Upgrade, one tap and a confirm.** Upgrade asks main for a preview (`ogb.cloudPlan.upgradePreview(plan, source)`,
@@ -2402,7 +2401,7 @@ screen's note.
   checkout already being prepared), the offer says why. A screen reader
   hears each card's button with its plan's name, and each new step takes
   focus at its heading. A payment problem, an ended sign-in or a Cloud that can't
-  be reached go to Settings → Seira Cloud instead.
+  be reached go to Settings → Your account instead.
 - **Checkout runs in the default browser, never the app.** Signed in, main
   asks the Admin for this account's checkout (`POST /api/cloud/desktop/checkout`
   with the plan and where it was opened) and opens the address only when it is

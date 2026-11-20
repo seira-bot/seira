@@ -37,6 +37,13 @@ it("anywhere else keeps the switcher as it was", async () => {
   expect(host.querySelector("button")?.textContent).toContain("This computer");
 });
 
+it("the hover title of the switcher button names the place and never its address", async () => {
+  await show({ local: false, name: "Office", origin: "https://office.example.test" });
+  const button = host.querySelector("button");
+  expect(button?.getAttribute("title")).toBe("Office");
+  expect(host.innerHTML).not.toContain("office.example.test");
+});
+
 it("says always on only when My Cloud's verified plan never sleeps, on its pages and its pair page alike", async () => {
   const home = { local: false, name: "My Cloud", origin: "https://seira-u-1a2b3c4d5e6f.fly.dev", home: true };
   const label = () => host.querySelector("[data-cloud-home-indicator]")?.textContent ?? "";

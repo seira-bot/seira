@@ -393,7 +393,7 @@ service never downloads a new release on its own.
 ## Connect ChatGPT from the browser
 
 A browser paired with Full access can connect an installed Codex CLI without opening a
-terminal: **Settings → Engines → Codex → Connect ChatGPT**. Seira starts
+terminal: **Settings → AI → Providers**, **Connect ChatGPT** on the Codex card. Seira starts
 `codex login --device-auth` on the server and shows a one-time code. Choose
 **Open ChatGPT sign-in**, enter the code on OpenAI's page, and complete sign-in
 with your own account. Seira checks for completion and refreshes the model list.
@@ -418,8 +418,8 @@ pulled away; finish or cancel it first.
 
 ## Connect a custom domain in Settings
 
-For a self-hosted server, open **Settings → Remote access → Connect your
-domain** from a browser paired with Full access. This is an address-setting and verification
+For a self-hosted server, open **Address** on the server's own page in Settings (its first
+entry) from a browser paired with Full access. This is an address-setting and verification
 flow, not a DNS or hosting service. Enter the domain to see a compact DNS record
 with copy buttons for **Type**, **Name / Host**, and **Value / IP**. The full
 hostname is shown; providers that already append the DNS zone need only the
@@ -754,6 +754,13 @@ SEIRA_DATA_DIR="$HOME/.seira" SEIRA_PORT=8799 \
   node --experimental-strip-types server/index.ts
 ```
 
+The server keeps the data folder private to the account that runs it: at start it
+removes every group and other permission bit (mode 0700) from the folder and its
+subfolders, and stops with a message if it cannot, for example when another account
+owns the folder or the mount refuses `chmod`. When several accounts share one install
+on purpose, set `SEIRA_DATA_DIR_GROUP_ACCESS=1`: the owner's group may then read, write
+and enter the folder (mode 2770), and other users still cannot.
+
 For something durable, let the CLI write the service for you:
 
 ```sh
@@ -772,13 +779,13 @@ a terminal, the service writes no pairing code into its log: run
 `npx @seira-bot/seira pair` when you need one.
 
 Engine CLIs read their logins from the service user's home: sign them in
-from Settings → Engines (below), or as that user in a terminal, before you
+from Settings → AI → Providers (below), or as that user in a terminal, before you
 rely on routines running unattended.
 
 ## Installing the engines without a terminal
 
 Engines whose installer is an npm package (Claude Code, Codex, OpenCode,
-MiniMax, pi) can be installed and updated from **Settings → Engines** when
+MiniMax, pi) can be installed and updated from **Settings → AI → Providers** when
 npm is on the server's PATH. Seira runs `npm install -g` as its own user into
 `<data dir>/tools/npm`, so nothing needs sudo and nothing touches a global
 prefix; that folder goes ahead of everything else on the engines' PATH, so
@@ -788,14 +795,14 @@ by a `curl | bash` script still need the command on the server.
 
 ## Provider keys, billed per token
 
-**Settings → Connections → Model providers** takes the keys a whole workspace
+**Settings → AI → Other services** takes the keys a whole workspace
 runs on, for people who would rather pay per token than have every user sign
 in. Keys are write-only: the page shows connected-or-not and a **Test** button
 that makes one read-only request to the provider from the server.
 
 - **Anthropic API key**: while one is saved, every Claude bot runs on it and
   Claude Code reports the real cost per turn to the usage ledger. Nobody has
-  to sign in, and Settings → Engines shows "workspace API key" instead of a
+  to sign in, and Settings → AI → Providers shows "workspace API key" instead of a
   person. Remove the key to go back to personal logins. The server's own
   `ANTHROPIC_API_KEY` environment variable is deliberately ignored; use the
   page, `config.json`, or `SEIRA_ANTHROPIC_API_KEY`.
@@ -868,7 +875,7 @@ root instead, and `--dry-run` always prints.
 
 ## Signing the engines in without a terminal
 
-On a hosted server, the engine CLIs sign in from Settings → Engines:
+On a hosted server, the engine CLIs sign in from Settings → AI → Providers:
 
 - **Codex**: "Connect ChatGPT" shows a one-time code to enter on OpenAI's
   device page. Once connected, Settings names the account and offers
@@ -928,15 +935,15 @@ the menu bar).
 everything (the server's owner), it asks once: **Let <server> use this
 computer?** with **Allow** or **Not now**. Allow lets the server's bots see and
 use the apps on this computer's screen, and run the MCP servers you keep for
-it, while the app is open. Folders and the terminal are added in **Settings →
-Servers**, where each server of yours has a **Share this computer** switch and
+it, while the app is open. Folders and the terminal are added in **Settings → This app → Your
+computers**, where each server of yours has a **Share this computer** switch and
 **Choose what it can use**; the switch turns it off at once, and the menu bar's
 Seira item pauses it with your Clouds. The server needs nothing turned on:
 it takes a computer from its owner's pairings only, and a phone code or another
 person's pairing is never asked. Set `features.sharedComputers` to `false` in the
 server's config to turn this off, or to `true` to let every paired session lend
 its computer. Nothing is shared without that Allow, unless you make the server
-your bots' home (below). In **Settings → Servers → Computer
+your bots' home (below). In **Settings → This app → Your computers**, then the server's **Computer
 access**, choose read-only folders and optionally allow edits. Unrestricted
 terminal and screen/app control are separate opt-ins, confirmed in a native
 dialog. They can access information outside the selected folders. Share only
@@ -969,9 +976,9 @@ People). A server other people sign in to keeps the explicit **Share this
 computer?** flow above, and its bots stay where they are. Both sides need this
 release: an older server says to update it first.
 
-To move by hand instead, export a backup from this computer in **Settings →
-Import & export → Export backup**, then import it on the server in **Settings → Import & export
-→ Import backup**. API keys, engine sign-ins and paired devices stay where they
+To move by hand instead, export a backup from this computer in **Settings → Import & export → Take things out → Export full
+backup**, then import it on the server in **Settings → Import & export → Bring things in → Import
+backup**. API keys, engine sign-ins and paired devices stay where they
 are on both sides; routines arrive paused. An older desktop app's **Copy this
 computer here** is answered with "Update Seira to bring your bots here by
 itself."
@@ -1134,7 +1141,7 @@ SEIRA_SIGNIN_EMAILS="her@yourcompany.com, @yourcompany.com"   # full access
 SEIRA_SIGNIN_MEMBER_EMAILS="freelancer@example.com"          # chat and approvals only
 ```
 
-Signed in as an admin? Settings → Remote access → **Who can sign in with an
+Signed in as an admin? Settings → People, under **Who can sign in with an
 email** edits the same list in the browser, no command line needed. With the
 npm package, the same thing from the command line, with the server running
 or not, no restart needed:
@@ -1374,7 +1381,7 @@ For the proxy boundary and offline regression checks, see the
 ## Using it from your phone
 
 Signed in on a hosted server as an admin (with a pairing code or your
-email)? Settings → Remote access → **Pair a phone or another computer**
+email)? Settings → Phone & devices → **Pair a phone or another computer**
 creates a one-time code with a QR right in the browser, and lists every
 paired device with a sign-out button. Nobody needs the command line.
 
@@ -1417,7 +1424,7 @@ bot, which model and engine, tokens in and out, the cost the engine reported
 (real on a metered key, an equivalent on a subscription, absent when the
 engine reports none), and who asked: the email a person signed in with, the
 device label otherwise, a routine, another bot, or this computer. No message
-text is stored. **Settings → Usage → History** shows a period grouped by bot,
+text is stored. **Settings → Spending** shows a period grouped by bot,
 model, person, day or engine, and **Export CSV** downloads one line per turn.
 Owners can read the same over the API:
 
@@ -1435,7 +1442,7 @@ current month to date.
 
 By default nothing limits what the bots use. The owner can cap a day's and a
 month's usage, for the whole server and for each bot, in estimated dollars
-and in tokens, under **Settings → Usage → Usage caps**, in `config.json`, or
+and in tokens, under **Settings → Spending**, **Usage caps**, in `config.json`, or
 for the server's own caps in the environment
 (`SEIRA_USAGE_CAP_DAILY_USD`, `SEIRA_USAGE_CAP_MONTHLY_USD`,
 `SEIRA_USAGE_CAP_DAILY_TOKENS`, `SEIRA_USAGE_CAP_MONTHLY_TOKENS`,
@@ -1643,7 +1650,7 @@ request named or saved, so two admins changing things at the same moment are
 each credited with their own change. The desktop app, and a server one person
 uses, keep no such log.
 
-**Settings → Activity** (admins, in the browser) shows these rows together
+**Settings → Data → Activity** (admins, in the browser) shows these rows together
 with the cards people answered, filtered by who, what and when, and exports
 them as CSV. The same over the API:
 
@@ -1663,7 +1670,7 @@ which keeps its own activity log.
 
 ## Spend limits and sell prices (enterprise)
 
-With the `budgets` entitlement, **Settings → Usage → Monthly spend limit**
+With the `budgets` entitlement, **Settings → Spending**, **Monthly spend limit**
 caps the workspace: once the month's cost reaches it, no bot starts a turn,
 whether a person wrote, a routine fired, a peer asked or a webhook arrived,
 until an admin raises it. A warning shows at a configurable percentage, and
@@ -1935,7 +1942,7 @@ every release instead.
 
 A server installed with the [installer](deploy-vps.md#quick-start-one-command-on-your-own-domain)
 updates with `sudo /opt/seira/update.sh`, which the installer puts there.
-Its admins can also press **Update server** in **Settings → Updates**, which runs
+Its admins can also press **Update server** on the server's own page in **Settings** (its first entry), which runs
 that same script on the server; a Docker checkout gets the button with
 `sudo deploy/update-runner.sh --install`. Until the bots' sandbox is on for
 self-hosted servers, a bot can ask for the same update, so the runner allows only

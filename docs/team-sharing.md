@@ -93,4 +93,4 @@ The `share` tool has the same actions: `export`, `publish`, `publish_to_repo` (`
 library actions and `publish_to_repo` need a person's own request on a Team Cloud from its owner or an admin, read from
 the server's records of who the turn acts for, never from what the model says.
 
-Backups are separate: Settings → Backup saves everything, chats included.
+Backups are separate: Settings → Import & export → Take things out saves everything, chats included.

@@ -26,11 +26,14 @@ const VCS_METADATA = new Set([".git", ".hg", ".svn", ".jj", ".bzr"]);
 // eslint-disable-next-line no-control-regex
 const WINDOWS_CHARACTERS = /[<>:"\\|?*\u0000-\u001f]/;
 
+// Sync's own temporary file. "omb-" is the name before v0.1.182; folders of earlier versions still carry it.
+export const SYNC_TEMP_NAME = /\.(?:seira|omb)-sync-[0-9a-f]+$/;
+
 /** True for a directory or file sync never carries, including its own half-downloaded files. */
 export function skipped(name, directory) {
   if (directory) return SKIP_DIRS.has(name);
   return SKIP_FILES.has(name.toLowerCase()) || name.startsWith("~$") || /\.(?:tmp|crdownload|part)$/i.test(name)
-    || /^\.~lock\..*#$/.test(name) || /\.seira-sync-[0-9a-f]+$/.test(name);
+    || /^\.~lock\..*#$/.test(name) || SYNC_TEMP_NAME.test(name);
 }
 
 /** A path as it travels: well-formed Unicode, relative, "/"-separated, NFC, with no empty, "." or ".." part, and no direction override. */

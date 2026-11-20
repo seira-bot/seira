@@ -15,6 +15,7 @@
 import { linkedAddress } from "./bot-link-address.mjs";
 import { BACKGROUND_HEADERS } from "./cloud-power.mjs";
 import { parseTogether } from "./places-together.mjs";
+import { sentWireName } from "./phone-wire-names.mjs";
 
 const STATE = "/api/bot-link";
 const PAIR = "/api/bot-link/pair";
@@ -58,7 +59,7 @@ export function createBotLinkMain({ wanted, pref, localRequest, fetch: fetchImpl
   let computer = null;
   const thisComputer = async () => {
     if (computer) return computer;
-    const described = await body(await localRequest("/.well-known/seira/environment", { signal: AbortSignal.timeout(10_000) }));
+    const described = await body(await localRequest(sentWireName("environmentPath"), { signal: AbortSignal.timeout(10_000) }));
     if (!described?.environmentId) return null;
     return (computer = { id: described.environmentId, name: String(described.label ?? "").trim().slice(0, 120) || "This computer" });
   };

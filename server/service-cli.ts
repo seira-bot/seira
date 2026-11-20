@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -88,7 +89,7 @@ export function runServiceCommand(input: ServiceInstallInput, io: ServiceIo): nu
     ...(script !== input.script ? { cliPrefix: "npx @seira-bot/seira" } : {}),
   };
   const rendered = platform === "darwin" ? launchdPlist(spec) : systemdUnit(spec);
-  mkdirSync(input.dataDir, { recursive: true, mode: 0o700 });
+  ensurePrivateDir(input.dataDir);
   writeFileSync(plan.file, rendered, { mode: 0o644 });
   io.log(`wrote ${plan.file}`);
   io.log("");

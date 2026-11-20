@@ -1,6 +1,7 @@
 import { userErrorThrown } from "./user-errors.ts";
 // Never writable by agents: a compromised or mistaken bot must not persist instructions into every teammate's turns.
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { ensurePrivateDir } from "./data-dir.ts";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { z } from "zod";
@@ -74,7 +75,7 @@ function loadFile(forWrite = false): SectionContextFile {
 }
 
 function saveFile(data: SectionContextFile): void {
-  mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+  ensurePrivateDir(DATA_DIR);
   writeFileAtomic(SECTION_CONTEXTS_FILE, JSON.stringify(data, null, 2), { mode: 0o600 });
 }
 

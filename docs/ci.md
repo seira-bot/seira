@@ -1,38 +1,34 @@
 # CI
 
 Seira has one CI workflow, `.github/workflows/ci.yml`. It runs on every pull
-request, on every push to `main`, and on a manual start. A run does its work
-on Linux. There is no merge queue or nightly run. Two rules cut the number of
-runners that a run uses (see [Fewer runners](#fewer-runners)).
+request, on every merge queue entry, on every push to `main`, and on a manual
+start. A run does its work on Linux. There is no nightly run. Two rules cut the
+number of runners that a run uses (see [Fewer runners](#fewer-runners)).
 
 The repository also has package workflows, `.github/workflows/package-*.yml`.
 A maintainer starts them by hand to build a desktop package (see
 [Package workflows](#package-workflows)).
-
-A separate workflow, `.github/workflows/bug-reports.yml`, checks the bug report
-Worker. It starts only when the Worker changes (see
-[Bug report Worker workflow](#bug-report-worker-workflow)).
-A second one, `.github/workflows/push-relay.yml`, does the same for the phone
-push relay Worker (see [Push relay Worker workflow](#push-relay-worker-workflow)).
 
 ## Jobs
 
 | Job | What it does |
 | --- | --- |
 | `checks` | `pnpm install --frozen-lockfile`, `pnpm i18n:check`, `pnpm lint`, `pnpm check:contrast`, the model manifest and announcements checks, `node scripts/check-local-leaks.mjs`, and the source guards (tests that only read the source) |
-| `build` | `pnpm typecheck`, `pnpm check:electron`, and a production web build (`pnpm exec vite build`) |
-| `vitest (linux, shard n/8)` | The whole Vitest suite in 8 shards, 4 files at once per shard. Shard 1 also runs `pnpm broker:test` and `pnpm test:electron`. |
-| `CI` | The gate. It passes only when every job before it passed. `build` and the shards may be skipped only as [Fewer runners](#fewer-runners) says. |
+| `build` | `pnpm typecheck`, `pnpm check:electron`, the Electron unit tests (`pnpm test:electron`), and a production web build (`pnpm exec vite build`) |
+| `vitest (linux, shard n/8)` | The whole Vitest suite in 8 shards, 4 files at once per shard. |
+| `worker (<name>)` | One job for each Cloudflare Worker in scope: `pnpm install --frozen-lockfile`, the type check of the Worker, and its tests. The Worker list is `WORKERS` in `scripts/ci-heavy.mjs`. No job deploys a Worker. |
+| `server image` | The image build and boot check of `server-image-smoke.yml`: build the server image on `linux/amd64` and `linux/arm64`, start it, and check the server, the UI, and the user. |
+| `CI` | The gate. It passes only when every job before it passed or was skipped for an allowed reason. See [Skipped jobs](#skipped-jobs). |
 
-`build` and the shards start after `checks` passes.
+`build`, the shards, `worker`, and `server image` start after `checks` passes.
 
 ## Fewer runners
 
-The organization can run 20 jobs at the same time, and a full run uses 10.
-These rules keep a release from waiting for a free runner:
+The organization can run 20 jobs at the same time. These rules keep a release
+from waiting for a free runner:
 
-- **Draft pull request.** A draft runs `checks` only. `build` and the shards
-  are skipped. When the author marks the pull request ready, CI runs the full
+- **Draft pull request.** A draft runs `checks` only. All other jobs are
+  skipped. When the author marks the pull request ready, CI runs the full
   suite. A draft cannot merge, so the skip hides no failure.
 - **Documentation and pictures only.** A pull request runs `checks` only when
   every changed file is one of these: a Markdown file in the repository root,
@@ -43,13 +39,43 @@ These rules keep a release from waiting for a free runner:
   rule. It runs the full suite for any other file and for any doubt, such as
   an empty or unreadable list of changed files. The tests that read the docs
   in `checks` (`scripts/testing/verification-docs.test.ts`) still run.
-- **Newer push to `main`.** A push to `main` cancels the older `main` run that
-  is still going. The newer commit holds the older one, so the newer run tests
-  both. A manual start is never cancelled.
+- **Workers in scope.** A pull request runs a `worker` job only for a Worker
+  that it can break. A Worker is in scope when the change touches its folder
+  `cloudflare/<name>/`, a file that the Worker reads outside its folder (the
+  `paths` of the Worker in `scripts/ci-heavy.mjs`), or a file that every Worker
+  reads (`WORKER_INPUTS`: the dependencies and the CI files). When no Worker is
+  in scope, no `worker` job runs.
+- **Server image.** The `server image` job runs when the heavy jobs run. The
+  `Dockerfile` builds the server and the web app, so any code change can break
+  the image.
+- **Merge queue and `main`.** The merge queue checks the same scope as the pull
+  request. A push to `main` and a manual start check everything.
 
-The `CI` gate passes a skipped `build` or shard only for a draft or a
-documentation-only pull request. In every other run, a skipped job fails the
-gate.
+## Skipped jobs
+
+GitHub counts a skipped job as a pass. So the `CI` gate decides which skips are
+allowed. It fails on any other skip.
+
+| Job | The gate accepts a skip when |
+| --- | --- |
+| `build`, `vitest`, `server image` | The pull request is a draft, or `checks` found documentation and pictures only |
+| `worker` | The pull request is a draft, or no Worker is in scope |
+| `checks` | Never |
+
+A job that ends as `failure` or `cancelled` fails the gate. A failed `checks`
+job also fails it, and no skip is then allowed, because the scope outputs are
+empty. The gate prints one line for each job.
+
+## Runs on `main` and in the merge queue
+
+A new push to a pull request cancels the older run of that pull request. A run
+on `main` is never cancelled. GitHub replaces a run only when it still waits
+for a runner. Before this rule, a burst of merges cancelled most `main` runs.
+A cancelled run gives no verdict, so a commit had no proof that it was green.
+
+The workflow listens to `merge_group` with the type `checks_requested`. Turn
+on the merge queue in the `main` ruleset, and the gate then runs on each queue
+entry.
 
 ## Fork pull requests
 
@@ -71,7 +97,10 @@ repository or read a secret:
 rule fails CI. The rules also stop a workflow that reads `github.token`, puts
 an `inputs` value into a shell command, or runs `electron-builder` with a
 `--publish` value other than `never`. The one token read they accept is the
-registry sign-in of `server-image.yml` (see [Server image workflow](#server-image-workflow)).
+registry sign-in of `server-image.yml` (see [Server image workflow](#server-image-workflows)).
+A workflow may call another workflow of this repository by its path
+(`./.github/workflows/<file>.yml`). Every other `uses` value stays pinned to a
+full commit SHA.
 
 A job that needs write access or reads a secret must use the GitHub
 environment `release`. The test fails a job that asks for write access or
@@ -129,36 +158,49 @@ holds these rules for every `package-*.yml` file:
   script in `package.json` ends with `electron-builder ... --publish never`.
 - It has one `actions/upload-artifact` step with `if-no-files-found: error`.
 
-## Server image workflow
+## Server image workflows
 
-`server-image.yml` builds the server image of the root `Dockerfile` and
-publishes it as `ghcr.io/seira-bot/seira`. The scripts in `deploy/` install
-and update that image.
+Two workflows handle the server image of the root `Dockerfile`. The scripts in
+`deploy/` install and update the published image.
 
-| Start | What it does |
+| Workflow | What it does |
 | --- | --- |
-| A pull request that changes `Dockerfile`, `.dockerignore`, or the workflow | The `image` job only: build, start, and check the server on each platform |
+| `server-image-smoke.yml` | A reusable workflow. It builds the image on each platform, starts it, and checks the server, the UI, and the user. It pushes nothing. |
+| `server-image.yml` | Run by hand. It calls the smoke workflow, then publishes `ghcr.io/seira-bot/seira`. |
+
+`ci.yml` calls the smoke workflow in the job `server image`. The `CI` gate
+needs that job. A broken image therefore blocks a merge.
+
+| Start of `server-image.yml` | What it does |
+| --- | --- |
 | Run by hand from `main`, with `tag` set to a release tag | Publishes that tag's code as `ghcr.io/seira-bot/seira:<tag>` |
 | Run by hand from `main`, with no `tag` | Publishes `main` as `latest` and `sha-<commit>` |
+| Run by hand from another branch | Builds and checks the image only |
 
-The repository allows only GitHub's own actions, so the workflow uses the
-runner's `docker` CLI and no `docker/*` action. The `image` job builds each
+The repository allows only GitHub's own actions, so the workflows use the
+runner's `docker` CLI and no `docker/*` action. The smoke workflow builds each
 platform on its own runner: `linux/amd64` on `ubuntu-24.04`, `linux/arm64` on
-`ubuntu-24.04-arm`. It sets the label `org.opencontainers.image.version` to
-the tag, or to `main` when there is no tag. On a run by hand from `main`, it
-saves each image as a workflow artifact for 7 days.
+`ubuntu-24.04-arm`. A failure on one platform does not stop the other. It sets
+the label `org.opencontainers.image.version` to the tag, or to `main` when
+there is no tag. With the input `save` set, it keeps each image as a workflow
+artifact for 7 days. `server-image.yml` sets `save` on `main` only.
 
 The `publish` job loads the two images and pushes each one to the tag
 `build-amd64` or `build-arm64`. It reads each pushed image back from the
 registry and checks its platform, version label, and commit. Then it joins the
-two digests under the final tags with `docker buildx imagetools create`. Approve the run within 7 days, or the
-artifacts expire and the job fails. Then start a new run.
+two digests under the final tags with `docker buildx imagetools create`.
+Approve the run within 7 days, or the artifacts expire and the job fails. Then
+start a new run.
 
-`scripts/ci-workflow.test.ts` holds these rules for it:
+`publish` stays in `server-image.yml`. A workflow that `ci.yml` calls cannot ask
+for more rights than `ci.yml` has, and `publish` needs `packages: write`.
 
-- The workflow uses only `actions/*` actions.
-- The `image` job has no permission, no secret, and no environment, and it
-  pushes nothing.
+`scripts/ci-workflow.test.ts` holds these rules for them:
+
+- The workflows use only `actions/*` actions.
+- The smoke workflow has no permission, no secret, no environment, and no
+  `concurrency` group. It pushes nothing. It reads the tag only through `env`.
+- The `image` job of `server-image.yml` calls the smoke workflow.
 - The `approval` job needs `image`. It runs only for a person who is not a
   maintainer, in the `release-approval` environment.
 - The `publish` job runs only by hand from `main`, after `image` succeeded. It
@@ -174,58 +216,6 @@ artifacts expire and the job fails. Then start a new run.
 - It publishes only to this repository's own package, with no build cache, so
   another run cannot change the image.
 
-## Bug report Worker workflow
-
-`bug-reports.yml` checks the Worker in `cloudflare/bug-reports/`. It is not
-part of `ci.yml` and not part of the `CI` gate. A pull request that does not
-change the Worker adds no job. A draft pull request does not start the job, as
-in `ci.yml` (see [Fewer runners](#fewer-runners)). Marking the pull request ready
-starts it.
-
-| Start | What it does |
-| --- | --- |
-| A pull request, or a push to `main`, that changes `cloudflare/bug-reports/**` or `bug-reports.yml` | The job `bug-reports`: `pnpm install --frozen-lockfile`, `pnpm bugs:check` (the type check), and `pnpm bugs:test` (the tests) |
-| Run by hand | The same job |
-
-`scripts/ci-workflow.test.ts` holds these rules for it:
-
-- The workflow has one job. The job has no permission, no secret, and no
-  environment.
-- The job never deploys. Deploying the Worker stays a manual step (see the
-  [Worker README](../cloudflare/bug-reports/README.md)).
-- The two `paths` filters name the Worker folder and the workflow file.
-- The job skips a draft pull request. A new push cancels the older run of the
-  same pull request or of `main`. A manual start never cancels or is cancelled.
-- All the rules of [Fork pull requests](#fork-pull-requests) hold for it too.
-
-Do not add `bug-reports` to the `main CI must pass` ruleset. A required check that
-does not run on every pull request keeps the pull requests that skip it
-waiting forever. Read the result on a pull request that changes the Worker.
-
-## Push relay Worker workflow
-
-`push-relay.yml` checks the Worker in `cloudflare/push-relay/`. It follows the
-same rules as the [Bug report Worker workflow](#bug-report-worker-workflow). It
-is not part of `ci.yml` and not part of the `CI` gate.
-
-| Start | What it does |
-| --- | --- |
-| A pull request, or a push to `main`, that changes `cloudflare/push-relay/**` or `push-relay.yml` | The job `push-relay`: `pnpm install --frozen-lockfile`, `pnpm push:check` (the type check), and `pnpm push:test` (the tests) |
-| Run by hand | The same job |
-
-`scripts/ci-workflow.test.ts` holds the same rules for it:
-
-- The workflow has one job. The job has no permission, no secret, and no
-  environment. The tests use a fake APNs, a fake FCM, and a fake database.
-- The job never deploys. Deploying the Worker stays a manual step (see the
-  [Worker README](../cloudflare/push-relay/README.md)).
-- The two `paths` filters name the Worker folder and the workflow file.
-- The job skips a draft pull request. A new push cancels the older run of the
-  same pull request or of `main`. A manual start never cancels or is cancelled.
-
-Do not add `push-relay` to the `main` branch ruleset. Read the result on a pull
-request that changes the Worker.
-
 ## Required check
 
 The ruleset `main CI must pass` requires the one check `CI` and has no bypass
@@ -236,6 +226,9 @@ admin bypass. The gate runs with
 so the gate must run and fail when a job before it failed or was skipped.
 Before you rename the gate job, update the ruleset, or every pull request
 waits forever.
+The gate needs `checks`, `build`, `vitest`, `worker`, and `server image`. The
+`worker` and `server image` jobs are part of `CI`, so you add no other check to
+the ruleset.
 
 ## Vitest shards
 
@@ -292,6 +285,9 @@ Nothing else is retried, and a local run never retries.
   (`scripts/testing/ci-retry-summary.mjs`).
 - Fix the test, then delete its entry. `scripts/testing/ci-retry-list.test.ts`
   fails on an entry whose test no longer exists.
+- Add an entry only when the cause is outside this repository, and give the
+  run ids that prove it. A retry or a longer timeout does not fix a flaky test:
+  find the cause and fix it. The list can be empty.
 
 ## What CI does not run
 
@@ -314,7 +310,7 @@ checkout without dependencies can run them on an ssh host instead (see
 ## Repository settings for Actions
 
 These settings keep CI safe for a public repository. An organization admin
-sets them in **Settings → Actions → General**:
+sets them in GitHub **Settings → Actions → General**:
 
 | Setting | Value |
 | --- | --- |
@@ -331,7 +327,7 @@ Then add the `CI` check (source: GitHub Actions) to a separate ruleset on the de
 `package-macos.yml` reads the Apple signing secrets from the environment
 `release`, the `publish` job of `server-image.yml` uses it to write to
 `ghcr.io`, and the `publish` job of `npm-publish.yml` uses it to publish to
-npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin creates it in **Settings → Environments**:
+npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin creates it in GitHub **Settings → Environments**:
 
 | Setting | Value |
 | --- | --- |
@@ -351,7 +347,7 @@ npm (see [Releasing](releasing.md#publish-to-npm)). An organization admin create
 
 The `approval` jobs of `package-macos.yml` and `server-image.yml` use the
 `release-approval` environment. An organization admin creates it in
-**Settings → Environments**:
+GitHub **Settings → Environments**:
 
 | Setting | Value |
 | --- | --- |

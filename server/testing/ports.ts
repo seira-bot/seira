@@ -1,9 +1,8 @@
 // Ports for suites that boot real servers: probe first, so two suites at once never lose an unchecked bind.
-import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 
 import { mcpOAuthRedirectUri } from "../mcp-oauth.ts";
-import { forWorker } from "./worker-port.ts";
+import { belowEphemeral, ephemeralFloor, forWorker } from "./worker-port.ts";
 
 const isFree = (port: number): Promise<boolean> =>
   new Promise((resolve) => {
@@ -30,22 +29,13 @@ function claim(ports: number[]): boolean {
 export async function freePortBlock(offsets: number[], from = 19_600, span = 3_000): Promise<number> {
   for (let attempt = 0; attempt < 40; attempt++) {
     const picked = from + Math.floor(Math.random() * span);
-    const base = span < 64 ? picked : forWorker(picked);
+    const base = span < 64 ? picked : forWorker(belowEphemeral(picked));
     const ports = offsets.map((offset) => base + offset);
     if (!claim(ports)) continue;
     const checks = await Promise.all(ports.map(isFree));
     if (checks.every(Boolean)) return base;
   }
   throw new Error(`no free port block for offsets ${offsets.join(",")} in ${from}..${from + span}`);
-}
-
-/** The lowest port the OS hands out itself: Linux's ip_local_port_range, else IANA's dynamic range (macOS, Windows). */
-function ephemeralFloor(): number {
-  try {
-    return Number(readFileSync("/proc/sys/net/ipv4/ip_local_port_range", "utf8").trim().split(/\s+/)[0]) || 49_152;
-  } catch {
-    return 49_152;
-  }
 }
 
 /** A pre-registered sign-in app returns to one loopback port derived from the URL (mcpOAuthRedirectUri).
