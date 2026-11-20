@@ -50,7 +50,7 @@ describe("seira service", () => {
   });
 
   it("writes a launchd agent on macOS and explains uninstall on both", () => {
-    expect(runServiceCommand({ action: "install", dataDir: dir, port: 8799, tunnel: true, script: "/opt/homebrew/lib/node_modules/openmausbot/cli.js", node: "/opt/homebrew/bin/node", platform: "darwin", home: "/Users/maus" }, io)).toBe(0);
+    expect(runServiceCommand({ action: "install", dataDir: dir, port: 8799, tunnel: true, script: "/opt/homebrew/lib/node_modules/openmausbot/cli.js", node: "/opt/homebrew/bin/node", platform: "darwin", home: "/Users/maus", env: { OMB_CONTROL_PLANE_URL: "https://accounts.example.test" } }, io)).toBe(0);
     expect(readFileSync(join(dir, "com.openmausbot.serve.plist"), "utf8")).toContain("<string>--tunnel</string>");
     expect(out.join("\n")).toContain("launchctl bootstrap");
     out.length = 0;
