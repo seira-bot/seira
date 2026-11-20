@@ -1,9 +1,10 @@
 // Moving an earlier version's folders to the current names once, without ever losing or doubling a person's data.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import nodeFs, { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 import { legacyLeaseHeld } from "./data-dir-lease.mjs";
@@ -164,4 +165,99 @@ test("inner files move when the data folder is the default one in the given home
   assert.equal(migrateInnerFiles({ dataDir, home: base, env: { SEIRA_DATA_DIR: dataDir }, held: never }).length, 1);
   assert.ok(existsSync(path.join(dataDir, ".seira-cloud-home.json")));
   assert.ok(!existsSync(path.join(dataDir, ".omb-cloud-home.json")));
+});
+
+function setUpOld(base) {
+  folder(base, ".openmausbot");
+  writeFileSync(path.join(base, ".openmausbot", "config.json"), "{}");
+}
+function unusedCurrent(base) {
+  mkdirSync(path.join(base, ".seira"));
+  writeFileSync(path.join(base, ".seira", "tailscale-serve.marker"), "stale");
+}
+function messages(dir, ...roles) {
+  const db = new DatabaseSync(path.join(dir, "messages.db"));
+  db.exec("CREATE TABLE messages (thread_id TEXT NOT NULL, id TEXT NOT NULL, at INTEGER NOT NULL, role TEXT NOT NULL, kind TEXT NOT NULL, text TEXT, json TEXT NOT NULL)");
+  for (const [index, role] of roles.entries()) db.prepare("INSERT INTO messages VALUES ('t', ?, 1, ?, 'text', NULL, '{}')").run(`m${index}`, role);
+  db.close();
+}
+const asideOf = (base) => readdirSync(path.join(base, ".seira", ".backups")).filter((name) => name.startsWith("seira-before-move-"));
+const idle = { held: never, running: never, wrote: never };
+
+test("an unused current data folder moves into the old one's backups, and the old one takes its place", (t) => {
+  const base = home(t);
+  setUpOld(base);
+  unusedCurrent(base);
+  const lines = [];
+  assert.deepEqual(migrateHomeFolders({ home: base, env: {}, ...idle, log: (line) => lines.push(line) }), [[".openmausbot", ".seira"]]);
+  assert.equal(readFileSync(path.join(base, ".seira", "bots.json"), "utf8"), "old");
+  assert.ok(!existsSync(path.join(base, ".openmausbot")));
+  const aside = asideOf(base);
+  assert.equal(aside.length, 1);
+  assert.equal(readFileSync(path.join(base, ".seira", ".backups", aside[0], "tailscale-serve.marker"), "utf8"), "stale");
+  assert.ok(existsSync(path.join(base, ".seira", ".backups", "legacy-move.json")));
+  assert.equal(lines.length, 1);
+  assert.ok(lines[0].includes(aside[0]), lines[0]);
+});
+
+for (const [what, prepare, options] of [
+  ["its own setup", (dir) => writeFileSync(path.join(dir, "config.json"), "{}"), {}],
+  ["its own groups", (dir) => writeFileSync(path.join(dir, "groups.json"), "[]"), {}],
+  ["a server running on it", () => {}, { running: () => true }],
+  ["a person's message", () => {}, { wrote: () => true }],
+]) {
+  test(`a current data folder with ${what} stays, and so does the old one`, (t) => {
+    const base = home(t);
+    setUpOld(base);
+    unusedCurrent(base);
+    prepare(path.join(base, ".seira"));
+    const lines = [];
+    assert.deepEqual(migrateHomeFolders({ home: base, env: {}, ...idle, ...options, log: (line) => lines.push(line) }), []);
+    assert.ok(existsSync(path.join(base, ".openmausbot", "config.json")));
+    assert.ok(existsSync(path.join(base, ".seira", "tailscale-serve.marker")));
+    assert.deepEqual(lines, ["legacy migration: .openmausbot and .seira both exist; both left as they are"]);
+  });
+}
+
+test("the current data folder stays when the old one holds no setup", (t) => {
+  const base = home(t);
+  folder(base, ".openmausbot");
+  unusedCurrent(base);
+  assert.deepEqual(migrateHomeFolders({ home: base, env: {}, ...idle }), []);
+  assert.ok(existsSync(path.join(base, ".seira", "tailscale-serve.marker")));
+});
+
+test("only the data folder is set aside", (t) => {
+  const base = home(t);
+  folder(base, ".openmausbot-work");
+  writeFileSync(path.join(base, ".openmausbot-work", "config.json"), "{}");
+  mkdirSync(path.join(base, ".seira-work"));
+  assert.deepEqual(migrateHomeFolders({ home: base, env: {}, ...idle }), []);
+  assert.ok(existsSync(path.join(base, ".openmausbot-work", "config.json")));
+});
+
+test("the unused folder goes back when the old one cannot move", (t) => {
+  const base = home(t);
+  setUpOld(base);
+  unusedCurrent(base);
+  const source = path.join(base, ".openmausbot");
+  const fs = { ...nodeFs, renameSync: (from, to) => { if (from === source) throw new Error("fixture rename failure"); nodeFs.renameSync(from, to); } };
+  assert.deepEqual(migrateHomeFolders({ home: base, env: {}, fs, ...idle }), []);
+  assert.equal(readFileSync(path.join(base, ".seira", "tailscale-serve.marker"), "utf8"), "stale");
+  assert.ok(existsSync(path.join(source, "config.json")));
+  assert.deepEqual(readdirSync(path.join(source, ".backups")).filter((name) => name.startsWith("seira-before-move-")), []);
+});
+
+test("chats written only by bots do not hold the current folder; a person's message or an unreadable database does", async (t) => {
+  for (const [roles, moves] of [[["bot"], true], [["bot", "user"], false], [null, false]]) {
+    await t.test(String(roles), (st) => {
+      const base = home(st);
+      setUpOld(base);
+      unusedCurrent(base);
+      if (roles) messages(path.join(base, ".seira"), ...roles);
+      else writeFileSync(path.join(base, ".seira", "messages.db"), "not a database");
+      const moved = migrateHomeFolders({ home: base, env: {}, held: never, running: never });
+      assert.equal(moved.length, moves ? 1 : 0);
+    });
+  }
 });
