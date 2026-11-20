@@ -2,6 +2,7 @@ import { rmSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { ROUTINE_HANDOFF_WAIT, type RoutineRunReport } from "../shared/routines.ts";
+import { WORKFLOW_TIME_WAIT, workflowBotWait } from "./workflows/rest-text.ts";
 import "./server-line-packs.ts";
 import { clipRunOutput } from "./routine-lines.ts";
 import { automationContextText, createAutomationReports, newestAutomationLines, readRunReply, recoveredText, routineRunNeedsReview } from "./automation-reports.ts";
@@ -42,6 +43,9 @@ describe("routineRunNeedsReview", () => {
     expect(routineRunNeedsReview({ status: "missed" })).toBe(true);
     expect(routineRunNeedsReview({ status: "waiting", attention: "Approve: Bash" })).toBe(true);
     expect(routineRunNeedsReview({ status: "waiting", attention: ROUTINE_HANDOFF_WAIT })).toBe(false);
+    expect(routineRunNeedsReview({ status: "waiting", attention: WORKFLOW_TIME_WAIT })).toBe(false);
+    expect(routineRunNeedsReview({ status: "waiting", attention: workflowBotWait("Ben") })).toBe(false);
+    expect(routineRunNeedsReview({ status: "waiting", attention: "Ben asks: send the draft?" })).toBe(true);
     expect(routineRunNeedsReview({ status: "running" })).toBe(false);
     expect(routineRunNeedsReview({ status: "completed", output: clipRunOutput(`${"Long report. ".repeat(300)}\nNEEDS INPUT: Send it?`, 2_000) })).toBe(true);
     // The source chat is synced from the stored output alone: a closing question over half of it, or over all of it, still counts.
@@ -723,5 +727,64 @@ describe("automation reports", () => {
     f.online();
     reports.flush();
     expect(f.lines().map((line: Message) => line.text)).toEqual(["Acme replied."]);
+  });
+});
+
+describe("a workflow's Post results step", () => {
+  beforeEach(() => {
+    rmSync(DATA_DIR, { recursive: true, force: true });
+  });
+
+  it("writes one line per post step, and a failure line still follows", () => {
+    const f = fixture();
+    const run = f.finished("", "Weekly report", { status: "failed", error: "Writer failed" });
+    const written: string[] = [];
+    f.reports.postStep(run, "post-1", "Sales are up 4%.", (id) => written.push(id));
+    f.reports.postStep(run, "post-1", "Sales are up 4%.", (id) => written.push(id));
+    const posted = f.lines();
+    expect(posted).toHaveLength(1);
+    expect(posted[0]).toMatchObject({ text: "Sales are up 4%.", automation: { runId: run.id, workflowStepId: "post-1" } });
+    expect(written).toEqual([posted[0]!.id, posted[0]!.id]);
+    expect(f.runs.get(run.id)!.report).toBeUndefined();
+    f.reports.runFailed(run, "Writer failed");
+    expect(f.lines().map((line) => line.automation?.failed === true)).toEqual([false, true]);
+  });
+
+  it("writes into the run's own chat when no results chat is set, and nothing for an empty text", () => {
+    const f = fixture();
+    const run = f.finished("", "Weekly report", { resultsThreadId: undefined });
+    const written: string[] = [];
+    f.reports.postStep(run, "post-1", "  ", (id) => written.push(id));
+    expect(written).toEqual([""]);
+    f.reports.postStep(run, "post-2", "Done.", (id) => written.push(id));
+    const own = f.store.messagesFor(run.threadId!).filter((message) => message.automation?.workflowStepId === "post-2");
+    expect(own).toHaveLength(1);
+    expect(written[1]).toBe(own[0]!.id);
+  });
+
+  it("drops a held post when the run has stopped by the time the chat is free", () => {
+    const f = fixture();
+    const run = f.finished("", "Weekly report", { status: "running" });
+    f.busy.add(f.main);
+    const written: string[] = [];
+    f.reports.postStep(run, "post-1", "Hello.", (id) => written.push(id));
+    f.runs.get(run.id)!.status = "cancelled";
+    f.busy.delete(f.main);
+    f.reports.flush();
+    expect(written).toEqual([]);
+    expect(f.lines()).toHaveLength(0);
+  });
+
+  it("waits while the chat is busy and writes after it", () => {
+    const f = fixture();
+    const run = f.finished("", "Weekly report", { status: "running" });
+    f.busy.add(f.main);
+    const written: string[] = [];
+    f.reports.postStep(run, "post-1", "Hello.", (id) => written.push(id));
+    expect(written).toEqual([]);
+    f.busy.delete(f.main);
+    f.reports.flush();
+    expect(written).toHaveLength(1);
+    expect(f.lines()).toHaveLength(1);
   });
 });

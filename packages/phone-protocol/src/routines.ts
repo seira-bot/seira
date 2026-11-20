@@ -183,6 +183,10 @@ export interface Routine {
   attachments?: RoutineContextAttachment[];
   sourceThreadId?: string;
   resultsThreadId?: string;
+  /** The workflow this routine runs instead of `prompt`. `prompt` then holds a numbered copy of its steps, which an app without workflows runs as one instruction for the first bot. */
+  workflowId?: string;
+  /** Every bot in that workflow: a person sees the routine only when they see each one. */
+  workflowBotIds?: string[];
   nextRunAt: number | null;
   createdAt: number;
   updatedAt: number;
@@ -213,6 +217,10 @@ export interface RoutineRun {
   executionThreadId?: string;
   sourceThreadId?: string;
   resultsThreadId?: string;
+  /** The workflow this routine runs instead of `prompt`. `prompt` then holds a numbered copy of its steps, which an app without workflows runs as one instruction for the first bot. */
+  workflowId?: string;
+  /** Every bot in that workflow: a person sees the routine only when they see each one. */
+  workflowBotIds?: string[];
   threadId?: string;
   startedAt?: number;
   finishedAt?: number;
@@ -276,6 +284,8 @@ export interface RoutineInput {
   /** Omission preserves routing; null resets it to the bot's main thread (on a Team Cloud, a results chat everyone who
    * sees the bot reads); RESULTS_JUST_ME, on a Team Cloud only, the person's own private chat with the bot. */
   resultsThreadId?: string | null;
+  /** The workflow to run instead of `prompt`; `null` releases it. */
+  workflowId?: string | null;
 }
 
 /** On a Team Cloud, "Just me": the routine reports into the person's own private chat with the bot, theirs alone. */

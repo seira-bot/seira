@@ -433,6 +433,12 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["POST"], path: /^\/api\/routines\/[\w-]+\/run$/ },
   { methods: ["POST"], path: /^\/api\/routine-runs\/[\w-]+\/(?:cancel|seen)$/ },
   { methods: ["POST"], path: /^\/api\/routine-runs\/seen-all$/ },
+  // workflows: steps name bots and instructions only; each route checks that the person sees every bot
+  { methods: ["GET", "POST"], path: /^\/api\/workflows$/ },
+  { methods: ["GET", "PATCH", "DELETE"], path: /^\/api\/workflows\/[\w-]+$/ },
+  { methods: ["GET"], path: /^\/api\/workflows\/[\w-]+\/runs$/ },
+  { methods: ["GET"], path: /^\/api\/workflow-runs\/[\w-]+$/ },
+  { methods: ["POST"], path: /^\/api\/workflow-runs\/[\w-]+\/steps\/[\w-]+\/run-again$/ },
   // webhook list is secret-free; creating or rotating one is not
   { methods: ["GET"], path: /^\/api\/webhooks$/ },
   // app-event automations: the list carries no credential; creating or changing one is the owner's

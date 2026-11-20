@@ -151,7 +151,7 @@ export function answeredByPerson(card: Card | undefined): boolean {
 
 type RoutineShape = {
   prompt?: string; target?: unknown; botId?: string; groupId?: string; attachments?: { id: string; path: string }[];
-  schedule?: unknown; runOn?: string;
+  schedule?: unknown; runOn?: string; workflowId?: string;
 };
 
 /** The scheduler never rewrites these fields, so any edit by someone else changes the fingerprint. */
@@ -159,7 +159,7 @@ export function routineFingerprint(routine: RoutineShape): string {
   const attachments = (routine.attachments ?? []).map(attachment => [attachment.id, attachment.path]);
   return createHash("sha256").update(JSON.stringify([
     routine.prompt ?? "", routine.target ?? null, routine.botId ?? "", routine.groupId ?? null, attachments,
-    routine.schedule ?? null, routine.runOn ?? null,
+    routine.schedule ?? null, routine.runOn ?? null, ...(routine.workflowId ? [routine.workflowId] : []),
   ])).digest("hex");
 }
 

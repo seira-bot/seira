@@ -1778,9 +1778,7 @@ function openWorkspaceSettings(computerId) {
   }
 }
 
-function showConnectSheet() {
-  openConnectSheet({ window: () => mainWindow, isLocal: contents => senderIsLocal({ sender: contents }), fallback: () => openWorkspaceSettings() });
-}
+function showConnectSheet() { openConnectSheet({ window: () => mainWindow, isLocal: contents => senderIsLocal({ sender: contents }), fallback: () => openWorkspaceSettings() }); }
 
 async function addServerFromClipboard() {
   try {

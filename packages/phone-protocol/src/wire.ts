@@ -28,7 +28,7 @@ import type { AppFromRef, AppPayload, AppPointedRef } from "./app.ts";
 import type { GroupGoalRunCardData } from "./group-goal-run.ts"; import type { BurstCardData } from "./burst.ts";
 import type { RuntimeEvent } from "./runtime-events.ts";
 import type { NotificationLogEntry } from "./notification.ts";
-import type { Routine, RoutineRun } from "./routines.ts";
+import type { Routine, RoutineRun } from "./routines.ts"; import type { WorkflowFrame } from "./workflows.ts";
 import type { WebhookAttempt, WebhookTrigger } from "./webhooks.ts";
 import type { PublishedPageCard } from "./published-page.ts";
 import type { InboxItem, InboxTask } from "./inbox.ts";
@@ -968,7 +968,7 @@ export type ServerFrame =
   | { kind: "group.deleted"; groupId: string }
   | { kind: "routine"; routine: Routine }
   | { kind: "routine.deleted"; routineId: string }
-  | { kind: "routine.run"; run: RoutineRun }
+  | { kind: "routine.run"; run: RoutineRun } | WorkflowFrame
   | { kind: "webhook"; webhook: WebhookTrigger }
   | { kind: "webhook.attempt"; attempt: WebhookAttempt }
   | { kind: "webhook.deleted"; webhookId: string }

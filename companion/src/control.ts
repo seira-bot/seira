@@ -10,6 +10,7 @@ import type { E2EDescriptor } from "./e2e/descriptor.ts";
 import type { LiveRoute } from "./e2e/registry.ts";
 import { companionEndpointCandidates, hostedCompanionUrl } from "./endpoints.ts";
 import { directRoutes, routedAddresses } from "./direct-routes.ts";
+import { linuxFirewall, type LinuxFirewall, type PhoneLan } from "./linux-firewall.ts";
 import { lanInterfaces, tailnetName, tailscaleAddress } from "./listener.ts";
 import { defaultHostName } from "./mdns.ts";
 import { publicNetworks } from "./windows-network.ts";
@@ -37,6 +38,7 @@ export interface ControlOptions {
   /** `PUT /routes` from the desktop app: which direct ways in are on, and the tailnet name it learned. */
   setDirectRoutes?: (body: unknown) => boolean;
   publicNetworks?: () => ReadonlySet<string>;
+  linuxFirewall?: (lan: PhoneLan) => LinuxFirewall | null;
   /** End-to-end status; absent or `enabled: false` while it is off. */
   e2e?: () => E2EStatus;
   /** The best live encrypted route of each connected device. */
@@ -202,6 +204,9 @@ export function companionState(options: Omit<ControlOptions, "controlToken">) {
   const publicNetwork = pairing && lead && (options.publicNetworks ?? publicNetworks)().has(lead.name)
     ? lead.name
     : null;
+  const firewall = pairing && lead
+    ? (options.linuxFirewall ?? linuxFirewall)({ name: lead.name, address: lead.address, port: options.companionPort })
+    : null;
   const secretPublicKey = options.secretPublicKey?.() ?? null;
   const routes = directRoutes();
   return {
@@ -215,6 +220,7 @@ export function companionState(options: Omit<ControlOptions, "controlToken">) {
     lan: lead?.address ?? null,
     // Windows has this network as Public, so its firewall likely drops a phone.
     ...(publicNetwork ? { publicNetwork } : {}),
+    ...(firewall ? { linuxFirewall: firewall } : {}),
     hosts: hostCandidates(addresses, name),
     endpoints: companionEndpointCandidates(
       options.companionPort,
