@@ -125,6 +125,9 @@ the page's own drag events, and exits.
    Simple (Advanced keeps its dialog); **Delete department** says the bots stay.
 7. Switch to Advanced: the same departments and order show, and rows drag the
    same way.
+8. The `pinned-advanced` and `pinned-simple` views pin Research, Writer and
+   Recipes, which have no messages. Each row shows the bot's role as its second
+   line; Recipes has no role, so its second line stays empty.
 
 `src/lib/sidebar-bot-drop.test.ts` covers where a drop lands,
 `src/components/Sidebar.departments.test.ts` the sidebar's wiring, and
