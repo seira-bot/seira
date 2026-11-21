@@ -29,7 +29,7 @@ Only the maintainers can release:
   that tree.
 
 The server image `ghcr.io/seira-bot/seira:v<version>` comes from the
-`Server image` workflow after the release (step 7). The npm package
+`Server image` workflow after the release (step 8). The npm package
 `@seira-bot/seira` comes from the `npm publish` workflow (see
 [Publish to npm](#publish-to-npm)).
 
@@ -163,7 +163,7 @@ cd ../..
   the AppImage in an Ubuntu 24.04 VM with the stock settings. Each `RESULT`
   line records one check.
 
-### 4. Merge, tag, and publish
+### 4. Merge, tag, and create the draft
 
 ```sh
 gh pr merge <pr number> --squash
@@ -178,11 +178,9 @@ node ../../scripts/release-assets.mjs upload v<version> \
   Seira-<version>-x86_64.AppImage Seira-<version>-amd64.deb latest-linux.yml \
   Seira.AppImage Seira-amd64.deb SHA256SUMS-linux-x64.txt
 node ../../scripts/release-assets.mjs check v<version>
-gh release edit v<version> --draft=false
-node ../../scripts/release-assets.mjs check v<version>
 ```
 
-The release stays a draft until the Linux files are on it. Attach every file
+The release stays a draft until step 7. Attach every file
 with the upload command, never with `gh release upload`. The script uploads
 the feeds (`latest*.yml`) last, so installed apps never read a feed whose file
 is still uploading. It uploads one file at a time and stops at the first
@@ -224,8 +222,11 @@ node scripts/release-assets.mjs upload v<version> release/Seira-<version>-x86_64
 - Use `--init-repo` for the first publish only.
 - The script stops when HEAD is not the tag, the tree is not clean, or `package.json` has another version.
 - The bundle `Seira-<version>-x86_64.flatpak` adds the Seira remote when a person installs it.
+- Attach the bundle to the draft release before step 7. The `publish` command refuses a release without it.
 
 ### 5. Build and attach the Windows installer
+
+Attach the files to the draft release. Do not publish the release yet.
 
 The `Package Windows` workflow (`.github/workflows/package-windows.yml`)
 builds the installer from a tag on a GitHub-hosted Windows runner. Before it
@@ -326,7 +327,7 @@ Rules for the package:
 ### 6. Build and attach the macOS apps
 
 Do this step only when the [macOS signing secrets](#macos-signing-secrets)
-are set.
+are set. Attach the files to the draft release.
 
 The `Package macOS` workflow (`.github/workflows/package-macos.yml`) builds
 both apps from a tag on a GitHub-hosted macOS runner. It reads the Apple
@@ -396,7 +397,26 @@ have an ad-hoc signature and no notarization, and the artifact is named
 When only some of the five secrets are set, the workflow stops before it
 builds, so a missing secret never gives an unsigned build by mistake.
 
-### 7. Publish the server image
+### 7. Publish the release
+
+```sh
+node scripts/release-assets.mjs publish v<version>
+```
+
+The command makes the draft release public and marks it as the latest release.
+
+- It refuses when a Linux or Windows asset is missing. The release stays a draft.
+- The Linux assets include the Flatpak bundle `Seira-<version>-x86_64.flatpak`.
+- It refuses when the release has any macOS file and a macOS asset is missing.
+- It refuses when `check` finds a problem. The release stays a draft.
+- It runs `check` again after it publishes the release.
+- Publishing the release starts the `npm publish` workflow (see [Publish to npm](#publish-to-npm)).
+- A published release without the Windows assets makes installed Windows apps fail their update check.
+- It also breaks the `Seira-setup.exe` download link.
+- Do not publish with `gh release edit` or the GitHub web page.
+- Do this step before step 8. The server image workflow fails while the release is still a draft.
+
+### 8. Publish the server image
 
 The `Server image` workflow (`.github/workflows/server-image.yml`) builds the
 server image from the tag for `linux/amd64` and `linux/arm64`, each on its own
@@ -422,7 +442,7 @@ docker buildx imagetools inspect ghcr.io/seira-bot/seira:v<version>
 - A person who is not a maintainer cannot re-run a failed publish job alone.
   An approval from an earlier attempt does not count. Re-run all jobs, or ask a
   maintainer to re-run.
-- Publish the GitHub release first. The workflow refuses a tag that is not a
+- Publish the GitHub release first (step 7). The workflow refuses a tag that is not a
   published release, and it builds the tag only, never a branch of that name.
 - The image must show both platforms, and the label
   `org.opencontainers.image.version` must be `v<version>`.
@@ -431,7 +451,7 @@ docker buildx imagetools inspect ghcr.io/seira-bot/seira:v<version>
 - The package must be public, or a server cannot pull it. An organization
   admin sets this once in the package settings on GitHub.
 
-### 8. Check what users download
+### 9. Check what users download
 
 ```sh
 mkdir -p .seira-scratch/release-check && cd .seira-scratch/release-check
@@ -456,7 +476,7 @@ environment through the GitHub OIDC token.
 It starts in one of two ways:
 
 ```sh
-# Automatic: it starts when a maintainer publishes the GitHub release (step 4).
+# Automatic: it starts when a maintainer publishes the GitHub release (step 7).
 # By hand, from main:
 gh workflow run npm-publish.yml --repo seira-bot/seira --ref main -f tag=v<version>
 gh run watch <run id> --repo seira-bot/seira --exit-status
