@@ -48,6 +48,10 @@ settings() {
   ACCOUNT_HOST=accounts.seira.bot
   TUNNEL_EDGE_HOST=region1.v2.argotunnel.com
   TUNNEL_WAIT_S="${SEIRA_INSTALL_TUNNEL_WAIT_S:-120}"
+  # The zones a server's address may sit in: Seira's own, and the one SEIRA_TUNNEL_HOST_SUFFIX names when you also run an
+  # account service of your own (SEIRA_CONTROL_PLANE_URL), as the server itself allows.
+  TUNNEL_SUFFIXES=seira.run
+  if [ -n "${SEIRA_CONTROL_PLANE_URL:-}" ] && [ -n "${SEIRA_TUNNEL_HOST_SUFFIX:-}" ]; then TUNNEL_SUFFIXES="$TUNNEL_SUFFIXES $SEIRA_TUNNEL_HOST_SUFFIX"; fi
 
   MODE=install
   DOMAIN=""
@@ -129,7 +133,7 @@ usage() {
   say "  --domain NAME      the name people will open, already pointing at this server"
   say "  --tunnel           serve at the address your Seira account gives this server, with no domain and no open port"
   say "  --account-email A  the email of your Seira account, which sends the code that signs this server in (with --tunnel)"
-  say "  --events           print one machine-readable ::seira line per check, step and question, for an app that runs this installer"
+  say "  --events           print one machine-readable ::seira line per check, step and question, for an app that runs this installer; its output holds a one-time sign-in link, so do not send it to a log"
   say "  --email ADDRESS    the first admin's email, so they can sign in with an emailed code (needs a mail server: SEIRA_SIGNIN_SMTP_URL in .env)"
   say "  --install-docker   install Docker with Docker's official script when it is missing, without asking"
   say "  --dir PATH         where the install lives (default /opt/seira)"
@@ -1100,8 +1104,25 @@ wait_healthy() {
   return 1
 }
 
-tunnel_address() { # the address the server's own log says the tunnel is live at
-  compose logs --no-color seira 2>/dev/null | sed -n 's#.*tunnel: live at \(https://[A-Za-z0-9.-]*\).*#\1#p' | tail -n 1
+# The address the account gave this server, as `seira status` reads it from the server's own sign-in record. A log is
+# never read for it: anything that can print a line could print a false one.
+tunnel_address() {
+  compose exec -T seira seira status 2>/dev/null | sed -n 's#^Seira web address: \(https://[^ ]*\) .*#\1#p' | head -n 1
+}
+
+# True only for exactly https://c-<32 lowercase hex>.<suffix>, with no port, path or other label.
+tunnel_host_allowed() { # address
+  host=${1#https://}
+  [ "$host" != "$1" ] || return 1
+  case "$host" in *[!a-z0-9.-]*) return 1 ;; esac
+  label=${host%%.*}
+  zone=${host#*.}
+  case "$label" in c-????????????????????????????????) ;; *) return 1 ;; esac
+  case "${label#c-}" in *[!0-9a-f]*) return 1 ;; esac
+  for suffix in $TUNNEL_SUFFIXES; do
+    if [ "$zone" = "$suffix" ]; then return 0; fi
+  done
+  return 1
 }
 
 tunnel_answers() { # address
@@ -1112,9 +1133,12 @@ wait_tunnel() { # sets ADDRESS once the tunnel's address answers as Seira
   waited=0
   while [ "$waited" -lt "$TUNNEL_WAIT_S" ]; do
     found=$(tunnel_address || true)
-    if [ -n "$found" ] && tunnel_answers "$found"; then
-      ADDRESS=$found
-      return 0
+    if [ -n "$found" ]; then
+      tunnel_host_allowed "$found" || fail "The address this server was given is not one that Seira issues, so the installer does not use it. Run this again; if it is the same, tell us."
+      if tunnel_answers "$found"; then
+        ADDRESS=$found
+        return 0
+      fi
     fi
     sleep 5
     waited=$((waited + 5))
@@ -1308,7 +1332,7 @@ connect_server() {
 # The first admin's one-time sign-in link, as `seira pair` prints it: its code line (until when it works) and the
 # link. Nothing when the server would not make one.
 first_admin_link() {
-  made=$(compose exec -T seira seira pair --label "First admin" 2>/dev/null) || return 1
+  made=$(compose exec -T seira seira pair --label "First admin" --ttl 10m 2>/dev/null) || return 1
   lines=$(printf '%s\n' "$made" | grep -E '^(Pairing code|Link) ' || true)
   case "$lines" in *"Link "*"$ADDRESS/pair#code="*) printf '%s\n' "$lines" | sed 's/^/  /' ;; *) return 1 ;; esac
 }

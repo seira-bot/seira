@@ -122,8 +122,9 @@ case "$*" in
       echo "sign-in failed: \${typed#code } is not the code" >&2
       exit 1
     fi ;;
-  "compose logs --no-color seira") printf '%s\\n' "\${FAKE_TUNNEL_LOG:-}" ;;
-  "compose exec -T seira seira pair --label First admin") printf 'Pairing code 123456 (valid 10 minutes)\\nLink %s/pair#code=ZZZ\\n' "\${FAKE_PAIR_BASE:-https://c-test1.seira.run}" ;;
+  "compose exec -T seira seira status") printf "Server seira running\\nSeira web address: %s (signed in as owner@example.com; serve it with seira serve --tunnel)\\n" "\${FAKE_STATUS_ADDRESS:-https://c-0123456789abcdef0123456789abcdef.seira.run}" ;;
+  "compose logs --no-color seira") printf "%s\\n" "\${FAKE_TUNNEL_LOG:-}" ;;
+  "compose exec -T seira seira pair --label First admin --ttl 10m") printf 'Pairing code 123456 (valid 10 minutes)\\nLink %s/pair#code=ZZZ\\n' "\${FAKE_PAIR_BASE:-https://c-0123456789abcdef0123456789abcdef.seira.run}" ;;
 esac`,
 };
 
@@ -454,7 +455,7 @@ describe.skipIf(!posix)("deploy/install.sh", () => {
     expect(second.all).toContain("Seira is running at https://seira.example.com");
     expect(second.status).toBe(0);
     expect(readFileSync(env, "utf8").split("\n").filter((line) => /^[A-Z_]+=/.test(line))).toEqual([
-      "SEIRA_SIGNIN_SMTP_URL=smtps://mail.example.com", "DOMAIN=seira.example.com", "SEIRA_IMAGE=ghcr.io/seira-bot/seira:v0.1.152", "COMPOSE_FILE=compose.yaml:compose.box.yaml",
+      "DOMAIN=seira.example.com", "COMPOSE_FILE=compose.yaml:compose.box.yaml", "SEIRA_SIGNIN_SMTP_URL=smtps://mail.example.com", "SEIRA_IMAGE=ghcr.io/seira-bot/seira:v0.1.152",
     ]);
     expect(readFileSync(join(first.install, "compose.yaml"), "utf8")).toContain("name: seira");
     expect(readFileSync(join(first.install, "data", "messages.db"), "utf8")).toBe("chats");
@@ -708,7 +709,7 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
   const SIGNIN_CODE = "48151623";
   const TUNNEL_ENV = {
     FAKE_LOGIN_CODE: SIGNIN_CODE,
-    FAKE_TUNNEL_LOG: "tunnel: connecting…\ntunnel: live at https://c-test1.seira.run",
+    FAKE_TUNNEL_LOG: "tunnel: connecting…\ntunnel: live at https://c-0123456789abcdef0123456789abcdef.seira.run",
     SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test",
   };
   const ARGS = ["--tunnel", "--events", "--account-email", "owner@example.com"];
@@ -784,8 +785,8 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
       "::seira step signin start", "::seira ask code owner@example.com", "::seira step signin done",
       "::seira step start start", "::seira step start done",
       "::seira step health start", "::seira step health done",
-      "::seira step tunnel start", "::seira address https://c-test1.seira.run", "::seira step tunnel done",
-      "::seira step pair start", "::seira pair https://c-test1.seira.run/pair#code=ZZZ", "::seira step pair done",
+      "::seira step tunnel start", "::seira address https://c-0123456789abcdef0123456789abcdef.seira.run", "::seira step tunnel done",
+      "::seira step pair start", "::seira pair https://c-0123456789abcdef0123456789abcdef.seira.run/pair#code=ZZZ", "::seira step pair done",
       "::seira done",
     ]);
   });
@@ -795,7 +796,7 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
     expect(result.status, result.all).toBe(0);
     expect(result.all).not.toContain("/pair#code=");
     expect(result.docker.some((call) => call.includes("seira pair"))).toBe(false);
-    expect(result.stdout).toContain("Seira is running at https://c-test1.seira.run");
+    expect(result.stdout).toContain("Seira is running at https://c-0123456789abcdef0123456789abcdef.seira.run");
     expect(result.stdout).toContain("(The link is not made here because this output is not a terminal");
   });
 
@@ -820,6 +821,43 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
     expect(result.docker.some((call) => call === "docker compose up -d --remove-orphans")).toBe(false);
     const retry = tunnel(ARGS, { input: `code 11111111\ncode ${SIGNIN_CODE}\n` });
     expect(retry.status, retry.all).toBe(0);
+  });
+
+  it("takes the address from the server's own record, not from a log line that says otherwise", () => {
+    const spoof = "tunnel: live at https://evil.example.test\ntunnel: live at https://c-ffffffffffffffffffffffffffffffff.seira.run";
+    const result = tunnel(ARGS, { input: `code ${SIGNIN_CODE}\n`, env: { FAKE_TUNNEL_LOG: spoof } });
+    expect(result.status, result.all).toBe(0);
+    expect(eventLines(result.stdout)).toContain("::seira address https://c-0123456789abcdef0123456789abcdef.seira.run");
+    expect(result.all).not.toContain("evil.example.test");
+    expect(result.calls.filter((call) => call.startsWith("curl ")).join("\n")).not.toMatch(/evil\.example\.test|ffffffffffffffff/);
+    expect(result.docker).not.toContain("docker compose logs --no-color seira");
+  });
+
+  it.each([
+    "https://evil.example.test",
+    "http://c-0123456789abcdef0123456789abcdef.seira.run",
+    "https://c-0123456789abcdef0123456789abcdef.seira.run.evil.test",
+    "https://c-0123456789abcdef0123456789abcdeg.seira.run",
+    "https://c-0123456789abcdef.seira.run",
+    "https://c-0123456789abcdef0123456789abcdef.other.run",
+    "https://x.c-0123456789abcdef0123456789abcdef.seira.run",
+  ])("refuses an address that is not a managed tunnel address: %s", (address) => {
+    const result = tunnel(ARGS, { input: `code ${SIGNIN_CODE}\n`, env: { FAKE_STATUS_ADDRESS: address } });
+    expect(result.status).toBe(1);
+    const lines = eventLines(result.stdout);
+    expect(lines.some((line) => line.startsWith("::seira step tunnel fail The address this server was given is not one that Seira issues"))).toBe(true);
+    expect(lines.some((line) => line.startsWith("::seira address ") || line.startsWith("::seira pair "))).toBe(false);
+    expect(result.calls.filter((call) => call.startsWith("curl ")).join("\n")).not.toContain(`${address}/api/health`);
+  });
+
+  it("asks for a one-time link that lives ten minutes, and only with --events or at a terminal", () => {
+    const events = tunnel(ARGS, { input: `code ${SIGNIN_CODE}\n` });
+    expect(events.docker).toContain('docker compose exec -T seira seira pair --label First admin --ttl 10m');
+    const plain = tunnel(["--tunnel"], { signedIn: true });
+    expect(plain.status, plain.all).toBe(0);
+    expect(plain.all).not.toContain("/pair#code=");
+    expect(plain.docker.some((call) => call.includes("seira pair"))).toBe(false);
+    expect(script).toContain("so do not send it to a log");
   });
 
   it("stops, without asking again, when no code line comes", () => {
@@ -848,6 +886,6 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
     expect(snapshot()).toEqual(before);
     expect(readFileSync(join(first.install, "compose.yaml"), "utf8")).not.toContain("caddy");
     expect(again.docker.some((call) => call.includes(" login"))).toBe(false);
-    expect(eventLines(again.stdout)).toContain("::seira address https://c-test1.seira.run");
+    expect(eventLines(again.stdout)).toContain("::seira address https://c-0123456789abcdef0123456789abcdef.seira.run");
   });
 });
