@@ -3938,6 +3938,8 @@
   "sidebar.update.readyShort": "Update bereit",
   "sidebar.update.restartAction": "Neu starten",
   "sidebar.update.retryAction": "Erneut versuchen",
+  "sidebar.update.availableShort": "Server-Update verfügbar",
+  "sidebar.update.howAction": "So aktualisieren",
   "sidebar.nav.publishedApps": "Veröffentlichte Apps",
   "sidebar.nav.teamFiles": "Teamdateien",
   "settings.advancedMode.subtitle": "Zeigt auf diesem Gerät jede technische Einstellung: Nutzung und Tokens, den Inspektor und andere Werkzeuge für Bastler. Schalte ihn für eine einfachere App aus. Gelöscht wird so oder so nichts.",

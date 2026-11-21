@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ciProof, judgeChecks, mainVerdict, newestByName, parseArgs, preflight, repoFromRemote } from "./release-preflight.mjs";
+import { ciProof, dependabotSuites, judgeChecks, mainVerdict, newestByName, parseArgs, preflight, repoFromRemote } from "./release-preflight.mjs";
 
 const SHA = "a".repeat(40);
 const OTHER = "b".repeat(40);
@@ -80,7 +80,7 @@ describe("judgeChecks", () => {
 
   it("passes success, skipped and neutral", () => {
     const result = judgeChecks([run("a", "success"), run("b", "skipped", { id: 2 }), run("c", "neutral", { id: 3 })]);
-    expect(result).toEqual({ failures: [], pending: [], superseded: [] });
+    expect(result).toEqual({ failures: [], pending: [], superseded: [], ignored: [] });
   });
 
   it("fails a queued or running check as pending", () => {
@@ -114,6 +114,31 @@ describe("judgeChecks", () => {
       { context: "x", state: "success", id: 2, updated_at: "2026-11-20T10:00:00Z" },
     ]);
     expect(result.failures).toEqual([]);
+  });
+});
+
+describe("Dependabot update runs", () => {
+  const dependabot = (conclusion: string, suite: number) => run("Dependabot", conclusion, { id: 50 + suite, check_suite: { id: suite } });
+
+  it("lists a failed Dependabot run in an ignored suite and does not fail it", () => {
+    const result = judgeChecks([run("CI", "success"), dependabot("failure", 7)], [], new Set([7]));
+    expect(result.failures).toEqual([]);
+    expect(result.ignored).toEqual([{ name: "Dependabot", state: "failure", url: "https://example.test/Dependabot" }]);
+  });
+
+  it("still fails a Dependabot run in a suite that is not ignored", () => {
+    const result = judgeChecks([dependabot("failure", 8)], [], new Set([7]));
+    expect(result.failures.map((item) => item.name)).toEqual(["Dependabot"]);
+    expect(result.ignored).toEqual([]);
+  });
+
+  it("keeps only the dynamic Dependabot suites", () => {
+    const suites = dependabotSuites([
+      { path: "dynamic/dependabot/dependabot-updates", event: "dynamic", check_suite_id: 7 },
+      { path: "dynamic/github-code-scanning/codeql", event: "dynamic", check_suite_id: 8 },
+      { path: ".github/workflows/ci.yml", event: "push", check_suite_id: 9 },
+    ]);
+    expect([...suites]).toEqual([7]);
   });
 });
 
@@ -171,6 +196,7 @@ type Fixture = {
   statuses?: unknown[];
   successRuns?: unknown[];
   mainRuns?: unknown[];
+  dynamicRuns?: unknown[];
 };
 
 function stub(fixture: Fixture = {}) {
@@ -182,6 +208,7 @@ function stub(fixture: Fixture = {}) {
     statuses: [],
     successRuns: [],
     mainRuns: [ciRun("success", "push", TREE, 5)],
+    dynamicRuns: [],
     ...fixture,
   };
   return async (path: string) => {
@@ -196,6 +223,7 @@ function stub(fixture: Fixture = {}) {
     }
     if (path.includes("/git/tags/")) return { object: { type: "commit", sha: OTHER } };
     if (path.includes("/compare/")) return { status: f.compare };
+    if (path.includes("actions/runs?head_sha=")) return { workflow_runs: f.dynamicRuns };
     if (path.includes("status=success")) return { workflow_runs: f.successRuns };
     if (path.includes("branch=main")) return { workflow_runs: f.mainRuns };
     throw new Error(`unexpected path ${path}`);
@@ -245,6 +273,18 @@ describe("preflight", () => {
     expect(text).toContain("build (failure)");
     expect(text).toContain("not finished: lint");
     expect(text).toContain("deploy (failure)");
+  });
+
+  it("passes and notes a failed Dependabot update run on the release commit", async () => {
+    const { code, text } = await runPreflight(
+      {
+        checkRuns: [run("CI", "success"), run("Dependabot", "failure", { id: 2, check_suite: { id: 7 } })],
+        dynamicRuns: [{ path: "dynamic/dependabot/dependabot-updates", event: "dynamic", check_suite_id: 7 }],
+      },
+      { tag: "v0.1.3" },
+    );
+    expect(code).toBe(0);
+    expect(text).toContain("note Dependabot (failure) is a Dependabot update run, so it does not block the release");
   });
 
   it("fails when the tag and the package version differ", async () => {
