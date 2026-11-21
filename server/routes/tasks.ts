@@ -17,6 +17,7 @@ import { titleConversationExcerpt, type ThreadTitleSource } from "../thread-titl
 import type { MessagePage } from "./channels.ts";
 import { bulkDeleteThreadIds, type BulkDeleteRefusal } from "./bulk-delete.ts";
 import { forkMessageId } from "./fork-request.ts";
+import { fromPairedDevice } from "./paired-device.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { sawThread } from "../thread-presence.ts";
 import { refusalBody, userError } from "../user-errors.ts";
@@ -188,6 +189,9 @@ export function createTaskRoutes(deps: TaskRouteDeps): RouteHandler & { deleteTa
       if (!bot) return json(res, 404, { error: "no such bot" });
       let cwd: string | undefined;
       if (body.cwd !== undefined) {
+        if (fromPairedDevice(req, auth)) {
+          return json(res, 403, { error: "Choose a working folder on the host computer." });
+        }
         // Choosing where its file tools run takes the same authority as editing the bot's folder.
         if (!auth.scopes.includes("admin")) {
           return json(res, 403, { error: "Choosing a working folder requires the admin scope" });
