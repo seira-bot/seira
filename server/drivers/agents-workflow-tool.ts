@@ -1,5 +1,3 @@
-// The agents catalog's workflow tool. The checks and the saving live behind /api/internal/workflows (server/routes/workflow-agent.ts);
-// this is the schema a model sees and the words it gets back.
 import { WORKFLOW_LIMITS } from "../../shared/workflows.ts";
 import type { ToolCallContext, ToolCallResult } from "./agents-call.ts";
 import type { Json } from "./agents-client.ts";

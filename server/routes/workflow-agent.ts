@@ -1,5 +1,3 @@
-// The internal calls behind the bot tools trigger_info action=workflows and workflow action=create. They run inside
-// index.ts's internal route table, for the bot whose turn holds the capability.
 import type { Workflow } from "../../shared/workflows.ts";
 import type { InternalTriggerContext } from "../app-trigger-host.ts";
 import type { WorkflowHost } from "../host/workflow-host.ts";

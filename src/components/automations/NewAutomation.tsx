@@ -22,7 +22,6 @@ export function defaultBot(bots: readonly Bot[], selectedId: string): Bot | unde
 export function NewAutomation({ initialText = "", onClose, onSetUpYourself, onDrawWorkflow }: {
   initialText?: string;
   onClose: () => void;
-  /** Draw a workflow instead of describing one to a bot; the page creates it and opens the editor. */
   onDrawWorkflow?: () => void;
   /** The bot this box would have asked, so the editor starts with it chosen. */
   onSetUpYourself: (kind: SetUpKind, botId: string) => void;
