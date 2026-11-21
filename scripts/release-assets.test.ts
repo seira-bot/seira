@@ -16,8 +16,10 @@ function fakeApi(assets: Asset[], contents: Record<string, string>, release: Rec
     if (path.startsWith("repos/o/r/releases?")) return [{ id: 5, tag_name: "v0.9.0" }, { id: 7, tag_name: "v1.0.0", ...release }];
     if (path.startsWith("repos/o/r/releases/7/assets")) return assets;
     const match = /releases\/assets\/(\d+)$/.exec(path);
-    if (match && options?.raw) const name = assets.find((item) => item.id === Number(match[1]))!.name;
+    if (match && options?.raw) {
+      const name = assets.find((item) => item.id === Number(match[1]))!.name;
       return contents[name] ?? (name.startsWith("SHA256SUMS") ? SUMS : "");
+    }
     throw new Error(`unexpected ${path}`);
   };
   return { api, calls };
