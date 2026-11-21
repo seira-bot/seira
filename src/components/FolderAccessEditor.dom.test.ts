@@ -92,6 +92,8 @@ describe("FolderAccessEditor", () => {
     expect(shown.textContent).toContain("…");
     expect(shown.textContent!.startsWith("/srv/shared/")).toBe(true);
     expect(shown.textContent!.endsWith("/reports")).toBe(true);
+    expect(shown.className).toContain("truncate");
+    expect(host.querySelector("[data-folder-name]")!.textContent).toBe("reports");
   });
 
   it("marks folders from the department and does not let the bot change them", async () => {

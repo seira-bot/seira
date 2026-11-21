@@ -16,6 +16,10 @@ function middle(path: string): string {
   return `${path.slice(0, head)}…${path.slice(path.length - (MIDDLE_KEEP - 1 - head))}`;
 }
 
+function folderName(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+}
+
 interface Props {
   /** The folders set on this bot or department itself. */
   access: FolderAccess | null | undefined;
@@ -91,7 +95,10 @@ export function FolderAccessEditor({ access, save, department, subject, enforcem
         <ul aria-label={t("folderAccess.list")} className="flex flex-col divide-y divide-ink/[0.05]">
           {rows.map((row) => (
             <li key={`${row.from ?? ""}:${row.path}`} className="flex min-h-[40px] items-center gap-2.5 py-1.5">
-              <span title={row.path} className="min-w-0 flex-1 whitespace-nowrap font-mono text-[13px] text-ink">{middle(row.path)}</span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span data-folder-name="" className="truncate text-[13px] text-ink">{folderName(row.path)}</span>
+                <span title={row.path} className="truncate font-mono text-[11px] text-ink-secondary">{middle(row.path)}</span>
+              </span>
               {row.from !== undefined && <span className="ui-chip shrink-0">{t("folderAccess.from", { department: row.from })}</span>}
               <span className="shrink-0 text-[12px] text-ink-secondary">{t("folderAccess.canChange")}</span>
               <Switch
