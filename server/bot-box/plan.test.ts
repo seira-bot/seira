@@ -1,5 +1,7 @@
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 import { engineInstallRoots } from "../engine-roots.ts";
 import { BOX_MUTATIONS, CPU_LIST_FILES, argvPaths, bwrapArgs, planBox, taskWorkspaceIds, under, visibleInBox, type BoxAudience, type BoxMutation, type BoxRequest, type BoxSetup } from "./plan.ts";
@@ -362,5 +364,155 @@ linuxBox("the box plan", () => {
     expect(taskWorkspaceIds(join(dataDir, "task-workspaces"), dataDir)).toBeNull();
     expect(taskWorkspaceIds(join(dataDir, "task-workspaces", "../../etc", "x"), dataDir)).toBeNull();
     expect(argvPaths(["-p", "--mcp-config", "/tmp/a/mcp.json", "--additional-mcp-config", "@/tmp/copilot/mcp.json", "--settings=/tmp/b/s.json", "/", "relative/file", "--model", "x"])).toEqual(["/tmp/a/mcp.json", "/tmp/copilot/mcp.json", "/tmp/b/s.json"]);
+  });
+});
+
+linuxBox("a bot's folder list", () => {
+  const folders = (limited: boolean, ...grants: Array<[string, boolean]>) => ({ limited, grants: grants.map(([path, write]) => ({ path, write })) });
+  const ask = (given?: BoxRequest["folders"], more: Partial<BoxRequest> = {}, over: Partial<BoxSetup> = {}) =>
+    planBox({ ...setup(), ...over }, { command: "/usr/local/bin/claude", args: [], cwd, env: { HOME: home }, ...(given ? { folders: given } : {}), ...more });
+
+  it("a bot with no folder setting gets the same plan as before (AC-17)", () => {
+    expect(ask()).toEqual(ask(undefined));
+    const bare = planBox(setup(), { command: "/usr/bin/x", args: [], env: {} });
+    expect(bare.mounts.slice(0, 18).map((mount) => mount.kind)).toEqual(["ro", "symlink", "symlink", "symlink", "symlink", "ro", "ro", "ro", "ro", "ro", "ro", "proc", "dev", "tmpfs", "tmpfs", "tmpfs", "bind", "tmpfs"]);
+    expect(bare.mounts[16]).toEqual({ kind: "bind", source: home, target: home });
+    expect(bare.mounts[17]).toEqual({ kind: "tmpfs", target: dataDir });
+    expect(bare.writable).toEqual([home]);
+    const unlimited = ask({ limited: false, grants: [] });
+    expect(unlimited.mounts).toEqual(ask().mounts);
+  });
+
+  it("binds a can-change grant read-write and a read-only grant read-only, over a writable HOME (AC-09, AC-10)", () => {
+    const plan = ask(folders(false, ["/data/projects/site", true], ["/data/docs", false]));
+    expect(visibleInBox(plan, "/data/projects/site/index.html")).toBe("rw");
+    expect(visibleInBox(plan, "/data/docs/a.md")).toBe("ro");
+    expect(visibleInBox(plan, "/data/other/a.md")).toBe("rw");
+    const outside = ask(folders(false, ["/work/shared", false], ["/work/own", true]));
+    expect(visibleInBox(outside, "/work/shared/a.md")).toBe("ro");
+    expect(visibleInBox(outside, "/work/own/a.md")).toBe("rw");
+  });
+
+  it("a read-only grant inside a can-change grant stays read-only (AC-10)", () => {
+    const plan = ask(folders(false, ["/work/repo", true], ["/work/repo/secrets", false]));
+    expect(visibleInBox(plan, "/work/repo/src/a.ts")).toBe("rw");
+    expect(visibleInBox(plan, "/work/repo/secrets/key.txt")).toBe("ro");
+    const reversed = ask(folders(false, ["/work/repo/secrets", false], ["/work/repo", true]));
+    expect(visibleInBox(reversed, "/work/repo/secrets/key.txt")).toBe("ro");
+  });
+
+  it("a can-change grant inside a read-only grant is writable again (AC-10)", () => {
+    const plan = ask(folders(true, ["/work/repo", false], ["/work/repo/out", true], ["/work/repo/out/frozen", false]));
+    expect(visibleInBox(plan, "/work/repo/src/a.ts")).toBe("ro");
+    expect(visibleInBox(plan, "/work/repo/out/a.js")).toBe("rw");
+    expect(visibleInBox(plan, "/work/repo/out/frozen/a.js")).toBe("ro");
+    const sameBoth = ask(folders(false, ["/work/x", true], ["/work/x", false]));
+    expect(visibleInBox(sameBoth, "/work/x/a")).toBe("ro");
+  });
+
+  it("never gives back the data folder, a folder in it, or a folder that holds it (AC-11)", () => {
+    const plan = ask(folders(false, [dataDir, true], [join(dataDir, "providers"), true], [join(dataDir, "tools"), false], [home, false]));
+    for (const hidden of ["messages.db", "config.json", "providers/x", "tools/y"]) expect(visibleInBox(plan, join(dataDir, hidden)), hidden).toBe("none");
+    expect(plan.mounts.some((mount) => "source" in mount && mount.source === home && mount.kind === "ro")).toBe(false);
+    const apart = ask(folders(true, ["/srv", true]), { cwd: "/srv/seira/task-workspaces/b/t" }, { dataDir: "/srv/seira", engineRoots: engineInstallRoots("/srv/seira") });
+    expect(visibleInBox(apart, "/srv/seira/messages.db")).toBe("none");
+    expect(visibleInBox(apart, "/srv/other.txt")).toBe("none");
+  });
+
+  describe("limited", () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "seira-limited-")));
+    afterAll(() => rmSync(root, { recursive: true, force: true }));
+    const fakeHome = join(root, "home"), fakeData = join(fakeHome, ".seira");
+    for (const dir of [".claude", ".codex", ".npm-global/bin", ".local/bin", ".config/git", ".ssh", "Documents", "Downloads"]) mkdirSync(join(fakeHome, dir), { recursive: true });
+    writeFileSync(join(fakeHome, ".claude.json"), "{}");
+    writeFileSync(join(fakeHome, ".gitconfig"), "");
+    writeFileSync(join(fakeHome, ".bashrc"), "");
+    const fakeCwd = join(fakeData, "task-workspaces", "bot-a", "thread-1");
+    const limitedPlan = (...grants: Array<[string, boolean]>) => planBox({ ...setup(), dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+      command: "/usr/local/bin/claude", args: [], cwd: fakeCwd, env: { HOME: fakeHome }, folders: folders(true, ...grants),
+    });
+
+    it("hides the rest of HOME and keeps the sign-ins, the programs, the git settings and the grants (AC-09)", () => {
+      const plan = limitedPlan([join(fakeHome, "Documents"), false]);
+      for (const hidden of [".ssh/id_ed25519", ".bashrc", "Downloads/a.pdf", ".config/other", ".seira/messages.db", ".seira/config.json"]) expect(visibleInBox(plan, join(fakeHome, hidden)), hidden).toBe("none");
+      for (const signIn of [".claude/settings.json", ".claude.json", ".codex/auth.json"]) expect(visibleInBox(plan, join(fakeHome, signIn)), signIn).toBe("rw");
+      for (const kept of [".npm-global/lib/x.js", ".local/bin/claude", ".gitconfig", ".config/git/ignore"]) expect(visibleInBox(plan, join(fakeHome, kept)), kept).toBe("ro");
+      expect(visibleInBox(plan, join(fakeHome, "Documents/a.md"))).toBe("ro");
+      expect(visibleInBox(plan, fakeCwd), "the working folder").toBe("rw");
+      expect(visibleInBox(plan, join(fakeData, "workspaces", "bot-a", "MEMORY.md")), "the bot's own folder").toBe("rw");
+      expect(visibleInBox(plan, join(fakeHome, ".grok/auth.json")), "a sign-in folder that is not there is not bound").toBe("none");
+      expect(plan.mounts.filter((mount) => mount.kind === "tmpfs" && mount.target === fakeHome)).toHaveLength(1);
+      expect(plan.writable).not.toContain(fakeHome);
+    });
+
+    it("leaves out an entry that is a link, or that sits behind one (a link to HOME or to the data folder gives nothing)", () => {
+      const tricky = join(root, "tricky"), data = join(tricky, ".seira");
+      mkdirSync(join(data, "workspaces"), { recursive: true });
+      mkdirSync(join(tricky, "elsewhere"), { recursive: true });
+      mkdirSync(join(tricky, ".codex"), { recursive: true });
+      symlinkSync(tricky, join(tricky, ".claude"));
+      symlinkSync(data, join(tricky, ".gemini"));
+      symlinkSync(join(tricky, "elsewhere"), join(tricky, ".local"));
+      mkdirSync(join(tricky, "elsewhere", "bin"), { recursive: true });
+      symlinkSync(tricky, join(tricky, ".grok"));
+      const plan = planBox({ ...setup(), dataDir: data, home: tricky, engineRoots: engineInstallRoots(data) }, {
+        command: "claude", args: [], cwd: join(data, "task-workspaces", "bot-a", "t"), env: { HOME: tricky }, folders: folders(true),
+      });
+      for (const left of [".claude/x", ".gemini/x", ".grok/x", ".local/bin/x", "Notes/x"]) expect(visibleInBox(plan, join(tricky, left)), left).toBe("none");
+      expect(visibleInBox(plan, join(tricky, ".codex/auth.json")), "a real folder stays").toBe("rw");
+      expect(visibleInBox(plan, join(data, "messages.db"))).toBe("none");
+      expect(plan.mounts.some((mount) => "source" in mount && (mount.source === tricky || mount.source === data))).toBe(false);
+    });
+
+    it("does not give HOME back through an environment path, and non-limited mode is unchanged", () => {
+      const env = { HOME: fakeHome, XDG_CONFIG_HOME: join(fakeHome, ".config"), XDG_CACHE_HOME: join(fakeHome, ".cache"), CLAUDE_CONFIG_DIR: join(fakeHome, ".claude", "work"), CODEX_HOME: join(fakeHome, "Documents", "codex") };
+      const ask = (given: BoxRequest["folders"]) => planBox({ ...setup(), dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, { command: "claude", args: [], cwd: fakeCwd, env, ...(given ? { folders: given } : {}) });
+      const plan = ask(folders(true, [join(fakeHome, "Documents"), true]));
+      expect(visibleInBox(plan, join(fakeHome, ".config/other-app/token"))).toBe("none");
+      expect(visibleInBox(plan, join(fakeHome, ".cache/x"))).toBe("none");
+      expect(visibleInBox(plan, join(fakeHome, ".claude/work/s.json")), "inside a sign-in folder").toBe("rw");
+      expect(visibleInBox(plan, join(fakeHome, "Documents/codex/x")), "inside a grant").toBe("rw");
+      expect(plan.mounts.some((mount) => "source" in mount && (mount.source === join(fakeHome, ".config") || mount.source === join(fakeHome, ".cache")))).toBe(false);
+      expect(ask(undefined).mounts).toEqual(ask({ limited: false, grants: [] }).mounts);
+      expect(visibleInBox(ask({ limited: false, grants: [] }), join(fakeHome, ".config/other-app/token"))).toBe("rw");
+    });
+
+    it("never binds a path that holds HOME, from the environment, rw or a lent folder; non-limited mode is unchanged", () => {
+      const ask = (given: BoxRequest["folders"], more: Partial<BoxRequest>) => planBox({ ...setup(), dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "claude", args: [], cwd: fakeCwd, env: { HOME: fakeHome }, ...(given ? { folders: given } : {}), ...more,
+      });
+      for (const holder of ["/", root, fakeHome, join(fakeHome, "..")]) {
+        const plan = ask(folders(true), { env: { HOME: fakeHome, XDG_DATA_HOME: holder }, rw: [holder] });
+        expect(visibleInBox(plan, join(fakeHome, ".ssh/id_ed25519")), holder).toBe("none");
+        expect(plan.mounts.some((mount) => mount.kind === "bind" && "source" in mount && mount.source === holder), holder).toBe(false);
+      }
+      const owned = ask(folders(true), { rw: [join(fakeData, "workspaces", "bot-a--member-p_mira")] });
+      expect(visibleInBox(owned, join(fakeData, "workspaces", "bot-a--member-p_mira", "MEMORY.md")), "an own folder in the data folder stays").toBe("rw");
+      const open = ask(undefined, { rw: [root] });
+      expect(visibleInBox(open, join(fakeHome, ".ssh/id_ed25519"))).toBe("rw");
+    });
+
+    it("lists the mounts of one read-only grant inside one can-change grant", () => {
+      const plan = limitedPlan(["/work/repo", true], ["/work/repo/vendor", false]);
+      const lines = plan.mounts.filter((mount) => "source" in mount && mount.source.startsWith("/work")).map((mount) => `${mount.kind} ${"source" in mount ? mount.source : ""}`);
+      expect(lines).toEqual(["bind /work/repo", "ro /work/repo/vendor"]);
+      expect(plan.mounts.findIndex((mount) => mount.kind === "tmpfs" && mount.target === fakeHome)).toBeLessThan(plan.mounts.findIndex((mount) => "source" in mount && mount.source === "/work/repo"));
+    });
+
+    it("on an audience's engine home, limited changes nothing but the grants", () => {
+      const own = join(fakeData, "engine-homes", "member-aaaaaaaaaaaaaaaa");
+      const plan = planBox({ ...setup(), dataDir: fakeData, home: fakeHome }, { command: "claude", args: [], cwd: fakeCwd, env: { HOME: own }, home: own, folders: folders(true, ["/work/a", true]) });
+      expect(visibleInBox(plan, join(own, ".claude", "x"))).toBe("rw");
+      expect(visibleInBox(plan, "/work/a/f")).toBe("rw");
+      expect(plan.mounts.some((mount) => mount.kind === "tmpfs" && mount.target === fakeHome)).toBe(false);
+    });
+
+    it("with limited off, HOME stays and only the grants are added", () => {
+      const plan = planBox({ ...setup(), dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "claude", args: [], cwd: fakeCwd, env: { HOME: fakeHome }, folders: folders(false, [join(fakeHome, "Documents"), false]),
+      });
+      expect(visibleInBox(plan, join(fakeHome, ".ssh/id_ed25519"))).toBe("rw");
+      expect(visibleInBox(plan, join(fakeHome, "Documents/a.md"))).toBe("ro");
+    });
   });
 });
