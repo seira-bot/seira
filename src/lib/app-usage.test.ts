@@ -14,7 +14,7 @@ describe("fetchAppUsage", () => {
     expect(store.api).toHaveBeenCalledWith("/api/apps/usage");
   });
   it("returns nothing when the request fails", async () => {
-    store.api.mockRejectedValue(new Error("offline"));
+    store.api.mockImplementation(async () => { throw new Error("offline"); });
     expect(await fetchAppUsage()).toEqual([]);
   });
   it("returns nothing for an answer of the wrong shape and drops a bad entry", async () => {
