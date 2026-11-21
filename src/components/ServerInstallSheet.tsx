@@ -15,7 +15,7 @@ type Screen =
   | { name: "hostKey"; host: string; fingerprint: string }
   | { name: "checks"; items: Check[]; ok: boolean }
   | { name: "install"; steps: Step[]; email: string | null; again: boolean }
-  | { name: "failed"; reason: string; sentence: string | null };
+  | { name: "failed"; reason: string; sentence: string | null; source: "saved" | "system" | "both" | null };
 
 const PHASE_KEY: Record<string, LocaleKey> = {
   connecting: "serverInstall.phase.connecting", rights: "serverInstall.phase.rights", upload: "serverInstall.phase.upload",
@@ -62,7 +62,7 @@ export function ServerInstallSheet({ onBack, onConnected }: { onBack: (() => voi
       case "askCode": setCode(""); setScreen(current => ({ name: "install", steps: current.name === "install" ? current.steps : [], email: event.email, again: event.again === true })); break;
       case "connected": done.current(); break;
       case "cancelled": setKeyFile(null); setScreen({ name: "form" }); break;
-      case "failed": setScreen({ name: "failed", reason: event.reason, sentence: event.sentence }); break;
+      case "failed": setScreen({ name: "failed", reason: event.reason, sentence: event.sentence, source: event.source ?? null }); break;
       default: break;
     }
   }), [bridge]);
@@ -81,7 +81,7 @@ export function ServerInstallSheet({ onBack, onConnected }: { onBack: (() => voi
     setPassword(""); setAdminPassword(""); setPassphrase("");
     setBusy(true);
     setScreen({ name: "working", phase: "connecting" });
-    try { await bridge.start(request); } catch { setScreen({ name: "failed", reason: "unreachable", sentence: null }); } finally { setBusy(false); }
+    try { await bridge.start(request); } catch { setScreen({ name: "failed", reason: "unreachable", sentence: null, source: null }); } finally { setBusy(false); }
   };
   const cancel = () => { void bridge.cancel().catch(() => {}); setKeyFile(null); setScreen({ name: "form" }); };
   const sendCode = async (event: FormEvent) => {
@@ -184,6 +184,11 @@ export function ServerInstallSheet({ onBack, onConnected }: { onBack: (() => voi
     {head}
     <p role="alert" data-install-problem className="text-[13px] text-danger">{t(FAILURE_KEY[screen.reason] ?? "serverInstall.fail.installer")}</p>
     {screen.sentence && <p data-install-sentence className="text-[13px] text-ink-secondary">{screen.sentence}</p>}
+    {screen.reason === "hostKeyChanged" && screen.source === "saved" && <>
+      <p data-install-rebuilt-warning className="text-[13px] text-ink-secondary">{t("serverInstall.rebuiltWarning")}</p>
+      <button type="button" data-install-rebuilt onClick={() => void bridge.forgetHost()} className={QUIET_WIDE}>{t("serverInstall.rebuilt")}</button>
+    </>}
+    {screen.reason === "hostKeyChanged" && (screen.source === "system" || screen.source === "both") && <p data-install-system-list className="text-[13px] text-ink-secondary">{t("serverInstall.systemList")}</p>}
     <button type="button" data-install-retry onClick={() => { setKeyFile(null); setScreen({ name: "form" }); }} className={PRIMARY_WIDE}>{t("serverInstall.retry")}</button>
   </div>;
 }

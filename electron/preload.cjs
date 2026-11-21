@@ -454,6 +454,7 @@ const bridge = {
   serverInstall: {
     info: () => ipcRenderer.invoke("server-install:info"),
     pickKey: () => ipcRenderer.invoke("server-install:pick-key"),
+    forgetHost: () => ipcRenderer.invoke("server-install:forget-host"),
     start: request => ipcRenderer.invoke("server-install:start", request),
     acceptHostKey: () => ipcRenderer.invoke("server-install:accept-host-key"),
     rejectHostKey: () => ipcRenderer.invoke("server-install:reject-host-key"),

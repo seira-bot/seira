@@ -89,6 +89,15 @@ export function hostKeyStatus({ host, port, key, knownHosts, saved }) {
   return held ? "changed" : "unknown";
 }
 
+/** Which sources hold any key for this address: the person's known_hosts (`system`) and the app's saved list (`saved`). */
+export function hostKeySources({ host, port, knownHosts, saved }) {
+  const label = hostLabel(host, port);
+  return {
+    system: parseKnownHosts(knownHosts).some((entry) => entryNames(entry, label)),
+    saved: saved.some((item) => item.host.toLowerCase() === host.toLowerCase() && item.port === port),
+  };
+}
+
 /** The `serverHostKey` list to offer: the types the person already trusts for this address first, so the server answers with one of them. */
 export function preferredHostKeyAlgorithms(types) {
   const out = [];
@@ -117,5 +126,13 @@ export function createSavedHosts({ dir }) {
     try { chmodSync(temporary, 0o600); } catch { /* a file system without modes */ }
     renameSync(temporary, file);
   };
-  return { file, read, remember };
+  const forget = ({ host, port }) => {
+    const rest = read().filter((item) => !(item.host.toLowerCase() === host.toLowerCase() && item.port === port));
+    mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    const temporary = `${file}.${process.pid}.tmp`;
+    writeFileSync(temporary, `${JSON.stringify({ hosts: rest }, null, 2)}\n`, { mode: 0o600 });
+    try { chmodSync(temporary, 0o600); } catch { /* a file system without modes */ }
+    renameSync(temporary, file);
+  };
+  return { file, read, remember, forget };
 }

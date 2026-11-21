@@ -715,3 +715,68 @@ test("a saved key and a server that offers that type and a new one connects as k
     await h.session.cancel();
   } finally { await w.close(); }
 });
+
+const forgetRig = (dataDir) => {
+  const handlers = new Map(), sent = [];
+  installVpsInstall({ ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) }, guard: (handler) => handler, dialog: {}, add: async () => true, dataDir, resourcesPath: dataDir, packaged: false });
+  const sender = { isDestroyed: () => false, send: (_channel, message) => sent.push(message), once() {} };
+  return { sent, call: (name, ...args) => handlers.get(`server-install:${name}`)({ sender }, ...args) };
+};
+
+test("a saved-list conflict says so, forget-host removes only that host and port, and the next start asks for the fingerprint", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    const saved = createSavedHosts({ dir: w.dataDir });
+    saved.remember({ host: "127.0.0.1", port: w.port, fingerprint: "SHA256:old", type: "ssh-ed25519" });
+    saved.remember({ host: "127.0.0.1", port: w.port, fingerprint: "SHA256:oldrsa", type: "ssh-rsa" });
+    saved.remember({ host: "127.0.0.1", port: 1, fingerprint: "SHA256:other-port", type: "ssh-ed25519" });
+    saved.remember({ host: "other.example", port: w.port, fingerprint: "SHA256:other-host", type: "ssh-ed25519" });
+    const knownText = "# untouched\n";
+    writeFileSync(w.knownHosts, knownText);
+    const rig = forgetRig(w.dataDir);
+    assert.equal(await rig.call("forget-host"), false, "nothing to forget before a failure");
+    await rig.call("start", request(w));
+    const failed = await until(() => rig.sent.find((event) => event.type === "failed"), "the failure");
+    assert.equal(failed.reason, "hostKeyChanged");
+    assert.equal(failed.source, "saved");
+    assert.equal(JSON.stringify(failed).includes(w.dataDir), false);
+    assert.equal(await rig.call("forget-host"), true);
+    assert.equal(await rig.call("forget-host"), false);
+    assert.deepEqual(saved.read().map((item) => `${item.host}:${item.port}`).sort(), ["127.0.0.1:1", "other.example:" + w.port].sort());
+    assert.equal(readFileSync(w.knownHosts, "utf8"), knownText);
+    const again = harness(w);
+    void again.session.start(request(w));
+    assert.equal((await again.wait("hostKey")).fingerprint, w.fingerprint);
+    await again.session.cancel();
+  } finally { await w.close(); }
+});
+
+test("a known_hosts conflict is reported as the system source and offers no forget", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    const other = await world({ password: "pw" });
+    writeFileSync(w.knownHosts, `[127.0.0.1]:${w.port} ssh-ed25519 ${other.hostBlob.toString("base64")}\n`);
+    await other.close();
+    const h = harness(w);
+    void h.session.start(request(w));
+    const failed = await h.wait("failed");
+    assert.equal(failed.reason, "hostKeyChanged");
+    assert.equal(failed.source, "system");
+    assert.equal(h.session.forgetHost(), false);
+    assert.equal(createSavedHosts({ dir: w.dataDir }).read().length, 0);
+  } finally { await w.close(); }
+});
+
+test("a conflict in both sources is reported as both", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    const other = await world({ password: "pw" });
+    writeFileSync(w.knownHosts, `[127.0.0.1]:${w.port} ssh-ed25519 ${other.hostBlob.toString("base64")}\n`);
+    await other.close();
+    createSavedHosts({ dir: w.dataDir }).remember({ host: "127.0.0.1", port: w.port, fingerprint: "SHA256:old", type: "ssh-ed25519" });
+    const h = harness(w);
+    void h.session.start(request(w));
+    assert.equal((await h.wait("failed")).source, "both");
+    assert.equal(h.session.forgetHost(), false);
+  } finally { await w.close(); }
+});

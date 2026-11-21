@@ -106,3 +106,16 @@ it("a repeat ask clears the code field and says the code did not work", async ()
   expect(document.querySelector<HTMLInputElement>("[data-install-code]")!.value).toBe("");
   expect(document.querySelector("[data-install-code-again]")!.textContent).toBe("That code did not work. Check the newest email and try again.");
 });
+
+it("a changed identity from the app's own list offers a guarded recovery; one from the computer's list offers none", async () => {
+  const forget = vi.fn(async () => true);
+  (window as { ogb: { serverInstall: { forgetHost?: unknown } } }).ogb.serverInstall.forgetHost = forget;
+  await fill();
+  await act(async () => { emit({ type: "failed", reason: "hostKeyChanged", step: null, sentence: null, source: "saved" }); });
+  expect(document.querySelector("[data-install-rebuilt-warning]")!.textContent).toBe("Only do this if you reinstalled or rebuilt this server. Otherwise someone may be between you and it.");
+  await act(async () => { document.querySelector<HTMLButtonElement>("[data-install-rebuilt]")!.click(); });
+  expect(forget).toHaveBeenCalledTimes(1);
+  await act(async () => { emit({ type: "failed", reason: "hostKeyChanged", step: null, sentence: null, source: "system" }); });
+  expect(document.querySelector("[data-install-rebuilt]")).toBeNull();
+  expect(document.querySelector("[data-install-system-list]")!.textContent).toBe("This computer's own list of known servers still has the old identity. Remove it there, then try again.");
+});

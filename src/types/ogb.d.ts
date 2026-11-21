@@ -473,6 +473,7 @@ const __APP_VERSION__: string;
       serverInstall?: {
         info(): Promise<{ agent: boolean }>;
         pickKey(): Promise<{ name: string } | null>;
+        forgetHost(): Promise<boolean>;
         start(request: { address: string; user: string; email: string; method: "password" | "key" | "agent"; password?: string; sudoPassword?: string; passphrase?: string }): Promise<boolean>;
         acceptHostKey(): Promise<boolean>;
         rejectHostKey(): Promise<boolean>;
@@ -527,7 +528,7 @@ export type ServerInstallEvent =
   | { type: "askCode"; email: string; again?: true }
   | { type: "connected" }
   | { type: "cancelled" }
-  | { type: "failed"; reason: string; step: string | null; sentence: string | null };
+  | { type: "failed"; reason: string; step: string | null; sentence: string | null; source?: "saved" | "system" | "both" };
 
 export interface LinuxLocalControlStatus {
   enabled: boolean;

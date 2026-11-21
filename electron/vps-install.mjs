@@ -9,7 +9,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createSavedHosts, fingerprint, hostKeyStatus, keyType, knownTypes, parseKnownHosts, preferredHostKeyAlgorithms } from "./vps-install-hosts.mjs";
+import { createSavedHosts, fingerprint, hostKeySources, hostKeyStatus, keyType, knownTypes, parseKnownHosts, preferredHostKeyAlgorithms } from "./vps-install-hosts.mjs";
 
 export const CONNECT_TIMEOUT_MS = 15_000;
 export const CANCEL_BUDGET_MS = 1_500;
@@ -41,6 +41,7 @@ export class InstallFailure extends Error {
     this.reason = reason;
     this.step = extra.step ?? null;
     this.sentence = extra.sentence ?? null;
+    this.source = extra.source ?? null;
   }
 }
 
@@ -117,9 +118,9 @@ async function within(work, ms, give) {
 }
 
 function connectFailure(error, flags) {
-  if (flags.changed) return new InstallFailure("hostKeyChanged");
+  if (flags.changed) return new InstallFailure("hostKeyChanged", { source: flags.source });
   if (flags.declined) return new InstallFailure("hostKeyDeclined");
-  if (flags.limited && error?.level === "handshake" && /host key/i.test(error.message ?? "")) return new InstallFailure("hostKeyChanged");
+  if (flags.limited && error?.level === "handshake" && /host key/i.test(error.message ?? "")) return new InstallFailure("hostKeyChanged", { source: flags.source });
   if (error?.level === "client-authentication") return new InstallFailure("auth");
   if (error?.level === "client-timeout" || error?.code === "ETIMEDOUT" || flags.timedOut) return new InstallFailure("timeout");
   return new InstallFailure("unreachable");
@@ -131,7 +132,7 @@ function connectFailure(error, flags) {
  *   emit(event: InstallEvent): void,
  *   addServer(url: string): Promise<{ outcome?: string } | boolean | void>,
  *   installer: string,
- *   savedHosts: { read(): any[], remember(entry: { host: string, port: number, fingerprint: string, type?: string }): void },
+ *   savedHosts: { read(): any[], remember(entry: { host: string, port: number, fingerprint: string, type?: string }): void, forget(entry: { host: string, port: number }): void },
  *   knownHostsFile?: string,
  *   createClient?: () => any,
  *   connectTimeoutMs?: number,
@@ -159,7 +160,9 @@ export function createInstallSession(deps) {
   let finished = false;
   let closing = false;
   let linkClosed = false;
-  const flags = { changed: false, declined: false, timedOut: false, limited: false };
+  const flags = { changed: false, declined: false, timedOut: false, limited: false, source: null };
+  let conflict = null;
+  const sourceOf = (system, saved) => (system && saved ? "both" : system ? "system" : "saved");
   let armTimer = () => {};
 
   const redact = (text) => {
@@ -228,14 +231,24 @@ export function createInstallSession(deps) {
         hostVerifier: (blob, verify) => {
           const status = hostKeyStatus({ host: target.host, port: target.port, key: blob, knownHosts: known, saved: savedHosts.read() });
           if (status === "known") return true;
-          if (status === "changed") { flags.changed = true; return false; }
+          if (status === "changed") {
+            const where = { host: target.host, port: target.port, key: blob };
+            flags.source = sourceOf(hostKeyStatus({ ...where, knownHosts: known, saved: [] }) === "changed", hostKeyStatus({ ...where, knownHosts: "", saved: savedHosts.read() }) === "changed");
+            flags.changed = true;
+            return false;
+          }
           clearTimeout(timer);
           pendingHostKey = { verify, fingerprint: fingerprint(blob), type: keyType(blob) };
           emit({ type: "hostKey", host: target.host, port: target.port, fingerprint: pendingHostKey.fingerprint });
           return undefined;
         },
       };
-      if (types.length) { config.algorithms = { serverHostKey: preferredHostKeyAlgorithms(types) }; flags.limited = true; }
+      if (types.length) {
+        config.algorithms = { serverHostKey: preferredHostKeyAlgorithms(types) };
+        flags.limited = true;
+        const held = hostKeySources({ host: target.host, port: target.port, knownHosts: known, saved: savedHosts.read() });
+        flags.source = sourceOf(held.system, held.saved);
+      }
       if (secrets.method === "password") config.password = secrets.password;
       else if (secrets.method === "key") { config.privateKey = secrets.key; if (secrets.passphrase) config.passphrase = secrets.passphrase; }
       else config.agent = agent;
@@ -367,7 +380,8 @@ export function createInstallSession(deps) {
   async function fail(error) {
     if (finished) return;
     const failure = error instanceof InstallFailure ? error : new InstallFailure("unreachable");
-    emit({ type: "failed", reason: failure.reason, step: failure.step, sentence: failure.sentence });
+    if (failure.reason === "hostKeyChanged" && failure.source === "saved" && target) conflict = { host: target.host, port: target.port };
+    emit({ type: "failed", reason: failure.reason, step: failure.step, sentence: failure.sentence, ...(failure.source ? { source: failure.source } : {}) });
     finished = true;
     await within(removeTemporaryFolder(), CANCEL_BUDGET_MS, () => undefined);
     closeConnection();
@@ -480,6 +494,14 @@ export function createInstallSession(deps) {
       return true;
     },
 
+    forgetHost() {
+      if (!conflict) return false;
+      const { host, port } = conflict;
+      conflict = null;
+      savedHosts.forget({ host, port });
+      return true;
+    },
+
     async cancel() {
       if (finished) return;
       finished = true;
@@ -541,6 +563,7 @@ export function installVpsInstall({ ipcMain, guard, dialog, add, dataDir, resour
     });
     return true;
   });
+  handle("forget-host", () => current?.forgetHost() ?? false);
   handle("accept-host-key", () => current?.acceptHostKey() ?? false);
   handle("reject-host-key", () => current?.rejectHostKey() ?? false);
   handle("check", () => current?.check() ?? false);
