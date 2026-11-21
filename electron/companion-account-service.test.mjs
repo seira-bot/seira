@@ -2645,7 +2645,8 @@ describe("Renewing the installation credential", () => {
   });
 
   it("sends no request when no account is stored", async () => {
-    const { client, service } = serviceFixture({ initial: {} });
+    const client = readyClient({ getEndpoint: vi.fn(async () => ({})) });
+    const { service } = serviceFixture({ initial: {}, client });
 
     await service.renewInstallation();
 
