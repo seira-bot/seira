@@ -47,7 +47,10 @@ export async function hostFileRefusal(call: HostFileCall): Promise<string | null
   if (!folders) return null;
   const tool = call.query.get("tool");
   if (!tool || !HOST_FILE_TOOL_NAMES.has(tool)) return folders.limited ? FOLDER_NOT_OPEN : null;
-  const wanted = asked(call.query.get("path"), call.home ?? homedir());
+  if (call.query.get("pathInvalid") === "1") return FOLDER_NOT_OPEN;
+  const raw = call.query.get("path");
+  if (raw === null && tool !== "list_files") return null;
+  const wanted = asked(raw, call.home ?? homedir());
   if (wanted === null) return null;
   const target = await realLocation(wanted);
   const holders = [

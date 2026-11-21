@@ -87,6 +87,13 @@ describe("localComputerResultLine", () => {
     expect(localComputerCallQuery({ jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "list_files", arguments: {} } })).toEqual({ files: "1", tool: "list_files" });
   });
 
+  it("marks a file call whose path is not a text of at most 4096 characters", () => {
+    for (const path of [5, null, ["/x"], { a: 1 }, "x".repeat(4097)]) {
+      expect(localComputerCallQuery({ jsonrpc: "2.0", id: 8, method: "tools/call", params: { name: "read_file", arguments: { path } } })).toEqual({ files: "1", tool: "read_file", pathInvalid: "1" });
+    }
+    expect(localComputerCallQuery({ jsonrpc: "2.0", id: 9, method: "tools/call", params: { name: "read_file", arguments: { path: "x".repeat(4096) } } })).toMatchObject({ path: "x".repeat(4096) });
+  });
+
   it("passes every other frame through byte for byte", () => {
     const otherRefusal = EXISTING_PROFILE_REFUSAL
       .replaceAll("browser_consent_required", "browser_requires_setup")

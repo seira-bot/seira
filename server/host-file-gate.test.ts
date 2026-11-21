@@ -82,6 +82,19 @@ describe("host file gate", () => {
     expect(await hostFileRefusal({ folders: { limited: false, grants }, ownRoots: [own], query })).toBeNull();
   });
 
+  it("refuses a call whose path was not usable, for every tool", async () => {
+    for (const tool of ["list_files", "read_file", "write_file", "make_folder"]) {
+      const query = new URLSearchParams({ files: "1", tool, pathInvalid: "1" });
+      expect(await hostFileRefusal({ folders: { limited: true, grants }, ownRoots: [own], query }), tool).toBe(FOLDER_NOT_OPEN);
+    }
+  });
+
+  it("checks the home folder only for a listing with no path", async () => {
+    const folders = { limited: true, grants };
+    expect(await ask("list_files", undefined, folders)).toBe(FOLDER_NOT_OPEN);
+    expect(await ask("read_file", undefined, folders)).toBeNull();
+  });
+
   it("leaves a relative path to the file tool, which refuses it", async () => {
     expect(await ask("read_file", "notes.txt", { limited: true, grants })).toBeNull();
   });

@@ -3,7 +3,7 @@
 // names only those two, so a bot relays them to the person, who has no way to act on either.
 import { typeOneCharacterAtATime, typesInOneBurst } from "../electron/paced-typing.mjs";
 import { describeComputerCall } from "../shared/your-computer.ts";
-import { HOST_FILE_TOOL_NAMES } from "./host-file-tools.ts";
+import { HOST_FILE_PATH_MAX, HOST_FILE_TOOL_NAMES } from "./host-file-tools.ts";
 import type { ChildCalls, ToolCall } from "./mcp-bridge.ts";
 import { CLICK_TOOLS, unconfirmedClickResult } from "./unconfirmed-click.ts";
 
@@ -68,7 +68,8 @@ export function localComputerCallQuery(frame: unknown): Record<string, string> {
   const name = (frame as { params?: { name?: unknown } } | null)?.params?.name;
   if (typeof name === "string" && HOST_FILE_TOOL_NAMES.has(name)) {
     const path = (frame as { params?: { arguments?: { path?: unknown } } }).params?.arguments?.path;
-    return { files: "1", tool: name, ...(typeof path === "string" && path.length <= 4096 ? { path } : {}) };
+    if (path === undefined) return { files: "1", tool: name };
+    return typeof path === "string" && path.length <= HOST_FILE_PATH_MAX ? { files: "1", tool: name, path } : { files: "1", tool: name, pathInvalid: "1" };
   }
   const { app, site } = describeComputerCall(frame);
   return { ...(app ? { app } : {}), ...(site ? { site } : {}) };
