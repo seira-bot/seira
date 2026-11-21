@@ -808,7 +808,7 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
     const ids = new Set(checks.map((line) => line.split(" ")[2]));
     for (const id of ["os", "cpu", "memory", "disk", "docker", "outbound", "userns", "apparmor", "clock", "version", "account"]) expect(ids.has(id), id).toBe(true);
     for (const id of ["ports", "dns"]) expect(ids.has(id), id).toBe(false);
-    for (const line of checks) expect(line).toMatch(/^::seira check [a-z]+ (ok|fix|note) \S/);
+    for (const line of checks) expect(line).toMatch(/^::seira check [a-z-]+ (ok|fix|note) \S/);
     expect(lines.filter((line) => !line.startsWith("::seira check "))).toEqual([
       "::seira checks ok",
       "::seira step files start", "::seira step files done",
@@ -926,10 +926,22 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
     const result = tunnel(["--check", "--tunnel", "--events"], { without: ["docker"] });
     expect(result.status).toBe(1);
     const lines = eventLines(result.stdout);
-    expect(lines).toContain("::seira check docker fix Docker isn't installed. It can be installed with Docker's official script.");
-    expect(lines.indexOf("::seira check docker fix Docker isn't installed. It can be installed with Docker's official script.")).toBeLessThan(lines.indexOf("::seira checks fix"));
+    const fix = "::seira check docker-install fix Docker isn't installed. It can be installed with Docker's official script.";
+    expect(lines).toContain(fix);
+    expect(lines.indexOf(fix)).toBeLessThan(lines.indexOf("::seira checks fix"));
     expect(lines).not.toContain("::seira checks ok");
     expect(lines.filter((line) => line.includes("check docker"))).toHaveLength(1);
+  });
+
+  it("notes a missing Docker, without counting it, with --install-docker, and installs it", () => {
+    const check = tunnel(["--check", "--tunnel", "--events", "--install-docker"], { without: ["docker"] });
+    expect(check.status, check.all).toBe(0);
+    expect(eventLines(check.stdout)).toContain("::seira check docker-install note Docker isn't installed. It will be installed with Docker's official script.");
+    expect(eventLines(check.stdout)).toContain("::seira checks ok");
+    const install = tunnel(["--tunnel", "--events", "--install-docker", "--account-email", "owner@example.com"], { without: ["docker"] });
+    expect(install.calls.some((call) => call.includes("https://get.docker.com -o"))).toBe(true);
+    expect(install.stdout).not.toContain("This server is not ready");
+    expect(eventLines(install.stdout)).toContain("::seira step docker start");
   });
 
   it("writes the host name into the compose file's setting and the extra settings into .env", () => {

@@ -387,6 +387,18 @@ report_docker_missing() {
   fi
 }
 
+# A missing Docker is its own check, so an app can offer to install it: a fix without --install-docker (when the run is a
+# check or reports events), a note with it. A terminal install without the flag asks at the prompt instead.
+report_docker_install() {
+  [ "$DOCKER_STATE" = missing ] || return 0
+  if [ "$INSTALL_DOCKER" = 1 ]; then
+    DOCKER_REPORTED=yes
+    note "$DOCKER_PROBLEM It will be installed with Docker's official script."
+  elif [ "$MODE" = check ] || [ "$EVENTS" = yes ]; then
+    report_docker_missing
+  fi
+}
+
 listener_on() { # port: the listening line, or nothing
   ss -Hltnp "sport = :$1" 2>/dev/null | head -n 1
 }
@@ -700,7 +712,7 @@ preflight() {
   step_check cpu check_cpus
   step_check memory check_memory
   step_check docker check_docker
-  if [ "$MODE" = check ] || { [ "$EVENTS" = yes ] && [ "$INSTALL_DOCKER" != 1 ]; }; then step_check docker report_docker_missing; fi
+  step_check docker-install report_docker_install
   step_check disk check_disk
   if [ "$TUNNEL" != yes ]; then step_check ports check_ports; fi
   step_check userns check_userns
