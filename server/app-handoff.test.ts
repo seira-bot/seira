@@ -14,7 +14,7 @@ afterEach(() => {
 
 interface Started { cli: string; argv: string[]; env: NodeJS.ProcessEnv; exit(code: number): void; killed: NodeJS.Signals[] }
 
-function harness(options: { own?: string; health?: (version: string | null)[]; env?: NodeJS.ProcessEnv; failBackup?: boolean; exitOnKill?: boolean } = {}) {
+function harness(options: { own?: string; health?: Array<string | null>; env?: NodeJS.ProcessEnv; failBackup?: boolean; exitOnKill?: boolean } = {}) {
   const root = mkdtempSync(join(tmpdir(), "seira-handoff-"));
   roots.push(root);
   const dataDir = join(root, "data");
