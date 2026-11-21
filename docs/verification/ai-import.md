@@ -13,7 +13,7 @@ node --experimental-strip-types scripts/control-seira.ts ui launch
 ```
 
 The control surface has no import verbs. The steps below drive the real Settings screen with `ui eval`, and
-read the state through the page's own `fetch` of `/api/bots`, `/api/routines` and `/api/ai-import/jobs`.
+read the state through the page's own `fetch` of `/api/bots`, `/api/routines` and the import jobs list.
 
 ## Inputs
 
