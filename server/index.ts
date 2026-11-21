@@ -34,7 +34,7 @@ import { BOT_PROFILE_LIMITS } from "../shared/bot-profile.ts";
 import { CLOUD_COMPUTER_BUSY_ERROR } from "../shared/computer-contention.ts";
 import { failedTurnTool } from "../shared/failed-turn.ts";
 import { assistantTranscript, errorTranscript } from "../shared/client-cancel.ts"; import { PersonStops, stoppedTurnRow } from "./person-stops.ts"; import { LiveTurns } from "./live-turns.ts";
-import { phonePairingLink, serverPairingLink } from "../shared/pairing-link.ts"; import { phoneRoutes, phoneRoutesFromEnv } from "./phone-routes.ts"; import { createCompanionEndpointRoutes } from "./routes/companion-endpoints.ts"; import { personTagNames, withoutPersonTags } from "../shared/person-mention.ts"; import { taggedToolsFor, usableApps } from "./tool-mentions.ts";
+import { phonePairingLink, serverPairingLink } from "../shared/pairing-link.ts"; import { phoneRoutes, phoneRoutesFromEnv } from "./phone-routes.ts"; import { createCompanionEndpointRoutes } from "./routes/companion-endpoints.ts"; import { personTagNames, withoutPersonTags } from "../shared/person-mention.ts"; import { taggedToolsFor, toolMentionsAllowed, usableApps } from "./tool-mentions.ts";
 import { canWorkOnCloud, type CloudEngine } from "../shared/cloud-computer.ts";
 import {
   approvalModeFor,
@@ -8244,7 +8244,7 @@ async function beginTurn(
       const tagged = integrations.agents
         ? mentionedBots(withoutPersonTags(providerText, [...personTagNames(cfg.profile?.name), ...teamMessages.people().flatMap((one) => one.tags)],
           store.bots.filter((one) => !one.hidden).map((one) => one.name)), sectionPeers, opts?.mentions)
-        : []; const peopleTags = [...personTagNames(cfg.profile?.name), ...teamMessages.people().flatMap((one) => one.tags)], visibleNames = store.bots.filter((one) => !one.hidden).map((one) => one.name), toolText = await taggedToolsFor({ text: withoutPersonTags(providerText, peopleTags, visibleNames), direct: !store.groupByThread(threadId), botNames: visibleNames, mcpServers: Object.keys(integrations.custom ?? {}), apps: integrations.composio ? async () => usableApps(bot, await composio.connectedServices(cfg), (await composio.listToolkits(cfg)).cards) : null });
+        : []; const peopleTags = [...personTagNames(cfg.profile?.name), ...teamMessages.people().flatMap((one) => one.tags)], visibleNames = store.bots.filter((one) => !one.hidden).map((one) => one.name), toolText = await taggedToolsFor({ text: withoutPersonTags(providerText, peopleTags, visibleNames), direct: !store.groupByThread(threadId) && toolMentionsAllowed({ personLine, relayed: userMessage.relayed, unattended: opts?.unattended, outside: startedOutside(threadId), guestConfined, fenced: proactive.fence.confines(threadId), botApi: botApiThread(threadId) }), botNames: visibleNames, mcpServers: Object.keys(integrations.custom ?? {}), apps: integrations.composio ? async () => usableApps(bot, await composio.connectedServices(cfg), (await composio.listToolkits(cfg)).cards) : null });
       const teamPrompt = chiefLevel(bot)
         ? chiefOfStaffPrompt(bot.id, store.bots, Boolean(integrations.agents), (peer) => personalReach.listed(bot, peer, threadId), store.sections)
         : integrations.agents && sectionPeers.length > 0

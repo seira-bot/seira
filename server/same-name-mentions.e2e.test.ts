@@ -153,6 +153,26 @@ it("tells a bot in a one-to-one chat about the teammate picked, and about both w
   expect(typed).toContain(`Marlowe (${chief.id})`);
 }, hostTimeout(120_000));
 
+it("names a tagged MCP server in a typed one-to-one line, and in no line that carries the same words from elsewhere", async () => {
+  const added = await team.as(olive, "POST", "/api/mcp/servers", { name: "notion", command: process.execPath, args: ["-e", "setInterval(() => {}, 1000)"] });
+  expect(added.status, JSON.stringify(added.body)).toBe(201);
+  expect((await team.as(olive, "PATCH", "/api/mcp/servers/notion", { enabled: true })).status).toBe(200);
+  const opened = await team.as(olive, "POST", `/api/bots/${lead.id}/tasks`, { title: "Notes" });
+  expect(opened.status, JSON.stringify(opened.body)).toBe(201);
+  const chat = opened.body.task.threadId as string;
+  const asked = async (text: string) => {
+    const before = ran(lead);
+    const sent = await team.as(olive, "POST", `/api/bots/${lead.id}/messages`, { text, threadId: chat });
+    expect(sent.status, JSON.stringify(sent.body)).toBe(202);
+    await expect.poll(() => ran(lead), { timeout: 60_000 }).toBe(before + 1);
+    await expect.poll(settled, { timeout: 30_000 }).toBe(true);
+    return turns().filter((one) => one.botId === lead.id).at(-1)!.system;
+  };
+  expect(await asked("please check my notes with @notion")).toContain("The person's message tags these tools: notion (an MCP server).");
+  expect(await asked("please check my notes without a tag")).not.toContain("tags these tools");
+  expect(await asked("please check my notes with @slack")).not.toContain("tags these tools");
+}, hostTimeout(120_000));
+
 it("refuses a bot's post_to_room that tags the shared name, with each bot's id, and posts it again by id", async () => {
   const before = { analyst: ran(analyst), chief: ran(chief), posts: (await transcript()).length };
   const sent = await team.as(olive, "POST", `/api/groups/${ops.id}/messages`, { text: `@Tessaly ${POST}`, sendId: randomUUID() });

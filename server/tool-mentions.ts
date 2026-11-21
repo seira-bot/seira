@@ -25,7 +25,7 @@ export function taggedTools(text: string, tools: readonly TurnTool[], botNames: 
 export function taggedToolsPrompt(tagged: readonly TaggedTool[]): string {
   if (!tagged.length) return "";
   const list = tagged.map((tool) => `${tool.name} (${tool.kind === "app" ? "a connected app" : "an MCP server"})`).join(", ");
-  return `The person tagged these tools for this request: ${list}. Use them for this request. If one fails, say so plainly.`;
+  return `The person's message tags these tools: ${list}. They want them used for this request. If one fails, say so plainly.`;
 }
 
 
@@ -63,4 +63,18 @@ export async function taggedToolsFor(input: {
   if (!input.direct || !input.text.includes("@")) return "";
   const apps = await input.apps?.().catch(() => []) ?? [];
   return taggedToolsPrompt(taggedTools(input.text, turnTools(apps, input.mcpServers), input.botNames));
+}
+
+/** Only a line the person typed in their own turn may name tools: never a webhook, a schedule, a relayed or peer line,
+ * or a thread an outsider or a fence confines. */
+export function toolMentionsAllowed(turn: {
+  personLine: boolean;
+  relayed?: boolean;
+  unattended?: boolean;
+  outside: boolean;
+  guestConfined: boolean;
+  fenced: boolean;
+  botApi: boolean;
+}): boolean {
+  return turn.personLine && !turn.relayed && !turn.unattended && !turn.outside && !turn.guestConfined && !turn.fenced && !turn.botApi;
 }
