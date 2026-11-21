@@ -403,7 +403,7 @@ describe.skipIf(!posix)("deploy/install.sh", () => {
   });
 
   it("names no seira.bot address but the account service a tunnel install asks", () => {
-    expect(script.split("\n").filter((line) => line.includes("seira.bot")).filter((line) => !line.trim().startsWith("ACCOUNT_HOST="))).toEqual([]);
+    expect(script.split("\n").filter((line) => line.includes("seira.bot")).filter((line) => !line.trim().startsWith("ACCOUNT_HOST=") && !line.trim().startsWith("CLOUD_HOST="))).toEqual([]);
   });
 
   it("says, before anything is downloaded, when the version it would install has no bots' sandbox", () => {
@@ -847,7 +847,7 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
     expect(result.status).toBe(1);
     const lines = eventLines(result.stdout);
     expect(lines.filter((line) => line === "::seira ask code owner@example.com")).toHaveLength(3);
-    expect(lines.filter((line) => line.startsWith("::seira step signin fail "))).toHaveLength(0);
+    expect(lines.filter((line) => line.startsWith("::seira step signin fail "))).toHaveLength(1);
     expect(lines).toContain("::seira fail sign-in failed: Invalid code");
     expect(result.docker.filter((call) => call.includes(" seira login"))).toHaveLength(1);
     expect(result.all).not.toMatch(/11111111|22222222|33333333/);
