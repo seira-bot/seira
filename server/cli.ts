@@ -41,6 +41,7 @@ import { HEADLESS_VERB_NAMES, usage } from "./cli-usage.ts";
 import { normalizePhoneOrigin, phonePairingInstructions, runPhoneSetup } from "./cli-phone-setup.ts";
 import { browserSignInLines, desktopOwnedRefusal, formatSessions, pairingBlock, RELAY_NOT_WITH_TUNNEL, relayPairingBlock, showRelayPairing } from "./cli-pairing.ts";
 import { cliCommand, cliPrefix } from "./cli-invocation.ts";
+import { CODE_ATTEMPTS, readCodeLine, stdinLoginEvents, type LoginEvents } from "./cli-login-events.ts";
 import { checkReach, envPublicUrl, lanProblem, localLinkBase, noRouteLines, publicUrlProblem, reachLines, waitForReach, type Route } from "./cli-reach.ts";
 import { lanUrl } from "./lan-address.ts";
 import { isLoopbackHost } from "../electron/server-address.mjs";
@@ -231,37 +232,6 @@ export function defaultIo(): CliIo {
         rl.close();
       }
     },
-  };
-}
-
-/** What `seira login --events` talks to: it asks for a code and reads the lines the caller sends back; null is the end of them. */
-export interface LoginEvents {
-  ask(email: string): void;
-  readLine(): Promise<string | null>;
-}
-
-const CODE_LINE = /^code ([0-9]{8})$/;
-const CODE_ATTEMPTS = 3;
-
-async function readCodeLine(events: LoginEvents): Promise<string | null> {
-  for (;;) {
-    const line = await events.readLine();
-    if (line === null) return null;
-    const found = CODE_LINE.exec(line.replace(/\r$/, ""));
-    if (found) return found[1]!;
-  }
-}
-
-export function stdinLoginEvents(): LoginEvents & { close(): void } {
-  const reader = createInterface({ input: process.stdin });
-  const lines = reader[Symbol.asyncIterator]();
-  return {
-    ask: (email) => console.log(`::seira ask code ${email}`),
-    readLine: async () => {
-      const next = await lines.next();
-      return next.done ? null : next.value;
-    },
-    close: () => reader.close(),
   };
 }
 
