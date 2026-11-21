@@ -66,7 +66,7 @@ export function knownTypes(entries, host, port) {
 /**
  * `known` when a source holds this key, `changed` when a source holds another key for the address, `unknown` otherwise.
  * One `changed` from either source wins.
- * @param {{ host: string, port: number, key: Buffer, knownHosts: string, saved: { host: string, port: number, fingerprint: string }[] }} input
+ * @param {{ host: string, port: number, key: Buffer, knownHosts: string, saved: { host: string, port: number, fingerprint: string, type?: string }[] }} input
  */
 export function hostKeyStatus({ host, port, key, knownHosts, saved }) {
   const seen = fingerprint(key), type = keyType(key), label = hostLabel(host, port);
@@ -77,7 +77,7 @@ export function hostKeyStatus({ host, port, key, knownHosts, saved }) {
     known = true;
   }
   for (const item of saved) {
-    if (item.host.toLowerCase() !== host.toLowerCase() || item.port !== port) continue;
+    if (item.host.toLowerCase() !== host.toLowerCase() || item.port !== port || (item.type && item.type !== type)) continue;
     if (item.fingerprint !== seen) return "changed";
     known = true;
   }
@@ -93,21 +93,22 @@ export function preferredHostKeyAlgorithms(types) {
   return out;
 }
 
-/** The app's own list of confirmed servers: `<dataDir>/ssh/install-hosts.json`, mode 600, holding host, port and fingerprint only. */
+/** The app's own list of confirmed servers: `<dataDir>/ssh/install-hosts.json`, mode 600, holding host, port, key type and fingerprint only. */
 export function createSavedHosts({ dir }) {
   const file = path.join(dir, "ssh", "install-hosts.json");
   const read = () => {
     try {
       const list = JSON.parse(readFileSync(file, "utf8"))?.hosts;
       return Array.isArray(list) ? list.filter((item) => item && typeof item.host === "string" && Number.isInteger(item.port) && typeof item.fingerprint === "string")
-        .map(({ host, port, fingerprint: seen }) => ({ host, port, fingerprint: seen })) : [];
+        .map(({ host, port, fingerprint: seen, type }) => ({ host, port, fingerprint: seen, ...(typeof type === "string" && TYPES.test(type) ? { type } : {}) })) : [];
     } catch { return []; }
   };
-  const remember = ({ host, port, fingerprint: seen }) => {
-    const rest = read().filter((item) => !(item.host.toLowerCase() === host.toLowerCase() && item.port === port));
+  const remember = ({ host, port, fingerprint: seen, type }) => {
+    const kind = typeof type === "string" && TYPES.test(type) ? type : undefined;
+    const rest = read().filter((item) => !(item.host.toLowerCase() === host.toLowerCase() && item.port === port && (!item.type || !kind || item.type === kind)));
     mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
     const temporary = `${file}.${process.pid}.tmp`;
-    writeFileSync(temporary, `${JSON.stringify({ hosts: [...rest, { host: host.toLowerCase(), port, fingerprint: seen }] }, null, 2)}\n`, { mode: 0o600 });
+    writeFileSync(temporary, `${JSON.stringify({ hosts: [...rest, { host: host.toLowerCase(), port, fingerprint: seen, ...(kind ? { type: kind } : {}) }] }, null, 2)}\n`, { mode: 0o600 });
     try { chmodSync(temporary, 0o600); } catch { /* a file system without modes */ }
     renameSync(temporary, file);
   };

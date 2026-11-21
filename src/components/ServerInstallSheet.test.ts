@@ -96,3 +96,13 @@ it("connected closes the sheet", async () => {
   await act(async () => { emit({ type: "connected" }); });
   expect(connected).toHaveBeenCalledTimes(1);
 });
+
+it("a repeat ask clears the code field and says the code did not work", async () => {
+  await fill();
+  await act(async () => { emit({ type: "askCode", email: "me@example.com" }); });
+  expect(document.querySelector("[data-install-code-again]")).toBeNull();
+  await act(async () => { set("[data-install-code]", "00000000"); });
+  await act(async () => { emit({ type: "askCode", email: "me@example.com", again: true }); });
+  expect(document.querySelector<HTMLInputElement>("[data-install-code]")!.value).toBe("");
+  expect(document.querySelector("[data-install-code-again]")!.textContent).toBe("That code did not work. Check the newest email and try again.");
+});

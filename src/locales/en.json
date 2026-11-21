@@ -11783,6 +11783,7 @@
   "serverInstall.progress": "Installation steps",
   "serverInstall.code": "Enter the 8-digit code we emailed to {email}.",
   "serverInstall.sendCode": "Continue",
+  "serverInstall.codeAgain": "That code did not work. Check the newest email and try again.",
   "serverInstall.fail.address": "That server address does not look right.",
   "serverInstall.fail.user": "Enter the user name for your server.",
   "serverInstall.fail.email": "Enter a valid email address.",

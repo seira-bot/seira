@@ -469,7 +469,6 @@ const __APP_VERSION__: string;
       openLogsFolder?(): Promise<{ folder: string; opened: boolean; error?: string }>;
       /** This app's own login item, which opens the window. `available`: false in a build that cannot add one. */
       openAtLogin?: { state(): Promise<{ available: boolean; on: boolean; startupApps?: boolean }>; set(on: boolean): Promise<{ available: boolean; on: boolean; startupApps?: boolean }> };
-      /** Use this computer as an always-on home (this computer's own page only). Absent on an older app. */
       /** Install on my server: the page sends each secret once and keeps none; events carry none. */
       serverInstall?: {
         info(): Promise<{ agent: boolean }>;
@@ -483,6 +482,7 @@ const __APP_VERSION__: string;
         cancel(): Promise<boolean>;
         onEvent(callback: (event: import("./ogb").ServerInstallEvent) => void): () => void;
       };
+      /** Use this computer as an always-on home (this computer's own page only). Absent on an older app. */
       alwaysOnHome?: { state(): Promise<AlwaysOnHomeState>; set(on: boolean): Promise<AlwaysOnHomeState> };
       /** Saved keys this launch could not read (this app's own page only). `reset` asks the person, moves the unreadable
        * file aside and restarts; it resolves "cancelled" when they say no, "quitting" (doing nothing) when the app began
@@ -524,7 +524,7 @@ export type ServerInstallEvent =
   | { type: "check"; id: string; level: "ok" | "fix" | "note"; sentence: string }
   | { type: "checks"; result: "ok" | "fix"; items: { id: string; level: "ok" | "fix" | "note"; sentence: string }[] }
   | { type: "step"; id: string; state: "start" | "done" | "fail"; sentence: string | null }
-  | { type: "askCode"; email: string }
+  | { type: "askCode"; email: string; again?: true }
   | { type: "connected" }
   | { type: "cancelled" }
   | { type: "failed"; reason: string; step: string | null; sentence: string | null };

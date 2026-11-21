@@ -14,7 +14,7 @@ type Screen =
   | { name: "working"; phase: string }
   | { name: "hostKey"; host: string; fingerprint: string }
   | { name: "checks"; items: Check[]; ok: boolean }
-  | { name: "install"; steps: Step[]; email: string | null }
+  | { name: "install"; steps: Step[]; email: string | null; again: boolean }
   | { name: "failed"; reason: string; sentence: string | null };
 
 const PHASE_KEY: Record<string, LocaleKey> = {
@@ -56,10 +56,10 @@ export function ServerInstallSheet({ onBack, onConnected }: { onBack: (() => voi
       case "checks": setScreen({ name: "checks", items: event.items, ok: event.result === "ok" }); break;
       case "step": setScreen(current => {
         const steps = current.name === "install" ? current.steps : [];
-        return { name: "install", email: current.name === "install" ? current.email : null,
+        return { name: "install", email: null, again: current.name === "install" && current.again,
           steps: [...steps.filter(step => step.id !== event.id), { id: event.id, state: event.state === "start" ? "now" : "done", sentence: event.sentence }] };
       }); break;
-      case "askCode": setScreen(current => ({ name: "install", steps: current.name === "install" ? current.steps : [], email: event.email })); break;
+      case "askCode": setCode(""); setScreen(current => ({ name: "install", steps: current.name === "install" ? current.steps : [], email: event.email, again: event.again === true })); break;
       case "connected": done.current(); break;
       case "cancelled": setKeyFile(null); setScreen({ name: "form" }); break;
       case "failed": setScreen({ name: "failed", reason: event.reason, sentence: event.sentence }); break;
@@ -171,6 +171,7 @@ export function ServerInstallSheet({ onBack, onConnected }: { onBack: (() => voi
     {head}
     <Checklist label={t("serverInstall.progress")} items={screen.steps.map(step => ({ key: step.id, state: step.state, title: step.sentence ?? step.id }))} />
     {screen.email && <form data-install-code-form onSubmit={(event) => void sendCode(event)} className="flex flex-col gap-2">
+      {screen.again && <p role="alert" data-install-code-again className="text-[13px] text-danger">{t("serverInstall.codeAgain")}</p>}
       <label className="flex flex-col gap-1.5 text-[13px] font-medium text-ink">{t("serverInstall.code", { email: screen.email })}
         <input data-autofocus data-install-code inputMode="numeric" value={code} onChange={(event) => setCode(event.target.value)} placeholder="12345678" className={FIELD} autoComplete="off" />
       </label>

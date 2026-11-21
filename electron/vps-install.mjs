@@ -9,7 +9,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createSavedHosts, fingerprint, hostKeyStatus, knownTypes, parseKnownHosts, preferredHostKeyAlgorithms } from "./vps-install-hosts.mjs";
+import { createSavedHosts, fingerprint, hostKeyStatus, keyType, knownTypes, parseKnownHosts, preferredHostKeyAlgorithms } from "./vps-install-hosts.mjs";
 
 export const CONNECT_TIMEOUT_MS = 15_000;
 export const CANCEL_BUDGET_MS = 1_500;
@@ -79,10 +79,13 @@ export function parseSeiraLine(line) {
   return null;
 }
 
-function pairingLink(url) {
+const TUNNEL_HOST = /^c-[0-9a-f]{32}\./;
+
+function pairingLink(url, addressUrl) {
   try {
-    const parsed = new URL(url);
-    return parsed.protocol === "https:" && /(?:^|[#&])code=/.test(parsed.hash) && url.length < 2048 ? url : null;
+    const parsed = new URL(url), announced = new URL(addressUrl);
+    return parsed.protocol === "https:" && parsed.origin === announced.origin && TUNNEL_HOST.test(parsed.hostname)
+      && /(?:^|[#&])code=/.test(parsed.hash) && url.length < 2048 ? url : null;
   } catch { return null; }
 }
 
@@ -127,7 +130,7 @@ function connectFailure(error, flags) {
  *   emit(event: InstallEvent): void,
  *   addServer(url: string): Promise<{ outcome?: string } | boolean | void>,
  *   installer: string,
- *   savedHosts: { read(): any[], remember(entry: { host: string, port: number, fingerprint: string }): void },
+ *   savedHosts: { read(): any[], remember(entry: { host: string, port: number, fingerprint: string, type?: string }): void },
  *   knownHostsFile?: string,
  *   createClient?: () => any,
  *   connectTimeoutMs?: number,
@@ -216,7 +219,8 @@ export function createInstallSession(deps) {
       const link = createClient();
       client = link;
       const known = (() => { try { return readFileSync(knownHostsFile, "utf8"); } catch { return ""; } })();
-      const types = knownTypes(parseKnownHosts(known), target.host, target.port);
+      const types = [...new Set([...savedHosts.read().filter((item) => item.type && item.host.toLowerCase() === target.host.toLowerCase() && item.port === target.port).map((item) => item.type),
+        ...knownTypes(parseKnownHosts(known), target.host, target.port)])];
       const config = {
         host: target.host, port: target.port, username: secrets.user,
         readyTimeout: 0, keepaliveInterval: 10_000, tryKeyboard: secrets.method === "password",
@@ -225,7 +229,7 @@ export function createInstallSession(deps) {
           if (status === "known") return true;
           if (status === "changed") { flags.changed = true; return false; }
           clearTimeout(timer);
-          pendingHostKey = { verify, fingerprint: fingerprint(blob) };
+          pendingHostKey = { verify, fingerprint: fingerprint(blob), type: keyType(blob) };
           emit({ type: "hostKey", host: target.host, port: target.port, fingerprint: pendingHostKey.fingerprint });
           return undefined;
         },
@@ -384,8 +388,8 @@ export function createInstallSession(deps) {
     stage = "installing";
     emit({ type: "phase", phase: "installing" });
     const args = `--tunnel --events --account-email ${shellQuote(email)}${installDocker ? " --install-docker" : ""}`;
-    let pair = null, pairSeen = false, failedStep = null, failedSentence = null, fatal = null;
-    let announce = () => {}, doneSeen = () => {};
+    let pair = null, pairSeen = false, announced = "", failedStep = null, failedSentence = null, fatal = null;
+    let asks = 0, announce = () => {}, doneSeen = () => {};
     const pairWait = new Promise((resolve) => { announce = resolve; });
     const doneWait = new Promise((resolve) => { doneSeen = resolve; });
     const closed = await runScript(args, (event) => {
@@ -393,8 +397,9 @@ export function createInstallSession(deps) {
         emit({ type: "step", id: event.id, state: event.state, sentence: event.sentence || null });
         if (event.state === "start") lastStep = event.id;
         if (event.state === "fail") { failedStep = event.id; failedSentence = event.sentence || null; }
-      } else if (event.type === "ask") { waitingForCode = true; stage = "code"; emit({ type: "askCode", email }); }
-      else if (event.type === "pair") { pair = pairingLink(event.url); pairSeen = true; announce(); }
+      } else if (event.type === "ask") { asks += 1; codeSent = false; waitingForCode = true; stage = "code"; emit({ type: "askCode", email, ...(asks > 1 ? { again: true } : {}) }); }
+      else if (event.type === "address") announced = event.url;
+      else if (event.type === "pair") { pair = pairingLink(event.url, announced); pairSeen = true; announce(); }
       else if (event.type === "done") doneSeen();
       else if (event.type === "fail") fatal = event.sentence;
     });
@@ -433,9 +438,9 @@ export function createInstallSession(deps) {
 
     acceptHostKey() {
       if (!pendingHostKey || finished) return false;
-      const { verify, fingerprint: seen } = pendingHostKey;
+      const { verify, fingerprint: seen, type: pendingType } = pendingHostKey;
       pendingHostKey = null;
-      savedHosts.remember({ host: target.host, port: target.port, fingerprint: seen });
+      savedHosts.remember({ host: target.host, port: target.port, fingerprint: seen, type: pendingType });
       armTimer();
       verify(true);
       return true;
@@ -521,6 +526,7 @@ export function installVpsInstall({ ipcMain, guard, dialog, add, dataDir, resour
     const session = createInstallSession({
       installer: installerPath({ packaged, resourcesPath }), savedHosts, addServer: add, createClient,
       emit: (message) => {
+        if (current !== session) return;
         if (message.type === "connected" || message.type === "failed" || message.type === "cancelled") pickedKey = null;
         if (!sender.isDestroyed()) sender.send(EVENT_CHANNEL, message);
       },

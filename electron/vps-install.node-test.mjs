@@ -50,16 +50,24 @@ fi
 echo "::seira step docker start"
 echo "::seira step docker done"
 echo "::seira step signin start"
-echo "::seira ask code $email"
-IFS= read -r line
-echo "$line" >> "$BOX/stdin.log"
+tries=0
+while :; do
+  echo "::seira ask code $email"
+  IFS= read -r line
+  echo "$line" >> "$BOX/stdin.log"
+  tries=$((tries + 1))
+  [ "$line" = "code 00000000" ] && [ "$tries" -lt 3 ] || break
+done
 case "$line" in "code "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;; *) echo "::seira step signin fail The code was not accepted"; echo "::seira fail The code was not accepted"; exit 1;; esac
 echo "::seira step signin done"
 if [ -f "$BOX/image-fails" ]; then echo "::seira step image start"; echo "::seira step image fail Docker could not pull the image"; echo "::seira fail Docker could not pull the image"; exit 1; fi
 if [ -f "$BOX/drop" ]; then sleep 1; fi
-echo "::seira address https://abc.example.test"
+tunnel=c-0123456789abcdef0123456789abcdef.example.test
+[ -f "$BOX/plain-host" ] && tunnel=abc.example.test
+echo "::seira address https://$tunnel"
 echo "::seira step pair done"
-echo "::seira pair https://abc.example.test/pair#code=PAIR-CODE-1"
+if [ -f "$BOX/other-origin" ]; then echo "::seira pair https://c-fedcba9876543210fedcba9876543210.example.test/pair#code=PAIR-CODE-1"
+else echo "::seira pair https://$tunnel/pair#code=PAIR-CODE-1"; fi
 echo "::seira done"
 `;
 
@@ -393,7 +401,7 @@ test("Install runs the installer with the tunnel and events options, shows each 
     assert.deepEqual(h.events.filter((event) => event.type === "step").map((event) => `${event.id}:${event.state}`), ["docker:start", "docker:done", "signin:start", "signin:done", "pair:done"]);
     assert.match(readFileSync(path.join(w.box, "runs.log"), "utf8"), /^--check --tunnel --events\n--tunnel --events --account-email me@example\.com\n$/);
     assert.equal(readFileSync(path.join(w.box, "stdin.log"), "utf8"), "code 12345678\n");
-    assert.deepEqual(h.added, ["https://abc.example.test/pair#code=PAIR-CODE-1"]);
+    assert.deepEqual(h.added, ["https://c-0123456789abcdef0123456789abcdef.example.test/pair#code=PAIR-CODE-1"]);
   } finally { await w.close(); }
 });
 
@@ -647,3 +655,38 @@ test("the stored key path is cleared by cancel and by a cancelled pick", async (
   assert.equal((await until(() => b.sent.find((event) => event.type === "failed"), "a failure")).reason, "keyUnreadable");
   rmSync(dir, { recursive: true, force: true });
 });
+
+test("a wrong emailed code is asked again, flagged as a repeat, and the right code then connects", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    const h = harness(w);
+    await toChecks(w, h);
+    const done = h.session.install({});
+    await until(() => h.events.filter((event) => event.type === "askCode").length === 1, "the first ask");
+    assert.equal(h.events.find((event) => event.type === "askCode").again, undefined);
+    assert.equal(h.session.sendCode("00000000"), true);
+    await until(() => h.events.filter((event) => event.type === "askCode").length === 2, "the second ask");
+    assert.equal(h.events.filter((event) => event.type === "askCode")[1].again, true);
+    assert.equal(h.session.sendCode("12345678"), true);
+    await done;
+    await h.wait("connected");
+    assert.equal(readFileSync(path.join(w.box, "stdin.log"), "utf8"), "code 00000000\ncode 12345678\n");
+  } finally { await w.close(); }
+});
+
+for (const [name, marker] of [["a pair link on another address than the one the installer announced", "other-origin"], ["a pair link on a host that is not a tunnel host", "plain-host"]]) {
+  test(`${name} is refused and nothing is added`, async () => {
+    const w = await world({ password: "pw" });
+    try {
+      const h = harness(w);
+      await toChecks(w, h);
+      writeFileSync(path.join(w.box, marker), "");
+      const done = h.session.install({});
+      await h.wait("askCode");
+      h.session.sendCode("12345678");
+      await done;
+      assert.equal((await h.wait("failed")).reason, "pairFailed");
+      assert.deepEqual(h.added, []);
+    } finally { await w.close(); }
+  });
+}

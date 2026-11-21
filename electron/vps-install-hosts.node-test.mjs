@@ -64,3 +64,25 @@ test("the saved list keeps only host, port and fingerprint, in a private file, a
     assert.deepEqual(saved.read(), []);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("a saved entry with a key type is compared only with a key of that type; an old entry without a type still matches any", () => {
+  const ed = edKey(), rsa = blob("ssh-rsa", randomBytes(40));
+  const typed = [{ host: "h.example", port: 22, fingerprint: fingerprint(ed), type: "ssh-ed25519" }];
+  assert.equal(hostKeyStatus({ host: "h.example", port: 22, key: rsa, knownHosts: "", saved: typed }), "unknown");
+  assert.equal(hostKeyStatus({ host: "h.example", port: 22, key: ed, knownHosts: "", saved: typed }), "known");
+  assert.equal(hostKeyStatus({ host: "h.example", port: 22, key: edKey(), knownHosts: "", saved: typed }), "changed");
+  assert.equal(hostKeyStatus({ host: "h.example", port: 22, key: rsa, knownHosts: "", saved: [{ host: "h.example", port: 22, fingerprint: fingerprint(ed) }] }), "changed");
+});
+
+test("the saved list keeps the key type, keeps one entry per type, and reads an old entry without one", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "seira-hosts-"));
+  try {
+    const saved = createSavedHosts({ dir });
+    saved.remember({ host: "a.example", port: 22, fingerprint: "SHA256:one", type: "ssh-ed25519" });
+    saved.remember({ host: "a.example", port: 22, fingerprint: "SHA256:two", type: "ssh-rsa" });
+    saved.remember({ host: "a.example", port: 22, fingerprint: "SHA256:three", type: "ssh-rsa" });
+    assert.deepEqual(saved.read(), [{ host: "a.example", port: 22, fingerprint: "SHA256:one", type: "ssh-ed25519" }, { host: "a.example", port: 22, fingerprint: "SHA256:three", type: "ssh-rsa" }]);
+    writeFileSync(saved.file, JSON.stringify({ hosts: [{ host: "old.example", port: 22, fingerprint: "SHA256:x" }] }));
+    assert.deepEqual(saved.read(), [{ host: "old.example", port: 22, fingerprint: "SHA256:x" }]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
