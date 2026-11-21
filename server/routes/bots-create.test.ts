@@ -89,9 +89,9 @@ describe("where a new bot works", () => {
 });
 
 describe("folder access at creation", () => {
-  it("is refused as an unknown field: folders are set afterwards, by an admin, on the folder routes", async () => {
+  it("is never taken from the request: folders are set afterwards, by an admin, on the folder routes", async () => {
     const folderAccess = { limited: false, folders: [{ path: "/", write: true }] };
-    await expect(fixture().create({ name: "Ada", folderAccess })).rejects.toThrow("unsupported bot field: folderAccess");
-    expect((await fixture().create({ name: "Ada", settings: { folderAccess } })).folderAccess).toBeUndefined();
+    expect((await fixture().create({ name: "Ada", folderAccess })).folderAccess).toBeUndefined();
+    await expect(fixture().create({ name: "Ada", settings: { folderAccess } })).rejects.toThrow("unsupported bot field: folderAccess");
   });
 });
