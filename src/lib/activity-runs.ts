@@ -187,7 +187,8 @@ export function describeRun(messages: Message[], label: (tool: NonNullable<Messa
   const names = [...counts].map(([name, count]) => (count > 1 ? `${name} ×${count}` : name));
   const shown = names.slice(0, MAX_NAMES).join(", ");
   const rest = names.length > MAX_NAMES ? ` ${t("chat.run.more", { count: names.length - MAX_NAMES })}` : "";
-  return t("chat.run.steps", { count: messages.length, tools: `${shown}${rest}` });
+  const tools = `${shown}${rest}`;
+  return messages.length === 1 ? `${t("chat.run.stepOne")} · ${tools}` : t("chat.run.steps", { count: messages.length, tools });
 }
 
 export type RunStatus = "done" | "working" | "failed";

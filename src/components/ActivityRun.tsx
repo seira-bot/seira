@@ -81,7 +81,7 @@ export function ActivityRun({
               : <Check size={16} aria-hidden="true" className="shrink-0 text-success" />}
           <span className={cn("min-w-0 truncate font-medium", advanced ? (state === "failed" ? "text-danger" : "text-ink") : "flex-1")}>{summary}</span>
           {!advanced && botId && <InvolvedBots botId={botId} messages={messages} />}
-          {!advanced && durationMs !== undefined && <span data-run-duration className="shrink-0 text-[12px] tabular-nums text-ink-tertiary">{formatElapsed(durationMs)}</span>}
+          {!advanced && durationMs !== undefined && durationMs >= 1_000 && <span data-run-duration className="shrink-0 text-[12px] tabular-nums text-ink-tertiary">{formatElapsed(durationMs)}</span>}
           {advanced && <span data-run-steps className="ms-auto shrink-0 text-[12px] tabular-nums text-ink-tertiary">{stepCountLabel(messages.length)}</span>}
           <ChevronDown size={14} aria-hidden="true" className={cn("shrink-0 text-ink-tertiary transition-transform duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none", open && "rotate-180")} />
         </button>

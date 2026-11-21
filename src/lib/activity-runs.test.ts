@@ -199,6 +199,10 @@ describe("describeRun", () => {
     expect(describeRun([tool("Edit"), tool("Bash"), tool("Edit"), tool("Edit")])).toBe("4 steps · Edit ×3, Bash");
   });
 
+  it("says one step in the singular", () => {
+    expect(describeRun([tool("Bash")])).toBe("1 step · Bash");
+  });
+
   it("names a single repeat without a multiplier", () => {
     expect(describeRun([tool("Edit"), tool("Bash")])).toBe("2 steps · Edit, Bash");
   });

@@ -331,6 +331,8 @@ on. Simple is the default for new installs.
   check, a summary of the steps, 20px avatars of the bots involved (at most four, each with a ring in the chat
   background), the time the turn took and a chevron. Open, it shows one 32px line per step: avatar, bot name,
   step text, and a check or a red cross. A 1px `hairline` runs down the start side.
+  A turn under one second shows no time. A failed step stays outside the card, so a closed card never hides an
+  error. Simple shows no separate turn receipt under the reply; Advanced keeps it.
 - **The Simple bot panel has four tabs:** Activity, Details, Library and Computer. It opens on Activity. Activity
   lists what the bot did, grouped by day, newest first. Each item has an icon, the action, the app and time, and
   a mark: spinner, check, red cross or bell.

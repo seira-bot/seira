@@ -754,7 +754,7 @@ const MessagesList = memo(function MessagesList({
               return <ActivityChip message={m} place={place} />;
             }
             case "digest":
-              return showToolCalls && !traces.absorbed.has(m.id) ? <DigestChip message={m} /> : null;
+              return showToolCalls && advanced && !traces.absorbed.has(m.id) ? <DigestChip message={m} /> : null;
             case "compaction":
               return <CompactionChip message={m} onNewChat={m.id === lookups.newChatHintId && canReact ? () => dispatch({ type: "newTask", botId }) : undefined} />;
             case "screen":

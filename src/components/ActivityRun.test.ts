@@ -40,6 +40,7 @@ describe("ActivityRun in Simple mode", () => {
     expect(run({ botId: "a", durationMs: 18_000 })).toContain(">18s<");
     expect(run({ botId: "a", durationMs: 125_000 })).toContain(">2m 05s<");
     expect(run({ botId: "a" })).not.toContain("data-run-duration");
+    expect(run({ botId: "a", durationMs: 400 })).not.toContain("data-run-duration");
   });
 
   it("shows the chat's bot first, then the bots it talked to, at most four", () => {
