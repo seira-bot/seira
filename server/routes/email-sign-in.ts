@@ -41,7 +41,7 @@ export async function emailSignInRoute(deps: EmailSignInRouteDeps, req: Incoming
   const body = await readBody(req);
   const email = typeof body?.email === "string" ? body.email : "";
   if (path === "/api/auth/email/start") {
-    const started = await emailSignIn.start(email, deps.target(req));
+    const started = await emailSignIn.start(email, deps.target(req), source);
     if (!started.ok) {
       if (started.status === 403) sessions.noteFailure(source);
       json(res, started.status, refusalBody(started));
