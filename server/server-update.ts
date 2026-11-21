@@ -263,6 +263,7 @@ export function createServerUpdater(options: {
     if (!current.available) return { status: 409, body: { error: "This server is up to date.", code: "up-to-date", status: current } };
     if (current.retryAt) return { status: 429, body: { error: "Wait a few minutes before you ask again.", code: "too-soon", status: current } };
     if (options.install === "npm" && options.app) return requestApp(actor, current);
+    if (!requestFile) return { status: 409, body: { error: "This server can't be updated from the app.", code: "unavailable", status: current } };
     const last = readHostFacts(options.dir).last;
     const pending: PendingUpdate = { at: now(), baseline: last?.run ?? 0, from: options.version };
     writePending(options.dataDir, pending);
