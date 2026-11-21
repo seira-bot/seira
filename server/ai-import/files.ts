@@ -15,7 +15,7 @@ export async function folderFiles(root: string): Promise<ImportFiles> {
     }
   };
   await walk(root, "");
-  entries.sort((a, b) => a.name.localeCompare(b.name));
+  entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const known = new Set(entries.map((entry) => entry.name));
   return {
     entries,
