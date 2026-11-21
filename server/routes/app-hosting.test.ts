@@ -36,10 +36,10 @@ describe("publish_app's internal route", () => {
     expect(publisher.publish).toHaveBeenCalledWith({ botId: "bot-1", roots: ["/work/bot-1"], path: "shop/dist", project: "shop", title: "Shop" });
   });
 
-  it("never offers a read-only folder to publish from, since publishing writes a record into the project", async () => {
+  it("never offers a read-only folder to publish from, and names it so no record lands inside one", async () => {
     const publisher = fakePublisher();
     await call(publisher, { roots: ["/work/bot-1", "/shared/read", "/shared/write"], readOnlyRoots: ["/shared/read"], body: { path: "shop" } });
-    expect(publisher.publish).toHaveBeenCalledWith({ botId: "bot-1", roots: ["/work/bot-1", "/shared/write"], path: "shop" });
+    expect(publisher.publish).toHaveBeenCalledWith({ botId: "bot-1", roots: ["/work/bot-1", "/shared/write"], readOnly: ["/shared/read"], path: "shop" });
   });
 
   it("answers status with or without a folder, and delete only with one", async () => {
