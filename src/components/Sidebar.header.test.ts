@@ -366,6 +366,12 @@ describe("sidebar foot in Simple mode", () => {
     expect(foot.match(/data-app-face="/g)).toHaveLength(3);
   });
 
+  it("lets the account row fill the foot, so Settings sits at its right end", () => {
+    fixture.advanced = false;
+    const foot = render().split('data-sidebar-footer="simple"')[1];
+    expect(foot).toMatch(/<div class="min-w-0 flex-1"><div class="relative"><button[^>]*class="w-full[^"]*"[^>]*><span[^>]*data-sidebar-account=""/);
+  });
+
   it("keeps one Automations row in the head and no Routines row in Advanced mode, and still one Apps", () => {
     fixture.advanced = true;
     const html = render();

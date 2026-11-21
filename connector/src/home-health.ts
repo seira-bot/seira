@@ -16,10 +16,14 @@ export function cloudRequestSignature(secret: string, timestamp: string, nonce: 
 export function signedHeaders(secret: string, method: string, target: string, body = "", now = Date.now()): Record<string, string> {
   const timestamp = String(Math.floor(now / 1000));
   const nonce = randomBytes(18).toString("base64url");
+  const signature = `v1=${cloudRequestSignature(secret, timestamp, nonce, method, target, body)}`;
   return {
+    "x-seira-cloud-timestamp": timestamp,
+    "x-seira-cloud-nonce": nonce,
+    "x-seira-cloud-signature": signature,
     "x-omb-cloud-timestamp": timestamp,
     "x-omb-cloud-nonce": nonce,
-    "x-omb-cloud-signature": `v1=${cloudRequestSignature(secret, timestamp, nonce, method, target, body)}`,
+    "x-omb-cloud-signature": signature,
   };
 }
 

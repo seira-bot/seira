@@ -138,7 +138,7 @@ const UPSERT_MESSAGE =
   "INSERT INTO messages (thread_id, id, at, role, kind, text, json, search_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
   "ON CONFLICT(thread_id, id) DO UPDATE SET at = excluded.at, role = excluded.role, kind = excluded.kind, " +
   "text = excluded.text, json = excluded.json, search_text = excluded.search_text";
-const messageRow = (threadId: string, message: Message) =>
+export const messageRow = (threadId: string, message: Message) =>
   [threadId, message.id, message.at, message.role, message.kind, message.text ?? null, JSON.stringify(message), cjkSearchText(message.text)] as const;
 
 const ACTIVE_LEAF = "SELECT active_leaf_id FROM thread_state WHERE thread_id = ?";
@@ -168,7 +168,7 @@ export function prepared(sql: string): StatementSync {
 }
 
 let transactionDepth = 0;
-function transaction<T>(fn: (database: DatabaseSync) => T): T {
+export function transaction<T>(fn: (database: DatabaseSync) => T): T {
   const database = db();
   if (transactionDepth > 0) {
     const savepoint = `command_${transactionDepth}`;

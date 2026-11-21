@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createWokeNotifier, wokeSignature, WOKE_ADMIN_PATH } from "./cloud-woke.ts";
+import { expectBothCloudSignedNames } from "./testing/cloud-signed-assert.ts";
 
 const options = { adminOrigin: "https://admin.test", machineId: "cm_1", secret: "s".repeat(43) };
 
@@ -15,6 +16,7 @@ describe("the wake notice to the Admin", () => {
     const headers = init.headers as Record<string, string>;
     expect(headers["x-omb-cloud-machine"]).toBe("cm_1");
     expect(headers["x-omb-cloud-signature"]).toBe(`v1=${wokeSignature(options.secret, "cm_1", headers["x-omb-cloud-timestamp"]!, headers["x-omb-cloud-nonce"]!, init.body as string)}`);
+    expectBothCloudSignedNames(headers);
   });
   it("an older Admin that doesn't know it, or an Admin that can't be reached, changes nothing and is said once", async () => {
     const log = vi.fn();
