@@ -1,6 +1,6 @@
 import { t } from "@/lib/i18n";
 import type { ImportAgentView, ImportDestination, ImportJobView } from "../../../shared/ai-import/api";
-import { SETTINGS_INPUT } from "../SettingsPrimitives";
+import { Select } from "../Select";
 import { Counts } from "./Progress";
 
 export interface BotChoice {
@@ -15,11 +15,11 @@ export function DestinationSelect({ label, value, bots, onChange }: { label: str
   return (
     <label className="flex items-center gap-3 text-[13px] leading-5 text-ink-secondary">
       <span className="shrink-0">{label}</span>
-      <select data-ai-import-destination="" aria-label={label} value={destinationValue(value)} onChange={(event) => onChange(destinationFrom(event.target.value))}
-        className={`${SETTINGS_INPUT} min-w-0 flex-1`}>
+      <Select data-ai-import-destination="" aria-label={label} value={destinationValue(value)} onChange={(event) => onChange(destinationFrom(event.target.value))}
+        className="min-w-0 flex-1">
         <option value="new">{t("aiImport.dest.new")}</option>
         {bots.map((bot) => <option key={bot.id} value={`bot:${bot.id}`}>{bot.name}</option>)}
-      </select>
+      </Select>
     </label>
   );
 }

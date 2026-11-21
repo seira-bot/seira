@@ -5,7 +5,7 @@ import type { LocaleKey } from "@/locales";
 import type { ImportDestination, PasteSource } from "../../../shared/ai-import/api";
 import { AI_IMPORT_LIMITS } from "../../../shared/ai-import/limits";
 import { checkPaste, parsePaste, pastePrompt, PASTE_SOURCES } from "../../../shared/ai-import/paste";
-import { SETTINGS_INPUT } from "../SettingsPrimitives";
+import { Select } from "../Select";
 import { sourceName } from "./copy";
 import { DestinationSelect, type BotChoice } from "./Review";
 
@@ -42,9 +42,9 @@ export function PasteStep({ ai, text, destination, bots, copied = false, busy = 
       <h3 className="text-[14px] font-medium text-ink">{t("aiImport.paste.title")}</h3>
       <label className="flex items-center gap-3 text-[13px] leading-5 text-ink-secondary">
         <span className="shrink-0">{t("aiImport.paste.which")}</span>
-        <select data-ai-import-paste-ai="" value={ai} onChange={(event) => onAi(event.target.value as PasteSource)} className={`${SETTINGS_INPUT} min-w-0 flex-1`}>
+        <Select data-ai-import-paste-ai="" value={ai} onChange={(event) => onAi(event.target.value as PasteSource)} className="min-w-0 flex-1">
           {PASTE_SOURCES.map((source) => <option key={source} value={source}>{pasteName(source)}</option>)}
-        </select>
+        </Select>
       </label>
       <section className="flex flex-col gap-2">
         <p className="text-[13px] leading-[18px] text-ink">{t("aiImport.paste.step1", { ai: pasteName(ai) })}</p>

@@ -4,6 +4,7 @@ import { Bot, ClipboardPaste } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { aiImportApi, uploadAll, type AiImportClient, type DroppedFile } from "@/lib/ai-import";
+import { copyText } from "@/lib/copy-text";
 import { t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { useStore } from "@/state/store";
@@ -209,7 +210,7 @@ export function ImportHubSection({ client = aiImportApi, local }: { client?: AiI
           onAi={(ai) => setPaste((was) => ({ ...was, ai, copied: false }))}
           onText={(text) => setPaste((was) => ({ ...was, text }))}
           onDestination={(destination) => setPaste((was) => ({ ...was, destination }))}
-          onCopy={() => void navigator.clipboard?.writeText(pastePrompt(paste.ai)).then(() => setPaste((was) => ({ ...was, copied: true })), () => {})}
+          onCopy={() => void copyText(pastePrompt(paste.ai)).then((result) => { if (result === "copied") setPaste((was) => ({ ...was, copied: true })); })}
           onImport={() => {
             const { aboutYou, howToReply } = parsePaste(paste.text);
             run(() => client.create({ from: "paste", ai: paste.ai, aboutYou, howToReply, destination: paste.destination }).then((job) => { openJob(job); return job; }));
