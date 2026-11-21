@@ -976,7 +976,10 @@ describe("Sessions reach the person's working accounts", () => {
 
   it("names the config a working account is on, not a newer one the project added", async () => {
     const { h, me, created, reachable } = await oneInstallation();
-    h.composio.authConfigs.push(ownGmail, { ...ownGmail, id: "ac_gmail_newer", created_at: "2026-11-10T00:00:00Z" });
+    h.composio.authConfigs.push(
+      { ...ownGmail, last_updated_at: "2026-11-01T00:00:00Z" },
+      { ...ownGmail, id: "ac_gmail_newer", created_at: "2026-11-10T00:00:00Z", last_updated_at: "2026-11-10T00:00:00Z" },
+    );
     const gmail = h.account(me, "gmail", "ACTIVE", { auth_config: { id: "ac_gmail_own", is_composio_managed: false } });
 
     await expect(reachable()).resolves.toEqual([gmail]);
