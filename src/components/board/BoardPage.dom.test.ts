@@ -45,7 +45,7 @@ const CARDS = [
   card("thread:w2", { botId: "cleo" }),
   card("thread:n", { column: "needs-you", state: "needs-input", question: "Which page?", threadId: "scout-main" }),
   card("handoff:h", { kind: "handoff", column: "done", state: "completed", result: "All set", fromBotId: "cleo", brief: "Do it" }),
-  card("routine:r1", { kind: "routine", threadId: undefined, title: "Daily digest" }),
+  card("routine:r1", { kind: "routine", threadId: "run-thread", title: "Daily digest" }),
 ];
 
 let root: Root;
