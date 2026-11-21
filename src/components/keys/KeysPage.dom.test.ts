@@ -4,6 +4,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "@/lib/i18n";
+import type { KeySectionId } from "./key-catalog";
 
 const fx = vi.hoisted(() => ({
   config: {} as Record<string, unknown>,
@@ -327,7 +328,8 @@ describe("the keys page", () => {
 });
 
 describe("the keys inside AI › Other services", () => {
-  const bare = (exclude: string[]) => render(() => createElement(KeysPage, { key: "bare", bare: true, exclude: exclude as never }));
+  const Bare = ({ exclude }: { exclude: KeySectionId[] }) => KeysPage({ bare: true, exclude });
+  const bare = (exclude: KeySectionId[]) => render(() => createElement(Bare, { key: "bare", exclude }));
 
   it("leads every fold row with an icon, and lists Routing and Images as links with icons", () => {
     bare(["ai"]);
