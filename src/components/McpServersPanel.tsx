@@ -430,7 +430,7 @@ export function McpServersPanel({ embedded = false, hostedCards, hideHosted = fa
     setNotice(null);
     forgetProbe(server.name);
     try {
-      if (card && holdsHostedKey(server)) {
+      if (card && isRemoteMcpListing(server) && holdsHostedKey(server)) {
         listed((await api(`/api/mcp/servers/${server.name}`, { method: "DELETE" })).servers);
         return;
       }
