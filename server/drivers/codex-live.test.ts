@@ -264,18 +264,15 @@ describe("codexLiveVoice start", () => {
   });
 
   it("escalates to SIGKILL for a process that ignores SIGTERM", async () => {
-    const stubborn = "process.on('SIGTERM', () => {}); process.stdin.resume(); setInterval(() => {}, 1000);";
-    const spawned: ChildProcess[] = [];
-    const h = harness({ timeouts: { rpcMs: 100, killMs: 150 }, deps: { spawn: (_args, options) => {
-      const child = spawn(process.execPath, ["-e", stubborn], { cwd: options.cwd, env: options.env, stdio: ["pipe", "pipe", "pipe"] });
-      spawned.push(child);
-      return child;
-    } } });
+    const stubborn = "process.on('SIGTERM', () => {}); process.stderr.write('ready'); process.stdin.resume(); setInterval(() => {}, 1000);";
+    const child = spawn(process.execPath, ["-e", stubborn], { cwd: scratch, stdio: ["pipe", "pipe", "pipe"] });
+    await new Promise<void>((resolve) => child.stderr.once("data", () => resolve()));
+    const h = harness({ timeouts: { rpcMs: 100, killMs: 150 }, deps: { spawn: () => child } });
     const started = Date.now();
     expect(await refusalOf(h.live.start(h.input()))).toBe("failed");
     expect(Date.now() - started).toBeLessThan(5_000);
-    await until(() => isGone(spawned[0]!));
-    expect(spawned[0]!.signalCode).toBe("SIGKILL");
+    await until(() => isGone(child));
+    expect(child.signalCode).toBe("SIGKILL");
   });
 });
 
