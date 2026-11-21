@@ -57,7 +57,7 @@ export function workflowLinkProblem(
     const first = links?.botName(found.botId);
     return { message: `A routine that runs this workflow belongs to the bot of its first step${first ? `, ${first}` : ""}. Set it up for that bot${operation.action === "create" ? " with for_bot_id" : ""}.`, status: 409 };
   }
-  const blocked = found.botIds.find((id) => id !== owner && !links?.manages(botId, id));
+  const blocked = found.botIds.find((id) => id !== owner && id !== botId && !links?.manages(botId, id));
   if (blocked) return { message: `This workflow has a step for ${links?.botName(blocked) ?? "a bot"}, and you may not set up automations for that bot. Link a workflow whose steps are yours or a bot you manage, or tell the person to link it under Automations → Workflows.`, status: 403 };
   if (operation.action === "create") operation.routine.instructions = found.prompt.slice(0, PROMPT_LIMIT);
   else if (changes) changes.instructions = found.prompt.slice(0, PROMPT_LIMIT);

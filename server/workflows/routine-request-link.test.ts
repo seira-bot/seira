@@ -28,6 +28,12 @@ describe("linking a workflow to a routine", () => {
     expect((operation as { routine: { instructions: string } }).routine.instructions).toBe("Steps");
   });
 
+  it("lets a bot link a workflow for a bot it manages when a later step is its own", () => {
+    const operation = { ...create("wf"), forBot: { botId: "scout" } } as RoutineRequestOperation;
+    const manages = (caller: string, id: string) => caller !== id;
+    expect(workflowLinkProblem(operation, "chief", routines, links({ botIds: ["scout", "chief"], manages }), "t1")).toBeNull();
+  });
+
   it("answers as if there were no workflow when the person behind the turn cannot see it", () => {
     expect(workflowLinkProblem(create("wf"), "scout", routines, links({ botIds: ["scout"], shown: () => false }), "t1")).toMatchObject({ status: 404 });
   });
