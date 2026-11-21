@@ -333,6 +333,8 @@ on. Simple is the default for new installs.
   step text, and a check or a red cross. A 1px `hairline` runs down the start side.
   A turn under one second shows no time. A failed step stays outside the card, so a closed card never hides an
   error. Simple shows no separate turn receipt under the reply; Advanced keeps it.
+  Show tool calls is on by default in Advanced and off in Simple, so Simple shows the card only after the person turns
+  it on. A saved choice applies to both modes.
 - **The Simple bot panel has four tabs:** Activity, Details, Library and Computer. It opens on Activity. Activity
   lists what the bot did, grouped by day, newest first. Each item has an icon, the action, the app and time, and
   a mark: spinner, check, red cross or bell.
