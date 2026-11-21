@@ -324,18 +324,39 @@ export function sessionCookieName(port: number, environmentId: string): string {
   return `seira_session_${port}_${environmentId.replace(/[^a-z0-9]/gi, "").slice(0, 12)}`;
 }
 
+const HOST_PREFIX = "__Host-";
+
+/** On https the cookie is `__Host-<name>`: the browser then accepts it only with `Secure` and `Path=/`, and without a
+ * `Domain`, so a sibling host cannot set or replace it. */
 export function serializeSessionCookie(
   name: string,
   token: string,
   options: { secure: boolean; maxAgeSeconds: number },
 ): string {
-  const parts = [`${name}=${token}`, "Path=/", "HttpOnly", "SameSite=Lax", `Max-Age=${options.maxAgeSeconds}`];
+  const parts = [`${options.secure ? HOST_PREFIX : ""}${name}=${token}`, "Path=/", "HttpOnly", "SameSite=Lax", `Max-Age=${options.maxAgeSeconds}`];
   if (options.secure) parts.push("Secure");
   return parts.join("; ");
 }
 
+/** On https the unprefixed cookie of an earlier version is cleared at the same time. */
+export function sessionCookieHeaders(name: string, token: string, options: { secure: boolean; maxAgeSeconds: number }): string[] {
+  const issued = serializeSessionCookie(name, token, options);
+  return options.secure ? [issued, clearSessionCookie(name)] : [issued];
+}
+
 export function clearSessionCookie(name: string): string {
   return `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+}
+
+/** Both names, so a person signed in on either version leaves signed out. */
+export function clearSessionCookies(name: string): string[] {
+  return [clearSessionCookie(name), `${HOST_PREFIX}${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Secure`];
+}
+
+/** The `__Host-` cookie wins; the unprefixed name counts only when it is absent. */
+export function presentedSessionCookie(cookieHeader: string | undefined, name: string): string | undefined {
+  const cookies = parseCookies(cookieHeader);
+  return cookies.get(`${HOST_PREFIX}${name}`) ?? cookies.get(name);
 }
 
 /** What a `client` session may do. Default deny: a new route is admin-only until listed here. */
@@ -698,7 +719,7 @@ export function resolveRequestAuth(req: IncomingMessage, options: ResolveOptions
 
   // A presented session credential wins over the loopback rule.
   const bearer = bearerToken(req.headers.authorization);
-  const cookie = parseCookies(headerValue(req.headers.cookie)).get(options.cookieName);
+  const cookie = presentedSessionCookie(headerValue(req.headers.cookie), options.cookieName);
   const ticket = path === options.streamPath ? options.url.searchParams.get("ticket") : null;
   let session: SessionRecord | null = null;
   let via: "bearer" | "cookie" | "ticket" | null = null;

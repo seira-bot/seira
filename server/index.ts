@@ -533,7 +533,7 @@ import { allowedScopes, createEmailSignIn, parseAllowList } from "./account-sign
 import { pairingLinkBase, signInMailTarget } from "./pairing-base.ts"; import { lanUrl, listenHost } from "./lan-address.ts"; import { createTailnetShare } from "./tailnet-listener.ts";
 import { ProviderAuthSessions } from "./provider-auth-sessions.ts";
 import {
-  clearSessionCookie,
+  clearSessionCookies,
   isLoopbackHost,
   isProxied,
   labelFromUserAgent,
@@ -541,8 +541,8 @@ import {
   requestSource,
   resolveLoopbackTrust,
   resolveRequestAuth,
-  parseCookies,
-  serializeSessionCookie,
+  presentedSessionCookie,
+  sessionCookieHeaders,
   sessionCookieName, ownerOrAdmin, acceptLegacyOrigins,
 } from "./request-auth.ts";
 import { cookieMaxAgeSeconds, formatPairingCode, pairingRequest, SessionRegistry, type SessionRecord } from "./sessions.ts"; import type { PairingErrorCode } from "../shared/pairing-code.ts";
@@ -575,7 +575,7 @@ import {
   type StreamSeen,
   type Viewer,
 } from "./bot-visibility.ts";
-import { describeBrand, loadBrand } from "./brand.ts";
+import { describeBrand, loadBrand, publicBrand } from "./brand.ts";
 import { deliverSseFrame, openSseHeartbeat } from "./sse-fanout.ts"; import { createBotFrames, takesFrame, type BotFrameForm } from "./host/bot-frames.ts";
 import { PhoneSecretBridge, PhoneSecretSubmissionRegistry } from "./phone-secret.ts";
 // Keep these two last, so loading the route table leaves module start-up order as is.
@@ -12575,10 +12575,10 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       if (CLOUD_TEAM) teamHost.met(result.session);
       const environment = environmentDescriptor({ environmentId: ENVIRONMENT_ID, ...TEAM_LABEL, desktopManaged: DESKTOP_MANAGED, emailSignIn: !CLOUD_HOME && emailSignIn.enabled(), sharedComputers: lendingEnabled(), cloudHome: Boolean(CLOUD_HOME), cloudTeam: CLOUD_TEAM !== null, ownHome: ownHome.takesMove() });
       if (wantsCookie) {
-        const previous = browser ? sessions.authenticate(parseCookies(req.headers.cookie).get(SESSION_COOKIE)) : null;
+        const previous = browser ? sessions.authenticate(presentedSessionCookie(req.headers.cookie, SESSION_COOKIE)) : null;
         if (previous && previous.id !== result.session.id) sessions.revoke(previous.id);
         const secure = requestOrigin(req)?.startsWith("https://") === true;
-        res.setHeader("set-cookie", serializeSessionCookie(SESSION_COOKIE, result.token, { secure, maxAgeSeconds: cookieMaxAgeSeconds(result.session) }));
+        res.setHeader("set-cookie", sessionCookieHeaders(SESSION_COOKIE, result.token, { secure, maxAgeSeconds: cookieMaxAgeSeconds(result.session) }));
         return json(res, 200, { session: result.session, environment });
       }
       return json(res, 200, { token: result.token, session: result.session, environment } satisfies AuthPairResponse);
@@ -12624,10 +12624,10 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     });
     // The session term slides on use, so re-issue the cookie on every cookie request; handlers that clear it later overwrite this header.
     if (gate.auth?.kind === "session" && gate.auth.via === "cookie") {
-      const presented = parseCookies(req.headers.cookie).get(SESSION_COOKIE);
+      const presented = presentedSessionCookie(req.headers.cookie, SESSION_COOKIE);
       if (presented) {
         const secure = HOSTED_WORKSPACE || requestOrigin(req)?.startsWith("https://") === true;
-        res.setHeader("set-cookie", serializeSessionCookie(SESSION_COOKIE, presented, { secure, maxAgeSeconds: cookieMaxAgeSeconds(gate.auth.session) }));
+        res.setHeader("set-cookie", sessionCookieHeaders(SESSION_COOKIE, presented, { secure, maxAgeSeconds: cookieMaxAgeSeconds(gate.auth.session) }));
       }
     }
     // Public reachability probe: a stranger learns only the app name; pid and the static flag stay behind the gate.
@@ -12636,7 +12636,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     }
     // Public: the sign-in page needs the deployment's name and icon, and it holds nothing secret.
     if (method === "GET" && path === "/api/brand" && !gate.auth) {
-      return json(res, 200, loadBrand());
+      return json(res, 200, publicBrand(loadBrand()));
     }
     if (!gate.auth) return json(res, gate.status, { error: gate.error });
     if (cloudPower && gate.auth.kind === "session") cloudPower.request(path, req.headers, res); // someone using a Cloud home keeps it awake
@@ -12698,7 +12698,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     }
     if (method === "POST" && path === "/api/auth/logout") {
       if (auth.kind === "session") sessions.revoke(auth.session.id);
-      res.setHeader("set-cookie", clearSessionCookie(SESSION_COOKIE));
+      res.setHeader("set-cookie", clearSessionCookies(SESSION_COOKIE));
       return json(res, 200, { ok: true });
     }
     if (method === "POST" && path === "/api/auth/pairing") {
@@ -12761,7 +12761,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     m = path.match(/^\/api\/auth\/sessions\/([\w-]+)$/);
     if (m && method === "DELETE") {
       const revoked = sessions.revoke(m[1]);
-      if (auth.kind === "session" && auth.session.id === m[1]) res.setHeader("set-cookie", clearSessionCookie(SESSION_COOKIE));
+      if (auth.kind === "session" && auth.session.id === m[1]) res.setHeader("set-cookie", clearSessionCookies(SESSION_COOKIE));
       return json(res, revoked ? 200 : 404, revoked ? { ok: true } : { error: "no such session" });
     }
     // Test-only routes exist only when the launcher sets a high-entropy test key, which production builds never set.

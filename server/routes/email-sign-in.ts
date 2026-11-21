@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import type { EmailSignIn } from "../account-signin.ts";
 import { json, readBody } from "../harness/http.ts";
-import { labelFromUserAgent, requestOrigin, requestSource, serializeSessionCookie } from "../request-auth.ts";
+import { labelFromUserAgent, requestOrigin, requestSource, sessionCookieHeaders } from "../request-auth.ts";
 import { cookieMaxAgeSeconds, type SessionRegistry } from "../sessions.ts";
 import { refusalBody, userError } from "../user-errors.ts";
 
@@ -62,7 +62,7 @@ export async function emailSignInRoute(deps: EmailSignInRouteDeps, req: Incoming
   sessions.clearFailures(source);
   const issued = sessions.issue({ label: label.trim() || labelFromUserAgent(req.headers["user-agent"]), scopes: verified.scopes, userId: verified.userId, email: verified.email });
   const secure = requestOrigin(req)?.startsWith("https://") === true;
-  res.setHeader("set-cookie", serializeSessionCookie(deps.cookieName, issued.token, { secure, maxAgeSeconds: cookieMaxAgeSeconds(issued.session) }));
+  res.setHeader("set-cookie", sessionCookieHeaders(deps.cookieName, issued.token, { secure, maxAgeSeconds: cookieMaxAgeSeconds(issued.session) }));
   json(res, 200, { session: issued.session, environment: deps.environment() });
   return true;
 }
