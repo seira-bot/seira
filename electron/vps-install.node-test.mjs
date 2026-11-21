@@ -1,0 +1,591 @@
+// The install flow against a real ssh2 server in this process. Its exec handler runs each command with the local shell
+// in a scratch folder, with a stub `id` and `sudo` first on PATH, and the bundled installer is a fake script.
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import net from "node:net";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+import { createInstallSession, CONNECT_TIMEOUT_MS, installerPath, parseAddress, parseSeiraLine, shellQuote } from "./vps-install.mjs";
+import { createSavedHosts, fingerprint } from "./vps-install-hosts.mjs";
+
+const require = createRequire(import.meta.url);
+const { Server, utils } = require("./vendor/ssh2.cjs");
+const here = path.dirname(fileURLToPath(import.meta.url));
+
+const SUDO_STUB = `#!/bin/sh
+if [ "$1" = "-S" ]; then mode=S; shift; shift; shift; else mode=n; shift; fi
+if [ "$mode" = n ]; then
+  [ "\${FAKE_SUDO:-none}" = nopass ] || { echo "sudo: a password is required" >&2; exit 1; }
+  exec "$@"
+fi
+[ "\${FAKE_SUDO:-none}" = none ] && { echo "alice is not in the sudoers file." >&2; exit 1; }
+IFS= read -r pass
+[ "$pass" = "$FAKE_SUDO_PASSWORD" ] || { echo "Sorry, try again." >&2; exit 1; }
+[ "$1" = "-v" ] && exit 0
+exec "$@"
+`;
+const ID_STUB = `#!/bin/sh
+if [ "$1" = "-u" ]; then echo "\${FAKE_UID:-0}"; else exec /usr/bin/id "$@"; fi
+`;
+const INSTALLER = `#!/bin/sh
+echo "$*" >> "$BOX/runs.log"
+mode=install; email=""
+while [ $# -gt 0 ]; do
+  case "$1" in --check) mode=check;; --account-email) shift; email="$1";; esac
+  shift
+done
+if [ "$mode" = check ]; then
+  echo "::seira check os ok Debian is supported"
+  if [ -f "$BOX/disk-bad" ]; then echo "::seira check disk fix Free up 20 GB of disk space"; echo "::seira checks fix"; exit 1; fi
+  echo "::seira check disk ok Plenty of disk space"
+  if [ -f "$BOX/docker-bad" ]; then echo "::seira check docker fix Docker is not installed"; echo "::seira checks fix"; exit 1; fi
+  echo "::seira checks ok"
+  exit 0
+fi
+echo "::seira step docker start"
+echo "::seira step docker done"
+echo "::seira step signin start"
+echo "::seira ask code $email"
+IFS= read -r line
+echo "$line" >> "$BOX/stdin.log"
+case "$line" in "code "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;; *) echo "::seira step signin fail The code was not accepted"; echo "::seira fail The code was not accepted"; exit 1;; esac
+echo "::seira step signin done"
+if [ -f "$BOX/image-fails" ]; then echo "::seira step image start"; echo "::seira step image fail Docker could not pull the image"; echo "::seira fail Docker could not pull the image"; exit 1; fi
+if [ -f "$BOX/drop" ]; then sleep 1; fi
+echo "::seira address https://abc.example.test"
+echo "::seira step pair done"
+echo "::seira pair https://abc.example.test/pair#code=PAIR-CODE-1"
+echo "::seira done"
+`;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function until(check, what, ms = 8_000) {
+  const end = Date.now() + ms;
+  for (;;) {
+    const found = check();
+    if (found) return found;
+    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+    await sleep(15);
+  }
+}
+
+async function world(options = {}) {
+  const root = mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), "seira-vps-"));
+  const stub = path.join(root, "bin"), box = path.join(root, "box");
+  mkdirSync(stub); mkdirSync(box);
+  writeFileSync(path.join(stub, "sudo"), SUDO_STUB, { mode: 0o755 });
+  writeFileSync(path.join(stub, "id"), ID_STUB, { mode: 0o755 });
+  const installer = path.join(root, "install.sh");
+  writeFileSync(installer, options.installer ?? INSTALLER);
+  const hostKey = utils.generateKeyPairSync("ed25519");
+  const hostBlob = utils.parseKey(hostKey.public).getPublicSSH();
+  const log = [];
+  const state = { closed: 0, authMethods: [], connections: 0, clients: new Set() };
+  const accountKey = options.publicKey ? utils.parseKey(options.publicKey) : null;
+  const server = new Server({ hostKeys: [hostKey.private] }, (client) => {
+    state.connections += 1;
+    state.clients.add(client);
+    client.on("authentication", (ctx) => {
+      state.authMethods.push(ctx.method);
+      if (ctx.username === "alice" && ctx.method === "password" && options.password !== undefined && ctx.password === options.password) return ctx.accept();
+      if (ctx.username === "alice" && ctx.method === "publickey" && accountKey && ctx.key.algo === accountKey.type && timingSafeEqual(ctx.key.data, accountKey.getPublicSSH())) {
+        if (!ctx.signature || accountKey.verify(ctx.blob, ctx.signature, ctx.hashAlgo) === true) return ctx.accept();
+      }
+      return ctx.reject(["password", "publickey"]);
+    });
+    client.on("error", () => {});
+    client.on("close", () => { state.closed += 1; state.clients.delete(client); });
+    client.on("ready", () => client.on("session", (accept) => {
+      const session = accept();
+      session.on("exec", (acceptExec, _reject, info) => {
+        let command = info.command.replaceAll("/tmp/seira-install", `${box}/seira-install`);
+        log.push({ kind: "exec", command: info.command });
+        if (options.corruptUpload && command.startsWith("cat > ")) command = `${command}; echo tampered >> ${command.slice(6)}`;
+        const stream = acceptExec();
+        const child = spawn("sh", ["-c", command], { cwd: box, env: { ...process.env, PATH: `${stub}:${process.env.PATH}`, BOX: box, FAKE_UID: options.uid ?? "0", FAKE_SUDO: options.sudo ?? "none", FAKE_SUDO_PASSWORD: options.sudoPassword ?? "" } });
+        stream.pipe(child.stdin);
+        child.stdin.on("error", () => {});
+        child.stdout.pipe(stream, { end: false });
+        child.stderr.on("data", (chunk) => stream.stderr.write(chunk));
+        child.on("close", (code) => { stream.exit(code ?? 1); stream.end(); });
+        stream.on("close", () => child.kill("SIGTERM"));
+      });
+    }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = server.address().port;
+  const dataDir = path.join(root, "data"), knownHosts = path.join(root, "known_hosts");
+  mkdirSync(dataDir);
+  return {
+    root, box, port, installer, dataDir, knownHosts, log, state, hostBlob,
+    address: `127.0.0.1:${port}`,
+    fingerprint: fingerprint(hostBlob),
+    folders: () => readdirSync(box).filter((name) => name.startsWith("seira-install.")),
+    async close() { for (const client of state.clients) client.end(); await new Promise((resolve) => server.close(resolve)); rmSync(root, { recursive: true, force: true }); },
+  };
+}
+
+function harness(w, extra = {}) {
+  const events = [], added = [];
+  const session = createInstallSession({
+    emit: (event) => events.push(event),
+    addServer: async (url) => { added.push(url); w.log.push({ kind: "add" }); return { outcome: "connected" }; },
+    installer: w.installer, savedHosts: createSavedHosts({ dir: w.dataDir }), knownHostsFile: w.knownHosts, agent: null, ...extra,
+  });
+  const has = (type) => events.some((event) => event.type === type);
+  return { session, events, added, has, wait: (type, ms) => until(() => events.find((event) => event.type === type), `${type} (saw ${JSON.stringify(events)})`, ms) };
+}
+
+const request = (w, extra = {}) => ({ address: w.address, user: "alice", email: "me@example.com", method: "password", password: "pw", ...extra });
+
+async function toChecks(w, h, extra = {}) {
+  void h.session.start(request(w, extra));
+  const first = await until(() => h.events.find((event) => ["hostKey", "checks", "failed"].includes(event.type)), "the host key question or the checks");
+  if (first.type === "hostKey") assert.equal(h.session.acceptHostKey(), true);
+  return h.wait("checks");
+}
+
+test("the connect timeout is fifteen seconds and a server that never answers fails as a timeout", async () => {
+  assert.equal(CONNECT_TIMEOUT_MS, 15_000);
+  const silent = net.createServer((socket) => { socket.resume(); socket.on("error", () => {}); });
+  await new Promise((resolve) => silent.listen(0, "127.0.0.1", resolve));
+  const events = [];
+  const session = createInstallSession({ emit: (event) => events.push(event), addServer: async () => true, installer: "unused", savedHosts: { read: () => [], remember() {} }, knownHostsFile: "/nonexistent", agent: null, connectTimeoutMs: 250 });
+  const started = Date.now();
+  await session.start({ address: `127.0.0.1:${silent.address().port}`, user: "alice", email: "me@example.com", method: "password", password: "pw" });
+  assert.equal(events.at(-1).type, "failed");
+  assert.equal(events.at(-1).reason, "timeout");
+  assert.ok(Date.now() - started < 3_000);
+  await new Promise((resolve) => silent.close(resolve));
+});
+
+test("a wrong password stops as an authentication failure and an unreachable address as unreachable", async () => {
+  const w = await world({ password: "right" });
+  try {
+    const h = harness(w);
+    void h.session.start(request(w, { password: "wrong" }));
+    await h.wait("hostKey");
+    h.session.acceptHostKey();
+    const failed = await h.wait("failed");
+    assert.equal(failed.reason, "auth");
+    const closed = net.createServer();
+    await new Promise((resolve) => closed.listen(0, "127.0.0.1", resolve));
+    const dead = closed.address().port;
+    await new Promise((resolve) => closed.close(resolve));
+    const other = harness(w);
+    await other.session.start(request(w, { address: `127.0.0.1:${dead}` }));
+    assert.equal(other.events.at(-1).reason, "unreachable");
+    const bad = harness(w);
+    await bad.session.start(request(w, { address: "not a host" }));
+    assert.equal(bad.events.at(-1).reason, "address");
+  } finally { await w.close(); }
+});
+
+test("an unknown host key shows its fingerprint and waits for the person before anything else happens", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    const h = harness(w);
+    void h.session.start(request(w));
+    const asked = await h.wait("hostKey");
+    assert.equal(asked.fingerprint, w.fingerprint);
+    assert.equal(asked.host, "127.0.0.1");
+    await sleep(250);
+    assert.equal(h.has("checks"), false);
+    assert.deepEqual(w.state.authMethods, []);
+    assert.deepEqual(w.log, []);
+    h.session.acceptHostKey();
+    await h.wait("checks");
+  } finally { await w.close(); }
+});
+
+test("declining the host key stops the flow before sign-in", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    const h = harness(w);
+    void h.session.start(request(w));
+    await h.wait("hostKey");
+    h.session.rejectHostKey();
+    assert.equal((await h.wait("failed")).reason, "hostKeyDeclined");
+    assert.deepEqual(w.state.authMethods, []);
+  } finally { await w.close(); }
+});
+
+test("a host key that differs from the saved one or the known_hosts one stops the flow before sign-in", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    createSavedHosts({ dir: w.dataDir }).remember({ host: "127.0.0.1", port: w.port, fingerprint: "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" });
+    const saved = harness(w);
+    await saved.session.start(request(w));
+    assert.equal(saved.events.at(-1).reason, "hostKeyChanged");
+    assert.equal(saved.has("hostKey"), false);
+    rmSync(path.join(w.dataDir, "ssh"), { recursive: true });
+    const other = utils.parseKey(utils.generateKeyPairSync("ed25519").public).getPublicSSH();
+    writeFileSync(w.knownHosts, `[127.0.0.1]:${w.port} ssh-ed25519 ${other.toString("base64")}\n`);
+    const known = harness(w);
+    await known.session.start(request(w));
+    assert.equal(known.events.at(-1).reason, "hostKeyChanged");
+    assert.deepEqual(w.state.authMethods, []);
+    assert.deepEqual(w.log, []);
+  } finally { await w.close(); }
+});
+
+test("a key the known_hosts file holds goes straight on without a question", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    writeFileSync(w.knownHosts, `[127.0.0.1]:${w.port} ssh-ed25519 ${w.hostBlob.toString("base64")}\n`);
+    const h = harness(w);
+    void h.session.start(request(w));
+    await h.wait("checks");
+    assert.equal(h.has("hostKey"), false);
+    await h.session.cancel();
+  } finally { await w.close(); }
+});
+
+test("accepting saves only host, port and fingerprint, and the next install to that host asks nothing", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    const first = harness(w);
+    await toChecks(w, first);
+    const file = path.join(w.dataDir, "ssh", "install-hosts.json");
+    assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { hosts: [{ host: "127.0.0.1", port: w.port, fingerprint: w.fingerprint }] });
+    if (process.platform !== "win32") assert.equal(statSync(file).mode & 0o777, 0o600);
+    await first.session.cancel();
+    const second = harness(w);
+    void second.session.start(request(w));
+    await second.wait("checks");
+    assert.equal(second.has("hostKey"), false);
+    await second.session.cancel();
+  } finally { await w.close(); }
+});
+
+test("a user who is not root and cannot use sudo stops before any change on the server", async () => {
+  const w = await world({ password: "pw", uid: "1000", sudo: "none" });
+  try {
+    const h = harness(w);
+    void h.session.start(request(w));
+    await h.wait("hostKey");
+    h.session.acceptHostKey();
+    const failed = await h.wait("failed");
+    assert.equal(failed.reason, "notAdmin");
+    assert.equal(w.log.some((entry) => /mktemp|cat >|install\.sh/.test(entry.command ?? "")), false);
+    assert.deepEqual(w.folders(), []);
+  } finally { await w.close(); }
+});
+
+test("a user with sudo and a password is checked with sudo -S in its own channel and a wrong password is said as such", async () => {
+  const w = await world({ password: "pw", uid: "1000", sudo: "password", sudoPassword: "pw" });
+  try {
+    const h = harness(w);
+    await toChecks(w, h);
+    assert.ok(w.log.some((entry) => entry.command === "sudo -S -p '' -v"));
+    assert.ok(w.log.some((entry) => /^sudo -S -p '' sh '.*install\.sh' --check --tunnel --events$/.test(entry.command)));
+    await h.session.cancel();
+    const wrong = harness(w);
+    void wrong.session.start(request(w, { method: "password", sudoPassword: "nope" }));
+    await wrong.wait("failed");
+    assert.equal(wrong.events.at(-1).reason, "sudoPassword");
+  } finally { await w.close(); }
+});
+
+test("sudo without a password is used when the server allows it", async () => {
+  const w = await world({ password: "pw", uid: "1000", sudo: "nopass" });
+  try {
+    const h = harness(w);
+    await toChecks(w, h);
+    assert.ok(w.log.some((entry) => /^sudo -n sh '.*install\.sh' --check/.test(entry.command)));
+    await h.session.cancel();
+  } finally { await w.close(); }
+});
+
+test("the installer goes to a new private folder and its SHA-256 is checked before it runs", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    const h = harness(w);
+    await toChecks(w, h);
+    const [folder] = w.folders();
+    assert.ok(folder);
+    if (process.platform !== "win32") assert.equal(statSync(path.join(w.box, folder)).mode & 0o777, 0o700);
+    assert.equal(readFileSync(path.join(w.box, folder, "install.sh"), "utf8"), INSTALLER);
+    const order = w.log.map((entry) => entry.command);
+    const sum = order.findIndex((command) => /sha256sum/.test(command));
+    const run = order.findIndex((command) => /^sh '.*install\.sh' --check/.test(command));
+    assert.ok(sum > order.findIndex((command) => /^cat > /.test(command)) && sum < run);
+    await h.session.cancel();
+  } finally { await w.close(); }
+});
+
+test("an installer that arrives changed is never run", async () => {
+  const w = await world({ password: "pw", corruptUpload: true });
+  try {
+    const h = harness(w);
+    void h.session.start(request(w));
+    await h.wait("hostKey");
+    h.session.acceptHostKey();
+    assert.equal((await h.wait("failed")).reason, "upload");
+    assert.equal(w.log.some((entry) => /install\.sh' --/.test(entry.command ?? "")), false);
+    await until(() => w.folders().length === 0, "the folder to be removed");
+  } finally { await w.close(); }
+});
+
+test("the check runs alone, shows each result, and nothing is installed before Install", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    const h = harness(w);
+    const checks = await toChecks(w, h);
+    assert.equal(checks.result, "ok");
+    assert.deepEqual(h.events.filter((event) => event.type === "check").map((event) => [event.id, event.level]), [["os", "ok"], ["disk", "ok"]]);
+    assert.equal(w.log.some((entry) => /account-email/.test(entry.command ?? "")), false);
+    assert.equal(readFileSync(path.join(w.box, "runs.log"), "utf8").trim(), "--check --tunnel --events");
+    await h.session.cancel();
+  } finally { await w.close(); }
+});
+
+test("a failed check shows the one-sentence fix, refuses Install, and Check again reruns it", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    writeFileSync(path.join(w.box, "disk-bad"), "");
+    const h = harness(w);
+    const first = await toChecks(w, h);
+    assert.equal(first.result, "fix");
+    assert.deepEqual(first.items.find((item) => item.id === "disk"), { id: "disk", level: "fix", sentence: "Free up 20 GB of disk space" });
+    assert.equal(await h.session.install({ installDocker: false }), false);
+    rmSync(path.join(w.box, "disk-bad"));
+    h.events.length = 0;
+    assert.equal(await h.session.check(), true);
+    assert.equal((await h.wait("checks")).result, "ok");
+    await h.session.cancel();
+  } finally { await w.close(); }
+});
+
+test("a missing Docker can be installed only when the person agreed", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    writeFileSync(path.join(w.box, "docker-bad"), "");
+    const h = harness(w);
+    const checks = await toChecks(w, h);
+    assert.equal(checks.result, "fix");
+    assert.equal(await h.session.install({ installDocker: false }), false);
+    void h.session.install({ installDocker: true });
+    await h.wait("askCode");
+    assert.match(readFileSync(path.join(w.box, "runs.log"), "utf8"), /--tunnel --events --account-email me@example\.com --install-docker/);
+    await h.session.cancel();
+  } finally { await w.close(); }
+});
+
+test("Install runs the installer with the tunnel and events options, shows each step, asks for the code once and adds the server", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    const h = harness(w);
+    await toChecks(w, h);
+    const done = h.session.install({ installDocker: false });
+    const asked = await h.wait("askCode");
+    assert.equal(asked.email, "me@example.com");
+    assert.equal(h.session.sendCode("12ab"), false);
+    assert.equal(h.session.sendCode("12345678"), true);
+    assert.equal(h.session.sendCode("87654321"), false);
+    await done;
+    await h.wait("connected");
+    assert.deepEqual(h.events.filter((event) => event.type === "step").map((event) => `${event.id}:${event.state}`), ["docker:start", "docker:done", "signin:start", "signin:done", "pair:done"]);
+    assert.match(readFileSync(path.join(w.box, "runs.log"), "utf8"), /^--check --tunnel --events\n--tunnel --events --account-email me@example\.com\n$/);
+    assert.equal(readFileSync(path.join(w.box, "stdin.log"), "utf8"), "code 12345678\n");
+    assert.deepEqual(h.added, ["https://abc.example.test/pair#code=PAIR-CODE-1"]);
+  } finally { await w.close(); }
+});
+
+test("the pairing link closes the connection, removes the folder first, then adds the server", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    const h = harness(w);
+    await toChecks(w, h);
+    const done = h.session.install({});
+    await h.wait("askCode");
+    h.session.sendCode("12345678");
+    await done;
+    await h.wait("connected");
+    const kinds = w.log.map((entry) => (entry.kind === "add" ? "add" : /rm -rf/.test(entry.command) ? "rm" : "other"));
+    assert.ok(kinds.indexOf("rm") !== -1 && kinds.indexOf("rm") < kinds.indexOf("add"));
+    await until(() => w.state.closed >= 1, "the connection to close");
+    assert.deepEqual(w.folders(), []);
+    assert.equal(await h.session.check(), false);
+    assert.equal(h.session.sendCode("12345678"), false);
+  } finally { await w.close(); }
+});
+
+test("a failed step shows the step and the installer's sentence, and Try again runs the installer on a new connection", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    writeFileSync(path.join(w.box, "image-fails"), "");
+    const h = harness(w);
+    await toChecks(w, h);
+    const done = h.session.install({});
+    await h.wait("askCode");
+    h.session.sendCode("12345678");
+    await done;
+    const failed = await h.wait("failed");
+    assert.equal(failed.step, "image");
+    assert.equal(failed.sentence, "Docker could not pull the image");
+    assert.deepEqual(w.folders(), []);
+    rmSync(path.join(w.box, "image-fails"));
+    const before = w.state.connections;
+    const again = harness(w);
+    await toChecks(w, again);
+    assert.equal(w.state.connections, before + 1);
+    const second = again.session.install({});
+    await again.wait("askCode");
+    again.session.sendCode("12345678");
+    await second;
+    await again.wait("connected");
+    assert.equal(readFileSync(path.join(w.box, "runs.log"), "utf8").split("\n").filter((line) => line.includes("--account-email")).length, 2);
+  } finally { await w.close(); }
+});
+
+test("a dropped connection is shown as a failure at the step that was running", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    const h = harness(w);
+    await toChecks(w, h);
+    void h.session.install({});
+    await h.wait("askCode");
+    for (const client of w.state.clients) client.end();
+    for (const client of w.state.clients) client._sock?.destroy();
+    const failed = await h.wait("failed");
+    assert.equal(failed.reason, "dropped");
+    assert.equal(failed.step, "signin");
+  } finally { await w.close(); }
+});
+
+test("Cancel closes the connection within two seconds, even while the installer waits", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    const h = harness(w);
+    await toChecks(w, h);
+    void h.session.install({});
+    await h.wait("askCode");
+    const started = Date.now();
+    await h.session.cancel();
+    assert.ok(Date.now() - started < 2_000, `took ${Date.now() - started} ms`);
+    await until(() => w.state.closed >= 1, "the server to see the connection close", 2_000);
+    assert.equal(h.events.at(-1).type, "cancelled");
+    assert.deepEqual(w.folders(), []);
+    rmSync(path.join(w.dataDir, "ssh"), { recursive: true });
+    const early = harness(w);
+    void early.session.start(request(w));
+    await early.wait("hostKey");
+    const t = Date.now();
+    await early.session.cancel();
+    assert.ok(Date.now() - t < 2_000);
+  } finally { await w.close(); }
+});
+
+test("an email that could break out of the command is refused before any connection", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    const h = harness(w);
+    await h.session.start(request(w, { email: "x'; touch /tmp/pwned; '@example.com" }));
+    assert.equal(h.events.at(-1).reason, "email");
+    assert.equal(w.state.connections, 0);
+    assert.equal(shellQuote("a'b"), "'a'\\''b'");
+  } finally { await w.close(); }
+});
+
+test("nothing secret reaches the console, the page's events or the data folder (password, key passphrase, emailed code)", async () => {
+  const secrets = { password: "pw-UNIQ-4f8e1c7a", passphrase: "pp-UNIQ-9d2b6e3f", code: "48151623", pair: "PAIR-CODE-1" };
+  const consoleLines = [];
+  const originals = {};
+  for (const name of ["log", "info", "warn", "error", "debug", "trace"]) {
+    originals[name] = console[name];
+    console[name] = (...args) => consoleLines.push(args.map(String).join(" "));
+  }
+  const pair = utils.generateKeyPairSync("ed25519", { passphrase: secrets.passphrase, cipher: "aes256-ctr", rounds: 16 });
+  const w = await world({ password: secrets.password, uid: "1000", sudo: "password", sudoPassword: secrets.password });
+  const k = await world({ publicKey: pair.public });
+  const scan = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true, recursive: true })) {
+      if (!entry.isFile()) continue;
+      const body = readFileSync(path.join(entry.parentPath ?? entry.path, entry.name), "utf8");
+      for (const [name, value] of Object.entries(secrets)) assert.equal(body.includes(value), false, `${name} found in ${entry.name}`);
+    }
+  };
+  try {
+    const first = harness(w);
+    await toChecks(w, first, { password: secrets.password });
+    const done = first.session.install({});
+    await first.wait("askCode");
+    first.session.sendCode(secrets.code);
+    await done;
+    await first.wait("connected");
+    const keyFile = path.join(k.root, "id_ed25519");
+    writeFileSync(keyFile, pair.private, { mode: 0o600 });
+    const second = harness(k);
+    void second.session.start({ ...request(k), method: "key", keyPath: keyFile, passphrase: secrets.passphrase, password: "" });
+    await second.wait("hostKey");
+    second.session.acceptHostKey();
+    await second.wait("checks");
+    const done2 = second.session.install({});
+    await second.wait("askCode");
+    second.session.sendCode(secrets.code);
+    await done2;
+    await second.wait("connected");
+    assert.deepEqual(k.folders(), []);
+    assert.deepEqual(w.folders(), []);
+    scan(w.dataDir);
+    scan(k.dataDir);
+    const text = `${JSON.stringify([...first.events, ...second.events])}\n${consoleLines.join("\n")}`;
+    for (const [name, value] of Object.entries(secrets)) assert.equal(text.includes(value), false, `${name} leaked into events or console`);
+  } finally {
+    for (const [name, fn] of Object.entries(originals)) console[name] = fn;
+    await w.close();
+    await k.close();
+  }
+});
+
+test("after the install ends the session is inert and its folder on the server is gone", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    const h = harness(w);
+    await toChecks(w, h);
+    assert.equal(w.folders().length, 1);
+    await h.session.cancel();
+    assert.deepEqual(w.folders(), []);
+    assert.equal(await h.session.install({}), false);
+    assert.equal(await h.session.check(), false);
+    assert.equal(h.session.acceptHostKey(), false);
+    assert.equal(h.session.sendCode("12345678"), false);
+  } finally { await w.close(); }
+});
+
+test("the installer's lines are read as events and every other line is ignored", () => {
+  assert.deepEqual(parseSeiraLine("::seira check disk fix Free up space"), { type: "check", id: "disk", level: "fix", sentence: "Free up space" });
+  assert.deepEqual(parseSeiraLine("::seira checks ok"), { type: "checks", result: "ok" });
+  assert.deepEqual(parseSeiraLine("::seira step image fail It broke"), { type: "step", id: "image", state: "fail", sentence: "It broke" });
+  assert.deepEqual(parseSeiraLine("::seira step image start"), { type: "step", id: "image", state: "start", sentence: "" });
+  assert.deepEqual(parseSeiraLine("::seira ask code me@example.com"), { type: "ask", email: "me@example.com" });
+  assert.deepEqual(parseSeiraLine("::seira pair https://a.test/pair#code=X"), { type: "pair", url: "https://a.test/pair#code=X" });
+  assert.deepEqual(parseSeiraLine("::seira done"), { type: "done" });
+  assert.deepEqual(parseSeiraLine("::seira fail No room"), { type: "fail", sentence: "No room" });
+  for (const line of ["hello", "::seira", "::seira unknown x", "::seira check disk maybe x", "code 12345678"]) assert.equal(parseSeiraLine(line), null, line);
+});
+
+test("an address is read as host, host:port, [v6]:port or ssh://host", () => {
+  assert.deepEqual(parseAddress("203.0.113.9"), { host: "203.0.113.9", port: 22 });
+  assert.deepEqual(parseAddress("vps.example.com:2200"), { host: "vps.example.com", port: 2200 });
+  assert.deepEqual(parseAddress("ssh://vps.example.com/"), { host: "vps.example.com", port: 22 });
+  assert.deepEqual(parseAddress("[2001:db8::1]:2200"), { host: "2001:db8::1", port: 2200 });
+  for (const bad of ["", "a b", "root@host", "host:99999", "host:0", "-bad.example", "a;b"]) assert.equal(parseAddress(bad), null, bad);
+});
+
+test("the installer comes from the bundled resources, is shipped by the build, and no system ssh is called", () => {
+  assert.equal(installerPath({ packaged: true, resourcesPath: "/r" }), path.join("/r", "installer", "install.sh"));
+  assert.ok(existsSync(installerPath({ packaged: false, resourcesPath: "/r" })));
+  const build = readFileSync(path.join(here, "..", "electron-builder.yml"), "utf8");
+  assert.match(build, /from: deploy\/install\.sh\n\s+to: installer\/install\.sh/);
+  for (const file of ["vps-install.mjs", "vps-install-hosts.mjs"]) {
+    const source = readFileSync(path.join(here, file), "utf8");
+    assert.equal(/child_process/.test(source), false, `${file} must not run a program`);
+  }
+});
