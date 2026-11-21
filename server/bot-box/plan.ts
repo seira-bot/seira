@@ -19,10 +19,11 @@
 //     the egress gate (every connection to the internet goes through it) and the harness gate (only /api/internal/
 //     routes of this server). Nothing else on the server's loopback is reachable. A box that waits for a sign-in callback
 //     also dials out to one more socket, through which the server reaches the box's own loopback, never the other way.
-import { statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { isLayerId } from "../audience.ts";
+import type { TurnFolders } from "../folder-access.ts";
 
 export type BoxNet = "isolated" | "shared";
 
@@ -92,6 +93,10 @@ export interface BoxRequest {
   conversationBot?: string;
   /** On a Team Cloud: what the conversation's audience gives the box of the bot's team things (BoxAudience). */
   audience?: BoxAudience;
+  /** The bot's folder list for this turn. Each grant is bound at its own path, read-only grants after every read-write
+   * line. `limited` also hides the rest of the server's HOME (not with `home`, which already replaces it). Absent: the
+   * box is the same as without folder settings. */
+  folders?: TurnFolders;
 }
 
 /** On a Team Cloud, what one conversation's boxes get of what is the team's (docs/team-cloud.md, "The audience rule"):
@@ -171,6 +176,19 @@ export const CPU_LIST_FILES = ["/sys/devices/system/cpu/possible", "/sys/devices
 /** Folders the box always has its own copy of, so no setting may put the host's back. */
 const PRIVATE_INSIDE = ["/tmp", "/var/tmp", "/run", "/dev", "/proc"];
 
+/** Engine sign-in folders and files in HOME that a limited box still has read-write (the same set as ENGINE_FOLDERS in
+ * server/engine-homes/layout.ts). */
+export const LIMITED_HOME_SIGN_INS = [".claude", ".claude.json", ".codex", ".grok", ".kimi-code", ".dsh", ".factory",
+  ".config/muse", ".config/opencode", ".local/share/opencode", ".gemini", ".pi/agent"] as const;
+
+/** Program installs in HOME that a limited box has read-only. Whole roots, not their bin folders: npm's and nvm's bin
+ * links point into the install by relative paths. */
+export const LIMITED_HOME_PROGRAMS = [".local/bin", ".npm-global", ".nvm", ".volta", ".bun", ".asdf", ".local/share/mise", ".deno",
+  ".cargo", ".opencode", "bin"] as const;
+
+/** Git settings a limited box reads, so commits and clones keep working. */
+export const LIMITED_HOME_GIT = [".gitconfig", ".config/git"] as const;
+
 function assertReadOnlySource(source: string): void {
   try {
     const stat = statSync(source);
@@ -215,7 +233,17 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
   // HOME first; the data folder is replaced by an empty one right after, so the lines below put back only what is named.
   // An engine home lives in the data folder, so it goes back after that.
   const ownHome = request.home ? resolve(request.home) : null;
-  if (!ownHome) rw(home);
+  const limited = !ownHome && request.folders?.limited === true;
+  if (limited) {
+    // A private empty HOME, with back only what an engine needs to run and sign in.
+    mounts.push({ kind: "tmpfs", target: home });
+    for (const name of [...LIMITED_HOME_PROGRAMS, ...LIMITED_HOME_GIT]) mounts.push({ kind: "ro", source: join(home, name), target: join(home, name), optional: true });
+    for (const name of LIMITED_HOME_SIGN_INS) {
+      const path = join(home, name);
+      if (under(path, dataDir) || under(dataDir, path) || !existsSync(path)) continue;
+      rw(path);
+    }
+  } else if (!ownHome) rw(home);
   const dataInsideHome = under(dataDir, home);
   if (!mutate.has("bind-data")) {
     if (dataInsideHome) mounts.push({ kind: "tmpfs", target: dataDir });
@@ -261,6 +289,14 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
     rw(resolve(value));
   }
   for (const path of request.rw ?? []) if (!covered(resolve(path))) rw(resolve(path));
+  // Security: a grant never gives back the data folder, or a folder that holds it, whatever the caller was given.
+  const grants = (request.folders?.grants ?? []).map((grant) => ({ path: resolve(grant.path), write: grant.write }))
+    .filter((grant) => !under(grant.path, dataDir) && !under(dataDir, grant.path));
+  for (const grant of grants) {
+    if (!grant.write) continue;
+    mounts.push({ kind: "bind", source: grant.path, target: grant.path, optional: true });
+    if (!writable.includes(grant.path)) writable.push(grant.path);
+  }
   if (ownHome) {
     for (const file of request.shared ?? []) {
       if (under(resolve(file.target), ownHome)) mounts.push({ kind: "bind", source: resolve(file.source), target: resolve(file.target), optional: true });
@@ -307,6 +343,15 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
     if (["/usr", "/etc", "/opt", "/var/lib", ...setup.codeRoots, ...setup.engineRoots].some((base) => under(full, resolve(base)))) continue;
     readOnly.add(full);
     mounts.push({ kind: "ro", source: full, target: full, optional: true });
+  }
+
+  // The bot's read-only grants go after every read-write line, so they win over a writable HOME or parent. Shallow to
+  // deep: a can-change grant inside a read-only one is bound read-write again, as the deeper grant wins.
+  const askedReadOnly = grants.filter((grant) => !grant.write);
+  const depth = (path: string) => path.split(sep).filter(Boolean).length;
+  for (const grant of [...grants].sort((a, b) => depth(a.path) - depth(b.path) || Number(b.write) - Number(a.write))) {
+    if (!grant.write) mounts.push({ kind: "ro", source: grant.path, target: grant.path, optional: true });
+    else if (askedReadOnly.some((outer) => outer.path !== grant.path && under(grant.path, outer.path))) mounts.push({ kind: "bind", source: grant.path, target: grant.path, optional: true });
   }
 
   // The team's shared folder, at one path in every box: its own line, as nothing else is bound there.
