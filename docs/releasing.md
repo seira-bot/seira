@@ -174,12 +174,12 @@ git push origin v<version>
 node scripts/release-preflight.mjs --tag v<version>
 cd .seira-scratch/linux-upload
 gh release create v<version> --verify-tag --draft --title "Seira v<version>" --generate-notes
-node scripts/release-assets.mjs upload v<version> \
+node ../../scripts/release-assets.mjs upload v<version> \
   Seira-<version>-x86_64.AppImage Seira-<version>-amd64.deb latest-linux.yml \
   Seira.AppImage Seira-amd64.deb SHA256SUMS-linux-x64.txt
-node scripts/release-assets.mjs check v<version>
+node ../../scripts/release-assets.mjs check v<version>
 gh release edit v<version> --draft=false
-node scripts/release-assets.mjs check v<version>
+node ../../scripts/release-assets.mjs check v<version>
 ```
 
 The release stays a draft until the Linux files are on it. Attach every file
@@ -249,10 +249,10 @@ gh run watch <run id> --repo seira-bot/seira --exit-status
 mkdir -p .seira-scratch/windows && cd .seira-scratch/windows
 gh run download <run id> --repo seira-bot/seira --name seira-<version>-windows-x64
 sha256sum -c SHA256SUMS-windows-x64.txt
-node scripts/release-assets.mjs upload v<version> \
+node ../../scripts/release-assets.mjs upload v<version> \
   Seira-<version>-setup.exe Seira-<version>-setup.exe.blockmap latest.yml \
   Seira-setup.exe SHA256SUMS-windows-x64.txt
-node scripts/release-assets.mjs check v<version>
+node ../../scripts/release-assets.mjs check v<version>
 ```
 
 - Set `ref` to the release tag. The workflow stops when the tag and the
@@ -359,13 +359,13 @@ gh run watch <run id> --repo seira-bot/seira --exit-status
 mkdir -p .seira-scratch/macos && cd .seira-scratch/macos
 gh run download <run id> --repo seira-bot/seira --name seira-<version>-macos
 sha256sum -c SHA256SUMS-mac.txt
-node scripts/release-assets.mjs upload v<version> \
+node ../../scripts/release-assets.mjs upload v<version> \
   Seira-<version>-arm64.dmg Seira-<version>-x64.dmg \
   Seira-<version>-arm64.zip Seira-<version>-x64.zip \
   Seira-<version>-arm64.dmg.blockmap Seira-<version>-x64.dmg.blockmap \
   Seira-<version>-arm64.zip.blockmap Seira-<version>-x64.zip.blockmap \
   latest-mac.yml Seira.dmg Seira-intel.dmg SHA256SUMS-mac.txt
-node scripts/release-assets.mjs check v<version>
+node ../../scripts/release-assets.mjs check v<version>
 ```
 
 - Set `ref` to the release tag. The workflow stops when the tag and the
@@ -436,11 +436,12 @@ gh release download v<version> --repo seira-bot/seira
 sha256sum -c SHA256SUMS-linux-x64.txt
 sha256sum -c SHA256SUMS-windows-x64.txt
 sha256sum -c SHA256SUMS-mac.txt
-node scripts/release-assets.mjs check v<version>
+node ../../scripts/release-assets.mjs check v<version>
 ```
 
-Each check must print `OK`, and the `check` command must print no `FAIL` line. If a check fails, delete the release assets and
-upload them again. Never edit an asset in place.
+Each check must print `OK`, and the `check` command must print no `FAIL`
+line. If a check fails, delete the release assets and upload them again. Never
+edit an asset in place.
 
 ## Publish to npm
 

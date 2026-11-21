@@ -95,7 +95,6 @@ export function sumsFiles(text) {
   return names;
 }
 
-/** `assets` are the release assets. `texts` maps the name of a feed or checksum asset to its content. */
 export function judgeAssets({ assets, texts }) {
   const problems = [];
   const byName = new Map(assets.map((asset) => [asset.name, asset]));
@@ -116,7 +115,6 @@ export function judgeAssets({ assets, texts }) {
   return problems;
 }
 
-/** Every file that is not a feed keeps its given order and goes first. The feeds go last. */
 export function uploadOrder(files) {
   return { first: files.filter((file) => !isFeed(file)), last: files.filter(isFeed) };
 }
@@ -142,7 +140,6 @@ export async function findRelease(api, repo, tag) {
   return null;
 }
 
-/** Reads the release, logs one line per finding and returns the exit status. */
 export async function check({ api, repo = "owner/name", tag, log = console.log }) {
   const release = await findRelease(api, repo, tag);
   if (!release) {
@@ -166,7 +163,6 @@ export async function check({ api, repo = "owner/name", tag, log = console.log }
   return 0;
 }
 
-/** Uploads one file at a time. Feeds go last, and only after a check that passed. */
 export async function upload({ api, run, repo = "owner/name", tag, files, log = console.log, exists = existsSync }) {
   const missing = files.filter((file) => !exists(file));
   for (const file of missing) log(`FAIL ${file} does not exist`);

@@ -53,10 +53,10 @@ workflow again.
 Attach all five files to the same release as the Linux and macOS files:
 
 ```sh
-node scripts/release-assets.mjs upload v<version> \
+node ../../scripts/release-assets.mjs upload v<version> \
   Seira-<version>-setup.exe Seira-<version>-setup.exe.blockmap latest.yml \
   Seira-setup.exe SHA256SUMS-windows-x64.txt
-node scripts/release-assets.mjs check v<version>
+node ../../scripts/release-assets.mjs check v<version>
 ```
 
 The script uploads feeds (`latest*.yml`) last, so installed apps never read a
