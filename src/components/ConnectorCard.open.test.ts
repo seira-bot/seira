@@ -118,7 +118,7 @@ describe("ConnectorCard Sign in after a sign-in it started", () => {
     await signIn();
     render({ status: "authorizing" });
     render({ status: "required" });
-    expect(link()).toBeNull();
+    await vi.waitFor(() => expect(link()).toBeNull());
     expect(text("status")).toBeNull();
     api.mockResolvedValueOnce({ url: LATER_URL });
     signInButton().click();
