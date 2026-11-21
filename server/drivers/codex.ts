@@ -1263,7 +1263,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
           // Omitting these on a resumed thread would keep the previous named mode.
           approvalParams = customApprovalParams(effectiveConfig);
         } else {
-          approvalParams = namedApprovalParams(approvalMode);
+          approvalParams = namedApprovalParams(approvalMode, turn.folders);
         }
         // Codex's `never` means "do not ask to escalate", not "grant every requested permission":
         // only Full may synthesize approvals.
@@ -1371,7 +1371,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
           return request("turn/start", {
             threadId: codexThreadId,
             input: turnInput,
-            ...withFolderGrants(approvalParams, turn.folders).turn,
+            ...withFolderGrants(approvalParams, turn.folders, turn.cwd).turn,
             // No environment: exec_command, apply_patch and view_image are refused (codex-cli 0.159.0).
             // Without the experimental API the field is rejected, not ignored.
             ...(turn.guestConfined ? { environments: [] } : {}),

@@ -10,7 +10,8 @@ describe("withFolderGrants", () => {
     expect(withFolderGrants(ask, undefined)).toBe(ask);
     expect(withFolderGrants(ask, { limited: true, grants: [grants[0]] })).toBe(ask);
     const full = namedApprovalParams("full");
-    expect(withFolderGrants(full, { limited: true, grants })).toBe(full);
+    expect(withFolderGrants(full, { limited: false, grants })).toBe(full);
+    expect(namedApprovalParams("full", { limited: false, grants })).toEqual(full);
   });
 
   it("adds only can-change grants to the roots and keeps existing roots without a duplicate", () => {
@@ -23,5 +24,22 @@ describe("withFolderGrants", () => {
     const base = namedApprovalParams("ask");
     const params = { ...base, turn: { ...base.turn, sandboxPolicy: { type: "readOnly" } } };
     expect(withFolderGrants(params, { limited: true, grants })).toBe(params);
+  });
+});
+
+describe("a limited full turn", () => {
+  it("is workspace-write with network access and never asks", () => {
+    const params = namedApprovalParams("full", { limited: true, grants });
+    expect(params.thread).toMatchObject({ approvalPolicy: "never", sandbox: "workspace-write" });
+    expect(withFolderGrants(params, { limited: true, grants }, "/work").turn).toMatchObject({
+      approvalPolicy: "never",
+      sandboxPolicy: { type: "workspaceWrite", networkAccess: true, writableRoots: ["/work", "/data/rw", "/data/rw2"] },
+    });
+  });
+
+  it("keeps network access when the resolved sandbox says otherwise", () => {
+    const base = namedApprovalParams("full", { limited: true, grants: [] });
+    const resolved = { ...base, turn: { ...base.turn, sandboxPolicy: { type: "workspaceWrite", networkAccess: false, writableRoots: [] } } };
+    expect((withFolderGrants(resolved, { limited: true, grants: [] }, "/work").turn.sandboxPolicy as any).networkAccess).toBe(true);
   });
 });

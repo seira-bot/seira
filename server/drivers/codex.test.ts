@@ -975,8 +975,24 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       expect(policy.writableRoots).toEqual([folders.grants[1].path]);
     });
 
-    it("leaves full access as it was", async () => {
-      expect(await turnPolicy("full", { folders })).toEqual({ type: "dangerFullAccess" });
+    it("leaves full access as it was when the turn is not limited", async () => {
+      expect(await turnPolicy("full", { folders: { ...folders, limited: false } })).toEqual({ type: "dangerFullAccess" });
+      expect(await turnPolicy("full", {})).toEqual({ type: "dangerFullAccess" });
+    });
+
+    it("runs a limited full turn in workspace-write with network, the working folder and can-change grants as roots, and no new asks", async () => {
+      const cwd = join(scratch, "work");
+      mkdirSync(cwd, { recursive: true });
+      await create({ mode: "resume" });
+      const dump = join(scratch, "folders-full-limited.json");
+      process.env.FAKE_CODEX_DUMP = dump;
+      await instance.adapter.sendTurn({ threadId: "t-folders-full", text: "continue", approvalMode: "full", cwd, folders });
+      await recorder.until((event) => event.type === "turn.completed");
+      const calls = JSON.parse(readFileSync(dump, "utf8")).calls as Array<{ method: string; params: Record<string, any> }>;
+      expect(calls.find((call) => call.method === "thread/start")!.params).toMatchObject({ approvalPolicy: "never", sandbox: "workspace-write" });
+      const turn = calls.find((call) => call.method === "turn/start")!.params;
+      expect(turn.approvalPolicy).toBe("never");
+      expect(turn.sandboxPolicy).toMatchObject({ type: "workspaceWrite", networkAccess: true, writableRoots: [cwd, folders.grants[1].path] });
     });
 
     it("sends the same sandbox policy as before for a turn with no folder setting (resumed)", async () => {
