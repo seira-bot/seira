@@ -55,11 +55,15 @@ describe("PanelTabs", () => {
     const press = (key: string) => flushSync(() => { list.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true })); });
     press("ArrowRight");
     expect(onSelect).toHaveBeenLastCalledWith("library");
+    press("ArrowLeft");
+    expect(onSelect).toHaveBeenLastCalledWith("activity");
+    press("Home");
+    expect(onSelect).toHaveBeenLastCalledWith("activity");
     press("End");
     expect(onSelect).toHaveBeenLastCalledWith("computer");
     flushSync(() => root!.render(createElement(PanelTabs, { tab: "computer", onSelect })));
     press("ArrowRight");
-    expect(onSelect).toHaveBeenCalledTimes(2);
+    expect(onSelect).toHaveBeenCalledTimes(4);
     expect(document.querySelector('[data-panel-tab="computer"]')?.getAttribute("tabindex")).toBe("0");
     expect(document.querySelector('[data-panel-tab="library"]')?.getAttribute("tabindex")).toBe("-1");
   });
