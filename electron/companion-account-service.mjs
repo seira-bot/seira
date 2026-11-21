@@ -85,6 +85,7 @@ const CONNECTOR_FAILING_STATES = new Set(["retrying", "error"]);
 /** Verify failures in a row after which a stored address is checked with the control plane. */
 const FORCED_CHECK_AFTER_FAILURES = 2;
 const DEFAULT_FORCED_CHECK_INTERVAL_MS = 10 * 60_000;
+const DEFAULT_RENEW_INTERVAL_MS = 10 * 60_000;
 /** Each such check waits longer (10 min, 30 min, then 2 h with the default), until a connection verifies. */
 const FORCED_CHECK_STEPS = [1, 3, 12];
 
@@ -143,6 +144,8 @@ export function createCompanionAccountService({
   forcedCheckIntervalMs = DEFAULT_FORCED_CHECK_INTERVAL_MS,
   /** A new installation credential was stored: the relay token can be asked for now. */
   installationChanged = () => {},
+  /** The shortest wait between two renewals of the installation credential. */
+  renewIntervalMs = DEFAULT_RENEW_INTERVAL_MS,
   cloudSession = null,
   // Only the code, HTTP status, request id and retry delay: never an email, token, credential or address.
   log = () => {},
@@ -160,6 +163,7 @@ export function createCompanionAccountService({
   let lastEndpointCheck = null;
   let requestedAt = null;
   let disposed = false;
+  let lastRenewalAt = null;
   let connectorFailures = 0;
   let forcedChecks = 0;
   let nextForcedCheckAt = null;
@@ -413,6 +417,27 @@ export function createCompanionAccountService({
     });
   };
 
+  // Persist the verified installation before anything else, or each Retry rotates the credential until rate-limited.
+  const storeInstallation = async ({ accountToken, previous, installation }) => {
+    try {
+      await updateCredentials((document) => withInstallationCredentials(document, installation));
+    } catch (error) {
+      if (previous?.installationId !== installation.installation.id ||
+          previous?.installationCredential !== installation.credential) {
+        await client.revokeInstallation(accountToken, installation.installation.id).catch(() => {});
+      }
+      throw error;
+    }
+    if (previous?.installationCredential !== installation.credential) {
+      try {
+        installationChanged();
+      } catch {
+      }
+      return true;
+    }
+    return false;
+  };
+
   /** `addressGone`: the control plane said the stored address is gone, so it is forgotten even when no tunnel is asked for. */
   const provision = async ({ accountToken, user, addressGone = false }) => {
     const clientInstanceId = await ensureClientIdentity();
@@ -428,22 +453,7 @@ export function createCompanionAccountService({
       platform: identity.platform,
       appVersion: identity.appVersion, ...(identity.kind ? { kind: identity.kind } : {}),
     });
-    // Persist the verified installation before provisioning, or each Retry rotates the credential until rate-limited.
-    try {
-      await updateCredentials((document) => withInstallationCredentials(document, installation));
-    } catch (error) {
-      if (previous?.installationId !== installation.installation.id ||
-          previous?.installationCredential !== installation.credential) {
-        await client.revokeInstallation(accountToken, installation.installation.id).catch(() => {});
-      }
-      throw error;
-    }
-    if (previous?.installationCredential !== installation.credential) {
-      try {
-        installationChanged();
-      } catch {
-      }
-    }
+    await storeInstallation({ accountToken, previous, installation });
     // The control plane answers for the address below: no separate check is due.
     lastEndpointCheck = now();
     const withoutTunnel = async () => {
@@ -974,6 +984,34 @@ export function createCompanionAccountService({
     return settledState();
   });
 
+  const renewInstallation = () => serialize(async () => {
+    if (!configured || disposed) return settledState();
+    const account = storedAccount(credentials());
+    if (!account || companionAccountCleanupPending(credentials())) return settledState();
+    if (lastRenewalAt !== null && now() - lastRenewalAt < renewIntervalMs) return settledState();
+    lastRenewalAt = now();
+    try {
+      await requireHealthyControlPlane();
+      const clientInstanceId = await ensureClientIdentity();
+      const accountToken = shared.tokenFor(account);
+      const installation = await client.ensureInstallation({
+        accountToken,
+        currentCredential: account.installationCredential,
+        clientInstanceId,
+        name: identity.name,
+        platform: identity.platform,
+        appVersion: identity.appVersion, ...(identity.kind ? { kind: identity.kind } : {}),
+      });
+      if (await storeInstallation({ accountToken, previous: account, installation })) {
+        writeLog("companion account: renewed the installation credential for the relay");
+      }
+      phase = null;
+    } catch (error) {
+      failAction(error, { email: account.email, expiredSessionIsSignedOut: true });
+    }
+    return settledState();
+  });
+
   const dispose = () => {
     disposed = true;
     cancelAutoRetry();
@@ -995,6 +1033,7 @@ export function createCompanionAccountService({
     connectorChanged,
     signOut,
     restore,
+    renewInstallation,
     dispose,
   });
 }
