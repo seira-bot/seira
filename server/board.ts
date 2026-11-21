@@ -139,10 +139,10 @@ function withClosure(card: BoardCard, closed: BoardSources["closed"]): BoardCard
   if (card.column !== "needs-you") return card;
   const closure = closed?.(card.id);
   if (!closure || closure.at < card.updatedAt) return card;
-  const closed: BoardCard = { ...card, column: "done", state: "closed", updatedAt: closure.at, closedBy: closure.by };
-  delete closed.question;
-  if (closure.reason) closed.closedReason = closure.reason;
-  return closed;
+  const moved: BoardCard = { ...card, column: "done", state: "closed", updatedAt: closure.at, closedBy: closure.by };
+  delete moved.question;
+  if (closure.reason) moved.closedReason = closure.reason;
+  return moved;
 }
 
 /** A bot may move a card to Done when the work is its own or it handed the work over. A Chief of Staff may also close a
