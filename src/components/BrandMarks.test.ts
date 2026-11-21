@@ -56,7 +56,7 @@ describe("brand marks", () => {
 
   it("names where each logo comes from", () => {
     const source = readFileSync(join(process.cwd(), "src", "components", "BrandMarks.tsx"), "utf8");
-    const marks = [...source.matchAll(/(\/\*\*[^\n]*\*\/)\nexport function (\w+Mark)\(/g)];
+    const marks = [...source.matchAll(/(\/\*\*[^\n]*\*\/)\nexport function (\w+Mark)\(/g)].filter((match) => match[2] !== "BrandMark");
     expect(marks.map((match) => match[2]).sort()).toEqual(Object.values(BRAND_MARKS).map((entry) => entry.Mark.name).sort());
     for (const [, comment] of marks) expect(comment).toMatch(/\bfrom\b/);
   });
