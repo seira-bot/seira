@@ -107,7 +107,7 @@ describe("the agents action tools", () => {
   };
   /** Every call each action tool makes, by its action or by the id that picks it. */
   const CALLS_OF: Record<string, Record<string, number>> = {
-    trigger_info: { list: READ, events: READ },
+    trigger_info: { list: READ, events: READ, workflows: READ },
     trigger: { create: CHANGE, update: CHANGE, pause: CHANGE, resume: CHANGE, run_now: CHANGE },
     delete_trigger: { delete: DELETE },
     manage_room: { create: CHANGE, add_members: CHANGE, remove_members: CHANGE, set_members: CHANGE, rename: CHANGE, set_bulletin: CHANGE, new_thread: CHANGE },
