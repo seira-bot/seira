@@ -54,7 +54,7 @@ export async function emailSignInRoute(deps: EmailSignInRouteDeps, req: Incoming
   const label = typeof body?.label === "string" ? body.label : "";
   const verified = await emailSignIn.verify(email, code);
   if (!verified.ok) {
-    if (verified.status === 401 || verified.status === 403) sessions.noteFailure(source);
+    if (verified.status === 401 || verified.status === 403 || verified.status === 429) sessions.noteFailure(source);
     console.warn(`email sign-in refused from ${source}: ${verified.error}`);
     json(res, verified.status, refusalBody(verified));
     return true;

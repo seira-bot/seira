@@ -44,6 +44,10 @@ export interface EmailSignIn {
 }
 
 const NOT_WELCOME: SignInFailure = { ok: false, status: 403, ...userError("serverError.email.notAllowed") };
+const CODE_WRONG: SignInFailure = { ok: false, status: 401, ...userError("serverError.email.codeWrong") };
+const CODE_FORMAT: SignInFailure = { ok: false, status: 400, ...userError("serverError.email.codeFormat") };
+
+const codeShapeOk = (code: string): boolean => code.length <= 32 && /^\d{8}$/.test(code.replace(/[\s-]/g, ""));
 
 export function createEmailSignIn(options: {
   allow: SignInAllowList | (() => SignInAllowList);
@@ -81,8 +85,9 @@ export function createEmailSignIn(options: {
       return { ok: true };
     },
     async verify(rawEmail, code) {
+      if (!codeShapeOk(code)) return CODE_FORMAT;
       const email = normalizeAccountEmail(rawEmail);
-      if (!email || !allowedScopes(email, allow())) return NOT_WELCOME;
+      if (!email || !allowedScopes(email, allow())) return CODE_WRONG;
       let verified: { accountToken: string; user: { id: string; email: string } };
       try {
         verified = await controlPlane().verifyOTP(email, code);
@@ -126,8 +131,9 @@ function mailedSignIn(allow: () => SignInAllowList, mail: SignInMail): EmailSign
       return { ok: true };
     },
     async verify(rawEmail, code) {
+      if (!codeShapeOk(code)) return CODE_FORMAT;
       const email = normalizeAccountEmail(rawEmail);
-      if (!email || !allowedScopes(email, allow())) return NOT_WELCOME;
+      if (!email || !allowedScopes(email, allow())) return CODE_WRONG;
       const checked = mail.check(email, code);
       if (checked === "format") return { ok: false, status: 400, ...userError("serverError.email.codeFormat") };
       if (checked === "tooMany") return { ok: false, status: 429, ...userError("serverError.email.tooMany") };

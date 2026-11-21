@@ -91,6 +91,21 @@ describe("request source for the lockout", () => {
     expect(requestSource(withPeer("127.0.0.1", { "x-forwarded-for": "evil\n\u0007 <script>" + "x".repeat(200) }))).toMatch(/^[\w.:%[\]-]{1,64}$/);
     expect(sanitizeSource("")).toBe("unknown");
   });
+
+  it("keys an IPv6 forwarded source by its /64", () => {
+    const via = (address: string) => requestSource(withPeer("127.0.0.1", { "x-forwarded-for": address }));
+    expect(via("2001:db8:1:2::1")).toBe(via("2001:db8:1:2::ffff"));
+    expect(via("2001:db8:1:2:aaaa:bbbb:cccc:dddd")).toBe(via("2001:db8:1:2::1"));
+    expect(via("2001:db8:1:3::1")).not.toBe(via("2001:db8:1:2::1"));
+    expect(via("2001:db8:1:2::1")).toMatch(/^[\w.:%[\]-]{1,64}$/);
+  });
+
+  it("keeps an IPv4 and an IPv4-mapped IPv6 source as the IPv4 address", () => {
+    const via = (address: string) => requestSource(withPeer("127.0.0.1", { "x-forwarded-for": address }));
+    expect(via("203.0.113.9")).toBe("203.0.113.9");
+    expect(via("::ffff:203.0.113.9")).toBe("203.0.113.9");
+    expect(requestSource(withPeer("::1", {}))).toBe("::1");
+  });
 });
 
 describe("scopes", () => {

@@ -90,6 +90,21 @@ describe("sign-in codes through the server's own mail server", () => {
     expect(mail.check("her@example.test", box.code())).toBe("wrong");
   });
 
+  it("limits the codes one address gets in ten minutes", async () => {
+    let clock = 1_000_000;
+    const box = mailbox();
+    const mail = createSignInMail({ url: URL_, from: "signin@example.test", now: () => clock, transport: box.transport });
+    for (let sent = 0; sent < 3; sent++) {
+      expect(await mail.send("her@example.test")).toBe("sent");
+      clock += SIGNIN_CODE_RESEND_MS;
+    }
+    expect(await mail.send("her@example.test")).toBe("tooSoon");
+    expect(box.sent).toHaveLength(3);
+    expect(await mail.send("his@example.test")).toBe("sent");
+    clock += SIGNIN_CODE_TTL_MS;
+    expect(await mail.send("her@example.test")).toBe("sent");
+  });
+
   it("forgets a code the mail server refused, and needs a sender address", async () => {
     let refuse = true;
     const sent: MailMessage[] = [];

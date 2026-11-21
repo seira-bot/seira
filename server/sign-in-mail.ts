@@ -5,6 +5,7 @@ import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 export const SIGNIN_CODE_TTL_MS = 10 * 60_000;
 export const SIGNIN_CODE_RESEND_MS = 30_000;
 export const SIGNIN_CODE_TRIES = 5;
+export const SIGNIN_CODES_PER_ADDRESS = 3;
 const MAX_PENDING = 1_000;
 
 export interface MailMessage {
@@ -62,8 +63,14 @@ export function createSignInMail(options: { url: string; from?: string; now?: ()
     if (!named.includes("@")) throw new SignInMailError("set SEIRA_SIGNIN_SMTP_FROM to the address sign-in codes come from");
     return named;
   };
+  const sentAt = new Map<string, number[]>();
   const prune = () => {
     for (const [email, entry] of pending) if (now() - entry.sentAt >= SIGNIN_CODE_TTL_MS) pending.delete(email);
+    for (const [email, times] of sentAt) {
+      const recent = times.filter((time) => now() - time < SIGNIN_CODE_TTL_MS);
+      if (recent.length) sentAt.set(email, recent);
+      else sentAt.delete(email);
+    }
   };
   return {
     async send(email, target) {
@@ -71,10 +78,12 @@ export function createSignInMail(options: { url: string; from?: string; now?: ()
       const open = pending.get(email);
       if (open && now() - open.sentAt < SIGNIN_CODE_RESEND_MS) return "tooSoon";
       if (!open && pending.size >= MAX_PENDING) return "tooSoon";
+      if ((sentAt.get(email)?.length ?? 0) >= SIGNIN_CODES_PER_ADDRESS) return "tooSoon";
       const sender = from();
       transport ??= import("nodemailer").then(({ createTransport }) => createTransport(smtpOptions(options.url)));
       const code = String(randomInt(0, 100_000_000)).padStart(8, "0");
       pending.set(email, { hash: digest(code), sentAt: now(), tries: 0 });
+      sentAt.set(email, [...(sentAt.get(email) ?? []), now()]);
       try {
         await (await transport).sendMail({
           from: sender, to: email, subject: target ? `Your Seira sign-in code for ${target}` : "Your Seira sign-in code",
@@ -94,6 +103,10 @@ export function createSignInMail(options: { url: string; from?: string; now?: ()
         });
       } catch (error) {
         pending.delete(email);
+        const times = sentAt.get(email) ?? [];
+        times.pop();
+        if (times.length) sentAt.set(email, times);
+        else sentAt.delete(email);
         throw error;
       }
       return "sent";
