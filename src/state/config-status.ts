@@ -114,9 +114,10 @@ export interface ConfigStatus {
    * the one under Settings → API keys); `sharedKey`: that one is on file. */
   decider?: {
     provider: "jev" | "workersai" | "openrouter" | "custom" | "gemini";
-    /** Jev, when the person picked it but the shared OpenRouter key decides until a Jev key is saved; OpenRouter, when
-     * it was picked but a saved Gemini key decides until an OpenRouter key is saved. */
-    chosen?: "jev" | "openrouter";
+    /** The provider the person picked under Routing, whenever one is saved; another key may decide until its key is saved. */
+    chosen?: "jev" | "workersai" | "openrouter" | "custom" | "included";
+    /** Cloud's included decisions can be picked here. Absent from older servers. */
+    includedAvailable?: boolean;
     /** The OpenRouter or custom model in use; present only while that is the provider. */
     model?: string;
     /** The custom endpoint's protocol, or the OpenRouter API. */
