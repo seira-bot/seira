@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Bot, Group } from "@/state/store";
 import { restoreComposerDraft } from "@/lib/drafts";
 
-const fixture = vi.hoisted(() => ({ dispatch: vi.fn() }));
+const fixture = vi.hoisted(() => ({ dispatch: vi.fn(), tools: [] as unknown[] }));
 const ENGINE = "claude-3f0c2b1e-9d1a-4c55-8a51-0a3a6f1e2b7c";
 vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
@@ -20,6 +20,7 @@ vi.mock("@/state/store", async (importOriginal) => {
   }) };
 });
 vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
+vi.mock("@/lib/use-mention-tools", () => ({ useMentionTools: () => fixture.tools }));
 vi.mock("@/lib/use-owner-or-admin", () => ({ useOwnerOrAdmin: () => true }));
 vi.mock("./CallView", () => ({ CallButton: () => null }));
 vi.mock("./GroupCallView", () => ({ GroupCallButton: () => null }));
@@ -55,6 +56,7 @@ afterEach(() => {
   flushSync(() => root.unmount());
   container.remove();
   for (const id of drafts) restoreComposerDraft(id, { text: "", attachments: [] });
+  fixture.tools = [];
   vi.clearAllMocks();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -116,5 +118,45 @@ describe("a one-to-one chat's @ list", () => {
     pick("Quill", "Analyst");
     send();
     expect(sent()).toEqual([expect.objectContaining({ type: "send", botId: scout.id, text: "ask @Quill", mentions: [analyst.id] })]);
+  });
+});
+
+describe("the @ list's tools", () => {
+  const tools = [
+    { id: "tool:app:gmail", name: "Gmail", tool: { kind: "app", slug: "gmail", logo: "https://example.com/gmail.png", domain: null } },
+    { id: "tool:mcp:notion", name: "notion", tool: { kind: "mcp", slug: "notion" } },
+  ];
+
+  it("lists bots first, then apps and MCP servers, then @devs, each tool with its icon and kind", () => {
+    fixture.tools = tools;
+    flushSync(() => root.render(createElement(Composer, { bot: scout })));
+    type(drafts[1]!, "@");
+    const rows = options();
+    const text = rows.map((one) => one.textContent ?? "");
+    const at = (needle: string) => text.findIndex((one) => one.includes(needle));
+    expect(at("Quill")).toBeLessThan(at("Gmail"));
+    expect(at("Gmail")).toBeLessThan(at("notion"));
+    expect(at("notion")).toBeLessThan(at("devs"));
+    expect(text[at("Gmail")]).toContain("App");
+    expect(text[at("notion")]).toContain("MCP server");
+    expect(rows[at("Gmail")]!.querySelector("img")?.getAttribute("src")).toBe("https://example.com/gmail.png");
+    expect(rows[at("notion")]!.querySelector("svg")).not.toBeNull();
+  });
+
+  it("inserts the tool's name and sends no id for it", () => {
+    fixture.tools = tools;
+    flushSync(() => root.render(createElement(Composer, { bot: scout })));
+    type(drafts[1]!, "write with @Gm");
+    pick("Gmail", "App");
+    expect(input().value).toBe("write with @Gmail ");
+    send();
+    expect(sent()).toEqual([expect.objectContaining({ type: "send", botId: scout.id, text: "write with @Gmail", mentions: [] })]);
+  });
+
+  it("offers no tool in a room", () => {
+    fixture.tools = tools;
+    flushSync(() => root.render(createElement(Composer, { group: room, members: [scout, analyst, chief] })));
+    type(drafts[0]!, "@");
+    expect(options().map((one) => one.textContent).join("|")).not.toMatch(/Gmail|notion/);
   });
 });
