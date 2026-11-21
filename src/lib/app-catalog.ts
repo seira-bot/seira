@@ -1,4 +1,4 @@
-import { t } from "./i18n";
+import { activeLocale, t } from "./i18n";
 import type { LocaleKey } from "@/locales";
 
 export interface CatalogCard {
@@ -10,29 +10,67 @@ export const INLINE_CATEGORY_COUNT = 5;
 export const CATEGORY_SECTION_COUNT = 3;
 export const CATEGORY_SECTION_SIZE = 4;
 
-/** Categories by how many apps they hold; `keep` ones (an app of Seira's own lives there) always show inline. */
-export function rankCategories(cards: readonly CatalogCard[], inline = INLINE_CATEGORY_COUNT, keep: readonly string[] = []): { inline: string[]; more: string[] } {
-  const counts = new Map<string, number>();
-  for (const card of cards) for (const category of new Set(card.categories ?? [])) counts.set(category, (counts.get(category) ?? 0) + 1);
-  const ranked = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name);
-  const kept = keep.filter((name) => ranked.indexOf(name) >= inline);
-  const shown = [...ranked.slice(0, Math.max(0, inline - kept.length)), ...kept];
-  return { inline: shown, more: ranked.filter((name) => !shown.includes(name)) };
+/** Composio sends about 40 free-form category names in mixed case; the dialog shows these fixed groups instead. */
+export type AppCategory =
+  | "productivity" | "developerTools" | "communication" | "files" | "salesCrm" | "design" | "marketing" | "analytics"
+  | "social" | "finance" | "commerce" | "ai" | "automation" | "hr" | "entertainment" | "education";
+
+const CATEGORY_RULES: ReadonlyArray<readonly [AppCategory, RegExp]> = [
+  ["marketing", /market|advertis|\bads\b|\bseo\b|newsletter|campaign/],
+  ["social", /social/],
+  ["salesCrm", /\bcrm\b|sales|customer|support|help ?desk|ticketing/],
+  ["hr", /\bhr\b|recruit|hiring|human resources|talent|payroll|employee/],
+  ["finance", /financ|account|invoic|payment|billing|bank|\btax|expense/],
+  ["commerce", /commerce|\bshop|retail|\bstores?\b/],
+  ["ai", /\bai\b|artificial intelligence|machine learning|\bllms?\b/],
+  ["education", /educat|\blms\b|course|school|learning/],
+  ["analytics", /analytic|intelligence|database|\bdata\b|metric|report/],
+  ["communication", /e-?mail|chat|messag|communicat|\bsms\b|phone|telephon|voice|meeting|conferenc|inbox/],
+  ["files", /\bfiles?\b|document|storage|\bdrive\b|\bpdf|signature/],
+  ["developerTools", /develop|devops|\bcode|coding|\bapis?\b|hosting|monitor|security|infrastructure|deploy|testing/],
+  ["design", /design|image|creative|photo|video|graphic/],
+  ["automation", /automat|workflow|integration/],
+  ["productivity", /productiv|project|task|schedul|calendar|booking|\bnotes?\b|spreadsheet|collaborat|\bforms?\b|survey|knowledge/],
+  ["entertainment", /entertain|lifestyle|\bmedia\b|music|\bgam(e|es|ing)\b|news/],
+];
+
+export function appCategory(name: string): AppCategory | null {
+  const text = name.trim().toLowerCase();
+  return CATEGORY_RULES.find(([, rule]) => rule.test(text))?.[0] ?? null;
 }
 
-export function inCategory(card: CatalogCard, category: string | null): boolean {
-  return category === null || (card.categories ?? []).includes(category);
+export function appCategories(card: CatalogCard): AppCategory[] {
+  return [...new Set((card.categories ?? []).map(appCategory).filter((group): group is AppCategory => group !== null))];
+}
+
+export function appCategoryLabel(category: AppCategory): string {
+  return t(`apps.category.${category}` as LocaleKey);
+}
+
+/** Groups by how many apps they hold, the rest under More by label; `keep` ones (an app of Seira's own lives there) always show inline. */
+export function rankCategories(cards: readonly CatalogCard[], inline = INLINE_CATEGORY_COUNT, keep: readonly AppCategory[] = []): { inline: AppCategory[]; more: AppCategory[] } {
+  const counts = new Map<AppCategory, number>();
+  for (const card of cards) for (const category of appCategories(card)) counts.set(category, (counts.get(category) ?? 0) + 1);
+  const ranked = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([category]) => category);
+  const kept = keep.filter((category) => ranked.indexOf(category) >= inline);
+  const shown = [...ranked.slice(0, Math.max(0, inline - kept.length)), ...kept];
+  const more = ranked.filter((category) => !shown.includes(category));
+  return { inline: shown, more: more.sort((a, b) => appCategoryLabel(a).localeCompare(appCategoryLabel(b), activeLocale())) };
+}
+
+export function inCategory(card: CatalogCard, category: AppCategory | null): boolean {
+  return category === null || appCategories(card).includes(category);
 }
 
 export type CatalogSection<Card> =
   | { kind: "connected"; cards: Card[] }
-  | { kind: "category"; category: string; cards: Card[]; more: boolean }
+  | { kind: "category"; category: AppCategory; cards: Card[]; more: boolean }
   | { kind: "all"; cards: Card[] };
 
 export function catalogSections<Card extends CatalogCard>(
   cards: readonly Card[],
   isConnected: (slug: string) => boolean,
-  categories: readonly string[],
+  categories: readonly AppCategory[],
 ): CatalogSection<Card>[] {
   const sections: CatalogSection<Card>[] = [];
   const connected = cards.filter((card) => isConnected(card.slug));
@@ -45,19 +83,7 @@ export function catalogSections<Card extends CatalogCard>(
   return sections;
 }
 
-// Catalog categories and blurbs come in English; the known ones show in the app's language.
-const APP_CATEGORY_COPY: Record<string, string> = {
-  productivity: "productivity",
-  "developer tools": "developerTools",
-  communication: "communication",
-  files: "files",
-  "sales and crm": "salesCrm",
-  design: "design",
-  marketing: "marketing",
-  analytics: "analytics",
-  social: "social",
-};
-
+// Catalog blurbs come in English; the known ones show in the app's language.
 const CONNECTOR_COPY: Record<string, string> = {
   "google calendar": "googleCalendar",
   "google sheets": "googleSheets",
@@ -84,11 +110,6 @@ const CONNECTOR_COPY: Record<string, string> = {
   figma: "figma",
   stripe: "stripe",
 };
-
-export function appCategoryLabel(name: string): string {
-  const id = APP_CATEGORY_COPY[name.trim().toLowerCase()];
-  return id ? t(`apps.category.${id}` as LocaleKey) : name;
-}
 
 export function connectorDescription(card: { label: string; blurb: string }): string {
   const id = CONNECTOR_COPY[card.label.trim().toLowerCase()];

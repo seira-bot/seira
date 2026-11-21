@@ -537,10 +537,10 @@ describe("X research tools", () => {
 describe("page tools", () => {
   it("send the tool's arguments to their internal routes and hand back the sentence, or the refusal as an error", async () => {
     const calls: Array<{ path: string; body: unknown }> = [];
-    const answers = [{ ok: true, status: 200, body: { ok: true, text: "Published “Bake sale” at https://abcdefghijklmnopqrstuvwxyz.page.seira.bot/" } },
+    const answers = [{ ok: true, status: 200, body: { ok: true, text: "Published “Bake sale” at https://abcdefghijklmnopqrstuvwxyz.seira.page/" } },
       { ok: false, status: 402, body: { error: "You’ve used your 5 free pages. Seira Cloud gives you more, and pages without the badge." } }];
     const client = { api: async () => ({}), apiResponse: async (path: string, init?: RequestInit) => { calls.push({ path, body: JSON.parse(String(init?.body)) }); return answers.shift()!; } };
-    expect(await callTool("publish_page", { path: "site", title: "Bake sale" }, context({ client }))).toEqual({ text: "Published “Bake sale” at https://abcdefghijklmnopqrstuvwxyz.page.seira.bot/" });
+    expect(await callTool("publish_page", { path: "site", title: "Bake sale" }, context({ client }))).toEqual({ text: "Published “Bake sale” at https://abcdefghijklmnopqrstuvwxyz.seira.page/" });
     expect(await callTool("unpublish_page", { page_id: "abcdefghijklmnopqrstuvwxyz" }, context({ client })))
       .toEqual({ text: "You’ve used your 5 free pages. Seira Cloud gives you more, and pages without the badge.", isError: true });
     expect(calls).toEqual([{ path: "/api/internal/pages/publish", body: { path: "site", title: "Bake sale" } },

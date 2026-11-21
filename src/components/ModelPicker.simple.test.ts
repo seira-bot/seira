@@ -362,11 +362,11 @@ describe("the model picker in Simple mode", () => {
     expect(atDefault).toContain('data-simple-effort-auto="true" class="px-2 pb-1 text-[12px] leading-4 text-ink-tertiary">Recommended. Effort is picked per message.</p>');
   });
 
-  it("names the model on the Simple chip, quiet until hovered; thinking and route stay in its tooltip and the menu", () => {
+  it("names the model and its thinking level on the Simple chip; the route stays in its tooltip and the menu", () => {
     const chip = render(bot("high")).nodes.find((node) => node.props["data-tour"] === "model")!;
     const markup = renderToStaticMarkup(chip);
-    expect(markup).not.toContain("data-model-effort");
-    expect(markup.replace(/title="[^"]*"/, "")).not.toContain("High");
+    expect(markup).toMatch(/<span data-model-effort[^>]*>(<!-- -->)?\s*· (<!-- -->)?High<\/span>/);
+    expect(renderToStaticMarkup(render(bot()).nodes.find((node) => node.props["data-tour"] === "model")!)).not.toContain("data-model-effort");
     expect(String(chip.props.title)).toContain("High thinking");
     expect(String(chip.props.title)).not.toContain("effort");
     expect(String(chip.props.className)).toContain("h-8");

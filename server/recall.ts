@@ -24,6 +24,11 @@ export function recallThreadIds(bot: RecallOwner, rooms: ReadonlyMap<string, unk
   return [...new Set([bot.threadId, ...(bot.tasks ?? []).map((task) => task.threadId), ...rooms.keys()])];
 }
 
+export function autoRecallThreadIds(bot: Omit<RecallOwner, "tasks"> & { tasks?: readonly { threadId: string; imported?: unknown }[] }, rooms: ReadonlyMap<string, unknown>): string[] {
+  const imported = new Set((bot.tasks ?? []).filter((task) => task.imported !== undefined).map((task) => task.threadId));
+  return recallThreadIds(bot, rooms).filter((id) => !imported.has(id));
+}
+
 export const RECALL_MIN_CHARS = 8;
 export const RECALL_QUERY_CHARS = 500;
 export const RECALL_MAX_CHARS = 6_000;

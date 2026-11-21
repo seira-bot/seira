@@ -53,10 +53,18 @@ workflow again.
 Attach all five files to the same release as the Linux and macOS files:
 
 ```sh
-gh release upload v<version> --repo seira-bot/seira \
+node ../../scripts/release-assets.mjs upload v<version> \
   Seira-<version>-setup.exe Seira-<version>-setup.exe.blockmap latest.yml \
   Seira-setup.exe SHA256SUMS-windows-x64.txt
+node ../../scripts/release-assets.mjs check v<version>
 ```
+
+The script uploads feeds (`latest*.yml`) last, so installed apps never read a
+feed whose file is still uploading. It uploads one file at a time. Before it
+uploads `latest.yml`, it checks that every file that a feed or a checksum file
+names is an uploaded asset of the same size. Never attach the files with
+`gh release upload`: it uploads small files, such as `latest.yml`, before the
+installer is complete.
 
 | File | Who uses it |
 | --- | --- |
@@ -70,6 +78,8 @@ gh release upload v<version> --repo seira-bot/seira \
   edit `latest.yml`. Do not use a `latest.yml` from an earlier build.
 - Never replace an asset in place. If an asset is wrong, delete the assets of
   the release and upload all five again.
+- Run `check` after the upload and again after the release is published. It
+  must print no `FAIL` line.
 - Then do step 8 of `docs/releasing.md`: download the release and check every
   checksum file.
 
@@ -99,11 +109,13 @@ release notes that Windows stays on the earlier version.
 
 Find the cause in this order:
 
-1. Open the release of the newest version. It must have all five files. If
-   `latest.yml` is missing, attach the files of step 3.
-2. Download `latest.yml` and the installer from the release. The `path`, the
-   SHA-512, and the size in `latest.yml` must match the installer. If they do
-   not match, delete the five assets and attach the workflow files again.
+1. Run `node scripts/release-assets.mjs check v<version>` for the newest
+   version. The release must have all five files. If `latest.yml` is missing,
+   attach the files of step 3.
+2. Read the same `check` output. Each file that `latest.yml` names must be an
+   uploaded asset with the same size. If a line says `FAIL`, delete the five
+   assets and attach the workflow files again with the upload command. To
+   compare the SHA-512, download `latest.yml` and the installer.
 3. Ask for `updater.log` from the log folder of the app:
    `%APPDATA%\Seira\logs`. Version 0.1.182 and earlier use `%APPDATA%\openmausbot\logs`.
 4. Ask where the user installed the app from. A Seira installer from
