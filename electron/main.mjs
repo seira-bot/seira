@@ -2458,7 +2458,6 @@ const workspaceOnly = (handler) => (event, ...args) => {
   return handler(event, ...args);
 };
 const localWorkspaceOnly = (channel, handler) => localOnly(channel, workspaceOnly(handler));
-installVpsInstall({ ipcMain, dialog, guard: handler => (event, ...args) => (chromeRail.owns(event) ? handler(event, ...args) : localWorkspaceOnly("server-install", handler)(event, ...args)), add: url => serverConnect.connect(url, ""), dataDir: desktopDataDir(), resourcesPath: process.resourcesPath, packaged: app.isPackaged });
 // No renderer-supplied address, token, paid flag or callback can choose an account or activate Pro.
 for (const method of ["state", "begin", "signInAgain", "reopen", "cancel", "refresh", "signOut", "openDashboard", "offer"]) {
   ipcMain.handle(`cloud-account:${method}`, localWorkspaceOnly(`cloud-account:${method}`, () => (method === "signOut" ? accounts.signOutActive() : ensureCloudAccount()[method]())));
@@ -2576,6 +2575,7 @@ const savedWorkspace = id => {
   if (!env) throw new Error("This server is no longer connected");
   return env;
 };
+installVpsInstall({ ipcMain, dialog, guard: handler => (event, ...args) => (chromeRail.owns(event) ? handler(event, ...args) : localWorkspaceOnly("server-install", handler)(event, ...args)), add: url => serverConnect.connect(url, ""), dataDir: desktopDataDir(), resourcesPath: process.resourcesPath, packaged: app.isPackaged });
 // The buying sheet (cloud-buy.mjs): its channels, and the Cloud's name and colour (Servers entry once listed).
 const cloudLook = createCloudLook({ store: lookFile(() => path.join(app.getPath("userData"), cloudTarget(process.env).look), fs), accountId: () => cloudAccount?.state().account?.id ?? null,
   homeEntry: cloudHomeEntry, saveEntry: (origin, look) => persistEnvironments(withEnvironmentLook(environmentsState, origin, look)) });
