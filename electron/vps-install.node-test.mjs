@@ -83,7 +83,7 @@ async function until(check, what, ms = 8_000) {
   for (;;) {
     const found = check();
     if (found) return found;
-    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+    if (Date.now() > end) throw new Error(`timed out waiting for ${typeof what === "function" ? what() : what}`);
     await sleep(15);
   }
 }
@@ -152,7 +152,7 @@ function harness(w, extra = {}) {
     installer: w.installer, savedHosts: createSavedHosts({ dir: w.dataDir }), knownHostsFile: w.knownHosts, agent: null, ...extra,
   });
   const has = (type) => events.some((event) => event.type === type);
-  return { session, events, added, has, wait: (type, ms) => until(() => events.find((event) => event.type === type), `${type} (saw ${JSON.stringify(events)})`, ms) };
+  return { session, events, added, has, wait: (type, ms) => until(() => events.find((event) => event.type === type), () => `${type} (saw ${JSON.stringify(events)}; server saw ${JSON.stringify(w.log)})`, ms) };
 }
 
 const request = (w, extra = {}) => ({ address: w.address, user: "alice", email: "me@example.com", method: "password", password: "pw", ...extra });
