@@ -1,3 +1,33 @@
+import { toolkitName } from "./activity.ts";
+import { isMentionBoundary, isMentionNameContinuation } from "../shared/mention-boundary.ts";
+
+export type TurnTool = { name: string; kind: "app" | "mcp"; aliases: readonly string[] };
+export type TaggedTool = { name: string; kind: "app" | "mcp" };
+
+/** The tools a message @-tags. The longest name wins; a bot of the same length wins a tie, as in a bot tag. */
+export function taggedTools(text: string, tools: readonly TurnTool[], botNames: readonly string[]): TaggedTool[] {
+  const names = tools.flatMap((tool) => [tool.name, ...tool.aliases].filter((name) => name.trim()).map((name) => ({ tool, name })))
+    .sort((a, b) => b.name.length - a.name.length);
+  const found: TaggedTool[] = [];
+  for (let at = text.indexOf("@"); at !== -1; at = text.indexOf("@", at + 1)) {
+    if (!isMentionBoundary(text, at)) continue;
+    const rest = text.slice(at + 1).toLowerCase();
+    const matches = (name: string) => rest.startsWith(name.toLowerCase()) && !isMentionNameContinuation(rest.slice(name.length));
+    const hit = names.find(({ name }) => matches(name));
+    if (!hit) continue;
+    if (botNames.some((name) => name.trim() && name.length >= hit.name.length && matches(name))) continue;
+    if (!found.some((one) => one.name === hit.tool.name && one.kind === hit.tool.kind)) found.push({ name: hit.tool.name, kind: hit.tool.kind });
+  }
+  return found;
+}
+
+/** The sentence of the turn prompt that names the tools the person tagged. */
+export function taggedToolsPrompt(tagged: readonly TaggedTool[]): string {
+  if (!tagged.length) return "";
+  const list = tagged.map((tool) => `${tool.name} (${tool.kind === "app" ? "a connected app" : "an MCP server"})`).join(", ");
+  return `The person tagged these tools for this request: ${list}. Use them for this request. If one fails, say so plainly.`;
+}
+
 
 /** The tools a turn can name: its connected apps (a slug and a label both name one) and its MCP servers. */
 export function turnTools(apps: readonly { slug: string; label: string }[], mcpServers: readonly string[]): TurnTool[] {
