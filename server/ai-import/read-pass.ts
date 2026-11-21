@@ -2,7 +2,7 @@ import { createWriteStream, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { once } from "node:events";
 
-import type { ImportCounts, ImportErrorCode } from "../../shared/ai-import/api.ts";
+import type { ImportCounts, ImportErrorCode, InstructionsAs } from "../../shared/ai-import/api.ts";
 import { emptyCounts } from "../../shared/ai-import/api.ts";
 import { emptyAgent, type ImportAgent, type ImportLeftover, type ImportSource, type ImportSourceKind } from "../../shared/ai-import/bundle.ts";
 import { hashOf } from "./ids.ts";
