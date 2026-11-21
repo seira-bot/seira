@@ -12,6 +12,8 @@
 
 <h3>Your own team of AI agents in one chat app.</h3>
 
+<p>Seira is a free, open source desktop app for Windows and Linux. It runs Claude Code, Codex, Gemini, and more than 25 other AI agents as a team of bots in one chat.</p>
+
 Give each bot a job. Watch it work. Approve the steps that matter.<br>
 Seira runs on your computer and uses the AI plans that you already have.
 
@@ -25,11 +27,14 @@ Seira runs on your computer and uses the AI plans that you already have.
 
 <p>
   <a href="https://seira.bot"><b>Website</b></a> ·
+  <a href="https://docs.seira.bot"><b>Docs</b></a> ·
+  <a href="https://play.google.com/store/apps/details?id=bot.seira.companion"><b>Android app</b></a> ·
   <a href="#quick-start"><b>Quick start</b></a> ·
   <a href="#features"><b>Features</b></a> ·
   <a href="#engines"><b>Engines</b></a> ·
   <a href="#how-it-works"><b>How it works</b></a> ·
   <a href="#documentation"><b>Documentation</b></a> ·
+  <a href="#faq"><b>FAQ</b></a> ·
   <a href="#contributing"><b>Contributing</b></a>
 </p>
 
@@ -39,6 +44,7 @@ Seira runs on your computer and uses the AI plans that you already have.
 > Seira is in early development.
 > Download it for Windows or Linux from the [latest release](https://github.com/seira-bot/seira/releases/latest),
 > run the server with [`npx @seira-bot/seira`](#run-it-on-a-server), or [build it from source](#build-from-source).
+> The [Seira Android app](https://play.google.com/store/apps/details?id=bot.seira.companion) on Google Play pairs your phone with Seira on your computer.
 
 ## Why Seira
 
@@ -194,6 +200,12 @@ Download the app from the [latest release](https://github.com/seira-bot/seira/re
 The app updates itself. Each release also has a `SHA256SUMS` file for each system, to check your download.
 There is no macOS download yet. On macOS, run the server with Node, or build Seira from source.
 
+### Android phone
+
+Install [Seira: AI bot companion](https://play.google.com/store/apps/details?id=bot.seira.companion) from Google Play.
+It pairs with Seira on your computer. On the phone, you read your bots, answer approvals, and send tasks.
+Your bots, keys, and chats stay on the computer.
+
 ### Run it on a server
 
 The npm package [`@seira-bot/seira`](https://www.npmjs.com/package/@seira-bot/seira) is the same server without the desktop shell.
@@ -299,6 +311,10 @@ They are anonymous and never include keys, names, addresses, or conversations.
 
 ## Documentation
 
+The full documentation is at [docs.seira.bot](https://docs.seira.bot).
+It covers installation, engines, approvals, self-hosting, and the phone app.
+These guides are in this repository:
+
 | Topic | Guide |
 |---|---|
 | Your own engines (ACP programs, OpenAI-compatible endpoints) | [docs/custom-engines.md](docs/custom-engines.md) |
@@ -312,6 +328,44 @@ They are anonymous and never include keys, names, addresses, or conversations.
 | Routing with a decision model | [docs/decision-model.md](docs/decision-model.md) |
 | Feature switches | [docs/feature-flags.md](docs/feature-flags.md) |
 | Other model providers | [apps/docs/…/model-providers.mdx](apps/docs/content/docs/providers/model-providers.mdx) |
+
+## FAQ
+
+<details>
+<summary><b>What is Seira?</b></summary>
+<br>
+Seira is a free, open source desktop app for Windows and Linux. It runs Claude Code, Codex, Gemini, and more than 25 other AI agents as a team of bots in one chat. Give each bot a job, watch it work, and approve the steps that matter.
+</details>
+
+<details>
+<summary><b>Is Seira free?</b></summary>
+<br>
+Yes. Seira is free and open source under the Apache License 2.0. Your AI plans, and any paid service that you add, keep their own prices.
+</details>
+
+<details>
+<summary><b>Do I need a new AI account or an API key?</b></summary>
+<br>
+No. Bots use the AI tools that you already have, with your own sign-in. You can also add an API key for an engine that uses one.
+</details>
+
+<details>
+<summary><b>Which AI agents does Seira support?</b></summary>
+<br>
+Seira has more than 30 engines. They include Claude Code, Codex, Gemini, Grok, Cursor, GitHub Copilot, and OpenCode. You can add your own ACP program or OpenAI-compatible endpoint. See <a href="#engines">Engines</a>.
+</details>
+
+<details>
+<summary><b>Where do my chats and files go?</b></summary>
+<br>
+Chats and files stay on your computer. A bot sends your message to the AI service that it uses. A bot uses your computer only after you turn it on. Commands and file edits show as cards that you allow or deny.
+</details>
+
+<details>
+<summary><b>Is there a phone app?</b></summary>
+<br>
+Yes. <a href="https://play.google.com/store/apps/details?id=bot.seira.companion">Seira: AI bot companion</a> is on Google Play. It pairs with Seira on your computer. On the phone, you read your bots, answer approvals, and send tasks. The computer keeps the bots, keys, and chats.
+</details>
 
 ## Contributing
 
