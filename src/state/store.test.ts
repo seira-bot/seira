@@ -220,6 +220,23 @@ describe("independent bot threads", () => {
     expect(switched.bots[0]?.liveVoice).toBeUndefined();
   });
 
+  const appGrants = {
+    connectorTools: { gmail: { tools: ["GMAIL_SEND_EMAIL"] } },
+    connectorScopes: { apps: { gmail: "read" as const } },
+    mcpServers: ["notes"],
+  };
+
+  it.each(Object.keys(appGrants) as Array<keyof typeof appGrants>)("a frame without %s clears the stale grant", (field) => {
+    const granted = reducer(start(), { type: "botPatched", bot: { ...bot, ...appGrants } });
+    expect(granted.bots[0]?.[field]).toEqual(appGrants[field]);
+    const { [field]: _cleared, ...frame } = { ...bot, ...appGrants };
+    expect(reducer(granted, { type: "botPatched", bot: frame }).bots[0]?.[field]).toBeUndefined();
+    const switched = reducer(granted, { type: "botPatched", bot: { ...frame, threadId: "second", tasks: bot.tasks!.slice(1), messages: [] } });
+    expect(switched.bots[0]).toMatchObject({ threadId: "second" });
+    expect(switched.bots[0]?.[field]).toBeUndefined();
+    expect(reducer(granted, { type: "taskSwitched", bot: { ...frame, threadId: "second", messages: [] } }).bots[0]?.[field]).toBeUndefined();
+  });
+
   it("keeps background bot frames from switching the visible transcript or clearing unread", () => {
     const patched = reducer(start(), { type: "botPatched", bot: { ...bot, threadId: "second", messages: [], activeLeafId: "other" } });
     expect(patched.bots[0]?.threadId).toBe("first");

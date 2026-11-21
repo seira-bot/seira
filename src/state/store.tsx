@@ -15,7 +15,7 @@ import type { NotificationLogEntry } from "../../shared/notification";
 import { isNotificationFeedAction, reduceNotificationFeed, type NotificationFeedAction } from "./notification-feed";
 import { bumpThreadUpdatedAt, mergeTaskStamps, rewindThreadUpdatedAt } from "./thread-stamps";
 import { botOpensTo, closeTrayUnlessShown, closeUnpinnedTray, openBot, openThread, visibleNotificationThread, withRememberedTrayPin } from "./thread-navigation";
-import { patchGroupTask } from "./thread-edits"; import { unreadBeyondFrame, wholeBotFrame } from "./bot-thread-frame";
+import { patchGroupTask } from "./thread-edits"; import { clearedWhenAbsent, unreadBeyondFrame, wholeBotFrame } from "./bot-thread-frame";
 import type { EngineInstall } from "./engine-install";
 import { optimisticMessageId, optimisticUserMessage, sendArrived, sendReconciled } from "./optimistic-send";
 import { patchedGroups, roomAnswers, snapshotPatch } from "./room-frames";
@@ -1145,7 +1145,7 @@ export function reducer(state: AppState, action: Action): AppState {
       if ((switchedThread || (before.awaitingThreadSnapshot && action.bot.threadId === before.threadId)) &&
           Array.isArray(action.bot.messages)) {
         // The slim deletion broadcast can beat the full snapshot; later duplicate snapshots must not overwrite newer messages.
-        return reducer(switching, { type: "taskSwitched", bot: { ...before, ...action.bot, computer: action.bot.computer, section: action.bot.section, toolScope: action.bot.toolScope, managedSections: action.bot.managedSections, messages: action.bot.messages, browserProfile: action.bot.browserProfile, vpsAlias: action.bot.vpsAlias, phoneApps: action.bot.phoneApps, onlyPeopleAdded: action.bot.onlyPeopleAdded, liveVoice: action.bot.liveVoice } });
+        return reducer(switching, { type: "taskSwitched", bot: { ...before, ...action.bot, ...clearedWhenAbsent(action.bot), messages: action.bot.messages } });
       }
       const patched = updateBot(switching, action.bot.id, (b) => ({
         ...b,
@@ -1153,12 +1153,7 @@ export function reducer(state: AppState, action: Action): AppState {
         threadId: switchedThread ? action.bot.threadId : b.threadId,
         activeLeafId: switchedThread ? null : b.activeLeafId,
         awaitingThreadSnapshot: switchedThread || b.awaitingThreadSnapshot,
-        // Complete frames omit cleared optional fields; copy them so the spread cannot keep stale values.
-        browserProfile: action.bot.browserProfile,
-        computer: action.bot.computer,
-        toolScope: action.bot.toolScope,
-        section: action.bot.section, managedSections: action.bot.managedSections,
-        vpsAlias: action.bot.vpsAlias, phoneApps: action.bot.phoneApps, onlyPeopleAdded: action.bot.onlyPeopleAdded, liveVoice: action.bot.liveVoice,
+        ...clearedWhenAbsent(action.bot),
         tasks: action.bot.tasks ? mergeTaskStamps(b.tasks, action.bot.tasks) : b.tasks,
         // Old approvals must never be sent to the replacement thread while its transcript loads.
         messages: switchedThread ? [] : b.messages,
@@ -1709,9 +1704,7 @@ export function reducer(state: AppState, action: Action): AppState {
       let switched = updateBot(bumpTranscriptGeneration(state, action.bot.threadId), action.bot.id, (bot) => ({
         ...bot,
         ...action.bot,
-        computer: action.bot.computer,
-        toolScope: action.bot.toolScope, managedSections: action.bot.managedSections,
-        vpsAlias: action.bot.vpsAlias, liveVoice: action.bot.liveVoice,
+        ...clearedWhenAbsent(action.bot),
         messages: action.bot.messages ?? [],
         hasMore: action.bot.hasMore,
         awaitingThreadSnapshot: false,
