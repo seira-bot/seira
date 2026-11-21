@@ -452,12 +452,12 @@ linuxBox("a bot's folder list", () => {
       expect(plan.mounts.findIndex((mount) => mount.kind === "tmpfs" && mount.target === fakeHome)).toBeLessThan(plan.mounts.findIndex((mount) => "source" in mount && mount.source === "/work/repo"));
     });
 
-    it("a limited box on an audience's engine home keeps that home and no more is hidden", () => {
+    it("on an audience's engine home, limited changes nothing but the grants", () => {
       const own = join(fakeData, "engine-homes", "member-aaaaaaaaaaaaaaaa");
       const plan = planBox({ ...setup(), dataDir: fakeData, home: fakeHome }, { command: "claude", args: [], cwd: fakeCwd, env: { HOME: own }, home: own, folders: folders(true, ["/work/a", true]) });
       expect(visibleInBox(plan, join(own, ".claude", "x"))).toBe("rw");
       expect(visibleInBox(plan, "/work/a/f")).toBe("rw");
-      expect(plan.mounts.some((mount) => mount.kind === "tmpfs" && mount.target === fakeHome && fakeHome !== fakeData)).toBe(false);
+      expect(plan.mounts.some((mount) => mount.kind === "tmpfs" && mount.target === fakeHome)).toBe(false);
     });
 
     it("with limited off, HOME stays and only the grants are added", () => {

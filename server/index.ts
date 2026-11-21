@@ -634,7 +634,7 @@ import { createStatusRoutes } from "./routes/status.ts";
 import { findAntigravityLeftovers, removeAntigravityLeftovers } from "./drivers/antigravity-temp.ts";
 import { createLiveRoutes } from "./routes/live.ts";
 import { createNotificationRoutes, notificationListedFor } from "./routes/notifications.ts";
-import { createAppUsageRoutes } from "./routes/app-usage.ts"; import { createTodayRoutes } from "./routes/today.ts"; import { createBoardRoutes } from "./routes/board.ts"; import { createInboxRoutes } from "./routes/inbox.ts"; import { createSidebarSectionRoutes } from "./routes/sidebar-sections.ts"; import { createDepartmentFolderRoutes } from "./routes/department-folders.ts"; import { DepartmentFolders } from "./department-folders.ts";
+import { createAppUsageRoutes } from "./routes/app-usage.ts"; import { createTodayRoutes } from "./routes/today.ts"; import { createBoardRoutes } from "./routes/board.ts"; import { createInboxRoutes } from "./routes/inbox.ts"; import { createSidebarSectionRoutes } from "./routes/sidebar-sections.ts"; import { createDepartmentFolderRoutes } from "./routes/department-folders.ts"; import { DepartmentFolders } from "./department-folders.ts"; import { createBotFolders } from "./bot-folders.ts";
 import { createToolTimingRoute, createUsageRoutes } from "./routes/usage.ts"; import { createPrivateRecords } from "./host/private-records.ts"; import { createPublishedApps } from "./host/published-apps.ts"; import { savedNetlifyToken } from "./host/netlify-sites.ts"; import { createIncludedHosting } from "./host/included-hosting.ts"; import { createAppPublisher } from "./host/app-publisher.ts"; import { createPublishedAppsRoutes } from "./routes/published-apps.ts";
 import { createBotMessageRoutes } from "./routes/bot-messages.ts";
 import { clearInternalTurn, isInternalTurn, markInternalTurn } from "./internal-turns.ts"; import { createFirstReplyRescue } from "./first-reply-rescue.ts";
@@ -2817,7 +2817,8 @@ const teamWelcome = createTeamWelcomeStore(DATA_DIR); const { cloudHealth, cloud
   engines: () => registry.instances().map((instance) => ({ instanceId: instance.instanceId, driverKind: instance.driverKind, snapshot: registry.knownSnapshot(instance.instanceId) })),
   connectors: () => emailHost.health(composio.configured(cfg) ? composio.connectedServices(cfg) : null),
   browser: () => ({ available: browserReady(undefined), installing: Boolean(browserEngineInstall), interrupted: browserRuntime.interruptedCount() }), firstHour: () => firstHourHooks.health(), ...(engineMemory.enabled ? { room: () => engineMemory.dayPressure() } : {}) } });
-const teamComputers = new TeamComputers(join(DATA_DIR, "team-computers.json"), ENVIRONMENT_ID); const departmentFolders = new DepartmentFolders(join(DATA_DIR, "department-folders.json"));
+const teamComputers = new TeamComputers(join(DATA_DIR, "team-computers.json"), ENVIRONMENT_ID); const departmentFolders = new DepartmentFolders(join(DATA_DIR, "department-folders.json")); const botFolderAccess = createBotFolders({ bot: (botId) => store.bot(botId), departments: departmentFolders, dataDir: DATA_DIR, log: (line) => console.warn(line) });
+botBox.scopeFolders(botFolderAccess.forTurn);
 let followupsReady = false;
 const sendSequencer = new SendSequencer();
 // Before the new-bot default is read: a saved default may name the engine.
