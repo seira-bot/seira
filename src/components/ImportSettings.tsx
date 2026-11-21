@@ -1,5 +1,5 @@
-// Settings → Import: everything that brings work in from elsewhere, in one place. "From your AI apps" brings the skills
-// and MCP servers another AI tool keeps on this computer.
+// Settings → Import: everything that brings work in from elsewhere, in one place. The hub (ai-import/) moves another
+// AI's persona, memories, skills, tools, routines and chats; the welcome step still uses the skills-and-tools importer below.
 import { BookOpen, Check, ChevronDown, Info, Loader2, Plug } from "lucide-react";
 import { useContext, useEffect, useState, type ReactNode } from "react";
 import { SettingRow, SettingsLook, SettingsMark, SettingsRows, Switch } from "./SettingsPrimitives";
@@ -7,9 +7,11 @@ import { SettingRow, SettingsLook, SettingsMark, SettingsRows, Switch } from "./
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
-import { importOutcome, localSetupImport, setupImportApi, skillsSummary, toolsSummary, type SetupImportClient } from "@/lib/setup-import";
+import { aiImportApi, type AiImportClient } from "@/lib/ai-import";
+import { importOutcome, localSetupImport, skillsSummary, toolsSummary, type SetupImportClient } from "@/lib/setup-import";
 import { useStore } from "@/state/store";
 import { detectionCount, detectionSources, type SetupDetection, type SetupImportResult, type SetupSource } from "../../shared/setup-import";
+import { ImportHubSection } from "./ai-import";
 import { GrokBotMark } from "./GrokBotMark";
 import { GrokMoveDialog } from "./lazy-screens";
 import { ClaudeMark, CodexMark, CursorMark, PresetProviderMark } from "./ProviderIcons";
@@ -180,7 +182,7 @@ export function AiAppsImportView({ local, detection, chosen, status, result, onC
 }
 
 /** The welcome step's importer, outside the tour: look, tick, bring in. */
-function AiAppsImport({ client, local }: { client: SetupImportClient; local: boolean }) {
+export function AiAppsImport({ client, local }: { client: SetupImportClient; local: boolean }) {
   const [detection, setDetection] = useState<SetupDetection | null | undefined>(undefined);
   const [chosen, setChosen] = useState({ skills: true, tools: true });
   const [status, setStatus] = useState<"idle" | "working" | "failed">("idle");
@@ -241,21 +243,22 @@ export function GrokImportSection() {
   );
 }
 
-export function ImportSettings({ client = setupImportApi, children }: { client?: SetupImportClient; children?: ReactNode }) {
+/** The Import page's "Move from another AI" section. It replaces the old "From your AI apps" and Grok Bot cards;
+ * Grok Bot opens from a row of the hub. */
+export function ImportSettings({ ai = aiImportApi, children }: { ai?: AiImportClient; children?: ReactNode }) {
   const { state } = useStore();
+  const hub = <ImportHubSection client={ai} local={localSetupImport(state.config?.cloudHome === true)} />;
   if (useContext(SettingsLook)) {
     return (
       <SettingsRows>
-        <GrokImportSection />
-        <AiAppsImport client={client} local={localSetupImport(state.config?.cloudHome === true)} />
+        {hub}
         {children}
       </SettingsRows>
     );
   }
   return (
     <div className="flex flex-col gap-4">
-      <GrokImportSection />
-      <AiAppsImport client={client} local={localSetupImport(state.config?.cloudHome === true)} />
+      {hub}
       {children}
     </div>
   );
