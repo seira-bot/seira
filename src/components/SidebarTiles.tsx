@@ -20,6 +20,7 @@ import { SimpleSectionLabel } from "./SidebarSimpleNav";
 import { SIMPLE_ROW_FOCUS } from "./SidebarSimpleTop";
 import { useBotUnread } from "./unread-notice";
 
+export const TILE_COLUMNS = "repeat(auto-fill, minmax(max(60px, calc((100% - 6px) / 4)), 1fr))";
 const RING = "ring-2 ring-[var(--tile)]";
 
 type TileProps = BotRowProps & PinnedCircleDragProps & { primary?: boolean; kind?: "bot" };
@@ -142,7 +143,7 @@ export function SidebarTileGrid({ primary, pinned, others = [], row, onAdd }: { 
   return (
     <section data-sidebar-tiles="" aria-label={t("sidebar.section.bots")} className="px-3 pb-2 pt-1">
       <SimpleSectionLabel name={t("sidebar.section.bots")} addLabel={onAdd ? t("sidebar.newBotSimple") : undefined} onAdd={onAdd} />
-      <div className="grid max-h-[40vh] grid-cols-4 gap-0.5 overflow-y-auto py-0.5" {...order.frameProps}>
+      <div className="grid max-h-[40vh] gap-0.5 overflow-y-auto py-0.5" style={{ gridTemplateColumns: TILE_COLUMNS }} {...order.frameProps}>
         {primary && <SidebarBotTile {...row(primary)} primary />}
         {order.ranked.map((bot) => <SidebarBotTile key={bot.id} {...row(bot)} {...order.dragProps(bot)} />)}
         {others.map((bot) => <SidebarBotTile key={bot.id} {...row(bot)} kind="bot" />)}
@@ -155,7 +156,7 @@ export function SidebarTileGrid({ primary, pinned, others = [], row, onAdd }: { 
 export function SidebarSectionTiles({ bots, row }: { bots: Bot[]; row: (bot: Bot) => BotRowProps }) {
   if (bots.length === 0) return null;
   return (
-    <div data-sidebar-section-tiles="" className="grid grid-cols-4 gap-0.5 px-3 py-0.5">
+    <div data-sidebar-section-tiles="" className="grid gap-0.5 px-3 py-0.5" style={{ gridTemplateColumns: TILE_COLUMNS }}>
       {bots.map((bot) => <SidebarBotTile key={bot.id} {...row(bot)} kind="bot" />)}
     </div>
   );

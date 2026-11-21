@@ -325,9 +325,11 @@ on. Simple is the default for new installs.
   threads as a tree under its row), Simple may offer a shortcut to the same
   thing there instead of a second copy of it: a menu that opens on a click
   of a small chevron, never on hover.
-- **In Simple mode on desktop, the sidebar shows every bot as a tile.** Each tile is 44-48px
-  in a 4-column grid. Bots without a section go in the top grid. Each section has one grid
-  under its header. Rooms stay rows. Advanced keeps rows.
+- **In Simple mode on desktop, the sidebar shows every bot as a tile.** Each tile is 44-48px.
+  The grid has up to 4 columns and follows the sidebar width. Drag the edge narrower for 3
+  or 2 columns. Drag it narrower again and the sidebar becomes the column of avatars. Bots
+  without a section go in the top grid. Each section has one grid under its header. Rooms
+  stay rows. Advanced keeps rows.
 - **The Advanced bot panel is a grouped list.** A hero (avatar, name, role, state), four quick actions, a search
   field, then rows in five groups: Profile, Knowledge, Work, Channels, Admin. Each row is a 44px button with an
   icon, a title, a short value that comes from state already on screen (left empty when there is none) and a

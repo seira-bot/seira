@@ -12,7 +12,7 @@ vi.mock("@/lib/interface-mode", async (original) => ({
 vi.mock("./DesktopCapabilities", () => ({ useDesktopCapabilities: () => ({}) }));
 
 import { BotListItem, botRowProps } from "./Sidebar";
-import { SidebarBotTile, SidebarSectionTiles, SidebarTileGrid } from "./SidebarTiles";
+import { SidebarBotTile, SidebarSectionTiles, SidebarTileGrid, TILE_COLUMNS } from "./SidebarTiles";
 
 const bot = (extra: Partial<Bot> = {}): Bot => ({
   id: "seira", threadId: "t", name: "Seira", title: "", description: "", notifications: true, color: "chrome",
@@ -128,7 +128,9 @@ describe("the tile grid", () => {
     const drag = count > 1 ? ":drag" : "";
     expect(tiles(html)).toEqual(["primary:seira", ...pins(count).map((pin) => `pinned:${pin.id}${drag}`)]);
     expect(html).toMatch(/^<section data-sidebar-tiles="" aria-label="Bots"/);
-    expect(html).toContain("grid max-h-[40vh] grid-cols-4");
+    expect(html).toContain("grid max-h-[40vh] gap-0.5");
+    expect(html).not.toContain("grid-cols-4");
+    expect(html).toContain(`grid-template-columns:${TILE_COLUMNS}`);
     expect(html).toContain('data-sidebar-section-label=""');
     expect(html.match(/width="48px" height="48px"/g)).toHaveLength(count + 1);
     expect(html.match(/data-testid="chief-badge"/g)).toHaveLength(1);
@@ -159,7 +161,8 @@ describe("the tile grid", () => {
     const row = (candidate: Bot) => botRowProps({ ...initialState, bots: members, selectedId: "", activeView: "chat" }, dispatch, candidate, { density: "comfortable", query: "", onMenu });
     const html = renderToStaticMarkup(createElement(SidebarSectionTiles, { bots: members, row }));
     expect(tiles(html)).toEqual(["bot:a", "bot:b"]);
-    expect(html).toContain("grid grid-cols-4");
+    expect(html).not.toContain("grid-cols-4");
+    expect(html).toContain(`grid-template-columns:${TILE_COLUMNS}`);
     expect(html).not.toContain("data-sidebar-section-label");
     expect(html).not.toContain('data-testid="chief-badge"');
     expect(renderToStaticMarkup(createElement(SidebarSectionTiles, { bots: [], row }))).toBe("");
