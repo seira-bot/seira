@@ -181,6 +181,17 @@ function unavailable(response) {
   response.end(body);
 }
 
+function invalidRequest(response) {
+  const body = JSON.stringify({ error: "invalid request" });
+  response.writeHead(400, {
+    "cache-control": "private, no-store",
+    connection: "close",
+    "content-length": Buffer.byteLength(body),
+    "content-type": "application/json",
+  });
+  response.end(body);
+}
+
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
   "keep-alive",
@@ -203,6 +214,8 @@ function endToEndHeaders(headers = {}) {
     Object.entries(headers).filter(([name, value]) => value !== undefined && !blocked.has(name.toLowerCase())),
   );
 }
+
+const BODILESS_METHODS = new Set(["GET", "HEAD", "DELETE", "OPTIONS"]);
 
 function upgradeHeaders(headers = {}) {
   if (String(headers.upgrade ?? "").toLowerCase() !== "websocket") return null;
@@ -256,9 +269,16 @@ export function createCompanionOriginGateway({
 
   const server = createServer((incoming, outgoing) => {
     if (!accepting || !isTargetAlive(target)) return unavailable(outgoing);
+    const bodiless = BODILESS_METHODS.has(incoming.method);
+    if (bodiless && incoming.headers["transfer-encoding"] !== undefined) {
+      incoming.resume();
+      return invalidRequest(outgoing);
+    }
+    const headers = endToEndHeaders(incoming.headers);
+    if (bodiless) delete headers["content-length"];
     const upstream = request(
       {
-        headers: endToEndHeaders(incoming.headers),
+        headers,
         method: incoming.method,
         path: incoming.url,
         socketPath: target.socketPath,
@@ -284,7 +304,12 @@ export function createCompanionOriginGateway({
     upstream.once("error", () => unavailable(outgoing));
     incoming.once("aborted", () => upstream.destroy());
     outgoing.once("close", () => upstream.destroy());
-    incoming.pipe(upstream);
+    if (bodiless) {
+      incoming.resume();
+      upstream.end();
+    } else {
+      incoming.pipe(upstream);
+    }
   });
   server.on("upgrade", (incoming, socket, head) => {
     // Node removes its own error listener from a socket it hands to `upgrade`.

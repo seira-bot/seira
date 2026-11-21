@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { createServer as createHttpServer, request as httpRequest } from "node:http";
-import { createConnection } from "node:net";
+import { createConnection, createServer as createNetServer } from "node:net";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -157,6 +157,41 @@ describe("managed Companion loopback gateway", () => {
     expect(response.headers["x-private-hop"]).toBeUndefined();
     await gateway.close();
   });
+
+  it.each(["GET", "HEAD", "DELETE", "OPTIONS"])(
+    "answers 400 to a chunked %s and the sidecar socket sees no bytes",
+    async (method) => {
+      const allocated = endpoint();
+      let bytes = 0;
+      const target = createNetServer((socket) => {
+        socket.on("data", (chunk) => {
+          bytes += chunk.length;
+        });
+      });
+      servers.push(target);
+      await listen(target, allocated.socketPath);
+      const gateway = createCompanionOriginGateway({
+        target: { pid: process.pid, socketPath: allocated.socketPath },
+        originPort: 0,
+      });
+      const address = await gateway.start();
+      const client = createConnection({ host: "127.0.0.1", port: address.port });
+      sockets.push(client);
+      let reply = "";
+      client.setEncoding("utf8");
+      client.on("data", (chunk) => {
+        reply += chunk;
+      });
+      client.write(
+        `${method} /api/health HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n`
+          + "5d\r\nGET /api/bots HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n\r\n0\r\n\r\n",
+      );
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(reply).toMatch(/^HTTP\/1\.1 400 /);
+      expect(bytes).toBe(0);
+      await gateway.close();
+    },
+  );
 
   it("carries an authenticated viewer WebSocket to the private companion origin", async () => {
     const allocated = endpoint();

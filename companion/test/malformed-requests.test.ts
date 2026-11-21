@@ -118,3 +118,79 @@ it("answers 500 and logs the cause when pairing itself fails", async () => {
     logged.mockRestore();
   }
 });
+
+const fakeHarness = async () => {
+  const seen: { method?: string; url?: string; bytes: number }[] = [];
+  const server = createServer((req, res) => {
+    const entry: { method?: string; url?: string; bytes: number } = { method: req.method, url: req.url, bytes: 0 };
+    seen.push(entry);
+    req.on("data", (chunk: Buffer) => {
+      entry.bytes += chunk.length;
+    });
+    req.on("end", () => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ app: "seira" }));
+    });
+  });
+  return { seen, port: await listen(server) };
+};
+
+const proxyToHarness = async (harnessPort: number) => {
+  const proxy = createProxyHandler({
+    harnessPort,
+    authenticate: (token) => token === "paired" ? { id: "phone", cloudDesktopAccess: true, browserControlAccess: false } : null,
+    redeem: () => ({ error: "no", code: "pairing_code_wrong" }),
+    serverName: () => "Fixture",
+  });
+  return listen(createServer(proxy));
+};
+
+const rawExchange = async (port: number, bytes: string): Promise<string> => {
+  const client = createConnection({ host: "127.0.0.1", port });
+  let response = "";
+  client.setEncoding("utf8");
+  client.on("data", (chunk) => {
+    response += chunk;
+  });
+  client.once("connect", () => client.write(bytes));
+  const done = once(client, "close");
+  setTimeout(() => client.destroy(), 700).unref();
+  await done;
+  return response;
+};
+
+const CHUNKED_SMUGGLE = (method: string, path: string) =>
+  `${method} ${path} HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n`
+  + "5d\r\nGET /api/bots HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n\r\n0\r\n\r\n";
+
+it.each(["GET", "HEAD", "DELETE", "OPTIONS"])(
+  "answers 400 to a %s with Transfer-Encoding and forwards nothing",
+  async (method) => {
+    const harness = await fakeHarness();
+    const port = await proxyToHarness(harness.port);
+    const response = await rawExchange(port, CHUNKED_SMUGGLE(method, "/api/health"));
+    expect(response).toMatch(/^HTTP\/1\.1 400 /);
+    const authed = await rawExchange(port, CHUNKED_SMUGGLE(method, "/api/bots").replace("Host: x", "Host: x\r\nAuthorization: Bearer paired"));
+    expect(authed).toMatch(/^HTTP\/1\.1 400 /);
+    expect(harness.seen).toEqual([]);
+  },
+);
+
+it("forwards GET /api/health to the harness as one request with no body", async () => {
+  const harness = await fakeHarness();
+  const port = await proxyToHarness(harness.port);
+  const response = await fetch(`http://127.0.0.1:${port}/api/health`);
+  expect(response.status).toBe(200);
+  expect(harness.seen).toEqual([{ method: "GET", url: "/api/health", bytes: 0 }]);
+});
+
+it("does not forward the body of a GET that has a Content-Length", async () => {
+  const harness = await fakeHarness();
+  const port = await proxyToHarness(harness.port);
+  const response = await rawExchange(
+    port,
+    "GET /api/health HTTP/1.1\r\nHost: x\r\nContent-Length: 4\r\nConnection: close\r\n\r\nabcd",
+  );
+  expect(response).toMatch(/^HTTP\/1\.1 200 /);
+  expect(harness.seen).toEqual([{ method: "GET", url: "/api/health", bytes: 0 }]);
+});

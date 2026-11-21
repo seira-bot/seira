@@ -65,6 +65,10 @@ export interface ProxyOptions {
  * requests arriving through an encrypted stream are recognised by their socket, whatever this says. */
 export type ProxyListener = "lan" | "origin";
 
+/** A request with one of these methods carries no body here. Transfer-Encoding on one is the shape of a smuggled
+ * second request, so it is refused whole. */
+const BODILESS_METHODS = new Set(["GET", "HEAD", "DELETE", "OPTIONS"]);
+
 /** §11 rule 4 of the wire spec: a phone that has used the encrypted connection never goes back to plain HTTP. */
 const UPDATE_APP = { error: "update_app" } as const;
 
@@ -310,7 +314,12 @@ export function companionIdentityHeaders(authenticatedDeviceId?: string, mutatio
 
 /** An allowlist: `host` and `origin` must not travel, `authorization` is the
  * sidecar's own credential, and hop-by-hop headers are not ours to relay. */
-const forwardHeaders = (req: IncomingMessage, authenticatedDeviceId?: string, mutationToken?: string): Record<string, string> => {
+const forwardHeaders = (
+  req: IncomingMessage,
+  authenticatedDeviceId?: string,
+  mutationToken?: string,
+  bodiless = false,
+): Record<string, string> => {
   const out: Record<string, string> = {
     accept: String(req.headers.accept ?? "*/*"),
     ...companionIdentityHeaders(authenticatedDeviceId, mutationToken),
@@ -320,7 +329,8 @@ const forwardHeaders = (req: IncomingMessage, authenticatedDeviceId?: string, mu
   // A trustworthy byte count lets the harness reserve disk quota up front.
   const contentLength = req.headers["content-length"];
   if (
-    typeof contentLength === "string"
+    !bodiless
+    && typeof contentLength === "string"
     && /^(?:0|[1-9]\d*)$/.test(contentLength)
     && Number.isSafeInteger(Number(contentLength))
   ) {
@@ -398,6 +408,12 @@ export function createProxyHandler(options: ProxyOptions) {
     if (!target) return sendJson(res, 400, { error: "invalid request target" });
     const path = (req.url ?? "/").split("?")[0];
     const method = req.method ?? "GET";
+    const bodiless = BODILESS_METHODS.has(method);
+    if (bodiless && req.headers["transfer-encoding"] !== undefined) {
+      req.resume();
+      res.setHeader("connection", "close");
+      return sendJson(res, 400, { error: "invalid request" });
+    }
 
     // A native app sends no Origin: anything with one is a browser, refused
     // before the token is looked at.
@@ -509,7 +525,7 @@ export function createProxyHandler(options: ProxyOptions) {
         port: options.harnessPort,
         path: req.url,
         method,
-        headers: forwardHeaders(req, device?.id, mutationToken ?? undefined),
+        headers: forwardHeaders(req, device?.id, mutationToken ?? undefined, bodiless),
       },
       (harness) => {
         clearTimeout(headersDeadline);
@@ -791,7 +807,12 @@ export function createProxyHandler(options: ProxyOptions) {
           : { error: "Seira is not running on this computer" },
       );
     });
-    req.pipe(upstream);
+    if (bodiless) {
+      req.resume();
+      upstream.end();
+    } else {
+      req.pipe(upstream);
+    }
   };
 
   handle.upgrade = (req: IncomingMessage, socket: Duplex, head: Buffer, listener: ProxyListener = "lan"): void => {
