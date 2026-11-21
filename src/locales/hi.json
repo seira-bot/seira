@@ -3588,6 +3588,8 @@
   "sidebar.update.readyShort": "अपडेट तैयार",
   "sidebar.update.restartAction": "रीस्टार्ट करें",
   "sidebar.update.retryAction": "फिर से कोशिश करें",
+  "sidebar.update.availableShort": "सर्वर अपडेट उपलब्ध है",
+  "sidebar.update.howAction": "अपडेट कैसे करें",
   "sidebar.nav.publishedApps": "प्रकाशित ऐप्स",
   "sidebar.nav.teamFiles": "टीम फ़ाइलें",
   "settings.advancedMode.subtitle": "इस डिवाइस पर हर तकनीकी नियंत्रण दिखाएँ: उपयोग और टोकन, इंस्पेक्टर और बिल्डर्स के लिए दूसरे टूल। आसान ऐप के लिए इसे बंद करें। दोनों ही तरह कुछ भी मिटता नहीं।",
