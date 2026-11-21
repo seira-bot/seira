@@ -293,7 +293,7 @@ describe("paste", () => {
     const done = await waitFor(jobs, listeners, job.id, (view) => view.state === "done");
     expect(done.source.kind).toBe("paste");
     expect(importedThreads(store)).toHaveLength(0);
-    expect(harness.ports.memory.read(botId)).toContain("I drink tea at noon");
+    expect(harness.ports.memory.readTopic(botId, "About you from ChatGPT.md")).toContain("I drink tea at noon");
     expect(store.bot(botId)?.soul).toContain("Keep answers short");
     await jobs.close();
   });
