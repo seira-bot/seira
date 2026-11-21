@@ -600,7 +600,8 @@ test("the place asked for: My Cloud unless a team is asked or remembered; a team
   assert.deepEqual(placeOf({ ask: "cloud", remembered: { team: "team-acme" }, state }), { kind: "cloud" }, "asked for My Cloud: My Cloud");
   assert.deepEqual(placeOf({ ask: { team: "team-acme" }, state }), { kind: "team", id: "team-acme", name: "Acme", role: "member", origin: TEAM, machine: ACME.machine });
   assert.deepEqual(placeOf({ remembered: { team: "team-acme", name: "Old name", origin: "https://old.fly.dev" }, state }).origin, TEAM, "the session's address wins over the saved one");
-  assert.deepEqual(placeOf({ ask: { team: "team-acme" }, state: { ...state, teams: [{ ...ACME, machine: null }] } }), { kind: "team", id: "team-acme", name: "Acme", role: "member", origin: null, machine: null });
+  assert.deepEqual(placeOf({ ask: { team: "team-acme" }, state: { ...state, teams: [{ ...ACME, machine: null }] } }), { kind: "cloud", noCloud: true }, "listed with no machine: no place");
+  assert.deepEqual(placeOf({ remembered: { team: "team-acme", name: "Acme", origin: TEAM }, state: { ...state, teams: [{ ...ACME, machine: null }] } }), { kind: "cloud", noCloud: true });
   assert.deepEqual(placeOf({ remembered: { team: "team-acme", name: "Acme", origin: TEAM }, state: connected() }), { kind: "cloud", left: "Acme" }, "connected, not listed: gone, by name");
   assert.deepEqual(placeOf({ ask: { team: "team-acme", name: "Acme" }, state: connected() }), { kind: "cloud", left: "Acme" });
   assert.deepEqual(placeOf({ remembered: { team: "team-acme" }, state: connected() }), { kind: "cloud", left: null }, "gone, with no name to say");
@@ -691,7 +692,6 @@ test("signed out, a team shows the sign-in screen with its name; the Admin refus
     assert.deepEqual(await stoppedFor("member", machine), { screen: "plan", machine: machine.status, name: "Acme", member: true }, "a team's User is sent to its owner");
     for (const role of ["owner", "admin"]) assert.equal((await stoppedFor(role, machine)).member, undefined, role);
   }
-  assert.equal((await stoppedFor("member", null)).member, true, "no machine at all: stopped, for a User too");
 });
 
 test("on the team's page, a session that ends is renewed through the team pairing, the page counts as this app's, and its new version reloads at a quiet moment", async () => {

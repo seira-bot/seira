@@ -173,10 +173,24 @@ git tag -a v<version> -m "Seira v<version>" <merge commit sha>
 git push origin v<version>
 node scripts/release-preflight.mjs --tag v<version>
 cd .seira-scratch/linux-upload
-gh release create v<version> --verify-tag --title "Seira v<version>" --generate-notes \
+gh release create v<version> --verify-tag --draft --title "Seira v<version>" --generate-notes
+node ../../scripts/release-assets.mjs upload v<version> \
   Seira-<version>-x86_64.AppImage Seira-<version>-amd64.deb latest-linux.yml \
   Seira.AppImage Seira-amd64.deb SHA256SUMS-linux-x64.txt
+node ../../scripts/release-assets.mjs check v<version>
+gh release edit v<version> --draft=false
+node ../../scripts/release-assets.mjs check v<version>
 ```
+
+The release stays a draft until the Linux files are on it. Attach every file
+with the upload command, never with `gh release upload`. The script uploads
+the feeds (`latest*.yml`) last, so installed apps never read a feed whose file
+is still uploading. It uploads one file at a time and stops at the first
+failure. Before it uploads a feed, it checks that every file that a feed or a
+`SHA256SUMS-*.txt` file names is an uploaded asset of the same size. The
+`check` command runs the same check at any time. It only reads from GitHub.
+Do not publish the release when a check fails. The preflight cannot see
+assets, because it runs before the release exists.
 
 Tag the squash commit on `main`, not the release branch's last commit. The
 tag push works only for an organization admin.
@@ -203,7 +217,7 @@ settings and the recovery steps.
 ```sh
 git switch --detach v<version>
 scripts/linux-store/publish-flatpak.sh v<version>
-gh release upload v<version> release/Seira-<version>-x86_64.flatpak --repo seira-bot/seira
+node scripts/release-assets.mjs upload v<version> release/Seira-<version>-x86_64.flatpak
 ```
 
 - Use `--init-repo` for the first publish only.
@@ -235,9 +249,10 @@ gh run watch <run id> --repo seira-bot/seira --exit-status
 mkdir -p .seira-scratch/windows && cd .seira-scratch/windows
 gh run download <run id> --repo seira-bot/seira --name seira-<version>-windows-x64
 sha256sum -c SHA256SUMS-windows-x64.txt
-gh release upload v<version> --repo seira-bot/seira \
+node ../../scripts/release-assets.mjs upload v<version> \
   Seira-<version>-setup.exe Seira-<version>-setup.exe.blockmap latest.yml \
   Seira-setup.exe SHA256SUMS-windows-x64.txt
+node ../../scripts/release-assets.mjs check v<version>
 ```
 
 - Set `ref` to the release tag. The workflow stops when the tag and the
@@ -246,8 +261,11 @@ gh release upload v<version> --repo seira-bot/seira \
   [CI](ci.md#repository-settings-for-actions)).
 - The artifact stays for 14 days. Upload it before then, or run the workflow
   again.
-- Upload all five files together. A release with the installer but without
-  `latest.yml` leaves every installed Windows app on its old version.
+- Upload all five files in one upload command. The script uploads `latest.yml`
+  last, so installed apps never read a feed whose file is still uploading. A
+  release with the installer but without `latest.yml` leaves every installed
+  Windows app on its old version.
+- Run `check` after the upload. It must print no `FAIL` line.
 
 #### The installer is not signed
 
@@ -341,12 +359,13 @@ gh run watch <run id> --repo seira-bot/seira --exit-status
 mkdir -p .seira-scratch/macos && cd .seira-scratch/macos
 gh run download <run id> --repo seira-bot/seira --name seira-<version>-macos
 sha256sum -c SHA256SUMS-mac.txt
-gh release upload v<version> --repo seira-bot/seira \
+node ../../scripts/release-assets.mjs upload v<version> \
   Seira-<version>-arm64.dmg Seira-<version>-x64.dmg \
   Seira-<version>-arm64.zip Seira-<version>-x64.zip \
   Seira-<version>-arm64.dmg.blockmap Seira-<version>-x64.dmg.blockmap \
   Seira-<version>-arm64.zip.blockmap Seira-<version>-x64.zip.blockmap \
   latest-mac.yml Seira.dmg Seira-intel.dmg SHA256SUMS-mac.txt
+node ../../scripts/release-assets.mjs check v<version>
 ```
 
 - Set `ref` to the release tag. The workflow stops when the tag and the
@@ -355,8 +374,11 @@ gh release upload v<version> --repo seira-bot/seira \
   workflow stops at a gate. Build `v0.1.171` or later.
 - The artifact stays for 14 days. Upload it before then, or run the workflow
   again.
-- Upload all twelve files together. A release with the apps but without
-  `latest-mac.yml` leaves every installed macOS app on its old version.
+- Upload all twelve files in one upload command. The script uploads
+  `latest-mac.yml` last, so installed apps never read a feed whose file is
+  still uploading. A release with the apps but without `latest-mac.yml` leaves
+  every installed macOS app on its old version.
+- Run `check` after the upload. It must print no `FAIL` line.
 
 #### An artifact named NOT-FOR-RELEASE
 
@@ -414,10 +436,12 @@ gh release download v<version> --repo seira-bot/seira
 sha256sum -c SHA256SUMS-linux-x64.txt
 sha256sum -c SHA256SUMS-windows-x64.txt
 sha256sum -c SHA256SUMS-mac.txt
+node ../../scripts/release-assets.mjs check v<version>
 ```
 
-Each check must print `OK`. If a check fails, delete the release assets and
-upload them again. Never edit an asset in place.
+Each check must print `OK`, and the `check` command must print no `FAIL`
+line. If a check fails, delete the release assets and upload them again. Never
+edit an asset in place.
 
 ## Publish to npm
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 
+import { AUTOMATION_VIEWS } from "../../shared/automation-views";
 import { automationsFrom, automationSentence, automationStatus, orderAutomations, runLine, statusLine, type Automation } from "@/lib/automations";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
@@ -101,7 +102,7 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
               </Select>
             )}
             <div role="group" aria-label={t("automations.view")} className="flex items-center rounded-lg border border-hairline/50 bg-panel p-0.5">
-              {(["list", "calendar", ...(workflows.unavailable ? [] : ["workflows" as const])] as const).map((option) => (
+              {AUTOMATION_VIEWS.filter((option) => option !== "workflows" || !workflows.unavailable).map((option) => (
                 <button key={option} type="button" aria-pressed={view === option} onClick={() => dispatch({ type: "showRoutines", view: option, botId: botFilter === "all" ? undefined : botFilter })}
                   className={cn("rounded-md px-3 py-1 text-[13px] font-medium", view === option ? "bg-raised text-ink shadow-sm" : "text-ink-secondary hover:text-ink")}>
                   {option === "list" ? t("automations.list") : option === "calendar" ? t("automations.calendar") : t("workflow.view")}
