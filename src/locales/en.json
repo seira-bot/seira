@@ -11015,6 +11015,8 @@
   "serverUpdate.appUnavailable": "This app can't update itself here. Download the new version from the website.",
   "serverUpdate.appBehind": "This app is on v{appVersion}, the server on v{serverVersion}",
   "serverUpdate.updateApp": "Update app",
+  "serverUpdate.downloadApp": "Download",
+  "serverUpdate.appFromStore": "Your app store updates Seira.",
   "serverUpdate.confirmTitle": "Update the server?",
   "serverUpdate.confirmBody": "The server restarts to update, so anything running on it stops. This takes a few minutes. If the new version doesn't work, the server goes back to this one by itself.",
   "serverUpdate.confirmBusy.one": "A bot is answering in {count} chat right now.",

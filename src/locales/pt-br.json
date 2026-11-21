@@ -10953,6 +10953,8 @@
   "serverUpdate.appUnavailable": "Este app não consegue se atualizar sozinho aqui. Baixe a nova versão no site.",
   "serverUpdate.appBehind": "Este app está na v{appVersion}, e o servidor na v{serverVersion}",
   "serverUpdate.updateApp": "Atualizar app",
+  "serverUpdate.downloadApp": "Baixar",
+  "serverUpdate.appFromStore": "Sua loja de apps atualiza o Seira.",
   "serverUpdate.confirmTitle": "Atualizar o servidor?",
   "serverUpdate.confirmBody": "O servidor reinicia para atualizar, então tudo que estiver rodando nele para. Isso leva alguns minutos. Se a nova versão não funcionar, o servidor volta sozinho para esta.",
   "serverUpdate.confirmBusy.one": "Agora mesmo um bot está respondendo em {count} chat.",

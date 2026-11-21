@@ -31,9 +31,9 @@ function writeSite(folder: string, files: Record<string, string> = SITE) {
 }
 const signIn = () => applyIncludedPagesMessage({ type: "seira:included-pages", access: { url: FAKE_TOKEN_URL, token: FAKE_DESKTOP_TOKEN } });
 
-function deferred() {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => { resolve = done; });
+function deferred<T = void>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
   return { promise, resolve };
 }
 
@@ -504,15 +504,61 @@ describe("unpublishing a page", () => {
     };
     const fromSite = f.publish({ path: "site" });
     await stored;
+    const readFolder = bundle.readPageBundle;
+    const draftRead = deferred<{ read: ReturnType<typeof readFolder> }>();
+    const read = vi.spyOn(bundle, "readPageBundle").mockImplementationOnce((...args) => {
+      const reading = readFolder(...args);
+      draftRead.resolve({ read: reading });
+      return reading;
+    });
     const fromDraft = f.publish({ path: "draft", pageId: page });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // A promise runs its callbacks in the order they were added. The publish awaits its read before this test does, so it
+    // has joined the page's queue when this await returns.
+    await (await draftRead.promise).read;
+    read.mockRestore();
     const unpublished = f.pages.publisher.unpublish({ pageId: page });
-    await new Promise((resolve) => setTimeout(resolve, 20));
     release();
     expect((await Promise.all([fromSite, fromDraft, unpublished])).map((outcome) => outcome.status)).toEqual([200, 200, 200]);
     expect(f.service.pages.size).toBe(0);
     expect(f.pages.store.get(page!)).toBeNull();
     expect(f.cards.map((card) => card.card.state)).toEqual(["unpublished", "unpublished", "unpublished"]);
+  });
+
+  it("says the page is gone to an update from another folder by its page id that finished reading its folder only after an unpublish took the page down", async () => {
+    const f = setup();
+    signIn();
+    writeSite(join(f.work, "site"));
+    writeSite(join(f.work, "draft"));
+    await f.publish({ path: "site" });
+    const [page] = [...f.service.pages.keys()];
+    const answered = deferred(), stored = deferred();
+    let held = false;
+    const fetch = f.service.fetch;
+    f.service.fetch = async (input, init) => {
+      const response = await fetch(input, init);
+      if (init?.method === "PUT" && !held) { held = true; stored.resolve(); await answered.promise; }
+      return response;
+    };
+    const fromSite = f.publish({ path: "site" });
+    await stored.promise;
+    const readFolder = bundle.readPageBundle;
+    const takenDown = deferred();
+    const read = vi.spyOn(bundle, "readPageBundle").mockImplementationOnce(async (...args) => {
+      await takenDown.promise;
+      return readFolder(...args);
+    });
+    const fromDraft = f.publish({ path: "draft", pageId: page });
+    const unpublished = f.pages.publisher.unpublish({ pageId: page });
+    answered.resolve();
+    expect((await fromSite).status).toBe(200);
+    expect((await unpublished).status).toBe(200);
+    takenDown.resolve();
+    expect(await fromDraft).toMatchObject({ status: 410, reason: "gone" });
+    read.mockRestore();
+    expect(f.service.pages.size).toBe(0);
+    expect(f.pages.store.get(page!)).toBeNull();
+    expect(f.pages.store.list()).toEqual([]);
+    expect(f.cards.map((card) => card.card.state)).toEqual(["unpublished", "unpublished"]);
   });
 
   it("updates the page a folder's publish waited for, though the folder moved to another page meanwhile", async () => {

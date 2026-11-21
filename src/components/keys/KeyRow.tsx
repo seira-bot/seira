@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import type { KeyResult, KeyVia } from "@/lib/analytics-allowlist";
 import { keyRemoved, keySaved, keySaveFailure, savedKeyResult } from "@/lib/product-events";
-import { InstanceProviderMark } from "../ProviderIcons";
+import { BrandMark, InstanceProviderMark } from "../ProviderIcons";
 import { FIELD_EDGE, SettingsLook, SettingsMark } from "../SettingsPrimitives";
 import { keyEntry, keyForInstance, looksLikeOtherKey, savedState, shownKeyEntry, type KeyEntry, type KeyId, type SavedState } from "./key-catalog";
 import { checkKey, cleanKey, looksLikeKey, saveKey } from "./key-save";
@@ -19,8 +19,9 @@ export function KeyMarkIcon({ entry }: { entry: KeyEntry }) {
   const { mark } = entry;
   if ("icon" in mark) {
     const Icon = mark.icon;
-    return <Icon size={16} aria-hidden="true" className="shrink-0 text-ink-tertiary transition-colors group-hover:text-ink-secondary group-focus-within:text-ink-secondary" />;
+    return <Icon size={16} aria-hidden="true" className="shrink-0 text-ink-tertiary transition-colors group-hover:text-ink group-focus-within:text-ink" />;
   }
+  if ("brand" in mark) return <BrandMark brand={mark.brand} size={16} subtle />;
   return <InstanceProviderMark instance={{ driverKind: mark.driverKind, ...(mark.preset ? { icon: { kind: "preset", preset: mark.preset } } : {}) }} size={16} subtle />;
 }
 

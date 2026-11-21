@@ -1,4 +1,4 @@
-import { AudioLines, Blocks, Fingerprint, Image, LockKeyhole, Monitor, Phone, Search, Server, Zap, type LucideIcon } from "lucide-react";
+import { Fingerprint, Image, Search, Server, Zap, type LucideIcon } from "lucide-react";
 import type { AppSettingsSection, ConfigStatus } from "@/state/store";
 import type { SavedKey } from "@/state/config-status";
 import type { KeyProvider } from "@/lib/analytics-allowlist";
@@ -6,6 +6,7 @@ import { t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { reportModelgoOffer } from "@/lib/modelgo-offer";
 import type { ProviderIconPreset } from "../../../shared/provider-icon";
+import type { BrandId } from "../BrandMarks";
 import { MODELGO_URL } from "../../../shared/modelgo";
 
 export type KeySectionId = "ai" | "servers" | "voice" | "computers" | "apps" | "helpers";
@@ -49,7 +50,7 @@ export type KeyId =
   | "ollama" | "lmStudio" | "openaiCompat" | "liveCalls" | "liveKey" | "elevenlabs" | "fishAudio" | "geminiTts" | "box" | "vps" | "onePassword" | "composio" | "treg"
   | "jev" | "openrouterHelper" | "workersAi" | "customDecider" | "imageOpenai" | "imageGemini" | "imageCustom";
 
-export type KeyMark = { driverKind: string; preset?: ProviderIconPreset } | { icon: LucideIcon };
+export type KeyMark = { driverKind: string; preset?: ProviderIconPreset } | { brand: BrandId } | { icon: LucideIcon };
 
 export interface KeyEntry {
   id: KeyId;
@@ -128,36 +129,36 @@ export const KEY_CATALOG: readonly KeyEntry[] = [
   { id: "ollama", section: "servers", labelKey: "ollama.title", purposeKey: "keys.purpose.ollama", name: "Ollama", env: [],
     words: ["ollama", "local", "llama", "ollama pull"], mark: provider("openai-compat", "ollama"), kind: "panel" },
   { id: "lmStudio", section: "servers", labelKey: "lmStudio.title", purposeKey: "keys.purpose.lmStudio", name: "LM Studio", env: [],
-    words: ["lm studio", "lmstudio", "llm studio", "local", "bionic"], mark: { icon: Server }, kind: "panel" },
+    words: ["lm studio", "lmstudio", "llm studio", "local", "bionic"], mark: { brand: "lmStudio" }, kind: "panel" },
   { id: "openaiCompat", section: "servers", labelKey: "keys.openaiCompat.label", purposeKey: "keys.purpose.openaiCompat", name: "OpenAI-compatible", env: ["OPENAI_COMPAT_API_KEY", "OPENAI_COMPAT_URL"],
     words: ["openai-compatible", "openai compatible", "together", "gemini", "google ai studio", "base url", "server", "endpoint"], mark: { icon: Server }, kind: "key",
     target: { patch: (value) => ({ openaiCompat: { key: value } }), slot: "openaiCompatApiKey", saved: (config) => flag(config.openaiCompat), placeholder: "…", placeholderKey: "keys.openaiCompat.placeholder",
       href: "https://platform.openai.com/docs/api-reference", test: "openaiCompat", analytics: "openai_compat" } },
   { id: "liveCalls", section: "voice", labelKey: "call.live.key", purposeKey: "keys.purpose.liveCalls", name: "OpenAI", env: [],
-    words: ["openai", "live calls", "calls", "voice", "talk", "gpt-live", "read aloud", "speech", "tts"], mark: { icon: Phone }, kind: "uses", uses: "openai" },
+    words: ["openai", "live calls", "calls", "voice", "talk", "gpt-live", "read aloud", "speech", "tts"], mark: { brand: "openai" }, kind: "uses", uses: "openai" },
   { id: "liveKey", section: "voice", labelKey: "keys.label.liveKey", purposeKey: "keys.purpose.liveKey", name: "OpenAI", env: ["SEIRA_OPENAI_LIVE_KEY"],
-    words: ["openai", "live calls", "calls", "voice", "gpt-live", "azure", "foundry"], mark: { icon: Phone }, kind: "key",
+    words: ["openai", "live calls", "calls", "voice", "gpt-live", "azure", "foundry"], mark: { brand: "openai" }, kind: "key",
     target: { patch: (value) => ({ live: { key: value } }), slot: "openaiLiveKey",
       saved: (config) => flag(config.savedKeys?.openaiLiveKey ?? { configured: config.live?.keySource === "live" }),
       placeholder: "sk-…", href: "https://platform.openai.com/api-keys", analytics: "openai_live", shape: OPENAI_SHAPE } },
   { id: "elevenlabs", section: "voice", labelKey: "keys.label.elevenlabs", purposeKey: "keys.purpose.elevenlabs", name: "ElevenLabs", env: ["SEIRA_TTS_KEY"],
-    words: ["elevenlabs", "eleven labs", "voice", "voices", "speech", "tts"], mark: { icon: AudioLines }, kind: "key",
+    words: ["elevenlabs", "eleven labs", "voice", "voices", "speech", "tts"], mark: { brand: "elevenlabs" }, kind: "key",
     target: { patch: (value) => ({ tts: { key: value } }), slot: "ttsKey", verifiedOnSave: true,
       saved: (config) => ({ ...flag(config.savedKeys?.ttsKey ?? { configured: config.tts?.provider === "elevenlabs" && config.tts.configured && !config.tts.included }),
         ...(config.tts?.included ? { included: true } : {}) }),
       placeholder: "sk_…", href: "https://elevenlabs.io/app/settings/api-keys", analytics: "elevenlabs", shape: /^sk_/ } },
   { id: "geminiTts", section: "voice", labelKey: "keys.label.geminiTts", purposeKey: "keys.purpose.geminiTts", name: "Gemini", env: ["SEIRA_GEMINI_API_KEY"],
-    words: ["google", "gemini", "speech", "voice", "tts"], mark: { icon: AudioLines }, kind: "key",
+    words: ["google", "gemini", "speech", "voice", "tts"], mark: { brand: "gemini" }, kind: "key",
     target: { patch: (value) => ({ tts: { geminiKey: value } }), slot: "geminiTtsKey",
       saved: (config) => flag(config.savedKeys?.geminiTtsKey), placeholderKey: "voice.gemini.keyPlaceholder", placeholder: "...",
       href: "https://aistudio.google.com/api-keys", analytics: "gemini_tts" } },
   { id: "fishAudio", section: "voice", labelKey: "keys.label.fishAudio", purposeKey: "keys.purpose.fishAudio", name: "Fish Audio", env: ["SEIRA_FISH_AUDIO_API_KEY"],
-    words: ["fish", "fish audio", "voice", "voices", "speech", "tts"], mark: { icon: AudioLines }, kind: "key",
+    words: ["fish", "fish audio", "voice", "voices", "speech", "tts"], mark: { brand: "fishAudio" }, kind: "key",
     target: { patch: (value) => ({ tts: { fishKey: value } }), slot: "fishAudioKey", verifiedOnSave: true,
       saved: (config) => flag(config.savedKeys?.fishAudioKey ?? { configured: config.tts?.provider === "fish" && config.tts.configured }),
       placeholder: "…", placeholderKey: "voice.fish.keyPlaceholder", href: "https://fish.audio/app/api-keys/", analytics: "fish_audio" } },
   { id: "box", section: "computers", labelKey: "keys.boat.label", purposeKey: "keys.purpose.box", name: "boat.dev", env: ["BOX_TOKEN"],
-    words: ["boat", "box", "cloud desktop", "cloud computer", "computer", "sandbox"], mark: { icon: Monitor }, kind: "key",
+    words: ["boat", "box", "cloud desktop", "cloud computer", "computer", "sandbox"], mark: { brand: "boat" }, kind: "key",
     target: { patch: (value) => ({ box: { token: value } }), slot: "boxToken", verifiedOnSave: true,
       saved: (config) => ({ ...flag(config.box?.included ? undefined : config.box), ...(config.box?.included ? { included: true } : {}) }),
       placeholder: "boat_…", href: "https://docs.boat.dev/api-keys", analytics: "boat", shape: /^(boat|box)_/, warningKey: "keys.boat.warning" } },
@@ -165,10 +166,10 @@ export const KEY_CATALOG: readonly KeyEntry[] = [
     words: ["vps", "ssh", "server", "self-hosted", "computer", "docker"], mark: { icon: Server }, kind: "panel",
     status: (config) => ({ configured: config.vps?.configured === true }) },
   { id: "onePassword", section: "computers", labelKey: "settings.logins.onePassword.title", purposeKey: "keys.purpose.onePassword", name: "1Password", env: [],
-    words: ["1password", "one password", "logins", "passwords", "vault", "service account"], mark: { icon: LockKeyhole }, kind: "elsewhere",
+    words: ["1password", "one password", "logins", "passwords", "vault", "service account"], mark: { brand: "onePassword" }, kind: "elsewhere",
     opens: "logins", whereKey: "keys.where.vault" },
   { id: "composio", section: "apps", labelKey: "keys.composio.label", purposeKey: "keys.purpose.composio", name: "Composio", env: ["COMPOSIO_API_KEY"],
-    words: ["composio", "connected apps", "apps", "gmail", "slack", "github", "notion", "self-host"], mark: { icon: Blocks }, kind: "key",
+    words: ["composio", "connected apps", "apps", "gmail", "slack", "github", "notion", "self-host"], mark: { brand: "composio" }, kind: "key",
     target: { patch: (value) => ({ composio: { apiKey: value } }), slot: "composioApiKey", verifiedOnSave: true,
       saved: (config) => ({ ...flag((config.composio?.mode ?? "self-hosted") === "self-hosted" ? config.composio : undefined),
         ...(config.composio?.mode === "managed" ? { included: true } : {}) }),
@@ -224,10 +225,10 @@ export function shownKeyEntry(id: KeyId, config: ConfigStatus | null | undefined
   if (id !== "liveKey" || (provider !== "azure" && provider !== "custom" && provider !== "fish" && provider !== "gemini" && provider !== "elevenlabs") || !entry.target) return entry;
   const { shape: _openAiShape, ...target } = entry.target;
   if (provider === "fish") {
-    return { ...entry, name: "Fish Audio", labelKey: "keys.label.fishAudio", purposeKey: "keys.purpose.liveKeyFish", target: keyEntry("fishAudio").target };
+    return { ...entry, name: "Fish Audio", mark: keyEntry("fishAudio").mark, labelKey: "keys.label.fishAudio", purposeKey: "keys.purpose.liveKeyFish", target: keyEntry("fishAudio").target };
   }
   if (provider === "gemini") {
-    return { ...entry, name: "Gemini", labelKey: "keys.label.geminiTts", purposeKey: "keys.purpose.liveKeyGemini", target: keyEntry("geminiTts").target };
+    return { ...entry, name: "Gemini", mark: keyEntry("geminiTts").mark, labelKey: "keys.label.geminiTts", purposeKey: "keys.purpose.liveKeyGemini", target: keyEntry("geminiTts").target };
   }
   if (provider === "elevenlabs") {
     // Cloud's included voices cannot place Live calls, so this row asks for the person's own key even then.
@@ -236,13 +237,13 @@ export function shownKeyEntry(id: KeyId, config: ConfigStatus | null | undefined
       const { included: _included, ...own } = voices.saved(config);
       return own;
     };
-    return { ...entry, name: "ElevenLabs", labelKey: "keys.label.elevenlabs", purposeKey: "keys.purpose.liveKeyElevenLabs", target: { ...voices, saved } };
+    return { ...entry, name: "ElevenLabs", mark: keyEntry("elevenlabs").mark, labelKey: "keys.label.elevenlabs", purposeKey: "keys.purpose.liveKeyElevenLabs", target: { ...voices, saved } };
   }
   if (provider === "custom") {
     const { href: _openAiPage, ...own } = target;
-    return { ...entry, name: "Custom endpoint", labelKey: "call.live.customKeyField", purposeKey: "keys.purpose.liveKeyCustom", target: { ...own, placeholder: "…" } };
+    return { ...entry, name: "Custom endpoint", mark: { icon: Server }, labelKey: "call.live.customKeyField", purposeKey: "keys.purpose.liveKeyCustom", target: { ...own, placeholder: "…" } };
   }
-  return { ...entry, name: "Azure OpenAI", labelKey: "call.live.azureKeyField", purposeKey: "keys.purpose.liveKeyAzure", target: { ...target, placeholder: "…", href: "https://portal.azure.com" } };
+  return { ...entry, name: "Azure OpenAI", mark: { driverKind: "openai-compat", preset: "azure" }, labelKey: "call.live.azureKeyField", purposeKey: "keys.purpose.liveKeyAzure", target: { ...target, placeholder: "…", href: "https://portal.azure.com" } };
 }
 
 export function keySection(entry: KeyEntry) {

@@ -1,5 +1,5 @@
 import type { ServerUpdateReason, ServerUpdateStatus } from "../../shared/server-update";
-import type { AppUpdateAnswer } from "@/types/ogb";
+import type { AppUpdateAnswer, AppUpdateWay } from "@/types/ogb";
 import type { LocaleKey } from "@/locales";
 import { appVersion } from "./app-links";
 import { t } from "./i18n";
@@ -74,7 +74,7 @@ export function newerVersion(a: string, b: string): boolean {
 /** An update that has not come back after this long is said to be stuck, with what to run on the server. */
 export const SERVER_UPDATE_DEADLINE_MS = 15 * 60_000;
 
-export type ServerUpdateAction = "check" | "update-server" | "update-app" | "reload" | null;
+export type ServerUpdateAction = "check" | "update-server" | "update-app" | "download-app" | "reload" | null;
 
 /** The one row Settings → Updates shows for a self-hosted server: what is behind (the server, this app, or both) and the
  * one action that fixes it, with the last update's outcome as `note`. */
@@ -148,6 +148,8 @@ export function serverUpdateView(input: {
   failed?: boolean;
   pressed?: boolean;
   appAnswer?: AppUpdateAnswer | null;
+  /** How this app gets its updates; null or absent while unknown (an older app), which keeps the app's own update button. */
+  appWay?: AppUpdateWay | null;
   /** How long this page has been waiting for the server to come back from an update. */
   waitedMs?: number;
 }): ServerUpdateView {
@@ -190,7 +192,9 @@ export function serverUpdateView(input: {
     return { label, ...(command ? { subtitle: t(how, { command }) } : {}), action: null, busy: false, ...extra };
   }
   if (appBehind && input.app) {
-    return { label: t("serverUpdate.appBehind", { appVersion: input.app, serverVersion: check.current }), action: "update-app", busy: false, ...extra };
+    const label = t("serverUpdate.appBehind", { appVersion: input.app, serverVersion: check.current });
+    if (input.appWay === "store") return { label, subtitle: t("serverUpdate.appFromStore"), action: null, busy: false, ...extra };
+    return { label, action: input.appWay === "download" ? "download-app" : "update-app", busy: false, ...extra };
   }
   return { label: t("sidebar.update.upToDate"), subtitle: `v${check.current}`, action: "check", busy: false, ...extra };
 }
