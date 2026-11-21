@@ -445,7 +445,8 @@ export function DecisionModelSettings() {
             {openrouterHint && <>{t(openrouterHint)}{" "}</>}
             {openrouterHint && !own && (
               <><button type="button" data-testid="decider-manage-keys" onClick={() => dispatch(openKeySettings("openrouter"))}
-                className="cursor-pointer text-accent-text hover:underline">{t("decider.openrouter.key.manageLink")}</button>{" "}</>
+                className="cursor-pointer text-accent-text hover:underline">{t("decider.openrouter.key.manageLink")}</button>
+                {!(picked === "openrouter" && sharedKey) && <span aria-hidden="true"> · </span>}</>
             )}
             {!(picked === "openrouter" && sharedKey) && (
               <a href={KEY_URL[picked]} target="_blank" rel="noopener noreferrer" className={LINK}>
