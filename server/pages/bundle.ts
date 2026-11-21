@@ -224,7 +224,8 @@ export function skippedNote(skipped: readonly SkippedFile[]): string {
 }
 
 /** The bot's own folders for a turn, and its Local VM's workspace on this computer when it has one. */
-export type BotFolders = () => Promise<{ roots: readonly string[]; vmWorkspace: string | null }>;
+/** `readOnlyRoots` are roots a tool may read but never write into. */
+export type BotFolders = () => Promise<{ roots: readonly string[]; vmWorkspace: string | null; readOnlyRoots?: readonly string[] }>;
 
 /** A chat page's bundle, videos included: readPageBundle within a bot's own folders; a path inside its Local VM's workspace means the same file here. */
 export async function readBotPageBundle(requested: string, folders: BotFolders): Promise<PageBundle> {

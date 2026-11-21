@@ -62,7 +62,7 @@ describe("/api/department-folders", () => {
     const put = await call("PUT", "?section=Sales", { limited: true, folders: [{ path: join(root, "docs"), write: true }] });
     expect(put).toEqual({ status: 200, body: { access: { limited: true, folders: [{ path: join(root, "docs"), write: true }] } } });
     const got = await call("GET", "");
-    expect(got.body).toEqual({ departments: { Sales: put.body.access }, enforcement: "ai" });
+    expect(got.body).toEqual({ departments: { Sales: put.body.access }, enforcement: "ai", setHere: true });
     expect((await fixture({ box: true }).call("GET", "")).body.enforcement).toBe("box");
   });
 
@@ -104,5 +104,6 @@ describe("/api/department-folders", () => {
     expect(await call("PUT", "?section=Sales", { limited: true, folders: [] })).toEqual({ status: 409, body: { error: FOLDER_ACCESS_SET_ELSEWHERE } });
     expect(folders.all()).toEqual({});
     expect((await call("GET", "")).status).toBe(200);
+    expect((await call("GET", "")).body.setHere).toBe(false);
   });
 });

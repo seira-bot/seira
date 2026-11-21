@@ -79,8 +79,12 @@ describe("localComputerResultLine", () => {
     expect(localComputerCallQuery(frame)).toEqual({ app: "Chrome", site: "calendar.google.com" });
     expect(localComputerCallQuery({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "screenshot", arguments: {} } })).toEqual({});
     for (const name of ["list_files", "read_file", "write_file", "make_folder"]) {
-      expect(localComputerCallQuery({ jsonrpc: "2.0", id: 6, method: "tools/call", params: { name, arguments: { path: "/x", url: "https://evil.example" } } })).toEqual({ files: "1" });
+      expect(localComputerCallQuery({ jsonrpc: "2.0", id: 6, method: "tools/call", params: { name, arguments: { path: "/x", url: "https://evil.example" } } })).toEqual({ files: "1", tool: name, path: "/x" });
     }
+  });
+
+  it("sends the gate no path when a file call has none", () => {
+    expect(localComputerCallQuery({ jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "list_files", arguments: {} } })).toEqual({ files: "1", tool: "list_files" });
   });
 
   it("passes every other frame through byte for byte", () => {

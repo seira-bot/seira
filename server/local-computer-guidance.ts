@@ -63,10 +63,13 @@ export function localComputerResultLine(line: string): string {
   return JSON.stringify({ ...frame, result: { ...frame.result, content } });
 }
 
-/** The query a screen call carries to the gate: the app and site it would open, for the person's one-time question. */
+/** The query a call carries to the gate: the app and site a screen call would open, for the person's one-time question; the tool and path of a file call, for the folders the bot may use. */
 export function localComputerCallQuery(frame: unknown): Record<string, string> {
   const name = (frame as { params?: { name?: unknown } } | null)?.params?.name;
-  if (typeof name === "string" && HOST_FILE_TOOL_NAMES.has(name)) return { files: "1" };
+  if (typeof name === "string" && HOST_FILE_TOOL_NAMES.has(name)) {
+    const path = (frame as { params?: { arguments?: { path?: unknown } } }).params?.arguments?.path;
+    return { files: "1", tool: name, ...(typeof path === "string" && path.length <= 4096 ? { path } : {}) };
+  }
   const { app, site } = describeComputerCall(frame);
   return { ...(app ? { app } : {}), ...(site ? { site } : {}) };
 }

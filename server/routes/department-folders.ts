@@ -20,7 +20,7 @@ export function createDepartmentFolderRoutes(deps: DepartmentFolderRouteDeps): R
   return async ({ req, res, url, path, method, auth, json, readBody }) => {
     if (path !== "/api/department-folders" || (method !== "GET" && method !== "PUT")) return PASS;
     if (!auth.scopes.includes("admin")) return json(res, 403, { error: "Only an admin can change folder access." });
-    if (method === "GET") return json(res, 200, { departments: deps.folders.all(), enforcement: deps.boxOn() ? "box" : "ai" });
+    if (method === "GET") return json(res, 200, { departments: deps.folders.all(), enforcement: deps.boxOn() ? "box" : "ai", setHere: !deps.setElsewhere() });
     if (deps.setElsewhere()) return json(res, 409, { error: FOLDER_ACCESS_SET_ELSEWHERE });
     const section = url.searchParams.get("section")?.trim();
     if (!section || !deps.store.sections.includes(section)) return json(res, 404, { error: "No such department" });
