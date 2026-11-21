@@ -47,7 +47,7 @@ function fixture(extra: Partial<AiImportJobsOptions> = {}, wrap?: (ports: Import
     dir, ports, locate: async () => [], readersModule: READERS_MODULE,
     broadcast: (event: AiImportEvent) => {
       seen.push({ at: Date.now(), job: event.job });
-      for (const listener of [...listeners]) listener(event.job);
+      for (const listener of listeners) listener(event.job);
     },
     ...extra,
   };
