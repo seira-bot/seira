@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { t } from "@/lib/i18n";
+import { SETTINGS_INPUT } from "./SettingsPrimitives";
 
 export type RenameOutcome = "saved" | "name" | "taken" | "gone" | "failed";
 
@@ -23,7 +24,7 @@ export function ServerRename({ id, name, onRename, onDone }: { id: string; name:
     <input autoFocus value={value} maxLength={60} disabled={busy} aria-label={t("servers.renameName", { name })} aria-invalid={said ? true : undefined}
       onChange={(event) => { setValue(event.target.value); setSaid(null); }}
       onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onDone(); } }}
-      className="h-8 w-full rounded-md border border-hairline/60 bg-inset px-2 text-[13px] text-ink outline-none focus:border-accent/50" />
+      className={SETTINGS_INPUT} />
     {said && <p role="alert" className="text-[12px] text-danger">{t(said === "taken" ? "rail.localTaken" : said === "name" ? "rail.renameName" : "rail.localFailed")}</p>}
     <div className="flex gap-2">
       <button type="submit" data-server-rename-save className="ui-button ui-button-primary" disabled={busy || !value.trim()}>{t("rail.renameSave")}</button>

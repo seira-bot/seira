@@ -110,6 +110,7 @@ export function ServerList({ saved, busy, sharingOffered, ownServers = [], appVe
           : `${new URL(entry.origin!).host} · ${t(TRANSPORT[serverTransport(entry.origin!)])}`;
         const share = ownServers.find((own) => own.id === entry.id);
         const showUpdate = status?.behind === true && appVersion !== null && !hidden.includes(`${entry.id}:${status.version}`);
+        const renamer = renaming === entry.id ? onRename : undefined;
         return <div key={entry.id} data-server-row={entry.id} className="flex flex-col px-4 py-3">
           <div className="flex min-h-10 items-center gap-3">
             {/* A place shows the same mark as on the rail, in the nav and on Phone & devices: its 24 px badge. */}
@@ -130,9 +131,11 @@ export function ServerList({ saved, busy, sharingOffered, ownServers = [], appVe
             {entry.id !== "local" && !entry.home && <button type="button" disabled={busy} data-danger="" aria-label={t("servers.removeName", { name: entry.name })} title={t("servers.removeName", { name: entry.name })}
               onClick={() => onForget(entry.id)} className="settings-quiet shrink-0 cursor-pointer">{t("remote.devices.removeShort")}</button>}
           </div>
-          {onRename && renaming === entry.id && <div className="pl-11"><ServerRename id={entry.id} name={entry.name} onRename={onRename} onDone={() => setRenaming(null)} /></div>}
-          {share && <div className="pl-11"><ShareRow name={entry.name} share={share} busy={busy} onShare={(on) => onShare(entry.id, on)} onOpen={() => onComputerAccess(entry.id)} /></div>}
-          {showUpdate && <div className="pl-11"><UpdateNote name={entry.name} status={status!} appVersion={appVersion!} onHide={() => setHidden((list) => [...list, `${entry.id}:${status!.version}`])} /></div>}
+          {(renamer || share || showUpdate) && <div className="pl-11">
+            {renamer && <ServerRename id={entry.id} name={entry.name} onRename={renamer} onDone={() => setRenaming(null)} />}
+            {share && <ShareRow name={entry.name} share={share} busy={busy} onShare={(on) => onShare(entry.id, on)} onOpen={() => onComputerAccess(entry.id)} />}
+            {showUpdate && <UpdateNote name={entry.name} status={status!} appVersion={appVersion!} onHide={() => setHidden((list) => [...list, `${entry.id}:${status!.version}`])} />}
+          </div>}
         </div>;
       })}
       <SettingsLinkRow title={t("connect.title")} leading={<span className="flex size-8 items-center justify-center rounded-full bg-ink/[0.05] text-ink-secondary"><Plus size={18} strokeWidth={1.75} aria-hidden="true" /></span>}
