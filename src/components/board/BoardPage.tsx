@@ -15,7 +15,7 @@ import { BoardPanel } from "./BoardPanel";
 import { BoardTabs } from "./BoardTabs";
 import { BotMenu } from "./BotMenu";
 import { NewTaskForm } from "./NewTaskForm";
-import { COLUMNS, cardsIn, visibleCards } from "./board-model";
+import { COLUMNS, cardsIn, closerName, visibleCards } from "./board-model";
 import { useBoardActions } from "./use-board-actions";
 
 export const BOARD_NARROW = "(max-width: 760px)";
@@ -44,6 +44,11 @@ export function BoardPage() {
     const timer = window.setTimeout(actions.clearStopped, 4000);
     return () => window.clearTimeout(timer);
   }, [actions.stopped, actions.clearStopped]);
+  useEffect(() => {
+    if (!actions.moved) return;
+    const timer = window.setTimeout(actions.clearMoved, 4000);
+    return () => window.clearTimeout(timer);
+  }, [actions.moved, actions.clearMoved]);
 
   const openCard = (card: BoardCard) => { opener.current = document.activeElement as HTMLElement | null; setOpenId(card.id); };
   const closePanel = () => { setOpenId(null); opener.current?.focus(); };
@@ -91,12 +96,13 @@ export function BoardPage() {
         </ToolPageActions>
       </ToolPageHeader>
       {adding && <NewTaskForm bots={state.bots} defaultBotId={defaultBotId} />}
-      <p role="status" aria-live="polite" className="px-4 text-[13px] text-ink-secondary empty:hidden sm:px-6">{actions.stopped ? t("board.stopped") : ""}</p>
+      <p role="status" aria-live="polite" className="px-4 text-[13px] text-ink-secondary empty:hidden sm:px-6">{actions.stopped ? t("board.stopped") : actions.moved ? t("board.movedToDone") : ""}</p>
       {narrow && board.loaded && !empty && <BoardTabs active={tab} counts={counts} onChange={setTab} />}
       <div className="flex min-h-0 flex-1 pb-2 pt-1">
         {!(narrow && open) && <div className="flex min-h-0 min-w-0 flex-1 flex-col">{body}</div>}
         {open && (
-          <BoardPanel card={open} bot={botOf(open)} onClose={closePanel} onOpen={() => actions.openConversation(open)} onStop={() => actions.stop(open)} />
+          <BoardPanel card={open} bot={botOf(open)} closer={closerName(open, state.bots)} moveFailed={actions.moveFailed === open.id} onClose={closePanel}
+            onOpen={() => actions.openConversation(open)} onStop={() => actions.stop(open)} onMove={() => void actions.moveToDone(open)} />
         )}
       </div>
     </ToolPage>
