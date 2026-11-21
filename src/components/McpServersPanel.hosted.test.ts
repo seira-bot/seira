@@ -25,7 +25,6 @@ vi.mock("@/lib/app-links", () => ({ openExternalLink: vi.fn(async () => {}) }));
 vi.mock("@/lib/mcp-servers", () => ({ updateMcpServers: vi.fn() }));
 vi.mock("./bot-panel/panel-link", () => ({ openBotSettings: fixture.openBotSettings }));
 
-import { openExternalLink } from "@/lib/app-links";
 import { McpServersPanel } from "./McpServersPanel";
 
 interface Listing { name: string; type: "http"; url: string; headerKeys: string[]; enabled: boolean; auth: "signed-in" | "needs-sign-in"; managedBy?: string }
@@ -93,7 +92,7 @@ afterEach(async () => {
   host.remove();
 });
 
-describe.each(HOSTED_MCP_APPS.filter((app) => !("key" in app)))("The $label card", (app) => {
+describe.each(HOSTED_MCP_APPS)("The $label card", (app) => {
   async function connect() {
     await act(async () => button(app, "Connect").click());
     await settle();
@@ -229,71 +228,18 @@ describe.each(HOSTED_MCP_APPS.filter((app) => !("key" in app)))("The $label card
   });
 });
 
-describe.each(HOSTED_MCP_APPS.filter((app) => "key" in app))("The $label key card", (app) => {
-  const keyField = () => card(app).querySelector<HTMLInputElement>('input[type="password"]')!;
-  async function typeKey(value: string) {
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(keyField(), value);
-      keyField().dispatchEvent(new Event("input", { bubbles: true }));
-    });
-  }
-  async function connectWith(value: string) {
-    await typeKey(value);
-    await act(async () => button(app, "Connect").click());
-    await settle();
-  }
-
-  it("keeps Connect off until a key is typed", async () => {
+describe("the browser sign-in cards", () => {
+  it.each(["konektor", "biver", "coret", "termilo"])("%s has no key field and no key page", async (id) => {
     await mount();
-    expect(keyField().getAttribute("aria-label")).toBe(`${app.label} API key`);
-    expect((button(app, "Connect") as HTMLButtonElement).disabled).toBe(true);
-    await typeKey("  ");
-    expect((button(app, "Connect") as HTMLButtonElement).disabled).toBe(true);
-    await typeKey("sk-live");
-    expect((button(app, "Connect") as HTMLButtonElement).disabled).toBe(false);
-  });
-
-  it("saves the key in a header on a server left off, never in its address, and switches it on once its tools load", async () => {
-    await mount();
-    await connectWith(" sk-live ");
-    expect(added()).toEqual([{ name: app.id, type: "http", url: app.url, headers: { Authorization: "Bearer sk-live" }, enabled: false }]);
-    expect(fixture.runMcpSignIn).not.toHaveBeenCalled();
-    expect(calls("PATCH")).toEqual([]);
-    await act(async () => testRequest!.resolve({ ok: true, tools: [{ name: "any" }] }));
-    await settle();
-    expect(calls("PATCH")).toEqual([[`/api/mcp/servers/${app.id}`, { enabled: true }]]);
-    expect(card(app).querySelector('[aria-label="Connected"]')).not.toBeNull();
+    const app = HOSTED_MCP_APPS.find((one) => one.id === id)!;
     expect(card(app).querySelector('input[type="password"]')).toBeNull();
+    expect(card(app).textContent).toContain("No API key needed");
   });
+});
 
-  it("leaves the server off and says the key was refused when the service turns it down", async () => {
-    await mount();
-    await connectWith("sk-wrong");
-    await act(async () => testRequest!.resolve({ ok: false, reason: "keys", error: "The server didn't accept the keys (HTTP 401). Check the header values." }));
-    await settle();
-    expect(card(app).querySelector('[role="alert"]')?.textContent).toBe(`${app.label} didn’t accept that key. Check it and connect again.`);
-    expect(calls("PATCH")).toEqual([]);
-    expect(card(app).querySelector('[aria-label="Connected"]')).toBeNull();
-  });
-
-  it("leaves the server off and gives the reason when its tools fail to load for anything else", async () => {
-    await mount();
-    await connectWith("sk-live");
-    await act(async () => testRequest!.resolve({ ok: false, reason: "timeout", error: "The server did not answer in time." }));
-    await settle();
-    expect(card(app).querySelector('[role="alert"]')?.textContent).toBe(`${app.label}’s tools could not be loaded with that key: The server did not answer in time. Connect again to retry.`);
-    expect(calls("PATCH")).toEqual([]);
-  });
-
-  it("replaces the key on the server it already has, under any name, instead of adding another", async () => {
-    servers = [listing(app, { name: "calls", headerKeys: ["Authorization"] })];
-    await mount();
-    await connectWith("sk-new");
-    expect(added()).toEqual([]);
-    expect(calls("PUT")).toEqual([["/api/mcp/servers/calls", { type: "http", url: app.url, headers: { Authorization: "Bearer sk-new" }, enabled: false }]]);
-  });
-
-  it("deletes the server, and with it the key, on Disconnect", async () => {
+describe("a Konektor.id server that holds a pasted key", () => {
+  it("shows as connected, and Disconnect deletes the server with its key", async () => {
+    const app = HOSTED_MCP_APPS.find((one) => one.id === "konektor")!;
     servers = [listing(app, { enabled: true, headerKeys: ["Authorization"] })];
     await mount();
     expect(card(app).querySelector('[aria-label="Connected"]')).not.toBeNull();
@@ -301,33 +247,6 @@ describe.each(HOSTED_MCP_APPS.filter((app) => "key" in app))("The $label key car
     await settle();
     expect(calls("DELETE")).toEqual([[`/api/mcp/servers/${app.id}`, undefined]]);
     expect(fixture.api.mock.calls.some(([path]) => String(path).endsWith("/sign-out"))).toBe(false);
-    expect(keyField()).not.toBeNull();
-  });
-
-  it("opens the service's own page for making a key", async () => {
-    await mount();
-    await act(async () => button(app, `Get a ${app.label} key`).click());
-    expect(openExternalLink).toHaveBeenCalledWith(app.key.url);
-  });
-});
-
-describe("the browser sign-in cards", () => {
-  it.each(["biver", "coret", "termilo"])("%s has no key field and no key page", async (id) => {
-    await mount();
-    const app = HOSTED_MCP_APPS.find((one) => one.id === id)!;
-    expect("key" in app).toBe(false);
-    expect(card(app).querySelector('input[type="password"]')).toBeNull();
-    expect(card(app).textContent).toContain("No API key needed");
-  });
-});
-
-describe("the Konektor.id card", () => {
-  it("asks for a key and links to the page that makes one", async () => {
-    await mount();
-    const app = HOSTED_MCP_APPS.find((one) => one.id === "konektor")!;
-    expect(card(app).querySelector('input[type="password"]')).not.toBeNull();
-    await act(async () => button(app, "Get a Konektor.id key").click());
-    expect(openExternalLink).toHaveBeenCalledWith("https://app.konektor.id/developer");
   });
 });
 

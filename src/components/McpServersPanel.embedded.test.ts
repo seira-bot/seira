@@ -93,7 +93,7 @@ describe("Your MCP servers inside the Apps pop-up", () => {
     expect(html).toContain("Add server");
   });
 
-  it.each(HOSTED_MCP_APPS.filter((app) => !("key" in app)))("offers $label setup with no API key form or forced installation", (app) => {
+  it.each(HOSTED_MCP_APPS)("offers $label setup with no API key form or forced installation", (app) => {
     fixture.servers = [];
     const html = render(true, true);
     expect(html).toContain(`data-app-tile="${app.id}"`);
