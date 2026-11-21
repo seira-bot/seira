@@ -52,6 +52,15 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
       opening.current = null;
     };
   }, [target, gone]);
+  const statusShown = useRef(connector.status);
+  useEffect(() => {
+    const signInEnded = statusShown.current === "authorizing" && connector.status !== "authorizing";
+    statusShown.current = connector.status;
+    if (!signInEnded) return;
+    setAuthorization(null);
+    setLocalError(null);
+    setUnconfirmed(false);
+  }, [connector.status]);
   const checkStatus = useCallback(async () => {
     const result = await api(`${endpoint}/status?threadId=${encodeURIComponent(threadId)}`);
     return Boolean(result.connected);
@@ -105,7 +114,7 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
     setRefusal(null);
     setUnconfirmed(false);
     try {
-      const reusableUrl = alias ? null : reusableConnectionUrl(pendingAuthorization);
+      const reusableUrl = alias || isMcp ? null : reusableConnectionUrl(pendingAuthorization);
       const createdAt = reusableUrl ? pendingAuthorization!.createdAt : Date.now();
       const result = reusableUrl ? { url: reusableUrl } : await api(`${endpoint}/authorize`, {
           method: "POST",
