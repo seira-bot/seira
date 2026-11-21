@@ -1,4 +1,4 @@
-import { Archive, Bug, Layers, MessagesSquare, Mic, Package, Plug, Sparkles, Tag, Timer, Users, type LucideIcon } from "lucide-react";
+import { Archive, Bug, Copy, Layers, MessagesSquare, Mic, Package, Plug, Shuffle, Sparkles, Tag, Timer, Users, Wand2, Workflow, type LucideIcon } from "lucide-react";
 import type { LocaleKey } from "@/locales";
 import { RELEASES_URL } from "@/lib/app-links";
 
@@ -9,6 +9,12 @@ export type ReleaseNotesView = { version: string; from: string | null; items: Re
 
 /** Newest first. A version with no entry here shows no popup. */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
+  { version: "0.1.183", items: [
+    { id: "workflows", icon: Workflow },
+    { id: "drawFromReply", icon: Wand2 },
+    { id: "copyCode", icon: Copy },
+    { id: "personLook", icon: Shuffle },
+  ] },
   { version: "0.1.182", items: [
     { id: "seiraName", icon: Tag },
   ] },

@@ -1636,7 +1636,7 @@ describe("the release notes after an update", () => {
   });
 
   it("is not due for a version with no entry", async () => {
-    atVersion("0.1.183"); update();
+    atVersion("0.1.179"); update("0.1.178");
     expect(await relaunch()).not.toContain("new in Seira");
     atVersion("dev");
     expect(await relaunch()).not.toContain("new in Seira");
