@@ -4,6 +4,7 @@
 //   a desktop's main process fetches its sign-in's own pages token and hands it over on the private parent port.
 // Neither is ever written to config, sent to a client, or given to an engine. No Cloudflare credential is held here.
 import { createHash, createHmac, randomBytes } from "node:crypto";
+import { cloudSignedHeaders } from "../cloud-signed-headers.ts";
 
 export const PAGES_TOKEN_PATH = "/api/cloud/pages/token";
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
@@ -23,12 +24,7 @@ export function pagesHomeSignature(secret: string, machineId: string, timestamp:
 export function pagesAuthHeaders(access: PagesAccess, body: string, now = Date.now(), label = "omb-pages-v1"): Record<string, string> {
   if (access.kind === "desktop") return { authorization: `Bearer ${access.token}` };
   const timestamp = String(Math.floor(now / 1000)), nonce = randomBytes(18).toString("base64url");
-  return {
-    "x-omb-cloud-machine": access.machineId,
-    "x-omb-cloud-timestamp": timestamp,
-    "x-omb-cloud-nonce": nonce,
-    "x-omb-cloud-signature": `v1=${pagesHomeSignature(access.secret, access.machineId, timestamp, nonce, body, label)}`,
-  };
+  return cloudSignedHeaders({ machineId: access.machineId, timestamp, nonce, signature: `v1=${pagesHomeSignature(access.secret, access.machineId, timestamp, nonce, body, label)}` });
 }
 
 let desktopPages: { url: string; token: string } | null = null;

@@ -1641,9 +1641,9 @@ credit, the Admin also sets:
 ```http
 POST /api/cloud/pairing
 Content-Type: application/json
-x-omb-cloud-timestamp: 1790000000
-x-omb-cloud-nonce: <base64url, 16–128 characters>
-x-omb-cloud-signature: v1=<base64url HMAC-SHA256(SEIRA_CLOUD_BOOTSTRAP_SECRET, canonical)>
+x-seira-cloud-timestamp: 1790000000
+x-seira-cloud-nonce: <base64url, 16–128 characters>
+x-seira-cloud-signature: v1=<base64url HMAC-SHA256(SEIRA_CLOUD_BOOTSTRAP_SECRET, canonical)>
 
 {"label":"Seira app (Cloud)","ttlSeconds":300}
 ```
@@ -1653,6 +1653,8 @@ where `canonical` is
 ```text
 v1\n<timestamp>\n<nonce>\nPOST\n/api/cloud/pairing\n<base64url SHA-256 of the raw body>
 ```
+
+Every signed request, in either direction, carries these headers as `x-seira-cloud-*`. Senders also send the same values as `x-omb-cloud-*`, and receivers still accept those names, so older installs keep working. A receiver reads `x-seira-cloud-*` first. A machine request adds `x-seira-cloud-machine` (and `x-omb-cloud-machine`). The signed text and its labels do not change.
 
 `200`:
 
