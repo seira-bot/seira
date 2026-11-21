@@ -196,11 +196,12 @@ async function main() {
   if (renamed.status !== 200) throw new Error(`could not rename the bot: ${JSON.stringify(renamed.body)}`);
   bot.name = "Pesto";
 
-  // Remove the starter bot the harness seeds on an empty store: Android's
-  // ClientTest.botJson() expects one bot, and no phone route deletes bots.
-  const preseeded = (await json(`${SIDECAR}/api/bots`, asDevice())).body.bots ?? [];
+  // Remove the other bots the harness seeds on an empty store, through the
+  // harness because no phone route deletes bots. Seira itself (`defaultBot`)
+  // cannot be deleted, so it stays in the fleet fixtures.
+  const preseeded = (await json(`${HARNESS}/api/bots`)).body.bots ?? [];
   for (const extra of preseeded) {
-    if (extra.id === bot.id) continue;
+    if (extra.id === bot.id || extra.defaultBot) continue;
     const removed = await json(`${HARNESS}/api/bots/${extra.id}`, { method: "DELETE" });
     if (removed.status !== 200) {
       throw new Error(`could not remove the seeded starter bot: ${JSON.stringify(removed.body)}`);
