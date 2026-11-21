@@ -311,14 +311,23 @@ describe.each(HOSTED_MCP_APPS.filter((app) => "key" in app))("The $label key car
   });
 });
 
-describe("the Agentcard tile", () => {
-  it("draws a glyph and never an Agentcard logo, and says Agentcard keeps the cards", async () => {
+describe("the browser sign-in cards", () => {
+  it.each(["biver", "coret", "termilo"])("%s has no key field and no key page", async (id) => {
     await mount();
-    const tile = card(HOSTED_MCP_APPS.find((app) => app.id === "agentcard")!);
-    expect(tile.querySelector("img")).toBeNull();
-    expect(tile.querySelector("svg")).not.toBeNull();
-    expect(tile.textContent).toContain("Shop and pay from your own Agentcard account.");
-    expect(tile.textContent).toContain("Seira stores no card details");
+    const app = HOSTED_MCP_APPS.find((one) => one.id === id)!;
+    expect("key" in app).toBe(false);
+    expect(card(app).querySelector('input[type="password"]')).toBeNull();
+    expect(card(app).textContent).toContain("No API key needed");
+  });
+});
+
+describe("the Konektor.id card", () => {
+  it("asks for a key and links to the page that makes one", async () => {
+    await mount();
+    const app = HOSTED_MCP_APPS.find((one) => one.id === "konektor")!;
+    expect(card(app).querySelector('input[type="password"]')).not.toBeNull();
+    await act(async () => button(app, "Get a Konektor.id key").click());
+    expect(openExternalLink).toHaveBeenCalledWith("https://app.konektor.id/developer");
   });
 });
 

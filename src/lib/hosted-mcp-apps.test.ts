@@ -53,13 +53,25 @@ describe("hosted MCP apps", () => {
     expect(connectedWith(app, { enabled: true, auth: "signed-in" })).toBe(false);
   });
 
+  it("offers exactly Konektor.id, Biver.id, Coret.id and Termilo.id, at their official endpoints", () => {
+    expect(HOSTED_MCP_APPS.map((app) => [app.id, app.url])).toEqual([
+      ["konektor", "https://mcp.konektor.id/mcp"],
+      ["biver", "https://mcp.biver.id/mcp"],
+      ["coret", "https://mcp.coret.id/mcp"],
+      ["termilo", "https://api.termilo.id/mcp"],
+    ]);
+    const ids: string[] = HOSTED_MCP_APPS.map((app) => app.id);
+    for (const old of ["whop", "agentcard", "agentmail", "vapi", "telnyx", "agentphone", "bubblav"]) expect(ids).not.toContain(old);
+  });
+
   it("takes a pasted key exactly for the services with no browser sign-in, each with an https page to make one", () => {
-    expect(HOSTED_MCP_APPS.filter((app) => "key" in app).map((app) => app.id)).toEqual(["vapi", "telnyx"]);
+    expect(HOSTED_MCP_APPS.filter((app) => "key" in app).map((app) => app.id)).toEqual(["konektor"]);
+    expect(HOSTED_MCP_APPS.find((app) => app.id === "konektor")).toMatchObject({ key: { url: "https://app.konektor.id/developer" } });
     for (const app of HOSTED_MCP_APPS) if ("key" in app) expect(app.key.url).toMatch(/^https:\/\//);
   });
 
   it("counts each app on its own server", () => {
-    const [first] = HOSTED_MCP_APPS;
+    const first = HOSTED_MCP_APPS.find((app) => !("key" in app))!;
     const connections = hostedConnections([
       { type: "http", url: first.url, enabled: true, auth: "signed-in" },
       { type: "http", url: "https://unrelated.example/mcp", enabled: true, auth: "signed-in" },

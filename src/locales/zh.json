@@ -1,7 +1,5 @@
 {
   "hostedMcp.otherAppsSetup": "已连接：{services}。请设置或恢复连接服务以使用其他应用。",
-  "agentcard.description": "用你自己的 Agentcard 账号购物和付款。",
-  "agentcard.notice": "用你的 Agentcard 账号登录，不需要 API 密钥。Agentcard 保管你的卡片并处理购买审批；Seira 不保存任何卡片信息。能使用 Agentcard 的机器人可以调用它的全部工具，包括购买和展示卡片信息，所以请在“机器人访问权限”中选择哪些机器人可以使用它。",
   "email.title": "邮件",
   "email.description": "用你的地址和密码，在任意邮件主机上收发邮件。",
   "email.menu": "邮件选项",
@@ -86,10 +84,8 @@
   "connectedWorkspaces.forgetName": "移除 {name}",
   "connectedWorkspaces.forgetError": "无法移除该环境。请重试。",
   "connectedWorkspaces.createError": "无法创建环境。请检查数据文件夹，然后重试。",
-  "whop.description": "通过 Whop 官方集成管理商品、结账链接、会员资格和付款。",
   "hostedMcp.connect": "连接 {service}",
   "hostedMcp.disconnect": "断开 {service} 连接",
-  "whop.notice": "使用 Whop 登录，无需 API 密钥。Whop 会请求你所管理所有商家的管理员权限，并在执行重大财务操作或破坏性操作前要求确认。",
   "hostedMcp.connected": "{service} 已连接并启用。机器人的访问权限取决于各机器人所选的 MCP 服务器。",
   "hostedMcp.access": "机器人访问权限",
   "hostedMcp.accessHint": "使用所有已启用 MCP 服务器的机器人会共用此连接。打开机器人的「访问」设置即可选择它能用的服务器。更改会在它的下一个任务中生效。",

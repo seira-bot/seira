@@ -62,10 +62,10 @@ export function botsWithLimitedServiceTools(bots: Bot[], instances: InstanceInfo
   });
 }
 
-/** Whether a hosted app's card shows: it matches the search and the person has it connected. */
-export function hostedShown(app: HostedApp, search: string, connected: HostedConnections | null): boolean {
+/** A hosted app's card shows when it matches the search, and in the Connected view only when the app is connected. */
+export function hostedShown(app: HostedApp, search: string, connected: HostedConnections | null, listing: AppsFilter): boolean {
   const matches = !search || `${app.label} ${app.keywords} ${t(app.description)}`.toLowerCase().includes(search.toLowerCase().trim());
-  return matches && connected?.[app.id] === true;
+  return matches && (listing === "all" || connected?.[app.id] === true);
 }
 
 export type ConnectorSetup = "ready" | "needs-setup" | "service-unavailable";
@@ -395,7 +395,7 @@ export function PluginsPanel() {
   const searching = search.trim().length > 0;
   /** A search covers the whole catalog, whichever view it was typed in. */
   const listing: AppsFilter = searching && filter === "connected" ? "all" : filter;
-  const shownHosted = new Set(HOSTED_MCP_APPS.filter((app) => hostedShown(app, search, hostedConnected)).map((app) => app.id));
+  const shownHosted = new Set(HOSTED_MCP_APPS.filter((app) => hostedShown(app, search, hostedConnected, listing)).map((app) => app.id));
   const searchMatches = (text: string) => !search || text.toLowerCase().includes(search.toLowerCase().trim());
   const showEmail = emailConnected === true && searchMatches(`email mail imap smtp mailbox ${t("email.description")}`);
   const showX = xConnected === true && searchMatches(`${X_CARD_SEARCH} ${t("apps.x.description")}`);

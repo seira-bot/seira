@@ -1,7 +1,9 @@
-import { CreditCard, Mail, PhoneCall, RadioTower, Smartphone, type LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-import bubblavLogo from "@/assets/bubblav/logo.png";
-import whopLogo from "@/assets/whop/logo.png";
+import biverLogo from "@/assets/biver/logo.png";
+import coretLogo from "@/assets/coret/logo.png";
+import konektorLogo from "@/assets/konektor/logo.png";
+import termiloLogo from "@/assets/termilo/logo.png";
 import type { LocaleKey } from "@/locales";
 import { POSTIZ_SERVER } from "../../shared/postiz";
 
@@ -28,71 +30,41 @@ export interface HostedMcpApp {
  * Bot access, its row in the MCP list, search, the Connected filter and the count all derive from this table. */
 export const HOSTED_MCP_APPS = [
   {
-    id: "whop",
-    label: "Whop",
-    url: "https://mcp.whop.com/mcp",
-    icon: { image: whopLogo },
-    description: "whop.description",
-    notice: "whop.notice",
-    keywords: "whop checkout memberships",
+    id: "konektor",
+    label: "Konektor.id",
+    url: "https://mcp.konektor.id/mcp",
+    key: { url: "https://app.konektor.id/developer" },
+    icon: { image: konektorLogo },
+    description: "konektor.description",
+    notice: "konektor.notice",
+    keywords: "konektor whatsapp leads inbox broadcast ads conversions tracking crm",
   },
   {
-    id: "agentcard",
-    label: "Agentcard",
-    url: "https://mcp.agentcard.sh/mcp",
-    // Agentcard's packages are "SEE LICENSE IN LICENSE" and it publishes no logo licence, so a neutral glyph stands in.
-    icon: { glyph: CreditCard },
-    description: "agentcard.description",
-    notice: "agentcard.notice",
-    keywords: "agentcard agent card opencommerce shopping payments buy virtual debit card",
-  },
-  // None of these four publishes a logo licence we have checked, so neutral glyphs stand in.
-  {
-    id: "agentmail",
-    label: "AgentMail",
-    url: "https://mcp.agentmail.to/mcp",
-    icon: { glyph: Mail },
-    description: "agentmail.description",
-    notice: "agentmail.notice",
-    keywords: "agentmail email inbox mail address send reply",
+    id: "biver",
+    label: "Biver.id",
+    url: "https://mcp.biver.id/mcp",
+    icon: { image: biverLogo },
+    description: "biver.description",
+    notice: "biver.notice",
+    keywords: "biver website landing page builder pages sections forms products checkout domain",
   },
   {
-    id: "vapi",
-    label: "Vapi",
-    url: "https://mcp.vapi.ai/mcp",
-    key: { url: "https://dashboard.vapi.ai" },
-    icon: { glyph: PhoneCall },
-    description: "vapi.description",
-    notice: "vapi.notice",
-    keywords: "vapi phone call calls voice dial assistant",
+    id: "coret",
+    label: "Coret.id",
+    url: "https://mcp.coret.id/mcp",
+    icon: { image: coretLogo },
+    description: "coret.description",
+    notice: "coret.notice",
+    keywords: "coret mind map mindmap whiteboard sketch notes pad book share",
   },
   {
-    id: "telnyx",
-    label: "Telnyx",
-    url: "https://api.telnyx.com/v2/mcp",
-    key: { url: "https://portal.telnyx.com/#/api-keys" },
-    icon: { glyph: RadioTower },
-    description: "telnyx.description",
-    notice: "telnyx.notice",
-    keywords: "telnyx phone number numbers sms text call calls international",
-  },
-  {
-    id: "agentphone",
-    label: "AgentPhone",
-    url: "https://mcp.agentphone.ai/mcp",
-    icon: { glyph: Smartphone },
-    description: "agentphone.description",
-    notice: "agentphone.notice",
-    keywords: "agentphone phone number sms text call calls",
-  },
-  {
-    id: "bubblav",
-    label: "BubblaV",
-    url: "https://www.bubblav.com/mcp",
-    icon: { image: bubblavLogo },
-    description: "bubblav.description",
-    notice: "bubblav.notice",
-    keywords: "bubblav chatbot chat widget website customer support service knowledge base conversations leads analytics",
+    id: "termilo",
+    label: "Termilo.id",
+    url: "https://api.termilo.id/mcp",
+    icon: { image: termiloLogo },
+    description: "termilo.description",
+    notice: "termilo.notice",
+    keywords: "termilo booking appointment schedule calendar reservation customers services",
   },
 ] as const satisfies readonly HostedMcpApp[];
 
@@ -117,7 +89,7 @@ export function hostedMcpApp(server: ServerAddress): HostedApp | undefined {
   });
 }
 
-/** `whop`, then `whop-2`, `whop-3`…: never an existing server's name. */
+/** `biver`, then `biver-2`, `biver-3`…: never an existing server's name. */
 export function hostedServerName(app: HostedMcpApp, servers: ReadonlyArray<{ name: string }>): string {
   const names = new Set(servers.map((server) => server.name));
   let name: string = app.id;
