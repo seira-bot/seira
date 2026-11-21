@@ -8819,8 +8819,16 @@ var require_handlers_misc = __commonJS({
       TERMINAL_MODE
     } = require_constants();
     var {
-      parseKey: parseKey2
+      parseDERKey
     } = require_keyParser();
+    function parseHostKeyBlob(blob) {
+      if (blob.length < 4)
+        return new Error("Malformed host key");
+      const typeEnd = 4 + blob.readUInt32BE(0);
+      if (typeEnd > blob.length)
+        return new Error("Malformed host key");
+      return parseDERKey(blob.subarray(typeEnd), blob.toString("utf8", 4, typeEnd));
+    }
     var TERMINAL_MODE_BY_VALUE = Array.from(Object.entries(TERMINAL_MODE)).reduce((obj, [key, value]) => ({ ...obj, [key]: value }), {});
     module2.exports = {
       // Transport layer protocol ==================================================
@@ -9260,7 +9268,7 @@ var require_handlers_misc = __commonJS({
                   data = void 0;
                   break;
                 }
-                const key = parseKey2(keyRaw);
+                const key = parseHostKeyBlob(keyRaw);
                 if (!(key instanceof Error))
                   data.push(key);
               }
