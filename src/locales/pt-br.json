@@ -9480,6 +9480,7 @@
   "activity.tool.team.askBot": "Perguntar a um bot",
   "activity.tool.team.assignmentStatus": "Status da tarefa",
   "activity.tool.team.attachFile": "Anexar arquivo",
+  "activity.tool.team.boardClose": "Fechar cartão do quadro",
   "activity.tool.team.closeThread": "Fechar conversa",
   "activity.tool.team.renameThread": "Renomear conversa",
   "activity.tool.team.coordinateBots": "Coordenar bots",

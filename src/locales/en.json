@@ -9563,6 +9563,7 @@
   "activity.tool.team.askBot": "Ask bot",
   "activity.tool.team.assignmentStatus": "Assignment status",
   "activity.tool.team.attachFile": "Attach file",
+  "activity.tool.team.boardClose": "Board close",
   "activity.tool.team.closeThread": "Close thread",
   "activity.tool.team.renameThread": "Rename thread",
   "activity.tool.team.coordinateBots": "Coordinate bots",
