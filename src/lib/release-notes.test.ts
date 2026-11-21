@@ -94,7 +94,7 @@ describe("releaseNotesView", () => {
     expect(view?.items).toHaveLength(4);
   });
   it("shows nothing when the version has no entry", () => {
-    expect(releaseNotesView({ first: "0.1.179", last: "0.1.183", before: "0.1.179" }, "0.1.183")).toBeNull();
+    expect(releaseNotesView({ first: "0.1.178", last: "0.1.179", before: "0.1.178" }, "0.1.179")).toBeNull();
   });
   it("merges skipped versions newest first and keeps at most six items", () => {
     const view = releaseNotesView({ first: "", last: "0.1.184", before: "0.1.180" }, "0.1.184", NOTES);
