@@ -25,11 +25,21 @@ onlyBuiltDependencies:
 ignoredBuiltDependencies:
   - core-js
   - workerd
-# Transitive packages whose parents still allow a release with a published advisory: mermaid allows an older dompurify
-# and ajv an older fast-uri. Force the patched releases.
+# Transitive packages whose parents still allow or pin a release with a published advisory. Force the patched
+# release in the same major line.
 overrides:
   dompurify: 3.4.17
   fast-uri: 3.1.9
+  "@xmldom/xmldom@0.8": 0.8.15
+  brace-expansion@1: 1.1.22
+  brace-expansion@2: 2.1.8
+  brace-expansion@5: 5.0.13
+  js-yaml@4: 4.3.2
+  sharp@0.35: 0.35.5
+  source-map-js@1: 1.2.4
+  undici@6: 6.29.1
+  undici@7: 7.30.2
+  zod@4: 4.6.7
 # electron-builder's AppImage AppRun adds --no-sandbox when user namespaces are blocked (Ubuntu 24.04).
 # The patch shows a message and stops instead, so the Chromium sandbox is never off.
 # The patch also stops the snap target from deleting chrome-sandbox in linux-unpacked, which the DEB packs next.
