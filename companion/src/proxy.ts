@@ -872,7 +872,7 @@ export function createProxyHandler(options: ProxyOptions) {
   handle.disconnectOrigin = (deviceId: string): void => {
     const open = originStreams.get(deviceId);
     if (!open) return;
-    for (const close of [...open]) close();
+    for (const close of Array.from(open)) close();
   };
   handle.closeViewers = (): void => viewers.closeAll();
   /** The endpoint list again, as an event on every event stream the device holds: a phone hears a change of where it
