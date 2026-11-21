@@ -1,0 +1,82 @@
+name: Probe Windows upgrade path
+
+on:
+  push:
+    branches: [probe/windows-upgrade-292]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      APPGUID: 3d9d45de-e327-5d79-b709-bb50619abdcf
+    steps:
+      - name: Write the dump script
+        shell: pwsh
+        run: |
+          @'
+          param([string]$Label)
+          "===================== $Label"
+          "--- Programs"
+          Get-ChildItem "$env:LOCALAPPDATA\Programs" -ErrorAction SilentlyContinue | ForEach-Object {
+            $_.FullName
+            Get-ChildItem $_.FullName -Filter *.exe -ErrorAction SilentlyContinue | ForEach-Object { "    " + $_.Name + "  " + $_.VersionInfo.FileVersion }
+          }
+          "--- HKCU\Software\$env:APPGUID"
+          reg query "HKCU\Software\$env:APPGUID" /s 2>&1
+          "--- Uninstall\$env:APPGUID"
+          reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\$env:APPGUID" /s 2>&1
+          "--- Uninstall keys named Seira"
+          Get-ChildItem "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall" -ErrorAction SilentlyContinue | ForEach-Object {
+            $p = Get-ItemProperty $_.PSPath
+            if ("$($p.DisplayName)" -match "Seira|OpenMaus") { "$($_.PSChildName): $($p.DisplayName) $($p.DisplayVersion) | $($p.UninstallString)" }
+          }
+          "--- Shortcuts"
+          $shell = New-Object -ComObject WScript.Shell
+          foreach ($dir in @("$env:APPDATA\Microsoft\Windows\Start Menu\Programs", [Environment]::GetFolderPath("Desktop"), "$env:APPDATA\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar")) {
+            Get-ChildItem $dir -Filter *.lnk -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+              $s = $shell.CreateShortcut($_.FullName); "$($_.FullName) -> $($s.TargetPath)"
+            }
+          }
+          "--- Seira processes"
+          Get-Process -Name Seira -ErrorAction SilentlyContinue | ForEach-Object { "$($_.Id) $($_.Path)" }
+          '@ | Set-Content -Path "$env:RUNNER_TEMP\dump.ps1"
+
+      - name: Download installers
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\setup" | Out-Null
+          foreach ($v in @("0.1.182", "0.1.183", "0.1.184")) {
+            gh release download "v$v" --repo $env:GITHUB_REPOSITORY -p "Seira-$v-setup.exe" -D "$env:RUNNER_TEMP\setup"
+          }
+          Get-ChildItem "$env:RUNNER_TEMP\setup"
+
+      - name: Fresh install of 0.1.182
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\setup\Seira-0.1.182-setup.exe" -ArgumentList "/S" -Wait -PassThru
+          "installer exit code: $($p.ExitCode)"
+          & "$env:RUNNER_TEMP\dump.ps1" -Label "after 0.1.182"
+
+      - name: Update to 0.1.183 the way the app does (quitAndInstall(true, true))
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\setup\Seira-0.1.183-setup.exe" -ArgumentList "--updated","/S","--force-run" -Wait -PassThru
+          "installer exit code: $($p.ExitCode)"
+          Start-Sleep -Seconds 15
+          & "$env:RUNNER_TEMP\dump.ps1" -Label "after 0.1.183"
+          Get-Process -Name Seira -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep -Seconds 5
+
+      - name: Update to 0.1.184 the same way
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\setup\Seira-0.1.184-setup.exe" -ArgumentList "--updated","/S","--force-run" -Wait -PassThru
+          "installer exit code: $($p.ExitCode)"
+          Start-Sleep -Seconds 15
+          & "$env:RUNNER_TEMP\dump.ps1" -Label "after 0.1.184"
+          Get-Process -Name Seira -ErrorAction SilentlyContinue | Stop-Process -Force
