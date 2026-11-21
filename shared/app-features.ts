@@ -210,6 +210,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     releaseNotes: ["liveYes"],
   },
   {
+    id: "board",
+    name: "Board",
+    place: "Board in the sidebar, above Automations",
+    does: "Shows every piece of work your bots have, in To do, Working, Needs you and Done. Open a card to answer, stop the work or open its conversation, or add a new task.",
+  },
+  {
     id: "inbox",
     name: "Inbox",
     place: "Your inbox under People in the sidebar",

@@ -70,6 +70,31 @@ describe("sidebar footer places", () => {
     expect(html.indexOf('data-sidebar-nav="automations"')).toBeLessThan(html.indexOf('data-sidebar-nav="apps"'));
   });
 
+  it.each([false, true])("puts Board right before Automations on the avatars-only density (advanced: %s)", (advanced) => {
+    fixture.advanced = advanced;
+    const html = render("icons").html;
+    expect(html).toContain('aria-label="Board" title="Board"');
+    const board = html.indexOf('data-sidebar-nav="board"');
+    const automations = html.indexOf('data-sidebar-nav="automations"');
+    expect(board).toBeGreaterThan(-1);
+    expect(board).toBeLessThan(automations);
+    expect(html.slice(board, automations)).not.toContain('data-sidebar-nav="apps"');
+  });
+
+  it("opens the Board from its row and marks it current there", () => {
+    fixture.advanced = false;
+    const row = () => render("icons").nodes.find((node) => node.props.id === "board")!;
+    (row().props.onClick as () => void)();
+    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "showBoard" });
+    fixture.state = { ...fixture.state, activeView: "board" };
+    expect(render("icons").html).toMatch(/data-sidebar-nav="board"[^>]*aria-current="page"/);
+  });
+
+  it("hides the Board row from Advanced mode's Tools list like Automations", () => {
+    fixture.advanced = true;
+    expect(render("comfortable").html).not.toContain('data-sidebar-nav="board"');
+  });
+
   it("keeps only Apps on Simple mode's rail: Automations and Team map are in its account menu", () => {
     const html = renderToStaticMarkup(createElement(() => SidebarFooterNav({ density: "icons", rail: true })));
     expect(html).toContain('aria-label="Apps" title="Apps"');

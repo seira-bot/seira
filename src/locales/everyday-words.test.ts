@@ -26,6 +26,7 @@ const EVERYDAY_PREFIXES: Record<string, readonly string[]> = {
     "files.", "usageMeter.", "roomCard.", "botLimit.",
   ],
   "routines and automations": ["routines.", "automations."],
+  "the Board": ["board."],
   "the team map": ["canvas.", "mapComputer.", "canvasComputers."],
   "the workflow canvas and its runs": ["workflow."],
   "Apps": ["apps.", "connectors."],
