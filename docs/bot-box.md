@@ -10,7 +10,7 @@ its database, its settings, other bots' folders and other turns' processes are n
 | Inside the box | What it is |
 |---|---|
 | `/usr`, `/etc`, `/opt`, the server's own code folder, read-only | The image: engine CLIs, node, python, git, the bots' browser |
-| `HOME`, read-write | The engines' own logins and settings (`~/.claude`, `~/.codex`, `~/.grok`). On a Team Cloud this is the turn's audience's engine home instead, with the team's engine sign-in files bound into it, and the server's HOME is not there at all ([team-cloud.md](team-cloud.md#engine-homes)) |
+| `HOME`, read-write (an empty private folder for a bot limited to its chosen folders, [below](#chosen-folders)) | The engines' own logins and settings (`~/.claude`, `~/.codex`, `~/.grok`). On a Team Cloud this is the turn's audience's engine home instead, with the team's engine sign-in files bound into it, and the server's HOME is not there at all ([team-cloud.md](team-cloud.md#engine-homes)) |
 | the data folder (`~/.seira`), **an empty private folder** | `messages.db`, `config.json`, logins, the server's sockets, every other bot's folders are not there |
 | put back inside it: the turn's working folder and the bot's own folder (`workspaces/<bot>`), read-write | What the turn works on, and the bot's memory and skills. On a Team Cloud a turn that is not the team's has the bot's own folder read-only, and its own memory layer read-write ([team-cloud.md](team-cloud.md#the-audience-rule)) |
 | put back: this turn's permission socket (the engine's question and approval helper reaches the server through it), and, read-only, the conversation's own hook token folder (the hook helper's bearer, renewed each turn) and the files its command line names (MCP config, system prompt) | What the driver made for this one process |
@@ -24,6 +24,23 @@ proxies read pass (`BOX_ENV_SEIRA_NAMES`); every other one an operator sets on t
 stays out. Every `SEIRA_CLOUD_*` setting, the server's own placement (`SEIRA_DATA_DIR`, `SEIRA_PORT`), the CLI's session
 token and server address (`SEIRA_TOKEN`, `SEIRA_URL`) and the workspace credentials are refused whatever
 a driver passed.
+
+## Chosen folders
+
+An admin can give a bot more folders, each read-only or Can change ([folder-access.md](folder-access.md)). The box
+binds each chosen folder at its real path: a Can change folder read-write, a read-only folder read-only. A read-only
+folder inside a read-write folder is bound read-only after it, and a Can change folder deeper inside that is bound
+read-write again. A chosen folder inside the data folder, or one that holds it, is left out.
+
+With **Only chosen folders** on, `HOME` is an empty private folder (`tmpfs`). The box puts back from the real `HOME`:
+
+- the engines' sign-in folders, read-write (`LIMITED_HOME_SIGN_INS` in `server/bot-box/plan.ts`);
+- program installs such as `.npm-global`, `.nvm`, `.bun` and `.cargo`, read-only (`LIMITED_HOME_PROGRAMS`);
+- the git settings, read-only (`LIMITED_HOME_GIT`);
+- the working folder, the bot's own folder and the chosen folders.
+
+Each entry is checked with `lstat` and its real path. A symbolic link that leaves `HOME` is not put back. An environment
+path inside `HOME`, or one that holds `HOME`, is dropped. A change of a bot's folders gives it a new box on its next turn.
 
 ## The two gates
 
