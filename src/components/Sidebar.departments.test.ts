@@ -111,7 +111,7 @@ function drag(id: string) {
 
 beforeEach(() => {
   fixture.values = [];
-  fixture.advanced = false;
+  fixture.advanced = true;
   fixture.phone = false;
   fixture.admin = null;
   fixture.storage = new Map();

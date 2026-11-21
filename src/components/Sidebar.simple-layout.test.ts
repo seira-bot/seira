@@ -46,6 +46,7 @@ vi.mock("@/state/store", async (importOriginal) => {
 import { initialState } from "@/state/store";
 import { BOTS_SECTION_ID, CHANNELS_SECTION_ID, PINNED_SECTION_ID, userSectionId } from "@/lib/sidebar-layout";
 import { SIDEBAR_COLLAPSED_SECTIONS_KEY, SIDEBAR_DENSITY_KEY, SIDEBAR_SECTION_ORDER_KEY, SIDEBAR_WIDTH_KEY, SIMPLE_SIDEBAR_SECTION_ORDER_KEY, SIMPLE_SIDEBAR_WIDTH_KEY, setSidebarDensity } from "@/lib/sidebar-preferences";
+import { PHONE_LAYOUT } from "@/lib/use-media-query";
 import { Sidebar, TeamMenuItems } from "./Sidebar";
 const drawSidebar = (Sidebar as unknown as { type: (props: import("react").ComponentProps<typeof Sidebar>) => import("react").ReactNode }).type;
 import { PinnedBotRoster } from "./PinnedCircleThreads";
@@ -134,9 +135,10 @@ describe("Simple-mode sidebar layout", () => {
   });
 
   it("keeps bot rows on the phone", () => {
-    vi.stubGlobal("window", Object.assign(new EventTarget(), { innerWidth: 400, innerHeight: 800, ogb: undefined, setTimeout, clearTimeout }));
+    vi.stubGlobal("window", Object.assign(new EventTarget(), { innerWidth: 400, innerHeight: 800, ogb: undefined, setTimeout, clearTimeout, matchMedia: (query: string) => ({ matches: query === PHONE_LAYOUT, addEventListener() {}, removeEventListener() {} }) }));
     const { tree } = render();
     expect(tree.some((node) => node.type === SidebarTileGrid || node.type === SidebarSectionTiles)).toBe(false);
+    expect(listedBots(tree)).toEqual(["atlas", "bea", "dodo"]);
   });
 
   it("shows the Chief, the pinned bots and the other bots as tiles, with no Pinned or Bots heading", () => {
