@@ -12,7 +12,7 @@ vi.mock("@/lib/interface-mode", async (original) => ({
 vi.mock("./DesktopCapabilities", () => ({ useDesktopCapabilities: () => ({}) }));
 
 import { BotListItem, botRowProps } from "./Sidebar";
-import { SidebarBotTile, SidebarTileGrid } from "./SidebarTiles";
+import { SidebarBotTile, SidebarSectionTiles, SidebarTileGrid, TILE_COLUMNS } from "./SidebarTiles";
 
 const bot = (extra: Partial<Bot> = {}): Bot => ({
   id: "seira", threadId: "t", name: "Seira", title: "", description: "", notifications: true, color: "chrome",
@@ -128,7 +128,9 @@ describe("the tile grid", () => {
     const drag = count > 1 ? ":drag" : "";
     expect(tiles(html)).toEqual(["primary:seira", ...pins(count).map((pin) => `pinned:${pin.id}${drag}`)]);
     expect(html).toMatch(/^<section data-sidebar-tiles="" aria-label="Bots"/);
-    expect(html).toContain("grid max-h-[40vh] grid-cols-4");
+    expect(html).toContain("grid max-h-[40vh] gap-0.5");
+    expect(html).not.toContain("grid-cols-4");
+    expect(html).toContain(`grid-template-columns:${TILE_COLUMNS}`);
     expect(html).toContain('data-sidebar-section-label=""');
     expect(html.match(/width="48px" height="48px"/g)).toHaveLength(count + 1);
     expect(html.match(/data-testid="chief-badge"/g)).toHaveLength(1);
@@ -142,6 +144,28 @@ describe("the tile grid", () => {
   it("shows the pinned tiles alone when there is no main bot, and nothing when there is neither", () => {
     expect(tiles(grid(null, pins(2)))).toEqual(["pinned:pin0:drag", "pinned:pin1:drag"]);
     expect(grid(null, [])).toBe("");
+  });
+
+  it("puts the other bots after the pinned tiles as same-size tiles that cannot be dragged, and shows them with no main bot", () => {
+    const others = Array.from({ length: 3 }, (_, index) => bot({ id: `other${index}`, name: `Other ${index}` }));
+    const bots = [main, ...pins(2), ...others];
+    const row = (candidate: Bot) => botRowProps({ ...initialState, bots, selectedId: "", activeView: "chat" }, dispatch, candidate, { density: "comfortable", query: "", onMenu });
+    const html = renderToStaticMarkup(createElement(SidebarTileGrid, { primary: main, pinned: pins(2), others, row }));
+    expect(tiles(html)).toEqual(["primary:seira", "pinned:pin0:drag", "pinned:pin1:drag", "bot:other0", "bot:other1", "bot:other2"]);
+    expect(html.match(/width="48px" height="48px"/g)).toHaveLength(6);
+    expect(tiles(renderToStaticMarkup(createElement(SidebarTileGrid, { primary: null, pinned: [], others, row })))).toEqual(["bot:other0", "bot:other1", "bot:other2"]);
+  });
+
+  it("draws a department's bots as a bare four-column grid, and nothing when it has none", () => {
+    const members = [bot({ id: "a", name: "A" }), bot({ id: "b", name: "B", chiefOfStaff: true })];
+    const row = (candidate: Bot) => botRowProps({ ...initialState, bots: members, selectedId: "", activeView: "chat" }, dispatch, candidate, { density: "comfortable", query: "", onMenu });
+    const html = renderToStaticMarkup(createElement(SidebarSectionTiles, { bots: members, row }));
+    expect(tiles(html)).toEqual(["bot:a", "bot:b"]);
+    expect(html).not.toContain("grid-cols-4");
+    expect(html).toContain(`grid-template-columns:${TILE_COLUMNS}`);
+    expect(html).not.toContain("data-sidebar-section-label");
+    expect(html).not.toContain('data-testid="chief-badge"');
+    expect(renderToStaticMarkup(createElement(SidebarSectionTiles, { bots: [], row }))).toBe("");
   });
 
   it("adds a plus button only when it is given something to do", () => {

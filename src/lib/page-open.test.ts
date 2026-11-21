@@ -5,21 +5,21 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isPublishedPageUrl, pagePanelBot, requestPanelPage, usePanelPage, withPageOpen, type PageOpenFacts, type PanelPage } from "./page-open";
 
-const PAGE = "https://abcdefghijklmnopqrstuvwxyz.page.seira.bot/";
+const PAGE = "https://abcdefghijklmnopqrstuvwxyz.seira.page/";
 const facts = (over: Partial<PageOpenFacts> = {}): PageOpenFacts => ({
   selectedId: "pepper", bots: [{ id: "pepper" }], groups: [{ id: "room" }],
   config: { features: { browser: true }, browserEngine: { kind: "engine" } }, desktop: {}, ...over,
 });
 
 describe("a published page's link", () => {
-  it("is only https://<page id>.page.seira.bot, never an app, chat or look-alike link", () => {
+  it("is only https://<page id>.seira.page, never an app, chat or look-alike link", () => {
     expect(isPublishedPageUrl(PAGE)).toBe(true);
     expect(isPublishedPageUrl(`${PAGE}charts/index.html?region=EU#top`)).toBe(true);
     for (const other of [
-      "seira://thread/t1?bot=pepper", "seira://bot/pepper", "http://abcdefghijklmnopqrstuvwxyz.page.seira.bot/",
-      "https://page.seira.bot/", "https://www.page.seira.bot/", "https://upload.page.seira.bot/", "https://a.b.abcdefghijklmnopqrstuvwxyz.page.seira.bot/",
-      "https://abcdefghijklmnopqrstuvwxyz.page.seira.bot.evil.test/", "https://abcdefghijklmnopqrstuvwxyz.seira.pages/",
-      "https://user:pw@abcdefghijklmnopqrstuvwxyz.page.seira.bot/", "https://abcdefghijklmnopqrstuvwxyz.page.seira.bot:8443/",
+      "seira://thread/t1?bot=pepper", "seira://bot/pepper", "http://abcdefghijklmnopqrstuvwxyz.seira.page/",
+      "https://abcdefghijklmnopqrstuvwxyz.page.seira.bot/", "https://seira.page/", "https://www.seira.page/", "https://upload.seira.page/",
+      "https://a.b.abcdefghijklmnopqrstuvwxyz.seira.page/", "https://abcdefghijklmnopqrstuvwxyz.seira.page.evil.test/", "https://abcdefghijklmnopqrstuvwxyz.seira.pages/",
+      "https://user:pw@abcdefghijklmnopqrstuvwxyz.seira.page/", "https://abcdefghijklmnopqrstuvwxyz.seira.page:8443/",
       "javascript:alert(1)", "not a url", "", undefined, null,
     ]) expect(isPublishedPageUrl(other), String(other)).toBe(false);
   });
@@ -46,7 +46,7 @@ describe("where a published page opens", () => {
   });
 
   it("never sends any other link to the panel", () => {
-    for (const link of ["https://example.com/", "seira://thread/t1?bot=pepper", "https://page.seira.bot/"]) expect(pagePanelBot(link, facts())).toBeNull();
+    for (const link of ["https://example.com/", "seira://thread/t1?bot=pepper", "https://seira.page/"]) expect(pagePanelBot(link, facts())).toBeNull();
   });
 });
 
