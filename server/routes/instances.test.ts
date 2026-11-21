@@ -327,6 +327,14 @@ describe("hiding a provider", () => {
     expect(persisted.at(-1)!.hermes).not.toHaveProperty("hidden");
     expect((await call("GET", "/api/instances/hidden")).instances).toEqual([]);
   });
+
+  it("lists a hidden provider with the mark it shows when shown", async () => {
+    const cfg = { instances: { openai: { driver: "openai-compat", displayName: "OpenAI", hidden: true, config: { url: "https://api.openai.com/v1" } } } };
+    const { call } = await serve({ cfg: cfg as unknown as AppConfig });
+    expect((await call("GET", "/api/instances/hidden")).instances).toEqual([
+      { instanceId: "openai", driverKind: "openai-compat", displayName: "OpenAI", icon: { kind: "preset", preset: "openai" } },
+    ]);
+  });
 });
 
 

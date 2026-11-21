@@ -208,6 +208,31 @@ describe("the Update server row", () => {
     );
   });
 
+  describe("how this app gets its updates", () => {
+    const behindApp = () => ({ check: check({ current: "0.1.151", available: false, latest: "0.1.151" }), bundle: "0.1.151", app: "0.1.149", status: button({ available: false, current: "0.1.151" }) });
+
+    it("AC-01 and AC-02: an app a store updates gets no Update app button, and the row says the store does it", () => {
+      const row = view({ ...behindApp(), appWay: "store" });
+      expect(row.action).toBeNull();
+      expect(row.label).toBe("This app is on v0.1.149, the server on v0.1.151");
+      expect(row.subtitle).toBe("Your app store updates Seira.");
+    });
+
+    it("AC-01 and AC-03: an app with no updater and no store offers a download, never Update app", () => {
+      expect(view({ ...behindApp(), appWay: "download" })).toEqual({
+        label: "This app is on v0.1.149, the server on v0.1.151", action: "download-app", busy: false,
+      });
+    });
+
+    it("AC-05: an app that cannot say how it updates, or updates itself, keeps the Update app button", () => {
+      for (const appWay of [undefined, null, "self" as const]) expect(view({ ...behindApp(), appWay }).action, String(appWay)).toBe("update-app");
+    });
+
+    it("an app that is not behind gets no app action whatever its way", () => {
+      expect(view({ ...behindApp(), app: "0.1.151", appWay: "download" }).action).toBe("check");
+    });
+  });
+
   it("asks first, saying the server restarts, running work stops, and how much is running", () => {
     const body = "The server restarts to update, so anything running on it stops. This takes a few minutes. If the new version doesn't work, the server goes back to this one by itself.";
     expect(serverUpdateConfirmBody(0)).toBe(body);
