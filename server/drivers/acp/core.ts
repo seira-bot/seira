@@ -190,9 +190,8 @@ export interface AcpSupport extends AcpDriverHooks {
   shareProcess?: boolean;
   /** Route workspace file access through ACP so edits retain approval cards. */
   clientFileSystem?: boolean;
-  /** Additional directories this turn may read; writes stay in cwd and the `clientWriteRoots`. */
+  /** Directories this turn may read; it writes only in cwd and `clientWriteRoots`. */
   clientReadRoots?(turn: SendTurnInput): readonly string[];
-  /** Folders outside the working folder where `fs/write_text_file` is allowed. */
   clientWriteRoots?(turn: SendTurnInput): readonly string[];
   /** Sent as `clientCapabilities._meta` on initialize, where agents read vendor capabilities. */
   clientCapabilitiesMeta?: Record<string, unknown>;
