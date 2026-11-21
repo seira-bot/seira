@@ -27,7 +27,7 @@ const REFUSAL_MESSAGE: Record<FolderRefusal, string> = {
 };
 
 const POSIX_SYSTEM = ["/bin", "/boot", "/dev", "/etc", "/lib", "/lib32", "/lib64", "/libx32", "/proc", "/run", "/sbin", "/sys", "/usr",
-  "/var/lib", "/var/run", "/System", "/Library", "/private/etc", "/private/var"];
+  "/var/lib", "/var/run", "/System", "/Library", "/private/etc", "/private/var/db", "/private/var/root", "/private/var/run"];
 
 function windowsSystem(): string[] {
   return [process.env.SystemRoot || "C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)", "C:\\ProgramData"];
