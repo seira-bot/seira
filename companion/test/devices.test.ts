@@ -150,6 +150,36 @@ describe("DeviceRegistry", () => {
     expect(registry.redeem(first.token, "iPhone")).toHaveProperty("token");
   });
 
+  it("a renewal keeps the code lock", () => {
+    const registry = new DeviceRegistry();
+    const first = registry.openPairing();
+    const wrong = first.code === "000000" ? "111111" : "000000";
+    for (let i = 0; i < MAX_PAIRING_ATTEMPTS; i++) registry.redeem(wrong, "iPhone");
+    const renewed = registry.renewPairing();
+    expect(registry.redeem(renewed.code, "iPhone")).toMatchObject({ code: "pairing_too_many" });
+    expect(registry.redeem(renewed.token, "iPhone")).toHaveProperty("token");
+  });
+
+  it("a renewal keeps the remaining attempts", () => {
+    const registry = new DeviceRegistry();
+    const first = registry.openPairing();
+    const wrong = first.code === "000000" ? "111111" : "000000";
+    for (let i = 0; i < MAX_PAIRING_ATTEMPTS - 2; i++) registry.redeem(wrong, "iPhone");
+    const renewed = registry.renewPairing();
+    const wrongAgain = renewed.code === "000000" ? "111111" : "000000";
+    expect(registry.redeem(wrongAgain, "iPhone")).toMatchObject({ code: "pairing_code_wrong" });
+    expect(registry.redeem(wrongAgain, "iPhone")).toMatchObject({ code: "pairing_too_many" });
+  });
+
+  it("starting pairing again restores the code", () => {
+    const registry = new DeviceRegistry();
+    const first = registry.openPairing();
+    const wrong = first.code === "000000" ? "111111" : "000000";
+    for (let i = 0; i < MAX_PAIRING_ATTEMPTS; i++) registry.redeem(wrong, "iPhone");
+    const reopened = registry.openPairing();
+    expect(registry.redeem(reopened.code, "iPhone")).toHaveProperty("token");
+  });
+
   it("does not count a wrong token against the code", () => {
     const registry = new DeviceRegistry();
     const { code } = registry.openPairing();

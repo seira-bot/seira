@@ -227,10 +227,14 @@ export class DeviceRegistry {
     return [this.window, this.previousWindow].filter((window): window is PairingWindow => window !== null);
   }
 
-  /** A fresh code while the pairing screen stays open; the one before keeps its remaining time. */
+  /** A fresh code while the pairing screen stays open; the one before keeps its remaining time. The code budget belongs to the pairing `openPairing` started, so a renewal keeps it. */
   renewPairing(): PairingWindow {
     const current = this.pairing();
     const next = this.newWindow();
+    if (current) {
+      next.attemptsLeft = current.attemptsLeft;
+      next.codeLocked = current.codeLocked;
+    }
     this.previousWindow = current;
     this.window = next;
     this.changed();
@@ -336,7 +340,7 @@ export class DeviceRegistry {
       }
       if (windows.some((open) => open.codeLocked)) {
         this.changed();
-        return { error: "too many incorrect codes — start pairing again", code: "pairing_too_many" };
+        return { error: "too many incorrect codes — scan the QR code or start pairing again", code: "pairing_too_many" };
       }
       return { error: "that pairing credential is not right", code: "pairing_code_wrong" };
     }
