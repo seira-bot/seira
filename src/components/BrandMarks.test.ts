@@ -9,7 +9,7 @@ import * as providerIcons from "./ProviderIcons";
 
 const BRANDS = Object.keys(BRAND_MARKS) as BrandId[];
 const draw = (brand: BrandId) => renderToStaticMarkup(createElement(BrandMark, { brand, size: 18 }));
-const textNodes = (html: string) => html.replace(/<[^>]*>/g, "").trim();
+const textNodes = (html: string) => [...html.matchAll(/>([^<]*)</g)].map((match) => match[1]).join("").trim();
 const shape = (html: string) => [...html.matchAll(/ d="([^"]+)"/g)].map((match) => match[1]).join("|");
 const coloured = (html: string) => /#[0-9a-f]{3,8}\b|url\(#/i.test(html);
 
