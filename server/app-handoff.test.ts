@@ -14,7 +14,7 @@ afterEach(() => {
 
 interface Started { cli: string; argv: string[]; env: NodeJS.ProcessEnv; exit(code: number): void; killed: NodeJS.Signals[] }
 
-function harness(options: { own?: string; health?: Array<string | null>; env?: NodeJS.ProcessEnv; failBackup?: boolean; exitOnKill?: boolean } = {}) {
+function harness(options: { own?: string; health?: Array<string | null>; env?: NodeJS.ProcessEnv; failBackup?: boolean; exitOnKill?: boolean; yieldWhileWaiting?: boolean } = {}) {
   const root = mkdtempSync(join(tmpdir(), "seira-handoff-"));
   roots.push(root);
   const dataDir = join(root, "data");
@@ -38,7 +38,7 @@ function harness(options: { own?: string; health?: Array<string | null>; env?: N
       return { exited, kill: (name) => { entry.killed.push(name); if (options.exitOnKill !== false) done(0); } };
     },
     health: async () => (answers.length > 1 ? answers.shift()! : answers[0] ?? null),
-    sleep: async (ms) => { clock += ms; },
+    sleep: async (ms) => { clock += ms; if (options.yieldWhileWaiting) await new Promise((resolve) => setTimeout(resolve, 2)); },
     now: () => clock,
     onSignal: (handler) => { signal = handler; return () => { signal = undefined; }; },
     log: (line) => logs.push(line),
@@ -106,7 +106,7 @@ describe("after the server stopped for an update", () => {
   });
 
   it("does not go back when a person stops the server while it waits", async () => {
-    const h = harness({ health: [null] });
+    const h = harness({ health: [null], yieldWhileWaiting: true });
     h.pend();
     const run = handoffAfterRestart(h.deps);
     await until(() => h.started.length > 0);
