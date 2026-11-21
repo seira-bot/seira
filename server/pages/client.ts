@@ -32,7 +32,7 @@ export const SIGN_IN_MESSAGE = "Publishing a page needs a Seira account. Sign in
 const UNAVAILABLE = "Publishing isn't available right now. Try again in a few minutes.";
 const NOT_TURNED_ON = "Public links for pages aren't available on this account.";
 /** A server with no desktop app to sign in through and no Cloud home (`seira serve`): no Settings sign-in can help. */
-export const SELF_HOSTED_MESSAGE = "Publishing pages isn't available on self-hosted servers yet.";
+export const SELF_HOSTED_MESSAGE = "Publishing pages isn't available on self-hosted servers.";
 const TOKEN_TIMEOUT_MS = 15_000, UPLOAD_TIMEOUT_MS = 60_000;
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
 

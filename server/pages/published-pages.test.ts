@@ -67,7 +67,7 @@ describe("publishing a page", () => {
     const f = setup({ selfHosted: true });
     writeSite(join(f.work, "site"));
     const outcome = await f.publish({ path: "site" });
-    expect(outcome).toEqual({ status: 503, text: "Publishing pages isn't available on self-hosted servers yet.", reason: "unavailable" });
+    expect(outcome).toEqual({ status: 503, text: "Publishing pages isn't available on self-hosted servers.", reason: "unavailable" });
     expect(f.service.minted).toEqual([]);
     expect(f.cards).toEqual([]);
   });
