@@ -890,14 +890,14 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
     /** This sign-in's own X research relay access while its plan is paid:
      * `{ url, token }` for the local server (electron/included-x.mjs), or null
      * when there is no sign-in, the Admin says the plan is not active (402) or
-     * it does not offer X research (404). Never kept on disk. The relay must
+     * it does not offer X research (404 or 501). Never kept on disk. The relay must
      * be on the Cloud's own origin: the token goes nowhere else. */
     async xResearchAccess() {
       const current = grant;
       if (!current) return null;
       let result;
       try { result = await request("services/x", { method: "POST", body: {}, token: current.token }); }
-      catch (error) { if (error?.status === 402 || error?.status === 404) return null; throw error; }
+      catch (error) { if (error?.status === 402 || error?.status === 404 || error?.status === 501) return null; throw error; }
       let relay = null;
       try { relay = typeof result?.url === "string" ? new URL(result.url) : null; } catch { relay = null; }
       if (result?.cloudContractVersion !== 1 || !relay || relay.origin !== origin || typeof result.token !== "string" || !/^seira_xd_[A-Za-z0-9_-]{43}$/.test(result.token)) {
@@ -906,14 +906,14 @@ export function createCloudAccountClient({ store, openBrowser, platform, deviceN
       return { url: result.url, token: result.token };
     },
     /** This sign-in's own pages token, for any plan: `{ url, token }` for the local server (electron/included-pages.mjs),
-     * or null when there is no sign-in or the Admin does not offer pages yet (404). Never kept on disk. The token route
+     * or null when there is no sign-in or the Admin does not offer pages (404 or 501). Never kept on disk. The token route
      * must be on the Cloud's own origin: the token goes nowhere else. */
     async pagesAccess() {
       const current = grant;
       if (!current) return null;
       let result;
       try { result = await request("services/pages", { method: "POST", body: {}, token: current.token }); }
-      catch (error) { if (error?.status === 404) return null; throw error; }
+      catch (error) { if (error?.status === 404 || error?.status === 501) return null; throw error; }
       let target = null;
       try { target = typeof result?.url === "string" ? new URL(result.url) : null; } catch { target = null; }
       if (result?.cloudContractVersion !== 1 || !target || target.origin !== origin || typeof result.token !== "string" || !/^omb_pd_[A-Za-z0-9_-]{43}$/.test(result.token)) {
