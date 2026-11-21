@@ -845,6 +845,8 @@
   "rail.localCreate": "Create",
   "rail.localTaken": "Another place here has that name. Choose another.",
   "rail.localFailed": "That didn't work. Try again in a moment.",
+  "rail.localFull": "This computer has as many places as it can hold. Remove one, then try again.",
+  "rail.localUnavailable": "You can't add a place on this computer now. Choose another kind of place.",
   "rail.localWork": "Work",
   "rail.localPersonal": "Personal",
   "rail.localNumbered": "Workspace {count}",

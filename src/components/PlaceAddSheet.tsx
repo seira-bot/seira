@@ -191,13 +191,15 @@ function placesTaken(places: readonly RailPlace[]): { names: string[]; swatches:
   return { names, swatches: new Set(places.map((place) => place.paint?.swatch ?? CLOUD_SWATCH_ORDER.find((swatch) => place.color !== null && SWATCH_COLOR[swatch] === place.color)).filter((swatch): swatch is CloudSwatch => Boolean(swatch))) };
 }
 
+const LOCAL_PROBLEM = { taken: "rail.localTaken", full: "rail.localFull", unavailable: "rail.localUnavailable", failed: "rail.localFailed" } as const;
+
 /** A new workspace on this computer: its name (Work, Personal or Workspace 2 to start) and its colour, then main makes it
  * and opens it. A name another place here has is said at once; main says it too, for one the rail doesn't list. */
 export function NewLocalWorkspace({ places, onBack, onDone }: { places: readonly RailPlace[]; onBack: (() => void) | null; onDone: () => void }) {
   const [taken] = useState(() => placesTaken(places));
   const [name, setName] = useState(() => suggestedLocalName(taken.names));
   const [color, setColor] = useState<CloudSwatch>(() => CLOUD_SWATCH_ORDER.find((swatch) => swatch !== "slate" && !taken.swatches.has(swatch)) ?? "slate");
-  const [busy, setBusy] = useState(false), [problem, setProblem] = useState<"taken" | "failed" | null>(null);
+  const [busy, setBusy] = useState(false), [problem, setProblem] = useState<keyof typeof LOCAL_PROBLEM | null>(null);
   const shown = name.trim().replace(/\s+/g, " ");
   const clash = taken.names.some((other) => other.toLocaleLowerCase() === shown.toLocaleLowerCase());
   const create = async () => {
@@ -207,7 +209,7 @@ export function NewLocalWorkspace({ places, onBack, onDone }: { places: readonly
     const outcome = await createLocal(shown, color === "slate" ? null : color);
     setBusy(false);
     if (outcome === "made") { track("rail_add", { step: "local" }); onDone(); return; }
-    setProblem(outcome === "taken" ? "taken" : "failed");
+    setProblem(outcome === "name" ? "failed" : outcome);
   };
   return <form data-place-add="local" className="flex flex-col gap-4 px-[30px] pb-[26px] pt-7" onSubmit={(event) => { event.preventDefault(); void create(); }}>
     {onBack && <div><BackLink label={t("rail.back")} onClick={onBack} /></div>}
@@ -230,7 +232,7 @@ export function NewLocalWorkspace({ places, onBack, onDone }: { places: readonly
         <span className="block text-[13px] text-ink-secondary">{t("rail.localPreview")}</span>
       </span>
     </div>
-    {problem && <p role="alert" data-local-problem className="text-[13px] leading-relaxed text-danger">{t(problem === "taken" ? "rail.localTaken" : "rail.localFailed")}</p>}
+    {problem && <p role="alert" data-local-problem className="text-[13px] leading-relaxed text-danger">{t(LOCAL_PROBLEM[problem])}</p>}
     <button type="submit" data-local-create className={PRIMARY_WIDE} disabled={busy || !shown}>
       {busy && <Loader2 size={15} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}{t("rail.localCreate")}
     </button>

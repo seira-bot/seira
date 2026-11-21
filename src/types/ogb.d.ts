@@ -218,7 +218,7 @@ const __APP_VERSION__: string;
          * which main opens next; a name or colour for one the rail lists; its removal, once the person said yes. Absent on
          * an older app. */
         local?: {
-          create(name: string, color: import("../../electron/cloud-list.mjs").CloudSwatch | null): Promise<{ outcome: "made"; id: string } | { outcome: "name" | "taken" | "failed" }>;
+          create(name: string, color: import("../../electron/cloud-list.mjs").CloudSwatch | null): Promise<{ outcome: "made"; id: string } | { outcome: "name" | "taken" | "full" | "unavailable" | "failed" }>;
           edit(id: string, changes: { name: string } | { color: import("../../electron/cloud-list.mjs").CloudSwatch | null }): Promise<{ outcome: "saved" | "name" | "taken" | "full" | "gone" }>;
           remove(id: string): Promise<{ outcome: "removed" | "gone" | "failed" }>;
         };

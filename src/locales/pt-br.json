@@ -823,6 +823,8 @@
   "rail.localCreate": "Criar",
   "rail.localTaken": "Outro lugar aqui já tem esse nome. Escolha outro.",
   "rail.localFailed": "Não deu certo. Tente de novo em instantes.",
+  "rail.localFull": "Este computador já tem todos os lugares que comporta. Remova um e tente de novo.",
+  "rail.localUnavailable": "Não dá para adicionar um lugar neste computador agora. Escolha outro tipo de lugar.",
   "rail.localWork": "Trabalho",
   "rail.localPersonal": "Pessoal",
   "rail.localNumbered": "Espaço de trabalho {count}",
