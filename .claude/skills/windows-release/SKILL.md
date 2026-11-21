@@ -6,7 +6,7 @@ description: Build, check, and attach the Seira Windows x64 installer and its up
 # Windows release
 
 The full release guide is [`docs/releasing.md`](../../../docs/releasing.md).
-This skill covers its step 5 and the Windows update problems.
+This skill covers its steps 5 and 7 and the Windows update problems.
 A release goes only to [`seira-bot/seira`](https://github.com/seira-bot/seira/releases).
 Never upload a Seira build to a Seira repository.
 
@@ -48,9 +48,9 @@ sha256sum -c SHA256SUMS-windows-x64.txt
 Each line must print `OK`. The artifact stays for 14 days. After that, run the
 workflow again.
 
-## 3. Attach to the release
+## 3. Attach to the draft release
 
-Attach all five files to the same release as the Linux and macOS files:
+Attach all five files to the same draft release as the Linux and macOS files. Do not publish the release yet:
 
 ```sh
 node ../../scripts/release-assets.mjs upload v<version> \
@@ -80,8 +80,18 @@ installer is complete.
   the release and upload all five again.
 - Run `check` after the upload and again after the release is published. It
   must print no `FAIL` line.
-- Then do step 8 of `docs/releasing.md`: download the release and check every
+- Then do step 9 of `docs/releasing.md`: download the release and check every
   checksum file.
+
+## 4. Publish
+
+Publish only after the Linux files are on the draft release. Add the macOS files when the release has any.
+
+```sh
+node ../../scripts/release-assets.mjs publish v<version>
+```
+
+The command refuses and keeps the draft when a required file is missing or `check` fails. Never publish with `gh release edit` or the GitHub web page.
 
 ## Microsoft Store package
 
@@ -102,8 +112,9 @@ release. Upload it to Partner Center by hand. The Store signs it.
 
 A release without `latest.yml` leaves every installed Windows app on its old
 version. A background update check that fails shows no message, so the user
-gets no warning. Attach the Windows files to each release. If you cannot, say in the
-release notes that Windows stays on the earlier version.
+gets no warning. Attach the Windows files to each release. The `publish` command
+refuses a release without them. If you cannot attach them, keep the release a
+draft.
 
 ## A Windows user says that the app does not update
 

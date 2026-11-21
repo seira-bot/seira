@@ -2320,6 +2320,8 @@
   "sidebar.update.restartAction": "重启",
   "sidebar.update.installAction": "安装",
   "sidebar.update.retryAction": "重试",
+  "sidebar.update.availableShort": "服务器有可用更新",
+  "sidebar.update.howAction": "如何更新",
   "links.card.pullRequest": "拉取请求 {id}",
   "links.card.issue": "议题 {id}",
   "links.card.reference": "议题或拉取请求 {id}",

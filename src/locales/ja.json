@@ -2088,6 +2088,8 @@
   "sidebar.update.restartAction": "再起動",
   "sidebar.update.installAction": "インストール",
   "sidebar.update.retryAction": "再試行",
+  "sidebar.update.availableShort": "サーバーのアップデートがあります",
+  "sidebar.update.howAction": "更新方法",
   "links.card.pullRequest": "プルリクエスト {id}",
   "links.card.issue": "Issue {id}",
   "links.card.reference": "IssueまたはPull Request {id}",

@@ -471,6 +471,7 @@ const bridge = {
   appUpdate: {
     request: () => navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("update:for-server-page") : Promise.reject(new Error("Choose Update app.")),
+    way: () => ipcRenderer.invoke("update:way-for-server-page"),
   },
 
   updater: {

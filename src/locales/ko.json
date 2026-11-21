@@ -1984,6 +1984,8 @@
   "sidebar.update.restartAction": "다시 시작",
   "sidebar.update.installAction": "설치",
   "sidebar.update.retryAction": "다시 시도",
+  "sidebar.update.availableShort": "서버 업데이트 있음",
+  "sidebar.update.howAction": "업데이트 방법",
   "links.card.pullRequest": "풀 리퀘스트 {id}",
   "links.card.issue": "이슈 {id}",
   "links.card.reference": "이슈 또는 풀 리퀘스트 {id}",

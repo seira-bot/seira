@@ -5836,6 +5836,8 @@
   "sidebar.update.readyShort": "Güncelleme hazır",
   "sidebar.update.restartAction": "Yeniden başlat",
   "sidebar.update.retryAction": "Tekrar dene",
+  "sidebar.update.availableShort": "Sunucu güncellemesi var",
+  "sidebar.update.howAction": "Nasıl güncellenir",
   "sidebar.nav.publishedApps": "Yayınlanan uygulamalar",
   "sidebar.nav.teamFiles": "Ekip dosyaları",
   "settings.analytics.link": "Gönderdiği her şeyi gör",
