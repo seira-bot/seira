@@ -4,6 +4,7 @@ import biverLogo from "@/assets/biver/logo.png";
 import citcatLogo from "@/assets/citcat/logo.png";
 import coretLogo from "@/assets/coret/logo.png";
 import konektorLogo from "@/assets/konektor/logo.png";
+import replizLogo from "@/assets/repliz/logo.png";
 import termiloLogo from "@/assets/termilo/logo.png";
 import type { LocaleKey } from "@/locales";
 import { POSTIZ_SERVER } from "../../shared/postiz";
@@ -71,6 +72,15 @@ export const HOSTED_MCP_APPS = [
     description: "citcat.description",
     notice: "citcat.notice",
     keywords: "citcat whatsapp crm inbox chats contacts customers sales funnel leads instagram messenger line",
+  },
+  {
+    id: "repliz",
+    label: "Repliz",
+    url: "https://mcp.repliz.com/mcp",
+    icon: { image: replizLogo },
+    description: "repliz.description",
+    notice: "repliz.notice",
+    keywords: "repliz social media comments auto reply dm schedule posts automation instagram facebook threads tiktok youtube",
   },
 ] as const satisfies readonly HostedMcpApp[];
 

@@ -1,17 +1,153 @@
 import { join, relative } from "node:path";
 
 import type { ImportLeftover, ImportRoutine, ImportSkill, ImportTool } from "../../shared/ai-import/bundle.ts";
+import { mask, redactSecretsInText } from "../../shared/redact.ts";
 import { copyTree, isFile, isRecord, listDirectories } from "./local-fs.ts";
 
-/** Keeps the names of env values and headers, never the values. */
+/** Security invariant: the entry names the keys a tool needs and never holds a key. Env and header values are dropped;
+ * credentials in the url, the args and the command are removed or masked, and their names join `needsKey`. */
 export function toolFromConfig(name: string, config: unknown): ImportTool | null {
   if (!isRecord(config)) return null;
   const url = typeof config.url === "string" && config.url ? config.url : undefined;
   const command = typeof config.command === "string" && config.command ? config.command : undefined;
-  if (!url && !command) return null;
   const needsKey = [...(isRecord(config.env) ? Object.keys(config.env) : []), ...(isRecord(config.headers) ? Object.keys(config.headers) : [])];
-  const args = Array.isArray(config.args) ? config.args.filter((arg): arg is string => typeof arg === "string") : undefined;
-  return { ref: `mcp/${name}`, name, transport: url ? "http" : "stdio", ...(url ? { url } : { command, ...(args ? { args } : {}) }), needsKey };
+  const noteFor = (transport: ImportTool["transport"]): Note => (raw) => {
+    const key = keyName(raw, transport);
+    if (key) needsKey.push(key);
+  };
+  if (url) {
+    const clean = cleanUrl(url, noteFor("http"));
+    return { ref: `mcp/${name}`, name, transport: "http", url: clean, needsKey: [...new Set(needsKey)] };
+  }
+  if (!command) return null;
+  const note = noteFor("stdio");
+  const cleanCommand = redactSecretsInText(command);
+  if (cleanCommand !== command) note(FALLBACK_KEY);
+  const args = Array.isArray(config.args) ? cleanArgs(config.args.filter((arg): arg is string => typeof arg === "string"), note) : undefined;
+  return { ref: `mcp/${name}`, name, transport: "stdio", command: cleanCommand, ...(args ? { args } : {}), needsKey: [...new Set(needsKey)] };
+}
+
+type Note = (name: string) => void;
+
+const FALLBACK_KEY = "API_KEY";
+
+const SECRET_LAST_WORDS = new Set([
+  "key", "keys", "apikey", "accesskey", "secretkey", "privatekey",
+  "token", "tokens", "apitoken", "accesstoken", "authtoken",
+  "secret", "secrets", "clientsecret",
+  "password", "passwd", "pwd", "pass", "passphrase",
+  "auth", "authorization", "bearer", "jwt",
+  "sig", "signature", "credential", "credentials",
+]);
+
+/** By its last word: `api_key`, `X-Amz-Signature` and `accessToken` name a secret; `key_file`, `token_url` and `keyword` do not. */
+function isSecretName(name: string): boolean {
+  const words = name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const last = words.at(-1);
+  return last !== undefined && SECRET_LAST_WORDS.has(last);
+}
+
+/** `${NAME}`, `$NAME`, `{env:NAME}` or `<your key>`, alone or after an auth scheme, points at a key and is not one. */
+const PLACEHOLDER = /^(?:(?:Bearer|Basic|Token)\s+)?(?:\$\{[^}]*\}|\$[A-Za-z_]\w*|\{env:[^}]*\}|<[^<>]*>)$/i;
+
+const holdsValue = (value: string): boolean => value.trim() !== "" && !PLACEHOLDER.test(value.trim());
+
+const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/;
+
+/** Import writes a stdio tool's keys as env names and an http tool's keys as header names, so each must be valid there. */
+function keyName(raw: string, transport: ImportTool["transport"]): string {
+  const name = raw.replace(/^-+/, "");
+  if (transport === "http" && HEADER_NAME.test(name)) return name;
+  const env = name.replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toUpperCase();
+  return /^\d/.test(env) ? `_${env}` : env;
+}
+
+/** Drops the userinfo and the value of each secret-named query or fragment parameter. A clean address comes back unchanged. */
+function cleanUrl(raw: string, note: Note): string {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return redactSecretsInText(raw);
+  }
+  let changed = false;
+  if (url.username || url.password) {
+    url.username = "";
+    url.password = "";
+    note("Authorization");
+    changed = true;
+  }
+  const search = cleanParams(url.search, note);
+  if (search !== url.search) {
+    url.search = search;
+    changed = true;
+  }
+  const hash = cleanParams(url.hash, note);
+  if (hash !== url.hash) {
+    url.hash = hash;
+    changed = true;
+  }
+  return redactSecretsInText(changed ? url.href : raw);
+}
+
+function cleanParams(part: string, note: Note): string {
+  if (part.length < 2) return part;
+  const pairs = part.slice(1).split("&").map((pair) => {
+    const at = pair.indexOf("=");
+    if (at < 0) return pair;
+    const name = decodeParam(pair.slice(0, at));
+    if (!isSecretName(name) || !holdsValue(decodeParam(pair.slice(at + 1)))) return pair;
+    note(name);
+    return pair.slice(0, at + 1);
+  });
+  return `${part.charAt(0)}${pairs.join("&")}`;
+}
+
+function decodeParam(text: string): string {
+  try {
+    return decodeURIComponent(text.replace(/\+/g, " "));
+  } catch {
+    return text;
+  }
+}
+
+const FLAG = /^--?([A-Za-z][\w.-]*)$/;
+/** `--key ./server.key`: a file that holds the key, not the key. */
+const PATH = /^(?:\.{0,2}[\\/]|~[\\/]|[A-Za-z]:[\\/])/;
+const ASSIGNMENT = /^(-{0,2}[A-Za-z_][\w.-]*)=(.*)$/s;
+const HEADER_LINE = /^([!#$%&'*+.^_`|~0-9A-Za-z-]+)(\s*:\s*)(.+)$/s;
+const ADDRESS = /^[a-z][a-z0-9+.-]*:\/\//i;
+
+function cleanArgs(args: string[], note: Note): string[] {
+  return args.map((arg, index) => {
+    const previous = args[index - 1];
+    const flag = previous === undefined ? null : (FLAG.exec(previous)?.[1] ?? null);
+    if (flag !== null && isSecretName(flag) && !arg.startsWith("-")) {
+      if (!holdsValue(arg) || PATH.test(arg)) return arg;
+      note(flag);
+      return mask(arg);
+    }
+    const assignment = ASSIGNMENT.exec(arg);
+    if (assignment) {
+      const [, key = "", value = ""] = assignment;
+      if (isSecretName(key) && holdsValue(value)) {
+        note(key);
+        return `${key}=${mask(value)}`;
+      }
+    }
+    if (ADDRESS.test(arg)) return cleanUrl(arg, note);
+    const header = HEADER_LINE.exec(arg);
+    if (header) {
+      const [, key = "", separator = "", value = ""] = header;
+      if (isSecretName(key) && holdsValue(value)) {
+        note(key);
+        return `${key}${separator}${mask(value)}`;
+      }
+    }
+    const redacted = redactSecretsInText(arg);
+    if (redacted !== arg) note(flag !== null && previous?.startsWith("--") ? flag : FALLBACK_KEY);
+    return redacted;
+  });
 }
 
 /** Skill folders sit at `<root>/<name>/SKILL.md` or one level deeper in a category folder. Each is copied into `stagingDir`. */
