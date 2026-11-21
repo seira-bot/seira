@@ -60,6 +60,34 @@ describe("container tunnel", () => {
     expect(events.some((event) => event.startsWith("start"))).toBe(false);
   });
 
+  it("keeps waiting for a server that answers after more than a minute", async () => {
+    let polls = 0;
+    const { tunnel, events } = harness({ up: () => ++polls > 300 });
+    await tunnel.prepare();
+    await tunnel.attach(9);
+    expect(polls).toBe(301);
+    expect(events.filter((event) => event.startsWith("start"))).toEqual(["start pid=9 socket=/run/origin-1.sock"]);
+  });
+
+  it("releases a prepared plan when a stop signal arrives while the plan is made", async () => {
+    const { tunnel, events } = harness();
+    let open!: () => void;
+    const gate = new Promise<void>((resume) => { open = resume; });
+    const signals = new EventEmitter();
+    let spawns = 0;
+    const done = superviseServer(() => { spawns += 1; return new EventEmitter() as unknown as ChildProcess; }, {
+      signals: signals as never,
+      prepare: async () => { await gate; await tunnel.prepare(); },
+      spawned: () => undefined,
+      release: () => tunnel.release(),
+    });
+    signals.emit("SIGTERM");
+    open();
+    expect(await done).toBe(0);
+    expect(spawns).toBe(0);
+    expect(events).toEqual(["plan", "cleanup /run/origin-1.sock"]);
+  });
+
   it("starts the server without the tunnel, with one log line, when the account gets no address", async () => {
     const { tunnel, events, logs } = harness({ plans: [{ unavailable: "capacity" }] });
     expect(await tunnel.prepare()).toEqual({});

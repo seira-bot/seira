@@ -24,7 +24,6 @@ export const containerTunnelDeps: ContainerTunnelDeps = {
   sleep: (ms) => new Promise((resume) => setTimeout(resume, ms)),
 };
 
-const SERVER_WAIT_MS = 60_000;
 const POLL_MS = 250;
 
 /** The guardian starts cloudflared with its own minimal environment; this keeps the launcher's provider keys out of what it reads. */
@@ -69,14 +68,12 @@ export function createContainerTunnel(options: { dataDir: string; port: number; 
       const current = plan;
       if (!current) return Promise.resolve();
       attaching = (async () => {
-        const deadline = Date.now() + SERVER_WAIT_MS;
         let answered = false;
-        while (!cancelled && Date.now() < deadline) {
+        while (!cancelled && !answered) {
           answered = await deps.serverUp(options.port);
-          if (answered) break;
-          await deps.sleep(POLL_MS);
+          if (!answered) await deps.sleep(POLL_MS);
         }
-        if (cancelled || !answered) return;
+        if (cancelled) return;
         running = deps.start({
           dataDir: options.dataDir,
           access: current.access,

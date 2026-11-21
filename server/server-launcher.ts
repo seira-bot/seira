@@ -42,7 +42,7 @@ export function superviseServer(start: () => ChildProcess, options: { signals?: 
     const onTerm = pass("SIGTERM"), onInt = pass("SIGINT");
     const go = () => {
       preparing = false;
-      if (stopping) { finish(0); return; }
+      if (stopping) { if (options.release) void options.release().then(() => finish(0), () => finish(0)); else finish(0); return; }
       child = start();
       options.spawned?.(child);
       child.once("error", () => finish(1));

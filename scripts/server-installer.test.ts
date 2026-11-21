@@ -75,6 +75,9 @@ case "$*" in
   *"-K -"*) cat >> "$FAKE_LOG.stdin"
     if blocked ghcr.io; then exit 7; fi
     case "$*" in */manifests/stable) printf '%s' "$FAKE_STABLE" ;; *) printf '%s' "$FAKE_RELEASE_STATUS" ;; esac ;;
+  *"telnet://"*) host=$(printf '%s' "$*" | sed -e 's#.*telnet://##' -e 's#:.*##')
+    if blocked "$host"; then printf '0.000000'; else printf '0.026672'; fi
+    exit 28 ;;
   *cdn-cgi/trace*) printf 'fl=1\\nip=%s\\nts=1\\n' "$FAKE_PUBLIC_IP" ;;
   "-sSI "*) printf 'HTTP/2 405\\r\\ndate: Tue, 10 Nov 2026 12:00:00 GMT\\r\\n' ;;
   *ghcr.io/token*) if blocked ghcr.io; then exit 7; fi; printf '{"token":"${TOKEN}"}' ;;
@@ -743,10 +746,11 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
     expect(result.stdout).toContain("  ok    outbound: the image registries and the tunnel edge are reachable");
     const curls = result.calls.filter((call) => call.startsWith("curl ")).join("\n");
     expect(curls).toContain("https://accounts.example.test/");
-    expect(curls).toContain("https://region1.v2.argotunnel.com/");
+    expect(curls).toContain("telnet://region1.v2.argotunnel.com:7844");
+    expect(curls).not.toContain("https://region1.v2.argotunnel.com/");
     expect(curls).not.toContain("letsencrypt");
     const blocked = tunnel(["--check", "--tunnel"], { env: { FAKE_BLOCKED: "region1.v2.argotunnel.com" } });
-    expect(blocked.fixes.join("\n")).toContain("region1.v2.argotunnel.com over HTTPS");
+    expect(blocked.fixes.join("\n")).toContain("region1.v2.argotunnel.com) on port 7844. Allow outbound port 7844 (TCP and UDP)");
   });
 
   it("writes a compose file with no Caddy, no published port and no host network", () => {

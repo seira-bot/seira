@@ -191,6 +191,12 @@ parse() {
       *) fail "That email address doesn't look right. Give one address, like you@example.com." ;;
     esac
   done
+  case "$ACCOUNT_EMAIL" in
+    "") ;;
+    *[!A-Za-z0-9@._+-]* | *@*@* | @* | *@ | *@.* | *. | *..* | *@-* | -*) fail "--account-email needs one address of letters, digits and . _ + -, like you@example.com." ;;
+    ?*@?*.?*) ;;
+    *) fail "--account-email needs one address of letters, digits and . _ + -, like you@example.com." ;;
+  esac
   if [ -n "$ACCOUNT_EMAIL" ] && [ "$TUNNEL" != yes ]; then fail "--account-email works only with --tunnel."; fi
   if [ -n "$CODE" ] && [ "$TUNNEL" = yes ]; then fail "A connection code works only with --domain."; fi
   case "$CODE" in
@@ -456,7 +462,7 @@ check_dns() {
 
 check_outbound() {
   targets="https://ghcr.io/v2/ https://pkg-containers.githubusercontent.com/ https://registry-1.docker.io/v2/ https://auth.docker.io/ https://production.cloudflare.docker.com/"
-  if [ "$TUNNEL" = yes ]; then targets="$targets https://$TUNNEL_EDGE_HOST/"; else targets="$targets https://acme-v02.api.letsencrypt.org/directory"; fi
+  if [ "$TUNNEL" != yes ]; then targets="$targets https://acme-v02.api.letsencrypt.org/directory"; fi
   if [ "$DOCKER_STATE" = missing ]; then targets="$targets https://get.docker.com/ https://download.docker.com/"; fi
   if [ -n "$CODE" ]; then targets="$targets $ADMIN_URL/"; fi
   case "${SOURCE_ASKED:-$REPOSITORY_FILES}" in https://*) targets="$targets https://$(host_of "${SOURCE_ASKED:-$REPOSITORY_FILES}")/" ;; esac
@@ -473,10 +479,20 @@ check_outbound() {
     return
   fi
   if [ "$TUNNEL" = yes ]; then
-    ok "outbound: the image registries and the tunnel edge are reachable"
+    check_edge
   else
     ok "outbound: the image registries and Let's Encrypt are reachable"
   fi
+}
+
+# cloudflared dials the edge on port 7844, which answers no HTTP, so only the TCP connect is checked.
+check_edge() {
+  connect=$(curl -s -o /dev/null -w '%{time_connect}' --connect-timeout 5 --max-time 2 "telnet://$TUNNEL_EDGE_HOST:7844" </dev/null 2>/dev/null || true)
+  if ! printf '%s' "$connect" | awk '{ exit !($1 > 0) }'; then
+    fix "This server can't open a connection to Cloudflare's tunnel edge ($TUNNEL_EDGE_HOST) on port 7844. Allow outbound port 7844 (TCP and UDP) to it in your firewall, then run this again."
+    return
+  fi
+  ok "outbound: the image registries and the tunnel edge are reachable"
 }
 
 check_account() {
@@ -1169,18 +1185,23 @@ login_problem() { # file
   tail -n 1 "$1" 2>/dev/null | sed 's/[0-9]\{8\}/********/g'
 }
 
+run_login() { # the code is read from standard input
+  if [ -n "$ACCOUNT_EMAIL" ]; then
+    compose run --rm --no-deps -T seira seira login --email "$ACCOUNT_EMAIL"
+  else
+    compose run --rm --no-deps -T seira seira login
+  fi
+}
+
 # Signs this server in to the Seira account in a one-off container on the data folder, before the server starts. The
 # code comes from the person's terminal, or on this installer's standard input as a "code" line with --events, and
 # is never written anywhere.
 sign_in_account() {
   if account_signed_in; then return 0; fi
-  login_args="login"
-  if [ -n "$ACCOUNT_EMAIL" ]; then login_args="login --email $ACCOUNT_EMAIL"; fi
   login_error=$(mktemp)
   if [ "$EVENTS" != yes ]; then
     say "Signing this server in to your Seira account. Seira emails a code: type it when asked."
-    # shellcheck disable=SC2086
-    if compose run --rm --no-deps -T seira seira $login_args </dev/tty 2>"$login_error"; then
+    if run_login </dev/tty 2>"$login_error"; then
       rm -f "$login_error"
       return 0
     fi
@@ -1193,8 +1214,7 @@ sign_in_account() {
   attempt=1
   while [ "$attempt" -le 3 ]; do
     event ask code "$ACCOUNT_EMAIL"
-    # shellcheck disable=SC2086
-    if { read_code || : >"$gave_up"; } | compose run --rm --no-deps -T seira seira $login_args >/dev/null 2>"$login_error"; then
+    if { read_code || : >"$gave_up"; } | run_login >/dev/null 2>"$login_error"; then
       rm -f "$login_error" "$gave_up"
       return 0
     fi
