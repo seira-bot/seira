@@ -120,7 +120,7 @@ export function configEntries(deps: Pick<RegistryDeps, "cfg" | "saveConfig" | "b
       allowed: `${MIN_THREAD_EVENT_LOG_BYTES} to ${MAX_THREAD_EVENT_LOG_BYTES} bytes, or null for the default ceiling (256 MiB)`,
       current: () => cfg().threads?.eventLogMaxBytes ?? null, read: () => display(cfg().threads?.eventLogMaxBytes ?? "256 MiB (default ceiling)"), patch: (eventLogMaxBytes) => ({ threads: { eventLogMaxBytes } }),
     }),
-    feature("appearance.toolCalls", "Show tool calls", "Show each tool a bot runs in the conversation.", "tool-calls", ["tool calls", "tools", "show tools"], "showToolCalls", false,
+    feature("appearance.toolCalls", "Show tool calls", "Show each tool a bot runs in the conversation.", "tool-calls", ["tool calls", "tools", "show tools"], "showToolCalls", true,
       "Show each tool a bot runs in its conversation", "Hide tool runs from conversations"),
     feature("desktops.browser", "Built-in browser", "Bots may use the built-in browser; each bot also has its own switch.", "browser", ["browser", "built-in browser"], "browser", true,
       "Let bots use the built-in browser", "Turn off the built-in browser for every bot"),

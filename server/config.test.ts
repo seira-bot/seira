@@ -679,8 +679,9 @@ describe("configuration boundaries", () => {
     });
   });
 
-  it("keeps tool-call chips off by default and accepts an explicit opt-in", () => {
-    expect(showToolCallsEnabled({})).toBe(false);
+  it("keeps tool-call chips on by default and accepts an explicit opt-out", () => {
+    expect(showToolCallsEnabled({})).toBe(true);
+    expect(showToolCallsEnabled({ features: { showToolCalls: false } })).toBe(false);
     expect(parseConfigPatch({ features: { showToolCalls: true } })).toEqual({
       features: { showToolCalls: true },
     });

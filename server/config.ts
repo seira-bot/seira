@@ -649,7 +649,7 @@ export function tidyHour(cfg: AppConfig): number {
 }
 
 export function showToolCallsEnabled(cfg: AppConfig): boolean {
-  return cfg.features?.showToolCalls === true;
+  return cfg.features?.showToolCalls !== false;
 }
 
 export function builtInBrowserEnabled(cfg: AppConfig, _env: NodeJS.ProcessEnv = process.env): boolean {
