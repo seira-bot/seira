@@ -88,8 +88,9 @@ describe("the button's state", () => {
       mode: "button", current: "0.1.150", latest: "0.1.151", available: true, activeTurns: 2,
       command: "cd /opt/seira && sudo ./update.sh", rollback: "cd /opt/seira && sudo ./update.sh --rollback",
       logs: "cd /opt/seira && sudo docker compose logs --tail 50 seira", setup: "cd /opt/seira && sudo ./update-runner.sh --install",
+      auto: { on: true, window: { start: "03:00", end: "05:00" } },
     });
-    expect(status({ facts: { ...runner, runner: { ...runner.runner!, held: true } } }).mode).toBe("held");
+    expect(status({ facts: { ...runner, runner: { ...runner.runner!, held: true } } })).toMatchObject({ mode: "held", auto: { on: false, off: "held" } });
   });
 
   it("never offers the button for a build of main: it says so, with the command that moves it to stable", () => {
@@ -234,7 +235,7 @@ describe("who may press it", () => {
 
 describe("an npm install that updates itself", () => {
   const npmCheck: UpdateCheck = { current: "0.1.150", install: "npm", latest: "0.1.151", available: true, command: "npm install -g @seira-bot/seira@0.1.151", restart: true };
-  const appDeps = (over: Partial<AppUpdateDeps> = {}): AppUpdateDeps => ({ ...realDeps(), exec: fakeNpmExec({}), npmOnPath: () => true, ...over });
+  const appDeps = (over: Partial<AppUpdateDeps> = {}): AppUpdateDeps => ({ ...realDeps(), now: () => NOW, exec: fakeNpmExec({}), npmOnPath: () => true, ...over });
 
   function npm(options: { launched?: boolean; deps?: AppUpdateDeps; admin?: boolean; env?: NodeJS.ProcessEnv; now?: () => number } = {}) {
     const box = host();
