@@ -314,7 +314,7 @@ export async function generateImageWith(
     try {
       return await fetchImpl(url, {
         method: "POST",
-        headers,
+        headers: { ...headers },
         body: edit ? multipart(payload, edit) : JSON.stringify(payload),
         redirect: "error",
         signal: cancel ? AbortSignal.any([timeoutSignal, cancel]) : timeoutSignal,
