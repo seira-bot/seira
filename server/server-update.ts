@@ -12,8 +12,9 @@ import { accessSync, constants, readFileSync, renameSync, rmSync, writeFileSync 
 import { ensurePrivateDir } from "./data-dir.ts";
 import { join } from "node:path";
 
-import type { ServerUpdateOutcome, ServerUpdateReason, ServerUpdateRun, ServerUpdateStatus } from "../shared/server-update.ts";
+import { AUTO_UPDATE_WINDOW, type ServerAutoUpdate, type ServerUpdateOutcome, type ServerUpdateReason, type ServerUpdateRun, type ServerUpdateStatus } from "../shared/server-update.ts";
 import { appendAdminAction, type AdminActor } from "./admin-activity.ts";
+import { prepareUpdate, readAppState, realDeps, type AppState, type AppUpdateDeps } from "./app-update.ts";
 import { isNewerVersion, updateCommand, type InstallKind, type UpdateCheck } from "./update-check.ts";
 
 /** Where a Docker install mounts the two folders (deploy/install.sh's compose.yaml, update-runner.sh's override):
@@ -59,6 +60,15 @@ function fields(text: string | null): Map<string, string> {
     if (match && !out.has(match[1]!)) out.set(match[1]!, match[2]!);
   }
   return out;
+}
+
+function writableFolder(dir: string): boolean {
+  try {
+    accessSync(dir, constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function readText(path: string): string | null {
@@ -140,6 +150,22 @@ export function runOf(pending: PendingUpdate | null, last: HostRun | null, versi
   return { ...base, outcome: "not-started" };
 }
 
+/** SEIRA_AUTO_UPDATE=0 (or false, off, no) turns the night update off whatever the settings say. */
+export function autoUpdateState(input: { held: boolean; admin: boolean; env?: NodeJS.ProcessEnv }): ServerAutoUpdate {
+  const off = /^(?:0|false|off|no)$/i.test((input.env ?? process.env).SEIRA_AUTO_UPDATE?.trim() ?? "") ? "env" : input.held ? "held" : !input.admin ? "admin" : undefined;
+  return { on: off === undefined, window: AUTO_UPDATE_WINDOW, ...(off ? { off } : {}) };
+}
+
+/** What an npm install did last: an update under way, or its outcome for an hour. */
+export function appRun(state: AppState, now: number): ServerUpdateRun | undefined {
+  const { pending, last } = state;
+  if (pending) {
+    const base = { from: pending.from, at: pending.at, local: true as const, ...(pending.by === "automatic" ? { automatic: true as const } : {}) };
+    return now - pending.at < RUNNING_FOR_MS ? { ...base, outcome: "running", target: pending.to } : { ...base, outcome: "not-changed", reason: "failed" };
+  }
+  return last && now - last.at <= SHOWN_FOR_MS ? last : undefined;
+}
+
 export function serverUpdateStatus(input: {
   install: InstallKind;
   check: UpdateCheck | null;
@@ -150,10 +176,24 @@ export function serverUpdateStatus(input: {
   now: number;
   /** The update check follows the stable channel, as update.sh does; with SEIRA_UPDATE_CHANNEL=newest it does not. */
   followsStable?: boolean;
+  /** An npm install: whether the server can install a copy of itself, and what it did the last times. */
+  app?: { ready: boolean; state: AppState };
+  /** What turns the night update off, other than the install: an admin's setting and the server's own settings. */
+  auto?: { admin: boolean; env?: NodeJS.ProcessEnv };
 }): ServerUpdateStatus {
   const { install, check, facts, pending, version, now } = input;
   const base = { current: version, available: check?.available === true, ...(check?.latest ? { latest: check.latest } : {}), activeTurns: input.activeTurns };
   if (install === "desktop" || install === "managed") return { ...base, mode: "none" };
+  if (install === "npm" && input.app) {
+    const command = check?.command ?? updateCommand(install)?.command;
+    if (!input.app.ready) return { ...base, mode: "command", why: "no-updater", ...(command ? { command } : {}) };
+    const run = appRun(input.app.state, now);
+    const retryAt = input.app.state.last?.outcome === "not-changed" && now - input.app.state.last.at < REQUEST_GAP_MS ? input.app.state.last.at + REQUEST_GAP_MS : undefined;
+    return {
+      ...base, mode: "button", ...(command ? { command } : {}), ...(run ? { run } : {}), ...(retryAt ? { retryAt } : {}),
+      auto: autoUpdateState({ held: false, admin: input.auto?.admin ?? true, env: input.auto?.env }),
+    };
+  }
   const runner = install === "docker" && facts.writable ? facts.runner : null;
   const run = runOf(pending, facts.last, version, now);
   const retryAt = pending && now - pending.at < REQUEST_GAP_MS ? pending.at + REQUEST_GAP_MS : undefined;
@@ -166,7 +206,7 @@ export function serverUpdateStatus(input: {
       command: `cd ${runner.dir} && sudo ./update.sh`, rollback: `cd ${runner.dir} && sudo ./update.sh --rollback`,
       logs: `cd ${runner.dir} && sudo docker compose logs --tail 50 seira`, setup: `cd ${runner.dir} && sudo ./update-runner.sh --install`,
     };
-    return { ...base, ...own, ...extra, mode: runner.held ? "held" : "button" };
+    return { ...base, ...own, ...extra, mode: runner.held ? "held" : "button", auto: autoUpdateState({ held: runner.held, admin: input.auto?.admin ?? true, env: input.auto?.env }) };
   }
   const command = check?.command ?? updateCommand(install)?.command;
   return { ...base, ...extra, mode: "command", ...(command ? { command } : {}) };
@@ -174,6 +214,8 @@ export function serverUpdateStatus(input: {
 
 export interface ServerUpdater {
   status(): Promise<ServerUpdateStatus>;
+  /** An admin's switch for the night update. */
+  setAuto(on: boolean, actor: AdminActor): Promise<ServerUpdateStatus>;
   /** One request, made for `actor`: the HTTP status to answer and its body. */
   request(actor: AdminActor): Promise<{ status: number; body: Record<string, unknown> }>;
 }
@@ -187,8 +229,12 @@ export function createServerUpdater(options: {
   activeTurns(): number;
   followsStable?: boolean;
   now?: () => number;
+  /** An npm install updates itself. `launched`: a launcher of this version started this server and can take over after it. */
+  app?: { launched: boolean; restart(): void; deps?: AppUpdateDeps; running?: string };
+  auto?: { admin(): boolean; save(on: boolean): void; env?: NodeJS.ProcessEnv };
 }): ServerUpdater {
   const now = options.now ?? Date.now;
+  const appDeps = (): AppUpdateDeps => options.app?.deps ?? realDeps();
   const requestFile = options.dir ? join(options.dir, "request", "request") : null;
   let queue: Promise<unknown> = Promise.resolve();
 
@@ -196,7 +242,11 @@ export function createServerUpdater(options: {
     const check = await options.check().catch(() => null);
     const facts = readHostFacts(options.dir);
     const pending = readPending(options.dataDir);
-    const answer = serverUpdateStatus({ install: options.install, check, facts, pending, version: options.version, activeTurns: options.activeTurns(), now: now(), followsStable: options.followsStable });
+    const answer = serverUpdateStatus({
+      install: options.install, check, facts, pending, version: options.version, activeTurns: options.activeTurns(), now: now(), followsStable: options.followsStable,
+      ...(options.app ? { app: { ready: options.app.launched && appDeps().npmOnPath() && writableFolder(options.dataDir), state: readAppState(options.dataDir) } } : {}),
+      auto: { admin: options.auto?.admin() ?? true, env: options.auto?.env },
+    });
     // A request the host never took is withdrawn, so a runner switched on later does not act on an old press.
     if (answer.run?.outcome === "not-started" && requestFile) rmSync(requestFile, { force: true, recursive: true });
     return answer;
@@ -204,7 +254,7 @@ export function createServerUpdater(options: {
 
   async function request(actor: AdminActor): Promise<{ status: number; body: Record<string, unknown> }> {
     const current = await status();
-    if (current.mode !== "button" || !requestFile) {
+    if (current.mode !== "button" || (!requestFile && options.install !== "npm")) {
       return { status: 409, body: { error: "This server can't be updated from the app.", code: "unavailable", status: current } };
     }
     if (current.run?.outcome === "requested" || current.run?.outcome === "running") {
@@ -212,6 +262,7 @@ export function createServerUpdater(options: {
     }
     if (!current.available) return { status: 409, body: { error: "This server is up to date.", code: "up-to-date", status: current } };
     if (current.retryAt) return { status: 429, body: { error: "Wait a few minutes before you ask again.", code: "too-soon", status: current } };
+    if (options.install === "npm" && options.app) return requestApp(actor, current);
     const last = readHostFacts(options.dir).last;
     const pending: PendingUpdate = { at: now(), baseline: last?.run ?? 0, from: options.version };
     writePending(options.dataDir, pending);
@@ -235,8 +286,40 @@ export function createServerUpdater(options: {
     return { status: 202, body: { status: await status() } };
   }
 
+  async function requestApp(actor: AdminActor, current: ServerUpdateStatus): Promise<{ status: number; body: Record<string, unknown> }> {
+    const app = options.app!;
+    const to = current.latest ?? "";
+    const done = await prepareUpdate({ dataDir: options.dataDir, from: options.version, to, by: actor.kind === "automatic" ? "automatic" : "admin", running: app.running }, appDeps());
+    if (!done.ok) {
+      const code = done.reason === "busy" ? "running" : done.reason;
+      return { status: 409, body: { error: "The update could not be started.", code, status: await status() } };
+    }
+    appendAdminAction(options.dataDir, {
+      category: "config",
+      action: "update.server",
+      target: { kind: "server", name: `${options.version} → ${to}` },
+      actor,
+    });
+    app.restart();
+    return { status: 202, body: { status: await status() } };
+  }
+
+  async function setAuto(on: boolean, actor: AdminActor): Promise<ServerUpdateStatus> {
+    options.auto?.save(on);
+    appendAdminAction(options.dataDir, {
+      category: "config",
+      action: "update.auto",
+      target: { kind: "server", name: "automatic update" },
+      changed: ["updates.auto"],
+      after: { "updates.auto": on },
+      actor,
+    });
+    return status();
+  }
+
   return {
     status,
+    setAuto,
     request: (actor) => {
       const next = queue.then(() => request(actor));
       queue = next.catch(() => {});

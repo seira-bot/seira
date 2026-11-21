@@ -40,6 +40,20 @@ export interface ServerUpdateRun {
   detail?: string;
   /** When it was asked for (ms since the epoch). */
   at: number;
+  /** The server started it by itself, in its night window. */
+  automatic?: boolean;
+  /** The server updated itself (an npm install); there is no host runner and no update log to point to. */
+  local?: boolean;
+}
+
+/** The night window, in the server's local time. */
+export const AUTO_UPDATE_WINDOW = { start: "03:00", end: "05:00" } as const;
+
+/** `admin`: an admin turned it off. `env`: the server's own settings turn it off. `held`: the host holds updates. */
+export interface ServerAutoUpdate {
+  on: boolean;
+  window: typeof AUTO_UPDATE_WINDOW;
+  off?: "admin" | "env" | "held";
 }
 
 export interface ServerUpdateStatus {
@@ -55,10 +69,12 @@ export interface ServerUpdateStatus {
   /** What refreshes the button's copy of update.sh on the host. */
   setup?: string;
   /** `unreleased`: the server runs a build of main, which the button does not update; `command` moves it to stable. */
-  why?: "unreleased";
+  why?: "unreleased" | "no-updater";
   /** Turns running now, which an update stops. */
   activeTurns: number;
   run?: ServerUpdateRun;
   /** A new request is refused until then (ms since the epoch). */
   retryAt?: number;
+  /** Whether this server updates itself at night. Absent where it cannot. */
+  auto?: ServerAutoUpdate;
 }

@@ -13,7 +13,7 @@ import { csvCell, monthKey } from "./usage-ledger.ts";
 export const ADMIN_ACTIVITY_CATEGORIES = ["config", "people", "session", "webhook", "bot-api", "mcp", "engine", "bot", "budget", "visibility"] as const;
 export type AdminActivityCategory = typeof ADMIN_ACTIVITY_CATEGORIES[number];
 
-export type AdminActor = DecisionActor | { kind: "cli" };
+export type AdminActor = DecisionActor | { kind: "cli" } | { kind: "automatic" };
 
 export interface AdminActionRow {
   at: string;
@@ -340,6 +340,7 @@ export function readAdminActivityRange(dataDir: string, range: { from: Date; to:
 
 export function adminActorLabel(actor: AdminActor | undefined): string {
   if (actor?.kind === "cli") return "Command line";
+  if (actor?.kind === "automatic") return "Automatic update";
   return actorLabel(actor as DecisionActor | undefined);
 }
 

@@ -6,6 +6,9 @@ import type { AdminActor } from "../admin-activity.ts";
 import { serverVersion } from "../environment.ts";
 import { SERVER_ROOT } from "../proxy-paths.ts";
 import type { RequestAuth } from "../request-auth.ts";
+import { loadConfig, saveConfig } from "../config.ts";
+import { readAppState, runningCopy } from "../app-update.ts";
+import { startAutoUpdate } from "../auto-update.ts";
 import { createServerUpdater, SERVER_UPDATE_DIR, SERVER_UPDATE_DIR_ENV, type ServerUpdater } from "../server-update.ts";
 import { createUpdateChecker, installKind, updateChannel, type UpdateCheck } from "../update-check.ts";
 import { PASS, type RouteHandler } from "./table.ts";
@@ -25,7 +28,13 @@ export function mayUpdateServer(auth: RequestAuth): boolean {
 }
 
 export function createUpdateCheckRoutes(deps: UpdateCheckRouteDeps): RouteHandler {
-  return async ({ req, res, path, method, json, auth }) => {
+  return async ({ req, res, path, method, json, auth, readBody }) => {
+    if (path === "/api/updates/server/auto" && deps.server && method === "POST") {
+      if (!mayUpdateServer(auth)) return json(res, 403, { error: "Only an admin of this server, signed in, can change this.", code: "admin_only" });
+      const body = await readBody(req, 1_024).catch(() => null) as { on?: unknown } | null;
+      if (typeof body?.on !== "boolean") return json(res, 400, { error: "Send on as true or false." });
+      return json(res, 200, await deps.server.setAuto(body.on, deps.actor?.(auth, req) ?? { kind: "loopback" }));
+    }
     if (path === "/api/updates/server" && deps.server && (method === "GET" || method === "POST")) {
       if (!mayUpdateServer(auth)) return json(res, 403, { error: "Only an admin of this server, signed in, can update it.", code: "admin_only" });
       if (method === "GET") return json(res, 200, await deps.server.status());
@@ -52,11 +61,20 @@ export function updateRouteDeps(where: {
   dataDir: string;
   activeTurns(): number;
   actor(auth: RequestAuth, req: IncomingMessage): AdminActor;
+  /** Asks the server to stop with the restart exit code, which its launcher answers by starting the new copy. */
+  restart(): void;
+  /** False in a test, so no timer starts. */
+  schedule?: boolean;
 }): UpdateCheckRouteDeps {
   const install = installKind({ ...where, serverRoot: SERVER_ROOT });
   const channel = updateChannel();
   const check = createUpdateChecker({ current: serverVersion(), install, channel });
   const dir = process.env[SERVER_UPDATE_DIR_ENV]?.trim() || (install === "docker" ? SERVER_UPDATE_DIR : undefined);
-  const server = createServerUpdater({ dir, dataDir: where.dataDir, install, version: serverVersion(), check, activeTurns: where.activeTurns, followsStable: channel === "stable" });
+  const server = createServerUpdater({
+    dir, dataDir: where.dataDir, install, version: serverVersion(), check, activeTurns: where.activeTurns, followsStable: channel === "stable",
+    app: { launched: process.env.SEIRA_LAUNCHER === "1", restart: () => { setTimeout(where.restart, 1_000); }, running: runningCopy(where.dataDir, process.argv[1]) },
+    auto: { admin: () => loadConfig().updates?.auto !== false, save: (on) => saveConfig({ updates: { auto: on } }) },
+  });
+  if (where.schedule !== false) startAutoUpdate({ status: () => server.status(), request: (actor) => server.request(actor), now: () => new Date(), failed: () => readAppState(where.dataDir).failed });
   return { check, server, actor: where.actor };
 }

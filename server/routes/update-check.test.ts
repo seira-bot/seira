@@ -56,6 +56,7 @@ describe("update check route", () => {
     const server: ServerUpdater = {
       status: async () => { asked.push("status"); return { mode: "button", current: "0.1.150", available: true, activeTurns: 0 }; },
       request: async () => { asked.push("request"); return { status: 202, body: { ok: true } }; },
+      setAuto: async (on) => { asked.push(`auto ${on}`); return { mode: "button", current: "0.1.150", available: true, activeTurns: 0 }; },
     };
     const check = async (): Promise<UpdateCheck> => ({ current: "0.1.150", install: "docker", available: true });
     const admin = { kind: "session", session: {}, via: "cookie", scopes: ["admin", "client"] } as unknown as RequestAuth;
@@ -69,5 +70,25 @@ describe("update check route", () => {
     expect(refused.status).toBe(403);
     expect(await refused.json()).toMatchObject({ code: "admin_only" });
     expect(asked).toEqual(["status", "request"]);
+  });
+
+  it("lets an admin's session switch the night update, and refuses loopback, a bad body and other methods (AC-10)", async () => {
+    const asked: string[] = [];
+    const server: ServerUpdater = {
+      status: async () => ({ mode: "button", current: "0.1.150", available: false, activeTurns: 0 }),
+      request: async () => ({ status: 202, body: {} }),
+      setAuto: async (on) => { asked.push(`auto ${on}`); return { mode: "button", current: "0.1.150", available: false, activeTurns: 0, auto: { on, window: { start: "03:00", end: "05:00" } } }; },
+    };
+    const check = async (): Promise<UpdateCheck> => ({ current: "0.1.150", install: "npm", available: false });
+    const admin = { kind: "session", session: {}, via: "cookie", scopes: ["admin", "client"] } as unknown as RequestAuth;
+    const base = await serve(check, server, admin);
+    const off = await fetch(`${base}/api/updates/server/auto`, { method: "POST", body: '{"on":false}' });
+    expect(off.status).toBe(200);
+    expect(await off.json()).toMatchObject({ auto: { on: false } });
+    expect((await fetch(`${base}/api/updates/server/auto`, { method: "POST", body: '{"on":"no"}' })).status).toBe(400);
+    expect((await fetch(`${base}/api/updates/server/auto`, { method: "GET" })).status).toBe(404);
+    const loopback = await serve(check, server);
+    expect((await fetch(`${loopback}/api/updates/server/auto`, { method: "POST", body: '{"on":true}' })).status).toBe(403);
+    expect(asked).toEqual(["auto false"]);
   });
 });

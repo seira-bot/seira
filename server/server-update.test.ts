@@ -1,4 +1,8 @@
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appRoot, copyDir, readAppState, realDeps, writeAppState, type AppUpdateDeps } from "./app-update.ts";
+import { createAutoUpdate } from "./auto-update.ts";
+import { fakeNpmExec } from "./testing/fake-app-copies.ts";
+import type { AdminActionRow } from "./admin-activity.ts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -225,5 +229,122 @@ describe("who may press it", () => {
   it("is an admin route for the central check: a member's session never reaches it", () => {
     expect(requiredScope("GET", "/api/updates/server")).toBe("admin");
     expect(requiredScope("POST", "/api/updates/server")).toBe("admin");
+  });
+});
+
+describe("an npm install that updates itself", () => {
+  const npmCheck: UpdateCheck = { current: "0.1.150", install: "npm", latest: "0.1.151", available: true, command: "npm install -g @seira-bot/seira@0.1.151", restart: true };
+  const appDeps = (over: Partial<AppUpdateDeps> = {}): AppUpdateDeps => ({ ...realDeps(), exec: fakeNpmExec({}), npmOnPath: () => true, ...over });
+
+  function npm(options: { launched?: boolean; deps?: AppUpdateDeps; admin?: boolean; env?: NodeJS.ProcessEnv; now?: () => number } = {}) {
+    const box = host();
+    const restarts: string[] = [];
+    const saved: boolean[] = [];
+    const updater = createServerUpdater({
+      dir: undefined, dataDir: box.data, install: "npm", version: "0.1.150", check: async () => npmCheck, activeTurns: () => 0, now: options.now ?? (() => NOW),
+      app: { launched: options.launched ?? true, restart: () => restarts.push("restart"), deps: options.deps ?? appDeps() },
+      auto: { admin: () => options.admin ?? true, save: (on) => saved.push(on), env: options.env ?? {} },
+    });
+    return { box, updater, restarts, saved };
+  }
+
+  it("has the Update server button, and the night update on by default", async () => {
+    const { updater } = npm();
+    expect(await updater.status()).toMatchObject({
+      mode: "button", available: true, latest: "0.1.151", command: "npm install -g @seira-bot/seira@0.1.151",
+      auto: { on: true, window: { start: "03:00", end: "05:00" } },
+    });
+  });
+
+  it("has no button when npm is not on the PATH, or no launcher started it, and names the way by hand (AC-13)", async () => {
+    expect(await npm({ deps: appDeps({ npmOnPath: () => false }) }).updater.status()).toMatchObject({ mode: "command", why: "no-updater", command: "npm install -g @seira-bot/seira@0.1.151" });
+    expect(await npm({ launched: false }).updater.status()).toMatchObject({ mode: "command", why: "no-updater" });
+  });
+
+  it("runs the whole update at once on a press, then asks the launcher to restart the server (AC-15)", async () => {
+    const { box, updater, restarts } = npm();
+    const answer = await updater.request(admin);
+    expect(answer.status).toBe(202);
+    expect(restarts).toEqual(["restart"]);
+    expect(existsSync(copyDir(box.data, "0.1.151"))).toBe(true);
+    expect(readAppState(box.data).pending).toMatchObject({ from: "0.1.150", to: "0.1.151", by: "admin" });
+    expect(answer.body).toMatchObject({ status: { run: { outcome: "running", from: "0.1.150", local: true } } });
+    await flushAdminActivity(box.data);
+    const rows = readAdminActivityRange(box.data, { from: new Date(Date.now() - 60_000), to: new Date(Date.now() + 60_000) });
+    expect(rows).toEqual([expect.objectContaining({ action: "update.server", target: { kind: "server", name: "0.1.150 → 0.1.151" }, actor: admin })]);
+  });
+
+  it("does not restart, and says why, when the update cannot be made", async () => {
+    const { box, updater, restarts } = npm({ deps: appDeps({ freeBytes: () => 0, dataBytes: async () => 10 }) });
+    const answer = await updater.request(admin);
+    expect(answer).toMatchObject({ status: 409, body: { code: "no-room", status: { run: { outcome: "not-changed", reason: "no-room" } } } });
+    expect(restarts).toEqual([]);
+    expect(readAppState(box.data).pending).toBeUndefined();
+    expect(await updater.request(admin)).toMatchObject({ status: 429 });
+  });
+
+  it("refuses a second press while the first runs", async () => {
+    const { updater, restarts } = npm();
+    await updater.request(admin);
+    expect(await updater.request(admin)).toMatchObject({ status: 409, body: { code: "running" } });
+    expect(restarts).toHaveLength(1);
+  });
+
+  it("shows the outcome the launcher recorded, for an hour", async () => {
+    const { box, updater } = npm();
+    writeAppState(box.data, { failed: ["0.1.149"], last: { outcome: "updated", from: "0.1.149", to: "0.1.150", at: NOW - 60_000, automatic: true, local: true } });
+    expect((await updater.status()).run).toMatchObject({ outcome: "updated", to: "0.1.150", automatic: true });
+    const later = npm({ now: () => NOW + 2 * 60 * 60_000 });
+    writeAppState(later.box.data, { failed: [], last: { outcome: "updated", from: "0.1.149", to: "0.1.150", at: NOW, local: true } });
+    expect((await later.updater.status()).run).toBeUndefined();
+  });
+
+  it("answers an update that never finished as not changed", async () => {
+    const { box, updater } = npm({ now: () => NOW + 3 * 60 * 60_000 });
+    writeAppState(box.data, { failed: [], pending: { from: "0.1.150", to: "0.1.151", dir: copyDir(box.data, "0.1.151"), at: NOW, by: "admin" } });
+    expect((await updater.status()).run).toMatchObject({ outcome: "not-changed", reason: "failed" });
+    expect(existsSync(appRoot(box.data))).toBe(true);
+  });
+
+  it("is switched off by an admin, by SEIRA_AUTO_UPDATE=0, and says which (AC-10)", async () => {
+    expect((await npm({ admin: false }).updater.status()).auto).toMatchObject({ on: false, off: "admin" });
+    expect((await npm({ env: { SEIRA_AUTO_UPDATE: "0" } }).updater.status()).auto).toMatchObject({ on: false, off: "env" });
+  });
+
+  it("saves the admin's switch and records who changed it", async () => {
+    const { box, updater, saved } = npm();
+    await updater.setAuto(false, admin);
+    expect(saved).toEqual([false]);
+    await flushAdminActivity(box.data);
+    const rows: AdminActionRow[] = readAdminActivityRange(box.data, { from: new Date(Date.now() - 60_000), to: new Date(Date.now() + 60_000) });
+    expect(rows).toEqual([expect.objectContaining({ action: "update.auto", changed: ["updates.auto"], after: { "updates.auto": false }, actor: admin })]);
+  });
+
+  it("is started by the night update with the automatic actor, and the update runs as for a press", async () => {
+    const { box, updater, restarts } = npm();
+    const auto = createAutoUpdate({ status: () => updater.status(), request: (actor) => updater.request(actor), now: () => new Date(2026, 10, 5, 4, 0), failed: () => readAppState(box.data).failed });
+    expect(await auto.tick()).toBe("updating");
+    expect(restarts).toEqual(["restart"]);
+    expect(readAppState(box.data).pending).toMatchObject({ by: "automatic" });
+    await flushAdminActivity(box.data);
+    expect(readAdminActivityRange(box.data, { from: new Date(Date.now() - 60_000), to: new Date(Date.now() + 60_000) })).toEqual([expect.objectContaining({ action: "update.server", actor: { kind: "automatic" } })]);
+  });
+});
+
+describe("a Docker install with the update runner and the night update (AC-09)", () => {
+  it("writes the request the button writes, and records the automatic actor", async () => {
+    const box = host();
+    const updated = updater(box);
+    expect((await updated.status()).auto).toMatchObject({ on: true });
+    const auto = createAutoUpdate({ status: () => updated.status(), request: (actor) => updated.request(actor), now: () => new Date(2026, 10, 5, 3, 15), failed: () => [] });
+    expect(await auto.tick()).toBe("updating");
+    expect(existsSync(box.request)).toBe(true);
+    await flushAdminActivity(box.data);
+    expect(readAdminActivityRange(box.data, { from: new Date(Date.now() - 60_000), to: new Date(Date.now() + 60_000) })).toEqual([expect.objectContaining({ action: "update.server", actor: { kind: "automatic" } })]);
+  });
+
+  it("is off where the host holds updates", async () => {
+    const box = host({ runnerFile: "layout=installer\ndir=/opt/seira\nheld=yes\n" });
+    expect((await updater(box).status()).auto).toMatchObject({ on: false, off: "held" });
   });
 });

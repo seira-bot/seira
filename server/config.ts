@@ -337,6 +337,8 @@ const appConfigSchema = z.object({
       warnAtPercent: z.number().int().min(1).max(100).optional(),
     })
     .optional(), /** Caps on a day's and a month's usage, for the server and for each bot; none by default (usage-caps.ts). */ usageCaps: usageCapsSchema.optional(),
+  /** `auto: false` turns off the night update of a self-hosted server (server/auto-update.ts); unset means on. */
+  updates: z.object({ auto: z.boolean().optional() }).strict().optional(),
   /** Operator sell prices per million tokens by model id, `driver/model` or `default`; read only with the `billing` entitlement. */
   billing: z
     .object({
@@ -460,6 +462,7 @@ export interface AppConfig extends HelperConfig {
   openai?: { key?: string };
   openrouter?: { key?: string };
   budgets?: { monthlyUsd?: number; warnAtPercent?: number }; usageCaps?: UsageCapsConfig;
+  updates?: { auto?: boolean };
   decisions?: { retentionDays?: number };
   loopGuard?: LoopGuardConfig;
   safetyFloor?: { enabled?: boolean };
@@ -925,6 +928,7 @@ export function saveConfig(
   if (checkedPatch.automaticRecovery !== undefined) disk.automaticRecovery = checkedPatch.automaticRecovery;
   if (checkedPatch.aiPool !== undefined) disk.aiPool = checkedPatch.aiPool;
   if (checkedPatch.cacheKeepWarm !== undefined) disk.cacheKeepWarm = checkedPatch.cacheKeepWarm; if (checkedPatch.usageCaps !== undefined) disk.usageCaps = checkedPatch.usageCaps;
+  if (checkedPatch.updates !== undefined) disk.updates = checkedPatch.updates;
   if (checkedPatch.defaultModelSelection !== undefined) {
     disk.defaultModelSelection = checkedPatch.defaultModelSelection;
     if (disk.newBotDefaults) {
