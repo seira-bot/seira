@@ -14,7 +14,7 @@ import { finishSpeech, speechBusy, startSpeech, stopSpeech } from "./speech.mjs"
 import { installTalk, isTalkPanel } from "./talk-main.mjs";
 import { openBlankTerminal } from "./terminal-launch.mjs";
 import { linuxDisablesGpu, SOFTWARE_RENDERING_ARG } from "./linux-gpu.mjs";
-import { applyWindowsAppId } from "./app-identity.mjs";
+import { applyWindowsAppId } from "./app-identity.mjs"; import { loadDevUi } from "./dev-ui-wait.mjs";
 import { contextMenuTemplate, createMediaDownloads } from "./context-menu.mjs";
 import { attachUpdaterWindow, startUpdater, registerUpdaterIpc, sendUpdaterState, reopenedOutOfSight, quietSignals, unattendedUpdates } from "./updater.mjs"; import { installAlwaysOnHome } from "./always-on-home.mjs";
 import {
@@ -2166,7 +2166,7 @@ function createWindow({ deferNavigation = false } = {}) {
   } else if (app.isPackaged) {
     win.loadURL(serverReady ? `http://127.0.0.1:${SERVER_PORT}` : buildErrorPage({ allPortsOccupied: serverStartConflictOnly, logDir: LOG_DIR, keepTrying: alwaysOnHome.on() }, nativeText));
   } else {
-    win.loadURL(DEV_URL);
+    loadDevUi({ win, url: DEV_URL, fetch: net.fetch, log: slog });
   }
   return win;
 }
