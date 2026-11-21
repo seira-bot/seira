@@ -30,6 +30,7 @@ export function readKeyFile(file) {
     return buffer.subarray(0, count);
   } finally { closeSync(fd); }
 }
+const NO_TERMINAL = /must have a tty|requiretty|no tty present|a terminal is required/i;
 const WINDOWS_AGENT_PIPE = "\\\\.\\pipe\\openssh-ssh-agent";
 const TEMP_DIR = /^\/(?:[A-Za-z0-9._-]+\/)*seira-install\.[A-Za-z0-9]+$/;
 const EMAIL = /^[^\s'"\\<>`$;&|(){}]+@[^\s'"\\<>`$;&|(){}@]+\.[^\s'"\\<>`$;&|(){}@]+$/;
@@ -82,11 +83,17 @@ export function parseSeiraLine(line) {
 
 const TUNNEL_HOST = /^c-[0-9a-f]{32}\./;
 
+function tunnelSuffix() {
+  const given = String(process.env.SEIRA_TUNNEL_HOST_SUFFIX ?? "").trim().toLowerCase();
+  return given ? (given.startsWith(".") ? given : `.${given}`) : ".seira.run";
+}
+
 function pairingLink(url, addressUrl) {
   try {
-    const parsed = new URL(url), announced = new URL(addressUrl);
-    return parsed.protocol === "https:" && parsed.origin === announced.origin && TUNNEL_HOST.test(parsed.hostname)
-      && /(?:^|[#&])code=/.test(parsed.hash) && url.length < 2048 ? url : null;
+    const text = String(url).trim();
+    const parsed = new URL(text), announced = new URL(String(addressUrl).trim());
+    return parsed.protocol === "https:" && parsed.origin === announced.origin && TUNNEL_HOST.test(parsed.hostname) && parsed.hostname.endsWith(tunnelSuffix())
+      && /(?:^|[#&])code=/.test(parsed.hash) && text.length < 2048 ? text : null;
   } catch { return null; }
 }
 
@@ -160,20 +167,24 @@ export function createInstallSession(deps) {
   let finished = false;
   let closing = false;
   let linkClosed = false;
+  let cancelled = false;
+  let making = null;
+  let lastLink = null;
   const flags = { changed: false, declined: false, timedOut: false, limited: false, source: null };
   let conflict = null;
   const sourceOf = (system, saved) => (system && saved ? "both" : system ? "system" : "saved");
   let armTimer = () => {};
 
-  const redact = (text) => {
-    let out = String(text ?? "");
-    for (const secret of secrets ? [secrets.password, secrets.sudoPassword, secrets.passphrase] : []) if (secret && secret.length >= 3) out = out.split(secret).join("***");
-    return out;
+  const scrub = (text) => {
+    if (typeof text !== "string") return text ?? null;
+    for (const secret of secrets ? [secrets.password, secrets.sudoPassword, secrets.passphrase] : []) if (secret && secret.length >= 3 && text.includes(secret)) return null;
+    return text;
   };
   const emit = (event) => {
     if (finished && event.type !== "cancelled" && event.type !== "failed" && event.type !== "connected") return;
     const clean = { ...event };
-    for (const key of ["sentence"]) if (typeof clean[key] === "string") clean[key] = redact(clean[key]);
+    if ("sentence" in clean) clean.sentence = scrub(clean.sentence);
+    if (Array.isArray(clean.items)) clean.items = clean.items.map((item) => ({ ...item, sentence: scrub(item.sentence) }));
     send(clean);
   };
   const drop = () => {
@@ -181,6 +192,15 @@ export function createInstallSession(deps) {
     secrets = null;
     pendingHostKey = null;
     waitingForCode = false;
+    armTimer = () => {};
+    const link = lastLink;
+    lastLink = null;
+    if (link) {
+      try { link.removeAllListeners(); link.on("error", () => {}); } catch { /* already gone */ }
+      for (const field of ["password", "privateKey", "passphrase"]) {
+        if (link.config && field in link.config) link.config[field] = undefined;
+      }
+    }
   };
 
   function prepare(request) {
@@ -222,6 +242,7 @@ export function createInstallSession(deps) {
       };
       const link = createClient();
       client = link;
+      lastLink = link;
       const known = (() => { try { return readFileSync(knownHostsFile, "utf8"); } catch { return ""; } })();
       const types = [...new Set([...savedHosts.read().filter((item) => item.type && item.host.toLowerCase() === target.host.toLowerCase() && item.port === target.port).map((item) => item.type),
         ...knownTypes(parseKnownHosts(known), target.host, target.port)])];
@@ -307,20 +328,25 @@ export function createInstallSession(deps) {
     emit({ type: "phase", phase: "rights" });
     const who = await run("id -u");
     if (who.stdout.trim() === "0") { elevation = "root"; return; }
-    if ((await run("sudo -n true")).code === 0) { elevation = "sudo"; return; }
-    if (!secrets.sudoPassword) throw new InstallFailure("notAdmin");
+    const quiet = await run("sudo -n true");
+    if (quiet.code === 0) { elevation = "sudo"; return; }
+    if (NO_TERMINAL.test(quiet.stderr)) throw new InstallFailure("sudoRefused");
+    if (!secrets.sudoPassword) throw new InstallFailure(secrets.method === "password" ? "notAdmin" : "adminPasswordNeeded");
     const asked = await run("sudo -S -p '' -v", { input: `${secrets.sudoPassword}\n` });
     if (asked.code === 0) { elevation = "sudo-password"; return; }
+    if (NO_TERMINAL.test(asked.stderr)) throw new InstallFailure("sudoRefused");
     if (/not in the sudoers|may not run sudo|not allowed|command not found|not found/i.test(asked.stderr)) throw new InstallFailure("notAdmin");
     throw new InstallFailure("sudoPassword");
   }
 
   async function upload() {
     emit({ type: "phase", phase: "upload" });
-    const made = await run("mktemp -d /tmp/seira-install.XXXXXXXXXX");
+    making = run("mktemp -d /tmp/seira-install.XXXXXXXXXX");
+    const made = await making;
     const folder = made.stdout.trim();
     if (made.code !== 0 || !TEMP_DIR.test(folder)) throw new InstallFailure("upload");
     directory = folder;
+    if (finished) throw new InstallFailure("dropped");
     const bytes = readFileSync(installer);
     const sent = await run(`cat > ${shellQuote(`${folder}/install.sh`)}`, { input: bytes });
     if (sent.code !== 0) throw new InstallFailure("upload");
@@ -389,10 +415,12 @@ export function createInstallSession(deps) {
   }
 
   async function finishWithPairing(url) {
+    if (cancelled || finished) return;
     finished = true;
     await within(removeTemporaryFolder(), CANCEL_BUDGET_MS, () => undefined);
     closeConnection();
     drop();
+    if (cancelled) return;
     let outcome;
     try { outcome = await addServer(url); } catch { outcome = { outcome: "problem" }; }
     const ok = outcome === true || outcome === undefined || (typeof outcome === "object" && outcome?.outcome === "connected");
@@ -455,7 +483,7 @@ export function createInstallSession(deps) {
       if (!pendingHostKey || finished) return false;
       const { verify, fingerprint: seen, type: pendingType } = pendingHostKey;
       pendingHostKey = null;
-      savedHosts.remember({ host: target.host, port: target.port, fingerprint: seen, type: pendingType });
+      try { savedHosts.remember({ host: target.host, port: target.port, fingerprint: seen, type: pendingType }); } catch { /* the answer still counts for this run */ }
       armTimer();
       verify(true);
       return true;
@@ -478,9 +506,10 @@ export function createInstallSession(deps) {
 
     async install({ installDocker = false } = {}) {
       if (stage !== "checked" || finished || !lastChecks) return false;
-      const dockerFix = lastChecks.items.some((item) => item.level === "fix" && item.id === "docker");
-      if (lastChecks.items.some((item) => item.level === "fix" && item.id !== "docker") || (dockerFix && !installDocker)) return false;
-      try { await runInstall(installDocker === true); } catch (error) { await fail(error); }
+      const fixes = lastChecks.items.filter((item) => item.level === "fix");
+      const dockerInstall = fixes.some((item) => item.id === "docker-install");
+      if (fixes.some((item) => item.id !== "docker-install") || (dockerInstall && installDocker !== true)) return false;
+      try { await runInstall(dockerInstall); } catch (error) { await fail(error); }
       return true;
     },
 
@@ -505,6 +534,8 @@ export function createInstallSession(deps) {
     async cancel() {
       if (finished) return;
       finished = true;
+      cancelled = true;
+      if (making) await within(making.catch(() => undefined), CANCEL_BUDGET_MS, () => undefined);
       if (pendingHostKey) { const { verify } = pendingHostKey; pendingHostKey = null; try { verify(false); } catch { /* handshake already ended */ } }
       try { installerStream?.signal?.("TERM"); } catch { /* the server ignores signals */ }
       await within(removeTemporaryFolder(), CANCEL_BUDGET_MS, () => undefined);
@@ -550,12 +581,26 @@ export function installVpsInstall({ ipcMain, guard, dialog, add, dataDir, resour
       installer: installerPath({ packaged, resourcesPath }), savedHosts, addServer: add, createClient,
       emit: (message) => {
         if (current !== session) return;
-        if (message.type === "connected" || message.type === "failed" || message.type === "cancelled") pickedKey = null;
+        const ends = message.type === "connected" || message.type === "failed" || message.type === "cancelled";
+        if (ends) pickedKey = null;
         if (!sender.isDestroyed()) sender.send(EVENT_CHANNEL, message);
+        if (ends && !(message.type === "failed" && message.reason === "hostKeyChanged" && message.source === "saved")) {
+          unwatch();
+          if (current === session) current = null;
+        }
       },
     });
     current = session;
-    sender.once("destroyed", () => { void session.cancel(); });
+    const stop = () => { void session.cancel(); };
+    const onNavigate = (details, _url, _inPlace, isMainFrame) => { if ((details?.isMainFrame ?? isMainFrame) !== false) stop(); };
+    const unwatch = () => {
+      sender.removeListener?.("destroyed", stop);
+      sender.removeListener?.("render-process-gone", stop);
+      sender.removeListener?.("did-start-navigation", onNavigate);
+    };
+    sender.once("destroyed", stop);
+    sender.on?.("render-process-gone", stop);
+    sender.on?.("did-start-navigation", onNavigate);
     const input = request && typeof request === "object" ? request : {};
     void session.start({
       address: text(input.address, 300), user: text(input.user, 80), email: text(input.email, 300), method: text(input.method, 10),

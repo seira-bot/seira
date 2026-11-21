@@ -62,7 +62,7 @@ it("an unknown server shows its fingerprint and waits for the person", async () 
 
 it("a check that needs a fix blocks Install until the person allows Docker, and Check again stays", async () => {
   await fill();
-  await act(async () => { emit({ type: "checks", result: "fix", items: [{ id: "docker", level: "fix", sentence: "Docker is not installed." }, { id: "disk", level: "ok", sentence: "There is enough space." }] }); });
+  await act(async () => { emit({ type: "checks", result: "fix", items: [{ id: "docker-install", level: "fix", sentence: "Run: apt install docker.io" }, { id: "disk", level: "ok", sentence: "There is enough space." }] }); });
   const run = document.querySelector<HTMLButtonElement>("[data-install-run]")!;
   expect(run.disabled).toBe(true);
   await act(async () => { document.querySelector<HTMLInputElement>("[data-install-docker]")!.click(); });
@@ -118,4 +118,25 @@ it("a changed identity from the app's own list offers a guarded recovery; one fr
   await act(async () => { emit({ type: "failed", reason: "hostKeyChanged", step: null, sentence: null, source: "system" }); });
   expect(document.querySelector("[data-install-rebuilt]")).toBeNull();
   expect(document.querySelector("[data-install-system-list]")!.textContent).toBe("This computer's own list of known servers still has the old identity. Remove it there, then try again.");
+});
+
+it("checks and steps show plain labels, never an id, and the installer's own words only inside a details element", async () => {
+  await fill();
+  await act(async () => { emit({ type: "checks", result: "ok", items: [{ id: "os", level: "ok", sentence: "Debian 12 via /etc/os-release" }, { id: "os", level: "ok", sentence: "second" }, { id: "weird", level: "ok", sentence: "x" }] }); });
+  const root = document.querySelector("[data-server-install=checks]")!;
+  expect(root.querySelectorAll("li")[0]!.textContent).toContain("Operating system");
+  expect(root.querySelectorAll("li")[2]!.textContent).toContain("Another check");
+  expect(root.textContent).not.toContain("weird");
+  const details = root.querySelector("details")!;
+  expect(details.querySelector("summary")!.textContent).toBe("Details from your server");
+  expect(details.textContent).toContain("Debian 12 via /etc/os-release");
+  expect(Array.from(root.querySelectorAll("li")).filter((li) => !details.contains(li)).some((li) => li.textContent!.includes("etc"))).toBe(false);
+  await act(async () => { emit({ type: "step", id: "image", state: "start", sentence: null }); emit({ type: "step", id: "nope", state: "start", sentence: null }); });
+  const steps = document.querySelector("[data-server-install=install]")!.textContent!;
+  expect(steps).toContain("Downloading the app");
+  expect(steps).toContain("Working on your server");
+  expect(steps).not.toContain("nope");
+  await act(async () => { emit({ type: "failed", reason: "installer", step: "image", sentence: "docker pull failed", source: undefined }); });
+  expect(document.querySelector("[data-install-failed-step]")!.textContent).toBe("It stopped at: Downloading the app.");
+  expect(document.querySelector("[data-install-details]")!.textContent).toContain("docker pull failed");
 });

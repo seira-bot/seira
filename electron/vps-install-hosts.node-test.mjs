@@ -45,6 +45,27 @@ test("comments, certificate authority lines and unreadable lines are skipped; a 
   assert.equal(hostKeyStatus({ host: "h.example", port: 22, key, knownHosts: text, saved: [] }), "changed");
 });
 
+test("a revoked line counts only for its own key, and an unrelated entry of the same type does not make a known key changed", () => {
+  const key = edKey(), other = edKey();
+  const revokedOther = `@revoked h.example ${keyType(other)} ${other.toString("base64")}`;
+  assert.equal(hostKeyStatus({ host: "h.example", port: 22, key, knownHosts: `${revokedOther}\n${line("h.example", key)}`, saved: [] }), "known");
+  assert.equal(hostKeyStatus({ host: "h.example", port: 22, key, knownHosts: revokedOther, saved: [] }), "unknown");
+  assert.equal(hostKeyStatus({ host: "h.example", port: 22, key: other, knownHosts: revokedOther, saved: [] }), "changed");
+  assert.equal(hostKeyStatus({ host: "h.example", port: 22, key, knownHosts: `${line("h.example", other)}\n${line("h.example", key)}`, saved: [] }), "known");
+});
+
+test("known_hosts patterns with * ? and ! are matched, and a negation excludes the address", () => {
+  const key = edKey(), other = edKey();
+  const status = (names, host) => hostKeyStatus({ host, port: 22, key: other, knownHosts: line(names, key), saved: [] });
+  assert.equal(status("*.example.com", "vps.example.com"), "changed");
+  assert.equal(status("vps-?.example.com", "vps-1.example.com"), "changed");
+  assert.equal(status("vps-?.example.com", "vps-12.example.com"), "unknown");
+  assert.equal(status("*.example.com,!vps.example.com", "vps.example.com"), "unknown");
+  assert.equal(status("*.example.com,!vps.example.com", "web.example.com"), "changed");
+  const revoked = `@revoked *.example.com ${keyType(key)} ${key.toString("base64")}`;
+  assert.equal(hostKeyStatus({ host: "x.example.com", port: 22, key, knownHosts: revoked, saved: [] }), "changed");
+});
+
 test("the algorithms to offer follow the key types the person already trusts", () => {
   assert.deepEqual(preferredHostKeyAlgorithms(["ssh-rsa", "ssh-ed25519"]), ["rsa-sha2-512", "rsa-sha2-256", "ssh-rsa", "ssh-ed25519"]);
 });

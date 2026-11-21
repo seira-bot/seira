@@ -52,8 +52,25 @@ export function parseKnownHosts(text) {
   return entries;
 }
 
+const patternCache = new Map();
+function patternMatches(pattern, label) {
+  let regex = patternCache.get(pattern);
+  if (!regex) {
+    regex = new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")}$`);
+    patternCache.set(pattern, regex);
+  }
+  return regex.test(label);
+}
+
 function entryNames(entry, label) {
-  if (entry.names) return entry.names.includes(label);
+  if (entry.names) {
+    let positive = false;
+    for (const name of entry.names) {
+      if (name.startsWith("!")) { if (patternMatches(name.slice(1), label)) return false; }
+      else if (name === label || patternMatches(name, label)) positive = true;
+    }
+    return positive;
+  }
   return createHmac("sha1", entry.salt).update(label).digest().equals(entry.digest);
 }
 
@@ -64,29 +81,27 @@ export function knownTypes(entries, host, port) {
 }
 
 /**
- * `known` when a source holds this key, `changed` when a source holds another key, or none of this key's type, for the address, `unknown` otherwise.
- * One `changed` from either source wins.
+ * `known` when a source holds this key, `changed` when a source holds another key, or none of this key's type, for the
+ * address, or lists this exact key as revoked; `unknown` otherwise. One `changed` from either source wins.
  * @param {{ host: string, port: number, key: Buffer, knownHosts: string, saved: { host: string, port: number, fingerprint: string, type?: string }[] }} input
  */
 export function hostKeyStatus({ host, port, key, knownHosts, saved }) {
   const seen = fingerprint(key), type = keyType(key), label = hostLabel(host, port);
-  let known = false, held = false;
+  let systemHeld = false, systemKnown = false;
   for (const entry of parseKnownHosts(knownHosts)) {
     if (!entryNames(entry, label)) continue;
-    held = true;
-    if (entry.type !== type) continue;
-    if (entry.revoked || !entry.blob.equals(key)) return "changed";
-    known = true;
+    if (entry.revoked) { if (entry.blob.equals(key)) return "changed"; continue; }
+    systemHeld = true;
+    if (entry.type === type && entry.blob.equals(key)) systemKnown = true;
   }
+  let savedHeld = false, savedKnown = false;
   for (const item of saved) {
     if (item.host.toLowerCase() !== host.toLowerCase() || item.port !== port) continue;
-    held = true;
-    if (item.type && item.type !== type) continue;
-    if (item.fingerprint !== seen) return "changed";
-    known = true;
+    savedHeld = true;
+    if ((!item.type || item.type === type) && item.fingerprint === seen) savedKnown = true;
   }
-  if (known) return "known";
-  return held ? "changed" : "unknown";
+  if ((systemHeld && !systemKnown) || (savedHeld && !savedKnown)) return "changed";
+  return systemKnown || savedKnown ? "known" : "unknown";
 }
 
 /** Which sources hold any key for this address: the person's known_hosts (`system`) and the app's saved list (`saved`). */

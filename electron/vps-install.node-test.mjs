@@ -1,7 +1,7 @@
 // The install flow against a real ssh2 server in this process. Its exec handler runs each command with the local shell
 // in a scratch folder, with a stub `id` and `sudo` first on PATH, and the bundled installer is a fake script.
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { timingSafeEqual } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -17,7 +17,10 @@ const require = createRequire(import.meta.url);
 const { Server, utils } = require("./vendor/ssh2.cjs");
 const here = path.dirname(fileURLToPath(import.meta.url));
 
+process.env.SEIRA_TUNNEL_HOST_SUFFIX = ".example.test";
+
 const SUDO_STUB = `#!/bin/sh
+[ "\${FAKE_SUDO:-none}" = tty ] && { echo "sudo: sorry, you must have a tty to run sudo" >&2; exit 1; }
 if [ "$1" = "-S" ]; then mode=S; shift; shift; shift; else mode=n; shift; fi
 if [ "$mode" = n ]; then
   [ "\${FAKE_SUDO:-none}" = nopass ] || { echo "sudo: a password is required" >&2; exit 1; }
@@ -43,7 +46,9 @@ if [ "$mode" = check ]; then
   echo "::seira check os ok Debian is supported"
   if [ -f "$BOX/disk-bad" ]; then echo "::seira check disk fix Free up 20 GB of disk space"; echo "::seira checks fix"; exit 1; fi
   echo "::seira check disk ok Plenty of disk space"
-  if [ -f "$BOX/docker-bad" ]; then echo "::seira check docker fix Docker is not installed"; echo "::seira checks fix"; exit 1; fi
+  if [ -f "$BOX/leak" ]; then echo "::seira check account ok $(cat "$BOX/leak")"; fi
+  if [ -f "$BOX/docker-bad" ]; then echo "::seira check docker-install fix Docker is not installed"; echo "::seira checks fix"; exit 1; fi
+  if [ -f "$BOX/docker-broken" ]; then echo "::seira check docker fix Docker is stopped"; echo "::seira checks fix"; exit 1; fi
   echo "::seira checks ok"
   exit 0
 fi
@@ -64,6 +69,7 @@ if [ -f "$BOX/image-fails" ]; then echo "::seira step image start"; echo "::seir
 if [ -f "$BOX/drop" ]; then sleep 1; fi
 tunnel=c-0123456789abcdef0123456789abcdef.example.test
 [ -f "$BOX/plain-host" ] && tunnel=abc.example.test
+[ -f "$BOX/other-suffix" ] && tunnel=c-0123456789abcdef0123456789abcdef.other.test
 echo "::seira address https://$tunnel"
 echo "::seira step pair done"
 if [ -f "$BOX/other-origin" ]; then echo "::seira pair https://c-fedcba9876543210fedcba9876543210.example.test/pair#code=PAIR-CODE-1"
@@ -674,7 +680,7 @@ test("a wrong emailed code is asked again, flagged as a repeat, and the right co
   } finally { await w.close(); }
 });
 
-for (const [name, marker] of [["a pair link on another address than the one the installer announced", "other-origin"], ["a pair link on a host that is not a tunnel host", "plain-host"]]) {
+for (const [name, marker] of [["a pair link on another address than the one the installer announced", "other-origin"], ["a pair link on a host that is not a tunnel host", "plain-host"], ["a pair link on a host outside the tunnel suffix", "other-suffix"]]) {
   test(`${name} is refused and nothing is added`, async () => {
     const w = await world({ password: "pw" });
     try {
@@ -779,4 +785,57 @@ test("a conflict in both sources is reported as both", async () => {
     assert.equal((await h.wait("failed")).source, "both");
     assert.equal(h.session.forgetHost(), false);
   } finally { await w.close(); }
+});
+
+test("the bundled installer knows the tunnel and events options", () => {
+  const result = spawnSync("sh", [path.join(here, "..", "deploy", "install.sh"), "--help"], { encoding: "utf8" });
+  const help = `${result.stdout}${result.stderr}`;
+  assert.match(help, /--tunnel/);
+  assert.match(help, /--events/);
+});
+
+test("a broken Docker is a normal fix that the Docker option cannot clear", async () => {
+  const w = await world({ password: "pw" });
+  try {
+    writeFileSync(path.join(w.box, "docker-broken"), "");
+    const h = harness(w);
+    const checks = await toChecks(w, h);
+    assert.equal(checks.result, "fix");
+    assert.equal(await h.session.install({ installDocker: true }), false);
+    assert.equal(await h.session.install({ installDocker: false }), false);
+    await h.session.cancel();
+  } finally { await w.close(); }
+});
+
+test("an installer sentence that holds a password is dropped whole, in a check and in the list", async () => {
+  const w = await world({ password: "pw-secret-9" });
+  try {
+    writeFileSync(path.join(w.box, "leak"), "login with pw-secret-9 worked");
+    const h = harness(w);
+    const checks = await toChecks(w, h, { password: "pw-secret-9" });
+    assert.equal(checks.items.find((item) => item.id === "account").sentence, null);
+    assert.equal(h.events.find((event) => event.type === "check" && event.id === "account").sentence, null);
+    assert.equal(JSON.stringify(h.events).includes("pw-secret-9"), false);
+    await h.session.cancel();
+  } finally { await w.close(); }
+});
+
+test("a key sign-in with no administrator password says so, and a server that wants a terminal says that", async () => {
+  const pair = utils.generateKeyPairSync("ed25519");
+  const w = await world({ publicKey: pair.public, uid: "1000", sudo: "password", sudoPassword: "pw" });
+  const t = await world({ password: "pw", uid: "1000", sudo: "tty" });
+  try {
+    const keyFile = path.join(w.root, "id_ed25519");
+    writeFileSync(keyFile, pair.private, { mode: 0o600 });
+    const h = harness(w);
+    void h.session.start({ ...request(w), method: "key", keyPath: keyFile, password: "" });
+    await h.wait("hostKey");
+    h.session.acceptHostKey();
+    assert.equal((await h.wait("failed")).reason, "adminPasswordNeeded");
+    const g = harness(t);
+    void g.session.start(request(t));
+    await g.wait("hostKey");
+    g.session.acceptHostKey();
+    assert.equal((await g.wait("failed")).reason, "sudoRefused");
+  } finally { await w.close(); await t.close(); }
 });
