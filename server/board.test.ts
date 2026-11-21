@@ -4,7 +4,7 @@ import { boardView, type BoardSources, type BoardViewer } from "./board.ts";
 
 const NOW = 1_800_000_000_000;
 const HOUR = 3_600_000;
-type Handoff = BoardSources["handoffs"][number];
+type Handoff = ReturnType<BoardSources["handoffs"]>[number];
 type Thread = BoardSources["threads"][number]["task"];
 type Run = ReturnType<BoardSources["runs"]>[number];
 
@@ -18,7 +18,7 @@ const run = (over: Partial<Run> & { id: string }): Run => ({
   routineId: "r1", routineName: "Daily digest", botId: "atlas", status: "queued", scheduledFor: NOW - HOUR, ...over,
 });
 const board = (sources: Partial<{ handoffs: Handoff[]; threads: Array<{ botId: string; task: Thread }>; runs: Run[] }>, viewer = everyone) =>
-  boardView({ handoffs: sources.handoffs ?? [], threads: sources.threads ?? [], runs: () => sources.runs ?? [] }, viewer, NOW).cards;
+  boardView({ handoffs: () => sources.handoffs ?? [], threads: sources.threads ?? [], runs: () => sources.runs ?? [] }, viewer, NOW).cards;
 const one = (h: Handoff) => board({ handoffs: [h] })[0];
 
 describe("hand-off cards", () => {
@@ -125,10 +125,10 @@ describe("automation run cards", () => {
     expect(by["routine:d"]).toMatchObject({ column: "done", state: "completed", threadId: "tt", groupId: "g", updatedAt: NOW - 20 });
   });
 
-  it("asks for runs inside the window", () => {
-    let from = 0;
-    boardView({ handoffs: [], threads: [], runs: (f) => { from = f; return []; } }, everyone, NOW);
-    expect(from).toBe(NOW - BOARD_DONE_WINDOW_MS);
+  it("asks for hand-offs and runs inside the window", () => {
+    const asked: number[] = [];
+    boardView({ handoffs: (f) => { asked.push(f); return []; }, threads: [], runs: (f) => { asked.push(f); return []; } }, everyone, NOW);
+    expect(asked).toEqual([NOW - BOARD_DONE_WINDOW_MS, NOW - BOARD_DONE_WINDOW_MS]);
   });
 });
 

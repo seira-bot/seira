@@ -224,6 +224,13 @@ export class RuntimeCoordinator implements Coordinator {
     return rows.map(row => view(row, row.parentId ? byId.get(row.parentId) : undefined));
   }
 
+  openSince(since: number): HandoffView[] {
+    this.ready();
+    const rows = this.store.all({ openSince: since });
+    const byId = new Map(rows.map(row => [row.id, row]));
+    return rows.map(row => view(row, row.parentId ? byId.get(row.parentId) ?? this.store.get(row.parentId) : undefined));
+  }
+
   newestRoot(threadId: string, ids: Iterable<string>): HandoffView | undefined {
     this.ready();
     let newest: Assignment | undefined;

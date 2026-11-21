@@ -185,6 +185,8 @@ export interface Coordinator {
   has(id: string): boolean;
   /** Every row of the last thirty days, parsed: for tests and one-off tools, never for a path a turn takes. */
   all(): HandoffView[];
+  /** Assignments not finished before `since`, oldest first: the open ones and those that ended at or after it. */
+  openSince(since: number): HandoffView[];
   /** The newest of the roots `ids` whose turn happens in this thread; reads those rows by id. */
   newestRoot(threadId: string, ids: Iterable<string>): HandoffView | undefined;
   /** Assignments whose turn happens in this thread, oldest first: `open` keeps the unfinished ones, `since` those not

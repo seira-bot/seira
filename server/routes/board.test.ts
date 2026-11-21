@@ -10,7 +10,7 @@ const NOW = 1_800_000_000_000;
 
 function setup(hidden: { threads?: string[]; bots?: string[] } = {}) {
   const sources: BoardSources = {
-    handoffs: [
+    handoffs: () => [
       { id: "h1", parentId: "root", threadId: "t-open", botId: "scout", text: "Find the numbers", createdAt: NOW - 1000, status: "running", result: "", mode: "work" },
       { id: "h2", parentId: "root", threadId: "t-secret", botId: "scout", text: "Private work", createdAt: NOW - 1000, status: "running", result: "", mode: "work" },
     ],

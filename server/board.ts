@@ -45,7 +45,7 @@ interface RunRow {
 }
 
 export interface BoardSources {
-  handoffs: readonly HandoffRow[];
+  handoffs(from: number): readonly HandoffRow[];
   threads: ReadonlyArray<{ botId: string; task: ThreadRow }>;
   runs(from: number): readonly RunRow[];
 }
@@ -135,7 +135,7 @@ function runCards(runs: readonly RunRow[], viewer: BoardViewer): BoardCard[] {
 
 export function boardView(sources: BoardSources, viewer: BoardViewer, now = Date.now()): BoardView {
   const runs = sources.runs(now - BOARD_DONE_WINDOW_MS);
-  const handoffs = handoffCards(sources.handoffs, viewer);
+  const handoffs = handoffCards(sources.handoffs(now - BOARD_DONE_WINDOW_MS), viewer);
   const taken = new Set<string>();
   for (const card of handoffs) if (card.threadId) taken.add(card.threadId);
   for (const run of runs) if (run.threadId) taken.add(run.threadId);

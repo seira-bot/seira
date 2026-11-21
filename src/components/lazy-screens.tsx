@@ -96,7 +96,7 @@ export const TeamFilesPage = lazyScreen("TeamFilesPage", async () => (await impo
 
 // Most opened first: a Cloud page fetches these in this order.
 const SCREENS = [
-  SettingsModal, BotSettingsDialog, PluginsPanel, ComputerPanel, TriggersPage, ActivityPanel, FilesView, InspectorPanel, KeyboardShortcutsModal,
+  SettingsModal, BotSettingsDialog, PluginsPanel, ComputerPanel, TriggersPage, BoardPage, ActivityPanel, FilesView, InspectorPanel, KeyboardShortcutsModal,
   LocalVmWorkspace, NewBotDialog, RemoteAgentSettingsPanel, RemoteDesktopPanel, RoomPanel, TeamMapPage, PublishedAppsPage,
 ];
 
