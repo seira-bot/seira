@@ -254,13 +254,13 @@ test("a key the known_hosts file holds goes straight on without a question", asy
   } finally { await w.close(); }
 });
 
-test("accepting saves only host, port and fingerprint, and the next install to that host asks nothing", async () => {
+test("accepting saves only host, port, key type and fingerprint, and the next install to that host asks nothing", async () => {
   const w = await world({ password: "pw" });
   try {
     const first = harness(w);
     await toChecks(w, first);
     const file = path.join(w.dataDir, "ssh", "install-hosts.json");
-    assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { hosts: [{ host: "127.0.0.1", port: w.port, fingerprint: w.fingerprint }] });
+    assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { hosts: [{ host: "127.0.0.1", port: w.port, fingerprint: w.fingerprint, type: "ssh-ed25519" }] });
     if (process.platform !== "win32") assert.equal(statSync(file).mode & 0o777, 0o600);
     await first.session.cancel();
     const second = harness(w);
