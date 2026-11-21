@@ -9,7 +9,7 @@ import { removeTempDir } from "../testing/cleanup.ts";
 
 const { opened, recording } = vi.hoisted(() => {
   const opened: string[] = [];
-  const recording = <T extends (...args: never[]) => unknown>(fn: T): T => ((path: unknown, ...rest: unknown[]) => (opened.push(String(path)), (fn as (...args: unknown[]) => unknown)(path, ...rest))) as unknown as T;
+  const recording = <T extends (...args: never[]) => unknown>(fn: T): T => ((path: unknown, ...rest: unknown[]) => (opened.push(String(path)), (fn as unknown as (...args: unknown[]) => unknown)(path, ...rest))) as unknown as T;
   return { opened, recording };
 });
 
