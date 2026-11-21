@@ -3,6 +3,7 @@ name: Server image smoke
 # Builds the server image on each platform and boots it. ci.yml calls this workflow for every change that runs the
 # heavy jobs, and server-image.yml calls it before it publishes. The workflow pushes nothing and reads nothing private.
 # With `save` set, each image goes to a workflow artifact for the publish job of server-image.yml.
+# The `cloud-home` job builds the `cloud-home` target of the Dockerfile for linux/amd64 only, and saves it the same way.
 
 on:
   workflow_call:
@@ -105,6 +106,69 @@ jobs:
         with:
           name: seira-server-${{ matrix.arch }}
           path: seira-server-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  cloud-home:
+    name: build cloud-home (amd64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check the release tag
+        env:
+          TAG: ${{ inputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          [ -n "$TAG" ] || exit 0
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "The tag must look like v0.1.173."
+            exit 1
+          fi
+          curl -fsS -o /dev/null "https://api.github.com/repos/$REPOSITORY/releases/tags/$TAG" || { echo "$TAG is not a published release."; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || '' }}
+          persist-credentials: false
+      - id: keys
+        # A failed lookup keys on today's date, so a build never keeps an old browser or engine.
+        run: |
+          today="date-$(date -u +%F)"
+          chrome=$(curl -fsSL --max-time 30 https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | jq -er .channels.Stable.version) || chrome=""
+          [[ "$chrome" =~ ^[0-9]+(\.[0-9]+)+$ ]] || chrome=$today
+          { echo "chrome=$chrome"; echo "engines=$today"; } | tee -a "$GITHUB_OUTPUT"
+      - name: Build image
+        # A consumer reads the label `org.opencontainers.image.version` as a
+        # semver version: the release tag without its `v`, or the version of
+        # package.json when there is no tag.
+        env:
+          TAG: ${{ inputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+          CHROME: ${{ steps.keys.outputs.chrome }}
+          ENGINES: ${{ steps.keys.outputs.engines }}
+        run: |
+          set -euo pipefail
+          if [ -n "$TAG" ]; then version="${TAG#v}"; else version=$(jq -er .version package.json); fi
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "The version $version is not a semver version."; exit 1; }
+          docker build --provenance=false --sbom=false --target cloud-home --platform linux/amd64 \
+            --label "org.opencontainers.image.source=https://github.com/$REPOSITORY" \
+            --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" \
+            --label "org.opencontainers.image.version=$version" \
+            --build-arg "CHROME_CACHE_TAG=$CHROME" \
+            --build-arg "ENGINES_CACHE_TAG=$ENGINES" \
+            -t seira-cloud-home:ci .
+          [ "$(docker image inspect -f '{{.Architecture}}' seira-cloud-home:ci)" = amd64 ] || { echo "The image is not an amd64 image."; exit 1; }
+          docker run --rm --entrypoint test seira-cloud-home:ci -f /app/dist-server/cloud-home-start.js
+      - name: Save the image for the publish job
+        if: ${{ inputs.save }}
+        run: |
+          docker tag seira-cloud-home:ci seira-cloud-home:amd64
+          docker save seira-cloud-home:amd64 | gzip -1 > seira-cloud-home-amd64.tar.gz
+      - if: ${{ inputs.save }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: seira-cloud-home-amd64
+          path: seira-cloud-home-amd64.tar.gz
           if-no-files-found: error
           retention-days: 7
           compression-level: 0

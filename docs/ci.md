@@ -166,7 +166,7 @@ Two workflows handle the server image of the root `Dockerfile`. The scripts in
 | Workflow | What it does |
 | --- | --- |
 | `server-image-smoke.yml` | A reusable workflow. It builds the image on each platform, starts it, and checks the server, the UI, and the user. It pushes nothing. |
-| `server-image.yml` | Run by hand. It calls the smoke workflow, then publishes `ghcr.io/seira-bot/seira`. |
+| `server-image.yml` | Run by hand. It calls the smoke workflow, then publishes `ghcr.io/seira-bot/seira` and `ghcr.io/seira-bot/seira-cloud-home` (`linux/amd64` only). |
 
 `ci.yml` calls the smoke workflow in the job `server image`. The `CI` gate
 needs that job. A broken image therefore blocks a merge.

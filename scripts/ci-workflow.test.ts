@@ -221,7 +221,7 @@ describe("Server image smoke workflow", () => {
       },
     });
     expect(smoke.concurrency).toBeUndefined();
-    expect(Object.keys(smoke.jobs)).toEqual(["image"]);
+    expect(Object.keys(smoke.jobs)).toEqual(["image", "cloud-home"]);
   });
 
   it("uses GitHub's own actions only", () => {
