@@ -85,6 +85,19 @@ it("raises a Docker server's release as ready to install when the server has its
   expect(f.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "overview" });
 });
 
+it("raises nothing for a server that updates itself at night, while the menu row stays", async () => {
+  f.status = { mode: "button", current: "0.1.116", available: true, activeTurns: 0, auto: { on: true, window: { start: "03:00", end: "05:00" } } };
+  await checkedRow({ location: { host: "bots.example.test" } });
+  expect(simpleUpdateTop(entry)).toBeNull();
+  expect(entry!.item.label).toBeTruthy();
+});
+
+it("raises ready to install when the server can install but the night update is off", async () => {
+  f.status = { mode: "button", current: "0.1.116", available: true, activeTurns: 0, auto: { on: false, off: "admin", window: { start: "03:00", end: "05:00" } } };
+  await checkedRow({ location: { host: "bots.example.test" } });
+  expect(simpleUpdateTop(entry)).toMatchObject({ label: "Update ready", action: "Install" });
+});
+
 it("keeps the release page on this computer's own page, where Settings has no server update row", async () => {
   await checkedRow({ ogb: { companion: {}, app: { version: "0.1.127", ownPage: true } }, location: { host: "127.0.0.1:8799" } });
   expect(simpleUpdateTop(entry)?.onSelect).toBeUndefined();

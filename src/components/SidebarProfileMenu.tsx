@@ -148,6 +148,7 @@ interface UpdateEntry {
   source?: "desktop" | "server";
   installMode?: string;
   selfInstall?: boolean;
+  autoUpdate?: boolean;
   onRaisedSelect?: () => void;
 }
 
@@ -159,7 +160,7 @@ export interface UpdateTop {
 
 /** The update a Simple account menu raises to its top row: one waiting to be installed, or one that failed. A server
  * release that the server cannot install by itself is only available, and the row leads to how to update it. */
-export function simpleUpdateTop(entry: Pick<UpdateEntry, "phase" | "source" | "installMode" | "selfInstall" | "onRaisedSelect"> | null): UpdateTop | null {
+export function simpleUpdateTop(entry: Pick<UpdateEntry, "phase" | "source" | "installMode" | "selfInstall" | "autoUpdate" | "onRaisedSelect"> | null): UpdateTop | null {
   const ready = () => t("sidebar.update.readyShort");
   if (entry?.source === "desktop") {
     if (entry.phase === "downloaded") return { label: ready(), action: t(entry.installMode === "handoff" ? "sidebar.update.installAction" : "sidebar.update.restartAction") };
@@ -167,6 +168,7 @@ export function simpleUpdateTop(entry: Pick<UpdateEntry, "phase" | "source" | "i
   }
   if (entry?.source === "server") {
     if (entry.phase === "available") {
+      if (entry.autoUpdate) return null;
       const top = entry.selfInstall
         ? { label: ready(), action: t("sidebar.update.installAction") }
         : { label: t("sidebar.update.availableShort"), action: t("sidebar.update.howAction") };
@@ -229,6 +231,7 @@ export function useServerUpdateItem(enabled: boolean): UpdateEntry | null {
   const [phase, setPhase] = useState<ServerUpdatePhase>("idle");
   const [check, setCheck] = useState<ServerUpdateCheck | null>(null);
   const [selfInstall, setSelfInstall] = useState(false);
+  const [autoUpdate, setAutoUpdate] = useState(false);
   const otherServer = useOtherServerName(enabled);
 
   useEffect(() => {
@@ -246,6 +249,7 @@ export function useServerUpdateItem(enabled: boolean): UpdateEntry | null {
     label: row.label,
     source: "server",
     selfInstall,
+    autoUpdate,
     ...(settingsShowsServerUpdate ? { onRaisedSelect: () => dispatch({ type: "toggleAppSettings", open: true, section: "overview" }) } : {}),
     item: {
       key: "update",
@@ -267,6 +271,7 @@ export function useServerUpdateItem(enabled: boolean): UpdateEntry | null {
               : null;
             setCheck(next);
             setSelfInstall(status?.mode === "button");
+            setAutoUpdate(status?.auto?.on === true);
             setPhase(serverCheckPhase(next));
           })
           .catch(() => setPhase("error"));
