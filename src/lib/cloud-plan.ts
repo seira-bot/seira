@@ -188,16 +188,16 @@ function voiceLine(characters: number): string {
   const hours = Math.round(minutes / 6) / 10;
   return hours === 1 ? t("cloudBuy.plan.voiceHour") : t("cloudBuy.plan.voiceHours", { hours: amount(hours) });
 }
-/** The same rows in the same order on every card, every number from the Admin's allowances. */
+/** The same rows in the same order on every card, every number from the Admin's allowances; an allowance of zero has no row. */
 export function planCardRows(a: CloudPlanAllowances): CloudPlanCardRow[] {
   const cpus = a.cpuKind === "shared" ? t("cloudBuy.plan.cpusShared", { count: a.cpus }) : t("cloudBuy.plan.cpus", { count: a.cpus });
   return [
     { key: "power", text: a.sleeps ? t("cloudBuy.sleeps") : t("cloudBuy.row.alwaysOn") },
-    { key: "desktops", text: t("cloudBuy.row.desktops"), note: t("cloudBuy.plan.limit", { count: a.computers }) },
-    { key: "hours", text: t("cloudAdd.hours", { hours: amount(a.computerHours) }) },
+    ...(a.computers > 0 ? [{ key: "desktops" as const, text: t("cloudBuy.row.desktops"), note: t("cloudBuy.plan.limit", { count: a.computers }) }] : []),
+    ...(a.computerHours > 0 ? [{ key: "hours" as const, text: t("cloudAdd.hours", { hours: amount(a.computerHours) }) }] : []),
     { key: "machine", text: t("cloudBuy.row.machine", { cpus, memory: gb(a.memoryMb) }), ...(a.swapMb ? { note: t("cloudBuy.row.swap", { swap: gb(a.swapMb) }) } : {}) },
     { key: "storage", text: a.maxDiskGb > a.diskGb ? t("cloudBuy.row.storageGrows", { gb: a.diskGb, max: a.maxDiskGb }) : t("cloudBuy.row.storage", { gb: a.diskGb }) },
-    { key: "voice", text: voiceLine(a.voiceCharacters) },
+    ...(a.voiceCharacters > 0 ? [{ key: "voice" as const, text: voiceLine(a.voiceCharacters) }] : []),
     ...(a.snapshotDays ? [{ key: "backups" as const, text: t("cloudBuy.row.backups", { days: a.snapshotDays }) }] : []),
   ];
 }

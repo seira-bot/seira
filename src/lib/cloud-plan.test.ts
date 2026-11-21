@@ -197,6 +197,18 @@ describe("what is for sale, as the Admin says", () => {
     expect(JSON.stringify(cards)).not.toMatch(/a day|credit|Everything in/);
   });
 
+  it("a plan with an allowance of zero shows no row for it", () => {
+    const base = { cpus: 3, memoryMb: 5120, diskGb: 33, maxDiskGb: 33, computers: 0, computerHours: 0, voiceCharacters: 0 };
+    const keys = (rows: Array<{ key: string }>) => rows.map(row => row.key);
+    expect(keys(planCardRows(base))).toEqual(["power", "machine", "storage"]);
+    expect(keys(planCardRows({ ...base, snapshotDays: 7 }))).toEqual(["power", "machine", "storage", "backups"]);
+    const text = planCardRows(base).map(row => `${row.text} ${row.note ?? ""}`).join(" ");
+    expect(text).not.toMatch(/at once|desktop|Voice|minute/);
+    expect(keys(planCardRows({ ...base, computers: 2 }))).toEqual(["power", "desktops", "machine", "storage"]);
+    expect(keys(planCardRows({ ...base, computerHours: 40 }))).toEqual(["power", "hours", "machine", "storage"]);
+    expect(keys(planCardRows({ ...base, voiceCharacters: 20_000 }))).toEqual(["power", "machine", "storage", "voice"]);
+  });
+
   it("a card shows the numbers a person weighs up, and sleeping only where the plans differ; Compare plans keeps the rest of its rows", () => {
     const pro = { tier: "pro", label: "Pro", amount: 4900, allowances: { cpus: 4, cpuKind: "shared" as const, memoryMb: 4096, swapMb: 4096, diskGb: 10, maxDiskGb: 100, computers: 15,
       computerHours: 300, voiceCharacters: 60_000, snapshotDays: 14 } };
