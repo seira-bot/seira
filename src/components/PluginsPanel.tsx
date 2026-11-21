@@ -17,7 +17,8 @@ import { accountAliasTaken, accountToReconnect, connectedInventoryCopy, connecto
   requiresAccountAlias, type ConnectorAccount, type ConnectorInventoryPhase, type ConnectorStatus } from "@/lib/connector-status";
 import { BotAvatar } from "./Avatar";
 import { SidebarPopoverMenu } from "./SidebarPopoverMenu";
-import { appCategories, appCategoryLabel, type AppCategory, CATEGORY_SECTION_SIZE, catalogSections, connectorDescription, inCategory, rankCategories } from "@/lib/app-catalog";
+import { appCategories, appCategoryLabel, type AppCategory, CATEGORY_SECTION_SIZE, catalogSections, connectorDescription, inCategory, popularSlugs, rankCategories } from "@/lib/app-catalog";
+import { useAppUsage } from "@/lib/app-usage";
 import { McpServersPanel } from "./McpServersPanel";
 import { LegalLinks } from "./LegalLinks";
 import { HOSTED_MCP_APPS, mcpServerConnected, ownMcpServer, type HostedApp, type HostedConnections } from "@/lib/hosted-mcp-apps";
@@ -37,15 +38,9 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { ServiceIcon, type ToolkitCard } from "./ServiceIcon"; import { AppsSection } from "./AppsSection";
 export { ServiceIcon, type ToolkitCard } from "./ServiceIcon";
 
+import { connectorSetupNotice, disconnectAccountConfirmation, type ConnectorSetup } from "@/lib/plugins-panel-helpers";
+export { connectorSetupNotice, disconnectAccountConfirmation, type ConnectorSetup } from "@/lib/plugins-panel-helpers";
 export { preloadConnectedApps, type ConnectorInventory } from "@/lib/connected-apps";
-
-export function disconnectAccountConfirmation(
-  service: string,
-  account: { id: string; alias?: string },
-) {
-  const identity = account.alias ? `“${account.alias}” (${account.id})` : `“${account.id}”`;
-  return t("connectors.disconnectConfirm", { identity, service });
-}
 
 export function botsWithLimitedServiceTools(bots: Bot[], instances: InstanceInfo[], slug: string): Bot[] {
   return bots.filter((bot) => {
@@ -64,21 +59,6 @@ export function botsWithLimitedServiceTools(bots: Bot[], instances: InstanceInfo
 export function hostedShown(app: HostedApp, search: string, connected: HostedConnections | null, listing: AppsFilter): boolean {
   const matches = !search || `${app.label} ${app.keywords} ${t(app.description)}`.toLowerCase().includes(search.toLowerCase().trim());
   return matches && (listing === "all" || connected?.[app.id] === true);
-}
-
-export type ConnectorSetup = "ready" | "needs-setup" | "service-unavailable";
-
-export function connectorSetupNotice(state: {
-  configured: boolean;
-  stale: boolean;
-  setup: ConnectorSetup | undefined;
-  remoteClient: boolean;
-}): { key: LocaleKey; tone: "info" | "warning" } | null {
-  if (state.configured || state.stale) return null;
-  if (state.setup === "needs-setup") {
-    return { key: state.remoteClient ? "connectors.setupNeededRemote" : "connectors.setupNeeded", tone: "info" };
-  }
-  return { key: "connectors.notConfigured", tone: "warning" };
 }
 
 export interface CatalogPagination {
@@ -298,6 +278,8 @@ export function PluginsPanel() {
 
   const { suggestions, picking, pick } = useSuggestedApps(cards !== null && configured && inventoryPhase === "ready", `${cardsRefresh}:${Object.keys(status).filter((slug) => status[slug]?.connected).sort().join()}`);
   const [disconnecting, setDisconnecting] = useState<{ slug: string; label: string; account: ConnectorAccount } | null>(null); disconnectingRef.current = disconnecting;
+  const [featuredSlot, setFeaturedSlot] = useState<HTMLElement | null>(null);
+  const usage = useAppUsage(cards !== null, cardsRefresh);
 
   const openConnectUrl = async (url: string) => {
     if (opening.current) return;
@@ -424,8 +406,9 @@ export function PluginsPanel() {
   const nativeCardsShown = (!inCategoryView && (shownHosted.size > 0 || showEmail || showX)) || (filter === "connected" && ownServers.some((server) => server.enabled && ownServerShown(server)));
   const categoryCards = inCategoryView ? visible.filter((card) => inCategory(card, category)) : visible;
   const sectioned = filter === "all" && !searching && category === null;
-  const sections = sectioned ? catalogSections(visible, isConnected, ranked.inline) : [];
+  const sections = sectioned ? catalogSections(visible, isConnected, ranked.inline, popularSlugs(usage, visible)) : [];
   const allSection = sections.find((section) => section.kind === "all");
+  const popularSection = sections.find((section) => section.kind === "popular");
   const allCards = sectioned ? allSection?.cards ?? [] : categoryCards;
   const allCapped = sectioned && !showAllApps && allCards.length > APPS_PREVIEW_COUNT;
   const allShown = allCapped ? allCards.slice(0, APPS_PREVIEW_COUNT) : allCards;
@@ -624,8 +607,18 @@ export function PluginsPanel() {
 
           {filter !== "mcp" && (
             <div data-apps-grid className="@container flex flex-col gap-7 pt-1">
+              {sectioned && (
+                <AppsSection id="apps-section-featured" title={t("apps.section.featured")}>
+                  <div ref={setFeaturedSlot} className="contents" data-featured-slot />
+                </AppsSection>
+              )}
+              {popularSection && (
+                <AppsSection id="apps-section-popular" title={t("apps.section.popular")} note={t("apps.popular.note")}>
+                  {popularSection.cards.map((card) => renderTile(card))}
+                </AppsSection>
+              )}
               {!sections.some((section) => section.kind === "connected") && renderSuggested()}
-              {sections.filter((section) => section.kind !== "all").map((section) => section.kind === "connected" ? (
+              {sections.filter((section) => section.kind !== "all" && section.kind !== "popular").map((section) => section.kind === "connected" ? (
                 <Fragment key="connected">
                   <AppsSection
                     id="apps-section-connected"
@@ -703,7 +696,7 @@ export function PluginsPanel() {
                   </>
                 )}
               >
-                <McpServersPanel hostedCards={{ shown: (id) => !inCategoryView && shownHosted.has(id), onConnections: setHostedConnected, onServers: setMcpServers, ...(filter === "connected" ? { ownServers: { shown: ownServerShown, manage: () => chooseFilter("mcp") } } : {}) }} refreshKey={cardsRefresh} />
+                <McpServersPanel hostedCards={{ shown: (id) => !inCategoryView && shownHosted.has(id), featured: sectioned ? featuredSlot : null, onConnections: setHostedConnected, onServers: setMcpServers, ...(filter === "connected" ? { ownServers: { shown: ownServerShown, manage: () => chooseFilter("mcp") } } : {}) }} refreshKey={cardsRefresh} />
                 <div data-native-card="x" className={showX && !inCategoryView ? "contents" : "hidden"}><XCard refreshKey={cardsRefresh} onConnection={setXConnected} /></div>
                 <div data-native-card="email" className={showEmail && !inCategoryView ? "contents" : "hidden"}><EmailCard refreshKey={cardsRefresh} onConnection={setEmailConnected} /></div>
                 {allShown.map((card) => renderTile(card))}
