@@ -187,7 +187,7 @@ is still uploading. It uploads one file at a time and stops at the first
 failure. Before it uploads a feed, it checks that every file that a feed or a
 `SHA256SUMS-*.txt` file names is an uploaded asset of the same size. The
 `check` command runs the same check at any time. It only reads from GitHub.
-Do not publish the release when a check fails. The release is a draft until step 7 publishes it. The preflight cannot see
+Do not publish the release when a check fails. The preflight cannot see
 assets, because it runs before the release exists.
 
 Tag the squash commit on `main`, not the release branch's last commit. The
