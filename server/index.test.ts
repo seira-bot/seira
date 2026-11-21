@@ -13149,7 +13149,8 @@ describe("harness HTTP API", () => {
       expect(saved.body.imageGen).toEqual({ provider: "custom", configured: true, model: "local/image",
         primary: { provider: "custom", model: "local/image", configured: true }, fallback: null, ready: true, maxPerTurn: 4,
         customUrl: "http://127.0.0.1:4321/v1", customModel: "local/image",
-        openaiConfigured: true, xaiConfigured: false, customKeyConfigured: true, geminiConfigured: false, openrouterConfigured: false });
+        openaiConfigured: true, openaiShared: false, codexSignedIn: false, codexPlan: null, xaiConfigured: false, customKeyConfigured: true,
+        geminiConfigured: false, openrouterConfigured: false });
       for (const secret of ["openai-avatar-fixture", "custom-avatar-fixture"]) {
         expect(JSON.stringify(saved.body)).not.toContain(secret);
         expect(readFileSync(join(home, ".seira", "config.json"), "utf8")).not.toContain(secret);
