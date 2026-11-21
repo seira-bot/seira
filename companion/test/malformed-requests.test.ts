@@ -163,7 +163,7 @@ const CHUNKED_SMUGGLE = (method: string, path: string) =>
   `${method} ${path} HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n`
   + "5d\r\nGET /api/bots HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n\r\n0\r\n\r\n";
 
-it.each(["GET", "HEAD", "DELETE", "OPTIONS"])(
+it.each(["GET", "HEAD", "OPTIONS"])(
   "answers 400 to a %s with Transfer-Encoding and forwards nothing",
   async (method) => {
     const harness = await fakeHarness();
@@ -193,4 +193,47 @@ it("does not forward the body of a GET that has a Content-Length", async () => {
   );
   expect(response).toMatch(/^HTTP\/1\.1 200 /);
   expect(harness.seen).toEqual([{ method: "GET", url: "/api/health", bytes: 0 }]);
+});
+
+const bodyHarness = async () => {
+  const seen: { method?: string; url?: string; body: string; transferEncoding?: string }[] = [];
+  const server = createServer((req, res) => {
+    const entry = { method: req.method, url: req.url, body: "", transferEncoding: req.headers["transfer-encoding"] };
+    seen.push(entry);
+    req.setEncoding("utf8");
+    req.on("data", (chunk: string) => {
+      entry.body += chunk;
+    });
+    req.on("end", () => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end("{}");
+    });
+  });
+  return { seen, port: await listen(server) };
+};
+
+const SETUP_BODY = JSON.stringify({ threadId: "t1" });
+
+it("a DELETE keeps its JSON body", async () => {
+  const harness = await bodyHarness();
+  const port = await proxyToHarness(harness.port);
+  const response = await rawExchange(
+    port,
+    `DELETE /api/bots/b1/setup-request HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer paired\r\nContent-Type: application/json\r\n`
+      + `Content-Length: ${SETUP_BODY.length}\r\nConnection: close\r\n\r\n${SETUP_BODY}`,
+  );
+  expect(response).toMatch(/^HTTP\/1\.1 200 /);
+  expect(harness.seen).toEqual([{ method: "DELETE", url: "/api/bots/b1/setup-request", body: SETUP_BODY, transferEncoding: undefined }]);
+});
+
+it("a chunked DELETE reaches the harness as one request with its body", async () => {
+  const harness = await bodyHarness();
+  const port = await proxyToHarness(harness.port);
+  const response = await rawExchange(
+    port,
+    `DELETE /api/bots/b1/setup-request HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer paired\r\nContent-Type: application/json\r\n`
+      + `Transfer-Encoding: chunked\r\nConnection: close\r\n\r\n${SETUP_BODY.length.toString(16)}\r\n${SETUP_BODY}\r\n0\r\n\r\n`,
+  );
+  expect(response).toMatch(/^HTTP\/1\.1 200 /);
+  expect(harness.seen).toEqual([{ method: "DELETE", url: "/api/bots/b1/setup-request", body: SETUP_BODY, transferEncoding: "chunked" }]);
 });

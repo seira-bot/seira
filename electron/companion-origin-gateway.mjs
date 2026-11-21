@@ -215,7 +215,7 @@ function endToEndHeaders(headers = {}) {
   );
 }
 
-const BODILESS_METHODS = new Set(["GET", "HEAD", "DELETE", "OPTIONS"]);
+const METHODS_WITHOUT_BODY = new Set(["GET", "HEAD", "OPTIONS"]);
 
 function upgradeHeaders(headers = {}) {
   if (String(headers.upgrade ?? "").toLowerCase() !== "websocket") return null;
@@ -269,13 +269,17 @@ export function createCompanionOriginGateway({
 
   const server = createServer((incoming, outgoing) => {
     if (!accepting || !isTargetAlive(target)) return unavailable(outgoing);
-    const bodiless = BODILESS_METHODS.has(incoming.method);
+    const bodiless = METHODS_WITHOUT_BODY.has(incoming.method);
     if (bodiless && incoming.headers["transfer-encoding"] !== undefined) {
       incoming.resume();
       return invalidRequest(outgoing);
     }
     const headers = endToEndHeaders(incoming.headers);
     if (bodiless) delete headers["content-length"];
+    else if (!/^(?:0|[1-9]\d*)$/.test(String(headers["content-length"] ?? ""))) {
+      delete headers["content-length"];
+      if (incoming.headers["transfer-encoding"] !== undefined) headers["transfer-encoding"] = "chunked";
+    }
     const upstream = request(
       {
         headers,

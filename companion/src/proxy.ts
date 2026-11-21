@@ -69,7 +69,7 @@ export type ProxyListener = "lan" | "origin";
 
 /** A request with one of these methods carries no body here. Transfer-Encoding on one is the shape of a smuggled
  * second request, so it is refused whole. */
-const BODILESS_METHODS = new Set(["GET", "HEAD", "DELETE", "OPTIONS"]);
+const METHODS_WITHOUT_BODY = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /** §11 rule 4 of the wire spec: a phone that has used the encrypted connection never goes back to plain HTTP. */
 const UPDATE_APP = { error: "update_app" } as const;
@@ -339,6 +339,8 @@ const forwardHeaders = (
     && Number.isSafeInteger(Number(contentLength))
   ) {
     out["content-length"] = contentLength;
+  } else if (!bodiless && req.headers["transfer-encoding"] !== undefined) {
+    out["transfer-encoding"] = "chunked";
   }
   // Last-Event-ID lets a reconnecting client resume instead of re-hydrating.
   const lastEventId = req.headers["last-event-id"];
@@ -429,7 +431,7 @@ export function createProxyHandler(options: ProxyOptions) {
     if (!target) return sendJson(res, 400, { error: "invalid request target" });
     const path = (req.url ?? "/").split("?")[0];
     const method = req.method ?? "GET";
-    const bodiless = BODILESS_METHODS.has(method);
+    const bodiless = METHODS_WITHOUT_BODY.has(method);
     if (bodiless && req.headers["transfer-encoding"] !== undefined) {
       req.resume();
       res.setHeader("connection", "close");
