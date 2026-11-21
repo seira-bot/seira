@@ -499,6 +499,8 @@ const __APP_VERSION__: string;
        * learns only what was done; the app asks in its own dialog before it restarts. Absent in older desktop builds. */
       appUpdate?: {
         request(): Promise<AppUpdateAnswer>;
+        /** How this app gets its updates. Absent in older desktop builds. */
+        way?(): Promise<AppUpdateWay>;
       };
     };
   }
@@ -519,6 +521,9 @@ export interface LinuxLocalControlStatus {
 
 /** What asking for this app's update from a server's page did (electron/updater.mjs `updateForServerPage`). */
 export type AppUpdateAnswer = "installing" | "later" | "downloading" | "current" | "failed" | "unavailable";
+
+/** How this app gets its updates (electron/updater.mjs `appUpdateWay`). */
+export type AppUpdateWay = "self" | "store" | "download";
 
 export interface UpdaterState {
   status:
@@ -552,6 +557,8 @@ export interface UpdaterState {
    * can be shown, use this.
    */
   installMode?: "restart" | "handoff";
+  /** when (ms) the last check found no newer version; cleared when one is found */
+  upToDateAt?: number;
   /** an app store updates this install, so the app offers no update action of its own */
   managedByStore?: boolean;
   /** hand-off only: the install command, already on the clipboard */

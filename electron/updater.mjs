@@ -142,6 +142,13 @@ async function askForServerPage(confirmRestart, server) {
   return state.status === "error" ? "failed" : "current";
 }
 
+/** How this app gets its updates, for a server's page to choose its button: "self" (the app's own updater), "store"
+ * (an app store updates it) or "download" (a new copy from the website). */
+export function appUpdateWay() {
+  if (updaterCoordinator) return "self";
+  return state.managedByStore ? "store" : "download";
+}
+
 /** What a server's page learns when it asks for this app's own update; never the updater's state. Asks at once share
  * one answer, and that answer stands for SERVER_PAGE_ASK_COOLDOWN_MS. `server`: the asking page's address, for the dialog. */
 export function updateForServerPage(confirmRestart, server = "", now = Date.now) {
@@ -168,6 +175,10 @@ export function registerUpdaterIpc({ pageAllowed: allowed, serverPage = () => nu
     const server = serverPage(event);
     if (!server) throw new Error("update:for-server-page is only available to the page this app's window shows");
     return updateForServerPage(confirmRestart, server);
+  });
+  ipcMain.handle("update:way-for-server-page", (event) => {
+    if (!serverPage(event)) throw new Error("update:way-for-server-page is only available to the page this app's window shows");
+    return appUpdateWay();
   });
   ipcMain.handle("update:seen", guarded("update:seen", () => {
     if (!launch?.updated) return;
@@ -213,6 +224,9 @@ export function startUpdater(signals = null) {
   // The coordinator starts each download itself, so it owns macOS staging and quiet failures.
   autoUpdater.autoDownload = false;
   autoUpdater.logger = updaterLogger();
+  // Registered before the coordinator's own listeners, so the time rides on the state the coordinator then sends.
+  autoUpdater.on("update-not-available", () => { state = { ...state, upToDateAt: Date.now() }; });
+  autoUpdater.on("update-available", () => { const { upToDateAt: _seen, ...kept } = state; state = kept; });
 
   // Broadcast the install flavour before the first check so the banner never offers a restart it cannot deliver.
   const handOff = HAND_OFF_TYPES.has(packageType);
