@@ -14,7 +14,13 @@ const guards = (files: string[]) => checksFor(files).find((check: { name: string
 describe("what a push's changed files call for", () => {
   it("lints only the changed code", () => {
     const [lint] = checksFor(["server/a.ts", "docs/a.md", "src/b.tsx", "electron/c.mjs"]);
-    expect(lint.args).toEqual(["--deny-warnings", "server/a.ts", "src/b.tsx", "electron/c.mjs"]);
+    expect(lint.args).toEqual(["--deny-warnings", "--no-error-on-unmatched-pattern", "server/a.ts", "src/b.tsx", "electron/c.mjs"]);
+  });
+
+  it("passes a push whose only code is a file the lint config ignores", () => {
+    const [lint] = checksFor(["electron/vendor/electron-updater.cjs"]);
+    const run = spawnSync(lint.command, lint.args, { encoding: "utf8" });
+    expect(run.status, `${run.stdout}${run.stderr}`).toBe(0);
   });
 
   it("checks nothing for docs alone", () => {
