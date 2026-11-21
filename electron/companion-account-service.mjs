@@ -1,7 +1,6 @@
 import {
   ControlPlaneError,
   normalizeAccountEmail,
-  normalizeControlPlaneURL,
 } from "./control-plane-client.mjs";
 import {
   MANAGED_COMPANION_ENDPOINT_FIELD,
@@ -44,14 +43,13 @@ export {
   companionAccountCleanupPending,
   companionTunnelRetired,
 } from "./companion-account-documents.mjs";
-import { createSharedSession } from "./companion-cloud-session.mjs"; import { LIVE_SEIRA_SERVICES, SEIRA_HOSTS, seiraOrigin, seiraServiceLive } from "./seira-hosts.mjs";
+import { createSharedSession } from "./companion-cloud-session.mjs";
 import { MANAGED_ENDPOINT_PHONES_UNUSED } from "./companion-endpoint-need.mjs";
 import { FRIENDLY_MESSAGES, friendlyCompanionAccountError } from "./companion-account-messages.mjs";
 export { friendlyCompanionAccountError };
 
 export { managedEndpointNeed, PHONE_UNUSED_RELEASE_MS } from "./companion-endpoint-need.mjs";
-
-export const DEFAULT_COMPANION_CONTROL_PLANE_URL = seiraServiceLive("accounts") ? seiraOrigin(SEIRA_HOSTS.accounts) : "";
+export { DEFAULT_COMPANION_CONTROL_PLANE_URL, resolveCompanionControlPlaneURL, resolveServerControlPlaneURL } from "./companion-control-plane-url.mjs";
 
 const DEFAULT_HEALTH_CACHE_MS = 30_000;
 const DEFAULT_AUTO_RETRY_BASE_MS = 10 * 60_000;
@@ -94,25 +92,6 @@ const defaultSetTimer = (callback, milliseconds) => {
   timer.unref?.();
   return timer;
 };
-
-/** Only an exact origin in SEIRA_CONTROL_PLANE_URL turns the phone account service on, so an OTP or bearer never reaches an accidental host; an invalid value leaves it off. */
-export function resolveCompanionControlPlaneURL({
-  isPackaged,
-  environment = process.env,
-} = {}) {
-  if (Object.hasOwn(environment, "SEIRA_CONTROL_PLANE_URL")) {
-    return normalizeControlPlaneURL(environment.SEIRA_CONTROL_PLANE_URL);
-  }
-  return isPackaged ? DEFAULT_COMPANION_CONTROL_PLANE_URL : "";
-}
-
-/** The control plane of `login` and `serve --tunnel`: SEIRA_CONTROL_PLANE_URL when set (an invalid value gives ""), else Seira's own once the server tunnel service is live. `live` is for tests. */
-export function resolveServerControlPlaneURL({ environment = process.env, live = LIVE_SEIRA_SERVICES } = {}) {
-  if (Object.hasOwn(environment, "SEIRA_CONTROL_PLANE_URL")) {
-    return normalizeControlPlaneURL(environment.SEIRA_CONTROL_PLANE_URL);
-  }
-  return seiraServiceLive("serverTunnel", environment, live) ? seiraOrigin(SEIRA_HOSTS.accounts) : "";
-}
 
 /** Nothing this service returns may contain an account bearer, installation credential, connector token or Cloudflare resource id. */
 export function createCompanionAccountService({
@@ -417,43 +396,36 @@ export function createCompanionAccountService({
     });
   };
 
-  // Persist the verified installation before anything else, or each Retry rotates the credential until rate-limited.
-  const storeInstallation = async ({ accountToken, previous, installation }) => {
+  /** Stores the verified installation before anything else, or each Retry rotates the credential until rate-limited. */
+  const adoptInstallation = async (accountToken, previous, currentCredential) => {
+    const installation = await client.ensureInstallation({
+      accountToken, currentCredential, clientInstanceId: await ensureClientIdentity(), name: identity.name,
+      platform: identity.platform, appVersion: identity.appVersion, ...(identity.kind ? { kind: identity.kind } : {}),
+    });
+    const changed = previous?.installationCredential !== installation.credential;
     try {
       await updateCredentials((document) => withInstallationCredentials(document, installation));
     } catch (error) {
-      if (previous?.installationId !== installation.installation.id ||
-          previous?.installationCredential !== installation.credential) {
+      if (changed || previous?.installationId !== installation.installation.id) {
         await client.revokeInstallation(accountToken, installation.installation.id).catch(() => {});
       }
       throw error;
     }
-    if (previous?.installationCredential !== installation.credential) {
+    if (changed) {
       try {
         installationChanged();
       } catch {
       }
-      return true;
     }
-    return false;
+    return installation;
   };
 
   /** `addressGone`: the control plane said the stored address is gone, so it is forgotten even when no tunnel is asked for. */
   const provision = async ({ accountToken, user, addressGone = false }) => {
     const clientInstanceId = await ensureClientIdentity();
     await finishPendingRelease();
-    const before = credentials();
-    const previous = storedAccount(before);
-    const installation = await client.ensureInstallation({
-      accountToken,
-      currentCredential:
-        previous?.userId === user.id ? previous.installationCredential : "",
-      clientInstanceId,
-      name: identity.name,
-      platform: identity.platform,
-      appVersion: identity.appVersion, ...(identity.kind ? { kind: identity.kind } : {}),
-    });
-    await storeInstallation({ accountToken, previous, installation });
+    const previous = storedAccount(credentials());
+    const installation = await adoptInstallation(accountToken, previous, previous?.userId === user.id ? previous.installationCredential : "");
     // The control plane answers for the address below: no separate check is due.
     lastEndpointCheck = now();
     const withoutTunnel = async () => {
@@ -985,26 +957,14 @@ export function createCompanionAccountService({
   });
 
   const renewInstallation = () => serialize(async () => {
-    if (!configured || disposed) return settledState();
     const account = storedAccount(credentials());
-    if (!account || companionAccountCleanupPending(credentials())) return settledState();
+    if (!configured || disposed || !account || companionAccountCleanupPending(credentials())) return settledState();
     if (lastRenewalAt !== null && now() - lastRenewalAt < renewIntervalMs) return settledState();
     lastRenewalAt = now();
     try {
       await requireHealthyControlPlane();
-      const clientInstanceId = await ensureClientIdentity();
-      const accountToken = shared.tokenFor(account);
-      const installation = await client.ensureInstallation({
-        accountToken,
-        currentCredential: account.installationCredential,
-        clientInstanceId,
-        name: identity.name,
-        platform: identity.platform,
-        appVersion: identity.appVersion, ...(identity.kind ? { kind: identity.kind } : {}),
-      });
-      if (await storeInstallation({ accountToken, previous: account, installation })) {
-        writeLog("companion account: renewed the installation credential for the relay");
-      }
+      const installation = await adoptInstallation(shared.tokenFor(account), account, account.installationCredential);
+      if (installation.credential !== account.installationCredential) writeLog("companion account: renewed the installation credential for the relay");
       phase = null;
     } catch (error) {
       failAction(error, { email: account.email, expiredSessionIsSignedOut: true });
