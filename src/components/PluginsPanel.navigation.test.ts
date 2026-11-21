@@ -16,6 +16,8 @@ const fixture = vi.hoisted(() => ({
   index: 0,
   counting: false,
   effects: [] as Array<{ effect: EffectCallback; deps?: DependencyList }>,
+  usage: [] as Array<{ app: string; calls: number }>,
+  featured: [] as unknown[],
 }));
 vi.mock("react", async (original) => {
   const react = await original<typeof import("react")>();
@@ -40,6 +42,7 @@ vi.mock("@/state/store", () => ({
     dispatch: fixture.dispatch,
   }),
 }));
+vi.mock("@/lib/app-usage", () => ({ useAppUsage: () => fixture.usage }));
 vi.mock("./McpServersPanel", async () => {
   const { HOSTED_MCP_APPS } = await import("@/lib/hosted-mcp-apps");
   return {
@@ -103,6 +106,7 @@ beforeEach(() => {
   fixture.dispatch.mockReset();
   fixture.track.mockReset();
   fixture.effects = [];
+  fixture.usage = [];
   fixture.bots = [];
   fixture.instances = [];
   fixture.overrides = new Map<number, unknown>([
@@ -164,15 +168,20 @@ describe("Apps pop-up", () => {
     expect(html).toContain(`data-hosted-app="${HOSTED_MCP_APPS[0].id}"`);
     for (const other of HOSTED_MCP_APPS.slice(1)) expect(html).not.toContain(`data-hosted-app="${other.id}"`);
   });
-  it.each(["mind map", "booking", "broadcast", "landing page", "sales funnel", "comment"])("finds the one hosted card whose keywords match %s", (word) => {
+  it.each(["mind map", "booking", "broadcast", "sales funnel", "comment"])("finds the one hosted card whose keywords match %s", (word) => {
     fixture.overrides.set(HOSTED_CONNECTED, null);
     fixture.overrides.set(SEARCH, word);
     expect(render().html.match(/data-hosted-app="/g)).toHaveLength(1);
   });
-  it("finds both WhatsApp hosted cards", () => {
+  it("finds every hosted WhatsApp card", () => {
     fixture.overrides.set(HOSTED_CONNECTED, null);
     fixture.overrides.set(SEARCH, "whatsapp");
-    expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["citcat", "konektor"]);
+    expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["citcat", "dalekta", "konektor"]);
+  });
+  it("finds the two hosted cards whose text mentions a landing page", () => {
+    fixture.overrides.set(HOSTED_CONNECTED, null);
+    fixture.overrides.set(SEARCH, "landing page");
+    expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["biver", "dalekta"]);
   });
   it("counts two connected hosted apps under Connected", () => {
     fixture.overrides.set(HOSTED_CONNECTED, { konektor: true, coret: true });
@@ -554,7 +563,7 @@ describe("Apps pop-up", () => {
     ]);
     const { html, nodes: tree } = render();
     const headings = [...html.matchAll(/<h3 id="[^"]*"[^>]*>([^<]*)/g)].map((match) => match[1]);
-    expect(headings).toEqual(["Connected", "Productivity", "Communication", "Analytics", "All apps"]);
+    expect(headings).toEqual(["Featured", "Connected", "Productivity", "Communication", "Analytics", "All apps"]);
     expect(tree.filter((node) => node.props["data-apps-category"]).map((node) => node.props["data-apps-category"])).toEqual(["productivity", "communication", "analytics", "design", "files"]);
     expect(html).toContain('aria-label="More categories"');
     // The dialog clips overflow, so the menu must portal out of it rather than open in place.
@@ -606,7 +615,7 @@ describe("Apps pop-up", () => {
   it("shows Suggested for you after Connected, the same tiles, with the on-demand button", () => {
     fixture.overrides.set(SUGGESTIONS, { cards: [card("notion"), card("gmail")], pick: "available" });
     const { html, nodes: tree } = render();
-    expect(headings(html).slice(0, 2)).toEqual(["Connected", "Suggested for you"]);
+    expect(headings(html).slice(1, 3)).toEqual(["Connected", "Suggested for you"]);
     expect(html).toContain('data-apps-section="apps-section-suggested"');
     expect(html.match(/data-app-tile="notion"/g)!.length).toBeGreaterThanOrEqual(2);
     expect(suggestedAction(tree)!.label).toBe("Show suggested");
@@ -619,7 +628,7 @@ describe("Apps pop-up", () => {
     fixture.overrides.set(SUGGESTIONS, { cards: [card("slack")], pick: "available" });
     expect(headings(render().html)).not.toContain("Suggested for you");
     fixture.overrides.set(STATUS, {});
-    expect(headings(render().html)[0]).toBe("Suggested for you");
+    expect(headings(render().html)[1]).toBe("Suggested for you");
   });
 
   it("points to Settings for a key when no decision model is available, and hides the button after a pick", () => {
@@ -748,5 +757,60 @@ describe("hostedShown", () => {
     expect(hostedShown(konektor, "mind map", none, "all")).toBe(false);
     expect(hostedShown(biver, "mind map", only, "connected")).toBe(false);
     expect(hostedShown(biver, "landing page", only, "connected")).toBe(true);
+  });
+});
+
+describe("Featured and Popular sections", () => {
+  const sectionIds = (tree: Node[]) => nodes(tree.find((node) => node.props["data-apps-grid"] !== undefined)!).map((node) => node.props.id).filter((id): id is string => typeof id === "string" && id.startsWith("apps-section-") || id === "apps-grid-title");
+  const hostedProps = (tree: Node[]) => nodes(tree.find((node) => node.props["data-apps-grid"] !== undefined)!).find((node) => node.props.hostedCards !== undefined)!.props.hostedCards as { featured?: unknown };
+  const featuredIndex = () => { render(); return fixture.index - 1; };
+
+  it("shows a Featured section first, with the place for every hosted card", () => {
+    const { html, nodes: tree } = render();
+    expect(sectionIds(tree)[0]).toBe("apps-section-featured");
+    expect(html).toContain('data-apps-section="apps-section-featured"');
+    expect(html.indexOf("data-featured-slot")).toBeGreaterThan(html.indexOf('data-apps-section="apps-section-featured"'));
+    expect(html.indexOf("data-featured-slot")).toBeLessThan(html.indexOf('data-apps-section="apps-grid-title"'));
+  });
+
+  it("hands the Featured place to the one hosted panel while the sections show, and takes it back for a search or a category", () => {
+    const slot = {};
+    fixture.overrides.set(featuredIndex(), slot);
+    expect(hostedProps(render().nodes).featured).toBe(slot);
+    fixture.overrides.set(SEARCH, "gmail");
+    expect(hostedProps(render().nodes).featured).toBeNull();
+    fixture.overrides.set(SEARCH, "");
+    fixture.overrides.set(CATEGORY, "design");
+    expect(hostedProps(render().nodes).featured).toBeNull();
+  });
+
+  it("shows no Featured section for a search, and the matching hosted card stays in the results", () => {
+    fixture.overrides.set(HOSTED_CONNECTED, null);
+    fixture.overrides.set(SEARCH, HOSTED_MCP_APPS[0].label.toLowerCase());
+    const { html, nodes: tree } = render();
+    expect(sectionIds(tree)).not.toContain("apps-section-featured");
+    expect(html).not.toContain("data-featured-slot");
+    expect(html).toContain(`data-hosted-app="${HOSTED_MCP_APPS[0].id}"`);
+  });
+
+  it("shows no Popular section while no app has calls", () => {
+    expect(sectionIds(render().nodes)).not.toContain("apps-section-popular");
+  });
+
+  it("shows the most called apps under Featured, most calls first, and not again below", () => {
+    fixture.usage = [{ app: "NOTION", calls: 9 }, { app: "SLACK", calls: 4 }, { app: "NOSUCHAPP", calls: 3 }];
+    const { html, nodes: tree } = render();
+    expect(sectionIds(tree).slice(0, 2)).toEqual(["apps-section-featured", "apps-section-popular"]);
+    const popular = tree.find((node) => node.props.id === "apps-section-popular")!;
+    expect(nodes(popular.props.children).filter((node) => node.props["data-app-tile"]).map((node) => node.props["data-app-tile"])).toEqual(["notion", "slack"]);
+    expect(html).toContain("Used most by your bots this week");
+    expect(html.match(/data-app-tile="notion"/g)).toHaveLength(1);
+    expect(html.match(/data-app-tile="slack"/g)).toHaveLength(1);
+  });
+
+  it("shows no Popular section for a search", () => {
+    fixture.usage = [{ app: "NOTION", calls: 9 }];
+    fixture.overrides.set(SEARCH, "notion");
+    expect(sectionIds(render().nodes)).not.toContain("apps-section-popular");
   });
 });

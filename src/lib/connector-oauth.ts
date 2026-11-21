@@ -14,7 +14,9 @@ export function reusableConnectionUrl(page: PendingAuthorization | null | undefi
 
 /** Reserve the tab during the click, before an authorization request consumes the browser's user activation. */
 export function reserveConnectionPage() {
-  const appOpensLinks = Boolean(window.ogb);
+  const app = window.ogb;
+  const appOpensLinks = Boolean(app);
+  const confirmedOpen = app?.openExternal ?? app?.openSignInPage;
   let page: Window | null = null;
   let navigated = false;
   let cancelled = false;
@@ -28,14 +30,14 @@ export function reserveConnectionPage() {
     }
   }
   return {
-    /** False on a desktop page from another server, which has no openExternal. Electron 43 gives the window's open
+    /** False on a desktop page from another server in an app without openSignInPage. Electron 43 gives the window's open
      * handler every window.open, with or without a click, and returns null whether the link opened or not. */
-    confirms: !appOpensLinks || Boolean(window.ogb?.openExternal),
+    confirms: !appOpensLinks || Boolean(confirmedOpen),
     async open(url: string): Promise<boolean> {
       if (cancelled) return false;
       if (appOpensLinks) {
         try {
-          await openExternalLink(url);
+          await (confirmedOpen ? confirmedOpen(url) : openExternalLink(url));
         } catch {
           return false;
         }

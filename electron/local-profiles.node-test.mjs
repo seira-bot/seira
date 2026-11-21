@@ -98,6 +98,7 @@ test(`at most ${MAX_PROFILES} workspaces`, (t) => {
   const w = computer(t);
   for (let at = 1; at < MAX_PROFILES; at++) assert.equal(w.registry.create({ name: `W${at}` }).ok, true);
   assert.deepEqual(w.registry.create({ name: "One more" }), { ok: false, error: "full" });
+  assert.deepEqual(w.profiles.create({ name: "One more" }), { outcome: "full" }, "the sheet says why, not try again");
 });
 
 test("who sees which: once My Cloud is home every workspace, This Mac first; with no home the named ones only; another home none", (t) => {
@@ -113,7 +114,7 @@ test("who sees which: once My Cloud is home every workspace, This Mac first; wit
   w.home = null;
   assert.deepEqual(w.profiles.places({ activeLocal: true }), []);
   assert.equal(w.profiles.creatable(), false);
-  assert.deepEqual(w.profiles.create({ name: "Lab" }), { outcome: "failed" });
+  assert.deepEqual(w.profiles.create({ name: "Lab" }), { outcome: "unavailable" });
 });
 
 test("switching once My Cloud is home: one runs at a time, the next one starts on its own folder, My Cloud never stops it", async (t) => {

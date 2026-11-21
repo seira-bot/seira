@@ -447,6 +447,8 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["GET"], path: /^\/api\/app-triggers$/ },
   // counts and lines from the threads this viewer can see; engine and app fixes only for an admin
   { methods: ["GET"], path: /^\/api\/today$/ },
+  // how often this server's bots called each app in the last week, from the threads this viewer can see
+  { methods: ["GET"], path: /^\/api\/apps\/usage$/ },
   // cards from the work this viewer can see, in four columns
   { methods: ["GET"], path: /^\/api\/board$/ },
   // moving one Needs you card to Done: the handler lets only someone who can chat with the card's bot do it

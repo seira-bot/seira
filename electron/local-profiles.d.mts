@@ -32,7 +32,7 @@ export interface LocalProfiles {
   open(id: string): Promise<boolean | null>;
   computer(): Promise<boolean | null>;
   cancel(): void;
-  create(input: { name: unknown; color?: unknown }): { outcome: "made"; id: string } | { outcome: "name" | "taken" | "failed" };
+  create(input: { name: unknown; color?: unknown }): { outcome: "made"; id: string } | { outcome: "name" | "taken" | "full" | "unavailable" };
   rename(id: string, name: unknown): { outcome: "saved" | ProfileRefusal };
   recolor(id: string, color: unknown): { outcome: "saved" | ProfileRefusal };
   remove(id: string): Promise<{ outcome: "removed" | "gone" | "failed" }>;

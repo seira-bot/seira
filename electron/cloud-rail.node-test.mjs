@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 
+import { createCleanWorkspace, profilesDir } from "./clean-workspace.mjs";
 import { parseCloudList } from "./cloud-list.mjs";
 import { addCloudView, createAddedCloudNotice, installCloudRail, railPlaces } from "./cloud-rail.mjs";
 import { otherCloudSnapshot } from "./cloud-plan-ipc.mjs";
+import { createLocalProfiles, createProfileRegistry, PROFILES_FILE } from "./local-profiles.mjs";
 
 const HOME = "https://seira-u-1a2b3c4d5e6f.fly.dev", CLIENT_A = "https://seira-c-a.fly.dev", TEAM = "https://seira-t-acme.fly.dev", VPS = "https://bots.example.test";
 const LOCAL = "http://127.0.0.1:8799";
@@ -506,5 +510,49 @@ test("＋'s new workspace and a workspace's menu: only while main offers it, onl
   r.w.trusted = false;
   assert.throws(() => r.call("workspaces:local-new", "Notes", null), /only available/, "a Cloud's page never makes one");
   creatable = false; r.w.trusted = true;
-  assert.throws(() => r.call("workspaces:local-new", "Notes", null), /isn't something to add/);
+  assert.deepEqual(await r.call("workspaces:local-new", "Notes", null), { outcome: "unavailable" }, "main's no is an answer the sheet can say");
+  assert.equal(made.length, 3, "nothing made");
+});
+
+/** The window on a server saved by hand, with this computer's real workspaces (local-profiles.mjs) behind ＋. */
+function onSavedServer(t) {
+  const parent = mkdtempSync(join(tmpdir(), "rail-saved-"));
+  t.after(() => rmSync(parent, { recursive: true, force: true }));
+  const dataDir = join(parent, ".seira");
+  mkdirSync(dataDir);
+  const w = { home: "local", opened: [], running: dataDir };
+  const clean = createCleanWorkspace({ dataDir: () => dataDir, running: () => w.running, swap: async (dir) => { w.running = dir; return { ok: true }; } });
+  w.local = createLocalProfiles({ registry: createProfileRegistry({ dataDir: () => dataDir }), clean, dataDir: () => dataDir, home: () => w.home,
+    window: { openProfile: async () => false, profile: () => null, showCloud: async () => {} }, showLocal: () => {}, onLocal: () => false,
+    busy: async () => null, trash: async () => {}, reserved: () => "This PC", changed: () => w.r.installed.changed() });
+  const onScreen = { activeId: "vps", environments: [{ id: "vps", kind: "remote", name: "Office", origin: VPS }] };
+  w.r = rail({ local: w.local, openProfile: async (id) => { w.opened.push(id); }, add: { choices: () => ({ cloud: false, link: true, address: true }) },
+    places: () => railPlaces({ saved: onScreen, home: null, state: null, profiles: w.local.places({ activeLocal: false }) }) });
+  w.file = join(profilesDir(dataDir), PROFILES_FILE);
+  return w;
+}
+
+test("a server saved by hand on screen: ＋'s new workspace on this computer is made, listed on the rail and opened next", async (t) => {
+  const w = onSavedServer(t);
+  const before = await w.r.call("workspaces:places");
+  assert.deepEqual(before.places.map(place => [place.id, place.active ?? false]), [["local", false], ["vps", true]]);
+  assert.equal(before.add.local, true);
+  assert.deepEqual(await w.r.call("workspaces:local-new", "Work", "green"), { outcome: "made", id: "work" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(existsSync(w.file), true, "this computer's list of workspaces is written");
+  assert.deepEqual((await w.r.call("workspaces:places")).places.map(place => place.id), ["local", "profile:work", "vps"]);
+  assert.deepEqual(w.opened, ["work"]);
+  assert.ok(w.r.sent.includes("rail:workspaces:changed"), "the rail reads its list again");
+});
+
+test("a server saved by hand on screen, once this computer can't hold a new workspace: Create says so, nothing is made, and ＋ stops offering it", async (t) => {
+  const w = onSavedServer(t);
+  assert.equal((await w.r.call("workspaces:places")).add.local, true, "the sheet opened while it could");
+  w.home = null;
+  const told = w.r.sent.length;
+  assert.deepEqual(await w.r.call("workspaces:local-new", "Work", "green"), { outcome: "unavailable" });
+  assert.equal(existsSync(w.file), false, "nothing written");
+  assert.deepEqual(w.opened, []);
+  assert.deepEqual(w.r.sent.slice(told), ["page:workspaces:changed", "rail:workspaces:changed"], "the rail and the page beside it read main's choices again");
+  assert.equal((await w.r.call("workspaces:places")).add.local, false);
 });

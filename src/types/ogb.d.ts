@@ -218,7 +218,7 @@ const __APP_VERSION__: string;
          * which main opens next; a name or colour for one the rail lists; its removal, once the person said yes. Absent on
          * an older app. */
         local?: {
-          create(name: string, color: import("../../electron/cloud-list.mjs").CloudSwatch | null): Promise<{ outcome: "made"; id: string } | { outcome: "name" | "taken" | "failed" }>;
+          create(name: string, color: import("../../electron/cloud-list.mjs").CloudSwatch | null): Promise<{ outcome: "made"; id: string } | { outcome: "name" | "taken" | "full" | "unavailable" | "failed" }>;
           edit(id: string, changes: { name: string } | { color: import("../../electron/cloud-list.mjs").CloudSwatch | null }): Promise<{ outcome: "saved" | "name" | "taken" | "full" | "gone" }>;
           remove(id: string): Promise<{ outcome: "removed" | "gone" | "failed" }>;
         };
@@ -390,6 +390,9 @@ const __APP_VERSION__: string;
       copyText?(text: string): Promise<boolean>;
       /** Opens an http(s) link in the user's default browser. */
       openExternal?(url: string): Promise<boolean>;
+      /** Opens an https sign-in page in the user's default browser, on every page of the window, another server's
+       * included. From another server's page it needs the person's click; it rejects any other address. Absent on older apps. */
+      openSignInPage?(url: string): Promise<boolean>;
       /** Recolor the native window chrome for a skin; absent on older builds. */
       applySkin?(skin: string): Promise<boolean>;
       /** The window's own frame, this desktop's choice (Settings → Appearance). Absent on an older app. */

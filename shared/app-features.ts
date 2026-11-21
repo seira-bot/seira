@@ -118,6 +118,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     releaseNotes: ["connectOneClick", "appsConnected", "socialRepliz"],
   },
   {
+    id: "featured-popular-apps",
+    name: "Featured and Popular apps",
+    place: "Apps → All apps, the Featured and Popular sections at the top",
+    does: "Featured shows the one-click cards of hosted MCP apps. Popular shows up to four apps that the bots here used most in the last 7 days. It appears once a bot has used an app.",
+  },
+  {
     id: "settings",
     name: "Settings",
     place: "the menu under the person's name at the bottom of the sidebar",
