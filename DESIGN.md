@@ -337,6 +337,17 @@ on. Simple is the default for new installs.
   The hero shows a 24px status pill only while the bot works, waits or has failed, in the words its sidebar row
   uses. A group card has a 1px `hairline` ring so it shows on every skin. An open section drops the cards of its
   own content (a card with its own border stays) so its fields sit flat inside the group card.
+- **The Simple activity card is folded.** It sits under a finished turn that used tools. The head is 40px: a green
+  check, a summary of the steps, 20px avatars of the bots involved (at most four, each with a ring in the chat
+  background), the time the turn took and a chevron. Open, it shows one 32px line per step: avatar, bot name,
+  step text, and a check or a red cross. A 1px `hairline` runs down the start side.
+  A turn under one second shows no time. A failed step stays outside the card, so a closed card never hides an
+  error. Simple shows no separate turn receipt under the reply; Advanced keeps it.
+  Show tool calls is on by default in Advanced and off in Simple, so Simple shows the card only after the person turns
+  it on. A saved choice applies to both modes.
+- **The Simple bot panel has four tabs:** Activity, Details, Library and Computer. It opens on Activity. Activity
+  lists what the bot did, grouped by day, newest first. Each item has an icon, the action, the app and time, and
+  a mark: spinner, check, red cross or bell.
 - **Advanced uses Simple's composer card.** The field sits above one bar, and
   the round slot is voice, Send or Stop. Advanced fills the bar with quiet 28px
   chips (Goal, approval level, place, context) where Simple uses the + menu.

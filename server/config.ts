@@ -648,10 +648,6 @@ export function tidyHour(cfg: AppConfig): number {
   return cfg.memory?.tidyHour ?? DEFAULT_TIDY_HOUR;
 }
 
-export function showToolCallsEnabled(cfg: AppConfig): boolean {
-  return cfg.features?.showToolCalls === true;
-}
-
 export function builtInBrowserEnabled(cfg: AppConfig, _env: NodeJS.ProcessEnv = process.env): boolean {
   return cfg.features?.browser !== false;
 }

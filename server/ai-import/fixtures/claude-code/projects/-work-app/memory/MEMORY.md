@@ -1,0 +1,2 @@
+- [Role](user_role.md) — the user is a designer
+- Remember to run tests before a release

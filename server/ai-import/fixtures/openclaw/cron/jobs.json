@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "jobs": [
+    { "id": "a", "name": "Daily news", "schedule": { "kind": "cron", "expr": "30 6 * * *" }, "payload": { "kind": "agentTurn", "message": "Read the news." } },
+    { "id": "b", "name": "Every 15", "schedule": { "kind": "every", "everyMs": 900000 }, "payload": { "kind": "systemEvent", "text": "Ping." } },
+    { "id": "c", "name": "One shot", "schedule": { "kind": "at", "at": "2027-02-01T10:00:00Z" }, "payload": { "kind": "agentTurn", "message": "File taxes." } },
+    { "id": "d", "name": "Ops job", "agentId": "ops", "schedule": { "kind": "cron", "expr": "0 0 * * 1" }, "payload": { "kind": "agentTurn", "message": "Weekly report." } }
+  ]
+}

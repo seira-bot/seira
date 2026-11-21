@@ -1,0 +1,7 @@
+{"type":"session","id":"root","timestamp":"2026-01-02T10:00:00Z"}
+{"type":"message","id":"m1","parentId":"root","timestamp":"2026-01-02T10:00:01Z","message":{"role":"user","content":[{"type":"text","text":"Hello there"}]}}
+{"type":"message","id":"m2","parentId":"m1","timestamp":"2026-01-02T10:00:02Z","message":{"role":"assistant","content":[{"type":"text","text":"Hi Sam"},{"type":"toolCall","name":"web_search","id":"t1"}]}}
+{"type":"message","id":"m2x","parentId":"m1","timestamp":"2026-01-02T10:00:03Z","message":{"role":"assistant","content":"Another branch"}}
+{"type":"message","id":"m3","parentId":"m2","timestamp":"2026-01-02T10:00:05Z","message":{"role":"toolResult","content":"result"}}
+{"type":"message","id":"m4","parentId":"m3","timestamp":"2026-01-02T10:00:06Z","message":{"role":"user","content":"Thanks"}}
+{"type":"message","id":"m5","parentId":"m4","timestamp":"2026-01-02T10:00:07Z","message":{"role":"assistant","con

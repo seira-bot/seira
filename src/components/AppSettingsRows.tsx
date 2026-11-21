@@ -347,7 +347,8 @@ export function UniversalPinsRow() {
 
 export function ToolCallsRow() {
   const { state, dispatch } = useStore();
-  const enabled = showToolCallsEnabled(state.config);
+  const advanced = useAdvancedMode();
+  const enabled = showToolCallsEnabled(state.config, advanced);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 

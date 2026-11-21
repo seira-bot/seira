@@ -118,14 +118,15 @@ describe("the Settings window", () => {
       const html = render("transfer");
       expect(html).toMatch(/data-settings-page="transfer"[^>]*>[\s\S]*?Import &amp; export/);
       expect(html).toMatch(/<h2[^>]*>Import &amp; export<\/h2>/);
-      expect(ascending(order(html, ['data-settings-block="bring-in"', 'data-import-section="grok"', "Move from Grok Bot", 'data-import-section="apps"',
-        "From your AI apps", "Import backup", 'data-settings-block="take-out"', "Export full backup"]))).toBe(true);
+      expect(ascending(order(html, ['data-settings-block="bring-in"', 'data-import-section="ai-import"', "Move from another AI", 'data-settings-block="grok-move"',
+        "Grok Bot", "Import backup", 'data-settings-block="take-out"', "Export full backup"]))).toBe(true);
       expect(html).not.toContain("Bring in a bot from another app");
+      expect(html).not.toContain("From your AI apps");
     });
 
     it("draws the Grok Bot mark in the row's leading slot, and opens nothing until Start is pressed", () => {
       const html = render("transfer");
-      const row = html.slice(html.indexOf('data-import-section="grok"'), html.indexOf('data-import-section="apps"'));
+      const row = html.slice(html.indexOf('data-settings-block="grok-move"'), html.indexOf('data-ai-import-drop'));
       expect(row).toMatch(/data-settings-slot=""[^>]*>\s*<span aria-hidden="true"[^>]*>\s*<svg[^>]*viewBox="0 0 70 70"/);
       expect(row).toContain("fill-[var(--color-ink)]");
       expect(row).toMatch(/data-grok-move-open[^>]*aria-expanded="false"|aria-expanded="false"[^>]*data-grok-move-open/);
@@ -140,15 +141,15 @@ describe("the Settings window", () => {
     it("shows on My Cloud in a browser, to a team's admin, and not at all to a team's member", () => {
       vi.stubGlobal("window", {});
       fixture.config = { cloudHome: true };
-      expect(render("transfer")).toContain("Move from Grok Bot");
+      expect(render("transfer")).toContain("Move from another AI");
       fixture.config = { cloudHome: true, team: { name: "Acme" } };
       expect(navPages(render("overview"))).toContain("transfer");
-      expect(render("transfer")).toContain("Move from Grok Bot");
+      expect(render("transfer")).toContain("Move from another AI");
       fixture.admin = false;
       expect(navPages(render("overview"))).not.toContain("transfer");
       const member = render("import");
       expect(member).toMatch(/data-settings-page-open="overview"/);
-      expect(member).not.toContain("Move from Grok Bot");
+      expect(member).not.toContain("Move from another AI");
       expect(member).not.toContain("data-backup-export");
     });
 

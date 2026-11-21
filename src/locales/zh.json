@@ -6432,6 +6432,13 @@
   "apps.category.marketing": "营销",
   "apps.category.analytics": "分析",
   "apps.category.social": "社交",
+  "apps.category.finance": "财务",
+  "apps.category.commerce": "电商",
+  "apps.category.ai": "AI",
+  "apps.category.automation": "自动化",
+  "apps.category.hr": "人事与招聘",
+  "apps.category.entertainment": "娱乐",
+  "apps.category.education": "教育",
   "apps.catalog.googleCalendar.blurb": "读取和创建日程",
   "apps.catalog.googleSheets.blurb": "读取和更新电子表格",
   "apps.catalog.googleDocs.blurb": "读取和写入文档",
@@ -10152,5 +10159,6 @@
   "settings.pool.levelsFalling": "每个档位都必须低于前一个。",
   "settings.pool.floorNumber": "下限是 0 到 98 的整数。",
   "settings.pool.floorLow": "下限必须低于最后一个档位。",
-  "settings.pool.error": "无法保存 AI 池，请重试。"
+  "settings.pool.error": "无法保存 AI 池，请重试。",
+  "aiImport.title": "从其他 AI 迁移"
 }

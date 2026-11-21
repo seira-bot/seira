@@ -59,16 +59,14 @@ recognized rather than replaced.
 
 | Card | Endpoint | Connects with |
 | --- | --- | --- |
-| **Konektor.id**, WhatsApp leads, inbox, broadcasts, ads and conversion tracking | `https://mcp.konektor.id/mcp` | An API key from your account's developer page |
+| **Konektor.id**, WhatsApp leads, inbox, broadcasts, ads and conversion tracking | `https://mcp.konektor.id/mcp` | Browser sign-in |
 | **Biver.id**, websites: pages, sections, forms, products, checkout and domains | `https://mcp.biver.id/mcp` | Browser sign-in |
 | **Coret.id**, mind maps, sketches and pads | `https://mcp.coret.id/mcp` | Browser sign-in |
 | **Termilo.id**, bookings, services, schedules and customer messages | `https://api.termilo.id/mcp` | Browser sign-in |
 
-Konektor.id has no browser sign-in for Seira, so its card takes a pasted key.
-The key goes in the server's `Authorization: Bearer` header, never in its
-address, on a server that stays off until its tools load with that key; a
-refused key leaves it off and says why. Like every header value it is never
-shown again, and **Disconnect** deletes the server and its key.
+A Konektor.id server added earlier with a pasted key keeps working and counts as
+connected. **Disconnect** deletes that server and its key. Connect again to use
+browser sign-in.
 
 A bot that can use one of these services acts on your account there: it can
 change your pages, maps, bookings or WhatsApp messages. Choose which bots get

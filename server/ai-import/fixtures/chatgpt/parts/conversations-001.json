@@ -1,0 +1,80 @@
+[
+  {
+    "title": null,
+    "create_time": null,
+    "update_time": null,
+    "conversation_id": "c2",
+    "id": "c2",
+    "current_node": "a",
+    "gizmo_id": "g-abc",
+    "mapping": {
+      "root": {
+        "id": "root",
+        "message": null,
+        "parent": null,
+        "children": [
+          "u"
+        ]
+      },
+      "u": {
+        "id": "u",
+        "message": {
+          "id": "u",
+          "author": {
+            "role": "user"
+          },
+          "create_time": null,
+          "update_time": null,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "Hello there"
+            ]
+          },
+          "status": "finished_successfully",
+          "end_turn": true,
+          "weight": 1,
+          "metadata": {},
+          "recipient": "all"
+        },
+        "parent": "root",
+        "children": [
+          "a"
+        ]
+      },
+      "a": {
+        "id": "a",
+        "message": {
+          "id": "a",
+          "author": {
+            "role": "assistant"
+          },
+          "create_time": 1700001000,
+          "update_time": null,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "Hi!"
+            ]
+          },
+          "status": "finished_successfully",
+          "end_turn": true,
+          "weight": 1,
+          "metadata": {},
+          "recipient": "all"
+        },
+        "parent": "u",
+        "children": []
+      }
+    }
+  },
+  {
+    "title": "Broken one",
+    "create_time": 1700002000,
+    "update_time": 1700002000,
+    "conversation_id": "c3",
+    "id": "c3",
+    "mapping": [],
+    "current_node": "x"
+  }
+]

@@ -93,7 +93,7 @@ describe("Your MCP servers inside the Apps pop-up", () => {
     expect(html).toContain("Add server");
   });
 
-  it.each(HOSTED_MCP_APPS.filter((app) => !("key" in app)))("offers $label setup with no API key form or forced installation", (app) => {
+  it.each(HOSTED_MCP_APPS)("offers $label setup with no API key form or forced installation", (app) => {
     fixture.servers = [];
     const html = render(true, true);
     expect(html).toContain(`data-app-tile="${app.id}"`);
@@ -104,11 +104,10 @@ describe("Your MCP servers inside the Apps pop-up", () => {
     expect(html).not.toContain("Paste config");
   });
 
-  it("asks for a key on the Konektor.id card and explains what the key allows", () => {
+  it("explains what signing in to Konektor.id allows", () => {
     fixture.servers = [];
     const html = render(true, true);
-    expect(html).toContain('aria-label="Konektor.id API key"');
-    expect(html).toContain("including sending WhatsApp messages");
+    expect(html).toContain("send WhatsApp messages for you");
   });
 
   it.each(HOSTED_MCP_APPS)("recognizes an existing $label URL under any name and exposes access and disconnect", (app) => {

@@ -9,6 +9,7 @@ import { ChatShareMenu } from "@/components/ChatMoreMenu";
 import { useCaptionChrome } from "../DesktopCapabilities";
 import type { useBotSettingsDerived } from "../bot-settings/useBotSettingsDerived";
 import { AvatarEditorCard } from "./AvatarEditorCard";
+import { ActivityTab } from "./ActivityTab";
 import { ComputerTab } from "./ComputerTab";
 import { DetailsTab } from "./DetailsTab";
 import { LibraryTab } from "./LibraryTab";
@@ -21,7 +22,7 @@ import { PanelTabs } from "./PanelTabs";
 import { PageHeader, roundButtonCls } from "./rows";
 
 function initialTarget(section: BotSettingsSection | null, link: PanelLink | null): PanelTarget {
-  return section ? linkTarget(section, link) : { tab: "details" };
+  return section ? linkTarget(section, link) : { tab: "activity" };
 }
 
 export function BotPanel({ bot, derived, linkedSection, onClose }: {
@@ -149,6 +150,7 @@ export function BotPanel({ bot, derived, linkedSection, onClose }: {
             <PanelQuickActions onAction={quick} canMessage={bot.yourAccess !== "view"} />
             <PanelTabs tab={tab} onSelect={openTab} />
             <div role="tabpanel">
+              {tab === "activity" && <ActivityTab bot={bot} />}
               {tab === "details" && <DetailsTab bot={bot} derived={derived} onOpen={openPage} />}
               {tab === "library" && <LibraryTab bot={bot} onOpen={openPage} />}
               {tab === "computer" && <ComputerTab bot={bot} derived={derived} onOpen={openPage} />}
