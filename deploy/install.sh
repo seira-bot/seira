@@ -3,6 +3,7 @@
 # Running it again repairs or updates the install and never touches your data.
 #
 #   curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh | sudo sh -s -- --domain seira.example.com
+#   ... | sudo sh -s -- --tunnel --account-email you@example.com   no domain, no open port: served at your Seira account's address
 #   ... | sudo sh -s -- --check --domain seira.example.com    only checks the server; changes nothing
 #   ... | sudo sh -s -- --uninstall                          stops the server; keeps your data
 #   ... | sudo sh -s -- --domain seira.example.com <code>     also connects the server to Seira with a one-time code
@@ -11,6 +12,7 @@
 # Nothing runs until the last line calls main, so a download that is cut off part-way runs nothing. It sends no
 # telemetry. The addresses it contacts are the ones the checks name: the image registries, Let's Encrypt, GitHub's
 # release list and this repository's files, and cloudflare.com/cdn-cgi/trace to learn this server's public address.
+# With --tunnel it also contacts your Seira account service and Cloudflare's tunnel edge, and not Let's Encrypt.
 set -eu
 
 settings() {
@@ -41,8 +43,21 @@ settings() {
   HEALTH_WAIT_S="${SEIRA_INSTALL_HEALTH_WAIT_S:-240}"
   HTTPS_WAIT_S="${SEIRA_INSTALL_HTTPS_WAIT_S:-180}"
 
+  # The two outbound addresses a tunnel install needs besides the registries: the account service that gives the
+  # address (SEIRA_CONTROL_PLANE_URL names another one) and the edge that Cloudflare's connector reaches.
+  ACCOUNT_HOST=accounts.seira.bot
+  TUNNEL_EDGE_HOST=region1.v2.argotunnel.com
+  TUNNEL_WAIT_S="${SEIRA_INSTALL_TUNNEL_WAIT_S:-120}"
+
   MODE=install
   DOMAIN=""
+  TUNNEL=no
+  ACCOUNT_EMAIL=""
+  EVENTS=no
+  CHECK_ID=""
+  CHECKING=no
+  STEP=""
+  ADDRESS=""
   EMAIL=""
   CODE=""
   INSTALL_DOCKER="${SEIRA_INSTALL_DOCKER:-}"
@@ -57,14 +72,47 @@ settings() {
 }
 
 say() { printf '%s\n' "$*"; }
+
+# One machine-readable line for an app that runs this installer, only with --events: ::seira <kind> <words>.
+event() {
+  if [ "$EVENTS" = yes ]; then
+    printf '::seira %s\n' "$(printf '%s' "$*" | tr '\n' ' ')"
+  fi
+}
+
+step() { # id: a step of the install begins
+  STEP=$1
+  event step "$1" start
+}
+
+step_done() {
+  event step "$STEP" done
+  STEP=""
+}
+
 fail() {
+  if [ "$EVENTS" = yes ]; then
+    if [ -n "$STEP" ]; then event step "$STEP" fail "$*"; fi
+    event fail "$*"
+  fi
   printf '\n%s\n' "$*" >&2
   exit 1
 }
-ok() { printf '  ok    %s\n' "$*"; }
-note() { printf '  note  %s\n' "$*"; }
+
+check_event() { # result sentence: a check's result, while the checks run
+  if [ "$CHECKING" = yes ]; then event check "$CHECK_ID" "$1" "$2"; fi
+}
+ok() {
+  printf '  ok    %s\n' "$*"
+  check_event ok "$*"
+}
+note() {
+  printf '  note  %s\n' "$*"
+  check_event note "$*"
+}
 fix() {
   printf '  FIX   %s\n' "$*"
+  check_event fix "$*"
   FAILED=$((FAILED + 1))
 }
 
@@ -74,10 +122,14 @@ command_line() { # what to run again, as the person ran it
 
 usage() {
   say "Usage: $(command_line '--domain seira.example.com')"
+  say "       $(command_line '--tunnel --account-email you@example.com')   no domain and no open port: Seira's address for your account"
   say "       $(command_line '--check --domain seira.example.com')   only checks this server; changes nothing"
   say "       $(command_line '--uninstall')                        stops the server; keeps your data"
   say ""
   say "  --domain NAME      the name people will open, already pointing at this server"
+  say "  --tunnel           serve at the address your Seira account gives this server, with no domain and no open port"
+  say "  --account-email A  the email of your Seira account, which sends the code that signs this server in (with --tunnel)"
+  say "  --events           print one machine-readable ::seira line per check, step and question, for an app that runs this installer"
   say "  --email ADDRESS    the first admin's email, so they can sign in with an emailed code (needs a mail server: SEIRA_SIGNIN_SMTP_URL in .env)"
   say "  --install-docker   install Docker with Docker's official script when it is missing, without asking"
   say "  --dir PATH         where the install lives (default /opt/seira)"
@@ -92,17 +144,21 @@ parse() {
       --uninstall) MODE=uninstall ;;
       --install-docker) INSTALL_DOCKER=1 ;;
       --no-sandbox) SANDBOX=no ;;
-      --domain | --email | --dir)
+      --tunnel) TUNNEL=yes ;;
+      --events) EVENTS=yes ;;
+      --domain | --email | --dir | --account-email)
         [ $# -ge 2 ] || fail "$1 needs a value. $(usage)"
         case "$1" in
           --domain) DOMAIN=$2 ;;
           --email) EMAIL=$2 ;;
+          --account-email) ACCOUNT_EMAIL=$2 ;;
           --dir) INSTALL_DIR=$2 ;;
         esac
         shift
         ;;
       --domain=*) DOMAIN=${1#--domain=} ;;
       --email=*) EMAIL=${1#--email=} ;;
+      --account-email=*) ACCOUNT_EMAIL=${1#--account-email=} ;;
       --dir=*) INSTALL_DIR=${1#--dir=} ;;
       -h | --help)
         usage
@@ -120,12 +176,19 @@ parse() {
     *.*) ;;
     *) fail "$DOMAIN is not a full domain name. Give a name like seira.example.com." ;;
   esac
-  case "$EMAIL" in
-    "") ;;
-    *[!A-Za-z0-9@._+-]* | *@*@*) fail "That email address doesn't look right. Give one address, like you@example.com." ;;
-    ?*@?*.?*) ;;
-    *) fail "That email address doesn't look right. Give one address, like you@example.com." ;;
-  esac
+  if [ "$TUNNEL" = yes ] && [ -n "$DOMAIN" ]; then
+    fail "--tunnel and --domain cannot be used together: use --tunnel for the address your Seira account gives, or --domain for a name of your own."
+  fi
+  for address in "$EMAIL" "$ACCOUNT_EMAIL"; do
+    case "$address" in
+      "") ;;
+      *[!A-Za-z0-9@._+-]* | *@*@*) fail "That email address doesn't look right. Give one address, like you@example.com." ;;
+      ?*@?*.?*) ;;
+      *) fail "That email address doesn't look right. Give one address, like you@example.com." ;;
+    esac
+  done
+  if [ -n "$ACCOUNT_EMAIL" ] && [ "$TUNNEL" != yes ]; then fail "--account-email works only with --tunnel."; fi
+  if [ -n "$CODE" ] && [ "$TUNNEL" = yes ]; then fail "A connection code works only with --domain."; fi
   case "$CODE" in
     *[!A-Za-z0-9-]*) fail "That code doesn't look right. Copy the install command from Seira again." ;;
   esac
@@ -319,6 +382,12 @@ listener_on() { # port: the listening line, or nothing
   ss -Hltnp "sport = :$1" 2>/dev/null | head -n 1
 }
 
+step_check() { # id check-function: the checks it runs report under that id
+  CHECK_ID=$1
+  shift
+  "$@"
+}
+
 check_ports() {
   if ! command -v ss >/dev/null 2>&1; then
     note "Ports 80 and 443 could not be checked because the ss tool is missing; if something else uses them, the install will say so."
@@ -382,7 +451,8 @@ check_dns() {
 }
 
 check_outbound() {
-  targets="https://ghcr.io/v2/ https://pkg-containers.githubusercontent.com/ https://registry-1.docker.io/v2/ https://auth.docker.io/ https://production.cloudflare.docker.com/ https://acme-v02.api.letsencrypt.org/directory"
+  targets="https://ghcr.io/v2/ https://pkg-containers.githubusercontent.com/ https://registry-1.docker.io/v2/ https://auth.docker.io/ https://production.cloudflare.docker.com/"
+  if [ "$TUNNEL" = yes ]; then targets="$targets https://$TUNNEL_EDGE_HOST/"; else targets="$targets https://acme-v02.api.letsencrypt.org/directory"; fi
   if [ "$DOCKER_STATE" = missing ]; then targets="$targets https://get.docker.com/ https://download.docker.com/"; fi
   if [ -n "$CODE" ]; then targets="$targets $ADMIN_URL/"; fi
   case "${SOURCE_ASKED:-$REPOSITORY_FILES}" in https://*) targets="$targets https://$(host_of "${SOURCE_ASKED:-$REPOSITORY_FILES}")/" ;; esac
@@ -398,7 +468,21 @@ check_outbound() {
     fi
     return
   fi
-  ok "outbound: the image registries and Let's Encrypt are reachable"
+  if [ "$TUNNEL" = yes ]; then
+    ok "outbound: the image registries and the tunnel edge are reachable"
+  else
+    ok "outbound: the image registries and Let's Encrypt are reachable"
+  fi
+}
+
+check_account() {
+  url=${SEIRA_CONTROL_PLANE_URL:-$(env_value SEIRA_CONTROL_PLANE_URL)}
+  case "$url" in https://*) ACCOUNT_HOST=$(host_of "$url") ;; esac
+  if reachable "https://$ACCOUNT_HOST/"; then
+    ok "account: the Seira account service ($ACCOUNT_HOST) is reachable"
+  else
+    fix "This server can't reach the Seira account service, $ACCOUNT_HOST, over HTTPS (port 443). Allow outbound HTTPS to it in your firewall, then run this again."
+  fi
 }
 
 check_userns() {
@@ -573,26 +657,35 @@ check_version() {
   note_sandbox "$release"
 }
 
+end_checks() {
+  CHECKING=no
+  if [ "$FAILED" = 0 ]; then event checks ok; else event checks fix; fi
+}
+
 preflight() {
   say "Checking this server..."
-  check_tools
-  check_os
-  check_arch
-  check_cpus
-  check_memory
-  check_docker
-  check_disk
-  check_ports
-  check_userns
-  check_sandbox
+  CHECKING=yes
+  step_check outbound check_tools
+  step_check os check_os
+  step_check os check_arch
+  step_check cpu check_cpus
+  step_check memory check_memory
+  step_check docker check_docker
+  step_check disk check_disk
+  if [ "$TUNNEL" != yes ]; then step_check ports check_ports; fi
+  step_check userns check_userns
+  step_check apparmor check_sandbox
   if ! command -v curl >/dev/null 2>&1; then
+    CHECK_ID=outbound
     note "The domain, outbound reach, the clock and the version were not checked, because they need curl."
+    end_checks
     return
   fi
-  check_dns
-  check_outbound
-  check_clock
-  check_version
+  if [ "$TUNNEL" = yes ]; then step_check account check_account; else step_check dns check_dns; fi
+  step_check outbound check_outbound
+  step_check clock check_clock
+  step_check version check_version
+  end_checks
 }
 
 install_docker() {
@@ -632,6 +725,10 @@ write_file() { # path, with the content on standard input: replaced in one step
 }
 
 write_compose() {
+  if [ "$TUNNEL" = yes ]; then
+    write_tunnel_compose
+    return
+  fi
   write_file "$INSTALL_DIR/compose.yaml" <<'COMPOSE'
 # Written by Seira's installer (deploy/install.sh), and written again each time it runs: put your own settings in
 # .env beside this file, which the installer keeps. The server only listens on loopback inside its container, and on
@@ -705,6 +802,45 @@ volumes:
 COMPOSE
 }
 
+# The tunnel install: the server alone. It publishes no port and shares no network with the host, and the tunnel
+# connector inside the container is the only way in.
+write_tunnel_compose() {
+  write_file "$INSTALL_DIR/compose.yaml" <<'TUNNELCOMPOSE'
+# Written by Seira's installer (deploy/install.sh), and written again each time it runs: put your own settings in
+# .env beside this file, which the installer keeps. The server publishes no port: people reach it at the address
+# your Seira account gives it, through the tunnel connector that runs in this container.
+name: seira
+services:
+  seira:
+    image: ${SEIRA_IMAGE:?run the installer again}
+    restart: unless-stopped
+    init: true
+    shm_size: 512m
+    volumes:
+      - ./data:/data
+      # The Update server button (update-runner.sh, root's folder): the server leaves a request in the first, reads the
+      # outcome in the second.
+      - /var/lib/seira-update/request:/run/seira-update/request
+      - /var/lib/seira-update/status:/run/seira-update/status:ro
+    environment:
+      SEIRA_PORT: "8799"
+      SEIRA_WEBHOOK_PORT: "8800"
+      SEIRA_ACCESS: ${SEIRA_ACCESS:?run the installer again}
+      SEIRA_SERVER_NAME: ${SEIRA_SERVER_NAME:-seira}
+      # Passed only when .env sets them: an empty one would still be set, and Settings' own lists are used when not.
+      SEIRA_SIGNIN_EMAILS:
+      SEIRA_SIGNIN_MEMBER_EMAILS:
+      SEIRA_SIGNIN_SMTP_URL:
+      SEIRA_SIGNIN_SMTP_FROM:
+      SEIRA_CONTROL_PLANE_URL:
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q -e seira -e openmausbot"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+TUNNELCOMPOSE
+}
+
 write_caddyfile() {
   write_file "$INSTALL_DIR/Caddyfile" <<'CADDY'
 {$DOMAIN} {
@@ -738,6 +874,7 @@ CADDY
 
 set_env() { # name value: that one line of .env, leaving every other line as the person wrote it
   env_file="$INSTALL_DIR/.env"
+  if [ -f "$env_file" ] && [ "$(grep -c "^$1=" "$env_file" || true)" = 1 ] && [ "$(env_value "$1")" = "$2" ]; then return 0; fi
   {
     if [ -f "$env_file" ]; then grep -v "^$1=" "$env_file" || true; fi
     printf '%s=%s\n' "$1" "$2"
@@ -754,11 +891,17 @@ unset_env() { # name
 write_settings() {
   if [ ! -f "$INSTALL_DIR/.env" ]; then
     write_file "$INSTALL_DIR/.env" 600 <<'ENV'
-# Seira's settings on this server. The installer sets DOMAIN, SEIRA_IMAGE and COMPOSE_FILE and keeps every other line.
+# Seira's settings on this server. The installer sets DOMAIN (or SEIRA_ACCESS=tunnel), SEIRA_IMAGE and COMPOSE_FILE and keeps every other line.
 # Who may sign in with an emailed code: SEIRA_SIGNIN_EMAILS (admins) and SEIRA_SIGNIN_MEMBER_EMAILS, comma-separated.
 ENV
   fi
-  set_env DOMAIN "$DOMAIN"
+  if [ "$TUNNEL" = yes ]; then
+    set_env SEIRA_ACCESS tunnel
+    if [ -n "${SEIRA_CONTROL_PLANE_URL:-}" ]; then set_env SEIRA_CONTROL_PLANE_URL "$SEIRA_CONTROL_PLANE_URL"; fi
+  else
+    unset_env SEIRA_ACCESS
+    set_env DOMAIN "$DOMAIN"
+  fi
   set_env SEIRA_IMAGE "$IMAGE"
   if [ -n "$EMAIL" ]; then
     current=$(env_value SEIRA_SIGNIN_EMAILS)
@@ -957,6 +1100,96 @@ wait_healthy() {
   return 1
 }
 
+tunnel_address() { # the address the server's own log says the tunnel is live at
+  compose logs --no-color seira 2>/dev/null | sed -n 's#.*tunnel: live at \(https://[A-Za-z0-9.-]*\).*#\1#p' | tail -n 1
+}
+
+tunnel_answers() { # address
+  curl -fsS --max-time 10 "$1/api/health" 2>/dev/null | grep -q -e seira -e openmausbot
+}
+
+wait_tunnel() { # sets ADDRESS once the tunnel's address answers as Seira
+  waited=0
+  while [ "$waited" -lt "$TUNNEL_WAIT_S" ]; do
+    found=$(tunnel_address || true)
+    if [ -n "$found" ] && tunnel_answers "$found"; then
+      ADDRESS=$found
+      return 0
+    fi
+    sleep 5
+    waited=$((waited + 5))
+  done
+  return 1
+}
+
+account_signed_in() {
+  grep -q '"companionAccountEmail"' "$INSTALL_DIR/data/.seira/tunnel-account.json" 2>/dev/null
+}
+
+# Passes on the first line that is "code" and 8 digits (the digits only) and discards every other line.
+read_code() {
+  while IFS= read -r line; do
+    line=$(printf '%s' "$line" | tr -d '\r')
+    case "$line" in
+      "code "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9])
+        printf '%s\n' "${line#code }"
+        return 0
+        ;;
+    esac
+  done
+  return 1
+}
+
+# The last error sentence `seira login` wrote, with anything that looks like a code taken out.
+login_problem() { # file
+  tail -n 1 "$1" 2>/dev/null | sed 's/[0-9]\{8\}/********/g'
+}
+
+# Signs this server in to the Seira account in a one-off container on the data folder, before the server starts. The
+# code comes from the person's terminal, or on this installer's standard input as a "code" line with --events, and
+# is never written anywhere.
+sign_in_account() {
+  if account_signed_in; then return 0; fi
+  login_args="login"
+  if [ -n "$ACCOUNT_EMAIL" ]; then login_args="login --email $ACCOUNT_EMAIL"; fi
+  login_error=$(mktemp)
+  if [ "$EVENTS" != yes ]; then
+    say "Signing this server in to your Seira account. Seira emails a code: type it when asked."
+    # shellcheck disable=SC2086
+    if compose run --rm --no-deps -T seira seira $login_args </dev/tty 2>"$login_error"; then
+      rm -f "$login_error"
+      return 0
+    fi
+    reason=$(login_problem "$login_error")
+    rm -f "$login_error"
+    fail "Signing in to your Seira account did not work${reason:+: $reason}. Run this again to try once more."
+  fi
+  gave_up=$(mktemp)
+  rm -f "$gave_up"
+  attempt=1
+  while [ "$attempt" -le 3 ]; do
+    event ask code "$ACCOUNT_EMAIL"
+    # shellcheck disable=SC2086
+    if { read_code || : >"$gave_up"; } | compose run --rm --no-deps -T seira seira $login_args >/dev/null 2>"$login_error"; then
+      rm -f "$login_error" "$gave_up"
+      return 0
+    fi
+    reason=$(login_problem "$login_error")
+    [ -n "$reason" ] || reason="Signing in to your Seira account did not work."
+    if [ -e "$gave_up" ]; then
+      rm -f "$login_error" "$gave_up"
+      fail "No sign-in code was given."
+    fi
+    attempt=$((attempt + 1))
+    if [ "$attempt" -gt 3 ]; then
+      rm -f "$login_error" "$gave_up"
+      fail "$reason"
+    fi
+    event step signin fail "$reason"
+    event step signin start
+  done
+}
+
 https_answers() {
   curl -fsS --max-time 10 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health" 2>/dev/null | grep -q -e seira -e openmausbot
 }
@@ -991,23 +1224,53 @@ make_folders() { # folder...
 install_server() {
   say ""
   say "Installing Seira in $INSTALL_DIR..."
+  step files
   if [ -d "$INSTALL_DIR/data" ]; then close_to_others "$INSTALL_DIR/data"; fi
-  make_folders "$INSTALL_DIR" "$INSTALL_DIR/caddy" "$INSTALL_DIR/caddy/data" "$INSTALL_DIR/caddy/config"
+  if [ "$TUNNEL" = yes ]; then
+    make_folders "$INSTALL_DIR"
+  else
+    make_folders "$INSTALL_DIR" "$INSTALL_DIR/caddy" "$INSTALL_DIR/caddy/data" "$INSTALL_DIR/caddy/config"
+  fi
   write_compose
-  write_caddyfile
+  if [ "$TUNNEL" != yes ]; then write_caddyfile; fi
   write_settings
+  step_done
+  step image
   say "Downloading Seira..."
   compose_quietly pull -q || fail "Seira could not be downloaded (Docker's message is above). Check this server's outbound HTTPS, then run this again."
+  step_done
   place_update
+  step sandbox
   prepare_sandbox
   prepare_data
   place_button
+  step_done
+  if [ "$TUNNEL" = yes ]; then
+    step signin
+    sign_in_account
+    step_done
+  fi
+  step start
   say "Starting Seira..."
   compose_quietly up -d --remove-orphans || fail "Seira could not be started (Docker's message is above). Fix that, then run this again."
+  step_done
+  step health
   wait_healthy || fail "Seira started but did not report healthy within $HEALTH_WAIT_S seconds. Its log: cd $INSTALL_DIR && sudo docker compose logs seira --tail 50"
   check_sandbox_runs
+  if [ "$TUNNEL" = yes ]; then
+    step_done
+    step tunnel
+    say "Waiting for the address your Seira account gives this server..."
+    wait_tunnel || fail "Seira is running, but its address did not answer within $TUNNEL_WAIT_S seconds. Run this again to try once more. Its log: cd $INSTALL_DIR && sudo docker compose logs seira --tail 50"
+    event address "$ADDRESS"
+    step_done
+    return
+  fi
+  ADDRESS="https://$DOMAIN"
   say "Waiting for the HTTPS certificate of $DOMAIN..."
   wait_https || fail "Seira is running, but https://$DOMAIN did not answer within $HTTPS_WAIT_S seconds, usually because the certificate could not be issued. Check that $DOMAIN points at this server and that ports 80 and 443 are open in your provider's firewall, then run this again. Caddy's reason: cd $INSTALL_DIR && sudo docker compose logs caddy --tail 30"
+  step_done
+  event address "$ADDRESS"
 }
 
 # The connector has its own installer, which Seira serves with its address and the connector's image filled in.
@@ -1047,16 +1310,23 @@ connect_server() {
 first_admin_link() {
   made=$(compose exec -T seira seira pair --label "First admin" 2>/dev/null) || return 1
   lines=$(printf '%s\n' "$made" | grep -E '^(Pairing code|Link) ' || true)
-  case "$lines" in *"Link "*"https://$DOMAIN/pair#code="*) printf '%s\n' "$lines" | sed 's/^/  /' ;; *) return 1 ;; esac
+  case "$lines" in *"Link "*"$ADDRESS/pair#code="*) printf '%s\n' "$lines" | sed 's/^/  /' ;; *) return 1 ;; esac
 }
 
 finish() {
   say ""
-  say "Seira is running at https://$DOMAIN"
+  say "Seira is running at $ADDRESS"
   say ""
   pair_command="cd $INSTALL_DIR && sudo docker compose exec seira seira pair --label \"First admin\""
-  # Only to a terminal: in a log, the link would let whoever reads it sign in as the admin until it is used or expires.
-  if [ -t 1 ] && link=$(first_admin_link); then
+  # Only to an app that asked for events, or to a terminal: in a log, the link would let whoever reads it sign in as the
+  # admin until it is used or expires.
+  if [ "$EVENTS" = yes ]; then
+    step pair
+    link=$(first_admin_link) || fail "The one-time sign-in link for the first admin could not be made. Make one on this server with: $pair_command"
+    event pair "$(printf '%s\n' "$link" | sed -n 's/^ *Link //p' | head -n 1)"
+    step_done
+    say "The one-time sign-in link for the first admin was handed to the app that runs this installer."
+  elif [ -t 1 ] && link=$(first_admin_link); then
     say "To sign in as the first admin, open this one-time link in your browser. Anyone who has it can use it, once:"
     say "$link"
     say "To make another: $pair_command"
@@ -1068,7 +1338,7 @@ finish() {
   admins=$(env_value SEIRA_SIGNIN_EMAILS)
   if [ -n "$admins" ]; then
     if [ -n "$(env_value SEIRA_SIGNIN_SMTP_URL)" ]; then
-      say "Or open https://$DOMAIN/pair and sign in with an emailed code as: $admins"
+      say "Or open $ADDRESS/pair and sign in with an emailed code as: $admins"
     else
       say "Signing in with an emailed code needs a mail server: set SEIRA_SIGNIN_SMTP_URL (and SEIRA_SIGNIN_SMTP_FROM) in $INSTALL_DIR/.env, then run this again. The pairing link works without it."
     fi
@@ -1081,25 +1351,41 @@ finish() {
   fi
   say ""
   say "Settings: $INSTALL_DIR/.env    Your data: $INSTALL_DIR/data    Run this command again to repair."
+  event done
+}
+
+# A rerun with neither --tunnel nor --domain keeps the mode the install already has.
+resolve_mode() {
+  if [ "$TUNNEL" != yes ] && [ -z "$DOMAIN" ] && [ "$(env_value SEIRA_ACCESS)" = tunnel ]; then TUNNEL=yes; fi
+  if [ "$TUNNEL" != yes ] && [ -z "$DOMAIN" ]; then DOMAIN=$(env_value DOMAIN); fi
 }
 
 run_install() {
-  need_root "--domain ${DOMAIN:-seira.example.com}"
-  if [ -z "$DOMAIN" ]; then DOMAIN=$(env_value DOMAIN); fi
-  [ -n "$DOMAIN" ] || fail "Say which name people will open, like this: $(command_line '--domain seira.example.com')"
+  need_root "$(if [ "$TUNNEL" = yes ]; then printf %s '--tunnel --account-email you@example.com'; else printf %s "--domain ${DOMAIN:-seira.example.com}"; fi)"
+  resolve_mode
+  if [ "$TUNNEL" != yes ]; then
+    [ -n "$DOMAIN" ] || fail "Say which name people will open, like this: $(command_line '--domain seira.example.com')  Or use $(command_line '--tunnel --account-email you@example.com') for no domain."
+  elif ! account_signed_in; then
+    if [ "$EVENTS" = yes ] && [ -z "$ACCOUNT_EMAIL" ]; then fail "--account-email is needed to sign this server in to your Seira account."; fi
+    if [ "$EVENTS" != yes ] && ! tty_available; then fail "Signing in to your Seira account needs a terminal to type the emailed code in. Run this in an SSH session, or add --events and send the code as a line like: code 12345678"; fi
+  fi
   preflight
   if [ "$FAILED" != 0 ]; then
     report_docker_missing
     fail "This server is not ready: fix the $FAILED line(s) marked FIX above, then run this again. Nothing was changed."
   fi
-  if [ "$DOCKER_STATE" = missing ]; then offer_docker; fi
+  if [ "$DOCKER_STATE" = missing ]; then
+    step docker
+    offer_docker
+    step_done
+  fi
   install_server
   if [ -n "$CODE" ]; then connect_server; fi
   finish
 }
 
 run_check() {
-  if [ -z "$DOMAIN" ]; then DOMAIN=$(env_value DOMAIN); fi
+  resolve_mode
   preflight
   report_docker_missing
   if [ "$FAILED" != 0 ]; then
@@ -1107,6 +1393,7 @@ run_check() {
   fi
   say ""
   say "This server is ready for Seira. Nothing was changed."
+  event done
 }
 
 # Stops the server and removes its containers. The data, the settings and the certificates stay where they are.
@@ -1118,8 +1405,13 @@ run_uninstall() {
   compose_quietly down --remove-orphans || fail "Seira could not be stopped (Docker's message is above)."
   if [ -f "$INSTALL_DIR/update-runner.sh" ]; then sh "$INSTALL_DIR/update-runner.sh" --remove --dir "$INSTALL_DIR" >/dev/null 2>&1 || true; fi
   say "Seira is stopped and its containers are removed."
-  say "Your data is kept in $INSTALL_DIR/data, your settings in $INSTALL_DIR/.env and the HTTPS certificates in $INSTALL_DIR/caddy."
-  say "To start it again: $(command_line "--domain $(env_value DOMAIN)")"
+  if [ "$(env_value SEIRA_ACCESS)" = tunnel ]; then
+    say "Your data is kept in $INSTALL_DIR/data and your settings in $INSTALL_DIR/.env."
+    say "To start it again: $(command_line "--tunnel")"
+  else
+    say "Your data is kept in $INSTALL_DIR/data, your settings in $INSTALL_DIR/.env and the HTTPS certificates in $INSTALL_DIR/caddy."
+    say "To start it again: $(command_line "--domain $(env_value DOMAIN)")"
+  fi
   say "This command never deletes your data. To delete it yourself: sudo rm -rf $INSTALL_DIR"
   if [ -f "$SYSROOT/etc/seira/$SECCOMP" ]; then
     say "The sandbox's two profiles stay on this server: /etc/seira/$SECCOMP and /etc/apparmor.d/$APPARMOR_PROFILE."
@@ -1135,6 +1427,7 @@ main() {
   # by everyone on the server.
   umask 022
   settings
+  case " $* " in *" --events "*) EVENTS=yes ;; esac
   parse "$@"
   case "$MODE" in
     check) run_check ;;
