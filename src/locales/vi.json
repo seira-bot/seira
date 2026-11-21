@@ -5836,6 +5836,8 @@
   "sidebar.update.readyShort": "Bản cập nhật đã sẵn sàng",
   "sidebar.update.restartAction": "Khởi động lại",
   "sidebar.update.retryAction": "Thử lại",
+  "sidebar.update.availableShort": "Có bản cập nhật máy chủ",
+  "sidebar.update.howAction": "Cách cập nhật",
   "sidebar.nav.publishedApps": "Ứng dụng đã xuất bản",
   "sidebar.nav.teamFiles": "Tệp của nhóm",
   "settings.analytics.link": "Xem mọi thứ được gửi đi",

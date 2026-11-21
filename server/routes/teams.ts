@@ -262,6 +262,8 @@ export function createTeamRoutes(deps: TeamRouteDeps): RouteHandler {
       const parsed = SUGGESTION_PICK.safeParse(await readBody(req, 64 * 1024));
       if (!parsed.success) return json(res, 400, { error: "Send the conversation and the bots to keep." });
       const { threadId, ...pick } = parsed.data;
+      const shown = deps.threadShown?.(auth);
+      if (shown && !shown(threadId)) return json(res, 404, { error: "This conversation was not found." });
       const language = conversationLanguage(threadId);
       const open = openSuggestion(store, threadId, m[1]!);
       if (!open) return json(res, 409, { error: "This suggestion is no longer open." });

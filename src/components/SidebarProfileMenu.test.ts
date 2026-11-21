@@ -404,11 +404,34 @@ describe("Simple mode's account menu", () => {
     expect(simpleUpdateTop({ source: "desktop", phase: "downloaded" })).toEqual({ label: "Update ready", action: "Restart" });
     expect(simpleUpdateTop({ source: "desktop", phase: "downloaded", installMode: "handoff" })).toEqual({ label: "Update ready", action: "Install" });
     expect(simpleUpdateTop({ source: "desktop", phase: "error" })).toEqual({ label: "Update failed", action: "Retry" });
-    expect(simpleUpdateTop({ source: "server", phase: "available" })).toEqual({ label: "Update ready", action: "Install" });
+    expect(simpleUpdateTop({ source: "server", phase: "available", selfInstall: true })).toEqual({ label: "Update ready", action: "Install" });
     expect(simpleUpdateTop({ source: "server", phase: "reload" })).toEqual({ label: "Update ready", action: "Restart" });
     for (const phase of ["idle", "checking", "downloading", "up-to-date"] as const) expect(simpleUpdateTop({ source: "desktop", phase })).toBeNull();
     expect(simpleUpdateTop({ source: "server", phase: "error" })).toBeNull();
     expect(simpleUpdateTop(null)).toBeNull();
+  });
+
+  it("says a server update that the server cannot install by itself is only available, and leads to how to update it", () => {
+    for (const install of [{}, { selfInstall: false }]) {
+      expect(simpleUpdateTop({ source: "server", phase: "available", ...install })).toEqual({ label: "Server update available", action: "How to update" });
+    }
+    const openSettings = vi.fn();
+    expect(simpleUpdateTop({ source: "server", phase: "available", onRaisedSelect: openSettings })).toEqual({ label: "Server update available", action: "How to update", onSelect: openSettings });
+    expect(simpleUpdateTop({ source: "server", phase: "available", selfInstall: true, onRaisedSelect: openSettings })).toEqual({ label: "Update ready", action: "Install", onSelect: openSettings });
+    expect(simpleUpdateTop({ source: "desktop", phase: "downloaded", onRaisedSelect: openSettings })).toEqual({ label: "Update ready", action: "Restart" });
+  });
+
+  it("gives the raised row its own action and closes the menu, and keeps the row's own action otherwise", () => {
+    const openNotes = vi.fn(), openSettings = vi.fn();
+    const update = { key: "update", label: "Version 0.1.185 available (release notes)", keepOpen: true, onSelect: openNotes };
+    const [raised] = build({ update, updateTop: { label: "Server update available", action: "How to update", onSelect: openSettings } });
+    expect(raised).toMatchObject({ label: "Server update available", keepOpen: false });
+    expect(renderToStaticMarkup(createElement("div", null, raised!.trailing))).toContain(">How to update</span>");
+    raised!.onSelect();
+    expect(openSettings).toHaveBeenCalledOnce();
+    expect(openNotes).not.toHaveBeenCalled();
+    const [plain] = build({ update, updateTop: { label: "Update ready", action: "Restart" } });
+    expect(plain).toMatchObject({ keepOpen: true, onSelect: openNotes });
   });
 
   it("adds Files once My Cloud's files are ready and Archived bots while there are any, after Team map", () => {

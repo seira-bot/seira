@@ -2263,6 +2263,8 @@
   "sidebar.update.restartAction": "重新啟動",
   "sidebar.update.installAction": "安裝",
   "sidebar.update.retryAction": "重試",
+  "sidebar.update.availableShort": "伺服器有可用更新",
+  "sidebar.update.howAction": "如何更新",
   "links.card.pullRequest": "Pull request {id}",
   "links.card.issue": "Issue {id}",
   "links.card.reference": "Issue 或 pull request {id}",
