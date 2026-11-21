@@ -146,6 +146,19 @@ describe("the Board page", () => {
     expect(buttonNamed("Move to Done")).not.toBeNull();
   });
 
+  it("hides Move to Done when the person may only view the card's bot", async () => {
+    const view = { ...bot("scout", "Scout"), yourAccess: "view" } as unknown as Bot;
+    server.cards = [card("thread:v", { column: "needs-you", state: "waiting-on-you" })];
+    await act(async () => {
+      root.render(createElement(StoreContext.Provider,
+        { value: { state: { ...initialState, bots: [view], groups: [] } as AppState, dispatch, flushBotPatches: vi.fn(), refreshInstances: vi.fn(), refreshModels: vi.fn() } as never }, createElement(BoardPage)));
+    });
+    await settle();
+    await click($("[data-board-card='thread:v']"));
+    expect($("[data-board-panel]")).not.toBeNull();
+    expect(buttonNamed("Move to Done")).toBeNull();
+  });
+
   it("names a bot that closed a card", async () => {
     server.cards = [card("thread:c", { column: "done", state: "closed", closedBy: { kind: "bot", botId: "cleo" }, closedReason: "No longer needed" })];
     await mount(); await settle();

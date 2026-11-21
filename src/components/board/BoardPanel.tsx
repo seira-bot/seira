@@ -67,7 +67,7 @@ export function BoardPanel({ card, bot, closer, moveFailed, onClose, onOpen, onS
       <div className="flex flex-wrap gap-2">
         {card.threadId && <button type="button" onClick={onOpen} className={ACTION}>{t("board.panel.open")}</button>}
         {isStoppable(card) && <button type="button" onClick={onStop} className={ACTION}>{t("board.action.stop")}</button>}
-        {canMoveToDone(card) && <button type="button" onClick={onMove} className={ACTION}>{t("board.action.moveToDone")}</button>}
+        {canMoveToDone(card, bot) && <button type="button" onClick={onMove} className={ACTION}>{t("board.action.moveToDone")}</button>}
       </div>
       {moveFailed && <p role="alert" className="text-[13px] text-ink-secondary">{t("board.moveFailed")}</p>}
     </aside>

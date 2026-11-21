@@ -36,4 +36,4 @@ export function closerName(card: BoardCard, bots: readonly Bot[]): string | unde
   return name || undefined;
 }
 
-export const canMoveToDone = (card: BoardCard): boolean => card.column === "needs-you";
+export const canMoveToDone = (card: BoardCard, bot: Bot | undefined): boolean => card.column === "needs-you" && bot?.yourAccess !== "view";
