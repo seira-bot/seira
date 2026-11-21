@@ -236,6 +236,8 @@ const ALLOWED: ReadonlyArray<{ method: string; path: RegExp }> = [
   { method: "DELETE", path: /^\/api\/routines\/[\w-]+$/ },
   { method: "POST", path: /^\/api\/routines\/[\w-]+\/run$/ },
   { method: "POST", path: /^\/api\/routine-runs\/[\w-]+\/(?:cancel|seen)$/ },
+  // Read only: how much of each AI plan is used and when it resets. Releasing a hold stays with the host.
+  { method: "GET", path: /^\/api\/limit-resets$/ },
   // The stopped turn's "Continue when your limit resets": a one-time automation in an existing
   // conversation, less than POST /api/routines already allows.
   { method: "POST", path: /^\/api\/limit-resets\/continue$/ },

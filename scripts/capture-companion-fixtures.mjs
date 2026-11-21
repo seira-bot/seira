@@ -274,6 +274,7 @@ async function main() {
   );
   write("config", (await json(`${SIDECAR}/api/config`, asDevice())).body);
   write("instances", (await json(`${SIDECAR}/api/instances`, asDevice())).body);
+  write("limit-resets", (await json(`${SIDECAR}/api/limit-resets`, asDevice())).body);
 
   write("forbidden", (await json(`${SIDECAR}/api/config`, asDevice({
     method: "PUT",

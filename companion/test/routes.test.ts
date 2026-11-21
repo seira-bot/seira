@@ -127,6 +127,7 @@ describe("what the app may do", () => {
     ["POST", "/api/routine-runs/run_1/cancel"],
     ["POST", "/api/routine-runs/run_1/seen"],
     // The stopped turn's "Continue when your limit resets" makes a one-time automation, like POST /api/routines.
+    ["GET", "/api/limit-resets"],
     ["POST", "/api/limit-resets/continue"],
     ["GET", "/api/connectors/catalog"],
     ["GET", "/api/connectors/connected"],
@@ -358,7 +359,8 @@ describe("what it may not", () => {
     expect(allowed("PATCH", "/api/groups/room-1")).toBe(false);
     expect(allowed("GET", "/api/limit-resets/continue")).toBe(false);
     expect(allowed("DELETE", "/api/limit-resets/continue")).toBe(false);
-    expect(allowed("GET", "/api/limit-resets")).toBe(false);
+    expect(allowed("GET", "/api/limit-resets/x")).toBe(false);
+    expect(allowed("POST", "/api/limit-resets/release")).toBe(false);
     expect(allowed("POST", "/api/limit-resets/after-reset")).toBe(false);
   });
 
