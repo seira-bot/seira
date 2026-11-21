@@ -11553,6 +11553,8 @@
   "coret.notice": "Sign in with Coret.id. No API key needed. A bot that can use Coret.id can read, change and share your maps, so choose which bots get it under Bot access.",
   "termilo.description": "Bookings, services, schedules and customer messages in your Termilo.id business.",
   "termilo.notice": "Sign in with Termilo.id. No API key needed. A bot that can use Termilo.id can read and change your bookings and send messages to your customers, so choose which bots get it under Bot access.",
+  "citcat.description": "Chats, contacts and sales funnel in your Citcat.id WhatsApp CRM.",
+  "citcat.notice": "Sign in with Citcat.id. No API key needed. A bot that can use Citcat.id can read and change your contacts, chats and funnel, so choose which bots get it under Bot access.",
   "aiImport.title": "Move from another AI",
   "aiImport.subtitle": "Bring over the persona, memories, skills, tools, routines and chats of another AI.",
   "aiImport.source.chatgpt": "ChatGPT",

@@ -312,7 +312,7 @@ describe.each(HOSTED_MCP_APPS.filter((app) => "key" in app))("The $label key car
 });
 
 describe("the browser sign-in cards", () => {
-  it.each(["biver", "coret", "termilo"])("%s has no key field and no key page", async (id) => {
+  it.each(HOSTED_MCP_APPS.filter((app) => !("key" in app)).map((app) => app.id))("%s has no key field and no key page", async (id) => {
     await mount();
     const app = HOSTED_MCP_APPS.find((one) => one.id === id)!;
     expect("key" in app).toBe(false);

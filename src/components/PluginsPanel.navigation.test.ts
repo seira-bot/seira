@@ -578,7 +578,7 @@ describe("Apps pop-up", () => {
     expect(tree.find((node) => node.props.ariaLabel === "More categories")!.props.placement).toBeUndefined();
     tree.find((node) => node.props["data-apps-category"] === "design")!.props.onClick!();
     const design = render();
-    expect(design.html.match(/data-app-tile="(?!konektor|biver|coret|termilo)[^"]*"/g)).toEqual(['data-app-tile="figma"']);
+    expect(design.html.match(new RegExp(`data-app-tile="(?!${HOSTED_MCP_APPS.map((app) => app.id).join("|")})[^"]*"`, "g"))).toEqual(['data-app-tile="figma"']);
     expect([...design.html.matchAll(/<h3 id="[^"]*"[^>]*>([^<]*)/g)].map((match) => match[1])).toEqual(["Design"]);
     expect(chip(design.nodes, "all").props["aria-pressed"]).toBe(false);
     expect(design.nodes.find((node) => node.props["data-apps-category"] === "design")!.props["aria-pressed"]).toBe(true);

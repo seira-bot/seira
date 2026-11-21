@@ -11553,6 +11553,8 @@
   "coret.notice": "Entre com o Coret.id. Não é preciso ter uma chave de API. Um bot que pode usar o Coret.id pode ler, alterar e compartilhar seus mapas. Por isso, escolha quais bots terão acesso em Acesso dos bots.",
   "termilo.description": "Agendamentos, serviços, horários e mensagens para clientes no seu negócio do Termilo.id.",
   "termilo.notice": "Entre com o Termilo.id. Não é preciso ter uma chave de API. Um bot que pode usar o Termilo.id pode ler e alterar seus agendamentos e enviar mensagens aos seus clientes. Por isso, escolha quais bots terão acesso em Acesso dos bots.",
+  "citcat.description": "Conversas, contatos e funil de vendas no seu CRM de WhatsApp do Citcat.id.",
+  "citcat.notice": "Entre com o Citcat.id. Não é preciso ter uma chave de API. Um bot que pode usar o Citcat.id pode ler e alterar seus contatos, conversas e funil. Por isso, escolha quais bots terão acesso em Acesso dos bots.",
   "aiImport.title": "Migrar de outra IA",
   "aiImport.subtitle": "Traga a persona, as memórias, as habilidades, as ferramentas, as rotinas e as conversas de outra IA.",
   "aiImport.source.chatgpt": "ChatGPT",
