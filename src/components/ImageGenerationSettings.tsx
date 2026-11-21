@@ -10,9 +10,10 @@ import { LearnMore, SETTINGS_INLINE_INPUT, SETTINGS_INPUT, SettingRow, SettingsF
 import { Select } from "./Select";
 import { productName } from "@/lib/brand";
 
-const PROVIDER_LABEL: Record<ImageProvider, string> = {
+const PROVIDER_LABEL: Record<Exclude<ImageProvider, "codex">, string> = {
   openai: "OpenAI", xai: "Grok (xAI)", gemini: "Gemini", openrouter: "OpenRouter", custom: "Custom",
 };
+const providerLabel = (provider: ImageProvider) => provider === "codex" ? t("imageGen.provider.codex") : PROVIDER_LABEL[provider];
 const OWN_KEYS = {
   openai: { credential: "openaiImageApiKey", patch: (key: string) => ({ imageGen: { key } }), label: "imageGen.key.openai" },
   gemini: { credential: "geminiImageApiKey", patch: (key: string) => ({ imageGen: { geminiKey: key } }), label: "imageGen.key.gemini" },
@@ -36,10 +37,12 @@ const OTHER_MODEL = "\u0000other";
 function imageTestText(provider: ImageProvider, result: ImageProviderTest): { ok: boolean; text: string } {
   if (result.ok) {
     if (result.freeTier) return { ok: false, text: t("imageGen.test.noCredit") };
-    return { ok: true, text: t(provider === "openrouter" ? "imageGen.test.okOpenrouter" : "imageGen.test.ok") };
+    return { ok: true, text: t(provider === "openrouter" ? "imageGen.test.okOpenrouter" : provider === "codex" ? "imageGen.test.okCodex" : "imageGen.test.ok") };
   }
   if (result.reason === "model_missing") return { ok: false, text: t("imageGen.test.modelMissing", { model: result.model }) };
-  if (result.reason === "rejected") return { ok: false, text: t("imageGen.test.rejected") };
+  if (result.reason === "no_sign_in") return { ok: false, text: t("imageGen.codex.signIn") };
+  if (result.reason === "free_plan") return { ok: false, text: t("imageGen.codex.freePlan") };
+  if (result.reason === "rejected") return { ok: false, text: t(provider === "codex" ? "imageGen.test.codexRejected" : "imageGen.test.rejected") };
   if (result.reason === "unreachable") return { ok: false, text: t("imageGen.test.unreachable") };
   if (result.reason === "no_key") return { ok: false, text: t("imageGen.key.missing") };
   if (result.reason === "no_url") return { ok: false, text: t("imageGen.test.noUrl") };
@@ -47,8 +50,10 @@ function imageTestText(provider: ImageProvider, result: ImageProviderTest): { ok
 }
 type ImageGenStatus = NonNullable<ConfigStatus["imageGen"]>;
 
+/** A key of the card's own: the one Remove takes away. */
 function keyConfigured(status: ImageGenStatus | undefined, provider: ImageProvider): boolean {
   if (provider === "openai") return status?.openaiConfigured === true;
+  if (provider === "codex") return false;
   if (provider === "xai") return status?.xaiConfigured === true;
   if (provider === "gemini") return status?.geminiConfigured === true;
   if (provider === "openrouter") return status?.openrouterConfigured === true;
@@ -100,9 +105,9 @@ export function ImageGenerationSettings() {
 
   const statusText = status?.ready
     ? primary.configured
-      ? t("imageGen.status.ready", { provider: PROVIDER_LABEL[primary.provider] })
-      : t("imageGen.status.backupOnly", { provider: PROVIDER_LABEL[fallback!.provider] })
-    : t("imageGen.status.notReady");
+      ? t("imageGen.status.ready", { provider: providerLabel(primary.provider) })
+      : t("imageGen.status.backupOnly", { provider: providerLabel(fallback!.provider) })
+    : t(primary.provider === "codex" ? "imageGen.status.notReadyCodex" : "imageGen.status.notReady");
   return (
     <>
       <SettingsGroup label={t("settings.ai.images")} block="images"
@@ -148,7 +153,9 @@ export function ImageGenerationSettings() {
         </SettingsRows>
       </SettingsGroup>
 
-      {providers.map((provider) => <ProviderKeyCard key={provider} provider={provider} status={status} />)}
+      {providers.map((provider) => provider === "codex"
+        ? <CodexCard key={provider} status={status} />
+        : <ProviderKeyCard key={provider} provider={provider} status={status} />)}
     </>
   );
 }
@@ -169,7 +176,9 @@ function SlotRow({ slot, provider, model, configured, exclude, openrouterModels,
     <>
       <SettingRow
         title={label}
-        subtitle={provider && !configured ? t(provider === "custom" ? "imageGen.slot.needsConnection" : "imageGen.slot.needsKey") : t(slot === "primary" ? "imageGen.primary.help" : "imageGen.fallback.help")}
+        subtitle={provider && !configured
+          ? t(provider === "custom" ? "imageGen.slot.needsConnection" : provider === "codex" ? "imageGen.slot.needsSignIn" : "imageGen.slot.needsKey")
+          : t(slot === "primary" ? "imageGen.primary.help" : "imageGen.fallback.help")}
       >
         <Select
           data-testid={`image-gen-${slot}`}
@@ -179,7 +188,7 @@ function SlotRow({ slot, provider, model, configured, exclude, openrouterModels,
           aria-label={label}
         >
           {slot === "fallback" && <option value="">{t("imageGen.fallback.none")}</option>}
-          {IMAGE_PROVIDERS.filter((option) => option !== exclude).map((option) => <option key={option} value={option}>{PROVIDER_LABEL[option]}</option>)}
+          {IMAGE_PROVIDERS.filter((option) => option !== exclude).map((option) => <option key={option} value={option}>{providerLabel(option)}</option>)}
         </Select>
       </SettingRow>
       {provider && <ModelRow slot={slot} slotLabel={label} provider={provider} model={model} openrouterModels={openrouterModels} disabled={disabled} onModel={onModel} />}
@@ -255,21 +264,85 @@ function ModelRow({ slot, slotLabel, provider, model, openrouterModels, disabled
   );
 }
 
-function ProviderKeyCard({ provider, status }: { provider: ImageProvider; status: ImageGenStatus | undefined }) {
-  const { dispatch } = useStore();
-  const [value, setValue] = useState("");
-  const [url, setUrl] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+/** Test, with a fixed sentence for the answer; shared by the key cards and the Codex card. */
+function useImageTest(provider: ImageProvider, status: ImageGenStatus | undefined) {
   const [testing, setTesting] = useState(false);
   const [tested, setTested] = useState<{ ok: boolean; text: string; models: string } | null>(null);
   // OpenRouter's verdict also covers the models it checked; once they change it no longer applies. Others check only the key.
   const models = provider === "openrouter" ? [status?.primary, status?.fallback].filter((slot) => slot?.provider === provider).map((slot) => slot?.model).join(" ") : "";
   const verdict = tested?.models === models ? tested : null;
   const setVerdict = (next: { ok: boolean; text: string } | null) => setTested(next && { ...next, models });
+  const test = async () => {
+    setTesting(true);
+    setVerdict(null);
+    try {
+      setVerdict(imageTestText(provider, await api<ImageProviderTest>("/api/images/test", { method: "POST", body: JSON.stringify({ provider }) })));
+    } catch (cause) {
+      setVerdict({ ok: false, text: cause instanceof Error ? cause.message : String(cause) });
+    } finally {
+      setTesting(false);
+    }
+  };
+  return { testing, verdict, setVerdict, test };
+}
+
+function NoDot() {
+  return <span aria-hidden="true" className="mr-1.5 inline-block size-1.5 rounded-full bg-ink/20" />;
+}
+
+/** ChatGPT plan names come in lower case ("plus", "pro"); the card shows them as OpenAI writes them. */
+function planName(plan: string): string {
+  return plan.split(/[_-]/).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+}
+
+/** Codex makes images with its own ChatGPT sign-in: no key to paste, so the card shows the sign-in, Test, and the way to sign in. */
+function CodexCard({ status }: { status: ImageGenStatus | undefined }) {
+  const { dispatch } = useStore();
+  const { testing, verdict, test } = useImageTest("codex", status);
+  const signedIn = status?.codexSignedIn === true;
+  const free = signedIn && status?.codexPlan === "free";
+  const state = !signedIn ? t("imageGen.codex.signedOut")
+    : free ? t("imageGen.codex.freePlan")
+    : status?.codexPlan ? t("imageGen.codex.signedIn", { plan: planName(status.codexPlan) }) : t("imageGen.codex.signedInNoPlan");
+  return (
+    <SettingsGroup label={providerLabel("codex")} block="images-codex">
+      <SettingsRows>
+        <div className="flex flex-col gap-2 px-4 pb-4 pt-3" data-image-key-form="">
+          <span className="flex flex-col gap-1 text-[13px] leading-[18px] text-ink-secondary">
+            <span role="status" data-testid="image-gen-codex-state" className={cn("flex items-center", free && "text-danger")}>
+              {signedIn && !free ? <StatusDot tone="success" /> : <NoDot />}{state}
+            </span>
+            {verdict && <span role="status" className={verdict.ok ? "text-ink-secondary" : "text-danger"}>{verdict.text}</span>}
+          </span>
+          <p className="text-[13px] leading-[18px] text-ink-secondary">
+            {t("imageGen.codex.line", { app: productName() })}{" "}
+            {!signedIn && <>{t("imageGen.codex.signIn")}{" "}</>}
+            <button type="button" onClick={() => dispatch({ type: "toggleAppSettings", open: true, section: "engines" })}
+              className="cursor-pointer text-accent-text hover:underline">{t("imageGen.codex.manage")}</button>
+          </p>
+          {signedIn && !free && (
+            <div className="flex items-center justify-end gap-2" data-settings-form-foot="">
+              <button type="button" onClick={() => void test()} disabled={testing} className="ui-button ui-button-md cursor-pointer rounded-full">{testing ? t("keys.testing") : t("keys.test")}</button>
+            </div>
+          )}
+        </div>
+      </SettingsRows>
+    </SettingsGroup>
+  );
+}
+
+function ProviderKeyCard({ provider, status }: { provider: Exclude<ImageProvider, "codex">; status: ImageGenStatus | undefined }) {
+  const { dispatch } = useStore();
+  const [value, setValue] = useState("");
+  const [url, setUrl] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { testing, verdict, setVerdict, test } = useImageTest(provider, status);
   const configured = keyConfigured(status, provider);
   const own = provider === "openai" || provider === "gemini" || provider === "custom" ? OWN_KEYS[provider] : null;
   const shared = provider === "xai" || provider === "openrouter" ? SHARED_KEYS[provider] : null;
+  // A key saved in AI › Other services is used here as it is: the card shows it, and offers no second field for it.
+  const elsewhere = (provider === "openai" && !configured && status?.openaiShared === true) || (shared !== null && configured);
   const customUrl = url ?? status?.customUrl ?? "";
 
   const run = async (work: () => Promise<ConfigStatus>) => {
@@ -297,17 +370,28 @@ function ProviderKeyCard({ provider, status }: { provider: ImageProvider; status
     return api("/api/config", { method: "PUT", body: JSON.stringify({ imageGen: { customUrl: normalized } }) });
   });
 
-  const test = async () => {
-    setTesting(true);
-    setVerdict(null);
-    try {
-      setVerdict(imageTestText(provider, await api<ImageProviderTest>("/api/images/test", { method: "POST", body: JSON.stringify({ provider }) })));
-    } catch (cause) {
-      setVerdict({ ok: false, text: cause instanceof Error ? cause.message : String(cause) });
-    } finally {
-      setTesting(false);
-    }
-  };
+  const manage = <button type="button" onClick={() => dispatch({ type: "toggleAppSettings", open: true, section: "connections" })}
+    className="cursor-pointer text-accent-text hover:underline">{t("imageGen.key.manage")}</button>;
+  if (elsewhere) {
+    return (
+      <SettingsGroup label={PROVIDER_LABEL[provider]} block={`images-${provider}`}>
+        <SettingsRows>
+          <div className="flex flex-col gap-2 px-4 pb-4 pt-3" data-image-key-form="" data-key-elsewhere="">
+            <span className="flex flex-col gap-1 text-[13px] leading-[18px] text-ink-secondary">
+              <span role="status" className="flex items-center"><StatusDot tone="success" />{t("imageGen.key.saved")}</span>
+              {verdict && <span role="status" className={verdict.ok ? "text-ink-secondary" : "text-danger"}>{verdict.text}</span>}
+            </span>
+            <p className="text-[13px] leading-[18px] text-ink-secondary">
+              {t(shared ? shared.note : "imageGen.key.sharedOpenai")}{" "}{manage}
+            </p>
+            <div className="flex items-center justify-end gap-2" data-settings-form-foot="">
+              <button type="button" onClick={() => void test()} disabled={testing} className="ui-button ui-button-md cursor-pointer rounded-full">{testing ? t("keys.testing") : t("keys.test")}</button>
+            </div>
+          </div>
+        </SettingsRows>
+      </SettingsGroup>
+    );
+  }
 
   const keyState = t(configured ? "imageGen.key.saved" : provider === "custom" ? "imageGen.key.optional" : "imageGen.key.missing");
   // The provider fold's key form (§6.5), in a card of its own: "Key", the field, its status under it, one line ending in
@@ -332,7 +416,7 @@ function ProviderKeyCard({ provider, status }: { provider: ImageProvider; status
             </SettingsField>
           )}
           <SettingsField label={t("imageGen.key.label")} hint={<span className="flex flex-col gap-1">
-            <span role="status" className="flex items-center">{configured ? <StatusDot tone="success" /> : <span aria-hidden="true" className="mr-1.5 inline-block size-1.5 rounded-full bg-ink/20" />}{keyState}</span>
+            <span role="status" className="flex items-center">{configured ? <StatusDot tone="success" /> : <NoDot />}{keyState}</span>
             {verdict && <span role="status" className={verdict.ok ? "text-ink-secondary" : "text-danger"}>{verdict.text}</span>}
             {error && <span role="alert" className="text-danger">{error}</span>}
           </span>}>
@@ -350,9 +434,7 @@ function ProviderKeyCard({ provider, status }: { provider: ImageProvider; status
             />
           </SettingsField>
           <p className="text-[13px] leading-[18px] text-ink-secondary">
-            {shared ? <>{t(shared.note)}{" "}
-              <button type="button" onClick={() => dispatch({ type: "toggleAppSettings", open: true, section: "connections" })}
-                className="cursor-pointer text-accent-text hover:underline">{t("imageGen.key.manage")}</button>{" "}</>
+            {shared ? <>{t(shared.note)}{" "}{manage}{" "}</>
               : provider === "custom" ? <>{t("imageGen.custom.help", { app: productName() })}</>
               : <>{t("imageGen.key.line", { app: productName(), provider: PROVIDER_LABEL[provider] })}{" "}</>}
             {KEY_URL[provider] && <a href={KEY_URL[provider]} target="_blank" rel="noreferrer" className="text-accent-text hover:underline focus-visible:underline">{t("imageGen.key.get")}</a>}

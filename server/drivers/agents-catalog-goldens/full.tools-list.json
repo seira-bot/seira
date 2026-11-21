@@ -1287,6 +1287,7 @@
             "type": "string",
             "enum": [
               "openai",
+              "codex",
               "xai",
               "gemini",
               "openrouter",

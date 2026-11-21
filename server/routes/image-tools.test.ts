@@ -6,7 +6,8 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { createImageDailyCap } from "../image-daily-cap.ts";
-import type { GeneratedImage } from "../image-generation.ts";
+import type { GeneratedImage, ImageCredentials } from "../image-generation.ts";
+import { codexAuthFile } from "../testing/codex-image-auth.ts";
 import { createImageToolRoutes, generateImageForTurn, IMAGE_MESSAGES } from "./image-tools.ts";
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
@@ -255,5 +256,43 @@ describe("the generate_image route", () => {
     expect(await pending).toEqual({ status: 409, body: { error: "Image generation was cancelled" } });
     expect(signal!.aborted).toBe(true);
     expect([...r.parked.values()].flat()).toEqual([]);
+  });
+});
+
+describe("Codex images in a turn", () => {
+  const codex = (plan = "plus", extra: Partial<ImageCredentials["imageGen"]> = {}): ImageCredentials => {
+    const codexHome = scratch();
+    codexAuthFile(codexHome, { token: "turn-token", accountId: "acct-turn", plan, expiresAt: Date.now() + 3_600_000 });
+    return {
+      instances: { codex: { driver: "codex", environment: { CODEX_HOME: codexHome } } },
+      imageGen: { primary: { provider: "codex" }, fallback: { provider: "xai" }, ...extra },
+      xai: { key: "xai-secret" },
+    };
+  };
+  const hosts = (fetchImpl: typeof fetch) => vi.mocked(fetchImpl).mock.calls.map(([url]) => new URL(String(url)).host);
+
+  it("makes the image with Codex and counts it toward the day's cap", async () => {
+    const dataDir = scratch();
+    const fetchImpl = okFetch();
+    const { deps: d, attached } = deps({ cfg: codex(), fetchImpl, dataDir, dailyCap: 1 });
+    expect(await generateImageForTurn({ prompt: "owl" }, d)).toEqual({ status: 201, body: { text: expect.stringContaining("Codex (gpt-image-2)") } });
+    expect(attached).toHaveLength(1);
+    expect(await generateImageForTurn({ prompt: "fox" }, d)).toEqual({ status: 429, body: { error: IMAGE_MESSAGES.dailyCap(1) } });
+    expect(hosts(fetchImpl)).toEqual(["chatgpt.com"]);
+  });
+
+  it("stops at the turn's image limit without calling Codex", async () => {
+    const fetchImpl = okFetch();
+    const { deps: d } = deps({ cfg: codex("plus", { maxPerTurn: 1 }), fetchImpl, parked: 1 });
+    expect((await generateImageForTurn({ prompt: "owl" }, d)).status).toBe(429);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("moves to the backup when the Codex sign-in is on the free plan", async () => {
+    const fetchImpl = okFetch();
+    const { deps: d } = deps({ cfg: codex("free"), fetchImpl });
+    const result = await generateImageForTurn({ prompt: "owl" }, d);
+    expect(result.body).toEqual({ text: expect.stringMatching(/xAI .*backup image provider, because the base failed: Codex makes images only on a paid ChatGPT plan/) });
+    expect(hosts(fetchImpl)).toEqual(["api.x.ai"]);
   });
 });
