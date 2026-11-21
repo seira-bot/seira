@@ -155,6 +155,7 @@ const proxy = createProxyHandler({
     mutationToken: parentPort ? () => mutationToken : undefined,
     // Also stamps lastSeenAt.
     authenticate: (token) => devices.authenticate(token),
+    deviceRoutes: (deviceId) => devices.records().find((device) => device.id === deviceId)?.routes,
     redeem: (code, deviceName, pairRequestId, replacesToken) => devices.redeem(code, deviceName, pairRequestId, replacesToken),
     serverName: machineName,
     version: process.env.SEIRA_APP_VERSION,
@@ -287,7 +288,10 @@ const control = createControlServer({
     }
     const held = e2e.holdAdmission(deviceId, ADMISSION_SETTLE_MS);
     proxy.sendEndpoints(deviceId);
-    void held.then(() => e2e.closeDevice(deviceId, CLOSE.normal, "relay"));
+    void held.then(() => {
+      e2e.closeDevice(deviceId, CLOSE.normal, "relay");
+      proxy.disconnectOrigin(deviceId);
+    });
   },
   setRelay: (body) => {
     const config = parseRelayConfig(body);
