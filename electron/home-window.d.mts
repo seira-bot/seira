@@ -65,7 +65,7 @@ export declare const NAME_RETRY_MS: readonly number[];
 export function nameNotFound(code: number): boolean;
 export function createReadyClock(input?: { store?: { read(): unknown; write(value: unknown): void } | null; now?(): number }): { seen(state: unknown): void; fresh(origin: string | null): boolean };
 export function splashText(status: "opening" | "waking", name?: string | null, t?: (key: string, params?: Record<string, string | number>) => string): string;
-export function placeOf(input: { ask?: HomeAsk; remembered?: RememberedPlace; state?: any }): { kind: "cloud"; left?: string | null } | { kind: "team" | "own"; id: string; name: string; role: string | null; origin: string | null; machine: any };
+export function placeOf(input: { ask?: HomeAsk; remembered?: RememberedPlace; state?: any }): { kind: "cloud"; left?: string | null; noCloud?: true } | { kind: "team" | "own"; id: string; name: string; role: string | null; origin: string | null; machine: any };
 
 export function homeOf(input: { journal?: any; frozenCloud?: string | true | null; state?: any }): Home;
 export function noWayHome(worked: Home, state?: any): boolean;
