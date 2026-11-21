@@ -170,8 +170,11 @@ export function useSidebarToolsLayout(): SidebarToolsLayout {
 /** The narrowest the open sidebar gets. */
 export const SIDEBAR_MIN_WIDTH = 240;
 
-export function clampSidebarWidth(width: number, viewportWidth: number, max = 480): number {
-  return Math.max(SIDEBAR_MIN_WIDTH, Math.min(max, viewportWidth - 320, Math.round(width)));
+/** The narrowest the open Simple sidebar gets: two columns of tiles. */
+export const SIMPLE_SIDEBAR_MIN_WIDTH = 156;
+
+export function clampSidebarWidth(width: number, viewportWidth: number, max = 480, min = SIDEBAR_MIN_WIDTH): number {
+  return Math.max(min, Math.min(max, viewportWidth - 320, Math.round(width)));
 }
 
 export function loadSidebarWidth(storage?: Pick<Storage, "getItem"> | null, key = SIDEBAR_WIDTH_KEY): number | null {
@@ -180,7 +183,8 @@ export function loadSidebarWidth(storage?: Pick<Storage, "getItem"> | null, key 
     const raw = target?.getItem(key);
     if (raw === null || raw === undefined || !/^\d+$/.test(raw)) return null;
     const width = Number(raw);
-    return width >= SIDEBAR_MIN_WIDTH && width <= 480 ? width : null;
+    const min = key === SIMPLE_SIDEBAR_WIDTH_KEY ? SIMPLE_SIDEBAR_MIN_WIDTH : SIDEBAR_MIN_WIDTH;
+    return width >= min && width <= 480 ? width : null;
   } catch {
     return null;
   }

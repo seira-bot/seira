@@ -225,6 +225,10 @@ intended for automation:
 The verification feature map is intentionally incomplete. Add an entry only
 when the shared control surface can exercise it and a permanent test proves it.
 
+## Keep the app feature catalog current
+
+When you add a page, a tab, an agent tool, a slash command, a composer menu row or a release note, add or update its entry in `shared/app-features.ts`. The drift test fails until you do.
+
 ## MCP tool schemas
 
 Tool `inputSchema`s travel through every engine's own MCP-to-provider conversion before a model

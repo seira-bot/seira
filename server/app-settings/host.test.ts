@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { APP_FEATURES } from "../../shared/app-features.ts";
 import type { AppConfig } from "../config.ts";
 import { flushDecisionLog, readDecisions } from "../decision-log.ts";
 import { UNDO_STALE } from "../direct-apply.ts";
@@ -127,6 +128,21 @@ describe("reads", () => {
     expect(every[0]).toMatch(/^Settings opens from/);
     expect(every).toContain("Settings → AI → Other services");
     expect(every.join("\n")).not.toMatch(/API keys|Computers\b/);
+  });
+
+  it("features answers with each match's name, place, what it does and tools, and lists them all with no words", async () => {
+    const { host, turn } = fixture();
+    const found = await host.handle({ action: "features", query: "workflow" }, turn);
+    expect(found.status).toBe(200);
+    const lines = String(found.body.text).split("\n");
+    expect(lines[0]).toMatch(/^Workflows — Automations → Workflows: .*only when a routine uses it/);
+    const routines = String((await host.handle({ action: "features", query: "routine" }, turn)).body.text);
+    expect(routines).toMatch(/^Automations — .*\(tools: trigger_info, trigger, delete_trigger\)/m);
+    const none = String((await host.handle({ action: "features", query: "zzzzqq" }, turn)).body.text);
+    expect(none).toMatch(/^No feature of the app matches "zzzzqq"\. Here is every feature:\n/);
+    const every = String((await host.handle({ action: "features" }, turn)).body.text).split("\n");
+    expect(every).toContain("Workflows — Automations → Workflows");
+    expect(every.length).toBe(APP_FEATURES.length);
   });
 
   it("works in a turn that is not the owner's, where writes are refused", async () => {

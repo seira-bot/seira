@@ -119,7 +119,7 @@ export async function sendAppMessage(args: { botId: string; threadId: string; me
   }
 }
 
-export type PagePublishOutcome = { ok: true; card: PublishedPageCard } | { ok: false; error: string; card?: PublishedPageCard };
+export type PagePublishOutcome = { ok: true; card: PublishedPageCard } | { ok: false; error: string; card?: PublishedPageCard; reason?: string };
 
 /** Publishes the version on screen to a public link, the same link every time. */
 export async function publishAppPage(threadId: string, messageId: string, rev: number): Promise<PagePublishOutcome> {
@@ -129,7 +129,8 @@ export async function publishAppPage(threadId: string, messageId: string, rev: n
   } catch (error) {
     if (!(error instanceof ApiError)) return { ok: false, error: OFFLINE_ERROR.message };
     const card = isRecord(error.body) && isRecord(error.body.card) ? error.body.card as unknown as PublishedPageCard : undefined;
-    return { ok: false, error: error.message, ...(card ? { card } : {}) };
+    const reason = isRecord(error.body) && typeof error.body.reason === "string" ? error.body.reason : undefined;
+    return { ok: false, error: error.message, ...(card ? { card } : {}), ...(reason ? { reason } : {}) };
   }
 }
 
