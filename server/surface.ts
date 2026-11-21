@@ -187,7 +187,7 @@ export function noticeWithoutCloudComputer(
 }
 
 export const WITHOUT_CLOUD_COMPUTER_NOTE =
-  " This bot is set to a cloud computer, but none is set up, so no computer is mounted this turn: you cannot open, click or check anything on a screen. Work that needs no screen can go ahead. If the request needs a computer, do not claim to have used one: say that no cloud computer is set up and that the person can connect their own server or change where this bot works.";
+  " This bot is set to a cloud computer, but none is set up, so no desktop computer is mounted this turn and this stays so for the whole request: do not offer, select or switch to another computer; the person moves a conversation only by their own choice in the place control. You cannot open, click or check anything on a computer's screen. The built-in browser is the only screen you may have, and only when its tools are listed this turn. Work that needs no screen can go ahead. If the request needs a desktop, do not claim to have used one: say that no cloud computer is set up and that the person can connect their own server or change where this bot works.";
 
 export function surfaceLabel(surface: Surface): string {
   switch (surface) {
