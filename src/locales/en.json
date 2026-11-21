@@ -11644,7 +11644,7 @@
   "aiImport.reason.not-in-export": "Not in the export file",
   "aiImport.next.title": "What is left for you",
   "aiImport.next.addKey": "Add key",
-  "aiImport.next.addKeyItem": "{bot}: {tool} needs {keys}",
+  "aiImport.next.addKeyItem": "{bot}: add the key for {tool}",
   "aiImport.next.allowSkill": "Allow skill",
   "aiImport.next.allowSkillItem": "{bot}: {skill}",
   "aiImport.next.connectAgain": "Connect again",

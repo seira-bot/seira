@@ -15,7 +15,7 @@ export interface ReportProps {
 
 function NextSteps({ next }: { next: ImportNextSteps }) {
   const groups = [
-    { key: "addKey", items: next.addKey.map((item) => t("aiImport.next.addKeyItem", { bot: item.botName, tool: item.tool, keys: item.keys.join(", ") })) },
+    { key: "addKey", items: next.addKey.map((item) => t("aiImport.next.addKeyItem", { bot: item.botName, tool: item.tool })) },
     { key: "allowSkill", items: next.allowSkill.map((item) => t("aiImport.next.allowSkillItem", { bot: item.botName, skill: item.skill })) },
     { key: "connectAgain", items: next.connectAgain.map((item) => t("aiImport.next.connectAgainItem", { bot: item.botName, channel: item.channel })) },
     { key: "resumeRoutine", items: next.resumeRoutine.map((item) => t("aiImport.next.resumeRoutineItem", { bot: item.botName, routine: item.routine })) },

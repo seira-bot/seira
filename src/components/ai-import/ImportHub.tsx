@@ -66,9 +66,9 @@ export interface HubViewProps {
   onFiles: (files: DroppedFile[]) => void;
 }
 
-function SourceRow({ kind, line, action, onAction, extra }: { kind: ImportSourceKind | "grok-bot"; line: string; action: string; onAction: () => void; extra?: ReactNode }) {
+function SourceRow({ kind, title, line, action, onAction, extra }: { kind: ImportSourceKind | "grok-bot"; title?: string; line: string; action: string; onAction: () => void; extra?: ReactNode }) {
   return (
-    <SettingRow title={sourceName(kind)} subtitle={line} leading={<SettingsMark><SourceMark kind={kind} /></SettingsMark>} message={extra}>
+    <SettingRow title={title ?? sourceName(kind)} subtitle={line} leading={<SettingsMark><SourceMark kind={kind} /></SettingsMark>} message={extra}>
       <button type="button" data-ai-import-source={kind} className="ui-button" onClick={onAction}>{action}</button>
     </SettingRow>
   );
@@ -88,7 +88,7 @@ export function HubView(props: HubViewProps) {
       {local ? (
         <>
           {found.map((source) => (
-            <SourceRow key={source.id} kind={source.kind} line={source.profile ? `${source.name} · ${source.profile}` : source.name} action={t("aiImport.action.bringIn")} onAction={() => onBring(source)}
+            <SourceRow key={source.id} kind={source.kind} title={source.name} line={t(`aiImport.line.${source.kind}` as LocaleKey)} action={t("aiImport.action.bringIn")} onAction={() => onBring(source)}
               extra={source.kind === "claude-code" ? (
                 <label className="inline-flex items-center gap-2 text-[12px] leading-4 text-ink-secondary">
                   <input type="checkbox" data-ai-import-transcripts="" checked={transcripts} onChange={(event) => onTranscripts(event.target.checked)} className="size-3.5 accent-[var(--color-accent)]" />

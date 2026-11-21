@@ -25,7 +25,7 @@ describe("the report", () => {
   it("next steps: Add key, Allow skill, Connect again and Resume routine", () => {
     const shown = text(draw());
     expect(shown).toContain("Add key");
-    expect(shown).toContain("Sample project: notes needs NOTES_KEY");
+    expect(shown).toContain("Sample project: add the key for notes");
     expect(shown).toContain("Allow skill");
     expect(shown).toContain("Sample project: pdf-tools");
     expect(shown).toContain("Connect again");

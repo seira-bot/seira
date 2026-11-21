@@ -19,7 +19,7 @@ import { DONE, job, READY } from "./test-jobs";
 
 const text = (markup: string) => markup.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ");
 const SOURCES: LocalSourceView[] = [
-  { id: "s1", kind: "hermes", name: "Hermes", profile: "work" },
+  { id: "s1", kind: "hermes", name: "Hermes · work", profile: "work" },
   { id: "s2", kind: "claude-code", name: "Claude Code" },
 ];
 const hub = (overrides: Partial<HubViewProps> = {}) => renderToStaticMarkup(createElement(HubView, {
@@ -65,6 +65,12 @@ describe("the hub on the Import page", () => {
     expect(markup).toContain('data-ai-import-source="paste"');
     expect(markup).toContain("data-ai-import-files");
     expect(text(markup)).toContain("can only be brought in from that computer");
+  });
+
+  it("names a local source once and describes it with its own line", () => {
+    const shown = text(hub());
+    expect(shown).toContain("Hermes · work Profile, memories, skills, tools, routines and chats.");
+    expect(shown).not.toContain("work · work");
   });
 
   it("says when it looks, finds nothing, or has a job to come back to", () => {

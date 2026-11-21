@@ -11644,7 +11644,7 @@
   "aiImport.reason.not-in-export": "Não está no arquivo de exportação",
   "aiImport.next.title": "O que falta para você",
   "aiImport.next.addKey": "Adicionar chave",
-  "aiImport.next.addKeyItem": "{bot}: {tool} precisa de {keys}",
+  "aiImport.next.addKeyItem": "{bot}: adicione a chave de {tool}",
   "aiImport.next.allowSkill": "Permitir habilidade",
   "aiImport.next.allowSkillItem": "{bot}: {skill}",
   "aiImport.next.connectAgain": "Conectar de novo",
