@@ -26,7 +26,8 @@ import { bindDecisionRetention, decisionRetentionDays } from "./decision-log.ts"
 import { hostedWorkspaceConfigured } from "./enterprise.ts";
 import { reportableServerVersion, serverVersion } from "./environment.ts";
 import { resolveLoopbackTrust } from "./request-auth.ts";
-import { CRASH_EXIT_CODE, crashed, restartLine, restartPolicy } from "./restart.ts";
+import { CRASH_EXIT_CODE, crashed, RESTART_EXIT_CODE, restartLine, restartPolicy } from "./restart.ts";
+import { HANDOFF_ENV, handoffAfterRestart, handoffAtStart, realHandoffDeps, type HandoffDeps } from "./app-handoff.ts";
 import { writeFileAtomic } from "./atomic.ts";
 import { ensureCaddy, normalizeDomainOption, startCaddy, type RunningCaddy } from "./caddy.ts";
 import { runServiceCommand } from "./service-cli.ts";
@@ -653,6 +654,7 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
     SEIRA_DATA_DIR: options.dataDir,
     SEIRA_PORT: String(options.port),
     SEIRA_WEBHOOK_PORT: process.env.SEIRA_WEBHOOK_PORT || String(options.port + 1), ...(options.relay ? { SEIRA_PHONE_RELAY: "1" } : {}),
+    SEIRA_LAUNCHER: "1",
   };
   if (options.local) delete env.SEIRA_PUBLIC_URL;
   // The per-launch secret goes over stdin, not the environment that every engine the server starts inherits.
@@ -835,11 +837,22 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
 }
 
 /** A server exiting with RESTART_EXIT_CODE is started again here at the same address, without a second pairing code. */
-export async function serveUntilStopped(options: CliOptions, run: (options: CliOptions) => Promise<number> = runServe, now: () => number = Date.now): Promise<number> {
+export async function serveUntilStopped(
+  options: CliOptions,
+  run: (options: CliOptions) => Promise<number> = runServe,
+  now: () => number = Date.now,
+  handoff: HandoffDeps = realHandoffDeps({ dataDir: options.dataDir, port: options.port, own: serverVersion() }),
+): Promise<number> {
   const policy = restartPolicy(now);
-  let launch = options;
+  let launch = handoff.env[HANDOFF_ENV] === "restart" ? { ...options, pair: false, open: false } : options;
+  const started = await handoffAtStart(handoff);
+  if (started !== null) return started;
   for (;;) {
     const code = await run(launch);
+    if (code === RESTART_EXIT_CODE) {
+      const handed = await handoffAfterRestart(handoff);
+      if (handed !== null) return handed;
+    }
     if (!policy.again(code)) return code;
     console.log(`\n${restartLine(code, policy.delayMs())}`); if (policy.delayMs() > 0) await new Promise((resume) => setTimeout(resume, policy.delayMs()));
     launch = { ...options, pair: false, open: false };
