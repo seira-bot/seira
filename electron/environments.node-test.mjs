@@ -506,3 +506,29 @@ test("the menu offers bringing the bots back to this computer only when asked to
   assert.deepEqual(calls, ["back"]);
   assert.equal(env.workspaceMenuTemplate(state, base).some((entry) => entry.id === "workspace-bring-back"), false);
 });
+
+test("withServerName saves a trimmed name for a saved server and refuses an empty, long or used one", () => {
+  const state = { activeId: "local", environments: [
+    { id: "a", kind: "remote", name: "instabox-seira", origin: "https://a.example.test" },
+    { id: "b", kind: "remote", name: "Office", origin: "https://b.example.test" },
+    { id: "lab", kind: "local", name: "Lab", dataDir: "/lab" },
+  ] };
+  const done = env.withServerName(state, "a", "  Studio   box  ");
+  assert.equal(done.outcome, "saved");
+  assert.deepEqual(done.state.environments.map((entry) => entry.name), ["Studio box", "Office", "Lab"]);
+  assert.equal(state.environments[0].name, "instabox-seira", "the old state is not changed");
+  assert.equal(JSON.parse(env.serializeEnvironments(done.state)).environments[0].name, "Studio box", "the name is in the saved file");
+  assert.equal(env.parseEnvironments(env.serializeEnvironments(done.state)).environments[0].name, "Studio box", "and it reads back the same");
+  const long = "x".repeat(60);
+  assert.equal(env.withServerName(state, "a", long).state.environments[0].name, long, "60 characters fit");
+  for (const [name, outcome] of [["", "name"], ["   ", "name"], ["x".repeat(61), "name"], [42, "name"], ["office", "taken"], ["LAB", "taken"], ["This computer", "taken"]]) {
+    const refused = env.withServerName(state, "a", name, ["This computer", "Work"]);
+    assert.equal(refused.outcome, outcome, String(name));
+    assert.equal(refused.state, state, "the old name stays");
+  }
+  assert.equal(env.withServerName(state, "a", "Work", ["Work"]).outcome, "taken", "a workspace of this computer's own has the name");
+  assert.equal(env.withServerName(state, "a", "INSTABOX-seira").outcome, "saved", "its own name in another case is free");
+  assert.equal(env.withServerName(state, "a", "instabox-seira").state, state, "the same name changes nothing");
+  assert.equal(env.withServerName(state, "lab", "X").outcome, "gone", "never a workspace folder of this app");
+  assert.equal(env.withServerName(state, "nope", "X").outcome, "gone");
+});
