@@ -473,8 +473,8 @@ const __APP_VERSION__: string;
       /** Install on my server: the page sends each secret once and keeps none; events carry none. */
       serverInstall?: {
         info(): Promise<{ agent: boolean }>;
-        pickKey(): Promise<{ path: string; name: string } | null>;
-        start(request: { address: string; user: string; email: string; method: "password" | "key" | "agent"; password?: string; sudoPassword?: string; passphrase?: string; keyPath?: string }): Promise<boolean>;
+        pickKey(): Promise<{ name: string } | null>;
+        start(request: { address: string; user: string; email: string; method: "password" | "key" | "agent"; password?: string; sudoPassword?: string; passphrase?: string }): Promise<boolean>;
         acceptHostKey(): Promise<boolean>;
         rejectHostKey(): Promise<boolean>;
         check(): Promise<boolean>;

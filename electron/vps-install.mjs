@@ -4,7 +4,7 @@
 // Password, passphrase, key and emailed code live only in the fields of a session. They are never written, logged or sent
 // to the page.
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync, realpathSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
@@ -16,6 +16,20 @@ export const CANCEL_BUDGET_MS = 1_500;
 const QUICK_MS = 30_000;
 const DONE_GRACE_MS = 5_000;
 const KEY_FILE_LIMIT = 64 * 1024;
+
+export function readKeyFile(file) {
+  if (!file) throw new Error("no file");
+  const real = realpathSync(file);
+  if (!statSync(real).isFile()) throw new Error("not a file");
+  const fd = openSync(real, "r");
+  try {
+    if (!fstatSync(fd).isFile()) throw new Error("not a file");
+    const buffer = Buffer.alloc(KEY_FILE_LIMIT + 1);
+    const count = readSync(fd, buffer, 0, buffer.length, 0);
+    if (count > KEY_FILE_LIMIT) throw new Error("too large");
+    return buffer.subarray(0, count);
+  } finally { closeSync(fd); }
+}
 const WINDOWS_AGENT_PIPE = "\\\\.\\pipe\\openssh-ssh-agent";
 const TEMP_DIR = /^\/(?:[A-Za-z0-9._-]+\/)*seira-install\.[A-Za-z0-9]+$/;
 const EMAIL = /^[^\s'"\\<>`$;&|(){}]+@[^\s'"\\<>`$;&|(){}@]+\.[^\s'"\\<>`$;&|(){}@]+$/;
@@ -178,9 +192,7 @@ export function createInstallSession(deps) {
     if (method === "agent" && !agent) throw new InstallFailure("auth");
     if (method === "key") {
       try {
-        const file = String(request.keyPath ?? "");
-        if (!file || statSync(file).size > KEY_FILE_LIMIT) throw new Error("size");
-        key = readFileSync(file);
+        key = readKeyFile(String(request.keyPath ?? ""));
       } catch { throw new InstallFailure("keyUnreadable"); }
       const parsed = ssh2Utils().parseKey(key, passphrase || undefined);
       const first = Array.isArray(parsed) ? parsed[0] : parsed;
@@ -494,11 +506,13 @@ const text = (value, limit) => (typeof value === "string" ? value.slice(0, limit
 export function installVpsInstall({ ipcMain, guard, dialog, add, dataDir, resourcesPath, packaged, createClient }) {
   const savedHosts = createSavedHosts({ dir: dataDir });
   let current = null;
+  let pickedKey = null;
   const handle = (channel, handler) => ipcMain.handle(`server-install:${channel}`, guard(handler));
   handle("info", () => ({ agent: Boolean(agentSocket()) }));
   handle("pick-key", async () => {
     const picked = await dialog.showOpenDialog({ properties: ["openFile", "showHiddenFiles"], defaultPath: path.join(os.homedir(), ".ssh") });
-    return picked.canceled || !picked.filePaths[0] ? null : { path: picked.filePaths[0], name: path.basename(picked.filePaths[0]) };
+    pickedKey = picked.canceled || !picked.filePaths[0] ? null : picked.filePaths[0];
+    return pickedKey ? { name: path.basename(pickedKey) } : null;
   });
   handle("start", async (event, request) => {
     const previous = current;
@@ -506,14 +520,17 @@ export function installVpsInstall({ ipcMain, guard, dialog, add, dataDir, resour
     const sender = event.sender;
     const session = createInstallSession({
       installer: installerPath({ packaged, resourcesPath }), savedHosts, addServer: add, createClient,
-      emit: (message) => { if (!sender.isDestroyed()) sender.send(EVENT_CHANNEL, message); },
+      emit: (message) => {
+        if (message.type === "connected" || message.type === "failed" || message.type === "cancelled") pickedKey = null;
+        if (!sender.isDestroyed()) sender.send(EVENT_CHANNEL, message);
+      },
     });
     current = session;
     sender.once("destroyed", () => { void session.cancel(); });
     const input = request && typeof request === "object" ? request : {};
     void session.start({
       address: text(input.address, 300), user: text(input.user, 80), email: text(input.email, 300), method: text(input.method, 10),
-      password: text(input.password, 1024), sudoPassword: text(input.sudoPassword, 1024), passphrase: text(input.passphrase, 1024), keyPath: text(input.keyPath, 1024),
+      password: text(input.password, 1024), sudoPassword: text(input.sudoPassword, 1024), passphrase: text(input.passphrase, 1024), keyPath: pickedKey ?? "",
     });
     return true;
   });
@@ -522,5 +539,5 @@ export function installVpsInstall({ ipcMain, guard, dialog, add, dataDir, resour
   handle("check", () => current?.check() ?? false);
   handle("install", (_event, options) => current?.install({ installDocker: options?.installDocker === true }) ?? false);
   handle("send-code", (_event, code) => current?.sendCode(text(code, 16)) ?? false);
-  handle("cancel", async () => { await current?.cancel(); return true; });
+  handle("cancel", async () => { pickedKey = null; await current?.cancel(); return true; });
 }

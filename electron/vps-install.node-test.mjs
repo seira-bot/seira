@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { createInstallSession, CONNECT_TIMEOUT_MS, installerPath, parseAddress, parseSeiraLine, shellQuote } from "./vps-install.mjs";
+import { createInstallSession, CONNECT_TIMEOUT_MS, installerPath, installVpsInstall, parseAddress, parseSeiraLine, readKeyFile, shellQuote } from "./vps-install.mjs";
 import { createSavedHosts, fingerprint } from "./vps-install-hosts.mjs";
 
 const require = createRequire(import.meta.url);
@@ -588,4 +588,62 @@ test("the installer comes from the bundled resources, is shipped by the build, a
     const source = readFileSync(path.join(here, file), "utf8");
     assert.equal(/child_process/.test(source), false, `${file} must not run a program`);
   }
+});
+
+function bridge(pick) {
+  const handlers = new Map(), sent = [];
+  const dir = mkdtempSync(path.join(os.tmpdir(), "seira-bridge-"));
+  installVpsInstall({ ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) }, guard: (handler) => handler, dialog: { showOpenDialog: async () => pick() },
+    add: async () => true, dataDir: dir, resourcesPath: dir, packaged: false });
+  const sender = { isDestroyed: () => false, send: (_channel, message) => sent.push(message), once() {} };
+  const call = (name, ...args) => handlers.get(`server-install:${name}`)({ sender }, ...args);
+  return { call, sent, dir };
+}
+const keyRequest = { address: "127.0.0.1:1", user: "alice", email: "me@example.com", method: "key" };
+
+test("a key path sent by the page is never read; only the file the person picked is used", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "seira-keyfile-"));
+  const secret = path.join(dir, "other");
+  writeFileSync(secret, "not a key");
+  const b = bridge(() => ({ canceled: true, filePaths: [] }));
+  await b.call("start", { ...keyRequest, keyPath: secret });
+  const failed = await until(() => b.sent.find((event) => event.type === "failed"), "a failure");
+  assert.equal(failed.reason, "keyUnreadable");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("the pick answers with the file name only, and a picked path that is not a regular file is unreadable", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "seira-keyfile-"));
+  const b = bridge(() => ({ canceled: false, filePaths: [dir] }));
+  assert.deepEqual(await b.call("pick-key"), { name: path.basename(dir) });
+  await b.call("start", keyRequest);
+  const failed = await until(() => b.sent.find((event) => event.type === "failed"), "a failure");
+  assert.equal(failed.reason, "keyUnreadable");
+  assert.throws(() => readKeyFile(dir));
+  assert.throws(() => readKeyFile("/dev/null"));
+  const big = path.join(dir, "big");
+  writeFileSync(big, Buffer.alloc(64 * 1024 + 1));
+  assert.throws(() => readKeyFile(big));
+  writeFileSync(big, "small");
+  assert.equal(readKeyFile(big).toString(), "small");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("the stored key path is cleared by cancel and by a cancelled pick", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "seira-keyfile-"));
+  const file = path.join(dir, "id");
+  writeFileSync(file, "x");
+  let answer = { canceled: false, filePaths: [file] };
+  const b = bridge(() => answer);
+  await b.call("pick-key");
+  await b.call("cancel");
+  await b.call("start", keyRequest);
+  assert.equal((await until(() => b.sent.find((event) => event.type === "failed"), "a failure")).reason, "keyUnreadable");
+  await b.call("pick-key");
+  answer = { canceled: true, filePaths: [] };
+  assert.equal(await b.call("pick-key"), null);
+  b.sent.length = 0;
+  await b.call("start", keyRequest);
+  assert.equal((await until(() => b.sent.find((event) => event.type === "failed"), "a failure")).reason, "keyUnreadable");
+  rmSync(dir, { recursive: true, force: true });
 });
