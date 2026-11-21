@@ -89,7 +89,7 @@ import { SidebarRailSeparator, SimpleRailFooter } from "./SidebarSimpleRail";
 import { useShowThreads } from "@/lib/thread-preferences";
 import { useBotUnread } from "./unread-notice";
 import { attentionHasRunningWork, attentionJumpAction, attentionUnpinAction, crossBotAttentionThreads, crossBotPinnedThreads, runningRoutineRun, SidebarBotActivity, sidebarBotActivityTasks, sidebarBotStatus } from "./SidebarBotActivity";
-import { SidebarNoBots, SidebarTileGrid } from "./SidebarTiles";
+import { SidebarNoBots, SidebarSectionTiles, SidebarTileGrid } from "./SidebarTiles";
 import { BotContextMenu } from "./SidebarBotMenu";
 export { BotContextMenu };
 import { AvatarActivityDot, AvatarCornerDot, RowDot, RowStatusText, rowSelectedSurface, rowSurface } from "./SidebarRowMarkers";
@@ -1114,13 +1114,13 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
     ...(pinnedBots.length > 0 && !universalPins && !simpleDesk ? [PINNED_SECTION_ID] : []),
     ...(unsectionedRooms.length > 0 ? [CHANNELS_SECTION_ID] : []),
     ...(botChats.length > 0 ? [BOT_CHATS_SECTION_ID] : []),
-    ...(unsectionedBots.length > 0 || drops.slot ? [BOTS_SECTION_ID] : []),
+    ...((unsectionedBots.length > 0 && !simpleDesk) || drops.slot ? [BOTS_SECTION_ID] : []),
     ...sectionNames.map(userSectionId),
   ];
   const layout = sections.arrange(naturalSectionIds);
   const sectionIds = layout.sectionIds;
   const showPinnedCircleThreads = !simpleDesk && pinnedCircleThreadListVisible(pinnedCircles, density, pinnedBots.length);
-  const tiles = simpleDesk && (primary !== null || pinnedBots.length > 0);
+  const tiles = simpleDesk && (primary !== null || pinnedBots.length > 0 || unsectionedBots.length > 0);
   const { interactive: layoutInteractive, collapsed: sectionCollapsed, toggle: toggleSection } = sections;
   const archivedBots = state.bots.filter((bot) => bot.hidden && !bot.movedTo);
   const archivedEntry = remoteClient ? undefined : { count: archivedBots.length, open: () => setArchivedBotsOpen(true) };
@@ -1356,7 +1356,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
           onToggle={layoutInteractive ? () => toggleSection(PINNED_THREADS_SECTION_ID) : undefined}
         />
       )}
-      {tiles && <SidebarTileGrid primary={primary} pinned={pinnedBots} row={botRow} onAdd={teamSettingsAllowed !== false || state.config?.team ? () => dispatch({ type: "newBot" }) : undefined} />}
+      {tiles && <SidebarTileGrid primary={primary} pinned={pinnedBots} others={unsectionedBots} row={botRow} onAdd={teamSettingsAllowed !== false || state.config?.team ? () => dispatch({ type: "newBot" }) : undefined} />}
       {simpleDesk && !tiles && <SidebarNoBots />}
       </GlassBar>
 
@@ -1392,7 +1392,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
               id === PINNED_SECTION_ID
                 ? pinnedBots
                 : id === BOTS_SECTION_ID
-                  ? unsectionedBots
+                  ? (simpleDesk ? [] : unsectionedBots)
                   : sectionName
                     ? sectionedBots.filter((bot) => bot.section === sectionName)
                     : [];
@@ -1447,7 +1447,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
                 {!collapsed && (
                   <>
                     {id === BOTS_SECTION_ID && drops.slot}
-                    {sectionChiefItems.map((bot) => <BotListItem key={bot.id} {...botRow(bot)} />)}
+                    {simpleDesk && sectionName ? <SidebarSectionTiles bots={[...sectionChiefItems, ...sectionBotItems]} row={botRow} /> : sectionChiefItems.map((bot) => <BotListItem key={bot.id} {...botRow(bot)} />)}
                     {sectionGroupItems.map((group) => roomDrag.wrap(group.id, (
                       <GroupListItem
                         key={group.id}
@@ -1465,7 +1465,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
                         row={botRow}
                         listItem={BotListItem}
                       />
-                    ) : sectionBotItems.map((bot) => <BotListItem key={bot.id} {...botRow(bot)} />)}
+                    ) : simpleDesk && sectionName ? null : sectionBotItems.map((bot) => <BotListItem key={bot.id} {...botRow(bot)} />)}
                     {!remoteClient && sectionName && layoutInteractive && !drops.naming(sectionName) && ((!simple && !advDesk) || sectionChiefItems.length + sectionGroupItems.length + sectionBotItems.length === 0) && (
                       <button onClick={() => setMoveToTeam(sectionName)} aria-label={t(state.bots.some(bot => !bot.hidden && bot.section?.trim() === sectionName) ? "team.manageBotsIn" : "team.addBotsTo", { name: sectionName })}
                         className="mx-3 my-1 flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] text-ink-secondary hover:bg-raised hover:text-ink">

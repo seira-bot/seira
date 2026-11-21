@@ -3,6 +3,7 @@
 // owner-only setting is only explained.
 import { randomUUID } from "node:crypto";
 
+import { APP_FEATURES, findAppFeatures, type AppFeature } from "../../shared/app-features.ts";
 import { isSettingsCardId, SETTINGS_CARD_IDS, type AppSettingRequest, type SettingsCardId } from "../../shared/app-settings.ts";
 import { appendDecision } from "../decision-log.ts";
 import { UNDO_STALE } from "../direct-apply.ts";
@@ -18,6 +19,8 @@ export const TOOL = "app_settings";
 export const WRITE_BUDGET = 10;
 const THEME_ACTIONS: readonly string[] = ["theme", "set_theme", "add_theme_asset", "theme_history", "undo_theme"];
 const FIND_LIMIT = 8;
+const FEATURE_LIMIT = 5;
+const featureLine = (feature: AppFeature) => `${feature.name} — ${feature.place}: ${feature.does}${feature.tools?.length ? ` (tools: ${feature.tools.join(", ")})` : ""}`;
 const NOT_SET = "not set";
 const text = (value: string) => value || NOT_SET;
 /** What a card and the bot see of a change: before → after, or, with no `before`, one line saying what it does. */
@@ -209,6 +212,12 @@ export function createAppSettings(deps: AppSettingsDeps) {
         const places = query ? findPlaces(query) : [];
         return reply(200, { text: query ? (places.length ? places.join("\n") : `No place in the app matches ${JSON.stringify(query)}. Here is every place:\n${placesList()}`) : placesList() });
       }
+      if (body.action === "features") {
+        const query = typeof body.query === "string" ? body.query.trim() : "";
+        if (!query) return reply(200, { text: APP_FEATURES.map((feature) => `${feature.name} — ${feature.place}`).join("\n") });
+        const hits = findAppFeatures(query, FEATURE_LIMIT);
+        return reply(200, { text: hits.length ? hits.map(featureLine).join("\n") : `No feature of the app matches ${JSON.stringify(query)}. Here is every feature:\n${APP_FEATURES.map((feature) => `${feature.name} — ${feature.place}`).join("\n")}` });
+      }
       if (body.action === "get") {
         const entry = typeof body.id === "string" ? byId.get(body.id) : undefined;
         if (!entry) return refuse(404, `No setting with id ${JSON.stringify(body.id ?? null)}. Use action find first.`);
@@ -218,7 +227,7 @@ export function createAppSettings(deps: AppSettingsDeps) {
       if (body.action === "set") return set(turn, body);
       if (body.action === "show_card") return showCard(turn, body);
       if (typeof body.action === "string" && THEME_ACTIONS.includes(body.action)) return theme(turn, body);
-      return refuse(400, `action must be find, get, set, show_card, places, ${THEME_ACTIONS.join(", ")}.`);
+      return refuse(400, `action must be find, get, set, show_card, places, features, ${THEME_ACTIONS.join(", ")}.`);
     },
 
     /** Undo on an applied card: restores the value read before the change, unless it changed since. */

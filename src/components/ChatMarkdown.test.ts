@@ -651,7 +651,7 @@ describe("application and rejected Markdown links", () => {
 });
 
 describe("a bot's link to a page it published", () => {
-  const PAGE = "https://abcdefghijklmnopqrstuvwxyz.page.seira.bot/";
+  const PAGE = "https://abcdefghijklmnopqrstuvwxyz.seira.page/";
   const text = `Here is your dashboard: [Sales dashboard](${PAGE})`;
   async function clickPage(store?: Parameters<typeof BotEditorStore>[0]["value"]) {
     const host = document.createElement("div");

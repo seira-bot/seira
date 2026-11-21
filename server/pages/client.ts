@@ -30,9 +30,9 @@ interface Minted {
 
 export const SIGN_IN_MESSAGE = "Publishing a page needs a Seira account. Sign in to Seira in the app's Settings, then ask again.";
 const UNAVAILABLE = "Publishing isn't available right now. Try again in a few minutes.";
-const NOT_TURNED_ON = "Publishing pages isn't turned on for this account yet.";
+const NOT_TURNED_ON = "Public links for pages aren't available on this account.";
 /** A server with no desktop app to sign in through and no Cloud home (`seira serve`): no Settings sign-in can help. */
-export const SELF_HOSTED_MESSAGE = "Publishing pages isn't available on self-hosted servers yet.";
+export const SELF_HOSTED_MESSAGE = "Publishing pages isn't available on self-hosted servers.";
 const TOKEN_TIMEOUT_MS = 15_000, UPLOAD_TIMEOUT_MS = 60_000;
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
@@ -90,7 +90,7 @@ export function createPagesClient(options: { access: () => PagesAccess | null; n
     if (response.status === 429) return fail("rate_limited", said(answer, "You've published a lot this hour. Try again in a few minutes."));
     const uploadUrl = safeUrl(answer.uploadUrl)?.href.replace(/\/+$/, ""), pageUrl = safeUrl(answer.pageUrl)?.href;
     if (!response.ok || typeof answer.token !== "string" || typeof answer.pageId !== "string" || !uploadUrl || !pageUrl || !answer.limits) {
-      return fail("unavailable", response.status === 404 ? NOT_TURNED_ON : UNAVAILABLE);
+      return fail("unavailable", response.status === 404 || response.status === 501 ? NOT_TURNED_ON : UNAVAILABLE);
     }
     const limit = answer.limit as Minted["limit"];
     return { token: answer.token, pageId: answer.pageId, uploadUrl, pageUrl, limits: answer.limits as Minted["limits"], ...(typeof answer.plan === "string" ? { plan: answer.plan } : {}),

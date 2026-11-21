@@ -6,7 +6,7 @@ import type { PagesCall, PagesClient, PagesFailure, PageUsage } from "./client.t
 import type { PublishedPagesStore } from "./store.ts";
 
 /** What a publish or unpublish comes to: the sentence for the bot (or the person's card), and whether it failed. */
-export interface PageOutcome { status: number; text: string; card?: PublishedPageCard }
+export interface PageOutcome { status: number; text: string; card?: PublishedPageCard; reason?: PagesFailure["reason"] }
 
 export interface PublishInput {
   botId: string;
@@ -150,16 +150,16 @@ export function createPagePublisher(deps: {
         const card: PublishedPageCard = { state: "live", title, ...result.uncertain, uncertain: true };
         const messageId = input.post(cardText(card), card);
         uncertainRecord(result.uncertain, messageId ? { threadId: input.threadId, messageId } : null);
-        return { status: failureStatus[result.reason], text: cardText(card), card };
+        return { status: failureStatus[result.reason], text: cardText(card), card, reason: result.reason };
       }
       if (pending) store.forget(pending);
       if (result.reason === "limit") {
         const card: PublishedPageCard = { state: "limit", title, message: result.message, ...(result.usage ? { usage: result.usage } : {}), ...(result.upgrade ? { upgrade: true } : {}),
           ...(result.plan ? { plan: result.plan } : {}) };
         input.post(cardText(card), card);
-        return { status: 402, text: `${result.message} Tell the person this in your reply.`, card };
+        return { status: 402, text: `${result.message} Tell the person this in your reply.`, card, reason: result.reason };
       }
-      return { status: failureStatus[result.reason], text: result.message };
+      return { status: failureStatus[result.reason], text: result.message, reason: result.reason };
     }
     const card: PublishedPageCard = { state: "live", title, pageId: result.pageId, url: result.url, usage: result.usage };
     const messageId = input.post(cardText(card), card, bundle);
@@ -180,7 +180,7 @@ export function createPagePublisher(deps: {
   async function unpublishNow(pageId: string, call: PagesCall | undefined): Promise<PageOutcome> {
     const title = store.get(pageId)?.title;
     const result = await client.unpublish(pageId, call);
-    if (!result.ok && result.reason !== "gone") return { status: failureStatus[result.reason], text: result.message };
+    if (!result.ok && result.reason !== "gone") return { status: failureStatus[result.reason], text: result.message, reason: result.reason };
     const card = markUnpublished(pageId, result.ok ? result.usage : null)
       ?? { state: "unpublished" as const, title: title ?? pageId, pageId, ...(result.ok && result.usage ? { usage: result.usage } : {}) };
     return { status: 200, text: result.ok ? `Unpublished${title ? ` “${title}”` : ""}. Its link no longer opens.` : "That page was already taken down.", card };

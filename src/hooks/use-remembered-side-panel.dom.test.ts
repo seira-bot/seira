@@ -3,12 +3,12 @@ import { StrictMode, act, createElement as h, useReducer } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { initialState, reducer, type Action } from "@/state/store";
-import { SIDE_PANEL_OPEN_KEY, useRememberedSidePanel } from "./use-remembered-side-panel";
+import { SIDE_PANEL_OPEN_KEY, hasRememberedSidePanelChoice, rememberedSidePanel, useRememberedSidePanel } from "./use-remembered-side-panel";
 
 let root: Root;
 let container: HTMLElement;
 let send: (action: Action) => void;
-let options = { enabled: true, inspector: true };
+let options: { enabled: boolean; inspector: boolean; botPanelByDefault?: boolean } = { enabled: true, inspector: true };
 
 /** The app's wiring: the real reducer, and the panels App draws from its open flags. */
 function Shell() {
@@ -19,7 +19,8 @@ function Shell() {
     state.activeView === "chat" && h("main", { "data-view": "chat" }),
     state.appSettingsOpen && h("dialog", { "data-modal": "settings" }),
     state.computerOpen && h("aside", { "data-panel": "computer" }),
-    state.inspectorOpen && h("aside", { "data-panel": "inspector" }));
+    state.inspectorOpen && h("aside", { "data-panel": "inspector" }),
+    state.settingsOpen && h("aside", { "data-panel": "bot" }));
 }
 
 /** A fresh app start: a new store, as after a restart. */
@@ -72,7 +73,9 @@ it("stays closed after a restart when the person closed the panel", async () => 
 
   await start();
   expect(panel()).toBeNull();
-  expect(localStorage.getItem(SIDE_PANEL_OPEN_KEY)).toBeNull();
+  expect(localStorage.getItem(SIDE_PANEL_OPEN_KEY)).toBe("none");
+  expect(rememberedSidePanel()).toBeNull();
+  expect(hasRememberedSidePanelChoice()).toBe(true);
 });
 
 it("opens the panel again when the person comes back from routines, without forgetting it there", async () => {
@@ -161,4 +164,62 @@ it("starts with panels closed when storage is blocked", async () => {
   await run({ type: "toggleComputer" });
   expect(panel()).toBe("computer");
   vi.restoreAllMocks();
+});
+
+const wide = () => { options = { enabled: true, inspector: true, botPanelByDefault: true }; };
+
+it("opens the bot panel on first arrival when the default is on, and remembers it", async () => {
+  wide();
+  await start();
+  expect(panel()).toBe("bot");
+  expect(localStorage.getItem(SIDE_PANEL_OPEN_KEY)).toBe("bot");
+});
+
+it("opens the bot panel again after the Plugins pane closes it", async () => {
+  wide();
+  await start();
+  await run({ type: "togglePlugins", open: true });
+  expect(panel()).toBeNull();
+  expect(localStorage.getItem(SIDE_PANEL_OPEN_KEY)).toBe("bot");
+
+  await run({ type: "togglePlugins", open: false });
+  expect(panel()).toBe("bot");
+});
+
+it("keeps the bot panel closed after the person closed it", async () => {
+  wide();
+  await start();
+  await run({ type: "toggleSettings", open: false });
+  expect(localStorage.getItem(SIDE_PANEL_OPEN_KEY)).toBe("none");
+
+  await start();
+  expect(panel()).toBeNull();
+});
+
+it("opens the bot panel again when the person left it open, with or without the default", async () => {
+  await start();
+  await run({ type: "toggleSettings", open: true });
+  expect(localStorage.getItem(SIDE_PANEL_OPEN_KEY)).toBe("bot");
+
+  await start();
+  expect(panel()).toBe("bot");
+});
+
+it("does not open the bot panel by default without the default option, or in the phone layout", async () => {
+  await start();
+  expect(panel()).toBeNull();
+  expect(hasRememberedSidePanelChoice()).toBe(false);
+
+  options = { enabled: false, inspector: true, botPanelByDefault: true };
+  await start();
+  expect(panel()).toBeNull();
+  expect(hasRememberedSidePanelChoice()).toBe(false);
+});
+
+it("lets a remembered screen panel win over the default", async () => {
+  await start();
+  await run({ type: "toggleComputer" });
+  wide();
+  await start();
+  expect(panel()).toBe("computer");
 });

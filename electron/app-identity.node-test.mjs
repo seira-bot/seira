@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { SOURCE_ICON, WINDOWS_APP_ID, applyWindowsAppId, sourceTaskbarIcon } from "./app-identity.mjs";
+import { SOURCE_ICON, WINDOWS_APP_ID, WINDOWS_SOURCE_APP_ID, applyWindowsAppId, windowsTaskbarDetails } from "./app-identity.mjs";
 import { LEGACY_APP_NAME, LEGACY_LINUX_PACKAGE } from "./legacy-names.mjs";
 
 const fakeApp = (isPackaged = true) => ({
@@ -74,29 +74,53 @@ test("the deb and pacman packages are named seira and replace the package that a
   }
 });
 
-test("win32 from source gives each window the Seira icon and keeps the ID", () => {
+const PACKAGED_EXE = "C:/Users/someone/AppData/Local/Programs/Seira/Seira.exe";
+
+test("win32 from source uses its own ID and the dev relaunch details", () => {
   const app = fakeApp(false);
-  applyWindowsAppId({ app, platform: "win32", iconPath: "C:/seira/icon.ico" });
-  assert.deepEqual(app.ids, ["bot.seira.app"]);
+  applyWindowsAppId({ app, platform: "win32", iconPath: "C:/seira/icon.ico", windowsStore: false });
+  assert.deepEqual(app.ids, ["bot.seira.app.dev"]);
   assert.equal(app.listeners.length, 1);
   assert.equal(app.listeners[0][0], "browser-window-created");
   const win = fakeWindow();
   app.listeners[0][1]({}, win);
   assert.deepEqual(win.details, [{
-    appId: "bot.seira.app",
+    appId: "bot.seira.app.dev",
     appIconPath: "C:/seira/icon.ico",
     appIconIndex: 0,
     relaunchCommand: `"${process.execPath}" "C:/src/seira"`,
-    relaunchDisplayName: "Seira",
+    relaunchDisplayName: "Seira (dev)",
   }]);
   assert.deepEqual(win.icons, ["C:/seira/icon.ico"]);
 });
 
-test("win32 packaged changes nothing besides the ID", () => {
+test("the source ID and the installed ID differ", () => {
+  assert.notEqual(WINDOWS_SOURCE_APP_ID, WINDOWS_APP_ID);
+});
+
+test("win32 NSIS package gets explicit relaunch details and keeps the window icon", () => {
   const app = fakeApp(true);
-  applyWindowsAppId({ app, platform: "win32" });
+  applyWindowsAppId({ app, platform: "win32", windowsStore: false });
+  assert.deepEqual(app.ids, ["bot.seira.app"]);
+  assert.equal(app.listeners.length, 1);
+  const win = fakeWindow();
+  app.listeners[0][1]({}, win);
+  assert.equal(win.details.length, 1);
+  assert.equal(win.details[0].appId, "bot.seira.app");
+  assert.equal(win.details[0].relaunchDisplayName, "Seira");
+  assert.deepEqual(win.icons, []);
+  assert.deepEqual(
+    windowsTaskbarDetails({ platform: "win32", isPackaged: true, windowsStore: false, execPath: PACKAGED_EXE }),
+    { appId: "bot.seira.app", appIconPath: PACKAGED_EXE, appIconIndex: 0, relaunchCommand: `"${PACKAGED_EXE}"`, relaunchDisplayName: "Seira" },
+  );
+});
+
+test("win32 Microsoft Store package sets the ID and registers no details", () => {
+  const app = fakeApp(true);
+  applyWindowsAppId({ app, platform: "win32", windowsStore: true });
   assert.deepEqual(app.ids, ["bot.seira.app"]);
   assert.deepEqual(app.listeners, []);
+  assert.equal(windowsTaskbarDetails({ platform: "win32", isPackaged: true, windowsStore: true }), null);
 });
 
 test("Linux and macOS from source register nothing", () => {
@@ -104,7 +128,7 @@ test("Linux and macOS from source register nothing", () => {
     const app = fakeApp(false);
     applyWindowsAppId({ app, platform });
     assert.deepEqual(app.listeners, [], platform);
-    assert.equal(sourceTaskbarIcon({ platform, isPackaged: false }), null, platform);
+    assert.equal(windowsTaskbarDetails({ platform, isPackaged: false }), null, platform);
   }
 });
 

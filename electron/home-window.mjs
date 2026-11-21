@@ -145,9 +145,10 @@ function ownPlaceOf(asked, remembered, state) {
  * The place a window is asked for. `ask`: "cloud" for My Cloud, `{ team }` for a team's Cloud, `{ cloud }` for another
  * Cloud of the person's own, or nothing for the place remembered from last time (`remembered`). A team is read from the
  * verified session (`state.teams`); one the connected session no longer lists is gone, and the answer is My Cloud with
- * the team's name in `left`, so the window can say so once. While the Admin can't be asked, a remembered team opens as
- * it was saved, on the window's own session.
- * @returns {{ kind: "cloud", left?: string | null } | { kind: "team" | "own", id: string, name: string, role: string | null, origin: string | null, machine: any }}
+ * the team's name in `left`, so the window can say so once. A team the session lists with no machine has no Cloud to
+ * open, so it is no place: My Cloud, with `noCloud`. While the Admin can't be asked, a remembered team opens as it was
+ * saved, on the window's own session.
+ * @returns {{ kind: "cloud", left?: string | null, noCloud?: true } | { kind: "team" | "own", id: string, name: string, role: string | null, origin: string | null, machine: any }}
  */
 export function placeOf({ ask = null, remembered = null, state = null }) {
   const asked = ask ?? remembered;
@@ -155,7 +156,8 @@ export function placeOf({ ask = null, remembered = null, state = null }) {
   const id = asked && asked !== "cloud" && typeof asked.team === "string" ? asked.team : null;
   if (!id) return { kind: "cloud" };
   const team = (Array.isArray(state?.teams) ? state.teams : []).find((entry) => entry?.id === id) ?? null;
-  if (team) return { kind: "team", id, name: team.name, role: team.role, origin: team.machine?.origin ?? null, machine: team.machine ?? null };
+  if (team && (!team.machine || typeof team.machine !== "object")) return { kind: "cloud", noCloud: true };
+  if (team) return { kind: "team", id, name: team.name, role: team.role, origin: team.machine.origin ?? null, machine: team.machine };
   if (state?.status === "connected") return { kind: "cloud", left: asked.name ?? (remembered?.team === id ? remembered.name : null) ?? null };
   const kept = remembered?.team === id ? remembered : asked;
   return kept?.origin ? { kind: "team", id, name: kept.name ?? "the team", role: null, origin: kept.origin, machine: null } : { kind: "cloud" };
@@ -558,7 +560,9 @@ export function createHomeWindow(deps) {
       if (!wanted(token)) return;
     }
     // Nobody signed in has nothing to open but the clean workspace; the place stays remembered for when they're back.
-    const target = current.clean && signedOut() ? { kind: "cloud" } : placeOf({ ask: place, remembered: remembered(), state: state() });
+    let target = current.clean && signedOut() ? { kind: "cloud" } : placeOf({ ask: place, remembered: remembered(), state: state() });
+    // A team asked for with no Cloud to open leaves the window on the place it keeps; one only remembered is forgotten.
+    if (target.noCloud && place) target = placeOf({ remembered: remembered(), state: state() });
     if (target.kind === "cloud" && target.left) { left(target.left); remember(null); }
     if (otherPlace(target)) {
       ensureWindow();
@@ -574,7 +578,7 @@ export function createHomeWindow(deps) {
       if (!target.origin) { toScreen(planScreen(target.machine?.status ?? "stopped", target)); later(); return; }
       return connect(target, token, open);
     }
-    if (place === "cloud" || target.left) remember(null);
+    if (place === "cloud" || target.left || target.noCloud) remember(null);
     opening = null;
     clearRenewal();
     if (current.kind === "computer" && asked) {

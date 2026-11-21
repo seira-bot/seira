@@ -28,6 +28,8 @@ export interface ConfigStatus {
   /** X research comes with Seira Cloud plans: `included` while this server holds the plan's relay credential;
    * `unavailable` when the Admin said no to this desktop's paid sign-in. */
   xResearch?: { included: boolean; unavailable?: boolean };
+  /** False when this account has no page links to offer: the page's Share is hidden. */
+  pages?: { offered: boolean };
   /** The built-in tool groups this workspace has, the ones a bot's Settings offer to turn off. */
   toolGroups?: ToolGroup[];
   /** The person's own treg key for research: configured or not, never the key. */

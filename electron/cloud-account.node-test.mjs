@@ -647,6 +647,7 @@ test("X research access: this sign-in's own relay token, null without a plan or 
   assert.ok(f.requests.some(r => r.route === "/api/cloud/desktop/services/x" && r.method === "POST" && r.token === `Bearer ${accessToken}`));
   f.x = { status: 402, body: { error: "subscription_inactive" } }; assert.equal(await f.client.xResearchAccess(), null);
   f.x = { status: 404, body: { error: "unsupported" } }; assert.equal(await f.client.xResearchAccess(), null);
+  f.x = { status: 501, body: { error: "unsupported" } }; assert.equal(await f.client.xResearchAccess(), null);
   f.x = { status: 200, body: { cloudContractVersion: 1, url: "https://elsewhere.example.test/api/cloud/services/x", token } }; await assert.rejects(f.client.xResearchAccess(), /Invalid/);
   f.x = { status: 200, body: { cloudContractVersion: 1, url, token: "short" } }; await assert.rejects(f.client.xResearchAccess(), /Invalid/);
   f.x = { status: 500, body: { error: "down" } }; await assert.rejects(f.client.xResearchAccess());
@@ -663,6 +664,7 @@ test("pages access: this sign-in's own pages token on any plan, null without the
   assert.deepEqual(await f.client.pagesAccess(), { url, token });
   assert.ok(f.requests.some(r => r.route === "/api/cloud/desktop/services/pages" && r.method === "POST" && r.token === `Bearer ${accessToken}`));
   f.pages = { status: 404, body: { error: "unsupported" } }; assert.equal(await f.client.pagesAccess(), null);
+  f.pages = { status: 501, body: { error: "unsupported" } }; assert.equal(await f.client.pagesAccess(), null);
   f.pages = { status: 200, body: { cloudContractVersion: 1, url: "https://elsewhere.example.test/api/cloud/pages/token", token } }; await assert.rejects(f.client.pagesAccess(), /Invalid/);
   f.pages = { status: 200, body: { cloudContractVersion: 1, url, token: `seira_xd_${"a".repeat(43)}` } }; await assert.rejects(f.client.pagesAccess(), /Invalid/);
   f.pages = { status: 500, body: { error: "down" } }; await assert.rejects(f.client.pagesAccess());

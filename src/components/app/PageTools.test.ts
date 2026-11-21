@@ -31,7 +31,7 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 const fetchMock = vi.fn<(path: string, init?: RequestInit) => Promise<Response>>();
 const openExternal = vi.fn(async () => true);
 const store = { state: {}, dispatch: vi.fn(), flushBotPatches: vi.fn(async () => null) } as unknown as ReturnType<typeof useStore>;
-const LINK = "https://page000000000000000000001.page.seira.bot/";
+const LINK = "https://page000000000000000000001.seira.page/";
 const LIVE: PublishedPageCard = { state: "live", title: "Pricing", pageId: "page000000000000000000001", url: LINK, usage: { pages: 1, limit: 5 } };
 
 let host: HTMLDivElement;
@@ -186,6 +186,39 @@ describe("a bot's page in the chat", () => {
     expect(card().querySelector("[data-page-link]")).toBeNull();
     expect(card().textContent).toContain("Unpublished. The link no longer opens.");
     expect(button("Open in new tab", card()).disabled).toBe(true);
+  });
+
+  it("hides Share and Open in new tab while pages are not offered and there is no link, and keeps them for a page that has one", async () => {
+    (store.state as { config?: unknown }).config = { pages: { offered: false } };
+    try {
+      await render(row(payload()));
+      expect(button("Share", card())).toBeUndefined();
+      expect(button("Open in new tab", card())).toBeUndefined();
+      expect(button("Point", card())).toBeDefined();
+      await render(row(payload(), LIVE));
+      expect(button("Share", card())).toBeDefined();
+      expect(button("Open in new tab", card()).disabled).toBe(false);
+    } finally {
+      delete (store.state as { config?: unknown }).config;
+    }
+  });
+
+  it("gives a refused Share for a missing sign-in a Sign in button that opens Your account, only in the desktop app", async () => {
+    const message = "Publishing a page needs a Seira account. Sign in to Seira in the app's Settings, then ask again.";
+    fetchMock.mockImplementation(async (path) => {
+      if (new URL(path, "http://seira.test").pathname.endsWith("/app/publish")) return json(403, { error: message, reason: "sign_in" });
+      return json(200, botHtmlDocument({ messageId: "a1", rev: 0, html: "<p>newest</p>" }));
+    });
+    await render(row(payload()));
+    await click("Share", card());
+    await settle();
+    expect(card().textContent).toContain(message);
+    expect(button("Sign in", card())).toBeUndefined();
+    vi.stubGlobal("ogb", { openExternal, cloudAccount: {} });
+    await click("Share", card());
+    await settle();
+    await click("Sign in", card());
+    expect(store.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "account" });
   });
 
   it("shows publish_page's link on the page it published", async () => {
