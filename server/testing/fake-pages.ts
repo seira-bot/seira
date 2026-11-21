@@ -2,6 +2,7 @@
 // are kept in memory; nothing reaches the network.
 import { SEIRA_HOSTS } from "../../electron/seira-hosts.mjs";
 import { pagesHomeSignature } from "../pages/access.ts";
+import { readCloudSigned } from "../cloud-signed-headers.ts";
 
 export const FAKE_ADMIN = "https://cloud.example.test";
 export const FAKE_TOKEN_URL = `${FAKE_ADMIN}/api/cloud/pages/token`;
@@ -22,9 +23,9 @@ export function fakePagesService(options: { quota?: number; plan?: string; admin
 
   const caller = (request: Request, body: string): "desktop" | "home" | null => {
     if (request.headers.get("authorization") === `Bearer ${FAKE_DESKTOP_TOKEN}`) return "desktop";
-    const machine = request.headers.get("x-omb-cloud-machine"), timestamp = request.headers.get("x-omb-cloud-timestamp") ?? "", nonce = request.headers.get("x-omb-cloud-nonce") ?? "";
+    const { machineId: machine, timestamp = "", nonce = "", signature } = readCloudSigned((name) => request.headers.get(name));
     const expected = `v1=${pagesHomeSignature(FAKE_HOME.bootstrapSecret, FAKE_HOME.machineId, timestamp, nonce, body)}`;
-    return machine === FAKE_HOME.machineId && request.headers.get("x-omb-cloud-signature") === expected ? "home" : null;
+    return machine === FAKE_HOME.machineId && signature === expected ? "home" : null;
   };
 
   const fetch: typeof globalThis.fetch = async (input, init) => {

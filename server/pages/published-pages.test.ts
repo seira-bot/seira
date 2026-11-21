@@ -91,7 +91,7 @@ describe("publishing a page", () => {
     const outcome = await f.publish({ path: "site" });
     expect(outcome.status).toBe(200);
     const [page] = [...f.service.pages.keys()];
-    const url = `https://${page}.page.seira.bot/`;
+    const url = `https://${page}.seira.page/`;
     expect(outcome.text).toContain(`Published “Bake sale” at ${url}`);
     expect(outcome.text).toContain("This account now has 1 of 5 pages.");
     expect(outcome.text.split("\n").at(-1)).toBe("Free pages carry a small “Made with Seira” badge.");
@@ -110,7 +110,7 @@ describe("publishing a page", () => {
     writeFileSync(join(site, "index.html"), "<h1>Tomorrow's menu</h1>");
     const again = await f.publish({ path: join(site), threadId: "routine-run-2" });
     const [page] = [...f.service.pages.keys()];
-    expect(again.text).toContain(`Updated “Bake sale” at the same link: https://${page}.page.seira.bot/`);
+    expect(again.text).toContain(`Updated “Bake sale” at the same link: https://${page}.seira.page/`);
     expect(f.service.minted.map((call) => call.action)).toEqual(["create", "update"]);
     expect(f.service.pages.size).toBe(1);
     expect(f.service.pages.get(page!)!.files.get("index.html")).toBe("<h1>Tomorrow's menu</h1>");
@@ -120,7 +120,7 @@ describe("publishing a page", () => {
     await f.publish({ path: "other", pageId: page });
     expect(f.service.minted.at(-1)).toEqual({ action: "update", pageId: page, caller: "desktop" });
     expect(f.service.pages.get(page!)!.files.get("index.html")).toBe("<p>Other</p>");
-    expect(f.cards.map((card) => card.card.url)).toEqual(Array(3).fill(`https://${page}.page.seira.bot/`));
+    expect(f.cards.map((card) => card.card.url)).toEqual(Array(3).fill(`https://${page}.seira.page/`));
   });
 
   it("gives a folder whose page was unpublished elsewhere a new link instead of failing", async () => {

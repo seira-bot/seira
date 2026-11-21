@@ -15,6 +15,7 @@ import { pagesHomeSignature } from "./pages/access.ts";
 import { createShareHost, readFolderFromDisk } from "./share.ts";
 import type { Routine } from "./routines.ts";
 import type { BotRecord } from "./store.ts";
+import { expectBothCloudSignedNames } from "./testing/cloud-signed-assert.ts";
 
 const KEY = "sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 const skillText = "---\nname: triage\ndescription: Sort the inbox.\n---\n\n# Triage\n\nNewest first.\n";
@@ -130,6 +131,7 @@ describe("publishing", () => {
     expect(await publisher.submit({ slug: "a", files: { "bot.md": "x" } })).toEqual({ ok: false, reason: "failed", message: "Someone else already shares a template by that name." });
     const expected = pagesHomeSignature(home.secret, home.machineId, headers["x-omb-cloud-timestamp"]!, headers["x-omb-cloud-nonce"]!, body, "omb-community-v1");
     expect(headers["x-omb-cloud-signature"]).toBe(`v1=${expected}`);
+    expectBothCloudSignedNames(headers);
     expect(expected).not.toBe(pagesHomeSignature(home.secret, home.machineId, headers["x-omb-cloud-timestamp"]!, headers["x-omb-cloud-nonce"]!, body));
     answer = Response.json({ prUrl: "https://github.com/seira-bot/seira-teams/pull/2", link: "https://github.com/seira-bot/seira-teams/tree/b/teams/a", updated: true });
     expect(await publisher.submit({ slug: "a", files: { "bot.md": "x" } })).toMatchObject({ ok: true, prUrl: "https://github.com/seira-bot/seira-teams/pull/2" });

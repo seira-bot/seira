@@ -18,7 +18,7 @@ const fixture = vi.hoisted(() => {
 vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
   return { ...original, useStore: () => ({
-    state: { ...original.initialState, config: fixture.showToolCalls ? { features: { showToolCalls: true } } : null,
+    state: { ...original.initialState, config: { features: { showToolCalls: fixture.showToolCalls } },
       instances: [{ instanceId: "test", driverKind: "codex", displayName: "Test" } as InstanceInfo] },
     dispatch: fixture.dispatch,
   }) };
@@ -78,11 +78,25 @@ describe("the header's right side", () => {
     return { markup, controls: markup.slice(markup.indexOf("data-chathead-controls"), markup.indexOf("role=\"log\"")) };
   };
 
+  it.each([true, false])("sets the model pill right after the bot name pill in the centre, not in the controls (advanced %s)", (advanced) => {
+    fixture.advanced = advanced;
+    try {
+      const { markup, controls } = header();
+      const identity = markup.slice(markup.indexOf("data-chathead-identity"), markup.indexOf("data-chathead-controls"));
+      expect(identity).toContain("data-test-model-control");
+      expect(controls).not.toContain("data-test-model-control");
+      expect(identity.indexOf("data-chathead-pill")).toBeGreaterThan(-1);
+      expect(identity.indexOf("data-test-model-control")).toBeGreaterThan(identity.indexOf("data-chathead-pill"));
+    } finally {
+      fixture.advanced = true;
+    }
+  });
+
   it("keeps the model picker and the bot's computer in view in Simple mode, with ⋯ left to the bot panel", () => {
     fixture.advanced = false;
     try {
       const { markup, controls } = header();
-      expect(controls).toContain("data-test-model-control");
+      expect(markup).toContain("data-test-model-control");
       expect(fixture.model).toMatchObject({ threadId: "selected" });
       const computer = controls.match(/<button[^>]*data-tour="computer"[^>]*>/)?.[0] ?? "";
       expect(computer.split(" ")).toEqual(expect.arrayContaining(["rounded-full", "size-8"]));
@@ -203,7 +217,7 @@ describe("the Simple header", () => {
       const simple = renderToStaticMarkup(createElement(ChatView, { bot: busyElsewhere }));
       const identity = simple.slice(simple.indexOf("data-chathead-identity"), simple.indexOf("data-chathead-controls"));
       const pill = identity.match(/<button[^>]*data-chathead-pill="true"[^>]*>([\s\S]*?)<\/button>/)!;
-      expect(identity.replace(pill[0], "").replace(/<span role="status"[^>]*>[^<]*<\/span>/, "")).not.toMatch(/<(button|a|span)[\s>]/);
+      expect(identity.replace(pill[0], "").replace(/<span data-test-model-control="true"><\/span>/, "").replace(/<span role="status"[^>]*>[^<]*<\/span>/, "")).not.toMatch(/<(button|a|span)[\s>]/);
       expect(pill[1]).toContain(">Pepper</span>");
       expect(pill[1]).toContain('data-chathead-elsewhere="true"');
       expect(pill[0].match(/class="([^"]*)"/)![1]!.split(" ")).toEqual(expect.arrayContaining(["rounded-full", "bg-composer", "ring-[0.5px]", "py-[7.5px]", "pr-[13.5px]"]));
@@ -581,6 +595,26 @@ describe("thread control placement", () => {
     expect(render()).toContain("Retry</button>");
     messages.push({ id: "next", role: "user", kind: "text", at: 4, text: "A different request" });
     expect(render()).not.toContain("Retry</button>");
+  });
+  it("draws the turn receipt in Advanced only, since the Simple activity card already says how long the turn took", () => {
+    const messages: Bot["messages"] = [
+      { id: "ask", role: "user", kind: "text", at: 1, text: "Find leads" },
+      {
+        id: "receipt", role: "bot", kind: "digest", at: 2, text: "Observed work",
+        digest: { turnId: "turn", botId: "bot", threadId: "thread", at: 2, durationMs: 72_000, tools: [{ name: "Bash", count: 3, failed: 0 }], memory: [], reply: "Done.", hookCoverage: "preview" },
+      },
+    ];
+    const render = () => renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: false, messages } }));
+    fixture.showToolCalls = true;
+    try {
+      fixture.advanced = true;
+      expect(render()).toContain('data-testid="digest-chip"');
+      fixture.advanced = false;
+      expect(render()).not.toContain('data-testid="digest-chip"');
+    } finally {
+      fixture.showToolCalls = false;
+      fixture.advanced = true;
+    }
   });
   it("keeps Retry on a failed turn after hanging up, when the call's record is the last row", () => {
     const messages: Bot["messages"] = [

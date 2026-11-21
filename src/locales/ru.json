@@ -5597,6 +5597,13 @@
   "apps.category.marketing": "Маркетинг",
   "apps.category.analytics": "Аналитика",
   "apps.category.social": "Соцсети",
+  "apps.category.finance": "Финансы",
+  "apps.category.commerce": "Электронная коммерция",
+  "apps.category.ai": "ИИ",
+  "apps.category.automation": "Автоматизация",
+  "apps.category.hr": "HR и найм",
+  "apps.category.entertainment": "Развлечения",
+  "apps.category.education": "Образование",
   "apps.catalog.googleCalendar.blurb": "Чтение и создание событий",
   "apps.catalog.googleSheets.blurb": "Чтение и обновление таблиц",
   "apps.catalog.googleDocs.blurb": "Чтение и редактирование документов",
@@ -7235,5 +7242,6 @@
   "settings.pool.levelsFalling": "Каждый уровень должен быть ниже предыдущего.",
   "settings.pool.floorNumber": "Нижний порог — целое число от 0 до 98.",
   "settings.pool.floorLow": "Нижний порог должен быть ниже последнего уровня.",
-  "settings.pool.error": "Не удалось сохранить пул ИИ. Попробуйте ещё раз."
+  "settings.pool.error": "Не удалось сохранить пул ИИ. Попробуйте ещё раз.",
+  "aiImport.title": "Переезд из другого AI"
 }

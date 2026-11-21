@@ -28,6 +28,10 @@ rule that guards correctness; fix the code.
 
 More specific `AGENTS.md` files override this note within their directories.
 
+## App feature catalog
+
+When you add a page, a tab, an agent tool, a slash command, a composer menu row or a release note, add or update its entry in `shared/app-features.ts`. The drift test fails until you do.
+
 ## Local details stay local
 
 This repository is public. A committed file must work on any machine and must not

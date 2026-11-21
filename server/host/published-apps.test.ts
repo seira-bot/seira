@@ -37,7 +37,7 @@ const site = (name: string, extra: Record<string, unknown> = {}) => ({
   createdAt: "2026-11-10T10:00:00.000Z", publishedAt: "2026-11-10T10:05:00.000Z", access: "public", ...extra,
 });
 const page = (pageId: string, botId: string, threadId: string, updatedAt: number): PublishedPageRecord => ({
-  pageId, url: `https://${pageId}.page.seira.bot/`, title: `Page ${pageId.slice(0, 3)}`, botId, source: `/w/${pageId}`, cards: [{ threadId, messageId: `m-${pageId}` }], createdAt: updatedAt, updatedAt,
+  pageId, url: `https://${pageId}.seira.page/`, title: `Page ${pageId.slice(0, 3)}`, botId, source: `/w/${pageId}`, cards: [{ threadId, messageId: `m-${pageId}` }], createdAt: updatedAt, updatedAt,
 });
 const PAGE_ADA = "adapage0000000000000000", PAGE_TEAM = "teampage000000000000000", PAGE_BEN = "benpage0000000000000000";
 
@@ -108,7 +108,7 @@ describe("the list on a person's own server", () => {
       publishedAt: Date.parse("2026-11-11T09:00:00.000Z"), access: "netlify-team", manageUrl: "https://app.netlify.com/projects/team-site", canDelete: true,
     });
     expect(listed.find((app) => app.id === `page-${PAGE_ADA}`)).toEqual({
-      id: `page-${PAGE_ADA}`, source: "page", title: "Page ada", url: `https://${PAGE_ADA}.page.seira.bot/`, bot: { id: "mira", name: "Mira" }, threadId: "ada-chat",
+      id: `page-${PAGE_ADA}`, source: "page", title: "Page ada", url: `https://${PAGE_ADA}.seira.page/`, bot: { id: "mira", name: "Mira" }, threadId: "ada-chat",
       publishedAt: 300, access: "link", canDelete: true,
     });
     expect(listed.every((app) => app.canDelete)).toBe(true);
@@ -200,7 +200,7 @@ describe("the list on a Team Cloud", () => {
     for (const id of ["netlify-mira-id-adas-shop", "netlify-adas-seira-id-adas-diary", `page-${PAGE_ADA}`, "netlify-mira-id-missing"]) {
       expect(await made.remove(visible(), ben, id), id).toEqual({ status: 404, body: { error: "No such published app.", code: "gone" } });
     }
-    for (const url of ["https://adas-shop.netlify.app/", "https://adas-diary.netlify.app/", `https://${PAGE_ADA}.page.seira.bot/`]) expect(await made.lists(visible(), ben, url), url).toBe(false);
+    for (const url of ["https://adas-shop.netlify.app/", "https://adas-diary.netlify.app/", `https://${PAGE_ADA}.seira.page/`]) expect(await made.lists(visible(), ben, url), url).toBe(false);
     expect(await made.lists(visible(), ben, "https://bens-plan.netlify.app/pricing")).toBe(true);
     expect(calls).toEqual([]);
     expect(tokenAsks).toEqual([]);

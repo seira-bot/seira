@@ -631,7 +631,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         items={items}
         ariaLabel={name}
         onOpenChange={setMenuOpen}
-        triggerClassName={named && simple ? "min-w-0 flex-1 rounded-lg" : iconOnly || simple ? cn("shrink-0", circle || simple ? "rounded-full" : "rounded-xl") : "w-full"}
+        triggerClassName={named && simple ? "w-full min-w-0 rounded-lg" : iconOnly || simple ? cn("shrink-0", circle || simple ? "rounded-full" : "rounded-xl") : "w-full"}
         triggerTitle={iconOnly || simple ? label : undefined}
         triggerLabel={label}
         triggerTour={account?.place.switchable ? "server-switcher" : undefined}

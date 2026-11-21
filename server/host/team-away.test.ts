@@ -6,6 +6,7 @@ import { AWAY_DAILY_MAX, AWAY_EMAILS_FILE, AWAY_EMAILS_PATH, AWAY_GAP_MS, AWAY_W
 import { json } from "../harness/http.ts";
 import { personKey } from "../person-key.ts";
 import { PASS } from "../routes/table.ts";
+import { expectBothCloudSignedNames } from "../testing/cloud-signed-assert.ts";
 
 const MAYA = "maya@example.com", BEN = "ben@example.com";
 const maya = personKey({ id: "", email: MAYA });
@@ -77,6 +78,7 @@ describe("the away email a Team Cloud asks the Admin for", () => {
     expect(headers["x-omb-cloud-machine"]).toBe(MACHINE);
     expect(headers["x-omb-cloud-timestamp"]).toBe(String(Math.floor(clock() / 1000)));
     expect(headers["x-omb-cloud-signature"]).toBe(`v1=${teamAwaySignature(SECRET, MACHINE, headers["x-omb-cloud-timestamp"]!, headers["x-omb-cloud-nonce"]!, request!.raw)}`);
+    expectBothCloudSignedNames(headers);
   });
 
   it("signs the way the Admin checks (a fixed vector both repositories test)", () => {

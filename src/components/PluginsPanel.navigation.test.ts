@@ -168,10 +168,15 @@ describe("Apps pop-up", () => {
     expect(html).toContain(`data-hosted-app="${HOSTED_MCP_APPS[0].id}"`);
     for (const other of HOSTED_MCP_APPS.slice(1)) expect(html).not.toContain(`data-hosted-app="${other.id}"`);
   });
-  it.each(["mind map", "booking", "whatsapp", "landing page"])("finds the one hosted card whose keywords match %s", (word) => {
+  it.each(["mind map", "booking", "broadcast", "landing page", "sales funnel"])("finds the one hosted card whose keywords match %s", (word) => {
     fixture.overrides.set(HOSTED_CONNECTED, null);
     fixture.overrides.set(SEARCH, word);
     expect(render().html.match(/data-hosted-app="/g)).toHaveLength(1);
+  });
+  it("finds both WhatsApp hosted cards", () => {
+    fixture.overrides.set(HOSTED_CONNECTED, null);
+    fixture.overrides.set(SEARCH, "whatsapp");
+    expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["citcat", "konektor"]);
   });
   it("counts two connected hosted apps under Connected", () => {
     fixture.overrides.set(HOSTED_CONNECTED, { konektor: true, coret: true });
@@ -196,9 +201,9 @@ describe("Apps pop-up", () => {
     fixture.overrides.set(POSTIZ_CONNECTED, true);
     expect(render().html).toContain("2 connected");
     expect(wrapper(render().nodes).props.className).toBe("contents");
-    fixture.overrides.set(CATEGORY, "Social");
+    fixture.overrides.set(CATEGORY, "social");
     expect(wrapper(render().nodes).props.className).toBe("contents");
-    fixture.overrides.set(CATEGORY, "Productivity");
+    fixture.overrides.set(CATEGORY, "productivity");
     expect(wrapper(render().nodes).props.className).toBe("hidden");
     fixture.overrides.set(CATEGORY, null);
     fixture.overrides.set(SEARCH, "instagram");
@@ -543,7 +548,7 @@ describe("Apps pop-up", () => {
   });
 
   it("drops a selected category when a filter is chosen, so the MCP section comes back", () => {
-    fixture.overrides.set(20, "Design");
+    fixture.overrides.set(20, "design");
     expect(render().html).not.toContain("MCP inventory");
     chip(render().nodes, "mcp").props.onClick!();
     expect(fixture.overrides.get(20)).toBeNull();
@@ -572,23 +577,23 @@ describe("Apps pop-up", () => {
     const { html, nodes: tree } = render();
     const headings = [...html.matchAll(/<h3 id="[^"]*"[^>]*>([^<]*)/g)].map((match) => match[1]);
     expect(headings).toEqual(["Connected", "Productivity", "Communication", "Analytics", "All apps"]);
-    expect(tree.filter((node) => node.props["data-apps-category"]).map((node) => node.props["data-apps-category"])).toEqual(["Productivity", "Communication", "Analytics", "Design", "Files"]);
+    expect(tree.filter((node) => node.props["data-apps-category"]).map((node) => node.props["data-apps-category"])).toEqual(["productivity", "communication", "analytics", "design", "files"]);
     expect(html).toContain('aria-label="More categories"');
     // The dialog clips overflow, so the menu must portal out of it rather than open in place.
     expect(tree.find((node) => node.props.ariaLabel === "More categories")!.props.placement).toBeUndefined();
-    tree.find((node) => node.props["data-apps-category"] === "Design")!.props.onClick!();
+    tree.find((node) => node.props["data-apps-category"] === "design")!.props.onClick!();
     const design = render();
-    expect(design.html.match(/data-app-tile="(?!konektor|biver|coret|termilo)[^"]*"/g)).toEqual(['data-app-tile="figma"']);
+    expect(design.html.match(new RegExp(`data-app-tile="(?!${HOSTED_MCP_APPS.map((app) => app.id).join("|")})[^"]*"`, "g"))).toEqual(['data-app-tile="figma"']);
     expect([...design.html.matchAll(/<h3 id="[^"]*"[^>]*>([^<]*)/g)].map((match) => match[1])).toEqual(["Design"]);
     expect(chip(design.nodes, "all").props["aria-pressed"]).toBe(false);
-    expect(design.nodes.find((node) => node.props["data-apps-category"] === "Design")!.props["aria-pressed"]).toBe(true);
+    expect(design.nodes.find((node) => node.props["data-apps-category"] === "design")!.props["aria-pressed"]).toBe(true);
     fixture.overrides.set(20, null);
     const again = render();
     expect(again.html.match(/>View all</g)).toHaveLength(1);
     const sections = again.nodes.filter((node) => node.props.viewAll);
     expect(sections.map((node) => node.props.title)).toEqual(["Productivity"]);
     (sections[0]!.props.viewAll as { onClick: () => void }).onClick();
-    expect(fixture.overrides.get(20)).toBe("Productivity");
+    expect(fixture.overrides.get(20)).toBe("productivity");
   });
 
   const MCP_SERVERS = 24, SUGGESTIONS = 28;
@@ -606,7 +611,7 @@ describe("Apps pop-up", () => {
     expect(chip(tree, "connected").props["aria-pressed"]).toBe(true);
 
     fixture.overrides.set(TAB, "marketplace");
-    fixture.overrides.set(CATEGORY, "Design");
+    fixture.overrides.set(CATEGORY, "design");
     fixture.overrides.set(SEARCH, " Notion ");
     ({ html } = render());
     expect(tiles(html)).toEqual(["notion"]);
@@ -615,6 +620,8 @@ describe("Apps pop-up", () => {
   it("searches an app's category too, in any word order", () => {
     fixture.overrides.set(CARDS, [{ ...card("sheets"), label: "Sheet Thing", categories: ["Spreadsheets"] }, card("gmail")]);
     fixture.overrides.set(SEARCH, "spreadsheets thing");
+    expect(tiles(render().html)).toEqual(["sheets"]);
+    fixture.overrides.set(SEARCH, "productivity");
     expect(tiles(render().html)).toEqual(["sheets"]);
   });
 

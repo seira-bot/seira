@@ -78,7 +78,8 @@ describe("thread folders after Advanced mode comes back", () => {
     await draw();
     expect(folder()).toBeNull();
     expect(expand()).toBeNull();
-    expect(peek(), "the hover list stands in for the tree").not.toBeNull();
+    expect(peek(), "a tile has no hover list").toBeNull();
+    expect(document.querySelector('[data-sidebar-tile="primary"], [data-sidebar-tile="bot"]')).not.toBeNull();
     flushSync(() => setAdvancedMode(true));
     await draw();
     expect(peek()).toBeNull();

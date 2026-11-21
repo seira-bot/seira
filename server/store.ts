@@ -42,7 +42,7 @@ import { appsFromCreator } from "./inherited-apps.ts"; import { newBotOwner, sha
 import { ThreadCache, type ThreadState } from "./thread-cache.ts";
 import { titleFromMessage, UNTITLED_TASK } from "./thread-title.ts";
 import { buildTask, threadTitleFrom, UNTITLED_THREAD } from "./task-record.ts";
-import { createBotFork, createGroupFork } from "./store-forks.ts";
+import { createBotFork, createGroupFork } from "./store-forks.ts"; import type { ImportedThreadMark } from "./store-imported.ts";
 import { activeGroupTask, groupTaskByThread, groupTasks, migrateGroupTaskRead, mirrorActiveGroupTask, refreshGroupUnread, setGroupTaskRead, syncGroupReadPatch } from "./group-task-state.ts";
 export { titleFromMessage, UNTITLED_TASK } from "./thread-title.ts";
 export { threadTitleFrom, UNTITLED_THREAD } from "./task-record.ts";
@@ -85,9 +85,10 @@ export interface TaskRecord extends Omit<WireTask, TaskWireDerivedKeys> {
   surfaceSource?: "user" | "auto";
   /** Epoch ms a person last wrote here: never a teammate, routine, webhook, the bot itself or a Slack relay. */
   askedAt?: number;
+  imported?: ImportedThreadMark;
 }
 
-export type TaskWirePrivateKeys = "resumeCursors" | "lastInstanceId" | "handedMessages" | "appliedCompactionId" | "contextFloor" | "lastContextModel" | "surfaceSource" | "askedAt";
+export type TaskWirePrivateKeys = "resumeCursors" | "lastInstanceId" | "handedMessages" | "appliedCompactionId" | "contextFloor" | "lastContextModel" | "surfaceSource" | "askedAt" | "imported";
 export type TaskWireDerivedKeys = "surfaceAuto" | "followsBotModel";
 export type TaskWireProjection = Pick<TaskRecord, Exclude<keyof TaskRecord, TaskWirePrivateKeys>> & Pick<WireTask, TaskWireDerivedKeys>;
 type AssertExact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
@@ -99,7 +100,7 @@ export const taskWireProjectionIsExact: TaskWireProjectionIsExact = true;
 export function toWireTask(task: TaskRecord, botModel: ModelSelection): WireTask {
   const { resumeCursors: _resumeCursors, lastInstanceId: _lastInstanceId, handedMessages: _handedMessages,
     appliedCompactionId: _appliedCompactionId, contextFloor: _contextFloor, lastContextModel: _lastContextModel,
-    surfaceSource, askedAt: _askedAt, ...stored } = task;
+    surfaceSource, askedAt: _askedAt, imported: _imported, ...stored } = task;
   const wire: WireTask = { ...stored, modelSelection: structuredClone(task.modelSelection ?? botModel), followsBotModel: task.modelSelection === undefined };
   return surfaceSource === "auto" && wire.surface !== undefined ? { ...wire, surfaceAuto: true } : wire;
 }
@@ -114,7 +115,6 @@ const TASK_PATCH_FIELDS = [
 export type TaskPatch = Partial<Pick<TaskRecord, typeof TASK_PATCH_FIELDS[number]>>;
 
 export type GroupTaskPatch = Partial<Pick<GroupTaskRecord, "title" | "pinned">> & { turnTimeoutMinutes?: number | null; archivedAt?: number | null; activity?: "waiting-on-you" | null };
-
 
 export const ACTIVITY_BUSY: ReadonlySet<BotActivity> = new Set(["working", "waiting-on-you", "no-signal"]);
 
@@ -1103,7 +1103,7 @@ export class Store {
     const newest = messages.reduce((max, message) => Math.max(max, message.at), Number.NEGATIVE_INFINITY);
     const newestOrder = messages.reduce((max, message) => movesThreadToTop(message) ? Math.max(max, message.turnCompletedAt ?? message.at) : max, Number.NEGATIVE_INFINITY);
     if (Number.isFinite(newest)) this.noteThreadActivity(threadId, newest, Number.isFinite(newestOrder), newestOrder);
-  }
+  } /** Only for chats imported from another AI app. */ importedThreads() { return { own: (botId: string) => this.own(botId), commit: (bot: BotRecord, change: () => void) => this.commitBotChange(bot, "the imported threads", change), changed: (botId: string) => this.emit({ type: "bot", botId }), touched: (threadId: string, newest: number | null) => { this.threads.delete(threadId); if (newest !== null) this.noteThreadActivity(threadId, newest); } }; }
 
   activeLeaf(threadId: string): string | null {
     return this.thread(threadId).activeLeafId;

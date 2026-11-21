@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { DEVS_REPORT_LIMITS, withoutContact, type DevsReportPayload } from "./devs-report.ts";
 import { bugReportIssueUrl } from "./devs-report-issue.ts";
+import { cloudSignedHeaders } from "./cloud-signed-headers.ts";
 
 export const BUG_REPORT_SERVICE = "https://bugs.seira.bot/api/bug-reports";
 const SEND_TIMEOUT_MS = 20_000;
@@ -135,8 +136,8 @@ export async function askReportStatus(endpoint: string, question: ReportStatusQu
   now = Date.now): Promise<ReportStatusAnswer | null> {
   const body = JSON.stringify({ installId: question.installId, ids: question.ids.slice(0, BUG_REPORT_STATUS_MAX_IDS) });
   const timestamp = String(Math.floor(now() / 1000)), nonce = randomBytes(18).toString("base64url");
-  const signed: Record<string, string> = home ? { "x-omb-cloud-machine": home.machineId, "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
-    "x-omb-cloud-signature": `v1=${bugReportsHomeSignature(home.bootstrapSecret, home.machineId, timestamp, nonce, body)}` } : {};
+  const signed: Record<string, string> = home ? cloudSignedHeaders({ machineId: home.machineId, timestamp, nonce,
+    signature: `v1=${bugReportsHomeSignature(home.bootstrapSecret, home.machineId, timestamp, nonce, body)}` }) : {};
   try {
     const response = await fetcher(endpoint, { method: "POST", redirect: "error", cache: "no-store", body, signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
       headers: { accept: "application/json", "content-type": "application/json", ...signed } });

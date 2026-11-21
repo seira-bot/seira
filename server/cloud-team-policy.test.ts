@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { remoteAccessPaths, startTeamPolicyClient, TEAM_POLICY_ADMIN_PATH, TEAM_POLICY_FILE, TEAM_POLICY_FRESH_MS, TEAM_POLICY_REFRESH_MS, teamManagedPolicy, teamPolicyDocumentSchema, teamPolicyFingerprint, teamPolicySignature, type TeamPolicyClient } from "./cloud-team-policy.ts";
 import { ManagedDesktopPolicy, type ManagedPolicy } from "./managed-policy.ts";
 import { excludedWorkspaceAuthPath } from "./workspace-backup-policy.ts";
+import { expectBothCloudSignedNames } from "./testing/cloud-signed-assert.ts";
 
 const TEAM = { id: "11111111-1111-4111-8111-111111111111", name: "Acme" };
 const doc = (limits: Record<string, unknown>) => ({ schema: 1, limits });
@@ -80,6 +81,7 @@ describe("the fetch", () => {
       expect(init.redirect).toBe("error");
       const headers = init.headers as Record<string, string>;
       expect(headers["x-omb-cloud-signature"]).toBe(`v1=${teamPolicySignature("s".repeat(43), "cm-test-home", headers["x-omb-cloud-timestamp"]!, headers["x-omb-cloud-nonce"]!, String(init.body))}`);
+      expectBothCloudSignedNames(headers);
       return answer(document);
     });
     await client.settled();
