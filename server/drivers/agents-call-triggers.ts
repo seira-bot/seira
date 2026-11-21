@@ -478,7 +478,7 @@ async function createTrigger(args: Json, forBotId: string | undefined, context: 
   if (error) return { text: error, isError: true };
   if (fields.workflowId === null) return { text: "workflow_id null stops an automation from running a workflow; it applies only to action=update.", isError: true };
   const runsWorkflow = typeof fields.workflowId === "string" && when === "schedule";
-  if (!fields.name || (!fields.instructions && !runsWorkflow)) return { text: `trigger action=create needs name and instructions (or, for a schedule, a workflow_id).${TAKES()}`, isError: true };
+  if (!fields.name || (!fields.instructions && !runsWorkflow)) return { text: `trigger action=create needs name and instructions.${TAKES()}`, isError: true };
   if (when !== "app_event") {
     const appOnly = [...APP_ONLY, "filter", "event_config"].find((key) => args[key] !== undefined && args[key] !== null);
     if (appOnly) return { text: `${appOnly} applies only to when=app_event.`, isError: true };

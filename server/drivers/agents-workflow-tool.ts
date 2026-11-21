@@ -10,18 +10,18 @@ export const WORKFLOWS_ROUTE = "/api/internal/workflows";
 export const WORKFLOW_TOOL_DEFINITION = {
   name: "workflow",
   description:
-    "Make a workflow: saved steps that run in order, shown to the person under Automations → Workflows. create saves one from a name and steps; it runs only when an automation uses it, so give it a schedule with trigger when=schedule and workflow_id. Read the saved ones with trigger_info action=workflows first, and reuse one the person already has. A check passes on only on a yes answer: on no, the workflow ends. The first step must be a bot step.",
+    "Make a workflow: saved steps in order, shown under Automations → Workflows. It runs only when an automation uses it: then call trigger when=schedule with workflow_id. Call trigger_info action=workflows first and reuse one that fits. A check passes only on yes; on no the workflow ends. The first step must be a bot step.",
   inputSchema: {
     type: "object",
     additionalProperties: false,
     properties: {
       action: { type: "string", enum: ["create"] },
-      name: { type: "string", minLength: 1, maxLength: WORKFLOW_LIMITS.name, description: "Shown on the workflow's card, in the person's plain words." },
+      name: { type: "string", minLength: 1, maxLength: WORKFLOW_LIMITS.name, description: "Shown on the workflow's card." },
       steps: {
         type: "array",
         minItems: 1,
         maxItems: WORKFLOW_LIMITS.steps,
-        description: "In the order they run. bot: a bot does the instruction (complete steps, in the person's plain words); it gets the output of the step before. check: a yes-or-no question about that output. wait: minutes (1 to 43200). post: posts the results to the person.",
+        description: "In run order. bot: a bot does the instruction, with the output of the step before. check: a yes-or-no question about that output. wait: minutes. post: posts the results to the person.",
         items: {
           type: "object",
           additionalProperties: false,

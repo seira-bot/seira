@@ -643,8 +643,8 @@ const TOOL_DEFINITIONS = [
       required: ["trigger_id"],
     },
   },
-  WORKFLOW_TOOL_DEFINITION,
   ...WAIT_TOOL_DEFINITIONS,
+  WORKFLOW_TOOL_DEFINITION,
   ...COMPUTER_ASK_TOOL_DEFINITIONS,
   {
     name: "propose_profile",
