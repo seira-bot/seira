@@ -8,7 +8,7 @@ import { t } from "@/lib/i18n";
 import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
 import { useStore, type Bot } from "@/state/store";
 import type { ApprovalMode } from "../../../shared/approval-mode";
-import { DEFAULT_OUTBOUND_POLICY, type OutboundPolicy } from "../../../shared/outbound";
+import type { OutboundPolicy } from "../../../shared/outbound";
 import { ApprovalModeSelector } from "../ApprovalModeSelector";
 import { CommandAllowlistDialog } from "../CommandAllowlistDialog";
 import { LocalComputerAutoWarning } from "../LocalComputerAutoWarning";
@@ -142,7 +142,7 @@ export function PermissionsSection({
         {...commandAllowlistTarget}
         onClose={() => setCommandAllowlistTarget(null)}
       />}
-      {!draft && shows("outbound") && <OutboundControl bot={bot} onChange={(outbound) => patch({ outbound })} />}
+      {!draft && shows("outbound") && <OutboundControl bot={bot} sendsFreely={approvalMode === "full"} onChange={(outbound) => patch({ outbound })} />}
       <LocalComputerAutoWarning
         open={localAutoWarning !== null}
         onCancel={() => setLocalAutoWarning(null)}
@@ -157,8 +157,9 @@ export function PermissionsSection({
   );
 }
 
-function OutboundControl({ bot, onChange }: { bot: Bot; onChange: (policy: OutboundPolicy) => void }) {
-  const policy = bot.outbound ?? DEFAULT_OUTBOUND_POLICY;
+function OutboundControl({ bot, sendsFreely, onChange }: { bot: Bot; sendsFreely: boolean; onChange: (policy: OutboundPolicy) => void }) {
+  const saved = bot.outbound?.policy;
+  const active = saved ?? (sendsFreely ? "allow" : "ask");
 
   return (
     <div className="rounded-xl bg-card p-4">
@@ -177,13 +178,13 @@ function OutboundControl({ bot, onChange }: { bot: Bot; onChange: (policy: Outbo
             key={value}
             title={hint}
             type="button"
-            aria-pressed={policy.policy === value}
+            aria-pressed={active === value}
             onClick={() => {
-              if (value !== policy.policy) onChange({ policy: value });
+              if (value !== saved) onChange({ policy: value });
             }}
             className={cn(
               "flex-1 rounded-md px-2.5 py-1.5 text-[13px] font-medium",
-              policy.policy === value ? "bg-raised text-ink" : "text-ink-secondary hover:text-ink",
+              active === value ? "bg-raised text-ink" : "text-ink-secondary hover:text-ink",
             )}
           >
             {label}
