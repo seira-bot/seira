@@ -243,7 +243,7 @@ export function shownKeyEntry(id: KeyId, config: ConfigStatus | null | undefined
     const { href: _openAiPage, ...own } = target;
     return { ...entry, name: "Custom endpoint", mark: { icon: Server }, labelKey: "call.live.customKeyField", purposeKey: "keys.purpose.liveKeyCustom", target: { ...own, placeholder: "…" } };
   }
-  return { ...entry, name: "Azure OpenAI", mark: provider("openai-compat", "azure"), labelKey: "call.live.azureKeyField", purposeKey: "keys.purpose.liveKeyAzure", target: { ...target, placeholder: "…", href: "https://portal.azure.com" } };
+  return { ...entry, name: "Azure OpenAI", mark: { driverKind: "openai-compat", preset: "azure" }, labelKey: "call.live.azureKeyField", purposeKey: "keys.purpose.liveKeyAzure", target: { ...target, placeholder: "…", href: "https://portal.azure.com" } };
 }
 
 export function keySection(entry: KeyEntry) {
