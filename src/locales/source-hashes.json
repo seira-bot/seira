@@ -4108,7 +4108,22 @@
       "settings.pool.levelsFalling": "6f8bc84c345ff560ec07618ed2987344e00f182b910485e40289390af6982e56",
       "settings.pool.floorNumber": "4c905b2d2197e3e06c02ddd759a5d1136487bac97a2403721f60fc5352290a56",
       "settings.pool.floorLow": "fed0c5fc4ed9197161db93b379366a95ac898486066e94df70d1da4bb4c9d967",
-      "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438"
+      "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438",
+      "apps.category.productivity": "f42bca637cb367c6d5fcd1b37bd3cb35cb736bdb6fdbf9589f8241845a3981f8",
+      "apps.category.developerTools": "96f0c06bbcb724cde5c748ad31fc5dd8beac095da2961268e060d7df87adb456",
+      "apps.category.communication": "3981a2b9c1ef7fce8dbf5e3d44fefc58746dee11b3de35655e166c25142612ba",
+      "apps.category.files": "abc7e9892806b047b4d4786b3685285543f76ca314c4c76246d5f6544c7856c9",
+      "apps.category.salesCrm": "3382df5928419e8278fc522083464e5d641156ca9c47dcca933175a498f437a2",
+      "apps.category.design": "0072e6b934945d5ba08f9729e00847391922f2f6026a435e704634fb93bf4502",
+      "apps.category.marketing": "f5904cf7a1231a7a13a8cffbd2f0482984a1c69e96fc48dd96be8858a1707e60",
+      "apps.category.analytics": "94c116ee118a72998db6cd10b586a9ef112a1891ff8ced8c7b2944ff62453b5f",
+      "apps.category.finance": "b696d75511dc16f2b52563e3113a498311a79866f4672862197aa9a8c5c0da12",
+      "apps.category.commerce": "02d9be75b85e3cc3b9fd68196ace3b6490367567378c1b494330ccf9eafcba43",
+      "apps.category.ai": "11fb682be0a0233d5fb899721ecfc1827d20f0d2ff2e093310efa61efca8af1c",
+      "apps.category.automation": "d909750b1bbb71a39b6330ba8f81f4f8f6e889ed96d7ab366e74857909750c64",
+      "apps.category.hr": "b721ff42cc1e87773997df5f9788557c4ab7b0ac5ff6065d6255a767064bf849",
+      "apps.category.entertainment": "ceaa553e838fb9f12e3e473ec6a8fe0c53329041cdee871874a3e4b2769e36ea",
+      "apps.category.education": "512ab3c6b9869577bd4474c56b88f9e3f1c40c54d18e8e5a2329821254d362d2"
     },
     "es": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -10589,7 +10604,22 @@
       "settings.pool.levelsFalling": "6f8bc84c345ff560ec07618ed2987344e00f182b910485e40289390af6982e56",
       "settings.pool.floorNumber": "4c905b2d2197e3e06c02ddd759a5d1136487bac97a2403721f60fc5352290a56",
       "settings.pool.floorLow": "fed0c5fc4ed9197161db93b379366a95ac898486066e94df70d1da4bb4c9d967",
-      "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438"
+      "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438",
+      "apps.category.productivity": "f42bca637cb367c6d5fcd1b37bd3cb35cb736bdb6fdbf9589f8241845a3981f8",
+      "apps.category.developerTools": "96f0c06bbcb724cde5c748ad31fc5dd8beac095da2961268e060d7df87adb456",
+      "apps.category.communication": "3981a2b9c1ef7fce8dbf5e3d44fefc58746dee11b3de35655e166c25142612ba",
+      "apps.category.files": "abc7e9892806b047b4d4786b3685285543f76ca314c4c76246d5f6544c7856c9",
+      "apps.category.salesCrm": "3382df5928419e8278fc522083464e5d641156ca9c47dcca933175a498f437a2",
+      "apps.category.design": "0072e6b934945d5ba08f9729e00847391922f2f6026a435e704634fb93bf4502",
+      "apps.category.marketing": "f5904cf7a1231a7a13a8cffbd2f0482984a1c69e96fc48dd96be8858a1707e60",
+      "apps.category.analytics": "94c116ee118a72998db6cd10b586a9ef112a1891ff8ced8c7b2944ff62453b5f",
+      "apps.category.finance": "b696d75511dc16f2b52563e3113a498311a79866f4672862197aa9a8c5c0da12",
+      "apps.category.commerce": "02d9be75b85e3cc3b9fd68196ace3b6490367567378c1b494330ccf9eafcba43",
+      "apps.category.ai": "11fb682be0a0233d5fb899721ecfc1827d20f0d2ff2e093310efa61efca8af1c",
+      "apps.category.automation": "d909750b1bbb71a39b6330ba8f81f4f8f6e889ed96d7ab366e74857909750c64",
+      "apps.category.hr": "b721ff42cc1e87773997df5f9788557c4ab7b0ac5ff6065d6255a767064bf849",
+      "apps.category.entertainment": "ceaa553e838fb9f12e3e473ec6a8fe0c53329041cdee871874a3e4b2769e36ea",
+      "apps.category.education": "512ab3c6b9869577bd4474c56b88f9e3f1c40c54d18e8e5a2329821254d362d2"
     },
     "fr": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -14479,7 +14509,22 @@
       "settings.pool.levelsFalling": "6f8bc84c345ff560ec07618ed2987344e00f182b910485e40289390af6982e56",
       "settings.pool.floorNumber": "4c905b2d2197e3e06c02ddd759a5d1136487bac97a2403721f60fc5352290a56",
       "settings.pool.floorLow": "fed0c5fc4ed9197161db93b379366a95ac898486066e94df70d1da4bb4c9d967",
-      "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438"
+      "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438",
+      "apps.category.productivity": "f42bca637cb367c6d5fcd1b37bd3cb35cb736bdb6fdbf9589f8241845a3981f8",
+      "apps.category.developerTools": "96f0c06bbcb724cde5c748ad31fc5dd8beac095da2961268e060d7df87adb456",
+      "apps.category.communication": "3981a2b9c1ef7fce8dbf5e3d44fefc58746dee11b3de35655e166c25142612ba",
+      "apps.category.files": "abc7e9892806b047b4d4786b3685285543f76ca314c4c76246d5f6544c7856c9",
+      "apps.category.salesCrm": "3382df5928419e8278fc522083464e5d641156ca9c47dcca933175a498f437a2",
+      "apps.category.design": "0072e6b934945d5ba08f9729e00847391922f2f6026a435e704634fb93bf4502",
+      "apps.category.marketing": "f5904cf7a1231a7a13a8cffbd2f0482984a1c69e96fc48dd96be8858a1707e60",
+      "apps.category.analytics": "94c116ee118a72998db6cd10b586a9ef112a1891ff8ced8c7b2944ff62453b5f",
+      "apps.category.finance": "b696d75511dc16f2b52563e3113a498311a79866f4672862197aa9a8c5c0da12",
+      "apps.category.commerce": "02d9be75b85e3cc3b9fd68196ace3b6490367567378c1b494330ccf9eafcba43",
+      "apps.category.ai": "11fb682be0a0233d5fb899721ecfc1827d20f0d2ff2e093310efa61efca8af1c",
+      "apps.category.automation": "d909750b1bbb71a39b6330ba8f81f4f8f6e889ed96d7ab366e74857909750c64",
+      "apps.category.hr": "b721ff42cc1e87773997df5f9788557c4ab7b0ac5ff6065d6255a767064bf849",
+      "apps.category.entertainment": "ceaa553e838fb9f12e3e473ec6a8fe0c53329041cdee871874a3e4b2769e36ea",
+      "apps.category.education": "512ab3c6b9869577bd4474c56b88f9e3f1c40c54d18e8e5a2329821254d362d2"
     },
     "hi": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -18223,7 +18268,22 @@
       "settings.pool.levelsFalling": "6f8bc84c345ff560ec07618ed2987344e00f182b910485e40289390af6982e56",
       "settings.pool.floorNumber": "4c905b2d2197e3e06c02ddd759a5d1136487bac97a2403721f60fc5352290a56",
       "settings.pool.floorLow": "fed0c5fc4ed9197161db93b379366a95ac898486066e94df70d1da4bb4c9d967",
-      "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438"
+      "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438",
+      "apps.category.productivity": "f42bca637cb367c6d5fcd1b37bd3cb35cb736bdb6fdbf9589f8241845a3981f8",
+      "apps.category.developerTools": "96f0c06bbcb724cde5c748ad31fc5dd8beac095da2961268e060d7df87adb456",
+      "apps.category.communication": "3981a2b9c1ef7fce8dbf5e3d44fefc58746dee11b3de35655e166c25142612ba",
+      "apps.category.files": "abc7e9892806b047b4d4786b3685285543f76ca314c4c76246d5f6544c7856c9",
+      "apps.category.salesCrm": "3382df5928419e8278fc522083464e5d641156ca9c47dcca933175a498f437a2",
+      "apps.category.design": "0072e6b934945d5ba08f9729e00847391922f2f6026a435e704634fb93bf4502",
+      "apps.category.marketing": "f5904cf7a1231a7a13a8cffbd2f0482984a1c69e96fc48dd96be8858a1707e60",
+      "apps.category.analytics": "94c116ee118a72998db6cd10b586a9ef112a1891ff8ced8c7b2944ff62453b5f",
+      "apps.category.finance": "b696d75511dc16f2b52563e3113a498311a79866f4672862197aa9a8c5c0da12",
+      "apps.category.commerce": "02d9be75b85e3cc3b9fd68196ace3b6490367567378c1b494330ccf9eafcba43",
+      "apps.category.ai": "11fb682be0a0233d5fb899721ecfc1827d20f0d2ff2e093310efa61efca8af1c",
+      "apps.category.automation": "d909750b1bbb71a39b6330ba8f81f4f8f6e889ed96d7ab366e74857909750c64",
+      "apps.category.hr": "b721ff42cc1e87773997df5f9788557c4ab7b0ac5ff6065d6255a767064bf849",
+      "apps.category.entertainment": "ceaa553e838fb9f12e3e473ec6a8fe0c53329041cdee871874a3e4b2769e36ea",
+      "apps.category.education": "512ab3c6b9869577bd4474c56b88f9e3f1c40c54d18e8e5a2329821254d362d2"
     },
     "ja": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -26239,7 +26299,14 @@
       "settings.pool.floorNumber": "4c905b2d2197e3e06c02ddd759a5d1136487bac97a2403721f60fc5352290a56",
       "settings.pool.floorLow": "fed0c5fc4ed9197161db93b379366a95ac898486066e94df70d1da4bb4c9d967",
       "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438",
-      "settings.profile.avatar.shuffle": "317cb3a7efadd989cf93430f492995c8a33f10a31ea74699f2c0152bb6c3b9fb"
+      "settings.profile.avatar.shuffle": "317cb3a7efadd989cf93430f492995c8a33f10a31ea74699f2c0152bb6c3b9fb",
+      "apps.category.finance": "b696d75511dc16f2b52563e3113a498311a79866f4672862197aa9a8c5c0da12",
+      "apps.category.commerce": "02d9be75b85e3cc3b9fd68196ace3b6490367567378c1b494330ccf9eafcba43",
+      "apps.category.ai": "11fb682be0a0233d5fb899721ecfc1827d20f0d2ff2e093310efa61efca8af1c",
+      "apps.category.automation": "d909750b1bbb71a39b6330ba8f81f4f8f6e889ed96d7ab366e74857909750c64",
+      "apps.category.hr": "b721ff42cc1e87773997df5f9788557c4ab7b0ac5ff6065d6255a767064bf849",
+      "apps.category.entertainment": "ceaa553e838fb9f12e3e473ec6a8fe0c53329041cdee871874a3e4b2769e36ea",
+      "apps.category.education": "512ab3c6b9869577bd4474c56b88f9e3f1c40c54d18e8e5a2329821254d362d2"
     },
     "pt-br": {
       "voice.gemini.keyPlaceholder": "8c87ba2043a4a89d63c90cae8a6dafd5cbd193652e923b97988e381a74773e10",
@@ -37787,7 +37854,14 @@
       "coret.description": "290657b250d59fe684e3ab6d9257c4c461f26cce5def39ffb133045062976477",
       "coret.notice": "d7910454d78e16f63d126af9db06bd3e8e47bb0b19cd8e2ae46a41f955c4472e",
       "termilo.description": "cb025053785dc99e2f894e9520cd9a103915829ad9076204776524768f3c31a5",
-      "termilo.notice": "06e677ea492a5ca3522a74aa3a0f87c3423e5ffa76de06491d8267260cab1d20"
+      "termilo.notice": "06e677ea492a5ca3522a74aa3a0f87c3423e5ffa76de06491d8267260cab1d20",
+      "apps.category.finance": "b696d75511dc16f2b52563e3113a498311a79866f4672862197aa9a8c5c0da12",
+      "apps.category.commerce": "02d9be75b85e3cc3b9fd68196ace3b6490367567378c1b494330ccf9eafcba43",
+      "apps.category.ai": "11fb682be0a0233d5fb899721ecfc1827d20f0d2ff2e093310efa61efca8af1c",
+      "apps.category.automation": "d909750b1bbb71a39b6330ba8f81f4f8f6e889ed96d7ab366e74857909750c64",
+      "apps.category.hr": "b721ff42cc1e87773997df5f9788557c4ab7b0ac5ff6065d6255a767064bf849",
+      "apps.category.entertainment": "ceaa553e838fb9f12e3e473ec6a8fe0c53329041cdee871874a3e4b2769e36ea",
+      "apps.category.education": "512ab3c6b9869577bd4474c56b88f9e3f1c40c54d18e8e5a2329821254d362d2"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -47943,7 +48017,14 @@
       "settings.pool.floorNumber": "4c905b2d2197e3e06c02ddd759a5d1136487bac97a2403721f60fc5352290a56",
       "settings.pool.floorLow": "fed0c5fc4ed9197161db93b379366a95ac898486066e94df70d1da4bb4c9d967",
       "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438",
-      "settings.profile.avatar.shuffle": "317cb3a7efadd989cf93430f492995c8a33f10a31ea74699f2c0152bb6c3b9fb"
+      "settings.profile.avatar.shuffle": "317cb3a7efadd989cf93430f492995c8a33f10a31ea74699f2c0152bb6c3b9fb",
+      "apps.category.finance": "b696d75511dc16f2b52563e3113a498311a79866f4672862197aa9a8c5c0da12",
+      "apps.category.commerce": "02d9be75b85e3cc3b9fd68196ace3b6490367567378c1b494330ccf9eafcba43",
+      "apps.category.ai": "11fb682be0a0233d5fb899721ecfc1827d20f0d2ff2e093310efa61efca8af1c",
+      "apps.category.automation": "d909750b1bbb71a39b6330ba8f81f4f8f6e889ed96d7ab366e74857909750c64",
+      "apps.category.hr": "b721ff42cc1e87773997df5f9788557c4ab7b0ac5ff6065d6255a767064bf849",
+      "apps.category.entertainment": "ceaa553e838fb9f12e3e473ec6a8fe0c53329041cdee871874a3e4b2769e36ea",
+      "apps.category.education": "512ab3c6b9869577bd4474c56b88f9e3f1c40c54d18e8e5a2329821254d362d2"
     },
     "zh-tw": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -58193,7 +58274,14 @@
       "settings.pool.floorNumber": "4c905b2d2197e3e06c02ddd759a5d1136487bac97a2403721f60fc5352290a56",
       "settings.pool.floorLow": "fed0c5fc4ed9197161db93b379366a95ac898486066e94df70d1da4bb4c9d967",
       "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438",
-      "settings.profile.avatar.shuffle": "317cb3a7efadd989cf93430f492995c8a33f10a31ea74699f2c0152bb6c3b9fb"
+      "settings.profile.avatar.shuffle": "317cb3a7efadd989cf93430f492995c8a33f10a31ea74699f2c0152bb6c3b9fb",
+      "apps.category.finance": "b696d75511dc16f2b52563e3113a498311a79866f4672862197aa9a8c5c0da12",
+      "apps.category.commerce": "02d9be75b85e3cc3b9fd68196ace3b6490367567378c1b494330ccf9eafcba43",
+      "apps.category.ai": "11fb682be0a0233d5fb899721ecfc1827d20f0d2ff2e093310efa61efca8af1c",
+      "apps.category.automation": "d909750b1bbb71a39b6330ba8f81f4f8f6e889ed96d7ab366e74857909750c64",
+      "apps.category.hr": "b721ff42cc1e87773997df5f9788557c4ab7b0ac5ff6065d6255a767064bf849",
+      "apps.category.entertainment": "ceaa553e838fb9f12e3e473ec6a8fe0c53329041cdee871874a3e4b2769e36ea",
+      "apps.category.education": "512ab3c6b9869577bd4474c56b88f9e3f1c40c54d18e8e5a2329821254d362d2"
     },
     "uk": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -62357,7 +62445,22 @@
       "settings.pool.levelsFalling": "6f8bc84c345ff560ec07618ed2987344e00f182b910485e40289390af6982e56",
       "settings.pool.floorNumber": "4c905b2d2197e3e06c02ddd759a5d1136487bac97a2403721f60fc5352290a56",
       "settings.pool.floorLow": "fed0c5fc4ed9197161db93b379366a95ac898486066e94df70d1da4bb4c9d967",
-      "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438"
+      "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438",
+      "apps.category.productivity": "f42bca637cb367c6d5fcd1b37bd3cb35cb736bdb6fdbf9589f8241845a3981f8",
+      "apps.category.developerTools": "96f0c06bbcb724cde5c748ad31fc5dd8beac095da2961268e060d7df87adb456",
+      "apps.category.communication": "3981a2b9c1ef7fce8dbf5e3d44fefc58746dee11b3de35655e166c25142612ba",
+      "apps.category.files": "abc7e9892806b047b4d4786b3685285543f76ca314c4c76246d5f6544c7856c9",
+      "apps.category.salesCrm": "3382df5928419e8278fc522083464e5d641156ca9c47dcca933175a498f437a2",
+      "apps.category.design": "0072e6b934945d5ba08f9729e00847391922f2f6026a435e704634fb93bf4502",
+      "apps.category.marketing": "f5904cf7a1231a7a13a8cffbd2f0482984a1c69e96fc48dd96be8858a1707e60",
+      "apps.category.analytics": "94c116ee118a72998db6cd10b586a9ef112a1891ff8ced8c7b2944ff62453b5f",
+      "apps.category.finance": "b696d75511dc16f2b52563e3113a498311a79866f4672862197aa9a8c5c0da12",
+      "apps.category.commerce": "02d9be75b85e3cc3b9fd68196ace3b6490367567378c1b494330ccf9eafcba43",
+      "apps.category.ai": "11fb682be0a0233d5fb899721ecfc1827d20f0d2ff2e093310efa61efca8af1c",
+      "apps.category.automation": "d909750b1bbb71a39b6330ba8f81f4f8f6e889ed96d7ab366e74857909750c64",
+      "apps.category.hr": "b721ff42cc1e87773997df5f9788557c4ab7b0ac5ff6065d6255a767064bf849",
+      "apps.category.entertainment": "ceaa553e838fb9f12e3e473ec6a8fe0c53329041cdee871874a3e4b2769e36ea",
+      "apps.category.education": "512ab3c6b9869577bd4474c56b88f9e3f1c40c54d18e8e5a2329821254d362d2"
     },
     "vi": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -68338,7 +68441,22 @@
       "settings.pool.levelsFalling": "6f8bc84c345ff560ec07618ed2987344e00f182b910485e40289390af6982e56",
       "settings.pool.floorNumber": "4c905b2d2197e3e06c02ddd759a5d1136487bac97a2403721f60fc5352290a56",
       "settings.pool.floorLow": "fed0c5fc4ed9197161db93b379366a95ac898486066e94df70d1da4bb4c9d967",
-      "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438"
+      "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438",
+      "apps.category.productivity": "f42bca637cb367c6d5fcd1b37bd3cb35cb736bdb6fdbf9589f8241845a3981f8",
+      "apps.category.developerTools": "96f0c06bbcb724cde5c748ad31fc5dd8beac095da2961268e060d7df87adb456",
+      "apps.category.communication": "3981a2b9c1ef7fce8dbf5e3d44fefc58746dee11b3de35655e166c25142612ba",
+      "apps.category.files": "abc7e9892806b047b4d4786b3685285543f76ca314c4c76246d5f6544c7856c9",
+      "apps.category.salesCrm": "3382df5928419e8278fc522083464e5d641156ca9c47dcca933175a498f437a2",
+      "apps.category.design": "0072e6b934945d5ba08f9729e00847391922f2f6026a435e704634fb93bf4502",
+      "apps.category.marketing": "f5904cf7a1231a7a13a8cffbd2f0482984a1c69e96fc48dd96be8858a1707e60",
+      "apps.category.analytics": "94c116ee118a72998db6cd10b586a9ef112a1891ff8ced8c7b2944ff62453b5f",
+      "apps.category.finance": "b696d75511dc16f2b52563e3113a498311a79866f4672862197aa9a8c5c0da12",
+      "apps.category.commerce": "02d9be75b85e3cc3b9fd68196ace3b6490367567378c1b494330ccf9eafcba43",
+      "apps.category.ai": "11fb682be0a0233d5fb899721ecfc1827d20f0d2ff2e093310efa61efca8af1c",
+      "apps.category.automation": "d909750b1bbb71a39b6330ba8f81f4f8f6e889ed96d7ab366e74857909750c64",
+      "apps.category.hr": "b721ff42cc1e87773997df5f9788557c4ab7b0ac5ff6065d6255a767064bf849",
+      "apps.category.entertainment": "ceaa553e838fb9f12e3e473ec6a8fe0c53329041cdee871874a3e4b2769e36ea",
+      "apps.category.education": "512ab3c6b9869577bd4474c56b88f9e3f1c40c54d18e8e5a2329821254d362d2"
     },
     "tr": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -74319,7 +74437,22 @@
       "settings.pool.levelsFalling": "6f8bc84c345ff560ec07618ed2987344e00f182b910485e40289390af6982e56",
       "settings.pool.floorNumber": "4c905b2d2197e3e06c02ddd759a5d1136487bac97a2403721f60fc5352290a56",
       "settings.pool.floorLow": "fed0c5fc4ed9197161db93b379366a95ac898486066e94df70d1da4bb4c9d967",
-      "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438"
+      "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438",
+      "apps.category.productivity": "f42bca637cb367c6d5fcd1b37bd3cb35cb736bdb6fdbf9589f8241845a3981f8",
+      "apps.category.developerTools": "96f0c06bbcb724cde5c748ad31fc5dd8beac095da2961268e060d7df87adb456",
+      "apps.category.communication": "3981a2b9c1ef7fce8dbf5e3d44fefc58746dee11b3de35655e166c25142612ba",
+      "apps.category.files": "abc7e9892806b047b4d4786b3685285543f76ca314c4c76246d5f6544c7856c9",
+      "apps.category.salesCrm": "3382df5928419e8278fc522083464e5d641156ca9c47dcca933175a498f437a2",
+      "apps.category.design": "0072e6b934945d5ba08f9729e00847391922f2f6026a435e704634fb93bf4502",
+      "apps.category.marketing": "f5904cf7a1231a7a13a8cffbd2f0482984a1c69e96fc48dd96be8858a1707e60",
+      "apps.category.analytics": "94c116ee118a72998db6cd10b586a9ef112a1891ff8ced8c7b2944ff62453b5f",
+      "apps.category.finance": "b696d75511dc16f2b52563e3113a498311a79866f4672862197aa9a8c5c0da12",
+      "apps.category.commerce": "02d9be75b85e3cc3b9fd68196ace3b6490367567378c1b494330ccf9eafcba43",
+      "apps.category.ai": "11fb682be0a0233d5fb899721ecfc1827d20f0d2ff2e093310efa61efca8af1c",
+      "apps.category.automation": "d909750b1bbb71a39b6330ba8f81f4f8f6e889ed96d7ab366e74857909750c64",
+      "apps.category.hr": "b721ff42cc1e87773997df5f9788557c4ab7b0ac5ff6065d6255a767064bf849",
+      "apps.category.entertainment": "ceaa553e838fb9f12e3e473ec6a8fe0c53329041cdee871874a3e4b2769e36ea",
+      "apps.category.education": "512ab3c6b9869577bd4474c56b88f9e3f1c40c54d18e8e5a2329821254d362d2"
     },
     "pl": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -81505,7 +81638,14 @@
       "settings.pool.floorNumber": "4c905b2d2197e3e06c02ddd759a5d1136487bac97a2403721f60fc5352290a56",
       "settings.pool.floorLow": "fed0c5fc4ed9197161db93b379366a95ac898486066e94df70d1da4bb4c9d967",
       "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438",
-      "settings.profile.avatar.shuffle": "317cb3a7efadd989cf93430f492995c8a33f10a31ea74699f2c0152bb6c3b9fb"
+      "settings.profile.avatar.shuffle": "317cb3a7efadd989cf93430f492995c8a33f10a31ea74699f2c0152bb6c3b9fb",
+      "apps.category.finance": "b696d75511dc16f2b52563e3113a498311a79866f4672862197aa9a8c5c0da12",
+      "apps.category.commerce": "02d9be75b85e3cc3b9fd68196ace3b6490367567378c1b494330ccf9eafcba43",
+      "apps.category.ai": "11fb682be0a0233d5fb899721ecfc1827d20f0d2ff2e093310efa61efca8af1c",
+      "apps.category.automation": "d909750b1bbb71a39b6330ba8f81f4f8f6e889ed96d7ab366e74857909750c64",
+      "apps.category.hr": "b721ff42cc1e87773997df5f9788557c4ab7b0ac5ff6065d6255a767064bf849",
+      "apps.category.entertainment": "ceaa553e838fb9f12e3e473ec6a8fe0c53329041cdee871874a3e4b2769e36ea",
+      "apps.category.education": "512ab3c6b9869577bd4474c56b88f9e3f1c40c54d18e8e5a2329821254d362d2"
     },
     "ru": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -88744,7 +88884,14 @@
       "settings.pool.floorNumber": "4c905b2d2197e3e06c02ddd759a5d1136487bac97a2403721f60fc5352290a56",
       "settings.pool.floorLow": "fed0c5fc4ed9197161db93b379366a95ac898486066e94df70d1da4bb4c9d967",
       "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438",
-      "settings.profile.avatar.shuffle": "317cb3a7efadd989cf93430f492995c8a33f10a31ea74699f2c0152bb6c3b9fb"
+      "settings.profile.avatar.shuffle": "317cb3a7efadd989cf93430f492995c8a33f10a31ea74699f2c0152bb6c3b9fb",
+      "apps.category.finance": "b696d75511dc16f2b52563e3113a498311a79866f4672862197aa9a8c5c0da12",
+      "apps.category.commerce": "02d9be75b85e3cc3b9fd68196ace3b6490367567378c1b494330ccf9eafcba43",
+      "apps.category.ai": "11fb682be0a0233d5fb899721ecfc1827d20f0d2ff2e093310efa61efca8af1c",
+      "apps.category.automation": "d909750b1bbb71a39b6330ba8f81f4f8f6e889ed96d7ab366e74857909750c64",
+      "apps.category.hr": "b721ff42cc1e87773997df5f9788557c4ab7b0ac5ff6065d6255a767064bf849",
+      "apps.category.entertainment": "ceaa553e838fb9f12e3e473ec6a8fe0c53329041cdee871874a3e4b2769e36ea",
+      "apps.category.education": "512ab3c6b9869577bd4474c56b88f9e3f1c40c54d18e8e5a2329821254d362d2"
     },
     "it": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -95796,7 +95943,16 @@
       "settings.pool.floorNumber": "4c905b2d2197e3e06c02ddd759a5d1136487bac97a2403721f60fc5352290a56",
       "settings.pool.floorLow": "fed0c5fc4ed9197161db93b379366a95ac898486066e94df70d1da4bb4c9d967",
       "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438",
-      "settings.profile.avatar.shuffle": "317cb3a7efadd989cf93430f492995c8a33f10a31ea74699f2c0152bb6c3b9fb"
+      "settings.profile.avatar.shuffle": "317cb3a7efadd989cf93430f492995c8a33f10a31ea74699f2c0152bb6c3b9fb",
+      "apps.category.design": "0072e6b934945d5ba08f9729e00847391922f2f6026a435e704634fb93bf4502",
+      "apps.category.marketing": "f5904cf7a1231a7a13a8cffbd2f0482984a1c69e96fc48dd96be8858a1707e60",
+      "apps.category.finance": "b696d75511dc16f2b52563e3113a498311a79866f4672862197aa9a8c5c0da12",
+      "apps.category.commerce": "02d9be75b85e3cc3b9fd68196ace3b6490367567378c1b494330ccf9eafcba43",
+      "apps.category.ai": "11fb682be0a0233d5fb899721ecfc1827d20f0d2ff2e093310efa61efca8af1c",
+      "apps.category.automation": "d909750b1bbb71a39b6330ba8f81f4f8f6e889ed96d7ab366e74857909750c64",
+      "apps.category.hr": "b721ff42cc1e87773997df5f9788557c4ab7b0ac5ff6065d6255a767064bf849",
+      "apps.category.entertainment": "ceaa553e838fb9f12e3e473ec6a8fe0c53329041cdee871874a3e4b2769e36ea",
+      "apps.category.education": "512ab3c6b9869577bd4474c56b88f9e3f1c40c54d18e8e5a2329821254d362d2"
     },
     "ko": {
       "connectedWorkspaces.localTitle": "7d6deafeab011d734c3fdd1bfd6f69544fbb746a004019269bdb48544b01164b",
@@ -103507,7 +103663,14 @@
       "settings.pool.floorNumber": "4c905b2d2197e3e06c02ddd759a5d1136487bac97a2403721f60fc5352290a56",
       "settings.pool.floorLow": "fed0c5fc4ed9197161db93b379366a95ac898486066e94df70d1da4bb4c9d967",
       "settings.pool.error": "94608874b9a81fdafd06398cd6fbdecd1bbbc997844f316530b54046fe40d438",
-      "settings.profile.avatar.shuffle": "317cb3a7efadd989cf93430f492995c8a33f10a31ea74699f2c0152bb6c3b9fb"
+      "settings.profile.avatar.shuffle": "317cb3a7efadd989cf93430f492995c8a33f10a31ea74699f2c0152bb6c3b9fb",
+      "apps.category.finance": "b696d75511dc16f2b52563e3113a498311a79866f4672862197aa9a8c5c0da12",
+      "apps.category.commerce": "02d9be75b85e3cc3b9fd68196ace3b6490367567378c1b494330ccf9eafcba43",
+      "apps.category.ai": "11fb682be0a0233d5fb899721ecfc1827d20f0d2ff2e093310efa61efca8af1c",
+      "apps.category.automation": "d909750b1bbb71a39b6330ba8f81f4f8f6e889ed96d7ab366e74857909750c64",
+      "apps.category.hr": "b721ff42cc1e87773997df5f9788557c4ab7b0ac5ff6065d6255a767064bf849",
+      "apps.category.entertainment": "ceaa553e838fb9f12e3e473ec6a8fe0c53329041cdee871874a3e4b2769e36ea",
+      "apps.category.education": "512ab3c6b9869577bd4474c56b88f9e3f1c40c54d18e8e5a2329821254d362d2"
     }
   }
 }
