@@ -39,7 +39,7 @@ export function NewTaskForm({ bots, defaultBotId }: { bots: readonly Bot[]; defa
           placeholder={t("board.newTask.placeholder", { bot: bot?.name ?? "" })}
           className="h-9 min-w-48 flex-1 rounded-lg bg-inset px-3 text-[13px] text-ink shadow-[inset_0_0_0_0.5px_var(--color-edge)] placeholder:text-ink-tertiary focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus" />
         <BotMenu label={t("board.newTask.bot")} bots={bots} value={botId} onChange={(id) => setChosen(id)}
-          summary={<>{bot && <BotAvatar bot={bot} size={18} />}<span className="min-w-0 truncate">{bot?.name}</span></>} />
+          summary={<>{bot && <BotAvatar bot={bot} size={18} label="" />}<span className="min-w-0 truncate">{bot?.name}</span></>} />
         <button type="submit" disabled={!text.trim() || !botId || sending}
           className="h-9 rounded-lg bg-accent px-3 text-[13px] font-medium text-accent-ink transition-colors duration-150 hover:opacity-90 disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus motion-reduce:transition-none">
           {t("board.newTask.send")}

@@ -51,7 +51,7 @@ export function BoardPanel({ card, bot, onClose, onOpen, onStop }: {
         </button>
       </header>
       <div className="flex items-center gap-2 text-[13px] text-ink-secondary">
-        {bot && <BotAvatar bot={bot} size={20} />}
+        {bot && <BotAvatar bot={bot} size={20} label="" />}
         <span className="min-w-0 truncate">{bot?.name}</span>
         <span aria-hidden="true">·</span>
         <span className="min-w-0 truncate">{stateLine(card, bot)}</span>

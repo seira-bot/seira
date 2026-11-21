@@ -59,7 +59,7 @@ export function BotMenu({ label, bots, value, onChange, allLabel, summary, class
             <button key={choice.id ?? "all"} type="button" role="menuitemradio" aria-checked={choice.id === value} tabIndex={-1}
               onClick={() => { onChange(choice.id); setOpen(false); trigger.current?.focus(); }}
               className={cn("flex h-8 w-full items-center gap-2 rounded-lg px-2 text-start text-[13px] text-ink hover:bg-menu-hover focus-visible:bg-menu-hover focus-visible:outline-none", choice.id === value && "bg-menu-active font-medium")}>
-              {choice.bot && <BotAvatar bot={choice.bot} size={18} />}
+              {choice.bot && <BotAvatar bot={choice.bot} size={18} label="" />}
               <span className="min-w-0 flex-1 truncate">{choice.name}</span>
             </button>
           ))}

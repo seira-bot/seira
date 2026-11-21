@@ -28,7 +28,7 @@ export function BoardCardButton({ card, bot, fromBot, selected, onOpen }: {
         )}>
         <span dir="auto" className="line-clamp-2 text-[13px] font-medium text-ink">{card.title || t("task.untitledConversation")}</span>
         <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-ink-secondary">
-          {bot && <BotAvatar bot={bot} size={16} />}
+          {bot && <BotAvatar bot={bot} size={16} label="" />}
           <span className="min-w-0 truncate">{bot?.name}</span>
         </span>
         <span className={cn("text-[12px]", alert ? "font-medium text-accent-text" : "text-ink-tertiary")}>{stateLine(card, bot)}</span>
