@@ -169,7 +169,8 @@ it("names a tagged MCP server in a typed one-to-one line, and in no line that ca
     const turn = turns().filter((one) => one.botId === lead.id).at(-1)!;
     return `${turn.system}\n${JSON.stringify(turn.prompt)}`;
   };
-  expect(await asked("please check my notes with @notion")).toContain("The person's message tags these tools: notion (an MCP server).");
+  const first = await asked("please check my notes with @notion"); console.log("DBG", first.includes("notion"), first.match(/.{80}notion.{80}/g)?.slice(0,4), /mcp/i.test(first));
+  expect(first).toContain("The person's message tags these tools: notion (an MCP server).");
   expect(await asked("please check my notes without a tag")).not.toContain("tags these tools");
   expect(await asked("please check my notes with @slack")).not.toContain("tags these tools");
 }, hostTimeout(120_000));
