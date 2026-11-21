@@ -1,4 +1,5 @@
 import type { Readable } from "node:stream";
+import type { InstructionsAs } from "../../shared/ai-import/api.ts";
 import type { ImportEvent, ImportSourceKind } from "../../shared/ai-import/bundle.ts";
 
 /** `name` uses "/" separators and is relative to the root of the upload or folder. */
@@ -28,6 +29,7 @@ export interface ReaderContext {
   /** A private folder the reader may write copies into; the engine deletes it. */
   stagingDir: string;
   transcripts: boolean;
+  instructions: InstructionsAs;
 }
 
 export interface SourceReader {

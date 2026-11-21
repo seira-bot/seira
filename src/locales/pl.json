@@ -7189,5 +7189,6 @@
   "settings.pool.levelsFalling": "Każdy próg musi być niższy od poprzedniego.",
   "settings.pool.floorNumber": "Dolna granica to liczba całkowita od 0 do 98.",
   "settings.pool.floorLow": "Dolna granica musi być niższa od ostatniego progu.",
-  "settings.pool.error": "Nie udało się zapisać puli AI. Spróbuj ponownie."
+  "settings.pool.error": "Nie udało się zapisać puli AI. Spróbuj ponownie.",
+  "aiImport.title": "Przenieś się z innej AI"
 }

@@ -7714,5 +7714,6 @@
   "settings.pool.levelsFalling": "각 단계는 앞 단계보다 낮아야 해요.",
   "settings.pool.floorNumber": "하한은 0에서 98 사이의 정수예요.",
   "settings.pool.floorLow": "하한은 마지막 단계보다 낮아야 해요.",
-  "settings.pool.error": "AI 풀을 저장하지 못했어요. 다시 시도해 주세요."
+  "settings.pool.error": "AI 풀을 저장하지 못했어요. 다시 시도해 주세요.",
+  "aiImport.title": "다른 AI에서 옮겨 오기"
 }

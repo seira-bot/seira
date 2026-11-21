@@ -4120,5 +4120,6 @@
   "settings.pool.levelsFalling": "Jede Stufe muss niedriger sein als die davor.",
   "settings.pool.floorNumber": "Die Untergrenze ist eine ganze Zahl von 0 bis 98.",
   "settings.pool.floorLow": "Die Untergrenze muss unter der letzten Stufe liegen.",
-  "settings.pool.error": "Der KI-Pool konnte nicht gespeichert werden. Bitte versuche es erneut."
+  "settings.pool.error": "Der KI-Pool konnte nicht gespeichert werden. Bitte versuche es erneut.",
+  "aiImport.title": "Von einer anderen KI umziehen"
 }

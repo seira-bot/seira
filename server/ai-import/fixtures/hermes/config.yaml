@@ -1,0 +1,18 @@
+model: example-model
+mcp_servers:
+  github:
+    command: npx
+    args: ["-y", "example-github-mcp"]
+    env:
+      GITHUB_TOKEN: "synthetic-not-a-secret"
+  docs:
+    url: https://mcp.example.test/docs
+    headers:
+      Authorization: "Bearer synthetic"
+    enabled: false
+  broken: 12
+platforms:
+  telegram:
+    token: "synthetic-telegram-token"
+  discord:
+    token: "synthetic-discord-token"

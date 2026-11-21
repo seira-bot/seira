@@ -3755,5 +3755,6 @@
   "settings.pool.levelsFalling": "हर स्तर पिछले स्तर से कम होना चाहिए।",
   "settings.pool.floorNumber": "न्यूनतम सीमा 0 से 98 तक की पूर्ण संख्या है।",
   "settings.pool.floorLow": "न्यूनतम सीमा आख़िरी स्तर से कम होनी चाहिए।",
-  "settings.pool.error": "AI पूल सहेजा नहीं जा सका। कृपया फिर से कोशिश करें।"
+  "settings.pool.error": "AI पूल सहेजा नहीं जा सका। कृपया फिर से कोशिश करें।",
+  "aiImport.title": "किसी दूसरे AI से यहाँ आएँ"
 }

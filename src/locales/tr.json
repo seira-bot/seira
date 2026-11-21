@@ -5992,5 +5992,6 @@
   "settings.pool.levelsFalling": "Her seviye bir öncekinden düşük olmalı.",
   "settings.pool.floorNumber": "Alt sınır 0 ile 98 arasında bir tam sayıdır.",
   "settings.pool.floorLow": "Alt sınır son seviyeden düşük olmalı.",
-  "settings.pool.error": "Yapay zeka havuzu kaydedilemedi. Lütfen tekrar dene."
+  "settings.pool.error": "Yapay zeka havuzu kaydedilemedi. Lütfen tekrar dene.",
+  "aiImport.title": "Başka bir yapay zekâdan taşıyın"
 }

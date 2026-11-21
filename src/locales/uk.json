@@ -4175,5 +4175,6 @@
   "settings.pool.levelsFalling": "Кожен рівень має бути нижчим за попередній.",
   "settings.pool.floorNumber": "Нижня межа — ціле число від 0 до 98.",
   "settings.pool.floorLow": "Нижня межа має бути нижчою за останній рівень.",
-  "settings.pool.error": "Не вдалося зберегти пул ШІ. Спробуйте ще раз."
+  "settings.pool.error": "Не вдалося зберегти пул ШІ. Спробуйте ще раз.",
+  "aiImport.title": "Переїзд з іншого ШІ"
 }

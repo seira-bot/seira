@@ -3901,5 +3901,6 @@
   "settings.pool.levelsFalling": "Chaque niveau doit être inférieur au précédent.",
   "settings.pool.floorNumber": "Le plancher est un nombre entier de 0 à 98.",
   "settings.pool.floorLow": "Le plancher doit être inférieur au dernier niveau.",
-  "settings.pool.error": "Impossible d'enregistrer le groupe d'IA. Réessayez."
+  "settings.pool.error": "Impossible d'enregistrer le groupe d'IA. Réessayez.",
+  "aiImport.title": "Passer depuis une autre IA"
 }

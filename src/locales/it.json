@@ -7057,5 +7057,6 @@
   "settings.pool.levelsFalling": "Ogni livello deve essere più basso del precedente.",
   "settings.pool.floorNumber": "La soglia minima è un numero intero da 0 a 98.",
   "settings.pool.floorLow": "La soglia minima deve essere più bassa dell'ultimo livello.",
-  "settings.pool.error": "Impossibile salvare il gruppo di IA. Riprova."
+  "settings.pool.error": "Impossibile salvare il gruppo di IA. Riprova.",
+  "aiImport.title": "Passa da un’altra AI"
 }

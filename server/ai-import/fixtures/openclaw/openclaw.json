@@ -1,0 +1,14 @@
+// OpenClaw config (JSON5)
+{
+  mcp: {
+    servers: {
+      fetch: { command: 'uvx', args: ['mcp-server-fetch'], },
+      search: { url: "https://mcp.example.test/search", headers: { "X-Api-Key": "synthetic" } },
+    },
+  },
+  channels: {
+    telegram: { botToken: "synthetic-bot-token" }, /* token stays behind */
+    whatsapp: { authDir: "~/.openclaw/credentials/whatsapp" },
+  },
+  agents: { defaults: { heartbeat: { every: "1h" } } },
+}

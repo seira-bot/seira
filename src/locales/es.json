@@ -6492,5 +6492,6 @@
   "settings.pool.levelsFalling": "Cada nivel debe ser menor que el anterior.",
   "settings.pool.floorNumber": "El mínimo es un número entero del 0 al 98.",
   "settings.pool.floorLow": "El mínimo debe ser menor que el último nivel.",
-  "settings.pool.error": "No se pudo guardar el grupo de IA. Inténtalo de nuevo."
+  "settings.pool.error": "No se pudo guardar el grupo de IA. Inténtalo de nuevo.",
+  "aiImport.title": "Pasar desde otra IA"
 }

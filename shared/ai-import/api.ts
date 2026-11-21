@@ -91,9 +91,11 @@ export interface LocalSourceView {
   profile?: string;
 }
 
+export type InstructionsAs = "persona" | "about-you";
+
 export type CreateImportJob =
   | { from: "upload"; uploadIds: string[] }
-  | { from: "local"; sourceId: string; transcripts?: boolean }
+  | { from: "local"; sourceId: string; transcripts?: boolean; instructions?: InstructionsAs }
   | { from: "paste"; ai: PasteSource; aboutYou: string[]; howToReply: string[]; destination: ImportDestination };
 
 export interface ApplyImportJob {

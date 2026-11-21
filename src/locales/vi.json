@@ -5992,5 +5992,6 @@
   "settings.pool.levelsFalling": "Mỗi mức phải thấp hơn mức trước nó.",
   "settings.pool.floorNumber": "Ngưỡng sàn là số nguyên từ 0 đến 98.",
   "settings.pool.floorLow": "Ngưỡng sàn phải thấp hơn mức cuối cùng.",
-  "settings.pool.error": "Không thể lưu nhóm AI. Vui lòng thử lại."
+  "settings.pool.error": "Không thể lưu nhóm AI. Vui lòng thử lại.",
+  "aiImport.title": "Chuyển từ AI khác"
 }
