@@ -8120,6 +8120,8 @@
   "keys.section.computers.purpose": "Desktops na nuvem, seu próprio servidor e logins de sites.",
   "keys.section.apps": "Apps e ferramentas",
   "keys.section.apps.purpose": "Apps conectados e pesquisa.",
+  "keys.section.routing.purpose": "Chaves para decisões rápidas e leitura.",
+  "keys.section.images.purpose": "Chaves que criam imagens para seus bots.",
   "keys.section.connected": "Conexões: {count}",
   "keys.purpose.openai": "Modelos da OpenAI e chamadas ao vivo",
   "keys.purpose.anthropic": "Modelos do Claude, cobrados por token",
