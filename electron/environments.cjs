@@ -76,10 +76,11 @@ function workspaceSenderAllowed(event, contents, state, localOrigin) {
  * `places`: the one line saying which side has which bots, shown first; `copyToCloud`: the send line under the list. `foldSublabels`: where menus show no sublabels (Windows, Linux), My Cloud's status line
  * joins its name instead of vanishing. `locals`: the workspaces of this computer's own (local-profiles.mjs), each opened by
  * `onLocal(id)` (`shown`: the one on screen); `onNewLocal`: a new one, named on this computer's own page. */
-function workspaceMenuTemplate(state, { onSwitch, onConnect, onForget, onAddCloud, sublabels = {}, iconFor = null, places = null, copyToCloud = null, foldSublabels = false, homeOrigin = null, locals = [], onLocal = null, onNewLocal = null, text = englishText }) {
+function workspaceMenuTemplate(state, { onSwitch, onConnect, onForget, onAddCloud, sublabels = {}, iconFor = null, places = null, copyToCloud = null, foldSublabels = false, homeOrigin = null, locals = [], onLocal = null, onNewLocal = null, onBringBack = null, text = englishText }) {
   const active = activeEnvironment(state), { t } = text;
   const own = onLocal ? locals.map((local) => ({ id: `workspace-local-${local.id}`, label: local.label, type: "radio", checked: local.shown === true, click: () => onLocal(local.id) })) : [];
   const fresh = onNewLocal ? [{ id: "workspace-new-local", label: t("native.menu.newLocal"), click: onNewLocal }] : [];
+  const back = onBringBack ? [{ type: "separator" }, { id: "workspace-bring-back", label: t("native.home.bringBack"), click: onBringBack }] : [];
   if (homeOrigin) return homeMenuTemplate(state, { onSwitch, onForget, sublabels, iconFor, foldSublabels, homeOrigin, own, fresh, t });
   return [
     ...(places ? [{ id: "workspace-places", label: places, enabled: false }, { type: "separator" }] : []),
@@ -101,6 +102,7 @@ function workspaceMenuTemplate(state, { onSwitch, onConnect, onForget, onAddClou
     ...fresh,
     { id: "workspace-connect", label: t("native.menu.connect"), click: onConnect },
     ...(active && !listedPlace(active) ? [{ id: "workspace-forget", label: t("native.switcher.forgetNamed", { name: active.name }), click: () => onForget(active.id) }] : []),
+    ...back,
   ];
 }
 

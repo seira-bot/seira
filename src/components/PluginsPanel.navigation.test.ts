@@ -168,10 +168,15 @@ describe("Apps pop-up", () => {
     expect(html).toContain(`data-hosted-app="${HOSTED_MCP_APPS[0].id}"`);
     for (const other of HOSTED_MCP_APPS.slice(1)) expect(html).not.toContain(`data-hosted-app="${other.id}"`);
   });
-  it.each(["mind map", "booking", "whatsapp", "landing page"])("finds the one hosted card whose keywords match %s", (word) => {
+  it.each(["mind map", "booking", "broadcast", "landing page", "sales funnel"])("finds the one hosted card whose keywords match %s", (word) => {
     fixture.overrides.set(HOSTED_CONNECTED, null);
     fixture.overrides.set(SEARCH, word);
     expect(render().html.match(/data-hosted-app="/g)).toHaveLength(1);
+  });
+  it("finds both WhatsApp hosted cards", () => {
+    fixture.overrides.set(HOSTED_CONNECTED, null);
+    fixture.overrides.set(SEARCH, "whatsapp");
+    expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["citcat", "konektor"]);
   });
   it("counts two connected hosted apps under Connected", () => {
     fixture.overrides.set(HOSTED_CONNECTED, { konektor: true, coret: true });
@@ -578,7 +583,7 @@ describe("Apps pop-up", () => {
     expect(tree.find((node) => node.props.ariaLabel === "More categories")!.props.placement).toBeUndefined();
     tree.find((node) => node.props["data-apps-category"] === "design")!.props.onClick!();
     const design = render();
-    expect(design.html.match(/data-app-tile="(?!konektor|biver|coret|termilo)[^"]*"/g)).toEqual(['data-app-tile="figma"']);
+    expect(design.html.match(new RegExp(`data-app-tile="(?!${HOSTED_MCP_APPS.map((app) => app.id).join("|")})[^"]*"`, "g"))).toEqual(['data-app-tile="figma"']);
     expect([...design.html.matchAll(/<h3 id="[^"]*"[^>]*>([^<]*)/g)].map((match) => match[1])).toEqual(["Design"]);
     expect(chip(design.nodes, "all").props["aria-pressed"]).toBe(false);
     expect(design.nodes.find((node) => node.props["data-apps-category"] === "design")!.props["aria-pressed"]).toBe(true);

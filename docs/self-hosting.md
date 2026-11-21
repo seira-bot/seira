@@ -974,6 +974,11 @@ Try again. Afterwards the server is what the window opens, and this computer
 works for it by itself as it does for My Cloud: no access dialog, only the
 menu bar's item with Pause.
 
+To use this computer again, open the server menu at the top of the sidebar and
+choose **Bring bots back to this computer**. This computer opens with every
+routine and other automation off. Turn on only the ones you want. Your bots also
+stay on the server.
+
 Until then, a bot that asks for a teammate living in your other place says where
 that teammate lives and how to bring them together, instead of only that it
 can't reach it: the app tells each place of yours the names of the bots your

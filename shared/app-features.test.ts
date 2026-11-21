@@ -10,6 +10,7 @@ import { RELEASE_NOTES } from "../src/lib/release-notes.ts";
 import { APP_FEATURE_DOES_MAX, APP_FEATURES, findAppFeatures, INTERNAL_AGENT_TOOLS } from "./app-features.ts";
 import { AUTOMATION_VIEWS } from "./automation-views.ts";
 import { BUILT_IN_SLASH_COMMANDS } from "./skill-command.ts";
+import { MENTION_ROW_KINDS } from "../src/lib/mention-row-kinds.ts";
 
 const FIX = "Add or update its entry in shared/app-features.ts, so a bot can tell the person where it is and what it does.";
 const golden = JSON.parse(readFileSync(fileURLToPath(new URL("../server/drivers/agents-catalog-goldens/full.tools-list.json", import.meta.url)), "utf8")) as { tools: Array<{ name: string }> };
@@ -41,6 +42,14 @@ describe("app feature catalog", () => {
     const views = new Set(APP_FEATURES.flatMap((feature) => feature.automationViews ?? []));
     const missingViews = AUTOMATION_VIEWS.filter((view) => !views.has(view));
     expect(missingViews, `Automations view without a feature: ${missingViews.join(", ")}. ${FIX}`).toEqual([]);
+  });
+
+  it("gives every @ list row kind a feature, and names only kinds that exist", () => {
+    const rows = new Set(APP_FEATURES.flatMap((feature) => feature.mentionRows ?? []));
+    const missing = MENTION_ROW_KINDS.filter((kind) => !rows.has(kind));
+    expect(missing, `@ list row kind without a feature: ${missing.join(", ")}. ${FIX}`).toEqual([]);
+    const unknown = [...rows].filter((kind) => !(MENTION_ROW_KINDS as readonly string[]).includes(kind));
+    expect(unknown, `shared/app-features.ts names an @ list row kind that does not exist: ${unknown.join(", ")}. Remove it or fix its name.`).toEqual([]);
   });
 
   it("names only release notes, slash commands and views that exist", () => {

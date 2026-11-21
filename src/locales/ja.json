@@ -629,7 +629,6 @@
   "rail.ended": "{name}：終了",
   "rail.remove": "リストから削除",
   "rail.makeHome": "{name} をホームにする",
-  "rail.makeHomeSub": "このコンピューターのボット、チャット、メモリー、ルーティンを {name} に移します。移動後も、このコンピューターは移動先のボットのために使われます。",
   "rail.makeHomeFailed": "ボットの移動を開始できませんでした。しばらくしてからもう一度お試しください。",
   "twoPlaces.title": "ボットを 1 か所にまとめる",
   "twoPlaces.body": "ボットが 2 か所に分かれているため、一緒に作業できません。{place} にまとめますか？",

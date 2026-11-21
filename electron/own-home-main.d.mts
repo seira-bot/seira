@@ -40,6 +40,7 @@ export function installOwnHome(deps: {
   lend?(projects: string[], place: SavedPlace | null): Promise<unknown>;
   phone?: { paired(): boolean; stop(): Promise<void>; start(): Promise<void> };
   openHome?(place: SavedPlace): void;
+  openLocal?(): void;
   lastInput?(): number;
   version?: string;
   onChange?(): void;
@@ -53,6 +54,8 @@ export function installOwnHome(deps: {
   busy(): boolean;
   away(): boolean;
   active(): boolean;
+  canBringBack(): boolean;
+  bringBack(): Promise<void>;
   origin(): string | null;
   underWay(): { phase: string; name: string } | null;
   home(): { id: string; origin: string; environmentId: string; name: string } | null;

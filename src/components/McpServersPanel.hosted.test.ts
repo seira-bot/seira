@@ -229,7 +229,7 @@ describe.each(HOSTED_MCP_APPS)("The $label card", (app) => {
 });
 
 describe("the browser sign-in cards", () => {
-  it.each(["konektor", "biver", "coret", "termilo"])("%s has no key field and no key page", async (id) => {
+  it.each(HOSTED_MCP_APPS.map((app) => app.id))("%s has no key field and no key page", async (id) => {
     await mount();
     const app = HOSTED_MCP_APPS.find((one) => one.id === id)!;
     expect(card(app).querySelector('input[type="password"]')).toBeNull();

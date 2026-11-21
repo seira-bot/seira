@@ -47,12 +47,13 @@ describe("hosted MCP apps", () => {
     expect(connectedWith(app, { enabled: false, headerKeys: ["Authorization"] })).toBe(false);
   });
 
-  it("offers exactly Konektor.id, Biver.id, Coret.id and Termilo.id, at their official endpoints", () => {
+  it("offers exactly the hosted apps with a card, at their official endpoints", () => {
     expect(HOSTED_MCP_APPS.map((app) => [app.id, app.url])).toEqual([
       ["konektor", "https://mcp.konektor.id/mcp"],
       ["biver", "https://mcp.biver.id/mcp"],
       ["coret", "https://mcp.coret.id/mcp"],
       ["termilo", "https://api.termilo.id/mcp"],
+      ["citcat", "https://api-crm.citcat.id/api/mcp"],
     ]);
     const ids: string[] = HOSTED_MCP_APPS.map((app) => app.id);
     for (const old of ["whop", "agentcard", "agentmail", "vapi", "telnyx", "agentphone", "bubblav"]) expect(ids).not.toContain(old);

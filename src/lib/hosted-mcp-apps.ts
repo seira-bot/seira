@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 
 import biverLogo from "@/assets/biver/logo.png";
+import citcatLogo from "@/assets/citcat/logo.png";
 import coretLogo from "@/assets/coret/logo.png";
 import konektorLogo from "@/assets/konektor/logo.png";
 import termiloLogo from "@/assets/termilo/logo.png";
@@ -61,6 +62,15 @@ export const HOSTED_MCP_APPS = [
     description: "termilo.description",
     notice: "termilo.notice",
     keywords: "termilo booking appointment schedule calendar reservation customers services",
+  },
+  {
+    id: "citcat",
+    label: "Citcat.id",
+    url: "https://api-crm.citcat.id/api/mcp",
+    icon: { image: citcatLogo },
+    description: "citcat.description",
+    notice: "citcat.notice",
+    keywords: "citcat whatsapp crm inbox chats contacts customers sales funnel leads instagram messenger line",
   },
 ] as const satisfies readonly HostedMcpApp[];
 
