@@ -527,7 +527,7 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
           const active = onActivePath(hit.threadId, hit.messageId);
           if (bot) {
             const task = store.taskByThread(bot.id, hit.threadId);
-            return { ...hit, botId: bot.id, name: bot.name, task: task?.title, onActivePath: active };
+            return { ...hit, botId: bot.id, name: bot.name, task: task?.title, onActivePath: active, ...(task?.imported ? { source: task.imported.label } : {}) };
           }
           if (group) {
             const task = store.groupTaskByThread(group.id, hit.threadId);
