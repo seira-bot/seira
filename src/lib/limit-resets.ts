@@ -126,7 +126,22 @@ export function usageRows(limit: EngineLimit): UsageRow[] {
 }
 
 export function windowLabel(window: LimitWindowName): string {
-  return window === "5-hour" ? t("planUsage.fiveHour") : window === "weekly" ? t("planUsage.weekly") : t("usage.title");
+  return window === "5-hour" ? t("planUsage.fiveHour") : window === "weekly" ? t("planUsage.weekly") : window === "monthly" ? t("planUsage.monthly") : t("usage.title");
+}
+
+const TONE_RANK: Record<UsageTone, number> = { out: 2, near: 1, fine: 0 };
+
+/** The AI closest to its limit: at the limit before near it before fine, then the most used, then the soonest reset. */
+export function mostConstrained(limits: readonly EngineLimit[]): EngineLimit | undefined {
+  return limits.filter(reportsUsage).sort((left, right) =>
+    TONE_RANK[usageTone(right)] - TONE_RANK[usageTone(left)] || (right.usedPercent ?? 0) - (left.usedPercent ?? 0) ||
+    (left.resetsAt ?? Infinity) - (right.resetsAt ?? Infinity))[0];
+}
+
+/** The limit the sidebar's ring shows: the selected bot's AI when it reports usage, else the most constrained AI. */
+export function shownUsageLimit(limits: readonly EngineLimit[], engine: string | undefined): EngineLimit | undefined {
+  const own = limits.find((limit) => limit.engine === engine);
+  return reportsUsage(own) ? own : mostConstrained(limits);
 }
 
 export interface ResetMarker { engine: string; name: string; at: number }

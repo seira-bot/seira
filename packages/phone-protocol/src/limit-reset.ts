@@ -22,7 +22,10 @@ export const AFTER_RESET_MS = 60_000;
 /** From this share of a window used, an engine is shown as near its limit. */
 export const NEAR_LIMIT_PERCENT = 90;
 
-export type LimitWindowName = "5-hour" | "weekly" | "other";
+export const LIMIT_WINDOW_NAMES = ["5-hour", "weekly", "monthly", "other"] as const;
+
+/** A name this build does not know (from a newer server) is shown as "other". */
+export type LimitWindowName = (typeof LIMIT_WINDOW_NAMES)[number];
 
 /** One usage window as the engine reported it. */
 export interface LimitWindowUsage {

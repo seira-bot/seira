@@ -1,3 +1,4 @@
+import { SidebarUsageRing } from "./EngineUsage";
 import { SidebarConnectApps } from "./SidebarConnectApps";
 import { SidebarPlaceStatus, useSimplePlace } from "./SidebarFooter";
 import { SidebarProfileMenu, useSimpleAccount, type ArchivedBots } from "./SidebarProfileMenu";
@@ -17,6 +18,7 @@ export function SimpleRailFooter({ owner = null, archived }: {
     <div data-sidebar-rail-footer="" className="relative flex flex-col items-center gap-2 px-2 pb-4 pt-2">
       <SidebarConnectApps circle />
       <UpdateIndicator />
+      <SidebarUsageRing simple shape="column" />
       <SidebarProfileMenu iconOnly rail simple={account} />
       <SidebarPlaceStatus place={place} className="absolute bottom-3 left-full z-40 ml-2 w-56 rounded-md bg-menu px-2 py-1 text-[11px] shadow-lg" />
     </div>

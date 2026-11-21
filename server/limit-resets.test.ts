@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { codexLimitResetsAt } from "./drivers/codex-errors.ts";
 import { engineLimitFromUsage, LimitResetClock, nearLimitNote, UNNAMED_LIMIT_MS } from "./limit-resets.ts";
 import type { RuntimeEvent } from "../shared/runtime-events.ts";
-import { parseClaudeUsage, parseCodexUsage, parseOpenCodeUsage, planAccountsFromInstances, type PlanProviderRow, type PlanUsageReport, type PlanWindows } from "./plan-usage.ts";
+import { parseClaudeUsage, parseCodexUsage, parseGrokUsage, parseOpenCodeUsage, planAccountsFromInstances, type PlanProviderRow, type PlanUsageReport, type PlanWindows } from "./plan-usage.ts";
 
 const NOW = Date.parse("2026-10-19T10:00:00Z");
 const HOUR = 3_600_000;
@@ -79,7 +79,7 @@ describe("engineLimitFromUsage", () => {
     expect(engineLimitFromUsage(opencode)).toMatchObject({
       engine: "opencodeGo", name: "OpenCode", driver: "opencode", window: "weekly", usedPercent: 55, resetsAt: NOW + 4 * 24 * HOUR, blocked: false,
     });
-    expect(engineLimitFromUsage(opencode)?.windows?.map((window) => window.window)).toEqual(["5-hour", "weekly"]);
+    expect(engineLimitFromUsage(opencode)?.windows?.map((window) => window.window)).toEqual(["5-hour", "weekly", "monthly"]);
   });
 
   it("waits for the latest reset of every window at its limit, and knows no time when one has none", () => {
@@ -124,6 +124,51 @@ describe("engineLimitFromUsage", () => {
     ]);
     const weeklyOnly = row("claude", "claude", parseClaudeUsage({ seven_day: { utilization: 30, resets_at: null } }));
     expect(engineLimitFromUsage(weeklyOnly)).toMatchObject({ window: "weekly", windows: [{ window: "weekly", usedPercent: 30, resetsAt: null }] });
+  });
+});
+
+describe("the monthly window", () => {
+  const grok = (credits: Record<string, unknown>) => row("grok", "grok", parseGrokUsage({ config: credits }));
+  const month = { type: "MONTH", end: iso(NOW + 20 * 24 * HOUR) };
+  const go = (rolling: number, monthly: number) => row("opencodeGo", "opencode", parseOpenCodeUsage({ usage: {
+    rolling: { percent: rolling, resetsAt: iso(NOW + 3 * HOUR) },
+    weekly: { percent: 8, resetsAt: iso(NOW + 5 * 24 * HOUR) },
+    monthly: { percent: monthly, resetsAt: iso(NOW + 20 * 24 * HOUR) },
+  } }));
+
+  it("lets a Grok month with no other window decide, and a Codex 30-day window too", () => {
+    expect(engineLimitFromUsage(grok({ creditUsagePercent: 40, currentPeriod: month }))).toMatchObject({
+      window: "monthly", usedPercent: 40, resetsAt: NOW + 20 * 24 * HOUR, blocked: false, windows: [{ window: "monthly", usedPercent: 40, resetsAt: NOW + 20 * 24 * HOUR }],
+    });
+    expect(engineLimitFromUsage(grok({ creditUsagePercent: 100, currentPeriod: month }))).toMatchObject({ window: "monthly", blocked: true, resetsAt: NOW + 20 * 24 * HOUR });
+    const codexMonth = row("codex", "codex", parseCodexUsage({ rate_limit: { primary_window: { used_percent: 30, limit_window_seconds: 30 * 86400, reset_at: Math.floor((NOW + 9 * 24 * HOUR) / 1000) } } }));
+    expect(engineLimitFromUsage(codexMonth)).toMatchObject({ window: "monthly", usedPercent: 30 });
+  });
+
+  it("only shows a month that sits beside a weekly window, and never blocks on it", () => {
+    const weeklyWithMonth = row("grok", "grok", parseGrokUsage(
+      { config: { creditUsagePercent: 8, currentPeriod: { type: "WEEK", end: iso(NOW + 3 * 24 * HOUR) } } },
+      { config: { onDemandCap: { val: 100 }, onDemandUsed: { val: 100 }, currentPeriod: month } },
+    ));
+    expect(engineLimitFromUsage(weeklyWithMonth)).toMatchObject({
+      window: "weekly", usedPercent: 8, blocked: false,
+      windows: [{ window: "weekly", usedPercent: 8, resetsAt: NOW + 3 * 24 * HOUR }, { window: "monthly", usedPercent: 100, resetsAt: NOW + 20 * 24 * HOUR }],
+    });
+  });
+
+  it("blocks OpenCode Go until its month resets when the month is full", () => {
+    expect(engineLimitFromUsage(go(3, 100))).toMatchObject({ window: "monthly", usedPercent: 100, blocked: true, resetsAt: NOW + 20 * 24 * HOUR });
+    expect(engineLimitFromUsage(go(3, 60))).toMatchObject({ window: "monthly", usedPercent: 60, blocked: false });
+    const goAccounts = [{ id: "opencodeGo", name: "OpenCode", driver: "opencode" as const, environment: {} }];
+    const instance = new LimitResetClock({ accounts: () => goAccounts, now: () => NOW });
+    instance.noteUsage(report(go(3, 100)));
+    expect(instance.blockedUntil("opencodeGo", "opencode-go/kimi-k2")).toBe(NOW + 20 * 24 * HOUR);
+    expect(instance.limit("opencodeGo")).toMatchObject({ window: "monthly", blocked: true });
+  });
+
+  it("does not take Claude's monthly spend for a monthly window", () => {
+    const enterprise = row("claude", "claude", parseClaudeUsage({ extra_usage: { is_enabled: true, used_credits: 100, monthly_limit: 5_000, utilization: 2, currency: "USD" } }));
+    expect(engineLimitFromUsage(enterprise)?.windows).toEqual([]);
   });
 });
 
@@ -297,6 +342,7 @@ describe("nearLimitNote", () => {
     expect(nearLimitNote(limit, "Claude", "UTC")).toBe(" Claude's usage limit is 92% used; it resets Mon 3:40 PM (UTC).");
     expect(nearLimitNote({ ...limit, usedPercent: 89 }, "Claude", "UTC")).toBe("");
     expect(nearLimitNote(undefined, "Claude", "UTC")).toBe("");
+    expect(nearLimitNote({ ...limit, window: "monthly" }, "Claude", "UTC")).toContain("Claude's monthly limit is 92% used");
   });
 });
 

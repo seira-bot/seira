@@ -48,6 +48,22 @@ describe("Plan usage presentation", () => {
     expect(html).toContain('aria-valuenow="9"');
   });
 
+  it("names a monthly plan limit Monthly and keeps its reset", () => {
+    fixture.report = {
+      fetchedAt: "2026-10-02T09:00:00Z",
+      providers: [{
+        id: "go", name: "OpenCode", driver: "opencode", plan: "Go", ok: true, error: null,
+        fiveHour: { available: false, remainingPercent: null, usedPercent: null, resetsAt: null },
+        weekly: { available: false, remainingPercent: null, usedPercent: null, resetsAt: null },
+        extra: [{ label: "Monthly", remainingPercent: 60, usedPercent: 40, resetsAt: null }],
+        models: [],
+      }],
+    };
+    const html = renderToStaticMarkup(createElement(PlanUsage));
+    expect(html).toContain("Monthly");
+    expect(html).toContain("60% left");
+  });
+
   it("names the monthly budget in the person's language", async () => {
     const { loadLocale, setLocale } = await import("@/lib/i18n");
     await loadLocale("zh");

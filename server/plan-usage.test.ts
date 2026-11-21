@@ -163,7 +163,7 @@ describe("plan usage parsers", () => {
     expect(parsed.weekly).toMatchObject({ available: true, usedPercent: 40, remainingPercent: 60 });
     expect(parsed.extra).toEqual([
       expect.objectContaining({
-        label: "30-day",
+        label: "Monthly",
         usedPercent: 5,
         remainingPercent: 95,
         resetsAt: new Date(1_800_000_000_000).toISOString(),
@@ -171,6 +171,14 @@ describe("plan usage parsers", () => {
     ]);
     expect(parsed.models).toEqual([]);
     expect(JSON.stringify(parsed)).not.toContain(SECRET);
+  });
+
+  it("labels a 28-day and a 31-day Codex window Monthly, and any other long window by its days", () => {
+    const parsed = (days: number) => parseCodexUsage({ rate_limit: { primary_window: { used_percent: 7, limit_window_seconds: days * 86400, reset_at: 1_800_000_000 } } });
+    expect(parsed(28).extra).toEqual([expect.objectContaining({ label: "Monthly", usedPercent: 7 })]);
+    expect(parsed(31).extra).toEqual([expect.objectContaining({ label: "Monthly", usedPercent: 7 })]);
+    expect(parsed(14).extra).toEqual([expect.objectContaining({ label: "14-day" })]);
+    expect(parsed(28).fiveHour.available).toBe(false);
   });
 
   it("keeps Codex model windows separate from the account plan", () => {

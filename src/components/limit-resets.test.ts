@@ -120,6 +120,48 @@ describe("the words", () => {
   });
 });
 
+describe("the monthly window", () => {
+  const monthly = (used: number, extra: Partial<EngineLimit> = {}): EngineLimit => ({
+    ...claude(used), engine: "go", name: "OpenCode", driver: "opencode", window: "monthly", resetsAt: MONDAY,
+    windows: [{ window: "weekly", usedPercent: 8, resetsAt: RESET }, { window: "monthly", usedPercent: used, resetsAt: MONDAY }], ...extra,
+  });
+
+  it("is labelled Monthly, and an unknown window still reads Usage", () => {
+    expect(limits.windowLabel("monthly")).toBe("Monthly");
+    expect(limits.windowLabel("other")).toBe("Usage");
+  });
+
+  it("gets its own row with the share left and its reset", () => {
+    expect(limits.usageRows(monthly(40))).toEqual([
+      { window: "weekly", left: 92, resetsAt: RESET, tone: "fine" }, { window: "monthly", left: 60, resetsAt: MONDAY, tone: "fine" },
+    ]);
+    const card = mount(createElement(UsageRows, { limit: monthly(40) }));
+    expect(card.querySelector("[data-usage-row=monthly]")?.textContent).toContain("Monthly");
+    expect(card.querySelector("[data-usage-row=monthly]")?.textContent).toContain("60% left");
+  });
+});
+
+describe("the AI the sidebar ring shows", () => {
+  const ai = (engine: string, used: number, resetsAt: number | null = RESET, blocked = false): EngineLimit => ({ ...claude(used, blocked), engine, name: engine, resetsAt });
+
+  it("picks the one at its limit, then the nearest, then the fullest, then the soonest reset", () => {
+    expect(limits.mostConstrained([ai("a", 95), ai("b", 100, RESET, true), ai("c", 50)])?.engine).toBe("b");
+    expect(limits.mostConstrained([ai("a", 91), ai("b", 96), ai("c", 50)])?.engine).toBe("b");
+    expect(limits.mostConstrained([ai("a", 40, MONDAY), ai("b", 40, RESET)])?.engine).toBe("b");
+    expect(limits.mostConstrained([ai("a", 40, null), ai("b", 40, RESET)])?.engine).toBe("b");
+    expect(limits.mostConstrained([{ ...ai("a", 0), usedPercent: null }])).toBeUndefined();
+    expect(limits.mostConstrained([])).toBeUndefined();
+  });
+
+  it("takes the selected bot's AI when it reports usage, else the most constrained", () => {
+    const all = [ai("a", 20), ai("b", 95)];
+    expect(limits.shownUsageLimit(all, "a")?.engine).toBe("a");
+    expect(limits.shownUsageLimit(all, "other")?.engine).toBe("b");
+    expect(limits.shownUsageLimit(all, undefined)?.engine).toBe("b");
+    expect(limits.shownUsageLimit([{ ...ai("a", 0), usedPercent: null }, ai("b", 30)], "a")?.engine).toBe("b");
+  });
+});
+
 describe("the Automations page warning", () => {
   it("shows the engine near its limit and moves just the next run of what is due before the reset", async () => {
     fixture.state = { ...fixture.state, routines: [routine("brief", NOW + HOUR)] };

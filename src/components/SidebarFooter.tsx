@@ -15,6 +15,7 @@ import { SidebarConnectApps } from "./SidebarConnectApps";
 import { SidebarBottomButtons, SidebarFooterNav } from "./SidebarFooterNav";
 import { phoneSettingsAction, SidebarPhoneButton } from "./SidebarPhoneButton";
 import { SidebarProfileMenu, useSimpleAccount, type ArchivedBots } from "./SidebarProfileMenu";
+import { SidebarUsageRing } from "./EngineUsage";
 import { UpdateIndicator } from "./UpdateIndicator";
 
 export function useSimplePlace(): WorkspacePlace {
@@ -50,6 +51,7 @@ function SimpleSidebarFooter({ owner, archived }: { owner: string | null; archiv
         <div className="min-w-0 flex-1">
           <SidebarProfileMenu simple={account} named />
         </div>
+        <SidebarUsageRing simple />
         <button type="button" onClick={() => dispatch({ type: "toggleAppSettings", open: true, section: "overview" })} aria-label={t("sidebar.menu.settings")} title={t("sidebar.menu.settings")}
           className="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-secondary transition-colors duration-150 hover:bg-ink/[0.06] hover:text-ink motion-reduce:transition-none touch:size-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus">
           <Settings size={16} strokeWidth={1.75} aria-hidden="true" />
@@ -77,6 +79,7 @@ export function SidebarFooter({ density, simple = false, owner = null, archived,
         <>
           <SidebarPhoneButton density={density} onOpen={() => dispatch(phoneSettingsAction())} />
           <div className="flex flex-col items-center justify-center gap-1">
+            <SidebarUsageRing simple={false} shape="column" />
             <UpdateIndicator />
             <SidebarProfileMenu iconOnly />
           </div>
@@ -89,6 +92,7 @@ export function SidebarFooter({ density, simple = false, owner = null, archived,
             <div className="min-w-0 flex-1">
               <SidebarProfileMenu />
             </div>
+            <SidebarUsageRing simple={false} />
             <SidebarBottomButtons />
           </div>
         </>

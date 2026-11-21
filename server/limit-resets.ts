@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { NEAR_LIMIT_PERCENT, type EngineLimit, type EngineLimitsReport, type LimitWindowName } from "../shared/limit-reset.ts";
 import { writeFileAtomic } from "./atomic.ts";
 import { LIMIT_POLL_MS, limitReadDue } from "./limit-poll.ts";
-import { claudeHasExtraUsageRoom, loadPlanUsage, type PlanAccount, type PlanProviderRow, type PlanUsageReport, type PlanWindow } from "./plan-usage.ts";
+import { claudeHasExtraUsageRoom, loadPlanUsage, MONTHLY, type PlanAccount, type PlanProviderRow, type PlanUsageReport, type PlanWindow } from "./plan-usage.ts";
 import type { RuntimeEvent } from "../shared/runtime-events.ts";
 import { OPENCODE_GO_MODEL_PREFIX, typedOpenCodeModel } from "../shared/opencode-model-id.ts";
 
@@ -20,27 +20,40 @@ type Driver = EngineLimit["driver"];
 /** The drivers whose plan usage gives a limit to show and to route around. */
 const REPORTED_DRIVERS: ReadonlySet<string> = new Set(["claude", "codex", "grok", "opencode"]);
 
-function windowLine(name: LimitWindowName, window: PlanWindow): { window: LimitWindowName; used: number; resetsAt: number | null } | null {
+interface WindowReading { window: LimitWindowName; used: number; resetsAt: number | null; decides: boolean }
+
+function windowLine(name: LimitWindowName, window: PlanWindow, decides = true): WindowReading | null {
   if (!window.available || window.usedPercent === null) return null;
   const resetsAt = window.resetsAt ? Date.parse(window.resetsAt) : NaN;
-  return { window: name, used: window.usedPercent, resetsAt: Number.isFinite(resetsAt) ? resetsAt : null };
+  return { window: name, used: window.usedPercent, resetsAt: Number.isFinite(resetsAt) ? resetsAt : null, decides };
+}
+
+/** The windows a row reports. The month decides the limit only where it is the plan's own allowance: OpenCode Go's, or the
+ * only window a plan has. Beside a 5-hour or weekly window it is a cap on top, and it only shows. */
+function readWindows(row: PlanProviderRow): WindowReading[] {
+  const month = row.extra.find((line) => line.label === MONTHLY && !line.spend);
+  const rolling = row.fiveHour.available || row.weekly.available;
+  const monthly = month ? windowLine("monthly", { available: true, remainingPercent: month.remainingPercent, usedPercent: month.usedPercent, resetsAt: month.resetsAt },
+    row.driver === "opencode" || !rolling) : null;
+  return [windowLine("5-hour", row.fiveHour), windowLine("weekly", row.weekly), monthly].filter((line) => line !== null);
 }
 
 /** An engine's limit from its plan-usage row. The windows at their limit decide, and all must reset, so the latest of
  * their resets counts; with none at the limit, the fullest window counts. Null when the row has no usage. */
 export function engineLimitFromUsage(row: PlanProviderRow): EngineLimit | null {
   if (!row.ok || !REPORTED_DRIVERS.has(row.driver)) return null;
-  const windows = [windowLine("5-hour", row.fiveHour), windowLine("weekly", row.weekly)].filter((line) => line !== null);
+  const windows = readWindows(row);
   const base = { engine: row.id, name: row.name, driver: row.driver as Driver,
     windows: windows.map(({ window, used, resetsAt }) => ({ window, usedPercent: used, resetsAt })) };
-  if (!windows.length) return { ...base, window: null, usedPercent: null, resetsAt: null, blocked: false };
-  const full = windows.filter((line) => line.used >= 100);
+  const deciding = windows.filter((line) => line.decides);
+  if (!deciding.length) return { ...base, window: null, usedPercent: null, resetsAt: null, blocked: false };
+  const full = deciding.filter((line) => line.used >= 100);
   if (full.length) {
     const latest = full.reduce((left, right) => (right.resetsAt ?? 0) > (left.resetsAt ?? 0) ? right : left);
     // Claude goes on past a full window on its paid extra usage while that has room; its own refusal still holds it.
     return { ...base, window: latest.window, usedPercent: 100, resetsAt: full.some((line) => line.resetsAt === null) ? null : latest.resetsAt, blocked: !claudeHasExtraUsageRoom(row) };
   }
-  const fullest = [...windows].sort((left, right) => right.used - left.used || (left.resetsAt ?? Infinity) - (right.resetsAt ?? Infinity))[0]!;
+  const fullest = [...deciding].sort((left, right) => right.used - left.used || (left.resetsAt ?? Infinity) - (right.resetsAt ?? Infinity))[0]!;
   return { ...base, window: fullest.window, usedPercent: fullest.used, resetsAt: fullest.resetsAt, blocked: false };
 }
 
@@ -53,10 +66,8 @@ const SAME_RESET_MS = 5 * 60_000;
  * not show, that refusal holds it again. A guessed hold (no reset named) has no time to compare and runs out in an hour. */
 function holdGone(row: PlanProviderRow, limit: EngineLimit, held: number | undefined, guessed: boolean): boolean {
   if (held === undefined || guessed || limit.blocked || limit.usedPercent === null || limit.usedPercent >= 100) return false;
-  // OpenCode Go also refuses on its month, which its row carries as an extra line: a full month keeps the hold.
-  if (row.driver === "opencode" && row.extra.some((line) => line.label === "Monthly" && line.usedPercent >= 100)) return false;
-  const windows = [windowLine("5-hour", row.fiveHour), windowLine("weekly", row.weekly)];
-  return windows.every((line) => line === null || (line.resetsAt !== null && Math.abs(line.resetsAt - held) > SAME_RESET_MS));
+  const windows = readWindows(row).filter((line) => line.decides);
+  return windows.every((line) => line.resetsAt !== null && Math.abs(line.resetsAt - held) > SAME_RESET_MS);
 }
 
 const PRODUCT_NAMES: Record<string, string> = { claudeAgent: "Claude", codex: "Codex", grokAgent: "Grok", opencodeGo: "OpenCode" };
@@ -74,7 +85,7 @@ export function nearLimitNote(limit: EngineLimit | undefined, name: string, time
     try { resets = `; it resets ${new Date(limit.resetsAt).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", timeZone })} (${timeZone})`; }
     catch { resets = `; it resets ${new Date(limit.resetsAt).toISOString()}`; }
   }
-  return ` ${name}'s ${limit.window === "weekly" ? "weekly" : "usage"} limit is ${Math.round(limit.usedPercent)}% used${resets}.`;
+  return ` ${name}'s ${limit.window === "weekly" ? "weekly" : limit.window === "monthly" ? "monthly" : "usage"} limit is ${Math.round(limit.usedPercent)}% used${resets}.`;
 }
 
 export interface LimitClockOptions {

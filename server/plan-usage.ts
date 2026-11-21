@@ -118,7 +118,7 @@ const KEYCHAIN_TIMEOUT_MS = 5_000;
 const KEYCHAIN_MAX_BUFFER = 1_000_000;
 const CLAUDE_KEYCHAIN_SERVICE = "Claude Code-credentials";
 const CLAUDE_MODEL_FAMILIES = ["opus", "sonnet", "haiku"];
-const MONTHLY_SPEND = "Monthly spend";
+export const MONTHLY = "Monthly", MONTHLY_SPEND = `${MONTHLY} spend`;
 const EXTRA_USAGE = "Extra Usage";
 
 const CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
@@ -221,7 +221,7 @@ export function parseGrokUsage(credits: unknown, billing?: unknown, settings?: u
     } else if (sample.slot === "monthly") {
       if (!sawMonthly) {
         sawMonthly = true;
-        extra.push(extraLine("Monthly", window));
+        extra.push(extraLine(MONTHLY, window));
       }
     } else {
       extra.push(extraLine(sample.seconds == null ? "Credits" : durationLabel(sample.seconds), window));
@@ -244,7 +244,7 @@ export function parseOpenCodeUsage(body: unknown): PlanWindows {
     plan: rolling || weekly || monthly ? "Go" : null,
     fiveHour: rolling ?? closedWindow(),
     weekly: weekly ?? closedWindow(),
-    extra: monthly ? [extraLine("Monthly", monthly)] : [], models: [],
+    extra: monthly ? [extraLine(MONTHLY, monthly)] : [], models: [],
   };
 }
 
@@ -615,7 +615,7 @@ function readGrokProducts(body: unknown, sample: GrokSample): Array<{ name: stri
   if (!root) return [];
   const config = asRecord(root.config) ?? root;
   if (!Array.isArray(config.productUsage)) return [];
-  const label = sample.slot === "fiveHour" ? "5-hour" : sample.slot === "weekly" ? "Weekly" : sample.slot === "monthly" ? "Monthly" : "Used";
+  const label = sample.slot === "fiveHour" ? "5-hour" : sample.slot === "weekly" ? "Weekly" : sample.slot === "monthly" ? MONTHLY : "Used";
   const rows: Array<{ name: string; window: PlanExtra }> = [];
   for (const item of config.productUsage) {
     const record = asRecord(item);
@@ -630,6 +630,7 @@ function readGrokProducts(body: unknown, sample: GrokSample): Array<{ name: stri
 }
 
 function durationLabel(seconds: number): string {
+  if (seconds >= MONTH_MIN_SECONDS && seconds <= MONTH_MAX_SECONDS) return MONTHLY;
   if (seconds >= 86400) return `${Math.max(1, Math.round(seconds / 86400))}-day`;
   if (seconds >= 3600) return `${Math.max(1, Math.round(seconds / 3600))}-hour`;
   return `${Math.max(1, Math.round(seconds / 60))}-minute`;

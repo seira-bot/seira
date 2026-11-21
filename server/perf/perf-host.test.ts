@@ -52,6 +52,22 @@ describe("slow-event log lines", () => {
   });
 });
 
+describe("a monthly usage-limit hold", () => {
+  it("keeps its window name in the health read", () => {
+    const dir = mkdtempSync(join(tmpdir(), "perf-host-"));
+    dirs.push(dir);
+    const clock = 1_800_000_000_000;
+    const sampler = createProcessSampler({ list: () => null, intervalMs: 60_000, scope: "tree", now: () => clock });
+    const host = createPerfHost({
+      dataDir: dir, timer: false, sampler, wholeMachine: false, now: () => clock, log: () => {},
+      limits: () => ({ checkedAt: clock, engines: [{ engine: "go", name: "OpenCode", driver: "opencode", window: "monthly", usedPercent: 100, resetsAt: clock + 3_600_000, blocked: true }] }),
+      bus: { subscribe: () => () => {} }, store: { onChange: () => () => {}, botByThread: () => null },
+    });
+    expect(host.health()?.holds).toEqual([{ driver: "opencode", window: "monthly", usedPercent: 100, resetsAt: clock + 3_600_000, blocked: true, held: false }]);
+    host.stop();
+  });
+});
+
 describe("the host's guard rails", () => {
   it("saves the turns since the last write when the server shuts down", () => {
     const dir = mkdtempSync(join(tmpdir(), "perf-host-"));

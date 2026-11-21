@@ -1,7 +1,7 @@
 // The timings as the Admin's health read carries them (compact JSON under PERF_HEALTH_MAX_BYTES) and as people read them
 // (plain lines for a @devs report and the desktop's diagnostics). Built only from the turn records' checked fields, the
 // process buckets and the limit clock's driver kinds, windows and times: nothing else reaches either.
-import type { EngineLimitsReport } from "../../shared/limit-reset.ts";
+import { LIMIT_WINDOW_NAMES, type EngineLimitsReport } from "../../shared/limit-reset.ts";
 import { botFootprintLines, type BotFootprintReport } from "./bot-footprint.ts";
 import type { DayAggregate } from "./day-ledger.ts";
 import { SLOW_TURN_MS } from "./day-ledger.ts";
@@ -17,7 +17,7 @@ export const PERF_HEALTH_MAX_BYTES = 8 * 1024;
 export const PERF_HEALTH_VERSION = 1;
 const LIVE_SHOWN = 5, TOOLS_SHOWN = 8, HOLDS_SHOWN = 8;
 const LIMIT_DRIVERS = new Set(["claude", "codex", "grok", "opencode"]);
-const WINDOWS = new Set(["5-hour", "weekly", "other"]);
+const WINDOWS: ReadonlySet<string> = new Set(LIMIT_WINDOW_NAMES);
 
 export interface LimitHold { driver: string; window: string | null; usedPercent: number | null; resetsAt: number | null; blocked: boolean; held: boolean }
 
