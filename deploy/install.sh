@@ -191,12 +191,7 @@ parse() {
       *) fail "That email address doesn't look right. Give one address, like you@example.com." ;;
     esac
   done
-  case "$ACCOUNT_EMAIL" in
-    "") ;;
-    *[!A-Za-z0-9@._+-]* | *@*@* | @* | *@ | *@.* | *. | *..* | *@-* | -*) fail "--account-email needs one address of letters, digits and . _ + -, like you@example.com." ;;
-    ?*@?*.?*) ;;
-    *) fail "--account-email needs one address of letters, digits and . _ + -, like you@example.com." ;;
-  esac
+
   if [ -n "$ACCOUNT_EMAIL" ] && [ "$TUNNEL" != yes ]; then fail "--account-email works only with --tunnel."; fi
   if [ -n "$CODE" ] && [ "$TUNNEL" = yes ]; then fail "A connection code works only with --domain."; fi
   case "$CODE" in

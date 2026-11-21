@@ -881,7 +881,7 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
   it.each(["a b@example.com", "owner@example", "owner@@example.com", "$(id)@example.com", "own*@example.com"])("refuses --account-email %s with one sentence before any change", (address) => {
     const result = tunnel(["--tunnel", "--events", "--account-email", address]);
     expect(result.status).toBe(1);
-    expect(eventLines(result.stdout)).toEqual(["::seira fail --account-email needs one address of letters, digits and . _ + -, like you@example.com."]);
+    expect(eventLines(result.stdout)).toEqual(["::seira fail That email address doesn't look right. Give one address, like you@example.com."]);
     expect(existsSync(result.install)).toBe(false);
   });
 
