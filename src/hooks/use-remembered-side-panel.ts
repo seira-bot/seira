@@ -33,11 +33,11 @@ export function rememberSidePanel(panel: RememberedSidePanel | null): void {
   }
 }
 
-export type SidePanelPlace = Pick<AppState, "activeView" | "computerOpen" | "inspectorOpen" | "settingsOpen" | "appSettingsOpen">;
+export type SidePanelPlace = Pick<AppState, "activeView" | "computerOpen" | "inspectorOpen" | "settingsOpen" | "appSettingsOpen" | "pluginsOpen">;
 
 /**
  * Keeps the bot's screen, bot info panel or bot panel open across restarts and views that close it (routines,
- * files, Settings): whenever the chat view appears it opens the remembered panel, and it remembers
+ * files, Settings, Plugins): whenever the chat view appears it opens the remembered panel, and it remembers
  * what the person leaves open there. Off in the phone layout, where a panel covers the chat.
  */
 export function useRememberedSidePanel(
@@ -45,12 +45,12 @@ export function useRememberedSidePanel(
   dispatch: (action: Action) => void,
   options: { enabled: boolean; inspector: boolean; botPanelByDefault?: boolean },
 ): void {
-  const { activeView, computerOpen, inspectorOpen, settingsOpen, appSettingsOpen } = place;
+  const { activeView, computerOpen, inspectorOpen, settingsOpen, appSettingsOpen, pluginsOpen } = place;
   const { enabled, inspector, botPanelByDefault = false } = options;
   const wasShown = useRef(false);
   const lastOpen = useRef<RememberedSidePanel | null>(null);
   useEffect(() => {
-    const shown = enabled && activeView === "chat" && !appSettingsOpen;
+    const shown = enabled && activeView === "chat" && !appSettingsOpen && !pluginsOpen;
     const arrived = shown && !wasShown.current;
     wasShown.current = shown;
     const open = computerOpen ? "computer" : inspectorOpen ? "inspector" : settingsOpen ? "bot" : null;
@@ -69,5 +69,5 @@ export function useRememberedSidePanel(
     if (open) rememberSidePanel(open);
     else if (lastOpen.current) rememberSidePanel(null);
     lastOpen.current = open;
-  }, [activeView, computerOpen, inspectorOpen, settingsOpen, appSettingsOpen, enabled, inspector, botPanelByDefault, dispatch]);
+  }, [activeView, computerOpen, inspectorOpen, settingsOpen, appSettingsOpen, pluginsOpen, enabled, inspector, botPanelByDefault, dispatch]);
 }

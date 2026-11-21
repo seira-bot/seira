@@ -168,11 +168,22 @@ it("starts with panels closed when storage is blocked", async () => {
 
 const wide = () => { options = { enabled: true, inspector: true, botPanelByDefault: true }; };
 
-it("opens the bot panel on first arrival when the default is on, and stores nothing for it", async () => {
+it("opens the bot panel on first arrival when the default is on, and remembers it", async () => {
   wide();
   await start();
   expect(panel()).toBe("bot");
   expect(localStorage.getItem(SIDE_PANEL_OPEN_KEY)).toBe("bot");
+});
+
+it("opens the bot panel again after the Plugins pane closes it", async () => {
+  wide();
+  await start();
+  await run({ type: "togglePlugins", open: true });
+  expect(panel()).toBeNull();
+  expect(localStorage.getItem(SIDE_PANEL_OPEN_KEY)).toBe("bot");
+
+  await run({ type: "togglePlugins", open: false });
+  expect(panel()).toBe("bot");
 });
 
 it("keeps the bot panel closed after the person closed it", async () => {
