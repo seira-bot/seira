@@ -45,6 +45,8 @@ export interface PairingWindow {
   token: string;
   expiresAt: number;
   attemptsLeft: number;
+  /** After too many wrong codes the six digits are refused; the token still works until `expiresAt`. */
+  codeLocked: boolean;
 }
 
 /** Lets the same request recover a lost response through another advertised
@@ -242,6 +244,7 @@ export class DeviceRegistry {
       token: `${sentWireName("pairingCredentialPrefix")}${randomBytes(32).toString("base64url")}`,
       expiresAt: Date.now() + PAIRING_TTL_MS,
       attemptsLeft: MAX_PAIRING_ATTEMPTS,
+      codeLocked: false,
     };
   }
 
@@ -320,13 +323,19 @@ export class DeviceRegistry {
     }
 
     const windows = this.pairingWindows();
-    const window = windows.find((candidate) => sameCredential(candidate.code, presented) || sameCredential(candidate.token, presented));
+    const window = windows.find((candidate) =>
+      sameCredential(candidate.token, presented) || (!candidate.codeLocked && sameCredential(candidate.code, presented)));
     if (windows.length === 0) return { error: "no pairing is in progress — open Phone settings on your computer", code: "pairing_not_open" };
     if (!window) {
-      // Every open window pays for a wrong guess: without burning them, six digits is seconds of guessing.
-      for (const open of windows) open.attemptsLeft -= 1;
-      if (windows.some((open) => open.attemptsLeft <= 0)) {
-        this.closePairing();
+      if (!/^\d{6}$/.test(presented)) return { error: "that pairing credential is not right", code: "pairing_code_wrong" };
+      // Every open window pays for a wrong guess: without that, six digits is seconds of guessing.
+      for (const open of windows) {
+        if (open.codeLocked) continue;
+        open.attemptsLeft -= 1;
+        if (open.attemptsLeft <= 0) open.codeLocked = true;
+      }
+      if (windows.some((open) => open.codeLocked)) {
+        this.changed();
         return { error: "too many incorrect codes — start pairing again", code: "pairing_too_many" };
       }
       return { error: "that pairing credential is not right", code: "pairing_code_wrong" };
