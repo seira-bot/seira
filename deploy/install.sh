@@ -1107,7 +1107,7 @@ wait_healthy() {
 # The address the account gave this server, as `seira status` reads it from the server's own sign-in record. A log is
 # never read for it: anything that can print a line could print a false one.
 tunnel_address() {
-  compose exec -T seira seira status 2>/dev/null | sed -n 's#^Seira web address: \(https://[^ ]*\) .*#\1#p' | head -n 1
+  compose exec -T seira seira status 2>/dev/null | sed -n 's#^Seira web address: \(http[s]*://[^ ]*\) .*#\1#p' | head -n 1
 }
 
 # True only for exactly https://c-<32 lowercase hex>.<suffix>, with no port, path or other label.
