@@ -15,6 +15,7 @@ import { hostTimeout } from "./testing/host-timeout.ts";
 const OLIVE = { email: "olive@acme.test", role: "owner" as const };
 const ENGINE = `process.env.FAKE_CLAUDE_ROOM_PLAN = process.env.FAKE_CLAUDE_FIXTURE_DIR + "/plan.json";`;
 const REFUSED = 'Two bots here are named "Marlowe": Marlowe, Analyst and Marlowe, Chief of Staff. Pick the one you mean from the @ list.';
+const QUIET_MCP_SERVER = `let b = ""; process.stdin.on("data", (d) => { b += d; let i; while ((i = b.indexOf("\\n")) >= 0) { const line = b.slice(0, i); b = b.slice(i + 1); if (!line.trim()) continue; const m = JSON.parse(line); if (m.id === undefined) continue; const result = m.method === "initialize" ? { protocolVersion: m.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: "notion", version: "1" } } : m.method === "tools/list" ? { tools: [] } : {}; process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: m.id, result }) + "\\n"); } });`;
 const HOLD = "hold the room for a moment";
 const POST = "post the launch update";
 const ASK = "ask the Marlowes about the numbers";
@@ -154,7 +155,7 @@ it("tells a bot in a one-to-one chat about the teammate picked, and about both w
 }, hostTimeout(120_000));
 
 it("names a tagged MCP server in a typed one-to-one line, and in no line that carries the same words from elsewhere", async () => {
-  const added = await team.as(olive, "POST", "/api/mcp/servers", { name: "notion", command: process.execPath, args: ["-e", "setInterval(() => {}, 1000)"] });
+  const added = await team.as(olive, "POST", "/api/mcp/servers", { name: "notion", command: process.execPath, args: ["-e", QUIET_MCP_SERVER] });
   expect(added.status, JSON.stringify(added.body)).toBe(201);
   expect((await team.as(olive, "PATCH", "/api/mcp/servers/notion", { enabled: true })).status).toBe(200);
   const opened = await team.as(olive, "POST", `/api/bots/${lead.id}/tasks`, { title: "Notes" });
@@ -169,8 +170,7 @@ it("names a tagged MCP server in a typed one-to-one line, and in no line that ca
     const turn = turns().filter((one) => one.botId === lead.id).at(-1)!;
     return `${turn.system}\n${JSON.stringify(turn.prompt)}`;
   };
-  const first = await asked("please check my notes with @notion"); console.log("DBG", first.includes("notion"), first.match(/.{80}notion.{80}/g)?.slice(0,4), /mcp/i.test(first));
-  expect(first).toContain("The person's message tags these tools: notion (an MCP server).");
+  expect(await asked("please check my notes with @notion")).toContain("The person's message tags these tools: notion (an MCP server).");
   expect(await asked("please check my notes without a tag")).not.toContain("tags these tools");
   expect(await asked("please check my notes with @slack")).not.toContain("tags these tools");
 }, hostTimeout(120_000));
