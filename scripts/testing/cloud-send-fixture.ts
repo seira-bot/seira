@@ -12,13 +12,17 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createLoginHandoffClient, type ConnectionAsk } from "../../electron/cloud-logins.mjs";
 import { createCloudSend, type CloudMoveCheck, type CloudSendOutcome, type CloudSendSnapshot } from "../../electron/cloud-send.mjs";
+import { itemKey } from "../../electron/cloud-send-parts.mjs";
 import { openOwnerSession } from "../../electron/cloud-send-main.mjs";
 import { BACKGROUND_HEADERS } from "../../electron/cloud-power.mjs";
 import { installOneHome } from "../../electron/one-home-main.mjs";
 import type { OneHomeView } from "../../electron/one-home.mjs";
 import { cloudPairingSignature, cloudRequestSignature } from "../../server/cloud-home.ts";
+import type { CloudSendManifest } from "../../server/cloud-send-manifest.ts";
 import type { TeamMember } from "../../server/cloud-team.ts";
 import { bitwardenCliPath } from "../../server/host/bitwarden-cli.ts";
+import { watchAsMade } from "../../server/host/default-watch.ts";
+import type { Routine } from "../../server/routines.ts";
 import { removeTempDir, waitForExit } from "../../server/testing/cleanup.ts";
 import type { FakeBwAccount } from "../../server/testing/fake-bw.ts";
 import { freePortBlock } from "../../server/testing/ports.ts";
@@ -62,6 +66,9 @@ export interface CloudSendFixture {
   move(options?: { final?: boolean }): Promise<CloudSendOutcome>;
   /** The move's check of what arrived, through main's own wiring. */
   check(): Promise<CloudMoveCheck>;
+  /** My Cloud's manifest as a move compares it. With `since`: less a default watch My Cloud made itself after that
+   * one, as it does on its own clock once connected apps arrive. A watch this computer has still counts. */
+  cloudManifest(since?: CloudSendManifest): Promise<CloudSendManifest>;
   /** The labels of the sessions each send made, and whether each counted as someone using My Cloud. */
   sessions: Array<{ label: string; background: boolean }>;
   /** Each request main sent My Cloud's chats route: the rows of each conversation it carried. */
@@ -628,6 +635,15 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     olderCompare: () => older().compare(),
     move: (options) => main.move(options),
     check: () => main.check(),
+    async cloudManifest(since) {
+      const manifest = (await onCloud("GET", "/api/cloud-send/manifest")).body as CloudSendManifest;
+      if (!since) return manifest;
+      const routines = async (side: typeof local) => (await side("GET", "/api/routines")).body.routines as Routine[];
+      const known = new Set([...since.items.map((item) => item.key), ...(await routines(local)).map((routine) => itemKey.moved("routine", routine.id))]);
+      const made = new Set((await routines(onCloud)).filter(watchAsMade).map((routine) => itemKey.moved("routine", routine.id)).filter((key) => !known.has(key)));
+      return { ...manifest, items: manifest.items.filter((item) => !made.has(item.key)), automations: manifest.automations.filter((entry) => !made.has(entry.key)),
+        runs: manifest.runs.filter((run) => !made.has(itemKey.moved("routine", run.routine))) };
+    },
     sessions,
     chatRequests,
     team: teamFixture,

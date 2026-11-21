@@ -28,7 +28,7 @@ export function pushedCommits(stdin) {
 export function checksFor(files) {
   const checks = [];
   const code = files.filter((file) => CODE.test(file));
-  if (code.length > 0) checks.push({ name: "lint", command: "node_modules/.bin/oxlint", args: ["--deny-warnings", ...code] });
+  if (code.length > 0) checks.push({ name: "lint", command: "node_modules/.bin/oxlint", args: ["--deny-warnings", "--no-error-on-unmatched-pattern", ...code] });
   if (files.some((file) => file.startsWith("src/locales/"))) checks.push({ name: "locale catalogs", command: "node", args: ["scripts/generate-locale.mjs", "--check"] });
   const guards = [
     ...(files.some((file) => RATCHETED.test(file) && !isTest(file)) ? ["scripts/testing/file-size-ratchet.test.ts"] : []),

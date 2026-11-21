@@ -2539,6 +2539,8 @@
   "sidebar.update.restartAction": "Restart",
   "sidebar.update.installAction": "Install",
   "sidebar.update.retryAction": "Retry",
+  "sidebar.update.availableShort": "Server update available",
+  "sidebar.update.howAction": "How to update",
   "links.card.pullRequest": "Pull request {id}",
   "links.card.issue": "Issue {id}",
   "links.card.reference": "Issue or pull request {id}",

@@ -129,6 +129,27 @@ describe("relay tokens", () => {
     service.stop();
   });
 
+  it("calls onSignInFailure on a signed-out or refused answer, and on no other failure", async () => {
+    const failures = [
+      [{ code: "signed_out" }, 1],
+      [{ status: 401 }, 1],
+      [{ code: "relay_unavailable", status: 503 }, 0],
+      [{ status: 429 }, 0],
+      [{ code: "network_unavailable" }, 0],
+    ];
+    for (const [failure, calls] of failures) {
+      const onSignInFailure = vi.fn();
+      const service = createRelayTokenService({
+        fetchGrant: async () => Promise.reject(Object.assign(new Error("failed"), failure)),
+        onGrant: () => {}, ...manualTimers(), now: () => 0, random: () => 0.5, onSignInFailure,
+      });
+      service.start();
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(onSignInFailure).toHaveBeenCalledTimes(calls);
+      service.stop();
+    }
+  });
+
   it("asks again once a request in flight settles, when a wake-up arrived during it", async () => {
     const timers = manualTimers();
     let answerOld;
@@ -220,6 +241,24 @@ describe("the desktop's end-to-end connection", () => {
     expect(posted.at(-1)).toEqual({ type: "seira:companion-e2e", transportKey: readE2EIdentity(document).privateKey, relay: null });
     e2e.resumed();
     expect(posted.at(-1)).toEqual({ type: "seira:companion-e2e-redial" });
+    e2e.stop();
+  });
+
+  it("asks the account to renew the installation credential after a signed-out failure", async () => {
+    const renewInstallation = vi.fn(async () => {});
+    const e2e = createCompanionE2E({
+      readCredentials: () => ({}),
+      updateCredentials: async () => {},
+      fetchGrant: async () => Promise.reject(Object.assign(new Error("signed out"), { code: "signed_out" })),
+      companionState: async () => ({ enabled: true, routes: { relay: { on: true, since: 1 } }, devices: [], pairing: { token: "t" } }),
+      post: () => {},
+      setTimer: () => 1,
+      clearTimer: () => {},
+      renewInstallation,
+    });
+    await e2e.start();
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(renewInstallation).toHaveBeenCalledTimes(1);
     e2e.stop();
   });
 

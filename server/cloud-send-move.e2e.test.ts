@@ -253,12 +253,11 @@ it("a move carries everything, apps and keys first, and its check finds every ro
 }, hostTimeout(900_000));
 
 it("a move run again changes nothing on My Cloud, and its check still finds everything there", async () => {
-  const manifest = async () => (await fx.onCloud("GET", "/api/cloud-send/manifest")).body;
-  const before = await manifest();
+  const before = await fx.cloudManifest();
   const again = await fx.move({ final: true });
   expect(again.result).toMatchObject({ bots: [], updatedBots: [], skills: 0, logins: 0, onePassword: false, settings: [], failed: [], chats: { conversations: 0, messages: 0, left: 0 },
     moved: 0, memory: 0, files: { sent: 0, kept: 0 }, conversationSettings: 0 });
-  expect(await manifest()).toEqual(before);
+  expect(await fx.cloudManifest(before)).toEqual(before);
   expect(everythingArrived(await fx.check())).toBe(true);
 }, hostTimeout(300_000));
 
