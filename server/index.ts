@@ -634,7 +634,7 @@ import { createStatusRoutes } from "./routes/status.ts";
 import { findAntigravityLeftovers, removeAntigravityLeftovers } from "./drivers/antigravity-temp.ts";
 import { createLiveRoutes } from "./routes/live.ts";
 import { createNotificationRoutes, notificationListedFor } from "./routes/notifications.ts";
-import { createAppUsageRoutes } from "./routes/app-usage.ts"; import { createTodayRoutes } from "./routes/today.ts"; import { createBoardRoutes } from "./routes/board.ts"; import { createInboxRoutes } from "./routes/inbox.ts"; import { createSidebarSectionRoutes } from "./routes/sidebar-sections.ts"; import { createDepartmentFolderRoutes } from "./routes/department-folders.ts"; import { DepartmentFolders } from "./department-folders.ts";
+import { createAppUsageRoutes } from "./routes/app-usage.ts"; import { createTodayRoutes } from "./routes/today.ts"; import { createBoardRoutes } from "./routes/board.ts"; import { createInboxRoutes } from "./routes/inbox.ts"; import { createSidebarSectionRoutes } from "./routes/sidebar-sections.ts"; import { createDepartmentFolderRoutes } from "./routes/department-folders.ts"; import { DepartmentFolders } from "./department-folders.ts"; import { createBotFolders } from "./bot-folders.ts";
 import { createToolTimingRoute, createUsageRoutes } from "./routes/usage.ts"; import { createPrivateRecords } from "./host/private-records.ts"; import { createPublishedApps } from "./host/published-apps.ts"; import { savedNetlifyToken } from "./host/netlify-sites.ts"; import { createIncludedHosting } from "./host/included-hosting.ts"; import { createAppPublisher } from "./host/app-publisher.ts"; import { createPublishedAppsRoutes } from "./routes/published-apps.ts";
 import { createBotMessageRoutes } from "./routes/bot-messages.ts";
 import { clearInternalTurn, isInternalTurn, markInternalTurn } from "./internal-turns.ts"; import { createFirstReplyRescue } from "./first-reply-rescue.ts";
@@ -2817,7 +2817,7 @@ const teamWelcome = createTeamWelcomeStore(DATA_DIR); const { cloudHealth, cloud
   engines: () => registry.instances().map((instance) => ({ instanceId: instance.instanceId, driverKind: instance.driverKind, snapshot: registry.knownSnapshot(instance.instanceId) })),
   connectors: () => emailHost.health(composio.configured(cfg) ? composio.connectedServices(cfg) : null),
   browser: () => ({ available: browserReady(undefined), installing: Boolean(browserEngineInstall), interrupted: browserRuntime.interruptedCount() }), firstHour: () => firstHourHooks.health(), ...(engineMemory.enabled ? { room: () => engineMemory.dayPressure() } : {}) } });
-const teamComputers = new TeamComputers(join(DATA_DIR, "team-computers.json"), ENVIRONMENT_ID); const departmentFolders = new DepartmentFolders(join(DATA_DIR, "department-folders.json"));
+const teamComputers = new TeamComputers(join(DATA_DIR, "team-computers.json"), ENVIRONMENT_ID); const departmentFolders = new DepartmentFolders(join(DATA_DIR, "department-folders.json")); const botFolderAccess = createBotFolders({ bot: (botId) => store.bot(botId), departments: departmentFolders, dataDir: DATA_DIR, log: (line) => console.warn(line) });
 let followupsReady = false;
 const sendSequencer = new SendSequencer();
 // Before the new-bot default is read: a saved default may name the engine.
@@ -8428,7 +8428,7 @@ async function beginTurn(
         ...(integrations.browser && browserIsThePlace(turnSurfacePlan(bot, undefined, threadId, true)) ? { preloadBrowserTools: true } : {}),
         ...skillsHost.turnSettings(bot, threadId, instance, managedPolicy.restrictsMcp()),
         cwd, ...(worksInWorkspace || guestConfined || cloudGuestOpened(threadId) ? {} : { toolResultFolder: messageFileRootsForThread(bot.id, threadId).find((root) => root !== ATTACHMENTS_DIR) }),
-        botSettingsFile: botSettingsFile(bot),
+        botSettingsFile: botSettingsFile(bot), ...((folders) => folders ? { folders } : {})(botFolderAccess.forTurn(bot.id)),
       }, (input) => quickFallback.sendTurn(instance, input, route.quickModel ? { model, own: bot.modelSelection, onFallback: () => store.patchMessage(threadId, userMessage.id, { quickModel: undefined }) } : undefined))), () => companyShutdown || !directTurnClaimExists(bot.id, dispatchClaimId, threadId), async () => {
         await (runningTurnEngines.get(threadId) ?? instance).adapter.interruptTurn(threadId).catch(() => {});
       });
@@ -10287,7 +10287,7 @@ async function runClaimedGroupMemberTurn(
         integrations,
         ...(integrations.browser && browserIsThePlace(roomPlan) ? { preloadBrowserTools: true } : {}),
         ...skillsHost.turnSettings(readyBot, threadId, instance, managedPolicy.restrictsMcp()),
-        botSettingsFile: botSettingsFile(readyBot),
+        botSettingsFile: botSettingsFile(readyBot), ...((folders) => folders ? { folders } : {})(botFolderAccess.forTurn(readyBot.id)),
         ...(instance.instanceId === readyBot.modelSelection.instanceId
           ? memberTurnSelection(readyBot.modelSelection)
           : { model: instance.models.default }),
