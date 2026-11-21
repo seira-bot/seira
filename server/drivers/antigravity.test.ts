@@ -990,6 +990,73 @@ describe("Antigravity driver over shared ACP", () => {
     expect([dumpState.env.TEMP, dumpState.env.TMP]).toEqual([expectedTemp, expectedTemp]);
   });
 
+  it.each([true, false])("lets file requests reach a turn's folders only as granted (folders set: %s)", async (withFolders) => {
+    ensureDirs();
+    const fake = fakeRuntime();
+    const instanceId = "antigravity-folders";
+    const tokenDirectory = join(antigravityProfileDirectory(instanceId), "antigravity-acp");
+    mkdirSync(tokenDirectory, { recursive: true });
+    writeFileSync(join(tokenDirectory, "acp_token.json"), "{}", { mode: 0o600 });
+    const grants = realpathSync.native(mkdtempSync(join(tmpdir(), "seira-ag-folders-")));
+    const readOnly = join(grants, "ro"), canChange = join(grants, "rw");
+    mkdirSync(readOnly); mkdirSync(canChange);
+    writeFileSync(join(readOnly, "a.txt"), "read only");
+    writeFileSync(join(canChange, "b.txt"), "can change");
+    const calls = [
+      { id: "ro-read", method: "fs/read_text_file", path: join(readOnly, "a.txt") },
+      { id: "rw-read", method: "fs/read_text_file", path: join(canChange, "b.txt") },
+      { id: "rw-write", method: "fs/write_text_file", path: join(canChange, "new.txt"), content: "written" },
+      { id: "ro-write", method: "fs/write_text_file", path: join(readOnly, "new.txt"), content: "refused" },
+    ];
+    const replies = new Map<string, any>();
+    let received!: () => void;
+    const finished = new Promise<void>((resolve) => { received = resolve; });
+    const spawn = procs.spawnCli;
+    vi.spyOn(procs, "spawnCli").mockImplementation((...args) => {
+      const child = spawn(...args);
+      const write = child.stdin.write.bind(child.stdin);
+      vi.spyOn(child.stdin, "write").mockImplementation((...writeArgs) => {
+        const message = JSON.parse(String(writeArgs[0]));
+        if (message.method === "session/prompt") {
+          for (const call of calls) child.stdout.emit("data", Buffer.from(JSON.stringify({
+            jsonrpc: "2.0", id: call.id, method: call.method, params: { sessionId: message.params.sessionId, path: call.path, content: (call as any).content },
+          }) + "\n"));
+        } else if (calls.some((call) => call.id === message.id)) {
+          replies.set(message.id, message);
+          if (replies.size === calls.length) received();
+        }
+        return write(...writeArgs);
+      });
+      return child;
+    });
+    try {
+      instance = await AntigravityDriver.create({
+        instanceId, displayName: "Antigravity Folders",
+        environment: { FAKE_ACP_AUTH_METHOD: "oauth-personal", FAKE_ACP_MODELS: "gemini-3.8-flash", FAKE_ACP_MODES: "default,yolo,auto_edit", TEMP: fake.directory, TMP: fake.directory },
+        enabled: true, config: { cli: fake.executable, fullAuto: false },
+      });
+      recorder = recordEvents(instance.adapter);
+      const { turnId } = await instance.adapter.sendTurn({
+        threadId: "thread-folders", text: "go", approvalMode: "ask", resumeCursor: "fake-acp-session", model: "gemini-3.8-flash", cwd: fake.directory,
+        ...(withFolders ? { folders: { limited: true, grants: [{ path: readOnly, write: false }, { path: canChange, write: true }] } } : {}),
+      });
+      await recorder.until((event) => event.type === "turn.completed" && event.turnId === turnId);
+      await finished;
+      expect(replies.get("ro-write").error.message).toContain("outside");
+      if (withFolders) {
+        expect(replies.get("ro-read").result).toEqual({ content: "read only" });
+        expect(replies.get("rw-read").result).toEqual({ content: "can change" });
+        expect(replies.get("rw-write").result).toEqual({});
+        expect(readFileSync(join(canChange, "new.txt"), "utf8")).toBe("written");
+      } else {
+        for (const id of ["ro-read", "rw-read", "rw-write"]) expect(replies.get(id).error.message).toContain("outside");
+      }
+      expect(existsSync(join(readOnly, "new.txt"))).toBe(false);
+    } finally {
+      await removeTempDir(grants);
+    }
+  });
+
   const legacyPickTurn = async (instanceId: string, sessionModels: string, model: string) => {
     ensureDirs();
     const fake = fakeRuntime();

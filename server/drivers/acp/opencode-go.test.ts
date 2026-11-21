@@ -1222,6 +1222,70 @@ describe("OpenCode access to folders Seira owns", () => {
     }
   });
 
+  it.each(["ask", "full"] as const)("gives a %s turn's folders to OpenCode's folder policy", async (approvalMode) => {
+    const scratch = mkdtempSync(join(tmpdir(), "seira-opencode-folders-"));
+    const dump = join(scratch, "env.json");
+    const driver = createOpenCodeDriver(async () => catalog("opencode/big-pickle"));
+    const instance = await driver.create({
+      instanceId: `opencode-folders-${approvalMode}`, displayName: "OpenCode", enabled: true,
+      config: { cli: FAKE_CLI, fullAuto: false, workspace: scratch },
+      environment: { HOME: scratch, XDG_CONFIG_HOME: scratch, XDG_DATA_HOME: scratch, FAKE_ACP_MODELS: "opencode/big-pickle", FAKE_ACP_DUMP: dump },
+    });
+    const recorder = recordEvents(instance.adapter);
+    const cwd = join(scratch, "work");
+    const readOnly = join(scratch, "ro"), canChange = join(scratch, "rw");
+    mkdirSync(cwd, { recursive: true });
+    try {
+      await instance.adapter.sendTurn({ threadId: "t-folders", botId: "bot-7", text: "hi", model: "opencode/big-pickle", approvalMode, cwd,
+        folders: { limited: true, grants: [{ path: readOnly, write: false }, { path: canChange, write: true }] } });
+      expect(await recorder.until((event) => event.type === "turn.completed")).toMatchObject({ ok: true });
+      const policy = JSON.parse((JSON.parse(readFileSync(dump, "utf8")) as { env: Record<string, string> }).env.OPENCODE_PERMISSION);
+      const rules = Object.entries(policy.external_directory);
+      expect(rules[0]).toEqual(["*", "deny"]);
+      for (const directory of [readOnly, canChange]) {
+        expect(rules).toContainEqual([directory, "allow"]);
+        expect(rules).toContainEqual([join(directory, "*"), "allow"]);
+      }
+      expect(rules.at(-1)).toEqual([join(canChange, "*"), "allow"]);
+      expect(policy.edit[join(readOnly, "**")]).toBe("deny");
+      expect(policy.edit[readOnly]).toBe("deny");
+      expect(policy.edit[join(relative(cwd, readOnly), "**")]).toBe("deny");
+      expect(Object.keys(policy.edit).some((pattern) => pattern.includes("rw"))).toBe(false);
+      if (approvalMode === "full") expect(policy.edit["*"]).toBe("allow");
+    } finally {
+      recorder.stop();
+      await instance.dispose();
+      await removeTempDir(scratch);
+    }
+  });
+
+  it("adds a grant to the allow-list and no deny for an unlimited turn with only a can-change grant", async () => {
+    const scratch = mkdtempSync(join(tmpdir(), "seira-opencode-folders-open-"));
+    const dump = join(scratch, "env.json");
+    const driver = createOpenCodeDriver(async () => catalog("opencode/big-pickle"));
+    const instance = await driver.create({
+      instanceId: "opencode-folders-open", displayName: "OpenCode", enabled: true,
+      config: { cli: FAKE_CLI, fullAuto: false, workspace: scratch },
+      environment: { HOME: scratch, XDG_CONFIG_HOME: scratch, XDG_DATA_HOME: scratch, FAKE_ACP_MODELS: "opencode/big-pickle", FAKE_ACP_DUMP: dump },
+    });
+    const recorder = recordEvents(instance.adapter);
+    const cwd = join(scratch, "work");
+    mkdirSync(cwd, { recursive: true });
+    try {
+      await instance.adapter.sendTurn({ threadId: "t-folders-open", text: "hi", model: "opencode/big-pickle", approvalMode: "ask", cwd,
+        folders: { limited: false, grants: [{ path: join(scratch, "rw"), write: true }] } });
+      expect(await recorder.until((event) => event.type === "turn.completed")).toMatchObject({ ok: true });
+      const policy = JSON.parse((JSON.parse(readFileSync(dump, "utf8")) as { env: Record<string, string> }).env.OPENCODE_PERMISSION);
+      expect(policy.external_directory["*"]).toBeUndefined();
+      expect(policy.external_directory[join(scratch, "rw")]).toBe("allow");
+      expect(policy).not.toHaveProperty("edit");
+    } finally {
+      recorder.stop();
+      await instance.dispose();
+      await removeTempDir(scratch);
+    }
+  });
+
   it.each([["ask", false], ["full", true]] as const)("sets OpenCode's folder policy for %s turns", async (approvalMode, full) => {
     const scratch = mkdtempSync(join(tmpdir(), "seira-opencode-permission-"));
     const dump = join(scratch, "env.json");

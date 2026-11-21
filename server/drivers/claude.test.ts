@@ -1973,6 +1973,77 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(seen.argv[seen.argv.indexOf("--setting-sources") + 1]).toBe("project");
   });
 
+  describe("a turn's folders", () => {
+    const folders = { limited: true, grants: [{ path: join(tmpdir(), "folder-ro"), write: false }, { path: join(tmpdir(), "folder-rw"), write: true }] };
+    const run = async (version: string, extra: Record<string, unknown>) => {
+      await create("echo", { FAKE_CLAUDE_VERSION: version });
+      const dump = join(scratch, "folders.json");
+      process.env.FAKE_CLAUDE_DUMP = dump;
+      await instance.adapter.sendTurn({ threadId: "t-folders", text: "hi", ...extra });
+      await recorder.until((e) => e.type === "turn.completed");
+      return JSON.parse(readFileSync(dump, "utf8")) as { argv: string[]; settings: any };
+    };
+
+    it("passes each grant as --add-dir and in the settings, and denies changes in a read-only one", async () => {
+      const seen = await run("2.1.330", { folders });
+      const dirs = seen.argv.flatMap((arg, i) => seen.argv[i - 1] === "--add-dir" ? [arg] : []);
+      expect(dirs).toEqual(folders.grants.map((grant) => grant.path));
+      expect(seen.settings.permissions.additionalDirectories).toEqual(dirs);
+      const ro = `/${folders.grants[0].path}/**)`;
+      expect(seen.settings.permissions.deny).toEqual([`Edit(${ro}`, `Write(${ro}`, `NotebookEdit(${ro}`]);
+      expect(seen.settings.permissions.deny.join()).not.toContain("folder-rw");
+    });
+
+    it("limits reads and writes outside the working folder when the CLI knows both settings", async () => {
+      const seen = await run("2.1.330", { folders });
+      expect(seen.settings.permissions).toMatchObject({ blockReadsOutsideWorkingDirectories: true, blockWritesOutsideWorkingDirectories: true });
+    });
+
+    it("refuses a limited turn on a CLI older than 2.1.330", async () => {
+      await create("echo", { FAKE_CLAUDE_VERSION: "2.1.300" });
+      await expect(instance.adapter.sendTurn({ threadId: "t-folders-old", text: "hi", folders })).rejects.toThrow(/Update Claude Code to let this bot use only its chosen folders/);
+    });
+
+    it("refuses a limited turn on a CLI older than 2.1.257", async () => {
+      await create("echo", { FAKE_CLAUDE_VERSION: "2.1.250" });
+      await expect(instance.adapter.sendTurn({ threadId: "t-folders-older", text: "hi", folders })).rejects.toThrow(/Update Claude Code/);
+    });
+
+    it("runs a turn that is not limited on an old CLI", async () => {
+      const seen = await run("2.1.250", { folders: { limited: false, grants: folders.grants } });
+      expect(seen.settings.permissions.additionalDirectories).toHaveLength(2);
+    });
+
+    it("starts a new process when a grant's write flag or the limit changes", async () => {
+      await create("echo", { FAKE_CLAUDE_VERSION: "2.1.330" });
+      const dump = join(scratch, "folders-warm.json");
+      process.env.FAKE_CLAUDE_DUMP = dump;
+      const turn = async (f: typeof folders) => {
+        const { turnId } = await instance.adapter.sendTurn({ threadId: "t-folders-warm", text: "hi", folders: f });
+        await recorder.until((e) => e.type === "turn.completed" && e.turnId === turnId);
+        return JSON.parse(readFileSync(dump, "utf8")).pid as number;
+      };
+      const first = await turn(folders);
+      expect(await turn(folders)).toBe(first);
+      const flipped = { ...folders, grants: [{ ...folders.grants[0], write: true }, folders.grants[1]] };
+      const second = await turn(flipped);
+      expect(second).not.toBe(first);
+      expect(await turn({ ...flipped, limited: false })).not.toBe(second);
+    });
+
+    it("adds no limit key for a turn that is not limited", async () => {
+      const seen = await run("2.1.330", { folders: { limited: false, grants: folders.grants } });
+      expect(seen.settings.permissions).not.toHaveProperty("blockReadsOutsideWorkingDirectories");
+      expect(seen.settings.permissions).not.toHaveProperty("blockWritesOutsideWorkingDirectories");
+    });
+
+    it("leaves argv and settings as they were for a turn with no folder setting", async () => {
+      const seen = await run("2.1.330", {});
+      expect(seen.argv).not.toContain("--add-dir");
+      expect(seen.settings).not.toHaveProperty("permissions");
+    });
+  });
+
   it("mounts a url server in the CLI's own shape, header values in the private file", async () => {
     await create();
     const dump = join(scratch, "remote-mcp.json");
