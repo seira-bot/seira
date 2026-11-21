@@ -63,7 +63,7 @@ function productionHandler(state) {
   const start = mainSource.indexOf('ipcMain.handle("desktop:open-sign-in-page"');
   assert.ok(start > 0, "main.mjs registers the channel");
   const end = mainSource.indexOf("}));\n", start) + "}));".length;
-  assert.equal(mainSource.indexOf('"desktop:open-sign-in-page"', start + 1), -1, "exactly one registration of the channel in main.mjs");
+  assert.equal(mainSource.split('"desktop:open-sign-in-page"').length, 2, "exactly one registration of the channel in main.mjs");
   const handlers = new Map();
   const opened = [];
   const mainWindow = { webContents: { mainFrame: { url: "" } } };
