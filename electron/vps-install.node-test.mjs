@@ -2,7 +2,7 @@
 // in a scratch folder, with a stub `id` and `sudo` first on PATH, and the bundled installer is a fake script.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import net from "node:net";
@@ -314,7 +314,7 @@ test("the installer goes to a new private folder and its SHA-256 is checked befo
     const order = w.log.map((entry) => entry.command);
     const sum = order.findIndex((command) => /sha256sum/.test(command));
     const run = order.findIndex((command) => /^sh '.*install\.sh' --check/.test(command));
-    assert.ok(sum > order.findIndex((command) => /^cat > /.test(command)) && sum < run);
+    assert.ok(sum > order.findIndex((command) => command.startsWith("cat > ")) && sum < run);
     await h.session.cancel();
   } finally { await w.close(); }
 });

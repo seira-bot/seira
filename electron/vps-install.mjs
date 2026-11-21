@@ -61,7 +61,7 @@ export function parseAddress(input) {
   return { host, port };
 }
 
-const sanitize = (text) => String(text ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 300);
+const sanitize = (text) => Array.from(String(text ?? ""), (char) => (char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127 ? " " : char)).join("").trim().slice(0, 300);
 
 /** One `::seira` line of the installer's output as an event, or null for any other line. */
 export function parseSeiraLine(line) {
