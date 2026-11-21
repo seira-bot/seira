@@ -11,7 +11,7 @@ export const SEIRA_HOSTS = Object.freeze({
   accounts: `accounts.${ZONE}`,
   device: `device.${ZONE}`,
   stats: `stats.${ZONE}`,
-  pages: `page.${ZONE}`,
+  pages: "seira.page",
   companion: `si.${ZONE}`,
   push: `push.${ZONE}`,
   tunnel: TUNNEL_ZONE,

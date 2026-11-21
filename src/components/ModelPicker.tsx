@@ -672,6 +672,7 @@ export function ModelPicker({
       </span>
       <span className={cn("min-w-0 truncate", !contained && "max-w-[160px]")}>{modelName(active, selection.model)}</span>
       {selection.variant !== undefined && <span className="shrink-0 whitespace-pre">{variantSuffix(active, selection.model, selection.variant)}</span>}
+      {selection.variant === undefined && selection.effort && <span data-model-effort className="shrink-0 whitespace-pre">{` · ${effortLabel(selection.effort)}`}</span>}
       <UsageBars engine={selection.instanceId} className="ml-1.5" />
       <ChevronDown size={12} strokeWidth={2} aria-hidden="true" className="ml-1 shrink-0 text-ink-tertiary group-hover:text-ink-secondary" />
     </button>

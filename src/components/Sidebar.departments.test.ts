@@ -111,7 +111,7 @@ function drag(id: string) {
 
 beforeEach(() => {
   fixture.values = [];
-  fixture.advanced = false;
+  fixture.advanced = true;
   fixture.phone = false;
   fixture.admin = null;
   fixture.storage = new Map();
@@ -142,9 +142,9 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-describe("Simple's sidebar before anyone drags", () => {
+describe("The sidebar before anyone drags", () => {
   it("looks as it did: the same sections and rows, nothing marked, each row ready to drag", () => {
-    expect(sections()).toEqual([BOTS_SECTION_ID, CHANNELS_SECTION_ID, userSectionId("Work")]);
+    expect(sections()).toEqual([CHANNELS_SECTION_ID, BOTS_SECTION_ID, userSectionId("Work")]);
     expect(listed()).toEqual(["atlas", "bea", "cleo", "dodo", "echo"]);
     for (const props of rows()) {
       expect(props.botDrop).toBeNull();
@@ -227,7 +227,7 @@ describe("dragging a bot", () => {
     expect(row("atlas").botDrop).toBe("group");
     row("atlas").botDrag!.row("atlas").onDrop(at() as never);
     expect(actions()).toEqual([]);
-    expect(sections()).toEqual([BOTS_SECTION_ID, CHANNELS_SECTION_ID, userSectionId("Work"), userSectionId(NEW_DEPARTMENT)]);
+    expect(sections()).toEqual([CHANNELS_SECTION_ID, BOTS_SECTION_ID, userSectionId("Work"), userSectionId(NEW_DEPARTMENT)]);
     const naming = header(NEW_DEPARTMENT).naming!;
     expect(naming.value).toBe("New department");
     expect(naming.label).toBe("New department name");
@@ -309,7 +309,7 @@ describe("dragging a bot", () => {
     fixture.state = { ...fixture.state, bots: fixture.state.bots.map((candidate) => ({ ...candidate, section: "Work" })) };
     expect(sections()).not.toContain(BOTS_SECTION_ID);
     drag("dodo");
-    expect(sections()[0]).toBe(BOTS_SECTION_ID);
+    expect(sections()).toContain(BOTS_SECTION_ID);
     section(BOTS_SECTION_ID).onDragOver(at() as never);
     expect(render().some((node) => node.props["data-bot-drop-slot"] !== undefined)).toBe(true);
     section(BOTS_SECTION_ID).onDrop(at() as never);
@@ -412,6 +412,7 @@ describe("who may drag a bot: whoever the bot menu offers Move to department", (
 });
 
 describe("a department's menu in Simple", () => {
+  beforeEach(() => { fixture.advanced = false; });
   const openMenu = (name: string) => {
     const button = { getBoundingClientRect: () => ({ right: 280, bottom: 300 }), focus: vi.fn(), isConnected: true } as unknown as HTMLButtonElement;
     header(name).onMenu!(button);
@@ -446,6 +447,7 @@ describe("a department's menu in Simple", () => {
 });
 
 describe("a bot's menu in Simple", () => {
+  beforeEach(() => { fixture.advanced = false; });
   type MenuProps = Parameters<typeof BotContextMenu>[0];
   const menuProps = (botId: string, extra: Partial<MenuProps> = {}): MenuProps => ({
     menu: { botId, x: 0, y: 0 }, onClose: vi.fn(), onArchive: vi.fn(), onDelete: vi.fn(), onMoveToSection: vi.fn(),

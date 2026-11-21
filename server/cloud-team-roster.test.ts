@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { startTeamRoster, TEAM_ROSTER_ADMIN_PATH, teamRosterSignature } from "./cloud-team-roster.ts";
 import { SessionRegistry } from "./sessions.ts";
+import { expectBothCloudSignedNames } from "./testing/cloud-signed-assert.ts";
 
 const HOUR = 60 * 60_000, MINUTE = 60_000;
 const ADA = { email: "ada@acme.test", role: "member" as const };
@@ -42,6 +43,7 @@ function admin(roster: Record<string, string | null>, options: { status?: number
     expect(url).toBe(`${ADMIN}${TEAM_ROSTER_ADMIN_PATH}`);
     const headers = init.headers as Record<string, string>, body = String(init.body);
     expect(headers["x-omb-cloud-signature"]).toBe(`v1=${teamRosterSignature(SECRET, "cm-home", headers["x-omb-cloud-timestamp"]!, headers["x-omb-cloud-nonce"]!, body)}`);
+    expectBothCloudSignedNames(headers);
     const emails = (JSON.parse(body) as { emails: string[] }).emails;
     asked.push(emails);
     if (options.status) return Response.json({ error: "no" }, { status: options.status });

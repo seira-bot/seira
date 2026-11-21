@@ -4,6 +4,7 @@ import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import {
   SIDEBAR_MIN_WIDTH,
+  SIMPLE_SIDEBAR_MIN_WIDTH,
   SIDEBAR_WIDTH_KEY,
   SIMPLE_SIDEBAR_WIDTH_KEY,
   clampSidebarWidth,
@@ -18,13 +19,16 @@ export function sidebarDefaultWidth(simple: boolean): number {
 /** Narrower than this, the sidebar's dragged edge leaves its column of avatars; wider again, the sidebar opens. */
 export const AVATARS_BELOW = 160;
 
+/** The same threshold in Simple mode, whose open sidebar gets narrower. */
+export const SIMPLE_AVATARS_BELOW = 128;
+
 /** Where a drag of the sidebar's edge has it: its column of avatars, or open; open, at the width it had until the
  * pointer reaches that edge (`following` false), then wherever the pointer is. */
 export interface EdgeDrag { avatars: boolean; following: boolean }
 
 /** The drag after the pointer moved to `wanted` pixels from the sidebar's left; `from` is the width it opens at. */
-export function nextEdgeDrag(drag: EdgeDrag, wanted: number, from: number): EdgeDrag {
-  if (wanted < AVATARS_BELOW) return { avatars: true, following: false };
+export function nextEdgeDrag(drag: EdgeDrag, wanted: number, from: number, avatarsBelow = AVATARS_BELOW): EdgeDrag {
+  if (wanted < avatarsBelow) return { avatars: true, following: false };
   if (drag.avatars) return { avatars: false, following: false };
   return { avatars: false, following: drag.following || wanted >= from };
 }
@@ -39,6 +43,8 @@ export function useSidebarWidth({ simple, sidePanelOpen, sidebarRef }: {
   const key = simple ? SIMPLE_SIDEBAR_WIDTH_KEY : SIDEBAR_WIDTH_KEY;
   const defaultWidth = sidebarDefaultWidth(simple);
   const cap = simple ? 400 : 480;
+  const minWidth = simple ? SIMPLE_SIDEBAR_MIN_WIDTH : SIDEBAR_MIN_WIDTH;
+  const avatarsBelow = simple ? SIMPLE_AVATARS_BELOW : AVATARS_BELOW;
   const maxWidth = sidePanelOpen ? defaultWidth : Math.min(cap, window.innerWidth - 320);
   const [savedWidth, setSavedWidth] = useState<number | null>(() => loadSidebarWidth(undefined, key));
   const widthRef = useRef(savedWidth);
@@ -53,7 +59,7 @@ export function useSidebarWidth({ simple, sidePanelOpen, sidebarRef }: {
   useEffect(() => () => { if (snapTimer.current) clearTimeout(snapTimer.current); }, []);
   const current = () => Math.min(widthRef.current ?? defaultWidth, maxWidth);
   const resizeTo = (width: number) => {
-    const next = clampSidebarWidth(width, sidePanelOpen ? defaultWidth + 320 : window.innerWidth, cap);
+    const next = clampSidebarWidth(width, sidePanelOpen ? defaultWidth + 320 : window.innerWidth, cap, minWidth);
     if (next === Math.round(sidebarRef.current?.getBoundingClientRect().width ?? defaultWidth)) return null;
     widthRef.current = next;
     sidebarRef.current?.style.setProperty("--sidebar-width", `${next}px`);
@@ -71,7 +77,9 @@ export function useSidebarWidth({ simple, sidePanelOpen, sidebarRef }: {
     /** A drag just took the sidebar to its avatars or back: its width animates, mid-drag too. */
     snapping,
     valueNow: Math.min(savedWidth ?? defaultWidth, maxWidth),
-    atMinimum: () => current() <= SIDEBAR_MIN_WIDTH,
+    atMinimum: () => current() <= minWidth,
+    /** Narrower than this, a drag of the edge leaves the open sidebar for its avatars. */
+    avatarsBelow,
     /** A drag begins: the width the sidebar has now. */
     startResize: () => { setResizing(true); return current(); },
     resizeTo,
@@ -103,7 +111,7 @@ function holdPageCursor(held: boolean) {
   document.body.style.userSelect = held ? "none" : "";
 }
 
-/** The sidebar's edge: a 12px strip centred on the sidebar's hairline that draws nothing of its own. Dragged, it resizes the sidebar, and past AVATARS_BELOW it leaves the column of avatars or opens
+/** The sidebar's edge: a 12px strip centred on the sidebar's hairline that draws nothing of its own. Dragged, it resizes the sidebar, and past `sizing.avatarsBelow` it leaves the column of avatars or opens
  * the sidebar again at its last width. The arrow keys do the same, a step at a time. */
 export function SidebarResizeHandle({ sizing, sidebarRef, avatars, avatarsWidth, onAvatars, style }: {
   sizing: SidebarSizing;
@@ -148,7 +156,7 @@ export function SidebarResizeHandle({ sizing, sidebarRef, avatars, avatarsWidth,
         const current = drag.current;
         if (!current || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
         const wanted = event.clientX - (sidebarRef.current?.getBoundingClientRect().left ?? 0);
-        const next = nextEdgeDrag(current.state, wanted, current.from);
+        const next = nextEdgeDrag(current.state, wanted, current.from, sizing.avatarsBelow);
         if (next.avatars !== current.state.avatars) {
           sizing.snap();
           if (next.avatars) sizing.restore(current.from);

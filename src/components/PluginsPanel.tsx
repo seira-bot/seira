@@ -17,7 +17,7 @@ import { accountAliasTaken, accountToReconnect, connectedInventoryCopy, connecto
   requiresAccountAlias, type ConnectorAccount, type ConnectorInventoryPhase, type ConnectorStatus } from "@/lib/connector-status";
 import { BotAvatar } from "./Avatar";
 import { SidebarPopoverMenu } from "./SidebarPopoverMenu";
-import { appCategoryLabel, CATEGORY_SECTION_SIZE, catalogSections, connectorDescription, inCategory, rankCategories } from "@/lib/app-catalog";
+import { appCategories, appCategoryLabel, type AppCategory, CATEGORY_SECTION_SIZE, catalogSections, connectorDescription, inCategory, rankCategories } from "@/lib/app-catalog";
 import { McpServersPanel } from "./McpServersPanel";
 import { LegalLinks } from "./LegalLinks";
 import { HOSTED_MCP_APPS, mcpServerConnected, ownMcpServer, type HostedApp, type HostedConnections } from "@/lib/hosted-mcp-apps";
@@ -131,7 +131,7 @@ export function PluginsPanel() {
   const [showAllApps, setShowAllApps] = useState(false);
   const [hostedConnected, setHostedConnected] = useState<HostedConnections | null>(null);
   const [cardsRefresh, setCardsRefresh] = useState(0);
-  const [category, setCategory] = useState<string | null>(null);
+  const [category, setCategory] = useState<AppCategory | null>(null);
   // Appended after the older state so tests that seed state by call order keep their indices.
   const [xConnected, setXConnected] = useState<boolean | null>(null);
   const [postizConnected, setPostizConnected] = useState<boolean | null>(null);
@@ -389,7 +389,7 @@ export function PluginsPanel() {
   };
 
   const offered = (cards ?? []).filter((c) => hasActiveConnection(status[c.slug]) || (!c.needsOwnAuth && !managedConnectorUnavailableReason(mode, c.slug)));
-  const matching = offered.filter((c) => matchesCatalogSearch(`${c.label} ${c.slug} ${connectorDescription(c)} ${(c.categories ?? []).join(" ")}`, search));
+  const matching = offered.filter((c) => matchesCatalogSearch(`${c.label} ${c.slug} ${connectorDescription(c)} ${(c.categories ?? []).join(" ")} ${appCategories(c).map(appCategoryLabel).join(" ")}`, search));
   const isConnected = (slug: string) => Boolean(status[slug]?.connected || status[slug]?.accounts?.length);
   const filter: AppsFilter = surface === "mcp" ? "mcp" : tab === "connected" ? "connected" : "all";
   const searching = search.trim().length > 0;
@@ -435,7 +435,7 @@ export function PluginsPanel() {
   const allCapped = sectioned && !showAllApps && allCards.length > APPS_PREVIEW_COUNT;
   const allShown = allCapped ? allCards.slice(0, APPS_PREVIEW_COUNT) : allCards;
   const connectedCards = (cards ?? []).filter((card) => hasActiveConnection(status[card.slug]));
-  const pickCategory = (next: string | null) => {
+  const pickCategory = (next: AppCategory | null) => {
     setCategory(next);
     setTab("marketplace");
     if (surface !== "apps") dispatch({ type: "togglePlugins", open: true, surface: "apps" });

@@ -3,6 +3,7 @@
 // of this home: a desktop that lends to it stops calling while it sleeps. docs/cloud-pro.md, "Sleeping homes". An older
 // Admin answers 404 and nothing changes; this never retries.
 import { createHash, createHmac, randomBytes } from "node:crypto";
+import { cloudSignedHeaders } from "./cloud-signed-headers.ts";
 
 export const WOKE_ADMIN_PATH = "/api/cloud/machines/woke";
 const WOKE_TIMEOUT_MS = 5_000;
@@ -21,8 +22,7 @@ export function createWokeNotifier(options: {
     const body = JSON.stringify({ v: 1, wokeAt: now() });
     const timestamp = String(Math.floor(now() / 1000)), nonce = randomBytes(18).toString("base64url");
     void fetcher(`${adminOrigin}${WOKE_ADMIN_PATH}`, { method: "POST", redirect: "error", cache: "no-store", body, signal: AbortSignal.timeout(WOKE_TIMEOUT_MS), headers: {
-      accept: "application/json", "content-type": "application/json", "x-omb-cloud-machine": machineId, "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
-      "x-omb-cloud-signature": `v1=${wokeSignature(secret, machineId, timestamp, nonce, body)}`,
+      accept: "application/json", "content-type": "application/json", ...cloudSignedHeaders({ machineId, timestamp, nonce, signature: `v1=${wokeSignature(secret, machineId, timestamp, nonce, body)}` }),
     } }).then(async (response) => {
       await response.body?.cancel().catch(() => {});
       if (!response.ok && response.status !== 404 && !warned) { warned = true; log?.(`cloud power: the Admin answered HTTP ${response.status} to the wake notice`); }

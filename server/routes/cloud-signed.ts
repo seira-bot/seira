@@ -15,6 +15,7 @@ import { CLOUD_IDLE_ACTIVITY_MS, CLOUD_POWER_PATH, CLOUD_POWER_SLEEP_PATH, type 
 import { json } from "../harness/http.ts";
 import { requestSource } from "../request-auth.ts";
 import type { SessionRegistry } from "../sessions.ts";
+import { readCloudSigned } from "../cloud-signed-headers.ts";
 
 export interface CloudSignedRequest { req: IncomingMessage; res: ServerResponse; url: URL; path: string; method: string }
 
@@ -75,7 +76,8 @@ export function createCloudSignedRoutes(deps: {
     res.setHeader("cache-control", "no-store");
     const source = requestSource(req);
     const header = (name: string) => { const value = req.headers[name]; return typeof value === "string" ? value : undefined; };
-    const signed = { timestamp: header("x-omb-cloud-timestamp"), nonce: header("x-omb-cloud-nonce"), signature: header("x-omb-cloud-signature") };
+    const { timestamp, nonce, signature } = readCloudSigned(header);
+    const signed = { timestamp, nonce, signature };
     if (power && path === CLOUD_POWER_PATH) {
       if (method !== "GET") { json(res, 405, { error: "method_not_allowed" }); return true; }
       const verdict = powerReads.verify({ ...signed, method, target: `${path}${url.search}`, body: "" });

@@ -229,6 +229,10 @@ pnpm dev           # app on http://127.0.0.1:5199
 pnpm dev:desktop   # Electron shell; keep the two commands above running
 ```
 
+On Windows, a run from source shows **Seira (dev)** on the taskbar.
+Its pin opens Seira only while `pnpm dev:server` and `pnpm dev` run.
+The Start menu entry and a pin that always opens Seira come from the installer.
+
 ### Optional keys
 
 Local chat works without these keys.
