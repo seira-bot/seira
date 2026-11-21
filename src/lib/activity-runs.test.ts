@@ -262,7 +262,7 @@ describe("groupTranscript", () => {
 
     const items = groupTranscript([user, ack, search, read, helper, fetch, final]);
     expect(items.map((item) => item.kind === "message" ? item.message.id : item.kind)).toEqual([user.id, ack.id, "turn", helper.id, final.id]);
-    expect(items[2]).toMatchObject({ kind: "turn", id: "turn:turn-1", label: "Worked for 29s", messages: [search, read, fetch] });
+    expect(items[2]).toMatchObject({ kind: "turn", id: "turn:turn-1", label: "Worked for 29s", durationMs: 29_000, messages: [search, read, fetch] });
   });
 
   it("shows just the answer for a turn with nothing to say: its steps fold, no line of it is hidden", () => {

@@ -112,6 +112,7 @@ import { groupTranscript, isStatusActivity, liveWorkSteps, turnDurations, worked
 import { StatusActivityRow } from "@/components/StatusActivityRow";
 import { CancelledTurnRow } from "./CancelledTurnRow";
 import { ActivityRun } from "./ActivityRun";
+import { ActivityStepLine } from "./ActivityStepLine";
 import { AdvancedTurnCard, cardRows, renameBotWith, useAdvancedTurns } from "./advanced-turn";
 import { BubbleEditor } from "./BubbleEditor";
 import { ReplyBlocks } from "./ReplyBlocks";
@@ -687,14 +688,14 @@ const MessagesList = memo(function MessagesList({
           const rows = cardRows(items, i, live);
           const itemId = item.kind === "message" ? `live:${item.message.id}` : item.id;
           const forceOpen = live || rows.some((step) => step.id === focusedId);
-          const steps = rows.map((step) => <div key={step.id} className="contents" data-mid={step.id}><ActivityChip message={step} place={place} /></div>);
+          const steps = rows.map((step) => <div key={step.id} className="contents" data-mid={step.id}>{advanced ? <ActivityChip message={step} place={place} /> : <ActivityStepLine message={step} botId={botId}><ActivityChip message={step} place={place} /></ActivityStepLine>}</div>);
           const label = item.kind === "turn" ? item.label : undefined;
           if (!advanced) {
             return (
               <div key={itemId} className="contents">
                 {newDay && <DaySeparator at={first.at} today={today} simple={simple} />}
                 {divider}
-                <ActivityRun messages={rows} label={label} forceOpen={forceOpen}>{steps}</ActivityRun>
+                <ActivityRun messages={rows} label={label} forceOpen={forceOpen} botId={botId} durationMs={item.kind === "turn" ? item.durationMs : undefined}>{steps}</ActivityRun>
               </div>
             );
           }
