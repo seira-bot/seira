@@ -7034,6 +7034,8 @@
   "sidebar.update.readyShort": "Aktualizacja gotowa",
   "sidebar.update.restartAction": "Uruchom ponownie",
   "sidebar.update.retryAction": "Ponów",
+  "sidebar.update.availableShort": "Dostępna aktualizacja serwera",
+  "sidebar.update.howAction": "Jak zaktualizować",
   "sidebar.nav.publishedApps": "Opublikowane aplikacje",
   "sidebar.nav.teamFiles": "Pliki zespołu",
   "defaultBot.show.subtitle": "Twój pomocnik do wszystkiego w aplikacji. Ukryty dalej pracuje, a wyszukiwanie wciąż go znajduje.",
