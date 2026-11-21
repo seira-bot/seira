@@ -1,0 +1,5 @@
+{"type":"file-history-snapshot","messageId":"x"}
+{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-03-01T08:00:00Z","message":{"role":"user","content":"Fix the login bug"}}
+{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-03-01T08:00:05Z","message":{"role":"assistant","content":[{"type":"text","text":"Looking now."},{"type":"tool_use","name":"Read","id":"t1","input":{}}]}}
+{"type":"user","uuid":"u2","parentUuid":"a1","timestamp":"2026-03-01T08:00:06Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"file text"}]}}
+{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-03-01T08:00:09Z","message":{"role":"assistant","content":[{"type":"text","text":"Fixed."}]}}
