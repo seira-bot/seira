@@ -73,7 +73,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "the Bots list in the sidebar; New bot",
     does: "Each bot has its own name, instructions, model and folder. A Chief of Staff adds specialists and sets up teams. A department groups bots.",
     tools: ["list_bots", "create_bot", "list_team_setup", "list_team_library", "propose_team_setup", "propose_bot_deletion", "suggest_team", "propose_profile", "propose_team_memory", "share"],
-    releaseNotes: ["sendSetting"],
+    releaseNotes: ["sendSetting", "teamSuggestion"],
   },
   {
     id: "handoffs",
@@ -115,7 +115,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Connected apps",
     place: "Apps → Connected apps",
     does: "Accounts such as Gmail, Calendar, Slack or Notion that the person connects so bots can use them. Select Connect on an app, then sign in with the link Seira gives. Tag one with @ in a direct chat.",
-    releaseNotes: ["connectOneClick"],
+    releaseNotes: ["connectOneClick", "appsConnected", "socialRepliz"],
   },
   {
     id: "settings",
@@ -134,9 +134,10 @@ export const APP_FEATURES: readonly AppFeature[] = [
   {
     id: "models",
     name: "Models and usage",
-    place: "the model choice of a bot; Settings → AI",
-    does: "A bot runs on one engine and model. A bot can read the model choices and each AI account's usage limits, and can ask to switch its own model.",
+    place: "the model choice of a bot; Settings → AI; the usage ring at the bottom of the sidebar",
+    does: "A bot runs on one engine and model. A bot can read the model choices and each AI account's usage limits, and can ask to switch its own model. A ring in the sidebar shows how much of the AI plan is left.",
     tools: ["list_models", "propose_model", "usage_limits"],
+    releaseNotes: ["usageRing"],
   },
   {
     id: "profile",
@@ -150,6 +151,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Alerts when the phone app is closed",
     place: "Settings → Phone & devices → Alerts when the phone app is closed",
     does: "Wakes the closed phone app for approvals, questions, sign-ins and finished replies. Off until the person turns it on. The alert holds names and the kind of alert, never the message.",
+    releaseNotes: ["phonePush"],
   },
   {
     id: "computers",
@@ -269,7 +271,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "The Seira app",
     place: "the whole app",
     does: "The app is named Seira everywhere. Chats, bots and settings carry over from earlier names. The window shows right away at start.",
-    releaseNotes: ["seiraName", "fasterStart"],
+    releaseNotes: ["seiraName", "fasterStart", "linuxDesktop"],
   },
 ];
 
