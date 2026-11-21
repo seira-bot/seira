@@ -651,9 +651,13 @@ describe("OpenRouter as the provider", () => {
       const chosen = describeDecider({ openrouter: { key: SHARED_KEY }, decider: { enabled: true, provider: "jev" } });
       expect(chosen).toMatchObject({ provider: "openrouter", chosen: "jev", configured: true, keySource: "shared" });
       expect(describeDecider({ openrouter: { key: SHARED_KEY }, decider: { enabled: true } })).not.toHaveProperty("chosen");
-      expect(describeDecider({ openrouter: { key: SHARED_KEY }, decider: { enabled: true, provider: "openrouter" } })).not.toHaveProperty("chosen");
-      expect(describeDecider({ openrouter: { key: SHARED_KEY }, decider: { enabled: true, provider: "jev", key: KEY } })).not.toHaveProperty("chosen");
-      expect(describeDecider({ decider: { enabled: true, provider: "jev", openrouterKey: OR_KEY } })).not.toHaveProperty("chosen");
+    });
+
+    it("reports the saved pick whenever there is one, whoever decides", () => {
+      expect(describeDecider({ openrouter: { key: SHARED_KEY }, decider: { enabled: true, provider: "openrouter" } })).toMatchObject({ provider: "openrouter", chosen: "openrouter" });
+      expect(describeDecider({ openrouter: { key: SHARED_KEY }, decider: { enabled: true, provider: "jev", key: KEY } })).toMatchObject({ provider: "jev", chosen: "jev" });
+      expect(describeDecider({ decider: { enabled: true, provider: "jev", openrouterKey: OR_KEY } })).toMatchObject({ provider: "openrouter", chosen: "jev" });
+      expect(describeDecider({ decider: { enabled: true, provider: "off", key: KEY } })).not.toHaveProperty("chosen");
     });
 
     it("status says which key is in use and whether a shared one is on file, never the key", () => {

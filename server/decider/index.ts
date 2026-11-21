@@ -109,9 +109,9 @@ export function deciderBorrowedKey(cfg: AppConfig): boolean {
 }
 
 /** Never a key, nor an operator base URL with no UI; a custom gateway's `baseUrl` is the person's own setting. `provider` is the one in use, else the one chosen
- * (so Settings shows its key field); `keySource` and `sharedKey` are OpenRouter's, while it is in use. `chosen` is the
+ * (so Settings shows its key field); `model`, `api` and `sharedKey` are OpenRouter's, while it is in use or picked; `keySource` is OpenRouter's, while it is in use. `chosen` is the
  * person's pick whenever one is saved, so Settings keeps the pick and its fields while another key stands in.
- * `includedAvailable`: Cloud's included decisions can be picked here. Which own keys are on file is `describeHelpers`'s. */
+ * `includedAvailable`: Cloud's included decisions can be picked here while another key decides. Which own keys are on file is `describeHelpers`'s. */
 export function describeDecider(cfg: AppConfig) {
   const account = deciderAccount(cfg);
   const provider = account?.provider ?? draftProvider(cfg);
@@ -119,7 +119,7 @@ export function describeDecider(cfg: AppConfig) {
   return {
     provider,
     ...(chosen ? { chosen } : {}),
-    ...(provider === "openrouter" ? { model: deciderModel(cfg), api: deciderApi(cfg) } : {}),
+    ...(provider === "openrouter" || chosen === "openrouter" ? { model: deciderModel(cfg), api: deciderApi(cfg) } : {}),
     ...(provider === "custom" ? {
       model: cfg.decider?.customModel?.trim() ?? "",
       api: customDeciderApi(cfg),
@@ -127,9 +127,9 @@ export function describeDecider(cfg: AppConfig) {
     } : {}),
     configured: Boolean(account),
     ...(account?.keySource ? { keySource: account.keySource } : {}),
-    ...(provider === "openrouter" && deciderSharedKeyUsable(cfg) ? { sharedKey: true as const } : {}),
+    ...((provider === "openrouter" || chosen === "openrouter") && deciderSharedKeyUsable(cfg) ? { sharedKey: true as const } : {}),
     ...(account?.included ? { included: true as const } : {}),
-    ...(deciderIncludedHere() ? { includedAvailable: true as const } : {}),
+    ...(!account?.included && deciderIncludedHere() ? { includedAvailable: true as const } : {}),
     enabled: deciderEnabled(cfg),
     jobs: { roomRouting: deciderJobOn(cfg, "roomRouting") },
   };

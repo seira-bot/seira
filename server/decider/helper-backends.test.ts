@@ -105,6 +105,74 @@ describe("the order: own Jev, own Workers AI, Cloud's included relay, OpenRouter
   });
 });
 
+describe("the person's pick decides first while its key is usable; without one, the order above decides", () => {
+  type Key = "jev" | "workersai" | "openrouter" | "shared";
+  const KEYS: Key[] = ["jev", "workersai", "openrouter", "shared"];
+  const withKeys = (keys: readonly Key[], provider?: string): AppConfig => ({
+    ...(keys.includes("shared") ? { openrouter: { key: SHARED } } : {}),
+    decider: {
+      enabled: true,
+      ...(provider ? { provider: provider as never } : {}),
+      ...(keys.includes("jev") ? { key: JEV_KEY } : {}),
+      ...(keys.includes("workersai") ? { workersAiToken: CF_TOKEN, workersAiAccountId: ACCOUNT } : {}),
+      ...(keys.includes("openrouter") ? { openrouterKey: OR_KEY } : {}),
+    },
+  });
+  // Every mix of keys, on Cloud and on a desktop.
+  const mixes = KEYS.reduce<Key[][]>((sets, key) => [...sets, ...sets.map((set) => [...set, key])], [[]]);
+  const each = (check: (keys: Key[]) => void) => {
+    for (const onCloud of [false, true]) {
+      if (onCloud) cloud(); else vi.unstubAllEnvs();
+      for (const keys of mixes) check(keys);
+    }
+  };
+
+  it("an older saved value (none, jev, off) gives the account the old order gave, for every mix of keys", () => {
+    each((keys) => {
+      const before = deciderAccount(withKeys(keys));
+      for (const old of ["jev", "off"]) expect(deciderAccount(withKeys(keys, old)), `${old} with ${keys.join("+") || "no key"}`).toEqual(before);
+    });
+  });
+
+  it("an older saved custom endpoint still decides alone: with nothing set up, no other key stands in", () => {
+    each((keys) => expect(deciderAccount(withKeys(keys, "custom"))).toBeNull());
+  });
+
+  it("a saved OpenRouter pick gives the old account while no OpenRouter key is usable", () => {
+    each((keys) => {
+      if (keys.includes("openrouter") || keys.includes("shared")) return;
+      expect(deciderAccount(withKeys(keys, "openrouter"))).toEqual(deciderAccount(withKeys(keys)));
+    });
+  });
+
+  it("the one change: a saved OpenRouter pick with a usable OpenRouter key decides first", () => {
+    cloud();
+    expect(deciderAccount(withKeys(["jev", "workersai", "openrouter"], "openrouter"))).toMatchObject({ provider: "openrouter", keySource: "own" });
+    expect(deciderAccount(withKeys(["jev", "shared"], "openrouter"))).toMatchObject({ provider: "openrouter", keySource: "shared" });
+  });
+
+  it("a picked Cloudflare key decides before a saved Jev key, and Cloud's plan before both", async () => {
+    expect(deciderAccount(withKeys(["jev", "workersai"], "workersai"))?.provider).toBe("workersai");
+    expect(deciderAccount(withKeys(["jev"], "workersai"))?.provider).toBe("jev");
+    // Off Cloud, a pick of the plan's decisions has nothing to give: the order decides.
+    expect(deciderAccount(withKeys(["jev", "workersai"], "included"))?.provider).toBe("jev");
+    cloud();
+    const fetchImpl = anyYes();
+    await expect(decider(withKeys(["jev", "workersai"], "included"), fetchImpl).testKey()).resolves.toMatchObject({ ok: true, provider: "jev" });
+    expect(sent(fetchImpl)).toMatchObject({ url: `${RELAY}/v1/systemone`, auth: `Bearer ${INCLUDED}` });
+  });
+
+  it("Settings is told the pick, and whether the plan's decisions can be picked while another key decides", () => {
+    expect(describeDecider(withKeys(["jev"], "workersai"))).toMatchObject({ provider: "jev", chosen: "workersai", configured: true });
+    expect(describeDecider(withKeys(["jev"]))).not.toHaveProperty("chosen");
+    expect(describeDecider(withKeys(["jev"]))).not.toHaveProperty("includedAvailable");
+    cloud();
+    expect(describeDecider(withKeys(["jev"]))).toMatchObject({ provider: "jev", includedAvailable: true });
+    expect(describeDecider(withKeys([], "included"))).toMatchObject({ provider: "jev", chosen: "included", included: true });
+    expect(describeDecider(withKeys([], "included"))).not.toHaveProperty("includedAvailable");
+  });
+});
+
 describe("Clef on Workers AI", () => {
   const config: AppConfig = { decider: { enabled: true, workersAiToken: CF_TOKEN, workersAiAccountId: ACCOUNT } };
 

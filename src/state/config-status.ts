@@ -116,7 +116,8 @@ export interface ConfigStatus {
     provider: "jev" | "workersai" | "openrouter" | "custom" | "gemini";
     /** The provider the person picked under Routing, whenever one is saved; another key may decide until its key is saved. */
     chosen?: "jev" | "workersai" | "openrouter" | "custom" | "included";
-    /** Cloud's included decisions can be picked here. Absent from older servers. */
+    /** Cloud's included decisions can be picked here while another key decides (`included` says they decide now).
+     * Absent from older servers. */
     includedAvailable?: boolean;
     /** The OpenRouter or custom model in use; present only while that is the provider. */
     model?: string;

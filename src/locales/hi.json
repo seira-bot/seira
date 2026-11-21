@@ -2508,7 +2508,6 @@
   "decider.test.extractionOk": "जानकारी निकालना भी काम करता है।",
   "decider.test.extractionFailed": "जानकारी निकालने का जवाब नहीं आया।",
   "decider.master": "तेज़ फ़ैसले और जानकारी निकालना इस्तेमाल करें",
-  "decider.provider.label": "दूसरी कुंजी",
   "apps.connected": "कनेक्टेड",
   "botPanel.conversations.title": "बातचीत",
   "botPanel.conversations.search": "बातचीत खोजें",
