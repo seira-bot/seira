@@ -48,7 +48,7 @@ describe("decider config", () => {
       // the desktop hands the saved key over as env: now it is the one in use
       process.env.SEIRA_JEV_API_KEY = KEY;
       saveConfig({ decider: { enabled: true } });
-      expect(describeDecider(loadConfig())).toEqual({ provider: "jev", configured: true, enabled: true, jobs: { roomRouting: true } });
+      expect(describeDecider(loadConfig())).toEqual({ provider: "jev", configured: true, includedAvailable: true, enabled: true, jobs: { roomRouting: true } });
       await decider.testKey();
       const calls = fetchImpl.mock.calls.map(([url, init]) => [String(url), (init!.headers as Record<string, string>).authorization]);
       expect(calls).toEqual([[`${relay}/v1/systemone`, "Bearer seira_decide_included"], ["https://api.typesafe.ai/v1/systemone", `Bearer ${KEY}`]]);
@@ -100,7 +100,7 @@ describe("decider config", () => {
       provider: "openrouter", openrouterModel: "openai/gpt-4o-mini", openrouterApi: "chat", openrouterKey: OR_KEY, enabled: true, jobs: { roomRouting: true },
     });
     expect(describeDecider(loadConfig())).toEqual({
-      provider: "openrouter", model: "openai/gpt-4o-mini", api: "chat", configured: true, keySource: "own", enabled: true, jobs: { roomRouting: true },
+      provider: "openrouter", chosen: "openrouter", model: "openai/gpt-4o-mini", api: "chat", configured: true, keySource: "own", enabled: true, jobs: { roomRouting: true },
     });
   });
 

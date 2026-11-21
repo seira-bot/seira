@@ -175,7 +175,7 @@ describe("DecisionModelSettings", () => {
     fixture.config = status({ chosen: "jev", configured: true, enabled: true }, { own: { jev: true, workersAi: true } });
     const view = render();
     expect(count(view.html, ">Saved<")).toBe(2);
-    expect(view.byTestId("decider-status")).toHaveLength(1);
+    expect(count(view.html, 'data-testid="decider-status"')).toBe(1);
     expect(view.byTestId("decider-test")).toHaveLength(1);
     expect(view.byTestId("decider-save")).toHaveLength(1);
     expect(view.html).toContain("Connected");
