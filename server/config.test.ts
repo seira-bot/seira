@@ -29,7 +29,6 @@ import { cacheUntilConfigChanges,
   mcpCallTimeoutMinutes,
   threadEventLogMaxBytes,
   threadEventLogRetentionDays,
-  showToolCallsEnabled,
   saveConfig,
   skillAuthoringEnabled,
   sharedComputersEnabled,
@@ -679,12 +678,9 @@ describe("configuration boundaries", () => {
     });
   });
 
-  it("keeps tool-call chips off by default and accepts an explicit opt-in", () => {
-    expect(showToolCallsEnabled({})).toBe(false);
-    expect(parseConfigPatch({ features: { showToolCalls: true } })).toEqual({
-      features: { showToolCalls: true },
-    });
-    expect(showToolCallsEnabled({ features: { showToolCalls: true } })).toBe(true);
+  it("accepts an explicit Show tool calls choice", () => {
+    expect(parseConfigPatch({ features: { showToolCalls: true } })).toEqual({ features: { showToolCalls: true } });
+    expect(parseConfigPatch({ features: { showToolCalls: false } })).toEqual({ features: { showToolCalls: false } });
   });
 
   it.each([0, 1.5, 9, "2", null])("rejects an invalid per-bot VM limit: %j", (maxInstances) => {

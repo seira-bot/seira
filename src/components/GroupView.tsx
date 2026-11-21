@@ -334,7 +334,8 @@ export const Transcript = memo(function Transcript({
   const { state, dispatch } = useStore();
   const phone = useMediaQuery(PHONE_LAYOUT);
   const showThreads = useShowThreads(), simple = true;
-  const showToolCalls = showToolCallsEnabled(state.config);
+  const advanced = useAdvancedMode();
+  const showToolCalls = showToolCallsEnabled(state.config, advanced);
   const canReact = useCanReact(group.threadId); const teammatePeers = useTeammates().peers;
   const memberOf = (id?: string) => members.find((b) => b.id === id); const messages = useLiveTranscript(group.threadId, saved, transcript, members, roomThreadSpeakerId(group, group.threadId));
   const folds = useMemo(() => roomTurnFolds(messages), [messages, locale]);
@@ -344,7 +345,6 @@ export const Transcript = memo(function Transcript({
   const newestMessageId = messages.at(-1)?.id;
   const newestUserMessageId = [...messages].reverse().find((message) => message.role === "user")?.id;
   const roomBusy = roomThreadWorking(group, group.threadId);
-  const advanced = useAdvancedMode();
   const traces = useMemo(() => advanced && showToolCalls ? roomRunTraces(items, messages) : null, [advanced, showToolCalls, items, messages]);
   const headFirst = advanced ? { showToolCalls } : undefined;
   const roleOf = (id?: string) => advanced ? memberOf(id)?.title.trim() || undefined : undefined;

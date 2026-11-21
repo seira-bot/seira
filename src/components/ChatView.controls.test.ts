@@ -18,7 +18,7 @@ const fixture = vi.hoisted(() => {
 vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
   return { ...original, useStore: () => ({
-    state: { ...original.initialState, config: fixture.showToolCalls ? { features: { showToolCalls: true } } : null,
+    state: { ...original.initialState, config: { features: { showToolCalls: fixture.showToolCalls } },
       instances: [{ instanceId: "test", driverKind: "codex", displayName: "Test" } as InstanceInfo] },
     dispatch: fixture.dispatch,
   }) };
@@ -595,6 +595,26 @@ describe("thread control placement", () => {
     expect(render()).toContain("Retry</button>");
     messages.push({ id: "next", role: "user", kind: "text", at: 4, text: "A different request" });
     expect(render()).not.toContain("Retry</button>");
+  });
+  it("draws the turn receipt in Advanced only, since the Simple activity card already says how long the turn took", () => {
+    const messages: Bot["messages"] = [
+      { id: "ask", role: "user", kind: "text", at: 1, text: "Find leads" },
+      {
+        id: "receipt", role: "bot", kind: "digest", at: 2, text: "Observed work",
+        digest: { turnId: "turn", botId: "bot", threadId: "thread", at: 2, durationMs: 72_000, tools: [{ name: "Bash", count: 3, failed: 0 }], memory: [], reply: "Done.", hookCoverage: "preview" },
+      },
+    ];
+    const render = () => renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: false, messages } }));
+    fixture.showToolCalls = true;
+    try {
+      fixture.advanced = true;
+      expect(render()).toContain('data-testid="digest-chip"');
+      fixture.advanced = false;
+      expect(render()).not.toContain('data-testid="digest-chip"');
+    } finally {
+      fixture.showToolCalls = false;
+      fixture.advanced = true;
+    }
   });
   it("keeps Retry on a failed turn after hanging up, when the call's record is the last row", () => {
     const messages: Bot["messages"] = [

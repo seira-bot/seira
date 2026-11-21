@@ -36,6 +36,7 @@ const ENTRY_POINTS = [
   "seira.ts",
   "pair-cli.ts",
   "workspace-backup.worker.ts",
+  "ai-import/job.worker.ts",
   // the Seira Cloud Pro home image's entry point
   "cloud-home-start.ts",
   // the container image's entry point
