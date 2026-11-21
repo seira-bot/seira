@@ -10152,5 +10152,6 @@
   "settings.pool.levelsFalling": "每个档位都必须低于前一个。",
   "settings.pool.floorNumber": "下限是 0 到 98 的整数。",
   "settings.pool.floorLow": "下限必须低于最后一个档位。",
-  "settings.pool.error": "无法保存 AI 池，请重试。"
+  "settings.pool.error": "无法保存 AI 池，请重试。",
+  "aiImport.title": "从其他 AI 迁移"
 }

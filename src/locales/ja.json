@@ -8012,5 +8012,6 @@
   "settings.pool.levelsFalling": "各レベルは、前のレベルより低くしてください。",
   "settings.pool.floorNumber": "下限は0〜98の整数です。",
   "settings.pool.floorLow": "下限は最後のレベルより低くしてください。",
-  "settings.pool.error": "AIプールを保存できませんでした。もう一度お試しください。"
+  "settings.pool.error": "AIプールを保存できませんでした。もう一度お試しください。",
+  "aiImport.title": "他の AI から移行"
 }

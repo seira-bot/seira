@@ -11544,5 +11544,6 @@
   "coret.description": "Crie, edite e compartilhe mapas mentais, esboços e blocos no Coret.id.",
   "coret.notice": "Entre com o Coret.id. Não é preciso ter uma chave de API. Um bot que pode usar o Coret.id pode ler, alterar e compartilhar seus mapas. Por isso, escolha quais bots terão acesso em Acesso dos bots.",
   "termilo.description": "Agendamentos, serviços, horários e mensagens para clientes no seu negócio do Termilo.id.",
-  "termilo.notice": "Entre com o Termilo.id. Não é preciso ter uma chave de API. Um bot que pode usar o Termilo.id pode ler e alterar seus agendamentos e enviar mensagens aos seus clientes. Por isso, escolha quais bots terão acesso em Acesso dos bots."
+  "termilo.notice": "Entre com o Termilo.id. Não é preciso ter uma chave de API. Um bot que pode usar o Termilo.id pode ler e alterar seus agendamentos e enviar mensagens aos seus clientes. Por isso, escolha quais bots terão acesso em Acesso dos bots.",
+  "aiImport.title": "Migrar de outra IA"
 }
