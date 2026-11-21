@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { PagePublisher } from "../pages/publisher.ts";
-import { createPagesInternalRoutes, createPublishedPageRoutes, type PagesInternalContext } from "./published-pages.ts";
+import { createPagesInternalRoutes, createPublishedPageRoutes, type AppPages, type PagesInternalContext } from "./published-pages.ts";
 import { PASS, type RouteContext } from "./table.ts";
 
 function fakePublisher() {
@@ -88,5 +88,18 @@ describe("the card's Unpublish", () => {
     expect(publisher.unpublish).toHaveBeenCalledWith({ pageId: "abcdefghijklmnopqrstuvwxyz" });
     expect((await call(handler, "/api/published-pages/abcdefghijklmnopqrstuvwxyz/unpublish", "GET")).out).toBe(PASS);
     expect((await call(handler, "/api/published-pages/short/unpublish")).out).toBe(PASS);
+  });
+});
+
+describe("the page card's Share", () => {
+  it("says why a refused publish was refused, so the app can offer to sign in", async () => {
+    const publisher = fakePublisher();
+    publisher.publishFiles.mockResolvedValueOnce({ status: 403, text: "Publishing a page needs a Seira account. Sign in to Seira in the app's Settings, then ask again.", reason: "sign_in" } as never);
+    const apps = { botOf: () => ({ id: "bot-1" }), page: () => ({ ok: true, title: "Bake sale", files: [] }), published: () => null, show: () => null } as unknown as AppPages;
+    const handler = createPublishedPageRoutes(publisher, apps);
+    const sent: { status?: number; body?: any } = {};
+    await handler({ path: "/api/threads/t1/messages/m1/app/publish", method: "POST", req: {}, res: {}, readBody: async () => ({}),
+      json: (_res: unknown, status: number, body: unknown) => { sent.status = status; sent.body = body; } } as unknown as RouteContext);
+    expect(sent).toEqual({ status: 403, body: { error: "Publishing a page needs a Seira account. Sign in to Seira in the app's Settings, then ask again.", reason: "sign_in" } });
   });
 });
