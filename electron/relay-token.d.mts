@@ -33,4 +33,6 @@ export declare function createRelayTokenService(options: {
   log?: (line: string) => void;
   /** A signed-out or refused (401) answer waits for `refreshNow` instead of asking again every 30 minutes. */
   wakeAfterSignInFailure?: boolean;
+  /** Called, not awaited, on a signed-out or refused (401) answer; never for other failures. */
+  onSignInFailure?: () => void;
 }): RelayTokenService;
