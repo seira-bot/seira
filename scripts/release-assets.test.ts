@@ -9,7 +9,7 @@ type Asset = { id: number; name: string; size: number; state: string };
 const asset = (name: string, size = 1, state = "uploaded", id = 0): Asset => ({ id: id || name.length * 7 + size, name, size, state });
 const good = () => [asset("Seira-1.0.0-setup.exe", 100), asset("Seira-1.0.0-setup.exe.blockmap", 5), asset("Seira-setup.exe", 100), asset("latest.yml", 90), asset("SHA256SUMS-windows-x64.txt", 80)];
 
-const linux = () => [asset("Seira-1.0.0-x86_64.AppImage", 300), asset("Seira-1.0.0-amd64.deb", 200), asset("latest-linux.yml", 60), asset("Seira.AppImage", 300), asset("Seira-amd64.deb", 200), asset("SHA256SUMS-linux-x64.txt", 70)];
+const linux = () => [asset("Seira-1.0.0-x86_64.AppImage", 300), asset("Seira-1.0.0-amd64.deb", 200), asset("latest-linux.yml", 60), asset("Seira.AppImage", 300), asset("Seira-amd64.deb", 200), asset("SHA256SUMS-linux-x64.txt", 70), asset("Seira-1.0.0-x86_64.flatpak", 250)];
 const complete = () => [...linux(), ...good()];
 
 function fakeApi(assets: Asset[], contents: Record<string, string>, release: Record<string, unknown> = {}) {
@@ -104,6 +104,11 @@ describe("judgeAssets", () => {
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain("size 100");
     expect(problems[0]).toContain("size 99");
+  });
+
+  it("names the Flatpak bundle of the release version when it is missing", () => {
+    expect(names(complete().filter((item) => item.name !== "Seira-1.0.0-x86_64.flatpak"))).toEqual(["Seira-1.0.0-x86_64.flatpak"]);
+    expect(names(complete())).toEqual([]);
   });
 
   it("does not count an asset that is not uploaded", () => {
@@ -250,10 +255,10 @@ describe("upload", () => {
 });
 
 describe("missingForPublish", () => {
-  const names = (assets: Asset[]) => missingForPublish(assets).map((item) => item.name);
+  const names = (assets: Asset[]) => missingForPublish(assets, "v1.0.0").map((item) => item.name);
 
   it("names the Windows files that a Linux-only release lacks", () => {
-    expect(missingForPublish(linux())).toEqual([
+    expect(missingForPublish(linux(), "v1.0.0")).toEqual([
       { platform: "Windows", name: "latest.yml" },
       { platform: "Windows", name: "SHA256SUMS-windows-x64.txt" },
       { platform: "Windows", name: "Seira-setup.exe" },
@@ -311,8 +316,15 @@ describe("publish", () => {
     expect(h.lines.join("\n")).toContain("FAIL publish of v1.0.0 failed: not allowed");
   });
 
+  it("refuses a draft without the Flatpak bundle, and runs nothing", async () => {
+    const h = harness(complete().filter((item) => !item.name.endsWith(".flatpak")));
+    expect(await go(h)).toBe(1);
+    expect(h.lines).toContain("FAIL Linux: Seira-1.0.0-x86_64.flatpak is missing");
+    expect(h.runs).toEqual([]);
+  });
+
   it("AC-04: does not require macOS files when the release has none", async () => {
-    expect(missingForPublish(complete())).toEqual([]);
+    expect(missingForPublish(complete(), "v1.0.0")).toEqual([]);
   });
 
   it("AC-05: requires every macOS file when the release has one", async () => {

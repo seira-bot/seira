@@ -117,18 +117,19 @@ export function judgeAssets({ assets, texts }) {
   return problems;
 }
 
-const REQUIRED = {
-  Linux: ["latest-linux.yml", "SHA256SUMS-linux-x64.txt", "Seira.AppImage", "Seira-amd64.deb"],
+const required = (version) => ({
+  Linux: ["latest-linux.yml", "SHA256SUMS-linux-x64.txt", "Seira.AppImage", "Seira-amd64.deb", `Seira-${version}-x86_64.flatpak`],
   Windows: ["latest.yml", "SHA256SUMS-windows-x64.txt", "Seira-setup.exe"],
   macOS: ["latest-mac.yml", "SHA256SUMS-mac.txt", "Seira.dmg", "Seira-intel.dmg"],
-};
+});
 const MAC_ASSET = /(\.dmg|-(arm64|x64)\.zip)(\.blockmap)?$|^latest-mac\.yml$|^SHA256SUMS-mac\.txt$/;
 
 /** The required assets that the release lacks, as `{ platform, name }`. macOS is required only when the release has a macOS file. */
-export function missingForPublish(assets) {
+export function missingForPublish(assets, tag) {
   const uploaded = new Set(assets.filter((asset) => asset.state === "uploaded").map((asset) => asset.name));
   const platforms = assets.some((asset) => MAC_ASSET.test(asset.name)) ? ["Linux", "Windows", "macOS"] : ["Linux", "Windows"];
-  return platforms.flatMap((platform) => REQUIRED[platform].filter((name) => !uploaded.has(name)).map((name) => ({ platform, name })));
+  const names = required(String(tag).replace(/^v/, ""));
+  return platforms.flatMap((platform) => names[platform].filter((name) => !uploaded.has(name)).map((name) => ({ platform, name })));
 }
 
 export function uploadOrder(files) {
@@ -211,7 +212,7 @@ export async function publish({ api, run, repo = "owner/name", tag, log = consol
   }
   const read = () => pages(api, `repos/${repo}/releases/${release.id}/assets`);
   const reportMissing = (assets) => {
-    const missing = missingForPublish(assets);
+    const missing = missingForPublish(assets, tag);
     for (const { platform, name } of missing) log(`FAIL ${platform}: ${name} is missing`);
     return missing.length;
   };

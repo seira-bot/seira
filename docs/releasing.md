@@ -221,6 +221,7 @@ node scripts/release-assets.mjs upload v<version> release/Seira-<version>-x86_64
 - Use `--init-repo` for the first publish only.
 - The script stops when HEAD is not the tag, the tree is not clean, or `package.json` has another version.
 - The bundle `Seira-<version>-x86_64.flatpak` adds the Seira remote when a person installs it.
+- Attach the bundle to the draft release before step 7. The `publish` command refuses a release without it.
 
 ### 5. Build and attach the Windows installer
 
@@ -404,6 +405,7 @@ node scripts/release-assets.mjs publish v<version>
 The command makes the draft release public and marks it as the latest release.
 
 - It refuses when a Linux or Windows asset is missing. The release stays a draft.
+- The Linux assets include the Flatpak bundle `Seira-<version>-x86_64.flatpak`.
 - It refuses when the release has any macOS file and a macOS asset is missing.
 - It refuses when `check` finds a problem. The release stays a draft.
 - It runs `check` again after it publishes the release.
@@ -411,6 +413,7 @@ The command makes the draft release public and marks it as the latest release.
 - A published release without the Windows assets makes installed Windows apps fail their update check.
 - It also breaks the `Seira-setup.exe` download link.
 - Do not publish with `gh release edit` or the GitHub web page.
+- Do this step before step 8. The server image workflow fails while the release is still a draft.
 
 ### 8. Publish the server image
 
