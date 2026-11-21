@@ -53,7 +53,7 @@ test("main opens only an https address, with no user name or password in it", as
   const opened = [];
   const open = signInPageOpener({ allowed: () => true, open: async (url) => { opened.push(url); } });
   assert.equal(await open({}, SIGN_IN), true);
-  for (const url of ["http://auth.example.test/authorize", "http://127.0.0.1:5000/authorize", "https://user:secret@auth.example.test/", "mailto:a@example.com", "javascript:alert(1)", "data:text/html,x", "not a url", null, 42]) {
+  for (const url of ["http://auth.example.test/authorize", "http://127.0.0.1:5000/authorize", "http://localhost:5000/authorize", "https://user:secret@auth.example.test/", "mailto:a@example.com", "javascript:alert(1)", "data:text/html,x", "file:///etc/passwd", "seira://open", "ms-settings:privacy", "not a url", null, 42]) {
     await assert.rejects(open({}, url), String(url));
   }
   assert.deepEqual(opened, [SIGN_IN]);
