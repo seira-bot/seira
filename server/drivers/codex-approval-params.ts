@@ -1,6 +1,7 @@
 import { effectiveApprovalPolicy, effectiveApprovalsReviewer } from "./codex-approval-config.ts";
 import { containsControlCharacter, plainRecord } from "./codex-app-approval.ts";
 import type { ApprovalMode } from "../../shared/approval-mode.ts";
+import type { TurnFolders } from "../folder-access.ts";
 
 export interface CodexApprovalParams {
   thread: Record<string, unknown>;
@@ -51,6 +52,16 @@ export function withResolvedSandbox(params: CodexApprovalParams, session: unknow
     throw new Error("Codex did not apply the requested sandbox mode; cannot safely start the turn.");
   }
   return { ...params, turn: { ...params.turn, sandboxPolicy: sandbox } };
+}
+
+/** Each can-change grant joins the workspace-write roots of the turn. Full access already reaches every folder, and a
+ * read-only grant is never a root: a turn's roots are the only writable place beyond the working folder. */
+export function withFolderGrants(params: CodexApprovalParams, folders: TurnFolders | undefined): CodexApprovalParams {
+  const policy = plainRecord(params.turn.sandboxPolicy);
+  const granted = (folders?.grants ?? []).filter((grant) => grant.write).map((grant) => grant.path);
+  if (!policy || policy.type !== "workspaceWrite" || granted.length === 0) return params;
+  const roots = Array.isArray(policy.writableRoots) ? policy.writableRoots.filter((root): root is string => typeof root === "string") : [];
+  return { ...params, turn: { ...params.turn, sandboxPolicy: { ...policy, writableRoots: [...new Set([...roots, ...granted])] } } };
 }
 
 function legacyCustomApprovalParams(config: Record<string, unknown>): CodexApprovalParams {

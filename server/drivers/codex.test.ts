@@ -951,6 +951,40 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
     expect(calls.find((call: { method: string }) => call.method === "turn/start").params.sandboxPolicy).toEqual(sandbox);
   });
 
+  describe("a turn's folders", () => {
+    const folders = { limited: true, grants: [{ path: join(tmpdir(), "folder-ro"), write: false }, { path: join(tmpdir(), "folder-rw"), write: true }] };
+    const turnPolicy = async (approvalMode: "ask" | "full", extra: Record<string, unknown>, resolved?: object) => {
+      await create({ mode: "resume" });
+      const dump = join(scratch, `folders-${approvalMode}.json`);
+      process.env.FAKE_CODEX_DUMP = dump;
+      if (resolved) process.env.FAKE_CODEX_RESOLVED_SANDBOX = JSON.stringify(resolved);
+      await instance.adapter.sendTurn({ threadId: "t-folders", text: "continue", approvalMode, ...extra });
+      await recorder.until((event) => event.type === "turn.completed");
+      const calls = JSON.parse(readFileSync(dump, "utf8")).calls as Array<{ method: string; params: Record<string, any> }>;
+      return calls.find((call) => call.method === "turn/start")!.params.sandboxPolicy;
+    };
+
+    it("adds a can-change grant to the writable roots, keeping resolved roots, and never a read-only grant", async () => {
+      const kept = join(scratch, "extra-root");
+      const policy = await turnPolicy("ask", { folders }, { type: "workspaceWrite", networkAccess: true, writableRoots: [kept], excludeTmpdirEnvVar: true, excludeSlashTmp: true });
+      expect(policy).toEqual({ type: "workspaceWrite", networkAccess: true, writableRoots: [kept, folders.grants[1].path], excludeTmpdirEnvVar: true, excludeSlashTmp: true });
+    });
+
+    it("lists the can-change grant when the resolved sandbox has no roots", async () => {
+      const policy = await turnPolicy("ask", { folders });
+      expect(policy.writableRoots).toEqual([folders.grants[1].path]);
+    });
+
+    it("leaves full access as it was", async () => {
+      expect(await turnPolicy("full", { folders })).toEqual({ type: "dangerFullAccess" });
+    });
+
+    it("sends the same sandbox policy as before for a turn with no folder setting (resumed)", async () => {
+      const policy = await turnPolicy("ask", {});
+      expect(policy).toEqual({ type: "workspaceWrite", networkAccess: false, writableRoots: [], excludeTmpdirEnvVar: false, excludeSlashTmp: false });
+    });
+  });
+
   it.each([false, true].flatMap(resumed => [null, {}, { type: "dangerFullAccess" }].map(sandbox => ({ resumed, sandbox }))))("refuses an absent or mismatched resolved sandbox: %j", async ({ resumed, sandbox }) => {
     await create({ mode: "resume" });
     const dump = join(scratch, "invalid-sandbox.json");
