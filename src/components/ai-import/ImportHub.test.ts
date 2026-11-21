@@ -27,7 +27,7 @@ const hub = (overrides: Partial<HubViewProps> = {}) => renderToStaticMarkup(crea
   onTranscripts: vi.fn(), onGuide: vi.fn(), onBring: vi.fn(), onPaste: vi.fn(), onGrok: vi.fn(), onResume: vi.fn(), onFiles: vi.fn(), ...overrides,
 }));
 
-beforeEach(() => { setLocale("en"); f.state = { config: {}, bots: [{ id: "b-9", name: "Sample helper" }] }; });
+beforeEach(() => { (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true; setLocale("en"); f.state = { config: {}, bots: [{ id: "b-9", name: "Sample helper" }] }; });
 
 describe("the hub on the Import page", () => {
   it("replaces the two old cards", () => {
@@ -51,8 +51,9 @@ describe("the hub on the Import page", () => {
   });
 
   it("shows session transcripts for Claude Code, off until the person turns them on", () => {
-    expect(hub()).toMatch(/data-ai-import-transcripts=""(?![^>]*checked)/);
-    expect(hub({ transcripts: true })).toMatch(/data-ai-import-transcripts="" checked/);
+    const box = (markup: string) => /<input[^>]*data-ai-import-transcripts[^>]*>/.exec(markup)![0];
+    expect(box(hub())).not.toContain("checked");
+    expect(box(hub({ transcripts: true }))).toContain("checked");
   });
 
   it("remote server hides local sources", () => {
