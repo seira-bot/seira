@@ -624,7 +624,13 @@ from **Settings → AI → Providers** live on the data volume and survive eithe
 
 ### Paths A and C (npm with the service above): the same steps by hand
 
-There is no one-command updater for an npm install yet. Do what the script
+An npm install updates itself at night (03:00 to 05:00 local time, no bot answering),
+or when an admin presses **Update server**. The server keeps each new version in
+`app/<version>` in the data directory, and keeps the last two. It takes a copy of the
+data in `.backups/update` first, and goes back to the old version with the old data when
+the new one does not answer within 5 minutes. Turn the night update off with the switch
+in **Settings → This app → Updates**, or with `SEIRA_AUTO_UPDATE=0` in the service
+environment. To update by hand instead, do what the script
 does: copy the data first, install one named version, check it, and keep the
 way back. Take the stable version number from
 [`stable.json`](https://raw.githubusercontent.com/seira-bot/seira/channels/stable.json)
