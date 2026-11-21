@@ -50,6 +50,6 @@ test("only a server saved by hand: never My Cloud, a team's or another Cloud of 
 
 test("a name that cannot be written says failed and the old name stays", () => {
   const h = harness({ fail: true });
-  assert.deepEqual(h.call("vps", "Studio"), { outcome: "failed" });
+  assert.deepEqual(h.call("vps", "Branch office"), { outcome: "failed" });
   assert.equal(h.current().environments[0].name, "instabox-seira");
 });
