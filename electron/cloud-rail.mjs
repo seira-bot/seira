@@ -174,6 +174,12 @@ export function installCloudRail({ ipcMain, guard, trusted, lists = trusted, bes
   // ＋'s choices: main's, and a new organization while this account runs a Team plan's organizations (unless the Admin has
   // turned adding them off).
   const choices = () => { const organizations = account()?.state().organizations; return { ...add.choices(), organization: Boolean(organizations) && organizations.blocked !== "off", local: local?.creatable() === true }; };
+  const changed = () => {
+    const key = JSON.stringify([places(), choices(), account()?.state().adding ?? null, account()?.state().addCloud ?? null, beside(), switching()]);
+    if (key === sent) return;
+    sent = key;
+    for (const target of targets()) if (target && !target.isDestroyed()) target.send("workspaces:changed");
+  };
   ipcMain.handle("workspaces:places", guard((event) => (lists(event) ? { places: places().map(seen), add: choices(), ...(switching() ? { switching: switching() } : {}) }
     : { places: [], add: { cloud: false, link: false, address: false, organization: false }, ...(beside() ? { beside: true } : {}) })));
   // A Cloud the Admin is still making has no saved place: its own screen opens, by main's word for which Cloud it is.
@@ -218,7 +224,7 @@ export function installCloudRail({ ipcMain, guard, trusted, lists = trusted, bes
   // A workspace of this computer's own: a new one from ＋ (on the rail's page, or this computer's own from the Server menu),
   // and a name, a colour or its removal from its circle's menu, only for one main listed.
   handle("workspaces:local-new", (_event, name, color) => {
-    if (!local?.creatable()) throw new Error(t("native.places.cannotAdd"));
+    if (!local?.creatable()) { changed(); return { outcome: "unavailable" }; }
     const made = local.create({ name: plain(name), color: plain(color) || null });
     if (made.outcome === "made" && openProfile) void Promise.resolve().then(() => openProfile(made.id)).catch(() => {});
     return made;
@@ -287,11 +293,6 @@ export function installCloudRail({ ipcMain, guard, trusted, lists = trusted, bes
     sheetOpen: () => sheetOpen,
     /** The places, the sign-in or the rail beside the page changed: the rail's page and the page beside it read them
      * again (a signal only, never the list). */
-    changed() {
-      const key = JSON.stringify([places(), choices(), account()?.state().adding ?? null, account()?.state().addCloud ?? null, beside(), switching()]);
-      if (key === sent) return;
-      sent = key;
-      for (const target of targets()) if (target && !target.isDestroyed()) target.send("workspaces:changed");
-    },
+    changed,
   };
 }

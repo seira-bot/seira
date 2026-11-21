@@ -11,11 +11,13 @@ const { ConnectServerFromMenu, NewLocalFromMenu, RailSheet } = await import("./P
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLDivElement, root: Root | null = null, ask: (() => void) | null = null, askConnect: (() => void) | null = null;
-const create = vi.fn(async (_name: string, _color: unknown) => ({ outcome: "made" as const, id: "work" }));
+type Made = { outcome: "made"; id: string } | { outcome: "name" | "taken" | "full" | "unavailable" | "failed" };
+const create = vi.fn(async (_name: string, _color: unknown): Promise<Made> => ({ outcome: "made", id: "work" }));
+const places = vi.fn(async () => ({ places: [], add: { cloud: false, link: false, address: false } }));
 beforeEach(() => {
   setLocale("en");
   vi.clearAllMocks();
-  Object.assign(window, { ogb: { workspaces: { places: vi.fn(async () => ({ places: [], add: { cloud: false, link: false, address: false } })), onChanged: () => () => {},
+  Object.assign(window, { ogb: { workspaces: { places, onChanged: () => () => {},
     local: { create, edit: vi.fn(), remove: vi.fn() }, onNewLocal: (callback: () => void) => { ask = callback; return () => { ask = null; }; },
     onConnectServer: (callback: () => void) => { askConnect = callback; return () => { askConnect = null; }; }, probe: vi.fn(async () => ({ outcome: "problem", problem: "unreachable", host: "" })) } } });
   host = document.createElement("div"); document.body.append(host);
@@ -41,6 +43,25 @@ it("the Server menu's New workspace on this computer opens the same step on this
   await act(async () => { ask!(); });
   await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
   expect(document.querySelector("[data-place-add-sheet]"), "Escape: no dead end").toBeNull();
+});
+
+it("Create that main can't do keeps the sheet open and says why in it: this computer is full, it can't take one now, or try again", async () => {
+  root = createRoot(host);
+  await act(async () => { root!.render(createElement(NewLocalFromMenu)); });
+  await act(async () => { ask!(); });
+  const form = document.querySelector<HTMLFormElement>('[data-place-add="local"]')!;
+  const said = async (answer: () => Promise<Made>) => {
+    create.mockImplementationOnce(answer);
+    await act(async () => { form.requestSubmit(); for (let i = 0; i < 4; i++) await Promise.resolve(); });
+    expect(document.querySelector("[data-place-add-sheet]"), "the sheet stays open").not.toBeNull();
+    return document.querySelector("[data-local-problem]")?.textContent;
+  };
+  expect(await said(async () => ({ outcome: "full" }))).toBe("This computer has as many places as it can hold. Remove one, then try again.");
+  expect(places).not.toHaveBeenCalled();
+  expect(await said(async () => ({ outcome: "unavailable" }))).toBe("You can't add a place on this computer now. Choose another kind of place.");
+  expect(places, "main's choices read again").toHaveBeenCalledTimes(1);
+  expect(await said(async () => { throw new Error("gone"); })).toBe("That didn't work. Try again in a moment.");
+  expect(create).toHaveBeenCalledTimes(3);
 });
 
 it("the Server menu's Connect to a server… opens the sheet that takes a link, or an address and a code", async () => {

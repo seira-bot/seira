@@ -36,6 +36,7 @@ let servers: Listing[];
 let testRequest: { resolve: (value: unknown) => void; signal?: AbortSignal } | null;
 let shown: (id: string) => boolean;
 let own: { shown(server: unknown): boolean; manage(): void } | undefined;
+let featured: HTMLElement | null;
 
 const settle = () => act(async () => { for (let turn = 0; turn < 5; turn += 1) await Promise.resolve(); });
 const card = (app: HostedApp) => host.querySelector<HTMLElement>(`[data-app-tile="${app.id}"]`)!;
@@ -49,7 +50,7 @@ async function mount() {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  const Cards = () => McpServersPanel({ hostedCards: { shown, onConnections: () => {}, ...(own ? { ownServers: own } : {}) } });
+  const Cards = () => McpServersPanel({ hostedCards: { shown, featured, onConnections: () => {}, ...(own ? { ownServers: own } : {}) } });
   await act(async () => root.render(createElement(Cards)));
   await settle();
 }
@@ -61,6 +62,7 @@ beforeEach(() => {
   servers = [];
   shown = () => true;
   own = undefined;
+  featured = null;
   fixture.store = { config: null, bots: [{ id: "atlas", name: "Atlas", hidden: false }, { id: "ghost", name: "Ghost", hidden: true }] };
   fixture.runMcpSignIn.mockResolvedValue({ phase: "succeeded", flowId: "00000000-0000-4000-8000-000000000000", authorizationUrl: null });
   fixture.api.mockImplementation((path: string, init?: RequestInit) => {
@@ -261,6 +263,34 @@ describe("hiding a hosted card", () => {
       expect(card(other).parentElement!.className).toBe("hidden");
     }
     expect(fixture.api.mock.calls.filter(([path]) => path === "/api/mcp/servers")).toHaveLength(1);
+  });
+});
+
+describe("the Featured place", () => {
+  it("holds every hosted card, in table order, and leaves none beside the panel", async () => {
+    featured = document.createElement("div");
+    document.body.append(featured);
+    await mount();
+    expect([...featured.querySelectorAll("[data-app-tile]")].map((tile) => tile.getAttribute("data-app-tile"))).toEqual(HOSTED_MCP_APPS.map((app) => app.id));
+    expect(host.querySelector("[data-app-tile]")).toBeNull();
+    featured.remove();
+  });
+  it("keeps the cards beside the panel without a place", async () => {
+    await mount();
+    expect(host.querySelectorAll("[data-app-tile]")).toHaveLength(HOSTED_MCP_APPS.length);
+  });
+  it("loads the servers once and signs in from a card in the place", async () => {
+    featured = document.createElement("div");
+    document.body.append(featured);
+    const app = HOSTED_MCP_APPS[0];
+    servers = [listing(app)];
+    await mount();
+    const connect = [...featured.querySelectorAll(`[data-app-tile="${app.id}"] button`)].find((element) => element.textContent?.trim() === "Connect") as HTMLButtonElement;
+    await act(async () => connect.click());
+    await settle();
+    expect(fixture.runMcpSignIn).toHaveBeenCalledOnce();
+    expect(fixture.api.mock.calls.filter(([path, init]) => path === "/api/mcp/servers" && !(init as RequestInit | undefined)?.method)).toHaveLength(1);
+    featured.remove();
   });
 });
 

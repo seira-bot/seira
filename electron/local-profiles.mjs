@@ -212,9 +212,9 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
     cancel() { turn++; if (settling) { settling = null; tell(); } },
     /** A new workspace's entry; the rail opens it next (cloud-rail.mjs), so a switch that waits shows on its circle. */
     create({ name, color }) {
-      if (!allowed() || home() === null) return { outcome: "failed" };
+      if (!allowed() || home() === null) return { outcome: "unavailable" };
       const made = registry.create({ name, color, reserved: reserved() });
-      if (!made.ok) return { outcome: made.error === "full" ? "failed" : made.error };
+      if (!made.ok) return { outcome: made.error };
       tell();
       return { outcome: "made", id: made.profile.id };
     },
