@@ -16,6 +16,7 @@ import {
   type RoutineToolScheduleInput,
 } from "./routine-request-schemas.ts";
 import { runsOnce } from "../shared/limit-reset.ts";
+import type { WorkflowCopyLookup } from "./workflows/routine-link.ts";
 import { limitResetOccurrence, noFutureResumeMessage } from "./routine-schedules.ts";
 import {
   intervalHasRestrictions,
@@ -118,6 +119,16 @@ export interface RoutineRequestServiceOptions {
   /** Re-authorizes a cross-bot target at propose and confirm time: the card can outlive the target's section. */
   validateTarget?: (proposerBotId: string, target: { botId: string; name: string }) => string | null;
   engines?: LimitResetEngines;
+  workflows?: RoutineWorkflowLinks;
+}
+
+/** What a request needs to link a routine to a saved workflow. */
+export interface RoutineWorkflowLinks {
+  copy: WorkflowCopyLookup;
+  name(workflowId: string): string | undefined;
+  botName(botId: string): string | undefined;
+  /** Why a bot may not link workflows here, in words for the bot; null when it may. */
+  refusal(): string | null;
 }
 
 export interface ProposeRoutineRequestArgs {
@@ -361,11 +372,13 @@ function normalizeScheduleChanges(
   };
 }
 
+const LINKED_INSTRUCTIONS = "Runs a saved workflow.";
+
 function normalizeDefinition(input: RoutineToolDefinitionInput, now: number, ownEngine?: string): RoutineRequestDefinition {
   const timeoutMinutes = timeout(input.timeoutMinutes);
   return {
     name: text(input.name, "name", 80),
-    instructions: text(input.instructions, "instructions", 20_000),
+    instructions: input.workflowId !== undefined && !input.instructions.trim() ? LINKED_INSTRUCTIONS : text(input.instructions, "instructions", 20_000),
     schedule: normalizeSchedule(input.schedule, now, ownEngine),
     runOn: runOn(input.runOn),
     durationMinutes: duration(input.durationMinutes),
@@ -373,6 +386,7 @@ function normalizeDefinition(input: RoutineToolDefinitionInput, now: number, own
     ...(input.continuity === true ? { continuity: true } : {}), ...(input.sameConversation === true ? { sameConversation: true } : {}),
     ...(input.overlap === "queue" ? { overlap: "queue" as const } : {}),
     ...(input.runOnStartup === true ? { runOnStartup: true } : {}),
+    ...(input.workflowId === undefined ? {} : { workflowId: input.workflowId }),
   };
 }
 
@@ -387,6 +401,7 @@ function normalizeChanges(input: RoutineToolChangesInput, now: number, ownEngine
   if (input.continuity !== undefined) changes.continuity = input.continuity === true; if (input.sameConversation !== undefined) changes.sameConversation = input.sameConversation === true;
   if (input.overlap !== undefined) changes.overlap = input.overlap;
   if (input.runOnStartup !== undefined) changes.runOnStartup = input.runOnStartup === true;
+  if (input.workflowId !== undefined) changes.workflowId = input.workflowId;
   return changes;
 }
 
@@ -610,14 +625,17 @@ function effectiveDefinition(operation: RoutineRequestOperation, manager: Routin
     ...(existing.continuity ? { continuity: true } : {}), ...(existing.sameConversation ? { sameConversation: true } : {}),
     ...(existing.overlap ? { overlap: existing.overlap } : {}),
     ...(existing.runOnStartup ? { runOnStartup: true } : {}),
+    ...(existing.workflowId ? { workflowId: existing.workflowId } : {}),
   };
   if (operation.action !== "update") return base;
-  const { schedule, timeoutMinutes, ...changes } = operation.changes;
+  const { schedule, timeoutMinutes, workflowId, ...changes } = operation.changes;
   const merged: RoutineRequestDefinition = {
     ...base,
     ...changes,
     ...(schedule === undefined ? {} : { schedule: effectiveSchedule(base.schedule, schedule) }),
   };
+  if (workflowId === null) delete merged.workflowId;
+  else if (workflowId !== undefined) merged.workflowId = workflowId;
   if (timeoutMinutes === null) delete merged.timeoutMinutes;
   else if (timeoutMinutes !== undefined) merged.timeoutMinutes = timeoutMinutes;
   if (runsOnce(merged.schedule)) delete merged.runOnStartup;
@@ -723,6 +741,7 @@ function inputFromDefinition(definition: RoutineRequestDefinition, botId: string
     ...(definition.continuity ? { continuity: true } : {}), ...(definition.sameConversation ? { sameConversation: true } : {}),
     ...(definition.overlap === "queue" ? { overlap: "queue" as const } : {}),
     ...(definition.runOnStartup ? { runOnStartup: true } : {}),
+    ...(definition.workflowId ? { workflowId: definition.workflowId } : {}),
   };
 }
 
@@ -741,6 +760,7 @@ function updateFromChanges(
   if (changes.continuity !== undefined) patch.continuity = changes.continuity; if (changes.sameConversation !== undefined) patch.sameConversation = changes.sameConversation;
   if (changes.overlap !== undefined) patch.overlap = changes.overlap;
   if (changes.runOnStartup !== undefined) patch.runOnStartup = changes.runOnStartup;
+  if (changes.workflowId !== undefined) patch.workflowId = changes.workflowId;
   return patch;
 }
 
@@ -900,6 +920,7 @@ function routineSnapshot(routine: Routine): RoutineRequestSnapshot | undefined {
     ...(routine.continuity ? { continuity: true } : {}), ...(routine.sameConversation ? { sameConversation: true } : {}),
     ...(routine.overlap === "queue" ? { overlap: "queue" as const } : {}),
     ...(routine.runOnStartup ? { runOnStartup: true } : {}),
+    ...(routine.workflowId ? { workflowId: routine.workflowId } : {}),
     enabled: routine.enabled,
     ...(routine.target === "room-goal" ? { target: "room-goal" as const } : {}),
     ...(routine.groupId ? { groupId: routine.groupId } : {}),
@@ -922,6 +943,7 @@ function restorePatch(before: RoutineRequestSnapshot, now: number): Partial<Rout
     continuity: before.continuity === true, sameConversation: before.sameConversation === true,
     overlap: before.overlap ?? "skip",
     runOnStartup: before.runOnStartup === true,
+    workflowId: before.workflowId ?? null,
   };
 }
 
@@ -935,6 +957,7 @@ export class RoutineRequestService {
   private readonly validateTarget?: RoutineRequestServiceOptions["validateTarget"];
   private readonly autoApply?: RoutineRequestServiceOptions["autoApply"];
   private readonly engines?: LimitResetEngines;
+  private readonly workflows?: RoutineWorkflowLinks;
 
   constructor(options: RoutineRequestServiceOptions) {
     this.store = options.store;
@@ -946,6 +969,7 @@ export class RoutineRequestService {
     this.validateTarget = options.validateTarget;
     this.autoApply = options.autoApply;
     this.engines = options.engines;
+    this.workflows = options.workflows;
   }
 
   /** Writes the card without applying it, the first half of submit(); no production path stops here since Triggers v2. */
@@ -971,6 +995,7 @@ export class RoutineRequestService {
       throw new RoutineRequestError(schemaIssue(parsedProposal.error, "Invalid routine proposal"));
     }
     const operation = normalizedOperation(this.routines, botId, parsedProposal.data, at, this.engines);
+    this.linkWorkflow(operation, botId);
     if (operation.forBot && this.validateTarget) {
       const refusal = this.validateTarget(botId, operation.forBot);
       if (refusal) throw new RoutineRequestError(refusal, 403);
@@ -1053,6 +1078,42 @@ export class RoutineRequestService {
       }, ...(grant ? { appliedBy: grant } : {}) };
     }
     throw new RoutineRequestError(result.state === "invalid" ? result.error : "The routine change could not be applied", result.state === "invalid" ? result.status : 409);
+  }
+
+  /** A routine that runs a workflow takes its instructions from the workflow's steps: the request names the workflow, never
+   *  words of its own. Fills in those steps so the card shows what will run, and refuses what the routine would discard. */
+  private linkWorkflow(operation: RoutineRequestOperation, botId: string): void {
+    const owner = operation.forBot?.botId ?? botId;
+    const asked = operation.action === "create" ? operation.routine.workflowId
+      : operation.action === "update" ? operation.changes.workflowId : undefined;
+    const changes = operation.action === "update" ? operation.changes : undefined;
+    const current = operation.action === "update" ? ownedRoutine(this.routines, operation.routineId, owner) : null;
+    if (current?.workflowId && changes?.instructions !== undefined && changes.workflowId === undefined) {
+      const name = this.workflows?.name(current.workflowId);
+      throw new RoutineRequestError(
+        `This automation runs the workflow ${name ? `“${redactSecretsInText(name)}”` : "you set up under Automations → Workflows"}. Change its steps under Automations → Workflows, or set workflow_id to null to give it instructions again.`,
+        409,
+      );
+    }
+    if (asked === null && changes?.instructions === undefined && current?.workflowId) {
+      throw new RoutineRequestError("To stop running the workflow, give this automation instructions of its own in the same call.", 400);
+    }
+    if (typeof asked !== "string") return;
+    const links = this.workflows;
+    const refusal = links?.refusal();
+    if (refusal) throw new RoutineRequestError(refusal, 403);
+    const found = links?.copy(asked) ?? null;
+    if (!found) throw new RoutineRequestError("There is no workflow with that id. Call trigger_info with action=workflows to see the ids.", 404);
+    if ("code" in found) throw new RoutineRequestError(found.message, 409);
+    if (found.botId !== owner) {
+      const first = links?.botName(found.botId);
+      throw new RoutineRequestError(
+        `A routine that runs this workflow belongs to the bot of its first step${first ? `, ${first}` : ""}. Set it up for that bot${operation.action === "create" ? ` with for_bot_id` : ""}.`,
+        409,
+      );
+    }
+    if (operation.action === "create") operation.routine.instructions = found.prompt.slice(0, 20_000);
+    else if (changes) changes.instructions = found.prompt.slice(0, 20_000);
   }
 
   private snapshotOf(routineId: string, owner: string): RoutineRequestSnapshot | undefined {
@@ -1154,6 +1215,7 @@ export class RoutineRequestService {
             ...(before.continuity ? { continuity: true } : {}), ...(before.sameConversation ? { sameConversation: true } : {}),
             ...(before.overlap === "queue" ? { overlap: "queue" as const } : {}),
             ...(before.runOnStartup ? { runOnStartup: true } : {}),
+            ...(before.workflowId ? { workflowId: before.workflowId } : {}),
             ...(before.resultsThreadId ? { resultsThreadId: before.resultsThreadId } : {}),
           }).id;
           break;

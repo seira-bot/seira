@@ -1,10 +1,10 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import type { Workflow } from "../../../shared/workflows";
 import { t } from "@/lib/i18n";
 import { useStore } from "@/state/store";
-import { keepDraft, loadWorkflows, useWorkflows, workflowApi, type WorkflowDraft } from "@/state/workflows";
+import { keepDraft, loadWorkflows, takeDraft, useWorkflows, workflowApi, type WorkflowDraft } from "@/state/workflows";
 import { UndoToast } from "../bot-access/ShareBotButton";
 import { WorkflowEditor } from "./WorkflowEditor";
 import { WorkflowList } from "./WorkflowList";
@@ -26,6 +26,25 @@ export function WorkflowsView({ workflowId, workflowRunId, onUseInRoutine }: { w
   const workflow = workflowId ? workflows.workflows.find((candidate) => candidate.id === workflowId) : undefined;
   const loading = !workflows.loaded;
   const showSpinner = useDelayed(loading);
+
+  const editorId = workflow && !workflowRunId ? workflow.id : null;
+  const latest = useRef({ workflows: workflows.workflows, routines: state.routines });
+  latest.current = { workflows: workflows.workflows, routines: state.routines };
+  useEffect(() => {
+    if (!editorId) return;
+    return () => {
+      if (leaving.current === editorId) return;
+      const current = latest.current.workflows.find((candidate) => candidate.id === editorId);
+      if (!current || current.steps.length > 0 || current.name !== t("workflow.untitled")) return;
+      if (latest.current.routines.some((routine) => routine.workflowId === editorId)) return;
+      const kept = takeDraft(editorId);
+      if (kept && (kept.draft.steps.length > 0 || kept.draft.name !== t("workflow.untitled"))) {
+        keepDraft(editorId, kept.draft, kept.base);
+        return;
+      }
+      void workflowApi.remove(editorId).catch(() => {});
+    };
+  }, [editorId]);
 
   const open = useCallback((id?: string) => dispatch({ type: "showRoutines", view: "workflows", workflowId: id }), [dispatch]);
   const { create, failed: createFailed } = useCreateWorkflow(useCallback((made: Workflow) => {

@@ -11544,5 +11544,7 @@
   "coret.description": "Create, edit and share mind maps, sketches and pads in Coret.id.",
   "coret.notice": "Sign in with Coret.id. No API key needed. A bot that can use Coret.id can read, change and share your maps, so choose which bots get it under Bot access.",
   "termilo.description": "Bookings, services, schedules and customer messages in your Termilo.id business.",
-  "termilo.notice": "Sign in with Termilo.id. No API key needed. A bot that can use Termilo.id can read and change your bookings and send messages to your customers, so choose which bots get it under Bot access."
+  "termilo.notice": "Sign in with Termilo.id. No API key needed. A bot that can use Termilo.id can read and change your bookings and send messages to your customers, so choose which bots get it under Bot access.",
+  "automations.newBox.drawWorkflow": "Draw a workflow instead",
+  "activity.tool.team.workflow": "Saving a workflow"
 }

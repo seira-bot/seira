@@ -19,9 +19,11 @@ export function defaultBot(bots: readonly Bot[], selectedId: string): Bot | unde
 }
 
 /** "+ New": say what should happen and a bot sets it up in chat, exactly as if you had asked it there. */
-export function NewAutomation({ initialText = "", onClose, onSetUpYourself }: {
+export function NewAutomation({ initialText = "", onClose, onSetUpYourself, onDrawWorkflow }: {
   initialText?: string;
   onClose: () => void;
+  /** Draw a workflow instead of describing one to a bot; the page creates it and opens the editor. */
+  onDrawWorkflow?: () => void;
   /** The bot this box would have asked, so the editor starts with it chosen. */
   onSetUpYourself: (kind: SetUpKind, botId: string) => void;
 }) {
@@ -84,7 +86,10 @@ export function NewAutomation({ initialText = "", onClose, onSetUpYourself }: {
               </label>
             )}
             <div className="mt-4 flex items-center justify-between gap-2">
-              <button type="button" onClick={() => setYourself(true)} className="rounded-lg px-2 py-1.5 text-[13px] text-ink-secondary underline-offset-2 hover:text-ink hover:underline">{t("automations.newBox.yourself")}</button>
+              <div className="flex flex-wrap items-center gap-x-2">
+                <button type="button" onClick={() => setYourself(true)} className="rounded-lg px-2 py-1.5 text-[13px] text-ink-secondary underline-offset-2 hover:text-ink hover:underline">{t("automations.newBox.yourself")}</button>
+                {onDrawWorkflow && <button type="button" onClick={() => { onClose(); onDrawWorkflow(); }} className="rounded-lg px-2 py-1.5 text-[13px] text-ink-secondary underline-offset-2 hover:text-ink hover:underline">{t("automations.newBox.drawWorkflow")}</button>}
+              </div>
               <button type="button" disabled={!text.trim() || !bot} onClick={send} className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-[13px] font-medium text-accent-ink hover:brightness-110 disabled:opacity-40"><Send size={14} />{t("automations.newBox.send")}</button>
             </div>
           </>

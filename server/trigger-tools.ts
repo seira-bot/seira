@@ -62,12 +62,15 @@ function agentSchedule(schedule: Routine["schedule"]) {
   return { type: "weekly" as const, time: schedule.time, weekdays: schedule.weekdays.map((day) => WEEKDAY_NAMES[day]) };
 }
 
-export function agentRoutine(routine: Routine, latestRun?: RoutineRun) {
+export type WorkflowNameOf = (workflowId: string) => string | undefined;
+
+export function agentRoutine(routine: Routine, latestRun?: RoutineRun, workflowName?: WorkflowNameOf) {
   return {
     id: routine.id,
     kind: "schedule" as const,
     name: redactSecretsInText(routine.name),
     ...instructionsOf(routine.prompt),
+    ...(routine.workflowId ? { workflow: { id: routine.workflowId, name: redactSecretsInText(workflowName?.(routine.workflowId) ?? "Workflow") } } : {}),
     continuity: routine.continuity === true,
     sameConversation: routine.sameConversation === true,
     overlap: routine.overlap ?? "skip",
@@ -150,6 +153,7 @@ export function listTriggers(input: {
   runs: readonly RoutineRun[];
   timeZone: string;
   now: number;
+  workflowName?: WorkflowNameOf;
 }): TriggerListing {
   const latest = new Map<string, RoutineRun>();
   for (const run of input.runs) {
@@ -165,14 +169,14 @@ export function listTriggers(input: {
     const app = apps.find((candidate) => candidate.id === input.triggerId);
     if (!routine && !webhook && !app) return { ...header, error: NO_SUCH_TRIGGER, missing: true };
     const fires = input.runs.filter((run) => run.routineId === input.triggerId).slice(0, FIRES_SHOWN).map(agentRun);
-    const shown = routine ? agentRoutine(routine, latest.get(routine.id)) : webhook ? agentWebhook(webhook, latest.get(webhook.id)) : agentAppTrigger(app!, latest.get(app!.id));
+    const shown = routine ? agentRoutine(routine, latest.get(routine.id), input.workflowName) : webhook ? agentWebhook(webhook, latest.get(webhook.id)) : agentAppTrigger(app!, latest.get(app!.id));
     const prompt = (routine ?? webhook ?? app)!.prompt;
     return { ...header, trigger: { ...shown, ...instructionsOf(prompt, true), recentFires: fires } };
   }
   return {
     ...header,
     triggers: [
-      ...routines.map((routine) => agentRoutine(routine, latest.get(routine.id))),
+      ...routines.map((routine) => agentRoutine(routine, latest.get(routine.id), input.workflowName)),
       ...webhooks.map((webhook) => agentWebhook(webhook, latest.get(webhook.id))),
       ...apps.map((trigger) => agentAppTrigger(trigger, latest.get(trigger.id))),
     ].slice(0, 100),

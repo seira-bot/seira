@@ -63,12 +63,16 @@ export interface RoutineRequestDefinition {
   runOnStartup?: boolean;
   /** Each run continues the conversation the run before worked in. */
   sameConversation?: boolean;
+  /** The saved workflow the routine runs; its instructions are the workflow's steps. */
+  workflowId?: string;
 }
 
 export type RoutineRequestChanges =
-  & Omit<Partial<RoutineRequestDefinition>, "schedule" | "timeoutMinutes">
+  & Omit<Partial<RoutineRequestDefinition>, "schedule" | "timeoutMinutes" | "workflowId">
   & {
     schedule?: RoutineRequestScheduleChanges;
+    /** A workflow id links the routine to it; `null` unlinks it. */
+    workflowId?: string | null;
     /** `null` removes an existing safety cap. */
     timeoutMinutes?: number | null;
   };
