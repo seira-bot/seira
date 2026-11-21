@@ -76,6 +76,7 @@ case "$*" in
     if blocked ghcr.io; then exit 7; fi
     case "$*" in */manifests/stable) printf '%s' "$FAKE_STABLE" ;; *) printf '%s' "$FAKE_RELEASE_STATUS" ;; esac ;;
   *"telnet://"*) host=$(printf '%s' "$*" | sed -e 's#.*telnet://##' -e 's#:.*##')
+    if [ -n "\${FAKE_EDGE_SILENT:-}" ]; then exit 1; fi
     if blocked "$host"; then printf '0.000000'; else printf '0.026672'; fi
     exit 28 ;;
   *cdn-cgi/trace*) printf 'fl=1\\nip=%s\\nts=1\\n' "$FAKE_PUBLIC_IP" ;;
@@ -751,6 +752,8 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
     expect(curls).not.toContain("letsencrypt");
     const blocked = tunnel(["--check", "--tunnel"], { env: { FAKE_BLOCKED: "region1.v2.argotunnel.com" } });
     expect(blocked.fixes.join("\n")).toContain("region1.v2.argotunnel.com) on port 7844. Allow outbound port 7844 (TCP and UDP)");
+    const silent = tunnel(["--check", "--tunnel"], { env: { FAKE_EDGE_SILENT: "1" } });
+    expect(silent.fixes.join("\n")).toContain("region1.v2.argotunnel.com) on port 7844.");
   });
 
   it("writes a compose file with no Caddy, no published port and no host network", () => {

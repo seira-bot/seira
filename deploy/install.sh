@@ -483,10 +483,13 @@ check_outbound() {
 # cloudflared dials the edge on port 7844, which answers no HTTP, so only the TCP connect is checked.
 check_edge() {
   connect=$(curl -s -o /dev/null -w '%{time_connect}' --connect-timeout 5 --max-time 2 "telnet://$TUNNEL_EDGE_HOST:7844" </dev/null 2>/dev/null || true)
-  if ! printf '%s' "$connect" | awk '{ exit !($1 > 0) }'; then
-    fix "This server can't open a connection to Cloudflare's tunnel edge ($TUNNEL_EDGE_HOST) on port 7844. Allow outbound port 7844 (TCP and UDP) to it in your firewall, then run this again."
-    return
-  fi
+  case "$connect" in
+    *[1-9]*) ;;
+    *)
+      fix "This server can't open a connection to Cloudflare's tunnel edge ($TUNNEL_EDGE_HOST) on port 7844. Allow outbound port 7844 (TCP and UDP) to it in your firewall, then run this again."
+      return
+      ;;
+  esac
   ok "outbound: the image registries and the tunnel edge are reachable"
 }
 
