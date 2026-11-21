@@ -214,6 +214,7 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { id: "spending", page: "usage", labelKey: "settings.page.spending", topFor: ["spending", "cost", "costs", "tokens", "money"], synonyms: ["usage"] },
   { id: "grok-move", page: "transfer", anchor: "grok-move", labelKey: "settings.import.grokTitle", sectionKey: "settings.data.bringIn", topFor: ["grok", "grok bot", "move from"], synonyms: ["import", "bring", "another app"] },
   { id: "ai-apps", page: "transfer", anchor: "bring-in", labelKey: "settings.import.appsTitle", sectionKey: "settings.data.bringIn", synonyms: ["import", "bring", "skills", "mcp", "claude code", "codex", "cursor", "gemini"] },
+  { id: "ai-import", page: "transfer", anchor: "ai-import", labelKey: "aiImport.title", sectionKey: "settings.data.bringIn", topFor: ["move from another ai", "chatgpt", "claude.ai", "hermes", "openclaw"], synonyms: ["import", "bring", "memories", "persona", "chat history", "switch", "paste memory"] },
   { id: "backup-import", page: "transfer", anchor: "bring-in", labelKey: "backup.import", sectionKey: "settings.data.bringIn", topFor: ["restore"], synonyms: ["import", "bring", "backup", "backups", "bring back"] },
   { id: "bring-in", page: "transfer", anchor: "bring-in", labelKey: "settings.data.bringIn", synonyms: ["import", "move from", "bring"] },
   { id: "backup-export", page: "transfer", anchor: "take-out", labelKey: "backup.export", sectionKey: "settings.data.takeOut", topFor: ["backup", "backups", "export"], synonyms: ["full backup", "download"] },

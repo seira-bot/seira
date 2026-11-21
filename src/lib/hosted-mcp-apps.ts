@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 
 import biverLogo from "@/assets/biver/logo.png";
+import citcatLogo from "@/assets/citcat/logo.png";
 import coretLogo from "@/assets/coret/logo.png";
 import konektorLogo from "@/assets/konektor/logo.png";
 import termiloLogo from "@/assets/termilo/logo.png";
@@ -14,9 +15,6 @@ export interface HostedMcpApp {
   readonly label: string;
   /** Its official hosted MCP endpoint. A server is this app only at exactly this address, over streamable HTTP. */
   readonly url: string;
-  /** A service with no browser sign-in takes a key the person pastes, sent as `Authorization: Bearer`; `url` is where
-   * they make one. Without it the card signs in with browser OAuth. */
-  readonly key?: { readonly url: string };
   /** Its licensed logo, or a neutral lucide glyph when the service publishes none we may ship. */
   readonly icon: { readonly image: string } | { readonly glyph: LucideIcon };
   readonly description: LocaleKey;
@@ -33,7 +31,6 @@ export const HOSTED_MCP_APPS = [
     id: "konektor",
     label: "Konektor.id",
     url: "https://mcp.konektor.id/mcp",
-    key: { url: "https://app.konektor.id/developer" },
     icon: { image: konektorLogo },
     description: "konektor.description",
     notice: "konektor.notice",
@@ -65,6 +62,15 @@ export const HOSTED_MCP_APPS = [
     description: "termilo.description",
     notice: "termilo.notice",
     keywords: "termilo booking appointment schedule calendar reservation customers services",
+  },
+  {
+    id: "citcat",
+    label: "Citcat.id",
+    url: "https://api-crm.citcat.id/api/mcp",
+    icon: { image: citcatLogo },
+    description: "citcat.description",
+    notice: "citcat.notice",
+    keywords: "citcat whatsapp crm inbox chats contacts customers sales funnel leads instagram messenger line",
   },
 ] as const satisfies readonly HostedMcpApp[];
 
@@ -99,15 +105,19 @@ export function hostedServerName(app: HostedMcpApp, servers: ReadonlyArray<{ nam
 
 export const HOSTED_KEY_HEADER = "Authorization";
 
+/** True when the server holds an `Authorization` header, such as a pasted key. */
+export function holdsHostedKey(server: { headerKeys?: readonly string[] }): boolean {
+  return server.headerKeys?.some((name) => name.toLowerCase() === HOSTED_KEY_HEADER.toLowerCase()) === true;
+}
+
 /** The one rule for "connected", shared by the cards, the Connected filter and the count: the server is on and signed
- * in, or for a key app, on and holding its key. */
+ * in or holds an `Authorization` header. */
 export function hostedConnections(
   servers: ReadonlyArray<ServerAddress & { enabled: boolean; auth?: "signed-in" | "needs-sign-in"; headerKeys?: readonly string[] }>,
 ): HostedConnections {
-  const holdsKey = (server: (typeof servers)[number]) => server.headerKeys?.some((name) => name.toLowerCase() === HOSTED_KEY_HEADER.toLowerCase()) === true;
   return Object.fromEntries(HOSTED_MCP_APPS.map((app) => [
     app.id,
-    servers.some((server) => hostedMcpApp(server) === app && server.enabled && ("key" in app ? holdsKey(server) : server.auth === "signed-in")),
+    servers.some((server) => hostedMcpApp(server) === app && server.enabled && (server.auth === "signed-in" || holdsHostedKey(server))),
   ])) as HostedConnections;
 }
 

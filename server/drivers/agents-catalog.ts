@@ -9,6 +9,7 @@ import { DEVS_TOOL_DEFINITIONS } from "./agents-devs-tools.ts";
 import { HELPER_TOOL_DEFINITIONS } from "./agents-helper-tools.ts";
 import { USAGE_LIMITS_TOOL_DEFINITION } from "./agents-usage-tool.ts";
 import { APP_SETTINGS_TOOL_DEFINITION } from "./agents-app-settings-tool.ts";
+import { WORKFLOW_TOOL_DEFINITION } from "./agents-workflow-tool.ts";
 import { THREAD_POST_TOOL_DEFINITION } from "./agents-thread-post-tool.ts";
 import { RENAME_THREAD_TOOL_DEFINITION } from "./agents-thread-title-tool.ts";
 import { WAIT_TOOL_DEFINITIONS, WAIT_TOOL_NAMES } from "./agents-wait-tools.ts";
@@ -587,15 +588,15 @@ const TOOL_DEFINITIONS = [
   {
     name: "trigger_info",
     description:
-      "Read this bot's triggers (was list_triggers / list_trigger_events). list: its routines (schedules), app events and webhooks: ids, when they fire, on or paused, next run or last fire, problems, and the computer's authoritative current time and timezone; trigger_id gives one trigger with its last 10 fires, and with include_address a webhook's private address, to paste into the setup of the app that sends to it. Before reporting completion, inspect related monitors and verify enabled=false and nextRunAt=null after stopping them with trigger. events: before a when=app_event trigger, the connected apps you may use, with their accounts and events, and popular apps not connected yet.",
+      "Read this bot's triggers (was list_triggers / list_trigger_events). list: its routines (schedules), app events and webhooks: ids, when they fire, on or paused, next run or last fire, problems, and the computer's authoritative current time and timezone; trigger_id gives one trigger with its last 10 fires, and with include_address a webhook's private address, to paste into the setup of the app that sends to it. Before reporting completion, inspect related monitors and verify enabled=false and nextRunAt=null after stopping them with trigger. events: before a when=app_event trigger, the connected apps you may use, with their accounts and events, and popular apps not connected yet. workflows: the saved workflows (steps under Automations → Workflows) that include this bot, with their steps, and the automations that run each; call it first when the person says workflow.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
-        action: { type: "string", enum: ["list", "events"] },
+        action: { type: "string", enum: ["list", "events", "workflows"] },
         trigger_id: { type: "string", description: "Full instructions and fires; edit redactions in Automations." },
         include_address: { type: "boolean", description: "list, with a webhook's trigger_id: also its private address. For the bot that owns it, or a Chief of Staff." },
-        for_bot_id: { type: "string", description: "list: ANOTHER bot's triggers in your section, from list_bots." },
+        for_bot_id: { type: "string", description: "list, workflows: ANOTHER bot's triggers or workflows in your section, from list_bots." },
         app: { type: "string", description: "events: optional app slug, e.g. gmail." },
         search: { type: "string", description: "events: optional words in event names." },
       },
@@ -605,7 +606,7 @@ const TOOL_DEFINITIONS = [
   {
     name: "trigger",
     description:
-      "Set up or change an automation (a routine): when something happens, a bot does the instructions. Create it in this turn, without asking to confirm, whenever the person describes recurring or event-based work (\"every morning send me…\", \"whenever I get an email from…\", \"when another app calls…\"); something to do once, now, is not one. when=schedule runs on a time rule or cron (trigger_info first for the current time); app_event when a connected app's event happens (trigger_info action=events first; better than a schedule that keeps checking); webhook when another app calls its private address, which you may paste only into that app's setup; limit_reset when an AI's usage limit resets. update, pause, resume and run_now take a trigger_id from trigger_info. Pause a temporary monitor once its goal is met, then read it back; delete_trigger only at the person's request. To the person these are automations: write name and instructions as they would say them.",
+      "Set up or change an automation (a routine): when something happens, a bot does the instructions. Create it in this turn, without asking to confirm, whenever the person describes recurring or event-based work (\"every morning send me…\", \"whenever I get an email from…\", \"when another app calls…\"); something to do once, now, is not one. when=schedule runs on a time rule or cron (trigger_info first for the current time); app_event when a connected app's event happens (trigger_info action=events first; better than a schedule that keeps checking); webhook when another app calls its private address, which you may paste only into that app's setup; limit_reset when an AI's usage limit resets. A schedule that runs a saved workflow takes workflow_id instead of instructions; to change what it does, change the workflow's steps under Automations → Workflows. update, pause, resume and run_now take a trigger_id from trigger_info. Pause a temporary monitor once its goal is met, then read it back; delete_trigger only at the person's request. To the person these are automations: write name and instructions as they would say them.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -614,6 +615,10 @@ const TOOL_DEFINITIONS = [
         trigger_id: { type: "string", description: "Not for create: from trigger_info." },
         when: { type: "string", enum: ["schedule", "app_event", "webhook", "limit_reset"] },
         ...TRIGGER_FIELDS_SCHEMA,
+        workflow_id: {
+          type: ["string", "null"],
+          description: "when=schedule: the id of a saved workflow (trigger_info action=workflows, or the workflow tool) that each run does instead of instructions. Its first step's bot owns the automation. update: null stops running it and needs instructions.",
+        },
         app: { type: "string", description: "app_event: slug from trigger_info action=events." },
         event: { type: "string", description: "app_event: slug from trigger_info action=events." },
         account: { type: "string", description: "app_event: only when the app has several accounts." },
@@ -639,6 +644,7 @@ const TOOL_DEFINITIONS = [
     },
   },
   ...WAIT_TOOL_DEFINITIONS,
+  WORKFLOW_TOOL_DEFINITION,
   ...COMPUTER_ASK_TOOL_DEFINITIONS,
   {
     name: "propose_profile",

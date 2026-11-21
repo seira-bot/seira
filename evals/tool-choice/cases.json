@@ -14,5 +14,7 @@
   { "id": "daily-automation", "tools": ["trigger"], "text": "Every weekday at 8:00, send me a short summary of my unread email.", "why": "Asked for something that runs every day." },
   { "id": "jobs-per-pull-request", "tools": ["start_thread"], "text": "Open two separate jobs on yourself: one reviews pull request 12, the other pull request 13.", "why": "Asked for independent jobs, each its own thread." },
   { "id": "publish-a-page", "tools": ["publish_page", "publish_app"], "text": "Make a one-paragraph web page saying the office is closed on Friday and publish it to a link I can share.", "why": "Asked for a page at a public link." },
-  { "id": "ask-me-which-day", "tools": ["ask_user", "create_options_card"], "text": "Before you book the call, ask me whether I prefer Tuesday or Thursday, with both as choices.", "why": "Asked to be asked, with options." }
+  { "id": "ask-me-which-day", "tools": ["ask_user", "create_options_card"], "text": "Before you book the call, ask me whether I prefer Tuesday or Thursday, with both as choices.", "why": "Asked to be asked, with options." },
+  { "id": "workflow-not-routine-id", "tools": ["trigger_info", "workflow"], "text": "maksudku workflow seira", "why": "Named a Seira workflow, which is saved steps and not a routine." },
+  { "id": "workflow-not-routine-en", "tools": ["trigger_info", "workflow"], "text": "Make it a Seira workflow, not a routine.", "why": "Asked for a workflow in place of a routine." }
 ]

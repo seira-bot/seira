@@ -40,6 +40,7 @@ export interface AppTriggerHostDeps {
   emit: (frame: Record<string, unknown>) => void;
   audit: (row: { threadId: string; requestId: string; botId: string; botName: string; tool: string; summary: string }) => void;
   broker?: AppTriggerBroker;
+  workflowName?: (workflowId: string) => string | undefined;
 }
 
 export interface InternalTriggerContext {
@@ -184,7 +185,7 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
     const ownerId = target.forBot?.botId ?? context.from.id;
     const listing = listTriggers({
       botId: ownerId, triggerId: url.searchParams.get("triggerId") ?? undefined, routines: deps.routines().listRoutines().filter((routine) => context.routineShown?.(routine) ?? true),
-      webhooks: deps.webhooks.list(), appTriggers: manager.list(), runs: deps.routines().listRuns(), timeZone: deps.timeZone(), now: Date.now(),
+      webhooks: deps.webhooks.list(), appTriggers: manager.list(), runs: deps.routines().listRuns(), timeZone: deps.timeZone(), now: Date.now(), workflowName: deps.workflowName,
     });
     const shown = listing.trigger;
     if (url.searchParams.get("includeAddress") !== "1" || !shown) return json(res, 200, listing);

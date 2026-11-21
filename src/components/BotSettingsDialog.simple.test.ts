@@ -123,7 +123,9 @@ vi.mock("@/state/store", async (importOriginal) => {
 });
 
 const { BotSettingsDialog } = await import("./BotSettingsDialog");
+vi.mock("./bot-panel/ActivityTab", () => ({ ActivityTab: () => null }));
 const { BotPanel } = await import("./bot-panel/PanelShell");
+const { ActivityTab } = await import("./bot-panel/ActivityTab");
 const { AdvancedPanel } = await import("./bot-panel/AdvancedPanel");
 const { PanelHero } = await import("./bot-panel/PanelHero");
 const { AvatarEditorCard } = await import("./bot-panel/AvatarEditorCard");
@@ -288,7 +290,7 @@ beforeEach(() => {
 });
 
 describe("the bot panel in Simple mode", () => {
-  it("has Share, a gear for Bot settings and a close button on top, the hero, and three tabs: Details, Library, Computer", () => {
+  it("has Share, a gear for Bot settings and a close button on top, the hero, and four tabs: Activity, Details, Library, Computer", () => {
     const bot = makeBot();
     const rendered = panel(bot);
     expect(ofType(rendered, ChatShareMenu)!.props.bot).toBe(bot);
@@ -300,15 +302,15 @@ describe("the bot panel in Simple mode", () => {
     expect(hero.props.bot).toBe(bot);
     expect(hero.props.patch).toBe(patch);
     const tabs = [...rendered.html.matchAll(/data-panel-tab="(\w+)"[^>]*>([^<]+)<\/button>/g)].map((match) => [match[1], match[2]]);
-    expect(tabs).toEqual([["details", "Details"], ["library", "Library"], ["computer", "Computer"]]);
-    expect(shown(rendered)).toEqual({ tab: "details", page: undefined });
-    expect(ofType(rendered, DetailsTab)!.props.bot).toBe(bot);
+    expect(tabs).toEqual([["activity", "Activity"], ["details", "Details"], ["library", "Library"], ["computer", "Computer"]]);
+    expect(shown(rendered)).toEqual({ tab: "activity", page: undefined });
+    expect(ofType(rendered, ActivityTab)!.props.bot).toBe(bot);
     expect(rendered.html).toContain('id="bot-settings-title"');
   });
 
   it("switches tabs", () => {
     const bot = makeBot();
-    for (const [tab, type] of [["computer", ComputerTab], ["library", LibraryTab], ["details", DetailsTab]] as const) {
+    for (const [tab, type] of [["computer", ComputerTab], ["library", LibraryTab], ["details", DetailsTab], ["activity", ActivityTab]] as const) {
       click(find(panel(bot), "data-panel-tab", tab));
       const rendered = panel(bot);
       expect(shown(rendered).tab).toBe(tab);
@@ -334,6 +336,7 @@ describe("the bot panel in Simple mode", () => {
 
   it("drills into a page with its intro and back, naming where Back goes", () => {
     const bot = makeBot();
+    click(find(panel(bot), "data-panel-tab", "details"));
     (ofType(panel(bot), DetailsTab)!.props.onOpen as (page: string) => void)("routines");
     const page = panel(bot);
     expect(shown(page)).toEqual({ tab: undefined, page: "routines" });
@@ -355,6 +358,7 @@ describe("the bot panel in Simple mode", () => {
 
   it("goes back on Escape from a page, and leaves Escape to the dialog on a tab", () => {
     const bot = makeBot();
+    click(find(panel(bot), "data-panel-tab", "details"));
     (ofType(panel(bot), DetailsTab)!.props.onOpen as (page: string) => void)("routines");
     const event = key(panel(bot).nodes[0]!, "Escape");
     expect(event.stopPropagation).toHaveBeenCalled();
@@ -427,7 +431,7 @@ describe("the bot panel in Simple mode", () => {
     const bot = makeBot();
     expect(switches(panel(bot).html)).toBe(0);
     expect(panel(bot).html).not.toContain('aria-label="Work until done"');
-    for (const tab of ["library", "computer"]) {
+    for (const tab of ["details", "library", "computer"]) {
       click(find(panel(bot), "data-panel-tab", tab));
       const rendered = panel(bot);
       expect(switches(rendered.html), tab).toBe(0);

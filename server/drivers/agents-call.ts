@@ -9,7 +9,7 @@ import { noCloudComputerNote } from "../../shared/team-setup.ts";
 
 import { peerName } from "../peer-roster.ts";
 import { callCardTool, CARD_TOOL_NAMES } from "./agents-call-cards.ts";
-import { callTriggerTool, TRIGGER_TOOL_NAMES } from "./agents-call-triggers.ts";
+import { callTriggerTool, TRIGGER_TOOL_NAMES } from "./agents-call-triggers.ts"; import { callWorkflowTool, WORKFLOW_TOOL_NAMES } from "./agents-workflow-tool.ts";
 import { catalogProfileFromEnv, fullInputSchema, SHARED_COMPUTER_TOOL_NAMES } from "./agents-catalog.ts";
 import { harnessClientFromEnv } from "./agents-client.ts";
 import type { HarnessClient, Json } from "./agents-client.ts";
@@ -254,7 +254,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
   if (SHARE_TOOL_NAMES.has(name)) return callShareTool(args, context);
   if (PERSON_TOOL_NAMES.has(name)) return callPersonTool(name, args, context);
   if (DEVS_TOOL_NAMES.has(name)) return callDevsTool(name, args, context);
-  if (TRIGGER_TOOL_NAMES.has(name)) return callTriggerTool(name, args, context);
+  if (TRIGGER_TOOL_NAMES.has(name)) return callTriggerTool(name, args, context); if (WORKFLOW_TOOL_NAMES.has(name)) return callWorkflowTool(args, context);
   if (WAIT_TOOL_NAMES.has(name)) return callWaitTool(name, args, context);
   if (name === USAGE_LIMITS_TOOL) return callUsageLimitsTool(context);
   if (COMPUTER_ASK_TOOL_NAMES.has(name)) return callComputerAskTool(args, context);

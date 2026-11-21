@@ -1573,7 +1573,7 @@
     },
     {
       "name": "trigger_info",
-      "description": "Read this bot's triggers (was list_triggers / list_trigger_events). list: its routines (schedules), app events and webhooks: ids, when they fire, on or paused, next run or last fire, problems, and the computer's authoritative current time and timezone; trigger_id gives one trigger with its last 10 fires, and with include_address a webhook's private address, to paste into the setup of the app that sends to it. Before reporting completion, inspect related monitors and verify enabled=false and nextRunAt=null after stopping them with trigger. events: before a when=app_event trigger, the connected apps you may use, with their accounts and events, and popular apps not connected yet.",
+      "description": "Read this bot's triggers (was list_triggers / list_trigger_events). list: its routines (schedules), app events and webhooks: ids, when they fire, on or paused, next run or last fire, problems, and the computer's authoritative current time and timezone; trigger_id gives one trigger with its last 10 fires, and with include_address a webhook's private address, to paste into the setup of the app that sends to it. Before reporting completion, inspect related monitors and verify enabled=false and nextRunAt=null after stopping them with trigger. events: before a when=app_event trigger, the connected apps you may use, with their accounts and events, and popular apps not connected yet. workflows: the saved workflows (steps under Automations → Workflows) that include this bot, with their steps, and the automations that run each; call it first when the person says workflow.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -1582,7 +1582,8 @@
             "type": "string",
             "enum": [
               "list",
-              "events"
+              "events",
+              "workflows"
             ]
           },
           "trigger_id": {
@@ -1595,7 +1596,7 @@
           },
           "for_bot_id": {
             "type": "string",
-            "description": "list: ANOTHER bot's triggers in your section, from list_bots."
+            "description": "list, workflows: ANOTHER bot's triggers or workflows in your section, from list_bots."
           },
           "app": {
             "type": "string",
@@ -1619,7 +1620,7 @@
     },
     {
       "name": "trigger",
-      "description": "Set up or change an automation (a routine): when something happens, a bot does the instructions. Create it in this turn, without asking to confirm, whenever the person describes recurring or event-based work (\"every morning send me…\", \"whenever I get an email from…\", \"when another app calls…\"); something to do once, now, is not one. when=schedule runs on a time rule or cron (trigger_info first for the current time); app_event when a connected app's event happens (trigger_info action=events first; better than a schedule that keeps checking); webhook when another app calls its private address, which you may paste only into that app's setup; limit_reset when an AI's usage limit resets. update, pause, resume and run_now take a trigger_id from trigger_info. Pause a temporary monitor once its goal is met, then read it back; delete_trigger only at the person's request. To the person these are automations: write name and instructions as they would say them.",
+      "description": "Set up or change an automation (a routine): when something happens, a bot does the instructions. Create it in this turn, without asking to confirm, whenever the person describes recurring or event-based work (\"every morning send me…\", \"whenever I get an email from…\", \"when another app calls…\"); something to do once, now, is not one. when=schedule runs on a time rule or cron (trigger_info first for the current time); app_event when a connected app's event happens (trigger_info action=events first; better than a schedule that keeps checking); webhook when another app calls its private address, which you may paste only into that app's setup; limit_reset when an AI's usage limit resets. A schedule that runs a saved workflow takes workflow_id instead of instructions; to change what it does, change the workflow's steps under Automations → Workflows. update, pause, resume and run_now take a trigger_id from trigger_info. Pause a temporary monitor once its goal is met, then read it back; delete_trigger only at the person's request. To the person these are automations: write name and instructions as they would say them.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -1817,6 +1818,13 @@
             "type": "boolean",
             "description": "Repeating schedules: also run when Seira starts."
           },
+          "workflow_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "when=schedule: the id of a saved workflow (trigger_info action=workflows, or the workflow tool) that each run does instead of instructions. Its first step's bot owns the automation. update: null stops running it and needs instructions."
+          },
           "app": {
             "type": "string",
             "description": "app_event: slug from trigger_info action=events."
@@ -1954,6 +1962,71 @@
         },
         "required": [
           "id"
+        ]
+      }
+    },
+    {
+      "name": "workflow",
+      "description": "Make a workflow: saved steps in order, shown under Automations → Workflows. It runs only when an automation uses it: then call trigger when=schedule with workflow_id. Call trigger_info action=workflows first and reuse one that fits. A check passes only on yes; on no the workflow ends. The first step must be a bot step.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "create"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "description": "Shown on the workflow's card."
+          },
+          "steps": {
+            "type": "array",
+            "description": "In run order. bot: a bot does the instruction, with the output of the step before. check: a yes-or-no question about that output. wait: minutes. post: posts the results to the person.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "bot",
+                    "check",
+                    "wait",
+                    "post"
+                  ]
+                },
+                "instruction": {
+                  "type": "string",
+                  "description": "bot: what the bot does."
+                },
+                "bot_id": {
+                  "type": "string",
+                  "description": "bot: another bot's id from list_bots; omit for yourself."
+                },
+                "question": {
+                  "type": "string",
+                  "description": "check: a question that yes or no settles."
+                },
+                "minutes": {
+                  "type": "integer",
+                  "maximum": 43200,
+                  "description": "wait: how long."
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            }
+          }
+        },
+        "required": [
+          "action",
+          "name",
+          "steps"
         ]
       }
     },

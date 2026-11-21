@@ -239,4 +239,62 @@ describe("the Workflows view", () => {
     expect(region.textContent).toBe("Started a new run from Ledger");
     expect(document.activeElement).toBe(container.querySelector("h2"));
   });
+
+  describe("leaving an empty new workflow", () => {
+    const blank: Workflow = { id: "wf-blank", name: "Untitled workflow", createdAt: 1, updatedAt: 5, steps: [], connections: [] };
+    const removed = () => fixture.api.mock.calls.filter((call) => (call[1] as { method?: string } | undefined)?.method === "DELETE").map((call) => call[0]);
+
+    it("deletes it when the editor closes with no steps, the default name and no routine", async () => {
+      workflows = [blank];
+      mount({ workflowId: "wf-blank" });
+      await settle();
+      act(() => root!.unmount());
+      root = null;
+      await settle();
+      expect(removed()).toEqual(["/api/workflows/wf-blank"]);
+    });
+
+    it("keeps it when a routine runs it", async () => {
+      workflows = [blank];
+      fixture.state = { bots: [scout, ledger], routines: [routine("wf-blank")] };
+      mount({ workflowId: "wf-blank" });
+      await settle();
+      act(() => root!.unmount());
+      root = null;
+      await settle();
+      expect(removed()).toEqual([]);
+    });
+
+    it("keeps it when it was renamed", async () => {
+      workflows = [{ ...blank, name: "Weekly report" }];
+      mount({ workflowId: "wf-blank" });
+      await settle();
+      act(() => root!.unmount());
+      root = null;
+      await settle();
+      expect(removed()).toEqual([]);
+    });
+
+    it("keeps it when it has steps", async () => {
+      workflows = [{ ...blank, steps: [botStep("a", "bot-a", 0)] }];
+      mount({ workflowId: "wf-blank" });
+      await settle();
+      act(() => root!.unmount());
+      root = null;
+      await settle();
+      expect(removed()).toEqual([]);
+    });
+
+    it("deletes it when the person goes back to the list", async () => {
+      workflows = [blank];
+      fixture.dispatch.mockImplementation((action: { type: string; workflowId?: string }) => {
+        if (action.type === "showRoutines") act(() => root!.render(createElement(WorkflowsView, { workflowId: action.workflowId })));
+      });
+      const container = mount({ workflowId: "wf-blank" });
+      await settle();
+      await click(button(container, "All workflows"));
+      await settle();
+      expect(removed()).toEqual(["/api/workflows/wf-blank"]);
+    });
+  });
 });

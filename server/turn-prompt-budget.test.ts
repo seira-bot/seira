@@ -62,7 +62,7 @@ async function measured(): Promise<Record<string, number>> {
   };
 }
 
-/** Bytes when the budget was last set. The direct chat's stable half now also carries "computer-selection", and a bot's
+/** Bytes when the budget was last set. The trigger text gained 214 bytes on purpose: it tells a bot what a workflow is and which tools to call. The direct chat's stable half now also carries "computer-selection", and a bot's
  * stable half "memory-rules" too (with its own paths), both moved out of the volatile note: 8,895 before the move and the
  * rewording (when the two rode the note, about 3,800 more bytes per conversation), 8,391 + 2,048 after. */
 const PROMPT_BUDGET_BASELINE: Record<string, number> = {
@@ -75,7 +75,7 @@ const PROMPT_BUDGET_BASELINE: Record<string, number> = {
   "meetings": 294,
   "computer-selection": 1263,
   "credential": 1091,
-  "routine": 2624,
+  "routine": 2838,
   "profile": 1097,
   "team-memory": 286,
   // Both sandbox kinds carry +130 bytes on purpose: the person's own files (C:\Users\…, /Users/…, Desktop) are reached only on This computer.
@@ -84,11 +84,11 @@ const PROMPT_BUDGET_BASELINE: Record<string, number> = {
   "computer:box": 4028,
   "computer:vps": 4672,
   "computer:local": 4969,
-  "claude:direct-chat": 8808,
-  "claude:setup-chat": 11204,
+  "claude:direct-chat": 9023,
+  "claude:setup-chat": 11418,
   "claude:volatile-note": 178,
-  "codex:direct-chat": 8808,
-  "codex:setup-chat": 11204,
+  "codex:direct-chat": 9023,
+  "codex:setup-chat": 11418,
   "codex:resumed-instructions": 207,
   "codex:volatile-note": 91,
 };

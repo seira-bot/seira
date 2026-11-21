@@ -16,6 +16,7 @@ const EXACT: ReadonlySet<string> = new Set([
   "POST /api/internal/attach-file",
   "POST /api/internal/voice-note",
   "GET /api/internal/agents",
+  "GET /api/internal/workflows",
   "GET /api/internal/rooms",
   "GET /api/internal/room-targets",
   "GET /api/internal/threads",

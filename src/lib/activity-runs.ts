@@ -12,7 +12,7 @@ export type ActivityTranscriptItem =
 
 export type TranscriptItem =
   | ActivityTranscriptItem
-  | { kind: "turn"; id: string; turnId: string; label: string; messages: Message[] };
+  | { kind: "turn"; id: string; turnId: string; label: string; durationMs: number; messages: Message[] };
 
 export function statusActivity(message: Message): { kind: "recovery" | "notice" | "stopped"; text: string } | null {
   const tool = message.kind === "activity" ? message.tool : undefined;
@@ -93,8 +93,9 @@ function settledTurnFolds(messages: Message[], folded: (message: Message, turnId
 
     const firstIndex = before.findIndex((message) => message.turnId === turnId);
     const startedAt = turnStartedAt(messages, firstIndex, rows[0].at);
-    const label = workedLabel(Math.max(0, terminal.at - startedAt));
-    byAnchorId.set(rows[0].id, { kind: "turn", id: `turn:${turnId}`, turnId, label, messages: rows });
+    const durationMs = Math.max(0, terminal.at - startedAt);
+    const label = workedLabel(durationMs);
+    byAnchorId.set(rows[0].id, { kind: "turn", id: `turn:${turnId}`, turnId, label, durationMs, messages: rows });
     for (const message of rows) hiddenIds.add(message.id);
   });
 
@@ -186,7 +187,8 @@ export function describeRun(messages: Message[], label: (tool: NonNullable<Messa
   const names = [...counts].map(([name, count]) => (count > 1 ? `${name} ×${count}` : name));
   const shown = names.slice(0, MAX_NAMES).join(", ");
   const rest = names.length > MAX_NAMES ? ` ${t("chat.run.more", { count: names.length - MAX_NAMES })}` : "";
-  return t("chat.run.steps", { count: messages.length, tools: `${shown}${rest}` });
+  const tools = `${shown}${rest}`;
+  return messages.length === 1 ? `${t("chat.run.stepOne")} · ${tools}` : t("chat.run.steps", { count: messages.length, tools });
 }
 
 export type RunStatus = "done" | "working" | "failed";

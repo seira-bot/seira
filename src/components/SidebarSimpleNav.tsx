@@ -1,4 +1,4 @@
-import { Plus, Search, Zap } from "lucide-react";
+import { Plus, Search, SquareKanban, Zap } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
@@ -36,6 +36,19 @@ export function SimpleSearchPill() {
         <Search size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
         <span className="min-w-0 flex-1 truncate text-start">{t("sidebar.search")}</span>
         <ShortcutHint id="command-palette" />
+      </button>
+    </div>
+  );
+}
+
+export function SimpleBoardRow() {
+  const { state, dispatch } = useStore();
+  const active = state.activeView === "board";
+  return (
+    <div className="px-3 pb-1">
+      <button type="button" data-sidebar-board="" aria-current={active || undefined} onClick={() => dispatch({ type: "showBoard" })} className={SIMPLE_NAV_ROW}>
+        <SquareKanban size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
+        <span className="min-w-0 flex-1 truncate">{t("sidebar.nav.board")}</span>
       </button>
     </div>
   );

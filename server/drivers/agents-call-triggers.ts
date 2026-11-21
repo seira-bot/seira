@@ -9,6 +9,7 @@ import type { ToolCallContext, ToolCallResult } from "./agents-call.ts";
 import { WEEKDAYS, fullInputSchema } from "./agents-catalog.ts";
 import type { Json } from "./agents-client.ts";
 import { argumentNames } from "./agents-schema.ts";
+import { WORKFLOWS_ROUTE } from "./agents-workflow-tool.ts";
 
 export const TRIGGER_TOOL_NAMES: ReadonlySet<string> = new Set(["trigger_info", "trigger", "delete_trigger"]);
 
@@ -18,7 +19,7 @@ const APP_ONLY = ["app", "event", "account"] as const;
 const SAME_CONVERSATION_ONLY = "same_conversation applies only to when=app_event, when=webhook or when=schedule.";
 const REQUEST_ROUTE = "/api/internal/trigger-requests";
 const TAKES = () => ` trigger takes ${argumentNames(fullInputSchema("trigger"))}.`;
-const SCHEDULE_ONLY = ["schedule", "timeout_minutes", "timeoutMinutes", "clear_timeout", "continuity", "overlap", "run_on_startup", "runOnStartup"] as const;
+const SCHEDULE_ONLY = ["schedule", "timeout_minutes", "timeoutMinutes", "clear_timeout", "continuity", "overlap", "run_on_startup", "runOnStartup", "workflow_id"] as const;
 
 function jsonRecord(value: unknown): value is Json {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -258,8 +259,13 @@ function routineFields(args: Json): { fields: Json; error?: string } {
   if (args.clear_timeout === true && timeoutMinutes != null) {
     return { fields, error: "Choose timeout_minutes or clear_timeout, not both." };
   }
+  if (args.workflow_id !== undefined && args.workflow_id !== null && (typeof args.workflow_id !== "string" || !args.workflow_id.trim())) {
+    return { fields, error: "workflow_id must be a workflow id from trigger_info action=workflows, or null to stop running a workflow." };
+  }
   if (typeof args.name === "string") fields.name = args.name.trim();
   if (typeof args.instructions === "string") fields.instructions = args.instructions.trim();
+  if (typeof args.workflow_id === "string") fields.workflowId = args.workflow_id.trim();
+  else if (args.workflow_id === null) fields.workflowId = null;
   if (args.schedule !== undefined && args.schedule !== null) {
     const normalized = normalizeScheduleInput(args);
     if (normalized.error) return { fields, error: normalized.error };
@@ -381,7 +387,8 @@ export async function callTriggerTool(name: string, args: Json, context: ToolCal
   const forBotId = typeof args.for_bot_id === "string" && args.for_bot_id.trim() ? args.for_bot_id.trim() : undefined;
   if (name === "trigger_info") {
     if (args.action === "events") return listEvents(args, context);
-    if (args.action !== undefined && args.action !== null && args.action !== "list") return { text: "trigger_info action is list or events.", isError: true };
+    if (args.action === "workflows") return listWorkflows(forBotId, context);
+    if (args.action !== undefined && args.action !== null && args.action !== "list") return { text: "trigger_info action is list, events or workflows.", isError: true };
     return listTriggers(args, forBotId, context);
   }
   if (name === "trigger" && args.action === "create") {
@@ -432,6 +439,16 @@ async function listTriggers(args: Json, forBotId: string | undefined, context: T
   return { text: `This bot's triggers (${clock}):\n${JSON.stringify(triggers, null, 2)}` };
 }
 
+async function listWorkflows(forBotId: string | undefined, context: ToolCallContext): Promise<ToolCallResult> {
+  const query = new URLSearchParams({ fromBotId: context.botId, fromThreadId: context.threadId });
+  if (forBotId) query.set("forBotId", forBotId);
+  const r = await context.client.api(`${WORKFLOWS_ROUTE}?${query.toString()}`);
+  if (typeof r.error === "string") return { text: r.error, isError: true };
+  const workflows = Array.isArray(r.workflows) ? r.workflows : [];
+  if (!workflows.length) return { text: "No saved workflow includes this bot. To make one, call workflow action=create; the person finds workflows under Automations → Workflows." };
+  return { text: `Saved workflows that include this bot, as the person sees them under Automations → Workflows. A workflow runs only when an automation uses it: link one with trigger when=schedule and workflow_id. Only your own steps show their instructions.\n${JSON.stringify(workflows, null, 2)}` };
+}
+
 async function listEvents(args: Json, context: ToolCallContext): Promise<ToolCallResult> {
   const query = new URLSearchParams({ fromBotId: context.botId, fromThreadId: context.threadId });
   if (typeof args.app === "string" && args.app.trim()) query.set("app", args.app.trim().toLowerCase());
@@ -459,7 +476,9 @@ async function createTrigger(args: Json, forBotId: string | undefined, context: 
   }
   const { fields, error } = triggerFields(args);
   if (error) return { text: error, isError: true };
-  if (!fields.name || !fields.instructions) return { text: `trigger action=create needs name and instructions.${TAKES()}`, isError: true };
+  if (fields.workflowId === null) return { text: "workflow_id null stops an automation from running a workflow; it applies only to action=update.", isError: true };
+  const runsWorkflow = typeof fields.workflowId === "string" && when === "schedule";
+  if (!fields.name || (!fields.instructions && !runsWorkflow)) return { text: `trigger action=create needs name and instructions.${TAKES()}`, isError: true };
   if (when !== "app_event") {
     const appOnly = [...APP_ONLY, "filter", "event_config"].find((key) => args[key] !== undefined && args[key] !== null);
     if (appOnly) return { text: `${appOnly} applies only to when=app_event.`, isError: true };
@@ -480,7 +499,7 @@ async function createTrigger(args: Json, forBotId: string | undefined, context: 
     return request({ action: "create", kind: "app", trigger, ...(forBotId ? { forBotId } : {}) }, context, `Created the app-event trigger “${String(fields.name)}”`);
   }
   if (when === "limit_reset") {
-    const misplaced = ["schedule", "webhook_event_types", "webhook_payload_filter", "run_on_startup", "runOnStartup"].find((key) => args[key] !== undefined && args[key] !== null);
+    const misplaced = ["schedule", "webhook_event_types", "webhook_payload_filter", "run_on_startup", "runOnStartup", "workflow_id"].find((key) => args[key] !== undefined && args[key] !== null);
     if (misplaced) return { text: `A limit-reset trigger runs when the engine's limit resets, so it takes no ${misplaced}.`, isError: true };
     const timing = limitResetSchedule(args.engine, args.repeat);
     if (timing.error) return { text: timing.error, isError: true };
@@ -494,6 +513,7 @@ async function createTrigger(args: Json, forBotId: string | undefined, context: 
     if (fields.eventTypes) return { text: "webhook_event_types applies only to when=webhook.", isError: true };
     if (fields.payloadFilter) return { text: "webhook_payload_filter applies only to when=webhook.", isError: true };
     const { eventTypes: _unused, payloadFilter: _unusedFilter, ...routine } = fields;
+    if (runsWorkflow && !routine.instructions) routine.instructions = "";
     return request({ action: "create", kind: "schedule", routine, ...(forBotId ? { forBotId } : {}) }, context, `Created ${label}`);
   }
   const misplaced = SCHEDULE_ONLY.find((key) => args[key] !== undefined && args[key] !== null);

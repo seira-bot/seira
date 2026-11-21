@@ -52,12 +52,13 @@ export const routineToolDefinitionSchema = z.object({
   sameConversation: z.boolean().optional(),
   overlap: z.enum(["skip", "queue"]).optional(),
   runOnStartup: z.boolean().optional(),
+  workflowId: z.string().min(1).max(128).optional(),
 }).strict();
 
 export const routineToolChangesSchema = routineToolDefinitionSchema
-  .omit({ timeoutMinutes: true })
+  .omit({ timeoutMinutes: true, workflowId: true })
   .partial()
-  .extend({ timeoutMinutes: z.number().nullable().optional() })
+  .extend({ timeoutMinutes: z.number().nullable().optional(), workflowId: z.string().min(1).max(128).nullable().optional() })
   .strict()
   .refine(
   (changes) => Object.values(changes).some((value) => value !== undefined),
@@ -182,12 +183,14 @@ export const storedDefinitionSchema = z.object({
   sameConversation: z.boolean().optional(),
   overlap: z.enum(["skip", "queue"]).optional(),
   runOnStartup: z.boolean().optional(),
+  workflowId: z.string().min(1).max(128).optional(),
 }).strict();
 export const storedChangesSchema = storedDefinitionSchema
-  .omit({ schedule: true, timeoutMinutes: true })
+  .omit({ schedule: true, timeoutMinutes: true, workflowId: true })
   .partial()
   .extend({
     schedule: storedScheduleChangesSchema.optional(),
+    workflowId: z.string().min(1).max(128).nullable().optional(),
     timeoutMinutes: z.number().int().min(5).max(1_440).nullable().optional(),
   })
   .strict()

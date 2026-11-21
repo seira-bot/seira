@@ -629,7 +629,6 @@
   "rail.ended": "{name}：終了",
   "rail.remove": "リストから削除",
   "rail.makeHome": "{name} をホームにする",
-  "rail.makeHomeSub": "このコンピューターのボット、チャット、メモリー、ルーティンを {name} に移します。移動後も、このコンピューターは移動先のボットのために使われます。",
   "rail.makeHomeFailed": "ボットの移動を開始できませんでした。しばらくしてからもう一度お試しください。",
   "twoPlaces.title": "ボットを 1 か所にまとめる",
   "twoPlaces.body": "ボットが 2 か所に分かれているため、一緒に作業できません。{place} にまとめますか？",
@@ -6252,6 +6251,13 @@
   "apps.category.marketing": "マーケティング",
   "apps.category.analytics": "アナリティクス",
   "apps.category.social": "ソーシャル",
+  "apps.category.finance": "財務",
+  "apps.category.commerce": "eコマース",
+  "apps.category.ai": "AI",
+  "apps.category.automation": "自動化",
+  "apps.category.hr": "人事と採用",
+  "apps.category.entertainment": "エンタメ",
+  "apps.category.education": "教育",
   "apps.catalog.googleCalendar.blurb": "予定の閲覧と作成",
   "apps.catalog.googleSheets.blurb": "スプレッドシートの閲覧と更新",
   "apps.catalog.googleDocs.blurb": "ドキュメントの閲覧と作成",
@@ -8012,5 +8018,6 @@
   "settings.pool.levelsFalling": "各レベルは、前のレベルより低くしてください。",
   "settings.pool.floorNumber": "下限は0〜98の整数です。",
   "settings.pool.floorLow": "下限は最後のレベルより低くしてください。",
-  "settings.pool.error": "AIプールを保存できませんでした。もう一度お試しください。"
+  "settings.pool.error": "AIプールを保存できませんでした。もう一度お試しください。",
+  "aiImport.title": "他の AI から移行"
 }

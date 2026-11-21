@@ -1,0 +1,161 @@
+[
+  {
+    "uuid": "conv-1",
+    "name": "Launch email",
+    "summary": "",
+    "created_at": "2026-03-01T09:00:00.000000Z",
+    "updated_at": "2026-03-01T11:00:00.000000Z",
+    "account": {
+      "uuid": "acct-1"
+    },
+    "current_leaf_message_uuid": "m5",
+    "chat_messages": [
+      {
+        "uuid": "m1",
+        "text": "Hello",
+        "content": [
+          {
+            "type": "text",
+            "text": "Hello"
+          }
+        ],
+        "sender": "human",
+        "created_at": "2026-03-01T10:00:00.000000Z",
+        "updated_at": "2026-03-01T10:00:00.000000Z",
+        "attachments": [],
+        "files": [],
+        "parent_message_uuid": "00000000-0000-4000-8000-000000000000"
+      },
+      {
+        "uuid": "m2",
+        "text": "Old answer",
+        "content": [
+          {
+            "type": "text",
+            "text": "Old answer"
+          }
+        ],
+        "sender": "assistant",
+        "created_at": "2026-03-01T10:00:05.000000Z",
+        "updated_at": "2026-03-01T10:00:00.000000Z",
+        "attachments": [],
+        "files": [],
+        "parent_message_uuid": "m1"
+      },
+      {
+        "uuid": "m3",
+        "text": "Retried answer",
+        "content": [
+          {
+            "type": "text",
+            "text": "Retried answer"
+          }
+        ],
+        "sender": "assistant",
+        "created_at": "2026-03-01T10:00:06.000000Z",
+        "updated_at": "2026-03-01T10:00:00.000000Z",
+        "attachments": [],
+        "files": [],
+        "parent_message_uuid": "m1"
+      },
+      {
+        "uuid": "m4",
+        "text": "Use this brief",
+        "content": [
+          {
+            "type": "text",
+            "text": "Use this brief"
+          }
+        ],
+        "sender": "human",
+        "created_at": "2026-03-01T10:01:00.000000Z",
+        "updated_at": "2026-03-01T10:00:00.000000Z",
+        "attachments": [
+          {
+            "file_name": "brief.txt",
+            "file_size": 20,
+            "file_type": "text/plain",
+            "extracted_content": "Brief: ship Friday"
+          }
+        ],
+        "files": [
+          {
+            "file_uuid": "f-111",
+            "file_name": "chart.png"
+          }
+        ],
+        "parent_message_uuid": "m3"
+      },
+      {
+        "uuid": "m5",
+        "text": "Final answer",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "secret reasoning",
+            "summaries": []
+          },
+          {
+            "type": "tool_use",
+            "id": "t1",
+            "name": "web_search",
+            "input": {
+              "query": "q"
+            }
+          },
+          {
+            "type": "tool_result",
+            "tool_use_id": "t1",
+            "content": [
+              {
+                "type": "text",
+                "text": "TOOL RESULT TEXT"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": "Final answer"
+          }
+        ],
+        "sender": "assistant",
+        "created_at": "2026-03-01T10:01:30.000000Z",
+        "updated_at": "2026-03-01T10:00:00.000000Z",
+        "attachments": [],
+        "files": [],
+        "parent_message_uuid": "m4"
+      }
+    ]
+  },
+  {
+    "uuid": "conv-2",
+    "name": "Plan notes",
+    "created_at": "2026-03-02T09:00:00.000000Z",
+    "updated_at": "2026-03-02T09:05:00.000000Z",
+    "account": {
+      "uuid": "acct-1"
+    },
+    "project_uuid": "p1",
+    "current_leaf_message_uuid": "n2",
+    "chat_messages": [
+      {
+        "uuid": "n1",
+        "text": "What is the plan?",
+        "sender": "human",
+        "created_at": "2026-03-02T09:00:00.000000Z",
+        "updated_at": "2026-03-02T09:00:00.000000Z",
+        "attachments": [],
+        "files": []
+      },
+      {
+        "uuid": "n2",
+        "text": "Ship on Friday.",
+        "sender": "assistant",
+        "created_at": "2026-03-02T09:00:10.000000Z",
+        "updated_at": "2026-03-02T09:00:10.000000Z",
+        "attachments": [],
+        "files": []
+      }
+    ]
+  }
+]

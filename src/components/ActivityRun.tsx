@@ -1,6 +1,8 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { Check, ChevronDown, X } from "lucide-react";
-import type { Message } from "@/state/store";
+import { useStore, type Message } from "@/state/store";
+import { formatElapsed } from "@/lib/working-time";
+import { BotAvatar } from "./Avatar";
 import { describeRun, runHeadline, runStatus, stepCountLabel, type RunStatus } from "@/lib/activity-runs";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
@@ -11,10 +13,31 @@ import { StepRowContext } from "./step-row";
 import { TraceDialog } from "./usage/TraceView";
 import { WorkingDots } from "./WorkingIndicator";
 
+const MAX_AVATARS = 4;
+
+function InvolvedBots({ botId, messages }: { botId: string; messages: Message[] }) {
+  const { state } = useStore();
+  const ids = useMemo(() => {
+    const found = [botId, ...messages.map((message) => message.comm?.withBotId)];
+    return [...new Set(found)].filter((id): id is string => !!id && state.bots.some((bot) => bot.id === id)).slice(0, MAX_AVATARS);
+  }, [botId, messages, state.bots]);
+  return (
+    <span data-run-bots className="flex shrink-0 items-center">
+      {ids.map((id) => (
+        <span key={id} className="-ms-1.5 first:ms-0 rounded-full ring-2 ring-app">
+          <BotAvatar bot={state.bots.find((bot) => bot.id === id)!} size={20} />
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export function ActivityRun({
   messages,
   label,
   forceOpen = false,
+  botId,
+  durationMs,
   status,
   trace,
   children,
@@ -23,6 +46,10 @@ export function ActivityRun({
   /** A turn's own headline ("Worked for 29s") in place of the sum of its steps. */
   label?: string;
   forceOpen?: boolean;
+  /** Simple mode: the chat's bot, first of the avatars in the head. */
+  botId?: string;
+  /** Simple mode: how long the turn took, shown at the end of the head. */
+  durationMs?: number;
   /** Advanced mode: "working" while the turn runs; otherwise the card says "failed" when a step did. */
   status?: RunStatus;
   /** Advanced mode: the recorded trace of this turn, reached from the foot of the open card. */
@@ -34,7 +61,7 @@ export function ActivityRun({
   const [tracing, setTracing] = useState(false);
   const bodyId = useId();
   const state = status ?? runStatus(messages);
-  const summary = advanced ? runHeadline(messages, state, label, trace?.durationMs) : label ?? describeRun(messages, toolStepLabel);
+  const summary = advanced ? runHeadline(messages, state, label, trace?.durationMs) : (durationMs === undefined ? label : undefined) ?? describeRun(messages, toolStepLabel);
   useEffect(() => {
     if (forceOpen) setOpen(true);
   }, [forceOpen]);
@@ -53,6 +80,8 @@ export function ActivityRun({
             : advanced && state === "failed" ? <X size={16} aria-hidden="true" className="shrink-0 text-danger" />
               : <Check size={16} aria-hidden="true" className="shrink-0 text-success" />}
           <span className={cn("min-w-0 truncate font-medium", advanced ? (state === "failed" ? "text-danger" : "text-ink") : "flex-1")}>{summary}</span>
+          {!advanced && botId && <InvolvedBots botId={botId} messages={messages} />}
+          {!advanced && durationMs !== undefined && durationMs >= 1_000 && <span data-run-duration className="shrink-0 text-[12px] tabular-nums text-ink-tertiary">{formatElapsed(durationMs)}</span>}
           {advanced && <span data-run-steps className="ms-auto shrink-0 text-[12px] tabular-nums text-ink-tertiary">{stepCountLabel(messages.length)}</span>}
           <ChevronDown size={14} aria-hidden="true" className={cn("shrink-0 text-ink-tertiary transition-transform duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none", open && "rotate-180")} />
         </button>
@@ -66,7 +95,7 @@ export function ActivityRun({
                 </div>
               </StepRowContext>
             ) : (
-              <div className="mx-3 mb-3 mt-0.5 flex flex-col items-start gap-1 border-s border-hairline ps-3">{children}</div>
+              <div data-step-list className="mx-3 mb-3 mt-0.5 flex flex-col gap-2.5 border-s border-hairline ps-3">{children}</div>
             )}
             {advanced && trace && (
               <div className="px-3 pb-2.5">

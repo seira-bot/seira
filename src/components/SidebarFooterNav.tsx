@@ -1,4 +1,4 @@
-import { AppWindow, FolderOpen, FolderTree, Globe, Puzzle, Rocket, UsersRound, Zap } from "lucide-react";
+import { AppWindow, FolderOpen, FolderTree, Globe, Puzzle, Rocket, SquareKanban, UsersRound, Zap } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 
 import { useAppTriggers } from "@/lib/app-triggers";
@@ -150,6 +150,14 @@ export function SidebarFooterNav({
     icon={(active) => <Zap size={iconSize} className={tone(active)} />}
     onClick={() => dispatch({ type: "showRoutines", view: "list" })}
   />;
+  const boardRow = advanced && !iconsOnly ? null : <NavRow
+    id="board"
+    label={t("sidebar.nav.board")}
+    iconsOnly={iconsOnly || toolbar}
+    active={state.activeView === "board"}
+    icon={(active) => <SquareKanban size={iconSize} className={tone(active)} />}
+    onClick={() => dispatch({ type: "showBoard" })}
+  />;
   const filesRow = useCloudFilesReady() && <NavRow
     id="files"
     label={t("sidebar.nav.files")}
@@ -175,6 +183,7 @@ export function SidebarFooterNav({
 
   const rows = (
     <>
+      {boardRow}
       {automationsRow}
       {appsRow}
       {(advanced || iconsOnly) && (

@@ -83,7 +83,7 @@ import { ELEVATED_CONTROL } from "./elevated";
 export { TeamMenuItems };
 import { SidebarResizeHandle, useSidebarWidth } from "./SidebarResizeHandle";
 import { PHONE_TOP_BUTTON, SIMPLE_ROW_FOCUS, SIMPLE_TOP_BUTTON, SidebarSearchPill } from "./SidebarSimpleTop";
-import { SIMPLE_NEW_BUTTON, SimpleAutomationsRow, SimpleSearchPill, SimpleTopSlot } from "./SidebarSimpleNav";
+import { SIMPLE_NEW_BUTTON, SimpleAutomationsRow, SimpleBoardRow, SimpleSearchPill, SimpleTopSlot } from "./SidebarSimpleNav";
 import { isSidebarToggle } from "@/lib/keyboard-shortcuts";
 import { SidebarRailSeparator, SimpleRailFooter } from "./SidebarSimpleRail";
 import { useShowThreads } from "@/lib/thread-preferences";
@@ -1314,7 +1314,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
           />
         </div>
       </div>}
-      {!q && <TeamSideSwitch compact={density === "icons"} listOnly={phone} />}{!q && <SidebarInboxRow icons={density === "icons"} large={!advanced || advDesk} running={attentionHasRunningWork(attention)} onOpened={phone ? onClose : undefined} />}{!q && deskLook && <SimpleAutomationsRow />}
+      {!q && <TeamSideSwitch compact={density === "icons"} listOnly={phone} />}{!q && <SidebarInboxRow icons={density === "icons"} large={!advanced || advDesk} running={attentionHasRunningWork(attention)} onOpened={phone ? onClose : undefined} />}{!q && deskLook && <><SimpleBoardRow /><SimpleAutomationsRow /></>}
       {universalPins && pinnedBots.length > 0 && !simpleDesk && (
         <div
           data-sidebar-universal-pins=""

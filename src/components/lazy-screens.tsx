@@ -81,6 +81,7 @@ export const TriggersPage = lazyScreen("TriggersPage", async () => (await import
 export const SettingsModal = lazyScreen("SettingsModal", async () => (await import("./SettingsModal")).SettingsModal);
 export const TeamMapPage = lazyScreen("TeamMapPage", async () => (await import("./TeamMapPage")).TeamMapPage);
 export const PublishedAppsPage = lazyScreen("PublishedAppsPage", async () => (await import("./published-apps/PublishedAppsPage")).PublishedAppsPage);
+export const BoardPage = lazyScreen("BoardPage", async () => (await import("./board/BoardPage")).BoardPage);
 export const AnnouncementsPage = lazyScreen("AnnouncementsPage", async () => (await import("./announcements/AnnouncementsPage")).AnnouncementsPage);
 
 // Rarely opened, so never fetched ahead. The team library is what brings the YAML parser in.
@@ -95,7 +96,7 @@ export const TeamFilesPage = lazyScreen("TeamFilesPage", async () => (await impo
 
 // Most opened first: a Cloud page fetches these in this order.
 const SCREENS = [
-  SettingsModal, BotSettingsDialog, PluginsPanel, ComputerPanel, TriggersPage, ActivityPanel, FilesView, InspectorPanel, KeyboardShortcutsModal,
+  SettingsModal, BotSettingsDialog, PluginsPanel, ComputerPanel, TriggersPage, BoardPage, ActivityPanel, FilesView, InspectorPanel, KeyboardShortcutsModal,
   LocalVmWorkspace, NewBotDialog, RemoteAgentSettingsPanel, RemoteDesktopPanel, RoomPanel, TeamMapPage, PublishedAppsPage,
 ];
 

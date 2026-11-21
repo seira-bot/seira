@@ -1,0 +1,9 @@
+{
+  "jobs": [
+    { "id": "j1", "name": "Morning brief", "schedule": "0 7 * * *", "prompt": "Summarise my day." },
+    { "id": "j2", "name": "Water", "schedule": "every 2h", "prompt": "Remind me to drink water." },
+    { "id": "j3", "name": "Once", "schedule": "2027-01-05T09:00:00Z", "prompt": "Call the bank." },
+    { "id": "j4", "name": "Soon", "schedule": "in 30m", "prompt": "Stretch." },
+    { "id": "j5", "name": "Interval", "schedule": { "kind": "interval", "minutes": 90 }, "prompt": "Check mail." }
+  ]
+}

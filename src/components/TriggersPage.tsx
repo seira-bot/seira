@@ -170,7 +170,7 @@ export function TriggersPage({ onBack, onOpenRoom }: { onBack: () => void; onOpe
       </div>
 
       {newText !== null && (
-        <NewAutomation initialText={newText} onClose={() => setNewText(null)} onSetUpYourself={(kind, botId) => { setNewText(null); setEditing({ kind, botId }); }} />
+        <NewAutomation initialText={newText} onClose={() => setNewText(null)} onSetUpYourself={(kind, botId) => { setNewText(null); setEditing({ kind, botId }); }} onDrawWorkflow={workflows.unavailable ? undefined : () => void createWorkflow()} />
       )}
       {editing?.kind === "schedule" && (editRoutine || !editing.id) && <RoutineEditor routine={editRoutine} bots={schedulableBots(visibleBots, team, editRoutine?.botId)} initialBotId={editing.botId} initialWorkflowId={editing.workflowId} plain onClose={() => setEditing(null)} />}
       {editing?.kind === "webhook" && (editWebhook || !editing.id) && (

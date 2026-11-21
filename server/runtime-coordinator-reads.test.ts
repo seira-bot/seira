@@ -80,6 +80,18 @@ describe("the reads a finished turn makes", () => {
     }
   });
 
+  it("reads the open rows and those that ended at or after a time, and no older ones", () => {
+    const c = seeded();
+    const since = 1_100;
+    const wanted = c.all().filter(node => !["completed", "failed", "cancelled"].includes(node.status) || node.createdAt >= since);
+    expect(wanted.length).toBeLessThan(c.all().length);
+    const { result, reads } = watching(() => c.openSince(since));
+    expect(result).toEqual(wanted);
+    const lists = reads.filter(read => !/WHERE id = \?/.test(read.sql));
+    expect(lists).toHaveLength(1);
+    expect(lists[0]!.rows).toBe(wanted.length);
+  });
+
   it("reads one thread's rows through the thread index", () => {
     const c = seeded();
     const open = watching(() => c.inThread("thread-b", { open: true }));

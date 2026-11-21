@@ -30,6 +30,7 @@ vi.mock("../AvatarImageGenerator", () => ({ AvatarImageGenerator: () => null }))
 vi.mock("@/lib/use-organization-branding", () => ({ useOrganizationBranding: () => null }));
 const stub = (name: string) => (props: Record<string, unknown>) =>
   createElement("div", { [`data-stub-${name}`]: true, "data-editing-instructions": props.editingInstructions === true ? "true" : undefined });
+vi.mock("./ActivityTab", () => ({ ActivityTab: stub("activity") }));
 vi.mock("./DetailsTab", () => ({ DetailsTab: stub("details") }));
 vi.mock("./LibraryTab", () => ({ LibraryTab: stub("library") }));
 vi.mock("./ComputerTab", () => ({ ComputerTab: stub("computer") }));
@@ -171,22 +172,22 @@ describe("named links into the bot panel", () => {
 });
 
 describe("the panel's tabs", () => {
-  it("are Details, Library and Computer, opening on Details, each drawing its own tab", async () => {
+  it("are Activity, Details, Library and Computer, opening on Activity, each drawing its own tab", async () => {
     render(null);
     await settle();
     expect([...host.querySelectorAll('[role="tab"]')].map((element) => [element.getAttribute("data-panel-tab"), element.textContent]))
-      .toEqual([["details", "Details"], ["library", "Library"], ["computer", "Computer"]]);
-    expect(tab()).toBe("details");
+      .toEqual([["activity", "Activity"], ["details", "Details"], ["library", "Library"], ["computer", "Computer"]]);
+    expect(tab()).toBe("activity");
     const strip = host.querySelector('[role="tablist"]')!.className.split(" ");
     expect(strip).toEqual(expect.arrayContaining(["sticky", "top-0", "bg-app"]));
     expect(host.querySelector('[role="tab"]')!.parentElement!.className.split(" ")).toEqual(expect.arrayContaining(["rounded-full", "bg-ink/[0.05]"]));
     expect(host.querySelector('[role="tab"]')!.className.split(" ")).toEqual(expect.arrayContaining(["h-[26px]", "text-[13px]", "font-medium"]));
-    const thumb = () => host.querySelector<HTMLElement>("[data-segment-thumb]")!.style.getPropertyValue("--i");
-    expect(thumb()).toBe("0");
-    for (const id of ["library", "computer", "details"]) {
+    const thumb = () => host.querySelector<HTMLElement>("[data-segment-thumb]")!.dataset.tab;
+    expect(thumb()).toBe("activity");
+    for (const id of ["library", "computer", "details", "activity"]) {
       click(host.querySelector(`[data-panel-tab="${id}"]`));
       expect(tab()).toBe(id);
-      expect(thumb()).toBe(String(["details", "library", "computer"].indexOf(id)));
+      expect(thumb()).toBe(id);
       expect(host.querySelector(`[data-stub-${id}]`), id).not.toBeNull();
     }
   });
