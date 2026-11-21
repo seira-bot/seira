@@ -106,11 +106,6 @@ describe("judgeAssets", () => {
     expect(problems[0]).toContain("size 99");
   });
 
-  it("names the Flatpak bundle of the release version when it is missing", () => {
-    expect(names(complete().filter((item) => item.name !== "Seira-1.0.0-x86_64.flatpak"))).toEqual(["Seira-1.0.0-x86_64.flatpak"]);
-    expect(names(complete())).toEqual([]);
-  });
-
   it("does not count an asset that is not uploaded", () => {
     const assets = good().map((item) => (item.name === "Seira-1.0.0-setup.exe" ? { ...item, state: "starter" } : item));
     const problems = judgeAssets({ assets, texts: { "latest.yml": FEED } });
@@ -263,6 +258,11 @@ describe("missingForPublish", () => {
       { platform: "Windows", name: "SHA256SUMS-windows-x64.txt" },
       { platform: "Windows", name: "Seira-setup.exe" },
     ]);
+  });
+
+  it("names the Flatpak bundle of the release version when it is missing", () => {
+    expect(names(complete().filter((item) => item.name !== "Seira-1.0.0-x86_64.flatpak"))).toEqual(["Seira-1.0.0-x86_64.flatpak"]);
+    expect(names(complete())).toEqual([]);
   });
 
   it("does not count an asset that is not uploaded", () => {
