@@ -11691,5 +11691,5 @@
   "aiImport.paste.empty": "Cole uma resposta para importar.",
   "aiImport.paste.tooLong": "A resposta tem mais de {chars} caracteres. Encurte para importar.",
   "automations.newBox.drawWorkflow": "Desenhar um fluxo de trabalho",
-  "activity.tool.team.workflow": "Salvando um fluxo de trabalho"
+  "activity.tool.team.workflow": "Fluxo de trabalho"
 }
