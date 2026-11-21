@@ -12,6 +12,8 @@ describe a setting from memory: read the setting, the file, or the page.
   setting's live value and where it is in Settings, and `set` changes it the
   way the app does (a key goes through its secure card). Use the files below
   only for what it does not cover.
+- **For where a feature is or what it does, call `app_settings action=features`.**
+  It names the page, the tab and the tools, and tells a workflow from a routine.
 - **This install.** Every setting is a file under `~/.seira/`, and
   `SEIRA_DATA_DIR` moves that folder. The file says what is set right now, unless
   an environment variable overrides it: the environment wins, because it is
@@ -35,6 +37,7 @@ describe a setting from memory: read the setting, the file, or the page.
 | `bots/<botId>/SOUL.md` | A mirror of that bot's standing instructions. The record is the source of truth; `soulDrift` records that the two differed at the last turn. |
 | `routines.json` | Routines, their runs, and webhook receipts. |
 | `app-triggers.json` | Automations that fire on an app event. |
+| `workflows.db` | Workflows: the steps saved on a canvas, and their runs. A routine runs one. |
 | `workspaces/<botId>/` | The bot's own folder: `MEMORY.md`, `memory/<topic>.md`, `memory/log/<date>.md`, its private `skills/`. |
 | `skills-library/index.json` | Skills imported into the shared library: hashes, source, review state. |
 | `skill-state/` | Per-bot skill imports and their revisions. |
@@ -75,6 +78,8 @@ a hand edit races the next save.
   level is a provider's own permission mode, passed through. A personal install
   starts at Full access; a hosted company workspace starts at Ask. A bot reading
   its own files never asks.
+- **A workflow is the steps; a routine is the time.** Workflows live under
+  Automations, Workflows, and run only when a routine uses one.
 - **Routines are calendar rules.** Five-field cron plus an explicit IANA zone,
   and the scheduler wakes the bot at that time; no model checks the date. Never
   answer a schedule question with "check every morning instead".

@@ -43,6 +43,12 @@ describe("seira-docs skill guide", () => {
     }
   });
 
+  it("names Workflows and sends questions about the app to app_settings action=features", () => {
+    expect(guide).toContain("Workflows");
+    expect(guide).toContain("workflows.db");
+    expect(guide).toContain("app_settings action=features");
+  });
+
   it("sends the reader to the app before the docs, and never asks for a key to be quoted", () => {
     expect(guide).toContain("the app wins");
     expect(guide).toContain("never quote a key back");
