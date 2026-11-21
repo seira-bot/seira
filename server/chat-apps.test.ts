@@ -339,7 +339,7 @@ describe("a folder page", () => {
 });
 
 describe("publish_page in the chat", () => {
-  const LIVE = { state: "live" as const, title: "Dash", pageId: "page000000000000000000001", url: "https://page000000000000000000001.page.seira.bot/", usage: { pages: 1, limit: 5 } };
+  const LIVE = { state: "live" as const, title: "Dash", pageId: "page000000000000000000001", url: "https://page000000000000000000001.seira.page/", usage: { pages: 1, limit: 5 } };
 
   async function folder() {
     const base = realpathSync(mkdtempSync(join(tmpdir(), "seira-published-")));
