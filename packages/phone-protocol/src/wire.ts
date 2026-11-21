@@ -10,7 +10,7 @@ import type { TurnDigest } from "./digest.ts";
 import type { BotAvatarCrop, MascotFaceColor } from "./bot-avatar.ts";
 import type { BotBodyId } from "./bot-body.ts"; import type { MascotAccessoryId } from "./mascot-accessories.ts"; import type { ReplyStyle } from "./reply-style.ts";
 import type { CredentialTargetId, CUSTOM_SECRET_TARGET, SecretDelivery } from "./credential-request.ts"; import type { EmailOutgoingFields } from "./email.ts";
-import type { TeamSetupRequest } from "./team-setup.ts"; import type { DefaultBotFields, HelperIntroField } from "./default-bot.ts";
+import type { TeamSetupRequest } from "./team-setup.ts"; import type { DefaultBotFields, HelperIntroField } from "./default-bot.ts"; import type { FolderAccessField, WireFolderAccess, WireFolderGrant } from "./folder-access.ts"; export type { WireFolderAccess, WireFolderGrant };
 import type { SetupCardFields } from "./setup-card.ts"; import type { TeamSuggestionFields } from "./team-suggestion.ts"; import type { BugReportField } from "./devs-report-status.ts"; import type { AccessRequestCardField, BotAccessFields } from "./bot-access.ts";
 import type { RoutineRequestCardData } from "./routine-request.ts"; import type { SavedStepsMark } from "./saved-steps.ts";
 import type { WebhookRequestCardData } from "./webhook-request.ts"; import type { WaitCardField, WaitLineField } from "./wait-request.ts"; import type { ComputerAskField } from "./computer-ask.ts";
@@ -259,7 +259,7 @@ export const helperModelAllowed = (bot: { helperModel?: unknown }): boolean => b
 
 /** A bot as a client may see it. avatarUrl is always present (null when the
  * bot has none). */
-export interface WireBot extends DefaultBotFields, BotAccessFields {
+export interface WireBot extends DefaultBotFields, BotAccessFields, FolderAccessField {
   waitingForTeammates?: boolean;
   id: string;
   /** The task selected in the UI; running turns keep their own thread id. */
