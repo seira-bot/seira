@@ -84,6 +84,7 @@ const sectionOrder = (tree: ReactElement<Props>[]) => tree.map((node) => node.pr
 const headers = (tree: ReactElement<Props>[]) => tree.filter((node) => node.type === SidebarSectionHeader) as ReactElement<Parameters<typeof SidebarSectionHeader>[0]>[];
 const listedBots = (tree: ReactElement<Props>[]) => tree.map((node) => (node.props.bot as Bot | undefined)?.id).filter(Boolean);
 const gridProps = (tree: ReactElement<Props>[]) => tree.find((node) => node.type === SidebarTileGrid)!.props as Parameters<typeof SidebarTileGrid>[0];
+const otherIds = (tree: ReactElement<Props>[]) => (gridProps(tree).others ?? []).map((candidate) => candidate.id);
 const sectionTileIds = (tree: ReactElement<Props>[]) => tree.filter((node) => node.type === SidebarSectionTiles).flatMap((node) => (node.props.bots as Bot[]).map((candidate) => candidate.id));
 const labelled = (tree: ReactElement<Props>[], label: string) => tree.some((node) => node.props["aria-label"] === label);
 
@@ -116,7 +117,7 @@ describe("Simple-mode sidebar layout", () => {
     const { tree } = render();
     expect(sectionOrder(tree)).toEqual([CHANNELS_SECTION_ID, userSectionId("Work")]);
     expect(listedBots(tree)).toEqual([]);
-    expect(gridProps(tree).others.map((candidate) => candidate.id)).toEqual(["atlas", "bea"]);
+    expect(otherIds(tree)).toEqual(["atlas", "bea"]);
     expect(sectionTileIds(tree)).toEqual(["dodo"]);
     const lines = headers(tree);
     expect(lines.map((header) => [header.props.name, header.props.line, "count" in header.props])).toEqual([["Group chats", true, false], ["Work", true, false]]);
@@ -131,7 +132,7 @@ describe("Simple-mode sidebar layout", () => {
     const { tree } = render();
     expect(sectionTileIds(tree)).toEqual(["lead", "dodo"]);
     expect(listedBots(tree)).toEqual([]);
-    expect(gridProps(tree).others.map((candidate) => candidate.id)).toEqual(["atlas"]);
+    expect(otherIds(tree)).toEqual(["atlas"]);
   });
 
   it("keeps bot rows on the phone", () => {
@@ -147,7 +148,7 @@ describe("Simple-mode sidebar layout", () => {
     const grid = tree.find((node) => node.type === SidebarTileGrid)!.props as Parameters<typeof SidebarTileGrid>[0];
     expect(grid.primary?.id).toBe("chief");
     expect(grid.pinned.map((candidate) => candidate.id)).toEqual(["atlas", "dodo"]);
-    expect(grid.others.map((candidate) => candidate.id)).toEqual(["bea"]);
+    expect((grid.others ?? []).map((candidate) => candidate.id)).toEqual(["bea"]);
     expect(sectionOrder(tree)).toEqual([CHANNELS_SECTION_ID, userSectionId("Work")]);
     expect(listedBots(tree)).toEqual([]);
     expect(headers(tree).map((header) => header.props.name)).toEqual(["Group chats", "Work"]);
@@ -258,7 +259,7 @@ describe("Simple-mode sidebar layout", () => {
   it("never hides the heading-less bots behind a collapse saved in Advanced", () => {
     fixture.storage.set(SIDEBAR_COLLAPSED_SECTIONS_KEY, JSON.stringify([BOTS_SECTION_ID, userSectionId("Work")]));
     const { tree } = render();
-    expect(gridProps(tree).others.map((candidate) => candidate.id)).toEqual(["atlas", "bea"]);
+    expect(otherIds(tree)).toEqual(["atlas", "bea"]);
     expect(headers(tree).find((header) => header.props.name === "Work")!.props.collapsed).toBe(true);
   });
 
