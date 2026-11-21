@@ -17,7 +17,7 @@ describe("a published page's link", () => {
     expect(isPublishedPageUrl(`${PAGE}charts/index.html?region=EU#top`)).toBe(true);
     for (const other of [
       "seira://thread/t1?bot=pepper", "seira://bot/pepper", "http://abcdefghijklmnopqrstuvwxyz.seira.page/",
-      "https://abcdefghijklmnopqrstuvwxyz.page.".concat("seira.bot", "/"), "https://seira.page/", "https://www.seira.page/", "https://upload.seira.page/",
+      "https://abcdefghijklmnopqrstuvwxyz.page.seira.bot/", "https://seira.page/", "https://www.seira.page/", "https://upload.seira.page/",
       "https://a.b.abcdefghijklmnopqrstuvwxyz.seira.page/", "https://abcdefghijklmnopqrstuvwxyz.seira.page.evil.test/", "https://abcdefghijklmnopqrstuvwxyz.seira.pages/",
       "https://user:pw@abcdefghijklmnopqrstuvwxyz.seira.page/", "https://abcdefghijklmnopqrstuvwxyz.seira.page:8443/",
       "javascript:alert(1)", "not a url", "", undefined, null,

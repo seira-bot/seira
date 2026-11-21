@@ -72,7 +72,7 @@ describe("the Published apps routes", () => {
     expect(await call("GET", `/api/published-apps/framing?url=${encodeURIComponent("https://bakery.netlify.app/menu")}&origin=${origin}`)).toEqual({ status: 200, body: { framing: "allowed" } });
     expect(framing).toHaveBeenCalledWith("https://bakery.netlify.app/menu", "http://127.0.0.1:5173");
     for (const other of ["https://example.com/", "http://169.254.169.254/latest/meta-data", "http://127.0.0.1:8080/", "http://someone.netlify.app/", "https://netlify.app.evil.test/",
-      "https://app.netlify.com/", "https://upload.seira.page/", "https://abcdefghijklmnopqrstuvwxyz.page.".concat("seira.bot", "/"), "https://seira.page/", "file:///etc/passwd", "not a url"]) {
+      "https://app.netlify.com/", "https://upload.seira.page/", "https://abcdefghijklmnopqrstuvwxyz.page.seira.bot/", "https://seira.page/", "file:///etc/passwd", "not a url"]) {
       expect((await call("GET", `/api/published-apps/framing?url=${encodeURIComponent(other)}&origin=${origin}`)).status, other).toBe(404);
     }
     expect((await call("GET", "/api/published-apps/framing?url=https%3A%2F%2Fbakery.netlify.app%2F")).status).toBe(400);
