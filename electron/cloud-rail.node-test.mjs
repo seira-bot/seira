@@ -365,7 +365,7 @@ function preload(origin, { activation = false } = {}) {
 
 test("a Cloud's page gets the rail and the add sheet's narrow bridges; a circle, ＋ and checkout open only from the person's click", async () => {
   const page = preload(HOME);
-  assert.deepEqual(Object.keys(page.bridge.workspaces), ["state", "menu", "line", "places", "open", "add", "probe", "look", "color", "recolor", "remove", "makeHome", "homeOffers", "onChanged", "local", "onNewLocal", "onConnectServer"]);
+  assert.deepEqual(Object.keys(page.bridge.workspaces), ["state", "menu", "line", "places", "open", "add", "probe", "look", "color", "recolor", "remove", "rename", "makeHome", "homeOffers", "onChanged", "local", "onNewLocal", "onConnectServer"]);
   assert.deepEqual(Object.keys(page.bridge.cloudAdd), ["state", "start", "reopen", "copyLink", "open", "interest", "sheet", "organization"]);
   await page.bridge.workspaces.places();
   await page.bridge.cloudAdd.state();
@@ -429,7 +429,7 @@ test("Rename on a server saved by hand: main saves the name by its own word for 
   assert.deepEqual(await installed.call("workspaces:rename", "vps", "Dup"), { outcome: "taken" });
   assert.deepEqual(await installed.call("workspaces:rename", "vps", { toString: () => "x" }), { outcome: "saved" });
   assert.deepEqual(renamed, [["vps", "Branch office"], ["vps", "Dup"], ["vps", ""]], "only plain text reaches main");
-  for (const id of ["home", "a", "acme", "lab", "local", "profile:work"]) assert.throws(() => installed.call("workspaces:rename", id, "X"), /isn't here/, id);
+  for (const id of ["home", "a", "acme", "lab", "local", "profile:work"]) await assert.rejects(installed.call("workspaces:rename", id, "X"), /isn't here/, id);
   assert.equal(renamed.length, 3, "never a Cloud, a team's Cloud or this computer's own");
   installed.w.lists = false;
   assert.throws(() => installed.call("workspaces:rename", "vps", "X"), /only available/, "a place's page, even this computer's own, never renames from the rail");
