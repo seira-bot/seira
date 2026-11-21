@@ -154,7 +154,7 @@ it("tells a bot in a one-to-one chat about the teammate picked, and about both w
   expect(typed).toContain(`Marlowe (${chief.id})`);
 }, hostTimeout(120_000));
 
-it("names a tagged MCP server in a typed one-to-one line, and in no line that carries the same words from elsewhere", async () => {
+it("names a tagged MCP server in a typed one-to-one line, and no tool that is untagged or not mounted", async () => {
   const added = await team.as(olive, "POST", "/api/mcp/servers", { name: "notion", command: process.execPath, args: ["-e", QUIET_MCP_SERVER] });
   expect(added.status, JSON.stringify(added.body)).toBe(201);
   expect((await team.as(olive, "PATCH", "/api/mcp/servers/notion", { enabled: true })).status).toBe(200);
