@@ -99,11 +99,12 @@ export function suggestedLocalName(taken: readonly string[]): string {
   for (let count = 2; ; count++) { const name = t("rail.localNumbered", { count }); if (free(name)) return name; }
 }
 
-/** A new workspace of this computer's own, from ＋: main makes it and opens it next. */
-export async function createLocal(name: string, color: CloudSwatch | null): Promise<"made" | "name" | "taken" | "failed"> {
+/** A new workspace of this computer's own, from ＋: main makes it and opens it next. "unavailable": this computer can't
+ * hold one now, and ＋ reads main's choices again. */
+export async function createLocal(name: string, color: CloudSwatch | null): Promise<"made" | "name" | "taken" | "full" | "unavailable" | "failed"> {
   const answer = await bridge()?.local?.create(name, color).catch(() => null);
   if (!answer) return "failed";
-  if (answer.outcome === "made") void refreshPlaces();
+  if (answer.outcome === "made" || answer.outcome === "unavailable") void refreshPlaces();
   return answer.outcome;
 }
 

@@ -9,6 +9,7 @@ export interface CatalogCard {
 export const INLINE_CATEGORY_COUNT = 5;
 export const CATEGORY_SECTION_COUNT = 3;
 export const CATEGORY_SECTION_SIZE = 4;
+export const POPULAR_SECTION_SIZE = 4;
 
 /** Composio sends about 40 free-form category names in mixed case; the dialog shows these fixed groups instead. */
 export type AppCategory =
@@ -63,23 +64,38 @@ export function inCategory(card: CatalogCard, category: AppCategory | null): boo
 }
 
 export type CatalogSection<Card> =
+  | { kind: "popular"; cards: Card[] }
   | { kind: "connected"; cards: Card[] }
   | { kind: "category"; category: AppCategory; cards: Card[]; more: boolean }
   | { kind: "all"; cards: Card[] };
 
+const appKey = (name: string) => name.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+/** The catalog slugs of the apps in `usage` (most calls first), up to the size of the Popular section. */
+export function popularSlugs(usage: ReadonlyArray<{ app: string }>, cards: readonly CatalogCard[]): string[] {
+  const slugByKey = new Map(cards.map((card) => [appKey(card.slug), card.slug]));
+  const slugs = usage.flatMap(({ app }) => slugByKey.get(appKey(app)) ?? []);
+  return [...new Set(slugs)].slice(0, POPULAR_SECTION_SIZE);
+}
+
+/** `popular` lists catalog slugs, most used first; an app in it shows there and in no other section. */
 export function catalogSections<Card extends CatalogCard>(
   cards: readonly Card[],
   isConnected: (slug: string) => boolean,
   categories: readonly AppCategory[],
+  popular: readonly string[] = [],
 ): CatalogSection<Card>[] {
   const sections: CatalogSection<Card>[] = [];
-  const connected = cards.filter((card) => isConnected(card.slug));
+  const popularCards = popular.flatMap((slug) => cards.find((card) => card.slug === slug) ?? []);
+  if (popularCards.length) sections.push({ kind: "popular", cards: popularCards });
+  const rest = cards.filter((card) => !popularCards.includes(card));
+  const connected = rest.filter((card) => isConnected(card.slug));
   if (connected.length) sections.push({ kind: "connected", cards: connected });
   for (const category of categories.slice(0, CATEGORY_SECTION_COUNT)) {
-    const open = cards.filter((card) => !isConnected(card.slug) && inCategory(card, category));
+    const open = rest.filter((card) => !isConnected(card.slug) && inCategory(card, category));
     if (open.length) sections.push({ kind: "category", category, cards: open.slice(0, CATEGORY_SECTION_SIZE), more: open.length > CATEGORY_SECTION_SIZE });
   }
-  sections.push({ kind: "all", cards: cards.filter((card) => !isConnected(card.slug)) });
+  sections.push({ kind: "all", cards: rest.filter((card) => !isConnected(card.slug)) });
   return sections;
 }
 

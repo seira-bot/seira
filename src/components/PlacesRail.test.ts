@@ -806,6 +806,23 @@ it("＋ offers a new workspace on this computer first, to Cloud owners too: a na
   expect(create).toHaveBeenCalledTimes(2);
 });
 
+it("＋'s new workspace on a server saved by hand, once this computer can't hold one: Create says why, the sheet stays open, and the choice is gone", async () => {
+  const create = vi.fn(async (_name: string, _color: unknown) => { rail = { ...rail, add: { ...rail.add, local: false } }; return { outcome: "unavailable" as const }; });
+  rail = { places: [place("local", "This computer", { kind: "computer" }), place("vps", "Office", { kind: "server", active: true })], add: { cloud: true, link: true, address: false, local: true } };
+  Object.assign(window, { ogb: { workspaces: { ...workspaces, local: { create, edit: vi.fn(), remove: vi.fn() } }, cloudAdd } });
+  await mount(createElement(PlacesRail));
+  await click(host.querySelector("[data-rail-add]"));
+  await click(document.querySelector('[data-place-add-choice="local"]'));
+  await submit(document.querySelector('[data-place-add="local"]'));
+  await act(async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); });
+  expect(create).toHaveBeenCalledTimes(1);
+  expect(document.querySelector("[data-local-problem]")?.textContent).toBe("You can't add a place on this computer now. Choose another kind of place.");
+  expect(document.querySelector("[data-place-add-sheet]"), "the sheet stays open").not.toBeNull();
+  await click([...document.querySelectorAll('[data-place-add="local"] button')].find((button) => button.textContent === "Back") ?? null);
+  expect([...document.querySelectorAll("[data-place-add-choice]")].map((choice) => choice.getAttribute("data-place-add-choice")), "main's choices read again").toEqual(["cloud", "server"]);
+  expect(host.querySelector("[data-rail-add]")?.getAttribute("aria-label")).toBe("Add a Cloud or your own server");
+});
+
 it("with only the new workspace to add, ＋ goes straight to its name, and Close leaves nothing behind", async () => {
   const create = vi.fn();
   rail = { places: [place("local", "This computer", { kind: "computer", active: true }), place("vps", "Office", { kind: "server" })], add: { cloud: false, link: false, address: false, local: true } };

@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import biverLogo from "@/assets/biver/logo.png";
 import citcatLogo from "@/assets/citcat/logo.png";
 import coretLogo from "@/assets/coret/logo.png";
+import dalektaLogo from "@/assets/dalekta/logo.png";
 import konektorLogo from "@/assets/konektor/logo.png";
 import replizLogo from "@/assets/repliz/logo.png";
 import termiloLogo from "@/assets/termilo/logo.png";
@@ -80,6 +81,15 @@ export const HOSTED_MCP_APPS = [
     description: "repliz.description",
     notice: "repliz.notice",
     keywords: "repliz social media comments auto reply dm schedule posts automation instagram facebook threads tiktok youtube",
+  },
+  {
+    id: "dalekta",
+    label: "Dalekta",
+    url: "https://mcp.dalekta.id/mcp",
+    icon: { image: dalektaLogo },
+    description: "dalekta.description",
+    notice: "dalekta.notice",
+    keywords: "dalekta whatsapp ctwa lpwa ads tracking leads closing revenue conversions capi meta funnel",
   },
 ] as const satisfies readonly HostedMcpApp[];
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Check,
   CheckCircle2,
@@ -97,6 +98,8 @@ export function connectedLabel(result: Pick<ProbeResult, "tools" | "total">): st
 export interface HostedCardsProps {
   /** Whether this app's card shows now (search, filter, category view). A hidden card stays mounted. */
   shown(id: HostedMcpAppId): boolean;
+  /** Where the hosted cards render when set, in place of this panel's own spot: the Featured section. */
+  featured?: HTMLElement | null;
   onConnections(connected: HostedConnections): void;
   /** Every server listed, for the Connected count. */
   onServers?(servers: McpServerListing[]): void;
@@ -578,8 +581,9 @@ export function McpServersPanel({ embedded = false, hostedCards, hideHosted = fa
 
   if (hostedCards) {
     const own = hostedCards.ownServers;
+    const apps = HOSTED_MCP_APPS.map((app) => <div key={app.id} className={hostedCards.shown(app.id) ? "contents" : "hidden"}>{renderHostedCard(app)}</div>);
     return <>
-      {HOSTED_MCP_APPS.map((app) => <div key={app.id} className={hostedCards.shown(app.id) ? "contents" : "hidden"}>{renderHostedCard(app)}</div>)}
+      {hostedCards.featured ? createPortal(apps, hostedCards.featured) : apps}
       {own && servers?.filter((server) => server.enabled && ownMcpServer(server) && own.shown(server)).map((server) => renderOwnServer(server, own.manage))}
     </>;
   }
