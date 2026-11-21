@@ -5,7 +5,7 @@ vi.mock("@/state/store", () => ({ api: store.api }));
 
 import { fetchAppUsage } from "./app-usage";
 
-beforeEach(() => store.api.mockReset());
+beforeEach(() => { store.api.mockReset(); });
 
 describe("fetchAppUsage", () => {
   it("asks for the last week and returns the apps", async () => {
@@ -14,7 +14,7 @@ describe("fetchAppUsage", () => {
     expect(store.api).toHaveBeenCalledWith("/api/apps/usage");
   });
   it("returns nothing when the request fails", async () => {
-    store.api.mockImplementation(async () => { throw new Error("offline"); });
+    store.api.mockRejectedValue(new Error("offline"));
     expect(await fetchAppUsage()).toEqual([]);
   });
   it("returns nothing for an answer of the wrong shape and drops a bad entry", async () => {
