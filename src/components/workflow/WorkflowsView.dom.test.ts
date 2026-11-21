@@ -292,7 +292,7 @@ describe("the Workflows view", () => {
       });
       const container = mount({ workflowId: "wf-blank" });
       await settle();
-      await click(button(container, "Back"));
+      await click(button(container, "All workflows"));
       await settle();
       expect(removed()).toEqual(["/api/workflows/wf-blank"]);
     });
