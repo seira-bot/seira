@@ -1,4 +1,4 @@
-import { BOARD_CLOSE_REASON_CHARS } from "../../shared/board.ts";
+import { BOARD_CLOSE_REASON_CHARS, type BoardCard } from "../../shared/board.ts";
 import type { BoardClosures } from "../board-closed.ts";
 import { boardView, botMayClose, type BoardSources } from "../board.ts";
 
@@ -8,13 +8,15 @@ export interface BoardCloseDeps {
   bot: { id: string; chiefOfStaff?: boolean; section?: string };
   botOf: (botId: string) => { name?: string; section?: string } | undefined;
   teamCloud: boolean;
+  /** Whether the calling turn may read this card: a card it may not read looks like a missing one. */
+  readable: (card: BoardCard) => boolean;
 }
 
 const EVERYTHING = { thread: () => true, bot: () => true, routine: () => true };
 
 /** What a bot's board_close call gets: with no body, the Needs you cards that bot may close; with one, the close itself. */
 export function boardCloseAnswer(deps: BoardCloseDeps, body: Record<string, unknown> | null): { status: number; body: Record<string, unknown> } {
-  const cards = boardView({ ...deps.sources(), closed: (cardId) => deps.closures.get(cardId) }, EVERYTHING).cards.filter((card) => card.column === "needs-you");
+  const cards = boardView({ ...deps.sources(), closed: (cardId) => deps.closures.get(cardId) }, EVERYTHING).cards.filter((card) => card.column === "needs-you" && deps.readable(card));
   const mayClose = (card: (typeof cards)[number]) => botMayClose(card, deps.bot, deps.botOf(card.botId), deps.teamCloud);
   const botName = (botId: string) => deps.botOf(botId)?.name ?? botId;
   if (!body) {

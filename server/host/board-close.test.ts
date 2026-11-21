@@ -12,7 +12,7 @@ const failed = (id: string, botId: string, parentBot = "root"): Handoff[] => [
 ];
 const running: Handoff = { id: "run", parentId: "root", threadId: "t-run", botId: "scout", text: "Busy", createdAt: NOW - 5000, status: "running", result: "", mode: "work" };
 
-function world(bot: BoardCloseDeps["bot"], teamCloud = false) {
+function world(bot: BoardCloseDeps["bot"], teamCloud = false, readable: BoardCloseDeps["readable"] = () => true) {
   const closed = new Map<string, BoardClosure>();
   const closures: BoardClosures = { get: (id) => closed.get(id), close: (id, by, reason) => { closed.set(id, { at: NOW + 1, by, ...(reason ? { reason } : {}) }); } };
   const bots: Record<string, { name: string; section?: string }> = {
@@ -20,7 +20,7 @@ function world(bot: BoardCloseDeps["bot"], teamCloud = false) {
   };
   const rows = [...failed("mine", "scout"), ...failed("handed", "cleo", "scout"), ...failed("sales", "atlas"), ...failed("support", "cleo"), running];
   const deps: BoardCloseDeps = {
-    sources: () => ({ handoffs: () => rows, threads: [], runs: () => [] }), closures, bot, botOf: (id) => bots[id], teamCloud,
+    sources: () => ({ handoffs: () => rows, threads: [], runs: () => [] }), closures, bot, botOf: (id) => bots[id], teamCloud, readable,
   };
   return { deps, closed };
 }
@@ -75,5 +75,30 @@ describe("board_close on the server", () => {
     expect(boardCloseAnswer(deps, { cardId: "handoff:mine" }).status).toBe(400);
     expect(boardCloseAnswer(deps, { cardId: "handoff:mine", reason: "x".repeat(201) }).status).toBe(400);
     expect(closed.size).toBe(0);
+  });
+
+  describe("on a Team Cloud, across people", () => {
+    const audiences: Record<string, string> = { "t-mine": "member:a", "t-handed": "member:a", "t-sales": "member:b", "t-support": "team" };
+    const sameAudience: BoardCloseDeps["readable"] = (card) => Boolean(card.threadId) && (audiences[card.threadId!] === "team" || audiences[card.threadId!] === "member:a");
+    const chief = { id: "chief", chiefOfStaff: true };
+
+    it("does not list a card whose thread belongs to another member", () => {
+      const { deps } = world(chief, false, sameAudience);
+      expect(ids(boardCloseAnswer(deps, null))).toEqual(["handoff:handed", "handoff:mine", "handoff:support"]);
+    });
+
+    it("answers a close of another member's card like a missing card and keeps the store empty", () => {
+      const { deps, closed } = world(chief, false, sameAudience);
+      const hidden = boardCloseAnswer(deps, { cardId: "handoff:sales", reason: "Stale." });
+      expect(hidden).toEqual(boardCloseAnswer(deps, { cardId: "handoff:nope", reason: "Stale." }));
+      expect(hidden.status).toBe(409);
+      expect(closed.size).toBe(0);
+    });
+
+    it("still lists and closes a card of the same audience", () => {
+      const { deps, closed } = world(chief, false, sameAudience);
+      expect(boardCloseAnswer(deps, { cardId: "handoff:mine", reason: "Done." }).status).toBe(200);
+      expect(closed.has("handoff:mine")).toBe(true);
+    });
   });
 });
