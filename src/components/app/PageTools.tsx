@@ -56,7 +56,7 @@ export function usePageVersion(app: AppPayload): { rev: number; first: number; l
 type Share =
   | { kind: "idle" }
   | { kind: "busy" }
-  | { kind: "refused"; text: string; card?: PublishedPageCard }
+  | { kind: "refused"; text: string; card?: PublishedPageCard; signIn?: boolean }
   | { kind: "unpublishing" }
   | { kind: "unpublish-failed" };
 
@@ -71,7 +71,8 @@ export function usePageShare(threadId: string, messageId: string, published: Pub
     const outcome = await publishAppPage(threadId, messageId, rev);
     setAgain(Boolean(live) && outcome.ok);
     if (outcome.ok) setShare({ kind: "idle" });
-    else setShare({ kind: "refused", text: outcome.card?.message ?? outcome.error, ...(outcome.card ? { card: outcome.card } : {}) });
+    else setShare({ kind: "refused", text: outcome.card?.message ?? outcome.error, ...(outcome.card ? { card: outcome.card } : {}),
+      ...(outcome.reason === "sign_in" ? { signIn: true } : {}) });
   };
   const unpublish = async () => {
     if (!live?.pageId) return;
@@ -216,6 +217,8 @@ export interface PageToolsProps {
 export function PageToolbar({ version, point, share, save, ready, fullScreen, room, pin, className }: PageToolsProps & { className?: string }) {
   const label = version.latest ? t("chat.preview.version", { n: version.rev + 1 }) : t("chat.preview.versionOf", { n: version.rev + 1, count: version.last + 1 });
   const busy = share.share.kind === "busy";
+  const { state } = useStore();
+  const hideShare = state.config?.pages?.offered === false && !share.url;
   return (
     <div data-page-tools className={cn("flex flex-wrap items-center gap-x-1.5 gap-y-2", className)}>
       <div className="flex items-center gap-0.5 text-[13px] text-ink-secondary">
@@ -233,9 +236,11 @@ export function PageToolbar({ version, point, share, save, ready, fullScreen, ro
           <Crosshair size={14} />{t("chat.preview.point")}
         </button>
         {!room && <>
-          <button type="button" onClick={() => void share.run(version.rev)} disabled={busy} className={cn(ASK_CHIP, ASK_CHIP_IDLE)}>
-            {busy ? <Loader2 size={14} className="animate-spin" /> : <Share2 size={14} />}{t("chat.preview.share")}
-          </button>
+          {!hideShare && (
+            <button type="button" onClick={() => void share.run(version.rev)} disabled={busy} className={cn(ASK_CHIP, ASK_CHIP_IDLE)}>
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <Share2 size={14} />}{t("chat.preview.share")}
+            </button>
+          )}
           {pin?.show && (
             <button type="button" data-page-pin aria-pressed={pin.pinned} onClick={pin.toggle} disabled={pin.full}
               title={pin.full ? t("chat.preview.pinFull", { max: MAX_WEB_PANELS }) : t(pin.pinned ? "chat.preview.unpinHint" : "chat.preview.pinHint")}
@@ -248,10 +253,12 @@ export function PageToolbar({ version, point, share, save, ready, fullScreen, ro
           aria-label={t("chat.preview.save")} title={t("chat.preview.save")}>
           {save.busy ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
         </button>
-        <button type="button" className={TOOL} disabled={!share.url} onClick={() => share.url && void openExternalLink(share.url)}
-          aria-label={t("chat.preview.openTab")} title={share.url ? t("chat.preview.openTab") : t("chat.preview.openTabNeedsLink")}>
-          <ArrowUpRight size={15} />
-        </button>
+        {!hideShare && (
+          <button type="button" className={TOOL} disabled={!share.url} onClick={() => share.url && void openExternalLink(share.url)}
+            aria-label={t("chat.preview.openTab")} title={share.url ? t("chat.preview.openTab") : t("chat.preview.openTabNeedsLink")}>
+            <ArrowUpRight size={15} />
+          </button>
+        )}
         <button type="button" className={TOOL} onClick={fullScreen.toggle} aria-pressed={fullScreen.open}
           aria-label={fullScreenLabel(fullScreen)} title={fullScreenLabel(fullScreen)}>
           {fullScreen.open ? <X size={16} /> : <Maximize2 size={14} />}
@@ -298,6 +305,9 @@ export function PageNotes({ version, point, share, save, room, className }: Pick
         <span dir="auto" className="min-w-0 flex-1">{state.text}</span>
         {state.card?.upgrade && cloudSells() && window.ogb?.cloudAccount && !window.ogb.remoteClient?.active && (
           <button type="button" className={ASK_PRIMARY_BUTTON} onClick={() => dispatch({ type: "openCloudAdd", source: "app_pages" })}>{t("chat.page.morePages")}</button>
+        )}
+        {state.signIn && window.ogb?.cloudAccount && !window.ogb.remoteClient?.active && (
+          <button type="button" className={ASK_PRIMARY_BUTTON} onClick={() => dispatch({ type: "toggleAppSettings", open: true, section: "account" })}>{t("accounts.signIn")}</button>
         )}
       </div>,
     );

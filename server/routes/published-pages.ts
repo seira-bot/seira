@@ -108,6 +108,6 @@ export function createPublishedPageRoutes(publisher: PagePublisher, apps?: AppPa
       ...(pageId ? { pageId } : {}),
       post: (_text, card) => (card.state === "live" ? apps.show(threadId, messageId, card) : null),
     });
-    json(res, outcome.status, outcome.status === 200 ? { ok: true, card: outcome.card } : { error: outcome.text, ...(outcome.card ? { card: outcome.card } : {}) });
+    json(res, outcome.status, outcome.status === 200 ? { ok: true, card: outcome.card } : { error: outcome.text, ...(outcome.card ? { card: outcome.card } : {}), ...(outcome.reason ? { reason: outcome.reason } : {}) });
   };
 }

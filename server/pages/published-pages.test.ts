@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PublishedPageCard } from "../../shared/published-page.ts";
 import { FAKE_DESKTOP_TOKEN, FAKE_HOME, FAKE_TOKEN_URL, fakePagesService } from "../testing/fake-pages.ts";
-import { applyIncludedPagesMessage, pagesHomeSignature } from "./access.ts";
+import { applyIncludedPagesMessage, pagesHomeSignature, pagesOffered } from "./access.ts";
+import { createPagesClient } from "./client.ts";
 import { PageBundleError, readPageBundle, skippedNote } from "./bundle.ts";
 import * as bundle from "./bundle.ts";
 import { PublishedPagesStore } from "./store.ts";
@@ -57,7 +58,7 @@ describe("publishing a page", () => {
     const f = setup();
     writeSite(join(f.work, "site"));
     const outcome = await f.publish({ path: "site" });
-    expect(outcome).toEqual({ status: 403, text: "Publishing a page needs a Seira account. Sign in to Seira in the app's Settings, then ask again." });
+    expect(outcome).toEqual({ status: 403, text: "Publishing a page needs a Seira account. Sign in to Seira in the app's Settings, then ask again.", reason: "sign_in" });
     expect(f.service.minted).toEqual([]);
     expect(f.cards).toEqual([]);
   });
@@ -66,7 +67,7 @@ describe("publishing a page", () => {
     const f = setup({ selfHosted: true });
     writeSite(join(f.work, "site"));
     const outcome = await f.publish({ path: "site" });
-    expect(outcome).toEqual({ status: 503, text: "Publishing pages isn't available on self-hosted servers yet." });
+    expect(outcome).toEqual({ status: 503, text: "Publishing pages isn't available on self-hosted servers.", reason: "unavailable" });
     expect(f.service.minted).toEqual([]);
     expect(f.cards).toEqual([]);
   });
@@ -76,7 +77,7 @@ describe("publishing a page", () => {
     applyIncludedPagesMessage({ type: "seira:included-pages", access: null, offered: false });
     writeSite(join(f.work, "site"));
     const outcome = await f.publish({ path: "site" });
-    expect(outcome.text).toBe("Publishing pages isn't turned on for this account yet.");
+    expect(outcome.text).toBe("Public links for pages aren't available on this account.");
     expect(f.service.minted).toEqual([]);
     expect(f.cards).toEqual([]);
     applyIncludedPagesMessage({ type: "seira:included-pages", access: null });
@@ -269,7 +270,7 @@ describe("publishing a page", () => {
     signIn();
     writeSite(join(f.work, "site"));
     f.service.state.down = true;
-    expect(await f.publish({ path: "site" })).toEqual({ status: 503, text: "Publishing isn't available right now. Try again in a few minutes." });
+    expect(await f.publish({ path: "site" })).toEqual({ status: 503, text: "Publishing isn't available right now. Try again in a few minutes.", reason: "unavailable" });
   });
 });
 
@@ -732,3 +733,30 @@ describe("a live published page", () => {
   });
 });
 
+describe("whether pages are offered", () => {
+  const reset = () => applyIncludedPagesMessage({ type: "seira:included-pages", access: null });
+
+  it("is false on a self-hosted server, and true for a home or a desktop that has not been told otherwise", () => {
+    reset();
+    expect(pagesOffered(null, true)).toBe(false);
+    expect(pagesOffered(null, false)).toBe(true);
+    expect(pagesOffered(FAKE_HOME, false)).toBe(true);
+  });
+
+  it("is false once the desktop's Admin offers no pages, and true again when it gives a token", () => {
+    applyIncludedPagesMessage({ type: "seira:included-pages", access: null, offered: false });
+    expect(pagesOffered(null, false)).toBe(false);
+    signIn();
+    expect(pagesOffered(null, false)).toBe(true);
+    reset();
+    expect(pagesOffered(null, false)).toBe(true);
+  });
+
+  it("treats a Cloud home's 501 for the token route as not offered, with a message that names no route or status", async () => {
+    const client = createPagesClient({ access: () => ({ kind: "home", url: FAKE_TOKEN_URL, machineId: FAKE_HOME.machineId, secret: FAKE_HOME.bootstrapSecret }),
+      fetch: async () => Response.json({ error: "unsupported" }, { status: 501 }) });
+    const outcome = await client.unpublish("abcdefghijklmnopqrstuvwxyz");
+    expect(outcome).toEqual({ ok: false, reason: "unavailable", message: "Public links for pages aren't available on this account." });
+    expect(outcome.ok === false && outcome.message).not.toMatch(/\byet\b|501|\/api\//u);
+  });
+});

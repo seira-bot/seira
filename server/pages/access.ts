@@ -74,3 +74,8 @@ export function pagesAccess(home: { adminOrigin: string; machineId: string; boot
   if (home) return { kind: "home", url: `${home.adminOrigin}${PAGES_TOKEN_PATH}`, machineId: home.machineId, secret: home.bootstrapSecret };
   return desktopPages ? { kind: "desktop", ...desktopPages } : null;
 }
+
+/** Whether this server can offer page links at all: not on a self-hosted server, and not when the signed-in desktop's Admin offers none. */
+export function pagesOffered(home: unknown, selfHosted: boolean): boolean {
+  return !selfHosted && !pagesNotOffered(home);
+}
