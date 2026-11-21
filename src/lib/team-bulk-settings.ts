@@ -14,7 +14,8 @@ export type TeamApprovalMode = (typeof TEAM_APPROVAL_MODES)[number];
 
 export type TeamChange =
   | { kind: "approval"; mode: TeamApprovalMode }
-  | { kind: "model"; model?: string; effort?: EffortLevel | null }
+  /** An instanceId moves a bot to that engine, which may be another provider than its own. */
+  | { kind: "model"; model?: string; effort?: EffortLevel | null; instanceId?: string }
   /** A person's level null takes them off; the bot's owner is never listed, so they are left out for the bot they own. */
   | { kind: "access"; everyone?: BotAccessLevel; person?: { email: string; level: GrantedLevel | null } };
 
@@ -34,11 +35,20 @@ export function teamBots(bots: readonly Bot[], team: string): Bot[] {
   return bots.filter((bot) => !bot.hidden && (bot.section?.trim() || "") === name);
 }
 
+export function allBots(bots: readonly Bot[], options: { fromInstanceId?: string } = {}): Bot[] {
+  return bots.filter((bot) => !bot.hidden && (!options.fromInstanceId || bot.modelSelection.instanceId === options.fromInstanceId));
+}
+
 const engineOf = (bot: Bot, instances: readonly InstanceInfo[]) =>
   instances.find((instance) => instance.instanceId === bot.modelSelection.instanceId);
 
 export function teamModeOffered(driverKind: string | undefined, mode: TeamApprovalMode): boolean {
   return supportsApprovalMode(driverKind, mode) && !(driverKind === "antigravityAgent" && mode === "auto");
+}
+
+export function engineModelChoices(engine: InstanceInfo): Array<{ id: string; label: string }> {
+  const ids = [engine.models.default, ...engine.models.options.filter((option) => !option.orgBlocked && !option.needsCliUpdate).map((option) => option.id)].filter((id) => id.trim());
+  return [...new Set(ids)].map((id) => ({ id, label: engine.models.options.find((option) => option.id === id)?.label ?? id }));
 }
 
 export function teamModelChoices(bots: readonly Bot[], instances: readonly InstanceInfo[]): Array<{ id: string; label: string; engines: string[] }> {
@@ -48,9 +58,7 @@ export function teamModelChoices(bots: readonly Bot[], instances: readonly Insta
     const engine = engineOf(bot, instances);
     if (!engine || seen.has(engine.instanceId)) continue;
     seen.add(engine.instanceId);
-    const ids = [engine.models.default, ...engine.models.options.filter((option) => !option.orgBlocked && !option.needsCliUpdate).map((option) => option.id)].filter((id) => id.trim());
-    for (const id of new Set(ids)) {
-      const label = engine.models.options.find((option) => option.id === id)?.label ?? id;
+    for (const { id, label } of engineModelChoices(engine)) {
       const entry = choices.get(id) ?? { id, label, engines: [] };
       if (!entry.engines.includes(engine.displayName)) entry.engines.push(engine.displayName);
       choices.set(id, entry);
@@ -96,25 +104,28 @@ export function planTeamChange(bots: readonly Bot[], instances: readonly Instanc
       return { bot, status: "apply", patch: { approvalMode: change.mode, applyToAllThreads: true } };
     }
     const current = bot.modelSelection;
-    if (!engine) return { bot, status: "skip", reason: t("teamSettings.skip.engineMissing") };
+    const target = change.instanceId ? instances.find((instance) => instance.instanceId === change.instanceId) : engine;
+    const moving = target !== undefined && target.instanceId !== current.instanceId;
+    if (!target || (moving && target.snapshot.state !== "available")) return { bot, status: "skip", reason: t("teamSettings.skip.engineMissing") };
+    const targetName = target.displayName;
     const model = change.model ?? current.model;
-    const offered = model === engine.models.default || engine.models.options.some((option) => option.id === model && !option.orgBlocked && !option.needsCliUpdate);
-    if (!offered) return { bot, status: "skip", reason: t("teamSettings.skip.modelUnsupported", { engine: engineName, model }) };
-    const next: ModelSelection = { instanceId: current.instanceId, model };
-    if (current.variant && model === current.model) next.variant = current.variant;
+    const offered = model === target.models.default || target.models.options.some((option) => option.id === model && !option.orgBlocked && !option.needsCliUpdate);
+    if (!offered) return { bot, status: "skip", reason: t("teamSettings.skip.modelUnsupported", { engine: targetName, model }) };
+    const next: ModelSelection = { instanceId: target.instanceId, model };
+    if (!moving && current.variant && model === current.model) next.variant = current.variant;
     if (change.effort === undefined) {
-      if (current.effort) next.effort = current.effort;
+      if (!moving && current.effort) next.effort = current.effort;
     } else if (change.effort !== null) {
-      if (engine.capabilities?.modelVariants) {
-        return { bot, status: "skip", reason: t("teamSettings.skip.variantsOnly", { engine: engineName }) };
+      if (target.capabilities?.modelVariants) {
+        return { bot, status: "skip", reason: t("teamSettings.skip.variantsOnly", { engine: targetName }) };
       }
-      if (!(engine.capabilities?.effortLevels ?? []).includes(change.effort)) {
-        return { bot, status: "skip", reason: t("teamSettings.skip.effortUnsupported", { engine: engineName }) };
+      if (!(target.capabilities?.effortLevels ?? []).includes(change.effort)) {
+        return { bot, status: "skip", reason: t("teamSettings.skip.effortUnsupported", { engine: targetName }) };
       }
       next.effort = change.effort;
       delete next.variant;
     }
-    if (next.model === current.model && next.effort === current.effort && next.variant === current.variant) {
+    if (next.instanceId === current.instanceId && next.model === current.model && next.effort === current.effort && next.variant === current.variant) {
       return { bot, status: "unchanged" };
     }
     if (bot.busy) return { bot, status: "skip", reason: t("teamSettings.skip.busy") };

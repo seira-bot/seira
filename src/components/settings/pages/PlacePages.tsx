@@ -28,6 +28,7 @@ import { PlaceLookRows } from "../../PlaceLookCard";
 import { ProfileFields } from "../../ProfileSettings";
 import { RoomTurnTimeoutSettings } from "../../RoomTurnTimeoutSettings";
 import { SavedStepsRow } from "../../SavedStepsRow";
+import { TeamSettingsDialog } from "../../TeamSettingsDialog";
 import { Card, SettingRow, SettingsDisclosureRow, SettingsFoldRow, SettingsGroup, SettingsLinkRow, SettingsRows } from "../../SettingsPrimitives";
 import { KEY_SECTIONS } from "../../keys/key-catalog";
 import { DesktopKinds } from "../DesktopKinds";
@@ -118,6 +119,14 @@ function useConnectedAppCount(): number | null {
   return count;
 }
 
+function AllBotsModelRow() {
+  const [open, setOpen] = useState(false);
+  return <SettingRow title={t("settings.ai.allBotsModel")} subtitle={t("settings.ai.allBotsModelLine")}>
+    <button type="button" className="ui-button" data-all-bots-model onClick={() => setOpen(true)}>{t("settings.ai.allBotsModelChange")}</button>
+    {open && <TeamSettingsDialog scope={{ all: true }} onClose={() => setOpen(false)} />}
+  </SettingRow>;
+}
+
 export function AiPage() {
   const { ctx, anchor } = useSettingsShell();
   const [more, setMore] = useState(false);
@@ -131,6 +140,7 @@ export function AiPage() {
       <div data-settings-block="providers" className="flex scroll-mt-4 flex-col gap-6">
         <EnginesSettings simple more={{ id: "ai-more", open: more, onToggle: () => setMore((open) => !open) }} />
       </div>
+      <SettingsGroup block="all-bots-model"><SettingsRows><AllBotsModelRow /></SettingsRows></SettingsGroup>
       {!ctx.advanced && (
         <SettingsGroup block="ai-keys-fold">
           <SettingsRows>

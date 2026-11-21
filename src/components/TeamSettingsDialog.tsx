@@ -3,11 +3,14 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/cn";
+import { configuredModelInstances } from "@/lib/engine-rail";
 import { t } from "@/lib/i18n";
 import {
   applyTeamPlan,
   planAccess,
   planNeedsLocalAutoConsent,
+  allBots,
+  engineModelChoices,
   planTeamChange,
   TEAM_APPROVAL_MODES,
   teamBots,
@@ -19,7 +22,7 @@ import {
   type TeamPlanRow,
   type TeamResultRow,
 } from "@/lib/team-bulk-settings";
-import { api, desktopApprovalBridge, persistBotUpdate, useStore } from "@/state/store";
+import { api, desktopApprovalBridge, persistBotUpdate, useStore, type ConfigStatus } from "@/state/store";
 import { useTeamPeople } from "@/state/team-people";
 import { EFFORT_LEVELS, type EffortLevel } from "../../shared/wire";
 import { saveAccess } from "./bot-access/access";
@@ -54,9 +57,17 @@ export function TeamSettingsRows({ rows }: { rows: ReadonlyArray<TeamPlanRow | T
   );
 }
 
-export function TeamSettingsDialog({ team, onClose }: { team: string; onClose: () => void }) {
+export type TeamSettingsScope = { team: string } | { all: true };
+
+export function TeamSettingsDialog({ scope, onClose }: { scope: TeamSettingsScope; onClose: () => void }) {
   const { state, dispatch } = useStore();
-  const [tab, setTab] = useState<Tab>("approval");
+  const everyBot = "all" in scope;
+  const team = "team" in scope ? scope.team : "";
+  const [tab, setTab] = useState<Tab>(everyBot ? "model" : "approval");
+  const [fromEngine, setFromEngine] = useState<string>(KEEP);
+  const [toEngine, setToEngine] = useState<string>(KEEP);
+  const [alsoNewBots, setAlsoNewBots] = useState(false);
+  const [newBotsError, setNewBotsError] = useState("");
   const [mode, setMode] = useState<TeamApprovalMode | null>(null);
   const [model, setModel] = useState<string>(KEEP);
   const [effort, setEffort] = useState<string>(KEEP);
@@ -73,12 +84,16 @@ export function TeamSettingsDialog({ team, onClose }: { team: string; onClose: (
   const [consent, setConsent] = useState(false);
   const dialog = useRef<HTMLDivElement>(null);
 
-  const bots = useMemo(() => teamBots(state.bots, team), [state.bots, team]);
+  const bots = useMemo(() => everyBot ? allBots(state.bots, { fromInstanceId: fromEngine || undefined }) : teamBots(state.bots, team),
+    [state.bots, team, everyBot, fromEngine]);
+  const target = state.instances.find((instance) => instance.instanceId === toEngine);
+  const targetModels = useMemo(() => target ? engineModelChoices(target) : [], [target]);
   const latestBots = useRef(state.bots);
   latestBots.current = state.bots;
   const models = useMemo(() => teamModelChoices(bots, state.instances), [bots, state.instances]);
   const efforts = useMemo(() => teamEffortChoices(bots, state.instances, EFFORT_LEVELS), [bots, state.instances]);
-  const change: TeamChange | null = tab === "approval"
+  const change: TeamChange | null = everyBot ? toEngine === KEEP || model === KEEP ? null : { kind: "model", instanceId: toEngine, model }
+    : tab === "approval"
     ? mode ? { kind: "approval", mode } : null
     : tab === "access" ? everyone === KEEP && person === KEEP ? null
       : {
@@ -102,7 +117,7 @@ export function TeamSettingsDialog({ team, onClose }: { team: string; onClose: (
   }, []);
 
   const run = async (acknowledgeLocalAuto: boolean) => {
-    if (running || !applying) return;
+    if (running || !(applying || (everyBot && alsoNewBots && change))) return;
     setRunning(true);
     setProgress(0);
     const outcome = await applyTeamPlan(plan, async (bot, patch) => {
@@ -118,6 +133,17 @@ export function TeamSettingsDialog({ team, onClose }: { team: string; onClose: (
         if (row?.status === "apply" && "access" in row) dispatch({ type: "botPatched", bot: await saveAccess(bot.id, row.access) });
       },
     });
+    if (everyBot && alsoNewBots && change?.kind === "model" && change.model) {
+      try {
+        const config = await api<ConfigStatus>("/api/config", {
+          method: "PUT",
+          body: JSON.stringify({ defaultModelSelection: { instanceId: change.instanceId, model: change.model } }),
+        });
+        dispatch({ type: "configStatus", config });
+      } catch (cause) {
+        setNewBotsError(cause instanceof Error ? cause.message : t("teamSettings.all.newBotsFailed"));
+      }
+    }
     setResults(outcome);
     setRunning(false);
   };
@@ -138,7 +164,7 @@ export function TeamSettingsDialog({ team, onClose }: { team: string; onClose: (
         className="max-h-[90vh] w-full max-w-[460px] overflow-y-auto rounded-2xl border border-hairline/50 bg-panel p-5 text-ink shadow-2xl"
         onKeyDown={(event) => { if (event.key === "Escape" && !consent) { event.stopPropagation(); close(); } }}>
         <div className="mb-2 flex items-center justify-between gap-3">
-          <h2 id="team-settings-title" className="text-[17px] font-semibold">{t("teamSettings.title", { name: team || t("teamSettings.general") })}</h2>
+          <h2 id="team-settings-title" className="text-[17px] font-semibold">{everyBot ? t("teamSettings.all.title") : t("teamSettings.title", { name: team || t("teamSettings.general") })}</h2>
           <button type="button" aria-label={t("teamSettings.close")} disabled={running} onClick={close} className="rounded-lg p-1.5 text-ink-secondary hover:bg-raised"><X size={18} /></button>
         </div>
         {results && counts ? (
@@ -146,6 +172,7 @@ export function TeamSettingsDialog({ team, onClose }: { team: string; onClose: (
             <p role="status" className="mb-3 text-[13px] text-ink-secondary">
               {t("teamSettings.summary", { applied: counts.applied, unchanged: counts.unchanged, skipped: counts.skipped })}
             </p>
+            {newBotsError && <p role="alert" className="mb-3 text-[13px] text-warning">{t("teamSettings.all.newBotsFailedWhy", { reason: newBotsError })}</p>}
             <TeamSettingsRows rows={results} />
             <div className="mt-4 flex justify-end">
               <button type="button" onClick={onClose} className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white">{t("teamSettings.done")}</button>
@@ -153,13 +180,39 @@ export function TeamSettingsDialog({ team, onClose }: { team: string; onClose: (
           </>
         ) : (
           <>
-            <p className="mb-3 text-[13px] leading-relaxed text-ink-secondary">{t("teamSettings.intro", { count: bots.length })}</p>
-            <div className="mb-3 flex gap-1 rounded-lg bg-inset p-0.5" role="tablist">
+            <p className="mb-3 text-[13px] leading-relaxed text-ink-secondary">{t(everyBot ? "teamSettings.all.intro" : "teamSettings.intro", { count: bots.length })}</p>
+            {!everyBot && <div className="mb-3 flex gap-1 rounded-lg bg-inset p-0.5" role="tablist">
               <button type="button" role="tab" aria-selected={tab === "approval"} disabled={running} className={tabClass(tab === "approval")} onClick={() => setTab("approval")}>{t("teamSettings.tab.approval")}</button>
               <button type="button" role="tab" aria-selected={tab === "model"} disabled={running} className={tabClass(tab === "model")} onClick={() => setTab("model")}>{t("teamSettings.tab.model")}</button>
               {teamName && <button type="button" role="tab" aria-selected={tab === "access"} disabled={running} className={tabClass(tab === "access")} onClick={() => setTab("access")}>{t("teamSettings.tab.access")}</button>}
-            </div>
-            {tab === "approval" ? (
+            </div>}
+            {everyBot ? (
+              <fieldset disabled={running} className="flex flex-col gap-3">
+                <label className="text-[13px] text-ink-secondary">{t("teamSettings.all.from")}
+                  <Select className="mt-1 w-full" aria-label={t("teamSettings.all.from")} value={fromEngine} onChange={(event) => setFromEngine(event.target.value)}>
+                    <option value={KEEP}>{t("teamSettings.all.anyProvider")}</option>
+                    {state.instances.map((instance) => <option key={instance.instanceId} value={instance.instanceId}>{instance.displayName}</option>)}
+                  </Select>
+                </label>
+                <label className="text-[13px] text-ink-secondary">{t("teamSettings.all.toProvider")}
+                  <Select className="mt-1 w-full" aria-label={t("teamSettings.all.toProvider")} value={toEngine} onChange={(event) => { setToEngine(event.target.value); setModel(KEEP); }}>
+                    <option value={KEEP}>{t("teamSettings.all.pickProvider")}</option>
+                    {configuredModelInstances(state.instances).map((instance) => <option key={instance.instanceId} value={instance.instanceId}>{instance.displayName}</option>)}
+                  </Select>
+                </label>
+                <label className="text-[13px] text-ink-secondary">{t("teamSettings.model")}
+                  <Select className="mt-1 w-full" aria-label={t("teamSettings.model")} value={model} disabled={!target} onChange={(event) => setModel(event.target.value)}>
+                    <option value={KEEP}>{t("teamSettings.all.pickModel")}</option>
+                    {targetModels.map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}
+                  </Select>
+                </label>
+                <label className="flex items-center gap-2 text-[13px] text-ink">
+                  <input type="checkbox" checked={alsoNewBots} onChange={(event) => setAlsoNewBots(event.target.checked)} />
+                  {t("teamSettings.all.newBots")}
+                </label>
+                <p className="text-[12px] text-ink-secondary">{t("teamSettings.threadModels")}</p>
+              </fieldset>
+            ) : tab === "approval" ? (
               <fieldset disabled={running} className="flex flex-col gap-1">
                 <legend className="sr-only">{t("teamSettings.tab.approval")}</legend>
                 {approvalModeOptions().filter((option) => (TEAM_APPROVAL_MODES as readonly string[]).includes(option.mode)).map((option) => (
@@ -226,7 +279,7 @@ export function TeamSettingsDialog({ team, onClose }: { team: string; onClose: (
             <div className="mt-4 flex items-center justify-end gap-2">
               {running && <span role="status" className="mr-auto text-[12px] text-ink-secondary">{t("teamSettings.progress", { done: progress, count: plan.length })}</span>}
               <button type="button" disabled={running} onClick={close} className="rounded-lg px-3 py-2 text-[13px] text-ink-secondary hover:bg-raised">{t("common.cancel")}</button>
-              <button type="button" disabled={running || !applying} onClick={apply}
+              <button type="button" disabled={running || !(applying || (everyBot && alsoNewBots && change))} onClick={apply}
                 className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white disabled:opacity-40">
                 {t(applying === 1 ? "teamSettings.applyOne" : "teamSettings.applyMany", { count: applying })}
               </button>

@@ -5,11 +5,13 @@ import { describe, expect, it, vi } from "vitest";
 import { persistBotUpdate, type Bot, type InstanceInfo } from "@/state/store";
 import { EFFORT_LEVELS } from "../../shared/wire";
 import {
+  allBots,
   applyTeamPlan,
   planAccess,
   planNeedsLocalAutoConsent,
   planTeamChange,
   TEAM_APPROVAL_MODES,
+  engineModelChoices,
   teamBots,
   teamEffortChoices,
   teamModelChoices,
@@ -231,3 +233,57 @@ describe("who can use a department's bots", () => {
   });
 });
 
+
+describe("changing the model of every bot", () => {
+  it("collects every visible bot, optionally only those on one provider, whatever their department", () => {
+    const bots = [bot("a"), bot("b", { section: undefined }), bot("c", { hidden: true }), bot("d", { modelSelection: { instanceId: "codex", model: "gpt-5" } })];
+    expect(allBots(bots).map((b) => b.id)).toEqual(["a", "b", "d"]);
+    expect(allBots(bots, { fromInstanceId: "codex" }).map((b) => b.id)).toEqual(["d"]);
+    expect(allBots(bots, { fromInstanceId: "claude" }).map((b) => b.id)).toEqual(["a", "b"]);
+  });
+
+  it("moves a bot to another provider, dropping an effort or variant the new engine did not set", () => {
+    const bots = [
+      bot("claude", { modelSelection: { instanceId: "claude", model: "opus", effort: "high" } }),
+      bot("pi", { modelSelection: { instanceId: "pi", model: "local", variant: "fast" } }),
+    ];
+    const plan = planTeamChange(bots, instances, { kind: "model", instanceId: "codex", model: "gpt-5" });
+    expect(plan.map((row) => row.status)).toEqual(["apply", "apply"]);
+    for (const row of plan) expect(row).toMatchObject({ patch: { modelSelection: { instanceId: "codex", model: "gpt-5" }, keepThreadModels: true } });
+    expect(plan.map((row) => "patch" in row ? Object.keys(row.patch.modelSelection!) : [])).toEqual([["instanceId", "model"], ["instanceId", "model"]]);
+  });
+
+  it("skips a bot with the reason: model not offered, engine missing or off, busy; and calls a bot already there set", () => {
+    const off = [...instances, engine("off", "codex", ["x"], { snapshot: { state: "unavailable", reason: "off" } })];
+    const blocked = instances.map((instance) => instance.instanceId === "codex"
+      ? { ...instance, models: { default: "gpt-5", options: [{ id: "gpt-5", label: "gpt-5" }, { id: "gpt-5-mini", label: "gpt-5-mini", orgBlocked: true as const }] } }
+      : instance);
+    const one = [bot("a")];
+    expect(planTeamChange(one, instances, { kind: "model", instanceId: "codex", model: "opus" })[0]).toMatchObject({ status: "skip", reason: "Codex does not offer opus" });
+    expect(planTeamChange(one, blocked, { kind: "model", instanceId: "codex", model: "gpt-5-mini" })[0]).toMatchObject({ status: "skip" });
+    expect(planTeamChange(one, instances, { kind: "model", instanceId: "gone", model: "x" })[0]).toMatchObject({ status: "skip", reason: "its AI isn't available" });
+    expect(planTeamChange(one, off, { kind: "model", instanceId: "off", model: "x" })[0]).toMatchObject({ status: "skip", reason: "its AI isn't available" });
+    expect(planTeamChange([bot("w", { busy: true })], instances, { kind: "model", instanceId: "codex", model: "gpt-5" })[0]).toMatchObject({ status: "skip", reason: "busy. Stop its turn, then try again" });
+    expect(planTeamChange([bot("c", { modelSelection: { instanceId: "codex", model: "gpt-5" } })], instances, { kind: "model", instanceId: "codex", model: "gpt-5" })[0]).toMatchObject({ status: "unchanged" });
+  });
+
+  it("offers the models of one engine, without the ones the organization turned off", () => {
+    const codex = instances[1]!;
+    expect(engineModelChoices(codex).map((choice) => choice.id)).toEqual(["gpt-5", "gpt-5-mini"]);
+    const blocked = { ...codex, models: { default: "gpt-5", options: [{ id: "gpt-5-mini", label: "mini", orgBlocked: true as const }] } } as unknown as InstanceInfo;
+    expect(engineModelChoices(blocked).map((choice) => choice.id)).toEqual(["gpt-5"]);
+  });
+
+  it("applies one at a time and turns a server refusal into a skipped row while the rest continue", async () => {
+    const bots = [bot("a"), bot("b"), bot("c")];
+    const plan = planTeamChange(bots, instances, { kind: "model", instanceId: "codex", model: "gpt-5" });
+    const sent: string[] = [];
+    const results = await applyTeamPlan(plan, async (target) => {
+      sent.push(target.id);
+      if (target.id === "b") throw new Error("Custom approval cannot move to another provider without asking");
+    });
+    expect(sent).toEqual(["a", "b", "c"]);
+    expect(results.map((row) => row.status)).toEqual(["applied", "skipped", "applied"]);
+    expect(results[1]).toMatchObject({ reason: "Custom approval cannot move to another provider without asking" });
+  });
+});
