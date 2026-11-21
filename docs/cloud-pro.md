@@ -2508,9 +2508,10 @@ ends the move as before.
 
 ## Published image
 
-Every push to `main` and every release tag publishes the home machine image as
-`ghcr.io/milind-soni/openmausbot-cloud-home`, tagged `latest` (main only), `sha-<commit>` and the release tag.
-It is the `Dockerfile`'s `cloud-home` target for the same commit, with Grok and the current Claude Code and
-Codex installed. The Docker workflow's summary prints the digest. Set it in the Admin as
-`SEIRA_CLOUD_HOME_IMAGE=ghcr.io/milind-soni/openmausbot-cloud-home@sha256:…`; changing it rolls the new image
+The `Server image` workflow (run by hand) publishes the home machine image as
+`ghcr.io/seira-bot/seira-cloud-home` for `linux/amd64` only. The tags are the release tag, or `latest` and
+`sha-<commit>` when no tag is given. The label `org.opencontainers.image.version` is the release version without
+the `v`, like `0.1.185`. It is the `Dockerfile`'s `cloud-home` target for the same commit, with Grok and the current
+Claude Code and Codex installed. The job summary of the publish job prints the digest. Set it in the Admin as
+`SEIRA_CLOUD_HOME_IMAGE=ghcr.io/seira-bot/seira-cloud-home@sha256:…`; changing it rolls the new image
 out to existing machines one at a time, reverting automatically on a failed health check.

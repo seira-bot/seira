@@ -425,6 +425,8 @@ docker buildx imagetools inspect ghcr.io/seira-bot/seira:v<version>
   published release, and it builds the tag only, never a branch of that name.
 - The image must show both platforms, and the label
   `org.opencontainers.image.version` must be `v<version>`.
+- The same run also publishes `ghcr.io/seira-bot/seira-cloud-home` for `linux/amd64` only, with the same tags.
+  Its label `org.opencontainers.image.version` is `<version>`, without the `v`. The publish job summary prints its digest.
 - The package must be public, or a server cannot pull it. An organization
   admin sets this once in the package settings on GitHub.
 
