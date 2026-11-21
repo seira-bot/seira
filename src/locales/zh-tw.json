@@ -700,7 +700,6 @@
   "rail.ended": "{name}：已結束",
   "rail.remove": "從清單中移除",
   "rail.makeHome": "將 {name} 設為我的主要位置",
-  "rail.makeHomeSub": "將這台電腦的機器人、聊天、記憶和例行工作移到 {name}，之後這台電腦會為它工作。",
   "rail.makeHomeFailed": "你的機器人沒有開始移動。請稍後再試一次。",
   "twoPlaces.title": "讓你的機器人聚在一起",
   "twoPlaces.body": "你的機器人分散在兩個地方，所以無法一起工作。要把它們集中到 {place} 嗎？",

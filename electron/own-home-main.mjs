@@ -97,6 +97,7 @@ function jsonStore(store) {
  *   lend?(projects: string[], place: any): Promise<unknown>,
  *   phone?: { paired(): boolean, start(): Promise<void> },
  *   openHome?(place: any): void,
+ *   openLocal?(): void,
  *   lastInput?(): number,
  *   version?: string,
  *   onChange?(): void,
@@ -106,7 +107,7 @@ function jsonStore(store) {
  * `handoff`: this computer's server's private port, which hands a moving secret to main alone. `cloudJournal()`: the move
  * to My Cloud's journal: while it is under way or done, no server of the person's own is chosen.
  */
-export function installOwnHome({ localRequest, fetch: fetchImpl, environments, handoff, journal: journalStore, choice: choiceStore, sendState, cloudJournal, lend, phone, openHome, lastInput,
+export function installOwnHome({ localRequest, fetch: fetchImpl, environments, handoff, journal: journalStore, choice: choiceStore, sendState, cloudJournal, lend, phone, openHome, openLocal, lastInput,
   version, onChange = () => {}, now = Date.now, log = () => {}, t = nativeText.englishText.t }) {
   const journal = jsonStore(journalStore), choice = jsonStore(choiceStore);
   const chosen = () => parseChoice(choice.read());
@@ -221,6 +222,8 @@ export function installOwnHome({ localRequest, fetch: fetchImpl, environments, h
     retry.unref?.();
   }
 
+  const canBringBack = () => Boolean(chosen()) && parseJournal(journal.read())?.phase === "done";
+
   return {
     kick,
     view: () => home.view(),
@@ -271,6 +274,28 @@ export function installOwnHome({ localRequest, fetch: fetchImpl, environments, h
       onChange();
       void kick().catch((error) => log(`own home: ${error?.message ?? error}`));
       return { started: true };
+    },
+    /** Whether the bots can come back to this computer: home is the chosen server and the move is done. */
+    canBringBack,
+    /** Lifts the stop on this computer with every automation off, lets go of the chosen server as home, and opens This
+     * computer. The bots on the server stay there. Nothing changes when this computer's server does not answer. */
+    async bringBack() {
+      if (!canBringBack()) throw new Error(t("native.home.bringBackUnavailable"));
+      try {
+        if (await local.json("/api/move/freeze").then((said) => said?.frozen === true)) {
+          const lifted = await local.call("DELETE", "/api/move/freeze", { automations: "off" });
+          if (!lifted.ok) throw new Error("not lifted");
+        }
+      } catch (error) {
+        log(`own home: bring back failed (${error?.message ?? error})`);
+        throw new Error(t("native.home.bringBackFailed"));
+      }
+      if (retry) clearTimeout(retry);
+      retry = null;
+      journal.write(null);
+      choice.write(null);
+      onChange();
+      openLocal?.();
     },
     close() { if (retry) clearTimeout(retry); retry = null; home.close(); },
     journal: () => journal.read(),

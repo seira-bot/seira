@@ -495,3 +495,14 @@ test("the Server menu lists the workspaces of this computer's own and offers a n
   assert.deepEqual(calls, [["local", "work"], ["new"], ["local", "default"]]);
   assert.equal(env.workspaceMenuTemplate(state, { onSwitch() {}, onConnect() {}, onForget() {} }).some((item) => String(item.id).startsWith("workspace-new-local")), false, "only where main offers it");
 });
+
+test("the menu offers bringing the bots back to this computer only when asked to", () => {
+  const state = { environments: [{ id: "srv", name: "Garage", origin: "https://garage.example" }], activeId: "srv" };
+  const calls = [];
+  const base = { onSwitch() {}, onConnect() {}, onForget() {} };
+  const item = env.workspaceMenuTemplate(state, { ...base, onBringBack: () => calls.push("back") }).find((entry) => entry.id === "workspace-bring-back");
+  assert.equal(item.label, "Bring bots back to this computer");
+  item.click();
+  assert.deepEqual(calls, ["back"]);
+  assert.equal(env.workspaceMenuTemplate(state, base).some((entry) => entry.id === "workspace-bring-back"), false);
+});

@@ -814,7 +814,6 @@
   "rail.ended": "{name}: encerrado",
   "rail.remove": "Remover da lista",
   "rail.makeHome": "Definir {name} como base dos meus bots",
-  "rail.makeHomeSub": "Transfere os bots, conversas, memória e rotinas deste computador para {name}. Depois, este computador passa a trabalhar para ele.",
   "rail.makeHomeFailed": "A transferência dos seus bots não começou. Tente novamente em instantes.",
   "twoPlaces.title": "Reúna seus bots",
   "twoPlaces.body": "Seus bots estão em dois lugares e, por isso, não conseguem trabalhar juntos. Quer reuni-los em {place}?",
