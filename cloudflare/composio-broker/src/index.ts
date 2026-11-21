@@ -897,6 +897,10 @@ async function route(request: Request, env: Env, ctx: ExecutionContext) {
     return requestFileUpload(request, installation, env);
   }
   if (request.method === "GET" && url.pathname === "/v1/catalog") return catalog(env, url);
+  if (request.method === "GET" && url.pathname === "/v1/auth-configs") {
+    const project = await projectAuthConfigs(env);
+    return json({ toolkits: Object.keys(project?.picks ?? {}).sort() });
+  }
   if (request.method === "GET" && url.pathname === "/v1/connectors/connected") return connectedServices(installation, env, ctx);
   if (request.method === "GET" && url.pathname === "/v1/connectors") return connectionStatus(url, installation, env, ctx);
   const accountMatch = url.pathname.match(/^\/v1\/connectors\/([a-z0-9_][a-z0-9_-]{0,80})\/accounts\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})$/);
