@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
+import type { InstructionsAs } from "../../shared/ai-import/api.ts";
 import type { ImportEvent, ImportSourceKind } from "../../shared/ai-import/bundle.ts";
 import type { LocalSource, ReaderContext, SourceReader } from "./reader.ts";
 import { sourceId } from "./local-fs.ts";
@@ -18,8 +19,8 @@ export function localSource(kind: ImportSourceKind, path: string, profile?: stri
   return { id: sourceId(kind, path, profile), kind, path, name, ...(profile ? { profile } : {}) };
 }
 
-export function context(stagingDir: string, transcripts = false): ReaderContext {
-  return { signal: new AbortController().signal, stagingDir, transcripts };
+export function context(stagingDir: string, transcripts = false, instructions: InstructionsAs = "persona"): ReaderContext {
+  return { signal: new AbortController().signal, stagingDir, transcripts, instructions };
 }
 
 export async function collect(reader: SourceReader, source: LocalSource, ctx: ReaderContext): Promise<ImportEvent[]> {

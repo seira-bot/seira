@@ -23,8 +23,8 @@ const SOURCES: LocalSourceView[] = [
   { id: "s2", kind: "claude-code", name: "Claude Code" },
 ];
 const hub = (overrides: Partial<HubViewProps> = {}) => renderToStaticMarkup(createElement(HubView, {
-  local: true, localSources: SOURCES, transcripts: false, grokOpen: false, resume: null, sending: null,
-  onTranscripts: vi.fn(), onGuide: vi.fn(), onBring: vi.fn(), onPaste: vi.fn(), onGrok: vi.fn(), onResume: vi.fn(), onFiles: vi.fn(), ...overrides,
+  local: true, localSources: SOURCES, transcripts: false, instructions: "persona", grokOpen: false, resume: null, sending: null,
+  onTranscripts: vi.fn(), onInstructions: vi.fn(), onGuide: vi.fn(), onBring: vi.fn(), onPaste: vi.fn(), onGrok: vi.fn(), onResume: vi.fn(), onFiles: vi.fn(), ...overrides,
 }));
 
 beforeEach(() => { (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true; setLocale("en"); f.state = { config: {}, bots: [{ id: "b-9", name: "Sample helper" }] }; });
@@ -56,11 +56,25 @@ describe("the hub on the Import page", () => {
     expect(box(hub({ transcripts: true }))).toContain("checked");
   });
 
+  it("offers Claude Code instructions as persona or About you", () => {
+    const markup = hub();
+    const select = /<select[^>]*data-ai-import-instructions[^>]*>[\s\S]*?<\/select>/.exec(markup)![0];
+    expect(select).toContain('<option value="persona" selected="">Persona</option>');
+    expect(select).toContain('<option value="about-you">About you</option>');
+    expect(markup.match(/data-ai-import-instructions/g)).toHaveLength(1);
+    expect(markup.indexOf("data-ai-import-instructions")).toBeGreaterThan(markup.indexOf('data-ai-import-source="claude-code"') - 2000);
+    const only = hub({ localSources: [SOURCES[0]!] });
+    expect(only).not.toContain("data-ai-import-instructions");
+    expect(text(hub())).toContain("Use your instructions as");
+    expect(hub({ instructions: "about-you" })).toContain('<option value="about-you" selected="">About you</option>');
+  });
+
   it("remote server hides local sources", () => {
     const markup = hub({ local: false });
     expect(markup).not.toContain('data-ai-import-source="hermes"');
     expect(markup).not.toContain('data-ai-import-source="claude-code"');
     expect(markup).not.toContain("data-ai-import-transcripts");
+    expect(markup).not.toContain("data-ai-import-instructions");
     expect(markup).toContain('data-ai-import-source="chatgpt"');
     expect(markup).toContain('data-ai-import-source="paste"');
     expect(markup).toContain("data-ai-import-files");

@@ -125,6 +125,15 @@ describe("bodies", () => {
     expect((await fetch(`${base}/jobs`, { method: "POST", body: "{}" })).status).toBe(415);
   });
 
+  it("takes where Claude Code instructions go, and refuses anything else", async () => {
+    const base = await serve(true);
+    const ok = await fetch(`${base}/jobs`, asJson({ from: "local", sourceId: "src-1", instructions: "about-you" }));
+    expect(ok.status).toBe(200);
+    const bad = await fetch(`${base}/jobs`, asJson({ from: "local", sourceId: "src-1", instructions: "other" }));
+    expect(bad.status).toBe(400);
+    expect(await bad.json()).toEqual({ error: "invalid" });
+  });
+
   it("refuses a wrong body", async () => {
     const base = await serve(true);
     const bodies = [{}, { from: "upload" }, { from: "upload", uploadIds: [] }, { from: "upload", uploadIds: ["a"], extra: 1 }, { from: "paste", ai: "nope", aboutYou: [], howToReply: [], destination: { kind: "new" } }];

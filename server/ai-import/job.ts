@@ -145,7 +145,7 @@ export class AiImportJobs {
       const source = this.located.get(body.sourceId);
       if (!source) throw new ImportJobError(404, "not-found");
       const row = this.newRow({ kind: source.kind, name: source.name, ...(source.profile ? { profile: source.profile } : {}) }, "reading",
-        { from: "local", source, transcripts: body.transcripts === true });
+        { from: "local", source, transcripts: body.transcripts === true, instructions: body.instructions ?? "persona" });
       this.db.insertJob(row);
       this.publish(row.view);
       this.read(row);
@@ -299,7 +299,7 @@ export class AiImportJobs {
       parts = row.input.uploadIds.map((uploadId) => this.uploads.get(uploadId)).filter((upload) => upload !== null).map((upload) => ({ path: upload.path, name: upload.name }));
     }
     const params: ReadPassParams = {
-      input: row.input.from === "local" ? { from: "local", source: row.input.source, transcripts: row.input.transcripts } : { from: "files", parts },
+      input: row.input.from === "local" ? { from: "local", source: row.input.source, transcripts: row.input.transcripts, instructions: row.input.instructions ?? "persona" } : { from: "files", parts },
       stagingDir,
       ...(this.options.readersModule ? { readersModule: this.options.readersModule } : {}),
       ...(this.options.limits ? { limits: this.options.limits } : {}),

@@ -37994,7 +37994,11 @@
       "aiImport.paste.placeholder": "86057d1317e07dd5ee7f01959d6f7ce31bb13fc0f75f6f7e44437120f811ffcd",
       "aiImport.paste.counts": "fddc29add4d47365313de819b9e49954dabe57252d883e87897d01d874f9fe63",
       "aiImport.paste.empty": "f9f001096987461acc61e6353c2e6bd9aec03799662c1394ce544df012c7b6fe",
-      "aiImport.paste.tooLong": "bdf18475d42f492b0ed4cc2ebc2061337201c326563af3f2b96adb21b552831a"
+      "aiImport.paste.tooLong": "bdf18475d42f492b0ed4cc2ebc2061337201c326563af3f2b96adb21b552831a",
+      "botPanel.tab.activity": "38da1505ca8373288489495101b14f24ac95078f520ad64df18272aa6054f750",
+      "aiImport.instructions.label": "1b929bbc705cdb4b4362f06bdfc16a20de9ef4fb038678ca5a3e3b049a595905",
+      "aiImport.instructions.persona": "31bdeef94e7d9a9c9b0d65c97d049ac72fc2080d36f8bf73ad15ee3a5a23e86f",
+      "aiImport.instructions.aboutYou": "428f4d00b7fff988d67562877fca368cfe17bca6bec8b0995d8b2bfba1b91e30"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
