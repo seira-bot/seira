@@ -2014,7 +2014,15 @@ is newer than the one it reports), and asks before it puts back data from an
 update an earlier run left unfinished.
 [Every step, the rollback and the exit codes](deploy-vps.md#update).
 
-For the npm service there is no one-command updater yet:
+An npm install under the service updates itself at night. Between 03:00 and 05:00
+local time, when a newer stable release exists and no bot is answering, the server
+installs that release into its own `app/` folder in the data directory, stops, takes a
+copy of the data, and starts the new version. When the new version does not answer
+with its own version within 5 minutes, the server stops it, puts the data back, and
+keeps the old version. A version that rolled back is not tried again. Turn it off with
+the "Update automatically" switch in **Settings → This app → Updates**, or set
+`SEIRA_AUTO_UPDATE=0` in the service environment. The same page has an **Update server**
+button. You can also
 [do the same steps by hand](deploy-vps.md#paths-a-and-c-npm-with-the-service-above-the-same-steps-by-hand),
 as the service user while the server is stopped. For a foreground invocation,
 `npx --yes @seira-bot/seira@X.Y.Z serve --public-url https://seira.example.com` selects a particular published

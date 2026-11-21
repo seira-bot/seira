@@ -81,6 +81,8 @@ export type ServerUpdateAction = "check" | "update-server" | "update-app" | "rel
 export interface ServerUpdateView {
   label: string;
   subtitle?: string;
+  /** The night update: whether it is on, in words, and whether this admin can switch it. */
+  auto?: { on: boolean; text: string; canChange: boolean };
   note?: string;
   noteTone?: "danger";
   action: ServerUpdateAction;
@@ -119,17 +121,38 @@ const APP_ANSWER_TEXT: Partial<Record<AppUpdateAnswer, LocaleKey>> = {
   unavailable: "serverUpdate.appUnavailable",
 };
 
+const LOCAL_REASON_TEXT: Partial<Record<ServerUpdateReason, LocaleKey>> = {
+  "no-room": "serverUpdate.local.reason.noRoom",
+  "no-updater": "serverUpdate.local.reason.noUpdater",
+  older: "serverUpdate.local.reason.older",
+  failed: "serverUpdate.local.reason.failed",
+};
+
+function localReasonText(reason: ServerUpdateReason, status: ServerUpdateStatus): string {
+  return t(LOCAL_REASON_TEXT[reason] ?? "serverUpdate.local.reason.failed", { command: status.command ?? "" });
+}
+
+/** What the night update says about itself, and whether an admin can change it. */
+function autoView(status: ServerUpdateStatus | null): ServerUpdateView["auto"] {
+  const auto = status?.auto;
+  if (!auto) return undefined;
+  if (auto.on) return { on: true, text: t("serverUpdate.auto.on", { start: auto.window.start, end: auto.window.end }), canChange: true };
+  if (auto.off === "held") return { on: false, text: t("serverUpdate.reason.held"), canChange: false };
+  if (auto.off === "env") return { on: false, text: t("serverUpdate.auto.offSettings"), canChange: false };
+  return { on: false, text: t("serverUpdate.auto.off"), canChange: true };
+}
+
 function runNote(status: ServerUpdateStatus | null): Pick<ServerUpdateView, "note" | "noteTone"> {
   const run = status?.run;
   switch (run?.outcome) {
-    case "updated": return { note: t("serverUpdate.updated", { version: run.to ?? status!.current }) };
+    case "updated": return { note: t(run.automatic ? "serverUpdate.updatedAuto" : "serverUpdate.updated", { version: run.to ?? status!.current }) };
     case "unchanged": return { note: t("serverUpdate.unchanged") };
-    case "rolled-back": return { note: `${t("serverUpdate.rolledBack", { version: run.from })} ${t("serverUpdate.rolledBackDetail")}`, noteTone: "danger" };
+    case "rolled-back": return { note: `${t("serverUpdate.rolledBack", { version: run.from })} ${t(run.local ? "serverUpdate.rolledBackLocalDetail" : "serverUpdate.rolledBackDetail")}`, noteTone: "danger" };
     case "rollback-failed": {
       const detail = status!.rollback ? ` ${t("serverUpdate.runOnServer", { command: status!.rollback })}` : "";
       return { note: `${t("serverUpdate.rollbackFailed")}${detail}`, noteTone: "danger" };
     }
-    case "not-changed": return { note: `${t("serverUpdate.notChanged")} ${reasonText(run.reason ?? "failed", status!, run)}`, noteTone: "danger" };
+    case "not-changed": return { note: `${t("serverUpdate.notChanged")} ${run.local ? localReasonText(run.reason ?? "failed", status!) : reasonText(run.reason ?? "failed", status!, run)}`, noteTone: "danger" };
     case "not-started": return { note: `${t("serverUpdate.notStarted")} ${t("serverUpdate.runOnServer", { command: "systemctl status seira-update.path" })}`, noteTone: "danger" };
     default: return {};
   }
@@ -166,7 +189,8 @@ export function serverUpdateView(input: {
   }
   const note = runNote(status);
   const appNote = input.appAnswer && APP_ANSWER_TEXT[input.appAnswer] ? { note: t(APP_ANSWER_TEXT[input.appAnswer]!) } : {};
-  const extra = { ...note, ...appNote };
+  const auto = autoView(status);
+  const extra = { ...note, ...appNote, ...(auto ? { auto } : {}) };
   if (input.checking) return { label: t("sidebar.update.checking"), action: null, busy: true, ...extra };
   if (input.failed) return { label: t("sidebar.update.checkFailed"), action: "check", busy: false, ...extra };
   if (!check) return { label: t("sidebar.update.check"), action: "check", busy: false, ...extra };
@@ -187,6 +211,7 @@ export function serverUpdateView(input: {
     if (status?.mode === "held") return { label, subtitle: t("serverUpdate.reason.held"), action: null, busy: false, ...extra };
     const how = check.restart ? "sidebar.update.howRestart" : "sidebar.update.how";
     const command = status?.command ?? check.command;
+    if (status?.why === "no-updater") return { label, subtitle: localReasonText("no-updater", status), action: null, busy: false, ...extra };
     return { label, ...(command ? { subtitle: t(how, { command }) } : {}), action: null, busy: false, ...extra };
   }
   if (appBehind && input.app) {

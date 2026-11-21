@@ -8,7 +8,7 @@ import { ApiError } from "@/state/api";
 import { api, useStore } from "@/state/store";
 import type { AppUpdateAnswer } from "@/types/ogb";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { SettingRow } from "./SettingsPrimitives";
+import { SettingRow, Switch } from "./SettingsPrimitives";
 
 const STATUS = "/api/updates/server";
 const POLL_MS = 4_000;
@@ -101,6 +101,15 @@ export function useServerUpdate() {
     }
   }, []);
 
+  const setAuto = useCallback(async (on: boolean) => {
+    setProblem(null);
+    try {
+      setStatus(await api<ServerUpdateStatus>(`${STATUS}/auto`, { method: "POST", body: JSON.stringify({ on }), timeoutMs: 20_000 }));
+    } catch {
+      setProblem(t("serverUpdate.autoFailed"));
+    }
+  }, []);
+
   const updateApp = useCallback(async () => {
     try {
       setAppAnswer(await window.ogb!.appUpdate!.request());
@@ -111,7 +120,7 @@ export function useServerUpdate() {
 
   const waitedMs = waitingSince === null ? 0 : Math.max(0, now - waitingSince);
   const view: ServerUpdateView = serverUpdateView({ check, status, app: askableAppVersion(), checking, failed, pressed, appAnswer, waitedMs });
-  return { check, status, view: problem ? { ...view, note: problem, noteTone: "danger" as const } : view, load, readStatus, updateServer, updateApp };
+  return { check, status, view: problem ? { ...view, note: problem, noteTone: "danger" as const } : view, load, readStatus, updateServer, updateApp, setAuto };
 }
 
 const ACTION_LABEL = {
@@ -153,6 +162,11 @@ export function ServerUpdateRow({ title }: { title: string }) {
           )}
         </div>
       </SettingRow>
+      {view.auto && (
+        <SettingRow title={t("serverUpdate.auto.title")} subtitle={view.auto.text}>
+          <Switch checked={view.auto.on} disabled={!view.auto.canChange} aria-label={t("serverUpdate.auto.title")} onClick={() => void update.setAuto(!view.auto!.on)} />
+        </SettingRow>
+      )}
       <ConfirmDialog
         open={confirming}
         title={t("serverUpdate.confirmTitle")}

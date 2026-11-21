@@ -266,6 +266,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     releaseNotes: ["backupName"],
   },
   {
+    id: "server-auto-update",
+    name: "Automatic server updates",
+    place: "Settings → This app → Updates, on the page of a server you host",
+    does: "A server you host updates itself at night, 03:00 to 05:00 its time, when no bot is answering. It copies the data first and goes back if the new version fails. An admin turns it off with Update automatically.",
+  },
+  {
     id: "whats-new",
     name: "What's new",
     place: "the menu under the person's name at the bottom of the sidebar",

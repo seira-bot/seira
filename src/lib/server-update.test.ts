@@ -222,3 +222,41 @@ describe("the Update server row", () => {
     expect(newerVersion("dev", "0.1.150")).toBe(false);
   });
 });
+
+describe("the Update server row of a server that updates itself (AC-11)", () => {
+  const behind = check({ install: "npm", current: "0.1.150", available: true, latest: "0.1.151", command: "npm install -g @seira-bot/seira@0.1.151", restart: true });
+  const npm = (patch: Partial<ServerUpdateStatus> = {}): ServerUpdateStatus => ({
+    mode: "button", current: "0.1.150", latest: "0.1.151", available: true, activeTurns: 0, command: behind.command,
+    auto: { on: true, window: { start: "03:00", end: "05:00" } }, ...patch,
+  });
+  const view = (patch: Partial<ServerUpdateStatus> = {}) => serverUpdateView({ check: behind, status: npm(patch), bundle: "0.1.150", app: null });
+
+  it("says that the server updates itself at night, and lets an admin turn that off", () => {
+    expect(view().auto).toEqual({ on: true, text: "The server updates itself at night, between 03:00 and 05:00 its time, when no bot is answering.", canChange: true });
+    expect(view({ auto: { on: false, window: { start: "03:00", end: "05:00" }, off: "admin" } }).auto).toEqual({ on: false, text: "The server updates only when you press Update server.", canChange: true });
+  });
+
+  it("says it cannot be changed here when the host or the server's own settings decide", () => {
+    expect(view({ auto: { on: false, window: { start: "03:00", end: "05:00" }, off: "held" } }).auto).toMatchObject({ on: false, canChange: false, text: "Updates are on hold on this server." });
+    expect(view({ auto: { on: false, window: { start: "03:00", end: "05:00" }, off: "env" } }).auto).toMatchObject({ on: false, canChange: false });
+  });
+
+  it("shows nothing about it where the server cannot update itself, and to a member", () => {
+    expect(view({ auto: undefined }).auto).toBeUndefined();
+    expect(serverUpdateView({ check: behind, status: null, bundle: "0.1.150" }).auto).toBeUndefined();
+  });
+
+  it("shows the last result: updated by itself, or rolled back with the data as it was", () => {
+    expect(view({ available: false, run: { outcome: "updated", from: "0.1.149", to: "0.1.150", at: 1, automatic: true, local: true } }).note).toBe("The server updated itself to v0.1.150 during the night.");
+    const back = view({ run: { outcome: "rolled-back", from: "0.1.150", target: "0.1.151", at: 1, local: true } });
+    expect(back).toMatchObject({ note: "The update didn't work, so the server went back to v0.1.150. Your data is as it was before the update.", noteTone: "danger" });
+    expect(back.note).not.toMatch(/update\.log|\.update/);
+  });
+
+  it("says why nothing was changed, in words and without the host's tools", () => {
+    expect(view({ run: { outcome: "not-changed", reason: "no-room", from: "0.1.150", at: 1, local: true } }).note).toBe("The server wasn't changed. There isn't enough free disk space to keep a safe copy of your data first. Free some space, then try again.");
+    const noNpm = view({ mode: "command", why: "no-updater", auto: undefined });
+    expect(noNpm.subtitle).toBe("This server can't update itself, because the tool that installs updates isn't available to it. On the server, run: npm install -g @seira-bot/seira@0.1.151");
+    expect(noNpm.action).toBeNull();
+  });
+});
