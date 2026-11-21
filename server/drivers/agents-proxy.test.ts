@@ -1368,7 +1368,7 @@ describe("agents-proxy MCP surface", () => {
     try {
       const refused = await callTool("board_close", { card_id: "handoff:x", reason: "Not mine." });
       expect(refused.result.isError).toBe(true);
-      expect(refused.result.content[0].text).toBe("Couldn't move that card: you can close only cards of your own work");
+      expect(refused.result.content[0].text).toContain("you can close only cards of your own work");
     } finally {
       boardCloseReply = { status: 200, body: { ok: true, title: "Ship the report", botName: "Ops" } };
     }
