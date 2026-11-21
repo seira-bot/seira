@@ -1,0 +1,355 @@
+[
+  {
+    "title": "Trip plan",
+    "create_time": 1700000000,
+    "update_time": 1700000300,
+    "conversation_id": "c1",
+    "id": "c1",
+    "current_node": "a2",
+    "gizmo_id": null,
+    "mapping": {
+      "root": {
+        "id": "root",
+        "message": null,
+        "parent": null,
+        "children": [
+          "sys"
+        ]
+      },
+      "sys": {
+        "id": "sys",
+        "message": {
+          "id": "sys",
+          "author": {
+            "role": "system"
+          },
+          "create_time": null,
+          "update_time": null,
+          "content": {
+            "content_type": "user_editable_context",
+            "user_profile": "profile text",
+            "user_instructions": "instruction text"
+          },
+          "status": "finished_successfully",
+          "end_turn": true,
+          "weight": 1,
+          "metadata": {
+            "is_visually_hidden_from_conversation": true,
+            "user_context_message_data": {
+              "about_user_message": "I live in Porto and cook a lot.",
+              "about_model_message": "Answer in short sentences."
+            }
+          },
+          "recipient": "all"
+        },
+        "parent": "root",
+        "children": [
+          "u1"
+        ]
+      },
+      "u1": {
+        "id": "u1",
+        "message": {
+          "id": "u1",
+          "author": {
+            "role": "user"
+          },
+          "create_time": 1700000100,
+          "update_time": null,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "Plan a three-day trip to Lisbon."
+            ]
+          },
+          "status": "finished_successfully",
+          "end_turn": true,
+          "weight": 1,
+          "metadata": {},
+          "recipient": "all"
+        },
+        "parent": "sys",
+        "children": [
+          "a1",
+          "a1b"
+        ]
+      },
+      "a1": {
+        "id": "a1",
+        "message": {
+          "id": "a1",
+          "author": {
+            "role": "assistant"
+          },
+          "create_time": 1700000110,
+          "update_time": null,
+          "content": {
+            "content_type": "multimodal_text",
+            "parts": [
+              "Day 1: Alfama.",
+              {
+                "content_type": "image_asset_pointer",
+                "asset_pointer": "file-service://file-DaLle99",
+                "size_bytes": 4096
+              }
+            ]
+          },
+          "status": "finished_successfully",
+          "end_turn": true,
+          "weight": 1,
+          "metadata": {},
+          "recipient": "all"
+        },
+        "parent": "u1",
+        "children": []
+      },
+      "a1b": {
+        "id": "a1b",
+        "message": {
+          "id": "a1b",
+          "author": {
+            "role": "assistant"
+          },
+          "create_time": 1700000120,
+          "update_time": null,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "Day 1: Belem, then the tram."
+            ]
+          },
+          "status": "finished_successfully",
+          "end_turn": true,
+          "weight": 1,
+          "metadata": {},
+          "recipient": "all"
+        },
+        "parent": "u1",
+        "children": [
+          "h"
+        ]
+      },
+      "h": {
+        "id": "h",
+        "message": {
+          "id": "h",
+          "author": {
+            "role": "assistant"
+          },
+          "create_time": 1700000125,
+          "update_time": null,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "HIDDEN MESSAGE"
+            ]
+          },
+          "status": "finished_successfully",
+          "end_turn": true,
+          "weight": 0,
+          "metadata": {},
+          "recipient": "all"
+        },
+        "parent": "a1b",
+        "children": [
+          "u2"
+        ]
+      },
+      "u2": {
+        "id": "u2",
+        "message": {
+          "id": "u2",
+          "author": {
+            "role": "user"
+          },
+          "create_time": 1700000130,
+          "update_time": null,
+          "content": {
+            "content_type": "multimodal_text",
+            "parts": [
+              "What is in this photo?",
+              {
+                "content_type": "image_asset_pointer",
+                "asset_pointer": "file-service://file-AbC123",
+                "size_bytes": 2048
+              }
+            ]
+          },
+          "status": "finished_successfully",
+          "end_turn": true,
+          "weight": 1,
+          "metadata": {
+            "attachments": [
+              {
+                "id": "file_00000000aaaa",
+                "name": "notes.txt",
+                "mime_type": "text/plain",
+                "size": 12
+              }
+            ]
+          },
+          "recipient": "all"
+        },
+        "parent": "h",
+        "children": [
+          "th"
+        ]
+      },
+      "th": {
+        "id": "th",
+        "message": {
+          "id": "th",
+          "author": {
+            "role": "assistant"
+          },
+          "create_time": 1700000140,
+          "update_time": null,
+          "content": {
+            "content_type": "thoughts",
+            "thoughts": [
+              {
+                "summary": "x",
+                "content": "private reasoning"
+              }
+            ]
+          },
+          "status": "finished_successfully",
+          "end_turn": true,
+          "weight": 1,
+          "metadata": {},
+          "recipient": "all"
+        },
+        "parent": "u2",
+        "children": [
+          "tl"
+        ]
+      },
+      "tl": {
+        "id": "tl",
+        "message": {
+          "id": "tl",
+          "author": {
+            "role": "tool"
+          },
+          "create_time": 1700000150,
+          "update_time": null,
+          "content": {
+            "content_type": "execution_output",
+            "text": "42"
+          },
+          "status": "finished_successfully",
+          "end_turn": true,
+          "weight": 1,
+          "metadata": {},
+          "recipient": "all"
+        },
+        "parent": "th",
+        "children": [
+          "a2"
+        ]
+      },
+      "a2": {
+        "id": "a2",
+        "message": {
+          "id": "a2",
+          "author": {
+            "role": "assistant"
+          },
+          "create_time": 1700000200,
+          "update_time": null,
+          "content": {
+            "content_type": "new_future_type",
+            "parts": [
+              "It looks like a tram."
+            ]
+          },
+          "status": "finished_successfully",
+          "end_turn": true,
+          "weight": 1,
+          "metadata": {},
+          "recipient": "all"
+        },
+        "parent": "tl",
+        "children": []
+      }
+    }
+  },
+  {
+    "title": null,
+    "create_time": null,
+    "update_time": null,
+    "conversation_id": "c2",
+    "id": "c2",
+    "current_node": "a",
+    "gizmo_id": "g-abc",
+    "mapping": {
+      "root": {
+        "id": "root",
+        "message": null,
+        "parent": null,
+        "children": [
+          "u"
+        ]
+      },
+      "u": {
+        "id": "u",
+        "message": {
+          "id": "u",
+          "author": {
+            "role": "user"
+          },
+          "create_time": null,
+          "update_time": null,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "Hello there"
+            ]
+          },
+          "status": "finished_successfully",
+          "end_turn": true,
+          "weight": 1,
+          "metadata": {},
+          "recipient": "all"
+        },
+        "parent": "root",
+        "children": [
+          "a"
+        ]
+      },
+      "a": {
+        "id": "a",
+        "message": {
+          "id": "a",
+          "author": {
+            "role": "assistant"
+          },
+          "create_time": 1700001000,
+          "update_time": null,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "Hi!"
+            ]
+          },
+          "status": "finished_successfully",
+          "end_turn": true,
+          "weight": 1,
+          "metadata": {},
+          "recipient": "all"
+        },
+        "parent": "u",
+        "children": []
+      }
+    }
+  },
+  {
+    "title": "Broken one",
+    "create_time": 1700002000,
+    "update_time": 1700002000,
+    "conversation_id": "c3",
+    "id": "c3",
+    "mapping": [],
+    "current_node": "x"
+  }
+]
