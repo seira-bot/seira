@@ -498,7 +498,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
       text: `${opened}${timing}${approval} Its result will be delivered to this conversation automatically (assignment id: ${assignmentId || "unknown"}). Acknowledge it, mention it to the person as #${threadTitle}, and finish your turn; do not check or wait for it in this turn.`,
     };
   }
-  if (name === "burst") return callBurstTool(args, api);
+  if (name === "burst") return callBurstTool(args, api); if (name === "board_close") return callBoardCloseTool(args, api, { botId: BOT_ID, threadId: THREAD_ID });
   if (name === "list_models") {
     const search = typeof args.search === "string" ? args.search.trim() : "";
     const r = await api(`/api/internal/models${search ? `?search=${encodeURIComponent(search)}` : ""}`);
@@ -779,7 +779,6 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
     if (r.error) return { text: `Couldn't retry that thread: ${String(r.error)}`, isError: true };
     return { text: typeof r.message === "string" ? r.message : "The thread is running again. Its result stays in that thread; you are not woken for it — check it later with session_search or list_threads if you need to." };
   }
-  if (name === "board_close") return callBoardCloseTool(args, api, { botId: BOT_ID, threadId: THREAD_ID });
   if (member === "memory_log") {
     if (typeof args.text !== "string" || !args.text.trim()) {
       return { text: "memory_log needs text: one line about what happened.", isError: true };
