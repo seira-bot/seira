@@ -970,7 +970,7 @@ export class RoutineRequestService {
       throw new RoutineRequestError(schemaIssue(parsedProposal.error, "Invalid routine proposal"));
     }
     const operation = normalizedOperation(this.routines, botId, parsedProposal.data, at, this.engines);
-    const problem = workflowLinkProblem(operation, botId, this.routines, this.workflows); if (problem) throw new RoutineRequestError(problem.message, problem.status);
+    const problem = workflowLinkProblem(operation, botId, this.routines, this.workflows, threadId); if (problem) throw new RoutineRequestError(problem.message, problem.status);
     if (operation.forBot && this.validateTarget) {
       const refusal = this.validateTarget(botId, operation.forBot);
       if (refusal) throw new RoutineRequestError(refusal, 403);

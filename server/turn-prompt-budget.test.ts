@@ -75,7 +75,7 @@ const PROMPT_BUDGET_BASELINE: Record<string, number> = {
   "meetings": 294,
   "computer-selection": 1263,
   "credential": 1091,
-  "routine": 2624,
+  "routine": 2887,
   "profile": 931,
   "team-memory": 286,
   // Both sandbox kinds carry +130 bytes on purpose: the person's own files (C:\Users\…, /Users/…, Desktop) are reached only on This computer.

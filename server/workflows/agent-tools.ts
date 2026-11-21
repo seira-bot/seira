@@ -19,7 +19,7 @@ export interface AgentWorkflowFacts {
   routines: readonly { id: string; name: string; botId: string; workflowId?: string }[];
 }
 
-function agentStep(step: WorkflowStep, facts: AgentWorkflowFacts) {
+function agentStep(step: WorkflowStep, facts: AgentWorkflowFacts, hideQuestion: boolean) {
   switch (step.kind) {
     case "bot": {
       const own = step.botId === facts.botId;
@@ -32,7 +32,7 @@ function agentStep(step: WorkflowStep, facts: AgentWorkflowFacts) {
       };
     }
     case "check":
-      return { kind: "check" as const, question: redactSecretsInText(step.question).slice(0, INSTRUCTION_SHOWN) };
+      return { kind: "check" as const, ...(hideQuestion ? {} : { question: redactSecretsInText(step.question).slice(0, INSTRUCTION_SHOWN) }) };
     case "wait":
       return { kind: "wait" as const, minutes: step.minutes };
     case "post":
@@ -49,12 +49,13 @@ export function agentWorkflows(workflows: readonly Workflow[], facts: AgentWorkf
     .slice(0, WORKFLOWS_SHOWN)
     .map((workflow) => {
       const order = stepOrder(workflow);
+      const hideQuestion = workflow.steps.some((step) => step.kind === "bot" && step.botId !== facts.botId && facts.botName(step.botId) === undefined);
       const notes = workflow.steps.filter((step) => step.kind === "note");
       return {
         id: workflow.id,
         name: redactSecretsInText(workflow.name),
         stepCount: workflow.steps.length,
-        steps: [...order, ...notes].map((step) => agentStep(step, facts)),
+        steps: [...order, ...notes].map((step) => agentStep(step, facts, hideQuestion)),
         routines: facts.routines
           .filter((routine) => routine.workflowId === workflow.id && routine.botId === facts.botId)
           .map((routine) => ({ id: routine.id, name: redactSecretsInText(routine.name) })),

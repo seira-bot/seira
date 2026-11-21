@@ -13,6 +13,10 @@ export interface RoutineWorkflowLinks {
   botName(botId: string): string | undefined;
   /** Why a bot may not link workflows here, in words for the bot; null when it may. */
   refusal(): string | null;
+  /** Whether the caller may set up automations for that bot (the for_bot_id rule). */
+  manages(callerBotId: string, botId: string): boolean;
+  /** Whether the person behind this turn may see the workflow. */
+  shown(workflowId: string, threadId: string): boolean;
 }
 
 export interface WorkflowLinkProblem { message: string; status: number }
@@ -24,6 +28,7 @@ export function workflowLinkProblem(
   botId: string,
   routines: Pick<RoutineManager, "listRoutines">,
   links: RoutineWorkflowLinks | undefined,
+  threadId: string,
 ): WorkflowLinkProblem | null {
   const owner = operation.forBot?.botId ?? botId;
   const changes = operation.action === "update" ? operation.changes : undefined;
@@ -44,6 +49,7 @@ export function workflowLinkProblem(
   if (typeof asked !== "string") return null;
   const refusal = links?.refusal();
   if (refusal) return { message: refusal, status: 403 };
+  if (links && !links.shown(asked, threadId)) return { message: "There is no workflow with that id. Call trigger_info with action=workflows to see the ids.", status: 404 };
   const found = links?.copy(asked) ?? null;
   if (!found) return { message: "There is no workflow with that id. Call trigger_info with action=workflows to see the ids.", status: 404 };
   if ("code" in found) return { message: found.message, status: 409 };
@@ -51,6 +57,8 @@ export function workflowLinkProblem(
     const first = links?.botName(found.botId);
     return { message: `A routine that runs this workflow belongs to the bot of its first step${first ? `, ${first}` : ""}. Set it up for that bot${operation.action === "create" ? " with for_bot_id" : ""}.`, status: 409 };
   }
+  const blocked = found.botIds.find((id) => id !== owner && !links?.manages(botId, id));
+  if (blocked) return { message: `This workflow has a step for ${links?.botName(blocked) ?? "a bot"}, and you may not set up automations for that bot. Link a workflow whose steps are yours or a bot you manage, or tell the person to link it under Automations → Workflows.`, status: 403 };
   if (operation.action === "create") operation.routine.instructions = found.prompt.slice(0, PROMPT_LIMIT);
   else if (changes) changes.instructions = found.prompt.slice(0, PROMPT_LIMIT);
   return null;

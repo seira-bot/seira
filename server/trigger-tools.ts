@@ -233,6 +233,8 @@ export function parseTriggerRequest(body: unknown, kindOf: (id: string) => "sche
   return { ok: true, kind: "webhook", forBotId: request.forBotId, operation: { action: request.action, webhookId: request.triggerId, ...(changes ? { changes } : {}) } };
 }
 
+export const CANNOT_SET_UP_FOR = "that bot's automations are set up by bots in its own department or by its Chief, or it is unavailable. You can still hand it the work itself with coordinate_bots, or tell the person what to set up there.";
+
 /** An automation is part of a bot's setup: another bot named by for_bot_id needs the sender's authority, not just reach. */
 export function triggerTarget<T extends RosterMember>(from: T, forBotId: unknown, bot: (id: string) => T | null | undefined):
   { forBot?: { botId: string; name: string } } | { status: number; error: string } {
@@ -242,6 +244,6 @@ export function triggerTarget<T extends RosterMember>(from: T, forBotId: unknown
   if (id === from.id) return {};
   const target = bot(id);
   if (!target) return { status: 404, error: "no bot with that id — call list_bots and copy the exact id from the result" };
-  if (!canManage(from, target)) return { status: 403, error: "that bot's automations are set up by bots in its own department or by its Chief, or it is unavailable. You can still hand it the work itself with coordinate_bots, or tell the person what to set up there." };
+  if (!canManage(from, target)) return { status: 403, error: CANNOT_SET_UP_FOR };
   return { forBot: { botId: target.id, name: target.name } };
 }
