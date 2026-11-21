@@ -145,6 +145,18 @@ export function externalWebUrl(rawUrl) {
   return url.toString();
 }
 
+/** Security: a sign-in page any page of the window may open, another server's included, so `allowed` checks the page
+ * that asks and only an https address opens. */
+export function signInPageOpener({ allowed, open }) {
+  return async (event, rawUrl) => {
+    if (!allowed(event)) throw new Error("Use the link to open the page.");
+    const url = externalWebUrl(rawUrl);
+    if (new URL(url).protocol !== "https:") throw new Error("Only a secure sign-in page can be opened");
+    await open(url);
+    return true;
+  };
+}
+
 const EMAIL_DRAFT_FIELDS = new Set(["subject", "body"]);
 
 /** Security: one address, and only a subject and a body, so a link can add no recipient and attach no file (some mail

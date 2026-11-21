@@ -77,6 +77,24 @@ describe("OAuth tab reservation", () => {
     expect(await reserveConnectionPage().open("https://auth.example.test/flow")).toBe(false);
   });
 
+  it("opens the page through the app's sign-in bridge from a remote server's page, and knows it opened", async () => {
+    const openSignInPage = vi.fn(async () => true);
+    const open = vi.fn();
+    vi.stubGlobal("window", { ogb: { platform: "linux", openSignInPage }, open });
+    const launch = reserveConnectionPage();
+    expect(launch.confirms).toBe(true);
+    expect(await launch.open("https://auth.example.test/flow")).toBe(true);
+    expect(openSignInPage).toHaveBeenCalledWith("https://auth.example.test/flow");
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it("says the page did not open when the app's sign-in bridge refuses it", async () => {
+    const open = vi.fn();
+    vi.stubGlobal("window", { ogb: { openSignInPage: vi.fn(async () => { throw new Error("Use the link to open the page."); }) }, open });
+    expect(await reserveConnectionPage().open("https://auth.example.test/flow")).toBe(false);
+    expect(open).not.toHaveBeenCalled();
+  });
+
   it("says the page did not open when the desktop app refuses it", async () => {
     vi.stubGlobal("window", { ogb: { openExternal: vi.fn(async () => { throw new Error("only available while using the local server"); }) }, open: vi.fn() });
     expect(await reserveConnectionPage().open("https://auth.example.test/flow")).toBe(false);
