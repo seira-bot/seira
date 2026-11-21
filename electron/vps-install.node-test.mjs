@@ -17,6 +17,15 @@ const require = createRequire(import.meta.url);
 const { Server, utils } = require("./vendor/ssh2.cjs");
 const here = path.dirname(fileURLToPath(import.meta.url));
 
+// ssh2 1.17.0 writes about one ed25519 public key in 200 with a short length field that its own parser refuses.
+function keyPair(kind, options) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const pair = utils.generateKeyPairSync(kind, options);
+    if (typeof utils.parseKey(pair.public)?.getPublicSSH === "function") return pair;
+  }
+  throw new Error(`no readable ${kind} key after 50 tries`);
+}
+
 process.env.SEIRA_TUNNEL_HOST_SUFFIX = ".example.test";
 
 const SUDO_STUB = `#!/bin/sh
@@ -96,7 +105,7 @@ async function world(options = {}) {
   writeFileSync(path.join(stub, "id"), ID_STUB, { mode: 0o755 });
   const installer = path.join(root, "install.sh");
   writeFileSync(installer, options.installer ?? INSTALLER);
-  const hostKeys = (options.hostKeys ?? ["ed25519"]).map((kind) => utils.generateKeyPairSync(kind, kind === "rsa" ? { bits: 2048 } : kind === "ecdsa" ? { bits: 256 } : undefined));
+  const hostKeys = (options.hostKeys ?? ["ed25519"]).map((kind) => keyPair(kind, kind === "rsa" ? { bits: 2048 } : kind === "ecdsa" ? { bits: 256 } : undefined));
   const hostBlob = utils.parseKey(hostKeys[0].public).getPublicSSH();
   const log = [];
   const state = { closed: 0, authMethods: [], connections: 0, clients: new Set() };
@@ -238,7 +247,7 @@ test("a host key that differs from the saved one or the known_hosts one stops th
     assert.equal(saved.events.at(-1).reason, "hostKeyChanged");
     assert.equal(saved.has("hostKey"), false);
     rmSync(path.join(w.dataDir, "ssh"), { recursive: true });
-    const other = utils.parseKey(utils.generateKeyPairSync("ed25519").public).getPublicSSH();
+    const other = utils.parseKey(keyPair("ed25519").public).getPublicSSH();
     writeFileSync(w.knownHosts, `[127.0.0.1]:${w.port} ssh-ed25519 ${other.toString("base64")}\n`);
     const known = harness(w);
     await known.session.start(request(w));
@@ -515,7 +524,7 @@ test("nothing secret reaches the console, the page's events or the data folder (
     originals[name] = console[name];
     console[name] = (...args) => consoleLines.push(args.map(String).join(" "));
   }
-  const pair = utils.generateKeyPairSync("ed25519", { passphrase: secrets.passphrase, cipher: "aes256-ctr", rounds: 16 });
+  const pair = keyPair("ed25519", { passphrase: secrets.passphrase, cipher: "aes256-ctr", rounds: 16 });
   const w = await world({ password: secrets.password, uid: "1000", sudo: "password", sudoPassword: secrets.password });
   const k = await world({ publicKey: pair.public });
   const scan = (dir) => {
@@ -821,7 +830,7 @@ test("an installer sentence that holds a password is dropped whole, in a check a
 });
 
 test("a key sign-in with no administrator password says so, and a server that wants a terminal says that", async () => {
-  const pair = utils.generateKeyPairSync("ed25519");
+  const pair = keyPair("ed25519");
   const w = await world({ publicKey: pair.public, uid: "1000", sudo: "password", sudoPassword: "pw" });
   const t = await world({ password: "pw", uid: "1000", sudo: "tty" });
   try {
