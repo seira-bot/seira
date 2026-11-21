@@ -18,9 +18,13 @@ const NOTES: ReleaseNote[] = [
 ];
 
 describe("release notes data", () => {
-  it("starts with 0.1.183 and its four items in order", () => {
-    expect(RELEASE_NOTES[0]!.version).toBe("0.1.183");
-    expect(RELEASE_NOTES[0]!.items.map(entry => entry.id)).toEqual(["workflows", "drawFromReply", "copyCode", "personLook"]);
+  it("starts with 0.1.184 and its six items in order", () => {
+    expect(RELEASE_NOTES[0]!.version).toBe("0.1.184");
+    expect(RELEASE_NOTES[0]!.items.map(entry => entry.id)).toEqual(["aiImport", "board", "botWorkflows", "turnActivity", "appsInChat", "sendSetting"]);
+  });
+  it("keeps 0.1.183 with its four items in order", () => {
+    const entry = RELEASE_NOTES.find(note => note.version === "0.1.183")!;
+    expect(entry.items.map(item => item.id)).toEqual(["workflows", "drawFromReply", "copyCode", "personLook"]);
   });
   it("keeps 0.1.182 with its one item", () => {
     const entry = RELEASE_NOTES.find(note => note.version === "0.1.182")!;

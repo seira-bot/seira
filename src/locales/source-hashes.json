@@ -38036,7 +38036,21 @@
       "board.stopped": "f8ec77e7a3a08e74c874907cf6d20cd0ec0a6ad2c637f8f2a11770e986f92676",
       "board.loadFailed": "4986828c901a1cf84ea96ec1a4d6ab10fb29546a902dd06a5f60308c45e00a52",
       "board.retry": "d8b8392e2c542950ca64867168e4ef87d4ad606882d5898f826b51c6d553988f",
-      "board.columns": "53aade77cd69a77bbb51bf8ca4e7ea8b282db75edce8883775e47042478d35b5"
+      "board.columns": "53aade77cd69a77bbb51bf8ca4e7ea8b282db75edce8883775e47042478d35b5",
+      "releaseNotes.items.aiImport.title": "d2bba1cbb99d34656f4cf4571432dd5a1185cdccb2355882c765ed73bcda2ae9",
+      "releaseNotes.items.aiImport.body": "d4a1fcc5b05396d4c2fbf001c7b113bb736fe0aef009e77de627df144bdd50b5",
+      "releaseNotes.items.board.title": "75793e9f3445833c34c717e6b8af1edf23cb45cd6823ac2614bfee6a1942eba1",
+      "releaseNotes.items.board.body": "0f725ab775720c519cec1e4144cbf20d950454a93a65f621dc0db349361eb1d2",
+      "releaseNotes.items.botWorkflows.title": "b8c833d2b019679c623c8aac11c761c88afa3c4ff48c8b440bd92fe7abb48123",
+      "releaseNotes.items.botWorkflows.body": "596cdcf5a22fc402c5fdf2404cf3020adbea568ff39dbb9d971b1fbe84f85b99",
+      "releaseNotes.items.turnActivity.title": "c4075e483a2dcbe4f807075db421c9876df8613324706250c0b79a28e01ae8c4",
+      "releaseNotes.items.turnActivity.body": "9ba450e4cafec6c1322ed956e448e3169b5528677af7b3406f81df5408e73c2f",
+      "releaseNotes.items.appsInChat.title": "0762bf699d0fb8e5b78f954582c1561699d0d003effe1543579216f433493aa3",
+      "releaseNotes.items.appsInChat.body": "779c540ea0fa13e9876436c1308fedd98b5e6b1a410a8282065832f56db742c7",
+      "releaseNotes.items.sendSetting.title": "059a1272cd5a3191e6d622b85520c16cb6b77fe9df18e3ba71f90bfe26b40f28",
+      "releaseNotes.items.sendSetting.body": "54bf13b45e7d8bb0c50ed4c353e668c52e8494151ab1e07b64be40d686efde6e",
+      "automations.newBox.drawWorkflow": "e33b3a877c9d5a677578ab0a1229793e75a478b65144ebc49edeb2c029ba5fcc",
+      "activity.tool.team.workflow": "2e2d5c5649b718b542fae80e72768b9cfcfea9bcfa51ecc25bf6f3ce532eb5b3"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",

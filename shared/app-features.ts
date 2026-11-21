@@ -41,7 +41,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "Automations → Workflows",
     does: "Steps that bots take in order, saved on a canvas. It runs only when a routine uses it. Make one with New workflow, Draw a workflow instead, or Draw as workflow on a reply. A bot can read, make and link workflows.",
     tools: ["workflow"],
-    releaseNotes: ["workflows", "drawFromReply"],
+    releaseNotes: ["workflows", "drawFromReply", "botWorkflows"],
     automationViews: ["workflows"],
   },
   {
@@ -65,6 +65,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "the chat box: type @",
     does: "Lists other bots, the connected apps and MCP servers this bot can use, teammates, and @devs. In a direct chat, tagging an app or a server asks the bot to use it for that message.",
     mentionRows: ["agent", "app", "mcp", "person", "team", "channel", "devs"],
+    releaseNotes: ["appsInChat"],
   },
   {
     id: "bots",
@@ -72,6 +73,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "the Bots list in the sidebar; New bot",
     does: "Each bot has its own name, instructions, model and folder. A Chief of Staff adds specialists and sets up teams. A department groups bots.",
     tools: ["list_bots", "create_bot", "list_team_setup", "list_team_library", "propose_team_setup", "propose_bot_deletion", "propose_profile", "propose_team_memory", "share"],
+    releaseNotes: ["sendSetting"],
   },
   {
     id: "handoffs",
@@ -91,8 +93,8 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "chats",
     name: "Chats",
     place: "a conversation with a bot",
-    does: "Replies show code with a copy control. Long chats open at the newest messages and load older ones when the person scrolls up.",
-    releaseNotes: ["copyCode", "longChats"],
+    does: "Replies show code with a copy control, and an activity card with the tools the bot used. Long chats open at the newest messages and load older ones when the person scrolls up.",
+    releaseNotes: ["copyCode", "longChats", "turnActivity"],
   },
   {
     id: "skills",
@@ -218,6 +220,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Board",
     place: "Board in the sidebar, above Automations",
     does: "Shows every piece of work your bots have, in To do, Working, Needs you and Done. Open a card to answer, stop the work or open its conversation, or add a new task.",
+    releaseNotes: ["board"],
   },
   {
     id: "inbox",
@@ -233,6 +236,13 @@ export const APP_FEATURES: readonly AppFeature[] = [
     does: "When Seira hits an error of its own, a draft report waits under the reply. It goes to the Seira team only when the person selects Send report.",
     tools: ["report_bug"],
     releaseNotes: ["bugReport"],
+  },
+  {
+    id: "ai-import",
+    name: "Move from another AI",
+    place: "Settings → Import & export → Bring things in → Move from another AI",
+    does: "Brings the persona, memories, skills, tools, routines and chats of ChatGPT, Claude.ai, Claude Code, Hermes or OpenClaw into Seira. The person reviews what Seira found before anything comes in.",
+    releaseNotes: ["aiImport"],
   },
   {
     id: "backups",
