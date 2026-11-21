@@ -5,35 +5,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { removeTempDir } from "../testing/cleanup.ts";
 
-const opened = vi.hoisted(() => [] as string[]);
+
+
+const { opened, recording } = vi.hoisted(() => {
+  const opened: string[] = [];
+  const recording = <T extends (...args: never[]) => unknown>(fn: T): T => ((path: unknown, ...rest: unknown[]) => (opened.push(String(path)), (fn as (...args: unknown[]) => unknown)(path, ...rest))) as unknown as T;
+  return { opened, recording };
+});
 
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
-  return {
-    ...actual,
-    createReadStream: ((path: string, ...rest: never[]) => (opened.push(String(path)), actual.createReadStream(path, ...rest))) as typeof actual.createReadStream,
-    readFileSync: ((path: string, ...rest: never[]) => (opened.push(String(path)), actual.readFileSync(path, ...rest))) as typeof actual.readFileSync,
-    openSync: ((path: string, ...rest: never[]) => (opened.push(String(path)), actual.openSync(path, ...rest))) as typeof actual.openSync,
-  };
+  return { ...actual, createReadStream: recording(actual.createReadStream), readFileSync: recording(actual.readFileSync), openSync: recording(actual.openSync) };
 });
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
-  return {
-    ...actual,
-    readFile: ((path: string, ...rest: never[]) => (opened.push(String(path)), actual.readFile(path, ...rest))) as typeof actual.readFile,
-    open: ((path: string, ...rest: never[]) => (opened.push(String(path)), actual.open(path, ...rest))) as typeof actual.open,
-    copyFile: ((from: string, to: string, ...rest: never[]) => (opened.push(String(from)), actual.copyFile(from, to, ...rest))) as typeof actual.copyFile,
-    cp: ((from: string, ...rest: never[]) => (opened.push(String(from)), (actual.cp as (...args: unknown[]) => Promise<void>)(from, ...rest))) as typeof actual.cp,
-  };
+  return { ...actual, readFile: recording(actual.readFile), open: recording(actual.open), copyFile: recording(actual.copyFile), cp: recording(actual.cp) };
 });
 vi.mock("node:sqlite", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:sqlite")>();
   return {
     ...actual,
     DatabaseSync: class extends actual.DatabaseSync {
-      constructor(path: string, ...rest: never[]) {
+      constructor(path: string, options?: ConstructorParameters<typeof actual.DatabaseSync>[1]) {
         opened.push(String(path));
-        super(path, ...rest);
+        super(path, options);
       }
     },
   };

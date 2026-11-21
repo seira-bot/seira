@@ -14,7 +14,7 @@ export function copyFixture(name: "hermes" | "openclaw" | "claude-code", to: str
   return to;
 }
 
-export function localSource(kind: ImportSourceKind, path: string, profile?: string, name = kind): LocalSource {
+export function localSource(kind: ImportSourceKind, path: string, profile?: string, name: string = kind): LocalSource {
   return { id: sourceId(kind, path, profile), kind, path, name, ...(profile ? { profile } : {}) };
 }
 

@@ -1,6 +1,7 @@
 import { basename, join } from "node:path";
 
 import { emptyAgent, type ImportAgent, type ImportConversation, type ImportEvent, type ImportLeftover } from "../../shared/ai-import/bundle.ts";
+import { userHome } from "../env-path.ts";
 import { collectSkills, everySchedule, markdownEntries, routineFrom, textSchedule, toolFromConfig } from "./local-agent.ts";
 import { databaseConversations, decodeMessageBody, jsonlConversation, openDatabaseCopy, type JsonlEntry } from "./local-chats.ts";
 import { isFile, isRecord, listNames, readText, sourceId, toMillis } from "./local-fs.ts";
@@ -37,7 +38,7 @@ async function* readOpenclaw(input: ImportInput, ctx: ReaderContext): AsyncGener
   const agentId = source.profile ?? "main";
   yield { type: "source", source: { kind: "openclaw", ...(source.profile ? { profile: source.profile } : {}), fingerprint: sourceId("openclaw", workspace, source.profile) } };
 
-  const stateDir = await openclawStateDirOf(workspace, process.env, process.env.HOME ?? process.env.USERPROFILE ?? "");
+  const stateDir = await openclawStateDirOf(workspace, process.env, userHome());
   const agent: ImportAgent = emptyAgent(agentId, source.name);
   const leftovers: ImportLeftover[] = [];
 
