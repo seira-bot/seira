@@ -1,19 +1,25 @@
 import type { RefObject } from "react";
-import { Bug, Users } from "lucide-react";
+import { Bug, Plug, Users } from "lucide-react";
 import type { Bot } from "@/state/store";
 import type { TeamPerson } from "@/state/team-people";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import type { LocaleKey } from "@/locales";
+import type { MentionRowKind } from "@/lib/mention-row-kinds";
 import { normalizeState } from "@/lib/mascot";
 import { mentionRowDescription } from "@/lib/mentions";
 import { BotAvatar } from "./Avatar";
 import { ComposerMenuRow } from "./ComposerMenuRow";
 import type { MenuMotion } from "./MenuMotion";
 import { PersonFace } from "./TeamOwner";
+import { ServiceIcon } from "./ServiceIcon";
 import { DEVS_TAG } from "../../shared/devs-mention";
 
-/** One row of the @ list: a bot, a teammate on a Team Cloud, a whole team, everyone, or the Seira team (@devs). */
-export type MentionChoice = { id: string; name: string; bot?: Bot; person?: TeamPerson; team?: { count: number }; all?: { count: number }; devs?: true };
+/** A connected app or an MCP server the bot of a direct chat can use. Tagging one only inserts its name. */
+export type MentionTool = { kind: "app" | "mcp"; slug: string; logo?: string | null; domain?: string | null; blurb?: string };
+
+/** One row of the @ list: a bot, a tool of that bot, a teammate on a Team Cloud, a whole team, everyone, or the Seira team (@devs). */
+export type MentionChoice = { id: string; name: string; bot?: Bot; tool?: MentionTool; person?: TeamPerson; team?: { count: number }; all?: { count: number }; devs?: true };
 
 /** The last row of every @ list: a message that tags it is a bug report the app sends to the Seira team. */
 export const DEVS_CHOICE: MentionChoice = { id: "__devs__", name: DEVS_TAG, devs: true };
@@ -21,6 +27,25 @@ export const DEVS_CHOICE: MentionChoice = { id: "__devs__", name: DEVS_TAG, devs
 /** The @ list's rows for a Team Cloud's teammates, after the bots. */
 export function teammateChoices(people: readonly TeamPerson[]): MentionChoice[] {
   return people.map((person) => ({ id: `person:${person.email}`, name: person.name, person }));
+}
+
+const MENTION_KIND_LABEL: Record<MentionRowKind, LocaleKey> = {
+  agent: "composer.mention.agent",
+  app: "composer.mention.app",
+  mcp: "composer.mention.mcp",
+  person: "composer.mention.person",
+  team: "composer.mention.team",
+  channel: "composer.mention.channel",
+  devs: "composer.mention.devs",
+};
+
+export function mentionRowKind(choice: MentionChoice): MentionRowKind {
+  if (choice.bot) return "agent";
+  if (choice.tool) return choice.tool.kind;
+  if (choice.person) return "person";
+  if (choice.devs) return "devs";
+  if (choice.team) return "team";
+  return "channel";
 }
 
 /** The composer's @ list, shared by every composer that tags bots. */
@@ -43,7 +68,7 @@ export function MentionMenu({ listRef, motion, choices, highlight, everyoneCount
       className={cn("absolute bottom-full start-2 z-20 mb-2 max-h-72 w-72 overflow-x-hidden overflow-y-auto overscroll-contain rounded-xl border border-hairline/40 bg-raised shadow-lg", motion.className, className)} {...motion.exitProps}
     >
       {choices.map((choice, i) => {
-        const description = choice.person ? "" : choice.devs ? t("composer.mention.devsDesc") : mentionRowDescription(choice.bot ? { kind: "bot", title: choice.bot.title.trim() || (choice.bot.chiefOfStaff ? t("chat.chiefOfStaff") : "") }
+        const description = choice.person ? "" : choice.tool ? choice.tool.blurb ?? "" : choice.devs ? t("composer.mention.devsDesc") : mentionRowDescription(choice.bot ? { kind: "bot", title: choice.bot.title.trim() || (choice.bot.chiefOfStaff ? t("chat.chiefOfStaff") : "") }
           : choice.team ? { kind: "team", count: choice.team.count }
             : choice.all ? { kind: "all", count: choice.all.count } : { kind: "everyone", count: everyoneCount });
         return (
@@ -63,6 +88,12 @@ export function MentionMenu({ listRef, motion, choices, highlight, everyoneCount
                 size={24}
                 animated={i === highlight}
               />
+            ) : choice.tool ? choice.tool.kind === "app" ? (
+              <ServiceIcon card={{ logo: choice.tool.logo ?? null, domain: choice.tool.domain ?? null, label: choice.name }} className="size-6" />
+            ) : (
+              <span className="flex size-6 items-center justify-center rounded-full bg-raised text-ink-secondary">
+                <Plug size={14} aria-hidden="true" />
+              </span>
             ) : choice.person ? <PersonFace person={choice.person} size={24} /> : choice.devs ? (
               <span className="flex size-6 items-center justify-center rounded-full bg-raised text-ink-secondary">
                 <Bug size={14} aria-hidden="true" />
@@ -74,7 +105,7 @@ export function MentionMenu({ listRef, motion, choices, highlight, everyoneCount
             )}
             name={choice.name}
             description={description || undefined}
-            kind={choice.bot ? t("composer.mention.agent") : choice.person ? t("composer.mention.person") : choice.devs ? t("composer.mention.devs") : choice.team ? t("composer.mention.team") : t("composer.mention.channel")}
+            kind={t(MENTION_KIND_LABEL[mentionRowKind(choice)])}
           />
         );
       })}

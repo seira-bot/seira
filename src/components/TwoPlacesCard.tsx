@@ -28,6 +28,7 @@ export function TwoPlacesCard({ suggest, onBring, onDismiss }: { suggest: TwoPla
       <p className="text-[13px] font-medium text-ink">{t("twoPlaces.confirmTitle", { place: suggest.name })}</p>
       <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">{t("twoPlaces.confirm", { place: suggest.name })}</p>
       {suggest.kind === "cloud" && <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">{t("twoPlaces.undo")}</p>}
+      {suggest.kind === "server" && <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">{t("twoPlaces.serverStops")}</p>}
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <button type="button" data-two-places-move className={PRIMARY_BUTTON} disabled={busy} aria-busy={busy || undefined} onClick={bring}>
           {busy && <Loader2 aria-hidden="true" className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" />}

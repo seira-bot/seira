@@ -223,3 +223,74 @@ test("after an own-home move is done, an app update does not send the old worksp
   assert.deepEqual(files(), []);
   second.close();
 });
+
+function bringBackSetup({ frozen = true, lift = 200, phase = "done" } = {}) {
+  const choice = { v: 1, id: "g", origin: garage.origin, environmentId: ID, name: "Garage server", at: 1 };
+  const cloud = { origin: garage.origin, account: `own:${ID}`, machine: garage.origin, name: "Garage server" };
+  const journal = memory({ v: 1, phase, cloud, doneAt: 1 });
+  const choiceStore = memory(choice);
+  const sendState = memory({ keep: "me" });
+  const calls = [];
+  let opened = 0, changed = 0;
+  const own = installOwnHome({
+    localRequest: async (route, init) => {
+      calls.push(`${init?.method ?? "GET"} ${route} ${init?.body ?? ""}`.trim());
+      if ((init?.method ?? "GET") === "GET") return Response.json({ frozen });
+      return Response.json({}, { status: lift });
+    },
+    fetch: async () => new Response("", { status: 502 }),
+    environments: () => [garage],
+    handoff: async () => null,
+    journal, choice: choiceStore, sendState,
+    cloudJournal: () => null,
+    openLocal: () => { opened += 1; },
+    onChange: () => { changed += 1; },
+  });
+  return { own, calls, journal, choiceStore, sendState, opened: () => opened, changed: () => changed };
+}
+
+test("the bots come back to this computer: the stop lifts with every automation off, home is let go of and This computer opens", async () => {
+  const set = bringBackSetup();
+  assert.equal(set.own.canBringBack(), true);
+  assert.equal(set.own.away(), true);
+  await set.own.bringBack();
+  assert.ok(set.calls.includes('DELETE /api/move/freeze {"automations":"off"}'));
+  assert.equal(set.journal.read(), null);
+  assert.equal(set.choiceStore.read(), null);
+  assert.deepEqual(set.sendState.read(), { keep: "me" });
+  assert.equal(set.opened(), 1);
+  assert.ok(set.changed() >= 1);
+  assert.equal(set.own.away(), false);
+  assert.equal(set.own.origin(), null);
+  assert.equal(set.own.canBringBack(), false);
+  await set.own.kick();
+  assert.equal(set.choiceStore.read(), null);
+  set.own.close();
+});
+
+test("a stop that was already lifted is not lifted again", async () => {
+  const set = bringBackSetup({ frozen: false });
+  await set.own.bringBack();
+  assert.equal(set.calls.some((call) => call.startsWith("DELETE")), false);
+  assert.equal(set.opened(), 1);
+  set.own.close();
+});
+
+test("when this computer's server does not lift the stop, the choice and journal stay and one plain error is shown", async () => {
+  const set = bringBackSetup({ lift: 500 });
+  await assert.rejects(() => set.own.bringBack(), { message: "Your bots couldn't come back yet. Try again in a moment." });
+  assert.notEqual(set.journal.read(), null);
+  assert.notEqual(set.choiceStore.read(), null);
+  assert.equal(set.opened(), 0);
+  set.own.close();
+});
+
+test("the bots cannot come back before the move is done", async () => {
+  const set = bringBackSetup({ phase: "final" });
+  assert.equal(set.own.canBringBack(), false);
+  await assert.rejects(() => set.own.bringBack(), { message: "Your bots are already on this computer." });
+  assert.deepEqual(set.calls, []);
+  assert.equal(set.opened(), 0);
+  assert.notEqual(set.choiceStore.read(), null);
+  set.own.close();
+});
