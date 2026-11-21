@@ -2,17 +2,24 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { describe, expect, it } from "vitest";
 import type { VisibleSet } from "../bot-visibility.ts";
 import type { BoardSources } from "../board.ts";
+import type { BoardClosure, BoardClosures } from "../board-closed.ts";
 import { requiredScope, type RequestAuth } from "../request-auth.ts";
 import { createBoardRoutes } from "./board.ts";
 import { PASS, type RouteContext } from "./table.ts";
 
 const NOW = 1_800_000_000_000;
 
-function setup(hidden: { threads?: string[]; bots?: string[] } = {}) {
+function setup(hidden: { threads?: string[]; bots?: string[] } = {}, options: { level?: string; more?: ReturnType<BoardSources["handoffs"]> } = {}) {
+  const closed = new Map<string, BoardClosure>();
+  const closures: BoardClosures = {
+    get: (id) => closed.get(id),
+    close: (id, by, reason) => { closed.set(id, { at: NOW, by, ...(reason ? { reason } : {}) }); },
+  };
   const sources: BoardSources = {
     handoffs: () => [
       { id: "h1", parentId: "root", threadId: "t-open", botId: "scout", text: "Find the numbers", createdAt: NOW - 1000, status: "running", result: "", mode: "work" },
       { id: "h2", parentId: "root", threadId: "t-secret", botId: "scout", text: "Private work", createdAt: NOW - 1000, status: "running", result: "", mode: "work" },
+      ...(options.more ?? []),
     ],
     threads: [{ botId: "atlas", task: { threadId: "t-chat", title: "Chat", createdAt: NOW - 5000, activity: "working" } }],
     runs: () => [
@@ -28,18 +35,19 @@ function setup(hidden: { threads?: string[]; bots?: string[] } = {}) {
     routineShown: () => true,
     bot: (id: string) => !(hidden.bots ?? []).includes(id),
     group: () => true,
+    level: (id: string) => ((hidden.bots ?? []).includes(id) ? "none" : options.level ?? "chat"),
   } as unknown as VisibleSet;
-  const route = createBoardRoutes({ sources: () => sources, visibleFor: () => visible, now: () => NOW });
-  const call = async (method: string, path: string) => {
+  const route = createBoardRoutes({ sources: () => sources, visibleFor: () => visible, closures, closerName: () => "Rama", now: () => NOW });
+  const call = async (method: string, path: string, body: unknown = {}) => {
     const sent: { status?: number; body?: any } = {};
     const out = await route({
       req: {} as IncomingMessage, res: {} as ServerResponse, url: new URL(path, "http://127.0.0.1"), path, method,
-      auth: { kind: "loopback", scopes: ["client"] } as RequestAuth, readBody: (async () => ({})) as RouteContext["readBody"],
+      auth: { kind: "loopback", scopes: ["client"] } as RequestAuth, readBody: (async () => body) as RouteContext["readBody"],
       json: ((_res: ServerResponse, status: number, body: unknown) => { sent.status = status; sent.body = body; }) as RouteContext["json"],
     });
     return { out, ...sent };
   };
-  return { call };
+  return { call, closed };
 }
 
 describe("GET /api/board", () => {
@@ -53,7 +61,9 @@ describe("GET /api/board", () => {
 
   it("refuses other methods and leaves other paths alone", async () => {
     const { call } = setup();
+    expect(await call("PUT", "/api/board")).toMatchObject({ status: 405, body: { error: "method not allowed" } });
     expect(await call("POST", "/api/board")).toMatchObject({ status: 405, body: { error: "method not allowed" } });
+    expect(await call("GET", "/api/board/close")).toMatchObject({ status: 405 });
     expect((await call("GET", "/api/boards")).out).toBe(PASS);
   });
 
@@ -61,5 +71,50 @@ describe("GET /api/board", () => {
     const { call } = setup({ threads: ["t-secret", "t-chat"], bots: ["ghost"] });
     const { body } = await call("GET", "/api/board");
     expect(body.cards.map((c: { id: string }) => c.id).sort()).toEqual(["handoff:h1", "routine:r1"]);
+  });
+});
+
+describe("POST /api/board/close", () => {
+  const failed = { id: "h3", parentId: "root", threadId: "t-failed", botId: "scout", text: "Send the report", createdAt: NOW - 5000, status: "failed" as const, result: "It broke", mode: "work" as const };
+  const close = (call: ReturnType<typeof setup>["call"], cardId: string, reason?: string) => call("POST", "/api/board/close", { cardId, ...(reason ? { reason } : {}) });
+
+  it("moves a Needs you card to Done with the person's name and reason, and a client may call it", async () => {
+    const { call } = setup({}, { more: [failed] });
+    expect(await close(call, "handoff:h3", "Fixed by hand")).toMatchObject({ status: 200, body: { ok: true } });
+    const { body } = await call("GET", "/api/board");
+    expect(body.cards.find((c: { id: string }) => c.id === "handoff:h3")).toMatchObject({
+      column: "done", state: "closed", updatedAt: NOW, closedBy: { kind: "person", name: "Rama" }, closedReason: "Fixed by hand",
+    });
+    expect(requiredScope("POST", "/api/board/close")).toBe("client");
+  });
+
+  it("refuses a card the person cannot see, and a card that does not exist, and keeps the card", async () => {
+    const { call, closed } = setup({ threads: ["t-failed"] }, { more: [failed] });
+    expect(await close(call, "handoff:h3")).toMatchObject({ status: 404 });
+    expect(await close(call, "handoff:nope")).toMatchObject({ status: 404 });
+    expect(closed.size).toBe(0);
+  });
+
+  it("refuses a person who may only view the card's bot, and keeps the card", async () => {
+    const { call, closed } = setup({}, { level: "view", more: [failed] });
+    expect(await close(call, "handoff:h3")).toMatchObject({ status: 403 });
+    expect(closed.size).toBe(0);
+    const { body } = await call("GET", "/api/board");
+    expect(body.cards.find((c: { id: string }) => c.id === "handoff:h3")).toMatchObject({ column: "needs-you" });
+  });
+
+  it("refuses a card that is not in Needs you, and a card that is already in Done", async () => {
+    const { call, closed } = setup({}, { more: [failed] });
+    expect(await close(call, "handoff:h1")).toMatchObject({ status: 409 });
+    expect(await close(call, "handoff:h3")).toMatchObject({ status: 200 });
+    expect(await close(call, "handoff:h3")).toMatchObject({ status: 409 });
+    expect([...closed.keys()]).toEqual(["handoff:h3"]);
+  });
+
+  it("refuses a body without a card id or with a reason that is too long", async () => {
+    const { call, closed } = setup({}, { more: [failed] });
+    expect(await call("POST", "/api/board/close", {})).toMatchObject({ status: 400 });
+    expect(await close(call, "handoff:h3", "x".repeat(201))).toMatchObject({ status: 400 });
+    expect(closed.size).toBe(0);
   });
 });

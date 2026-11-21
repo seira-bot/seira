@@ -546,6 +546,33 @@ services:
     expect(box.calls().some((call) => call.includes("/to/.omb-restore /to/.omb-replaced"))).toBe(true);
   });
 
+  it("updates a --tunnel install without a Caddy, a Caddyfile or an address check, and keeps its settings", () => {
+    const tunnelEnv = "SEIRA_ACCESS=tunnel\nSEIRA_SIGNIN_EMAILS=owner@example.test\n";
+    const box = install({}, { containers: { seira: { id: "seira-1", image: OLD.id, status: "running", restarts: 0 } } });
+    const tunnelCompose = "# Written by Seira's installer (deploy/install.sh)\nname: seira\nservices:\n  seira:\n    image: ${SEIRA_IMAGE:?run the installer again}\n";
+    writeFileSync(join(box.deploy, ".env"), tunnelEnv);
+    writeFileSync(join(box.deploy, "compose.yaml"), tunnelCompose);
+    const done = box.run();
+    expect(done.status, done.stdout + done.stderr).toBe(0);
+    expect(done.said).toContain("Updated from 0.1.150 to 0.1.151.");
+    expect(box.env()).toBe(`${tunnelEnv}SEIRA_IMAGE=${NEW.refs[0]}\n`);
+    expect(readFileSync(join(box.deploy, "compose.yaml"), "utf8")).toBe(tunnelCompose);
+    expect(existsSync(join(box.deploy, "Caddyfile"))).toBe(false);
+    expect(box.calls().some((call) => call.includes("caddy") || call.includes("https://"))).toBe(false);
+  });
+
+  it("moves a --tunnel install to the installer's tunnel compose file, never to one with Caddy", () => {
+    const box = install({}, { containers: { seira: { id: "seira-1", image: OLD.id, status: "running", restarts: 0 } } });
+    writeFileSync(join(box.deploy, ".env"), "SEIRA_ACCESS=tunnel\n");
+    writeFileSync(join(box.deploy, "compose.yaml"), `# Written by Seira's installer (deploy/install.sh)\nservices:\n  seira:\n    image: x\n  caddy:\n    network_mode: "service:seira"\n`);
+    writeFileSync(join(box.deploy, "Caddyfile"), "{$DOMAIN} {\n}\n");
+    const done = box.run();
+    expect(done.status, done.stdout + done.stderr).toBe(0);
+    const compose = readFileSync(join(box.deploy, "compose.yaml"), "utf8");
+    expect(compose).toContain("SEIRA_ACCESS: ${SEIRA_ACCESS:?run the installer again}");
+    for (const text of ["caddy", "ports:", "network_mode"]) expect(compose, text).not.toContain(text);
+  });
+
   it("updates to a named version, and --check changes nothing", () => {
     const box = install();
     const check = box.run(["--check"]);

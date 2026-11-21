@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 
-import { api, useStore } from "@/state/store";
+import { api, useStore, type InstanceInfo } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { InstanceProviderMark } from "./ProviderIcons";
 import { SettingsMark } from "./SettingsPrimitives";
 
 /** A provider someone hid: the server leaves it out of /api/instances and every model list (withInstanceConfig), so
  * these lists are the only way back to it. */
-export interface HiddenProvider { instanceId: string; driverKind?: string; displayName: string }
+export interface HiddenProvider { instanceId: string; driverKind?: string; displayName: string; icon?: InstanceInfo["icon"] }
 
 /** GET /api/instances/hidden, read again whenever the instance list changes (a Hide or an Unhide refreshes it). */
 export function useHiddenProviders(): HiddenProvider[] {
@@ -48,7 +48,7 @@ export function HiddenProviderRows({ hidden }: { hidden: HiddenProvider[] }) {
     <div data-hidden-engines="" className="px-4 pb-1 pt-3 text-[12px] font-medium text-ink-secondary">{t("engines.hiddenTitle", { count: String(hidden.length) })}</div>
     {hidden.map((entry) => (
       <div key={entry.instanceId} data-hidden-engine={entry.instanceId} className="flex min-h-11 items-center gap-3 px-4 py-1.5">
-        <SettingsMark><InstanceProviderMark instance={{ driverKind: entry.driverKind ?? "" }} size={18} subtle /></SettingsMark>
+        <SettingsMark><InstanceProviderMark instance={{ driverKind: entry.driverKind ?? "", ...(entry.icon ? { icon: entry.icon } : {}) }} size={18} subtle /></SettingsMark>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="truncate text-[14px] leading-5 text-ink">{entry.displayName}</span>
           <span className="truncate text-[13px] leading-[18px] text-ink-secondary">{t("settings.ai.hiddenStatus")}</span>

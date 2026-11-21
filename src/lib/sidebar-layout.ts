@@ -269,3 +269,18 @@ export function mergeSectionOrder(
 export function sameSectionOrder(a: SidebarSectionId[], b: SidebarSectionId[]): boolean {
   return a.length === b.length && a.every((id, index) => id === b[index]);
 }
+
+export function departmentsShown(
+  names: readonly string[],
+  parts: {
+    pinned: readonly { section?: string }[];
+    unpinned: readonly { section?: string }[];
+    rooms: readonly { section?: string }[];
+    keep: readonly string[];
+  },
+): string[] {
+  const has = (list: readonly { section?: string }[], name: string) => list.some((item) => item.section === name);
+  return names.filter(
+    (name) => parts.keep.includes(name) || !has(parts.pinned, name) || has(parts.unpinned, name) || has(parts.rooms, name),
+  );
+}

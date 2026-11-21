@@ -52,6 +52,7 @@ import {
   PINNED_THREADS_SECTION_ID,
   TOOLS_SECTION_ID,
   activeBotsFirst,
+  departmentsShown,
   partitionSidebarBots,
   partitionSidebarGroups,
   pinnedCircleThreadListVisible,
@@ -1099,7 +1100,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
   }) };
   const { botChats, sectionedRooms, unsectionedRooms } = partitionSidebarGroups(visibleGroups);
 
-  const sectionNames: string[] = [...(state.sections ?? []).filter((name) => !q || name.toLowerCase().includes(q.toLowerCase())), ...botDrag.pending];
+  const sectionNames: string[] = [...departmentsShown((state.sections ?? []).filter((name) => !q || name.toLowerCase().includes(q.toLowerCase())), { pinned: primary ? [...pinnedBots, primary] : pinnedBots, unpinned: [...sectionChiefs, ...sectionedBots], rooms: sectionedRooms, keep: botDrag.pending }), ...botDrag.pending];
   for (const bot of sectionedBots) {
     if (!sectionNames.includes(bot.section!)) sectionNames.push(bot.section!);
   }

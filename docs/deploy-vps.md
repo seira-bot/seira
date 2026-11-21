@@ -77,6 +77,21 @@ The installer also accepts the one-time code of a server connected to an account
 
 Not on Ubuntu, or prefer to do it by hand? Use one of the three ways below.
 
+### Quick start without a domain
+
+No domain, and no open port? Let your Seira account give the server an address:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/seira-bot/seira/main/deploy/install.sh | sudo sh -s -- --tunnel --account-email you@example.com
+```
+
+- **What it needs:** the same server as above, and outbound HTTPS to your Seira account service and to Cloudflare's tunnel edge. It needs no domain, no DNS record, and no open port: ports 80 and 443 stay closed, and no Caddy runs.
+- **The emailed code:** Seira emails an 8-digit code to the address you gave. The installer asks for it in your terminal, then signs the server in before it starts.
+- **The result:** the server answers at an address like `https://c-….seira.run`, and the installer prints a one-time link for the first admin.
+- **Run it again** with no option to repair or update. The install keeps its tunnel mode, and `update.sh` works the same way.
+- **`--events`** is for an app that runs the installer: it prints one `::seira` line per step. Its output contains a one-time sign-in link (valid 10 minutes), so do not send it to a log. Without `--events`, the installer prints the link only to a terminal.
+- `--tunnel` and `--domain` exclude each other.
+
 ## Three ways in, by hand
 
 Three ways to make the server reachable are covered. Pick one; the rest of the guide is the same. The short version of every path, including `--lan` and your own cloudflared or proxy (`--public-url`), is at the top of [Self-hosting](self-hosting.md#pick-a-way-in); this guide adds the server setup around it.

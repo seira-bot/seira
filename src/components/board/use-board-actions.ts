@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 
 import type { BoardCard } from "../../../shared/board";
 import { useShowThreads } from "@/lib/thread-preferences";
+import { api } from "@/state/api";
 import { loadBoard } from "@/state/board";
 import { openThread, useStore } from "@/state/store";
 
@@ -9,6 +10,8 @@ export function useBoardActions() {
   const { state, dispatch } = useStore();
   const showThreads = useShowThreads();
   const [stopped, setStopped] = useState(false);
+  const [moved, setMoved] = useState(false);
+  const [moveFailed, setMoveFailed] = useState<string | null>(null);
 
   const openConversation = useCallback((card: BoardCard) => {
     if (!card.threadId) return;
@@ -24,5 +27,20 @@ export function useBoardActions() {
     window.setTimeout(() => void loadBoard({ background: true }), 600);
   }, [dispatch]);
 
-  return { openConversation, stop, stopped, clearStopped: () => setStopped(false) };
+  const moveToDone = useCallback(async (card: BoardCard) => {
+    setMoveFailed(null);
+    try {
+      await api("/api/board/close", { method: "POST", body: JSON.stringify({ cardId: card.id }) });
+    } catch {
+      setMoveFailed(card.id);
+      return;
+    }
+    setMoved(true);
+    await loadBoard({ background: true });
+  }, []);
+
+  return {
+    openConversation, stop, stopped, clearStopped: () => setStopped(false),
+    moveToDone, moved, clearMoved: () => setMoved(false), moveFailed,
+  };
 }

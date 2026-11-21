@@ -398,6 +398,21 @@ function withEnvironmentLook(state, origin, { name, color } = {}) {
   return { ...state, environments: state.environments.map((e) => (e === existing ? next : e)) };
 }
 
+/** A server saved on this computer under a new name, this app's own record only. `taken`: the names other places have
+ * that are not saved entries (This computer, workspaces of its own). One line, at most MAX_NAME characters, and free
+ * among every place, whatever the case. `outcome`: saved, name (empty or too long), taken, or gone. */
+function withServerName(state, id, name, taken = []) {
+  const existing = state.environments.find((entry) => entry.id === id && entry.kind !== "local");
+  if (!existing) return { outcome: "gone", state };
+  const clean = typeof name === "string" ? name.trim().replace(/\s+/g, " ") : "";
+  if (!clean || clean.length > MAX_NAME) return { outcome: "name", state };
+  const same = (a, b) => typeof a === "string" && typeof b === "string" && a.toLocaleLowerCase() === b.toLocaleLowerCase();
+  const others = [...state.environments.filter((entry) => entry !== existing).map((entry) => entry.name), ...taken];
+  if (others.some((other) => same(other, clean))) return { outcome: "taken", state };
+  if (existing.name === clean) return { outcome: "saved", state };
+  return { outcome: "saved", state: { ...state, environments: state.environments.map((entry) => (entry === existing ? { ...entry, name: clean } : entry)) } };
+}
+
 function withLocalEnvironment(state, input, makeId, defaultDir) {
   const name = typeof input?.name === "string" ? input.name.trim().replace(/\s+/g, " ") : "";
   if (!name || name.length > MAX_NAME) return { ok: false, error: "name" };
@@ -487,6 +502,7 @@ module.exports = {
   withEnvironmentLook,
   withListedColors,
   withPlaceColor,
+  withServerName,
   withLocalEnvironment,
   withMicrophone,
   withoutEnvironment,

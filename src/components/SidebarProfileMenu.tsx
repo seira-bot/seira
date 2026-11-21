@@ -45,7 +45,8 @@ import { useAutomationsNeedYou } from "./SidebarFooterNav";
 import { useCloudFilesReady } from "@/lib/cloud-files";
 import { SidebarPopoverMenu, type SidebarMenuItem } from "./SidebarPopoverMenu";
 import { api, useStore, type Action, type AppSettingsSection } from "@/state/store";
-import { serverCheckPhase, serverUpdateRow, type ServerUpdateCheck, type ServerUpdatePhase } from "@/lib/server-update";
+import { serverCheckPhase, serverUpdateRow, type ServerUpdateCheck, type ServerUpdatePhase, type ServerUpdateStatus } from "@/lib/server-update";
+import { unlessRefused } from "@/lib/admin-scope";
 import type { CloudAccountBridge, CloudAccountState } from "../../electron/cloud-account.mjs";
 import { updaterMessage, useUpdaterState, type UpdaterState } from "@/lib/updater";
 import { productName } from "../lib/brand";
@@ -146,17 +147,31 @@ interface UpdateEntry {
   label: string;
   source?: "desktop" | "server";
   installMode?: string;
+  selfInstall?: boolean;
+  onRaisedSelect?: () => void;
 }
 
-/** The update a Simple account menu raises to its top row: one waiting to be installed, or one that failed. */
-export function simpleUpdateTop(entry: Pick<UpdateEntry, "phase" | "source" | "installMode"> | null): { label: string; action: string } | null {
+export interface UpdateTop {
+  label: string;
+  action: string;
+  onSelect?: () => void;
+}
+
+/** The update a Simple account menu raises to its top row: one waiting to be installed, or one that failed. A server
+ * release that the server cannot install by itself is only available, and the row leads to how to update it. */
+export function simpleUpdateTop(entry: Pick<UpdateEntry, "phase" | "source" | "installMode" | "selfInstall" | "onRaisedSelect"> | null): UpdateTop | null {
   const ready = () => t("sidebar.update.readyShort");
   if (entry?.source === "desktop") {
     if (entry.phase === "downloaded") return { label: ready(), action: t(entry.installMode === "handoff" ? "sidebar.update.installAction" : "sidebar.update.restartAction") };
     if (entry.phase === "error") return { label: t("sidebar.update.failedShort"), action: t("sidebar.update.retryAction") };
   }
   if (entry?.source === "server") {
-    if (entry.phase === "available") return { label: ready(), action: t("sidebar.update.installAction") };
+    if (entry.phase === "available") {
+      const top = entry.selfInstall
+        ? { label: ready(), action: t("sidebar.update.installAction") }
+        : { label: t("sidebar.update.availableShort"), action: t("sidebar.update.howAction") };
+      return entry.onRaisedSelect ? { ...top, onSelect: entry.onRaisedSelect } : top;
+    }
     if (entry.phase === "reload") return { label: ready(), action: t("sidebar.update.restartAction") };
   }
   return null;
@@ -210,8 +225,10 @@ export function useUpdateItem(): UpdateEntry | null {
 
 /** Without the packaged app's updater the server cannot replace itself, so the row says whether a newer release exists and how to install it. */
 export function useServerUpdateItem(enabled: boolean): UpdateEntry | null {
+  const { dispatch } = useStore();
   const [phase, setPhase] = useState<ServerUpdatePhase>("idle");
   const [check, setCheck] = useState<ServerUpdateCheck | null>(null);
+  const [selfInstall, setSelfInstall] = useState(false);
   const otherServer = useOtherServerName(enabled);
 
   useEffect(() => {
@@ -222,11 +239,14 @@ export function useServerUpdateItem(enabled: boolean): UpdateEntry | null {
 
   if (!enabled) return null;
   const row = serverUpdateRow(phase, check, appVersion(), otherServer);
+  const settingsShowsServerUpdate = !pageIsThisComputer() && window.ogb?.remoteClient?.active !== true;
   return {
     phase,
     pending: false,
     label: row.label,
     source: "server",
+    selfInstall,
+    ...(settingsShowsServerUpdate ? { onRaisedSelect: () => dispatch({ type: "toggleAppSettings", open: true, section: "overview" }) } : {}),
     item: {
       key: "update",
       label: row.label,
@@ -241,8 +261,12 @@ export function useServerUpdateItem(enabled: boolean): UpdateEntry | null {
         if (phase === "reload") return window.location.reload();
         setPhase("checking");
         void api<ServerUpdateCheck>("/api/updates/check", { timeoutMs: 20_000 })
-          .then((next) => {
+          .then(async (next) => {
+            const status = next.available && next.install !== "desktop" && next.install !== "managed"
+              ? await unlessRefused("/api/updates/server", () => api<ServerUpdateStatus>("/api/updates/server", { timeoutMs: 20_000 }), null).catch(() => null)
+              : null;
             setCheck(next);
+            setSelfInstall(status?.mode === "button");
             setPhase(serverCheckPhase(next));
           })
           .catch(() => setPhase("error"));
@@ -444,7 +468,7 @@ export function profileMenuItems({
 }: {
   phone: SidebarMenuItem | null;
   update: SidebarMenuItem | null;
-  updateTop?: { label: string; action: string } | null;
+  updateTop?: UpdateTop | null;
   /** the move to My Cloud's own rows, first of all (AccountMove) */
   move?: SidebarMenuItem[];
   header: AccountHeader;
@@ -473,6 +497,7 @@ export function profileMenuItems({
     subtitle: undefined,
     attention: false,
     trailing: <span className="ui-button ui-button-sm ui-button-primary pointer-events-none flex h-6 shrink-0 items-center rounded-full px-2.5 text-[12px] font-medium">{updateTop.action}</span>,
+    ...(updateTop.onSelect ? { onSelect: updateTop.onSelect, keepOpen: false } : {}),
   } : null;
   const help: SidebarMenuItem[] = [
     { key: "help", label: t("sidebar.menu.help"), icon: <HelpCircle size={16} />, onSelect: onHelp },

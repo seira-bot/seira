@@ -420,7 +420,15 @@ INSTALLER_MARK="# Written by Seira's installer (deploy/install.sh)"
 old_installer_layout() { [ -f compose.yaml ] && grep -qF "$INSTALLER_MARK" compose.yaml && grep -q '^ *network_mode: "service:seira"' compose.yaml; }
 # A Compose file of this repository's (path B) with Caddy in the server's network: `git pull` brings the current one.
 old_repository_layout() { [ -f docker-compose.yml ] && grep -q '^ *network_mode: "service:seira"' docker-compose.yml; }
+# An install made with --tunnel has no Caddy, no Caddyfile and no published port: its Compose file is the installer's
+# tunnel one, and an update never gives it a Caddy.
+tunnel_install() { [ "$(sed -n 's/^SEIRA_ACCESS=//p' .env 2>/dev/null | tail -n 1)" = tunnel ]; }
 move_installer_layout() {
+  if tunnel_install; then
+    cp -p compose.yaml "$STATE/compose.yaml.before" || return 1
+    installer_tunnel_compose >compose.yaml.update.tmp && mv compose.yaml.update.tmp compose.yaml
+    return
+  fi
   cp -p compose.yaml "$STATE/compose.yaml.before" && cp -p Caddyfile "$STATE/Caddyfile.before" || return 1
   installer_compose >compose.yaml.update.tmp && mv compose.yaml.update.tmp compose.yaml &&
     installer_caddyfile >Caddyfile.update.tmp && mv Caddyfile.update.tmp Caddyfile
@@ -497,6 +505,45 @@ volumes:
       device: tmpfs
       o: mode=1777,size=1m
 COMPOSE
+}
+installer_tunnel_compose() {
+  cat <<'TUNNELCOMPOSE'
+# Written by Seira's installer (deploy/install.sh), and written again each time it runs: put your own settings in
+# .env beside this file, which the installer keeps. The server publishes no port: people reach it at the address
+# your Seira account gives it, through the tunnel connector that runs in this container.
+name: seira
+services:
+  seira:
+    image: ${SEIRA_IMAGE:?run the installer again}
+    restart: unless-stopped
+    hostname: ${SEIRA_HOSTNAME:-seira}
+    init: true
+    shm_size: 512m
+    volumes:
+      - ./data:/data
+      # The Update server button (update-runner.sh, root's folder): the server leaves a request in the first, reads the
+      # outcome in the second.
+      - /var/lib/seira-update/request:/run/seira-update/request
+      - /var/lib/seira-update/status:/run/seira-update/status:ro
+    environment:
+      SEIRA_PORT: "8799"
+      SEIRA_WEBHOOK_PORT: "8800"
+      SEIRA_ACCESS: ${SEIRA_ACCESS:?run the installer again}
+      SEIRA_SERVER_NAME: ${SEIRA_SERVER_NAME:-seira}
+      # Passed only when .env sets them: an empty one would still be set, and Settings' own lists are used when not.
+      SEIRA_SIGNIN_EMAILS:
+      SEIRA_SIGNIN_MEMBER_EMAILS:
+      SEIRA_SIGNIN_SMTP_URL:
+      SEIRA_SIGNIN_SMTP_FROM:
+      SEIRA_CONTROL_PLANE_URL:
+      SEIRA_TUNNEL_HOST_SUFFIX:
+      SEIRA_CLOUD_ORIGIN:
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q -e seira -e openmausbot"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+TUNNELCOMPOSE
 }
 installer_caddyfile() {
   cat <<'CADDY'

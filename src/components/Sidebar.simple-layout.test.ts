@@ -149,9 +149,9 @@ describe("Simple-mode sidebar layout", () => {
     expect(grid.primary?.id).toBe("chief");
     expect(grid.pinned.map((candidate) => candidate.id)).toEqual(["atlas", "dodo"]);
     expect((grid.others ?? []).map((candidate) => candidate.id)).toEqual(["bea"]);
-    expect(sectionOrder(tree)).toEqual([CHANNELS_SECTION_ID, userSectionId("Work")]);
+    expect(sectionOrder(tree)).toEqual([CHANNELS_SECTION_ID]);
     expect(listedBots(tree)).toEqual([]);
-    expect(headers(tree).map((header) => header.props.name)).toEqual(["Group chats", "Work"]);
+    expect(headers(tree).map((header) => header.props.name)).toEqual(["Group chats"]);
   });
 
   it("fades the list's edges in both modes, with the top buttons and the tiles fixed above it", () => {

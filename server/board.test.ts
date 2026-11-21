@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BOARD_DONE_MAX, BOARD_DONE_WINDOW_MS, BOARD_TITLE_CHARS } from "../shared/board.ts";
-import { boardView, type BoardSources, type BoardViewer } from "./board.ts";
+import type { BoardClosure } from "./board-closed.ts";
+import { boardView, botMayClose, type BoardSources, type BoardViewer } from "./board.ts";
 
 const NOW = 1_800_000_000_000;
 const HOUR = 3_600_000;
@@ -176,5 +177,73 @@ describe("window, limit, order and visibility", () => {
     const viewer: BoardViewer = { ...everyone, bot: (id) => id !== "secret" };
     expect(board({ handoffs: rows })[0]).toMatchObject({ fromBotId: "secret" });
     expect(board({ handoffs: rows }, viewer)[0]).not.toHaveProperty("fromBotId");
+  });
+});
+
+describe("cards moved to Done", () => {
+  const closure = (over: Partial<BoardClosure> = {}): BoardClosure => ({ at: NOW - HOUR, by: { kind: "person", name: "Rama" }, reason: "Fixed by hand", ...over });
+  const withClosures = (rows: Handoff[], closed: Record<string, BoardClosure>) =>
+    boardView({ handoffs: () => rows, threads: [], runs: () => [], closed: (id) => closed[id] }, everyone, NOW).cards;
+  const failed = handoff({ id: "f", status: "failed", result: "It broke", lastProgressAt: NOW - 2 * HOUR });
+
+  it("shows a closed Needs you card in Done with who closed it, when and why", () => {
+    const [card] = withClosures([failed], { "handoff:f": closure() });
+    expect(card).toMatchObject({ column: "done", state: "closed", updatedAt: NOW - HOUR, closedBy: { kind: "person", name: "Rama" }, closedReason: "Fixed by hand" });
+  });
+
+  it("drops the bot's question from a closed card and omits an empty reason", () => {
+    const asking = handoff({ id: "q", status: "waiting", question: "Which list?", lastProgressAt: NOW - 2 * HOUR });
+    const [card] = withClosures([asking], { "handoff:q": closure({ by: { kind: "bot", botId: "cleo" }, reason: undefined }) });
+    expect(card).toMatchObject({ column: "done", state: "closed", closedBy: { kind: "bot", botId: "cleo" } });
+    expect(card).not.toHaveProperty("question");
+    expect(card).not.toHaveProperty("closedReason");
+  });
+
+  it("shows the card in its own column again when it changed after the close", () => {
+    const changed = handoff({ id: "f", status: "failed", result: "It broke again", lastProgressAt: NOW - HOUR / 2 });
+    const [card] = withClosures([changed], { "handoff:f": closure() });
+    expect(card).toMatchObject({ column: "needs-you", state: "failed" });
+    expect(card).not.toHaveProperty("closedBy");
+  });
+
+  it("leaves a card that is not in Needs you where it is", () => {
+    const running = handoff({ id: "r", status: "running", lastProgressAt: NOW - 2 * HOUR });
+    expect(withClosures([running], { "handoff:r": closure() })[0]).toMatchObject({ column: "working", state: "running" });
+  });
+
+  it("closes a conversation that waits on the person and a failed routine run", () => {
+    const cards = boardView({
+      handoffs: () => [], runs: () => [run({ id: "x", status: "failed", finishedAt: NOW - 2 * HOUR })],
+      threads: [{ botId: "atlas", task: thread({ threadId: "w", activity: "waiting-on-you", updatedAt: NOW - 2 * HOUR }) }],
+      closed: () => closure(),
+    }, everyone, NOW).cards;
+    expect(cards.map((card) => [card.id, card.column, card.state]).sort()).toEqual([["routine:x", "done", "closed"], ["thread:w", "done", "closed"]]);
+  });
+});
+
+describe("which bot may move a card to Done", () => {
+  const card = { botId: "scout", fromBotId: "cleo" };
+  const chief = { id: "chief", chiefOfStaff: true, section: "Sales" };
+
+  it("allows the bot that does the work and the bot that handed it over", () => {
+    expect(botMayClose(card, { id: "scout" }, undefined, true)).toBe(true);
+    expect(botMayClose(card, { id: "cleo" }, undefined, true)).toBe(true);
+  });
+
+  it("refuses another bot's card to a bot that is not a Chief of Staff", () => {
+    expect(botMayClose(card, { id: "atlas" }, undefined, false)).toBe(false);
+    expect(botMayClose({ botId: "scout" }, { id: "atlas", chiefOfStaff: false }, undefined, false)).toBe(false);
+  });
+
+  it("lets a Chief of Staff close any card off a Team Cloud", () => {
+    expect(botMayClose(card, chief, { section: "Support" }, false)).toBe(true);
+  });
+
+  it("limits a Chief of Staff on a Team Cloud to bots in the same non-empty section", () => {
+    expect(botMayClose(card, chief, { section: "Sales" }, true)).toBe(true);
+    expect(botMayClose(card, chief, { section: "Support" }, true)).toBe(false);
+    expect(botMayClose(card, chief, undefined, true)).toBe(false);
+    expect(botMayClose(card, { id: "chief", chiefOfStaff: true }, {}, true)).toBe(false);
+    expect(botMayClose(card, { id: "chief", chiefOfStaff: true, section: " " }, { section: " " }, true)).toBe(false);
   });
 });

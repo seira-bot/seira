@@ -63,6 +63,9 @@ export interface CompanionAccountService {
   connectorChanged(status: { status: string } | null | undefined): void;
   signOut(): Promise<CompanionAccountState>;
   restore(): Promise<CompanionAccountState>;
+  /** The relay refused this computer's installation credential or none is stored: asks for a usable one with the
+   * account, at most once per `renewIntervalMs`. The address stays as it is. */
+  renewInstallation(): Promise<CompanionAccountState>;
   /** Cancels background recovery timers (autoRecover only). */
   dispose(): void;
 }
@@ -102,6 +105,8 @@ export declare function createCompanionAccountService(options: {
   forcedCheckIntervalMs?: number;
   /** A new installation credential was stored. */
   installationChanged?: () => void;
+  /** The shortest wait between two renewals of the installation credential (default 10 minutes). */
+  renewIntervalMs?: number;
   /** One line per failed setup step: code, HTTP status, request id, retry delay. */
   log?: (line: string) => void;
 }): CompanionAccountService;

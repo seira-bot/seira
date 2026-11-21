@@ -61,7 +61,7 @@ export const USAGE = `seira — your team of AI bots, ready in a few steps
   seira devices [revoke ID]
   seira status
   seira --version
-  seira login [--email you@example.com] [--relay]
+  seira login [--email you@example.com] [--relay] [--events]
   seira logout
   seira access list | add EMAIL [--chat-only] | remove EMAIL
   seira service install [the same way-in options as serve] [--port N] [--data-dir DIR] | uninstall

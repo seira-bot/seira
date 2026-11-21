@@ -173,6 +173,9 @@ describe("search", () => {
   it.each(["cancel", "billing", "invoice", "subscription", "refund"])("puts Plan & billing first for “%s”", (query) => expect(first(query)?.page).toBe("plan"));
   it.each(["voice", "microphone", "dictation"])("puts the Talk shortcut first for “%s” on the desktop", (query) => expect(first(query)?.id).toBe("talk"));
   it("puts All bots on You and your bots", () => expect(first("all bots")?.page).toBe("bots"));
+  it.each(["jev", "cloudflare", "system one"])("puts AI › Routing and extraction first for “%s”, where that key's field is", (query) => expect(first(query)?.id).toBe("routing"));
+  it.each(["image key", "picture key", "nano banana"])("puts AI › Images first for “%s”, where that key's field is", (query) => expect(first(query)?.id).toBe("images"));
+  it.each(["treg", "twitter"])("finds the Apps panel, where the X card holds the treg key, for “%s”", (query) => expect(find(query).map((hit) => hit.entry.id)).toContain("apps"));
   it.each(["kimi", "hidden providers", "unhide"])("puts AI › Providers first for “%s”", (query) => expect(first(query)?.id).toBe("providers"));
   it("finds AI › Providers for “cursor” beside importing from Cursor", () => expect(find("cursor").map((hit) => hit.entry.id)).toEqual(expect.arrayContaining(["providers", "ai-apps"])));
   it("finds Activity in Data where it exists: a browser, for an admin", () => {

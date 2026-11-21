@@ -39,7 +39,7 @@ import { productName } from "../brand.ts";
 import { checkEngine, type EngineCheck } from "../engine-check.ts";
 import { HOSTED_PROVIDER_SETTINGS_ERROR } from "../hosted-models.ts";
 import type { ProviderAuthSessions } from "../provider-auth-sessions.ts";
-import { providerIconPatchSchema, withInstanceIcon } from "../provider-icon.ts";
+import { instanceIcon, providerIconPatchSchema, withInstanceIcon } from "../provider-icon.ts";
 import { isLoopbackHost, isProxied, ownerOrAdmin } from "../request-auth.ts";
 import type { SessionRegistry } from "../sessions.ts";
 import type { Store } from "../store.ts";
@@ -115,7 +115,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
   return async ({ req, res, url, path, method, auth, json, readBody }) => {
     if (method === "GET" && path === "/api/instances/hidden") {
       const hidden = Object.entries(persistableInstanceConfigs(cfg)).filter(([, entry]) => entry.hidden === true);
-      return json(res, 200, { instances: hidden.map(([instanceId, entry]) => ({ instanceId, driverKind: entry.driver, displayName: entry.displayName ?? BUILT_IN_DRIVERS.find((driver) => driver.driverKind === entry.driver)?.metadata.displayName ?? instanceId })) });
+      return json(res, 200, { instances: hidden.map(([instanceId, entry]) => ({ instanceId, driverKind: entry.driver, displayName: entry.displayName ?? BUILT_IN_DRIVERS.find((driver) => driver.driverKind === entry.driver)?.metadata.displayName ?? instanceId, ...instanceIcon(entry) })) });
     }
     if (method === "GET" && path === "/api/instances") {
       // Rescan PATH: Windows never pushes PATH changes into a live process, so a CLI installed since launch stays invisible.

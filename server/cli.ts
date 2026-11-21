@@ -7,7 +7,7 @@
 //   seira pair  [--label "My MacBook"] [--client] [--public-url https://host]
 //   seira sessions [revoke <id>]
 //   seira status
-//   seira login [--email you@example.com] [--relay]
+//   seira login [--email you@example.com] [--relay] [--events]
 //   seira logout
 //   seira run | send | wait | doctor | team apply | export | …
 //
@@ -41,6 +41,7 @@ import { HEADLESS_VERB_NAMES, usage } from "./cli-usage.ts";
 import { normalizePhoneOrigin, phonePairingInstructions, runPhoneSetup } from "./cli-phone-setup.ts";
 import { browserSignInLines, desktopOwnedRefusal, formatSessions, pairingBlock, RELAY_NOT_WITH_TUNNEL, relayPairingBlock, showRelayPairing } from "./cli-pairing.ts";
 import { cliCommand, cliPrefix } from "./cli-invocation.ts";
+import { CODE_ATTEMPTS, readCodeLine, stdinLoginEvents, type LoginEvents } from "./cli-login-events.ts";
 import { checkReach, envPublicUrl, lanProblem, localLinkBase, noRouteLines, publicUrlProblem, reachLines, waitForReach, type Route } from "./cli-reach.ts";
 import { lanUrl } from "./lan-address.ts";
 import { isLoopbackHost } from "../electron/server-address.mjs";
@@ -74,6 +75,8 @@ export interface CliOptions {
   serviceAction?: "install" | "uninstall";
   sentinel?: boolean;
   email?: string;
+  /** `login --events`: the sign-in an installer drives. Standard output carries only `::seira ask code EMAIL` lines, and the code arrives on standard input as `code 12345678`. */
+  events?: boolean;
   /** `browser install [--with-deps]` */
   browserAction?: "install" | "status";
   /** `fleet init|create|list|users|suspend|resume|delete|upgrade|agent` */
@@ -160,6 +163,7 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
       else if (arg === "--local") options.local = true;
       else if (arg === "--json") options.json = true;
       else if (arg === "--email") options.email = value();
+      else if (options.command === "login" && arg === "--events") options.events = true;
       else if (options.command === "sessions" && (arg === "revoke" || arg === "list")) { if (arg === "revoke") options.revoke = value(); }
       else if (options.command === "access" && !options.accessAction && (arg === "list" || arg === "add" || arg === "remove")) {
         options.accessAction = arg;
@@ -199,6 +203,7 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
   if (options.command === "service" && !options.serviceAction) return { error: "service needs one of: install [the same options as serve], uninstall" };
   if (options.domain && (options.tailscale || options.tunnel || options.publicUrl)) return { error: "--domain already gives the server its address; drop --tailscale, --tunnel and --public-url" };
   if (options.local && (options.tailscale || options.tunnel || options.publicUrl || options.lan || options.relay)) return { error: "--local cannot be combined with a remote-access option" };
+  if (options.events && !options.email) return { error: "--events needs --email" };
   if (options.command === "browser" && !options.browserAction) return { error: "browser needs an action: install or status" };
   if (options.command === "fleet") {
     if (!options.fleetAction) return { error: "fleet needs one of: init --domain HOST [--operator USER], create NAME --admin EMAIL, list, users NAME add|remove EMAIL, suspend NAME, resume NAME, delete NAME --yes, upgrade, agent" };
@@ -481,7 +486,7 @@ export async function runAccess(options: CliOptions, io: CliIo = defaultIo()): P
   return 0;
 }
 
-export async function runLogin(options: CliOptions, io: CliIo = defaultIo()): Promise<number> {
+export async function runLogin(options: CliOptions, io: CliIo = defaultIo(), events?: LoginEvents): Promise<number> {
   const account = createTunnelAccount({ dataDir: options.dataDir, version: reportableServerVersion(), relayOnly: options.relay === true });
   if (fleetCredential()) io.log(`note: ${FLEET_CREDENTIAL_ENV} is set, so serve --tunnel will use that credential rather than this account`);
   if (account.credentials.status === "unavailable") {
@@ -492,7 +497,7 @@ export async function runLogin(options: CliOptions, io: CliIo = defaultIo()): Pr
   if (problem) { io.error(problem); return 1; }
   const existing = describeTunnelAccount(account.credentials.read());
   if (existing.address) io.log(`already signed in as ${existing.email ?? "?"} (${existing.address}); signing in again refreshes it`);
-  const email = (options.email ?? (await io.ask("Email for your Seira account: "))).trim();
+  const email = (options.email ?? (events ? "" : await io.ask("Email for your Seira account: "))).trim();
   if (!email) {
     io.error(`an email address is needed: ${cliCommand("login --email you@example.com")}`);
     return 1;
@@ -503,13 +508,30 @@ export async function runLogin(options: CliOptions, io: CliIo = defaultIo()): Pr
     io.error(`could not send a sign-in code: ${message(error)}`);
     return 1;
   }
-  const code = (await io.ask(`Enter the 8-digit code we emailed to ${email}: `)).trim();
   let state;
-  try {
-    state = await account.service.verifyCode(email, code);
-  } catch (error) {
-    io.error(`sign-in failed: ${message(error)}`);
-    return 1;
+  if (events) {
+    for (let attempt = 1; attempt <= CODE_ATTEMPTS && !state; attempt += 1) {
+      events.ask(email);
+      const given = await readCodeLine(events);
+      if (given === null) {
+        io.error("No sign-in code was given.");
+        return 1;
+      }
+      try {
+        state = await account.service.verifyCode(email, given);
+      } catch (error) {
+        io.error(`sign-in failed: ${message(error)}`);
+      }
+    }
+    if (!state) return 1;
+  } else {
+    const code = (await io.ask(`Enter the 8-digit code we emailed to ${email}: `)).trim();
+    try {
+      state = await account.service.verifyCode(email, code);
+    } catch (error) {
+      io.error(`sign-in failed: ${message(error)}`);
+      return 1;
+    }
   }
   const signedIn = describeTunnelAccount(account.credentials.read());
   if (!signedIn.address && !(options.relay && signedIn.installationId)) {
@@ -520,8 +542,10 @@ export async function runLogin(options: CliOptions, io: CliIo = defaultIo()): Pr
     // FR-221: the sign-in stays; only the address is missing, and serve --tunnel asks for it again at each start.
     io.log(`Signed in as ${signedIn.email}.`);
     io.error(`No public address this time${state.message ? `: ${state.message}` : "."}`);
-    io.log(`${cliCommand("serve --tunnel")} asks for one again each time it starts, and serves without one until then.`);
-    io.log(`To pair a phone now, use ${cliCommand("serve --lan")} on this Wi-Fi or ${cliCommand("serve --tailscale")} on your tailnet.`);
+    if (!events) {
+      io.log(`${cliCommand("serve --tunnel")} asks for one again each time it starts, and serves without one until then.`);
+      io.log(`To pair a phone now, use ${cliCommand("serve --lan")} on this Wi-Fi or ${cliCommand("serve --tailscale")} on your tailnet.`);
+    }
     return 1;
   }
   io.log(`Signed in as ${signedIn.email ?? email}.`);
@@ -936,8 +960,15 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       return runSessions(options);
     case "status":
       return runStatus(options);
-    case "login":
-      return runLogin(options);
+    case "login": {
+      if (!options.events) return runLogin(options);
+      const events = stdinLoginEvents();
+      try {
+        return await runLogin(options, { log: (line) => console.error(line), error: (line) => console.error(line), ask: async () => "" }, events);
+      } finally {
+        events.close();
+      }
+    }
     case "access":
       return runAccess(options);
     case "service":
