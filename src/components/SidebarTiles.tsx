@@ -20,11 +20,12 @@ import { SimpleSectionLabel } from "./SidebarSimpleNav";
 import { SIMPLE_ROW_FOCUS } from "./SidebarSimpleTop";
 import { useBotUnread } from "./unread-notice";
 
+export const TILE_COLUMNS = "repeat(auto-fill, minmax(max(60px, calc((100% - 6px) / 4)), 1fr))";
 const RING = "ring-2 ring-[var(--tile)]";
 
-type TileProps = BotRowProps & PinnedCircleDragProps & { primary?: boolean };
+type TileProps = BotRowProps & PinnedCircleDragProps & { primary?: boolean; kind?: "bot" };
 
-export const SidebarBotTile = memo(function SidebarBotTile({ primary = false, drag, dragging, drop, prevId, nextId, ...row }: TileProps) {
+export const SidebarBotTile = memo(function SidebarBotTile({ primary = false, kind, drag, dragging, drop, prevId, nextId, ...row }: TileProps) {
   const { bot, selected, deleting, mascotMotion, pendingQueued, instances, liveCall, dispatch, onMenu, renameRequest } = row;
   const showThreads = useShowThreads();
   const liveMedia = useLiveMedia();
@@ -64,7 +65,7 @@ export const SidebarBotTile = memo(function SidebarBotTile({ primary = false, dr
       role={renaming ? undefined : "button"}
       tabIndex={renaming ? undefined : 0}
       data-sidebar-bot-row={bot.id}
-      data-sidebar-tile={primary ? "primary" : "pinned"}
+      data-sidebar-tile={kind ?? (primary ? "primary" : "pinned")}
       draggable={Boolean(drag) && !renaming} data-look="sidebar-bot"
       aria-label={renaming ? undefined : label}
       aria-current={selected && !renaming ? "page" : undefined}
@@ -136,17 +137,27 @@ export function SidebarNoBots() {
   return <p data-sidebar-empty="" className="px-5 pt-4 text-[13px] leading-[18px] text-ink-tertiary">{t("onboarding.shell.noBots")}</p>;
 }
 
-export function SidebarTileGrid({ primary, pinned, row, onAdd }: { primary: Bot | null; pinned: Bot[]; row: (bot: Bot) => BotRowProps; onAdd?: () => void }) {
+export function SidebarTileGrid({ primary, pinned, others = [], row, onAdd }: { primary: Bot | null; pinned: Bot[]; others?: Bot[]; row: (bot: Bot) => BotRowProps; onAdd?: () => void }) {
   const order = usePinnedCircleDrag(pinned);
-  if (!primary && order.ranked.length === 0) return null;
+  if (!primary && order.ranked.length === 0 && others.length === 0) return null;
   return (
     <section data-sidebar-tiles="" aria-label={t("sidebar.section.bots")} className="px-3 pb-2 pt-1">
       <SimpleSectionLabel name={t("sidebar.section.bots")} addLabel={onAdd ? t("sidebar.newBotSimple") : undefined} onAdd={onAdd} />
-      <div className="grid max-h-[40vh] grid-cols-4 gap-0.5 overflow-y-auto py-0.5" {...order.frameProps}>
+      <div className="grid max-h-[40vh] gap-0.5 overflow-y-auto py-0.5" style={{ gridTemplateColumns: TILE_COLUMNS }} {...order.frameProps}>
         {primary && <SidebarBotTile {...row(primary)} primary />}
         {order.ranked.map((bot) => <SidebarBotTile key={bot.id} {...row(bot)} {...order.dragProps(bot)} />)}
+        {others.map((bot) => <SidebarBotTile key={bot.id} {...row(bot)} kind="bot" />)}
         <span role="status" className="sr-only">{order.moved}</span>
       </div>
     </section>
+  );
+}
+
+export function SidebarSectionTiles({ bots, row }: { bots: Bot[]; row: (bot: Bot) => BotRowProps }) {
+  if (bots.length === 0) return null;
+  return (
+    <div data-sidebar-section-tiles="" className="grid gap-0.5 py-0.5" style={{ gridTemplateColumns: TILE_COLUMNS }}>
+      {bots.map((bot) => <SidebarBotTile key={bot.id} {...row(bot)} kind="bot" />)}
+    </div>
   );
 }

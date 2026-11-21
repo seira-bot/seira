@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { teamSlackPhase } from "./host/team-slack-host.ts";
 import type { Message } from "./store.ts";
 import { TEAM_SLACK_FILE, TEAM_SLACK_REPORT_PATH, createTeamSlackMessages, createTeamSlackReporter, teamSlackMessageSchema, teamSlackOver, teamSlackSignature, type TeamSlackRecord, type TeamSlackReport } from "./team-slack.ts";
+import { expectBothCloudSignedNames } from "./testing/cloud-signed-assert.ts";
 
 const ID = "6f0c1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b", LATER = "7a1d2b3c-4d5e-4f6a-9b0c-1d2e3f4a5b6c";
 let seq = 0;
@@ -170,6 +171,7 @@ describe("createTeamSlackReporter", () => {
     expect(headers["x-omb-cloud-timestamp"]).toBe("1731662000");
     expect(headers["x-omb-cloud-nonce"]).toMatch(/^[A-Za-z0-9_-]{16,128}$/);
     expect(headers["x-omb-cloud-signature"]).toBe(`v1=${teamSlackSignature("s3cret-s3cret", "machine-1", "1731662000", headers["x-omb-cloud-nonce"]!, String(init.body))}`);
+    expectBothCloudSignedNames(headers);
     expect(init.redirect).toBe("error");
   });
   it("reads the Admin's answers: over, later, refused; a Stop it mentions is never acted on", async () => {

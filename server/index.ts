@@ -119,7 +119,7 @@ import * as composio from "./composio.ts";
 import { appSandboxRule, connectorCallFromFrame, connectorRefusalText, connectorScopeRefusalText, connectorUnrecognizedText, evaluateConnectorTools } from "./connector-verdict.ts";
 import { signInCardText } from "./connector-card-text.ts";
 import { BOT_HELD_CODE, BOT_PAUSED_CODE } from "../shared/bot-limit.ts"; import { createBotHolds } from "./host/bot-holds.ts"; import { createBotHoldRoutes } from "./routes/bot-holds.ts"; import { createStarterAwake } from "./host/starter-awake.ts"; import { createStarterCaps } from "./host/starter-caps.ts"; import { createStarterAwakeRoutes } from "./routes/starter-awake.ts"; import { chiefOfStaffPrompt, chiefOfStaffSystemPrompt } from "./chief-of-staff.ts"; import { coordinateTooLong } from "./too-long.ts"; import { chiefAbsentFrom, createChiefRooms } from "./host/chief-rooms.ts"; import { chiefLevel, readTeamRolesWith } from "./chief-level.ts"; import { defaultBotRefusal, ensureDefaultBot } from "./default-bot.ts"; import { ensureProfileLook } from "./person-look.ts";
-import { buildRecall, recallRooms, recallThreadIds, withRecalled } from "./recall.ts";
+import { autoRecallThreadIds, buildRecall, recallRooms, recallThreadIds, withRecalled } from "./recall.ts";
 import { hostTimeZone, takesTurnClock, turnClockLine, withTurnClock } from "./turn-clock.ts";
 import { createMemoryUpkeep, dreamConversations, upkeepEnabled } from "./memory-upkeep.ts";
 import { createCacheKeepWarm, type KeepWarmStatus, type KeepWarmTarget } from "./cache-keepwarm.ts";
@@ -630,7 +630,7 @@ import { createInstanceRoutes } from "./routes/instances.ts";
 import { createMcpConfig } from "./host/mcp-config.ts";
 import { createMcpServerRoutes } from "./routes/mcp-servers.ts";
 import { teamAdminSummary } from "./cloud-team-admin.ts"; import { createConnectionHealthHost } from "./host/connection-health-host.ts"; import { teamVaultReport } from "./host/team-vault-report.ts"; import { createBitwardenVault } from "./host/bitwarden-vault.ts";
-import { createSetupImportRoutes, setupImportLocal } from "./routes/setup-import.ts";
+import { createSetupImportRoutes, setupImportLocal } from "./routes/setup-import.ts"; import { createAiImportHost } from "./host/ai-import.ts"; import { importedMark } from "./store-imported.ts";
 import { createComputerRoutes } from "./routes/computers.ts";
 import { createStatusRoutes } from "./routes/status.ts";
 import { findAntigravityLeftovers, removeAntigravityLeftovers } from "./drivers/antigravity-temp.ts";
@@ -1165,7 +1165,7 @@ function autoRecallPrompt(bot: BotRecord, threadId: string, message: string, opt
   if (bot.memoryEnabled === false || !autoRecallEnabled(cfg)) return "";
   const roomByThread = opts.conversations ? recallRooms(store.groups, bot, roomFeedsBot) : new Map<string, GroupRecord>();
   const threadIds = opts.conversations
-    ? recallThreadIds(bot, roomByThread).filter((id) => id !== threadId && threadReadableFrom(threadId)(id) && outsideLineage.mayReach(id, threadId))
+    ? autoRecallThreadIds(bot, roomByThread).filter((id) => id !== threadId && threadReadableFrom(threadId)(id) && outsideLineage.mayReach(id, threadId))
     : [];
   try {
     const recalled = buildRecall({
@@ -12346,7 +12346,7 @@ ROUTES.push(createMcpServerRoutes({
   fallbackPublicUrl: FALLBACK_PUBLIC_URL,
   mcpServerResponse, savedCustomDomain, appCatalog: chatAppsMcp, config: mcpConfig, lender: sessionLendingPrincipal, connectionHealth, ownsVault: () => !CLOUD_TEAM && !HOSTED_WORKSPACE, place: (server, auth) => lentMcp.place(server, { principal: sessionLendingPrincipal(auth), ...(auth.kind === "session" ? { session: auth.session.id } : {}), newest: true }) }));
 ROUTES.push(createSetupImportRoutes({ local: setupImportLocal({ desktopManaged: DESKTOP_MANAGED, localBrowsers: LOOPBACK.localBrowsers, cloudHome: Boolean(CLOUD_HOME), hostedWorkspace: HOSTED_WORKSPACE }), cfg, mcpPolicyRefusal, persistMcpServers: persistAnnouncedMcpServers,
-  mcpConfigBusy: mcpConfig.busy }));
+  mcpConfigBusy: mcpConfig.busy })); const aiImports = createAiImportHost({ dataDir: DATA_DIR, store, mcp: { servers: () => cfg.mcpServers ?? {}, refusal: (name, server) => mcpPolicyRefusal(name, server) ?? null, persist: persistAnnouncedMcpServers }, routines: () => routines, broadcast, local: setupImportLocal({ desktopManaged: DESKTOP_MANAGED, localBrowsers: LOOPBACK.localBrowsers, cloudHome: Boolean(CLOUD_HOME), hostedWorkspace: HOSTED_WORKSPACE }) }); ROUTES.push(aiImports.routes);
 ROUTES.push(createComputerRoutes({
   store, cfg, sessions, teamComputers, computerControl,
   routines: () => routines,
@@ -13457,13 +13457,13 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         const inRoom = Boolean(store.groupByThread(fromThreadId));
         const found = q ? recallMessages(q, ownThreads, limit, range) : recentMessages(ownThreads, range ?? {}, limit);
         const hits = found.map((hit) => {
-          const room = roomByThread.get(hit.threadId);
+          const room = roomByThread.get(hit.threadId), imported = room ? undefined : importedMark(store, from.id, hit.threadId);
           return {
             ...hit,
             task: room
               ? (room.tasks ?? []).find((task) => task.threadId === hit.threadId)?.title
               : store.taskByThread(from.id, hit.threadId)?.title,
-            ...(room ? { room: room.name } : {}),
+            ...(room ? { room: room.name } : {}), ...(imported ? { source: imported.label } : {}),
             current: hit.threadId === fromThreadId,
             crossed: inRoom && !room && hit.threadId !== fromThreadId,
           };
@@ -15337,7 +15337,7 @@ const gracefulShutdown = createGracefulShutdown({
       cloudComputerPower.close(); boatRecovery.close();
       vps.closeAllVpsDesktopTunnels();
       watchdog.stop();
-      routines?.close(); workflows?.close(); void appTriggers.stop();
+      routines?.close(); workflows?.close(); void appTriggers.stop(); void aiImports.jobs.close();
       calendarCalls?.stop(); botWaits.stop();
       memoryUpkeep.stop();
       cacheKeepWarm.dispose(); warmSummaries.dispose();

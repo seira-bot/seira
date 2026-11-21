@@ -41,7 +41,8 @@ The app has three places: the **sidebar** (bots and conversations), the
 where they belong instead of adding new places.
 
 - **No new header buttons.** The chat header shows the bot, its model and its
-  screen. Anything else goes in the bot panel, a menu or the command palette.
+  screen. The model pill sits in the centre, right after the bot name pill.
+  Anything else goes in the bot panel, a menu or the command palette.
   A button that exists only while the conversation has what it shows (its
   pinned message) is fine: it opens a menu and is gone when there is nothing
   to show.
@@ -61,6 +62,8 @@ where they belong instead of adding new places.
   Simple version, then decide what Advanced adds (see [section 13](#13-simple-and-advanced-mode)).
 - **Don't hide everyday features.** A thing most people use must be reachable
   in two clicks from the chat in Simple mode.
+- **The bot panel opens by default in Simple mode** when the window is at least
+  1280px wide. The app then remembers if the person left it open or closed it.
 
 ## 3. Colour
 
@@ -90,6 +93,8 @@ Rules:
   accent one. Give a view one primary action at most.
 - **Status colours mean status.** Use `danger` for destructive actions and
   errors only, never as decoration.
+- **The person's own message uses the neutral `bubble-user`.** The bot colour
+  for it is an opt-in setting.
 - **Bot colours belong to bots.** Use `identity-*` only for things owned by
   one bot: its mark, its bubble, `.bot-button`.
 - **A new token goes in every skin.** `src/lib/skins.test.ts` fails
@@ -320,6 +325,11 @@ on. Simple is the default for new installs.
   threads as a tree under its row), Simple may offer a shortcut to the same
   thing there instead of a second copy of it: a menu that opens on a click
   of a small chevron, never on hover.
+- **In Simple mode on desktop, the sidebar shows every bot as a tile.** Each tile is 44-48px.
+  The grid has up to 4 columns and follows the sidebar width. Drag the edge narrower for 3
+  or 2 columns. Drag it narrower again and the sidebar becomes the column of avatars. Bots
+  without a section go in the top grid. Each section has one grid under its header. Rooms
+  stay rows. Advanced keeps rows.
 - **The Advanced bot panel is a grouped list.** A hero (avatar, name, role, state), four quick actions, a search
   field, then rows in five groups: Profile, Knowledge, Work, Channels, Admin. Each row is a 44px button with an
   icon, a title, a short value that comes from state already on screen (left empty when there is none) and a

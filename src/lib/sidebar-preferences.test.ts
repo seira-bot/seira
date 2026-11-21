@@ -12,6 +12,7 @@ import {
   SIDEBAR_TOOLS_LAYOUT_KEY,
   SIDEBAR_WIDTH_KEY,
   SIDEBAR_SECTION_ORDER_KEY,
+  SIMPLE_SIDEBAR_MIN_WIDTH,
   SIMPLE_SIDEBAR_WIDTH_KEY,
   clampSidebarWidth,
   loadPinnedCircles,
@@ -75,6 +76,14 @@ describe("sidebar width preference", () => {
     for (const raw of ["NaN", "9999", "-1", "320.5"]) {
       expect(loadSidebarWidth({ getItem: () => raw })).toBeNull();
     }
+  });
+
+  it("lets Simple mode's sidebar get narrower, and leaves the default minimum alone", () => {
+    expect(clampSidebarWidth(100, 900, 400, SIMPLE_SIDEBAR_MIN_WIDTH)).toBe(156);
+    expect(clampSidebarWidth(100, 900)).toBe(240);
+    expect(loadSidebarWidth({ getItem: () => "160" }, SIMPLE_SIDEBAR_WIDTH_KEY)).toBe(160);
+    expect(loadSidebarWidth({ getItem: () => "150" }, SIMPLE_SIDEBAR_WIDTH_KEY)).toBeNull();
+    expect(loadSidebarWidth({ getItem: () => "200" })).toBeNull();
   });
 
   it("persists width without requiring local storage", () => {
