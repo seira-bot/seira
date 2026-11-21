@@ -2508,7 +2508,6 @@
   "decider.test.extractionOk": "L'extraction fonctionne aussi.",
   "decider.test.extractionFailed": "L'extraction n'a pas répondu.",
   "decider.master": "Utiliser les décisions et l'extraction rapides",
-  "decider.provider.label": "Autre clé",
   "apps.connected": "Connectée",
   "botPanel.conversations.title": "Conversations",
   "botPanel.conversations.search": "Rechercher dans les conversations",

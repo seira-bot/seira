@@ -146,6 +146,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     releaseNotes: ["usageRing"],
   },
   {
+    id: "routing",
+    name: "Routing and extraction",
+    place: "Settings → AI → Routing and extraction",
+    does: "Small, fast models that pick which bot answers in an Auto room and read values out of emails. One provider is picked: Cloudflare Workers AI, TypeSafe Jev, OpenRouter, a custom endpoint, or the Cloud plan's.",
+  },
+  {
     id: "profile",
     name: "Your profile",
     place: "Settings → You and your bots → About you",

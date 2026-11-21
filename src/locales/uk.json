@@ -1610,7 +1610,6 @@
   "decider.test.extractionOk": "Видобування теж працює.",
   "decider.test.extractionFailed": "Видобування не відповіло.",
   "decider.master": "Використовувати швидкі рішення та видобування",
-  "decider.provider.label": "Інший ключ",
   "keys.vps.label": "Власний VPS",
   "keys.vps.descBefore": "Аліас SSH-конфігу для Linux-VPS. {app} використовує ваш звичайний SSH-конфіг і агент; ключі чи паролі він не зберігає. Див. ",
   "keys.vps.descLink": "гід налаштування",
