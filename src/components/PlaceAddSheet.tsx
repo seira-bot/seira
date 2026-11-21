@@ -17,8 +17,9 @@ import type { LocaleKey } from "@/locales";
 import { computerName, createLocal, placeInitials, suggestedLocalName } from "@/lib/places";
 import { AddCloudFlow } from "./cloud-buy/AddCloudFlow";
 import { NewOrganization } from "./cloud-buy/NewOrganization";
-import { BackLink, FIELD, Heading, PRIMARY_WIDE } from "./cloud-buy/parts";
+import { BackLink, FIELD, Heading, LINK, PRIMARY_WIDE } from "./cloud-buy/parts";
 import { Layer, useIsTopLayer } from "./Layer";
+import { ServerInstallSheet } from "./ServerInstallSheet";
 import { SwatchRadios } from "./SwatchRadios";
 
 const PAIR_COMMAND = "npx @seira-bot/seira pair";
@@ -48,8 +49,8 @@ const TRANSPORT_KEY = { https: "connect.found.https", tailscale: "connect.found.
 /** Connect to a server: a link, or an address with the pairing code typed apart (a code pasted alone is moved to its
  * field). Main looks the address up as the person types and connects only to the server it found, opening that server's
  * own /pair page with the code. `connect`: a server of theirs that signed in with their account, not connected yet. */
-export function OwnServerLink({ onBack, onConnected, connect = null, start = null }: { onBack: (() => void) | null; onConnected: () => void; connect?: { name: string } | null;
-  start?: { address: string; locked: boolean; title: string } | null }) {
+export function OwnServerLink({ onBack, onConnected, connect = null, start = null, onInstall = null }: { onBack: (() => void) | null; onConnected: () => void; connect?: { name: string } | null;
+  start?: { address: string; locked: boolean; title: string } | null; onInstall?: (() => void) | null }) {
   const [address, setAddress] = useState(start?.address ?? "");
   const [code, setCode] = useState("");
   const [movedCode, setMovedCode] = useState(false);
@@ -134,6 +135,7 @@ export function OwnServerLink({ onBack, onConnected, connect = null, start = nul
     <div><button type="submit" data-own-server-connect disabled={busy || !address.trim() || (canProbe && !found)} className="ui-button ui-button-primary inline-flex items-center gap-2">
       {busy && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}{found ? t("connect.to", { name: found.label }) : t("rail.connect")}
     </button></div>
+    {onInstall && !connect && !start && window.ogb?.serverInstall && <div><button type="button" data-own-server-install onClick={onInstall} className={LINK}>{t("serverInstall.open")}</button></div>}
   </form>;
 }
 
@@ -267,7 +269,7 @@ export function ConnectServerFromMenu() {
 export function PlaceAddSheet({ choices, places = [], connect = null, onClose, onAccount }: { choices: RailAddChoices; places?: readonly RailPlace[]; connect?: { name: string } | null; onClose: () => void; onAccount?: () => void }) {
   const server = choices.link, organization = choices.organization === true, account = choices.account === true && Boolean(onAccount), local = choices.local === true;
   const several = [local, organization, choices.cloud, server, account].filter(Boolean).length > 1;
-  const [view, setView] = useState<"choose" | "local" | "cloud" | "server" | "organization">(connect ? "server" : several ? "choose" : local ? "local" : organization ? "organization" : choices.cloud ? "cloud" : "server");
+  const [view, setView] = useState<"choose" | "local" | "cloud" | "server" | "install" | "organization">(connect ? "server" : several ? "choose" : local ? "local" : organization ? "organization" : choices.cloud ? "cloud" : "server");
   const [wide, setWide] = useState(false);
   const workspaces = window.ogb?.workspaces;
   const firstCloud = () => {
@@ -287,7 +289,8 @@ export function PlaceAddSheet({ choices, places = [], connect = null, onClose, o
       </div>
     </div>}
     {view === "local" && <NewLocalWorkspace places={places} onBack={several ? () => setView("choose") : null} onDone={onClose} />}
-    {view === "server" && <OwnServerLink onBack={several && !connect ? () => setView("choose") : null} onConnected={onClose} connect={connect} />}
+    {view === "server" && <OwnServerLink onBack={several && !connect ? () => setView("choose") : null} onConnected={onClose} connect={connect} onInstall={() => setView("install")} />}
+    {view === "install" && <ServerInstallSheet onBack={() => setView("server")} onConnected={onClose} />}
     {view === "cloud" && <AddCloudFlow onClose={onClose} onFirstCloud={firstCloud} onWide={setWide} onBack={several ? () => setView("choose") : null} />}
     {view === "organization" && <NewOrganization onClose={onClose} onBack={several ? () => setView("choose") : null} />}
   </RailSheet>;

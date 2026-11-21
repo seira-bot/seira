@@ -453,6 +453,24 @@ const bridge = {
   openHtmlInBrowser: (source, name) => invokeWithPlainError("desktop:open-html", source, name),
   // This app's own logs folder (server.log, desktop-crashes.log, updater.log); the page names no path.
   openLogsFolder: () => ipcRenderer.invoke("desktop:open-logs"),
+  // Install on my server (electron/vps-install.mjs): the page sends each secret once and keeps none; events carry none.
+  serverInstall: {
+    info: () => ipcRenderer.invoke("server-install:info"),
+    pickKey: () => ipcRenderer.invoke("server-install:pick-key"),
+    forgetHost: () => ipcRenderer.invoke("server-install:forget-host"),
+    start: request => ipcRenderer.invoke("server-install:start", request),
+    acceptHostKey: () => ipcRenderer.invoke("server-install:accept-host-key"),
+    rejectHostKey: () => ipcRenderer.invoke("server-install:reject-host-key"),
+    check: () => ipcRenderer.invoke("server-install:check"),
+    install: options => ipcRenderer.invoke("server-install:install", options),
+    sendCode: code => ipcRenderer.invoke("server-install:send-code", code),
+    cancel: () => ipcRenderer.invoke("server-install:cancel"),
+    onEvent: cb => {
+      const handler = (_event, message) => cb(message);
+      ipcRenderer.on("server-install:event", handler);
+      return () => ipcRenderer.removeListener("server-install:event", handler);
+    },
+  },
   alwaysOnHome: {
     state: () => ipcRenderer.invoke("always-on-home:state"),
     set: on => ipcRenderer.invoke("always-on-home:set", on === true),
