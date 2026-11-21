@@ -57,11 +57,23 @@ function newestBy(items, key, time) {
 /** A re-run or a second check suite repeats a name. Only the newest run of a name counts. */
 export const newestByName = (checkRuns) => newestBy(checkRuns, "name", "started_at");
 
-export function judgeChecks(checkRuns, statuses = []) {
+/** The check suites of the dynamic Dependabot update runs. Their check runs do not test the release. */
+export function dependabotSuites(workflowRuns) {
+  const ids = workflowRuns.filter((item) => String(item.path ?? "").startsWith("dynamic/dependabot/") && item.check_suite_id != null).map((item) => item.check_suite_id);
+  return new Set(ids);
+}
+
+export function judgeChecks(checkRuns, statuses = [], ignoredSuites = new Set()) {
   const failures = [];
   const pending = [];
   const superseded = [];
-  for (const run of newestByName(checkRuns)) {
+  const ignored = [];
+  const counted = [];
+  for (const run of checkRuns) {
+    if (ignoredSuites.has(run.check_suite?.id)) ignored.push({ name: run.name, state: run.conclusion ?? run.status, url: run.html_url });
+    else counted.push(run);
+  }
+  for (const run of newestByName(counted)) {
     const item = { name: run.name, state: run.conclusion ?? run.status, url: run.html_url };
     if (run.status !== "completed") pending.push(item);
     else if (run.conclusion === "cancelled") superseded.push(item);
@@ -72,7 +84,7 @@ export function judgeChecks(checkRuns, statuses = []) {
     if (status.state === "pending") pending.push(item);
     else if (status.state !== "success") failures.push(item);
   }
-  return { failures, pending, superseded };
+  return { failures, pending, superseded, ignored };
 }
 
 /** The run that proves the release tree, or null. `runs` are successful runs of the CI workflow. */
@@ -97,6 +109,11 @@ async function allCheckRuns(api, repo, sha) {
     found.push(...body.check_runs);
     if (found.length >= body.total_count || body.check_runs.length === 0) return found;
   }
+}
+
+async function dependabotRuns(api, repo, sha) {
+  const body = await api(`repos/${repo}/actions/runs?head_sha=${sha}&event=dynamic&per_page=100`);
+  return dependabotSuites(body.workflow_runs ?? []);
 }
 
 async function tagCommit(api, repo, tag) {
@@ -149,10 +166,11 @@ export async function preflight({ api, repo = "owner/name", tag, sha, version, l
 
   const checkRuns = await allCheckRuns(api, repo, sha);
   const statuses = (await api(`repos/${repo}/commits/${sha}/status?per_page=100`)).statuses ?? [];
-  const { failures, pending, superseded } = judgeChecks(checkRuns, statuses);
+  const { failures, pending, superseded, ignored } = judgeChecks(checkRuns, statuses, await dependabotRuns(api, repo, sha));
   for (const item of failures) check(false, `check ${describe(item)}`);
   for (const item of pending) check(false, `check not finished: ${describe(item)}`);
   for (const item of superseded) log(`note ${item.name} was cancelled (superseded), so it proves nothing`);
+  for (const item of ignored) log(`note ${item.name} (${item.state}) is a Dependabot update run, so it does not block the release`);
   if (failures.length + pending.length === 0) check(true, `no failed or unfinished check on the commit (${newestByName(checkRuns).length} runs, ${statuses.length} statuses)`);
 
   const successful = await api(`repos/${repo}/actions/workflows/ci.yml/runs?status=success&per_page=100`);

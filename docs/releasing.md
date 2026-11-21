@@ -195,7 +195,8 @@ assets, because it runs before the release exists.
 Tag the squash commit on `main`, not the release branch's last commit. The
 tag push works only for an organization admin.
 
-The preflight reads GitHub with `gh api` and changes nothing. Stop when it
+The preflight reads GitHub with `gh api` and changes nothing. It ignores the
+check runs of Dependabot update runs and lists them as notes. Stop when it
 exits with a failure.
 
 - It checks that the tag and the `package.json` version are the same, that

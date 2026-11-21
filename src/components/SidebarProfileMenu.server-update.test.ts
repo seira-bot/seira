@@ -4,14 +4,17 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ServerUpdateCheck } from "@/lib/server-update";
 
 // React's hooks are replayed by hand.
-const f = vi.hoisted(() => ({ values: [] as unknown[], index: 0, effects: [] as EffectCallback[], check: null as unknown }));
+const f = vi.hoisted(() => ({ values: [] as unknown[], index: 0, effects: [] as EffectCallback[], check: null as unknown, status: null as unknown, dispatch: vi.fn() }));
 vi.mock("react", async (original) => ({
   ...await original<typeof import("react")>(),
   useState: (initial: unknown) => { const index = f.index++; if (!(index in f.values)) f.values[index] = initial; return [f.values[index], (next: unknown) => { f.values[index] = next; }]; },
   useEffect: (effect: EffectCallback) => { f.effects.push(effect); },
 }));
-vi.mock("@/state/store", () => ({ api: vi.fn(async () => f.check), useStore: () => ({ state: { config: {} }, dispatch: vi.fn() }) }));
-import { useServerUpdateItem } from "./SidebarProfileMenu";
+vi.mock("@/state/store", () => ({
+  api: vi.fn(async (route: string) => (route === "/api/updates/server" ? f.status : f.check)),
+  useStore: () => ({ state: { config: {} }, dispatch: f.dispatch }),
+}));
+import { simpleUpdateTop, useServerUpdateItem } from "./SidebarProfileMenu";
 
 // The server the window shows, on 0.1.116 from npm, while 0.1.127 is out.
 const npmServer: ServerUpdateCheck = {
@@ -36,7 +39,7 @@ async function checkedRow(page: object) {
   return { label: entry!.item.label, subtitle: entry!.item.subtitle, attention: entry!.item.attention };
 }
 
-beforeEach(() => { f.check = npmServer; });
+beforeEach(() => { f.check = npmServer; f.status = { mode: "command", current: "0.1.116", available: true, activeTurns: 0 }; f.dispatch.mockReset(); });
 afterEach(() => vi.unstubAllGlobals());
 
 it("in the app on another server, says the update is that server's, for whoever runs it", async () => {
@@ -62,4 +65,41 @@ it("keeps today's row in a browser on that server and in the app on this compute
   };
   expect(await checkedRow({ location: { host: "bots.example.test" } })).toEqual(today);
   expect(await checkedRow({ ogb: { app: { version: "0.1.127", ownPage: true } }, location: { host: "127.0.0.1:8799" } })).toEqual(today);
+});
+
+it("raises an npm server's release as available, with how to update it, in Settings", async () => {
+  await checkedRow({ location: { host: "bots.example.test" } });
+  const top = simpleUpdateTop(entry);
+  expect(top).toMatchObject({ label: "Server update available", action: "How to update" });
+  top!.onSelect!();
+  expect(f.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "overview" });
+});
+
+it("raises a Docker server's release as ready to install when the server has its own Update server button", async () => {
+  f.check = { current: "0.1.116", install: "docker", latest: "0.1.127", available: true, releaseUrl: "https://example.test/release" };
+  f.status = { mode: "button", current: "0.1.116", available: true, activeTurns: 0 };
+  await checkedRow({ location: { host: "bots.example.test" } });
+  const top = simpleUpdateTop(entry);
+  expect(top).toMatchObject({ label: "Update ready", action: "Install" });
+  top!.onSelect!();
+  expect(f.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "overview" });
+});
+
+it("keeps the release page on this computer's own page, where Settings has no server update row", async () => {
+  await checkedRow({ ogb: { companion: {}, app: { version: "0.1.127", ownPage: true } }, location: { host: "127.0.0.1:8799" } });
+  expect(simpleUpdateTop(entry)?.onSelect).toBeUndefined();
+});
+
+it("treats a member, whom the server refuses its button state, as one who cannot install", async () => {
+  f.status = undefined;
+  const refusal = Object.assign(new Error("this session lacks the admin scope"), { status: 403 });
+  const { api } = await import("@/state/store");
+  vi.mocked(api).mockImplementationOnce(async () => f.check).mockImplementationOnce(async () => { throw refusal; });
+  f.values = [];
+  vi.stubGlobal("window", { location: { host: "bots.example.test" } });
+  render();
+  entry!.item.onSelect?.();
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  render();
+  expect(simpleUpdateTop(entry)).toMatchObject({ label: "Server update available", action: "How to update" });
 });
