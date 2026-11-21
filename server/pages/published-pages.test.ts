@@ -58,7 +58,7 @@ describe("publishing a page", () => {
     const f = setup();
     writeSite(join(f.work, "site"));
     const outcome = await f.publish({ path: "site" });
-    expect(outcome).toEqual({ status: 403, text: "Publishing a page needs a Seira account. Sign in to Seira in the app's Settings, then ask again." });
+    expect(outcome).toEqual({ status: 403, text: "Publishing a page needs a Seira account. Sign in to Seira in the app's Settings, then ask again.", reason: "sign_in" });
     expect(f.service.minted).toEqual([]);
     expect(f.cards).toEqual([]);
   });
@@ -67,7 +67,7 @@ describe("publishing a page", () => {
     const f = setup({ selfHosted: true });
     writeSite(join(f.work, "site"));
     const outcome = await f.publish({ path: "site" });
-    expect(outcome).toEqual({ status: 503, text: "Publishing pages isn't available on self-hosted servers yet." });
+    expect(outcome).toEqual({ status: 503, text: "Publishing pages isn't available on self-hosted servers yet.", reason: "unavailable" });
     expect(f.service.minted).toEqual([]);
     expect(f.cards).toEqual([]);
   });
@@ -270,7 +270,7 @@ describe("publishing a page", () => {
     signIn();
     writeSite(join(f.work, "site"));
     f.service.state.down = true;
-    expect(await f.publish({ path: "site" })).toEqual({ status: 503, text: "Publishing isn't available right now. Try again in a few minutes." });
+    expect(await f.publish({ path: "site" })).toEqual({ status: 503, text: "Publishing isn't available right now. Try again in a few minutes.", reason: "unavailable" });
   });
 });
 
