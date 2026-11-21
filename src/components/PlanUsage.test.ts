@@ -48,6 +48,16 @@ describe("Plan usage presentation", () => {
     expect(html).toContain('aria-valuenow="9"');
   });
 
+  it("names the monthly budget in the person's language", async () => {
+    const { loadLocale, setLocale } = await import("@/lib/i18n");
+    await loadLocale("zh");
+    try {
+      expect(renderToStaticMarkup(createElement(PlanUsage))).toContain("每月支出");
+    } finally {
+      setLocale("en");
+    }
+  });
+
   it("names a monthly plan limit Monthly and keeps its reset", () => {
     fixture.report = {
       fetchedAt: "2026-10-02T09:00:00Z",
@@ -62,16 +72,6 @@ describe("Plan usage presentation", () => {
     const html = renderToStaticMarkup(createElement(PlanUsage));
     expect(html).toContain("Monthly");
     expect(html).toContain("60% left");
-  });
-
-  it("names the monthly budget in the person's language", async () => {
-    const { loadLocale, setLocale } = await import("@/lib/i18n");
-    await loadLocale("zh");
-    try {
-      expect(renderToStaticMarkup(createElement(PlanUsage))).toContain("每月支出");
-    } finally {
-      setLocale("en");
-    }
   });
 
   it("shows an account error without inventing zero usage", () => {
