@@ -11,14 +11,15 @@ export function BoardTabs({ active, counts, onChange }: {
   onChange: (column: BoardColumn) => void;
 }) {
   const move = (event: KeyboardEvent<HTMLDivElement>) => {
-    const rtl = getComputedStyle(event.currentTarget).direction === "rtl";
+    const list = event.currentTarget;
+    const rtl = getComputedStyle(list).direction === "rtl";
     const step = event.key === "ArrowRight" ? (rtl ? -1 : 1) : event.key === "ArrowLeft" ? (rtl ? 1 : -1) : 0;
     if (!step) return;
     event.preventDefault();
     const at = COLUMNS.findIndex((column) => column.id === active);
     const next = COLUMNS[(at + step + COLUMNS.length) % COLUMNS.length]!;
     onChange(next.id);
-    requestAnimationFrame(() => event.currentTarget.querySelector<HTMLElement>(`#board-tab-${next.id}`)?.focus());
+    requestAnimationFrame(() => list.querySelector<HTMLElement>(`#board-tab-${next.id}`)?.focus());
   };
   return (
     <div role="tablist" aria-label={t("board.columns")} onKeyDown={move} className="flex gap-1 px-4 pb-2">
