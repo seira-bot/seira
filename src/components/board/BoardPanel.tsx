@@ -8,7 +8,7 @@ import type { Bot } from "@/state/store";
 import { BotAvatar } from "../Avatar";
 import { InboxAnswer } from "../inbox/InboxAnswer";
 import { answerKindOf } from "../inbox/inbox-answer";
-import { isStoppable } from "./board-model";
+import { canMoveToDone, isStoppable } from "./board-model";
 import { stateLine } from "./BoardCardButton";
 
 const ACTION = "inline-flex h-8 items-center rounded-lg bg-control px-3 text-[13px] font-medium text-ink transition-colors duration-150 hover:bg-raised-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus motion-reduce:transition-none";
@@ -22,12 +22,15 @@ function Block({ label, text }: { label: string; text: string }) {
   );
 }
 
-export function BoardPanel({ card, bot, onClose, onOpen, onStop }: {
+export function BoardPanel({ card, bot, closer, moveFailed, onClose, onOpen, onStop, onMove }: {
   card: BoardCard;
   bot: Bot | undefined;
+  closer: string | undefined;
+  moveFailed: boolean;
   onClose: () => void;
   onOpen: () => void;
   onStop: () => void;
+  onMove: () => void;
 }) {
   const inbox = useInboxView();
   const close = useRef<HTMLButtonElement>(null);
@@ -54,16 +57,19 @@ export function BoardPanel({ card, bot, onClose, onOpen, onStop }: {
         {bot && <BotAvatar bot={bot} size={20} label="" />}
         <span className="min-w-0 truncate">{bot?.name}</span>
         <span aria-hidden="true">·</span>
-        <span className="min-w-0 truncate">{stateLine(card, bot)}</span>
+        <span className="min-w-0 truncate">{stateLine(card, bot, closer)}</span>
       </div>
       {asked && <Block label={t("board.panel.asked")} text={asked} />}
       {card.error && <Block label={t("board.panel.problem")} text={card.error} />}
       {card.result && <Block label={t("board.panel.result")} text={card.result} />}
+      {closer && <Block label={t("board.panel.closed")} text={[t("board.state.closedBy", { name: closer }), card.closedReason].filter(Boolean).join("\n")} />}
       {row && inbox && <InboxAnswer kind={answerKindOf(row)} view={inbox} row={row} asker={bot} />}
       <div className="flex flex-wrap gap-2">
         {card.threadId && <button type="button" onClick={onOpen} className={ACTION}>{t("board.panel.open")}</button>}
         {isStoppable(card) && <button type="button" onClick={onStop} className={ACTION}>{t("board.action.stop")}</button>}
+        {canMoveToDone(card, bot) && <button type="button" onClick={onMove} className={ACTION}>{t("board.action.moveToDone")}</button>}
       </div>
+      {moveFailed && <p role="alert" className="text-[13px] text-ink-secondary">{t("board.moveFailed")}</p>}
     </aside>
   );
 }

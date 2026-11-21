@@ -211,3 +211,18 @@ it("shows local environment controls in Simplified Chinese", async () => {
   expect(html).toContain("每个环境都有自己的机器人、会话和数据文件夹");
   expect(html).not.toContain("Separate setups on this computer");
 });
+
+it("Rename for a saved server goes to main, and the list is read again once it is saved", async () => {
+  const rename = vi.fn().mockResolvedValue({ outcome: "saved" });
+  const environments = stubEnvironments({}, { rename });
+  await mount();
+  const onRename = (render().nodes.find(n => "onRename" in n.props)!.props as unknown as { onRename: (id: string, name: string) => Promise<string> }).onRename;
+  expect(await onRename("vps", "Studio")).toBe("saved");
+  expect(rename).toHaveBeenCalledWith("vps", "Studio");
+  expect(environments.state).toHaveBeenCalledTimes(2);
+  rename.mockResolvedValueOnce({ outcome: "taken" });
+  expect(await onRename("vps", "Office")).toBe("taken");
+  rename.mockRejectedValueOnce(new Error("no"));
+  expect(await onRename("vps", "Office")).toBe("failed");
+  expect(environments.state, "nothing saved: the list is not read again").toHaveBeenCalledTimes(2);
+});

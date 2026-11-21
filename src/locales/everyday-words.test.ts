@@ -92,6 +92,7 @@ const ALLOWED: Record<string, string> = {
   "sidebar.switchServerError": "points at the app menu's Server menu",
   "sidebar.update.howOther": "a server added from the app menu's Server menu: its update is for whoever runs it, not this app",
   "sidebar.update.howOtherRestart": "a server added from the app menu's Server menu: its update is for whoever runs it, not this app",
+  "sidebar.update.availableShort": "a self-hosted server's own release, which its owner installs apart from this app's update",
   "connectors.setupNeeded": "names Composio because the person must add their own Composio project key",
   "connectors.setupNeededRemote": "names Composio because the host needs the owner's own Composio project key",
   "botAccess.tools.syntax": "the tool names people type, such as mcp:SERVER:NAME",

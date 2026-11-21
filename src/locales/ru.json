@@ -7088,6 +7088,8 @@
   "sidebar.update.readyShort": "Обновление готово",
   "sidebar.update.restartAction": "Перезапустить",
   "sidebar.update.retryAction": "Повторить",
+  "sidebar.update.availableShort": "Доступно обновление сервера",
+  "sidebar.update.howAction": "Как обновить",
   "sidebar.nav.publishedApps": "Опубликованные приложения",
   "sidebar.nav.teamFiles": "Файлы команды",
   "settings.followUp.subtitle": "Добавление вносит сообщение в то, что бот делает сейчас; очередь запускает его после окончания хода. {key} делает другое для одного сообщения, а стрелка рядом с «Отправить» может также перезапустить ход. Только на этом устройстве.",

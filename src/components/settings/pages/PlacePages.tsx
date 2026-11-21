@@ -29,7 +29,7 @@ import { ProfileFields } from "../../ProfileSettings";
 import { RoomTurnTimeoutSettings } from "../../RoomTurnTimeoutSettings";
 import { SavedStepsRow } from "../../SavedStepsRow";
 import { Card, SettingRow, SettingsDisclosureRow, SettingsFoldRow, SettingsGroup, SettingsLinkRow, SettingsRows } from "../../SettingsPrimitives";
-import { KEY_SECTIONS } from "../../keys/key-catalog";
+import { KEY_SECTIONS, type KeySectionId } from "../../keys/key-catalog";
 import { DesktopKinds } from "../DesktopKinds";
 import { SkillsSection } from "../../SkillsSection";
 import { ThreadConcurrencySettings } from "../../ThreadConcurrencySettings";
@@ -126,6 +126,8 @@ export function AiPage() {
   // A key asked for by search or a link opens Other services whatever the fold says.
   const shown = ctx.advanced || services || anchor === "ai-keys";
   const count = KEY_SECTIONS.filter((section) => section.id !== "ai").length;
+  // Advanced shows Routing and Images further down this page, so only Simple lists them under Other services, as links there.
+  const exclude: KeySectionId[] = [...(anchor === "ai-keys" ? [] : ["ai" as const]), ...(ctx.advanced ? ["routing" as const, "images" as const] : [])];
   return <>
     <AdminOnly>
       <div data-settings-block="providers" className="flex scroll-mt-4 flex-col gap-6">
@@ -140,7 +142,7 @@ export function AiPage() {
       )}
       {shown && (
         <SettingsGroup label={ctx.advanced ? t("settings.ai.otherServices") : undefined} block="ai-keys">
-          <KeysPage bare exclude={anchor === "ai-keys" ? [] : ["ai"]} />
+          <KeysPage bare exclude={exclude} />
         </SettingsGroup>
       )}
       <AdvancedSection anchor="backup-model"><SettingsGroup label={t("settings.ai.backupModel")} block="backup-model"><AutomaticRecoverySettings /></SettingsGroup></AdvancedSection>

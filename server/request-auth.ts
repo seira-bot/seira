@@ -451,6 +451,8 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["GET"], path: /^\/api\/apps\/usage$/ },
   // cards from the work this viewer can see, in four columns
   { methods: ["GET"], path: /^\/api\/board$/ },
+  // moving one Needs you card to Done: the handler lets only someone who can chat with the card's bot do it
+  { methods: ["POST"], path: /^\/api\/board\/close$/ },
   // configured-or-not booleans; the handler strips the few identifying fields for clients
   { methods: ["GET"], path: /^\/api\/config$/ },
   // a person's own "About you" on a Team Cloud

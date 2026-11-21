@@ -6338,6 +6338,8 @@
   "sidebar.update.readyShort": "Actualización lista",
   "sidebar.update.restartAction": "Reiniciar",
   "sidebar.update.retryAction": "Reintentar",
+  "sidebar.update.availableShort": "Actualización del servidor disponible",
+  "sidebar.update.howAction": "Cómo actualizar",
   "sidebar.nav.publishedApps": "Apps publicadas",
   "sidebar.nav.teamFiles": "Archivos del equipo",
   "settings.followUp.subtitle": "Meterlo añade tu mensaje a lo que el bot hace ahora; ponerlo en cola lo ejecuta cuando termina el turno. {key} hace lo otro para un solo mensaje, y la flecha junto a Enviar también puede reiniciar el turno. Solo en este dispositivo.",

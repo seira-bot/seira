@@ -4,6 +4,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "@/lib/i18n";
+import type { KeySectionId } from "./key-catalog";
 
 const fx = vi.hoisted(() => ({
   config: {} as Record<string, unknown>,
@@ -89,7 +90,7 @@ describe("the keys page", () => {
   it("groups the keys into plain sections, AI providers open first", () => {
     page();
     expect([...host.querySelectorAll<HTMLElement>("[data-keys-section]")].map((element) => element.dataset.keysSection))
-      .toEqual(["ai", "servers", "voice", "computers", "apps", "helpers"]);
+      .toEqual(["ai", "servers", "voice", "computers", "apps", "routing", "images"]);
     expect(section("ai").textContent).toContain("AI providers");
     expect(expanded("ai")).toBe("true");
     expect(expanded("voice")).toBe("false");
@@ -234,18 +235,50 @@ describe("the keys page", () => {
     expect(saveKey().disabled).toBe(false);
   });
 
-  it("lands the live-call notice's button on the OpenAI row in Voice and calls, focused and lit", async () => {
+  it("lands the live-call notice's button on the OpenAI key's own row, focused and lit", async () => {
     render(() => createElement(LiveKeyNeeded, { key: "notice" }), () => createElement(KeysPage, { key: "page" }));
-    expect(expanded("voice")).toBe("false");
     const button = [...host.querySelectorAll("button")].find((candidate) => candidate.textContent === "Open AI › Other services")!;
     flushSync(() => button.click());
     expect(fx.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "connections" });
-    const live = () => row("liveCalls")!.querySelector<HTMLInputElement>("[data-key-input]")!;
-    await vi.waitFor(() => expect(document.activeElement).toBe(live()));
-    expect(expanded("voice")).toBe("true");
-    expect(row("liveCalls")!.hasAttribute("data-key-highlight")).toBe(true);
-    expect(live().getAttribute("aria-label")).toBe("OpenAI API key");
-    expect(row("liveCalls")!.textContent).toContain("Live calls use the same key as OpenAI's models");
+    const field = () => row("openai")!.querySelector<HTMLInputElement>("[data-key-input]")!;
+    await vi.waitFor(() => expect(document.activeElement).toBe(field()));
+    expect(row("openai")!.hasAttribute("data-key-highlight")).toBe(true);
+    expect(field().getAttribute("aria-label")).toBe("OpenAI API key");
+  });
+
+  it("shows Live calls' use of the OpenAI key as a link to that key, never a second field for it", async () => {
+    setConfig({ ...fx.config, openai: { configured: true, last4: "a1b2" } });
+    page();
+    flushSync(() => section("voice").querySelector<HTMLButtonElement>("button[aria-expanded]")!.click());
+    const live = row("liveCalls")!;
+    expect(live.textContent).toContain("Live calls use the same key as OpenAI's models");
+    expect(live.querySelector("input")).toBeNull();
+    expect(live.textContent).toContain("••••••••a1b2");
+    flushSync(() => live.querySelector<HTMLButtonElement>("[data-key-open]")!.click());
+    expect(fx.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "connections" });
+    await vi.waitFor(() => expect(row("openai")!.contains(document.activeElement)).toBe(true));
+    expect(row("openai")!.hasAttribute("data-key-highlight")).toBe(true);
+  });
+
+  it("links Routing and Images to where their keys are, with no key field of their own", () => {
+    page();
+    for (const id of ["jev", "openrouterHelper", "workersAi", "customDecider", "imageOpenai", "imageGemini", "imageCustom"]) expect(row(id), id).toBeNull();
+    const routing = section("routing").querySelector<HTMLButtonElement>("[data-keys-opens]")!;
+    expect(routing.getAttribute("aria-expanded")).toBeNull();
+    expect(routing.textContent).toContain("Routing and extraction");
+    flushSync(() => routing.click());
+    expect(fx.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "decisionModel" });
+    flushSync(() => section("images").querySelector<HTMLButtonElement>("[data-keys-opens]")!.click());
+    expect(fx.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "imageGeneration" });
+  });
+
+  it("leaves the treg row to the X card in Apps while X research is connected", () => {
+    page();
+    expect(row("treg")).not.toBeNull();
+    flushSync(() => setConfig({ ...fx.config, treg: { configured: true, last4: "a1b2" } }));
+    expect(row("treg")).toBeNull();
+    flushSync(() => setConfig({ ...fx.config, treg: { configured: false }, xResearch: { included: true } }));
+    expect(row("treg")).toBeNull();
   });
 
   it("clears a search that would hide the row a link asks for", async () => {
@@ -291,6 +324,28 @@ describe("the keys page", () => {
     await vi.waitFor(() => expect(row("box")!.querySelector("[data-key-masked]")?.textContent).toContain("••••••••c3d4"));
     expect(row("box")!.textContent).toContain("Connected");
     expect(fx.api).toHaveBeenCalledOnce();
+  });
+});
+
+describe("the keys inside AI › Other services", () => {
+  const Bare = ({ exclude }: { exclude: KeySectionId[] }) => KeysPage({ bare: true, exclude });
+  const bare = (exclude: KeySectionId[]) => render(() => createElement(Bare, { key: "bare", exclude }));
+
+  it("leads every fold row with an icon, and lists Routing and Images as links with icons", () => {
+    bare(["ai"]);
+    const folds = [...host.querySelectorAll<HTMLElement>("[data-settings-fold]")];
+    expect(folds.map((fold) => fold.dataset.settingsDisclosure)).toEqual(["keys-servers", "keys-voice", "keys-computers", "keys-apps"]);
+    const links = [...host.querySelectorAll<HTMLElement>("button[data-keys-opens]")];
+    expect(links.map((link) => [link.dataset.keysSection, link.dataset.keysOpens])).toEqual([["routing", "decisionModel"], ["images", "imageGeneration"]]);
+    for (const shown of [...folds, ...links]) expect(shown.querySelectorAll("[data-settings-slot] svg"), shown.textContent!).toHaveLength(1);
+    flushSync(() => links[1]!.click());
+    expect(fx.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "imageGeneration" });
+  });
+
+  it("drops the Routing and Images links where the page shows those sections itself", () => {
+    bare(["ai", "routing", "images"]);
+    expect(host.querySelector("[data-keys-opens]")).toBeNull();
+    expect(host.querySelectorAll("[data-settings-fold]")).toHaveLength(4);
   });
 });
 

@@ -4012,6 +4012,8 @@
   "sidebar.update.readyShort": "Оновлення готове",
   "sidebar.update.restartAction": "Перезапустити",
   "sidebar.update.retryAction": "Повторити",
+  "sidebar.update.availableShort": "Доступне оновлення сервера",
+  "sidebar.update.howAction": "Як оновити",
   "sidebar.nav.publishedApps": "Опубліковані застосунки",
   "sidebar.nav.teamFiles": "Файли команди",
   "settings.advancedMode.subtitle": "Показувати на цьому пристрої всі технічні налаштування: використання й токени, інспектор та інші інструменти для розробників. Вимкніть для простішого застосунку. Нічого не видаляється в жодному разі.",

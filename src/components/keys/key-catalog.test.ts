@@ -76,8 +76,9 @@ describe("every credential has one home on the keys page", () => {
 
   it("names each section plainly and says what each row is for in one line", () => {
     expect(KEY_SECTIONS.map((section) => t(section.titleKey))).toEqual([
-      "AI providers", "Your own model servers", "Voice and calls", "Computers and browser", "Apps and tools", "Helpers and pictures",
+      "AI providers", "Your own model servers", "Voice and calls", "Computers and browser", "Apps and tools", "Routing and extraction", "Images",
     ]);
+    for (const section of KEY_SECTIONS) expect(t(section.purposeKey), section.id).not.toBe(section.purposeKey);
     for (const entry of KEY_CATALOG) {
       const purpose = t(entry.purposeKey);
       expect(purpose, entry.id).not.toBe(entry.purposeKey);
@@ -96,6 +97,13 @@ describe("every credential has one home on the keys page", () => {
     expect(savedState(live, config)).toEqual({ configured: true, last4: "a1b2" });
     expect(t(live.labelKey)).toBe("OpenAI key");
     expect(t(keyEntry("openai").labelKey)).toBe("OpenAI API key");
+  });
+
+  it("files the keys Routing and Images hold under sections that open those parts of Settings, never a field of their own", () => {
+    const owner = (id: KeyId) => KEY_SECTIONS.find((section) => section.id === keyEntry(id).section)!.opens;
+    for (const id of ["jev", "openrouterHelper", "workersAi", "customDecider"] as const) expect(owner(id), id).toBe("decisionModel");
+    for (const id of ["imageOpenai", "imageGemini", "imageCustom"] as const) expect(owner(id), id).toBe("imageGeneration");
+    expect(KEY_SECTIONS.filter((section) => section.opens).map((section) => section.id)).toEqual(["routing", "images"]);
   });
 
   it("never shows Cloud's included voices on the ElevenLabs Live key row: Live calls need the person's own key", () => {
@@ -141,6 +149,13 @@ describe("searching the keys", () => {
     expect(keyHidden("liveCalls", { live: { provider: "openai" } } as never)).toBe(false);
     expect(keyHidden("liveCalls", null)).toBe(false);
     expect(keyHidden("liveKey", { live: { provider: "fish" } } as never)).toBe(false);
+  });
+
+  it("hides the treg row while X research is connected, since the X card in Apps holds the key then", () => {
+    expect(keyHidden("treg", { treg: { configured: true, last4: "a1b2" } } as never)).toBe(true);
+    expect(keyHidden("treg", { xResearch: { included: true } } as never)).toBe(true);
+    expect(keyHidden("treg", { treg: { configured: false } } as never)).toBe(false);
+    expect(keyHidden("treg", null)).toBe(false);
   });
 });
 

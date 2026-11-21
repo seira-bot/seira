@@ -30,7 +30,7 @@ export function LiveKeyNeeded() {
     </div>
     <ProviderAndKey formKey={liveKeyFormKey(live)} keyForm={keyForm} />
     {(azure || custom || fish || gemini || elevenlabs || codex) && <DismissWhenReady ready={live?.configured === true} />}
-    {!azure && !custom && !fish && !gemini && !elevenlabs && !codex && <button type="button" className="ui-button ui-button-primary self-start" onClick={() => { dismissLiveNotice(); dispatch(openKeySettings("openai", "liveCalls")); }}>{t("call.live.openApiKeys")}</button>}
+    {!azure && !custom && !fish && !gemini && !elevenlabs && !codex && <button type="button" className="ui-button ui-button-primary self-start" onClick={() => { dismissLiveNotice(); dispatch(openKeySettings("openai")); }}>{t("call.live.openApiKeys")}</button>}
     <p className="text-[12px] leading-[1.45] text-ink-tertiary">{!keyForm && `${liveDisclosure({ cloudHome: state.config?.cloudHome === true, azure, custom, fish, gemini, elevenlabs, codex })} `}{t(copy.cost)}</p>
   </section>;
 }

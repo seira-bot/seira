@@ -2597,3 +2597,59 @@ describe("A stored address the control plane no longer holds", () => {
     signedOut.service.dispose();
   });
 });
+
+describe("Renewing the installation credential", () => {
+  const withoutCredential = () => {
+    const initial = signedCredentials();
+    delete initial[COMPANION_INSTALLATION_CREDENTIAL_FIELD];
+    delete initial[COMPANION_INSTALLATION_ID_FIELD];
+    return initial;
+  };
+
+  it("stores a new credential, tells the relay once, and sends no endpoint request", async () => {
+    const installationChanged = vi.fn();
+    const client = readyClient({ getEndpoint: vi.fn(async () => ({})) });
+    const { service, store } = serviceFixture({ initial: withoutCredential(), client, installationChanged });
+
+    await service.renewInstallation();
+
+    expect(client.ensureInstallation).toHaveBeenCalledTimes(1);
+    expect(client.ensureInstallation.mock.calls[0][0]).toMatchObject({ currentCredential: "" });
+    expect(store.read()[COMPANION_INSTALLATION_CREDENTIAL_FIELD]).toBe(INSTALLATION_CREDENTIAL);
+    expect(installationChanged).toHaveBeenCalledTimes(1);
+    for (const call of ["ensureEndpoint", "getEndpoint", "deleteEndpoint"]) expect(client[call]).not.toHaveBeenCalled();
+  });
+
+  it("sends no request again within the renewal interval, and one after it", async () => {
+    let time = 1_000_000;
+    const { client, service } = serviceFixture({ initial: withoutCredential(), now: () => time, renewIntervalMs: 10 * 60_000 });
+
+    await service.renewInstallation();
+    await service.renewInstallation();
+    expect(client.ensureInstallation).toHaveBeenCalledTimes(1);
+
+    time += 10 * 60_000 + 1;
+    await service.renewInstallation();
+    expect(client.ensureInstallation).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives the signed-out state when the control plane refuses the account token", async () => {
+    const client = readyClient({
+      ensureInstallation: vi.fn(async () => {
+        throw new ControlPlaneError("unauthorized", 401);
+      }),
+    });
+    const { service } = serviceFixture({ initial: withoutCredential(), client });
+
+    await expect(service.renewInstallation()).resolves.toMatchObject({ status: "signed-out" });
+  });
+
+  it("sends no request when no account is stored", async () => {
+    const client = readyClient({ getEndpoint: vi.fn(async () => ({})) });
+    const { service } = serviceFixture({ initial: {}, client });
+
+    await service.renewInstallation();
+
+    for (const call of ["ensureInstallation", "ensureEndpoint", "getEndpoint", "deleteEndpoint"]) expect(client[call]).not.toHaveBeenCalled();
+  });
+});

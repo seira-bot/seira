@@ -35,6 +35,8 @@ export function createCompanionE2E({
   clearTimer = clearInterval,
   log = () => {},
   onState = () => {},
+  /** Asks the account for a usable installation credential after the relay refused this computer's sign-in. */
+  renewInstallation = () => {},
 }) {
   let identity = readE2EIdentity(readCredentials());
   let lastState = null;
@@ -64,6 +66,7 @@ export function createCompanionE2E({
     },
     log,
     wakeAfterSignInFailure: true,
+    onSignInFailure: () => void Promise.resolve().then(renewInstallation).catch(() => {}),
   });
 
   async function reconcile() {

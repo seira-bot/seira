@@ -233,7 +233,8 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "board",
     name: "Board",
     place: "Board in the sidebar, above Automations",
-    does: "Shows every piece of work your bots have, in To do, Working, Needs you and Done. Open a card to answer, stop the work or open its conversation, or add a new task.",
+    does: "Shows every piece of work your bots have, in To do, Working, Needs you and Done. Open a card to answer, stop the work, move it to Done or open its conversation, or add a new task.",
+    tools: ["board_close"],
     releaseNotes: ["board"],
   },
   {

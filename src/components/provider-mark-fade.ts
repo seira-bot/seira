@@ -2,7 +2,7 @@ import type { InstanceInfo } from "@/state/store";
 
 export type ProviderMarkTone = "brand" | "mono";
 
-const BRAND_DRIVERS: ReadonlySet<string> = new Set(["claudeAgent", "mistral", "mistralVibeAgent", "meta", "museCode", "kimiAgent", "qwenAgent", "deepseekAgent", "greenference", "modelgo", "kiroAgent", "cerebras", "ompAgent", "geminiAgent"]);
+const BRAND_DRIVERS: ReadonlySet<string> = new Set(["claudeAgent", "mistral", "mistralVibeAgent", "meta", "museCode", "kimiAgent", "qwenAgent", "deepseekAgent", "greenference", "modelgo", "kiroAgent", "cerebras", "ompAgent", "geminiAgent", "codex", "minimax"]);
 const MONO_PRESETS: ReadonlySet<string> = new Set(["openai", "xai", "ollama"]);
 
 export function providerMarkTone(instance: Pick<InstanceInfo, "driverKind" | "icon">): ProviderMarkTone {

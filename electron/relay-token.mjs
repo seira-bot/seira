@@ -51,6 +51,7 @@ export function createRelayTokenService({
   random = Math.random,
   log = () => {},
   wakeAfterSignInFailure = false,
+  onSignInFailure = () => {},
 }) {
   let running = false;
   let grant = null;
@@ -90,6 +91,12 @@ export function createRelayTokenService({
       if (code === "relay_unavailable" || signIn) {
         log(`relay token ${code || "refused"}`);
         publish(null);
+        if (signIn) {
+          try {
+            onSignInFailure();
+          } catch {
+          }
+        }
         waiting = signIn && wakeAfterSignInFailure;
         return schedule(jitter(waiting ? SIGN_IN_FALLBACK_MS : UNAVAILABLE_RETRY_MS));
       }
