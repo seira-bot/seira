@@ -112,6 +112,7 @@ import { groupTranscript, isStatusActivity, liveWorkSteps, turnDurations, worked
 import { StatusActivityRow } from "@/components/StatusActivityRow";
 import { CancelledTurnRow } from "./CancelledTurnRow";
 import { ActivityRun } from "./ActivityRun";
+import { ActivityStepLine } from "./ActivityStepLine";
 import { AdvancedTurnCard, cardRows, renameBotWith, useAdvancedTurns } from "./advanced-turn";
 import { BubbleEditor } from "./BubbleEditor";
 import { ReplyBlocks } from "./ReplyBlocks";
@@ -687,14 +688,14 @@ const MessagesList = memo(function MessagesList({
           const rows = cardRows(items, i, live);
           const itemId = item.kind === "message" ? `live:${item.message.id}` : item.id;
           const forceOpen = live || rows.some((step) => step.id === focusedId);
-          const steps = rows.map((step) => <div key={step.id} className="contents" data-mid={step.id}><ActivityChip message={step} place={place} /></div>);
+          const steps = rows.map((step) => <div key={step.id} className="contents" data-mid={step.id}>{advanced ? <ActivityChip message={step} place={place} /> : <ActivityStepLine message={step} botId={botId}><ActivityChip message={step} place={place} /></ActivityStepLine>}</div>);
           const label = item.kind === "turn" ? item.label : undefined;
           if (!advanced) {
             return (
               <div key={itemId} className="contents">
                 {newDay && <DaySeparator at={first.at} today={today} simple={simple} />}
                 {divider}
-                <ActivityRun messages={rows} label={label} forceOpen={forceOpen}>{steps}</ActivityRun>
+                <ActivityRun messages={rows} label={label} forceOpen={forceOpen} botId={botId} durationMs={item.kind === "turn" ? item.durationMs : undefined}>{steps}</ActivityRun>
               </div>
             );
           }
@@ -753,7 +754,7 @@ const MessagesList = memo(function MessagesList({
               return <ActivityChip message={m} place={place} />;
             }
             case "digest":
-              return showToolCalls && !traces.absorbed.has(m.id) ? <DigestChip message={m} /> : null;
+              return showToolCalls && advanced && !traces.absorbed.has(m.id) ? <DigestChip message={m} /> : null;
             case "compaction":
               return <CompactionChip message={m} onNewChat={m.id === lookups.newChatHintId && canReact ? () => dispatch({ type: "newTask", botId }) : undefined} />;
             case "screen":
@@ -876,7 +877,7 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
   const bots = useStoreSelector((s) => s.bots, sameDrawnBots);
   const teammates = useTeammates(); const mentionPeers = useMemo(() => [...bots.filter((peer) => peer.id !== bot.id), ...teammates.peers], [bots, bot.id, teammates]);
   const focus = state.focusMessage?.threadId === bot.threadId ? state.focusMessage : null;
-  const showToolCalls = showToolCallsEnabled(state.config);
+  const showToolCalls = showToolCallsEnabled(state.config, advanced);
   const tts = state.config?.tts;
   const localVoice = localSystemVoiceActive();
   const locale = activeLocale();

@@ -56,8 +56,8 @@ export function builtInBrowserEnabled(config: FeatureFlagConfig | null | undefin
   return config?.features?.browser === true;
 }
 
-export function showToolCallsEnabled(config: FeatureFlagConfig | null | undefined): boolean {
-  return config?.features?.showToolCalls === true;
+export function showToolCallsEnabled(config: FeatureFlagConfig | null | undefined, advanced: boolean): boolean {
+  return config?.features?.showToolCalls ?? advanced;
 }
 
 export function sharedComputersEnabled(config: FeatureFlagConfig | null | undefined): boolean {

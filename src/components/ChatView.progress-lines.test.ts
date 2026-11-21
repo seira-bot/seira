@@ -75,14 +75,15 @@ describe("a finished turn in a conversation", () => {
     } finally { unmount(); }
   });
 
-  it("folds only its tool steps into one Worked-for chip when steps are shown", () => {
+  it("folds only its tool steps into one activity card when steps are shown", () => {
     vi.stubGlobal("fetch", () => new Promise(() => {}));
     const { container, unmount } = mount(true);
     try {
       expect(rows(container)).toEqual(["ask", "ack", "helper", "answer"]);
       const chips = [...transcript(container).querySelectorAll<HTMLButtonElement>("[data-activity-run] button")];
-      // In Simple mode the whole turn is one collapsed card, the same one a run of steps gets.
-      expect(chips.map((chip) => chip.textContent)).toEqual(["Worked for 29s"]);
+      // In Simple mode the whole turn is one collapsed card: its steps, then how long the turn took.
+      expect(chips).toHaveLength(1);
+      expect(chips[0]!.textContent).toMatch(/^3 steps · .*29s$/);
       flushSync(() => chips[0]!.click());
       expect(rows(container)).toEqual(["ask", "ack", "search", "fetch", "fetch-2", "helper", "answer"]);
     } finally { unmount(); }

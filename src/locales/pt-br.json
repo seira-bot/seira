@@ -7937,6 +7937,7 @@
   "botPanel.screen.working": "Trabalhando em uma tarefa. A tela aparece aqui em breve; abra a visualização completa para acompanhar ao vivo.",
   "botPanel.screen.resting": "Não está usando o computador agora",
   "botPanel.none": "Nenhuma",
+  "botPanel.tab.activity": "Atividade",
   "botPanel.tab.computer": "Computador",
   "botPanel.tab.details": "Detalhes",
   "botPanel.tab.library": "Biblioteca",

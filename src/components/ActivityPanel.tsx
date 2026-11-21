@@ -1,5 +1,5 @@
 import { routineLineText } from "@/lib/activity-text";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { ListChecks, RefreshCw, X } from "lucide-react";
 import { useStore, type Bot } from "@/state/store";
 import { cn } from "@/lib/cn";
@@ -13,7 +13,7 @@ import {
   type ActivityRow,
   type ChipTone,
 } from "@/lib/activity";
-import { listenLiveFrames } from "@/lib/live-events";
+import { useBotActivity } from "@/lib/use-bot-activity";
 import { useActivityFocus } from "@/lib/activity-focus";
 import { t } from "@/lib/i18n";
 
@@ -29,63 +29,7 @@ const TONE_CLASS: Record<ChipTone, string> = {
 export function ActivityPanel({ bot }: { bot: Bot }) {
   const { dispatch } = useStore();
   const { dragProps } = useCaptionChrome();
-  const [rows, setRows] = useState<ActivityRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const loadAbort = useRef<AbortController | null>(null);
-
-  const load = useCallback(async () => {
-    loadAbort.current?.abort();
-    const controller = new AbortController();
-    loadAbort.current = controller;
-    try {
-      const res = await fetch(`/api/bots/${bot.id}/activity?limit=${LIMIT}`, { signal: controller.signal });
-      if (!res.ok) throw new Error(`${res.status}`);
-      // SAFETY: the same-version harness's typed activity endpoint; malformed transport data is handled by catch.
-      const next = (await res.json()) as { rows: ActivityRow[] };
-      if (controller.signal.aborted) return;
-      setRows(next.rows);
-      setError(null);
-    } catch (e) {
-      if (controller.signal.aborted) return;
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      if (loadAbort.current === controller) loadAbort.current = null;
-    }
-  }, [bot.id]);
-
-  useEffect(() => {
-    setRows(null);
-    void load();
-    return () => loadAbort.current?.abort();
-  }, [load]);
-
-  const threadKey = [bot.threadId, ...(bot.tasks ?? []).map((task) => task.threadId)].join("\n");
-  const threadIds = useMemo(() => new Set(threadKey.split("\n")), [threadKey]);
-  useEffect(() => {
-    let settle: ReturnType<typeof setTimeout> | null = null;
-    const stopLive = listenLiveFrames({
-      onMissedFrames: () => void load(),
-      onFrame: (frame) => {
-        if (frame.kind !== "runtime") return;
-        const runtime = frame.event;
-        if (!threadIds.has(runtime.threadId)) return;
-        if (
-          runtime.type === "turn.completed" ||
-          runtime.type === "runtime.error" ||
-          runtime.type === "request.opened" ||
-          runtime.type === "request.resolved" ||
-          runtime.type === "item.completed"
-        ) {
-          if (settle) clearTimeout(settle);
-          settle = setTimeout(() => void load(), 400);
-        }
-      },
-    });
-    return () => {
-      stopLive();
-      if (settle) clearTimeout(settle);
-    };
-  }, [threadIds, load]);
+  const { rows, error, reload, threadIds } = useBotActivity(bot, LIMIT);
 
   const days = useMemo(() => (rows ? groupActivityByDay(rows, new Date()) : []), [rows]);
   const focus = useActivityFocus(bot.id);
@@ -109,7 +53,7 @@ export function ActivityPanel({ bot }: { bot: Bot }) {
         </span>
         <span className="flex items-center gap-1">
           <button
-            onClick={() => void load()}
+            onClick={() => void reload()}
             className="rounded-md p-1 text-ink-secondary hover:bg-raised hover:text-ink"
             title={t("activity.panel.reload")}
             aria-label={t("activity.panel.reload")}

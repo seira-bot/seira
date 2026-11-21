@@ -55,12 +55,36 @@ describe("PanelTabs", () => {
     const press = (key: string) => flushSync(() => { list.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true })); });
     press("ArrowRight");
     expect(onSelect).toHaveBeenLastCalledWith("library");
+    press("ArrowLeft");
+    expect(onSelect).toHaveBeenLastCalledWith("activity");
+    press("Home");
+    expect(onSelect).toHaveBeenLastCalledWith("activity");
     press("End");
     expect(onSelect).toHaveBeenLastCalledWith("computer");
     flushSync(() => root!.render(createElement(PanelTabs, { tab: "computer", onSelect })));
     press("ArrowRight");
-    expect(onSelect).toHaveBeenCalledTimes(2);
+    expect(onSelect).toHaveBeenCalledTimes(4);
     expect(document.querySelector('[data-panel-tab="computer"]')?.getAttribute("tabindex")).toBe("0");
     expect(document.querySelector('[data-panel-tab="library"]')?.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("sizes the thumb to the selected tab's box and moves it with the selection", () => {
+    const boxes: Record<string, [number, number]> = { activity: [3, 71], details: [74, 60], library: [134, 58], computer: [192, 90] };
+    const left = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetLeft");
+    const width = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
+    const box = (element: HTMLElement) => boxes[element.dataset.panelTab ?? ""];
+    Object.defineProperty(HTMLElement.prototype, "offsetLeft", { configurable: true, get(this: HTMLElement) { return box(this)?.[0] ?? 0; } });
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get(this: HTMLElement) { return box(this)?.[1] ?? 0; } });
+    try {
+      const onSelect = vi.fn();
+      mount(createElement(PanelTabs, { tab: "details", onSelect }));
+      const thumb = () => document.querySelector<HTMLElement>("[data-segment-thumb]")!;
+      expect([thumb().style.width, thumb().style.transform]).toEqual(["60px", "translateX(74px)"]);
+      flushSync(() => root!.render(createElement(PanelTabs, { tab: "computer", onSelect })));
+      expect([thumb().style.width, thumb().style.transform]).toEqual(["90px", "translateX(192px)"]);
+    } finally {
+      if (left) Object.defineProperty(HTMLElement.prototype, "offsetLeft", left); else Reflect.deleteProperty(HTMLElement.prototype, "offsetLeft");
+      if (width) Object.defineProperty(HTMLElement.prototype, "offsetWidth", width); else Reflect.deleteProperty(HTMLElement.prototype, "offsetWidth");
+    }
   });
 });

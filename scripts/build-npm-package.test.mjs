@@ -39,8 +39,8 @@ describe("the npm package", () => {
   });
 
   it("points at the Seira repository", () => {
-    expect(pkg.repository).toEqual({ type: "git", url: "https://github.com/seira-bot/seira.git" });
-    expect(pkg.homepage).toBe("https://github.com/seira-bot/seira#readme");
+    expect(pkg.repository).toEqual({ type: "git", url: "git+https://github.com/seira-bot/seira.git" });
+    expect(pkg.homepage).toBe("https://seira.bot");
     expect(pkg.keywords).toContain("seira");
   });
 
