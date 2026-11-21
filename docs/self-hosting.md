@@ -2015,7 +2015,7 @@ update an earlier run left unfinished.
 [Every step, the rollback and the exit codes](deploy-vps.md#update).
 
 An npm install under the service updates itself at night. Between 03:00 and 05:00
-local time, when a newer stable release exists and no bot is answering, the server
+in the server's own time zone (many VPS run in UTC; set `TZ` in the service environment to move the window), when a newer stable release exists and no bot is answering, the server
 installs that release into its own `app/` folder in the data directory, stops, takes a
 copy of the data, and starts the new version. When the new version does not answer
 with its own version within 5 minutes, the server stops it, puts the data back, and

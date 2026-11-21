@@ -4,7 +4,9 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { handoffAfterRestart, handoffAtStart, HANDOFF_ENV, HEALTH_WAIT_MS, type CopyProcess, type HandoffDeps } from "./app-handoff.ts";
-import { backupFolder, copyDir, readAppState, realDeps, writeAppState } from "./app-update.ts";
+import { backupData, backupFolder, copyDir, readAppState, realDeps, writeAppState } from "./app-update.ts";
+import { serveUntilStopped, type CliOptions } from "./cli.ts";
+import { RESTART_EXIT_CODE } from "./restart.ts";
 import { writeFakeCopy } from "./testing/fake-app-copies.ts";
 
 const roots: string[] = [];
@@ -190,6 +192,128 @@ describe("at a fresh start", () => {
     h.started[0]!.exit(0);
     expect(await run).toBe(0);
     expect(readAppState(h.dataDir).current?.version).toBe("0.1.151");
+  });
+});
+
+describe("one launcher runs every handoff", () => {
+  const ref = (h: ReturnType<typeof harness>, version: string) => ({ version, dir: copyDir(h.dataDir, version) });
+  const later = (h: ReturnType<typeof harness>, version: string) => writeFakeCopy(copyDir(h.dataDir, version), version);
+  const pendingFor = (h: ReturnType<typeof harness>, from: string, to: string) => ({ from, to, dir: copyDir(h.dataDir, to), at: 1_800_000_000_000, by: "admin" as const });
+
+  it("starts the next copy itself when the running copy asks for a restart: one level, not two", async () => {
+    const h = harness({ health: ["0.1.152"] });
+    later(h, "0.1.152");
+    writeAppState(h.dataDir, { failed: [], current: ref(h, "0.1.151") });
+    const run = handoffAtStart(h.deps);
+    await until(() => h.started.length === 1);
+    writeAppState(h.dataDir, { failed: [], current: ref(h, "0.1.151"), pending: pendingFor(h, "0.1.151", "0.1.152") });
+    h.started[0]!.exit(RESTART_EXIT_CODE);
+    await until(() => h.started.length === 2);
+    expect(h.started[1]!.cli).toBe(join(copyDir(h.dataDir, "0.1.152"), "node_modules", "@seira-bot", "seira", "cli.js"));
+    expect(h.started[1]!.env[HANDOFF_ENV]).toBe("restart");
+    await until(() => h.logs.some((line) => line.includes("is done")));
+    h.started[1]!.exit(0);
+    expect(await run).toBe(0);
+    expect(h.started).toHaveLength(2);
+    expect(readAppState(h.dataDir).current?.version).toBe("0.1.152");
+  });
+
+  it("returns a restart that asks for no update to the caller as the copy's own exit code", async () => {
+    const h = harness();
+    writeAppState(h.dataDir, { failed: [], current: ref(h, "0.1.151") });
+    const run = handoffAtStart(h.deps);
+    await until(() => h.started.length === 1);
+    h.started[0]!.exit(RESTART_EXIT_CODE);
+    expect(await run).toBe(RESTART_EXIT_CODE);
+    expect(h.started).toHaveLength(1);
+  });
+
+  it("runs the current copy, not this older version, after the next copy rolled back", async () => {
+    const h = harness({ health: [null] });
+    later(h, "0.1.152");
+    writeAppState(h.dataDir, { failed: [], current: ref(h, "0.1.151") });
+    const real = h.deps.start;
+    h.deps.start = (cli, argv, env) => {
+      const child = real(cli, argv, env);
+      if (h.started.length === 2) h.started[1]!.exit(3);
+      return child;
+    };
+    const run = handoffAtStart(h.deps);
+    await until(() => h.started.length === 1);
+    writeAppState(h.dataDir, { failed: [], current: ref(h, "0.1.151"), pending: pendingFor(h, "0.1.151", "0.1.152") });
+    h.started[0]!.exit(RESTART_EXIT_CODE);
+    await until(() => h.started.length === 3);
+    expect(h.started[2]!.cli).toBe(join(copyDir(h.dataDir, "0.1.151"), "node_modules", "@seira-bot", "seira", "cli.js"));
+    expect(h.started[2]!.env[HANDOFF_ENV]).toBe("restart");
+    h.started[2]!.exit(0);
+    expect(await run).toBe(0);
+    expect(readAppState(h.dataDir)).toMatchObject({ failed: ["0.1.152"], current: { version: "0.1.151" }, last: { outcome: "rolled-back" } });
+  });
+
+  it("runs the current copy after an update was dropped because the data could not be copied", async () => {
+    const h = harness({ failBackup: true });
+    later(h, "0.1.152");
+    writeAppState(h.dataDir, { failed: [], current: ref(h, "0.1.151"), pending: pendingFor(h, "0.1.151", "0.1.152") });
+    const run = handoffAfterRestart(h.deps);
+    await until(() => h.started.length === 1);
+    expect(h.started[0]!.cli).toBe(join(copyDir(h.dataDir, "0.1.151"), "node_modules", "@seira-bot", "seira", "cli.js"));
+    h.started[0]!.exit(0);
+    expect(await run).toBe(0);
+    expect(readAppState(h.dataDir)).toMatchObject({ last: { outcome: "not-changed" } });
+  });
+
+  it("does not start a handoff in a launcher that a copy started: it returns the restart code", async () => {
+    const h = harness({ env: { [HANDOFF_ENV]: "restart" } });
+    later(h, "0.1.152");
+    let runs = 0;
+    const run = async () => {
+      runs++;
+      writeAppState(h.dataDir, { failed: [], pending: pendingFor(h, "0.1.151", "0.1.152") });
+      return RESTART_EXIT_CODE;
+    };
+    const options = { command: "serve", port: 4321, dataDir: h.dataDir, pair: true, json: false } as unknown as CliOptions;
+    expect(await serveUntilStopped(options, run, Date.now, h.deps)).toBe(RESTART_EXIT_CODE);
+    expect(runs).toBe(1);
+    expect(h.started).toEqual([]);
+    expect(readAppState(h.dataDir).pending).toBeDefined();
+  });
+
+  it("keeps the restart loop for a restart that left no update pending", async () => {
+    const h = harness({ env: { [HANDOFF_ENV]: "restart" } });
+    let runs = 0;
+    const run = async () => (++runs === 1 ? RESTART_EXIT_CODE : 0);
+    const options = { command: "serve", port: 4321, dataDir: h.dataDir, pair: true, json: false } as unknown as CliOptions;
+    expect(await serveUntilStopped(options, run, Date.now, h.deps)).toBe(0);
+    expect(runs).toBe(2);
+  });
+});
+
+describe("a launcher that was stopped while it waited for the new version", () => {
+  it("puts back the first backup, and takes no new one (the new version may have changed the data)", async () => {
+    const h = harness({ health: [null] });
+    const first = await backupData(h.dataDir, "0.1.150", h.deps.app);
+    expect(first.ok).toBe(true);
+    writeFileSync(join(h.dataDir, "config.json"), '{"changedByNewVersion":true}');
+    h.pend({ backup: first.ok ? first.file : "" });
+    h.deps.start = ((original) => (cli, argv, env) => {
+      const child = original(cli, argv, env);
+      h.started[h.started.length - 1]!.exit(3);
+      return child;
+    })(h.deps.start);
+    expect(await handoffAfterRestart(h.deps)).toBeNull();
+    expect(readdirSync(backupFolder(h.dataDir)).filter((name) => name.endsWith(".tgz"))).toHaveLength(1);
+    expect(readFileSync(join(h.dataDir, "config.json"), "utf8")).toBe('{"before":true}');
+    expect(readAppState(h.dataDir)).toMatchObject({ failed: ["0.1.151"], last: { outcome: "rolled-back" } });
+  });
+
+  it("takes a new backup when the recorded one is gone or is not in the backup folder", async () => {
+    const h = harness({ health: ["0.1.151"] });
+    h.pend({ backup: join(h.dataDir, "elsewhere.tgz") });
+    const run = handoffAfterRestart(h.deps);
+    await until(() => h.logs.some((line) => line.includes("is done")));
+    h.started[0]!.exit(0);
+    await run;
+    expect(readdirSync(backupFolder(h.dataDir)).filter((name) => name.endsWith(".tgz"))).toHaveLength(1);
   });
 });
 

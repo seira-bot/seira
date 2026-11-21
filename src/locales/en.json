@@ -11044,6 +11044,7 @@
   "serverUpdate.local.reason.noUpdater": "This server can't update itself, because the tool that installs updates isn't available to it. On the server, run: {command}",
   "serverUpdate.local.reason.older": "That version isn't newer than the one the server runs.",
   "serverUpdate.local.reason.failed": "The new version couldn't be installed. Try again later.",
+  "serverUpdate.local.reason.busy": "The server waited for the bots to finish, but they kept working. It tries again the next night.",
   "phone.devices.remove": "Remove",
   "phone.pair.button": "Pair a phone",
   "phone.pair.cloudPersonal": "Only your own devices can connect, each with full access.",

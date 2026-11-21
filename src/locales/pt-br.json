@@ -10982,6 +10982,7 @@
   "serverUpdate.local.reason.noUpdater": "Este servidor não consegue se atualizar, porque a ferramenta que instala atualizações não está disponível para ele. No servidor, execute: {command}",
   "serverUpdate.local.reason.older": "Essa versão não é mais nova do que a que o servidor executa.",
   "serverUpdate.local.reason.failed": "Não foi possível instalar a nova versão. Tente de novo mais tarde.",
+  "serverUpdate.local.reason.busy": "O servidor esperou os bots terminarem, mas eles continuaram trabalhando. Ele tenta de novo na próxima noite.",
   "phone.devices.remove": "Remover",
   "phone.pair.button": "Parear um celular",
   "phone.pair.cloudPersonal": "Só os seus próprios dispositivos podem se conectar, cada um com acesso total.",

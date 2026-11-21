@@ -7,7 +7,7 @@ import { requiredScope, type RequestAuth } from "../request-auth.ts";
 import type { ServerUpdater } from "../server-update.ts";
 import type { UpdateCheck } from "../update-check.ts";
 import { dispatchRoutes } from "./table.ts";
-import { createUpdateCheckRoutes } from "./update-check.ts";
+import { createUpdateCheckRoutes, launcherCanRestart } from "./update-check.ts";
 
 const servers: Server[] = [];
 afterEach(async () => {
@@ -90,5 +90,13 @@ describe("update check route", () => {
     const loopback = await serve(check, server);
     expect((await fetch(`${loopback}/api/updates/server/auto`, { method: "POST", body: '{"on":true}' })).status).toBe(403);
     expect(asked).toEqual(["auto false"]);
+  });
+});
+
+describe("when a launcher can take over after an update", () => {
+  it("needs a launcher and a health check that tells the version, which a service's loopback trust hides (F4)", () => {
+    expect(launcherCanRestart({ SEIRA_LAUNCHER: "1" }, true)).toBe(true);
+    expect(launcherCanRestart({ SEIRA_LAUNCHER: "1" }, false)).toBe(false);
+    expect(launcherCanRestart({}, true)).toBe(false);
   });
 });

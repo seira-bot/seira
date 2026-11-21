@@ -2,11 +2,14 @@
 // backs up the data, starts the new copy, waits until that copy answers with its own version, and otherwise puts the data
 // back and keeps the old version. The code that rolls back is the code that already runs.
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 
 import {
-  backupData, changeAppState, readAppState, realDeps, restoreData, prune, runningCopy, validCopy,
+  backupData, backupFolder, changeAppState, readAppState, realDeps, restoreData, prune, runningCopy, validCopy,
   type AppUpdateDeps, type PendingApp,
 } from "./app-update.ts";
+import { RESTART_EXIT_CODE } from "./restart.ts";
 import { isNewerVersion } from "./update-check.ts";
 
 export const HANDOFF_ENV = "SEIRA_APP_HANDOFF";
@@ -123,16 +126,17 @@ export async function handoffAfterRestart(deps: HandoffDeps): Promise<number | n
       const { pending: _gone, ...rest } = s;
       return { ...rest, last: runFor(pending, "not-changed") };
     });
-    return null;
+    return runCurrent(deps, "restart");
   };
   const cli = validCopy(dataDir, { version: pending.to, dir: pending.dir });
   if (!cli || !isNewerVersion(pending.to, deps.own)) return drop();
-  const backup = await backupData(dataDir, pending.from, deps.app);
+  const earlier = pending.backup && dirname(resolve(pending.backup)) === resolve(backupFolder(dataDir)) && existsSync(pending.backup) ? pending.backup : undefined;
+  const backup = earlier ? { ok: true as const, file: earlier } : await backupData(dataDir, pending.from, deps.app);
   if (!backup.ok) {
     deps.log("The update was not started: the data could not be copied first. The server goes on with the version it had.");
     return drop();
   }
-  changeAppState(dataDir, (s) => ({ ...s, pending: { ...pending, backup: backup.file } }));
+  if (!earlier) changeAppState(dataDir, (s) => ({ ...s, pending: { ...pending, backup: backup.file } }));
   deps.log(`Starting version ${pending.to}. If it does not answer within ${Math.round((deps.healthWaitMs ?? HEALTH_WAIT_MS) / 60_000)} minutes, the server goes back to version ${deps.own}.`);
   const child = deps.start(cli, deps.argv, { ...deps.env, [HANDOFF_ENV]: "restart" });
   const signals = watchSignals(deps, child);
@@ -140,6 +144,7 @@ export async function handoffAfterRestart(deps: HandoffDeps): Promise<number | n
   void child.exited.then((code) => { exited = code; });
   const deadline = deps.now() + (deps.healthWaitMs ?? HEALTH_WAIT_MS);
   let healthy = false;
+  let ran: { code: number; stopped: boolean } | undefined;
   try {
     while (exited === undefined && !signals.stopped() && deps.now() < deadline) {
       if (await deps.health(deps.port) === pending.to) {
@@ -155,13 +160,17 @@ export async function handoffAfterRestart(deps: HandoffDeps): Promise<number | n
       });
       prune(dataDir, runningCopy(dataDir, deps.script));
       deps.log(`Version ${pending.to} answers. The update is done.`);
+      const code = await child.exited;
+      ran = { code, stopped: signals.stopped() };
+    } else if (signals.stopped()) {
       return await child.exited;
+    } else if (exited === undefined) {
+      await stopCopy(deps, child);
     }
-    if (signals.stopped()) return await child.exited;
-    if (exited === undefined) await stopCopy(deps, child);
   } finally {
     signals.dispose();
   }
+  if (ran) return afterCopy(deps, ran);
   deps.log(`Version ${pending.to} did not start well. Putting back the data from before the update.`);
   const restored = await restoreData(dataDir, backup.file, deps.app);
   changeAppState(dataDir, (s) => {
@@ -173,29 +182,43 @@ export async function handoffAfterRestart(deps: HandoffDeps): Promise<number | n
     return 1;
   }
   deps.log(`The data is as it was. What the new version wrote is kept in ${restored.aside}.`);
-  return null;
+  return runCurrent(deps, "restart");
 }
 
 /**
- * A fresh start. An update the server did not finish is finished first. Then a newer healthy copy in `<data dir>/app/`
- * runs in place of this version. Null: this version runs. The data is never put back here: the copy may have changed it.
+ * A copy ran to its end. A restart it asked for, with an update pending, is this launcher's to run: the copy's own
+ * launcher stops there, so launchers do not pile up. Any other end is the copy's exit code.
  */
-export async function handoffAtStart(deps: HandoffDeps): Promise<number | null> {
-  if (deps.env[HANDOFF_ENV]) return null;
-  if (readAppState(deps.dataDir).pending) {
-    const done = await handoffAfterRestart(deps);
-    if (done !== null) return done;
-  }
+async function afterCopy(deps: HandoffDeps, ran: { code: number; stopped: boolean }): Promise<number | null> {
+  if (ran.stopped || ran.code !== RESTART_EXIT_CODE || !readAppState(deps.dataDir).pending) return ran.code;
+  return handoffAfterRestart(deps);
+}
+
+/** Runs the newest copy that is newer than this version, and follows it. Null: no such copy, so this version runs. */
+async function runCurrent(deps: HandoffDeps, mode: "start" | "restart"): Promise<number | null> {
   const current = readAppState(deps.dataDir).current;
   if (!current || !isNewerVersion(current.version, deps.own)) return null;
   const cli = validCopy(deps.dataDir, current);
   if (!cli) return null;
   deps.log(`Starting version ${current.version}, the newest copy on this server.`);
-  const child = deps.start(cli, deps.argv, { ...deps.env, [HANDOFF_ENV]: "start" });
+  const child = deps.start(cli, deps.argv, { ...deps.env, [HANDOFF_ENV]: mode });
   const signals = watchSignals(deps, child);
+  let ran: { code: number; stopped: boolean };
   try {
-    return await child.exited;
+    ran = { code: await child.exited, stopped: signals.stopped() };
   } finally {
     signals.dispose();
   }
+  return afterCopy(deps, ran);
+}
+
+/**
+ * A fresh start of the first launcher. An update the server did not finish is finished first. Then a newer healthy copy
+ * in `<data dir>/app/` runs in place of this version. Null: this version runs. The data is never put back for the copy
+ * itself: it may have changed it.
+ */
+export async function handoffAtStart(deps: HandoffDeps): Promise<number | null> {
+  if (deps.env[HANDOFF_ENV]) return null;
+  if (readAppState(deps.dataDir).pending) return handoffAfterRestart(deps);
+  return runCurrent(deps, "start");
 }

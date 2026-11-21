@@ -624,7 +624,7 @@ from **Settings → AI → Providers** live on the data volume and survive eithe
 
 ### Paths A and C (npm with the service above): the same steps by hand
 
-An npm install updates itself at night (03:00 to 05:00 local time, no bot answering),
+An npm install updates itself at night (03:00 to 05:00 in the server's own time zone, no bot answering; many VPS run in UTC, so set `TZ` in the service environment to move the window),
 or when an admin presses **Update server**. The server keeps each new version in
 `app/<version>` in the data directory, and keeps the last two. It takes a copy of the
 data in `.backups/update` first, and goes back to the old version with the old data when

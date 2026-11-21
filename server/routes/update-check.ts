@@ -54,6 +54,11 @@ export function serverUpdateChecker(where: { desktopManaged: boolean; managed: b
   return createUpdateChecker({ current: serverVersion(), install: installKind({ ...where, serverRoot: SERVER_ROOT }), channel: updateChannel() });
 }
 
+/** A launcher started this server, and it can read the server's version from the health check to judge a new copy. */
+export function launcherCanRestart(env: NodeJS.ProcessEnv, loopbackOwner: boolean): boolean {
+  return env.SEIRA_LAUNCHER === "1" && loopbackOwner;
+}
+
 /** Both routes' parts for this server: one shared check, and the button where the install has one. */
 export function updateRouteDeps(where: {
   desktopManaged: boolean;
@@ -63,6 +68,8 @@ export function updateRouteDeps(where: {
   actor(auth: RequestAuth, req: IncomingMessage): AdminActor;
   /** Asks the server to stop with the restart exit code, which its launcher answers by starting the new copy. */
   restart(): void;
+  /** False when the launcher's health check cannot read the version of this server (loopback trust for a service). */
+  loopbackOwner: boolean;
   /** False in a test, so no timer starts. */
   schedule?: boolean;
 }): UpdateCheckRouteDeps {
@@ -72,7 +79,7 @@ export function updateRouteDeps(where: {
   const dir = process.env[SERVER_UPDATE_DIR_ENV]?.trim() || (install === "docker" ? SERVER_UPDATE_DIR : undefined);
   const server = createServerUpdater({
     dir, dataDir: where.dataDir, install, version: serverVersion(), check, activeTurns: where.activeTurns, followsStable: channel === "stable",
-    app: { launched: process.env.SEIRA_LAUNCHER === "1", restart: () => { setTimeout(where.restart, 1_000); }, running: runningCopy(where.dataDir, process.argv[1]) },
+    app: { launched: launcherCanRestart(process.env, where.loopbackOwner), restart: () => { setTimeout(where.restart, 1_000); }, running: runningCopy(where.dataDir, process.argv[1]) },
     auto: { admin: () => loadConfig().updates?.auto !== false, save: (on) => saveConfig({ updates: { auto: on } }) },
   });
   if (where.schedule !== false) startAutoUpdate({ status: () => server.status(), request: (actor) => server.request(actor), now: () => new Date(), failed: () => readAppState(where.dataDir).failed });

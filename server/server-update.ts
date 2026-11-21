@@ -14,7 +14,7 @@ import { join } from "node:path";
 
 import { AUTO_UPDATE_WINDOW, type ServerAutoUpdate, type ServerUpdateOutcome, type ServerUpdateReason, type ServerUpdateRun, type ServerUpdateStatus } from "../shared/server-update.ts";
 import { appendAdminAction, type AdminActor } from "./admin-activity.ts";
-import { prepareUpdate, readAppState, realDeps, type AppState, type AppUpdateDeps } from "./app-update.ts";
+import { changeAppState, prepareUpdate, readAppState, realDeps, type AppState, type AppUpdateDeps } from "./app-update.ts";
 import { isNewerVersion, updateCommand, type InstallKind, type UpdateCheck } from "./update-check.ts";
 
 /** Where a Docker install mounts the two folders (deploy/install.sh's compose.yaml, update-runner.sh's override):
@@ -220,6 +220,9 @@ export interface ServerUpdater {
   request(actor: AdminActor): Promise<{ status: number; body: Record<string, unknown> }>;
 }
 
+const IDLE_POLL_MS = 15_000;
+const IDLE_WAIT_MS = 20 * 60_000;
+
 export function createServerUpdater(options: {
   dir: string | undefined;
   dataDir: string;
@@ -230,7 +233,7 @@ export function createServerUpdater(options: {
   followsStable?: boolean;
   now?: () => number;
   /** An npm install updates itself. `launched`: a launcher of this version started this server and can take over after it. */
-  app?: { launched: boolean; restart(): void; deps?: AppUpdateDeps; running?: string };
+  app?: { launched: boolean; restart(): void; deps?: AppUpdateDeps; running?: string; sleep?(ms: number): Promise<void> };
   auto?: { admin(): boolean; save(on: boolean): void; env?: NodeJS.ProcessEnv };
 }): ServerUpdater {
   const now = options.now ?? Date.now;
@@ -252,7 +255,9 @@ export function createServerUpdater(options: {
     return answer;
   }
 
-  async function request(actor: AdminActor): Promise<{ status: number; body: Record<string, unknown> }> {
+  type Answer = { status: number; body: Record<string, unknown> };
+
+  async function request(actor: AdminActor): Promise<Answer & { settle?: () => Promise<Answer> }> {
     const current = await status();
     if (current.mode !== "button" || (!requestFile && options.install !== "npm")) {
       return { status: 409, body: { error: "This server can't be updated from the app.", code: "unavailable", status: current } };
@@ -287,22 +292,39 @@ export function createServerUpdater(options: {
     return { status: 202, body: { status: await status() } };
   }
 
-  async function requestApp(actor: AdminActor, current: ServerUpdateStatus): Promise<{ status: number; body: Record<string, unknown> }> {
+  async function requestApp(actor: AdminActor, current: ServerUpdateStatus): Promise<Answer & { settle?: () => Promise<Answer> }> {
     const app = options.app!;
     const to = current.latest ?? "";
-    const done = await prepareUpdate({ dataDir: options.dataDir, from: options.version, to, by: actor.kind === "automatic" ? "automatic" : "admin", running: app.running }, appDeps());
+    const automatic = actor.kind === "automatic";
+    const done = await prepareUpdate({ dataDir: options.dataDir, from: options.version, to, by: automatic ? "automatic" : "admin", running: app.running }, appDeps());
     if (!done.ok) {
       const code = done.reason === "busy" ? "running" : done.reason;
       return { status: 409, body: { error: "The update could not be started.", code, status: await status() } };
     }
-    appendAdminAction(options.dataDir, {
-      category: "config",
-      action: "update.server",
-      target: { kind: "server", name: `${options.version} → ${to}` },
-      actor,
-    });
-    app.restart();
-    return { status: 202, body: { status: await status() } };
+    const go = async (): Promise<Answer> => {
+      appendAdminAction(options.dataDir, {
+        category: "config",
+        action: "update.server",
+        target: { kind: "server", name: `${options.version} → ${to}` },
+        actor,
+      });
+      app.restart();
+      return { status: 202, body: { status: await status() } };
+    };
+    if (!automatic) return go();
+    // The install above takes minutes, and a bot may have started meanwhile: the restart stops its turn.
+    const settle = async (): Promise<Answer> => {
+      const sleep = app.sleep ?? ((ms: number) => new Promise<void>((resume) => setTimeout(resume, ms)));
+      const end = now() + IDLE_WAIT_MS;
+      while (options.activeTurns() > 0 && now() < end) await sleep(IDLE_POLL_MS);
+      if (options.activeTurns() === 0) return go();
+      changeAppState(options.dataDir, (state) => {
+        const { pending: _gone, ...rest } = state;
+        return { ...rest, last: { outcome: "not-changed", reason: "busy", from: options.version, at: now(), automatic: true, local: true } };
+      });
+      return { status: 409, body: { error: "The update waited for the bots to finish, but they kept working.", code: "busy", status: await status() } };
+    };
+    return { status: 202, body: { status: await status() }, settle };
   }
 
   async function setAuto(on: boolean, actor: AdminActor): Promise<ServerUpdateStatus> {
@@ -321,10 +343,11 @@ export function createServerUpdater(options: {
   return {
     status,
     setAuto,
-    request: (actor) => {
+    request: async (actor) => {
       const next = queue.then(() => request(actor));
       queue = next.catch(() => {});
-      return next;
+      const { settle, ...first } = await next;
+      return settle ? settle() : first;
     },
   };
 }

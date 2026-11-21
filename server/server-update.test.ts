@@ -237,13 +237,13 @@ describe("an npm install that updates itself", () => {
   const npmCheck: UpdateCheck = { current: "0.1.150", install: "npm", latest: "0.1.151", available: true, command: "npm install -g @seira-bot/seira@0.1.151", restart: true };
   const appDeps = (over: Partial<AppUpdateDeps> = {}): AppUpdateDeps => ({ ...realDeps(), now: () => NOW, exec: fakeNpmExec({}), npmOnPath: () => true, ...over });
 
-  function npm(options: { launched?: boolean; deps?: AppUpdateDeps; admin?: boolean; env?: NodeJS.ProcessEnv; now?: () => number } = {}) {
+  function npm(options: { launched?: boolean; deps?: AppUpdateDeps; admin?: boolean; env?: NodeJS.ProcessEnv; now?: () => number; turns?: () => number; sleep?: (ms: number) => Promise<void> } = {}) {
     const box = host();
     const restarts: string[] = [];
     const saved: boolean[] = [];
     const updater = createServerUpdater({
-      dir: undefined, dataDir: box.data, install: "npm", version: "0.1.150", check: async () => npmCheck, activeTurns: () => 0, now: options.now ?? (() => NOW),
-      app: { launched: options.launched ?? true, restart: () => restarts.push("restart"), deps: options.deps ?? appDeps() },
+      dir: undefined, dataDir: box.data, install: "npm", version: "0.1.150", check: async () => npmCheck, activeTurns: options.turns ?? (() => 0), now: options.now ?? (() => NOW),
+      app: { launched: options.launched ?? true, restart: () => restarts.push("restart"), deps: options.deps ?? appDeps(), ...(options.sleep ? { sleep: options.sleep } : {}) },
       auto: { admin: () => options.admin ?? true, save: (on) => saved.push(on), env: options.env ?? {} },
     });
     return { box, updater, restarts, saved };
@@ -282,6 +282,56 @@ describe("an npm install that updates itself", () => {
     expect(restarts).toEqual([]);
     expect(readAppState(box.data).pending).toBeUndefined();
     expect(await updater.request(admin)).toMatchObject({ status: 429 });
+  });
+
+  const automatic = { kind: "automatic" } as const;
+
+  it("waits for a bot that started during the install, then restarts (AC-02)", async () => {
+    let clock = NOW;
+    let turns = 1;
+    const waits: number[] = [];
+    const { box, updater, restarts } = npm({
+      now: () => clock, turns: () => turns,
+      sleep: async (ms) => { waits.push(ms); clock += ms; if (waits.length === 3) turns = 0; },
+    });
+    const answer = await updater.request(automatic);
+    expect(answer.status).toBe(202);
+    expect(waits).toEqual([15_000, 15_000, 15_000]);
+    expect(restarts).toEqual(["restart"]);
+    expect(readAppState(box.data).pending).toMatchObject({ by: "automatic" });
+  });
+
+  it("does not restart when a bot is still answering after 20 minutes: the copy stays, the update is not made (AC-02)", async () => {
+    let clock = NOW;
+    const { box, updater, restarts } = npm({ now: () => clock, turns: () => 1, sleep: async (ms) => { clock += ms; } });
+    const answer = await updater.request(automatic);
+    expect(answer).toMatchObject({ status: 409, body: { code: "busy" } });
+    expect(clock - NOW).toBeGreaterThanOrEqual(20 * 60_000);
+    expect(restarts).toEqual([]);
+    expect(readAppState(box.data).pending).toBeUndefined();
+    expect(readAppState(box.data).last).toMatchObject({ outcome: "not-changed", reason: "busy", automatic: true, local: true });
+    expect(existsSync(copyDir(box.data, "0.1.151"))).toBe(true);
+  });
+
+  it("does not wait for an admin's press: the dialog already warns about running turns", async () => {
+    const waits: number[] = [];
+    const { updater, restarts } = npm({ turns: () => 2, sleep: async (ms) => { waits.push(ms); } });
+    expect((await updater.request(admin)).status).toBe(202);
+    expect(waits).toEqual([]);
+    expect(restarts).toEqual(["restart"]);
+  });
+
+  it("shows the update as running while it waits, and an admin press is refused", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resume) => { release = resume; });
+    let turns = 1;
+    const { updater } = npm({ turns: () => turns, sleep: async () => { await gate; turns = 0; } });
+    const pending = updater.request(automatic);
+    await new Promise((resume) => setTimeout(resume, 50));
+    expect((await updater.status()).run).toMatchObject({ outcome: "running", automatic: true });
+    expect(await updater.request(admin)).toMatchObject({ status: 409, body: { code: "running" } });
+    release();
+    expect((await pending).status).toBe(202);
   });
 
   it("refuses a second press while the first runs", async () => {

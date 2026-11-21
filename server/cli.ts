@@ -28,6 +28,7 @@ import { reportableServerVersion, serverVersion } from "./environment.ts";
 import { resolveLoopbackTrust } from "./request-auth.ts";
 import { CRASH_EXIT_CODE, crashed, RESTART_EXIT_CODE, restartLine, restartPolicy } from "./restart.ts";
 import { HANDOFF_ENV, handoffAfterRestart, handoffAtStart, realHandoffDeps, type HandoffDeps } from "./app-handoff.ts";
+import { readAppState } from "./app-update.ts";
 import { writeFileAtomic } from "./atomic.ts";
 import { ensureCaddy, normalizeDomainOption, startCaddy, type RunningCaddy } from "./caddy.ts";
 import { runServiceCommand } from "./service-cli.ts";
@@ -656,6 +657,7 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
     SEIRA_WEBHOOK_PORT: process.env.SEIRA_WEBHOOK_PORT || String(options.port + 1), ...(options.relay ? { SEIRA_PHONE_RELAY: "1" } : {}),
     SEIRA_LAUNCHER: "1",
   };
+  delete env[HANDOFF_ENV];
   if (options.local) delete env.SEIRA_PUBLIC_URL;
   // The per-launch secret goes over stdin, not the environment that every engine the server starts inherits.
   const serviceTrust = resolveLoopbackTrust({ env, desktopManaged: false, hostedWorkspace: hostedWorkspaceConfigured(env) }).trust === "service";
@@ -845,11 +847,15 @@ export async function serveUntilStopped(
 ): Promise<number> {
   const policy = restartPolicy(now);
   let launch = handoff.env[HANDOFF_ENV] === "restart" ? { ...options, pair: false, open: false } : options;
-  const started = await handoffAtStart(handoff);
-  if (started !== null) return started;
+  const nested = Boolean(handoff.env[HANDOFF_ENV]);
+  if (!nested) {
+    const started = await handoffAtStart(handoff);
+    if (started !== null) return started;
+  }
   for (;;) {
     const code = await run(launch);
-    if (code === RESTART_EXIT_CODE) {
+    if (code === RESTART_EXIT_CODE && readAppState(options.dataDir).pending) {
+      if (nested) return code;
       const handed = await handoffAfterRestart(handoff);
       if (handed !== null) return handed;
     }

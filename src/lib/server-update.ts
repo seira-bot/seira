@@ -126,6 +126,7 @@ const LOCAL_REASON_TEXT: Partial<Record<ServerUpdateReason, LocaleKey>> = {
   "no-updater": "serverUpdate.local.reason.noUpdater",
   older: "serverUpdate.local.reason.older",
   failed: "serverUpdate.local.reason.failed",
+  busy: "serverUpdate.local.reason.busy",
 };
 
 function localReasonText(reason: ServerUpdateReason, status: ServerUpdateStatus): string {
