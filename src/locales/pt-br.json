@@ -2839,6 +2839,8 @@
   "composer.mention.allMany": "Todos os {count} bots",
   "composer.mention.devs": "Desenvolvedores",
   "composer.mention.devsDesc": "Relatar um problema ao Seira",
+  "composer.mention.app": "App",
+  "composer.mention.mcp": "Servidor MCP",
   "devs.report.received": "Relato de problema enviado · Recebemos e estamos analisando",
   "devs.report.fixedSoon": "Relato de problema · Corrigido, a correção chega em uma atualização",
   "devs.report.fixedComing": "Relato de problema · Corrigido na versão {version}, que chega na próxima atualização",
