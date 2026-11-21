@@ -59,6 +59,7 @@ export interface ImportPorts {
     files(botId: string, name: string): SkillFolderFile[] | null;
     /** Installs the skill switched off. `flagged`: the safety scan found something to review. */
     install(botId: string, source: string, files: SkillFolderFile[]): { name: string; hash: string; flagged: boolean } | { error: string };
+    enabled(botId: string, name: string): boolean;
     enable(botId: string, name: string): void;
     remove(botId: string, name: string): void;
   };
@@ -152,6 +153,7 @@ export function createStorePorts(store: Store, deps: StorePortDeps): ImportPorts
         if ("error" in listing) return listing;
         return { name: listing.name, hash: listing.sha256, flagged: listing.warnings.length > 0 };
       },
+      enabled: (botId, name) => listSkills(botId).find((skill) => skill.name === name)?.enabled ?? false,
       enable: (botId, name) => { setSkillEnabled(botId, name, true); },
       remove: (botId, name) => { removeSkill(botId, name); },
     },

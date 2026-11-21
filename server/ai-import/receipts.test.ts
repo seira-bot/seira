@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { AI_IMPORT_LIMITS } from "../../shared/ai-import/limits.ts";
-import { listSkills } from "../skills.ts";
+import { listSkills, setSkillEnabled } from "../skills.ts";
 import { applyFastLane } from "./apply.ts";
 import { sha256, stableId } from "./ids.ts";
 import { expireReceipts, undoJob } from "./receipts.ts";
@@ -117,6 +117,7 @@ describe("receipts", () => {
       memory: env.ports.memory.read(botId),
       topic: env.ports.memory.readTopic(botId, TOPIC),
       skill: env.ports.skills.hash(botId, "tidy-notes"),
+      skillOn: env.ports.skills.enabled(botId, "tidy-notes"),
       servers: structuredClone(env.mcpServers),
       routines: [...env.routines.entries()].map(([id, routine]) => [id, routine.prompt]),
       messages: stored(botId, "keep")?.messages,
@@ -148,9 +149,26 @@ describe("receipts", () => {
     expect(env.ports.memory.read(botId)).toBe(snapshot.memory);
     expect(env.ports.memory.readTopic(botId, TOPIC)).toBe(snapshot.topic);
     expect(env.ports.skills.hash(botId, "tidy-notes")).toBe(snapshot.skill);
+    expect(snapshot.skillOn).toBe(true);
+    expect(env.ports.skills.enabled(botId, "tidy-notes")).toBe(true);
     expect(env.mcpServers).toEqual(snapshot.servers);
     expect([...env.routines.entries()].map(([id, routine]) => [id, routine.prompt])).toEqual(snapshot.routines);
     expect(env.db.receipts("job-2")).toEqual([]);
+  });
+
+  it("re-import keeps a skill off", async () => {
+    const first = await runImport(env, { agents: [fullAgent(env)], chats: spool("a1", []) });
+    const botId = first.botId;
+    setSkillEnabled(botId, "tidy-notes", false);
+    const hash = env.ports.skills.hash(botId, "tidy-notes");
+
+    await runImport(env, { jobId: "job-2", agents: [fullAgent(env, { version: 2 })], chats: spool("a1", []), destinations: { a1: { kind: "bot", botId } } });
+
+    expect(env.ports.skills.hash(botId, "tidy-notes")).not.toBe(hash);
+    expect(env.ports.skills.enabled(botId, "tidy-notes")).toBe(false);
+    undoJob(env.db, "job-2", env.ports);
+    expect(env.ports.skills.hash(botId, "tidy-notes")).toBe(hash);
+    expect(env.ports.skills.enabled(botId, "tidy-notes")).toBe(false);
   });
 
   it("undo keeps changed items", async () => {

@@ -17,7 +17,7 @@ import { MEMORY_ENTRY_MAX_CHARS, MEMORY_MAX_BYTES, MEMORY_MAX_LINES, memoryEntry
 import type { ApplyCursor, Fingerprint, FingerprintKey, ImportDb, Receipt, ReceiptKind } from "./db.ts";
 import { hashOf, sha256, stableId } from "./ids.ts";
 import type { ImportPorts } from "./ports.ts";
-import { conversationHash, currentHash, decide } from "./receipts.ts";
+import { conversationHash, currentHash, decide, restoreSkill } from "./receipts.ts";
 import { CHATS_FILE, type SpoolLine } from "./spool.ts";
 
 export const CHAT_BATCH = AI_IMPORT_LIMITS.chatBatchMessages;
@@ -422,10 +422,10 @@ function applySkills(ctx: ApplyContext, agent: ImportAgent, botId: string, lefto
       leave(skill);
       continue;
     }
-    const install = (name: string): { target: Target } | null => {
+    const install = (name: string, on: boolean): { target: Target } | null => {
       const installed = ctx.ports.skills.install(botId, `import:${ctx.source.kind}`, name === named ? files : renameSkill(files, name));
       if ("error" in installed) return null;
-      if (!installed.flagged) ctx.ports.skills.enable(botId, installed.name);
+      if (on && !installed.flagged) ctx.ports.skills.enable(botId, installed.name);
       return { target: { botId, name: installed.name, flagged: installed.flagged } };
     };
     let failed = false;
@@ -440,21 +440,22 @@ function applySkills(ctx: ApplyContext, agent: ImportAgent, botId: string, lefto
         const name = keepBoth || taken(named)
           ? freeName(taken, named, (base, n) => `${base.slice(0, SKILL_NAME_MAX - String(n).length - 1)}-${n}`)
           : named;
-        const out = install(name);
+        const out = install(name, true);
         failed = !out;
         return out;
       },
       update: (target) => {
         const name = text(target.name);
-        const before = ctx.ports.skills.files(botId, name);
+        const files = ctx.ports.skills.files(botId, name);
+        const enabled = ctx.ports.skills.enabled(botId, name);
         ctx.ports.skills.remove(botId, name);
-        const out = install(name);
+        const out = install(name, enabled);
         if (!out) {
-          if (before) ctx.ports.skills.install(botId, `import:${ctx.source.kind}`, before);
+          if (files) restoreSkill(ctx.ports, botId, { files, enabled });
           failed = true;
           return null;
         }
-        return { ...out, before };
+        return { ...out, before: files && { files, enabled } };
       },
     });
     if (failed) leave(skill);

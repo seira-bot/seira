@@ -61,6 +61,12 @@ export function currentHash(kind: ReceiptKind, target: Record<string, unknown>, 
   }
 }
 
+/** Puts back a skill as it was before an import changed it, switched on only if it was on. */
+export function restoreSkill(ports: ImportPorts, botId: string, before: { files: SkillFolderFile[]; enabled: boolean }): void {
+  const installed = ports.skills.install(botId, "import", before.files);
+  if (before.enabled && !("error" in installed)) ports.skills.enable(botId, installed.name);
+}
+
 /** Removes what a job added and restores what it updated. With `force`, a changed item goes too (used to roll back a failed job). */
 export function undoJob(db: ImportDb, jobId: string, ports: ImportPorts, options: { force?: boolean } = {}): ImportUndoResult {
   const result: ImportUndoResult = { removed: 0, restored: 0, kept: [] };
@@ -122,8 +128,8 @@ export function undoJob(db: ImportDb, jobId: string, ports: ImportPorts, options
       }
       case "skill": {
         ports.skills.remove(botId, text(target.name));
-        const before = receipt.before as SkillFolderFile[] | null;
-        if (!added && before) ports.skills.install(botId, "import", before);
+        const before = receipt.before as { files: SkillFolderFile[]; enabled: boolean } | null;
+        if (!added && before) restoreSkill(ports, botId, before);
         break;
       }
       case "tool": {
