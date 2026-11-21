@@ -1,6 +1,6 @@
-import { SettingsFoldRow, SettingsRows } from "../SettingsPrimitives";
+import { SettingsFoldRow, SettingsLinkRow, SettingsMark, SettingsRows } from "../SettingsPrimitives";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { ChevronRight, Search } from "lucide-react";
+import { AudioLines, Blocks, ChevronRight, Image, Monitor, Route, Search, Server, Sparkles, type LucideIcon } from "lucide-react";
 import { useStore, type ConfigStatus } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { scrollParent, scrollWithin } from "@/lib/scroll-within";
@@ -10,12 +10,16 @@ import { VoiceEveryReplySetting } from "../VoiceEveryReplySetting";
 import { BuiltInReplyWait, LmStudioServer, OtherOpenAiCompatServers } from "../OpenAiCompatServers";
 import { OllamaServer } from "../OllamaServer";
 import { KEY_CATALOG, KEY_SECTIONS, keyHidden, keyMatches, savedState, type KeyEntry, type KeyId, type KeySectionId } from "./key-catalog";
-import { finishKeyFocus, useKeyFocus, type KeyFocusRequest } from "./key-focus";
+import { finishKeyFocus, openKeySettings, useKeyFocus, type KeyFocusRequest } from "./key-focus";
 import { AnthropicEveryClaudeBot, OpenAiCompatUrl, OpenCodeProviderKeys, VpsConnection } from "./KeyPanels";
 import { KEY_CONTENT, KEY_ROW, KeyRow, MaskedKey, RowHeading, type KeyStatus } from "./KeyRow";
 
 const CARD = "rounded-xl bg-card in-data-[settings-look=simple]:rounded-[12px] in-data-[settings-look=simple]:border-[0.5px] in-data-[settings-look=simple]:border-(--settings-edge) in-data-[settings-look=simple]:bg-menu";
 const HIGHLIGHT_MS = 1600;
+
+const SECTION_ICONS: Record<KeySectionId, LucideIcon> = {
+  ai: Sparkles, servers: Server, voice: AudioLines, computers: Monitor, apps: Blocks, routing: Route, images: Image,
+};
 
 const PANELS: Partial<Record<KeyId, (visible: boolean) => ReactNode>> = {
   opencodeProviders: () => <OpenCodeProviderKeys />,
@@ -49,9 +53,12 @@ function PanelRow({ entry, visible }: { entry: KeyEntry; visible: boolean }) {
   );
 }
 
+/** A key whose field is somewhere else: a Live calls row that uses the OpenAI key, or a login kept in Vault. Its Open
+ * button goes to that field, so the same key never has two fields. */
 function ElsewhereRow({ entry }: { entry: KeyEntry }) {
   const { state, dispatch } = useStore();
   const titleId = useId();
+  const uses = entry.uses;
   const opens = entry.opens;
   const saved = savedState(entry, state.config);
   const status: KeyStatus = saved.configured ? { tone: "ok", text: t("keys.connected") } : null;
@@ -62,8 +69,9 @@ function ElsewhereRow({ entry }: { entry: KeyEntry }) {
         {saved.configured && <div className="flex"><MaskedKey saved={saved} label={t(entry.labelKey)} /></div>}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           {entry.whereKey && <span className="min-w-0 flex-1 text-[12px] leading-4 text-ink-secondary">{t(entry.whereKey)}</span>}
-          {opens && (
-            <button type="button" data-key-open className="ui-button shrink-0" onClick={() => dispatch({ type: "toggleAppSettings", open: true, section: opens })}>
+          {(uses || opens) && (
+            <button type="button" data-key-open className="ui-button shrink-0"
+              onClick={() => dispatch(uses ? openKeySettings(uses) : { type: "toggleAppSettings", open: true, section: opens! })}>
               {t("keys.row.open")}
             </button>
           )}
@@ -74,15 +82,15 @@ function ElsewhereRow({ entry }: { entry: KeyEntry }) {
 }
 
 export function KeyCatalogRow({ entry, visible }: { entry: KeyEntry; visible: boolean }) {
-  if (entry.kind === "uses" && entry.uses) return <KeyRow id={entry.uses} row={entry.id} />;
   if (entry.kind === "panel") return <PanelRow entry={entry} visible={visible} />;
-  if (entry.kind === "elsewhere") return <ElsewhereRow entry={entry} />;
+  if (entry.kind === "elsewhere" || entry.kind === "uses") return <ElsewhereRow entry={entry} />;
   return <KeyRow id={entry.id}>{EXTRAS[entry.id]?.()}</KeyRow>;
 }
 
 function KeySection({ id, rows, open, onToggle }: { id: KeySectionId; rows: KeyEntry[]; open: boolean; onToggle: () => void }) {
-  const { state } = useStore();
+  const { state, dispatch } = useStore();
   const section = KEY_SECTIONS.find((candidate) => candidate.id === id)!;
+  const opens = section.opens;
   const headId = useId();
   const bodyId = useId();
   const count = rows.filter((entry) => connected(entry, state.config)).length;
@@ -90,9 +98,10 @@ function KeySection({ id, rows, open, onToggle }: { id: KeySectionId; rows: KeyE
     <section data-keys-section={id} aria-labelledby={headId} className={CARD}>
       <button
         type="button"
-        aria-expanded={open}
-        aria-controls={bodyId}
-        onClick={onToggle}
+        aria-expanded={opens ? undefined : open}
+        aria-controls={opens ? undefined : bodyId}
+        data-keys-opens={opens}
+        onClick={opens ? () => dispatch({ type: "toggleAppSettings", open: true, section: opens }) : onToggle}
         className="flex w-full cursor-pointer items-center gap-3 rounded-[inherit] px-4 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/60"
       >
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -100,12 +109,12 @@ function KeySection({ id, rows, open, onToggle }: { id: KeySectionId; rows: KeyE
           <span className="text-[13px] leading-[18px] text-ink-secondary">{t(section.purposeKey)}</span>
         </span>
         {count > 0 && <span className="shrink-0 text-[12px] leading-4 text-ink-secondary">{t("keys.section.connected", { count })}</span>}
-        <ChevronRight size={14} aria-hidden="true" className={cn("shrink-0 text-ink-secondary transition-transform motion-reduce:transition-none", open && "rotate-90")} />
+        <ChevronRight size={14} aria-hidden="true" className={cn("shrink-0 text-ink-secondary transition-transform motion-reduce:transition-none", open && !opens && "rotate-90")} />
       </button>
-      <div id={bodyId} hidden={!open} className="flex flex-col gap-0.5 border-t border-hairline/40 px-1 py-1.5 in-data-[settings-look=simple]:border-t-[0.5px] in-data-[settings-look=simple]:border-(--settings-edge)">
+      {!opens && <div id={bodyId} hidden={!open} className="flex flex-col gap-0.5 border-t border-hairline/40 px-1 py-1.5 in-data-[settings-look=simple]:border-t-[0.5px] in-data-[settings-look=simple]:border-(--settings-edge)">
         {rows.map((entry) => <KeyCatalogRow key={entry.id} entry={entry} visible={open} />)}
         {id === "voice" && <VoiceEveryReplySetting />}
-      </div>
+      </div>}
     </section>
   );
 }
@@ -125,7 +134,7 @@ function landOn(page: HTMLElement | null, request: KeyFocusRequest, section: Key
 /** `bare`: inside AI's Other services, every section is a fold row in one card; `exclude`: sections listed elsewhere
  * (AI providers are AI's own Providers list), unless a search or a link asks for a key in one. */
 export function KeysPage({ bare = false, exclude = [] }: { bare?: boolean; exclude?: KeySectionId[] } = {}) {
-  const { state } = useStore();
+  const { state, dispatch } = useStore();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<ReadonlySet<KeySectionId>>(() => new Set(
     KEY_SECTIONS.filter((section) => section.id === "ai" || KEY_CATALOG.some((entry) => entry.section === section.id && connected(entry, state.config)))
@@ -166,15 +175,24 @@ export function KeysPage({ bare = false, exclude = [] }: { bare?: boolean; exclu
   if (bare) {
     return (
       <div ref={pageRef} data-keys-page="">
-        {/* The key rows inside lead with their provider's mark, so every row of this card keeps the 32 px slot column
-            (empty on the fold rows), and the card has one text edge and one divider inset (§6.5). */}
+        {/* Every row of this card leads with a mark in the 32 px slot column (the section's icon on the fold rows, the
+            provider's mark on the key rows), so the card has one text edge and one divider inset (§6.5). */}
         <SettingsRows icons>
           {sections.map(({ id, rows: sectionRows }) => {
             const section = KEY_SECTIONS.find((candidate) => candidate.id === id)!;
             const count = sectionRows.filter((entry) => connected(entry, state.config)).length;
+            const Icon = SECTION_ICONS[id];
+            const value = count > 0 ? t("keys.section.connected", { count }) : undefined;
+            const opens = section.opens;
+            if (opens) {
+              return (
+                <SettingsLinkRow key={id} title={t(section.titleKey)} subtitle={t(section.purposeKey)} leading={<SettingsMark><Icon /></SettingsMark>} value={value}
+                  onClick={() => dispatch({ type: "toggleAppSettings", open: true, section: opens })} data={{ "data-keys-section": id, "data-keys-opens": opens }} />
+              );
+            }
             return (
-              <SettingsFoldRow key={id} id={`keys-${id}`} title={t(section.titleKey)} subtitle={t(section.purposeKey)} leading={<span aria-hidden="true" />}
-                value={count > 0 ? t("keys.section.connected", { count }) : undefined} open={open.has(id)} onToggle={() => toggle(id)}>
+              <SettingsFoldRow key={id} id={`keys-${id}`} title={t(section.titleKey)} subtitle={t(section.purposeKey)} leading={<SettingsMark><Icon /></SettingsMark>}
+                value={value} open={open.has(id)} onToggle={() => toggle(id)}>
                 <div data-keys-section={id} className="flex flex-col gap-0.5 py-1.5">
                   {sectionRows.map((entry) => <KeyCatalogRow key={entry.id} entry={entry} visible={open.has(id)} />)}
                   {id === "voice" && <VoiceEveryReplySetting />}

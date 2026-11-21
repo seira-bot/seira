@@ -7340,8 +7340,6 @@
   "keys.section.computers.purpose": "雲端桌面、你自己的伺服器和網站登入資訊。",
   "keys.section.apps": "應用程式與工具",
   "keys.section.apps.purpose": "已連線的應用程式和研究。",
-  "keys.section.helpers": "輔助工具與圖片",
-  "keys.section.helpers.purpose": "為機器人分類整理的小型模型，以及頭像圖片。",
   "keys.section.connected": "已連接 {count} 個",
   "keys.purpose.openai": "OpenAI 的模型和即時通話",
   "keys.purpose.anthropic": "Claude 模型，依 token 計費",

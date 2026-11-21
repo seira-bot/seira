@@ -116,6 +116,14 @@ export async function editLocal(id: string, changes: { name: string } | { color:
   return answer.outcome === "saved" || answer.outcome === "name" || answer.outcome === "taken" ? answer.outcome : "failed";
 }
 
+/** A server's new name, from its circle's menu: main saves it in this app's own record and the list refreshes. */
+export async function renameServer(id: string, name: string): Promise<"saved" | "name" | "taken" | "failed"> {
+  const answer = await bridge()?.rename?.(id, name).catch(() => null);
+  if (!answer) return "failed";
+  if (answer.outcome === "saved") void refreshPlaces();
+  return answer.outcome === "saved" || answer.outcome === "name" || answer.outcome === "taken" ? answer.outcome : "failed";
+}
+
 /** Removes a workspace from this computer, once the person said yes in its circle's menu. */
 export async function removeLocal(id: string): Promise<"removed" | "failed"> {
   const answer = await bridge()?.local?.remove(id).catch(() => null);

@@ -6835,8 +6835,6 @@
   "keys.section.computers.purpose": "클라우드 데스크톱, 내 서버, 웹사이트 로그인이에요.",
   "keys.section.apps": "앱과 도구",
   "keys.section.apps.purpose": "연결된 앱과 리서치예요.",
-  "keys.section.helpers": "도우미와 사진",
-  "keys.section.helpers.purpose": "봇을 위해 분류해 주는 작은 모델과 아바타 사진이에요.",
   "keys.section.connected": "{count}개 연결됨",
   "keys.purpose.openai": "OpenAI 모델과 실시간 통화",
   "keys.purpose.anthropic": "Claude 모델, 토큰 단위 청구",

@@ -7298,8 +7298,6 @@
   "keys.section.computers.purpose": "云端桌面、你自己的服务器和网站登录信息。",
   "keys.section.apps": "应用与工具",
   "keys.section.apps.purpose": "已连接的应用与调研。",
-  "keys.section.helpers": "小助手与图片",
-  "keys.section.helpers.purpose": "为机器人整理内容的小模型，以及头像图片。",
   "keys.section.connected": "已连接 {count} 项",
   "keys.purpose.openai": "OpenAI 的模型与实时通话",
   "keys.purpose.anthropic": "Claude 模型，按 token 计费",

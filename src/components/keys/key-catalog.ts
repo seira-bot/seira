@@ -9,15 +9,17 @@ import type { ProviderIconPreset } from "../../../shared/provider-icon";
 import type { BrandId } from "../BrandMarks";
 import { MODELGO_URL } from "../../../shared/modelgo";
 
-export type KeySectionId = "ai" | "servers" | "voice" | "computers" | "apps" | "helpers";
+export type KeySectionId = "ai" | "servers" | "voice" | "computers" | "apps" | "routing" | "images";
 
-export const KEY_SECTIONS: ReadonlyArray<{ id: KeySectionId; titleKey: LocaleKey; purposeKey: LocaleKey }> = [
+/** `opens`: the section's keys have their fields on that part of Settings, so the keys page links there and shows no field of its own. */
+export const KEY_SECTIONS: ReadonlyArray<{ id: KeySectionId; titleKey: LocaleKey; purposeKey: LocaleKey; opens?: AppSettingsSection }> = [
   { id: "ai", titleKey: "keys.section.ai", purposeKey: "keys.section.ai.purpose" },
   { id: "servers", titleKey: "keys.section.servers", purposeKey: "keys.section.servers.purpose" },
   { id: "voice", titleKey: "keys.section.voice", purposeKey: "keys.section.voice.purpose" },
   { id: "computers", titleKey: "keys.section.computers", purposeKey: "keys.section.computers.purpose" },
   { id: "apps", titleKey: "keys.section.apps", purposeKey: "keys.section.apps.purpose" },
-  { id: "helpers", titleKey: "keys.section.helpers", purposeKey: "keys.section.helpers.purpose" },
+  { id: "routing", titleKey: "settings.ai.routing", purposeKey: "keys.section.routing.purpose", opens: "decisionModel" },
+  { id: "images", titleKey: "settings.ai.images", purposeKey: "keys.section.images.purpose", opens: "imageGeneration" },
 ];
 
 export type TestableProvider = "anthropic" | "openai" | "openrouter" | "openaiCompat" | "xai" | "mistral" | "cerebras" | "groq" | "greenference" | "modelgo" | "meta" | "treg";
@@ -178,34 +180,34 @@ export const KEY_CATALOG: readonly KeyEntry[] = [
     words: ["treg", "research", "x", "twitter", "companies", "people", "funding", "news"], mark: { icon: Search }, kind: "key",
     target: { ...providerKey("treg", { slot: "tregApiKey", placeholder: "…", placeholderKey: "keys.treg.placeholder", href: "https://treg.to", test: "treg", analytics: "treg" }),
       saved: (config) => ({ ...flag(config.treg), ...(config.xResearch?.included && !config.treg?.configured ? { included: true } : {}) }) } },
-  { id: "jev", section: "helpers", labelKey: "decider.key.label", purposeKey: "keys.purpose.jev", name: "Jev", env: ["SEIRA_JEV_API_KEY"],
+  { id: "jev", section: "routing", labelKey: "decider.key.label", purposeKey: "keys.purpose.jev", name: "Jev", env: ["SEIRA_JEV_API_KEY"],
     words: ["jev", "typesafe", "decisions", "extraction", "helper", "rooms"], mark: { icon: Zap }, kind: "key",
     target: { patch: (value) => ({ decider: { key: value } }), slot: "jevApiKey", verifiedOnSave: true,
       saved: (config) => ({ ...flag(config.savedKeys?.jevApiKey ?? { configured: config.helpers?.own.jev === true }), ...(config.decider?.included ? { included: true } : {}) }),
       placeholder: "…", placeholderKey: "decider.key.placeholder", href: "https://typesafe.ai", analytics: "jev" } },
-  { id: "openrouterHelper", section: "helpers", labelKey: "keys.label.openrouterHelper", purposeKey: "keys.purpose.openrouterHelper", name: "OpenRouter", env: ["SEIRA_OPENROUTER_DECIDER_KEY"],
+  { id: "openrouterHelper", section: "routing", labelKey: "keys.label.openrouterHelper", purposeKey: "keys.purpose.openrouterHelper", name: "OpenRouter", env: ["SEIRA_OPENROUTER_DECIDER_KEY"],
     words: ["openrouter", "decisions", "helper"], mark: provider("openai-compat", "openrouter"), kind: "key",
     target: { patch: (value) => ({ decider: { openrouterKey: value } }), slot: "openrouterDeciderKey", verifiedOnSave: true,
       saved: (config) => flag(config.savedKeys?.openrouterDeciderKey ?? { configured: config.helpers?.own.openrouter === true }),
       placeholder: "sk-or-v1-…", href: "https://openrouter.ai/keys", analytics: "openrouter_decider", shape: /^sk-or-/ } },
-  { id: "workersAi", section: "helpers", labelKey: "decider.workersAi.title", purposeKey: "keys.purpose.workersAi", name: "Cloudflare", env: ["SEIRA_WORKERS_AI_TOKEN"],
+  { id: "workersAi", section: "routing", labelKey: "decider.workersAi.title", purposeKey: "keys.purpose.workersAi", name: "Cloudflare", env: ["SEIRA_WORKERS_AI_TOKEN"],
     words: ["cloudflare", "workers ai", "clef", "clairic", "decisions", "helper"], mark: { icon: Zap }, kind: "elsewhere",
     opens: "decisionModel", whereKey: "keys.where.decisions",
     status: (config) => flag(config.savedKeys?.workersAiToken ?? { configured: config.helpers?.own.workersAi === true }) },
-  { id: "customDecider", section: "helpers", labelKey: "decider.custom.key.label", purposeKey: "keys.purpose.customDecider", name: "Custom endpoint", env: ["SEIRA_CUSTOM_DECIDER_KEY"],
+  { id: "customDecider", section: "routing", labelKey: "decider.custom.key.label", purposeKey: "keys.purpose.customDecider", name: "Custom endpoint", env: ["SEIRA_CUSTOM_DECIDER_KEY"],
     words: ["custom", "endpoint", "gateway", "system one", "decisions", "helper"], mark: { icon: Zap }, kind: "elsewhere",
     opens: "decisionModel", whereKey: "keys.where.decisions",
     status: (config) => flag(config.savedKeys?.customDeciderKey ?? { configured: false }) },
-  { id: "imageOpenai", section: "helpers", labelKey: "keys.label.imageOpenai", purposeKey: "keys.purpose.imageOpenai", name: "OpenAI", env: ["SEIRA_OPENAI_IMAGE_KEY"],
+  { id: "imageOpenai", section: "images", labelKey: "keys.label.imageOpenai", purposeKey: "keys.purpose.imageOpenai", name: "OpenAI", env: ["SEIRA_OPENAI_IMAGE_KEY"],
     words: ["openai", "image", "images", "pictures", "avatar", "gpt image"], mark: { icon: Image }, kind: "key",
     target: { patch: (value) => ({ imageGen: { key: value } }), slot: "openaiImageApiKey",
       saved: (config) => flag(config.savedKeys?.openaiImageApiKey ?? { configured: config.imageGen?.openaiConfigured === true }),
       placeholder: "sk-…", href: "https://platform.openai.com/api-keys", analytics: "openai_image", shape: OPENAI_SHAPE } },
-  { id: "imageGemini", section: "helpers", labelKey: "keys.label.imageGemini", purposeKey: "keys.purpose.imageGemini", name: "Gemini", env: ["SEIRA_GEMINI_IMAGE_KEY"],
+  { id: "imageGemini", section: "images", labelKey: "keys.label.imageGemini", purposeKey: "keys.purpose.imageGemini", name: "Gemini", env: ["SEIRA_GEMINI_IMAGE_KEY"],
     words: ["gemini", "google", "nano banana", "image", "images", "pictures"], mark: { icon: Image }, kind: "elsewhere",
     opens: "imageGeneration", whereKey: "keys.where.imageGeneration",
     status: (config) => flag(config.savedKeys?.geminiImageApiKey ?? { configured: config.imageGen?.geminiConfigured === true }) },
-  { id: "imageCustom", section: "helpers", labelKey: "keys.label.imageCustom", purposeKey: "keys.purpose.imageCustom", name: "Custom", env: ["SEIRA_CUSTOM_IMAGE_KEY"],
+  { id: "imageCustom", section: "images", labelKey: "keys.label.imageCustom", purposeKey: "keys.purpose.imageCustom", name: "Custom", env: ["SEIRA_CUSTOM_IMAGE_KEY"],
     words: ["image", "images", "pictures", "avatar", "custom"], mark: { icon: Fingerprint }, kind: "elsewhere",
     opens: "imageGeneration", whereKey: "keys.where.imageGeneration",
     status: (config) => flag(config.savedKeys?.customImageApiKey ?? { configured: config.imageGen?.customKeyConfigured === true }) },
@@ -257,8 +259,9 @@ export function savedState(entry: KeyEntry, config: ConfigStatus | null | undefi
 }
 
 /** With Azure, a custom endpoint, Fish Audio, Gemini or ElevenLabs chosen, Live calls do not use the OpenAI key the Live calls row points at, so that row is
- * hidden. */
+ * hidden. With X research connected, the X card in Apps holds the treg key, so its row here is hidden too. */
 export function keyHidden(id: KeyId, config: ConfigStatus | null | undefined): boolean {
+  if (id === "treg") return config?.treg?.configured === true || config?.xResearch?.included === true;
   const provider = config?.live?.provider;
   return id === "liveCalls" && (provider === "azure" || provider === "custom" || provider === "fish" || provider === "gemini" || provider === "elevenlabs");
 }

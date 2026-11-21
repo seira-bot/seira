@@ -208,6 +208,9 @@ const __APP_VERSION__: string;
         /** Remove from list: a Cloud the window's rail lists as `removable`, by its circle's id, once the person said yes on
          * the rail's own page (refused on any other page). Absent on an older app. */
         remove?: (id: string) => Promise<{ outcome: import("../../electron/cloud-account.mjs").CloudRemoveOutcome }>;
+        /** A new name for a server saved by hand, which the rail lists with `forget`, by its circle's id, from the person's
+         * click on the rail's own page (refused on any other page). Absent on an older app. */
+        rename?: (id: string, name: string) => Promise<{ outcome: "saved" | "name" | "taken" | "gone" | "failed" | "unsupported" }>;
         /** Make a server of the person's own, which the rail lists with `makeHome`, their bots' home: the move starts. */
         makeHome?: (id: string) => Promise<{ started: true }>;
         /** The ids of the servers main offers Make … my home for now (none once a move is done). Absent on an older app. */
@@ -268,6 +271,8 @@ const __APP_VERSION__: string;
             cloud?: { id: string; role: string };
           }>;
         }>;
+        /** A new name for a server saved by hand, on this computer's own page. Absent on an older app. */
+        rename?: (id: string, name: string) => Promise<{ outcome: "saved" | "name" | "taken" | "gone" | "failed" }>;
         /** Local targets answer {ok, error?} (error strings are an open set); remote ones answer nothing. */
         switch: (id: string) => Promise<{ ok: boolean; error?: string } | void>;
         addFromLink: (link: string, name?: string) => Promise<boolean | void>;

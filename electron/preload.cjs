@@ -189,6 +189,9 @@ const bridge = {
     // Remove from list, for a Cloud the window's rail lists as removable, from a click on the rail's own page (main refuses any other page).
     remove: (id) => isLocalPage || navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("workspaces:remove", String(id)) : Promise.reject(new Error("Choose Remove from list.")),
+    // A new name for a server saved by hand that the window's rail lists, from a click on the rail's own page (main refuses any other page).
+    rename: (id, name) => isLocalPage || navigator.userActivation?.isActive === true
+      ? ipcRenderer.invoke("workspaces:rename", String(id), String(name ?? "")) : Promise.reject(new Error("Choose Rename.")),
     // Make a server of the person's own their bots' home, from a click on the rail's own page (main refuses any other page).
     makeHome: (id) => isLocalPage || navigator.userActivation?.isActive === true
       ? ipcRenderer.invoke("workspaces:make-home", String(id)) : Promise.reject(new Error("Choose Make my home.")),
@@ -498,6 +501,7 @@ const bridge = {
     create: (name, dataDir) => ipcRenderer.invoke("environments:create", name, dataDir),
     pickDir: () => ipcRenderer.invoke("environments:pick-dir"),
     forget: (id, purge) => ipcRenderer.invoke("environments:forget", id, purge === true),
+    rename: (id, name) => ipcRenderer.invoke("environments:rename", String(id), String(name ?? "")),
     status: () => ipcRenderer.invoke("environments:status"),
     retry: (id) => ipcRenderer.invoke("environments:retry", ...(typeof id === "string" ? [id] : [])),
     onStatus: (cb) => {

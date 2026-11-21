@@ -7104,8 +7104,6 @@
   "keys.section.computers.purpose": "クラウドデスクトップ、自分のサーバー、Web サイトのログイン情報です。",
   "keys.section.apps": "アプリとツール",
   "keys.section.apps.purpose": "接続したアプリと調査です。",
-  "keys.section.helpers": "補助モデルと画像",
-  "keys.section.helpers.purpose": "ボットのために仕分けをする小型モデルと、アバターの画像です。",
   "keys.section.connected": "{count} 件接続済み",
   "keys.purpose.openai": "OpenAI のモデルと Live 通話",
   "keys.purpose.anthropic": "トークン単位で課金される Claude のモデル",
