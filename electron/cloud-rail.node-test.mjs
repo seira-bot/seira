@@ -379,6 +379,7 @@ test("a Cloud's page gets the rail and the add sheet's narrow bridges; a circle,
   await assert.rejects(page.bridge.workspaces.color("rose"), /Choose a color/, "a page changes its place's colour only from the person's click");
   await assert.rejects(page.bridge.workspaces.recolor("vps", "rose"), /Choose a color/);
   await assert.rejects(page.bridge.workspaces.remove("old"), /Choose Remove from list/, "Remove from list only from the person's click");
+  await assert.rejects(page.bridge.workspaces.rename("vps", "Studio"), /Choose Rename/, "a new name only from the person's click");
   await assert.rejects(page.bridge.workspaces.makeHome("vps"), /Choose Make my home/, "a move starts only from the person's click");
   await assert.rejects(page.bridge.workspaces.local.create("Work", "rose"), /Choose a name/, "a workspace of this computer's own only from the person's click");
   await assert.rejects(page.bridge.workspaces.local.edit("profile:work", { name: "Office" }), /Choose a change/);
@@ -391,9 +392,10 @@ test("a Cloud's page gets the rail and the add sheet's narrow bridges; a circle,
   await clicked.bridge.cloudAdd.start("pro", "Client B", null);
   await clicked.bridge.workspaces.color("rose");
   await clicked.bridge.workspaces.color(null);
+  await clicked.bridge.workspaces.rename({ toString: () => "vps" }, { toString: () => "Studio" });
   await clicked.bridge.cloudAdd.organization({ toString: () => "Client C" }, null);
   assert.deepEqual(clicked.invoked, [["workspaces:open", "a"], ["workspaces:add", "link"], ["cloud-add:start", "pro", "Client B", null], ["workspaces:color", "rose"], ["workspaces:color", null],
-    ["cloud-add:organization", "Client C", null]]);
+    ["workspaces:rename", "vps", "Studio"], ["cloud-add:organization", "Client C", null]]);
   await clicked.bridge.cloudAdd.start("team", "Studio", "blue", { toString: () => "app_whats_new_team" });
   assert.deepEqual(clicked.invoked.at(-1), ["cloud-add:start", "team", "Studio", "blue", "app_whats_new_team"], "a source travels as plain text");
   assert.equal(page.bridge.cloudAccount, undefined, "never the account bridge");
@@ -418,6 +420,20 @@ test("Remove from list on a server saved by hand: main forgets it here, by its o
   assert.deepEqual(forgotten, ["vps"], "never a Cloud, a team's Cloud or this computer's own");
   assert.deepEqual(await rail({ forget: async () => false }).call("workspaces:remove", "vps"), { outcome: "failed" });
   assert.deepEqual(await rail().call("workspaces:remove", "vps"), { outcome: "unsupported" }, "a main without forget says so");
+});
+
+test("Rename on a server saved by hand: main saves the name by its own word for which one, only for the rail's page, never a Cloud or this computer", async () => {
+  const renamed = [];
+  const installed = rail({ renameServer: async (id, name) => { renamed.push([id, name]); return { outcome: name === "Dup" ? "taken" : "saved" }; } });
+  assert.deepEqual(await installed.call("workspaces:rename", "vps", "Branch office"), { outcome: "saved" });
+  assert.deepEqual(await installed.call("workspaces:rename", "vps", "Dup"), { outcome: "taken" });
+  assert.deepEqual(await installed.call("workspaces:rename", "vps", { toString: () => "x" }), { outcome: "saved" });
+  assert.deepEqual(renamed, [["vps", "Branch office"], ["vps", "Dup"], ["vps", ""]], "only plain text reaches main");
+  for (const id of ["home", "a", "acme", "lab", "local", "profile:work"]) assert.throws(() => installed.call("workspaces:rename", id, "X"), /isn't here/, id);
+  assert.equal(renamed.length, 3, "never a Cloud, a team's Cloud or this computer's own");
+  installed.w.lists = false;
+  assert.throws(() => installed.call("workspaces:rename", "vps", "X"), /only available/, "a place's page, even this computer's own, never renames from the rail");
+  assert.deepEqual(await rail().call("workspaces:rename", "vps", "X"), { outcome: "unsupported" }, "a main without rename says so");
 });
 
 test("a place with inbox lines waiting says so on its circle, this computer's too; the Admin's payment problem still does", () => {

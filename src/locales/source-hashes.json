@@ -37876,7 +37876,9 @@
       "activity.tool.team.workflow": "2e2d5c5649b718b542fae80e72768b9cfcfea9bcfa51ecc25bf6f3ce532eb5b3",
       "phone.push.detail": "110ecd97683ca3e4e5f22c1f250027bc5185277353a82be879b3f8bc364873cf",
       "phone.push.short": "b5d444d5b277680f123b48c7bc266b59b33e0b09f9f690c12357484986fde5af",
-      "phone.push.title": "e92adf8015a7dd9a488e5962d2639e49e6035a95b055be012fa199867be7ab0c"
+      "phone.push.title": "e92adf8015a7dd9a488e5962d2639e49e6035a95b055be012fa199867be7ab0c",
+      "rail.renameName": "c3990ecbffd5cf1454cb5bf63a230cc3b9883cfc9630ab5d3e08c5a9ef68a97c",
+      "servers.renameName": "e84e258ef7217296bc648fab2aa6dcaa8ad52f9631e64a41af7d3b5b1fb06b7a"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
