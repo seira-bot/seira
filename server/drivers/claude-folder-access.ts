@@ -22,9 +22,22 @@ export function claudeFolderArgs(folders: TurnFolders | undefined): string[] {
   return (folders?.grants ?? []).flatMap((grant) => ["--add-dir", grant.path]);
 }
 
+export const CLAUDE_FOLDER_LIMIT_REFUSAL = "Update Claude Code to let this bot use only its chosen folders.";
+
+/** A limited turn needs both settings; an unknown version is sent the keys. */
+export function claudeFolderLimitRefusal(folders: TurnFolders | undefined, version: Version | null): string | null {
+  if (!folders?.limited || version === null) return null;
+  return versionAtLeast(version, CLAUDE_BLOCK_READS_FLOOR) && versionAtLeast(version, CLAUDE_BLOCK_WRITES_FLOOR) ? null : CLAUDE_FOLDER_LIMIT_REFUSAL;
+}
+
+/** Stable text of a turn's folders for the warm-process key. */
+export function claudeFolderKey(folders: TurnFolders | undefined): string | null {
+  return folders ? `${folders.limited ? "limited" : "open"}|${folders.grants.map((grant) => `${grant.path}:${grant.write}`).sort().join("|")}` : null;
+}
+
 /** Settings `permissions` for a turn's folders, or null when the turn has none. A deny rule beats an allow rule, so a
  * can-change grant inside a read-only grant is read-only too. */
-export function claudeFolderPermissions(folders: TurnFolders | undefined, version: Version | null, platform: NodeJS.Platform = process.platform): Record<string, unknown> | null {
+export function claudeFolderPermissions(folders: TurnFolders | undefined, platform: NodeJS.Platform = process.platform): Record<string, unknown> | null {
   if (!folders) return null;
   const permissions: Record<string, unknown> = {};
   if (folders.grants.length) permissions.additionalDirectories = folders.grants.map((grant) => grant.path);
@@ -32,8 +45,8 @@ export function claudeFolderPermissions(folders: TurnFolders | undefined, versio
     .flatMap((grant) => READ_ONLY_TOOLS.map((tool) => `${tool}(${claudeRulePath(grant.path, platform)}/**)`));
   if (deny.length) permissions.deny = deny;
   if (folders.limited) {
-    if (version === null || versionAtLeast(version, CLAUDE_BLOCK_READS_FLOOR)) permissions.blockReadsOutsideWorkingDirectories = true;
-    if (version === null || versionAtLeast(version, CLAUDE_BLOCK_WRITES_FLOOR)) permissions.blockWritesOutsideWorkingDirectories = true;
+    permissions.blockReadsOutsideWorkingDirectories = true;
+    permissions.blockWritesOutsideWorkingDirectories = true;
   }
   return Object.keys(permissions).length ? permissions : null;
 }

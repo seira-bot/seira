@@ -1999,16 +1999,36 @@ describe("ClaudeDriver turns (fake CLI)", () => {
       expect(seen.settings.permissions).toMatchObject({ blockReadsOutsideWorkingDirectories: true, blockWritesOutsideWorkingDirectories: true });
     });
 
-    it("leaves out the write limit on a CLI older than 2.1.330", async () => {
-      const seen = await run("2.1.300", { folders });
-      expect(seen.settings.permissions.blockReadsOutsideWorkingDirectories).toBe(true);
-      expect(seen.settings.permissions).not.toHaveProperty("blockWritesOutsideWorkingDirectories");
+    it("refuses a limited turn on a CLI older than 2.1.330", async () => {
+      await create("echo", { FAKE_CLAUDE_VERSION: "2.1.300" });
+      await expect(instance.adapter.sendTurn({ threadId: "t-folders-old", text: "hi", folders })).rejects.toThrow(/Update Claude Code to let this bot use only its chosen folders/);
     });
 
-    it("leaves out both limits on a CLI older than 2.1.257", async () => {
-      const seen = await run("2.1.250", { folders });
-      expect(seen.settings.permissions).not.toHaveProperty("blockReadsOutsideWorkingDirectories");
-      expect(seen.settings.permissions).not.toHaveProperty("blockWritesOutsideWorkingDirectories");
+    it("refuses a limited turn on a CLI older than 2.1.257", async () => {
+      await create("echo", { FAKE_CLAUDE_VERSION: "2.1.250" });
+      await expect(instance.adapter.sendTurn({ threadId: "t-folders-older", text: "hi", folders })).rejects.toThrow(/Update Claude Code/);
+    });
+
+    it("runs a turn that is not limited on an old CLI", async () => {
+      const seen = await run("2.1.250", { folders: { limited: false, grants: folders.grants } });
+      expect(seen.settings.permissions.additionalDirectories).toHaveLength(2);
+    });
+
+    it("starts a new process when a grant's write flag or the limit changes", async () => {
+      await create("echo", { FAKE_CLAUDE_VERSION: "2.1.330" });
+      const dump = join(scratch, "folders-warm.json");
+      process.env.FAKE_CLAUDE_DUMP = dump;
+      const turn = async (f: typeof folders) => {
+        const { turnId } = await instance.adapter.sendTurn({ threadId: "t-folders-warm", text: "hi", folders: f });
+        await recorder.until((e) => e.type === "turn.completed" && e.turnId === turnId);
+        return JSON.parse(readFileSync(dump, "utf8")).pid as number;
+      };
+      const first = await turn(folders);
+      expect(await turn(folders)).toBe(first);
+      const flipped = { ...folders, grants: [{ ...folders.grants[0], write: true }, folders.grants[1]] };
+      const second = await turn(flipped);
+      expect(second).not.toBe(first);
+      expect(await turn({ ...flipped, limited: false })).not.toBe(second);
     });
 
     it("adds no limit key for a turn that is not limited", async () => {
