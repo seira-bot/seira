@@ -110,8 +110,10 @@ export function* databaseConversations(db: DatabaseSync, filter: (sessionId: str
     if (current === null) continue;
     const role = String(row[messageTable.role]).toLowerCase();
     if (role !== "user" && role !== "assistant") continue;
-    const text = blocksText(parseMaybeJson(row[messageTable.text]));
-    const notes: ImportNote[] = messageTable.tools ? toolCallNotes(row[messageTable.tools]) : [];
+    const body = parseMaybeJson(row[messageTable.text]);
+    const text = blocksText(body);
+    const columnNotes = messageTable.tools ? toolCallNotes(row[messageTable.tools]) : [];
+    const notes: ImportNote[] = columnNotes.length > 0 ? columnNotes : toolNames(body).map((name): ImportNote => ({ kind: "tool-call", name }));
     if (!text && notes.length === 0) continue;
     const ref = messageTable.id && row[messageTable.id] != null ? String(row[messageTable.id]) : `${current}#${messages.length}`;
     messages.push({ ref, parentRef: messages.at(-1)?.ref ?? null, role, text, at: messageTable.time ? toMillis(row[messageTable.time]) : null, ...(notes.length > 0 ? { notes } : {}) });
