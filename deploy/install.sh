@@ -48,10 +48,7 @@ settings() {
   ACCOUNT_HOST=accounts.seira.bot
   TUNNEL_EDGE_HOST=region1.v2.argotunnel.com
   TUNNEL_WAIT_S="${SEIRA_INSTALL_TUNNEL_WAIT_S:-120}"
-  # The zones a server's address may sit in: Seira's own, and the one SEIRA_TUNNEL_HOST_SUFFIX names when you also run an
-  # account service of your own (SEIRA_CONTROL_PLANE_URL), as the server itself allows.
-  TUNNEL_SUFFIXES=seira.run
-  if [ -n "${SEIRA_CONTROL_PLANE_URL:-}" ] && [ -n "${SEIRA_TUNNEL_HOST_SUFFIX:-}" ]; then TUNNEL_SUFFIXES="$TUNNEL_SUFFIXES $SEIRA_TUNNEL_HOST_SUFFIX"; fi
+  CLOUD_HOST=cloud.seira.bot
 
   MODE=install
   DOMAIN=""
@@ -69,6 +66,7 @@ settings() {
   FAILED=0
   DOCKER_STATE=unknown
   DOCKER_PROBLEM=""
+  DOCKER_REPORTED=no
   IMAGE=""
   PUBLIC_IP=""
   REGISTRY_TOKEN=""
@@ -341,6 +339,7 @@ check_disk() {
 # DOCKER_STATE: ready, or missing (the one thing the installer offers to install), or broken (the person fixes it).
 check_docker() {
   DOCKER_PROBLEM=""
+  DOCKER_REPORTED=no
   if ! command -v docker >/dev/null 2>&1; then
     DOCKER_STATE=missing
     DOCKER_PROBLEM="Docker isn't installed."
@@ -378,7 +377,12 @@ check_docker() {
 }
 
 report_docker_missing() {
-  if [ "$DOCKER_STATE" = missing ]; then
+  if [ "$DOCKER_STATE" = missing ] && [ "$DOCKER_REPORTED" != yes ]; then
+    DOCKER_REPORTED=yes
+    if [ "$EVENTS" = yes ]; then
+      fix "$DOCKER_PROBLEM It can be installed with Docker's official script."
+      return
+    fi
     fix "$DOCKER_PROBLEM Run this again with --install-docker to install it with Docker's official script, or install it yourself with: curl -fsSL https://get.docker.com | sudo sh"
   fi
 }
@@ -482,7 +486,7 @@ check_outbound() {
 
 # cloudflared dials the edge on port 7844, which answers no HTTP, so only the TCP connect is checked.
 check_edge() {
-  connect=$(curl -s -o /dev/null -w '%{time_connect}' --connect-timeout 5 --max-time 2 "telnet://$TUNNEL_EDGE_HOST:7844" </dev/null 2>/dev/null || true)
+  connect=$(curl -s -o /dev/null -w '%{time_connect}' --connect-timeout 5 --max-time 6 "telnet://$TUNNEL_EDGE_HOST:7844" </dev/null 2>/dev/null || true)
   case "$connect" in
     *[1-9]*) ;;
     *)
@@ -493,13 +497,20 @@ check_edge() {
   ok "outbound: the image registries and the tunnel edge are reachable"
 }
 
+# The sign-in asks the Seira cloud for its code, and the account service gives the address.
 check_account() {
   url=${SEIRA_CONTROL_PLANE_URL:-$(env_value SEIRA_CONTROL_PLANE_URL)}
   case "$url" in https://*) ACCOUNT_HOST=$(host_of "$url") ;; esac
-  if reachable "https://$ACCOUNT_HOST/"; then
-    ok "account: the Seira account service ($ACCOUNT_HOST) is reachable"
+  url=${SEIRA_CLOUD_ORIGIN:-$(env_value SEIRA_CLOUD_ORIGIN)}
+  case "$url" in https://*) CLOUD_HOST=$(host_of "$url") ;; esac
+  blocked=""
+  for host in $ACCOUNT_HOST $CLOUD_HOST; do
+    reachable "https://$host/" || blocked="$blocked $host"
+  done
+  if [ -z "$blocked" ]; then
+    ok "account: the Seira account service ($ACCOUNT_HOST) and the sign-in service ($CLOUD_HOST) are reachable"
   else
-    fix "This server can't reach the Seira account service, $ACCOUNT_HOST, over HTTPS (port 443). Allow outbound HTTPS to it in your firewall, then run this again."
+    fix "This server can't reach$blocked over HTTPS (port 443), which signing in to your Seira account needs. Allow outbound HTTPS to them in your firewall, then run this again."
   fi
 }
 
@@ -689,6 +700,7 @@ preflight() {
   step_check cpu check_cpus
   step_check memory check_memory
   step_check docker check_docker
+  if [ "$MODE" = check ] || { [ "$EVENTS" = yes ] && [ "$INSTALL_DOCKER" != 1 ]; }; then step_check docker report_docker_missing; fi
   step_check disk check_disk
   if [ "$TUNNEL" != yes ]; then step_check ports check_ports; fi
   step_check userns check_userns
@@ -832,6 +844,7 @@ services:
   seira:
     image: ${SEIRA_IMAGE:?run the installer again}
     restart: unless-stopped
+    hostname: ${SEIRA_HOSTNAME:-seira}
     init: true
     shm_size: 512m
     volumes:
@@ -851,6 +864,8 @@ services:
       SEIRA_SIGNIN_SMTP_URL:
       SEIRA_SIGNIN_SMTP_FROM:
       SEIRA_CONTROL_PLANE_URL:
+      SEIRA_TUNNEL_HOST_SUFFIX:
+      SEIRA_CLOUD_ORIGIN:
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q -e seira -e openmausbot"]
       interval: 30s
@@ -916,6 +931,12 @@ ENV
   if [ "$TUNNEL" = yes ]; then
     set_env SEIRA_ACCESS tunnel
     if [ -n "${SEIRA_CONTROL_PLANE_URL:-}" ]; then set_env SEIRA_CONTROL_PLANE_URL "$SEIRA_CONTROL_PLANE_URL"; fi
+    if [ -n "${SEIRA_TUNNEL_HOST_SUFFIX:-}" ]; then set_env SEIRA_TUNNEL_HOST_SUFFIX "$SEIRA_TUNNEL_HOST_SUFFIX"; fi
+    if [ -n "${SEIRA_CLOUD_ORIGIN:-}" ]; then set_env SEIRA_CLOUD_ORIGIN "$SEIRA_CLOUD_ORIGIN"; fi
+    if [ -z "$(env_value SEIRA_HOSTNAME)" ]; then
+      host_name=$(hostname 2>/dev/null | tr -cd 'A-Za-z0-9.-' || true)
+      if [ -n "$host_name" ]; then set_env SEIRA_HOSTNAME "$host_name"; fi
+    fi
   else
     unset_env SEIRA_ACCESS
     set_env DOMAIN "$DOMAIN"
@@ -1133,7 +1154,13 @@ tunnel_host_allowed() { # address
   zone=${host#*.}
   case "$label" in c-????????????????????????????????) ;; *) return 1 ;; esac
   case "${label#c-}" in *[!0-9a-f]*) return 1 ;; esac
-  for suffix in $TUNNEL_SUFFIXES; do
+  # Seira's own zone, and the one SEIRA_TUNNEL_HOST_SUFFIX names when you also run an account service of your own
+  # (SEIRA_CONTROL_PLANE_URL), as the server itself allows.
+  suffixes=seira.run
+  plane=${SEIRA_CONTROL_PLANE_URL:-$(env_value SEIRA_CONTROL_PLANE_URL)}
+  extra=${SEIRA_TUNNEL_HOST_SUFFIX:-$(env_value SEIRA_TUNNEL_HOST_SUFFIX)}
+  if [ -n "$plane" ] && [ -n "$extra" ]; then suffixes="$suffixes $extra"; fi
+  for suffix in $suffixes; do
     if [ "$zone" = "$suffix" ]; then return 0; fi
   done
   return 1
@@ -1160,22 +1187,12 @@ wait_tunnel() { # sets ADDRESS once the tunnel's address answers as Seira
   return 1
 }
 
-account_signed_in() {
-  grep -q '"companionAccountEmail"' "$INSTALL_DIR/data/.seira/tunnel-account.json" 2>/dev/null
+account_email() {
+  sed -n 's/.*"companionAccountEmail"[^"]*"\([^"]*\)".*/\1/p' "$INSTALL_DIR/data/.seira/tunnel-account.json" 2>/dev/null | head -n 1
 }
 
-# Passes on the first line that is "code" and 8 digits (the digits only) and discards every other line.
-read_code() {
-  while IFS= read -r line; do
-    line=$(printf '%s' "$line" | tr -d '\r')
-    case "$line" in
-      "code "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9])
-        printf '%s\n' "${line#code }"
-        return 0
-        ;;
-    esac
-  done
-  return 1
+account_signed_in() {
+  grep -q '"companionAccountEmail"' "$INSTALL_DIR/data/.seira/tunnel-account.json" 2>/dev/null
 }
 
 # The last error sentence `seira login` wrote, with anything that looks like a code taken out.
@@ -1183,8 +1200,10 @@ login_problem() { # file
   tail -n 1 "$1" 2>/dev/null | sed 's/[0-9]\{8\}/********/g'
 }
 
-run_login() { # the code is read from standard input
-  if [ -n "$ACCOUNT_EMAIL" ]; then
+run_login() { # the code is read from standard input with --events
+  if [ "$EVENTS" = yes ]; then
+    compose run --rm --no-deps -T seira seira login --email "$ACCOUNT_EMAIL" --events
+  elif [ -n "$ACCOUNT_EMAIL" ]; then
     compose run --rm --no-deps -T seira seira login --email "$ACCOUNT_EMAIL"
   else
     compose run --rm --no-deps -T seira seira login
@@ -1192,44 +1211,26 @@ run_login() { # the code is read from standard input
 }
 
 # Signs this server in to the Seira account in a one-off container on the data folder, before the server starts. The
-# code comes from the person's terminal, or on this installer's standard input as a "code" line with --events, and
-# is never written anywhere.
+# code comes from the person's terminal, or with --events on this installer's standard input as a "code" line. The
+# login asks for it, tries up to three times, and is never given the code in an argument or a file.
 sign_in_account() {
   if account_signed_in; then return 0; fi
   login_error=$(mktemp)
-  if [ "$EVENTS" != yes ]; then
+  login_ok=no
+  if [ "$EVENTS" = yes ]; then
+    if run_login 2>"$login_error"; then login_ok=yes; fi
+  else
     say "Signing this server in to your Seira account. Seira emails a code: type it when asked."
-    if run_login </dev/tty 2>"$login_error"; then
-      rm -f "$login_error"
-      return 0
-    fi
-    reason=$(login_problem "$login_error")
-    rm -f "$login_error"
-    fail "Signing in to your Seira account did not work${reason:+: $reason}. Run this again to try once more."
+    if run_login </dev/tty 2>"$login_error"; then login_ok=yes; fi
   fi
-  gave_up=$(mktemp)
-  rm -f "$gave_up"
-  attempt=1
-  while [ "$attempt" -le 3 ]; do
-    event ask code "$ACCOUNT_EMAIL"
-    if { read_code || : >"$gave_up"; } | run_login >/dev/null 2>"$login_error"; then
-      rm -f "$login_error" "$gave_up"
-      return 0
-    fi
-    reason=$(login_problem "$login_error")
-    [ -n "$reason" ] || reason="Signing in to your Seira account did not work."
-    if [ -e "$gave_up" ]; then
-      rm -f "$login_error" "$gave_up"
-      fail "No sign-in code was given."
-    fi
-    attempt=$((attempt + 1))
-    if [ "$attempt" -gt 3 ]; then
-      rm -f "$login_error" "$gave_up"
-      fail "$reason"
-    fi
-    event step signin fail "$reason"
-    event step signin start
-  done
+  reason=$(login_problem "$login_error")
+  rm -f "$login_error"
+  if [ "$login_ok" = yes ]; then
+    if account_signed_in; then return 0; fi
+    reason="The sign-in did not finish."
+  fi
+  if [ "$EVENTS" = yes ]; then fail "${reason:-Signing in to your Seira account did not work.}"; fi
+  fail "Signing in to your Seira account did not work${reason:+: $reason}. Run this again to try once more."
 }
 
 https_answers() {
@@ -1365,7 +1366,7 @@ finish() {
   if [ "$EVENTS" = yes ]; then
     step pair
     link=$(first_admin_link) || fail "The one-time sign-in link for the first admin could not be made. Make one on this server with: $pair_command"
-    event pair "$(printf '%s\n' "$link" | sed -n 's/^ *Link //p' | head -n 1)"
+    event pair "$(printf '%s\n' "$link" | sed -n 's/^ *Link  *//p' | head -n 1)"
     step_done
     say "The one-time sign-in link for the first admin was handed to the app that runs this installer."
   elif [ -t 1 ] && link=$(first_admin_link); then
@@ -1407,7 +1408,12 @@ run_install() {
   resolve_mode
   if [ "$TUNNEL" != yes ]; then
     [ -n "$DOMAIN" ] || fail "Say which name people will open, like this: $(command_line '--domain seira.example.com')  Or use $(command_line '--tunnel --account-email you@example.com') for no domain."
-  elif ! account_signed_in; then
+  elif account_signed_in; then
+    signed_as=$(account_email)
+    if [ -n "$ACCOUNT_EMAIL" ] && [ -n "$signed_as" ] && [ "$(printf '%s' "$ACCOUNT_EMAIL" | tr 'A-Z' 'a-z')" != "$(printf '%s' "$signed_as" | tr 'A-Z' 'a-z')" ]; then
+      fail "This server is already signed in as $signed_as. Run this again with --account-email $signed_as, or without --account-email."
+    fi
+  else
     if [ "$EVENTS" = yes ] && [ -z "$ACCOUNT_EMAIL" ]; then fail "--account-email is needed to sign this server in to your Seira account."; fi
     if [ "$EVENTS" != yes ] && ! tty_available; then fail "Signing in to your Seira account needs a terminal to type the emailed code in. Run this in an SSH session, or add --events and send the code as a line like: code 12345678"; fi
   fi
@@ -1429,7 +1435,6 @@ run_install() {
 run_check() {
   resolve_mode
   preflight
-  report_docker_missing
   if [ "$FAILED" != 0 ]; then
     fail "This server is not ready: fix the $FAILED line(s) marked FIX above. Nothing was changed."
   fi

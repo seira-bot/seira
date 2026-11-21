@@ -516,6 +516,7 @@ services:
   seira:
     image: ${SEIRA_IMAGE:?run the installer again}
     restart: unless-stopped
+    hostname: ${SEIRA_HOSTNAME:-seira}
     init: true
     shm_size: 512m
     volumes:
@@ -535,6 +536,8 @@ services:
       SEIRA_SIGNIN_SMTP_URL:
       SEIRA_SIGNIN_SMTP_FROM:
       SEIRA_CONTROL_PLANE_URL:
+      SEIRA_TUNNEL_HOST_SUFFIX:
+      SEIRA_CLOUD_ORIGIN:
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8799/api/health | grep -q -e seira -e openmausbot"]
       interval: 30s

@@ -94,7 +94,7 @@ if (isEntry()) {
   const tunnel = process.env.SEIRA_ACCESS === "tunnel" ? createContainerTunnel({ dataDir, port: Number(process.env.SEIRA_PORT) || 8799, log: (line) => console.log(line) }) : null;
   let tunnelEnv: Record<string, string> = {};
   void superviseServer(() => spawn(process.execPath, server.args, { stdio: "inherit", env: { ...server.env, ...tunnelEnv } }), tunnel ? {
-    prepare: async () => { tunnelEnv = await tunnel.prepare(); },
+    prepare: async () => { tunnelEnv = {}; tunnelEnv = await tunnel.prepare(); },
     spawned: (child) => { if (child.pid) void tunnel.attach(child.pid); },
     release: () => tunnel.release(),
   } : {}).then((code) => { process.exitCode = code; });

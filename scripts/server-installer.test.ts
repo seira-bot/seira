@@ -101,6 +101,7 @@ case "$*" in
     host=$(printf '%s' "$last" | sed -e 's#^[a-z]*://##' -e 's#/.*##')
     if blocked "$host"; then exit 7; fi ;;
 esac`,
+  hostname: `echo "\${FAKE_HOSTNAME:-test-host}"`,
   docker: `echo "docker $*" >> "$FAKE_LOG"
 case "$*" in
   "version --format"*) [ -n "$FAKE_DOCKER" ] || exit 1; echo "$FAKE_DOCKER" ;;
@@ -117,18 +118,39 @@ case "$*" in
   "compose exec -T seira node dist-server/bot-box/box-check.js --public=none") echo "$FAKE_BOX_CHECK"; case "$FAKE_BOX_CHECK" in *'"failed":[]'*) ;; *) exit 1 ;; esac ;;
   "inspect --format {{.State.Health.Status}} c1") echo "$FAKE_HEALTH" ;;
   "compose run --rm --no-deps -T seira seira login"*)
-    read -r typed || typed=""
-    echo "Enter the 8-digit code: \${typed#code }"
-    if [ "\${typed#code }" = "$FAKE_LOGIN_CODE" ]; then
-      mkdir -p "$SEIRA_INSTALL_DIR/data/.seira"
-      echo '{"companionAccountEmail":"owner@example.com"}' > "$SEIRA_INSTALL_DIR/data/.seira/tunnel-account.json"
-    else
-      echo "sign-in failed: \${typed#code } is not the code" >&2
-      exit 1
-    fi ;;
+    [ -z "$FAKE_LOGIN_REQUEST_FAILS" ] || { echo "could not send a sign-in code: the account service is down" >&2; exit 1; }
+    email=$(printf '%s' "$*" | sed -n 's/.*--email \\([^ ]*\\).*/\\1/p')
+    events=""
+    case "$*" in *" --events") events=1 ;; esac
+    tries=0
+    while [ "$tries" -lt 3 ]; do
+      tries=$((tries + 1))
+      typed=""
+      if [ -n "$events" ]; then
+        echo "::seira ask code $email"
+        while IFS= read -r line; do
+          line=$(printf '%s' "$line" | tr -d '\\r')
+          case "$line" in "code "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) typed=\${line#code }; break ;; esac
+        done || true
+      else
+        read -r typed || typed=""
+        typed=\${typed#code }
+      fi
+      if [ -z "$typed" ]; then echo "No sign-in code was given." >&2; exit 1; fi
+      if [ "$typed" = "$FAKE_LOGIN_CODE" ]; then
+        if [ -z "$FAKE_LOGIN_NO_RECORD" ]; then
+          mkdir -p "$SEIRA_INSTALL_DIR/data/.seira"
+          echo '{"companionAccountEmail":"owner@example.com"}' > "$SEIRA_INSTALL_DIR/data/.seira/tunnel-account.json"
+        fi
+        exit 0
+      fi
+      echo "sign-in failed: Invalid code" >&2
+      [ -n "$events" ] || exit 1
+    done
+    exit 1 ;;
   "compose exec -T seira seira status") printf "Server seira running\\nSeira web address: %s (signed in as owner@example.com; serve it with seira serve --tunnel)\\n" "\${FAKE_STATUS_ADDRESS:-https://c-0123456789abcdef0123456789abcdef.seira.run}" ;;
   "compose logs --no-color seira") printf "%s\\n" "\${FAKE_TUNNEL_LOG:-}" ;;
-  "compose exec -T seira seira pair --label First admin --ttl 10m") printf 'Pairing code 123456 (valid 10 minutes)\\nLink %s/pair#code=ZZZ\\n' "\${FAKE_PAIR_BASE:-https://c-0123456789abcdef0123456789abcdef.seira.run}" ;;
+  "compose exec -T seira seira pair --label First admin --ttl 10m") printf 'Pairing code 123456 (valid 10 minutes)\\nLink           %s/pair#code=ZZZ\\n' "\${FAKE_PAIR_BASE:-https://c-0123456789abcdef0123456789abcdef.seira.run}" ;;
 esac`,
 };
 
@@ -743,13 +765,16 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
     const result = tunnel(["--check", "--tunnel"]);
     expect(result.status, result.all).toBe(0);
     expect(result.stdout).not.toMatch(/ports 80|DNS/);
-    expect(result.stdout).toContain("  ok    account: the Seira account service (accounts.example.test) is reachable");
+    expect(result.stdout).toContain("  ok    account: the Seira account service (accounts.example.test) and the sign-in service (cloud.seira.bot) are reachable");
     expect(result.stdout).toContain("  ok    outbound: the image registries and the tunnel edge are reachable");
     const curls = result.calls.filter((call) => call.startsWith("curl ")).join("\n");
     expect(curls).toContain("https://accounts.example.test/");
+    expect(curls).toContain("https://cloud.seira.bot/");
     expect(curls).toContain("telnet://region1.v2.argotunnel.com:7844");
     expect(curls).not.toContain("https://region1.v2.argotunnel.com/");
     expect(curls).not.toContain("letsencrypt");
+    const cloud = tunnel(["--check", "--tunnel"], { env: { FAKE_BLOCKED: "cloud.seira.bot" } });
+    expect(cloud.fixes.join("\n")).toContain("can't reach cloud.seira.bot over HTTPS");
     const blocked = tunnel(["--check", "--tunnel"], { env: { FAKE_BLOCKED: "region1.v2.argotunnel.com" } });
     expect(blocked.fixes.join("\n")).toContain("region1.v2.argotunnel.com) on port 7844. Allow outbound port 7844 (TCP and UDP)");
     const silent = tunnel(["--check", "--tunnel"], { env: { FAKE_EDGE_SILENT: "1" } });
@@ -769,7 +794,7 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
 
   it("signs in in a one-off container on the data folder before it starts the server", () => {
     const result = tunnel(ARGS, { input: `code ${SIGNIN_CODE}\n` });
-    const login = result.docker.findIndex((call) => call === "docker compose run --rm --no-deps -T seira seira login --email owner@example.com");
+    const login = result.docker.findIndex((call) => call === "docker compose run --rm --no-deps -T seira seira login --email owner@example.com --events");
     const up = result.docker.findIndex((call) => call === "docker compose up -d --remove-orphans");
     expect(login).toBeGreaterThan(-1);
     expect(up).toBeGreaterThan(login);
@@ -822,8 +847,9 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
     expect(result.status).toBe(1);
     const lines = eventLines(result.stdout);
     expect(lines.filter((line) => line === "::seira ask code owner@example.com")).toHaveLength(3);
-    expect(lines.filter((line) => line.startsWith("::seira step signin fail "))).toHaveLength(3);
-    expect(lines).toContain("::seira fail sign-in failed: ******** is not the code");
+    expect(lines.filter((line) => line.startsWith("::seira step signin fail "))).toHaveLength(0);
+    expect(lines).toContain("::seira fail sign-in failed: Invalid code");
+    expect(result.docker.filter((call) => call.includes(" seira login"))).toHaveLength(1);
     expect(result.all).not.toMatch(/11111111|22222222|33333333/);
     expect(result.docker.some((call) => call === "docker compose up -d --remove-orphans")).toBe(false);
     const retry = tunnel(ARGS, { input: `code 11111111\ncode ${SIGNIN_CODE}\n` });
@@ -872,6 +898,50 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
     expect(result.status).toBe(1);
     expect(eventLines(result.stdout)).toContain("::seira fail No sign-in code was given.");
     expect(eventLines(result.stdout).filter((line) => line.startsWith("::seira ask code "))).toHaveLength(1);
+  });
+
+  it("asks for no code when the request for it fails", () => {
+    const result = tunnel(ARGS, { input: `code ${SIGNIN_CODE}\n`, env: { FAKE_LOGIN_REQUEST_FAILS: "1" } });
+    expect(result.status).toBe(1);
+    const lines = eventLines(result.stdout);
+    expect(lines.some((line) => line.startsWith("::seira ask code "))).toBe(false);
+    expect(lines).toContain("::seira fail could not send a sign-in code: the account service is down");
+  });
+
+  it("does not count a login that exits 0 without a sign-in as signed in", () => {
+    const result = tunnel(ARGS, { input: `code ${SIGNIN_CODE}\n`, env: { FAKE_LOGIN_NO_RECORD: "1" } });
+    expect(result.status).toBe(1);
+    expect(eventLines(result.stdout)).toContain("::seira fail The sign-in did not finish.");
+    expect(result.docker.some((call) => call === "docker compose up -d --remove-orphans")).toBe(false);
+  });
+
+  it("stops, naming the email it already uses, when it is run again with another --account-email", () => {
+    const result = tunnel(["--tunnel", "--events", "--account-email", "other@example.com"], { signedIn: true });
+    expect(result.status).toBe(1);
+    expect(eventLines(result.stdout)).toContain("::seira fail This server is already signed in as owner@example.com. Run this again with --account-email owner@example.com, or without --account-email.");
+    expect(result.docker.some((call) => call.includes(" login"))).toBe(false);
+  });
+
+  it("reports a missing Docker as a check, before checks fix, with a sentence that has no flag", () => {
+    const result = tunnel(["--check", "--tunnel", "--events"], { without: ["docker"] });
+    expect(result.status).toBe(1);
+    const lines = eventLines(result.stdout);
+    expect(lines).toContain("::seira check docker fix Docker isn't installed. It can be installed with Docker's official script.");
+    expect(lines.indexOf("::seira check docker fix Docker isn't installed. It can be installed with Docker's official script.")).toBeLessThan(lines.indexOf("::seira checks fix"));
+    expect(lines).not.toContain("::seira checks ok");
+    expect(lines.filter((line) => line.includes("check docker"))).toHaveLength(1);
+  });
+
+  it("writes the host name into the compose file's setting and the extra settings into .env", () => {
+    const result = tunnel(ARGS, { input: `code ${SIGNIN_CODE}\n`, env: { SEIRA_TUNNEL_HOST_SUFFIX: "tunnels.example.test", SEIRA_CLOUD_ORIGIN: "https://cloud.example.test" } });
+    expect(result.status, result.all).toBe(0);
+    const compose = readFileSync(join(result.install, "compose.yaml"), "utf8");
+    expect(compose).toContain("hostname: ${SEIRA_HOSTNAME:-seira}");
+    for (const name of ["SEIRA_CONTROL_PLANE_URL", "SEIRA_TUNNEL_HOST_SUFFIX", "SEIRA_CLOUD_ORIGIN"]) expect(compose).toContain(`      ${name}:\n`);
+    const env = readFileSync(join(result.install, ".env"), "utf8");
+    expect(env).toContain("SEIRA_TUNNEL_HOST_SUFFIX=tunnels.example.test\n");
+    expect(env).toContain("SEIRA_CLOUD_ORIGIN=https://cloud.example.test\n");
+    expect(env).toMatch(/^SEIRA_HOSTNAME=[A-Za-z0-9.-]+$/m);
   });
 
   it("with --events and no --account-email, stops with one sentence before any change", () => {
