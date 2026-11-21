@@ -735,6 +735,7 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
   const SIGNIN_CODE = "48151623";
   const TUNNEL_ENV = {
     FAKE_LOGIN_CODE: SIGNIN_CODE,
+    FAKE_RELEASE: "v0.1.186",
     FAKE_TUNNEL_LOG: "tunnel: connecting…\ntunnel: live at https://c-0123456789abcdef0123456789abcdef.seira.run",
     SEIRA_CONTROL_PLANE_URL: "https://accounts.example.test",
   };
@@ -898,6 +899,39 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
     expect(result.status).toBe(1);
     expect(eventLines(result.stdout)).toContain("::seira fail No sign-in code was given.");
     expect(eventLines(result.stdout).filter((line) => line.startsWith("::seira ask code "))).toHaveLength(1);
+  });
+
+  it("stops before any change when the newest release is older than the first with a tunnel mode", () => {
+    const sentence = "Installing without a domain needs Seira 0.1.186 or newer, and the newest release is v0.1.185. Try again after the next release.";
+    const old = tunnel(ARGS, { env: { FAKE_RELEASE: "v0.1.185" }, input: `code ${SIGNIN_CODE}\n` });
+    expect(old.status).toBe(1);
+    expect(eventLines(old.stdout)).toContain(`::seira check version fix ${sentence}`);
+    expect(eventLines(old.stdout)).toContain("::seira checks fix");
+    expect(old.docker.filter((call) => !READS.test(call))).toEqual([]);
+    expect(existsSync(old.install)).toBe(false);
+    const older = tunnel(["--check", "--tunnel"], { env: { FAKE_RELEASE: "v0.1.99" } });
+    expect(older.fixes).toContain(sentence.replace("v0.1.185", "v0.1.99"));
+    const exact = tunnel(["--check", "--tunnel"], { env: { FAKE_RELEASE: "v0.1.186" } });
+    expect(exact.status, exact.all).toBe(0);
+    const newer = tunnel(["--check", "--tunnel"], { env: { FAKE_RELEASE: "v0.2.0" } });
+    expect(newer.status, newer.all).toBe(0);
+    const domain = run(["--check", "--domain", "seira.example.com"], { env: { FAKE_RELEASE: "v0.1.185" } });
+    expect(domain.status, domain.all).toBe(0);
+  });
+
+  it("reads the version of the stable image from its label for the same check", () => {
+    const digest = (n: string) => `sha256:${n.repeat(64)}`;
+    const registry = (version: string) => ({ env: {
+      FAKE_STABLE: "200",
+      FAKE_INDEX: JSON.stringify({ manifests: [{ mediaType: "application/vnd.oci.image.manifest.v1+json", digest: digest("b"), size: 1, platform: { architecture: "amd64", os: "linux" } }] }, null, 2),
+      FAKE_MANIFEST: JSON.stringify({ config: { mediaType: "application/vnd.oci.image.config.v1+json", digest: digest("d"), size: 1 }, layers: [] }),
+      FAKE_CONFIG: JSON.stringify({ config: { Env: ["SEIRA_IMAGE=server"], Labels: version ? { "org.opencontainers.image.version": version } : {} } }),
+    } });
+    const old = tunnel(["--check", "--tunnel"], registry("v0.1.185"));
+    expect(old.fixes.join("\n")).toContain("the newest release is v0.1.185");
+    expect(tunnel(["--check", "--tunnel"], registry("0.1.186")).status).toBe(0);
+    expect(tunnel(["--check", "--tunnel"], registry("")).fixes.join("\n")).toContain("could not be read");
+    expect(run(["--check", "--domain", "seira.example.com"], registry("v0.1.185")).status).toBe(0);
   });
 
   it("asks for no code when the request for it fails", () => {

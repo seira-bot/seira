@@ -49,6 +49,8 @@ settings() {
   TUNNEL_EDGE_HOST=region1.v2.argotunnel.com
   TUNNEL_WAIT_S="${SEIRA_INSTALL_TUNNEL_WAIT_S:-120}"
   CLOUD_HOST=cloud.seira.bot
+  # The first release whose server image has the tunnel mode of its launcher and `seira login --events`.
+  TUNNEL_MIN_VERSION=0.1.186
 
   MODE=install
   DOMAIN=""
@@ -603,9 +605,9 @@ registry_get() { # path-under-the-repository media-types: the registry's answer,
   printf 'header = "Authorization: Bearer %s"\n' "$REGISTRY_TOKEN" | curl -K - -fsSL --max-time 20 -H "Accept: $2" "https://ghcr.io/v2/$IMAGE_REPO/$1" 2>/dev/null
 }
 
-# Whether the image a tag or digest names runs the bots' sandbox (SEIRA_IMAGE=server in its settings), read from the
-# registry without downloading it: yes, no, or nothing when the registry did not say.
-registry_sandbox() { # tag or sha256:digest
+# The configuration of the image a tag or digest names, read from the registry without downloading it, or nothing when
+# the registry did not say.
+registry_config() { # tag or sha256:digest
   [ -n "$REGISTRY_TOKEN" ] || REGISTRY_TOKEN=$(registry_token || true)
   [ -n "$REGISTRY_TOKEN" ] || return 0
   case "$(uname -m)" in aarch64 | arm64) platform=arm64 ;; *) platform=amd64 ;; esac
@@ -621,11 +623,56 @@ registry_sandbox() { # tag or sha256:digest
   esac
   config=$(printf '%s' "$answer" | sed -n 's/.*"config":{[^}]*"digest":"\(sha256:[0-9a-f]\{64\}\)".*/\1/p')
   [ -n "$config" ] || return 0
-  case "$(registry_get "blobs/$config" "application/vnd.oci.image.config.v1+json, application/vnd.docker.container.image.v1+json")" in
+  registry_get "blobs/$config" "application/vnd.oci.image.config.v1+json, application/vnd.docker.container.image.v1+json"
+}
+
+# Whether the image a tag or digest names runs the bots' sandbox (SEIRA_IMAGE=server in its settings): yes, no, or
+# nothing when the registry did not say.
+registry_sandbox() { # tag or sha256:digest
+  case "$(registry_config "$1")" in
     '') ;;
     *'"SEIRA_IMAGE=server"'*) echo yes ;;
     *) echo no ;;
   esac
+}
+
+# The version an image names in its label, like 0.1.185, or nothing.
+registry_version() { # tag or sha256:digest
+  registry_config "$1" | tr -d '\n' | sed -n 's/.*"org.opencontainers.image.version": *"v\{0,1\}\([0-9][0-9.]*\)".*/\1/p'
+}
+
+# Whether version $1 is older than $2: numeric per dot part, a missing part counts as 0.
+version_older() {
+  older_a=$1
+  older_b=$2
+  while [ -n "$older_a" ] || [ -n "$older_b" ]; do
+    part_a=${older_a%%.*}
+    part_b=${older_b%%.*}
+    case "$older_a" in *.*) older_a=${older_a#*.} ;; *) older_a="" ;; esac
+    case "$older_b" in *.*) older_b=${older_b#*.} ;; *) older_b="" ;; esac
+    part_a=${part_a:-0}
+    part_b=${part_b:-0}
+    if [ "$part_a" -lt "$part_b" ]; then return 0; fi
+    if [ "$part_a" -gt "$part_b" ]; then return 1; fi
+  done
+  return 1
+}
+
+# Without a domain needs the launcher's tunnel mode; an older release lacks it. Fails the check when $1 is older.
+tunnel_version_fix() { # version, like 0.1.185 or empty when unknown
+  [ "$TUNNEL" = yes ] || return 1
+  case "$1" in
+    '')
+      fix "Installing without a domain needs Seira $TUNNEL_MIN_VERSION or newer, and the version of the newest image could not be read. Try again after the next release."
+      return 0
+      ;;
+    *[!0-9.]* | .* | *. | *..*) return 1 ;;
+  esac
+  if version_older "$1" "$TUNNEL_MIN_VERSION"; then
+    fix "Installing without a domain needs Seira $TUNNEL_MIN_VERSION or newer, and the newest release is v$1. Try again after the next release."
+    return 0
+  fi
+  return 1
 }
 
 # Says, before anything is downloaded, when the version chosen would run without the bots' sandbox.
@@ -653,6 +700,8 @@ check_version() {
     case "${chosen##*/}" in
       *:latest) fix "SEIRA_INSTALL_IMAGE names the latest tag, which follows every commit. Name a release, like ghcr.io/$IMAGE_REPO:v0.1.151." ;;
       *:?*)
+        tag=${chosen##*:}
+        if tunnel_version_fix "${tag#v}"; then return; fi
         IMAGE=$chosen
         ok "version: $IMAGE, as asked"
         ;;
@@ -670,6 +719,7 @@ check_version() {
   esac
   registry_ask stable
   if [ "$REGISTRY_STATUS" = 200 ]; then
+    if [ "$TUNNEL" = yes ] && tunnel_version_fix "$(registry_version stable)"; then return; fi
     IMAGE="ghcr.io/$IMAGE_REPO:stable"
     ok "version: the stable channel"
     note_sandbox stable
@@ -693,6 +743,7 @@ check_version() {
     fix "The image registry ghcr.io did not say whether it has Seira $release (it answered $REGISTRY_STATUS). Run this again in a few minutes."
     return
   fi
+  if tunnel_version_fix "${release#v}"; then return; fi
   IMAGE="ghcr.io/$IMAGE_REPO:$release"
   ok "version: $release, the newest release"
   note_sandbox "$release"
