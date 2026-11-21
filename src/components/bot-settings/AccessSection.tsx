@@ -17,6 +17,7 @@ import { CloudBackendPicker } from "../CloudBackendPicker";
 import { placeManagedBy, worksOnChoices, WorksOnGrid, worksOnSelected, type WorksOnMode } from "../WorksOnGrid";
 import { Switch } from "../SettingsPrimitives";
 import { PhoneAppsCard } from "./PhoneAppsCard";
+import { BotFolderAccess } from "../bot-panel/BotFolderAccess";
 import { ProposalStatus } from "./ProposalStatus";
 import { ToolGroupsCard } from "./ToolGroupsCard";
 import { ToolSelectionCard } from "./ToolSelectionCard";
@@ -752,6 +753,7 @@ export function AccessSection({
       </div>}
 
       {shows("folder") && <WorkingFolder bot={bot} />}
+      {shows("folder") && <BotFolderAccess bot={bot} variant="card" />}
 
       {shows("apps") && <div className="rounded-xl bg-card p-4">
         <div className="flex items-center justify-between gap-4">

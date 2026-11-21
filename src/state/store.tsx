@@ -272,7 +272,7 @@ export interface TaskUsage {
   context?: { tokens: number; window?: number };
 }
 
-export interface Bot extends DefaultBotFields, Pick<WireBot, "mascotFaceColor" | "mascotAccessories" | "access" | "yourAccess" | "onlyPeopleAdded"> {
+export interface Bot extends DefaultBotFields, Pick<WireBot, "mascotFaceColor" | "mascotAccessories" | "access" | "yourAccess" | "onlyPeopleAdded" | "folderAccess"> {
   toolScope?: ToolScope;
   waitingForTeammates?: boolean;
   id: string;
