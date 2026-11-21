@@ -166,7 +166,8 @@ it("names a tagged MCP server in a typed one-to-one line, and in no line that ca
     expect(sent.status, JSON.stringify(sent.body)).toBe(202);
     await expect.poll(() => ran(lead), { timeout: 60_000 }).toBe(before + 1);
     await expect.poll(settled, { timeout: 30_000 }).toBe(true);
-    return turns().filter((one) => one.botId === lead.id).at(-1)!.system;
+    const turn = turns().filter((one) => one.botId === lead.id).at(-1)!;
+    return `${turn.system}\n${JSON.stringify(turn.prompt)}`;
   };
   expect(await asked("please check my notes with @notion")).toContain("The person's message tags these tools: notion (an MCP server).");
   expect(await asked("please check my notes without a tag")).not.toContain("tags these tools");
