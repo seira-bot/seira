@@ -156,7 +156,7 @@ export function SidebarTileGrid({ primary, pinned, others = [], row, onAdd }: { 
 export function SidebarSectionTiles({ bots, row }: { bots: Bot[]; row: (bot: Bot) => BotRowProps }) {
   if (bots.length === 0) return null;
   return (
-    <div data-sidebar-section-tiles="" className="grid gap-0.5 px-3 py-0.5" style={{ gridTemplateColumns: TILE_COLUMNS }}>
+    <div data-sidebar-section-tiles="" className="grid gap-0.5 py-0.5" style={{ gridTemplateColumns: TILE_COLUMNS }}>
       {bots.map((bot) => <SidebarBotTile key={bot.id} {...row(bot)} kind="bot" />)}
     </div>
   );
