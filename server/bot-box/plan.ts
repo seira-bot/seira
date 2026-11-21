@@ -19,7 +19,7 @@
 //     the egress gate (every connection to the internet goes through it) and the harness gate (only /api/internal/
 //     routes of this server). Nothing else on the server's loopback is reachable. A box that waits for a sign-in callback
 //     also dials out to one more socket, through which the server reaches the box's own loopback, never the other way.
-import { existsSync, statSync } from "node:fs";
+import { lstatSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { isLayerId } from "../audience.ts";
@@ -189,6 +189,10 @@ export const LIMITED_HOME_PROGRAMS = [".local/bin", ".npm-global", ".nvm", ".vol
 /** Git settings a limited box reads, so commits and clones keep working. */
 export const LIMITED_HOME_GIT = [".gitconfig", ".config/git"] as const;
 
+function realPathOf(path: string): string {
+  try { return realpathSync(path); } catch { return resolve(path); }
+}
+
 function assertReadOnlySource(source: string): void {
   try {
     const stat = statSync(source);
@@ -234,14 +238,33 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
   // An engine home lives in the data folder, so it goes back after that.
   const ownHome = request.home ? resolve(request.home) : null;
   const limited = !ownHome && request.folders?.limited === true;
+  const keptSignIns: string[] = [];
   if (limited) {
     // A private empty HOME, with back only what an engine needs to run and sign in.
     mounts.push({ kind: "tmpfs", target: home });
-    for (const name of [...LIMITED_HOME_PROGRAMS, ...LIMITED_HOME_GIT]) mounts.push({ kind: "ro", source: join(home, name), target: join(home, name), optional: true });
-    for (const name of LIMITED_HOME_SIGN_INS) {
+    const realData = realPathOf(dataDir), realHome = realPathOf(home);
+    // Security: bubblewrap binds through links. An entry is bound only when it is not a link and is where its name says,
+    // so a link to HOME or to the data folder gives nothing back.
+    const entry = (name: string): string | null => {
       const path = join(home, name);
-      if (under(path, dataDir) || under(dataDir, path) || !existsSync(path)) continue;
-      rw(path);
+      try {
+        if (lstatSync(path).isSymbolicLink()) return null;
+        const real = realpathSync(path);
+        if (real !== join(realHome, name) || under(real, realData) || under(realData, real) || under(path, dataDir) || under(dataDir, path)) return null;
+        return real;
+      } catch { return null; }
+    };
+    for (const name of [...LIMITED_HOME_PROGRAMS, ...LIMITED_HOME_GIT]) {
+      const real = entry(name);
+      if (!real) continue;
+      mounts.push({ kind: "ro", source: real, target: join(home, name), optional: true });
+    }
+    for (const name of LIMITED_HOME_SIGN_INS) {
+      const real = entry(name);
+      if (!real) continue;
+      mounts.push({ kind: "bind", source: real, target: join(home, name), optional: true });
+      writable.push(join(home, name));
+      keptSignIns.push(join(home, name));
     }
   } else if (!ownHome) rw(home);
   const dataInsideHome = under(dataDir, home);
@@ -281,17 +304,20 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
     rw(join(dataDir, "workspaces"));
     rw(join(dataDir, "task-workspaces"));
   }
+  // Security: a grant never gives back the data folder, or a folder that holds it, whatever the caller was given.
+  const grants = (request.folders?.grants ?? []).map((grant) => ({ path: resolve(grant.path), write: grant.write }))
+    .filter((grant) => !under(grant.path, dataDir) && !under(dataDir, grant.path));
   for (const name of PATH_ENV_NAMES) {
     const value = request.env[name];
     // A temp folder stays the box's own private one; anything else the engine writes is put back.
     if (!value || !isAbsolute(value) || covered(resolve(value)) || PRIVATE_INSIDE.some((base) => under(resolve(value), base))) continue;
+    // A limited box does not give HOME back through an environment path: only a sign-in folder, a program folder (already
+    // there) or a grant may hold it.
+    if (limited && under(resolve(value), home) && !keptSignIns.some((kept) => under(resolve(value), kept)) && !grants.some((grant) => under(resolve(value), grant.path))) continue;
     if (request.configured && (under(resolve(value), dataDir) || under(dataDir, resolve(value))) && !ownFolders.some((folder) => under(resolve(value), folder))) continue;
     rw(resolve(value));
   }
   for (const path of request.rw ?? []) if (!covered(resolve(path))) rw(resolve(path));
-  // Security: a grant never gives back the data folder, or a folder that holds it, whatever the caller was given.
-  const grants = (request.folders?.grants ?? []).map((grant) => ({ path: resolve(grant.path), write: grant.write }))
-    .filter((grant) => !under(grant.path, dataDir) && !under(dataDir, grant.path));
   for (const grant of grants) {
     if (!grant.write) continue;
     mounts.push({ kind: "bind", source: grant.path, target: grant.path, optional: true });
