@@ -4,6 +4,8 @@ import type { Bot } from "@/state/store";
 import type { TeamPerson } from "@/state/team-people";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import type { LocaleKey } from "@/locales";
+import type { MentionRowKind } from "@/lib/mention-row-kinds";
 import { normalizeState } from "@/lib/mascot";
 import { mentionRowDescription } from "@/lib/mentions";
 import { BotAvatar } from "./Avatar";
@@ -25,6 +27,25 @@ export const DEVS_CHOICE: MentionChoice = { id: "__devs__", name: DEVS_TAG, devs
 /** The @ list's rows for a Team Cloud's teammates, after the bots. */
 export function teammateChoices(people: readonly TeamPerson[]): MentionChoice[] {
   return people.map((person) => ({ id: `person:${person.email}`, name: person.name, person }));
+}
+
+const MENTION_KIND_LABEL: Record<MentionRowKind, LocaleKey> = {
+  agent: "composer.mention.agent",
+  app: "composer.mention.app",
+  mcp: "composer.mention.mcp",
+  person: "composer.mention.person",
+  team: "composer.mention.team",
+  channel: "composer.mention.channel",
+  devs: "composer.mention.devs",
+};
+
+export function mentionRowKind(choice: MentionChoice): MentionRowKind {
+  if (choice.bot) return "agent";
+  if (choice.tool) return choice.tool.kind;
+  if (choice.person) return "person";
+  if (choice.devs) return "devs";
+  if (choice.team) return "team";
+  return "channel";
 }
 
 /** The composer's @ list, shared by every composer that tags bots. */
@@ -84,7 +105,7 @@ export function MentionMenu({ listRef, motion, choices, highlight, everyoneCount
             )}
             name={choice.name}
             description={description || undefined}
-            kind={choice.bot ? t("composer.mention.agent") : choice.tool ? t(choice.tool.kind === "app" ? "composer.mention.app" : "composer.mention.mcp") : choice.person ? t("composer.mention.person") : choice.devs ? t("composer.mention.devs") : choice.team ? t("composer.mention.team") : t("composer.mention.channel")}
+            kind={t(MENTION_KIND_LABEL[mentionRowKind(choice)])}
           />
         );
       })}

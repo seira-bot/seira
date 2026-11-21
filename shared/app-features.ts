@@ -17,6 +17,8 @@ export interface AppFeature {
   slashCommands?: readonly string[];
   /** Views of the Automations page. */
   automationViews?: readonly string[];
+  /** Kinds of row in the @ list of the chat box. */
+  mentionRows?: readonly string[];
 }
 
 export const APP_FEATURE_DOES_MAX = 240;
@@ -60,7 +62,8 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "mention-menu",
     name: "The @ list",
     place: "the chat box: type @",
-    does: "Lists the bots and the teammates the person can mention. A mention brings that bot or teammate into the message.",
+    does: "Lists other bots, the connected apps and MCP servers this bot can use, teammates, and @devs. In a direct chat, tagging an app or a server asks the bot to use it for that message.",
+    mentionRows: ["agent", "app", "mcp", "person", "team", "channel", "devs"],
   },
   {
     id: "bots",
@@ -101,14 +104,14 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "mcp-servers",
     name: "MCP servers",
     place: "Apps → MCP servers",
-    does: "Tool servers the person adds to give bots more abilities. They are separate from Connected apps such as Gmail, which the person signs in to.",
+    does: "Tool servers the person adds to give bots more abilities. They are separate from Connected apps such as Gmail, which the person signs in to. Tag one with @ in a direct chat.",
     tools: ["mcp_server"],
   },
   {
     id: "connected-apps",
     name: "Connected apps",
     place: "Apps → Connected apps",
-    does: "Accounts such as Gmail, Calendar, Slack or Notion that the person connects so bots can use them. Select Connect on an app, then sign in with the link Seira gives.",
+    does: "Accounts such as Gmail, Calendar, Slack or Notion that the person connects so bots can use them. Select Connect on an app, then sign in with the link Seira gives. Tag one with @ in a direct chat.",
     releaseNotes: ["connectOneClick"],
   },
   {
