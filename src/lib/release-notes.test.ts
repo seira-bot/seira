@@ -18,9 +18,13 @@ const NOTES: ReleaseNote[] = [
 ];
 
 describe("release notes data", () => {
-  it("starts with 0.1.182 and its one item", () => {
-    expect(RELEASE_NOTES[0]!.version).toBe("0.1.182");
-    expect(RELEASE_NOTES[0]!.items.map(entry => entry.id)).toEqual(["seiraName"]);
+  it("starts with 0.1.183 and its four items in order", () => {
+    expect(RELEASE_NOTES[0]!.version).toBe("0.1.183");
+    expect(RELEASE_NOTES[0]!.items.map(entry => entry.id)).toEqual(["workflows", "drawFromReply", "copyCode", "personLook"]);
+  });
+  it("keeps 0.1.182 with its one item", () => {
+    const entry = RELEASE_NOTES.find(note => note.version === "0.1.182")!;
+    expect(entry.items.map(item => item.id)).toEqual(["seiraName"]);
   });
   it("keeps 0.1.181 with its six items in order", () => {
     const entry = RELEASE_NOTES.find(note => note.version === "0.1.181")!;
@@ -90,7 +94,7 @@ describe("releaseNotesView", () => {
     expect(view?.items).toHaveLength(4);
   });
   it("shows nothing when the version has no entry", () => {
-    expect(releaseNotesView({ first: "0.1.179", last: "0.1.183", before: "0.1.179" }, "0.1.183")).toBeNull();
+    expect(releaseNotesView({ first: "0.1.178", last: "0.1.179", before: "0.1.178" }, "0.1.179")).toBeNull();
   });
   it("merges skipped versions newest first and keeps at most six items", () => {
     const view = releaseNotesView({ first: "", last: "0.1.184", before: "0.1.180" }, "0.1.184", NOTES);
