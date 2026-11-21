@@ -38,6 +38,9 @@ export function checksFor(files) {
   for (const { name, paths } of WORKERS.filter((worker) => worker.fast)) {
     if (files.some((file) => file.startsWith(`cloudflare/${name}/`) || paths.includes(file))) checks.push({ name: `worker ${name}`, worker: name });
   }
+  if (files.some((file) => file === "pnpm-lock.yaml" || file === "packaging/flatpak/generated-sources.json")) {
+    checks.push({ name: "flatpak sources", command: "node", args: ["scripts/check-flatpak-sources.mjs"] });
+  }
   return checks;
 }
 

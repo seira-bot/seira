@@ -344,11 +344,11 @@ it("downloads an update by itself: the first check after launch starts it, and n
 it("My Cloud's page reads and drives the update channels, and another server's page is refused", async () => {
   const rule = mainRule();
   const { handlers } = await load(rule.pageAllowed);
-  expect([...handlers.keys()].sort()).toEqual(["update:check", "update:for-server-page", "update:get-state", "update:install", "update:seen"]);
+  expect([...handlers.keys()].sort()).toEqual(["update:check", "update:for-server-page", "update:get-state", "update:install", "update:seen", "update:way-for-server-page"]);
 
   const cloud = page(CLOUD);
   rule.show(cloud, "cloud");
-  const channels = [...handlers.keys()].filter((channel) => channel !== "update:for-server-page");
+  const channels = [...handlers.keys()].filter((channel) => channel !== "update:for-server-page" && channel !== "update:way-for-server-page");
   for (const channel of channels) expect(() => handlers.get(channel)(cloud.event), channel).not.toThrow();
   rule.context.cloudAccount = { homeTarget: () => null, state: () => ({ status: "unavailable", account: { id: "a1" } }), isOwnCloud: () => false };
   rule.context.rememberedHome = { accountId: "a1", origin: CLOUD };
@@ -441,8 +441,14 @@ it("a server's page the window shows may ask for the app's own update: it learns
   const ask = handlers.get("update:for-server-page");
   await expect(Promise.resolve().then(() => ask({ sender: page(OTHER).webContents, senderFrame: { url: `${OTHER}/` } }))).rejects.toThrow(/only available/);
   expect(await ask(other.event)).toBe("unavailable");
+  const way = handlers.get("update:way-for-server-page");
+  expect(() => way({ sender: page(OTHER).webContents, senderFrame: { url: `${OTHER}/` } })).toThrow(/only available/);
+  expect(() => way(page(LOCAL).event)).toThrow(/only available/);
+  expect(way(other.event)).toBe("download");
+  expect(updater.appUpdateWay()).toBe("download");
   updater.attachUpdaterWindow(rule.window);
   updater.startUpdater();
+  expect(way(other.event)).toBe("self");
   // Checked and downloaded at the page's request; the person said Not now. Five asks at once open one dialog, which
   // names the asking server.
   vi.advanceTimersByTime(updater.SERVER_PAGE_ASK_COOLDOWN_MS);
@@ -483,6 +489,7 @@ for (const [name, env] of [["a Flatpak", { FLATPAK_ID: "bot.seira.Seira" }], ["a
       expect(autoUpdater.downloadUpdate).not.toHaveBeenCalled();
       expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
       expect(handlers.get("update:get-state")(local.event)).toEqual({ status: "idle", managedByStore: true });
+      expect(updater.appUpdateWay()).toBe("store");
       await handlers.get("update:check")(local.event);
       await handlers.get("update:install")(local.event);
       expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
@@ -517,6 +524,7 @@ it("never checks, downloads or installs an update by itself in a Microsoft Store
     expect(autoUpdater.downloadUpdate).not.toHaveBeenCalled();
     expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
     expect(handlers.get("update:get-state")(local.event)).toEqual({ status: "idle", managedByStore: true });
+    expect(updater.appUpdateWay()).toBe("store");
     await handlers.get("update:check")(local.event);
     await handlers.get("update:install")(local.event);
     expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
@@ -527,4 +535,33 @@ it("never checks, downloads or installs an update by itself in a Microsoft Store
     if (store) Object.defineProperty(process, "windowsStore", store);
     else delete process.windowsStore;
   }
+});
+
+it("records when a check found nothing newer, and forgets it once an update is found", async () => {
+  const rule = mainRule();
+  const local = page(LOCAL);
+  rule.show(local);
+  const { updater, autoUpdater, handlers } = await load(rule.pageAllowed);
+  autoUpdater.checkForUpdates = vi.fn(async () => {
+    autoUpdater.emit("checking-for-update");
+    autoUpdater.emit("update-not-available", { version: "1.0.0" });
+    return { isUpdateAvailable: false };
+  });
+  updater.attachUpdaterWindow(rule.window);
+  updater.startUpdater();
+  expect(handlers.get("update:get-state")(local.event).upToDateAt).toBeUndefined();
+
+  vi.setSystemTime(new Date("2026-11-21T10:00:00Z"));
+  await handlers.get("update:check")(local.event);
+  await settle();
+  expect(handlers.get("update:get-state")(local.event)).toMatchObject({ status: "idle", upToDateAt: Date.parse("2026-11-21T10:00:00Z") });
+
+  autoUpdater.checkForUpdates = vi.fn(async () => {
+    autoUpdater.emit("checking-for-update");
+    autoUpdater.emit("update-available", { version: "2.0.0" });
+    return { isUpdateAvailable: true };
+  });
+  await handlers.get("update:check")(local.event);
+  await settle();
+  expect(handlers.get("update:get-state")(local.event).upToDateAt).toBeUndefined();
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { check, feedFiles, isFeed, judgeAssets, parseArgs, repoFromRemote, sumsFiles, upload, uploadOrder } from "./release-assets.mjs";
+import { check, feedFiles, isFeed, judgeAssets, missingForPublish, parseArgs, publish, repoFromRemote, sumsFiles, upload, uploadOrder } from "./release-assets.mjs";
 
 const FEED = "version: 1.0.0\nfiles:\n  - url: Seira-1.0.0-setup.exe\n    sha512: abc\n    size: 100\n  - url: Seira-1.0.0-setup.exe.blockmap\n    sha512: def\n    size: 5\npath: Seira-1.0.0-setup.exe\nsha512: abc\n";
 const SUMS = `${"a".repeat(64)}  Seira-1.0.0-setup.exe\n${"b".repeat(64)} *Seira-setup.exe\n`;
@@ -8,6 +8,9 @@ const SUMS = `${"a".repeat(64)}  Seira-1.0.0-setup.exe\n${"b".repeat(64)} *Seira
 type Asset = { id: number; name: string; size: number; state: string };
 const asset = (name: string, size = 1, state = "uploaded", id = 0): Asset => ({ id: id || name.length * 7 + size, name, size, state });
 const good = () => [asset("Seira-1.0.0-setup.exe", 100), asset("Seira-1.0.0-setup.exe.blockmap", 5), asset("Seira-setup.exe", 100), asset("latest.yml", 90), asset("SHA256SUMS-windows-x64.txt", 80)];
+
+const linux = () => [asset("Seira-1.0.0-x86_64.AppImage", 300), asset("Seira-1.0.0-amd64.deb", 200), asset("latest-linux.yml", 60), asset("Seira.AppImage", 300), asset("Seira-amd64.deb", 200), asset("SHA256SUMS-linux-x64.txt", 70), asset("Seira-1.0.0-x86_64.flatpak", 250)];
+const complete = () => [...linux(), ...good()];
 
 function fakeApi(assets: Asset[], contents: Record<string, string>, release: Record<string, unknown> = {}) {
   const calls: string[] = [];
@@ -43,12 +46,17 @@ describe("parseArgs", () => {
     [["check", "1.0.0"]],
     [["check", "v1.0.0", "file"]],
     [["upload", "v1.0.0"]],
-    [["publish", "v1.0.0"]],
+    [["publish"]],
+    [["publish", "v1.0.0", "file"]],
     [["check", "v1.0.0", "--repo"]],
     [["check", "v1.0.0", "--repo", "bad"]],
     [["check", "v1.0.0", "--nope"]],
   ])("gives exit 2 for %j", (argv) => {
     expect(() => parseArgs(argv)).toThrowError(expect.objectContaining({ exitCode: 2 }));
+  });
+
+  it("reads publish with a tag and no files", () => {
+    expect(parseArgs(["publish", "v1.2.3"])).toMatchObject({ command: "publish", tag: "v1.2.3", files: [] });
   });
 
   it("reads the repository from a remote", () => {
@@ -238,5 +246,119 @@ describe("upload", () => {
     expect(status).toBe(2);
     expect(h.uploaded).toEqual([]);
     expect(lines.join("\n")).toContain("Seira-setup.exe does not exist");
+  });
+});
+
+describe("missingForPublish", () => {
+  const names = (assets: Asset[]) => missingForPublish(assets, "v1.0.0").map((item) => item.name);
+
+  it("names the Windows files that a Linux-only release lacks", () => {
+    expect(missingForPublish(linux(), "v1.0.0")).toEqual([
+      { platform: "Windows", name: "latest.yml" },
+      { platform: "Windows", name: "SHA256SUMS-windows-x64.txt" },
+      { platform: "Windows", name: "Seira-setup.exe" },
+    ]);
+  });
+
+  it("names the Flatpak bundle of the release version when it is missing", () => {
+    expect(names(complete().filter((item) => item.name !== "Seira-1.0.0-x86_64.flatpak"))).toEqual(["Seira-1.0.0-x86_64.flatpak"]);
+    expect(names(complete())).toEqual([]);
+  });
+
+  it("does not count an asset that is not uploaded", () => {
+    expect(names(complete().map((item) => (item.name === "latest.yml" ? { ...item, state: "starter" } : item)))).toEqual(["latest.yml"]);
+  });
+});
+
+describe("publish", () => {
+  const LINUX_FEED = "version: 1.0.0\nfiles:\n  - url: Seira-1.0.0-x86_64.AppImage\n    sha512: abc\n    size: 300\npath: Seira-1.0.0-x86_64.AppImage\nsha512: abc\n";
+  const LINUX_SUMS = `${"a".repeat(64)}  Seira-1.0.0-x86_64.AppImage\n${"b".repeat(64)}  Seira.AppImage\n`;
+  const MAC_FEED = "version: 1.0.0\nfiles:\n  - url: Seira-1.0.0-arm64.dmg\n    sha512: abc\n    size: 400\npath: Seira-1.0.0-arm64.dmg\nsha512: abc\n";
+  const contents = { "latest.yml": FEED, "latest-linux.yml": LINUX_FEED, "SHA256SUMS-linux-x64.txt": LINUX_SUMS, "latest-mac.yml": MAC_FEED };
+
+  function harness(assets: Asset[], release: Record<string, unknown> = { draft: true }, failRun = false) {
+    const runs: string[][] = [];
+    const run = async (args: string[]) => {
+      runs.push(args);
+      if (failRun) throw new Error("not allowed");
+    };
+    const { api } = fakeApi(assets.map((item, index) => ({ ...item, id: 1000 + index })), contents, release);
+    return { runs, run, api, ...logger() };
+  }
+  const go = (h: ReturnType<typeof harness>) => publish({ api: h.api, run: h.run, repo: "o/r", tag: "v1.0.0", log: h.log });
+
+  it("AC-01: refuses a draft with Linux files only, names latest.yml, and runs nothing", async () => {
+    const h = harness(linux());
+    expect(await go(h)).toBe(1);
+    expect(h.lines).toContain("FAIL Windows: latest.yml is missing");
+    expect(h.lines.join("\n")).toContain("stays a draft");
+    expect(h.runs).toEqual([]);
+  });
+
+  it("AC-02: refuses a draft whose feed names a file with a wrong size, and runs nothing", async () => {
+    const assets = complete().map((item) => (item.name === "Seira-1.0.0-setup.exe" ? { ...item, size: 50 } : item));
+    const h = harness(assets);
+    expect(await go(h)).toBe(1);
+    expect(h.lines.join("\n")).toContain("FAIL latest.yml names Seira-1.0.0-setup.exe with size 100");
+    expect(h.runs).toEqual([]);
+  });
+
+  it("AC-03: publishes a complete draft as latest with one gh release edit, and checks again", async () => {
+    const h = harness(complete());
+    expect(await go(h)).toBe(0);
+    expect(h.runs).toEqual([["release", "edit", "v1.0.0", "--draft=false", "--latest", "--repo", "o/r"]]);
+    expect(h.lines.some((line) => line.startsWith("FAIL"))).toBe(false);
+  });
+
+  it("AC-03: exits 1 when gh release edit fails", async () => {
+    const h = harness(complete(), { draft: true }, true);
+    expect(await go(h)).toBe(1);
+    expect(h.lines.join("\n")).toContain("FAIL publish of v1.0.0 failed: not allowed");
+  });
+
+  it("refuses a draft without the Flatpak bundle, and runs nothing", async () => {
+    const h = harness(complete().filter((item) => !item.name.endsWith(".flatpak")));
+    expect(await go(h)).toBe(1);
+    expect(h.lines).toContain("FAIL Linux: Seira-1.0.0-x86_64.flatpak is missing");
+    expect(h.runs).toEqual([]);
+  });
+
+  it("AC-04: does not require macOS files when the release has none", async () => {
+    expect(missingForPublish(complete(), "v1.0.0")).toEqual([]);
+  });
+
+  it("AC-05: requires every macOS file when the release has one", async () => {
+    const h = harness([...complete(), asset("Seira-1.0.0-arm64.dmg", 400)]);
+    expect(await go(h)).toBe(1);
+    const text = h.lines.join("\n");
+    expect(text).toContain("FAIL macOS: latest-mac.yml is missing");
+    expect(text).toContain("FAIL macOS: Seira-intel.dmg is missing");
+    expect(h.runs).toEqual([]);
+  });
+
+  it("AC-05: publishes when all macOS files are present", async () => {
+    const mac = [asset("Seira-1.0.0-arm64.dmg", 400), asset("latest-mac.yml", 70), asset("SHA256SUMS-mac.txt", 60), asset("Seira.dmg", 400), asset("Seira-intel.dmg", 410)];
+    const h = harness([...complete(), ...mac]);
+    expect(await go(h)).toBe(0);
+    expect(h.runs).toHaveLength(1);
+  });
+
+  it("AC-06: changes nothing for a published release and exits 1 when Windows files are missing", async () => {
+    const h = harness(linux(), { draft: false });
+    expect(await go(h)).toBe(1);
+    expect(h.lines).toContain("FAIL Windows: Seira-setup.exe is missing");
+    expect(h.runs).toEqual([]);
+  });
+
+  it("AC-06: exits 0 for a published release with every file", async () => {
+    const h = harness(complete(), { draft: false });
+    expect(await go(h)).toBe(0);
+    expect(h.runs).toEqual([]);
+  });
+
+  it("exits 1 when the release does not exist", async () => {
+    const h = harness(complete());
+    expect(await publish({ api: h.api, run: h.run, repo: "o/r", tag: "v2.0.0", log: h.log })).toBe(1);
+    expect(h.runs).toEqual([]);
   });
 });

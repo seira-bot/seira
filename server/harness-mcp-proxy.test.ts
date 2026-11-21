@@ -1,5 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server } from "node:http";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DEVICE_PROXY_TIMEOUT_MS, HARNESS_PROXY_TIMEOUT_MS } from "./harness-budget.ts";
@@ -184,6 +187,35 @@ describe("harness MCP capability proxy", () => {
     } finally {
       child.kill();
       await new Promise<void>((resolve) => child.once("close", () => resolve()));
+    }
+  });
+
+  it("answers when started through a symlinked server folder, as the AppImage starts it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "seira-harness-link-"));
+    const link = join(dir, "server-resources");
+    symlinkSync(dirname(fileURLToPath(import.meta.url)), link, "junction");
+    const child = spawn(process.execPath, ["--experimental-strip-types", join(link, "harness-mcp-proxy.ts"), "browser"], {
+      env: { SEIRA_HARNESS_URL: url, SEIRA_MCP_TOKEN_BROWSER: "entrypoint-capability" }, stdio: ["pipe", "pipe", "pipe"],
+    });
+    let output = "";
+    const result = new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("Proxy did not respond")), 3_000);
+      child.stdout.on("data", (chunk) => {
+        output += chunk;
+        if (output.includes("\n")) { clearTimeout(timer); resolve(JSON.parse(output.split("\n")[0])); }
+      });
+      child.once("close", (code) => { clearTimeout(timer); reject(new Error(`Proxy exited (${code}) without an answer`)); });
+      child.on("error", reject);
+    });
+    try {
+      child.stdin.write(`${JSON.stringify(frame("initialize"))}\n`);
+      await expect(result).resolves.toMatchObject({ result: { serverInfo: { name: "seira-browser" } } });
+    } finally {
+      if (child.exitCode === null) {
+        child.kill();
+        await new Promise<void>((resolve) => child.once("close", () => resolve()));
+      }
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 
