@@ -22,7 +22,7 @@ import { callHelperTool, HELPER_TOOL_NAMES } from "./agents-helper-tools.ts";
 import { callUsageLimitsTool, USAGE_LIMITS_TOOL } from "./agents-usage-tool.ts";
 import { callThreadPostTool, THREAD_POST_TOOL } from "./agents-thread-post-tool.ts"; import { callRenameThreadTool, RENAME_THREAD_TOOL } from "./agents-thread-title-tool.ts";
 import { callWaitTool, WAIT_TOOL_NAMES } from "./agents-wait-tools.ts";
-import { callBurstTool } from "./agents-burst-tool.ts";
+import { callBurstTool } from "./agents-burst-tool.ts"; import { callBoardCloseTool } from "./agents-board-tool.ts";
 import { callComputerAskTool, COMPUTER_ASK_TOOL_NAMES } from "./agents-computer-ask-tool.ts";
 import { callImageTool, IMAGE_TOOL_NAMES } from "./agents-image-tools.ts";
 import { callHostingTool, HOSTING_TOOL_NAMES } from "./agents-hosting-tools.ts";
@@ -779,22 +779,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
     if (r.error) return { text: `Couldn't retry that thread: ${String(r.error)}`, isError: true };
     return { text: typeof r.message === "string" ? r.message : "The thread is running again. Its result stays in that thread; you are not woken for it — check it later with session_search or list_threads if you need to." };
   }
-  if (name === "board_close") {
-    const cardId = typeof args.card_id === "string" ? args.card_id.trim() : "";
-    if (!cardId) {
-      const query = new URLSearchParams({ fromBotId: BOT_ID, fromThreadId: THREAD_ID });
-      const r = await api(`/api/internal/board-close?${query.toString()}`);
-      if (r.error) return { text: `Couldn't list the cards: ${String(r.error)}`, isError: true };
-      const cards = Array.isArray(r.cards) ? r.cards.filter(jsonRecord) : [];
-      if (!cards.length) return { text: "No Needs you cards that you may move to Done." };
-      return { text: `Needs you cards you may move to Done:\n${cards.map((card) => `- ${String(card.title) || "Untitled"} (${String(card.state)}, @${String(card.botName)}) [card id: ${String(card.id)}]`).join("\n")}` };
-    }
-    const reason = typeof args.reason === "string" ? args.reason.trim() : "";
-    if (!reason) return { text: "board_close needs a reason (one plain sentence) with card_id.", isError: true };
-    const r = await api("/api/internal/board-close", { method: "POST", body: JSON.stringify({ fromBotId: BOT_ID, fromThreadId: THREAD_ID, cardId, reason }) });
-    if (r.error) return { text: `Couldn't move that card: ${String(r.error)}`, isError: true };
-    return { text: `Moved ${String(r.title) || "the card"} to Done as closed. The person sees that you closed it, and why.` };
-  }
+  if (name === "board_close") return callBoardCloseTool(args, api, { botId: BOT_ID, threadId: THREAD_ID });
   if (member === "memory_log") {
     if (typeof args.text !== "string" || !args.text.trim()) {
       return { text: "memory_log needs text: one line about what happened.", isError: true };
