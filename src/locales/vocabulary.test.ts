@@ -68,8 +68,6 @@ const ALLOWED: ReadonlyArray<{ file: string; snippet?: string; why: string }> = 
   { file: "server/peer-provenance.ts", snippet: "openmausbot", why: "defuses imitations of an earlier version's notes" },
   { file: "server/checkpoints.ts", snippet: ".openmausbot-secrets/", why: "keeps the secrets folder of an earlier version out of snapshots" },
   { file: "server/browser-engine-release.ts", snippet: "milind-soni/OpenMausBot/releases", why: "the release assets still live in the upstream repository" },
-  { file: "server/team-library.ts", snippet: "milind-soni/openmausbot-teams", why: "the community repository keeps its upstream name" },
-  { file: "packages/phone-protocol/src/share-card.ts", snippet: "milind-soni/openmausbot-teams", why: "the community repository keeps its upstream name" },
 ];
 
 function* sources(dir: string): Generator<string> {
