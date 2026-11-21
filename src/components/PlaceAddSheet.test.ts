@@ -7,7 +7,7 @@ import { suggestedLocalName } from "@/lib/places";
 
 vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
 vi.mock("./cloud-buy/CloudMascotScene", () => ({ CloudMascotScene: () => null }));
-const { ConnectServerFromMenu, NewLocalFromMenu, RailSheet } = await import("./PlaceAddSheet");
+const { ConnectServerFromMenu, NewLocalFromMenu, PlaceAddSheet, RailSheet } = await import("./PlaceAddSheet");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLDivElement, root: Root | null = null, ask: (() => void) | null = null, askConnect: (() => void) | null = null;
@@ -85,4 +85,19 @@ it("a parent re-render with a new onClose keeps focus inside the sheet instead o
   expect(document.activeElement).toBe(second);
   await act(async () => { root!.render(createElement("div")); });
   expect(document.activeElement, "closing still returns focus to the opener").toBe(opener);
+});
+
+it("the server view offers Install on my server only where the desktop bridge exists", async () => {
+  root = createRoot(host);
+  const open = async () => { await act(async () => { root!.render(createElement(PlaceAddSheet, { choices: { cloud: false, link: true, address: false }, onClose: () => {} })); }); };
+  await open();
+  expect(document.querySelector("[data-own-server-install]"), "no bridge, no link").toBeNull();
+  await act(async () => root?.unmount());
+  root = createRoot(host);
+  (window as { ogb?: { serverInstall?: unknown } }).ogb!.serverInstall = { info: async () => ({ agent: false }), onEvent: () => () => {}, cancel: async () => true };
+  await open();
+  const link = document.querySelector<HTMLButtonElement>("[data-own-server-install]");
+  expect(link?.textContent).toBe("Install on my server");
+  await act(async () => { link!.click(); });
+  expect(document.querySelector('[data-server-install="form"]')).not.toBeNull();
 });
