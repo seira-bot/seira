@@ -10,7 +10,7 @@ export interface BotFolders {
 }
 
 export interface BotFoldersDeps {
-  bot(botId: string): { folderAccess?: FolderAccess; section?: string } | undefined;
+  bot(botId: string): { folderAccess?: FolderAccess; section?: string } | null | undefined;
   departments: Pick<DepartmentFolders, "get">;
   dataDir: string;
   log?: (line: string) => void;
