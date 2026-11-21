@@ -51,6 +51,6 @@ export async function fixtureFiles(...parts: string[]): Promise<ImportFiles> {
 
 export async function collectEvents(reader: SourceReader, files: ImportFiles, signal: AbortSignal = new AbortController().signal): Promise<ImportEvent[]> {
   const events: ImportEvent[] = [];
-  for await (const event of reader.read({ from: "files", files }, { signal, stagingDir: "", transcripts: true })) events.push(event);
+  for await (const event of reader.read({ from: "files", files }, { signal, stagingDir: "", transcripts: true, instructions: "persona" })) events.push(event);
   return events;
 }

@@ -3,14 +3,14 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import type { ImportLeftover, ImportSourceKind } from "../../shared/ai-import/bundle.ts";
-import type { ImportDestination, ImportJobView, PasteSource } from "../../shared/ai-import/api.ts";
+import type { ImportDestination, ImportJobView, InstructionsAs, PasteSource } from "../../shared/ai-import/api.ts";
 import { ensurePrivateDir } from "../data-dir.ts";
 import type { LocalSource } from "./reader.ts";
 
 /** The source of a local job stays on the server; the hub only ever holds its opaque id. */
 export type JobInput =
   | { from: "upload"; uploadIds: string[] }
-  | { from: "local"; source: LocalSource; transcripts: boolean }
+  | { from: "local"; source: LocalSource; transcripts: boolean; instructions: InstructionsAs }
   | { from: "paste"; ai: PasteSource; aboutYou: string[]; howToReply: string[]; destination: ImportDestination };
 
 /** `bots` and `leftovers` come from the fast lane, so a restarted job goes on with the chats. */

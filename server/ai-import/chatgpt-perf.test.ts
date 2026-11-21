@@ -20,7 +20,7 @@ describe("ChatGPT reader at size", () => {
     try {
       const made = await makeChatgptExport(dir, 2 * MB);
       let seen = 0;
-      for await (const event of chatgptReader.read({ from: "files", files: await folderFiles(dir) }, { signal: new AbortController().signal, stagingDir: "", transcripts: true })) {
+      for await (const event of chatgptReader.read({ from: "files", files: await folderFiles(dir) }, { signal: new AbortController().signal, stagingDir: "", transcripts: true, instructions: "persona" })) {
         if (event.type === "conversation") seen++;
       }
       expect(seen).toBe(made.conversations);
@@ -48,7 +48,7 @@ describe("ChatGPT reader at size", () => {
       let peakRss = process.memoryUsage().rss;
       let conversations = 0;
       const started = performance.now();
-      for await (const event of chatgptReader.read({ from: "files", files }, { signal: new AbortController().signal, stagingDir: "", transcripts: true })) {
+      for await (const event of chatgptReader.read({ from: "files", files }, { signal: new AbortController().signal, stagingDir: "", transcripts: true, instructions: "persona" })) {
         if (event.type !== "conversation") continue;
         conversations++;
         if (conversations % 100 === 0) {

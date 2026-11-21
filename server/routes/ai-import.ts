@@ -25,7 +25,7 @@ const destinationSchema = z.discriminatedUnion("kind", [
 const lines = z.array(z.string().max(AI_IMPORT_LIMITS.pasteChars)).max(MAX_LINES);
 const createSchema = z.discriminatedUnion("from", [
   z.object({ from: z.literal("upload"), uploadIds: z.array(z.string().min(1).max(64)).min(1).max(MAX_UPLOADS) }).strict(),
-  z.object({ from: z.literal("local"), sourceId: z.string().min(1).max(200), transcripts: z.boolean().optional() }).strict(),
+  z.object({ from: z.literal("local"), sourceId: z.string().min(1).max(200), transcripts: z.boolean().optional(), instructions: z.enum(["persona", "about-you"]).optional() }).strict(),
   z.object({
     from: z.literal("paste"),
     ai: z.enum(["chatgpt", "claude-ai", "gemini", "grok", "copilot", "other"]),

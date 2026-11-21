@@ -2,7 +2,7 @@ import { createWriteStream, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { once } from "node:events";
 
-import type { ImportCounts, ImportErrorCode } from "../../shared/ai-import/api.ts";
+import type { ImportCounts, ImportErrorCode, InstructionsAs } from "../../shared/ai-import/api.ts";
 import { emptyCounts } from "../../shared/ai-import/api.ts";
 import { emptyAgent, type ImportAgent, type ImportLeftover, type ImportSource, type ImportSourceKind } from "../../shared/ai-import/bundle.ts";
 import { hashOf } from "./ids.ts";
@@ -14,7 +14,7 @@ import { CHATS_FILE, SUMMARY_FILE, type ReadSummary, type SpoolLine } from "./sp
 import { ImportUploadError, openUploads, type ImportLimits, type UploadPart } from "./upload.ts";
 
 export interface ReadPassParams {
-  input: { from: "files"; parts: UploadPart[] } | { from: "local"; source: LocalSource; transcripts: boolean };
+  input: { from: "files"; parts: UploadPart[] } | { from: "local"; source: LocalSource; transcripts: boolean; instructions: InstructionsAs };
   stagingDir: string;
   /** Tests only: a module that exports READERS in place of the real readers. Never set from a request. */
   readersModule?: string;
@@ -118,7 +118,7 @@ export async function runReadPass(params: ReadPassParams, post: (message: ReadPa
   postProgress(true);
 
   try {
-    const ctx = { signal, stagingDir: filesDir, transcripts: params.input.from === "local" ? params.input.transcripts : true };
+    const ctx = { signal, stagingDir: filesDir, transcripts: params.input.from === "local" ? params.input.transcripts : true, instructions: params.input.from === "local" ? params.input.instructions : "persona" };
     for await (const event of chosen.read(input, ctx)) {
       if (signal.aborted) return;
       switch (event.type) {

@@ -29,7 +29,10 @@ async function* readClaudeCode(input: ImportInput, ctx: ReaderContext): AsyncGen
   const ref = "claude-code";
   const agent: ImportAgent = emptyAgent(ref, input.source.name);
   const instructions = await readText(join(home, "CLAUDE.md"));
-  if (instructions?.trim()) agent.persona = instructions.trim();
+  if (instructions?.trim()) {
+    if (ctx.instructions === "about-you") agent.aboutYou = markdownEntries(instructions).map((entry, index) => ({ ref: `CLAUDE.md#${index}`, text: entry }));
+    else agent.persona = instructions.trim();
+  }
 
   for (const name of await listNames(join(home, "rules"))) {
     if (!name.endsWith(".md")) continue;

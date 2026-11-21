@@ -39,6 +39,16 @@ describe("claudeCodeReader", () => {
     expect(agent.tools).toEqual([]);
   });
 
+  it("claude code memory: puts CLAUDE.md under About you when asked", async () => {
+    const agent = agentOf(await collect(claudeCodeReader, localSource("claude-code", home, undefined, "Claude Code"), context(staging, false, "about-you")));
+    expect(agent.persona).toBeUndefined();
+    expect(agent.aboutYou).toEqual([{ ref: "CLAUDE.md#0", text: "Reply briefly. Prefer TypeScript." }]);
+    expect(agent.memories).toEqual([
+      { ref: "projects/-work-app/memory/MEMORY.md#1", text: "Remember to run tests before a release" },
+      { ref: "projects/-work-app/memory/user_role.md", text: "The user is a product designer." },
+    ]);
+  });
+
   it("transcripts off: reads no session by default", async () => {
     const events = await collect(claudeCodeReader, localSource("claude-code", home), context(staging));
     expect(events.filter((event) => event.type === "conversation")).toEqual([]);

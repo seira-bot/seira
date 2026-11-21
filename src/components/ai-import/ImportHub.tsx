@@ -8,11 +8,12 @@ import { copyText } from "@/lib/copy-text";
 import { t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { useStore } from "@/state/store";
-import type { ApplyImportJob, ImportDestination, ImportErrorCode, ImportJobView, LocalSourceView, PasteSource } from "../../../shared/ai-import/api";
+import type { ApplyImportJob, ImportDestination, ImportErrorCode, ImportJobView, InstructionsAs, LocalSourceView, PasteSource } from "../../../shared/ai-import/api";
 import type { ImportSourceKind } from "../../../shared/ai-import/bundle";
 import { parsePaste, pastePrompt } from "../../../shared/ai-import/paste";
 import { GrokBotMark } from "../GrokBotMark";
 import { ClaudeMark, HermesMark, PresetProviderMark } from "../ProviderIcons";
+import { Select } from "../Select";
 import { SettingRow, SettingsMark } from "../SettingsPrimitives";
 import { GrokMoveDialog } from "../lazy-screens";
 import { sourceName } from "./copy";
@@ -51,6 +52,7 @@ export interface HubViewProps {
   /** undefined while looking; null when the look failed. */
   localSources: readonly LocalSourceView[] | null | undefined;
   transcripts: boolean;
+  instructions: InstructionsAs;
   grokOpen: boolean;
   /** The Grok Bot dialog, drawn under its row while open. */
   grokDialog?: ReactNode;
@@ -58,6 +60,7 @@ export interface HubViewProps {
   sending: { done: number; total: number } | null;
   sendFailed?: boolean;
   onTranscripts: (on: boolean) => void;
+  onInstructions: (value: InstructionsAs) => void;
   onGuide: (source: GuideSource) => void;
   onBring: (source: LocalSourceView) => void;
   onPaste: () => void;
@@ -75,7 +78,7 @@ function SourceRow({ kind, title, line, action, onAction, extra }: { kind: Impor
 }
 
 export function HubView(props: HubViewProps) {
-  const { local, localSources, transcripts, grokOpen, grokDialog, resume, sending, sendFailed, onTranscripts, onGuide, onBring, onPaste, onGrok, onResume, onFiles } = props;
+  const { local, localSources, transcripts, instructions, grokOpen, grokDialog, resume, sending, sendFailed, onTranscripts, onInstructions, onGuide, onBring, onPaste, onGrok, onResume, onFiles } = props;
   const found = (localSources ?? []).filter((source) => LOCAL_KINDS.has(source.kind));
   return (
     <div data-import-section="ai-import" data-settings-block="ai-import" className="contents">
@@ -90,10 +93,19 @@ export function HubView(props: HubViewProps) {
           {found.map((source) => (
             <SourceRow key={source.id} kind={source.kind} title={source.name} line={t(`aiImport.line.${source.kind}` as LocaleKey)} action={t("aiImport.action.bringIn")} onAction={() => onBring(source)}
               extra={source.kind === "claude-code" ? (
-                <label className="inline-flex items-center gap-2 text-[12px] leading-4 text-ink-secondary">
-                  <input type="checkbox" data-ai-import-transcripts="" checked={transcripts} onChange={(event) => onTranscripts(event.target.checked)} className="size-3.5 accent-[var(--color-accent)]" />
-                  {t("aiImport.transcripts")}
-                </label>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <label className="inline-flex items-center gap-2 text-[12px] leading-4 text-ink-secondary">
+                    <input type="checkbox" data-ai-import-transcripts="" checked={transcripts} onChange={(event) => onTranscripts(event.target.checked)} className="size-3.5 accent-[var(--color-accent)]" />
+                    {t("aiImport.transcripts")}
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-[12px] leading-4 text-ink-secondary">
+                    <span className="shrink-0">{t("aiImport.instructions.label")}</span>
+                    <Select data-ai-import-instructions="" aria-label={t("aiImport.instructions.label")} value={instructions} onChange={(event) => onInstructions(event.target.value === "about-you" ? "about-you" : "persona")}>
+                      <option value="persona">{t("aiImport.instructions.persona")}</option>
+                      <option value="about-you">{t("aiImport.instructions.aboutYou")}</option>
+                    </Select>
+                  </label>
+                </div>
               ) : undefined} />
           ))}
           {localSources === undefined && <SettingRow title={t("aiImport.group.here")} subtitle={t("aiImport.looking")}>{null}</SettingRow>}
@@ -145,6 +157,7 @@ export function ImportHubSection({ client = aiImportApi, local }: { client?: AiI
   const [jobs, setJobs] = useState<Record<string, ImportJobView>>({});
   const [localSources, setLocalSources] = useState<LocalSourceView[] | null | undefined>(local ? undefined : []);
   const [transcripts, setTranscripts] = useState(false);
+  const [instructions, setInstructions] = useState<InstructionsAs>("persona");
   const [grokOpen, setGrokOpen] = useState(false);
   const [sending, setSending] = useState<{ done: number; total: number } | null>(null);
   const [sendFailed, setSendFailed] = useState(false);
@@ -242,11 +255,11 @@ export function ImportHubSection({ client = aiImportApi, local }: { client?: AiI
     }
   }
   return (
-    <HubView local={local} localSources={localSources} transcripts={transcripts} grokOpen={grokOpen} resume={resumableJob(Object.values(jobs), Date.now())}
+    <HubView local={local} localSources={localSources} transcripts={transcripts} instructions={instructions} grokOpen={grokOpen} resume={resumableJob(Object.values(jobs), Date.now())}
       grokDialog={grokOpen ? <GrokMoveDialog inline onClose={() => setGrokOpen(false)} /> : undefined}
       sending={sending} sendFailed={sendFailed}
-      onTranscripts={setTranscripts} onGuide={(source) => { setSendFailed(false); setScreen({ name: "guide", source }); }}
-      onBring={(source) => run(() => client.create({ from: "local", sourceId: source.id, ...(source.kind === "claude-code" ? { transcripts } : {}) }).then((job) => { openJob(job); return job; }))}
+      onTranscripts={setTranscripts} onInstructions={setInstructions} onGuide={(source) => { setSendFailed(false); setScreen({ name: "guide", source }); }}
+      onBring={(source) => run(() => client.create({ from: "local", sourceId: source.id, ...(source.kind === "claude-code" ? { transcripts, instructions } : {}) }).then((job) => { openJob(job); return job; }))}
       onPaste={() => setScreen({ name: "paste" })} onGrok={() => setGrokOpen((open) => !open)}
       onResume={openJob} onFiles={sendFiles} />
   );
