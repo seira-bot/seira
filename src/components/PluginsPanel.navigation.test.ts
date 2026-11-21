@@ -168,15 +168,20 @@ describe("Apps pop-up", () => {
     expect(html).toContain(`data-hosted-app="${HOSTED_MCP_APPS[0].id}"`);
     for (const other of HOSTED_MCP_APPS.slice(1)) expect(html).not.toContain(`data-hosted-app="${other.id}"`);
   });
-  it.each(["mind map", "booking", "broadcast", "landing page", "sales funnel", "comment"])("finds the one hosted card whose keywords match %s", (word) => {
+  it.each(["mind map", "booking", "broadcast", "sales funnel", "comment"])("finds the one hosted card whose keywords match %s", (word) => {
     fixture.overrides.set(HOSTED_CONNECTED, null);
     fixture.overrides.set(SEARCH, word);
     expect(render().html.match(/data-hosted-app="/g)).toHaveLength(1);
   });
-  it("finds both WhatsApp hosted cards", () => {
+  it("finds every hosted WhatsApp card", () => {
     fixture.overrides.set(HOSTED_CONNECTED, null);
     fixture.overrides.set(SEARCH, "whatsapp");
-    expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["citcat", "konektor"]);
+    expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["citcat", "dalekta", "konektor"]);
+  });
+  it("finds the two hosted cards whose text mentions a landing page", () => {
+    fixture.overrides.set(HOSTED_CONNECTED, null);
+    fixture.overrides.set(SEARCH, "landing page");
+    expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["biver", "dalekta"]);
   });
   it("counts two connected hosted apps under Connected", () => {
     fixture.overrides.set(HOSTED_CONNECTED, { konektor: true, coret: true });
@@ -610,7 +615,7 @@ describe("Apps pop-up", () => {
   it("shows Suggested for you after Connected, the same tiles, with the on-demand button", () => {
     fixture.overrides.set(SUGGESTIONS, { cards: [card("notion"), card("gmail")], pick: "available" });
     const { html, nodes: tree } = render();
-    expect(headings(html).slice(0, 2)).toEqual(["Connected", "Suggested for you"]);
+    expect(headings(html).slice(1, 3)).toEqual(["Connected", "Suggested for you"]);
     expect(html).toContain('data-apps-section="apps-section-suggested"');
     expect(html.match(/data-app-tile="notion"/g)!.length).toBeGreaterThanOrEqual(2);
     expect(suggestedAction(tree)!.label).toBe("Show suggested");
@@ -623,7 +628,7 @@ describe("Apps pop-up", () => {
     fixture.overrides.set(SUGGESTIONS, { cards: [card("slack")], pick: "available" });
     expect(headings(render().html)).not.toContain("Suggested for you");
     fixture.overrides.set(STATUS, {});
-    expect(headings(render().html)[0]).toBe("Suggested for you");
+    expect(headings(render().html)[1]).toBe("Suggested for you");
   });
 
   it("points to Settings for a key when no decision model is available, and hides the button after a pick", () => {
