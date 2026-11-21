@@ -22,7 +22,7 @@ const fixture = vi.hoisted(() => {
 });
 vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
-  return { ...original, useStore: () => ({ state: { ...original.initialState, ...fixture.state }, dispatch: fixture.dispatch }) };
+  return { ...original, useStore: () => ({ state: { ...original.initialState, config: { features: { showToolCalls: false } } as AppState["config"], ...fixture.state }, dispatch: fixture.dispatch }) };
 });
 vi.mock("@/lib/drafts", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/drafts")>();
@@ -82,7 +82,7 @@ const release: Message[] = [
 ];
 const agentsEngine = { instanceId: "test", driverKind: "claude", displayName: "Test", capabilities: { agentsMcp: true } } as unknown as InstanceInfo;
 const saveable = (): void => {
-  fixture.state = { instances: [agentsEngine], config: { features: { skillAuthoring: true } } as AppState["config"] };
+  fixture.state = { instances: [agentsEngine], config: { features: { skillAuthoring: true, showToolCalls: false } } as AppState["config"] };
 };
 const CARD = `aria-label="${t("chat.verify.aria")}"`;
 const TAG = `>${t("chat.verify.verifiedTag")}<`;
@@ -126,7 +126,7 @@ describe("The run card in the chat pane", () => {
   });
 
   it("withholds Save when skill authoring is switched off in Settings", () => {
-    fixture.state = { instances: [agentsEngine], config: { features: { skillAuthoring: false } } as AppState["config"] };
+    fixture.state = { instances: [agentsEngine], config: { features: { skillAuthoring: false, showToolCalls: false } } as AppState["config"] };
     const markup = render(run);
     expect(markup).toContain(">doctor<");
     expect(markup).not.toContain(t("chat.verify.save"));
