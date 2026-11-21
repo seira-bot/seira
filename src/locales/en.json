@@ -11592,6 +11592,8 @@
   "board.columns": "Columns",
   "citcat.description": "Chats, contacts and sales funnel in your Citcat.id WhatsApp CRM.",
   "citcat.notice": "Sign in with Citcat.id. No API key needed. A bot that can use Citcat.id can read and change your contacts, chats and funnel, so choose which bots get it under Bot access.",
+  "repliz.description": "Comments, messages, scheduled posts and automations for your social accounts in Repliz.",
+  "repliz.notice": "Sign in with Repliz. No API key needed here: Repliz asks for your Access Key and Secret Key once, on its own page. A bot that can use Repliz can reply to comments, send messages and post on your social accounts, so choose which bots get it under Bot access.",
   "aiImport.title": "Move from another AI",
   "aiImport.subtitle": "Bring over the persona, memories, skills, tools, routines and chats of another AI.",
   "aiImport.source.chatgpt": "ChatGPT",

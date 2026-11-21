@@ -64,13 +64,14 @@ recognized rather than replaced.
 | **Coret.id**, mind maps, sketches and pads | `https://mcp.coret.id/mcp` | Browser sign-in |
 | **Termilo.id**, bookings, services, schedules and customer messages | `https://api.termilo.id/mcp` | Browser sign-in |
 | **Citcat.id**, WhatsApp CRM: chats, contacts and sales funnel | `https://api-crm.citcat.id/api/mcp` | Browser sign-in |
+| **Repliz**, social media: comments, messages, scheduled posts and automations | `https://mcp.repliz.com/mcp` | Browser sign-in |
 
 A Konektor.id server added earlier with a pasted key keeps working and counts as
 connected. **Disconnect** deletes that server and its key. Connect again to use
 browser sign-in.
 
 A bot that can use one of these services acts on your account there: it can
-change your pages, maps, bookings, contacts or WhatsApp messages. Choose which bots get
+change your pages, maps, bookings, contacts, social posts or WhatsApp messages. Choose which bots get
 each card under **Bot access**.
 
 ### Servers that ask you to sign in

@@ -168,7 +168,7 @@ describe("Apps pop-up", () => {
     expect(html).toContain(`data-hosted-app="${HOSTED_MCP_APPS[0].id}"`);
     for (const other of HOSTED_MCP_APPS.slice(1)) expect(html).not.toContain(`data-hosted-app="${other.id}"`);
   });
-  it.each(["mind map", "booking", "broadcast", "landing page", "sales funnel"])("finds the one hosted card whose keywords match %s", (word) => {
+  it.each(["mind map", "booking", "broadcast", "landing page", "sales funnel", "comment"])("finds the one hosted card whose keywords match %s", (word) => {
     fixture.overrides.set(HOSTED_CONNECTED, null);
     fixture.overrides.set(SEARCH, word);
     expect(render().html.match(/data-hosted-app="/g)).toHaveLength(1);
