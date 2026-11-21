@@ -477,6 +477,21 @@ linuxBox("a bot's folder list", () => {
       expect(visibleInBox(ask({ limited: false, grants: [] }), join(fakeHome, ".config/other-app/token"))).toBe("rw");
     });
 
+    it("never binds a path that holds HOME, from the environment, rw or a lent folder; non-limited mode is unchanged", () => {
+      const ask = (given: BoxRequest["folders"], more: Partial<BoxRequest>) => planBox({ ...setup(), dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "claude", args: [], cwd: fakeCwd, env: { HOME: fakeHome }, ...(given ? { folders: given } : {}), ...more,
+      });
+      for (const holder of ["/", root, fakeHome, join(fakeHome, "..")]) {
+        const plan = ask(folders(true), { env: { HOME: fakeHome, XDG_DATA_HOME: holder }, rw: [holder] });
+        expect(visibleInBox(plan, join(fakeHome, ".ssh/id_ed25519")), holder).toBe("none");
+        expect(plan.mounts.some((mount) => mount.kind === "bind" && "source" in mount && mount.source === holder), holder).toBe(false);
+      }
+      const owned = ask(folders(true), { rw: [join(fakeData, "workspaces", "bot-a--member-p_mira")] });
+      expect(visibleInBox(owned, join(fakeData, "workspaces", "bot-a--member-p_mira", "MEMORY.md")), "an own folder in the data folder stays").toBe("rw");
+      const open = ask(undefined, { rw: [root] });
+      expect(visibleInBox(open, join(fakeHome, ".ssh/id_ed25519"))).toBe("rw");
+    });
+
     it("lists the mounts of one read-only grant inside one can-change grant", () => {
       const plan = limitedPlan(["/work/repo", true], ["/work/repo/vendor", false]);
       const lines = plan.mounts.filter((mount) => "source" in mount && mount.source.startsWith("/work")).map((mount) => `${mount.kind} ${"source" in mount ? mount.source : ""}`);

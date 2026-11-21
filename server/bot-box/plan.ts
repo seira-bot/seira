@@ -239,10 +239,12 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
   const ownHome = request.home ? resolve(request.home) : null;
   const limited = !ownHome && request.folders?.limited === true;
   const keptSignIns: string[] = [];
+  const realHome = realPathOf(home), realData = realPathOf(dataDir);
+  /** A path that is HOME, or holds it (the server's data folder too): in a limited box nothing may bind it. */
+  const holdsHome = (path: string) => under(realHome, path) || under(home, path) || under(realData, path) || under(dataDir, path);
   if (limited) {
     // A private empty HOME, with back only what an engine needs to run and sign in.
     mounts.push({ kind: "tmpfs", target: home });
-    const realData = realPathOf(dataDir), realHome = realPathOf(home);
     // Security: bubblewrap binds through links. An entry is bound only when it is not a link and is where its name says,
     // so a link to HOME or to the data folder gives nothing back.
     const entry = (name: string): string | null => {
@@ -312,12 +314,20 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
     // A temp folder stays the box's own private one; anything else the engine writes is put back.
     if (!value || !isAbsolute(value) || covered(resolve(value)) || PRIVATE_INSIDE.some((base) => under(resolve(value), base))) continue;
     // A limited box does not give HOME back through an environment path: only a sign-in folder, a program folder (already
-    // there) or a grant may hold it.
-    if (limited && under(resolve(value), home) && !keptSignIns.some((kept) => under(resolve(value), kept)) && !grants.some((grant) => under(resolve(value), grant.path))) continue;
+    // there) or a grant may hold it, and nothing may hold HOME itself.
+    if (limited) {
+      const path = resolve(value), real = realPathOf(path);
+      if (holdsHome(real) || holdsHome(path)) continue;
+      const inside = (base: string) => under(path, base) || under(real, realPathOf(base));
+      if ((under(real, realHome) || under(path, home)) && !keptSignIns.some(inside) && !grants.some((grant) => inside(grant.path))) continue;
+    }
     if (request.configured && (under(resolve(value), dataDir) || under(dataDir, resolve(value))) && !ownFolders.some((folder) => under(resolve(value), folder))) continue;
     rw(resolve(value));
   }
-  for (const path of request.rw ?? []) if (!covered(resolve(path))) rw(resolve(path));
+  for (const path of request.rw ?? []) {
+    if (limited && (holdsHome(realPathOf(resolve(path))) || holdsHome(resolve(path)))) continue;
+    if (!covered(resolve(path))) rw(resolve(path));
+  }
   for (const grant of grants) {
     if (!grant.write) continue;
     mounts.push({ kind: "bind", source: grant.path, target: grant.path, optional: true });
