@@ -67,14 +67,25 @@ describe("which Chrome the bots' browser runs", () => {
     expect(registryData(output, "Missing")).toBeNull();
   });
 
-  it("on a Linux desktop without its own Google Chrome keeps the bundled shell, as a fixed choice", () => {
-    const linuxDesktop = (files: string[]) => host("linux", files, { env: { SEIRA_RESOURCES_PATH: "/opt/Seira/resources" } });
-    expect(resolveChromePlan(linuxDesktop(["/opt/google/chrome/chrome"]), managed)).toMatchObject({ kind: "chrome", chrome: { source: "installed" }, fallback: null });
-    expect(resolveChromePlan(linuxDesktop([]), managed)).toEqual({ kind: "legacy", reason: "Google Chrome is not installed", noChrome: true });
+  it("on a Linux desktop without its own Google Chrome downloads Chrome for Testing, as a Mac does", () => {
+    const linuxDesktop = (files: string[], arch = "x64") => host("linux", files, { arch, env: { SEIRA_RESOURCES_PATH: "/opt/Seira/resources", PATH: "/usr/bin" } });
+    const pin = chromeForTestingPin("linux", "x64");
+    expect(resolveChromePlan(linuxDesktop(["/opt/google/chrome/chrome"]), managed)).toMatchObject({ kind: "chrome", chrome: { source: "installed" }, fallback: pin });
+    expect(resolveChromePlan(linuxDesktop([]), managed)).toEqual({ kind: "download", pin });
+    // A system Chromium on PATH would start through agent-browser with its "HeadlessChrome" user agent.
+    expect(resolveChromePlan(linuxDesktop(["/usr/bin/chromium"]), managed)).toEqual({ kind: "download", pin });
+    const downloaded = chromeForTestingExecutable("/data", pin!);
+    expect(resolveChromePlan(linuxDesktop([downloaded]), managed)).toEqual({ kind: "chrome", chrome: { path: downloaded, source: "downloaded" }, fallback: null });
+    expect(resolveChromePlan(linuxDesktop([], "ia32"), managed)).toEqual({ kind: "legacy", reason: "no Chrome is installed and none is pinned for this platform", noChrome: true });
     const policy = linuxDesktop(["/opt/google/chrome/chrome", "/etc/opt/chrome/policies/managed/corp.json"]);
     expect(chromePolicyManaged(policy)).toBe(true);
-    expect(resolveChromePlan(policy, managed)).toEqual({ kind: "legacy", reason: "Google Chrome here is managed by an organization" });
+    expect(resolveChromePlan(policy, managed)).toEqual({ kind: "download", pin });
     expect(chromePolicyManaged(linuxDesktop(["/etc/opt/chrome/policies/managed/README"]))).toBe(false);
+  });
+
+  it("on a Linux server keeps a browser agent-browser finds on PATH rather than downloading another", () => {
+    const server = host("linux", ["/usr/bin/chromium"], { arch: "x64", env: { PATH: "/usr/bin" } });
+    expect(resolveChromePlan(server, managed)).toEqual({ kind: "legacy", reason: "agent-browser found a browser on this server" });
   });
 
   it("on a server uses the Chrome for Testing agent-browser installed, newest first", () => {

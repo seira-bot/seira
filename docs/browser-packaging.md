@@ -42,13 +42,14 @@ real Chrome whenever this machine has one, chosen once per machine
 2. Otherwise **Chrome for Testing** 158.0.8127.36, downloaded once into
    `tools/chrome/` in the data directory at first launch, checked against its
    pinned size and SHA-256 before it is unpacked, and moved into place in one
-   rename. Only platforms with a pin download (Apple silicon Macs and Linux
-   servers on x64 or arm64 today; `scripts/pin-chrome-for-testing.ts` measures
-   more). A browser call made
+   rename. Only platforms with a pin download (Apple silicon Macs, and Linux
+   desktops and servers on x64 or arm64 today;
+   `scripts/pin-chrome-for-testing.ts` measures more). A browser call made
    during the download waits up to 45 seconds, then says how far it got.
-3. A Linux desktop without Google Chrome, and a platform without a pin, keep
-   the bundled headless shell. That stays the machine's choice; it never
-   changes while the server runs.
+   The Linux desktop downloads it too, because sites such as WhatsApp Web
+   refuse the bundled headless shell's `HeadlessChrome` user agent.
+3. A platform without a pin keeps the bundled headless shell. That stays the
+   machine's choice; it never changes while the server runs.
 
 Servers and the Docker image name their browser with
 `AGENT_BROWSER_EXECUTABLE_PATH` (the image's Chrome for Testing), or use the

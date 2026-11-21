@@ -131,17 +131,17 @@ export function resolveChromePlan(host: ChromeHost, engine: ChromeEngine | null,
     return { kind: "chrome", chrome: { path: paths(platform).isAbsolute(named) ? named : resolve(named), source: "named" }, fallback: null };
   }
   if (!engine?.managed) return { kind: "legacy", reason: "agent-browser was named, so it picks its own browser" };
-  // The Linux desktop app keeps its bundled browser; a Linux server downloads Chrome for Testing like a Mac.
-  const pin = platform === "linux" && env.SEIRA_RESOURCES_PATH ? null : chromeForTestingPin(platform, host.arch);
+  const pin = chromeForTestingPin(platform, host.arch);
   const installed = installedGoogleChrome(host);
   if (installed && !chromePolicyManaged(host)) return { kind: "chrome", chrome: { path: installed, source: "installed" }, fallback: pin };
-  if (platform === "linux" && env.SEIRA_RESOURCES_PATH) return installed ? { kind: "legacy", reason: "Google Chrome here is managed by an organization" } : { kind: "legacy", reason: "Google Chrome is not installed", noChrome: true };
   const own = agentBrowserChrome(host);
   if (own) return { kind: "chrome", chrome: { path: own, source: "agent-browser" }, fallback: null };
   if (pin) {
     const executable = chromeForTestingExecutable(host.dataDir, pin);
     if (host.exists(executable)) return { kind: "chrome", chrome: { path: executable, source: "downloaded" }, fallback: null };
-    if (platform === "linux" && !options.downloading && engineFindsLinuxBrowser(host)) return { kind: "legacy", reason: "agent-browser found a browser on this server" };
+    // WhatsApp Web refuses the "HeadlessChrome" user agent of the bundled shell and of a browser agent-browser starts on its own.
+    const linuxServer = platform === "linux" && !env.SEIRA_RESOURCES_PATH;
+    if (linuxServer && !options.downloading && engineFindsLinuxBrowser(host)) return { kind: "legacy", reason: "agent-browser found a browser on this server" };
     return { kind: "download", pin };
   }
   return installed ? { kind: "legacy", reason: "Google Chrome here is managed by an organization" } : { kind: "legacy", reason: "no Chrome is installed and none is pinned for this platform", noChrome: true };
