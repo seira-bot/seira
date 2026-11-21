@@ -97,7 +97,7 @@ describe("connected-apps broker boundaries", () => {
       headers: { "x-session": "one" },
       userId: undefined,
       multiAccountConfigured: false,
-      authConfigs: {},
+      authConfigs: undefined,
     });
     expect(() => parseSession({ session_id: "session-1", mcp: { url: "https://attacker.example/mcp" } })).toThrow(/untrusted/i);
     expect(() => parseSession({ session_id: "session-1", mcp: { url: "http://mcp.composio.dev/session" } })).toThrow(/untrusted/i);
@@ -779,6 +779,7 @@ describe("project auth configs", () => {
     let created = 0;
     const harness = {
       env, ctx, dbRuns, fetchCalls, sessions,
+      accounts: [] as unknown[],
       echoAuthConfigs: true,
       creations: () => fetchCalls.filter((call) => call.init?.method === "POST").map((call) => JSON.parse(String(call.init?.body)) as Record<string, unknown>),
       authConfigReads: () => fetchCalls.filter((call) => call.url.includes("/auth_configs")),
@@ -788,6 +789,7 @@ describe("project auth configs", () => {
       const url = String(input);
       fetchCalls.push({ url, init });
       if (url.includes("/auth_configs")) return authConfigs();
+      if (url.includes("/connected_accounts?")) return Response.json({ items: harness.accounts });
       if (init?.method === "POST") {
         const body = JSON.parse(String(init.body)) as { user_id: string; auth_configs?: Record<string, string> };
         const wire = session(`trs_new_${++created}`, body.user_id);
@@ -837,7 +839,10 @@ describe("project auth configs", () => {
       auth_configs: { zoho_crm: "ac_new", twitter: "ac_x" },
     })]);
     expect(harness.dbRuns.some((run) => run.sql.includes("SET session_id") && run.values[0] === "trs_new_1")).toBe(true);
-    await expect(listCustomAuthConfigs(harness.env as never)).resolves.toEqual({ zoho_crm: "ac_new", twitter: "ac_x" });
+    await expect(listCustomAuthConfigs(harness.env as never)).resolves.toEqual({
+      picks: { zoho_crm: "ac_new", twitter: "ac_x" },
+      usable: new Set(["ac_old", "ac_new", "ac_x"]),
+    });
   });
 
   it("recreates a Session that lacks the project's auth configs once, keeping the Composio user", async () => {
@@ -914,5 +919,172 @@ describe("project auth configs", () => {
     expect(harness.authConfigReads()).toHaveLength(3);
     expect(harness.creations().at(-1)).toEqual(expect.objectContaining({ user_id: "seira_stable", auth_configs: { zoho_crm: "ac_new", twitter: "ac_x" } }));
     errors.mockRestore();
+  });
+});
+
+// The auth-config cache and upgrade sets are module state, so every test here
+// loads a fresh copy of the Worker.
+describe("Sessions reach the person's working accounts", () => {
+  afterEach(() => vi.useRealTimers());
+
+  type Services = Record<string, { connected: boolean; pending: boolean; status: string; accounts: Array<{ id: string; status: string; alias?: string }> }>;
+  const ownGmail = { id: "ac_gmail_own", is_composio_managed: false, created_at: "2026-11-01T00:00:00Z", toolkit: { slug: "gmail" } };
+  const managed = { auth_config: { id: "ac_gmail_managed", is_composio_managed: true } };
+
+  async function oneInstallation() {
+    vi.resetModules();
+    const { brokerHarness } = await import("./test-harness");
+    const h = brokerHarness();
+    vi.stubGlobal("fetch", h.composio.fetchImpl);
+    const me = await h.install();
+    const created = () => h.composio.calls
+      .filter((call) => call.method === "POST" && call.path === "/tool_router/session")
+      .map((call) => call.body as { user_id: string; auth_configs?: Record<string, string> });
+    const connected = async () => {
+      const response = await h.call(me, "/v1/connectors/connected");
+      expect(response.status).toBe(200);
+      return (await response.json() as { services: Services }).services;
+    };
+    const status = async (services: string) => {
+      const response = await h.call(me, `/v1/connectors?services=${services}`);
+      expect(response.status).toBe(200);
+      return (await response.json() as { services: Services }).services;
+    };
+    const reachable = async () => {
+      const response = await h.call(me, "/v1/mcp", {
+        method: "POST",
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "GMAIL_SEND_EMAIL", arguments: {} } }),
+      });
+      expect(response.status).toBe(200);
+      const body = await response.json() as { result: { content: Array<{ text: string }> } };
+      return (JSON.parse(body.result.content[0]!.text) as { accounts: string[] }).accounts;
+    };
+    return { h, me, created, connected, status, reachable };
+  }
+
+  it("leaves a toolkit out of the Session when its working account is on Composio's managed config", async () => {
+    const { h, me, created, connected, reachable } = await oneInstallation();
+    h.composio.authConfigs.push(ownGmail);
+    const gmail = h.account(me, "gmail", "ACTIVE", managed);
+
+    expect((await connected()).gmail).toEqual({ connected: true, pending: false, status: "ACTIVE", accounts: [{ id: gmail, status: "ACTIVE" }] });
+    expect(created()).toHaveLength(1);
+    expect(created()[0]).not.toHaveProperty("auth_configs");
+    await expect(reachable()).resolves.toEqual([gmail]);
+    expect(created()).toHaveLength(1);
+  });
+
+  it("names the config a working account is on, not a newer one the project added", async () => {
+    const { h, me, created, reachable } = await oneInstallation();
+    h.composio.authConfigs.push(ownGmail, { ...ownGmail, id: "ac_gmail_newer", created_at: "2026-11-10T00:00:00Z" });
+    const gmail = h.account(me, "gmail", "ACTIVE", { auth_config: { id: "ac_gmail_own", is_composio_managed: false } });
+
+    await expect(reachable()).resolves.toEqual([gmail]);
+    expect(created()).toEqual([expect.objectContaining({ user_id: me.userId, auth_configs: { gmail: "ac_gmail_own" } })]);
+  });
+
+  it("picks the newest created config, so an edit to an older one does not move the pick", async () => {
+    const { h, created, reachable } = await oneInstallation();
+    h.composio.authConfigs.push(
+      { ...ownGmail, id: "ac_gmail_first", created_at: "2026-10-01T00:00:00Z", last_updated_at: "2026-11-20T00:00:00Z" },
+      { ...ownGmail, id: "ac_gmail_second", created_at: "2026-11-01T00:00:00Z", last_updated_at: "2026-11-02T00:00:00Z" },
+    );
+
+    await expect(reachable()).resolves.toEqual([]);
+    expect(created()).toEqual([expect.objectContaining({ auth_configs: { gmail: "ac_gmail_second" } })]);
+  });
+
+  it("does not hide a working account after the first auth config read fails", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-21T08:00:00Z"));
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { h, me, created, connected, reachable } = await oneInstallation();
+    h.composio.authConfigs.push(ownGmail);
+    const gmail = h.account(me, "gmail", "ACTIVE", managed);
+    h.composio.fail(500, (call) => call.path === "/auth_configs");
+
+    expect((await connected()).gmail?.connected).toBe(true);
+    expect(created()).toHaveLength(1);
+
+    vi.setSystemTime(new Date("2026-11-21T08:01:01Z"));
+    expect((await connected()).gmail).toEqual({ connected: true, pending: false, status: "ACTIVE", accounts: [{ id: gmail, status: "ACTIVE" }] });
+    await expect(reachable()).resolves.toEqual([gmail]);
+    expect(h.composio.callsTo("/auth_configs")).toHaveLength(2);
+    expect(created()).toHaveLength(1);
+    expect(created()[0]).not.toHaveProperty("auth_configs");
+    errors.mockRestore();
+  });
+
+  it("replaces a Session made before the auth configs were known once they are", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-21T08:00:00Z"));
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { h, created, connected } = await oneInstallation();
+    h.composio.authConfigs.push(ownGmail);
+    h.composio.fail(500, (call) => call.path === "/auth_configs");
+
+    await connected();
+    expect(created()).toEqual([expect.not.objectContaining({ auth_configs: expect.anything() })]);
+
+    vi.setSystemTime(new Date("2026-11-21T08:01:01Z"));
+    await connected();
+    await connected();
+    expect(created()).toHaveLength(2);
+    expect(created()[1]).toEqual(expect.objectContaining({ auth_configs: { gmail: "ac_gmail_own" } }));
+    errors.mockRestore();
+  });
+
+  it("plans the Session again once a failed account read works, and keeps it over a later failed read", async () => {
+    const warnings = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { h, me, created, connected, reachable } = await oneInstallation();
+    h.composio.authConfigs.push(ownGmail);
+    const gmail = h.account(me, "gmail", "ACTIVE", managed);
+
+    h.composio.fail(503, (call) => call.path === "/connected_accounts");
+    await expect(reachable()).resolves.toEqual([]);
+    expect(created()).toEqual([expect.objectContaining({ auth_configs: { gmail: "ac_gmail_own" } })]);
+    expect(warnings.mock.calls.some(([line]) => String(line).includes("connected account lookup failed"))).toBe(true);
+
+    expect((await connected()).gmail?.connected).toBe(true);
+    await expect(reachable()).resolves.toEqual([gmail]);
+    expect(created()).toHaveLength(2);
+    expect(created()[1]).not.toHaveProperty("auth_configs");
+
+    h.composio.fail(503, (call) => call.path === "/connected_accounts");
+    expect((await connected()).gmail?.connected).toBe(true);
+    expect(created()).toHaveLength(2);
+    warnings.mockRestore();
+  });
+
+  it("reports an ACTIVE account the Session cannot use as signed out, and reconnects it without a label", async () => {
+    const { h, me, created, connected, status, reachable } = await oneInstallation();
+    h.composio.authConfigs.push(ownGmail);
+    const stranded = h.account(me, "gmail", "ACTIVE", { auth_config: { id: "ac_gmail_removed", is_composio_managed: false } });
+    const slack = h.account(me, "slack", "ACTIVE", { auth_config: { id: "ac_slack_managed", is_composio_managed: true } });
+
+    const services = await connected();
+    expect(services.gmail).toEqual({ connected: false, pending: false, status: "INACTIVE", accounts: [{ id: stranded, status: "INACTIVE" }] });
+    expect(services.slack).toEqual({ connected: true, pending: false, status: "ACTIVE", accounts: [{ id: slack, status: "ACTIVE" }] });
+    expect((await status("gmail,slack"))).toEqual({
+      gmail: { connected: false, pending: false, status: "INACTIVE", accounts: [{ id: stranded, status: "INACTIVE" }] },
+      slack: { connected: true, pending: false, status: "ACTIVE", accounts: [{ id: slack, status: "ACTIVE" }] },
+    });
+    await expect(reachable()).resolves.toEqual([slack]);
+    expect(created()).toEqual([expect.objectContaining({ auth_configs: { gmail: "ac_gmail_own" } })]);
+
+    const reconnect = await h.call(me, "/v1/connectors/gmail/authorize", { method: "POST" });
+    expect(reconnect.status).toBe(200);
+    const link = h.composio.calls.filter((call) => call.path.endsWith("/link")).at(-1);
+    expect(link?.body).toEqual({ toolkit: "gmail", alias: expect.stringMatching(/^seira-retry-/) });
+  });
+
+  it("still asks for a label beside an account the Session can use", async () => {
+    const { h, me } = await oneInstallation();
+    h.composio.authConfigs.push(ownGmail);
+    h.account(me, "gmail", "ACTIVE", { auth_config: { id: "ac_gmail_own", is_composio_managed: false } });
+
+    const second = await h.call(me, "/v1/connectors/gmail/authorize", { method: "POST" });
+    expect(second.status).toBe(400);
+    await expect(second.json()).resolves.toEqual({ error: "Add an account alias so the existing connection is not replaced" });
   });
 });

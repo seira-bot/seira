@@ -69,7 +69,14 @@ export function fakeD1(migrations = Infinity) {
   return { db, D1, rows, sqlLog };
 }
 
-interface FakeAccount { id: string; user_id: string; toolkit: { slug: string }; status: string }
+interface FakeAccount {
+  id: string;
+  user_id: string;
+  toolkit: { slug: string };
+  status: string;
+  created_at?: string;
+  auth_config?: { id: string; is_composio_managed: boolean };
+}
 interface FakeInstance {
   id: string;
   trigger_name: string;
@@ -91,14 +98,22 @@ export const GMAIL_TYPE = {
   version: "20260901_00",
 };
 
-export interface FakeSession { id: string; user_id: string }
+export interface FakeSession { id: string; user_id: string; auth_configs?: Record<string, string> }
 
 /** The slice of Composio's v3.1 API the broker calls, with the semantics the design relies on: an identical upsert
  *  returns (and re-enables) the existing instance, manage answers 409 for "already in that state", and a tool router
- *  Session reaches only its own user's connected accounts. */
+ *  Session reaches only its own user's connected accounts, and of those only the ones on the auth config it names
+ *  for the toolkit, or on a Composio-managed one when it names none. */
 export function fakeComposio() {
   const accounts: FakeAccount[] = [];
+  const authConfigs: Array<Record<string, unknown>> = [];
   const sessions = new Map<string, FakeSession>();
+  const reaches = (session: FakeSession, account: FakeAccount) => {
+    if (account.user_id !== session.user_id || !/^active$/i.test(account.status)) return false;
+    if (!account.auth_config) return true;
+    const named = session.auth_configs?.[account.toolkit.slug];
+    return named ? account.auth_config.id === named : account.auth_config.is_composio_managed;
+  };
   const types: Array<Record<string, unknown>> = [
     GMAIL_TYPE,
     { slug: "GMAIL_EMAIL_SENT", name: "Email sent", description: "", type: "poll", toolkit: { slug: "gmail" }, config: {}, payload: {} },
@@ -138,14 +153,19 @@ export function fakeComposio() {
       accounts.splice(index, 1);
       return reply({ status: "success" });
     }
-    if (method === "GET" && path === "/auth_configs") return reply({ items: [], next_cursor: null });
+    if (method === "GET" && path === "/auth_configs") return reply({ items: authConfigs, next_cursor: null });
     const sessionPayload = (session: FakeSession) => ({
       session_id: session.id,
       mcp: { type: "http", url: `https://backend.composio.dev/tool_router/${session.id}/mcp` },
-      config: { user_id: session.user_id, multi_account: { enable: true, max_accounts_per_toolkit: 10, require_explicit_selection: true } },
+      config: {
+        user_id: session.user_id,
+        multi_account: { enable: true, max_accounts_per_toolkit: 10, require_explicit_selection: true },
+        ...(session.auth_configs ? { auth_configs: session.auth_configs } : {}),
+      },
     });
     if (method === "POST" && path === "/tool_router/session" && body) {
-      const session = { id: `trs_${next++}`, user_id: String(body.user_id) };
+      const session: FakeSession = { id: `trs_${next++}`, user_id: String(body.user_id) };
+      if (body.auth_configs) session.auth_configs = body.auth_configs as Record<string, string>;
       sessions.set(session.id, session);
       return reply(sessionPayload(session), 201);
     }
@@ -155,8 +175,7 @@ export function fakeComposio() {
     if (session && method === "GET" && !sessionPath![2]) return reply(sessionPayload(session));
     if (session && method === "GET" && sessionPath![2] === "/toolkits") {
       const wanted = url.searchParams.get("toolkits")?.split(",").filter(Boolean);
-      const items = accounts.filter((account) => account.user_id === session.user_id && /^active$/i.test(account.status)
-        && (!wanted || wanted.includes(account.toolkit.slug)))
+      const items = accounts.filter((account) => reaches(session, account) && (!wanted || wanted.includes(account.toolkit.slug)))
         .map((account) => ({ slug: account.toolkit.slug, connected_account: { id: account.id, status: account.status } }));
       return reply({ items, next_cursor: null });
     }
@@ -166,7 +185,7 @@ export function fakeComposio() {
     if (session && method === "POST" && sessionPath![2] === "/mcp") {
       const rpc = (body ?? {}) as { id?: unknown; method?: unknown; params?: { name?: unknown } };
       if (rpc.method === "tools/call") {
-        const mine = accounts.filter((account) => account.user_id === session.user_id && /^active$/i.test(account.status)).map((account) => account.id);
+        const mine = accounts.filter((account) => reaches(session, account)).map((account) => account.id);
         return reply({ jsonrpc: "2.0", id: rpc.id ?? null, result: { content: [{ type: "text", text: JSON.stringify({ tool: rpc.params?.name, user: session.user_id, accounts: mine }) }] } });
       }
       if (rpc.method === "tools/list") return reply({ jsonrpc: "2.0", id: rpc.id ?? null, result: { tools: [{ name: "GMAIL_SEND_EMAIL", inputSchema: { type: "object" } }] } });
@@ -224,6 +243,7 @@ export function fakeComposio() {
   }
   return {
     accounts,
+    authConfigs,
     types,
     instances,
     sessions,
@@ -306,9 +326,9 @@ export function brokerHarness(options: { migrations?: number } = {}) {
       const body = await response.json() as { installationId: string; token: string };
       return { id: body.installationId, token: body.token, userId: `seira_${body.installationId.replaceAll("-", "")}` };
     },
-    account(owner: Installation, toolkit = "gmail", status = "ACTIVE") {
+    account(owner: Pick<Installation, "userId">, toolkit = "gmail", status = "ACTIVE", extra: Pick<FakeAccount, "auth_config" | "created_at"> = {}) {
       const id = `ca_${toolkit}_${++accountCount}`;
-      composio.accounts.push({ id, user_id: owner.userId, toolkit: { slug: toolkit }, status });
+      composio.accounts.push({ id, user_id: owner.userId, toolkit: { slug: toolkit }, status, ...extra });
       return id;
     },
     call(owner: Installation, path: string, init: RequestInit = {}) {

@@ -32,12 +32,24 @@ interface ComposioSession {
   multiAccountConfigured: boolean;
   /** The account cap Composio echoed, when it did. */
   maxAccounts?: number;
-  /** Project auth configs the Session was created with, by canonical toolkit slug. */
-  authConfigs: AuthConfigMap;
+  /** Auth configs the Session names, by canonical toolkit slug; undefined when Composio's answer left them out. */
+  authConfigs?: AuthConfigMap;
 }
 
 /** Toolkit slug -> auth config id. */
 type AuthConfigMap = Record<string, string>;
+
+/** Toolkit slug -> the auth config a Session must name, or null when it must name none. */
+type AuthConfigPlan = Record<string, string | null>;
+
+interface ProjectAuthConfigs {
+  /** The newest enabled config per toolkit. */
+  picks: AuthConfigMap;
+  /** Every enabled config a Session may name. */
+  usable: ReadonlySet<string>;
+}
+
+type AccountReader = (user: string) => Promise<ConnectedAccountResponse[] | null>;
 
 interface ConnectedAccountSummary {
   id: string;
@@ -83,6 +95,7 @@ const authConfigItemSchema = z.object({
   status: z.string().nullable().optional(),
   is_composio_managed: z.boolean().optional(),
   is_enabled_for_tool_router: z.boolean().nullable().optional(),
+  created_at: z.string().nullable().optional(),
   last_updated_at: z.string().nullable().optional(),
   toolkit: z.object({ slug: z.string().optional() }).optional(),
 });
@@ -169,8 +182,8 @@ function parseSession(value: SessionWire): ComposioSession {
     // the same echo back — strict equality here can only churn, never fix.
     multiAccountConfigured: multi?.enable === true,
     maxAccounts: multi?.max_accounts_per_toolkit,
-    authConfigs: Object.fromEntries(
-      Object.entries(config?.auth_configs ?? {}).map(([slug, id]) => [canonicalToolkitSlug(slug), id]),
+    authConfigs: config?.auth_configs && Object.fromEntries(
+      Object.entries(config.auth_configs).map(([slug, id]) => [canonicalToolkitSlug(slug), id]),
     ),
   };
 }
@@ -199,13 +212,15 @@ async function createSession(env: Env, userId: string, authConfigs: AuthConfigMa
   if (!response.ok) throw new Error(await upstreamError(response, `Session creation failed (${response.status})`));
   const session = parseSession(sessionWireSchema.parse(await response.json()));
   if (session.userId && session.userId !== userId) throw new Error("Composio created a Session for another user");
-  return { ...session, userId };
+  return { ...session, userId, authConfigs: session.authConfigs ?? authConfigs };
 }
 
-/** The project's own (not Composio-managed) auth configs: newest enabled one
- *  per toolkit. Paged like the account inventory. */
-async function listCustomAuthConfigs(env: Env): Promise<AuthConfigMap> {
-  const chosen = new Map<string, { id: string; updated: string }>();
+/** The project's own (not Composio-managed) auth configs that a Session may
+ *  name, and the newest created one per toolkit: an edit does not change the
+ *  pick. Paged like the account inventory. */
+async function listCustomAuthConfigs(env: Env): Promise<ProjectAuthConfigs> {
+  const chosen = new Map<string, { id: string; created: string }>();
+  const usable = new Set<string>();
   let cursor: string | undefined;
   for (let page = 0; page < MAX_AUTH_CONFIG_PAGES; page += 1) {
     const params = new URLSearchParams({ is_composio_managed: "false", limit: "100" });
@@ -218,41 +233,134 @@ async function listCustomAuthConfigs(env: Env): Promise<AuthConfigMap> {
       if (!slug || !item.id || item.is_composio_managed === true) continue;
       if (item.is_enabled_for_tool_router === false) continue;
       if (item.status && /^(disabled|inactive|expired|deleted)$/i.test(item.status)) continue;
-      const updated = item.last_updated_at ?? "";
+      usable.add(item.id);
+      const created = item.created_at || item.last_updated_at || "";
       const current = chosen.get(slug);
-      if (!current || updated > current.updated) chosen.set(slug, { id: item.id, updated });
+      if (!current || created > current.created || (created === current.created && item.id < current.id)) {
+        chosen.set(slug, { id: item.id, created });
+      }
     }
     const next = body.next_cursor || undefined;
     if (!next || next === cursor) break;
     cursor = next;
   }
-  return Object.fromEntries([...chosen].sort(([a], [b]) => a.localeCompare(b)).map(([slug, { id }]) => [slug, id]));
+  return {
+    picks: Object.fromEntries([...chosen].sort(([a], [b]) => a.localeCompare(b)).map(([slug, { id }]) => [slug, id])),
+    usable,
+  };
 }
 
 /** The Worker serves one Composio project, so its auth configs are read once
- *  per isolate every ten minutes. A failed read keeps the last good map (or
- *  none) and retries sooner: Sessions must keep working without it. */
+ *  per isolate every ten minutes. A failed read keeps the last good list and
+ *  retries sooner. Until one read works the isolate knows none: it then keeps
+ *  any Session it finds, and a Session it makes is checked again by the first
+ *  isolate that knows the list. */
 const AUTH_CONFIG_TTL_MS = 10 * 60_000;
 const AUTH_CONFIG_RETRY_MS = 60_000;
-let authConfigCache: { configs: AuthConfigMap; expiresAt: number } | undefined;
+let authConfigCache: { project: ProjectAuthConfigs | null; expiresAt: number } | undefined;
 
-async function projectAuthConfigs(env: Env): Promise<AuthConfigMap> {
-  if (authConfigCache && Date.now() < authConfigCache.expiresAt) return authConfigCache.configs;
+async function projectAuthConfigs(env: Env): Promise<ProjectAuthConfigs | null> {
+  if (authConfigCache && Date.now() < authConfigCache.expiresAt) return authConfigCache.project;
   try {
-    authConfigCache = { configs: await listCustomAuthConfigs(env), expiresAt: Date.now() + AUTH_CONFIG_TTL_MS };
+    authConfigCache = { project: await listCustomAuthConfigs(env), expiresAt: Date.now() + AUTH_CONFIG_TTL_MS };
   } catch (error) {
     console.error(JSON.stringify({ message: "auth config lookup failed", error: error instanceof Error ? error.message : String(error) }));
-    authConfigCache = { configs: authConfigCache?.configs ?? {}, expiresAt: Date.now() + AUTH_CONFIG_RETRY_MS };
+    authConfigCache = { project: authConfigCache?.project ?? null, expiresAt: Date.now() + AUTH_CONFIG_RETRY_MS };
   }
-  return authConfigCache.configs;
+  return authConfigCache.project;
 }
 
-function sessionCoversAuthConfigs(session: ComposioSession, wanted: AuthConfigMap) {
-  return Object.entries(wanted).every(([slug, id]) => session.authConfigs[slug] === id);
+const ACTIVE = /^active$/i;
+
+function accountSlug(account: ConnectedAccountResponse) {
+  return account.toolkit?.slug ? canonicalToolkitSlug(account.toolkit.slug) : "";
 }
 
-function authConfigsKey(sessionId: string, wanted: AuthConfigMap) {
-  return `${sessionId}:${JSON.stringify(wanted)}`;
+/** The project's pick per toolkit. When the user's working accounts for a
+ *  toolkit are all on other configs, the config of the newest of them
+ *  instead, or none for a Composio-managed one: a Session never hides a
+ *  working account. Isolates that read the same accounts and configs agree. */
+function authConfigPlan(project: ProjectAuthConfigs, accounts: readonly ConnectedAccountResponse[]): AuthConfigPlan {
+  const working = new Map<string, Array<{ config: string; managed: boolean; created: string; id: string }>>();
+  for (const account of accounts) {
+    const slug = accountSlug(account);
+    const config = account.auth_config?.id;
+    const managed = account.auth_config?.is_composio_managed === true;
+    if (!slug || !config || !ACTIVE.test(account.status ?? "") || (!managed && !project.usable.has(config))) continue;
+    working.set(slug, [...working.get(slug) ?? [], {
+      config,
+      managed,
+      created: account.created_at ?? account.updated_at ?? "",
+      id: account.id ?? "",
+    }]);
+  }
+  const plan: AuthConfigPlan = { ...project.picks };
+  for (const [slug, list] of working) {
+    if (list.some(({ config }) => config === plan[slug])) continue;
+    const [newest] = list.toSorted((a, b) => b.created.localeCompare(a.created) || a.id.localeCompare(b.id));
+    plan[slug] = newest.managed ? null : newest.config;
+  }
+  return Object.fromEntries(Object.entries(plan).sort(([a], [b]) => a.localeCompare(b)));
+}
+
+function namedConfigs(plan: AuthConfigPlan): AuthConfigMap {
+  return Object.fromEntries(Object.entries(plan).flatMap(([slug, id]) => id === null ? [] : [[slug, id]]));
+}
+
+/** The plan a Session must follow, or null when this isolate cannot tell. */
+async function sessionPlan(project: ProjectAuthConfigs | null, session: ComposioSession | null, accounts: () => ReturnType<AccountReader>) {
+  if (!project) return null;
+  if (!project.usable.size && !Object.keys(session?.authConfigs ?? {}).length) return authConfigPlan(project, []);
+  const listed = await accounts();
+  return listed && authConfigPlan(project, listed);
+}
+
+function sessionFollowsPlan(session: ComposioSession, plan: AuthConfigPlan) {
+  const named = session.authConfigs ?? {};
+  return Object.entries(plan).every(([slug, id]) => named[slug] === (id ?? undefined));
+}
+
+function authConfigsKey(sessionId: string, plan: AuthConfigPlan) {
+  return `${sessionId}:${JSON.stringify(plan)}`;
+}
+
+/** Composio lets a Session use an account only on the auth config it names
+ *  for the toolkit, or on Composio's own when it names none. */
+function sessionCanUse(session: ComposioSession, account: ConnectedAccountResponse) {
+  const config = account.auth_config;
+  if (!config?.id || !session.authConfigs) return true;
+  const named = session.authConfigs[accountSlug(account)];
+  return named ? config.id === named : config.is_composio_managed !== false;
+}
+
+/** An ACTIVE account the Session cannot use is reported INACTIVE, so Settings
+ *  asks for a reconnect. `selected` holds the accounts the Session itself
+ *  reports. */
+function asSessionSees(accounts: readonly ConnectedAccountResponse[], session: ComposioSession, selected: ReadonlySet<string>) {
+  return accounts.map((account) => ACTIVE.test(account.status ?? "") && !selected.has(account.id ?? "") && !sessionCanUse(session, account)
+    ? { ...account, status: "INACTIVE" }
+    : account);
+}
+
+/** One read of a user's connected accounts per request; null when Composio
+ *  did not answer. */
+function accountReader(env: Env): AccountReader {
+  const reads = new Map<string, ReturnType<AccountReader>>();
+  return (user) => {
+    let read = reads.get(user);
+    if (!read) {
+      read = listConnectedAccounts(env, user, []).catch((error: unknown) => {
+        console.warn(JSON.stringify({ message: "connected account lookup failed", error: error instanceof Error ? error.message : String(error) }));
+        return null;
+      });
+      reads.set(user, read);
+    }
+    return read;
+  };
+}
+
+function sessionToolkitAccounts(items: readonly ToolkitItem[]) {
+  return new Set(items.flatMap((item) => item.connected_account?.id ? [item.connected_account.id] : []));
 }
 
 /** Session ids this isolate already tried to upgrade once. If the fresh Session
@@ -282,15 +390,16 @@ async function raiseAccountCap(session: ComposioSession, env: Env) {
   accountCapRaised.add(session.sessionId);
 }
 
-/** Likewise for an `auth_configs` echo Composio leaves out, keyed by the map
- *  asked for so a new auth config still triggers one more upgrade. */
+/** Likewise for an `auth_configs` echo Composio leaves out, keyed by the plan
+ *  asked for so a new plan still triggers one more upgrade. */
 const authConfigUpgradeAttempted = new Set<string>();
 
-/** A Session cannot be edited, so one that lacks multi-account or the
- *  project's current auth configs is replaced (once per shortfall). */
-function sessionReady(session: ComposioSession, authConfigs: AuthConfigMap) {
+/** A Session that lacks multi-account or does not follow the plan is replaced
+ *  (once per shortfall). Without a plan its auth configs are left alone, so an
+ *  isolate that cannot tell never undoes one that can. */
+function sessionReady(session: ComposioSession, plan: AuthConfigPlan | null) {
   return (session.multiAccountConfigured || multiAccountUpgradeAttempted.has(session.sessionId))
-    && (sessionCoversAuthConfigs(session, authConfigs) || authConfigUpgradeAttempted.has(authConfigsKey(session.sessionId, authConfigs)));
+    && (!plan || sessionFollowsPlan(session, plan) || authConfigUpgradeAttempted.has(authConfigsKey(session.sessionId, plan)));
 }
 
 /** A Session's MCP URL and headers are fixed for its id, so the relay reuses a
@@ -345,9 +454,9 @@ async function limitSessionRequests(installation: InstallationRow, env: Env) {
   }
 }
 
-async function ensureSession(installation: InstallationRow, env: Env, ctx: ExecutionContext) {
+async function ensureSession(installation: InstallationRow, env: Env, ctx: ExecutionContext, accounts = accountReader(env)) {
   await limitSessionRequests(installation, env);
-  return verifySession(installation, env, ctx);
+  return verifySession(installation, env, ctx, accounts);
 }
 
 async function currentInstallation(env: Env, id: string) {
@@ -356,12 +465,13 @@ async function currentInstallation(env: Env, id: string) {
   return current;
 }
 
-async function verifySession(installation: InstallationRow, env: Env, ctx: ExecutionContext) {
-  const authConfigs = await projectAuthConfigs(env);
+async function verifySession(installation: InstallationRow, env: Env, ctx: ExecutionContext, accounts = accountReader(env)) {
+  const project = await projectAuthConfigs(env);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const user = actingUser(installation);
     let session = installation.session_id ? await getSession(env, installation.session_id) : null;
-    if (session && sessionReady(session, authConfigs) && session.userId === user) {
+    const plan = await sessionPlan(project, session, () => accounts(user));
+    if (session && sessionReady(session, plan) && session.userId === user) {
       const current = await currentInstallation(env, installation.id);
       if (actingUser(current) !== user) {
         Object.assign(installation, current);
@@ -369,9 +479,10 @@ async function verifySession(installation: InstallationRow, env: Env, ctx: Execu
       }
       touchLastSeen(installation, env, ctx);
     } else {
+      const authConfigs = plan ? namedConfigs(plan) : project?.picks ?? {};
       session = await createSession(env, user, authConfigs);
       multiAccountUpgradeAttempted.add(session.sessionId);
-      authConfigUpgradeAttempted.add(authConfigsKey(session.sessionId, authConfigs));
+      if (plan) authConfigUpgradeAttempted.add(authConfigsKey(session.sessionId, plan));
       const userColumn = installation.shared_user_id === undefined ? "composio_user_id" : "COALESCE(shared_user_id, composio_user_id)";
       const saved = await env.DB.prepare(
         `UPDATE installations SET session_id = ?, last_seen_at = ? WHERE id = ? AND ${userColumn} = ? AND disabled_at IS NULL`,
@@ -381,6 +492,7 @@ async function verifySession(installation: InstallationRow, env: Env, ctx: Execu
         continue;
       }
       installation.session_id = session.sessionId;
+      console.log(JSON.stringify({ message: "session created", installationId: installation.id, authConfigs, planned: plan !== null }));
     }
     rememberSession(session);
     return session;
@@ -579,31 +691,35 @@ async function connectedServices(
   env: Env,
   ctx: ExecutionContext,
 ) {
-  const session = await ensureSession(installation, env, ctx);
-  const [toolkits, accounts] = await Promise.all([
+  const accounts = accountReader(env);
+  const session = await ensureSession(installation, env, ctx, accounts);
+  const [toolkits, listed] = await Promise.all([
     listSessionToolkits(env, session.sessionId),
-    listConnectedAccounts(env, actingUser(installation), []).catch(() => []),
+    accounts(actingUser(installation)),
   ]);
+  const usable = asSessionSees(listed ?? [], session, sessionToolkitAccounts(toolkits));
   return json({
     configured: true,
-    services: allServiceStates(summarizeAccounts(accounts, []), toolkits),
+    services: allServiceStates(summarizeAccounts(usable, []), toolkits),
   });
 }
 
 async function connectionStatus(url: URL, installation: InstallationRow, env: Env, ctx: ExecutionContext) {
   const slugs = [...new Set((url.searchParams.get("services") ?? "").split(",").map((slug) => slug.toLowerCase()).filter(Boolean))].slice(0, 50);
-  const session = await ensureSession(installation, env, ctx);
-  const [response, accounts] = await Promise.all([
+  const accounts = accountReader(env);
+  const session = await ensureSession(installation, env, ctx, accounts);
+  const [response, listed] = await Promise.all([
     composioRequest(
       env,
       `/tool_router/session/${encodeURIComponent(session.sessionId)}/toolkits?${new URLSearchParams({ limit: "50", toolkits: slugs.join(",") })}`,
     ),
-    listConnectedAccounts(env, actingUser(installation), slugs).catch(() => []),
+    accounts(actingUser(installation)),
   ]);
   if (!response.ok) return json({ error: await upstreamError(response, "Connection status unavailable") }, 502);
   const body = toolkitPageSchema.parse(await response.json());
   const items = new Map((body.items ?? []).map((item) => [item.slug?.toLowerCase(), item]));
-  const accountsBySlug = summarizeAccounts(accounts, slugs);
+  const usable = asSessionSees(listed ?? [], session, sessionToolkitAccounts(body.items ?? []));
+  const accountsBySlug = summarizeAccounts(usable, slugs);
   return json({ services: Object.fromEntries(slugs.map((slug) => {
     const item = items.get(slug);
     const serviceAccounts = accountsBySlug.get(slug) ?? [];
@@ -625,11 +741,14 @@ async function authorize(
   env: Env,
   ctx: ExecutionContext,
 ) {
-  const session = await ensureSession(installation, env, ctx);
+  const accounts = accountReader(env);
+  const session = await ensureSession(installation, env, ctx, accounts);
   // Listing can be denied to the broker's key scope; authorize must still
   // work, with the alias guardrails degrading to first-account behavior.
-  const accounts = await listConnectedAccounts(env, actingUser(installation), [slug]).catch(() => []);
-  const serviceAccounts = accounts.filter((account) => account.toolkit?.slug?.toLowerCase() === slug);
+  const listed = await accounts(actingUser(installation)) ?? [];
+  const serviceAccounts = listed
+    .filter((account) => account.toolkit?.slug?.toLowerCase() === slug)
+    .map((account) => ({ ...account, usableBySession: sessionCanUse(session, account) }));
   const plan = planAccountLink(
     slug,
     serviceAccounts,

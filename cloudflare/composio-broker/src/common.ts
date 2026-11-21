@@ -147,8 +147,13 @@ const connectedAccountResponseSchema = z.object({
   user_id: z.string().nullable().optional(),
   alias: z.string().nullable().optional(),
   status: z.string().optional(),
+  created_at: z.string().nullable().optional().catch(undefined),
   updated_at: z.string().optional(),
   toolkit: z.object({ slug: z.string().optional() }).optional(),
+  auth_config: z.object({
+    id: z.string().optional(),
+    is_composio_managed: z.boolean().nullable().optional(),
+  }).nullable().optional().catch(undefined),
 });
 export type ConnectedAccountResponse = z.infer<typeof connectedAccountResponseSchema>;
 const connectedAccountsPageSchema = z.object({
