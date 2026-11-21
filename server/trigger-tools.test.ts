@@ -37,6 +37,14 @@ describe("listTriggers", () => {
     expect(listTriggers({ ...input, triggerId: "r1", botId: "bot-b" })).not.toHaveProperty("trigger");
   });
 
+  it("names the workflow a routine runs, and leaves the field off a routine that has none", () => {
+    const linked = { ...routine("r1", "bot-a"), workflowId: "wf1" };
+    const input = { botId: "bot-a", routines: [linked, routine("r2", "bot-a")], webhooks: [], appTriggers: [], runs: [], timeZone: "UTC", now };
+    const listed = listTriggers({ ...input, workflowName: (id) => (id === "wf1" ? "Morning round" : undefined) }).triggers!;
+    expect(listed.find((one) => one.id === "r1")).toMatchObject({ workflow: { id: "wf1", name: "Morning round" } });
+    expect(listed.find((one) => one.id === "r2")).not.toHaveProperty("workflow");
+  });
+
   it("redacts the entire detailed instruction text, including held secrets beyond the preview", () => {
     const secret = "sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789";
     const prompt = "Keep checking.\n".repeat(250) + `Use ${secret} and fixture-password.`;

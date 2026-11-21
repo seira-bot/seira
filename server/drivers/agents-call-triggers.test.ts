@@ -156,3 +156,35 @@ describe("same_conversation in the trigger tool", () => {
     expect(refused.calls).toEqual([]);
   });
 });
+
+describe("workflows in the trigger tools", () => {
+  it("lists the workflows that include this bot through trigger_info", async () => {
+    const { calls, context: ctx } = context({ api: { workflows: [{ id: "wf1", name: "Morning round", stepCount: 2, steps: [{ kind: "bot", bot: "Scout", yours: true, instruction: "Collect" }], routines: [] }] } });
+    const result = await callTool("trigger_info", { action: "workflows" }, ctx);
+    expect(result.isError).toBeUndefined();
+    expect(result.text).toContain("wf1");
+    expect(calls[0]!.path).toBe("/api/internal/workflows?fromBotId=scout&fromThreadId=thread-1");
+    expect((await callTool("trigger_info", { action: "workflows" }, context({ api: { workflows: [] } }).context)).text).toContain("workflow action=create");
+  });
+
+  it("creates a schedule that runs a workflow without instructions of its own", async () => {
+    const { calls, context: ctx } = context();
+    await callTool("trigger", { action: "create", when: "schedule", name: "Round", workflow_id: "wf1", schedule: { type: "daily", time: "09:00" } }, ctx);
+    expect(calls[0]!.body).toMatchObject({ action: "create", kind: "schedule", proposal: { action: "create", routine: { name: "Round", workflowId: "wf1" } } });
+  });
+
+  it("stops running a workflow with workflow_id null on update, and refuses null on create", async () => {
+    const { calls, context: ctx } = context();
+    await callTool("trigger", { action: "update", trigger_id: "r1", workflow_id: null, instructions: "Own words." }, ctx);
+    expect(calls[0]!.body).toMatchObject({ action: "update", proposal: { changes: { workflowId: null, instructions: "Own words." } } });
+    const refused = await callTool("trigger", { action: "create", when: "schedule", name: "A", instructions: "B", workflow_id: null, schedule: { type: "daily", time: "09:00" } }, ctx);
+    expect(refused.isError).toBe(true);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("takes workflow_id only for a schedule", async () => {
+    const { calls, context: ctx } = context();
+    expect((await callTool("trigger", { action: "create", when: "webhook", name: "A", instructions: "B", workflow_id: "wf1" }, ctx)).isError).toBe(true);
+    expect(calls).toEqual([]);
+  });
+});

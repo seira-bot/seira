@@ -19,7 +19,7 @@ function harness(options: { guestDriven?: boolean; team?: boolean; saved?: Workf
   const deps: WorkflowAgentDeps = {
     workflows: () => ({ list: () => saved, create: (input) => { created.push(input); return { ...input, id: "wf-new", createdAt: 1, updatedAt: 1 } as Workflow; } }),
     routines: () => ({ listRoutines: () => [] }),
-    bot: (id) => bots.get(id),
+    bot: (id) => bots.get(id) as never,
     reachableName: (_from, _thread, botId) => ((options.reach ?? ["scout", "ledger", "peer"]).includes(botId) ? bots.get(botId)?.name : undefined),
     shown: (workflow) => options.shown?.(workflow) ?? true,
     team: () => Boolean(options.team),
