@@ -26,9 +26,9 @@ vi.mock("node:sqlite", async (importOriginal) => {
   return {
     ...actual,
     DatabaseSync: class extends actual.DatabaseSync {
-      constructor(path: string, options?: ConstructorParameters<typeof actual.DatabaseSync>[1]) {
+      constructor(path: string, ...options: [ConstructorParameters<typeof actual.DatabaseSync>[1]?]) {
         opened.push(String(path));
-        super(path, options);
+        super(path, ...options);
       }
     },
   };
