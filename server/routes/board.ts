@@ -1,5 +1,5 @@
-import { routineVisible, type VisibleSet } from "../bot-visibility.ts";
-import { boardView, type BoardSources } from "../board.ts";
+import { routineRunVisible, type VisibleSet } from "../bot-visibility.ts";
+import { boardView, type BoardSources, type BoardViewer } from "../board.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
@@ -15,7 +15,11 @@ export function createBoardRoutes(deps: BoardRouteDeps): RouteHandler {
     if (path !== "/api/board") return PASS;
     if (method !== "GET") return json(res, 405, { error: "method not allowed" });
     const visible = deps.visibleFor(auth);
-    const viewer = { thread: (threadId: string) => visible.thread(threadId), routine: (run: { botId?: unknown; groupId?: unknown }) => routineVisible(run, visible) };
+    const viewer: BoardViewer = {
+      thread: (threadId) => visible.thread(threadId),
+      bot: (botId) => visible.bot(botId),
+      routine: (run) => routineRunVisible(run, visible),
+    };
     return json(res, 200, boardView(deps.sources(), viewer, deps.now?.() ?? Date.now()));
   };
 }

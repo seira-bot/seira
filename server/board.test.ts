@@ -8,7 +8,7 @@ type Handoff = BoardSources["handoffs"][number];
 type Thread = BoardSources["threads"][number]["task"];
 type Run = ReturnType<BoardSources["runs"]>[number];
 
-const everyone: BoardViewer = { thread: () => true, routine: () => true };
+const everyone: BoardViewer = { thread: () => true, bot: () => true, routine: () => true };
 const handoff = (over: Partial<Handoff> & { id: string }): Handoff => ({
   parentId: "root", threadId: `t-${over.id}`, botId: "scout", text: "Find the numbers", createdAt: NOW - 5 * HOUR,
   status: "running", result: "", mode: "work", ...over,
@@ -162,12 +162,19 @@ describe("window, limit, order and visibility", () => {
   });
 
   it("hides what the viewer may not see", () => {
-    const viewer: BoardViewer = { thread: (id) => id !== "t-hidden" && id !== "hid", routine: (r) => r.botId !== "secret" };
+    const viewer: BoardViewer = { thread: (id) => id !== "t-hidden" && id !== "hid", bot: (id) => id !== "secret", routine: (r) => r.botId !== "secret" };
     const cards = board({
       handoffs: [handoff({ id: "hidden" }), handoff({ id: "shown" })],
       threads: [{ botId: "atlas", task: thread({ threadId: "hid", activity: "working" }) }, { botId: "atlas", task: thread({ threadId: "vis", activity: "working" }) }],
       runs: [run({ id: "s", botId: "secret" }), run({ id: "p", botId: "atlas" })],
     }, viewer);
     expect(cards.map((c) => c.id).sort()).toEqual(["handoff:shown", "routine:p", "thread:vis"]);
+  });
+
+  it("names the handing bot only when the viewer may see it", () => {
+    const rows = [handoff({ id: "root", parentId: undefined, status: "source", botId: "secret" }), handoff({ id: "a" })];
+    const viewer: BoardViewer = { ...everyone, bot: (id) => id !== "secret" };
+    expect(board({ handoffs: rows })[0]).toMatchObject({ fromBotId: "secret" });
+    expect(board({ handoffs: rows }, viewer)[0]).not.toHaveProperty("fromBotId");
   });
 });

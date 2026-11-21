@@ -52,7 +52,8 @@ export interface BoardSources {
 
 export interface BoardViewer {
   thread(threadId: string): boolean;
-  routine(run: { botId?: unknown; groupId?: unknown }): boolean;
+  bot(botId: string): boolean;
+  routine(run: { botId?: unknown; groupId?: unknown; threadId?: unknown }): boolean;
 }
 
 const BRIEF_CHARS = 2000;
@@ -75,10 +76,11 @@ function handoffCards(rows: readonly HandoffRow[], viewer: BoardViewer): BoardCa
   for (const row of rows) {
     if (!row.parentId || row.status === "source" || row.status === "cancelled" || row.mode === "notify" || row.statusOnly) continue;
     if (!viewer.thread(row.threadId)) continue;
+    const fromBot = botOf.get(row.parentId);
     const base = {
       id: `handoff:${row.id}`, kind: "handoff" as const, title: plainTitle(row.text), botId: row.botId, threadId: row.threadId,
       ...(row.groupId ? { groupId: row.groupId } : {}),
-      ...(botOf.has(row.parentId) ? { fromBotId: botOf.get(row.parentId)! } : {}),
+      ...(fromBot && viewer.bot(fromBot) ? { fromBotId: fromBot } : {}),
       brief: row.text.length > BRIEF_CHARS ? `${row.text.slice(0, BRIEF_CHARS - 1)}…` : row.text,
       createdAt: row.createdAt, updatedAt: row.lastProgressAt ?? row.startedAt ?? row.createdAt,
     };

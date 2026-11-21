@@ -18,11 +18,13 @@ function setup(hidden: { threads?: string[]; bots?: string[] } = {}) {
     runs: () => [
       { id: "r1", routineId: "rt", routineName: "Digest", botId: "atlas", status: "queued", scheduledFor: NOW - 10 },
       { id: "r2", routineId: "rt", routineName: "Secret digest", botId: "ghost", status: "queued", scheduledFor: NOW - 10 },
+      { id: "r3", routineId: "rt", routineName: "Digest", botId: "atlas", status: "running", threadId: "t-secret", scheduledFor: NOW - 10 },
     ],
   };
   const visible = {
     everything: false,
     thread: (id: string) => !(hidden.threads ?? []).includes(id),
+    hides: (id: string) => (hidden.threads ?? []).includes(id),
     routineShown: () => true,
     bot: (id: string) => !(hidden.bots ?? []).includes(id),
     group: () => true,
@@ -45,7 +47,7 @@ describe("GET /api/board", () => {
     const { call } = setup();
     const { status, body } = await call("GET", "/api/board");
     expect(status).toBe(200);
-    expect(body.cards.map((c: { id: string }) => c.id).sort()).toEqual(["handoff:h1", "handoff:h2", "routine:r1", "routine:r2", "thread:t-chat"]);
+    expect(body.cards.map((c: { id: string }) => c.id).sort()).toEqual(["handoff:h1", "handoff:h2", "routine:r1", "routine:r2", "routine:r3", "thread:t-chat"]);
     expect(requiredScope("GET", "/api/board")).toBe("client");
   });
 
