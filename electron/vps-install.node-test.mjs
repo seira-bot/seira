@@ -90,12 +90,12 @@ async function world(options = {}) {
   writeFileSync(path.join(stub, "id"), ID_STUB, { mode: 0o755 });
   const installer = path.join(root, "install.sh");
   writeFileSync(installer, options.installer ?? INSTALLER);
-  const hostKey = utils.generateKeyPairSync("ed25519");
-  const hostBlob = utils.parseKey(hostKey.public).getPublicSSH();
+  const hostKeys = (options.hostKeys ?? ["ed25519"]).map((kind) => utils.generateKeyPairSync(kind, kind === "rsa" ? { bits: 2048 } : kind === "ecdsa" ? { bits: 256 } : undefined));
+  const hostBlob = utils.parseKey(hostKeys[0].public).getPublicSSH();
   const log = [];
   const state = { closed: 0, authMethods: [], connections: 0, clients: new Set() };
   const accountKey = options.publicKey ? utils.parseKey(options.publicKey) : null;
-  const server = new Server({ hostKeys: [hostKey.private] }, (client) => {
+  const server = new Server({ hostKeys: hostKeys.map((key) => key.private) }, (client) => {
     state.connections += 1;
     state.clients.add(client);
     client.on("authentication", (ctx) => {
@@ -690,3 +690,28 @@ for (const [name, marker] of [["a pair link on another address than the one the 
     } finally { await w.close(); }
   });
 }
+
+test("a saved key of one type and a server that offers only another type is refused as a changed host key", async () => {
+  const w = await world({ password: "pw", hostKeys: ["rsa"] });
+  try {
+    createSavedHosts({ dir: w.dataDir }).remember({ host: "127.0.0.1", port: w.port, fingerprint: "SHA256:someoneelse", type: "ssh-ed25519" });
+    const h = harness(w);
+    void h.session.start(request(w));
+    const failed = await h.wait("failed");
+    assert.equal(failed.reason, "hostKeyChanged");
+    assert.equal(h.has("hostKey"), false);
+    assert.equal(w.state.authMethods.length, 0);
+  } finally { await w.close(); }
+});
+
+test("a saved key and a server that offers that type and a new one connects as known", async () => {
+  const w = await world({ password: "pw", hostKeys: ["ed25519", "ecdsa"] });
+  try {
+    createSavedHosts({ dir: w.dataDir }).remember({ host: "127.0.0.1", port: w.port, fingerprint: w.fingerprint, type: "ssh-ed25519" });
+    const h = harness(w);
+    void h.session.start(request(w));
+    await h.wait("checks");
+    assert.equal(h.has("hostKey"), false);
+    await h.session.cancel();
+  } finally { await w.close(); }
+});

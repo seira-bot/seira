@@ -65,10 +65,12 @@ test("the saved list keeps only host, port and fingerprint, in a private file, a
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("a saved entry with a key type is compared only with a key of that type; an old entry without a type still matches any", () => {
+test("a saved entry with a key type matches only that type, and a key of another type for a known address is changed; an old entry without a type still matches any", () => {
   const ed = edKey(), rsa = blob("ssh-rsa", randomBytes(40));
   const typed = [{ host: "h.example", port: 22, fingerprint: fingerprint(ed), type: "ssh-ed25519" }];
-  assert.equal(hostKeyStatus({ host: "h.example", port: 22, key: rsa, knownHosts: "", saved: typed }), "unknown");
+  assert.equal(hostKeyStatus({ host: "h.example", port: 22, key: rsa, knownHosts: "", saved: typed }), "changed");
+  assert.equal(hostKeyStatus({ host: "h.example", port: 22, key: rsa, knownHosts: `${line("h.example", ed)}\n`, saved: [] }), "changed");
+  assert.equal(hostKeyStatus({ host: "other.example", port: 22, key: rsa, knownHosts: "", saved: typed }), "unknown");
   assert.equal(hostKeyStatus({ host: "h.example", port: 22, key: ed, knownHosts: "", saved: typed }), "known");
   assert.equal(hostKeyStatus({ host: "h.example", port: 22, key: edKey(), knownHosts: "", saved: typed }), "changed");
   assert.equal(hostKeyStatus({ host: "h.example", port: 22, key: rsa, knownHosts: "", saved: [{ host: "h.example", port: 22, fingerprint: fingerprint(ed) }] }), "changed");

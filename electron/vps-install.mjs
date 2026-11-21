@@ -119,6 +119,7 @@ async function within(work, ms, give) {
 function connectFailure(error, flags) {
   if (flags.changed) return new InstallFailure("hostKeyChanged");
   if (flags.declined) return new InstallFailure("hostKeyDeclined");
+  if (flags.limited && error?.level === "handshake" && /host key/i.test(error.message ?? "")) return new InstallFailure("hostKeyChanged");
   if (error?.level === "client-authentication") return new InstallFailure("auth");
   if (error?.level === "client-timeout" || error?.code === "ETIMEDOUT" || flags.timedOut) return new InstallFailure("timeout");
   return new InstallFailure("unreachable");
@@ -158,7 +159,7 @@ export function createInstallSession(deps) {
   let finished = false;
   let closing = false;
   let linkClosed = false;
-  const flags = { changed: false, declined: false, timedOut: false };
+  const flags = { changed: false, declined: false, timedOut: false, limited: false };
   let armTimer = () => {};
 
   const redact = (text) => {
@@ -234,7 +235,7 @@ export function createInstallSession(deps) {
           return undefined;
         },
       };
-      if (types.length) config.algorithms = { serverHostKey: { prepend: preferredHostKeyAlgorithms(types) } };
+      if (types.length) { config.algorithms = { serverHostKey: preferredHostKeyAlgorithms(types) }; flags.limited = true; }
       if (secrets.method === "password") config.password = secrets.password;
       else if (secrets.method === "key") { config.privateKey = secrets.key; if (secrets.passphrase) config.passphrase = secrets.passphrase; }
       else config.agent = agent;

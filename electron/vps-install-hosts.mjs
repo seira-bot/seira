@@ -64,24 +64,29 @@ export function knownTypes(entries, host, port) {
 }
 
 /**
- * `known` when a source holds this key, `changed` when a source holds another key for the address, `unknown` otherwise.
+ * `known` when a source holds this key, `changed` when a source holds another key, or none of this key's type, for the address, `unknown` otherwise.
  * One `changed` from either source wins.
  * @param {{ host: string, port: number, key: Buffer, knownHosts: string, saved: { host: string, port: number, fingerprint: string, type?: string }[] }} input
  */
 export function hostKeyStatus({ host, port, key, knownHosts, saved }) {
   const seen = fingerprint(key), type = keyType(key), label = hostLabel(host, port);
-  let known = false;
+  let known = false, held = false;
   for (const entry of parseKnownHosts(knownHosts)) {
-    if (!entryNames(entry, label) || entry.type !== type) continue;
+    if (!entryNames(entry, label)) continue;
+    held = true;
+    if (entry.type !== type) continue;
     if (entry.revoked || !entry.blob.equals(key)) return "changed";
     known = true;
   }
   for (const item of saved) {
-    if (item.host.toLowerCase() !== host.toLowerCase() || item.port !== port || (item.type && item.type !== type)) continue;
+    if (item.host.toLowerCase() !== host.toLowerCase() || item.port !== port) continue;
+    held = true;
+    if (item.type && item.type !== type) continue;
     if (item.fingerprint !== seen) return "changed";
     known = true;
   }
-  return known ? "known" : "unknown";
+  if (known) return "known";
+  return held ? "changed" : "unknown";
 }
 
 /** The `serverHostKey` list to offer: the types the person already trusts for this address first, so the server answers with one of them. */
