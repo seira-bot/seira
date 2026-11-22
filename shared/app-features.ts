@@ -291,7 +291,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "whats-new",
     name: "What's new",
     place: "the menu under the person's name at the bottom of the sidebar",
-    does: "After an update, a short note says what changed. The person sees it once.",
+    does: "After an update, a short note says what changed. The person sees it once and can open it again from this menu.",
     releaseNotes: ["whatsNew"],
   },
   {

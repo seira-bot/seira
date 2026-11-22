@@ -79,6 +79,8 @@ download the update and then reject it.
 
 Add an entry for the new version to `RELEASE_NOTES` in `src/lib/release-notes.ts`,
 with its strings in `en.json` and `pt-br.json`. A version with no entry shows no popup.
+`src/lib/release-notes.test.ts` fails until the newest entry matches the `package.json` version.
+The profile menu's What's new opens the same notes.
 
 ```sh
 git switch -c release/v<version> origin/main
