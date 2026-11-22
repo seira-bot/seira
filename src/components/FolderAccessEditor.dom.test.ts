@@ -135,4 +135,17 @@ describe("FolderAccessEditor", () => {
     await render({ access: { limited: true, folders: [] }, enforcement: "box" });
     expect(host.textContent).not.toContain(note);
   });
+
+  it("says commands see only the chosen folders where the box holds limited bots", async () => {
+    const note = "To check each command first, set approval to Ask for approval.";
+    const boxNote = "Commands also see only these folders, and cannot reach other apps on this computer.";
+    await render({ access: { limited: true, folders: [] }, enforcement: "limited" });
+    expect(host.textContent).toContain(boxNote);
+    expect(host.textContent).not.toContain(note);
+    await render({ access: { limited: false, folders: [{ path: "/srv/shared/reports", write: false }] }, enforcement: "limited" });
+    expect(host.textContent).toContain(note);
+    expect(host.textContent).not.toContain(boxNote);
+    await render({ access: { limited: true, folders: [] }, enforcement: "box" });
+    expect(host.textContent).not.toContain(boxNote);
+  });
 });

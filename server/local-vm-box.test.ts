@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("./bot-box/box.ts", () => ({
-  botBox: { enabled: vi.fn(() => false) },
+  botBox: { boxesBot: vi.fn(() => false) },
 }));
 
 import { botBox } from "./bot-box/box.ts";
@@ -22,13 +22,14 @@ describe("Local VM inside the bot box", () => {
     expect(localVmInBoxMessage(false)).toBeUndefined();
   });
 
-  it("refuses containerComputerMcp while the bot box is enabled", () => {
-    vi.mocked(botBox.enabled).mockReturnValue(true);
-    expect(() => containerComputerMcp("docker")).toThrow(LOCAL_VM_IN_BOX_MESSAGE);
+  it("refuses containerComputerMcp for a bot whose spawns run in the bot box", () => {
+    vi.mocked(botBox.boxesBot).mockImplementation((botId) => botId === "limited");
+    expect(() => containerComputerMcp("docker", undefined, undefined, "limited")).toThrow(LOCAL_VM_IN_BOX_MESSAGE);
+    expect(containerComputerMcp("docker", undefined, undefined, "open").command).toBe(process.execPath);
   });
 
   it("mounts normally while the bot box is off", () => {
-    vi.mocked(botBox.enabled).mockReturnValue(false);
+    vi.mocked(botBox.boxesBot).mockReturnValue(false);
     const connection = containerComputerMcp("podman");
     expect(connection.command).toBe(process.execPath);
     expect(connection.args).toContain("podman");

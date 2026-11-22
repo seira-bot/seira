@@ -23,6 +23,7 @@ const STABLE_MS = 60_000;
 const UNAUTHORIZED_RETRY_MS = 5 * 60_000;
 const REPLACED_RETRY_MS = 60_000;
 const RESTART_WAIT_MAX_MS = 5 * 60_000;
+const MAX_RETRY_MS = 2 * RESTART_WAIT_MAX_MS;
 const DRAIN_POLL_MS = 50;
 /** Jobs a box the team's Owner has not accepted yet still answers: they read, and carry none of the team's data. */
 const READS: ReadonlySet<JobType> = new Set(["status", "host-health"]);
@@ -282,7 +283,7 @@ export class Agent {
     this.retry = this.setTimer(() => {
       this.retry = null;
       this.connect();
-    }, ms);
+    }, ms > MAX_RETRY_MS ? MAX_RETRY_MS : ms);
   }
 
   private received(connection: Connection, data: unknown): void {

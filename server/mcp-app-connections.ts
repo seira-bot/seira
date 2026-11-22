@@ -49,7 +49,7 @@ class StdioAppClient implements AppClient {
   constructor(server: StdioMcpSpec, hooks: AppClientHooks, as: AppServerAs = {}) {
     // With the box off `box` changes nothing, and the server starts where it always did.
     this.child = spawnCli(server.command, server.args, {
-      ...(botBox.enabled() ? (as.cwd ? { cwd: as.cwd } : {}) : { cwd: process.cwd() }),
+      ...(botBox.boxesBot(as.id) ? (as.cwd ? { cwd: as.cwd } : {}) : { cwd: process.cwd() }),
       env: probeEnvironment(server), stdio: ["pipe", "pipe", "pipe"],
       box: { ...(as.id ? { botId: as.id } : {}), allowEnv: Object.keys(server.env), configured: true },
     });

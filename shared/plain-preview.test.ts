@@ -32,4 +32,8 @@ describe("the one line a sidebar or a notification shows", () => {
   it("keeps a list item whose text starts with a dash", () => {
     expect(plainPreviewText("- -5 degrees outside")).toBe("-5 degrees outside");
   });
+
+  it("removes a tag that only forms once an inner tag is removed", () => {
+    expect(plainPreviewText("a <<b>b>text</b> c")).toBe("a text c");
+  });
 });

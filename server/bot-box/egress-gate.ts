@@ -1,13 +1,14 @@
 // The box's way to the internet: an HTTP proxy (CONNECT for TLS, absolute-URI for plain HTTP) on a unix socket that a
 // loopback port inside the box is bridged to. Like the browser's SOCKS gate (server/browser/egress/gate.ts) it resolves
-// names itself and connects only to public addresses, so a bot's shell reaches neither this server's loopback routes,
-// the local network, the cloud metadata service nor Fly's private network, whatever name it uses.
+// names itself and connects only to the addresses its rules pass, so a bot's shell reaches neither this server's loopback
+// routes, the cloud metadata service nor Fly's private network, whatever name it uses.
 import { createServer, request as httpRequest, type ClientRequest, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { connect, type Socket } from "node:net";
+import { connect, type BlockList, type Socket } from "node:net";
 import type { Duplex } from "node:stream";
 
+import { listed } from "../../electron/egress-addresses.mjs";
 import { resolveTarget, type ResolvedAddress } from "../browser/egress/gate.ts";
-import { refusalFor, type EgressRules } from "../browser/egress/policy.ts";
+import { addressClass, ownAddresses, refusalFor, type EgressRules, type Refusal } from "../browser/egress/policy.ts";
 
 export interface EgressGateOptions {
   socketPath: string;
@@ -33,6 +34,20 @@ export const BOX_EGRESS_RULES: EgressRules = {
 };
 
 export const boxRefusal = (target: { host: string; port: number }, addresses: readonly ResolvedAddress[]) => refusalFor(target, addresses, BOX_EGRESS_RULES);
+
+/** A box beside unboxed bots (scope `limited`): the host's rules for bots' browsers, but never this computer, whatever
+ * name, address or bot-started service. */
+export async function limitedBoxRefusal(
+  target: { host: string; port: number },
+  addresses: readonly { address: string }[],
+  rules: EgressRules,
+  own: BlockList = ownAddresses(),
+): Promise<Refusal | null> {
+  for (const { address } of addresses) {
+    if (listed(own, address) || addressClass(address, own) === "loopback") return "this-computer";
+  }
+  return refusalFor(target, addresses, { ...rules, botPort: async () => false }, own);
+}
 
 const HOP_BY_HOP = new Set(["proxy-connection", "proxy-authorization", "connection", "keep-alive", "transfer-encoding", "te", "trailer", "upgrade"]);
 

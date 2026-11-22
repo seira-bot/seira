@@ -9,16 +9,26 @@ import { DATA_DIR } from "./config.ts";
 const TAG = /(<attached-(?:file|image)[\t ]+path=")([^"\r\n]*)(")/g;
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
+/** A conversation whose boxes see its uploads whatever its working folder: a bot limited to chosen folders. */
+export interface BoxedConversation { botId: string; threadId: string }
+
+/** What attachmentsForBox takes for `botId`'s turn in `threadId`: true where every bot is boxed, the conversation where
+ * only this bot's spawns are, false where they are not boxed. */
+export function boxedConversation(botId: string, threadId: string, box: Pick<typeof botBox, "enabled" | "boxesBot"> = botBox): boolean | BoxedConversation {
+  if (box.enabled()) return true;
+  return box.boxesBot(botId) ? { botId, threadId } : false;
+}
+
 /**
  * The bot box hides the data folder, uploads included, so an `<attached-file>` path would be unreadable there.
  * Each upload the text names is linked into the conversation's uploads folder (plan.ts boxUploadsDir), which the server
  * owns and every box of the conversation sees read-only, and the path is rewritten to it. The bot can read the upload but
  * never write it or swap the folder for a link. Only the text sent to the engine changes; with the box off, or a working
- * folder that is not a conversation's own, nothing does.
+ * folder that is not a conversation's own (unless `boxed` names the conversation), nothing does.
  */
-export function attachmentsForBox(text: string, cwd: string | undefined, boxed = botBox.enabled(), dataDir = DATA_DIR, attachmentsDir = ATTACHMENTS_DIR): string {
+export function attachmentsForBox(text: string, cwd: string | undefined, boxed: boolean | BoxedConversation = botBox.enabled(), dataDir = DATA_DIR, attachmentsDir = ATTACHMENTS_DIR): string {
   if (!boxed || !cwd || !text.includes("<attached-")) return text;
-  const ids = taskWorkspaceIds(resolve(cwd), resolve(dataDir));
+  const ids = taskWorkspaceIds(resolve(cwd), resolve(dataDir)) ?? (typeof boxed === "object" ? boxed : null);
   if (!ids) return text;
   const uploads = resolve(attachmentsDir), shown = boxUploadsDir(resolve(dataDir), ids.botId, ids.threadId);
   return text.replace(TAG, (tag, open: string, raw: string, close: string) => {

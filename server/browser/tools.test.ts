@@ -56,6 +56,9 @@ describe("old tool names", () => {
     expect(parseToolCall("agent_browser_fill", { selector: "#a" })).toEqual({ ok: false, error: expect.stringContaining("text") });
     expect(parseToolCall("agent_browser_open", { tab: "t0" })).toEqual({ ok: false, error: expect.stringContaining("tab") });
     expect(parseToolCall("browser_navigate", {})).toEqual({ ok: false, error: "There is no browser tool named browser_navigate." });
+    for (const name of ["toString", "constructor", "__proto__", "hasOwnProperty"]) {
+      expect(parseToolCall(name, {})).toEqual({ ok: false, error: `There is no browser tool named ${name}.` });
+    }
     expect(parseToolCall(undefined, {})).toEqual({ ok: false, error: "The tool call has no name." });
   });
 

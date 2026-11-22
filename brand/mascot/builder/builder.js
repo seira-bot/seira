@@ -80,8 +80,30 @@ function normalizeHex(value) {
   return /^#[0-9a-f]{6}$/.test(v) ? v : null;
 }
 
+function randomBelow(n) {
+  if (n <= 1) return 0;
+  const limit = 2 ** 32 - (2 ** 32 % n);
+  for (;;) {
+    const value = globalThis.crypto.getRandomValues(new Uint32Array(1))[0];
+    if (value < limit) return value % n;
+  }
+}
+
+function chance(hits, outOf) {
+  return randomBelow(outOf) < hits;
+}
+
+function shuffled(list) {
+  const out = list.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = randomBelow(i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 function pick(list) {
-  return list[Math.floor(Math.random() * list.length)];
+  return list[randomBelow(list.length)];
 }
 
 // Accept an array of strings, an array of { id, label }, or an object keyed by id.
@@ -681,11 +703,11 @@ export async function mountBuilder(root, options = {}) {
 
   function randomize() {
     const gender = pick(['f', 'm']);
-    const style = pick(visibleStyles(gender).filter((s) => s.id !== 'none' || Math.random() < 0.1));
+    const style = pick(visibleStyles(gender).filter((s) => s.id !== 'none' || chance(1, 10)));
     const recolor = style.recolor !== false;
     const accs = [];
     const slots = new Set();
-    for (const a of accessories.slice().sort(() => Math.random() - 0.5)) {
+    for (const a of shuffled(accessories)) {
       if (accs.length >= pick([0, 1, 2, 3])) break;
       if (slots.has(a.slot)) continue;
       accs.push(a.id);
@@ -695,9 +717,9 @@ export async function mountBuilder(root, options = {}) {
       name: 'Random Bot', gender, style: style.id,
       hairColor: recolor ? pick(HAIR_SWATCHES)[0] : null,
       shell: DEFAULT_SHELL, screen: DEFAULT_SCREEN,
-      eyes: pick(eyes).id, eyeColor: pick(EYE_COLORS)[0], lashes: Math.random() < 0.5,
-      brows: pick(BROWS)[0], mouth: pick(mouths).id, blush: Math.random() < 0.4,
-      accessories: accs, hands: Math.random() < 0.8, personality: pick(PERSONALITIES),
+      eyes: pick(eyes).id, eyeColor: pick(EYE_COLORS)[0], lashes: chance(1, 2),
+      brows: pick(BROWS)[0], mouth: pick(mouths).id, blush: chance(2, 5),
+      accessories: accs, hands: chance(4, 5), personality: pick(PERSONALITIES),
     });
     loadConfig(next, null);
     say('Made a new random character.');
