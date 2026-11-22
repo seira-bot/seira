@@ -37,6 +37,7 @@ import { inputCls } from "./field";
 import { openKeySettings } from "../keys/key-focus";
 import { KeysLink } from "../keys/KeysLink";
 import type { ConnectorScope, ConnectorScopes } from "../../../shared/connector-scopes";
+import { accountName } from "@/lib/connector-account-label";
 import type { ConnectorAccount } from "@/lib/connector-status";
 import type { useBotSettingsDerived } from "./useBotSettingsDerived";
 
@@ -972,12 +973,12 @@ export function ConnectorScopesControl({ connectedSlugs, labels = {}, accounts =
         {scopes?.apps[slug] && ((accounts[slug]?.length ?? 0) > 1 || scopes.accounts?.[slug]) && <fieldset className="flex w-full flex-wrap items-center gap-x-3 gap-y-1">
           <legend className="sr-only">{t("botAccess.scopes.accountsLabel")}</legend>
           <span aria-hidden className="text-[12px] text-ink-secondary">{t("botAccess.scopes.accountsLabel")}</span>
-          {(accounts[slug] ?? []).map((account) => {
+          {(accounts[slug] ?? []).map((account, index) => {
             const allowed = allowedIds(slug);
             const on = allowed.includes(account.id);
             return <label key={account.id} className="flex items-center gap-1.5 text-[12px] text-ink">
               <input type="checkbox" checked={on} disabled={on && allowed.length === 1} onChange={(event) => setAccount(slug, account.id, event.target.checked)} />
-              {account.alias ?? account.id}
+              {accountName(account, index)}
             </label>;
           })}
         </fieldset>}

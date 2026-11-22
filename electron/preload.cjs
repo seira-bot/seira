@@ -90,7 +90,7 @@ function railKeepsItsSize() {
 if (typeof window !== "undefined") {
   for (const type of ["resize", "DOMContentLoaded"]) window.addEventListener(type, () => { leaveRailRoom(); railKeepsItsSize(); });
 }
-const REMOTE_SAFE = new Set(["platform", "app", "getCapabilities", "onCapabilitiesChanged", "applySkin", "setUnreadCount", "permStatus", "workspaces", "rail", "cloudAdd", "cloudPlan", "cloudSendPage", "placesTogether", "accountSheet", "desktopNotices", "desktopNotifications", "desktopAnalytics", "desktopLanguage", "updatesConsent", "windowControls", "onOpenAppSettings", "windowFrame", "softwareRendering", "appUpdate", "openSignInPage"]);
+const REMOTE_SAFE = new Set(["platform", "app", "getCapabilities", "onCapabilitiesChanged", "applySkin", "setUnreadCount", "permStatus", "workspaces", "rail", "cloudAdd", "cloudPlan", "cloudSendPage", "placesTogether", "accountSheet", "desktopNotices", "desktopNotifications", "desktopAnalytics", "desktopLanguage", "updatesConsent", "windowControls", "onOpenAppSettings", "windowFrame", "softwareRendering", "appUpdate", "openSignInPage", "openCleanSignInPage"]);
 /** My Cloud's own page once it is the person's home (main checks the sender again): it is this app's page then. */
 const HOME_PAGE = ["home", "onChatLink", "onPackageInstall", "exportDiagnostics", "openLogsFolder", "openAtLogin", "callActive"];
 function updaterOffered() {
@@ -397,6 +397,8 @@ const bridge = {
   /** An https sign-in page only, and on another server's page only from the person's click; main checks both again. */
   openSignInPage: (url) => (isLocalPage || navigator.userActivation?.isActive === true) && httpsAddress(url)
     ? ipcRenderer.invoke("desktop:open-sign-in-page", String(url)) : Promise.reject(new Error("Use the link to open the page.")),
+  openCleanSignInPage: (url) => (isLocalPage || navigator.userActivation?.isActive === true) && httpsAddress(url)
+    ? ipcRenderer.invoke("desktop:open-sign-in-page", String(url), { clean: true }) : Promise.reject(new Error("Use the link to open the page.")),
   applySkin: (skin) => ipcRenderer.invoke("desktop:skin", skin),
   windowControls: {
     minimize: () => ipcRenderer.invoke("window:minimize"),
