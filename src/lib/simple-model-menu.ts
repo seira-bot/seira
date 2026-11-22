@@ -8,6 +8,7 @@ import { favoriteKey, favoriteModels } from "./favorite-models";
 import { localModelDetail } from "./local-model";
 import { displayModelLabel, shortModelLabel } from "./model-friendly";
 import { choiceIsSelected, modelChoices, takesTypedModels, type ModelChoice } from "./model-choices";
+import { byHealth, providerHealth, type HealthOf, type ProviderHealth } from "./provider-health";
 
 export type ModelOption = InstanceInfo["models"]["options"][number];
 
@@ -49,6 +50,8 @@ export interface MenuGroup {
   account?: string;
   /** A short line under the heading, such as why this account is special here. */
   note?: string;
+  /** A provider that cannot start a task now is listed after the ones that can, with its reason. */
+  health: ProviderHealth;
   body: MenuGroupBody;
 }
 
@@ -84,6 +87,7 @@ export interface SimpleMenuInput {
   probing: ReadonlySet<string>;
   loading: boolean;
   refreshing?: string | null;
+  health?: HealthOf;
   /** Picking a model also changes the bot's own model, not just this conversation's. */
   updatesBotDefault?: boolean;
 }
@@ -168,7 +172,8 @@ export function simpleModelMenu(input: SimpleMenuInput): SimpleMenu {
   const search = total > SIMPLE_SEARCH_AFTER || listed.some((instance) => takesTypedModels(instance) && !instance.policy && !needsCli(instance));
   const query = search ? input.query.trim() : "";
   const { subscription, api, custom } = splitEngineRail(listed);
-  const ordered = [...subscription, ...api, ...custom];
+  const health = input.health ?? ((instance: InstanceInfo) => providerHealth(instance));
+  const ordered = byHealth([...subscription, ...api, ...custom], health);
   const current = ordered.find((instance) => instance.instanceId === selection.instanceId);
 
   function groupBody(instance: InstanceInfo, provider: string): MenuGroupBody | null {
@@ -216,10 +221,11 @@ export function simpleModelMenu(input: SimpleMenuInput): SimpleMenu {
     };
   }
 
-  const groups = (current ? [current, ...ordered.filter((instance) => instance !== current)] : ordered).flatMap((instance): MenuGroup[] => {
+  const first = current && health(current).usable ? [current] : [];
+  const groups = [...first, ...ordered.filter((instance) => !first.includes(instance))].flatMap((instance): MenuGroup[] => {
     const named = heading(instance, listed);
     const body = groupBody(instance, named.provider);
-    return body ? [{ instance, ...named, body }] : [];
+    return body ? [{ instance, ...named, health: health(instance), body }] : [];
   });
 
   return {

@@ -336,6 +336,7 @@ export const CURSOR_SIGN_IN: DeviceSignIn = {
   homeEnv: "CURSOR_CONFIG_DIR",
   homeDir: ".cursor",
   loginArgs: ["login"],
+  logoutArgs: ["logout"],
   env: { NO_OPEN_BROWSER: "1" },
   install: "Install Cursor's CLI (https://cursor.com/docs/cli/installation) for the user running Seira, then try again.",
   failure: cursorLoginFailure,
