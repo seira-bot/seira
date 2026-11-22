@@ -9,6 +9,7 @@ import { NewBotNameHost } from "@/components/NewBotName";
 import { MemberApps } from "@/components/MemberApps";
 import { CloudTimeZoneSync } from "@/components/CloudTimeZone";
 import { cloudSignInDue, spotlightsQuiet, type WelcomeViewer } from "@/lib/onboarding";
+import { pageName, reportPage } from "@/lib/crash-reports";
 import { FirstConversationTour } from "@/components/onboarding/FirstConversationTour";
 import { GuidedTour } from "@/components/onboarding/GuidedTour";
 import { CallHost } from "@/components/CallHost";
@@ -253,6 +254,8 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
     }
     previousViewRef.current = state.activeView;
   }, [state.activeView]);
+
+  useEffect(() => { reportPage(pageName({ activeView: state.activeView, settingsOpen: state.settingsOpen, firstRun: Boolean(firstRun) })); }, [state.activeView, state.settingsOpen, firstRun]);
 
   useEffect(() => {
     if (

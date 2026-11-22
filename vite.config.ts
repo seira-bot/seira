@@ -47,6 +47,9 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), railPage()],
   build: {
     rollupOptions: { input: { index: page("./index.html"), rail: page("./rail.html") } },
+    // Only a build that can send crash reports makes maps. `hidden` writes no reference to the map into the bundle,
+    // and scripts/crash-report-symbols.mjs uploads the maps and deletes them before the package is made.
+    ...(process.env.SEIRA_CRASH_REPORT_URL ? { sourcemap: "hidden" as const } : {}),
   },
   define: {
     __APP_VERSION__: JSON.stringify(version),

@@ -52,7 +52,9 @@ where they belong instead of adding new places.
   Settings. Don't add a second home for the same setting.
 - **No new settings.** No new global settings, toggles or hidden flags. Make
   the behaviour automatic with a good default. An optional field on something
-  the person sets up is fine.
+  the person sets up is fine. One approved exception (2026-11-22): the
+  **Send crash reports** switch in Settings → General → Privacy. It is on by
+  default and has no dialog and no nag.
 - **No new asks.** No new permission asks, approval cards, confirm dialogs,
   nags or waits that interrupt the person, and no default below Full access.
   A bot gets on with the work; a change that needs undoing gets **Undo**.

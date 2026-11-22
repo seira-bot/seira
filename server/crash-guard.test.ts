@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { crashVerdict, currentTurn, FATAL_EXIT_DEADLINE_MS, installCrashGuard, runInTurn, STORM_LIMIT, STORM_WINDOW_MS, withTurnScope } from "./crash-guard.ts";
+import { crashVerdict, currentTurn, FATAL_EXIT_DEADLINE_MS, installCrashGuard, REPORT_WAIT_MS, runInTurn, STORM_LIMIT, STORM_WINDOW_MS, withTurnScope, type CrashReportInfo } from "./crash-guard.ts";
 import type { ProviderInstance } from "./contracts.ts";
 import { CRASH_EXIT_CODE } from "./restart.ts";
 
@@ -118,6 +118,79 @@ describe("installCrashGuard", () => {
     expect(calls.shutdown).toEqual([]);
     raise("unhandledRejection", new Error("one too many"));
     expect(calls.shutdown).toEqual([CRASH_EXIT_CODE]);
+  });
+});
+
+describe("the crash guard's report", () => {
+  function reporting(report: (info: CrashReportInfo) => Promise<void> | void, turnRunning = true) {
+    const events = new EventEmitter();
+    const calls = { shutdown: [] as number[], exit: [] as number[] };
+    installCrashGuard({
+      failTurn: () => turnRunning, shutdown: (code) => calls.shutdown.push(code), exit: (code) => calls.exit.push(code),
+      log: () => {}, report, on: (event, listener) => events.on(event, listener),
+    });
+    return { calls, raise: (kind: "uncaughtException" | "unhandledRejection", error: unknown) => events.emit(kind, error) };
+  }
+
+  it("files a server-turn report for a stopped turn, with its engine and without the bot or the thread, and does not wait", async () => {
+    const infos: CrashReportInfo[] = [];
+    const { calls, raise } = reporting((info) => { infos.push(info); return new Promise<void>(() => {}); });
+    await runInTurn({ botId: "bot-canary", threadId: "thread-canary", engine: "codex" }, async () => { await Promise.resolve(); raise("uncaughtException", new TypeError("x")); });
+    expect(infos).toHaveLength(1);
+    expect(infos[0]).toMatchObject({ kind: "server-turn", engine: "codex" });
+    expect(JSON.stringify(Object.keys(infos[0]!).sort())).toBe('["engine","error","kind"]');
+    expect(JSON.stringify(infos[0])).not.toContain("canary");
+    expect(calls.shutdown).toEqual([]);
+  });
+
+  it("files one server-exit report before a close and closes when the report is done", async () => {
+    let finish: () => void = () => {};
+    const infos: CrashReportInfo[] = [];
+    const { calls, raise } = reporting((info) => { infos.push(info); return new Promise<void>((resolve) => { finish = resolve; }); });
+    raise("uncaughtException", new TypeError("x is not a function"));
+    expect(infos.map((info) => info.kind)).toEqual(["server-exit"]);
+    expect(calls.shutdown).toEqual([]);
+    finish();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls.shutdown).toEqual([CRASH_EXIT_CODE]);
+  });
+
+  it("closes after 2000 ms when the report does not finish", async () => {
+    vi.useFakeTimers();
+    const { calls, raise } = reporting(() => new Promise<void>(() => {}));
+    raise("uncaughtException", new TypeError("x"));
+    await vi.advanceTimersByTimeAsync(REPORT_WAIT_MS - 1);
+    expect(calls.shutdown).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(calls.shutdown).toEqual([CRASH_EXIT_CODE]);
+  });
+
+  it("files only the server-exit report when a turn's error turns into a close", async () => {
+    vi.useFakeTimers();
+    const infos: CrashReportInfo[] = [];
+    const { calls, raise } = reporting((info) => { infos.push(info); }, false);
+    await runInTurn({ botId: "b", threadId: "warm", engine: "codex" }, async () => { raise("uncaughtException", new TypeError("late callback")); });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(infos.map((info) => info.kind)).toEqual(["server-exit"]);
+    expect(calls.shutdown).toEqual([CRASH_EXIT_CODE]);
+  });
+
+  it("keeps its verdict when the report throws or rejects", async () => {
+    const turn = { botId: "b", threadId: "t" };
+    const thrown = reporting(() => { throw new Error("report failed"); });
+    await runInTurn(turn, async () => { thrown.raise("uncaughtException", new TypeError("x")); });
+    expect(thrown.calls.shutdown).toEqual([]);
+    const rejected = reporting(() => Promise.reject(new Error("report failed")));
+    rejected.raise("uncaughtException", new TypeError("x"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(rejected.calls.shutdown).toEqual([CRASH_EXIT_CODE]);
+  });
+
+  it("files no report for an error it survives", () => {
+    const report = vi.fn();
+    const { raise } = reporting(report);
+    raise("unhandledRejection", new Error("fetch failed"));
+    expect(report).not.toHaveBeenCalled();
   });
 });
 
