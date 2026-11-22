@@ -6379,14 +6379,14 @@ describe("harness HTTP API", () => {
   });
 
   it("buzzes when a turn dies before it can start", async () => {
-    // The cloud destination with no Boat configured fails inside dispatch without touching the network.
+    // A VPS destination with no VPS set up fails inside dispatch without touching the network.
     let botId: string | undefined;
     let stream: Awaited<ReturnType<typeof openSse>> | undefined;
     try {
-      expect((await api("PUT", "/api/config", { box: { token: "box_unavailable" } })).status).toBe(200);
+      expect((await api("PUT", "/api/config", { box: { token: "" } })).status).toBe(200);
       const bot = (await api("POST", "/api/bots")).body.bot;
       botId = bot.id;
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud" })).status).toBe(200);
+      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud", cloudBackend: "vps" })).status).toBe(200);
       stream = await openSse(`${BASE}/api/events`);
       await stream.until((frame) => frame.kind === "hello");
       expect((await api("POST", `/api/bots/${bot.id}/messages`, { text: "go" })).status).toBe(202);
@@ -6418,7 +6418,7 @@ describe("harness HTTP API", () => {
     let botId: string | undefined;
     let stream: Awaited<ReturnType<typeof openSse>> | undefined;
     try {
-      expect((await api("PUT", "/api/config", { box: { token: "box_unavailable" } })).status).toBe(200);
+      expect((await api("PUT", "/api/config", { box: { token: "" } })).status).toBe(200);
       const bot = (await api("POST", "/api/bots")).body.bot;
       botId = bot.id;
       expect((await api("PATCH", `/api/bots/${bot.id}`, {
@@ -6514,8 +6514,8 @@ describe("harness HTTP API", () => {
         messageId,
       })).status).toBe(200);
 
-      // The bot now works on a cloud computer with no Box account connected, so the execution cannot start.
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud" })).status).toBe(200);
+      // The bot now works on a VPS that is not set up, so the execution cannot start.
+      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud", cloudBackend: "vps" })).status).toBe(200);
       rmSync(fakeClaudeDump, { force: true });
       expect((await api("POST", `/api/bots/${bot.id}/secret-cards/${messageId}/dismiss`, {
         threadId: bot.threadId,
@@ -7283,10 +7283,10 @@ describe("harness HTTP API", () => {
     let routineId: string | undefined;
     let stream: Awaited<ReturnType<typeof openSse>> | undefined;
     try {
-      expect((await api("PUT", "/api/config", { box: { token: "box_unavailable" } })).status).toBe(200);
+      expect((await api("PUT", "/api/config", { box: { token: "" } })).status).toBe(200);
       const bot = (await api("POST", "/api/bots")).body.bot;
       botId = bot.id;
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud" })).status).toBe(200);
+      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud", cloudBackend: "vps" })).status).toBe(200);
       const created = await api("POST", "/api/routines", {
         name: "Cloud check",
         prompt: "look at the cloud desktop",
