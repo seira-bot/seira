@@ -21,7 +21,7 @@ import { openHarnessGate, type HarnessGate } from "./harness-gate.ts";
 import { distrustHomePrograms, distrustLimitedBoxFolders } from "./program-trust.ts";
 import { procHidepid } from "./hidepid.ts";
 import { DENIED_SYSCALLS, seccompBytes, seccompSupported } from "./seccomp.ts";
-import { LIMITED_HOME_SIGN_INS, RELAY_SOCKET_NAME, TEAM_FOLDER_KEPT, boxUploadsDir, signInProgramFolders, teamFolderOf, under, bwrapArgs, inBoxSocket, planBox, taskWorkspaceIds, visibleInBox, type BoxAudience, type BoxBridge, type BoxPlan, type BoxRequest, type BoxSetup } from "./plan.ts";
+import { LIMITED_HOME_SIGN_INS, RELAY_SOCKET_NAME, TEAM_FOLDER_KEPT, boxUploadsDir, makeSignInProgramFolders, signInPrograms, teamFolderOf, under, bwrapArgs, inBoxSocket, planBox, taskWorkspaceIds, visibleInBox, type BoxAudience, type BoxBridge, type BoxPlan, type BoxRequest, type BoxSetup } from "./plan.ts";
 import { openBoxRelay, type BoxRelay } from "./relay.ts";
 
 /** The loopback port inside a box that reaches the egress gate. The harness gate sits at the server's own port. */
@@ -166,6 +166,7 @@ export class BoxRunner {
     };
     const extraFds: number[] = [];
     const seccomp = this.options.seccompFile && !this.options.setup.mutate?.has("no-seccomp") ? this.options.seccompFile : null;
+    if (request.folders?.limited && !request.home) makeSignInProgramFolders(this.options.setup.home, this.options.setup.dataDir);
     const plan = planBox({ ...this.options.setup, seccompFd: seccomp ? BOX_SECCOMP_FD : undefined }, request);
     const mutate = this.options.setup.mutate;
     const env = mutate?.has("env-all")
@@ -442,11 +443,11 @@ export class BotBox {
     }
   }
 
-  /** The program folders in the sign-in folders that each limited box so far has had read-only. Security: a box that had
-   * one writable, as when the folder was not there yet, may have left a program in it. */
+  /** The program folders in the sign-in folders that a limited box has read-only, but those that a box here had writable
+   * before, as when a link there came to pass another folder of its sign-in folder. */
   private limitedKeptFolders(home: string, dataDir: string): string[] {
     const views = [...this.limitedSignInViews.values()];
-    return signInProgramFolders(home, dataDir).filter((dir) => views.every((view) => !under(dir, view.signIn) || view.kept.some((kept) => under(dir, kept))));
+    return signInPrograms(home, dataDir).readOnly.filter((dir) => views.every((view) => !under(dir, view.signIn) || view.kept.some((kept) => under(dir, kept))));
   }
 
   /** The bot's folder list for one box now, as a key (foldersKey); null with no setting. */

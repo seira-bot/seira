@@ -8,7 +8,7 @@
 import { realpathSync } from "node:fs";
 import { delimiter, isAbsolute, resolve } from "node:path";
 
-import { under } from "./plan.ts";
+import { linksOnTheWay, under } from "./plan.ts";
 
 let distrusted: { homes: readonly string[]; kept: readonly string[]; bots: readonly string[] } | null = null;
 let limitedBox: { folders: readonly string[]; chosen: () => readonly string[]; kept: () => readonly string[] } | null = null;
@@ -58,10 +58,13 @@ function mayRunFrom(path: string, boxWrites: BoxWrites | null): boolean {
   if (!isAbsolute(path)) return false;
   const full = resolve(path);
   if (boxWrites) {
+    const steps = linksOnTheWay(full);
+    if (!steps) return false;
     const inside = (name: string, dirs: readonly string[]) => dirs.some((dir) => under(name, dir));
-    // Security: each name on its own, so a link the box writes never borrows the trust of the folder it points to.
+    // Security: the path as given, each link on the way and where it ends, each on its own: a link the box can change
+    // never borrows the trust of the folder it points to.
     const boxWrote = (name: string) => inside(name, boxWrites.chosen) || (inside(name, boxWrites.always) && !inside(name, boxWrites.kept));
-    if (bothNames(full).some(boxWrote)) return false;
+    if ([full, ...steps].some(boxWrote)) return false;
   }
   if (!distrusted) return true;
   if (distrusted.bots.some((dir) => under(full, dir))) return false;

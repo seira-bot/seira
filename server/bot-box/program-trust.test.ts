@@ -123,6 +123,34 @@ describe("programs a boxed bot could have written", () => {
     expect(readFileSync(marker, "utf8").trim()).toBe(own);
   });
 
+  it.skipIf(!posix)("an unboxed spawn checks each link on the way to a program, by path and by name", async () => {
+    const home = homedir();
+    const marker = join(home, "ran-chain");
+    rmSync(marker, { force: true });
+    const grok = join(home, ".grok-chain");
+    const real = plant(join(grok, "versions", "1.0"), "seira-chain-grok", marker);
+    mkdirSync(join(grok, "bin"), { recursive: true });
+    mkdirSync(join(grok, "tmp"), { recursive: true });
+    symlinkSync(join("..", "versions", "1.0", "seira-chain-grok"), join(grok, "tmp", "link"));
+    symlinkSync(join("..", "tmp", "link"), join(grok, "bin", "seira-chain-grok"));
+    const env = { ...process.env, PATH: [join(grok, "bin"), "/usr/bin", "/bin"].join(delimiter) };
+    let kept = [join(grok, "bin"), join(grok, "versions")];
+    distrustLimitedBoxFolders([grok], () => [], () => kept);
+
+    expect(serverMayRunFrom(join(grok, "bin")), "the folder itself is read-only in the box").toBe(true);
+    expect(serverMayRunFrom(real)).toBe(true);
+    expect(serverMayRunFrom(join(grok, "bin", "seira-chain-grok")), "a link on the way sits in a folder the box writes").toBe(false);
+    for (const command of [join(grok, "bin", "seira-chain-grok"), "seira-chain-grok"]) {
+      expect(((await run(command, env)).error as NodeJS.ErrnoException | null)?.code, command).toBe("EACCES");
+    }
+    expect(existsSync(marker)).toBe(false);
+
+    kept = [...kept, join(grok, "tmp")];
+    expect((await run("seira-chain-grok", env)).error, "every folder on the way is read-only in the box").toBeNull();
+    expect(existsSync(marker)).toBe(true);
+    rmSync(grok, { recursive: true, force: true });
+  });
+
   it.skipIf(!posix)("the server's PATH keeps the app's own engines and the system's, never HOME's program folders", () => {
     const home = homedir();
     const dataDir = join(home, ".seira");

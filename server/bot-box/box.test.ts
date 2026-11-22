@@ -1,4 +1,4 @@
-import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { BotBox, BoxRunner, BOX_EGRESS_PORT, flyApiPrivate, foldersKey, writeSeccompFile } from "./box.ts";
 import { processStart, seesProcess } from "./box-probe.ts";
 import { procHidepid } from "./hidepid.ts";
-import { boxUploadsDir, visibleInBox } from "./plan.ts";
+import { boxUploadsDir, under, visibleInBox } from "./plan.ts";
 import { homeProgramsDistrusted, serverMayRunFrom, serverPath } from "./program-trust.ts";
 import { DENIED_SYSCALLS, seccompBytes } from "./seccomp.ts";
 import { engineInstallRoots, npmEnginesPrefix } from "../engine-roots.ts";
@@ -281,26 +281,41 @@ describe("BotBox", () => {
     }
   });
 
-  it.skipIf(process.platform === "win32")("limited: a program folder that a box had writable stays distrusted until the box stops", async () => {
-    const box = new BotBox();
-    boxes.push(box);
+  it.skipIf(process.platform === "win32")("limited: no box has a program folder of a sign-in folder writable, so trust needs no memory across a restart", async () => {
     const home = realpathSync(temp()), dataDir = join(home, ".seira"), cwd = realpathSync(temp());
     mkdirSync(join(home, ".kimi-code"), { recursive: true });
+    mkdirSync(join(home, ".grok"), { recursive: true, mode: 0o500 });
+    mkdirSync(join(home, ".claude", "elsewhere"), { recursive: true });
+    symlinkSync("elsewhere", join(home, ".claude", "local"));
+    const canBlock = process.getuid?.() !== 0;
+    const start = async () => {
+      const box = new BotBox();
+      boxes.push(box);
+      box.scopeFolders(() => ({ limited: true, grants: [] }));
+      await box.start({
+        dataDir, home, port: 8799, denyEnv: new Set(), env: {}, log: () => {},
+        detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: null }, scope: "limited" }),
+      });
+      return box;
+    };
+    const first = await start();
+    const wrapped = first.wrap({ command: "/usr/local/bin/claude", args: [], cwd, conversationBot: "b1", threadId: "t1", env: { PATH: "/usr/bin" } })!;
+    wrapped.release();
+    expect(statSync(join(home, ".kimi-code", "bin")).mode & 0o777, "made before the box, for the person only").toBe(0o700);
+    expect(visibleInBox(wrapped.plan, join(home, ".kimi-code", "bin", "kimi"))).toBe("ro");
+    expect(visibleInBox(wrapped.plan, join(home, ".kimi-code", "config.toml"))).toBe("rw");
+    expect(visibleInBox(wrapped.plan, join(home, ".claude", "local", "claude")), "a program folder that is a link: the sign-in folder is read-only").toBe("ro");
+    expect(visibleInBox(wrapped.plan, join(home, ".claude", "settings.json"))).toBe("ro");
+    if (canBlock) expect(visibleInBox(wrapped.plan, join(home, ".grok", "bin", "grok")), "a program folder that cannot be made: the sign-in folder is read-only").toBe("ro");
+    for (const path of wrapped.plan.writable) expect(["bin", "local"].some((name) => path.endsWith(`/${name}`)) && under(path, home) && !under(path, dataDir), path).toBe(false);
+    await first.stop();
+
+    chmodSync(join(home, ".grok"), 0o700);
     mkdirSync(join(home, ".grok", "bin"), { recursive: true });
-    box.scopeFolders(() => ({ limited: true, grants: [] }));
-    await box.start({
-      dataDir, home, port: 8799, denyEnv: new Set(), env: {}, log: () => {},
-      detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: null }, scope: "limited" }),
-    });
-    const before = box.wrap({ command: "/usr/local/bin/claude", args: [], cwd, conversationBot: "b1", threadId: "t1", env: { PATH: "/usr/bin" } })!;
-    before.release();
-    expect(visibleInBox(before.plan, join(home, ".kimi-code", "bin", "kimi")), "not there yet, so inside its sign-in folder").toBe("rw");
-    mkdirSync(join(home, ".kimi-code", "bin"));
-    const after = box.wrap({ command: "/usr/local/bin/claude", args: [], cwd, conversationBot: "b1", threadId: "t1", env: { PATH: "/usr/bin" } })!;
-    after.release();
-    expect(visibleInBox(after.plan, join(home, ".kimi-code", "bin", "kimi"))).toBe("ro");
-    expect(serverMayRunFrom(join(home, ".kimi-code", "bin")), "an earlier box could write it").toBe(false);
-    expect(serverMayRunFrom(join(home, ".grok", "bin")), "every box had it read-only").toBe(true);
+    await start();
+    expect(serverMayRunFrom(join(home, ".kimi-code", "bin")), "after a restart, with no memory of the earlier box").toBe(true);
+    expect(serverMayRunFrom(join(home, ".grok", "bin")), "made outside every box").toBe(true);
+    for (const path of [join(home, ".claude", "local"), join(home, ".claude", "elsewhere"), join(home, ".kimi-code", "cache"), join(home, ".grok")]) expect(serverMayRunFrom(path), path).toBe(false);
   });
 
   it.skipIf(process.platform === "win32")("limited: a bot working in a folder of its own choosing still reads its conversation's uploads", async () => {
