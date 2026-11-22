@@ -235,7 +235,7 @@ describe("Settings → AI lists every provider the app knows", () => {
 });
 
 describe("Settings → AI → ChatGPT: the built-in account rows can be hidden", () => {
-  const codexAccount: InstanceInfo = { ...codex, authentication: { method: "device-code", signOut: true } };
+  const codexAccount: InstanceInfo = { ...codex, authentication: { method: "device-code", signOut: true }, models: { default: "gpt", options: [{ id: "gpt", label: "GPT" }] } };
   const plan: InstanceInfo = {
     instanceId: "chatgpt", driverKind: "codex", displayName: "ChatGPT plan", cliDefault: "codex",
     snapshot: { state: "available", authenticated: false, chatgptPlan: true }, models: { default: "gpt", options: [] },
