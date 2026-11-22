@@ -147,6 +147,18 @@ test("a redirect that composio sends after the callback also closes the window",
   assert.equal(f.log.timers.length, 1);
 });
 
+test("a blocked redirect that composio sends after the callback still closes the window", () => {
+  const f = fixture();
+  f.open();
+  const contents = f.win().webContents;
+  contents.emit("did-start-navigation", nav(GITHUB_LOGIN), GITHUB_LOGIN, false, true);
+  contents.emit("will-redirect", nav(CALLBACK), CALLBACK, false, true);
+  const away = nav("https://example.com/connected");
+  contents.emit("will-redirect", away, away.url, false, true);
+  assert.equal(away.defaultPrevented, true);
+  assert.equal(f.log.timers.length, 1);
+});
+
 test("composio pages before github never close the window", () => {
   const f = fixture();
   f.open();
