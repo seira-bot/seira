@@ -7,7 +7,7 @@
 import type { RuntimeEvent } from "../shared/runtime-events.ts";
 import type { ServerText } from "../shared/server-text.ts";
 import { isCountedSkip, type RoutineRetryCause } from "../shared/routines.ts";
-import { engineFailureKind } from "./drivers/engine-errors.ts";
+import { contextOverflow, engineFailureKind } from "./drivers/engine-errors.ts";
 import { classifyError } from "./drivers/retry.ts";
 import { hostFaultOf, retryCannotFix } from "./host-fault.ts";
 import { outOfProcesses } from "./process-shortage.ts";
@@ -98,6 +98,8 @@ export function classifyRoutineFailure(failure: string, facts: RoutineFailureFac
   if (facts.cause === "busy" || outOfProcesses(failure)) return { kind: "busy" };
   if (facts.cause === "stalled" || facts.cause === "cap") return { kind: "final" };
   if (facts.stopReason && NOT_RETRIED_STOPS.has(facts.stopReason)) return { kind: "final" };
+  // The thread's next run starts a new engine session with a summary (server/context-full.ts), so one more start can finish.
+  if (facts.stopReason === "context_full" || contextOverflow(failure)) return { kind: "retry", cause: "failed" };
   if (classifyContinuable(facts.stopReason, failure) === "cap") return { kind: "final" };
   const fault = hostFaultOf(failure, facts.stopReason);
   if (fault && fault !== "signed_out" && retryCannotFix(fault)) return { kind: "final" };

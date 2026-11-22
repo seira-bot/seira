@@ -692,7 +692,7 @@ export type Action =
       rememberCommand?: boolean;
       onError?: (message: string) => void;
     }
-  | { type: "newTask"; botId: string; projectId?: string; cwd?: string; onCreated?: () => void; onError?: (message: string) => void }
+  | { type: "newTask"; botId: string; projectId?: string; cwd?: string; continueFrom?: string; onCreated?: () => void; onError?: (message: string) => void }
   | { type: "switchTask"; botId: string; threadId: string; whole?: true }
   | { type: "switchTaskFailed"; botId: string; threadId: string }
   | { type: "taskSwitched"; bot: Bot }
@@ -2741,7 +2741,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             : Promise.resolve();
           void ready.then(() => api<{ bot: Bot }>(action.type === "newTask"
             ? `/api/bots/${action.botId}/tasks`
-            : `/api/bots/${action.botId}/tasks/${action.threadId}${action.whole ? "" : `?messages=${SWITCH_MESSAGE_COUNT}`}`, { method: "POST", body: JSON.stringify(action.type === "newTask" ? { projectId: action.projectId, cwd: action.cwd } : {}) }))
+            : `/api/bots/${action.botId}/tasks/${action.threadId}${action.whole ? "" : `?messages=${SWITCH_MESSAGE_COUNT}`}`, { method: "POST", body: JSON.stringify(action.type === "newTask" ? { projectId: action.projectId, cwd: action.cwd, continueFrom: action.continueFrom } : {}) }))
             .then((r) => {
               if (action.type === "newTask") { settle(null); action.onCreated?.(); }
               if (navigation.get(action.botId) !== revision) return;

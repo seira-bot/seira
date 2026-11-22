@@ -760,7 +760,7 @@ const MessagesList = memo(function MessagesList({
             case "digest":
               return showToolCalls && advanced && !traces.absorbed.has(m.id) ? <DigestChip message={m} /> : null;
             case "compaction":
-              return <CompactionChip message={m} onNewChat={m.id === lookups.newChatHintId && canReact ? () => dispatch({ type: "newTask", botId }) : undefined} />;
+              return <CompactionChip message={m} onNewChat={m.id === lookups.newChatHintId && canReact ? () => dispatch({ type: "newTask", botId, continueFrom: threadId }) : undefined} />;
             case "screen":
               return <ScreenFrame threadId={threadId} message={m} />;
             default: {

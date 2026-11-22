@@ -185,3 +185,31 @@ it.each([
     expect(f.turns().at(-1).resumed).toBe(false);
   }
 }, false, { FAKE_CLAUDE_CONTEXT_TOKENS: String(tokens) }), 90_000);
+
+it("folds a thread whose engine said the prompt is too long and runs its next turn on a new session with the summary", () => fixture(async f => {
+  for (const text of ["FIRST_REQUEST use port 9000", "SECOND_REQUEST add logging", "THIRD_REQUEST add tests"]) await f.send(text);
+  const oldSession = f.task().resumeCursors.claude;
+  expect((await f.messages()).filter(m => m.kind === "compaction")).toHaveLength(0);
+  expect(f.task().usage.context?.tokens ?? 0).toBeLessThan(10_000);
+  await f.restart();
+  await f.cli("send", "--bot", f.bot.id, "--task", f.thread, "--text", "FOURTH_REQUEST this run meets the full context");
+  await f.cli("wait", "--bot", f.bot.id, "--task", f.thread, "--timeout", "30");
+  await f.idle();
+  expect((await f.messages()).filter(m => m.kind === "compaction")).toHaveLength(0);
+  await f.send("FIFTH_REQUEST retry on the new session");
+  const records = (await f.messages()).filter(m => m.kind === "compaction");
+  expect(records).toHaveLength(1);
+  expect(records[0].compaction.by).toBe("harness");
+  expect(records[0].compaction.summary).toContain("FIRST_REQUEST");
+  const turn = f.turns().at(-1);
+  expect(turn.resumed).toBe(false);
+  const prompt = String(turn.prompt.message.content);
+  expect(prompt).toContain("Earlier conversation summary");
+  expect(prompt).toContain("FIRST_REQUEST");
+  expect(prompt).toContain("FOURTH_REQUEST this run meets the full context");
+  expect(prompt).toContain("FIFTH_REQUEST retry on the new session");
+  expect(f.task().resumeCursors.claude).not.toBe(oldSession);
+  expect(f.task().appliedCompactionId).toBe(records[0].id);
+  await f.send("SIXTH_REQUEST the thread is folded once");
+  expect((await f.messages()).filter(m => m.kind === "compaction")).toHaveLength(1);
+}, false, { FAKE_CLAUDE_RESUMED_API_ERROR: "1", FAKE_CLAUDE_API_ERROR: "Prompt is too long", FAKE_CLAUDE_API_ERROR_STATUS: "400" }), 120_000);
