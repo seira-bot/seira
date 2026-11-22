@@ -48,4 +48,8 @@ describe("data helpers", () => {
     expect(ordered.map((entry) => entry.id)).toEqual(["old", "new", "mid"]);
     expect(cardsLatestFirst([card("a", "same"), card("b", "same")]).map((entry) => entry.id)).toEqual(["b", "a"]);
   });
+
+  it("escapes a backslash in a markdown table cell before the pipe", () => {
+    expect(markdownTable(["a\\b"], [["x\\|y"]])).toBe("| a\\\\b |\n| --- |\n| x\\\\\\|y |");
+  });
 });

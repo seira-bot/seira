@@ -508,6 +508,11 @@ export class DeviceRegistry {
  * the scheme is `undefined`, never "". */
 export function bearerToken(header: string | undefined): string | undefined {
   if (!header) return undefined;
-  const match = /^Bearer[ \t]+(.+)$/i.exec(header.trim());
-  return match ? match[1].trim() || undefined : undefined;
+  const text = header.trim();
+  if (text.slice(0, 6).toLowerCase() !== "bearer") return undefined;
+  let at = 6;
+  while (text[at] === " " || text[at] === "\t") at += 1;
+  const token = text.slice(at);
+  if (at === 6 || !token || /[\n\r\u2028\u2029]/.test(token)) return undefined;
+  return token.trim() || undefined;
 }

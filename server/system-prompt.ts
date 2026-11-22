@@ -7,6 +7,7 @@ import type { ConnectorToolGrant } from "../shared/wire.ts";
 import { loginLabel, type LoginPlace } from "../shared/logins.ts";
 import { vaultNameKey } from "../shared/vault.ts";
 import { isConversational, type ReplyStyle } from "../shared/reply-style.ts";
+import { HEAVY_WORK_PROMPT } from "./heavy-work-prompt.ts";
 import { REPLY_HABITS_PROMPT } from "./reply-habits.ts";
 
 export type PromptPart = { id: string; label: string; text: string };
@@ -289,7 +290,7 @@ const LONG_COMMANDS_TEXT =
 const VM_LONG_COMMANDS_TEXT =
   " In your Local VM, vm_exec takes `timeout_seconds` instead (default 60, at most 300). The VM keeps running between calls, so a job longer than that may start detached inside it (`nohup <command> > /tmp/<job>.log 2>&1 &`); check its log with later vm_exec calls.";
 export function longCommandsPrompt(computer: ComputerPromptKind | null): string {
-  return LONG_COMMANDS_TEXT + (computer === "vm-private" || computer === "vm-shared" ? VM_LONG_COMMANDS_TEXT : "");
+  return LONG_COMMANDS_TEXT + (computer === "vm-private" || computer === "vm-shared" ? VM_LONG_COMMANDS_TEXT : "") + HEAVY_WORK_PROMPT;
 }
 export const THREADS_PROMPT =
   " A thread is one conversation with its own history and run, a row under its bot; several can run at once. start_thread opens one on yourself for separate work; coordinate_bots with thread \"new\" gives a teammate a job in a fresh one; list_threads shows how yours are going. Write a thread's title as #Title so it links. Never use a ticket comment, note or room post as a stand-in for a thread. When the person says to burst something, or a request is clearly many independent items in parallel, use burst: it shows a card, nothing runs until they press Run, and results come back here as one merged reply.";

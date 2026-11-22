@@ -8,7 +8,8 @@ export type FolderGrant = WireFolderGrant;
 
 export interface DepartmentFolders {
   departments: Record<string, FolderAccess>;
-  enforcement: "box" | "ai";
+  /** "limited": the bot box holds only bots limited to chosen folders. */
+  enforcement: "box" | "limited" | "ai";
   setHere: boolean;
 }
 

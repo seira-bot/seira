@@ -1,5 +1,6 @@
 // The provider key never leaves the harness: the renderer only ever holds the SDP answer and its media connection.
 import { CLOUD_HOME_PLACE } from "./system-prompt.ts";
+import { callLanguageInstruction, callSpeedFor, callVoiceCapability } from "../shared/call-voice.ts";
 import type { LiveProvider } from "../shared/wire.ts";
 import type { Message } from "./store.ts";
 
@@ -192,9 +193,16 @@ export function liveIdentityLine(bot: LiveBot, { cloudHome = false }: { cloudHom
   return `You are ${name}${title ? `, ${title}` : ""}, an AI agent that ${where}.${description ? ` ${description}` : ""}`;
 }
 
-export const LIVE_STYLE_LINE = "Speak warmly and naturally, at an unhurried pace. Keep replies short: one or two sentences unless the user asks for more. Speak the language the user speaks.";
+const STYLE_LINE_START = "Speak warmly and naturally, at an unhurried pace. Keep replies short: one or two sentences unless the user asks for more.";
+export const LIVE_STYLE_LINE = `${STYLE_LINE_START} Speak the language the user speaks.`;
 
-export function liveInstructions(bot: LiveBot, { cloudHome = false }: { cloudHome?: boolean } = {}): string {
+/** The style line, with the bot's chosen call language in place of "the language the user speaks"; auto or absent keeps it. */
+export function liveStyleLine(language?: string): string {
+  const instruction = callLanguageInstruction(language);
+  return instruction ? `${STYLE_LINE_START} ${instruction}` : LIVE_STYLE_LINE;
+}
+
+export function liveInstructions(bot: LiveBot, { cloudHome = false, language }: { cloudHome?: boolean; language?: string } = {}): string {
   const name = liveBotName(bot);
   const changes = cloudHome ? "My Cloud" : "the computer";
   return [
@@ -202,7 +210,7 @@ export function liveInstructions(bot: LiveBot, { cloudHome = false }: { cloudHom
     `To the user you are one assistant, ${name}, and you speak in the first person. Your work — looking things up, using your tools, files and memory, researching, deciding, and answering anything that needs facts this conversation does not hold — happens when you delegate. Delegating is how you think and act; it is not someone else.`,
     "Never mention a backend, delegation, a voice layer, or another system or model doing the work, and never say you are only a voice. Say \"I\" about the work.",
     "Never ask the user whether you may look something up or check something. When it needs checking, delegate at once and say briefly that you are checking.",
-    LIVE_STYLE_LINE,
+    liveStyleLine(language),
     "",
     "Backchannel policy: Use light backchannels. Acknowledge naturally without competing with the user.",
     "Interruption policy: Stop speaking when the user interrupts. Listen to what they say.",
@@ -273,6 +281,9 @@ export interface CreateLiveSessionInput {
   history: LiveHistoryMessage[];
   cloudHome: boolean;
   voice?: string;
+  /** The bot's saved call speed and language (`Bot.callSpeed`, `Bot.callLanguage`). */
+  callSpeed?: number;
+  callLanguage?: string;
   endpoint?: LiveEndpoint;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
@@ -288,12 +299,13 @@ export async function createLiveSession(input: CreateLiveSessionInput): Promise<
     throw new LiveSessionError("The call could not start: the connection offer was invalid.", 400);
   }
   const initialInput = liveInitialInput(input.history);
+  const speed = callSpeedFor(input.callSpeed, callVoiceCapability({ mode: "live", provider: endpoint.provider }).speed);
   const body = {
     session: {
       model: endpoint.model,
-      instructions: liveInstructions(input.bot, { cloudHome: input.cloudHome }),
+      instructions: liveInstructions(input.bot, { cloudHome: input.cloudHome, language: input.callLanguage }),
       delegation: { type: "client" },
-      audio: { output: { voice: liveVoice(input.voice) } },
+      audio: { output: { voice: liveVoice(input.voice), ...(speed === 1 ? {} : { speed }) } },
       // Azure's GPT-Live refuses `session.client` ("Unknown parameter"): see LIVE_DATA_CHANNEL for who may hold such a call.
       ...(endpoint.provider === "azure" ? {} : { client: { data_channel: LIVE_DATA_CHANNEL } }),
       ...(initialInput.length ? { input: initialInput } : {}),

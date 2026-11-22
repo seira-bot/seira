@@ -4,7 +4,10 @@
 import { createServer, type IncomingMessage } from "node:http";
 import type { AddressInfo } from "node:net";
 
-export interface FakeComposioAccount { id: string; user_id: string; toolkit: { slug: string }; status: string; updated_at: string }
+export interface FakeComposioAccount {
+  id: string; user_id: string; toolkit: { slug: string }; status: string; updated_at: string;
+  created_at?: string; state?: { val: { displayName?: string } };
+}
 
 export interface FakeComposioProject {
   /** What SEIRA_COMPOSIO_API is set to. */
@@ -14,13 +17,13 @@ export interface FakeComposioProject {
   /** Session id → the Composio user it was made for. */
   sessions: Map<string, string>;
   /** Every request, in order: `user` is the Composio user it named or whose Session it used. */
-  requests: Array<{ method: string; path: string; apiKey: string | null; user?: string }>;
+  requests: Array<{ method: string; path: string; apiKey: string | null; user?: string; revoke?: boolean }>;
   /** Each tools/call that reached a Session's MCP endpoint. */
   toolCalls: Array<{ user: string; tool: string; slugs: string[] }>;
   /** Each connect link asked for. */
   links: Array<{ user: string; toolkit: string }>;
   /** The person finished the sign-in: an active account for that user. */
-  connect(userId: string, toolkit: string): string;
+  connect(userId: string, toolkit: string, identity?: { displayName?: string; createdAt?: string }): string;
   /** While true, every request answers 503. */
   down: boolean;
   close(): Promise<void>;
@@ -36,9 +39,13 @@ export async function startFakeComposioProject(apiKey: string): Promise<FakeComp
   let serial = 0;
   const fake: Omit<FakeComposioProject, "api" | "origin" | "close"> = {
     accounts: [], sessions: new Map(), requests: [], toolCalls: [], links: [], down: false,
-    connect(userId, toolkit) {
+    connect(userId, toolkit, identity = {}) {
       const id = `ca_fake${String(++serial).padStart(4, "0")}`;
-      fake.accounts.push({ id, user_id: userId, toolkit: { slug: toolkit }, status: "ACTIVE", updated_at: new Date(serial * 1000).toISOString() });
+      fake.accounts.push({
+        id, user_id: userId, toolkit: { slug: toolkit }, status: "ACTIVE", updated_at: new Date(serial * 1000).toISOString(),
+        ...(identity.createdAt ? { created_at: identity.createdAt } : {}),
+        ...(identity.displayName ? { state: { val: { displayName: identity.displayName } } } : {}),
+      });
       return id;
     },
   };
@@ -88,6 +95,7 @@ export async function startFakeComposioProject(apiKey: string): Promise<FakeComp
     }
     const account = /^\/connected_accounts\/([^/]+)$/.exec(path);
     if (account && req.method === "DELETE") {
+      record.revoke = url.searchParams.get("revoke_on_delete") === "true";
       const index = fake.accounts.findIndex((entry) => entry.id === decodeURIComponent(account[1]!));
       if (index < 0) return send(404, { message: "Connected account not found" });
       record.user = fake.accounts[index]!.user_id;

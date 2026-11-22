@@ -1,5 +1,6 @@
 // Nothing said on the call is logged; the summary line has counters only.
 import { randomUUID } from "node:crypto";
+import { callSpeedFor, callVoiceCapability } from "../shared/call-voice.ts";
 import { spokenConsent } from "../shared/call-consent.ts";
 import {
   LIVE_COPY, liveCardKind, liveStepLabel, spokenApprovalPrompt, spokenConnectorPrompt, spokenQuestionPrompt, spokenReviewPrompt, spokenSecretPrompt, spokenSignInPrompt,
@@ -75,6 +76,8 @@ export interface LiveCallDeps {
   settings(): { key: string; endpoint: LiveEndpoint | null; setupProblem?: string | null; provider?: LiveProvider; voice: string; geminiVoice?: string; readTypedReplies: boolean; idleMinutes: number };
   /** The called bot's own Live call voice, used over the app's when it is the call provider's. */
   botVoice?(botId: string): string | undefined;
+  /** The called bot's saved call speed and language, sent to the provider that takes them. */
+  botCall?(botId: string): { speed?: number; language?: string };
   /** Why this caller may not hold a call through Azure OpenAI; null when they may. Required, so no wiring can leave it out. */
   azureRefusal(auth: RequestAuth): string | null;
   /** The same for the relayed providers, where the harness hears the call only through its client's reports. Required too. */
@@ -83,7 +86,7 @@ export interface LiveCallDeps {
   elevenlabsRefusal(auth: RequestAuth): string | null;
   /** `sdp` is "" on relayed calls, which answer with `fish`, `gemini` or `elevenlabs` instead of an SDP answer. */
   /** `signal` aborts when the call ends before the session is created. */
-  createSession(input: { key: string; endpoint: LiveEndpoint; sdp: string; botId: string; threadId: string; voice: string; signal?: AbortSignal }): Promise<LiveSessionAnswer>;
+  createSession(input: { key: string; endpoint: LiveEndpoint; sdp: string; botId: string; threadId: string; voice: string; callSpeed?: number; callLanguage?: string; signal?: AbortSignal }): Promise<LiveSessionAnswer>;
   openSocket(url: string, key: string, endpoint: LiveEndpoint): LiveSocket;
   attachUrl(sessionId: string, endpoint: LiveEndpoint): string;
   speakable(text: string): string[];
@@ -222,6 +225,7 @@ export class LiveCallController {
     const botVoice = this.deps.botVoice?.(input.botId);
     const voice = codex ? CODEX_CALL_VOICE : relayed === "gemini" ? geminiLiveVoice(botCallVoice(botVoice, settings.geminiVoice, true))
       : relayed ? FISH_AGENT_VOICE : liveVoice(botCallVoice(botVoice, settings.voice, false));
+    const botCall = this.deps.botCall?.(input.botId);
     const call = this.newCall(input, key, endpoint, voice);
     // Taken before the first await: a second start in the same tick is refused.
     this.call = call;
@@ -229,7 +233,7 @@ export class LiveCallController {
     const starting = new AbortController();
     call.starting = starting;
     try {
-      session = await this.deps.createSession({ key, endpoint, sdp: relayed ? "" : input.sdp ?? "", botId: input.botId, threadId: input.threadId, voice, signal: starting.signal });
+      session = await this.deps.createSession({ key, endpoint, sdp: relayed ? "" : input.sdp ?? "", botId: input.botId, threadId: input.threadId, voice, callSpeed: botCall?.speed, callLanguage: botCall?.language, signal: starting.signal });
       call.starting = null;
     } catch (error) {
       call.starting = null;
@@ -272,6 +276,14 @@ export class LiveCallController {
     if (!call || call.state.callId !== callId || call.state.status === "ended") return null;
     await this.hangUp(call, "hung-up");
     return { ...call.state };
+  }
+
+  /** A bot's saved call speed changed: a live GPT-Live call with that bot speaks the next reply at it. Other providers set it at the call's start. */
+  speedChanged(botId: string, saved: number | undefined): void {
+    const call = this.call;
+    if (!call || call.state.botId !== botId || (call.endpoint.provider !== "openai" && call.endpoint.provider !== "azure")) return;
+    const speed = callSpeedFor(saved, callVoiceCapability({ mode: "live", provider: call.endpoint.provider }).speed);
+    this.command(call, { type: "session.update", session: { type: "realtime", audio: { output: { speed } } } });
   }
 
   async shutdown(): Promise<void> {

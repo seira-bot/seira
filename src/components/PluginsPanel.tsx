@@ -13,8 +13,11 @@ import { pollConnector } from "@/lib/connector-poll";
 import { connectorConnect } from "@/lib/product-events";
 import { managedConnectorUnavailableReason } from "../../shared/connector-availability";
 import { isConnectorToolGrantShape } from "@/lib/connector-grants";
-import { accountAliasTaken, accountToReconnect, connectedInventoryCopy, connectorActionLabel, hasActiveConnection, needsReconnect,
+import { accountAliasTaken, accountToReconnect, connectedInventoryCopy, connectorActionLabel, hasActiveConnection,
   requiresAccountAlias, type ConnectorAccount, type ConnectorInventoryPhase, type ConnectorStatus } from "@/lib/connector-status";
+import { accountName, usesCleanSignIn } from "@/lib/connector-account-label";
+import { removeNewDuplicate } from "@/lib/connector-duplicate";
+import { AddAccountHint, ConnectorAccountRows } from "./ConnectorAccountRows";
 import { BotAvatar } from "./Avatar";
 import { SidebarPopoverMenu } from "./SidebarPopoverMenu";
 import { appCategories, appCategoryLabel, type AppCategory, CATEGORY_SECTION_SIZE, catalogSections, connectorDescription, inCategory, popularSlugs, rankCategories } from "@/lib/app-catalog";
@@ -115,7 +118,7 @@ export function PluginsPanel() {
   const [emailConnected, setEmailConnected] = useState<boolean | null>(null);
   const [mcpServers, setMcpServers] = useState<McpServerListing[]>([]);
 
-  const disconnectingRef = useRef<{ slug: string; label: string; account: ConnectorAccount } | null>(null);
+  const disconnectingRef = useRef<{ slug: string; label: string; account: ConnectorAccount; name: string } | null>(null);
   const polls = useRef(new Map<string, () => void>());
   const statusGenerations = useRef(new Map<string, number>());
   const latestStatusRequests = useRef(new Map<string, number>());
@@ -277,7 +280,7 @@ export function PluginsPanel() {
   }, [dispatch]);
 
   const { suggestions, picking, pick } = useSuggestedApps(cards !== null && configured && inventoryPhase === "ready", `${cardsRefresh}:${Object.keys(status).filter((slug) => status[slug]?.connected).sort().join()}`);
-  const [disconnecting, setDisconnecting] = useState<{ slug: string; label: string; account: ConnectorAccount } | null>(null); disconnectingRef.current = disconnecting;
+  const [disconnecting, setDisconnecting] = useState<{ slug: string; label: string; account: ConnectorAccount; name: string } | null>(null); disconnectingRef.current = disconnecting;
   const [featuredSlot, setFeaturedSlot] = useState<HTMLElement | null>(null);
   const usage = useAppUsage(cards !== null, cardsRefresh);
 
@@ -295,11 +298,17 @@ export function PluginsPanel() {
     }
   };
 
-  const startPolling = (slug: string, before: ConnectorStatus | undefined, firstConnection: boolean) => {
+  const startPolling = (slug: string, before: ConnectorStatus | undefined, firstConnection: boolean, addedAccount = false) => {
     polls.current.get(slug)?.();
-    const stop = pollConnector(before, () => refreshStatus([slug]).then((services) => services[slug]), (result) => {
+    let latest: ConnectorStatus | undefined;
+    const stop = pollConnector(before, () => refreshStatus([slug]).then((services) => latest = services[slug]), (result) => {
       if (polls.current.get(slug) === stop) polls.current.delete(slug);
       connectorConnect(slug, result);
+      if (result === "connected" && addedAccount) {
+        void removeNewDuplicate({ before, after: latest, remove: (id) => api(`/api/connectors/${slug}/accounts/${encodeURIComponent(id)}`, { method: "DELETE" }) })
+          .then((removed) => removed ? refreshStatus([slug]).then(() => setError({ key: "connectors.duplicateRemoved" })) : undefined)
+          .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+      }
       if (result === "connected" && firstConnection) appGrants.appConnected(slug, cards?.find((card) => card.slug === slug)?.label ?? slug);
     });
     polls.current.set(slug, stop);
@@ -335,8 +344,9 @@ export function PluginsPanel() {
       }));
       setAliasSlug(null);
       setAliasDraft("");
-      startPolling(slug, status[slug], firstConnection);
-      if (!await launch.open(url) && opening.current === launch) {
+      const addedAccount = Boolean(alias) && !replacing && hasActiveConnection(status[slug]);
+      startPolling(slug, status[slug], firstConnection, addedAccount);
+      if (!await launch.open(url, { cleanWindow: addedAccount && usesCleanSignIn(slug) }) && opening.current === launch) {
         setError({ key: "connectors.popupBlockedContinue" });
       }
     } catch (e) {
@@ -714,7 +724,7 @@ export function PluginsPanel() {
           </nav>
         </div>
         <ConfirmDialog open={disconnecting !== null} layer="z-[60]" tone="danger" title={t("connectors.disconnect")} confirmLabel={t("connectors.disconnect")}
-          body={disconnecting ? disconnectAccountConfirmation(disconnecting.label, disconnecting.account) : ""} onCancel={() => setDisconnecting(null)}
+          body={disconnecting ? disconnectAccountConfirmation(disconnecting.label, disconnecting.account, disconnecting.name) : ""} onCancel={() => setDisconnecting(null)}
           onConfirm={() => { if (disconnecting) disconnectAccount(disconnecting.slug, disconnecting.account.id); setDisconnecting(null); }} />
         {appGrants.changing && (
           <AppGrantPrompt
@@ -880,44 +890,9 @@ export function PluginsPanel() {
             </div>
           )}
           {accounts.length > 0 && (
-            <div className="mt-1.5 space-y-0.5">
-              {accounts.map((account) => {
-                const active = /^active$/i.test(account.status);
-                const reconnectable = needsReconnect(account) && account.id !== reconnect?.id;
-                return (
-                  <div key={account.id} className="flex min-w-0 items-center gap-2 text-[12px] leading-5">
-                    {active ? <Check size={12} className="shrink-0 text-success" /> : <span className="size-3 shrink-0" />}
-                    <span className="min-w-0 truncate text-ink" title={`${account.alias ? `${account.id} · ` : ""}${account.status.toLowerCase()}`}>
-                      {account.alias || account.id}
-                      <span className="text-ink-secondary"> · {account.status.toLowerCase()}</span>
-                    </span>
-                    {reconnectable && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void connect(card.slug, account.alias, account)}
-                        className="ms-auto shrink-0 rounded-full px-2 text-[12px] font-medium leading-5 text-accent-text transition-colors hover:bg-raised-hover disabled:opacity-40"
-                        aria-label={t("connectors.reconnectAria", { account: account.alias || account.id, service: card.label })}
-                      >
-                        {t("connectors.action.reconnect")}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => setDisconnecting({ slug: card.slug, label: card.label, account })}
-                      className={cn("shrink-0 rounded-full px-2 text-[12px] font-medium leading-5 text-ink-secondary transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-40", !reconnectable && "ms-auto")}
-                      aria-label={t("connectors.disconnectAria", {
-                        account: account.alias || account.id,
-                        service: card.label,
-                      })}
-                    >
-                      {t("connectors.disconnect")}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+            <ConnectorAccountRows accounts={accounts} service={card.label} reconnectId={reconnect?.id} busy={busy}
+              onReconnect={(account) => void connect(card.slug, account.alias, account)}
+              onDisconnect={(account) => setDisconnecting({ slug: card.slug, label: card.label, account, name: accountName(account, accounts.indexOf(account)) })} />
           )}
           {(serviceStatus?.connected || included) && (() => {
             const limited = botsWithLimitedServiceTools(state.bots, state.instances, card.slug);
@@ -943,6 +918,7 @@ export function PluginsPanel() {
             );
           })()}
           {addingAccount && (
+            <>
             <form
               className="mt-2 flex items-center gap-2"
               onSubmit={(event) => {
@@ -974,6 +950,8 @@ export function PluginsPanel() {
                 {t("connectors.action.continue")}
               </button>
             </form>
+            {accounts.length > 0 && <AddAccountHint slug={card.slug} />}
+            </>
           )}
         </div>
       </div>

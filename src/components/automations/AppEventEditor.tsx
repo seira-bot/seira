@@ -8,6 +8,7 @@ import { useModalDialog } from "@/hooks/use-modal-dialog";
 import { confirmPlaceInput } from "@/lib/place-lost";
 import { PlaceLostConfirm } from "../PlaceLostConfirm";
 import { appTriggerApi, type AppEventCatalog, type AppTrigger, type AppTriggerFilter } from "@/lib/app-triggers";
+import { accountName } from "@/lib/connector-account-label";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { useStore, type Bot } from "@/state/store";
@@ -132,7 +133,7 @@ export function AppEventEditor({ trigger, bots, initialBotId, onClose, onSaved }
                   <span className={LABEL}>{t("automations.editor.appEvent.account")}</span>
                   <Select value={account} onChange={(change) => setAccount(change.target.value)} aria-label={t("automations.editor.appEvent.account")} className="w-full">
                     <option value="" />
-                    {appEntry.accounts.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.alias ?? candidate.id}</option>)}
+                    {appEntry.accounts.map((candidate, index) => <option key={candidate.id} value={candidate.id}>{accountName(candidate, index)}</option>)}
                   </Select>
                 </label>
               )}

@@ -22,7 +22,7 @@ let failure = false;
 let attempts = 0;
 const requestBodies: Array<{ alias?: string }> = [];
 const deletedAccounts: string[] = [];
-const services: Record<string, { connected: boolean; pending: boolean; status: string; accounts: Array<{ id: string; alias: string; status: string }> }> = {};
+const services: Record<string, { connected: boolean; pending: boolean; status: string; accounts: Array<{ id: string; alias?: string; status: string; displayName?: string; duplicateOf?: string }> }> = {};
 const evidence = resolve(process.env.SEIRA_UI_EVIDENCE_DIR ?? ".seira-scratch/connected-apps-evidence");
 mkdirSync(evidence, { recursive: true });
 const pauseAuthorize = (fail = false) => {
@@ -131,6 +131,8 @@ try {
     await command("tab", "t1");
   };
 
+  // The label form opens only for an app that already has an account.
+  for (const slug of ["gmail", "slack"]) services[slug] = { connected: true, pending: false, status: "ACTIVE", accounts: [{ id: `ca-${slug}-first`, alias: "fixture-first", status: "ACTIVE" }] };
   // Settings reserves synchronously even though the returned URL is delayed.
   await click("Settings Apps");
   await wait("document.querySelector('[data-app-tile=gmail] button[type=button]:not([aria-label]):not(:disabled)')!==null");
@@ -238,9 +240,47 @@ try {
   pauseAuthorize(); await click("Try again"); await assertReserved(); release();
   assert.equal(requestBodies.at(-1)!.alias, "fixture-label");
   await wait("window.__oauthResponses===11");
+  // Accounts read as a label or the provider's name, never an id, and a copy names the account it repeats.
+  services.gmail = { connected: true, pending: false, status: "ACTIVE", accounts: [
+    { id: "ca-work", alias: "Work", displayName: "work@example.com", status: "ACTIVE" },
+    { id: "ca-twin", displayName: "work@example.com", duplicateOf: "ca-work", status: "ACTIVE" },
+    { id: "ca-unnamed", status: "INITIATED" },
+  ] };
+  await click("Settings Apps");
+  await command("find", "role", "button", "click", "--name", "Refresh connection status", "--exact");
+  const gmailTile = "document.querySelector('[data-app-tile=gmail]')";
+  await wait(`${gmailTile}.textContent.includes('Same account as Work.')`);
+  const tileText = await evaluate(`${gmailTile}.textContent`) as string;
+  for (const shown of ["Work", "work@example.com", "Account 3"]) assert.ok(tileText.includes(shown), shown);
+  const labels = await evaluate(`[...${gmailTile}.querySelectorAll('[title],[aria-label]')].map((node)=>[node.getAttribute('title'),node.getAttribute('aria-label')].join(' ')).join(' ')`) as string;
+  assert.equal(/ca-(work|twin|unnamed)/.test(`${tileText} ${labels}`), false);
+  await evaluate(`${gmailTile}.scrollIntoView({block:"center"})`);
+  await command("screenshot", join(evidence, "settings-account-names.png"), "--full");
+
+  // Add account says which sign-in page opens, then removes a new account that repeats one already connected.
+  services.gmail = { connected: true, pending: false, status: "ACTIVE", accounts: [{ id: "ca-work", alias: "Work", displayName: "work@example.com", status: "ACTIVE" }] };
+  await command("find", "role", "button", "click", "--name", "Refresh connection status", "--exact");
+  await wait(`!${gmailTile}.textContent.includes('Same account as')`);
+  await command("click", "[data-app-tile=gmail] button[type=button]:not([aria-label])");
+  await wait(`${gmailTile}.textContent.includes('The sign-in page uses the account already signed in to your browser')`);
+  await command("fill", "[data-app-tile=gmail] form input", "Second");
+  pauseAuthorize(); await command("click", "[data-app-tile=gmail] form button[type=submit]");
+  await assertReserved(); release();
+  const copied = `ca-${attempts}`;
+  await wait(`window.__oauthResponses===${attempts}`);
+  services.gmail = { connected: true, pending: false, status: "ACTIVE", accounts: [
+    { id: "ca-work", alias: "Work", displayName: "work@example.com", status: "ACTIVE" },
+    { id: copied, alias: "Second", displayName: "work@example.com", duplicateOf: "ca-work", status: "ACTIVE" },
+  ] };
+  await wait("document.body.textContent.includes('This account is already connected.')");
+  assert.equal(deletedAccounts.at(-1), copied);
+  assert.deepEqual(services.gmail.accounts.map((account) => account.id), ["ca-work"]);
+  await evaluate("(document.querySelector('[role=alert]')??document.querySelector('[data-app-tile=gmail]')).scrollIntoView({block:'center'})");
+  await command("screenshot", join(evidence, "settings-duplicate-removed.png"), "--full");
+  await command("find", "role", "button", "click", "--name", "Close plugins", "--exact");
   const errors = await command("errors");
   assert.deepEqual(errors.errors, []);
-  const result = { ok: true, fixtureUrl: fixture.info.url, logPath: fixture.info.logPath, attempts, evidence, tested: ["Settings synchronous reservation", "Settings blocked-popup fallback and Continue", "Settings close cancels late opening", "Settings pending inventory after reopen", "expired anchor renewal without stale alias", "card blocked-popup fallback", "native safe link navigation", "Open again reuses flow", "failure closes blank and Try again", "replacement and unmount cancel late opening", "expired-only app reconnects under its label", "card asks for a label instead of looping"], limitation: "Synthetic authorize responses in Chromium; no live provider, Safari or Brave acceptance." };
+  const result = { ok: true, fixtureUrl: fixture.info.url, logPath: fixture.info.logPath, attempts, evidence, tested: ["Settings synchronous reservation", "Settings blocked-popup fallback and Continue", "Settings close cancels late opening", "Settings pending inventory after reopen", "expired anchor renewal without stale alias", "card blocked-popup fallback", "native safe link navigation", "Open again reuses flow", "failure closes blank and Try again", "replacement and unmount cancel late opening", "expired-only app reconnects under its label", "card asks for a label instead of looping", "account rows show label or provider name, never the id", "a duplicate row names its original", "Add account hint", "Add account removes a new duplicate"], limitation: "Synthetic authorize responses in Chromium; no live provider, Safari or Brave acceptance." };
   writeFileSync(join(evidence, "result.json"), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
 } finally {

@@ -718,3 +718,125 @@ describe("OpenAI voice error language", () => {
     } finally { setLocale("en"); }
   });
 });
+
+describe("Speaker on a call", () => {
+  class PlaybackAudio extends FakeAudio {
+    playbackRate = 1;
+    preservesPitch: boolean | undefined;
+  }
+  const seen: { latest: PlaybackAudio | null } = { latest: null };
+  const speakBodies: Array<Record<string, unknown>> = [];
+
+  beforeEach(() => {
+    seen.latest = null;
+    speakBodies.length = 0;
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.stubGlobal("Audio", class extends PlaybackAudio {
+      constructor(src: string) {
+        super(src);
+        seen.latest = this;
+      }
+    });
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:call");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).endsWith("/prepare")) return json({ ready: true, utterances: ["One reply."] });
+      speakBodies.push(JSON.parse(String(init?.body)));
+      return new Response(new Blob(["mp3"]), { status: 200 });
+    }));
+  });
+
+  async function speakOnCall(call: { provider: "elevenlabs" | "fish" | "openai" | "xai" | "gemini" | "deepseek" | "chatterbox" | "system"; speed?: number; language?: string } | undefined) {
+    const speaker = new Speaker();
+    const speaking = speaker.speak("One reply.", { botId: "bot", voiceId: "v1", ...(call ? { call } : {}) });
+    await vi.waitFor(() => expect(seen.latest).not.toBeNull());
+    seen.latest!.onended?.();
+    await speaking;
+  }
+
+  it("sends the saved speed and language to a provider with a native speed field", async () => {
+    await speakOnCall({ provider: "elevenlabs", speed: 1.15, language: "id" });
+    expect(speakBodies).toEqual([{ text: "One reply.", voiceId: "v1", speed: 1.15, language: "id" }]);
+    expect(seen.latest!.playbackRate).toBe(1);
+  });
+
+  it("leaves out the language for a provider that decides it from the reply text", async () => {
+    await speakOnCall({ provider: "openai", speed: 1, language: "id" });
+    expect(speakBodies[0]).toEqual({ text: "One reply.", voiceId: "v1", speed: 1 });
+  });
+
+  it("clamps the speed to the provider range and leaves out an auto language", async () => {
+    await speakOnCall({ provider: "elevenlabs", speed: 2, language: "auto" });
+    expect(speakBodies[0]).toEqual({ text: "One reply.", voiceId: "v1", speed: 1.2 });
+  });
+
+  it.each(["gemini", "deepseek", "chatterbox", "system"] as const)("plays %s replies at the chosen rate and keeps the pitch", async (provider) => {
+    await speakOnCall({ provider, speed: 1.25, language: "id" });
+    expect(seen.latest!.playbackRate).toBe(1.25);
+    expect(seen.latest!.preservesPitch).toBe(true);
+    expect(speakBodies[0]).toEqual({ text: "One reply.", voiceId: "v1" });
+  });
+
+  it("keeps a playback rate inside 0.75 to 1.5", async () => {
+    await speakOnCall({ provider: "gemini", speed: 0.5 });
+    expect(seen.latest!.playbackRate).toBe(0.75);
+  });
+
+  it("changes nothing for a reply read outside a call", async () => {
+    await speakOnCall(undefined);
+    expect(speakBodies).toEqual([{ text: "One reply.", voiceId: "v1" }]);
+    expect(seen.latest!.playbackRate).toBe(1);
+    expect(seen.latest!.preservesPitch).toBeUndefined();
+  });
+
+  it("sets the device voice rate and language on the utterance", async () => {
+    const utterances: Array<{ rate: number; lang: string; onend: (() => void) | null }> = [];
+    class Utterance {
+      rate = 1;
+      lang = "";
+      voice = null;
+      onstart: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(public text: string) {
+        utterances.push(this);
+      }
+    }
+    vi.stubGlobal("window", {
+      ogb: { remoteClient: { active: true }, platform: "darwin" },
+      speechSynthesis: { speak: () => utterances[0]!.onend?.(), cancel: () => {}, getVoices: () => [] },
+      SpeechSynthesisUtterance: Utterance,
+    });
+    const speaker = new Speaker();
+    const stream = speaker.begin({ botId: "bot", call: { provider: "device", speed: 1.4, language: "ja" } });
+    stream.push("Hello.");
+    await stream.end();
+    expect(utterances[0]).toMatchObject({ rate: 1.4, lang: "ja" });
+  });
+
+  it("leaves the device language alone for auto", async () => {
+    const utterances: Array<{ rate: number; lang: string; onend: (() => void) | null }> = [];
+    class Utterance {
+      rate = 1;
+      lang = "";
+      voice = null;
+      onstart: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(public text: string) {
+        utterances.push(this);
+      }
+    }
+    vi.stubGlobal("window", {
+      ogb: { remoteClient: { active: true }, platform: "darwin" },
+      speechSynthesis: { speak: () => utterances[0]!.onend?.(), cancel: () => {}, getVoices: () => [] },
+      SpeechSynthesisUtterance: Utterance,
+    });
+    const speaker = new Speaker();
+    const stream = speaker.begin({ botId: "bot", call: { provider: "device", language: "auto" } });
+    stream.push("Hello.");
+    await stream.end();
+    expect(utterances[0]).toMatchObject({ rate: 1, lang: "" });
+  });
+});

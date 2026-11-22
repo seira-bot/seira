@@ -42,6 +42,14 @@ describe("host file gate", () => {
     expect(await hostFileGate({ folders, ownRoots: [own], query: new URLSearchParams({ files: "1" }) })).toMatchObject({ held: true, blockedReason: FOLDER_NOT_OPEN });
   });
 
+  it("refuses a path it cannot place when limited, and leaves it to the tool's own refusal otherwise", async () => {
+    for (const path of ["notes.txt", "../../etc/passwd", "~other/secret.txt", `/${"a".repeat(5000)}`]) {
+      expect(await ask("read_file", path, { limited: true, grants })).toBe(FOLDER_NOT_OPEN);
+      expect(await ask("read_file", path, { limited: false, grants })).toBeNull();
+    }
+    expect(await ask("read_file", "~/own/a.txt", { limited: true, grants: [] })).toBeNull();
+  });
+
   it("allows a path outside every folder when not limited", async () => {
     expect(await ask("write_file", join(outside, "a.txt"), { limited: false, grants })).toBeNull();
   });
@@ -93,9 +101,5 @@ describe("host file gate", () => {
     const folders = { limited: true, grants };
     expect(await ask("list_files", undefined, folders)).toBe(FOLDER_NOT_OPEN);
     expect(await ask("read_file", undefined, folders)).toBeNull();
-  });
-
-  it("leaves a relative path to the file tool, which refuses it", async () => {
-    expect(await ask("read_file", "notes.txt", { limited: true, grants })).toBeNull();
   });
 });

@@ -12,6 +12,8 @@ import { canPairDevices } from "./ServerPairingCard";
 import { normalizeAccessEntry, withEntry, withoutEntry, type SignInLists } from "./SignInAccessCard";
 import { Card } from "./SettingsPrimitives";
 import { Select } from "./Select";
+import { DepartmentAccessChoice } from "./DepartmentAccessChoice";
+import { grantFor, loadDepartmentChoices, saveDepartmentAccess, type DepartmentChoices } from "@/lib/department-access";
 
 export type Role = "admin" | "member";
 
@@ -90,13 +92,21 @@ export function lastSeenLabel(lastSeenAt: number | null, now = Date.now()): stri
   return new Date(lastSeenAt).toISOString().slice(0, 10);
 }
 
-export function PeopleTable({ people, busy, onRole, onRemove, onLink, readOnly = false }: {
+/** What a user sees: the departments they are limited to, or the whole team. */
+export function accessLine(departments: readonly string[] | undefined): string {
+  return departments ? departments.map((name) => name || t("settings.section.general")).join(", ") || t("people.access.none") : t("people.access.whole");
+}
+
+export function PeopleTable({ people, busy, onRole, onRemove, onLink, readOnly = false, access, onAccess }: {
   people: Person[];
   busy: boolean;
   onRole: (person: Person, role: Role) => void;
   onRemove: (person: Person) => void;
   onLink: (person: Person) => void;
   readOnly?: boolean;
+  /** Each user's departments by sign-in entry; absent where nobody can be limited to departments. */
+  access?: Record<string, string[]> | null;
+  onAccess?: (person: Person) => void;
 }) {
   if (people.length === 0) return <p className="text-[13px] text-ink-secondary">{t(readOnly ? "people.portal.empty" : "people.empty")}</p>;
   const columns = "grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-4";
@@ -114,6 +124,7 @@ export function PeopleTable({ people, busy, onRole, onRemove, onLink, readOnly =
           <span className="min-w-0">
             <span className="block truncate text-ink">{person.isDomain ? t("people.everyoneAt", { domain: person.entry.slice(1) }) : person.entry}</span>
             {person.devices > 0 && <span className="block text-[12px] text-ink-secondary">{t("people.devices", { count: String(person.devices) })}</span>}
+            {access && person.role === "member" && <span data-person-access className="block truncate text-[12px] text-ink-secondary">{accessLine(grantFor(access, person.entry))}</span>}
           </span>
           <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", person.role === "admin" ? "bg-accent/15 text-accent" : "bg-control text-ink-secondary")}>
             {person.role === "admin" ? t("people.roleAdmin") : t("people.roleMember")}
@@ -124,6 +135,7 @@ export function PeopleTable({ people, busy, onRole, onRemove, onLink, readOnly =
           </span>
           {readOnly ? <span /> : <span className="flex items-center justify-end gap-2 text-[12px]">
             <button type="button" disabled={busy} onClick={() => onLink(person)} aria-label={t("people.link")} title={t("people.link")} className="rounded-md p-1 text-ink-secondary hover:bg-control hover:text-ink disabled:opacity-50"><Link2 size={13} /></button>
+            {access && onAccess && person.role === "member" && <button type="button" disabled={busy} onClick={() => onAccess(person)} className="text-ink-secondary hover:text-ink disabled:opacity-50">{t("people.access.change")}</button>}
             <button type="button" disabled={busy} onClick={() => onRole(person, person.role === "admin" ? "member" : "admin")} className="text-ink-secondary hover:text-ink disabled:opacity-50">
               {person.role === "admin" ? t("people.makeMember") : t("people.makeAdmin")}
             </button>
@@ -192,6 +204,9 @@ export function PeopleSection({ simple = false, startOpen = false }: { simple?: 
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [choices, setChoices] = useState<DepartmentChoices | null>(null);
+  const [chosen, setChosen] = useState<string[] | null>(null);
+  const [editing, setEditing] = useState<{ entry: string; value: string[] | null } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -216,6 +231,7 @@ export function PeopleSection({ simple = false, startOpen = false }: { simple?: 
       setPeople(authority.authority === "portal" ? peopleFromSessions(signedIn, spent) : mergePeople(current, signedIn, spent));
       if (typeof domain?.publicUrl === "string" && domain.publicUrl) setBase(domain.publicUrl);
       setEmailOffered(environment?.capabilities?.emailSignIn === true ? true : environment ? false : null);
+      setChoices(authority.authority === "portal" ? null : await loadDepartmentChoices());
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -230,14 +246,36 @@ export function PeopleSection({ simple = false, startOpen = false }: { simple?: 
     });
   }, [load]);
 
-  const save = async (next: SignInLists) => {
+  const save = async (next: SignInLists, before?: () => Promise<void>, after?: () => Promise<void>): Promise<boolean> => {
     setBusy(true);
     setError(null);
     try {
+      await before?.();
       await api("/api/config", { method: "PUT", body: JSON.stringify({ signIn: next }) });
+      await after?.();
       await load();
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const changeAccess = async (entry: string, value: string[] | null) => {
+    if (value && value.length === 0) {
+      setError(t("people.access.pick"));
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await saveDepartmentAccess(entry, value);
+      setEditing(null);
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("people.access.failed"));
     } finally {
       setBusy(false);
     }
@@ -251,9 +289,21 @@ export function PeopleSection({ simple = false, startOpen = false }: { simple?: 
       setError(t("remote.signInAccess.invalid"));
       return;
     }
-    await save(withEntry(lists, entry, role));
+    const limitedTo = role === "member" && choices ? chosen : null;
+    if (limitedTo && limitedTo.length === 0) {
+      setError(t("people.access.pick"));
+      return;
+    }
+    const saved = await save(withEntry(lists, entry, role), limitedTo ? () => saveDepartmentAccess(entry, limitedTo) : choices?.access.people[entry] ? () => saveDepartmentAccess(entry, null) : undefined);
+    if (!saved) return;
     setDraft("");
+    setChosen(null);
     setLink(inviteLink(base, entry));
+  };
+
+  const remove = (entry: string) => {
+    if (!lists) return;
+    void save(withoutEntry(lists, entry), undefined, choices?.access.people[entry] ? () => saveDepartmentAccess(entry, null).catch(() => undefined) : undefined);
   };
 
   if (!canPairDevices(session)) return null;
@@ -279,7 +329,13 @@ export function PeopleSection({ simple = false, startOpen = false }: { simple?: 
         </button>
         <button type="button" onClick={() => void load()} disabled={loading || busy} aria-label={t("people.refresh")} title={t("people.refresh")} className="rounded-md p-1.5 text-ink-secondary hover:bg-control hover:text-ink disabled:opacity-50"><RefreshCw size={13} className={cn(loading && "animate-spin")} /></button>
       </form>
+      {choices && (
+        <div className="mt-2">
+          <DepartmentAccessChoice value={role === "member" ? chosen : null} onChange={setChosen} departments={choices.departments} limited={choices.limited} disabled={busy} adminReason={role === "admin"} />
+        </div>
+      )}
       <p className="mt-2 text-[12px] leading-relaxed text-ink-secondary">{t("people.inviteHint")}</p>
+      {choices?.access.unreadable && <p role="alert" className="mt-2 text-[12px] text-danger">{t("people.access.unreadable")}</p>}
       {link && <CopyLink link={link} />}
       {error && <p role="alert" className="mt-2 text-[12px] text-danger">{error}</p>}
       <div className="mt-4">
@@ -287,9 +343,21 @@ export function PeopleSection({ simple = false, startOpen = false }: { simple?: 
           people={people}
           busy={busy}
           onRole={(person, next) => { if (lists) void save(withEntry(lists, person.entry, next)); }}
-          onRemove={(person) => { if (lists) void save(withoutEntry(lists, person.entry)); }}
+          onRemove={(person) => remove(person.entry)}
           onLink={(person) => setLink(inviteLink(base, person.entry))}
+          access={choices && !choices.access.unreadable ? choices.access.people : null}
+          onAccess={(person) => setEditing({ entry: person.entry, value: choices ? grantFor(choices.access.people, person.entry) ?? null : null })}
         />
+        {choices && editing && (
+          <div data-person-access-editor className="mt-3 rounded-lg border border-hairline/40 bg-inset p-3">
+            <div className="mb-2 text-[13px] text-ink">{editing.entry.startsWith("@") ? t("people.everyoneAt", { domain: editing.entry.slice(1) }) : editing.entry}</div>
+            <DepartmentAccessChoice value={editing.value} onChange={(value) => setEditing({ entry: editing.entry, value })} departments={choices.departments} limited={choices.limited} disabled={busy} />
+            <div className="mt-3 flex gap-2">
+              <button type="button" disabled={busy} onClick={() => void changeAccess(editing.entry, editing.value)} className="ui-button ui-button-primary">{t("common.save")}</button>
+              <button type="button" disabled={busy} onClick={() => setEditing(null)} className="ui-button">{t("common.cancel")}</button>
+            </div>
+          </div>
+        )}
       </div>
       {!simple && <p className="mt-3 text-[12px] leading-relaxed text-ink-secondary">{t("people.note")}</p>}
     </>

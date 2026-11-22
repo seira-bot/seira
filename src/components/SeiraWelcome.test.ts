@@ -36,6 +36,11 @@ describe("Seira's first-launch welcome", () => {
     expect(welcomePatch(seira, { ...draftOf(seira), mascotBody: "star" }, false)).toEqual({ mascotBody: "star", welcomed: true, sidebarHidden: true });
   });
 
+  it("saves the accessories and the face picked in the look editor", () => {
+    expect(welcomePatch(seira, { ...draftOf(seira), mascotAccessories: ["glasses"], mascotExpression: "proud" }, true))
+      .toEqual({ mascotAccessories: ["glasses"], mascotExpression: "proud", welcomed: true, sidebarHidden: false, pinned: true });
+  });
+
   it("saves an empty name as Seira and caps a long one at the bot-name limit", () => {
     const jarvis = { ...seira, name: "Jarvis" };
     expect(welcomePatch(jarvis, { ...draftOf(jarvis), name: "   " }, true).name).toBe("Seira");

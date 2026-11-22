@@ -3,9 +3,11 @@ import { t } from "./i18n";
 
 export function disconnectAccountConfirmation(
   service: string,
-  account: { id: string; alias?: string },
+  account: { alias?: string; displayName?: string },
+  name: string,
 ) {
-  const identity = account.alias ? `“${account.alias}” (${account.id})` : `“${account.id}”`;
+  const identity = account.alias && account.displayName && account.displayName.toLowerCase() !== account.alias.toLowerCase()
+    ? `“${account.alias}” (${account.displayName})` : `“${name}”`;
   return t("connectors.disconnectConfirm", { identity, service });
 }
 

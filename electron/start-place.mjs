@@ -9,14 +9,16 @@ import { DEFAULT_PROFILE } from "./clean-workspace.mjs";
  *   places: { remembered(): any, remember(place: null): void },
  *   profiles: { open(id: string): Promise<boolean | null> } | null,
  *   server(id: string): Promise<boolean>,
+ *   ensureWindow(): void,
  *   log?(line: string): void,
  * }} deps `home`: the home window. `profiles`: the workspaces of this computer's own, null where there are
  * none. `server(id)`: opens the server saved by hand under that id without a dialog, false when it isn't saved or doesn't
- * answer in a short wait.
+ * answer in a short wait. `ensureWindow()`: makes the main window when there is none, without loading a page in it, so
+ * a workspace that opens has a window to show it in.
  * @returns {Promise<"remembered" | "cloud" | "this-mac" | "home">} where the window went: the remembered place, My Cloud
  * instead of it, This Mac instead of both, or home as worked out with nothing remembered (or nobody signed in).
  */
-export async function openStartPlace({ home, places, profiles, server, log = () => {} }) {
+export async function openStartPlace({ home, places, profiles, server, ensureWindow, log = () => {} }) {
   const { kind } = await home.refresh();
   const last = places.remembered();
   // Signed out, nothing of the account's opens: home shows as ever, and the place waits for the person to be back.
@@ -24,15 +26,20 @@ export async function openStartPlace({ home, places, profiles, server, log = () 
   if (await reopens(last)) return "remembered";
   log(`start: the place open last time can't open now (${Object.keys(last)[0]}); My Cloud instead`);
   places.remember(null);
-  if (kind === "cloud" && home.opensNow("cloud") === false && profiles && (await profiles.open(DEFAULT_PROFILE)) === true) return "this-mac";
+  if (kind === "cloud" && home.opensNow("cloud") === false && profiles && (await openProfile(DEFAULT_PROFILE)) === true) return "this-mac";
   await home.show();
   return "cloud";
 
   async function reopens(place) {
-    if (typeof place.profile === "string") return Boolean(profiles) && (await profiles.open(place.profile)) === true;
+    if (typeof place.profile === "string") return Boolean(profiles) && (await openProfile(place.profile)) === true;
     if (typeof place.server === "string") return kind === "cloud" && (await server(place.server).catch(() => false)) === true;
     if (!home.opensNow(place)) return false;
     await home.show();
     return true;
+  }
+
+  function openProfile(id) {
+    ensureWindow();
+    return profiles.open(id);
   }
 }

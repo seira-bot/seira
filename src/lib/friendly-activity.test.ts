@@ -40,4 +40,16 @@ describe("Simple mode's working line", () => {
     expect(toolService("Bash")).toBeNull();
     expect(friendlyNowPhrases(null, running("mcp__notion__search")).phrases).toEqual(["Working in Notion"]);
   });
+
+  it("reads a hyphenated server id and refuses a malformed name", () => {
+    expect(toolService("mcp__my-server__do_it")).toBe("My-server");
+    expect(toolService("mcp__a_b__tool")).toBeNull();
+    expect(toolService("mcp____tool")).toBeNull();
+  });
+
+  it("answers an attack string in under 100 ms", () => {
+    const started = performance.now();
+    expect(toolService(`mcp__^-${"^-".repeat(50_000)}`)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(100);
+  });
 });

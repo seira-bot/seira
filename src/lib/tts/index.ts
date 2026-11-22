@@ -5,6 +5,7 @@ import { recordBlockTiming, recordPrepared, recordSpeakEnter } from "../voice-la
 import { t, tFromServer } from "@/lib/i18n";
 import { serverErrorText } from "@/lib/server-error";
 import type { ServerErrorBody } from "../../../shared/server-text";
+import { callLanguage, callSpeedFor, callVoiceCapability, type TurnsVoiceProvider } from "../../../shared/call-voice";
 
 export type SpeechStatus = "idle" | "preparing" | "speaking";
 
@@ -16,10 +17,32 @@ export interface SpeechSnapshot {
   error?: string;
 }
 
+/** The called bot's saved speed and language, for a reply spoken on a call. Readout outside a call passes none. */
+export interface CallSpeech {
+  provider: TurnsVoiceProvider;
+  speed?: number;
+  language?: string;
+}
+
 interface SpeakOptions {
   voiceId?: string;
   botId?: string;
   messageId?: string;
+  call?: CallSpeech;
+}
+
+export function callRequestFields(call: CallSpeech | undefined): { speed?: number; language?: string } {
+  if (!call || call.provider === "device") return {};
+  const capability = callVoiceCapability({ mode: "turns", provider: call.provider });
+  if (capability.speed.kind !== "native") return {};
+  const language = capability.language === "native" ? callLanguage(call.language) : undefined;
+  return { speed: callSpeedFor(call.speed, capability.speed), ...(language ? { language: language.code } : {}) };
+}
+
+export function callPlaybackRate(call: CallSpeech | undefined): number | undefined {
+  if (!call || call.provider === "device") return undefined;
+  const { speed } = callVoiceCapability({ mode: "turns", provider: call.provider });
+  return speed.kind === "playback" ? callSpeedFor(call.speed, speed) : undefined;
 }
 
 /** One spoken reply, fed block by block: blocks come from the committed
@@ -207,7 +230,7 @@ export class Speaker {
     };
     const render = (utterance: string, block: number): Promise<Rendered> => {
       recordBlockTiming(opts.messageId, block, "renderStart");
-      return this.render(utterance, opts.voiceId, controller.signal).then(
+      return this.render(utterance, opts.voiceId, controller.signal, opts.call).then(
         (blob) => {
           recordBlockTiming(opts.messageId, block, "renderDone");
           return { blob };
@@ -249,7 +272,7 @@ export class Speaker {
           return;
         }
         this.set({ status: "speaking", botId: opts.botId, messageId: opts.messageId, caption: pending[at]! });
-        const played = await this.play(rendered.blob, live, opts.messageId, at);
+        const played = await this.play(rendered.blob, live, opts.messageId, at, callPlaybackRate(opts.call));
         if (!played || !live()) {
           if (live()) this.set({ ...IDLE, error: t("voice.error.clip") });
           controller.abort();
@@ -320,6 +343,11 @@ export class Speaker {
     const utterance = new window.SpeechSynthesisUtterance(value);
     const selected = resolveLocalSystemVoice(remoteSystemVoice(opts.botId));
     if (selected) utterance.voice = selected;
+    if (opts.call) {
+      utterance.rate = callSpeedFor(opts.call.speed, callVoiceCapability({ mode: "turns", provider: "device" }).speed);
+      const language = callLanguage(opts.call.language);
+      if (language) utterance.lang = language.code;
+    }
     this.localUtterance = utterance;
 
     return new Promise((resolve) => {
@@ -374,11 +402,11 @@ export class Speaker {
     return body.utterances ?? [];
   }
 
-  private async render(text: string, voiceId: string | undefined, signal: AbortSignal): Promise<Blob> {
+  private async render(text: string, voiceId: string | undefined, signal: AbortSignal, call?: CallSpeech): Promise<Blob> {
     const res = await fetch("/api/tts/speak", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text, voiceId }),
+      body: JSON.stringify({ text, voiceId, ...callRequestFields(call) }),
       signal,
     });
     if (!res.ok) {
@@ -390,12 +418,16 @@ export class Speaker {
     return res.blob();
   }
 
-  private play(blob: Blob, live: () => boolean, probeMessageId?: string, probeBlock?: number): Promise<boolean> {
+  private play(blob: Blob, live: () => boolean, probeMessageId?: string, probeBlock?: number, rate?: number): Promise<boolean> {
     return new Promise((resolve) => {
       if (!live()) return resolve(false);
       this.teardownAudio();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
+      if (rate !== undefined) {
+        audio.playbackRate = rate;
+        audio.preservesPitch = true;
+      }
       this.audio = audio;
       this.objectUrl = url;
       let settled = false;

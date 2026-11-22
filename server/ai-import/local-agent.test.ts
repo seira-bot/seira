@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { mask } from "../../shared/redact.ts";
-import { toolFromConfig } from "./local-agent.ts";
+import { stripHtmlComments, toolFromConfig } from "./local-agent.ts";
 
 const alpha = "Abcdefghij0123456789Klmnopqrst";
 const openaiKey = `${"sk-"}proj-${alpha}`;
@@ -84,5 +84,12 @@ describe("toolFromConfig", () => {
     const tool = toolFromConfig("openai", { command: `env OPENAI_API_KEY=${openaiKey} npx example-mcp` });
     expect(tool?.needsKey).toEqual(["API_KEY"]);
     expect(JSON.stringify(tool)).not.toContain(alpha);
+  });
+});
+
+describe("stripHtmlComments", () => {
+  it("removes a comment and one that only forms once an inner comment is removed", () => {
+    expect(stripHtmlComments("a<!-- x -->b")).toBe("ab");
+    expect(stripHtmlComments("a<!<!-- x -->-- y -->b")).toBe("ab");
   });
 });

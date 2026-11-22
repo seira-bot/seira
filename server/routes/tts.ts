@@ -1,5 +1,6 @@
 // The voice routes: whether a voice is ready, the provider's voices (searched, or one pasted by ID or link), adding an
 // ElevenLabs Voice Library voice to My Voices, speaking a line, and hearing speech. Scopes are keyed by path in server/request-auth.ts.
+import { callLanguage, callLanguageBase } from "../../shared/call-voice.ts";
 import type { AppConfig } from "../config.ts";
 import { voiceCredential } from "../included-services.ts";
 import { redactSecretsInText } from "../redact.ts";
@@ -67,7 +68,7 @@ export function createTtsRoutes(deps: TtsRouteDeps): RouteHandler {
       const cancel = () => { if (!res.writableEnded) controller.abort(); };
       res.on("close", cancel);
       try {
-        const audio = await tts.speak(cfg, text, typeof body.voiceId === "string" ? body.voiceId : undefined, undefined, controller.signal);
+        const audio = await tts.speak(cfg, text, typeof body.voiceId === "string" ? body.voiceId : undefined, undefined, controller.signal, { speed: body.speed, language: body.language });
         if (controller.signal.aborted) return;
         res.writeHead(200, {
           "content-type": audio.mime,
@@ -128,9 +129,10 @@ export function createTtsRoutes(deps: TtsRouteDeps): RouteHandler {
       const cancel = () => { if (!res.writableEnded) controller.abort(); };
       res.on("close", cancel);
       try {
+        const language = speechLanguage(req.headers["x-speech-language"]);
         const text = deepseekKey
           ? await deepseek.transcribe(audio, deepseekKey, controller.signal)
-          : key ? await fish.transcribe(audio, mime, key) : await elevenlabs.transcribe(audio, mime, eleven!.token, eleven!.api);
+          : key ? await fish.transcribe(audio, mime, key, language) : await elevenlabs.transcribe(audio, mime, eleven!.token, eleven!.api, language);
         if (controller.signal.aborted) return;
         return json(res, 200, { text });
       } catch (e) {
@@ -144,4 +146,10 @@ export function createTtsRoutes(deps: TtsRouteDeps): RouteHandler {
     }
     return PASS;
   };
+}
+
+/** The ISO 639-1 code of a call language the client names for dictation; undefined for auto or an unlisted one. */
+function speechLanguage(header: string | string[] | undefined): string | undefined {
+  const chosen = callLanguage(Array.isArray(header) ? header[0] : header);
+  return chosen ? callLanguageBase(chosen) : undefined;
 }

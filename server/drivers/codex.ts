@@ -6,6 +6,7 @@ import { codexToolSurfaceArgs } from "./codex-tool-surface.ts";
 import { codexShellDisabled, codexTurnConfigArgs } from "./codex-guest.ts";
 import { TEAM_TOOLS_FAILED, teamToolsFailed } from "./team-tools.ts";
 import { enabledMcpMounts, mcpStartupTracker, supportsMcpStartup } from "./codex-mcp-startup.ts";
+import { botBox } from "../bot-box/box.ts";
 import { boxAdmittedEnv, boxProxyEnvNames, customServerEnvBox, type McpApprovalMode, mountMcpServer } from "./codex-mcp-mount.ts";
 import { reportUnsupportedCalls, rolloutMark, type RolloutMark } from "./codex-unsupported-calls.ts";
 // The `codex` CLI headless over its app-server JSON-RPC (NDJSON on stdio): completion is
@@ -503,7 +504,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
           const mountName = mountedMcpServerName(name, takenMcpNames);
           takenMcpNames.add(mountName);
           if (mountName !== name) noteRenamedMcpServer(name, mountName);
-          mountSelected(name, mountName, server, "prompt", turn.toolScope === undefined && !("url" in server) ? boxProxyEnvNames() : []);
+          mountSelected(name, mountName, server, "prompt", turn.toolScope === undefined && !("url" in server) ? boxProxyEnvNames(botBox.boxesFolders(turn.folders)) : []);
         }
         if (turn.integrations?.phone) {
           if (turn.toolScope !== undefined) {
@@ -524,7 +525,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
         }
 
         // Codex hands MCP children its shell environment, so mounted variables (and box-admitted custom env) leave that shell.
-        const customBox = customServerEnvBox(turn.integrations?.custom, selectedMcp), boxAdmitted = boxAdmittedEnv(customBox);
+        const customBox = customServerEnvBox(turn.integrations?.custom, selectedMcp), boxAdmitted = boxAdmittedEnv(customBox, botBox.boxesFolders(turn.folders));
         const mountedEnv = [...mountedNames].filter((name) => env[name] !== undefined && !SHELL_ESSENTIALS.has(name) && !name.startsWith("LC_")
           && (name === "ELECTRON_RUN_AS_NODE" || boxAdmitted.has(name) || baseEnv.get(name) !== env[name]));
         const privateEnv = [...new Set([

@@ -220,7 +220,7 @@ export type ParsedCall = { ok: true; call: ToolCall } | { ok: false; error: stri
 export function parseToolCall(rawName: unknown, rawArgs: unknown): ParsedCall {
   if (typeof rawName !== "string") return { ok: false, error: "The tool call has no name." };
   const given: Args = rawArgs && typeof rawArgs === "object" && !Array.isArray(rawArgs) ? rawArgs as Args : {};
-  const alias = ALIASES[rawName];
+  const alias = Object.hasOwn(ALIASES, rawName) ? ALIASES[rawName] : undefined;
   const translated = alias ? alias(given) : TOOL_NAMES.has(rawName) ? { name: rawName as ToolName, args: given } : null;
   if (!translated) return { ok: false, error: `There is no browser tool named ${rawName}.` };
   const args = Object.fromEntries(Object.entries(oldArguments(translated.name, translated.args)).filter(([key]) => !OLD_ONLY.has(key)));

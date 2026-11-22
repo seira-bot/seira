@@ -149,6 +149,7 @@ const connectedAccountResponseSchema = z.object({
   status: z.string().optional(),
   created_at: z.string().nullable().optional().catch(undefined),
   updated_at: z.string().optional(),
+  state: z.unknown().optional(),
   toolkit: z.object({ slug: z.string().optional() }).optional(),
   auth_config: z.object({
     id: z.string().optional(),

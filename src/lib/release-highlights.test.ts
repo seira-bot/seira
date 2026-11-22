@@ -54,4 +54,8 @@ describe("releaseHighlights", () => {
     expect(long.length).toBeLessThanOrEqual(110);
     expect(long.endsWith("…")).toBe(true);
   });
+
+  it("strips tags that carry attributes", () => {
+    expect(releaseHighlights("<ul><li><span class=\"x\">Faster</span> loading</li></ul>")).toEqual(["Faster loading"]);
+  });
 });

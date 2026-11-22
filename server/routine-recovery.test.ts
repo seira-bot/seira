@@ -547,3 +547,17 @@ describe("a coded engine error on a run", () => {
     }
   });
 });
+
+describe("a run that stopped on a full conversation", () => {
+  it.each([
+    ["its stop reason", "Prompt is too long", { stopReason: "context_full" }],
+    ["the engine's words alone", "API Error: 400 prompt is too long: 213412 tokens > 200000 maximum", {}],
+    ["the compaction failure", "Automatic compaction failed", { stopReason: "error_during_execution" }],
+  ])("is retried once, on the thread's new session, by %s", (_how, failure, facts) => {
+    expect(classifyRoutineFailure(failure, facts)).toEqual({ kind: "retry", cause: "failed" });
+  });
+
+  it("still ends a stop the person pressed", () => {
+    expect(classifyRoutineFailure("Prompt is too long", { stopReason: "interrupted" })).toEqual({ kind: "final" });
+  });
+});
