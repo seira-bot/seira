@@ -22,7 +22,7 @@ chief labels, role badges, and working/waiting indicators. The interaction check
 above are manual browser verification, not assertions made by those unit tests.
 This fixture covers the sidebar confirmation and bot-row result only; it does
 not exercise Settings → Desktops & browser → Desktops deletion or provider completion polling.
-Those paths are covered by the computer-section and server Boat inventory tests.
+Those paths are covered by the computer-section and server inventory tests.
 
 ## Mark all of a bot's conversations as read
 
@@ -79,7 +79,7 @@ The fixture reports its log path and keeps a snapshot and screenshot on failure.
 `src/components/SidebarSectionHeader.test.ts` separately checks that the optional
 delete control coexists with the context menu and does not replace or nest inside
 the collapse button. Server safeguards still reject deletion during active work,
-with an assigned team computer, or when moving the Chief would conflict with
+or when moving the Chief would conflict with
 General's Chief; see [Teams](teams.md) for those lifecycle checks.
 
 ## Activity, quieter rows, and notification preference
