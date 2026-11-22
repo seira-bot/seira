@@ -290,19 +290,33 @@ function takingBackReclaim(row: EndpointRow | null): boolean {
   return row !== null && row.tunnel_id !== null && row.status === "deleting" && row.reclaim_requested_at !== null;
 }
 
-/** Tunnels the owner's other active installations hold. The check and the later tunnel creation are not one
- * transaction, so concurrent first calls from several installations can pass together. */
-async function tunnelsHeldByOwnerElsewhere(env: Env, ownerUserId: string, installationId: string): Promise<number> {
-  const row = await env.DB.prepare(
-    `SELECT COUNT(*) AS held
+/** The row keeps a tunnel of its own, so the account's endpoint limit does not apply to it. */
+function keepsOwnTunnel(row: EndpointRow | null): boolean {
+  return holdsTunnel(row) || takingBackReclaim(row);
+}
+
+interface OwnerLimit {
+  limit: number;
+  ownerUserId: string;
+}
+
+/** Binds the owner, then `otherThan` when it is `?`, then the current time. A live provisioning claim counts, so
+ * parallel first calls see each other before any of them has a tunnel. */
+function countedElsewhereSQL(otherThan: string): string {
+  return `SELECT COUNT(*)
        FROM installation_endpoints e
        JOIN installations i ON i.id = e.installation_id
       WHERE i.owner_user_id = ?
         AND i.revoked_at IS NULL
-        AND e.installation_id != ?
-        AND e.tunnel_id IS NOT NULL
-        AND e.status NOT IN ('deleting', 'deleted')`,
-  ).bind(ownerUserId, installationId).first<{ held: number }>();
+        AND e.installation_id != ${otherThan}
+        AND ((e.tunnel_id IS NOT NULL AND e.status NOT IN ('deleting', 'deleted'))
+          OR (e.status = 'provisioning' AND e.lease_expires_at > ?))`;
+}
+
+async function endpointsCountedElsewhere(env: Env, ownerUserId: string, installationId: string): Promise<number> {
+  const row = await env.DB.prepare(`SELECT (${countedElsewhereSQL("?")}) AS held`)
+    .bind(ownerUserId, installationId, Date.now())
+    .first<{ held: number }>();
   return row?.held ?? 0;
 }
 
@@ -337,7 +351,7 @@ async function claimEndpoint(
   env: Env,
   row: EndpointRow,
   nextStatus: "deleting" | "provisioning",
-  { keepReclaim = false }: { keepReclaim?: boolean } = {},
+  { keepReclaim = false, ownerLimit }: { keepReclaim?: boolean; ownerLimit?: OwnerLimit } = {},
 ): Promise<ClaimedEndpoint | null> {
   const now = Date.now();
   const leaseOwner = crypto.randomUUID();
@@ -354,6 +368,12 @@ async function claimEndpoint(
               AND i.revoked_at IS NULL
          ))`
       : "";
+  // The limit check and the claim are one statement, so two claims of one account cannot both pass a stale count.
+  const limitGuard = ownerLimit
+    ? `AND ((tunnel_id IS NOT NULL AND status != 'deleted')
+         OR (${countedElsewhereSQL("installation_endpoints.installation_id")}) < ?)`
+    : "";
+  const limitValues = ownerLimit ? [ownerLimit.ownerUserId, now, ownerLimit.limit] : [];
   const result = await env.DB.prepare(
     `UPDATE installation_endpoints
         SET status = ?, generation = generation + 1,
@@ -372,7 +392,8 @@ async function claimEndpoint(
             END
       WHERE installation_id = ?
         AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
-        ${deletingGuard}`,
+        ${deletingGuard}
+        ${limitGuard}`,
   ).bind(
     nextStatus,
     leaseOwner,
@@ -387,6 +408,7 @@ async function claimEndpoint(
     keepReclaim ? 1 : 0,
     row.installation_id,
     now,
+    ...limitValues,
   ).run();
   if (result.meta.changes === 0) return null;
   const claimed = await endpointRow(env, row.installation_id);
@@ -1288,10 +1310,11 @@ export async function provisionManagedEndpoint(
   const atCapacity = async () => (
     readsTunnelReason(policy, reportedVersion) && await onRelay() ? relayCapableResponse("full") : capacityResponse()
   );
-  if (!holdsTunnel(existing) && !takingBackReclaim(existing)) {
-    const held = await tunnelsHeldByOwnerElsewhere(env, installation.owner_user_id, installation.installation_id);
-    if (held >= config.endpointsPerAccount) throw new HTTPError(429, "endpoint_limit");
-  }
+  const ownerLimit: OwnerLimit = { limit: config.endpointsPerAccount, ownerUserId: installation.owner_user_id };
+  const overLimit = async () => (
+    await endpointsCountedElsewhere(env, ownerLimit.ownerUserId, installation.installation_id) >= ownerLimit.limit
+  );
+  if (!keepsOwnTunnel(existing) && await overLimit()) throw new HTTPError(429, "endpoint_limit");
   // Only a new row chooses its account; an existing one keeps its own.
   const row = existing
     ?? await ensureEndpointRow(env, installation.installation_id, await newEndpointAccount(config, allocation));
@@ -1325,8 +1348,11 @@ export async function provisionManagedEndpoint(
     if (capacity) return atCapacity();
     throw new HTTPError(502, "endpoint_unavailable");
   }
-  const claim = await claimEndpoint(env, row, "provisioning");
-  if (!claim) return busyResponse();
+  const claim = await claimEndpoint(env, row, "provisioning", { ownerLimit });
+  if (!claim) {
+    if (!keepsOwnTunnel(row) && await overLimit()) throw new HTTPError(429, "endpoint_limit");
+    return busyResponse();
+  }
 
   try {
     const result = await reconcileClaim(env, config, claim, fetcher, allocation, requestId);
