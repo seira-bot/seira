@@ -310,9 +310,6 @@ static void stop_largest(Hold *hold, DWORD by, int percent, int report_denied) {
   DWORD helper = is_engine(&look, root) ? root->ppid : 0;
   int stopped = TerminateProcess(process, STOPPED_EXIT_CODE);
   DWORD error = stopped ? 0 : GetLastError();
-  // Wait for its memory to come back, so the next message does not count it again.
-  if (stopped) WaitForSingleObject(process, 2000);
-  CloseHandle(process);
   char name[3 * MAX_PATH + 1];
   json_text(target->name, name, sizeof name);
   char line[1200];
@@ -322,7 +319,11 @@ static void stop_largest(Hold *hold, DWORD by, int percent, int report_denied) {
       (unsigned long)target->pid, name, target->bytes, look.job_bytes, limit, (unsigned long)root->pid, (unsigned long)helper, (unsigned long)by);
   else
     snprintf(line, sizeof line, "{\"event\":\"error\",\"step\":\"stop\",\"code\":%lu,\"pid\":%lu}", (unsigned long)error, (unsigned long)target->pid);
+  // Before the wait: a stopped engine ends its turn at once, and the server counts the stop for that turn.
   write_line(line);
+  // Wait for its memory to come back, so the next message does not count it again.
+  if (stopped) WaitForSingleObject(process, 2000);
+  CloseHandle(process);
   free_look(&look);
 }
 

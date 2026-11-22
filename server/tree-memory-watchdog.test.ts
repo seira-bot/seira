@@ -202,6 +202,91 @@ describe("tree memory watchdog", () => {
     expect(signals).toEqual([]);
   });
 
+  it("starts the 10 seconds again after a check without a list (AC-07)", async () => {
+    const { state, signals, at } = setup(botA, [engine(100, "bot-a")]);
+    await at(0);
+    await at(4_000);
+    state.rows = null as unknown as ProcessRow[];
+    await at(6_000);
+    state.rows = botA;
+    await at(120_000);
+    expect(signals).toEqual([]);
+    await at(130_000);
+    expect(signals).toEqual([[101, "SIGTERM"]]);
+  });
+
+  it("sends no SIGKILL to a process that has the pid now, or after a check without a list", async () => {
+    const reused = setup(botA, [engine(100, "bot-a")]);
+    await reused.at(0);
+    await reused.at(10_000);
+    reused.state.rows = botA.map((r) => (r.pid === 101 ? { ...r, start: "later" } : r));
+    await reused.at(14_000);
+    expect(reused.signals).toEqual([[101, "SIGTERM"]]);
+
+    const unlisted = setup(botA, [engine(100, "bot-a")]);
+    await unlisted.at(0);
+    await unlisted.at(10_000);
+    unlisted.state.rows = null as unknown as ProcessRow[];
+    await unlisted.at(12_000);
+    unlisted.state.rows = botA;
+    await unlisted.at(14_000);
+    expect(unlisted.signals).toEqual([[101, "SIGTERM"]]);
+  });
+
+  it("sends no SIGKILL to a process that is no longer bot work", async () => {
+    const owners = [engine(100, "bot-a")];
+    const { state, signals, at } = setup(botA, owners);
+    await at(0);
+    await at(10_000);
+    state.rows = [row(100, 1, "engine", 300), row(101, 1, "worker", 600)];
+    await at(14_000);
+    expect(signals).toEqual([[101, "SIGTERM"]]);
+  });
+
+  it("never stops the engine that a launcher root started", async () => {
+    const helper = [row(100, 1, "seira-job-fence.exe", 5), row(101, 100, "node.exe", 900), row(102, 101, "python.exe", 200)];
+    const { signals, stops, at } = setup(helper, [engine(100, "bot-a")]);
+    await at(0);
+    await at(10_000);
+    expect(signals).toEqual([[102, "SIGTERM"]]);
+    expect(stops[0]).toMatchObject({ pid: 102, root: 100 });
+
+    const shim = [row(200, 1, "powershell.exe", 60), row(201, 200, "node.exe", 900), row(202, 200, "conhost.exe", 10)];
+    const alone = setup(shim, [engine(200, "bot-a")]);
+    await alone.at(0);
+    await alone.at(10_000);
+    await alone.at(30_000);
+    expect(alone.signals).toEqual([]);
+    alone.state.rows = [...shim, row(203, 201, "python.exe", 300)];
+    await alone.at(32_000);
+    expect(alone.signals).toEqual([[203, "SIGTERM"]]);
+  });
+
+  it("with a calm interval lists less often while bot work is well under the budget", async () => {
+    let lists = 0;
+    const { state, at } = setup(botA, [engine(100, "bot-a")], { calmMs: 10_000, list: () => { lists += 1; return state.rows; } });
+    state.budget = 2000 * MB;
+    await at(0);
+    await at(2_000);
+    await at(8_000);
+    expect(lists).toBe(1);
+    await at(10_000);
+    expect(lists).toBe(2);
+    state.budget = 1200 * MB;
+    await at(12_000);
+    await at(14_000);
+    expect(lists).toBe(4);
+  });
+
+  it("with a calm interval still lists at every check when the machine is short of memory", async () => {
+    let lists = 0;
+    const { state, at } = setup(botA, [engine(100, "bot-a")], { calmMs: 10_000, available: () => 1024 * MB, list: () => { lists += 1; return state.rows; } });
+    state.budget = 2000 * MB;
+    await at(0);
+    await at(2_000);
+    expect(lists).toBe(2);
+  });
+
   it("reports botId null for a shared process", async () => {
     const rows = [row(100, 1, "engine", 300), row(101, 100, "worker", 700)];
     const { stops, at } = setup(rows, [engine(100, "bot-a", "bot-b")]);
