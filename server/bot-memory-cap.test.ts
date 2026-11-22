@@ -355,10 +355,10 @@ describe("the line a stopped turn ends with", () => {
 });
 
 describe("the cap for all of a bot's work (the fallback without the kernel limit)", () => {
-  it("takes the budget as a whole cap, but a number in the environment still wins and off still means none", () => {
+  it("takes the budget as a whole cap, a number in the environment as that budget too, and off still means none", () => {
     const inputs = { gate: "desktop" as const, memoryBytes: 16 * GB };
     expect(botMemoryCap({}, inputs, () => undefined, 8 * GB)).toEqual({ mode: "enforce", bytes: 8 * GB, whole: true });
-    expect(botMemoryCap({ SEIRA_BOT_MEMORY_MAX_MB: "3000" }, inputs, () => undefined, 8 * GB)).toEqual({ mode: "enforce", bytes: 3000 * MB });
+    expect(botMemoryCap({ SEIRA_BOT_MEMORY_MAX_MB: "3000" }, inputs, () => undefined, 3000 * MB)).toEqual({ mode: "enforce", bytes: 3000 * MB, whole: true });
     expect(botMemoryCap({ SEIRA_BOT_MEMORY_MAX_MB: "off" }, inputs, () => undefined, 8 * GB)).toBeNull();
     // The old log cap stays off on the desktop gate.
     expect(botMemoryCap({}, inputs)).toBeNull();

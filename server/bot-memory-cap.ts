@@ -75,9 +75,10 @@ export interface CapSetting {
 export function botMemoryCap(env: NodeJS.ProcessEnv, inputs: CapInputs, warn: (line: string) => void = () => undefined, wholeBudget: number | null = null): CapSetting | null {
   const raw = env[BOT_MEMORY_ENV]?.trim().toLowerCase();
   if (raw === "off" || raw === "0") return null;
+  // Without the kernel limit the budget (which already holds a number from the environment) covers all a bot's work.
+  if (wholeBudget !== null) return { mode: "enforce", bytes: Math.max(SMALLEST_CAP_BYTES, wholeBudget), whole: true };
   if (raw && /^\d+$/.test(raw)) return { mode: "enforce", bytes: Math.max(SMALLEST_CAP_BYTES, Number(raw) * MB) };
   if (raw && raw !== "auto") warn(`${BOT_MEMORY_ENV}=${JSON.stringify(env[BOT_MEMORY_ENV])} is not a number of MB, "auto" or "off", so the default (watch only) is used`);
-  if (wholeBudget !== null) return { mode: "enforce", bytes: wholeBudget, whole: true };
   if (inputs.gate === null || inputs.gate === "desktop" || !(inputs.memoryBytes > 0)) return null;
   const turns = Math.max(1, inputs.turns ?? Math.floor(inputs.memoryBytes / ENGINE_DEFAULT_BYTES));
   const fair = (FAIR_SHARES * inputs.memoryBytes) / turns;
