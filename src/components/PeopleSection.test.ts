@@ -2,7 +2,9 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { readMembership } from "../lib/membership";
-import { inviteLink, lastSeenLabel, mergePeople, PeopleTable, peopleFromSessions, PortalPeople, type Person } from "./PeopleSection";
+import { grantFor, openFolderDepartments } from "../lib/department-access";
+import { DepartmentAccessChoice } from "./DepartmentAccessChoice";
+import { accessLine, inviteLink, lastSeenLabel, mergePeople, PeopleTable, peopleFromSessions, PortalPeople, type Person } from "./PeopleSection";
 
 describe("people helpers", () => {
   it("builds an invite link that opens the sign-in page with the address filled in", () => {
@@ -101,5 +103,77 @@ describe("people on a workspace the organisation's Admin manages", () => {
     expect(html).toContain("$1.25");
     expect(html).not.toMatch(/Make admin|Make user|>Remove<|Invite link|<input|<form|pairing code|ends their account sessions/);
     expect(renderToStaticMarkup(createElement(PortalPeople, { peopleUrl: null, people: [] }))).toContain("Nobody has signed in here yet.");
+  });
+});
+
+describe("each user's departments", () => {
+  const people: Person[] = [
+    { entry: "ada@acme.test", role: "member", isDomain: false, lastSeenAt: null, devices: 0, turns: 0, costUsd: null },
+    { entry: "bob@acme.test", role: "member", isDomain: false, lastSeenAt: null, devices: 0, turns: 0, costUsd: null },
+    { entry: "cy@acme.test", role: "member", isDomain: false, lastSeenAt: null, devices: 0, turns: 0, costUsd: null },
+    { entry: "dee@acme.test", role: "admin", isDomain: false, lastSeenAt: null, devices: 0, turns: 0, costUsd: null },
+  ];
+  const noop = () => {};
+
+  it("shows each user's departments or the whole team, and a way to change them", () => {
+    const html = renderToStaticMarkup(createElement(PeopleTable, { people, busy: false, onRole: noop, onRemove: noop, onLink: noop, onAccess: noop, access: { "ada@acme.test": ["Sales", ""], "cy@acme.test": [] } }));
+    expect(accessLine(["Sales", ""])).toBe("Sales, General");
+    expect(html).toContain('Sales, General</span>');
+    expect(html).toContain('Whole team</span>');
+    expect(html).toContain('No department</span>');
+    expect(html.match(/>Change access</g)).toHaveLength(3);
+  });
+
+  it("shows nothing about departments where nobody can be limited", () => {
+    const html = renderToStaticMarkup(createElement(PeopleTable, { people, busy: false, onRole: noop, onRemove: noop, onLink: noop }));
+    expect(html).not.toMatch(/Whole team|Change access|data-person-access/);
+  });
+});
+
+describe("the choice of departments", () => {
+  const render = (props: Partial<Parameters<typeof DepartmentAccessChoice>[0]>) => renderToStaticMarkup(createElement(DepartmentAccessChoice, { value: null, onChange: noop, departments: ["Sales", "Finance"], limited: new Set<string>(), ...props }));
+  const noop = () => {};
+
+  it("offers the whole team, and a list of departments only once some are chosen", () => {
+    expect(render({})).toContain(">Whole team<");
+    expect(render({})).toContain(">Chosen departments<");
+    expect(render({})).not.toContain('type="checkbox"');
+    const chosen = render({ value: ["Sales"] });
+    expect(chosen.match(/type="checkbox"/g)).toHaveLength(3);
+    expect(chosen).toContain(">General<");
+    expect(chosen).toMatch(/checked=""[^>]*\/>Sales|Sales/);
+  });
+
+  it("explains why an admin cannot be limited", () => {
+    const html = render({ adminReason: true, value: ["Sales"] });
+    expect(html).toContain("Admins see the whole team.");
+    expect(html).toMatch(/<select[^>]*disabled/);
+    expect(html).not.toContain('type="checkbox"');
+  });
+
+  it("warns about a chosen department whose bots can still read files outside their folders", () => {
+    const html = render({ value: ["Sales", "Finance"], limited: new Set(["Finance"]) });
+    expect(html).toContain("Bots in Sales can still read files outside their folders.");
+    expect(html).not.toContain("Bots in Finance");
+    expect(render({ value: [""], limited: new Set() })).toContain("Bots in General can still read");
+    expect(render({ value: ["Finance"], limited: new Set(["Finance"]) })).not.toContain("can still read");
+    expect(render({ value: null })).not.toContain("can still read");
+    expect(openFolderDepartments(["Sales", "Finance"], new Set(["Finance"]))).toEqual(["Sales"]);
+  });
+});
+
+describe("a user under a domain's departments", () => {
+  const ada: Person = { entry: "ada@acme.test", role: "member", isDomain: false, lastSeenAt: null, devices: 0, turns: 0, costUsd: null };
+  const noop = () => {};
+
+  it("shows the departments of the domain, as the server applies them, unless the address has its own", () => {
+    const access = { "@acme.test": ["Sales"], "bob@acme.test": ["Finance"] };
+    expect(grantFor(access, "ada@acme.test")).toEqual(["Sales"]);
+    expect(grantFor(access, "bob@acme.test")).toEqual(["Finance"]);
+    expect(grantFor(access, "cy@other.test")).toBeUndefined();
+    expect(grantFor(access, "@other.test")).toBeUndefined();
+    const html = renderToStaticMarkup(createElement(PeopleTable, { people: [ada], busy: false, onRole: noop, onRemove: noop, onLink: noop, onAccess: noop, access }));
+    expect(html).toContain("Sales</span>");
+    expect(html).not.toContain("Whole team");
   });
 });

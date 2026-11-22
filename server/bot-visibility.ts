@@ -34,6 +34,8 @@ export type Viewer = { kind: "all"; email?: string } | { kind: "member"; email?:
 
 export const SEES_EVERYTHING: Viewer = { kind: "all" };
 
+const departmentName = (section?: string): string => section?.trim() || "";
+
 export const MAX_VISIBILITY_PEOPLE = 500;
 const ENTRY = /^(?:[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+|@[^\s@,;<>"]+\.[^\s@,;<>"]+)$/;
 
@@ -174,6 +176,7 @@ export interface VisibilityBot extends AccessBot {
 
 export interface VisibilityGroup {
   id: string;
+  dm?: boolean;
   threadId: string;
   memberIds: readonly string[];
   section?: string;
@@ -194,6 +197,9 @@ export class VisibleSet {
   private readonly audiences: ThreadAudiences | null;
   private threads: Map<string, ThreadOwner> | null = null;
   private readonly botMemo = new Map<string, boolean>();
+  /** Security invariant: a member with a department grant sees only these departments (by their current names, General as
+   * ""), and an unreadable grant file arrives here as the empty set, which shows nothing. */
+  private readonly departments: ReadonlySet<string> | null;
 
   constructor(
     bots: readonly VisibilityBot[],
@@ -201,16 +207,28 @@ export class VisibleSet {
     viewer: Viewer,
     ownerOf?: (threadId: string) => ThreadOwner | undefined,
     audiences?: ThreadAudiences,
+    departments?: ReadonlySet<string> | null,
   ) {
     this.viewer = viewer;
     this.audiences = audiences ?? null;
+    this.departments = viewer.kind === "member" ? departments ?? null : null;
     // On a Team Cloud nobody's view is everything, an admin's included: each conversation has its own audience.
-    this.everything = this.audiences === null && (viewer.kind === "all" ||
+    this.everything = this.audiences === null && this.departments === null && (viewer.kind === "all" ||
       (!bots.some((bot) => isRestricted(bot.visibility)) && !groups.some((group) => isRestricted(group.audienceFloor))));
     this.ownerOf = ownerOf ?? ((threadId) => this.indexedOwner(threadId));
     if (this.everything) return;
     for (const bot of bots) this.bots.set(bot.id, bot);
     for (const group of groups) this.groups.set(group.id, group);
+  }
+
+  /** A member limited to some departments. */
+  get limitedToDepartments(): boolean {
+    return this.departments !== null;
+  }
+
+  /** Whether this viewer may put a room in that department: always, unless a department grant limits them. */
+  departmentAllowed(section: unknown): boolean {
+    return this.departments === null || this.departments.has(departmentName(typeof section === "string" ? section : undefined));
   }
 
   /** A non-admin session, even one that can see every bot: what only an admin reads still stays off its copy. */
@@ -233,6 +251,7 @@ export class VisibleSet {
     if (seen === undefined) {
       const bot = this.bots.get(id);
       seen = bot && this.someoneElsesOwn(bot) ? false : this.viewer.kind === "all" || Boolean(bot && viewerSees(this.viewer, bot.visibility));
+      if (seen && this.departments && !this.departments.has(departmentName(bot?.section))) seen = false;
       this.botMemo.set(id, seen);
     }
     return seen;
@@ -251,7 +270,8 @@ export class VisibleSet {
     const group = this.groups.get(id);
     if (!group) return false;
     const members = group.memberIds.filter((member) => this.bots.has(member));
-    return members.length > 0 && members.every((member) => this.bot(member)) && viewerSees(this.viewer, group.audienceFloor);
+    const inDepartment = this.departments === null || group.dm === true || this.departments.has(departmentName(group.section));
+    return members.length > 0 && members.every((member) => this.bot(member)) && inDepartment && viewerSees(this.viewer, group.audienceFloor);
   }
 
   /** A conversation's unread mark and read line as this viewer read it; the task as it is where everyone reads alike. */
@@ -307,6 +327,7 @@ export class VisibleSet {
 
   sections(all: readonly string[]): string[] {
     if (this.everything || this.viewer.kind === "all") return [...all];
+    if (this.departments) return all.filter((section) => this.departments!.has(departmentName(section)));
     const key = (value?: string) => value?.trim() || "";
     const shown = new Set<string>();
     for (const bot of this.bots.values()) if (this.bot(bot.id)) shown.add(key(bot.section));
@@ -426,7 +447,23 @@ export function memberBot<T extends object>(bot: T, visible: VisibleSet): T {
   const shown = visible.filtersThreads ? withLevel(shownConversations(bot, visible), visible) : bot;
   if (!visible.member) return shown;
   const { visibility: _visibility, vpsAlias: _vpsAlias, ...rest } = shown as T & { visibility?: unknown; vpsAlias?: unknown };
+  const managed = (rest as { managedSections?: unknown }).managedSections;
+  if (visible.limitedToDepartments && Array.isArray(managed)) return { ...rest, managedSections: managed.filter((section) => visible.departmentAllowed(section)) } as T;
   return rest as T;
+}
+
+/** The pause lists name bots and departments: a person sees only the ones they may see. */
+export function narrowedHolds(key: string, value: unknown, visible: VisibleSet): unknown {
+  if (visible.everything) return value;
+  const ids = (list: unknown) => (Array.isArray(list) ? list.filter((id) => typeof id !== "string" || visible.bot(id)) : list);
+  if (key === "heldBots" || key === "pausedBots") return ids(value);
+  if (key !== "pausedByPerson" || !value || typeof value !== "object" || Array.isArray(value)) return value;
+  const state = value as { bots?: unknown; departments?: unknown };
+  return {
+    ...state,
+    ...(state.bots !== undefined ? { bots: ids(state.bots) } : {}),
+    ...(Array.isArray(state.departments) ? { departments: visible.sections(state.departments.filter((name): name is string => typeof name === "string")) } : {}),
+  };
 }
 
 /** On a Team Cloud each person's copy says what they may do with the bot; whoever can edit it also gets its sharing
@@ -514,7 +551,8 @@ export function memberBody(body: unknown, visible: VisibleSet): unknown {
     for (const [key, child] of Object.entries(record)) {
       // A member who can see every bot and room, and an admin, are sent the rooms as they are; bots still narrow.
       if ((visible.everything || !visible.member) && (key === "group" || key === "groups")) continue;
-      let next = child;
+      let next = key === "heldBots" || key === "pausedBots" || key === "pausedByPerson" ? narrowedHolds(key, child, visible) : child;
+      if (next !== child) { (out ??= { ...record })[key] = next; continue; }
       if (key === "bot" && child && typeof child === "object" && !Array.isArray(child)) next = memberBot(child, visible);
       else if (key === "bots" && Array.isArray(child)) {
         const shown = child.map((bot) => (bot && typeof bot === "object" ? memberBot(bot as object, visible) : bot));
@@ -629,7 +667,10 @@ export function frameForMember(payload: Record<string, unknown>, ctx: FrameConte
       const { help: _help, ...rest } = payload;
       return { ...rest, helpReason: null };
     }
-    case "config":
+    case "config": {
+      const narrowed = Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, narrowedHolds(key, value, visible)]));
+      return Object.keys(payload).some((key) => key === "heldBots" || key === "pausedBots" || key === "pausedByPerson") ? narrowed : payload;
+    }
     case "routine.deleted":
     case "workflow.deleted":
     case "webhook.deleted":
