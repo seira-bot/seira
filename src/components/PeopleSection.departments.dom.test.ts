@@ -115,6 +115,7 @@ describe("changing and removing a user's access", () => {
   it("takes the person off the sign-in list before it removes their departments", async () => {
     fixture.calls = [];
     await click(button("Remove"));
+    console.log(JSON.stringify(fixture.calls.map((c) => [c.path, c.init?.method])), host.textContent);
     expect(writes()).toEqual(["/api/config", "/api/department-access"]);
     expect(fixture.people).toEqual({});
   });

@@ -118,9 +118,9 @@ describe("each user's departments", () => {
   it("shows each user's departments or the whole team, and a way to change them", () => {
     const html = renderToStaticMarkup(createElement(PeopleTable, { people, busy: false, onRole: noop, onRemove: noop, onLink: noop, onAccess: noop, access: { "ada@acme.test": ["Sales", ""], "cy@acme.test": [] } }));
     expect(accessLine(["Sales", ""])).toBe("Sales, General");
-    expect(html).toContain('data-person-access="">Sales, General<');
-    expect(html).toContain('data-person-access="">Whole team<');
-    expect(html).toContain('data-person-access="">No department<');
+    expect(html).toContain('data-person-access="true"Sales, General<');
+    expect(html).toContain('data-person-access="true"Whole team<');
+    expect(html).toContain('data-person-access="true"No department<');
     expect(html.match(/>Change access</g)).toHaveLength(3);
   });
 
