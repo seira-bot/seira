@@ -18,6 +18,12 @@ import { THIS_COMPUTER_NOT_READY } from "../shared/your-computer.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const CALL_WAIT_MS = 3_000;
+const COMPUTER_FREE_NOTE = "Seira computer update: the computer this conversation waited for is free again. Continue the task that parked waiting for it.";
+const PARKED_LINE = "Parked — it continues automatically when the computer is free";
+const LEAD_REPLIES = [
+  "Parker should do the screen work.\n<seira-goal>{\"status\":\"continue\",\"next\":\"Parker\",\"instruction\":\"Use the shared VM\",\"detail\":\"Delegated to Parker\"}</seira-goal>",
+  "The VM stayed busy, so I finished without it.\n<seira-goal>{\"status\":\"completed\",\"detail\":\"Parker parked at the computer; the lead finished the goal directly.\"}</seira-goal>",
+];
 let child: ChildProcess;
 let startServer: (computerWaitMaxMs?: number) => Promise<void>;
 let fixtureHome = "";
@@ -25,6 +31,8 @@ let base = "";
 let stateFile = "";
 let dumpFile = "";
 let finishFile = "";
+let promptsFile = "";
+let leadReplyState = "";
 let cuaDescriptor = "";
 let stderr = "";
 const vmState = (state: Record<string, unknown> = {}) => writeFileAtomic(stateFile, JSON.stringify(state));
@@ -51,6 +59,15 @@ const dump = () => until(() => {
 }, Boolean);
 const activityRows = async (threadId: string, text: string) => (await api("GET", `/api/threads/${threadId}/messages`)).messages
   .filter((message: any) => message.tool?.name?.includes(text)).length;
+/** Every prompt a turn of the `claude` instance received, oldest first. */
+const prompts = (): string[] => existsSync(promptsFile) ? readFileSync(promptsFile, "utf8").split("\n").filter(Boolean) : [];
+/** The thread's rows in runtime.db: [bot, parent, status, executions, continuation note]. */
+const threadRows = (threadId: string) => readHandoffs(join(fixtureHome, "data")).filter(node => node.threadId === threadId)
+  .map(node => [node.botId, node.parentId ?? null, node.status, node.executions, node.continuation?.note ?? null]);
+const waitEvents = async (threadId: string) => (await api("GET", `/api/threads/${threadId}/events`)).entries
+  .filter((entry: any) => entry.kind === "runtime" && String(entry.data?.type).startsWith("turn.wait_")).map((entry: any) => entry.data);
+const taskOf = async (botId: string, threadId: string) => (await api("GET", "/api/bots?messages=0")).bots
+  .find((bot: any) => bot.id === botId)?.tasks.find((task: any) => task.threadId === threadId);
 // The seeded Chief answers a failed run with a Problems to look at turn on this same engine, and that turn writes the dump.
 async function stepDownSeededChief() {
   const seeded = (await api("GET", "/api/bots?messages=0")).bots.find((bot: any) => bot.chiefOfStaff);
@@ -69,6 +86,8 @@ beforeAll(async () => {
   stateFile = join(fixtureHome, "vm.json");
   dumpFile = join(fixtureHome, "dump.json");
   finishFile = join(fixtureHome, "finish");
+  promptsFile = join(fixtureHome, "prompts.jsonl");
+  leadReplyState = join(fixtureHome, "lead-replies.txt");
   cuaDescriptor = join(fixtureHome, "user-data", "cua-connection.json");
   vmState();
   const data = join(fixtureHome, "data");
@@ -79,7 +98,11 @@ beforeAll(async () => {
   writeFileSync(join(data, "config.json"), JSON.stringify({ instances: { claude: {
     driver: "claudeAgent", config: { cli: join(ROOT, "server/testing/fake-claude-cli.ts") },
     // Its first computer call is what claims the computer, as with a real model.
-    environment: { FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_DUMP: dumpFile, FAKE_CLAUDE_SLOW_FINISH_GATE: finishFile, FAKE_CLAUDE_USES_CLOUD_COMPUTER: "1" },
+    environment: { FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_DUMP: dumpFile, FAKE_CLAUDE_SLOW_FINISH_GATE: finishFile, FAKE_CLAUDE_USES_CLOUD_COMPUTER: "1",
+      FAKE_CLAUDE_PROMPTS: promptsFile },
+  }, lead: {
+    driver: "claudeAgent", config: { cli: join(ROOT, "server/testing/fake-claude-cli.ts") },
+    environment: { FAKE_CLAUDE_MODE: "happy", FAKE_CLAUDE_REPLIES: JSON.stringify(LEAD_REPLIES), FAKE_CLAUDE_REPLY_STATE: leadReplyState },
   } } }));
   const port = await freePortBlock([0, 1]);
   base = `http://127.0.0.1:${port}`;
@@ -146,6 +169,11 @@ async function room() {
     setup: { bulletin: "", defaultResponder: { kind: "member", botId: bots[0].id } } });
   rooms.set(group.id, bots.map(bot => bot.id));
   return { bots, group };
+}
+async function vmBot(name: string) {
+  const { bot } = await api("POST", "/api/bots", { name });
+  await api("PATCH", `/api/bots/${bot.id}`, { computer: "vm", browser: false });
+  return bot;
 }
 const send = (id: string) => api("POST", `/api/groups/${id}/messages`, { text: "Reply once." });
 const stop = (id: string) => api("POST", `/api/groups/${id}/interrupt`, {});
@@ -887,6 +915,127 @@ describe("Group Local VM ownership on the real isolated server", () => {
       await api("POST", `/api/bots/${bot.id}/interrupt`, { threadId: bot.threadId });
       await idle(bot.id);
       await api("DELETE", `/api/bots/${bot.id}`);
+      vmState();
+      await waitForExit(child, { signal: "SIGTERM" });
+      await startServer();
+    }
+  }, 60_000);
+
+  it("parks a room turn at the wait ceiling, resumes it when the shared VM frees, and keeps a parked wait behind newer work in its conversation", async () => {
+    await waitForExit(child, { signal: "SIGTERM" });
+    await startServer(2_000);
+    vmState({ containers: ["shared"] });
+    rmSync(dumpFile, { force: true }); rmSync(finishFile, { force: true }); rmSync(promptsFile, { force: true });
+    const holder = await vmBot("Room park holder");
+    const speaker = await vmBot("Room park speaker");
+    const { group } = await api("POST", "/api/groups", { name: "Room park", memberIds: [speaker.id],
+      setup: { bulletin: "", defaultResponder: { kind: "member", botId: speaker.id } } });
+    const roomText = async () => JSON.stringify((await api("GET", `/api/threads/${group.threadId}/messages`)).messages);
+    try {
+      await api("POST", `/api/bots/${holder.id}/messages`, { text: "Hold the shared VM" });
+      expect((await gate(computer(await dump()))).status).toBe(200);
+      rmSync(dumpFile, { force: true });
+
+      await api("POST", `/api/groups/${group.id}/messages`, { text: "Use the shared VM when it is free" });
+      await until(roomText, text => text.includes(PARKED_LINE));
+      await expect.poll(() => threadRows(group.threadId), { timeout: 5_000 }).toEqual([[speaker.id, null, "queued", 1, COMPUTER_FREE_NOTE]]);
+      const roomMessages = (await api("GET", `/api/threads/${group.threadId}/messages`)).messages;
+      expect(roomMessages.filter((message: any) => message.tool?.ok === false && /Computer still busy|Parked/.test(message.tool.name))).toHaveLength(0);
+      expect(roomMessages.find((message: any) => String(message.tool?.name).startsWith("Computer still busy after "))?.tool?.ok).toBe(true);
+      const events = await waitEvents(group.threadId);
+      expect(events.find((event: any) => event.type === "turn.wait_started")).toMatchObject({ holder: { name: "Room park holder" }, resource: expect.stringMatching(/^computer:/) });
+      expect(events.filter((event: any) => event.type === "turn.wait_ended")).toMatchObject([{ holder: { name: "Room park holder" }, outcome: "parked" }]);
+      expect(prompts()).toHaveLength(1);
+
+      await api("POST", `/api/bots/${holder.id}/interrupt`, { threadId: holder.threadId });
+      await idle(holder.id);
+      const resumedDump = await dump();
+      expect(resumedDump).toMatchObject({ prompt: { message: { content: expect.stringContaining("Continue the task that parked waiting for it") } } });
+      await expect.poll(() => threadRows(group.threadId), { timeout: 5_000 }).toEqual([[speaker.id, null, "running", 2, null]]);
+      expect(prompts()).toHaveLength(2);
+      expect((await gate(computer(resumedDump))).status).toBe(200);
+      rmSync(dumpFile, { force: true });
+
+      // A later turn on the holder's thread claims the shared VM with its first screen call.
+      await api("POST", `/api/bots/${holder.id}/messages`, { text: "Wait behind the room" });
+      expect(await check(computer(await dump()))).toEqual({ held: true, helpOpen: false, blockedReason: expect.stringContaining(PARKED_LINE) });
+      await until(() => taskOf(holder.id, holder.threadId), task => task?.activity === "parked.computer" && task.busy === false);
+      expect(await activityRows(holder.threadId, PARKED_LINE)).toBe(1);
+      expect(prompts()).toHaveLength(3);
+      await api("POST", `/api/bots/${holder.id}/messages`, { text: "Newer work in the same conversation" });
+      await expect.poll(() => prompts().length, { timeout: 10_000 }).toBe(4);
+      expect(prompts().at(-1)).toContain("Newer work in the same conversation");
+      await stop(group.id);
+      await idle(speaker.id);
+      await new Promise(resolve => setTimeout(resolve, 3_000));
+      expect(prompts(), "the parked wait does not start beside the newer work").toHaveLength(4);
+      expect(threadRows(holder.threadId)).toEqual([[holder.id, null, "cancelled", 1, null], [holder.id, null, "queued", 1, COMPUTER_FREE_NOTE], [holder.id, null, "source", 1, null]]);
+      expect(await taskOf(holder.id, holder.threadId)).toMatchObject({ busy: true });
+      expect(threadRows(group.threadId)).toEqual([[speaker.id, null, "cancelled", 2, null]]);
+    } finally {
+      await stop(group.id);
+      for (const bot of [holder, speaker]) {
+        await api("POST", `/api/bots/${bot.id}/interrupt`, { threadId: bot.threadId });
+        await idle(bot.id);
+      }
+      await api("DELETE", `/api/groups/${group.id}`);
+      for (const bot of [holder, speaker]) await api("DELETE", `/api/bots/${bot.id}`);
+      vmState();
+      await waitForExit(child, { signal: "SIGTERM" });
+      await startServer();
+    }
+  }, 60_000);
+
+  it("routes a goal run around a member parked at the computer wait ceiling and never runs that step again", async () => {
+    await waitForExit(child, { signal: "SIGTERM" });
+    await startServer(2_000);
+    vmState({ containers: ["shared"] });
+    rmSync(dumpFile, { force: true }); rmSync(finishFile, { force: true }); rmSync(promptsFile, { force: true }); rmSync(leadReplyState, { force: true });
+    const holder = await vmBot("Goal park holder");
+    const { bot: lead } = await api("POST", "/api/bots", { name: "Goal lead" });
+    await api("PATCH", `/api/bots/${lead.id}`, { computer: "off", browser: false, modelSelection: { instanceId: "lead", model: "claude-sonnet-5" } });
+    const worker = await vmBot("Parker");
+    const { group } = await api("POST", "/api/groups", { name: "Goal park room", memberIds: [lead.id, worker.id],
+      setup: { bulletin: "", defaultResponder: { kind: "member", botId: lead.id } } });
+    const room = async () => (await api("GET", "/api/bots?messages=40")).groups.find((entry: any) => entry.id === group.id);
+    const parkedChips = async () => ((await room())?.messages ?? [])
+      .filter((message: any) => String(message.tool?.name).startsWith("Computer still busy after "));
+    try {
+      await api("POST", `/api/bots/${holder.id}/messages`, { text: "Hold the shared VM" });
+      expect((await gate(computer(await dump()))).status).toBe(200);
+
+      await api("POST", `/api/groups/${group.id}/messages`, { text: "Finish the report using the shared VM", mode: "goal" });
+      await expect.poll(async () => {
+        const current = await room();
+        const card = current?.messages.find((message: any) => message.kind === "goal.run")?.goalRun;
+        return { working: current?.working, status: card?.status, detail: card?.detail, turnCount: card?.turnCount, rows: threadRows(group.threadId) };
+      }, { timeout: 15_000 }).toEqual({
+        working: false,
+        status: "completed",
+        detail: "Parker parked at the computer; the lead finished the goal directly.",
+        turnCount: 3,
+        rows: [[lead.id, null, "completed", 1, null], [worker.id, null, "failed", 1, null], [lead.id, null, "completed", 1, null]],
+      });
+      expect(await parkedChips()).toHaveLength(1);
+      expect((await parkedChips()).every((message: any) => message.tool?.ok === true)).toBe(true);
+      // A retry loop would park again about once a ceiling.
+      await new Promise(resolve => setTimeout(resolve, 3_000));
+      expect(await parkedChips()).toHaveLength(1);
+
+      await api("POST", `/api/bots/${holder.id}/interrupt`, { threadId: holder.threadId });
+      await idle(holder.id);
+      await new Promise(resolve => setTimeout(resolve, 3_000));
+      expect(prompts(), "the holder's one start: the parked step never runs again").toHaveLength(1);
+      expect(threadRows(group.threadId)).toHaveLength(3);
+      expect((await room())?.working).toBe(false);
+    } finally {
+      await stop(group.id);
+      for (const bot of [holder, lead, worker]) {
+        await api("POST", `/api/bots/${bot.id}/interrupt`, { threadId: bot.threadId });
+        await idle(bot.id);
+      }
+      await api("DELETE", `/api/groups/${group.id}`);
+      for (const bot of [holder, lead, worker]) await api("DELETE", `/api/bots/${bot.id}`);
       vmState();
       await waitForExit(child, { signal: "SIGTERM" });
       await startServer();
