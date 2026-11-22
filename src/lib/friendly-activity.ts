@@ -22,7 +22,7 @@ const OWN_SERVERS = new Set(["ogb", "agents", "seira", "seira", "computer", "bro
 
 /** The outside service a tool call works in, by its MCP server or a connected-app tool's name, as a person names it. */
 export function toolService(name: string | undefined): string | null {
-  const server = /^mcp__([^_]+(?:-[^_]+)*)__(.+)$/.exec(name ?? "");
+  const server = /^mcp__([^_]+)__(.+)$/.exec(name ?? "");
   if (!server) return null;
   const [, id, tool] = server;
   if (OWN_SERVERS.has(id!.toLowerCase())) return null;

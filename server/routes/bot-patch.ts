@@ -11,6 +11,8 @@ import { isSeiraColor, SEIRA_COLOR_NAMES, type BotUpdateResponse, type WireBot, 
 import { dropRemovedGrants, MAX_ALWAYS_ALLOW } from "../always-allow.ts";
 import { checkBrowserProfileChange, settleBrowserChange } from "../bot-browser-profile.ts";
 import { validateBotCwd } from "../bot-cwd.ts";
+import { validateFolderAccess } from "../folder-access.ts";
+import { FOLDER_ACCESS_SET_ELSEWHERE } from "./department-folders.ts";
 import { parseBotProfilePatch } from "../bot-profile.ts";
 import { accessFromVisibility } from "../../shared/bot-access.ts";
 import { parseVisibility } from "../bot-visibility.ts";
@@ -54,6 +56,8 @@ export interface BotPatchRouteDeps {
   supportsApprovalMode: ReturnType<typeof createApprovalModeSupport>;
   routines(): RoutineManager | null;
   activeVpsThreads: { has(botId: string): boolean };
+  /** Where a folder list is checked, and whether it is set from here at all (a Team Cloud or a hosted workspace: no). */
+  folderAccess: { dataDir: string; home: string; setElsewhere(): boolean };
   /** Full access comes only from the workspace policy. */
   hostedWorkspace: boolean;
   hostedFullAccessRefusal: string;
@@ -468,6 +472,15 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         const checked = validateBotCwd(body.cwd);
         if (!checked.ok) return json(res, 400, { error: checked.error });
         patch.cwd = checked.cwd ?? undefined;
+      }
+      if (body.folderAccess !== undefined) {
+        if (deps.folderAccess.setElsewhere()) return json(res, 409, { error: FOLDER_ACCESS_SET_ELSEWHERE });
+        if (body.folderAccess === null) patch.folderAccess = undefined;
+        else {
+          const checked = validateFolderAccess(body.folderAccess, deps.folderAccess);
+          if (!checked.ok) return json(res, 400, { error: checked.message, refusal: checked.refusal, path: checked.path });
+          patch.folderAccess = checked.value;
+        }
       }
       if (body.hidden === true && existingBot?.chiefOfStaff && body.chiefOfStaff !== false) {
         return json(res, 400, { error: "choose another Chief of Staff before hiding this bot" });

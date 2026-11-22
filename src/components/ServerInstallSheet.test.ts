@@ -145,7 +145,7 @@ it("checks and steps show plain labels, never an id, and the installer's own wor
   await act(async () => { emit({ type: "checks", result: "ok", items: [{ id: "os", level: "ok", sentence: "Debian 12 via /etc/os-release" }, { id: "os", level: "ok", sentence: "second" }, { id: "weird", level: "ok", sentence: "x" }] }); });
   const root = document.querySelector("[data-server-install=checks]")!;
   expect(root.querySelectorAll("li")[0]!.textContent).toContain("Operating system");
-  expect(root.querySelectorAll("li")[2]!.textContent).toContain("Another check");
+  expect(root.querySelectorAll("li")[1]!.textContent).toContain("Another check");
   expect(root.textContent).not.toContain("weird");
   const details = root.querySelector("details")!;
   expect(details.querySelector("summary")!.textContent).toBe("Details from your server");
@@ -159,4 +159,19 @@ it("checks and steps show plain labels, never an id, and the installer's own wor
   await act(async () => { emit({ type: "failed", reason: "installer", step: "image", sentence: "docker pull failed", source: undefined }); });
   expect(document.querySelector("[data-install-failed-step]")!.textContent).toBe("It stopped at: Downloading the app.");
   expect(document.querySelector("[data-install-details]")!.textContent).toContain("docker pull failed");
+});
+
+it("the check list shows one row per check, in order, and a fix on any item of a check marks its row", async () => {
+  await fill();
+  const items = [["os", "ok"], ["arch", "ok"], ["memory", "ok"], ["memory", "note"], ["docker-install", "fix"], ["clock", "ok"], ["clock", "note"]] as const;
+  await act(async () => { emit({ type: "checks", result: "fix", items: items.map(([id, level]) => ({ id, level, sentence: `${id} ${level}` })) }); });
+  const root = document.querySelector("[data-server-install=checks]")!;
+  const details = root.querySelector("details")!;
+  const rows = Array.from(root.querySelectorAll("li")).filter((li) => !details.contains(li));
+  const titles = rows.map((li) => li.textContent);
+  expect(titles).toHaveLength(5);
+  ["Operating system", "Processor", "Memory", "Docker is not installed", "Server clock"].forEach((label, index) => expect(titles[index]).toContain(label));
+  expect(new Set(titles).size).toBe(5);
+  const pending = rows.filter((li) => li.querySelector(".text-ink-secondary"));
+  expect(pending.map((li) => li.textContent)).toEqual([titles[3]]);
 });

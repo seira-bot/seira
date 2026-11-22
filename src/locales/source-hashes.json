@@ -38020,6 +38020,7 @@
       "serverInstall.details": "a44175678e7f689dc54b231a761b242a1dfca506fcab1b27e80262ca42a2e5bd",
       "serverInstall.failedStep": "3c087717e9d4116d3e376fa9d81661f8f81840e5db06cef93920105ab0ecbe23",
       "serverInstall.check.os": "0fcabfe6e097cd4064a08313b4b7da807f5ea3c59d056acc46289467bd2216e4",
+      "serverInstall.check.arch": "54aac653f06e8f298e547bfae26e1226cf14e373a6fe4ea8a041915ca132d01b",
       "serverInstall.check.cpu": "54aac653f06e8f298e547bfae26e1226cf14e373a6fe4ea8a041915ca132d01b",
       "serverInstall.check.memory": "c3963aedaac6c83c04cf8fb997b479c61e66b3caeecfadd2f2d4bd5b0aef1778",
       "serverInstall.check.disk": "133e37b5b8b85545feee6b7b6f7bbe57cb0f94e59b44e976004170295637dd38",

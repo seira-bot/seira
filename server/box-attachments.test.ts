@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { boxUploadsDir, planBox } from "./bot-box/plan.ts";
-import { attachmentsForBox } from "./box-attachments.ts";
+import { attachmentsForBox, boxedConversation } from "./box-attachments.ts";
 
 describe("attachmentsForBox", () => {
   let root: string, dataDir: string, uploads: string, cwd: string, shown: string;
@@ -59,6 +59,23 @@ describe("attachmentsForBox", () => {
     expect(attachmentsForBox(text, undefined, true, dataDir, uploads)).toBe(text);
     expect(run(text, join(dataDir, "workspaces", "bot"))).toBe(text);
     expect(existsSync(shown)).toBe(false);
+  });
+
+  it("points a limited bot working in a folder of its own choosing at its conversation's uploads (AC-09)", () => {
+    const upload = join(uploads, "a.md");
+    writeFileSync(upload, "x");
+    const text = `<attached-file path="${upload}" name="a.md" />`;
+    const elsewhere = join(root, "project");
+    expect(attachmentsForBox(text, elsewhere, { botId: "bot", threadId: "thread" }, dataDir, uploads)).toBe(`<attached-file path="${join(shown, "a.md")}" name="a.md" />`);
+    expect(readFileSync(join(shown, "a.md"), "utf8")).toBe("x");
+    expect(attachmentsForBox(text, elsewhere, true, dataDir, uploads), "a box of every bot names no conversation here").toBe(text);
+  });
+
+  it("names the conversation only for a bot the box holds beside unboxed bots", () => {
+    const box = (all: boolean, limited: boolean) => ({ enabled: () => all, boxesBot: () => all || limited });
+    expect(boxedConversation("bot", "thread", box(true, false))).toBe(true);
+    expect(boxedConversation("bot", "thread", box(false, true))).toEqual({ botId: "bot", threadId: "thread" });
+    expect(boxedConversation("bot", "thread", box(false, false))).toBe(false);
   });
 
   it("leaves paths outside the uploads folder, odd names and missing files as they are", () => {

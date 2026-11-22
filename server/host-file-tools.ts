@@ -10,6 +10,7 @@ import type { ToolCall } from "./mcp-bridge.ts";
 export const HOST_FILE_READ_LIMIT = 10 * 1024 * 1024;
 export const HOST_FILE_WRITE_LIMIT = 25 * 1024 * 1024;
 const LISTED = 500;
+export const HOST_FILE_PATH_MAX = 4096;
 
 const encoding = { type: "string", enum: ["utf8", "base64"], description: "utf8 (default) for text, base64 for any other file." };
 
@@ -63,6 +64,7 @@ function sizeText(bytes: number): string {
 
 function fullPath(home: string, raw: unknown): string {
   if (typeof raw !== "string" || !raw) throw new Mistake("Give the full path.");
+  if (raw.length > HOST_FILE_PATH_MAX) throw new Mistake("That path is too long.");
   const text = raw === "~" || /^~[\\/]/.test(raw) ? home + raw.slice(1) : raw;
   if (!path.isAbsolute(text)) throw new Mistake(`Give a full path, like ${path.join(home, "Documents", "notes.txt")}.`);
   return path.resolve(text);

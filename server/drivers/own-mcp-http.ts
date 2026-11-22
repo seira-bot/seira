@@ -9,10 +9,10 @@ import { ownMcpOverHttp } from "./turn-mcp.ts";
 /** "1" turns the URL form on; off unless set, on every kind of server. */
 export const OWN_MCP_HTTP_ENV = "SEIRA_OWN_MCP_HTTP";
 
-/** Whether engines get Seira's own servers by URL: only with SEIRA_OWN_MCP_HTTP=1, and never while the bot box is on
- * (a boxed engine reaches this server only through the box's relays, which carry the stdio proxies' requests, not an
- * engine's own). */
-export function ownMcpHttpEnabled(env: NodeJS.ProcessEnv = process.env, boxed: boolean = botBox.enabled()): boolean {
+/** Whether engines get Seira's own servers by URL: only with SEIRA_OWN_MCP_HTTP=1, and never while the bot box runs, for
+ * every bot or only some (a boxed engine reaches this server only through the box's relays, which carry the stdio
+ * proxies' requests, not an engine's own). */
+export function ownMcpHttpEnabled(env: NodeJS.ProcessEnv = process.env, boxed: boolean = botBox.scope() !== null): boolean {
   return !boxed && env[OWN_MCP_HTTP_ENV] === "1";
 }
 

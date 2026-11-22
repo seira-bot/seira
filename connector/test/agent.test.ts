@@ -290,6 +290,14 @@ describe("the connector's connection to Seira", () => {
     await until(() => agent.connected);
   });
 
+  it("never waits more than ten minutes to come back after a restart notice", async () => {
+    const { admin, agent, retries } = await connected({ accepted: true });
+    admin.restarting(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
+    await until(() => !agent.connected);
+    await until(() => retries.includes(5 * 60_000));
+    expect(Math.max(...retries)).toBeLessThanOrEqual(10 * 60_000);
+  });
+
   it("drops a connection the Admin went silent on, and opens a new one", async () => {
     const { admin, agent, lines } = await connected({ accepted: true, pingMs: 50, deadMs: 300 });
     admin.freeze();

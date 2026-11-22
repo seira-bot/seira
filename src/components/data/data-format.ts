@@ -45,7 +45,7 @@ export function tsv(columns: string[], rows: Cell[][]): string {
 }
 
 export function markdownTable(columns: string[], rows: Cell[][]): string {
-  const clean = (text: string) => text.replace(/\|/g, "\\|").replace(/[\r\n]+/g, " ");
+  const clean = (text: string) => text.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/[\r\n]+/g, " ");
   const line = (cells: string[]) => `| ${cells.map(clean).join(" | ")} |`;
   return [line(columns), `| ${columns.map(() => "---").join(" | ")} |`, ...rows.map((row) => line(row.map(cellText)))].join("\n");
 }

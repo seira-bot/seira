@@ -3,10 +3,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { BotBox, BoxRunner, BOX_EGRESS_PORT, flyApiPrivate, writeSeccompFile } from "./box.ts";
+import { BotBox, BoxRunner, BOX_EGRESS_PORT, flyApiPrivate, foldersKey, writeSeccompFile } from "./box.ts";
 import { processStart, seesProcess } from "./box-probe.ts";
 import { procHidepid } from "./hidepid.ts";
-import { visibleInBox } from "./plan.ts";
+import { boxUploadsDir, visibleInBox } from "./plan.ts";
+import { homeProgramsDistrusted } from "./program-trust.ts";
 import { DENIED_SYSCALLS, seccompBytes } from "./seccomp.ts";
 import { engineInstallRoots, npmEnginesPrefix } from "../engine-roots.ts";
 import { spawnCli } from "../procs.ts";
@@ -128,10 +129,12 @@ describe("BotBox", () => {
     const box = new BotBox();
     boxes.push(box);
     const lines: string[] = [];
-    expect((await box.start({ dataDir: temp(), home: temp(), port: 8799, denyEnv: new Set(), env: {}, log: (line) => lines.push(line) })).box).toBe("off");
+    expect((await box.start({ dataDir: temp(), home: temp(), port: 8799, denyEnv: new Set(), env: { SEIRA_BOT_BOX: "0" }, log: (line) => lines.push(line) })).box).toBe("off");
     expect(box.wrap({ command: "claude", args: [], env: {} })).toBeNull();
-    expect(box.report()).toMatchObject({ box: "off", reason: "not-cloud", checks: null, bridge: null, boxed: 0, refused: { egress: 0, harness: 0 }, broker: { on: false, tokens: 0, forwarded: 0, refused: 0, unbrokered: [] }, hardening: { seccomp: "off", denied: 0 } });
-    expect(lines).toEqual(["bot box: off (not-cloud)"]);
+    expect(box.scope()).toBeNull();
+    expect(box.boxesBot("b1")).toBe(false);
+    expect(box.report()).toMatchObject({ box: "off", reason: "switched-off", checks: null, bridge: null, boxed: 0, refused: { egress: 0, harness: 0 }, broker: { on: false, tokens: 0, forwarded: 0, refused: 0, unbrokered: [] }, hardening: { seccomp: "off", denied: 0 } });
+    expect(lines).toEqual(["bot box: off (switched-off)"]);
     expect(existsSync(join(dirs[0]!, "box"))).toBe(false);
   });
 
@@ -170,7 +173,7 @@ describe("BotBox", () => {
     box.noteChecks({ passed: 20, total: 21, failed: ["egress-public-allowed"], at: 1 });
     expect(box.report().checks).toEqual({ passed: 20, total: 21, failed: ["egress-public-allowed"], at: 1 });
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(/^bot box: on \(bubblewrap, node bridges, credential broker, seccomp (on|unsupported here)\)$/);
+    expect(lines[0]).toMatch(/^bot box: on \(every bot; bubblewrap, node bridges, credential broker, seccomp (on|unsupported here)\)$/);
     const relay = (await box.openRelay())!;
     expect(relay.socketPath.startsWith(join(dataDir, "box", "relay-"))).toBe(true);
     expect(existsSync(relay.socketPath)).toBe(true);
@@ -181,8 +184,60 @@ describe("BotBox", () => {
   it("off: no relay", async () => {
     const box = new BotBox();
     boxes.push(box);
-    await box.start({ dataDir: temp(), home: temp(), port: 8799, denyEnv: new Set(), env: {}, log: () => {} });
+    await box.start({ dataDir: temp(), home: temp(), port: 8799, denyEnv: new Set(), env: { SEIRA_BOT_BOX: "0" }, log: () => {} });
     expect(await box.openRelay()).toBeNull();
+  });
+
+  it.skipIf(process.platform === "win32")("limited: boxes only the spawns of bots limited to chosen folders and leaves every other spawn as it was", async () => {
+    const box = new BotBox();
+    boxes.push(box);
+    const dataDir = temp();
+    const lines: string[] = [];
+    box.scopeFolders((botId) => botId === "b1" ? { limited: true, grants: [{ path: "/work/docs", write: false }] } : botId === "b2" ? { limited: false, grants: [{ path: "/work/docs", write: false }] } : null);
+    await box.start({
+      dataDir, home: temp(), port: 8799, denyEnv: new Set(), env: {}, log: (line) => lines.push(line),
+      detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: null }, scope: "limited" }),
+    });
+    expect(box.enabled(), "not every bot spawn is boxed").toBe(false);
+    expect(box.scope()).toBe("limited");
+    expect(lines[0]).toMatch(/^bot box: on \(bots limited to chosen folders; bubblewrap/);
+    expect(homeProgramsDistrusted(), "the person and the other bots write HOME anyway").toBe(false);
+    const env = { PATH: "/usr/bin", HOME: "/data", ANTHROPIC_API_KEY: "sk-ant-real" };
+    const limited = box.wrap({ command: "/usr/local/bin/claude", args: [], cwd: join(dataDir, "task-workspaces", "b1", "t1"), env })!;
+    expect(limited.command).toBe("/usr/bin/bwrap");
+    expect(visibleInBox(limited.plan, "/work/docs/a.md")).toBe("ro");
+    expect(limited.env.ANTHROPIC_API_KEY, "its key goes through the broker").toBe(limited.token);
+    expect(box.wrap({ command: "/usr/local/bin/claude", args: [], cwd: join(dataDir, "task-workspaces", "b2", "t1"), env }), "a bot with folders but no limit").toBeNull();
+    expect(box.wrap({ command: "/usr/local/bin/claude", args: [], cwd: join(dataDir, "task-workspaces", "b3", "t1"), env }), "a bot with no setting").toBeNull();
+    expect(box.wrap({ command: "/usr/bin/node", args: [], env }), "a spawn of no bot").toBeNull();
+    expect(box.report().boxed).toBe(1);
+    expect([box.boxesBot("b1"), box.boxesBot("b2"), box.boxesBot("b3"), box.boxesBot(undefined)]).toEqual([true, false, false, false]);
+    expect(box.boxesFolders({ limited: true, grants: [] })).toBe(true);
+    expect(box.boxesFolders({ limited: false, grants: [] })).toBe(false);
+    expect(box.boxesFolders(undefined)).toBe(false);
+    expect(box.takes({ cwd: join(dataDir, "task-workspaces", "b1", "t1") })).toBe(true);
+    expect(box.takes({ cwd: join(dataDir, "task-workspaces", "b2", "t1") })).toBe(false);
+    expect(box.broker("b1")?.port).toBe(18080);
+    expect(box.broker("b2"), "a bot outside the box keeps its URL servers direct").toBeNull();
+    expect(box.broker()).toBeNull();
+    expect(await box.openRelay(), "relays are for a box of every bot").toBeNull();
+  });
+
+  it.skipIf(process.platform === "win32")("limited: a bot working in a folder of its own choosing still reads its conversation's uploads", async () => {
+    const box = new BotBox();
+    boxes.push(box);
+    const dataDir = temp();
+    box.scopeFolders(() => ({ limited: true, grants: [{ path: "/srv/project", write: true }] }));
+    await box.start({
+      dataDir, home: temp(), port: 8799, denyEnv: new Set(), env: {}, log: () => {},
+      detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: null }, scope: "limited" }),
+    });
+    const wrapped = box.wrap({ command: "/usr/local/bin/claude", args: [], cwd: "/srv/project", conversationBot: "b1", threadId: "t1", env: { PATH: "/usr/bin" } })!;
+    expect(wrapped.plan.botId).toBe("b1");
+    const uploads = boxUploadsDir(dataDir, "b1", "t1");
+    expect(existsSync(uploads)).toBe(true);
+    expect(visibleInBox(wrapped.plan, join(uploads, "photo.png"))).toBe("ro");
+    expect(visibleInBox(wrapped.plan, "/srv/project/a.txt")).toBe("rw");
   });
 });
 
@@ -297,5 +352,60 @@ describe("the probe tells the server and the canary from a box process with the 
     expect(seesProcess(7, "4321789", () => "4321789")).toBe(true);
     expect(seesProcess(7, "4321789", () => "88")).toBe(false);
     expect(seesProcess(7, "4321789", () => null)).toBe(false);
+  });
+});
+
+describe.skipIf(process.platform === "win32")("a bot's folder list in its box", () => {
+  const setup = { dataDir: "/data/.seira", home: "/data", codeRoots: ["/app"], engineRoots: engineInstallRoots("/data/.seira"), bridges: [] };
+  const cwd = "/data/.seira/task-workspaces/b1/t1";
+  const request = { command: "/usr/local/bin/claude", args: [], cwd, env: { HOME: "/data" } };
+  const boxes: BotBox[] = [];
+  afterEach(async () => { for (const box of boxes.splice(0)) await box.stop(); });
+
+  it("gives every spawn of a bot that bot's folders and no other bot's", () => {
+    const runner = new BoxRunner({ bwrap: "/usr/bin/bwrap", bridge, setup, denyEnv: new Set() });
+    const asked: string[] = [];
+    runner.scopeFolders((botId) => { asked.push(botId); return botId === "b1" ? { limited: false, grants: [{ path: "/work/docs", write: false }] } : null; });
+    expect(visibleInBox(runner.wrap(request).plan, "/work/docs/a.md")).toBe("ro");
+    const other = runner.wrap({ ...request, cwd: "/data/.seira/task-workspaces/b2/t1" });
+    expect(visibleInBox(other.plan, "/work/docs/a.md")).toBe("none");
+    expect(asked).toEqual(["b1", "b2"]);
+    runner.scopeFolders(null);
+    expect(visibleInBox(runner.wrap(request).plan, "/work/docs/a.md")).toBe("none");
+  });
+
+  it("changes the key a kept process starts again on when the folders change (AC-18)", async () => {
+    const box = new BotBox();
+    boxes.push(box);
+    const dataDir = join(mkdtempSync(join(tmpdir(), "seira-folders-key-")), "home", ".seira"), home = dirname(dataDir);
+    mkdirSync(dataDir, { recursive: true });
+    let folders: { limited: boolean; grants: Array<{ path: string; write: boolean }> } | null = null;
+    box.scopeFolders(() => folders);
+    await box.start({ dataDir, home, port: 8799, denyEnv: new Set(), env: {}, log: () => {}, detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: null } }) });
+    const turn = { cwd: join(dataDir, "task-workspaces", "b1", "t1") };
+    const keys = () => [box.audienceKey(turn), box.sharedThreadsKey(turn)];
+    expect(keys(), "no setting leaves the keys as they were").toEqual([null, null]);
+    folders = { limited: false, grants: [{ path: "/work/a", write: true }] };
+    const first = keys();
+    expect(first[0]).not.toBeNull();
+    expect(first[1]).not.toBeNull();
+    folders = { limited: true, grants: [{ path: "/work/a", write: true }] };
+    const limited = keys();
+    folders = { limited: true, grants: [{ path: "/work/a", write: false }] };
+    const readOnly = keys();
+    folders = { limited: true, grants: [{ path: "/work/a", write: false }, { path: "/work/b", write: true }] };
+    const more = keys();
+    const all = [first, limited, readOnly, more];
+    for (const field of [0, 1]) expect(new Set(all.map((keys) => keys[field])).size).toBe(4);
+    folders = { limited: true, grants: [{ path: "/work/b", write: true }, { path: "/work/a", write: false }] };
+    expect(keys(), "the order of the list is not a change").toEqual(more);
+    folders = null;
+    expect(keys()).toEqual([null, null]);
+  });
+
+  it("writes the key from the sorted list and the limit", () => {
+    expect(foldersKey(null)).toBeNull();
+    expect(foldersKey({ limited: false, grants: [{ path: "/b", write: true }, { path: "/a", write: false }] })).toBe(foldersKey({ limited: false, grants: [{ path: "/a", write: false }, { path: "/b", write: true }] }));
+    expect(foldersKey({ limited: false, grants: [] })).not.toBe(foldersKey({ limited: true, grants: [] }));
   });
 });

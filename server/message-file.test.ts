@@ -89,6 +89,24 @@ describe("message-linked files", () => {
     })[0]).toBe("/current/project");
   });
 
+  it("adds the folders opened for a turn after the conversation's own roots, and nothing without them", () => {
+    const base = { senderWorkspace: "/app/workspace", attachments: "/app/attachments", pinnedCwd: "/proj" };
+    const plain = messageFileRoots(base);
+    expect(plain).toEqual(["/proj", "/app/workspace", "/app/attachments"]);
+    expect(messageFileRoots({ ...base, extraRoots: [] })).toEqual(plain);
+    expect(messageFileRoots({ ...base, extraRoots: ["/shared/read", "/proj"] })).toEqual([...plain, "/shared/read"]);
+  });
+
+  it("opens a file in an opened folder, and still refuses one outside every root", async () => {
+    writeFileSync(join(outside, "granted.txt"), "hello");
+    const roots = messageFileRoots({ senderWorkspace: workspace, attachments: join(suite, "attachments"), pinnedCwd: null, extraRoots: [outside] });
+    const opened = await openMessageFile(join(outside, "granted.txt"), roots);
+    expect(opened.bytes).toBe(5);
+    await opened.handle.close();
+    const without = messageFileRoots({ senderWorkspace: workspace, attachments: join(suite, "attachments"), pinnedCwd: null });
+    await expect(openMessageFile(join(outside, "granted.txt"), without)).rejects.toMatchObject({ status: 403 });
+  });
+
   it("matches Unix, Windows, and UNC links independently of the server OS", () => {
     expect(messageReferencesFile(
       "[Open the notes](file:///Users/milind/Project/release%20notes.md)",
