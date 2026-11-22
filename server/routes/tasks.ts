@@ -1,4 +1,5 @@
 import { approvalModeFor, approvalModeWidens, isApprovalMode, type ApprovalMode } from "../../shared/approval-mode.ts";
+import { continueThread, type HandoffStore } from "../thread-handoff.ts";
 import { threadLinkUrl } from "../../shared/thread-link.ts";
 import type { TaskResponse, WireBot, WireTask } from "../../shared/wire.ts";
 import { validateBotCwd } from "../bot-cwd.ts";
@@ -30,7 +31,7 @@ export interface TaskRouteDeps {
   store: Pick<Store,
     | "bot" | "bots" | "taskByThread" | "project" | "projectBotForTask" | "patchTask" | "patchProject" | "tasks"
     | "switchTaskModel" | "switchTask" | "retitleTask" | "reorderProjects" | "refreshTaskPermissions" | "messagesTail"
-    | "messagesFor" | "deleteTasks" | "deleteProject" | "createTask" | "forkTask" | "createProject">;
+    | "messagesFor" | "deleteTasks" | "deleteProject" | "createTask" | "forkTask" | "createProject"> & HandoffStore;
   /** On a Cloud home only the owner changes how a bot asks for approval. */
   cloudHome: boolean;
   /** The desktop app owns this server, so a loopback caller is its owner. */
@@ -187,6 +188,12 @@ export function createTaskRoutes(deps: TaskRouteDeps): RouteHandler & { deleteTa
       if (body.select !== undefined && typeof body.select !== "boolean") return json(res, 400, { error: "select must be a boolean" });
       const bot = store.bot(m[1]);
       if (!bot) return json(res, 404, { error: "no such bot" });
+      const continueFrom = body.continueFrom;
+      if (continueFrom !== undefined && (typeof continueFrom !== "string" || !store.taskByThread(bot.id, continueFrom))) {
+        return json(res, 400, { error: "continueFrom must be a conversation of this bot" });
+      }
+      const continueRefusal = typeof continueFrom === "string" ? cloudThreadRefusal(auth, continueFrom) : null;
+      if (continueRefusal) return json(res, 403, { error: continueRefusal });
       let cwd: string | undefined;
       if (body.cwd !== undefined) {
         if (fromPairedDevice(req, auth)) {
@@ -220,6 +227,7 @@ export function createTaskRoutes(deps: TaskRouteDeps): RouteHandler & { deleteTa
       const task = store.createTask(bot.id, typeof body.title === "string" ? body.title : undefined, body.select !== false, body.projectId, undefined, body.approvalMode, undefined, cwd,
         auth.kind === "session" ? (created) => threadStarters.set(created.threadId, actorKey(auth)) : undefined);
       if (!task) return json(res, 500, { error: "couldn't create that task" });
+      if (typeof continueFrom === "string") continueThread(store, bot.id, continueFrom, task);
       return json(res, 201, { bot: publicBot(store.bot(bot.id)!), task: wireTask(task, store.bot(bot.id)!.modelSelection) } satisfies TaskResponse);
     }
     m = path.match(/^\/api\/bots\/([\w-]+)\/tasks\/delete$/);
