@@ -57,7 +57,7 @@ export function BotMemorySettings() {
   const note = error
     ? <span id="bot-memory-error" role="alert" className="text-danger">{error}</span>
     : fixed
-      ? <span id="bot-memory-fixed" className="text-ink-secondary">{t("settings.botMemory.fixed", { gb: memory.envGb })}</span>
+      ? <span id="bot-memory-fixed" className="text-ink-secondary">{t("settings.botMemory.fixed", { gb: String(memory.envGb) })}</span>
       : undefined;
 
   return (
