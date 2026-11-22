@@ -78,7 +78,7 @@ let brokerToolsListFail = false;
 let brokerConnectedServicesBody: { complete?: boolean; services: Record<string, { connected: boolean; status: string }> } | null = null;
 let brokerConnectedServicesFail = false;
 // What /broker/v1/catalog serves; null falls back to github only.
-let brokerCatalogBody: { items: Array<{ slug: string; name: string; composio_managed_auth_schemes?: string[] }> } | null = null;
+let brokerCatalogBody: { items: Array<{ slug: string; name: string }> } | null = null;
 // The project's own auth configs, and those the stub Session was created with: a Session knows only the configs named at creation.
 let customAuthConfigs: Array<Record<string, unknown>> = [];
 let sessionAuthConfigs: Record<string, string> = {};
@@ -513,10 +513,6 @@ describe.sequential("Composio Sessions", () => {
   });
 
   describe("apps with a sign-in of the project's own", () => {
-    const ownCatalog = [
-      { slug: "ownauth", name: "Own", composio_managed_auth_schemes: [] },
-      { slug: "otherown", name: "Other", composio_managed_auth_schemes: [] },
-    ];
     const flaggedSlugs = async (cfg: AppConfig) =>
       (await listToolkits(cfg)).cards.filter((card) => card.needsOwnAuth).map((card) => card.slug);
 
