@@ -28,6 +28,12 @@ export const INTERNAL_AGENT_TOOLS: ReadonlySet<string> = new Set(["tool_result_r
 
 export const APP_FEATURES: readonly AppFeature[] = [
   {
+    id: "install-on-my-server",
+    name: "Install on my server",
+    place: "The ＋ button at the end of the places list, then Connect to a server, then Install on my server (desktop app only)",
+    does: "Signs in to a server of the person's own once, installs the app on it and adds it to the places list. The sign-in is used once and never saved. It is different from connecting to a server that already runs the app.",
+  },
+  {
     id: "automations",
     name: "Automations",
     place: "Automations in the sidebar: the List and Calendar views of routines",
@@ -150,6 +156,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     does: "A bot runs on one engine and model. A bot can read the model choices and each AI account's usage limits, and can ask to switch its own model. A ring in the sidebar shows how much of the AI plan is left.",
     tools: ["list_models", "propose_model", "usage_limits"],
     releaseNotes: ["usageRing"],
+  },
+  {
+    id: "routing",
+    name: "Routing and extraction",
+    place: "Settings → AI → Routing and extraction",
+    does: "Small, fast models that pick which bot answers in an Auto room and read values out of emails. One provider is picked: Cloudflare Workers AI, TypeSafe Jev, OpenRouter, a custom endpoint, or the Cloud plan's.",
   },
   {
     id: "profile",

@@ -208,7 +208,7 @@ describe("Cloud Pro's included decision model", { timeout: 90_000 }, () => {
   it("an own key wins and goes only to Jev; clearing it falls back to the included decisions", async () => {
     const saved = await api("PUT", "/api/config", { decider: { key: OWN } });
     expect(saved.status, saved.text).toBe(200);
-    expect(saved.body.decider).toEqual({ provider: "jev", configured: true, enabled: true, jobs: { roomRouting: true } });
+    expect(saved.body.decider).toEqual({ provider: "jev", configured: true, includedAvailable: true, enabled: true, jobs: { roomRouting: true } });
     pick = bots.Maya!.id;
     expect((await round(room.id, "Can someone redo the pricing page copy?")).from!.name).toBe("Maya");
     expect(routed().at(-1)).toMatchObject({ side: "jev", auth: `Bearer ${OWN}` });

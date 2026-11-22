@@ -962,6 +962,44 @@ describe("Sessions reach the person's working accounts", () => {
     return { h, me, created, connected, status, reachable };
   }
 
+  const elevenlabs = { slug: "elevenlabs", name: "ElevenLabs", composio_managed_auth_schemes: [], meta: { description: "Voice" } };
+  const github = { slug: "github", name: "GitHub", composio_managed_auth_schemes: [] };
+  const catalogOf = async (h: Awaited<ReturnType<typeof oneInstallation>>["h"], me: Awaited<ReturnType<typeof oneInstallation>>["me"]) => {
+    const response = await h.call(me, "/v1/catalog");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, max-age=600");
+    return (await response.json() as { items: unknown[] }).items;
+  };
+
+  it("drops the managed sign-in list of a toolkit that has a project auth config", async () => {
+    const { h, me } = await oneInstallation();
+    h.composio.catalogItems.push(elevenlabs, github);
+    h.composio.authConfigs.push({ ...ownGmail, id: "ac_eleven", toolkit: { slug: "elevenlabs" } });
+
+    await expect(catalogOf(h, me)).resolves.toEqual([
+      { slug: "elevenlabs", name: "ElevenLabs", meta: { description: "Voice" } },
+      github,
+    ]);
+  });
+
+  it("passes the catalog through when the project has no auth config", async () => {
+    const { h, me } = await oneInstallation();
+    h.composio.catalogItems.push(elevenlabs, github);
+
+    await expect(catalogOf(h, me)).resolves.toEqual([elevenlabs, github]);
+  });
+
+  it("passes the catalog through when the auth config read fails", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { h, me } = await oneInstallation();
+    h.composio.catalogItems.push(elevenlabs, github);
+    h.composio.authConfigs.push({ ...ownGmail, id: "ac_eleven", toolkit: { slug: "elevenlabs" } });
+    h.composio.fail(500, (call) => call.path === "/auth_configs");
+
+    await expect(catalogOf(h, me)).resolves.toEqual([elevenlabs, github]);
+    errors.mockRestore();
+  });
+
   it("leaves a toolkit out of the Session when its working account is on Composio's managed config", async () => {
     const { h, me, created, connected, reachable } = await oneInstallation();
     h.composio.authConfigs.push(ownGmail);
