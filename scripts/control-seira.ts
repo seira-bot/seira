@@ -122,14 +122,15 @@ export async function runControlSeira(
   });
 }
 
-/** A folder with only bubblewrap in it, so a Linux fixture starts the bot box for the bots limited to chosen folders
- * while its PATH stays sealed. */
-function boxToolsFolder(parentEnv: NodeJS.ProcessEnv, dataDir: string): string {
+/** Beside the data folder, as on a desktop: bubblewrap alone in `bin` for the child's sealed PATH, and its temporary
+ * folder, as the box hides what a command line names inside the data folder. */
+function boxFixtureFolder(parentEnv: NodeJS.ProcessEnv, dataDir: string): string {
   const bwrap = process.platform === "linux" ? whichOnPath("bwrap", parentEnv) : null;
   if (!bwrap) throw new ControlSeiraError("SEIRA_VERIFY_BOT_BOX=1 needs Linux with bubblewrap on PATH");
-  const folder = join(dataDir, "box-tools");
-  mkdirSync(folder);
-  symlinkSync(bwrap, join(folder, "bwrap"));
+  const folder = `${dataDir}-box`;
+  mkdirSync(join(folder, "bin"), { recursive: true });
+  mkdirSync(join(folder, "tmp"));
+  symlinkSync(bwrap, join(folder, "bin", "bwrap"));
   return folder;
 }
 
@@ -399,7 +400,15 @@ export async function launchVerificationServer(
   });
   if (boatFixtureApi) childEnv.SEIRA_BOAT_API = boatFixtureApi;
   if (staticDir) childEnv.SEIRA_STATIC_DIR = staticDir;
-  if (parentEnv.SEIRA_VERIFY_BOT_BOX === "1") childEnv.PATH = [childEnv.PATH, boxToolsFolder(parentEnv, dataDir)].join(delimiter);
+  const boxFolder = parentEnv.SEIRA_VERIFY_BOT_BOX === "1" ? boxFixtureFolder(parentEnv, dataDir) : null;
+  if (boxFolder) {
+    childEnv.PATH = [childEnv.PATH, join(boxFolder, "bin")].join(delimiter);
+    childEnv.TMPDIR = childEnv.TMP = childEnv.TEMP = join(boxFolder, "tmp");
+  }
+  const removeFolders = async () => {
+    await removeTempDir(dataDir);
+    if (boxFolder) await removeTempDir(boxFolder);
+  };
   const child = spawn(process.execPath, verificationServerArgs(childEnv), {
     cwd: ROOT,
     env: childEnv,
@@ -436,7 +445,7 @@ export async function launchVerificationServer(
     }
   } catch (error) {
     await waitForExit(child, { signal: "SIGTERM" });
-    await removeTempDir(dataDir);
+    await removeFolders();
     throw error;
   }
 
@@ -463,7 +472,7 @@ export async function launchVerificationServer(
     if (!rename.ok) throw new Error(`verification starter rename failed (${rename.status}); see ${logPath}`);
   } catch (error) {
     await waitForExit(child, { signal: "SIGTERM" });
-    await removeTempDir(dataDir);
+    await removeFolders();
     throw error;
   }
 
@@ -476,7 +485,7 @@ export async function launchVerificationServer(
       if (closed) return;
       closed = true;
       await waitForExit(child, { signal: "SIGTERM" });
-      await removeTempDir(dataDir);
+      await removeFolders();
     },
   };
 }
@@ -536,7 +545,7 @@ async function main() {
             ok: false,
             error: `verification server exited unexpectedly; see ${session.info.logPath}`,
           }, null, 2)}\n`);
-          void removeTempDir(session.info.dataDir).finally(resolve);
+          void session.close().finally(resolve);
         }
       });
     });
