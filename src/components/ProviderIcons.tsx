@@ -11,7 +11,7 @@ import { CodexMark, GeminiMark, MiniMaxMark, OpenAIMark, OpenRouterMark, XaiMark
 
 export { HermesMark, CursorMark, GrokBotMark };
 export {
-  BRAND_MARKS, BoatMark, BrandMark, CloudflareMark, CodexMark, ComposioMark, ElevenLabsMark, FishAudioMark, GeminiMark, LmStudioMark,
+  BRAND_MARKS, BrandMark, CloudflareMark, CodexMark, ComposioMark, ElevenLabsMark, FishAudioMark, GeminiMark, LmStudioMark,
   MiniMaxMark, OnePasswordMark, OpenAIMark, OpenRouterMark, TypeSafeMark, XaiMark, type BrandId,
 } from "./BrandMarks";
 

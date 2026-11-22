@@ -155,6 +155,7 @@ export function createAppTriggerHost(deps: AppTriggerHostDeps) {
           ...(body.config && typeof body.config === "object" ? { config: body.config as Record<string, unknown> } : {}),
           ...(typeof body.enabled === "boolean" ? { enabled: body.enabled } : {}),
           ...(typeof body.sameConversation === "boolean" ? { sameConversation: body.sameConversation } : {}),
+          ...(body.confirmPlace === true ? { confirmPlace: true as const } : {}),
         };
         const trigger = await manager.update(id, patch);
         return trigger ? json(res, 200, { trigger }) : json(res, 404, { error: "no such automation" });

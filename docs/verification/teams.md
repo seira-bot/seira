@@ -14,7 +14,6 @@ Run the isolated lifecycle checks:
 pnpm exec vitest run server/team-lifecycle.e2e.test.ts server/section-context.test.ts server/store.test.ts src/lib/team-map.test.ts --maxWorkers=2
 SEIRA_UI_E2E=1 pnpm exec vitest run scripts/testing/team-lifecycle-ui.e2e.test.ts scripts/testing/team-template-ui.e2e.test.ts --maxWorkers=1
 SEIRA_UI_E2E=1 pnpm exec vitest run scripts/testing/team-canvas-ui.e2e.test.ts --maxWorkers=1
-SEIRA_UI_E2E=1 pnpm exec vitest run scripts/testing/team-computers-ui.e2e.test.ts --maxWorkers=1
 pnpm exec vitest run scripts/testing/team-computers-fixture.test.ts
 pnpm exec vitest run server/index.test.ts -t "creates team computers|shares one team computer" --maxWorkers=1
 ```
@@ -68,9 +67,6 @@ next bot click, and Escape during arrangement restores the original position.
 Idle cards omit the redundant Ready label. A computer shortcut appears only on
 the selected bot and opens that bot's access settings while Team map remains
 mounted.
-The **Add → Boat computer** entry explains provider charges and cannot create a
-machine while this credential-free fixture is disconnected. Opening and
-cancelling it leaves the server's computer inventory unchanged.
 
 The focused `server/index.test.ts` cases run the real server against a local
 HTTP Boat stand-in, with a disposable fake token and no paid account or container
@@ -89,42 +85,6 @@ another bot and is revoked after its turn. Removing the simulated provider
 machine causes a clear failure, never an automatic paid replacement. These
 checks prove server routing and ownership, not actual Boat provisioning or
 remote desktop operation.
-
-The separate `team-computers-ui` test uses a real Seira server and renderer with
-an owned loopback HTTP Boat provider. It creates a named machine through **Add →
-Boat computer**, verifies opening the shelf never provisions a machine, cancels
-and confirms a pointer drop, explicitly unassigns before moving to another team,
-and preserves bot settings and the computer registry across a browser reload.
-It also checks an Auto bot's **Computer** panel names the shared team machine
-without offering a second private computer, then takes/releases human control,
-sleeps the machine, and retries a simulated rate-limit error using the same
-durable resource ID. No provider deletion is made. Evidence and a screenshot
-are retained beside the fixture log as `*.team-computers.json` and
-`*.team-computers.png`. Accessible clicks and confirmation keys are real browser
-input; pointer events and native-select change events are injected in this test.
-
-For a separately driven computer-use preview, run:
-
-```sh
-node --experimental-strip-types scripts/testing/team-computers-preview.ts
-```
-
-The printed `previewUrl` is disposable. `boatFixtureApi` exposes a fixture-only
-`GET /__fixture` receipt of provider calls; `POST /__fixture` with
-`{"refuseCreate":true}` enables the simulated 429 response, and false clears it.
-The launch hook accepts only a literal `http://127.0.0.1:PORT` and installs a
-fixed fake token. It cannot inherit a real Boat token or use a remote provider.
-Ctrl-C stops the owned renderer/server and local provider. Guest bootstrap
-commands are acknowledged by the stand-in but never execute.
-
-On 2026-09-13, a separate native computer-use pass against this preview created
-a named computer, used its desktop hold/release controls, and dragged its shelf
-handle onto General. The real pointer drag opened the correct assignment
-confirmation with **Cancel** focused; this verified the shelf's native pointer
-capture after replacing HTML drag-and-drop. The confirmation clearly explains
-shared files/accounts and that only one bot can use the desktop at a time.
-This native pass does not prove physical touch input, a paid provider's
-provisioning behavior, or a live remote desktop stream.
 
 The test retains its before/after receipts and dark/light screenshots beside
 the fixture log as `*.team-canvas.json` and `*.team-canvas-*.png`. Its injected

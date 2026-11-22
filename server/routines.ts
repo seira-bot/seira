@@ -28,7 +28,7 @@ import {
 } from "./routine-recovery.ts";
 import { askOf, settleAsk, waitingFor, type RoutineRunAsk } from "./routine-waits.ts";
 import { failsLikeLastOutcome, outcomesNewestFirst } from "./routine-outcomes.ts"; import { createRunGate, type RunPreparation } from "./routine-run-gate.ts";
-import { busyWait, markStop, RunClock, runOverLimit, SlowStops, withBoundedStops, type StopState } from "./routine-bounds.ts"; import { keepUnreadableAside, readRoutineFile, UNREADABLE_RETRY_MS } from "./routine-file.ts";
+import { busyWait, markStop, RunClock, runOverLimit, SlowStops, withBoundedStops, type StopState } from "./routine-bounds.ts"; import { PlaceLostError, placeConfirmed } from "./place-lost.ts"; import { keepUnreadableAside, readRoutineFile, UNREADABLE_RETRY_MS } from "./routine-file.ts";
 import { noStartAlert, noStartSpacing, turnBackOn } from "./routine-no-start.ts"; import { afterRunSpacing, failureSpacingAlert, runSpacing } from "./routine-failure-spacing.ts"; import { blockingRun, recordSkip, type RoutineSkips } from "./routine-skips.ts";
 import { restartRetryAt, startupDecision } from "./routine-restarts.ts"; import { routineHealthOf, type RoutineHealth } from "./routine-health.ts"; import { Occurrences, ROUTINE_TURN_GONE } from "./routine-occurrences.ts"; import type { Occurrence } from "./routine-ledger.ts";
 import { CATCH_UP_MS, planOccurrence, settleRestored, staggered } from "./routine-catch-up.ts"; import { evictRuns } from "./routine-run-history.ts"; import { RunWatch } from "./routine-run-watch.ts"; import { scheduleSection, type ScheduleSection } from "./routine-schedule-report.ts";
@@ -61,6 +61,8 @@ export interface Routine extends RoutineTroubleCode {
   botId: string;
   groupId?: string;
   runOn: RoutineRunOn;
+  /** Moved off a cloud computer that is gone: Run now refuses until the person picks a place (place-lost.ts). */
+  placeLost?: true;
   enabled: boolean;
   schedule: RoutineSchedule;
   durationMinutes: number;
@@ -200,6 +202,8 @@ export interface RoutineInput {
   access?: RoutineAccess | null;
   deliver?: RoutineDelivery | null;
   resultsThreadId?: string | null; workflowId?: string | null; rewriteWorkflow?: true;
+  /** Only on an edit: the person confirmed where a moved automation runs (see place-lost.ts). */
+  confirmPlace?: true;
 }
 
 interface RoutineFile {
@@ -591,6 +595,7 @@ export class RoutineManager {
     }
     const routine = this.routines.find((r) => r.id === id);
     if (!routine) return null;
+    const placeCleared = placeConfirmed(routine.placeLost, patch);
     const now = this.now();
     const clean = sanitizeInput({
       name: patch.name ?? routine.name,
@@ -635,6 +640,7 @@ export class RoutineManager {
         updatedAt: Math.max(now, routine.updatedAt + 1),
       });
       if (patch.enabled !== undefined) delete routine.heldFor;
+      if (placeCleared) delete routine.placeLost;
       for (const key of ["continuity", "sameConversation", "modelSelection", "overlap", "runOnStartup", "access", "deliver", "workflowId", "workflowBotIds"] as const) if (!clean[key]) delete routine[key];
       if (!clean.checks) for (const key of ["checks", "checkedAt", "checkTrouble", "checkTroubleCode", "wakeAt"] as const) delete routine[key];
       if (Object.hasOwn(patch, "timeoutMinutes") && patch.timeoutMinutes == null) {
@@ -731,6 +737,7 @@ export class RoutineManager {
     }
     const routine = this.routines.find((r) => r.id === id);
     if (!routine) return null;
+    if (routine.placeLost) throw new PlaceLostError();
     let run!: RoutineRun;
     const allocations: ResultsThreadAllocation[] = [];
     const previousDestination = routine.resultsThreadId;

@@ -17,7 +17,7 @@ const EVERYDAY_PREFIXES: Record<string, readonly string[]> = {
     "botPanel.", "botApi.", "botSettings.simple.", "botAccess.tools.", "botAccess.browser.", "memory.learnFromRooms.", "memory.upkeep.",
   ],
   "the Screen panel and where a bot works": [
-    "place.", "computer.tab.", "computer.simple.", "computer.phase.", "computer.cloud.", "computer.badge.", "computer.problem.",
+    "place.", "computer.tab.", "computer.simple.", "computer.phase.", "computer.badge.", "computer.problem.",
     "computer.screen.", "vm.cloud.", "browser.",
   ],
   "Seira Cloud: buying it, setting it up, moving to it and sharing with it": [
@@ -27,7 +27,7 @@ const EVERYDAY_PREFIXES: Record<string, readonly string[]> = {
   ],
   "routines and automations": ["routines.", "automations."],
   "the Board": ["board."],
-  "the team map": ["canvas.", "mapComputer.", "canvasComputers."],
+  "the team map": ["canvas.", "mapComputer."],
   "the workflow canvas and its runs": ["workflow."],
   "Apps": ["apps.", "connectors."],
   "the Settings pages Simple mode shows": ["settings.section.", "settings.group.", "settings.mcpCalls.", "settings.logins."],
@@ -39,8 +39,8 @@ const EVERYDAY_PREFIXES: Record<string, readonly string[]> = {
 
 const EVERYDAY_KEYS: Record<string, readonly string[]> = {
   "the Screen panel": [
-    "computer.close", "computer.sleepTitle", "computer.capturingVm", "computer.capturingLocal", "computer.chooseCloudWake",
-    "computer.chooseCloudOpen", "computer.chooseCloudManage", "computer.autoChooseCloudOpen", "computer.createVm", "computer.replaceVm",
+    "computer.close", "computer.sleepTitle", "computer.capturingVm", "computer.capturingLocal",
+    "computer.autoChooseCloudOpen", "computer.createVm", "computer.replaceVm",
     "computer.openVmSetup", "computer.confirm.replaceVm", "computer.err.emptyFrame", "computer.err.frameTimeout", "computer.err.noDesktopLink",
     "computer.err.vmNotReady", "computer.err.vmEngine", "computer.err.localEngine", "computer.err.vmOpenSettings", "computer.worksOnHint",
     "computer.worksOnHintCloudHome", "computer.linux.waylandAfter", "vm.dest.vm", "vm.setup.start", "vm.setup.starting", "vm.stopped.detail",

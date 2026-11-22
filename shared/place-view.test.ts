@@ -9,12 +9,12 @@ import {
 /** Every param any line or action names, so a state always reads whole. */
 const PARAMS: PlaceParams = {
   bot: "Scout", engine: "Claude", model: "Llama", computer: "Team desk", hours: 50, month: "November",
-  plan: "Pro", max: 2, holders: ["Ada", "Bo"], words: "Start the Boat plan to create sandboxes.", reason: "CUA Driver is not ready.",
+  plan: "Pro", max: 2, holders: ["Ada", "Bo"], words: "Start the server to create sandboxes.", reason: "CUA Driver is not ready.",
   cause: "the Local VM is not ready",
 };
 
 const facts = (patch: Partial<PlaceFacts> = {}): PlaceFacts => ({
-  place: "cloud", server: "my-cloud", bot: "Scout", boat: "included", role: "admin", toolsAllowComputer: true, browserOn: true,
+  place: "cloud", server: "my-cloud", bot: "Scout", vps: false, role: "admin", toolsAllowComputer: true, browserOn: true,
   engine: { name: "Claude", model: "Claude Fable 5", computer: true, browser: true, signedIn: true },
   ...patch,
 });
@@ -61,18 +61,16 @@ describe("U1: one line and at most one action for every state", () => {
   });
 
   it("keeps jargon out of what subscribers read", () => {
-    // Boat is named where its account is needed, and credited (our sponsor) where a bot first gets its cloud desktop.
-    const boatAllowed = new Set<PlaceState>(["cc-needs-key", "cc-provider", "cc-new"]);
     for (const state of PLACE_STATES) {
       const view = placeViewOf(state, { ...PARAMS, words: "x" }, { role: "admin", server: "my-cloud" });
       const words = `${view.short} ${view.line} ${view.action?.label ?? ""}`;
-      if (!boatAllowed.has(state)) expect(words, state).not.toMatch(/Boat/);
+      expect(words, state).not.toMatch(/Boat/);
       expect(words, state).not.toMatch(/\bbox\b|Hosted desktop|Cloud box|Works on to Auto|\btools?\b/i);
       if (state.startsWith("cc-")) expect(words, state).not.toMatch(/\bVM\b/);
     }
     for (const [id, sentence] of Object.entries(PLACE_WORDS)) {
       expect(sentence, id).not.toMatch(/\bbox\b|Hosted desktop|Cloud box|Works on to Auto|\btools?\b/i);
-      if (id !== "add-boat-key") expect(sentence, id).not.toMatch(/Boat/);
+      expect(sentence, id).not.toMatch(/Boat/);
     }
   });
 
@@ -100,28 +98,22 @@ describe("U1: one line and at most one action for every state", () => {
     });
     expect(placeViewOf("auto", {}, { role: "admin", server: "mac" }).line)
       .toBe("Uses the built-in browser, a private desktop on this computer, or this computer's screen, whichever the task needs.");
-    expect(placeViewOf("cc-provider", { bot: "Scout", words: "Start the $20/month Boat plan." }, admin))
-      .toMatchObject({ short: "Couldn't start", line: "Your Boat account couldn't start Scout's cloud desktop: Start the $20/month Boat plan." });
+    expect(placeViewOf("cc-provider", { bot: "Scout", words: "The server did not answer." }, admin))
+      .toMatchObject({ short: "Couldn't start", line: "Your own server couldn't start Scout's cloud desktop: The server did not answer." });
   });
 });
 
 describe("placeState", () => {
-  it("reads the cloud computer's facts in order: model, what it can use, sign-in, provider, state", () => {
+  it("reads the cloud computer's facts in order: model, what it can use, sign-in, VPS", () => {
     expect(placeState(facts({ engine: { name: "Llama", computer: false, browser: true, signedIn: true } })).state).toBe("cc-cannot");
     expect(placeState(facts({ toolsAllowComputer: false })).state).toBe("cc-tools-off");
     expect(placeState(facts({ engine: { name: "Claude", computer: true, browser: true, signedIn: false } }))).toEqual({
       state: "cc-sign-in", params: { bot: "Scout", engine: "Claude" },
     });
-    expect(placeState(facts({ server: "mac", boat: "none", plan: true })).state).toBe("cc-on-my-cloud");
-    expect(placeState(facts({ server: "pc", boat: "none" })).state).toBe("cc-needs-key");
-    expect(placeState(facts({ server: "mac", boat: "own-key" })).state).toBe("cc-new");
-    expect(placeState(facts({ computer: "starting" })).state).toBe("cc-starting");
-    expect(placeState(facts({ computer: "asleep" })).state).toBe("cc-asleep");
-    expect(placeState(facts({ computer: "on" })).state).toBe("cc-on");
-    expect(placeState(facts({ refusal: { state: "cc-no-hours", params: { hours: 50, month: "November" } } }))).toEqual({
-      state: "cc-no-hours", params: { bot: "Scout", hours: 50, month: "November" },
-    });
-    expect(placeState(facts({ backend: "vps" })).state).toBe("vps");
+    // Cloud is the person's own VPS: without one a turn runs with no computer, and nothing asks for a Boat key.
+    expect(placeState(facts()).state).toBe("cc-not-set-up");
+    expect(placeState(facts({ server: "pc", plan: true })).state).toBe("cc-not-set-up");
+    expect(placeState(facts({ vps: true })).state).toBe("vps");
   });
 
   it("reads Auto, Off, the browser, this computer and a Local VM", () => {

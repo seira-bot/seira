@@ -180,6 +180,8 @@ export interface Routine {
   warning?: string;
   /** Set while Seira keeps it paused because its owner left; turning it on or off clears it. */
   heldFor?: RoutineHoldCause;
+  /** Moved off a cloud computer that is gone: paused, and it stays paused until an edit confirms where it runs. */
+  placeLost?: true;
   attachments?: RoutineContextAttachment[];
   sourceThreadId?: string;
   resultsThreadId?: string;
@@ -286,6 +288,8 @@ export interface RoutineInput {
   resultsThreadId?: string | null;
   /** The workflow to run instead of `prompt`; `null` releases it. */
   workflowId?: string | null;
+  /** Only on an edit of an automation moved off a gone cloud computer: the person confirms where it runs, which lets it be switched on. */
+  confirmPlace?: true;
 }
 
 /** On a Team Cloud, "Just me": the routine reports into the person's own private chat with the bot, theirs alone. */

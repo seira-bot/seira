@@ -51,6 +51,7 @@ import { cacheUntilConfigChanges,
   OPENCODE_PROVIDER_KEY_LIMIT,
   type AppConfig,
 } from "./config.ts";
+import { resetBoatEnvWarningForTest } from "./boat-env.ts";
 
 const reloaded = (patch: object, cfg: AppConfig = {}) =>
   changedInstanceIds(engineLaunches(instanceConfigs(cfg), {}), engineLaunches(instanceConfigs({ ...cfg, ...patch } as AppConfig), {}));
@@ -1604,7 +1605,6 @@ describe("credential env preference", () => {
     "OPENAI_COMPAT_URL",
     "OPENAI_COMPAT_MODEL",
     "OPENAI_COMPAT_PROVIDER",
-    "BOX_TOKEN",
     "OPENCODE_API_KEY",
     "SEIRA_TTS_KEY",
     "SEIRA_FISH_AUDIO_API_KEY",
@@ -1640,17 +1640,33 @@ describe("credential env preference", () => {
       }),
     );
     process.env.XAI_API_KEY = "env-xai";
-    process.env.BOX_TOKEN = "env-box";
     process.env.OPENCODE_API_KEY = "env-ocg";
     process.env.SEIRA_TTS_KEY = "env-tts";
     process.env.SEIRA_FISH_AUDIO_API_KEY = "env-fish";
     process.env.SEIRA_OPENAI_IMAGE_KEY = "env-image";
     const cfg = loadConfig();
     expect(cfg.xai).toEqual({ key: "env-xai", url: "https://api.example.test/v1" });
-    expect(cfg.box).toEqual({ token: "env-box" });
+    expect(cfg.box).toEqual({ token: "file-box" });
     expect(cfg.opencodeGo).toEqual({ apiKey: "env-ocg" });
     expect(cfg.tts).toEqual({ key: "env-tts", fishKey: "env-fish", voice: "narrator" });
     expect(cfg.imageGen).toEqual({ key: "env-image" });
+  });
+
+  it("ignores BOX_TOKEN from the environment and logs one warning: Boat is never active again", () => {
+    resetBoatEnvWarningForTest();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      process.env.BOX_TOKEN = "box_from_env";
+      expect(loadConfig().box?.token).toBeUndefined();
+      loadConfig();
+      loadConfig();
+      const boatWarnings = warn.mock.calls.filter(([line]) => String(line).includes("BOX_TOKEN"));
+      expect(boatWarnings).toHaveLength(1);
+      expect(JSON.stringify(boatWarnings)).not.toContain("box_from_env");
+    } finally {
+      warn.mockRestore();
+      delete process.env.BOX_TOKEN;
+    }
   });
 
   it("uses a preset voice only when the person has not chosen one or another provider", () => {
@@ -1689,10 +1705,8 @@ describe("credential env preference", () => {
         expect(disk).not.toContain(token);
         expect(runtime).not.toContain(token);
       }
-      process.env.BOX_TOKEN = "box_own";
       process.env.SEIRA_TTS_KEY = "sk-own";
-      expect(loadConfig()).toMatchObject({ box: { token: "box_own" }, tts: { key: "sk-own" } });
-      expect(JSON.stringify(instanceConfigs(loadConfig()))).not.toContain("box_own");
+      expect(loadConfig()).toMatchObject({ tts: { key: "sk-own" } });
     } finally {
       vi.unstubAllEnvs();
     }
@@ -1963,17 +1977,16 @@ describe("credential env preference", () => {
 
   it("syncCredentialEnv keeps process.env in step with a credential save", () => {
     process.env.XAI_API_KEY = "boot-injected";
-    process.env.BOX_TOKEN = "boot-injected";
     process.env.COMPOSIO_API_KEY = "boot-injected";
     syncCredentialEnv({
       xai: { key: "just-saved" },
       composio: { apiKey: "ak_just_saved" },
-      box: { token: "" },
+      box: { token: "box_saved_in_settings" },
       profile: { name: "Ada" },
     });
     expect(process.env.XAI_API_KEY).toBe("just-saved");
     expect(process.env.COMPOSIO_API_KEY).toBe("ak_just_saved");
-    expect(process.env.BOX_TOKEN).toBeUndefined();
+    expect(process.env.BOX_TOKEN).toBeUndefined(); // Boat is retired: a saved token no longer reaches process.env
     expect(process.env.SEIRA_TTS_KEY).toBeUndefined();
     expect(process.env.SEIRA_FISH_AUDIO_API_KEY).toBeUndefined();
   });

@@ -211,7 +211,7 @@ describe("the card after the update", () => {
     offer = null; expect(await relaunch()).not.toContain(INTRO);
     offer = { ...TRIAL_OFFER, refundDays: undefined, creditUsd: undefined };
     html = await relaunch();
-    expect(html).toContain(INTRO); expect(html).toContain("Voice and cloud desktops by Boat included");
+    expect(html).toContain(INTRO); expect(html).toContain("Voice included");
     expect(html).not.toContain("money-back"); expect(html).not.toContain("Claude credit");
   });
 

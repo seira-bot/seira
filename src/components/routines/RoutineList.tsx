@@ -62,7 +62,7 @@ export function RoutineList({ routines, runs, bots, pausedBots, heldBots, loadin
           <button type="button" className="cursor-pointer text-accent hover:underline" onClick={() => showBotLimit("paused")}>{t("routines.botPausedSwap")}</button>
         </p>}
         {routine.enabled && heldBots?.includes(routine.botId) && <p className="mt-2 text-[12px] leading-relaxed text-warning" data-routine-bot-held="">{t("routines.botHeld")}</p>}
-        {routine.heldFor && <p className="mt-2 text-[12px] leading-relaxed text-ink-secondary">{routineHeldNote(routine)}</p>}
+        {(routine.heldFor || routine.placeLost) && <p className="mt-2 text-[12px] leading-relaxed text-ink-secondary">{routineHeldNote(routine)}</p>}
         {!!routine.skippedRuns && <p className="mt-2 text-[12px] text-ink-secondary">
           {t("routines.skippedRuns", { count: routine.skippedRuns })}
           {routine.lastSkippedAt != null && <> · {t("routines.lastSkipped", { date: routineDateTime(routine.lastSkippedAt) })}</>}
