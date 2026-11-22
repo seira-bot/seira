@@ -4,7 +4,8 @@ import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { MENU_ITEM } from "./menu-recipe";
 import { chooseRoomPicture, roomPictureMessage, uploadRoomPicture } from "@/lib/room-picture";
-import { useStoreDispatch, type Group } from "@/state/store";
+import { useStoreDispatch } from "@/state/store-select";
+import type { Group } from "@/state/store";
 
 /** The room menu's picture rows. The menu closes when the file dialog takes focus, so the work runs here, not in the menu. */
 export function RoomPictureMenuItems({ group, onClose }: { group: Group; onClose: () => void }) {
