@@ -35,6 +35,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     releaseNotes: ["installOwnServer", "serverRename"],
   },
   {
+    id: "memory-for-bots",
+    name: "Memory for bots",
+    place: "Settings → You and your bots → Limits",
+    does: "All bot work on this computer shares one memory limit, so a heavy task cannot use the memory your other apps need. Set the number of GB, or leave it empty for Auto.",
+  },
+  {
     id: "automations",
     name: "Automations",
     place: "Automations in the sidebar: the List and Calendar views of routines",
