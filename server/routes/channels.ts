@@ -70,6 +70,8 @@ export interface ChannelRouteDeps {
   groupTurnOperations: ReadonlyMap<string, ReadonlySet<{ threadId: string; cancelled: boolean }>>;
   lastReply: Pick<Map<string, string>, "delete">;
   cloudThreadRefusal(auth: RequestAuth, threadId: string): string | null;
+  /** Why this session may not put a room in that department (a member limited to some departments), else null. */
+  sectionRefusal?(auth: RequestAuth, section: unknown): string | null;
   messageSender(auth: RequestAuth): ResolvedSender | undefined;
   usageTriggerFor(auth: RequestAuth): UsageTrigger;
   publicGroupState(record: GroupRecord): WireGroup;
@@ -293,6 +295,8 @@ export function createChannelRoutes(deps: ChannelRouteDeps): RouteHandler {
         const field = clientGroupPatchViolation(body);
         if (field) return json(res, 403, { error: `forbidden: this session may rename or mark a room, not change "${field}" (needs the admin scope)` });
       }
+      const outside = body && typeof body === "object" && body.section !== undefined ? deps.sectionRefusal?.(auth, body.section) : null;
+      if (outside) return json(res, 403, { error: outside });
       const renamed = store.group(m[1]);
       if (renamed && body && typeof body === "object" &&
         ((body.name !== undefined && body.name !== renamed.name) || (body.bulletin !== undefined && body.bulletin !== (renamed.bulletin ?? "")) || roomPictureChanges(body, renamed))) {

@@ -70,6 +70,7 @@ export function synthesize(
   key: string,
   signal?: AbortSignal,
   connect: (key: string) => WebSocket = openSocket,
+  speed?: number,
 ): Promise<Audio> {
   if (!key) return Promise.reject(new OpenAiVoiceError("key"));
   if (!OPENAI_VOICES.some((id) => id === voice)) return Promise.reject(new OpenAiVoiceError("voice"));
@@ -99,7 +100,7 @@ export function synthesize(
       socket.send(JSON.stringify({ type: "session.update", session: {
         type: "realtime", model: OPENAI_VOICE_MODEL,
         instructions: INSTRUCTIONS, output_modalities: ["audio"], tools: [], tool_choice: "none",
-        audio: { input: { turn_detection: null }, output: { format: { type: "audio/pcm", rate: 24000 }, voice } },
+        audio: { input: { turn_detection: null }, output: { format: { type: "audio/pcm", rate: 24000 }, voice, ...(speed === undefined ? {} : { speed }) } },
       } }));
     });
     socket.on("message", (data, binary) => {

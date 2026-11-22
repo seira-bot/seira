@@ -53,7 +53,7 @@ class FakeAudio implements GeminiAudio {
   close() { this.closed = true; }
 }
 
-function harness({ denied = false, held = false } = {}) {
+function harness({ denied = false, held = false, session = SESSION } = {}) {
   const sockets: FakeSocket[] = [];
   const audios: FakeAudio[] = [];
   const start = elevenLabsSessionStarter({
@@ -64,7 +64,7 @@ function harness({ denied = false, held = false } = {}) {
     onConnect: vi.fn(), onDisconnect: vi.fn(), onModeChange: vi.fn(), onUserTranscript: vi.fn(), onAgentResponseDelta: vi.fn(), onError: vi.fn(),
   };
   const delegate = vi.fn(async (_params: Record<string, unknown>, _context: { callId: string }) => "On it.");
-  const options: FishSessionOptions<LiveElevenLabsSession> = { sessionToken: SESSION, clientTools: { [FISH_DELEGATE_TOOL]: delegate }, clientToolTimeoutMs: 12_000, callbacks };
+  const options: FishSessionOptions<LiveElevenLabsSession> = { sessionToken: session, clientTools: { [FISH_DELEGATE_TOOL]: delegate }, clientToolTimeoutMs: 12_000, callbacks };
   const starting = start(options);
   const socket = () => sockets.at(-1)!;
   const connect = async () => {
@@ -94,6 +94,15 @@ describe("an ElevenLabs Live session", () => {
     expect(t.audio().rate).toBe(16_000);
     t.audio().mic!(new Int16Array([1, 2]).buffer);
     expect(t.socket().sent.at(-1)).toEqual({ user_audio_chunk: AUDIO });
+  });
+
+  it("adds the bot's call speed and language next to the call's instructions", () => {
+    const t = harness({ session: { ...SESSION, overrides: { tts: { speed: 1.1 }, agent: { language: "id" } } } });
+    t.socket().open();
+    expect(t.socket().sent[0]).toEqual({
+      type: "conversation_initiation_client_data",
+      conversation_config_override: { agent: { prompt: { prompt: SESSION.instructions }, language: "id" }, tts: { speed: 1.1 } },
+    });
   });
 
   it("plays the agent at the rate ElevenLabs names", () => {

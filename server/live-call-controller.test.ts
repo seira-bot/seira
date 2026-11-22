@@ -2024,3 +2024,34 @@ describe("a Codex Live call through the real session wiring", () => {
     expect(c.t.logs.join("\n")).not.toMatch(/secret phrase|answer phrase/);
   });
 });
+
+describe("LiveCallController call speed and language", () => {
+  it("hands the called bot's saved speed and language to the session", async () => {
+    const t = setup({ botCall: (botId) => (botId === "bot1" ? { speed: 1.2, language: "id" } : {}) });
+    await t.controller.start({ auth: owner, ...BOT, client: "desktop", sdp: "a" });
+    expect(t.deps.createSession).toHaveBeenCalledWith(expect.objectContaining({ callSpeed: 1.2, callLanguage: "id" }));
+  });
+
+  it("sends session.update with the new speed over the sideband of a live call with that bot (AC-12)", async () => {
+    const t = setup();
+    await t.start();
+    t.controller.speedChanged("bot1", 1.3);
+    t.controller.speedChanged("bot1", 2);
+    t.controller.speedChanged("bot2", 1.1);
+    const updates = t.socket().sent.filter((e) => e.type === "session.update");
+    expect(updates.map(({ type, session }) => ({ type, session }))).toEqual([
+      { type: "session.update", session: { type: "realtime", audio: { output: { speed: 1.3 } } } },
+      { type: "session.update", session: { type: "realtime", audio: { output: { speed: 1.5 } } } },
+    ]);
+  });
+
+  it("sends nothing for a custom server, or when no call is live", async () => {
+    const idle = setup();
+    idle.controller.speedChanged("bot1", 1.3);
+    expect(idle.sockets).toHaveLength(0);
+    const custom = setup({ settings: () => ({ key: "k", endpoint: { ...ENDPOINT, provider: "custom" }, voice: "sol", readTypedReplies: true, idleMinutes: 5 }) });
+    await custom.start();
+    custom.controller.speedChanged("bot1", 1.3);
+    expect(custom.socket().sent.some((e) => e.type === "session.update")).toBe(false);
+  });
+});

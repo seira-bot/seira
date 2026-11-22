@@ -27,6 +27,15 @@ describe("Fish Audio transcribe", () => {
     expect(audio.size).toBe(3);
   });
 
+  it("names the dictation language only when the call has one", async () => {
+    const fetchMock = stubFetch(200, { text: "halo" });
+    await transcribe(new Uint8Array(4), "audio/wav", "k", "id");
+    await transcribe(new Uint8Array(4), "audio/wav", "k");
+    const forms = fetchMock.mock.calls.map((call) => (call as unknown as [string, RequestInit])[1].body as FormData);
+    expect(forms[0]!.get("language")).toBe("id");
+    expect(forms[1]!.has("language")).toBe(false);
+  });
+
   it("returns empty text when Fish heard nothing", async () => {
     stubFetch(200, {});
     expect(await transcribe(new Uint8Array(4), "audio/wav", "k")).toBe("");

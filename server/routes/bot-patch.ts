@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { approvalModeFor, isApprovalMode, type ApprovalMode } from "../../shared/approval-mode.ts";
 import { normalizeConnectorScopes, widensConnectorScopes } from "../../shared/connector-scopes.ts";
+import { isCallLanguage, isCallSpeed } from "../../shared/call-voice.ts";
 import { isBotLiveVoice } from "../../shared/live-call.ts";
 import { normalizeOutboundPolicy } from "../../shared/outbound.ts";
 import { normalizePhoneApps } from "../../shared/phone-apps.ts";
@@ -55,6 +56,8 @@ export interface BotPatchRouteDeps {
   hostedModels: ReturnType<typeof hostedModelPolicy>;
   supportsApprovalMode: ReturnType<typeof createApprovalModeSupport>;
   routines(): RoutineManager | null;
+  /** Called after a bot's saved call speed changed, so a call that is live can use it. */
+  callSpeedChanged?(botId: string, speed: number | undefined): void;
   activeVpsThreads: { has(botId: string): boolean };
   /** Where a folder list is checked, and whether it is set from here at all (a Team Cloud or a hosted workspace: no). */
   folderAccess: { dataDir: string; home: string; setElsewhere(): boolean };
@@ -140,7 +143,7 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       if (body.pinned !== undefined && typeof body.pinned !== "boolean") {
         return json(res, 400, { error: "pinned must be true or false" });
       }
-      const existingBot = store.bot(m[1]); const defaultBotRefused = defaultBotPatchRefusal(existingBot, body);
+      const existingBot = store.bot(m[1]); const callSpeedBefore = existingBot?.callSpeed; const defaultBotRefused = defaultBotPatchRefusal(existingBot, body);
       if (defaultBotRefused) return json(res, 400, { error: defaultBotRefused });
       if (existingBot && typeof body.unread === "boolean" && deps.shownThread && deps.personMarkThread?.(auth, deps.shownThread(auth, existingBot), body.unread)) {
         delete body.unread;
@@ -305,6 +308,15 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       if (body.liveVoice !== undefined) {
         if (body.liveVoice !== null && body.liveVoice !== "" && !isBotLiveVoice(body.liveVoice)) return json(res, 400, { error: "liveVoice must be a GPT-Live or Gemini Live voice, or empty" });
         patch.liveVoice = body.liveVoice || undefined;
+      }
+      // null or "": the default again (normal speed, follow the conversation).
+      if (body.callSpeed !== undefined) {
+        if (body.callSpeed !== null && body.callSpeed !== "" && !isCallSpeed(body.callSpeed)) return json(res, 400, { error: "callSpeed must be a number from 0.5 to 2, or empty" });
+        patch.callSpeed = body.callSpeed === null || body.callSpeed === "" ? undefined : (body.callSpeed as number);
+      }
+      if (body.callLanguage !== undefined) {
+        if (body.callLanguage !== null && body.callLanguage !== "" && !isCallLanguage(body.callLanguage)) return json(res, 400, { error: "callLanguage must be auto or a listed language code, or empty" });
+        patch.callLanguage = body.callLanguage === null || body.callLanguage === "" ? undefined : (body.callLanguage as string);
       }
       // Spends the Cloud plan's monthly X research calls: an admin decision too.
       if (body.xResearch !== undefined) {
@@ -745,6 +757,7 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         broadcast({ kind: "sections", sections: store.sections });
         audienceChanged();
       }
+      if (Object.hasOwn(patch, "callSpeed") && patch.callSpeed !== callSpeedBefore) deps.callSpeedChanged?.(bot.id, bot.callSpeed);
       return json(res, 200, { bot: wireBot(store.bot(bot.id)!),
         ...(vpsLeftOn ? { notice: vpsLeftBehindNotice("Moved", vpsLeftOn, vps.vpsContainerName(bot.id)) } : {}) } satisfies BotUpdateResponse);
     }

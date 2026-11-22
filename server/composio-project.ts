@@ -290,7 +290,9 @@ const connectedAccountResponseSchema = z.object({
   user_id: z.string().optional(),
   alias: z.string().nullable().optional(),
   status: z.string().optional(),
+  created_at: z.string().nullable().optional().catch(undefined),
   updated_at: z.string().optional(),
+  state: z.unknown().optional(),
   toolkit: z.object({ slug: z.string().optional() }).optional(),
 });
 export type ConnectedAccountResponse = z.infer<typeof connectedAccountResponseSchema>;
@@ -340,9 +342,9 @@ export async function listConnectedAccounts(
   throw new Error("Composio account inventory exceeded the pagination safety limit");
 }
 
-export async function deleteConnectedAccount(apiKey: string, id: string) {
+export async function deleteConnectedAccount(apiKey: string, id: string, options: { revoke?: boolean } = {}) {
   const removed = await fetch(
-    `${apiBase()}/connected_accounts/${encodeURIComponent(id)}?revoke_on_delete=true`,
+    `${apiBase()}/connected_accounts/${encodeURIComponent(id)}?revoke_on_delete=${options.revoke ?? true}`,
     { method: "DELETE", headers: projectHeaders(apiKey), signal: AbortSignal.timeout(30_000) },
   );
   if (!removed.ok) throw new Error(await responseError(removed, `Composio disconnect: HTTP ${removed.status}`));

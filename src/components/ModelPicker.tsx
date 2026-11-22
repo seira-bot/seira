@@ -23,6 +23,8 @@ import { approvalModeFor, modelSwitchNeedsAsk } from "../../shared/approval-mode
 import { cn } from "@/lib/cn";
 import { useMenuMotion } from "./MenuMotion";
 import { SimpleModelMenu, type SimpleThinking } from "./SimpleModelMenu";
+import { useProviderOrder } from "@/lib/provider-health";
+import { ProviderMenu } from "./ProviderMenu";
 import { apiKeysLabel, ClaudeAccountSelect, engineStatus, FollowBotModelRow, ModelEngineRail, ModelRow, ModelSearch } from "./ModelPickerFull";
 import { MENU_LABEL, MENU_LINE, MENU_ROW, MENU_SEPARATOR, MENU_STROKE, MENU_TRAILING } from "./menu-recipe";
 import { modelMenuKey, modelMenuPointerMove } from "./model-menu-keys";
@@ -293,7 +295,7 @@ export function ModelPicker({
   const refocusAfterPick = useRefocusAfterPick(menuRef, open, selection, query);
   const instances = withTypedModels(state.instances, selection, query);
   const active = instances.find((instance) => instance.instanceId === selection.instanceId);
-  const pickerInstances = configuredModelInstances(instances, selection.instanceId);
+  const { listed: pickerInstances, health } = useProviderOrder(configuredModelInstances(instances, selection.instanceId));
   const selectedVariantLabel = selection.variant === undefined ? undefined : variantLabel(
     active?.models.options.find((option) => option.id === selection.model)?.variants?.find((option) => option.id === selection.variant)
       ?? { id: selection.variant, label: selection.variant },
@@ -307,8 +309,7 @@ export function ModelPicker({
   const showActiveAccount = (multipleClaudeAccounts && isClaudeAccount(active)) || Boolean(active?.snapshot.chatgptPlan);
   const claudeRailInstance = claudeAccounts.find((instance) => instance.instanceId === lastClaudeIdRef.current)
     ?? claudeAccounts.find((instance) => instance.instanceId === selection.instanceId) ?? claudeAccounts[0];
-  const railInstance =
-    pickerInstances.find((instance) => instance.instanceId === (railId ?? selection.instanceId)) ?? pickerInstances[0];
+  const railInstance = pickerInstances.find((instance) => instance.instanceId === (railId ?? selection.instanceId)) ?? pickerInstances[0];
   const displayedInstanceId = railInstance?.instanceId;
   // A plan account discovers its allowed models only after sign-in: an empty catalog must still lead to cloud sign-in,
   // never local models.
@@ -681,6 +682,7 @@ export function ModelPicker({
   const simpleMenu = simpleView ? simpleModelMenu({
     instances,
     listed: pickerInstances,
+    health,
     selection,
     bot: { name: profile.name, selection: profile.modelSelection, follows }, updatesBotDefault: !threadId || simpleUpdatesBotDefault,
     query,
@@ -704,8 +706,7 @@ export function ModelPicker({
         <FollowBotModelRow name={profile.name} model={botModelName} follows={follows} onPick={pickBotModel} />
       )}
       <div className="flex min-h-0 min-w-0 flex-1">
-        {pickerInstances.length > 0 && <ModelEngineRail instances={pickerInstances} selectedInstance={railInstance} claudeInstance={claudeRailInstance} openaiInstance={openaiRailInstance} onSelect={selectRail}
-          onAddApiKeys={remote ? undefined : openApiKeys} />}
+        {pickerInstances.length > 0 && <ModelEngineRail instances={pickerInstances} selectedInstance={railInstance} claudeInstance={claudeRailInstance} openaiInstance={openaiRailInstance} onSelect={selectRail} onAddApiKeys={remote ? undefined : openApiKeys} health={health} />}
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
           {threadId && simpleUpdatesBotDefault && (
@@ -749,6 +750,7 @@ export function ModelPicker({
                         <RefreshCw size={14} strokeWidth={MENU_STROKE} aria-hidden="true" />
                       )}
                     </button>
+                    {!remote && <ProviderMenu instance={railInstance} status />}
                     <span
                       className={cn(
                         "flex h-5 shrink-0 items-center rounded-full px-2 text-[11px] font-medium leading-4",

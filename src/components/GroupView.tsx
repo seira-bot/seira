@@ -64,6 +64,7 @@ import { AttachmentGallery, MessageAttachmentGallery, replyAttachmentGroup } fro
 import { VoiceNoteBubble, type VoiceNoteAttachment } from "./VoiceNoteBubble";
 import { OptionCard } from "./OptionCard";
 import { GroupCallOverlay } from "./GroupCallView";
+import { CallSurface } from "./CallSurface";
 
 import { ApprovalCard } from "./ApprovalCard";
 import { isQuestionCard, QuestionCard } from "./QuestionCard";
@@ -665,6 +666,7 @@ export function GroupView({ group, inForkPanel = false }: { group: Group; inFork
   return (
     <main data-look="chat" className="relative flex h-full min-w-0 flex-1 flex-col bg-app">
       <GroupCallOverlay group={group} members={members} />
+      <CallSurface />
       {membersOpen && !remoteClient && !group.dm && (
         <ManageMembersPanel group={group} onClose={closeMembers} triggerRef={membersTriggerRef} />
       )}

@@ -95,3 +95,21 @@ test("main opens the page for the window's own page and the server on screen, an
   await assert.rejects(handler(from(`${SERVER}/chat`), "http://auth.example.test/authorize"), "an address that is not https");
   assert.deepEqual(opened, [SIGN_IN, SIGN_IN]);
 });
+
+test("the clean sign-in request reaches main only from the person's click and tells main to use the clean window", async () => {
+  const page = preload({ origin: SERVER, active: true });
+  assert.equal(await page.bridge.openCleanSignInPage(SIGN_IN), true);
+  assert.equal(JSON.stringify(page.invoked), JSON.stringify([["desktop:open-sign-in-page", SIGN_IN, { clean: true }]]));
+  const late = preload({ origin: SERVER, active: false });
+  await assert.rejects(late.bridge.openCleanSignInPage(SIGN_IN));
+  await assert.rejects(page.bridge.openCleanSignInPage("http://auth.example.test/"));
+});
+
+test("main passes the clean choice to the opener and defaults to the system browser", async () => {
+  const calls = [];
+  const open = signInPageOpener({ allowed: () => true, open: async (url, options) => { calls.push([url, options]); } });
+  await open({}, SIGN_IN);
+  await open({}, SIGN_IN, { clean: true });
+  await open({}, SIGN_IN, { clean: "yes" });
+  assert.deepEqual(calls, [[SIGN_IN, { clean: false }], [SIGN_IN, { clean: true }], [SIGN_IN, { clean: false }]]);
+});

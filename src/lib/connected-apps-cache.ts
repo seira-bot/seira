@@ -37,12 +37,16 @@ function parseConnectorStatus(value: unknown): ConnectorStatus | null {
         !isRecord(account) ||
         typeof account.id !== "string" ||
         typeof account.status !== "string" ||
-        (account.alias !== undefined && typeof account.alias !== "string")
+        (account.alias !== undefined && typeof account.alias !== "string") ||
+        (account.displayName !== undefined && typeof account.displayName !== "string") ||
+        (account.duplicateOf !== undefined && typeof account.duplicateOf !== "string")
       ) return null;
       return {
         id: account.id,
         status: account.status,
         ...(account.alias === undefined ? {} : { alias: account.alias }),
+        ...(account.displayName === undefined ? {} : { displayName: account.displayName }),
+        ...(account.duplicateOf === undefined ? {} : { duplicateOf: account.duplicateOf }),
       };
     });
     if (accounts.some((account) => account === null)) return null;

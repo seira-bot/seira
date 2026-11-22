@@ -94,6 +94,7 @@ import { CallRecordRow } from "./CallRecordRow";
 import { AttachmentGallery, collectMessageFiles, replyAttachmentGroup, splitMessageAttachments } from "./AttachmentGallery";
 import { ScreenFrame } from "./ScreenFrame";
 import { CompactionChip, DigestChip } from "./DigestChip";
+import { HandoffCard } from "./HandoffCard";
 import { RenameTitle } from "./RenameTitle"; import { ChatHeadRole, chiefOfStaffBadge } from "./BotRole";
 import { BotActivityPicker } from "./TaskPicker"; import { ChatHeadPill } from "./ChatHeadPill"; import { HeaderShare } from "./bot-access/HeaderShare"; import { ThreadPresenceFaces } from "./TeamPresence"; import { useStoreRef } from "@/state/store-ref"; import { sameFields, useStoreDispatch, useStoreSelector } from "@/state/store-select"; import { sameDrawnBots } from "@/lib/drawn-bots";
 import { ELEVATED_FLOAT, ELEVATED_HOVER } from "./elevated";
@@ -102,9 +103,8 @@ import { ChatHeaderMenu, ChatMoreMenu } from "./ChatMoreMenu"; import { TeamOwnH
 import { useChatFindRequests, useChatFindShortcut } from "@/lib/chat-find";
 import { CitationSelectionToolbar, SentCitations } from "./CitationUI";
 import { SpeakButton, speakReady } from "./SpeakButton";
-import { CallOverlay } from "./CallView";
+import { CallSurface } from "./CallSurface";
 import { LiveCallBar } from "./LiveCallBar";
-import { LiveCallChip } from "./LiveCallPill";
 import { effectivePlace, toolPlace, type EffectivePlace } from "@/lib/place";
 import { cn } from "@/lib/cn";
 import { activeLocale, intlLocale, t } from "@/lib/i18n";
@@ -760,10 +760,11 @@ const MessagesList = memo(function MessagesList({
             case "digest":
               return showToolCalls && advanced && !traces.absorbed.has(m.id) ? <DigestChip message={m} /> : null;
             case "compaction":
-              return <CompactionChip message={m} onNewChat={m.id === lookups.newChatHintId && canReact ? () => dispatch({ type: "newTask", botId }) : undefined} />;
+              return <CompactionChip message={m} onNewChat={m.id === lookups.newChatHintId && canReact ? () => dispatch({ type: "newTask", botId, continueFrom: threadId }) : undefined} />;
             case "screen":
               return <ScreenFrame threadId={threadId} message={m} />;
             default: {
+              if (m.handoff) return <HandoffCard message={m} />;
               if (m.publishedPage || m.template) return m.template ? <TemplateChatCard message={m} botId={botId} threadId={threadId} /> : <PublishedPageCard message={m} />;
               const peer = peerLine(m) ?? peerRequest(m, botId);
               const user = m.role === "user" && !peer;
@@ -995,7 +996,7 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
   return (
     <ThreadLinkContext value={threadLink}>
     <main data-look="chat" className="relative flex h-full min-w-0 flex-1 flex-col bg-app">
-      <CallOverlay bot={bot} />
+      <CallSurface botId={bot.id} />
       <GlassScrollFrame className="flex-1 [--glass-tint:var(--color-app)]">
       {/* z-[25]: above the room set-up card (z-20), below the CallOverlay (z-30). */}
       <GlassBar edge="top" fade={!remoteClient} className="z-[25]">
@@ -1096,7 +1097,7 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
           )}
           <ThreadContextWarning bot={bot} messages={messages} />
           {phone && <UsageAlert engine={bot.modelSelection?.instanceId} />}
-          <LiveCallChip currentBotId={bot.id} onOpen={(botId, threadId) => openThread(dispatch, { botId, threadId }, store.state(), showThreads)} />{!phoneMenu && <WatchScreenButton botId={bot.id} messages={messages} liveTools={liveTools} place={place} />}
+          {!phoneMenu && <WatchScreenButton botId={bot.id} messages={messages} liveTools={liveTools} place={place} />}
           <PinnedMessagesMenu
             pins={pinnedPreview(messages, bot.pinnedMessageId, bot.name)}
             triggerClassName={cn(ELEVATED_FLOAT, ELEVATED_HOVER)}

@@ -20,6 +20,12 @@ describe("sidebar previews", () => {
     expect(lastPreviewable([screen(), message({ kind: "compaction" })])).toBeUndefined();
   });
 
+  it("does not preview the handoff line of a continued chat", () => {
+    const handoff = message({ role: "user", text: "[From Seira · continued chat · x]\nsummary", handoff: { threadId: "t", title: "T" } });
+    expect(lastPreviewable([handoff])).toBeUndefined();
+    expect(botPreview(bot, [handoff], [], false)).toBe("");
+  });
+
   const step = (name: string) => message({ kind: "activity", tool: { name, ok: true } } as Partial<Message>);
 
   it("quotes the bot in Simple mode when its newest line is a step that went fine, and keeps the step in Advanced", () => {
