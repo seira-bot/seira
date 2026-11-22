@@ -175,6 +175,12 @@ describe("resolveSurface", () => {
     expect(resolveSurface({ destination: "off", browserOn: true, botOpened: true })).toMatchObject({ computer: "off", browser: false });
   });
 
+  it("a pin kept through the Boat migration never mounts a place on a bot that has no computer", () => {
+    for (const pinnedSurface of ["cloud", "local", "vm", "browser"] as const) {
+      expect(resolveSurface({ destination: "off", pinnedSurface, browserOn: true })).toMatchObject({ computer: "off", browser: false, pinned: null });
+    }
+  });
+
   it("Off mounts no computer and no browser, and says which setting did it", () => {
     const plan = resolveSurface({ destination: "off", browserOn: true });
     expect(plan).toMatchObject({ computer: "off", browser: false, pinned: null });

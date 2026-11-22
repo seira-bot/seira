@@ -54,6 +54,29 @@ describe("bots and thread pins", () => {
     expect(withVps[0]).toEqual({ id: "c", computer: "vm", cloudBackend: "vps" });
   });
 
+  it("leaves a bot that depends on the default VPS alone while the settings file cannot be read, then moves it once it can", () => {
+    const bots = [
+      { id: "own", computer: "cloud", cloudBackend: "box", vpsAlias: "my-vps" },
+      { id: "dflt", computer: "cloud", cloudBackend: "box", tasks: [{ threadId: "t", surface: "cloud", surfaceSource: "auto" }] },
+    ];
+    expect(retireBoatFromBots(bots, undefined)).toEqual({ bots: 1, pins: 0 });
+    expect(bots[1]).toEqual({ id: "dflt", computer: "cloud", cloudBackend: "box", tasks: [{ threadId: "t", surface: "cloud", surfaceSource: "auto" }] });
+    retireBoatFromBots(bots, "default-vps");
+    expect(bots[1]).toMatchObject({ computer: "cloud", cloudBackend: "vps" });
+  });
+
+  it("reads a settings file that is broken as unknown, and a missing one as no VPS", () => {
+    const bots = () => [{ id: "a", computer: "cloud", cloudBackend: "box" }];
+    writeFileSync(join(dir, "config.json"), "{ broken");
+    const broken = bots();
+    expect(retireBoatFromBotsAtBoot(dir, broken, log)).toBe(false);
+    expect(broken[0].computer).toBe("cloud");
+    rmSync(join(dir, "config.json"));
+    const missing = bots();
+    expect(retireBoatFromBotsAtBoot(dir, missing, log)).toBe(true);
+    expect(missing[0].computer).toBe("off");
+  });
+
   it("clears the cloud pin a turn made on its own where there is no VPS, and keeps the ones a person chose", () => {
     const bots = [{
       id: "a", computer: "cloud", cloudBackend: "box",
@@ -99,11 +122,7 @@ describe("bots and thread pins", () => {
     expect(logs).toEqual([]);
   });
 
-  it("treats a config.json it cannot read as no VPS, and never throws", () => {
-    writeFileSync(join(dir, "config.json"), "{ not json");
-    const bots = [{ id: "a", computer: "cloud", cloudBackend: "box" }];
-    expect(retireBoatFromBotsAtBoot(dir, bots, log)).toBe(true);
-    expect(bots[0]).toEqual({ id: "a", computer: "off" });
+  it("never throws, and logs no bot data when it fails", () => {
     expect(retireBoatFromBotsAtBoot(dir, [{ get tasks(): never { throw new Error("boom with a-secret"); }, computer: "cloud", cloudBackend: "vps" } as never], log)).toBe(false);
     expect(logs.at(-1)).toBe("[boat] could not move the bots off Boat; they are left as they are");
     expect(logs.join("\n")).not.toContain("a-secret");
@@ -187,6 +206,39 @@ describe("routines, webhooks and app automations", () => {
     expect(read("webhooks.json").webhooks.map((hook: { runOn: string }) => hook.runOn)).toEqual(["seira", "seira"]);
     expect(read("webhooks.json").deleted[0].webhook.runOn).toBe("seira");
     expect(read("app-triggers.json").triggers[0].runOn).toBe("seira");
+  });
+
+  it("switches off, and does not move, an automation whose bot works on this computer or a virtual machine", () => {
+    write("bots.json", [{ id: "here", computer: "local" }, { id: "vm", computer: "vm" }, { id: "away", computer: "cloud" }, { id: "plain" }]);
+    write("routines.json", {
+      routines: [
+        { id: "r1", botId: "here", runOn: "cloud", enabled: true, nextRunAt: 5 }, { id: "r2", botId: "vm", runOn: "cloud", enabled: true, nextRunAt: 5 },
+        { id: "r3", botId: "away", runOn: "cloud", enabled: true, nextRunAt: 5 }, { id: "r4", botId: "plain", runOn: "cloud", enabled: true, nextRunAt: 5 },
+      ],
+      runs: [{ id: "a", botId: "here", runOn: "cloud", status: "queued" }, { id: "b", botId: "away", runOn: "cloud", status: "queued" }],
+    });
+    write("webhooks.json", { version: 1, webhooks: [{ id: "w1", botId: "vm", runOn: "cloud", enabled: true }, { id: "w2", botId: "away", runOn: "cloud", enabled: true }], deliveries: [] });
+    write("app-triggers.json", { version: 1, pollerId: "poller-12345", cursor: 0, triggers: [{ id: "t1", botId: "here", runOn: "cloud", enabled: true }], attempts: [], deleted: [] });
+    retireBoatFromFiles(dir, log);
+    const routines = read("routines.json");
+    expect(routines.routines.map((routine: { enabled: boolean; nextRunAt: number | null }) => [routine.enabled, routine.nextRunAt])).toEqual([[false, null], [false, null], [true, 5], [true, 5]]);
+    expect(routines.runs.map((run: { status: string }) => run.status)).toEqual(["cancelled", "queued"]);
+    expect(routines.runs[0].error).toMatch(/Choose where the bot works/);
+    expect(read("webhooks.json").webhooks.map((hook: { enabled: boolean }) => hook.enabled)).toEqual([false, true]);
+    expect(read("app-triggers.json").triggers[0].enabled).toBe(false);
+    const again = [bytes("routines.json"), bytes("webhooks.json"), bytes("app-triggers.json")];
+    retireBoatFromFiles(dir, log);
+    expect([bytes("routines.json"), bytes("webhooks.json"), bytes("app-triggers.json")]).toEqual(again);
+  });
+
+  it("waits for the next start when the list of bots cannot be read", () => {
+    writeFileSync(join(dir, "bots.json"), "{ not json");
+    write("routines.json", { routines: [{ id: "r", botId: "a", runOn: "cloud", enabled: true }], runs: [] });
+    retireBoatFromFiles(dir, log);
+    expect(read("routines.json").routines[0]).toEqual({ id: "r", botId: "a", runOn: "cloud", enabled: true });
+    write("bots.json", [{ id: "a" }]);
+    retireBoatFromFiles(dir, log);
+    expect(read("routines.json").routines[0].runOn).toBe("seira");
   });
 
   it("changes nothing the second time, and leaves a file it cannot read as it is while the others still move", () => {

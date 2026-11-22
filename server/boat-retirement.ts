@@ -34,10 +34,12 @@ function movesCloud(profile: Row, hasVps: boolean): boolean {
 /** Bots first: a conversation pinned to Cloud follows its bot's backend, so a pin needs no change where the bot has a
  * VPS and still means Cloud there. A pin a turn made on its own is dropped where there is none, as it was never chosen;
  * one a person chose stays, and Cloud without a VPS runs the turn without a computer. */
-export function retireBoatFromBots(bots: readonly Row[], defaultAlias: string | null): { bots: number; pins: number } {
+export function retireBoatFromBots(bots: readonly Row[], defaultAlias: string | null | undefined): { bots: number; pins: number } {
   const counts = { bots: 0, pins: 0 };
   for (const bot of bots) {
-    const hasVps = isValidSshAlias(bot.vpsAlias) || defaultAlias !== null;
+    // A settings file that cannot be read says nothing about a default VPS: a bot that depends on it is left for the next start.
+    if (!isValidSshAlias(bot.vpsAlias) && defaultAlias === undefined) continue;
+    const hasVps = isValidSshAlias(bot.vpsAlias) || Boolean(defaultAlias);
     if (movesCloud(bot, hasVps)) counts.bots++;
     if (hasVps) continue;
     for (const task of rows(bot.tasks)) {
@@ -47,9 +49,11 @@ export function retireBoatFromBots(bots: readonly Row[], defaultAlias: string | 
   return counts;
 }
 
-/** The default VPS alias as config.json holds it; null when none is set or the file cannot be read. */
-function defaultVpsAlias(dataDir: string): string | null {
+/** The default VPS alias as config.json holds it; null when none is set (or there is no file); undefined when the file
+ * exists and cannot be read, which is not the same as no VPS. */
+function defaultVpsAlias(dataDir: string): string | null | undefined {
   const read = readConfigFile(join(dataDir, "config.json"));
+  if (read.state === "unreadable" || read.state === "invalid") return undefined;
   const vps = read.state === "ok" && isRow(read.value.vps) ? read.value.vps : undefined;
   return isValidSshAlias(vps?.sshAlias) ? vps.sshAlias : null;
 }
@@ -68,13 +72,33 @@ export function retireBoatFromBotsAtBoot(dataDir: string, bots: readonly unknown
 
 const RUNNING_STATES = new Set(["queued", "running", "waiting"]);
 
-/** A routine, webhook or app event that ran in the Boat VM runs on this server's own provider instead. */
-function retireRunOn(file: string, key: "routines" | "webhooks" | "triggers", runs: boolean): { rows: number; runs: number } | null {
+/** Bots that work on this computer or a virtual machine. A routine of theirs that ran on Cloud must not start using
+ * that place: it is paused for the person to choose. Null when bots.json cannot be read. */
+function botsOnOwnMachine(dataDir: string): Set<string> | null {
+  const file = join(dataDir, "bots.json");
+  if (!existsSync(file)) return new Set();
+  const disk = parseJson(readFileSync(file, "utf8")) as JsonValue;
+  if (!Array.isArray(disk)) return null;
+  return new Set(rows(disk).filter((bot) => bot.computer === "local" || bot.computer === "vm").map((bot) => String(bot.id)));
+}
+
+const PAUSED_RUN = "This ran on a cloud computer that is gone. Choose where the bot works, then run it again.";
+
+/** A routine, webhook or app event that ran in the Boat VM runs on this server's own provider instead, except where
+ * that would put it on a place nobody chose for it: those are switched off, and their waiting runs cancelled. */
+function retireRunOn(file: string, key: "routines" | "webhooks" | "triggers", runs: boolean, ownMachine: ReadonlySet<string>): { rows: number; runs: number } | null {
   if (!existsSync(file)) return null;
   const disk = parseJson(readFileSync(file, "utf8")) as JsonValue;
   if (!isRow(disk)) return null;
   const counts = { rows: 0, runs: 0 };
-  const retire = (row: Row, counter: "rows" | "runs") => { if (row.runOn === "cloud") { row.runOn = "seira"; counts[counter]++; } };
+  const retire = (row: Row, counter: "rows" | "runs") => {
+    if (row.runOn !== "cloud") return;
+    row.runOn = "seira";
+    counts[counter]++;
+    if (!ownMachine.has(String(row.botId))) return;
+    if (counter === "rows") { row.enabled = false; if ("nextRunAt" in row) row.nextRunAt = null; }
+    else Object.assign(row, { status: "cancelled", error: PAUSED_RUN, finishedAt: Date.now() });
+  };
   for (const row of rows(disk[key])) retire(row, "rows");
   for (const entry of rows(disk.deleted)) for (const kept of Object.values(entry)) if (isRow(kept)) retire(kept, "rows");
   if (runs) for (const run of rows(disk.runs)) if (RUNNING_STATES.has(String(run.status))) retire(run, "runs");
@@ -105,9 +129,14 @@ export function retireBoatFromFiles(dataDir: string, log: Log = console.warn): B
   const counts: BoatRetirementCounts = { bots: 0, pins: 0, defaults: 0, routines: 0, runs: 0, webhooks: 0, appTriggers: 0, key: 0 };
   const step = (run: () => void) => { try { run(); } catch { log("[boat] one saved file could not be updated and is left as it is"); } };
   step(() => { const done = retireConfig(dataDir); if (done) { counts.key = done.key; counts.defaults = done.defaults; } });
-  step(() => { const done = retireRunOn(join(dataDir, "routines.json"), "routines", true); if (done) { counts.routines = done.rows; counts.runs = done.runs; } });
-  step(() => { const done = retireRunOn(join(dataDir, "webhooks.json"), "webhooks", false); if (done) counts.webhooks = done.rows; });
-  step(() => { const done = retireRunOn(join(dataDir, "app-triggers.json"), "triggers", false); if (done) counts.appTriggers = done.rows; });
+  // Without the list of bots nothing says which automations are safe to move, so they wait for the next start.
+  let own: Set<string> | null = null;
+  try { own = botsOnOwnMachine(dataDir); } catch { log("[boat] the list of bots could not be read, so saved automations are left for the next start"); }
+  if (own) {
+    step(() => { const done = retireRunOn(join(dataDir, "routines.json"), "routines", true, own); if (done) { counts.routines = done.rows; counts.runs = done.runs; } });
+    step(() => { const done = retireRunOn(join(dataDir, "webhooks.json"), "webhooks", false, own); if (done) counts.webhooks = done.rows; });
+    step(() => { const done = retireRunOn(join(dataDir, "app-triggers.json"), "triggers", false, own); if (done) counts.appTriggers = done.rows; });
+  }
   const { key, defaults, routines, runs, webhooks, appTriggers } = counts;
   if (key + defaults + routines + runs + webhooks + appTriggers > 0) {
     log(`[boat] removed ${key} Boat keys, moved ${defaults} new-bot defaults, ${routines} routines, ${runs} pending runs, ${webhooks} webhooks and ${appTriggers} app automations off Boat`);
