@@ -1,7 +1,6 @@
 // Pixel size of each image in docs/screenshots. The page keeps this space before the image loads.
 const screenshotSizes = {
   'approval-card': [1980, 1470],
-  'byo-vps-picker': [717, 565],
   'docs-automations': [2560, 1600],
   'docs-computer-panel': [2560, 1600],
   'docs-connected-apps': [2560, 1600],

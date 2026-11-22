@@ -159,7 +159,7 @@ flowchart LR
     BUS -- "one SSE stream" --> UI
     REG --> CLI & ACP & API
     CLI & ACP -- "permission requests" --> BROKER
-    server -- "Boat API" --> BOAT[("Cloud computer")]
+    server -- "SSH" --> VPS[("Your VPS")]
     server -- "Composio" --> APPS[("Gmail · Slack · GitHub · …")]
 ```
 
@@ -255,12 +255,10 @@ To turn on an integration, paste its key in **App Settings** (the gear at the bo
 | Key | What it turns on | Where to get it |
 |---|---|---|
 | Composio project key (`ak_…`) | Gmail, GitHub, Slack, Notion, and other apps for your bots | [docs/composio.md](docs/composio.md) |
-| Boat API key | An isolated remote Linux computer with a desktop and a terminal for each bot | [Boat API keys](https://docs.boat.dev/api-keys) |
 | ElevenLabs key | Spoken replies and calls | [ElevenLabs API keys](https://elevenlabs.io/app/settings/api-keys) |
 | Fish Audio key | Spoken replies and calls with Fish Audio voices | [Fish Audio API keys](https://fish.audio/app/api-keys/) |
 
-Composio and Boat are third-party services with their own accounts and terms.
-Boat is a paid service after its trial, and a cloud computer can cost money.
+Composio is a third-party service with its own account and terms. A bot's cloud computer is your own VPS ([docs/byo-vps.md](docs/byo-vps.md)); it needs no key here.
 
 ### Check and build
 
@@ -289,7 +287,7 @@ pnpm package:linux   # Linux x64: AppImage, Debian package, snap, and the verifi
 | Capability | macOS | Windows x64 | Ubuntu 24.04 Xorg | Ubuntu 24.04 Wayland |
 |---|---|---|---|---|
 | Packaged app, harness server inside, local engines | Supported | Supported | Beta | Beta |
-| Composio and Boat cloud computers | Supported | Supported | Beta | Beta |
+| Composio and your own VPS as a cloud computer | Supported | Supported | Beta | Beta |
 | Preview of the local screen | Supported | Not available | Beta | Beta |
 | Bot control of this computer | Supported | Supported | Beta, after you opt in | Off for safety |
 | Dictation on the device | Supported | Not available | Planned | Planned |

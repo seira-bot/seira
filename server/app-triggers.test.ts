@@ -65,6 +65,8 @@ function manager(overrides: Partial<AppTriggerManagerOptions> = {}) {
   });
 }
 
+// The mark is stored and served, but is not part of the shared phone contract.
+const placeLost = (row: object | null | undefined) => (row as { placeLost?: true } | null | undefined)?.placeLost;
 const runsOf = (triggerId: string) => routines.listRuns().filter((run) => run.routineId === triggerId);
 const drain = async (triggers: AppTriggerManager) => { while (await triggers.pollOnce(undefined, 0) > 0) { /* until the queue is empty */ } };
 
@@ -524,6 +526,31 @@ describe("app-event automation that keeps one conversation", () => {
     await drain(triggers);
     expect(runsOf(trigger.id)[0]).toMatchObject({ deliveryId: "msg_same_2", status: "queued" });
     expect(runsOf(trigger.id)[0]).not.toHaveProperty("sameConversation");
+  });
+});
+
+describe("an automation moved off a gone cloud computer", () => {
+  it("refuses Test until a place is chosen, and a plain paused one still tests", async () => {
+    const trigger = await gmailTrigger(manager());
+    const file = join(dir, "app-triggers.json");
+    const saved = JSON.parse(readFileSync(file, "utf8"));
+    Object.assign(saved.triggers[0], { enabled: false, runOn: "seira", placeLost: true });
+    writeFileSync(file, JSON.stringify(saved));
+    const reloaded = manager();
+    expect(placeLost(reloaded.list()[0])).toBe(true);
+    await expect(reloaded.runNow(trigger.id)).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/Choose where it runs/) });
+    expect(runsOf(trigger.id)).toEqual([]);
+    expect(placeLost(await reloaded.update(trigger.id, { name: "Renamed" }))).toBe(true);
+    expect(placeLost(await reloaded.update(trigger.id, { runOn: "seira" }))).toBe(true);
+    await expect(reloaded.update(trigger.id, { enabled: true })).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/Choose where it runs/) });
+    expect(reloaded.list()[0]).toMatchObject({ enabled: false });
+    expect(placeLost(await reloaded.update(trigger.id, { confirmPlace: true }))).toBeUndefined();
+    await expect(reloaded.runNow(trigger.id)).resolves.toMatchObject({ via: expect.any(String) });
+    // Paused the ordinary way, it is not marked and still tests.
+    const plain = await gmailTrigger(reloaded, { from: "other.com", subject: "invoice" });
+    await reloaded.update(plain.id, { enabled: false });
+    expect(placeLost(reloaded.list().find((row) => row.id === plain.id))).toBeUndefined();
+    await expect(reloaded.runNow(plain.id)).resolves.toMatchObject({ via: expect.any(String) });
   });
 });
 

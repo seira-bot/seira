@@ -14,7 +14,7 @@ it.each([
     .rejects.toThrow(/Boat verification requires/);
 });
 
-it.each([false, true])("adds a Boat account only for an opted-in Boat fixture, and never a Boat-run engine: %s", async (withBoat) => {
+it.each([false, true])("never saves a Boat account or a Boat-run engine, even when a Boat fixture is offered: %s", async (withBoat) => {
   const calls: string[] = [];
   const provider = createServer((request, response) => {
     calls.push(`${request.method} ${request.url}`);
@@ -37,14 +37,10 @@ it.each([false, true])("adds a Boat account only for an opted-in Boat fixture, a
     // runs its turns on Boat.
     expect(instances.filter(instance => instance.driverKind === "boxAgent" || instance.instanceId === "computer")).toEqual([]);
     expect(config.instances).not.toHaveProperty("computer");
-    if (withBoat) {
-      expect(config.box).toEqual({ token: "box_verification_fixture" });
-    } else {
-      expect(config).not.toHaveProperty("box");
-      expect(calls).toEqual([]);
-    }
-    // Merely advertising the opted-in backend must never provision a boat.
-    expect(calls.every(call => call.startsWith("GET "))).toBe(true);
+    // The server drops a saved Boat account at boot (boat-retirement.ts), so nothing of it is left in the data folder and
+    // the offered stand-in is never called.
+    expect(config).not.toHaveProperty("box");
+    expect(calls).toEqual([]);
   } finally {
     await fixture?.close();
     provider.closeAllConnections();

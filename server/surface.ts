@@ -159,16 +159,18 @@ export function placeUnavailable(place: Surface, row: PlaceRow, cloudHome = fals
   return new PlaceUnavailableError(place, row, cloudHome);
 }
 
-/** A Cloud pick with no cloud computer behind it. The turn goes on with no computer; it is never moved to this one or a VM. */
+/** A Cloud pick with no cloud computer behind it: no VPS for the bot, or on a leftover Boat setting no Boat key. The turn goes on with no computer; it is never moved to this one or a VM. */
 export function cloudPickWithoutComputer(input: {
   wants: ComputerWant;
   backend: "box" | "vps";
   boatConfigured: boolean;
+  /** A VPS is set up for the bot: its own alias or the install's default. */
+  vpsConfigured: boolean;
   teamComputer: boolean;
   routine: boolean;
   cloudHome: boolean;
 }): boolean {
-  return input.wants === "cloud" && input.backend === "box" && !input.boatConfigured
+  return input.wants === "cloud" && !(input.backend === "box" ? input.boatConfigured : input.vpsConfigured)
     && !input.teamComputer && !input.routine && !input.cloudHome;
 }
 

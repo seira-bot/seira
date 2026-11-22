@@ -246,6 +246,8 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
           return json(res, 400, { error: "computer must be null (Auto), cloud, vm, local, browser, or off" });
         }
       }
+      // Cloud is the person's own VPS: a bot that works on Cloud carries no other backend, whatever client asked.
+      if (requestedComputer === "cloud" && (patch.cloudBackend ?? existingBot?.cloudBackend) !== "vps") patch.cloudBackend = "vps";
       if (normalizedSelection) patch.modelSelection = normalizedSelection;
       // null/"" clears; the id is not checked against the transcript.
       if (body.pinnedMessageId !== undefined) {

@@ -60,7 +60,7 @@ targeted.
 Direct-turn regressions additionally send two different requests through a
 Local VM-pinned conversation while the bot default is Cloud, checking the
 actual MCP descriptor, prompt, matching preview surface, and capability expiry.
-A channel member's explicit This computer and Cloud (Boat or VPS) destinations
+A channel member's explicit This computer and Cloud (VPS) destinations
 mount exactly as its bot thread mounts them: the same checks, the same
 control gate, and the same consent boundary for waking or creating a cloud
 computer. The fixture proves the host descriptor reaches the speaker behind a
