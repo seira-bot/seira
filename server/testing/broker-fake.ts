@@ -7,11 +7,11 @@ import type { AddressInfo } from "node:net";
 /** The broker sources are Worker code outside this program's type world; loaded at run time only. */
 const HARNESS = new URL("../../cloudflare/composio-broker/src/test-harness.ts", import.meta.url).href;
 
-interface FakeAccount { id: string; user_id: string; toolkit: { slug: string }; status: string; alias?: string }
+interface FakeAccount { id: string; user_id: string; toolkit: { slug: string }; status: string; alias?: string; created_at?: string; state?: { val: { displayName?: string } } }
 interface Harness {
   d1: { db: { prepare(sql: string): { run(...values: unknown[]): unknown; all(...values: unknown[]): unknown[] } }; rows<T>(sql: string, ...values: unknown[]): T[] };
   env: { COMPOSIO_WEBHOOK_SECRET?: string; CLOUD_GRANT_SECRET?: string };
-  composio: { accounts: FakeAccount[]; instances: Map<string, { id: string; trigger_name: string; trigger_config: Record<string, unknown>; disabled_at: string | null }>; calls: Array<{ method: string; path: string; body?: Record<string, unknown> }>; fetchImpl: typeof fetch };
+  composio: { accounts: FakeAccount[]; instances: Map<string, { id: string; trigger_name: string; trigger_config: Record<string, unknown>; disabled_at: string | null }>; calls: Array<{ method: string; path: string; query: URLSearchParams; body?: Record<string, unknown> }>; fetchImpl: typeof fetch };
   fetch(path: string, init?: RequestInit): Promise<Response>;
   install(): Promise<{ id: string; token: string; userId: string }>;
   deliver(envelope: Record<string, unknown>, sign?: Record<string, unknown>): Promise<Response>;
@@ -29,7 +29,7 @@ export interface BrokerFake {
   /** Registers an installation the way the desktop app does, for a server started with its token. */
   install(): Promise<{ id: string; token: string; userId: string }>;
   installationIds(): string[];
-  account(userId: string, toolkit?: string, alias?: string): string;
+  account(userId: string, toolkit?: string, alias?: string, identity?: { displayName?: string; createdAt?: string }): string;
   expire(accountId: string): Promise<Response>;
   /** One signed Composio delivery for a trigger, as the live project subscription sends it. */
   deliver(triggerId: string, data: Record<string, unknown>, id?: string): Promise<Response>;
@@ -140,9 +140,13 @@ export async function startBrokerFake(): Promise<BrokerFake> {
     harness,
     install: () => harness.install(),
     installationIds: () => harness.d1.rows<{ id: string }>("SELECT id FROM installations ORDER BY created_at").map((row) => row.id),
-    account(userId, toolkit = "gmail", alias) {
+    account(userId, toolkit = "gmail", alias, identity = {}) {
       const id = `ca_${toolkit}_${++accounts}`;
-      harness.composio.accounts.push({ id, user_id: userId, toolkit: { slug: toolkit }, status: "ACTIVE", ...(alias ? { alias } : {}) });
+      harness.composio.accounts.push({
+        id, user_id: userId, toolkit: { slug: toolkit }, status: "ACTIVE", ...(alias ? { alias } : {}),
+        ...(identity.createdAt ? { created_at: identity.createdAt } : {}),
+        ...(identity.displayName ? { state: { val: { displayName: identity.displayName } } } : {}),
+      });
       return id;
     },
     async expire(accountId) {
