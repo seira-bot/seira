@@ -90,8 +90,9 @@ describe("startJobHold", () => {
     const hold = (await pending)!;
     hold.setLimit(512 * MIB + 100);
     hold.setLimit(640 * MIB);
+    hold.stats();
     await flush();
-    expect(written).toEqual(["limit 640"]);
+    expect(written).toEqual(["limit 640", "stats"]);
     expect(hold.limitBytes()).toBe(640 * MIB);
     say({ event: "memory-stop", pid: 9, name: "node.exe", bytes: 1, jobBytes: 2, limitBytes: 3, root: 8, helper: 7, by: 9 });
     say({ event: "nonsense" });

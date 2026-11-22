@@ -144,7 +144,7 @@ export interface BotFootprintRow {
 export interface BotCapReport {
   mb: number | null; mode: "log" | "enforce" | null; rung: string; stops: number; flagged: number;
   /** How bot memory is protected: the kernel's limit on a slice, the watchdog, or nothing; and all bots' budget in GB. */
-  protection?: "slice" | "watchdog" | "none"; budgetGb?: number | null;
+  protection?: "slice" | "job" | "watchdog" | "none"; budgetGb?: number | null;
   events: ReadonlyArray<{ at: number; botId: string; usedMB: number; measured: string; capMB: number; engines: number; room: number; freeMB: number | null; pressure: boolean; action: string }>;
 }
 
@@ -216,7 +216,7 @@ export function createBotFootprints(options: BotFootprintsOptions) {
 export type BotFootprints = ReturnType<typeof createBotFootprints>;
 
 export function capLine(cap: BotCapReport): string {
-  if (cap.protection === "slice" || (cap.protection === "watchdog" && cap.budgetGb != null)) return `  Memory for all bots together: ${cap.budgetGb ?? "unknown"} GB, protection: ${cap.protection}, steps taken since start: ${cap.stops}`;
+  if (cap.protection === "slice" || cap.protection === "job" || (cap.protection === "watchdog" && cap.budgetGb != null)) return `  Memory for all bots together: ${cap.budgetGb ?? "unknown"} GB, protection: ${cap.protection}, steps taken since start: ${cap.stops}`;
   if (cap.mb === null) return `  Memory one bot may use: no limit${cap.protection ? `, protection: ${cap.protection}` : ""}`;
   const last = cap.events.at(-1);
   return `  Memory one bot may use: ${cap.mb} MB per engine (${cap.mode === "enforce" ? "enforced when memory runs short" : "watch only"}, ${cap.rung}); `

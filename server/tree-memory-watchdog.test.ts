@@ -50,7 +50,18 @@ describe("tree memory watchdog", () => {
     await at(0);
     await at(10_000);
     expect(signals).toEqual([[101, "SIGTERM"]]);
-    expect(stops).toEqual([{ botId: "bot-a", pid: 101, name: "worker", bytes: 600 * MB, totalBytes: 1000 * MB, budgetBytes: 500 * MB }]);
+    expect(stops).toEqual([{ botId: "bot-a", pid: 101, root: 100, name: "worker", bytes: 600 * MB, totalBytes: 1000 * MB, budgetBytes: 500 * MB }]);
+  });
+
+  it("tells the bots' memory at the last look, and null when the list was not read", async () => {
+    const { state, dog, at } = setup(botA, [engine(100, "bot-a")]);
+    expect(dog.used()).toBeNull();
+    state.budget = 2000 * MB;
+    await at(0);
+    expect(dog.used()).toBe(1000 * MB);
+    state.rows = null as unknown as ProcessRow[];
+    await at(2_000);
+    expect(dog.used()).toBeNull();
   });
 
   it("stops at the first check over budget when the machine has less than 1 GiB available (AC-07b)", async () => {

@@ -33,9 +33,13 @@ export function fenceSliceName(dataDir: string = defaultDataDir()): string {
   return `seira_bots_${createHash("sha256").update(resolve(dataDir)).digest("hex").slice(0, 10)}.slice`;
 }
 
-/** Off Linux never; `off` or a budget of `off`/0 never; `on` always; else only in the desktop app's server. */
+/** Off Linux never; else as `memoryLimitWanted`. */
 export function fenceWanted(env: NodeJS.ProcessEnv, platform: NodeJS.Platform = process.platform): boolean {
-  if (platform !== "linux") return false;
+  return platform === "linux" && memoryLimitWanted(env);
+}
+
+/** `off` or a budget of `off`/0 never; `on` always; else only in the desktop app's server. */
+export function memoryLimitWanted(env: NodeJS.ProcessEnv): boolean {
   const fence = env[FENCE_ENV]?.trim().toLowerCase();
   if (fence === "off") return false;
   const budget = env.SEIRA_BOT_MEMORY_MAX_MB?.trim().toLowerCase();

@@ -73,6 +73,8 @@ export interface JobHold {
   pid: number;
   limitBytes(): number;
   setLimit(bytes: number): void;
+  /** Asks for a "stats" event. */
+  stats(): void;
   alive(): boolean;
   close(): void;
 }
@@ -134,6 +136,7 @@ export function startJobHold(options: JobHoldOptions): Promise<JobHold | null> {
             mib = next;
             child.stdin.write(`limit ${next}\n`);
           },
+          stats: () => { if (!exited) child.stdin.write("stats\n"); },
           alive: () => !exited,
           close: () => { if (!exited) child.stdin.end(); },
         };

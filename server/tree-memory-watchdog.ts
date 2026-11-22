@@ -5,6 +5,8 @@ export interface TreeMemoryStop {
   /** Null when the process counts as shared. */
   botId: string | null;
   pid: number;
+  /** The owner process (an engine or a browser) whose tree held it; null when none is known. */
+  root: number | null;
   name: string;
   bytes: number;
   totalBytes: number;
@@ -45,10 +47,11 @@ export function createTreeMemoryWatchdog(options: TreeMemoryWatchdogOptions) {
   let overSince: number | null = null;
   let pending: { pid: number; name: string; at: number } | null = null;
   let running = false;
+  let used: number | null = null;
   let timer: ReturnType<typeof setInterval> | null = null;
 
   const target = (tallies: ReadonlyArray<readonly [string | null, BotTally]>, byPid: ReadonlyMap<number, ProcessRow>) => {
-    let best: { botId: string | null; row: ProcessRow; tallyBytes: number } | null = null;
+    let best: { botId: string | null; row: ProcessRow; tallyBytes: number; root: number | null } | null = null;
     for (const [botId, tally] of tallies) {
       const roots = new Set<number>();
       for (const unit of tally.units.values()) if (unit.kind === "engine") roots.add(unit.root);
@@ -58,16 +61,19 @@ export function createTreeMemoryWatchdog(options: TreeMemoryWatchdogOptions) {
         if (!row || pid <= 1 || pid === serverPid || roots.has(pid)) continue;
         if (pick === null || row.rssBytes > pick.rssBytes) pick = row;
       }
-      if (pick && (best === null || tally.rssBytes > best.tallyBytes)) best = { botId, row: pick, tallyBytes: tally.rssBytes };
+      if (pick && (best === null || tally.rssBytes > best.tallyBytes)) {
+        const owner = [...tally.units.values()].find((unit) => unit.pids.includes(pick!.pid));
+        best = { botId, row: pick, tallyBytes: tally.rssBytes, root: owner?.root ?? null };
+      }
     }
     return best;
   };
 
   const run = async (): Promise<void> => {
     const budget = options.budgetBytes();
-    if (budget === null || !(budget > 0)) { overSince = null; pending = null; return; }
+    if (budget === null || !(budget > 0)) { overSince = null; pending = null; used = null; return; }
     const rows = await options.list();
-    if (rows === null) return;
+    if (rows === null) { used = null; return; }
     const at = now();
     const byPid = new Map(rows.map((row) => [row.pid, row]));
     if (pending) {
@@ -79,6 +85,7 @@ export function createTreeMemoryWatchdog(options: TreeMemoryWatchdogOptions) {
     const tallies: Array<readonly [string | null, BotTally]> = [...attribution.bots].map(([id, tally]) => [id === SHARED ? null : id, tally] as const);
     tallies.push([null, attribution.shared]);
     const total = tallies.reduce((sum, [, tally]) => sum + tally.rssBytes, 0);
+    used = total;
     if (total <= budget) { overSince = null; return; }
     overSince ??= at;
     if (pending) return;
@@ -92,7 +99,7 @@ export function createTreeMemoryWatchdog(options: TreeMemoryWatchdogOptions) {
     pending = { pid: found.row.pid, name: found.row.name, at };
     overSince = at;
     try {
-      options.onStop?.({ botId: found.botId, pid: found.row.pid, name: found.row.name, bytes: found.row.rssBytes, totalBytes: total, budgetBytes: budget });
+      options.onStop?.({ botId: found.botId, pid: found.row.pid, root: found.root, name: found.row.name, bytes: found.row.rssBytes, totalBytes: total, budgetBytes: budget });
     } catch { /* a failing listener never stops the watchdog */ }
   };
 
@@ -113,5 +120,7 @@ export function createTreeMemoryWatchdog(options: TreeMemoryWatchdogOptions) {
       timer = null;
     },
     tick,
+    /** The bots' memory at the last look; null before one, or when the list was not read. */
+    used: (): number | null => used,
   };
 }

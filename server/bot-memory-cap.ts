@@ -16,6 +16,7 @@ import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 
 import { boxMemory } from "./box-memory.ts";
 import { botMemoryStatusOf, currentBotBudget, machineMemoryBytes, savedBotMemoryGb, type BotMemoryStatus } from "./bot-memory-budget.ts";
+import { botMemoryGuard } from "./bot-memory-guard.ts";
 import { noticeFailure } from "./chat-notices.ts";
 import { newEventId, type ProviderAdapter, type ProviderInstance, type RuntimeEvent } from "./contracts.ts";
 import { BROWSER_BYTES, ENGINE_DEFAULT_BYTES } from "./engine-memory.ts";
@@ -441,12 +442,12 @@ export interface CapReport {
 }
 let report: () => CapReport = () => ({ mb: null, mode: null, rung: "none", offered: [], protection: "none", budgetGb: null, stops: 0, flagged: 0, events: [] });
 
-/** The protection in force: the kernel's limit, the watchdog standing in for it, or none. */
-export const botMemoryProtection = (): BotMemoryStatus["protection"] => memoryFence.protection();
+/** The protection in force: the kernel's limit (Linux) or the job's (Windows), the watchdog standing in for it, or none. */
+export const botMemoryProtection = (platform: NodeJS.Platform = process.platform): BotMemoryStatus["protection"] =>
+  platform === "linux" ? memoryFence.protection() : botMemoryGuard.protection();
 
 /** What Settings shows of the memory limit for bots; undefined where nothing protects bot memory on this computer. */
-export function botMemoryStatus(cfg: { botMemoryGb?: number | null }, env: NodeJS.ProcessEnv = process.env): BotMemoryStatus | undefined {
-  const protection = botMemoryProtection();
+export function botMemoryStatus(cfg: { botMemoryGb?: number | null }, env: NodeJS.ProcessEnv = process.env, protection: BotMemoryStatus["protection"] = botMemoryProtection()): BotMemoryStatus | undefined {
   if (protection === "none") return undefined;
   return botMemoryStatusOf({ savedGb: cfg.botMemoryGb ?? savedBotMemoryGb(), env, totalBytes: machineMemoryBytes(), protection });
 }
@@ -461,9 +462,13 @@ export function startBotMemoryCap(deps: {
   protection?: () => BotMemoryStatus["protection"];
   /** Whether the kernel limit for bots is wanted on this computer. */
   wanted?: () => boolean;
+  /** Off Linux: programs the Windows job or the watchdog stopped for the memory limit for bots since start. */
+  guardStops?: () => number;
 }): BotMemoryWatchdog | null {
   const env = deps.env ?? process.env, log = deps.log ?? ((line: string) => console.warn(line));
-  const protection = deps.protection ?? botMemoryProtection, wanted = deps.wanted ?? (() => memoryFence.wanted());
+  const platform = deps.platform ?? process.platform;
+  const protection = deps.protection ?? (() => botMemoryProtection(platform)), wanted = deps.wanted ?? (() => memoryFence.wanted());
+  const guardStops = deps.guardStops ?? (() => botMemoryGuard.sliceKills() ?? 0);
   let warned = false;
   const capWith = (whole: number | null) => botMemoryCap(env, { gate: deps.gate, memoryBytes: deps.memoryBytes ?? boxMemory().bytes, ...(deps.turns() === undefined ? {} : { turns: deps.turns() }) },
     (line) => { if (!warned) { warned = true; log(`memory: ${line}`); } }, whole);
@@ -473,10 +478,16 @@ export function startBotMemoryCap(deps: {
     const now = protection();
     return now === "slice" ? null : capWith(now === "watchdog" ? whole() : null);
   };
-  const first = standby(), atStart = protection(), ladder = capLadder(first, { platform: deps.platform ?? process.platform });
+  const first = standby(), atStart = protection(), ladder = capLadder(first, { platform });
   const dog = ladder.rung === "watchdog" ? new BotMemoryWatchdog({ cap, standby: atStart === "slice", list: deps.list, owners: deps.owners, pressure: deps.pressure, pss: (pid) => pssBytes(pid), closeBrowsers: deps.closeBrowsers, startOf: deps.startOf, log }) : null;
   report = () => {
-    const live = protection(), now = dog && live !== "slice" ? cap() : null;
+    const live = protection();
+    if (platform !== "linux") {
+      const budget = live === "none" ? null : whole();
+      return { mb: null, mode: null, rung: "none", offered: [], protection: live, budgetGb: budget === null ? null : Math.round((budget / 1024 ** 3) * 10) / 10,
+        stops: live === "none" ? 0 : guardStops(), flagged: 0, events: [] };
+    }
+    const now = dog && live !== "slice" ? cap() : null;
     const current = live === "slice" ? "slice" : now ? "watchdog" : "none";
     const budget = live === "slice" ? whole() : now?.whole ? now.bytes : null;
     return { mb: now ? mb(now.bytes) : null, mode: now?.mode ?? null, rung: now ? ladder.rung : "none", offered: ladder.offered, protection: current, budgetGb: budget === null ? null : Math.round((budget / 1024 ** 3) * 10) / 10,

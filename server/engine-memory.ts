@@ -3,10 +3,11 @@
 // turn that needs a new engine waits here for memory, and under a container's pids limit for room for its processes
 // (process-room.ts), on a Cloud home and on a self-hosted Linux server alike.
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { ChildProcess } from "node:child_process";
+import { execFile, type ChildProcess } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { freemem, totalmem } from "node:os";
 import { currentBotBudget } from "./bot-memory-budget.ts";
+import { botMemoryGuard } from "./bot-memory-guard.ts";
 import { memoryFence } from "./memory-fence.ts";
 import { chatNotice, noticeFailure } from "./chat-notices.ts";
 import { newEventId, newId, TurnAuthenticationRefusedError, TurnNotStartedError, TurnUsageLimitRefusedError, type ProviderAdapter, type ProviderInstance, type RuntimeEvent, type RuntimeEventListener } from "./contracts.ts";
@@ -69,18 +70,20 @@ export function readHostMemory(read: (path: string) => string = procText): HostM
     oomKills: cgroup.oomKills ?? host.oomKills, fullStall10: cgroup.fullStall10 ?? host.fullStall10 };
 }
 
-/** The desktop's room for bots: the bot budget is its total, and with the kernel limit in force what the bots' slice has not
+/** The desktop's room for bots: the bot budget is its total, and with the limit for bots in force what bot work has not
  * used of it bounds what is free. Without a budget (protection off) the machine's own memory. */
 export function desktopHostMemory(deps: {
   machine?: () => HostMemory | null; budget?: () => number | null; fenceActive?: () => boolean; sliceCurrent?: () => number | null; platform?: NodeJS.Platform;
 } = {}): HostMemory | null {
   const platform = deps.platform ?? process.platform;
-  const machine = deps.machine ? deps.machine() : platform === "win32"
-    ? { totalBytes: totalmem(), availableBytes: freemem(), swapFreeBytes: 0, oomKills: null, fullStall10: null }
+  const linux = platform === "linux";
+  const machine = deps.machine ? deps.machine() : platform === "win32" || platform === "darwin"
+    ? { ...(platform === "darwin" ? botMemoryGuard.machine() : { totalBytes: totalmem(), availableBytes: freemem() }), swapFreeBytes: 0, oomKills: null, fullStall10: null }
     : readHostMemory();
   const budget = deps.budget ? deps.budget() : currentBotBudget()?.bytes ?? null;
   if (!machine || budget === null) return machine;
-  const used = (deps.fenceActive ?? (() => memoryFence.active()))() ? (deps.sliceCurrent ?? (() => memoryFence.sliceCurrent()))() : null;
+  const active = deps.fenceActive ?? (() => linux ? memoryFence.active() : botMemoryGuard.active());
+  const used = active() ? (deps.sliceCurrent ?? (() => linux ? memoryFence.sliceCurrent() : botMemoryGuard.usedBytes()))() : null;
   return { ...machine, totalBytes: budget, availableBytes: used === null ? machine.availableBytes : Math.max(0, Math.min(machine.availableBytes, budget - used)), swapFreeBytes: 0 };
 }
 
@@ -287,8 +290,8 @@ export class EngineMemory {
     this.read = options.read ?? (this.desktop ? () => desktopHostMemory() : () => readHostMemory());
     this.groups = options.groups ?? (() => processGroupBytes());
     this.now = options.now ?? Date.now;
-    this.signal = options.signal ?? ((pid, signal) => process.kill(-pid, signal));
-    this.tree = options.tree ?? ((pid) => linuxTreeUse(pid));
+    this.signal = options.signal ?? (process.platform === "win32" ? stopWindowsTree : (pid, signal) => process.kill(-pid, signal));
+    this.tree = options.tree ?? (process.platform === "linux" ? (pid) => linuxTreeUse(pid) : () => null);
     this.log = options.log ?? ((line) => console.warn(`memory: ${line}`));
     this.tickMs = options.tickMs ?? TICK_MS;
   }
@@ -789,6 +792,9 @@ export class EngineMemory {
     this.timer.unref?.();
   }
 }
+
+/** Windows has no process groups: taskkill /T stops the engine and every process it started. */
+const stopWindowsTree = (pid: number): void => { execFile("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true }, () => {}); };
 
 const HOST = gateHost();
 export const engineMemory = new EngineMemory({ enabled: HOST !== null, host: HOST ?? "cloud", turns: turnsSetting(process.env.SEIRA_TURNS_MAX_RUNNING) });

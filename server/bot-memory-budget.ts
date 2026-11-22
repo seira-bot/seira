@@ -64,7 +64,8 @@ export interface BotMemoryStatus {
   gb: number | null;
   autoGb: number;
   machineGb: number;
-  protection: "slice" | "watchdog" | "none";
+  /** slice: the Linux kernel's limit; job: the Windows job object's; watchdog: this server stops the largest process. */
+  protection: "slice" | "job" | "watchdog" | "none";
   /** Set when the environment fixes the number, so Settings cannot change it. */
   envGb: number | null;
 }

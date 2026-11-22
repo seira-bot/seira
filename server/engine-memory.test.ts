@@ -1045,5 +1045,25 @@ describe("the desktop gate", () => {
     expect(desktopHostMemory({ machine, budget: () => null })).toEqual(machine());
     expect(desktopHostMemory({ machine: () => null, budget: () => 8 * GB })).toBeNull();
     expect(desktopHostMemory({ platform: "win32", budget: () => null })?.totalBytes).toBeGreaterThan(0);
+    expect(desktopHostMemory({ platform: "darwin", budget: () => null })?.totalBytes).toBeGreaterThan(0);
+    expect(desktopHostMemory({ platform: "darwin", machine, budget: () => 8 * GB })?.availableBytes).toBe(10 * GB);
+  });
+
+  it("holds a new engine while the bots' memory is short, and not a turn whose engine runs (AC-10)", async () => {
+    const h = host({ kind: "desktop", available: 600 * MB });
+    h.memory.turnStarted("busy"); h.spawn("busy");
+    h.memory.turnStarted("warm"); h.spawn("warm"); h.memory.turnEnded("warm");
+    h.memory.turnStarted("busy2"); h.spawn("busy2");
+    const fake = fakeInstance();
+    const decorated = withEngineMemory(fake.instance, h.memory);
+    const seen: RuntimeEvent[] = [];
+    decorated.adapter.onEvent((event) => seen.push(event));
+    expect(await decorated.adapter.sendTurn({ threadId: "warm", text: "again" } as SendTurnInput)).toEqual({ turnId: "turn-warm" });
+    const fresh = decorated.adapter.sendTurn({ threadId: "new", text: "hi" } as SendTurnInput);
+    await settle();
+    expect(fake.sent).toEqual(["warm"]);
+    expect(seen.some((event) => event.type === "runtime.notice" && event.threadId === "new")).toBe(true);
+    await decorated.adapter.interruptTurn("new");
+    await expect(fresh).rejects.toBeInstanceOf(TurnNotStartedError);
   });
 });

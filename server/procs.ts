@@ -25,6 +25,7 @@ import { engineHomes } from "./engine-homes/engine-homes.ts";
 import type { HomedSpawn } from "./engine-homes/layout.ts";
 import { resolveCliSpawn, type ResolvedSpawn } from "./env-path.ts";
 import { HOST_ENV_FD, hostBridge, hostEnvFile, inFlatpak, type HostSpawn } from "./flatpak-host.ts";
+import { botMemoryGuard } from "./bot-memory-guard.ts";
 import { memoryFence, type FencedSpawn } from "./memory-fence.ts";
 import { spawnBotWork } from "./oom-score.ts";
 import { noticeFailure } from "./chat-notices.ts";
@@ -397,7 +398,7 @@ export function spawnCli(
   const refused = (code: string | undefined) => { processBudget.spawnFailed(code); engineMemory.spawnRefused(code, owner === "bot"); };
   try {
     // Not inside `start`: there the server holds the bot's OOM score, and the fence runs systemctl.
-    fenced = !hosted && (owner === "bot" || botWork) ? memoryFence.argv(command, argv, plainEnv) : null;
+    fenced = !hosted && (owner === "bot" || botWork) ? (process.platform === "linux" ? memoryFence : botMemoryGuard).argv(command, argv, plainEnv) : null;
     child = owner === "bot" || botWork ? spawnBotWork(start) : start();
   } catch (error) {
     // Node throws some refusals (ENOMEM) at once rather than reporting them on the child.
@@ -406,7 +407,7 @@ export function spawnCli(
   } finally {
     for (const fd of boxed?.extraFds ?? []) try { closeSync(fd); } catch {}
   }
-  if (fenced) {
+  if (fenced && process.platform === "linux") {
     const spawnedAt = Date.now();
     child.once("exit", (code) => { if (code !== null && code !== 0 && Date.now() - spawnedAt < FAST_EXIT_MS) memoryFence.recheck(); });
   }
@@ -425,8 +426,8 @@ export function spawnCli(
     linuxTrees.set(child, tree);
   }
   if (process.platform !== "win32") recordEngine(child, child.pid ? linuxTrees.get(child)?.get(child.pid) ?? null : null);
-  if (process.platform !== "win32" && owner === "bot") {
-    rememberEngineSession(child);
+  if (owner === "bot") {
+    if (process.platform !== "win32") rememberEngineSession(child);
     engineMemory.track(child);
     engineOwners.track(child, child.pid ? linuxTrees.get(child)?.get(child.pid) ?? null : null);
   }
