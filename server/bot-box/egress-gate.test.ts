@@ -161,15 +161,15 @@ describe("the gate of a box beside unboxed bots (scope limited)", () => {
   const desktop = (localNetwork: boolean): EgressRules => ({
     host: "desktop", ownPort: (port) => port === 8799, botPort: async () => true, localNetwork, allowed: () => false,
   });
-  const v4 = (address: string) => [{ address, family: 4 }];
+  const v4 = (address: string) => [{ address }];
 
   it("never reaches this computer, by loopback, its own address, a mapped address or a service a bot started", async () => {
     for (const rules of [desktop(true), desktop(false)]) {
       expect(await limitedBoxRefusal({ host: "localhost", port: 3000 }, v4("127.0.0.1"), rules, own)).toBe("this-computer");
-      expect(await limitedBoxRefusal({ host: "localhost", port: 8799 }, [{ address: "::1", family: 6 }], rules, own)).toBe("this-computer");
-      expect(await limitedBoxRefusal({ host: "x", port: 3000 }, [{ address: "::ffff:127.0.0.1", family: 6 }], rules, own)).toBe("this-computer");
+      expect(await limitedBoxRefusal({ host: "localhost", port: 8799 }, [{ address: "::1" }], rules, own)).toBe("this-computer");
+      expect(await limitedBoxRefusal({ host: "x", port: 3000 }, [{ address: "::ffff:127.0.0.1" }], rules, own)).toBe("this-computer");
       expect(await limitedBoxRefusal({ host: "my-laptop.local", port: 3000 }, v4("192.168.1.20"), rules, own)).toBe("this-computer");
-      expect(await limitedBoxRefusal({ host: "rebind.example", port: 443 }, [PUBLIC, { address: "127.0.0.2", family: 4 }], rules, own)).toBe("this-computer");
+      expect(await limitedBoxRefusal({ host: "rebind.example", port: 443 }, [PUBLIC, { address: "127.0.0.2" }], rules, own)).toBe("this-computer");
     }
   });
 

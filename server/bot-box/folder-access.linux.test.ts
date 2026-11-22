@@ -11,6 +11,7 @@ import { detectBox } from "./detect.ts";
 
 const ENV = { PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin", SEIRA_BOT_BOX: "1" };
 const detection = detectBox({ env: ENV });
+const write = (path: string) => `(echo x > "${path}") 2>/dev/null && echo "WROTE ${path}" || echo "REFUSED ${path}"`;
 
 describe.skipIf(detection.box !== "bwrap")(`a bot's folders in a real box (${detection.box === "bwrap" ? "bubblewrap works here" : `skipped: ${detection.reason}`})`, () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "seira-folders-real-")));
@@ -39,7 +40,6 @@ describe.skipIf(detection.box !== "bwrap")(`a bot's folders in a real box (${det
       child.once("exit", () => { wrapped.release(); resolve(out); });
     });
   }
-  const write = (path: string) => `(echo x > "${path}") 2>/dev/null && echo "WROTE ${path}" || echo "REFUSED ${path}"`;
 
   it("refuses a write in a read-only grant inside a can-change grant, and allows one beside it", async () => {
     folders = { limited: false, grants: [{ path: work, write: true }, { path: frozen, write: false }] };
