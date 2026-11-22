@@ -278,9 +278,9 @@ describe("the relay client", () => {
   it("caps a redial wait at ten minutes", async () => {
     const delays: number[] = [];
     const real = globalThis.setTimeout;
-    vi.spyOn(globalThis, "setTimeout").mockImplementation(((callback: () => void, ms?: number, ...rest: unknown[]) => {
+    vi.spyOn(globalThis, "setTimeout").mockImplementation(((callback: () => void, ms?: number) => {
       delays.push(Number(ms));
-      return real(callback, Math.min(Number(ms) || 0, 50), ...rest);
+      return real(callback, Math.min(Number(ms) || 0, 50));
     }) as unknown as typeof setTimeout);
     const relay = await scriptedRelay((socket) => socket.close(1011));
     const { instance } = client({ "relay1.seira.bot": relay }, { timing: { backoffMs: [Number.MAX_SAFE_INTEGER] } });
