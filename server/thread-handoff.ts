@@ -11,7 +11,7 @@ export type HandoffStore = Pick<Store, "activePath" | "appendMessage" | "taskByT
 const HANDOFF_BYTES = 12_000;
 
 /** What a new chat needs from the chat it continues: that chat's newest summary with the messages after it, or its
- * newest messages as excerpts. Null when the chat has nothing a new chat could use. */
+ * newest messages as excerpts. Null when the person has said nothing in it. */
 export function handoffSummary(store: Pick<Store, "activePath">, threadId: string): string | null {
   const path = sinceFreshStart(store.activePath(threadId));
   const history: ReplayEntry[] = path.filter(isContextMessage).map((message) => ({
@@ -25,7 +25,7 @@ export function handoffSummary(store: Pick<Store, "activePath">, threadId: strin
     ...(record?.compaction ? { compaction: { ...record.compaction, id: record.id } } : {}),
   });
   const entries = selected.transcript.filter((entry) => entry.id);
-  return entries.some((entry) => entry.text.trim()) ? deterministicSummary(entries, HANDOFF_BYTES) : null;
+  return entries.some((entry) => entry.priorSummary || (entry.role === "user" && entry.text.trim())) ? deterministicSummary(entries, HANDOFF_BYTES) : null;
 }
 
 /** Puts the earlier chat's summary in a new chat as a line the model reads, and a link line in each chat to the other. */
