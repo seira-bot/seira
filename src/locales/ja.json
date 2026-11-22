@@ -8032,5 +8032,9 @@
   "call.voice.languageAuto": "自動",
   "call.voice.device": "このコンピューターの音声",
   "call.voice.deviceDefault": "標準の音声",
-  "call.voice.thisComputer": "このコンピューター"
+  "call.voice.thisComputer": "このコンピューター",
+  "settings.crashReports.title": "クラッシュレポートを送信",
+  "settings.crashReports.aria": "クラッシュレポートを送信",
+  "settings.crashReports.subtitle": "Seira が動作しなくなったとき、アプリのバージョン、システムの種類、コードのどこで失敗したかを送信します。メッセージ、ファイル、名前は送信しません。",
+  "settings.crashReports.link": "レポートの内容"
 }

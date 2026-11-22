@@ -18,8 +18,11 @@ import { PairPage, TeamLeftPage } from "./pair/PairPage";
 import { TEAM_LEFT_REFUSAL } from "../shared/cloud-hints";
 import { HomeScreen, SignedOutAtHome } from "./components/HomeScreen";
 import { PageBoundary } from "./components/PageBoundary";
+import { installCrashReports } from "./lib/crash-reports";
 import { endedBeforeReload, forgetEndedSession } from "./lib/session-ended";
 import "./styles.css";
+
+installCrashReports();
 
 // Before first paint; settleInterfaceMode must run before applySkin writes seira-skin.
 settleInterfaceMode();

@@ -143,7 +143,7 @@ export function readSafeLogTail(logPath, maxBytes = 256 * 1024, platform = proce
 }
 
 // Metadata only: no URL, title, error message, command line or absolute path reaches the public export.
-const PROCESS_GONE_REASONS = new Set([
+export const PROCESS_GONE_REASONS = new Set([
   "abnormal-exit",
   "clean-exit",
   "crashed",
@@ -162,7 +162,7 @@ const CHILD_PROCESS_TYPES = new Set([
   "Zygote",
 ]);
 const MAIN_FAILURE_ORIGINS = new Set(["uncaughtException", "unhandledRejection"]);
-const ERROR_NAMES = new Set([
+export const ERROR_NAMES = new Set([
   "AggregateError",
   "Error",
   "EvalError",
@@ -173,7 +173,20 @@ const ERROR_NAMES = new Set([
   "URIError",
 ]);
 
-function known(value, allowed, fallback = "unknown") {
+/** The kinds a crash report can have: the only values that reach desktop-crashes.log and the report id list. */
+export const CRASH_REPORT_KINDS = new Set([
+  "hang",
+  "main-error",
+  "native",
+  "page-boundary",
+  "renderer-error",
+  "renderer-rejection",
+  "server-exit",
+  "server-turn",
+]);
+const REPORT_ID = /^[0-9a-f]{32}$/;
+
+export function known(value, allowed, fallback = "unknown") {
   return typeof value === "string" && allowed.has(value) ? value.replaceAll(" ", "-") : fallback;
 }
 
@@ -203,6 +216,10 @@ export function formatDesktopCrashRecord(event = {}) {
       if (reason === "clean-exit") return null;
       const type = known(event.type, CHILD_PROCESS_TYPES);
       return `event=child-process-gone type=${type} reason=${reason} exitCode=${exitCode(event.exitCode)}`;
+    }
+    if (event.kind === "crash-report") {
+      if (typeof event.id !== "string" || !REPORT_ID.test(event.id) || !CRASH_REPORT_KINDS.has(event.reportKind)) return null;
+      return `event=crash-report id=${event.id} kind=${event.reportKind}`;
     }
     if (event.kind === "main") {
       const origin = known(event.origin, MAIN_FAILURE_ORIGINS, "uncaughtException");
@@ -279,6 +296,7 @@ export function buildDiagnosticsReport({
   updaterLogTail,
   logTail,
   performance,
+  crashReportIds,
   now = new Date().toISOString(),
 } = {}) {
   const lines = [];
@@ -316,6 +334,11 @@ export function buildDiagnosticsReport({
   } else {
     lines.push("(no desktop crash events available)");
   }
+  lines.push("");
+  lines.push("## Crash report ids");
+  const reportIds = Array.isArray(crashReportIds) ? crashReportIds.filter((id) => typeof id === "string" && REPORT_ID.test(id)) : [];
+  if (reportIds.length) for (const id of reportIds) lines.push(`id=${id}`);
+  else lines.push("(no crash reports sent in the last 7 days)");
   lines.push("");
   lines.push(logTail && logTail.trim() ? "## Server log tail — known credential patterns auto-masked" : "## Server log tail");
   if (logTail && logTail.trim()) {

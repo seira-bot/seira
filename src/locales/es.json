@@ -6528,5 +6528,9 @@
   "roomPicture.remove": "Quitar imagen",
   "roomPicture.typeRefused": "Elige una imagen PNG, JPEG, GIF o WebP.",
   "roomPicture.tooBig": "Esa imagen es demasiado grande. Elige una de menos de 10 MB.",
-  "roomPicture.failed": "No se pudo guardar la imagen. Inténtalo de nuevo."
+  "roomPicture.failed": "No se pudo guardar la imagen. Inténtalo de nuevo.",
+  "settings.crashReports.title": "Enviar informes de fallos",
+  "settings.crashReports.aria": "Enviar informes de fallos",
+  "settings.crashReports.subtitle": "Cuando Seira deja de funcionar, envía la versión de la app, el tipo de sistema y el punto de su código donde falló, nunca tus mensajes, archivos ni nombres.",
+  "settings.crashReports.link": "Qué contiene un informe"
 }

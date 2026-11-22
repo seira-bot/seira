@@ -10160,5 +10160,9 @@
   "call.voice.languageAuto": "自动",
   "call.voice.device": "此电脑上的语音",
   "call.voice.deviceDefault": "默认语音",
-  "call.voice.thisComputer": "此电脑"
+  "call.voice.thisComputer": "此电脑",
+  "settings.crashReports.title": "发送崩溃报告",
+  "settings.crashReports.aria": "发送崩溃报告",
+  "settings.crashReports.subtitle": "Seira 停止工作时，会发送应用版本、系统类型以及代码出错的位置，绝不包含你的消息、文件或名称。",
+  "settings.crashReports.link": "报告包含哪些内容"
 }

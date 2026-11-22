@@ -6028,5 +6028,9 @@
   "roomPicture.remove": "Resmi kaldır",
   "roomPicture.typeRefused": "PNG, JPEG, GIF veya WebP bir resim seç.",
   "roomPicture.tooBig": "Bu resim çok büyük. 10 MB'ın altında bir resim seç.",
-  "roomPicture.failed": "Resim kaydedilemedi. Tekrar dene."
+  "roomPicture.failed": "Resim kaydedilemedi. Tekrar dene.",
+  "settings.crashReports.title": "Çökme raporlarını gönder",
+  "settings.crashReports.aria": "Çökme raporlarını gönder",
+  "settings.crashReports.subtitle": "Seira çalışmayı bıraktığında uygulama sürümünü, sistem türünü ve kodunun nerede hata verdiğini gönderir. Asla mesajlarını, dosyalarını veya adlarını göndermez.",
+  "settings.crashReports.link": "Bir rapor neleri içerir"
 }

@@ -52,3 +52,4 @@ deploy/podman/.env.*
 /.leakcheck.local
 /.explore/
 __pycache__/
+electron/crash-report.json

@@ -157,6 +157,14 @@ const __APP_VERSION__: string;
       /** This computer's own page only: the account's full name, for a first run's profile (system-name.mjs). */
       desktopProfile?: { systemName(): Promise<string | null> };
       desktopAnalytics?: import("../../electron/desktop-prefs.mjs").DesktopAnalyticsBridge;
+      /** This computer's own page only, and only in a build that has a crash report service. The main process checks the switch, filters and sends. */
+      crashReports?: {
+        available: boolean;
+        enabled(): boolean;
+        set(on: boolean): Promise<unknown>;
+        report(report: { kind: "renderer-error" | "renderer-rejection" | "page-boundary"; errorName: string; message: string; stack: string; page: string; debugIds?: Record<string, string> }): void;
+        page(name: "chat" | "settings" | "onboarding" | "rail" | "other"): void;
+      };
       desktopLanguage?: import("../../electron/desktop-prefs.mjs").DesktopLanguageBridge;
       /** This computer's page and My Cloud's own page: the one-time "Get Seira updates?" answer. */
       updatesConsent?: import("../../electron/updates-consent.mjs").UpdatesConsentBridge;

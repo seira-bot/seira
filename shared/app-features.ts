@@ -342,6 +342,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     does: "The app is named Seira everywhere. Chats, bots and settings carry over from earlier names. The window shows right away at start.",
     releaseNotes: ["seiraName", "fasterStart", "linuxDesktop"],
   },
+  {
+    id: "crash-reports",
+    name: "Send crash reports",
+    place: "Settings → General → Privacy (the switch is in the desktop app only)",
+    does: "On by default. When Seira stops working, the desktop app sends the app version, system type and where its code failed. Never messages, files or names. It is a different switch from Usage analytics.",
+  },
 ];
 
 const FILLER = new Set(["seira", "the", "and", "for", "how", "what", "where", "does", "do", "is", "are", "my", "in", "of", "to", "me", "can", "you", "about", "mean", "meant"]);
