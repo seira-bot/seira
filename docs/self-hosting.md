@@ -672,8 +672,10 @@ The worked-out number is the smaller of two: the memory limit less a tenth
 (at least 320 MB), divided by 700 MB for an engine; and the process limit
 less a tenth (at least 32) and 40 for the server, divided by 60. A 4 GB
 container runs 5 turns at once, an 8 GB one 10; a process limit of 512 allows
-7, 1,024 allows 14, 4,096 allows 60. The desktop app never uses this setting,
-and a Seira Cloud keeps its own rules.
+7, 1,024 allows 14, 4,096 allows 60. The desktop app does not use a number
+here: on Linux a new turn waits while the memory for bots is full,
+and `off` turns that off ([memory for bots](linux-desktop.md#memory-for-bots)).
+A Seira Cloud keeps its own rules.
 
 On Kubernetes a pod's process limit (`podPidsLimit`) is set above the
 container, where the server cannot read it. The server then learns it from
@@ -728,9 +730,10 @@ that much for each). By default it only writes down a bot that stays over
 (for 30 seconds, or sooner while memory is short): the bot's id, the memory
 it used and how it was measured, the limit, its engines and the room left
 go to the server log and the health report. Nothing is stopped. To have the
-server act, set `SEIRA_BOT_MEMORY_MAX_MB` to a number of MB (any Linux host,
-the desktop app included); `auto` is the default (watch only) and `off` turns
-the watching off. Even then it acts only while the server is short of
+server act, set `SEIRA_BOT_MEMORY_MAX_MB` to a number of MB (any Linux host;
+in the desktop app the number is the limit for all bot work together, see
+[memory for bots](linux-desktop.md#memory-for-bots)); `auto` is the default
+(watch only) and `off` turns the watching off. Even then it acts only while the server is short of
 memory, only on the bot using the most, and in steps: first what the bot
 left running and its idle engines; then, measured again and still over, its
 largest busy engine. The browser of a stopped engine's conversation is
@@ -741,8 +744,10 @@ may join, are never stopped this way; on a Team Cloud only the stopped
 conversation's own browser is closed, never the same bot's browsers for
 other members. The
 server watches by reading its process list; it logs at start whether the
-host also offers a systemd scope or a delegated cgroup, which are not used
-yet.
+host also offers a systemd scope or a delegated cgroup. A server uses a
+systemd scope only with `SEIRA_BOT_MEMORY_FENCE=on`, which puts all bot work
+under one kernel limit, as the desktop app does
+([memory for bots](linux-desktop.md#memory-for-bots)).
 
 **Bots' cloud computers do not count.** A bot's cloud computer runs at the
 provider that hosts it, not in this container, so its desktop and browser

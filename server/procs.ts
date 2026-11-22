@@ -25,6 +25,7 @@ import { engineHomes } from "./engine-homes/engine-homes.ts";
 import type { HomedSpawn } from "./engine-homes/layout.ts";
 import { resolveCliSpawn, type ResolvedSpawn } from "./env-path.ts";
 import { HOST_ENV_FD, hostBridge, hostEnvFile, inFlatpak, type HostSpawn } from "./flatpak-host.ts";
+import { memoryFence, type FencedSpawn } from "./memory-fence.ts";
 import { spawnBotWork } from "./oom-score.ts";
 import { noticeFailure } from "./chat-notices.ts";
 import { processBudget } from "./process-room.ts";
@@ -216,6 +217,8 @@ function signalLinuxDescendants(child: ChildProcess, value: NodeJS.Signals): voi
 }
 
 const MAX_ENDED_SESSIONS = 4_096;
+/** A fenced engine that exits with an error this soon may have failed to start inside the slice. */
+const FAST_EXIT_MS = 3_000;
 const engineSessions = { live: new Set<number>(), ended: new Set<number>() };
 
 /** POSIX session ids of the engines that run bots' turns (each leads its own session). A server opened by any
@@ -371,13 +374,17 @@ export function spawnCli(
   const { box: _box, engineHome: _engineHome, botWork, ...spawnOpts } = boxed || hosted ? options : outsideBoxOptions(resolved.command, options);
   // The box's extra descriptors (its seccomp filter) follow stdio; only a plain three-entry stdio can take them.
   const stdio = boxed?.extraFds.length && Array.isArray(spawnOpts.stdio) && spawnOpts.stdio.length === 3 ? [...spawnOpts.stdio, ...boxed.extraFds] : spawnOpts.stdio;
+  const command = boxed?.command ?? hosted?.command ?? resolved.command, argv = boxed?.args ?? hosted?.args ?? resolved.args;
+  const plainEnv = tag ? { ...(boxed?.env ?? spawnOpts.env ?? process.env), [ENGINE_TAG_ENV]: tag } : boxed?.env ?? spawnOpts.env ?? process.env;
+  let fenced: FencedSpawn | null = null;
   const start = () => {
     const envFd = hosted ? hostEnvFile(hosted.envBlock) : null;
     try {
-      return spawn(boxed?.command ?? hosted?.command ?? resolved.command, boxed?.args ?? hosted?.args ?? resolved.args, {
+      return spawn(fenced?.command ?? command, fenced?.args ?? argv, {
         ...spawnOpts,
         ...(boxed ? { env: boxed.env, stdio } : {}),
-        ...(tag ? { env: { ...(boxed?.env ?? spawnOpts.env ?? process.env), [ENGINE_TAG_ENV]: tag } } : {}),
+        ...(tag ? { env: plainEnv } : {}),
+        ...(fenced ? { env: fenced.env } : {}),
         ...(hosted && envFd !== null ? { env: hosted.env, cwd: undefined, stdio: hostStdio(spawnOpts.stdio, envFd) } : {}),
         // POSIX: own group so kill(-pid) reaps child MCP servers; Windows: taskkill /T does it.
         ...(process.platform === "win32" ? { windowsHide: true } : { detached: true }),
@@ -389,6 +396,8 @@ export function spawnCli(
   let child: ChildProcessByStdio<Writable, Readable, Readable>;
   const refused = (code: string | undefined) => { processBudget.spawnFailed(code); engineMemory.spawnRefused(code, owner === "bot"); };
   try {
+    // Not inside `start`: there the server holds the bot's OOM score, and the fence runs systemctl.
+    fenced = !hosted && (owner === "bot" || botWork) ? memoryFence.argv(command, argv, plainEnv) : null;
     child = owner === "bot" || botWork ? spawnBotWork(start) : start();
   } catch (error) {
     // Node throws some refusals (ENOMEM) at once rather than reporting them on the child.
@@ -396,6 +405,10 @@ export function spawnCli(
     throw error;
   } finally {
     for (const fd of boxed?.extraFds ?? []) try { closeSync(fd); } catch {}
+  }
+  if (fenced) {
+    const spawnedAt = Date.now();
+    child.once("exit", (code) => { if (code !== null && code !== 0 && Date.now() - spawnedAt < FAST_EXIT_MS) memoryFence.recheck(); });
   }
   rememberLiveSpawn(child, [resolved.command, ...resolved.args]);
   // Node reports most refused spawns (EAGAIN, EMFILE, ENOENT) on the child, a tick later, with no pid.

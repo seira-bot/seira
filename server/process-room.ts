@@ -209,14 +209,15 @@ export function turnsSetting(value: string | undefined): TurnsSetting {
   return text && /^\d+$/.test(text) ? Number(text) : "auto";
 }
 
-export type GateHost = "cloud" | "server" | null;
+export type GateHost = "cloud" | "server" | "desktop" | null;
 
 /** Where turns wait for room. A Cloud home, as before. A self-hosted Linux server in a container that was given a memory
  * or pids limit, which is where a turn too many ends in a killed engine or a refused spawn. Any self-hosted server whose
- * operator set SEIRA_TURNS_MAX_RUNNING to a number or "auto". Never the desktop app's own server. */
+ * operator set SEIRA_TURNS_MAX_RUNNING to a number or "auto". The desktop app's own server on Linux, unless
+ * SEIRA_TURNS_MAX_RUNNING is "off". */
 export function gateHost(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, limited: () => boolean = containerLimited): GateHost {
   if ((env.SEIRA_CLOUD_ROLE === "home" || env.SEIRA_CLOUD_ROLE === "team") && platform === "linux") return "cloud";
-  if (env.SEIRA_DESKTOP_PARENT === "1") return null;
+  if (env.SEIRA_DESKTOP_PARENT === "1") return platform === "linux" && turnsSetting(env.SEIRA_TURNS_MAX_RUNNING) !== "off" ? "desktop" : null;
   const setting = turnsSetting(env.SEIRA_TURNS_MAX_RUNNING);
   if (setting === "off") return null;
   if (typeof setting === "number" || env.SEIRA_TURNS_MAX_RUNNING?.trim().toLowerCase() === "auto") return "server";
