@@ -87,7 +87,7 @@ describe("the new chat button under a summary", () => {
 
 describe("the handoff line of a continued chat", () => {
   const handoff: Message = {
-    id: "h1", role: "user", kind: "text", at: NOW - 2_000, automated: true, handoff: { threadId: "older", title: "Invoice run" },
+    id: "h1", role: "user", kind: "text", at: NOW - 2_000, handoff: { threadId: "older", title: "Invoice run" },
     text: '[From Seira · continued chat · not from the person. This chat continues "Invoice run".]\nEarlier conversation summary: ALPHA_REQUEST',
   };
 
