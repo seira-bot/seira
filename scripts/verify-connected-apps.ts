@@ -254,6 +254,7 @@ try {
   for (const shown of ["Work", "work@example.com", "Account 3"]) assert.ok(tileText.includes(shown), shown);
   const labels = await evaluate(`[...${gmailTile}.querySelectorAll('[title],[aria-label]')].map((node)=>[node.getAttribute('title'),node.getAttribute('aria-label')].join(' ')).join(' ')`) as string;
   assert.equal(/ca-(work|twin|unnamed)/.test(`${tileText} ${labels}`), false);
+  await evaluate(`${gmailTile}.scrollIntoView({block:"center"})`);
   await command("screenshot", join(evidence, "settings-account-names.png"), "--full");
 
   // Add account says which sign-in page opens, then removes a new account that repeats one already connected.
@@ -274,6 +275,7 @@ try {
   await wait("document.body.textContent.includes('This account is already connected.')");
   assert.equal(deletedAccounts.at(-1), copied);
   assert.deepEqual(services.gmail.accounts.map((account) => account.id), ["ca-work"]);
+  await evaluate("(document.querySelector('[role=alert]')??document.querySelector('[data-app-tile=gmail]')).scrollIntoView({block:'center'})");
   await command("screenshot", join(evidence, "settings-duplicate-removed.png"), "--full");
   await command("find", "role", "button", "click", "--name", "Close plugins", "--exact");
   const errors = await command("errors");
