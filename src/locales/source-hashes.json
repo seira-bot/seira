@@ -4111,7 +4111,12 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "es": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -10588,7 +10593,12 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "fr": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -14478,7 +14488,12 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "hi": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -18222,7 +18237,12 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "ja": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -26223,7 +26243,12 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "pt-br": {
       "voice.gemini.keyPlaceholder": "8c87ba2043a4a89d63c90cae8a6dafd5cbd193652e923b97988e381a74773e10",
@@ -38068,7 +38093,12 @@
       "decider.pick.included.detail": "1ac30b636b2e2802ce17d46d5de80c99299f8fec885437d2c2e6273876d393e9",
       "decider.pick.jev.detail": "b3150b2abb549f5e18ac7e3c9d52712965b2ac1e99d9327109d682c0f43b3f1e",
       "decider.pick.openrouter.detail": "25bd37347c75bb047385c1bd334aa49613e486eeb2d0eebc683f549ef6fc22a9",
-      "decider.pick.custom.detail": "c5ca8a0aa525243bf900e843158c51171d19df4d8a451bf5a2da63454688b410"
+      "decider.pick.custom.detail": "c5ca8a0aa525243bf900e843158c51171d19df4d8a451bf5a2da63454688b410",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -48198,7 +48228,12 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "zh-tw": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -58417,7 +58452,12 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "uk": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -62581,7 +62621,12 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "vi": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -68558,7 +68603,12 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "tr": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -74535,7 +74585,12 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "pl": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -81709,7 +81764,12 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "ru": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -88936,7 +88996,12 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "it": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -95978,7 +96043,12 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "ko": {
       "connectedWorkspaces.localTitle": "7d6deafeab011d734c3fdd1bfd6f69544fbb746a004019269bdb48544b01164b",
@@ -103675,7 +103745,12 @@
       "imageGen.codex.signIn": "43c45437b116014292dfa58e8413351d0458b73e580813c4f93c86530d78bd14",
       "imageGen.codex.manage": "958eab000104673ba62cbb9743886d162cdfa35e2ff20b27676e107872c220ea",
       "imageGen.test.okCodex": "cde9cdd3c1201a49d2c89523c7e6ef3ddefcde19d2f2997558f6ea6991fcca3b",
-      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315"
+      "imageGen.test.codexRejected": "b81632677c81c653c0a132cf778e6ca321a221e5a25bf85c5a16d800c0e47315",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     }
   }
 }

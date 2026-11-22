@@ -5975,5 +5975,10 @@
   "settings.pool.floorNumber": "Ngưỡng sàn là số nguyên từ 0 đến 98.",
   "settings.pool.floorLow": "Ngưỡng sàn phải thấp hơn mức cuối cùng.",
   "settings.pool.error": "Không thể lưu nhóm AI. Vui lòng thử lại.",
-  "aiImport.title": "Chuyển từ AI khác"
+  "aiImport.title": "Chuyển từ AI khác",
+  "roomPicture.change": "Đổi ảnh",
+  "roomPicture.remove": "Xóa ảnh",
+  "roomPicture.typeRefused": "Hãy chọn ảnh PNG, JPEG, GIF hoặc WebP.",
+  "roomPicture.tooBig": "Ảnh này quá lớn. Hãy chọn ảnh dưới 10 MB.",
+  "roomPicture.failed": "Không lưu được ảnh. Hãy thử lại."
 }

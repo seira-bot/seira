@@ -4110,5 +4110,10 @@
   "settings.pool.floorNumber": "Die Untergrenze ist eine ganze Zahl von 0 bis 98.",
   "settings.pool.floorLow": "Die Untergrenze muss unter der letzten Stufe liegen.",
   "settings.pool.error": "Der KI-Pool konnte nicht gespeichert werden. Bitte versuche es erneut.",
-  "aiImport.title": "Von einer anderen KI umziehen"
+  "aiImport.title": "Von einer anderen KI umziehen",
+  "roomPicture.change": "Bild ändern",
+  "roomPicture.remove": "Bild entfernen",
+  "roomPicture.typeRefused": "Wähle ein PNG-, JPEG-, GIF- oder WebP-Bild.",
+  "roomPicture.tooBig": "Das Bild ist zu groß. Wähle eines unter 10 MB.",
+  "roomPicture.failed": "Das Bild konnte nicht gespeichert werden. Versuche es noch einmal."
 }

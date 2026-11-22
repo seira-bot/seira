@@ -279,6 +279,7 @@ describe("scopes", () => {
     expect(clientBotPatchViolation({ unread: false, pinned: true }, false, true)).toBeNull();
     expect(clientBotPatchViolation({ color: "blue", name: "Mine" }, true, true)).toBeNull();
     expect(clientGroupPatchViolation({ name: "Ops", unread: false, turnTimeoutMinutes: 30 })).toBeNull();
+    expect(clientGroupPatchViolation({ avatarUrl: "/api/attachments/a.png" })).toBeNull();
     expect(clientGroupPatchViolation({ cwd: "/tmp" })).toBe("cwd");
     expect(clientGroupPatchViolation({ memberIds: [] })).toBe("memberIds");
   });

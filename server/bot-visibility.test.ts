@@ -45,6 +45,8 @@ const groups = [
   { id: "room-pub", threadId: "t-room-pub", memberIds: ["pub"], section: "Ops" },
   { id: "room-mixed", threadId: "t-room-mixed", memberIds: ["pub", "hr"], tasks: [{ threadId: "t-room-mixed-2" }] },
   { id: "room-empty", threadId: "t-room-empty", memberIds: ["gone"] },
+  { id: "room-hr-only", threadId: "t-room-hr-only", memberIds: ["hr"], avatarUrl: "/api/attachments/room-hr.png" },
+  { id: "room-open", threadId: "t-room-open", memberIds: ["pub"], avatarUrl: "/api/attachments/room-open.png" },
 ];
 
 describe("visibility values", () => {
@@ -155,6 +157,15 @@ describe("VisibleSet", () => {
     expect(bob.attachment("shared.png", lookup)).toBe(true);
     expect(bob.attachment("fresh.png", lookup)).toBe(true);
     expect(new VisibleSet(bots, groups, ADA).attachment("in-hr.png", lookup)).toBe(true);
+  });
+
+  it("serves a room's picture only to people who can see that room", () => {
+    const lookup = () => [] as string[];
+    const bob = new VisibleSet(bots, groups, BOB);
+    const ada = new VisibleSet(bots, groups, ADA);
+    expect(bob.attachment("room-hr.png", lookup)).toBe(false);
+    expect(ada.attachment("room-hr.png", lookup)).toBe(true);
+    expect(bob.attachment("room-open.png", lookup)).toBe(true);
   });
 
   it("routes each path to the entity it names", () => {
