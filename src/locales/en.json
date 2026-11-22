@@ -532,7 +532,7 @@
   "releaseNotes.items.sendSetting.title": "See how a bot sends for you",
   "releaseNotes.items.sendSetting.body": "Sending on your behalf, in a bot's settings, now shows the choice that applies, even before you save one.",
   "releaseNotes.items.installOwnServer.title": "Install Seira on your own server",
-  "releaseNotes.items.installOwnServer.body": "In the desktop app, select ＋ at the end of your places, then Connect to a server, then Install on my server. Your server needs no domain, and the sign-in is never saved.",
+  "releaseNotes.items.installOwnServer.body": "In the desktop app, select the + button at the end of your places, then Connect to a server, then Install on my server. Your server needs no domain, and the sign-in is never saved.",
   "releaseNotes.items.codexImages.title": "Images with your ChatGPT plan",
   "releaseNotes.items.codexImages.body": "In Settings, AI, Images, pick Codex (ChatGPT plan). Your bots then make images with your paid ChatGPT plan, without an OpenAI key, in the shape you ask for.",
   "releaseNotes.items.aiSettings.title": "Clearer AI settings",
