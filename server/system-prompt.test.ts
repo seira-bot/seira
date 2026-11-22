@@ -235,7 +235,7 @@ describe("computerPrompt", () => {
     expect(computerPrompt("vm-shared")).toContain("a shared, isolated Cua sandbox");
     expect(computerPrompt("vps")).toContain("self-hosted remote Linux computer");
     expect(computerPrompt("local")).toContain("act on the user's computer");
-    for (const kind of ["vm-private", "vm-shared", "box", "vps", "local"] as const) {
+    for (const kind of ["vm-private", "vm-shared", "vps", "local"] as const) {
       expect(computerPrompt(kind).endsWith(SIGN_IN_PROMPT)).toBe(true);
       expect(computerPrompt(kind).startsWith(" ")).toBe(true);
     }
@@ -491,7 +491,7 @@ it("tells Cloud bots that a sign-in ending on an unreachable 127.0.0.1 page is f
 
 describe("longCommandsPrompt", () => {
   it("names Bash's limit everywhere and vm_exec's own limit only with a Local VM", () => {
-    for (const kind of [null, "local", "vps", "box"] as const) {
+    for (const kind of [null, "local", "vps"] as const) {
       const text = longCommandsPrompt(kind);
       expect(text).toContain("pass `timeout` in milliseconds, up to 86400000, which is 1440 minutes, unless a lower limit is set here");
       expect(text).toContain("Never wait inside a command for CI, a deploy or any other job to finish (no sleep loops or polls): check once");
@@ -505,7 +505,7 @@ describe("longCommandsPrompt", () => {
   });
 
   it("keeps a long command in the foreground, and trusts only its own fresh exit code", () => {
-    for (const kind of [null, "local", "vps", "box"] as const) {
+    for (const kind of [null, "local", "vps"] as const) {
       const text = longCommandsPrompt(kind);
       expect(text).toContain("stay in the foreground until it exits");
       expect(text).toContain("split work that cannot finish within that");
