@@ -446,8 +446,9 @@ export function memberBot<T extends object>(bot: T, visible: VisibleSet): T {
   if (visible.everything) return visible.member ? withoutServerAlias(bot) : bot;
   const shown = visible.filtersThreads ? withLevel(shownConversations(bot, visible), visible) : bot;
   if (!visible.member) return shown;
-  const { visibility: _visibility, vpsAlias: _vpsAlias, ...rest } = shown as T & { visibility?: unknown; vpsAlias?: unknown; managedSections?: unknown };
-  if (visible.limitedToDepartments && Array.isArray(rest.managedSections)) rest.managedSections = rest.managedSections.filter((section) => visible.departmentAllowed(section));
+  const { visibility: _visibility, vpsAlias: _vpsAlias, ...rest } = shown as T & { visibility?: unknown; vpsAlias?: unknown };
+  const managed = (rest as { managedSections?: unknown }).managedSections;
+  if (visible.limitedToDepartments && Array.isArray(managed)) return { ...rest, managedSections: managed.filter((section) => visible.departmentAllowed(section)) } as T;
   return rest as T;
 }
 
