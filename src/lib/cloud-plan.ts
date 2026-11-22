@@ -335,7 +335,10 @@ export function cloudAddView(account: CloudAccountState | null | undefined, offe
   { now, sells = true, unreachable = false, error = null, choosing = false, conflict = false, signIn = null, arrived = false, terms = false }: {
     now: number;
     /** Whether this build sells a Cloud: when it does not, signed in with no Cloud there is nothing to choose, so Settings is the next step. */
-    sells?: boolean; error?: "failed" | "rate-limited" | null; choosing?: boolean; conflict?: boolean; signIn?: CloudSignInPhase | null;
+    sells?: boolean;
+    /** The offer could not be read; with a null offer, Seira Cloud answered but lists no plan. */
+    unreachable?: boolean;
+    error?: "failed" | "rate-limited" | null; choosing?: boolean; conflict?: boolean; signIn?: CloudSignInPhase | null;
     /** Signed in here to an account whose own terms differ from those shown: Choose says so. */
     terms?: boolean;
     /** Signed in from this sheet just now: a ready Cloud is theirs to open, not a second one to ask for. */

@@ -341,7 +341,7 @@ describe("the buying sheet, one view per state", () => {
   it("sends someone with no Cloud to Settings when this build sells none, but still signs a signed-out person in", () => {
     const none = { ...at, sells: false };
     const plain: CloudSignInPhase = { step: "email", intent: false, problem: null };
-    const done: CloudSignInPhase = { step: "done", intent: false, problem: null };
+    const done: CloudSignInPhase = { step: "done", intent: false };
     for (const offer of [undefined, null, OFFER]) {
       expect(cloudAddView(connected(), offer, { ...none, signIn: done })).toEqual({ kind: "settings" });
       expect(cloudAddView(connected(), offer, none)).toEqual({ kind: "settings" });
