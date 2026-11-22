@@ -522,7 +522,7 @@ const crashReports = createCrashReports({ app, ipcMain, crashReporter, fetch: (u
 
 const rendererRecovery = createRendererRecovery({ isShuttingDown: () => desktopShutdownStarted, log: slog, onHang: (contents) => crashReports.hang(contents), text: nativeText,
   onStop: (stop) => { appendDesktopCrashRecord(DESKTOP_CRASH_LOG, DESKTOP_CRASH_LOG_MAX_BYTES, formatDesktopCrashRecord({ kind: "renderer-stuck", ...stop })); crashReports.recoveryStopped(stop); },
-  fallbackUrl: rendererOrigin, showMessageBox: (options) => dialog.showMessageBox(options), createWindow: () => createWindow(), relaunch: () => { app.relaunch(); app.quit(); } });
+  fallbackUrl: rendererOrigin, showMessageBox: (options) => dialog.showMessageBox(options), createWindow: () => createWindow(), relaunch: relaunchAfterDesktopRemoteChange });
 
 let managedCompanionConnector = null;
 let companionAccountService = null;
