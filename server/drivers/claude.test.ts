@@ -603,6 +603,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
 
   afterEach(async () => {
     delete process.env.FAKE_CLAUDE_MODE;
+    delete process.env.FAKE_CLAUDE_EXIT_STDERR;
     delete process.env.FAKE_CLAUDE_AUTO_UNAVAILABLE_MODELS;
     delete process.env.FAKE_CLAUDE_DUMP;
     delete process.env.FAKE_CLAUDE_PROMPTS;
@@ -3985,6 +3986,36 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(done).toMatchObject({ ok: false, stopReason: "exit_before_result" });
     const error = recorder.events.find((e) => e.type === "runtime.error")!;
     expect(error.message).toContain("simulated crash");
+  });
+
+  it("does not start Claude for Full access when the server runs as root", async () => {
+    await create();
+    const dump = join(scratch, "root-full.json");
+    process.env.FAKE_CLAUDE_DUMP = dump;
+    const euid = vi.spyOn(process, "geteuid").mockReturnValue(0);
+    try {
+      await expect(instance.adapter.sendTurn({ threadId: "t-root-full", text: "go", approvalMode: "full" })).rejects.toMatchObject({
+        message: "Claude can't use Full access while Seira runs as the administrator account. Choose Ask for approval or Approve for me for this bot, or run Seira as a normal user.",
+        errorKey: "serverError.engine.rootFullAccess",
+      });
+      expect(existsSync(dump)).toBe(false);
+      const { turnId } = await instance.adapter.sendTurn({ threadId: "t-root-ask", text: "go", approvalMode: "ask" });
+      await recorder.until((e) => e.type === "turn.completed" && e.turnId === turnId);
+      expect(existsSync(dump)).toBe(true);
+    } finally {
+      euid.mockRestore();
+    }
+  });
+
+  it("shows the same error when Claude Code refuses to run as root", async () => {
+    process.env.FAKE_CLAUDE_EXIT_STDERR = "--dangerously-skip-permissions cannot be used with root/sudo privileges for security reasons\n";
+    await create("exit-early");
+    await instance.adapter.sendTurn({ threadId: "t-root-refused", text: "go" });
+    const done = await recorder.until((e) => e.type === "turn.completed");
+    expect(done).toMatchObject({ ok: false, stopReason: "exit_before_result" });
+    expect(recorder.events.some((e) => e.type === "turn.retrying")).toBe(false);
+    const error = recorder.events.find((e) => e.type === "runtime.error")!;
+    expect(error.message).toBe("Claude can't use Full access while Seira runs as the administrator account. Choose Ask for approval or Approve for me for this bot, or run Seira as a normal user.");
   });
 
   it("auto-retries transient exits, then completes with exactly one final message", async () => {

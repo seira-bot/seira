@@ -3,6 +3,7 @@ import { EXIT, flag, parseCount, parseDuration, requiredFlag, usageError } from 
 import { conversationFor, conversationTitle, newSendId, readMessage, resolveTarget, type Target, type VerbContext, type VerbOutcome } from "./context.ts";
 import { oneLine, shortId } from "./output.ts";
 import { stopConversation } from "./run.ts";
+import { runsAsRoot } from "../run-as-root.ts";
 import { acceptedWireNames, sentWireName } from "../../electron/phone-wire-names.mjs";
 
 type Rec = Record<string, any>;
@@ -45,6 +46,7 @@ async function doctorOnce(ctx: VerbContext): Promise<VerbOutcome> {
   if (session?.kind === "session" && typeof session.expiresAt === "number" && session.expiresAt - Date.now() < 14 * DAY) {
     warnings.push(`this session expires in ${Math.max(0, Math.floor((session.expiresAt - Date.now()) / DAY))} days: get a new one with seira connect`);
   }
+  if (runsAsRoot()) warnings.push("Seira runs as the administrator account (root), so Claude can't use Full access. Choose Ask for approval or Approve for me for each bot, or run Seira as a normal user");
   const browser = config?.browserEngine ?? null;
   if (browser && browser.kind !== "engine") warnings.push(`bots have no built-in browser here: ${browser.reason ?? "not installed"}${browser.installable ? " (install it with `seira browser install`)" : ""}`);
   const ok = isSeira && !tooOld && availableCount > 0;

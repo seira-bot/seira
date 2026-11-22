@@ -191,6 +191,7 @@ export const USER_ERROR = {
   "serverError.mcp.addressChanged": "The MCP server address changed. Reload the server and try again.",
   "serverError.attachment.alreadyInMessage": "This file is already in a message, so it stays.",
   "serverError.engine.signedOut": "{name} is signed out.",
+  "serverError.engine.rootFullAccess": "Claude can't use Full access while Seira runs as the administrator account. Choose Ask for approval or Approve for me for this bot, or run Seira as a normal user.",
   "serverError.bot.viewOnly": "You can view {bot}, not chat with it.",
   "serverError.bot.alwaysAllowFull": "This bot already always-allows {max} tools. Remove one under Access in its settings, then try again.",
   "serverError.share.ownBot": "Chats with your own Seira stay yours, so they can't be shared.",

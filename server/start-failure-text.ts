@@ -9,6 +9,7 @@ const START_FAILURE = {
   "serverError.computer.systemUnsupported": "chat.notice.computerSystemUnsupported",
   "serverError.computer.aiUnsupported": "chat.notice.computerAiUnsupported",
   "serverError.engine.signedOut": "chat.notice.engineSignedOut",
+  "serverError.engine.rootFullAccess": "chat.notice.engineRootFullAccess",
 } as const;
 
 export function startFailureText(error: unknown): ServerText | undefined {

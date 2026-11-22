@@ -4,6 +4,7 @@
 //     | stale-session (--resume answers 2.1.295's no-session error result, no init, stays up)
 //     | error-result | resume-dies-after-init | stream (partial deltas plus subagent noise)
 //     | not-logged-in (2.1.296's frames) | api-error | usage-limit (2.1.295's usage_limit_reached frames)
+//   FAKE_CLAUDE_EXIT_STDERR  with exit-early: the stderr text written before exit 3
 //   FAKE_CLAUDE_API_ERROR  text for the api-error frame (default: overloaded)
 //   FAKE_CLAUDE_API_ERROR_KIND  the api-error frame's `error` (default: unknown); FAKE_CLAUDE_API_ERROR_STATUS its result's
 //     api_error_status; FAKE_CLAUDE_NO_TERMINAL_REASON=1: the result has no terminal_reason, only stop_reason "stop_sequence"
@@ -959,7 +960,7 @@ const playTurn = (prompt: JsonValue, late = false) => {
   }
 
   if (mode === "exit-early") {
-    process.stderr.write("fake-claude: simulated crash before result\n");
+    process.stderr.write(process.env.FAKE_CLAUDE_EXIT_STDERR ?? "fake-claude: simulated crash before result\n");
     process.exit(3);
   }
   // FAKE_CLAUDE_TRANSIENTS launches fail transiently (exit 5), counted in the FAKE_CLAUDE_STATE file;
