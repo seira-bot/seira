@@ -39,6 +39,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Memory for bots",
     place: "Settings → You and your bots → Limits",
     does: "All bot work on this computer shares one memory limit, so a heavy task cannot use the memory your other apps need. Set the number of GB, or leave it empty for Auto.",
+    releaseNotes: ["memoryForBots"],
   },
   {
     id: "automations",
@@ -207,6 +208,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "the Computer tab of a bot's panel",
     does: "Where a bot works with a screen, a browser or files: this computer, a Cloud desktop, a shared desktop or its own Local VM.",
     tools: ["select_computer", "list_shared_computers", "shared_computer", "vm_exec", "ask_for_computer"],
+    releaseNotes: ["boatGone"],
   },
   {
     id: "pages-apps",
