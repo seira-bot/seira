@@ -166,3 +166,16 @@ describe("refusals", () => {
     expect(host.sectionRefusal(member("bob@acme.test"), "Finance")).toBeNull();
   });
 });
+
+describe("how many departments one person may have", () => {
+  it("refuses more than the file can hold, and keeps the file readable", () => {
+    const { host, state } = fixture();
+    state.sections = Array.from({ length: 201 }, (_, index) => `Dept ${index}`);
+    const refused = host.change({ entry: "ada@acme.test", departments: state.sections });
+    expect(refused).toMatchObject({ ok: false, status: 400 });
+    expect(host.view().people).toEqual({});
+    expect(host.change({ entry: "ada@acme.test", departments: state.sections.slice(0, 200) })).toEqual({ ok: true });
+    expect(host.view().unreadable).toBe(false);
+  });
+});
+

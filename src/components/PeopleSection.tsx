@@ -124,7 +124,7 @@ export function PeopleTable({ people, busy, onRole, onRemove, onLink, readOnly =
           <span className="min-w-0">
             <span className="block truncate text-ink">{person.isDomain ? t("people.everyoneAt", { domain: person.entry.slice(1) }) : person.entry}</span>
             {person.devices > 0 && <span className="block text-[12px] text-ink-secondary">{t("people.devices", { count: String(person.devices) })}</span>}
-            {access && person.role === "member" && <span data-person-access className="block truncate text-[12px] text-ink-secondary">{accessLine(access[person.entry])}</span>}
+            {access && person.role === "member" && <span data-person-access className="block truncate text-[12px] text-ink-secondary">{accessLine(grantFor(access, person.entry))}</span>}
           </span>
           <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", person.role === "admin" ? "bg-accent/15 text-accent" : "bg-control text-ink-secondary")}>
             {person.role === "admin" ? t("people.roleAdmin") : t("people.roleMember")}
@@ -346,7 +346,7 @@ export function PeopleSection({ simple = false, startOpen = false }: { simple?: 
           onRemove={(person) => remove(person.entry)}
           onLink={(person) => setLink(inviteLink(base, person.entry))}
           access={choices && !choices.access.unreadable ? choices.access.people : null}
-          onAccess={(person) => setEditing({ entry: person.entry, value: choices?.access.people[person.entry] ?? null })}
+          onAccess={(person) => setEditing({ entry: person.entry, value: choices ? grantFor(choices.access.people, person.entry) ?? null : null })}
         />
         {choices && editing && (
           <div data-person-access-editor className="mt-3 rounded-lg border border-hairline/40 bg-inset p-3">

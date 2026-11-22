@@ -36,3 +36,8 @@ export async function saveDepartmentAccess(entry: string, departments: string[] 
 export function openFolderDepartments(chosen: readonly string[], limited: ReadonlySet<string>): string[] {
   return chosen.filter((name) => !limited.has(name));
 }
+
+/** The departments a sign-in entry is limited to: its own entry, else its `@domain`'s, as the server decides. */
+export function grantFor(people: Readonly<Record<string, string[]>>, entry: string): string[] | undefined {
+  return people[entry] ?? (entry.startsWith("@") ? undefined : people[entry.slice(entry.lastIndexOf("@"))]);
+}

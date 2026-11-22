@@ -20,7 +20,7 @@ export interface RosterMember extends Pick<DefaultBotFields, "defaultBot"> {
 
 const sectionKey = (section?: string): string => section?.trim() || "";
 
-export const PEER_ACCESS_HELP = "Every bot can reach every other bot, in any department, and list_bots shows each one with its exact id. A bot it does not show is archived or shared with different people, so it cannot be reached. Never use computer control to get around this.";
+export const PEER_ACCESS_HELP = "A bot can reach every other bot, in any department, and list_bots shows each one with its exact id. A bot in a department that is limited for an invited person can reach only bots in its own department. A bot that list_bots does not show is archived, shared with different people or in another department, so it cannot be reached. Never use computer control to get around this.";
 
 // Authority (supervising, incidents, setup changes, automations, a person's brief) follows departments,
 // a Chief's managedSections and Team Cloud ownership. Reach below never widens it.
@@ -129,9 +129,11 @@ export function setDepartmentWalls(walled: (section: string) => boolean): void {
 }
 
 /** Security invariant: a bot in a walled department reaches only bots of its own department. Reaching in from outside
- * stays open, and a report back to whoever started the work is no new reach. */
+ * stays open, and a report back to whoever started the work is no new reach. General is never
+ * walled: the default bot and the Chief live there. */
 function behindWall(from: Pick<RosterMember, "section">, target: Pick<RosterMember, "section">): boolean {
-  return sectionKey(from.section) !== sectionKey(target.section) && isWalled(sectionKey(from.section));
+  const own = sectionKey(from.section);
+  return own !== "" && own !== sectionKey(target.section) && isWalled(own);
 }
 
 /** The refusal a bot is told when a hand-off would cross a department wall, else undefined. */

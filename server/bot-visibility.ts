@@ -446,8 +446,23 @@ export function memberBot<T extends object>(bot: T, visible: VisibleSet): T {
   if (visible.everything) return visible.member ? withoutServerAlias(bot) : bot;
   const shown = visible.filtersThreads ? withLevel(shownConversations(bot, visible), visible) : bot;
   if (!visible.member) return shown;
-  const { visibility: _visibility, vpsAlias: _vpsAlias, ...rest } = shown as T & { visibility?: unknown; vpsAlias?: unknown };
+  const { visibility: _visibility, vpsAlias: _vpsAlias, ...rest } = shown as T & { visibility?: unknown; vpsAlias?: unknown; managedSections?: unknown };
+  if (visible.limitedToDepartments && Array.isArray(rest.managedSections)) rest.managedSections = rest.managedSections.filter((section) => visible.departmentAllowed(section));
   return rest as T;
+}
+
+/** The pause lists name bots and departments: a person sees only the ones they may see. */
+export function narrowedHolds(key: string, value: unknown, visible: VisibleSet): unknown {
+  if (visible.everything) return value;
+  const ids = (list: unknown) => (Array.isArray(list) ? list.filter((id) => typeof id !== "string" || visible.bot(id)) : list);
+  if (key === "heldBots" || key === "pausedBots") return ids(value);
+  if (key !== "pausedByPerson" || !value || typeof value !== "object" || Array.isArray(value)) return value;
+  const state = value as { bots?: unknown; departments?: unknown };
+  return {
+    ...state,
+    ...(state.bots !== undefined ? { bots: ids(state.bots) } : {}),
+    ...(Array.isArray(state.departments) ? { departments: visible.sections(state.departments.filter((name): name is string => typeof name === "string")) } : {}),
+  };
 }
 
 /** On a Team Cloud each person's copy says what they may do with the bot; whoever can edit it also gets its sharing
@@ -535,7 +550,8 @@ export function memberBody(body: unknown, visible: VisibleSet): unknown {
     for (const [key, child] of Object.entries(record)) {
       // A member who can see every bot and room, and an admin, are sent the rooms as they are; bots still narrow.
       if ((visible.everything || !visible.member) && (key === "group" || key === "groups")) continue;
-      let next = child;
+      let next = key === "heldBots" || key === "pausedBots" || key === "pausedByPerson" ? narrowedHolds(key, child, visible) : child;
+      if (next !== child) { (out ??= { ...record })[key] = next; continue; }
       if (key === "bot" && child && typeof child === "object" && !Array.isArray(child)) next = memberBot(child, visible);
       else if (key === "bots" && Array.isArray(child)) {
         const shown = child.map((bot) => (bot && typeof bot === "object" ? memberBot(bot as object, visible) : bot));
@@ -651,6 +667,7 @@ export function frameForMember(payload: Record<string, unknown>, ctx: FrameConte
       return { ...rest, helpReason: null };
     }
     case "config":
+      return Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, narrowedHolds(key, value, visible)]));
     case "routine.deleted":
     case "workflow.deleted":
     case "webhook.deleted":

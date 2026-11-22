@@ -1,6 +1,6 @@
 import { isLinkedId } from "../bot-link/protocol.ts";
 import type { HandoffView, RoomAddress } from "../coordinator.ts";
-import { peerAllowed, reachRefusal, type LookedAfterBy } from "../peer-roster.ts";
+import { peerAllowed, reachRefusal, walledOff, type LookedAfterBy } from "../peer-roster.ts";
 import type { BotRecord, GroupRecord, Store } from "../store.ts";
 import type { PersonalReach } from "./personal-reach.ts";
 
@@ -30,6 +30,8 @@ const LEFT_THE_ROOM = "The addressed agent is no longer a member of this room, s
 
 export function createRoomAccess({ store, privateTo = () => null, lookedAfterBy, personalReach }: RoomAccessDeps) {
   function reachProblem(from: BotRecord, bot: BotRecord, parent: Pick<HandoffView, "threadId">, node: Pick<HandoffView, "threadId"> & Partial<Pick<HandoffView, "id" | "origin">>): string | undefined {
+    const wall = walledOff(from, bot);
+    if (wall) return wall;
     if (peerAllowed(from, bot)) return undefined;
     const personal = personalReach?.();
     if (personal?.carries(from, bot, parent.threadId, node)) return undefined;

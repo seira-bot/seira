@@ -3,7 +3,7 @@
 import { entryMatches } from "../../shared/bot-access.ts";
 import type { DepartmentAccessChange, DepartmentAccessView } from "../../shared/department-access.ts";
 import type { VisibleSet } from "../bot-visibility.ts";
-import { accessEntry, type DepartmentAccess } from "../department-access.ts";
+import { accessEntry, MAX_GRANTED_DEPARTMENTS, type DepartmentAccess } from "../department-access.ts";
 import type { RequestAuth } from "../request-auth.ts";
 
 export interface DepartmentAccessHostDeps {
@@ -102,6 +102,7 @@ export function createDepartmentAccessHost(deps: DepartmentAccessHostDeps) {
     if (departments !== null && (!Array.isArray(departments) || departments.length === 0 || departments.some((name) => typeof name !== "string"))) {
       return { ok: false, status: 400, error: "Choose at least one department." };
     }
+    if (departments && new Set(departments).size > MAX_GRANTED_DEPARTMENTS) return { ok: false, status: 400, error: "Choose fewer departments." };
     let ids: string[] | null = null;
     try {
       if (departments) {

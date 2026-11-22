@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { canReach, reachablePeers, resolveTeammate, setDepartmentWalls, unreachableTeammate, walledOff, type RosterMember } from "./peer-roster.ts";
+import { PEER_ACCESS_HELP, canReach, reachablePeers, resolveTeammate, setDepartmentWalls, unreachableTeammate, walledOff, type RosterMember } from "./peer-roster.ts";
 
 const bot = (id: string, section?: string): RosterMember => ({ id, name: `Bot ${id}`, ...(section !== undefined ? { section } : {}) });
 const sales = bot("sales", "Sales");
@@ -56,5 +56,24 @@ describe("a walled department", () => {
     wall("");
     expect(canReach(chief, sales)).toBe(false);
     expect(canReach(sales, chief)).toBe(true);
+  });
+});
+
+describe("General", () => {
+  it("is never walled, even when a grant names it, so the Chief keeps its reach", () => {
+    setDepartmentWalls((section) => section === "" || section === "Sales");
+    expect(canReach(chief, sales)).toBe(true);
+    expect(canReach(chief, fin)).toBe(true);
+    expect(walledOff(chief, fin)).toBeUndefined();
+    expect(reachablePeers(all, chief).map((peer) => peer.id).sort()).toEqual(["fin", "sales", "sales2"]);
+    expect(canReach(sales, fin)).toBe(false);
+  });
+});
+
+describe("the access help a bot reads", () => {
+  it("says a bot in a limited department reaches only its own department, without internal words", () => {
+    expect(PEER_ACCESS_HELP).toContain("limited for an invited person can reach only bots in its own department");
+    expect(PEER_ACCESS_HELP).not.toMatch(/Every bot can reach every other bot/);
+    expect(PEER_ACCESS_HELP).not.toMatch(/grant|memoryKey|wall|scope|endpoint/i);
   });
 });

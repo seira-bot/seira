@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { frameForMember, routineVisible, webhookVisible, workflowVisible, notFoundFor, pathSubject, VisibleSet, type FrameContext, type StreamSeen, type Viewer } from "./bot-visibility.ts";
+import { frameForMember, memberBody, memberBot, routineVisible, webhookVisible, workflowVisible, notFoundFor, pathSubject, VisibleSet, type FrameContext, type StreamSeen, type Viewer } from "./bot-visibility.ts";
 
 const ADA: Viewer = { kind: "member", email: "ada@acme.test" };
 const BOSS: Viewer = { kind: "all" };
@@ -138,5 +138,35 @@ describe("live frames for a member limited to some departments", () => {
     expect(frameForMember({ kind: "bot", bot: { id: "fin" } }, context(before), state)).toMatchObject({ kind: "bot" });
     expect(frameForMember({ kind: "bot", bot: { id: "fin" } }, context(limited), state)).toEqual({ kind: "bot.deleted", botId: "fin" });
     expect(frameForMember({ kind: "bot", bot: { id: "fin" } }, context(limited), state)).toBeUndefined();
+  });
+});
+
+describe("names outside the grant", () => {
+  const ctx = (visible: VisibleSet) => ({ visible } as unknown as FrameContext);
+  const seen = {} as StreamSeen;
+  const pauses = { heldBots: ["sales", "fin"], pausedBots: ["fin", "chief"], pausedByPerson: { bots: ["sales", "fin"], departments: ["Sales", "Finance"], all: true } };
+
+  it("cuts the pause lists of a config frame to the bots and departments it may see", () => {
+    const frame = frameForMember({ kind: "config", language: "en", ...pauses }, ctx(limited), seen)!;
+    expect(frame.heldBots).toEqual(["sales"]);
+    expect(frame.pausedBots).toEqual([]);
+    expect(frame.pausedByPerson).toEqual({ bots: ["sales"], departments: ["Sales"], all: true });
+    expect(frame.language).toBe("en");
+  });
+
+  it("cuts the same lists in a response body", () => {
+    expect(memberBody({ language: "en", ...pauses }, limited)).toEqual({ language: "en", heldBots: ["sales"], pausedBots: [], pausedByPerson: { bots: ["sales"], departments: ["Sales"], all: true } });
+  });
+
+  it("leaves the lists whole for someone who sees everything", () => {
+    const everything = new VisibleSet(bots, groups, { kind: "member", email: "x@acme.test" });
+    expect(memberBody(pauses, everything)).toEqual(pauses);
+  });
+
+  it("cuts a Chief's departments to the granted ones, and only for a limited person", () => {
+    const chief = { id: "sales", section: "Sales", chiefOfStaff: true, managedSections: ["Sales", "Finance", ""] };
+    expect(memberBot(chief, limited).managedSections).toEqual(["Sales"]);
+    expect(memberBot(chief, new VisibleSet(bots, groups, ADA, undefined, undefined, new Set(["Sales", ""]))).managedSections).toEqual(["Sales", ""]);
+    expect(memberBot(chief, new VisibleSet(bots, groups, ADA)).managedSections).toEqual(["Sales", "Finance", ""]);
   });
 });
