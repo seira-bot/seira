@@ -462,6 +462,19 @@ describe("bearerToken", () => {
     expect(bearerToken("Bearer   ")).toBeUndefined();
     expect(bearerToken("Bearerseira_abc")).toBeUndefined();
   });
+
+  it("answers an attack string in under 100 ms", () => {
+    const started = performance.now();
+    expect(bearerToken(`bearer\t${"\t\t".repeat(50_000)}x\ny`)).toBeUndefined();
+    expect(bearerToken(`bearer\t${"\t\t".repeat(50_000)}`)).toBeUndefined();
+    expect(performance.now() - started).toBeLessThan(100);
+  });
+
+  it("keeps the token after tabs and refuses one that spans lines", () => {
+    expect(bearerToken("Bearer\t \tseira_abc")).toBe("seira_abc");
+    expect(bearerToken("Bearer a b")).toBe("a b");
+    expect(bearerToken("Bearer a\nb")).toBeUndefined();
+  });
 });
 
 describe("browser control capability", () => {
@@ -637,18 +650,5 @@ describe("re-pairing with the token a phone already holds", () => {
     expect(registry.redeem(credential, "iPhone", undefined, first.token)).toMatchObject({ code: "pairing_failed" });
     expect(registry.count()).toBe(1);
     expect(registry.authenticate(first.token)?.id).toBe(first.device.id);
-  });
-
-  it("answers an attack string in under 100 ms", () => {
-    const started = performance.now();
-    expect(bearerToken(`bearer\t${"\t\t".repeat(50_000)}x\n`)).toBeUndefined();
-    expect(bearerToken(`bearer\t${"\t\t".repeat(50_000)}`)).toBeUndefined();
-    expect(performance.now() - started).toBeLessThan(100);
-  });
-
-  it("keeps the token after tabs and refuses one that spans lines", () => {
-    expect(bearerToken("Bearer\t \tseira_abc")).toBe("seira_abc");
-    expect(bearerToken("Bearer a b")).toBe("a b");
-    expect(bearerToken("Bearer a\nb")).toBeUndefined();
   });
 });

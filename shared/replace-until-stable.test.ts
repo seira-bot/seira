@@ -4,7 +4,7 @@ import { replaceUntilStable } from "./replace-until-stable.ts";
 
 describe("replaceUntilStable", () => {
   it("removes a match that forms once an inner match is gone", () => {
-    expect(replaceUntilStable("<<b>script>", /<[^>]+>/g, "")).toBe("");
+    expect(replaceUntilStable("<<b>b>", /<b>/g, "")).toBe("");
     expect(replaceUntilStable("<!<!-- x -->-- y -->", /<!--[\s\S]*?-->/g, "")).toBe("");
   });
 
