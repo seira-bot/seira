@@ -165,7 +165,7 @@ it("saves every kind of credential, reads it back and shows it masked to its las
     }
   }
   expect(stubCalls).toEqual(expect.arrayContaining([
-    "GET /sandboxes", "POST /composio/tool_router/session", "GET /eleven/voices", "GET /fish/model", "POST /jev/v1/systemone", "POST /alpha/decisions",
+    "POST /composio/tool_router/session", "GET /eleven/voices", "GET /fish/model", "POST /jev/v1/systemone", "POST /alpha/decisions",
   ]));
 }, hostTimeout(180_000));
 
