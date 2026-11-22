@@ -26,8 +26,11 @@ export function jobBaseName(home: string): string {
   return `Local\\Seira-bots-${createHash("sha256").update(home).digest("hex").slice(0, 10)}`;
 }
 
-/** The helper passes its command line after `--` to CreateProcess unchanged, so the program gets the quoting Node gives it. */
+/** The helper passes its command line after `--` to CreateProcess unchanged, so the program gets the quoting Node gives it.
+ * CreateProcess runs a .bat or .cmd file through cmd.exe, which parses the arguments again (CVE-2024-27980): like Node's
+ * own spawn, this refuses one with EINVAL. Windows drops trailing dots and spaces from a file name. */
 export function jobFenceArgv(helper: string, command: string, args: readonly string[]): { command: string; args: string[] } {
+  if (/\.(?:bat|cmd)[.\s]*$/i.test(command)) throw Object.assign(new Error(`will not start ${command} in the memory job`), { code: "EINVAL" });
   return { command: helper, args: ["--", command, ...args] };
 }
 

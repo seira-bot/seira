@@ -45,6 +45,14 @@ describe("job fence paths and names", () => {
     expect(jobFenceArgv("fence.exe", "C:\\node.exe", ["a b", ""])).toEqual({ command: "fence.exe", args: ["--", "C:\\node.exe", "a b", ""] });
     expect(jobFenceEnv({ PATH: "x" }, "Local\\Seira-bots-1-2")).toEqual({ PATH: "x", [JOB_FENCE_ENV]: "Local\\Seira-bots-1-2" });
   });
+
+  it("refuses a .bat or .cmd program with EINVAL, whatever its spelling", () => {
+    for (const command of ["C:\\x\\codex.cmd", "codex.CMD", "run.bat", "run.bat.", "run.cmd .", "run.Cmd  "]) {
+      expect(() => jobFenceArgv("fence.exe", command, [])).toThrow(expect.objectContaining({ code: "EINVAL" }));
+    }
+    expect(jobFenceArgv("fence.exe", "C:\\x\\cmd.exe", []).args).toEqual(["--", "C:\\x\\cmd.exe"]);
+    expect(jobFenceArgv("fence.exe", "C:\\cmd\\batch", []).args).toEqual(["--", "C:\\cmd\\batch"]);
+  });
 });
 
 describe("parseJobFenceLine", () => {

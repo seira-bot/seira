@@ -28,18 +28,18 @@ Pages purged:                           777777.
 `;
 
 describe("parseVmStat", () => {
-  it("adds free, inactive, purgeable and speculative pages at 16384 bytes", () => {
+  it("adds free, inactive and speculative pages at 16384 bytes, but not purgeable pages", () => {
     const stat = parseVmStat(APPLE)!;
     expect(stat.pageBytes).toBe(16384);
     expect(stat.freePages).toBe(11236);
     expect(stat.inactivePages).toBe(243586);
     expect(stat.speculativePages).toBe(5894);
     expect(stat.purgeablePages).toBe(7781);
-    expect(stat.availableBytes).toBe((11236 + 243586 + 7781 + 5894) * 16384);
+    expect(stat.availableBytes).toBe((11236 + 243586 + 5894) * 16384);
   });
 
   it("uses the page size of the header (4096 bytes)", () => {
-    expect(parseVmStat(INTEL)!.availableBytes).toBe((100000 + 200000 + 50000 + 10000) * 4096);
+    expect(parseVmStat(INTEL)!.availableBytes).toBe((100000 + 200000 + 10000) * 4096);
   });
 
   it("does not read Pages purged as Pages purgeable", () => {
@@ -75,7 +75,7 @@ function setup(options: { runs?: Array<() => Promise<string | null>>; total?: nu
 
 describe("createMacMemoryReader", () => {
   const ok = () => Promise.resolve(INTEL);
-  const bytes = (100000 + 200000 + 50000 + 10000) * 4096;
+  const bytes = (100000 + 200000 + 10000) * 4096;
 
   it("uses the fallback before the first answer", () => {
     const { reader } = setup({ runs: [ok] });

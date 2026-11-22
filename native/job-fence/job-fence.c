@@ -8,11 +8,13 @@
 //   seira-job-fence.exe -- <program> [arguments]
 //     Starts the program inside the job that SEIRA_FENCE_JOB names, waits for it, and exits with its exit code. The
 //     program gets this process's stdin, stdout, stderr and environment (without SEIRA_FENCE_JOB) and the command line
-//     after "--" exactly as written. When the job cannot be opened, the program runs without it: bot work never waits
-//     on the limit.
+//     after "--" exactly as written. The program also gets a job of its own inside the bots job: when this helper is
+//     stopped, the program and its children stop with it. When the bots job is missing, the program runs without it.
+//     When the bots job exists but the program cannot start inside it, the program does not run and the exit code is
+//     127. A bare program name is looked up on PATH only, and a .bat or .cmd file is never started.
 //
-// At the limit the job refuses the allocation, and "hold" stops the largest process in the job that is not an engine
-// (a process the "--" mode started), else the largest engine, with exit code 137 as on Linux.
+// Near the limit, and when the job refuses an allocation, "hold" stops the largest process in the job that is not an
+// engine (a process the "--" mode started), else the largest engine, with exit code 137 as on Linux.
 #define WIN32_LEAN_AND_MEAN
 #define PSAPI_VERSION 2
 // C99 printf (%llu) whatever C runtime the toolchain targets.
@@ -29,16 +31,39 @@
 #define PROC_THREAD_ATTRIBUTE_JOB_LIST ProcThreadAttributeValue(13, FALSE, TRUE, FALSE)
 #endif
 
+#ifndef JOB_OBJECT_MSG_NOTIFICATION_LIMIT
+#define JOB_OBJECT_MSG_NOTIFICATION_LIMIT 11
+#endif
+
+// JOBOBJECT_NOTIFICATION_LIMIT_INFORMATION (Windows 8), under its own name: older MinGW-w64 headers do not have it.
+typedef struct {
+  DWORD64 IoReadBytesLimit;
+  DWORD64 IoWriteBytesLimit;
+  LARGE_INTEGER PerJobUserTimeLimit;
+  DWORD64 JobMemoryLimit;
+  DWORD RateControlTolerance;
+  DWORD RateControlToleranceInterval;
+  DWORD LimitFlags;
+} NotificationLimit;
+#define JOB_NOTIFICATION_LIMIT_CLASS ((JOBOBJECTINFOCLASS)12)
+
 #define STOPPED_EXIT_CODE 137
 #define START_FAILED_EXIT_CODE 127
 #define USAGE_EXIT_CODE 2
 #define JOB_KEY 1
 #define QUIT_KEY 2
+// The job memory limit refuses the allocation, and the program that asked (often the engine) then fails on its own. A
+// notification at this share of the limit lets "hold" stop a process before the refusal.
+#define NOTIFY_PERCENT 90
+#define NOTIFY_STOP_AT_PERCENT 85
 // A refused allocation stops a process only when the job is this full: a single large request can fail with room left.
 #define STOP_AT_PERCENT 90
-// After a refusal the job is checked every second for this long, for programs that retry without a new refusal.
+// After a notification or a refusal the job is checked every second for this long, for programs that keep growing. A
+// refusal can come only once, while the program that asked keeps trying.
 #define PRESSURE_MS 30000
-#define SWEEP_STOP_AT_PERCENT 95
+#define SWEEP_MS 1000
+// The largest limit in MiB whose byte count fits in a signed 64-bit number.
+#define MAX_LIMIT_MIB ((~0ULL >> 1) >> 20)
 
 static const wchar_t FENCE_ENV[] = L"SEIRA_FENCE_JOB";
 
@@ -81,6 +106,7 @@ typedef struct {
   DWORD pid;
   DWORD ppid;
   ULONGLONG bytes;
+  int skip;
   wchar_t name[MAX_PATH];
 } Proc;
 
@@ -201,6 +227,15 @@ typedef struct {
   wchar_t name[300];
 } Hold;
 
+// Arms (again) the notification at NOTIFY_PERCENT of the limit. Without it the limit still holds; only the early stop is lost.
+static void arm_notification(Hold *hold) {
+  NotificationLimit info;
+  memset(&info, 0, sizeof info);
+  info.LimitFlags = JOB_OBJECT_LIMIT_JOB_MEMORY;
+  info.JobMemoryLimit = (ULONGLONG)hold->limit / 100 * NOTIFY_PERCENT;
+  if (!SetInformationJobObject(hold->job, JOB_NOTIFICATION_LIMIT_CLASS, &info, sizeof info)) write_error("notify", GetLastError());
+}
+
 static int set_limit(Hold *hold, ULONGLONG bytes) {
   JOBOBJECT_EXTENDED_LIMIT_INFORMATION info;
   memset(&info, 0, sizeof info);
@@ -208,7 +243,41 @@ static int set_limit(Hold *hold, ULONGLONG bytes) {
   info.JobMemoryLimit = (SIZE_T)bytes;
   if (!SetInformationJobObject(hold->job, JobObjectExtendedLimitInformation, &info, sizeof info)) return 0;
   InterlockedExchange64(&hold->limit, (LONGLONG)bytes);
+  arm_notification(hold);
   return 1;
+}
+
+// A limit in MiB: digits only (no sign, no space), from 1 to MAX_LIMIT_MIB. 0 when the text is not one.
+static ULONGLONG parse_mib(const char *text) {
+  if (*text < '0' || *text > '9') return 0;
+  char *end = NULL;
+  unsigned long long mib = strtoull(text, &end, 10);
+  if (!end || *end != 0 || mib > MAX_LIMIT_MIB) return 0;
+  return mib;
+}
+
+// The largest process in the job that is not skipped: one that is not an engine first, else an engine. Windows puts the
+// console host of a console program in the program's job; stopping it frees nothing.
+static Proc *pick_target(Look *look) {
+  Proc *target = NULL;
+  for (int pass = 0; pass < 2 && !target; pass++) {
+    for (DWORD i = 0; i < look->all_count; i++) {
+      Proc *proc = &look->all[i];
+      if (proc->skip || !is_in_job(look, proc->pid) || proc->pid == GetCurrentProcessId()) continue;
+      if (_wcsicmp(proc->name, L"conhost.exe") == 0) continue;
+      if (pass == 0 && is_engine(look, proc)) continue;
+      if (!target || proc->bytes > target->bytes) target = proc;
+    }
+  }
+  return target;
+}
+
+static ULONGLONG job_bytes_now(Hold *hold) {
+  Look look;
+  if (!take_look(hold->job, &look)) return 0;
+  ULONGLONG bytes = look.job_bytes;
+  free_look(&look);
+  return bytes;
 }
 
 static void stop_largest(Hold *hold, DWORD by, int percent, int report_denied) {
@@ -225,23 +294,25 @@ static void stop_largest(Hold *hold, DWORD by, int percent, int report_denied) {
     free_look(&look);
     return;
   }
-  const Proc *target = NULL;
-  for (int pass = 0; pass < 2 && !target; pass++) {
-    for (DWORD i = 0; i < look.all_count; i++) {
-      const Proc *proc = &look.all[i];
-      if (!is_in_job(&look, proc->pid) || proc->pid == GetCurrentProcessId()) continue;
-      if (pass == 0 && is_engine(&look, proc)) continue;
-      if (!target || proc->bytes > target->bytes) target = proc;
-    }
+  Proc *target = NULL;
+  HANDLE process = NULL;
+  // A pid from the list can belong to a new process by now: stop it only while it is still in this job.
+  for (int tries = 0; tries < 8 && !process; tries++) {
+    target = pick_target(&look);
+    if (!target) break;
+    process = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, target->pid);
+    BOOL in = FALSE;
+    if (process && (!IsProcessInJob(process, hold->job, &in) || !in)) { CloseHandle(process); process = NULL; }
+    if (!process) target->skip = 1;
   }
-  if (!target) { free_look(&look); return; }
+  if (!target || !process) { free_look(&look); return; }
   const Proc *root = tree_root(&look, target);
   DWORD helper = is_engine(&look, root) ? root->ppid : 0;
-  HANDLE process = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, target->pid);
-  int stopped = process && TerminateProcess(process, STOPPED_EXIT_CODE);
+  int stopped = TerminateProcess(process, STOPPED_EXIT_CODE);
   DWORD error = stopped ? 0 : GetLastError();
-  // Wait for its memory to come back, so the next refusal does not count it again.
-  if (process) { if (stopped) WaitForSingleObject(process, 2000); CloseHandle(process); }
+  // Wait for its memory to come back, so the next message does not count it again.
+  if (stopped) WaitForSingleObject(process, 2000);
+  CloseHandle(process);
   char name[3 * MAX_PATH + 1];
   json_text(target->name, name, sizeof name);
   char line[1200];
@@ -272,9 +343,8 @@ static void run_command(Hold *hold, char *line) {
   size_t len = strlen(line);
   while (len && (line[len - 1] == '\r' || line[len - 1] == ' ')) line[--len] = 0;
   if (strncmp(line, "limit ", 6) == 0) {
-    char *end = NULL;
-    unsigned long long mib = strtoull(line + 6, &end, 10);
-    if (mib == 0 || !end || *end != 0) { write_error("limit-value", 0); return; }
+    ULONGLONG mib = parse_mib(line + 6);
+    if (mib == 0) { write_error("limit-value", 0); return; }
     if (!set_limit(hold, mib << 20)) { write_error("limit", GetLastError()); return; }
     char out[96];
     snprintf(out, sizeof out, "{\"event\":\"limit\",\"limitBytes\":%llu}", mib << 20);
@@ -311,17 +381,26 @@ static DWORD WINAPI read_commands(LPVOID arg) {
 }
 
 static int hold_main(const wchar_t *base, const wchar_t *limit_text) {
-  wchar_t *end = NULL;
-  unsigned long long mib = wcstoull(limit_text, &end, 10);
-  if (mib == 0 || !end || *end != 0 || wcslen(base) > 200) {
+  char limit_ascii[32];
+  ULONGLONG mib = 0;
+  if (wcslen(limit_text) < sizeof limit_ascii) {
+    size_t i = 0;
+    for (; limit_text[i]; i++) limit_ascii[i] = limit_text[i] < 128 ? (char)limit_text[i] : '?';
+    limit_ascii[i] = 0;
+    mib = parse_mib(limit_ascii);
+  }
+  if (mib == 0 || wcslen(base) > 200) {
     fputs("usage: seira-job-fence hold <job base name> <limit MiB>\n", stderr);
     return USAGE_EXIT_CODE;
   }
   static Hold hold;
   // A new job each time: a job keeps the first completion port it gets, so a job from an earlier server cannot report here.
   swprintf(hold.name, sizeof hold.name / sizeof hold.name[0], L"%ls-%lu", base, (unsigned long)GetCurrentProcessId());
+  SetLastError(ERROR_SUCCESS);
   hold.job = CreateJobObjectW(NULL, hold.name);
   if (!hold.job) { write_error("create", GetLastError()); return 1; }
+  // An existing job of that name belongs to another process, and its limit and port are not ours to set.
+  if (GetLastError() == ERROR_ALREADY_EXISTS) { write_error("exists", ERROR_ALREADY_EXISTS); CloseHandle(hold.job); return 1; }
   if (!set_limit(&hold, mib << 20)) { write_error("limit", GetLastError()); return 1; }
   hold.port = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 1);
   if (!hold.port) { write_error("port", GetLastError()); return 1; }
@@ -343,21 +422,33 @@ static int hold_main(const wchar_t *base, const wchar_t *limit_text) {
     (unsigned long)GetCurrentProcessId());
   write_line(line);
 
-  ULONGLONG pressure_until = 0;
+  ULONGLONG pressure_until = 0, last_sweep = 0;
+  int notified = 0;
   for (;;) {
     DWORD message = 0;
     ULONG_PTR key = 0;
     LPOVERLAPPED value = NULL;
-    DWORD wait = GetTickCount64() < pressure_until ? 1000 : INFINITE;
+    ULONGLONG now = GetTickCount64();
+    DWORD wait = INFINITE;
+    if (now < pressure_until) wait = now - last_sweep >= SWEEP_MS ? 0 : (DWORD)(SWEEP_MS - (now - last_sweep));
     BOOL got = GetQueuedCompletionStatus(hold.port, &message, &key, &value, wait);
-    if (!got && value == NULL) {
-      if (GetLastError() == WAIT_TIMEOUT) { stop_largest(&hold, 0, SWEEP_STOP_AT_PERCENT, 0); continue; }
-      break;
-    }
-    if (key == QUIT_KEY) break;
-    if (key == JOB_KEY && message == JOB_OBJECT_MSG_JOB_MEMORY_LIMIT) {
+    if (!got && value == NULL && GetLastError() != WAIT_TIMEOUT) break;
+    if (got && key == QUIT_KEY) break;
+    if (got && key == JOB_KEY && message == JOB_OBJECT_MSG_NOTIFICATION_LIMIT) {
+      stop_largest(&hold, (DWORD)(ULONG_PTR)value, NOTIFY_STOP_AT_PERCENT, 0);
+      notified = 1;
+      pressure_until = GetTickCount64() + PRESSURE_MS;
+    } else if (got && key == JOB_KEY && message == JOB_OBJECT_MSG_JOB_MEMORY_LIMIT) {
       stop_largest(&hold, (DWORD)(ULONG_PTR)value, STOP_AT_PERCENT, 1);
       pressure_until = GetTickCount64() + PRESSURE_MS;
+    }
+    // By time, not by timeout: other job messages (a process starts or ends) must not hold the sweep back.
+    now = GetTickCount64();
+    if (now < pressure_until && now - last_sweep >= SWEEP_MS) {
+      last_sweep = now;
+      stop_largest(&hold, 0, STOP_AT_PERCENT, 0);
+      // The notification may come once per crossing: arm it again once the job is back under the stop line.
+      if (notified && job_bytes_now(&hold) * 100 < (ULONGLONG)hold.limit * NOTIFY_STOP_AT_PERCENT) { arm_notification(&hold); notified = 0; }
     }
   }
   // The job lives on while its programs run: they keep the limit after this process ends.
@@ -393,6 +484,56 @@ static void inherit(HANDLE handle) {
   if (handle && handle != INVALID_HANDLE_VALUE) SetHandleInformation(handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
 }
 
+// The program name as CreateProcess reads it: quotes delimit it and backslashes are literal.
+static wchar_t *program_token(const wchar_t *tail) {
+  const wchar_t *start = tail;
+  if (*tail == L'"') start++;
+  const wchar_t *end = skip_program_name(tail);
+  if (*tail == L'"' && end > start && end[-1] == L'"') end--;
+  size_t length = end > start ? (size_t)(end - start) : 0;
+  wchar_t *token = (wchar_t *)calloc(length + 1, sizeof(wchar_t));
+  if (token) memcpy(token, start, length * sizeof(wchar_t));
+  return token;
+}
+
+// CreateProcess runs a .bat or .cmd file through cmd.exe, which parses the arguments again by other rules
+// (CVE-2024-27980). Windows drops trailing dots and spaces from a file name, and a colon in the last part names a stream.
+static int is_refused(const wchar_t *path) {
+  const wchar_t *last = path;
+  for (const wchar_t *p = path; *p; p++) if (*p == L'\\' || *p == L'/') last = p + 1;
+  if (wcschr(last, L':')) return 1;
+  size_t n = wcslen(last);
+  while (n && (last[n - 1] == L'.' || last[n - 1] == L' ')) n--;
+  return n >= 4 && (_wcsnicmp(last + n - 4, L".bat", 4) == 0 || _wcsnicmp(last + n - 4, L".cmd", 4) == 0);
+}
+
+static int is_file(const wchar_t *path) {
+  DWORD attributes = GetFileAttributesW(path);
+  return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+#define PATH_CHARS 32768
+
+// The program file: a path as written, else with ".exe" added; a bare name from PATH only, so the folder of this
+// helper and the current folder never supply a program.
+static wchar_t *resolve_program(const wchar_t *token) {
+  if (!*token) return NULL;
+  wchar_t *path = (wchar_t *)calloc(PATH_CHARS + 8, sizeof(wchar_t));
+  if (!path) return NULL;
+  DWORD n = 0;
+  if (wcspbrk(token, L"\\/:")) {
+    n = GetFullPathNameW(token, PATH_CHARS, path, NULL);
+    if (n > 0 && n < PATH_CHARS && !is_file(path)) wcscat(path, L".exe");
+  } else {
+    DWORD size = GetEnvironmentVariableW(L"PATH", NULL, 0);
+    wchar_t *folders = size ? (wchar_t *)calloc(size, sizeof(wchar_t)) : NULL;
+    if (folders && GetEnvironmentVariableW(L"PATH", folders, size)) n = SearchPathW(folders, token, L".exe", PATH_CHARS, path, NULL);
+    free(folders);
+  }
+  if (n == 0 || n >= PATH_CHARS || !is_file(path)) { free(path); return NULL; }
+  return path;
+}
+
 static int run_main(void) {
   const wchar_t *p = skip_space(skip_program_name(GetCommandLineW()));
   if (!(p[0] == L'-' && p[1] == L'-' && (p[2] == L' ' || p[2] == L'\t'))) {
@@ -404,16 +545,41 @@ static int run_main(void) {
     fputs("usage: seira-job-fence -- <program> [arguments]\n", stderr);
     return USAGE_EXIT_CODE;
   }
+  wchar_t *token = program_token(tail);
+  if (!token || is_refused(token)) {
+    fputs("seira-job-fence: will not start this program\n", stderr);
+    free(token);
+    return START_FAILED_EXIT_CODE;
+  }
+  wchar_t *program = resolve_program(token);
+  free(token);
+  if (!program || is_refused(program)) {
+    fputs(program ? "seira-job-fence: will not start this program\n" : "seira-job-fence: could not find the program\n", stderr);
+    free(program);
+    return START_FAILED_EXIT_CODE;
+  }
   size_t length = wcslen(tail);
   wchar_t *command = (wchar_t *)calloc(length + 1, sizeof(wchar_t));
-  if (!command) return START_FAILED_EXIT_CODE;
+  if (!command) { free(program); return START_FAILED_EXIT_CODE; }
   memcpy(command, tail, length * sizeof(wchar_t));
 
   wchar_t job_name[300];
   DWORD name_length = GetEnvironmentVariableW(FENCE_ENV, job_name, sizeof job_name / sizeof job_name[0]);
   SetEnvironmentVariableW(FENCE_ENV, NULL);
-  HANDLE job = name_length > 0 && name_length < sizeof job_name / sizeof job_name[0]
+  HANDLE jobs[2];
+  DWORD job_count = 0;
+  HANDLE bots = name_length > 0 && name_length < sizeof job_name / sizeof job_name[0]
     ? OpenJobObjectW(JOB_OBJECT_ASSIGN_PROCESS, FALSE, job_name) : NULL;
+  if (bots) jobs[job_count++] = bots;
+  // Second in the list, so it nests inside the bots job. While this helper holds it, closing it stops its processes.
+  HANDLE engine = CreateJobObjectW(NULL, NULL);
+  if (engine) {
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION info;
+    memset(&info, 0, sizeof info);
+    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    if (SetInformationJobObject(engine, JobObjectExtendedLimitInformation, &info, sizeof info)) jobs[job_count++] = engine;
+    else { CloseHandle(engine); engine = NULL; }
+  }
 
   SetConsoleCtrlHandler(keep_waiting, TRUE);
   STARTUPINFOW own;
@@ -438,37 +604,44 @@ static int run_main(void) {
   PROCESS_INFORMATION child;
   memset(&child, 0, sizeof child);
   BOOL started = FALSE;
-  if (job) {
-    // The job list starts the program inside the job: no instruction of it runs outside the limit.
+  DWORD error = 0;
+  LPPROC_THREAD_ATTRIBUTE_LIST attributes = NULL;
+  int initialized = 0, listed = 0;
+  if (job_count) {
     SIZE_T size = 0;
     InitializeProcThreadAttributeList(NULL, 1, 0, &size);
-    LPPROC_THREAD_ATTRIBUTE_LIST attributes = (LPPROC_THREAD_ATTRIBUTE_LIST)HeapAlloc(GetProcessHeap(), 0, size);
-    if (attributes && InitializeProcThreadAttributeList(attributes, 1, 0, &size)) {
-      if (UpdateProcThreadAttribute(attributes, 0, PROC_THREAD_ATTRIBUTE_JOB_LIST, &job, sizeof job, NULL, NULL)) {
-        start.StartupInfo.cb = sizeof start;
-        start.lpAttributeList = attributes;
-        started = CreateProcessW(NULL, command, NULL, NULL, TRUE, flags | EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &start.StartupInfo, &child);
-        start.StartupInfo.cb = sizeof(STARTUPINFOW);
-        start.lpAttributeList = NULL;
-      }
-      DeleteProcThreadAttributeList(attributes);
-    }
-    if (attributes) HeapFree(GetProcessHeap(), 0, attributes);
-    if (!started) {
-      // Windows before the job list, or a job this program cannot join at birth: start it paused, add it, then run it.
-      started = CreateProcessW(NULL, command, NULL, NULL, TRUE, flags | CREATE_SUSPENDED, NULL, NULL, &start.StartupInfo, &child);
-      if (started) {
-        AssignProcessToJobObject(job, child.hProcess);
-        ResumeThread(child.hThread);
-      }
-    }
-    CloseHandle(job);
-  } else {
-    started = CreateProcessW(NULL, command, NULL, NULL, TRUE, flags, NULL, NULL, &start.StartupInfo, &child);
+    attributes = (LPPROC_THREAD_ATTRIBUTE_LIST)HeapAlloc(GetProcessHeap(), 0, size);
+    initialized = attributes && InitializeProcThreadAttributeList(attributes, 1, 0, &size);
+    listed = initialized && UpdateProcThreadAttribute(attributes, 0, PROC_THREAD_ATTRIBUTE_JOB_LIST, jobs, job_count * sizeof(HANDLE), NULL, NULL);
   }
+  if (listed) {
+    // The job list puts the program in the jobs at birth: no instruction of it runs outside the limit.
+    start.StartupInfo.cb = sizeof start;
+    start.lpAttributeList = attributes;
+    started = CreateProcessW(program, command, NULL, NULL, TRUE, flags | EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &start.StartupInfo, &child);
+    if (!started) error = GetLastError();
+  } else {
+    // Windows before the job list: start it paused, and let it run only once it is in every job.
+    started = CreateProcessW(program, command, NULL, NULL, TRUE, flags | (job_count ? CREATE_SUSPENDED : 0), NULL, NULL, &start.StartupInfo, &child);
+    if (!started) error = GetLastError();
+    for (DWORD i = 0; started && i < job_count; i++) {
+      if (AssignProcessToJobObject(jobs[i], child.hProcess)) continue;
+      error = GetLastError();
+      TerminateProcess(child.hProcess, START_FAILED_EXIT_CODE);
+      CloseHandle(child.hThread);
+      CloseHandle(child.hProcess);
+      started = FALSE;
+    }
+    if (started && job_count) ResumeThread(child.hThread);
+  }
+  if (initialized) DeleteProcThreadAttributeList(attributes);
+  if (attributes) HeapFree(GetProcessHeap(), 0, attributes);
+  if (bots) CloseHandle(bots);
   free(command);
+  free(program);
   if (!started) {
-    fprintf(stderr, "seira-job-fence: could not start the program (error %lu)\n", (unsigned long)GetLastError());
+    if (engine) CloseHandle(engine);
+    fprintf(stderr, "seira-job-fence: could not start the program (error %lu)\n", (unsigned long)error);
     return START_FAILED_EXIT_CODE;
   }
   CloseHandle(child.hThread);
@@ -476,6 +649,13 @@ static int run_main(void) {
   DWORD code = START_FAILED_EXIT_CODE;
   GetExitCodeProcess(child.hProcess, &code);
   CloseHandle(child.hProcess);
+  if (engine) {
+    // The program ended on its own: processes it left behind keep running, as on Linux.
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION info;
+    memset(&info, 0, sizeof info);
+    SetInformationJobObject(engine, JobObjectExtendedLimitInformation, &info, sizeof info);
+    CloseHandle(engine);
+  }
   return (int)code;
 }
 

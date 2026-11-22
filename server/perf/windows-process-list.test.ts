@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { parseWindowsProcessLines, WINDOWS_PROCESS_SCRIPT } from "./windows-process-list.ts";
+import type { ProcessRow } from "./process-buckets.ts";
+import { dropStaleParents, parseWindowsProcessLines, WINDOWS_PROCESS_SCRIPT } from "./windows-process-list.ts";
 
 describe("parseWindowsProcessLines", () => {
   it("reads pid, parent, private bytes, CPU time, start and name", () => {
@@ -19,5 +20,28 @@ describe("parseWindowsProcessLines", () => {
     for (const field of ["ProcessId", "ParentProcessId", "Name", "PrivatePageCount", "KernelModeTime", "UserModeTime", "CreationDate"]) {
       expect(WINDOWS_PROCESS_SCRIPT).toContain(field);
     }
+  });
+});
+
+describe("dropStaleParents", () => {
+  const row = (pid: number, ppid: number, start: string): ProcessRow => ({ pid, ppid, name: `p${pid}`, cpuMs: 0, rssBytes: 0, start });
+
+  it("unlinks a child from a parent pid that a later process now has", () => {
+    const rows = [row(10, 1, "win:300"), row(20, 10, "win:200"), row(30, 10, "win:400")];
+    expect(dropStaleParents(rows).map((each) => [each.pid, each.ppid])).toEqual([[10, 1], [20, 0], [30, 10]]);
+  });
+
+  it("keeps a link to a parent that started at the same time", () => {
+    expect(dropStaleParents([row(10, 1, "win:300"), row(20, 10, "win:300")])[1]!.ppid).toBe(10);
+  });
+
+  it("keeps rows with no listed parent or no start time unchanged", () => {
+    const rows = [row(10, 99, "win:300"), row(20, 10, "")];
+    expect(dropStaleParents(rows)).toEqual(rows);
+  });
+
+  it("compares start times past the range of safe numbers", () => {
+    const rows = [row(10, 1, "win:133000000000000002"), row(20, 10, "win:133000000000000001")];
+    expect(dropStaleParents(rows)[1]!.ppid).toBe(0);
   });
 });

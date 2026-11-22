@@ -3,10 +3,11 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
-import { describe, it } from "node:test";
+import { after, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -18,6 +19,7 @@ const skip = process.platform !== "win32" ? "Windows only" : !existsSync(FENCE) 
 /** A running `hold`: its events, and a wait for the next event that matches. */
 function startHold(limitMib) {
   const proc = spawn(FENCE, ["hold", "Local\\Seira-bots-test", String(limitMib)], { stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
+  started.push(proc);
   const events = [];
   const waiters = [];
   createInterface({ input: proc.stdout }).on("line", (line) => {
@@ -40,9 +42,13 @@ function startHold(limitMib) {
   return { proc, events, next, send, close };
 }
 
-/** Run a command through the helper inside `job`; resolves with its exit code, stdout and stderr. */
+/** Run a command through the helper inside `job`; resolves with its exit code, stdout and stderr. EATER_JOB tells
+ * `test-eater injob` which job to look at. */
 function fenced(job, command, args, { input, env } = {}) {
-  return collect(spawn(FENCE, ["--", command, ...args], { env: { ...process.env, ...env, ...(job ? { SEIRA_FENCE_JOB: job } : {}) }, windowsHide: true }), input);
+  const fence = job ? { SEIRA_FENCE_JOB: job, EATER_JOB: job } : {};
+  const child = spawn(FENCE, ["--", command, ...args], { env: { ...process.env, ...env, ...fence }, windowsHide: true });
+  started.push(child);
+  return collect(child, input);
 }
 
 function collect(child, input) {
@@ -57,10 +63,23 @@ function collect(child, input) {
   return Object.assign(done, { child });
 }
 
+/** Every helper this file starts: a failed test must not leave one running, or the test file never ends. */
+const started = [];
 const stopAll = (...children) => { for (const child of children) if (child.exitCode === null) spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true }); };
+const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const exitCode = (command, args) => new Promise((resolve, reject) => {
+  const child = spawn(command, args, { stdio: "ignore", windowsHide: true });
+  child.once("error", reject);
+  child.once("exit", resolve);
+});
 
-describe("seira-job-fence", { skip, timeout: 120_000 }, () => {
-  it("passes arguments, stdin, stdout, stderr and the exit code through unchanged (AC-04)", async () => {
+const T = { timeout: 60_000 };
+
+describe("seira-job-fence", { skip }, () => {
+  after(() => stopAll(...started));
+
+  it("passes arguments, stdin, stdout, stderr and the exit code through unchanged (AC-04)", T, async () => {
     const hold = startHold(2048);
     const { job } = await hold.next((event) => event.event === "ready");
     // Echo stdin to stdout byte for byte; argv and the fence variable go to stderr.
@@ -78,19 +97,19 @@ describe("seira-job-fence", { skip, timeout: 120_000 }, () => {
     assert.equal(await hold.close(), 0);
   });
 
-  it("starts the program and its children inside the job, with the limit already set (AC-01)", async () => {
+  it("starts the program and its children inside the job, with the limit already set (AC-01)", T, async () => {
     const hold = startHold(300);
     const { job } = await hold.next((event) => event.event === "ready");
     const own = await fenced(job, EATER, ["injob"]);
     assert.equal(own.code, 0);
-    assert.deepEqual(JSON.parse(own.stdout.toString()), { inJob: true, jobMemoryLimit: 300 * MIB });
+    assert.deepEqual(JSON.parse(own.stdout.toString()), { inJob: true, jobMemoryLimit: 300 * MIB, killOnClose: true });
     const grandchild = await fenced(job, EATER, ["child", "injob"]);
     assert.equal(grandchild.code, 0);
-    assert.deepEqual(JSON.parse(grandchild.stdout.toString()), { inJob: true, jobMemoryLimit: 300 * MIB });
+    assert.deepEqual(JSON.parse(grandchild.stdout.toString()), { inJob: true, jobMemoryLimit: 300 * MIB, killOnClose: true });
     assert.equal(await hold.close(), 0);
   });
 
-  it("stops a program at the limit, reports it, and keeps running (AC-03)", async (t) => {
+  it("stops a program at the limit, reports it, and keeps running (AC-03)", T, async (t) => {
     const hold = startHold(256);
     const { job } = await hold.next((event) => event.event === "ready");
     const started = Date.now();
@@ -109,7 +128,7 @@ describe("seira-job-fence", { skip, timeout: 120_000 }, () => {
     assert.equal(await hold.close(), 0);
   });
 
-  it("stops a child of the engine before the engine itself", async () => {
+  it("stops a child of the engine before the engine itself", T, async () => {
     const hold = startHold(256);
     const { job } = await hold.next((event) => event.event === "ready");
     const run = fenced(job, EATER, ["child", "retry", "16"]);
@@ -122,7 +141,7 @@ describe("seira-job-fence", { skip, timeout: 120_000 }, () => {
     assert.equal(await hold.close(), 0);
   });
 
-  it("limits the sum of all programs in the job (AC-02)", async (t) => {
+  it("limits the sum of all programs in the job (AC-02)", T, async (t) => {
     const hold = startHold(256);
     const { job } = await hold.next((event) => event.event === "ready");
     const first = fenced(job, EATER, ["hold", "160"]);
@@ -144,7 +163,7 @@ describe("seira-job-fence", { skip, timeout: 120_000 }, () => {
     }
   });
 
-  it("changes the limit on a command", async () => {
+  it("changes the limit on a command", T, async () => {
     const hold = startHold(256);
     await hold.next((event) => event.event === "ready");
     hold.send("limit 512");
@@ -155,13 +174,84 @@ describe("seira-job-fence", { skip, timeout: 120_000 }, () => {
     assert.equal(await hold.close(), 0);
   });
 
-  it("runs the program without a job when the job is missing", async () => {
+  it("runs the program without the bots job when that job is missing", T, async () => {
     const result = await fenced("Local\\Seira-bots-missing-0", EATER, ["injob"]);
     assert.equal(result.code, 0);
-    assert.equal(JSON.parse(result.stdout.toString()).jobMemoryLimit, 0);
+    assert.deepEqual(JSON.parse(result.stdout.toString()), { inJob: false, jobMemoryLimit: 0, killOnClose: true });
   });
 
-  it("exits when its stdin closes", async () => {
+  it("never runs the program outside a job that exists, even when the program cannot start inside it", T, async () => {
+    const hold = startHold(1);
+    const { job } = await hold.next((event) => event.event === "ready");
+    try {
+      const result = await fenced(job, EATER, ["injob"]);
+      const out = result.stdout.toString();
+      assert.ok(!out.includes('"inJob":false'), `ran outside the job: ${out} (exit ${result.code})`);
+      if (result.code === 0) assert.equal(JSON.parse(out).inJob, true);
+    } finally {
+      await hold.close();
+    }
+  });
+
+  it("refuses a .bat or .cmd program, whatever its spelling", T, async () => {
+    const folder = mkdtempSync(join(tmpdir(), "seira-fence-"));
+    const marker = join(folder, "ran.txt");
+    for (const name of ["x.cmd", "y.BAT"]) writeFileSync(join(folder, name), `@echo off\r\necho ran> "${marker}"\r\n`);
+    for (const program of [join(folder, "x.cmd"), `${join(folder, "x.cmd")}.`, `${join(folder, "x.cmd")} .`, join(folder, "y.BAT")]) {
+      const result = await fenced(null, program, ["a"]);
+      assert.equal(result.code, 127, `${program}: ${result.stderr}`);
+    }
+    assert.equal(existsSync(marker), false, "no batch file ran");
+  });
+
+  it("stops the program and its children when the helper is stopped", T, async () => {
+    const hold = startHold(512);
+    const { job } = await hold.next((event) => event.event === "ready");
+    const run = fenced(job, EATER, ["child", "hold", "16"]);
+    try {
+      const pid = await new Promise((resolve) => run.child.stdout.on("data", (chunk) => {
+        const match = /held \d+ (\d+)/.exec(chunk.toString());
+        if (match) resolve(Number(match[1]));
+      }));
+      assert.ok(alive(pid));
+      run.child.kill();
+      for (let waited = 0; alive(pid) && waited < 10_000; waited += 100) await sleep(100);
+      assert.equal(alive(pid), false, "the grandchild ended with the helper");
+    } finally {
+      stopAll(run.child);
+      await hold.close();
+    }
+  });
+
+  it("leaves processes the program started running after the program ends", T, async () => {
+    const hold = startHold(512);
+    const { job } = await hold.next((event) => event.event === "ready");
+    let pid = 0;
+    try {
+      const result = await fenced(job, EATER, ["spawn", "hold", "16"]);
+      assert.equal(result.code, 0);
+      pid = Number(/spawned (\d+)/.exec(result.stdout.toString())?.[1]);
+      await sleep(1000);
+      assert.equal(alive(pid), true, "the process the program started still runs");
+    } finally {
+      if (pid) spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true });
+      await hold.close();
+    }
+  });
+
+  it("refuses a limit that is not a whole number of MiB in range", T, async () => {
+    for (const limit of ["-1", "+5", " 5", "0", "99999999999999999999", "8796093022208"]) {
+      assert.equal(await exitCode(FENCE, ["hold", "Local\\Seira-bots-test", limit]), 2, limit);
+    }
+    const hold = startHold(64);
+    await hold.next((event) => event.event === "ready");
+    for (const line of ["limit -5", "limit 0", "limit 99999999999999999999"]) hold.send(line);
+    await hold.next((event) => event.event === "error" && hold.events.filter((seen) => seen.step === "limit-value").length === 3);
+    assert.equal(hold.events.some((event) => event.event === "limit"), false);
+    assert.equal(await hold.close(), 0);
+  });
+
+  it("exits when its stdin closes", T, async () => {
     const hold = startHold(128);
     await hold.next((event) => event.event === "ready");
     assert.equal(await hold.close(), 0);

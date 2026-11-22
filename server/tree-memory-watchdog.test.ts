@@ -53,6 +53,38 @@ describe("tree memory watchdog", () => {
     expect(stops).toEqual([{ botId: "bot-a", pid: 101, name: "worker", bytes: 600 * MB, totalBytes: 1000 * MB, budgetBytes: 500 * MB }]);
   });
 
+  it("stops at the first check over budget when the machine has less than 1 GiB available (AC-07b)", async () => {
+    const free = { bytes: 900 * MB as number | null };
+    const { signals, at } = setup(botA, [engine(100, "bot-a")], { available: () => free.bytes });
+    await at(0);
+    expect(signals).toEqual([[101, "SIGTERM"]]);
+  });
+
+  it("still waits 10 seconds when the machine has 1 GiB or more available, or the amount is unknown", async () => {
+    for (const bytes of [1024 * MB, null]) {
+      const { signals, at } = setup(botA, [engine(100, "bot-a")], { available: () => bytes });
+      await at(0);
+      await at(8_000);
+      expect(signals).toEqual([]);
+      await at(10_000);
+      expect(signals).toEqual([[101, "SIGTERM"]]);
+    }
+  });
+
+  it("does not stop a second process while the first stop is pending, even with little memory available", async () => {
+    const { signals, at } = setup(botA, [engine(100, "bot-a")], { available: () => 0 });
+    await at(0);
+    await at(2_000);
+    expect(signals).toEqual([[101, "SIGTERM"]]);
+  });
+
+  it("does nothing under budget when the machine has little memory available", async () => {
+    const { state, signals, at } = setup(botA, [engine(100, "bot-a")], { available: () => 0 });
+    state.budget = 2000 * MB;
+    await at(0);
+    expect(signals).toEqual([]);
+  });
+
   it("never stops an engine root, even when it is the largest", async () => {
     const rows = [row(100, 1, "engine", 900), row(101, 100, "worker", 100)];
     const { signals, at } = setup(rows, [engine(100, "bot-a")]);

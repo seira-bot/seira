@@ -25,6 +25,9 @@ export interface TreeMemoryWatchdogOptions {
   overForMs?: number;
   graceMs?: number;
   serverPid?: number;
+  /** The machine's available memory in bytes, or null when unknown. Below `urgentBelowBytes` a stop does not wait `overForMs`. */
+  available?: () => number | null;
+  urgentBelowBytes?: number;
 }
 
 const kill = (pid: number, signal: "SIGTERM" | "SIGKILL"): boolean => {
@@ -38,6 +41,7 @@ export function createTreeMemoryWatchdog(options: TreeMemoryWatchdogOptions) {
   const overForMs = options.overForMs ?? 10_000;
   const graceMs = options.graceMs ?? 3_000;
   const serverPid = options.serverPid ?? process.pid;
+  const urgentBelowBytes = options.urgentBelowBytes ?? 1024 ** 3;
   let overSince: number | null = null;
   let pending: { pid: number; name: string; at: number } | null = null;
   let running = false;
@@ -77,7 +81,11 @@ export function createTreeMemoryWatchdog(options: TreeMemoryWatchdogOptions) {
     const total = tallies.reduce((sum, [, tally]) => sum + tally.rssBytes, 0);
     if (total <= budget) { overSince = null; return; }
     overSince ??= at;
-    if (pending || at - overSince < overForMs) return;
+    if (pending) return;
+    if (at - overSince < overForMs) {
+      const free = options.available?.() ?? null;
+      if (free === null || free >= urgentBelowBytes) return;
+    }
     const found = target(tallies, byPid);
     if (!found) return;
     if (!signal(found.row.pid, "SIGTERM")) return;

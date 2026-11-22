@@ -31,12 +31,13 @@ describe("the server's job hold", { skip, timeout: 120_000 }, () => {
     assert.match(hold.job, /^Local\\Seira-bots-[0-9a-f]{10}-\d+$/);
     try {
       const injob = jobFenceArgv(helper, EATER, ["injob"]);
-      const first = await run(injob.command, injob.args, jobFenceEnv(process.env, hold.job));
-      assert.deepEqual(JSON.parse(first.stdout), { inJob: true, jobMemoryLimit: 256 * MIB });
+      const env = { ...jobFenceEnv(process.env, hold.job), EATER_JOB: hold.job };
+      const first = await run(injob.command, injob.args, env);
+      assert.deepEqual(JSON.parse(first.stdout), { inJob: true, jobMemoryLimit: 256 * MIB, killOnClose: true });
 
       hold.setLimit(320 * MIB);
       for (let waited = 0; !events.some((event) => event.event === "limit") && waited < 10_000; waited += 50) await new Promise((resolve) => setTimeout(resolve, 50));
-      const second = await run(injob.command, injob.args, jobFenceEnv(process.env, hold.job));
+      const second = await run(injob.command, injob.args, env);
       assert.equal(JSON.parse(second.stdout).jobMemoryLimit, 320 * MIB);
       assert.equal(hold.limitBytes(), 320 * MIB);
 

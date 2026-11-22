@@ -17,8 +17,9 @@ const pages = (text: string, label: string): number | null => {
   return found ? Number(found[1]) : null;
 };
 
-/** `vm_stat` prints "Pages free" without the speculative pages, and the page size is 16384 bytes on Apple silicon. Inactive and
- * purgeable pages are reclaimable, which `os.freemem()` does not count on macOS. */
+/** `vm_stat` prints "Pages free" without the speculative pages, and the page size is 16384 bytes on Apple silicon. Inactive pages
+ * are reclaimable, which `os.freemem()` does not count on macOS. Purgeable pages are already on the inactive or active queue, so
+ * they are not added again. */
 export function parseVmStat(text: string): VmStat | null {
   const size = /page size of (\d+) bytes/.exec(text);
   const pageBytes = size ? Number(size[1]) : 0;
@@ -27,7 +28,7 @@ export function parseVmStat(text: string): VmStat | null {
   const inactivePages = pages(text, "Pages inactive") ?? 0;
   const speculativePages = pages(text, "Pages speculative") ?? 0;
   const purgeablePages = pages(text, "Pages purgeable") ?? 0;
-  return { pageBytes, freePages, inactivePages, speculativePages, purgeablePages, availableBytes: (freePages + inactivePages + purgeablePages + speculativePages) * pageBytes };
+  return { pageBytes, freePages, inactivePages, speculativePages, purgeablePages, availableBytes: (freePages + inactivePages + speculativePages) * pageBytes };
 }
 
 export interface MacMemoryOptions {

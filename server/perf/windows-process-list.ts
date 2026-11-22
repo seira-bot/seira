@@ -30,12 +30,29 @@ export function parseWindowsProcessLines(text: string): ProcessRow[] {
   return rows;
 }
 
+const startOf = (row: ProcessRow): bigint | null => {
+  const found = /^win:(\d+)$/.exec(row.start ?? "");
+  return found ? BigInt(found[1]!) : null;
+};
+
+/** Windows keeps a dead parent's pid in its children, and can give that pid to a new process. A parent that started after
+ * the child is not its parent: the child gets ppid 0. */
+export function dropStaleParents(rows: readonly ProcessRow[]): ProcessRow[] {
+  const byPid = new Map(rows.map((row) => [row.pid, row]));
+  return rows.map((row) => {
+    const parent = byPid.get(row.ppid);
+    const own = startOf(row);
+    const theirs = parent ? startOf(parent) : null;
+    return own !== null && theirs !== null && theirs > own ? { ...row, ppid: 0 } : row;
+  });
+}
+
 export function windowsProcessList(): Promise<ProcessList | null> {
   return new Promise((resolve) => {
     execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", WINDOWS_PROCESS_SCRIPT],
       { timeout: 15_000, maxBuffer: 8 * 1024 * 1024, windowsHide: true }, (error, stdout) => {
         if (error) return resolve(null);
-        const rows = parseWindowsProcessLines(stdout);
+        const rows = dropStaleParents(parseWindowsProcessLines(stdout));
         resolve(rows.length ? { rows, reapedMs: null, totalMs: null } : null);
       });
   });
