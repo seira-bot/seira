@@ -1,4 +1,5 @@
 // Ports for suites that boot real servers: probe first, so two suites at once never lose an unchecked bind.
+import { randomInt } from "node:crypto";
 import { createServer } from "node:http";
 
 import { mcpOAuthRedirectUri } from "../mcp-oauth.ts";
@@ -28,7 +29,7 @@ function claim(ports: number[]): boolean {
  * itself. */
 export async function freePortBlock(offsets: number[], from = 19_600, span = 3_000): Promise<number> {
   for (let attempt = 0; attempt < 40; attempt++) {
-    const picked = from + Math.floor(Math.random() * span);
+    const picked = from + randomInt(span);
     const base = span < 64 ? picked : forWorker(belowEphemeral(picked));
     const ports = offsets.map((offset) => base + offset);
     if (!claim(ports)) continue;

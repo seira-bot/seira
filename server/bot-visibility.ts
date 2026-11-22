@@ -177,6 +177,7 @@ export interface VisibilityGroup {
   threadId: string;
   memberIds: readonly string[];
   section?: string;
+  avatarUrl?: string | null;
   tasks?: ReadonlyArray<{ threadId: string }>;
   /** The narrowest audience the room has had: a bot leaving never widens it, only an admin's explicit reset. */
   audienceFloor?: unknown;
@@ -327,6 +328,11 @@ export class VisibleSet {
     for (const bot of this.bots.values()) {
       if (bot.avatarUrl !== url) continue;
       if (this.bot(bot.id)) return true;
+      referenced = true;
+    }
+    for (const group of this.groups.values()) {
+      if (group.avatarUrl !== url) continue;
+      if (this.group(group.id)) return true;
       referenced = true;
     }
     for (const threadId of threadsReferencing(name)) {

@@ -19,7 +19,7 @@ function record(value: unknown): value is Json {
 /** "1440" or "1,440" standing alone in the words. */
 function stated(value: number, words: string): boolean {
   const grouped = String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return [...new Set([String(value), grouped])].some((form) => new RegExp(`(?<![\\d,.])${form.replace(/[.,]/g, "\\$&")}(?![\\d,])`).test(words));
+  return [...new Set([String(value), grouped])].some((form) => new RegExp(`(?<![\\d,.])${form.replace(/[\\.,]/g, "\\$&")}(?![\\d,])`).test(words));
 }
 
 function leftOut(keyword: string, value: unknown, node: Json, words: string): boolean {

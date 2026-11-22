@@ -1,7 +1,7 @@
-// The bot box runtime: one per server. Decides once at boot whether turns are boxed (detect.ts), opens the two gates the
-// boxes reach through unix sockets (egress-gate.ts, harness-gate.ts), and wraps each bot spawn (server/procs.ts spawnCli
-// with owner "bot") in bubblewrap by the plan (plan.ts). Nothing here changes a spawn when the box is off: the command,
-// its arguments and its environment go through untouched, so every host that is not a Cloud home behaves as before.
+// The bot box runtime: one per server. Decides once at boot whether turns are boxed and which (detect.ts), opens the
+// gates the boxes reach through unix sockets (egress-gate.ts, harness-gate.ts, broker.ts), and wraps each bot spawn
+// (server/procs.ts spawnCli with owner "bot") in bubblewrap by the plan (plan.ts). Nothing here changes a spawn the box
+// does not take: the command, its arguments and its environment go through untouched.
 import { randomBytes } from "node:crypto";
 import { closeSync, existsSync, mkdirSync, openSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -13,8 +13,9 @@ import { SERVER_ROOT, resolveProxy } from "../proxy-paths.ts";
 import { bridgedCommand, type BridgeTools } from "./bridge.ts";
 import { brokerRewrite } from "./broker-env.ts";
 import { openCredentialBroker, type BrokerGrant, type CredentialBroker } from "./broker.ts";
-import { detectBox, type BoxDetection, type BoxKind } from "./detect.ts";
-import { openBoxEgressGate, type BoxEgressGate } from "./egress-gate.ts";
+import { detectBox, type BoxDetection, type BoxKind, type BoxScope } from "./detect.ts";
+import { BOX_EGRESS_RULES, limitedBoxRefusal, openBoxEgressGate, type BoxEgressGate } from "./egress-gate.ts";
+import type { EgressRules } from "../browser/egress/policy.ts";
 import { boxEnvironment } from "./env.ts";
 import { openHarnessGate, type HarnessGate } from "./harness-gate.ts";
 import { distrustHomePrograms } from "./program-trust.ts";
@@ -139,8 +140,12 @@ export class BoxRunner {
     const { botId, threadId } = this.conversation(given);
     const lent = botId && threadId ? this.lentTo(botId, threadId) : [];
     const audience = this.audienceFor(given);
+    const folders = this.foldersFor(given);
+    // A limited bot working in a folder of its own choosing still has its own folder, and its conversation's uploads.
+    const limitedOwn = folders?.limited && !given.home && !ids && botId ? { botId, threadId } : null;
+    const uploads = ids ?? (limitedOwn?.threadId ? { botId: limitedOwn.botId, threadId: limitedOwn.threadId } : null);
     // Made before the box starts, so an upload a later turn adds shows up in a box that is still running.
-    if (ids) try { mkdirSync(boxUploadsDir(this.options.setup.dataDir, ids.botId, ids.threadId), { recursive: true, mode: 0o700 }); } catch (error) {
+    if (uploads) try { mkdirSync(boxUploadsDir(this.options.setup.dataDir, uploads.botId, uploads.threadId), { recursive: true, mode: 0o700 }); } catch (error) {
       // The bind stays optional, but an upload named later would then be unreadable in this box: say so.
       console.error(`bot box: could not make the uploads folder, so uploads stay unreadable in this box: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -150,8 +155,10 @@ export class BoxRunner {
     if (team && under(resolve(given.cwd!), team) && existsSync(team)) {
       for (const name of TEAM_FOLDER_KEPT) if (name !== "MEMORY.md") try { mkdirSync(join(team, name), { recursive: true, mode: 0o700 }); } catch {}
     }
-    const folders = this.foldersFor(given);
-    const request: BoxRequest = { ...given, ...(lent.length ? { rw: [...(given.rw ?? []), ...lent] } : {}), ...(audience ? { audience } : {}), ...(folders ? { folders } : {}) };
+    const request: BoxRequest = {
+      ...given, ...(lent.length ? { rw: [...(given.rw ?? []), ...lent] } : {}), ...(audience ? { audience } : {}), ...(folders ? { folders } : {}),
+      ...(limitedOwn && !given.botId ? { botId: limitedOwn.botId } : {}), ...(limitedOwn?.threadId && !given.threadId ? { threadId: limitedOwn.threadId } : {}),
+    };
     const extraFds: number[] = [];
     const seccomp = this.options.seccompFile && !this.options.setup.mutate?.has("no-seccomp") ? this.options.seccompFile : null;
     const plan = planBox({ ...this.options.setup, seccompFd: seccomp ? BOX_SECCOMP_FD : undefined }, request);
@@ -242,13 +249,17 @@ export interface StartOptions {
   codeRoots?: readonly string[];
   engineRoots?: readonly string[];
   log?: (line: string) => void;
+  /** Scope `limited`: the host's rules for bots' browsers, which the box narrows to never reach this computer. */
+  limitedEgress?: () => EgressRules;
   /** Overrides for tests. */
   detect?: (env: Record<string, string | undefined>) => BoxDetection;
 }
 
 export function defaultCodeRoots(): string[] {
   const roots = [dirname(SERVER_ROOT)];
-  const node = dirname(dirname(process.execPath));
+  const prefix = dirname(dirname(process.execPath));
+  // An AppImage's runtime sits at the top of its own mount (/tmp/.mount_X/seira): that mount, not the folder holding it.
+  const node = ["/", "/tmp", "/run", "/var/tmp"].includes(prefix) ? dirname(process.execPath) : prefix;
   if (!roots.some((root) => node.startsWith(root))) roots.push(node);
   return roots;
 }
@@ -266,6 +277,7 @@ export class BotBox {
   private started: StartOptions | null = null;
   private audiences: BoxAudienceScope | null = null;
   private folders: BoxFolders | null = null;
+  private boxScope: BoxScope = "all";
 
   /** Detects, and when the box is on opens the gates. Safe to call once; returns what it decided. */
   async start(options: StartOptions): Promise<BoxDetection> {
@@ -277,11 +289,19 @@ export class BotBox {
       log(`bot box: off (${this.detection.reason})`);
       return this.detection;
     }
+    this.boxScope = this.detection.scope ?? "all";
     const dir = join(options.dataDir, "box");
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     const egressSocket = join(dir, "egress.sock"), harnessSocket = join(dir, "harness.sock"), brokerSocket = join(dir, "broker.sock");
     for (const socket of [egressSocket, harnessSocket, brokerSocket]) rmSync(socket, { force: true });
-    this.egress = await openBoxEgressGate({ socketPath: egressSocket });
+    const limitedEgress = options.limitedEgress;
+    const limitedRules = (): EgressRules => {
+      try { return limitedEgress?.() ?? BOX_EGRESS_RULES; } catch { return BOX_EGRESS_RULES; }
+    };
+    this.egress = await openBoxEgressGate({
+      socketPath: egressSocket,
+      ...(this.boxScope === "limited" ? { decide: (target, addresses) => limitedBoxRefusal(target, addresses, limitedRules()) } : {}),
+    });
     this.harness = await openHarnessGate({ socketPath: harnessSocket, port: options.port });
     this.credentials = await openCredentialBroker({ socketPath: brokerSocket });
     this.seccompFile = writeSeccompFile(dir);
@@ -299,16 +319,20 @@ export class BotBox {
     });
     this.runner.scopeAudiences(this.audiences);
     this.runner.scopeFolders(this.folders);
-    distrustHomePrograms(options.home, [options.dataDir], ["workspaces", "task-workspaces", "engine-homes", "team-files"].map((name) => join(options.dataDir, name)));
-    resetPathCache();
-    log(`bot box: on (bubblewrap, ${this.detection.tools.socat ? "socat" : "node"} bridges, credential broker, seccomp ${this.seccompFile ? "on" : "unsupported here"})`);
+    // Security: with only some bots boxed, the unboxed ones and the person write HOME anyway, so its programs stay trusted.
+    if (this.boxScope === "all") {
+      distrustHomePrograms(options.home, [options.dataDir], ["workspaces", "task-workspaces", "engine-homes", "team-files"].map((name) => join(options.dataDir, name)));
+      resetPathCache();
+    }
+    log(`bot box: on (${this.boxScope === "all" ? "every bot" : "bots limited to chosen folders"}; bubblewrap, ${this.detection.tools.socat ? "socat" : "node"} bridges, credential broker, seccomp ${this.seccompFile ? "on" : "unsupported here"})`);
     return this.detection;
   }
 
-  /** The broker for callers that mint conversation-bound grants, or null when the box (and so the broker) is off. */
-  broker(): BoxBroker | null {
+  /** The broker for callers that mint conversation-bound grants for `botId`'s boxes, or null when its spawns are not boxed. */
+  broker(botId?: string | null): BoxBroker | null {
     const credentials = this.credentials;
-    return credentials ? { port: BOX_BROKER_PORT, mintForThread: credentials.mintForThread, touchThread: credentials.touchThread, revokeThread: credentials.revokeThread, lookup: credentials.lookup } : null;
+    if (!credentials || !this.boxesBot(botId)) return null;
+    return { port: BOX_BROKER_PORT, mintForThread: credentials.mintForThread, touchThread: credentials.touchThread, revokeThread: credentials.revokeThread, lookup: credentials.lookup };
   }
 
   /** The broker's socket, for a self-check that bridges it. */
@@ -317,21 +341,44 @@ export class BotBox {
   /** The filter file each box gets, for a self-check. */
   seccomp(): string | null { return this.seccompFile; }
 
-  /** The box for one spawn, or null when turns are not boxed here. */
+  /** The box for one spawn, or null when this spawn is not boxed here. */
   wrap(request: BoxRequest): WrappedSpawn | null {
     if (!this.runner) return null;
-    const wrapped = this.runner.wrap(request);
+    const folders = this.boxScope === "limited" ? this.runner.foldersFor(request) : null;
+    if (this.boxScope === "limited" && folders?.limited !== true) return null;
+    const wrapped = this.runner.wrap(folders ? { ...request, folders } : request);
     this.boxed += 1;
     for (const name of wrapped.unbrokered) this.unbrokered.add(name);
     return wrapped;
   }
 
-  enabled(): boolean { return this.runner !== null; }
+  /** Whether every bot spawn runs boxed. */
+  enabled(): boolean { return this.runner !== null && this.boxScope === "all"; }
 
-  /** A relay for one boxed spawn (BoxRequest.relay), or null when bot spawns are not boxed here. */
+  /** Which spawns the box takes, or null when it is off. */
+  scope(): BoxScope | null { return this.enabled() ? "all" : this.runner ? this.boxScope : null; }
+
+  /** Whether the spawns of a bot with these folders run boxed. */
+  boxesFolders(folders: TurnFolders | null | undefined): boolean {
+    return this.enabled() || (this.runner !== null && folders?.limited === true);
+  }
+
+  /** Whether `botId`'s spawns run boxed now. */
+  boxesBot(botId: string | null | undefined): boolean {
+    return this.enabled() || (Boolean(botId) && this.boxesFolders(this.folders?.(botId!)));
+  }
+
+  /** Whether this spawn runs boxed: every one in scope `all`, else one of a bot with "Only chosen folders" on. */
+  takes(request: Pick<BoxRequest, "cwd" | "threadId" | "conversationBot" | "botId" | "folders">): boolean {
+    if (this.enabled()) return true;
+    return this.runner?.foldersFor({ command: "", args: [], env: {}, ...request })?.limited === true;
+  }
+
+  /** A relay for one boxed spawn (BoxRequest.relay), or null unless every bot spawn is boxed here. */
   async openRelay(): Promise<BoxRelay | null> {
-    if (!this.runner) return null;
-    return openBoxRelay(join(this.runner.setup.dataDir, "box", `relay-${randomBytes(6).toString("hex")}.sock`));
+    const runner = this.runner;
+    if (!runner || this.boxScope !== "all") return null;
+    return openBoxRelay(join(runner.setup.dataDir, "box", `relay-${randomBytes(6).toString("hex")}.sock`));
   }
 
   /** The box a bot's Chrome runs in: the system read-only, private /tmp and /run, the host's network (the browser's own
@@ -409,6 +456,7 @@ export class BotBox {
     this.credentials = null;
     this.seccompFile = null;
     this.runner = null;
+    this.boxScope = "all";
     distrustHomePrograms(null);
     resetPathCache();
   }

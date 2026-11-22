@@ -2312,11 +2312,7 @@
   "seiraWelcome.line.knows": "ऐप को जानता है, इसलिए इससे कुछ भी करने का तरीका पूछें।",
   "seiraWelcome.line.setup": "आपके लिए बॉट, ऐप और रूटीन सेट करता है।",
   "seiraWelcome.line.powers": "आपके बॉट्स पर चीफ़ ऑफ़ स्टाफ़ जैसे अधिकार रखता है।",
-  "seiraWelcome.look": "रूप",
-  "seiraWelcome.generate": "AI से तस्वीर बनाएँ",
   "seiraWelcome.customize": "{name} को बदलें",
-  "seiraWelcome.upload": "तस्वीर अपलोड करें",
-  "seiraWelcome.removePicture": "तस्वीर हटाएँ",
   "seiraWelcome.add": "{name} जोड़ें",
   "seiraWelcome.notNow": "अभी नहीं",
   "seiraWelcome.notNowHint": "{name} साइडबार से बाहर रहेगा। इसे कभी भी सेटिंग्स (साइडबार में) में चालू करें।",
@@ -3775,5 +3771,10 @@
   "call.voice.languageAuto": "अपने आप",
   "call.voice.device": "इस कंप्यूटर की आवाज़",
   "call.voice.deviceDefault": "डिफ़ॉल्ट आवाज़",
-  "call.voice.thisComputer": "यह कंप्यूटर"
+  "call.voice.thisComputer": "यह कंप्यूटर",
+  "roomPicture.change": "तस्वीर बदलें",
+  "roomPicture.remove": "तस्वीर हटाएँ",
+  "roomPicture.typeRefused": "PNG, JPEG, GIF या WebP तस्वीर चुनें।",
+  "roomPicture.tooBig": "यह तस्वीर बहुत बड़ी है। 10 MB से छोटी तस्वीर चुनें।",
+  "roomPicture.failed": "तस्वीर सेव नहीं हो सकी। फिर से कोशिश करें।"
 }

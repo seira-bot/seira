@@ -124,3 +124,17 @@ export function releaseNotesView(record: VersionRecord, current: string, notes: 
     .sort((a, b) => (compareVersions(b.version, a.version) ?? 0));
   return { version: current, from, items: merged.flatMap(note => note.items).slice(0, MAX_RELEASE_NOTE_ITEMS) };
 }
+
+export type WhatsNewMenuAction = { kind: "popup"; view: ReleaseNotesView } | { kind: "link"; url: string };
+
+/** Picks the notes the What's new menu item shows: the running version, else the newest older entry, else the releases page. */
+export function whatsNewMenuAction(current: string, notes: readonly ReleaseNote[] = RELEASE_NOTES): WhatsNewMenuAction {
+  const popup = (entry: ReleaseNote): WhatsNewMenuAction =>
+    ({ kind: "popup", view: { version: entry.version, from: null, items: entry.items.slice(0, MAX_RELEASE_NOTE_ITEMS) } });
+  const exact = notes.find(note => note.version === current);
+  if (exact) return popup(exact);
+  const older = notes.find(note => (compareVersions(note.version, current) ?? 1) < 0);
+  if (older) return popup(older);
+  if (numeric(current) === null) return notes[0] ? popup(notes[0]) : { kind: "link", url: RELEASES_URL };
+  return { kind: "link", url: releaseNotesUrl(current) };
+}

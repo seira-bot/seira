@@ -854,7 +854,7 @@ export interface WireGroup {
   /** Short one-line description shown under the room name; distinct from
    * the bulletin (long-form instructions) and any member bot's title.
    * null = explicitly cleared, so a client's shallow merge drops a stale value. */
-  description?: string | null;
+  description?: string | null; /** The room's own picture: a stored image attachment URL, shown in place of the member avatars. null = explicitly cleared, so a client's shallow merge drops a stale value. */ avatarUrl?: string | null;
   unread: boolean;
   /** The newest message on screen the last time the person read this
    * conversation. The New divider goes after it. */

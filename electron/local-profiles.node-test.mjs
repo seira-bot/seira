@@ -305,3 +305,56 @@ test("the workspace that opened is the place the next launch opens; one that did
   assert.equal(await local.profiles.computer(), true);
   assert.deepEqual(local.remembered, [{ profile: "work" }, null]);
 });
+
+test("a phone's list is This PC and each workspace the rail offers, one current, with no folder in it", async (t) => {
+  const w = computer(t, { home: "local" });
+  w.registry.create({ name: "Work", color: "green" });
+  w.registry.create({ name: "Home" });
+  const before = w.profiles.phoneFacts();
+  assert.deepEqual(before.map(({ id, current, state }) => ({ id, current, state })), [
+    { id: "local", current: true, state: "ready" }, { id: "work", current: false, state: "ready" }, { id: "home", current: false, state: "ready" }]);
+  assert.equal(before[0].name, "This Mac");
+  assert.equal(before.filter((workspace) => workspace.current).length, 1);
+  assert.equal(before.find((workspace) => workspace.id === "work").name, "Work");
+  assert.doesNotMatch(JSON.stringify(before), /seira-profiles|\/|\\|:\d{2,5}/, "no path, address or port");
+
+  assert.equal(await w.profiles.open("work"), true);
+  assert.deepEqual(w.profiles.phoneFacts().filter((workspace) => workspace.current).map((workspace) => workspace.id), ["work"], "the next list marks the new workspace current");
+});
+
+test("a phone's list marks the workspace a switch waits for, with the bot's name, and the others unavailable", async (t) => {
+  const w = computer(t, { home: "local" });
+  w.registry.create({ name: "Work" });
+  w.registry.create({ name: "Home" });
+  await w.profiles.open("home");
+  w.busy = [{ name: "Scout", what: "bot" }];
+  let seen = null;
+  w.onWait = () => { seen ??= w.profiles.phoneFacts(); if (w.waits === 2) w.busy = []; };
+  await w.profiles.open("work");
+  assert.deepEqual(seen.map(({ id, state, waitingFor }) => ({ id, state, ...(waitingFor ? { waitingFor } : {}) })), [
+    { id: "local", state: "unavailable" }, { id: "work", state: "waiting", waitingFor: "Scout" }, { id: "home", state: "ready" }]);
+  assert.equal(seen.find((workspace) => workspace.id === "home").current, true, "the one that runs stays current while the other waits");
+  assert.equal(w.profiles.phoneFacts().every((workspace) => workspace.state === "ready"), true);
+});
+
+test("a phone's list marks This PC waiting when a switch back to it waits", async (t) => {
+  const w = computer(t, { home: "local" });
+  w.registry.create({ name: "Work" });
+  await w.profiles.open("work");
+  w.busy = [{ name: "Juno" }];
+  let seen = null;
+  w.onWait = () => { seen ??= w.profiles.phoneFacts(); w.busy = []; };
+  await w.profiles.computer();
+  assert.deepEqual(seen.find((workspace) => workspace.id === "local"), { id: "local", name: "This Mac", current: false, state: "waiting", waitingFor: "Juno" });
+});
+
+test("a phone gets no list while My Cloud or another server is home, or the app does not allow workspaces here", (t) => {
+  for (const home of ["cloud", null]) assert.equal(computer(t, { home }).profiles.phoneFacts(), null, String(home));
+});
+
+test("a new workspace never takes the id a phone uses for This PC", (t) => {
+  const w = computer(t, { home: "local" });
+  const made = w.registry.create({ name: "Local" });
+  assert.equal(made.ok, true);
+  assert.notEqual(made.profile.id, "local");
+});

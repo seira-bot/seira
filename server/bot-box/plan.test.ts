@@ -507,6 +507,108 @@ linuxBox("a bot's folder list", () => {
       expect(plan.mounts.some((mount) => mount.kind === "tmpfs" && mount.target === fakeHome)).toBe(false);
     });
 
+    it("keeps the code readable when it runs from under HOME, /tmp or /run, and never gives back /tmp, HOME or the data folder (AC-12)", () => {
+      const checkout = join(fakeHome, "src", "seira"), appImage = "/tmp/.mount_SeiraX1/resources", runtime = "/run/user/1000/seira";
+      for (const dir of ["server", "shared", "node_modules/ajv", "packages/p", "skills/s", ".git", "internal/plan", "brand"]) mkdirSync(join(checkout, dir), { recursive: true });
+      for (const file of ["package.json", ".env.local", "AGENTS.local.md", "brand/.env.local"]) writeFileSync(join(checkout, file), "");
+      const roots = [checkout, appImage, runtime, "/tmp", fakeHome, fakeData, "/app"];
+      const plan = planBox({ ...setup(), codeRoots: roots, dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "/usr/local/bin/claude", args: [], cwd: fakeCwd, env: { HOME: fakeHome }, folders: folders(true),
+      });
+      for (const code of [appImage, runtime]) expect(visibleInBox(plan, join(code, "dist-server", "index.js")), code).toBe("ro");
+      for (const part of ["server/index.ts", "shared/x.ts", "node_modules/ajv/x.js", "packages/p/x.ts", "skills/s/SKILL.md", "package.json"]) expect(visibleInBox(plan, join(checkout, part)), part).toBe("ro");
+      for (const secret of [".env.local", ".git/config", "internal/plan/x.md", "AGENTS.local.md", "brand/.env.local"]) expect(visibleInBox(plan, join(checkout, secret)), secret).toBe("none");
+      expect(visibleInBox(plan, "/tmp/other-user-file"), "the host's /tmp").toBe("none");
+      expect(visibleInBox(plan, join(fakeHome, ".ssh/id_ed25519"))).toBe("none");
+      expect(visibleInBox(plan, join(fakeData, "messages.db"))).toBe("none");
+      const unlimited = planBox({ ...setup(), codeRoots: roots, dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "/usr/local/bin/claude", args: [], cwd: fakeCwd, env: { HOME: fakeHome },
+      });
+      expect(visibleInBox(unlimited, join(checkout, "x.js")), "HOME stays writable for a box of every bot").toBe("rw");
+      expect(visibleInBox(unlimited, join(appImage, "x.js"))).toBe("ro");
+    });
+
+    it("reads only a Node install's programs of a code root in HOME, never the rest of it (AC-12)", () => {
+      const prefix = join(fakeHome, ".local");
+      for (const dir of ["bin", "lib/node_modules/npm", "share/keyrings", "state"]) mkdirSync(join(prefix, dir), { recursive: true });
+      const plan = planBox({ ...setup(), codeRoots: [prefix], dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "/usr/local/bin/claude", args: [], cwd: fakeCwd, env: { HOME: fakeHome }, folders: folders(true),
+      });
+      for (const code of ["bin/node", "lib/node_modules/npm/index.js"]) expect(visibleInBox(plan, join(prefix, code)), code).toBe("ro");
+      for (const hidden of ["share/keyrings/login.keyring", "share/recently-used.xbel", "state/x"]) expect(visibleInBox(plan, join(prefix, hidden)), hidden).toBe("none");
+    });
+
+    it("reads the versions Claude's and Cursor's installers keep in .local/share, and nothing else there", () => {
+      const own = join(root, "installs"), share = join(own, ".local", "share"), data = join(own, ".seira");
+      for (const dir of [join(own, ".local", "bin"), join(share, "claude", "versions"), join(share, "cursor-agent", "versions", "2026.1"), join(share, "keyrings")]) mkdirSync(dir, { recursive: true });
+      writeFileSync(join(share, "claude", "versions", "2.1.0"), "");
+      writeFileSync(join(share, "keyrings", "login.keyring"), "");
+      symlinkSync(join(share, "claude", "versions", "2.1.0"), join(own, ".local", "bin", "claude"));
+      const plan = planBox({ ...setup(), dataDir: data, home: own, engineRoots: engineInstallRoots(data) }, {
+        command: join(own, ".local", "bin", "claude"), args: [], cwd: join(data, "task-workspaces", "bot-a", "t"), env: { HOME: own }, folders: folders(true),
+      });
+      for (const kept of ["claude/versions/2.1.0", "cursor-agent/versions/2026.1/cursor-agent"]) expect(visibleInBox(plan, join(share, kept)), kept).toBe("ro");
+      for (const hidden of ["keyrings/login.keyring", "claude/other", "recently-used.xbel"]) expect(visibleInBox(plan, join(share, hidden)), hidden).toBe("none");
+    });
+
+    it("leaves out a part of a code root in HOME that is a link", () => {
+      const checkout = join(root, "linked-checkout");
+      mkdirSync(join(checkout, "server"), { recursive: true });
+      symlinkSync(fakeHome, join(checkout, "skills"));
+      symlinkSync(fakeData, join(checkout, "shared"));
+      const inHome = join(fakeHome, "src", "linked");
+      mkdirSync(join(fakeHome, "src"), { recursive: true });
+      symlinkSync(checkout, inHome);
+      const plan = planBox({ ...setup(), codeRoots: [inHome], dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "/usr/local/bin/claude", args: [], cwd: fakeCwd, env: { HOME: fakeHome }, folders: folders(true),
+      });
+      expect(plan.mounts.some((mount) => "source" in mount && (mount.source === fakeHome || mount.source === fakeData))).toBe(false);
+      expect(visibleInBox(plan, join(inHome, "skills", ".ssh", "id_ed25519"))).toBe("none");
+    });
+
+    it("gives a code root in a HOME under /tmp only its parts, and a box of every bot keeps HOME writable (AC-12)", () => {
+      const tmpRoot = realpathSync(mkdtempSync(join("/tmp", "seira-home-in-tmp-")));
+      try {
+        const tmpHome = join(tmpRoot, "home"), tmpData = join(tmpHome, ".seira"), checkout = join(tmpHome, "src", "seira");
+        for (const dir of [join(checkout, "server"), join(checkout, ".git"), join(tmpData, "workspaces")]) mkdirSync(dir, { recursive: true });
+        writeFileSync(join(checkout, ".env.local"), "");
+        const ask = (given?: BoxRequest["folders"]) => planBox({ ...setup(), codeRoots: [checkout], dataDir: tmpData, home: tmpHome, engineRoots: engineInstallRoots(tmpData) }, {
+          command: "/usr/local/bin/claude", args: [], cwd: join(tmpData, "task-workspaces", "bot-a", "t"), env: { HOME: tmpHome }, ...(given ? { folders: given } : {}),
+        });
+        const plan = ask(folders(true));
+        expect(visibleInBox(plan, join(checkout, "server", "index.ts"))).toBe("ro");
+        for (const secret of [".env.local", ".git/config"]) expect(visibleInBox(plan, join(checkout, secret)), secret).toBe("none");
+        expect(visibleInBox(ask(), join(checkout, ".env.local"))).toBe("rw");
+      } finally {
+        rmSync(tmpRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("gives a limited box nothing more through a configured server's command line", () => {
+      const key = join(fakeHome, "Documents", "brief.md");
+      const ask = (configured: boolean) => planBox({ ...setup(), dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "/usr/bin/cat", args: [key], cwd: fakeCwd, env: { HOME: fakeHome }, folders: folders(true), configured,
+      });
+      expect(visibleInBox(ask(true), key)).toBe("none");
+      expect(visibleInBox(ask(false), key), "a command line the server built is unchanged").toBe("ro");
+      const outside = planBox({ ...setup(), dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "/usr/bin/cat", args: ["/srv/data/x.csv", "/"], cwd: fakeCwd, env: { HOME: fakeHome }, folders: folders(true), configured: true,
+      });
+      for (const path of ["/srv/data/x.csv", "/srv/other"]) expect(visibleInBox(outside, path), path).toBe("none");
+    });
+
+    it("reads its conversation's uploads when a limited bot works in a folder of its own choosing (AC-09)", () => {
+      const plan = planBox({ ...setup(), dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "/usr/local/bin/claude", args: [], cwd: "/work/repo", botId: "bot-a", threadId: "thread-1", env: { HOME: fakeHome }, folders: folders(true, ["/work/repo", true]),
+      });
+      expect(visibleInBox(plan, join(fakeData, "box-uploads", "bot-a", "thread-1", "a.png")), "the uploads folder, read-only").toBe("ro");
+      expect(visibleInBox(plan, join(fakeData, "box-uploads", "bot-b", "thread-1", "a.png"))).toBe("none");
+      const other = planBox({ ...setup(), dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "/usr/local/bin/claude", args: [], cwd: "/work/repo", botId: "bot-a", threadId: "../bot-b/thread-1", env: { HOME: fakeHome }, folders: folders(true, ["/work/repo", true]),
+      });
+      expect(other.mounts.some((mount) => "source" in mount && mount.source.includes("bot-b"))).toBe(false);
+    });
+
     it("with limited off, HOME stays and only the grants are added", () => {
       const plan = planBox({ ...setup(), dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
         command: "claude", args: [], cwd: fakeCwd, env: { HOME: fakeHome }, folders: folders(false, [join(fakeHome, "Documents"), false]),

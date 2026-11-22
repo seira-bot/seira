@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { LOOK_HISTORY_LIMIT } from "../../shared/theme.ts";
-import { isRefusal, createThemeStore } from "./store.ts";
+import { isRefusal, createThemeStore, startsLikeSvg } from "./store.ts";
 
 const PNG = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
 const GIF = Buffer.from("GIF89a\x01\x00\x01\x00", "latin1");
@@ -153,5 +153,27 @@ describe("theme store", () => {
     expect(store.history("owner").map((item) => item.look)).toEqual([{ id: "neon", skin: "system" }, { id: null, skin: "system" }]);
     store.change("owner", { wear: null, skin: "midnight" });
     expect(store.history("owner").map((item) => item.seq)).toEqual([3, 2, 1]);
+  });
+});
+
+describe("startsLikeSvg", () => {
+  it("accepts an SVG with an XML declaration, comments and a DOCTYPE, in any case", () => {
+    expect(startsLikeSvg('<svg xmlns="http://www.w3.org/2000/svg"/>')).toBe(true);
+    expect(startsLikeSvg('\uFEFF  <?xml version="1.0"?>\n<!-- a -->\n<!-- b -->\n<!DOCTYPE svg PUBLIC "x">\n<SVG>')).toBe(true);
+    expect(startsLikeSvg("<svg>")).toBe(true);
+  });
+
+  it("refuses text that is not an SVG document", () => {
+    expect(startsLikeSvg("<html><svg></svg></html>")).toBe(false);
+    expect(startsLikeSvg("<!-- never closed <svg>")).toBe(false);
+    expect(startsLikeSvg("<svgfoo>")).toBe(false);
+    expect(startsLikeSvg("")).toBe(false);
+    expect(startsLikeSvg("<?xml version=\"1.0\"")).toBe(false);
+  });
+
+  it("answers an attack string in under 100 ms", () => {
+    const started = performance.now();
+    expect(startsLikeSvg(`<!--${"--><!--".repeat(12_500)}`)).toBe(false);
+    expect(performance.now() - started).toBeLessThan(100);
   });
 });

@@ -2312,11 +2312,7 @@
   "seiraWelcome.line.knows": "Connaît l'app : demandez-lui comment faire n'importe quoi.",
   "seiraWelcome.line.setup": "Configure pour vous bots, apps et routines.",
   "seiraWelcome.line.powers": "A les pouvoirs d'un chef de cabinet sur vos bots.",
-  "seiraWelcome.look": "Apparence",
-  "seiraWelcome.generate": "Créer une image avec l'IA",
   "seiraWelcome.customize": "Personnaliser {name}",
-  "seiraWelcome.upload": "Importer une image",
-  "seiraWelcome.removePicture": "Retirer l'image",
   "seiraWelcome.add": "Ajouter {name}",
   "seiraWelcome.notNow": "Pas maintenant",
   "seiraWelcome.notNowHint": "{name} reste hors de la barre latérale. Activez-le à tout moment dans Paramètres (Dans la barre latérale).",
@@ -3921,5 +3917,10 @@
   "call.voice.languageAuto": "Automatique",
   "call.voice.device": "Voix de cet ordinateur",
   "call.voice.deviceDefault": "Voix par défaut",
-  "call.voice.thisComputer": "Cet ordinateur"
+  "call.voice.thisComputer": "Cet ordinateur",
+  "roomPicture.change": "Changer l'image",
+  "roomPicture.remove": "Retirer l'image",
+  "roomPicture.typeRefused": "Choisissez une image PNG, JPEG, GIF ou WebP.",
+  "roomPicture.tooBig": "Cette image est trop lourde. Choisissez-en une de moins de 10 Mo.",
+  "roomPicture.failed": "L'image n'a pas pu être enregistrée. Réessayez."
 }
