@@ -99,8 +99,14 @@ describe("empty room intro", () => {
     defaultResponder: { kind: "member", botId: "atlas" }, bulletin: "", unread: false,
     createdAt: 1, setupCompletedAt: 1, messages: [],
   };
-  const intro = (group: Group) =>
-    renderToStaticMarkup(createElement(StoreProvider, null, createElement(GroupView, { group })));
+  const intro = (group: Group) => {
+    vi.stubGlobal("window", { ogb: {} });
+    try {
+      return renderToStaticMarkup(createElement(StoreProvider, null, createElement(GroupView, { group })));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  };
   const bigPicture = /<img data-room-picture="" src="\/api\/attachments\/qa\.png"[^>]*width:56px/;
 
   it("shows the room's own picture above its name", () => {
