@@ -11,7 +11,7 @@ export const PLACE_STATES = [
   "auto", "auto-team",
   "cc-cannot", "cc-tools-off", "cc-sign-in", "cc-new", "cc-starting", "cc-waking", "cc-on", "cc-asleep",
   "cc-no-hours", "cc-at-once", "cc-unavailable", "cc-ended", "cc-no-start", "cc-clearing", "cc-provider",
-  "cc-on-my-cloud", "cc-needs-key", "cc-not-set-up", "vps",
+  "cc-on-my-cloud", "cc-not-set-up", "vps",
   "browser", "browser-off", "browser-cannot",
   "local", "local-unavailable", "vm", "vm-cannot", "place-failed",
   "off",
@@ -27,7 +27,7 @@ export type PlaceSource = "works-on" | "pin" | "auto-pin" | "routine" | "room";
  * stored row, one sentence a phone can read. */
 export const PLACE_ACTIONS = [
   "choose-model", "open-tools", "sign-in", "start", "wake", "watch", "see-plan", "manage-computers",
-  "try-again", "open-my-cloud", "add-boat-key", "turn-on-browser", "open-team-map", "open-vm-settings",
+  "try-again", "open-my-cloud", "turn-on-browser", "open-team-map", "open-vm-settings",
   "clear-pin", "change-routine", "open-computer-panel",
 ] as const;
 export type PlaceActionId = (typeof PLACE_ACTIONS)[number];
@@ -83,10 +83,8 @@ export interface PlaceFacts {
   bot: string;
   /** Desktop only: signed in to a paid Seira Cloud plan (the desktop bridge). */
   plan?: boolean;
-  /** Where cloud computers come from here: the plan's, the person's own Boat key, or nowhere. */
-  boat: "included" | "own-key" | "none";
-  /** The cloud computer's provider: Boat, or the person's own server. */
-  backend?: "box" | "vps";
+  /** The bot has a VPS to work on: its own alias or the installation's default. */
+  vps: boolean;
   engine: {
     name: string;
     model?: string;
@@ -129,7 +127,7 @@ export const PLACE_EN = {
   "place.view.ccSignIn.line": "Sign in to {engine} first. {bot} uses it on its cloud desktop too.",
   "place.view.ccSignIn.lineMyCloud": "Sign in to {engine} in the Cloud first. {bot} uses it on its cloud desktop too.",
   "place.view.ccNew.short": "Ready",
-  "place.view.ccNew.line": "{bot} gets its own cloud desktop from Boat the first time a task needs one. The first start takes about a minute.",
+  "place.view.ccNew.line": "{bot} gets its own cloud desktop the first time a task needs one. The first start takes about a minute.",
   "place.view.ccStarting.short": "Starting…",
   "place.view.ccStarting.line": "Starting {bot}'s cloud desktop. The first start takes about a minute.",
   "place.view.ccWaking.short": "Waking…",
@@ -155,11 +153,9 @@ export const PLACE_EN = {
   "place.view.ccClearing.short": "Clearing up",
   "place.view.ccClearing.line": "{bot}'s previous cloud desktop is still being removed.",
   "place.view.ccProvider.short": "Couldn't start",
-  "place.view.ccProvider.line": "Your Boat account couldn't start {bot}'s cloud desktop: {words}",
+  "place.view.ccProvider.line": "Your own server couldn't start {bot}'s cloud desktop: {words}",
   "place.view.ccOnMyCloud.short": "For Cloud bots",
   "place.view.ccOnMyCloud.line": "Cloud desktops from your plan work for Cloud bots for now.",
-  "place.view.ccNeedsKey.short": "Connect Boat first",
-  "place.view.ccNeedsKey.line": "Bots here can get their own cloud desktops from Boat, a paid service.",
   "place.view.ccNotSetUp.short": "No cloud desktop yet",
   "place.view.ccNotSetUp.line": "{bot} answered without a computer because no cloud desktop is set up. Connect your own server, or change where {bot} works.",
   "place.view.vps.short": "Your own machine",
@@ -192,7 +188,6 @@ export const PLACE_EN = {
   "place.action.manageComputers": "Manage cloud desktops",
   "place.action.tryAgain": "Try again",
   "place.action.openMyCloud": "Open the Cloud",
-  "place.action.addBoatKey": "Connect Boat",
   "place.action.turnOnBrowser": "Turn on the browser",
   "place.action.openTeamMap": "Open Team map",
   "place.action.openVmSettings": "Private desktop settings",
@@ -219,7 +214,6 @@ export const PLACE_WORDS: Record<PlaceActionId, string> = {
   "manage-computers": "Manage your cloud desktops in Settings → Desktops & browser → Desktops.",
   "try-again": "Try again.",
   "open-my-cloud": "Open My Cloud from the menu at the top of the sidebar.",
-  "add-boat-key": "Connect your Boat account in AI › Other services.",
   "turn-on-browser": "Turn on the built-in browser in the Screen panel.",
   "open-team-map": "Open Team map to manage it.",
   "open-vm-settings": "Check it in Settings → Desktops & browser → Desktops.",
@@ -258,7 +252,6 @@ const STATE: Record<PlaceState, { key: string; action: PlaceActionId | null }> =
   "cc-clearing": { key: "ccClearing", action: "try-again" },
   "cc-provider": { key: "ccProvider", action: "try-again" },
   "cc-on-my-cloud": { key: "ccOnMyCloud", action: "open-my-cloud" },
-  "cc-needs-key": { key: "ccNeedsKey", action: "add-boat-key" },
   "cc-not-set-up": { key: "ccNotSetUp", action: "manage-computers" },
   vps: { key: "vps", action: null },
   browser: { key: "browser", action: null },
@@ -280,7 +273,7 @@ const PASSING: ReadonlySet<PlaceState> = new Set(["cc-unavailable", "cc-no-start
  * them, so the line ends "Ask an Admin to change it." instead. */
 const ADMIN_ONLY: ReadonlySet<PlaceActionId> = new Set([
   "choose-model", "open-tools", "sign-in", "see-plan", "manage-computers", "open-my-cloud",
-  "add-boat-key", "turn-on-browser", "open-team-map", "open-vm-settings", "change-routine",
+  "turn-on-browser", "open-team-map", "open-vm-settings", "change-routine",
 ]);
 /** Starting or waking a computer early: a User's own message does it, so
  * there is nothing to ask anyone for. */
@@ -297,7 +290,6 @@ const ACTION_KEY: Record<PlaceActionId, PlaceKey> = {
   "manage-computers": "place.action.manageComputers",
   "try-again": "place.action.tryAgain",
   "open-my-cloud": "place.action.openMyCloud",
-  "add-boat-key": "place.action.addBoatKey",
   "turn-on-browser": "place.action.turnOnBrowser",
   "open-team-map": "place.action.openTeamMap",
   "open-vm-settings": "place.action.openVmSettings",
@@ -327,25 +319,11 @@ export function placeState(facts: PlaceFacts): { state: PlaceState; params: Plac
   if (facts.place === "vm") {
     return facts.engine.computer ? { state: "vm", params: { bot } } : { state: "vm-cannot", params: { bot, model } };
   }
-  // On the person's own server (VPS) or on Boat, one rule for both.
-  const vps = facts.backend === "vps";
+  // Cloud is the person's own VPS: with none set up, a turn runs without a computer.
   if (!facts.engine.computer) return { state: "cc-cannot", params: { bot, model } };
   if (!facts.toolsAllowComputer) return { state: "cc-tools-off", params: { bot } };
   if (!facts.engine.signedIn) return { state: "cc-sign-in", params: { bot, engine: facts.engine.name } };
-  if (vps) return { state: "vps", params: { bot } };
-  if (facts.refusal) return { state: facts.refusal.state, params: { bot, ...facts.refusal.params } };
-  if (facts.boat === "none") {
-    // My Cloud always has the plan's computers while the plan is active.
-    if (facts.server === "my-cloud") return { state: "cc-unavailable", params: { bot } };
-    return { state: facts.plan ? "cc-on-my-cloud" : "cc-needs-key", params: { bot } };
-  }
-  switch (facts.computer) {
-    case "starting": return { state: "cc-starting", params: { bot } };
-    case "waking": return { state: "cc-waking", params: { bot } };
-    case "on": return { state: "cc-on", params: { bot } };
-    case "asleep": return { state: "cc-asleep", params: { bot } };
-    default: return { state: "cc-new", params: { bot } };
-  }
+  return { state: facts.vps ? "vps" : "cc-not-set-up", params: { bot } };
 }
 
 /** Where the person goes when a passing cause stops a place: try again in
@@ -568,7 +546,7 @@ export function cloudLimitSentence(failure: CloudFailure): string | null {
 
 /** The Admin's `reason` comes first, then its codes; from an Admin that
  * sends neither, its English is read. `included`: the plan's computers, not
- * the person's own Boat key, whose provider's words are shown as they are. */
+ * the person's own account, whose provider's words are shown as they are. */
 export function cloudRefusal(failure: CloudFailure, included: boolean): { state: PlaceState; params: PlaceParams } {
   const message = failure.message.trim();
   const code = failure.code;

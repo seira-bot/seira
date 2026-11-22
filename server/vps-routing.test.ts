@@ -569,7 +569,7 @@ createServer(socket => socket.end()).listen(port, '127.0.0.1');
       const echo = snapshot.messages.find((m: any) => m.kind === "text" && m.text?.startsWith("echo: ")).text;
       expect(echo).toContain("self-hosted remote Linux computer");
       expect(echo).toContain("This is the user's own VPS");
-      expect(echo).toContain("using it does not require a Boat API key");
+      expect(echo).not.toContain("Boat");
       expect(echo).toContain("wiped whenever its container is recreated");
 
       // SAFETY: the fake ACP CLI wrote this dump from session/new's mcpServers; fake-acp-cli.ts pins the shape.

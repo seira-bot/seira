@@ -187,10 +187,10 @@ describe("the keys page", () => {
   });
 
   it("opens a section that holds a saved key, and counts what is connected", () => {
-    setConfig({ ...fx.config, box: { configured: true, last4: "c3d4" } });
+    setConfig({ ...fx.config, composio: { configured: true, last4: "c3d4" } });
     page();
-    expect(expanded("computers")).toBe("true");
-    expect(section("computers").textContent).toContain("1 connected");
+    expect(expanded("apps")).toBe("true");
+    expect(section("apps").textContent).toContain("1 connected");
   });
 
   it("filters rows live by name, purpose and section, and says so when nothing matches", () => {
@@ -199,7 +199,7 @@ describe("the keys page", () => {
     type(search, "fish");
     expect(rowsShown()).toEqual(["fishAudio"]);
     type(search, "Computers and browser");
-    expect(rowsShown()).toEqual(["box", "vps", "onePassword"]);
+    expect(rowsShown()).toEqual(["vps", "onePassword"]);
     type(search, "research");
     expect(rowsShown()).toEqual(["treg"]);
     type(search, "zzz");
@@ -284,8 +284,8 @@ describe("the keys page", () => {
   it("clears a search that would hide the row a link asks for", async () => {
     page();
     type(host.querySelector<HTMLInputElement>("[data-keys-search]")!, "fish");
-    flushSync(() => { openKeySettings("box"); });
-    await vi.waitFor(() => expect(document.activeElement).toBe(row("box")!.querySelector("[data-key-input]")));
+    flushSync(() => { openKeySettings("composio"); });
+    await vi.waitFor(() => expect(document.activeElement).toBe(row("composio")!.querySelector("[data-key-input]")));
     expect(host.querySelector<HTMLInputElement>("[data-keys-search]")!.value).toBe("");
   });
 
@@ -314,15 +314,15 @@ describe("the keys page", () => {
   });
 
   it("confirms a key the server checked on save as Connected", async () => {
-    fx.api.mockImplementation(async () => ({ ...fx.config, box: { configured: true, last4: "c3d4" } }));
+    fx.api.mockImplementation(async () => ({ ...fx.config, composio: { configured: true, last4: "c3d4" } }));
     setConfig({ ...fx.config });
     page();
-    flushSync(() => section("computers").querySelector<HTMLButtonElement>("button[aria-expanded]")!.click());
-    const input = row("box")!.querySelector<HTMLInputElement>("[data-key-input]")!;
-    type(input, "boat_dummy_fixture_key_c3d4");
+    flushSync(() => section("apps").querySelector<HTMLButtonElement>("button[aria-expanded]")!.click());
+    const input = row("composio")!.querySelector<HTMLInputElement>("[data-key-input]")!;
+    type(input, "cmp_dummy_fixture_key_c3d4");
     flushSync(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
-    await vi.waitFor(() => expect(row("box")!.querySelector("[data-key-masked]")?.textContent).toContain("••••••••c3d4"));
-    expect(row("box")!.textContent).toContain("Connected");
+    await vi.waitFor(() => expect(row("composio")!.querySelector("[data-key-masked]")?.textContent).toContain("••••••••c3d4"));
+    expect(row("composio")!.textContent).toContain("Connected");
     expect(fx.api).toHaveBeenCalledOnce();
   });
 });

@@ -6,13 +6,12 @@ Cua container there — a Linux desktop it can see and control. SSH is the only 
 only surface exposed: Seira never opens a public port on the VPS, never stores your SSH key or
 passphrase, and never runs an agent remotely.
 
-## Choosing the backend
+## Choosing Cloud
 
-The [Your own VPS guide](../apps/docs/content/docs/computers/byo-vps.mdx)
-shows the setup steps and configuration fields. In 0.1.151 and 0.1.152, the Simple layout can
-hide the backend selector for an existing bot (#5225; selector fix #5228). The guide
-includes a stopped-app `bots.json` workaround for affected builds. Do not look for
-an Advanced-only Access page in that layout.
+A bot's **Cloud** computer is this VPS. The [Your own VPS guide](../apps/docs/content/docs/computers/byo-vps.mdx)
+shows the setup steps and configuration fields. With no VPS set up, choosing **Cloud** shows one note that
+links to the setup and the bot answers without a computer; it never falls back to this computer or a
+virtual machine.
 
 Using a VPS only as a bot’s computer leaves Seira and its agents on their current
 host. To move the whole server to a VPS, use [Deploy on a VPS](deploy-vps.md).
@@ -20,8 +19,8 @@ host. To move the whole server to a VPS, use [Deploy on a VPS](deploy-vps.md).
 ## What works
 
 - A per-bot Linux desktop in a managed container on your VPS, driven through the official Cua tools.
-- Live screen preview in the Computer panel and in transcripts, same as a Boat.
-- Explicit **Cloud** with the **Self-hosted VPS** backend provisions or starts the container. **Auto** reuses
+- Live screen preview in the Computer panel and in transcripts, in every Cloud desktop.
+- Explicit **Cloud** provisions or starts the container. **Auto** reuses
   a ready container by default; an off-by-default **Start VPS automatically** switch lets that bot prepare
   or wake its managed container when needed. Scheduled and manually triggered routine runs always start it,
   and never fall back to this computer's own desktop when the VPS cannot be reached.
@@ -96,7 +95,6 @@ Host my-vps
 The app-level alias (Settings → AI → Other services) is the default server for every bot. A bot can also be pointed at
 its own alias through the `vpsAlias` field in `bots.json`; omit the field to use the default.
 The older Advanced layout exposes this as Bot Settings → Access → **Server (SSH alias)**.
-If the selector is missing, follow the stopped-app workaround in the published guide.
 The bot's own server then wins for everything
 that matters to that bot — provisioning, status checks, previews, screenshots, watched desktop sessions, its
 computer tools, and deletion cleanup. The Settings inventory spans every server in play and tags each
@@ -156,7 +154,7 @@ still gets its own managed desktop container on that machine; it does not take o
 3. Check it by hand as in [Troubleshooting](#troubleshooting): `ssh home-box true`, then
    `docker -H ssh://home-box info`.
 4. Enter `home-box` as the alias in Settings → AI → Other services (or as one bot's own server), then choose
-   **Self-hosted VPS** for the bot.
+   **Cloud** for the bot.
 
 The same trust rules apply: the bot gets full control of what Docker can reach on that machine, so prefer one
 that holds nothing you would not hand to the agent. Tailscale does not close ports that are already open to the
@@ -249,7 +247,7 @@ Work up the same path the app takes, cheapest signal first:
    not set up; a host-key prompt means the first manual connect has not happened yet.
 2. **Docker over SSH reaches the daemon:** `docker -H ssh://my-vps info` prints server details. A permission
    error means the SSH user is not in the `docker` group.
-3. **Provision:** choose **Cloud** with the **Self-hosted VPS** backend in the bot's Computer panel. The
+3. **Provision:** choose **Cloud** in the bot's Computer panel. The
    first provision pulls and builds the Cua image on the VPS, which can take minutes; later ones are fast.
 4. **Read the status states.** The panel surfaces exactly what the server found, in check order: alias not
    configured → daemon unreachable → image missing → container missing / stopped → container unmanaged or

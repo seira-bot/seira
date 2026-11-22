@@ -139,6 +139,23 @@ describe("a bot set to Cloud answers when no cloud computer is set up", () => {
     expect(computerPlaces()).not.toContain("vm");
   });
 
+  it("runs a bot whose Cloud is a VPS that is not set up without any computer, and says so once", { timeout: 60_000 }, async () => {
+    const made = await bot("No VPS", { computer: "cloud", cloudBackend: "vps" });
+    const first = await say(made.id, made.threadId, "hello");
+    expect(mounted(first)).not.toContain("computer");
+    expect(offersAnotherComputer(first), "no other computer offered").toBe(false);
+    const second = await say(made.id, made.threadId, "hello again");
+    expect(mounted(second)).not.toContain("computer");
+    const rows = await messages(made.threadId);
+    expect(failures(rows)).toEqual([]);
+    expect(rows.filter(row => row.role === "bot" && row.kind === "text").length).toBeGreaterThanOrEqual(2);
+    expect(notices(rows)).toHaveLength(1);
+    expect(notices(rows)[0].tool).toMatchObject({ notice: true, place: { state: "cc-not-set-up", source: "works-on" } });
+    expect(JSON.stringify(notices(rows)[0].tool)).not.toMatch(/boat/i);
+    expect(computerPlaces()).not.toContain("local");
+    expect(computerPlaces()).not.toContain("vm");
+  });
+
   it("runs a thread pinned to Cloud by hand without any computer, and says so once", { timeout: 60_000 }, async () => {
     const made = await bot("Pinned", {});
     await apiOk("PATCH", `/api/bots/${made.id}/tasks/${made.threadId}`, { surface: "cloud" });

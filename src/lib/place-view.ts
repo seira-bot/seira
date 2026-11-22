@@ -9,7 +9,6 @@ import { useAdvancedMode } from "@/lib/interface-mode";
 import { pageOnRemoteServer } from "@/lib/local-computer";
 import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
 import { openBotSettings } from "@/components/bot-panel/panel-link";
-import { openKeySettings } from "@/components/keys/key-focus";
 import type { Action, Bot, ConfigStatus, InstanceInfo } from "@/state/store";
 import type { LocaleKey } from "@/locales";
 import {
@@ -53,10 +52,10 @@ function engineFacts(instance: InstanceInfo | undefined, model: string | undefin
 }
 
 export function placeFacts(input: {
-  bot: Pick<Bot, "name" | "modelSelection" | "toolScope" | "cloudBackend">;
+  bot: Pick<Bot, "name" | "modelSelection" | "toolScope" | "vpsAlias">;
   place: PlaceFacts["place"];
   seat: PlaceSeat;
-  config: (FeatureFlagConfig & Pick<ConfigStatus, "box">) | null | undefined;
+  config: (FeatureFlagConfig & Pick<ConfigStatus, "vps">) | null | undefined;
   instances: InstanceInfo[];
   local?: PlaceFacts["local"];
   computer?: PlaceFacts["computer"];
@@ -69,8 +68,7 @@ export function placeFacts(input: {
     server: seat.server,
     bot: bot.name,
     plan: seat.plan,
-    boat: config?.box?.configured ? (config.box.included ? "included" : "own-key") : "none",
-    backend: bot.cloudBackend === "vps" ? "vps" : "box",
+    vps: Boolean(bot.vpsAlias) || config?.vps?.configured === true,
     engine: engineFacts(instance, bot.modelSelection.model),
     toolsAllowComputer: canUseMcpServer(bot.toolScope, "computer"),
     browserOn: builtInBrowserEnabled(config) && browserAvailable(config),
@@ -87,8 +85,7 @@ export function placeViewFor(facts: PlaceFacts): PlaceView {
 }
 
 export function placeRowViewFor(row: PlaceRow, seat: PlaceSeat, worksOnLabel?: string): PlaceView {
-  const read = row.state === "cc-needs-key" && seat.plan && seat.server !== "my-cloud" ? { ...row, state: "cc-on-my-cloud" as const } : row;
-  return placeRowView(read, { server: seat.server, role: seat.role, mode: seat.mode, worksOnLabel, translate: placeTranslate, locale: activeLocale() });
+  return placeRowView(row, { server: seat.server, role: seat.role, mode: seat.mode, worksOnLabel, translate: placeTranslate, locale: activeLocale() });
 }
 
 export function placeBlocked(view: PlaceView): boolean {
@@ -97,7 +94,7 @@ export function placeBlocked(view: PlaceView): boolean {
 }
 
 export function placeHasIssue(view: PlaceView): boolean {
-  return placeBlocked(view) || view.state === "cc-tools-off" || view.state === "cc-sign-in" || view.state === "cc-needs-key"
+  return placeBlocked(view) || view.state === "cc-tools-off" || view.state === "cc-sign-in"
     || view.state === "cc-unavailable";
 }
 
@@ -134,7 +131,6 @@ export function openPlaceAction(
     case "change-routine": openBotSettings(dispatch, "routines", { botId: target.botId }); return true;
     case "sign-in": appSettings("engines"); return true;
     case "manage-computers": appSettings("computer"); return true;
-    case "add-boat-key": dispatch(openKeySettings("box")); return true;
     case "open-vm-settings":
       window.sessionStorage?.setItem("seira.settings.section", "computer");
       appSettings("computer");

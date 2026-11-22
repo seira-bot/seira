@@ -113,13 +113,12 @@ describe("included Boat computers", () => {
     expect(requests.every((request) => request.auth === "Bearer box_own")).toBe(true);
   });
 
-  it("an own key from the environment (BOX_TOKEN) wins and goes only to Boat", async () => {
+  it("BOX_TOKEN from the environment is ignored: Boat is retired and the included key stays in charge", async () => {
     vi.stubEnv("BOX_TOKEN", "box_from_env");
     const cfg = loadConfig();
-    expect(cfg.box?.token).toBe("box_from_env");
+    expect(cfg.box?.token).toBeUndefined();
     await boat.execOnBoat(cfg, botId, "true");
-    expect(underRelay()).toEqual([]);
-    expect(requests.every((request) => request.path.startsWith("/boat/") && request.auth === "Bearer box_from_env")).toBe(true);
+    expect(requests.some((request) => request.auth === "Bearer box_from_env")).toBe(false);
   });
 
   it("removing the own key falls back to the included one", async () => {

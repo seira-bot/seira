@@ -103,7 +103,7 @@ const DEBT: Record<string, number> = {
   "src/components/EnginesSettings.tsx": 14,
   "src/components/HomeLine.tsx": 1,
   "src/components/ImportSettings.tsx": 8,
-  "src/components/LocalComputerSection.tsx": 11,
+  "src/components/LocalComputerSection.tsx": 6,
   "src/components/MacLocalControl.tsx": 2,
   "src/components/NewBotDialog.tsx": 11,
   "src/components/OrganizationSettings.tsx": 3,

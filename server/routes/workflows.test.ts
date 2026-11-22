@@ -8,6 +8,7 @@ import type { Workflow, WorkflowInput, WorkflowRun } from "../../shared/workflow
 import { atLeast, type BotAccessLevel } from "../../shared/bot-access.ts";
 import { frameForMember, routineRunVisible, routineVisible, VisibleSet, type StreamSeen, type Viewer } from "../bot-visibility.ts";
 import type { WorkflowHost } from "../host/workflow-host.ts";
+import { PlaceLostError } from "../place-lost.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { RoutineRequestService, type RoutineRequestMessage, type RoutineRequestOptionCard, type RoutineRequestStore } from "../routine-requests.ts";
 import { RoutineManager, type Routine, type RoutineRun } from "../routines.ts";
@@ -251,6 +252,8 @@ describe("workflow routes", () => {
     expect(await fixture({ runs: [gone] }).call("POST", "/api/workflow-runs/run-open/steps/s9/run-again"))
       .toMatchObject({ status: 409, body: { error: "That step is no longer in the workflow." } });
     expect(await fixture({ again: () => null }).call("POST", again)).toMatchObject({ status: 409, body: { error: "The routine can't run now." } });
+    expect(await fixture({ again: () => { throw new PlaceLostError(); } }).call("POST", again))
+      .toMatchObject({ status: 409, body: { error: expect.stringMatching(/Choose where it runs/) } });
     expect(await fixture({ again: () => { throw new Error("could not prepare"); } }).call("POST", again))
       .toMatchObject({ status: 500, body: { error: "could not prepare" } });
   });

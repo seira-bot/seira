@@ -10,6 +10,8 @@ export interface WebhookTrigger {
   botId: string;
   runOn: RoutineRunOn;
   enabled: boolean;
+  /** Moved off a cloud computer that is gone: paused until an edit confirms where it runs. */
+  placeLost?: true;
   createdAt: number;
   updatedAt: number;
   lastReceivedAt?: number;
@@ -56,6 +58,8 @@ export interface WebhookTriggerInput {
   /** 1–50; `null` goes back to the default. */
   maxPendingRuns?: number | null;
   sameConversation?: boolean;
+  /** Only on an edit: confirms where a moved automation runs. */
+  confirmPlace?: true;
 }
 
 export interface WebhookVerificationSample {

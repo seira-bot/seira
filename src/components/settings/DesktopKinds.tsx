@@ -1,20 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
-import { Cloud, Laptop, Server } from "lucide-react";
+import { Laptop, Server } from "lucide-react";
 import { t } from "@/lib/i18n";
 import { productName } from "@/lib/brand";
 import { computerInventoryRequest } from "@/lib/computer-requests";
 import { useStore } from "@/state/store";
 import { LocalComputerSection } from "../LocalComputerSection";
-import { SettingRow, SettingsGroup, SettingsLinkRow, SettingsMark, SettingsRows, StatusDot } from "../SettingsPrimitives";
-import { useAccountSummary } from "./account-summary";
-import { useOtherPlaces } from "./settings-context";
+import { SettingRow, SettingsGroup, SettingsMark, SettingsRows, StatusDot } from "../SettingsPrimitives";
 import { SettingsDialog } from "./SettingsDialog";
 import { useSettingsShell } from "./settings-shell";
 
 type PrivateStatus = { runtime: string | null; daemonUp: boolean; image: boolean; ready: boolean } | null;
 type Kind = "ready" | "setup" | "none" | "attention" | "elsewhere";
 
-const read = async <T,>(which: "status" | "cloud" | "vps"): Promise<T | null> => {
+const read = async <T,>(which: "status" | "vps"): Promise<T | null> => {
   const response = await fetch(...computerInventoryRequest(which)).catch(() => null);
   if (!response?.ok) return null;
   return await response.json().catch(() => null) as T | null;
@@ -59,37 +57,21 @@ function PrivateSetup({ status, onCheck, onClose }: { status: PrivateStatus; onC
 
 /** Desktops: what each kind is, its state first, and one Set up. */
 export function DesktopKinds() {
-  const { ctx, place, go } = useSettingsShell();
+  const { place, go } = useSettingsShell();
   const { state } = useStore();
   const cloudHome = state.config?.cloudHome === true;
   const [local, setLocal] = useState<PrivateStatus>(null);
-  const [cloud, setCloud] = useState<{ configured: boolean; available: boolean } | null>(null);
   const [vps, setVps] = useState<{ configured: boolean; available: boolean } | null>(null);
   const [setup, setSetup] = useState(false);
   const load = useCallback(() => {
     if (!cloudHome) void read<PrivateStatus>("status").then(setLocal);
-    void read<{ configured: boolean; available: boolean }>("cloud").then(setCloud);
     void read<{ configured: boolean; available: boolean }>("vps").then(setVps);
   }, [cloudHome]);
   useEffect(load, [load]);
-  const summary = useAccountSummary();
-  const others = useOtherPlaces("desktops");
-  const myCloud = others.find((other) => other.kind === "cloud");
-  // With a paid plan, Cloud desktops are My Cloud's: on This computer the row says so and goes there.
-  const onMyCloud = !cloudHome && summary.paid && !cloud?.configured;
   const privateKind: Kind = local?.ready ? "ready" : local?.runtime ? "setup" : "none";
-  const cloudKind: Kind = cloudHome ? "elsewhere" : onMyCloud ? "elsewhere" : cloud?.configured ? (cloud.available ? "ready" : "attention") : "none";
   const serversKind: Kind = vps?.configured ? (vps.available ? "ready" : "attention") : "none";
   const row = (kind: Kind, title: string, line: string, icon: React.ReactNode, onSetUp: () => void, data: string) => {
-    const status = statusLine(kind, onMyCloud && data === "cloud" ? myCloud?.name ?? t("cloudSetup.myCloud") : place.name);
-    if (kind === "elsewhere" && onMyCloud && data === "cloud") {
-      return (
-        <div data-desktop-kind={data} className="contents">
-          <SettingsLinkRow title={title} leading={<SettingsMark>{icon}</SettingsMark>} subtitle={<><StatusDot tone={status.tone} />{status.text} · {line}</>}
-            external onClick={() => myCloud?.open()} data={{ "data-desktop-elsewhere": "" }} />
-        </div>
-      );
-    }
+    const status = statusLine(kind, place.name);
     return (
       <div data-desktop-kind={data} className="contents">
         <SettingRow title={title} leading={<SettingsMark>{icon}</SettingsMark>}
@@ -102,9 +84,8 @@ export function DesktopKinds() {
   return (
     <SettingsGroup label={t("settings.desktops.kinds")} block="desktops">
       <SettingsRows icons>
-        {row(cloudKind, t("settings.desktops.cloud"), t("settings.desktops.cloudLine"), <Cloud strokeWidth={1.75} />, () => go(ctx.plan && !cloud?.configured ? "plan" : "ai", ctx.plan && !cloud?.configured ? undefined : "ai-keys"), "cloud")}
         {!cloudHome && row(privateKind, t("settings.desktops.private"), t("settings.desktops.privateLine"), <Laptop strokeWidth={1.75} />, () => setSetup(true), "private")}
-        {(ctx.advanced || vps?.configured) && row(serversKind, t("settings.desktops.servers"), t("settings.desktops.serversLine"), <Server strokeWidth={1.75} />, () => go("ai", "ai-keys"), "servers")}
+        {row(serversKind, t("settings.desktops.servers"), t("settings.desktops.serversLine"), <Server strokeWidth={1.75} />, () => go("ai", "ai-keys"), "servers")}
       </SettingsRows>
       {setup && <PrivateSetup status={local} onCheck={load} onClose={() => setSetup(false)} />}
     </SettingsGroup>
