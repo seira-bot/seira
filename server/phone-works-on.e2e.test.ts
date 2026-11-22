@@ -40,8 +40,8 @@ describe("a paired phone changes where one bot works", () => {
     expect(result.status, `${method} ${path}: ${JSON.stringify(result.body)}`).toBeLessThan(400);
     return result.body;
   };
-  const pair = async (scopes: string[], how: { phone?: boolean; route?: "/api/auth/pair" | "/api/pair"; attemptId?: boolean } = {}) => {
-    const { code } = await owner("POST", "/api/auth/pairing", { scopes, ...(how.phone ? { device: "phone" } : {}) });
+  const pair = async (scopes: string[], how: { device?: "phone" | "computer"; route?: "/api/auth/pair" | "/api/pair"; attemptId?: boolean } = {}) => {
+    const { code } = await owner("POST", "/api/auth/pairing", { scopes, ...(how.device ? { device: how.device } : {}) });
     if (how.route === "/api/pair") return (await owner("POST", "/api/pair", { code, deviceName: "Device", pairRequestId: crypto.randomUUID() })).token as string;
     return (await owner("POST", "/api/auth/pair", { code, ...(how.attemptId ? { label: "Device", attemptId: crypto.randomUUID() } : {}) })).token as string;
   };
@@ -167,7 +167,7 @@ describe("a paired phone changes where one bot works", () => {
   });
 
   it("holds a session from a phone's pairing to the paired-device limits without the companion header", { timeout: 60_000 }, async () => {
-    const phone = await pair(["admin", "client"], { phone: true });
+    const phone = await pair(["admin", "client"], { device: "phone" });
     const id = await newBot("Headerless", { computer: "cloud", vpsAlias: "own-vps" });
     for (const body of [{ name: "Renamed" }, { computer: "local" }, { approvalMode: "full" }]) {
       const refused = await call("PATCH", `/api/bots/${id}`, body, phone, false);
@@ -183,33 +183,58 @@ describe("a paired phone changes where one bot works", () => {
 
   it("takes the phone limits from the pairing, whichever route redeems it", { timeout: 60_000 }, async () => {
     const id = await newBot("Routes");
-    for (const how of [{ route: "/api/pair" }, { route: "/api/auth/pair", attemptId: true }, { route: "/api/auth/pair" }] as const) {
-      const phone = await pair(["admin", "client"], { phone: true, ...how });
+    const routes = [{ route: "/api/pair" }, { route: "/api/auth/pair", attemptId: true }, { route: "/api/auth/pair" }] as const;
+    for (const how of routes) {
+      const phone = await pair(["admin", "client"], { device: "phone", ...how });
       const refused = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, phone, false);
       expect(refused.status, JSON.stringify(how)).toBe(403);
     }
-    const computer = await pair(["admin", "client"], { route: "/api/pair" });
+    const computer = await pair(["admin", "client"], { device: "computer", route: "/api/pair" });
     const renamed = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, computer, false);
     expect(renamed.status, `a computer's code on the companion route: ${JSON.stringify(renamed.body)}`).toBe(200);
     expect((await stored(id)).name).toBe("Renamed");
   });
 
-  it("passes a phone's limits on to a session from a code the phone opens", { timeout: 60_000 }, async () => {
-    const phone = await pair(["admin", "client"], { phone: true });
-    const opened = await call("POST", "/api/auth/pairing", { scopes: ["admin", "client"] }, phone, false);
-    expect(opened.status, JSON.stringify(opened.body)).toBe(200);
-    const minted = await call("POST", "/api/auth/pair", { code: opened.body.code });
-    expect(minted.status, JSON.stringify(minted.body)).toBe(200);
-    const id = await newBot("Second");
-    const refused = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, minted.body.token, false);
-    expect(refused.status).toBe(403);
+  it("holds a session from a pairing opened for no one in particular to the limits, unless a browser takes it as a cookie", { timeout: 60_000 }, async () => {
+    const id = await newBot("Unnamed");
+    for (const how of [{ route: "/api/pair" }, { route: "/api/auth/pair", attemptId: true }, { route: "/api/auth/pair" }] as const) {
+      const device = await pair(["admin", "client"], how);
+      const refused = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, device, false);
+      expect(refused.status, JSON.stringify(how)).toBe(403);
+      expect(refused.body.error).toMatch(/^forbidden: a paired device may change how a bot looks, not "/);
+    }
+    const { code } = await owner("POST", "/api/auth/pairing", { scopes: ["admin", "client"] });
+    const browser = await fetch(`${base}/api/auth/pair`, {
+      method: "POST", headers: { "content-type": "application/json", origin: base }, body: JSON.stringify({ code, cookie: true }),
+    });
+    expect(browser.status).toBe(200);
+    const cookie = browser.headers.get("set-cookie")?.split(";")[0] ?? "";
+    expect(cookie).not.toBe("");
+    const renamed = await fetch(`${base}/api/bots/${id}`, {
+      method: "PATCH", headers: { "content-type": "application/json", origin: base, cookie }, body: JSON.stringify({ name: "Renamed" }),
+    });
+    expect(renamed.status, await renamed.text()).toBe(200);
   });
 
-  it("leaves a session from a pairing made for no phone as it was, with or without the companion header", { timeout: 60_000 }, async () => {
+  it("passes a phone's limits on to a session from a code the phone opens, whoever the phone says it is for", { timeout: 60_000 }, async () => {
+    const phone = await pair(["admin", "client"], { device: "phone" });
+    const id = await newBot("Second");
+    for (const asked of [{}, { device: "computer" }]) {
+      const opened = await call("POST", "/api/auth/pairing", { scopes: ["admin", "client"], ...asked }, phone, false);
+      expect(opened.status, JSON.stringify(opened.body)).toBe(200);
+      const minted = await call("POST", "/api/pair", { code: opened.body.code, deviceName: "Device", pairRequestId: crypto.randomUUID() });
+      expect(minted.status, JSON.stringify(minted.body)).toBe(200);
+      const refused = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, minted.body.token, false);
+      expect(refused.status, JSON.stringify(asked)).toBe(403);
+    }
+  });
+
+  it("leaves a session from a computer's pairing as it was, and narrows it only when it sends the companion header", { timeout: 60_000 }, async () => {
+    const computer = await pair(["admin", "client"], { device: "computer" });
     const id = await newBot("Desk", { computer: "cloud", vpsAlias: "own-vps" });
-    const narrowed = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, adminToken, true);
+    const narrowed = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, computer, true);
     expect(narrowed.status).toBe(403);
-    const renamed = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, adminToken, false);
+    const renamed = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, computer, false);
     expect(renamed.status, JSON.stringify(renamed.body)).toBe(200);
     expect((await stored(id)).name).toBe("Renamed");
   });

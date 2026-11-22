@@ -241,6 +241,7 @@ export function createCloudPairing(options: {
         browser,
         ...(browser ? { owner: owner as string } : {}),
         ...(member ? { member } : {}),
+        device: "computer",
       });
       // Saying `purpose` back tells the Admin this machine made a browser sign-in; an older machine ignores it.
       if (browser) return { status: 200, body: { credential: opened.credential, expiresAt: opened.expiresAt, purpose: "browser" } };

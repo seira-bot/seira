@@ -59,7 +59,7 @@ describe("connect", () => {
     expect(result).toMatchObject({ ok: true, tokenFile: file, workspace: { label: "Sandbox", environmentId: "env-1" }, session: { label: "CI runner", scopes: ["admin", "client"] } });
     expect(JSON.stringify([out, err])).not.toContain("seira_sess_secret_token_value");
     expect(requests.map((request) => request.path)).toEqual(["/.well-known/openmausbot/environment", "/api/auth/pairing", "/api/auth/pair"]);
-    expect(requests[1]!.body).toEqual({ label: "CI runner" });
+    expect(requests[1]!.body).toEqual({ label: "CI runner", device: "computer" });
   });
 
   it("uses a given code, refuses to overwrite a token file unless --force, and reports a refused code", async () => {

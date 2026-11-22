@@ -82,7 +82,7 @@ export async function connectVerb(ctx: VerbContext): Promise<VerbOutcome> {
   }
   const label = flag(ctx.flags, "label")?.trim() || "Seira CLI";
   if (!code) {
-    const minted = await call(origin, "/api/auth/pairing", { method: "POST", body: JSON.stringify({ label, ...(ctx.flags.client ? { scopes: ["client"] } : {}) }) });
+    const minted = await call(origin, "/api/auth/pairing", { method: "POST", body: JSON.stringify({ label, ...(ctx.flags.client ? { scopes: ["client"] } : {}), device: "computer" }) });
     if (minted.status !== 200 || typeof minted.body.code !== "string") {
       throw new HeadlessError(`this server will not mint a pairing code for a command on this computer${minted.body.error ? ` (${minted.body.error})` : ""}`,
         EXIT.unreachable, `${cliCommand("pair")} in a terminal on this computer, then pass --code CODE`);

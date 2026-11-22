@@ -29,7 +29,7 @@ async function create(ctx: VerbContext): Promise<VerbOutcome> {
   const ttlMs = raw ? parseDuration(raw, "--expires", { min: 3_600_000, max: 3_650 * DAY }) : 90 * DAY;
   const client = await ctx.client();
   const minted = await client.json<Rec>("/api/auth/pairing", {
-    method: "POST", body: JSON.stringify({ label: name, scopes: scope === "admin" ? ["admin", "client"] : ["client"], tokenTtlMs: ttlMs }),
+    method: "POST", body: JSON.stringify({ label: name, scopes: scope === "admin" ? ["admin", "client"] : ["client"], tokenTtlMs: ttlMs, device: "computer" }),
   });
   const paired = await client.json<Rec>("/api/auth/pair", { method: "POST", body: JSON.stringify({ code: minted.code, label: name }) });
   const session: Rec = paired.session ?? {};
