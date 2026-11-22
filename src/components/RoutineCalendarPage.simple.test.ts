@@ -239,8 +239,8 @@ describe("routine drawer", () => {
     expect(props.onOpenRun).toHaveBeenCalledWith(runs[3]);
   });
 
-  it("describes the Boat runner in plain words", () => {
-    expect(details(routineItem({ ...routine, runOn: "cloud" })).html).toContain("Cloud desktop");
+  it("never names Boat, even for a routine an older install left on the cloud runner", () => {
+    expect(details(routineItem({ ...routine, runOn: "cloud" })).html).not.toMatch(/Boat/i);
   });
 
   it("Run now and Pause send the same requests as before", () => {
@@ -279,7 +279,7 @@ describe("routine editor", () => {
     seed: { kind: "routine", at: Date.now() + 3_600_000, durationMinutes: 30, botIds: [bot.id], routine: routineToEdit },
     bots: [bot], onClose: vi.fn(), onSavedCall: vi.fn(),
   }));
-  const hidden = ['<select aria-label="Repeat"', "Routine safety limit", "Runs the whole job on the bot&#x27;s cloud desktop", "Add attachment", "Post results to", "Routine type"];
+  const hidden = ['<select aria-label="Repeat"', "Routine safety limit", "Add attachment", "Post results to", "Routine type"];
 
   it("keeps Simple mode to the basics with everything else behind More options", () => {
     const html = editor();
@@ -435,7 +435,7 @@ describe("routine editor", () => {
   it("leaves the Advanced editor as it was", () => {
     fixture.advanced = true;
     const html = editor();
-    for (const text of ['placeholder="Add title"', '<select aria-label="Repeat"', "Assign a bot", "Runs the whole job on the bot&#x27;s cloud desktop", "Post results to", "Routine type", "New event"]) {
+    for (const text of ['placeholder="Add title"', '<select aria-label="Repeat"', "Assign a bot", "Post results to", "Routine type", "New event"]) {
       expect(html, text).toContain(text);
     }
     expect(html).not.toContain("More options");

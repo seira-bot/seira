@@ -13,7 +13,6 @@ import { placeBlocked, placeFacts, placeHasIssue, placeViewFor, usePlaceSeat, ty
 import { shortPath } from "@/lib/short-path";
 import { isOwnThreadFolder } from "../../../shared/thread-folder";
 import { useDesktopCapabilities } from "../DesktopCapabilities";
-import { CloudBackendPicker } from "../CloudBackendPicker";
 import { placeManagedBy, worksOnChoices, WorksOnGrid, worksOnSelected, type WorksOnMode } from "../WorksOnGrid";
 import { Switch } from "../SettingsPrimitives";
 import { PhoneAppsCard } from "./PhoneAppsCard";
@@ -634,10 +633,6 @@ export function CloudPreference({ bot, patch }: { bot: Bot; patch: ReturnType<ty
           {t("botAccess.cloud.autoDescription")}
         </div>
       )}
-      <CloudBackendPicker
-        value={bot.cloudBackend ?? "box"}
-        onChange={(backend) => patch({ cloudBackend: backend })}
-      />
       {/* A saved bot only: a new bot starts on the default server, and new-bot defaults never name one. */}
       {bot.cloudBackend === "vps" && !draft && <VpsAliasField bot={bot} />}
       {!bot.computer && bot.cloudBackend === "vps" && (
@@ -673,7 +668,7 @@ function DraftWorksOn({ bot, patch, seat }: { bot: Bot; patch: ReturnType<typeof
         reason: localReason ?? t("computer.unavailableLocal"),
       },
     }));
-    const managedBy = placeManagedBy(mode, bot.cloudBackend, state.config?.managedPolicy);
+    const managedBy = placeManagedBy(mode, state.config?.managedPolicy);
     return {
       mode, labelKey, descriptionKey, Icon, view, managedBy,
       selected: worksOnSelected(mode, bot.computer, capabilities),

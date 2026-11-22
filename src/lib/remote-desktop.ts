@@ -1,5 +1,5 @@
 import type { InstanceInfo } from "@/state/store";
-import { canWorkOnCloud, type CloudEngine } from "../../shared/cloud-computer";
+import type { CloudEngine } from "../../shared/cloud-computer";
 import { isCloudComputerBusyMessage } from "../../shared/computer-contention";
 
 export function isRemoteScreenshotContention(error: { status: number; message: string }): boolean {
@@ -35,9 +35,4 @@ export function localVmScreenshotSource(raw: unknown): string | null {
 
 export function cloudEngineOf(instance: InstanceInfo | undefined): CloudEngine {
   return { computerMcp: instance?.capabilities?.computerMcp };
-}
-
-export function boatCapableEngine(instances: readonly InstanceInfo[], selectedId?: string): InstanceInfo | undefined {
-  const selected = selectedId ? instances.find(instance => instance.instanceId === selectedId) : undefined;
-  return selected && canWorkOnCloud(cloudEngineOf(selected)) ? selected : undefined;
 }

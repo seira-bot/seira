@@ -100,7 +100,6 @@ checked against what it does.
 | --- | --- |
 | Pi, Grok CLI, Grok API, OpenAI compatible, Mistral, MiniMax | Native and app-supplied MCP tools |
 | Claude, Codex, Gemini, Kimi, Droid, Cursor, OpenCode Go, Qwen, Hermes, Custom ACP, Antigravity | App-supplied MCP tools; keep `native:*` in Allow and do not exclude native tools |
-| Boat native | Meaningful tool restrictions are unsupported |
 
 Grok CLI's native contract is verified on version **1.0.41**. Other versions
 refuse native restrictions until their contract is verified. Inherited Grok

@@ -26,7 +26,7 @@ const admin = {
   signed: [] as boolean[],
   version: 0,
 };
-let adminServer: Server, gateway: FakeHttpMcp, relay: Server, broker: BrokerFake, fx: CloudSendFixture, team: CloudTeamFixture;
+let adminServer: Server, gateway: FakeHttpMcp, broker: BrokerFake, fx: CloudSendFixture, team: CloudTeamFixture;
 let owner = "", ada = "";
 let botId = "", peerId = "";
 
@@ -95,14 +95,10 @@ beforeAll(async () => {
     });
   });
   await new Promise<void>((resolve) => adminServer.listen(0, "127.0.0.1", resolve));
-  relay = createServer((_req, res) => { res.writeHead(404, { "content-type": "application/json" }); res.end("{}"); });
-  await new Promise<void>((resolve) => relay.listen(0, "127.0.0.1", resolve));
   gateway = await startFakeHttpMcp({ tools: [{ name: "lookup_order", inputSchema: { type: "object", properties: {} } }], callResult: () => ({ content: [{ type: "text", text: "ok" }] }) });
   broker = await startBrokerFake();
-  const relayBase = `http://127.0.0.1:${(relay.address() as AddressInfo).port}`;
   fx = await launchCloudSendFixture({ onePasswordToken: "ops_fake-rules", broker, team: { id: "team-acme-1", name: "Acme", engine: ENGINE, env: {
     SEIRA_BOT_BOX: "0", FIXTURE_ADMIN_STAND_IN: `http://127.0.0.1:${(adminServer.address() as AddressInfo).port}`,
-    SEIRA_CLOUD_BOAT_URL: `${relayBase}/relay/api/box/v1`, SEIRA_CLOUD_BOAT_TOKEN: "box_seira_rules",
   } } });
   team = fx.team!;
   owner = (await team.pair(OWNER)).token!;
@@ -120,7 +116,6 @@ afterAll(async () => {
   await gateway?.close();
   await broker?.close();
   await new Promise((resolve) => adminServer?.close(resolve));
-  await new Promise((resolve) => relay?.close(resolve));
 });
 
 it("with no rules, everything is as it was and nobody sees a badge; the fetch is signed", async () => {
@@ -235,15 +230,8 @@ it("a connected app the rules don't allow: its tools and its sign-in are refused
   expect(await call("SLACK_SEND_MESSAGE")).not.toContain("Acme does not allow");
 }, hostTimeout(60_000));
 
-it("a blocked cloud desktop is refused for a chat turn and a routine; a lent computer is refused too; both lift", async () => {
-  const setComputer = await team.as(owner, "PATCH", `/api/bots/${botId}`, { computer: "cloud" });
-  expect(setComputer.status, JSON.stringify(setComputer.body)).toBe(200);
+it("a lent computer is refused when the rules do not allow it; it lifts", async () => {
   await rules({ allowedComputers: ["vps"] });
-  const { sent, messages } = await dumped(owner, "blocked computer", (text) => /Acme does not allow bots to use cloud computers/.test(text));
-  expect(`${JSON.stringify(sent.body)} ${messages}`).toMatch(/Acme does not allow bots to use cloud computers\. Ask a team admin\./);
-  const routine = await routineRun("Blocked computer");
-  expect(routine.words).toMatch(/Acme does not allow bots to use cloud computers/);
-
   const thread = await team.as(owner, "POST", `/api/bots/${botId}/tasks`, { title: "lent" });
   const capability = await team.capability(botId, thread.body.task.threadId);
   const lent = await fetch(`${team.base}/api/internal/shared-computers`, { method: "POST", headers: { authorization: `Bearer ${capability}`, "content-type": "application/json" }, body: JSON.stringify({ action: "list_files", computer_id: "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f" }) });
@@ -253,7 +241,6 @@ it("a blocked cloud desktop is refused for a chat turn and a routine; a lent com
   await rules(null);
   const after = await dumped(owner, "computer allowed again", () => engineRan());
   expect(after.messages).not.toMatch(/Acme does not allow/);
-  expect((await team.as(owner, "PATCH", `/api/bots/${botId}`, { computer: null })).status).toBe(200);
 }, hostTimeout(180_000));
 
 it("remote access off refuses a phone code and signs phones out, while every member's app still pairs; it lifts", async () => {

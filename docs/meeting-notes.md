@@ -42,7 +42,7 @@ transcribes them and hands the words back, so the computer can label each word w
 
 ## Limits
 
-- Meetings run on a Linux cloud computer (Boat); a person's own Mac or PC isn't a meeting computer yet.
+- Meetings need a Linux cloud computer, and a VPS can't be one yet; without one Seira says the meeting needs a cloud computer. A person's own Mac or PC isn't a meeting computer yet.
 - Hosts must admit the bot. Google Meet often refuses guests from cloud networks ("You can't join this video call");
   the bot can also run with a Chrome profile signed in to a Google account, which is still being tried live.
 - A meeting stops after 4 hours.

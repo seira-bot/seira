@@ -235,13 +235,11 @@ parity, restart recovery, duplicate completion events and atomic cursor/counter
 rollback on a failed save. The MCP fixture verifies reviewed policy changes
 and the listing through the actual tool and API, using no live accounts.
 
-The routine tool defaults to `seira` (the bot's configured model and computer,
-including VPS); `box` explicitly selects the bot's Boat cloud computer, which the
-bot's own model drives through its computer tools. Legacy `cloud`
-values remain accepted without migrating existing routines. The cron tool
-fixture checks this default and the missing-Boat-account recovery instruction.
+The routine tool runs on `seira` (the bot's configured model and computer,
+including VPS). A routine saved to run on the old Boat cloud computer is moved to
+`seira` by the first start after the update (`server/boat-retirement.test.ts`).
 The VPS fixture runs an actual scheduled execution with fake ACP/SSH and checks
-that the same VPS computer tools reach the agent without a Boat key. These are
+that the same VPS computer tools reach the agent with no Boat key saved. These are
 deterministic routing checks, not a live model-choice or real VPS acceptance test.
 
 ```sh
