@@ -1,5 +1,5 @@
 import { accountDisplayName, accountStateDisplayName, markDuplicateAccounts, revokesProviderGrant } from "../../../shared/connector-account-identity";
-import { composioRequest, type ConnectedAccountResponse, type Env } from "./common";
+import { composioRequest, type ConnectedAccountResponse } from "./common";
 
 export function applyAccountIdentity(
   summaries: Array<{ id: string; status: string; displayName?: string; duplicateOf?: string; createdAt?: string; updatedAt?: string }>,

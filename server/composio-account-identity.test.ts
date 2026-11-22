@@ -32,7 +32,7 @@ describe("own-key account identity", () => {
     const twin = project.connect(USER, "github", { displayName: "octocat", createdAt: "2026-02-01T00:00:00Z" });
     const other = project.connect(USER, "github", { displayName: "someone", createdAt: "2026-03-01T00:00:00Z" });
     const { github } = await connectionStatus(cfg, ["github"]);
-    const byId = Object.fromEntries(github!.accounts.map((account) => [account.id, account]));
+    const byId = Object.fromEntries((github?.accounts ?? []).map((account) => [account.id, account] as const));
     expect(byId[old]).toEqual({ id: old, status: "ACTIVE", displayName: "OctoCat" });
     expect(byId[twin]).toEqual({ id: twin, status: "ACTIVE", displayName: "octocat", duplicateOf: old });
     expect(byId[other]).toEqual({ id: other, status: "ACTIVE", displayName: "someone" });
@@ -42,7 +42,7 @@ describe("own-key account identity", () => {
     project.connect(USER, "github");
     project.connect(USER, "github");
     const { github } = await connectionStatus(cfg, ["github"]);
-    expect(github!.accounts.every((account) => account.displayName === undefined && account.duplicateOf === undefined)).toBe(true);
+    expect((github?.accounts ?? []).every((account) => account.displayName === undefined && account.duplicateOf === undefined)).toBe(true);
   });
 
   it("deletes without revoke when a twin exists (AC-07)", async () => {
