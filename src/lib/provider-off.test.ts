@@ -66,7 +66,8 @@ describe("runProviderOff", () => {
   const x = instance("x");
   const target = moveTarget("x", [x, y], health)!;
   const actions = () => ({
-    persist: vi.fn(async () => undefined), hide: vi.fn(async () => undefined), followBotModel: vi.fn(async () => undefined),
+    persist: vi.fn(async (_bot: Bot, _patch: unknown): Promise<unknown> => undefined), hide: vi.fn(async (): Promise<unknown> => undefined),
+    followBotModel: vi.fn(async (_bot: Bot): Promise<unknown> => undefined),
   });
 
   it("moves every bot, then their conversations, then hides", async () => {

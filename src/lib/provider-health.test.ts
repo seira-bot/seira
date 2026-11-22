@@ -40,7 +40,7 @@ describe("providerHealth", () => {
   });
 
   it("keeps a provider whose CLI only has an update waiting", () => {
-    expect(providerHealth(instance("a", { snapshot: { state: "available", authenticated: true, update: { latest: "9" } } as InstanceInfo["snapshot"] })).usable).toBe(true);
+    expect(providerHealth(instance("a", { snapshot: { state: "available", authenticated: true, update: { title: "Update", message: "A newer version is out." } } })).usable).toBe(true);
   });
 });
 

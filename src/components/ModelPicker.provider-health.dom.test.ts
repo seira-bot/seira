@@ -104,7 +104,7 @@ describe("the model picker's provider rail", () => {
   });
 
   it("keeps a provider that only has a CLI update among the ones that work", async () => {
-    fixture.instances = [engine("cursor", "Cursor", { state: "available", version: "1", authenticated: true, update: { latest: "2" } } as InstanceInfo["snapshot"]), codex()];
+    fixture.instances = [engine("cursor", "Cursor", { state: "available", version: "1", authenticated: true, update: { title: "Update", message: "A newer version is out." } }), codex()];
     await open(bot("codex"));
     expect(document.querySelector("[data-rail-unusable]")).toBeNull();
     expect(document.querySelector("[data-rail-not-ready]")).toBeNull();
