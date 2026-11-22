@@ -11830,6 +11830,7 @@
   "serverInstall.details": "Detalhes do seu servidor",
   "serverInstall.failedStep": "Parou em: {step}.",
   "serverInstall.check.os": "Sistema operacional",
+  "serverInstall.check.arch": "Processador",
   "serverInstall.check.cpu": "Processador",
   "serverInstall.check.memory": "Memória",
   "serverInstall.check.disk": "Espaço em disco",
