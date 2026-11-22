@@ -19,9 +19,13 @@ const NOTES: ReleaseNote[] = [
 ];
 
 describe("release notes data", () => {
-  it("starts with 0.1.187 and its six items in order", () => {
-    expect(RELEASE_NOTES[0]!.version).toBe("0.1.187");
-    expect(RELEASE_NOTES[0]!.items.map(entry => entry.id)).toEqual(["callView", "chosenFolders", "providerMenu", "fullChat", "departmentAccess", "pictures"]);
+  it("starts with 0.1.188 and its three items in order", () => {
+    expect(RELEASE_NOTES[0]!.version).toBe("0.1.188");
+    expect(RELEASE_NOTES[0]!.items.map(entry => entry.id)).toEqual(["boatGone", "memoryForBots", "crashReports"]);
+  });
+  it("keeps 0.1.187 with its six items in order", () => {
+    const entry = RELEASE_NOTES.find(note => note.version === "0.1.187")!;
+    expect(entry.items.map(item => item.id)).toEqual(["callView", "chosenFolders", "providerMenu", "fullChat", "departmentAccess", "pictures"]);
   });
   it("keeps 0.1.186 with its six items in order", () => {
     const entry = RELEASE_NOTES.find(note => note.version === "0.1.186")!;

@@ -39,6 +39,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Memory for bots",
     place: "Settings → You and your bots → Limits",
     does: "All bot work on this computer shares one memory limit, so a heavy task cannot use the memory your other apps need. Set the number of GB, or leave it empty for Auto.",
+    releaseNotes: ["memoryForBots"],
   },
   {
     id: "automations",
@@ -207,6 +208,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "the Computer tab of a bot's panel",
     does: "Where a bot works with a screen, a browser or files: this computer, a Cloud desktop, a shared desktop or its own Local VM.",
     tools: ["select_computer", "list_shared_computers", "shared_computer", "vm_exec", "ask_for_computer", "reset_cloud_computer"],
+    releaseNotes: ["boatGone"],
   },
   {
     id: "pages-apps",
@@ -347,6 +349,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Send crash reports",
     place: "Settings → General → Privacy (the switch is in the desktop app only)",
     does: "On by default. When Seira stops working, the desktop app sends the app version, system type and where its code failed. Never messages, files or names. It is a different switch from Usage analytics.",
+    releaseNotes: ["crashReports"],
   },
 ];
 
