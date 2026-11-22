@@ -68,6 +68,16 @@ describe("pairing devices from a hosted server's settings", () => {
     expect(renderToStaticMarkup(createElement(ServerPairingCard, { initialSession: owner, simple: true }))).toContain(">Pair a phone<");
   });
 
+  it("offers a second, quieter way to pair a computer beside the phone, except on a Seira Cloud home", () => {
+    const owner = { kind: "loopback" as const };
+    const phonePage = renderToStaticMarkup(createElement(ServerPairingCard, { initialSession: owner, simple: true }));
+    expect(phonePage).toMatch(/<button[^>]*data-pair-computer=""[^>]*class="ui-button"[^>]*>Pair a computer<\/button>/);
+    expect(phonePage.match(/ui-button-primary/g)?.length).toBe(1);
+    expect(phonePage.match(/data-phone-pairing-action/g)?.length).toBe(1);
+    expect(renderToStaticMarkup(createElement(ServerPairingCard, { initialSession: owner, simple: true, forComputer: true }))).not.toContain("data-pair-computer");
+    expect(renderToStaticMarkup(createElement(ServerPairingCard, { initialSession: owner, cloudHome: true }))).not.toContain("data-pair-computer");
+  });
+
   it("offers no pairing code on a hosted workspace, where people sign in through the portal", () => {
     const admin = { kind: "session" as const, id: "s", label: "Hosted workspace", scopes: ["admin", "client"], expiresAt: 1 };
     const html = renderToStaticMarkup(createElement(ServerPairingCard, { initialSession: admin, initialPairingCodes: false }));

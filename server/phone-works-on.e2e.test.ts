@@ -219,7 +219,7 @@ describe("a paired phone changes where one bot works", () => {
   it("passes a phone's limits on to a session from a code the phone opens, whoever the phone says it is for", { timeout: 60_000 }, async () => {
     const phone = await pair(["admin", "client"], { device: "phone" });
     const id = await newBot("Second");
-    for (const asked of [{}, { device: "computer" }]) {
+    for (const asked of [{}, { device: "computer" }, { tokenTtlMs: 3_600_000 }]) {
       const opened = await call("POST", "/api/auth/pairing", { scopes: ["admin", "client"], ...asked }, phone, false);
       expect(opened.status, JSON.stringify(opened.body)).toBe(200);
       const minted = await call("POST", "/api/pair", { code: opened.body.code, deviceName: "Device", pairRequestId: crypto.randomUUID() });
@@ -227,6 +227,16 @@ describe("a paired phone changes where one bot works", () => {
       const refused = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, minted.body.token, false);
       expect(refused.status, JSON.stringify(asked)).toBe(403);
     }
+  });
+
+  it("leaves an access token from a client that names no device as it was", { timeout: 60_000 }, async () => {
+    const id = await newBot("Script");
+    const { code } = await owner("POST", "/api/auth/pairing", { scopes: ["admin", "client"], label: "CI runner", tokenTtlMs: 3_600_000 });
+    const minted = await call("POST", "/api/auth/pair", { code, label: "CI runner" });
+    expect(minted.status, JSON.stringify(minted.body)).toBe(200);
+    const renamed = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, minted.body.token, false);
+    expect(renamed.status, JSON.stringify(renamed.body)).toBe(200);
+    expect((await stored(id)).name).toBe("Renamed");
   });
 
   it("leaves a session from a computer's pairing as it was, and narrows it only when it sends the companion header", { timeout: 60_000 }, async () => {

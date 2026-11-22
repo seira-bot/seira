@@ -35,10 +35,10 @@ afterEach(() => {
   host.remove();
 });
 
-async function openDialog(forComputer: boolean) {
+async function openDialog(forComputer: boolean, choice = forComputer ? "Pair a computer" : "Pair a phone") {
   flushSync(() => root.render(createElement(ServerPairingCard, { simple: true, reveal: false, forComputer, address: forComputer ? "http://macmini.tail1234.ts.net:8799" : null })));
   const button = await vi.waitFor(() => {
-    const found = [...host.querySelectorAll("button")].find((b) => (b.textContent ?? "").startsWith("Pair a"));
+    const found = [...host.querySelectorAll("button")].find((b) => b.textContent === choice);
     expect(found).toBeDefined();
     return found!;
   });
@@ -85,6 +85,22 @@ it("asks for a computer's code only from the computer dialog, so every other cod
   await openDialog(false);
   expect(asked).toHaveLength(1);
   expect(asked[0]).not.toHaveProperty("device");
+});
+
+it("lets the phone page pair a computer too, with the computer's code, address and wording", async () => {
+  const fromPhonePage = await openDialog(false, "Pair a computer");
+  expect(asked).toEqual([expect.objectContaining({ device: "computer" })]);
+  expect(fromPhonePage.title).toBe("Pair another computer");
+  expect(fromPhonePage.dialog.querySelector("[data-pairing-address]")?.textContent).toBe("http://macmini.tail1234.ts.net:8799");
+  expect(fromPhonePage.qr).toBe(false);
+  expect(fromPhonePage.all).not.toMatch(/phone|scan/i);
+  expect(fromPhonePage.buttons).toEqual([{ text: "Done", primary: false }, { text: "Copy link", primary: true }]);
+  flushSync(() => root.unmount());
+  root = createRoot(host);
+  asked.length = 0;
+  const phone = await openDialog(false);
+  expect(asked[0]).not.toHaveProperty("device");
+  expect(phone.qr).toBe(true);
 });
 
 it("makes the link from the shared address when the server gave none", () => {

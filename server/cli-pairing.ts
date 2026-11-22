@@ -26,7 +26,8 @@ export function untilText(expiresAt: number, now = Date.now()): string {
 /**
  * What `serve` and `pair` print for one pairing code. `link`: the address other devices reach this server at, with the
  * code (null when it has no way in); `localLink`: a browser on this machine (or the Docker host, `localPlace`);
- * `inviteUrl`: the phone-app link only Android's scanner needs; `prefix`: how the CLI was started, so commands paste.
+ * `inviteUrl`: the phone-app link only Android's scanner needs; `computer`: a code for another computer, so no phone QR;
+ * `prefix`: how the CLI was started, so commands paste.
  */
 export function pairingBlock(input: {
   code: string;
@@ -37,6 +38,7 @@ export function pairingBlock(input: {
   localPlace?: "machine" | "docker";
   inviteUrl?: string | null;
   phone?: "ios" | "android";
+  computer?: boolean;
   prefix: string;
   now?: number;
 }): string {
@@ -52,10 +54,15 @@ export function pairingBlock(input: {
   lines.push(`Link           ${input.link}`);
   lines.push("");
   lines.push("  Desktop app   ＋ → Connect to a server, paste the link");
+  if (input.computer) {
+    lines.push(`  Command line  seira connect ${input.link} --out FILE`);
+    return lines.join("\n");
+  }
   lines.push(scanInvite ? "  Phone         scan this with the Seira app" : "  Phone         scan with your camera or the Seira app");
   lines.push("");
   lines.push(qrToString(scanInvite ? input.inviteUrl! : input.link));
   if (!input.chatOnly) lines.push(`For a phone (chat and approvals only)   ${input.prefix} pair --phone`);
+  if (!input.phone) lines.push(`For a script on another computer   ${input.prefix} pair --computer${input.chatOnly ? " --client" : ""}`);
   return lines.join("\n");
 }
 

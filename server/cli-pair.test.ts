@@ -110,6 +110,15 @@ describe("seira pair", () => {
     expect(printed()).not.toContain("For a phone");
   });
 
+  it("--computer mints a code made for another computer, with no phone QR", async () => {
+    expect(await runPair({ ...options, computer: true })).toBe(0);
+    const posted = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+    expect(JSON.parse(String(posted![1]!.body))).toEqual({ device: "computer" });
+    expect(printed()).toContain("· everything");
+    expect(printed()).toContain(`seira connect ${advertisedOrigin}/pair#code=${code} --out FILE`);
+    expect(printed()).not.toMatch(/[▀▄█]/);
+  });
+
   it("still prints the code when the address answers as another server, and says what to fix", async () => {
     remoteWorkspaceId = "another-workspace";
     expect(await runPair(options)).toBe(0);

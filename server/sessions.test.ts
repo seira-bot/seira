@@ -847,7 +847,7 @@ describe("a member's own phone on a Team Cloud", () => {
 });
 
 describe("the paired-device mark on a session's pairing record", () => {
-  const redeem = (opened: { device?: "phone" | "computer"; browser?: boolean }, input: { attemptId?: string; browser?: boolean; cookie?: boolean } = {}) => {
+  const redeem = (opened: { device?: "phone" | "computer"; browser?: boolean; tokenTtlMs?: number }, input: { attemptId?: string; browser?: boolean; cookie?: boolean } = {}) => {
     const pairing = registry.openPairing(opened);
     const result = registry.exchange({ code: opened.browser ? pairing.credential : pairing.code, label: "Device", source: "10.0.0.7", ...input });
     if (!result.ok) throw new Error(result.error);
@@ -871,6 +871,15 @@ describe("the paired-device mark on a session's pairing record", () => {
     expect(redeem({ device: "computer" }, { attemptId: "pair-request-0001" }).pairedDevice, "with the desktop app's retry id").toBeUndefined();
     expect(redeem({ browser: true }, { browser: true, cookie: true }).pairedDevice, "a browser sign-in").toBeUndefined();
     expect(redeem({ browser: true, device: "phone" }, { browser: true, cookie: true }).pairedDevice, "a browser sign-in asked for a phone").toBeUndefined();
+  });
+
+  it("leaves an access token unmarked whatever its client says, unless a phone opened its code", () => {
+    const day = 24 * 3_600_000;
+    const token = redeem({ tokenTtlMs: day });
+    expect(token.token, "an access token").toBe(true);
+    expect(token.pairedDevice, "a client that names no device").toBeUndefined();
+    expect(redeem({ tokenTtlMs: day, device: "computer" }).pairedDevice).toBeUndefined();
+    expect(redeem({ tokenTtlMs: day, device: "phone" }).pairedDevice, "a code a phone opened").toBe(true);
   });
 
   it("takes who the code is for from the pairing request and nothing else", () => {

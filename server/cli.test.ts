@@ -83,6 +83,9 @@ describe("seira command line", () => {
     expect(parseArgs(["pair", "--chat-only"], {})).toMatchObject({ client: true });
     expect(parseArgs(["pair", "--phone", "blackberry"], {})).toEqual({ error: expect.stringContaining("blackberry") });
     expect(parseArgs(["serve", "--phone", "blackberry"], {})).toEqual({ error: expect.stringContaining("ios or android") });
+    expect(parseArgs(["pair", "--computer", "--client", "--ttl", "24h"], {})).toMatchObject({ command: "pair", computer: true, client: true });
+    expect(parseArgs(["pair", "--phone", "--computer"], {})).toEqual({ error: "choose one of --computer and --phone" });
+    expect(parseArgs(["serve", "--computer"], {})).toEqual({ error: expect.stringContaining("--computer") });
     expect(parseArgs(["devices", "revoke", "a1"], {})).toMatchObject({ command: "sessions", revoke: "a1" });
     expect(parseArgs(["--version"], {})).toMatchObject({ command: "version" });
   });
@@ -107,8 +110,19 @@ describe("seira command line", () => {
       expect(out).toContain("＋ → Connect to a server, paste the link");
       expect(out).toContain(qrToString(link));
       expect(out).toContain("For a phone (chat and approvals only)   npx @seira-bot/seira pair --phone");
+      expect(out).toContain("For a script on another computer   npx @seira-bot/seira pair --computer");
       expect(out).not.toMatch(/(?:omb|seira)_pair_|phone app:|this computer:/);
       expect(pairingBlock({ ...base, chatOnly: true })).toContain("· chat and approvals");
+      expect(pairingBlock({ ...base, chatOnly: true })).toContain("pair --computer --client");
+      expect(pairingBlock({ ...base, chatOnly: true, phone: "ios" })).not.toContain("pair --computer");
+    });
+
+    it("gives a computer's code its link and the connect command, with no phone QR", () => {
+      const out = pairingBlock({ ...base, computer: true, inviteUrl: "seira://pair?x" });
+      expect(out).toContain(`Link           ${link}`);
+      expect(out).toContain("＋ → Connect to a server, paste the link");
+      expect(out).toContain(`Command line  seira connect ${link} --out FILE`);
+      expect(out).not.toMatch(/[▀▄█]|Phone|For a phone/);
     });
 
     it("with no way in: no link and no QR, the browser on this machine, and the command that lists the ways in", () => {

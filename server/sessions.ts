@@ -139,7 +139,7 @@ export interface PairingCode {
   tokenTtlMs?: number;
   /** Security invariant: the paired-device mark fails closed. "phone": every session it opens is marked. "computer": none
    * is. Absent: a session redeemed without a browser cookie is marked. Only a host that opens a code for a computer
-   * alone may say "computer". */
+   * alone may say "computer"; an access token's code is a computer's unless a phone opens it. */
   device?: PairingDevice;
 }
 
@@ -397,6 +397,8 @@ export class SessionRegistry {
     const credential = generatePairingCredential();
     const scopes = input.scopes?.length ? [...new Set(input.scopes)] : [...SCOPES];
     this.refusePersonal(scopes);
+    const token = input.tokenTtlMs !== undefined && !input.browser && !input.member;
+    const device = input.device === "phone" || !token ? input.device : "computer";
     const pairing: PairingCode = {
       id: randomUUID(),
       codeHash: sha256(code),
@@ -407,8 +409,8 @@ export class SessionRegistry {
       expiresAt: now + (input.ttlMs ?? PAIRING_CODE_TTL_MS),
       ...(input.browser ? { browser: true as const, ...(input.owner ? { owner: input.owner } : {}) } : {}),
       ...(input.member ? { member: input.member, ...(input.memberCheckedAt !== undefined ? { memberCheckedAt: input.memberCheckedAt } : {}) } : {}),
-      ...(input.tokenTtlMs !== undefined && !input.browser && !input.member ? { tokenTtlMs: input.tokenTtlMs } : {}),
-      ...(input.device && !input.browser ? { device: input.device } : {}),
+      ...(token ? { tokenTtlMs: input.tokenTtlMs } : {}),
+      ...(device && !input.browser ? { device } : {}),
     };
     this.pairings.push(pairing);
     return { id: pairing.id, code, credential, expiresAt: pairing.expiresAt };
