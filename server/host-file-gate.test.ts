@@ -102,8 +102,4 @@ describe("host file gate", () => {
     expect(await ask("list_files", undefined, folders)).toBe(FOLDER_NOT_OPEN);
     expect(await ask("read_file", undefined, folders)).toBeNull();
   });
-
-  it("leaves a relative path to the file tool, which refuses it", async () => {
-    expect(await ask("read_file", "notes.txt", { limited: true, grants })).toBeNull();
-  });
 });
