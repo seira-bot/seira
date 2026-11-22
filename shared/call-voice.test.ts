@@ -61,7 +61,7 @@ describe("callSpeedFor", () => {
     expect(callSpeedFor(2, eleven)).toBe(1.2);
     expect(callSpeedFor(0.5, openai)).toBe(0.75);
   });
-  it("rounds to the slider step", () => expect(callSpeedFor(1.13, openai)).toBeCloseTo(1.15));
+  it("rounds to the slider step", () => expect(callSpeedFor(1.13, openai)).toBe(1.15));
   it("sends normal speed to a provider without speed", () => expect(callSpeedFor(1.4, { kind: "none", reason: "own-pace" })).toBe(1));
   it("ignores a saved value outside the bot range", () => expect(callSpeedFor(9, openai)).toBe(1));
 });

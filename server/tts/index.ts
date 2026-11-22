@@ -1,4 +1,4 @@
-import { callLanguage, callLanguageBase, callSpeedWire, callVoiceCapability, isCallLanguage, isCallSpeed, CALL_LANGUAGE_AUTO } from "../../shared/call-voice.ts";
+import { callLanguage, callLanguageBase, callSpeedFor, callVoiceCapability, isCallLanguage, isCallSpeed, CALL_LANGUAGE_AUTO } from "../../shared/call-voice.ts";
 import type { AppConfig } from "../config.ts";
 import { voiceCredential } from "../included-services.ts";
 import * as chatterbox from "./chatterbox.ts";
@@ -41,7 +41,7 @@ export interface SpeakCall {
 function nativeSpeed(provider: VoiceProvider, asked: unknown): number | undefined {
   if (!isCallSpeed(asked)) return undefined;
   const support = callVoiceCapability({ mode: "turns", provider }).speed;
-  return support.kind === "native" ? callSpeedWire(asked, support) : undefined;
+  return support.kind === "native" ? callSpeedFor(asked, support) : undefined;
 }
 
 /**

@@ -1,6 +1,6 @@
 // Nothing said on the call is logged; the summary line has counters only.
 import { randomUUID } from "node:crypto";
-import { callSpeedWire, callVoiceCapability } from "../shared/call-voice.ts";
+import { callSpeedFor, callVoiceCapability } from "../shared/call-voice.ts";
 import { spokenConsent } from "../shared/call-consent.ts";
 import {
   LIVE_COPY, liveCardKind, liveStepLabel, spokenApprovalPrompt, spokenConnectorPrompt, spokenQuestionPrompt, spokenReviewPrompt, spokenSecretPrompt, spokenSignInPrompt,
@@ -282,7 +282,7 @@ export class LiveCallController {
   speedChanged(botId: string, saved: number | undefined): void {
     const call = this.call;
     if (!call || call.state.botId !== botId || (call.endpoint.provider !== "openai" && call.endpoint.provider !== "azure")) return;
-    const speed = callSpeedWire(saved, callVoiceCapability({ mode: "live", provider: call.endpoint.provider }).speed);
+    const speed = callSpeedFor(saved, callVoiceCapability({ mode: "live", provider: call.endpoint.provider }).speed);
     this.command(call, { type: "session.update", session: { type: "realtime", audio: { output: { speed } } } });
   }
 

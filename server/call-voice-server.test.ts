@@ -167,7 +167,7 @@ describe("Fish call speed and language", () => {
     expect(fishCallLanguage("auto")).toBeUndefined();
   });
 
-  const wire = () => {
+  const wire = (saved?: number) => {
     const calls: Array<{ method: string; path: string; body: any }> = [];
     const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const path = String(url).replace("https://api.fish.audio/v1/agent", "");
@@ -175,7 +175,12 @@ describe("Fish call speed and language", () => {
       if (path === "/sessions") return new Response(JSON.stringify({ transport: "livekit", session_id: "s", livekit_url: "wss://x.test", token: "t" }), { status: 201 });
       return new Response("{}", { status: 200 });
     });
-    const wiring = liveSessionWiring({ bot: () => ({ name: "Ada" }), history: () => [], cloudHome: false, othersOnLoopback: () => false, saveAgent: () => {}, fetchImpl: fetchImpl as unknown as typeof fetch, env: {} });
+    const live: { fishAgentSpeed?: number } = { fishAgentSpeed: saved };
+    const wiring = liveSessionWiring({
+      bot: () => ({ name: "Ada" }), history: () => [], cloudHome: false, othersOnLoopback: () => false,
+      saveAgent: (agent) => { if ("fishAgentSpeed" in agent) live.fishAgentSpeed = agent.fishAgentSpeed; },
+      fishAgentSpeed: () => live.fishAgentSpeed, fetchImpl: fetchImpl as unknown as typeof fetch, env: {},
+    });
     return { calls, wiring };
   };
   const start = (extra: Record<string, unknown>) => ({ key: "k", sdp: "", botId: "b", threadId: "t", voice: "agent", endpoint: fishLiveEndpoint("agent_1", {}), ...extra });
@@ -190,6 +195,18 @@ describe("Fish call speed and language", () => {
     expect(patches(calls)).toEqual([{ voice: { speed: 1.4 } }, { voice: { speed: 1 } }]);
     await wiring.calls.createSession(start({}));
     expect(patches(calls)).toHaveLength(2);
+  });
+  it("sets a bot without a saved speed back to 1 after a saved 1.5, and not again", async () => {
+    const { calls, wiring } = wire(1.5);
+    await wiring.calls.createSession(start({}));
+    expect(patches(calls)).toEqual([{ voice: { speed: 1 } }]);
+    await wiring.calls.createSession(start({}));
+    expect(patches(calls)).toHaveLength(1);
+  });
+  it("sends no patch when the persisted speed is the same", async () => {
+    const { calls, wiring } = wire(1.5);
+    await wiring.calls.createSession(start({ callSpeed: 1.5 }));
+    expect(patches(calls)).toEqual([]);
   });
   it("does not patch an agent when the bot has no saved speed", async () => {
     const { calls, wiring } = wire();

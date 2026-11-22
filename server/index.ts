@@ -12405,7 +12405,7 @@ function taskFolders(bot: BotRecord, threadId: string, instance: { instanceId: s
 const { liveBotFor, liveHistoryFor, liveCallTitle, liveCodexFor, postLiveCallAnswer } = createLiveCallHost({
   store, registry, taskFolders, toolScopeForTurn, approvalModeForTurn, cloudGuestDriven, botApiThread, threadTitleGate, generateThreadTitle, sinceFreshStart,
 });
-const liveWiring = liveSessionWiring({ codexLive: liveCodexFor, postCallAnswer: postLiveCallAnswer, bot: liveBotFor, history: liveHistoryFor, cloudHome: Boolean(CLOUD_HOME), othersOnLoopback: adminActivityRecording, saveAgent: (agent) => { saveConfig({ live: agent }); Object.assign(cfg, loadConfig()); }, language: appLanguage, fishAgentLanguage: () => cfg.live?.fishAgentLanguage });
+const liveWiring = liveSessionWiring({ codexLive: liveCodexFor, postCallAnswer: postLiveCallAnswer, bot: liveBotFor, history: liveHistoryFor, cloudHome: Boolean(CLOUD_HOME), othersOnLoopback: adminActivityRecording, saveAgent: (agent) => { saveConfig({ live: agent }); Object.assign(cfg, loadConfig()); }, language: appLanguage, fishAgentLanguage: () => cfg.live?.fishAgentLanguage, fishAgentSpeed: () => cfg.live?.fishAgentSpeed });
 const liveCalls = new LiveCallController({
   store,
   send: async ({ auth, botId, threadId, text, callId }) => {

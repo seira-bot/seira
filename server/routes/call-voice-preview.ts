@@ -1,5 +1,5 @@
 // The sample a person plays before choosing a Live call voice. Scopes are keyed by path in server/request-auth.ts.
-import { CALL_VOICE_PREVIEW_TEXT_MAX, callSpeedWire, callVoiceCapability, isCallSpeed, type CallVoicePreviewRequest } from "../../shared/call-voice.ts";
+import { CALL_VOICE_PREVIEW_TEXT_MAX, callSpeedFor, callVoiceCapability, isCallSpeed, type CallVoicePreviewRequest } from "../../shared/call-voice.ts";
 import { GEMINI_LIVE_VOICE_OPTIONS, LIVE_VOICE_OPTIONS } from "../../shared/live-call.ts";
 import { OPENAI_VOICES } from "../../shared/openai-voice.ts";
 import type { AppConfig } from "../config.ts";
@@ -45,7 +45,7 @@ export function createCallVoicePreviewRoutes(deps: CallVoicePreviewDeps): RouteH
         const liveKey = provider === "openai" && liveKeyTarget(cfg.live) === "openai" ? usableLiveKey(cfg.live) : undefined;
         const key = cfg.openai?.key?.trim() || liveKey;
         if (!key || !OPENAI_VOICES.some((id) => id === voice)) return json(res, 404, { error: "no sample for this voice" });
-        audio = await openai.synthesize(spoken, voice, key, controller.signal, undefined, speed === undefined ? undefined : callSpeedWire(speed, callVoiceCapability({ mode: "live", provider: "openai" }).speed));
+        audio = await openai.synthesize(spoken, voice, key, controller.signal, undefined, speed === undefined ? undefined : callSpeedFor(speed, callVoiceCapability({ mode: "live", provider: "openai" }).speed));
       } else {
         const key = cfg.tts?.geminiKey?.trim();
         if (!key) return json(res, 404, { error: "no sample for this voice" });

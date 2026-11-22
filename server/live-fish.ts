@@ -1,7 +1,7 @@
 // Fish Audio Live 3 calls. The Fish key never leaves the harness: the client gets only Fish's single-use session token,
 // and Fish has no server sideband, so the client relays what was said and the harness answers through FishRelay.
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { callLanguage, callLanguageBase, callSpeedWire, callVoiceCapability } from "../shared/call-voice.ts";
+import { callLanguage, callLanguageBase, callSpeedFor, callVoiceCapability } from "../shared/call-voice.ts";
 import type { LiveFishRelayCommand, LiveFishRelayEvent, LiveFishSessionToken } from "../shared/wire.ts";
 import type { LiveSocket } from "./live-call-controller.ts";
 import { liveInstructions, LiveSessionError, type LiveBot, type LiveEndpoint, type LiveHistoryMessage } from "./live-call.ts";
@@ -70,7 +70,7 @@ export function fishCallLanguage(saved: string | undefined): string | undefined 
 
 /** The speed to set on a Fish agent: the bot's saved speed clamped to Fish's range. */
 export function fishCallSpeed(saved: number | undefined): number {
-  return callSpeedWire(saved, callVoiceCapability({ mode: "live", provider: "fish" }).speed);
+  return callSpeedFor(saved, callVoiceCapability({ mode: "live", provider: "fish" }).speed);
 }
 
 /** Fish API v1: a Live 3 agent speaking `language` named for `product`, with the client tool `delegate` and a system prompt

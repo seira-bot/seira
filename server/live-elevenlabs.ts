@@ -2,7 +2,7 @@
 // tool `delegate` on the person's account once, and for each call asks ElevenLabs for a signed URL the client opens; the
 // client relays what was said as on a Fish Audio call.
 import { randomBytes } from "node:crypto";
-import { callLanguage, callLanguageBase, callSpeedWire, callVoiceCapability } from "../shared/call-voice.ts";
+import { callLanguage, callLanguageBase, callSpeedFor, callVoiceCapability } from "../shared/call-voice.ts";
 import type { LiveElevenLabsOverrides, LiveElevenLabsSession } from "../shared/wire.ts";
 import { LiveSessionError, type LiveBot, type LiveEndpoint, type LiveHistoryMessage } from "./live-call.ts";
 import type { LiveConfig } from "./live-config.ts";
@@ -101,7 +101,7 @@ export async function setUpElevenLabsAgent(key: string, endpoint: LiveEndpoint, 
 export function elevenLabsCallOverrides(callSpeed: number | undefined, language: string | undefined): LiveElevenLabsOverrides | undefined {
   const chosen = callLanguage(language);
   const overrides: LiveElevenLabsOverrides = {
-    ...(callSpeed === undefined ? {} : { tts: { speed: callSpeedWire(callSpeed, callVoiceCapability({ mode: "live", provider: "elevenlabs" }).speed) } }),
+    ...(callSpeed === undefined ? {} : { tts: { speed: callSpeedFor(callSpeed, callVoiceCapability({ mode: "live", provider: "elevenlabs" }).speed) } }),
     ...(chosen ? { agent: { language: callLanguageBase(chosen) } } : {}),
   };
   return overrides.tts || overrides.agent ? overrides : undefined;

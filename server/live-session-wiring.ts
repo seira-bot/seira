@@ -29,7 +29,7 @@ export interface LiveSessionWiringInput {
   cloudHome: boolean;
   othersOnLoopback(): boolean;
   /** Saves the Fish Audio or ElevenLabs agent the harness set up, with the account it belongs to. */
-  saveAgent(agent: Required<Pick<LiveConfig, "fishAgentId" | "fishAgentFor" | "fishAgentLanguage">> | Required<Pick<LiveConfig, "elevenlabsAgentId" | "elevenlabsAgentFor">>): void;
+  saveAgent(agent: Required<Pick<LiveConfig, "fishAgentId" | "fishAgentFor" | "fishAgentLanguage" | "fishAgentSpeed">> | Required<Pick<LiveConfig, "elevenlabsAgentId" | "elevenlabsAgentFor">>): void;
   /** The voice hook and run settings of the engine the bot's conversation runs on; null when that engine is not Codex or has no voice. */
   codexLive?(botId: string, threadId: string): { startLiveVoice(input: EngineLiveVoiceStart): Promise<EngineLiveVoiceSession>; cwd: string; approvalMode: ApprovalMode; botId: string; model: string | null; toolScoped?: boolean; guestConfined?: boolean } | null;
   /** Adds what the bot's engine answered during a Codex call to the chat; the voice already spoke it. */
@@ -38,6 +38,8 @@ export interface LiveSessionWiringInput {
   language?(): string | undefined;
   /** The language the saved Fish Audio agent was last set to speak (`LiveConfig.fishAgentLanguage`). */
   fishAgentLanguage?(): string | undefined;
+  /** The speed the saved Fish Audio agent was last set to (`LiveConfig.fishAgentSpeed`); absent: 1. */
+  fishAgentSpeed?(): number | undefined;
   /** The name a person reads, which names the agent on their account; the brand's own by default. */
   productName?(): string;
   env?: NodeJS.ProcessEnv;
@@ -61,34 +63,29 @@ export function liveSessionWiring(input: LiveSessionWiringInput): {
 
   const operatorAgent = () => Boolean(env.SEIRA_FISH_LIVE_AGENT_ID?.trim());
 
-  // The speed this process last set on each Fish agent; an agent not in the map still has whatever it had.
-  const fishSpeeds = new Map<string, number>();
   const elevenLabsAllowed = new Set<string>();
 
   const setUpAgent = async (key: string, endpoint: LiveEndpoint, language: string, speed?: number): Promise<LiveEndpoint> => {
     const fishAgentId = await setUpFishAgent(key, endpoint, (input.productName ?? productName)(), language, fetchImpl, speed);
-    if (speed !== undefined) fishSpeeds.set(fishAgentId, speed);
-    input.saveAgent({ fishAgentId, fishAgentFor: fishKeyPrint(key), fishAgentLanguage: language });
+    input.saveAgent({ fishAgentId, fishAgentFor: fishKeyPrint(key), fishAgentLanguage: language, fishAgentSpeed: speed ?? 1 });
     return { ...endpoint, model: fishAgentId };
   };
 
   // Moves the saved agent the harness set up to the call's language and speed; if Fish refuses, the call goes ahead with the old ones.
   // One change at a time, even past a cancelled call start, so a slower earlier start never saves over a later one.
   let languageChange: Promise<void> = Promise.resolve();
-  const speakLanguage = (key: string, endpoint: LiveEndpoint, language: string, speed: number, saved: boolean): Promise<void> => {
+  const speakLanguage = (key: string, endpoint: LiveEndpoint, language: string, speed: number): Promise<void> => {
     const change = languageChange.then(async () => {
       if (operatorAgent()) return;
       const languageChanged = (input.fishAgentLanguage?.() ?? "en") !== language;
-      const last = fishSpeeds.get(endpoint.model);
-      const speedChanged = last === undefined ? saved : speed !== last;
+      const speedChanged = (input.fishAgentSpeed?.() ?? 1) !== speed;
       if (!languageChanged && !speedChanged) return;
       try {
         await setFishAgentVoice(key, endpoint, endpoint.model, { ...(languageChanged ? { language } : {}), ...(speedChanged ? { speed } : {}) }, fetchImpl);
       } catch {
         return;
       }
-      if (speedChanged) fishSpeeds.set(endpoint.model, speed);
-      if (languageChanged) input.saveAgent({ fishAgentId: endpoint.model, fishAgentFor: fishKeyPrint(key), fishAgentLanguage: language });
+      input.saveAgent({ fishAgentId: endpoint.model, fishAgentFor: fishKeyPrint(key), fishAgentLanguage: language, fishAgentSpeed: speed });
     });
     languageChange = change.catch(() => undefined);
     return change;
@@ -99,7 +96,7 @@ export function liveSessionWiring(input: LiveSessionWiringInput): {
     const language = fishCallLanguage(call.language) ?? fishSpeakingLanguage(input.language?.());
     const speed = fishCallSpeed(call.speed);
     const saved = call.speed !== undefined;
-    if (endpoint.model) await speakLanguage(key, endpoint, language, speed, saved);
+    if (endpoint.model) await speakLanguage(key, endpoint, language, speed);
     let agent = endpoint.model ? endpoint : await setUpAgent(key, endpoint, language, saved ? speed : undefined);
     try {
       return { agent, token: await createFishLiveSession({ ...session, endpoint: agent }) };

@@ -1,6 +1,6 @@
 // The provider key never leaves the harness: the renderer only ever holds the SDP answer and its media connection.
 import { CLOUD_HOME_PLACE } from "./system-prompt.ts";
-import { callLanguageInstruction, callSpeedWire, callVoiceCapability } from "../shared/call-voice.ts";
+import { callLanguageInstruction, callSpeedFor, callVoiceCapability } from "../shared/call-voice.ts";
 import type { LiveProvider } from "../shared/wire.ts";
 import type { Message } from "./store.ts";
 
@@ -299,7 +299,7 @@ export async function createLiveSession(input: CreateLiveSessionInput): Promise<
     throw new LiveSessionError("The call could not start: the connection offer was invalid.", 400);
   }
   const initialInput = liveInitialInput(input.history);
-  const speed = callSpeedWire(input.callSpeed, callVoiceCapability({ mode: "live", provider: endpoint.provider }).speed);
+  const speed = callSpeedFor(input.callSpeed, callVoiceCapability({ mode: "live", provider: endpoint.provider }).speed);
   const body = {
     session: {
       model: endpoint.model,

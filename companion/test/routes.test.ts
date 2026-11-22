@@ -115,6 +115,7 @@ describe("what the app may do", () => {
     ["GET", "/api/tts/voices"],
     ["POST", "/api/tts/prepare"],
     ["POST", "/api/tts/speak"],
+    ["POST", "/api/call/voice-preview"],
     ["POST", "/api/live/session"],
     ["POST", "/api/live/call/end"],
     ["GET", "/api/live/call"],
