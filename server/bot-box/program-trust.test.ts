@@ -1,5 +1,5 @@
-import { chmodSync, mkdirSync, readFileSync, existsSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, existsSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -69,6 +69,32 @@ describe("programs a boxed bot could have written", () => {
     distrustLimitedBoxFolders(null);
     expect(programsDistrusted()).toBe(false);
     expect(serverPath(["/data/.grok/bin", "."].join(delimiter))).toBe(["/data/.grok/bin", "."].join(delimiter));
+  });
+
+  it("with only the limited bots boxed: the program folders the box has read-only stay trusted, and the rest of their sign-in folders does not", () => {
+    let chosen: string[] = [];
+    let kept: () => string[] = () => ["/data/.grok/bin", "/data/.grok/downloads", "/data/.claude/local", "/data/.kimi-code/bin", "relative"];
+    distrustLimitedBoxFolders(["/data/.grok", "/data/.claude", "/data/.kimi-code"], () => chosen, () => kept());
+    for (const path of ["/data/.grok/bin", "/data/.grok/downloads/grok-1", "/data/.claude/local", "/data/.claude/local/claude", "/data/.kimi-code/bin/kimi"]) expect(serverMayRunFrom(path), path).toBe(true);
+    for (const path of ["/data/.grok", "/data/.grok/sessions", "/data/.claude", "/data/.claude/projects/bin", "/data/.kimi-code/cache"]) expect(serverMayRunFrom(path), path).toBe(false);
+    expect(serverPath(["/data/.grok/bin", "/data/.grok/sessions", "/data/.claude/local", "/usr/bin"].join(delimiter))).toBe(["/data/.grok/bin", "/data/.claude/local", "/usr/bin"].join(delimiter));
+    chosen = ["/data/.grok"];
+    expect(serverMayRunFrom("/data/.grok/bin"), "a folder a bot may change wins over a read-only one").toBe(false);
+    chosen = [];
+    kept = () => { throw new Error("no list"); };
+    expect(serverMayRunFrom("/data/.grok/bin"), "a list that fails keeps the whole sign-in folder distrusted").toBe(false);
+  });
+
+  it.skipIf(!posix)("a link in a sign-in folder never borrows the trust of the read-only folder it points to", () => {
+    const home = mkdtempSync(join(tmpdir(), "seira-kept-link-"));
+    try {
+      mkdirSync(join(home, ".grok", "bin"), { recursive: true });
+      symlinkSync(join(home, ".grok", "bin"), join(home, ".grok", "link"));
+      symlinkSync(join(home, ".grok"), join(home, "grok-link"));
+      distrustLimitedBoxFolders([join(home, ".grok")], () => [], () => [join(home, ".grok", "bin")]);
+      expect(serverMayRunFrom(join(home, ".grok", "link")), "the box can point its own link elsewhere").toBe(false);
+      expect(serverMayRunFrom(join(home, "grok-link", "bin")), "a link the box cannot change, to the read-only folder").toBe(true);
+    } finally { rmSync(home, { recursive: true, force: true }); }
   });
 
   it("every bot boxed: HOME is untrusted, as before", () => {

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { engineInstallRoots } from "../engine-roots.ts";
-import { BOX_MUTATIONS, CPU_LIST_FILES, argvPaths, bwrapArgs, planBox, taskWorkspaceIds, under, visibleInBox, type BoxAudience, type BoxMutation, type BoxRequest, type BoxSetup } from "./plan.ts";
+import { BOX_MUTATIONS, CPU_LIST_FILES, argvPaths, bwrapArgs, planBox, signInProgramFolders, taskWorkspaceIds, under, visibleInBox, type BoxAudience, type BoxMutation, type BoxRequest, type BoxSetup } from "./plan.ts";
 
 const home = "/data";
 const dataDir = "/data/.seira";
@@ -462,6 +462,36 @@ linuxBox("a bot's folder list", () => {
       expect(visibleInBox(plan, join(tricky, ".codex/auth.json")), "a real folder stays").toBe("rw");
       expect(visibleInBox(plan, join(data, "messages.db"))).toBe("none");
       expect(plan.mounts.some((mount) => "source" in mount && (mount.source === tricky || mount.source === data))).toBe(false);
+    });
+
+    it.skipIf(process.platform === "win32")("binds the program folders in a sign-in folder, and the folders their links lead to there, read-only after it", () => {
+      const programs = join(root, "programs"), data = join(programs, ".seira");
+      for (const dir of [".grok/bin", ".grok/downloads", ".grok/sessions", ".claude/local", ".kimi-code/bin", ".codex"]) mkdirSync(join(programs, dir), { recursive: true });
+      writeFileSync(join(programs, ".grok/downloads/grok-1"), "");
+      symlinkSync(join("..", "downloads", "grok-1"), join(programs, ".grok/bin/grok"));
+      symlinkSync("..", join(programs, ".grok/bin/up"));
+      symlinkSync(root, join(programs, ".grok/bin/away"));
+      writeFileSync(join(programs, ".claude/local/claude"), "");
+      writeFileSync(join(programs, ".kimi-code/bin/kimi"), "");
+      const kept = [".claude/local", ".grok/bin", ".grok/downloads", ".kimi-code/bin"].map((name) => join(programs, name));
+      expect(signInProgramFolders(programs, data).sort()).toEqual(kept);
+      const plan = planBox({ ...setup(), dataDir: data, home: programs, engineRoots: engineInstallRoots(data) }, {
+        command: "claude", args: [], cwd: join(data, "task-workspaces", "bot-a", "t"), env: { HOME: programs }, folders: folders(true),
+      });
+      const at = (kind: string, target: string) => plan.mounts.findIndex((mount) => mount.kind === kind && "target" in mount && mount.target === target);
+      for (const path of kept) {
+        const signIn = join(programs, path.slice(programs.length + 1).split("/")[0]!);
+        expect(at("ro", path), path).toBeGreaterThan(at("bind", signIn));
+        expect(at("bind", signIn), signIn).toBeGreaterThan(-1);
+      }
+      for (const path of [".grok/bin/grok", ".grok/downloads/grok-1", ".claude/local/claude", ".kimi-code/bin/kimi"]) expect(visibleInBox(plan, join(programs, path)), path).toBe("ro");
+      for (const path of [".grok/auth.json", ".grok/sessions/s.json", ".claude/settings.json", ".kimi-code/config.toml", ".codex/auth.json"]) expect(visibleInBox(plan, join(programs, path)), path).toBe("rw");
+      expect(plan.writable).toEqual(expect.arrayContaining([".grok", ".claude", ".kimi-code", ".codex"].map((name) => join(programs, name))));
+      for (const path of kept) expect(plan.writable, path).not.toContain(path);
+      const granted = planBox({ ...setup(), dataDir: data, home: programs, engineRoots: engineInstallRoots(data) }, {
+        command: "claude", args: [], cwd: join(data, "task-workspaces", "bot-a", "t"), env: { HOME: programs }, folders: folders(true, [join(programs, ".grok"), true]),
+      });
+      expect(visibleInBox(granted, join(programs, ".grok/bin/grok")), "a folder a bot may change is bound after, and wins").toBe("rw");
     });
 
     it("does not give HOME back through an environment path, and non-limited mode is unchanged", () => {

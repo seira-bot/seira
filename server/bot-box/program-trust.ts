@@ -3,14 +3,15 @@
 // a program a bot left in ~/.local/bin would otherwise run outside the box at the next engine status read. The data
 // folder is the exception: the box replaces it with an empty one, and the engines the app installs there are read-only.
 // With only the limited bots boxed, HOME stays trusted (the person and the unboxed bots write it anyway), but a folder
-// a limited box writes never is: its sign-in folders in HOME, the bots' folders and the folders its bots may change.
+// a limited box writes never is: its sign-in folders in HOME (except the program folders it has read-only there), the
+// bots' folders and the folders its bots may change.
 import { realpathSync } from "node:fs";
 import { delimiter, isAbsolute, resolve } from "node:path";
 
 import { under } from "./plan.ts";
 
 let distrusted: { homes: readonly string[]; kept: readonly string[]; bots: readonly string[] } | null = null;
-let limitedBox: { folders: readonly string[]; chosen: () => readonly string[] } | null = null;
+let limitedBox: { folders: readonly string[]; chosen: () => readonly string[]; kept: () => readonly string[] } | null = null;
 
 /** A folder as given and as the filesystem names it, so a link's target is judged by where it really is. */
 function bothNames(dir: string): string[] {
@@ -25,9 +26,10 @@ export function distrustHomePrograms(home: string | null, kept: readonly string[
 }
 
 /** Called with the folders a box of only the limited bots always writes when it goes on, and with null when it stops.
- * `chosen` is read at each check: the other folders its bots may change, so a new one counts at once. */
-export function distrustLimitedBoxFolders(folders: readonly string[] | null, chosen: () => readonly string[] = () => []): void {
-  limitedBox = folders ? { folders: folders.flatMap(bothNames), chosen } : null;
+ * Read at each check, so a change counts at once: `chosen`, the other folders its bots may change; `kept`, the folders
+ * inside `folders` that every box has had read-only. */
+export function distrustLimitedBoxFolders(folders: readonly string[] | null, chosen: () => readonly string[] = () => [], kept: () => readonly string[] = () => []): void {
+  limitedBox = folders ? { folders: folders.flatMap(bothNames), chosen, kept } : null;
 }
 
 /** Whether HOME is untrusted: only while every bot spawn is boxed. */
@@ -40,19 +42,27 @@ export function programsDistrusted(): boolean {
   return distrusted !== null || limitedBox !== null;
 }
 
-function limitedBoxWrites(): string[] | null {
+interface BoxWrites { always: readonly string[]; chosen: readonly string[]; kept: readonly string[] }
+
+function limitedBoxWrites(): BoxWrites | null {
   if (!limitedBox) return null;
-  let chosen: readonly string[] = [];
-  // Security: a list that fails to load still leaves the folders the box always writes distrusted.
-  try { chosen = limitedBox.chosen(); } catch {}
-  return [...limitedBox.folders, ...chosen.filter((dir) => isAbsolute(dir)).flatMap(bothNames)];
+  const absolute = (list: () => readonly string[]): string[] => {
+    try { return list().filter((dir) => isAbsolute(dir)).flatMap(bothNames); } catch { return []; }
+  };
+  // Security: a list that fails to load counts as empty, which leaves every folder the box always writes distrusted.
+  return { always: limitedBox.folders, chosen: absolute(limitedBox.chosen), kept: absolute(limitedBox.kept) };
 }
 
-function mayRunFrom(path: string, boxWrites: readonly string[] | null): boolean {
+function mayRunFrom(path: string, boxWrites: BoxWrites | null): boolean {
   if (!distrusted && !boxWrites) return true;
   if (!isAbsolute(path)) return false;
   const full = resolve(path);
-  if (boxWrites && bothNames(full).some((name) => boxWrites.some((dir) => under(name, dir)))) return false;
+  if (boxWrites) {
+    const inside = (name: string, dirs: readonly string[]) => dirs.some((dir) => under(name, dir));
+    // Security: each name on its own, so a link the box writes never borrows the trust of the folder it points to.
+    const boxWrote = (name: string) => inside(name, boxWrites.chosen) || (inside(name, boxWrites.always) && !inside(name, boxWrites.kept));
+    if (bothNames(full).some(boxWrote)) return false;
+  }
   if (!distrusted) return true;
   if (distrusted.bots.some((dir) => under(full, dir))) return false;
   return !distrusted.homes.some((home) => under(full, home)) || distrusted.kept.some((dir) => under(full, dir));

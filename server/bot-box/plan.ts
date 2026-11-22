@@ -19,10 +19,11 @@
 //     the egress gate (every connection to the internet goes through it) and the harness gate (only /api/internal/
 //     routes of this server). Nothing else on the server's loopback is reachable. A box that waits for a sign-in callback
 //     also dials out to one more socket, through which the server reaches the box's own loopback, never the other way.
-import { lstatSync, realpathSync, statSync } from "node:fs";
+import { lstatSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { isLayerId } from "../audience.ts";
+import { homeProgramDirs } from "../env-path.ts";
 import type { TurnFolders } from "../folder-access.ts";
 
 export type BoxNet = "isolated" | "shared";
@@ -198,6 +199,47 @@ function realPathOf(path: string): string {
   try { return realpathSync(path); } catch { return resolve(path); }
 }
 
+/** The program folders on the server's PATH that sit in a sign-in folder of a limited box, and the folders there that
+ * their links lead to, as named in HOME. Each one is a real folder at its name, with no link on the way.
+ * Security: a limited box writes the rest of its sign-in folders. It has these read-only, so they are the only places
+ * there from which the server may run a program. */
+export function signInProgramFolders(home: string, dataDir: string): string[] {
+  const homeDir = resolve(home), data = resolve(dataDir);
+  const realHome = realPathOf(homeDir), realData = realPathOf(data);
+  const atName = (name: string): string | null => {
+    const path = join(homeDir, name);
+    try {
+      if (lstatSync(path).isSymbolicLink()) return null;
+      const real = realpathSync(path);
+      if (real !== join(realHome, name) || under(real, realData) || under(realData, real) || under(path, data) || under(data, path)) return null;
+      return real;
+    } catch { return null; }
+  };
+  const found = new Set<string>();
+  const programs = homeProgramDirs(homeDir);
+  for (const signIn of LIMITED_HOME_SIGN_INS) {
+    const realSignIn = atName(signIn);
+    if (!realSignIn) continue;
+    for (const dir of programs) {
+      const name = relative(homeDir, dir);
+      if (!under(dir, join(homeDir, signIn)) || name === signIn) continue;
+      const realDir = atName(name);
+      if (!realDir) continue;
+      found.add(dir);
+      let entries: string[] = [];
+      try { entries = readdirSync(dir); } catch {}
+      for (const entry of entries) {
+        let real: string;
+        try { real = realpathSync(join(dir, entry)); } catch { continue; }
+        if (real === realSignIn || !under(real, realSignIn) || under(real, realDir)) continue;
+        const part = join(signIn, relative(realSignIn, real).split(sep)[0]!);
+        if (atName(part)) found.add(join(homeDir, part));
+      }
+    }
+  }
+  return [...found];
+}
+
 function assertReadOnlySource(source: string): void {
   try {
     const stat = statSync(source);
@@ -273,6 +315,10 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
       mounts.push({ kind: "bind", source: real, target: join(home, name), optional: true });
       writable.push(join(home, name));
       keptSignIns.push(join(home, name));
+    }
+    // Bound after their sign-in folders, so read-only wins there.
+    for (const path of signInProgramFolders(home, dataDir)) {
+      if (keptSignIns.some((signIn) => under(path, signIn))) mounts.push({ kind: "ro", source: realPathOf(path), target: path, optional: true });
     }
   } else if (!ownHome) rw(home);
   const dataInsideHome = under(dataDir, home);

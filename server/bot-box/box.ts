@@ -21,7 +21,7 @@ import { openHarnessGate, type HarnessGate } from "./harness-gate.ts";
 import { distrustHomePrograms, distrustLimitedBoxFolders } from "./program-trust.ts";
 import { procHidepid } from "./hidepid.ts";
 import { DENIED_SYSCALLS, seccompBytes, seccompSupported } from "./seccomp.ts";
-import { LIMITED_HOME_SIGN_INS, RELAY_SOCKET_NAME, TEAM_FOLDER_KEPT, boxUploadsDir, teamFolderOf, under, bwrapArgs, inBoxSocket, planBox, taskWorkspaceIds, type BoxAudience, type BoxBridge, type BoxPlan, type BoxRequest, type BoxSetup } from "./plan.ts";
+import { LIMITED_HOME_SIGN_INS, RELAY_SOCKET_NAME, TEAM_FOLDER_KEPT, boxUploadsDir, signInProgramFolders, teamFolderOf, under, bwrapArgs, inBoxSocket, planBox, taskWorkspaceIds, visibleInBox, type BoxAudience, type BoxBridge, type BoxPlan, type BoxRequest, type BoxSetup } from "./plan.ts";
 import { openBoxRelay, type BoxRelay } from "./relay.ts";
 
 /** The loopback port inside a box that reaches the egress gate. The harness gate sits at the server's own port. */
@@ -285,7 +285,9 @@ export class BotBox {
   private boxScope: BoxScope = "all";
   private limitedWrites: LimitedWrites | null = null;
   private limitedFolders: string[] = [];
+  private limitedSignIns: string[] = [];
   private limitedWritten = new Set<string>();
+  private limitedSignInViews = new Map<string, { signIn: string; kept: readonly string[] }>();
 
   /** Detects, and when the box is on opens the gates. Safe to call once; returns what it decided. */
   async start(options: StartOptions): Promise<BoxDetection> {
@@ -332,8 +334,9 @@ export class BotBox {
     // trusted; a folder a limited box writes does not.
     if (this.boxScope === "all") distrustHomePrograms(options.home, [options.dataDir], botFolders);
     else {
-      this.limitedFolders = [...LIMITED_HOME_SIGN_INS.map((name) => join(options.home, name)), ...botFolders].map((path) => resolve(path));
-      distrustLimitedBoxFolders(this.limitedFolders, () => this.limitedChosenFolders(options.dataDir));
+      this.limitedSignIns = LIMITED_HOME_SIGN_INS.map((name) => resolve(options.home, name));
+      this.limitedFolders = [...this.limitedSignIns, ...botFolders.map((path) => resolve(path))];
+      distrustLimitedBoxFolders(this.limitedFolders, () => this.limitedChosenFolders(options.dataDir), () => this.limitedKeptFolders(options.home, options.dataDir));
     }
     resetPathCache();
     log(`bot box: on (${this.boxScope === "all" ? "every bot" : "bots limited to chosen folders"}; bubblewrap, ${this.detection.tools.socat ? "socat" : "node"} bridges, credential broker, seccomp ${this.seccompFile ? "on" : "unsupported here"})`);
@@ -359,9 +362,7 @@ export class BotBox {
     const folders = this.boxScope === "limited" ? this.runner.foldersFor(request) : null;
     if (this.boxScope === "limited" && folders?.limited !== true) return null;
     const wrapped = this.runner.wrap(folders ? { ...request, folders } : request);
-    if (this.boxScope === "limited") {
-      for (const path of wrapped.plan.writable) if (!this.limitedFolders.some((dir) => under(path, dir))) this.limitedWritten.add(path);
-    }
+    if (this.boxScope === "limited") this.noteLimitedWrites(wrapped.plan);
     this.boxed += 1;
     for (const name of wrapped.unbrokered) this.unbrokered.add(name);
     return wrapped;
@@ -428,6 +429,26 @@ export class BotBox {
     return [...named, ...this.limitedWritten];
   }
 
+  /** What a limited box can write, kept until the box stops: each folder it was given, and of each sign-in folder, the
+   * folders in it that it had read-only. */
+  private noteLimitedWrites(plan: BoxPlan): void {
+    for (const path of plan.writable.map((given) => resolve(given))) {
+      if (this.limitedSignIns.includes(path)) {
+        const kept = plan.mounts.filter((mount) => mount.kind === "ro" && mount.target !== path && under(mount.target, path) && visibleInBox(plan, mount.target) === "ro").map((mount) => mount.target).sort();
+        this.limitedSignInViews.set([path, ...kept].join("\0"), { signIn: path, kept });
+      } else if (this.limitedSignIns.some((signIn) => under(path, signIn)) || !this.limitedFolders.some((dir) => under(path, dir))) {
+        this.limitedWritten.add(path);
+      }
+    }
+  }
+
+  /** The program folders in the sign-in folders that each limited box so far has had read-only. Security: a box that had
+   * one writable, as when the folder was not there yet, may have left a program in it. */
+  private limitedKeptFolders(home: string, dataDir: string): string[] {
+    const views = [...this.limitedSignInViews.values()];
+    return signInProgramFolders(home, dataDir).filter((dir) => views.every((view) => !under(dir, view.signIn) || view.kept.some((kept) => under(dir, kept))));
+  }
+
   /** The bot's folder list for one box now, as a key (foldersKey); null with no setting. */
   foldersKey(request: Pick<BoxRequest, "cwd" | "threadId" | "conversationBot">): string | null {
     return foldersKey(this.runner?.foldersFor({ command: "", args: [], env: {}, ...request }));
@@ -486,7 +507,9 @@ export class BotBox {
     this.runner = null;
     this.boxScope = "all";
     this.limitedFolders = [];
+    this.limitedSignIns = [];
     this.limitedWritten.clear();
+    this.limitedSignInViews.clear();
     distrustHomePrograms(null);
     distrustLimitedBoxFolders(null);
     resetPathCache();
