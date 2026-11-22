@@ -68,7 +68,7 @@ describe("foldCaption with a long turn", () => {
 
   it("keeps a short new turn that repeats words of the last line as its own line", () => {
     let lines = fold([], "bot", "You have three tasks on your list for today, and one of them is overdue by two days already.");
-    lines = fold(lines, "bot", "You have three tasks");
+    lines = fold(lines, "bot", "You have three tasks, yes.");
     expect(lines).toHaveLength(2);
   });
 });
