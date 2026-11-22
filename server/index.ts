@@ -14593,10 +14593,8 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       const bot = computerPreviewBot(m[1], url);
       if (!bot) return json(res, 404, { error: "no such bot" });
       const surface = url.searchParams.has("threadId") ? await computerPreviewSurface(bot, bot.threadId) : "cloud";
-      if (surface !== "cloud") return json(res, 200, { surface, configured: false, backend: bot.cloudBackend === "vps" ? "vps" : "box" });
-      return bot.cloudBackend === "vps"
-        ? json(res, 200, { surface, backend: "vps", ...(await vps.vpsComputerStatus(vpsConfigForBot(cfg, bot), bot.id)) })
-        : json(res, 200, { surface, backend: "box", configured: false, box: null });
+      if (surface !== "cloud") return json(res, 200, { surface, configured: false, backend: "vps" });
+      return json(res, 200, { surface, backend: "vps", ...(await vps.vpsComputerStatus(vpsConfigForBot(cfg, bot), bot.id)) });
     }
     // The person's take and release; the bot has no verb here, only a sign-in request its card settles.
     m = path.match(/^\/api\/bots\/([\w-]+)\/computer\/control$/);

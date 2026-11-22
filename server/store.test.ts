@@ -1142,25 +1142,25 @@ describe("Store", () => {
 
   it("normalizes persisted cloud backends: a removed Boat backend is cleared, valid or absent values are unchanged", () => {
     const store = new Store(selection);
-    const boat = store.createBot();
+    const legacy = store.createBot();
     const vps = store.createBot();
     const invalid = store.createBot();
     const absent = store.createBot();
     const raw: BotRecord[] = readRegistry(DATA_DIR).bots;
-    raw.find((bot) => bot.id === boat.id)!.cloudBackend = "box";
+    raw.find((bot) => bot.id === legacy.id)!.cloudBackend = "box";
     raw.find((bot) => bot.id === vps.id)!.cloudBackend = "vps";
     (raw.find((bot) => bot.id === invalid.id) as unknown as { cloudBackend: string }).cloudBackend = "daytona";
     delete raw.find((bot) => bot.id === absent.id)!.cloudBackend;
     writeRegistry(DATA_DIR, { bots: raw });
 
     const reloaded = new Store(selection);
-    expect(reloaded.bot(boat.id)?.cloudBackend).toBeUndefined();
+    expect(reloaded.bot(legacy.id)?.cloudBackend).toBeUndefined();
     expect(reloaded.bot(vps.id)?.cloudBackend).toBe("vps");
     expect(reloaded.bot(invalid.id)?.cloudBackend).toBeUndefined();
     expect(reloaded.bot(absent.id)?.cloudBackend).toBeUndefined();
 
     const saved: BotRecord[] = readRegistry(DATA_DIR).bots;
-    expect(saved.find((bot) => bot.id === boat.id)).not.toHaveProperty("cloudBackend");
+    expect(saved.find((bot) => bot.id === legacy.id)).not.toHaveProperty("cloudBackend");
     expect(saved.find((bot) => bot.id === vps.id)?.cloudBackend).toBe("vps");
     expect(saved.find((bot) => bot.id === invalid.id)).not.toHaveProperty("cloudBackend");
     expect(saved.find((bot) => bot.id === absent.id)).not.toHaveProperty("cloudBackend");

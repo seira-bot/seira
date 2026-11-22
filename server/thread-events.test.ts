@@ -167,7 +167,7 @@ describe("readThreadEvents", () => {
     const eventsDir = tmp();
     const nativeDir = tmp();
     const base = {
-      provider: "boatagent",
+      provider: "claudeAgent",
       threadId: "t1",
       type: "request.opened",
       requestType: "question",

@@ -401,8 +401,7 @@ describe("surface parsing", () => {
     expect(parseSurface(undefined)).toBeUndefined();
   });
 
-  it("folds both cloud backends into one surface", () => {
-    expect(surfaceOfComputerKind("box")).toBe("cloud");
+  it("maps each computer kind to its surface", () => {
     expect(surfaceOfComputerKind("vps")).toBe("cloud");
     expect(surfaceOfComputerKind("vm")).toBe("vm");
     expect(surfaceOfComputerKind("local")).toBe("local");

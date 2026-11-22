@@ -33,7 +33,7 @@ vi.mock("@/state/store", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/state/store")>(),
   api: async (path: string) => {
     if (path.startsWith("/api/bots/scout/computer/control")) return { held: false, helpReason: null };
-    if (path.startsWith("/api/bots/scout/computer?")) return { surface: "cloud", backend: "box", configured: true, box: { boxId: "bx_23456789", state: "ready" } };
+    if (path.startsWith("/api/bots/scout/computer?")) return { surface: "cloud", backend: "vps", configured: true };
     return {};
   },
 }));

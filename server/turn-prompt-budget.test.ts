@@ -31,7 +31,7 @@ function directChatParts(setup: boolean): PromptPart[] {
   ];
 }
 
-const KINDS: ComputerPromptKind[] = ["vm-private", "vm-shared", "box", "vps", "local"];
+const KINDS: ComputerPromptKind[] = ["vm-private", "vm-shared", "vps", "local"];
 
 async function measured(): Promise<Record<string, number>> {
   const bytes = (text: string) => Buffer.byteLength(text, "utf8");
@@ -62,7 +62,7 @@ async function measured(): Promise<Record<string, number>> {
   };
 }
 
-/** Bytes when the budget was last set. Removing Boat shrank "meetings" (the Boat key line), "credential" and "computer:vps" (the Boat mentions), so those three were lowered to lock in the win. The trigger text gained 214 bytes on purpose: it tells a bot what a workflow is and which tools to call. The direct chat's stable half now also carries "computer-selection", and a bot's
+/** Bytes when the budget was last set. The trigger text gained 214 bytes on purpose: it tells a bot what a workflow is and which tools to call. The direct chat's stable half now also carries "computer-selection", and a bot's
  * stable half "memory-rules" too (with its own paths), both moved out of the volatile note: 8,895 before the move and the
  * rewording (when the two rode the note, about 3,800 more bytes per conversation), 8,391 + 2,048 after. */
 const PROMPT_BUDGET_BASELINE: Record<string, number> = {
@@ -78,12 +78,10 @@ const PROMPT_BUDGET_BASELINE: Record<string, number> = {
   "routine": 2838,
   "profile": 1097,
   "team-memory": 286,
-  // Every computer:* prompt carries 536 bytes on purpose: the free-form memory text. computer:vps is 42 bytes smaller than
-  // that text alone would make it, because it no longer mentions Boat. computer:box stays until its prompt is deleted with the Boat code.
+  // Every computer:* prompt carries 536 bytes on purpose: the free-form memory text.
   // Both sandbox kinds carry +130 bytes on purpose: the person's own files (C:\Users\…, /Users/…, Desktop) are reached only on This computer.
   "computer:vm-private": 6095,
   "computer:vm-shared": 6090,
-  "computer:box": 4564,
   "computer:vps": 5166,
   "computer:local": 5505,
   "claude:direct-chat": 9023,
