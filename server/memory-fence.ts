@@ -265,7 +265,7 @@ export function withMemoryFence(instance: ProviderInstance, options: FenceWatchO
     const slice = fence.sliceKills();
     if (slice === null || slice <= lastSlice) return;
     lastSlice = slice;
-    for (const threadId of [...turns.keys()]) tell(threadId, false);
+    for (const threadId of turns.keys()) tell(threadId, false);
   };
   const begin = (threadId: string) => {
     if (!fence.active()) return;

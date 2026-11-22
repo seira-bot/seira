@@ -178,7 +178,7 @@ function fakeEngine() {
     steer: async (_thread: string, text: string) => { steers.push(text); return state.steer as "steered"; },
   } as unknown as ProviderAdapter;
   const instance = { driverKind: "claudeAgent", adapter } as unknown as ProviderInstance;
-  const emit = (event: Record<string, unknown>) => { for (const listener of [...listeners]) listener({ eventId: "e", provider: "claudeAgent", createdAt: "", ...event } as RuntimeEvent); };
+  const emit = (event: Record<string, unknown>) => { for (const listener of listeners) listener({ eventId: "e", provider: "claudeAgent", createdAt: "", ...event } as RuntimeEvent); };
   return { instance, steers, state, emit };
 }
 
