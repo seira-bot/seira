@@ -2,6 +2,7 @@ import { join, relative } from "node:path";
 
 import type { ImportLeftover, ImportRoutine, ImportSkill, ImportTool } from "../../shared/ai-import/bundle.ts";
 import { mask, redactSecretsInText } from "../../shared/redact.ts";
+import { replaceUntilStable } from "../../shared/replace-until-stable.ts";
 import { copyTree, isFile, isRecord, listDirectories } from "./local-fs.ts";
 
 /** Security invariant: the entry names the keys a tool needs and never holds a key. Env and header values are dropped;
@@ -201,9 +202,11 @@ export function routineFrom(ref: string, name: string, schedule: string | null, 
   return { routine: { ref, name, schedule, prompt } };
 }
 
+export const stripHtmlComments = (text: string): string => replaceUntilStable(text, /<!--[\s\S]*?-->/g, "");
+
 /** One entry per top-level bullet with its continuation lines; a file with no bullets gives one entry per paragraph. Headings are dropped. */
 export function markdownEntries(text: string): string[] {
-  const lines = text.replace(/<!--[\s\S]*?-->/g, "").split(/\r?\n/).filter((line) => !/^\s{0,3}#{1,6}\s/.test(line));
+  const lines = stripHtmlComments(text).split(/\r?\n/).filter((line) => !/^\s{0,3}#{1,6}\s/.test(line));
   const bullets: string[] = [];
   let hasBullet = false;
   for (const line of lines) {
