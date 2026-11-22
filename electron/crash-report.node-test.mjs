@@ -205,6 +205,9 @@ test("AC-12: a main process that ended with a native crash is one report at the 
   fs.mkdirSync(join(first.dumps, "completed"), { recursive: true });
   const dump = join(first.dumps, "completed", "a.dmp");
   fs.writeFileSync(dump, "CANARY-MEMORY");
+  // Linux stamps a file with a coarse clock that can lag Date.now by a tick, so the test sets the crash time itself.
+  const crashedAt = new Date(first.clock.now + 1_000);
+  fs.utimesSync(dump, crashedAt, crashedAt);
   first.clock.now += 5_000;
   const next = first.restart();
   assert.equal(fs.existsSync(dump), false, "every dump is deleted");
