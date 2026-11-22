@@ -1,13 +1,13 @@
-import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { BotBox, BoxRunner, BOX_EGRESS_PORT, flyApiPrivate, foldersKey, writeSeccompFile } from "./box.ts";
 import { processStart, seesProcess } from "./box-probe.ts";
 import { procHidepid } from "./hidepid.ts";
 import { boxUploadsDir, visibleInBox } from "./plan.ts";
-import { homeProgramsDistrusted, serverMayRunFrom } from "./program-trust.ts";
+import { homeProgramsDistrusted, serverMayRunFrom, serverPath } from "./program-trust.ts";
 import { DENIED_SYSCALLS, seccompBytes } from "./seccomp.ts";
 import { engineInstallRoots, npmEnginesPrefix } from "../engine-roots.ts";
 import { spawnCli } from "../procs.ts";
@@ -223,18 +223,44 @@ describe("BotBox", () => {
     expect(await box.openRelay(), "relays are for a box of every bot").toBeNull();
   });
 
-  it.skipIf(process.platform === "win32")("limited: the server runs no program from a sign-in folder or a bots' folder that a limited box writes", async () => {
+  it.skipIf(process.platform === "win32")("limited: the server runs no program from a folder a limited box writes, and HOME stays trusted", async () => {
     const box = new BotBox();
     boxes.push(box);
-    const home = temp(), dataDir = join(home, ".seira");
+    const real = () => realpathSync(temp());
+    const home = real(), dataDir = join(home, ".seira"), chosen = real(), later = real(), beside = real(), cwd = real(), elsewhere = real();
+    mkdirSync(join(home, ".grok", "bin"), { recursive: true });
+    symlinkSync(join(home, ".grok"), join(home, "grok-link"));
+    mkdirSync(join(elsewhere, "codex", "bin"), { recursive: true });
+    symlinkSync(join(elsewhere, "codex"), join(home, ".codex"));
+    let named = [chosen, join(dataDir, "workspaces", "b1", "docs"), dirname(home), "relative/bin"];
+    box.scopeFolders(() => ({ limited: true, grants: [] }));
+    box.scopeLimitedWrites(() => named);
     await box.start({
       dataDir, home, port: 8799, denyEnv: new Set(), env: {}, log: () => {},
       detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: null }, scope: "limited" }),
     });
-    expect(serverMayRunFrom(join(home, ".grok", "bin"))).toBe(false);
-    expect(serverMayRunFrom(join(home, ".claude", "local", "claude"))).toBe(false);
-    expect(serverMayRunFrom(join(dataDir, "task-workspaces", "b1", "t1", "tool"))).toBe(false);
-    expect(serverMayRunFrom(join(home, ".local", "bin")), "HOME stays trusted").toBe(true);
+    expect(homeProgramsDistrusted(), "the person and the other bots write HOME anyway").toBe(false);
+    for (const path of [
+      join(home, ".grok", "bin"), join(home, ".claude", "local", "claude"), join(home, ".kimi-code", "bin"), join(home, ".config", "opencode", "bin"),
+      join(dataDir, "task-workspaces", "b1", "t1", "tool"), join(dataDir, "workspaces", "b1"), join(dataDir, "engine-homes", "a1"), join(dataDir, "team-files"),
+      join(chosen, "bin"),
+    ]) expect(serverMayRunFrom(path), path).toBe(false);
+    expect(serverMayRunFrom(join(home, "grok-link", "bin")), "a link to a sign-in folder, judged by its real path").toBe(false);
+    expect(serverMayRunFrom(join(elsewhere, "codex", "bin")), "a sign-in folder that is a link, at its real path").toBe(false);
+    for (const path of [home, join(home, ".local", "bin"), join(home, ".config", "git"), join(dataDir, "tools", "npm", "bin"), join(beside, "bin"), "/usr/bin"]) {
+      expect(serverMayRunFrom(path), `${path}: a grant around the data folder is never bound, so it stays trusted`).toBe(true);
+    }
+    expect(serverPath([join(home, ".local", "bin"), join(home, ".grok", "bin"), join(chosen, "bin"), "/usr/bin", "."].join(delimiter))).toBe([join(home, ".local", "bin"), "/usr/bin"].join(delimiter));
+    expect(serverMayRunFrom(join(later, "bin"))).toBe(true);
+    named = [...named, later];
+    expect(serverMayRunFrom(join(later, "bin")), "a folder an admin adds counts at once").toBe(false);
+    expect(serverMayRunFrom(join(cwd, "bin"))).toBe(true);
+    box.wrap({ command: "/usr/local/bin/claude", args: [], cwd, conversationBot: "b1", threadId: "t1", env: { PATH: "/usr/bin" } })!.release();
+    expect(serverMayRunFrom(join(cwd, "bin")), "a folder a box here was given, outside every list").toBe(false);
+    await box.stop();
+    for (const path of [join(home, ".grok", "bin"), join(chosen, "bin"), join(later, "bin"), join(cwd, "bin"), join(dataDir, "workspaces", "b1")]) {
+      expect(serverMayRunFrom(path), `${path} after the box stops`).toBe(true);
+    }
   });
 
   it.skipIf(process.platform === "win32")("limited: a bot working in a folder of its own choosing still reads its conversation's uploads", async () => {

@@ -4,7 +4,7 @@
 // does not take: the command, its arguments and its environment go through untouched.
 import { randomBytes } from "node:crypto";
 import { closeSync, existsSync, mkdirSync, openSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { engineInstallRoots } from "../engine-roots.ts";
 import type { TurnFolders } from "../folder-access.ts";
@@ -18,10 +18,10 @@ import { BOX_EGRESS_RULES, limitedBoxRefusal, openBoxEgressGate, type BoxEgressG
 import type { EgressRules } from "../browser/egress/policy.ts";
 import { boxEnvironment } from "./env.ts";
 import { openHarnessGate, type HarnessGate } from "./harness-gate.ts";
-import { distrustHomePrograms } from "./program-trust.ts";
+import { distrustHomePrograms, distrustLimitedBoxFolders } from "./program-trust.ts";
 import { procHidepid } from "./hidepid.ts";
 import { DENIED_SYSCALLS, seccompBytes, seccompSupported } from "./seccomp.ts";
-import { RELAY_SOCKET_NAME, TEAM_FOLDER_KEPT, boxUploadsDir, teamFolderOf, under, bwrapArgs, inBoxSocket, planBox, taskWorkspaceIds, type BoxAudience, type BoxBridge, type BoxPlan, type BoxRequest, type BoxSetup } from "./plan.ts";
+import { LIMITED_HOME_SIGN_INS, RELAY_SOCKET_NAME, TEAM_FOLDER_KEPT, boxUploadsDir, teamFolderOf, under, bwrapArgs, inBoxSocket, planBox, taskWorkspaceIds, type BoxAudience, type BoxBridge, type BoxPlan, type BoxRequest, type BoxSetup } from "./plan.ts";
 import { openBoxRelay, type BoxRelay } from "./relay.ts";
 
 /** The loopback port inside a box that reaches the egress gate. The harness gate sits at the server's own port. */
@@ -55,6 +55,11 @@ export type BoxAudienceScope = (input: { threadId: string; botId: string | null;
 
 /** The folders a bot's turn may use now, or null when the bot has no folder setting (server/bot-folders.ts). */
 export type BoxFolders = (botId: string) => TurnFolders | null;
+
+/** The folders the bots limited to chosen folders may change now, by every bot's setting. */
+export type LimitedWrites = () => readonly string[];
+
+const BOT_DATA_FOLDERS = ["workspaces", "task-workspaces", "engine-homes", "team-files"] as const;
 
 /** A bot's folder list as a stable text: what a process kept between turns is started again on when it changes. */
 export function foldersKey(folders: TurnFolders | null | undefined): string | null {
@@ -278,6 +283,9 @@ export class BotBox {
   private audiences: BoxAudienceScope | null = null;
   private folders: BoxFolders | null = null;
   private boxScope: BoxScope = "all";
+  private limitedWrites: LimitedWrites | null = null;
+  private limitedFolders: string[] = [];
+  private limitedWritten = new Set<string>();
 
   /** Detects, and when the box is on opens the gates. Safe to call once; returns what it decided. */
   async start(options: StartOptions): Promise<BoxDetection> {
@@ -319,11 +327,15 @@ export class BotBox {
     });
     this.runner.scopeAudiences(this.audiences);
     this.runner.scopeFolders(this.folders);
-    // Security: with only some bots boxed, the unboxed ones and the person write HOME anyway, so its programs stay trusted.
-    if (this.boxScope === "all") {
-      distrustHomePrograms(options.home, [options.dataDir], ["workspaces", "task-workspaces", "engine-homes", "team-files"].map((name) => join(options.dataDir, name)));
-      resetPathCache();
+    const botFolders = BOT_DATA_FOLDERS.map((name) => join(options.dataDir, name));
+    // Security: with only some bots boxed, the unboxed ones and the person write HOME anyway, so its programs stay
+    // trusted; a folder a limited box writes does not.
+    if (this.boxScope === "all") distrustHomePrograms(options.home, [options.dataDir], botFolders);
+    else {
+      this.limitedFolders = [...LIMITED_HOME_SIGN_INS.map((name) => join(options.home, name)), ...botFolders].map((path) => resolve(path));
+      distrustLimitedBoxFolders(this.limitedFolders, () => this.limitedChosenFolders(options.dataDir));
     }
+    resetPathCache();
     log(`bot box: on (${this.boxScope === "all" ? "every bot" : "bots limited to chosen folders"}; bubblewrap, ${this.detection.tools.socat ? "socat" : "node"} bridges, credential broker, seccomp ${this.seccompFile ? "on" : "unsupported here"})`);
     return this.detection;
   }
@@ -347,6 +359,9 @@ export class BotBox {
     const folders = this.boxScope === "limited" ? this.runner.foldersFor(request) : null;
     if (this.boxScope === "limited" && folders?.limited !== true) return null;
     const wrapped = this.runner.wrap(folders ? { ...request, folders } : request);
+    if (this.boxScope === "limited") {
+      for (const path of wrapped.plan.writable) if (!this.limitedFolders.some((dir) => under(path, dir))) this.limitedWritten.add(path);
+    }
     this.boxed += 1;
     for (const name of wrapped.unbrokered) this.unbrokered.add(name);
     return wrapped;
@@ -399,6 +414,19 @@ export class BotBox {
 
   /** Each bot's folder list for every box: from now on, and for a box started later. Null takes it away. */
   scopeFolders(folders: BoxFolders | null): void { this.folders = folders; this.runner?.scopeFolders(folders); }
+
+  /** The folders the limited bots may change, read each time the server checks where it may run a program. Null takes
+   * it away. */
+  scopeLimitedWrites(writes: LimitedWrites | null): void { this.limitedWrites = writes; }
+
+  /** Besides the folders a limited box always writes: those the host names now, and every folder a box here was given
+   * until the box stops. */
+  private limitedChosenFolders(dataDir: string): string[] {
+    const data = resolve(dataDir);
+    // A grant in or around the data folder is never bound, and distrusting one around it would hide the app's engines.
+    const named = (this.limitedWrites?.() ?? []).filter((path) => isAbsolute(path)).map((path) => resolve(path)).filter((path) => !under(path, data) && !under(data, path));
+    return [...named, ...this.limitedWritten];
+  }
 
   /** The bot's folder list for one box now, as a key (foldersKey); null with no setting. */
   foldersKey(request: Pick<BoxRequest, "cwd" | "threadId" | "conversationBot">): string | null {
@@ -457,7 +485,10 @@ export class BotBox {
     this.seccompFile = null;
     this.runner = null;
     this.boxScope = "all";
+    this.limitedFolders = [];
+    this.limitedWritten.clear();
     distrustHomePrograms(null);
+    distrustLimitedBoxFolders(null);
     resetPathCache();
   }
 }

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { augmentedPath, findCliCandidates, registerPathDir, resetPathCacheForTests } from "../env-path.ts";
 import { execCli, spawnCli } from "../procs.ts";
 import { BoxRunner } from "./box.ts";
-import { distrustHomePrograms, serverMayRunFrom, serverPath } from "./program-trust.ts";
+import { distrustHomePrograms, distrustLimitedBoxFolders, homeProgramsDistrusted, programsDistrusted, serverMayRunFrom, serverPath } from "./program-trust.ts";
 
 const posix = process.platform !== "win32";
 
@@ -24,6 +24,7 @@ function run(cli: string, env: NodeJS.ProcessEnv): Promise<{ error: (Error & { c
 
 afterEach(() => {
   distrustHomePrograms(null);
+  distrustLimitedBoxFolders(null);
   resetPathCacheForTests();
 });
 
@@ -46,6 +47,54 @@ describe("programs a boxed bot could have written", () => {
     expect(serverMayRunFrom("bin")).toBe(false);
     expect(serverPath(["/data/.seira/tools/npm/bin", "/usr/local/bin", "/data/.local/bin", "", ".", "/usr/bin", "/data/bin"].join(delimiter)))
       .toBe(["/data/.seira/tools/npm/bin", "/usr/local/bin", "/usr/bin"].join(delimiter));
+  });
+
+  it("with only the limited bots boxed: their folders by both names, and nothing else of HOME", () => {
+    distrustLimitedBoxFolders(["/data/.grok", "/data/.seira/workspaces"], () => ["/work/project", "relative/bin"]);
+    expect(homeProgramsDistrusted()).toBe(false);
+    expect(programsDistrusted()).toBe(true);
+    expect(serverMayRunFrom("/data/.grok/bin")).toBe(false);
+    expect(serverMayRunFrom("/data/.seira/workspaces/b1/tool")).toBe(false);
+    expect(serverMayRunFrom("/work/project/node_modules/.bin")).toBe(false);
+    expect(serverMayRunFrom("/data")).toBe(true);
+    expect(serverMayRunFrom("/data/.local/bin")).toBe(true);
+    expect(serverMayRunFrom("/data/.seira/tools/npm/bin")).toBe(true);
+    expect(serverMayRunFrom("/work/projects")).toBe(true);
+    expect(serverMayRunFrom("bin")).toBe(false);
+    expect(serverPath(["/data/.local/bin", "/data/.grok/bin", "", ".", "/usr/bin", "/work/project/bin"].join(delimiter)))
+      .toBe(["/data/.local/bin", "/usr/bin"].join(delimiter));
+    distrustLimitedBoxFolders(["/data/.grok"], () => { throw new Error("no list"); });
+    expect(serverMayRunFrom("/data/.grok/bin"), "a list that fails keeps the folders the box always writes").toBe(false);
+    expect(serverMayRunFrom("/work/project/bin")).toBe(true);
+    distrustLimitedBoxFolders(null);
+    expect(programsDistrusted()).toBe(false);
+    expect(serverPath(["/data/.grok/bin", "."].join(delimiter))).toBe(["/data/.grok/bin", "."].join(delimiter));
+  });
+
+  it("every bot boxed: HOME is untrusted, as before", () => {
+    distrustHomePrograms("/data", ["/data/.seira"]);
+    expect(homeProgramsDistrusted()).toBe(true);
+    expect(programsDistrusted()).toBe(true);
+  });
+
+  it.skipIf(!posix)("with only the limited bots boxed, an unboxed spawn starts no program from their folders, and HOME's still run", async () => {
+    const home = homedir();
+    const marker = join(home, "ran-limited");
+    rmSync(marker, { force: true });
+    const planted = plant(join(home, ".grok", "bin"), "seira-planted-grok", marker);
+    const own = plant(join(home, ".local", "bin"), "seira-own-cli", marker);
+    const env = { ...process.env, PATH: [join(home, ".grok", "bin"), join(home, ".local", "bin"), "/usr/bin", "/bin"].join(delimiter) };
+    distrustLimitedBoxFolders([join(home, ".grok")]);
+
+    const byName = await run("seira-planted-grok", env);
+    expect((byName.error as NodeJS.ErrnoException | null)?.code).toBe("ENOENT");
+    const byPath = await run(planted, env);
+    expect((byPath.error as NodeJS.ErrnoException | null)?.code).toBe("EACCES");
+    expect(existsSync(marker)).toBe(false);
+
+    const ok = await run("seira-own-cli", env);
+    expect(ok.error).toBeNull();
+    expect(readFileSync(marker, "utf8").trim()).toBe(own);
   });
 
   it.skipIf(!posix)("the server's PATH keeps the app's own engines and the system's, never HOME's program folders", () => {

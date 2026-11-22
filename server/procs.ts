@@ -15,7 +15,7 @@ import type { Readable, Writable } from "node:stream";
 import { basename, dirname, join, resolve } from "node:path";
 import { botBox, type WrappedSpawn } from "./bot-box/box.ts";
 import type { BoxRequest } from "./bot-box/plan.ts";
-import { homeProgramsDistrusted, serverMayRunFrom, serverPath } from "./bot-box/program-trust.ts";
+import { programsDistrusted, serverMayRunFrom, serverPath } from "./bot-box/program-trust.ts";
 import { currentTurn } from "./crash-guard.ts";
 import { engineMemory } from "./engine-memory.ts";
 import { engineOwners } from "./engine-owners.ts";
@@ -301,7 +301,7 @@ export function sharedBoxScope(cwd: string): string | null {
 /** Security (bot-box/program-trust.ts): a spawn outside the box neither starts a program from a folder a boxed bot can
  * write nor looks one up there. */
 export function outsideBoxOptions<T extends { env?: NodeJS.ProcessEnv; cwd?: string | URL }>(command: string, opts: T): T {
-  if (!homeProgramsDistrusted()) return opts;
+  if (!programsDistrusted()) return opts;
   if (/[/\\]/.test(command)) {
     const path = resolve(typeof opts.cwd === "string" ? opts.cwd : process.cwd(), command);
     let real = path;
