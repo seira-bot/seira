@@ -32,6 +32,10 @@ function safeTail(first, tail) {
   return (first === "ui" ? UI_REST : SAFE_REST).test(tail) && !tail.split("/").includes("..");
 }
 
+// Security invariant (NFR-054): a credential in a message must never leave the computer. This list mirrors the key prefixes in shared/redact.ts; a test keeps the two in step.
+const KEY_START = /(?:^|[^A-Za-z0-9])(?:omd_|omg_|sk-|rk_|sk_|xai-|gsk_|csk-|LLM\||hf_|pypi-|ghp_|gho_|ghu_|ghs_|ghr_|github_pat_|gl(?:pat|dt|rtr?)-|xox[abposr]-|xapp-|AKIA|ASIA|AIza|npm_|ntn_|pplx-|whsec_|SG\.|bak_|eyJ)/;
+const LONG_WITH_DIGIT = /(?=[A-Za-z0-9_-]*\d)[A-Za-z0-9_-]{20,}/;
+
 const contains = (text, needle) => needle.length >= 2 && text.toLowerCase().includes(needle.toLowerCase());
 const namesPerson = (file, username, hostname) => {
   const parts = file.toLowerCase().split("/").flatMap((part) => [part, part.split(".")[0]]);
@@ -48,6 +52,7 @@ export function filterMessage(message, { username = "", hostname = "" } = {}) {
   if (/(["'`])[^"'`]*\1/.test(message)) return null;
   // Two capitalized words in a row read as a person's or a bot's name; engine messages do not have them.
   if (/\b[A-Z][a-z]+\s+[A-Z][a-z]+/.test(message)) return null;
+  if (KEY_START.test(message) || LONG_WITH_DIGIT.test(message)) return null;
   if (contains(message, username) || contains(message, hostname)) return null;
   return message;
 }

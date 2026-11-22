@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+
+import { holdsCredential } from "../shared/redact.ts";
 
 import {
   BREADCRUMB_MESSAGES, MAX_BREADCRUMBS, MAX_FRAMES, buildEnvelope, buildEvent, crashSignature, detectPackageType, filterMessage, normalizeFile, parseFrames,
@@ -23,6 +26,39 @@ test("AC-41: the message filter keeps a short plain message and refuses every sh
   assert.equal(filterMessage(42, PEOPLE), null);
   assert.equal(filterMessage("a".repeat(200), PEOPLE), "a".repeat(200));
   assert.equal(filterMessage("short five 12345", PEOPLE), "short five 12345");
+});
+
+const A = "aB3dE5gH7jK9mN1pQ3sT5v";
+const n = (length) => A.repeat(Math.ceil(length / A.length)).slice(0, length);
+const SECRET_SAMPLES = [
+  `omd_${n(43)}`, `sk-proj-${A}`, `sk_live_${A}`, `xai-${A}`, `gsk_${A}${A}`, `csk-${A}${A}`, `LLM|123456|${A}`, `hf_${A}${A}`,
+  `pypi-AgE${A}${A}${A}${A}`, `ghp_${A}`, `github_pat_${A}`, `glpat-${A}`, `xoxb-${A}`, `xapp-1-${A}`, "AKIAABCDEFGHIJKLMNOP", `AIza${A}${A}`,
+  `npm_${A}`, `ntn_${n(46)}`, `pplx-${n(48)}`, `whsec_${A}`, `SG.${n(22)}.${n(43)}`, `bak_${A}`, `eyJhbGciOiJIUzI1NiJ9.${A}.${A}`,
+];
+
+test("NFR-054: the message filter refuses a message that holds a secret-shaped token", () => {
+  for (const secret of SECRET_SAMPLES) {
+    assert.equal(holdsCredential(secret), true, `redact.ts no longer matches ${secret}`);
+    for (const message of [secret, `bad key ${secret}`, `key ${secret} bad`]) assert.equal(filterMessage(message, PEOPLE), null, message);
+  }
+  for (const message of ["AKIAABCDEFGHIJKLMNOP", "ASIAABCDEFGHIJKLMNOP", "eyJhbGciOiJIUzI1NiJ9", "sk-short", "key sk-x", "token ghp_short"]) {
+    assert.equal(filterMessage(message, PEOPLE), null, message);
+  }
+  assert.equal(filterMessage("abcdefghij1234567890x", PEOPLE), null);
+  assert.equal(filterMessage("a-b_c-d_e-f_g-h_i-j_k1", PEOPLE), null);
+});
+
+test("NFR-054: the secret prefix list tracks shared/redact.ts", () => {
+  const source = readFileSync(new URL("../shared/redact.ts", import.meta.url), "utf8");
+  const block = /const KEY_PREFIXES: RegExp\[\] = \[([\s\S]*?)\n\];/.exec(source)[1];
+  assert.equal(block.split("\n").filter((line) => line.trim().startsWith("/")).length, SECRET_SAMPLES.length);
+});
+
+test("NFR-054: plain engine messages still pass", () => {
+  for (const message of [
+    "x is not a function", "Maximum call stack size exceeded", "requireActiveInternalCapability is not a function", "Invalid array length",
+    "Cannot read properties of undefined", "task-runner is not defined", "a".repeat(200),
+  ]) assert.equal(filterMessage(message, PEOPLE), message);
 });
 
 test("file names are normalized to a fixed prefix, or become <external>", () => {
