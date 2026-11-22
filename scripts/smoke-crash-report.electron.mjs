@@ -21,7 +21,7 @@ app.setPath("crashDumps", path.join(dir, "dumps"));
 if (phase === "main-crash") globalThis.__smokeCanary = process.env.SMOKE_CANARY;
 
 const finish = (code = 0) => {
-  setTimeout(() => app.exit(code), 5000).unref();
+  setTimeout(() => app.exit(code), 2000);
   app.quit();
 };
 
