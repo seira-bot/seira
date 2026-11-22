@@ -1,7 +1,7 @@
 // Settings → AI → Routing and extraction: what the helper models do first, then one provider picker, then only the
 // picked provider's fields. Security: keys are write-only; the server reports configured-or-not, never the value.
 import { useEffect, useState, type ReactNode } from "react";
-import { BadgeCheck, Cloud, Network, Route, Server } from "lucide-react";
+import { BadgeCheck, Server } from "lucide-react";
 import { api, useStore, type ConfigStatus } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
@@ -12,6 +12,7 @@ import {
 } from "./SettingsPrimitives";
 import { Select } from "./Select";
 import { openKeySettings } from "./keys/key-focus";
+import { CloudflareMark, OpenRouterMark, TypeSafeMark } from "./ProviderIcons";
 
 type CustomApi = "systemone" | "decisions" | "chat";
 const customApiOf = (api: string | undefined): CustomApi => (api === "decisions" || api === "chat" ? api : "systemone");
@@ -31,9 +32,15 @@ const PICK_DETAIL: Record<ProviderPick, LocaleKey> = {
 };
 
 /** The 32 px mark before each provider. One place, so brand logos can replace these icons later. */
+/** Official brand marks for named providers; plain icons for the plan and for a person's own server. */
 function providerMark(pick: ProviderPick): ReactNode {
-  const Icon = { included: BadgeCheck, workersai: Cloud, jev: Route, openrouter: Network, custom: Server }[pick];
-  return <Icon aria-hidden="true" />;
+  switch (pick) {
+    case "workersai": return <CloudflareMark size={18} />;
+    case "jev": return <TypeSafeMark size={18} />;
+    case "openrouter": return <OpenRouterMark size={18} />;
+    case "included": return <BadgeCheck aria-hidden="true" />;
+    case "custom": return <Server aria-hidden="true" />;
+  }
 }
 
 const KEY_URL = { jev: "https://typesafe.ai", openrouter: "https://openrouter.ai/keys", workersai: "https://dash.cloudflare.com/profile/api-tokens" } as const;

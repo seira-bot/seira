@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConfigStatus } from "@/state/store";
 import { setLocale } from "@/lib/i18n";
 import { DecisionModelSettings, deciderFailureText, helpersStatusLine, pickedProvider } from "./DecisionModelSettings";
+import { CloudflareMark, OpenRouterMark, TypeSafeMark } from "./ProviderIcons";
 import { Switch } from "./SettingsPrimitives";
 
 const fixture = vi.hoisted(() => ({
@@ -112,7 +113,7 @@ describe("DecisionModelSettings", () => {
     expect(view.html).toContain("Save a key below to turn this on.");
   });
 
-  it("offers each provider once, as a radio row with a leading slot, and Jev only once", () => {
+  it("offers each provider once, as a radio row with its brand mark in the leading slot, and Jev only once", () => {
     const view = render();
     expect(view.radios.map((node) => node.props.value)).toEqual(["workersai", "jev", "openrouter", "custom"]);
     expect(view.pick("workersai")!.props.checked).toBe(true);
@@ -120,6 +121,8 @@ describe("DecisionModelSettings", () => {
     const rows = view.all.filter((node) => node.type === "label" && node.props["data-decider-pick"]);
     expect(rows).toHaveLength(4);
     for (const row of rows) expect(nodes(row.props.children).some((child) => child.props["data-settings-slot"] === "")).toBe(true);
+    const marked = (id: string, mark: unknown) => nodes(rows.find((row) => row.props["data-decider-pick"] === id)!.props.children).some((child) => child.type === mark);
+    expect([marked("workersai", CloudflareMark), marked("jev", TypeSafeMark), marked("openrouter", OpenRouterMark)]).toEqual([true, true, true]);
     expect(view.html).toContain('role="radiogroup"');
   });
 
