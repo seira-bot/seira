@@ -42,6 +42,7 @@ describe("service units", () => {
     expect(servicePath("/home/alice/.nvm/versions/node/v22.1.0/bin/node", "/opt/engines/bin:/usr/bin::bin:./x:/opt/engines/bin:/home/alice/.local/bin"))
       .toBe("/home/alice/.nvm/versions/node/v22.1.0/bin:/opt/engines/bin:/usr/bin:/home/alice/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/sbin:/bin");
     expect(servicePath("/usr/bin/node", undefined)).toBe("/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/sbin:/bin");
+    expect(servicePath("/usr/local/bin/node", undefined, "darwin")).toBe("/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin");
   });
 
   it("writes that PATH into the systemd unit, quoted for systemd", () => {

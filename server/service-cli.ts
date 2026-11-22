@@ -97,7 +97,7 @@ export function runServiceCommand(input: ServiceInstallInput, io: ServiceIo): nu
     user: input.user ?? currentUser(),
     home,
     bindsLowPorts: Boolean(input.domain),
-    path: servicePath(input.node, input.pathEnv ?? process.env.PATH),
+    path: servicePath(input.node, input.pathEnv ?? process.env.PATH, platform),
     ...(input.label ? { label: input.label } : {}),
     ...(script !== input.script ? { cliPrefix: "npx @seira-bot/seira" } : {}),
   };

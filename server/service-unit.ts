@@ -22,10 +22,11 @@ export interface ServiceSpec {
 }
 
 const SYSTEMD_DEFAULT_PATH = ["/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"];
+const LAUNCHD_DEFAULT_PATH = ["/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
 
-/** systemd starts a service with only its default PATH, so node's folder and the install PATH come first. */
-export function servicePath(node: string, installPath: string | undefined): string {
-  const folders = [dirname(node), ...(installPath ?? "").split(":"), ...SYSTEMD_DEFAULT_PATH];
+/** systemd and launchd start a service with only a short default PATH, so node's folder and the install PATH come first. */
+export function servicePath(node: string, installPath: string | undefined, platform: NodeJS.Platform = "linux"): string {
+  const folders = [dirname(node), ...(installPath ?? "").split(":"), ...(platform === "darwin" ? LAUNCHD_DEFAULT_PATH : SYSTEMD_DEFAULT_PATH)];
   return [...new Set(folders.filter((folder) => posix.isAbsolute(folder) && !/[\r\n\0]/.test(folder)))].join(":");
 }
 
