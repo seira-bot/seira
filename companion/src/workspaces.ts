@@ -31,7 +31,7 @@ export interface WorkspaceReply {
 
 export interface WorkspaceChannel {
   list(): Workspace[] | null;
-  switchTo(request: { id: unknown; now?: unknown }): Promise<WorkspaceReply>;
+  switchTo(request: Record<string, unknown>): Promise<WorkspaceReply>;
 }
 
 export type WorkspaceRoute = "list" | "switch";
