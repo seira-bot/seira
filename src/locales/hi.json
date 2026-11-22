@@ -3796,5 +3796,9 @@
   "roomPicture.remove": "तस्वीर हटाएँ",
   "roomPicture.typeRefused": "PNG, JPEG, GIF या WebP तस्वीर चुनें।",
   "roomPicture.tooBig": "यह तस्वीर बहुत बड़ी है। 10 MB से छोटी तस्वीर चुनें।",
-  "roomPicture.failed": "तस्वीर सेव नहीं हो सकी। फिर से कोशिश करें।"
+  "roomPicture.failed": "तस्वीर सेव नहीं हो सकी। फिर से कोशिश करें।",
+  "settings.crashReports.title": "क्रैश रिपोर्ट भेजें",
+  "settings.crashReports.aria": "क्रैश रिपोर्ट भेजें",
+  "settings.crashReports.subtitle": "जब Seira काम करना बंद कर देता है, तो वह ऐप का संस्करण, सिस्टम का प्रकार और अपने कोड में विफलता की जगह भेजता है। आपके संदेश, फ़ाइलें या नाम कभी नहीं।",
+  "settings.crashReports.link": "रिपोर्ट में क्या होता है"
 }

@@ -9,6 +9,7 @@ import { IDLE_HTTP_SERVER } from "./due-timer.ts";
 
 export const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 const statusErrorSchema = z.object({ status: z.number().int().optional() });
+const statusMessageSchema = z.object({ status: z.number().int(), message: z.string().min(1) });
 const serverAddressSchema = z.object({ port: z.number().int().min(1).max(65_535) });
 
 export interface WebhookIngress {
@@ -141,13 +142,12 @@ export function createWebhookIngressHandler(manager: WebhookManager, claimReques
       });
       return json(res, 202, { accepted: true, ...result });
     } catch (error) {
-      const parsedError = statusErrorSchema.safeParse(error);
-      const status = parsedError.success ? parsedError.data.status : undefined;
-      if (status === undefined) {
+      const parsedError = statusMessageSchema.safeParse(error);
+      if (!parsedError.success) {
         console.error("webhooks: request failed", error);
         return json(res, 500, { error: "Webhook receiver failed" });
       }
-      const message = error instanceof Error ? error.message : String(error);
+      const { status, message } = parsedError.data;
       if (status === 400 || status === 413) {
         manager.recordRejected(match[1], status, message, {
           contentType: header(req, "content-type"),

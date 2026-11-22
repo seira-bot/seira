@@ -106,6 +106,26 @@ function savedAnalyticsChoice() {
   try { const saved = ipcRenderer.sendSync("desktop-analytics:read"); return typeof saved === "boolean" ? saved : null; } catch { return null; }
 }
 let analyticsChoice;
+const text = (value, max) => (typeof value === "string" ? value.slice(0, max) : undefined);
+/** Main passes --seira-crash-reports=1 only when this build has a crash endpoint; without it the page gets `available: false` and no way to send. */
+function crashReportsBridge() {
+  if (!process.argv.includes("--seira-crash-reports=1")) return { available: false };
+  // Read on first use, not at load. A value that cannot be read counts as off.
+  let choice;
+  const savedChoice = () => { try { return ipcRenderer.sendSync("desktop-crash-reports:read") === true; } catch { return false; } };
+  return {
+    available: true,
+    enabled: () => { if (choice === undefined) choice = savedChoice(); return choice; },
+    set: enabled => { choice = enabled === true; return ipcRenderer.invoke("desktop-crash-reports:set", choice); },
+    report: report => {
+      try {
+        const ids = report?.debugIds && typeof report.debugIds === "object" ? Object.fromEntries(Object.entries(report.debugIds).slice(0, 50).filter(([, id]) => typeof id === "string")) : undefined;
+        ipcRenderer.send("desktop-crash-reports:renderer", { kind: text(report?.kind, 40), errorName: text(report?.errorName, 100), message: text(report?.message, 20000), stack: text(report?.stack, 20000), page: text(report?.page, 20), debugIds: ids });
+      } catch {}
+    },
+    page: name => { try { ipcRenderer.send("desktop-crash-reports:page", text(name, 20)); } catch {} },
+  };
+}
 function savedLanguageChoice() {
   try { const saved = ipcRenderer.sendSync("desktop-language:read"); return typeof saved === "string" ? saved : null; } catch { return null; }
 }
@@ -804,6 +824,7 @@ const bridge = {
     },
     ...(isLocalPage ? { set: enabled => { analyticsChoice = enabled === true; return ipcRenderer.invoke("desktop-analytics:set", analyticsChoice); } } : {}),
   },
+  ...(isLocalPage ? { crashReports: crashReportsBridge() } : {}),
   desktopLanguage: {
     choice: () => {
       if (languageChoice === undefined) languageChoice = savedLanguageChoice();

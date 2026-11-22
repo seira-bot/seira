@@ -23,7 +23,7 @@ interface Job {
   uses?: string;
   environment?: unknown;
   permissions?: Record<string, string> | string;
-  strategy?: { "fail-fast"?: boolean; matrix?: { shard?: number[]; include?: Record<string, string>[]; worker?: string } };
+  strategy?: { "fail-fast"?: boolean; matrix?: { shard?: number[]; include?: Record<string, string>[]; worker?: string; runner?: string[] } };
   with?: Record<string, unknown>;
   steps?: Step[];
 }
@@ -493,6 +493,33 @@ describe("CI workers job", () => {
   });
 });
 
+describe("CI native job", () => {
+  const job = workflow.jobs.native!;
+
+  it("starts after checks, and skips a draft and a change that cannot break the native files", () => {
+    expect(job.needs).toBe("checks");
+    expect(job.if).toBe("${{ github.event.pull_request.draft != true && needs.checks.outputs.native == 'true' }}");
+    expect(workflow.jobs.checks.outputs?.native).toBe("${{ steps.scope.outputs.native }}");
+  });
+
+  it("runs on a GitHub-hosted Windows and macOS runner, with no permission, no secret and no environment", () => {
+    expect(job.strategy?.matrix?.runner).toEqual(["windows-2025", "macos-15"]);
+    expect(job.strategy?.["fail-fast"]).toBe(false);
+    expect(job["runs-on"]).toBe("${{ matrix.runner }}");
+    expect(job.permissions).toBeUndefined();
+    expect(job.environment).toBeUndefined();
+    expect(JSON.stringify(job)).not.toContain("secrets.");
+  });
+
+  it("builds the helper on Windows only, and runs the native tests without the dependencies", () => {
+    const build = stepsOf(job).find((step) => step.run?.includes("prepare-job-fence"));
+    expect(build?.run).toBe("node scripts/prepare-job-fence.mjs --test");
+    expect(build?.if).toBe("${{ runner.os == 'Windows' }}");
+    expect(runs(job)).toContain('node --test "native/**/*.test.mjs"');
+    expect(runs(job).some((run) => run.includes("pnpm"))).toBe(false);
+  });
+});
+
 describe("CI server image job", () => {
   const job = workflow.jobs["server-image"]!;
 
@@ -574,6 +601,7 @@ describe("CI skips jobs only when it may", () => {
     vitest: { result },
     workers: { result },
     "server-image": { result },
+    native: { result },
   });
   const run = (extra: Record<string, string>, jobs: Needs) => {
     const command = runs(gate).find((line) => line.includes("node --input-type=module")) as string;
@@ -604,7 +632,7 @@ describe("CI skips jobs only when it may", () => {
   });
 
   it("passes when the scope skipped the heavy jobs and no Worker is in scope", () => {
-    expect(run({ HEAVY: "false", WORKERS: NONE }, needs("skipped")).status).toBe(0);
+    expect(run({ HEAVY: "false", WORKERS: NONE, NATIVE: "false" }, needs("skipped")).status).toBe(0);
   });
 
   it("passes when no Worker is in scope and the heavy jobs ran", () => {
@@ -619,6 +647,16 @@ describe("CI skips jobs only when it may", () => {
     const check = run({}, skipped("workers"));
     expect(check.status).toBe(1);
     expect(check.stderr).toContain("workers");
+  });
+
+  it("passes when the native job was skipped because its files are not in scope", () => {
+    expect(run({ NATIVE: "false" }, skipped("native")).status).toBe(0);
+  });
+
+  it("fails when the native job was skipped while its files are in scope", () => {
+    const check = run({ NATIVE: "true" }, skipped("native"));
+    expect(check.status).toBe(1);
+    expect(check.stderr).toContain("native");
   });
 
   it("fails when the server image was skipped while the heavy jobs run", () => {
@@ -641,9 +679,9 @@ describe("CI skips jobs only when it may", () => {
   });
 
   it.each(["failure", "cancelled"])("fails when any job ends as %s, even when it could be skipped", (result) => {
-    for (const id of ["build", "vitest", "workers", "server-image"]) {
+    for (const id of ["build", "vitest", "workers", "server-image", "native"]) {
       expect(run({ DRAFT: "true" }, { ...needs("skipped"), [id]: { result } }).status, id).toBe(1);
-      expect(run({ HEAVY: "false", WORKERS: NONE }, { ...needs("skipped"), [id]: { result } }).status, id).toBe(1);
+      expect(run({ HEAVY: "false", WORKERS: NONE, NATIVE: "false" }, { ...needs("skipped"), [id]: { result } }).status, id).toBe(1);
     }
   });
 

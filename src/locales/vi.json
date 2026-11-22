@@ -6028,5 +6028,9 @@
   "roomPicture.remove": "Xóa ảnh",
   "roomPicture.typeRefused": "Hãy chọn ảnh PNG, JPEG, GIF hoặc WebP.",
   "roomPicture.tooBig": "Ảnh này quá lớn. Hãy chọn ảnh dưới 10 MB.",
-  "roomPicture.failed": "Không lưu được ảnh. Hãy thử lại."
+  "roomPicture.failed": "Không lưu được ảnh. Hãy thử lại.",
+  "settings.crashReports.title": "Gửi báo cáo sự cố",
+  "settings.crashReports.aria": "Gửi báo cáo sự cố",
+  "settings.crashReports.subtitle": "Khi Seira ngừng hoạt động, ứng dụng gửi phiên bản ứng dụng, loại hệ thống và vị trí trong mã nơi lỗi xảy ra. Không bao giờ gửi tin nhắn, tệp hay tên của bạn.",
+  "settings.crashReports.link": "Báo cáo chứa những gì"
 }

@@ -7075,5 +7075,9 @@
   "call.voice.languageAuto": "Automatica",
   "call.voice.device": "Voce di questo computer",
   "call.voice.deviceDefault": "Voce predefinita",
-  "call.voice.thisComputer": "Questo computer"
+  "call.voice.thisComputer": "Questo computer",
+  "settings.crashReports.title": "Invia i report di arresto anomalo",
+  "settings.crashReports.aria": "Invia i report di arresto anomalo",
+  "settings.crashReports.subtitle": "Quando Seira smette di funzionare, invia la versione dell'app, il tipo di sistema e il punto del suo codice in cui è fallita, mai i tuoi messaggi, file o nomi.",
+  "settings.crashReports.link": "Cosa contiene un report"
 }

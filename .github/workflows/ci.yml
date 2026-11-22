@@ -37,6 +37,8 @@ jobs:
       heavy: ${{ steps.scope.outputs.heavy }}
       # A JSON array of the Cloudflare Workers to check: all of them, except for a pull request that touches fewer.
       workers: ${{ steps.scope.outputs.workers }}
+      # "true" when the change can break the native job: always, except for a pull request that leaves its files alone.
+      native: ${{ steps.scope.outputs.native }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -186,13 +188,41 @@ jobs:
     if: ${{ github.event.pull_request.draft != true && needs.checks.outputs.heavy == 'true' }}
     uses: ./.github/workflows/server-image-smoke.yml
 
+  native:
+    # The Windows memory helper (native/job-fence) and the macOS memory readers, each on its own system. The tests run
+    # with `node --test` and no dependencies, so the job is short: macOS runners are few. scripts/ci-heavy.mjs decides
+    # when it runs.
+    name: native (${{ matrix.runner }})
+    needs: checks
+    # Skipped on a draft pull request, and when the change cannot break the native files.
+    if: ${{ github.event.pull_request.draft != true && needs.checks.outputs.native == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-2025, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Build the memory helper
+        if: ${{ runner.os == 'Windows' }}
+        run: node scripts/prepare-job-fence.mjs --test
+      - name: Run the native tests
+        run: node --test "native/**/*.test.mjs"
+
   gate:
     # The one check that the main branch ruleset requires. It runs even when a job before it fails, and it fails then:
     # a skipped required check counts as a pass, so the gate must not skip. A job may be skipped only when `checks`
     # says so: `build`, `vitest` and `server-image` on a draft or a documentation-only pull request, `workers` on a
-    # draft or when no Worker is in scope. Any other skip, a failure, or a cancel fails the gate.
+    # draft or when no Worker is in scope, `native` on a draft or when its files are not in scope. Any other skip, a
+    # failure, or a cancel fails the gate.
     name: CI
-    needs: [checks, build, vitest, workers, server-image]
+    needs: [checks, build, vitest, workers, server-image, native]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -203,12 +233,13 @@ jobs:
           DRAFT: ${{ github.event.pull_request.draft }}
           HEAVY: ${{ needs.checks.outputs.heavy }}
           WORKERS: ${{ needs.checks.outputs.workers }}
+          NATIVE: ${{ needs.checks.outputs.native }}
         run: |
           node --input-type=module -e '
             const needs = JSON.parse(process.env.NEEDS);
             const draft = process.env.DRAFT === "true";
             const light = draft || process.env.HEAVY === "false";
-            const mayStop = { build: light, vitest: light, "server-image": light, workers: draft || process.env.WORKERS === "[]" };
+            const mayStop = { build: light, vitest: light, "server-image": light, workers: draft || process.env.WORKERS === "[]", native: draft || process.env.NATIVE === "false" };
             for (const [job, { result }] of Object.entries(needs)) console.log(`${result.padEnd(9)} ${job}`);
             const bad = Object.entries(needs).filter(([job, { result }]) => result !== "success" && !(result === "skipped" && mayStop[job] === true)).map(([job]) => job);
             if (bad.length) { console.error(`\n${bad.length} job(s) did not pass: ${bad.join(", ")}`); process.exit(1); }

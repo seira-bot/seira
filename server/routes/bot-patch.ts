@@ -32,6 +32,7 @@ import type { MemoryUpkeep } from "../memory-upkeep.ts";
 import { phoneAppsFor } from "../phones/access.ts";
 import { profileSnapshot } from "../profile-revision.ts";
 import { recordProfileChange } from "../profile-versions.ts";
+import { pairedDeviceWorksOnChange } from "../phone-works-on.ts";
 import { memberBotPatchViolation, requestSource, type RequestAuth } from "../request-auth.ts"; import { defaultBotPatchRefusal, ownsDefaultBot } from "../default-bot.ts";
 import type { RoutineManager } from "../routines.ts";
 import type { SessionRegistry } from "../sessions.ts";
@@ -63,6 +64,8 @@ export interface BotPatchRouteDeps {
   folderAccess: { dataDir: string; home: string; setElsewhere(): boolean };
   /** Full access comes only from the workspace policy. */
   hostedWorkspace: boolean;
+  /** This server is a person's Cloud home. */
+  cloudHome: boolean;
   hostedFullAccessRefusal: string;
   desktopManaged: boolean;
   broadcast(payload: Record<string, unknown>): void;
@@ -119,7 +122,13 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         return json(res, 400, { error: "body must be a JSON object" });
       }
       const pairedDevice = req.headers["x-seira-companion"] === "1";
-      if ((auth.kind === "session" && !auth.scopes.includes("admin")) || pairedDevice) {
+      const worksOn = pairedDeviceWorksOnChange(body, {
+        pairedDevice: pairedDevice && auth.kind === "session", scopes: auth.scopes, cloudHome: deps.cloudHome, hostedWorkspace: HOSTED_WORKSPACE,
+      });
+      if (worksOn === "own-server" && !vpsSshAliasForBot(cfg, store.bot(m[1]))) {
+        return json(res, 409, { error: "Set up your own server for this bot on the computer first." });
+      }
+      if (!worksOn && ((auth.kind === "session" && !auth.scopes.includes("admin")) || pairedDevice)) {
         const session = auth.kind === "session" ? auth.session : undefined;
         const level = pairedDevice ? "chat" : deps.levelOf(auth, m[1]);
         const field = memberBotPatchViolation(body, level === "none" ? "chat" : level, ownsDefaultBot(store.bot(m[1]), session?.email), session?.membershipAuthority === "team");
@@ -758,6 +767,7 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         audienceChanged();
       }
       if (Object.hasOwn(patch, "callSpeed") && patch.callSpeed !== callSpeedBefore) deps.callSpeedChanged?.(bot.id, bot.callSpeed);
+      if (worksOn && auth.kind === "session") console.log(`[bots] paired device ${auth.session.id} moved bot ${bot.id} to ${worksOn === "off" ? "no computer" : "its own server"}`);
       return json(res, 200, { bot: wireBot(store.bot(bot.id)!),
         ...(vpsLeftOn ? { notice: vpsLeftBehindNotice("Moved", vpsLeftOn, vps.vpsContainerName(bot.id)) } : {}) } satisfies BotUpdateResponse);
     }

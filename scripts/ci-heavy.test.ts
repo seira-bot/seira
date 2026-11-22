@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { WORKERS, WORKER_INPUTS, heavyReason, isLightPath, sourceNames, workersFor, workersOutput, workersToRun } from "./ci-heavy.mjs";
+import {
+  NATIVE_INPUTS, WORKERS, WORKER_INPUTS, heavyReason, isLightPath, nativeFor, nativeImports, nativeToRun, sourceNames, workersFor, workersOutput, workersToRun,
+} from "./ci-heavy.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const names = (files: string[]) => workersFor(files).map((worker) => worker.name);
@@ -101,6 +103,36 @@ describe("workersToRun and workersOutput", () => {
   });
 });
 
+describe("the native job scope", () => {
+  const imports = nativeImports(root);
+
+  it("follows the imports of the native tests into the server files they run", () => {
+    expect(imports).toContain("native/job-fence/job-fence.test.mjs");
+    expect(imports).toContain("native/mac/memory.test.mjs");
+    expect(imports).toContain("server/mac-memory.ts");
+    expect(imports).toContain("server/tree-memory-watchdog.ts");
+    expect(imports).toContain("server/perf/bot-footprint.ts");
+  });
+
+  it("runs for a change of the native files, the helper build, the files the tests import and the CI files", () => {
+    for (const file of ["native/job-fence/job-fence.c", "scripts/prepare-job-fence.mjs", "server/perf/bot-footprint.ts", ".github/workflows/ci.yml"]) {
+      expect(nativeFor([file], imports), file).toBe(true);
+    }
+    expect(NATIVE_INPUTS).toContain("native/");
+  });
+
+  it("does not run for other files", () => {
+    expect(nativeFor(["README.md", "src/App.tsx", "server/procs.ts"], imports)).toBe(false);
+  });
+
+  it("uses the diff for a pull request and a merge queue entry, and runs for any other event or an unreadable diff", () => {
+    expect(nativeToRun("pull_request", ["README.md"], imports)).toBe(false);
+    expect(nativeToRun("merge_group", ["native/mac/memory.test.mjs"], imports)).toBe(true);
+    for (const event of ["push", "workflow_dispatch"]) expect(nativeToRun(event, ["README.md"], imports)).toBe(true);
+    expect(nativeToRun("pull_request", null, imports)).toBe(true);
+  });
+});
+
 describe("the main block", () => {
   it("writes heavy and workers for a push", () => {
     const folder = mkdtempSync(join(tmpdir(), "ci-heavy-"));
@@ -114,6 +146,7 @@ describe("the main block", () => {
       const lines = readFileSync(output, "utf8").trim().split("\n");
       expect(lines[0]).toBe("heavy=true");
       expect(lines[1]).toBe(`workers=${workersOutput(WORKERS)}`);
+      expect(lines[2]).toBe("native=true");
       expect(run.stdout).toContain("Workers that run:");
     } finally {
       rmSync(folder, { recursive: true, force: true });

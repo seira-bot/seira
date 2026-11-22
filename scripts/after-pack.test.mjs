@@ -85,6 +85,25 @@ describe.skipIf(process.platform === "win32")("Linux afterPack permissions", () 
   });
 });
 
+describe("source map gate", () => {
+  it("fails the pack when a source map is in the packed UI or server", async () => {
+    for (const folder of ["ui/assets", "server/drivers"]) {
+      const { appOutDir, resources } = fixture();
+      fs.mkdirSync(path.join(resources, folder), { recursive: true });
+      fs.writeFileSync(path.join(resources, folder, "index.js.map"), "{}");
+      await expect(afterPack({ electronPlatformName: "win32", arch: 1, appOutDir })).rejects.toThrow(/source map files/);
+    }
+  });
+
+  it("lets a pack without maps go on to the next check", async () => {
+    const { appOutDir, resources } = fixture();
+    fs.mkdirSync(path.join(resources, "ui"), { recursive: true });
+    fs.writeFileSync(path.join(resources, "ui", "index.js"), "x");
+    fs.mkdirSync(path.join(resources, "browser-engine"));
+    await expect(afterPack({ electronPlatformName: "win32", arch: 1, appOutDir })).rejects.toThrow(/manifest\.json/);
+  });
+});
+
 describe("desktop browser package gate", () => {
   it("rejects a missing browser manifest instead of accepting partial resources", async () => {
     const { appOutDir, resources } = fixture();
