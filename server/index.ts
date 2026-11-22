@@ -8315,8 +8315,7 @@ async function beginTurn(
       recordTurnPlace(bot.id, threadId, plan.computer === undefined && mountedComputer === "local" && integrations.browser ? "browser" : mountedComputer ?? (integrations.browser ? "browser" : null));
       // Never overlap a replacement with a cancelled adapter's pre-id window: wait for it, then revalidate this exact claim.
       await pendingCancelledProviderHandshakes.waitForClear(threadId);
-      if (!markDirectTurnDispatching(bot.id, dispatchClaimId, threadId)) throw new DirectTurnSetupCancelled("turn stopped before dispatch");
-      if (withoutCloud) noticeWithoutCloudComputer(store, bot.name, threadId, plan.pinned ? pinSource(plan.pinned, dispatchTask, bot.computer) : "works-on");
+      if (!markDirectTurnDispatching(bot.id, dispatchClaimId, threadId)) throw new DirectTurnSetupCancelled("turn stopped before dispatch"); if (withoutCloud) noticeWithoutCloudComputer(store, bot.name, threadId, plan.pinned ? pinSource(plan.pinned, dispatchTask, bot.computer) : "works-on");
       const computerPromptKind = resolveComputerPromptKind({
         kind: computerKind,
         vmPrivate: localVmMode(cfg) === "per-bot",
