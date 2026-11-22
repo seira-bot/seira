@@ -143,7 +143,7 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       if (body.pinned !== undefined && typeof body.pinned !== "boolean") {
         return json(res, 400, { error: "pinned must be true or false" });
       }
-      const existingBot = store.bot(m[1]); const defaultBotRefused = defaultBotPatchRefusal(existingBot, body);
+      const existingBot = store.bot(m[1]); const callSpeedBefore = existingBot?.callSpeed; const defaultBotRefused = defaultBotPatchRefusal(existingBot, body);
       if (defaultBotRefused) return json(res, 400, { error: defaultBotRefused });
       if (existingBot && typeof body.unread === "boolean" && deps.shownThread && deps.personMarkThread?.(auth, deps.shownThread(auth, existingBot), body.unread)) {
         delete body.unread;
@@ -757,7 +757,7 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         broadcast({ kind: "sections", sections: store.sections });
         audienceChanged();
       }
-      if (Object.hasOwn(patch, "callSpeed") && patch.callSpeed !== existingBot?.callSpeed) deps.callSpeedChanged?.(bot.id, bot.callSpeed);
+      if (Object.hasOwn(patch, "callSpeed") && patch.callSpeed !== callSpeedBefore) deps.callSpeedChanged?.(bot.id, bot.callSpeed);
       return json(res, 200, { bot: wireBot(store.bot(bot.id)!),
         ...(vpsLeftOn ? { notice: vpsLeftBehindNotice("Moved", vpsLeftOn, vps.vpsContainerName(bot.id)) } : {}) } satisfies BotUpdateResponse);
     }

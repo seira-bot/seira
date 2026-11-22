@@ -81,7 +81,7 @@ export function callSpeedFor(saved: number | undefined, speed: CallSpeedSupport)
   if (speed.kind === "none") return CALL_SPEED_DEFAULT;
   const value = isCallSpeed(saved) ? saved : CALL_SPEED_DEFAULT;
   const clamped = Math.min(speed.max, Math.max(speed.min, value));
-  return Math.round(clamped / CALL_SPEED_STEP) * CALL_SPEED_STEP;
+  return Number((Math.round(clamped / CALL_SPEED_STEP) * CALL_SPEED_STEP).toFixed(2));
 }
 
 /** `callSpeedFor` without float noise (1.15, not 1.1500000000000001), for a number that goes into a provider request. */
