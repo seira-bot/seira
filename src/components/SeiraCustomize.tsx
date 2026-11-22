@@ -1,22 +1,15 @@
-import { useState, type RefObject } from "react";
-import { ImagePlus, Loader2, Sparkles, Trash2 } from "lucide-react";
+import type { RefObject } from "react";
 
-import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
-import { colorSwatch, SEIRA_COLOR_LABEL, SEIRA_COLOR_NAMES } from "@/lib/mascot";
-import { bodyName } from "@/lib/mascot-names";
+import { PICKABLE_STATES } from "@/lib/mascot";
 import type { Bot } from "@/state/store";
 import { BOT_PROFILE_LIMITS } from "../../shared/bot-profile";
-import { PICKER_BODY_IDS, botBodyId } from "../../shared/bot-body";
-import { SeiraAvatar } from "./Avatar";
-import { CastCharacterPicker } from "./CastCharacterPicker";
-import { AvatarImageGenerator } from "./AvatarImageGenerator";
+import { AvatarEditor } from "./avatar/AvatarEditor";
 import type { AvatarPatch, useAvatarImage } from "./avatar-editing";
 
-export const AVATAR_FILE_TYPES = "image/png,image/jpeg,image/gif,image/webp";
 const LABEL = "text-[12px] font-medium uppercase tracking-wide text-ink-secondary";
 
-/** The welcome's own profile edit: name, colour, look, then a picture of the person's own or one made with AI. */
+/** The welcome's own profile edit: a name, then the shared avatar editor. */
 export function SeiraCustomize({ preview, name, nameRef, image, onName, onPatch }: {
   preview: Bot;
   name: string;
@@ -25,9 +18,6 @@ export function SeiraCustomize({ preview, name, nameRef, image, onName, onPatch 
   onName(name: string): void;
   onPatch(patch: AvatarPatch): void;
 }) {
-  const [generating, setGenerating] = useState(false);
-  const picture = Boolean(preview.avatarUrl) && preview.avatarCrop !== "mascot";
-  const shape = (patch: AvatarPatch) => onPatch({ ...patch, avatarCrop: "mascot" });
   return (
     <div className="space-y-3 rounded-2xl bg-ink/[0.03] p-3.5 text-left">
       <label className="block">
@@ -42,80 +32,14 @@ export function SeiraCustomize({ preview, name, nameRef, image, onName, onPatch 
           className="mt-1 w-full rounded-lg border border-hairline/40 bg-inset px-3 py-2 text-[14px] text-ink focus:outline-none"
         />
       </label>
-      <div>
-        <span className={LABEL}>{t("onboarding.bot.color")}</span>
-        <div role="radiogroup" aria-label={t("onboarding.bot.color")} className="mt-1.5 flex flex-wrap gap-1.5">
-          {SEIRA_COLOR_NAMES.map((color) => (
-            <button
-              key={color}
-              type="button"
-              role="radio"
-              aria-checked={!picture && preview.color === color}
-              aria-label={t(SEIRA_COLOR_LABEL[color])}
-              title={t(SEIRA_COLOR_LABEL[color])}
-              data-seira-welcome-color={color}
-              onClick={() => shape({ color })}
-              className={cn("size-6 rounded-full border-2 transition-transform hover:scale-110", !picture && preview.color === color ? "border-ink" : "border-transparent")}
-              style={{ background: colorSwatch(color) }}
-            />
-          ))}
-        </div>
-      </div>
-      <div>
-        <span className={LABEL}>{t("botIdentity.characters")}</span>
-        <div className="mt-1.5">
-          <CastCharacterPicker look={preview} selectable={!picture} avatarSize={30} onPick={shape} />
-        </div>
-      </div>
-      {PICKER_BODY_IDS.length > 1 && (
-        <div>
-          <span className={LABEL}>{t("seiraWelcome.look")}</span>
-          <div className="mt-1.5 grid grid-cols-5 gap-1">
-            {PICKER_BODY_IDS.map((id) => (
-              <button
-                key={id}
-                type="button"
-                aria-pressed={!picture && botBodyId(preview.mascotBody) === id}
-                aria-label={bodyName(id)}
-                title={bodyName(id)}
-                data-seira-welcome-body={id}
-                onClick={() => shape({ mascotBody: id })}
-                className={cn("flex h-11 items-center justify-center rounded-xl", !picture && botBodyId(preview.mascotBody) === id ? "bg-ink/[0.08] ring-[1.5px] ring-inset ring-ink/25" : "hover:bg-ink/[0.05]")}
-              >
-                <SeiraAvatar color={preview.color} bodyId={id} size={30} animated={false} trackPointer={false} />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      <div>
-        <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
-          <input ref={image.fileRef} type="file" accept={AVATAR_FILE_TYPES} className="sr-only" tabIndex={-1} aria-hidden="true"
-            onChange={(event) => void image.upload(event.target.files?.[0])} />
-          <button type="button" data-seira-welcome-upload="" disabled={image.busy} onClick={() => image.fileRef.current?.click()}
-            className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-ink-secondary hover:bg-ink/[0.05] hover:text-ink disabled:opacity-50">
-            {image.uploading ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <ImagePlus size={14} aria-hidden="true" />}
-            {t("seiraWelcome.upload")}
-          </button>
-          <span aria-hidden="true" className="text-ink-tertiary">·</span>
-          <button type="button" data-seira-welcome-generate="" aria-expanded={generating} onClick={() => setGenerating(!generating)}
-            className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-ink-secondary hover:bg-ink/[0.05] hover:text-ink">
-            <Sparkles size={14} aria-hidden="true" />{t("seiraWelcome.generate")}
-          </button>
-          {picture && (
-            <div className="basis-full"><button type="button" data-seira-welcome-remove="" disabled={image.busy} onClick={image.removeImage}
-              className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[13px] text-ink-secondary hover:bg-ink/[0.05] hover:text-ink disabled:opacity-50">
-              <Trash2 size={13} aria-hidden="true" />{t("seiraWelcome.removePicture")}
-            </button></div>
-          )}
-        </div>
-        {image.error && <p role="alert" data-seira-welcome-error="" className="mt-1 px-2 text-[13px] text-danger">{image.error}</p>}
-        {generating && (
-          <div className="mt-2">
-            <AvatarImageGenerator botLabel={name || "Seira"} disabled={image.uploading} generating={image.generating} onGenerate={image.generate} />
-          </div>
-        )}
-      </div>
+      <AvatarEditor
+        bot={preview}
+        activeState={PICKABLE_STATES.find((state) => state === preview.mascotExpression) ?? "idle"}
+        image={image}
+        variant="welcome"
+        nameLabel={name || "Seira"}
+        onPatch={onPatch}
+      />
     </div>
   );
 }

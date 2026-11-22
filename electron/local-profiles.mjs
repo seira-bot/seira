@@ -21,6 +21,8 @@ export const PROFILES_FILE = "profiles.json";
 export const PROFILE_NAME_LIMIT = 40;
 export const MAX_PROFILES = 20;
 export const SETTLE_POLL_MS = 1_000;
+/** This computer's own copy in the list a phone reads: not a profile's id, which cannot be this word. */
+export const PHONE_LOCAL_ID = "local";
 
 /** A name as a person typed it: one line, no control characters, at most PROFILE_NAME_LIMIT characters; null when empty. */
 export function profileName(value) {
@@ -65,7 +67,7 @@ export function createProfileRegistry({ dataDir, fs = nodeFs, now = Date.now, ra
   /** The name is free: no other workspace here has it, This Mac's own word for itself (`reserved`) included. */
   const free = (profiles, name, except, reserved) => !profiles.some((entry) => entry.id !== except && sameName(entry.name ?? (entry.id === DEFAULT_PROFILE ? reserved : null), name));
   function idFor(name, profiles) {
-    const used = (id) => id === DEFAULT_PROFILE || profiles.some((entry) => entry.id === id) || fs.existsSync(profileDir(dataDir(), id));
+    const used = (id) => id === DEFAULT_PROFILE || id === PHONE_LOCAL_ID || profiles.some((entry) => entry.id === id) || fs.existsSync(profileDir(dataDir(), id));
     const slug = name.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "");
     if (slug && PROFILE_ID.test(slug) && !used(slug)) return slug;
     for (;;) {
@@ -195,6 +197,21 @@ export function createLocalProfiles({ registry, clean, dataDir, home, window: sh
     },
     /** The workspace a switch waits to open (`id` null: This computer), and the name of what it waits for. */
     settling: () => settling,
+    /** What a paired phone may list: This PC (id `local`) and each workspace the rail offers, one current, a switch that
+     * waits marked on its target. No folder, address or port. Null unless this computer is home. */
+    phoneFacts() {
+      if (!allowed() || home() !== "local") return null;
+      const onScreen = running(), name = reserved();
+      const waiting = settling ? { state: "waiting", ...(settling.name ? { waitingFor: settling.name } : {}) } : null;
+      const state = (target, current) => (settling?.id === target && waiting ? waiting : current || !settling ? { state: "ready" } : { state: "unavailable" });
+      return [
+        { id: PHONE_LOCAL_ID, ...(name ? { name } : {}), current: onScreen === null, ...state(null, onScreen === null) },
+        ...registry.list().filter((entry) => offered(entry.id) && entry.id !== PHONE_LOCAL_ID).map((entry) => {
+          const color = swatchColor(entry.color);
+          return { id: entry.id, ...(entry.name ? { name: entry.name } : {}), ...(color ? { color } : {}), current: entry.id === onScreen, ...state(entry.id, entry.id === onScreen) };
+        }),
+      ];
+    },
     /** A new workspace may be added from ＋ here. */
     creatable: () => allowed() && home() !== null,
     open,
