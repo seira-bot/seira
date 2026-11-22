@@ -41,8 +41,9 @@
 //   FAKE_CLAUDE_REPLY_STATE  counter file keeping FAKE_CLAUDE_REPLIES in order across processes
 //   FAKE_CLAUDE_TOOL_CALLS  JSON [{name, input?, ok?, hold?}] each turn calls before its reply (unset: one Bash call). A call
 //     with `hold` keeps running until FAKE_CLAUDE_RELEASE exists, sending a tool_progress every FAKE_CLAUDE_TOOL_PROGRESS_MS
-//     (default 30000) as 2.1.306 does; hold "busy" | "idle" | "network" also keeps a stand-in child process that burns CPU,
-//     sleeps, or holds a loopback TCP connection, as the call's command would
+//     (default 30000) as 2.1.306 does; hold "busy" | "idle" | "network" | "memory" also keeps a stand-in child process that
+//     burns CPU, sleeps, holds a loopback TCP connection, or takes 64 MB more memory every 100 ms until it is stopped, as
+//     the call's command would
 //   FAKE_CLAUDE_TOOL_CALLS_FILE  path of the same JSON, read again each turn (a warm process's turns differ); missing: none
 //   FAKE_STREAM_SCRIPT, FAKE_STREAM_CADENCE  a scripted reply chosen by a marker in the prompt (stream-script.ts)
 //   FAKE_CLAUDE_STREAM_CADENCE  "chars:ms" (happy mode): stream each scripted reply as
@@ -175,9 +176,9 @@ const scriptedReplies = (() => {
     return [];
   }
 })();
-type ScriptedHold = true | "busy" | "idle" | "network";
+type ScriptedHold = true | "busy" | "idle" | "network" | "memory";
 type ScriptedToolCall = { name: string; id?: string; input: Record<string, unknown>; ok: boolean; output?: unknown; server?: string; hold?: ScriptedHold };
-const HOLDS = new Set<unknown>([true, "busy", "idle", "network"]);
+const HOLDS = new Set<unknown>([true, "busy", "idle", "network", "memory"]);
 const parseToolCalls = (raw: string | undefined): ScriptedToolCall[] | null => {
   if (raw === undefined) return null;
   try {
@@ -850,6 +851,7 @@ const ORPHAN_EXIT = "const parent = process.ppid; const orphaned = () => { try {
 const STAND_INS: Record<Exclude<ScriptedHold, true>, string> = {
   busy: `${ORPHAN_EXIT} let checked = Date.now(); for (;;) { if (Date.now() - checked > 500) { checked = Date.now(); if (orphaned()) process.exit(0); } }`,
   idle: `${ORPHAN_EXIT} setInterval(() => { if (orphaned()) process.exit(0); }, 500);`,
+  memory: `${ORPHAN_EXIT} const held = []; setInterval(() => { if (orphaned()) process.exit(0); held.push(Buffer.alloc(64 * 1048576, 1)); }, 100);`,
   network: `${ORPHAN_EXIT} const net = require("node:net"); const server = net.createServer(() => {}).listen(0, "127.0.0.1", () => { net.connect(server.address().port, "127.0.0.1"); }); setInterval(() => { if (orphaned()) process.exit(0); }, 500);`,
 };
 

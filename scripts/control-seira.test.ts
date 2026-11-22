@@ -33,6 +33,18 @@ describe("the fixture's fake engine knobs", () => {
   });
 });
 
+describe("the fixture's bot memory limit", () => {
+  it("lets the switch and the budget cross, and the service manager's address only with the switch on", () => {
+    const bus = { XDG_RUNTIME_DIR: "/run/user/1000", DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus" };
+    expect(childEnv({ SEIRA_BOT_MEMORY_FENCE: "on", SEIRA_BOT_MEMORY_MAX_MB: "512", ...bus }))
+      .toMatchObject({ SEIRA_BOT_MEMORY_FENCE: "on", SEIRA_BOT_MEMORY_MAX_MB: "512", ...bus });
+    for (const parent of [bus, { ...bus, SEIRA_BOT_MEMORY_FENCE: "off" }]) {
+      const env = childEnv(parent);
+      for (const key of Object.keys(bus)) expect(env, key).not.toHaveProperty(key);
+    }
+  });
+});
+
 describe("the fixture's Netlify stand-in", () => {
   it("lets only a loopback stand-in's API address cross, so a fixture never lists or deletes on Netlify", () => {
     expect(childEnv({ SEIRA_NETLIFY_API_URL: " http://127.0.0.1:4010/api/v1 " }).SEIRA_NETLIFY_API_URL).toBe("http://127.0.0.1:4010/api/v1");
