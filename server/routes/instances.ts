@@ -67,6 +67,9 @@ export interface InstanceRouteDeps {
   activeGroupTurnForBot(botId: string): { threadId: string } | null;
   /** The server's tested-AI record (server/tested-ai.ts): a check there also settles the new-bot default. */
   checkInstance?(instance: ProviderInstance): Promise<EngineCheck>;
+  /** Moves the model new bots start with off a provider that is about to be hidden, to the first provider that is ready.
+   * Answers null when none is ready. */
+  moveNewBotModelOff?(instanceId: string): Promise<ModelSelection | null>;
   /** Whether an added server lists its models (server/openai-compat-endpoints.ts); replaced in tests. */
   endpointModelsReadable?(config: { url: string; key: string; catalog?: unknown }): Promise<boolean>;
 }
@@ -81,7 +84,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
   const describeInstances = async () => hostedModels ? deps.describeInstances()
     : withEndpointUrls(withCodexEndpointInfo(withClaudeBedrockInfo(withClaudeEndpointInfo(await deps.describeInstances(), cfg.instances ?? {}), cfg.instances ?? {}), cfg.instances ?? {}), cfg.instances ?? {});
   /** Bots, their backups and threads, the new-bot default, or a turn running on it: a provider in use can't go away. */
-  const providerInUse = (instanceId: string): boolean => cfg.defaultModelSelection?.instanceId === instanceId || store.bots.some((bot) =>
+  const providerInUse = (instanceId: string, withDefault = true): boolean => (withDefault && cfg.defaultModelSelection?.instanceId === instanceId) || store.bots.some((bot) =>
     bot.modelSelection.instanceId === instanceId || bot.fallback?.some(candidate => candidate.instanceId === instanceId) || store.tasks(bot.id).some((task) => task.modelSelection?.instanceId === instanceId)) ||
     busyProviderSelections().some((selection) => selection.instanceId === instanceId);
   const busyProviderSelections = () => store.bots.flatMap((bot) => {
@@ -493,6 +496,10 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         const entry = instances[instanceId];
         if ((body.configDir !== undefined && entry.driver !== "claudeAgent") || (body.displayName !== undefined && !["claudeAgent", "codex"].includes(entry.driver))) {
           return json(res, 400, { error: "Account settings are available for Claude and ChatGPT accounts only." });
+        }
+        if (body.hidden === true && deps.moveNewBotModelOff && !providerInUse(instanceId, false)
+          && (cfg.defaultModelSelection?.instanceId === instanceId || cfg.newBotDefaults?.profile.modelSelection?.instanceId === instanceId)) {
+          await deps.moveNewBotModelOff(instanceId);
         }
         if (body.hidden === true && providerInUse(instanceId)) {
           return json(res, 409, { error: "Choose another model for the bots and default model using this provider before hiding it." });

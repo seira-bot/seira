@@ -12,6 +12,7 @@ import { ChatGptPlanStatus } from "./ChatGptPlanStatus";
 import { EngineCard, engineReady, providerName, type EngineCardSummary } from "./EngineLibrary";
 import { CommandRow, EngineSetup, EngineUpdateNotice, EngineWarningNotice } from "./EngineSetup";
 import { MENU_SHEET } from "./menu-recipe";
+import { ProviderOffItems, useProviderOff } from "./ProviderMenu";
 
 /** Providers whose accounts are listed together on one card, each signed in on its own. */
 export type AccountGroup = "claude" | "chatgpt";
@@ -37,13 +38,13 @@ const COPY: Record<AccountGroup, Record<"title" | "add" | "removeBody", LocaleKe
 };
 
 /** What an account's menu offers. Only accounts added here can be removed; each provider's first account stays, and
- * ChatGPT's built-in rows (Codex, ChatGPT plan) can be hidden instead. */
+ * the built-in rows (Claude, Codex, ChatGPT plan) can be hidden instead. */
 export function accountActions(group: AccountGroup, instance: InstanceInfo): { signOut: boolean; remove: boolean; hide: boolean } {
   const remove = group === "claude" ? instance.instanceId !== "claude" && instance.claudeAccount?.isDefault !== true : instance.instanceId.startsWith("chatgpt-");
   return {
     signOut: accountState(instance) === "signedIn" && instance.authentication?.signOut === true && instance.snapshot.account?.method !== "api-key",
     remove,
-    hide: group === "chatgpt" && !remove,
+    hide: !remove,
   };
 }
 
@@ -76,6 +77,7 @@ function AccountMenu({ group, instance, onRename }: { group: AccountGroup; insta
   const [error, setError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const { signOut: canSignOut, remove: canRemove, hide: canHide } = accountActions(group, instance);
+  const off = useProviderOff(instance);
   const usedBy = state.bots.filter((bot) => bot.modelSelection.instanceId === instance.instanceId || bot.fallback?.some((backup) => backup.instanceId === instance.instanceId)).length;
 
   useEffect(() => {
@@ -92,15 +94,13 @@ function AccountMenu({ group, instance, onRename }: { group: AccountGroup; insta
     };
   }, [open]);
 
-  const run = async (action: "signOut" | "remove" | "hide") => {
+  const run = async (action: "signOut" | "remove") => {
     setConfirm(null);
     setBusy(true);
     setError(null);
     try {
       const path = `/api/instances/${encodeURIComponent(instance.instanceId)}${action === "signOut" ? "/auth/sign-out" : ""}`;
-      // Hide leaves the account out of every model list until Unhide (Settings → AI → More providers).
-      const init = action === "signOut" ? { method: "POST" } : action === "remove" ? { method: "DELETE" } : { method: "PATCH", body: JSON.stringify({ hidden: true }) };
-      const { instances } = await api(path, init);
+      const { instances } = await api(path, { method: action === "signOut" ? "POST" : "DELETE" });
       // The response is the confirmed state: a second request could fail and leave a stale row.
       if (Array.isArray(instances)) dispatch({ type: "instances", instances });
       else await refreshInstances().catch(() => {});
@@ -114,25 +114,25 @@ function AccountMenu({ group, instance, onRename }: { group: AccountGroup; insta
   const item = "ui-menu-row w-full text-left disabled:cursor-not-allowed disabled:opacity-50";
   return (
     <div ref={menuRef} className="relative flex items-center gap-1">
-      {canRemove && <button type="button" disabled={busy || usedBy > 0} onClick={() => setConfirm("remove")}
+      {canRemove && <button type="button" disabled={busy || off.busy || usedBy > 0} onClick={() => setConfirm("remove")}
         title={usedBy > 0 ? t("accounts.inUse", { count: String(usedBy) }) : undefined}
         className="rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50">
         {t("accounts.remove")}
       </button>}
-      <button type="button" onClick={() => setOpen((value) => !value)} disabled={busy} aria-haspopup="menu" aria-expanded={open}
+      <button type="button" onClick={() => setOpen((value) => !value)} disabled={busy || off.busy} aria-haspopup="menu" aria-expanded={open}
         aria-label={t("accounts.menu", { name: engineDisplayName(instance) })}
         className="flex size-8 items-center justify-center rounded-lg text-ink-secondary outline-none hover:bg-control hover:text-ink focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
-        {busy ? <Loader2 size={14} className="animate-spin" /> : <MoreHorizontal size={16} />}
+        {busy || off.busy ? <Loader2 size={14} className="animate-spin" /> : <MoreHorizontal size={16} />}
       </button>
       {open && (
         <div role="menu" className={cn("absolute right-0 top-full z-40 mt-1 w-[220px] overflow-hidden text-[13px]", MENU_SHEET)}>
           <button type="button" role="menuitem" className={cn(item, "text-ink")} onClick={() => { setOpen(false); onRename(); }}>{t("accounts.rename")}</button>
           {canSignOut && <button type="button" role="menuitem" className={cn(item, "text-ink")} onClick={() => { setOpen(false); setConfirm("signOut"); }}>{t("accounts.signOut")}</button>}
-          {canHide && <button type="button" role="menuitem" disabled={usedBy > 0} title={t("engines.hideHint")} className={cn(item, "text-ink")} onClick={() => { setOpen(false); void run("hide"); }}>{t("engines.hide")}</button>}
-          {(canRemove || canHide) && usedBy > 0 && <p className="px-3 pb-1 pt-0.5 text-[11px] leading-snug text-ink-secondary">{t("accounts.inUse", { count: String(usedBy) })}</p>}
+          {canHide && <ProviderOffItems off={off} onDone={() => setOpen(false)} />}
+          {canRemove && usedBy > 0 && <p className="px-3 pb-1 pt-0.5 text-[11px] leading-snug text-ink-secondary">{t("accounts.inUse", { count: String(usedBy) })}</p>}
         </div>
       )}
-      {error && <p role="alert" className="absolute right-0 top-full z-30 mt-1 w-[260px] rounded-lg bg-card p-2 text-[12px] text-danger shadow-lg">{error}</p>}
+      {(error ?? off.error) && <p role="alert" className="absolute right-0 top-full z-30 mt-1 w-[260px] rounded-lg bg-card p-2 text-[12px] text-danger shadow-lg">{error ?? off.error}</p>}
       <ConfirmDialog
         open={confirm === "signOut"}
         title={t("accounts.signOutTitle", { name: engineDisplayName(instance) })}

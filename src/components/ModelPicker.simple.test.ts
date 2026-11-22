@@ -618,8 +618,8 @@ describe("the model picker in Simple mode", () => {
     const forBot = bot(undefined, "cursor", "auto");
     const opened = open(forBot);
     expect(list(opened).current).toMatchObject({ meta: "Setup required", warning: true });
-    expect(list(opened).groups.map((entry) => [entry.label, entry.body.kind])).toEqual([["Cursor", "setUp"], ["Claude", "models"]]);
-    const html = region(menu(opened.html), 'data-simple-provider="cursor"', 'data-simple-provider="claude"');
+    expect(list(opened).groups.map((entry) => [entry.label, entry.body.kind])).toEqual([["Claude", "models"], ["Cursor", "setUp"]]);
+    const html = region(menu(opened.html), 'data-simple-provider="cursor"');
     expect(html).toContain(">Set up</span>");
     expect(html).toContain("data-simple-set-up");
     pane(opened)!.props.onSetUp(missing, false);

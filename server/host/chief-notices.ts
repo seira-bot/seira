@@ -247,7 +247,7 @@ export function createChiefNotices(deps: ChiefNoticeDeps) {
       failure: { text: input.failure ?? input.detail, stopReason: input.facts?.stopReason },
       ...incidentContext(deps.store.messagesFor(threadId)),
     };
-    const count = incidentLedger.note(threadId);
+    const count = incidentLedger.note(threadId, !input.facts?.limit);
     if (count.muted) return;
     const chief = chiefForBot(store.bots, bot);
     const report = (retry?: IncidentRetry): void => void deliver({
