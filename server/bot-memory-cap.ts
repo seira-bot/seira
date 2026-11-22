@@ -475,7 +475,8 @@ export function startBotMemoryCap(deps: {
   if (dog && first) {
     dog.start();
     const others = ladder.offered.filter((rung) => rung !== "watchdog");
-    log(`memory: one bot may use up to ${mb(first.bytes)} MB per engine it runs (${first.mode === "enforce" ? `${BOT_MEMORY_ENV}; enforced when memory runs short` : "the default for this server's memory and turns; watch only, nothing is stopped"}); `
+    log(`memory: ${first.whole ? `all of one bot's work may use up to ${mb(first.bytes)} MB (the budget for bots; the kernel limit is not available here)`
+      : `one bot may use up to ${mb(first.bytes)} MB per engine it runs (${first.mode === "enforce" ? `${BOT_MEMORY_ENV}; enforced when memory runs short` : "the default for this server's memory and turns; watch only, nothing is stopped"})`}; `
       + `this server checks every ${Math.round(WATCHDOG_MS / 1000)} s while an engine runs${others.length ? `; also offered here, not used yet: ${others.join(", ")}` : ""}`);
   }
   return dog;

@@ -134,12 +134,14 @@ export class MemoryFence {
   #look(): Probe {
     const { env } = this.#deps, exists = (path: string) => this.#deps.exists(path);
     const systemdRun = findProgram("systemd-run", env.PATH, exists), systemctl = findProgram("systemctl", env.PATH, exists), envProgram = findProgram("env", env.PATH, exists);
-    if (!systemdRun || !systemctl || !envProgram) return this.#fail("systemd is not installed");
+    // The test scope runs `true` by its full path: systemd-run looks a bare name up on this server's PATH, which may be sealed.
+    const trueProgram = findProgram("true", env.PATH, exists);
+    if (!systemdRun || !systemctl || !envProgram || !trueProgram) return this.#fail("systemd is not installed");
     const budget = this.#deps.budget();
     if (budget === null) return this.#fail("no limit is set");
     const probe: Probe = { ok: true, oomPolicy: true, systemdRun, envProgram, systemctl };
     if (!this.#apply(probe, budget)) return this.#fail("the user manager refused the limit");
-    const scope = (oomPolicy: boolean) => this.#deps.run(systemdRun, ["--user", "--scope", "--quiet", "--collect", `--slice=${this.#deps.slice()}`, ...(oomPolicy ? ["-p", "OOMPolicy=continue"] : []), "--", "true"]).status === 0;
+    const scope = (oomPolicy: boolean) => this.#deps.run(systemdRun, ["--user", "--scope", "--quiet", "--collect", `--slice=${this.#deps.slice()}`, ...(oomPolicy ? ["-p", "OOMPolicy=continue"] : []), "--", trueProgram]).status === 0;
     if (!scope(true)) {
       if (!scope(false)) return this.#fail("the user manager could not start a scope");
       probe.oomPolicy = false;

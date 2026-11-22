@@ -101,6 +101,8 @@ describe("the probe", () => {
     expect(f.runs[0]).toEqual({ file: "/usr/bin/systemctl", args: ["--user", "set-property", "--runtime", SLICE, `MemoryMax=${5 * GIB}`, "MemorySwapMax=0", "CPUQuota=700%"] });
     expect(f.runs[1]!.file).toBe("/usr/bin/systemd-run");
     expect(f.runs[1]!.args).toContain("OOMPolicy=continue");
+    // A sealed PATH holds only node's folder, so the test scope names its program by the full path.
+    expect(f.runs[1]!.args.at(-1)).toBe("/usr/bin/true");
     const fenced = fence.argv("engine", ["x"], { PATH: "/bin" });
     expect(fenced?.command).toBe("/usr/bin/systemd-run");
     expect(fenced?.args.slice(-2)).toEqual(["engine", "x"]);
