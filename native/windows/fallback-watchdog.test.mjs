@@ -20,7 +20,9 @@ test("the process list sees this process with its memory", { skip }, async () =>
   assert.ok(list.rows.some((row) => row.ppid === own.ppid));
 });
 
-test("without the helper, the watchdog stops the memory-hungry child and keeps the engine (AC-06)", { skip, timeout: 90_000 }, async (t) => {
+/** Starts an engine stand-in whose child grows by 32 MiB every 100 ms, runs the watchdog with a 300 MiB budget until the
+ * first stop, and checks that the child is gone and the engine is alive. */
+async function stopHungryChild(t, extra = {}) {
   const childCode = "const keep=[];setInterval(()=>{if(keep.length<48)keep.push(Buffer.alloc(32*1024*1024,1))},100)";
   const parentCode = `const {spawn}=require("node:child_process");const c=spawn(process.execPath,["-e",${JSON.stringify(childCode)}],{stdio:"ignore"});console.log("child "+c.pid);setInterval(()=>{},1000)`;
   const parent = spawn(process.execPath, ["-e", parentCode], { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
@@ -43,6 +45,7 @@ test("without the helper, the watchdog stops the memory-hungry child and keeps t
     owners: () => [{ pid: parent.pid, botIds: ["bot-a"], kind: "engine" }],
     budgetBytes: () => 300 * MiB,
     onStop: (event) => { stops.push(event); stoppedAt ??= Date.now(); },
+    ...extra,
   });
   try {
     childPid = await new Promise((resolve, reject) => {
@@ -55,14 +58,26 @@ test("without the helper, the watchdog stops the memory-hungry child and keeps t
     while (stops.length === 0 && Date.now() < deadline) await sleep(250);
     const gone = Date.now() + 5_000;
     while (alive(childPid) && Date.now() < gone) await sleep(100);
-    t.diagnostic(`first over budget to stop: ${firstOver === null || stoppedAt === null ? "n/a" : ((stoppedAt - firstOver) / 1000).toFixed(1)} s; peak ${(peak / MiB).toFixed(0)} MiB`);
+    const overToStopMs = firstOver === null || stoppedAt === null ? null : stoppedAt - firstOver;
+    t.diagnostic(`first over budget to stop: ${overToStopMs === null ? "n/a" : (overToStopMs / 1000).toFixed(1)} s; peak ${(peak / MiB).toFixed(0)} MiB`);
     assert.ok(stops.length >= 1, "a process was stopped");
     assert.equal(stops[0].botId, "bot-a");
     assert.equal(stops[0].pid, childPid);
     assert.equal(alive(childPid), false, "the child is gone");
     assert.equal(alive(parent.pid), true, "the engine stand-in is alive");
+    return { overToStopMs, peak };
   } finally {
     watchdog.stop();
     for (const pid of [childPid, parent.pid]) { try { if (pid) process.kill(pid, "SIGKILL"); } catch { /* already gone */ } }
   }
+}
+
+test("without the helper, the watchdog stops the memory-hungry child and keeps the engine (AC-06)", { skip, timeout: 90_000 }, async (t) => {
+  const { overToStopMs } = await stopHungryChild(t);
+  assert.ok(overToStopMs !== null && overToStopMs >= 8_000, `waited ${overToStopMs} ms over budget`);
+});
+
+test("with less than 1 GiB available the watchdog stops at the first check over budget (AC-07b)", { skip, timeout: 90_000 }, async (t) => {
+  const { overToStopMs } = await stopHungryChild(t, { available: () => 0 });
+  assert.ok(overToStopMs !== null && overToStopMs < 5_000, `waited ${overToStopMs} ms over budget`);
 });

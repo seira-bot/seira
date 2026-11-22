@@ -5,6 +5,8 @@
 //                                  limit, and whether its own innermost job stops its processes when the job closes
 //   test-eater child <mode> ...    runs itself with the other arguments and exits with that run's exit code
 //   test-eater spawn <mode> ...    starts itself with the other arguments, prints "spawned <pid>", and exits at once
+//   test-eater ask <MiB> <MiB>     commits the first amount, asks once for the second, prints "asked granted" or
+//                                  "asked refused", then waits
 #define WIN32_LEAN_AND_MEAN
 #define __USE_MINGW_ANSI_STDIO 1
 #include <windows.h>
@@ -33,6 +35,17 @@ static int hold(unsigned long mib) {
     while (!commit((SIZE_T)16 << 20)) Sleep(20);
   }
   printf("held %lu %lu\n", mib, (unsigned long)GetCurrentProcessId());
+  fflush(stdout);
+  Sleep(INFINITE);
+  return 0;
+}
+
+static int ask(unsigned long hold_mib, unsigned long request_mib) {
+  for (unsigned long done = 0; done < hold_mib; done += 16) {
+    while (!commit((SIZE_T)16 << 20)) Sleep(20);
+  }
+  void *memory = VirtualAlloc(NULL, (SIZE_T)request_mib << 20, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+  printf("asked %s\n", memory ? "granted" : "refused");
   fflush(stdout);
   Sleep(INFINITE);
   return 0;
@@ -110,8 +123,9 @@ int main(int argc, char **argv) {
   if (argc == 3 && strcmp(argv[1], "retry") == 0) return retry(strtoul(argv[2], NULL, 10));
   if (argc == 3 && strcmp(argv[1], "hold") == 0) return hold(strtoul(argv[2], NULL, 10));
   if (argc == 2 && strcmp(argv[1], "injob") == 0) return injob();
+  if (argc == 4 && strcmp(argv[1], "ask") == 0) return ask(strtoul(argv[2], NULL, 10), strtoul(argv[3], NULL, 10));
   if (argc >= 3 && strcmp(argv[1], "child") == 0) return child();
   if (argc >= 3 && strcmp(argv[1], "spawn") == 0) return spawn_self();
-  fputs("usage: test-eater retry <MiB> | hold <MiB> | injob | child <mode> ... | spawn <mode> ...\n", stderr);
+  fputs("usage: test-eater retry <MiB> | hold <MiB> | injob | child <mode> ... | spawn <mode> ... | ask <MiB> <MiB>\n", stderr);
   return 2;
 }

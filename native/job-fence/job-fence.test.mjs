@@ -75,6 +75,9 @@ const exitCode = (command, args) => new Promise((resolve, reject) => {
 });
 
 const T = { timeout: 60_000 };
+/** Windows counts a request that the job refuses in PeakJobMemoryUsed, with the page tables for its range (one 4 KiB page
+ * for each 2 MiB, one more for a range that does not start on a 2 MiB line). The memory in use never passes the limit. */
+const refusedRequestBytes = (mib) => mib * MIB + (Math.ceil(mib / 2) + 1) * 4096;
 
 describe("seira-job-fence", { skip }, () => {
   after(() => stopAll(...started));
@@ -122,10 +125,38 @@ describe("seira-job-fence", { skip }, () => {
     assert.equal(stop.helper, run.child.pid);
     assert.equal(stop.limitBytes, 256 * MIB);
     assert.equal(hold.proc.exitCode, null, "hold keeps running");
+    assert.ok(stop.jobBytes <= 256 * MIB, `in use ${stop.jobBytes} within the limit`);
     hold.send("stats");
     const stats = await hold.next((event) => event.event === "stats");
-    assert.ok(stats.peakBytes <= 256 * MIB, `peak ${stats.peakBytes} within the limit`);
+    t.diagnostic(`peak ${stats.peakBytes}: ${stats.peakBytes - 256 * MIB} over the limit`);
+    assert.ok(stats.peakBytes <= 256 * MIB + refusedRequestBytes(16), `peak ${stats.peakBytes} within the limit and one refused 16 MiB request`);
     assert.equal(await hold.close(), 0);
+  });
+
+  it("counts a refused request in the job's peak, while the memory in use stays under the limit", T, async (t) => {
+    const hold = startHold(512);
+    const { job } = await hold.next((event) => event.event === "ready");
+    const run = fenced(job, EATER, ["ask", "64", "480"]);
+    try {
+      const answer = await new Promise((resolve) => run.child.stdout.on("data", (chunk) => {
+        const match = /asked (\w+)/.exec(chunk.toString());
+        if (match) resolve(match[1]);
+      }));
+      assert.equal(answer, "refused");
+      // The job, not the computer, refused it: Windows sent the job's memory-limit message.
+      const denied = await hold.next((event) => event.event === "memory-denied");
+      assert.ok(denied.jobBytes < 128 * MIB, `in use ${denied.jobBytes} when refused`);
+      hold.send("stats");
+      const stats = await hold.next((event) => event.event === "stats");
+      const counted = stats.peakBytes - stats.jobBytes;
+      t.diagnostic(`in use ${stats.jobBytes}, peak ${stats.peakBytes}: the refused 480 MiB request counted ${counted}`);
+      assert.ok(stats.jobBytes < 128 * MIB, `in use ${stats.jobBytes}`);
+      assert.ok(counted >= 480 * MIB && counted <= refusedRequestBytes(480) + 64 * 1024, `counted ${counted}`);
+      assert.equal(hold.events.some((event) => event.event === "memory-stop"), false, "nothing was stopped");
+    } finally {
+      stopAll(run.child);
+      await hold.close();
+    }
   });
 
   it("stops a child of the engine before the engine itself", T, async () => {
@@ -155,8 +186,11 @@ describe("seira-job-fence", { skip }, () => {
       hold.send("stats");
       const stats = await hold.next((event) => event.event === "stats");
       t.diagnostic(`stats ${JSON.stringify(stats)}; stops ${JSON.stringify(hold.events.filter((event) => event.event === "memory-stop"))}`);
-      assert.ok(stats.peakBytes <= 256 * MIB, `peak ${stats.peakBytes} within the limit`);
-      assert.equal(hold.events.filter((event) => event.event === "memory-stop").length, 2);
+      const stops = hold.events.filter((event) => event.event === "memory-stop");
+      assert.ok(stops.every((stop) => stop.jobBytes <= 256 * MIB), "in use within the limit at each stop");
+      // Only one program asks at a time: the first one holds its 160 MiB before the second starts.
+      assert.ok(stats.peakBytes <= 256 * MIB + refusedRequestBytes(16), `peak ${stats.peakBytes} within the limit and one refused 16 MiB request`);
+      assert.equal(stops.length, 2);
     } finally {
       stopAll(first.child, second.child);
       await hold.close();
