@@ -35,7 +35,7 @@ ends without a "finished" one.
 
 The Chief's report turn, and its review of work it hands on from one, uses
 the Chief's computer as any turn does, but does not need it: when that
-computer cannot be had — no Boat key, the team's computer missing, its
+computer cannot be had — no VPS set up, the team's computer missing, its
 settings mid-change — the turn runs without one and the Chief is told why,
 instead of the report being refused.
 

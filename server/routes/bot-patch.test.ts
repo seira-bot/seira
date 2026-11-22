@@ -159,6 +159,16 @@ describe("PATCH /api/bots/:id vpsAlias relocation guard", () => {
     expect(store.bot(bot.id)?.vpsAlias).toBeUndefined();
   });
 
+  it("makes Cloud the person's own VPS whichever client chose it, and leaves other places alone", async () => {
+    const { bot, store, patch } = fixture();
+    expect((await patch(bot.id, { computer: "cloud" })).status).toBe(200);
+    expect([store.bot(bot.id)?.computer, store.bot(bot.id)?.cloudBackend]).toEqual(["cloud", "vps"]);
+    expect((await patch(bot.id, { computer: "cloud", cloudBackend: "box" })).status).toBe(200);
+    expect(store.bot(bot.id)?.cloudBackend).toBe("vps");
+    expect((await patch(bot.id, { computer: "off" })).status).toBe(200);
+    expect(store.bot(bot.id)?.computer).toBe("off");
+  });
+
   it("still refuses the move while the bot's computer lives on the old server", async () => {
     const { bot, patch } = fixture();
     scan.mockResolvedValue({

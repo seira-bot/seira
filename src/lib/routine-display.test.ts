@@ -9,9 +9,6 @@ describe("where a routine runs", () => {
     expect(routineRunsOn({ roomGoal: false, cloudHome: true })).toEqual({
       label: "The Cloud", hint: "Runs on schedule, even when your computer is off.",
     });
-    expect(routineRunsOn({ roomGoal: false, runOn: "cloud", cloudHome: true })).toEqual({
-      label: "Cloud desktop", hint: "Runs the whole job on the bot's cloud desktop, even when your computer is off.",
-    });
     expect(routineRunsOn({ roomGoal: false, computer: "cloud", cloudHome: true })).toEqual({
       label: "The bot's cloud desktop", hint: "Runs on schedule, even when your computer is off.",
     });
@@ -24,9 +21,6 @@ describe("where a routine runs", () => {
   it("on a desktop, a routine starts while Seira is open there", () => {
     expect(routineRunsOn({ roomGoal: false, cloudHome: false })).toEqual({
       label: "This computer", hint: "Starts while Seira is open here.",
-    });
-    expect(routineRunsOn({ roomGoal: false, runOn: "cloud", cloudHome: false })).toEqual({
-      label: "Cloud desktop", hint: "Runs the whole job on the bot's cloud desktop while Seira is open.",
     });
     expect(routineRunsOn({ roomGoal: false, computer: "vm", cloudHome: false }).label).toBe("The bot's private desktop");
     expect(routineRunsOn({ roomGoal: true, cloudHome: false }).label).toBe("This computer, with the whole group");

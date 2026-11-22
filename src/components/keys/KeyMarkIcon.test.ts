@@ -9,7 +9,7 @@ const icon = (entry: KeyEntry) => renderToStaticMarkup(createElement(KeyMarkIcon
 
 describe("the mark on a key row", () => {
   it.each<[KeyId, string]>([
-    ["composio", "composio"], ["elevenlabs", "elevenlabs"], ["geminiTts", "gemini"], ["fishAudio", "fishAudio"], ["box", "boat"],
+    ["composio", "composio"], ["elevenlabs", "elevenlabs"], ["geminiTts", "gemini"], ["fishAudio", "fishAudio"],
     ["onePassword", "onePassword"], ["lmStudio", "lmStudio"], ["liveCalls", "openai"], ["liveKey", "openai"],
   ])("shows the %s row with the %s logo", (id, brand) => {
     const html = icon(keyEntry(id));

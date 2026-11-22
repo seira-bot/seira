@@ -1901,7 +1901,7 @@ async function cloudComputerHolders(botId: string): Promise<string[]> {
   }
 }
 function boatNotConfigured(bot: { name: string }, source: PlaceSource): PlaceUnavailableError {
-  return placeUnavailable("cloud", { state: CLOUD_HOME ? "cc-unavailable" : "cc-needs-key", params: { bot: bot.name }, source }, Boolean(CLOUD_HOME));
+  return placeUnavailable("cloud", { state: CLOUD_HOME ? "cc-unavailable" : "cc-not-set-up", params: { bot: bot.name }, source }, Boolean(CLOUD_HOME));
 }
 const directTurnDispatchClaims = new Map<string, DirectTurnDispatchClaim>();
 const directTurnGenerationByThread = new Map<string, string>();
@@ -7916,7 +7916,7 @@ async function beginTurn(
       const handoffMayUseCloud = !computerSkipped && plan.computer === undefined && isHandedWork(opts?.coordination ? coordinator.node(opts.coordination.id) : undefined) && !teamComputer && cloudBackend === "box" && boat.boatConfigured(cfg)
         && canWorkOnCloud(cloudEngine(instance)) && !computerPlaceRefusal("box") && !cloudPlaceRefusal(cloudEngine(instance, bot.modelSelection.model), "works-on", bot.name) && !computerToolsRefusal(toolScope, "works-on", bot.name);
       const ownCloud = handoffMayUseCloud ? await ownCloudStateWithin(boat.boatStatus(cfg, bot.id)) : undefined, handoffOwnCloud = handoffUsesOwnCloud({ plan, handoffWork: Boolean(ownCloud), ownCloudState: ownCloud?.state });
-      let wants: ComputerWant = computerSkipped ? "off" : handoffOwnCloud ? "cloud" : plan.computer; const withoutCloud = cloudPickWithoutComputer({ wants, backend: cloudBackend, boatConfigured: boat.boatConfigured(cfg), teamComputer: Boolean(teamComputer), routine: opts?.runOn === "cloud", cloudHome: Boolean(CLOUD_HOME) }); if (withoutCloud) { wants = "off"; if (computerSelectionTurns.get(threadId)?.generation === dispatchClaimId) computerSelectionTurns.delete(threadId); }
+      let wants: ComputerWant = computerSkipped ? "off" : handoffOwnCloud ? "cloud" : plan.computer; const withoutCloud = cloudPickWithoutComputer({ wants, backend: cloudBackend, boatConfigured: boat.boatConfigured(cfg), vpsConfigured: vpsSshAliasForBot(cfg, bot) !== null, teamComputer: Boolean(teamComputer), routine: opts?.runOn === "cloud", cloudHome: Boolean(CLOUD_HOME) }); if (withoutCloud) { wants = "off"; if (computerSelectionTurns.get(threadId)?.generation === dispatchClaimId) computerSelectionTurns.delete(threadId); }
       const skipComputer = (error: unknown) => {
         if (!answer.incident || error instanceof DirectTurnSetupCancelled || error instanceof ComputerWaitParked) throw error;
         computerSkipped ??= error instanceof Error ? error.message : String(error);
@@ -9903,7 +9903,7 @@ async function runClaimedGroupMemberTurn(
       readyBot.browser !== false &&
       instance.adapter.capabilities.browserMcp === true,
   });
-  const roomWithoutCloud = cloudPickWithoutComputer({ wants: roomPlan.computer, backend: turnProvider(readyBot) === "vps" ? "vps" : "box", boatConfigured: boat.boatConfigured(cfg), teamComputer: Boolean(roomTeamComputer), routine: false, cloudHome: Boolean(CLOUD_HOME) });
+  const roomWithoutCloud = cloudPickWithoutComputer({ wants: roomPlan.computer, backend: turnProvider(readyBot) === "vps" ? "vps" : "box", boatConfigured: boat.boatConfigured(cfg), vpsConfigured: vpsSshAliasForBot(cfg, readyBot) !== null, teamComputer: Boolean(roomTeamComputer), routine: false, cloudHome: Boolean(CLOUD_HOME) });
   const roomKind = roomTeamComputer ? "box" : roomPlan.computer === "local" ? "thisComputer" : readyBot.computer === "vm" ? "localVm"
     : roomPlan.computer === "cloud" ? (turnProvider(readyBot) === "vps" ? "vps" : "box") : undefined;
   const roomPlaceRefusal = roomKind && !roomWithoutCloud && computerPlaceRefusal(roomKind);

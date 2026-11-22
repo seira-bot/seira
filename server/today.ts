@@ -55,7 +55,7 @@ export interface TodaySources {
 
 /** Place failures a person fixes by changing a setting or plan; the rest pass or retry by themselves. */
 const OWNER_PLACES: ReadonlySet<PlaceState> = new Set([
-  "cc-cannot", "cc-tools-off", "cc-sign-in", "cc-no-hours", "cc-at-once", "cc-ended", "cc-on-my-cloud", "cc-needs-key",
+  "cc-cannot", "cc-tools-off", "cc-sign-in", "cc-no-hours", "cc-at-once", "cc-ended", "cc-on-my-cloud",
   "browser-off", "browser-cannot", "vm-cannot",
 ]);
 /** A connected app refusing for want of a working sign-in, as Composio and the apps behind it word it. */

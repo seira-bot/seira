@@ -26,7 +26,7 @@ const { setLocale } = await import("@/lib/i18n");
 
 const ROOT = new URL("../..", import.meta.url);
 const ACCOUNT_ID = "0123456789abcdef0123456789abcdef";
-const PREFIX: Record<string, string> = { box: "boat_", composio: "ak_", elevenlabs: "sk_" };
+const PREFIX: Record<string, string> = { composio: "ak_", elevenlabs: "sk_" };
 const EXTRA_PATCH: Record<string, (key: string) => Record<string, unknown>> = {
   workersAi: (key) => ({ decider: { workersAiToken: key, workersAiAccountId: ACCOUNT_ID } }),
   imageCustom: (key) => ({ imageGen: { customApiKey: key } }),
@@ -137,7 +137,7 @@ it("saves every kind of credential, reads it back and shows it masked to its las
   setLocale("en");
   expect(saveds.map((entry) => entry.id)).toEqual([
     "openai", "anthropic", "xai", "openrouter", "mistral", "cerebras", "groq", "greenference", "modelgo", "meta", "deepseek", "opencodeGo", "openaiCompat",
-    "liveKey", "elevenlabs", "geminiTts", "fishAudio", "box", "composio", "treg", "jev", "openrouterHelper", "workersAi", "imageOpenai", "imageCustom",
+    "liveKey", "elevenlabs", "geminiTts", "fishAudio", "composio", "treg", "jev", "openrouterHelper", "workersAi", "imageOpenai", "imageCustom",
   ]);
   for (const storage of ["", "?secretStorage=external"]) {
     for (const entry of saveds) {

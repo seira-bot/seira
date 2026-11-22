@@ -10,9 +10,9 @@ function asked() {
 }
 
 it("opens the keys page at a key's own row", () => {
-  expect(openKeySettings("box")).toEqual({ type: "toggleAppSettings", open: true, section: "connections" });
+  expect(openKeySettings("composio")).toEqual({ type: "toggleAppSettings", open: true, section: "connections" });
   const request = asked();
-  expect(request).toMatchObject({ id: "box", row: "box" });
+  expect(request).toMatchObject({ id: "composio", row: "composio" });
   finishKeyFocus(request!);
   expect(asked()).toBeNull();
 });

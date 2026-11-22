@@ -631,15 +631,22 @@ describe("a vm_exec command that names this computer's own paths", () => {
 });
 
 describe("a Cloud pick with no cloud computer behind it", () => {
-  const base = { wants: "cloud", backend: "box", boatConfigured: false, teamComputer: false, routine: false, cloudHome: false } as const;
+  const base = { wants: "cloud", backend: "box", boatConfigured: false, vpsConfigured: false, teamComputer: false, routine: false, cloudHome: false } as const;
 
   it("goes on without a computer", () => {
     expect(cloudPickWithoutComputer(base)).toBe(true);
   });
 
+  it("goes on without a computer on a VPS backend with no VPS set up, and not once there is one", () => {
+    expect(cloudPickWithoutComputer({ ...base, backend: "vps" })).toBe(true);
+    expect(cloudPickWithoutComputer({ ...base, backend: "vps", boatConfigured: true })).toBe(true);
+    expect(cloudPickWithoutComputer({ ...base, backend: "vps", vpsConfigured: true })).toBe(false);
+  });
+
   it("leaves every other case to its own rule", () => {
     expect(cloudPickWithoutComputer({ ...base, boatConfigured: true })).toBe(false);
-    expect(cloudPickWithoutComputer({ ...base, backend: "vps" })).toBe(false);
+    expect(cloudPickWithoutComputer({ ...base, backend: "vps", vpsConfigured: true })).toBe(false);
+    expect(cloudPickWithoutComputer({ ...base, vpsConfigured: true })).toBe(true);
     expect(cloudPickWithoutComputer({ ...base, teamComputer: true })).toBe(false);
     expect(cloudPickWithoutComputer({ ...base, routine: true })).toBe(false);
     expect(cloudPickWithoutComputer({ ...base, cloudHome: true })).toBe(false);
