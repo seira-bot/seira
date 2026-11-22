@@ -94,7 +94,7 @@ function playDevice(request: VoicePreviewRequest, mine: number): void {
   const spoken = new SpeechSynthesisUtterance(request.text);
   const chosen = resolveLocalSystemVoice(request.voice);
   if (chosen) spoken.voice = chosen;
-  spoken.rate = roundCallSpeed(callSpeedFor(request.speed, callVoiceCapability({ mode: "turns", provider: "device" }).speed));
+  spoken.rate = callSpeedFor(request.speed, callVoiceCapability({ mode: "turns", provider: "device" }).speed);
   const language = callLanguage(request.language);
   if (language) spoken.lang = language.code;
   const done = () => {

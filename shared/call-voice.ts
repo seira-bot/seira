@@ -153,7 +153,7 @@ export interface CallVoicePreviewRequest {
   speed?: number;
 }
 
-/** `callSpeedFor` multiplies a step count by 0.05, which leaves float noise (1.1500000000000001); this trims it to two decimals. */
+/** A slider value trimmed to two decimals, so 1.1500000000000001 is saved as 1.15. */
 export function roundCallSpeed(value: number): number {
   return Math.round(value * 100) / 100;
 }

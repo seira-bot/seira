@@ -211,12 +211,13 @@ export async function synthesize(
   return { bytes: new Uint8Array(await res.arrayBuffer()), mime: "audio/mpeg" };
 }
 
-export async function transcribe(audio: Uint8Array, mime: string, key: string): Promise<string> {
+export async function transcribe(audio: Uint8Array, mime: string, key: string, language?: string): Promise<string> {
   const form = new FormData();
   form.append("audio", new Blob([audio as Uint8Array<ArrayBuffer>], { type: mime }), "speech.wav");
   form.append("ignore_timestamps", "true");
   form.append("diarize", "false");
   form.append("tag_audio_events", "false");
+  if (language) form.append("language", language);
   let res: Response;
   try {
     res = await fetch(`${API}/v1/asr`, {

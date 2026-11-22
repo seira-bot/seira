@@ -5,7 +5,7 @@ import { recordBlockTiming, recordPrepared, recordSpeakEnter } from "../voice-la
 import { t, tFromServer } from "@/lib/i18n";
 import { serverErrorText } from "@/lib/server-error";
 import type { ServerErrorBody } from "../../../shared/server-text";
-import { callLanguage, callSpeedFor, callVoiceCapability, roundCallSpeed, type TurnsVoiceProvider } from "../../../shared/call-voice";
+import { callLanguage, callSpeedFor, callVoiceCapability, type TurnsVoiceProvider } from "../../../shared/call-voice";
 
 export type SpeechStatus = "idle" | "preparing" | "speaking";
 
@@ -36,13 +36,13 @@ export function callRequestFields(call: CallSpeech | undefined): { speed?: numbe
   const capability = callVoiceCapability({ mode: "turns", provider: call.provider });
   if (capability.speed.kind !== "native") return {};
   const language = capability.language === "native" ? callLanguage(call.language) : undefined;
-  return { speed: roundCallSpeed(callSpeedFor(call.speed, capability.speed)), ...(language ? { language: language.code } : {}) };
+  return { speed: callSpeedFor(call.speed, capability.speed), ...(language ? { language: language.code } : {}) };
 }
 
 export function callPlaybackRate(call: CallSpeech | undefined): number | undefined {
   if (!call || call.provider === "device") return undefined;
   const { speed } = callVoiceCapability({ mode: "turns", provider: call.provider });
-  return speed.kind === "playback" ? roundCallSpeed(callSpeedFor(call.speed, speed)) : undefined;
+  return speed.kind === "playback" ? callSpeedFor(call.speed, speed) : undefined;
 }
 
 /** One spoken reply, fed block by block: blocks come from the committed
@@ -344,7 +344,7 @@ export class Speaker {
     const selected = resolveLocalSystemVoice(remoteSystemVoice(opts.botId));
     if (selected) utterance.voice = selected;
     if (opts.call) {
-      utterance.rate = roundCallSpeed(callSpeedFor(opts.call.speed, callVoiceCapability({ mode: "turns", provider: "device" }).speed));
+      utterance.rate = callSpeedFor(opts.call.speed, callVoiceCapability({ mode: "turns", provider: "device" }).speed);
       const language = callLanguage(opts.call.language);
       if (language) utterance.lang = language.code;
     }

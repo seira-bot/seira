@@ -59,7 +59,7 @@ function noSpeedReason(reason: "own-pace" | "custom-server" | "codex"): string {
 }
 
 function SpeedRow({ speed, saved, onSave }: { speed: CallSpeedSupport; saved: number | undefined; onSave: (value: number) => void }) {
-  const current = speed.kind === "none" ? CALL_SPEED_DEFAULT : roundCallSpeed(callSpeedFor(saved, speed));
+  const current = speed.kind === "none" ? CALL_SPEED_DEFAULT : callSpeedFor(saved, speed);
   const [draft, setDraft] = useState(current);
   useEffect(() => setDraft(current), [current]);
   const commit = () => {
