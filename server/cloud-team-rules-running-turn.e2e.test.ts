@@ -22,7 +22,7 @@ const WAIT = { name: "Read", input: { file_path: "notes.txt" }, hold: true, outp
 const ORDERS = { name: "lookup_order", server: "orders", input: {} };
 const GMAIL = { name: "COMPOSIO_MULTI_EXECUTE_TOOL", server: "composio", input: { tools: [{ tool_slug: "GMAIL_FETCH_EMAILS", arguments: { max_results: 1 } }] } };
 
-let adminServer: Server, relay: Server, gateway: FakeHttpMcp, broker: BrokerFake, fx: CloudSendFixture, team: CloudTeamFixture;
+let adminServer: Server, gateway: FakeHttpMcp, broker: BrokerFake, fx: CloudSendFixture, team: CloudTeamFixture;
 let owner = "", botId = "", teamUser = "";
 let answer: unknown = { policy: null }, version = 0;
 const reports: { loaded: { fingerprint: string } | null }[] = [];
@@ -90,13 +90,10 @@ beforeAll(async () => {
     });
   });
   await new Promise<void>((resolve) => adminServer.listen(0, "127.0.0.1", resolve));
-  relay = createServer((_req, res) => { res.writeHead(404, { "content-type": "application/json" }); res.end("{}"); });
-  await new Promise<void>((resolve) => relay.listen(0, "127.0.0.1", resolve));
   gateway = await startFakeHttpMcp({ tools: [{ name: "lookup_order", inputSchema: { type: "object", properties: {} } }], callResult: () => ({ content: [{ type: "text", text: "order 7 shipped" }] }) });
   broker = await startBrokerFake();
   fx = await launchCloudSendFixture({ onePasswordToken: "ops_fake-running-turn", broker, team: { id: "team-acme-1", name: "Acme", engine: ENGINE, env: {
     SEIRA_BOT_BOX: "0", FIXTURE_ADMIN_STAND_IN: `http://127.0.0.1:${(adminServer.address() as AddressInfo).port}`,
-    SEIRA_CLOUD_BOAT_URL: `http://127.0.0.1:${(relay.address() as AddressInfo).port}/relay/api/box/v1`, SEIRA_CLOUD_BOAT_TOKEN: "box_seira_running",
   } } });
   team = fx.team!;
   writeFileSync(join(team.home, "reply.txt"), FINISHED);
@@ -114,7 +111,6 @@ afterAll(async () => {
   await gateway?.close();
   await broker?.close();
   await new Promise((resolve) => adminServer?.close(resolve));
-  await new Promise((resolve) => relay?.close(resolve));
 });
 
 it("keeps its engine and the MCP servers it began with, and finishes, though the engine and the server are now blocked", async () => {
@@ -173,17 +169,4 @@ it("a connected-app tool is refused from the moment the rule lands, mid-turn, an
   expect(Object.keys(launched.mcpConfig?.mcpServers ?? {})).toContain("composio");
   expect(callsBy()).toBe(before + 1);
   expect(words).toMatch(/Acme does not allow bots to use Gmail\. Ask a team admin\./);
-}, hostTimeout(120_000));
-
-it("a computer it has not claimed yet is refused from the moment the rule lands: the turn stops there, in the rule's words", async () => {
-  const refusal = "Acme does not allow bots to use cloud computers. Ask a team admin.";
-  expect((await team.as(owner, "PATCH", `/api/bots/${botId}`, { computer: "cloud" })).status).toBe(200);
-  try {
-    const { launched, words } = await ruleLandsMidTurn({ allowedComputers: ["vps"] }, [WAIT, { name: "screenshot", server: "computer", input: {} }], "uses a computer", { ended: refusal });
-    expect(Object.keys(launched.mcpConfig?.mcpServers ?? {})).toContain("computer");
-    expect(words).not.toMatch(/didn't start/);
-    expect(words).not.toContain(FINISHED);
-  } finally {
-    expect((await team.as(owner, "PATCH", `/api/bots/${botId}`, { computer: null })).status).toBe(200);
-  }
 }, hostTimeout(120_000));

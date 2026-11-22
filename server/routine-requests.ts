@@ -1,4 +1,5 @@
 import { instructionsUpdateRefusal } from "./automation-instructions.ts";
+import { placeLostAs } from "./place-lost.ts";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { ROUTINE_RUN_LIMIT_MINUTES } from "../shared/routines.ts";
@@ -1421,7 +1422,7 @@ export class RoutineRequestService {
       case "pause":
       case "resume": {
         verifyManageSnapshot(operation, this.routines, operation.forBot?.botId ?? payload.botId);
-        const updated = this.routines.update(operation.routineId, { enabled: operation.action === "resume" }, {
+        const updated = placeLostAs(RoutineRequestError, () => this.routines.update(operation.routineId, { enabled: operation.action === "resume" }, {
           requestId: payload.requestId,
           messageId,
           botId: payload.botId,
@@ -1429,21 +1430,16 @@ export class RoutineRequestService {
           action: operation.action,
           fingerprintVersion: ROUTINE_REQUEST_FINGERPRINT_VERSION,
           fingerprint,
-        });
+        }));
         if (!updated) throw new RoutineRequestError("That routine no longer exists", 404);
         return updated.id;
       }
       case "run_now": {
         verifyManageSnapshot(operation, this.routines, operation.forBot?.botId ?? payload.botId);
-        const run = this.routines.runNow(operation.routineId, {
-          requestId: payload.requestId,
-          messageId,
-          botId: payload.botId,
-          threadId: payload.threadId,
-          action: "run_now",
-          fingerprintVersion: ROUTINE_REQUEST_FINGERPRINT_VERSION,
-          fingerprint,
-        });
+        const run = placeLostAs(RoutineRequestError, () => this.routines.runNow(operation.routineId, {
+          requestId: payload.requestId, messageId, botId: payload.botId, threadId: payload.threadId, action: "run_now",
+          fingerprintVersion: ROUTINE_REQUEST_FINGERPRINT_VERSION, fingerprint,
+        }));
         if (!run) throw new RoutineRequestError("That routine no longer exists", 404);
         return run.id;
       }

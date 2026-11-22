@@ -28,7 +28,7 @@ import { STARTER_CHARACTERS, STARTER_COLORS } from "./bot-look.ts";
 import { createTeamManifest } from "./team-manifest.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 import { FILE_MAX_BYTES, IMAGE_MAX_BYTES } from "./attachments.ts";
-import { computerPrompt, SIGN_IN_PROMPT } from "./system-prompt.ts";
+import { SIGN_IN_PROMPT } from "./system-prompt.ts";
 import {
   PHONE_SECRET_INFO,
   phoneSecretAAD,
@@ -3385,49 +3385,6 @@ describe("harness HTTP API", () => {
     if (target === "profile") expect((await api("DELETE", `/api/bots/${bot.id}`)).status).toBe(200);
   });
 
-  it("clears an explicit computer to Auto and refuses passive Auto Boat provisioning", async () => {
-    let botId: string | undefined;
-    try {
-      expect((await api("PUT", "/api/config", { box: { token: "box_route" } })).status).toBe(200);
-      const bot = (await api("POST", "/api/bots")).body.bot;
-      botId = bot.id;
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud" })).body.bot.computer).toBe("cloud");
-
-      const auto = await api("PATCH", `/api/bots/${bot.id}`, { computer: null });
-      expect(auto.status).toBe(200);
-      expect(auto.body.bot).not.toHaveProperty("computer");
-      const malformed = await api("PATCH", `/api/bots/${bot.id}`, { computer: ["cloud"] });
-      expect(malformed.status).toBe(400);
-      expect(malformed.body.error).toMatch(/computer must be null/);
-      expect((await api("GET", "/api/bots?messages=0")).body.bots.find(
-        (candidate: { id: string }) => candidate.id === bot.id,
-      )).not.toHaveProperty("computer");
-
-      boatRouteCalls.length = 0;
-      const passiveStatus = await api("GET", `/api/bots/${bot.id}/computer`);
-      expect(passiveStatus).toMatchObject({ status: 200, body: { backend: "box", configured: true } });
-      expect(boatRouteCalls).toEqual([{ method: "GET", path: "/sandboxes?limit=200" }]);
-
-      const before = [...boatRouteCalls];
-      for (const action of ["provision", "join", "sleep", "exec", "screenshot", "remove"]) {
-        const blocked = await api("POST", `/api/bots/${bot.id}/computer/${action}`, {});
-        expect(blocked.status, action).toBe(409);
-        expect(blocked.body.error, action).toMatch(/Choose Cloud/);
-      }
-      expect(boatRouteCalls).toEqual(before);
-
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud" })).status).toBe(200);
-      const provisioned = await api("POST", `/api/bots/${bot.id}/computer/provision`, {});
-      expect(provisioned.status).toBe(500);
-      expect(provisioned.body.error).toMatch(/fixture refused create/);
-      expect(boatRouteCalls).toContainEqual({ method: "POST", path: "/sandboxes" });
-    } finally {
-      if (botId) await api("DELETE", `/api/bots/${botId}`);
-      await api("PUT", "/api/config", { box: { token: "" } });
-      boatRouteCalls.length = 0;
-    }
-  });
-
   it("refuses a room Works-on Local VM turn for an engine without computer tools", async () => {
     let roomId: string | undefined;
     let botId: string | undefined;
@@ -4199,284 +4156,6 @@ describe("harness HTTP API", () => {
     expectStoppedTestServerCleanly(isolatedChild, isolatedStderr);
   }, 75_000);
 
-  it("blocks bot-scoped Boat lifecycle changes after a direct turn claims the bot", async () => {
-    let botId = "";
-    try {
-      expect((await api("PUT", "/api/config", { box: { token: "box_route" } })).status).toBe(200);
-      const bot = (await api("POST", "/api/bots")).body.bot;
-      botId = bot.id;
-      expect((await api("PATCH", `/api/bots/${bot.id}`, {
-        computer: "off",
-        cloudBackend: "box",
-        modelSelection: { instanceId: "claude", model: "claude-sonnet-5" },
-      })).status).toBe(200);
-
-      rmSync(fakeClaudeDump, { force: true });
-      expect((await api("POST", `/api/bots/${bot.id}/messages`, { text: "hold the direct turn" })).status).toBe(202);
-      await readJsonFileWhenReady(fakeClaudeDump);
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud" })).status).toBe(200);
-      managedBoatRows = [{
-        id: "bx_3456789a",
-        name: managedBoatNameForFixture(bot.id),
-        state: "idle",
-      }];
-
-      boatRouteCalls.length = 0;
-      for (const action of ["provision", "sleep"]) {
-        const blocked = await api("POST", `/api/bots/${bot.id}/computer/${action}`, {});
-        expect(blocked.status, action).toBe(409);
-        expect(blocked.body.error, action).toMatch(/active turn.*interrupt/i);
-      }
-      expect(boatRouteCalls).toEqual([]);
-
-      const joined = await api("POST", `/api/bots/${bot.id}/computer/join`, {});
-      expect(joined).toMatchObject({
-        status: 200,
-        body: { joinUrl: "https://desktop.invalid/bx_3456789a", state: "idle" },
-      });
-      expect(boatRouteCalls.some((call) => call.path.endsWith("/resume"))).toBe(false);
-      expect(boatRouteCalls.some((call) => call.path.endsWith("/commands"))).toBe(false);
-
-      managedBoatRows = managedBoatRows.map((row) => ({ ...row, state: "archived" }));
-      boatRouteCalls.length = 0;
-      const sleepingJoin = await api("POST", `/api/bots/${bot.id}/computer/join`, {});
-      expect(sleepingJoin.status).toBe(409);
-      expect(sleepingJoin.body.error).toMatch(/sleeping or starting.*interrupt/i);
-      expect(boatRouteCalls.some((call) => call.path.endsWith("/resume"))).toBe(false);
-      expect(boatRouteCalls.some((call) => call.path.includes("/desktop"))).toBe(false);
-
-      expect((await api("POST", `/api/bots/${bot.id}/interrupt`, { threadId: bot.threadId })).status).toBe(200);
-      await expect.poll(async () => {
-        const current = (await api("GET", "/api/bots?messages=0")).body.bots.find(
-          (candidate: { id: string }) => candidate.id === bot.id,
-        );
-        return current?.busy;
-      }, { timeout: 5_000 }).toBe(false);
-    } finally {
-      if (botId) await api("POST", `/api/bots/${botId}/interrupt`, {}).catch(() => undefined);
-      managedBoatRows = [];
-      if (botId) await api("DELETE", `/api/bots/${botId}`).catch(() => undefined);
-      await api("PUT", "/api/config", { box: { token: "" } });
-      boatRouteCalls.length = 0;
-      rmSync(fakeClaudeDump, { force: true });
-    }
-  });
-
-  it("blocks bot-scoped Boat lifecycle changes while the bot owns a room turn", async () => {
-    let botId = "";
-    let roomId = "";
-    try {
-      expect((await api("PUT", "/api/config", { box: { token: "box_route" } })).status).toBe(200);
-      const bot = (await api("POST", "/api/bots")).body.bot;
-      botId = bot.id;
-      expect((await api("PATCH", `/api/bots/${bot.id}`, {
-        computer: "off",
-        cloudBackend: "box",
-        modelSelection: { instanceId: "claude", model: "claude-sonnet-5" },
-      })).status).toBe(200);
-      const room = (await api("POST", "/api/groups", {
-        name: "Boat lifecycle race",
-        memberIds: [bot.id],
-      })).body.group;
-      roomId = room.id;
-      expect((await api("PATCH", `/api/groups/${room.id}/setup`, { action: "skip" })).status).toBe(200);
-
-      rmSync(fakeClaudeDump, { force: true });
-      expect((await api("POST", `/api/groups/${room.id}/messages`, { text: "hold the room turn" })).status).toBe(202);
-      await readJsonFileWhenReady(fakeClaudeDump);
-      await expect.poll(async () => {
-        const group = (await api("GET", "/api/bots?messages=0")).body.groups.find(
-          (candidate: { id: string }) => candidate.id === room.id,
-        );
-        return group?.busyBotId;
-      }, { timeout: 5_000 }).toBe(bot.id);
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud" })).status).toBe(200);
-
-      boatRouteCalls.length = 0;
-      for (const action of ["provision", "sleep"]) {
-        const blocked = await api("POST", `/api/bots/${bot.id}/computer/${action}`, {});
-        expect(blocked.status, action).toBe(409);
-        expect(blocked.body.error, action).toMatch(/active turn.*interrupt/i);
-      }
-      expect(boatRouteCalls).toEqual([]);
-
-      expect((await api("POST", `/api/groups/${room.id}/interrupt`, {})).status).toBe(200);
-      await expect.poll(async () => {
-        const state = (await api("GET", "/api/bots?messages=0")).body;
-        return {
-          botBusy: state.bots.find((candidate: { id: string }) => candidate.id === bot.id)?.busy,
-          roomBusyBotId: state.groups.find((candidate: { id: string }) => candidate.id === room.id)?.busyBotId,
-        };
-      }, { timeout: 5_000 }).toEqual({ botBusy: false, roomBusyBotId: null });
-    } finally {
-      if (roomId) await api("POST", `/api/groups/${roomId}/interrupt`, {}).catch(() => undefined);
-      managedBoatRows = [];
-      if (roomId) await api("DELETE", `/api/groups/${roomId}`).catch(() => undefined);
-      if (botId) await api("DELETE", `/api/bots/${botId}`).catch(() => undefined);
-      await api("PUT", "/api/config", { box: { token: "" } });
-      boatRouteCalls.length = 0;
-      rmSync(fakeClaudeDump, { force: true });
-    }
-  });
-
-  it("lists sanitized cloud computers and requires explicit safe lifecycle actions", async () => {
-    let botId = "";
-    try {
-      expect((await api("PUT", "/api/config", { box: { token: "box_route" } })).status).toBe(200);
-      const bot = (await api("POST", "/api/bots")).body.bot;
-      botId = bot.id;
-      const managedName = managedBoatNameForFixture(bot.id);
-      const orphanName = managedBoatNameForFixture("deleted-orphan-bot");
-      managedBoatRows = [
-        {
-          id: "bx_23456789",
-          name: managedName,
-          state: "idle",
-          desktopUrl: "https://desktop.invalid/?token=provider-secret",
-          ip: "203.0.113.9",
-        },
-        { id: "bx_abcdefgh", name: orphanName, state: "idle", desktopUrl: "secret-orphan-url" },
-        { id: "bx_jkmnpqrs", name: "someone-elses-box", state: "idle", desktopUrl: "secret-foreign-url" },
-      ];
-
-      const listed = await fetch(`${BASE}/api/computers/boxes`);
-      expect(listed.status).toBe(200);
-      expect(listed.headers.get("cache-control")).toBe("private, no-store");
-      const inventory = await listed.json() as any;
-      expect(inventory.instances).toEqual([
-        expect.objectContaining({
-          boxId: "bx_23456789",
-          name: managedName,
-          ownerBotId: bot.id,
-          ownerName: bot.name,
-          orphaned: false,
-          inUse: false,
-        }),
-        expect.objectContaining({
-          boxId: "bx_abcdefgh",
-          name: orphanName,
-          ownerBotId: null,
-          ownerName: null,
-          orphaned: true,
-        }),
-      ]);
-      expect(JSON.stringify(inventory)).not.toMatch(/provider-secret|secret-orphan-url|secret-foreign-url|desktopUrl|203\.0\.113\.9/);
-
-      expect((await api("POST", `/api/bots/${bot.id}/computer/control`, { action: "take" })).status).toBe(200);
-      const held = await api("GET", "/api/computers/boxes");
-      expect(held.body.instances.find((instance: { ownerBotId: string }) => instance.ownerBotId === bot.id).inUse).toBe(true);
-      expect((await api("POST", "/api/computers/boxes/bx_23456789/sleep", {})).status).toBe(409);
-      expect((await api("POST", "/api/computers/boxes/bx_23456789/delete", { confirmName: managedName })).status).toBe(409);
-      expect((await api("POST", `/api/bots/${bot.id}/computer/control`, { action: "release" })).status).toBe(200);
-
-      const noJson = await fetch(`${BASE}/api/computers/boxes/bx_23456789/sleep`, { method: "POST" });
-      expect(noJson.status).toBe(415);
-      const nullConfirmation = await fetch(`${BASE}/api/computers/boxes/bx_23456789/delete`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: "null",
-      });
-      expect(nullConfirmation.status).toBe(400);
-      boatRouteCalls.length = 0;
-      managedBoatStopDelayMs = 1_000;
-      const sleeping = api("POST", "/api/computers/boxes/bx_23456789/sleep", {});
-      await expect.poll(() => boatRouteCalls.some(
-        (call) => call.method === "POST" && call.path === "/sandboxes/bx_23456789/stop",
-      )).toBe(true);
-      const racedTurn = await api("POST", `/api/bots/${bot.id}/messages`, { text: "do not race deletion" });
-      expect(racedTurn.status).toBe(409);
-      expect(racedTurn.body.error).toMatch(/cloud computer is being changed/i);
-      expect((await api("POST", `/api/bots/${bot.id}/computer/provision`, {})).status).toBe(409);
-      expect((await api("POST", `/api/bots/${bot.id}/computer/control`, { action: "take" })).status).toBe(409);
-      expect((await api("DELETE", `/api/bots/${bot.id}`)).status).toBe(409);
-      expect((await sleeping).status).toBe(200);
-      managedBoatStopDelayMs = 0;
-      expect(boatRouteCalls).toContainEqual({ method: "POST", path: "/sandboxes/bx_23456789/stop" });
-
-      boatRouteCalls.length = 0;
-      managedBoatStopDelayMs = 1_000;
-      const orphanSleep = api("POST", "/api/computers/boxes/bx_abcdefgh/sleep", {});
-      await expect.poll(() => boatRouteCalls.some(
-        (call) => call.method === "POST" && call.path === "/sandboxes/bx_abcdefgh/stop",
-      )).toBe(true);
-      const racedOrphanDelete = await api("POST", "/api/computers/boxes/bx_abcdefgh/delete", {
-        confirmName: orphanName,
-      });
-      expect(racedOrphanDelete.status).toBe(409);
-      expect(racedOrphanDelete.body.error).toMatch(/cloud computer is being changed/i);
-      expect(managedBoatDeleteConfirmations.some(({ boxId }) => boxId === "bx_abcdefgh")).toBe(false);
-      expect((await orphanSleep).status).toBe(200);
-      managedBoatStopDelayMs = 0;
-
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud", cloudBackend: "box" })).status).toBe(200);
-      managedBoatRows = managedBoatRows.map((row) => row.id === "bx_23456789" ? { ...row, state: "idle" } : row);
-      managedBoatStopDelayMs = 1_000;
-      boatRouteCalls.length = 0;
-      const botScopedSleep = api("POST", `/api/bots/${bot.id}/computer/sleep`, {});
-      await expect.poll(() => boatRouteCalls.some(
-        (call) => call.method === "POST" && call.path === "/sandboxes/bx_23456789/stop",
-      )).toBe(true);
-      expect((await api("POST", "/api/computers/boxes/bx_23456789/delete", {
-        confirmName: managedName,
-      })).status).toBe(409);
-      expect((await botScopedSleep).status).toBe(200);
-      managedBoatStopDelayMs = 0;
-
-      const removed = await api("POST", "/api/computers/boxes/bx_23456789/delete", { confirmName: managedName });
-      expect(removed.status).toBe(202);
-      expect(managedBoatDeleteConfirmations).toContainEqual({
-        boxId: "bx_23456789",
-        confirmation: "bx_23456789",
-      });
-      expect(managedBoatRows.some((row) => row.id === "bx_23456789")).toBe(false);
-    } finally {
-      managedBoatListStatus = 200;
-      managedBoatListGate?.release();
-      managedBoatListGate = null;
-      managedBoatStopDelayMs = 0;
-      managedBoatRows = [];
-      managedBoatDeleteConfirmations.length = 0;
-      if (botId) await api("DELETE", `/api/bots/${botId}`).catch(() => undefined);
-      await api("PUT", "/api/config", { box: { token: "" } });
-      boatRouteCalls.length = 0;
-    }
-  });
-
-  it("resets only the bot's own stuck cloud computer from its Computer panel, never while it is in use", async () => {
-    let botId = "";
-    try {
-      expect((await api("PUT", "/api/config", { box: { token: "box_route" } })).status).toBe(200);
-      const bot = (await api("POST", "/api/bots")).body.bot;
-      botId = bot.id;
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud", cloudBackend: "box" })).status).toBe(200);
-      const managedName = managedBoatNameForFixture(bot.id);
-      const orphanName = managedBoatNameForFixture("deleted-orphan-bot");
-      managedBoatRows = [
-        { id: "bx_23456789", name: managedName, state: "starting" },
-        { id: "bx_abcdefgh", name: orphanName, state: "starting" },
-      ];
-
-      expect((await api("POST", `/api/bots/${bot.id}/computer/control`, { action: "take" })).status).toBe(200);
-      const inUse = await api("POST", `/api/bots/${bot.id}/computer/remove`, {});
-      expect(inUse.status).toBe(409);
-      expect(inUse.body.error).toMatch(/in use/i);
-      expect(managedBoatDeleteConfirmations).toEqual([]);
-      expect((await api("POST", `/api/bots/${bot.id}/computer/control`, { action: "release" })).status).toBe(200);
-
-      const reset = await api("POST", `/api/bots/${bot.id}/computer/remove`, {});
-      expect(reset).toMatchObject({ status: 202, body: { ok: true } });
-      expect(managedBoatDeleteConfirmations).toEqual([{ boxId: "bx_23456789", confirmation: "bx_23456789" }]);
-      expect(managedBoatRows.map((row) => row.id)).toEqual(["bx_abcdefgh"]);
-      expect(await api("POST", `/api/bots/${bot.id}/computer/remove`, {})).toMatchObject({ status: 202, body: { ok: true, missing: true } });
-    } finally {
-      managedBoatRows = [];
-      managedBoatDeleteConfirmations.length = 0;
-      if (botId) await api("DELETE", `/api/bots/${botId}`).catch(() => undefined);
-      await api("PUT", "/api/config", { box: { token: "" } });
-      boatRouteCalls.length = 0;
-    }
-  });
-
   it("deletes a bot-owned Boat automatically even after the bot changes destination", async () => {
     let botId = "";
     try {
@@ -4576,63 +4255,6 @@ describe("harness HTTP API", () => {
     }
   });
 
-  it("keeps the bot while an owned Boat deletion is pending and finishes on retry", async () => {
-    let botId = "";
-    try {
-      expect((await api("PUT", "/api/config", { box: { token: "box_route" } })).status).toBe(200);
-      const bot = (await api("POST", "/api/bots")).body.bot;
-      botId = bot.id;
-      const managedName = managedBoatNameForFixture(bot.id);
-      expect((await api("PATCH", `/api/bots/${bot.id}`, {
-        computer: "cloud",
-        cloudBackend: "box",
-      })).status).toBe(200);
-      managedBoatCreateMode = "success";
-      managedBoatCreateId = "bx_3456789a";
-      managedBoatCreateName = managedName;
-      expect((await api("POST", `/api/bots/${bot.id}/computer/provision`, {})).status).toBe(200);
-      managedBoatDeleteRemovesRow = false;
-      managedBoatDeletionStatuses = ["pending"];
-
-      const pending = await api("DELETE", `/api/bots/${bot.id}`);
-      expect(pending.status).toBe(409);
-      expect(pending.body.error).toMatch(/deletion has started.*bot was kept/i);
-      expect((await api("GET", "/api/bots?messages=0")).body.bots.some(
-        (candidate: { id: string }) => candidate.id === bot.id,
-      )).toBe(true);
-      expect(managedBoatDeleteConfirmations).toHaveLength(1);
-
-      managedBoatRejectedTokens.add("Bearer box_route");
-      managedBoatDeletionStatuses = ["completed"];
-      const tokenChange = await api("PUT", "/api/config", { box: { token: "box_route_rotated" } });
-      expect(tokenChange.status).toBe(200);
-      expect(managedBoatDeleteConfirmations).toHaveLength(1);
-
-      const completed = await api("DELETE", `/api/bots/${bot.id}`);
-      expect(completed).toMatchObject({ status: 200, body: { ok: true } });
-      expect(managedBoatDeleteConfirmations).toHaveLength(1);
-      expect((await api("GET", "/api/bots?messages=0")).body.bots.some(
-        (candidate: { id: string }) => candidate.id === bot.id,
-      )).toBe(false);
-      botId = "";
-    } finally {
-      managedBoatDeleteRemovesRow = true;
-      managedBoatCreateMode = "refuse";
-      managedBoatCreateId = "bx_cdefghjk";
-      managedBoatCreateName = "";
-      managedBoatCreatedIds.clear();
-      managedBoatDeletionStatuses = [];
-      managedBoatLastDeletionStatus = "completed";
-      managedBoatDeletionTarget = "";
-      managedBoatRejectedTokens.clear();
-      managedBoatRows = [];
-      managedBoatDeleteConfirmations.length = 0;
-      if (botId) await api("DELETE", `/api/bots/${botId}`).catch(() => undefined);
-      await api("PUT", "/api/config", { box: { token: "" } }).catch(() => undefined);
-      boatRouteCalls.length = 0;
-    }
-  });
-
   it("keeps a bot when its Boat provider is unavailable and fences deletion races", async () => {
     let botId = "";
     let guardBotId = "";
@@ -4713,126 +4335,6 @@ describe("harness HTTP API", () => {
       if (guardBotId) await api("DELETE", `/api/bots/${guardBotId}`).catch(() => undefined);
       await api("PATCH", "/api/config", { localVm: { mode: "shared", maxInstances: 2 } }).catch(() => undefined);
       await api("PUT", "/api/config", { box: { token: "" } });
-      boatRouteCalls.length = 0;
-    }
-  });
-
-  it("keeps the bot owner while Boat creation recovery is unresolved", async () => {
-    let ambiguousBotId = "";
-    let rememberedBotId = "";
-    try {
-      expect((await api("PUT", "/api/config", { box: { token: "box_route" } })).status).toBe(200);
-
-      const ambiguousBot = (await api("POST", "/api/bots")).body.bot;
-      ambiguousBotId = ambiguousBot.id;
-      expect((await api("PATCH", `/api/bots/${ambiguousBot.id}`, {
-        computer: "cloud",
-        cloudBackend: "box",
-      })).status).toBe(200);
-      managedBoatCreateId = "bx_cdefghjk";
-      managedBoatCreateName = managedBoatNameForFixture(ambiguousBot.id);
-      managedBoatCreateMode = "ambiguous";
-      const ambiguousCreate = await api("POST", `/api/bots/${ambiguousBot.id}/computer/provision`, {});
-      expect(ambiguousCreate.status).toBe(500);
-      expect(ambiguousCreate.body.error).toMatch(/provider outcome is unknown/i);
-      const ambiguousDelete = await api("DELETE", `/api/bots/${ambiguousBot.id}`);
-      expect(ambiguousDelete.status).toBe(409);
-      expect(ambiguousDelete.body.error).toMatch(/pending cloud computer creation.*boat\.dev/i);
-
-      managedBoatCreateMode = "success";
-      expect((await api("POST", `/api/bots/${ambiguousBot.id}/computer/provision`, {})).status).toBe(200);
-      expect((await api("POST", `/api/computers/boxes/${managedBoatCreateId}/delete`, {
-        confirmName: managedBoatCreateName,
-      })).status).toBe(202);
-      expect((await api("DELETE", `/api/bots/${ambiguousBot.id}`)).status).toBe(200);
-      ambiguousBotId = "";
-
-      const rememberedBot = (await api("POST", "/api/bots")).body.bot;
-      rememberedBotId = rememberedBot.id;
-      expect((await api("PATCH", `/api/bots/${rememberedBot.id}`, {
-        computer: "cloud",
-        cloudBackend: "box",
-      })).status).toBe(200);
-      managedBoatCreateId = "bx_defghjkm";
-      managedBoatCreateName = managedBoatNameForFixture(rememberedBot.id);
-      managedBoatCreateMode = "fail-rename";
-      const rememberedCreate = await api("POST", `/api/bots/${rememberedBot.id}/computer/provision`, {});
-      expect(rememberedCreate.status).toBe(500);
-      expect(rememberedCreate.body.error).toMatch(/rename unavailable/i);
-      const rememberedDelete = await api("DELETE", `/api/bots/${rememberedBot.id}`);
-      expect(rememberedDelete.status).toBe(409);
-      expect(rememberedDelete.body.error).toMatch(/pending cloud computer creation.*boat\.dev/i);
-
-      managedBoatRejectedTokens.add("Bearer box_route");
-      expect((await api("PUT", "/api/config", {
-        box: { token: "box_route_rotated" },
-      })).status).toBe(200);
-
-      managedBoatCreateMode = "success";
-      const cleanupRetry = await api("POST", `/api/bots/${rememberedBot.id}/computer/provision`, {});
-      expect(cleanupRetry.status).toBe(409);
-      expect(cleanupRetry.body.error).toMatch(/previous cloud computer deletion finished.*retry/i);
-      expect((await api("POST", `/api/bots/${rememberedBot.id}/computer/provision`, {})).status).toBe(200);
-      expect((await api("POST", `/api/computers/boxes/${managedBoatCreateId}/delete`, {
-        confirmName: managedBoatCreateName,
-      })).status).toBe(202);
-      expect((await api("DELETE", `/api/bots/${rememberedBot.id}`)).status).toBe(200);
-      rememberedBotId = "";
-    } finally {
-      managedBoatCreateMode = "success";
-      managedBoatRows = [];
-      managedBoatCreatedIds.clear();
-      if (ambiguousBotId) await api("DELETE", `/api/bots/${ambiguousBotId}`).catch(() => undefined);
-      if (rememberedBotId) await api("DELETE", `/api/bots/${rememberedBotId}`).catch(() => undefined);
-      managedBoatCreateMode = "refuse";
-      managedBoatCreateId = "bx_cdefghjk";
-      managedBoatCreateName = "";
-      managedBoatRejectedTokens.clear();
-      await api("PUT", "/api/config", { box: { token: "" } });
-      boatRouteCalls.length = 0;
-    }
-  });
-
-  it("finds and deletes a remembered Boat even while account LIST omits it", async () => {
-    let botId = "";
-    try {
-      managedBoatRows = [];
-      expect((await api("PUT", "/api/config", { box: { token: "box_route" } })).status).toBe(200);
-      const bot = (await api("POST", "/api/bots")).body.bot;
-      botId = bot.id;
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud", cloudBackend: "box" })).status).toBe(200);
-      managedBoatCreateMode = "success";
-      managedBoatCreateId = "bx_ghjkmnpq";
-      managedBoatCreateName = managedBoatNameForFixture(bot.id);
-      expect((await api("POST", `/api/bots/${bot.id}/computer/provision`, {})).status).toBe(200);
-
-      managedBoatListRowsOverride = [];
-      boatRouteCalls.length = 0;
-      const inventory = await api("GET", "/api/computers/boxes");
-      expect(inventory.status).toBe(200);
-      expect(inventory.body.instances).toContainEqual(expect.objectContaining({
-        boxId: managedBoatCreateId,
-        name: managedBoatCreateName,
-        ownerBotId: bot.id,
-      }));
-
-      const deletion = await api("DELETE", `/api/bots/${bot.id}`);
-      expect(deletion).toMatchObject({ status: 200, body: { ok: true } });
-      expect(boatRouteCalls).toContainEqual({ method: "GET", path: `/sandboxes/${managedBoatCreateId}` });
-      expect(managedBoatDeleteConfirmations).toContainEqual({
-        boxId: managedBoatCreateId,
-        confirmation: managedBoatCreateId,
-      });
-      botId = "";
-    } finally {
-      managedBoatListRowsOverride = null;
-      managedBoatCreateMode = "refuse";
-      managedBoatCreateId = "bx_cdefghjk";
-      managedBoatCreateName = "";
-      managedBoatRows = [];
-      managedBoatCreatedIds.clear();
-      if (botId) await api("DELETE", `/api/bots/${botId}`).catch(() => undefined);
-      await api("PUT", "/api/config", { box: { token: "" } }).catch(() => undefined);
       boatRouteCalls.length = 0;
     }
   });
@@ -6412,11 +5914,11 @@ describe("harness HTTP API", () => {
   });
 
   it("buzzes when a turn dies before it can start", async () => {
-    // A VPS destination with no VPS set up fails inside dispatch without touching the network.
+    // A cloud destination on a server that does not exist fails inside dispatch before any turn starts.
     let botId: string | undefined;
     let stream: Awaited<ReturnType<typeof openSse>> | undefined;
     try {
-      expect((await api("PUT", "/api/config", { box: { token: "" } })).status).toBe(200);
+      expect((await api("PUT", "/api/config", { vps: { sshAlias: "fixture-vps" } })).status).toBe(200);
       const bot = (await api("POST", "/api/bots")).body.bot;
       botId = bot.id;
       expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud", cloudBackend: "vps" })).status).toBe(200);
@@ -6432,7 +5934,7 @@ describe("harness HTTP API", () => {
         threadId: bot.threadId,
         title: `${bot.name} couldn't start`,
       });
-      expect(String(buzz.notification.body)).toMatch(/vps/i);
+      expect(String(buzz.notification.body)).toMatch(/server|cloud|ssh/i);
 
       await expect.poll(async () => {
         const current = (await api("GET", "/api/bots?messages=20")).body.bots
@@ -6442,8 +5944,7 @@ describe("harness HTTP API", () => {
     } finally {
       stream?.close();
       if (botId) await api("DELETE", `/api/bots/${botId}`);
-      // The token is write-only: leave the boat unconfigured rather than half-set for whatever runs next.
-      await api("PUT", "/api/config", { box: { token: "" } });
+      await api("PUT", "/api/config", { vps: { sshAlias: "" } });
     }
   });
 
@@ -6451,7 +5952,7 @@ describe("harness HTTP API", () => {
     let botId: string | undefined;
     let stream: Awaited<ReturnType<typeof openSse>> | undefined;
     try {
-      expect((await api("PUT", "/api/config", { box: { token: "" } })).status).toBe(200);
+      expect((await api("PUT", "/api/config", { vps: { sshAlias: "fixture-vps" } })).status).toBe(200);
       const bot = (await api("POST", "/api/bots")).body.bot;
       botId = bot.id;
       expect((await api("PATCH", `/api/bots/${bot.id}`, {
@@ -6547,8 +6048,8 @@ describe("harness HTTP API", () => {
         messageId,
       })).status).toBe(200);
 
-      // The bot now works on a VPS that is not set up, so the execution cannot start.
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud", cloudBackend: "vps" })).status).toBe(200);
+      // The bot now works on a cloud computer on a server that does not exist, so the execution cannot start.
+      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud" })).status).toBe(200);
       rmSync(fakeClaudeDump, { force: true });
       expect((await api("POST", `/api/bots/${bot.id}/secret-cards/${messageId}/dismiss`, {
         threadId: bot.threadId,
@@ -6557,7 +6058,7 @@ describe("harness HTTP API", () => {
         id: string; tool?: { name?: string; ok?: boolean }; secret?: { dismissed?: boolean; resumed?: boolean };
       }>;
       await expect.poll(async () => (await thread()).filter((message) => message.tool?.ok === false)
-        .map((message) => message.tool!.name).join("\n"), { timeout: 10_000 }).toMatch(/vps/i);
+        .map((message) => message.tool!.name).join("\n"), { timeout: 10_000 }).toMatch(/server|cloud|ssh/i);
       expect((await thread()).find((message) => message.id === messageId)?.secret).toMatchObject({ dismissed: true, resumed: true });
       await expect.poll(async () => (await api("GET", "/api/bots?messages=0")).body.bots
         .find((candidate: { id: string }) => candidate.id === bot.id)?.busy).toBe(false);
@@ -6569,7 +6070,7 @@ describe("harness HTTP API", () => {
       if (botId) await api("POST", `/api/bots/${botId}/interrupt`, {}).catch(() => undefined);
       stream?.close();
       if (botId) await api("DELETE", `/api/bots/${botId}`);
-      await api("PUT", "/api/config", { box: { token: "" } });
+      await api("PUT", "/api/config", { vps: { sshAlias: "" } });
       rmSync(fakeClaudeDump, { force: true });
     }
   });
@@ -7316,7 +6817,7 @@ describe("harness HTTP API", () => {
     let routineId: string | undefined;
     let stream: Awaited<ReturnType<typeof openSse>> | undefined;
     try {
-      expect((await api("PUT", "/api/config", { box: { token: "" } })).status).toBe(200);
+      expect((await api("PUT", "/api/config", { vps: { sshAlias: "fixture-vps" } })).status).toBe(200);
       const bot = (await api("POST", "/api/bots")).body.bot;
       botId = bot.id;
       expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud", cloudBackend: "vps" })).status).toBe(200);
@@ -7352,7 +6853,7 @@ describe("harness HTTP API", () => {
       stream?.close();
       if (routineId) await api("DELETE", `/api/routines/${routineId}`);
       if (botId) await api("DELETE", `/api/bots/${botId}`);
-      await api("PUT", "/api/config", { box: { token: "" } });
+      await api("PUT", "/api/config", { vps: { sshAlias: "" } });
     }
   });
 
@@ -8479,81 +7980,6 @@ describe("harness HTTP API", () => {
     }
   });
 
-  it.each([false, true])("replaces a rejected Boat key without losing remembered computers (provisioned=%s)", async (provisioned) => {
-    let botId = "";
-    try {
-      managedBoatRows = [];
-      expect((await api("PUT", "/api/config", { box: { token: "box_route" } })).status).toBe(200);
-      const bot = (await api("POST", "/api/bots")).body.bot;
-      botId = bot.id;
-      if (provisioned) {
-        await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud", cloudBackend: "box" });
-        managedBoatCreateMode = "success";
-        managedBoatCreateId = "bx_hjkmnpqr";
-        managedBoatCreateName = managedBoatNameForFixture(bot.id);
-        expect((await api("POST", `/api/bots/${bot.id}/computer/provision`, {})).status).toBe(200);
-      }
-      managedBoatRejectedTokens.add("Bearer box_route");
-      if (provisioned) {
-        expect((await api("PUT", "/api/config", { box: { token: "box_good" } })).status).toBe(409);
-      }
-      managedBoatRejectedTokens.add("Bearer box_route_rotated");
-      expect((await api("PUT", "/api/config", { box: { token: "box_route_rotated" } })).status).toBe(400);
-      managedBoatRejectedTokens.delete("Bearer box_route_rotated");
-      const rotated = await api("PUT", "/api/config", { box: { token: "box_route_rotated" } });
-      expect(rotated.status).toBe(200);
-      expect(rotated.body.box).toEqual({ configured: true, last4: "ated" });
-      if (provisioned) {
-        const journal = readFileSync(join(home, ".seira", "box-create-requests.json"), "utf8");
-        expect(journal).toContain(managedBoatCreateId);
-      }
-    } finally {
-      managedBoatRejectedTokens.clear();
-      if (botId) await api("DELETE", `/api/bots/${botId}`).catch(() => undefined);
-      managedBoatCreateMode = "refuse";
-      managedBoatCreateId = "bx_cdefghjk";
-      managedBoatCreateName = "";
-      managedBoatRows = [];
-      managedBoatCreatedIds.clear();
-      await api("PUT", "/api/config", { box: { token: "" } }).catch(() => undefined);
-    }
-  });
-
-  it("retires a journaled Boat proven gone before clearing and later restoring credentials", async () => {
-    let botId = "";
-    try {
-      managedBoatRows = [];
-      expect((await api("PUT", "/api/config", { box: { token: "box_route" } })).status).toBe(200);
-      const bot = (await api("POST", "/api/bots")).body.bot;
-      botId = bot.id;
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud", cloudBackend: "box" })).status).toBe(200);
-      managedBoatCreateMode = "success";
-      managedBoatCreateId = "bx_hjkmnpqr";
-      managedBoatCreateName = managedBoatNameForFixture(bot.id);
-      expect((await api("POST", `/api/bots/${bot.id}/computer/provision`, {})).status).toBe(200);
-
-      // The person removed it in boat.dev: LIST and direct GET both prove absence while the credential is active.
-      managedBoatRows = [];
-      managedBoatCreatedIds.delete(managedBoatCreateId);
-      expect((await api("PUT", "/api/config", { box: { token: "" } })).status).toBe(200);
-      const journal = JSON.parse(readFileSync(join(home, ".seira", "box-create-requests.json"), "utf8"));
-      expect(journal.requests.some((entry: { botId?: string }) => entry.botId === bot.id)).toBe(false);
-
-      expect((await api("PUT", "/api/config", { box: { token: "box_route" } })).status).toBe(200);
-      expect((await api("DELETE", `/api/bots/${bot.id}`)).status).toBe(200);
-      botId = "";
-    } finally {
-      managedBoatCreateMode = "refuse";
-      managedBoatCreateId = "bx_cdefghjk";
-      managedBoatCreateName = "";
-      managedBoatRows = [];
-      managedBoatCreatedIds.clear();
-      if (botId) await api("DELETE", `/api/bots/${botId}`).catch(() => undefined);
-      await api("PUT", "/api/config", { box: { token: "" } }).catch(() => undefined);
-      boatRouteCalls.length = 0;
-    }
-  });
-
   it("pins where a conversation works from the composer, validates the place, and lets it follow the bot again", async () => {
     const created = await api("POST", "/api/bots", {
       modelSelection: { instanceId: "claude", model: "claude-sonnet-5" },
@@ -8574,145 +8000,6 @@ describe("harness HTTP API", () => {
     const cleared = await api("PATCH", `/api/bots/${bot.id}/tasks/${bot.threadId}`, { surface: null });
     expect(cleared.status).toBe(200);
     expect(cleared.body.task.surface).toBeUndefined();
-  });
-
-  it("dispatches the conversation's pinned computer on the bot's own engine, and previews that same surface", async () => {
-    const bot = (await api("POST", "/api/bots", {
-      name: "Surface routing fixture", modelSelection: { instanceId: "claude", model: "claude-sonnet-5" },
-    })).body.bot;
-    const idle = () => expect.poll(async () =>
-      (await api("GET", "/api/bots?messages=0")).body.bots.find((b: { id: string }) => b.id === bot.id)?.busy,
-    { timeout: 10_000 }).toBe(false);
-    try {
-      expect((await api("PUT", "/api/config", { box: { token: "box_route" } })).status).toBe(200);
-      await api("PATCH", `/api/bots/${bot.id}`, { browser: false, computer: null, cloudBackend: "box" });
-      managedBoatRows = [{ id: "bx_3456789a", name: managedBoatNameForFixture(bot.id), state: "idle" }];
-      boatRouteCalls.length = 0;
-      boatPromptBodies.length = 0;
-      rmSync(fakeClaudeDump, { force: true });
-      expect((await api("POST", `/api/bots/${bot.id}/messages`, { text: "Describe your available computer tools" })).status).toBe(202);
-      type Dump = { argv: string[]; mcpConfig: { mcpServers: Record<string, { args?: string[] }> }; systemPrompt: string };
-      const local = await readJsonFileWhenReady<Dump>(fakeClaudeDump);
-      expect(local.mcpConfig.mcpServers.computer).toBeUndefined();
-      expect(boatPromptBodies).toHaveLength(0);
-      expect(boatRouteCalls).toEqual([]);
-      await api("POST", `/api/bots/${bot.id}/interrupt`, {}); await idle();
-
-      // The fixture has no ready Local VM: fail there, never click the host or Box.
-      await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud" });
-      await api("PATCH", `/api/bots/${bot.id}/tasks/${bot.threadId}`, { surface: "vm" });
-      rmSync(fakeClaudeDump, { force: true });
-      expect((await api("POST", `/api/bots/${bot.id}/messages`, { text: "Open Chrome on the Local VM" })).status).toBe(202);
-      await idle();
-      expect(existsSync(fakeClaudeDump)).toBe(false);
-      expect(boatPromptBodies).toHaveLength(0);
-      const saved = (await api("GET", "/api/bots?messages=0")).body.bots.find((b: { id: string }) => b.id === bot.id);
-      expect(saved.tasks.find((task: { threadId: string }) => task.threadId === bot.threadId).surface).toBe("vm");
-      expect((await api("GET", `/api/bots/${bot.id}/computer?threadId=${bot.threadId}`)).body.surface).toBe("vm");
-      expect((await api("POST", `/api/bots/${bot.id}/computer/join?threadId=${bot.threadId}`, {})).status).toBe(409);
-
-      await api("PATCH", `/api/bots/${bot.id}`, { computer: "vm" });
-      await api("PATCH", `/api/bots/${bot.id}/tasks/${bot.threadId}`, { surface: "cloud" });
-      rmSync(fakeClaudeDump, { force: true });
-      expect((await api("POST", `/api/bots/${bot.id}/messages`, { text: "Open Chrome on the cloud VM" })).status).toBe(202);
-      const pinnedCloud = await readJsonFileWhenReady<Dump>(fakeClaudeDump, 10_000);
-      expect(pinnedCloud.argv[pinnedCloud.argv.indexOf("--model") + 1]).toBe("claude-sonnet-5");
-      expect(pinnedCloud.mcpConfig.mcpServers.computer?.args).toEqual([expect.stringMatching(/harness-mcp-proxy\.(?:ts|js)$/), "computer"]);
-      expect(pinnedCloud.systemPrompt).toContain("assigned cloud computer");
-      expect(boatPromptBodies).toHaveLength(0);
-      expect((await api("GET", `/api/bots/${bot.id}/computer?threadId=${bot.threadId}`)).body.surface).toBe("cloud");
-      const joined = await api("POST", `/api/bots/${bot.id}/computer/join?threadId=${bot.threadId}`, {});
-      expect(joined).toMatchObject({ status: 200, body: { joinUrl: "https://desktop.invalid/bx_3456789a" } });
-      await api("POST", `/api/bots/${bot.id}/interrupt`, {}); await idle();
-      const before = boatRouteCalls.length;
-      expect((await api("POST", `/api/bots/${bot.id}/computer/provision?threadId=${bot.threadId}`, {})).status).toBe(409);
-      expect((await api("GET", `/api/bots/${bot.id}/computer?threadId=not-owned`)).status).toBe(404);
-      expect(boatRouteCalls).toHaveLength(before);
-    } finally {
-      await api("POST", `/api/bots/${bot.id}/interrupt`, {}).catch(() => {});
-      await idle();
-      managedBoatRows = [];
-      await api("DELETE", `/api/bots/${bot.id}`).catch(() => {});
-      await api("PUT", "/api/config", { box: { token: "" } }).catch(() => {});
-      rmSync(fakeClaudeDump, { force: true });
-      boatPromptBodies.length = 0;
-    }
-  }, 45_000);
-
-  it("excludes new Boat turns, lifecycle actions, and bot deletion while a token change validates", async () => {
-    let botId = "";
-    // The check stays open until every refusal below is seen: a save that reloads no engine is over in moments.
-    let release = () => {};
-    boatSlowHold = new Promise<void>((resolve) => { release = resolve; });
-    try {
-      expect((await api("PUT", "/api/config", { box: { token: "" } })).status).toBe(200);
-      const bot = (await api("POST", "/api/bots")).body.bot;
-      botId = bot.id;
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud", cloudBackend: "box" })).status).toBe(200);
-
-      const beforeSlow = boatSlowRequestCount;
-      const changing = api("PUT", "/api/config", { box: { token: "box_slow" } });
-      await expect.poll(() => boatSlowRequestCount).toBeGreaterThan(beforeSlow);
-      const lifecycle = await api("POST", `/api/bots/${bot.id}/computer/provision`, {});
-      expect(lifecycle.status).toBe(409);
-      expect(lifecycle.body.error).toMatch(/Boat account settings are being updated/i);
-      const turn = await api("POST", `/api/bots/${bot.id}/messages`, { text: "do not cross the account change" });
-      expect(turn.status).toBe(409);
-      expect(turn.body.error).toMatch(/Boat account settings are being updated/i);
-      expect((await api("DELETE", `/api/bots/${bot.id}`)).status).toBe(409);
-      release();
-      expect((await changing).status).toBe(200);
-
-      expect((await api("DELETE", `/api/bots/${bot.id}`)).status).toBe(200);
-      botId = "";
-    } finally {
-      release();
-      boatSlowHold = null;
-      if (botId) await api("DELETE", `/api/bots/${botId}`).catch(() => undefined);
-      await api("PUT", "/api/config", { box: { token: "" } }).catch(() => undefined);
-    }
-  });
-
-  it("rejects a Boat token change while create and rename own the lifecycle lane", async () => {
-    let botId = "";
-    try {
-      managedBoatRows = [];
-      expect((await api("PUT", "/api/config", { box: { token: "box_route" } })).status).toBe(200);
-      const bot = (await api("POST", "/api/bots")).body.bot;
-      botId = bot.id;
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud", cloudBackend: "box" })).status).toBe(200);
-      managedBoatCreateMode = "success";
-      managedBoatCreateId = "bx_fghjkmnp";
-      managedBoatCreateName = managedBoatNameForFixture(bot.id);
-      managedBoatRenameDelayMs = 1_000;
-      boatRouteCalls.length = 0;
-
-      const provisioning = api("POST", `/api/bots/${bot.id}/computer/provision`, {});
-      await expect.poll(() => boatRouteCalls.some(
-        (call) => call.method === "PATCH" && call.path === `/sandboxes/${managedBoatCreateId}`,
-      )).toBe(true);
-      const racedChange = await api("PUT", "/api/config", { box: { token: "box_good" } });
-      expect(racedChange.status).toBe(409);
-      expect(racedChange.body.error).toMatch(/cloud computer actions/i);
-      expect((await provisioning).status).toBe(200);
-      managedBoatRenameDelayMs = 0;
-
-      expect((await api("POST", `/api/computers/boxes/${managedBoatCreateId}/delete`, {
-        confirmName: managedBoatCreateName,
-      })).status).toBe(202);
-      expect((await api("DELETE", `/api/bots/${bot.id}`)).status).toBe(200);
-      botId = "";
-    } finally {
-      managedBoatRenameDelayMs = 0;
-      managedBoatCreateMode = "refuse";
-      managedBoatCreateId = "bx_cdefghjk";
-      managedBoatCreateName = "";
-      managedBoatRows = [];
-      managedBoatCreatedIds.clear();
-      if (botId) await api("DELETE", `/api/bots/${botId}`).catch(() => undefined);
-      await api("PUT", "/api/config", { box: { token: "" } }).catch(() => undefined);
-      boatRouteCalls.length = 0;
-    }
   });
 
   it("manages and probes custom MCP servers without returning secret values", async () => {
@@ -10527,85 +9814,6 @@ describe("harness HTTP API", () => {
     }
   }, 60_000);
 
-  it.each(["direct", "room"] as const)("resolves the same computer paragraph in the settings preview and %s turns", async (target) => {
-    // The fleet mounts every capability for its dispatchable engines; capability-gated cells live in the unit grid.
-    const bot = (await api("POST", "/api/bots", { name: "Cadence" })).body.bot;
-    let boatBot: any;
-    let room: any;
-    const idle = (id: string) => expect.poll(async () =>
-      (await api("GET", "/api/bots?messages=0")).body.bots.find((b: { id: string }) => b.id === id)?.busy,
-    { timeout: 10_000 }).toBe(false);
-    const computerSection = async (id: string) =>
-      (await api("GET", `/api/bots/${id}/system-prompt`)).body.sections
-        .find((section: { id: string }) => section.id === "computer");
-    const turnPrompt = async (path: string) => {
-      rmSync(fakeClaudeDump, { force: true });
-      expect((await api("POST", path, { text: "describe your computer tools" })).status).toBe(202);
-      return (await readJsonFileWhenReady<{ systemPrompt: string }>(fakeClaudeDump, 15_000)).systemPrompt;
-    };
-    try {
-      expect((await api("PATCH", `/api/bots/${bot.id}`, {
-        modelSelection: { instanceId: "claude", model: "claude-sonnet-5" },
-      })).status).toBe(200);
-      if (target === "room") {
-        room = (await api("POST", "/api/groups", { name: "Computer paragraph", memberIds: [bot.id] })).body.group;
-        expect((await api("PATCH", `/api/groups/${room.id}/setup`, { action: "skip" })).status).toBe(200);
-      }
-      const messagesPath = room ? `/api/groups/${room.id}/messages` : `/api/bots/${bot.id}/messages`;
-
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "off" })).status).toBe(200);
-      expect(await computerSection(bot.id)).toBeUndefined();
-      const off = await turnPrompt(messagesPath);
-      for (const paragraph of ["isolated Cua sandbox", "assigned cloud computer", "This is a VPS", "user's computer"]) {
-        expect(off).not.toContain(paragraph);
-      }
-      await api("POST", `/api/bots/${bot.id}/interrupt`, {});
-      await idle(bot.id);
-
-      // The CI fleet has no VM runtime, so a real VM turn cannot be dispatched; the preview uses the same wiring.
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "vm" })).status).toBe(200);
-      expect((await computerSection(bot.id)).text).toBe(computerPrompt("vm-shared"));
-      expect((await api("PATCH", "/api/config", { localVm: { mode: "per-bot", maxInstances: 1 } })).status).toBe(200);
-      expect((await computerSection(bot.id)).text).toBe(computerPrompt("vm-private"));
-      expect((await api("PATCH", "/api/config", { localVm: { mode: "shared", maxInstances: 2 } })).status).toBe(200);
-      expect((await computerSection(bot.id)).text).toBe(computerPrompt("vm-shared"));
-
-      // Direct only: the room leg mounts through the identical attachBotBoat seam.
-      if (target === "direct") {
-        expect((await api("PUT", "/api/config", { box: { token: "box_route" } })).status).toBe(200);
-        boatBot = (await api("POST", "/api/bots", { name: "Beacon" })).body.bot;
-        expect((await api("PATCH", `/api/bots/${boatBot.id}`, {
-          computer: "cloud", cloudBackend: "box",
-          modelSelection: { instanceId: "claude", model: "claude-sonnet-5" },
-        })).status).toBe(200);
-        managedBoatRows = [{ id: "bx_8765432a", name: managedBoatNameForFixture(boatBot.id), state: "idle" }];
-        boatPromptBodies.length = 0;
-        expect((await computerSection(boatBot.id)).text).toBe(computerPrompt("box"));
-        const boatTurn = await turnPrompt(`/api/bots/${boatBot.id}/messages`);
-        expect(boatTurn).toContain(computerPrompt("box"));
-        for (const paragraph of ["isolated Cua sandbox", "This is a VPS", "user's computer"]) {
-          expect(boatTurn).not.toContain(paragraph);
-        }
-        expect(boatPromptBodies).toHaveLength(0);
-        await api("POST", `/api/bots/${boatBot.id}/interrupt`, {});
-        await idle(boatBot.id);
-      }
-    } finally {
-      if (room) await api("POST", `/api/groups/${room.id}/interrupt`, {}).catch(() => undefined);
-      await api("POST", `/api/bots/${bot.id}/interrupt`, {}).catch(() => undefined);
-      if (boatBot) {
-        await api("POST", `/api/bots/${boatBot.id}/interrupt`, {}).catch(() => undefined);
-        await api("DELETE", `/api/bots/${boatBot.id}`).catch(() => undefined);
-      }
-      managedBoatRows = [];
-      boatPromptBodies.length = 0;
-      await api("PATCH", "/api/config", { localVm: { mode: "shared", maxInstances: 2 } }).catch(() => undefined);
-      await api("PUT", "/api/config", { box: { token: "" } }).catch(() => undefined);
-      if (room) await api("DELETE", `/api/groups/${room.id}`).catch(() => undefined);
-      await api("DELETE", `/api/bots/${bot.id}`).catch(() => undefined);
-      rmSync(fakeClaudeDump, { force: true });
-    }
-  }, 60_000);
   it("reconciles a committed crash-stale bot reference before ACK and profile-id reuse", async () => {
     const isolatedHome = mkdtempSync(join(tmpdir(), "seira-browser-cleanup-restart-"));
     const isolatedData = join(isolatedHome, ".seira");
@@ -11474,7 +10682,7 @@ describe("harness HTTP API", () => {
       });
       expect(unavailableCloud.status).toBe(409);
       expect(await unavailableCloud.json()).toMatchObject({
-        error: expect.stringMatching(/^Bots here can get their own cloud desktops from Boat, a paid service\. Connect your Boat account in AI › Other services\./),
+        error: expect.stringMatching(/^\w+ answered without a computer because no cloud desktop is set up\. Connect your own server, or change where \w+ works\./),
       });
 
       const proposed = await fetch(`${BASE}/api/internal/trigger-requests`, {

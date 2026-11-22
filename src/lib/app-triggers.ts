@@ -90,7 +90,7 @@ export const appTriggerApi = {
     put(trigger);
     return trigger;
   },
-  async update(id: string, patch: Partial<Pick<AppTrigger, "name" | "prompt" | "enabled" | "config" | "sameConversation">> & { filter?: AppTriggerFilter | null }) {
+  async update(id: string, patch: Partial<Pick<AppTrigger, "name" | "prompt" | "enabled" | "config" | "sameConversation">> & { confirmPlace?: true; filter?: AppTriggerFilter | null }) {
     const { trigger } = await api<{ trigger: AppTrigger }>(`/api/app-triggers/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
     put(trigger);
     return trigger;

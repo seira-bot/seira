@@ -65,6 +65,15 @@ describe("routineEditorInput", () => {
     expect(routineEditorInput(fields({ existingRoutine: existing })).enabled).toBeUndefined();
   });
 
+  it("confirms the place only when the confirmation was ticked for a moved automation, never on a plain save or rename", () => {
+    const moved = { enabled: false, placeLost: true, schedule: { type: "daily", time: "09:00" } } as unknown as Routine;
+    expect(routineEditorInput(fields({ existingRoutine: moved, placeConfirmed: true }))).toMatchObject({ confirmPlace: true });
+    expect(routineEditorInput(fields({ existingRoutine: moved }))).not.toHaveProperty("confirmPlace");
+    expect(routineEditorInput(fields({ existingRoutine: moved, placeConfirmed: false, name: "Renamed" }))).not.toHaveProperty("confirmPlace");
+    expect(routineEditorInput(fields({ placeConfirmed: true }))).not.toHaveProperty("confirmPlace");
+    expect(routineEditorInput(fields({ existingRoutine: { ...moved, placeLost: undefined }, placeConfirmed: true }))).not.toHaveProperty("confirmPlace");
+  });
+
   it("sends workflowId and clears delivery, model choice, checks, access and the same chat when a workflow is chosen", () => {
     expect(routineEditorInput(fields({ workflowId: "wf1" }))).toMatchObject({
       workflowId: "wf1", deliver: null, modelSelection: null, checks: null, access: null, sameConversation: false,

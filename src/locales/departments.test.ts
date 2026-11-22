@@ -8,7 +8,7 @@ const english = en as Record<string, string>;
 const DEPARTMENT_COPY = [
   "sidebar.section.", "sidebar.bot.moveToSection", "sidebar.newChannel.context", "team.", "teamSettings.", "template.",
   "teamMemory.", "templateImport.", "sidebar.addDepartment", "botAccess.teams.", "newBot.team",
-  "botPanel.page.team", "botPanel.page.chiefTeams", "permissions.chief.", "composer.mention.team", "canvas.", "canvasComputers.",
+  "botPanel.page.team", "botPanel.page.chiefTeams", "permissions.chief.", "composer.mention.team", "canvas.",
   "mapComposer.placeholder", "place.view.autoTeam.line",
 ];
 const TEAM_MAP = new Set(["canvas.title", "canvas.addToMap", "canvas.region"]);

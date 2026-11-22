@@ -220,6 +220,8 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
           browserProfile: ordinary.browserProfile || undefined,
           voiceNoteEveryReply: ordinary.voiceNoteEveryReply ?? undefined,
           autoApprove: ordinary.approvalMode === "auto",
+          // Cloud is the person's own VPS.
+          ...(ordinary.computer === "cloud" ? { cloudBackend: "vps" as const } : {}),
         });
         const presetSkills = new Set(preset?.preset.skills ?? []);
         const presetNotes = new Set(Object.keys(preset?.preset.seed?.memory ?? {}));

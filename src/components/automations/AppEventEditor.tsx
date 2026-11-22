@@ -5,6 +5,8 @@ import { Loader2, X } from "lucide-react";
 
 import { BotAvatar } from "@/components/Avatar";
 import { useModalDialog } from "@/hooks/use-modal-dialog";
+import { confirmPlaceInput } from "@/lib/place-lost";
+import { PlaceLostConfirm } from "../PlaceLostConfirm";
 import { appTriggerApi, type AppEventCatalog, type AppTrigger, type AppTriggerFilter } from "@/lib/app-triggers";
 import { accountName } from "@/lib/connector-account-label";
 import { cn } from "@/lib/cn";
@@ -19,6 +21,7 @@ const LABEL = "mb-1.5 block text-[12px] font-medium text-ink-secondary";
 export function AppEventEditor({ trigger, bots, initialBotId, onClose, onSaved }: { trigger?: AppTrigger; bots: Bot[]; initialBotId?: string; onClose: () => void; onSaved?: (trigger: AppTrigger) => void }) {
   const { dispatch } = useStore();
   const [botId, setBotId] = useState(trigger?.botId ?? (initialBotId && bots.some((bot) => bot.id === initialBotId) ? initialBotId : bots[0]?.id) ?? "");
+  const [placeConfirmed, setPlaceConfirmed] = useState(false);
   const [catalog, setCatalog] = useState<AppEventCatalog | null>(null);
   const [app, setApp] = useState(trigger?.app ?? "");
   const [event, setEvent] = useState(trigger?.event ?? "");
@@ -64,7 +67,7 @@ export function AppEventEditor({ trigger, bots, initialBotId, onClose, onSaved }
     setError("");
     try {
       const saved = trigger
-        ? await appTriggerApi.update(trigger.id, { name: name.trim() || trigger.name, prompt: prompt.trim(), filter: Object.keys(cleanFilter).length ? cleanFilter : null })
+        ? await appTriggerApi.update(trigger.id, { name: name.trim() || trigger.name, prompt: prompt.trim(), ...confirmPlaceInput(trigger, placeConfirmed), filter: Object.keys(cleanFilter).length ? cleanFilter : null })
         : await appTriggerApi.create({
           botId, app, event: chosen?.event ?? event, prompt: prompt.trim(), name: name.trim() || suggestedName(prompt, bot),
           ...(account ? { account } : {}), ...(Object.keys(cleanFilter).length ? { filter: cleanFilter } : {}),
@@ -164,6 +167,7 @@ export function AppEventEditor({ trigger, bots, initialBotId, onClose, onSaved }
               <label className="mt-4 block"><span className={LABEL}>{t("automations.editor.app.name")}</span><input value={name} onChange={(input) => setName(input.target.value)} placeholder={suggestedName(prompt, bots.find((bot) => bot.id === botId))} className={FIELD} /></label>
             </details>
           )}
+          {trigger?.placeLost && <PlaceLostConfirm checked={placeConfirmed} onChange={setPlaceConfirmed} />}
           {error && <div role="alert" className="rounded-xl border border-danger/30 bg-danger/10 px-3.5 py-3 text-[12px] text-danger">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 border-t border-hairline/40 px-5 py-4">

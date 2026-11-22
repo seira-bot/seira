@@ -1,4 +1,5 @@
 import { isDone } from "@/lib/automations";
+import { confirmPlaceInput } from "@/lib/place-lost";
 import type { Routine, RoutineContextAttachment, RoutineInput, RoutineRunOn, RoutineTarget } from "@/lib/routines";
 
 export type WorkflowBlock = "room" | "cloud" | "limit";
@@ -32,6 +33,8 @@ export interface RoutineEditorFields {
   groupId: string;
   runOn: RoutineRunOn;
   existingRoutine: Routine | undefined;
+  /** The person ticked the confirmation shown for a moved automation. */
+  placeConfirmed?: boolean;
   savedAt: number;
   schedule: RoutineInput["schedule"];
   durationMinutes: number;
@@ -62,6 +65,7 @@ export function routineEditorInput(fields: RoutineEditorFields): RoutineInput & 
     botId: fields.botId,
     groupId: routineTarget === "room-goal" && fields.groupId ? fields.groupId : null,
     runOn: routineTarget === "room-goal" ? "seira" : fields.runOn,
+    ...confirmPlaceInput(existingRoutine, fields.placeConfirmed === true),
     enabled: existingRoutine && (existingRoutine.enabled || !isDone(existingRoutine, savedAt)) ? undefined : true,
     schedule: fields.schedule,
     durationMinutes: fields.durationMinutes,

@@ -35,7 +35,7 @@ import type {
   WireMessage, WireTask, BotProject as BotProjectRecord,
 } from "../shared/wire.ts";
 import { movesThreadToTop, nextOpenThread } from "../shared/wire.ts";
-import { parseConnectorTools } from "./connector-tools.ts"; import { recoverThreadGrantsOnce, rewriteGrantLists, type GrantRewrite } from "./always-allow.ts";
+import { parseConnectorTools } from "./connector-tools.ts"; import { retireBoatFromBotsAtBoot } from "./boat-retirement.ts"; import { recoverThreadGrantsOnce, rewriteGrantLists, type GrantRewrite } from "./always-allow.ts";
 import { sameModelSelection } from "../shared/thread-model.ts";
 import { initialGreetingMessage } from "./initial-greeting.ts"; import { createDefaultBot, defaultBotRefusal, type DefaultBotIntro } from "./default-bot.ts";
 import { appsFromCreator } from "./inherited-apps.ts"; import { newBotOwner, sharedAsMaker, sharedUnlessRestricted, type NewBotSharingRule } from "./new-bot-sharing.ts";
@@ -419,7 +419,7 @@ export class Store {
       delete b.approvePeerComms;
       botsMigrated = true;
     }
-    if (recoverThreadGrantsOnce(DATA_DIR, this.bots)) botsMigrated = true;
+    if (recoverThreadGrantsOnce(DATA_DIR, this.bots)) botsMigrated = true; if (retireBoatFromBotsAtBoot(DATA_DIR, this.bots)) botsMigrated = true;
     const botIds = new Set(this.bots.map((b) => b.id));
     for (const g of this.groups) {
       g.busyBotId = null;

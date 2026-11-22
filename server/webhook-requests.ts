@@ -8,6 +8,7 @@ import { newId } from "./contracts.ts";
 import { UNDO_STALE } from "./direct-apply.ts";
 import { redactSecretsInText } from "./redact.ts";
 import type { WebhookManager, WebhookTrigger } from "./webhooks.ts";
+import { placeLostAs } from "./place-lost.ts";
 
 export interface WebhookRequestCard {
   title: string;
@@ -181,7 +182,7 @@ export class WebhookRequestService {
         break;
       case "pause":
       case "resume":
-        after = webhooks.update(operation.webhookId, { enabled: operation.action === "resume", verificationPending: false });
+        after = placeLostAs(WebhookRequestError, () => webhooks.update(operation.webhookId, { enabled: operation.action === "resume", verificationPending: false }));
         break;
       case "run_now": {
         const result = webhooks.test(operation.webhookId);
