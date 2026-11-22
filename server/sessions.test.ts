@@ -755,14 +755,14 @@ describe("a member's own phone on a Team Cloud", () => {
   const HOUR = 60 * 60_000;
   /** Ada's session from the Admin's signed pairing, as the desktop gets it. */
   const fromAdmin = (member: { email: string; role: "owner" | "admin" | "member" } = ADA) => {
-    const { code } = registry.openPairing({ scopes: ["client"], member });
+    const { code } = registry.openPairing({ scopes: ["client"], member, device: "computer" });
     const paired = registry.exchange({ code, label: "Desktop", source: "a" });
     if (!paired.ok) throw new Error(paired.error);
     return registry.authenticate(paired.token)!;
   };
   /** A code Ada made from that session, redeemed by her phone. */
   const phoneOf = (session: { email?: string; teamRole?: "owner" | "admin" | "member"; createdAt: number; memberCheckedAt?: number }) => {
-    const { code } = registry.openPairing({ scopes: ["client"], member: { email: session.email!, role: session.teamRole! }, memberCheckedAt: session.memberCheckedAt ?? session.createdAt });
+    const { code } = registry.openPairing({ scopes: ["client"], member: { email: session.email!, role: session.teamRole! }, memberCheckedAt: session.memberCheckedAt ?? session.createdAt, device: "phone" });
     const paired = registry.exchange({ code, label: "Ada's phone", source: "p" });
     if (!paired.ok) throw new Error(paired.error);
     return paired;
@@ -837,11 +837,11 @@ describe("a member's own phone on a Team Cloud", () => {
     expect(registry.memberPhones(), "an ended phone is not listed").toEqual([]);
   });
 
-  it("counts her phone as a paired device without the phone mark, and never the app's own sign-in", () => {
+  it("counts her phone as a paired device even without the phone mark, and never the app's own sign-in", () => {
     const desktop = fromAdmin();
     const phone = registry.authenticate(phoneOf(desktop).token)!;
-    expect(phone.pairedDevice).toBeUndefined();
     expect(isPairedDeviceSession(phone)).toBe(true);
+    expect(isPairedDeviceSession({ ...phone, pairedDevice: undefined })).toBe(true);
     expect(isPairedDeviceSession(desktop)).toBe(false);
   });
 });

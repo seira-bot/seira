@@ -124,7 +124,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
   // chat-only one each open a conversation.
   await boot(false);
   const pair = async (scopes: string[]) => {
-    const opened = await api("POST", "/api/auth/pairing", { body: { label: scopes.join("+"), scopes } });
+    const opened = await api("POST", "/api/auth/pairing", { body: { label: scopes.join("+"), scopes, device: "computer" } });
     expect(opened.status, JSON.stringify(opened.body)).toBe(200);
     return (await api("POST", "/api/auth/pair", { body: { code: opened.body.code } })).body.token as string;
   };
