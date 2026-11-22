@@ -6,7 +6,7 @@ import type { Duplex, Readable } from "node:stream";
 import { StringDecoder } from "node:string_decoder";
 import { createGzip, type Gzip } from "node:zlib";
 
-import { bearerToken, type PairingRefusal } from "./devices.ts";
+import { bearerToken, type DeviceRoutes, type PairingRefusal } from "./devices.ts";
 import type { E2EDescriptor } from "./e2e/descriptor.ts";
 import { e2eContextOf } from "./e2e/origin.ts";
 import type { E2EContext } from "./e2e/registry.ts";
@@ -33,7 +33,9 @@ export interface ProxyOptions {
   mutationToken?: () => string | null;
   authenticate: (
     token: string | undefined,
-  ) => { id?: string; cloudDesktopAccess: boolean; browserControlAccess: boolean; e2eAt?: number } | null;
+  ) => { id?: string; cloudDesktopAccess: boolean; browserControlAccess: boolean; e2eAt?: number; routes?: DeviceRoutes } | null;
+  /** Where one device may connect from. Read when the endpoint list is built for a device that is not in a request. */
+  deviceRoutes?: (deviceId: string) => DeviceRoutes | undefined;
   /** Pairing is handled here and never forwarded: the harness has no such route. */
   redeem: (
     code: string,
@@ -65,8 +67,14 @@ export interface ProxyOptions {
  * requests arriving through an encrypted stream are recognised by their socket, whatever this says. */
 export type ProxyListener = "lan" | "origin";
 
+/** A request with one of these methods carries no body here. Transfer-Encoding on one is the shape of a smuggled
+ * second request, so it is refused whole. */
+const METHODS_WITHOUT_BODY = new Set(["GET", "HEAD", "OPTIONS"]);
+
 /** §11 rule 4 of the wire spec: a phone that has used the encrypted connection never goes back to plain HTTP. */
 const UPDATE_APP = { error: "update_app" } as const;
+
+const LOCAL_ONLY_REFUSAL = "This phone connects only on the same Wi-Fi or Tailscale. Change this in Remote access on the host computer.";
 
 const PAIRING_SESSION_PATHS = new Set(["POST /api/pair", "GET /api/health"]);
 
@@ -310,7 +318,12 @@ export function companionIdentityHeaders(authenticatedDeviceId?: string, mutatio
 
 /** An allowlist: `host` and `origin` must not travel, `authorization` is the
  * sidecar's own credential, and hop-by-hop headers are not ours to relay. */
-const forwardHeaders = (req: IncomingMessage, authenticatedDeviceId?: string, mutationToken?: string): Record<string, string> => {
+const forwardHeaders = (
+  req: IncomingMessage,
+  authenticatedDeviceId?: string,
+  mutationToken?: string,
+  bodiless = false,
+): Record<string, string> => {
   const out: Record<string, string> = {
     accept: String(req.headers.accept ?? "*/*"),
     ...companionIdentityHeaders(authenticatedDeviceId, mutationToken),
@@ -320,11 +333,14 @@ const forwardHeaders = (req: IncomingMessage, authenticatedDeviceId?: string, mu
   // A trustworthy byte count lets the harness reserve disk quota up front.
   const contentLength = req.headers["content-length"];
   if (
-    typeof contentLength === "string"
+    !bodiless
+    && typeof contentLength === "string"
     && /^(?:0|[1-9]\d*)$/.test(contentLength)
     && Number.isSafeInteger(Number(contentLength))
   ) {
     out["content-length"] = contentLength;
+  } else if (!bodiless && req.headers["transfer-encoding"] !== undefined) {
+    out["transfer-encoding"] = "chunked";
   }
   // Last-Event-ID lets a reconnecting client resume instead of re-hydrating.
   const lastEventId = req.headers["last-event-id"];
@@ -389,15 +405,38 @@ export function createProxyHandler(options: ProxyOptions) {
   /** Each device's open `/api/events` streams, for the events the sidecar itself sends. */
   const eventStreams = new Map<string, Set<(event: string) => void>>();
   const version = options.version !== undefined && RELEASE_VERSION.test(options.version) ? options.version : undefined;
-  const endpointsFor = (deviceId: string | null) => {
+  /** Streams open on the managed origin, by device: the owner can narrow a device to Wi-Fi and Tailscale while one is open. */
+  const originStreams = new Map<string, Set<() => void>>();
+  const trackOrigin = (deviceId: string, close: () => void): (() => void) => {
+    const open = originStreams.get(deviceId) ?? new Set<() => void>();
+    open.add(close);
+    originStreams.set(deviceId, open);
+    return () => {
+      open.delete(close);
+      if (open.size === 0 && originStreams.get(deviceId) === open) originStreams.delete(deviceId);
+    };
+  };
+  const endpointsFor = (deviceId: string | null, routes?: DeviceRoutes) => {
     const descriptor = options.e2eDescriptor?.(deviceId) ?? null;
-    return { ...endpointSnapshot(options), ...(version ? { version } : {}), ...(descriptor ? { e2e: descriptor } : {}) };
+    const snapshot = endpointSnapshot(options);
+    const local = (routes ?? (deviceId ? options.deviceRoutes?.(deviceId) : undefined)) === "local";
+    return {
+      ...(local ? { ...snapshot, endpoints: snapshot.endpoints.filter((endpoint) => endpoint.kind !== "hosted") } : snapshot),
+      ...(version ? { version } : {}),
+      ...(descriptor ? { e2e: descriptor } : {}),
+    };
   };
   const handle = function handle(req: IncomingMessage, res: ServerResponse, listener: ProxyListener = "lan"): void {
     const target = requestTarget(req.url);
     if (!target) return sendJson(res, 400, { error: "invalid request target" });
     const path = (req.url ?? "/").split("?")[0];
     const method = req.method ?? "GET";
+    const bodiless = METHODS_WITHOUT_BODY.has(method);
+    if (bodiless && req.headers["transfer-encoding"] !== undefined) {
+      req.resume();
+      res.setHeader("connection", "close");
+      return sendJson(res, 400, { error: "invalid request" });
+    }
 
     // A native app sends no Origin: anything with one is a browser, refused
     // before the token is looked at.
@@ -407,6 +446,7 @@ export function createProxyHandler(options: ProxyOptions) {
 
     const token = bearerToken(req.headers.authorization);
     const device = options.authenticate(token);
+    if (listener === "origin" && device?.routes === "local") return sendJson(res, 403, { error: LOCAL_ONLY_REFUSAL });
     const e2e = e2eContextOf(req.socket);
     if (!e2e && listener === "lan" && device?.e2eAt && path !== "/api/health") return sendJson(res, 426, UPDATE_APP);
     const e2eDenial = e2e ? e2eRefusal(e2e, method, path, device?.id) : null;
@@ -469,7 +509,8 @@ export function createProxyHandler(options: ProxyOptions) {
           const pairedId = (result.device as { id?: unknown } | null)?.id;
           if (e2e && typeof pairedId === "string") options.e2ePaired?.(e2e, pairedId);
           const hosts = options.hosts?.() ?? [];
-          const endpoints = options.endpoints?.() ?? [];
+          const pairedRoutes = (result.device as { routes?: DeviceRoutes } | null)?.routes;
+          const endpoints = (options.endpoints?.() ?? []).filter((endpoint) => pairedRoutes !== "local" || endpoint.kind !== "hosted");
           const descriptor = options.e2eDescriptor?.(typeof pairedId === "string" ? pairedId : null) ?? null;
           const response: typeof result & {
             serverName: string;
@@ -496,7 +537,7 @@ export function createProxyHandler(options: ProxyOptions) {
     // Sidecar-owned state: answered here after the bearer and default-deny
     // checks, never sent to the harness.
     if (method === "GET" && path === "/api/companion/endpoints") {
-      return sendJson(res, 200, endpointsFor(device?.id ?? null));
+      return sendJson(res, 200, endpointsFor(device?.id ?? null, device?.routes));
     }
 
     const mutationToken = device ? options.mutationToken?.() : undefined;
@@ -509,7 +550,7 @@ export function createProxyHandler(options: ProxyOptions) {
         port: options.harnessPort,
         path: req.url,
         method,
-        headers: forwardHeaders(req, device?.id, mutationToken ?? undefined),
+        headers: forwardHeaders(req, device?.id, mutationToken ?? undefined, bodiless),
       },
       (harness) => {
         clearTimeout(headersDeadline);
@@ -586,6 +627,7 @@ export function createProxyHandler(options: ProxyOptions) {
             if (!harness.destroyed) harness.destroy();
             if (!res.destroyed) res.destroy();
           };
+          const untrackOrigin = listener === "origin" && device?.id ? trackOrigin(device.id, disconnect) : null;
           let releaseConnection =
             tracksDeviceConnection && currentDevice?.id
               ? options.connected?.(currentDevice.id, disconnect) ?? null
@@ -609,6 +651,7 @@ export function createProxyHandler(options: ProxyOptions) {
             eventStreams.set(pushTo, open);
           }
           const release = () => {
+            untrackOrigin?.();
             releaseConnection?.();
             releaseConnection = null;
             if (pushTo) {
@@ -791,7 +834,12 @@ export function createProxyHandler(options: ProxyOptions) {
           : { error: "Seira is not running on this computer" },
       );
     });
-    req.pipe(upstream);
+    if (bodiless) {
+      req.resume();
+      upstream.end();
+    } else {
+      req.pipe(upstream);
+    }
   };
 
   handle.upgrade = (req: IncomingMessage, socket: Duplex, head: Buffer, listener: ProxyListener = "lan"): void => {
@@ -801,6 +849,13 @@ export function createProxyHandler(options: ProxyOptions) {
     }
     const token = bearerToken(req.headers.authorization);
     const device = options.authenticate(token);
+    if (listener === "origin" && device?.routes === "local") {
+      const body = JSON.stringify({ error: LOCAL_ONLY_REFUSAL });
+      socket.end(
+        `HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`,
+      );
+      return;
+    }
     const e2e = e2eContextOf(req.socket);
     if (!e2e && listener === "lan" && device?.e2eAt) {
       socket.end("HTTP/1.1 426 Upgrade Required\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
@@ -810,7 +865,16 @@ export function createProxyHandler(options: ProxyOptions) {
       socket.destroy();
       return;
     }
+    if (listener === "origin" && device?.id) {
+      const untrack = trackOrigin(device.id, () => socket.destroy());
+      socket.once("close", untrack);
+    }
     viewers.handleUpgrade(req, socket, head, device);
+  };
+  handle.disconnectOrigin = (deviceId: string): void => {
+    const open = originStreams.get(deviceId);
+    if (!open) return;
+    for (const close of Array.from(open)) close();
   };
   handle.closeViewers = (): void => viewers.closeAll();
   /** The endpoint list again, as an event on every event stream the device holds: a phone hears a change of where it

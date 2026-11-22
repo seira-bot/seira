@@ -81,6 +81,11 @@ export function loadBrand(options: { file?: string; isEntitled?: (feature: strin
   return { brand: parsed.data, source: "file", file };
 }
 
+/** All a stranger sees before signing in: no file path, no notice about the operator's setup. */
+export function publicBrand(status: BrandStatus): Pick<BrandStatus, "brand" | "source"> {
+  return { brand: status.brand, source: status.source };
+}
+
 export function describeBrand(status: BrandStatus): string {
   if (status.source === "file") return `brand: ${status.brand.name} (from ${status.file})`;
   return `brand: default${status.notice ? ` (${status.notice})` : ""}`;

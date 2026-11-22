@@ -171,7 +171,7 @@ describe("sign in with your email on a hosted server", () => {
     expect(right.body.session).toMatchObject({ label: "Her iPad", scopes: ["admin", "client"], email: "her@example.test" });
     expect(right.body.environment.environmentId).toBeTruthy();
     const cookie = cookieOf(right);
-    expect(cookie).toMatch(/^seira_session_/);
+    expect(cookie).toMatch(/^__Host-seira_session_/);
     expect(String(right.headers["set-cookie"])).toMatch(/HttpOnly/);
 
     const me = await call("/api/auth/session", { headers: { cookie, origin: `https://${HOST}` } });

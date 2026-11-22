@@ -49,6 +49,9 @@ let assignmentStatusCode = 200;
 let lastThreadBody: any = null;
 let threadCalls = 0;
 let threadsList: unknown = { threads: [] };
+let boardCloseList: unknown = { cards: [] };
+let boardCloseReply: { status: number; body: unknown } = { status: 200, body: { ok: true, title: "Ship the report", botName: "Ops" } };
+let boardCloseBody: any = null;
 let threadResponse: unknown = { threadId: "thread-new", title: "QA: PR #1", botId: "bot-asker", botName: "Asker", self: true, state: "running", limit: 3 };
 let computerRequests: { method: string; url: string; body: unknown }[] = [];
 let computerResponse: unknown = { current: "local", available: ["local", "vm"] };
@@ -266,6 +269,21 @@ beforeAll(async () => {
       lastModelsUrl = req.url;
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ current: { instanceId: "claude", model: "claude-sonnet-5" }, engines: [{ instanceId: "codex", name: "Codex", models: ["gpt-5.5"] }] }));
+      return;
+    }
+    if (req.url?.startsWith("/api/internal/board-close")) {
+      if (req.method === "GET") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify(boardCloseList));
+        return;
+      }
+      let data = "";
+      req.on("data", (c) => (data += c));
+      req.on("end", () => {
+        boardCloseBody = JSON.parse(data);
+        res.writeHead(boardCloseReply.status, { "content-type": "application/json" });
+        res.end(JSON.stringify(boardCloseReply.body));
+      });
       return;
     }
     if (req.method === "GET" && req.url?.startsWith("/api/internal/threads?")) {
@@ -674,6 +692,7 @@ describe("agents-proxy MCP surface", () => {
       "suggest_team",
       "memory_update",
       "retry_thread",
+      "board_close",
       "memory_log",
       "session_search",
       "trigger_info",
@@ -1328,6 +1347,31 @@ describe("agents-proxy MCP surface", () => {
     assignmentStatusResponse = { outstanding: [] };
     expect((await callTool("assignment_status", {})).result.content[0].text).toBe("Nothing outstanding: no assignment of this conversation is still open.");
     assignmentStatusResponse = DONE_ASSIGNMENT;
+  });
+
+  it("board_close lists the cards the bot may close, and closes one with a reason", async () => {
+    boardCloseList = { cards: [{ id: "handoff:h1", title: "Ship the report", state: "failed", botName: "Ops" }] };
+    expect((await callTool("board_close", {})).result.content[0].text).toBe("Needs you cards you may move to Done:\n- Ship the report (failed, @Ops) [card id: handoff:h1]");
+    boardCloseList = { cards: [] };
+    expect((await callTool("board_close", {})).result.content[0].text).toBe("No Needs you cards that you may move to Done.");
+
+    const missing = await callTool("board_close", { card_id: "handoff:h1" });
+    expect(missing.result.isError).toBe(true);
+    expect(missing.result.content[0].text).toContain("needs a reason");
+
+    const closed = await callTool("board_close", { card_id: "handoff:h1", reason: "The person fixed it by hand." });
+    expect(closed.result.isError).toBeFalsy();
+    expect(closed.result.content[0].text).toContain("Moved Ship the report to Done as closed");
+    expect(boardCloseBody).toMatchObject({ cardId: "handoff:h1", reason: "The person fixed it by hand." });
+
+    boardCloseReply = { status: 403, body: { error: "you can close only cards of your own work" } };
+    try {
+      const refused = await callTool("board_close", { card_id: "handoff:x", reason: "Not mine." });
+      expect(refused.result.isError).toBe(true);
+      expect(refused.result.content[0].text).toContain("you can close only cards of your own work");
+    } finally {
+      boardCloseReply = { status: 200, body: { ok: true, title: "Ship the report", botName: "Ops" } };
+    }
   });
 
   it("assignment_status and list_threads say why a queued handoff has not started, with its handoff id", async () => {

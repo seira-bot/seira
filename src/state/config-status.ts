@@ -153,6 +153,12 @@ export interface ConfigStatus {
     customUrl?: string;
     customModel?: string;
     openaiConfigured?: boolean;
+    /** OpenAI images use the main OpenAI key: no image key of their own is saved. */
+    openaiShared?: boolean;
+    /** Codex has a ChatGPT sign-in of its own on this computer; never its token. */
+    codexSignedIn?: boolean;
+    /** That sign-in's ChatGPT plan, such as "plus" or "free"; null when unknown. */
+    codexPlan?: string | null;
     xaiConfigured?: boolean;
     customKeyConfigured?: boolean;
     geminiConfigured?: boolean;

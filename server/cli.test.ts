@@ -825,3 +825,64 @@ describe.skipIf(process.platform === "win32")("serve --domain", () => {
     }
   }, 120_000);
 });
+
+describe("login --events", () => {
+  const stubs: Array<{ close(): Promise<void> }> = [];
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    for (const stub of stubs.splice(0)) await stub.close().catch(() => undefined);
+  });
+
+  async function drive(lines: string[], options: { down?: boolean } = {}) {
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-login-events-"));
+    const stub = await startControlPlaneStub();
+    stubs.push(stub);
+    vi.stubEnv("SEIRA_CONTROL_PLANE_URL", stub.url);
+    if (options.down) await stub.close();
+    const asked: string[] = [];
+    const queue = [...lines];
+    const text: string[] = [];
+    const io = { log: (line: string) => text.push(line), error: (line: string) => text.push(line), ask: async () => "" };
+    const events = { ask: (email: string) => asked.push(email), readLine: async () => queue.shift() ?? null };
+    try {
+      const code = await runLogin({ command: "login", port: 1, dataDir, tailscale: false, tunnel: false, client: false, pair: true, json: false, email: "cli@example.test", events: true }, io, events);
+      return { code, asked, text: text.join("\n"), otp: stub.otp };
+    } finally {
+      await removeTempDir(dataDir);
+    }
+  }
+
+  it("asks again after a wrong code, ignores lines that are not a code, and signs in with the right one", async () => {
+    const result = await drive(["not a code", "code 1234", "code 11111111", "code 24681357"]);
+    expect(result.code).toBe(0);
+    expect(result.asked).toEqual(["cli@example.test", "cli@example.test"]);
+    expect(result.text).toContain("sign-in failed");
+    for (const secret of ["11111111", result.otp]) expect(result.text).not.toContain(secret);
+  });
+
+  it("asks for no code when the request for it fails", async () => {
+    const result = await drive(["code 24681357"], { down: true });
+    expect(result.code).toBe(1);
+    expect(result.asked).toEqual([]);
+    expect(result.text).toContain("could not send a sign-in code");
+  });
+
+  it("stops with one sentence and exit 1 when the input ends without a code", async () => {
+    const result = await drive([]);
+    expect(result.code).toBe(1);
+    expect(result.asked).toHaveLength(1);
+    expect(result.text).toContain("No sign-in code was given.");
+  });
+
+  it("gives up after three wrong codes", async () => {
+    const result = await drive(["code 11111111", "code 22222222", "code 33333333", "code 24681357"]);
+    expect(result.code).toBe(1);
+    expect(result.asked).toHaveLength(3);
+    expect(result.text).not.toMatch(/11111111|22222222|33333333/);
+  });
+
+  it("needs an email in the arguments", () => {
+    expect(parseArgs(["login", "--events"], {})).toEqual({ error: "--events needs --email" });
+    expect(parseArgs(["login", "--events", "--email", "a@example.test"], {})).toMatchObject({ events: true, email: "a@example.test" });
+  });
+});

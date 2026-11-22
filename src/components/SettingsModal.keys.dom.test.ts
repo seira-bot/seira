@@ -118,6 +118,25 @@ describe("searching Settings for a key", () => {
     expect(result("liveCalls")!.textContent).toMatch(/^OpenAI key.*AI › Voice and calls$/);
   });
 
+  it("lists a Routing or Images key under that section and opens it there, where its one field is", () => {
+    flushSync(() => root.render(createElement(SettingsModal)));
+    type("cloudflare");
+    expect(result("workersAi")!.textContent).toMatch(/AI › Routing and extraction$/);
+    type("jev");
+    expect(result("jev")!.textContent).toMatch(/AI › Routing and extraction$/);
+    flushSync(() => result("jev")!.click());
+    expect(fx.section).toBe("decisionModel");
+  });
+
+  it("lists the treg key while X research is not connected, and leaves it to the X card in Apps once it is", () => {
+    flushSync(() => root.render(createElement(SettingsModal)));
+    type("treg");
+    expect(result("treg")!.textContent).toMatch(/AI › Apps and tools$/);
+    flushSync(() => { fx.config = { ...fx.config, treg: { configured: true, last4: "a1b2" } }; publish(); });
+    expect(result("treg")).toBeNull();
+    expect(document.querySelector('[data-settings-hit="apps"]')).not.toBeNull();
+  });
+
   it("says plainly when nothing matches", () => {
     flushSync(() => root.render(createElement(SettingsModal)));
     type("zzzz");

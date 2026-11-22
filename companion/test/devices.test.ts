@@ -122,9 +122,9 @@ describe("DeviceRegistry", () => {
     expect(registry.authenticate(`${token}x`)).toBeNull();
   });
 
-  it("burns the pairing window after too many wrong codes", () => {
+  it("wrong codes lock the code but not the QR token", () => {
     const registry = new DeviceRegistry();
-    const { code } = registry.openPairing();
+    const { code, token } = registry.openPairing();
     const wrong = code === "000000" ? "111111" : "000000";
 
     for (let i = 1; i < MAX_PAIRING_ATTEMPTS; i++) {
@@ -132,10 +132,61 @@ describe("DeviceRegistry", () => {
       expect(registry.pairing()).not.toBeNull();
     }
     expect(registry.redeem(wrong, "iPhone")).toMatchObject({ error: expect.stringContaining("start pairing again"), code: "pairing_too_many" });
-    expect(registry.pairing()).toBeNull();
+    expect(registry.pairing()).not.toBeNull();
 
-    expect(registry.redeem(code, "iPhone")).toMatchObject({ error: expect.stringContaining("no pairing"), code: "pairing_not_open" });
+    expect(registry.redeem(code, "iPhone")).toMatchObject({ code: "pairing_too_many" });
     expect(registry.count()).toBe(0);
+    expect(registry.redeem(token, "iPhone")).toHaveProperty("token");
+    expect(registry.count()).toBe(1);
+  });
+
+  it("locks the code of a renewed window and of the window it replaced", () => {
+    const registry = new DeviceRegistry();
+    const first = registry.openPairing();
+    const second = registry.renewPairing();
+    const wrong = [first.code, second.code].includes("000000") ? "111111" : "000000";
+    for (let i = 0; i < MAX_PAIRING_ATTEMPTS; i++) registry.redeem(wrong, "iPhone");
+    expect(registry.redeem(second.code, "iPhone")).toMatchObject({ code: "pairing_too_many" });
+    expect(registry.redeem(first.token, "iPhone")).toHaveProperty("token");
+  });
+
+  it("a renewal keeps the code lock", () => {
+    const registry = new DeviceRegistry();
+    const first = registry.openPairing();
+    const wrong = first.code === "000000" ? "111111" : "000000";
+    for (let i = 0; i < MAX_PAIRING_ATTEMPTS; i++) registry.redeem(wrong, "iPhone");
+    const renewed = registry.renewPairing();
+    expect(registry.redeem(renewed.code, "iPhone")).toMatchObject({ code: "pairing_too_many" });
+    expect(registry.redeem(renewed.token, "iPhone")).toHaveProperty("token");
+  });
+
+  it("a renewal keeps the remaining attempts", () => {
+    const registry = new DeviceRegistry();
+    const first = registry.openPairing();
+    const wrong = first.code === "000000" ? "111111" : "000000";
+    for (let i = 0; i < MAX_PAIRING_ATTEMPTS - 2; i++) registry.redeem(wrong, "iPhone");
+    const renewed = registry.renewPairing();
+    const wrongAgain = renewed.code === "000000" ? "111111" : "000000";
+    expect(registry.redeem(wrongAgain, "iPhone")).toMatchObject({ code: "pairing_code_wrong" });
+    expect(registry.redeem(wrongAgain, "iPhone")).toMatchObject({ code: "pairing_too_many" });
+  });
+
+  it("starting pairing again restores the code", () => {
+    const registry = new DeviceRegistry();
+    const first = registry.openPairing();
+    const wrong = first.code === "000000" ? "111111" : "000000";
+    for (let i = 0; i < MAX_PAIRING_ATTEMPTS; i++) registry.redeem(wrong, "iPhone");
+    const reopened = registry.openPairing();
+    expect(registry.redeem(reopened.code, "iPhone")).toHaveProperty("token");
+  });
+
+  it("does not count a wrong token against the code", () => {
+    const registry = new DeviceRegistry();
+    const { code } = registry.openPairing();
+    for (let i = 0; i < MAX_PAIRING_ATTEMPTS + 2; i++) {
+      expect(registry.redeem("seira_pair_wrong", "iPhone")).toMatchObject({ code: "pairing_code_wrong" });
+    }
+    expect(registry.redeem(code, "iPhone")).toHaveProperty("token");
   });
 
   it("spends a code exactly once", () => {
@@ -535,7 +586,7 @@ describe("re-pairing with the token a phone already holds", () => {
     const registry = new DeviceRegistry();
     const first = pair(registry);
     registry.openPairing();
-    expect(registry.redeem("seira_pair_wrong", "Thief", undefined, first.token)).toMatchObject({ code: "pairing_code_wrong" });
+    expect(registry.redeem(registry.pairing()!.code === "999999" ? "888888" : "999999", "Thief", undefined, first.token)).toMatchObject({ code: "pairing_code_wrong" });
     expect(registry.pairing()?.attemptsLeft).toBe(MAX_PAIRING_ATTEMPTS - 1);
     expect(registry.authenticate(first.token)?.id).toBe(first.device.id);
     registry.closePairing();

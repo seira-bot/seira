@@ -2,6 +2,8 @@ import type { ReadableStreamReadResult } from "node:stream/web";
 import { z } from "zod";
 
 import { IMAGE_DEFAULT_MODELS, IMAGE_PROVIDERS, looksLikeApiKey, supportsImageComplexity, normalizeImageGenerationUrl, type ImageGenerationConfig, type ImageProvider } from "../shared/image-generation.ts";
+import { codexImageLogin, codexPlanMakesImages, renewCodexImageLogin, type CodexImageSource } from "./codex-image-login.ts";
+import type { InstanceConfigMap } from "./contracts.ts";
 import { decodeGeneratedImage } from "./generated-image.ts";
 
 export const IMAGE_GENERATION_TIMEOUT_MS = 120_000;
@@ -14,9 +16,18 @@ const imagesApiResponseSchema = z.object({
 
 export interface ImageCredentials {
   imageGen?: ImageGenerationConfig;
+  /** The main OpenAI key: OpenAI images use it when no image key of their own is saved. */
+  openai?: { key?: string };
   xai?: { key?: string };
   openrouter?: { key?: string };
+  /** The engines: a plain Codex engine names the Codex home whose ChatGPT sign-in makes Codex images. */
+  instances?: InstanceConfigMap;
 }
+
+/** Asks Codex to renew its own ChatGPT sign-in; tests replace it. */
+export type RenewCodexLogin = (source: CodexImageSource) => Promise<boolean>;
+
+const CODEX_IMAGES_URL = "https://chatgpt.com/backend-api/codex/images/generations";
 
 export interface ImageSlot {
   provider: ImageProvider;
@@ -86,10 +97,18 @@ const PROVIDERS: Record<ImageProvider, {
   openai: {
     name: "OpenAI",
     missing: "Add an OpenAI image API key first",
-    key: (cfg) => cfg.imageGen?.key,
+    key: (cfg) => cfg.imageGen?.key?.trim() || cfg.openai?.key,
     url: () => "https://api.openai.com/v1/images/generations",
     editUrl: "https://api.openai.com/v1/images/edits",
     body: (request) => ({ size: OPENAI_SIZES[request.aspect ?? "1:1"], quality: request.draft ? "low" : "auto", output_format: "webp" }),
+  },
+  codex: {
+    name: "Codex",
+    missing: "Sign in to Codex with a ChatGPT plan first",
+    // Codex's own ChatGPT sign-in authorizes the request: see codexHeaders.
+    key: () => undefined,
+    url: () => CODEX_IMAGES_URL,
+    body: (request) => ({ size: OPENAI_SIZES[request.aspect ?? "1:1"], quality: request.draft ? "low" : "auto", output_format: "png", background: "auto", n: 1 }),
   },
   xai: {
     name: "xAI",
@@ -177,6 +196,10 @@ export function primaryImageSlot(cfg: ImageCredentials): ImageSlot {
 
 export function imageSlotConfigured(cfg: ImageCredentials, slot: ImageSlot): boolean {
   if (slot.provider === "custom") return Boolean(customImageUrl(cfg) && slot.model);
+  if (slot.provider === "codex") {
+    const codex = codexImageLogin(cfg.instances);
+    return Boolean(codex && codexPlanMakesImages(codex.login.plan) && slot.model);
+  }
   return Boolean(PROVIDERS[slot.provider].key(cfg)?.trim() && slot.model);
 }
 
@@ -234,14 +257,35 @@ export async function generateImageWith(
   fetchImpl: typeof fetch = fetch,
   timeoutMs = IMAGE_GENERATION_TIMEOUT_MS,
   cancel?: AbortSignal,
+  renewCodex: RenewCodexLogin = renewCodexImageLogin,
 ): Promise<GeneratedImage> {
   const provider = PROVIDERS[slot.provider];
+  const isCodex = slot.provider === "codex";
+  let codex = isCodex ? codexImageLogin(cfg.instances) : null;
+  if (codex && !codexPlanMakesImages(codex.login.plan)) fail("Codex makes images only on a paid ChatGPT plan", 409, true);
   if (!imageSlotConfigured(cfg, slot)) fail(provider.missing, 409, true);
 
   const apiKey = provider.key(cfg)?.trim();
   const { edit } = request;
   const headers: Record<string, string> = edit ? {} : { "content-type": "application/json" };
   if (apiKey) headers.authorization = `Bearer ${apiKey}`;
+  // The token and the account id go only into these headers: never into an error, a log or a reply.
+  const signCodex = () => {
+    if (!codex) fail(provider.missing, 409, true);
+    headers.authorization = `Bearer ${codex.login.token}`;
+    headers["chatgpt-account-id"] = codex.login.accountId;
+    headers.accept = "application/json";
+  };
+  let codexRenewed = false;
+  const renewCodexSignIn = async () => {
+    if (!codex) return;
+    codexRenewed = true;
+    await renewCodex(codex.source).catch(() => false);
+    codex = codexImageLogin(cfg.instances);
+    signCodex();
+  };
+  if (codex?.login.expired) await renewCodexSignIn();
+  else if (codex) signCodex();
   const gpt26 = supportsImageComplexity(slot);
   if (request.gif && !gpt26) fail("Animated GIFs need a GPT-Image-2.6 model (Sunburst or Flare) on OpenAI", 409, true);
   const complexity = gpt26 ? cfg.imageGen?.complexity : undefined;
@@ -270,7 +314,7 @@ export async function generateImageWith(
     try {
       return await fetchImpl(url, {
         method: "POST",
-        headers,
+        headers: { ...headers },
         body: edit ? multipart(payload, edit) : JSON.stringify(payload),
         redirect: "error",
         signal: cancel ? AbortSignal.any([timeoutSignal, cancel]) : timeoutSignal,
@@ -284,8 +328,15 @@ export async function generateImageWith(
   };
   let response = await send(body);
 
-  // Some Custom gateways accept only size "auto" and reject every exact size, so a failed exact size gets one retry with "auto".
-  if (!response.ok && slot.provider === "custom" && !NOT_STARTED_STATUSES.has(response.status)) {
+  // A Codex sign-in can end before its token says it does: Codex renews it once, then the same request goes again.
+  if (isCodex && response.status === 401 && !codexRenewed) {
+    await response.body?.cancel().catch(() => undefined);
+    await renewCodexSignIn();
+    response = await send(body);
+  }
+
+  // Some Custom gateways and the Codex backend accept only size "auto" for some models, so a failed exact size gets one retry with "auto".
+  if (!response.ok && (slot.provider === "custom" || isCodex) && !NOT_STARTED_STATUSES.has(response.status)) {
     await response.body?.cancel().catch(() => undefined);
     // A retry that cannot connect keeps the exact size's error; only cancel and timeout end the call there.
     const retry = await send({ ...body, size: "auto" }).catch((error: unknown) => {
@@ -343,11 +394,11 @@ export async function generateImageWith(
 export async function generateImage(
   cfg: ImageCredentials,
   request: ImageRequest,
-  options: { slot?: "primary" | "fallback"; fetchImpl?: typeof fetch; timeoutMs?: number; signal?: AbortSignal } = {},
+  options: { slot?: "primary" | "fallback"; fetchImpl?: typeof fetch; timeoutMs?: number; signal?: AbortSignal; renewCodex?: RenewCodexLogin } = {},
 ): Promise<GeneratedSlotImage> {
   const { primary, fallback } = imageSlots(cfg);
   const attempt = async (slot: ImageSlot, usedFallback: boolean): Promise<GeneratedSlotImage> => ({
-    ...await generateImageWith(cfg, slot, request, options.fetchImpl, options.timeoutMs, options.signal),
+    ...await generateImageWith(cfg, slot, request, options.fetchImpl, options.timeoutMs, options.signal, options.renewCodex),
     ...slot,
     usedFallback,
   });

@@ -4,16 +4,19 @@ import { z } from "zod";
 import { IMAGE_MODEL_CHOICES, IMAGE_PROVIDERS, type ImageProvider, type ImageProviderTest } from "../../shared/image-generation.ts";
 import { avatarGenerationRequestSchema, generateAvatarImage } from "../avatar-image.ts";
 import { parseBotProfilePatch } from "../bot-profile.ts";
+import { codexImageLogin, codexPlanMakesImages, renewCodexImageLogin } from "../codex-image-login.ts";
 import { createOpenRouterModelCatalog } from "../decider/openrouter-models.ts";
-import { customImageUrl, imageProviderKey, imageSlots, type ImageCredentials } from "../image-generation.ts";
+import { customImageUrl, imageProviderKey, imageSlots, type ImageCredentials, type RenewCodexLogin } from "../image-generation.ts";
 import { checkProviderKey, type ProviderKeyKind } from "../provider-key-check.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 const GEMINI_OPENAI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai";
+/** Codex's plan-usage answer: it checks the ChatGPT sign-in without making an image. */
+const CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
 const testSchema = z.object({ provider: z.enum(IMAGE_PROVIDERS) });
 
 /** Every openaiCompat target carries its own URL: without one, the key check would fall back to OpenRouter. */
-function keyCheckTarget(cfg: ImageCredentials, provider: ImageProvider): { provider: ProviderKeyKind; url?: string } | null {
+function keyCheckTarget(cfg: ImageCredentials, provider: Exclude<ImageProvider, "codex">): { provider: ProviderKeyKind; url?: string } | null {
   if (provider === "gemini") return { provider: "openaiCompat", url: GEMINI_OPENAI_BASE };
   if (provider === "custom") {
     const url = customImageUrl(cfg);
@@ -36,7 +39,44 @@ async function openrouterHasModel(model: string, fetchImpl: typeof fetch): Promi
   }
 }
 
-export async function testImageProvider(cfg: ImageCredentials, provider: ImageProvider, fetchImpl: typeof fetch = fetch): Promise<ImageProviderTest> {
+/** Checks Codex's own ChatGPT sign-in; the answer names no token, account id or email. */
+async function testCodexSignIn(cfg: ImageCredentials, fetchImpl: typeof fetch, renewCodex: RenewCodexLogin): Promise<ImageProviderTest> {
+  let codex = codexImageLogin(cfg.instances);
+  if (!codex) return { ok: false, reason: "no_sign_in" };
+  if (!codexPlanMakesImages(codex.login.plan)) return { ok: false, reason: "free_plan" };
+  const check = async (): Promise<number | null> => {
+    if (!codex) return null;
+    try {
+      const response = await fetchImpl(CODEX_USAGE_URL, {
+        headers: { authorization: `Bearer ${codex.login.token}`, "chatgpt-account-id": codex.login.accountId, accept: "application/json" },
+        signal: AbortSignal.timeout(10_000), redirect: "error",
+      });
+      await response.body?.cancel().catch(() => undefined);
+      return response.status;
+    } catch {
+      return null;
+    }
+  };
+  let status = codex.login.expired ? 401 : await check();
+  if (status === 401 || status === 403) {
+    await renewCodex(codex.source).catch(() => false);
+    codex = codexImageLogin(cfg.instances);
+    if (!codex) return { ok: false, reason: "no_sign_in" };
+    status = await check();
+  }
+  if (status === null) return { ok: false, reason: "unreachable" };
+  if (status >= 200 && status < 300) return { ok: true, check: "authentication" };
+  if (status === 401 || status === 403) return { ok: false, reason: "rejected", status };
+  return { ok: false, reason: "unexpected", status };
+}
+
+export async function testImageProvider(
+  cfg: ImageCredentials,
+  provider: ImageProvider,
+  fetchImpl: typeof fetch = fetch,
+  renewCodex: RenewCodexLogin = renewCodexImageLogin,
+): Promise<ImageProviderTest> {
+  if (provider === "codex") return testCodexSignIn(cfg, fetchImpl, renewCodex);
   const target = keyCheckTarget(cfg, provider);
   if (!target) return { ok: false, reason: "no_url" };
   const key = imageProviderKey(cfg, provider);
@@ -56,7 +96,7 @@ export async function testImageProvider(cfg: ImageCredentials, provider: ImagePr
   return { ok: true, check: verdict.check, ...(verdict.freeTier !== undefined ? { freeTier: verdict.freeTier } : {}) };
 }
 
-export function createImageSettingsRoutes(deps: { config: () => ImageCredentials; fetch?: typeof fetch }): RouteHandler {
+export function createImageSettingsRoutes(deps: { config: () => ImageCredentials; fetch?: typeof fetch; renewCodex?: RenewCodexLogin }): RouteHandler {
   const models = createOpenRouterModelCatalog({ fetch: deps.fetch, output: "image", curated: IMAGE_MODEL_CHOICES.openrouter });
   return async ({ req, res, path, method, json, readBody }) => {
     if (method === "POST" && path === "/api/bot-defaults/avatar") {
@@ -79,6 +119,6 @@ export function createImageSettingsRoutes(deps: { config: () => ImageCredentials
     const parsed = testSchema.safeParse(await readBody(req, 8192));
     if (!parsed.success) return json(res, 400, { error: `provider must be one of ${IMAGE_PROVIDERS.join(", ")}` });
     res.setHeader("cache-control", "no-store");
-    return json(res, 200, await testImageProvider(deps.config(), parsed.data.provider, deps.fetch));
+    return json(res, 200, await testImageProvider(deps.config(), parsed.data.provider, deps.fetch, deps.renewCodex));
   };
 }

@@ -1,7 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdirSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { IMAGE_DEFAULT_MODELS } from "../shared/image-generation.ts";
-import { generateImage, imageGenerationReady, imageSlots, markupProblem } from "./image-generation.ts";
+import { generateImage, imageGenerationReady, imageSlotConfigured, imageSlots, markupProblem, type ImageCredentials } from "./image-generation.ts";
+import { removeTempDir } from "./testing/cleanup.ts";
+import { codexAuthFile } from "./testing/codex-image-auth.ts";
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
 const BOTH = {
@@ -341,5 +346,157 @@ describe("a Custom gateway that accepts only size auto", () => {
     const fetchMock = vi.fn<typeof fetch>(async () => new Response("{}", { status: 502 }));
     await expect(generateImage({ imageGen: { key: "openai-secret" } }, { prompt: "owl" }, { fetchImpl: fetchMock })).rejects.toThrow("HTTP 502");
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe("OpenAI images and the main OpenAI key", () => {
+  const bearer = (fetchMock: ReturnType<typeof vi.fn<typeof fetch>>) => new Headers((fetchMock.mock.calls[0]![1] as RequestInit).headers).get("authorization");
+
+  it("uses the main OpenAI key when no image key of its own is saved", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => imageResponse());
+    const cfg = { openai: { key: "main-openai-key" }, imageGen: { primary: { provider: "openai" as const } } };
+    expect(imageGenerationReady(cfg)).toBe(true);
+    await generateImage(cfg, { prompt: "owl" }, { fetchImpl: fetchMock });
+    expect(bearer(fetchMock)).toBe("Bearer main-openai-key");
+  });
+
+  it("keeps the image key of its own when both are saved", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => imageResponse());
+    await generateImage({ openai: { key: "main-openai-key" }, imageGen: { key: "image-openai-key" } }, { prompt: "owl" }, { fetchImpl: fetchMock });
+    expect(bearer(fetchMock)).toBe("Bearer image-openai-key");
+  });
+
+  it("never takes the main OpenAI key as a model ID", () => {
+    expect(imageSlots({ openai: { key: "main-openai-key" }, imageGen: { primary: { provider: "openai", model: "main-openai-key" } } }).primary.model).toBe("gpt-image-2");
+  });
+});
+
+describe("Codex images with Codex's own ChatGPT sign-in", () => {
+  const URL_CODEX = "https://chatgpt.com/backend-api/codex/images/generations";
+  let home: string;
+  const codexDir = () => join(home, "codex-home");
+  const cfg = (extra: Partial<ImageCredentials> = {}): ImageCredentials => ({
+    instances: { codex: { driver: "codex", environment: { CODEX_HOME: codexDir() } } },
+    imageGen: { primary: { provider: "codex" } },
+    ...extra,
+  });
+  const sign = (token: string, plan: string | null = "plus", expiresAt = Date.now() + 3_600_000) =>
+    codexAuthFile(codexDir(), { token, accountId: "acct-fixture", plan, expiresAt });
+  const call = (fetchMock: ReturnType<typeof vi.fn<typeof fetch>>, index = 0) => {
+    const [url, init] = fetchMock.mock.calls[index] as [string, RequestInit];
+    return { url, headers: new Headers(init.headers), body: JSON.parse(String(init.body)) };
+  };
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), "seira-codex-images-"));
+    mkdirSync(codexDir());
+  });
+  afterEach(async () => { await removeTempDir(home); });
+
+  it("sends one request to the Codex Images endpoint with the sign-in's token and account id, and returns the image", async () => {
+    const access = sign("token-one");
+    const fetchMock = vi.fn<typeof fetch>(async () => imageResponse());
+    const renew = vi.fn(async () => true);
+    const image = await generateImage(cfg(), { prompt: "owl", aspect: "16:9" }, { fetchImpl: fetchMock, renewCodex: renew });
+    expect(image).toMatchObject({ provider: "codex", model: "gpt-image-2", mime: "image/png", usedFallback: false });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const sent = call(fetchMock);
+    expect(sent.url).toBe(URL_CODEX);
+    expect(sent.headers.get("authorization")).toBe(`Bearer ${access}`);
+    expect(sent.headers.get("chatgpt-account-id")).toBe("acct-fixture");
+    expect(sent.body).toEqual({ model: "gpt-image-2", prompt: "owl", size: "1536x1024", quality: "auto", output_format: "png", background: "auto", n: 1 });
+    expect(renew).not.toHaveBeenCalled();
+  });
+
+  it("never sends a detail level to Codex", async () => {
+    sign("token-one");
+    const fetchMock = vi.fn<typeof fetch>(async () => imageResponse());
+    await generateImage(cfg({ imageGen: { primary: { provider: "codex", model: "gpt-image-2.6-flare" }, complexity: "low" } }), { prompt: "owl" }, { fetchImpl: fetchMock });
+    expect(call(fetchMock).body).not.toHaveProperty("complexity");
+  });
+
+  it("counts as not set up without a sign-in, and moves to the backup without calling Codex", async () => {
+    expect(imageGenerationReady(cfg())).toBe(false);
+    expect(imageSlotConfigured(cfg(), { provider: "codex", model: "gpt-image-2" })).toBe(false);
+    const fetchMock = vi.fn<typeof fetch>(async () => imageResponse());
+    await expect(generateImage(cfg(), { prompt: "owl" }, { fetchImpl: fetchMock })).rejects.toThrow("Sign in to Codex with a ChatGPT plan first");
+    expect(fetchMock).not.toHaveBeenCalled();
+    const withBackup = cfg({ imageGen: { primary: { provider: "codex" }, fallback: { provider: "xai" } }, xai: { key: "xai-secret" } });
+    expect(await generateImage(withBackup, { prompt: "owl" }, { fetchImpl: fetchMock })).toMatchObject({ provider: "xai", usedFallback: true });
+    expect(fetchMock.mock.calls.map(hostOf)).toEqual(["api.x.ai"]);
+  });
+
+  it("refuses the free plan before any request, and tries the backup", async () => {
+    sign("token-free", "free");
+    expect(imageGenerationReady(cfg())).toBe(false);
+    const fetchMock = vi.fn<typeof fetch>(async () => imageResponse());
+    await expect(generateImage(cfg(), { prompt: "owl" }, { fetchImpl: fetchMock })).rejects.toThrow("Codex makes images only on a paid ChatGPT plan");
+    expect(fetchMock).not.toHaveBeenCalled();
+    const withBackup = cfg({ imageGen: { primary: { provider: "codex" }, fallback: { provider: "xai" } }, xai: { key: "xai-secret" } });
+    expect(await generateImage(withBackup, { prompt: "owl" }, { fetchImpl: fetchMock })).toMatchObject({ provider: "xai", usedFallback: true });
+    expect(fetchMock.mock.calls.map(hostOf)).toEqual(["api.x.ai"]);
+  });
+
+  it("asks Codex to renew once after a 401, and retries once with the new token", async () => {
+    const oldToken = sign("token-old");
+    let newToken = "";
+    const renew = vi.fn(async () => { newToken = sign("token-new"); return true; });
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response("{}", { status: 401 }))
+      .mockResolvedValueOnce(imageResponse());
+    expect(await generateImage(cfg(), { prompt: "owl" }, { fetchImpl: fetchMock, renewCodex: renew })).toMatchObject({ provider: "codex" });
+    expect(renew).toHaveBeenCalledOnce();
+    expect(call(fetchMock, 0).headers.get("authorization")).toBe(`Bearer ${oldToken}`);
+    expect(call(fetchMock, 1).headers.get("authorization")).toBe(`Bearer ${newToken}`);
+  });
+
+  it("stops after one renewal, says nothing of the token, and lets the backup try", async () => {
+    const access = sign("token-refused");
+    const renew = vi.fn(async () => true);
+    const fetchMock = vi.fn<typeof fetch>(async (url) => String(url).startsWith(URL_CODEX) ? new Response("{}", { status: 401 }) : imageResponse());
+    const error = await generateImage(cfg(), { prompt: "owl" }, { fetchImpl: fetchMock, renewCodex: renew }).catch((cause: unknown) => cause as Error);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe("Codex image generation failed (HTTP 401, model gpt-image-2)");
+    expect((error as Error).message).not.toContain(access);
+    expect(renew).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const withBackup = cfg({ imageGen: { primary: { provider: "codex" }, fallback: { provider: "xai" } }, xai: { key: "xai-secret" } });
+    expect(await generateImage(withBackup, { prompt: "owl" }, { fetchImpl: fetchMock, renewCodex: renew })).toMatchObject({ provider: "xai", usedFallback: true });
+  });
+
+  it("renews a token that has already ended before the first request", async () => {
+    sign("token-ended", "plus", Date.now() - 1_000);
+    let newToken = "";
+    const renew = vi.fn(async () => { newToken = sign("token-fresh"); return true; });
+    const fetchMock = vi.fn<typeof fetch>(async () => imageResponse());
+    await generateImage(cfg(), { prompt: "owl" }, { fetchImpl: fetchMock, renewCodex: renew });
+    expect(renew).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(call(fetchMock).headers.get("authorization")).toBe(`Bearer ${newToken}`);
+  });
+
+  it("retries once with size auto when Codex refuses the exact size", async () => {
+    sign("token-one");
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response("{}", { status: 400 }))
+      .mockResolvedValueOnce(imageResponse());
+    await generateImage(cfg(), { prompt: "owl" }, { fetchImpl: fetchMock });
+    expect([call(fetchMock, 0).body.size, call(fetchMock, 1).body.size]).toEqual(["1024x1024", "auto"]);
+  });
+
+  it.each([402, 403, 429])("does not retry size auto after HTTP %i", async (status) => {
+    sign("token-one");
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("{}", { status }));
+    await expect(generateImage(cfg(), { prompt: "owl" }, { fetchImpl: fetchMock, renewCodex: async () => true })).rejects.toThrow(`HTTP ${status}`);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("leaves animated GIFs and edits to OpenAI's GPT-Image-2.6", async () => {
+    sign("token-one");
+    const fetchMock = vi.fn<typeof fetch>(async () => imageResponse());
+    const flare = cfg({ imageGen: { primary: { provider: "codex", model: "gpt-image-2.6-flare" } } });
+    await expect(generateImage(flare, { prompt: "owl", gif: {} }, { fetchImpl: fetchMock })).rejects.toThrow("Animated GIFs need");
+    await expect(generateImage(flare, { prompt: "owl", edit: { image: { bytes: PNG, mime: "image/png" } } }, { fetchImpl: fetchMock })).rejects.toThrow("Editing an image needs");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

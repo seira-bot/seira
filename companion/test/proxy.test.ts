@@ -442,6 +442,22 @@ describe("the sidecar in front of an unmodified harness", () => {
     expect(smuggled.status).toBe(400);
   });
 
+  it("refuses a task working folder from a paired device", async () => {
+    const bot = (await device("POST", "/api/bots")).body.bot;
+    const tasksOf = async () =>
+      (await device("GET", "/api/bots")).body.bots.find((candidate: { id: string }) => candidate.id === bot.id).tasks?.length ?? 0;
+    const before = await tasksOf();
+
+    const refused = await device("POST", `/api/bots/${bot.id}/tasks`, { body: { title: "Folder", cwd: home } });
+    expect(refused.status).toBe(403);
+    expect(refused.body.error).toBe("Choose a working folder on the host computer.");
+    expect(await tasksOf()).toBe(before);
+
+    const created = await device("POST", `/api/bots/${bot.id}/tasks`, { body: { title: "No folder" } });
+    expect(created.status).toBe(201);
+    expect(await tasksOf()).toBe(before + 1);
+  });
+
   it("creates a bot through companion pairing without host defaults or settings access", async () => {
     const before = (await device("GET", "/api/bots")).body.bots;
     const created = await device("POST", "/api/bots");

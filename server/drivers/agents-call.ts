@@ -22,7 +22,7 @@ import { callHelperTool, HELPER_TOOL_NAMES } from "./agents-helper-tools.ts";
 import { callUsageLimitsTool, USAGE_LIMITS_TOOL } from "./agents-usage-tool.ts";
 import { callThreadPostTool, THREAD_POST_TOOL } from "./agents-thread-post-tool.ts"; import { callRenameThreadTool, RENAME_THREAD_TOOL } from "./agents-thread-title-tool.ts";
 import { callWaitTool, WAIT_TOOL_NAMES } from "./agents-wait-tools.ts";
-import { callBurstTool } from "./agents-burst-tool.ts";
+import { callBurstTool } from "./agents-burst-tool.ts"; import { callBoardCloseTool } from "./agents-board-tool.ts";
 import { callComputerAskTool, COMPUTER_ASK_TOOL_NAMES } from "./agents-computer-ask-tool.ts";
 import { callImageTool, IMAGE_TOOL_NAMES } from "./agents-image-tools.ts";
 import { callHostingTool, HOSTING_TOOL_NAMES } from "./agents-hosting-tools.ts";
@@ -498,7 +498,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
       text: `${opened}${timing}${approval} Its result will be delivered to this conversation automatically (assignment id: ${assignmentId || "unknown"}). Acknowledge it, mention it to the person as #${threadTitle}, and finish your turn; do not check or wait for it in this turn.`,
     };
   }
-  if (name === "burst") return callBurstTool(args, api);
+  if (name === "burst") return callBurstTool(args, api); if (name === "board_close") return callBoardCloseTool(args, api, { botId: BOT_ID, threadId: THREAD_ID });
   if (name === "list_models") {
     const search = typeof args.search === "string" ? args.search.trim() : "";
     const r = await api(`/api/internal/models${search ? `?search=${encodeURIComponent(search)}` : ""}`);

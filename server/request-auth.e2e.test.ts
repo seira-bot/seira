@@ -64,6 +64,21 @@ describe("a browser on a self-hosted server's own machine", () => {
     }
   }, 60_000);
 
+  it("shows a stranger only the brand and where it came from", async () => {
+    const fixture = await launchVerificationServer({ SEIRA_DEV_TRUST_LOCAL_BROWSER: "0" });
+    const url = fixture.info.url;
+    try {
+      const answer = await raw(url, "/api/brand", fromPage(url));
+      expect(answer.status).toBe(200);
+      const body = JSON.parse(answer.body);
+      expect(Object.keys(body).sort()).toEqual(["brand", "source"]);
+      expect(body).not.toHaveProperty("file");
+      expect(body).not.toHaveProperty("notice");
+    } finally {
+      await fixture.close();
+    }
+  }, 60_000);
+
   it("is trusted as before by a development server, which asked for it", async () => {
     const fixture = await launchVerificationServer();
     try {

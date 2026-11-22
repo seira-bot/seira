@@ -1,5 +1,6 @@
 export type AvatarImageProvider = "openai" | "xai" | "custom";
-export const IMAGE_PROVIDERS = ["openai", "xai", "gemini", "openrouter", "custom"] as const;
+/** `codex` makes images with Codex's own ChatGPT sign-in, so it needs no API key. */
+export const IMAGE_PROVIDERS = ["openai", "codex", "xai", "gemini", "openrouter", "custom"] as const;
 export type ImageProvider = (typeof IMAGE_PROVIDERS)[number];
 
 export const IMAGE_MAX_PER_TURN_DEFAULT = 4;
@@ -12,13 +13,15 @@ export function supportsImageComplexity(slot: { provider: ImageProvider; model: 
 }
 
 export const IMAGE_DEFAULT_MODELS: Record<ImageProvider, string> = {
-  openai: "gpt-image-2", xai: "grok-imagine-image-2.0", gemini: "gemini-2.5-flash-image", openrouter: "google/gemini-2.5-flash-image", custom: "",
+  openai: "gpt-image-2", codex: "gpt-image-2", xai: "grok-imagine-image-2.0", gemini: "gemini-2.5-flash-image", openrouter: "google/gemini-2.5-flash-image", custom: "",
 };
 
 /** What Settings' Test learns about a provider; no image is made. */
 export type ImageProviderTest =
   | { ok: true; check: "authentication" | "models"; freeTier?: boolean }
   | { ok: false; reason: "no_key" | "no_url" | "rejected" | "unreachable" | "unexpected"; status?: number }
+  /** Codex: no ChatGPT sign-in of Codex's own on this computer, or a plan that makes no images. */
+  | { ok: false; reason: "no_sign_in" | "free_plan" }
   | { ok: false; reason: "model_missing"; model: string };
 
 export interface ImageModelChoice {
@@ -34,6 +37,12 @@ export const IMAGE_MODEL_CHOICES: Record<ImageProvider, readonly ImageModelChoic
     { id: "gpt-image-2", name: "GPT Image 2" },
     { id: "gpt-image-1", name: "GPT Image 1" },
     { id: "gpt-image-1-mini", name: "GPT Image 1 Mini" },
+  ],
+  codex: [
+    { id: "gpt-image-2", name: "GPT Image 2" },
+    { id: "gpt-image-2.6-sunburst", name: "GPT Image 2.6 Sunburst" },
+    { id: "gpt-image-2.6-flare", name: "GPT Image 2.6 Flare" },
+    { id: "gpt-image-1.5", name: "GPT Image 1.5" },
   ],
   xai: [{ id: "grok-imagine-image-2.0", name: "Grok Imagine Image 2.0" }],
   gemini: [{ id: "gemini-2.5-flash-image", name: "Nano Banana (Gemini 2.5 Flash Image)" }],

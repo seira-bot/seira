@@ -152,7 +152,7 @@ export function LiveCallSettings({ bot, onClose }: { bot?: Pick<Bot, "id" | "nam
       </div>
       {!hasKey && (azure || custom || fish || gemini || elevenlabs) && <div className="-mt-2 text-[12px] text-ink-tertiary">{t(copy.missing)}</div>}
       {live.keySource !== "live" && !azure && !custom && !fish && !gemini && !elevenlabs && (
-        <div className="-mt-2 text-[12px] text-ink-tertiary">{t(live.keySource === "openai" ? "call.live.keyFromApiKeys" : "call.live.needsKey")} <KeysLink id="openai" purpose="liveCalls" /></div>
+        <div className="-mt-2 text-[12px] text-ink-tertiary">{t(live.keySource === "openai" ? "call.live.keyFromApiKeys" : "call.live.needsKey")} <KeysLink id="openai" /></div>
       )}
       {/* Keyed by provider and endpoint: a key typed for one is never saved for another. */}
       {changingKey && <LiveKeySetup key={liveKeyFormKey(state.config?.live)} compact locked={providerSaving} onSaving={setKeySaving} onSaved={() => setChangingKey(false)} />}

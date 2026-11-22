@@ -835,6 +835,17 @@ describe("saving the image providers", () => {
     }
   });
 
+  it("refuses an image model equal to the main OpenAI key, which OpenAI images now use", () => {
+    const path = join(DATA_DIR, "config.json");
+    mkdirSync(DATA_DIR, { recursive: true });
+    writeFileSync(path, JSON.stringify({ openai: { key: "main-openai-fixture" }, imageGen: { primary: { provider: "openai" } } }));
+    try {
+      expect(() => saveConfig(parseConfigPatch({ imageGen: { primary: { provider: "openai", model: "main-openai-fixture" } } }))).toThrow("API key");
+    } finally {
+      rmSync(path, { force: true });
+    }
+  });
+
   it("keeps the base and the keys when the backup is cleared", () => {
     const path = join(DATA_DIR, "config.json");
     mkdirSync(DATA_DIR, { recursive: true });

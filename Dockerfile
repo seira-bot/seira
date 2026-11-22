@@ -258,12 +258,16 @@ COPY --from=build --chown=seira:seira /src/dist-native/duckdb/target ./duckdb
 COPY --from=build --chown=seira:seira /src/dist-server ./dist-server
 COPY --from=build --chown=seira:seira /src/dist ./dist
 COPY --from=build --chown=seira:seira /src/skills ./skills
+# The account tunnel (SEIRA_ACCESS=tunnel) connects with this copy, so the first start downloads nothing.
+COPY --from=tunnel /cloudflared /usr/local/bin/cloudflared
+RUN chmod 0755 /usr/local/bin/cloudflared && cloudflared version
 # `docker compose exec seira seira pair`: the commands the CLI prints start the same way. The self-host guides of
 # earlier versions name the command `openmausbot`.
 RUN printf '#!/bin/sh\nexec node /app/dist-server/seira.js "$@"\n' > /usr/local/bin/seira && chmod 0755 /usr/local/bin/seira \
  && cp /usr/local/bin/seira /usr/local/bin/openmausbot
 ENV HOME=/data \
-    SEIRA_CLI_PREFIX="docker compose exec seira seira"
+    SEIRA_CLI_PREFIX="docker compose exec seira seira" \
+    SEIRA_CLOUDFLARED_PATH=/usr/local/bin/cloudflared
 VOLUME ["/data"]
 USER seira
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

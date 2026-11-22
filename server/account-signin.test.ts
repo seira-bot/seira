@@ -44,7 +44,7 @@ describe("the exchange with the control plane", () => {
       expect(wrong).toMatchObject({ ok: false, status: 401 });
       expect(wrong.ok ? "" : wrong.error).toMatch(/wrong or has expired/);
       expect(await signIn.verify("her@example.test", "12")).toMatchObject({ ok: false, status: 400 });
-      expect(await signIn.verify("nobody@example.test", stub.otp)).toMatchObject({ ok: false, status: 403 });
+      expect(await signIn.verify("nobody@example.test", stub.otp)).toEqual(wrong);
 
       const admin = await signIn.verify("her@example.test", stub.otp);
       expect(admin).toEqual({ ok: true, email: "her@example.test", userId: "user_stub", scopes: ["admin", "client"] });
@@ -55,6 +55,40 @@ describe("the exchange with the control plane", () => {
     } finally {
       await stub.close();
     }
+  });
+
+  it("verify answers listed and unlisted addresses the same", async () => {
+    const stub = await startControlPlaneStub();
+    try {
+      const signIn = createEmailSignIn({
+        allow: { admins: ["her@example.test"], members: [] },
+        env: { ...process.env, SEIRA_CONTROL_PLANE_URL: stub.url },
+      });
+      const wrong = await signIn.verify("her@example.test", "00000000");
+      const callsBefore = stub.calls.length;
+      expect(wrong).toMatchObject({ ok: false, status: 401 });
+      for (const address of ["nobody@example.test", "not an email", ""]) {
+        expect(await signIn.verify(address, "00000000")).toEqual(wrong);
+        expect(await signIn.verify(address, stub.otp)).toEqual(wrong);
+      }
+      expect(stub.calls.length).toBe(callsBefore);
+      const badShape = await signIn.verify("her@example.test", "12");
+      expect(badShape).toMatchObject({ ok: false, status: 400 });
+      expect(await signIn.verify("nobody@example.test", "12")).toEqual(badShape);
+    } finally {
+      await stub.close();
+    }
+
+    const mailed = createEmailSignIn({
+      allow: { admins: ["her@example.test"], members: [] },
+      env: { SEIRA_SIGNIN_SMTP_URL: "smtp://localhost:25", SEIRA_SIGNIN_SMTP_FROM: "signin@example.test" },
+      mailTransport: { sendMail: async () => undefined },
+    });
+    await mailed.start("her@example.test");
+    const wrongMailed = await mailed.verify("her@example.test", "00000000");
+    expect(wrongMailed).toMatchObject({ ok: false, status: 401 });
+    expect(await mailed.verify("nobody@example.test", "00000000")).toEqual(wrongMailed);
+    expect(await mailed.verify("nobody@example.test", "12")).toMatchObject({ ok: false, status: 400 });
   });
 
   it("is off with an empty allow-list and says so when the sign-in service is down", async () => {

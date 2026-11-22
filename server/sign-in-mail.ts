@@ -5,6 +5,8 @@ import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 export const SIGNIN_CODE_TTL_MS = 10 * 60_000;
 export const SIGNIN_CODE_RESEND_MS = 30_000;
 export const SIGNIN_CODE_TRIES = 5;
+export const SIGNIN_CODES_PER_ADDRESS = 3;
+export const SIGNIN_CODES_PER_ADDRESS_ALL = 10;
 const MAX_PENDING = 1_000;
 
 export interface MailMessage {
@@ -23,7 +25,8 @@ export type CodeCheck = "ok" | "format" | "wrong" | "tooMany";
 export interface SignInMail {
   /** "tooSoon": a code went to this address moments ago; it still works. */
   /** `target` names the server the code signs in to, so a code asked for elsewhere is recognised as not this one. */
-  send(email: string, target?: string | null): Promise<"sent" | "tooSoon">;
+  /** `source`: who asked, so one source cannot use up the codes another source may ask for. */
+  send(email: string, target?: string | null, source?: string): Promise<"sent" | "tooSoon">;
   check(email: string, code: string): CodeCheck;
 }
 
@@ -62,19 +65,33 @@ export function createSignInMail(options: { url: string; from?: string; now?: ()
     if (!named.includes("@")) throw new SignInMailError("set SEIRA_SIGNIN_SMTP_FROM to the address sign-in codes come from");
     return named;
   };
+  const sentAt = new Map<string, number[]>();
+  const sentAtAll = new Map<string, number[]>();
   const prune = () => {
     for (const [email, entry] of pending) if (now() - entry.sentAt >= SIGNIN_CODE_TTL_MS) pending.delete(email);
+    for (const map of [sentAt, sentAtAll]) {
+      for (const [key, times] of map) {
+        const recent = times.filter((time) => now() - time < SIGNIN_CODE_TTL_MS);
+        if (recent.length) map.set(key, recent);
+        else map.delete(key);
+      }
+    }
   };
   return {
-    async send(email, target) {
+    async send(email, target, source = "") {
+      const quota = `${source}\n${email}`;
       prune();
       const open = pending.get(email);
       if (open && now() - open.sentAt < SIGNIN_CODE_RESEND_MS) return "tooSoon";
       if (!open && pending.size >= MAX_PENDING) return "tooSoon";
+      if ((sentAt.get(quota)?.length ?? 0) >= SIGNIN_CODES_PER_ADDRESS) return "tooSoon";
+      if ((sentAtAll.get(email)?.length ?? 0) >= SIGNIN_CODES_PER_ADDRESS_ALL) return "tooSoon";
       const sender = from();
       transport ??= import("nodemailer").then(({ createTransport }) => createTransport(smtpOptions(options.url)));
       const code = String(randomInt(0, 100_000_000)).padStart(8, "0");
       pending.set(email, { hash: digest(code), sentAt: now(), tries: 0 });
+      sentAt.set(quota, [...(sentAt.get(quota) ?? []), now()]);
+      sentAtAll.set(email, [...(sentAtAll.get(email) ?? []), now()]);
       try {
         await (await transport).sendMail({
           from: sender, to: email, subject: target ? `Your Seira sign-in code for ${target}` : "Your Seira sign-in code",
@@ -94,6 +111,12 @@ export function createSignInMail(options: { url: string; from?: string; now?: ()
         });
       } catch (error) {
         pending.delete(email);
+        for (const [map, key] of [[sentAt, quota], [sentAtAll, email]] as const) {
+          const times = map.get(key) ?? [];
+          times.pop();
+          if (times.length) map.set(key, times);
+          else map.delete(key);
+        }
         throw error;
       }
       return "sent";

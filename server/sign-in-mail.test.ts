@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createEmailSignIn } from "./account-signin.ts";
-import { createSignInMail, SIGNIN_CODE_RESEND_MS, SIGNIN_CODE_TRIES, SIGNIN_CODE_TTL_MS, smtpOptions, type MailMessage } from "./sign-in-mail.ts";
+import { createSignInMail, SIGNIN_CODE_RESEND_MS, SIGNIN_CODE_TRIES, SIGNIN_CODES_PER_ADDRESS_ALL, SIGNIN_CODE_TTL_MS, smtpOptions, type MailMessage } from "./sign-in-mail.ts";
 
 const URL_ = "smtps://signin%40example.test:p%40ss@smtp.example.test:465";
 
@@ -88,6 +88,47 @@ describe("sign-in codes through the server's own mail server", () => {
     await mail.send("her@example.test");
     clock += SIGNIN_CODE_TTL_MS;
     expect(mail.check("her@example.test", box.code())).toBe("wrong");
+  });
+
+  it("limits the codes one address gets in ten minutes", async () => {
+    let clock = 1_000_000;
+    const box = mailbox();
+    const mail = createSignInMail({ url: URL_, from: "signin@example.test", now: () => clock, transport: box.transport });
+    for (let sent = 0; sent < 3; sent++) {
+      expect(await mail.send("her@example.test", null, "203.0.113.1")).toBe("sent");
+      clock += SIGNIN_CODE_RESEND_MS;
+    }
+    expect(await mail.send("her@example.test", null, "203.0.113.1")).toBe("tooSoon");
+    expect(box.sent).toHaveLength(3);
+    expect(await mail.send("his@example.test", null, "203.0.113.1")).toBe("sent");
+    clock += SIGNIN_CODE_TTL_MS;
+    expect(await mail.send("her@example.test", null, "203.0.113.1")).toBe("sent");
+  });
+
+  it("one source cannot use up the codes of another source", async () => {
+    let clock = 1_000_000;
+    const box = mailbox();
+    const mail = createSignInMail({ url: URL_, from: "signin@example.test", now: () => clock, transport: box.transport });
+    for (let sent = 0; sent < 3; sent++) {
+      expect(await mail.send("her@example.test", null, "source-a")).toBe("sent");
+      clock += SIGNIN_CODE_RESEND_MS;
+    }
+    expect(await mail.send("her@example.test", null, "source-a")).toBe("tooSoon");
+    expect(await mail.send("her@example.test", null, "source-b")).toBe("sent");
+  });
+
+  it("one address gets at most ten codes in ten minutes from all sources", async () => {
+    let clock = 1_000_000;
+    const box = mailbox();
+    const mail = createSignInMail({ url: URL_, from: "signin@example.test", now: () => clock, transport: box.transport });
+    for (let sent = 0; sent < SIGNIN_CODES_PER_ADDRESS_ALL; sent++) {
+      expect(await mail.send("her@example.test", null, `source-${sent % 4}`)).toBe("sent");
+      clock += SIGNIN_CODE_RESEND_MS;
+    }
+    expect(box.sent).toHaveLength(SIGNIN_CODES_PER_ADDRESS_ALL);
+    expect(await mail.send("her@example.test", null, "source-new")).toBe("tooSoon");
+    clock += SIGNIN_CODE_TTL_MS;
+    expect(await mail.send("her@example.test", null, "source-new")).toBe("sent");
   });
 
   it("forgets a code the mail server refused, and needs a sender address", async () => {

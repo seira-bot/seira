@@ -6,6 +6,7 @@ import { t } from "@/lib/i18n";
 
 const INPUT_CLASS = "w-full min-w-0 rounded-lg border border-hairline/40 bg-inset px-3 py-2 text-[13px] text-ink placeholder:text-ink-secondary focus:outline-none disabled:opacity-50";
 const PROVIDER_LABEL = { openai: "OpenAI", xai: "Grok (xAI)", gemini: "Gemini", openrouter: "OpenRouter", custom: "Custom" } as const;
+const providerLabel = (provider: keyof typeof PROVIDER_LABEL | "codex") => provider === "codex" ? t("imageGen.provider.codex") : PROVIDER_LABEL[provider];
 
 export function AvatarImageGenerator({
   botLabel,
@@ -32,7 +33,7 @@ export function AvatarImageGenerator({
         <Sparkles size={14} className="text-accent" /> {t("botIdentity.ai.generateWith")}
       </div>
       <p className="mt-1.5 text-[11px] leading-relaxed text-ink-secondary">
-        {ready && inUse ? t("botIdentity.ai.usingProvider", { provider: PROVIDER_LABEL[inUse] }) : t("botIdentity.ai.noProvider")}{" "}
+        {ready && inUse ? t("botIdentity.ai.usingProvider", { provider: providerLabel(inUse) }) : t("botIdentity.ai.noProvider")}{" "}
         <button
           type="button"
           onClick={() => dispatch({ type: "toggleAppSettings", open: true, section: "imageGeneration" })}
