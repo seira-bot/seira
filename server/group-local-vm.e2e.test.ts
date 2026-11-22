@@ -1042,6 +1042,43 @@ describe("Group Local VM ownership on the real isolated server", () => {
     }
   }, 60_000);
 
+  it("does not stall an admitted turn waiting for another turn's shared Local VM", async () => {
+    vmState({ containers: ["shared"] }); rmSync(dumpFile, { force: true }); rmSync(finishFile, { force: true });
+    const holder = await vmBot("Computer holder");
+    const waiter = await vmBot("Computer waiter");
+    const transcript = async () => JSON.stringify((await api("GET", `/api/threads/${waiter.threadId}/messages?limit=50`)).messages);
+    try {
+      await api("POST", `/api/bots/${holder.id}/messages`, { text: "Hold the shared VM" });
+      expect((await gate(computer(await dump()))).status).toBe(200);
+      rmSync(dumpFile, { force: true });
+      await api("POST", `/api/bots/${waiter.id}/messages`, { text: "Wait for the shared VM" });
+      // The claim that the first screen call starts waits on after the call returns.
+      expect(await check(computer(await dump()))).toMatchObject({ held: true });
+      await until(transcript, text => text.includes("Waiting for its turn on this computer"));
+      // Only the waiting thread gets the short clock; the holder is deliberately gated.
+      vmState({ containers: ["shared"], stallThread: waiter.threadId });
+      await new Promise(resolve => setTimeout(resolve, 400));
+      expect(await transcript()).not.toContain("the turn was stopped");
+      expect(await taskOf(waiter.id, waiter.threadId)).toMatchObject({ busy: true });
+      vmState({ containers: ["shared"] });
+      writeFileSync(finishFile, "finish");
+      await idle(holder.id);
+      await idle(waiter.id);
+      const settled = await transcript();
+      expect(settled).not.toContain("the turn was stopped");
+      expect(settled).toContain("reply to:");
+    } finally {
+      vmState();
+      writeFileSync(finishFile, "finish");
+      for (const bot of [holder, waiter]) {
+        await api("POST", `/api/bots/${bot.id}/interrupt`, { threadId: bot.threadId });
+        await idle(bot.id);
+        await api("DELETE", `/api/bots/${bot.id}`);
+      }
+      rmSync(finishFile, { force: true });
+    }
+  }, 30_000);
+
   it("runs a screen-less Auto turn to completion while another thread holds the Local VM (issue #1361 AC1)", async () => {
     vmState(); rmSync(dumpFile, { force: true }); rmSync(finishFile, { force: true });
     const { bot: holder } = await api("POST", "/api/bots", { name: "VM holder" });
