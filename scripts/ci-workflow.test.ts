@@ -44,6 +44,7 @@ const packageFiles = files.filter((file) => /^package-[a-z0-9-]+\.yml$/.test(fil
 const packageWorkflows = packageFiles.map((file) => [file, workflows.get(file)!] as const);
 const IMAGE = "server-image.yml";
 const NPM = "npm-publish.yml";
+const MILESTONES = "milestones.yml";
 const SMOKE = "server-image-smoke.yml";
 const image = workflows.get(IMAGE)!;
 const smoke = workflows.get(SMOKE)!;
@@ -64,8 +65,8 @@ const allRuns = () => allSteps().flatMap((step) => (step.run === undefined ? [] 
 const runs = (job: Job) => stepsOf(job).flatMap((step) => (step.run === undefined ? [] : [step.run]));
 
 describe("CI workflows", () => {
-  it("keeps the CI workflow, the npm publish workflow, the package workflows and the two server image workflows only", () => {
-    expect(files).toEqual(["ci.yml", NPM, ...packageFiles, SMOKE, IMAGE]);
+  it("keeps the CI workflow, the milestones workflow, the npm publish workflow, the package workflows and the two server image workflows only", () => {
+    expect(files).toEqual(["ci.yml", MILESTONES, NPM, ...packageFiles, SMOKE, IMAGE]);
   });
 
   it("runs on pull requests, merge queue entries, pushes to main and manual starts only", () => {
@@ -79,10 +80,15 @@ describe("CI workflows", () => {
     }
   });
 
-  it("gives every workflow a read-only token, and write access only to a job behind the release environment", () => {
+  it("gives every workflow a read-only token, and write access only to a job behind the release environment, except the milestones job", () => {
     for (const [file, flow] of workflows) {
       expect(flow.permissions, file).toEqual({ contents: "read" });
       for (const [id, job] of Object.entries(flow.jobs)) {
+        if (file === MILESTONES && id === "milestones") {
+          expect(job.permissions, `${file} job ${id}`).toEqual({ contents: "read", issues: "write", "pull-requests": "write" });
+          expect(job.environment, `${file} job ${id}`).toBeUndefined();
+          continue;
+        }
         const grants = JSON.stringify(job.permissions ?? {});
         if (grants.includes("write")) expect(job.environment, `${file} job ${id}`).toBe("release");
       }
@@ -122,11 +128,12 @@ describe("CI workflows", () => {
     }
   });
 
-  it("reads no token, except the server image workflow once to sign in to the registry and the macOS commit step once to read the repository", () => {
+  it("reads no token, except the server image workflow once to sign in to the registry, the macOS commit step once to read the repository and the milestones step once to call the GitHub API", () => {
     expect(texts.get(IMAGE)!.split(LOGIN)).toHaveLength(2);
     expect(texts.get(MACOS)!.split(READ_TOKEN)).toHaveLength(2);
+    expect(texts.get(MILESTONES)!.split(READ_TOKEN)).toHaveLength(2);
     for (const [file, original] of texts) {
-      const text = file === IMAGE ? original.replace(LOGIN, "") : file === MACOS ? original.replace(READ_TOKEN, "") : original;
+      const text = file === IMAGE ? original.replace(LOGIN, "") : file === MACOS || file === MILESTONES ? original.replace(READ_TOKEN, "") : original;
       for (const forbidden of ["github.token", "GITHUB_TOKEN", "GH_TOKEN"]) {
         expect(text, `${file} reads ${forbidden}`).not.toContain(forbidden);
       }
@@ -206,6 +213,47 @@ describe("CI workflows", () => {
         }
       }
     }
+  });
+});
+
+describe("Milestones workflow", () => {
+  const flow = workflows.get(MILESTONES)!;
+  const text = texts.get(MILESTONES)!;
+  const job = flow.jobs.milestones!;
+
+  it("starts only on a push to main and on a published release", () => {
+    expect(flow.on).toEqual({ push: { branches: ["main"] }, release: { types: ["published"] } });
+  });
+
+  it("has no concurrency group, so no run is dropped", () => {
+    expect(flow).not.toHaveProperty("concurrency");
+  });
+
+  it("has one job on a GitHub-hosted runner, with a timeout, no environment, no needs and no condition", () => {
+    expect(Object.keys(flow.jobs)).toEqual(["milestones"]);
+    expect(job["runs-on"]).toBe("ubuntu-24.04");
+    expect(job).toHaveProperty("timeout-minutes");
+    expect(job.environment).toBeUndefined();
+    expect(job.needs).toBeUndefined();
+    expect(job.if).toBeUndefined();
+  });
+
+  it("checks out main without credentials and only the script, then runs the script with the read token in env", () => {
+    const steps = stepsOf(job);
+    expect(steps).toHaveLength(2);
+    expect(steps[0]!.uses).toMatch(/^actions\/checkout@[0-9a-f]{40}$/);
+    expect(steps[0]!.with).toEqual({
+      ref: "main",
+      "persist-credentials": false,
+      "sparse-checkout": "scripts/milestones.mjs",
+      "sparse-checkout-cone-mode": false,
+    });
+    expect(steps[1]!.run).toBe("node scripts/milestones.mjs");
+    expect(steps[1]!.env).toEqual({ GH_TOKEN: "${{ github.token }}" });
+  });
+
+  it("reads no secret and installs no dependency", () => {
+    for (const forbidden of ["secrets.", "pnpm", "npm install", "npm ci"]) expect(text).not.toContain(forbidden);
   });
 });
 
