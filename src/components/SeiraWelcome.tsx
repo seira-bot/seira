@@ -21,7 +21,7 @@ import { SeiraCustomize } from "./SeiraCustomize";
 import { usePrefersReducedMotion } from "./mascot-clock";
 import { SeiraHero, takeOff } from "./onboarding/SeiraHero";
 
-const LOOK = ["name", "color", "mascotBody", "avatarUrl", "avatarCrop", "avatarZoom", "avatarFocusX", "avatarFocusY"] as const;
+const LOOK = ["name", "color", "mascotBody", "avatarUrl", "avatarCrop", "avatarZoom", "avatarFocusX", "avatarFocusY", "mascotAccessories", "mascotExpression"] as const;
 export type WelcomeDraft = Pick<Bot, (typeof LOOK)[number]>;
 const RECEDE_MS = 240;
 const CHARACTER_SIZE = 120;
@@ -31,7 +31,8 @@ export const welcomeName = (name: string): string => name.trim().slice(0, BOT_PR
 
 export function draftOf(bot: Bot): WelcomeDraft {
   return { name: bot.name, color: bot.color, mascotBody: bot.mascotBody ?? DEFAULT_BOT_BODY, avatarUrl: bot.avatarUrl ?? null,
-    avatarCrop: bot.avatarCrop ?? "mascot", avatarZoom: bot.avatarZoom, avatarFocusX: bot.avatarFocusX, avatarFocusY: bot.avatarFocusY };
+    avatarCrop: bot.avatarCrop ?? "mascot", avatarZoom: bot.avatarZoom, avatarFocusX: bot.avatarFocusX, avatarFocusY: bot.avatarFocusY,
+    mascotAccessories: bot.mascotAccessories ?? null, mascotExpression: bot.mascotExpression ?? null };
 }
 
 /** What either choice saves, as the bot's own edit screen would: what the person changed, and that they chose. Add puts

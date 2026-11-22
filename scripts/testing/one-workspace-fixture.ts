@@ -717,7 +717,8 @@ export async function launchHomeWorld(fx: CloudSendFixture, { chrome, versionEve
       await whileClosed?.();
       home = launchHome();
       localProfiles = makeLocal();
-      await openStartPlace({ home, places: homePlaces, profiles: localProfiles, server: async () => false });
+      // The fixture's one window (`win`) outlives a relaunch, so there is never one to make before a profile opens.
+      await openStartPlace({ home, places: homePlaces, profiles: localProfiles, server: async () => false, ensureWindow: () => {} });
       if (railRef) await railRef.loadURL(`${localOrigin}/rail`);
     },
     cloudOrigin, localOrigin, teamOrigin, otherOrigin, window: win, get home() { return homeRef!; }, account, network, admin, cloudRequests, notifications, hostCache,

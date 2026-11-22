@@ -160,7 +160,7 @@ export interface Message extends Pick<import("../../shared/wire").WireMessage, "
 
 export type GroupDefaultResponder = import("../../shared/wire").GroupDefaultResponder;
 
-export interface Group extends Pick<WireGroup, "memberContext" | "queue" | "chiefAbsent" | "farMembers" | "turnsPerMember"> {
+export interface Group extends Pick<WireGroup, "memberContext" | "queue" | "chiefAbsent" | "farMembers" | "turnsPerMember" | "avatarUrl"> {
   usage?: GroupThreadUsage | null;
   id: string;
   threadId: string;
@@ -635,7 +635,7 @@ export type Action =
   | {
       type: "patchGroup";
       groupId: string;
-      patch: Partial<Pick<Group, "name" | "bulletin" | "description" | "memberIds" | "defaultResponder" | "turnsPerMember" | "pinnedMessageId" | "section">>;
+      patch: Partial<Pick<Group, "name" | "bulletin" | "description" | "avatarUrl" | "memberIds" | "defaultResponder" | "turnsPerMember" | "pinnedMessageId" | "section">>;
     }
   | { type: "deleteGroup"; groupId: string }
   | { type: "newGroupTask"; groupId: string }

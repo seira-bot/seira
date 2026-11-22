@@ -2321,11 +2321,7 @@
   "seiraWelcome.line.knows": "Connaît l'app : demandez-lui comment faire n'importe quoi.",
   "seiraWelcome.line.setup": "Configure pour vous bots, apps et routines.",
   "seiraWelcome.line.powers": "A les pouvoirs d'un chef de cabinet sur vos bots.",
-  "seiraWelcome.look": "Apparence",
-  "seiraWelcome.generate": "Créer une image avec l'IA",
   "seiraWelcome.customize": "Personnaliser {name}",
-  "seiraWelcome.upload": "Importer une image",
-  "seiraWelcome.removePicture": "Retirer l'image",
   "seiraWelcome.add": "Ajouter {name}",
   "seiraWelcome.notNow": "Pas maintenant",
   "seiraWelcome.notNowHint": "{name} reste hors de la barre latérale. Activez-le à tout moment dans Paramètres (Dans la barre latérale).",
@@ -3898,5 +3894,10 @@
   "settings.pool.floorNumber": "Le plancher est un nombre entier de 0 à 98.",
   "settings.pool.floorLow": "Le plancher doit être inférieur au dernier niveau.",
   "settings.pool.error": "Impossible d'enregistrer le groupe d'IA. Réessayez.",
-  "aiImport.title": "Passer depuis une autre IA"
+  "aiImport.title": "Passer depuis une autre IA",
+  "roomPicture.change": "Changer l'image",
+  "roomPicture.remove": "Retirer l'image",
+  "roomPicture.typeRefused": "Choisissez une image PNG, JPEG, GIF ou WebP.",
+  "roomPicture.tooBig": "Cette image est trop lourde. Choisissez-en une de moins de 10 Mo.",
+  "roomPicture.failed": "L'image n'a pas pu être enregistrée. Réessayez."
 }

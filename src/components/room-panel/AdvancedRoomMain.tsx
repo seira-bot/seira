@@ -7,6 +7,8 @@ import { t } from "@/lib/i18n";
 import { responderShortLabel } from "@/lib/room-responder";
 import { useStore, type Bot, type Group } from "@/state/store";
 import { BotAvatar } from "../Avatar";
+import { RoomPicture } from "../RoomPicture";
+import { RoomPictureControls } from "../RoomPictureControls";
 import { ConversationTurnLimit } from "../ConversationTurnLimit";
 import { groupUsageSummary } from "../GroupUsageChip";
 import { roomWorkingFolder } from "../RoomWorkingFolder";
@@ -18,15 +20,20 @@ export type AdvancedRoomPage = "responder" | "folder";
 function Hero({ group, members }: { group: Group; members: Bot[] }) {
   const [first, second] = members;
   return (
-    <div className="flex items-center gap-3.5 px-1">
-      <div data-room-panel-faces className="relative size-14 shrink-0">
-        {first && <span className="absolute start-0 top-0 flex rounded-full"><BotAvatar bot={first} state="happy" size={36} animated={false} /></span>}
-        {second && <span className="absolute bottom-0 end-0 flex rounded-full ring-2 ring-panel"><BotAvatar bot={second} state="happy" size={36} animated={false} /></span>}
+    <div className="px-1">
+      <div className="flex items-center gap-3.5">
+        <RoomPicture url={group.dm ? null : group.avatarUrl} size={56} fallback={
+          <div data-room-panel-faces className="relative size-14 shrink-0">
+            {first && <span className="absolute start-0 top-0 flex rounded-full"><BotAvatar bot={first} state="happy" size={36} animated={false} /></span>}
+            {second && <span className="absolute bottom-0 end-0 flex rounded-full ring-2 ring-panel"><BotAvatar bot={second} state="happy" size={36} animated={false} /></span>}
+          </div>
+        } />
+        <div className="min-w-0">
+          <h2 id="room-panel-title" className="truncate text-[17px] font-semibold leading-[22px] text-ink">{group.name}</h2>
+          <p className="text-[13px] text-ink-secondary">{t(members.length === 1 ? "room.panel.botsAndYouOne" : "room.panel.botsAndYouMany", { count: members.length })}</p>
+        </div>
       </div>
-      <div className="min-w-0">
-        <h2 id="room-panel-title" className="truncate text-[17px] font-semibold leading-[22px] text-ink">{group.name}</h2>
-        <p className="text-[13px] text-ink-secondary">{t(members.length === 1 ? "room.panel.botsAndYouOne" : "room.panel.botsAndYouMany", { count: members.length })}</p>
-      </div>
+      <RoomPictureControls group={group} align="start" />
     </div>
   );
 }
