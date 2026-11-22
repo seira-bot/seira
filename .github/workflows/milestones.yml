@@ -1,0 +1,38 @@
+name: Milestones
+
+# Fills and closes the GitHub milestone of each release (docs/releasing.md).
+# - A push to main puts each merged pull request, and the issues that it closes, into the milestone of the release that ships it.
+# - A published release closes its milestone and opens the next one.
+# - The job runs scripts/milestones.mjs from main only. It installs no dependency and reads no secret.
+# - No concurrency group: a group keeps one waiting run only, and a dropped run would leave a pull request without a milestone.
+# scripts/ci-workflow.test.ts holds these rules.
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  milestones:
+    name: fill and close milestones
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+          sparse-checkout: scripts/milestones.mjs
+          sparse-checkout-cone-mode: false
+      - name: Fill and close milestones
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/milestones.mjs

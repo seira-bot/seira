@@ -611,3 +611,14 @@ The Linux package stages a pinned engine and Chromium Headless Shell before
 packaging. See [browser packaging](browser-packaging.md) for update ownership,
 license provenance, and Linux sandbox limits. A build with missing browser
 resources must fail. Do not ship a package that downloads them on first use.
+
+## Milestones
+
+Each release has a milestone with the name of its tag, for example `v0.1.189`.
+The workflow `milestones.yml` puts each merged pull request into the milestone of the next release.
+It also puts the issues that the pull request closes into that milestone.
+The pull request that changes `version` in `package.json` goes into the milestone of that version.
+A published release closes its milestone and opens the milestone of the next patch version.
+The workflow never replaces a milestone that a person set.
+A maintainer has no step to do.
+To plan an open issue for a release, set its milestone by hand.
