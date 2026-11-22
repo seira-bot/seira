@@ -26,6 +26,6 @@ export async function callMachineBudgetTool(context: ToolCallContext): Promise<T
 
 export const MACHINE_BUDGET_TOOL_DEFINITION = {
   name: MACHINE_BUDGET_TOOL,
-  description: "Memory (GB), CPUs and suggested parallel workers free for bots now, memory pressure, and heavy work already running. Call before a test suite, build, docker, ffmpeg, a local model or large data. unknown means not readable.",
+  description: "Free memory (GB), CPUs, suggested parallel workers and heavy work running now. Call before a heavy job. unknown: not readable.",
   inputSchema: { type: "object", additionalProperties: false, properties: {} },
 };
