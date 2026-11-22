@@ -12,7 +12,7 @@
 # The `commit` job finds the commit of the ref before the approval. The `package` job builds that commit only.
 # The `release` environment accepts `main` only and holds the five Apple secrets (docs/ci.md):
 # - all five set: Developer ID signature, notarization, staple, and a Gatekeeper check;
-# - none set: ad-hoc signed apps for tests only, in an artifact named NOT-FOR-RELEASE with no update feed;
+# - none set: ad-hoc signed apps for tests only, in an artifact named NOT-FOR-RELEASE, built without the update feed file;
 # - some set: the run stops before it builds.
 # scripts/ci-workflow.test.ts holds these rules.
 name: Package macOS
@@ -176,13 +176,21 @@ jobs:
             pnpm package:mac -c.forceCodeSigning=true
           else
             # build/entitlements.mac.plist disables library validation, so an ad-hoc signed app with the hardened runtime starts.
+            # The ad-hoc apps are never attached to a release, so scripts/after-pack.mjs removes the update feed file from them.
+            export SEIRA_NO_UPDATE_FEED=1
             pnpm package:mac -c.mac.identity=- -c.dmg.sign=false
           fi
 
-      - name: "Gate: both apps use the Seira update feed"
+      - name: "Gate: the update feed file matches the signing mode"
+        env:
+          SIGNED: ${{ steps.mode.outputs.signed }}
         run: |
           for app in release/mac-arm64/Seira.app release/mac/Seira.app; do
             update="$app/Contents/Resources/app-update.yml"
+            if [ "$SIGNED" != true ]; then
+              test ! -e "$update" || { echo "::error::an ad-hoc app must not carry $update"; exit 1; }
+              continue
+            fi
             test -f "$update" || { echo "::error::missing $update"; exit 1; }
             grep -Eq '^provider: github$' "$update" || { echo "::error::$update does not use the github provider"; exit 1; }
             grep -Eq '^owner: seira-bot$' "$update" || { echo "::error::$update does not name owner seira-bot"; exit 1; }

@@ -599,6 +599,10 @@ export interface UpdaterState {
   installMode?: "restart" | "handoff";
   /** when (ms) the last check found no newer version; cleared when one is found */
   upToDateAt?: number;
+  /** when (ms) the last check failed; cleared when a later check finishes */
+  checkFailedAt?: number;
+  /** this copy cannot update itself: new versions come from the website */
+  downloadOnly?: boolean;
   /** an app store updates this install, so the app offers no update action of its own */
   managedByStore?: boolean;
   /** hand-off only: the install command, already on the clipboard */

@@ -51,6 +51,7 @@ import { serverCheckPhase, serverUpdateRow, type ServerUpdateCheck, type ServerU
 import { unlessRefused } from "@/lib/admin-scope";
 import type { CloudAccountBridge, CloudAccountState } from "../../electron/cloud-account.mjs";
 import { updaterMessage, useUpdaterState, type UpdaterState } from "@/lib/updater";
+import { DESKTOP_DOWNLOAD_URL } from "../../shared/computer-ask";
 import { productName } from "../lib/brand";
 import { cloudColor } from "@/lib/cloud-look";
 import { cn } from "@/lib/cn";
@@ -119,7 +120,7 @@ export function updateLabel(phase: UpdatePhase, state: UpdaterState | null): str
     case "up-to-date":
       return t("sidebar.update.upToDate");
     default:
-      return t("sidebar.update.check");
+      return state?.downloadOnly ? t("sidebar.update.downloadOnly") : t("sidebar.update.check");
   }
 }
 
@@ -179,6 +180,11 @@ export function simpleUpdateTop(entry: Pick<UpdateEntry, "phase" | "source" | "i
   return null;
 }
 
+/** "You're up to date" only for a check the person just asked for, and only when a check finished after the click. */
+export function upToDateAfterClick(state: UpdaterState | null, checkedAt: number, now: number): boolean {
+  return checkedAt > 0 && state?.status === "idle" && (state.upToDateAt ?? 0) >= checkedAt && now - checkedAt < 3000;
+}
+
 export function useUpdateItem(): UpdateEntry | null {
   const state = useUpdaterState();
   const updater = window.ogb?.updater;
@@ -188,7 +194,7 @@ export function useUpdateItem(): UpdateEntry | null {
 
   useEffect(() => setPending(false), [status]);
 
-  const upToDate = Boolean(checkedAt) && (!state || state.status === "idle") && Date.now() - checkedAt < 3000;
+  const upToDate = upToDateAfterClick(state, checkedAt, Date.now());
   useEffect(() => {
     if (!upToDate) return;
     const timer = setTimeout(() => setCheckedAt(0), 3000);
@@ -218,6 +224,7 @@ export function useUpdateItem(): UpdateEntry | null {
           setPending(true);
           return void updater.install();
         }
+        if (state.downloadOnly) return void openExternalLink(DESKTOP_DOWNLOAD_URL);
         setCheckedAt(Date.now());
         void updater.check();
       },

@@ -70,7 +70,8 @@ const UP_TO_DATE_FOR_MS = 24 * 60 * 60_000;
 /** "Up to date" only after a check in the last day that found nothing newer; otherwise the version alone. */
 export function appSubLine(update: UpdaterState | null, version: string, now = Date.now()): string {
   if (update?.status === "downloaded") return t("settings.app.updateReadyLine", { version });
-  if (update?.managedByStore || update?.upToDateAt === undefined) return version;
+  if (update?.managedByStore || update?.downloadOnly || update?.status === "error" || update?.upToDateAt === undefined) return version;
+  if (update.checkFailedAt !== undefined && update.checkFailedAt > update.upToDateAt) return version;
   return now - update.upToDateAt < UP_TO_DATE_FOR_MS ? t("settings.app.upToDateLine", { version }) : version;
 }
 
