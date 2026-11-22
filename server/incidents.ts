@@ -1,4 +1,5 @@
 import type { WireMessage as Message } from "../shared/wire.ts";
+import { CONTEXT_FULL_NOTE, contextFullStop } from "./context-full.ts";
 import { envWhole } from "./env-limits.ts";
 import { HOST_FAULT_WHY, hostFaultOf, retryCannotFix } from "./host-fault.ts";
 import { withoutDeliveredNote } from "./peer-provenance.ts";
@@ -109,11 +110,12 @@ export class IncidentLedger {
     this.options = options;
   }
 
-  note(threadId: string): IncidentCount {
+  /** `counted` false reads the thread's count without adding this incident to it. */
+  note(threadId: string, counted = true): IncidentCount {
     const now = this.options.now?.() ?? Date.now();
     const windowMs = this.options.windowMs ?? INCIDENT_WINDOW_MS;
     const recent = (this.at.get(threadId) ?? []).filter((time) => now - time < windowMs);
-    recent.push(now);
+    if (counted) recent.push(now);
     this.at.set(threadId, recent);
     const count = recent.length;
     return {
@@ -204,6 +206,7 @@ export function incidentText(incident: Incident, count: IncidentCount, retry?: I
   if (count.count > 1) lines.push(`This is the ${ordinal(count.count)} incident on that thread within the hour.`);
   if (retry && "retried" in retry) lines.push("Seira already retried this run once by itself; the failure above is how that retry ended.");
   else if (retry) lines.push(`Seira did not retry it: ${retry.notRetried}.`);
+  if (contextFullStop(incident.failure?.stopReason, incident.failure?.text ?? incident.detail)) lines.push(CONTEXT_FULL_NOTE);
   const fault = hostFaultOf(incident.failure?.text ?? incident.detail, incident.failure?.stopReason);
   lines.push(fault && retryCannotFix(fault)
     ? `A retry cannot fix this: ${HOST_FAULT_WHY[fault]}, and starting the run again would meet the same fault. Do not call retry_thread or hand the work on again. Say in one or two plain sentences what is blocking and what the person should do, then stop.`

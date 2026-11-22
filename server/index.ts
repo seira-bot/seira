@@ -15,7 +15,7 @@ import { basename, join } from "node:path";
 import { authorizeExternalRuntime, externalRuntimeIsActive, type ExternalRuntimeGrant } from "./external-runtime.ts";
 import { z } from "zod";
 import { selectReplay, replayToolCalls, DEFAULT_REBUILD_BYTES, MAX_SUMMARY_BYTES } from "./context-rebuild.ts";
-import { draftSummary, foldPoint } from "./compaction-summary.ts";
+import { draftSummary, foldPoint } from "./compaction-summary.ts"; import { contextFull, contextFullStop } from "./context-full.ts";
 import { compactBudget, compactionReading, contextWindowFor, shouldCompact } from "./context-budget.ts";
 import { autoCompactWindow } from "./drivers/claude.ts";
 import { RoomContextTracker, roomResetNote } from "./room-context.ts";
@@ -6673,7 +6673,7 @@ bus.subscribe((event: RuntimeEvent) => {
       const clientStopped = personStops.stopped(event.threadId, completedTurnId) || (stoppedTurns.has(event.threadId)
         && (stoppedTurnId === undefined || completedTurnId === undefined || stoppedTurnId === completedTurnId));
       const stopped = event.stopReason === "interrupted" || clientStopped;
-      landParkedFiles();
+      landParkedFiles(); if (contextFullStop(event.stopReason)) contextFull.mark(event.threadId);
       if (completedTurnId) {
         const terminal = store.markTerminalAssistantMessage(event.threadId, completedTurnId);
         if (terminal) store.patchMessage(event.threadId, terminal.id, { turnSucceeded: event.ok });
@@ -7002,20 +7002,20 @@ async function compactConversation(input: {
   excludedIds: ReadonlySet<string>; manual: boolean; idle?: AbortSignal;
 }): Promise<void> {
   const { bot, threadId, generation, instance, model, excludedIds, manual, idle } = input;
-  const task = store.taskByThread(bot.id, threadId);
-  if (!task || (!manual && cfg.context?.autoCompact === false)) return;
+  const task = store.taskByThread(bot.id, threadId), forced = !manual && contextFull.has(threadId);
+  if (!task || (!manual && !forced && cfg.context?.autoCompact === false)) return; const unfolded = (): void => { if (forced) contextFull.release(threadId, instance.instanceId, task.resumeCursors, (resumeCursors) => store.patchTask(bot.id, threadId, { resumeCursors })); };
   const messages = sinceFreshStart(store.activePath(threadId));
   const context = directContext(bot, threadId, messages);
   const record = latestCompaction(messages);
   // A retry must apply the existing record before considering another fold.
-  if (!manual && record && record.id !== task.appliedCompactionId) return;
+  if (!manual && record && record.id !== task.appliedCompactionId) return unfolded();
   if (manual && record?.id === messages.at(-1)?.id && !record?.firstKeptId) return;
   const selected = selectReplay(context, {
     budgetBytes: Math.max(1_024, context.reduce((n, entry) => n + Buffer.byteLength(entry.text) + 16, 0) + 4 * MAX_SUMMARY_BYTES + 1_024),
     maxMessages: Number.MAX_SAFE_INTEGER, excludedIds, compaction: record,
   });
   const history = selected.transcript.filter(entry => entry.id);
-  if (!history.length) return;
+  if (!history.length) return unfolded();
   const measurement = compactionReading(instance.adapter.capabilities, task.lastContextModel === `${instance.instanceId}:${model}` && !task.rewound ? task.usage?.context : undefined);
   const window = contextWindowFor(model, instance.models, measurement?.window);
   const bytes = history.reduce((n, entry) => n + Buffer.byteLength(entry.text), 0);
@@ -7025,14 +7025,14 @@ async function compactConversation(input: {
     store.patchTask(bot.id, threadId, { contextFloor: floor });
   }
   const nativeCompactAt = nativeCompactTokens(instance);
-  if (!manual && !shouldCompact({ contextTokens: measurement?.tokens, estimatedBytes: bytes,
+  if (!manual && !forced && !shouldCompact({ contextTokens: measurement?.tokens, estimatedBytes: bytes,
     budget: compactBudget(window, cfg.context?.compactAt, nativeCompactAt) * (idle ? HARNESS_IDLE_FRACTION : 1), floor, window, nativeCompactAt })) return;
   const fold = manual ? { folded: history, firstKeptId: "" } : foldPoint(history);
-  if (!fold) return;
+  if (!fold) return unfolded();
   const foldedThroughId = manual
     ? context.findLast(entry => !excludedIds.has(entry.id))?.id
     : fold.folded.at(-1)?.id;
-  if (!foldedThroughId) return;
+  if (!foldedThroughId) return unfolded();
   const prefix = JSON.stringify(messages);
   const controller = new AbortController(); idle?.addEventListener("abort", () => controller.abort(), { once: true }); if (idle?.aborted) controller.abort();
   compactionControllers.set(threadId, { generation, controller });
@@ -7048,7 +7048,7 @@ async function compactConversation(input: {
       role: "bot", kind: "compaction",
       compaction: { summary, firstKeptId: fold.firstKeptId, foldedThroughId,
         tokensBefore: measurement?.tokens ?? Math.ceil(bytes / 4), by: manual ? "person" : "harness" },
-    }, { kind: "compaction.append", key: `${threadId}:${messages.at(-1)?.id}:${fold.firstKeptId}` });
+    }, { kind: "compaction.append", key: `${threadId}:${messages.at(-1)?.id}:${fold.firstKeptId}` }); contextFull.clear(threadId);
   } finally {
     if (compactionControllers.get(threadId)?.generation === generation) compactionControllers.delete(threadId);
   }

@@ -14,8 +14,8 @@ import { localizedCard } from "@/lib/widget-text";
 import { widgetToText } from "../../shared/widget";
 
 /** The newest message a preview can show. A receipt or a screen frame says nothing about the conversation on its own. */
-export function lastPreviewable<T extends { kind: string }>(messages: readonly T[] | undefined): T | undefined {
-  return messages?.findLast((message) => !isReceipt(message) && message.kind !== "screen");
+export function lastPreviewable<T extends { kind: string; handoff?: unknown }>(messages: readonly T[] | undefined): T | undefined {
+  return messages?.findLast((message) => !isReceipt(message) && message.kind !== "screen" && !message.handoff);
 }
 
 export function botPreview(bot: Bot, visible: Message[], instances: InstanceInfo[], advanced: boolean): string {
