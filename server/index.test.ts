@@ -6399,7 +6399,7 @@ describe("harness HTTP API", () => {
         threadId: bot.threadId,
         title: `${bot.name} couldn't start`,
       });
-      expect(String(buzz.notification.body)).toMatch(/box|cloud/i);
+      expect(String(buzz.notification.body)).toMatch(/vps/i);
 
       await expect.poll(async () => {
         const current = (await api("GET", "/api/bots?messages=20")).body.bots
@@ -6524,7 +6524,7 @@ describe("harness HTTP API", () => {
         id: string; tool?: { name?: string; ok?: boolean }; secret?: { dismissed?: boolean; resumed?: boolean };
       }>;
       await expect.poll(async () => (await thread()).filter((message) => message.tool?.ok === false)
-        .map((message) => message.tool!.name).join("\n"), { timeout: 10_000 }).toMatch(/box|cloud/i);
+        .map((message) => message.tool!.name).join("\n"), { timeout: 10_000 }).toMatch(/vps/i);
       expect((await thread()).find((message) => message.id === messageId)?.secret).toMatchObject({ dismissed: true, resumed: true });
       await expect.poll(async () => (await api("GET", "/api/bots?messages=0")).body.bots
         .find((candidate: { id: string }) => candidate.id === bot.id)?.busy).toBe(false);
