@@ -645,7 +645,7 @@ import { createPersonReplies } from "./person-replies.ts";
 import { lendingPerson, lendingPersonKey, personKey, relayedPersonKey } from "./person-key.ts";
 import { createOutsideLineage, OUTSIDE_STAYS_HERE } from "./host/outside-lineage.ts"; import { OUTSIDE_REFUSAL, outsideRouteRefused } from "./host/outside-fence.ts"; import { createOutsideWrites } from "./host/outside-writes.ts";
 import { teamAiOwner } from "./host/team-ai-owner.ts"; import { createTeamOwners, type AskViewer } from "./host/team-owners.ts"; import { createTeamMessages } from "./host/team-messages.ts"; import { createTeamAwayHost } from "./host/team-away-host.ts"; import { createPlaceInbox, guestNameIn, placeInboxViewer } from "./host/place-inbox.ts"; import { relayedTurn } from "./host/relayed-turn.ts"; import { createPersonCalendar } from "./host/person-calendar.ts";
-import { createDevsReports } from "./host/devs-reports.ts"; import { createBugReportRoutes } from "./routes/bug-reports.ts"; import { createSettingNudges } from "./host/setting-nudges.ts"; import { createPerfHost } from "./perf/perf-host.ts"; import { footprintOwners } from "./host/bot-footprint-owners.ts"; import { engineOwners } from "./engine-owners.ts"; import { startBotMemoryCapHost } from "./host/bot-memory-cap-host.ts"; import { botMemoryCapReport } from "./bot-memory-cap.ts"; import { createPerfDiagnosticsRoutes } from "./routes/perf-diagnostics.ts"; import { bugReportEndpoint, devsReportSender, devsStatusAsker } from "./devs-report-send.ts"; import { captureRecentLog } from "./recent-log.ts"; import { createShareAnswer } from "./host/share-answer.ts";
+import { createDevsReports } from "./host/devs-reports.ts"; import { createBugReportRoutes } from "./routes/bug-reports.ts"; import { createSettingNudges } from "./host/setting-nudges.ts"; import { createPerfHost } from "./perf/perf-host.ts"; import { footprintOwners } from "./host/bot-footprint-owners.ts"; import { engineOwners } from "./engine-owners.ts"; import { startBotMemoryCapHost } from "./host/bot-memory-cap-host.ts"; import { botMemoryCapReport, botMemoryStatus } from "./bot-memory-cap.ts"; import { createPerfDiagnosticsRoutes } from "./routes/perf-diagnostics.ts"; import { bugReportEndpoint, devsReportSender, devsStatusAsker } from "./devs-report-send.ts"; import { captureRecentLog } from "./recent-log.ts"; import { createShareAnswer } from "./host/share-answer.ts";
 import { createCardRequester, linePersonKey } from "./host/thread-person.ts"; import { selfThreadRefusal } from "./host/self-threads.ts"; import { lookedAfterBy } from "./host/looked-after.ts"; import { createActingPeople, HANDED_PEOPLE_FILE, HandedPeople, type HandedRun, keptPrivate, privateHandBack, withPerson } from "./host/acting-person.ts"; import { createTurnCallSignals } from "./host/turn-call-signals.ts";
 import { createThreadRoutes } from "./routes/threads.ts";
 import { createWebhookRoutes } from "./routes/webhooks.ts";
@@ -11696,7 +11696,7 @@ function configStatus() {
       configured: composio.configured(cfg), mode: composio.connectionMode(cfg),
     },
     box: { ...boat.describeBoatAccount(cfg), ...(boat.boatAccount(cfg)?.included ? {} : keyHint(cfg.box?.token)) },
-    vps: { configured: Boolean(vpsSshAlias(cfg)), sshAlias: vpsSshAlias(cfg) ?? "" },
+    vps: { configured: Boolean(vpsSshAlias(cfg)), sshAlias: vpsSshAlias(cfg) ?? "" }, phoneWorksOn: CLOUD_HOME === null && !HOSTED_WORKSPACE,
     opencodeGo: { ...keyStatus(cfg.opencodeGo?.apiKey), providerKeys: Object.keys(openCodeProviderKeys(cfg)) },
     tts: tts.describeVoice(cfg),
     decider: describeDecider(cfg), helpers: describeHelpers(cfg),
@@ -11707,7 +11707,7 @@ function configStatus() {
     ...(CLOUD_HOME ? { cloudHome: true } : {}), ...(CLOUD_TEAM ? { team: { id: CLOUD_TEAM.id, name: CLOUD_TEAM.name, ...(CLOUD_HOME ? { cloudPage: `${CLOUD_HOME.adminOrigin}/cloud` } : {}) } } : {}),
     language: appLanguage() ?? "", computerName: cfg.computerName ?? "", everyBotRules: cfg.everyBotRules ?? "",
     rooms: { turnTimeoutMinutes: roomTurnTimeoutMinutes(cfg) },
-    mcp: { callTimeoutMinutes: mcpCallTimeoutMinutes(cfg) },
+    mcp: { callTimeoutMinutes: mcpCallTimeoutMinutes(cfg) }, ...(botMemoryStatus(cfg) ? { botMemory: botMemoryStatus(cfg) } : {}),
     automaticRecovery: cfg.automaticRecovery ?? { enabled: false }, aiPool: cfg.aiPool ?? { enabled: false, mode: "even", members: [] },
     cacheKeepWarm: cacheKeepWarmSettings(cfg),
     newBots: cfg.newBots?.effort ? { effort: cfg.newBots.effort } : {},
@@ -12102,7 +12102,7 @@ const botOrderRoutes = createBotOrderRoutes({ store, visibleFor: (auth) => visib
 const botPatchRoutes = createBotPatchRoutes({ turnBots: directTurnBots, folderAccess: { dataDir: DATA_DIR, home: homedir(), setElsewhere: () => HOSTED_WORKSPACE || CLOUD_TEAM !== null },
   store, cfg, registry, sessions, browserRuntime, browserLive, memoryUpkeep, cacheKeepWarm, hostedModels, supportsApprovalMode,
   routines: () => routines, callSpeedChanged: (botId, speed) => liveCalls.speedChanged(botId, speed), activeVpsThreads,
-  hostedWorkspace: HOSTED_WORKSPACE, hostedFullAccessRefusal: HOSTED_FULL_ACCESS_REFUSAL, desktopManaged: DESKTOP_MANAGED,
+  hostedWorkspace: HOSTED_WORKSPACE, cloudHome: CLOUD_HOME !== null, hostedFullAccessRefusal: HOSTED_FULL_ACCESS_REFUSAL, desktopManaged: DESKTOP_MANAGED,
   broadcast, wireBot, publicGroupState, audienceChanged, storedAvatarExists, requestedTaskBot, threadBusy, activeGroupTurnForBot,
   checkedModelSelection, engineSwitchNeedsAsk, currentBrowserSession, interruptAllDirectThreads, cancelGroupTurnOperations,
   revokeInternalCapabilitiesForThread, runningTurnInstance, closeOpenApprovals, assertTeamComputerChangeIdle, forgetTemporaryBrowser, levelOf, team: Boolean(CLOUD_TEAM), mainThreadTasks, chiefChanged: (changed) => chiefRooms.moved(changed), ...(personRooms.personMarkThread ? { personMarkThread: personRooms.personMarkThread, shownThread: (auth: RequestAuth, bot: BotRecord) => memberBot(wireBot(bot), visibleTo(viewerFor(auth))).threadId } : {}),

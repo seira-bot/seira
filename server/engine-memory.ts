@@ -5,6 +5,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { ChildProcess } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
+import { freemem, totalmem } from "node:os";
+import { currentBotBudget } from "./bot-memory-budget.ts";
+import { memoryFence } from "./memory-fence.ts";
 import { chatNotice, noticeFailure } from "./chat-notices.ts";
 import { newEventId, newId, TurnAuthenticationRefusedError, TurnNotStartedError, TurnUsageLimitRefusedError, type ProviderAdapter, type ProviderInstance, type RuntimeEvent, type RuntimeEventListener } from "./contracts.ts";
 import { readCgroupMemory } from "./process-limits.ts";
@@ -66,6 +69,21 @@ export function readHostMemory(read: (path: string) => string = procText): HostM
     oomKills: cgroup.oomKills ?? host.oomKills, fullStall10: cgroup.fullStall10 ?? host.fullStall10 };
 }
 
+/** The desktop's room for bots: the bot budget is its total, and with the kernel limit in force what the bots' slice has not
+ * used of it bounds what is free. Without a budget (protection off) the machine's own memory. */
+export function desktopHostMemory(deps: {
+  machine?: () => HostMemory | null; budget?: () => number | null; fenceActive?: () => boolean; sliceCurrent?: () => number | null; platform?: NodeJS.Platform;
+} = {}): HostMemory | null {
+  const platform = deps.platform ?? process.platform;
+  const machine = deps.machine ? deps.machine() : platform === "win32"
+    ? { totalBytes: totalmem(), availableBytes: freemem(), swapFreeBytes: 0, oomKills: null, fullStall10: null }
+    : readHostMemory();
+  const budget = deps.budget ? deps.budget() : currentBotBudget()?.bytes ?? null;
+  if (!machine || budget === null) return machine;
+  const used = (deps.fenceActive ?? (() => memoryFence.active()))() ? (deps.sliceCurrent ?? (() => memoryFence.sliceCurrent()))() : null;
+  return { ...machine, totalBytes: budget, availableBytes: used === null ? machine.availableBytes : Math.max(0, Math.min(machine.availableBytes, budget - used)), swapFreeBytes: 0 };
+}
+
 function readMachineMemory(read: (path: string) => string): HostMemory | null {
   let meminfo: string;
   try { meminfo = read("/proc/meminfo"); } catch { return null; }
@@ -122,13 +140,15 @@ export const memoryStillWaitingText = (count: number) => `Still waiting for memo
 /** How a wait reads to the person, in their language, and where else it shows. */
 export interface EngineWaits {
   /** `limit`: the most turns at once (a plan's, or a self-hosted server's), when that is what this one waits for rather
-   * than room. `server`: a self-hosted server, whose wait is for memory or for room under its process limit. */
-  text(threadId: string, wait: { first: boolean; running: number; ahead: number; limit?: number; server?: boolean }): string;
-  began(threadId: string, wait: { running: number; ahead: number; limit?: number; server?: boolean }): void;
+   * than room. `server`: a self-hosted server, whose wait is for memory or for room under its process limit. `computer`:
+   * the desktop app, whose wait is for the memory set aside for bots. */
+  text(threadId: string, wait: { first: boolean; running: number; ahead: number; limit?: number; server?: boolean; computer?: boolean }): string;
+  began(threadId: string, wait: { running: number; ahead: number; limit?: number; server?: boolean; computer?: boolean }): void;
   /** Whether anything is waiting for memory changed. */
   changed(): void;
 }
 export const memoryStallText = (cause: string, count: number) => `${cause}. This Cloud ran out of memory while ${tasks(count)} ran at once (not a problem with the AI provider)`;
+export const memoryStallComputerText = (cause: string, count: number) => `${cause}. This computer ran out of the memory set aside for bots while ${tasks(count)} ran at once (not a problem with the AI provider)`;
 
 /** The last day's memory pressure on a Cloud home: tasks that had to wait for memory and how long they waited in all (a wait
  * still going included), turns stopped for memory, processes the kernel stopped, and minutes the machine stalled on it. */
@@ -202,6 +222,8 @@ export interface EngineMemoryOptions {
   tree?: (pid: number) => TreeUse | null;
   log?: (line: string) => void;
   tickMs?: number;
+  /** Whether the kernel limit for bots is in force. Its stops are told by the fence, so the desktop adds no line of its own. */
+  fenceActive?: () => boolean;
 }
 
 export class EngineMemory {
@@ -247,6 +269,8 @@ export class EngineMemory {
   private waits: EngineWaits | null = null;
   private cap: EngineCap | null = null;
   private readonly server: boolean;
+  private readonly desktop: boolean;
+  private readonly fenceActive: () => boolean;
   private readonly turns: TurnsSetting;
   private readonly processes: ProcessBudget | null;
   private serverTurns: { at: number; most: number | undefined } | null = null;
@@ -255,10 +279,12 @@ export class EngineMemory {
   constructor(options: EngineMemoryOptions) {
     this.enabled = options.enabled;
     this.server = options.host === "server";
+    this.desktop = options.host === "desktop";
+    this.fenceActive = options.fenceActive ?? (() => this.desktop && memoryFence.active());
     this.turns = options.turns ?? "auto";
     this.processes = this.server ? options.processes ?? processBudget : null;
     this.processes?.onRefused(() => this.wake());
-    this.read = options.read ?? (() => readHostMemory());
+    this.read = options.read ?? (this.desktop ? () => desktopHostMemory() : () => readHostMemory());
     this.groups = options.groups ?? (() => processGroupBytes());
     this.now = options.now ?? Date.now;
     this.signal = options.signal ?? ((pid, signal) => process.kill(-pid, signal));
@@ -515,7 +541,7 @@ export class EngineMemory {
         }
         if (announced === null || this.now() - announced >= NOTICE_REPEAT_MS) {
           const others = this.othersBusy(threadId), first = announced === null, ahead = this.order().indexOf(waiter);
-          const limit = this.capped(threadId), wait = { running: others, ahead, ...(limit === undefined ? {} : { limit }), ...(this.server ? { server: true } : {}) };
+          const limit = this.capped(threadId), wait = { running: others, ahead, ...(limit === undefined ? {} : { limit }), ...(this.server ? { server: true } : {}), ...(this.desktop ? { computer: true } : {}) };
           if (first) {
             this.waitingSince.set(waiter, this.now());
             this.queuedEver += 1;
@@ -556,7 +582,9 @@ export class EngineMemory {
    * shortage was seen in the turn. `interrupted`: the person stopped the turn, which no shortage explains. */
   stopFailure(threadId: string, detail?: string, interrupted = false): ReturnType<typeof noticeFailure> | null {
     const starved = this.starved.get(threadId);
-    if (starved !== undefined && !interrupted && (detail === undefined || !namesOwnCause(detail))) return noticeFailure("chat.notice.outOfProcesses", { code: starved.code });
+    if (starved !== undefined && !interrupted && (detail === undefined || !namesOwnCause(detail))) {
+      return this.desktop ? noticeFailure("chat.notice.outOfRoomComputer") : noticeFailure("chat.notice.outOfProcesses", { code: starved.code });
+    }
     const stop = this.stops.get(threadId);
     return stop === undefined ? null : noticeFailure(memoryStopKey(stop.browser, detail !== undefined), detail === undefined ? undefined : { detail });
   }
@@ -564,7 +592,8 @@ export class EngineMemory {
   /** A stalled turn's cause, saying so when memory ran short while it ran. */
   stallCause(threadId: string, cause: string): string {
     const count = this.stops.get(threadId)?.count ?? this.pressure.get(threadId);
-    return count === undefined ? cause : memoryStallText(cause, count);
+    if (count === undefined) return cause;
+    return this.desktop ? memoryStallComputerText(cause, count) : memoryStallText(cause, count);
   }
 
   /** The last day's memory pressure, for the Admin's health check (cloud-health.ts): times only, never what ran. */
@@ -585,7 +614,7 @@ export class EngineMemory {
     if (!critical || this.now() - this.lastRelief < RELIEF_COOLDOWN_MS) return;
     const idle = this.idle();
     const newest = [...this.engines.values()].filter((engine) => !engine.stopping && this.working(engine).length).sort((a, b) => b.startedAt - a.startedAt);
-    const victim = idle ?? (newest.length >= 2 ? newest[0]! : null);
+    const victim = idle ?? (newest.length >= 2 && !this.desktop ? newest[0]! : null);
     if (!victim) return;
     this.lastRelief = this.now();
     if (idle) { void this.stop(victim, "idle"); return; }
@@ -711,7 +740,7 @@ export class EngineMemory {
   private exited(pid: number, engine: Engine, signal: NodeJS.Signals | null): void {
     if (this.engines.get(pid) === engine) this.engines.delete(pid);
     const working = this.working(engine);
-    if (signal === "SIGKILL" && !engine.stopping && working.length && this.kernelKilled(this.read()?.oomKills ?? null)) {
+    if (signal === "SIGKILL" && !engine.stopping && working.length && this.kernelKilled(this.read()?.oomKills ?? null) && !this.fenceActive()) {
       this.noteStops(working, (threadId) => this.busy(threadId));
       for (const threadId of working) this.roomStopped.set(threadId, pid);
       this.log(`the kernel stopped an engine (pid ${pid}) for memory`);

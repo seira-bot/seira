@@ -197,6 +197,10 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
   for (const key of ["SEIRA_UNATTENDED_TURN_MAX_MS", "SEIRA_UNATTENDED_TURN_MAX_REQUESTS", "SEIRA_UNATTENDED_TURN_MAX_DENIALS", "SEIRA_LOOP_GUARD_UNATTENDED_STOP_AT"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
   // Warm summaries' minutes as seconds (server/warm-summary.ts), and the switch that turns them off.
   for (const key of ["SEIRA_WARM_SUMMARY_TIME_SCALE", "SEIRA_WARM_SUMMARY"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
+  // The bot memory limit (server/memory-fence.ts): a test turns it on with a small budget. Only then do the two values
+  // that reach this user's service manager cross, so a fixture never puts bot work in a slice by accident.
+  for (const key of ["SEIRA_BOT_MEMORY_FENCE", "SEIRA_BOT_MEMORY_MAX_MB"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
+  if (parentEnv.SEIRA_BOT_MEMORY_FENCE === "on") for (const key of ["XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
   // A headless server's usage caps (server/usage-caps.ts).
   for (const key of ["SEIRA_USAGE_CAP_DAILY_USD", "SEIRA_USAGE_CAP_MONTHLY_USD", "SEIRA_USAGE_CAP_DAILY_TOKENS", "SEIRA_USAGE_CAP_MONTHLY_TOKENS", "SEIRA_USAGE_CAP_STOPS"]) if (parentEnv[key]) childEnv[key] = parentEnv[key];
   // Claude Code's tool search (server/drivers/claude-tool-search.ts): a test turns it off to see a bridged Claude turn.

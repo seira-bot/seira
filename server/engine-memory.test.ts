@@ -6,9 +6,11 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { TurnNotStartedError, type ProviderInstance, type RuntimeEvent, type RuntimeEventListener, type SendTurnInput } from "./contracts.ts";
 import {
-  BOT_TURN_GIVES_WAY_MS, BROWSER_BYTES, CHAT_RUNTIME_KINDS, EngineMemory, memoryStallText, memoryStillWaitingText, memoryStopped, memoryStopText, memoryWaitText, PressureLedger, processGroupBytes, readHostMemory,
+  BOT_TURN_GIVES_WAY_MS, BROWSER_BYTES, CHAT_RUNTIME_KINDS, desktopHostMemory, EngineMemory, memoryStallComputerText, memoryStallText, memoryStillWaitingText, memoryStopped, memoryStopText, memoryWaitText, PressureLedger, processGroupBytes, readHostMemory,
   withEngineMemory, type HostMemory,
 } from "./engine-memory.ts";
+import { createWaitWords } from "./host/wait-words.ts";
+import { outOfProcesses } from "./process-shortage.ts";
 import { OOM_SCORE, protectSupervisor, spawnBotWork, spawnWithOomScore } from "./oom-score.ts";
 
 const MB = 1024 * 1024, GB = 1024 * MB;
@@ -103,7 +105,7 @@ class FakeChild extends EventEmitter {
 }
 
 /** A 4 GB home without swap: `available` before any engine (the test may change it), less `perEngine` per running engine. */
-function host(options: { available?: number; perEngine?: number; tickMs?: number } = {}) {
+function host(options: { available?: number; perEngine?: number; tickMs?: number; kind?: "desktop"; fenceActive?: boolean } = {}) {
   let clock = 1_800_000_000_000, oomKills = 0;
   const perEngine = options.perEngine ?? 700 * MB;
   const state = { available: options.available ?? 3.4 * GB, fullStall10: 0 };
@@ -111,7 +113,7 @@ function host(options: { available?: number; perEngine?: number; tickMs?: number
   const signals: string[] = [];
   const logs: string[] = [];
   const memory = new EngineMemory({
-    enabled: true, tickMs: options.tickMs ?? 5,
+    enabled: true, tickMs: options.tickMs ?? 5, ...(options.kind ? { host: options.kind } : {}), ...(options.fenceActive === undefined ? {} : { fenceActive: () => options.fenceActive! }),
     read: (): HostMemory => ({ totalBytes: 4 * GB, availableBytes: Math.max(0, state.available - children.size * perEngine), swapFreeBytes: 0, oomKills, fullStall10: state.fullStall10 }),
     groups: () => new Map([...children.keys()].map((pid) => [pid, perEngine])),
     now: () => clock,
@@ -960,5 +962,88 @@ describe("a lane of its own", () => {
 
   it("is always open with the gate off", () => {
     expect(new EngineMemory({ enabled: false }).laneHasRoom()).toBe(true);
+  });
+});
+
+describe("the desktop gate", () => {
+  it("holds a new engine when the memory set aside for bots has no room, and says it waits for this computer", async () => {
+    const h = host({ available: 1.2 * GB, kind: "desktop" });
+    const waits = createWaitWords({ language: () => undefined, starter: () => false, held: () => {}, changed: () => {} });
+    h.memory.useWaits({ ...waits, text: (threadId, wait) => (wait.computer ? waits.text(threadId, wait) : "not the computer's wait") });
+    expect(await h.memory.admit("a", new AbortController().signal, () => {})).toBe(true);
+    h.memory.turnStarted("a");
+    h.spawn("a");
+    const notices: string[] = [];
+    const stop = new AbortController();
+    const second = h.memory.admit("b", stop.signal, (text) => notices.push(text));
+    await settle();
+    expect(notices).toEqual(["Waiting for memory on this computer. Running now: 1. Ahead of this one: 0. It starts by itself when there's room."]);
+    h.advance(10 * 60_000);
+    await settle();
+    expect(notices[1]).toBe("Still waiting for memory. Running now: 1. Ahead of this one: 0.");
+    stop.abort();
+    expect(await second).toBe(false);
+  });
+
+  it("stops an idle engine to make room but never a busy one", async () => {
+    const h = host({ kind: "desktop" });
+    for (const thread of ["a", "b", "c"]) { h.memory.turnStarted(thread); h.spawn(thread); h.advance(1_000); }
+    h.state.available = 100 * MB;
+    h.memory.tick();
+    await settle();
+    expect(h.signals).toEqual([]);
+    h.memory.turnEnded("c");
+    h.advance(20_000);
+    h.memory.tick();
+    await settle();
+    expect(h.signals).toEqual(["SIGTERM -1002"]);
+    expect(h.memory.most()).toBeUndefined();
+  });
+
+  it("words a stall for this computer, not for a Cloud", () => {
+    const h = host({ kind: "desktop", fenceActive: false });
+    h.memory.turnStarted("a"); const a = h.spawn("a");
+    h.oomKill();
+    a.exit("SIGKILL");
+    expect(h.memory.stallCause("a", "no activity for 20 minutes — the turn was stopped")).toBe("no activity for 20 minutes — the turn was stopped. This computer ran out of the memory set aside for bots while 1 task ran at once (not a problem with the AI provider)");
+    expect(memoryStallComputerText("x", 3)).not.toMatch(/Cloud/);
+  });
+
+  it("tells a refused start without a code, and a Cloud with its code", () => {
+    const desktop = host({ kind: "desktop" });
+    desktop.memory.turnStarted("a");
+    desktop.memory.within("a", () => desktop.memory.spawnRefused("ENOMEM", true));
+    const failure = desktop.memory.stopFailure("a");
+    expect(failure?.text).toEqual({ key: "chat.notice.outOfRoomComputer" });
+    expect(failure?.message).toBe("There is no room on this computer to start another program, so this task could not run. Nothing was sent to the AI. It starts again by itself when there is room.");
+    expect(outOfProcesses(failure!.message)).toBe(true);
+    const cloud = host();
+    cloud.memory.turnStarted("a");
+    cloud.memory.within("a", () => cloud.memory.spawnRefused("ENOMEM", true));
+    expect(cloud.memory.stopFailure("a")?.text).toEqual({ key: "chat.notice.outOfProcesses", params: { code: "ENOMEM" } });
+  });
+
+  it("adds no room-stop line for an engine the kernel killed while the fence is on, and keeps it otherwise", () => {
+    const fenced = host({ kind: "desktop", fenceActive: true });
+    fenced.memory.turnStarted("a"); const a = fenced.spawn("a");
+    fenced.oomKill();
+    a.exit("SIGKILL");
+    expect(fenced.memory.stopFailure("a")).toBeNull();
+    expect(fenced.memory.stoppedForRoom("a")).toBe(false);
+    const open = host({ kind: "desktop", fenceActive: false });
+    open.memory.turnStarted("a"); const b = open.spawn("a");
+    open.oomKill();
+    b.exit("SIGKILL");
+    expect(open.memory.stopFailure("a")?.message).toBe(memoryStopText(false));
+  });
+
+  it("reads the bot budget as its total and the slice's use against it", () => {
+    const machine = (): HostMemory => ({ totalBytes: 16 * GB, availableBytes: 10 * GB, swapFreeBytes: GB, oomKills: null, fullStall10: null });
+    expect(desktopHostMemory({ machine, budget: () => 8 * GB, fenceActive: () => true, sliceCurrent: () => 6 * GB })).toMatchObject({ totalBytes: 8 * GB, availableBytes: 2 * GB, swapFreeBytes: 0 });
+    expect(desktopHostMemory({ machine, budget: () => 8 * GB, fenceActive: () => true, sliceCurrent: () => 9 * GB })?.availableBytes).toBe(0);
+    expect(desktopHostMemory({ machine, budget: () => 8 * GB, fenceActive: () => false, sliceCurrent: () => 6 * GB })?.availableBytes).toBe(10 * GB);
+    expect(desktopHostMemory({ machine, budget: () => null })).toEqual(machine());
+    expect(desktopHostMemory({ machine: () => null, budget: () => 8 * GB })).toBeNull();
+    expect(desktopHostMemory({ platform: "win32", budget: () => null })?.totalBytes).toBeGreaterThan(0);
   });
 });

@@ -11,7 +11,7 @@ import { stoppedForRoom } from "./drivers/session-idle.ts";
 import { memoryStopped } from "./engine-memory.ts";
 import { hostFaultOf, retryCannotFix } from "./host-fault.ts";
 import { capPressure } from "./host/bot-memory-cap-host.ts";
-import type { FootprintOwner } from "./perf/bot-footprint.ts";
+import { capLine, type FootprintOwner } from "./perf/bot-footprint.ts";
 import type { ProcessRow } from "./perf/process-buckets.ts";
 import { perfHealth, PERF_HEALTH_MAX_BYTES } from "./perf/perf-report.ts";
 import { createTurnTimings } from "./perf/turn-timings.ts";
@@ -93,14 +93,14 @@ const SHORT: CapPressure = { room: 0.1, short: true, freeBytes: 300 * MB };
 
 /** A watchdog over `rows` with a 1,000 MB cap per engine. Every process's proportional size reads as its resident size. */
 function dog(rows: () => ProcessRow[], options: {
-  mode?: CapSetting["mode"]; pressure?: () => CapPressure; busy?: ReadonlySet<string>; owners?: () => FootprintOwner[];
+  mode?: CapSetting["mode"]; whole?: boolean; pressure?: () => CapPressure; busy?: ReadonlySet<string>; owners?: () => FootprintOwner[];
   pss?: (pid: number) => number | null; startOf?: (pid: number) => string | null;
 } = {}) {
   const signals: string[] = [], closed: string[][] = [], logs: string[] = [];
   let clock = 1_800_000_000_000, pssReads = 0;
   const pss = options.pss ?? ((pid: number) => rows().find((row) => row.pid === pid)?.rssBytes ?? null);
   const watchdog = new BotMemoryWatchdog({
-    cap: () => ({ mode: options.mode ?? "enforce", bytes: 1000 * MB }), list: rows, owners: options.owners ?? (() => OWNERS), pressure: options.pressure ?? (() => SHORT),
+    cap: () => ({ mode: options.mode ?? "enforce", bytes: 1000 * MB, ...(options.whole ? { whole: true } : {}) }), list: rows, owners: options.owners ?? (() => OWNERS), pressure: options.pressure ?? (() => SHORT),
     pss: (pid) => { pssReads += 1; return pss(pid); }, startOf: options.startOf ?? ((pid) => `s${pid}`), graceMs: 0, now: () => clock,
     busy: (threadId) => (options.busy ?? new Set(["tb", "ta"])).has(threadId),
     signal: (pid, value) => signals.push(`${value} ${pid}`), closeBrowsers: async (threadIds) => { closed.push([...threadIds]); }, log: (line) => logs.push(line),
@@ -351,5 +351,38 @@ describe("the line a stopped turn ends with", () => {
     await instance.adapter.sendTurn({ threadId: "tb", botId: "bot_b", text: "again" } as SendTurnInput);
     emit({ threadId: "tb", turnId: "t2", type: "runtime.error", message: "its own failure" });
     expect(shown()).toEqual(["its own failure"]);
+  });
+});
+
+describe("the cap for all of a bot's work (the fallback without the kernel limit)", () => {
+  it("takes the budget as a whole cap, a number in the environment as that budget too, and off still means none", () => {
+    const inputs = { gate: "desktop" as const, memoryBytes: 16 * GB };
+    expect(botMemoryCap({}, inputs, () => undefined, 8 * GB)).toEqual({ mode: "enforce", bytes: 8 * GB, whole: true });
+    expect(botMemoryCap({ SEIRA_BOT_MEMORY_MAX_MB: "3000" }, inputs, () => undefined, 3000 * MB)).toEqual({ mode: "enforce", bytes: 3000 * MB, whole: true });
+    expect(botMemoryCap({ SEIRA_BOT_MEMORY_MAX_MB: "off" }, inputs, () => undefined, 8 * GB)).toBeNull();
+    // The old log cap stays off on the desktop gate.
+    expect(botMemoryCap({}, inputs)).toBeNull();
+  });
+
+  it("compares a bot's whole use to the cap, not one engine's share, and acts without waiting for the room to run short", async () => {
+    // Bot B uses 1,500 MB over two engines: under 2 x 1,000 MB, over a whole cap of 1,000 MB.
+    const each = dog(() => processes({ b: 700, b2: 700 }), { pressure: () => ROOMY });
+    for (let look = 0; look < 3; look++) { expect(await each.watchdog.check()).toEqual([]); each.advance(OVER_FOR_MS); }
+    const whole = dog(() => processes({ b: 700, b2: 700 }), { whole: true, pressure: () => ROOMY });
+    await whole.watchdog.check();
+    whole.advance(OVER_FOR_MS);
+    const events = await whole.watchdog.check();
+    expect(events.map((event) => [event.botId, event.capMB, event.pressure])).toEqual([["bot_b", 1000, true]]);
+    expect(whole.signals.length).toBeGreaterThan(0);
+  });
+});
+
+describe("the health line for bot memory (AC-11)", () => {
+  const base = { mb: null, mode: null, rung: "none", stops: 2, flagged: 0, events: [] };
+
+  it("names the protection and the budget", () => {
+    expect(capLine({ ...base, protection: "slice", budgetGb: 12 })).toBe("  Memory for all bots together: 12 GB, protection: slice, steps taken since start: 2");
+    expect(capLine({ ...base, mb: 12288, mode: "enforce", rung: "watchdog", protection: "watchdog", budgetGb: 12 })).toContain("protection: watchdog");
+    expect(capLine({ ...base, protection: "none", budgetGb: null })).toBe("  Memory one bot may use: no limit, protection: none");
   });
 });
