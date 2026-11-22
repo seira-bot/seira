@@ -12,7 +12,6 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
   { version: "0.1.188", items: [
     { id: "boatGone", icon: Server },
     { id: "memoryForBots", icon: Gauge },
-    { id: "crashReports", icon: Bug },
   ] },
   { version: "0.1.187", items: [
     { id: "callView", icon: Phone },
