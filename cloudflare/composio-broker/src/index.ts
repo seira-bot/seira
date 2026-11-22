@@ -138,13 +138,15 @@ const printableAliasSchema = z.string().min(1).max(64).refine((value) => {
   return true;
 });
 
+class AccountAliasError extends Error {}
+
 function normalizeAccountAlias(value: string | null | undefined): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   const parsed = z.string().safeParse(value);
-  if (!parsed.success) throw new Error("Account alias must be text");
+  if (!parsed.success) throw new AccountAliasError("Account alias must be text");
   const alias = parsed.data.trim();
   if (!printableAliasSchema.safeParse(alias).success) {
-    throw new Error("Account alias must be 1-64 printable characters");
+    throw new AccountAliasError("Account alias must be 1-64 printable characters");
   }
   return alias;
 }
@@ -864,7 +866,7 @@ async function requestAlias(request: Request) {
   try {
     return normalizeAccountAlias(body.alias);
   } catch (error) {
-    throw new Response(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }), { status: 400, headers: JSON_HEADERS });
+    throw new Response(JSON.stringify({ error: error instanceof AccountAliasError ? error.message : "Account alias is not valid" }), { status: 400, headers: JSON_HEADERS });
   }
 }
 
