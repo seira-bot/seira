@@ -7,7 +7,7 @@ import { BotBox, BoxRunner, BOX_EGRESS_PORT, flyApiPrivate, foldersKey, writeSec
 import { processStart, seesProcess } from "./box-probe.ts";
 import { procHidepid } from "./hidepid.ts";
 import { boxUploadsDir, visibleInBox } from "./plan.ts";
-import { homeProgramsDistrusted } from "./program-trust.ts";
+import { homeProgramsDistrusted, serverMayRunFrom } from "./program-trust.ts";
 import { DENIED_SYSCALLS, seccompBytes } from "./seccomp.ts";
 import { engineInstallRoots, npmEnginesPrefix } from "../engine-roots.ts";
 import { spawnCli } from "../procs.ts";
@@ -221,6 +221,20 @@ describe("BotBox", () => {
     expect(box.broker("b2"), "a bot outside the box keeps its URL servers direct").toBeNull();
     expect(box.broker()).toBeNull();
     expect(await box.openRelay(), "relays are for a box of every bot").toBeNull();
+  });
+
+  it.skipIf(process.platform === "win32")("limited: the server runs no program from a sign-in folder or a bots' folder that a limited box writes", async () => {
+    const box = new BotBox();
+    boxes.push(box);
+    const home = temp(), dataDir = join(home, ".seira");
+    await box.start({
+      dataDir, home, port: 8799, denyEnv: new Set(), env: {}, log: () => {},
+      detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: null }, scope: "limited" }),
+    });
+    expect(serverMayRunFrom(join(home, ".grok", "bin"))).toBe(false);
+    expect(serverMayRunFrom(join(home, ".claude", "local", "claude"))).toBe(false);
+    expect(serverMayRunFrom(join(dataDir, "task-workspaces", "b1", "t1", "tool"))).toBe(false);
+    expect(serverMayRunFrom(join(home, ".local", "bin")), "HOME stays trusted").toBe(true);
   });
 
   it.skipIf(process.platform === "win32")("limited: a bot working in a folder of its own choosing still reads its conversation's uploads", async () => {
