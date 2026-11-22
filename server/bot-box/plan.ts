@@ -19,8 +19,8 @@
 //     the egress gate (every connection to the internet goes through it) and the harness gate (only /api/internal/
 //     routes of this server). Nothing else on the server's loopback is reachable. A box that waits for a sign-in callback
 //     also dials out to one more socket, through which the server reaches the box's own loopback, never the other way.
-import { lstatSync, readdirSync, realpathSync, statSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { lstatSync, realpathSync, statSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { isLayerId } from "../audience.ts";
 import type { TurnFolders } from "../folder-access.ts";
@@ -184,7 +184,7 @@ export const LIMITED_HOME_SIGN_INS = [".claude", ".claude.json", ".codex", ".gro
 /** Program installs in HOME that a limited box has read-only. Whole roots, not their bin folders: npm's and nvm's bin
  * links point into the install by relative paths. */
 export const LIMITED_HOME_PROGRAMS = [".local/bin", ".npm-global", ".nvm", ".volta", ".bun", ".asdf", ".local/share/mise", ".deno",
-  ".cargo", ".opencode", "bin"] as const;
+  ".cargo", ".opencode", "bin", ".local/share/claude/versions", ".local/share/cursor-agent/versions"] as const;
 
 /** Git settings a limited box reads, so commits and clones keep working. */
 export const LIMITED_HOME_GIT = [".gitconfig", ".config/git"] as const;
@@ -193,26 +193,6 @@ export const LIMITED_HOME_GIT = [".gitconfig", ".config/git"] as const;
  * Security: never the whole root, which can be a checkout with its env files and history, or `~/.local` with
  * `~/.local/share`. */
 export const LIMITED_CODE_PARTS = ["server", "shared", "node_modules", "packages", "skills", "package.json", "bin", "lib"] as const;
-
-/** Installers that keep a program in a folder of its own under `~/.local/share` and link it from `~/.local/bin`
- * (Claude's, Cursor's): the folders a limited box reads, so the links work. Only folders two or more levels in, of an
- * executable the link names, so `~/.local/share` and its direct folders stay hidden. */
-export function linkedHomeInstalls(home: string): string[] {
-  const bin = join(home, ".local", "bin"), share = join(realPathOf(home), ".local", "share");
-  let names: string[];
-  try { names = readdirSync(bin); } catch { return []; }
-  const folders = new Set<string>();
-  for (const name of names) {
-    try {
-      if (!lstatSync(join(bin, name)).isSymbolicLink()) continue;
-      const real = realpathSync(join(bin, name));
-      const stat = statSync(real);
-      const folder = dirname(real);
-      if (stat.isFile() && (stat.mode & 0o111) !== 0 && under(folder, share) && relative(share, folder).split(sep).length >= 2) folders.add(folder);
-    } catch {}
-  }
-  return [...folders];
-}
 
 function realPathOf(path: string): string {
   try { return realpathSync(path); } catch { return resolve(path); }
@@ -267,27 +247,25 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
   const realHome = realPathOf(home), realData = realPathOf(dataDir);
   /** A path that is HOME, or holds it (the server's data folder too): in a limited box nothing may bind it. */
   const holdsHome = (path: string) => under(realHome, path) || under(home, path) || under(realData, path) || under(dataDir, path);
+  // Security: bubblewrap binds through links. A folder's entry is bound only when it is not a link and is where its name
+  // says, so a link to HOME or to the data folder gives nothing back.
+  const boundAsNamed = (folder: string, realFolder: string, name: string): string | null => {
+    const path = join(folder, name);
+    try {
+      if (lstatSync(path).isSymbolicLink()) return null;
+      const real = realpathSync(path);
+      if (real !== join(realFolder, name) || holdsHome(real) || under(real, realData) || under(path, dataDir)) return null;
+      return real;
+    } catch { return null; }
+  };
   if (limited) {
     // A private empty HOME, with back only what an engine needs to run and sign in.
     mounts.push({ kind: "tmpfs", target: home });
-    // Security: bubblewrap binds through links. An entry is bound only when it is not a link and is where its name says,
-    // so a link to HOME or to the data folder gives nothing back.
-    const entry = (name: string): string | null => {
-      const path = join(home, name);
-      try {
-        if (lstatSync(path).isSymbolicLink()) return null;
-        const real = realpathSync(path);
-        if (real !== join(realHome, name) || under(real, realData) || under(realData, real) || under(path, dataDir) || under(dataDir, path)) return null;
-        return real;
-      } catch { return null; }
-    };
+    const entry = (name: string) => boundAsNamed(home, realHome, name);
     for (const name of [...LIMITED_HOME_PROGRAMS, ...LIMITED_HOME_GIT]) {
       const real = entry(name);
       if (!real) continue;
       mounts.push({ kind: "ro", source: real, target: join(home, name), optional: true });
-    }
-    for (const folder of linkedHomeInstalls(home)) {
-      if (!holdsHome(folder) && !under(folder, realData)) mounts.push({ kind: "ro", source: folder, target: folder, optional: true });
     }
     for (const name of LIMITED_HOME_SIGN_INS) {
       const real = entry(name);
@@ -311,7 +289,10 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
     if (holdsHome(code) || holdsHome(realPathOf(code)) || under(code, dataDir)) continue;
     if (PRIVATE_INSIDE.some((base) => under(code, base) && code !== base)) mounts.push({ kind: "ro", source: code, target: code });
     else if (limited && (under(code, home) || under(code, realHome))) {
-      for (const part of LIMITED_CODE_PARTS) mounts.push({ kind: "ro", source: join(code, part), target: join(code, part), optional: true });
+      for (const part of LIMITED_CODE_PARTS) {
+        const real = boundAsNamed(code, realPathOf(code), part);
+        if (real) mounts.push({ kind: "ro", source: real, target: join(code, part) });
+      }
     }
   }
   const dataHidden = !mutate.has("bind-data");
@@ -415,8 +396,8 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
     // when the caller named it in `ro`, or when it is in a bot's folder: this box's bot's, or any bot's where the caller
     // gave no bot (a configured server's program lives in the folder of the bot that added it).
     if (!named.has(full) && (under(full, dataDir) || under(dataDir, full)) && !covered(full) && !inBotFolder(full)) continue;
-    // Security: nor does a configured server's command line give a limited box back a path in HOME.
-    if (limited && request.configured && !named.has(full) && (under(full, home) || under(full, realHome) || under(realPathOf(full), realHome))) continue;
+    // Security: nor does a configured server's command line give a limited box anything its folders do not.
+    if (limited && request.configured && !named.has(full)) continue;
     // Code and the system are already there; a file under HOME or /tmp the command line names is put back read-only.
     if ((!asked.has(full) && covered(full)) || readOnly.has(full)) continue;
     if (["/usr", "/etc", "/opt", "/var/lib", ...setup.codeRoots, ...setup.engineRoots].some((base) => under(full, resolve(base)))) continue;

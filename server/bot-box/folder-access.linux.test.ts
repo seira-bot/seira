@@ -73,7 +73,7 @@ describe.skipIf(desktop.box !== "bwrap")(`only the bots limited to chosen folder
   const project = join(home, "project"), secret = join(home, ".ssh", "id");
   const box = new BotBox();
   beforeAll(async () => {
-    for (const dir of [join(dataDir, "workspaces", "bot-1"), project, join(home, ".ssh")]) mkdirSync(dir, { recursive: true, mode: 0o700 });
+    for (const dir of [join(dataDir, "workspaces", "bot-1"), project, join(home, ".ssh"), join(root, "other")]) mkdirSync(dir, { recursive: true, mode: 0o700 });
     writeFileSync(join(project, "a.txt"), "project");
     writeFileSync(secret, "private");
     box.scopeFolders((botId) => botId === "bot-1" ? { limited: true, grants: [{ path: project, write: true }] } : botId === "bot-2" ? { limited: false, grants: [] } : null);
@@ -83,7 +83,7 @@ describe.skipIf(desktop.box !== "bwrap")(`only the bots limited to chosen folder
   afterAll(async () => { await box.stop(); rmSync(root, { recursive: true, force: true }); });
 
   it("runs a limited bot's command in its folders only, also in a working folder of its own choosing (AC-02)", async () => {
-    const script = `cat "${join(project, "a.txt")}"; cat "${secret}" 2>&1; ${write(join(project, "b.txt"))}; ${write(join(home, "c.txt"))}; ${write(join(root, "outside.txt"))}`;
+    const script = `cat "${join(project, "a.txt")}"; cat "${secret}" 2>&1; ${write(join(project, "b.txt"))}; ${write(join(home, "c.txt"))}; ${write(join(root, "outside.txt"))}; ${write(join(root, "other", "d.txt"))}`;
     const wrapped = box.wrap({ command: "/bin/sh", args: ["-c", script], cwd: project, conversationBot: "bot-1", threadId: "thread-1", env: { ...DESKTOP_ENV, HOME: home } })!;
     expect(wrapped).not.toBeNull();
     const out = await new Promise<string>((resolve) => {
@@ -98,8 +98,9 @@ describe.skipIf(desktop.box !== "bwrap")(`only the bots limited to chosen folder
     expect(out).not.toContain("private");
     expect(out).toContain(`WROTE ${join(project, "b.txt")}`);
     expect(existsSync(join(home, "c.txt")), "HOME in the box is scratch that never reaches the real one").toBe(false);
-    expect(out).toContain(`REFUSED ${join(root, "outside.txt")}`);
-    expect(existsSync(join(root, "outside.txt"))).toBe(false);
+    expect(existsSync(join(root, "outside.txt")), "a parent of a bound folder is the box's own scratch").toBe(false);
+    expect(out).toContain(`REFUSED ${join(root, "other", "d.txt")}`);
+    expect(existsSync(join(root, "other", "d.txt"))).toBe(false);
     expect(existsSync(join(project, "b.txt"))).toBe(true);
   }, 60_000);
 

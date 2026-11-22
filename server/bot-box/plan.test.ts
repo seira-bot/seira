@@ -1,10 +1,10 @@
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { engineInstallRoots } from "../engine-roots.ts";
-import { BOX_MUTATIONS, CPU_LIST_FILES, argvPaths, bwrapArgs, linkedHomeInstalls, planBox, taskWorkspaceIds, under, visibleInBox, type BoxAudience, type BoxMutation, type BoxRequest, type BoxSetup } from "./plan.ts";
+import { BOX_MUTATIONS, CPU_LIST_FILES, argvPaths, bwrapArgs, planBox, taskWorkspaceIds, under, visibleInBox, type BoxAudience, type BoxMutation, type BoxRequest, type BoxSetup } from "./plan.ts";
 
 const home = "/data";
 const dataDir = "/data/.seira";
@@ -535,34 +535,45 @@ linuxBox("a bot's folder list", () => {
       for (const hidden of ["share/keyrings/login.keyring", "share/recently-used.xbel", "state/x"]) expect(visibleInBox(plan, join(prefix, hidden)), hidden).toBe("none");
     });
 
-    it("reads the folder of a program an installer links from .local/bin into .local/share, and nothing else there", () => {
-      const own = join(root, "linked"), share = join(own, ".local", "share"), bin = join(own, ".local", "bin");
-      for (const dir of [bin, join(share, "claude", "versions"), join(share, "keyrings"), join(share, "tool")]) mkdirSync(dir, { recursive: true });
-      const program = (path: string, mode: number) => { writeFileSync(path, ""); chmodSync(path, mode); };
-      program(join(share, "claude", "versions", "2.1.0"), 0o755);
-      program(join(share, "keyrings", "login.keyring"), 0o600);
-      program(join(share, "keyrings", "run"), 0o755);
-      program(join(share, "tool", "data.json"), 0o644);
-      symlinkSync(join(share, "claude", "versions", "2.1.0"), join(bin, "claude"));
-      symlinkSync(join(share, "keyrings", "login.keyring"), join(bin, "keyring"));
-      symlinkSync(join(share, "keyrings", "run"), join(bin, "run"));
-      symlinkSync(join(share, "tool", "data.json"), join(bin, "tool"));
-      expect(linkedHomeInstalls(own)).toEqual([join(share, "claude", "versions")]);
-      const data = join(own, ".seira");
+    it("reads the versions Claude's and Cursor's installers keep in .local/share, and nothing else there", () => {
+      const own = join(root, "installs"), share = join(own, ".local", "share"), data = join(own, ".seira");
+      for (const dir of [join(own, ".local", "bin"), join(share, "claude", "versions"), join(share, "cursor-agent", "versions", "2026.1"), join(share, "keyrings")]) mkdirSync(dir, { recursive: true });
+      writeFileSync(join(share, "claude", "versions", "2.1.0"), "");
+      writeFileSync(join(share, "keyrings", "login.keyring"), "");
+      symlinkSync(join(share, "claude", "versions", "2.1.0"), join(own, ".local", "bin", "claude"));
       const plan = planBox({ ...setup(), dataDir: data, home: own, engineRoots: engineInstallRoots(data) }, {
-        command: join(bin, "claude"), args: [], cwd: join(data, "task-workspaces", "bot-a", "t"), env: { HOME: own }, folders: folders(true),
+        command: join(own, ".local", "bin", "claude"), args: [], cwd: join(data, "task-workspaces", "bot-a", "t"), env: { HOME: own }, folders: folders(true),
       });
-      expect(visibleInBox(plan, join(share, "claude", "versions", "2.1.0"))).toBe("ro");
-      for (const hidden of ["keyrings/login.keyring", "keyrings/run", "tool/data.json"]) expect(visibleInBox(plan, join(share, hidden)), hidden).toBe("none");
+      for (const kept of ["claude/versions/2.1.0", "cursor-agent/versions/2026.1/cursor-agent"]) expect(visibleInBox(plan, join(share, kept)), kept).toBe("ro");
+      for (const hidden of ["keyrings/login.keyring", "claude/other", "recently-used.xbel"]) expect(visibleInBox(plan, join(share, hidden)), hidden).toBe("none");
     });
 
-    it("does not give a limited box a path in HOME through a configured server's command line", () => {
+    it("leaves out a part of a code root in HOME that is a link", () => {
+      const checkout = join(root, "linked-checkout");
+      mkdirSync(join(checkout, "server"), { recursive: true });
+      symlinkSync(fakeHome, join(checkout, "skills"));
+      symlinkSync(fakeData, join(checkout, "shared"));
+      const inHome = join(fakeHome, "src", "linked");
+      mkdirSync(join(fakeHome, "src"), { recursive: true });
+      symlinkSync(checkout, inHome);
+      const plan = planBox({ ...setup(), codeRoots: [inHome], dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "/usr/local/bin/claude", args: [], cwd: fakeCwd, env: { HOME: fakeHome }, folders: folders(true),
+      });
+      expect(plan.mounts.some((mount) => "source" in mount && (mount.source === fakeHome || mount.source === fakeData))).toBe(false);
+      expect(visibleInBox(plan, join(inHome, "skills", ".ssh", "id_ed25519"))).toBe("none");
+    });
+
+    it("gives a limited box nothing more through a configured server's command line", () => {
       const key = join(fakeHome, "Documents", "brief.md");
       const ask = (configured: boolean) => planBox({ ...setup(), dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
         command: "/usr/bin/cat", args: [key], cwd: fakeCwd, env: { HOME: fakeHome }, folders: folders(true), configured,
       });
       expect(visibleInBox(ask(true), key)).toBe("none");
       expect(visibleInBox(ask(false), key), "a command line the server built is unchanged").toBe("ro");
+      const outside = planBox({ ...setup(), dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
+        command: "/usr/bin/cat", args: ["/srv/data/x.csv", "/"], cwd: fakeCwd, env: { HOME: fakeHome }, folders: folders(true), configured: true,
+      });
+      for (const path of ["/srv/data/x.csv", "/srv/other"]) expect(visibleInBox(outside, path), path).toBe("none");
     });
 
     it("reads its conversation's uploads when a limited bot works in a folder of its own choosing (AC-09)", () => {
