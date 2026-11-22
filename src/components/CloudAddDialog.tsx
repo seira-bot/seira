@@ -117,6 +117,7 @@ export function CloudAddDialog({ now = Date.now, sells = cloudSells }: { now?: (
   const bridge = window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
   const [account, setAccount] = useState<CloudAccountState | null>(null);
   const [offer, setOffer] = useState<CloudOffer | null | undefined>(undefined);
+  const [offerFailed, setOfferFailed] = useState(false);
   const [chosen, setChosen] = useState<string | null>(null);
   const [error, setError] = useState<"failed" | "rate-limited" | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -145,12 +146,12 @@ export function CloudAddDialog({ now = Date.now, sells = cloudSells }: { now?: (
     void bridge.state().then(next => { if (active && !updated) setAccount(next); }).catch(() => {});
     return () => { active = false; unsubscribe(); };
   }, [open, bridge]);
-  const view = open ? cloudAddView(account, offer, { now: now(), sells: sells(), error, choosing, conflict, signIn, arrived, terms }) : null;
+  const view = open ? cloudAddView(account, offer, { now: now(), sells: sells(), unreachable: offerFailed, error, choosing, conflict, signIn, arrived, terms }) : null;
   const offerKey = open && sells() && view && OFFER_VIEWS.includes(view.kind) && account ? `${account.status}:${JSON.stringify(account.offer ?? null)}:${asked}` : null;
   useEffect(() => {
     if (!offerKey || !bridge?.offer) return;
     let active = true;
-    void bridge.offer().then(next => { if (active) setOffer(next); }, () => { if (active) setOffer(null); });
+    void bridge.offer().then(next => { if (active) { setOffer(next); setOfferFailed(false); } }, () => { if (active) { setOffer(null); setOfferFailed(true); } });
     return () => { active = false; };
   }, [offerKey, bridge]);
   const defaultName = t("cloudSetup.myCloud");
@@ -365,7 +366,7 @@ export function CloudAddDialog({ now = Date.now, sells = cloudSells }: { now?: (
     },
     copyLink: () => { void bridge.copyCheckoutLink?.().then(copied => setNote(copied ? "copied" : "pay-failed"), () => setNote("pay-failed")); },
     changePlan: () => { setChosen(view.kind === "waiting" ? view.plan : chosen); setChoosing(true); setNote(null); },
-    retry: () => { setError(null); setConflict(false); setOffer(undefined); setAsked(asked + 1); },
+    retry: () => { setError(null); setConflict(false); setOffer(undefined); setOfferFailed(false); setAsked(asked + 1); },
     name: value => setLook({ typed: value, color: shownLook.color, dirty: true }),
     color: value => setLook({ typed: shownLook.typed, color: value, dirty: true }),
     openCloud,

@@ -332,7 +332,7 @@ function teamCloudView(team: ReturnType<typeof planTeam>): CloudAddView {
 
 /** The one state → view function of the buying sheet: every Cloud state is one message and one next step. */
 export function cloudAddView(account: CloudAccountState | null | undefined, offer: CloudOffer | null | undefined,
-  { now, sells = true, error = null, choosing = false, conflict = false, signIn = null, arrived = false, terms = false }: {
+  { now, sells = true, unreachable = false, error = null, choosing = false, conflict = false, signIn = null, arrived = false, terms = false }: {
     now: number;
     /** Whether this build sells a Cloud: when it does not, signed in with no Cloud there is nothing to choose, so Settings is the next step. */
     sells?: boolean; error?: "failed" | "rate-limited" | null; choosing?: boolean; conflict?: boolean; signIn?: CloudSignInPhase | null;
@@ -365,7 +365,7 @@ export function cloudAddView(account: CloudAccountState | null | undefined, offe
       if (error) return { kind: "error", reason: error };
       if (!sells) return { kind: "settings" };
       if (offer === undefined) return { kind: "checking" };
-      if (offer === null) return { kind: "no-plans" };
+      if (offer === null) return { kind: unreachable ? "unreachable" : "no-plans" };
       const opened = account?.checkout ?? null;
       if (signIn && !opened && (view.kind === "signed-out" || signIn.step === "done")) return { kind: "sign-in", phase: signIn };
       const open = offer.checkout && offer.checkout.openUntil > now ? offer.checkout : null;

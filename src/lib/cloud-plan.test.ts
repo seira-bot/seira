@@ -334,6 +334,7 @@ describe("the buying sheet, one view per state", () => {
     expect(cloudAddView({ status: "signed-out" }, OFFER, at)).toEqual({ kind: "offer", offer: OFFER, signedOut: true, notice: null });
     expect(cloudAddView(connected(), noTrial(OFFER), at)).toEqual({ kind: "offer", offer: noTrial(OFFER), signedOut: false, notice: null });
     expect(cloudAddView({ status: "signed-out" }, null, at)).toEqual({ kind: "no-plans" });
+    expect(cloudAddView({ status: "signed-out" }, null, { ...at, unreachable: true })).toEqual({ kind: "unreachable" });
     expect(cloudAddView(connected(), OFFER, { ...at, error: "rate-limited" })).toEqual({ kind: "error", reason: "rate-limited" });
   });
 
