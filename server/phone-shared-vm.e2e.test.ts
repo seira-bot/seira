@@ -35,6 +35,7 @@ describe("a person's hold on the shared Local VM", () => {
   let keyCheckHeld = false;
   let releaseKeyCheck = () => {};
   let keyCheckCall: Promise<unknown> | undefined;
+  let vpsBin = "", vpsGate = "";
   let phoneToken = "";
   let witness = "";
   let sse: SseRecorder;
@@ -124,12 +125,46 @@ describe("a person's hold on the shared Local VM", () => {
   /** The computer-control frames for this bot sent after `since` frames had arrived. */
   const framesFor = (botId: string, since: number) =>
     sse.frames.slice(since).filter(frame => frame.kind === "computer-control" && frame.botId === botId);
+  /** A VPS with no managed computers; its inventory answer waits while the gate file exists. Only the test that needs it has it,
+   * so no other test finds a `docker` on PATH. */
+  const installFakeVps = () => {
+    const docker = join(vpsBin, "docker.mjs"), ssh = join(vpsBin, "ssh.mjs");
+    writeFileSync(docker, [
+      'import { existsSync, writeFileSync } from "node:fs";',
+      'const args = process.argv.slice(2);',
+      `const gate = ${JSON.stringify(vpsGate)};`,
+      'if (args[0] === "-H" && args[2] === "container" && args[3] === "ls") {',
+      '  if (existsSync(gate)) writeFileSync(`${gate}.entered`, "1");',
+      '  while (existsSync(gate)) await new Promise(resolve => setTimeout(resolve, 20));',
+      '  process.exit(0);',
+      '}',
+      'process.exit(127);',
+    ].join("\n"));
+    writeFileSync(ssh, [
+      'const args = process.argv.slice(2);',
+      'if (args[0] === "-F") args.splice(0, 2);',
+      'if (args.length === 4 && args.slice(0, 3).join(" ") === "-O check --") process.exit(255);',
+      'if (args.length === 8 && args.slice(0, 6).join(" ") === "-o BatchMode=yes -o PermitLocalCommand=no -T --" && args[7] === "true") process.exit(0);',
+      'process.exit(127);',
+    ].join("\n"));
+    for (const [name, program] of [["docker", docker], ["ssh", ssh]] as const) {
+      writeFileSync(join(vpsBin, name), `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(program)} "$@"\n`, { mode: 0o755 });
+    }
+  };
+  const removeFakeVps = () => {
+    rmSync(vpsGate, { force: true });
+    rmSync(`${vpsGate}.entered`, { force: true });
+    for (const name of ["docker", "ssh"]) rmSync(join(vpsBin, name), { force: true });
+  };
 
   beforeAll(async () => {
     home = mkdtempSync(join(tmpdir(), "seira-phone-shared-vm-"));
     stateFile = join(home, "vm.json");
     dumpFile = join(home, "dump.json");
     finishFile = join(home, "finish");
+    vpsBin = join(home, "fake-vps-bin");
+    vpsGate = join(home, "fake-vps-gate");
+    mkdirSync(vpsBin);
     vmState();
     const data = join(home, "data");
     const ui = join(home, "static");
@@ -161,6 +196,7 @@ describe("a person's hold on the shared Local VM", () => {
           APPDATA: join(home, "appdata"), LOCALAPPDATA: join(home, "localappdata"),
           TEMP: home, TMP: home, TMPDIR: home,
           SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), SEIRA_STATIC_DIR: ui, SEIRA_TEST_VM_STATE: stateFile,
+          SEIRA_EXTRA_PATH: vpsBin,
           SEIRA_FISH_AUDIO_API: `http://127.0.0.1:${(providerServer.address() as { port: number }).port}`,
           SEIRA_COMPUTER_CALL_WAIT_MS: String(CALL_WAIT_MS), SEIRA_TEST_LEASE_GRACE_MS: String(GRACE_MS),
           SEIRA_TEST_VIEWER_RECHECK_MS: String(RECHECK_MS),
@@ -659,6 +695,31 @@ describe("a person's hold on the shared Local VM", () => {
     await control(api, witness, { action: "take" });
     expect((await api("DELETE", `/api/bots/${cloud.id}`)).status).toBe(200);
     expect(await held(witness)).toBe(true);
+  }, 30_000);
+
+  it.skipIf(process.platform === "win32")("a cloud bot being deleted is kept when a person takes the shared desktop its conversation is pinned to, through another bot, while the deletion reads the VPS inventory", async () => {
+    installFakeVps();
+    let deleting: Promise<unknown> | undefined;
+    try {
+      await ok("PUT", "/api/config", { vps: { sshAlias: "fixture-vps" } });
+      const a = await newBot("Books", { computer: "cloud" });
+      await newTask(a.id, "vm");
+      writeFileSync(vpsGate, "hold");
+      const deletion = api("DELETE", `/api/bots/${a.id}`);
+      deleting = deletion;
+      await until(() => existsSync(`${vpsGate}.entered`), Boolean);
+      await control(api, witness, { action: "take" });
+      rmSync(vpsGate, { force: true });
+      const refused = await deletion;
+      expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+      expect(refused.body.error).toBe("Hand back control of this bot's computer before deleting it");
+      expect((await ok("GET", "/api/bots?messages=0")).bots.some((bot: any) => bot.id === a.id)).toBe(true);
+    } finally {
+      rmSync(vpsGate, { force: true });
+      await deleting?.catch(() => {});
+      await control(api, witness, { action: "release" });
+      await ok("PUT", "/api/config", { vps: { sshAlias: "" } }).finally(removeFakeVps);
+    }
   }, 30_000);
 
   it("a phone's take of the shared desktop that nothing ever beats lapses a grace later", async () => {

@@ -142,6 +142,8 @@ let setupAnswersDump: string;
 let fakeDockerFixture: string;
 let fakeVpsFixture: string;
 let fakeDockerLog: string;
+/** While this file exists, the fake docker call whose arguments contain its text waits, and writes `<file>.entered`. */
+let fakeDockerGate: string;
 let fakeSshLog: string;
 let fakeSshUnavailable: string;
 let stderr = "";
@@ -165,6 +167,21 @@ const managedVpsNameForFixture = (botId: string): string => {
   const botPrefix = botId.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12) || "bot";
   const botHash = createHash("sha256").update(botId).digest("hex").slice(0, 12);
   return `seira-vps-${botPrefix}-${botHash}`;
+};
+
+/** Resolves once the gated fake docker call has started, and fails if the request settles first. */
+const fakeDockerHeld = async (request: Promise<unknown>): Promise<void> => {
+  await Promise.race([
+    expect.poll(() => existsSync(`${fakeDockerGate}.entered`), { timeout: 15_000, interval: 20 }).toBe(true),
+    request.then((settled) => {
+      throw new Error(`the request settled before the gated docker call: ${JSON.stringify(settled)}`);
+    }),
+  ]);
+};
+
+const releaseFakeDocker = (): void => {
+  rmSync(fakeDockerGate, { force: true });
+  rmSync(`${fakeDockerGate}.entered`, { force: true });
 };
 
 const expectStoppedTestServerCleanly = (serverChild: ChildProcess, capturedStderr: string): void => {
@@ -369,12 +386,18 @@ beforeAll(async () => {
   fakeDockerFixture = join(home, ".seira", "fake-unmanaged-container");
   fakeVpsFixture = join(home, ".seira", "fake-vps-container.json");
   fakeDockerLog = join(home, ".seira", "fake-docker-calls.log");
+  fakeDockerGate = join(home, ".seira", "fake-docker-gate");
   fakeSshLog = join(home, ".seira", "fake-ssh-calls.log");
   fakeSshUnavailable = join(home, ".seira", "fake-ssh-unavailable");
   mkdirSync(fakeDockerDir, { recursive: true });
   writeFileSync(fakeDockerProgram, [
-    'import { appendFileSync, existsSync, readFileSync, rmSync } from "node:fs";',
+    'import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";',
     'const args = process.argv.slice(2);',
+    `const gate = ${JSON.stringify(fakeDockerGate)};`,
+    'if (existsSync(gate) && args.join(" ").includes(readFileSync(gate, "utf8"))) {',
+    '  writeFileSync(`${gate}.entered`, args.join(" "));',
+    '  while (existsSync(gate)) await new Promise((resolve) => setTimeout(resolve, 20));',
+    '}',
     `const fixture = ${JSON.stringify(fakeDockerFixture)};`,
     `const vpsFixture = ${JSON.stringify(fakeVpsFixture)};`,
     `const log = ${JSON.stringify(fakeDockerLog)};`,
@@ -9140,6 +9163,123 @@ describe("harness HTTP API", () => {
       rmSync(fakeDockerLog, { force: true });
       await api("DELETE", `/api/bots/${bot.id}`).catch(() => undefined);
       expect((await api("PUT", "/api/config", { vps: { sshAlias: "" } })).status).toBe(200);
+    }
+  });
+
+  it("keeps a deletion target that changes while its VPS computer is being removed", async () => {
+    const chief = (await api("POST", "/api/bots", { name: "Deletion Chief", section: "Deletion race" })).body.bot;
+    const target = (await api("POST", "/api/bots", { name: "Deletion Target", section: "Deletion race" })).body.bot;
+    const containerId = "c".repeat(64);
+    try {
+      expect((await api("PATCH", `/api/bots/${chief.id}`, { chiefOfStaff: true, approvalMode: "ask" })).status).toBe(200);
+      expect((await api("PUT", "/api/config", { vps: { sshAlias: "fixture-vps" } })).status).toBe(200);
+      writeFileSync(fakeVpsFixture, JSON.stringify({ id: containerId, name: managedVpsNameForFixture(target.id) }));
+      writeFileSync(fakeDockerGate, `rm -f ${containerId}`);
+
+      // Applies at Ask too: the Chief's own deletion request runs the guarded lifecycle, with no card.
+      const token = await mintTestCapability(BASE, chief.id, chief.threadId);
+      const deleting = fetch(`${BASE}/api/internal/bot-deletion-requests`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          fromBotId: chief.id,
+          fromThreadId: chief.threadId,
+          targetBotId: target.id,
+          reason: "Verify a deletion stays bound to the exact target profile",
+        }),
+      });
+      await fakeDockerHeld(deleting);
+      const changed = await api("PATCH", `/api/bots/${target.id}`, {
+        title: "Changed while its computer was being removed",
+      });
+      expect(changed.status).toBe(200);
+      releaseFakeDocker();
+
+      const response = await deleting;
+      expect(response.status).toBe(201);
+      expect(await response.json()).toMatchObject({
+        applied: false,
+        state: "cancelled",
+        result: { state: "cancelled", error: expect.stringMatching(/deletion target changed/i) },
+      });
+      const fleet = (await api("GET", "/api/bots?messages=0")).body.bots;
+      expect(fleet.find((candidate: { id: string }) => candidate.id === target.id)).toMatchObject({
+        title: "Changed while its computer was being removed",
+      });
+      expect(existsSync(fakeVpsFixture)).toBe(false);
+    } finally {
+      releaseFakeDocker();
+      rmSync(fakeVpsFixture, { force: true });
+      await api("POST", `/api/bots/${chief.id}/interrupt`, {}).catch(() => undefined);
+      await api("DELETE", `/api/bots/${target.id}`).catch(() => undefined);
+      // With an SSH alias set, a busy bot's delete is refused with 409.
+      await api("PUT", "/api/config", { vps: { sshAlias: "" } }).catch(() => undefined);
+      await expect.poll(async () =>
+        (await api("GET", "/api/bots?messages=0")).body.bots.find((bot: { id: string }) => bot.id === chief.id)?.busy !== true,
+      { timeout: 15_000 }).toBe(true);
+      await api("DELETE", `/api/bots/${chief.id}`).catch(() => undefined);
+      expect((await api("GET", "/api/bots")).body.bots.some((bot: { id: string }) => bot.id === chief.id)).toBe(false);
+    }
+  });
+
+  it("refuses a bot's turn, room round, Local VM start and take of control while its deletion reads the VPS", async () => {
+    let botId = "";
+    let guardBotId = "";
+    let roomId = "";
+    try {
+      expect((await api("PUT", "/api/config", { vps: { sshAlias: "fixture-vps" } })).status).toBe(200);
+      const bot = (await api("POST", "/api/bots")).body.bot;
+      botId = bot.id;
+      expect((await api("PATCH", `/api/bots/${bot.id}`, {
+        name: "Target",
+        modelSelection: { instanceId: "claude", model: "claude-sonnet-5" },
+        composio: false,
+        browser: false,
+      })).status).toBe(200);
+      const guardBot = (await api("POST", "/api/bots")).body.bot;
+      guardBotId = guardBot.id;
+      const room = (await api("POST", "/api/groups", {
+        name: "Deletion race",
+        memberIds: [bot.id, guardBot.id],
+      })).body.group;
+      roomId = room.id;
+      expect((await api("PATCH", `/api/groups/${room.id}/setup`, { action: "skip" })).status).toBe(200);
+      expect((await api("PATCH", `/api/groups/${room.id}`, {
+        defaultResponder: { kind: "mentions" },
+      })).status).toBe(200);
+      writeFileSync(fakeDockerGate, "-H ssh://fixture-vps container ls");
+
+      const deletion = api("DELETE", `/api/bots/${bot.id}`);
+      await fakeDockerHeld(deletion);
+      const racedTurn = await api("POST", `/api/bots/${bot.id}/messages`, { text: "do not provision during deletion" });
+      expect(racedTurn.status).toBe(409);
+      expect(racedTurn.body.error).toMatch(/cloud computer is being changed/i);
+      const racedLocalVm = await api("POST", `/api/bots/${bot.id}/local-computer/run`, {});
+      expect(racedLocalVm.status).toBe(409);
+      expect(racedLocalVm.body.error).toMatch(/computer is being changed or deleted/i);
+      const racedTake = await api("POST", `/api/bots/${bot.id}/computer/control`, { action: "take" });
+      expect(racedTake.status).toBe(409);
+      expect(racedTake.body.error).toMatch(/being changed — wait before taking control/i);
+      expect((await api("POST", `/api/groups/${room.id}/messages`, { text: "@Target do not race deletion" })).status).toBe(202);
+      await expect.poll(async () => {
+        const snapshot = (await api("GET", "/api/bots?messages=30")).body;
+        const currentRoom = snapshot.groups.find((candidate: { id: string }) => candidate.id === room.id);
+        return currentRoom?.messages.some((message: { tool?: { name?: string } }) =>
+          message.tool?.name === "Target's cloud computer is being changed — skipped this round"
+        ) ?? false;
+      }, { timeout: 5_000 }).toBe(true);
+      releaseFakeDocker();
+      expect((await deletion).status).toBe(200);
+      botId = "";
+      expect((await api("GET", "/api/bots?messages=0")).body.bots.some(
+        (candidate: { id: string }) => candidate.id === bot.id,
+      )).toBe(false);
+    } finally {
+      releaseFakeDocker();
+      if (roomId) await api("DELETE", `/api/groups/${roomId}`).catch(() => undefined);
+      if (botId) await api("DELETE", `/api/bots/${botId}`).catch(() => undefined);
+      if (guardBotId) await api("DELETE", `/api/bots/${guardBotId}`).catch(() => undefined);
+      await api("PUT", "/api/config", { vps: { sshAlias: "" } }).catch(() => undefined);
     }
   });
 
