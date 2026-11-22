@@ -8085,8 +8085,7 @@ async function beginTurn(
             integrations.localComputer = containerComputerMcp(
               lazyReadyVm.runtime,
               controlIntegration(bot.id, threadId, dispatchClaimId),
-              localVmTarget,
-              bot.id,
+              localVmTarget, bot.id,
             );
             autoVmClaims.set(threadId, {
               owner: resourceOwner,
@@ -8115,8 +8114,7 @@ async function beginTurn(
           integrations.localComputer = containerComputerMcp(
             claimed.runtime,
             controlIntegration(bot.id, threadId, dispatchClaimId),
-            claimed.target,
-            bot.id,
+            claimed.target, bot.id,
           );
           autoVmClaims.set(threadId, {
             owner: resourceOwner,
@@ -10025,8 +10023,7 @@ async function runClaimedGroupMemberTurn(
       integrations.localComputer = containerComputerMcp(
         vm.runtime,
         controlIntegration(readyBot.id, threadId, internalGeneration, { localVmTarget: target }),
-        target,
-        readyBot.id,
+        target, readyBot.id,
       );
     }
   } catch (error) {
