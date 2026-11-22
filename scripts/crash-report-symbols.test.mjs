@@ -26,7 +26,7 @@ describe("crash report symbols", () => {
     const calls = [];
     const result = await runSymbols({ env: {}, dirs, version: "1.2.3", run: (args) => { calls.push(args); return 0; } });
     expect(calls).toEqual([]);
-    expect(result).toEqual({ uploaded: false, deleted: 5 });
+    expect(result).toEqual({ uploaded: false, deleted: 4 });
     expect(mapsIn(ui)).toEqual([]);
     expect(mapsIn(server)).toEqual([]);
     expect(fs.existsSync(path.join(ui, "assets", "app.js"))).toBe(true);
@@ -47,8 +47,8 @@ describe("crash report symbols", () => {
     expect(calls.map((call) => call.args.slice(0, 2))).toEqual([["sourcemaps", "inject"], ["sourcemaps", "upload"]]);
     expect(calls[1].args).toContain("seira@1.2.3");
     expect(calls[0].args.slice(2)).toEqual([ui, server]);
-    expect(calls.every((call) => call.url === "https://127.0.0.1:9" && call.mapsLeft === 5)).toBe(true);
-    expect(result).toEqual({ uploaded: true, deleted: 5 });
+    expect(calls.every((call) => call.url === "https://127.0.0.1:9" && call.mapsLeft === 4)).toBe(true);
+    expect(result).toEqual({ uploaded: true, deleted: 4 });
     expect(mapsIn(ui).length + mapsIn(server).length).toBe(0);
   });
 
