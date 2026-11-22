@@ -90,22 +90,33 @@ describe("the memory limit for all bots", () => {
 describe("currentBotLimit", () => {
   const fence = (protection: "slice" | "watchdog" | "none", current: number | null = 14 * GB, applied: number | null = 24 * GB) =>
     ({ protection: () => protection, budgetBytes: () => applied, sliceCurrent: vi.fn(() => current) });
+  const linux = (one: ReturnType<typeof fence>, budget: () => number | null = () => 30 * GB) => currentBotLimit({ platform: "linux", fence: one, budget });
 
   it("reads the limit in force and what bot work uses under it", () => {
-    expect(currentBotLimit(fence("slice"), () => 30 * GB)).toEqual({ budgetBytes: 24 * GB, usedBytes: 14 * GB });
+    expect(linux(fence("slice"))).toEqual({ budgetBytes: 24 * GB, usedBytes: 14 * GB });
   });
   it("uses the budget alone when what bot work uses cannot be read", () => {
-    expect(currentBotLimit(fence("slice", null), () => 30 * GB)).toEqual({ budgetBytes: 24 * GB, usedBytes: null });
+    expect(linux(fence("slice", null))).toEqual({ budgetBytes: 24 * GB, usedBytes: null });
   });
   it("uses the budget alone under the watchdog, without reading bot work's use", () => {
     const watched = fence("watchdog");
-    expect(currentBotLimit(watched, () => 22 * GB)).toEqual({ budgetBytes: 22 * GB, usedBytes: null });
+    expect(linux(watched, () => 22 * GB)).toEqual({ budgetBytes: 22 * GB, usedBytes: null });
     expect(watched.sliceCurrent).not.toHaveBeenCalled();
   });
   it("is null with no protection or no budget", () => {
-    expect(currentBotLimit(fence("none"), () => 22 * GB)).toBeNull();
-    expect(currentBotLimit(fence("watchdog"), () => null)).toBeNull();
-    expect(currentBotLimit(fence("slice", 1 * GB, null), () => null)).toBeNull();
+    expect(linux(fence("none"))).toBeNull();
+    expect(linux(fence("watchdog"), () => null)).toBeNull();
+    expect(linux(fence("slice", 1 * GB, null), () => null)).toBeNull();
+  });
+  it("reads the Windows and macOS limit and its use from the guard", () => {
+    const guard = (protection: "job" | "watchdog" | "none") => ({ protection: () => protection, budgetBytes: () => 12 * GB, usedBytes: () => 5 * GB });
+    const unused = fence("slice");
+    for (const platform of ["win32", "darwin"] as const) {
+      expect(currentBotLimit({ platform, guard: guard("job"), fence: unused })).toEqual({ budgetBytes: 12 * GB, usedBytes: 5 * GB });
+      expect(currentBotLimit({ platform, guard: guard("watchdog"), fence: unused })).toEqual({ budgetBytes: 12 * GB, usedBytes: 5 * GB });
+      expect(currentBotLimit({ platform, guard: guard("none"), fence: unused })).toBeNull();
+    }
+    expect(unused.sliceCurrent).not.toHaveBeenCalled();
   });
   it("is what the default source reports, unless one is given", () => {
     expect(nodeBudgetSource({ botLimit: () => null }).botLimit?.()).toBeNull();

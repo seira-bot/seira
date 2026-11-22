@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 
 import { currentBotBudget } from "./bot-memory-budget.ts";
+import { botMemoryGuard, type BotMemoryGuard } from "./bot-memory-guard.ts";
 import { availableMemory, boxMemory } from "./box-memory.ts";
 import { boxCpus } from "./box-cpus.ts";
 import { memoryFence, type MemoryFence } from "./memory-fence.ts";
@@ -36,13 +37,19 @@ export interface BudgetSource {
 type Read = (path: string) => string | null;
 const readText: Read = (path) => { try { return readFileSync(path, "utf8"); } catch { return null; } };
 
-/** Under the kernel limit the fence's own use counts; under the watchdog only the budget does. */
-export function currentBotLimit(
-  fence: Pick<MemoryFence, "protection" | "budgetBytes" | "sliceCurrent"> = memoryFence, budget: () => number | null = () => currentBotBudget()?.bytes ?? null,
-): BotLimit | null {
-  const protection = fence.protection();
+/** On Linux the kernel limit counts its own use and the watchdog only the budget; on Windows and macOS the guard counts
+ * the use of all bot work. */
+export function currentBotLimit(input: {
+  platform?: NodeJS.Platform; fence?: Pick<MemoryFence, "protection" | "budgetBytes" | "sliceCurrent">;
+  guard?: Pick<BotMemoryGuard, "protection" | "budgetBytes" | "usedBytes">; budget?: () => number | null;
+} = {}): BotLimit | null {
+  if ((input.platform ?? process.platform) !== "linux") {
+    const guard = input.guard ?? botMemoryGuard, budgetBytes = guard.protection() === "none" ? null : guard.budgetBytes();
+    return budgetBytes === null ? null : { budgetBytes, usedBytes: guard.usedBytes() };
+  }
+  const fence = input.fence ?? memoryFence, protection = fence.protection();
   if (protection === "none") return null;
-  const budgetBytes = protection === "slice" ? fence.budgetBytes() : budget();
+  const budgetBytes = protection === "slice" ? fence.budgetBytes() : (input.budget ?? (() => currentBotBudget()?.bytes ?? null))();
   if (budgetBytes === null) return null;
   return { budgetBytes, usedBytes: protection === "slice" ? fence.sliceCurrent() : null };
 }
