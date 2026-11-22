@@ -181,12 +181,13 @@ describe("config.json: the Boat key and new-bot defaults", () => {
 
 describe("routines, webhooks and app automations", () => {
   it("moves a routine that ran on Boat to this server's provider, with the runs still to happen", () => {
+    write("bots.json", [{ id: "away", computer: "cloud" }]);
     write("routines.json", {
       version: 1,
-      routines: [{ id: "r1", runOn: "cloud", name: "Digest" }, { id: "r2", runOn: "seira", name: "Local" }],
+      routines: [{ id: "r1", botId: "away", runOn: "cloud", name: "Digest" }, { id: "r2", botId: "away", runOn: "seira", name: "Local" }],
       runs: [
-        { id: "q", runOn: "cloud", status: "queued" }, { id: "w", runOn: "cloud", status: "waiting" },
-        { id: "d", runOn: "cloud", status: "done" }, { id: "s", runOn: "seira", status: "queued" },
+        { id: "q", botId: "away", runOn: "cloud", status: "queued" }, { id: "w", botId: "away", runOn: "cloud", status: "waiting" },
+        { id: "d", botId: "away", runOn: "cloud", status: "done" }, { id: "s", botId: "away", runOn: "seira", status: "queued" },
       ],
       holds: [],
     });
@@ -199,8 +200,9 @@ describe("routines, webhooks and app automations", () => {
   });
 
   it("moves webhooks and app automations, deleted ones that can still be restored included", () => {
-    write("webhooks.json", { version: 1, webhooks: [{ id: "w", runOn: "cloud" }, { id: "x", runOn: "seira" }], deliveries: [], deleted: [{ at: 1, webhook: { id: "gone", runOn: "cloud" } }] });
-    write("app-triggers.json", { version: 1, pollerId: "poller-12345", cursor: 0, triggers: [{ id: "t", runOn: "cloud" }], attempts: [], deleted: [] });
+    write("bots.json", [{ id: "away", computer: "cloud" }]);
+    write("webhooks.json", { version: 1, webhooks: [{ id: "w", botId: "away", runOn: "cloud" }, { id: "x", botId: "away", runOn: "seira" }], deliveries: [], deleted: [{ at: 1, webhook: { id: "gone", botId: "away", runOn: "cloud" } }] });
+    write("app-triggers.json", { version: 1, pollerId: "poller-12345", cursor: 0, triggers: [{ id: "t", botId: "away", runOn: "cloud" }], attempts: [], deleted: [] });
     const counts = retireBoatFromFiles(dir, log);
     expect([counts.webhooks, counts.appTriggers]).toEqual([2, 1]);
     expect(read("webhooks.json").webhooks.map((hook: { runOn: string }) => hook.runOn)).toEqual(["seira", "seira"]);
@@ -208,23 +210,24 @@ describe("routines, webhooks and app automations", () => {
     expect(read("app-triggers.json").triggers[0].runOn).toBe("seira");
   });
 
-  it("switches off, and does not move, an automation whose bot works on this computer or a virtual machine", () => {
-    write("bots.json", [{ id: "here", computer: "local" }, { id: "vm", computer: "vm" }, { id: "away", computer: "cloud" }, { id: "plain" }]);
+  it("switches off every old Cloud automation whose bot has no settled place, Auto included, and moves the rest", () => {
+    write("bots.json", [{ id: "here", computer: "local" }, { id: "vm", computer: "vm" }, { id: "away", computer: "cloud" }, { id: "plain" }, { id: "none", computer: "off" }]);
     write("routines.json", {
       routines: [
         { id: "r1", botId: "here", runOn: "cloud", enabled: true, nextRunAt: 5 }, { id: "r2", botId: "vm", runOn: "cloud", enabled: true, nextRunAt: 5 },
         { id: "r3", botId: "away", runOn: "cloud", enabled: true, nextRunAt: 5 }, { id: "r4", botId: "plain", runOn: "cloud", enabled: true, nextRunAt: 5 },
+        { id: "r5", botId: "none", runOn: "cloud", enabled: true, nextRunAt: 5 },
       ],
-      runs: [{ id: "a", botId: "here", runOn: "cloud", status: "queued" }, { id: "b", botId: "away", runOn: "cloud", status: "queued" }],
+      runs: [{ id: "a", botId: "here", runOn: "cloud", status: "queued" }, { id: "b", botId: "away", runOn: "cloud", status: "queued" }, { id: "c", botId: "plain", runOn: "cloud", status: "queued" }],
     });
-    write("webhooks.json", { version: 1, webhooks: [{ id: "w1", botId: "vm", runOn: "cloud", enabled: true }, { id: "w2", botId: "away", runOn: "cloud", enabled: true }], deliveries: [] });
+    write("webhooks.json", { version: 1, webhooks: [{ id: "w1", botId: "vm", runOn: "cloud", enabled: true }, { id: "w2", botId: "away", runOn: "cloud", enabled: true }, { id: "w3", botId: "plain", runOn: "cloud", enabled: true }], deliveries: [] });
     write("app-triggers.json", { version: 1, pollerId: "poller-12345", cursor: 0, triggers: [{ id: "t1", botId: "here", runOn: "cloud", enabled: true }], attempts: [], deleted: [] });
     retireBoatFromFiles(dir, log);
     const routines = read("routines.json");
-    expect(routines.routines.map((routine: { enabled: boolean; nextRunAt: number | null }) => [routine.enabled, routine.nextRunAt])).toEqual([[false, null], [false, null], [true, 5], [true, 5]]);
-    expect(routines.runs.map((run: { status: string }) => run.status)).toEqual(["cancelled", "queued"]);
+    expect(routines.routines.map((routine: { enabled: boolean; nextRunAt: number | null }) => [routine.enabled, routine.nextRunAt])).toEqual([[false, null], [false, null], [true, 5], [false, null], [true, 5]]);
+    expect(routines.runs.map((run: { status: string }) => run.status)).toEqual(["cancelled", "queued", "cancelled"]);
     expect(routines.runs[0].error).toMatch(/Choose where the bot works/);
-    expect(read("webhooks.json").webhooks.map((hook: { enabled: boolean }) => hook.enabled)).toEqual([false, true]);
+    expect(read("webhooks.json").webhooks.map((hook: { enabled: boolean }) => hook.enabled)).toEqual([false, true, false]);
     expect(read("app-triggers.json").triggers[0].enabled).toBe(false);
     const again = [bytes("routines.json"), bytes("webhooks.json"), bytes("app-triggers.json")];
     retireBoatFromFiles(dir, log);
