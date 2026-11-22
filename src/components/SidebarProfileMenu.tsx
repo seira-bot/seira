@@ -35,6 +35,8 @@ import { AccountMoveStatus, useAccountMove, type AccountMoveKind } from "./Accou
 import { PersonAvatar } from "./Avatar";
 import { SignOutConfirm } from "./settings/SignOutConfirm";
 import { AboutDialog } from "./AboutDialog";
+import { ReleaseNotesPopup } from "./whats-new/ReleaseNotesPopup";
+import { whatsNewMenuAction, type ReleaseNotesView } from "@/lib/release-notes";
 import { CloudTile } from "./cloud-buy/parts";
 import { usageBridge } from "./CloudUsageMeter";
 import { useCloudPlanSnapshot } from "./CloudTrialNotice";
@@ -55,7 +57,7 @@ import { cn } from "@/lib/cn";
 import { meterPercent, resetLine } from "@/lib/usage-meter";
 import type { CloudPlanSnapshot } from "../../electron/cloud-account.mjs";
 import { activeLocale, t } from "@/lib/i18n";
-import { FEEDBACK_URL, HELP_CENTER_URL, RELEASES_URL, appVersion, openExternalLink } from "@/lib/app-links";
+import { FEEDBACK_URL, HELP_CENTER_URL, appVersion, desktopAppVersion, openExternalLink } from "@/lib/app-links";
 import { pageIsThisComputer } from "@/lib/companion-bridge";
 import { cloudPlanLabel } from "@/lib/cloud-plan";
 import { shortcutLabel } from "./ShortcutHint";
@@ -568,6 +570,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
   } : null;
   const update = desktopUpdate ?? elsewhereUpdate ?? serverUpdate;
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [notesView, setNotesView] = useState<ReleaseNotesView | null>(null);
   const [signingOut, setSigningOut] = useState<"desktop" | "browser" | null>(null);
   const [session, setSession] = useState<SessionState | null>(null);
   const triggerRef = useRef<HTMLSpanElement>(null);
@@ -632,7 +635,11 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
     onAbout: () => setAboutOpen(true),
     onHelp: () => void openExternalLink(HELP_CENTER_URL),
     onFeedback: () => void openExternalLink(FEEDBACK_URL),
-    onWhatsNew: () => void openExternalLink(RELEASES_URL),
+    onWhatsNew: () => {
+      const action = whatsNewMenuAction(desktopAppVersion());
+      if (action.kind === "popup") setNotesView(action.view);
+      else void openExternalLink(action.url);
+    },
     announcements: { unread: news.unread, active: state.activeView === "announcements", onSelect: () => dispatch({ type: "showAnnouncements" }) },
     // Every Sign out asks first: "Sign out of Seira?" and what keeps running.
     signOut: accounts.view?.active ? null
@@ -722,6 +729,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         )}
       />
       <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      {notesView && <ReleaseNotesPopup view={notesView} onDone={() => setNotesView(null)} onAllChanges={() => {}} />}
       {signingOut && <SignOutConfirm browser={signingOut === "browser"} here={signingOut === "browser" ? place.name : t("rail.thisComputer")}
         cloud={signingOut === "desktop" && summary.plan ? t("cloudSetup.myCloud") : null} onClose={() => setSigningOut(null)}
         onConfirm={() => signingOut === "browser"

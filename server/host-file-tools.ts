@@ -62,12 +62,20 @@ function sizeText(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/** The absolute location a host file tool works on for this `path` argument, or null when the tools refuse it. The
+ * folder gate checks the same location, so a path the gate cannot place is one no tool opens. */
+export function hostFileLocation(home: string, raw: string): string | null {
+  if (!raw || raw.length > HOST_FILE_PATH_MAX) return null;
+  const text = raw === "~" || /^~[\\/]/.test(raw) ? home + raw.slice(1) : raw;
+  return path.isAbsolute(text) ? path.resolve(text) : null;
+}
+
 function fullPath(home: string, raw: unknown): string {
   if (typeof raw !== "string" || !raw) throw new Mistake("Give the full path.");
   if (raw.length > HOST_FILE_PATH_MAX) throw new Mistake("That path is too long.");
-  const text = raw === "~" || /^~[\\/]/.test(raw) ? home + raw.slice(1) : raw;
-  if (!path.isAbsolute(text)) throw new Mistake(`Give a full path, like ${path.join(home, "Documents", "notes.txt")}.`);
-  return path.resolve(text);
+  const location = hostFileLocation(home, raw);
+  if (location === null) throw new Mistake(`Give a full path, like ${path.join(home, "Documents", "notes.txt")}.`);
+  return location;
 }
 
 function wanted(value: unknown): "utf8" | "base64" {
