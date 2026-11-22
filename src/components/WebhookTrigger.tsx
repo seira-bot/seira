@@ -8,6 +8,8 @@ import { useModalDialog } from "@/hooks/use-modal-dialog";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import type { RoutineRunOn } from "@/lib/routines";
+import { confirmPlaceInput } from "@/lib/place-lost";
+import { PlaceLostConfirm } from "./PlaceLostConfirm";
 import { WEBHOOK_DEFAULT_MAX_PENDING_RUNS, WEBHOOK_MAX_PENDING_RUNS_LIMIT, webhookActivationDefaults, webhookMaxPendingRunsInput, type WebhookCredential, type WebhookTrigger, type WebhookTriggerInput } from "@/lib/webhooks";
 import { api, useStore, type Bot } from "@/state/store";
 
@@ -28,6 +30,7 @@ export function WebhookEditor({ webhook, bots, initialBotId, onClose, onCredenti
   const runOn: RoutineRunOn = "seira";
   const [eventTypes, setEventTypes] = useState((webhook?.eventTypes ?? []).join(", "));
   const [maxPendingRuns, setMaxPendingRuns] = useState(webhook?.maxPendingRuns?.toString() ?? "");
+  const [placeConfirmed, setPlaceConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -40,7 +43,7 @@ export function WebhookEditor({ webhook, bots, initialBotId, onClose, onCredenti
       setError(t("automations.editor.app.limitError", { max: WEBHOOK_MAX_PENDING_RUNS_LIMIT }));
       return;
     }
-    const input: WebhookTriggerInput = { name: name.trim() || suggestedName(prompt, bot), prompt: prompt.trim(), botId, runOn, ...(webhook?.placeLost ? { confirmPlace: true } : {}), ...webhookActivationDefaults(webhook), eventTypes: eventTypes.split(",").map((value) => value.trim()).filter(Boolean), maxPendingRuns: pendingLimit };
+    const input: WebhookTriggerInput = { name: name.trim() || suggestedName(prompt, bot), prompt: prompt.trim(), botId, runOn, ...confirmPlaceInput(webhook, placeConfirmed), ...webhookActivationDefaults(webhook), eventTypes: eventTypes.split(",").map((value) => value.trim()).filter(Boolean), maxPendingRuns: pendingLimit };
     setSaving(true);
     setError("");
     try {
@@ -86,6 +89,7 @@ export function WebhookEditor({ webhook, bots, initialBotId, onClose, onCredenti
               <label className="block"><span className="mb-1.5 block text-[12px] font-medium text-ink-secondary">{t("automations.editor.app.limit")}</span><input type="number" inputMode="numeric" min={1} max={WEBHOOK_MAX_PENDING_RUNS_LIMIT} step={1} value={maxPendingRuns} onChange={(event) => setMaxPendingRuns(event.target.value)} placeholder={String(WEBHOOK_DEFAULT_MAX_PENDING_RUNS)} className={FIELD} /><span className="mt-1.5 block text-[11px] text-ink-secondary">{t("automations.editor.app.limitHelp", { count: WEBHOOK_DEFAULT_MAX_PENDING_RUNS })}</span></label>
             </div>
           </details>
+          {webhook?.placeLost && <PlaceLostConfirm checked={placeConfirmed} onChange={setPlaceConfirmed} />}
           {error && <div className="rounded-xl border border-danger/30 bg-danger/10 px-3.5 py-3 text-[12px] text-danger">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 border-t border-hairline/40 px-5 py-4">

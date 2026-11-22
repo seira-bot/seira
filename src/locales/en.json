@@ -5443,6 +5443,7 @@
   "routines.unread": "Unseen failure",
   "routines.activeSchedule": "Active",
   "routines.pausedSchedule": "Paused",
+  "routines.placeLostConfirm": "I checked where this runs now. Save with this ticked so it can run again, then turn it on.",
   "routines.placeLost": "This automation used a cloud desktop that is gone, so it is paused. Open it, check where it runs and save to turn it back on.",
   "routines.heldFor.plan_cancelled": "Paused because the plan was cancelled. Turn it on to keep it running until the plan ends.",
   "routines.heldFor.no_engine": "Paused because none of your AI accounts is signed in here. It turns back on when you sign in again.",

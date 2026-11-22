@@ -81,6 +81,7 @@ import {
 } from "@/lib/routines"; import { ROUTINE_GOAL_RUN_LIMIT_MINUTES, ROUTINE_RUN_LIMIT_MAX_MINUTES, ROUTINE_RUN_LIMIT_MINUTES } from "@/lib/routines";
 import { api, openBotThread, openThread, useStore, type Bot, type Group } from "@/state/store";
 import { RoutineScheduleNote } from "./RoutineScheduleNote";
+import { PlaceLostConfirm } from "./PlaceLostConfirm";
 import { choiceOf, routineEditorInput, workflowBlock, workflowClears, workflowIdOf } from "./routines/routine-editor-input";
 import { WhatItDoes, WorkflowRoutineSection } from "./routines/WhatItDoes";
 import { CalendarEventCard, HOUR_HEIGHT, statusState } from "./routines/CalendarEventCard";
@@ -299,6 +300,7 @@ export function EventEditor({
 }) {
   const { state, dispatch } = useStore();
   const existingRoutine = seed.routine;
+  const [placeConfirmed, setPlaceConfirmed] = useState(false);
   const { request: editorRequest } = useBotEditor();
   const existingCall = seed.call;
   const [kind, setKind] = useState<EventKind>(routinesOnly ? "routine" : seed.kind);
@@ -486,7 +488,7 @@ export function EventEditor({
         });
         if (!nextSchedule) throw new Error(cron?.error || t("routines.error.invalidSchedule"));
         const input = routineEditorInput({
-          name, description, routineTarget, botId: lockedBotId ?? botIds[0] ?? "", groupId, runOn, existingRoutine, savedAt, schedule: nextSchedule,
+          name, description, routineTarget, botId: lockedBotId ?? botIds[0] ?? "", groupId, runOn, existingRoutine, placeConfirmed, savedAt, schedule: nextSchedule,
           durationMinutes, timeoutMinutes, overlap, continuity, recurrenceIsOnce: recurrence === "none", runOnStartup,
           attachments: attachments as RoutineContextAttachment[], resultsThreadId, workflowId,
         });
@@ -973,6 +975,7 @@ export function EventEditor({
             </div>
           )}
 
+          {existingRoutine?.placeLost && <div className="ml-10"><PlaceLostConfirm checked={placeConfirmed} onChange={setPlaceConfirmed} /></div>}
           {error && <div className="ml-10 flex items-start gap-2 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2.5 text-[13px] text-danger"><CircleAlert size={15} className="mt-0.5 shrink-0" />{error}</div>}
         </div>
 
