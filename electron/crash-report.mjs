@@ -20,6 +20,8 @@ export const SENT_PER_WINDOW = 10;
 export const DEFAULT_RETRY_AFTER_MS = 60_000;
 export const MAX_RETRY_AFTER_MS = 24 * 60 * 60_000;
 export const SERVER_EXIT_GRACE_MS = 3_000;
+/** Main passes this to this app's own pages only when the build can send reports, so the preload knows without a sync call at load. */
+export const CRASH_REPORTS_ARG = "--seira-crash-reports=1";
 const HANG_SUPPRESS_MS = 10_000;
 const ID_DAYS = 7;
 const QUIET_SERVER_EXITS = new Set([0, 70, 75]);

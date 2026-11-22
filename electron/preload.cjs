@@ -107,14 +107,15 @@ function savedAnalyticsChoice() {
 }
 let analyticsChoice;
 const text = (value, max) => (typeof value === "string" ? value.slice(0, max) : undefined);
-/** Main answers null when this build has no crash endpoint: that page gets `available: false` and no way to send. */
+/** Main passes --seira-crash-reports=1 only when this build has a crash endpoint; without it the page gets `available: false` and no way to send. */
 function crashReportsBridge() {
-  let choice = null;
-  try { choice = ipcRenderer.sendSync("desktop-crash-reports:read"); } catch {}
-  if (typeof choice !== "boolean") return { available: false };
+  if (!process.argv.includes("--seira-crash-reports=1")) return { available: false };
+  // Read on first use, not at load. A value that cannot be read counts as off.
+  let choice;
+  const savedChoice = () => { try { return ipcRenderer.sendSync("desktop-crash-reports:read") === true; } catch { return false; } };
   return {
     available: true,
-    enabled: () => choice,
+    enabled: () => { if (choice === undefined) choice = savedChoice(); return choice; },
     set: enabled => { choice = enabled === true; return ipcRenderer.invoke("desktop-crash-reports:set", choice); },
     report: report => {
       try {
