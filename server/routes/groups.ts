@@ -6,6 +6,8 @@ import type { GroupDefaultResponder, GroupRecord, Store } from "../store.ts";
 import type { ThreadStarters } from "../thread-starters.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
+export const OUTSIDE_YOUR_DEPARTMENTS = "You do not have access to that department.";
+
 export interface GroupRouteDeps {
   store: Pick<Store, "bot" | "group" | "messagesFor" | "patchGroup">;
   cloudHome: boolean;
@@ -52,6 +54,7 @@ export function createGroupRoutes(deps: GroupRouteDeps): RouteHandler {
       const body = await readBody(req);
       const hiddenMember = Array.isArray(body?.memberIds) ? body.memberIds.find((id: unknown) => typeof id === "string" && store.bot(id) && !visible.bot(id)) : undefined;
       if (hiddenMember) return json(res, 400, { error: `unknown channel member: ${String(hiddenMember)}` });
+      if (!visible.departmentAllowed(body?.section)) return json(res, 403, { error: OUTSIDE_YOUR_DEPARTMENTS });
       const group = createChannel(body);
       // On a Cloud home whoever opens a room names it (cloudThreadRefusal).
       if (CLOUD_HOME && auth.kind === "session") threadStarters.set(group.threadId, actorKey(auth));

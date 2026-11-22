@@ -121,10 +121,31 @@ export const peerAllowed = (
   target: string | { id: string; visibility?: unknown },
 ): boolean => typeof target === "string" || sameAudience(from.visibility, target.visibility);
 
-/** Departments are folders, not walls: any bot reaches any other visible bot, a Chief someone owns included. Only the
- * bots' audiences narrow it, and reaching a bot grants no authority over it. */
+let isWalled: (section: string) => boolean = () => false;
+
+/** Which departments are walled (server/host/department-access-host.ts): the ones some person's access is limited to. */
+export function setDepartmentWalls(walled: (section: string) => boolean): void {
+  isWalled = walled;
+}
+
+/** Security invariant: a bot in a walled department reaches only bots of its own department. Reaching in from outside
+ * stays open, and a report back to whoever started the work is no new reach. */
+function behindWall(from: Pick<RosterMember, "section">, target: Pick<RosterMember, "section">): boolean {
+  return sectionKey(from.section) !== sectionKey(target.section) && isWalled(sectionKey(from.section));
+}
+
+/** The refusal a bot is told when a hand-off would cross a department wall, else undefined. */
+export function walledOff(from: RosterMember, target: RosterMember): string | undefined {
+  return from.id !== target.id && behindWall(from, target)
+    ? `${peerName(target.name)} is in another department, and ${peerName(from.name)} cannot hand work to other departments, so nothing was sent. Tell the person in one plain sentence what you wanted to ask, so they can pass it on.`
+    : undefined;
+}
+
+/** Departments are folders, not walls, until someone's access is limited to some departments: any bot reaches any other
+ * visible bot, a Chief someone owns included. Only the bots' audiences and a department wall narrow it, and reaching a
+ * bot grants no authority over it. */
 export function canReach(from: RosterMember, target: RosterMember): boolean {
-  return from.id !== target.id && !target.hidden && peerAllowed(from, target);
+  return from.id !== target.id && !target.hidden && peerAllowed(from, target) && !behindWall(from, target);
 }
 
 /** The name of the person who looks after a bot, or null when nobody does. */
