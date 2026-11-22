@@ -30,6 +30,14 @@ exception: `SEIRA_OPENAI_LIVE_URL` crosses when it is a loopback
 and `SEIRA_OPENAI_LIVE_KEY` crosses only with it, so that key can only ever
 reach the fake.
 
+On Linux, `SEIRA_VERIFY_BOT_BOX=1` adds a folder that holds only a link to
+bubblewrap to the child's PATH. The fixture then starts the bot box for the
+bots limited to chosen folders ([folder access](../folder-access.md)). The
+rest of the PATH stays sealed. The child's temporary folder moves out of the
+data folder to a folder beside it, as on a desktop, because the box hides a
+file that a command line names inside the data folder. The launcher removes
+both folders when it stops.
+
 Pass the printed URL explicitly from a second terminal:
 
 ```sh

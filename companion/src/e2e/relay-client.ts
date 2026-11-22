@@ -12,6 +12,7 @@ export type RelayProblem = "no_answer" | "token_refused" | "busy" | "unreachable
 
 /** README section 10: 4429 means back off at least this long. */
 const LIMITED_MIN_MS = 30_000;
+const MAX_RETRY_MS = 10 * 60_000;
 const DEFAULT_TIMING = {
   /** Reconnect delays by failure count (± a fifth); the last repeats. */
   backoffMs: [0, 1_000, 2_000, 4_000, 8_000, 16_000, 32_000, 60_000],
@@ -371,7 +372,7 @@ export class RelayClient {
     this.#retryTimer = setTimeout(() => {
       this.#retryTimer = null;
       this.#connect(index);
-    }, delayMs);
+    }, delayMs > MAX_RETRY_MS ? MAX_RETRY_MS : delayMs);
     this.#retryTimer.unref?.();
   }
 

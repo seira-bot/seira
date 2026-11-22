@@ -53,8 +53,8 @@ export function customServerEnvBox(
 }
 
 /** The custom env names the box admits into Codex: none with the box off, where its shell keeps what it inherited anyway. */
-export function boxAdmittedEnv(custom: { box?: { allowEnv: string[] } }): Set<string> {
-  return new Set(botBox.enabled() ? custom.box?.allowEnv : []);
+export function boxAdmittedEnv(custom: { box?: { allowEnv: string[] } }, boxed: boolean = botBox.enabled()): Set<string> {
+  return new Set(boxed ? custom.box?.allowEnv : []);
 }
 
 /** One of Seira's own stdio proxies as Codex's streamable HTTP server, where that setting is on (own-mcp-http.ts):

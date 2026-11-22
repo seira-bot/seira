@@ -1,3 +1,5 @@
+import { replaceUntilStable } from "./replace-until-stable.ts";
+
 /** Markdown a person typed, as the one plain line a sidebar or an OS notification can show. */
 export function plainPreviewText(text: string): string {
   const escaped: string[] = [];
@@ -20,7 +22,7 @@ export function plainPreviewText(text: string): string {
   out = out.replace(/^[ \t]{0,3}\[[^\]]+\]:[ \t]+\S+.*$/gm, "");
   out = out.replace(/<((?:https?|mailto):[^>\s]+)>/gi, "$1");
   out = out.replace(/<br\s*\/?>/gi, " ");
-  out = out.replace(/<\/?(?:b|strong|i|em|u|s|del|ins|mark|code|kbd|sub|sup|small|span|p|div)\b[^>]*>/gi, "");
+  out = replaceUntilStable(out, /<\/?(?:b|strong|i|em|u|s|del|ins|mark|code|kbd|sub|sup|small|span|p|div)\b[^>]*>/gi, "");
   out = out.replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, "");
   out = out.replace(/^[ \t]{0,3}#{1,6}[ \t]*$/gm, "");
   out = out.replace(/^[ \t]*(?:>[ \t]?)+/gm, "");

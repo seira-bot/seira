@@ -462,6 +462,19 @@ describe("bearerToken", () => {
     expect(bearerToken("Bearer   ")).toBeUndefined();
     expect(bearerToken("Bearerseira_abc")).toBeUndefined();
   });
+
+  it("answers an attack string in under 100 ms", () => {
+    const started = performance.now();
+    expect(bearerToken(`bearer\t${"\t\t".repeat(50_000)}x\ny`)).toBeUndefined();
+    expect(bearerToken(`bearer\t${"\t\t".repeat(50_000)}`)).toBeUndefined();
+    expect(performance.now() - started).toBeLessThan(100);
+  });
+
+  it("keeps the token after tabs and refuses one that spans lines", () => {
+    expect(bearerToken("Bearer\t \tseira_abc")).toBe("seira_abc");
+    expect(bearerToken("Bearer a b")).toBe("a b");
+    expect(bearerToken("Bearer a\nb")).toBeUndefined();
+  });
 });
 
 describe("browser control capability", () => {

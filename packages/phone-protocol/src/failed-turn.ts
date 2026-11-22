@@ -30,12 +30,14 @@ export interface FailedTurnTool {
   nameParams?: ServerTextParams;
   /** the turn's reply came back; only a step it ran failed or wasn't allowed */
   partial?: boolean;
+  /** the turn ran; this row only says what it ran without, once per conversation. Not a failure: no retry, no red. */
+  notice?: true;
 }
 
 /** The activity row a failed turn is stored as. */
 export function failedTurnTool(
   cause: string,
-  flags: { setup?: boolean; terminal?: boolean; claudeUpdate?: boolean; place?: PlaceRow; limitResetsAt?: number; partial?: boolean; text?: ServerText } = {},
+  flags: { setup?: boolean; terminal?: boolean; claudeUpdate?: boolean; place?: PlaceRow; limitResetsAt?: number; partial?: boolean; notice?: true; text?: ServerText } = {},
 ): FailedTurnTool {
   const words = cause.length > FAILED_TURN_MAX_CHARS ? `${cause.slice(0, FAILED_TURN_MAX_CHARS - 1)}…` : cause;
   return {
@@ -48,6 +50,7 @@ export function failedTurnTool(
     ...(flags.limitResetsAt ? { limitResetsAt: flags.limitResetsAt } : {}),
     ...(flags.text ? { nameCode: flags.text.key, ...(flags.text.params ? { nameParams: flags.text.params } : {}) } : {}),
     ...(flags.partial ? { partial: true } : {}),
+    ...(flags.notice ? { notice: true as const } : {}),
   };
 }
 

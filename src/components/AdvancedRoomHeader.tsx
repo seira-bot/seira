@@ -6,6 +6,7 @@ import { normalizeState } from "@/lib/mascot";
 import { closeRoomPanel, openRoomPanel, useRoomPanel } from "@/lib/room-panel";
 import { useStore, type Bot, type Group } from "@/state/store";
 import { BotAvatar } from "./Avatar";
+import { RoomPicture } from "./RoomPicture";
 import { useCaptionChrome } from "./DesktopCapabilities";
 import { ELEVATED_FLOAT, ELEVATED_HOVER } from "./elevated";
 import { RoomHeaderCallButton } from "./GroupCallView";
@@ -47,13 +48,13 @@ export function AdvancedRoomHeader({ group, members, working, folderOpen, onTogg
             aria-expanded={panelOpen}
             className={cn("group flex min-w-0 max-w-full items-center gap-2 rounded-full py-[7.5px] pl-[7.5px] pr-[13.5px] text-ink", ELEVATED_FLOAT, ELEVATED_HOVER)}
           >
-            <span aria-hidden="true" className="flex shrink-0 items-center -space-x-1.5">
+            <RoomPicture url={group.dm ? null : group.avatarUrl} size={28} fallback={<span aria-hidden="true" className="flex shrink-0 items-center -space-x-1.5">
               {members.slice(0, FACES).map((member) => (
                 <span key={member.id} className="flex rounded-full ring-2 ring-composer">
                   <BotAvatar bot={member} state={normalizeState(member.mascotExpression) ?? "happy"} size={24} animated={false} />
                 </span>
               ))}
-            </span>
+            </span>} />
             <span dir="auto" className="min-w-0 truncate text-[14px] font-semibold leading-5">{group.name}</span>
             <span data-room-count className="shrink-0 text-[13px] leading-5 text-ink-tertiary max-md:hidden">
               {t(members.length === 1 ? "routines.botCountOne" : "routines.botCountMany", { count: members.length })}

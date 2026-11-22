@@ -5,7 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { BOX_EGRESS_RULES, boxRefusal, openBoxEgressGate, type BoxEgressGate } from "./egress-gate.ts";
+import { BlockList } from "node:net";
+
+import type { EgressRules } from "../browser/egress/policy.ts";
+import { BOX_EGRESS_RULES, boxRefusal, limitedBoxRefusal, openBoxEgressGate, type BoxEgressGate } from "./egress-gate.ts";
 
 const PUBLIC = { address: "203.0.113.7", family: 4 };
 
@@ -149,5 +152,51 @@ linuxBox("the box's egress gate", () => {
       req.end();
     });
     expect(answer).toBe(400);
+  });
+});
+
+describe("the gate of a box beside unboxed bots (scope limited)", () => {
+  const own = new BlockList();
+  own.addAddress("192.168.1.20", "ipv4");
+  const desktop = (localNetwork: boolean): EgressRules => ({
+    host: "desktop", ownPort: (port) => port === 8799, botPort: async () => true, localNetwork, allowed: () => false,
+  });
+  const v4 = (address: string) => [{ address }];
+
+  it("never reaches this computer, by loopback, its own address, a mapped address or a service a bot started", async () => {
+    for (const rules of [desktop(true), desktop(false)]) {
+      expect(await limitedBoxRefusal({ host: "localhost", port: 3000 }, v4("127.0.0.1"), rules, own)).toBe("this-computer");
+      expect(await limitedBoxRefusal({ host: "localhost", port: 8799 }, [{ address: "::1" }], rules, own)).toBe("this-computer");
+      expect(await limitedBoxRefusal({ host: "x", port: 3000 }, [{ address: "::ffff:127.0.0.1" }], rules, own)).toBe("this-computer");
+      expect(await limitedBoxRefusal({ host: "my-laptop.local", port: 3000 }, v4("192.168.1.20"), rules, own)).toBe("this-computer");
+      expect(await limitedBoxRefusal({ host: "rebind.example", port: 443 }, [PUBLIC, { address: "127.0.0.2" }], rules, own)).toBe("this-computer");
+    }
+  });
+
+  it("reaches the local network only while the browser's local network setting is on", async () => {
+    expect(await limitedBoxRefusal({ host: "printer.local", port: 80 }, v4("192.168.1.50"), desktop(true), own)).toBeNull();
+    expect(await limitedBoxRefusal({ host: "printer.local", port: 80 }, v4("192.168.1.50"), desktop(false), own)).toBe("local-network");
+  });
+
+  it("reaches the public internet and keeps the other refusals", async () => {
+    expect(await limitedBoxRefusal({ host: "example.com", port: 443 }, [PUBLIC], desktop(false), own)).toBeNull();
+    expect(await limitedBoxRefusal({ host: "x", port: 80 }, v4("169.254.169.254"), desktop(true), own)).toBe("metadata");
+    expect(await limitedBoxRefusal({ host: "x", port: 80 }, v4("0.0.0.0"), desktop(true), own)).not.toBeNull();
+  });
+
+  it("refuses Seira's own ports behind a fake-IP proxy, as the browser does", async () => {
+    expect(await limitedBoxRefusal({ host: "example.com", port: 8799 }, v4("198.18.0.5"), desktop(true), own)).toBe("seira");
+    expect(await limitedBoxRefusal({ host: "example.com", port: 443 }, v4("198.18.0.5"), desktop(true), own)).toBeNull();
+  });
+
+  it("opens a gate that decides with the rules it is given", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "seira-limited-gate-"));
+    const opened = await openBoxEgressGate({ socketPath: join(dir, "egress.sock"), decide: (target, addresses) => limitedBoxRefusal(target, addresses, desktop(true), own) });
+    try {
+      expect(await connectVia(opened.socketPath, "127.0.0.1:3000")).toMatchObject({ status: "403", blocked: "this-computer" });
+    } finally {
+      await opened.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

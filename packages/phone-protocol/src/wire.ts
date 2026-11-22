@@ -494,8 +494,8 @@ export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCard
     clipped?: boolean;
     /** Words the harness wrote for what the call did, shown in place of `name`; `name` stays the tool's own. */
     label?: string;
-    /** error rows: the reply came back; only a step the turn ran failed or wasn't allowed. */
-    partial?: boolean;
+    /** error rows: the reply came back (partial), or the turn ran and the row only says what it ran without (notice). */
+    partial?: boolean; notice?: true;
   };
   /** A bot line a "post" webhook wrote: whoever called the webhook chose
    * its words. On a room line this also carries `from`, so the room renders
@@ -854,7 +854,7 @@ export interface WireGroup {
   /** Short one-line description shown under the room name; distinct from
    * the bulletin (long-form instructions) and any member bot's title.
    * null = explicitly cleared, so a client's shallow merge drops a stale value. */
-  description?: string | null;
+  description?: string | null; /** The room's own picture: a stored image attachment URL, shown in place of the member avatars. null = explicitly cleared, so a client's shallow merge drops a stale value. */ avatarUrl?: string | null;
   unread: boolean;
   /** The newest message on screen the last time the person read this
    * conversation. The New divider goes after it. */

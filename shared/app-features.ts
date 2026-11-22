@@ -86,7 +86,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "folder-access",
     name: "Folder access",
     place: "a bot's panel, Other folders; Advanced bot settings, Access; the menu of a department on the map, Folders",
-    does: "An admin picks which folders a bot or a whole department may use, each read-only or Can change, and can limit a bot to only those folders. A bot gets its department's folders plus its own.",
+    does: "An admin picks which folders a bot or a whole department may use, each read-only or Can change, and can limit a bot to only those folders, which on Linux its commands obey too. A bot gets its department's folders plus its own.",
   },
   {
     id: "handoffs",

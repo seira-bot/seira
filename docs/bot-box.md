@@ -3,7 +3,8 @@
 On a Seira Cloud home every bot turn runs in a box: the engine (Claude Code, Codex, Grok, OpenCode, the ACP agents),
 every shell command it runs, the MCP servers it starts and Seira's own helper proxies all live inside one
 unprivileged [bubblewrap](https://github.com/containers/bubblewrap) sandbox for that process's lifetime. The server,
-its database, its settings, other bots' folders and other turns' processes are not in it. Code: `server/bot-box/`.
+its database, its settings, other bots' folders and other turns' processes are not in it. On a Linux computer, only the
+turns of a bot limited to its chosen folders run in the box ([below](#on-a-linux-computer)). Code: `server/bot-box/`.
 
 ## What a boxed process sees
 
@@ -35,12 +36,16 @@ read-write again. A chosen folder inside the data folder, or one that holds it, 
 With **Only chosen folders** on, `HOME` is an empty private folder (`tmpfs`). The box puts back from the real `HOME`:
 
 - the engines' sign-in folders, read-write (`LIMITED_HOME_SIGN_INS` in `server/bot-box/plan.ts`);
-- program installs such as `.npm-global`, `.nvm`, `.bun` and `.cargo`, read-only (`LIMITED_HOME_PROGRAMS`);
+- program installs such as `.npm-global`, `.nvm`, `.bun` and `.cargo`, and the version folders of the Claude Code and
+  Cursor installers, read-only (`LIMITED_HOME_PROGRAMS`);
 - the git settings, read-only (`LIMITED_HOME_GIT`);
+- of Seira's own code folder, when it is in `HOME` (a checkout), only the parts the server runs, read-only
+  (`LIMITED_CODE_PARTS`);
 - the working folder, the bot's own folder and the chosen folders.
 
 Each entry is checked with `lstat` and its real path. A symbolic link that leaves `HOME` is not put back. An environment
-path inside `HOME`, or one that holds `HOME`, is dropped. A change of a bot's folders gives it a new box on its next turn.
+path inside `HOME`, or one that holds `HOME`, is dropped. The command line of an MCP server that someone configured
+gives a limited box no path its folders do not give. A change of a bot's folders gives it a new box on its next turn.
 
 ## The two gates
 
@@ -48,7 +53,8 @@ path inside `HOME`, or one that holds `HOME`, is dropped. A change of a bot's fo
   `127.0.0.1:3128` inside the box, bridged to the server's gate. `HTTPS_PROXY` and `HTTP_PROXY` point there. The gate
   resolves names itself and connects only to public addresses: this machine, the local network, link-local, the cloud
   metadata service and Fly's private network are refused by address, so neither a name nor a redirect gets around it.
-  It is the engines' twin of the browser's SOCKS gate (`server/browser/egress/`), with the same address policy.
+  It is the engines' twin of the browser's SOCKS gate (`server/browser/egress/`), with the same address policy. On a
+  Linux computer the gate uses the rules of the bots' browsers instead ([below](#on-a-linux-computer)).
 - **Harness** (`server/bot-box/harness-gate.ts`): the server's own port inside the box reaches only `/api/internal/`
   routes, which every helper calls with a per-turn capability bearer. Every other route is answered `403` by the gate
   itself, so the server is never asked.
@@ -67,13 +73,41 @@ connects to a path inside the box.
 
 ## When it is on
 
-`server/bot-box/detect.ts`: on by default on a Cloud home (`SEIRA_CLOUD_ROLE=home` or `team`), off everywhere else
-unless `SEIRA_BOT_BOX=1`; `SEIRA_BOT_BOX=0` turns it off. It is never on without a working unprivileged bubblewrap: if the
-kernel refuses user namespaces or the image has no `bwrap`, the box reports `off` with the reason, and the Admin shows
-it. The cloud-home image installs `bubblewrap` and `socat` (the in-box bridges; without socat a bundled Node bridge does
-the same).
+`server/bot-box/detect.ts` chooses a scope at boot:
+
+| Where | Scope | What runs in the box |
+|---|---|---|
+| A Cloud home (`SEIRA_CLOUD_ROLE=home` or `team`), or any host with `SEIRA_BOT_BOX=1` | `all` | Every bot spawn |
+| Linux outside a Cloud home, with `SEIRA_BOT_BOX` unset | `limited` | The spawns of a turn whose bot has **Only chosen folders** on |
+
+`SEIRA_BOT_BOX=0` turns the box off. The box is never on without a working unprivileged bubblewrap: if the kernel
+refuses user namespaces or there is no `bwrap` on `PATH`, the box reports `off` with the reason, and the Admin shows it.
+Scope `limited` is also off in the Flatpak (reason `flatpak`) and on macOS and Windows (reason `not-cloud`). The
+cloud-home image installs `bubblewrap` and `socat` (the in-box bridges; without socat a bundled Node bridge does the
+same).
 
 Cost on Fly (measured, T0 build notes): about 5 ms and 3 MB per box, plus one socat per bridge.
+
+## On a Linux computer
+
+In scope `limited` the box takes the bot of a spawn from the turn that runs it. A bot without **Only chosen folders**
+runs as before: no box, and the same command line, environment, key paths, URL MCP servers, Local VM and Codex proxy
+settings. A kept engine process starts again on the bot's next turn when its limit turns on or off.
+
+A boxed turn on a computer differs from a turn on a Cloud home:
+
+- **Network.** The egress gate refuses every address of this computer, whatever the name, the port or the form of the
+  address (an IPv4-mapped IPv6 address too). The local network follows the setting of the bots' browsers
+  (`browserEngine.egress.localNetwork`): it is reachable unless that setting is `false`.
+- **Programs.** The programs in `HOME` stay trusted, and the server's `PATH` does not change.
+- **Keys.** The credential broker takes the keys of boxed spawns only.
+- **Seira's own MCP server over HTTP** (`SEIRA_OWN_MCP_HTTP=1`) is off while the box runtime runs, for every bot.
+  Engines then get it over stdio.
+- **Local VM and Docker computer use** fail early for a boxed bot only.
+- **Uploads** in a conversation are readable in the box, also when the working folder is the bot's own folder.
+
+The folder card says "Commands also see only these folders" only where the box runs. Everywhere else it keeps the note
+that a command can open other files ([folder-access.md](folder-access.md#what-it-does-not-do)).
 
 ## The self-check and the report
 
@@ -82,7 +116,8 @@ over a fixture laid out like a data folder, with a canary process and a fixture 
 could and could not do (`server/bot-box/self-check.ts`). The Admin reads the result in the signed health report and at
 `GET /api/cloud/box`: `{ box: "bwrap" | "off", checks: "23/23", failed: [], boxed, refused }`. Running the check with a
 mutation (`--mutate=bind-data,share-pid,share-net,env-all,tmp-shared`) removes one protection and must fail exactly the
-checks it guards.
+checks it guards. The canary runs on the server's own Node, so the check needs nothing else on `PATH`. The kernel
+keyring check calls `python3`; on a computer without it, the report lists that check as skipped.
 
 ## What it does not do yet
 
@@ -95,6 +130,23 @@ checks it guards.
 - On a Team Cloud each Chrome of the bots' browsers runs in a box of its own (`BotBox.browserBox`, written into the
   launcher agent-browser runs, see [team-cloud.md](team-cloud.md)); the agent-browser daemon is not boxed, and on a My
   Cloud no browser is.
+
+On a Linux computer (scope `limited`) these stay open:
+
+- **Sign-in folders.** The engines' sign-in folders (`~/.claude`, `~/.codex` and others) are shared and read-write.
+  They hold settings that run code, such as hooks, so a limited bot can change what the person's own CLI runs outside
+  the box. An engine home per bot closes this; it is not built.
+- **The bots' browser** runs outside the box. It does not read local files, except uploads.
+- **Turns with no tools**, such as keep-warm pings and compaction, run outside the box.
+- **A fake-IP proxy** (a TUN proxy that answers every name with an address in `198.18.0.0/15`) hides the real
+  destination from the gate. As for the bots' browsers, the gate treats such an address as the local network and
+  refuses Seira's own ports on it.
+- **Ubuntu 24.04 and later** can refuse unprivileged user namespaces through AppArmor. The box is then `off` with the
+  reason `userns-refused`, and the folder card keeps its note.
+- **The AppImage.** Its code is bound read-only from the mounted image. No test on a real AppImage desktop has run yet.
+- **A code folder outside `HOME`** is bound whole, read-only.
+- **Tools installed with `uv`** in `~/.local/share/uv` are not visible in the box.
+- **An MCP server that a limited bot adds** runs for every bot that uses it, also outside the box.
 
 ## The credential broker
 
