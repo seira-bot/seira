@@ -148,6 +148,7 @@ export interface EngineWaits {
   changed(): void;
 }
 export const memoryStallText = (cause: string, count: number) => `${cause}. This Cloud ran out of memory while ${tasks(count)} ran at once (not a problem with the AI provider)`;
+export const memoryStallComputerText = (cause: string, count: number) => `${cause}. This computer ran out of the memory set aside for bots while ${tasks(count)} ran at once (not a problem with the AI provider)`;
 
 /** The last day's memory pressure on a Cloud home: tasks that had to wait for memory and how long they waited in all (a wait
  * still going included), turns stopped for memory, processes the kernel stopped, and minutes the machine stalled on it. */
@@ -221,6 +222,8 @@ export interface EngineMemoryOptions {
   tree?: (pid: number) => TreeUse | null;
   log?: (line: string) => void;
   tickMs?: number;
+  /** Whether the kernel limit for bots is in force. Its stops are told by the fence, so the desktop adds no line of its own. */
+  fenceActive?: () => boolean;
 }
 
 export class EngineMemory {
@@ -267,6 +270,7 @@ export class EngineMemory {
   private cap: EngineCap | null = null;
   private readonly server: boolean;
   private readonly desktop: boolean;
+  private readonly fenceActive: () => boolean;
   private readonly turns: TurnsSetting;
   private readonly processes: ProcessBudget | null;
   private serverTurns: { at: number; most: number | undefined } | null = null;
@@ -276,6 +280,7 @@ export class EngineMemory {
     this.enabled = options.enabled;
     this.server = options.host === "server";
     this.desktop = options.host === "desktop";
+    this.fenceActive = options.fenceActive ?? (() => this.desktop && memoryFence.active());
     this.turns = options.turns ?? "auto";
     this.processes = this.server ? options.processes ?? processBudget : null;
     this.processes?.onRefused(() => this.wake());
@@ -577,7 +582,9 @@ export class EngineMemory {
    * shortage was seen in the turn. `interrupted`: the person stopped the turn, which no shortage explains. */
   stopFailure(threadId: string, detail?: string, interrupted = false): ReturnType<typeof noticeFailure> | null {
     const starved = this.starved.get(threadId);
-    if (starved !== undefined && !interrupted && (detail === undefined || !namesOwnCause(detail))) return noticeFailure("chat.notice.outOfProcesses", { code: starved.code });
+    if (starved !== undefined && !interrupted && (detail === undefined || !namesOwnCause(detail))) {
+      return this.desktop ? noticeFailure("chat.notice.outOfRoomComputer") : noticeFailure("chat.notice.outOfProcesses", { code: starved.code });
+    }
     const stop = this.stops.get(threadId);
     return stop === undefined ? null : noticeFailure(memoryStopKey(stop.browser, detail !== undefined), detail === undefined ? undefined : { detail });
   }
@@ -585,7 +592,8 @@ export class EngineMemory {
   /** A stalled turn's cause, saying so when memory ran short while it ran. */
   stallCause(threadId: string, cause: string): string {
     const count = this.stops.get(threadId)?.count ?? this.pressure.get(threadId);
-    return count === undefined ? cause : memoryStallText(cause, count);
+    if (count === undefined) return cause;
+    return this.desktop ? memoryStallComputerText(cause, count) : memoryStallText(cause, count);
   }
 
   /** The last day's memory pressure, for the Admin's health check (cloud-health.ts): times only, never what ran. */
@@ -732,7 +740,7 @@ export class EngineMemory {
   private exited(pid: number, engine: Engine, signal: NodeJS.Signals | null): void {
     if (this.engines.get(pid) === engine) this.engines.delete(pid);
     const working = this.working(engine);
-    if (signal === "SIGKILL" && !engine.stopping && working.length && this.kernelKilled(this.read()?.oomKills ?? null)) {
+    if (signal === "SIGKILL" && !engine.stopping && working.length && this.kernelKilled(this.read()?.oomKills ?? null) && !this.fenceActive()) {
       this.noteStops(working, (threadId) => this.busy(threadId));
       for (const threadId of working) this.roomStopped.set(threadId, pid);
       this.log(`the kernel stopped an engine (pid ${pid}) for memory`);
