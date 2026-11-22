@@ -11630,6 +11630,8 @@
   "repliz.notice": "Entre com o Repliz. Não é preciso ter uma chave de API aqui: o Repliz pede sua Access Key e sua Secret Key uma vez, na própria página dele. Um bot que pode usar o Repliz pode responder comentários, enviar mensagens e publicar nas suas contas sociais. Por isso, escolha quais bots terão acesso em Acesso dos bots.",
   "dalekta.description": "Acompanhe seus anúncios de Click to WhatsApp e de landing page, do primeiro chat até o fechamento e a receita, no Dalekta.",
   "dalekta.notice": "Entre com o Dalekta. Não é preciso ter uma chave de API. Um bot que pode usar o Dalekta pode ler e alterar seus leads, chats, links de rastreamento e ajustes de anúncios da Meta. Por isso, escolha quais bots terão acesso em Acesso dos bots.",
+  "grupy.description": "Resumos com IA, membros e pedidos de entrada dos seus grupos de WhatsApp no Grupy.chat.",
+  "grupy.notice": "Entre com o Grupy.chat. Não é preciso ter uma chave de API. Um bot que pode usar o Grupy.chat pode ler os resumos e os membros dos seus grupos. Se você permitir no Grupy.chat, ele também pode ler mensagens, aprovar pedidos de entrada e alterar ajustes dos grupos. Por isso, escolha quais bots terão acesso em Acesso dos bots.",
   "aiImport.title": "Migrar de outra IA",
   "aiImport.subtitle": "Traga a persona, as memórias, as habilidades, as ferramentas, as rotinas e as conversas de outra IA.",
   "aiImport.source.chatgpt": "ChatGPT",
