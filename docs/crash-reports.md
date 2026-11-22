@@ -30,9 +30,20 @@ The switch is **Send crash reports**. It is in Settings → General → Privacy.
 | App | The app version. |
 | Runtime | The name and version of the runtime that Seira uses. |
 | Exception type | The error name, for example `TypeError`. |
-| Message | The error message, only when it passes a filter that removes paths, addresses, names, and anything that looks like a secret. |
+| Message | The error message, only when the two rules below are true. Otherwise the report has the error type and no message. |
 | Stack frames | At most 30 frames. Each frame has a function name and a place in the Seira code. Code that is not from Seira has no function name. |
 | Breadcrumbs | At most 20 short notes from a fixed list: the app started, the page changed, a process changed state. |
+
+The report has an error message only when both rules are true:
+
+- The error type is a built-in JavaScript type: `TypeError`, `RangeError`,
+  `ReferenceError`, `SyntaxError`, `URIError`, or `EvalError`.
+- The message passes a filter. It has at most 200 characters. It has no path,
+  no address, no `@`, no long number, no dotted name, no quoted value, and
+  no user name or computer name.
+
+For every other error type, and for every crash, hang, and server exit, a
+report has the error type and no message.
 
 Some terms in the table:
 
