@@ -197,6 +197,8 @@ it("folds a thread whose engine said the prompt is too long and runs its next tu
   await f.idle();
   await f.send("FIFTH_REQUEST retry on the new session");
   const records = (await f.messages()).filter(m => m.kind === "compaction");
+  console.info("DEBUGMSGS " + (await f.messages()).map(m => `${m.role}:${m.kind}:${String(m.text ?? m.compaction?.summary ?? m.tool?.name ?? "").slice(0, 40).replace(/\n/g, " ")}`).join(" | "));
+  console.info("DEBUGTURNS " + JSON.stringify(f.turns().map(t => ({ resumed: t.resumed, head: String(t.prompt.message.content).slice(0, 80) }))));
   expect(records).toHaveLength(1);
   expect(records[0].compaction.by).toBe("harness");
   expect(records[0].compaction.summary).toContain("FIRST_REQUEST");
