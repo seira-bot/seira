@@ -7732,5 +7732,10 @@
   "settings.crashReports.title": "오류 보고서 보내기",
   "settings.crashReports.aria": "오류 보고서 보내기",
   "settings.crashReports.subtitle": "Seira가 멈추면 앱 버전, 시스템 종류, 코드에서 실패한 위치를 보내요. 메시지, 파일, 이름은 절대 보내지 않아요.",
-  "settings.crashReports.link": "보고서에 담기는 내용"
+  "settings.crashReports.link": "보고서에 담기는 내용",
+  "serverUpdate.downloadApp": "다운로드",
+  "settings.updates.notChecked": "아직 확인하지 않았습니다.",
+  "settings.updates.downloadOnly": "이 {app} 사본은 스스로 업데이트되지 않습니다. 새 버전은 웹사이트에서 받으세요.",
+  "settings.updates.checkFailed": "업데이트를 확인하지 못했습니다. 다시 시도하거나 웹사이트에서 최신 버전을 받으세요.",
+  "sidebar.update.downloadOnly": "최신 버전 받기"
 }

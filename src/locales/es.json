@@ -6532,5 +6532,10 @@
   "settings.crashReports.title": "Enviar informes de fallos",
   "settings.crashReports.aria": "Enviar informes de fallos",
   "settings.crashReports.subtitle": "Cuando Seira deja de funcionar, envía la versión de la app, el tipo de sistema y el punto de su código donde falló, nunca tus mensajes, archivos ni nombres.",
-  "settings.crashReports.link": "Qué contiene un informe"
+  "settings.crashReports.link": "Qué contiene un informe",
+  "serverUpdate.downloadApp": "Descargar",
+  "settings.updates.notChecked": "Aún no se ha comprobado.",
+  "settings.updates.downloadOnly": "Esta copia de {app} no se actualiza sola. Descarga las nuevas versiones desde el sitio web.",
+  "settings.updates.checkFailed": "No se pudo buscar actualizaciones. Inténtalo de nuevo o descarga la versión más reciente desde el sitio web.",
+  "sidebar.update.downloadOnly": "Obtener la versión más reciente"
 }

@@ -7079,5 +7079,10 @@
   "settings.crashReports.title": "Invia i report di arresto anomalo",
   "settings.crashReports.aria": "Invia i report di arresto anomalo",
   "settings.crashReports.subtitle": "Quando Seira smette di funzionare, invia la versione dell'app, il tipo di sistema e il punto del suo codice in cui è fallita, mai i tuoi messaggi, file o nomi.",
-  "settings.crashReports.link": "Cosa contiene un report"
+  "settings.crashReports.link": "Cosa contiene un report",
+  "serverUpdate.downloadApp": "Scarica",
+  "settings.updates.notChecked": "Non ancora controllato.",
+  "settings.updates.downloadOnly": "Questa copia di {app} non si aggiorna da sola. Scarica le nuove versioni dal sito web.",
+  "settings.updates.checkFailed": "Impossibile cercare aggiornamenti. Riprova oppure scarica la versione più recente dal sito web.",
+  "sidebar.update.downloadOnly": "Scarica la versione più recente"
 }

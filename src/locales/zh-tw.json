@@ -10253,5 +10253,10 @@
   "settings.crashReports.title": "傳送當機報告",
   "settings.crashReports.aria": "傳送當機報告",
   "settings.crashReports.subtitle": "Seira 停止運作時，會傳送應用程式版本、系統類型以及程式碼出錯的位置，絕不包含你的訊息、檔案或名稱。",
-  "settings.crashReports.link": "報告包含哪些內容"
+  "settings.crashReports.link": "報告包含哪些內容",
+  "serverUpdate.downloadApp": "下載",
+  "settings.updates.notChecked": "尚未檢查。",
+  "settings.updates.downloadOnly": "這份 {app} 不會自行更新。請從網站取得新版本。",
+  "settings.updates.checkFailed": "無法檢查更新。請再試一次，或從網站取得最新版本。",
+  "sidebar.update.downloadOnly": "取得最新版本"
 }

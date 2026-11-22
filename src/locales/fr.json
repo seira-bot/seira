@@ -3946,5 +3946,10 @@
   "settings.crashReports.title": "Envoyer les rapports de plantage",
   "settings.crashReports.aria": "Envoyer les rapports de plantage",
   "settings.crashReports.subtitle": "Quand Seira cesse de fonctionner, elle envoie la version de l'app, le type de système et l'endroit de son code où l'erreur s'est produite, jamais vos messages, fichiers ou noms.",
-  "settings.crashReports.link": "Ce que contient un rapport"
+  "settings.crashReports.link": "Ce que contient un rapport",
+  "serverUpdate.downloadApp": "Télécharger",
+  "settings.updates.notChecked": "Pas encore vérifié.",
+  "settings.updates.downloadOnly": "Cette copie de {app} ne se met pas à jour toute seule. Téléchargez les nouvelles versions sur le site web.",
+  "settings.updates.checkFailed": "Impossible de rechercher les mises à jour. Réessayez, ou téléchargez la dernière version sur le site web.",
+  "sidebar.update.downloadOnly": "Obtenir la dernière version"
 }

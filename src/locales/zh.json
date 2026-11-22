@@ -10164,5 +10164,10 @@
   "settings.crashReports.title": "发送崩溃报告",
   "settings.crashReports.aria": "发送崩溃报告",
   "settings.crashReports.subtitle": "Seira 停止工作时，会发送应用版本、系统类型以及代码出错的位置，绝不包含你的消息、文件或名称。",
-  "settings.crashReports.link": "报告包含哪些内容"
+  "settings.crashReports.link": "报告包含哪些内容",
+  "serverUpdate.downloadApp": "下载",
+  "settings.updates.notChecked": "尚未检查。",
+  "settings.updates.downloadOnly": "此 {app} 副本不会自动更新。请从网站获取新版本。",
+  "settings.updates.checkFailed": "无法检查更新。请重试，或从网站获取最新版本。",
+  "sidebar.update.downloadOnly": "获取最新版本"
 }

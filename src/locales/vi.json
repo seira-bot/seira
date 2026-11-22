@@ -6032,5 +6032,10 @@
   "settings.crashReports.title": "Gửi báo cáo sự cố",
   "settings.crashReports.aria": "Gửi báo cáo sự cố",
   "settings.crashReports.subtitle": "Khi Seira ngừng hoạt động, ứng dụng gửi phiên bản ứng dụng, loại hệ thống và vị trí trong mã nơi lỗi xảy ra. Không bao giờ gửi tin nhắn, tệp hay tên của bạn.",
-  "settings.crashReports.link": "Báo cáo chứa những gì"
+  "settings.crashReports.link": "Báo cáo chứa những gì",
+  "serverUpdate.downloadApp": "Tải xuống",
+  "settings.updates.notChecked": "Chưa kiểm tra.",
+  "settings.updates.downloadOnly": "Bản {app} này không tự cập nhật. Hãy tải phiên bản mới từ trang web.",
+  "settings.updates.checkFailed": "Không thể kiểm tra bản cập nhật. Hãy thử lại hoặc tải phiên bản mới nhất từ trang web.",
+  "sidebar.update.downloadOnly": "Tải phiên bản mới nhất"
 }
