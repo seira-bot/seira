@@ -1972,7 +1972,7 @@ export class Store {
   }
 
   private firstUserLine(threadId: string): string | null {
-    const first = this.messagesFor(threadId).find((m) => m.role === "user" && m.kind === "text" && m.text?.trim());
+    const first = this.messagesFor(threadId).find((m) => m.role === "user" && m.kind === "text" && !m.handoff && m.text?.trim());
     return first?.text ? titleFromMessage(first.text) : null;
   }
 
