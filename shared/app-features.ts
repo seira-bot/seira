@@ -163,7 +163,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "machine-budget",
     name: "Heavy work on this computer",
     place: "a bot's own work; no setting",
-    does: "Before a test suite, a build, docker, a video job, a local model or a large file, a bot checks how much memory and how many processors are free. It starts only as many parallel workers as fit, runs one heavy job at a time, and offers a lighter version when memory is short.",
+    does: "Before a test suite, build, docker, video job, local model or large file, a bot checks free memory and processors. It starts only as many workers as fit, runs one heavy job at a time, and offers a lighter version when memory is short.",
     tools: ["machine_budget"],
   },
   {
