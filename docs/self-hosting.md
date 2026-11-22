@@ -1206,6 +1206,16 @@ seen, and what each person spent this month. **Invite** adds an address (or
 with the address filled in, and the one-time code still goes to that address.
 Roles change with one click; removing someone stops new sign-ins.
 
+A user can be limited to chosen departments: pick **Chosen departments** when
+you invite them, or **Change access** on their row. They then see only the
+bots, rooms, workflows and conversations of those departments, and cannot see
+team files or restore a workspace backup. Admins always see the whole team.
+Bots in a department that is named in any user's list can reach only bots in
+their own department. A bot in a chosen department can still read files outside
+its folders unless the department uses **Only chosen folders**. If the list of
+departments cannot be read, users see nothing until it is fixed. Teams in
+Seira Cloud do not support this.
+
 On a hosted workspace whose members your organization's Admin manages
 (`SEIRA_ADMIN_MEMBERSHIP=portal`), this list decides nothing, so Settings →
 People shows, read-only, who has signed in and what they spent, with a

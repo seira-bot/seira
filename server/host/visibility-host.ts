@@ -18,6 +18,8 @@ export interface VisibilityHostDeps {
   team: boolean;
   audiencesFor(viewer: Viewer): ThreadAudiences | undefined;
   threadsReferencing(name: string): readonly string[];
+  /** The departments a member is limited to (host/department-access-host.ts); null: the whole team. */
+  departmentsFor?(email: string | undefined): ReadonlySet<string> | null;
 }
 
 export function createVisibilityHost(deps: VisibilityHostDeps) {
@@ -46,7 +48,7 @@ export function createVisibilityHost(deps: VisibilityHostDeps) {
     const key = viewer.kind === "all" ? (viewer.email === undefined ? "*" : `admin:${viewer.email.trim().toLowerCase()}`) : `member:${viewer.email?.trim().toLowerCase() ?? ""}`;
     let set = visibleSets.get(key);
     if (!set) {
-      set = new VisibleSet(store.bots, store.groups, viewer, threadOwner, deps.audiencesFor(viewer));
+      set = new VisibleSet(store.bots, store.groups, viewer, threadOwner, deps.audiencesFor(viewer), viewer.kind === "member" ? deps.departmentsFor?.(viewer.email) ?? null : null);
       if (visibleSets.size >= 1_000) visibleSets.clear();
       visibleSets.set(key, set);
     }
