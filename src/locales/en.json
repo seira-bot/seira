@@ -2009,6 +2009,7 @@
   "settings.botMemory.help": "Leave it empty for Auto, which leaves room for your other apps. Bot work that goes past the limit is stopped, and the bot is told to try a lighter way. A change applies to the next task a bot starts.",
   "settings.botMemory.range": "Enter a number of GB from 1 to {max}.",
   "settings.botMemory.error": "Couldn't save the memory limit. Try again.",
+  "settings.botMemory.fixed": "Set to {gb} GB when this app started, so it can't be changed here.",
   "settings.language.title": "Language",
   "settings.language.subtitle": "The app follows your system language unless you pick one here. Only part of the interface is translated so far. Untranslated text stays in English.",
   "settings.language.system": "System",

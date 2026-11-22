@@ -22,6 +22,7 @@ import { DefaultBotSidebarRow } from "../../DefaultBotControls";
 import { EnginesSettings } from "../../EnginesSettings";
 import { ImageGenerationSettings } from "../../ImageGenerationSettings";
 import { LocalComputerSection } from "../../LocalComputerSection";
+import { BotMemorySettings } from "../../BotMemorySettings";
 import { McpCallTimeoutSettings } from "../../McpCallTimeoutSettings";
 import { DefaultBotSettings } from "../../NewBotDialog";
 import { PlaceLookRows } from "../../PlaceLookCard";
@@ -169,10 +170,11 @@ export function BotsPage() {
     <SettingsGroup label={t("settings.bots.newBots")} block="new-bots">
       <SettingsRows><NewBotEffortRow /><DefaultBotSettings simple /></SettingsRows>
     </SettingsGroup>
-    {!(ctx.team && !ctx.admin) && <AdvancedSection anchor="limits" also={["parallel", "group-turns", "tool-time", "keep-warm"]}><SettingsGroup label={t("settings.simple.more.limits")} block="limits">
+    {!(ctx.team && !ctx.admin) && <AdvancedSection anchor="limits" also={["parallel", "group-turns", "tool-time", "bot-memory", "keep-warm"]}><SettingsGroup label={t("settings.simple.more.limits")} block="limits">
       <SettingsRows selectWidth={160}>
         <div data-settings-block="group-turns" className="contents"><RoomTurnTimeoutSettings /></div>
         <div data-settings-block="tool-time" className="contents"><McpCallTimeoutSettings /></div>
+        <div data-settings-block="bot-memory" className="contents"><BotMemorySettings /></div>
         <ThreadConcurrencySettings />
         <div data-settings-block="keep-warm" className="contents"><CacheKeepWarmSettings /></div>
       </SettingsRows>
