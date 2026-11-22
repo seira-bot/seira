@@ -239,6 +239,37 @@ describe("programs a boxed bot could have written", () => {
     rmSync(safe, { recursive: true, force: true });
   });
 
+  it.skipIf(!posix)("looks a program up in a PATH folder with a `..` after a link as the system does", async () => {
+    const home = homedir();
+    const marker = join(home, "ran-path-dotdot");
+    rmSync(marker, { force: true });
+    const grok = join(home, ".grok-path-dotdot");
+    const trusted = join(home, "trusted-path-dotdot");
+    const other = join(home, "other-path-dotdot");
+    const written = plant(join(grok, "sessions"), "seira-path-dotdot", marker);
+    mkdirSync(join(grok, "sessions", "sub"), { recursive: true });
+    mkdirSync(join(other, "sub"), { recursive: true });
+    mkdirSync(trusted, { recursive: true });
+    symlinkSync(written, join(other, "seira-path-dotdot"));
+    symlinkSync(join(other, "sub"), join(trusted, "link"));
+    symlinkSync(join(grok, "sessions", "sub"), join(trusted, "link-written"));
+    const entry = `${trusted}/link/..`;
+    const env = { ...process.env, PATH: [entry, "/usr/bin", "/bin"].join(delimiter) };
+    distrustLimitedBoxFolders([grok]);
+
+    expect(serverPath(env.PATH).split(delimiter)).toContain(entry);
+    expect(serverPath(`${trusted}/link-written/..`), "the folder it ends at is written by the box").toBe("");
+    expect(((await run("seira-path-dotdot", env)).error as NodeJS.ErrnoException | null)?.code).toBe("EACCES");
+    expect(existsSync(marker)).toBe(false);
+
+    distrustLimitedBoxFolders(null);
+    expect((await run("seira-path-dotdot", env)).error, "the system finds the one the link leads to").toBeNull();
+    expect(existsSync(marker)).toBe(true);
+    rmSync(grok, { recursive: true, force: true });
+    rmSync(trusted, { recursive: true, force: true });
+    rmSync(other, { recursive: true, force: true });
+  });
+
   it.skipIf(!posix)("the server's PATH keeps the app's own engines and the system's, never HOME's program folders", () => {
     const home = homedir();
     const dataDir = join(home, ".seira");
