@@ -468,3 +468,26 @@ test("Settings reads and changes the window's frame on any page of the window; o
   asking = null;
   assert.throws(() => handlers.get("window-frame:set")({}, true), /only available in this app's window/);
 });
+
+test("AC-04, AC-05: crash reports default on without a record, stay off when the record cannot be read, and keep a saved choice", () => {
+  const missing = Object.assign(new Error("none"), { code: "ENOENT" });
+  assert.equal(createDesktopPrefs({ read: () => { throw missing; }, write() {} }).crashReports(), true);
+  assert.equal(createDesktopPrefs({ read: () => ({}), write() {} }).crashReports(), true);
+  assert.equal(createDesktopPrefs({ read: () => { throw new SyntaxError("bad json"); }, write() {} }).crashReports(), false);
+  assert.equal(createDesktopPrefs({ read: () => "text", write() {} }).crashReports(), false);
+  assert.equal(createDesktopPrefs({ read: () => ({ crashReports: false }), write() {} }).crashReports(), false);
+  assert.equal(createDesktopPrefs({ read: () => ({ crashReports: "yes" }), write() {} }).crashReports(), true, "a value that is not a boolean is ignored");
+});
+
+test("AC-08, AC-10: the crash report choice is saved with the other choices and survives a restart", () => {
+  let saved = { seen: [POPUP], analytics: true };
+  const prefs = createDesktopPrefs({ read: () => saved, write: (value) => { saved = structuredClone(value); } });
+  prefs.setCrashReports(false);
+  assert.equal(saved.crashReports, false);
+  assert.deepEqual(saved.seen, [POPUP], "the other choices stay");
+  assert.equal(createDesktopPrefs({ read: () => saved, write() {} }).crashReports(), false);
+  prefs.setCrashReports(true);
+  assert.equal(saved.crashReports, true);
+  prefs.setCrashReports("x");
+  assert.equal(saved.crashReports, false, "only true turns it on");
+});

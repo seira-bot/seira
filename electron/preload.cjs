@@ -106,6 +106,25 @@ function savedAnalyticsChoice() {
   try { const saved = ipcRenderer.sendSync("desktop-analytics:read"); return typeof saved === "boolean" ? saved : null; } catch { return null; }
 }
 let analyticsChoice;
+const text = (value, max) => (typeof value === "string" ? value.slice(0, max) : undefined);
+/** Main answers null when this build has no crash endpoint: that page gets `available: false` and no way to send. */
+function crashReportsBridge() {
+  let choice = null;
+  try { choice = ipcRenderer.sendSync("desktop-crash-reports:read"); } catch {}
+  if (typeof choice !== "boolean") return { available: false };
+  return {
+    available: true,
+    enabled: () => choice,
+    set: enabled => { choice = enabled === true; return ipcRenderer.invoke("desktop-crash-reports:set", choice); },
+    report: report => {
+      try {
+        const ids = report?.debugIds && typeof report.debugIds === "object" ? Object.fromEntries(Object.entries(report.debugIds).slice(0, 50).filter(([, id]) => typeof id === "string")) : undefined;
+        ipcRenderer.send("desktop-crash-reports:renderer", { kind: text(report?.kind, 40), errorName: text(report?.errorName, 100), message: text(report?.message, 20000), stack: text(report?.stack, 20000), page: text(report?.page, 20), debugIds: ids });
+      } catch {}
+    },
+    page: name => { try { ipcRenderer.send("desktop-crash-reports:page", text(name, 20)); } catch {} },
+  };
+}
 function savedLanguageChoice() {
   try { const saved = ipcRenderer.sendSync("desktop-language:read"); return typeof saved === "string" ? saved : null; } catch { return null; }
 }
@@ -804,6 +823,7 @@ const bridge = {
     },
     ...(isLocalPage ? { set: enabled => { analyticsChoice = enabled === true; return ipcRenderer.invoke("desktop-analytics:set", analyticsChoice); } } : {}),
   },
+  ...(isLocalPage ? { crashReports: crashReportsBridge() } : {}),
   desktopLanguage: {
     choice: () => {
       if (languageChoice === undefined) languageChoice = savedLanguageChoice();

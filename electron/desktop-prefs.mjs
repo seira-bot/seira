@@ -64,6 +64,7 @@ function parse(raw) {
     ? Object.fromEntries(Object.entries(record.quickAsks).flatMap(([server, chat]) => { const parsed = parseChat(chat); return parsed ? [[server, parsed]] : []; }))
     : {};
   return { seen, ...(typeof record.analytics === "boolean" ? { analytics: record.analytics } : {}),
+    ...(typeof record.crashReports === "boolean" ? { crashReports: record.crashReports } : {}),
     ...(isLanguage(record.language) ? { language: record.language } : {}),
     ...(typeof record.installId === "string" && INSTALL_ID.test(record.installId) ? { installId: record.installId } : {}),
     ...(updatesConsent ? { updatesConsent } : {}),
@@ -89,11 +90,12 @@ export function relabelDesktop({ menu, trays, window, title, badge }) {
 
 /** A record that cannot be written is still kept for this launch. */
 export function createDesktopPrefs({ read, write }) {
-  let record = null;
+  let record = null, unreadable = false;
   const current = () => {
     if (record) return record;
     let raw = null;
-    try { raw = read(); } catch {}
+    try { raw = read(); } catch (error) { unreadable = error?.code !== "ENOENT"; }
+    if (raw !== null && (typeof raw !== "object" || Array.isArray(raw))) unreadable = true;
     return (record = parse(raw));
   };
   const save = next => { record = next; try { write(next); } catch {} };
@@ -111,6 +113,9 @@ export function createDesktopPrefs({ read, write }) {
     /** null until a choice is saved. */
     analytics: () => current().analytics ?? null,
     setAnalytics(enabled) { save({ ...current(), analytics: enabled === true }); },
+    /** On for a computer that never chose; off while the saved record exists but cannot be read, until the person chooses. */
+    crashReports: () => current().crashReports ?? !unreadable,
+    setCrashReports(enabled) { save({ ...current(), crashReports: enabled === true }); },
     /** null until a language is picked; "" is a pick too: follow the system. */
     language: () => current().language ?? null,
     setLanguage(language) {

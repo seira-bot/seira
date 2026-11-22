@@ -37,6 +37,9 @@ export interface DesktopPrefs {
   markSeen(id: string): void;
   analytics(): boolean | null;
   setAnalytics(enabled: boolean): void;
+  /** On until the person chooses; off while the saved record cannot be read. */
+  crashReports(): boolean;
+  setCrashReports(enabled: boolean): void;
   language(): string | null;
   /** False for anything that is not a locale code or "". */
   setLanguage(language: unknown): boolean;
