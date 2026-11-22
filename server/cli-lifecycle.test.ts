@@ -325,7 +325,7 @@ describe("CLI startup lifecycle", () => {
       }
       if (address === `http://127.0.0.1:${options.port}/api/auth/pairing`) {
         expect(init?.method).toBe("POST");
-        expect(JSON.parse(String(init?.body))).toEqual({ label: "Android", scopes: ["client"] });
+        expect(JSON.parse(String(init?.body))).toEqual({ label: "Android", scopes: ["client"], device: "phone" });
         // A server started without SEIRA_PUBLIC_URL: it mints the credential but
         // cannot name itself, so it returns no links at all. The CLI was told
         // the public address with --public-url and must build both from that.

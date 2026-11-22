@@ -12,7 +12,7 @@ import { sentWireName } from "../../electron/phone-wire-names.mjs";
 type Rec = Record<string, any>;
 
 /** The command that makes a pairing code on a server, whichever way that server was installed. */
-const PAIR_ON_SERVER = "npx @seira-bot/seira pair (Docker: docker compose exec seira seira pair)";
+const PAIR_ON_SERVER = "npx @seira-bot/seira pair --computer (Docker: docker compose exec seira seira pair --computer)";
 
 const isLoopback = (origin: string) => /^https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?$/i.test(origin);
 
@@ -82,10 +82,10 @@ export async function connectVerb(ctx: VerbContext): Promise<VerbOutcome> {
   }
   const label = flag(ctx.flags, "label")?.trim() || "Seira CLI";
   if (!code) {
-    const minted = await call(origin, "/api/auth/pairing", { method: "POST", body: JSON.stringify({ label, ...(ctx.flags.client ? { scopes: ["client"] } : {}) }) });
+    const minted = await call(origin, "/api/auth/pairing", { method: "POST", body: JSON.stringify({ label, ...(ctx.flags.client ? { scopes: ["client"] } : {}), device: "computer" }) });
     if (minted.status !== 200 || typeof minted.body.code !== "string") {
       throw new HeadlessError(`this server will not mint a pairing code for a command on this computer${minted.body.error ? ` (${minted.body.error})` : ""}`,
-        EXIT.unreachable, `${cliCommand("pair")} in a terminal on this computer, then pass --code CODE`);
+        EXIT.unreachable, `${cliCommand("pair --computer")} in a terminal on this computer, then pass --code CODE`);
     }
     code = minted.body.code as string;
   }

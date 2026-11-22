@@ -57,7 +57,7 @@ export const USAGE = `seira — your team of AI bots, ready in a few steps
   seira start [the same options as serve]
   seira serve [--port 8799] [--data-dir DIR] [--label NAME]
                     [--public-url https://host | --domain HOST | --tailscale] [--tunnel] [--lan] [--relay]
-  seira pair  [--label NAME] [--phone [ios|android]] [--ttl 24h] [--public-url https://host]
+  seira pair  [--label NAME] [--phone [ios|android] | --computer] [--ttl 24h] [--public-url https://host]
   seira devices [revoke ID]
   seira status
   seira --version
@@ -81,8 +81,8 @@ serve   starts the server without prompts; in a terminal it prints a pairing
         code, the link to paste into the desktop app (＋ → Connect to a
         server) and a QR for a phone
 pair    a new pairing code for the running server, with its link and QR
-        (--phone: chat and approvals only; --ttl keeps it open up to 24h,
-        still single use)
+        (--phone: chat and approvals only; --computer: for seira connect on
+        another computer; --ttl keeps it open up to 24h, still single use)
 devices lists paired devices; "devices revoke ID" signs one out
 status  the running server, the address others reach it at, and whether
         that address answers as this server

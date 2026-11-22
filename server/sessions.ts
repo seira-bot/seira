@@ -91,11 +91,18 @@ const sessionSchema = z.object({
   moveIn: z.string().regex(/^[\w-]{1,128}$/).optional(),
   /** An access token for a script (`seira token create`): it ends at expiresAt and never renews. */
   token: z.literal(true).optional(),
+  /** A paired device's sign-in (see PairingCode.device): the paired-device limits apply to it whatever headers it sends. */
+  pairedDevice: z.literal(true).optional(),
 });
 
 const fileSchema = z.object({ version: z.literal(1), sessions: z.array(sessionSchema) });
 
 export type SessionRecord = z.infer<typeof sessionSchema>;
+
+/** The paired-device limits apply to this session: its pairing marked it, or a Team Cloud member's own code opened it. */
+export function isPairedDeviceSession(record: SessionRecord): boolean {
+  return record.pairedDevice === true || (record.membershipAuthority === "team" && record.memberCheckedAt !== undefined);
+}
 
 /** What the UI may see: never the hash. */
 export interface PublicSession {
@@ -130,6 +137,17 @@ export interface PairingCode {
   memberCheckedAt?: number;
   /** The session it opens is an access token that lasts exactly this long. */
   tokenTtlMs?: number;
+  /** Security invariant: the paired-device mark fails closed. "phone": every session it opens is marked. "computer": none
+   * is. Absent: a session redeemed without a browser cookie is marked. Only a host that opens a code for a computer
+   * alone may say "computer"; an access token's code is a computer's unless a phone opens it. */
+  device?: PairingDevice;
+}
+
+export type PairingDevice = "phone" | "computer";
+
+function marksPairedDevice(pairing: PairingCode, cookie: boolean): boolean {
+  if (pairing.device) return pairing.device === "phone";
+  return !pairing.browser && !cookie;
 }
 
 export interface PublicPairing {
@@ -204,6 +222,7 @@ export interface PairingRequest {
   scopes?: Scope[];
   ttlMs?: number;
   tokenTtlMs?: number;
+  device?: PairingDevice;
 }
 
 const DAY_MS = 24 * 3_600_000;
@@ -211,7 +230,7 @@ const within = (value: unknown, min: number, max: number): number | null | undef
   value === undefined ? undefined : typeof value === "number" && Number.isInteger(value) && value >= min && value <= max ? value : null;
 
 /** POST /api/auth/pairing's body: `ttlMs` keeps the code open up to a day; `tokenTtlMs` makes the session it opens an
- * access token, bounded by SEIRA_SESSION_MAX_DAYS like every session. */
+ * access token, bounded by SEIRA_SESSION_MAX_DAYS like every session; `device` says who the code is for (PairingCode.device). */
 export function pairingRequest(body: unknown): PairingRequest | { error: string } {
   const record: Record<string, unknown> = body && typeof body === "object" && !Array.isArray(body) ? Object(body) : {};
   const ttlMs = within(record.ttlMs, 60_000, PAIRING_CODE_MAX_TTL_MS);
@@ -222,6 +241,7 @@ export function pairingRequest(body: unknown): PairingRequest | { error: string 
   return {
     ...(typeof record.label === "string" ? { label: record.label } : {}), ...(scopes ? { scopes } : {}),
     ...(ttlMs !== undefined ? { ttlMs } : {}), ...(tokenTtlMs !== undefined ? { tokenTtlMs } : {}),
+    ...(record.device === "phone" || record.device === "computer" ? { device: record.device } : {}),
   };
 }
 
@@ -370,13 +390,15 @@ export class SessionRegistry {
     }
   }
 
-  openPairing(input: { scopes?: Scope[]; label?: string; ttlMs?: number; tokenTtlMs?: number; browser?: boolean; owner?: string; member?: TeamMember; memberCheckedAt?: number } = {}): { id: string; code: string; credential: string; expiresAt: number } {
+  openPairing(input: { scopes?: Scope[]; label?: string; ttlMs?: number; tokenTtlMs?: number; browser?: boolean; owner?: string; member?: TeamMember; memberCheckedAt?: number; device?: PairingDevice } = {}): { id: string; code: string; credential: string; expiresAt: number } {
     this.prune();
     const now = this.now();
     const code = generatePairingCode();
     const credential = generatePairingCredential();
     const scopes = input.scopes?.length ? [...new Set(input.scopes)] : [...SCOPES];
     this.refusePersonal(scopes);
+    const token = input.tokenTtlMs !== undefined && !input.browser && !input.member;
+    const device = input.device === "phone" || !token ? input.device : "computer";
     const pairing: PairingCode = {
       id: randomUUID(),
       codeHash: sha256(code),
@@ -387,7 +409,8 @@ export class SessionRegistry {
       expiresAt: now + (input.ttlMs ?? PAIRING_CODE_TTL_MS),
       ...(input.browser ? { browser: true as const, ...(input.owner ? { owner: input.owner } : {}) } : {}),
       ...(input.member ? { member: input.member, ...(input.memberCheckedAt !== undefined ? { memberCheckedAt: input.memberCheckedAt } : {}) } : {}),
-      ...(input.tokenTtlMs !== undefined && !input.browser && !input.member ? { tokenTtlMs: input.tokenTtlMs } : {}),
+      ...(token ? { tokenTtlMs: input.tokenTtlMs } : {}),
+      ...(device && !input.browser ? { device } : {}),
     };
     this.pairings.push(pairing);
     return { id: pairing.id, code, credential, expiresAt: pairing.expiresAt };
@@ -450,7 +473,8 @@ export class SessionRegistry {
     this.codeFailures.delete(UNNAMED_SOURCES);
   }
 
-  exchange(input: { code: string; label: string; source: string; fallbackLabel?: string; attemptId?: string; browser?: boolean }): ExchangeResult {
+  /** `cookie`: the caller redeems into a browser cookie. */
+  exchange(input: { code: string; label: string; source: string; fallbackLabel?: string; attemptId?: string; browser?: boolean; cookie?: boolean }): ExchangeResult {
     this.prune();
     const now = this.now();
     const read = readPairingInput(input.code);
@@ -491,6 +515,7 @@ export class SessionRegistry {
       ...(pairing.browser ? { cookieOnly: true as const, ...(pairing.owner ? { owner: pairing.owner } : {}) } : {}),
       ...(pairing.member ? { email: pairing.member.email, teamRole: pairing.member.role, membershipAuthority: "team" as const } : {}),
       ...(pairing.member && pairing.memberCheckedAt !== undefined ? { memberCheckedAt: pairing.memberCheckedAt } : {}),
+      ...(marksPairedDevice(pairing, input.cookie === true) ? { pairedDevice: true as const } : {}),
     };
     if (pairing.member && pairing.memberCheckedAt === undefined) this.memberChecked(pairing.member, now);
     this.sessions.push(record);

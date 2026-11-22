@@ -27,7 +27,7 @@ describe("paired thread targets through an isolated HTTP fixture", () => {
 
   beforeAll(async () => {
     fixture = await launchVerificationServer();
-    const invitation = await api("POST", "/api/auth/pairing", { label: "Thread compatibility fixture", scopes: ["client", "admin"] });
+    const invitation = await api("POST", "/api/auth/pairing", { label: "Thread compatibility fixture", scopes: ["client", "admin"], device: "computer" });
     expect(invitation.status).toBe(200);
     const accepted = await api("POST", "/api/auth/pair", { code: invitation.body.code, label: "Old paired client" });
     expect(accepted.status).toBe(200);

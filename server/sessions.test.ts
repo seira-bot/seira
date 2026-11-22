@@ -23,6 +23,7 @@ import {
   SESSION_MAX_AGE_MS,
   cookieMaxAgeSeconds,
   daysMs,
+  isPairedDeviceSession,
 } from "./sessions.ts";
 import { userError } from "./user-errors.ts";
 
@@ -754,14 +755,14 @@ describe("a member's own phone on a Team Cloud", () => {
   const HOUR = 60 * 60_000;
   /** Ada's session from the Admin's signed pairing, as the desktop gets it. */
   const fromAdmin = (member: { email: string; role: "owner" | "admin" | "member" } = ADA) => {
-    const { code } = registry.openPairing({ scopes: ["client"], member });
+    const { code } = registry.openPairing({ scopes: ["client"], member, device: "computer" });
     const paired = registry.exchange({ code, label: "Desktop", source: "a" });
     if (!paired.ok) throw new Error(paired.error);
     return registry.authenticate(paired.token)!;
   };
   /** A code Ada made from that session, redeemed by her phone. */
   const phoneOf = (session: { email?: string; teamRole?: "owner" | "admin" | "member"; createdAt: number; memberCheckedAt?: number }) => {
-    const { code } = registry.openPairing({ scopes: ["client"], member: { email: session.email!, role: session.teamRole! }, memberCheckedAt: session.memberCheckedAt ?? session.createdAt });
+    const { code } = registry.openPairing({ scopes: ["client"], member: { email: session.email!, role: session.teamRole! }, memberCheckedAt: session.memberCheckedAt ?? session.createdAt, device: "phone" });
     const paired = registry.exchange({ code, label: "Ada's phone", source: "p" });
     if (!paired.ok) throw new Error(paired.error);
     return paired;
@@ -834,5 +835,69 @@ describe("a member's own phone on a Team Cloud", () => {
     const later = phoneOf(fromAdmin());
     clock = registry.authenticate(later.token)!.expiresAt;
     expect(registry.memberPhones(), "an ended phone is not listed").toEqual([]);
+  });
+
+  it("counts her phone as a paired device even without the phone mark, and never the app's own sign-in", () => {
+    const desktop = fromAdmin();
+    const phone = registry.authenticate(phoneOf(desktop).token)!;
+    expect(isPairedDeviceSession(phone)).toBe(true);
+    expect(isPairedDeviceSession({ ...phone, pairedDevice: undefined })).toBe(true);
+    expect(isPairedDeviceSession(desktop)).toBe(false);
+  });
+});
+
+describe("the paired-device mark on a session's pairing record", () => {
+  const redeem = (opened: { device?: "phone" | "computer"; browser?: boolean; tokenTtlMs?: number }, input: { attemptId?: string; browser?: boolean; cookie?: boolean } = {}) => {
+    const pairing = registry.openPairing(opened);
+    const result = registry.exchange({ code: opened.browser ? pairing.credential : pairing.code, label: "Device", source: "10.0.0.7", ...input });
+    if (!result.ok) throw new Error(result.error);
+    return registry.record(result.session.id)!;
+  };
+
+  it("marks a session from a pairing opened for no one in particular, unless a browser takes it as a cookie", () => {
+    expect(redeem({}).pairedDevice, "redeemed without a cookie").toBe(true);
+    expect(redeem({}, { attemptId: "pair-request-0001" }).pairedDevice, "with a retry id").toBe(true);
+    expect(redeem({}, { cookie: true }).pairedDevice, "a browser's cookie").toBeUndefined();
+  });
+
+  it("marks every session a phone's pairing opens, even into a cookie", () => {
+    expect(redeem({ device: "phone" }).pairedDevice).toBe(true);
+    expect(redeem({ device: "phone" }, { attemptId: "3f2c9a1e-5b7d-4c8e-9f01-23456789abcd" }).pairedDevice).toBe(true);
+    expect(redeem({ device: "phone" }, { cookie: true }).pairedDevice).toBe(true);
+  });
+
+  it("leaves a session from a computer's pairing or a browser sign-in unmarked", () => {
+    expect(redeem({ device: "computer" }).pairedDevice, "a computer's code").toBeUndefined();
+    expect(redeem({ device: "computer" }, { attemptId: "pair-request-0001" }).pairedDevice, "with the desktop app's retry id").toBeUndefined();
+    expect(redeem({ browser: true }, { browser: true, cookie: true }).pairedDevice, "a browser sign-in").toBeUndefined();
+    expect(redeem({ browser: true, device: "phone" }, { browser: true, cookie: true }).pairedDevice, "a browser sign-in asked for a phone").toBeUndefined();
+  });
+
+  it("leaves an access token unmarked whatever its client says, unless a phone opened its code", () => {
+    const day = 24 * 3_600_000;
+    const token = redeem({ tokenTtlMs: day });
+    expect(token.token, "an access token").toBe(true);
+    expect(token.pairedDevice, "a client that names no device").toBeUndefined();
+    expect(redeem({ tokenTtlMs: day, device: "computer" }).pairedDevice).toBeUndefined();
+    expect(redeem({ tokenTtlMs: day, device: "phone" }).pairedDevice, "a code a phone opened").toBe(true);
+  });
+
+  it("takes who the code is for from the pairing request and nothing else", () => {
+    expect(pairingRequest({ device: "phone", scopes: ["client"] })).toEqual({ scopes: ["client"], device: "phone" });
+    expect(pairingRequest({ device: "computer" })).toEqual({ device: "computer" });
+    expect(pairingRequest({ device: true })).toEqual({});
+    expect(pairingRequest({ device: "desktop" })).toEqual({});
+  });
+
+  it("keeps the mark when the registry reads its file again, and reads an older record unmarked", () => {
+    const phone = redeem({ device: "phone" });
+    const desktop = redeem({ device: "computer" });
+    registry.close();
+    const saved = JSON.parse(readFileSync(file(), "utf8"));
+    expect(saved.sessions.find((s: { id: string }) => s.id === phone.id).pairedDevice).toBe(true);
+    expect(saved.sessions.find((s: { id: string }) => s.id === desktop.id)).not.toHaveProperty("pairedDevice");
+    registry = new SessionRegistry({ file: file(), now: () => clock });
+    expect(isPairedDeviceSession(registry.record(phone.id)!)).toBe(true);
+    expect(isPairedDeviceSession(registry.record(desktop.id)!)).toBe(false);
   });
 });

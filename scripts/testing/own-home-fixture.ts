@@ -134,8 +134,9 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     const port = await freePortBlock([0, 1]);
     const base = `http://127.0.0.1:${port}`;
     await start(`server-${servers.length + 1}`, { SEIRA_ENVIRONMENT_LABEL: name, ...more }, port);
-    // `seira pair` on that server, then the link opened in this app: a session of the admin scope.
-    const minted = await fetch(`${base}/api/auth/pairing`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ label: "My desktop" }) });
+    // `seira pair` on that server, then the link opened in this app: its /pair page signs the window in by cookie, which
+    // the paired-device limits never mark. A computer's code gives this bearer session the same admin rights.
+    const minted = await fetch(`${base}/api/auth/pairing`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ label: "My desktop", device: "computer" }) });
     const code = (await minted.json() as { code: string }).code;
     const paired = await fetch(`${base}/api/auth/pair`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code, label: "Seira app" }) });
     const token = (await paired.json() as { token: string }).token;

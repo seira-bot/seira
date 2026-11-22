@@ -4,7 +4,7 @@
 //   seira start [serve options]
 //   seira serve [--port 8799] [--data-dir ~/.seira] [--label "cab mini"]
 //                     [--public-url https://host] [--tailscale] [--tunnel] [--domain HOST] [--relay] [--no-pair]
-//   seira pair  [--label "My MacBook"] [--client] [--public-url https://host]
+//   seira pair  [--label "My MacBook"] [--client] [--computer] [--public-url https://host]
 //   seira sessions [revoke <id>]
 //   seira status
 //   seira login [--email you@example.com] [--relay] [--events]
@@ -103,6 +103,8 @@ export interface CliOptions {
   open?: boolean;
   guided?: boolean;
   phone?: "ios" | "android";
+  /** `pair --computer`: a code for `seira connect` on another computer, without a phone's limits. */
+  computer?: boolean;
   /** `pair --ttl 24h`: how long the code stays open. */
   pairTtlMs?: number;
 }
@@ -156,6 +158,7 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
         else if (options.command === "pair") options.phone = "ios";
         else return { error: "--phone takes ios or android" };
       }
+      else if (options.command === "pair" && arg === "--computer") options.computer = true;
       else if (options.command === "pair" && arg === "--ttl") options.pairTtlMs = parseDuration(value(), "--ttl", { min: 60_000 });
       else if (arg === "--help" || arg === "-h") options.command = "help";
       else if (arg === "--no-pair") options.pair = false;
@@ -199,6 +202,7 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
   const publicUrlRefusal = options.publicUrl ? publicUrlProblem(options.publicUrl) : null;
   if (publicUrlRefusal) return { error: publicUrlRefusal };
   if (options.tunnel && options.relay) return { error: "choose one of --relay (phones through Seira Relay) and --tunnel (a public address)" };
+  if (options.computer && options.phone) return { error: "choose one of --computer and --phone" };
   if (options.command === "access" && !options.accessAction) return { error: "access needs one of: list, add EMAIL [--chat-only], remove EMAIL" };
   if (options.command === "service" && !options.serviceAction) return { error: "service needs one of: install [the same options as serve], uninstall" };
   if (options.domain && (options.tailscale || options.tunnel || options.publicUrl)) return { error: "--domain already gives the server its address; drop --tailscale, --tunnel and --public-url" };
@@ -333,9 +337,10 @@ async function showPhonePairing(options: CliOptions, origin: string | undefined,
   return true;
 }
 
-async function mintPairing(port: number, options: { label?: string; client?: boolean; publicUrl?: string; phone?: "ios" | "android"; guided?: boolean; ttlMs?: number }): Promise<string> {
+async function mintPairing(port: number, options: { label?: string; client?: boolean; publicUrl?: string; phone?: "ios" | "android"; computer?: boolean; guided?: boolean; ttlMs?: number }): Promise<string> {
   const chatOnly = Boolean(options.client || options.phone);
-  const request = { ...(options.label ? { label: options.label } : {}), ...(chatOnly ? { scopes: ["client"] } : {}), ...(options.ttlMs ? { ttlMs: options.ttlMs } : {}) };
+  const device = options.phone ? "phone" : options.computer ? "computer" : null;
+  const request = { ...(options.label ? { label: options.label } : {}), ...(chatOnly ? { scopes: ["client"] } : {}), ...(options.ttlMs ? { ttlMs: options.ttlMs } : {}), ...(device ? { device } : {}) };
   const { status, body } = await api(port, "/api/auth/pairing", { method: "POST", body: JSON.stringify(request) });
   const refusal = refusedAsService(status, body) ? SERVICE_TRUST_HELP : desktopOwnedRefusal(status, body);
   if (refusal || status !== 200) throw new Error(refusal ?? `server refused to mint a pairing code: ${typeof body?.error === "string" ? body.error : status}`);
@@ -344,7 +349,7 @@ async function mintPairing(port: number, options: { label?: string; client?: boo
   const invite = (typeof body.inviteUrl === "string" && body.inviteUrl.includes("endpoints=") ? body.inviteUrl : null) ?? (reachable && typeof body.credential === "string" ? phonePairingLink({ address: reachable, token: body.credential, name: typeof body.serverName === "string" ? body.serverName : undefined }) : null) ?? (typeof body.inviteUrl === "string" ? body.inviteUrl : null);
   const local = localLinkBase(options.publicUrl ?? null, port);
   if (options.guided) return browserSignInLines(`${local.base}/pair#code=${body.code}`, body.code, body.expiresAt);
-  return relayPairingBlock(body, chatOnly, cliPrefix()) ?? pairingBlock({ code: body.code, expiresAt: body.expiresAt, chatOnly, link, localLink: `${local.base}/pair#code=${body.code}`, localPlace: local.place, inviteUrl: invite, phone: options.phone, prefix: cliPrefix() });
+  return (options.computer ? null : relayPairingBlock(body, chatOnly, cliPrefix())) ?? pairingBlock({ code: body.code, expiresAt: body.expiresAt, chatOnly, link, localLink: `${local.base}/pair#code=${body.code}`, localPlace: local.place, inviteUrl: invite, phone: options.phone, computer: options.computer, prefix: cliPrefix() });
 }
 
 /** Never asks anything: the running server's own address (its routes) goes in the link. */
@@ -355,7 +360,7 @@ export async function runPair(options: CliOptions): Promise<number> {
   }
   const advertised = await api(options.port, "/api/auth/pairing").catch(() => ({ status: 0, body: {} as any }));
   const origin = options.publicUrl ?? (typeof advertised.body?.publicUrl === "string" ? advertised.body.publicUrl : undefined);
-  console.log(await mintPairing(options.port, { label: options.label, client: options.client, publicUrl: origin, phone: options.phone, ttlMs: options.pairTtlMs }));
+  console.log(await mintPairing(options.port, { label: options.label, client: options.client, publicUrl: origin, phone: options.phone, computer: options.computer, ttlMs: options.pairTtlMs }));
   if (origin && origin.startsWith("https:") && !isLoopbackHost(new URL(origin).hostname)) {
     const reach = await checkReach(options.port, origin);
     if (!reach.ok) for (const line of [...reachLines("public-url", origin, options.port, cliPrefix(), reach), "The code works once the address answers."]) console.log(line);

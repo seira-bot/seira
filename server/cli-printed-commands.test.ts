@@ -34,6 +34,8 @@ describe("printed commands", () => {
   const outputs = [
     pairingBlock({ code: "ABCD-EFGH-JKLM", expiresAt: now + 600_000, chatOnly: false, link: "https://seira.example.com/pair#code=ABCD-EFGH-JKLM", prefix: "seira", now }),
     pairingBlock({ code: "ABCD-EFGH-JKLM", expiresAt: now + 600_000, chatOnly: false, link: null, localLink: "http://127.0.0.1:8799/pair#code=X", prefix: "seira", now }),
+    pairingBlock({ code: "ABCD-EFGH-JKLM", expiresAt: now + 600_000, chatOnly: true, link: "https://seira.example.com/pair#code=ABCD-EFGH-JKLM", prefix: "seira", now }),
+    pairingBlock({ code: "ABCD-EFGH-JKLM", expiresAt: now + 600_000, chatOnly: false, computer: true, link: "https://seira.example.com/pair#code=ABCD-EFGH-JKLM", prefix: "seira", now }),
     noRouteLines(8799, "seira").join("\n"),
     reachLines("public-url", "https://seira.example.com", 8799, "seira", { ok: false, kind: "unreachable", reason: "connection refused" }).join("\n"),
     browserSignInLines("http://127.0.0.1:8799/pair#code=X", "X", now),
@@ -62,7 +64,7 @@ describe("printed commands", () => {
         checked.push(`${command} ${flag}`);
       }
     }
-    expect(checked).toEqual(expect.arrayContaining(["serve --lan", "serve --public-url", "pair --phone", "pair --ttl"]));
+    expect(checked).toEqual(expect.arrayContaining(["serve --lan", "serve --public-url", "pair --phone", "pair --computer", "pair --ttl"]));
   });
 
   it("names the Seira tunnel address in the help once that service is live, unless SEIRA_CONTROL_PLANE_URL is set", () => {

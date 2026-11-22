@@ -37,9 +37,10 @@ seira doctor --url https://seira.example.com --token-file ~/.seira-token
 
 `connect` also takes the whole link the server printed
 (`https://seira.example.com/pair#code=…`), so `--code` can be left out then.
-Make the pairing code on the server with `seira pair` (add
+Make the pairing code on the server with `seira pair --computer` (add
 `--client --ttl 24h` for a chat-only code that stays open up to a day; a code
-works once). On this
+works once). A plain `seira pair` code is for a phone or a browser, and a
+token from it gets a phone's limits. On this
 computer's own server, `connect` makes the code itself (`--client` gives a
 token that can chat but not change settings). The token goes to a file only
 you can read, and is never printed. Pass it with `--token-file FILE` or

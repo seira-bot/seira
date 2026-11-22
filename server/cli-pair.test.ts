@@ -102,12 +102,21 @@ describe("seira pair", () => {
     expect(printed()).toContain(`Link           ${explicitOrigin}/pair#code=${code}`);
   });
 
-  it("--phone mints a chat-only code", async () => {
+  it("--phone mints a chat-only code made for a phone", async () => {
     expect(await runPair({ ...options, phone: "ios" })).toBe(0);
     const posted = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
-    expect(JSON.parse(String(posted![1]!.body))).toEqual({ scopes: ["client"] });
+    expect(JSON.parse(String(posted![1]!.body))).toEqual({ scopes: ["client"], device: "phone" });
     expect(printed()).toContain("· chat and approvals");
     expect(printed()).not.toContain("For a phone");
+  });
+
+  it("--computer mints a code made for another computer, with no phone QR", async () => {
+    expect(await runPair({ ...options, computer: true })).toBe(0);
+    const posted = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+    expect(JSON.parse(String(posted![1]!.body))).toEqual({ device: "computer" });
+    expect(printed()).toContain("· everything");
+    expect(printed()).toContain(`seira connect ${advertisedOrigin}/pair#code=${code} --out FILE`);
+    expect(printed()).not.toMatch(/[▀▄█]/);
   });
 
   it("still prints the code when the address answers as another server, and says what to fix", async () => {
