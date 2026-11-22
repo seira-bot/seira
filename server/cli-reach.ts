@@ -3,6 +3,7 @@
 import { allowedServerOrigin, isLoopbackHost } from "../electron/server-address.mjs";
 import { reachableAddresses, type ReachableAddresses } from "./lan-address.ts";
 import { sentWireName } from "../electron/phone-wire-names.mjs";
+import { tailnetOrigin } from "../electron/tailnet.mjs";
 import { controlPlaneProblem } from "./tunnel.ts";
 
 export type Route = "public-url" | "domain" | "tunnel" | "tailscale" | "lan";
@@ -30,7 +31,9 @@ export function lanProblem(addresses: ReachableAddresses = reachableAddresses())
   return addresses.lan.length ? null : "--lan: this machine has no private network address, so --lan would reach nobody. Use --public-url, --domain or --tailscale.";
 }
 
-export type ReachCheck = { ok: true; at: number } | { ok: false; kind: "other-server" | "unreachable"; reason?: string };
+export type ReachCheck = { ok: true; at: number } | { ok: false; kind: "other-server" | "unreachable" | "certificate"; reason?: string };
+
+const CERTIFICATE_ERROR = /CERT|SELF_SIGNED|UNABLE_TO_VERIFY|UNABLE_TO_GET_ISSUER/;
 
 /** Whether `origin` answers with this server's own descriptor; never sends a code or a credential. */
 export async function checkReach(port: number, origin: string, fetchImpl: typeof fetch = fetch, now = Date.now): Promise<ReachCheck> {
@@ -43,6 +46,7 @@ export async function checkReach(port: number, origin: string, fetchImpl: typeof
     return remote?.environmentId ? { ok: false, kind: "other-server" } : { ok: false, kind: "unreachable", reason: `HTTP ${response.status}` };
   } catch (error) {
     const code = (error as { cause?: { code?: string } })?.cause?.code;
+    if (code && CERTIFICATE_ERROR.test(code)) return { ok: false, kind: "certificate" };
     return { ok: false, kind: "unreachable", reason: code === "ECONNREFUSED" ? "connection refused" : code === "ENOTFOUND" ? "no such name yet" : code ?? "no answer" };
   }
 }
@@ -69,12 +73,30 @@ const NOTE: Record<Route, string> = {
   lan: "this network only, not encrypted",
 };
 
+const isTailnetName = (origin: string) => new URL(origin).hostname.endsWith(".ts.net");
+const originPort = (origin: string) => new URL(origin).port || (origin.startsWith("https:") ? "443" : "80");
+
+/** The first IPv4 tailnet address, else the first address of any kind. */
+function tailnetAddressUrl(addresses: string[], port: number): string | null {
+  const address = addresses.find((value) => !value.includes(":")) ?? addresses[0];
+  return address ? tailnetOrigin(address, port) : null;
+}
+
 /** The Reach line (and its fix, when the address doesn't answer as this server). `check` is absent for the LAN. */
-export function reachLines(route: Route, origin: string, port: number, prefix: string, check?: ReachCheck): string[] {
+export function reachLines(route: Route, origin: string, port: number, prefix: string, check?: ReachCheck, tailnetAddresses: string[] = []): string[] {
   if (!check) return [`Reach    ${origin}   ${NOTE[route]}`.trimEnd()];
-  if (check.ok) return [`Reach    ${origin}   ✓ answers as this server (${clock(check.at)})${NOTE[route] ? ` · ${NOTE[route]}` : ""}`];
-  if (check.kind === "other-server") return [`Reach    ✗ ${origin} answers as a different server.`, `           Check your tunnel or proxy points at this machine's port ${port}.`];
+  const byAddress = route === "tailscale" && origin.startsWith("http:") ? tailnetAddressUrl(tailnetAddresses, port) : null;
+  const address = byAddress ? [`           By address: ${byAddress}`] : [];
+  const tailnetName = route === "tailscale" && isTailnetName(origin);
+  if (check.ok) return [`Reach    ${origin}   ✓ answers as this server (${clock(check.at)})${NOTE[route] ? ` · ${NOTE[route]}` : ""}${tailnetName ? " · checked from this server; other devices need MagicDNS on" : ""}`, ...address];
+  if (check.kind === "certificate") return [`Reach    ✗ ${origin} answers with a certificate that is not this server's.`, `           Another program answers on this address with its own certificate. Find it with: ss -ltnp 'sport = :${originPort(origin)}'`];
+  if (check.kind === "other-server") {
+    return [`Reach    ✗ ${origin} answers as a different server.`, route === "tailscale"
+      ? "           Another Seira server uses this tailnet address. Stop it, or see what it serves with: tailscale serve status"
+      : `           Check your tunnel or proxy points at this machine's port ${port}.`];
+  }
   if (route === "domain") return [`Reach    … ${origin} doesn't answer yet (${check.reason ?? "no answer"}).`, "           Check the domain's DNS points at this machine and ports 80 and 443 are open; the certificate follows."];
+  if (route === "tailscale") return [`Reach    ✗ ${origin} doesn't reach this server (${check.reason ?? "no answer"}).`, `           Check that Tailscale is connected on this machine and that MagicDNS is on, then run: ${prefix} status`, ...address];
   return [`Reach    ✗ ${origin} doesn't reach this server (${check.reason ?? "no answer"}).`, `           Point your tunnel or proxy at http://127.0.0.1:${port} (on another machine: add --lan and use this machine's address), then run: ${prefix} status`];
 }
 

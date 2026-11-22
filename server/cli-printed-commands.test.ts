@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { parseArgs } from "./cli.ts";
 import { browserSignInLines, formatSessions, pairingBlock } from "./cli-pairing.ts";
+import { laptopLines } from "./cli-devices.ts";
 import { noRouteLines, reachLines } from "./cli-reach.ts";
 import { HEADLESS_VERB_NAMES, usage } from "./cli-usage.ts";
 
@@ -38,6 +39,8 @@ describe("printed commands", () => {
     pairingBlock({ code: "ABCD-EFGH-JKLM", expiresAt: now + 600_000, chatOnly: false, computer: true, link: "https://seira.example.com/pair#code=ABCD-EFGH-JKLM", prefix: "seira", now }),
     noRouteLines(8799, "seira").join("\n"),
     reachLines("public-url", "https://seira.example.com", 8799, "seira", { ok: false, kind: "unreachable", reason: "connection refused" }).join("\n"),
+    laptopLines({ port: 8799, user: "alice", host: "box", prefix: "seira" }).join("\n"),
+    reachLines("tailscale", "https://mini.tail1234.ts.net", 8799, "seira", { ok: false, kind: "unreachable", reason: "connection refused" }).join("\n"),
     browserSignInLines("http://127.0.0.1:8799/pair#code=X", "X", now),
     formatSessions([{ id: "a1", label: "phone", scopes: ["client"], lastSeenAt: now, expiresAt: now }], now),
   ];

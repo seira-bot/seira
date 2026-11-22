@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { classifyTailscaleStderr, clearLeftoverTailscaleServe, explainTailscaleFailure, parseTailscaleStatus, tailnetListenFallback, tailscaleMarker, tailscaleServe, type TailscaleStatus } from "./tailscale.ts";
+import { classifyTailscaleStderr, clearLeftoverTailscaleServe, explainTailscaleFailure, parseTailscaleStatus, pickTailscaleHttpsPort, tailnetListenFallback, tailscaleHttpsProblem, tailscaleMarker, tailscaleServe, type TailscaleStatus } from "./tailscale.ts";
 
 describe("tailscale helpers", () => {
   it("reads the MagicDNS name, addresses and state from status --json", () => {
@@ -140,5 +140,44 @@ describe("serve --tailscale", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("the tailnet HTTPS port", () => {
+  it("is 443, or 8443 with one line that says so when another program holds 443", () => {
+    expect(pickTailscaleHttpsPort([22, 8799])).toEqual({ port: 443, line: null });
+    expect(pickTailscaleHttpsPort(new Set([22, 443]))).toEqual({ port: 8443, line: expect.stringContaining("port 8443") });
+    expect(pickTailscaleHttpsPort([443])?.line).toContain("port 443 is in use by another program");
+  });
+
+  it("stays 443 when 8443 is taken too, so Tailscale reports the clash", () => {
+    expect(pickTailscaleHttpsPort([443, 8443])).toEqual({ port: 443, line: null });
+  });
+
+  it("gives the phone origin the new port", async () => {
+    const status: TailscaleStatus = { cli: "/usr/bin/tailscale", dnsName: "mini.tail1234.ts.net", addresses: [], backendState: "Running", httpsEnabled: true };
+    const dir = mkdtempSync(join(tmpdir(), "seira-ts-"));
+    try {
+      const calls: string[][] = [];
+      const spawnImpl = ((_cli: string, args: string[]) => {
+        calls.push(args);
+        return Object.assign(new EventEmitter(), { stderr: new EventEmitter(), kill() {} });
+      }) as never;
+      const served = await tailscaleServe(status, 8799, { dataDir: dir, httpsPort: pickTailscaleHttpsPort([443]).port, settleMs: 20, spawnImpl });
+      expect("origin" in served && served.origin).toBe("https://mini.tail1234.ts.net:8443");
+      expect(calls).toEqual([["serve", "--https=8443", "http://127.0.0.1:8799"]]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("why a tailnet cannot give an HTTPS address", () => {
+  const status: TailscaleStatus = { cli: "t", dnsName: "mini.tail1234.ts.net", addresses: [], backendState: "Running", httpsEnabled: false };
+
+  it("names the admin page when certificates are off, and nothing when they are on", async () => {
+    expect(await tailscaleHttpsProblem(async () => ({ status }))).toContain("login.tailscale.com/admin/dns");
+    expect(await tailscaleHttpsProblem(async () => ({ status: { ...status, httpsEnabled: true } }))).toBeNull();
+    expect(await tailscaleHttpsProblem(async () => ({ failure: "not-logged-in" }))).toContain("not signed in");
   });
 });

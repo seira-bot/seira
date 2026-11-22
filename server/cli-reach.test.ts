@@ -59,7 +59,42 @@ describe("the Reach line", () => {
     ]);
     expect(reachLines("public-url", "https://seira.example.com", 8799, "seira", { ok: false, kind: "other-server" })[0]).toContain("answers as a different server");
     expect(reachLines("lan", "http://192.168.1.20:8799", 8799, "seira")).toEqual(["Reach    http://192.168.1.20:8799   this network only, not encrypted"]);
-    expect(reachLines("tailscale", "https://mini.tail1234.ts.net", 8799, "seira", { ok: true, at: Date.parse("2026-11-07T11:04:00") })[0]).toMatch(/✓ answers as this server \(.+\) · your tailnet$/);
+    expect(reachLines("tailscale", "https://mini.tail1234.ts.net", 8799, "seira", { ok: true, at: Date.parse("2026-11-07T11:04:00") })[0]).toMatch(/✓ answers as this server \(.+\) · your tailnet · checked from this server; other devices need MagicDNS on$/);
+  });
+
+  it("tells a certificate error from a closed port, and names the command that finds the other program", async () => {
+    const wrong = fetching(() => { throw Object.assign(new TypeError("fetch failed"), { cause: { code: "ERR_TLS_CERT_ALTNAME_INVALID" } }); });
+    const result = await checkReach(8799, "https://mini.tail1234.ts.net", wrong);
+    expect(result).toEqual({ ok: false, kind: "certificate" });
+    const lines = reachLines("tailscale", "https://mini.tail1234.ts.net", 8799, "seira", result).join("\n");
+    expect(lines).toContain("another program answers on this address with its own certificate".replace("another", "Another"));
+    expect(lines).toContain("ss -ltnp 'sport = :443'");
+    expect(lines).not.toContain("ERR_TLS");
+    for (const code of ["DEPTH_ZERO_SELF_SIGNED_CERT", "SELF_SIGNED_CERT_IN_CHAIN", "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "CERT_HAS_EXPIRED"]) {
+      const failing = fetching(() => { throw Object.assign(new TypeError("fetch failed"), { cause: { code } }); });
+      expect((await checkReach(8799, "https://x.example", failing)).ok === false && (await checkReach(8799, "https://x.example", failing))).toMatchObject({ kind: "certificate" });
+    }
+    expect(reachLines("tailscale", "https://mini.tail1234.ts.net:8443", 8799, "seira", result).join("\n")).toContain("sport = :8443");
+  });
+
+  it("says a tailnet name was checked from this server, and what other devices need", () => {
+    const line = reachLines("tailscale", "https://mini.tail1234.ts.net", 8799, "seira", { ok: true, at: 1 })[0];
+    expect(line).toContain("checked from this server; other devices need MagicDNS on");
+    expect(reachLines("public-url", "https://seira.example.com", 8799, "seira", { ok: true, at: 1 })[0]).not.toContain("MagicDNS");
+  });
+
+  it("prints the tailnet address while the server listens on the tailnet itself, and not behind tailscale serve", () => {
+    const listening = reachLines("tailscale", "http://mini.tail1234.ts.net:8799", 8799, "seira", { ok: true, at: 1 }, ["fd7a:115c:a1e0::7", "100.64.0.1"]);
+    expect(listening[1]).toContain("http://100.64.0.1:8799");
+    expect(reachLines("tailscale", "https://mini.tail1234.ts.net", 8799, "seira", { ok: true, at: 1 }, ["100.64.0.1"])).toHaveLength(1);
+  });
+
+  it("gives a Tailscale fix for a Tailscale route and a tunnel fix for the rest", () => {
+    const miss = { ok: false, kind: "unreachable", reason: "connection refused" } as const;
+    expect(reachLines("tailscale", "https://mini.tail1234.ts.net", 8799, "seira", miss).join("\n")).not.toContain("tunnel or proxy");
+    expect(reachLines("tailscale", "https://mini.tail1234.ts.net", 8799, "seira", miss).join("\n")).toContain("Tailscale is connected");
+    expect(reachLines("public-url", "https://seira.example.com", 8799, "seira", miss).join("\n")).toContain("tunnel or proxy");
+    expect(reachLines("tailscale", "https://mini.tail1234.ts.net", 8799, "seira", { ok: false, kind: "other-server" }).join("\n")).not.toContain("tunnel or proxy");
   });
 
   it("waits a while for a tunnel or certificate, then gives up on its budget", async () => {

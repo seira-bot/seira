@@ -35,10 +35,12 @@ import { runConfigCli } from "./config-cli.ts";
 import { runFleetCommand, type FleetInput } from "./fleet-cli.ts";
 import { startFleetAgent } from "./fleet-agent.ts"; import { fleetLayout } from "./fleet.ts";
 import { migrateBeforeFirstWrite } from "./cli-data-move.ts";
-import { phoneRoutesFromEnv } from "./phone-routes.ts"; import { clearLeftoverTailscaleServe, explainTailscaleFailure, tailnetListenFallback, tailscaleServe, tailscaleStatus, type TailscaleStatus } from "./tailscale.ts";
+import { phoneRoutesFromEnv } from "./phone-routes.ts"; import { clearLeftoverTailscaleServe, explainTailscaleFailure, pickTailscaleHttpsPort, tailnetListenFallback, tailscaleHttpsProblem, tailscaleServe, tailscaleStatus, type TailscaleStatus } from "./tailscale.ts";
+import { listeningPorts, systemProbe } from "./headless/host-doctor.ts";
+import { laptopLinesHere } from "./cli-devices.ts";
 import { defaultSetupIo, SetupCancelled, type SetupIo } from "./cli-prompts.ts";
 import { HEADLESS_VERB_NAMES, usage } from "./cli-usage.ts";
-import { normalizePhoneOrigin, phonePairingInstructions, runPhoneSetup } from "./cli-phone-setup.ts";
+import { normalizePhoneOrigin, phoneNotReadyLines, phonePairingInstructions, runPhoneSetup } from "./cli-phone-setup.ts";
 import { browserSignInLines, desktopOwnedRefusal, formatSessions, pairingBlock, RELAY_NOT_WITH_TUNNEL, relayPairingBlock, showRelayPairing } from "./cli-pairing.ts";
 import { cliCommand, cliPrefix } from "./cli-invocation.ts";
 import { CODE_ATTEMPTS, readCodeLine, stdinLoginEvents, type LoginEvents } from "./cli-login-events.ts";
@@ -323,12 +325,11 @@ function startupPreferences(options: CliOptions): NonNullable<AppConfig["cliStar
   };
 }
 
-async function showPhonePairing(options: CliOptions, origin: string | undefined, log: (line: string) => void): Promise<boolean> {
+async function showPhonePairing(options: CliOptions, origin: string | undefined, log: (line: string) => void, tailscaleWhy: string | null = null): Promise<boolean> {
   if (options.relay) return showRelayPairing({ tty: process.stdout.isTTY === true, status: async () => (await api(options.port, "/api/auth/pairing")).body?.relay, mint: () => mintPairing(options.port, { client: true, label: options.label ?? (options.phone === "android" ? "Android" : "iPhone / iPad"), phone: options.phone ?? "ios" }), log, prefix: cliPrefix() });
   const ready = !!origin && await verifyPhoneEndpoint(options.port, origin);
   if (!ready) {
-    log("Phone access is not reachable yet. Seira is ready on this computer; no phone pairing code was created.");
-    log(`Check the HTTPS connection, then run ${cliCommand("pair")} again with the same --data-dir and --port.`);
+    for (const line of phoneNotReadyLines(tailscaleWhy, cliCommand("pair"))) log(line);
     return false;
   }
   for (const line of phonePairingInstructions(options.phone ?? "ios", { origin: origin!, ready })) log(line);
@@ -700,6 +701,7 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
   let logPath: string | undefined;
   let logFd: number | undefined;
   let tailscaleShare: { origin: string; stop(): Promise<void> } | null = null;
+  let tailscaleWhy: string | null = null;
   let startupCancelled = false;
   const cancelStartup = () => { startupCancelled = true; };
   process.on("SIGINT", cancelStartup);
@@ -714,12 +716,15 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
       log("\nStarting your workspace…");
     }
     if (tailscale) {
-      const served = await tailscaleServe(tailscale, options.port, { dataDir: options.dataDir, otherServer: answersAsSeira });
+      const httpsPort = pickTailscaleHttpsPort(listeningPorts(systemProbe()));
+      const served = await tailscaleServe(tailscale, options.port, { dataDir: options.dataDir, httpsPort: httpsPort.port, otherServer: answersAsSeira });
       const listening = "failure" in served ? tailnetListenFallback(served.failure, tailscale, options.port) : null;
+      if (listening && "failure" in served) tailscaleWhy = explainTailscaleFailure(served.failure);
+      else if (httpsPort.line) log(httpsPort.line);
       tailscaleShare = "failure" in served ? listening && { origin: listening.origin, stop: async () => {} } : served;
       if (startupCancelled || !tailscaleShare) throw startupCancelled ? new SetupCancelled() : new Error(`--tailscale: ${explainTailscaleFailure("failure" in served ? served.failure : "unknown")}`);
       Object.assign(env, listening?.env); if (plan) env.SEIRA_PHONE_ROUTES = [tailscaleShare.origin, ...phoneRoutesFromEnv(process.env)].join(","); else publicUrl = tailscaleShare.origin;
-      log(listening?.line ?? `tailscale: serving https://${tailscale.dnsName} → http://127.0.0.1:${options.port} (only your tailnet can reach it)`);
+      log(listening?.line ?? `tailscale: serving ${tailscaleShare.origin} → http://127.0.0.1:${options.port} (only your tailnet can reach it)`);
     }
     if (startupCancelled) throw new SetupCancelled();
     if (publicUrl) env.SEIRA_PUBLIC_URL = publicUrl;
@@ -832,11 +837,11 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
       log(describeBrowserEngine(browserEngineStatus({ dataDir: options.dataDir })));
     }
     const reach = route && origin && route !== "lan" ? await waitForReach(options.port, origin, route === "public-url" ? 3_000 : 15_000) : undefined;
-    if (route && origin) for (const line of reachLines(route, origin, options.port, prefix, reach)) log(line);
+    if (route && origin) for (const line of reachLines(route, origin, options.port, prefix, reach, tailscale?.addresses)) log(line);
     const interactive = process.stdout.isTTY === true;
     if (options.pair && (options.phone || options.relay)) {
       log("");
-      if (!stopping && exited === null) await showPhonePairing(options, publicUrl, log).catch((error: unknown) => log(`no pairing code: ${message(error)}`));
+      if (!stopping && exited === null) await showPhonePairing(options, publicUrl, log, tailscaleWhy).catch((error: unknown) => log(`no pairing code: ${message(error)}`));
     } else if (options.pair && (options.guided || ((route || serviceTrust) && interactive))) {
       log("");
       try {
@@ -852,6 +857,7 @@ export async function runServe(options: CliOptions, log: (line: string) => void 
       log(`Get a pairing code: ${prefix} pair`);
     }
     if (serviceTrust && !(options.pair && interactive)) log(`This shared server takes no pairing commands from this machine. Let people sign in with their email: ${prefix} access add you@example.com`);
+    if (interactive && !options.guided) for (const line of laptopLinesHere(options.port, prefix)) log(line);
     if (interactive && !options.guided) log(`New code later   ${prefix} pair\nStop with Ctrl+C`);
     if (options.guided) log(`\nKeep this terminal open while using your bots. Ctrl+C stops the server, not your saved work.\nNext time: ${prefix} · Change AI or phone setup: ${prefix} setup · Pair another device: ${prefix} pair`);
     return await childExit;
@@ -917,6 +923,7 @@ export async function runOnboardingCommand(
     if (interactive && options.pair && !options.local && (options.command === "setup" || !saved)) {
       io.log("\nOne optional step: connect your phone. You can skip this and start chatting here.");
       const result = await (flow.phoneSetup ?? runPhoneSetup)(launch, prompts, {
+        tailscaleProblem: tailscaleHttpsProblem,
         accountReady: (value) => !!describeTunnelAccount(createTunnelAccount({ dataDir: value.dataDir, version: reportableServerVersion() }).credentials.read()).email,
         login: (value, ui) => runLogin(value, {
           log: ui.log, error: ui.log,

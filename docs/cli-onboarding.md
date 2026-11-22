@@ -37,7 +37,7 @@ A phone cannot connect to this computer's `localhost` address. The harness also 
 
 Choose one connection method:
 
-- **Existing Tailscale:** both computer and phone must already be signed in to the same tailnet, with HTTPS certificates enabled. Setup asks before enabling HTTPS serving to that tailnet; it does not install or sign in to Tailscale for you.
+- **Existing Tailscale:** both computer and phone must already be signed in to the same tailnet, with HTTPS certificates enabled. Setup checks the tailnet for HTTPS certificates and, if they are off, shows the admin link that turns them on. It asks before enabling HTTPS serving to that tailnet. It does not install or sign in to Tailscale for you. If another program uses port 443, the tailnet address uses port 8443 and the server prints one line that says so.
 - **Existing HTTPS address (advanced):** supply the origin of a reverse proxy you already configured, such as `https://seira.example.com`. Your own Cloudflare Tunnel works the same way: point it at `http://127.0.0.1:8799`. Do not paste a password, path, query, or pairing code. Entering an address does not create the proxy or open a LAN listener.
 
 After the connection is ready:
@@ -47,7 +47,9 @@ After the connection is ready:
 
 Choose **Connect** on the phone. Scanning alone is not a successful pairing. The code is private, single-use, and works for 10 minutes. Guided phone pairing grants client access for chat and approvals, not settings or pairing administration.
 
-If the workspace starts but its HTTPS check fails, the local workspace remains usable and no phone code is created. Fix the connection and run `seira pair` in another terminal to try again. A missing Tailscale prerequisite can prevent startup; follow the printed error, or use `seira --local`. To add phone access after skipping it, stop the server, run `seira setup`, then start it again.
+If the workspace starts but its HTTPS check fails, the local workspace remains usable and no phone code is created. Fix the connection and run `seira pair` in another terminal to try again. A missing Tailscale prerequisite can prevent startup; follow the printed error, or use `seira --local`. To reach the server from a laptop that has no address for it, run the `ssh -L` line that `serve` prints, for example `ssh -L 8799:127.0.0.1:8799 you@your-server`. Then run `seira pair` on the server and open the Browser on this machine link on the laptop.
+
+To add phone access after skipping it, stop the server, run `seira setup`, then start it again.
 
 ## Commands
 

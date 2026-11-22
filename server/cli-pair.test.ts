@@ -15,6 +15,7 @@ vi.mock("./cli-prompts.ts", async (original) => ({
   ...await original<typeof import("./cli-prompts.ts")>(), defaultSetupIo: () => mocks.ui,
 }));
 vi.mock("./tailscale.ts", () => ({
+  pickTailscaleHttpsPort: () => ({ port: 443, line: null }), tailscaleHttpsProblem: async () => null,
   tailscaleStatus: mocks.tailscaleStatus,
   tailscaleServe: vi.fn(), clearLeftoverTailscaleServe: vi.fn(), explainTailscaleFailure: vi.fn(),
 }));
