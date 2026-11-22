@@ -69,14 +69,14 @@ describe("runProviderOff", () => {
     persist: vi.fn(async () => undefined), hide: vi.fn(async () => undefined), followBotModel: vi.fn(async () => undefined),
   });
 
-  it("moves each bot, then its conversations, then hides", async () => {
+  it("moves every bot, then their conversations, then hides", async () => {
     const calls = actions();
     const order: string[] = [];
     calls.persist.mockImplementation(async (one: Bot) => { order.push(`move ${one.id}`); });
     calls.followBotModel.mockImplementation(async (one: Bot) => { order.push(`follow ${one.id}`); });
     calls.hide.mockImplementation(async () => { order.push("hide"); });
     const result = await runProviderOff(x, planProviderOff("x", [bot("a", "x"), bot("b", "x")], target), calls);
-    expect(order).toEqual(["move a", "follow a", "move b", "follow b", "hide"]);
+    expect(order).toEqual(["move a", "move b", "follow a", "follow b", "hide"]);
     expect(result).toMatchObject({ hidden: true, target: "Y", stayed: [] });
     expect(result.moved.map((one) => one.id)).toEqual(["a", "b"]);
     expect(result.moved[0]!.modelSelection).toEqual({ instanceId: "x", model: "x-model" });

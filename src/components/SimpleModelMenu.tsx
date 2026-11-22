@@ -310,7 +310,7 @@ export function SimpleModelMenu(props: SimpleModelMenuProps) {
                 <div id={labelId} className={cn(MENU_LABEL, expanded && "sticky top-0 z-[1] -mx-1.5 bg-menu px-3.5")}>
                   <Gutter><InstanceProviderMark instance={group.instance} size={14} subtle /></Gutter>
                   <span className={cn("min-w-0 flex-1 truncate", dim)}>{group.label}</span>
-                  <ProviderMenu instance={group.instance} compact />
+                  <ProviderMenu instance={group.instance} name={group.label} compact />
                 </div>
                 {group.note && <p className={cn(MENU_NOTE, "pl-8 pt-0")}>{group.note}</p>}
                 <div className={cn("flex flex-col gap-0.5", dim)}><GroupBody group={group} props={props} /></div>

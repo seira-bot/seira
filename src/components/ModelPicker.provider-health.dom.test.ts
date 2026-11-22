@@ -76,15 +76,21 @@ describe("the model picker's provider rail", () => {
     expect(heading.compareDocumentPosition(unusable) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("lists a provider that needs setup, and one at its usage limit, the same way", async () => {
+  it("lists a provider at its usage limit the same way", async () => {
     rememberLimits({ checkedAt: 1, engines: [{ engine: "grok", name: "Grok", driver: "grok", window: "5-hour", usedPercent: 100, resetsAt: null, blocked: true, windows: [] }] });
-    fixture.instances = [grok(), cursor({ state: "unavailable", reason: "CLI not found" }), codex()];
+    fixture.instances = [grok(), codex()];
     await open(bot("codex"));
     const unusable = [...document.querySelectorAll<HTMLButtonElement>("[data-rail-unusable]")];
-    expect(unusable.map((button) => button.title)).toEqual([
-      `Grok · ${t("limits.atLimit", { engine: "Grok" })}`,
-      `Cursor · ${t("model.setupRequired")}`,
-    ]);
+    expect(unusable.map((button) => button.title)).toEqual([`Grok · ${t("limits.atLimit", { engine: "Grok" })}`]);
+    expect(railButtons().at(-1)).toBe(unusable[0]);
+  });
+
+  it("lists the provider the bot uses last when its CLI is missing", async () => {
+    fixture.instances = [cursor({ state: "unavailable", reason: "CLI not found" }), codex()];
+    await open(bot("cursor"));
+    const unusable = document.querySelector<HTMLButtonElement>("[data-rail-unusable]")!;
+    expect(unusable.title).toBe(`Cursor · ${t("model.setupRequired")}`);
+    expect(railButtons().at(-1)).toBe(unusable);
   });
 
   it("opens on the first provider that works when the bot's own is gone, and never on one that does not", async () => {
@@ -132,7 +138,7 @@ describe("the provider menu", () => {
     flushSync(() => root.unmount());
     root = createRoot(host);
     fixture.advanced = false;
-    await open(bot("codex"));
+    await open(bot("grok"));
     const simple = itemsOf(menuIn(document.querySelector('[data-simple-provider="codex"]')!)!);
     expect(full).toEqual([t("engines.hide")]);
     expect(simple).toEqual(full);
@@ -142,7 +148,7 @@ describe("the provider menu", () => {
     fixture.advanced = false;
     fixture.instances = [codex(), grok()];
     fixture.bots = [bot("codex")];
-    await open(bot("codex"));
+    await open(bot("grok"));
     const button = menuIn(document.querySelector('[data-simple-provider="codex"]')!)!;
     itemsOf(button);
     const menu = button.closest("[data-provider-menu]")!;

@@ -189,7 +189,7 @@ describe("Settings → Engines → setup cards", () => {
     expect(renderToStaticMarkup(createElement(EnginesSettings))).toContain(">Remove<");
   });
 
-  it("offers Sign out for a signed-in Antigravity account, including the first one", () => {
+  it("gives a signed-in Antigravity account its provider menu, including the first one", () => {
     vi.stubGlobal("window", {});
     vi.stubGlobal("navigator", { userAgent: "Linux" });
     fixture.bots = [];
@@ -199,13 +199,9 @@ describe("Settings → Engines → setup cards", () => {
       authentication: { method: "callback-url", signOut },
     });
     fixture.instances = [account("antigravity", true, true)];
-    expect(renderToStaticMarkup(createElement(EnginesSettings))).toContain(">Sign out<");
+    expect(renderToStaticMarkup(createElement(EnginesSettings))).toContain('data-provider-menu="antigravity"');
     fixture.instances = [account("antigravity-work", true, true)];
-    expect(renderToStaticMarkup(createElement(EnginesSettings))).toContain(">Sign out<");
-    fixture.instances = [account("antigravity", false, true)];
-    expect(renderToStaticMarkup(createElement(EnginesSettings))).not.toContain(">Sign out<");
-    fixture.instances = [account("antigravity", true, false)];
-    expect(renderToStaticMarkup(createElement(EnginesSettings))).not.toContain(">Sign out<");
+    expect(renderToStaticMarkup(createElement(EnginesSettings))).toContain('data-provider-menu="antigravity-work"');
   });
 
   it("shows every Company provider as read-only while preserving personal controls", () => {

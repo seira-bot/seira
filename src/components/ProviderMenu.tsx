@@ -147,9 +147,9 @@ const keyTarget = (instance: InstanceInfo) => {
   return id ? keyEntry(id).target : undefined;
 };
 
-/** One menu for a provider, wherever it is listed: Sign out, Remove key, Hide, or Move and hide. `status` also shows the
- * result of the last Hide, with Undo, under the button. */
-export function ProviderMenu({ instance, compact = false, status = false }: { instance: InstanceInfo; compact?: boolean; status?: boolean }) {
+/** One menu for a provider, wherever it is listed: Sign out, Remove key, Hide, or Move and hide. `name` is how the list
+ * names it. `status` also shows the result of the last Hide, with Undo, under the button. */
+export function ProviderMenu({ instance, name: shown, compact = false, status = false }: { instance: InstanceInfo; name?: string; compact?: boolean; status?: boolean }) {
   const { state, dispatch, refreshInstances } = useStore();
   const off = useProviderOff(instance);
   const [open, setOpen] = useState(false);
@@ -157,7 +157,7 @@ export function ProviderMenu({ instance, compact = false, status = false }: { in
   const [working, setWorking] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const name = engineDisplayName(instance);
+  const name = shown ?? engineDisplayName(instance);
   const signOut = canSignOut(instance);
   const ownApp = signsOutInOwnApp(instance);
   const target = keyTarget(instance);
