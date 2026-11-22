@@ -282,7 +282,7 @@ interface TurnMark {
  * in the same turn and, in one line, to the person. The instance is changed in place.
  */
 export function withMemoryFence(instance: ProviderInstance, options: FenceWatchOptions = {}): ProviderInstance {
-  const fence = options.fence ?? memoryFence, every = options.every ?? everyMs, log = options.log ?? ((line: string) => console.warn(`memory: ${line}`));
+  const fence: FenceView = options.fence ?? memoryFence, every = options.every ?? everyMs, log = options.log ?? ((line: string) => console.warn(`memory: ${line}`));
   const adapter = instance.adapter;
   const listeners = new Set<RuntimeEventListener>();
   const turns = new Map<string, TurnMark>();
