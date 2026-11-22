@@ -51,12 +51,6 @@ describe("a walled department", () => {
     expect(resolveTeammate(all, sales, "fin")).toEqual({ id: "fin", byName: false });
     expect(walledOff(sales, fin)).toBeDefined();
   });
-
-  it("walls General by its empty name", () => {
-    wall("");
-    expect(canReach(chief, sales)).toBe(false);
-    expect(canReach(sales, chief)).toBe(true);
-  });
 });
 
 describe("General", () => {

@@ -13,7 +13,7 @@ import { normalizeAccessEntry, withEntry, withoutEntry, type SignInLists } from 
 import { Card } from "./SettingsPrimitives";
 import { Select } from "./Select";
 import { DepartmentAccessChoice } from "./DepartmentAccessChoice";
-import { loadDepartmentChoices, saveDepartmentAccess, type DepartmentChoices } from "@/lib/department-access";
+import { grantFor, loadDepartmentChoices, saveDepartmentAccess, type DepartmentChoices } from "@/lib/department-access";
 
 export type Role = "admin" | "member";
 

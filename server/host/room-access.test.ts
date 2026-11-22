@@ -153,7 +153,7 @@ describe("roomHandoffProblem behind a department wall", () => {
     taskByThread: (botId: string, threadId: string) => threadId.startsWith(botId) ? { threadId } : undefined,
   } as unknown as Store;
   const { roomHandoffProblem } = createRoomAccess({ store });
-  const parent = { botId: "sales", groupId: "room", threadId: "room-thread-sales" };
+  const parent = { botId: "sales", groupId: "room", threadId: "room-thread" };
   const node = (botId: string) => ({ botId, groupId: "room", threadId: "room-thread" });
 
   it("refuses a hand-off from a walled bot to a bot of another department, in a room too", () => {

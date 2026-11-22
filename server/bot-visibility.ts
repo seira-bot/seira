@@ -667,7 +667,7 @@ export function frameForMember(payload: Record<string, unknown>, ctx: FrameConte
       return { ...rest, helpReason: null };
     }
     case "config":
-      return Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, narrowedHolds(key, value, visible)]));
+      return visible.everything ? payload : Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, narrowedHolds(key, value, visible)]));
     case "routine.deleted":
     case "workflow.deleted":
     case "webhook.deleted":
