@@ -3,7 +3,7 @@ import { CALL_VOICE_PREVIEW_TEXT_MAX, callSpeedWire, callVoiceCapability, isCall
 import { GEMINI_LIVE_VOICE_OPTIONS, LIVE_VOICE_OPTIONS } from "../../shared/live-call.ts";
 import { OPENAI_VOICES } from "../../shared/openai-voice.ts";
 import type { AppConfig } from "../config.ts";
-import { usableLiveKey } from "../live-config.ts";
+import { liveKeyTarget, usableLiveKey } from "../live-config.ts";
 import { redactSecretsInText } from "../redact.ts";
 import * as gemini from "../tts/gemini.ts";
 import * as openai from "../tts/openai.ts";
@@ -41,7 +41,9 @@ export function createCallVoicePreviewRoutes(deps: CallVoicePreviewDeps): RouteH
     try {
       let audio: { bytes: Uint8Array; mime: string };
       if (GPT_LIVE.has(provider)) {
-        const key = cfg.openai?.key?.trim() || usableLiveKey(cfg.live);
+        // A Live key saved for Azure or a custom gateway never goes to the OpenAI host.
+        const liveKey = provider === "openai" && liveKeyTarget(cfg.live) === "openai" ? usableLiveKey(cfg.live) : undefined;
+        const key = cfg.openai?.key?.trim() || liveKey;
         if (!key || !OPENAI_VOICES.some((id) => id === voice)) return json(res, 404, { error: "no sample for this voice" });
         audio = await openai.synthesize(spoken, voice, key, controller.signal, undefined, speed === undefined ? undefined : callSpeedWire(speed, callVoiceCapability({ mode: "live", provider }).speed));
       } else {

@@ -240,6 +240,19 @@ describe("POST /api/call/voice-preview", () => {
     expect((await call({ provider: "openai", voice: "marin", text: "Hi" }, {} as AppConfig)).answers[0]![0]).toBe(404);
     expect((await call({ provider: "openai", voice: "gleam", text: "Hi" }, { openai: { key: "k" } } as AppConfig)).answers[0]![0]).toBe(404);
   });
+  it("never sends a Live key saved for Azure or a custom gateway to OpenAI", async () => {
+    stubFetch(mp3);
+    const spy = vi.spyOn(openai, "synthesize");
+    for (const provider of ["azure", "custom"] as const) {
+      const cfg = { live: { provider, key: "live-secret", keyFor: `${provider}:gw.example`, [provider === "azure" ? "azureEndpoint" : "customEndpoint"]: `https://gw.example` } } as AppConfig;
+      expect((await call({ provider, voice: "cedar", text: "Hi" }, cfg)).answers[0]![0]).toBe(404);
+    }
+    const openaiLive = { live: { key: "live-secret", keyFor: "openai" } } as AppConfig;
+    expect((await call({ provider: "azure", voice: "cedar", text: "Hi" }, openaiLive)).answers[0]![0]).toBe(404);
+    expect(spy).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
   it("speaks a Gemini voice and answers audio that is never cached", async () => {
     const wav = Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WAVE"), Buffer.alloc(40)]);
     stubFetch(() => new Response(JSON.stringify({ steps: [{ type: "model_output", content: [{ type: "audio", data: wav.toString("base64"), mime_type: "audio/wav" }] }] }), { status: 200 }));
