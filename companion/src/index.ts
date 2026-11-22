@@ -36,6 +36,7 @@ import { gzipTunnelReplies } from "./tunnel-gzip.ts";
 import { normalizedPhoneSecretPublicKey } from "./phone-secret-key.ts";
 import { machineNameFromConfig } from "./machine-name.ts";
 import { sentWireName } from "./wire-names.ts";
+import { createWorkspaces } from "./workspaces.ts";
 
 // Only Electron supplies this port; Electron children fail closed until initialized.
 const parentPort = (process as NodeJS.Process & {
@@ -44,6 +45,7 @@ const parentPort = (process as NodeJS.Process & {
     postMessage(message: unknown): void;
   };
 }).parentPort;
+const workspaces = createWorkspaces({ send: (message) => parentPort?.postMessage(message) });
 let mutationToken: string | null = null;
 let controlToken = initialControlToken(process.env, Boolean(parentPort));
 let controlTokenReceived = (): void => {};
@@ -53,6 +55,7 @@ parentPort?.on("message", ({ data }) => {
   const message = data as Record<string, unknown>;
   if (message.type === "seira:companion-e2e") return void configureE2E(message);
   if (message.type === "seira:companion-e2e-redial") return void relay?.redial();
+  if (workspaces.receive(message)) return;
   if (message.type !== "seira:companion-mutation-token") return;
   if (typeof message.token === "string" && /^[A-Za-z0-9_-]{43}$/.test(message.token)) {
     mutationToken = message.token;
@@ -164,6 +167,7 @@ const proxy = createProxyHandler({
     connected: connectedDevices.open,
     e2eDescriptor: (deviceId) => e2e.descriptor(deviceId),
     e2ePaired: (context, deviceId) => e2e.paired(context, deviceId),
+    workspaces,
   });
 const e2eOrigin = createE2EOrigin((req, res) => proxy(req, res), (req, socket, head) => proxy.upgrade(req, socket, head));
 const companion = createServer((req, res) => proxy(req, res, "lan"));

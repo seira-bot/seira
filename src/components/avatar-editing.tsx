@@ -11,9 +11,7 @@ import {
   botAvatarUrlFromStoredPath,
   clampAvatarFocus,
   clampAvatarZoom,
-  type BotAvatarCrop,
 } from "../../shared/bot-avatar";
-import { DEFAULT_BOT_BODY } from "../../shared/bot-body";
 import { BotAvatar } from "./Avatar";
 import { useBotEditor } from "./bot-settings/BotEditorContext";
 
@@ -21,14 +19,7 @@ export type AvatarPatch = Partial<
   Pick<Bot, "avatarCrop" | "avatarUrl" | "avatarZoom" | "avatarFocusX" | "avatarFocusY" | "color" | "mascotExpression" | "mascotBody" | "mascotFaceColor" | "mascotAccessories">
 >;
 
-export const RESET_MASCOT_PATCH: AvatarPatch = { avatarCrop: "mascot", color: "green", mascotExpression: null, mascotBody: DEFAULT_BOT_BODY, mascotFaceColor: null, mascotAccessories: null };
-
-export const CROP_LABEL = {
-  mascot: "Mascot",
-  circle: "Circle",
-  rounded: "Rounded",
-  square: "Square",
-} satisfies Record<BotAvatarCrop, string>;
+export const AVATAR_FILE_TYPES = "image/png,image/jpeg,image/gif,image/webp";
 
 const FRAME_SIZE = 168;
 
@@ -139,8 +130,6 @@ export function useAvatarImage(bot: Bot, onPatch: (patch: AvatarPatch) => void) 
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const crop = bot.avatarCrop ?? "mascot";
-  const cropRef = useRef(crop);
-  cropRef.current = crop;
   const busy = uploading || generating;
 
   const upload = async (file: File | undefined) => {
@@ -151,10 +140,9 @@ export function useAvatarImage(bot: Bot, onPatch: (patch: AvatarPatch) => void) 
       const saved = uploadAvatar ? null : await imageAttachmentFromFile(file);
       const avatarUrl = uploadAvatar ? await uploadAvatar(file) : saved ? botAvatarUrlFromStoredPath(saved.path) : null;
       if (!avatarUrl) throw new Error(t("botIdentity.uploadUnusable"));
-      const latestCrop = cropRef.current;
       onPatch({
         avatarUrl,
-        avatarCrop: latestCrop === "mascot" ? "circle" : latestCrop,
+        avatarCrop: "circle",
         avatarZoom: AVATAR_ZOOM_MIN,
         avatarFocusX: AVATAR_FOCUS_CENTER,
         avatarFocusY: AVATAR_FOCUS_CENTER,
@@ -185,20 +173,12 @@ export function useAvatarImage(bot: Bot, onPatch: (patch: AvatarPatch) => void) 
     try {
       // Commit debounced profile edits first, then feed the generated avatar back through the same serialized mutation
       // lane as upload and remove.
-      const cropAtStart = cropRef.current;
       await flushBotPatches(bot.id);
-      const result: { avatarUrl: string; bot: Bot } = await api(`/api/bots/${bot.id}/avatar/generate`, {
+      const result: { avatarUrl: string } = await api(`/api/bots/${bot.id}/avatar/generate`, {
         method: "POST",
         body: JSON.stringify({ prompt: direction.trim() }),
       });
-      const latestCrop = cropRef.current;
-      onPatch({
-        avatarUrl: result.avatarUrl,
-        avatarCrop:
-          latestCrop === cropAtStart
-            ? (result.bot.avatarCrop ?? "circle")
-            : latestCrop,
-      });
+      onPatch({ avatarUrl: result.avatarUrl, avatarCrop: "circle" });
     } catch (generateError) {
       setError(generateError instanceof Error ? generateError.message : String(generateError));
     } finally {
