@@ -326,6 +326,10 @@ export interface WireBot extends DefaultBotFields, BotAccessFields, FolderAccess
   /** This bot's own voice id, so a room of bots doesn't sound like one person. */
   voice?: string;
   /** This bot's own Live call voice, a GPT-Live or Gemini Live voice id; absent, or not the call provider's, uses the app's. */ liveVoice?: string;
+  /** Call speech speed, 0.5–2.0; each voice provider clamps it to its own range. Absent: 1. */
+  callSpeed?: number;
+  /** Call language as a BCP-47 tag from the call language list, or "auto". Absent or "auto": the call follows the conversation. */
+  callLanguage?: string;
   /** Whether this bot may send voice notes. Absent/true = allowed; false
    * hides the tool and refuses the route even with a voice configured. */
   voiceNotes?: boolean; /** The harness speaks each reply as a voice note; absent follows the installation's `tts.everyReply`. */ voiceNoteEveryReply?: boolean;
