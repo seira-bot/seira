@@ -636,7 +636,7 @@ describe("a person's hold on the shared Local VM", () => {
     expect(await held(a.id, elsewhere)).toBe(false);
   });
 
-  it("a closing viewer's release by its open's lease, without a conversation, frees that Boat hold and leaves a phone's hold on the shared desktop", async () => {
+  it("a closing viewer's release by its open's lease, without a conversation, frees that cloud computer's hold and leaves a phone's hold on the shared desktop", async () => {
     const a = await newBot("Ada");
     const onCloud = await newTask(a.id, "cloud");
     await control(phone, witness, { action: "take", controlLeaseId: lease() });
@@ -679,30 +679,6 @@ describe("a person's hold on the shared Local VM", () => {
     await control(api, witness, { action: "take" });
     expect((await api("DELETE", `/api/bots/${cloud.id}`)).status).toBe(200);
     expect(await held(witness)).toBe(true);
-  }, 30_000);
-
-  it("a cloud bot being deleted is kept with its Boat when a person takes the shared desktop its conversation is pinned to, through another bot, while the deletion reads the cloud inventory", async () => {
-    const a = await newBot("Books", { computer: "cloud" });
-    await newTask(a.id, "vm");
-    const scope = createHash("sha256").update(readFileSync(join(home, "data", "environment-id"), "utf8").trim()).digest("hex").slice(0, 12);
-    const name = `ogb-${scope}-${a.id.slice(0, 8).replace(/[^a-z0-9]/g, "")}-${createHash("sha256").update(a.id).digest("hex").slice(0, 6)}`;
-    boatRow = { id: "bx_keptbxat", name, state: "idle" };
-    try {
-      holdBoatList = new Promise(resolve => { releaseBoat = resolve; });
-      boatListHeld = false;
-      const deleting = boatCall = api("DELETE", `/api/bots/${a.id}`);
-      await until(() => boatListHeld, Boolean);
-      await control(api, witness, { action: "take" });
-      holdBoatList = null;
-      releaseBoat();
-      const refused = await deleting;
-      expect(refused.status, JSON.stringify(refused.body)).toBe(409);
-      expect(refused.body.error).toBe("Hand back control of this bot's computer before deleting it");
-      expect((await ok("GET", "/api/bots?messages=0")).bots.some((bot: any) => bot.id === a.id)).toBe(true);
-      expect([boatRow?.id, boatCalls.includes("DELETE /sandboxes/bx_keptbxat")]).toEqual(["bx_keptbxat", false]);
-    } finally {
-      boatRow = null;
-    }
   }, 30_000);
 
   it("a phone's take of the shared desktop that nothing ever beats lapses a grace later", async () => {

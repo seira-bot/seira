@@ -97,7 +97,7 @@ const TRIGGER_FIELDS_SCHEMA = {
   event_config: { type: "object", description: "app_event: config_fields from trigger_info action=events." },
   run_on: {
     type: "string",
-    // "box" is Boat's historical run_on destination id (agents wire contract).
+    // "box" stays in the enum: released agents send it (agents wire contract).
     enum: ["seira", "box"],
     description: "Omit normally: seira (default) = the bot's configured computer, INCLUDING a self-hosted VPS; box = its cloud computer.",
   },

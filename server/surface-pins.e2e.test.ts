@@ -1,7 +1,5 @@
 // A restartable fixture home lets tests seed bots.json between boots: the sourceless pin shapes only exist on disk.
 import { spawn, type ChildProcess } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { createServer, type Server } from "node:http";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -27,9 +25,6 @@ describe("surface pin provenance against the real server", () => {
   let output = "";
   let child: ChildProcess | null = null;
   let base = "";
-  let boatServer: Server;
-  let boatApi = "";
-  let boatDown = false;
 
   const vmState = (state: Record<string, unknown> = {}) => writeFileAtomic(stateFile, JSON.stringify(state));
   const resetTurn = () => { vmState(); rmSync(dumpFile, { force: true }); rmSync(finishFile, { force: true }); };
@@ -89,7 +84,7 @@ describe("surface pin provenance against the real server", () => {
         APPDATA: join(home, "appdata"), LOCALAPPDATA: join(home, "localappdata"),
         TEMP: home, TMP: home, TMPDIR: home,
         SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), SEIRA_STATIC_DIR: ui, SEIRA_TEST_VM_STATE: stateFile,
-        SEIRA_BOAT_API: boatApi, SEIRA_USER_DATA: join(home, "user-data"), SEIRA_TEST_DESKTOP_CUA_CONNECTION: cuaDescriptor,
+        SEIRA_USER_DATA: join(home, "user-data"), SEIRA_TEST_DESKTOP_CUA_CONNECTION: cuaDescriptor,
         ...(withBrowser ? { SEIRA_AGENT_BROWSER_PATH: inertBrowser, AGENT_BROWSER_EXECUTABLE_PATH: inertBrowser } : {}),
       }, stdio: ["ignore", "pipe", "pipe"],
     });
@@ -129,18 +124,9 @@ describe("surface pin provenance against the real server", () => {
     mkdirSync(join(ui, "assets"), { recursive: true });
     writeFileSync(join(ui, "index.html"), "<title>Surface pins</title>");
     writeFileSync(join(ui, "assets", "test.css"), "body{}");
-    boatServer = createServer(async (req, res) => {
-      res.setHeader("content-type", "application/json");
-      const path = new URL(req.url ?? "/", "http://box.fixture").pathname;
-      if (boatDown && path.startsWith("/sandboxes")) { res.statusCode = 503; return res.end(JSON.stringify({ error: "Fixture Boat unavailable" })); }
-      if (path === "/sandboxes") return res.end(JSON.stringify({ sandboxes: [] }));
-      return res.end("{}");
-    });
-    await new Promise<void>(resolve => boatServer.listen(0, "127.0.0.1", resolve));
-    boatApi = `http://127.0.0.1:${(boatServer.address() as { port: number }).port}`;
     writeFileSync(join(data, "config.json"), JSON.stringify({ instances: { claude: {
       driver: "claudeAgent", config: { cli: join(ROOT, "server/testing/fake-claude-cli.ts") },
-      // The first computer call is what reaches the Boat, as with a real model.
+      // The first computer call is what claims the computer, as with a real model.
       environment: { FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_DUMP: dumpFile, FAKE_CLAUDE_SLOW_FINISH_GATE: finishFile, FAKE_CLAUDE_USES_CLOUD_COMPUTER: "1" },
     }, teammate: {
       driver: "claudeAgent", config: { cli: join(ROOT, "server/testing/fake-claude-cli.ts") },
@@ -149,10 +135,9 @@ describe("surface pin provenance against the real server", () => {
   });
   afterAll(async () => {
     await stop();
-    if (boatServer) await new Promise<void>(resolve => boatServer.close(() => resolve()));
     if (home) await removeTempDir(home);
   });
-  afterEach(async () => { await stop(); resetTurn(); boatDown = false; });
+  afterEach(async () => { await stop(); resetTurn(); });
 
   it("marks a person's thread pin as theirs and clears provenance with the pin", async () => {
     await start();
@@ -388,79 +373,6 @@ describe("surface pin provenance against the real server", () => {
     } finally {
       rmSync(cuaDescriptor, { force: true });
     }
-    await apiOk("DELETE", `/api/bots/${bot.id}`);
-    await stop();
-  });
-
-  it("clears a select_computer pin to a cloud computer that fails, and keeps a person's pin", async () => {
-    await start();
-    const { bot } = await apiOk("POST", "/api/bots", { name: "Failed place bot" });
-    const { task } = await apiOk("POST", `/api/bots/${bot.id}/tasks`, {});
-    await apiOk("PUT", "/api/config", { box: { token: "box_fixture" } });
-    const lastRow = async () => {
-      const { messages } = await apiOk("GET", `/api/threads/${task.threadId}/messages?limit=30`);
-      return String(messages.filter((message: any) => message.kind !== "digest").at(-1)?.tool?.name ?? "");
-    };
-    resetTurn();
-    await apiOk("POST", `/api/bots/${bot.id}/messages`, { text: "Open Chrome on the cloud computer.", threadId: task.threadId });
-    const sent = await dump();
-    const token = sent.mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN;
-    const selected = await fetch(base + "/api/internal/computer/select", { method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ surface: "cloud" }) });
-    expect(await selected.json()).toMatchObject({ status: "pending", surface: "cloud" });
-    boatDown = true;
-    writeFileSync(finishFile, "finish");
-    await until(() => lastRow(), row => row.startsWith("error:"));
-    await idle(bot.id, task.threadId);
-    expect(await lastRow()).toBe("error: Cloud desktops can't start right now. It isn't anything you did. This conversation is back on Auto. Send your message again.");
-    const cleared = savedTask(bot.id, task.threadId)!;
-    expect(cleared.surface).toBeUndefined();
-    expect(cleared.surfaceSource).toBeUndefined();
-    resetTurn();
-    await apiOk("POST", `/api/bots/${bot.id}/messages`, { text: "Carry on where you can.", threadId: task.threadId });
-    const next = await dump();
-    expect(mountedComputer(next)?.args ?? []).not.toContain("computer");
-    writeFileSync(finishFile, "finish");
-    await idle(bot.id, task.threadId);
-    expect(await lastRow()).not.toMatch(/^error:/);
-
-    await apiOk("PATCH", `/api/bots/${bot.id}/tasks/${task.threadId}`, { surface: "cloud" });
-    resetTurn();
-    await apiOk("POST", `/api/bots/${bot.id}/messages`, { text: "Use the cloud computer.", threadId: task.threadId });
-    await until(() => lastRow(), row => row.startsWith("error:"));
-    await idle(bot.id, task.threadId);
-    expect(await lastRow()).toBe("error: Cloud desktops can't start right now. It isn't anything you did. Clear this conversation's place in the composer to continue.");
-    expect(savedTask(bot.id, task.threadId)).toMatchObject({ surface: "cloud", surfaceSource: "user" });
-    boatDown = false;
-    await apiOk("DELETE", `/api/bots/${bot.id}`);
-    await stop();
-  });
-
-  it("never takes a relayed line's conversation for where the person writes, when select_computer continues its turn", async () => {
-    await start();
-    const { bot } = await apiOk("POST", "/api/bots", { name: "Relayed place bot" });
-    // An Ask thread, as a Slack relay's guarded send expects.
-    const { task } = await apiOk("POST", `/api/bots/${bot.id}/tasks`, { approvalMode: "ask" });
-    await apiOk("PUT", "/api/config", { box: { token: "box_fixture" } });
-    const lastRow = async () => {
-      const { messages } = await apiOk("GET", `/api/threads/${task.threadId}/messages?limit=30`);
-      return String(messages.filter((message: any) => message.kind !== "digest").at(-1)?.tool?.name ?? "");
-    };
-    resetTurn();
-    await apiOk("POST", `/api/bots/${bot.id}/messages/guarded`, {
-      threadId: task.threadId, sendId: randomUUID(), text: "Check the dashboard on the cloud computer.", expectedActiveLeafId: null,
-    });
-    const sent = await dump();
-    const token = sent.mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN;
-    const selected = await fetch(base + "/api/internal/computer/select", { method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ surface: "cloud" }) });
-    expect(await selected.json()).toMatchObject({ status: "pending", surface: "cloud" });
-    boatDown = true;
-    writeFileSync(finishFile, "finish");
-    await until(() => lastRow(), row => row.startsWith("error:"));
-    await idle(bot.id, task.threadId);
-    expect(savedTask(bot.id, task.threadId)).not.toHaveProperty("askedAt");
-    boatDown = false;
     await apiOk("DELETE", `/api/bots/${bot.id}`);
     await stop();
   });

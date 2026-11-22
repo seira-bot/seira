@@ -12,8 +12,6 @@ export interface AgentsConversation {
   bot: NonNullable<Parameters<typeof roleToolEnv>[0]> & { id: string; computer?: string; memoryEnabled?: boolean; xResearch?: boolean; toolsOff?: readonly string[] };
   /** A room's thread: rooms refuse widgets, pages and a computer pick. */
   room: boolean;
-  /** The bot works on its team's cloud computer, so it has no computer of its own to pick. */
-  teamComputer: boolean;
   /** Only bots or automation drive it (`botDrivenConversation`): no turn in it is a person's own message to pick a computer for. */
   botDriven?: boolean;
   /** `x`: a research credential is held (a treg key or a plan's); `research`: research works for it too; `appHosting`:
@@ -52,7 +50,7 @@ export function agentsServerEnv(conversation: AgentsConversation, turn: AgentsTu
     SEIRA_IMAGE_GENERATION: flag(host.imageGeneration),
     SEIRA_MEETINGS: flag(host.meetings === true && !conversation.room),
     SEIRA_APP_HOSTING: flag(host.appHosting === true),
-    SEIRA_COMPUTER_SELECTION: flag(!conversation.room && bot.computer !== "off" && !conversation.teamComputer && !conversation.botDriven),
+    SEIRA_COMPUTER_SELECTION: flag(!conversation.room && bot.computer !== "off" && !conversation.botDriven),
     SEIRA_LOCAL_VM: flag(host.localVm),
     [TOOLS_OFF_ENV]: (bot.toolsOff ?? []).join(","),
   };

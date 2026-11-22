@@ -121,7 +121,6 @@ export function createMeetingsHost(deps: MeetingsHostDeps, routeDeps: () => Meet
 
   return {
     internal: (ctx: MeetingRouteContext) => routes.internal(ctx),
-    keepsAwake: (owner: string) => meetings.keepsAwake(owner),
     /** The live card's Leave button, handled here without a turn. */
     serverPress(bot: Pick<BotRecord, "id">, threadId: string, messageId: string, action: WidgetAction, _auth: RequestAuth): "handled" | null {
       if (action.type !== LEAVE_ACTION || !action.payload || typeof action.payload !== "object" || Array.isArray(action.payload)) return null;

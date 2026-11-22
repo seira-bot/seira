@@ -57,7 +57,6 @@ const ALLOWED: ReadonlyArray<{ file: string; snippet?: string; why: string }> = 
   { file: "server/cloud-backend.ts", why: "the Boat server code, which is removed in the next change" },
   { file: "server/routes/config.ts", why: "the Boat server code, which is removed in the next change" },
   { file: "server/index.ts", snippet: "Boat account", why: "the Boat server code, which is removed in the next change" },
-  { file: "server/index.ts", snippet: "boat.dev", why: "the Boat server code, which is removed in the next change" },
   { file: "src/lib/remote-desktop.ts", snippet: "Boat account settings", why: "matches the server's own line, which goes with the Boat server code" },
   { file: "packages/phone-protocol/src/credential-request.ts", why: "the card that asks for a person's own Boat key; goes with the Boat server code" },
   { file: "server/boat-retirement.ts", why: "the one-time move off Boat names it in its own log lines" },

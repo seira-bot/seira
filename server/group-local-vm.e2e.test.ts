@@ -1,6 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createServer, type Server } from "node:http";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -28,11 +27,6 @@ let dumpFile = "";
 let finishFile = "";
 let cuaDescriptor = "";
 let stderr = "";
-let boatServer: Server;
-let boatRow: { id: string; name: string; state: string } | null = null;
-let allowBoatCreation = false;
-const boatCalls: Array<{ method: string; path: string }> = [];
-const boatPrompts: Array<Record<string, unknown>> = [];
 const vmState = (state: Record<string, unknown> = {}) => writeFileAtomic(stateFile, JSON.stringify(state));
 const api = async (method: string, path: string, body?: unknown) => {
   const r = await fetch(base + path, { method, headers: { "content-type": "application/json" },
@@ -82,38 +76,9 @@ beforeAll(async () => {
   mkdirSync(data); mkdirSync(join(ui, "assets"), { recursive: true });
   writeFileSync(join(ui, "index.html"), "<title>Isolated VM routing</title>");
   writeFileSync(join(ui, "assets", "test.css"), "body{}");
-  boatServer = createServer(async (req, res) => {
-    const path = new URL(req.url ?? "/", "http://box.fixture").pathname;
-    boatCalls.push({ method: req.method ?? "GET", path });
-    res.setHeader("content-type", "application/json");
-    let raw = ""; for await (const chunk of req) raw += chunk;
-    const body = raw ? JSON.parse(raw) : {};
-    if (path === "/sandboxes" && req.method === "POST") {
-      if (!allowBoatCreation) { res.statusCode = 409; return res.end(JSON.stringify({ error: "Unexpected Boat creation in routing fixture" })); }
-      boatRow = { id: "bx_23456789", name: body.name ?? "fixture-new-box", state: "idle" };
-      return res.end(JSON.stringify({ sandbox: boatRow }));
-    }
-    if (path === "/sandboxes") return res.end(JSON.stringify({ sandboxes: boatRow ? [boatRow] : [] }));
-    if (/^\/sandboxes\/bx_[^/]+$/.test(path)) {
-      if (req.method === "DELETE") { boatRow = null; return res.end("{}"); }
-      if (!boatRow) res.statusCode = 404;
-      else if (req.method === "PATCH" && body.name) boatRow.name = body.name;
-      return res.end(JSON.stringify(boatRow ? { sandbox: boatRow } : { error: "missing" }));
-    }
-    if (path.endsWith("/desktop")) return res.end(JSON.stringify({ desktopUrl: "https://desktop.fixture.invalid/" }));
-    if (path.endsWith("/resume") && boatRow) { boatRow.state = "idle"; return res.end("{}"); }
-    // Boat's own agent: no turn may ever be handed to it.
-    if (path.endsWith("/prompt") && req.method === "POST") {
-      boatPrompts.push(body);
-      return res.end(JSON.stringify({ promptRun: { id: "fixture-prompt" } }));
-    }
-    return res.end("{}");
-  });
-  await new Promise<void>(resolve => boatServer.listen(0, "127.0.0.1", resolve));
-  const boatPort = (boatServer.address() as { port: number }).port;
   writeFileSync(join(data, "config.json"), JSON.stringify({ instances: { claude: {
     driver: "claudeAgent", config: { cli: join(ROOT, "server/testing/fake-claude-cli.ts") },
-    // Its first computer call is what creates or wakes the Boat, as with a real model.
+    // Its first computer call is what claims the computer, as with a real model.
     environment: { FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_DUMP: dumpFile, FAKE_CLAUDE_SLOW_FINISH_GATE: finishFile, FAKE_CLAUDE_USES_CLOUD_COMPUTER: "1" },
   } } }));
   const port = await freePortBlock([0, 1]);
@@ -128,7 +93,6 @@ beforeAll(async () => {
         APPDATA: join(fixtureHome, "appdata"), LOCALAPPDATA: join(fixtureHome, "localappdata"),
         TEMP: fixtureHome, TMP: fixtureHome, TMPDIR: fixtureHome,
         SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), SEIRA_STATIC_DIR: ui, SEIRA_TEST_VM_STATE: stateFile,
-        SEIRA_BOAT_API: `http://127.0.0.1:${boatPort}`,
         ...(computerWaitMaxMs ? { SEIRA_COMPUTER_WAIT_MAX_MS: String(computerWaitMaxMs) } : {}),
         SEIRA_COMPUTER_CALL_WAIT_MS: String(CALL_WAIT_MS),
         SEIRA_USER_DATA: join(fixtureHome, "user-data"), SEIRA_TEST_DESKTOP_CUA_CONNECTION: cuaDescriptor,
@@ -148,7 +112,6 @@ afterAll(async () => {
   if (stateFile) vmState();
   if (finishFile) writeFileSync(finishFile, "finish");
   await waitForExit(child, { signal: "SIGTERM" });
-  if (boatServer) await new Promise<void>(resolve => boatServer.close(() => resolve()));
   if (fixtureHome) await removeTempDir(fixtureHome);
 });
 const rooms = new Map<string, string[]>();
@@ -459,66 +422,10 @@ describe("Group Local VM ownership on the real isolated server", () => {
     }
   });
 
-  it.each(["wake", "removed", "missing-auto"])("chat selection starts or provisions a configured cloud computer (%s) only after selecting it", async state => {
-    vmState(); rmSync(dumpFile, { force: true }); rmSync(finishFile, { force: true });
-    const { bot } = await api("POST", "/api/bots", { name: "Chat cloud selection" });
-    try {
-      await api("PUT", "/api/config", { box: { token: "box_fixture" } });
-      await api("PATCH", `/api/bots/${bot.id}`, { computer: state === "missing-auto" ? "browser" : "vm", browser: false });
-      const environmentId = readFileSync(join(fixtureHome, "data", "environment-id"), "utf8").trim();
-      const scope = createHash("sha256").update(environmentId).digest("hex").slice(0, 12);
-      const prefix = bot.id.slice(0, 8).replace(/[^a-z0-9]/g, "");
-      const suffix = createHash("sha256").update(bot.id).digest("hex").slice(0, 6);
-      boatRow = { id: "bx_23456789", name: `ogb-${scope}-${prefix}-${suffix}`, state: "archived" };
-      allowBoatCreation = true;
-      if (state === "missing-auto") { boatRow = null; vmState({ failed: true }); }
-      boatCalls.length = 0; boatPrompts.length = 0;
-      await api("POST", `/api/bots/${bot.id}/messages`, { text: "Open Chrome on the cloud VM" });
-      const before: any = await dump();
-      if (computer(before)) expect((await gate(computer(before))).status).toBe(200);
-      const token = before.mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN;
-      const options = await (await fetch(base + "/api/internal/computer/select", { headers: { authorization: `Bearer ${token}` } })).json() as any;
-      expect(options.options.find((option: any) => option.surface === "cloud")).toMatchObject({ available: true, ready: false,
-        canStart: state !== "missing-auto", canCreate: state === "missing-auto" });
-      expect(boatCalls.every(call => call.method === "GET")).toBe(true);
-      const result = await fetch(base + "/api/internal/computer/select", { method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ surface: state === "missing-auto" ? "auto" : "cloud" }) });
-      expect(await result.json()).toMatchObject({ status: "pending", surface: "cloud" });
-      if (computer(before)) expect((await gate(computer(before))).status).toBe(401);
-      expect((await fetch(base + "/api/internal/computer/select", { headers: { authorization: `Bearer ${token}` } })).status).toBe(200);
-      expect(boatCalls.every(call => call.method === "GET")).toBe(true);
-      if (state === "removed") boatRow = null;
-      const harnessComputer = (sent: any) => computer(sent)?.args?.at(-1) === "computer" && /harness-mcp-proxy/.test(computer(sent).args[0]);
-      rmSync(dumpFile, { force: true });
-      writeFileSync(finishFile, "finish");
-      const continued: any = await dump();
-      expect(harnessComputer(continued)).toBe(true);
-      expect(continued.argv[continued.argv.indexOf("--model") + 1]).toBe(before.argv[before.argv.indexOf("--model") + 1]);
-      await idle(bot.id);
-      expect(boatPrompts).toHaveLength(0);
-      expect(boatCalls.filter(call => call.method === "POST" && call.path === "/sandboxes")).toHaveLength(state === "wake" ? 0 : 1);
-      expect(boatCalls.some(call => call.path.endsWith("/resume"))).toBe(state === "wake");
-      rmSync(dumpFile, { force: true });
-      await api("POST", `/api/bots/${bot.id}/messages`, { text: "Inspect the current page on the same cloud VM" });
-      expect(harnessComputer(await dump())).toBe(true);
-      await idle(bot.id);
-      expect(boatPrompts).toHaveLength(0);
-      expect(boatCalls.filter(call => call.method === "POST" && call.path === "/sandboxes")).toHaveLength(state === "wake" ? 0 : 1);
-    } finally {
-      writeFileSync(finishFile, "finish");
-      await api("POST", `/api/bots/${bot.id}/interrupt`, {}); await idle(bot.id);
-      boatRow = null;
-      allowBoatCreation = false;
-      await api("DELETE", `/api/bots/${bot.id}`);
-      await api("PUT", "/api/config", { box: { token: "" } });
-    }
-  }, 45_000);
-
   it("lets a chat tool select Auto, replaces tools after completion, and continues the same user message once", async () => {
     vmState(); rmSync(dumpFile, { force: true }); rmSync(finishFile, { force: true });
     const { bot } = await api("POST", "/api/bots", { name: "Chat selects computer" });
     try {
-      await api("PUT", "/api/config", { box: { token: "box_fixture" } });
       await api("PATCH", `/api/bots/${bot.id}`, { computer: "browser", browser: false });
       await api("POST", `/api/bots/${bot.id}/messages`, { text: "Open Chrome on an available VM and inspect its page title" });
       const before: any = await dump();
@@ -533,7 +440,7 @@ describe("Group Local VM ownership on the real isolated server", () => {
       expect(before.systemPrompt).not.toContain(cloudHomePrompt(true));
       expect(before.systemPrompt).not.toContain("You run on the user's Seira Cloud");
       expect(available.options).toContainEqual(expect.objectContaining({ surface: "vm", available: true }));
-      expect(available.options).toContainEqual(expect.objectContaining({ surface: "cloud", ready: false, canCreate: true }));
+      expect(available.options).toContainEqual(expect.objectContaining({ surface: "cloud", available: false }));
       expect(await (await call("POST", { surface: "auto" })).json()).toMatchObject({ status: "pending", surface: "vm" });
       expect((await call("POST", { surface: "cloud" })).status).toBe(409);
       rmSync(dumpFile, { force: true });
@@ -559,21 +466,14 @@ describe("Group Local VM ownership on the real isolated server", () => {
       writeFileSync(finishFile, "finish");
       await api("POST", `/api/bots/${bot.id}/interrupt`, {}); await idle(bot.id);
       await api("DELETE", `/api/bots/${bot.id}`);
-      await api("PUT", "/api/config", { box: { token: "" } });
     }
   });
 
-  it("lets a chat tool's Auto start a stopped private desktop before waking a sleeping cloud computer", async () => {
+  it("lets a chat tool's Auto start a stopped private desktop", async () => {
     vmState({ containers: ["shared"], stopped: ["shared"] }); rmSync(dumpFile, { force: true }); rmSync(finishFile, { force: true });
     const { bot } = await api("POST", "/api/bots", { name: "Chat prefers its desktop" });
     try {
-      await api("PUT", "/api/config", { box: { token: "box_fixture" } });
       await api("PATCH", `/api/bots/${bot.id}`, { computer: "browser", browser: false });
-      const environmentId = readFileSync(join(fixtureHome, "data", "environment-id"), "utf8").trim();
-      const scope = createHash("sha256").update(environmentId).digest("hex").slice(0, 12);
-      const prefix = bot.id.slice(0, 8).replace(/[^a-z0-9]/g, "");
-      const suffix = createHash("sha256").update(bot.id).digest("hex").slice(0, 6);
-      boatRow = { id: "bx_23456789", name: `ogb-${scope}-${prefix}-${suffix}`, state: "archived" };
       await api("POST", `/api/bots/${bot.id}/messages`, { text: "Open Chrome on an available computer" });
       const token = ((await dump()) as any).mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN;
       const call = (method: string, body?: unknown) => fetch(base + "/api/internal/computer/select", { method,
@@ -581,15 +481,13 @@ describe("Group Local VM ownership on the real isolated server", () => {
       const listed = await (await call("GET")).json() as any, offered = listed.options;
       // Works on Browser with the browser off: chosen, but not to be had, so Auto picks.
       expect(listed.chosen).toBe("browser");
-      expect(offered).toContainEqual(expect.objectContaining({ surface: "cloud", ready: false, canStart: true }));
+      expect(offered).toContainEqual(expect.objectContaining({ surface: "cloud", available: false }));
       expect(offered).toContainEqual(expect.objectContaining({ surface: "vm", ready: false, available: true }));
       expect(await (await call("POST", { surface: "auto" })).json()).toMatchObject({ status: "pending", surface: "vm" });
     } finally {
       writeFileSync(finishFile, "finish");
       await api("POST", `/api/bots/${bot.id}/interrupt`, {}); await idle(bot.id);
-      boatRow = null;
       await api("DELETE", `/api/bots/${bot.id}`);
-      await api("PUT", "/api/config", { box: { token: "" } });
     }
   });
 
