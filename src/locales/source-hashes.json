@@ -4118,7 +4118,12 @@
       "connectors.duplicateNote": "1a33ba9629a9262a1fcc6a5ca205b83f654863060d4d317ccbe09d644fa476fb",
       "connectors.duplicateRemoved": "f4a626d18542cd2df2ce9d84ab7f7d1afcd478fde840ae054ba7ea6198328d63",
       "connectors.addHintCleanWindow": "1432d1352bc96497afe34bb90b4cce67b22d1ecb7ed2ea0d3688f1883a4a8ddf",
-      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937"
+      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "es": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -10602,7 +10607,12 @@
       "connectors.duplicateNote": "1a33ba9629a9262a1fcc6a5ca205b83f654863060d4d317ccbe09d644fa476fb",
       "connectors.duplicateRemoved": "f4a626d18542cd2df2ce9d84ab7f7d1afcd478fde840ae054ba7ea6198328d63",
       "connectors.addHintCleanWindow": "1432d1352bc96497afe34bb90b4cce67b22d1ecb7ed2ea0d3688f1883a4a8ddf",
-      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937"
+      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "fr": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -14499,7 +14509,12 @@
       "connectors.duplicateNote": "1a33ba9629a9262a1fcc6a5ca205b83f654863060d4d317ccbe09d644fa476fb",
       "connectors.duplicateRemoved": "f4a626d18542cd2df2ce9d84ab7f7d1afcd478fde840ae054ba7ea6198328d63",
       "connectors.addHintCleanWindow": "1432d1352bc96497afe34bb90b4cce67b22d1ecb7ed2ea0d3688f1883a4a8ddf",
-      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937"
+      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "hi": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -18250,7 +18265,12 @@
       "connectors.duplicateNote": "1a33ba9629a9262a1fcc6a5ca205b83f654863060d4d317ccbe09d644fa476fb",
       "connectors.duplicateRemoved": "f4a626d18542cd2df2ce9d84ab7f7d1afcd478fde840ae054ba7ea6198328d63",
       "connectors.addHintCleanWindow": "1432d1352bc96497afe34bb90b4cce67b22d1ecb7ed2ea0d3688f1883a4a8ddf",
-      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937"
+      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "ja": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -26258,7 +26278,12 @@
       "connectors.duplicateNote": "1a33ba9629a9262a1fcc6a5ca205b83f654863060d4d317ccbe09d644fa476fb",
       "connectors.duplicateRemoved": "f4a626d18542cd2df2ce9d84ab7f7d1afcd478fde840ae054ba7ea6198328d63",
       "connectors.addHintCleanWindow": "1432d1352bc96497afe34bb90b4cce67b22d1ecb7ed2ea0d3688f1883a4a8ddf",
-      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937"
+      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "pt-br": {
       "voice.gemini.keyPlaceholder": "8c87ba2043a4a89d63c90cae8a6dafd5cbd193652e923b97988e381a74773e10",
@@ -38106,7 +38131,7 @@
       "decider.pick.openrouter.detail": "25bd37347c75bb047385c1bd334aa49613e486eeb2d0eebc683f549ef6fc22a9",
       "decider.pick.custom.detail": "c5ca8a0aa525243bf900e843158c51171d19df4d8a451bf5a2da63454688b410",
       "releaseNotes.items.installOwnServer.title": "1370fb18df42242dc5abce2327d8e35e1dfb9ce3a8c5c6618613fd7cbd145d13",
-      "releaseNotes.items.installOwnServer.body": "fb002f74dfdfcd4d6a02f4aa2f1787ca696fd6fbe037d8ad7221afa6099768e5",
+      "releaseNotes.items.installOwnServer.body": "f35ddf3fa48f81cf827aa802cb902519bb2e09af4d7d4495af9486b706f41126",
       "releaseNotes.items.codexImages.title": "d2d1f11a403fa1f87f073d342c743a4b91b6c202f2071f83880ec420dee758ee",
       "releaseNotes.items.aiSettings.title": "e5323d0f19e1dd8b57399f1605733854655bea8a2b47605b63101b25bc647efb",
       "releaseNotes.items.aiSettings.body": "2080279f67741ce723c7fed570f7078734bc9fe4beb4d0a04bd302354cd3ba2f",
@@ -38133,7 +38158,12 @@
       "connectors.duplicateNote": "1a33ba9629a9262a1fcc6a5ca205b83f654863060d4d317ccbe09d644fa476fb",
       "connectors.duplicateRemoved": "f4a626d18542cd2df2ce9d84ab7f7d1afcd478fde840ae054ba7ea6198328d63",
       "connectors.addHintCleanWindow": "1432d1352bc96497afe34bb90b4cce67b22d1ecb7ed2ea0d3688f1883a4a8ddf",
-      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937"
+      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -48270,7 +48300,12 @@
       "connectors.duplicateNote": "1a33ba9629a9262a1fcc6a5ca205b83f654863060d4d317ccbe09d644fa476fb",
       "connectors.duplicateRemoved": "f4a626d18542cd2df2ce9d84ab7f7d1afcd478fde840ae054ba7ea6198328d63",
       "connectors.addHintCleanWindow": "1432d1352bc96497afe34bb90b4cce67b22d1ecb7ed2ea0d3688f1883a4a8ddf",
-      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937"
+      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "zh-tw": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -58496,7 +58531,12 @@
       "connectors.duplicateNote": "1a33ba9629a9262a1fcc6a5ca205b83f654863060d4d317ccbe09d644fa476fb",
       "connectors.duplicateRemoved": "f4a626d18542cd2df2ce9d84ab7f7d1afcd478fde840ae054ba7ea6198328d63",
       "connectors.addHintCleanWindow": "1432d1352bc96497afe34bb90b4cce67b22d1ecb7ed2ea0d3688f1883a4a8ddf",
-      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937"
+      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "uk": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -62667,7 +62707,12 @@
       "connectors.duplicateNote": "1a33ba9629a9262a1fcc6a5ca205b83f654863060d4d317ccbe09d644fa476fb",
       "connectors.duplicateRemoved": "f4a626d18542cd2df2ce9d84ab7f7d1afcd478fde840ae054ba7ea6198328d63",
       "connectors.addHintCleanWindow": "1432d1352bc96497afe34bb90b4cce67b22d1ecb7ed2ea0d3688f1883a4a8ddf",
-      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937"
+      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "vi": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -68651,7 +68696,12 @@
       "connectors.duplicateNote": "1a33ba9629a9262a1fcc6a5ca205b83f654863060d4d317ccbe09d644fa476fb",
       "connectors.duplicateRemoved": "f4a626d18542cd2df2ce9d84ab7f7d1afcd478fde840ae054ba7ea6198328d63",
       "connectors.addHintCleanWindow": "1432d1352bc96497afe34bb90b4cce67b22d1ecb7ed2ea0d3688f1883a4a8ddf",
-      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937"
+      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "tr": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -74635,7 +74685,12 @@
       "connectors.duplicateNote": "1a33ba9629a9262a1fcc6a5ca205b83f654863060d4d317ccbe09d644fa476fb",
       "connectors.duplicateRemoved": "f4a626d18542cd2df2ce9d84ab7f7d1afcd478fde840ae054ba7ea6198328d63",
       "connectors.addHintCleanWindow": "1432d1352bc96497afe34bb90b4cce67b22d1ecb7ed2ea0d3688f1883a4a8ddf",
-      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937"
+      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "pl": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -81816,7 +81871,12 @@
       "connectors.duplicateNote": "1a33ba9629a9262a1fcc6a5ca205b83f654863060d4d317ccbe09d644fa476fb",
       "connectors.duplicateRemoved": "f4a626d18542cd2df2ce9d84ab7f7d1afcd478fde840ae054ba7ea6198328d63",
       "connectors.addHintCleanWindow": "1432d1352bc96497afe34bb90b4cce67b22d1ecb7ed2ea0d3688f1883a4a8ddf",
-      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937"
+      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "ru": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -89050,7 +89110,12 @@
       "connectors.duplicateNote": "1a33ba9629a9262a1fcc6a5ca205b83f654863060d4d317ccbe09d644fa476fb",
       "connectors.duplicateRemoved": "f4a626d18542cd2df2ce9d84ab7f7d1afcd478fde840ae054ba7ea6198328d63",
       "connectors.addHintCleanWindow": "1432d1352bc96497afe34bb90b4cce67b22d1ecb7ed2ea0d3688f1883a4a8ddf",
-      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937"
+      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "it": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -96099,7 +96164,12 @@
       "connectors.duplicateNote": "1a33ba9629a9262a1fcc6a5ca205b83f654863060d4d317ccbe09d644fa476fb",
       "connectors.duplicateRemoved": "f4a626d18542cd2df2ce9d84ab7f7d1afcd478fde840ae054ba7ea6198328d63",
       "connectors.addHintCleanWindow": "1432d1352bc96497afe34bb90b4cce67b22d1ecb7ed2ea0d3688f1883a4a8ddf",
-      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937"
+      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     },
     "ko": {
       "connectedWorkspaces.localTitle": "7d6deafeab011d734c3fdd1bfd6f69544fbb746a004019269bdb48544b01164b",
@@ -103803,7 +103873,12 @@
       "connectors.duplicateNote": "1a33ba9629a9262a1fcc6a5ca205b83f654863060d4d317ccbe09d644fa476fb",
       "connectors.duplicateRemoved": "f4a626d18542cd2df2ce9d84ab7f7d1afcd478fde840ae054ba7ea6198328d63",
       "connectors.addHintCleanWindow": "1432d1352bc96497afe34bb90b4cce67b22d1ecb7ed2ea0d3688f1883a4a8ddf",
-      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937"
+      "connectors.addHintBrowser": "cb6b2ccf5449c4da31e0524c101457d202066e4544970bbddcf8ae343cf05937",
+      "roomPicture.change": "d226d18891d62ec555dcf95d03d344c925256134df120d1d7f6c53c7c63fdf28",
+      "roomPicture.remove": "1bc6f23b53041b4568c24c7537eff6ec0b7460f05c6d2649b9e37bd8fbb3498c",
+      "roomPicture.typeRefused": "6ed948a6ad64e61cd250c0dcb442f3fad9e572d1230d2b1df52d32156a7f12f0",
+      "roomPicture.tooBig": "a124f53388ba71f62266af9f774f7316e165943eb6bad5631caa9b42801653e7",
+      "roomPicture.failed": "b0684f13d7afa2c1df76319e9fb5f18a9cd10c201ed5afef15ccce80aeea6a5c"
     }
   }
 }

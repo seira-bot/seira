@@ -92,3 +92,29 @@ describe("room header", () => {
     expect(markup).toContain("Launch planning");
   });
 });
+
+describe("empty room intro", () => {
+  const room: Group = {
+    id: "room", threadId: "room-thread", name: "Seira QA", memberIds: [],
+    defaultResponder: { kind: "member", botId: "atlas" }, bulletin: "", unread: false,
+    createdAt: 1, setupCompletedAt: 1, messages: [],
+  };
+  const intro = (group: Group) => {
+    vi.stubGlobal("window", { ogb: {} });
+    try {
+      return renderToStaticMarkup(createElement(StoreProvider, null, createElement(GroupView, { group })));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  };
+  const bigPicture = /<img data-room-picture="" src="\/api\/attachments\/qa\.png"[^>]*width:56px/;
+
+  it("shows the room's own picture above its name", () => {
+    expect(intro({ ...room, avatarUrl: "/api/attachments/qa.png" })).toMatch(bigPicture);
+  });
+
+  it("keeps the member faces for a room without a picture and for a bot-to-bot chat", () => {
+    expect(intro(room)).not.toMatch(bigPicture);
+    expect(intro({ ...room, dm: true, avatarUrl: "/api/attachments/qa.png" })).not.toMatch(bigPicture);
+  });
+});

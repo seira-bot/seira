@@ -323,7 +323,7 @@ import { autoRoomDefault, roomTurnMembers } from "./room-routing-members.ts";
 import { createLiveCallHost } from "./host/live-calls.ts";
 import { LiveCallController, LiveCallSignedOutError } from "./live-call-controller.ts"; import { liveSessionWiring, shutdownLiveCalls } from "./live-session-wiring.ts";
 import { liveCallSettings, liveSettingsFor, liveSettingsForClient, saveLiveSettings } from "./live-settings.ts"; import { azureLiveCallRefusal, liveScopeRefusal } from "./live-access.ts";
-import { recordLiveCall, spokenLineFields, titleLiveCall } from "./live-call-record.ts"; import { finalTurnBlock, noteGroupTurn, roomRoundPasses, roomTurnsPerMember, turnsPerMemberPatch, turnsSince } from "./room-round-turns.ts";
+import { recordLiveCall, spokenLineFields, titleLiveCall } from "./live-call-record.ts"; import { finalTurnBlock, noteGroupTurn, roomRoundPasses, roomTurnsPerMember, turnsPerMemberPatch, turnsSince } from "./room-round-turns.ts"; import { roomPicturePatch } from "./room-picture.ts";
 import { narrateTool, toUtterances } from "./tts/speech-text.ts";
 import { createTtsRoutes } from "./routes/tts.ts";
 import { turnStartLogLine } from "./turn-log.ts";
@@ -3666,7 +3666,7 @@ function updateChannel(groupId: string, value: unknown): GroupRecord {
     const responder = checkedGroupResponder(body.defaultResponder, memberIds);
     if (!responder) throw Object.assign(new Error("invalid default responder"), { status: 400 });
     patch.defaultResponder = responder;
-  } Object.assign(patch, turnsPerMemberPatch(body, existing));
+  } Object.assign(patch, turnsPerMemberPatch(body, existing), roomPicturePatch(body, existing));
   if (Object.prototype.hasOwnProperty.call(body, "turnTimeoutMinutes")) {
     if (!existing.dm) {
       throw Object.assign(new Error("set the turn limit on that conversation"), { status: 400 });
@@ -4099,7 +4099,7 @@ function publicGroupState(record: GroupRecord): WireGroup {
     ...group,
     tasks: record.dm ? undefined : tasks,
     // Always present (null when cleared), so a client's shallow merge clears a stale value.
-    description: record.description ?? null,
+    description: record.description ?? null, avatarUrl: record.avatarUrl ?? null,
     turnTimeoutMinutes: record.turnTimeoutMinutes ?? null,
     usage: usage ?? null,
     memberContext: roomMemberContexts.forThread(group.threadId) ?? null,

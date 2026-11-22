@@ -23,6 +23,7 @@ import type { PhoneSecretSubmissionRegistry } from "../phone-secret.ts";
 import { promptWithReply, type PersonName } from "../replies.ts";
 import { clientGroupPatchViolation, requestSource, type RequestAuth } from "../request-auth.ts";
 import type { RoomContextTracker } from "../room-context.ts";
+import { roomPictureChanges } from "../room-picture.ts";
 import { parseConversationTurnTimeout } from "../room-turn-timeout.ts";
 import type { RoutineManager } from "../routines.ts";
 import { acceptedSendMatch, parseSendId, parseStopId, sendFingerprint, StopReceipts, type SendSequencer } from "../send-idempotency.ts";
@@ -294,7 +295,7 @@ export function createChannelRoutes(deps: ChannelRouteDeps): RouteHandler {
       }
       const renamed = store.group(m[1]);
       if (renamed && body && typeof body === "object" &&
-        ((body.name !== undefined && body.name !== renamed.name) || (body.bulletin !== undefined && body.bulletin !== (renamed.bulletin ?? "")))) {
+        ((body.name !== undefined && body.name !== renamed.name) || (body.bulletin !== undefined && body.bulletin !== (renamed.bulletin ?? "")) || roomPictureChanges(body, renamed))) {
         const notYours = cloudThreadRefusal(auth, renamed.threadId);
         if (notYours) return json(res, 403, { error: notYours });
       }
