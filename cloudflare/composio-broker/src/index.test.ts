@@ -502,6 +502,16 @@ describe("connected-apps broker boundaries", () => {
     expect(() => normalizeAccountAlias("bad\nalias")).toThrow(/printable/i);
   });
 
+  it("answers a refused name with a short message and no stack", async () => {
+    const refused = await requestAlias(new Request("https://broker.test/v1/connect", { method: "POST", body: JSON.stringify({ alias: "bad\nalias" }) })).catch((thrown: unknown) => thrown);
+    expect(refused).toBeInstanceOf(Response);
+    const response = refused as Response;
+    expect(response.status).toBe(400);
+    const text = await response.text();
+    expect(JSON.parse(text)).toEqual({ error: "Account alias must be 1-64 printable characters" });
+    expect(text).not.toMatch(/\bat .*\.ts/);
+  });
+
   it("routes underscore-prefixed toolkit slugs instead of 404ing them", async () => {
     const token = "a".repeat(64);
     const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
