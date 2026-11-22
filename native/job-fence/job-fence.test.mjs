@@ -23,7 +23,8 @@ function startHold(limitMib) {
   createInterface({ input: proc.stdout }).on("line", (line) => {
     const event = JSON.parse(line);
     events.push(event);
-    for (const waiter of [...waiters]) if (waiter.match(event)) { waiters.splice(waiters.indexOf(waiter), 1); waiter.resolve(event); }
+    const matched = waiters.filter((waiter) => waiter.match(event));
+    for (const waiter of matched) { waiters.splice(waiters.indexOf(waiter), 1); waiter.resolve(event); }
   });
   const next = (match, ms = 30_000) => {
     const seen = events.find(match);
