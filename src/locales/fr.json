@@ -160,6 +160,8 @@
   "server.rooms.finishingElsewhereSpoken": "{bot} termine une autre conversation",
   "server.rooms.unavailable": "{bot} n'est plus disponible : tour passé",
   "server.threads.posted": "{bot} a publié un message ici",
+  "server.threads.continuedIn": "Poursuivi dans un nouveau chat",
+  "server.threads.continuedFrom": "Suite de {title}",
   "server.stop.nothingRunning": "Rien n'était en cours ici, il n'y avait donc rien à arrêter.",
   "server.memory.wait": "En attente de mémoire sur ce Cloud. En cours : {running}. Avant celle-ci : {ahead}. Elle démarre d'elle-même dès qu'il y a de la place.",
   "server.memory.still": "Toujours en attente de mémoire. En cours : {running}. Avant celle-ci : {ahead}.",

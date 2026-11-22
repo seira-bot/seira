@@ -188,6 +188,8 @@
   "server.rooms.finishingElsewhereSpoken": "{bot} está terminando otra conversación",
   "server.rooms.unavailable": "{bot} ya no está disponible; se saltó esta ronda",
   "server.threads.posted": "{bot} publicó un mensaje aquí",
+  "server.threads.continuedIn": "Continuado en un chat nuevo",
+  "server.threads.continuedFrom": "Continuación de {title}",
   "server.stop.nothingRunning": "Aquí no había nada en marcha, así que no hacía falta detener nada.",
   "server.memory.wait": "Esperando memoria en este Cloud. En marcha ahora: {running}. Por delante: {ahead}. Empieza sola cuando haya espacio.",
   "server.memory.still": "Sigue esperando memoria. En marcha ahora: {running}. Por delante: {ahead}.",
