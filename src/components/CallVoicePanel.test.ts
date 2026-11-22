@@ -133,7 +133,7 @@ describe("CallVoicePanel voice list", () => {
     fixture.config = live("elevenlabs");
     render("live");
     expect(host.querySelector('[role="radiogroup"]')).toBeNull();
-    expect(text()).toContain("The voice comes from your agent at ElevenLabs.");
+    expect(text()).toMatch(/The voice comes from your agent at ElevenLabs/);
   });
 
   it("says Codex uses one voice, with no hint about the next call and no language", () => {

@@ -6,10 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppState } from "@/state/store";
 import { atlas, turnsConfig } from "./call-test-support";
 
-const fixture = vi.hoisted(() => ({ config: null as unknown, tones: false, bridge: null as unknown }));
+const fixture = vi.hoisted(() => ({ config: null as unknown, tones: false, bridge: null as unknown, dispatch: vi.fn() }));
 vi.mock("@/state/store", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/state/store")>();
-  return { ...original, useStore: () => ({ state: { ...original.initialState, config: fixture.config as AppState["config"], bots: [] }, dispatch: vi.fn() }) };
+  return { ...original, useStore: () => ({ state: { ...original.initialState, config: fixture.config as AppState["config"], bots: [] }, dispatch: fixture.dispatch }) };
 });
 vi.mock("@/lib/speech", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/speech")>()), speechBridge: () => fixture.bridge }));
 vi.mock("@/lib/push-to-talk", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/push-to-talk")>()), usePushToTalk: () => false }));
