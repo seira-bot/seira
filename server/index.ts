@@ -111,7 +111,6 @@ import { TeamComputers, teamComputerOwner, type TeamComputerRecord } from "./tea
 import { isEffortLevel, type AuthPairResponse, type CardAnswerer, type LoopbackSessionResponse, type SignedInSessionResponse, type PairResponse, type ResolvedSender, type ServerFrame, type SignInRequestCardData, type WireBot, type WireGroup, type WireTask } from "../shared/wire.ts";
 import { isPersistentQuestionCard, shouldSettleRequestCard } from "../shared/ask-question.ts";
 import { parseToolScope } from "../shared/tool-scope.ts";
-import type { TeamComputersPayload } from "../shared/team-computer.ts";
 import { boatCreateRecoverySnapshot } from "./boat-create-idempotency.ts";
 import { boatDeletionSnapshot } from "./boat-delete-journal.ts";
 import { liveDecisionRefusal } from "../shared/live-approval.ts"; import type { PersonWaitKind } from "../shared/person-wait.ts";
@@ -5630,7 +5629,6 @@ const computerLifecycleBusyBots = new Set<string>();
 const computerPreviews = createComputerPreviews();
 const vpsJoinRequests = new Map<string, Promise<void>>();
 const orphanBoatLifecycleBusyIds = new Set<string>();
-const boatInventoryRequestsBusyIds = new Set<string>();
 type RemoteComputerProvider = "box" | "vps";
 const computerProviderConfigTransitions = new Set<RemoteComputerProvider>();
 const localVmIdleMs = () => localVmIdleTimeoutMinutes(cfg) * 60_000;
@@ -5727,24 +5725,6 @@ function assertTeamComputerChangeIdle(before: BotRecord, after: BotRecord): void
       [previous, next].some(computer => computer && (teamComputerInUse(computer) || computerLifecycleBusyBots.has(teamComputerOwner(computer.id))))) {
     throw Object.assign(new Error("Stop the affected team's work and release computer control before changing its computer access"), { status: 409 });
   }
-}
-
-async function teamComputersPayload(): Promise<TeamComputersPayload> {
-  const entries = teamComputers.list();
-  const inventory = await boat.listManagedBoats(cfg, managedComputerOwners());
-  return {
-    configured: inventory.configured,
-    ...(inventory.problem ? { problem: inventory.problem } : {}),
-    computers: entries.map(entry => {
-      const machine = inventory.instances.find(instance => instance.ownerBotId === teamComputerOwner(entry.id));
-      return {
-        id: entry.id, name: entry.name, section: entry.section,
-        held: computerControl.snapshot(teamComputerOwner(entry.id)).held,
-        state: computerLifecycleBusyBots.has(teamComputerOwner(entry.id)) ? "working" : machine?.state ?? (inventory.available ? "missing" : "unavailable"),
-        ...(entry.problem || inventory.problem ? { problem: entry.problem || inventory.problem! } : {}),
-      };
-    }),
-  };
 }
 
 /** Assignment authorizes waking, never replacing a missing paid machine. */
@@ -5944,7 +5924,7 @@ function providerOperationConflict(provider: RemoteComputerProvider): string | n
     return "wait for cloud computer actions to finish before changing provider settings";
   }
   if (provider === "box") {
-    if (boatInventoryRequestsBusyIds.size > 0 || orphanBoatLifecycleBusyIds.size > 0) {
+    if (orphanBoatLifecycleBusyIds.size > 0) {
       return "wait for cloud computer actions to finish before changing the Boat account";
     }
     const deletingBoatIds = new Set(boatDeletionSnapshot().map((entry) => entry.boxId));
@@ -6128,14 +6108,6 @@ function providerTransitionForTurn(
   return provider && computerProviderConfigTransitions.has(provider)
     ? providerTransitionMessage(provider)
     : null;
-}
-
-function claimBoatInventoryRequest(boxId: string): () => void {
-  if (boatInventoryRequestsBusyIds.has(boxId)) {
-    throw Object.assign(new Error("this cloud computer is being changed — wait for it to finish"), { status: 409 });
-  }
-  boatInventoryRequestsBusyIds.add(boxId);
-  return () => boatInventoryRequestsBusyIds.delete(boxId);
 }
 
 /** Claimed synchronously before the provider mutation; startTurn checks the same set, so a turn and an irreversible lifecycle action cannot pass each other. */
@@ -12346,18 +12318,16 @@ ROUTES.push(createMcpServerRoutes({
 ROUTES.push(createSetupImportRoutes({ local: setupImportLocal({ desktopManaged: DESKTOP_MANAGED, localBrowsers: LOOPBACK.localBrowsers, cloudHome: Boolean(CLOUD_HOME), hostedWorkspace: HOSTED_WORKSPACE }), cfg, mcpPolicyRefusal, persistMcpServers: persistAnnouncedMcpServers,
   mcpConfigBusy: mcpConfig.busy })); const aiImports = createAiImportHost({ dataDir: DATA_DIR, store, mcp: { servers: () => cfg.mcpServers ?? {}, refusal: (name, server) => mcpPolicyRefusal(name, server) ?? null, persist: persistAnnouncedMcpServers }, routines: () => routines, broadcast, local: setupImportLocal({ desktopManaged: DESKTOP_MANAGED, localBrowsers: LOOPBACK.localBrowsers, cloudHome: Boolean(CLOUD_HOME), hostedWorkspace: HOSTED_WORKSPACE }) }); ROUTES.push(aiImports.routes);
 ROUTES.push(createComputerRoutes({
-  store, cfg, sessions, teamComputers, computerControl,
-  routines: () => routines,
+  store, cfg, computerControl,
   controlLeaseIdSchema, computerLifecycleBusyBots, computerProviderConfigTransitions, localVmActiveThreads,
   localVmLifecycleBusy, localVmSeen,
   localVmImageBusy: { get: () => localVmImageBusy, set: (busy) => { localVmImageBusy = busy; } },
   localVmProvisionBusy: { get: () => localVmProvisionBusy, set: (busy) => { localVmProvisionBusy = busy; } },
   localVmModeChangeBusy: { get: () => localVmModeChangeBusy },
   localVmOwnerBusy, localVmIdleMs, localVmLeaseFor, localVmIdleFor, localVmTargetForBot, localVmTargetForStatus,
-  localVmPayload, localVmInventoryPayload, existingPerBotLocalVmCount, teamComputersPayload, teamComputerInUse,
-  managedComputerOwners, providerTransitionMessage, botHasActiveTurn, localVmLeaseKey: sharedVm.leaseKey, botComputerControlSnapshot: sharedVm.snapshot,
-  computerPreviewBot, computerPreviewSurface, claimTeamComputerLifecycle, claimBotComputerLifecycle,
-  claimBoatInventoryRequest, claimManagedBoatMutation, claimManagedVpsMutation, cloudComputerUsed: owner => cloudComputerPower.used(owner), boatRecovery, cloudComputerOwner: botComputerControlKey,
+  localVmPayload, localVmInventoryPayload, existingPerBotLocalVmCount,
+  managedComputerOwners, providerTransitionMessage, localVmLeaseKey: sharedVm.leaseKey,
+  computerPreviewBot, computerPreviewSurface, claimManagedVpsMutation,
 }));
 ROUTES.push(createStatusRoutes({
   store, cfg,

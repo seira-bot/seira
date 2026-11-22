@@ -9,7 +9,6 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { cloudPairingSignature, cloudRequestSignature } from "./cloud-home.ts";
-import { CONTROL_BUSY } from "./control-client.ts";
 import { BROWSER_HANDED_OVER, browserBusyText } from "./host/browser-seats.ts";
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 import { freePortBlock } from "./testing/ports.ts";
@@ -293,76 +292,6 @@ describe.skipIf(process.platform === "win32").each(["desktop", "home"] as const)
     f.release();
     await expect.poll(async () => (await botRow(f, botId)).busy, { timeout: 20_000, interval: 100 }).toBe(false);
   }, 90_000);
-});
-
-// One relay stands in for the Admin's Boat proxy; a picture stands in for the desktop.
-const FRAME = Buffer.from("/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==", "base64");
-describe.each(["desktop", "team"] as const)("two threads of a bot on the team's shared computer on a %s server", (role) => {
-  let f: Fixture;
-  const servers: Server[] = [];
-  afterEach(async () => {
-    await f?.stop();
-    for (const server of servers.splice(0)) { server.closeAllConnections(); server.close(); }
-  });
-
-  it("both run from the start, and only the one that reaches for the screen second waits, saying so", async () => {
-    const boxes: Array<{ id: string; state: string; name?: string }> = [];
-    const relay = createServer((req, res) => {
-      const path = new URL(req.url ?? "/", "http://relay.test").pathname.replace(/^\/relay\/api\/box\/v1/, "");
-      let raw = "";
-      req.on("data", (chunk) => { raw += chunk; });
-      req.on("end", () => {
-        const answer = (status: number, payload: unknown) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(payload)); };
-        if (path === "/boxes" && req.method === "GET") return answer(200, { ok: true, boxes, pageInfo: { nextCursor: null } });
-        if (path === "/boxes" && req.method === "POST") { const box = { id: "bx_23456789", state: "ready" }; boxes.push(box); return answer(201, { ok: true, box }); }
-        const [, id = "", verb = ""] = /^\/boxes\/([^/]+)(?:\/(.+))?$/.exec(path) ?? [];
-        const box = boxes.find((candidate) => candidate.id === id);
-        if (!box) return answer(404, { ok: false, code: "not_found", message: "Not found" });
-        if (!verb && req.method === "PATCH") { box.name = JSON.parse(raw).name; return answer(200, { ok: true, box }); }
-        if (!verb && req.method === "GET") return answer(200, { ok: true, box });
-        if (verb === "desktop") return answer(200, { desktopUrl: `https://desktop.invalid/${box.id}` });
-        if (verb === "commands") return answer(200, { exitCode: 0, stdout: "captured", stderr: "" });
-        if (verb === "artifacts") { res.writeHead(200, { "content-type": "image/jpeg", "content-length": String(FRAME.length) }); return res.end(FRAME); }
-        return answer(404, { ok: false, code: "not_found", message: "Not found" });
-      });
-    });
-    servers.push(relay);
-    await new Promise<void>((resolve) => relay.listen(0, "127.0.0.1", resolve));
-    const relayBase = `http://127.0.0.1:${(relay.address() as AddressInfo).port}`;
-    f = new Fixture(role);
-    f.extraEnv = { SEIRA_BOAT_API: `${relayBase}/own-key-must-not-be-used`, SEIRA_CLOUD_BOAT_URL: `${relayBase}/relay/api/box/v1`, SEIRA_CLOUD_BOAT_TOKEN: "box_seira_fixture", SEIRA_COMPUTER_CALL_WAIT_MS: "500" };
-    await f.start();
-    const requestId = randomUUID();
-    const made = await f.api("POST", "/api/team-computers", { requestId, name: "Ops desktop", acknowledgeCost: true });
-    expect(made.status, JSON.stringify(made.body)).toBe(201);
-    const { botId, threads } = await botWithThreads(f, CLAUDE, 2);
-    expect((await f.api("PATCH", `/api/bots/${botId}`, { section: "Ops" })).status).toBe(200);
-    const assigned = await f.api("PATCH", `/api/team-computers/${requestId}`, { section: "Ops", acknowledgeSharedAccess: true });
-    expect(assigned.status, JSON.stringify(assigned.body)).toBe(200);
-
-    await send(f, botId, threads[0]!, "First job");
-    await send(f, botId, threads[1]!, "Second job");
-    await expect.poll(() => f.claudeTurnsStarted(), { timeout: 20_000, interval: 50 }).toBe(2);
-    expect((await busyThreads(f, botId)).sort(), "neither has touched the computer, so neither waited for it").toEqual([...threads].sort());
-    expect((await rows(f, threads[1]!)).filter((name) => name.startsWith("Waiting for its turn"))).toEqual([]);
-
-    const screenshot = (threadId: string) => {
-      const env = f.servers(threadId).computer.env;
-      return internal(f, "/api/internal/computer/mcp", env.SEIRA_MCP_TOKEN_COMPUTER, { method: "tools/call", params: { name: "screenshot", arguments: {} } });
-    };
-    let first = await screenshot(threads[0]!);
-    for (let attempt = 0; attempt < 40 && first.body.result?.isError; attempt++) first = await screenshot(threads[0]!);
-    expect(first.body.result.isError, JSON.stringify(first.body)).toBeFalsy();
-    const second = await screenshot(threads[1]!);
-    expect(second.body.result).toEqual({ isError: true, content: [{ type: "text", text: CONTROL_BUSY }] });
-    expect((await rows(f, threads[1]!)).find((name) => name.startsWith("Waiting for its turn on this computer")), "the person sees why").toContain("Scout is running");
-    expect((await busyThreads(f, botId)).sort()).toEqual([...threads].sort());
-
-    f.finish(threads[0]!);
-    await expect.poll(async () => (await screenshot(threads[1]!)).body.result.isError, { timeout: 30_000, interval: 200 }).toBeFalsy();
-    f.release();
-    await expect.poll(async () => (await botRow(f, botId)).busy, { timeout: 20_000, interval: 100 }).toBe(false);
-  }, 120_000);
 });
 
 describe("a Starter Cloud", () => {

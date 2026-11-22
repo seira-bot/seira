@@ -580,28 +580,6 @@ describe("a person's hold on the shared Local VM", () => {
     expect(await held(witness)).toBe(false);
   }, 60_000);
 
-  it("a thread-less take of an Auto bot keeps its Boat in use and pauses its conversation on the cloud too", async () => {
-    const a = await newBot("Ada");
-    const scope = createHash("sha256").update(readFileSync(join(home, "data", "environment-id"), "utf8").trim()).digest("hex").slice(0, 12);
-    const name = `ogb-${scope}-${a.id.slice(0, 8).replace(/[^a-z0-9]/g, "")}-${createHash("sha256").update(a.id).digest("hex").slice(0, 6)}`;
-    boatRow = { id: "bx_abcdefgh", name, state: "idle" };
-    try {
-      const onCloud = await newTask(a.id, "cloud");
-      const { computer } = await startTurn(a.id, onCloud);
-      // A Boat's tools reach the gate through the harness proxy, with the turn's computer capability.
-      const boatGate = () => gate({ env: { SEIRA_CONTROL_URL: `${base}/api/internal/computer-control?botId=${a.id}`, SEIRA_CONTROL_TOKEN: computer.env.SEIRA_MCP_TOKEN_COMPUTER } });
-      expect(await boatGate()).toEqual({ held: false, helpOpen: false });
-      await control(api, a.id, { action: "take" });
-      expect(await boatGate()).toMatchObject({ held: true, reason: "person" });
-      await finishTurns([a.id, onCloud]);
-      const boxes = (await ok("GET", "/api/computers/boxes")).instances;
-      expect(boxes.find((instance: { ownerBotId: string }) => instance.ownerBotId === a.id)).toMatchObject({ inUse: true });
-    } finally {
-      await control(api, a.id, { action: "release" });
-      boatRow = null;
-    }
-  }, 30_000);
-
   // One row per place a person's hold can land; `key` is the control key it must land on.
   it.each([
     { row: "shared, Auto", mode: "shared", key: "desk" },
@@ -610,19 +588,11 @@ describe("a person's hold on the shared Local VM", () => {
     { row: "shared, Auto, thread on this computer", mode: "shared", pin: "local", inThread: true, key: "own" },
     { row: "per-bot, Auto", mode: "per-bot", key: "own" },
     { row: "pool, Auto", mode: "pool", key: "own" },
-    { row: "team cloud computer", mode: "shared", team: true, key: "team" },
   ] as const)("every path a person takes resolves the same control key: $row", async (row: {
-    mode: "shared" | "per-bot" | "pool"; key: "desk" | "own" | "team"; computer?: string; pin?: string; inThread?: boolean; team?: boolean;
+    mode: "shared" | "per-bot" | "pool"; key: "desk" | "own"; computer?: string; pin?: string; inThread?: boolean;
   }) => {
     await setMode(row.mode);
-    const section = row.team ? `Team ${randomUUID()}` : undefined;
-    const subject = await newBot("Subject", { ...(row.computer ? { computer: row.computer } : {}), ...(section ? { section } : {}) });
-    const mate = section ? (await newBot("Mate", { section })).id : null;
-    if (section) {
-      const requestId = randomUUID();
-      await ok("POST", "/api/team-computers", { requestId, name: "Team desktop", acknowledgeCost: true });
-      await ok("PATCH", `/api/team-computers/${requestId}`, { section, acknowledgeSharedAccess: true });
-    }
+    const subject = await newBot("Subject", row.computer ? { computer: row.computer } : {});
     const pinned = row.pin ? await newTask(subject.id, row.pin) : undefined;
     const threadId = row.inThread ? pinned : undefined;
     const desk = row.key === "desk";
@@ -631,7 +601,6 @@ describe("a person's hold on the shared Local VM", () => {
     expect((await control(phone, subject.id, { action: "take", controlLeaseId: id }, threadId)).body.owned).toBe(true);
     expect(await held(subject.id, threadId)).toBe(true);
     expect(await held(witness)).toBe(desk);
-    if (mate) expect(await held(mate)).toBe(true);
 
     const ownVm = createHash("sha256").update(subject.id).digest("hex");
     if (row.mode === "per-bot") vmState({ containers: ["shared", `bot:${ownVm}`] });
@@ -655,7 +624,7 @@ describe("a person's hold on the shared Local VM", () => {
     await control(api, witness, { action: "take" });
     await until(() => framesFor(witness, since), frames => frames.length > 0);
     await sleep(200);
-    expect(framesFor(subject.id, since).length > 0).toBe(row.mode === "shared" && !row.team);
+    expect(framesFor(subject.id, since).length > 0).toBe(row.mode === "shared");
   }, 30_000);
 
   it("the panel's release, sent without its conversation, ends the hold it took there", async () => {
@@ -810,26 +779,6 @@ describe("a person's hold on the shared Local VM", () => {
     expect((await control(api, a.id, undefined, b.threadId)).status).toBe(404);
     expect((await control(api, a.id, undefined, a.threadId)).status).toBe(200);
   });
-
-  it("the Team map does not capture a bot's Boat while its hold sits on the shared desktop", async () => {
-    const a = await newBot("Ada");
-    const scope = createHash("sha256").update(readFileSync(join(home, "data", "environment-id"), "utf8").trim()).digest("hex").slice(0, 12);
-    const name = `ogb-${scope}-${a.id.slice(0, 8).replace(/[^a-z0-9]/g, "")}-${createHash("sha256").update(a.id).digest("hex").slice(0, 6)}`;
-    boatRow = { id: "bx_mapframe", name, state: "idle" };
-    const captures = () => boatCalls.filter(entry => entry === "POST /sandboxes/bx_mapframe/commands").length;
-    try {
-      await control(api, a.id, { action: "take" });
-      await ok("GET", "/api/computers/frames");
-      await sleep(1_500);
-      expect(captures()).toBe(0);
-      await control(api, a.id, { action: "release" });
-      await ok("GET", "/api/computers/frames");
-      await until(captures, count => count > 0);
-    } finally {
-      await control(api, a.id, { action: "release" });
-      boatRow = null;
-    }
-  }, 30_000);
 
   it("a turn's command on the shared VM is refused while a person holds it, even when the take lands as it starts", async () => {
     const worker = await newBot("Worker", { computer: "vm" });
