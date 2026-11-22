@@ -131,6 +131,8 @@ try {
     await command("tab", "t1");
   };
 
+  // The label form opens only for an app that already has an account.
+  for (const slug of ["gmail", "slack"]) services[slug] = { connected: true, pending: false, status: "ACTIVE", accounts: [{ id: `ca-${slug}-first`, alias: "fixture-first", status: "ACTIVE" }] };
   // Settings reserves synchronously even though the returned URL is delayed.
   await click("Settings Apps");
   await wait("document.querySelector('[data-app-tile=gmail] button[type=button]:not([aria-label]):not(:disabled)')!==null");
