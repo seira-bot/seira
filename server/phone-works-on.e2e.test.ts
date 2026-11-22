@@ -98,6 +98,12 @@ describe("a paired phone changes where one bot works", () => {
     if (home) await removeTempDir(home);
   });
 
+  it("tells an admin phone that this server accepts the change", { timeout: 60_000 }, async () => {
+    const config = await call("GET", "/api/config", undefined, adminToken);
+    expect(config.status).toBe(200);
+    expect(config.body.phoneWorksOn).toBe(true);
+  });
+
   it("AC-01: moves a bot to no computer and answers with the bot", { timeout: 60_000 }, async () => {
     const id = await newBot("Scout", { computer: "cloud" });
     const moved = await call("PATCH", `/api/bots/${id}`, { computer: "off" }, adminToken);
