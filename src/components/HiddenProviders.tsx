@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { api, useStore, type InstanceInfo } from "@/state/store";
 import { t } from "@/lib/i18n";
+import { forgetProviderOff } from "@/lib/provider-off";
 import { InstanceProviderMark } from "./ProviderIcons";
 import { SettingsMark } from "./SettingsPrimitives";
 
@@ -32,7 +33,7 @@ function useUnhide() {
     setBusy(instanceId);
     setError(null);
     api(`/api/instances/${encodeURIComponent(instanceId)}`, { method: "PATCH", body: JSON.stringify({ hidden: false }) })
-      .then(() => Promise.resolve(refreshInstances()).catch(() => {}))
+      .then(() => { forgetProviderOff(instanceId); return Promise.resolve(refreshInstances()).catch(() => {}); })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setBusy(null));
   };

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Bot, InstanceInfo } from "@/state/store";
-import { moveTarget, planProviderOff, providerUses, runProviderOff, undoProviderOff } from "./provider-off";
+import { forgetProviderOff, moveTarget, planProviderOff, providerOffResult, providerUses, rememberProviderOff, runProviderOff, undoProviderOff } from "./provider-off";
 import { providerHealth } from "./provider-health";
 
 const instance = (instanceId: string, extra: Partial<InstanceInfo> = {}): InstanceInfo => ({
@@ -150,5 +150,15 @@ describe("undoProviderOff", () => {
       { unhide: async () => {}, restore: async () => {}, followBotModel: async () => { throw new Error("busy"); } },
     );
     expect(failed).toEqual([]);
+  });
+});
+
+describe("forgetProviderOff", () => {
+  it("drops the last Hide when that provider comes back, and keeps it for another provider", () => {
+    rememberProviderOff({ instanceId: "x", name: "X", hidden: true, stayed: [], moved: [] });
+    forgetProviderOff("y");
+    expect(providerOffResult()?.instanceId).toBe("x");
+    forgetProviderOff("x");
+    expect(providerOffResult()).toBeNull();
   });
 });

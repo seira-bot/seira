@@ -129,6 +129,14 @@ export function rememberProviderOff(result: ProviderOffResult | null): void {
   for (const listener of listeners) listener();
 }
 
+export function forgetProviderOff(instanceId: string): void {
+  if (last?.instanceId === instanceId) rememberProviderOff(null);
+}
+
+export function providerOffResult(): ProviderOffResult | null {
+  return last;
+}
+
 export function useProviderOffResult(): ProviderOffResult | null {
-  return useSyncExternalStore((listener) => { listeners.add(listener); return () => { listeners.delete(listener); }; }, () => last, () => last);
+  return useSyncExternalStore((listener) => { listeners.add(listener); return () => { listeners.delete(listener); }; }, providerOffResult, providerOffResult);
 }
