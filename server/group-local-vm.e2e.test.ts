@@ -842,39 +842,6 @@ describe("Group Local VM ownership on the real isolated server", () => {
     }
   });
 
-  it("runs a channel speaker's own Cloud destination on its own engine with its Boat, waking it first", async () => {
-    const { bots, group } = await room();
-    try {
-      await api("PUT", "/api/config", { box: { token: "box_fixture" } });
-      await api("PATCH", `/api/bots/${bots[0].id}`, { computer: "cloud" });
-      const environmentId = readFileSync(join(fixtureHome, "data", "environment-id"), "utf8").trim();
-      const scope = createHash("sha256").update(environmentId).digest("hex").slice(0, 12);
-      const prefix = bots[0].id.slice(0, 8).replace(/[^a-z0-9]/g, "");
-      const suffix = createHash("sha256").update(bots[0].id).digest("hex").slice(0, 6);
-      boatRow = { id: "bx_23456789", name: `ogb-${scope}-${prefix}-${suffix}`, state: "archived" };
-      boatCalls.length = 0; boatPrompts.length = 0;
-      const onBoat = (sent: any) => computer(sent)?.args?.at(-1) === "computer" && /harness-mcp-proxy/.test(computer(sent).args[0]);
-      writeFileSync(finishFile, "finish");
-      await send(group.id);
-      expect(onBoat(await dump())).toBe(true);
-      await idle(bots[0].id);
-      expect(boatCalls.some(call => call.path.endsWith("/resume"))).toBe(true);
-      expect(boatCalls.filter(call => call.method === "POST" && call.path === "/sandboxes")).toHaveLength(0);
-      expect(JSON.stringify(await api("GET", "/api/bots?messages=30"))).not.toContain("not available in channels yet");
-      rmSync(dumpFile, { force: true });
-      await send(group.id);
-      expect(onBoat(await dump())).toBe(true);
-      await idle(bots[0].id);
-      expect(boatPrompts).toHaveLength(0);
-    } finally {
-      boatRow = null;
-      await stop(group.id);
-      await idle(bots[0].id);
-      await api("PATCH", `/api/bots/${bots[0].id}`, { computer: "vm" });
-      await api("PUT", "/api/config", { box: { token: "" } });
-    }
-  }, 45_000);
-
   it("releases a failed readiness claim so the bot and room can run again", async () => {
     const { bots, group } = await room();
     vmState({ failed: true });

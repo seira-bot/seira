@@ -709,6 +709,36 @@ describe("turning a webhook back on, Run now, and a deleted bot's webhooks", () 
     expect(h.queued.at(-1)?.byPerson).toBeUndefined();
   });
 
+  it("refuses Test on a webhook moved off a gone cloud computer until a place is chosen", () => {
+    const h = harness();
+    const { webhook } = create(h.manager);
+    const saved = JSON.parse(readFileSync(h.file, "utf8"));
+    Object.assign(saved.webhooks[0], { enabled: false, runOn: "seira", placeLost: true });
+    writeFileSync(h.file, JSON.stringify(saved));
+    const reloaded = new WebhookManager(h.options);
+    expect(reloaded.list()[0]).toMatchObject({ id: webhook.id, placeLost: true });
+    expect(() => reloaded.test(webhook.id)).toThrow(expect.objectContaining({ status: 409, message: expect.stringMatching(/Choose where it runs/) }));
+    expect(h.queued).toEqual([]);
+    expect(reloaded.update(webhook.id, { name: "Renamed" })).toMatchObject({ placeLost: true });
+    expect(reloaded.update(webhook.id, { runOn: "seira" })?.placeLost).toBe(true);
+    expect(reloaded.update(webhook.id, { confirmPlace: true })?.placeLost).toBeUndefined();
+    expect(reloaded.test(webhook.id)).toMatchObject({ duplicate: false });
+    expect(new WebhookManager(h.options).list()[0].placeLost).toBeUndefined();
+  });
+
+  it("refuses to switch a moved webhook on without confirming its place, and switches it on with one", () => {
+    const h = harness();
+    const { webhook } = create(h.manager);
+    const saved = JSON.parse(readFileSync(h.file, "utf8"));
+    Object.assign(saved.webhooks[0], { enabled: false, runOn: "seira", placeLost: true });
+    writeFileSync(h.file, JSON.stringify(saved));
+    const reloaded = new WebhookManager(h.options);
+    expect(() => reloaded.update(webhook.id, { enabled: true, verificationPending: false })).toThrow(expect.objectContaining({ status: 409, message: expect.stringMatching(/Choose where it runs/) }));
+    expect(reloaded.list()[0]).toMatchObject({ enabled: false, placeLost: true });
+    expect(reloaded.update(webhook.id, { enabled: true, verificationPending: false, confirmPlace: true })).toMatchObject({ enabled: true });
+    expect(reloaded.list()[0].placeLost).toBeUndefined();
+  });
+
   it("removes a deleted bot's webhooks for good, with their calls, and cancels their queued work", () => {
     const h = harness();
     const { webhook, secret } = create(h.manager);

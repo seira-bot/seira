@@ -736,28 +736,6 @@ describe("a person's hold on the shared Local VM", () => {
     }
   }, 30_000);
 
-  it("another device's hold on the shared desktop leaves a cloud bot's Boat turn running until a panel takes that conversation's computer", async () => {
-    const books = await newBot("Books", { computer: "cloud" });
-    await newTask(books.id, "vm");
-    const scope = createHash("sha256").update(readFileSync(join(home, "data", "environment-id"), "utf8").trim()).digest("hex").slice(0, 12);
-    const name = `ogb-${scope}-${books.id.slice(0, 8).replace(/[^a-z0-9]/g, "")}-${createHash("sha256").update(books.id).digest("hex").slice(0, 6)}`;
-    boatRow = { id: "bx_bkwtqrsz", name, state: "idle" };
-    try {
-      const { computer } = await startTurn(books.id, books.threadId);
-      const boatGate = () => gate({ env: { SEIRA_CONTROL_URL: `${base}/api/internal/computer-control?botId=${books.id}`, SEIRA_CONTROL_TOKEN: computer.env.SEIRA_MCP_TOKEN_COMPUTER } });
-      await control(api, witness, { action: "take" });
-      expect((await ok("GET", "/api/bots?messages=0")).computerControl[books.id]).toMatchObject({ held: true });
-      expect(await boatGate()).toEqual({ held: false, helpOpen: false });
-      const id = lease();
-      expect((await control(api, books.id, { action: "take", controlLeaseId: id }, books.threadId)).body).toMatchObject({ held: true, owned: true });
-      expect(await boatGate()).toMatchObject({ held: true, reason: "person" });
-      expect((await control(api, books.id, { action: "release", controlLeaseId: id })).body.released).toBe(true);
-      await finishTurns([books.id, books.threadId]);
-    } finally {
-      boatRow = null;
-    }
-  }, 30_000);
-
   it("a phone's take of the shared desktop that nothing ever beats lapses a grace later", async () => {
     const a = await newBot("Ada");
     expect((await control(phone, a.id, { action: "take", controlLeaseId: lease() })).body.owned).toBe(true);

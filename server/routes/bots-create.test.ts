@@ -90,6 +90,16 @@ describe("where a new bot works", () => {
     expect((await fixture({ newBotComputer: () => undefined }).create({ name: "Bea" })).computer).toBeUndefined();
     expect((await fixture().create({ name: "Cy" })).computer).toBeUndefined();
   });
+
+  it("works on the person's own VPS when a request or the New bot defaults name Cloud", async () => {
+    const fx = fixture();
+    const made = await fx.create({ name: "Ada", useDefaults: false, settings: { computer: "cloud" } });
+    expect([made.computer, made.cloudBackend]).toEqual(["cloud", "vps"]);
+    const saved = fixture({ cfg: { newBotDefaults: { profile: { computer: "cloud" }, memory: {}, skills: [], routines: [] } } as Partial<AppConfig> });
+    const other = await saved.create({ name: "Bea" });
+    expect([other.computer, other.cloudBackend]).toEqual(["cloud", "vps"]);
+    expect((await fx.create({ name: "Cy", useDefaults: false, settings: { computer: "vm" } })).cloudBackend).toBeUndefined();
+  });
 });
 
 describe("folder access at creation", () => {

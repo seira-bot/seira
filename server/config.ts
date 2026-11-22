@@ -748,7 +748,7 @@ export function loadConfig(): AppConfig {
   cfg.composio = { ...cfg.composio };
   if (process.env.COMPOSIO_API_KEY !== undefined) cfg.composio.apiKey = process.env.COMPOSIO_API_KEY;
   cfg.box = { ...cfg.box };
-  if (process.env.BOX_TOKEN !== undefined) cfg.box.token = process.env.BOX_TOKEN;
+  warnBoatEnvIgnored();
   cfg.opencodeGo = { ...cfg.opencodeGo };
   if (process.env.OPENCODE_API_KEY !== undefined) cfg.opencodeGo.apiKey = process.env.OPENCODE_API_KEY;
   cfg.tts = { ...cfg.tts };
@@ -797,7 +797,6 @@ export function syncCredentialEnv(patch: Partial<Omit<AppConfig, "threads" | "ne
     [patch.openai?.key, "SEIRA_OPENAI_API_KEY"],
     [patch.openrouter?.key, "SEIRA_OPENROUTER_API_KEY"],
     [patch.composio?.apiKey, "COMPOSIO_API_KEY"],
-    [patch.box?.token, "BOX_TOKEN"],
     [patch.opencodeGo?.apiKey, "OPENCODE_API_KEY"],
     [patch.tts?.key, "SEIRA_TTS_KEY"],
     [patch.tts?.fishKey, "SEIRA_FISH_AUDIO_API_KEY"],
@@ -828,6 +827,7 @@ export function syncCredentialEnv(patch: Partial<Omit<AppConfig, "threads" | "ne
   }
 }
 
+import { warnBoatEnvIgnored } from "./boat-env.ts";
 import { WORKSPACE_CREDENTIAL_ENV, CONTROL_PLANE_ENV, CONTROL_PLANE_ENV_PREFIX, stripControlPlaneEnv, stripWorkspaceCredentialEnv, stripEnvNames, stripWorkspaceCredentialKeys, PROVIDER_CREDENTIAL_ENV, OPENCODE_PROVIDER_ENV } from "./credential-env.ts";
 export { WORKSPACE_CREDENTIAL_ENV, CONTROL_PLANE_ENV, CONTROL_PLANE_ENV_PREFIX, stripControlPlaneEnv, stripWorkspaceCredentialEnv, stripEnvNames, stripWorkspaceCredentialKeys, PROVIDER_CREDENTIAL_ENV, OPENCODE_PROVIDER_ENV };
 

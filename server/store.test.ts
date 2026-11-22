@@ -1145,7 +1145,7 @@ describe("Store", () => {
     expect(reloaded.projectBotForTask(bot.id, sibling.threadId)?.approvalMode).toBe("full");
   });
 
-  it("normalizes persisted cloud backends without changing valid or absent values", () => {
+  it("normalizes persisted cloud backends: a removed Boat backend is cleared, valid or absent values are unchanged", () => {
     const store = new Store(selection);
     const boat = store.createBot();
     const vps = store.createBot();
@@ -1159,13 +1159,13 @@ describe("Store", () => {
     writeRegistry(DATA_DIR, { bots: raw });
 
     const reloaded = new Store(selection);
-    expect(reloaded.bot(boat.id)?.cloudBackend).toBe("box");
+    expect(reloaded.bot(boat.id)?.cloudBackend).toBeUndefined();
     expect(reloaded.bot(vps.id)?.cloudBackend).toBe("vps");
     expect(reloaded.bot(invalid.id)?.cloudBackend).toBeUndefined();
     expect(reloaded.bot(absent.id)?.cloudBackend).toBeUndefined();
 
     const saved: BotRecord[] = readRegistry(DATA_DIR).bots;
-    expect(saved.find((bot) => bot.id === boat.id)?.cloudBackend).toBe("box");
+    expect(saved.find((bot) => bot.id === boat.id)).not.toHaveProperty("cloudBackend");
     expect(saved.find((bot) => bot.id === vps.id)?.cloudBackend).toBe("vps");
     expect(saved.find((bot) => bot.id === invalid.id)).not.toHaveProperty("cloudBackend");
     expect(saved.find((bot) => bot.id === absent.id)).not.toHaveProperty("cloudBackend");

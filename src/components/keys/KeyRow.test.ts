@@ -38,7 +38,6 @@ describe("an empty key row", () => {
   });
 
   it("keeps a key's warning in view before it is added", () => {
-    expect(render({ id: "box" })).toContain("Boat is a paid service after its trial.");
     expect(render({ id: "openai" })).toContain("Codex doesn&#x27;t use this key");
   });
 });
@@ -127,8 +126,8 @@ describe("a saved key", () => {
 
 describe("a key that comes with the Cloud plan", () => {
   it("says it is included and offers the person's own key only on request", () => {
-    fixture.config = { box: { configured: true, included: true } };
-    const html = render({ id: "box" });
+    fixture.config = { xResearch: { included: true } };
+    const html = render({ id: "treg" });
     expect(html).toContain("Included with your Cloud plan");
     expect(html).toContain("Use your own key");
     expect(html).not.toContain("<input");

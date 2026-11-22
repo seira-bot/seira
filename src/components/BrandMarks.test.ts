@@ -31,8 +31,6 @@ describe("brand marks", () => {
 
   it("draws the black logos in the text colour, so the dark skins show their white version", () => {
     for (const brand of ["openai", "xai", "elevenlabs", "lmStudio", "composio", "typesafe", "fishAudio"] as const) expect(draw(brand), brand).toContain("var(--color-ink)");
-    expect(draw("boat")).toContain("light-dark(#263FA9, var(--color-ink))");
-    expect(draw("boat")).toContain("color-scheme:var(--code-color-scheme)");
   });
 
   it("gives two gradient marks on one page their own gradients", () => {
