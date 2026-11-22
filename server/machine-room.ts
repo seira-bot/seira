@@ -1,13 +1,9 @@
-// What this computer has free for bots right now: memory, CPUs, pressure, heavy work already running, and how many
-// parallel workers a heavy job should start. One read, no program started: Node's own numbers and Linux's /proc and /sys
-// files. A number that cannot be read here is "unknown", never 0. The budget source is a parameter so a stricter budget
-// (a memory fence) can replace the default.
+// A value that cannot be read is "unknown", never 0.
 import { readFileSync } from "node:fs";
 
 import { availableMemory, boxMemory } from "./box-memory.ts";
 import { boxCpus } from "./box-cpus.ts";
 import { linuxProcessList } from "./perf/process-sampler.ts";
-import { readCgroupMemory } from "./process-limits.ts";
 
 export type Unknown = "unknown";
 
@@ -22,7 +18,7 @@ export interface BudgetSource {
   /** Memory bots may use, bytes: null where it cannot be read. */
   memory(): { totalBytes: number; freeBytes: number } | null;
   cpus(): number | null;
-  /** Share of recent time that tasks stalled on memory, 0..100, null when this system does not say. */
+  /** Share of the last 10 seconds in which some task waited for memory, 0..100; null when this system does not say. */
   pressure(): number | null;
   /** Processes the server started, with their memory, null where the process list cannot be read. */
   processes(): { name: string; rssBytes: number }[] | null;
@@ -42,8 +38,6 @@ export function nodeBudgetSource(options: { platform?: NodeJS.Platform; read?: R
     cpus() { const count = boxCpus(); return count > 0 ? count : null; },
     pressure() {
       if (platform !== "linux") return null;
-      const cgroup = readCgroupMemory(read)?.fullStall10;
-      if (typeof cgroup === "number") return cgroup;
       const some = /^some avg10=([\d.]+)/m.exec(read("/proc/pressure/memory") ?? "")?.[1];
       return some === undefined ? null : Number(some);
     },
@@ -81,7 +75,7 @@ const gb = (bytes: number): number => Math.round((bytes / GB) * 10) / 10;
 export interface MachineRoom {
   memoryGB: { total: number | Unknown; used: number | Unknown; free: number | Unknown };
   cpus: number | Unknown;
-  /** Percent of recent time spent waiting for memory. */
+  /** Percent of the last 10 seconds in which some task waited for memory. */
   memoryPressurePercent: number | Unknown;
   /** Programs over 1 GB that Seira started and that run now: a name and its memory, no arguments or file names. */
   heavyWorkRunning: { program: string; gb: number }[] | Unknown;

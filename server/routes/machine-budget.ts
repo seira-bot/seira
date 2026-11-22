@@ -1,5 +1,4 @@
-// The internal call behind the machine_budget tool. Runs inside index.ts's /api/internal/ block after the capability
-// bearer is checked. It only reads, and shows no file names, so every conversation may ask.
+// It only reads, and shows no file names, so every conversation may ask.
 import type { ServerResponse } from "node:http";
 
 import type { json as sendJson } from "../harness/http.ts";

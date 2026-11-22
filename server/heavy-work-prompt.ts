@@ -1,5 +1,3 @@
-// The heavy-work rules of every bot that runs commands. Static text: the same bytes every turn, so the prompt cache
-// prefix holds. Live numbers come from the machine_budget tool, never from here.
 export const HEAVY_WORK_PROMPT =
   "\n\nHeavy work: test suites, builds, docker, ffmpeg, local models and large files can fill this computer's memory. " +
   "Before one, call machine_budget. Start no more parallel workers than suggestedWorkers (for example --maxWorkers, -j, --workers). " +

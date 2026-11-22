@@ -15,8 +15,6 @@ export const USAGE_LIMITS_TOOL_DEFINITION = {
   inputSchema: { type: "object", additionalProperties: false, properties: {} },
 };
 
-// The machine_budget tool: what this computer has free for a heavy job right now. The internal route
-// (server/routes/machine-budget.ts) reads it; the rules for using it ride the system prompt (server/heavy-work-prompt.ts).
 export const MACHINE_BUDGET_TOOL = "machine_budget";
 
 export async function callMachineBudgetTool(context: ToolCallContext): Promise<ToolCallResult> {
