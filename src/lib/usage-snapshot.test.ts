@@ -49,8 +49,7 @@ afterEach(() => {
 });
 
 const DOCUMENTED = [
-  "key_providers", "key_count", "has_boat_key", "cloud_computer_source", "cloud_computers", "team_computers", "bots_cloud_boat",
-  "bots_cloud_vps", "bots", "bots_local_vm", "bots_this_computer", "bots_browser", "bots_off", "bots_auto", "rooms", "bot_channels",
+  "key_providers", "key_count", "bots_cloud_vps", "bots", "bots_local_vm", "bots_this_computer", "bots_browser", "bots_off", "bots_auto", "rooms", "bot_channels",
   "teams", "routines", "routines_enabled", "routines_cloud", "routines_room_goal", "routines_once", "routines_daily",
   "routines_interval", "routines_cron", "webhooks", "engines", "engine_count", "custom_endpoints", "trial_credit", "apps",
   "apps_connected", "connectors_mode", "local_vm_mode", "vps_configured", "voice", "voice_included", "decider", "decider_included",
@@ -88,7 +87,7 @@ function hostileState(): SnapshotState {
     config: {
       anthropic: { configured: true, everyClaudeBot: false }, openai: { configured: false }, openrouter: { configured: false },
       openaiCompat: { configured: true, url: `https://${HOSTILE}.example.com/v1` }, xai: { configured: false },
-      composio: { configured: true, mode: "self-hosted" }, box: { configured: true },
+      composio: { configured: true, mode: "self-hosted" },
       vps: { configured: true, sshAlias: HOSTILE }, rooms: { turnTimeoutMinutes: 30 }, localVm: { mode: "per-bot", maxInstances: 2 },
       opencodeGo: { configured: true, providerKeys: [HOSTILE] },
       tts: { configured: true, ready: true, voice: HOSTILE, provider: "fish" },
@@ -110,7 +109,7 @@ function hostileState(): SnapshotState {
       instance("codex", "codex", { snapshot: { state: "unavailable", reason: HOSTILE } }),
     ],
     bots: [
-      hostileBot("cloud"), hostileBot("cloud", "box"), hostileBot("cloud", "vps"), hostileBot("vm"), hostileBot("local"), hostileBot("browser"),
+      hostileBot("cloud"), hostileBot("cloud", "vps"), hostileBot("vm"), hostileBot("local"), hostileBot("browser"),
       hostileBot("off"), hostileBot(), hostileBot(),
     ] as unknown as SnapshotState["bots"],
     groups: [{ id: HOSTILE, name: HOSTILE, bulletin: HOSTILE, dm: false }, { id: HOSTILE, name: HOSTILE, dm: true }, { id: HOSTILE, name: HOSTILE }] as unknown as SnapshotState["groups"],
@@ -147,7 +146,6 @@ function hostileSources(overrides: Partial<UsageSources> = {}): UsageSources & {
           ],
         } as T;
       }
-      if (path === "/api/computers/usage") return { cloudComputers: 3, teamComputers: 1 } as T;
       throw new Error(`unexpected ${path}`);
     },
     connectedApps: async () => {
@@ -199,9 +197,9 @@ describe("the daily usage snapshot", () => {
     expect(await snapshot.sendDailySnapshot(hostileState(), hostileSources(), DAY)).toBe(true);
     const [sent] = snapshots();
     expect(sent).toEqual({
-      key_providers: ["anthropic", "openai_compat", "boat", "composio", "opencode_go", "fish_audio", "jev", "custom_image", "openai_live"],
-      key_count: 9, has_boat_key: true, cloud_computer_source: "own_key", cloud_computers: 3, team_computers: 1,
-      bots_cloud_boat: 2, bots_cloud_vps: 1, bots: 9, bots_local_vm: 1, bots_this_computer: 1, bots_browser: 1, bots_off: 1, bots_auto: 2,
+      key_providers: ["anthropic", "openai_compat", "composio", "opencode_go", "fish_audio", "jev", "custom_image", "openai_live"],
+      key_count: 8,
+      bots_cloud_vps: 2, bots: 8, bots_local_vm: 1, bots_this_computer: 1, bots_browser: 1, bots_off: 1, bots_auto: 2,
       rooms: 2, bot_channels: 1, teams: 2,
       routines: 4, routines_enabled: 3, routines_cloud: 1, routines_room_goal: 1, routines_once: 1, routines_daily: 1, routines_interval: 1, routines_cron: 1,
       webhooks: 1, engines: ["claude", "openai_compat", "other"], engine_count: 4, custom_endpoints: 1, trial_credit: "used_up",
@@ -258,15 +256,6 @@ describe("the daily usage snapshot", () => {
     expect(await snapshot.sendDailySnapshot(hostileState(), sources, DAY)).toBe(true);
   });
 
-  it("asks no Boat question and counts no cloud computers without a Boat account", async () => {
-    const { snapshot } = await freshModules();
-    const state = hostileState();
-    const sources = hostileSources();
-    await snapshot.sendDailySnapshot({ ...state, config: { ...state.config!, box: { configured: false } } }, sources, DAY);
-    expect(sources.calls).not.toContain("/api/computers/usage");
-    expect(snapshots()[0]).toMatchObject({ cloud_computer_source: "none", cloud_computers: 0, team_computers: 0, has_boat_key: false });
-  });
-
   it("leaves out what a source could not tell, and still sends the rest", async () => {
     const { snapshot } = await freshModules();
     const fail = async () => { throw new Error("unreachable"); };
@@ -274,10 +263,10 @@ describe("the daily usage snapshot", () => {
       request: fail, connectedApps: fail, companion: { state: fail }, cloudAccount: { state: fail },
     }), DAY);
     const [sent] = snapshots();
-    for (const key of ["cloud_computers", "team_computers", "apps", "apps_connected", "phones_paired", "paired_devices", "phone_paired", "members", "cloud_trial"]) {
+    for (const key of ["apps", "apps_connected", "phones_paired", "paired_devices", "phone_paired", "members", "cloud_trial"]) {
       expect(sent, key).not.toHaveProperty(key);
     }
-    expect(sent).toMatchObject({ cloud_plan: "unknown", bots: 9, key_count: 9 });
+    expect(sent).toMatchObject({ cloud_plan: "unknown", bots: 8, key_count: 8 });
   });
 
   it("reads the plan from a Cloud page's own bridge, and leaves out what only this computer knows", async () => {
@@ -286,11 +275,10 @@ describe("the daily usage snapshot", () => {
       companion: null, cloudAccount: null, platform: "browser",
       cloudPlan: { state: async () => ({ status: "paid", tier: "pro", trial: { state: "ending", endsAt: 1, amount: null, chargeAt: null, holdUntil: null } } as never) },
     });
-    await snapshot.sendDailySnapshot({ ...hostileState(), config: { ...hostileState().config!, cloudHome: true, box: { configured: true, included: true } } }, sources, DAY);
+    await snapshot.sendDailySnapshot({ ...hostileState(), config: { ...hostileState().config!, cloudHome: true } }, sources, DAY);
     const [sent] = snapshots();
-    expect(sent).toMatchObject({ cloud_plan: "pro", cloud_trial: true, cloud_home: true, cloud_computer_source: "included", platform: "browser", paired_devices: 2, phone_paired: true });
+    expect(sent).toMatchObject({ cloud_plan: "pro", cloud_trial: true, cloud_home: true, platform: "browser", paired_devices: 2, phone_paired: true });
     expect(sent).not.toHaveProperty("phones_paired");
-    expect((sent!.key_providers as string[])).not.toContain("boat");
   });
 });
 
@@ -319,16 +307,11 @@ describe("an opted-out install", () => {
   });
 });
 
-describe("what counts as a key, a computer source and an app", () => {
+describe("what counts as a key and an app", () => {
   const minimal = (config: Partial<ConfigStatus> = {}, input: Partial<UsageInput> = {}): UsageInput => ({
-    config: { composio: { configured: false }, box: { configured: false }, vps: { configured: false, sshAlias: "" }, rooms: { turnTimeoutMinutes: 30 }, localVm: { mode: "shared", maxInstances: 1 }, ...config } as ConfigStatus,
+    config: { composio: { configured: false }, vps: { configured: false, sshAlias: "" }, rooms: { turnTimeoutMinutes: 30 }, localVm: { mode: "shared", maxInstances: 1 }, ...config } as ConfigStatus,
     instances: [], bots: [], groups: [], routines: [], webhooks: 0, apps: null, sessions: null, companionDevices: null, cloud: null,
-    computers: null, platform: "browser", remoteClient: false, ...input,
-  });
-
-  it("tells an own Boat key from computers included with a Cloud plan", () => {
-    expect(buildUsageSnapshot(minimal({ box: { configured: true } }))).toMatchObject({ has_boat_key: true, cloud_computer_source: "own_key", key_providers: ["boat"] });
-    expect(buildUsageSnapshot(minimal({ box: { configured: true, included: true } }))).toMatchObject({ has_boat_key: false, cloud_computer_source: "included", key_providers: [], key_count: 0 });
+    platform: "browser", remoteClient: false, ...input,
   });
 
   it("counts a Composio key only for a self-hosted project, and names the mode either way", () => {
@@ -344,17 +327,14 @@ describe("what counts as a key, a computer source and an app", () => {
     expect(sent).toMatchObject({ key_providers: [], voice: "elevenlabs", voice_included: true, decider: "jev", decider_included: true });
   });
 
-  it("leaves out the cloud computer count it was not told, the apps of an inventory it cannot trust, and lists not loaded", () => {
+  it("leaves out the apps of an inventory it cannot trust, and lists not loaded", () => {
     const services = { gmail: { connected: true } };
-    for (const computers of [null, { cloudComputers: null, teamComputers: 2 }]) {
-      const sent = buildUsageSnapshot(minimal({}, { computers, apps: { services, authoritative: false }, routines: null, webhooks: null }));
-      expect(sent).not.toHaveProperty("cloud_computers");
-      expect(sent).not.toHaveProperty("apps");
-      expect(sent).not.toHaveProperty("apps_connected");
-      expect(sent).not.toHaveProperty("routines");
-      expect(sent).not.toHaveProperty("routines_enabled");
-      expect(sent).not.toHaveProperty("webhooks");
-    }
+    const sent = buildUsageSnapshot(minimal({}, { apps: { services, authoritative: false }, routines: null, webhooks: null }));
+    expect(sent).not.toHaveProperty("apps");
+    expect(sent).not.toHaveProperty("apps_connected");
+    expect(sent).not.toHaveProperty("routines");
+    expect(sent).not.toHaveProperty("routines_enabled");
+    expect(sent).not.toHaveProperty("webhooks");
     expect(buildUsageSnapshot(minimal({}, { apps: { services, authoritative: true } }))).toMatchObject({ apps: ["gmail"], apps_connected: 1 });
   });
 
@@ -372,14 +352,12 @@ describe("what counts as a key, a computer source and an app", () => {
   });
 
   it("leaves archived bots out of every bot count", () => {
-    const bots = [{ computer: "cloud", hidden: true }, { computer: "cloud", cloudBackend: "vps", hidden: true }, { computer: "local", hidden: false }, { computer: "cloud" }] as UsageInput["bots"];
-    expect(buildUsageSnapshot(minimal({}, { bots }))).toMatchObject({ bots: 2, bots_cloud_boat: 1, bots_cloud_vps: 0, bots_this_computer: 1 });
+    const bots = [{ computer: "cloud", hidden: true }, { computer: "local", hidden: false }, { computer: "cloud" }] as UsageInput["bots"];
+    expect(buildUsageSnapshot(minimal({}, { bots }))).toMatchObject({ bots: 2, bots_cloud_vps: 1, bots_this_computer: 1 });
   });
 
   it("never passes a number the server sent unless it is a count", () => {
-    const sent = buildUsageSnapshot(minimal({}, { computers: { cloudComputers: -1, teamComputers: "3" }, companionDevices: 1.5 }));
-    expect(sent).not.toHaveProperty("cloud_computers");
-    expect(sent).not.toHaveProperty("team_computers");
+    const sent = buildUsageSnapshot(minimal({}, { companionDevices: 1.5 }));
     expect(sent).not.toHaveProperty("phones_paired");
   });
 });

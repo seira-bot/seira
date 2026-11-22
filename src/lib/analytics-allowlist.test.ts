@@ -18,7 +18,7 @@ const HOSTILE = [
 
 describe("allow", () => {
   it("passes a value only when its list has it", () => {
-    expect(allow("boat", KEY_PROVIDER)).toBe("boat");
+    expect(allow("composio", KEY_PROVIDER)).toBe("composio");
     expect(allow("gmail", APP)).toBe("gmail");
     for (const value of HOSTILE) expect(allow(value, KEY_PROVIDER), JSON.stringify(value) ?? "undefined").toBe("other");
   });

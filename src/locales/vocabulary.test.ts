@@ -51,7 +51,6 @@ const isSource = (name: string) => /\.(?:ts|tsx|mjs|cjs|js)$/.test(name) && !/\.
 
 /** No snippet keeps the word file-wide; otherwise only literals containing the snippet. */
 const ALLOWED: ReadonlyArray<{ file: string; snippet?: string; why: string }> = [
-  { file: "src/lib/remote-desktop.ts", snippet: "Boat account settings", why: "an older server's busy line; goes with the client's Boat code" },
   { file: "server/boat-retirement.ts", why: "the one-time move off Boat names it in its own log lines" },
   { file: "electron/legacy-names.mjs", why: "reads files that earlier versions wrote" },
   { file: "packages/phone-protocol/src/wire-names.ts", why: "the released phone apps know these names" },

@@ -262,7 +262,7 @@ describe("SecretRequestCard mailbox", () => {
 });
 
 describe("SecretRequestCard key analytics", () => {
-  const KEY = "boat_ZZtestSECRET0123456789abcdef";
+  const KEY = "key_ZZtestSECRET0123456789abcdef";
   type Props = { children?: ReactNode; type?: string; onChange?: (event: { target: { value: string } }) => void; onSubmit?: (event: { preventDefault(): void }) => void };
   const nodes = (tree: ReactNode): Array<ReactElement<Props>> =>
     Children.toArray(tree).flatMap((child) => isValidElement<Props>(child) ? [child, ...nodes(child.props.children)] : []);

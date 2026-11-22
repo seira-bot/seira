@@ -75,7 +75,7 @@ const makeBot = (patch: Partial<Bot> = {}): Bot => ({
 let root: Root | null = null;
 let features: NonNullable<AppState["config"]>["features"];
 const value = (): Parameters<typeof BotEditorStore>[0]["value"] => ({
-  state: { ...initialState, instances: [engine("claude"), engine("codex")], config: { box: { configured: true }, features } as AppState["config"] } as AppState,
+  state: { ...initialState, instances: [engine("claude"), engine("codex")], config: { features } as AppState["config"] } as AppState,
   dispatch: vi.fn(),
   flushBotPatches: async () => null,
   refreshInstances: async () => {},

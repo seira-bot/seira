@@ -45,7 +45,6 @@ describe("buildDiagnosticsReport", () => {
       appInfo,
       configSummary: {
         xai: { configured: true },
-        box: { configured: false },
         rooms: { turnTimeoutMinutes: 5 },
       },
       logTail: "",
