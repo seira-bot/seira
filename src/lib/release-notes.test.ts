@@ -1,6 +1,7 @@
 import { Bug, Mic } from "lucide-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { compareVersions, noteVersion, RELEASE_NOTES, releaseNoteKeys, releaseNotesHint, releaseNotesUrl, releaseNotesView, VERSIONS_KEY, type ReleaseNote } from "./release-notes";
+import pkg from "../../package.json";
+import { compareVersions, noteVersion, RELEASE_NOTES, releaseNoteKeys, releaseNotesHint, releaseNotesUrl, releaseNotesView, VERSIONS_KEY, whatsNewMenuAction, type ReleaseNote } from "./release-notes";
 
 let storage: Map<string, string>;
 beforeEach(() => {
@@ -124,5 +125,42 @@ describe("releaseNotesView", () => {
   });
   it("shows nothing for a development build", () => {
     expect(releaseNotesView({ first: "", last: "dev", before: "0.1.180" }, "dev")).toBeNull();
+  });
+});
+
+describe("whatsNewMenuAction", () => {
+  const popupOf = (action: ReturnType<typeof whatsNewMenuAction>) => {
+    if (action.kind !== "popup") throw new Error(`expected a popup, got ${action.url}`);
+    return action.view;
+  };
+  it("shows the entry of the running version", () => {
+    expect(popupOf(whatsNewMenuAction("0.1.182", NOTES))).toMatchObject({ version: "0.1.182", from: null });
+  });
+  it("shows the newest older entry when the version has none", () => {
+    expect(popupOf(whatsNewMenuAction("0.1.183", NOTES)).version).toBe("0.1.182");
+    expect(popupOf(whatsNewMenuAction("0.1.190", NOTES)).version).toBe("0.1.184");
+  });
+  it("shows the newest entry for a build that has no number", () => {
+    expect(popupOf(whatsNewMenuAction("dev", NOTES)).version).toBe("0.1.184");
+  });
+  it("opens the release page when every entry is newer", () => {
+    expect(whatsNewMenuAction("0.1.179", NOTES)).toEqual({ kind: "link", url: "https://github.com/seira-bot/seira/releases/tag/v0.1.179" });
+  });
+  it("opens the releases page when there are no entries and no number", () => {
+    expect(whatsNewMenuAction("dev", [])).toEqual({ kind: "link", url: "https://github.com/seira-bot/seira/releases" });
+  });
+  it("shows at most six items", () => {
+    const many: ReleaseNote[] = [{ version: "0.1.190", items: Array.from({ length: 9 }, (_, i) => item(`x${i}`)) }];
+    expect(popupOf(whatsNewMenuAction("0.1.190", many)).items).toHaveLength(6);
+  });
+});
+
+describe("release guard", () => {
+  it("has a release-notes entry for the package version", () => {
+    const version = pkg.version;
+    expect(RELEASE_NOTES.some(note => note.version === version), `add a RELEASE_NOTES entry for ${version} in src/lib/release-notes.ts`).toBe(true);
+  });
+  it("lists the package version first", () => {
+    expect(RELEASE_NOTES[0]!.version, "put the entry for the package version first in RELEASE_NOTES").toBe(pkg.version);
   });
 });
