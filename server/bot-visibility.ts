@@ -666,8 +666,10 @@ export function frameForMember(payload: Record<string, unknown>, ctx: FrameConte
       const { help: _help, ...rest } = payload;
       return { ...rest, helpReason: null };
     }
-    case "config":
-      return visible.everything ? payload : Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, narrowedHolds(key, value, visible)]));
+    case "config": {
+      const narrowed = Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, narrowedHolds(key, value, visible)]));
+      return Object.keys(payload).some((key) => key === "heldBots" || key === "pausedBots" || key === "pausedByPerson") ? narrowed : payload;
+    }
     case "routine.deleted":
     case "workflow.deleted":
     case "webhook.deleted":

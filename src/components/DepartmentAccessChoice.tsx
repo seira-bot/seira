@@ -38,6 +38,7 @@ export function DepartmentAccessChoice({ value, onChange, departments, limited, 
           ))}
         </fieldset>
       )}
+      {value?.includes("") && !adminReason && <p role="note" className="text-[12px] leading-relaxed text-warning">{t("people.access.generalWarning")}</p>}
       {open.map((name) => (
         <p key={name || "general"} role="note" className="text-[12px] leading-relaxed text-warning">
           {t("people.access.folderWarning", { department: name || t("settings.section.general") })}

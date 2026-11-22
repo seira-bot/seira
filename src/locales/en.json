@@ -4513,6 +4513,7 @@
   "people.access.pick": "Choose at least one department.",
   "people.access.failed": "Access could not be saved. Try again.",
   "people.access.folderWarning": "Bots in {department} can still read files outside their folders.",
+  "people.access.generalWarning": "Bots in General, Chief of Staff too, can then hand work only to bots in General.",
   "people.access.unreadable": "Who sees which department could not be loaded. Users see nothing until this is fixed.",
   "people.notHosted": "Email sign-in is not enabled on this server, so invite links will not work here; people connect with a pairing code from Remote access.",
   "people.portalSignIn": "On this installation people sign in through your organization's Admin, so invite links and pairing codes are not used here.",

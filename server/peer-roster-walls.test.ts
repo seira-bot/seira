@@ -54,13 +54,13 @@ describe("a walled department", () => {
 });
 
 describe("General", () => {
-  it("is never walled, even when a grant names it, so the Chief keeps its reach", () => {
-    setDepartmentWalls((section) => section === "" || section === "Sales");
-    expect(canReach(chief, sales)).toBe(true);
-    expect(canReach(chief, fin)).toBe(true);
-    expect(walledOff(chief, fin)).toBeUndefined();
-    expect(reachablePeers(all, chief).map((peer) => peer.id).sort()).toEqual(["fin", "sales", "sales2"]);
-    expect(canReach(sales, fin)).toBe(false);
+  it("is walled like any department when a grant names it: its bots, the Chief too, reach only General", () => {
+    setDepartmentWalls((section) => section === "");
+    expect(canReach(chief, sales)).toBe(false);
+    expect(canReach(chief, fin)).toBe(false);
+    expect(walledOff(chief, sales)).toMatch(/another department/);
+    expect(reachablePeers(all, chief)).toEqual([]);
+    expect(canReach(sales, chief)).toBe(true);
   });
 });
 

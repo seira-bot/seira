@@ -129,11 +129,10 @@ export function setDepartmentWalls(walled: (section: string) => boolean): void {
 }
 
 /** Security invariant: a bot in a walled department reaches only bots of its own department. Reaching in from outside
- * stays open, and a report back to whoever started the work is no new reach. General is never
- * walled: the default bot and the Chief live there. */
+ * stays open, and a report back to whoever started the work is no new reach. General counts
+ * as a department: a bot there could otherwise carry another department's data into a chat a limited person reads. */
 function behindWall(from: Pick<RosterMember, "section">, target: Pick<RosterMember, "section">): boolean {
-  const own = sectionKey(from.section);
-  return own !== "" && own !== sectionKey(target.section) && isWalled(own);
+  return sectionKey(from.section) !== sectionKey(target.section) && isWalled(sectionKey(from.section));
 }
 
 /** The refusal a bot is told when a hand-off would cross a department wall, else undefined. */

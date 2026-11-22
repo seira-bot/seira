@@ -4312,6 +4312,7 @@
   "people.access.pick": "Escolha pelo menos um departamento.",
   "people.access.failed": "Não foi possível salvar o acesso. Tente de novo.",
   "people.access.folderWarning": "Os bots em {department} ainda podem ler arquivos fora das pastas deles.",
+  "people.access.generalWarning": "Os bots em Geral, incluindo o chefe de gabinete, só poderão passar trabalho para bots em Geral.",
   "people.access.unreadable": "Não foi possível carregar quem vê cada departamento. Os usuários não veem nada até isso ser corrigido.",
   "people.notHosted": "O login por e-mail não está ativado neste servidor, então os links de convite não funcionam aqui; as pessoas se conectam com um código de pareamento em Acesso remoto.",
   "people.portalSignIn": "Nesta instalação, as pessoas entram pelo Admin da sua organização, então links de convite e códigos de pareamento não são usados aqui.",
