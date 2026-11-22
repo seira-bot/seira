@@ -79,8 +79,6 @@ let brokerConnectedServicesBody: { complete?: boolean; services: Record<string, 
 let brokerConnectedServicesFail = false;
 // What /broker/v1/catalog serves; null falls back to github only.
 let brokerCatalogBody: { items: Array<{ slug: string; name: string; composio_managed_auth_schemes?: string[] }> } | null = null;
-// What /broker/v1/auth-configs answers: a body, a failing status, or null for a broker that has no such route.
-let brokerAuthConfigs: { status: number; body: unknown } | null = null;
 // The project's own auth configs, and those the stub Session was created with: a Session knows only the configs named at creation.
 let customAuthConfigs: Array<Record<string, unknown>> = [];
 let sessionAuthConfigs: Record<string, string> = {};
@@ -136,10 +134,6 @@ beforeAll(async () => {
       if (req.method === "DELETE" && url.pathname.startsWith("/broker/v1/connectors/")) {
         res.writeHead(200, { "content-type": "application/json" });
         return res.end(JSON.stringify({ removed: 1 }));
-      }
-      if (req.method === "GET" && url.pathname === "/broker/v1/auth-configs" && brokerAuthConfigs) {
-        res.writeHead(brokerAuthConfigs.status, { "content-type": "application/json" });
-        return res.end(typeof brokerAuthConfigs.body === "string" ? brokerAuthConfigs.body : JSON.stringify(brokerAuthConfigs.body));
       }
       if (req.method === "GET" && url.pathname === "/broker/v1/catalog") {
         res.writeHead(200, { "content-type": "application/json" });
@@ -527,44 +521,13 @@ describe.sequential("Composio Sessions", () => {
       (await listToolkits(cfg)).cards.filter((card) => card.needsOwnAuth).map((card) => card.slug);
 
     afterEach(() => {
-      brokerCatalogBody = null;
-      brokerAuthConfigs = null;
       customAuthConfigs = [];
-      setManagedBrokerAccess(null);
-    });
-
-    it("does not flag a toolkit that the managed service lists with its own auth config", async () => {
-      setManagedBrokerAccess({ url: `${origin}/broker`, token: "ac".repeat(32) });
-      brokerCatalogBody = { items: ownCatalog };
-      brokerAuthConfigs = { status: 200, body: { toolkits: ["ownauth"] } };
-
-      await expect(flaggedSlugs({})).resolves.toEqual(["otherown"]);
     });
 
     it("does not flag a toolkit with an enabled auth config in the person's own project", async () => {
       customAuthConfigs = [{ id: "ac_own", toolkit: { slug: "ownauth" }, is_composio_managed: false, status: "ENABLED", is_enabled_for_tool_router: true }];
 
       await expect(flaggedSlugs({ composio: { apiKey: "ak_catalog_own" } })).resolves.toEqual(["otherown"]);
-    });
-
-    it("keeps the flag and the cards when the managed service has no list", async () => {
-      setManagedBrokerAccess({ url: `${origin}/broker`, token: "ad".repeat(32) });
-      brokerCatalogBody = { items: ownCatalog };
-
-      await expect(flaggedSlugs({})).resolves.toEqual(["ownauth", "otherown"]);
-    });
-
-    it("keeps the flag and the cards when the managed list fails or is malformed", async () => {
-      brokerCatalogBody = { items: ownCatalog };
-      for (const [token, answer] of [
-        ["ae".repeat(32), { status: 500, body: { error: "down" } }],
-        ["ca".repeat(32), { status: 200, body: "not json" }],
-        ["da".repeat(32), { status: 200, body: { toolkits: "ownauth" } }],
-      ] as const) {
-        setManagedBrokerAccess({ url: `${origin}/broker`, token });
-        brokerAuthConfigs = answer;
-        await expect(flaggedSlugs({})).resolves.toEqual(["ownauth", "otherown"]);
-      }
     });
 
     it("keeps the flag and the cards when the person's project cannot list its auth configs", async () => {

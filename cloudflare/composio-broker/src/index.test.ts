@@ -962,25 +962,42 @@ describe("Sessions reach the person's working accounts", () => {
     return { h, me, created, connected, status, reachable };
   }
 
-  it("lists the toolkits that have a usable project auth config, sorted", async () => {
-    const { h, me } = await oneInstallation();
-    h.composio.authConfigs.push(
-      { ...ownGmail, id: "ac_zoho", toolkit: { slug: "zoho_crm" } },
-      ownGmail,
-      { ...ownGmail, id: "ac_off", toolkit: { slug: "xero" }, is_enabled_for_tool_router: false },
-    );
-
-    const response = await h.call(me, "/v1/auth-configs");
-
+  const elevenlabs = { slug: "elevenlabs", name: "ElevenLabs", composio_managed_auth_schemes: [], meta: { description: "Voice" } };
+  const github = { slug: "github", name: "GitHub", composio_managed_auth_schemes: [] };
+  const catalogOf = async (h: Awaited<ReturnType<typeof oneInstallation>>["h"], me: Awaited<ReturnType<typeof oneInstallation>>["me"]) => {
+    const response = await h.call(me, "/v1/catalog");
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ toolkits: ["gmail", "zoho_crm"] });
+    expect(response.headers.get("cache-control")).toBe("private, max-age=600");
+    return (await response.json() as { items: unknown[] }).items;
+  };
+
+  it("drops the managed sign-in list of a toolkit that has a project auth config", async () => {
+    const { h, me } = await oneInstallation();
+    h.composio.catalogItems.push(elevenlabs, github);
+    h.composio.authConfigs.push({ ...ownGmail, id: "ac_eleven", toolkit: { slug: "elevenlabs" } });
+
+    await expect(catalogOf(h, me)).resolves.toEqual([
+      { slug: "elevenlabs", name: "ElevenLabs", meta: { description: "Voice" } },
+      github,
+    ]);
   });
 
-  it("refuses the auth config list without a valid installation token", async () => {
+  it("passes the catalog through when the project has no auth config", async () => {
     const { h, me } = await oneInstallation();
+    h.composio.catalogItems.push(elevenlabs, github);
 
-    expect((await h.fetch("/v1/auth-configs")).status).toBe(401);
-    expect((await h.call({ ...me, token: "x".repeat(64) }, "/v1/auth-configs")).status).toBe(401);
+    await expect(catalogOf(h, me)).resolves.toEqual([elevenlabs, github]);
+  });
+
+  it("passes the catalog through when the auth config read fails", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { h, me } = await oneInstallation();
+    h.composio.catalogItems.push(elevenlabs, github);
+    h.composio.authConfigs.push({ ...ownGmail, id: "ac_eleven", toolkit: { slug: "elevenlabs" } });
+    h.composio.fail(500, (call) => call.path === "/auth_configs");
+
+    await expect(catalogOf(h, me)).resolves.toEqual([elevenlabs, github]);
+    errors.mockRestore();
   });
 
   it("leaves a toolkit out of the Session when its working account is on Composio's managed config", async () => {
