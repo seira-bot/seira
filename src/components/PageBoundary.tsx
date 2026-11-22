@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from "react";
 
+import { reportPageBoundary } from "@/lib/crash-reports";
 import { t } from "@/lib/i18n";
 import { SeiraCharacter } from "./seira-character";
 
@@ -10,6 +11,10 @@ export class PageBoundary extends Component<{ children: ReactNode }, { error: Er
 
   static getDerivedStateFromError(error: unknown) {
     return { error: error instanceof Error ? error : new Error(String(error)) };
+  }
+
+  componentDidCatch(error: unknown) {
+    reportPageBoundary(error);
   }
 
   render() {

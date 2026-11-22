@@ -4164,5 +4164,9 @@
   "roomPicture.remove": "Bild entfernen",
   "roomPicture.typeRefused": "Wähle ein PNG-, JPEG-, GIF- oder WebP-Bild.",
   "roomPicture.tooBig": "Das Bild ist zu groß. Wähle eines unter 10 MB.",
-  "roomPicture.failed": "Das Bild konnte nicht gespeichert werden. Versuche es noch einmal."
+  "roomPicture.failed": "Das Bild konnte nicht gespeichert werden. Versuche es noch einmal.",
+  "settings.crashReports.title": "Absturzberichte senden",
+  "settings.crashReports.aria": "Absturzberichte senden",
+  "settings.crashReports.subtitle": "Wenn Seira nicht mehr funktioniert, sendet es die App-Version, den Systemtyp und die Stelle im Code, an der es fehlgeschlagen ist, nie deine Nachrichten, Dateien oder Namen.",
+  "settings.crashReports.link": "Was ein Bericht enthält"
 }

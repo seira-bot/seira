@@ -3942,5 +3942,9 @@
   "roomPicture.remove": "Retirer l'image",
   "roomPicture.typeRefused": "Choisissez une image PNG, JPEG, GIF ou WebP.",
   "roomPicture.tooBig": "Cette image est trop lourde. Choisissez-en une de moins de 10 Mo.",
-  "roomPicture.failed": "L'image n'a pas pu être enregistrée. Réessayez."
+  "roomPicture.failed": "L'image n'a pas pu être enregistrée. Réessayez.",
+  "settings.crashReports.title": "Envoyer les rapports de plantage",
+  "settings.crashReports.aria": "Envoyer les rapports de plantage",
+  "settings.crashReports.subtitle": "Quand Seira cesse de fonctionner, elle envoie la version de l'app, le type de système et l'endroit de son code où l'erreur s'est produite, jamais vos messages, fichiers ou noms.",
+  "settings.crashReports.link": "Ce que contient un rapport"
 }

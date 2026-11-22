@@ -11964,5 +11964,9 @@
   "call.voice.languageAuto": "Auto",
   "call.voice.device": "Voice on this computer",
   "call.voice.deviceDefault": "Default voice",
-  "call.voice.thisComputer": "This computer"
+  "call.voice.thisComputer": "This computer",
+  "settings.crashReports.title": "Send crash reports",
+  "settings.crashReports.aria": "Send crash reports",
+  "settings.crashReports.subtitle": "When Seira stops working, it sends the app version, system type, and where its code failed, never your messages, files, or names.",
+  "settings.crashReports.link": "What a report contains"
 }
