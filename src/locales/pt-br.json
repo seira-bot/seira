@@ -526,8 +526,6 @@
   "releaseNotes.items.boatGone.body": "O desktop na nuvem de um bot agora é o seu próprio servidor. Os bots que usavam o desktop na nuvem antigo agora trabalham no seu servidor, ou sem computador se você não tiver um servidor. Rotinas, webhooks e automações de apps que rodavam lá estão desligadas. Abra cada uma, escolha onde ela roda e ligue de novo.",
   "releaseNotes.items.memoryForBots.title": "Trabalho pesado dos bots não trava o computador",
   "releaseNotes.items.memoryForBots.body": "Todo o trabalho dos bots neste computador divide um único limite de memória, então uma tarefa grande não deixa seus outros apps lentos. Para mudar o limite, abra Configurações, Você e seus bots, Limites, Memória para bots.",
-  "releaseNotes.items.crashReports.title": "Relatórios de falha nos ajudam a corrigir o Seira",
-  "releaseNotes.items.crashReports.body": "Quando o Seira para de funcionar, o app de desktop envia a versão do app, o tipo de sistema e onde o código falhou. Ele nunca envia mensagens, arquivos ou nomes. Para desligar, abra Configurações, Geral, Privacidade.",
   "releaseNotes.items.callView.title": "As chamadas tocam como uma ligação",
   "releaseNotes.items.callView.body": "Ligue para um bot pelo chat dele. A chamada toca e depois mostra o bot e o tempo de chamada. Minimize para continuar trabalhando em outro chat. Voz da chamada define a velocidade, a voz e o idioma desse bot.",
   "releaseNotes.items.chosenFolders.title": "Escolha as pastas que um bot pode usar",
