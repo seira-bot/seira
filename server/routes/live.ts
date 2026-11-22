@@ -6,6 +6,7 @@ import { GEMINI_LIVE_VOICE_OPTIONS } from "../../shared/live-call.ts";
 import { azureLiveDeployment, azureOpenAiRoot, customLiveApiBase, customLiveModel, LiveSessionError, MAX_SDP_BYTES } from "../live-call.ts";
 import { LiveCallBusyError, type LiveCallController } from "../live-call-controller.ts";
 import { RELAY_POLL_MS } from "../live-fish.ts";
+import { companionDeviceOf } from "./paired-device.ts";
 import { PASS, type RouteContext, type RouteHandler } from "./table.ts";
 
 export interface LiveRouteDeps {
@@ -60,15 +61,6 @@ const settingsBody = z.object({
   idleMinutes: z.number().int().min(1).max(60).optional(),
 }).strict();
 
-const DEVICE_ID = /^[\w-]{1,128}$/;
-
-/** The companion sends its own id for the phone that authenticated, never one the phone chose. */
-function companionDevice(req: IncomingMessage): string | undefined {
-  if (req.headers["x-seira-companion"] !== "1") return undefined;
-  const device = req.headers["x-seira-companion-device"];
-  return typeof device === "string" && DEVICE_ID.test(device) ? device : undefined;
-}
-
 async function bodyOf(req: IncomingMessage, readBody: RouteContext["readBody"]): Promise<unknown> {
   try {
     return await readBody(req);
@@ -87,7 +79,7 @@ export function createLiveRoutes(deps: LiveRouteDeps): RouteHandler {
       const target = deps.resolveTarget(parsed.data.botId, parsed.data.threadId);
       if (!target) return json(res, 404, { error: "That bot or chat does not exist." });
       try {
-        const device = companionDevice(req);
+        const device = companionDeviceOf(req, auth);
         const started = await deps.calls.start({ auth, ...(device ? { device } : {}), ...target, client: parsed.data.client, ...(parsed.data.sdp ? { sdp: parsed.data.sdp } : {}) });
         return json(res, 201, { call: started.call, transport: started.fish ?? started.gemini ?? started.elevenlabs ?? { type: "webrtc", sdp: started.sdp } });
       } catch (error) {
@@ -118,8 +110,10 @@ export function createLiveRoutes(deps: LiveRouteDeps): RouteHandler {
     }
 
     if (method === "POST" && path === "/api/live/device-revoked") {
-      if (req.headers["x-seira-companion"] !== "1") return json(res, 403, { error: "Only the phone companion can report an unpaired phone." });
-      const device = companionDevice(req);
+      if (auth.kind !== "loopback" || (!auth.companionDevice && req.headers["x-seira-companion"] !== "1")) {
+        return json(res, 403, { error: "Only the phone companion can report an unpaired phone." });
+      }
+      const device = companionDeviceOf(req, auth);
       if (!device) return json(res, 400, { error: "The unpaired phone was not named." });
       deps.deviceRevoked?.(device);
       return json(res, 200, { call: deps.calls.deviceRevoked(device) });

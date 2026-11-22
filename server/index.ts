@@ -12567,7 +12567,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         return preview ? json(res, 200, { ...preview, ...(CLOUD_TEAM ? { team: CLOUD_TEAM.name } : {}) }) : json(res, 401, { ...userError("serverError.pair.linkExpired"), code: "pairing_link_expired" satisfies PairingErrorCode });
       }
       if (browser && !wantsCookie) return json(res, 400, { error: "a browser sign-in sets this browser's cookie; send cookie: true", code: "pairing_bad_request" satisfies PairingErrorCode });
-      const result = sessions.exchange({ code, label, attemptId, browser, source: requestSource(req), fallbackLabel: labelFromUserAgent(req.headers["user-agent"]) });
+      const result = sessions.exchange({ code, label, attemptId, browser, cookie: wantsCookie, source: requestSource(req), fallbackLabel: labelFromUserAgent(req.headers["user-agent"]) });
       if (!result.ok) {
         console.warn(`pairing refused from ${requestSource(req)}: ${result.error}`);
         return json(res, result.status, { ...refusalBody(result), code: result.code });
@@ -12593,7 +12593,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       const label = typeof body?.deviceName === "string" ? body.deviceName : "";
       const attemptId = typeof body?.pairRequestId === "string" ? body.pairRequestId : undefined;
       const relayRefusal = phoneRelay?.pairingRefusal(req, credential); if (relayRefusal) return json(res, 400, { error: relayRefusal, code: "pairing_qr_only" satisfies PairingErrorCode });
-      const paired = sessions.exchange({ code: credential, label, attemptId, source: requestSource(req), fallbackLabel: labelFromUserAgent(req.headers["user-agent"]) });
+      const paired = sessions.exchange({ code: credential, label, attemptId, device: true, source: requestSource(req), fallbackLabel: labelFromUserAgent(req.headers["user-agent"]) });
       if (!paired.ok) {
         console.warn(`pairing refused from ${requestSource(req)}: ${paired.error}`);
         return json(res, paired.status, { ...refusalBody(paired), code: paired.code });

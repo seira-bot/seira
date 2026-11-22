@@ -24,12 +24,12 @@ describe("a paired phone changes where one bot works", () => {
   let adminToken = "";
   let clientToken = "";
 
-  const call = async (method: string, path: string, body?: unknown, token?: string) => {
+  const call = async (method: string, path: string, body?: unknown, token?: string, companionHeader = true) => {
     const response = await fetch(base + path, {
       method,
       headers: {
         "content-type": "application/json", origin: base,
-        ...(token ? { authorization: `Bearer ${token}`, "x-seira-companion": "1" } : {}),
+        ...(token ? { authorization: `Bearer ${token}`, ...(companionHeader ? { "x-seira-companion": "1" } : {}) } : {}),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
@@ -40,9 +40,9 @@ describe("a paired phone changes where one bot works", () => {
     expect(result.status, `${method} ${path}: ${JSON.stringify(result.body)}`).toBeLessThan(400);
     return result.body;
   };
-  const pair = async (scopes: string[]) => {
+  const pair = async (scopes: string[], asPhoneApp = false) => {
     const { code } = await owner("POST", "/api/auth/pairing", { scopes });
-    return (await owner("POST", "/api/auth/pair", { code })).token as string;
+    return (await owner("POST", "/api/auth/pair", { code, ...(asPhoneApp ? { label: "Pixel", attemptId: crypto.randomUUID() } : {}) })).token as string;
   };
   const newBot = async (name: string, patch: Record<string, unknown> = {}) => {
     const { bot } = await owner("POST", "/api/bots", { name });
@@ -163,5 +163,29 @@ describe("a paired phone changes where one bot works", () => {
     expect(refused.status).toBe(409);
     expect(refused.body.error).toBe(CLOUD_BACKEND_CHANGE_ERROR);
     expect((await stored(id)).computer).toBe("off");
+  });
+
+  it("holds a phone app's session to the paired-device limits without the companion header", { timeout: 60_000 }, async () => {
+    const phone = await pair(["admin", "client"], true);
+    const id = await newBot("Headerless", { computer: "cloud", vpsAlias: "own-vps" });
+    for (const body of [{ name: "Renamed" }, { computer: "local" }, { approvalMode: "full" }]) {
+      const refused = await call("PATCH", `/api/bots/${id}`, body, phone, false);
+      expect(refused.status, JSON.stringify(body)).toBe(403);
+      expect(refused.body.error).toMatch(/^forbidden: a paired device may change how a bot looks, not "/);
+    }
+    const moved = await call("PATCH", `/api/bots/${id}`, { computer: "off" }, phone, false);
+    expect(moved.status, JSON.stringify(moved.body)).toBe(200);
+    expect(await stored(id)).toMatchObject({ name: "Headerless", computer: "off" });
+    const made = await call("POST", "/api/bots", { name: "Phone bot", computer: "local" }, phone, false);
+    expect(made.status).toBe(403);
+  });
+
+  it("leaves a session the phone apps did not open as it was, with or without the companion header", { timeout: 60_000 }, async () => {
+    const id = await newBot("Desk", { computer: "cloud", vpsAlias: "own-vps" });
+    const narrowed = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, adminToken, true);
+    expect(narrowed.status).toBe(403);
+    const renamed = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, adminToken, false);
+    expect(renamed.status, JSON.stringify(renamed.body)).toBe(200);
+    expect((await stored(id)).name).toBe("Renamed");
   });
 });

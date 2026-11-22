@@ -91,11 +91,24 @@ const sessionSchema = z.object({
   moveIn: z.string().regex(/^[\w-]{1,128}$/).optional(),
   /** An access token for a script (`seira token create`): it ends at expiresAt and never renews. */
   token: z.literal(true).optional(),
+  /** A phone app's sign-in: the paired-device limits apply to it whatever headers it sends. */
+  pairedDevice: z.literal(true).optional(),
 });
 
 const fileSchema = z.object({ version: z.literal(1), sessions: z.array(sessionSchema) });
 
 export type SessionRecord = z.infer<typeof sessionSchema>;
+
+/** The phone apps redeem a code with a retry id and ask for no cookie, or redeem it on the companion apps' route. A
+ * browser asks for a cookie; the CLI and the desktop app's own sign-ins send no retry id. */
+export function redeemedByPhoneApp(input: { device?: boolean; cookie?: boolean; attemptId: string | null }): boolean {
+  return input.device === true || (input.cookie !== true && input.attemptId !== null);
+}
+
+/** The paired-device limits apply to this session: a phone app paired it, or a Team Cloud member's own code opened it. */
+export function isPairedDeviceSession(record: SessionRecord): boolean {
+  return record.pairedDevice === true || (record.membershipAuthority === "team" && record.memberCheckedAt !== undefined);
+}
 
 /** What the UI may see: never the hash. */
 export interface PublicSession {
@@ -450,7 +463,8 @@ export class SessionRegistry {
     this.codeFailures.delete(UNNAMED_SOURCES);
   }
 
-  exchange(input: { code: string; label: string; source: string; fallbackLabel?: string; attemptId?: string; browser?: boolean }): ExchangeResult {
+  /** `device`: redeemed on the companion apps' pairing route. `cookie`: the caller asked for this browser's cookie. */
+  exchange(input: { code: string; label: string; source: string; fallbackLabel?: string; attemptId?: string; browser?: boolean; device?: boolean; cookie?: boolean }): ExchangeResult {
     this.prune();
     const now = this.now();
     const read = readPairingInput(input.code);
@@ -491,6 +505,7 @@ export class SessionRegistry {
       ...(pairing.browser ? { cookieOnly: true as const, ...(pairing.owner ? { owner: pairing.owner } : {}) } : {}),
       ...(pairing.member ? { email: pairing.member.email, teamRole: pairing.member.role, membershipAuthority: "team" as const } : {}),
       ...(pairing.member && pairing.memberCheckedAt !== undefined ? { memberCheckedAt: pairing.memberCheckedAt } : {}),
+      ...(!pairing.browser && redeemedByPhoneApp({ device: input.device, cookie: input.cookie, attemptId }) ? { pairedDevice: true as const } : {}),
     };
     if (pairing.member && pairing.memberCheckedAt === undefined) this.memberChecked(pairing.member, now);
     this.sessions.push(record);

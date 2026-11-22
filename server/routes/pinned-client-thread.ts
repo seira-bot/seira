@@ -2,13 +2,13 @@ import type { IncomingMessage } from "node:http";
 
 import type { RequestAuth } from "../request-auth.ts";
 import type { Store } from "../store.ts";
+import { fromPairedDevice } from "./paired-device.ts";
 
 export function pinnedClientThreadGuard(store: Pick<Store, "tasks">) {
   return (auth: RequestAuth, req: IncomingMessage) => {
-    // The companion marker may only narrow behavior: it never grants authority or replaces the request gate.
     const requirePinnedClientThread = (botId: string, threadId: unknown): void => {
       if (threadId === undefined &&
-        (auth.kind === "session" || req.headers["x-seira-companion"] === "1") &&
+        (auth.kind === "session" || fromPairedDevice(req, auth)) &&
         store.tasks(botId).length > 1) {
         throw Object.assign(new Error("This bot has more than one thread. Update the Seira app on this device, then choose a thread and try again."), { status: 409 });
       }

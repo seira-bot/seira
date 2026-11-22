@@ -97,4 +97,12 @@ describe("a paired device filing bots", () => {
   it("lets the host computer move an Auto bot onto a team computer", async () => {
     expect((await post(host, { name: "Studio", botIds: ["auto"] })).status).toBe(200);
   });
+
+  it("holds a phone's session to the same rule without the companion header, and lets an admin's other session move it", async () => {
+    const session = (record: Record<string, unknown>) =>
+      ({ kind: "session", via: "bearer", scopes: ["admin", "client"], session: { id: "s1", label: "Device", scopes: ["admin", "client"], ...record } }) as unknown as RequestAuth;
+    expect((await post(session({ pairedDevice: true }), { name: "Studio", botIds: ["auto"] })).status).toBe(403);
+    expect(filed).toEqual([]);
+    expect((await post(session({}), { name: "Studio", botIds: ["auto"] })).status).toBe(200);
+  });
 });

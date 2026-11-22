@@ -6,7 +6,7 @@ import type { LiveCallState, LiveSettings } from "../../shared/wire.ts";
 import { json, readBody } from "../harness/http.ts";
 import { LiveCallBusyError, LiveCallSignedOutError } from "../live-call-controller.ts";
 import { LIVE_NEEDS_KEY, LiveSessionError } from "../live-call.ts";
-import { requiredScope } from "../request-auth.ts";
+import { requiredScope, type RequestAuth } from "../request-auth.ts";
 import { RELAY_POLL_MS } from "../live-fish.ts";
 import { createLiveRoutes, type LiveRouteDeps } from "./live.ts";
 import { dispatchRoutes } from "./table.ts";
@@ -18,13 +18,15 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => new Promise((done) => server.close(done))));
 });
 
-async function serve(deps: LiveRouteDeps): Promise<string> {
+const LOOPBACK: RequestAuth = { kind: "loopback", scopes: ["admin", "client"] };
+
+async function serve(deps: LiveRouteDeps, auth: RequestAuth = LOOPBACK): Promise<string> {
   const routes = [createLiveRoutes(deps)];
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const handled = await dispatchRoutes(routes, {
       req, res, url, path: url.pathname, method: req.method ?? "GET",
-      auth: { kind: "loopback", scopes: ["admin", "client"] }, json, readBody,
+      auth, json, readBody,
     });
     if (!handled) json(res, 404, { from: "inline routes" });
   });
@@ -33,8 +35,8 @@ async function serve(deps: LiveRouteDeps): Promise<string> {
   return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
 
-async function request(deps: LiveRouteDeps, method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<{ status: number; body: unknown }> {
-  const base = await serve(deps);
+async function request(deps: LiveRouteDeps, method: string, path: string, body?: unknown, headers: Record<string, string> = {}, auth?: RequestAuth): Promise<{ status: number; body: unknown }> {
+  const base = await serve(deps, auth);
   const response = await fetch(`${base}${path}`, {
     method,
     headers: { ...(body === undefined ? {} : { "content-type": "application/json" }), ...headers },
@@ -236,6 +238,29 @@ describe("live routes", () => {
       expect((await request(d, "POST", "/api/live/device-revoked", undefined, { "x-seira-companion": "1" })).status).toBe(400);
       expect((await request(d, "POST", "/api/live/device-revoked", undefined, fromPhone("a/b"))).status).toBe(400);
       expect(d.calls.deviceRevoked).not.toHaveBeenCalled();
+    });
+    it("takes no phone from a session's headers, and never its word that a phone was unpaired", async () => {
+      const signedIn = (pairedDevice: boolean) => ({
+        kind: "session", via: "bearer", scopes: ["admin", "client"],
+        session: { id: "s-1", label: "Device", scopes: ["admin", "client"], ...(pairedDevice ? { pairedDevice: true } : {}) },
+      }) as unknown as RequestAuth;
+      for (const auth of [signedIn(true), signedIn(false)]) {
+        const d = deps();
+        await request(d, "POST", "/api/live/session", { botId: "bot1", sdp: "v=0", client: "ios" }, fromPhone(), auth);
+        expect(vi.mocked(d.calls.start).mock.calls[0]![0].device).toBeUndefined();
+        expect(await request(d, "POST", "/api/live/device-revoked", undefined, fromPhone(), auth))
+          .toEqual({ status: 403, body: { error: "Only the phone companion can report an unpaired phone." } });
+        expect(d.calls.deviceRevoked).not.toHaveBeenCalled();
+      }
+    });
+    it("takes the phone the companion proved over any phone its headers name", async () => {
+      const proven: RequestAuth = { kind: "loopback", scopes: ["admin", "client"], companionDevice: "phone-1" };
+      const d = deps();
+      await request(d, "POST", "/api/live/session", { botId: "bot1", sdp: "v=0", client: "ios" }, {}, proven);
+      expect(d.calls.start).toHaveBeenCalledWith(expect.objectContaining({ device: "phone-1" }));
+      expect((await request(d, "POST", "/api/live/device-revoked", undefined, fromPhone("phone-2"), proven)).status).toBe(200);
+      expect(d.calls.deviceRevoked).toHaveBeenCalledWith("phone-1");
+      expect(d.calls.deviceRevoked).not.toHaveBeenCalledWith("phone-2");
     });
   });
 });

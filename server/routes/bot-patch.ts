@@ -33,6 +33,7 @@ import { phoneAppsFor } from "../phones/access.ts";
 import { profileSnapshot } from "../profile-revision.ts";
 import { recordProfileChange } from "../profile-versions.ts";
 import { pairedDeviceWorksOnChange } from "../phone-works-on.ts";
+import { fromPairedDevice } from "./paired-device.ts";
 import { memberBotPatchViolation, requestSource, type RequestAuth } from "../request-auth.ts"; import { defaultBotPatchRefusal, ownsDefaultBot } from "../default-bot.ts";
 import type { RoutineManager } from "../routines.ts";
 import type { SessionRegistry } from "../sessions.ts";
@@ -121,20 +122,23 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       if (!body || typeof body !== "object" || Array.isArray(body)) {
         return json(res, 400, { error: "body must be a JSON object" });
       }
-      const pairedDevice = req.headers["x-seira-companion"] === "1";
+      const pairedDevice = fromPairedDevice(req, auth);
       const worksOn = pairedDeviceWorksOnChange(body, {
         pairedDevice: pairedDevice && auth.kind === "session", scopes: auth.scopes, cloudHome: deps.cloudHome, hostedWorkspace: HOSTED_WORKSPACE,
       });
       if (worksOn === "own-server" && !vpsSshAliasForBot(cfg, store.bot(m[1]))) {
         return json(res, 409, { error: "Set up your own server for this bot on the computer first." });
       }
-      if (!worksOn && ((auth.kind === "session" && !auth.scopes.includes("admin")) || pairedDevice)) {
+      if (!worksOn) {
         const session = auth.kind === "session" ? auth.session : undefined;
-        const level = pairedDevice ? "chat" : deps.levelOf(auth, m[1]);
-        const field = memberBotPatchViolation(body, level === "none" ? "chat" : level, ownsDefaultBot(store.bot(m[1]), session?.email), session?.membershipAuthority === "team");
+        const ownSeira = ownsDefaultBot(store.bot(m[1]), session?.email);
+        const teamMember = session?.membershipAuthority === "team";
+        const deviceField = pairedDevice ? memberBotPatchViolation(body, "chat", ownSeira, teamMember) : null;
+        const level = session && !auth.scopes.includes("admin") ? deps.levelOf(auth, m[1]) : null;
+        const field = deviceField ?? (level ? memberBotPatchViolation(body, level === "none" ? "chat" : level, ownSeira, teamMember) : null);
         if (field) {
           return json(res, 403, {
-            error: pairedDevice
+            error: deviceField
               ? `forbidden: a paired device may change how a bot looks, not "${field}"; change it on the host computer`
               : level === "edit" ? `forbidden: "${field}" is an admin's to change`
                 : level === "view" ? `forbidden: you can view this bot, not change "${field}"`

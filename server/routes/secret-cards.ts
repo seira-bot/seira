@@ -8,6 +8,7 @@ import { phoneSecretEnvelopeSchema, type SecretCards } from "../host/secret-card
 import type { PhoneSecretSubmissionRegistry } from "../phone-secret.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { SECRET_VALUE_MAX_BYTES } from "../secret-vault.ts";
+import { companionDeviceOf } from "./paired-device.ts";
 import { PASS, type RouteContext, type RouteHandler } from "./table.ts";
 
 /** Whose a conversation is, for who may type a secret into its card. */
@@ -84,12 +85,11 @@ export function createSecretCardRoutes(deps: SecretCardRouteDeps): RouteHandler 
     // An HPKE envelope bound to the paired device, bot, task, card and target; only the embedded Electron server holds the key to open it.
     m = path.match(/^\/api\/bots\/([\w-]+)\/secret-cards\/([\w-]+)\/provide$/);
     if (m && method === "POST") {
-      if (req.headers["x-seira-companion"] !== "1") {
+      if (auth.kind !== "loopback" || (!auth.companionDevice && req.headers["x-seira-companion"] !== "1")) {
         return json(res, 403, { error: "Secure phone entry must come from a paired phone" });
       }
-      const rawDeviceId = req.headers["x-seira-companion-device"];
-      const authenticatedDeviceId = Array.isArray(rawDeviceId) ? "" : String(rawDeviceId ?? "");
-      if (!/^[\w-]{1,128}$/.test(authenticatedDeviceId)) {
+      const authenticatedDeviceId = companionDeviceOf(req, auth);
+      if (!authenticatedDeviceId) {
         return json(res, 401, { error: "This paired phone could not be verified" });
       }
       if (!String(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
