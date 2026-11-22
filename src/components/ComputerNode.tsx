@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { MONITOR_HEIGHT, MONITOR_WIDTH } from "@/lib/team-canvas-computers";
-import type { MapComputer, MapComputerState } from "../../shared/map-computer";
+import type { MapComputer, MapComputerState } from "@/lib/map-computers";
 import { BotAvatar } from "./Avatar";
 
 const STATE_LABEL: Record<MapComputerState, LocaleKey> = {

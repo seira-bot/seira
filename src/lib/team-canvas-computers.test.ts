@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CARD_HEIGHT, CARD_WIDTH, HEADER_HEIGHT, TEAM_PADDING, layoutTeams, teamSize } from "./team-canvas";
 import { LINK_WIDTH, MONITOR_HEIGHT, MONITOR_WIDTH, TREE_INDENT, bestColumns, polylinePath, teamGeometry } from "./team-canvas-computers";
-import { computerForBot, haveParam, localFrameTime, teamComputersFor } from "./map-computers";
-import type { MapComputer } from "../../shared/map-computer";
+import { computerForBot, haveParam, localFrameTime, teamComputersFor, type MapComputer } from "./map-computers";
 import type { TeamMapSection } from "./team-map";
 
 const bots = (prefix: string, count: number) => Array.from({ length: count }, (_, index) => ({ id: `${prefix}${index}`, name: `${prefix}${index}` }));
