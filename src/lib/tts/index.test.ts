@@ -761,6 +761,11 @@ describe("Speaker on a call", () => {
     expect(latest!.playbackRate).toBe(1);
   });
 
+  it("leaves out the language for a provider that decides it from the reply text", async () => {
+    await speakOnCall({ provider: "openai", speed: 1, language: "id" });
+    expect(speakBodies[0]).toEqual({ text: "One reply.", voiceId: "v1", speed: 1 });
+  });
+
   it("clamps the speed to the provider range and leaves out an auto language", async () => {
     await speakOnCall({ provider: "elevenlabs", speed: 2, language: "auto" });
     expect(speakBodies[0]).toEqual({ text: "One reply.", voiceId: "v1", speed: 1.2 });

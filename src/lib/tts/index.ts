@@ -31,15 +31,15 @@ interface SpeakOptions {
   call?: CallSpeech;
 }
 
-function callRequestFields(call: CallSpeech | undefined): { speed?: number; language?: string } {
+export function callRequestFields(call: CallSpeech | undefined): { speed?: number; language?: string } {
   if (!call || call.provider === "device") return {};
-  const { speed } = callVoiceCapability({ mode: "turns", provider: call.provider });
-  if (speed.kind !== "native") return {};
-  const language = callLanguage(call.language);
-  return { speed: roundCallSpeed(callSpeedFor(call.speed, speed)), ...(language ? { language: language.code } : {}) };
+  const capability = callVoiceCapability({ mode: "turns", provider: call.provider });
+  if (capability.speed.kind !== "native") return {};
+  const language = capability.language === "native" ? callLanguage(call.language) : undefined;
+  return { speed: roundCallSpeed(callSpeedFor(call.speed, capability.speed)), ...(language ? { language: language.code } : {}) };
 }
 
-function callPlaybackRate(call: CallSpeech | undefined): number | undefined {
+export function callPlaybackRate(call: CallSpeech | undefined): number | undefined {
   if (!call || call.provider === "device") return undefined;
   const { speed } = callVoiceCapability({ mode: "turns", provider: call.provider });
   return speed.kind === "playback" ? roundCallSpeed(callSpeedFor(call.speed, speed)) : undefined;
