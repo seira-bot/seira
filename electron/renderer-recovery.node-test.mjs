@@ -107,7 +107,7 @@ test("AC-02: a page that ends a fourth time in a minute loads the recovery page 
   assert.equal(page.reloads, 3, "the fourth in a minute is not reloaded");
   assert.equal(page.loaded.length, 1, "it loads the recovery page");
   assert.deepEqual(state.stops, [{ reason: "killed", exitCode: 7, next: "page" }]);
-  assert.match(state.lines.at(-1), /stop reloading.*0x7/);
+  assert.match(state.lines.at(-1), /0x7\); stop reloading/);
   assert.equal(state.boxes.length, 0);
   page.emit("did-navigate", {}, "http://127.0.0.1:8799/chat");
 });
@@ -117,7 +117,7 @@ test("AC-02: the recovery page opens the last app address in the same window, or
   known.page.emit("did-navigate", {}, "http://127.0.0.1:8799/settings?x=1&y=\"2\"");
   for (let i = 0; i < 4; i++) known.end();
   const html = decoded(known.page.loaded[0]);
-  assert.match(html, /<a href="http:\/\/127\.0\.0\.1:8799\/settings\?x=1&amp;y=%22?2/);
+  assert.match(html, /<a href="http:\/\/127\.0\.0\.1:8799\/settings\?x=1&amp;y=&quot;2&quot;"/);
   assert.ok(!html.includes("target="), "the link stays in the window");
   assert.match(html, />Reload<\/a>/);
   const unknown = world(t);
@@ -143,6 +143,7 @@ test("reloading resumes once the failures are more than a minute old", (t) => {
   for (let i = 0; i < 4; i++) end();
   assert.equal(page.reloads, 3);
   state.clock += RELOAD_WINDOW_MS + 1;
+  page.emit("did-navigate", {}, "http://127.0.0.1:8799/");
   end();
   assert.equal(page.reloads, 4, "the old failures no longer count");
 });
