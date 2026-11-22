@@ -13,6 +13,7 @@ import { busyPlaceOf, roomSpeakerIds } from "@/lib/room-threads";
 import { formatTokens } from "@/lib/usage";
 import { useStore, type Bot, type Group } from "@/state/store";
 import type { RoomQueueEntry } from "../../shared/wire";
+import { RoomPicture } from "./RoomPicture";
 import { BotAvatar } from "./Avatar";
 import { RoomContextBadge } from "./ContextWarning";
 import { ConversationTurnLimit } from "./ConversationTurnLimit";
@@ -179,9 +180,9 @@ export function RoomHeader({
               style={headerNoDragStyle}
               className="group flex h-9 min-w-0 max-w-full items-center gap-2 rounded-full ps-2 pe-3 text-ink hover:bg-ink/[0.06] focus-visible:bg-ink/[0.06] motion-reduce:transition-none"
             >
-              <span aria-hidden="true" className="flex shrink-0 items-center -space-x-1.5">
+              <RoomPicture url={group.dm ? null : group.avatarUrl} size={24} fallback={<span aria-hidden="true" className="flex shrink-0 items-center -space-x-1.5">
                 {members.slice(0, SIMPLE_FACES).map((member) => <BotAvatar key={member.id} bot={member} state={normalizeState(member.mascotExpression) ?? "happy"} size={22} animated={false} />)}
-              </span>
+              </span>} />
               <span className="truncate text-[14px] font-semibold leading-5">{group.name}</span>
               <ChevronDown size={14} aria-hidden="true" className="shrink-0 text-ink-tertiary" />
             </button>
@@ -227,9 +228,9 @@ export function RoomHeader({
         <div data-roomhead-identity className="flex min-w-0 items-center gap-2 @max-3xl/roomhead:basis-full" style={headerNoDragStyle}>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span aria-hidden="true" className="flex shrink-0 items-center -space-x-1.5">
+              <RoomPicture url={group.dm ? null : group.avatarUrl} size={24} fallback={<span aria-hidden="true" className="flex shrink-0 items-center -space-x-1.5">
                 {members.slice(0, SIMPLE_FACES).map((member) => <BotAvatar key={member.id} bot={member} state={normalizeState(member.mascotExpression) ?? "happy"} size={22} animated={false} />)}
-              </span>
+              </span>} />
               <span className="truncate text-[14px] font-semibold leading-5 text-ink">{group.name}</span>
               <span className="shrink-0 text-[13px] leading-5 text-ink-tertiary">{t(members.length === 1 ? "routines.botCountOne" : "routines.botCountMany", { count: members.length })}</span>
               {!setupPending && !group.dm && <GroupTaskPicker group={group} />}

@@ -119,6 +119,34 @@ describe("the Room panel's card", () => {
   });
 });
 
+describe("the Room panel's picture", () => {
+  const URL_A = "/api/attachments/desk-1.png";
+
+  it("shows the room's picture in the hero instead of the faces, with Change and Remove", () => {
+    render(room({ avatarUrl: URL_A }));
+    expect($("[data-room-picture]")?.getAttribute("src")).toBe(URL_A);
+    expect($("[data-room-panel-faces]")).toBeNull();
+    expect($("[data-room-picture-change]")?.textContent).toBe("Change picture");
+    click($("[data-room-picture-remove]"));
+    expect(patches()).toEqual([{ type: "patchGroup", groupId: "desk", patch: { avatarUrl: null } }]);
+  });
+
+  it("shows the faces and only Change while the room has no picture", () => {
+    render(room());
+    expect($("[data-room-picture]")).toBeNull();
+    expect($("[data-room-panel-faces]")).not.toBeNull();
+    expect($("[data-room-picture-change]")).not.toBeNull();
+    expect($("[data-room-picture-remove]")).toBeNull();
+  });
+
+  it("shows the faces again when the picture fails to load", () => {
+    render(room({ avatarUrl: URL_A }));
+    flushSync(() => $("[data-room-picture]")!.dispatchEvent(new Event("error")));
+    expect($("[data-room-picture]")).toBeNull();
+    expect($("[data-room-panel-faces]")).not.toBeNull();
+  });
+});
+
 describe("Who responds", () => {
   it("lists each member, then Seira choosing, everyone and mentions only, and writes what the header picker writes", async () => {
     render(room());

@@ -266,6 +266,32 @@ describe("bot-first sidebar", () => {
     expect(channel.match(/data-avatar-kind="bot"/g)).toHaveLength(2);
   });
 
+  it.each([
+    { advanced: false, density: "comfortable" },
+    { advanced: false, density: "icons" },
+    { advanced: true, density: "comfortable" },
+    { advanced: true, density: "icons" },
+  ] as const)("draws a room's own picture in its row instead of the faces or the room mark (advanced $advanced, $density)", ({ advanced, density }) => {
+    fixture.advanced = advanced;
+    const pip: Bot = { ...quiet, id: "pip", name: "Pip", color: "blue" };
+    fixture.state = { ...fixture.state, bots: [bot, pip] };
+    const room: Group = { id: "room", threadId: "room-thread", name: "Launch", memberIds: [bot.id, pip.id], messages: [], defaultResponder: { kind: "mentions" }, bulletin: "", unread: false, createdAt: 1 };
+    const withPicture = renderToStaticMarkup(createElement(GroupListItem, { group: { ...room, avatarUrl: "/api/attachments/launch-1.png" }, density, onMenu: vi.fn() }));
+    expect(withPicture).toContain("data-room-picture");
+    expect(withPicture).toContain('src="/api/attachments/launch-1.png"');
+    expect(withPicture).not.toContain("data-room-mark");
+    expect(withPicture).not.toContain("data-room-stack");
+    expect(withPicture).not.toContain('data-avatar-kind="bot"');
+    expect(renderToStaticMarkup(createElement(GroupListItem, { group: room, density, onMenu: vi.fn() }))).not.toContain("data-room-picture");
+  });
+
+  it("never draws a picture on a two-bot channel", () => {
+    const pip: Bot = { ...quiet, id: "pip", name: "Pip", color: "blue" };
+    fixture.state = { ...fixture.state, bots: [bot, pip] };
+    const channel: Group = { id: "room", threadId: "room-thread", name: "Launch", memberIds: [bot.id, pip.id], messages: [], defaultResponder: { kind: "mentions" }, bulletin: "", unread: false, createdAt: 1, dm: true, avatarUrl: "/api/attachments/launch-1.png" };
+    expect(renderToStaticMarkup(createElement(GroupListItem, { group: channel, density: "comfortable", onMenu: vi.fn() }))).not.toContain("data-room-picture");
+  });
+
   it("marks an unread Simple group chat with an accent dot after the preview and a bold title, said once for a screen reader", () => {
     const group: Group = { id: "room", threadId: "room-thread", name: "Launch", memberIds: [bot.id], messages: [], defaultResponder: { kind: "mentions" }, bulletin: "", unread: true, createdAt: 1 };
     const markup = renderToStaticMarkup(createElement(GroupListItem, { group, density: "comfortable", onMenu: vi.fn() }));

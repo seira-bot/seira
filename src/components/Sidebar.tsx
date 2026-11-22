@@ -23,7 +23,7 @@ import type { LocaleKey } from "@/locales";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { BulkSelectFilters, ThreadListFooter, deleteThreadsInBulk, retitleThreadsInBulk, useBulkSelect } from "./BulkSelectBar";
 import { SidebarBotThreadsPeek } from "./SidebarBotThreadsPeek";
-import { RoomMark, StackedSeiras } from "./StackedSeiras";
+import { RoomMark, StackedSeiras } from "./StackedSeiras"; import { RoomPictureMenuItems } from "./RoomPictureMenuItems";
 import { SimpleRoomStack, SimpleRoomText } from "./SidebarSimpleRoom";
 import { LocalComputerAutoWarning } from "./LocalComputerAutoWarning";
 import { nextRename } from "@/lib/rename";
@@ -202,9 +202,9 @@ export const GroupListItem = memo(function GroupListItem({
       aria-label={density === "icons" ? group.name : undefined}
     >
       {advThread ? <AdvancedThreadText bot={members[0]} name={group.name} unread={group.unread} time={last && formatRowTime(last.at)} /> : advRow ? <>
-        <AdvancedRoomStack members={members} />
+        <AdvancedRoomStack members={members} picture={group.avatarUrl} />
         <AdvancedRoomText name={group.name} unread={group.unread} time={last && formatRowTime(last.at)} preview={group.description || groupPreview(group, bots, instances, advanced)} expanded={expanded} />
-      </> : simpleRow ? <SimpleRoomStack members={members} /> : group.dm ? <StackedSeiras members={members} density={railTile ? "comfortable" : density} large={railTile} /> : <RoomMark density={railTile ? "comfortable" : density} large={simpleRow || railTile} />}
+      </> : simpleRow ? <SimpleRoomStack members={members} picture={group.dm ? null : group.avatarUrl} /> : group.dm ? <StackedSeiras members={members} density={railTile ? "comfortable" : density} large={railTile} /> : <RoomMark density={railTile ? "comfortable" : density} large={simpleRow || railTile} picture={group.avatarUrl} />}
       {advRow ? null : simpleRow ? <SimpleRoomText name={group.name} unread={group.unread} time={last && formatTime(last.at)} preview={group.description || groupPreview(group, bots, instances, advanced)} expanded={expanded} /> : (
       <div className={cn("min-w-0 flex-1", density === "icons" && "hidden")}>
         <div className="flex items-baseline justify-between gap-2">
@@ -250,10 +250,8 @@ function RoomContextMenu({
   const dispatch = useStoreDispatch(), store = useStoreRef();
   const remoteClient = window.ogb?.remoteClient?.active === true;
   const group = useStoreSelector((s) => shown ? s.groups.find((g) => g.id === shown.groupId) : undefined);
-  const [renaming, setRenaming] = useState(false);
-  const [describing, setDescribing] = useState(false);
-  const [draft, setDraft] = useState(group?.name ?? "");
-  const [descriptionDraft, setDescriptionDraft] = useState(group?.description ?? "");
+  const [renaming, setRenaming] = useState(false), [describing, setDescribing] = useState(false);
+  const [draft, setDraft] = useState(group?.name ?? ""), [descriptionDraft, setDescriptionDraft] = useState(group?.description ?? "");
 
   useEffect(() => {
     if (!menu) return;
@@ -411,6 +409,7 @@ function RoomContextMenu({
           {t("sidebar.room.setDescription")}
         </button>
       )}
+      {!remoteClient && !renaming && !describing && !isBotChat && <RoomPictureMenuItems group={group} onClose={onClose} />}
       {!remoteClient && !isBotChat && (
         <button
           role="menuitem"
