@@ -10,7 +10,7 @@ import type { TurnDigest } from "./digest.ts";
 import type { BotAvatarCrop, MascotFaceColor } from "./bot-avatar.ts";
 import type { BotBodyId } from "./bot-body.ts"; import type { MascotAccessoryId } from "./mascot-accessories.ts"; import type { ReplyStyle } from "./reply-style.ts";
 import type { CredentialTargetId, CUSTOM_SECRET_TARGET, SecretDelivery } from "./credential-request.ts"; import type { EmailOutgoingFields } from "./email.ts";
-import type { TeamSetupRequest } from "./team-setup.ts"; import type { DefaultBotFields, HelperIntroField } from "./default-bot.ts";
+import type { TeamSetupRequest } from "./team-setup.ts"; import type { DefaultBotFields, HelperIntroField } from "./default-bot.ts"; import type { FolderAccessField, WireFolderAccess, WireFolderGrant } from "./folder-access.ts"; export type { WireFolderAccess, WireFolderGrant };
 import type { SetupCardFields } from "./setup-card.ts"; import type { TeamSuggestionFields } from "./team-suggestion.ts"; import type { BugReportField } from "./devs-report-status.ts"; import type { AccessRequestCardField, BotAccessFields } from "./bot-access.ts";
 import type { RoutineRequestCardData } from "./routine-request.ts"; import type { SavedStepsMark } from "./saved-steps.ts";
 import type { WebhookRequestCardData } from "./webhook-request.ts"; import type { WaitCardField, WaitLineField } from "./wait-request.ts"; import type { ComputerAskField } from "./computer-ask.ts";
@@ -259,7 +259,7 @@ export const helperModelAllowed = (bot: { helperModel?: unknown }): boolean => b
 
 /** A bot as a client may see it. avatarUrl is always present (null when the
  * bot has none). */
-export interface WireBot extends DefaultBotFields, BotAccessFields {
+export interface WireBot extends DefaultBotFields, BotAccessFields, FolderAccessField {
   waitingForTeammates?: boolean;
   id: string;
   /** The task selected in the UI; running turns keep their own thread id. */
@@ -494,8 +494,8 @@ export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCard
     clipped?: boolean;
     /** Words the harness wrote for what the call did, shown in place of `name`; `name` stays the tool's own. */
     label?: string;
-    /** error rows: the reply came back; only a step the turn ran failed or wasn't allowed. */
-    partial?: boolean;
+    /** error rows: the reply came back (partial), or the turn ran and the row only says what it ran without (notice). */
+    partial?: boolean; notice?: true;
   };
   /** A bot line a "post" webhook wrote: whoever called the webhook chose
    * its words. On a room line this also carries `from`, so the room renders
@@ -854,7 +854,7 @@ export interface WireGroup {
   /** Short one-line description shown under the room name; distinct from
    * the bulletin (long-form instructions) and any member bot's title.
    * null = explicitly cleared, so a client's shallow merge drops a stale value. */
-  description?: string | null;
+  description?: string | null; /** The room's own picture: a stored image attachment URL, shown in place of the member avatars. null = explicitly cleared, so a client's shallow merge drops a stale value. */ avatarUrl?: string | null;
   unread: boolean;
   /** The newest message on screen the last time the person read this
    * conversation. The New divider goes after it. */

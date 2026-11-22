@@ -114,7 +114,7 @@ describe("how a new bot is shared", () => {
 
 describe("a Team Cloud member's own bot", () => {
   const ADMIN_ONLY = ["approvalMode", "autoApprove", "alwaysAllow", "cwd", "computer", "cloudBackend", "vpsAlias", "browser", "browserProfile", "section",
-    "reportsTo", "createdBy", "chiefOfStaff", "managedSections", "toolScope", "helperModel", "visibility", "access", "preset", "id", "threadId", "defaultBot"];
+    "reportsTo", "createdBy", "chiefOfStaff", "managedSections", "toolScope", "helperModel", "visibility", "access", "preset", "id", "threadId", "defaultBot", "folderAccess"];
 
   it("takes at creation only what someone who can edit a bot may change", () => {
     expect(memberBotCreateViolation({})).toBeNull();

@@ -6,6 +6,7 @@ import { codexToolSurfaceArgs } from "./codex-tool-surface.ts";
 import { codexShellDisabled, codexTurnConfigArgs } from "./codex-guest.ts";
 import { TEAM_TOOLS_FAILED, teamToolsFailed } from "./team-tools.ts";
 import { enabledMcpMounts, mcpStartupTracker, supportsMcpStartup } from "./codex-mcp-startup.ts";
+import { botBox } from "../bot-box/box.ts";
 import { boxAdmittedEnv, boxProxyEnvNames, customServerEnvBox, type McpApprovalMode, mountMcpServer } from "./codex-mcp-mount.ts";
 import { reportUnsupportedCalls, rolloutMark, type RolloutMark } from "./codex-unsupported-calls.ts";
 // The `codex` CLI headless over its app-server JSON-RPC (NDJSON on stdio): completion is
@@ -67,7 +68,7 @@ import { parseProtocolAskQuestions, questionChoices } from "../../shared/ask-que
 import { codexQuestionReply, openAsyncQuestion, type CodexAsk } from "./codex-questions.ts";
 import { codexReleaseUpdate, codexUpdateCommand } from "./codex-update.ts";
 export { codexUpdateCommand };
-import { customApprovalParams, namedApprovalParams, permissionProfileUnsupported, withResolvedSandbox, type CodexApprovalParams } from "./codex-approval-params.ts"; import { AGENTS_TOOL_TIMEOUT_SECONDS } from "./agents-tool-limit.ts"; import { COMPUTER_PROXY_TIMEOUT_MS } from "../harness-budget.ts";
+import { customApprovalParams, namedApprovalParams, permissionProfileUnsupported, withFolderGrants, withResolvedSandbox, type CodexApprovalParams } from "./codex-approval-params.ts"; import { AGENTS_TOOL_TIMEOUT_SECONDS } from "./agents-tool-limit.ts"; import { COMPUTER_PROXY_TIMEOUT_MS } from "../harness-budget.ts";
 import { canUseMcpServer } from "../../shared/tool-scope.ts";
 import { assertToolScopeSupported } from "../../shared/tool-scope-support.ts";
 import { appMountFor, gateServer, mcpStdioServer } from "../mcp-gate-config.ts"; import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
@@ -503,7 +504,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
           const mountName = mountedMcpServerName(name, takenMcpNames);
           takenMcpNames.add(mountName);
           if (mountName !== name) noteRenamedMcpServer(name, mountName);
-          mountSelected(name, mountName, server, "prompt", turn.toolScope === undefined && !("url" in server) ? boxProxyEnvNames() : []);
+          mountSelected(name, mountName, server, "prompt", turn.toolScope === undefined && !("url" in server) ? boxProxyEnvNames(botBox.boxesFolders(turn.folders)) : []);
         }
         if (turn.integrations?.phone) {
           if (turn.toolScope !== undefined) {
@@ -524,7 +525,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
         }
 
         // Codex hands MCP children its shell environment, so mounted variables (and box-admitted custom env) leave that shell.
-        const customBox = customServerEnvBox(turn.integrations?.custom, selectedMcp), boxAdmitted = boxAdmittedEnv(customBox);
+        const customBox = customServerEnvBox(turn.integrations?.custom, selectedMcp), boxAdmitted = boxAdmittedEnv(customBox, botBox.boxesFolders(turn.folders));
         const mountedEnv = [...mountedNames].filter((name) => env[name] !== undefined && !SHELL_ESSENTIALS.has(name) && !name.startsWith("LC_")
           && (name === "ELECTRON_RUN_AS_NODE" || boxAdmitted.has(name) || baseEnv.get(name) !== env[name]));
         const privateEnv = [...new Set([
@@ -1263,7 +1264,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
           // Omitting these on a resumed thread would keep the previous named mode.
           approvalParams = customApprovalParams(effectiveConfig);
         } else {
-          approvalParams = namedApprovalParams(approvalMode);
+          approvalParams = namedApprovalParams(approvalMode, turn.folders);
         }
         // Codex's `never` means "do not ask to escalate", not "grant every requested permission":
         // only Full may synthesize approvals.
@@ -1371,7 +1372,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
           return request("turn/start", {
             threadId: codexThreadId,
             input: turnInput,
-            ...approvalParams.turn,
+            ...withFolderGrants(approvalParams, turn.folders, turn.cwd).turn,
             // No environment: exec_command, apply_patch and view_image are refused (codex-cli 0.159.0).
             // Without the experimental API the field is rejected, not ignored.
             ...(turn.guestConfined ? { environments: [] } : {}),

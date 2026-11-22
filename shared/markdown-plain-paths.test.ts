@@ -42,4 +42,20 @@ describe("plain file paths", () => {
     expect(links("```\ncat /Users/me/notes.md\n```")).toEqual([]);
     expect(links("[the report](/Users/me/report.md)")).toEqual(["/Users/me/report.md"]);
   });
+
+  it("links a Windows path in backticks, with a trailing backslash or none", () => {
+    const code = (path: string) => links(`\`${path}\``);
+    expect(code("C:\\Users\\me\\My Reports\\q3 final.md")).toEqual(["C:\\Users\\me\\My Reports\\q3 final.md"]);
+    expect(code("C:\\Users\\me\\")).toEqual(["C:\\Users\\me\\"]);
+    expect(code("C:\\")).toEqual([]);
+    expect(code("C:\\a\\\\b")).toEqual([]);
+  });
+
+  it("answers an attack string in under 100 ms", () => {
+    for (const attack of ["A:\\" + "\\[".repeat(30_000), "A:\\x" + "\\x".repeat(30_000) + "\\\\", "A:\\" + "a\\".repeat(30_000) + "\\\\"]) {
+      const started = performance.now();
+      links(`\`${attack}\``);
+      expect(performance.now() - started).toBeLessThan(100);
+    }
+  });
 });

@@ -12,6 +12,7 @@ describe("parseBotProfilePatch (strict — the paired boundary)", () => {
       "alwaysAllow",
       "computer",
       "cwd",
+      "folderAccess",
       "composio",
       "chiefOfStaff",
       "acknowledgeLocalAuto",

@@ -47,6 +47,11 @@ describe("file tools on disk", () => {
     return { root, home, call };
   };
 
+  it("refuses a path longer than 4096 characters", async () => {
+    const { home, call } = fixture();
+    for (const name of ["list_files", "read_file", "make_folder"]) expect(await call(name, { path: join(home, "x".repeat(4097)) }), name).toEqual({ text: "That path is too long.", error: true });
+  });
+
   it("answers only its own four tools", () => {
     expect(hostFileRelay("/")({ name: "screenshot", arguments: {} })).toBeNull();
   });

@@ -17,13 +17,14 @@ export function localVmInBoxMessage(boxEnabled: boolean): string | undefined {
 
 type Runtime = Parameters<typeof mountContainerComputerMcp>[0];
 
-/** Drop-in for containerComputerMcp that refuses when the bot box is on. */
+/** Drop-in for containerComputerMcp that refuses when `botId`'s spawns run in the bot box. */
 export function containerComputerMcp(
   runtime: Runtime,
   control?: { url: string; token: string },
   target: LocalVmTarget = SHARED_LOCAL_VM_TARGET,
+  botId?: string,
 ): ReturnType<typeof mountContainerComputerMcp> {
-  const boxed = localVmInBoxMessage(botBox.enabled());
+  const boxed = localVmInBoxMessage(botBox.boxesBot(botId));
   if (boxed) throw Object.assign(new Error(boxed), { status: 409, code: "bot_box" });
   return mountContainerComputerMcp(runtime, control, target);
 }
