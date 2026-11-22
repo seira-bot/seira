@@ -1,5 +1,5 @@
 import "./legacy-env-boot.mjs";
-import { app, autoUpdater as nativeAutoUpdater, BrowserWindow, Tray, WebContentsView, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeImage, Notification, net, powerMonitor, powerSaveBlocker, safeStorage, screen, session, shell, systemPreferences, utilityProcess, nativeTheme } from "electron";
+import { app, autoUpdater as nativeAutoUpdater, BrowserWindow, Tray, WebContentsView, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeImage, Notification, net, crashReporter, powerMonitor, powerSaveBlocker, safeStorage, screen, session, shell, systemPreferences, utilityProcess, nativeTheme } from "electron";
 import { createRequire } from "node:module";
 import { randomBytes, randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -21,10 +21,9 @@ import {
   appendDesktopCrashRecord,
   buildDiagnosticsReport,
   diagnosticsFileName,
-  formatDesktopCrashRecord,
-  installDesktopCrashListeners,
   readSafeLogTail,
 } from "./diagnostics.mjs";
+import { CRASH_REPORTS_ARG, createCrashReports } from "./crash-report.mjs";
 import { migrateWorkspaceConfigFile, workspaceCredentialEnv } from "./workspace-credentials.mjs";
 import { evictStartupCacheOnce } from "./startup-cache-eviction.mjs";
 import { activateExistingWindow, releaseSingleInstanceLock } from "./single-instance.mjs";
@@ -350,7 +349,7 @@ function desktopDataDir() {
 
 async function stopUtilityServer(proc, timeoutMs = UTILITY_SERVER_STOP_TIMEOUT_MS) {
   if (!proc) return true;
-  const exited = utilityServerExits.get(proc);
+  const exited = (crashReports.stopping(proc), utilityServerExits.get(proc));
   if (!exited) return false;
   try {
     proc.kill();
@@ -516,17 +515,11 @@ function slog(line) {
   }
 }
 
-// Synchronous: a fatal exception can end Electron before an async write flushes.
-// uncaughtExceptionMonitor observes Node's fatal path without handling it, so the process still exits.
-installDesktopCrashListeners({
-  appTarget: app,
-  processTarget: process,
-  record: (event) => appendDesktopCrashRecord(DESKTOP_CRASH_LOG, DESKTOP_CRASH_LOG_MAX_BYTES, formatDesktopCrashRecord(event)),
-  isShuttingDown: () => desktopShutdownStarted,
-  mainWebContents: () => mainWindow?.webContents ?? null,
-});
+const crashReports = createCrashReports({ app, ipcMain, crashReporter, fetch: (url, init) => net.fetch(url, init), prefs: nativeText.prefs, userData: app.getPath("userData"),
+  roots: [app.getAppPath(), process.resourcesPath], appendCrashLog: (line) => appendDesktopCrashRecord(DESKTOP_CRASH_LOG, DESKTOP_CRASH_LOG_MAX_BYTES, line),
+  isShuttingDown: () => desktopShutdownStarted, mainWebContents: () => mainWindow?.webContents ?? null, isLocalSender: senderIsLocal });
 
-const rendererRecovery = createRendererRecovery({ isShuttingDown: () => desktopShutdownStarted, log: slog });
+const rendererRecovery = createRendererRecovery({ isShuttingDown: () => desktopShutdownStarted, log: slog, onHang: (contents) => crashReports.hang(contents) });
 
 let managedCompanionConnector = null;
 let companionAccountService = null;
@@ -787,7 +780,7 @@ async function gatherDiagnostics() {
       packaged: app.isPackaged,
       uptimeSeconds: Math.round(process.uptime()),
     },
-    configSummary: serverStatus ?? {}, performance,
+    configSummary: serverStatus ?? {}, performance, crashReportIds: crashReports.crashReportIds(),
     desktopLogTail: desktopLog?.tail ?? "",
     updaterLogTail: updaterLog?.tail ?? "",
     logTail: log?.tail ?? "",
@@ -1150,7 +1143,7 @@ async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmen
       if (trustedApprovalMode.receive(proc, message)) return;
       if (managedDesktopRelay.receive(proc, message)) return;
       if (orgLibrary?.receive(message)) return;
-      if (receivePhoneSecretSave(proc, message) || oneHome.receive(proc, message) || tailnetShare.receive(message)) return;
+      if (receivePhoneSecretSave(proc, message) || oneHome.receive(proc, message) || tailnetShare.receive(message) || crashReports.receive(proc, message)) return;
     } catch (error) {
       slog(`desktop private sync rejected: ${error?.message ?? error}`);
     }
@@ -1166,7 +1159,7 @@ async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmen
     exited = true;
     trustedApprovalMode.rejectProcess(proc);
     managedDesktopRelay.rejectProcess(proc);
-    resolveServerExit();
+    resolveServerExit(); crashReports.serverExit(proc, code);
     slog(`exited code=${code}`);
   });
   serverSupervisor.watch(proc);
@@ -1947,7 +1940,7 @@ function createWindow({ deferNavigation = false } = {}) {
       contextIsolation: true,
       preload: path.join(__dirname, "preload.cjs"),
       additionalArguments: [...desktopCompanionRendererArguments(rendererOrigin(), desktopRemoteAccess),
-        ...(app.isPackaged && !desktopRemoteAccess ? ["--seira-company-desktop=1"] : []), `--seira-app-version=${app.getVersion()}`, ...(linuxSoftwareRendering ? [SOFTWARE_RENDERING_ARG] : [])],
+        ...(app.isPackaged && !desktopRemoteAccess ? ["--seira-company-desktop=1"] : []), `--seira-app-version=${app.getVersion()}`, ...(crashReports.available ? [CRASH_REPORTS_ARG] : []), ...(linuxSoftwareRendering ? [SOFTWARE_RENDERING_ARG] : [])],
     },
   });
   mainWindow = win; hiddenStart = false; chromeRail.attach(win); rendererRecovery.attach(win);
@@ -2604,7 +2597,7 @@ const placeInbox = createPlaceInboxWatch({ places: () => [{ id: LOCAL_ID, local:
 const localProfiles = createLocalProfiles({ registry: createProfileRegistry({ dataDir: desktopDataDir }), clean: cleanWorkspace, dataDir: desktopDataDir, allowed: () => app.isPackaged && !desktopRemoteAccess, home: () => (homeWindow.cloudOrigin() ? "cloud" : ownHome?.origin() || cleanWorkspace.marker().frozen ? null : "local"), window: { openProfile: id => homeWindow.openProfile(id), profile: () => homeWindow.profile(), showCloud: () => showHome({ place: "cloud" }) }, showLocal: () => { homeWindow.cancel(); persistEnvironments(withActive(environmentsState, LOCAL_ID)); return navigateMainWindow(rendererOrigin()); }, onLocal: () => Boolean(mainWindow && !mainWindow.isDestroyed() && senderIsLocal({ sender: mainWindow.webContents })), busy: async () => { const said = await (await localServerRequest("/api/move/freeze", { signal: AbortSignal.timeout(5_000) })).json(); return typeof said?.busy === "string" ? { name: said.busy, what: said.what } : null; }, trash: dir => shell.trashItem(dir), reserved: () => nativeT(process.platform === "darwin" ? "rail.thisMac" : "rail.thisPc"), remember: homePlaces.remember, changed: () => railChanged(), log: slog }); const railList = () => { ownHome?.refresh(); const settling = localProfiles.settling(); return railPlaces({ saved: environmentsState, waiting: placeInbox.waiting, home: homeWindow.cloudOrigin() ?? ownHome?.origin() ?? null, mine: myCloud(), state: desktopRemoteAccess ? null : cloudAccount?.state(), offers: entry => !desktopRemoteAccess && ownHome?.offers(entry) === true, accounts: accountRing.waiting(), profiles: localProfiles.places({ activeLocal: environmentsState.activeId === LOCAL_ID }), computerSettling: settling && settling.id === null ? settling.name : null }); }; const companionWorkspaces = createCompanionWorkspaces({ profiles: localProfiles, post: postCompanionMessage, settled: () => cleanWorkspace.settled(), log: slog }); setCompanionWorkspaceHooks({ initialMessage: companionWorkspaces.initial, receive: companionWorkspaces.receive });
 // The rail as the window's own chrome (chrome-rail.mjs): this app's page beside every place's page, the one that lists.
 const placeSwitch = createPlaceSwitch({ changed: () => railChanged(), stop: () => homeWindow.stopOpening(), kept: () => homePlaces.remembered(), pageSettled: () => { const page = mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null; if (page?.isLoadingMainFrame()) return new Promise(done => { page.once("did-stop-loading", done); page.once("destroyed", done); }); } }); const openPlace = (id, stale) => workspaceMenuAction(async () => { if (id === LOCAL_ID) await cleanWorkspace.settled(); if (!stale()) await switchEnvironment(id, stale); }); const chromeRail = createChromeRail({ createView: options => new WebContentsView(options), preload: path.join(__dirname, "preload.cjs"), log: slog, prefs: () => desktopPrefs, changed: () => rail.changed(), openComputer: (page) => openComputerSettings({ window: () => mainWindow, onLocal: (win) => senderIsLocal({ sender: win.webContents }), showLocal: () => placeSwitch.ask(LOCAL_ID, stale => { localProfiles.cancel(); return openPlace(LOCAL_ID, stale); }) }, page),
-  args: () => [...desktopCompanionRendererArguments(rendererOrigin(), desktopRemoteAccess), ...(app.isPackaged && !desktopRemoteAccess ? ["--seira-company-desktop=1"] : []), `--seira-app-version=${app.getVersion()}`],
+  args: () => [...desktopCompanionRendererArguments(rendererOrigin(), desktopRemoteAccess), ...(app.isPackaged && !desktopRemoteAccess ? ["--seira-company-desktop=1"] : []), `--seira-app-version=${app.getVersion()}`, ...(crashReports.available ? [CRASH_REPORTS_ARG] : [])],
   url: () => `${rendererOrigin()}${CHROME_RAIL_PATH}`, wanted: () => !desktopRemoteAccess && (serverReady || placeSwitch.target() !== null) && railList().length > 0 });
 chromeRail.install(ipcMain); const renameSavedServer = installServerRename({ ipcMain, guard: localWorkspaceOnly, state: () => environmentsState, persist: persistEnvironments, taken: () => [nativeT(process.platform === "darwin" ? "rail.thisMac" : "rail.thisPc"), ...localProfiles.places({ activeLocal: false }).map(place => place.name)] });
 function railChanged() { chromeRail.refresh(); rail.changed(); try { companionWorkspaces.changed(); } catch {} }

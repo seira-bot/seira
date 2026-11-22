@@ -114,6 +114,25 @@ async function thinMacPlatformTools(resources, arch) {
   }
 }
 
+// The UI and the server are copied as plain files. A source map in them would hand every user the unminified code that
+// the crash report service reads. The symbols step (scripts/crash-report-symbols.mjs) deletes the maps after the upload.
+async function assertNoSourceMaps(resources) {
+  const found = [];
+  for (const name of ["ui", "server"]) {
+    let entries;
+    try {
+      entries = await readdir(path.join(resources, name), { recursive: true });
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
+    }
+    for (const entry of entries) if (entry.endsWith(".map")) found.push(path.join(name, entry));
+  }
+  if (found.length) {
+    throw new Error(`The package contains source map files (the symbols step must delete them first): ${found.slice(0, 5).join(", ")}${found.length > 5 ? `, and ${found.length - 5} more` : ""}`);
+  }
+}
+
 // electron-builder normalizes copied resource directories to 0775. That is
 // unsafe for a root-owned executable path after DEB/AppImage installation, so
 // repair and revalidate the exact tree after resources are copied and before
@@ -124,6 +143,7 @@ export default async function afterPack(context) {
       ? path.join(context.appOutDir, "Seira.app", "Contents", "Resources")
       : path.join(context.appOutDir, "resources")
   );
+  await assertNoSourceMaps(resources);
   await validateCloudflared(resources, context.electronPlatformName, Boolean(context.packager));
   const browserRoot = path.join(resources, "browser-engine");
   const hasBrowser = await lstat(browserRoot).then(() => true, (error) => {

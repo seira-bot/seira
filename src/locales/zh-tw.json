@@ -10249,5 +10249,9 @@
   "call.voice.languageAuto": "自動",
   "call.voice.device": "此電腦上的語音",
   "call.voice.deviceDefault": "預設語音",
-  "call.voice.thisComputer": "此電腦"
+  "call.voice.thisComputer": "此電腦",
+  "settings.crashReports.title": "傳送當機報告",
+  "settings.crashReports.aria": "傳送當機報告",
+  "settings.crashReports.subtitle": "Seira 停止運作時，會傳送應用程式版本、系統類型以及程式碼出錯的位置，絕不包含你的訊息、檔案或名稱。",
+  "settings.crashReports.link": "報告包含哪些內容"
 }

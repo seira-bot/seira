@@ -273,7 +273,7 @@ test("the preload gives every page of the window the notices and the switch's st
     const page = preload(origin, { saved: false });
     assert.equal(typeof page.bridge.desktopNotices.state, "function", origin);
     assert.equal(page.bridge.cloudAccount, undefined, origin);
-    const asked = () => page.synced.filter(channel => channel.startsWith("desktop-"));
+    const asked = () => page.synced.filter(channel => channel.startsWith("desktop-") && !channel.startsWith("desktop-crash-reports:"));
     assert.deepEqual(asked(), [], "nothing is asked until analytics asks");
     assert.equal(page.bridge.desktopAnalytics.enabled(), false, "turned off on this desktop");
     assert.deepEqual(asked(), ["desktop-analytics:read"]);
@@ -284,16 +284,16 @@ test("the preload gives every page of the window the notices and the switch's st
   }
   const local = preload(LOCAL, { activation: true, saved: false });
   assert.equal(typeof local.bridge.desktopNotices.state, "function");
-  assert.deepEqual(local.synced, [], "nothing is asked until analytics asks");
+  assert.deepEqual(local.synced.filter(c => c !== "desktop-crash-reports:read"), [], "nothing is asked until analytics asks");
   assert.equal(local.bridge.desktopAnalytics.enabled(), false, "answered at once, before anything loads");
   assert.equal(local.bridge.desktopAnalytics.enabled(), false);
-  assert.deepEqual(local.synced, ["desktop-analytics:read"], "asked once a page");
+  assert.deepEqual(local.synced.filter(c => c !== "desktop-crash-reports:read"), ["desktop-analytics:read"], "asked once a page");
   await local.bridge.desktopAnalytics.set(true);
   assert.equal(local.bridge.desktopAnalytics.enabled(), true);
   assert.deepEqual(local.invoked, [["desktop-analytics:set", true]]);
   const unsaved = preload(LOCAL);
   for (let i = 0; i < 3; i++) assert.equal(unsaved.bridge.desktopAnalytics.enabled(), null);
-  assert.deepEqual(unsaved.synced, ["desktop-analytics:read"], "no choice saved yet is asked once too");
+  assert.deepEqual(unsaved.synced.filter(c => c !== "desktop-crash-reports:read"), ["desktop-analytics:read"], "no choice saved yet is asked once too");
   assert.equal(preload(LOCAL, { saved: "off" }).bridge.desktopAnalytics.enabled(), null);
   const safe = PRELOAD.match(/const REMOTE_SAFE = new Set\(\[([^\]]*)\]\)/)[1];
   assert.ok(safe.includes('"desktopNotices"')); assert.ok(safe.includes('"desktopAnalytics"'));
@@ -303,7 +303,7 @@ test("the preload gives every page of the window the app language this computer 
   for (const origin of [LOCAL, CLOUD, VPS]) {
     const page = preload(origin, { language: "de" });
     assert.deepEqual(Object.keys(page.bridge.desktopLanguage), ["choice", "set", "onChange", "shown"], origin);
-    const asked = () => page.synced.filter(channel => channel.startsWith("desktop-"));
+    const asked = () => page.synced.filter(channel => channel.startsWith("desktop-") && !channel.startsWith("desktop-crash-reports:"));
     assert.deepEqual(asked(), [], "nothing is asked until the language is");
     assert.equal(page.bridge.desktopLanguage.choice(), "de", origin);
     assert.equal(page.bridge.desktopLanguage.choice(), "de");
@@ -467,4 +467,27 @@ test("Settings reads and changes the window's frame on any page of the window; o
   assert.deepEqual(await handlers.get("window-frame:set")({}, false), { on: false, restart: false }, "no window yet");
   asking = null;
   assert.throws(() => handlers.get("window-frame:set")({}, true), /only available in this app's window/);
+});
+
+test("AC-04, AC-05: crash reports default on without a record, stay off when the record cannot be read, and keep a saved choice", () => {
+  const missing = Object.assign(new Error("none"), { code: "ENOENT" });
+  assert.equal(createDesktopPrefs({ read: () => { throw missing; }, write() {} }).crashReports(), true);
+  assert.equal(createDesktopPrefs({ read: () => ({}), write() {} }).crashReports(), true);
+  assert.equal(createDesktopPrefs({ read: () => { throw new SyntaxError("bad json"); }, write() {} }).crashReports(), false);
+  assert.equal(createDesktopPrefs({ read: () => "text", write() {} }).crashReports(), false);
+  assert.equal(createDesktopPrefs({ read: () => ({ crashReports: false }), write() {} }).crashReports(), false);
+  assert.equal(createDesktopPrefs({ read: () => ({ crashReports: "yes" }), write() {} }).crashReports(), true, "a value that is not a boolean is ignored");
+});
+
+test("AC-08, AC-10: the crash report choice is saved with the other choices and survives a restart", () => {
+  let saved = { seen: [POPUP], analytics: true };
+  const prefs = createDesktopPrefs({ read: () => saved, write: (value) => { saved = structuredClone(value); } });
+  prefs.setCrashReports(false);
+  assert.equal(saved.crashReports, false);
+  assert.deepEqual(saved.seen, [POPUP], "the other choices stay");
+  assert.equal(createDesktopPrefs({ read: () => saved, write() {} }).crashReports(), false);
+  prefs.setCrashReports(true);
+  assert.equal(saved.crashReports, true);
+  prefs.setCrashReports("x");
+  assert.equal(saved.crashReports, false, "only true turns it on");
 });

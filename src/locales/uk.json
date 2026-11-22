@@ -4215,5 +4215,9 @@
   "roomPicture.remove": "Прибрати зображення",
   "roomPicture.typeRefused": "Виберіть зображення PNG, JPEG, GIF або WebP.",
   "roomPicture.tooBig": "Зображення завелике. Виберіть файл менше 10 МБ.",
-  "roomPicture.failed": "Не вдалося зберегти зображення. Спробуйте ще раз."
+  "roomPicture.failed": "Не вдалося зберегти зображення. Спробуйте ще раз.",
+  "settings.crashReports.title": "Надсилати звіти про збої",
+  "settings.crashReports.aria": "Надсилати звіти про збої",
+  "settings.crashReports.subtitle": "Коли Seira перестає працювати, вона надсилає версію застосунку, тип системи та місце в коді, де сталася помилка. Ніколи ваші повідомлення, файли чи імена.",
+  "settings.crashReports.link": "Що входить до звіту"
 }

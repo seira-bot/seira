@@ -117,6 +117,8 @@
   "computerSharing.state",
   "confirm",
   "copyText",
+  "crashReports",
+  "crashReports.available",
   "desktopAnalytics",
   "desktopAnalytics.enabled",
   "desktopAnalytics.set",

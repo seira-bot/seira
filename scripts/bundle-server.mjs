@@ -67,8 +67,13 @@ const ENTRY_POINTS = [
   "meetings/meetbot.ts",
 ];
 
+// Maps only for a build that can send crash reports. "external" writes the map and no reference to it in the bundle;
+// scripts/crash-report-symbols.mjs uploads the maps and deletes them before the package is made.
+const sourcemap = process.env.SEIRA_CRASH_REPORT_URL ? "external" : false;
+
 await build({
   entryPoints: ENTRY_POINTS.map((entry) => join(server, entry)),
+  sourcemap,
   bundle: true,
   platform: "node",
   target: "node20",

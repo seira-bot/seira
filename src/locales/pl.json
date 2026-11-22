@@ -7210,5 +7210,9 @@
   "call.voice.languageAuto": "Automatycznie",
   "call.voice.device": "Głos na tym komputerze",
   "call.voice.deviceDefault": "Głos domyślny",
-  "call.voice.thisComputer": "Ten komputer"
+  "call.voice.thisComputer": "Ten komputer",
+  "settings.crashReports.title": "Wysyłaj raporty o awariach",
+  "settings.crashReports.aria": "Wysyłaj raporty o awariach",
+  "settings.crashReports.subtitle": "Gdy Seira przestaje działać, wysyła wersję aplikacji, typ systemu i miejsce w kodzie, w którym wystąpił błąd. Nigdy Twoich wiadomości, plików ani nazw.",
+  "settings.crashReports.link": "Co zawiera raport"
 }

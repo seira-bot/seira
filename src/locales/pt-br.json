@@ -11964,5 +11964,9 @@
   "call.voice.languageAuto": "Automático",
   "call.voice.device": "Voz deste computador",
   "call.voice.deviceDefault": "Voz padrão",
-  "call.voice.thisComputer": "Este computador"
+  "call.voice.thisComputer": "Este computador",
+  "settings.crashReports.title": "Enviar relatórios de falhas",
+  "settings.crashReports.aria": "Enviar relatórios de falhas",
+  "settings.crashReports.subtitle": "Quando o Seira para de funcionar, ele envia a versão do app, o tipo de sistema e o ponto do código onde falhou, nunca suas mensagens, arquivos ou nomes.",
+  "settings.crashReports.link": "O que um relatório contém"
 }
