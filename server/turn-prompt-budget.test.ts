@@ -78,9 +78,8 @@ const PROMPT_BUDGET_BASELINE: Record<string, number> = {
   "routine": 2838,
   "profile": 1097,
   "team-memory": 286,
-  // Every computer:* prompt carries +536 bytes on purpose: the free-form memory text main added (#350). Measured on the merge
-  // of main (437c21921) into #316: vm-private 5559 -> 6095, vm-shared 5554 -> 6090, box 4028 -> 4564, local 4969 -> 5505.
-  // computer:vps is 5166, not main's 5208: it also lost its Boat mention (-42, 4672 -> 4630 before the memory text). computer:box stays until #317.
+  // Every computer:* prompt carries 536 bytes on purpose: the free-form memory text. computer:vps is 42 bytes smaller than
+  // that text alone would make it, because it no longer mentions Boat. computer:box stays until its prompt is deleted with the Boat code.
   // Both sandbox kinds carry +130 bytes on purpose: the person's own files (C:\Users\…, /Users/…, Desktop) are reached only on This computer.
   "computer:vm-private": 6095,
   "computer:vm-shared": 6090,
