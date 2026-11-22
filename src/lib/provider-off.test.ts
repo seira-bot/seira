@@ -115,24 +115,40 @@ describe("runProviderOff", () => {
 });
 
 describe("undoProviderOff", () => {
-  it("unhides the provider, then puts each bot back", async () => {
+  const moved = [
+    { id: "a", name: "a", modelSelection: { instanceId: "x", model: "m" } },
+    { id: "b", name: "b", modelSelection: { instanceId: "x", model: "m" }, fallback: [{ instanceId: "q", model: "m" }] },
+  ];
+
+  it("unhides the provider, puts each bot back, then moves its conversations back", async () => {
     const order: string[] = [];
     const failed = await undoProviderOff(
-      { instanceId: "x", name: "X", hidden: true, stayed: [], moved: [
-        { id: "a", name: "a", modelSelection: { instanceId: "x", model: "m" } },
-        { id: "b", name: "b", modelSelection: { instanceId: "x", model: "m" }, fallback: [{ instanceId: "q", model: "m" }] },
-      ] },
-      { unhide: async () => { order.push("unhide"); }, restore: async (one) => { order.push(`restore ${one.id}`); } },
+      { instanceId: "x", name: "X", hidden: true, stayed: [], moved },
+      {
+        unhide: async () => { order.push("unhide"); },
+        restore: async (one) => { order.push(`restore ${one.id}`); },
+        followBotModel: async (one) => { order.push(`follow ${one.id}`); },
+      },
     );
-    expect(order).toEqual(["unhide", "restore a", "restore b"]);
+    expect(order).toEqual(["unhide", "restore a", "follow a", "restore b", "follow b"]);
     expect(failed).toEqual([]);
   });
 
-  it("names a bot it could not restore", async () => {
+  it("does not move the conversations of a bot it could not restore, and names it", async () => {
+    const follow: string[] = [];
     const failed = await undoProviderOff(
       { instanceId: "x", name: "X", hidden: false, stayed: [], moved: [{ id: "a", name: "Ann", modelSelection: { instanceId: "x", model: "m" } }] },
-      { unhide: async () => { throw new Error("no"); }, restore: async () => { throw new Error("no"); } },
+      { unhide: async () => { throw new Error("no"); }, restore: async () => { throw new Error("no"); }, followBotModel: async (one) => { follow.push(one.id); } },
     );
     expect(failed).toEqual(["Ann"]);
+    expect(follow).toEqual([]);
+  });
+
+  it("still finishes when moving a conversation back fails", async () => {
+    const failed = await undoProviderOff(
+      { instanceId: "x", name: "X", hidden: false, stayed: [], moved },
+      { unhide: async () => {}, restore: async () => {}, followBotModel: async () => { throw new Error("busy"); } },
+    );
+    expect(failed).toEqual([]);
   });
 });

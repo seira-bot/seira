@@ -329,12 +329,12 @@ describe("hiding a provider", () => {
   });
 
   describe("a provider the new-bot default points at", () => {
-    const setup = (move: (instanceId: string, cfg: { defaultModelSelection: unknown }) => Promise<unknown>) => {
+    const setup = (move: (instanceId: string, cfg: { defaultModelSelection: unknown }) => Promise<unknown>, bots: unknown[] = []) => {
       const cfg = { instances: { a: { driver: "fake" }, b: { driver: "fake" } }, defaultModelSelection: { instanceId: "a", model: "m" } };
       const persisted: Array<Record<string, { hidden?: boolean }>> = [];
       return serve({
         cfg: cfg as unknown as AppConfig,
-        store: { bots: [], tasks: () => [] } as never,
+        store: { bots, tasks: () => [] } as never,
         persistProviderInstance: async (_id: string, instances: typeof persisted[number]) => { persisted.push(structuredClone(instances)); (cfg as { instances: unknown }).instances = instances; },
         moveNewBotModelOff: (instanceId: string) => move(instanceId, cfg) as Promise<null>,
       }).then((served) => ({ ...served, cfg, persisted }));
@@ -357,6 +357,15 @@ describe("hiding a provider", () => {
       const reply = await fetch(`${served.base}/api/instances/a`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ hidden: true }) });
       expect(reply.status).toBe(409);
       expect(served.persisted).toEqual([]);
+    });
+
+    it("keeps the default where it is when a bot still uses the provider", async () => {
+      const calls: string[] = [];
+      const served = await setup(async (instanceId) => { calls.push(instanceId); return null; }, [{ id: "pen", modelSelection: { instanceId: "a", model: "m" } }]);
+      const reply = await fetch(`${served.base}/api/instances/a`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ hidden: true }) });
+      expect(reply.status).toBe(409);
+      expect(calls).toEqual([]);
+      expect(served.cfg.defaultModelSelection).toEqual({ instanceId: "a", model: "m" });
     });
 
     it("leaves the default alone when it points at another provider", async () => {

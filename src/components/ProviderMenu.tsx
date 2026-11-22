@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { Loader2, MoreHorizontal, X } from "lucide-react";
 import { api, desktopApprovalBridge, persistBotUpdate, useStore, type Bot, type InstanceInfo } from "@/state/store";
 import type { BotUpdatePatch } from "@/state/bot-patch-queue";
@@ -13,6 +14,7 @@ import {
 import { ConfirmDialog } from "./ConfirmDialog";
 import { hasSavedApiKey } from "./EngineSetup";
 import { MENU_SHEET } from "./menu-recipe";
+import { anchoredMenuPosition } from "./SidebarPopoverMenu";
 import { keyEntry, keyForInstance } from "./keys/key-catalog";
 import { saveKey } from "./keys/key-save";
 
@@ -109,7 +111,7 @@ export function ProviderOffStatus({ className }: { className?: string }) {
       { modelSelection: moved.modelSelection, fallback: moved.fallback ?? [] },
     );
     try {
-      const failed = await undoProviderOff(result, { unhide: () => setHidden(result.instanceId, false, (instances) => dispatch({ type: "instances", instances }), refreshInstances), restore });
+      const failed = await undoProviderOff(result, { unhide: () => setHidden(result.instanceId, false, (instances) => dispatch({ type: "instances", instances }), refreshInstances), restore, followBotModel: followBotModelRequest });
       if (failed.length > 0) setProblem(t("provider.undoFailed", { names: failed.join(", ") }));
       else rememberProviderOff(null);
     } catch (cause) {
@@ -134,6 +136,38 @@ export function ProviderOffStatus({ className }: { className?: string }) {
   );
 }
 
+/** Beside its button on top of everything, so a scrolling list cannot cut it off; below the button, or above it near the
+ * bottom edge. A press inside it does not reach the menus that close on an outside press. */
+function Floating({ anchor, panelRef, children }: { anchor: RefObject<HTMLElement | null>; panelRef: RefObject<HTMLDivElement | null>; children: ReactNode }) {
+  const [at, setAt] = useState<{ left: number; top: number } | null>(null);
+  const place = useCallback(() => {
+    const button = anchor.current;
+    const panel = panelRef.current;
+    if (!button || !panel) return;
+    const size = panel.getBoundingClientRect();
+    const next = anchoredMenuPosition(button.getBoundingClientRect(), { width: size.width, height: size.height },
+      { width: window.innerWidth, height: window.innerHeight }, getComputedStyle(button).direction === "rtl", "end");
+    setAt((before) => before && before.left === next.left && before.top === next.top ? before : next);
+  }, [anchor, panelRef]);
+  useLayoutEffect(place);
+  useEffect(() => {
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [place]);
+  return createPortal(
+    <div ref={panelRef} data-provider-floating onPointerDown={(event) => event.stopPropagation()}
+      style={{ position: "fixed", left: at?.left ?? 0, top: at?.top ?? 0, visibility: at ? undefined : "hidden" }}
+      className="z-[90] flex w-[260px] max-w-[calc(100vw-16px)] flex-col gap-1 text-[13px]">
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
 const canSignOut = (instance: InstanceInfo) => instance.snapshot.state === "available" && instance.snapshot.authenticated === true
   && instance.authentication?.signOut === true && instance.snapshot.account?.method !== "api-key";
 
@@ -152,11 +186,14 @@ const keyTarget = (instance: InstanceInfo) => {
 export function ProviderMenu({ instance, name: shown, compact = false, status = false }: { instance: InstanceInfo; name?: string; compact?: boolean; status?: boolean }) {
   const { state, dispatch, refreshInstances } = useStore();
   const off = useProviderOff(instance);
+  const result = useProviderOffResult();
   const [open, setOpen] = useState(false);
   const [confirm, setConfirm] = useState<"signOut" | "removeKey" | null>(null);
   const [working, setWorking] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const name = shown ?? engineDisplayName(instance);
   const signOut = canSignOut(instance);
   const ownApp = signsOutInOwnApp(instance);
@@ -166,7 +203,7 @@ export function ProviderMenu({ instance, name: shown, compact = false, status = 
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false); } };
-    const onPointerDown = (event: PointerEvent) => { if (event.target instanceof Node && !menuRef.current?.contains(event.target)) setOpen(false); };
+    const onPointerDown = (event: PointerEvent) => { if (event.target instanceof Node && !menuRef.current?.contains(event.target) && !panelRef.current?.contains(event.target)) setOpen(false); };
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("pointerdown", onPointerDown);
     return () => {
@@ -202,21 +239,25 @@ export function ProviderMenu({ instance, name: shown, compact = false, status = 
   const close = () => setOpen(false);
   return (
     <div ref={menuRef} data-provider-menu={instance.instanceId} className="relative flex shrink-0 items-center">
-      <button type="button" aria-haspopup="menu" aria-expanded={open} disabled={busy} onClick={() => setOpen((value) => !value)}
+      <button ref={buttonRef} type="button" aria-haspopup="menu" aria-expanded={open} disabled={busy} onClick={() => setOpen((value) => !value)}
         aria-label={t("accounts.menu", { name })} title={t("accounts.menu", { name })}
         className={cn("flex items-center justify-center rounded-full text-ink-tertiary outline-none hover:bg-ink/[0.06] hover:text-ink focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50", compact ? "size-6" : "size-8")}>
         {busy ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <MoreHorizontal size={compact ? 14 : 16} aria-hidden="true" />}
       </button>
-      {open && (
-        <div role="menu" className={cn("absolute right-0 top-full z-40 mt-1 w-[240px] text-[13px]", MENU_SHEET)}>
-          {signOut && <button type="button" role="menuitem" data-provider-sign-out className={ITEM} onClick={() => { close(); setConfirm("signOut"); }}>{t("accounts.signOut")}</button>}
-          {ownApp && <p data-provider-sign-out-note className={NOTE}>{t("provider.signOutInApp", { name })}</p>}
-          {target && <button type="button" role="menuitem" data-provider-remove-key className={ITEM} onClick={() => { close(); setConfirm("removeKey"); }}>{t("provider.removeKey")}</button>}
-          <ProviderOffItems off={off} onDone={close} />
-        </div>
+      {(open || error || (status && result)) && (
+        <Floating anchor={buttonRef} panelRef={panelRef}>
+          {open && (
+            <div role="menu" className={cn("w-[240px]", MENU_SHEET)}>
+              {signOut && <button type="button" role="menuitem" data-provider-sign-out className={ITEM} onClick={() => { close(); setConfirm("signOut"); }}>{t("accounts.signOut")}</button>}
+              {ownApp && <p data-provider-sign-out-note className={NOTE}>{t("provider.signOutInApp", { name })}</p>}
+              {target && <button type="button" role="menuitem" data-provider-remove-key className={ITEM} onClick={() => { close(); setConfirm("removeKey"); }}>{t("provider.removeKey")}</button>}
+              <ProviderOffItems off={off} onDone={close} />
+            </div>
+          )}
+          {error && <p role="alert" className="rounded-lg bg-card p-2 text-[12px] text-danger shadow-lg">{error}</p>}
+          {status && result && <ProviderOffStatus className="shadow-lg" />}
+        </Floating>
       )}
-      {error && <p role="alert" className="absolute right-0 top-full z-30 mt-1 w-[260px] rounded-lg bg-card p-2 text-[12px] text-danger shadow-lg">{error}</p>}
-      {status && <ProviderOffStatus className="absolute right-0 top-full z-30 mt-1 w-[260px] shadow-lg" />}
       <ConfirmDialog open={confirm === "signOut"} title={t("accounts.signOutTitle", { name })}
         body={<>{t("accounts.signOutBody")}{instance.driverKind !== "claudeAgent" && instance.driverKind !== "antigravityAgent" && <span data-sign-out-cli="" className="mt-2 block">{t("accounts.signOutCliBody", { name })}</span>}</>}
         confirmLabel={t("accounts.signOut")} tone="neutral" onCancel={() => setConfirm(null)} onConfirm={() => void run("signOut")} />

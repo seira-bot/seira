@@ -128,7 +128,7 @@ describe("the provider menu", () => {
   const menuIn = (scope: Element) => scope.querySelector('[data-provider-menu] button[aria-haspopup="menu"]') as HTMLButtonElement | null;
   const itemsOf = (button: HTMLButtonElement) => {
     flushSync(() => button.click());
-    return [...button.closest("[data-provider-menu]")!.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
+    return [...document.body.querySelectorAll('[data-provider-floating] [role="menuitem"]')].map((item) => item.textContent);
   };
 
   it("offers the same Hide in the full view and in the Simple view", async () => {
@@ -151,9 +151,55 @@ describe("the provider menu", () => {
     await open(bot("grok"));
     const button = menuIn(document.querySelector('[data-simple-provider="codex"]')!)!;
     itemsOf(button);
-    const menu = button.closest("[data-provider-menu]")!;
+    const menu = document.body.querySelector("[data-provider-floating]")!;
     expect(menu.querySelector("[data-provider-used]")?.textContent).toBe(t("provider.usedBy", { count: "1" }));
     expect(menu.querySelector("[data-provider-move]")?.textContent).toBe(t("provider.moveAndHide", { count: "1", target: "Grok" }));
     expect(menu.querySelector("[data-provider-hide]")).toBeNull();
+  });
+
+  describe("where it opens", () => {
+    const rect = (left: number, top: number, width: number, height: number) =>
+      ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
+    const floating = () => document.body.querySelector<HTMLElement>("[data-provider-floating]");
+    const lastGroupButton = () => document.querySelector<HTMLButtonElement>('[data-simple-provider="cursor"] button[aria-haspopup="menu"]')!;
+    const key = (target: Element, name: string) => flushSync(() => target.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true })));
+    const press = (target: Element) => flushSync(() => target.dispatchEvent(new Event("pointerdown", { bubbles: true })));
+
+    afterEach(() => vi.restoreAllMocks());
+    beforeEach(async () => {
+      Object.defineProperty(window, "innerHeight", { value: 800, configurable: true });
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+        if (this.hasAttribute("data-provider-floating")) return rect(300, 0, 260, 150);
+        if (this === lastGroupButton()) return rect(500, 770, 24, 24);
+        return rect(0, 0, 0, 0);
+      });
+      fixture.advanced = false;
+      fixture.instances = [codex(), grok(), cursor()];
+      await open(bot("codex"));
+    });
+
+    it("opens inside the window above the button of the last group, outside the scrolling list", () => {
+      flushSync(() => lastGroupButton().click());
+      const panel = floating()!;
+      expect(panel.parentElement).toBe(document.body);
+      expect(document.querySelector("[data-simple-model-menu]")!.contains(panel)).toBe(false);
+      expect(panel.style.position).toBe("fixed");
+      expect(parseFloat(panel.style.top)).toBeLessThan(770);
+      expect(parseFloat(panel.style.top) + 150).toBeLessThanOrEqual(800);
+      expect(panel.querySelector('[role="menu"]')).not.toBeNull();
+    });
+
+    it("closes on Escape and on a press outside, and stays open for a press inside", () => {
+      flushSync(() => lastGroupButton().click());
+      press(floating()!.querySelector('[role="menu"]')!);
+      expect(floating()).not.toBeNull();
+      key(floating()!, "Escape");
+      expect(floating()).toBeNull();
+      expect(document.querySelector("[data-model-picker-content]")).not.toBeNull();
+      flushSync(() => lastGroupButton().click());
+      press(document.querySelector("[data-simple-model-menu]")!);
+      expect(floating()).toBeNull();
+      expect(document.querySelector("[data-model-picker-content]")).not.toBeNull();
+    });
   });
 });

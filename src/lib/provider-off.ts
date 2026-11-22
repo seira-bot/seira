@@ -107,11 +107,14 @@ export async function runProviderOff(instance: Pick<InstanceInfo, "instanceId" |
   return result;
 }
 
-/** Brings the provider back, then each moved bot's model and backups. */
-export async function undoProviderOff(result: ProviderOffResult, actions: { unhide: () => Promise<unknown>; restore: (bot: MovedBot) => Promise<unknown> }): Promise<string[]> {
+/** Brings the provider back, then each moved bot's model and backups, then the conversations that follow the bot's model. */
+export async function undoProviderOff(result: ProviderOffResult, actions: { unhide: () => Promise<unknown>; restore: (bot: MovedBot) => Promise<unknown>; followBotModel: (bot: MovedBot) => Promise<unknown> }): Promise<string[]> {
   if (result.hidden) await actions.unhide();
   const failed: string[] = [];
-  for (const bot of result.moved) await actions.restore(bot).catch(() => failed.push(bot.name));
+  for (const bot of result.moved) {
+    const restored = await actions.restore(bot).then(() => true, () => { failed.push(bot.name); return false; });
+    if (restored) await actions.followBotModel(bot).catch(() => {});
+  }
   return failed;
 }
 

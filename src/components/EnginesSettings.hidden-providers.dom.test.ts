@@ -95,7 +95,7 @@ describe("Settings → AI: a provider hidden from its own card", () => {
     expect(rows()).toContain("kimi");
     await click(rowButton("kimi"));
     await openProviderMenu("kimi");
-    await click(container.querySelector('[data-provider-menu="kimi"] [data-provider-hide]'));
+    await click(document.body.querySelector('[data-provider-floating] [data-provider-hide]'));
     expect(server.calls).toContainEqual({ method: "PATCH", path: "/api/instances/kimi", body: { hidden: true } });
     expect(fixture.state.instances.map((instance) => instance.instanceId)).toEqual(["codex"]);
 
@@ -141,7 +141,7 @@ describe("Settings → AI: a provider hidden from its own card", () => {
     await render();
     await click(rowButton("kimi"));
     await openProviderMenu("kimi");
-    const signOut = container.querySelector('[data-provider-menu="kimi"] [data-provider-sign-out]');
+    const signOut = document.body.querySelector('[data-provider-floating] [data-provider-sign-out]');
     expect(signOut?.textContent).toBe("Sign out");
     await click(signOut);
     // The dialog says the CLI's own sign-in on this computer goes too.
@@ -176,7 +176,7 @@ describe("Settings → AI: Sign out on other CLI sign-ins", () => {
     await render();
     await click(rowButton(engine.instanceId));
     await openProviderMenu(engine.instanceId);
-    await click(container.querySelector(`[data-provider-menu="${engine.instanceId}"] [data-provider-sign-out]`));
+    await click(document.body.querySelector('[data-provider-floating] [data-provider-sign-out]'));
     expect(document.body.querySelector("[data-sign-out-cli]")?.textContent).toContain(name);
     await click([...document.body.querySelectorAll("button")].filter((button) => button.textContent === "Sign out").at(-1));
     expect(server.calls).toContainEqual({ method: "POST", path: `/api/instances/${engine.instanceId}/auth/sign-out` });
@@ -190,8 +190,8 @@ describe("Settings → AI: Sign out on other CLI sign-ins", () => {
     await click(rowButton("mistralVibe"));
     expect(container.querySelector('[data-engine-card="mistralVibe"]')).toBeTruthy();
     await openProviderMenu("mistralVibe");
-    expect(container.querySelector('[data-provider-menu="mistralVibe"] [data-provider-hide]')).toBeTruthy();
-    expect(container.querySelector('[data-provider-sign-out]')).toBeNull();
+    expect(document.body.querySelector('[data-provider-floating] [data-provider-hide]')).toBeTruthy();
+    expect(document.body.querySelector('[data-provider-sign-out]')).toBeNull();
   });
 });
 

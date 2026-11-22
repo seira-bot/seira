@@ -83,7 +83,11 @@ const click = async (target: Element | null | undefined) => {
   await render();
 };
 const menu = (instanceId: string) => container.querySelector(`[data-provider-menu="${instanceId}"]`);
-const openMenu = (instanceId: string) => click(menu(instanceId)?.querySelector('button[aria-haspopup="menu"]'));
+const item = (selector: string) => document.body.querySelector(`[data-provider-floating] ${selector}`);
+const openMenu = async (instanceId: string) => {
+  await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+  await click(menu(instanceId)?.querySelector('button[aria-haspopup="menu"]'));
+};
 const status = () => container.querySelector("[data-provider-off-status]")?.textContent ?? "";
 const patches = () => server.calls.filter((call) => call.method === "PATCH");
 
@@ -92,16 +96,16 @@ describe("Hide and Move and hide", () => {
     fixture.state = { ...fixture.state, bots: [bot("a", "kimi"), bot("b", "kimi")] };
     await render();
     await openMenu("kimi");
-    expect(menu("kimi")!.querySelector("[data-provider-used]")?.textContent).toBe(t("provider.usedBy", { count: "2" }));
-    expect(menu("kimi")!.querySelector("[data-provider-move]")?.textContent).toBe(t("provider.moveAndHide", { count: "2", target: "Hermes" }));
-    expect(menu("kimi")!.querySelector("[data-provider-hide]")).toBeNull();
+    expect(item("[data-provider-used]")?.textContent).toBe(t("provider.usedBy", { count: "2" }));
+    expect(item("[data-provider-move]")?.textContent).toBe(t("provider.moveAndHide", { count: "2", target: "Hermes" }));
+    expect(item("[data-provider-hide]")).toBeNull();
   });
 
   it("moves each bot's model and backup, follows the conversations, then hides", async () => {
     fixture.state = { ...fixture.state, bots: [bot("a", "kimi"), bot("b", "hermes", { fallback: [{ instanceId: "kimi", model: "m" }] })] };
     await render();
     await openMenu("kimi");
-    await click(menu("kimi")!.querySelector("[data-provider-move]"));
+    await click(item("[data-provider-move]"));
     expect(server.persisted).toEqual([
       { id: "a", patch: { keepThreadModels: true, modelSelection: { instanceId: "hermes", model: "hermes-model" } } },
       { id: "b", patch: { keepThreadModels: true, fallback: [] } },
@@ -120,7 +124,7 @@ describe("Hide and Move and hide", () => {
     fixture.state = { ...fixture.state, bots: [bot("a", "kimi"), bot("b", "kimi")] };
     await render();
     await openMenu("kimi");
-    await click(menu("kimi")!.querySelector("[data-provider-move]"));
+    await click(item("[data-provider-move]"));
     expect(server.persisted.map((one) => one.id)).toEqual(["a"]);
     expect(patches()).toEqual([]);
     expect(status()).toContain(t("provider.partial", { moved: "1", stayed: "1", name: "Kimi" }));
@@ -131,7 +135,7 @@ describe("Hide and Move and hide", () => {
     fixture.state = { ...fixture.state, bots: [bot("a", "kimi", { busy: true })] };
     await render();
     await openMenu("kimi");
-    await click(menu("kimi")!.querySelector("[data-provider-move]"));
+    await click(item("[data-provider-move]"));
     expect(server.persisted).toEqual([]);
     expect(patches()).toEqual([]);
     expect(status()).toContain(t("provider.partial", { moved: "0", stayed: "1", name: "Kimi" }));
@@ -142,19 +146,21 @@ describe("Hide and Move and hide", () => {
     fixture.state = { instances: [...server.all], bots: [bot("a", "kimi")], config: {} };
     await render();
     await openMenu("kimi");
-    expect(menu("kimi")!.querySelector("[data-provider-no-target]")?.textContent).toBe(t("provider.noTarget"));
-    expect(menu("kimi")!.querySelector("[data-provider-move]")).toBeNull();
-    expect(menu("kimi")!.querySelector("[data-provider-hide]")).toBeNull();
+    expect(item("[data-provider-no-target]")?.textContent).toBe(t("provider.noTarget"));
+    expect(item("[data-provider-move]")).toBeNull();
+    expect(item("[data-provider-hide]")).toBeNull();
   });
 
   it("puts every bot and the provider back with Undo", async () => {
     fixture.state = { ...fixture.state, bots: [bot("a", "kimi", { fallback: [{ instanceId: "hermes", model: "x" }] })] };
     await render();
     await openMenu("kimi");
-    await click(menu("kimi")!.querySelector("[data-provider-move]"));
+    await click(item("[data-provider-move]"));
     expect(server.hidden.has("kimi")).toBe(true);
     server.persisted = [];
+    server.calls = [];
     await click(container.querySelector("[data-provider-undo]"));
+    expect(server.calls.filter((call) => call.path.endsWith("/threads/follow-model")).map((call) => call.path)).toEqual(["/api/bots/a/threads/follow-model"]);
     expect(server.hidden.has("kimi")).toBe(false);
     expect(server.persisted).toEqual([{ id: "a", patch: { modelSelection: { instanceId: "kimi", model: "kimi-model" }, fallback: [{ instanceId: "hermes", model: "x" }] } }]);
     expect(container.querySelector("[data-provider-off-status]")).toBeNull();
@@ -164,7 +170,7 @@ describe("Hide and Move and hide", () => {
   it("closes the result with its close button", async () => {
     await render();
     await openMenu("kimi");
-    await click(menu("kimi")!.querySelector("[data-provider-hide]"));
+    await click(item("[data-provider-hide]"));
     expect(status()).toContain(t("provider.hidden", { name: "Kimi" }));
     await click(container.querySelector('[data-provider-off-status] button[aria-label="Close"]'));
     expect(container.querySelector("[data-provider-off-status]")).toBeNull();
@@ -177,15 +183,15 @@ describe("Sign out and Remove key", () => {
     fixture.state = { instances: [...server.all], bots: [], config: {} };
     await render();
     await openMenu("kimi");
-    expect(menu("kimi")!.querySelector("[data-provider-sign-out]")?.textContent).toBe(t("accounts.signOut"));
+    expect(item("[data-provider-sign-out]")?.textContent).toBe(t("accounts.signOut"));
     await openMenu("hermes");
-    expect(menu("hermes")!.querySelector("[data-provider-sign-out]")).toBeNull();
+    expect(item("[data-provider-sign-out]")).toBeNull();
   });
 
   it("tells how to sign out in the provider's own app when Seira cannot", async () => {
     await render();
     await openMenu("hermes");
-    expect(menu("hermes")!.querySelector("[data-provider-sign-out-note]")?.textContent).toBe(t("provider.signOutInApp", { name: "Hermes" }));
+    expect(item("[data-provider-sign-out-note]")?.textContent).toBe(t("provider.signOutInApp", { name: "Hermes" }));
   });
 
   it("shows no sign-out note for a provider that is signed out", async () => {
@@ -193,7 +199,7 @@ describe("Sign out and Remove key", () => {
     fixture.state = { instances: [...server.all], bots: [], config: {} };
     await render();
     await openMenu("hermes");
-    expect(menu("hermes")!.querySelector("[data-provider-sign-out-note]")).toBeNull();
+    expect(item("[data-provider-sign-out-note]")).toBeNull();
   });
 
   const keyed = (instanceId: string, displayName: string) => ready(instanceId, displayName, { driverKind: "grokAgent", access: "api", cliDefault: undefined });
@@ -203,7 +209,7 @@ describe("Sign out and Remove key", () => {
     fixture.state = { instances: [...server.all], bots: [], config: {} };
     await render();
     await openMenu("grok");
-    await click(menu("grok")!.querySelector("[data-provider-remove-key]"));
+    await click(item("[data-provider-remove-key]"));
     expect(document.body.querySelector("[data-remove-key-shared]")?.textContent).toBe(t("provider.removeKeyShared", { names: "xAI" }));
     expect(document.body.textContent).toContain(t("provider.removeKeyTitle", { name: "Grok" }));
   });
@@ -211,6 +217,6 @@ describe("Sign out and Remove key", () => {
   it("offers no Remove key to a provider that signs in without a saved key", async () => {
     await render();
     await openMenu("kimi");
-    expect(menu("kimi")!.querySelector("[data-provider-remove-key]")).toBeNull();
+    expect(item("[data-provider-remove-key]")).toBeNull();
   });
 });
