@@ -112,16 +112,6 @@ let child: ChildProcess;
 /** Stands in for the provider APIs so config saving never touches the network. */
 let providerStub: Server;
 let providerStubPort = 0;
-const boatRouteCalls: Array<{ method: string; path: string }> = [];
-const boatPromptBodies: Array<Record<string, unknown>> = [];
-let boatSlowRequestCount = 0;
-/** Holds a "box_slow" credential check open until released; unset, it takes 150 ms. */
-let boatSlowHold: Promise<void> | null = null;
-let managedBoatRows: Array<Record<string, unknown>> = [];
-let managedBoatListRowsOverride: Array<Record<string, unknown>> | null = null;
-let managedBoatListStatus = 200;
-let managedBoatStopDelayMs = 0;
-let managedBoatRenameDelayMs = 0;
 type DeferredGate = {
   wait: Promise<void>;
   release: () => void;
@@ -139,20 +129,6 @@ const deferredGate = (): DeferredGate => {
   });
   return { wait, release, entered, enter };
 };
-let managedBoatListGate: DeferredGate | null = null;
-let managedBoatCreateGate: DeferredGate | null = null;
-let managedBoatDeleteGate: DeferredGate | null = null;
-const managedBoatRejectedTokens = new Set<string>();
-const managedBoatCreateBodies: Array<Record<string, unknown>> = [];
-let managedBoatCreateName = "";
-const managedBoatCreatedIds = new Set<string>();
-const managedBoatDeleteConfirmations: Array<{ boxId: string; confirmation?: string }> = [];
-type ManagedBoatDeletionStatus = "pending" | "processing" | "blocked" | "completed";
-const managedBoatDeletionOperationId = "bdop_0123456789abcdef0123456789abcdef";
-let managedBoatDeletionStatuses: ManagedBoatDeletionStatus[] = [];
-let managedBoatLastDeletionStatus: ManagedBoatDeletionStatus = "completed";
-let managedBoatDeletionTarget = "";
-let managedBoatDeleteRemovesRow = true;
 let home: string;
 let staticDir: string;
 let fakeClaudeDump: string;
@@ -177,6 +153,8 @@ const connectorLinkRequests: Array<{ toolkit: string; alias?: string }> = [];
 // The ak_good project's own auth configs (a Xero OAuth app), and the auth_configs each new Session named.
 let connectorAuthConfigs: Array<{ id: string; status: string; is_composio_managed: boolean; toolkit: { slug: string } }> = [];
 const connectorSessionAuthConfigs: Array<Record<string, string> | undefined> = [];
+/** How long the stub holds each Composio Session request, so a config write stays inside its awaited key check. */
+let composioSessionDelayMs = 0;
 const connectorAuthConfigEdits: Array<{ id: string; body: unknown }> = [];
 const connectorRelayCalls: Array<{ transportSessionId: string; body: any }> = [];
 const browserCapabilityCalls: Array<{ operation: string; authorization?: string; body: any }> = [];
@@ -921,6 +899,7 @@ beforeAll(async () => {
         res.writeHead(401, { "content-type": "application/json" });
         return res.end(JSON.stringify({ error: { message: "invalid project key" } }));
       }
+      if (composioSessionDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, composioSessionDelayMs));
       let raw = "";
       for await (const chunk of req) raw += chunk;
       const body = raw ? JSON.parse(raw) : {};
@@ -1007,175 +986,8 @@ beforeAll(async () => {
         result: { content: [{ type: "text", text: "relay-ok" }] },
       }));
     }
-    if (
-      req.headers.authorization === "Bearer box_slow"
-      && new URL(req.url ?? "/", "http://box.invalid").pathname === "/sandboxes"
-    ) {
-      boatSlowRequestCount += 1;
-      await (boatSlowHold ?? new Promise((resolve) => setTimeout(resolve, 150)));
-    }
-    if (
-      req.headers.authorization === "Bearer box_route" ||
-      req.headers.authorization === "Bearer box_route_rotated"
-    ) {
-      const method = req.method ?? "GET";
-      const path = req.url ?? "/";
-      const requestUrl = new URL(path, "http://box.invalid");
-      boatRouteCalls.push({ method, path });
-      if (managedBoatRejectedTokens.has(String(req.headers.authorization))) {
-        res.writeHead(401, { "content-type": "application/json" });
-        return res.end(JSON.stringify({ ok: false, code: "unauthorized" }));
-      }
-      if (method === "GET" && requestUrl.pathname === "/sandboxes") {
-        const listGate = managedBoatListGate;
-        if (listGate) {
-          listGate.enter();
-          await listGate.wait;
-        }
-        res.writeHead(managedBoatListStatus, { "content-type": "application/json" });
-        return res.end(JSON.stringify(
-          managedBoatListStatus === 200
-            ? { ok: true, sandboxes: managedBoatListRowsOverride ?? managedBoatRows, pageInfo: { nextCursor: null } }
-            : { ok: false, message: "fixture list unavailable" },
-        ));
-      }
-      if (method === "GET" && requestUrl.pathname === `/deletion-operations/${managedBoatDeletionOperationId}`) {
-        managedBoatLastDeletionStatus = managedBoatDeletionStatuses.shift() ?? managedBoatLastDeletionStatus;
-        if (managedBoatLastDeletionStatus === "completed" && managedBoatDeletionTarget) {
-          managedBoatRows = managedBoatRows.filter((row) => row.id !== managedBoatDeletionTarget);
-          managedBoatCreatedIds.delete(managedBoatDeletionTarget);
-        }
-        return res.end(JSON.stringify({
-          ok: true,
-          type: "deletion.operation",
-          operation: {
-            id: managedBoatDeletionOperationId,
-            kind: "sandbox",
-            targetId: managedBoatDeletionTarget,
-            status: managedBoatLastDeletionStatus,
-          },
-        }));
-      }
-      res.setHeader("content-type", "application/json");
-      res.statusCode = 200;
-      if (method === "POST" && /^\/sandboxes\/[^/]+\/prompt$/.test(path)) {
-        let raw = "";
-        for await (const chunk of req) raw += chunk;
-        boatPromptBodies.push(JSON.parse(raw));
-        return res.end(JSON.stringify({ ok: true }));
-      }
-      if (method === "POST" && path === "/sandboxes") {
-        let raw = "";
-        for await (const chunk of req) raw += chunk;
-        managedBoatCreateBodies.push(raw ? JSON.parse(raw) : {});
-        if (managedBoatCreateGate) {
-          managedBoatCreateGate.enter();
-          await managedBoatCreateGate.wait;
-        }
-        return res.end(JSON.stringify({ ok: false, message: "fixture refused create" }));
-      }
-      if (method === "GET" && path === "/sandboxes/route-box") {
-        return res.end(JSON.stringify({ ok: true, sandbox: { id: "route-box", state: "running" } }));
-      }
-      if (method === "POST" && path === "/sandboxes/route-box/commands") {
-        return res.end(JSON.stringify({ ok: true, exitCode: 0, stdout: "", stderr: "" }));
-      }
-      if (method === "POST" && path === "/sandboxes/route-box/desktop?vnc=1") {
-        return res.end(JSON.stringify({ ok: true, desktopUrl: "https://desktop.invalid/route-box" }));
-      }
-      const boatMatch = requestUrl.pathname.match(/^\/sandboxes\/(bx_[23456789abcdefghjkmnpqrstuvwxyz]{8})$/);
-      if (method === "GET" && boatMatch) {
-        const row = managedBoatRows.find((candidate) => candidate.id === boatMatch[1]);
-        const exists = row ?? (managedBoatCreatedIds.has(boatMatch[1]!)
-          ? { id: boatMatch[1], name: `provider-${boatMatch[1]}`, state: "idle" }
-          : null);
-        if (!exists) {
-          res.statusCode = 404;
-          return res.end(JSON.stringify({ ok: false, message: "not found" }));
-        }
-        return res.end(JSON.stringify({ ok: true, sandbox: exists }));
-      }
-      if (method === "PATCH" && boatMatch) {
-        let raw = "";
-        for await (const chunk of req) raw += chunk;
-        const requestedName = raw ? JSON.parse(raw).name : undefined;
-        if (managedBoatRenameDelayMs > 0) {
-          await new Promise((resolve) => setTimeout(resolve, managedBoatRenameDelayMs));
-        }
-        managedBoatRows = [
-          ...managedBoatRows.filter((candidate) => candidate.id !== boatMatch[1]),
-          { id: boatMatch[1], name: managedBoatCreateName || requestedName, state: "idle" },
-        ];
-        return res.end(JSON.stringify({ ok: true, sandbox: managedBoatRows.at(-1) }));
-      }
-      const desktopMatch = requestUrl.pathname.match(/^\/sandboxes\/(bx_[23456789abcdefghjkmnpqrstuvwxyz]{8})\/desktop$/);
-      if (method === "POST" && desktopMatch) {
-        return res.end(JSON.stringify({ ok: true, desktopUrl: `https://desktop.invalid/${desktopMatch[1]}` }));
-      }
-      const commandMatch = requestUrl.pathname.match(/^\/sandboxes\/(bx_[23456789abcdefghjkmnpqrstuvwxyz]{8})\/commands$/);
-      if (method === "POST" && commandMatch) {
-        return res.end(JSON.stringify({ ok: true, exitCode: 0, stdout: "", stderr: "" }));
-      }
-      const stopMatch = requestUrl.pathname.match(/^\/sandboxes\/(bx_[23456789abcdefghjkmnpqrstuvwxyz]{8})\/stop$/);
-      if (method === "POST" && stopMatch) {
-        if (managedBoatStopDelayMs > 0) {
-          await new Promise((resolve) => setTimeout(resolve, managedBoatStopDelayMs));
-        }
-        managedBoatRows = managedBoatRows.map((row) => row.id === stopMatch[1] ? { ...row, state: "archived" } : row);
-        return res.end(JSON.stringify({ ok: true }));
-      }
-      const deleteMatch = requestUrl.pathname.match(/^\/sandboxes\/(bx_[23456789abcdefghjkmnpqrstuvwxyz]{8})$/);
-      if (method === "DELETE" && deleteMatch) {
-        const confirmation = Array.isArray(req.headers["x-ascii-confirm-delete"])
-          ? req.headers["x-ascii-confirm-delete"][0]
-          : req.headers["x-ascii-confirm-delete"];
-        managedBoatDeleteConfirmations.push({ boxId: deleteMatch[1], confirmation });
-        if (confirmation !== deleteMatch[1]) {
-          res.statusCode = 409;
-          return res.end(JSON.stringify({ ok: false, message: "confirmation mismatch" }));
-        }
-        const deleteGate = managedBoatDeleteGate;
-        if (deleteGate) {
-          deleteGate.enter();
-          await deleteGate.wait;
-        }
-        if (managedBoatDeleteRemovesRow) {
-          managedBoatRows = managedBoatRows.filter((row) => row.id !== deleteMatch[1]);
-          managedBoatCreatedIds.delete(deleteMatch[1]!);
-        }
-        res.statusCode = 202;
-        if (managedBoatDeletionStatuses.length || !managedBoatDeleteRemovesRow) {
-          managedBoatDeletionTarget = deleteMatch[1]!;
-          managedBoatLastDeletionStatus = managedBoatDeletionStatuses.shift() ?? "pending";
-          return res.end(JSON.stringify({
-            ok: true,
-            type: "deletion.operation",
-            operation: {
-              id: managedBoatDeletionOperationId,
-              kind: "sandbox",
-              targetId: deleteMatch[1],
-              status: managedBoatLastDeletionStatus,
-            },
-          }));
-        }
-        return res.end(JSON.stringify({ ok: true, type: "deletion.operation" }));
-      }
-      return res.end(JSON.stringify({ ok: true }));
-    }
-    if (req.headers.authorization === "Bearer box_unavailable") {
-      res.writeHead(500, { "content-type": "application/json" });
-      return res.end(JSON.stringify({ ok: false, message: "fixture outage" }));
-    }
-    const ok = req.headers.authorization === "Bearer box_good" || req.headers.authorization === "Bearer box_slow";
-    const directBoatRead = /^\/sandboxes\/bx_[23456789abcdefghjkmnpqrstuvwxyz]{8}$/.test(req.url ?? "");
-    res.writeHead(ok && directBoatRead ? 404 : ok ? 200 : 401, { "content-type": "application/json" });
-    res.end(JSON.stringify(
-      ok && directBoatRead
-        ? { ok: false, message: "not found" }
-        : ok
-          ? { ok: true, sandboxes: [] }
-          : { ok: false, code: "unauthorized" },
-    ));
+    res.writeHead(401, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: false, code: "unauthorized" }));
   });
   await new Promise<void>((r) => providerStub.listen(0, "127.0.0.1", r));
   providerStubPort = (providerStub.address() as { port: number }).port;
@@ -1224,7 +1036,6 @@ beforeAll(async () => {
       SEIRA_PORT: String(PORT),
       SEIRA_WEBHOOK_PORT: String(WEBHOOK_PORT),
       SEIRA_EXTRA_PATH: fakeDockerDir,
-      SEIRA_BOAT_API: `http://127.0.0.1:${providerStubPort}`,
       SEIRA_COMPOSIO_API: `http://127.0.0.1:${providerStubPort}/api/v3.1`,
       SEIRA_COMPOSIO_TOOLKITS_API: `http://127.0.0.1:${providerStubPort}/api/v3`,
       // A managed connected-apps broker on the stub, so relayed MCP frames are observable without any network.
@@ -1274,12 +1085,6 @@ afterAll(async () => {
 describe("harness HTTP API", () => {
   afterEach(async () => {
     // One shared server and store: drain busy holds between tests so a leak fails in its own test, not the next one's 409.
-    managedBoatListGate?.release();
-    managedBoatListGate = null;
-    managedBoatCreateGate?.release();
-    managedBoatCreateGate = null;
-    managedBoatDeleteGate?.release();
-    managedBoatDeleteGate = null;
     const deadline = Date.now() + 15_000;
     let stuck = { bots: [] as string[], groups: [] as string[], computers: [] as string[] };
     while (Date.now() < deadline) {
@@ -1321,7 +1126,6 @@ describe("harness HTTP API", () => {
     }
     // The same 409s defeat the finally blocks that reset config, so scrub a leftover pasted token here too.
     const config = (await api("GET", "/api/config")).body;
-    if (config.box?.configured) await api("PUT", "/api/config", { box: { token: "" } }).catch(() => undefined);
     if (config.vps?.configured) await api("PUT", "/api/config", { vps: { sshAlias: "" } }).catch(() => undefined);
   });
 
@@ -5381,7 +5185,6 @@ describe("harness HTTP API", () => {
   it("supersedes an earlier pending credential card when the same key is asked for again", async () => {
     let botId: string | undefined;
     try {
-      expect((await api("PUT", "/api/config", { box: { token: "" } })).status).toBe(200);
       const bot = (await api("POST", "/api/bots")).body.bot;
       botId = bot.id;
       const token = await mintTestCapability(BASE, bot.id, bot.threadId);
@@ -5422,14 +5225,12 @@ describe("harness HTTP API", () => {
       expect(fresh).toMatchObject({ status: 200, body: { dismissed: true } });
     } finally {
       if (botId) await api("DELETE", `/api/bots/${botId}`);
-      await api("PUT", "/api/config", { box: { token: "" } });
     }
   });
 
   it("leaves the earlier pending credential card actionable when the fresh card append fails", async () => {
     let botId: string | undefined;
     try {
-      expect((await api("PUT", "/api/config", { box: { token: "" } })).status).toBe(200);
       const bot = (await api("POST", "/api/bots")).body.bot;
       botId = bot.id;
       const token = await mintTestCapability(BASE, bot.id, bot.threadId);
@@ -5472,7 +5273,6 @@ describe("harness HTTP API", () => {
       expect((await card(thirdCard.messageId))?.secret?.superseded).toBeUndefined();
     } finally {
       if (botId) await api("DELETE", `/api/bots/${botId}`);
-      await api("PUT", "/api/config", { box: { token: "" } });
     }
   });
 
@@ -6830,34 +6630,15 @@ describe("harness HTTP API", () => {
     expect(missing.status).toBe(404);
   });
 
-  it("refuses a box token the provider rejects, at the point of pasting", async () => {
-    // the stub answers 401 for anything but the good token
-    const bad = await api("PUT", "/api/config", { box: { token: "box_wrong" } });
-    expect(bad.status).toBe(400);
-    expect(String(bad.body.error)).toMatch(/rejected/i);
-    expect(bad.body.code).toBe("key_rejected");
-    const unchecked = await api("PUT", "/api/config", { box: { token: "box_unavailable" } });
-    expect(unchecked.status).toBe(400);
-    expect(unchecked.body).toEqual({ error: "boat.dev returned 500 for that token — try again in a moment." });
+  // A released app may still send the old cloud computer key: it is refused like an empty write and never kept.
+  it("refuses a config write that saves nothing, and keeps no key this server does not use", async () => {
+    expect((await api("PUT", "/api/config", {})).status).toBe(400);
+    const retired = await api("PUT", "/api/config", { box: { token: "box_fixture_key" } });
+    expect(retired.status).toBe(400);
     const after = await api("GET", "/api/config");
-    expect(after.body.box).toEqual({ configured: false });
-  });
-
-  it("saves config keys write-only and reports booleans", async () => {
-    const before = await api("GET", "/api/config");
-    expect(before.body.box).toEqual({ configured: false });
-
-    const put = await api("PUT", "/api/config", { box: { token: "box_good" } });
-    expect(put.status).toBe(200);
-    expect(put.body.box).toEqual({ configured: true });
-    expect(JSON.stringify(put.body)).not.toContain("box_good");
-
-    const after = await api("GET", "/api/config");
-    expect(after.body.box).toEqual({ configured: true });
-    expect(JSON.stringify(after.body)).not.toContain("box_good");
-
-    const nothing = await api("PUT", "/api/config", {});
-    expect(nothing.status).toBe(400);
+    expect(after.body).not.toHaveProperty("box");
+    expect(JSON.stringify(after.body)).not.toContain("box_fixture_key");
+    expect(JSON.parse(readFileSync(join(home, ".seira", "config.json"), "utf8"))).not.toHaveProperty("box");
   });
 
   it.each(["fish", "xai"])("clears incompatible default and per-agent voices when switching to %s", async (provider) => {
@@ -8958,9 +8739,10 @@ describe("harness HTTP API", () => {
         modelSelection: { instanceId: "claude", model: "claude-sonnet-5" },
       })).status).toBe(200);
 
-      // The Boat stub holds this credential check for 150 ms: the profile becomes active while validation runs.
+      // The stub holds the Composio key check for 150 ms: the profile becomes active while validation runs.
+      composioSessionDelayMs = 150;
       const removing = api("PATCH", "/api/config", {
-        box: { token: "box_slow" },
+        composio: { apiKey: "ak_good" },
         browserProfiles: [],
       });
       await new Promise((resolve) => setTimeout(resolve, 30));
@@ -8980,6 +8762,7 @@ describe("harness HTTP API", () => {
         name: "Late claim",
       });
     } finally {
+      composioSessionDelayMs = 0;
       await api("POST", `/api/bots/${bot.id}/interrupt`, {}).catch(() => undefined);
       await expect.poll(async () => {
         const state = (await api("GET", "/api/bots")).body;
@@ -13139,11 +12922,18 @@ describe("instance CLI override API", () => {
   });
 
   it("rejects overlapping provider configuration writes", async () => {
-    const slowConfigWrite = api("PUT", "/api/config", { box: { token: "box_slow" } });
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    const overlapping = await api("PATCH", "/api/instances/ghost", { cli: "/tmp/ghost-overlap" });
-    expect(overlapping.status).toBe(409);
-    expect((await slowConfigWrite).status).toBe(200);
+    const keptKey = (await api("GET", "/api/config")).body.composio?.configured === true;
+    composioSessionDelayMs = 150;
+    try {
+      const slowConfigWrite = api("PUT", "/api/config", { composio: { apiKey: "ak_good" } });
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      const overlapping = await api("PATCH", "/api/instances/ghost", { cli: "/tmp/ghost-overlap" });
+      expect(overlapping.status).toBe(409);
+      expect((await slowConfigWrite).status).toBe(200);
+    } finally {
+      composioSessionDelayMs = 0;
+      if (!keptKey) await api("PUT", "/api/config", { composio: { apiKey: "" } });
+    }
   });
 });
 

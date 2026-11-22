@@ -113,7 +113,6 @@ export function buildSystemPrompt(
   return { text: sections.map((section) => section.text).join(""), sections, stable: halves(false), volatile: halves(true), roster };
 }
 
-// "box" is Boat's persisted kind literal.
 export type ComputerPromptKind = "vm-private" | "vm-shared" | "box" | "vps" | "local";
 
 export type ComputerPromptKindInput = {

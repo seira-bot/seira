@@ -439,7 +439,7 @@ createServer(socket => socket.end()).listen(port, '127.0.0.1');
     }
   }, 30_000);
 
-  it("tells a Boat bot without Boat that the saved VPS is not chosen for it, instead of only asking for Boat", async () => {
+  it("tells a bot whose cloud computer is not its VPS that the saved VPS is not chosen for it", async () => {
     await api("PUT", "/api/config", { vps: { sshAlias: "production-vps" } });
     const bot = (await api("POST", "/api/bots")).body.bot;
     try {

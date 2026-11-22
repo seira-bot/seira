@@ -162,4 +162,22 @@ describe("POST /api/bots/<bot>/secret-cards/<card>/provide", () => {
     await handler(ctx);
     expect(vi.mocked(ctx.json).mock.calls[0]?.[1]).toBe(403);
   });
+
+  it("refuses a phone's envelope for a key no card can ask for, and opens one for a known key", async () => {
+    const proven: RequestAuth = { kind: "loopback", scopes: ["admin", "client"], companionDevice: "phone-1" };
+    const envelope = (target: string) => ({
+      version: 1, threadId: "thread-1", keyId: "k".repeat(22), deviceId: "phone-1", target, requestKey: "request-1",
+      encapsulatedKey: "e".repeat(87), ciphertext: "c".repeat(32),
+    });
+    const refused = provide(proven, { "content-type": "application/json" });
+    vi.mocked(refused.ctx.readBody).mockResolvedValue(envelope("boxToken"));
+    await refused.handler(refused.ctx);
+    expect(refused.ctx.json).toHaveBeenCalledExactlyOnceWith(refused.ctx.res, 400, { error: "The encrypted credential request is invalid" });
+    expect(refused.provideSecretFromPhone).not.toHaveBeenCalled();
+    const known = provide(proven, { "content-type": "application/json" });
+    vi.mocked(known.ctx.readBody).mockResolvedValue(envelope("xaiApiKey"));
+    await known.handler(known.ctx);
+    expect(known.provideSecretFromPhone).toHaveBeenCalledOnce();
+    expect(vi.mocked(known.ctx.json).mock.calls[0]?.[1]).toBe(200);
+  });
 });

@@ -224,9 +224,10 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
           else section = trimmed;
         }
       }
-      for (const key of ["unread", "cloudBackend", "color", "mascotExpression", "mascotBody", "pinned", "hidden", "sidebarHidden", "welcomed"] as const) {
+      for (const key of ["unread", "color", "mascotExpression", "mascotBody", "pinned", "hidden", "sidebarHidden", "welcomed"] as const) {
         if (body[key] !== undefined) patch[key] = body[key];
       }
+      if (body.cloudBackend !== undefined) patch.cloudBackend = body.cloudBackend === "vps" ? "vps" : undefined;
       // null clears the default-bot mark, demoting the bot to a regular (deletable) one.
       if (body.defaultBot === null && existingBot?.defaultBot) patch.defaultBot = undefined;
       const computerSpecified = Object.prototype.hasOwnProperty.call(body, "computer");
@@ -247,7 +248,7 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
         }
       }
       // Cloud is the person's own VPS: a bot that works on Cloud carries no other backend, whatever client asked.
-      if (requestedComputer === "cloud" && (patch.cloudBackend ?? existingBot?.cloudBackend) !== "vps") patch.cloudBackend = "vps";
+      if (requestedComputer === "cloud" && (Object.hasOwn(patch, "cloudBackend") ? patch.cloudBackend : existingBot?.cloudBackend) !== "vps") patch.cloudBackend = "vps";
       if (normalizedSelection) patch.modelSelection = normalizedSelection;
       // null/"" clears; the id is not checked against the transcript.
       if (body.pinnedMessageId !== undefined) {

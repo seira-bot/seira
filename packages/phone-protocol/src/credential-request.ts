@@ -11,12 +11,6 @@ export const CREDENTIAL_TARGETS = {
     placeholder: "xai-…",
     helpUrl: "https://console.x.ai/",
   },
-  boxToken: {
-    label: "Boat API key",
-    description: "Gives bots an isolated cloud computer when Boat is selected.",
-    placeholder: "Paste your Boat API key",
-    helpUrl: "https://docs.boat.dev/api-keys",
-  },
   opencodeGoApiKey: {
     label: "OpenCode API key",
     description: "Used for OpenCode Zen and Go.",
@@ -132,7 +126,6 @@ export const PROVIDER_CREDENTIAL_TARGETS = [
 export type DesktopCredentialSlot = ConfigCredentialTargetId;
 export type CredentialConfig = {
   xai?: { key?: string };
-  box?: { token?: string };
   opencodeGo?: { apiKey?: string };
   tts?: { key?: string; fishKey?: string; geminiKey?: string };
   imageGen?: { key?: string };
@@ -186,8 +179,6 @@ export function credentialConfigPatch(id: ConfigCredentialTargetId, value: strin
   switch (id) {
     case "xaiApiKey":
       return { xai: { key: value } };
-    case "boxToken":
-      return { box: { token: value } };
     case "opencodeGoApiKey":
       return { opencodeGo: { apiKey: value } };
     case "ttsKey":
@@ -228,8 +219,6 @@ export function credentialIsConfigured(config: CredentialConfig, id: CredentialT
   switch (id) {
     case "xaiApiKey":
       return Boolean(config.xai?.key);
-    case "boxToken":
-      return Boolean(config.box?.token);
     case "opencodeGoApiKey":
       return Boolean(config.opencodeGo?.apiKey);
     case "ttsKey":

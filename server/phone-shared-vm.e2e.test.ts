@@ -1,4 +1,4 @@
-// The real server with the Local VM's container boundary replaced and a stub Boat: a person
+// The real server with the Local VM's container boundary replaced and a stub voice provider: a person
 // takes the one shared Local VM from a phone or the desktop, and every bot working on it waits until they hand it back.
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -30,13 +30,11 @@ const lease = () => randomUUID().replaceAll("-", "");
 describe("a person's hold on the shared Local VM", () => {
   let home = "", base = "", stateFile = "", dumpFile = "", finishFile = "", output = "";
   let child: ChildProcess | null = null;
-  let boatServer: Server;
-  let boatRow: { id: string; name: string; state: string } | null = null;
-  let holdBoatList: Promise<void> | null = null;
-  let boatListHeld = false;
-  let releaseBoat = () => {};
-  let boatCall: Promise<unknown> | undefined;
-  const boatCalls: string[] = [];
+  let providerServer: Server;
+  let holdKeyCheck: Promise<void> | null = null;
+  let keyCheckHeld = false;
+  let releaseKeyCheck = () => {};
+  let keyCheckCall: Promise<unknown> | undefined;
   let phoneToken = "";
   let witness = "";
   let sse: SseRecorder;
@@ -139,34 +137,16 @@ describe("a person's hold on the shared Local VM", () => {
     mkdirSync(join(ui, "assets"), { recursive: true });
     writeFileSync(join(ui, "index.html"), "<title>Shared VM takeover</title>");
     writeFileSync(join(ui, "assets", "test.css"), "body{}");
-    boatServer = createServer(async (req, res) => {
-      const path = new URL(req.url ?? "/", "http://box.fixture").pathname;
-      boatCalls.push(`${req.method} ${path}`);
+    providerServer = createServer(async (req, res) => {
       res.setHeader("content-type", "application/json");
-      let raw = "";
-      for await (const chunk of req) raw += chunk;
-      const body = raw ? JSON.parse(raw) : {};
-      if (path === "/sandboxes" && req.method === "POST") {
-        boatRow = { id: "bx_23456789", name: body.name ?? "fixture-box", state: "idle" };
-        return res.end(JSON.stringify({ sandbox: boatRow }));
+      if (new URL(req.url ?? "/", "http://voice.fixture").pathname === "/model" && holdKeyCheck) {
+        keyCheckHeld = true;
+        await holdKeyCheck;
       }
-      if (path === "/sandboxes") {
-        if (holdBoatList) { boatListHeld = true; await holdBoatList; }
-        return res.end(JSON.stringify({ sandboxes: boatRow ? [boatRow] : [] }));
-      }
-      if (path.endsWith("/desktop")) return res.end(JSON.stringify({ desktopUrl: "https://desktop.fixture.invalid/" }));
-      if (path.endsWith("/resume") && boatRow) { boatRow.state = "idle"; return res.end("{}"); }
-      if (/^\/sandboxes\/bx_[^/]+$/.test(path)) {
-        const row = boatRow?.id === path.slice("/sandboxes/".length) ? boatRow : null;
-        if (req.method === "DELETE") { if (row) boatRow = null; return res.end("{}"); }
-        if (!row) res.statusCode = 404;
-        else if (req.method === "PATCH" && body.name) row.name = body.name;
-        return res.end(JSON.stringify(row ? { sandbox: row } : { error: "missing" }));
-      }
-      return res.end("{}");
+      return res.end(JSON.stringify({ total: 0, items: [] }));
     });
-    await new Promise<void>(resolve => boatServer.listen(0, "127.0.0.1", resolve));
-    writeFileSync(join(data, "config.json"), JSON.stringify({ box: { token: "box_one" }, instances: { claude: {
+    await new Promise<void>(resolve => providerServer.listen(0, "127.0.0.1", resolve));
+    writeFileSync(join(data, "config.json"), JSON.stringify({ instances: { claude: {
       driver: "claudeAgent", config: { cli: join(ROOT, "server/testing/fake-claude-cli.ts") },
       environment: { FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_DUMP: dumpFile, FAKE_CLAUDE_SLOW_FINISH_GATE: finishFile },
     } } }));
@@ -181,7 +161,7 @@ describe("a person's hold on the shared Local VM", () => {
           APPDATA: join(home, "appdata"), LOCALAPPDATA: join(home, "localappdata"),
           TEMP: home, TMP: home, TMPDIR: home,
           SEIRA_PORT: String(port), SEIRA_WEBHOOK_PORT: String(port + 1), SEIRA_STATIC_DIR: ui, SEIRA_TEST_VM_STATE: stateFile,
-          SEIRA_BOAT_API: `http://127.0.0.1:${(boatServer.address() as { port: number }).port}`,
+          SEIRA_FISH_AUDIO_API: `http://127.0.0.1:${(providerServer.address() as { port: number }).port}`,
           SEIRA_COMPUTER_CALL_WAIT_MS: String(CALL_WAIT_MS), SEIRA_TEST_LEASE_GRACE_MS: String(GRACE_MS),
           SEIRA_TEST_VIEWER_RECHECK_MS: String(RECHECK_MS),
         }, stdio: ["ignore", "pipe", "pipe"],
@@ -207,10 +187,10 @@ describe("a person's hold on the shared Local VM", () => {
   }, 60_000);
 
   afterEach(async () => {
-    holdBoatList = null;
-    releaseBoat();
-    await boatCall?.catch(() => {});
-    boatCall = undefined;
+    holdKeyCheck = null;
+    releaseKeyCheck();
+    await keyCheckCall?.catch(() => {});
+    keyCheckCall = undefined;
     writeFileSync(finishFile, "finish");
     // A bot a person's hold reaches cannot be deleted, so every hold a test left goes first.
     await control(api, witness, { action: "release" });
@@ -233,7 +213,7 @@ describe("a person's hold on the shared Local VM", () => {
   afterAll(async () => {
     sse?.close();
     if (child) await waitForExit(child, { signal: "SIGTERM" });
-    if (boatServer) await new Promise<void>(resolve => boatServer.close(() => resolve()));
+    if (providerServer) await new Promise<void>(resolve => providerServer.close(() => resolve()));
     if (home) await removeTempDir(home);
   });
 
@@ -370,13 +350,13 @@ describe("a person's hold on the shared Local VM", () => {
     expect(moved.status).toBe(409);
     await control(api, a.id, { action: "release" });
 
-    holdBoatList = new Promise(resolve => { releaseBoat = resolve; });
-    boatListHeld = false;
-    const changing = boatCall = api("PATCH", "/api/config", { box: { token: "box_two" }, localVm: { mode: "per-bot" } });
-    await until(() => boatListHeld, Boolean);
+    holdKeyCheck = new Promise(resolve => { releaseKeyCheck = resolve; });
+    keyCheckHeld = false;
+    const changing = keyCheckCall = api("PATCH", "/api/config", { tts: { fishKey: "fish_fixture_key" }, localVm: { mode: "per-bot" } });
+    await until(() => keyCheckHeld, Boolean);
     const refused = await control(api, a.id, { action: "take" });
-    holdBoatList = null;
-    releaseBoat();
+    holdKeyCheck = null;
+    releaseKeyCheck();
     expect(refused.status).toBe(409);
     expect((await changing).status).toBe(200);
   }, 30_000);

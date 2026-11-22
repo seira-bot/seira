@@ -57,15 +57,14 @@ describe("every credential has one home on the keys page", () => {
 
   // A key saved from a bot's card lands exactly where its Settings row puts it: the same desktop slot, or the same config.
   it("covers every credential a bot can ask for in a chat, saved where Settings saves it", () => {
-    // boxToken is the Boat key: no row, and its credential target goes with the Boat server in the next change.
-    const homes: Record<Exclude<keyof typeof CREDENTIAL_TARGETS, "boxToken">, KeyId> = {
+    const homes: Record<keyof typeof CREDENTIAL_TARGETS, KeyId> = {
       xaiApiKey: "xai", opencodeGoApiKey: "opencodeGo", ttsKey: "elevenlabs", fishAudioKey: "fishAudio", geminiTtsKey: "geminiTts",
       openaiImageApiKey: "imageOpenai", onePasswordToken: "onePassword", composioApiKey: "composio", openaiApiKey: "openai",
       anthropicApiKey: "anthropic", openrouterApiKey: "openrouter", mistralApiKey: "mistral", cerebrasApiKey: "cerebras", groqApiKey: "groq",
       greenferenceApiKey: "greenference", modelgoApiKey: "modelgo", metaApiKey: "meta", deepseekApiKey: "deepseek",
     };
-    expect(Object.keys(homes).sort()).toEqual(Object.keys(CREDENTIAL_TARGETS).filter((name) => name !== "boxToken").sort());
-    for (const [name, id] of Object.entries(homes) as Array<[Exclude<keyof typeof CREDENTIAL_TARGETS, "boxToken">, KeyId]>) {
+    expect(Object.keys(homes).sort()).toEqual(Object.keys(CREDENTIAL_TARGETS).sort());
+    for (const [name, id] of Object.entries(homes) as Array<[keyof typeof CREDENTIAL_TARGETS, KeyId]>) {
       const entry = keyEntry(id);
       if (!entry.target) {
         expect(entry.opens, name).toBe("logins");
