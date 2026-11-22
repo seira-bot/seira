@@ -19,10 +19,11 @@
 //     the egress gate (every connection to the internet goes through it) and the harness gate (only /api/internal/
 //     routes of this server). Nothing else on the server's loopback is reachable. A box that waits for a sign-in callback
 //     also dials out to one more socket, through which the server reaches the box's own loopback, never the other way.
-import { lstatSync, realpathSync, statSync } from "node:fs";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { lstatSync, mkdirSync, readdirSync, readlinkSync, realpathSync, statSync } from "node:fs";
+import { dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
 
 import { isLayerId } from "../audience.ts";
+import { homeProgramCandidates } from "../env-path.ts";
 import type { TurnFolders } from "../folder-access.ts";
 
 export type BoxNet = "isolated" | "shared";
@@ -198,6 +199,99 @@ function realPathOf(path: string): string {
   try { return realpathSync(path); } catch { return resolve(path); }
 }
 
+/** Every link that resolving the absolute `path` passes, by its real name, and last the real path it ends at, as the
+ * system resolves it: a `..` after a link goes up from where the link leads. Null for a relative path, a link loop, or
+ * an end that differs from the system's own. A part that is not there is taken as named. */
+export function linksOnTheWay(path: string): string[] | null {
+  if (!isAbsolute(path)) return null;
+  const steps: string[] = [];
+  const pending = path.split(sep).filter(Boolean);
+  let current = parse(path).root, links = 0;
+  while (pending.length > 0) {
+    const part = pending.shift()!;
+    if (part === ".") continue;
+    if (part === "..") { current = dirname(current); continue; }
+    const next = join(current, part);
+    let target: string | null = null;
+    try { if (lstatSync(next).isSymbolicLink()) target = readlinkSync(next); } catch {}
+    if (target === null) { current = next; continue; }
+    if (++links > 40) return null;
+    steps.push(next);
+    pending.unshift(...target.split(sep).filter(Boolean));
+    if (isAbsolute(target)) current = parse(target).root;
+  }
+  let real: string | null = null;
+  try { real = realpathSync.native(path); } catch {}
+  if (real !== null && real !== current) return null;
+  return [...steps, current];
+}
+
+/** Of HOME, the real path of the entry `name` when it is no link, has none on the way and is apart from the data folder. */
+function namedInHome(home: string, dataDir: string): (name: string) => string | null {
+  const homeDir = resolve(home), data = resolve(dataDir);
+  const realHome = realPathOf(homeDir), realData = realPathOf(data);
+  return (name) => {
+    const path = join(homeDir, name);
+    try {
+      if (lstatSync(path).isSymbolicLink()) return null;
+      const real = realpathSync(path);
+      if (real !== join(realHome, name) || under(real, realData) || under(realData, real) || under(path, data) || under(data, path)) return null;
+      return real;
+    } catch { return null; }
+  };
+}
+
+/** The program folders on the server's PATH in the sign-in folders of a limited box, as named in HOME. */
+export interface SignInPrograms {
+  /** The program folders, and each folder there that a link in them passes. A limited box has them read-only. */
+  readOnly: string[];
+  /** The sign-in folders with a program folder, or a folder such a link passes, that cannot be bound read-only. */
+  locked: string[];
+}
+
+/** Security: a limited box writes its sign-in folders, except these program folders. A box must never have one of them
+ * writable, or it could leave a program there for the server to run later, also after a restart. */
+export function signInPrograms(home: string, dataDir: string): SignInPrograms {
+  const homeDir = resolve(home), atName = namedInHome(homeDir, dataDir);
+  const signIns = LIMITED_HOME_SIGN_INS.flatMap((name) => { const real = atName(name); return real ? [{ name, path: join(homeDir, name), real }] : []; });
+  const readOnly = new Set<string>(), locked = new Set<string>();
+  for (const dir of homeProgramCandidates(homeDir)) {
+    const signIn = signIns.find((one) => dir !== one.path && under(dir, one.path));
+    if (!signIn) continue;
+    const realDir = atName(relative(homeDir, dir));
+    if (!realDir) { locked.add(signIn.path); continue; }
+    readOnly.add(dir);
+    let entries: string[] = [];
+    try { entries = readdirSync(dir); } catch {}
+    for (const entry of entries) {
+      const steps = linksOnTheWay(join(dir, entry));
+      if (!steps) { locked.add(signIn.path); continue; }
+      for (const step of steps) {
+        const holder = signIns.find((one) => step !== one.real && under(step, one.real));
+        if (!holder || under(step, realDir)) continue;
+        const name = join(holder.name, relative(holder.real, step).split(sep)[0]!);
+        if (atName(name)) readOnly.add(join(homeDir, name));
+        else locked.add(holder.path);
+      }
+    }
+  }
+  return { readOnly: [...readOnly], locked: [...locked] };
+}
+
+/** Makes each program folder that is missing in a sign-in folder, so that a limited box can have it read-only. */
+export function makeSignInProgramFolders(home: string, dataDir: string): void {
+  const homeDir = resolve(home), atName = namedInHome(homeDir, dataDir);
+  for (const dir of homeProgramCandidates(homeDir)) {
+    let name: string | undefined = LIMITED_HOME_SIGN_INS.find((one) => dir !== join(homeDir, one) && under(dir, join(homeDir, one)));
+    if (!name || !atName(name)) continue;
+    for (const part of relative(join(homeDir, name), dir).split(sep)) {
+      name = join(name, part);
+      try { mkdirSync(join(homeDir, name), { mode: 0o700 }); } catch {}
+      if (!atName(name)) break;
+    }
+  }
+}
+
 function assertReadOnlySource(source: string): void {
   try {
     const stat = statSync(source);
@@ -243,7 +337,8 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
   // An engine home lives in the data folder, so it goes back after that.
   const ownHome = request.home ? resolve(request.home) : null;
   const limited = !ownHome && request.folders?.limited === true;
-  const keptSignIns: string[] = [];
+  const keptSignIns: string[] = [], boundSignIns: string[] = [];
+  let programs: SignInPrograms | null = null;
   const realHome = realPathOf(home), realData = realPathOf(dataDir);
   /** A path that is HOME, or holds it (the server's data folder too): in a limited box nothing may bind it. */
   const holdsHome = (path: string) => under(realHome, path) || under(home, path) || under(realData, path) || under(dataDir, path);
@@ -267,9 +362,15 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
       if (!real) continue;
       mounts.push({ kind: "ro", source: real, target: join(home, name), optional: true });
     }
+    programs = signInPrograms(home, dataDir);
     for (const name of LIMITED_HOME_SIGN_INS) {
       const real = entry(name);
       if (!real) continue;
+      boundSignIns.push(join(home, name));
+      if (programs.locked.includes(join(home, name))) {
+        mounts.push({ kind: "ro", source: real, target: join(home, name), optional: true });
+        continue;
+      }
       mounts.push({ kind: "bind", source: real, target: join(home, name), optional: true });
       writable.push(join(home, name));
       keptSignIns.push(join(home, name));
@@ -415,6 +516,12 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
   for (const grant of [...grants].sort((a, b) => depth(a.path) - depth(b.path) || Number(b.write) - Number(a.write))) {
     if (!grant.write) mounts.push({ kind: "ro", source: grant.path, target: grant.path, optional: true });
     else if (askedReadOnly.some((outer) => outer.path !== grant.path && under(grant.path, outer.path))) mounts.push({ kind: "bind", source: grant.path, target: grant.path, optional: true });
+  }
+  // Security: after their sign-in folders and every grant, so that no box has a program folder of a sign-in writable.
+  if (programs) {
+    for (const path of [...programs.locked, ...programs.readOnly]) {
+      if (boundSignIns.some((signIn) => under(path, signIn))) mounts.push({ kind: "ro", source: realPathOf(path), target: path, optional: true });
+    }
   }
 
   // The team's shared folder, at one path in every box: its own line, as nothing else is bound there.

@@ -10,12 +10,13 @@ import {
   type SpawnOptions,
 } from "node:child_process";
 import { createHash } from "node:crypto";
-import { closeSync, existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { accessSync, closeSync, constants, existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import type { Readable, Writable } from "node:stream";
-import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { basename, delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { botBox, type WrappedSpawn } from "./bot-box/box.ts";
 import type { BoxRequest } from "./bot-box/plan.ts";
-import { homeProgramsDistrusted, serverMayRunFrom, serverPath } from "./bot-box/program-trust.ts";
+import { programsDistrusted, serverMayRunFrom, serverPath } from "./bot-box/program-trust.ts";
 import { currentTurn } from "./crash-guard.ts";
 import { engineMemory } from "./engine-memory.ts";
 import { engineOwners } from "./engine-owners.ts";
@@ -301,17 +302,39 @@ export function sharedBoxScope(cwd: string): string | null {
 /** Security (bot-box/program-trust.ts): a spawn outside the box neither starts a program from a folder a boxed bot can
  * write nor looks one up there. */
 export function outsideBoxOptions<T extends { env?: NodeJS.ProcessEnv; cwd?: string | URL }>(command: string, opts: T): T {
-  if (!homeProgramsDistrusted()) return opts;
-  if (/[/\\]/.test(command)) {
-    const path = resolve(typeof opts.cwd === "string" ? opts.cwd : process.cwd(), command);
-    let real = path;
-    try { real = realpathSync(path); } catch {}
-    if (!serverMayRunFrom(path) || !serverMayRunFrom(real)) {
-      throw Object.assign(new Error(`${command} is in a folder the bots can write, so the server does not run it outside the bot box.`), { code: "EACCES" });
-    }
-  }
+  if (!programsDistrusted()) return opts;
   const env = opts.env ?? process.env;
-  return { ...opts, env: { ...env, PATH: serverPath(env.PATH) } };
+  const path = serverPath(env.PATH);
+  // A program found by name is checked as well: the folder can be trusted while a link in it leads to one the bots write.
+  const program = !/[/\\]/.test(command) ? onPath(command, path) : isAbsolute(command) ? command : `${spawnCwd(opts.cwd)}${sep}${command}`;
+  if (program && (!serverMayRunFrom(program) || !serverMayRunFrom(realPathOr(program)))) {
+    throw Object.assign(new Error(`${command} is in a folder the bots can write, so the server does not run it outside the bot box.`), { code: "EACCES" });
+  }
+  return { ...opts, env: { ...env, PATH: path } };
+}
+
+function realPathOr(path: string): string {
+  try { return realpathSync.native(path); } catch { return path; }
+}
+
+/** The folder a spawn with `cwd` starts in. */
+function spawnCwd(cwd: string | URL | undefined): string {
+  const dir = cwd instanceof URL ? fileURLToPath(cwd) : cwd ?? process.cwd();
+  return isAbsolute(dir) ? dir : `${process.cwd()}${sep}${dir}`;
+}
+
+/** The file a spawn of `command` by name starts, on `path`, named as the system opens it: unnormalized, because a `..`
+ * after a link goes up from where the link leads. */
+function onPath(command: string, path: string): string | null {
+  for (const dir of path.split(delimiter)) {
+    if (!dir) continue;
+    const file = `${dir}${sep}${command}`;
+    try {
+      accessSync(file, constants.X_OK);
+      if (statSync(file).isFile()) return file;
+    } catch {}
+  }
+  return null;
 }
 
 /** `stdio` with the descriptor `envFd` at HOST_ENV_FD, where `flatpak-spawn` reads the child's environment. */
