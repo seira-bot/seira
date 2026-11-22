@@ -148,11 +148,11 @@ export function externalWebUrl(rawUrl) {
 /** Security: a sign-in page any page of the window may open, another server's included, so `allowed` checks the page
  * that asks and only an https address opens. */
 export function signInPageOpener({ allowed, open }) {
-  return async (event, rawUrl) => {
+  return async (event, rawUrl, options) => {
     if (!allowed(event)) throw new Error("Use the link to open the page.");
     const url = externalWebUrl(rawUrl);
     if (new URL(url).protocol !== "https:") throw new Error("Only a secure sign-in page can be opened");
-    await open(url);
+    await open(url, { clean: options?.clean === true });
     return true;
   };
 }
@@ -176,3 +176,5 @@ export function emailDraftUrl(rawUrl) {
   }
   return url.toString();
 }
+
+export { openCleanSignIn } from "./sign-in-window.mjs";

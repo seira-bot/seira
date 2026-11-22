@@ -398,6 +398,7 @@ const __APP_VERSION__: string;
       /** Opens an https sign-in page in the user's default browser, on every page of the window, another server's
        * included. From another server's page it needs the person's click; it rejects any other address. Absent on older apps. */
       openSignInPage?(url: string): Promise<boolean>;
+      openCleanSignInPage?(url: string): Promise<boolean>;
       /** Recolor the native window chrome for a skin; absent on older builds. */
       applySkin?(skin: string): Promise<boolean>;
       /** The window's own frame, this desktop's choice (Settings → Appearance). Absent on an older app. */

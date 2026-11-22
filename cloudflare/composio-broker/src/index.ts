@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { applyAccountIdentity, deleteConnectedAccount, revokeOnRemoval } from "./account-identity";
 import { planAccountLink } from "../../../shared/connector-account-link";
 import { appEventStats, composioWebhook, pollEvents, presentCloudGrant, queueTestEvent, runHourly } from "./app-events";
 import { admitMcp, admitRegistration, admitRoute } from "./limits";
@@ -55,6 +56,8 @@ interface ConnectedAccountSummary {
   id: string;
   alias?: string;
   status: string;
+  displayName?: string;
+  duplicateOf?: string;
 }
 
 interface ConnectorServiceState {
@@ -643,14 +646,15 @@ async function listSessionToolkits(
 
 function summarizeAccounts(accounts: ConnectedAccountResponse[], slugs: string[]) {
   const requested = new Set(slugs.map((slug) => slug.toLowerCase()));
-  const bySlug = new Map<string, Array<ConnectedAccountSummary & { updatedAt: string }>>();
+  const bySlug = new Map<string, Array<ConnectedAccountSummary & { createdAt: string; updatedAt: string }>>();
   for (const account of accounts) {
     const slug = account.toolkit?.slug?.toLowerCase();
     if (!slug || (requested.size && !requested.has(slug)) || !account.id || !ACCOUNT_ID.test(account.id)) continue;
     const alias = account.alias?.trim() ?? "";
-    const summary: ConnectedAccountSummary & { updatedAt: string } = {
+    const summary: ConnectedAccountSummary & { createdAt: string; updatedAt: string } = {
       id: account.id,
       status: account.status || "UNKNOWN",
+      createdAt: account.created_at ?? "",
       updatedAt: account.updated_at ?? "",
     };
     if (printableAliasSchema.safeParse(alias).success) summary.alias = alias;
@@ -658,13 +662,18 @@ function summarizeAccounts(accounts: ConnectedAccountResponse[], slugs: string[]
     list.push(summary);
     bySlug.set(slug, list);
   }
-  for (const list of bySlug.values()) list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  for (const list of bySlug.values()) {
+    applyAccountIdentity(list, accounts);
+    list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
   return bySlug;
 }
 
-function publicAccount({ id, alias, status }: ConnectedAccountSummary): ConnectedAccountSummary {
+function publicAccount({ id, alias, status, displayName, duplicateOf }: ConnectedAccountSummary): ConnectedAccountSummary {
   const account: ConnectedAccountSummary = { id, status };
   if (alias) account.alias = alias;
+  if (displayName) account.displayName = displayName;
+  if (duplicateOf) account.duplicateOf = duplicateOf;
   return account;
 }
 
@@ -781,7 +790,7 @@ async function authorize(
   );
   if (!plan.ok) return json({ error: plan.error }, plan.status);
   for (const id of plan.replace) {
-    const removed = await composioRequest(env, `/connected_accounts/${encodeURIComponent(id)}?revoke_on_delete=true`, { method: "DELETE" });
+    const removed = await deleteConnectedAccount(env, id, revokeOnRemoval(listed, slug, id));
     if (!removed.ok) return json({ error: await upstreamError(removed, "Removing the earlier sign-in failed") }, 502);
   }
   await raiseAccountCap(session, env);
@@ -811,7 +820,8 @@ async function disconnect(slug: string, installation: InstallationRow, env: Env,
   const body = toolkitPageSchema.parse(await list.json());
   const id = body.items?.find((item) => item.slug?.toLowerCase() === slug)?.connected_account?.id;
   if (!id) return json({ removed: 0 });
-  const response = await composioRequest(env, `/connected_accounts/${encodeURIComponent(id)}?revoke_on_delete=true`, { method: "DELETE" });
+  const listed = await listConnectedAccounts(env, actingUser(installation), [slug]).catch(() => null);
+  const response = await deleteConnectedAccount(env, id, listed !== null && revokeOnRemoval(listed, slug, id));
   if (!response.ok) return json({ error: await upstreamError(response, "Disconnect failed") }, 502);
   return json({ removed: 1 });
 }
@@ -830,11 +840,7 @@ async function disconnectAccount(
     account.id === accountId && account.toolkit?.slug?.toLowerCase() === slug
   );
   if (!owned) return json({ removed: 0 });
-  const response = await composioRequest(
-    env,
-    `/connected_accounts/${encodeURIComponent(accountId)}?revoke_on_delete=true`,
-    { method: "DELETE" },
-  );
+  const response = await deleteConnectedAccount(env, accountId, revokeOnRemoval(accounts, slug, accountId));
   if (!response.ok) return json({ error: await upstreamError(response, "Disconnect failed") }, 502);
   return json({ removed: 1 });
 }
