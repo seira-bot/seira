@@ -69,6 +69,7 @@ Use only mapped, tested commands:
 - [Exact command allowlist UI and saved rules](command-allowlist.md)
 - [The safety floor: a never-list no grant can allow](safety-floor.md)
 - [Waiting for an occupied desktop](computer-wait.md)
+- [One memory limit for all bot work on Linux](bot-memory-fence.md)
 - [Chat UI, driven headlessly](chat-ui.md)
 - [Computer panel focus hand-off](computer-panel-focus.md)
 - [Taking control of a bot's computer](take-control.md)
