@@ -49,7 +49,7 @@ export function createRendererRecovery({ isShuttingDown = () => false, now = Dat
         if (dialogOpen) return;
         dialogOpen = true;
         onRecoveryPage = false;
-        let response = 2;
+        let response = -1;
         try {
           ({ response } = await showMessageBox({ type: "error", message: text.t("native.rendererRecovery.dialog"), noLink: true, defaultId: 0, cancelId: 2,
             buttons: [text.t("native.rendererRecovery.tryAgain"), text.t("native.rendererRecovery.restart"), text.t("native.common.close")] }));
@@ -64,6 +64,8 @@ export function createRendererRecovery({ isShuttingDown = () => false, now = Dat
         } else if (response === 1 && !relaunched) {
           relaunched = true;
           relaunch();
+        } else if (response === 2 && alive()) {
+          win.close();
         }
       }
 
@@ -86,6 +88,7 @@ export function createRendererRecovery({ isShuttingDown = () => false, now = Dat
         if (!webAddress(url)) return;
         lastUrl = url;
         onRecoveryPage = false;
+        stopped = false;
       });
       contents.on("render-process-gone", (_event, details) => {
         clearHang();

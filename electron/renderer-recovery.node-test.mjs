@@ -11,7 +11,7 @@ function appWindow() {
     reload() { this.reloads++; }, loadURL(url) { this.loaded.push(url); return Promise.resolve(); }, isDestroyed() { return this.destroyed; },
     forcefullyCrashRenderer() { this.crashes++; this.emit("render-process-gone", {}, { reason: "crashed", exitCode: 9 }); } });
   const win = Object.assign(new EventEmitter(), { webContents: page, destroyed: false, isDestroyed() { return this.destroyed; },
-    destroy() { this.destroyed = true; page.destroyed = true; state.order.push("destroy"); } });
+    destroy() { this.destroyed = true; page.destroyed = true; state.order.push("destroy"); }, close() { state.order.push("close"); } });
   return { win, page };
 }
 let state;
@@ -130,12 +130,22 @@ test("AC-02: the recovery page opens the last app address in the same window, or
 });
 
 test("a page that keeps ending stops once, and a stopped window logs the stop one time", (t) => {
+  const { end, state } = world(t);
+  for (let i = 0; i < 4; i++) end();
+  end("crashed");
+  assert.equal(state.lines.filter((line) => /stop/i.test(line)).length, 2, "the recovery page that goes away is the second stop");
+  assert.deepEqual(state.stops.map((stop) => stop.next), ["page", "dialog"]);
+});
+
+test("after Reload on the recovery page, a page that ends again in the same minute shows the recovery page again", (t) => {
   const { page, end, state } = world(t);
   for (let i = 0; i < 4; i++) end();
+  assert.equal(page.loaded.length, 1);
   page.emit("did-navigate", {}, "http://127.0.0.1:8799/");
-  end(); end();
-  assert.equal(state.stops.length, 1);
-  assert.equal(state.lines.filter((line) => /stop/i.test(line)).length, 1);
+  end();
+  assert.equal(page.reloads, 3, "no reload inside the minute");
+  assert.equal(page.loaded.length, 2);
+  assert.deepEqual(state.stops.map((stop) => stop.next), ["page", "page"]);
 });
 
 test("reloading resumes once the failures are more than a minute old", (t) => {
@@ -193,13 +203,20 @@ test("AC-05: Restart Seira relaunches once", async (t) => {
   assert.equal(state.relaunches, 1);
 });
 
-test("Close leaves the window as it is", async (t) => {
-  const { win, end, state } = world(t, { answers: [2] });
+test("Close closes the window the way its own close button does", async (t) => {
+  const { end, state } = world(t, { answers: [2] });
   for (let i = 0; i < 4; i++) end("launch-failed");
   await settle();
   assert.equal(state.relaunches, 0);
-  assert.equal(win.destroyed, false);
+  assert.deepEqual(state.order, ["close"]);
+});
+
+test("a dialog that fails to open changes nothing", async (t) => {
+  const { end, state } = world(t, { showMessageBox: () => Promise.reject(new Error("no display")) });
+  for (let i = 0; i < 4; i++) end("launch-failed");
+  await settle();
   assert.deepEqual(state.order, []);
+  assert.equal(state.relaunches, 0);
 });
 
 test("AC-06: while the dialog is open no reload runs and no second dialog opens", async (t) => {
@@ -214,9 +231,8 @@ test("AC-06: while the dialog is open no reload runs and no second dialog opens"
   assert.equal(state.boxes.length, 1);
   answer({ response: 2 });
   await settle();
-  state.clock += RELOAD_WINDOW_MS + 1;
-  end("crashed");
-  assert.equal(page.reloads, 4, "reloading resumes after the dialog");
+  assert.deepEqual(state.order, ["close"]);
+  assert.equal(page.reloads, 3);
 });
 
 test("an onStop that throws does not change the flow", async (t) => {
