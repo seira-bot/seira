@@ -31,7 +31,8 @@ async function crashRenderer() {
   const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true } });
   await win.loadURL("data:text/html,<p>smoke</p>");
   win.webContents.debugger.attach("1.3");
-  await win.webContents.debugger.sendCommand("Page.crash").catch(() => {});
+  // The command never answers, because the page ends: do not wait for it.
+  win.webContents.debugger.sendCommand("Page.crash").catch(() => {});
 }
 
 app.whenReady().then(async () => {
