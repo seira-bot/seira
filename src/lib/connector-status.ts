@@ -10,6 +10,10 @@ export interface ConnectorStatus {
 export interface ConnectorAccount {
   id: string;
   alias?: string;
+  /** The provider's own name for the account (a GitHub login, a mail address). */
+  displayName?: string;
+  /** Set on a newer account that is the same provider account as the older one with this id. */
+  duplicateOf?: string;
   status: string;
 }
 

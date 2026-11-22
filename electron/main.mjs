@@ -49,7 +49,7 @@ let startupScreen = null;
 let desktopTray = null;
 import { collisionFreeDownloadPath, defaultSaveName, openFolder, openHtmlCopy, openLogsFolder, revealDownloadWhenDone, revealInFolder, withSavableFile } from "./save-file.mjs";
 import { desktopViewerPermissionAllowed } from "./desktop-viewer-permissions.mjs";
-import { appPermissionHandlers, externalLinkUrl, signInPageOpener } from "./app-permissions.mjs";
+import { appPermissionHandlers, externalLinkUrl, openCleanSignIn, signInPageOpener } from "./app-permissions.mjs";
 import { appFrameNavigationAllowed } from "./app-frame-guard.mjs";
 import { writeClipboardText } from "./clipboard-write.mjs";
 import {
@@ -2283,7 +2283,7 @@ ipcMain.handle("desktop:open-external", localOnly("desktop:open-external", async
   await shell.openExternal(externalLinkUrl(rawUrl));
   return true;
 }));
-ipcMain.handle("desktop:open-sign-in-page", signInPageOpener({ open: url => shell.openExternal(url),
+ipcMain.handle("desktop:open-sign-in-page", signInPageOpener({ open: (url, options) => options.clean ? openCleanSignIn({ BrowserWindow, session }, url) : shell.openExternal(url),
   allowed: event => senderIsLocal(event) || homeWindow.homePage(event) || workspaceSenderAllowed(event, mainWindow?.webContents, environmentsState, rendererOrigin()) }));
 
 // The Boat VNC viewer must be a top-level page for its token exchange.
