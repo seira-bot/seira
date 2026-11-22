@@ -606,7 +606,7 @@ async function catalog(env: Env, url: URL) {
   const items = body[key];
   if (Array.isArray(items)) {
     for (const item of items) {
-      if (item && typeof item === "object" && typeof item.slug === "string" && canonicalToolkitSlug(item.slug) in picks) {
+      if (item && typeof item === "object" && typeof item.slug === "string" && Object.hasOwn(picks, canonicalToolkitSlug(item.slug))) {
         delete item.composio_managed_auth_schemes;
       }
     }
