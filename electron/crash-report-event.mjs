@@ -33,6 +33,10 @@ function safeTail(first, tail) {
 }
 
 const contains = (text, needle) => needle.length >= 2 && text.toLowerCase().includes(needle.toLowerCase());
+const namesPerson = (file, username, hostname) => {
+  const parts = file.toLowerCase().split("/").flatMap((part) => [part, part.split(".")[0]]);
+  return [username, hostname].some((name) => name.length >= 2 && parts.includes(name.toLowerCase()));
+};
 
 /** The message of an error, or null. Free text can carry a path, an address, a name or a prompt: only a short message with none of those shapes passes. */
 export function filterMessage(message, { username = "", hostname = "" } = {}) {
@@ -91,7 +95,9 @@ export function parseFrames(stack, { roots = [], username = "", hostname = "" } 
   for (const line of stack.slice(0, 50_000).split("\n")) {
     const match = FRAME_LINE.exec(line);
     if (!match) continue;
-    const filename = normalizeFile(match[2], roots);
+    const named = normalizeFile(match[2], roots);
+    // A file name from another process is trusted only up to its shape: a part equal to the user or computer name drops it.
+    const filename = namesPerson(named, username, hostname) ? EXTERNAL : named;
     const frame = { filename, lineno: Number(match[3]), colno: Number(match[4]), in_app: filename.startsWith("app:///") };
     const name = match[1]?.replace(/^async /, "");
     if (filename !== EXTERNAL && name && FUNCTION_NAME.test(name) && !contains(name, username) && !contains(name, hostname)) frame.function = name;
@@ -133,12 +139,12 @@ export function crashSignature(report, frames, type) {
   return [report.kind, type, ...top].join("|");
 }
 
-function debugImages(frames, debugIds, roots) {
+function debugImages(frames, debugIds, roots, username = "", hostname = "") {
   const byFile = new Map();
   if (debugIds && typeof debugIds === "object") {
     for (const [file, id] of Object.entries(debugIds).slice(0, 50)) {
       const normalized = normalizeFile(file, roots);
-      if (normalized !== EXTERNAL && typeof id === "string" && DEBUG_ID.test(id)) byFile.set(normalized, id.toLowerCase());
+      if (normalized !== EXTERNAL && !namesPerson(normalized, username, hostname) && typeof id === "string" && DEBUG_ID.test(id)) byFile.set(normalized, id.toLowerCase());
     }
   }
   const images = [];
@@ -187,7 +193,7 @@ export function buildEvent(report, context) {
   if (typeof report.errorCode === "string" && ERROR_CODE.test(report.errorCode)) tags.error_code = report.errorCode;
   const exception = { type: described.type, ...(value ? { value } : {}) };
   if (frames.length) exception.stacktrace = { frames: [...frames].reverse() };
-  const images = debugImages(frames, report.debugIds, roots);
+  const images = debugImages(frames, report.debugIds, roots, username, hostname);
   const event = {
     event_id: context.eventId,
     timestamp: context.timestamp,

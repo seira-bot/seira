@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { debugIdsByFile } from "../shared/crash-debug-ids.ts";
-import { buildCrashReport, CRASH_ACK_WAIT_MS, CRASH_MESSAGE_MAX, CRASH_STACK_MAX, createCrashReporter, crashEngine, type CrashParentPort } from "./crash-report.ts";
+import { buildCrashReport, serverFile, CRASH_ACK_WAIT_MS, CRASH_MESSAGE_MAX, CRASH_STACK_MAX, createCrashReporter, crashEngine, type CrashParentPort } from "./crash-report.ts";
 
 type Listener = (event: { data?: unknown }) => void;
 
@@ -49,33 +49,44 @@ describe("buildCrashReport", () => {
     expect(buildCrashReport({ kind: "server-turn", error: new Error("x"), engine: "bot-name" }, undefined).engine).toBe("custom");
   });
 
-  it("keeps a debug id key from its bundle folder onward, and drops a key with no bundle folder", () => {
-    const id = "123e4567-e89b-12d3-a456-426614174000";
+  it("names a debug id by its file in the real server folder, and drops a key outside it", () => {
+    const root = "/opt/seira/resources/server";
     const table = {
-      "Error\n    at e (file:///home/fakeperson/app/dist-server/drivers/x.js:2:3)": id,
-      "Error\n    at e (/home/fakeperson/res/ui/assets/a.js:2:3)": "223e4567-e89b-12d3-a456-426614174000",
+      "Error\n    at e (file:///opt/seira/resources/server/drivers/x.js:2:3)": "123e4567-e89b-12d3-a456-426614174000",
+      "Error\n    at e (/home/fakeperson/server/clients/FakeClient/a.js:2:3)": "223e4567-e89b-12d3-a456-426614174000",
       "Error\n    at e (/home/fakeperson/elsewhere/b.js:2:3)": "323e4567-e89b-12d3-a456-426614174000",
     };
-    const ids = buildCrashReport({ kind: "server-exit", error: new Error("x") }, table).debugIds!;
-    expect(Object.keys(ids).sort()).toEqual(["app:///server/drivers/x.js", "app:///ui/assets/a.js"]);
-    expect(JSON.stringify(ids)).not.toContain("fakeperson");
-  });
-
-  it("posts neither a home path nor a token from the message or the stack", () => {
-    const error = new Error("cannot open /home/fakeperson/notes/plan.txt with key sk-ant-api03-FAKEFAKEFAKEFAKEFAKEFAKE1234");
-    error.stack = `Error: x\n    at read (/home/fakeperson/project/node_modules/lib/index.js:1:1)\n    at run (file:///opt/seira/server/index.js:5:5)\n    at tok (https://example.test/?token=sk-ant-api03-FAKEFAKEFAKEFAKEFAKEFAKE1234:1:1)`;
-    const report = buildCrashReport({ kind: "server-exit", error }, undefined);
-    const text = JSON.stringify(report);
-    expect(text).not.toContain("fakeperson");
-    expect(text).not.toContain("FAKEFAKE");
-    expect(report.stack).toContain("(app:///server/index.js:5:5)");
-  });
-
-  it("names the bundle files of the debug-id table", () => {
-    const table = { "Error\n    at e (file:///opt/seira/dist-server/index.mjs:2:3)": "123e4567-e89b-12d3-a456-426614174000" };
-    expect(buildCrashReport({ kind: "server-exit", error: new Error("x") }, table).debugIds).toEqual({ "app:///server/index.mjs": "123e4567-e89b-12d3-a456-426614174000" });
+    const ids = buildCrashReport({ kind: "server-exit", error: new Error("x") }, table, root).debugIds!;
+    expect(ids).toEqual({ "app:///server/drivers/x.js": "123e4567-e89b-12d3-a456-426614174000" });
     expect(debugIdsByFile({ "x": "not-an-id" })).toBeUndefined();
     expect(debugIdsByFile(undefined)).toBeUndefined();
+  });
+
+  it("posts neither a home path, a folder of the person's named server, nor a token from the message or the stack", () => {
+    const root = "/opt/seira/resources/server";
+    const error = new Error("cannot open /home/fakeperson/notes/plan.txt with key sk-ant-api03-FAKEFAKEFAKEFAKEFAKEFAKE1234");
+    error.stack = [
+      "Error: x",
+      "    at read (/home/fakeperson/project/node_modules/lib/index.js:1:1)",
+      "    at mine (/home/fakeperson/server/clients/FakeClient/a.js:2:2)",
+      "    at run (file:///opt/seira/resources/server/index.js:5:5)",
+      "    at win (C:\\Users\\fakeperson\\AppData\\x.js:3:3)",
+      "    at tok (https://example.test/?token=sk-ant-api03-FAKEFAKEFAKEFAKEFAKEFAKE1234:1:1)",
+    ].join("\n");
+    const report = buildCrashReport({ kind: "server-exit", error }, undefined, root);
+    const text = JSON.stringify(report);
+    expect(text).not.toContain("fakeperson");
+    expect(text).not.toContain("FakeClient");
+    expect(text).not.toContain("FAKEFAKE");
+    expect(report.stack).toContain("(app:///server/index.js:5:5)");
+    expect(report.stack.match(/<external>/g)?.length).toBe(4);
+  });
+
+  it("knows a Windows server folder", () => {
+    expect(serverFile("file:///C:/Program%20Files/Seira/resources/server/index.js", "C:/Program Files/Seira/resources/server")).toBe("app:///server/index.js");
+    expect(serverFile("C:\\Program Files\\Seira\\resources\\server\\index.js", "C:/Program Files/Seira/resources/server")).toBe("app:///server/index.js");
+    expect(serverFile("/opt/seira/resources/server/../../x.js", "/opt/seira/resources/server")).toBeUndefined();
+    expect(serverFile("/opt/seira/resources/server/index.js", undefined)).toBeUndefined();
   });
 });
 

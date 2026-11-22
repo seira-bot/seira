@@ -130,6 +130,15 @@ test("a server frame in app:/// form keeps its file, function and debug id", () 
   assert.deepEqual(event.debug_meta.images, [{ type: "sourcemap", code_file: "app:///server/index.js", debug_id: id }]);
 });
 
+test("an app:/// file whose part equals the user or computer name becomes <external>", () => {
+  const { event } = buildEvent({ kind: "server-turn", process: "server", errorName: "TypeError", stack: "    at run (app:///server/canaryuser/x.js:5:7)" },
+    context({ username: "canaryuser" }));
+  assert.deepEqual(event.exception.values[0].stacktrace.frames, [{ filename: "<external>", lineno: 5, colno: 7, in_app: false }]);
+  const host = buildEvent({ kind: "server-turn", process: "server", errorName: "TypeError", stack: "    at run (app:///server/canary-host.js:5:7)" },
+    context({ hostname: "CANARY-HOST" })).event;
+  assert.equal(host.exception.values[0].stacktrace.frames[0].filename, "<external>");
+});
+
 test("AC-41: the message becomes the value only when it passes the filter", () => {
   assert.equal(buildEvent(mainError({ message: "x is not a function" }), context()).event.exception.values[0].value, "x is not a function");
   assert.equal("value" in buildEvent(mainError({ message: "cannot read /home/canaryuser/a" }), context()).event.exception.values[0], false);

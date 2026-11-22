@@ -4,6 +4,8 @@
 // sends nothing.
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { debugIdsByFile } from "../shared/crash-debug-ids.ts";
 import { redactSecretsInText } from "./redact.ts";
@@ -45,22 +47,42 @@ export const crashEngine = (driverKind: string | undefined): string | undefined 
 const safeToken = (value: unknown, max: number): string | undefined =>
   typeof value === "string" && /^[A-Za-z0-9_.$-]+$/.test(value) ? value.slice(0, max) : undefined;
 
-/** The main process accepts a file of ours only in this form; it makes any other relative name <external>. */
-const appFile = (folder: string, rest: string) => `app:///${folder === "ui" ? "ui" : "server"}/${rest.replaceAll("\\", "/")}`;
+const SAFE_REST = /^[\w./@+-]{1,200}$/;
 
-/** Keeps each debug id key from its bundle folder onward, so no folder of the person's computer leaves. A key with no bundle folder is dropped. */
-function bundleIds(ids: Record<string, string> | undefined): Record<string, string> | undefined {
+/** The folder of the running server bundle: dist-server or resources/server in a build, server/ when run from source. */
+function ownFolder(): string | undefined {
+  try { return dirname(fileURLToPath(import.meta.url)).replaceAll("\\", "/"); } catch { return undefined; }
+}
+
+export const SERVER_FOLDER = ownFolder();
+
+/**
+ * A file of the running server as app:///server/<rest>, the only relative form the main process accepts, or undefined.
+ * Only the real bundle folder counts: a folder of the person's that is also named "server" stays outside.
+ */
+export function serverFile(path: string, root: string | undefined = SERVER_FOLDER): string | undefined {
+  if (!root) return undefined;
+  let clean = path.replace(/^file:\/\//, "");
+  try { clean = decodeURIComponent(clean); } catch { return undefined; }
+  clean = clean.replaceAll("\\", "/").replace(/^\/([A-Za-z]:)/, "$1");
+  const base = root.replace(/\/+$/, "");
+  if (!clean.startsWith(`${base}/`)) return undefined;
+  const rest = clean.slice(base.length + 1);
+  return SAFE_REST.test(rest) && !rest.split("/").includes("..") ? `app:///server/${rest}` : undefined;
+}
+
+/** Names each debug id by its file in the server bundle. A key outside the bundle is dropped, so no folder of the person's computer leaves. */
+function bundleIds(ids: Record<string, string> | undefined, root: string | undefined): Record<string, string> | undefined {
   if (!ids) return undefined;
   const kept: Record<string, string> = {};
   for (const [file, id] of Object.entries(ids)) {
-    const match = /^.*\/(dist-server|server|ui)\/(.+)$/.exec(file.replaceAll("\\", "/"));
-    if (match) kept[appFile(match[1], match[2])] = id;
+    const named = serverFile(file, root);
+    if (named) kept[named] = id;
   }
   return Object.keys(kept).length ? kept : undefined;
 }
 
 const ABSOLUTE_PATH = /(?:file:\/\/)?(?:[A-Za-z]:)?[\\/](?:[^\s'"():,;<>]+[\\/])+[^\s'"():,;<>]*/g;
-const BUNDLE_PART = /^.*[\\/](dist-server|server|ui)[\\/](.+)$/;
 
 /** The text of an error without a folder of the person's computer, and without a secret. */
 function cleanText(text: string): string {
@@ -69,21 +91,17 @@ function cleanText(text: string): string {
   return redactSecretsInText(out.replace(ABSOLUTE_PATH, "<path>"));
 }
 
-/** A frame line with its file shortened to the part from the bundle folder onward; a file outside the bundles becomes <external>. */
-function cleanFrame(line: string): string {
-  const redacted = redactSecretsInText(line);
-  return redacted.replace(ABSOLUTE_PATH, (path) => {
-    const match = BUNDLE_PART.exec(path.replace(/^file:\/\//, ""));
-    return match ? appFile(match[1], match[2]) : "<external>";
-  });
+/** A frame line with a file of the server bundle as app:///server/<rest>; any other file becomes <external>. */
+function cleanFrame(line: string, root: string | undefined): string {
+  return redactSecretsInText(line).replace(ABSOLUTE_PATH, (path) => serverFile(path, root) ?? "<external>");
 }
 
-export function buildCrashReport(input: CrashReportInput, debugTable: unknown = (globalThis as { _sentryDebugIds?: unknown })._sentryDebugIds): CrashReport {
+export function buildCrashReport(input: CrashReportInput, debugTable: unknown = (globalThis as { _sentryDebugIds?: unknown })._sentryDebugIds, root: string | undefined = SERVER_FOLDER): CrashReport {
   const error = input.error;
   const failure = error instanceof Error ? error : undefined;
   const code = (error as { code?: unknown } | null)?.code;
   // Only the stack frames go: the first lines of a stack repeat the message.
-  const frames = failure?.stack ? failure.stack.split("\n").filter((line) => /^\s+at /.test(line)).map(cleanFrame).join("\n") : "";
+  const frames = failure?.stack ? failure.stack.split("\n").filter((line) => /^\s+at /.test(line)).map((line) => cleanFrame(line, root)).join("\n") : "";
   const report: CrashReport = {
     kind: input.kind,
     errorName: safeToken(failure?.name, 64) ?? typeof error,
@@ -94,7 +112,7 @@ export function buildCrashReport(input: CrashReportInput, debugTable: unknown = 
   if (errorCode) report.errorCode = errorCode;
   const engine = crashEngine(input.engine);
   if (engine) report.engine = engine;
-  const debugIds = bundleIds(debugIdsByFile(debugTable));
+  const debugIds = bundleIds(debugIdsByFile(debugTable), root);
   if (debugIds) report.debugIds = debugIds;
   return report;
 }
