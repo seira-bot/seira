@@ -78,6 +78,7 @@ const TEAM_ACTION_KEYS: Record<string, string> = {
   cancel_wait: "activity.tool.team.cancelWait",
   delete_trigger: "activity.tool.team.deleteTrigger",
   list_waits: "activity.tool.team.listWaits",
+  machine_budget: "activity.tool.team.machineBudget",
   wait_until: "activity.tool.team.waitUntil",
   workflow: "activity.tool.team.workflow",
   add_mcp_server: "activity.tool.team.addMcpServer",

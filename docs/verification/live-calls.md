@@ -384,3 +384,27 @@ call, titles off, one spoken request ("what is six times seven"), hung up.
   `src/components/ChatView.via-call.test.ts`).
 - SIGINT to the exact `ui launch` pid removed its data directory and the driver
   was stopped; `ps` showed no fixture, preview, driver or browser process left.
+
+## Call speed, call language and the voice sample
+
+A bot keeps its own `callSpeed` (0.5 to 2, each provider clamps it to its range) and `callLanguage`
+(`auto` or a listed language code). `PATCH /api/bots/:id` takes both; `null` or an empty string clears
+one, and any other value answers 400. A bot without them leaves every provider request as it was.
+
+- Turns: `POST /api/tts/speak` takes optional `speed` and `language`. OpenAI sends `audio.output.speed`,
+  ElevenLabs `voice_settings.speed` and `language_code`, Fish `prosody.speed`, xAI `speed` and `language`.
+  The other providers get nothing new.
+- Live, OpenAI and Azure: `audio.output.speed` is set when it is not 1, and a patch of the bot's speed
+  during a call sends `session.update` over that call's sideband. The language replaces "Speak the language
+  the user speaks" in the instructions, also for a custom endpoint and Gemini.
+- Live, ElevenLabs: the agent is allowed to override `tts.speed` and `agent.language`, and the session
+  answers with `overrides` for the client to send. If the agent refuses, the call starts without them.
+- Live, Fish: the agent's `voice.speed` and language are patched only when they differ from what the server
+  last set.
+- `POST /api/call/voice-preview` with `{ provider, voice, text, speed? }` answers a short sample as audio
+  (`cache-control: no-store`), 400 for a bad request, and 404 when the voice has no sample outside a call.
+  It needs the admin scope, like `/api/live/*`: a session with only the client scope gets 403.
+
+```sh
+pnpm exec vitest run server/call-voice-server.test.ts server/routes/bot-patch.test.ts server/live-call-controller.test.ts
+```

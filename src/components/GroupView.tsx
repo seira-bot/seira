@@ -15,6 +15,7 @@ import {
   type Message,
 } from "@/state/store";
 import { BotAvatar } from "./Avatar";
+import { RoomPicture } from "./RoomPicture";
 import { TurnFace } from "./BotCharacter";
 import { ScreenFrame } from "./ScreenFrame";
 import { RoomHoldsBanner } from "./RoomHoldsBanner";
@@ -63,6 +64,7 @@ import { AttachmentGallery, MessageAttachmentGallery, replyAttachmentGroup } fro
 import { VoiceNoteBubble, type VoiceNoteAttachment } from "./VoiceNoteBubble";
 import { OptionCard } from "./OptionCard";
 import { GroupCallOverlay } from "./GroupCallView";
+import { CallSurface } from "./CallSurface";
 
 import { ApprovalCard } from "./ApprovalCard";
 import { isQuestionCard, QuestionCard } from "./QuestionCard";
@@ -664,6 +666,7 @@ export function GroupView({ group, inForkPanel = false }: { group: Group; inFork
   return (
     <main data-look="chat" className="relative flex h-full min-w-0 flex-1 flex-col bg-app">
       <GroupCallOverlay group={group} members={members} />
+      <CallSurface />
       {membersOpen && !remoteClient && !group.dm && (
         <ManageMembersPanel group={group} onClose={closeMembers} triggerRef={membersTriggerRef} />
       )}
@@ -741,7 +744,7 @@ export function GroupView({ group, inForkPanel = false }: { group: Group; inFork
         >
           {group.messages.length === 0 && (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 py-24 text-center">
-              <div className="flex -space-x-2">
+              <RoomPicture url={group.dm ? null : group.avatarUrl} size={56} fallback={<div className="flex -space-x-2">
                 {members.slice(0, 3).map((b) => (
                   <BotAvatar
                     key={b.id}
@@ -753,7 +756,7 @@ export function GroupView({ group, inForkPanel = false }: { group: Group; inFork
                     animated={false}
                   />
                 ))}
-              </div>
+              </div>} />
               <div className="text-[17px] font-semibold text-ink">{group.name}</div>
               <div className="max-w-[380px] text-[14px] text-ink-secondary">
                 {groupResponseHint(group, members, { jevOn: jevRoomRoutingOn(state.config) })}

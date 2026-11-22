@@ -4,6 +4,7 @@ import biverLogo from "@/assets/biver/logo.png";
 import citcatLogo from "@/assets/citcat/logo.png";
 import coretLogo from "@/assets/coret/logo.png";
 import dalektaLogo from "@/assets/dalekta/logo.png";
+import grupyLogo from "@/assets/grupy/logo.png";
 import konektorLogo from "@/assets/konektor/logo.png";
 import replizLogo from "@/assets/repliz/logo.png";
 import termiloLogo from "@/assets/termilo/logo.png";
@@ -90,6 +91,15 @@ export const HOSTED_MCP_APPS = [
     description: "dalekta.description",
     notice: "dalekta.notice",
     keywords: "dalekta whatsapp ctwa lpwa ads tracking leads closing revenue conversions capi meta funnel",
+  },
+  {
+    id: "grupy",
+    label: "Grupy.chat",
+    url: "https://mcp.grupy.chat/mcp",
+    icon: { image: grupyLogo },
+    description: "grupy.description",
+    notice: "grupy.notice",
+    keywords: "grupy whatsapp group groups community summary summaries recap members export join requests approval",
   },
 ] as const satisfies readonly HostedMcpApp[];
 

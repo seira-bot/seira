@@ -25,7 +25,7 @@ const PROSE_PATH = new RegExp(
   "g",
 );
 // In backticks the whole span is the path, so spaces are allowed and no extension is needed.
-const CODE_PATH = /^(?:\/(?:[^\s/][^/]*\/)+[^/]+|[A-Za-z]:\\(?:[^\\]+\\?)+|\\\\[^\\]+(?:\\[^\\]+)+)$/;
+const CODE_PATH = /^(?:\/(?:[^\s/][^/]*\/)+[^/]+|[A-Za-z]:\\[^\\]+(?:\\[^\\]+)*\\?|\\\\[^\\]+(?:\\[^\\]+)+)$/;
 
 /** Removes Markdown's backslash escapes, the one decoding a plain path's text goes through. */
 const unescape = (raw: string): string => raw.replace(/\\([!-/:-@[-`{-~])/g, "$1");

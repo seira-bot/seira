@@ -86,6 +86,29 @@ describe("the room header in Simple mode", () => {
     expect(markup).not.toContain(BULLETIN);
   });
 
+  it("shows the room's picture in the name pill instead of the faces, and the faces when there is none", () => {
+    const pill = (markup: string) => /data-room-name[\s\S]*?<\/button>/.exec(header(markup))?.[0] ?? "";
+    const withPicture = pill(view(room({ avatarUrl: "/api/attachments/desk-1.png" })));
+    expect(withPicture).toContain("data-room-picture");
+    expect(withPicture).toContain('src="/api/attachments/desk-1.png"');
+    expect(withPicture).not.toContain("-space-x-1.5");
+    const plain = pill(view(room()));
+    expect(plain).not.toContain("data-room-picture");
+    expect(plain).toContain("-space-x-1.5");
+  });
+
+  it("shows the room's picture in the Advanced pill", () => {
+    fixture.advanced = true;
+    const markup = header(view(room({ avatarUrl: "/api/attachments/desk-1.png" })));
+    expect(markup).toContain("data-room-picture");
+    expect(header(view(room()))).not.toContain("data-room-picture");
+  });
+
+  it("never shows a picture on a bot-to-bot chat", () => {
+    const markup = view(room({ dm: true, memberIds: ["bot-0"], name: "Desk Manager", avatarUrl: "/api/attachments/desk-1.png" }));
+    expect(markup).not.toContain("data-room-picture");
+  });
+
   it("draws no +N while every member has a face", () => {
     const head = header(view(room({ memberIds: ["bot-0", "bot-1", "bot-2"] })));
     expect(head.match(/title="(?:Desk Manager|Vendor Bench|Job Board Sourcer)"/g)).toHaveLength(3);

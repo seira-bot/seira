@@ -36,6 +36,28 @@ export type LookHistoryItem = ThemeHistoryItem & { seq: number; look: Look; file
 
 export const slugFor = (name: string) => name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "theme";
 
+/** An SVG document starts, after an optional XML declaration, comments and a DOCTYPE, with an `<svg` tag. */
+export function startsLikeSvg(head: string): boolean {
+  const text = head.replace(/^\uFEFF/, "").trimStart();
+  const lower = text.toLowerCase();
+  let at = 0;
+  const skipSpace = () => {
+    while (at < text.length && /\s/.test(text.charAt(at))) at += 1;
+  };
+  const skipPast = (open: string, close: string): boolean => {
+    if (!lower.startsWith(open, at)) return false;
+    const end = lower.indexOf(close, at + open.length);
+    if (end < 0) return false;
+    at = end + close.length;
+    skipSpace();
+    return true;
+  };
+  skipPast("<?xml", ">");
+  while (skipPast("<!--", "-->"));
+  skipPast("<!doctype svg", ">");
+  return lower.startsWith("<svg", at) && /[\s>]/.test(text.charAt(at + 4));
+}
+
 /** Security: a file's first bytes must match its extension, so a theme file is only ever the image or font it claims. */
 function looksLike(name: string, bytes: Buffer): boolean {
   const ext = name.slice(name.lastIndexOf(".") + 1);
@@ -51,10 +73,7 @@ function looksLike(name: string, bytes: Buffer): boolean {
     case "woff2": return ascii(0, "wOF2");
     case "ttf": return starts(0x00, 0x01, 0x00, 0x00) || ascii(0, "true");
     case "otf": return ascii(0, "OTTO");
-    case "svg": {
-      const head = bytes.subarray(0, 4096).toString("utf8").replace(/^﻿/, "").trimStart();
-      return /^(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*(<!DOCTYPE svg[^>]*>\s*)?<svg[\s>]/i.test(head);
-    }
+    case "svg": return startsLikeSvg(bytes.subarray(0, 4096).toString("utf8"));
     default: return false;
   }
 }

@@ -21,6 +21,11 @@ export const limitQuietMs = (): number => {
 export const usageLimitWait = (status: number | null | undefined, waitMs: number | null | undefined): boolean =>
   status === 429 && (waitMs ?? 0) > limitQuietMs();
 
+/** Claude Code's refusal when a conversation no longer fits its model: the API's "Prompt is too long" and the CLI's
+ * "automatic compaction failed" (2.1.x), read from the engine's error text only. */
+const CONTEXT_OVERFLOW = /\bprompt is too long\b|\bautomatic compaction failed\b|\bautocompact is thrashing\b/i;
+export const contextOverflow = (text: string): boolean => CONTEXT_OVERFLOW.test(text);
+
 export type EngineFailureKind = "credits" | "usage_limit" | "rate_limit" | "overloaded" | "server" | "tool_schema" | "tool_count" | "model_no_route" | "refused";
 
 /** A provider refusing for want of credit or payment, in its own words (402 is read from the status). */

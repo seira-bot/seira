@@ -176,7 +176,8 @@ element's job and never a pixel value:
   rows 32px, with the same quiet nav rows, line headings and 52px top row
   as Simple. The sidebar search field is 34px so it reads as a field, not a
   button. A section count shows beside a heading only while that section is
-  closed.
+  closed. The round call controls in the call view are 44px, the phone-call
+  size; the call pill keeps the 32px step.
 - **Group with space before you group with lines.** Add a divider only between
   groups that space alone can't separate. Never a divider under a heading.
 - **No cards inside cards.** If a card needs sections, use spacing and a group

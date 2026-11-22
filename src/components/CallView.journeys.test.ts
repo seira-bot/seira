@@ -35,6 +35,7 @@ vi.stubGlobal("localStorage", storage);
 const { CallButton } = await import("./CallView");
 const { GroupCallButton } = await import("./GroupCallView");
 const { LiveCallBar } = await import("./LiveCallBar");
+const { CallSurface } = await import("./CallSurface");
 const { BotEditorStore, initialState, reducer } = await import("@/state/store");
 const { callMode, setCallMode } = await import("@/lib/call-mode");
 const { currentCall, endCall } = await import("@/lib/call");
@@ -126,6 +127,7 @@ function chat(config: AppState["config"]) {
     children: [
       createElement(CallButton, { key: "call", bot: ada, placement: "composer" }),
       createElement(LiveCallBar, { key: "bar", bot: ada }),
+      createElement(CallSurface, { key: "surface", botId: ada.id }),
     ],
   })));
 }
@@ -159,7 +161,7 @@ async function firstLiveCall() {
   await vi.waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
   await vi.waitFor(() => expect(requests.filter(({ path }) => path === "/api/live/session")).toHaveLength(2));
   expect(liveMedia()).toMatchObject({ phase: "starting", botId: "ada", threadId: "thread-ada" });
-  await vi.waitFor(() => expect(text()).toContain("Live with Ada"));
+  await vi.waitFor(() => expect(text()).toContain("Calling…"));
   expect(text()).not.toContain(KEY_NEEDED);
   expect(text()).not.toContain("Choose This computer");
   expect(requests.filter(({ path }) => path === "/api/config")).toEqual([]);

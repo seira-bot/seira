@@ -248,6 +248,12 @@ describe("live call media", () => {
     expect(applyCaption({ caption: "x".repeat(300), heard: "" }, { type: "session.output_transcript.delta", delta: "y" }).caption).toHaveLength(240);
   });
 
+  it("starts a new bot caption after the person spoke and appends while the bot goes on", () => {
+    const delta = { type: "session.output_transcript.delta", delta: "Second reply." };
+    expect(applyCaption({ caption: "First reply.", heard: "" }, delta, "you").caption).toBe("Second reply.");
+    expect(applyCaption({ caption: "First reply.", heard: "" }, delta, "bot").caption).toBe("First reply.Second reply.");
+  });
+
   it("names why a call ended", () => {
     expect(endNotice("idle")).toEqual({ text: "Call ended after a long silence.", dropped: false });
     expect(endNotice("sideband-lost")).toEqual({ text: "Call dropped.", dropped: true });

@@ -48,11 +48,11 @@ export async function listVoices(key: string): Promise<Voice[]> {
   }));
 }
 
-export async function synthesize(text: string, voiceId: string, key: string): Promise<Audio> {
+export async function synthesize(text: string, voiceId: string, key: string, options: { speed?: number; language?: string } = {}): Promise<Audio> {
   const response = await request("/tts", {
     method: "POST",
     headers: { authorization: `Bearer ${key}`, "content-type": "application/json", accept: "audio/mpeg" },
-    body: JSON.stringify({ text, voice_id: voiceId, language: "auto", output_format: { codec: "mp3" } }),
+    body: JSON.stringify({ text, voice_id: voiceId, language: options.language ?? "auto", ...(options.speed === undefined ? {} : { speed: options.speed }), output_format: { codec: "mp3" } }),
     signal: AbortSignal.timeout(60_000),
   });
   const mime = (response.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();

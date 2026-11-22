@@ -30,7 +30,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
   {
     id: "install-on-my-server",
     name: "Install on my server",
-    place: "The ＋ button at the end of the places list, then Connect to a server, then Install on my server (desktop app only)",
+    place: "The + button at the end of the places list, then Connect to a server, then Install on my server (desktop app only)",
     does: "Signs in to a server of the person's own once, installs the app on it and adds it to the places list. The sign-in is used once and never saved. It is different from connecting to a server that already runs the app.",
     releaseNotes: ["installOwnServer", "serverRename"],
   },
@@ -86,7 +86,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "folder-access",
     name: "Folder access",
     place: "a bot's panel, Other folders; Advanced bot settings, Access; the menu of a department on the map, Folders",
-    does: "An admin picks which folders a bot or a whole department may use, each read-only or Can change, and can limit a bot to only those folders. A bot gets its department's folders plus its own.",
+    does: "An admin picks which folders a bot or a whole department may use, each read-only or Can change, and can limit a bot to only those folders, which on Linux its commands obey too. A bot gets its department's folders plus its own.",
   },
   {
     id: "handoffs",
@@ -158,6 +158,13 @@ export const APP_FEATURES: readonly AppFeature[] = [
     does: "A bot runs on one engine and model. A bot can read the model choices and each AI account's usage limits, and can ask to switch its own model. A ring in the sidebar shows how much of the AI plan is left.",
     tools: ["list_models", "propose_model", "usage_limits"],
     releaseNotes: ["usageRing"],
+  },
+  {
+    id: "machine-budget",
+    name: "Heavy work on this computer",
+    place: "a bot's own work; no setting",
+    does: "Before a test suite, build, docker, video job, local model or large file, a bot checks free memory and processors. It starts only as many workers as fit, runs one heavy job at a time, and offers a lighter version when memory is short.",
+    tools: ["machine_budget"],
   },
   {
     id: "routing",
@@ -251,6 +258,24 @@ export const APP_FEATURES: readonly AppFeature[] = [
     releaseNotes: ["liveYes"],
   },
   {
+    id: "call-view",
+    name: "Call view",
+    place: "the full screen that opens in the chat when you call a bot",
+    does: "Shows the bot while the call rings, then the call time and what the bot is doing. Mute, Captions, Call voice, Minimize and Hang up sit under the face. Esc hangs up. It works for Take turns and Live.",
+  },
+  {
+    id: "call-pill",
+    name: "Call pill",
+    place: "the bar at the top of the chat area while a call is minimized, in every chat",
+    does: "Keeps a call within reach while you work in any chat. Click the face or the name to open the call view again. It has Call voice, Captions, Mute and Hang up.",
+  },
+  {
+    id: "call-voice",
+    name: "Call voice",
+    place: "the Call voice button in the call view or on the call pill",
+    does: "Sets the speed, the voice and the language of calls with one bot. It shows only what the call service can do. A change is saved on that bot and used on its next call; some changes start with the next reply.",
+  },
+  {
     id: "board",
     name: "Board",
     place: "Board in the sidebar, above Automations",
@@ -291,7 +316,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "whats-new",
     name: "What's new",
     place: "the menu under the person's name at the bottom of the sidebar",
-    does: "After an update, a short note says what changed. The person sees it once.",
+    does: "After an update, a short note says what changed. The person sees it once and can open it again from this menu.",
     releaseNotes: ["whatsNew"],
   },
   {

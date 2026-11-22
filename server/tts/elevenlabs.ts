@@ -156,7 +156,18 @@ export interface Synthesis {
   audio: Promise<Audio>;
 }
 
-export function synthesize(text: string, voiceId: string, key: string, api: string, included = false): Synthesis {
+/** `language_code` is refused by eleven_multilingual_v2, which this code never picks; the check keeps a later model change safe. */
+function speechBody(text: string, included: boolean, options: { speed?: number; language?: string }) {
+  const model = speechModel(text, included);
+  return {
+    text,
+    model_id: model,
+    ...(options.speed === undefined ? {} : { voice_settings: { speed: options.speed } }),
+    ...(options.language && model !== "eleven_multilingual_v2" ? { language_code: options.language } : {}),
+  };
+}
+
+export function synthesize(text: string, voiceId: string, key: string, api: string, included = false, options: { speed?: number; language?: string } = {}): Synthesis {
   const firstAudio = withResolvers<Audio>();
   const audio = withResolvers<Audio>();
   // Callers may consume only `audio`: a failure before the first chunk must not become an unhandled rejection.
@@ -166,7 +177,7 @@ export function synthesize(text: string, voiceId: string, key: string, api: stri
       const res = await fetch(`${api}/text-to-speech/${encodeURIComponent(voiceId)}/stream?output_format=${FORMAT}`, {
         method: "POST",
         headers: { "xi-api-key": key, "content-type": "application/json", accept: "audio/mpeg" },
-        body: JSON.stringify({ text, model_id: speechModel(text, included) }),
+        body: JSON.stringify(speechBody(text, included, options)),
         redirect: "error",
         signal: AbortSignal.timeout(60_000),
       });
@@ -192,10 +203,11 @@ export function synthesize(text: string, voiceId: string, key: string, api: stri
 }
 
 /** Speech-to-text with Scribe, for listening where no Fish Audio key is saved. Only the person's own key comes here. */
-export async function transcribe(audio: Uint8Array, mime: string, key: string, api: string): Promise<string> {
+export async function transcribe(audio: Uint8Array, mime: string, key: string, api: string, language?: string): Promise<string> {
   const form = new FormData();
   form.append("model_id", HEARING_MODEL);
   form.append("tag_audio_events", "false");
+  if (language) form.append("language_code", language);
   form.append("file", new Blob([audio as Uint8Array<ArrayBuffer>], { type: mime }), "speech.wav");
   let res: Response;
   try {

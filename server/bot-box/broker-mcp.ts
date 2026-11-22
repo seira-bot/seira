@@ -34,7 +34,7 @@ export function forgetBrokeredMcp(): void { remembered.clear(); }
 export function brokerRemoteMcp(
   custom: Record<string, McpServerSpec>,
   turn: BrokerTurn,
-  broker: BoxBroker | null = botBox.broker(),
+  broker: BoxBroker | null = botBox.broker(turn.botId),
   appFor?: (name: string, url: string) => McpServerApp | null,
 ): Record<string, McpServerSpec> {
   if (!broker) return custom;

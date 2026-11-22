@@ -328,6 +328,54 @@ describe("hiding a provider", () => {
     expect((await call("GET", "/api/instances/hidden")).instances).toEqual([]);
   });
 
+  describe("a provider the new-bot default points at", () => {
+    const setup = (move: (instanceId: string, cfg: { defaultModelSelection: unknown }) => Promise<unknown>, bots: unknown[] = []) => {
+      const cfg = { instances: { a: { driver: "fake" }, b: { driver: "fake" } }, defaultModelSelection: { instanceId: "a", model: "m" } };
+      const persisted: Array<Record<string, { hidden?: boolean }>> = [];
+      return serve({
+        cfg: cfg as unknown as AppConfig,
+        store: { bots, tasks: () => [] } as never,
+        persistProviderInstance: async (_id: string, instances: typeof persisted[number]) => { persisted.push(structuredClone(instances)); (cfg as { instances: unknown }).instances = instances; },
+        moveNewBotModelOff: (instanceId: string) => move(instanceId, cfg) as Promise<null>,
+      }).then((served) => ({ ...served, cfg, persisted }));
+    };
+
+    it("moves the default to another provider before it hides", async () => {
+      const calls: string[] = [];
+      const served = await setup(async (instanceId, cfg) => {
+        calls.push(instanceId);
+        cfg.defaultModelSelection = { instanceId: "b", model: "m" };
+        return { instanceId: "b", model: "m" };
+      });
+      await served.call("PATCH", "/api/instances/a", { hidden: true });
+      expect(calls).toEqual(["a"]);
+      expect(served.persisted.at(-1)!.a).toMatchObject({ hidden: true });
+    });
+
+    it("still refuses to hide it when nothing can take the default", async () => {
+      const served = await setup(async () => null);
+      const reply = await fetch(`${served.base}/api/instances/a`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ hidden: true }) });
+      expect(reply.status).toBe(409);
+      expect(served.persisted).toEqual([]);
+    });
+
+    it("keeps the default where it is when a bot still uses the provider", async () => {
+      const calls: string[] = [];
+      const served = await setup(async (instanceId) => { calls.push(instanceId); return null; }, [{ id: "pen", modelSelection: { instanceId: "a", model: "m" } }]);
+      const reply = await fetch(`${served.base}/api/instances/a`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ hidden: true }) });
+      expect(reply.status).toBe(409);
+      expect(calls).toEqual([]);
+      expect(served.cfg.defaultModelSelection).toEqual({ instanceId: "a", model: "m" });
+    });
+
+    it("leaves the default alone when it points at another provider", async () => {
+      const calls: string[] = [];
+      const served = await setup(async (instanceId) => { calls.push(instanceId); return null; });
+      await served.call("PATCH", "/api/instances/b", { hidden: true });
+      expect(calls).toEqual([]);
+    });
+  });
+
   it("lists a hidden provider with the mark it shows when shown", async () => {
     const cfg = { instances: { openai: { driver: "openai-compat", displayName: "OpenAI", hidden: true, config: { url: "https://api.openai.com/v1" } } } };
     const { call } = await serve({ cfg: cfg as unknown as AppConfig });

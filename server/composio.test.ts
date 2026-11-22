@@ -1222,7 +1222,7 @@ describe.sequential("Composio Sessions", () => {
     expect(calls.some(
       (call) => call.method === "DELETE"
         && call.path.endsWith("/connected_accounts/ca_github")
-        && call.query === "?revoke_on_delete=true",
+        && call.query === "?revoke_on_delete=false",
     )).toBe(true);
   });
 
@@ -1422,7 +1422,7 @@ describe.sequential("Composio Sessions", () => {
         await expect(authorizeService(cfg, "slack", "work")).resolves.toEqual({ url: "https://connect.composio.dev/link/slack" });
         const since = calls.slice(before).filter((call) => call.method === "DELETE" || call.path.endsWith("/link"));
         expect(since.map((call) => [call.method, call.path, call.query])).toEqual([
-          ["DELETE", "/api/v3.1/connected_accounts/ca_old_work", "?revoke_on_delete=true"],
+          ["DELETE", "/api/v3.1/connected_accounts/ca_old_work", "?revoke_on_delete=false"],
           ["POST", "/api/v3.1/tool_router/session/trs_test/link", ""],
         ]);
         expect(since[1]!.body).toEqual({ toolkit: "slack", alias: "work" });

@@ -6,11 +6,12 @@ import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 
 import { BotAvatar } from "./Avatar";
+import { RoomPicture } from "./RoomPicture";
 import { RowStatusText } from "./SidebarRowMarkers";
 
-export function SimpleRoomStack({ members }: { members: Bot[] }) {
+export function SimpleRoomStack({ members, picture }: { members: Bot[]; picture?: string | null }) {
   const shown = members.slice(0, 2);
-  return (
+  const faces = (
     <div data-room-stack="" className="flex w-[46px] shrink-0 items-center">
       {shown.length === 0 && <Users size={20} aria-hidden="true" className="ms-1 text-ink-secondary" />}
       {shown.map((member, index) => (
@@ -20,6 +21,7 @@ export function SimpleRoomStack({ members }: { members: Bot[] }) {
       ))}
     </div>
   );
+  return <RoomPicture url={picture} size={32} fallback={faces} className="me-3.5" />;
 }
 
 /** A Simple room row's text: 13px title, 12px time, one-line preview, an accent dot and bold title while unread. */

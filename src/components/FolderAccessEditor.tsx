@@ -3,7 +3,7 @@ import { FolderOpen } from "lucide-react";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
-import { folderAccessOrNull, limitedBy, shownFolders, type FolderAccess } from "@/lib/folder-access";
+import { type DepartmentFolders, folderAccessOrNull, limitedBy, shownFolders, type FolderAccess } from "@/lib/folder-access";
 import { Segmented, TrashButton } from "./bot-panel/rows";
 import { Switch } from "./SettingsPrimitives";
 import { inputCls } from "./bot-settings/field";
@@ -29,7 +29,7 @@ interface Props {
   department?: { name: string; access: FolderAccess | undefined };
   /** Who the list is for, for the empty line and the hint. */
   subject: "bot" | "department";
-  enforcement: "box" | "ai";
+  enforcement: DepartmentFolders["enforcement"];
 }
 
 export function FolderAccessEditor({ access, save, department, subject, enforcement }: Props) {
@@ -42,6 +42,7 @@ export function FolderAccessEditor({ access, save, department, subject, enforcem
   const limited = limitedBy(access, department) !== null;
   const rows = shownFolders(access, department);
   const readOnlyFolder = rows.some((row) => !row.write);
+  const boxed = enforcement === "box" || (enforcement === "limited" && limited);
 
   const commit = async (next: FolderAccess): Promise<boolean> => {
     setSaving(true);
@@ -142,8 +143,11 @@ export function FolderAccessEditor({ access, save, department, subject, enforcem
         <div className="text-[12px] text-ink-secondary">{t("folderAccess.combine", { department: department.name })}</div>
       )}
       {error && <div role="alert" className="text-[12px] text-danger">{error}</div>}
-      {enforcement === "ai" && (limited || readOnlyFolder) && (
+      {!boxed && (limited || readOnlyFolder) && (
         <div className="text-[12px] text-ink-secondary">{t("folderAccess.aiNote", { approval: t("approvalMode.ask.label") })}</div>
+      )}
+      {enforcement === "limited" && limited && (
+        <div className="text-[12px] text-ink-secondary">{t("folderAccess.boxNote")}</div>
       )}
     </div>
   );

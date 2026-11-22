@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { engineFailure, engineFailureKind, engineFailureMessage, errorReplyFailure, httpStatusOf, plainFailureMessage, providerReason, stopCause } from "./engine-errors.ts";
+import { contextOverflow, engineFailure, engineFailureKind, engineFailureMessage, errorReplyFailure, httpStatusOf, plainFailureMessage, providerReason, stopCause } from "./engine-errors.ts";
 import { classifyError } from "./retry.ts";
 
 const reason = (text: string) => classifyError({ text }).reason;
@@ -269,5 +269,22 @@ describe("a model the engine has no route to", () => {
     expect(engineFailureKind(raw("x/y"))).toBe("model_no_route");
     expect(engineFailureKind("Internal error: Cannot connect to API: ECONNREFUSED (session/prompt, service: session, APIError)")).toBeNull();
     expect(classifyError({ text: "Internal error: OpenCode service failure (session/prompt)" }).reason).toBe("unknown");
+  });
+});
+
+describe("contextOverflow", () => {
+  it.each([
+    "Prompt is too long",
+    "API Error: 400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"prompt is too long: 213412 tokens > 200000 maximum\"}}",
+    "Autocompact is thrashing: the context refilled to the limit within 3 turns of the previous compact, 3 times in a row.",
+    "Automatic compaction failed. Run /compact manually.",
+  ])("reads an engine's refusal of a full conversation: %s", (text) => {
+    expect(contextOverflow(text)).toBe(true);
+  });
+
+  it("reads no other failure as a full conversation", () => {
+    expect(contextOverflow("API Error: 529 Overloaded")).toBe(false);
+    expect(contextOverflow("Your request is too large for this endpoint")).toBe(false);
+    expect(contextOverflow("")).toBe(false);
   });
 });

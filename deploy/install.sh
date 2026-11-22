@@ -759,7 +759,7 @@ preflight() {
   CHECKING=yes
   step_check outbound check_tools
   step_check os check_os
-  step_check os check_arch
+  step_check arch check_arch
   step_check cpu check_cpus
   step_check memory check_memory
   step_check docker check_docker

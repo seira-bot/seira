@@ -289,6 +289,36 @@ describe("PATCH /api/bots/:id liveVoice", () => {
   });
 });
 
+describe("PATCH /api/bots/:id callSpeed and callLanguage", () => {
+  it("saves both, returns them on the bot, and clears them with null or an empty string", async () => {
+    const { store, bot, patch } = fixture();
+    const saved = await patch(bot.id, { callSpeed: 1.25, callLanguage: "id" });
+    expect(saved.status).toBe(200);
+    expect(saved.body.bot).toMatchObject({ callSpeed: 1.25, callLanguage: "id" });
+    expect(store.bot(bot.id)).toMatchObject({ callSpeed: 1.25, callLanguage: "id" });
+    expect((await patch(bot.id, { callSpeed: null, callLanguage: "" })).status).toBe(200);
+    expect(store.bot(bot.id)?.callSpeed).toBeUndefined();
+    expect(store.bot(bot.id)?.callLanguage).toBeUndefined();
+    await patch(bot.id, { callLanguage: "auto" });
+    expect(store.bot(bot.id)?.callLanguage).toBe("auto");
+  });
+  it("refuses a speed outside 0.5 to 2 or not a number, and an unlisted language, keeping the saved value", async () => {
+    const { store, bot, patch } = fixture();
+    await patch(bot.id, { callSpeed: 1.5, callLanguage: "fr" });
+    for (const callSpeed of [0.4, 2.1, "1", true, Number.NaN]) expect((await patch(bot.id, { callSpeed })).status, String(callSpeed)).toBe(400);
+    for (const callLanguage of ["xx", "FR", 5, "fr-CA"]) expect((await patch(bot.id, { callLanguage })).status, String(callLanguage)).toBe(400);
+    expect(store.bot(bot.id)).toMatchObject({ callSpeed: 1.5, callLanguage: "fr" });
+  });
+  it("tells the live call only when the saved speed changed", async () => {
+    const callSpeedChanged = vi.fn();
+    const { bot, patch } = fixture({ callSpeedChanged });
+    await patch(bot.id, { callSpeed: 1.2 });
+    await patch(bot.id, { callSpeed: 1.2 });
+    await patch(bot.id, { callSpeed: null });
+    expect(callSpeedChanged.mock.calls).toEqual([[bot.id, 1.2], [bot.id, undefined]]);
+  });
+});
+
 describe("PATCH /api/bots/:id alwaysAllow", () => {
   it("stores the list once each, and refuses a list over the limit instead of cutting it", async () => {
     const { store, bot, patch } = fixture();

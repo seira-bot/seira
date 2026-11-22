@@ -275,6 +275,20 @@ describe("the relay client", () => {
     expect(instance.status).toBe("connected");
   });
 
+  it("caps a redial wait at ten minutes", async () => {
+    const delays: number[] = [];
+    const real = globalThis.setTimeout;
+    vi.spyOn(globalThis, "setTimeout").mockImplementation(((callback: () => void, ms?: number) => {
+      delays.push(Number(ms));
+      return real(callback, Math.min(Number(ms) || 0, 50));
+    }) as unknown as typeof setTimeout);
+    const relay = await scriptedRelay((socket) => socket.close(1011));
+    const { instance } = client({ "relay1.seira.bot": relay }, { timing: { backoffMs: [Number.MAX_SAFE_INTEGER] } });
+    instance.start();
+    await waitFor(() => delays.includes(10 * 60_000), SLOW);
+    expect(delays).not.toContain(Number.MAX_SAFE_INTEGER);
+  });
+
   it("waits at least 30 s after the relay's rate limit (4429)", async () => {
     const relay = await scriptedRelay((socket) => socket.close(4429));
     const { instance } = client({ "relay1.seira.bot": relay });

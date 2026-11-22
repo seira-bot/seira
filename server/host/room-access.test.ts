@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
+import { setDepartmentWalls } from "../peer-roster.ts";
 import type { BotRecord, Store } from "../store.ts";
 import { createRoomAccess, PRIVATE_CHAT_ROOM_WRITE } from "./room-access.ts";
 
@@ -133,5 +134,33 @@ describe("roomHandoffProblem", () => {
     expect(roomHandoffProblem({ botId: "coder", threadId: "coder-review" }, from)).toBeUndefined();
     expect(roomHandoffProblem({ botId: "tester", threadId: "tester-work" }, from)).toBeUndefined();
     expect(roomHandoffProblem({ botId: "outsider", threadId: "outsider-work" }, from)).toMatch(/./);
+  });
+});
+
+describe("roomHandoffProblem behind a department wall", () => {
+  afterEach(() => setDepartmentWalls(() => false));
+  const bots = {
+    sales: { id: "sales", name: "Sales bot", section: "Sales" },
+    fin: { id: "fin", name: "Finance bot", section: "Finance" },
+    chief: { id: "chief", name: "Chief" },
+  } as unknown as Record<string, BotRecord>;
+  const room = { id: "room", threadId: "room-thread", dm: false, memberIds: ["sales", "fin", "chief"], name: "Room" };
+  const store = {
+    bot: (id: string) => bots[id],
+    group: () => room,
+    groupTaskByThread: () => ({ threadId: "room-thread" }),
+    groupByThread: () => room,
+    taskByThread: (botId: string, threadId: string) => threadId.startsWith(botId) ? { threadId } : undefined,
+  } as unknown as Store;
+  const { roomHandoffProblem } = createRoomAccess({ store });
+  const parent = { botId: "sales", groupId: "room", threadId: "room-thread" };
+  const node = (botId: string) => ({ botId, groupId: "room", threadId: "room-thread" });
+
+  it("refuses a hand-off from a walled bot to a bot of another department, in a room too", () => {
+    expect(roomHandoffProblem(node("fin"), parent)).toBeUndefined();
+    setDepartmentWalls((section) => section === "Sales");
+    expect(roomHandoffProblem(node("fin"), parent)).toMatch(/another department/);
+    expect(roomHandoffProblem(node("chief"), parent)).toMatch(/another department/);
+    expect(roomHandoffProblem(node("sales"), { ...parent, botId: "fin" })).toBeUndefined();
   });
 });

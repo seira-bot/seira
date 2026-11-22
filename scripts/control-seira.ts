@@ -2,12 +2,13 @@
 // The seira headless verbs for verifying an isolated fixture. A verb that
 // changes something never runs on a server it merely found.
 import { spawn, type ChildProcess } from "node:child_process";
-import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
 
+import { whichOnPath } from "../server/bot-box/detect.ts";
 import { EXIT, HeadlessError } from "../server/headless/args.ts";
 import { runHeadlessCommand } from "../server/headless/main.ts";
 import type { handleToolCall, request } from "./mcp-server.ts";
@@ -119,6 +120,18 @@ export async function runControlSeira(
     requireExplicitForMutations: true,
     defaultWaitMs: 30_000,
   });
+}
+
+/** Beside the data folder, as on a desktop: bubblewrap alone in `bin` for the child's sealed PATH, and its temporary
+ * folder, as the box hides what a command line names inside the data folder. */
+function boxFixtureFolder(parentEnv: NodeJS.ProcessEnv, dataDir: string): string {
+  const bwrap = process.platform === "linux" ? whichOnPath("bwrap", parentEnv) : null;
+  if (!bwrap) throw new ControlSeiraError("SEIRA_VERIFY_BOT_BOX=1 needs Linux with bubblewrap on PATH");
+  const folder = `${dataDir}-box`;
+  mkdirSync(join(folder, "bin"), { recursive: true });
+  mkdirSync(join(folder, "tmp"));
+  symlinkSync(bwrap, join(folder, "bin", "bwrap"));
+  return folder;
 }
 
 export interface VerificationServer {
@@ -387,6 +400,15 @@ export async function launchVerificationServer(
   });
   if (boatFixtureApi) childEnv.SEIRA_BOAT_API = boatFixtureApi;
   if (staticDir) childEnv.SEIRA_STATIC_DIR = staticDir;
+  const boxFolder = parentEnv.SEIRA_VERIFY_BOT_BOX === "1" ? boxFixtureFolder(parentEnv, dataDir) : null;
+  if (boxFolder) {
+    childEnv.PATH = [childEnv.PATH, join(boxFolder, "bin")].join(delimiter);
+    childEnv.TMPDIR = childEnv.TMP = childEnv.TEMP = join(boxFolder, "tmp");
+  }
+  const removeFolders = async () => {
+    await removeTempDir(dataDir);
+    if (boxFolder) await removeTempDir(boxFolder);
+  };
   const child = spawn(process.execPath, verificationServerArgs(childEnv), {
     cwd: ROOT,
     env: childEnv,
@@ -423,7 +445,7 @@ export async function launchVerificationServer(
     }
   } catch (error) {
     await waitForExit(child, { signal: "SIGTERM" });
-    await removeTempDir(dataDir);
+    await removeFolders();
     throw error;
   }
 
@@ -450,7 +472,7 @@ export async function launchVerificationServer(
     if (!rename.ok) throw new Error(`verification starter rename failed (${rename.status}); see ${logPath}`);
   } catch (error) {
     await waitForExit(child, { signal: "SIGTERM" });
-    await removeTempDir(dataDir);
+    await removeFolders();
     throw error;
   }
 
@@ -463,7 +485,7 @@ export async function launchVerificationServer(
       if (closed) return;
       closed = true;
       await waitForExit(child, { signal: "SIGTERM" });
-      await removeTempDir(dataDir);
+      await removeFolders();
     },
   };
 }
@@ -523,7 +545,7 @@ async function main() {
             ok: false,
             error: `verification server exited unexpectedly; see ${session.info.logPath}`,
           }, null, 2)}\n`);
-          void removeTempDir(session.info.dataDir).finally(resolve);
+          void session.close().finally(resolve);
         }
       });
     });

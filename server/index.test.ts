@@ -1902,6 +1902,39 @@ describe("harness HTTP API", () => {
     }
   });
 
+  it("sets and clears a room picture through PATCH and refuses anything but a stored image", async () => {
+    const [first, second] = await Promise.all([api("POST", "/api/bots"), api("POST", "/api/bots")]).then(
+      (created) => created.map((response) => response.body.bot),
+    );
+    const room = (await api("POST", "/api/groups", { name: "Pictures", memberIds: [first.id, second.id] })).body.group;
+    const picture = "/api/attachments/0f1e2d3c-aaaa-4bbb-8ccc-123456789abc.png";
+    try {
+      expect((await api("GET", "/api/bots")).body.groups.find((group: { id: string }) => group.id === room.id).avatarUrl).toBeNull();
+
+      const set = await api("PATCH", `/api/groups/${room.id}`, { avatarUrl: picture });
+      expect(set.status).toBe(200);
+      expect(set.body.group.avatarUrl).toBe(picture);
+      expect((await api("GET", "/api/bots")).body.groups.find((group: { id: string }) => group.id === room.id).avatarUrl).toBe(picture);
+
+      for (const bad of ["https://example.test/a.png", "/api/attachments/a.svg", "javascript:alert(1)", 7]) {
+        expect((await api("PATCH", `/api/groups/${room.id}`, { avatarUrl: bad })).status).toBe(400);
+      }
+      expect((await api("GET", "/api/bots")).body.groups.find((group: { id: string }) => group.id === room.id).avatarUrl).toBe(picture);
+
+      const cleared = await api("PATCH", `/api/groups/${room.id}`, { avatarUrl: null });
+      expect(cleared.status).toBe(200);
+      expect(cleared.body.group.avatarUrl).toBeNull();
+
+      await api("PATCH", `/api/groups/${room.id}`, { avatarUrl: picture });
+      const clearedByEmpty = await api("PATCH", `/api/groups/${room.id}`, { avatarUrl: "" });
+      expect(clearedByEmpty.status).toBe(200);
+      expect(clearedByEmpty.body.group.avatarUrl).toBeNull();
+    } finally {
+      await api("DELETE", `/api/groups/${room.id}`);
+      for (const bot of [first, second]) await api("DELETE", `/api/bots/${bot.id}`);
+    }
+  });
+
   it("adds and removes room members through PATCH", async () => {
     const [first, second, third] = await Promise.all([
       api("POST", "/api/bots"),

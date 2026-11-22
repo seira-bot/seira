@@ -31,8 +31,8 @@ export interface McpServersHostDeps {
   tell(text: string, bot: { id: string; name: string }): void;
   /** Whether this bot's AI starts config.json servers at all. */
   startsServers(botId: string): boolean;
-  /** Whether bots' turns run boxed here, each seeing only its own folders. */
-  boxed(): boolean;
+  /** Whether bots' turns run boxed here, each seeing only its own folders: this bot's, or every bot's. */
+  boxed(botId?: string): boolean;
   start?: McpHealthDeps["start"];
   /** A server's `vault:<id>` keys, read when it is launched or called. */
   keys?: McpKeys;
@@ -175,8 +175,8 @@ export function createMcpServersHost(deps: McpServersHostDeps) {
     keyChanged(item: string): void {
       for (const name of deps.keys?.usedBy(item) ?? []) health.changed(name);
     },
-    botAdd: (current: Record<string, unknown>, body: unknown, botId: string): BotMcpServerAdd => addBotMcpServer(current, body, botId, deps.dataDir, deps.boxed()),
-    botKeep: (server: StoredStdioMcpServer, botId: string): BotKept => keepForBot(server, botId, deps.dataDir, deps.boxed()),
+    botAdd: (current: Record<string, unknown>, body: unknown, botId: string): BotMcpServerAdd => addBotMcpServer(current, body, botId, deps.dataDir, deps.boxed(botId)),
+    botKeep: (server: StoredStdioMcpServer, botId: string): BotKept => keepForBot(server, botId, deps.dataDir, deps.boxed(botId)),
     botDeleted(botId: string): void {
       const before = deps.cfg().mcpServers;
       const next = withoutBotMcpServers(before, botId);

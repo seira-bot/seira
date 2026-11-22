@@ -222,6 +222,39 @@ describe("malformed requests", () => {
     expect((await fetch(`${ingress.baseUrl}/health`)).status).toBe(200);
   });
 
+  it("answers a failure without a status with a general message and logs the detail", async () => {
+    const failing = {
+      authorize: () => true,
+      receive: async () => { throw new Error("ENOENT: no such file, open '/srv/data/webhooks.json'"); },
+    } as unknown as WebhookManager;
+    const receiver = await listenWebhookIngress(failing, { port: 0 });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await fetch(`${receiver.baseUrl}/hooks/wh_failing`, { method: "POST", body: "{}" });
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ error: "Webhook receiver failed" });
+      expect(logged).toHaveBeenCalledWith("webhooks: request failed", expect.objectContaining({ message: expect.stringContaining("ENOENT") }));
+    } finally {
+      logged.mockRestore();
+      await new Promise<void>((resolve) => receiver.server.close(() => resolve()));
+    }
+  });
+
+  it("keeps the message of a failure that carries a status", async () => {
+    const refusing = {
+      authorize: () => true,
+      receive: async () => { throw Object.assign(new Error("Webhook is paused"), { status: 409 }); },
+    } as unknown as WebhookManager;
+    const receiver = await listenWebhookIngress(refusing, { port: 0 });
+    try {
+      const response = await fetch(`${receiver.baseUrl}/hooks/wh_paused`, { method: "POST", body: "{}" });
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({ error: "Webhook is paused" });
+    } finally {
+      await new Promise<void>((resolve) => receiver.server.close(() => resolve()));
+    }
+  });
+
   it("answers 500 when the handler itself fails instead of rejecting into the process", async () => {
     const failing = {
       authorize: () => true,
