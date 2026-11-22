@@ -114,10 +114,12 @@ server_image() {
   cid=$(server_container)
   [ -z "$cid" ] || docker inspect -f '{{.Image}}' "$cid" 2>/dev/null
 }
-# yes when the running image is labelled with a released version (a build of main is labelled with its branch).
+# yes when the running image is labelled with a released version (a build of main is labelled with its branch); unknown
+# when no container exists yet, as before the installer's first start.
 released() {
   image=$(server_image)
-  label=$( [ -z "$image" ] || docker image inspect -f "{{index .Config.Labels \"$VERSION_LABEL\"}}" "$image" 2>/dev/null)
+  if [ -z "$image" ]; then echo unknown; return; fi
+  label=$(docker image inspect -f "{{index .Config.Labels \"$VERSION_LABEL\"}}" "$image" 2>/dev/null)
   if printf '%s' "$label" | grep -Eqx 'v?[0-9]+\.[0-9]+\.[0-9]+'; then echo yes; else echo no; fi
 }
 write_runner() { write_status runner "layout=$1" "dir=$DIR" "held=$(held_word)" "release=$(released)"; }
