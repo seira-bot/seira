@@ -11,7 +11,7 @@ import { useChiefStepOpen } from "@/lib/default-bot";
 
 import { BotAvatar } from "./Avatar";
 import { botTooltip } from "./BotModelBadge";
-import { liveBadgeFor } from "./LiveCallPill";
+import { liveBadgeFor } from "@/lib/call-session";
 import { pinnedCircleDragClass, pinnedCircleDragHandlers, usePinnedCircleDrag, type PinnedCircleDragProps } from "./PinnedCircleThreads";
 import { RenameTitle } from "./RenameTitle";
 import { openBotContextMenu, useVisibleMessages, type BotRowProps } from "./Sidebar";
