@@ -4,8 +4,8 @@
 // (scripts/testing/verification-docs.test.ts). Any other file, any file a source
 // file names, and any doubt give "heavy". docs/ci.md describes this rule.
 import { execFileSync } from "node:child_process";
-import { appendFileSync } from "node:fs";
-import { basename, dirname, resolve } from "node:path";
+import { appendFileSync, existsSync, readFileSync, readdirSync } from "node:fs";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SHA = /^[a-f\d]{40}(?:[a-f\d]{24})?$/i;
@@ -80,12 +80,48 @@ function changedFiles(base, head) {
   return diff && diff.endsWith("\0") ? diff.slice(0, -1).split("\0") : [];
 }
 
+/** Files that the native job reads besides its tests and their imports. A path that ends in "/" is a folder. */
+export const NATIVE_INPUTS = ["native/", "scripts/prepare-job-fence.mjs", ".github/workflows/ci.yml", "scripts/ci-heavy.mjs"];
+
+const IMPORT = /(?:\bfrom\s*|\bimport\s*\(?\s*)["'](\.{1,2}\/[^"']+)["']/g;
+
+/** The repository files the native tests import, directly or through other files, relative to `root`. */
+export function nativeImports(root) {
+  const seen = new Set();
+  const visit = (file) => {
+    const path = relative(root, file).split("\\").join("/");
+    if (seen.has(path) || !existsSync(file)) return;
+    seen.add(path);
+    for (const match of readFileSync(file, "utf8").matchAll(IMPORT)) visit(resolve(dirname(file), match[1]));
+  };
+  const walk = (folder) => {
+    if (!existsSync(folder)) return;
+    for (const entry of readdirSync(folder, { withFileTypes: true })) {
+      const path = join(folder, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (entry.name.endsWith(".test.mjs")) visit(path);
+    }
+  };
+  walk(join(root, "native"));
+  return [...seen].sort();
+}
+
+/** Whether a change to `files` can break the native job. */
+export function nativeFor(files, imports) {
+  return files.some((file) => NATIVE_INPUTS.some((path) => matches(path, file)) || imports.includes(file));
+}
+
 /** The events whose diff decides the scope: a pull request, and a merge queue entry that holds the same change. */
 export const DIFF_EVENTS = ["pull_request", "merge_group"];
 
 /** The Workers that a CI run checks: every Worker, except for a diff event whose changed files name fewer. */
 export function workersToRun(eventName, files) {
   return DIFF_EVENTS.includes(eventName) && Array.isArray(files) ? workersFor(files) : [...WORKERS];
+}
+
+/** Whether a CI run starts the native job: always, except for a diff event whose changed files cannot break it. */
+export function nativeToRun(eventName, files, imports) {
+  return DIFF_EVENTS.includes(eventName) && Array.isArray(files) ? nativeFor(files, imports) : true;
 }
 
 export const workersOutput = (workers) => JSON.stringify(workers.map(({ name, check, test }) => ({ name, check, test })));
@@ -105,7 +141,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     }
   }
   const workers = workersToRun(EVENT_NAME, files);
+  const native = nativeToRun(EVENT_NAME, files, nativeImports(resolve(dirname(fileURLToPath(import.meta.url)), "..")));
   console.log(reason ? `CI scope: heavy jobs run, because ${reason}` : "CI scope: documentation and pictures only, so only checks run");
   console.log(workers.length ? `CI scope: Workers that run: ${workers.map((worker) => worker.name).join(", ")}` : "CI scope: no Worker runs");
-  if (GITHUB_OUTPUT) appendFileSync(GITHUB_OUTPUT, `heavy=${reason ? "true" : "false"}\nworkers=${workersOutput(workers)}\n`);
+  console.log(native ? "CI scope: the native job runs" : "CI scope: the native job does not run");
+  if (GITHUB_OUTPUT) appendFileSync(GITHUB_OUTPUT, `heavy=${reason ? "true" : "false"}\nworkers=${workersOutput(workers)}\nnative=${native}\n`);
 }
