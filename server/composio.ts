@@ -35,6 +35,7 @@ import {
 } from "./connector-advertisement.ts";
 import { connectedAppGrantSlugs, serviceSlugFor, serviceSlugForCandidates } from "./connector-verdict.ts";
 import { parseMcpResponse, withToolsListFallback } from "./connector-tools-list.ts";
+import { ownAuthToolkits } from "./composio-own-auth.ts";
 import { brokerAccess, managedComposioBrokerOff, type BrokerAccess } from "./composio-broker-access.ts";
 export { applyManagedBrokerMessage, brokerAccess, setManagedBrokerAccess, type BrokerAccess } from "./composio-broker-access.ts";
 export { prepareProjectSession, trustedSessionMcpUrl } from "./composio-session.ts";
@@ -912,6 +913,7 @@ export async function listToolkits(cfg: AppConfig): Promise<{ cards: ToolkitCard
     return { cards: toolkitCache.cards, source: "api", pagination: toolkitCache.pagination };
   }
   if (backendKey || broker) {
+    const ownAuth = backendKey ? ownAuthToolkits(backendKey) : Promise.resolve(new Set<string>());
     try {
       const items: any[] = [];
       const seenCursors = new Set<string>();
@@ -977,16 +979,20 @@ export async function listToolkits(cfg: AppConfig): Promise<{ cards: ToolkitCard
         cursor = next;
       }
       if (items.length) {
-        const cards: ToolkitCard[] = items.map((t: any) => ({
-          slug: canonicalToolkitSlug(String(t.slug ?? t.key ?? t.name ?? "")),
-          label: t.name ?? t.slug ?? "",
-          blurb: (t.meta?.description ?? t.description ?? "").slice(0, 90),
-          logo: t.meta?.logo ?? t.logo ?? null,
-          noAuth: t.no_auth === true,
-          ...(needsOwnAuth(t) ? { needsOwnAuth: true } : {}),
-          domain: null,
-          ...(toolkitCategories(t.meta?.categories) ? { categories: toolkitCategories(t.meta?.categories) } : {}),
-        }));
+        const own = await ownAuth;
+        const cards: ToolkitCard[] = items.map((t: any) => {
+          const slug = canonicalToolkitSlug(String(t.slug ?? t.key ?? t.name ?? ""));
+          return {
+            slug,
+            label: t.name ?? t.slug ?? "",
+            blurb: (t.meta?.description ?? t.description ?? "").slice(0, 90),
+            logo: t.meta?.logo ?? t.logo ?? null,
+            noAuth: t.no_auth === true,
+            ...(needsOwnAuth(t) && !own.has(slug) ? { needsOwnAuth: true } : {}),
+            domain: null,
+            ...(toolkitCategories(t.meta?.categories) ? { categories: toolkitCategories(t.meta?.categories) } : {}),
+          };
+        });
         const uniqueCards = cards.filter(
           (card, index) => card.slug && cards.findIndex((candidate) => candidate.slug === card.slug) === index,
         );

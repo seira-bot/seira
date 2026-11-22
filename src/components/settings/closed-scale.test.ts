@@ -70,7 +70,6 @@ const FILES = [
   "src/components/VaultSettings.tsx",
   "src/components/VpsComputersCard.tsx",
   "src/components/WindowFrameBar.tsx",
-  "src/components/WorkersAiKeyCard.tsx",
   "src/components/WorkspaceBackupSettings.tsx",
   "src/components/keys/KeyPanels.tsx",
   "src/components/keys/KeyRow.tsx",

@@ -86,12 +86,24 @@ export interface GeneratedSlotImage extends GeneratedImage, ImageSlot {
 
 const OPENAI_SIZES: Record<ImageAspect, string> = { "1:1": "1024x1024", "16:9": "1536x1024", "9:16": "1024x1536" };
 
+// Codex's image endpoint ignores `size` and takes the shape from the words of the prompt (a probe: 1:1 gave 1254x1254, 16:9 gave 1672x941, 9:16 gave 941x1672).
+const CODEX_ASPECT_HINTS: Record<ImageAspect, string> = {
+  "1:1": "Square 1:1 image.",
+  "16:9": "Wide 16:9 landscape image.",
+  "9:16": "Tall 9:16 portrait image.",
+};
+
+export function codexPrompt(prompt: string, aspect: ImageAspect = "1:1"): string {
+  return `${prompt.trimEnd()}\n\n${CODEX_ASPECT_HINTS[aspect]}`;
+}
+
 const PROVIDERS: Record<ImageProvider, {
   name: string;
   missing: string;
   key: (cfg: ImageCredentials) => string | undefined;
   url: (cfg: ImageCredentials) => string;
   editUrl?: string;
+  prompt?: (request: ImageRequest) => string;
   body: (request: ImageRequest) => Record<string, unknown>;
 }> = {
   openai: {
@@ -108,7 +120,8 @@ const PROVIDERS: Record<ImageProvider, {
     // Codex's own ChatGPT sign-in authorizes the request: see codexHeaders.
     key: () => undefined,
     url: () => CODEX_IMAGES_URL,
-    body: (request) => ({ size: OPENAI_SIZES[request.aspect ?? "1:1"], quality: request.draft ? "low" : "auto", output_format: "png", background: "auto", n: 1 }),
+    prompt: (request) => codexPrompt(request.prompt, request.aspect),
+    body: (request) => ({ size: "auto", quality: request.draft ? "low" : "auto", output_format: "png", background: "auto", n: 1 }),
   },
   xai: {
     name: "xAI",
@@ -297,7 +310,7 @@ export async function generateImageWith(
   const { size: generatedSize, ...params } = provider.body(request);
   const url = (edit && provider.editUrl) || provider.url(cfg);
   const body = {
-    model: slot.model, prompt: request.prompt, ...(edit ? params : { ...params, size: generatedSize }),
+    model: slot.model, prompt: provider.prompt?.(request) ?? request.prompt, ...(edit ? params : { ...params, size: generatedSize }),
     ...(complexity && { complexity }), ...gif,
   };
   const multipart = (fields: Record<string, unknown>, { image, markup }: NonNullable<typeof edit>) => {
@@ -335,8 +348,8 @@ export async function generateImageWith(
     response = await send(body);
   }
 
-  // Some Custom gateways and the Codex backend accept only size "auto" for some models, so a failed exact size gets one retry with "auto".
-  if (!response.ok && (slot.provider === "custom" || isCodex) && !NOT_STARTED_STATUSES.has(response.status)) {
+  // Some Custom gateways accept only size "auto" for some models, so a failed exact size gets one retry with "auto".
+  if (!response.ok && slot.provider === "custom" && !NOT_STARTED_STATUSES.has(response.status)) {
     await response.body?.cancel().catch(() => undefined);
     // A retry that cannot connect keeps the exact size's error; only cancel and timeout end the call there.
     const retry = await send({ ...body, size: "auto" }).catch((error: unknown) => {

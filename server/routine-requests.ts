@@ -1,4 +1,5 @@
 import { instructionsUpdateRefusal } from "./automation-instructions.ts";
+import { PlaceLostError } from "./place-lost.ts";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { ROUTINE_RUN_LIMIT_MINUTES } from "../shared/routines.ts";
@@ -1435,15 +1436,21 @@ export class RoutineRequestService {
       }
       case "run_now": {
         verifyManageSnapshot(operation, this.routines, operation.forBot?.botId ?? payload.botId);
-        const run = this.routines.runNow(operation.routineId, {
-          requestId: payload.requestId,
-          messageId,
-          botId: payload.botId,
-          threadId: payload.threadId,
-          action: "run_now",
-          fingerprintVersion: ROUTINE_REQUEST_FINGERPRINT_VERSION,
-          fingerprint,
-        });
+        let run: ReturnType<typeof this.routines.runNow>;
+        try {
+          run = this.routines.runNow(operation.routineId, {
+            requestId: payload.requestId,
+            messageId,
+            botId: payload.botId,
+            threadId: payload.threadId,
+            action: "run_now",
+            fingerprintVersion: ROUTINE_REQUEST_FINGERPRINT_VERSION,
+            fingerprint,
+          });
+        } catch (error) {
+          if (error instanceof PlaceLostError) throw new RoutineRequestError(error.message, 409);
+          throw error;
+        }
         if (!run) throw new RoutineRequestError("That routine no longer exists", 404);
         return run.id;
       }

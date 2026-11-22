@@ -40,6 +40,7 @@ Composio --signed POST--> /v1/composio/webhook --> D1 queue per installation <--
 | Route | Auth | Does |
 | --- | --- | --- |
 | `POST /v1/composio/webhook` | Composio signature (`COMPOSIO_WEBHOOK_SECRET`) | Verifies the Standard Webhooks signature (300 s tolerance), routes `metadata.trigger_id` through `trigger_bindings`, requires `metadata.user_id` to be that installation's Composio user, and queues the event. A bad, missing or stale signature gets 401; an event no installation can take gets 200 and is only counted. |
+| `GET /v1/catalog[?cursor=<c>]` | installation token | One page of Composio's toolkit catalog. It leaves out `composio_managed_auth_schemes` for toolkits that have an enabled custom auth config in the project, so clients do not read them as "needs its own sign-in". Any other field and every other item pass through unchanged. |
 | `GET /v1/trigger-types[?toolkits=a,b]` | installation token | Event types of the given toolkits (at most 10), or of the installation's active connected accounts. Types that need their own webhook endpoint are left out. Cached per isolate for an hour. |
 | `GET /v1/trigger-types/:slug` | installation token | One event type with its config and payload schemas. |
 | `POST /v1/triggers` `{slug, connectedAccountId, config}` | installation token | Checks that the account is this installation's, then `POST /trigger_instances/{slug}/upsert` and saves the binding. An identical config returns the same `triggerId`, so local triggers can share one. |

@@ -95,6 +95,19 @@ describe("publishing a bot's folder on the plan's included hosting", () => {
     expect((await made.publish({ botId: "mira", roots: roots("mira"), path: "shop", project: "shop/dist", title: "Shop" })).body.error).toContain("path must be the project folder or a folder inside it");
   });
 
+  it("publishes from a read-only folder without writing its record there, unless a deeper turn folder holds it", async () => {
+    site("mira", "docs/site");
+    site("mira", "docs/drafts/site");
+    const docs = join(workspace("mira"), "docs"), drafts = join(docs, "drafts");
+    const { publisher: made } = publisher();
+    const readOnly = await made.publish({ botId: "mira", roots: roots("mira"), readOnly: [docs], path: "docs/site", title: "Docs" });
+    expect(readOnly.body).toMatchObject({ ok: true, live: true });
+    expect(existsSync(join(docs, "site", SITE_FILE))).toBe(false);
+    const deeper = await made.publish({ botId: "mira", roots: [...roots("mira"), drafts], readOnly: [docs], path: "docs/drafts/site", title: "Drafts" });
+    expect(deeper.body).toMatchObject({ ok: true, live: true });
+    expect(record("mira", "docs/drafts/site").title).toBe("Drafts");
+  });
+
   it("gives two bots, and two folders of one bot, apps of their own", async () => {
     site("mira", "bakery");
     site("mira", "rota");

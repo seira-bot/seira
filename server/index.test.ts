@@ -5888,7 +5888,7 @@ describe("harness HTTP API", () => {
       expect((await api("PUT", "/api/config", { vps: { sshAlias: "fixture-vps" } })).status).toBe(200);
       const bot = (await api("POST", "/api/bots")).body.bot;
       botId = bot.id;
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud" })).status).toBe(200);
+      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud", cloudBackend: "vps" })).status).toBe(200);
       stream = await openSse(`${BASE}/api/events`);
       await stream.until((frame) => frame.kind === "hello");
       expect((await api("POST", `/api/bots/${bot.id}/messages`, { text: "go" })).status).toBe(202);
@@ -6787,7 +6787,7 @@ describe("harness HTTP API", () => {
       expect((await api("PUT", "/api/config", { vps: { sshAlias: "fixture-vps" } })).status).toBe(200);
       const bot = (await api("POST", "/api/bots")).body.bot;
       botId = bot.id;
-      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud" })).status).toBe(200);
+      expect((await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud", cloudBackend: "vps" })).status).toBe(200);
       const created = await api("POST", "/api/routines", {
         name: "Cloud check",
         prompt: "look at the cloud desktop",

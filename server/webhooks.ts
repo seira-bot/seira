@@ -8,6 +8,7 @@ import { defuse } from "./records-block.ts";
 
 import { writeFileAtomic } from "./atomic.ts";
 import { DATA_DIR } from "./config.ts";
+import { PLACE_LOST_MESSAGE, placeChosen } from "./place-lost.ts";
 import type { RoutineRunOn } from "./routines.ts";
 import { parseJson, schemaIssue, type JsonValue } from "./schema.ts";
 import { AUTHORITY, fromNote, fromNoteWith, webhookWho } from "./provenance-label.ts";
@@ -158,6 +159,7 @@ const storedWebhookSchema = z.object({
   // A hand-edited value out of range falls back to the default instead of making the file unreadable.
   maxPendingRuns: maxPendingRunsSchema.optional().catch(undefined),
   sameConversation: z.boolean().optional().catch(undefined),
+  placeLost: z.literal(true).optional().catch(undefined),
   secretHash: z.string().regex(/^[a-f0-9]{64}$/),
   /** The current secret, sealed under WEBHOOK_KEY_FILE beside this file, so the person and the owning bot get the same
    * address back. Never in a public trigger or a workspace backup; absent for a webhook made before it was kept. */
@@ -531,6 +533,7 @@ export class WebhookManager {
     if (this.options.botState(clean.botId) === "missing") fail(400, "That bot no longer exists");
     if (clean.groupId) this.assertRoomMember(clean.botId, clean.groupId);
     Object.assign(trigger, clean, { updatedAt: this.now() });
+    if (placeChosen(patch)) delete trigger.placeLost;
     if (!clean.eventTypes?.length) delete trigger.eventTypes;
     if (!clean.payloadFilter) delete trigger.payloadFilter;
     if (!clean.groupId) delete trigger.groupId;
@@ -677,6 +680,7 @@ export class WebhookManager {
    *  An ignored or duplicate event comes back as its finished receipt. */
   private admit(trigger: StoredWebhookTrigger, event: WebhookEvent, byPerson: boolean, now: number): { deliveryId: string } | { receipt: WebhookReceiveResult } {
     if (!trigger.enabled && !byPerson) fail(409, "This webhook is paused");
+    if (trigger.placeLost && byPerson) fail(409, PLACE_LOST_MESSAGE);
     if (this.options.botState(trigger.botId) === "missing") fail(410, "The assigned bot no longer exists");
 
     const ignore = (reason: string) => {

@@ -25,6 +25,7 @@ import { writeFileAtomic } from "./atomic.ts";
 import { instructionsUpdateRefusal } from "./automation-instructions.ts";
 import { DATA_DIR } from "./config.ts";
 import type { RoutineRunOn } from "./routines.ts";
+import { PLACE_LOST_MESSAGE, placeChosen } from "./place-lost.ts";
 
 export const DEFAULT_MAX_PENDING_RUNS = 3;
 const MAX_ATTEMPTS = 2_000;
@@ -103,6 +104,7 @@ const storedSchema = z.object({
   ]).optional().catch(undefined),
   sourceThreadId: z.string().optional(),
   sameConversation: z.boolean().optional().catch(undefined),
+  placeLost: z.literal(true).optional().catch(undefined),
   received: z.number().int().nonnegative(),
   filtered: z.number().int().nonnegative(),
   skipped: skippedSchema.optional().catch(undefined),
@@ -351,6 +353,7 @@ export class AppTriggerManager {
       });
       if (filter) trigger.filter = filter;
       else delete trigger.filter;
+      if (placeChosen(patch)) delete trigger.placeLost;
       if (patch.sameConversation === true) trigger.sameConversation = true;
       else if (patch.sameConversation === false) delete trigger.sameConversation;
       if (patch.enabled === false) this.options.runs.cancelQueued(trigger.id, "The automation was paused before this event's run started");
@@ -416,6 +419,7 @@ export class AppTriggerManager {
   async runNow(id: string): Promise<{ via: "service" | "here"; runId?: string } | null> {
     const trigger = this.triggers.find((candidate) => candidate.id === id);
     if (!trigger) return null;
+    if (trigger.placeLost) throw new AppTriggerError(PLACE_LOST_MESSAGE, 409);
     const data = { seira_test: true, note: "A test run started from Seira." };
     if (trigger.remote.triggerId && trigger.remote.state === "active" && this.options.service().available) {
       try {

@@ -155,6 +155,191 @@ it("files a failed run's incident only once its thread has settled, so the Chief
   }
 }, 150_000);
 
+it("queues reports that find the Chief's incidents thread busy, answers them together, and runs each without a computer it cannot have", async () => {
+  const { api, control, file, dump, messages, useCli, incidentsThread, close } = await launch();
+  try {
+    // A server that does not exist: a cloud computer on it cannot be prepared, so no run on it can start.
+    await api("PUT", "/api/config", { vps: { sshAlias: "fixture-vps" } });
+    // The Chief works on a cloud computer on a server that does not exist.
+    const chief = (await control(["new-bot", "--name", "Clive", "--section", "Ops"])).bot;
+    await api("PATCH", `/api/bots/${chief.id}`, { chiefOfStaff: true, computer: "cloud", cloudBackend: "vps" });
+    const ada = (await control(["new-bot", "--name", "Ada", "--section", "Ops"])).bot;
+    const ben = (await control(["new-bot", "--name", "Ben", "--section", "Ops"])).bot;
+    const cara = (await control(["new-bot", "--name", "Cara", "--section", "Ops"])).bot;
+    await useCli(`${JSON.stringify([ada.activeTaskId, ben.activeTaskId, cara.activeTaskId])}.includes(thread) ? "exit-early" : "slow"`);
+
+    await control(["send", "--bot", ada.id, "--text", "Reconcile the September invoices."]);
+    const incidents = (await incidentsThread(chief.id)).threadId;
+    const first = await dump(incidents);
+    expect(JSON.stringify(first.prompt)).toContain("Ada's run in its thread #Reconcile the September invoices. failed");
+    expect(Object.keys(first.mcpConfig.mcpServers)).toContain("agents");
+    expect(Object.keys(first.mcpConfig.mcpServers)).not.toContain("computer");
+    expect(first.systemPrompt).toContain("This turn answers a Team incidents report and your computer could not be prepared for it (Docker over SSH failed while checking the VPS");
+
+    const failsWhileBusy = async (bot: { id: string; activeTaskId: string }, name: string, request: string) => {
+      await control(["send", "--bot", bot.id, "--text", request]);
+      await expect.poll(async () => (await messages(incidents)).some((m) =>
+        m.kind === "activity" && (m.tool?.name ?? "").startsWith(`${name} hit a problem: its run in its thread #${request} failed`) && m.threadRef?.threadId === bot.activeTaskId,
+      ), { timeout: 20_000 }).toBe(true);
+    };
+    await failsWhileBusy(ben, "Ben", "Draft the vendor letter.");
+    await failsWhileBusy(cara, "Cara", "File the expense report.");
+    expect((await messages(incidents)).filter((m) => m.role === "user" && /incident report/.test(m.text ?? "")).length).toBe(1);
+    expect((await messages(incidents)).some((m) => /could not reach|error:/.test(m.tool?.name ?? ""))).toBe(false);
+
+    writeFileSync(file(incidents, "gate"), "finish");
+    await expect.poll(async () => JSON.stringify((await dump(incidents)).prompt), { timeout: 20_000 }).toContain("Ben's run in its thread #Draft the vendor letter. failed");
+    const second = await dump(incidents);
+    expect(JSON.stringify(second.prompt)).toContain("Cara's run in its thread #File the expense report. failed");
+    expect(Object.keys(second.mcpConfig.mcpServers)).not.toContain("computer");
+    expect(second.systemPrompt).toContain("This turn answers a Team incidents report and your computer could not be prepared for it");
+    expect((await control(["wait", "--bot", chief.id, "--task", incidents, "--timeout", "30"])).status).toBe("settled");
+
+    const lines = await messages(incidents);
+    const reports = lines.filter((m) => m.role === "user" && /incident report/.test(m.text ?? ""));
+    expect(reports.map((m) => m.peerAsk)).toEqual([ada, ben, cara].map((bot, at) => ({
+      botId: bot.id, name: ["Ada", "Ben", "Cara"][at], unattended: true, incident: { threadId: bot.activeTaskId },
+    })));
+    expect(lines.filter((m) => m.role === "bot" && m.kind === "text" && m.turnTerminal).map((m) => m.requestMessageId))
+      .toEqual([reports[0].id, reports[2].id]);
+    expect(reports.map((m) => m.requestPending)).toEqual([false, undefined, false]);
+    expect(lines.some((m) => /could not reach|error:/.test(m.tool?.name ?? ""))).toBe(false);
+  } finally {
+    await close();
+  }
+}, 150_000);
+
+it("reviews the work it handed on from a report without the Chief's computer, even after the person wrote there", async () => {
+  const { api, control, file, dump, messages, useCli, turnEnded, incidentsThread, close } = await launch();
+  try {
+    // A server that does not exist: a cloud computer on it cannot be prepared, so no run on it can start.
+    await api("PUT", "/api/config", { vps: { sshAlias: "fixture-vps" } });
+    // The Chief's Works-on computer cannot start here.
+    const chief = (await control(["new-bot", "--name", "Clive", "--section", "Ops"])).bot;
+    await api("PATCH", `/api/bots/${chief.id}`, { chiefOfStaff: true, computer: "cloud", cloudBackend: "vps" });
+    const ada = (await control(["new-bot", "--name", "Ada", "--section", "Ops"])).bot;
+    const cara = (await control(["new-bot", "--name", "Cara", "--section", "Ops"])).bot;
+    await useCli(`thread === ${JSON.stringify(ada.activeTaskId)} ? "exit-early" : "slow"`);
+
+    await control(["send", "--bot", ada.id, "--text", "Reconcile the September invoices."]);
+    const incidents = (await incidentsThread(chief.id)).threadId;
+    const token = (await dump(incidents)).mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN;
+    const handed = await api("POST", "/api/internal/coordinate-bots", { botIds: [cara.id], message: "Reconcile the September invoices; Ada's run crashed." }, token);
+    const caraThread = handed.receipts[0].threadId as string;
+    writeFileSync(file(incidents, "gate"), "finish");
+    await turnEnded(chief.id, incidents);
+
+    await control(["send", "--bot", chief.id, "--task", incidents, "--text", "Any update on the invoices?"]);
+    await expect.poll(async () => (await messages(incidents)).some((m) => m.kind === "activity" && /Docker over SSH failed while checking the VPS/.test(m.tool?.name ?? "")), { timeout: 20_000 }).toBe(true);
+    const refusals = (await messages(incidents)).filter((m) => m.kind === "activity" && /Docker over SSH failed while checking the VPS/.test(m.tool?.name ?? "")).length;
+
+    writeFileSync(file(caraThread, "gate"), "finish");
+    await expect.poll(async () => (await messages(incidents)).some((m) =>
+      m.kind === "activity" && m.tool?.name === "Resumed with Cara results, reviewing"), { timeout: 20_000 }).toBe(true);
+    await expect.poll(async () => JSON.stringify((await dump(incidents)).prompt), { timeout: 20_000 }).toContain("Your downstream room requests have settled");
+    const review = await dump(incidents);
+    expect(Object.keys(review.mcpConfig.mcpServers)).not.toContain("computer");
+    expect(review.systemPrompt).toContain("This turn answers a Team incidents report and your computer could not be prepared for it");
+    expect((await control(["wait", "--bot", chief.id, "--task", incidents, "--timeout", "30"])).status).toBe("settled");
+    const lines = await messages(incidents);
+    expect(lines.filter((m) => m.kind === "activity" && /Docker over SSH failed while checking the VPS/.test(m.tool?.name ?? "")).length).toBe(refusals);
+    expect(lines.some((m) => /could not reach/.test(m.tool?.name ?? ""))).toBe(false);
+    const reviewReply = lines.findLast((m) => m.role === "bot" && m.kind === "text" && m.turnTerminal);
+    expect(lines.indexOf(reviewReply)).toBeGreaterThan(lines.findIndex((m) => m.tool?.name === "Resumed with Cara results, reviewing"));
+  } finally {
+    await close();
+  }
+}, 150_000);
+
+it("adds no push for answering reports that waited, about failures the person already heard of", async () => {
+  const { api, control, file, dump, messages, useCli, incidentsThread, pushes, close } = await launch();
+  try {
+    // A server that does not exist: a cloud computer on it cannot be prepared, so no run on it can start.
+    await api("PUT", "/api/config", { vps: { sshAlias: "fixture-vps" } });
+    // Ada, Ben and Cara work on a cloud computer on a server that does not exist, so none of their runs can start.
+    const chief = (await control(["new-bot", "--name", "Clive", "--section", "Ops"])).bot;
+    await api("PATCH", `/api/bots/${chief.id}`, { chiefOfStaff: true });
+    const team: Array<{ id: string; activeTaskId: string }> = [];
+    for (const name of ["Ada", "Ben", "Cara"]) {
+      const bot = (await control(["new-bot", "--name", name, "--section", "Ops"])).bot;
+      await api("PATCH", `/api/bots/${bot.id}`, { computer: "cloud", cloudBackend: "vps" });
+      team.push(bot);
+    }
+    await useCli('"slow"');
+    const watch = await pushes();
+    try {
+      const cannotStart = async (bot: { id: string }, name: string, request: string, incidents?: string) => {
+        await control(["send", "--bot", bot.id, "--text", request]);
+        const thread = incidents ?? (await incidentsThread(chief.id)).threadId;
+        await expect.poll(async () => (await messages(thread)).some((m) =>
+          m.kind === "activity" && (m.tool?.name ?? "").startsWith(`${name} hit a problem: its run in its thread #${request} could not start`),
+        ), { timeout: 20_000 }).toBe(true);
+        return thread;
+      };
+      const incidents = await cannotStart(team[0], "Ada", "Reconcile the September invoices.");
+      await expect.poll(async () => JSON.stringify((await dump(incidents)).prompt), { timeout: 20_000 }).toContain("Ada's run in its thread");
+      await cannotStart(team[1], "Ben", "Draft the vendor letter.", incidents);
+      await cannotStart(team[2], "Cara", "File the expense report.", incidents);
+      writeFileSync(file(incidents, "gate"), "finish");
+      await expect.poll(async () => JSON.stringify((await dump(incidents)).prompt), { timeout: 20_000 }).toContain("Cara's run in its thread");
+      expect(JSON.stringify((await dump(incidents)).prompt)).toContain("Ben's run in its thread");
+      expect((await control(["wait", "--bot", chief.id, "--task", incidents, "--timeout", "30"])).status).toBe("settled");
+      expect((await messages(incidents)).filter((m) => m.role === "bot" && m.kind === "text" && m.turnTerminal)).toHaveLength(2);
+
+      const sent = await watch.sent(chief.id);
+      expect(sent.map((push: any) => [push.kind, push.botId])).toEqual([
+        ["turn-failed", team[0].id], ["turn-failed", team[1].id], ["turn-failed", team[2].id], ["done", chief.id],
+      ]);
+    } finally {
+      watch.stream.close();
+    }
+  } finally {
+    await close();
+  }
+}, 150_000);
+
+it("keeps a report that waited quiet through the work it hands on, when the person already heard of the failure", async () => {
+  const { api, control, file, dump, messages, useCli, incidentsThread, pushes, close } = await launch();
+  try {
+    // A server that does not exist: a cloud computer on it cannot be prepared, so no run on it can start.
+    await api("PUT", "/api/config", { vps: { sshAlias: "fixture-vps" } });
+    // One thread at a time per bot: a Chief busy anywhere makes a report wait.
+    await api("PATCH", "/api/config", { threads: { maxConcurrentPerBot: 1 } });
+    const chief = (await control(["new-bot", "--name", "Clive", "--section", "Ops"])).bot;
+    await api("PATCH", `/api/bots/${chief.id}`, { chiefOfStaff: true });
+    const ben = (await control(["new-bot", "--name", "Ben", "--section", "Ops"])).bot;
+    await api("PATCH", `/api/bots/${ben.id}`, { computer: "cloud", cloudBackend: "vps" });
+    const dan = (await control(["new-bot", "--name", "Dan", "--section", "Ops"])).bot;
+    await useCli('"slow"');
+    const watch = await pushes();
+    try {
+      await control(["send", "--bot", chief.id, "--text", "Plan the offsite."]);
+      await dump(chief.activeTaskId);
+      await control(["send", "--bot", ben.id, "--text", "Draft the vendor letter."]);
+      const incidents = (await incidentsThread(chief.id)).threadId;
+      await expect.poll(async () => (await messages(incidents)).some((m) =>
+        m.kind === "activity" && (m.tool?.name ?? "").startsWith("Ben hit a problem: its run in its thread #Draft the vendor letter. could not start")), { timeout: 20_000 }).toBe(true);
+
+      writeFileSync(file(chief.activeTaskId, "gate"), "finish");
+      await expect.poll(async () => JSON.stringify((await dump(incidents)).prompt), { timeout: 20_000 }).toContain("Ben's run in its thread #Draft the vendor letter. could not start");
+      const token = (await dump(incidents)).mcpConfig.mcpServers.agents.env.SEIRA_COMMS_TOKEN;
+      const handed = await api("POST", "/api/internal/coordinate-bots", { botIds: [dan.id], message: "Draft the vendor letter; Ben could not start." }, token);
+      writeFileSync(file(incidents, "gate"), "finish");
+      writeFileSync(file(handed.receipts[0].threadId as string, "gate"), "finish");
+      await expect.poll(async () => (await messages(incidents)).some((m) =>
+        m.kind === "activity" && m.tool?.name === "Resumed with Dan results, reviewing"), { timeout: 20_000 }).toBe(true);
+      expect((await control(["wait", "--bot", chief.id, "--task", incidents, "--timeout", "30"])).status).toBe("settled");
+
+      const sent = await watch.sent(chief.id);
+      expect(sent.map((push: any) => [push.kind, push.botId])).toEqual([["turn-failed", ben.id], ["done", chief.id]]);
+    } finally {
+      watch.stream.close();
+    }
+  } finally {
+    await close();
+  }
+}, 150_000);
+
 it("never parks a report behind work the Chief handed on, even for a Chief that parks its follow-ups", async () => {
   const { api, control, file, dump, messages, botsNow, useCli, turnEnded, incidentsThread, close } = await launch();
   try {

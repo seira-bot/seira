@@ -9,6 +9,7 @@ import type {
 import type { LocalModelFacts, OllamaProblem } from "../shared/local-model.ts";
 import type { ProviderIcon } from "../shared/provider-icon.ts";
 import type { ContextBreakdown } from "../shared/context-breakdown.ts";
+import type { TurnFolders } from "./folder-access.ts";
 
 export type { CloudBackend, EffortLevel, ModelSelection } from "../shared/wire.ts";
 export type {
@@ -211,6 +212,8 @@ export interface SendTurnInput {
     customResultBudgets?: Record<string, number>;
   };
   cwd?: string;
+  /** Folders this bot may use beyond its working folder; `limited` means the bot may use nothing else. Absent means no folder setting. */
+  folders?: TurnFolders;
   /** Engines with no working folder (the chat drivers): where an MCP result too big for the model is saved whole; a folder attach_file can deliver from. */
   toolResultFolder?: string;
   /** Also load the person's own CLI MCP setup (Claude Code user scope, claude.ai connectors). */

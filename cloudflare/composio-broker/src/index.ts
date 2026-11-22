@@ -576,19 +576,42 @@ async function proxyMcp(request: Request, installation: InstallationRow, env: En
   return new Response(response.body, { status: response.status, headers });
 }
 
+/** An empty `composio_managed_auth_schemes` tells clients that an app needs its own sign-in, so the broker leaves it out
+ *  for toolkits that its project can connect with its own auth config. */
 async function catalog(env: Env, url: URL) {
   // The catalog runs past a thousand toolkits, so pass the caller's cursor through.
   const params = new URLSearchParams({ limit: "500", sort_by: "usage" });
   const cursor = url.searchParams.get("cursor");
   if (cursor && CATALOG_CURSOR.test(cursor)) params.set("cursor", cursor);
-  const response = await fetch(`${env.COMPOSIO_TOOLKIT_BASE}/toolkits?${params}`, {
-    headers: { accept: "application/json", "x-api-key": env.COMPOSIO_API_KEY },
-    signal: AbortSignal.timeout(20_000),
-  });
+  const [response, project] = await Promise.all([
+    fetch(`${env.COMPOSIO_TOOLKIT_BASE}/toolkits?${params}`, {
+      headers: { accept: "application/json", "x-api-key": env.COMPOSIO_API_KEY },
+      signal: AbortSignal.timeout(20_000),
+    }),
+    projectAuthConfigs(env),
+  ]);
   if (!response.ok) return json({ error: await upstreamError(response, "Catalog unavailable") }, 502);
-  return new Response(response.body, {
-    headers: { "content-type": response.headers.get("content-type") ?? "application/json", "cache-control": "private, max-age=600" },
-  });
+  const headers = { "content-type": response.headers.get("content-type") ?? "application/json", "cache-control": "private, max-age=600" };
+  const picks = project?.picks ?? {};
+  if (!Object.keys(picks).length) return new Response(response.body, { headers });
+  const text = await response.text();
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(text);
+    if (!body || typeof body !== "object") throw new Error("not an object");
+  } catch {
+    return json({ error: "Catalog unavailable" }, 502);
+  }
+  const key = Array.isArray(body.items) ? "items" : "data";
+  const items = body[key];
+  if (Array.isArray(items)) {
+    for (const item of items) {
+      if (item && typeof item === "object" && typeof item.slug === "string" && Object.hasOwn(picks, canonicalToolkitSlug(item.slug))) {
+        delete item.composio_managed_auth_schemes;
+      }
+    }
+  }
+  return new Response(JSON.stringify(body), { headers });
 }
 
 async function listSessionToolkits(

@@ -18,6 +18,7 @@ import { placeOffered } from "@/lib/place";
 import { TeamCanvas } from "./TeamCanvas";
 import { TeamDialog } from "./TeamDialog";
 import { TeamMemoryDialog } from "./TeamMemoryDialog";
+import { SectionFoldersDialog } from "./SectionFoldersDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { intlLocale, t } from "@/lib/i18n";
 import { useMapComputers, useShowComputers } from "@/lib/map-computers";
@@ -274,6 +275,7 @@ export function TeamMapPage() {
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [contextEditor, setContextEditor] = useState<{ section: string; label: string } | null>(null);
   const [memoryEditor, setMemoryEditor] = useState<{ section: string; label: string } | null>(null);
+  const [foldersEditor, setFoldersEditor] = useState<{ section: string; label: string } | null>(null);
   const [teamEditor, setTeamEditor] = useState<{ section?: string; rename?: boolean } | null>(null);
   const [deletingTeam, setDeletingTeam] = useState<string | null>(null);
   const [pendingMove, setPendingMove] = useState<{ bot: Bot; destination: string; resolve: (moved: boolean) => void } | null>(null);
@@ -387,6 +389,7 @@ export function TeamMapPage() {
         onOpenComputer={(computer) => { if (computer.kind !== "team") dispatch({ type: "toggleComputer", open: true, botId: computer.id }); }}
         onInstructions={(section, label) => setContextEditor({ section, label })}
         onMemory={(section, label) => setMemoryEditor({ section, label })}
+        onFolders={(section, label) => setFoldersEditor({ section, label })}
         onEditTeam={(section, rename) => setTeamEditor({ section, rename })}
         onDeleteTeam={setDeletingTeam}
         isEmpty={(key) => ![...state.bots, ...state.groups].some((record) => record.section?.trim() === key)} />
@@ -404,6 +407,7 @@ export function TeamMapPage() {
           onClose={() => setContextEditor(null)}
         />
       )}
+      {foldersEditor && <SectionFoldersDialog key={foldersEditor.section} {...foldersEditor} onClose={() => setFoldersEditor(null)} />}
       {teamEditor && <TeamDialog {...teamEditor} onClose={() => setTeamEditor(null)} />}
       {memoryEditor && <TeamMemoryDialog key={memoryEditor.section} {...memoryEditor} onClose={() => setMemoryEditor(null)} />}
       <ConfirmDialog open={pendingMove !== null} tone="neutral" title={t("canvas.moveConfirmTitle", { name: pendingMove?.bot.name ?? t("canvas.bot"), team: pendingMove?.destination || t("settings.section.general") })}

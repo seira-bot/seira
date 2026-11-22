@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { resolveSurface } from "./surface.ts";
 import { retireBoatFromBots, retireBoatFromBotsAtBoot, retireBoatFromFiles } from "./boat-retirement.ts";
 
 let dir: string;
@@ -98,6 +99,32 @@ describe("bots and thread pins", () => {
     const bots = [{ id: "a", computer: "cloud", cloudBackend: "box", vpsAlias: "my-vps", tasks: [{ threadId: "t", surface: "cloud", surfaceSource: "auto" }] }];
     expect(retireBoatFromBots(bots, null)).toEqual({ bots: 1, pins: 0 });
     expect(bots[0]!.tasks).toEqual([{ threadId: "t", surface: "cloud", surfaceSource: "auto" }]);
+  });
+
+  it("never raises a bot that is Off to Cloud: its saved pin is ignored, and a Cloud pin on a Boat backend is cleaned like any other", () => {
+    const pins = () => [
+      { threadId: "auto", surface: "cloud", surfaceSource: "auto" },
+      { threadId: "chosen", surface: "cloud", surfaceSource: "user" },
+      { threadId: "vm", surface: "vm", surfaceSource: "user" },
+    ];
+    // No VPS: the bot stays Off and loses only the Boat backend; the automatic pin goes, the chosen ones stay but are never used.
+    const bare = [{ id: "a", computer: "off", cloudBackend: "box", tasks: pins() }];
+    expect(retireBoatFromBots(bare, null)).toEqual({ bots: 1, pins: 1 });
+    expect(bare[0]).toEqual({ id: "a", computer: "off", tasks: [{ threadId: "auto" }, pins()[1], pins()[2]] });
+    // A VPS exists: the backend moves to it, the bot is still Off and the pins are left as they are.
+    const withVps = [{ id: "b", computer: "off", cloudBackend: "box", vpsAlias: "my-vps", tasks: pins() }];
+    expect(retireBoatFromBots(withVps, null)).toEqual({ bots: 1, pins: 0 });
+    expect(withVps[0]).toMatchObject({ computer: "off", cloudBackend: "vps", tasks: pins() });
+    // Whatever pin is left, an Off bot gets no computer and no browser.
+    for (const bot of [bare[0]!, withVps[0]!]) {
+      for (const task of bot.tasks as Array<{ surface?: "cloud" | "vm" }>) {
+        expect(resolveSurface({ destination: "off", pinnedSurface: task.surface, browserOn: true })).toMatchObject({ computer: "off", browser: false, pinned: null });
+      }
+    }
+    // The second run changes nothing.
+    const once = structuredClone([...bare, ...withVps]);
+    expect(retireBoatFromBots([...bare, ...withVps], null)).toEqual({ bots: 0, pins: 0 });
+    expect([...bare, ...withVps]).toEqual(once);
   });
 
   it("changes nothing the second time", () => {
@@ -230,9 +257,21 @@ describe("routines, webhooks and app automations", () => {
     expect(routines.runs[0].error).toMatch(/Choose where the bot works/);
     expect(read("webhooks.json").webhooks.map((hook: { enabled: boolean }) => hook.enabled)).toEqual([false, false, false]);
     expect(read("app-triggers.json").triggers.map((trigger: { enabled: boolean }) => trigger.enabled)).toEqual([false, false]);
+    // Each one is marked, so Run now and Test refuse until the person picks a place again.
+    expect(routines.routines.map((row: { placeLost?: boolean }) => row.placeLost)).toEqual(Array(5).fill(true));
+    expect(read("webhooks.json").webhooks.map((hook: { placeLost?: boolean }) => hook.placeLost)).toEqual([true, true, true]);
+    expect(read("app-triggers.json").triggers.map((trigger: { placeLost?: boolean }) => trigger.placeLost)).toEqual([true, true]);
     const again = [bytes("routines.json"), bytes("webhooks.json"), bytes("app-triggers.json")];
     retireBoatFromFiles(dir, log);
     expect([bytes("routines.json"), bytes("webhooks.json"), bytes("app-triggers.json")]).toEqual(again);
+  });
+
+  it("marks only what used Cloud: an automation that was already paused on this computer stays as it is", () => {
+    write("routines.json", { routines: [{ id: "old", runOn: "seira", enabled: false, nextRunAt: null }, { id: "cloud", runOn: "cloud", enabled: true, nextRunAt: 9 }], runs: [] });
+    retireBoatFromFiles(dir, log);
+    const [paused, moved] = read("routines.json").routines;
+    expect(paused).toEqual({ id: "old", runOn: "seira", enabled: false, nextRunAt: null });
+    expect(moved).toMatchObject({ runOn: "seira", enabled: false, placeLost: true });
   });
 
   it("does not need the list of bots, and leaves a broken one alone", () => {

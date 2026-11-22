@@ -404,8 +404,26 @@ describe("Codex images with Codex's own ChatGPT sign-in", () => {
     expect(sent.url).toBe(URL_CODEX);
     expect(sent.headers.get("authorization")).toBe(`Bearer ${access}`);
     expect(sent.headers.get("chatgpt-account-id")).toBe("acct-fixture");
-    expect(sent.body).toEqual({ model: "gpt-image-2", prompt: "owl", size: "1536x1024", quality: "auto", output_format: "png", background: "auto", n: 1 });
+    expect(sent.body).toEqual({ model: "gpt-image-2", prompt: "owl\n\nWide 16:9 landscape image.", size: "auto", quality: "auto", output_format: "png", background: "auto", n: 1 });
     expect(renew).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [undefined, "Square 1:1 image."],
+    ["1:1", "Square 1:1 image."],
+    ["16:9", "Wide 16:9 landscape image."],
+    ["9:16", "Tall 9:16 portrait image."],
+  ] as const)("asks Codex for the %s shape in the prompt, because it ignores size", async (aspect, hint) => {
+    sign("token-one");
+    const fetchMock = vi.fn<typeof fetch>(async () => imageResponse());
+    await generateImage(cfg(), { prompt: "owl", aspect }, { fetchImpl: fetchMock });
+    expect(call(fetchMock).body).toMatchObject({ prompt: `owl\n\n${hint}`, size: "auto" });
+  });
+
+  it("does not add a shape sentence for other providers", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => imageResponse());
+    await generateImage({ openai: { key: "k" } }, { prompt: "owl", aspect: "9:16" }, { fetchImpl: fetchMock });
+    expect(call(fetchMock).body).toMatchObject({ prompt: "owl", size: "1024x1536" });
   });
 
   it("never sends a detail level to Codex", async () => {
@@ -475,13 +493,11 @@ describe("Codex images with Codex's own ChatGPT sign-in", () => {
     expect(call(fetchMock).headers.get("authorization")).toBe(`Bearer ${newToken}`);
   });
 
-  it("retries once with size auto when Codex refuses the exact size", async () => {
+  it("does not send the same request again when Codex answers HTTP 400", async () => {
     sign("token-one");
-    const fetchMock = vi.fn<typeof fetch>()
-      .mockResolvedValueOnce(new Response("{}", { status: 400 }))
-      .mockResolvedValueOnce(imageResponse());
-    await generateImage(cfg(), { prompt: "owl" }, { fetchImpl: fetchMock });
-    expect([call(fetchMock, 0).body.size, call(fetchMock, 1).body.size]).toEqual(["1024x1024", "auto"]);
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("{}", { status: 400 }));
+    await expect(generateImage(cfg(), { prompt: "owl" }, { fetchImpl: fetchMock })).rejects.toThrow(/HTTP 400/);
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it.each([402, 403, 429])("does not retry size auto after HTTP %i", async (status) => {

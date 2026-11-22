@@ -746,7 +746,7 @@ export function loadConfig(): AppConfig {
   cfg.composio = { ...cfg.composio };
   if (process.env.COMPOSIO_API_KEY !== undefined) cfg.composio.apiKey = process.env.COMPOSIO_API_KEY;
   cfg.box = { ...cfg.box };
-  if (process.env.BOX_TOKEN !== undefined) cfg.box.token = process.env.BOX_TOKEN;
+  warnBoatEnvIgnored();
   cfg.opencodeGo = { ...cfg.opencodeGo };
   if (process.env.OPENCODE_API_KEY !== undefined) cfg.opencodeGo.apiKey = process.env.OPENCODE_API_KEY;
   cfg.tts = { ...cfg.tts };
@@ -780,6 +780,16 @@ export function cacheUntilConfigChanges<T>(derive: (config: AppConfig) => T): ()
   };
 }
 
+let boatEnvWarned = false;
+/** Boat is retired: BOX_TOKEN is never read, so it can no longer turn Boat on. Says so once per process. */
+function warnBoatEnvIgnored(): void {
+  if (process.env.BOX_TOKEN === undefined || boatEnvWarned) return;
+  boatEnvWarned = true;
+  console.warn("config: BOX_TOKEN is ignored. Boat has been retired; use a VPS or Local VM for a bot's computer.");
+}
+/** Test hook: forget that the BOX_TOKEN notice was already logged. */
+export function resetBoatEnvWarningForTest(): void { boatEnvWarned = false; }
+
 /** Keeps process.env in step with a saved credential ("" drops the var), because loadConfig() prefers env. */
 export function syncCredentialEnv(patch: Partial<Omit<AppConfig, "threads" | "newBots" | "imageGen">> & { imageGen?: ImageGenCredentialPatch }): void {
   const secrets: Array<[value: string | undefined, name: string]> = [
@@ -795,7 +805,6 @@ export function syncCredentialEnv(patch: Partial<Omit<AppConfig, "threads" | "ne
     [patch.openai?.key, "SEIRA_OPENAI_API_KEY"],
     [patch.openrouter?.key, "SEIRA_OPENROUTER_API_KEY"],
     [patch.composio?.apiKey, "COMPOSIO_API_KEY"],
-    [patch.box?.token, "BOX_TOKEN"],
     [patch.opencodeGo?.apiKey, "OPENCODE_API_KEY"],
     [patch.tts?.key, "SEIRA_TTS_KEY"],
     [patch.tts?.fishKey, "SEIRA_FISH_AUDIO_API_KEY"],

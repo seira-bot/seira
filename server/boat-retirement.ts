@@ -86,7 +86,7 @@ function retireRunOn(file: string, key: "routines" | "webhooks" | "triggers", ru
     if (row.runOn !== "cloud") return;
     row.runOn = "seira";
     counts[counter]++;
-    if (counter === "rows") { row.enabled = false; if ("nextRunAt" in row) row.nextRunAt = null; }
+    if (counter === "rows") { row.enabled = false; row.placeLost = true; if ("nextRunAt" in row) row.nextRunAt = null; }
     else Object.assign(row, { status: "cancelled", error: PAUSED_RUN, finishedAt: Date.now() });
   };
   for (const row of rows(disk[key])) retire(row, "rows");

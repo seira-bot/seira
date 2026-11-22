@@ -189,6 +189,32 @@ describe("bounded scheduled overlap and run health", () => {
     expect(new RoutineManager(h.options).listRoutines()[0].overlap).toBeUndefined();
   });
 
+  it("refuses Run now on an automation moved off a gone cloud computer until a place is chosen, and lets a plain paused one run", async () => {
+    const h = harness(start);
+    const moved = h.manager.create(input());
+    const plain = h.manager.create({ ...input(), name: "Plain" });
+    h.manager.update(plain.id, { enabled: false });
+    const saved = JSON.parse(readFileSync(h.options.file!, "utf8"));
+    Object.assign(saved.routines.find((row: { id: string }) => row.id === moved.id), { enabled: false, nextRunAt: null, placeLost: true });
+    writeFileSync(h.options.file!, JSON.stringify(saved));
+    const reloaded = new RoutineManager(h.options);
+    expect(() => reloaded.runNow(moved.id)).toThrow(expect.objectContaining({ status: 409, message: expect.stringMatching(/Choose where it runs/) }));
+    expect(reloaded.listRuns()).toEqual([]);
+    expect(reloaded.runNow(plain.id)).toMatchObject({ manual: true });
+    // Saving it with a place clears the mark, and so does switching it on by hand.
+    expect(reloaded.update(moved.id, { runOn: "seira" })?.placeLost).toBeUndefined();
+    expect(reloaded.runNow(moved.id)).toMatchObject({ manual: true });
+    const second = h.manager.create({ ...input(), name: "Second" });
+    const again = JSON.parse(readFileSync(h.options.file!, "utf8"));
+    Object.assign(again.routines.find((row: { id: string }) => row.id === second.id), { enabled: false, nextRunAt: null, placeLost: true });
+    writeFileSync(h.options.file!, JSON.stringify(again));
+    const third = new RoutineManager(h.options);
+    expect(third.update(second.id, { name: "Renamed" })?.placeLost).toBe(true);
+    expect(() => third.runNow(second.id)).toThrow(/gone/);
+    expect(third.update(second.id, { enabled: true })?.placeLost).toBeUndefined();
+    expect(third.runNow(second.id)).toMatchObject({ manual: true });
+  });
+
   it("leaves explicit manual requests independent of the scheduled queue", async () => {
     const h = harness(start);
     const routine = h.manager.create({ ...input(), overlap: "queue" });

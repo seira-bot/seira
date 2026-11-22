@@ -1,4 +1,4 @@
-import { Activity, Archive, ArrowRightLeft, AtSign, Bell, Bot, Bug, Copy, Gauge, Layers, Megaphone, MessagesSquare, Mic, Monitor, Package, Plug, Send, Shuffle, Sparkles, SquareKanban, Tag, Timer, Users, Wand2, Workflow, type LucideIcon } from "lucide-react";
+import { Activity, Archive, ArrowRightLeft, AtSign, Bell, Bot, Bug, CircleCheck, Copy, Gauge, ImagePlus, KeyRound, Layers, Megaphone, MessagesSquare, Mic, Monitor, Package, Pencil, Plug, Send, Server, Shuffle, Sparkles, SquareKanban, Star, Tag, Timer, Users, Wand2, Workflow, type LucideIcon } from "lucide-react";
 import type { LocaleKey } from "@/locales";
 import { RELEASES_URL } from "@/lib/app-links";
 
@@ -9,6 +9,14 @@ export type ReleaseNotesView = { version: string; from: string | null; items: Re
 
 /** Newest first. A version with no entry here shows no popup. */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
+  { version: "0.1.186", items: [
+    { id: "installOwnServer", icon: Server },
+    { id: "codexImages", icon: ImagePlus },
+    { id: "aiSettings", icon: KeyRound },
+    { id: "boardDone", icon: CircleCheck },
+    { id: "appsFeatured", icon: Star },
+    { id: "serverRename", icon: Pencil },
+  ] },
   { version: "0.1.185", items: [
     { id: "teamSuggestion", icon: Users },
     { id: "usageRing", icon: Gauge },
