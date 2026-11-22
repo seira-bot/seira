@@ -51,6 +51,7 @@ const button = (label: string) => [...host.querySelectorAll("button")].find((nod
 const writes = () => fixture.calls.filter((call) => call.init?.method === "PUT").map((call) => call.path);
 
 beforeEach(async () => {
+  vi.stubGlobal("fetch", async () => ({ ok: false, json: async () => null }));
   fixture.calls = [];
   fixture.people = {};
   fixture.members = [];
@@ -62,6 +63,7 @@ beforeEach(async () => {
   await settle();
 });
 afterEach(() => {
+  vi.unstubAllGlobals();
   act(() => root.unmount());
   host.remove();
 });
