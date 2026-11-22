@@ -33,6 +33,9 @@ appxManifestCreated: ./scripts/appx-manifest.mjs
 # (Vite → ui/), and the compiled harness server (tsc → server/), both
 # shipped in Resources and run on Electron's own Node via
 # ELECTRON_RUN_AS_NODE (the agentcal-hq pattern).
+# electron-builder rebuilds the native modules of production dependencies by
+# default. The app ships no node_modules, so that rebuild is never used.
+npmRebuild: false
 files:
   - electron/**
   - "!electron/**/*.test.*"

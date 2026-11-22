@@ -32,6 +32,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Install on my server",
     place: "The ＋ button at the end of the places list, then Connect to a server, then Install on my server (desktop app only)",
     does: "Signs in to a server of the person's own once, installs the app on it and adds it to the places list. The sign-in is used once and never saved. It is different from connecting to a server that already runs the app.",
+    releaseNotes: ["installOwnServer", "serverRename"],
   },
   {
     id: "automations",
@@ -82,6 +83,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     releaseNotes: ["sendSetting", "teamSuggestion"],
   },
   {
+    id: "folder-access",
+    name: "Folder access",
+    place: "a bot's panel, Other folders; Advanced bot settings, Access; the menu of a department on the map, Folders",
+    does: "An admin picks which folders a bot or a whole department may use, each read-only or Can change, and can limit a bot to only those folders. A bot gets its department's folders plus its own.",
+  },
+  {
     id: "handoffs",
     name: "Threads and handoffs",
     place: "Bot threads in the sidebar",
@@ -128,6 +135,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Featured and Popular apps",
     place: "Apps → All apps, the Featured and Popular sections at the top",
     does: "Featured shows the one-click cards of hosted MCP apps. Popular shows up to four apps that the bots here used most in the last 7 days. It appears once a bot has used an app.",
+    releaseNotes: ["appsFeatured"],
   },
   {
     id: "settings",
@@ -141,7 +149,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "AI engines",
     place: "Settings → AI",
     does: "The AIs that bots use, by plan or by key. The person can spread work across several AIs. Each Claude account keeps its own approvals. The Flatpak app finds engines the host installs.",
-    releaseNotes: ["aiPool", "claudeAccounts", "flatpakEngine"],
+    releaseNotes: ["aiPool", "claudeAccounts", "flatpakEngine", "aiSettings"],
   },
   {
     id: "models",
@@ -150,6 +158,12 @@ export const APP_FEATURES: readonly AppFeature[] = [
     does: "A bot runs on one engine and model. A bot can read the model choices and each AI account's usage limits, and can ask to switch its own model. A ring in the sidebar shows how much of the AI plan is left.",
     tools: ["list_models", "propose_model", "usage_limits"],
     releaseNotes: ["usageRing"],
+  },
+  {
+    id: "routing",
+    name: "Routing and extraction",
+    place: "Settings → AI → Routing and extraction",
+    does: "Small, fast models that pick which bot answers in an Auto room and read values out of emails. One provider is picked: Cloudflare Workers AI, TypeSafe Jev, OpenRouter, a custom endpoint, or the Cloud plan's.",
   },
   {
     id: "profile",
@@ -220,6 +234,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "in the chat",
     does: "A bot can make an image, change an existing image from an instruction, or send a spoken voice note.",
     tools: ["generate_image", "edit_image", "send_voice_note"],
+    releaseNotes: ["codexImages"],
   },
   {
     id: "meetings",
@@ -241,7 +256,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "Board in the sidebar, above Automations",
     does: "Shows every piece of work your bots have, in To do, Working, Needs you and Done. Open a card to answer, stop the work, move it to Done or open its conversation, or add a new task.",
     tools: ["board_close"],
-    releaseNotes: ["board"],
+    releaseNotes: ["board", "boardDone"],
   },
   {
     id: "inbox",

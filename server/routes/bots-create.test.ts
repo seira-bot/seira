@@ -87,3 +87,11 @@ describe("where a new bot works", () => {
     expect((await fixture().create({ name: "Cy" })).computer).toBeUndefined();
   });
 });
+
+describe("folder access at creation", () => {
+  it("is never taken from the request: folders are set afterwards, by an admin, on the folder routes", async () => {
+    const folderAccess = { limited: false, folders: [{ path: "/", write: true }] };
+    expect((await fixture().create({ name: "Ada", folderAccess })).folderAccess).toBeUndefined();
+    await expect(fixture().create({ name: "Ada", settings: { folderAccess } })).rejects.toThrow("unsupported bot field: folderAccess");
+  });
+});

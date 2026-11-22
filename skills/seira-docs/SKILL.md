@@ -69,6 +69,7 @@ a hand edit races the next save.
 | Teams, shared departments, incidents | `team-sharing.md`, `team-cloud.md`, `team-incidents.md` |
 | Self-hosting, a VPS, My Cloud | `self-hosting.md`, `deploy-vps.md`, `byo-vps.md`, `cloud-pro.md` |
 | Where a bot's files go, and how to get them out | `files.md`, `bot-box.md` |
+| Which folders a bot or a department may use, read-only or Can change | `folder-access.md` |
 | Browser and computer control | `computer-use-integration.md`, `browser-packaging.md` |
 | Voice, images, meeting notes | `voice-mode.md`, `image-generation.md`, `meeting-notes.md` |
 

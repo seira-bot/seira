@@ -35,6 +35,7 @@ import { SettingsPage } from "./SettingsPage";
 import { panelMemoryNotes, withMemoryNote, withoutMemoryNote, type PanelMemoryNote } from "./memory-notes";
 import type { SimplePageId } from "./page-registry";
 import { BotSwitch, buttonCls, Card, ColRow, ItemRow, LinkRow, NoteRow, RadioRow, RowIcon, rowCls, RowText, SwitchRow, TextRow, TrashButton } from "./rows";
+import { BotFolderAccess } from "./BotFolderAccess";
 import { MemoryUpkeepCards } from "./MemoryUpkeepCards";
 import { useMemoryDoc } from "./use-memory-doc";
 import { useTeamMemoryEntries } from "../conversation-share/conversation-share";
@@ -594,6 +595,7 @@ export function FolderPage({ bot }: PageContext) {
           {error && <NoteRow tone="warn">{error}</NoteRow>}
         </Card>
       )}
+      <BotFolderAccess bot={bot} variant="panel" />
     </>
   );
 }

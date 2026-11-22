@@ -1491,9 +1491,11 @@ computers belong to this machine on every request.
 
   Any decision job added later uses only a key of the person's own (Jev,
   Workers AI or OpenRouter) until the relay accepts it too. For decisions the
-  relay speaks Jev's API only: included decisions are Jev's. An own Jev or
-  Workers AI key comes before them; an OpenRouter key comes after them,
-  whichever provider is selected in **Settings › AI › Routing and extraction**.
+  relay speaks Jev's API only: included decisions are Jev's. The provider
+  picked in **Settings › AI › Routing and extraction** decides first when its
+  key is usable; **Included with your Cloud plan** is one of the choices.
+  Without a usable pick, an own Jev or Workers AI key comes before the
+  included decisions, and an OpenRouter key comes after them.
 - **Included decisions are on until switched off.** While the decision model
   runs on the included token, its master switch counts as on unless the person
   switched it off in **Settings › AI › Routing and extraction**; an explicit off

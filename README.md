@@ -23,6 +23,8 @@ Seira runs on your computer and uses the AI plans that you already have.
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-0E1116?style=flat-square"></a>
   <img alt="Platforms: Windows, Linux, and macOS" src="https://img.shields.io/badge/platform-Windows%20%C2%B7%20Linux%20%C2%B7%20macOS-0E1116?style=flat-square">
   <img alt="Engines: Claude, Codex, Gemini, Grok, and more than 25 others" src="https://img.shields.io/badge/engines-Claude%20%C2%B7%20Codex%20%C2%B7%20Gemini%20%C2%B7%20Grok%20%C2%B7%2025%2B-E11D48?style=flat-square">
+  <a href="https://discord.gg/wAAgETJpFS"><img alt="Join the Seira Discord server" src="https://img.shields.io/badge/Discord-join%20the%20server-5865F2?style=flat-square&logo=discord&logoColor=white"></a>
+  <a href="https://whatsapp.com/channel/0029VbEEDHAAojYjWCQr2c1G"><img alt="Follow the Seira channel on WhatsApp" src="https://img.shields.io/badge/WhatsApp-follow%20the%20channel-25D366?style=flat-square&logo=whatsapp&logoColor=white"></a>
 </p>
 
 <p>
@@ -370,6 +372,8 @@ Yes. <a href="https://play.google.com/store/apps/details?id=bot.seira.companion"
 ## Contributing
 
 Issues and pull requests are welcome.
+Join the [Seira Discord server](https://discord.gg/wAAgETJpFS) to ask questions and meet other users.
+Follow the [Seira channel on WhatsApp](https://whatsapp.com/channel/0029VbEEDHAAojYjWCQr2c1G) for new releases, new features, and tips.
 [CONTRIBUTING.md](CONTRIBUTING.md) explains how a change lands, the [code guide](docs/contributing.md) holds the code rules,
 and [DESIGN.md](DESIGN.md) holds the design rules.
 
