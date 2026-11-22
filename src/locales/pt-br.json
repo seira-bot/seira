@@ -508,7 +508,7 @@
   "releaseNotes.items.sendSetting.title": "Veja como um bot envia por você",
   "releaseNotes.items.sendSetting.body": "Enviar em seu nome, nas configurações do bot, agora mostra a opção que vale, mesmo antes de você salvar uma.",
   "releaseNotes.items.installOwnServer.title": "Instale o Seira no seu próprio servidor",
-  "releaseNotes.items.installOwnServer.body": "No app de desktop, selecione ＋ no fim dos seus lugares, depois Conectar a um servidor e Instalar no meu servidor. Seu servidor não precisa de domínio, e o login nunca é salvo.",
+  "releaseNotes.items.installOwnServer.body": "No app de desktop, selecione o botão + no fim dos seus lugares, depois Conectar a um servidor e Instalar no meu servidor. Seu servidor não precisa de domínio, e o login nunca é salvo.",
   "releaseNotes.items.codexImages.title": "Imagens com o seu plano do ChatGPT",
   "releaseNotes.items.codexImages.body": "Em Configurações, IA, Imagens, escolha Codex (plano do ChatGPT). Seus bots passam a criar imagens com o seu plano pago do ChatGPT, sem chave da OpenAI, no formato que você pede.",
   "releaseNotes.items.aiSettings.title": "Configurações de IA mais claras",
