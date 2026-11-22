@@ -9116,6 +9116,7 @@
   "activity.tool.team.listThreads": "列出对话",
   "activity.tool.team.listTriggerEvents": "列出触发器事件",
   "activity.tool.team.listTriggers": "列出触发器",
+  "activity.tool.team.machineBudget": "内存与处理器",
   "activity.tool.team.manageRoom": "管理房间",
   "activity.tool.team.manageTrigger": "管理触发器",
   "activity.tool.team.mcpServer": "MCP 服务",
