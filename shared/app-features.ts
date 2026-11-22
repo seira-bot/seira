@@ -30,7 +30,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
   {
     id: "install-on-my-server",
     name: "Install on my server",
-    place: "The ＋ button at the end of the places list, then Connect to a server, then Install on my server (desktop app only)",
+    place: "The + button at the end of the places list, then Connect to a server, then Install on my server (desktop app only)",
     does: "Signs in to a server of the person's own once, installs the app on it and adds it to the places list. The sign-in is used once and never saved. It is different from connecting to a server that already runs the app.",
     releaseNotes: ["installOwnServer", "serverRename"],
   },
