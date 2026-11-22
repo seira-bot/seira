@@ -447,9 +447,7 @@ export interface AppConfig extends HelperConfig {
     phone?: "ios" | "android";
   };
   mcpServers?: Record<string, unknown>;
-  language?: string; computerName?: string;
-  /** GB that all bot work may use together; null or absent for Auto. */
-  botMemoryGb?: number | null;
+  language?: string; computerName?: string; botMemoryGb?: number | null;
   xai?: { key?: string; url?: string };
   mistral?: { key?: string };
   cerebras?: { key?: string }; treg?: { key?: string };
