@@ -4060,7 +4060,12 @@
       "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
-      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62",
+      "settings.updates.downloadOnly": "92f938b12e7dfea0911f3c78e1b0d51ffec6fbc6b983a1ea716b37d724e3c72e",
+      "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
+      "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
+      "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
     },
     "es": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -10512,7 +10517,12 @@
       "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
-      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62",
+      "settings.updates.downloadOnly": "92f938b12e7dfea0911f3c78e1b0d51ffec6fbc6b983a1ea716b37d724e3c72e",
+      "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
+      "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
+      "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
     },
     "fr": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -14354,7 +14364,12 @@
       "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
-      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62",
+      "settings.updates.downloadOnly": "92f938b12e7dfea0911f3c78e1b0d51ffec6fbc6b983a1ea716b37d724e3c72e",
+      "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
+      "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
+      "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
     },
     "hi": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -18076,7 +18091,12 @@
       "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
-      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62",
+      "settings.updates.downloadOnly": "92f938b12e7dfea0911f3c78e1b0d51ffec6fbc6b983a1ea716b37d724e3c72e",
+      "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
+      "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
+      "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
     },
     "ja": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -25994,7 +26014,12 @@
       "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
-      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62",
+      "settings.updates.downloadOnly": "92f938b12e7dfea0911f3c78e1b0d51ffec6fbc6b983a1ea716b37d724e3c72e",
+      "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
+      "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
+      "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
     },
     "pt-br": {
       "voice.gemini.keyPlaceholder": "8c87ba2043a4a89d63c90cae8a6dafd5cbd193652e923b97988e381a74773e10",
@@ -37848,7 +37873,26 @@
       "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
       "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62",
       "releaseNotes.items.boatGone.title": "d8cd6767dfeef907932df2451addedeb4f524a60404b377804ee11288bb22723",
-      "releaseNotes.items.boatGone.body": "192bb2070fcecdd724ddc0a3f13359471929c12254fc240ffdd3676c1aec79d0"
+      "releaseNotes.items.boatGone.body": "192bb2070fcecdd724ddc0a3f13359471929c12254fc240ffdd3676c1aec79d0",
+      "releaseNotes.items.windowRecovers.title": "b3fd8a6257ad1487946f80f7869638b279697a25e2f8f31e20b42dfdfc133c86",
+      "releaseNotes.items.windowRecovers.body": "59aae50ec0c9ff53d116419ff6b4f142694a9bb81422b85fc75b478e6919c0ac",
+      "releaseNotes.items.updateCheckHonest.title": "2e5676b8f68f7a83c897f2a7ff005c06e51e5f3fe481f332f74c015dede5cc21",
+      "releaseNotes.items.updateCheckHonest.body": "f4ffed6a3b8eb937dd35c7e72db563ae781bc2f54bb2dbd7bcb8511ee7d0e1bd",
+      "releaseNotes.items.serverSetupGuide.title": "20b8a75c8236e5296fb487437e12a3775a1ef4a1f470513fd11cdc1badebc711",
+      "releaseNotes.items.serverSetupGuide.body": "2a7752b9d0b2a9ae29eef9c3ce1b839931a9d992fa711bb81b5d70dd0331eb41",
+      "cloudAdd.noPlans": "f4bf2ed91bae719b3158e5ff7c4653df5c7cb4a0d4242018d38cb2d6e1954d28",
+      "settings.updates.downloadOnly": "92f938b12e7dfea0911f3c78e1b0d51ffec6fbc6b983a1ea716b37d724e3c72e",
+      "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
+      "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
+      "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
+      "native.rendererRecovery.title": "9c9099c070469335456838f5d247e86cc1cc34c244434d6119c26220db9ea4bd",
+      "native.rendererRecovery.body": "78bc4d3549d3bb0c8a513eadd7276085aa622bcae84e6c2d458a0e582421476b",
+      "native.rendererRecovery.reload": "bdc090ec61e3fcfc65f469951dfe00f3f2ecfc6003c44deac8e05b7237092de6",
+      "native.rendererRecovery.restart": "40f77753dd49a707322dfa950912a4416606e45955ed6a4067b2dc7a2f4cc814",
+      "native.rendererRecovery.tryAgain": "d8b8392e2c542950ca64867168e4ef87d4ad606882d5898f826b51c6d553988f",
+      "native.rendererRecovery.dialog": "977ddf47165a7440b8bcea16fca2781b35a4bb779afe1a63850569fb30feeb06",
+      "chat.notice.engineRootFullAccess": "20fce05e791e8ab0b3605d032236fd424392e62309b7f8c60a3fffb1fa739e87",
+      "serverError.engine.rootFullAccess": "20fce05e791e8ab0b3605d032236fd424392e62309b7f8c60a3fffb1fa739e87"
     },
     "zh": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -47892,7 +47936,12 @@
       "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
-      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62",
+      "settings.updates.downloadOnly": "92f938b12e7dfea0911f3c78e1b0d51ffec6fbc6b983a1ea716b37d724e3c72e",
+      "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
+      "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
+      "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
     },
     "zh-tw": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -58026,7 +58075,12 @@
       "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
-      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62",
+      "settings.updates.downloadOnly": "92f938b12e7dfea0911f3c78e1b0d51ffec6fbc6b983a1ea716b37d724e3c72e",
+      "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
+      "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
+      "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
     },
     "uk": {
       "pro.fromPrice": "d8188d4e671cf89854e625efbc479c60eb5db3af842a34fea84bb9b67ea39bc5",
@@ -62167,7 +62221,12 @@
       "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
-      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62",
+      "settings.updates.downloadOnly": "92f938b12e7dfea0911f3c78e1b0d51ffec6fbc6b983a1ea716b37d724e3c72e",
+      "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
+      "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
+      "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
     },
     "vi": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -68121,7 +68180,12 @@
       "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
-      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62",
+      "settings.updates.downloadOnly": "92f938b12e7dfea0911f3c78e1b0d51ffec6fbc6b983a1ea716b37d724e3c72e",
+      "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
+      "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
+      "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
     },
     "tr": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -74075,7 +74139,12 @@
       "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
-      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62",
+      "settings.updates.downloadOnly": "92f938b12e7dfea0911f3c78e1b0d51ffec6fbc6b983a1ea716b37d724e3c72e",
+      "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
+      "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
+      "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
     },
     "pl": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -81177,7 +81246,12 @@
       "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
-      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62",
+      "settings.updates.downloadOnly": "92f938b12e7dfea0911f3c78e1b0d51ffec6fbc6b983a1ea716b37d724e3c72e",
+      "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
+      "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
+      "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
     },
     "ru": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -88328,7 +88402,12 @@
       "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
-      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62",
+      "settings.updates.downloadOnly": "92f938b12e7dfea0911f3c78e1b0d51ffec6fbc6b983a1ea716b37d724e3c72e",
+      "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
+      "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
+      "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
     },
     "it": {
       "hostedMcp.connect": "90af8c699b876e65cb575aecfa9b4001ab9476dccd259b0b40d0512bf18747d7",
@@ -95297,7 +95376,12 @@
       "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
-      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62",
+      "settings.updates.downloadOnly": "92f938b12e7dfea0911f3c78e1b0d51ffec6fbc6b983a1ea716b37d724e3c72e",
+      "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
+      "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
+      "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
     },
     "ko": {
       "connectedWorkspaces.localTitle": "7d6deafeab011d734c3fdd1bfd6f69544fbb746a004019269bdb48544b01164b",
@@ -102911,7 +102995,12 @@
       "settings.crashReports.title": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.aria": "2b8f06d962939e814958c0add601cce11a87c455d8ec7d0c3dee674276c0d9af",
       "settings.crashReports.subtitle": "5f3285e6a0ccfa84de34476b0186caeb18efb094087c197753fb05bdf2c85971",
-      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62"
+      "settings.crashReports.link": "39402d40305937a451e5775436cd1a219aad7547e8fd902d3b4abecd616cec62",
+      "settings.updates.downloadOnly": "92f938b12e7dfea0911f3c78e1b0d51ffec6fbc6b983a1ea716b37d724e3c72e",
+      "settings.updates.checkFailed": "676963daec640020b8c04302698833708da83cf99683c5be743d701bc20c719c",
+      "settings.updates.notChecked": "36e770e5c8716327c031c4bf785e15035c9d08722aba0937a186d9457ca219b4",
+      "sidebar.update.downloadOnly": "db4831b4cc4f0eb7fa26408ae16bab68e74f4d01ed763973deae44cdb7556717",
+      "serverUpdate.downloadApp": "d6eafe82359100423c93c5ce53c352c1b51ca1e699215fcec3f5c5dd9bf12d24"
     }
   }
 }
