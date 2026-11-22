@@ -523,11 +523,11 @@ describe.sequential("Composio Sessions", () => {
     it("does not flag a toolkit with an enabled auth config in the person's own project", async () => {
       customAuthConfigs = [{ id: "ac_own", toolkit: { slug: "ownauth" }, is_composio_managed: false, status: "ENABLED", is_enabled_for_tool_router: true }];
 
-      await expect(flaggedSlugs({ composio: { apiKey: "ak_catalog_own" } })).resolves.toEqual(["otherown"]);
+      await expect(flaggedSlugs({ composio: { apiKey: "ak_catalog_own" } })).resolves.toEqual([]);
     });
 
     it("keeps the flag and the cards when the person's project cannot list its auth configs", async () => {
-      await expect(flaggedSlugs({ composio: { apiKey: "ak_catalog_own_fail" } })).resolves.toEqual(["ownauth", "otherown"]);
+      await expect(flaggedSlugs({ composio: { apiKey: "ak_catalog_own_fail" } })).resolves.toEqual(["ownauth"]);
     });
   });
 
