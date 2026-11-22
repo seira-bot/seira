@@ -57,7 +57,7 @@ describe("buildCrashReport", () => {
       "Error\n    at e (/home/fakeperson/elsewhere/b.js:2:3)": "323e4567-e89b-12d3-a456-426614174000",
     };
     const ids = buildCrashReport({ kind: "server-exit", error: new Error("x") }, table).debugIds!;
-    expect(Object.keys(ids).sort()).toEqual(["dist-server/drivers/x.js", "ui/assets/a.js"]);
+    expect(Object.keys(ids).sort()).toEqual(["app:///server/drivers/x.js", "app:///ui/assets/a.js"]);
     expect(JSON.stringify(ids)).not.toContain("fakeperson");
   });
 
@@ -68,12 +68,12 @@ describe("buildCrashReport", () => {
     const text = JSON.stringify(report);
     expect(text).not.toContain("fakeperson");
     expect(text).not.toContain("FAKEFAKE");
-    expect(report.stack).toContain("server/index.js:5:5");
+    expect(report.stack).toContain("(app:///server/index.js:5:5)");
   });
 
   it("names the bundle files of the debug-id table", () => {
     const table = { "Error\n    at e (file:///opt/seira/dist-server/index.mjs:2:3)": "123e4567-e89b-12d3-a456-426614174000" };
-    expect(buildCrashReport({ kind: "server-exit", error: new Error("x") }, table).debugIds).toEqual({ "dist-server/index.mjs": "123e4567-e89b-12d3-a456-426614174000" });
+    expect(buildCrashReport({ kind: "server-exit", error: new Error("x") }, table).debugIds).toEqual({ "app:///server/index.mjs": "123e4567-e89b-12d3-a456-426614174000" });
     expect(debugIdsByFile({ "x": "not-an-id" })).toBeUndefined();
     expect(debugIdsByFile(undefined)).toBeUndefined();
   });

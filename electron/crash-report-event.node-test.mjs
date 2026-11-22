@@ -121,6 +121,15 @@ test("the error type comes from an allowlist and the error code only when it has
   }
 });
 
+test("a server frame in app:/// form keeps its file, function and debug id", () => {
+  const id = "123e4567-e89b-12d3-a456-426614174000";
+  const { event } = buildEvent({ kind: "server-turn", process: "server", errorName: "TypeError", message: "x is not a function",
+    stack: "    at run (app:///server/index.js:5:7)\n    at <external>:1:1", debugIds: { "app:///server/index.js": id } }, context());
+  const frames = event.exception.values[0].stacktrace.frames;
+  assert.deepEqual(frames.at(-1), { filename: "app:///server/index.js", lineno: 5, colno: 7, in_app: true, function: "run" });
+  assert.deepEqual(event.debug_meta.images, [{ type: "sourcemap", code_file: "app:///server/index.js", debug_id: id }]);
+});
+
 test("AC-41: the message becomes the value only when it passes the filter", () => {
   assert.equal(buildEvent(mainError({ message: "x is not a function" }), context()).event.exception.values[0].value, "x is not a function");
   assert.equal("value" in buildEvent(mainError({ message: "cannot read /home/canaryuser/a" }), context()).event.exception.values[0], false);
@@ -132,7 +141,8 @@ test("a message is sent only for a built-in engine error type, never for Error, 
   assert.equal(value(mainError({ errorName: "CanaryError", message: "x is not a function" })), undefined);
   assert.equal(value(mainError({ errorName: "TypeError", message: "x is not a function" })), "x is not a function");
   assert.equal(value(mainError({ errorName: "TypeError", message: "hello canaryuser" })), undefined);
-  assert.equal(value(mainError({ errorName: "TypeError", message: "Contact Budi Santoso failed" })), "Contact Budi Santoso failed", "the pattern filter alone cannot tell a name; the type decides");
+  assert.equal(value(mainError({ errorName: "TypeError", message: "Contact Budi Santoso failed" })), undefined, "two capitalized words read as a name");
+  assert.equal(value(mainError({ errorName: "RangeError", message: "Maximum call stack size exceeded" })), "Maximum call stack size exceeded");
   for (const errorName of ["TypeError", "RangeError", "ReferenceError", "SyntaxError", "URIError", "EvalError"]) {
     for (const kind of [["main-error", "main"], ["renderer-error", "renderer"], ["server-turn", "server"], ["server-exit", "server"]]) {
       assert.equal(value({ kind: kind[0], process: kind[1], errorName, message: "bad input", stack: "" }), "bad input", `${errorName} ${kind[0]}`);

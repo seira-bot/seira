@@ -42,6 +42,8 @@ export function filterMessage(message, { username = "", hostname = "" } = {}) {
   if (/\d{6,}/.test(message)) return null;
   if (/[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/.test(message)) return null;
   if (/(["'`])[^"'`]*\1/.test(message)) return null;
+  // Two capitalized words in a row read as a person's or a bot's name; engine messages do not have them.
+  if (/\b[A-Z][a-z]+\s+[A-Z][a-z]+/.test(message)) return null;
   if (contains(message, username) || contains(message, hostname)) return null;
   return message;
 }

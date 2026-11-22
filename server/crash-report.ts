@@ -45,13 +45,16 @@ export const crashEngine = (driverKind: string | undefined): string | undefined 
 const safeToken = (value: unknown, max: number): string | undefined =>
   typeof value === "string" && /^[A-Za-z0-9_.$-]+$/.test(value) ? value.slice(0, max) : undefined;
 
+/** The main process accepts a file of ours only in this form; it makes any other relative name <external>. */
+const appFile = (folder: string, rest: string) => `app:///${folder === "ui" ? "ui" : "server"}/${rest.replaceAll("\\", "/")}`;
+
 /** Keeps each debug id key from its bundle folder onward, so no folder of the person's computer leaves. A key with no bundle folder is dropped. */
 function bundleIds(ids: Record<string, string> | undefined): Record<string, string> | undefined {
   if (!ids) return undefined;
   const kept: Record<string, string> = {};
   for (const [file, id] of Object.entries(ids)) {
     const match = /^.*\/(dist-server|server|ui)\/(.+)$/.exec(file.replaceAll("\\", "/"));
-    if (match) kept[`${match[1]}/${match[2]}`] = id;
+    if (match) kept[appFile(match[1], match[2])] = id;
   }
   return Object.keys(kept).length ? kept : undefined;
 }
@@ -71,7 +74,7 @@ function cleanFrame(line: string): string {
   const redacted = redactSecretsInText(line);
   return redacted.replace(ABSOLUTE_PATH, (path) => {
     const match = BUNDLE_PART.exec(path.replace(/^file:\/\//, ""));
-    return match ? `${match[1]}/${match[2]}` : "<external>";
+    return match ? appFile(match[1], match[2]) : "<external>";
   });
 }
 
