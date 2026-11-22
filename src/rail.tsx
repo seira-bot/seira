@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ChromeRail } from "./components/ChromeRail";
 import { PageBoundary } from "./components/PageBoundary";
+import { installCrashReports, reportPage } from "./lib/crash-reports";
 import { bootstrapBrand } from "./lib/brand";
 import { applyFont, readFont } from "./lib/fonts";
 import { settleInterfaceMode } from "./lib/new-look";
@@ -13,6 +14,8 @@ import "./styles.css";
 // The window's own rail of places (electron/chrome-rail.mjs): see-through but for the rail and its open sheets. Only
 // the desktop's preload gives this app's page a rail; anywhere else this address is the app.
 if (window.ogb?.rail?.expand) {
+  installCrashReports();
+  reportPage("rail");
   settleInterfaceMode();
   applySkinChoice(readSkinChoice());
   applyFont(readFont());
