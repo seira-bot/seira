@@ -92,7 +92,8 @@ export async function runBoxSelfCheck(options: SelfCheckOptions): Promise<SelfCh
   // The key the broker takes over: its own value, so a box that is never brokered (the host's network) is not counted
   // as leaking the canary when the raw key stays.
   const brokerKey = `sk-ant-${randomBytes(12).toString("hex")}`;
-  const canary = spawn("sleep", ["120"], { env: { PATH: process.env.PATH ?? "/usr/bin:/bin", SEIRA_BOX_CANARY: marker }, stdio: "ignore" });
+  const canary = spawn(process.execPath, ["-e", "setTimeout(() => {}, 120_000)"], { env: { ELECTRON_RUN_AS_NODE: "1", SEIRA_BOX_CANARY: marker }, stdio: "ignore" });
+  canary.once("error", () => {});
   const answer = (req: { url?: string; headers: Record<string, string | string[] | undefined> }, res: { writeHead(code: number, headers: Record<string, string>): unknown; end(body: string): void }) => {
     // A model call must arrive with the real key, never the token (so the broker forwarded and swapped it).
     const model = req.url?.startsWith("/v1/");
@@ -150,7 +151,7 @@ export async function runBoxSelfCheck(options: SelfCheckOptions): Promise<SelfCh
   if (credentials && wrapped.token) spec.broker = { port: BOX_BROKER_PORT, token: wrapped.token, provider: "anthropic", path: "/messages", keyNames: ["ANTHROPIC_API_KEY"], marker: brokerKey };
   wrapped.env[PROBE_SPEC_ENV] = JSON.stringify(spec);
   let stdout = "", stderr = "";
-  const results = await new Promise<ProbeResult[] | string>((resolve) => {
+  const probed = await new Promise<ProbeResult[] | string>((resolve) => {
     const child = spawn(wrapped.command, wrapped.args, { env: wrapped.env, stdio: ["ignore", "pipe", "pipe", ...wrapped.extraFds] });
     for (const fd of wrapped.extraFds) try { closeSync(fd); } catch {}
     const timer = setTimeout(() => { child.kill("SIGKILL"); resolve(`the probe did not answer within ${options.timeoutMs ?? 60_000} ms`); }, options.timeoutMs ?? 60_000);
@@ -162,6 +163,7 @@ export async function runBoxSelfCheck(options: SelfCheckOptions): Promise<SelfCh
       try { resolve((JSON.parse(stdout.trim().split("\n").at(-1) ?? "") as { results: ProbeResult[] }).results); } catch { resolve(`the probe exited with ${code}: ${stderr.slice(-400)}`); }
     });
   });
+  const results = canary.pid ? probed : "the canary process did not start";
   canary.kill("SIGKILL");
   wrapped.release();
   await Promise.all([egress.close(), harness.close(), credentials?.close(), new Promise<void>((resolve) => upstream.close(() => resolve())), new Promise<void>((resolve) => privateServer.close(() => resolve()))]);
