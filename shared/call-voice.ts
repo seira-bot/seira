@@ -152,3 +152,8 @@ export interface CallVoicePreviewRequest {
   /** 0.5–2.0; the server clamps it to the provider range. Absent: 1. */
   speed?: number;
 }
+
+/** `callSpeedFor` multiplies a step count by 0.05, which leaves float noise (1.1500000000000001); this trims it to two decimals. */
+export function roundCallSpeed(value: number): number {
+  return Math.round(value * 100) / 100;
+}

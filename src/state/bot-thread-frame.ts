@@ -16,7 +16,7 @@ export function wholeBotFrame(known: Pick<Bot, "tasks"> | undefined, bot: BotAnn
 
 const CLEARED_WHEN_ABSENT = [
   "browserProfile", "computer", "toolScope", "section", "managedSections", "vpsAlias", "phoneApps", "onlyPeopleAdded",
-  "liveVoice", "connectorTools", "connectorScopes", "mcpServers",
+  "liveVoice", "callSpeed", "callLanguage", "connectorTools", "connectorScopes", "mcpServers",
 ] as const satisfies readonly (keyof Bot)[];
 
 /** A complete bot frame leaves out a setting that was cleared, so these come from the frame even when absent. */

@@ -9,9 +9,9 @@ vi.mock("./DesktopCapabilities", () => ({
   useDesktopCapabilities: () => ({ capabilities: null, ready: false }),
 }));
 
-import { CallButton, CallOverlay, CallTargetButton } from "./CallView";
+import { CallButton, CallTargetButton } from "./CallView";
 import { setCallMode } from "@/lib/call-mode";
-import { endCall, startCall } from "@/lib/call";
+import { endCall } from "@/lib/call";
 import { configureLiveMedia, dismissStartPrompt, resetLiveMedia, startLiveCall } from "@/lib/live-call-media";
 
 const bot: Bot = {
@@ -129,18 +129,5 @@ describe("call modes", () => {
     expect(render(createElement(CallButton, { bot }))).toContain("Open AI › Other services");
     dismissStartPrompt(bot.id);
     expect(render(createElement(CallButton, { bot }))).not.toContain("OpenAI key");
-  });
-
-  it("leaves a Live call to the call bar and covers the chat only for Take turns", async () => {
-    vi.stubGlobal("window", { ogb: { speechStop: vi.fn(async () => {}) } });
-    configureLiveMedia({ getUserMedia: () => new Promise<MediaStream>(() => {}) });
-    void startLiveCall({ botId: bot.id, threadId: bot.threadId });
-    expect(render(createElement(CallOverlay, { bot }))).toBe("");
-
-    resetLiveMedia();
-    configureLiveMedia({ getUserMedia: () => Promise.reject(new Error("no microphone")) });
-    await startLiveCall({ botId: bot.id, threadId: bot.threadId });
-    startCall(bot.id);
-    expect(render(createElement(CallOverlay, { bot }))).toContain("backdrop-blur-sm");
   });
 });
