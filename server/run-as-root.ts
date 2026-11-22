@@ -4,6 +4,10 @@ export function runsAsRoot(euid: number | undefined = process.geteuid?.()): bool
   return euid === 0;
 }
 
+export function startsWithAsk(hostedWorkspace: boolean, euid?: number): boolean {
+  return hostedWorkspace || runsAsRoot(euid);
+}
+
 /** Claude Code refuses --dangerously-skip-permissions and bypassPermissions as root or with sudo (2.x). */
 export function claudeRootRefusal(stderr: string): boolean {
   return /\broot\b[^\n]*\bsudo\b|\bsudo\b[^\n]*\broot\b/i.test(stderr);

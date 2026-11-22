@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { claudeRootRefusal, refuseRootFullAccess, ROOT_FULL_ACCESS_TEXT, runsAsRoot } from "./run-as-root.ts";
+import { claudeRootRefusal, refuseRootFullAccess, ROOT_FULL_ACCESS_TEXT, runsAsRoot, startsWithAsk } from "./run-as-root.ts";
 import { userErrorFields } from "./user-errors.ts";
 
 describe("runsAsRoot", () => {
   it.each([[0, true], [1000, false], [undefined, false]])("euid %s gives %s", (euid, expected) => {
     expect(runsAsRoot(euid)).toBe(expected);
+  });
+});
+
+describe("startsWithAsk", () => {
+  it.each([[false, 0, true], [true, 1000, true], [false, 1000, false], [false, undefined, false]] as const)("hosted %s, euid %s gives %s", (hosted, euid, expected) => {
+    expect(startsWithAsk(hosted, euid)).toBe(expected);
   });
 });
 
