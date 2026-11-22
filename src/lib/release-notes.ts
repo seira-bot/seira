@@ -9,6 +9,11 @@ export type ReleaseNotesView = { version: string; from: string | null; items: Re
 
 /** Newest first. A version with no entry here shows no popup. */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
+  { version: "0.1.188", items: [
+    { id: "boatGone", icon: Server },
+    { id: "memoryForBots", icon: Gauge },
+    { id: "crashReports", icon: Bug },
+  ] },
   { version: "0.1.187", items: [
     { id: "callView", icon: Phone },
     { id: "chosenFolders", icon: FolderLock },
