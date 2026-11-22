@@ -31,7 +31,7 @@ const FAILURE_KEY: Record<string, LocaleKey> = {
   upload: "serverInstall.fail.upload", dropped: "serverInstall.fail.dropped", installer: "serverInstall.fail.installer", pairFailed: "serverInstall.fail.pairFailed",
 };
 const CHECK_KEY: Record<string, LocaleKey> = {
-  os: "serverInstall.check.os", cpu: "serverInstall.check.cpu", memory: "serverInstall.check.memory", disk: "serverInstall.check.disk",
+  os: "serverInstall.check.os", arch: "serverInstall.check.arch", cpu: "serverInstall.check.cpu", memory: "serverInstall.check.memory", disk: "serverInstall.check.disk",
   docker: "serverInstall.check.docker", "docker-install": "serverInstall.check.docker-install", outbound: "serverInstall.check.outbound",
   userns: "serverInstall.check.userns", apparmor: "serverInstall.check.apparmor", clock: "serverInstall.check.clock",
   version: "serverInstall.check.version", account: "serverInstall.check.account",
@@ -45,6 +45,11 @@ const shellWord = (word: string) => (/^[\w.@%+=:,/-]+$/.test(word) ? word : `'${
 const own = (map: Record<string, LocaleKey>, id: string) => (Object.hasOwn(map, id) ? map[id] : undefined);
 const checkLabel = (id: string) => t(own(CHECK_KEY, id) ?? "serverInstall.check.unknown");
 const stepLabel = (id: string) => t(own(STEP_KEY, id) ?? "serverInstall.step.unknown");
+const checkRows = (items: { id: string; level: string }[]) => {
+  const rows = new Map<string, "next" | "done">();
+  for (const item of items) rows.set(item.id, item.level === "fix" || rows.get(item.id) === "next" ? "next" : "done");
+  return Array.from(rows, ([id, state]) => ({ key: id, state, title: checkLabel(id) }));
+};
 
 function Details({ sentences }: { sentences: string[] }) {
   if (!sentences.length) return null;
@@ -181,7 +186,7 @@ export function ServerInstallSheet({ onBack, onConnected }: { onBack: (() => voi
     const dockerOnly = fixes.length === 1 && fixes[0]!.id === "docker-install";
     return <div data-server-install="checks" className={frame}>
       <Heading title={t(screen.ok ? "serverInstall.checks.ok" : "serverInstall.checks.fix")} />
-      <Checklist label={t("serverInstall.checks.label")} items={screen.items.map((item, index) => ({ key: `${index}-${item.id}`, state: item.level === "fix" ? "next" : "done", title: checkLabel(item.id) }))} />
+      <Checklist label={t("serverInstall.checks.label")} items={checkRows(screen.items)} />
       <Details sentences={screen.items.map(item => item.sentence).filter((sentence): sentence is string => Boolean(sentence))} />
       {dockerOnly && <label className="flex items-center gap-2 text-[13px] text-ink">
         <input type="checkbox" data-install-docker checked={installDocker} onChange={(event) => setInstallDocker(event.target.checked)} />{t("serverInstall.docker")}

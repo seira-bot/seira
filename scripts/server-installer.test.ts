@@ -807,7 +807,7 @@ describe.skipIf(!posix)("deploy/install.sh --tunnel", () => {
     const lines = eventLines(result.stdout);
     const checks = lines.filter((line) => line.startsWith("::seira check "));
     const ids = new Set(checks.map((line) => line.split(" ")[2]));
-    for (const id of ["os", "cpu", "memory", "disk", "docker", "outbound", "userns", "apparmor", "clock", "version", "account"]) expect(ids.has(id), id).toBe(true);
+    for (const id of ["os", "arch", "cpu", "memory", "disk", "docker", "outbound", "userns", "apparmor", "clock", "version", "account"]) expect(ids.has(id), id).toBe(true);
     for (const id of ["ports", "dns"]) expect(ids.has(id), id).toBe(false);
     for (const line of checks) expect(line).toMatch(/^::seira check [a-z-]+ (ok|fix|note) \S/);
     expect(lines.filter((line) => !line.startsWith("::seira check "))).toEqual([

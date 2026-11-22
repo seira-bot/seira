@@ -1,6 +1,7 @@
 import { effectiveApprovalPolicy, effectiveApprovalsReviewer } from "./codex-approval-config.ts";
 import { containsControlCharacter, plainRecord } from "./codex-app-approval.ts";
 import type { ApprovalMode } from "../../shared/approval-mode.ts";
+import type { TurnFolders } from "../folder-access.ts";
 
 export interface CodexApprovalParams {
   thread: Record<string, unknown>;
@@ -11,7 +12,13 @@ export interface CodexApprovalParams {
 
 /** Codex persists these on its native thread, so they are explicit on start, resume and every turn.
  * Codex has no narrower "edits only" sandbox, so a stray Edits value asks. */
-export function namedApprovalParams(mode: Exclude<ApprovalMode, "custom">): CodexApprovalParams {
+export function namedApprovalParams(mode: Exclude<ApprovalMode, "custom">, folders?: TurnFolders): CodexApprovalParams {
+  if (mode === "full" && folders?.limited) {
+    return {
+      thread: { approvalPolicy: "never", approvalsReviewer: "user", sandbox: "workspace-write" },
+      turn: { approvalPolicy: "never", approvalsReviewer: "user", sandboxPolicy: { type: "workspaceWrite", networkAccess: true } },
+    };
+  }
   if (mode === "full") {
     return {
       thread: {
@@ -51,6 +58,20 @@ export function withResolvedSandbox(params: CodexApprovalParams, session: unknow
     throw new Error("Codex did not apply the requested sandbox mode; cannot safely start the turn.");
   }
   return { ...params, turn: { ...params.turn, sandboxPolicy: sandbox } };
+}
+
+/** Each can-change grant joins the workspace-write roots of the turn. Full access already reaches every folder, and a
+ * read-only grant is never a root: a turn's roots are the only writable place beyond the working folder. A limited
+ * Full turn runs in workspace-write with network access and the working folder as a root. Codex 0.171.0 takes no
+ * read-only subfolder in `sandboxPolicy`, so a read-only grant inside a root stays writable there. */
+export function withFolderGrants(params: CodexApprovalParams, folders: TurnFolders | undefined, cwd?: string): CodexApprovalParams {
+  const policy = plainRecord(params.turn.sandboxPolicy);
+  if (!policy || policy.type !== "workspaceWrite" || !folders) return params;
+  const limitedFull = folders.limited && params.turn.approvalPolicy === "never";
+  const granted = [...(limitedFull && cwd ? [cwd] : []), ...folders.grants.filter((grant) => grant.write).map((grant) => grant.path)];
+  if (granted.length === 0 && !limitedFull) return params;
+  const roots = Array.isArray(policy.writableRoots) ? policy.writableRoots.filter((root): root is string => typeof root === "string") : [];
+  return { ...params, turn: { ...params.turn, sandboxPolicy: { ...policy, ...(limitedFull ? { networkAccess: true } : {}), writableRoots: [...new Set([...roots, ...granted])] } } };
 }
 
 function legacyCustomApprovalParams(config: Record<string, unknown>): CodexApprovalParams {

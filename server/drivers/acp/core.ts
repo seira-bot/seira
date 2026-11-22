@@ -190,8 +190,9 @@ export interface AcpSupport extends AcpDriverHooks {
   shareProcess?: boolean;
   /** Route workspace file access through ACP so edits retain approval cards. */
   clientFileSystem?: boolean;
-  /** Additional server-owned directories this turn may read; writes remain confined to cwd. */
+  /** Directories this turn may read; it writes only in cwd and `clientWriteRoots`. */
   clientReadRoots?(turn: SendTurnInput): readonly string[];
+  clientWriteRoots?(turn: SendTurnInput): readonly string[];
   /** Sent as `clientCapabilities._meta` on initialize, where agents read vendor capabilities. */
   clientCapabilitiesMeta?: Record<string, unknown>;
   /** Made once per process: rewrites a session/update before the turn reads it, or drops it by returning null. */
@@ -213,7 +214,7 @@ export interface AcpSupport extends AcpDriverHooks {
   /** Mutate the child env once the turn model is known; catalog refresh and snapshot see only `transformEnv`. */
   applyTurnEnv?(
     env: Record<string, string | undefined>,
-    ctx: { model?: string; requestedModel?: string; fullAuto: boolean; botId?: string; cwd: string; toolScope?: SendTurnInput["toolScope"]; threadId: string; mcpServers: AcpMcpServer[] },
+    ctx: { model?: string; requestedModel?: string; fullAuto: boolean; botId?: string; cwd: string; folders?: SendTurnInput["folders"]; toolScope?: SendTurnInput["toolScope"]; threadId: string; mcpServers: AcpMcpServer[] },
   ): void;
   /** The authenticate methodId from initialize's authMethods; null skips authenticate. */
   pickAuthMethod(authMethods: Array<{ id?: string }>, env: Record<string, string | undefined>): string | null;
@@ -632,7 +633,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
           try {
             if (!support.clientFileSystem) throw new Error("Client file access is disabled.");
             const params = msg.params ?? {};
-            const path = await resolveAcpClientPath(params.path, cwd, msg.method === "fs/read_text_file" ? support.clientReadRoots?.(current.turn) : undefined);
+            const path = await resolveAcpClientPath(params.path, cwd, (msg.method === "fs/read_text_file" ? support.clientReadRoots : support.clientWriteRoots)?.(current.turn));
             if (msg.method === "fs/read_text_file") {
               const info = await stat(path);
               if (!info.isFile() || info.size > CLIENT_FILE_MAX_BYTES) {
@@ -990,7 +991,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
         const mcpServers = acpMcpServers(turn, { http: loopbackUnproxied(env, support.ownMcpOverHttp === true || acpOwnMcpOverHttp(instanceId, support.mcpServersFromLaunch === true)), engine: support.driverKind,
           toolBudget: mcpToolBudget(learnedToolCountLimit(toolLimitKey), support.engineTools ?? 32) });
         support.applyTurnEnv?.(env, {
-          model: resolvedModel, requestedModel: turn.model, fullAuto: turnConfig.fullAuto === true, botId: turn.botId, cwd, toolScope: turn.toolScope,
+          model: resolvedModel, requestedModel: turn.model, fullAuto: turnConfig.fullAuto === true, botId: turn.botId, cwd, folders: turn.folders, toolScope: turn.toolScope,
           threadId, mcpServers,
         });
         let cliTurn =
