@@ -19,9 +19,9 @@ const NOTES: ReleaseNote[] = [
 ];
 
 describe("release notes data", () => {
-  it("starts with 0.1.188 and its three items in order", () => {
+  it("starts with 0.1.188 and its two items in order", () => {
     expect(RELEASE_NOTES[0]!.version).toBe("0.1.188");
-    expect(RELEASE_NOTES[0]!.items.map(entry => entry.id)).toEqual(["boatGone", "memoryForBots", "crashReports"]);
+    expect(RELEASE_NOTES[0]!.items.map(entry => entry.id)).toEqual(["boatGone", "memoryForBots"]);
   });
   it("keeps 0.1.187 with its six items in order", () => {
     const entry = RELEASE_NOTES.find(note => note.version === "0.1.187")!;
