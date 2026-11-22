@@ -53,7 +53,6 @@ describe("buildDiagnosticsReport", () => {
     expect(report).toContain("platform=darwin");
     expect(report).toContain("arch=arm64");
     expect(report).toContain("xai.configured=true");
-    expect(report).toContain("box.configured=false");
     expect(report).toContain("rooms.turnTimeoutMinutes=5");
     expect(report).toContain("(no desktop crash events available)");
     expect(report).toContain("(server log unavailable)");

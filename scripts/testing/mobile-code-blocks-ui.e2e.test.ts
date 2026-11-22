@@ -119,7 +119,7 @@ async function connect(url: string) {
     await request("Runtime.enable");
     await request("Emulation.setDeviceMetricsOverride", { width: 1100, height: 900, deviceScaleFactor: 1, mobile: false });
     await cdp.request("Browser.grantPermissions", { origin: new URL(preview.previewUrl).origin, permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"] });
-    // The notices (the Boat card and the like) are not this test's subject, and on a phone one covers the last block.
+    // The notices (the setup cards and the like) are not this test's subject, and on a phone one covers the last block.
     await request("Page.addScriptToEvaluateOnNewDocument", { source: `try { for (const notice of ${JSON.stringify(NOTICES)}) localStorage.setItem(notice, "1"); } catch {}` });
     await request("Page.navigate", { url: preview.previewUrl });
     await expect.poll(() => evaluate(`Boolean(document.querySelector('textarea[aria-label="Message Pepper"]'))`), { timeout: 120_000 }).toBe(true);
