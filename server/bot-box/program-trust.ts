@@ -6,7 +6,7 @@
 // a limited box writes never is: its sign-in folders in HOME (except the program folders it has read-only there), the
 // bots' folders and the folders its bots may change.
 import { realpathSync } from "node:fs";
-import { delimiter, isAbsolute, resolve } from "node:path";
+import { delimiter, dirname, isAbsolute, resolve } from "node:path";
 
 import { linksOnTheWay, under } from "./plan.ts";
 
@@ -54,21 +54,19 @@ function limitedBoxWrites(): BoxWrites | null {
 }
 
 function mayRunFrom(path: string, boxWrites: BoxWrites | null): boolean {
-  if (!distrusted && !boxWrites) return true;
-  if (!isAbsolute(path)) return false;
-  const full = resolve(path);
-  if (boxWrites) {
-    const steps = linksOnTheWay(full);
-    if (!steps) return false;
-    const inside = (name: string, dirs: readonly string[]) => dirs.some((dir) => under(name, dir));
-    // Security: the path as given, each link on the way and where it ends, each on its own: a link the box can change
-    // never borrows the trust of the folder it points to.
-    const boxWrote = (name: string) => inside(name, boxWrites.chosen) || (inside(name, boxWrites.always) && !inside(name, boxWrites.kept));
-    if ([full, ...steps].some(boxWrote)) return false;
-  }
-  if (!distrusted) return true;
-  if (distrusted.bots.some((dir) => under(full, dir))) return false;
-  return !distrusted.homes.some((home) => under(full, home)) || distrusted.kept.some((dir) => under(full, dir));
+  const home = distrusted;
+  if (!home && !boxWrites) return true;
+  const steps = linksOnTheWay(path);
+  if (!steps) return false;
+  const named = [resolve(path), steps[steps.length - 1]];
+  const links = steps.slice(0, -1);
+  const inside = (name: string, dirs: readonly string[]) => dirs.some((dir) => under(name, dir));
+  // Security: the path as given, where it ends and each link on the way, each on its own, so that a link a bot can change
+  // never borrows the trust of the folder it points to. A link changes where the folder that holds it is written.
+  const written = (dirs: readonly string[], kept: readonly string[]) =>
+    named.some((name) => inside(name, dirs) && !inside(name, kept)) || links.some((link) => inside(dirname(link), dirs) && !inside(link, kept));
+  if (boxWrites && (written(boxWrites.chosen, []) || written(boxWrites.always, boxWrites.kept))) return false;
+  return !home || !(written(home.bots, []) || written(home.homes, home.kept));
 }
 
 /** Whether the server may run a program from `path` (a folder or a file) outside the box. */

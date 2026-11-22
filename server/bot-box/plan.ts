@@ -199,12 +199,14 @@ function realPathOf(path: string): string {
   try { return realpathSync(path); } catch { return resolve(path); }
 }
 
-/** Every link that resolving `path` passes, by its real name, and last the real path it ends at; null for a link loop.
- * A part that is not there is taken as named. */
+/** Every link that resolving the absolute `path` passes, by its real name, and last the real path it ends at, as the
+ * system resolves it: a `..` after a link goes up from where the link leads. Null for a relative path, a link loop, or
+ * an end that differs from the system's own. A part that is not there is taken as named. */
 export function linksOnTheWay(path: string): string[] | null {
-  const full = resolve(path), steps: string[] = [];
-  const pending = full.split(sep).filter(Boolean);
-  let current = parse(full).root, links = 0;
+  if (!isAbsolute(path)) return null;
+  const steps: string[] = [];
+  const pending = path.split(sep).filter(Boolean);
+  let current = parse(path).root, links = 0;
   while (pending.length > 0) {
     const part = pending.shift()!;
     if (part === ".") continue;
@@ -218,8 +220,10 @@ export function linksOnTheWay(path: string): string[] | null {
     pending.unshift(...target.split(sep).filter(Boolean));
     if (isAbsolute(target)) current = parse(target).root;
   }
-  steps.push(current);
-  return steps;
+  let real: string | null = null;
+  try { real = realpathSync.native(path); } catch {}
+  if (real !== null && real !== current) return null;
+  return [...steps, current];
 }
 
 /** Of HOME, the real path of the entry `name` when it is no link, has none on the way and is apart from the data folder. */

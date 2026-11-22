@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, existsSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { augmentedPath, findCliCandidates, registerPathDir, resetPathCacheForTests } from "../env-path.ts";
@@ -149,6 +149,94 @@ describe("programs a boxed bot could have written", () => {
     expect((await run("seira-chain-grok", env)).error, "every folder on the way is read-only in the box").toBeNull();
     expect(existsSync(marker)).toBe(true);
     rmSync(grok, { recursive: true, force: true });
+  });
+
+  it.skipIf(!posix)("a program in a trusted folder is refused when a link on its way passes a folder the box writes", async () => {
+    const home = homedir();
+    const marker = join(home, "ran-hop");
+    rmSync(marker, { force: true });
+    const grok = join(home, ".grok-hop");
+    const trusted = join(home, "trusted-hop");
+    const real = plant(join(trusted, "real"), "seira-hop-real", marker);
+    const writable = plant(join(grok, "sessions"), "seira-hop-written", marker);
+    mkdirSync(join(trusted, "bin"), { recursive: true });
+    symlinkSync(writable, join(trusted, "bin", "seira-hop-into"));
+    symlinkSync(real, join(grok, "sessions", "hop"));
+    symlinkSync(join(grok, "sessions", "hop"), join(trusted, "bin", "seira-hop-through"));
+    const env = { ...process.env, PATH: [join(trusted, "bin"), "/usr/bin", "/bin"].join(delimiter) };
+    distrustLimitedBoxFolders([grok]);
+
+    expect(serverMayRunFrom(real)).toBe(true);
+    for (const name of ["seira-hop-into", "seira-hop-through"]) {
+      expect(serverMayRunFrom(join(trusted, "bin", name)), name).toBe(false);
+      for (const command of [join(trusted, "bin", name), name]) {
+        expect(((await run(command, env)).error as NodeJS.ErrnoException | null)?.code, command).toBe("EACCES");
+      }
+    }
+    expect(existsSync(marker)).toBe(false);
+    rmSync(grok, { recursive: true, force: true });
+    rmSync(trusted, { recursive: true, force: true });
+  });
+
+  it.skipIf(!posix)("every bot boxed: a program in the data folder is refused when a link on its way passes HOME", async () => {
+    const home = homedir();
+    const dataDir = join(home, ".seira");
+    const marker = join(home, "ran-data-hop");
+    rmSync(marker, { force: true });
+    const appBin = join(dataDir, "tools", "npm", "bin");
+    const real = plant(join(dataDir, "tools", "npm", "lib"), "seira-data-real", marker);
+    mkdirSync(join(home, ".local", "hop"), { recursive: true });
+    mkdirSync(appBin, { recursive: true });
+    const hop = join(home, ".local", "hop", "seira-data-real");
+    rmSync(hop, { force: true });
+    symlinkSync(real, hop);
+    const linked = join(appBin, "seira-data-hop");
+    rmSync(linked, { force: true });
+    symlinkSync(hop, linked);
+    const env = { ...process.env, PATH: [appBin, "/usr/bin", "/bin"].join(delimiter) };
+    distrustHomePrograms(home, [dataDir]);
+
+    expect(serverMayRunFrom(real)).toBe(true);
+    expect(serverMayRunFrom(linked)).toBe(false);
+    for (const command of [linked, "seira-data-hop"]) {
+      expect(((await run(command, env)).error as NodeJS.ErrnoException | null)?.code, command).toBe("EACCES");
+    }
+    expect(existsSync(marker)).toBe(false);
+
+    const homeLink = join(mkdtempSync(join(tmpdir(), "seira-home-link-")), "home");
+    symlinkSync(home, homeLink);
+    distrustHomePrograms(homeLink, [join(homeLink, ".seira")]);
+    expect(serverMayRunFrom(join(homeLink, ".seira", "tools", "npm", "lib", "seira-data-real")), "HOME is a link no bot can change").toBe(true);
+    expect(serverMayRunFrom(join(homeLink, ".local", "hop", "seira-data-real"))).toBe(false);
+    expect(serverMayRunFrom(linked)).toBe(false);
+    rmSync(dirname(homeLink), { recursive: true, force: true });
+  });
+
+  it.skipIf(!posix)("judges a `..` after a link from where the link leads, as the system does", async () => {
+    const home = homedir();
+    const marker = join(home, "ran-dotdot");
+    rmSync(marker, { force: true });
+    const grok = join(home, ".grok-dotdot");
+    const safe = join(home, "safe-dotdot");
+    plant(safe, "seira-dotdot", marker);
+    plant(join(grok, "sessions"), "seira-dotdot", join(home, "ran-dotdot-written"));
+    rmSync(join(home, "ran-dotdot-written"), { force: true });
+    mkdirSync(join(grok, "sessions", "sub"), { recursive: true });
+    symlinkSync(join(grok, "sessions", "sub"), join(safe, "link"));
+    const command = `${safe}/link/../seira-dotdot`;
+    distrustLimitedBoxFolders([grok]);
+
+    expect(serverMayRunFrom(join(safe, "seira-dotdot"))).toBe(true);
+    expect(serverMayRunFrom(command)).toBe(false);
+    expect(((await run(command, process.env)).error as NodeJS.ErrnoException | null)?.code).toBe("EACCES");
+    expect(existsSync(marker) || existsSync(join(home, "ran-dotdot-written"))).toBe(false);
+
+    distrustLimitedBoxFolders(null);
+    expect((await run(command, process.env)).error).toBeNull();
+    expect(existsSync(join(home, "ran-dotdot-written")), "the system runs the one the link leads to").toBe(true);
+    expect(existsSync(marker)).toBe(false);
+    rmSync(grok, { recursive: true, force: true });
+    rmSync(safe, { recursive: true, force: true });
   });
 
   it.skipIf(!posix)("the server's PATH keeps the app's own engines and the system's, never HOME's program folders", () => {

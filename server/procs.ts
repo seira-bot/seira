@@ -12,7 +12,7 @@ import {
 import { createHash } from "node:crypto";
 import { accessSync, closeSync, constants, existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import type { Readable, Writable } from "node:stream";
-import { basename, delimiter, dirname, join, resolve } from "node:path";
+import { basename, delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { botBox, type WrappedSpawn } from "./bot-box/box.ts";
 import type { BoxRequest } from "./bot-box/plan.ts";
 import { programsDistrusted, serverMayRunFrom, serverPath } from "./bot-box/program-trust.ts";
@@ -305,7 +305,8 @@ export function outsideBoxOptions<T extends { env?: NodeJS.ProcessEnv; cwd?: str
   const env = opts.env ?? process.env;
   const path = serverPath(env.PATH);
   // A program found by name is checked as well: the folder can be trusted while a link in it leads to one the bots write.
-  const program = /[/\\]/.test(command) ? resolve(typeof opts.cwd === "string" ? opts.cwd : process.cwd(), command) : onPath(command, path);
+  // As the system resolves it: a `..` after a link in `command` goes up from where the link leads.
+  const program = !/[/\\]/.test(command) ? onPath(command, path) : isAbsolute(command) ? command : `${typeof opts.cwd === "string" ? opts.cwd : process.cwd()}${sep}${command}`;
   if (program && (!serverMayRunFrom(program) || !serverMayRunFrom(realPathOr(program)))) {
     throw Object.assign(new Error(`${command} is in a folder the bots can write, so the server does not run it outside the bot box.`), { code: "EACCES" });
   }
@@ -313,7 +314,7 @@ export function outsideBoxOptions<T extends { env?: NodeJS.ProcessEnv; cwd?: str
 }
 
 function realPathOr(path: string): string {
-  try { return realpathSync(path); } catch { return path; }
+  try { return realpathSync.native(path); } catch { return path; }
 }
 
 /** The file a spawn of `command` by name starts, on `path`. */
