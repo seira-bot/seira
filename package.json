@@ -87,6 +87,7 @@
     "package:arch": "pnpm package:prepare && pnpm build:cua:linux && electron-builder --linux pacman --x64 --publish never",
     "package:linux:offline": "pnpm package:prepare && pnpm build:cua:linux:offline && electron-builder --linux --x64 --publish never",
     "smoke:deb-command": "node scripts/smoke-deb-command.mjs",
+    "smoke:crash-report": "node scripts/smoke-crash-report.mjs",
     "smoke:linux-update": "xvfb-run -a electron --no-sandbox scripts/smoke-linux-update.mjs",
     "smoke:linux-package": "node scripts/run-linux-package-smoke.mjs",
     "smoke:cua-x11-input": "node scripts/smoke-cua-x11-input.mjs",
