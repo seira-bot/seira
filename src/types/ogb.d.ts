@@ -474,6 +474,20 @@ const __APP_VERSION__: string;
       openLogsFolder?(): Promise<{ folder: string; opened: boolean; error?: string }>;
       /** This app's own login item, which opens the window. `available`: false in a build that cannot add one. */
       openAtLogin?: { state(): Promise<{ available: boolean; on: boolean; startupApps?: boolean }>; set(on: boolean): Promise<{ available: boolean; on: boolean; startupApps?: boolean }> };
+      /** Install on my server: the page sends each secret once and keeps none; events carry none. */
+      serverInstall?: {
+        info(): Promise<{ agent: boolean }>;
+        pickKey(): Promise<{ name: string } | null>;
+        forgetHost(): Promise<boolean>;
+        start(request: { address: string; user: string; email: string; method: "password" | "key" | "agent"; password?: string; sudoPassword?: string; passphrase?: string }): Promise<boolean>;
+        acceptHostKey(): Promise<boolean>;
+        rejectHostKey(): Promise<boolean>;
+        check(): Promise<boolean>;
+        install(options: { installDocker: boolean }): Promise<boolean>;
+        sendCode(code: string): Promise<boolean>;
+        cancel(): Promise<boolean>;
+        onEvent(callback: (event: import("./ogb").ServerInstallEvent) => void): () => void;
+      };
       /** Use this computer as an always-on home (this computer's own page only). Absent on an older app. */
       alwaysOnHome?: { state(): Promise<AlwaysOnHomeState>; set(on: boolean): Promise<AlwaysOnHomeState> };
       /** Saved keys this launch could not read (this app's own page only). `reset` asks the person, moves the unreadable
@@ -510,6 +524,18 @@ const __APP_VERSION__: string;
     };
   }
 }
+
+/** What the install flow tells the page (electron/vps-install.mjs): never a secret, never the pairing link. */
+export type ServerInstallEvent =
+  | { type: "phase"; phase: "connecting" | "rights" | "upload" | "checking" | "installing" }
+  | { type: "hostKey"; host: string; port: number; fingerprint: string }
+  | { type: "check"; id: string; level: "ok" | "fix" | "note"; sentence: string }
+  | { type: "checks"; result: "ok" | "fix"; items: { id: string; level: "ok" | "fix" | "note"; sentence: string }[] }
+  | { type: "step"; id: string; state: "start" | "done" | "fail"; sentence: string | null }
+  | { type: "askCode"; email: string; again?: true }
+  | { type: "connected" }
+  | { type: "cancelled" }
+  | { type: "failed"; reason: string; step: string | null; sentence: string | null; source?: "saved" | "system" | "both" };
 
 export interface LinuxLocalControlStatus {
   enabled: boolean;

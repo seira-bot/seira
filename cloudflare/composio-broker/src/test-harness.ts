@@ -107,6 +107,7 @@ export interface FakeSession { id: string; user_id: string; auth_configs?: Recor
 export function fakeComposio() {
   const accounts: FakeAccount[] = [];
   const authConfigs: Array<Record<string, unknown>> = [];
+  const catalogItems: Array<Record<string, unknown>> = [];
   const sessions = new Map<string, FakeSession>();
   const reaches = (session: FakeSession, account: FakeAccount) => {
     if (account.user_id !== session.user_id || !/^active$/i.test(account.status)) return false;
@@ -153,6 +154,7 @@ export function fakeComposio() {
       accounts.splice(index, 1);
       return reply({ status: "success" });
     }
+    if (method === "GET" && path === "/toolkits") return reply({ items: catalogItems, next_cursor: null });
     if (method === "GET" && path === "/auth_configs") return reply({ items: authConfigs, next_cursor: null });
     const sessionPayload = (session: FakeSession) => ({
       session_id: session.id,
@@ -244,6 +246,7 @@ export function fakeComposio() {
   return {
     accounts,
     authConfigs,
+    catalogItems,
     types,
     instances,
     sessions,
