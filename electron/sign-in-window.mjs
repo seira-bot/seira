@@ -73,10 +73,9 @@ export function openCleanSignIn({ BrowserWindow, session, randomId = randomUUID,
   contents.on("will-redirect", (event, url, _inPlace, mainFlag) => {
     if (!isMainFrame(event, mainFlag)) return;
     const target = navigationUrl(event, url);
-    block(event, target);
-    if (event.defaultPrevented) return;
     if (reachedGithub && inHosts(hostOf(inFlight), ["composio.dev"])) finish();
-    track(target);
+    block(event, target);
+    if (!event.defaultPrevented) track(target);
   });
   contents.on("did-start-navigation", (event, url, _inPlace, mainFlag) => {
     if (isMainFrame(event, mainFlag)) track(navigationUrl(event, url));
