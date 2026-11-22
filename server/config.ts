@@ -1,6 +1,7 @@
 // ~/.seira/config.json, with env vars overriding its credentials.
 import { readFileSync, existsSync, renameSync } from "node:fs";
 import { dataHome, ensurePrivateDir } from "./data-dir.ts";
+import { useBotMemorySetting } from "./bot-memory-budget.ts";
 import "../electron/legacy-env-boot.mjs"; import { isHarnessEnvName } from "../electron/legacy-env.mjs"; import { migrateLegacyData } from "../electron/legacy-migrate.mjs"; import { currentEngineEnvironment } from "../electron/legacy-names.mjs";
 import { signInFromEnv } from "./sign-in-env.ts";
 export { signInFromEnv };
@@ -387,6 +388,8 @@ const appConfigSchema = z.object({
   everyBotRules: z.string().max(24_000).optional(), profile: z.object({ name: optionalText, email: optionalText, aboutMe: z.string().max(24_000).optional(), avatarUrl: z.union([z.literal(""), botAvatarUrlSchema]).optional(), look: personLookSchema.optional() }).optional(),
   /** UI language override (BCP-47, lowercase), absent follows the system; what a paired phone calls this computer, "" for the default. */
   language: optionalText, computerName: z.string().trim().max(63).optional(),
+  /** The most memory all bot work on this computer may use together, in GB; null for Auto. */
+  botMemoryGb: z.number().finite().nullable().optional(),
   rooms: roomConfigSchema.optional(),
   mcp: mcpConfigSchema.optional(),
   context: z.object({
@@ -446,7 +449,7 @@ export interface AppConfig extends HelperConfig {
     phone?: "ios" | "android";
   };
   mcpServers?: Record<string, unknown>;
-  language?: string; computerName?: string;
+  language?: string; computerName?: string; botMemoryGb?: number | null;
   xai?: { key?: string; url?: string };
   mistral?: { key?: string };
   cerebras?: { key?: string }; treg?: { key?: string };
@@ -707,6 +710,8 @@ export function ensureDirs() {
 let lastIgnoredConfigWarning = "";
 const storedConfig = settledFileCache(() => join(DATA_DIR, "config.json"), () => parseStoredConfig(parseJson(readFileSync(join(DATA_DIR, "config.json"), "utf8"))));
 
+useBotMemorySetting(() => storedConfig.read().botMemoryGb);
+
 export function loadConfig(): AppConfig {
   let cfg: AppConfig = {};
   try {
@@ -919,6 +924,7 @@ export function saveConfig(
   for (const key of RETIRED_CONFIG_SECTIONS) delete disk[key];
   if (checkedPatch.vps !== undefined) disk.vps = normalizeVpsConfig(checkedPatch.vps);
   for (const key of ["language", "computerName", "everyBotRules"] as const) if (checkedPatch[key] !== undefined) disk[key] = checkedPatch[key];
+  if (checkedPatch.botMemoryGb === null) delete disk.botMemoryGb; else if (checkedPatch.botMemoryGb !== undefined) disk.botMemoryGb = checkedPatch.botMemoryGb;
   if (checkedPatch.customDomain !== undefined) disk.customDomain = checkedPatch.customDomain;
   if (checkedPatch.signIn !== undefined) disk.signIn = checkedPatch.signIn;
   // Replace the section so clearing a backup cannot revive the old selection.

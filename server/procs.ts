@@ -24,6 +24,7 @@ import { engineHomes } from "./engine-homes/engine-homes.ts";
 import type { HomedSpawn } from "./engine-homes/layout.ts";
 import { resolveCliSpawn, type ResolvedSpawn } from "./env-path.ts";
 import { HOST_ENV_FD, hostBridge, hostEnvFile, inFlatpak, type HostSpawn } from "./flatpak-host.ts";
+import { memoryFence } from "./memory-fence.ts";
 import { spawnBotWork } from "./oom-score.ts";
 import { noticeFailure } from "./chat-notices.ts";
 import { processBudget } from "./process-room.ts";
@@ -351,10 +352,14 @@ export function spawnCli(
   const start = () => {
     const envFd = hosted ? hostEnvFile(hosted.envBlock) : null;
     try {
-      return spawn(boxed?.command ?? hosted?.command ?? resolved.command, boxed?.args ?? hosted?.args ?? resolved.args, {
+      const command = boxed?.command ?? hosted?.command ?? resolved.command, argv = boxed?.args ?? hosted?.args ?? resolved.args;
+      const plainEnv = tag ? { ...(boxed?.env ?? spawnOpts.env ?? process.env), [ENGINE_TAG_ENV]: tag } : boxed?.env ?? spawnOpts.env ?? process.env;
+      const fenced = !hosted && (owner === "bot" || botWork) ? memoryFence.argv(command, argv, plainEnv) : null;
+      return spawn(fenced?.command ?? command, fenced?.args ?? argv, {
         ...spawnOpts,
         ...(boxed ? { env: boxed.env, stdio } : {}),
-        ...(tag ? { env: { ...(boxed?.env ?? spawnOpts.env ?? process.env), [ENGINE_TAG_ENV]: tag } } : {}),
+        ...(tag ? { env: plainEnv } : {}),
+        ...(fenced ? { env: fenced.env } : {}),
         ...(hosted && envFd !== null ? { env: hosted.env, cwd: undefined, stdio: hostStdio(spawnOpts.stdio, envFd) } : {}),
         // POSIX: own group so kill(-pid) reaps child MCP servers; Windows: taskkill /T does it.
         ...(process.platform === "win32" ? { windowsHide: true } : { detached: true }),
