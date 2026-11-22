@@ -67,7 +67,7 @@ export function createTtsRoutes(deps: TtsRouteDeps): RouteHandler {
       const cancel = () => { if (!res.writableEnded) controller.abort(); };
       res.on("close", cancel);
       try {
-        const audio = await tts.speak(cfg, text, typeof body.voiceId === "string" ? body.voiceId : undefined, undefined, controller.signal);
+        const audio = await tts.speak(cfg, text, typeof body.voiceId === "string" ? body.voiceId : undefined, undefined, controller.signal, { speed: body.speed, language: body.language });
         if (controller.signal.aborted) return;
         res.writeHead(200, {
           "content-type": audio.mime,

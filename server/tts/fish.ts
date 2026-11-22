@@ -180,6 +180,7 @@ export async function synthesize(
   voiceId: string,
   key: string,
   model: FishTtsModel = DEFAULT_FISH_MODEL,
+  speed?: number,
 ): Promise<Audio> {
   let res: Response;
   try {
@@ -198,6 +199,7 @@ export async function synthesize(
         sample_rate: 44_100,
         mp3_bitrate: 64,
         latency: "normal",
+        ...(speed === undefined ? {} : { prosody: { speed } }),
       }),
       redirect: "error",
       signal: AbortSignal.timeout(60_000),

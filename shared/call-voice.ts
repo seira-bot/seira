@@ -84,6 +84,11 @@ export function callSpeedFor(saved: number | undefined, speed: CallSpeedSupport)
   return Math.round(clamped / CALL_SPEED_STEP) * CALL_SPEED_STEP;
 }
 
+/** `callSpeedFor` without float noise (1.15, not 1.1500000000000001), for a number that goes into a provider request. */
+export function callSpeedWire(saved: number | undefined, speed: CallSpeedSupport): number {
+  return Number(callSpeedFor(saved, speed).toFixed(2));
+}
+
 export interface CallLanguage {
   /** BCP-47 tag. */
   code: string;
