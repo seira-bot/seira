@@ -10,7 +10,7 @@ import {
   type SpawnOptions,
 } from "node:child_process";
 import { createHash } from "node:crypto";
-import { accessSync, closeSync, constants, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { accessSync, closeSync, constants, existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import type { Readable, Writable } from "node:stream";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { botBox, type WrappedSpawn } from "./bot-box/box.ts";
@@ -306,10 +306,14 @@ export function outsideBoxOptions<T extends { env?: NodeJS.ProcessEnv; cwd?: str
   const path = serverPath(env.PATH);
   // A program found by name is checked as well: the folder can be trusted while a link in it leads to one the bots write.
   const program = /[/\\]/.test(command) ? resolve(typeof opts.cwd === "string" ? opts.cwd : process.cwd(), command) : onPath(command, path);
-  if (program && !serverMayRunFrom(program)) {
+  if (program && (!serverMayRunFrom(program) || !serverMayRunFrom(realPathOr(program)))) {
     throw Object.assign(new Error(`${command} is in a folder the bots can write, so the server does not run it outside the bot box.`), { code: "EACCES" });
   }
   return { ...opts, env: { ...env, PATH: path } };
+}
+
+function realPathOr(path: string): string {
+  try { return realpathSync(path); } catch { return path; }
 }
 
 /** The file a spawn of `command` by name starts, on `path`. */

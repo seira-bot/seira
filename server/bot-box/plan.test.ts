@@ -423,7 +423,7 @@ linuxBox("a bot's folder list", () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "seira-limited-")));
     afterAll(() => rmSync(root, { recursive: true, force: true }));
     const fakeHome = join(root, "home"), fakeData = join(fakeHome, ".seira");
-    for (const dir of [".claude", ".codex", ".npm-global/bin", ".local/bin", ".config/git", ".ssh", "Documents", "Downloads"]) mkdirSync(join(fakeHome, dir), { recursive: true });
+    for (const dir of [".claude/local", ".codex", ".npm-global/bin", ".local/bin", ".config/git", ".ssh", "Documents", "Downloads"]) mkdirSync(join(fakeHome, dir), { recursive: true });
     writeFileSync(join(fakeHome, ".claude.json"), "{}");
     writeFileSync(join(fakeHome, ".gitconfig"), "");
     writeFileSync(join(fakeHome, ".bashrc"), "");
@@ -497,7 +497,7 @@ linuxBox("a bot's folder list", () => {
 
     it.skipIf(process.platform === "win32")("binds each folder a chain of links passes read-only, and the whole sign-in folder when one cannot be", () => {
       const home = join(root, "chain"), data = join(home, ".seira");
-      for (const dir of [".grok/bin", ".grok/tmp", ".grok/versions/1.0", ".grok/sessions", ".kimi-code/bin", ".kimi-code/cache", ".claude"]) mkdirSync(join(home, dir), { recursive: true });
+      for (const dir of [".grok/bin", ".grok/tmp", ".grok/versions/1.0", ".grok/sessions", ".kimi-code/bin", ".kimi-code/cache"]) mkdirSync(join(home, dir), { recursive: true });
       writeFileSync(join(home, ".grok/versions/1.0/grok"), "");
       symlinkSync(join("..", "tmp", "link"), join(home, ".grok/bin/grok"));
       symlinkSync(join("..", "versions", "1.0", "grok"), join(home, ".grok/tmp/link"));
