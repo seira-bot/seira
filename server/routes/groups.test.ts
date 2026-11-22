@@ -8,7 +8,7 @@ import { createGroupRoutes } from "./groups.ts";
 import type { RouteContext } from "./table.ts";
 
 const bots = [{ id: "sales", threadId: "t-sales", section: "Sales" }, { id: "fin", threadId: "t-fin", section: "Finance" }];
-const auth = { kind: "session", scopes: ["client"] } as RequestAuth;
+const auth = { kind: "session", scopes: ["client"] } as unknown as RequestAuth;
 
 function fixture(departments: ReadonlySet<string> | null) {
   const createChannel = vi.fn((value: unknown) => ({ id: "g1", threadId: "t-g1", ...(value as object) }) as unknown as GroupRecord);

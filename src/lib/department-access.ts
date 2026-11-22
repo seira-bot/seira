@@ -17,7 +17,7 @@ export async function loadDepartmentChoices(): Promise<DepartmentChoices | null>
     const [access, sections, folders] = await Promise.all([
       api<DepartmentAccessView>("/api/department-access"),
       api<{ sections?: unknown }>("/api/sidebar-sections"),
-      api<{ departments?: Record<string, { limited?: boolean }> }>("/api/department-folders").catch(() => ({ departments: {} })),
+      api<{ departments?: Record<string, { limited?: boolean }> }>("/api/department-folders").catch((): { departments?: Record<string, { limited?: boolean }> } => ({ departments: {} })),
     ]);
     if (!access?.available) return null;
     const departments = Array.isArray(sections?.sections) ? sections.sections.filter((name): name is string => typeof name === "string") : [];

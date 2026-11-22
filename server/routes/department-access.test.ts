@@ -6,8 +6,8 @@ import type { RequestAuth } from "./../request-auth.ts";
 import { createDepartmentAccessRoutes } from "./department-access.ts";
 import { PASS, type RouteContext } from "./table.ts";
 
-const admin = { kind: "loopback", scopes: ["admin", "client"] } as RequestAuth;
-const member = { kind: "session", scopes: ["client"] } as RequestAuth;
+const admin = { kind: "loopback", scopes: ["admin", "client"] } as unknown as RequestAuth;
+const member = { kind: "session", scopes: ["client"] } as unknown as RequestAuth;
 const view: DepartmentAccessView = { available: true, people: { "ada@acme.test": ["Sales"] }, unreadable: false };
 
 function fixture(result: ReturnType<typeof vi.fn> = vi.fn(() => ({ ok: true }))) {
