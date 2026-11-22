@@ -40,9 +40,10 @@ describe("a paired phone changes where one bot works", () => {
     expect(result.status, `${method} ${path}: ${JSON.stringify(result.body)}`).toBeLessThan(400);
     return result.body;
   };
-  const pair = async (scopes: string[], asPhoneApp = false) => {
-    const { code } = await owner("POST", "/api/auth/pairing", { scopes });
-    return (await owner("POST", "/api/auth/pair", { code, ...(asPhoneApp ? { label: "Pixel", attemptId: crypto.randomUUID() } : {}) })).token as string;
+  const pair = async (scopes: string[], how: { phone?: boolean; route?: "/api/auth/pair" | "/api/pair"; attemptId?: boolean } = {}) => {
+    const { code } = await owner("POST", "/api/auth/pairing", { scopes, ...(how.phone ? { device: "phone" } : {}) });
+    if (how.route === "/api/pair") return (await owner("POST", "/api/pair", { code, deviceName: "Device", pairRequestId: crypto.randomUUID() })).token as string;
+    return (await owner("POST", "/api/auth/pair", { code, ...(how.attemptId ? { label: "Device", attemptId: crypto.randomUUID() } : {}) })).token as string;
   };
   const newBot = async (name: string, patch: Record<string, unknown> = {}) => {
     const { bot } = await owner("POST", "/api/bots", { name });
@@ -165,8 +166,8 @@ describe("a paired phone changes where one bot works", () => {
     expect((await stored(id)).computer).toBe("off");
   });
 
-  it("holds a phone app's session to the paired-device limits without the companion header", { timeout: 60_000 }, async () => {
-    const phone = await pair(["admin", "client"], true);
+  it("holds a session from a phone's pairing to the paired-device limits without the companion header", { timeout: 60_000 }, async () => {
+    const phone = await pair(["admin", "client"], { phone: true });
     const id = await newBot("Headerless", { computer: "cloud", vpsAlias: "own-vps" });
     for (const body of [{ name: "Renamed" }, { computer: "local" }, { approvalMode: "full" }]) {
       const refused = await call("PATCH", `/api/bots/${id}`, body, phone, false);
@@ -180,7 +181,31 @@ describe("a paired phone changes where one bot works", () => {
     expect(made.status).toBe(403);
   });
 
-  it("leaves a session the phone apps did not open as it was, with or without the companion header", { timeout: 60_000 }, async () => {
+  it("takes the phone limits from the pairing, whichever route redeems it", { timeout: 60_000 }, async () => {
+    const id = await newBot("Routes");
+    for (const how of [{ route: "/api/pair" }, { route: "/api/auth/pair", attemptId: true }, { route: "/api/auth/pair" }] as const) {
+      const phone = await pair(["admin", "client"], { phone: true, ...how });
+      const refused = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, phone, false);
+      expect(refused.status, JSON.stringify(how)).toBe(403);
+    }
+    const computer = await pair(["admin", "client"], { route: "/api/pair" });
+    const renamed = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, computer, false);
+    expect(renamed.status, `a computer's code on the companion route: ${JSON.stringify(renamed.body)}`).toBe(200);
+    expect((await stored(id)).name).toBe("Renamed");
+  });
+
+  it("passes a phone's limits on to a session from a code the phone opens", { timeout: 60_000 }, async () => {
+    const phone = await pair(["admin", "client"], { phone: true });
+    const opened = await call("POST", "/api/auth/pairing", { scopes: ["admin", "client"] }, phone, false);
+    expect(opened.status, JSON.stringify(opened.body)).toBe(200);
+    const minted = await call("POST", "/api/auth/pair", { code: opened.body.code });
+    expect(minted.status, JSON.stringify(minted.body)).toBe(200);
+    const id = await newBot("Second");
+    const refused = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, minted.body.token, false);
+    expect(refused.status).toBe(403);
+  });
+
+  it("leaves a session from a pairing made for no phone as it was, with or without the companion header", { timeout: 60_000 }, async () => {
     const id = await newBot("Desk", { computer: "cloud", vpsAlias: "own-vps" });
     const narrowed = await call("PATCH", `/api/bots/${id}`, { name: "Renamed" }, adminToken, true);
     expect(narrowed.status).toBe(403);

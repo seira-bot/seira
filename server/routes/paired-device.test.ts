@@ -12,7 +12,7 @@ const local: RequestAuth = { kind: "loopback", scopes: ["admin", "client"] };
 const proven: RequestAuth = { kind: "loopback", scopes: ["admin", "client"], companionDevice: "phone-9" };
 
 describe("fromPairedDevice", () => {
-  it("is true for a phone app's session, a Team Cloud member's phone and a phone the companion proved, with no header", () => {
+  it("is true for a session from a phone's pairing, a Team Cloud member's phone and a phone the companion proved, with no header", () => {
     expect(fromPairedDevice(req(), session({ pairedDevice: true }))).toBe(true);
     expect(fromPairedDevice(req(), session({ membershipAuthority: "team", memberCheckedAt: 1 }))).toBe(true);
     expect(fromPairedDevice(req(), proven)).toBe(true);

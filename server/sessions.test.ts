@@ -24,7 +24,6 @@ import {
   cookieMaxAgeSeconds,
   daysMs,
   isPairedDeviceSession,
-  redeemedByPhoneApp,
 } from "./sessions.ts";
 import { userError } from "./user-errors.ts";
 
@@ -838,7 +837,7 @@ describe("a member's own phone on a Team Cloud", () => {
     expect(registry.memberPhones(), "an ended phone is not listed").toEqual([]);
   });
 
-  it("counts her phone as a paired device without the phone app's mark, and never the app's own sign-in", () => {
+  it("counts her phone as a paired device without the phone mark, and never the app's own sign-in", () => {
     const desktop = fromAdmin();
     const phone = registry.authenticate(phoneOf(desktop).token)!;
     expect(phone.pairedDevice).toBeUndefined();
@@ -848,28 +847,32 @@ describe("a member's own phone on a Team Cloud", () => {
 });
 
 describe("the paired-device mark on a session's pairing record", () => {
-  const redeem = (input: { attemptId?: string; cookie?: boolean; device?: boolean; browser?: boolean }) => {
-    const opened = registry.openPairing({ browser: input.browser });
-    const result = registry.exchange({ code: input.browser ? opened.credential : opened.code, label: "Device", source: "10.0.0.7", ...input });
+  const redeem = (opened: { device?: "phone"; browser?: boolean }, input: { attemptId?: string; browser?: boolean } = {}) => {
+    const pairing = registry.openPairing(opened);
+    const result = registry.exchange({ code: opened.browser ? pairing.credential : pairing.code, label: "Device", source: "10.0.0.7", ...input });
     if (!result.ok) throw new Error(result.error);
     return registry.record(result.session.id)!;
   };
 
-  it("marks a phone app's sign-in: a retry id and no cookie, or the companion apps' route", () => {
-    expect(redeem({ attemptId: "3f2c9a1e-5b7d-4c8e-9f01-23456789abcd" }).pairedDevice).toBe(true);
-    expect(redeem({ device: true }).pairedDevice).toBe(true);
-    expect(redeem({ device: true, attemptId: "pair-request-0001" }).pairedDevice).toBe(true);
+  it("marks every session a phone's pairing opens, with or without a retry id", () => {
+    expect(redeem({ device: "phone" }).pairedDevice).toBe(true);
+    expect(redeem({ device: "phone" }, { attemptId: "3f2c9a1e-5b7d-4c8e-9f01-23456789abcd" }).pairedDevice).toBe(true);
   });
 
-  it("leaves a browser, the CLI and the desktop app's own sign-ins unmarked", () => {
-    expect(redeem({ attemptId: "attempt-web-0001", cookie: true }).pairedDevice).toBeUndefined();
-    expect(redeem({ attemptId: "attempt-web-0002", cookie: true, browser: true }).pairedDevice).toBeUndefined();
-    expect(redeem({}).pairedDevice).toBeUndefined();
-    expect(redeem({ attemptId: "no" }).pairedDevice, "a retry id the server ignores marks nothing").toBeUndefined();
+  it("leaves a session from any other pairing unmarked, with or without a retry id", () => {
+    expect(redeem({}).pairedDevice, "a computer's code").toBeUndefined();
+    expect(redeem({}, { attemptId: "pair-request-0001" }).pairedDevice, "a computer's code with the desktop app's retry id").toBeUndefined();
+    expect(redeem({ browser: true, device: "phone" }, { browser: true }).pairedDevice, "a browser sign-in").toBeUndefined();
+  });
+
+  it("takes the phone mark from the pairing request and nothing else", () => {
+    expect(pairingRequest({ device: "phone", scopes: ["client"] })).toEqual({ scopes: ["client"], device: "phone" });
+    expect(pairingRequest({ device: "computer" })).toEqual({});
+    expect(pairingRequest({ device: true })).toEqual({});
   });
 
   it("keeps the mark when the registry reads its file again, and reads an older record unmarked", () => {
-    const phone = redeem({ attemptId: "attempt-phone-0001" });
+    const phone = redeem({ device: "phone" });
     const desktop = redeem({});
     registry.close();
     const saved = JSON.parse(readFileSync(file(), "utf8"));
@@ -878,12 +881,5 @@ describe("the paired-device mark on a session's pairing record", () => {
     registry = new SessionRegistry({ file: file(), now: () => clock });
     expect(isPairedDeviceSession(registry.record(phone.id)!)).toBe(true);
     expect(isPairedDeviceSession(registry.record(desktop.id)!)).toBe(false);
-  });
-
-  it("tells a phone app's redeem from the others", () => {
-    expect(redeemedByPhoneApp({ attemptId: "attempt-1234" })).toBe(true);
-    expect(redeemedByPhoneApp({ attemptId: null, device: true })).toBe(true);
-    expect(redeemedByPhoneApp({ attemptId: "attempt-1234", cookie: true })).toBe(false);
-    expect(redeemedByPhoneApp({ attemptId: null })).toBe(false);
   });
 });

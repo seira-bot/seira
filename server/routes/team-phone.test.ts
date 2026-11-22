@@ -38,11 +38,11 @@ function call(team: typeof TEAM | null, auth: RequestAuth, path = TEAM_PHONE_PAI
 describe("Open on your phone, on a Team Cloud", () => {
   it("makes a code for the person signed in: their address, their role's scopes, and the Admin's last check of them", async () => {
     const { opened, answer } = await call(TEAM, asSession(session({ memberCheckedAt: 700 })));
-    expect(opened).toEqual([{ scopes: ["client"], label: "Phone", member: { email: "ada@acme.test", role: "member" }, memberCheckedAt: 700 }]);
+    expect(opened).toEqual([{ scopes: ["client"], label: "Phone", member: { email: "ada@acme.test", role: "member" }, memberCheckedAt: 700, device: "phone" }]);
     expect(answer).toMatchObject({ status: 200, body: { code: "ABCD-EFGH-JKLM", url: "https://acme.example/pair#code=ABCD-EFGH-JKLM", serverName: "Acme", team: { id: TEAM.id, name: "Acme", role: "member" } } });
     expect(String(answer!.body.inviteUrl)).toContain("name=Acme");
     const admin = await call(TEAM, asSession(session({ email: "ben@acme.test", teamRole: "admin", scopes: ["admin", "client"] })), "/api/auth/pairing");
-    expect(admin.opened, "an admin's own pairing code carries them too, never a bare admin code").toEqual([{ scopes: ["admin", "client"], label: "Phone", member: { email: "ben@acme.test", role: "admin" }, memberCheckedAt: 1_000 }]);
+    expect(admin.opened, "an admin's own pairing code carries them too, never a bare admin code").toEqual([{ scopes: ["admin", "client"], label: "Phone", member: { email: "ben@acme.test", role: "admin" }, memberCheckedAt: 1_000, device: "phone" }]);
   });
 
   it("answers off a team, and for a session the Admin never signed, exactly as before", async () => {

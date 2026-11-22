@@ -80,7 +80,7 @@ async function pairing(deps: TeamPhoneRouteDeps, { req, res, path, method, auth,
   if (!deps.sessions.isLive(auth.session.id)) return json(res, 401, userError("serverError.team.sessionEnded"));
   const scopes = teamRoleScopes(owner.member.role).filter((scope) => auth.scopes.includes(scope));
   if (!scopes.length) return json(res, 403, userError("serverError.team.signInFirst", { team: team.name }));
-  const opened = deps.sessions.openPairing({ scopes, label: PHONE_LABEL, member: owner.member, memberCheckedAt: owner.checkedAt });
+  const opened = deps.sessions.openPairing({ scopes, label: PHONE_LABEL, member: owner.member, memberCheckedAt: owner.checkedAt, device: "phone" });
   const base = deps.publicBase(req, auth);
   const code = formatPairingCode(opened.code);
   return json(res, 200, {
