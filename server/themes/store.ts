@@ -36,7 +36,6 @@ export type LookHistoryItem = ThemeHistoryItem & { seq: number; look: Look; file
 
 export const slugFor = (name: string) => name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "theme";
 
-/** Security: a file's first bytes must match its extension, so a theme file is only ever the image or font it claims. */
 /** An SVG document starts, after an optional XML declaration, comments and a DOCTYPE, with an `<svg` tag. */
 export function startsLikeSvg(head: string): boolean {
   const text = head.replace(/^\uFEFF/, "").trimStart();
@@ -59,6 +58,7 @@ export function startsLikeSvg(head: string): boolean {
   return lower.startsWith("<svg", at) && /[\s>]/.test(text.charAt(at + 4));
 }
 
+/** Security: a file's first bytes must match its extension, so a theme file is only ever the image or font it claims. */
 function looksLike(name: string, bytes: Buffer): boolean {
   const ext = name.slice(name.lastIndexOf(".") + 1);
   const starts = (...values: number[]) => values.every((value, index) => bytes[index] === value);
