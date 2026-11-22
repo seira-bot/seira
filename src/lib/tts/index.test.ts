@@ -791,7 +791,7 @@ describe("Speaker on a call", () => {
   });
 
   it("sets the device voice rate and language on the utterance", async () => {
-    const utterances: Array<{ rate: number; lang: string }> = [];
+    const utterances: Array<{ rate: number; lang: string; onend: (() => void) | null }> = [];
     class Utterance {
       rate = 1;
       lang = "";
@@ -816,7 +816,7 @@ describe("Speaker on a call", () => {
   });
 
   it("leaves the device language alone for auto", async () => {
-    const utterances: Array<{ rate: number; lang: string }> = [];
+    const utterances: Array<{ rate: number; lang: string; onend: (() => void) | null }> = [];
     class Utterance {
       rate = 1;
       lang = "";
