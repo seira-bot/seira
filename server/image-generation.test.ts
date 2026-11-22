@@ -493,13 +493,11 @@ describe("Codex images with Codex's own ChatGPT sign-in", () => {
     expect(call(fetchMock).headers.get("authorization")).toBe(`Bearer ${newToken}`);
   });
 
-  it("retries once with size auto when Codex refuses the exact size", async () => {
+  it("does not send the same request again when Codex answers HTTP 400", async () => {
     sign("token-one");
-    const fetchMock = vi.fn<typeof fetch>()
-      .mockResolvedValueOnce(new Response("{}", { status: 400 }))
-      .mockResolvedValueOnce(imageResponse());
-    await generateImage(cfg(), { prompt: "owl" }, { fetchImpl: fetchMock });
-    expect([call(fetchMock, 0).body.size, call(fetchMock, 1).body.size]).toEqual(["1024x1024", "auto"]);
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response("{}", { status: 400 }));
+    await expect(generateImage(cfg(), { prompt: "owl" }, { fetchImpl: fetchMock })).rejects.toThrow(/HTTP 400/);
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it.each([402, 403, 429])("does not retry size auto after HTTP %i", async (status) => {

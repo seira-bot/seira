@@ -348,8 +348,8 @@ export async function generateImageWith(
     response = await send(body);
   }
 
-  // Some Custom gateways and the Codex backend accept only size "auto" for some models, so a failed exact size gets one retry with "auto".
-  if (!response.ok && (slot.provider === "custom" || isCodex) && !NOT_STARTED_STATUSES.has(response.status)) {
+  // Some Custom gateways accept only size "auto" for some models, so a failed exact size gets one retry with "auto".
+  if (!response.ok && slot.provider === "custom" && !NOT_STARTED_STATUSES.has(response.status)) {
     await response.body?.cancel().catch(() => undefined);
     // A retry that cannot connect keeps the exact size's error; only cancel and timeout end the call there.
     const retry = await send({ ...body, size: "auto" }).catch((error: unknown) => {
