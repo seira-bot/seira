@@ -550,8 +550,6 @@
   "releaseNotes.items.boatGone.body": "A bot's cloud desktop is now your own server. Bots that used the old cloud desktop now work on your server, or without a computer if you have no server. Routines, webhooks and app automations that ran there are off. Open each one, choose where it runs, and turn it on again.",
   "releaseNotes.items.memoryForBots.title": "Heavy bot work keeps your computer usable",
   "releaseNotes.items.memoryForBots.body": "All bot work on this computer shares one memory limit, so one large task cannot slow down your other apps. To change the limit, open Settings, You and your bots, Limits, Memory for bots.",
-  "releaseNotes.items.crashReports.title": "Crash reports help us fix Seira",
-  "releaseNotes.items.crashReports.body": "When Seira stops working, the desktop app sends the app version, the system type and where the code failed. It never sends messages, files or names. To turn it off, open Settings, General, Privacy.",
   "releaseNotes.items.callView.title": "Calls ring like a phone call",
   "releaseNotes.items.callView.body": "Call a bot from its chat. The call rings, then shows the bot and the call time. Minimize it to keep working in another chat. Call voice sets the speed, voice and language for that bot.",
   "releaseNotes.items.chosenFolders.title": "Choose the folders a bot may use",

@@ -349,7 +349,6 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Send crash reports",
     place: "Settings → General → Privacy (the switch is in the desktop app only)",
     does: "On by default. When Seira stops working, the desktop app sends the app version, system type and where its code failed. Never messages, files or names. It is a different switch from Usage analytics.",
-    releaseNotes: ["crashReports"],
   },
 ];
 
