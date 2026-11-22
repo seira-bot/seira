@@ -32,6 +32,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Install on my server",
     place: "The ＋ button at the end of the places list, then Connect to a server, then Install on my server (desktop app only)",
     does: "Signs in to a server of the person's own once, installs the app on it and adds it to the places list. The sign-in is used once and never saved. It is different from connecting to a server that already runs the app.",
+    releaseNotes: ["installOwnServer", "serverRename"],
   },
   {
     id: "automations",
@@ -128,6 +129,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "Featured and Popular apps",
     place: "Apps → All apps, the Featured and Popular sections at the top",
     does: "Featured shows the one-click cards of hosted MCP apps. Popular shows up to four apps that the bots here used most in the last 7 days. It appears once a bot has used an app.",
+    releaseNotes: ["appsFeatured"],
   },
   {
     id: "settings",
@@ -141,7 +143,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "AI engines",
     place: "Settings → AI",
     does: "The AIs that bots use, by plan or by key. The person can spread work across several AIs. Each Claude account keeps its own approvals. The Flatpak app finds engines the host installs.",
-    releaseNotes: ["aiPool", "claudeAccounts", "flatpakEngine"],
+    releaseNotes: ["aiPool", "claudeAccounts", "flatpakEngine", "aiSettings"],
   },
   {
     id: "models",
@@ -226,6 +228,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "in the chat",
     does: "A bot can make an image, change an existing image from an instruction, or send a spoken voice note.",
     tools: ["generate_image", "edit_image", "send_voice_note"],
+    releaseNotes: ["codexImages"],
   },
   {
     id: "meetings",
@@ -247,7 +250,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "Board in the sidebar, above Automations",
     does: "Shows every piece of work your bots have, in To do, Working, Needs you and Done. Open a card to answer, stop the work, move it to Done or open its conversation, or add a new task.",
     tools: ["board_close"],
-    releaseNotes: ["board"],
+    releaseNotes: ["board", "boardDone"],
   },
   {
     id: "inbox",
