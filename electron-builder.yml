@@ -97,6 +97,9 @@ extraResources:
     to: companion
   - from: skills
     to: skills
+  # The server installer that Install on my server uploads over SSH; its SHA-256 is checked on the server before it runs.
+  - from: deploy/install.sh
+    to: installer/install.sh
   - from: dist-native/android-platform-tools
     to: android-platform-tools
 
