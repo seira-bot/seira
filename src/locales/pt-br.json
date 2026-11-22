@@ -6435,6 +6435,8 @@
   "place.view.ccOnMyCloud.line": "Por enquanto, os desktops na nuvem do seu plano funcionam para os bots do Cloud.",
   "place.view.ccNeedsKey.short": "Conecte a Boat primeiro",
   "place.view.ccNeedsKey.line": "Os bots daqui podem ter seus próprios desktops na nuvem da Boat, um serviço pago.",
+  "place.view.ccNotSetUp.short": "Ainda sem desktop na nuvem",
+  "place.view.ccNotSetUp.line": "{bot} respondeu sem um computador porque nenhum desktop na nuvem está configurado. Conecte seu próprio servidor ou mude onde {bot} trabalha.",
   "place.view.vps.short": "Sua própria máquina",
   "place.view.vps.line": "Usa sua própria máquina Linux, conectada por SSH.",
   "place.view.browser.short": "Só sites",

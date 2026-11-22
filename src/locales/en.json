@@ -6777,6 +6777,8 @@
   "place.view.ccOnMyCloud.line": "Cloud desktops from your plan work for Cloud bots for now.",
   "place.view.ccNeedsKey.short": "Connect Boat first",
   "place.view.ccNeedsKey.line": "Bots here can get their own cloud desktops from Boat, a paid service.",
+  "place.view.ccNotSetUp.short": "No cloud desktop yet",
+  "place.view.ccNotSetUp.line": "{bot} answered without a computer because no cloud desktop is set up. Connect your own server, or change where {bot} works.",
   "place.view.vps.short": "Your own machine",
   "place.view.vps.line": "Uses your own Linux machine, connected over SSH.",
   "place.view.browser.short": "Only websites",

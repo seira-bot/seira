@@ -507,7 +507,7 @@ import { keepTransient, lazyClaimFailedText, lazyClaimRetryText, reclaimAutoVm, 
 import { CONTROL_ACT_WITHIN_MS, CONTROL_BUSY, CONTROL_HANDED_BACK, CONTROL_WAIT_MS, CONTROL_WAITED, controlRefusal, type ControlState } from "./control-client.ts";
 import { computerFreeAfterText, computerParkedText, computerPersonAwayText, computerStoppedWaitingText, computerWaitingText, type ComputerHolder } from "./computer-wait.ts";
 import { modelContextWindow } from "./model-context-window.ts";
-import { browserIsThePlace, chosenPin, cloudPlaceRefusal, computerSelectionPrompt, computerSkippedNote, computerToolsRefusal, handoffUsesOwnCloud, isHandedWork, failedOnHostPath, openBrowserBeside, ownCloudStateWithin, parseSurface, pinSource, PlaceUnavailableError, placeUnavailable, resolveSurface, surfaceLabel, surfaceOfComputerKind, surfacePrompt, thisComputerSwitch, whereWorksControl, type ComputerWant, type PlaceSource, type Surface } from "./surface.ts";
+import { browserIsThePlace, chosenPin, cloudPickWithoutComputer, noticeWithoutCloudComputer, cloudPlaceRefusal, computerSelectionPrompt, computerSkippedNote, computerToolsRefusal, handoffUsesOwnCloud, isHandedWork, failedOnHostPath, openBrowserBeside, ownCloudStateWithin, parseSurface, pinSource, PlaceUnavailableError, placeUnavailable, resolveSurface, surfaceLabel, surfaceOfComputerKind, surfacePrompt, thisComputerSwitch, whereWorksControl, WITHOUT_CLOUD_COMPUTER_NOTE, type ComputerWant, type PlaceSource, type Surface } from "./surface.ts";
 import { cloudRefusal, type PlaceRow } from "../shared/place-view.ts";
 import { cloudFailureOf, cloudLimitFields, cloudLimitText } from "./boat-limit.ts";
 import {
@@ -7917,7 +7917,7 @@ async function beginTurn(
       const handoffMayUseCloud = !computerSkipped && plan.computer === undefined && isHandedWork(opts?.coordination ? coordinator.node(opts.coordination.id) : undefined) && !teamComputer && cloudBackend === "box" && boat.boatConfigured(cfg)
         && canWorkOnCloud(cloudEngine(instance)) && !computerPlaceRefusal("box") && !cloudPlaceRefusal(cloudEngine(instance, bot.modelSelection.model), "works-on", bot.name) && !computerToolsRefusal(toolScope, "works-on", bot.name);
       const ownCloud = handoffMayUseCloud ? await ownCloudStateWithin(boat.boatStatus(cfg, bot.id)) : undefined, handoffOwnCloud = handoffUsesOwnCloud({ plan, handoffWork: Boolean(ownCloud), ownCloudState: ownCloud?.state });
-      let wants: ComputerWant = computerSkipped ? "off" : handoffOwnCloud ? "cloud" : plan.computer;
+      let wants: ComputerWant = computerSkipped ? "off" : handoffOwnCloud ? "cloud" : plan.computer; const withoutCloud = cloudPickWithoutComputer({ wants, backend: cloudBackend, boatConfigured: boat.boatConfigured(cfg), teamComputer: Boolean(teamComputer), routine: opts?.runOn === "cloud", cloudHome: Boolean(CLOUD_HOME) }); if (withoutCloud) { wants = "off"; if (computerSelectionTurns.get(threadId)?.generation === dispatchClaimId) computerSelectionTurns.delete(threadId); }
       const skipComputer = (error: unknown) => {
         if (!answer.incident || error instanceof DirectTurnSetupCancelled || error instanceof ComputerWaitParked) throw error;
         computerSkipped ??= error instanceof Error ? error.message : String(error);
@@ -8315,9 +8315,7 @@ async function beginTurn(
       recordTurnPlace(bot.id, threadId, plan.computer === undefined && mountedComputer === "local" && integrations.browser ? "browser" : mountedComputer ?? (integrations.browser ? "browser" : null));
       // Never overlap a replacement with a cancelled adapter's pre-id window: wait for it, then revalidate this exact claim.
       await pendingCancelledProviderHandshakes.waitForClear(threadId);
-      if (!markDirectTurnDispatching(bot.id, dispatchClaimId, threadId)) {
-        throw new DirectTurnSetupCancelled("turn stopped before dispatch");
-      }
+      if (!markDirectTurnDispatching(bot.id, dispatchClaimId, threadId)) throw new DirectTurnSetupCancelled("turn stopped before dispatch"); if (withoutCloud) noticeWithoutCloudComputer(store, bot.name, threadId, plan.pinned ? pinSource(plan.pinned, dispatchTask, bot.computer) : "works-on");
       const computerPromptKind = resolveComputerPromptKind({
         kind: computerKind,
         vmPrivate: localVmMode(cfg) === "per-bot",
@@ -8342,7 +8340,7 @@ async function beginTurn(
         { id: "shell", label: "Long-running commands", text: worksInWorkspace ? longCommandsPrompt(computerPromptKind) : "" },
         { id: "computer", label: "Computer", text: computerPrompt(computerPromptKind) },
         { id: "team-computer", label: "Team computer", text: teamComputerPrompt(teamComputer) },
-        { id: "plan", label: "Surface", text: surfacePrompt({ computer: mountedComputer, browser: Boolean(integrations.browser) }, { pinned: plan.pinned, note: plan.note + vpsUnavailableNote + vmUpdateNote + (computerSkipped && plan.computer !== "off" ? computerSkippedNote(redactSecretsInText(computerSkipped)) : "") + (computerSelectionTurns.get(threadId)?.handoff && !integrations.browser ? HANDOFF_BROWSER_NOTE : ""), canSelect: computerSelectionTurns.has(threadId) && !computerSelectionTurns.get(threadId)?.handoff, selectionRules: !selectionRulesStable, cloudHome: Boolean(CLOUD_HOME), botOpened: plan.botOpened, ownComputer: CLOUD_HOME && integrations.agents && lendingEnabled() ? sharedComputers.known(CLOUD_HOME_LENDER) : undefined, thisComputer: !CLOUD_HOME && bot.computer !== "off" && !inheritedTeamComputer(bot) && shouldMountLocalComputer({ requested: "local", providerSupportsLocal: instance.adapter.capabilities.localComputerMcp === true }) ? { bot: bot.name, botId: bot.id, platform: process.platform } : undefined }) }, { id: "computer-selection", label: "Choosing a computer", text: selectionRulesStable ? computerSelectionPrompt({ cloudHome: Boolean(CLOUD_HOME) }) : "" },
+        { id: "plan", label: "Surface", text: surfacePrompt({ computer: mountedComputer, browser: Boolean(integrations.browser) }, { pinned: plan.pinned, note: plan.note + (withoutCloud ? WITHOUT_CLOUD_COMPUTER_NOTE : "") + vpsUnavailableNote + vmUpdateNote + (computerSkipped && plan.computer !== "off" ? computerSkippedNote(redactSecretsInText(computerSkipped)) : "") + (computerSelectionTurns.get(threadId)?.handoff && !integrations.browser ? HANDOFF_BROWSER_NOTE : ""), canSelect: computerSelectionTurns.has(threadId) && !computerSelectionTurns.get(threadId)?.handoff, selectionRules: !selectionRulesStable, cloudHome: Boolean(CLOUD_HOME), botOpened: plan.botOpened, ownComputer: CLOUD_HOME && integrations.agents && lendingEnabled() ? sharedComputers.known(CLOUD_HOME_LENDER) : undefined, thisComputer: !CLOUD_HOME && !withoutCloud && bot.computer !== "off" && !inheritedTeamComputer(bot) && shouldMountLocalComputer({ requested: "local", providerSupportsLocal: instance.adapter.capabilities.localComputerMcp === true }) ? { bot: bot.name, botId: bot.id, platform: process.platform } : undefined }) }, { id: "computer-selection", label: "Choosing a computer", text: selectionRulesStable ? computerSelectionPrompt({ cloudHome: Boolean(CLOUD_HOME) }) : "" },
         { id: "cloud-home", label: "My Cloud", text: CLOUD_HOME ? cloudHomePrompt(Boolean(integrations.agents) && lendingEnabled(), syncedFolders(DATA_DIR), sharedComputers.known(CLOUD_HOME_LENDER), CLOUD_PERSONAL) + firstHourHooks.prompt(bot.id, threadId) : "" }, phoneLinkPart(),
         { id: "composio", label: "Connected apps", text: connectedAppsPrompt({ composio: bot.composio, connectorTools: liveBot?.connectorTools ?? bot.connectorTools, connectorScopes: (liveBot ?? bot).connectorScopes }, { engine: instance.adapter.capabilities.composioMcp === true, configured: composio.configured(cfg), mounted: Boolean(integrations.composio) }) },
         { id: "mcp", label: "MCP servers", text: customMcpPrompt(Object.keys(integrations.custom ?? {}), mcpServersHost.off(bot)) }, { id: "to-connect", label: "Connections to make", text: cloudConnections.prompt(liveBot ?? bot, lentMcp.lines(liveBot ?? bot, { botId: bot.id, threadId, generation: dispatchClaimId })) + teamConnections.prompt(threadId, dispatchClaimId, integrations) },
@@ -9905,11 +9903,12 @@ async function runClaimedGroupMemberTurn(
       readyBot.browser !== false &&
       instance.adapter.capabilities.browserMcp === true,
   });
+  const roomWithoutCloud = cloudPickWithoutComputer({ wants: roomPlan.computer, backend: turnProvider(readyBot) === "vps" ? "vps" : "box", boatConfigured: boat.boatConfigured(cfg), teamComputer: Boolean(roomTeamComputer), routine: false, cloudHome: Boolean(CLOUD_HOME) });
   const roomKind = roomTeamComputer ? "box" : roomPlan.computer === "local" ? "thisComputer" : readyBot.computer === "vm" ? "localVm"
     : roomPlan.computer === "cloud" ? (turnProvider(readyBot) === "vps" ? "vps" : "box") : undefined;
-  const roomPlaceRefusal = roomKind && computerPlaceRefusal(roomKind);
+  const roomPlaceRefusal = roomKind && !roomWithoutCloud && computerPlaceRefusal(roomKind);
   if (roomPlaceRefusal) throw Object.assign(new Error(roomPlaceRefusal.message), { code: roomPlaceRefusal.code });
-  if (!roomTeamComputer && roomPlan.computer === "cloud") {
+  if (!roomTeamComputer && !roomWithoutCloud && roomPlan.computer === "cloud") {
     const unsupported = cloudPlaceRefusal(cloudEngine(instance, readyBot.modelSelection.model), "room", readyBot.name)
       ?? computerToolsRefusal(readyBot.toolScope, "room", readyBot.name);
     if (unsupported) throw unsupported;
@@ -9971,7 +9970,7 @@ async function runClaimedGroupMemberTurn(
       if (!roomSetupIsCurrent()) return false;
       roomComputerKind = "local";
     }
-    if (!roomTeamComputer && roomPlan.computer === "cloud") {
+    if (roomWithoutCloud) noticeWithoutCloudComputer(store, readyBot.name, threadId, "room"); else if (!roomTeamComputer && roomPlan.computer === "cloud") {
       if (turnProvider(readyBot) === "vps") {
         vpsThreadStarted(readyBot.id, threadId);
         roomVpsBotId = readyBot.id;
@@ -10123,7 +10122,7 @@ async function runClaimedGroupMemberTurn(
     { id: "mcp", label: "MCP servers", text: customMcpPrompt(Object.keys(integrations.custom ?? {}), mcpServersHost.off(bot)) + teamConnections.prompt(threadId, internalGeneration, integrations) },
     { id: "computer", label: "Computer", text: computerPrompt(roomComputerPromptKind) },
     { id: "team-computer", label: "Team computer", text: teamComputerPrompt(roomTeamComputer) },
-    { id: "plan", label: "Surface", text: surfacePrompt({ computer: roomTeamComputer ? "cloud" : roomVmTarget ? "vm" : surfaceOfComputerKind(roomComputerKind), browser: Boolean(integrations.browser) }, { note: roomPlan.note, cloudHome: Boolean(CLOUD_HOME), ownComputer: CLOUD_HOME && integrations.agents && lendingEnabled() ? sharedComputers.known(CLOUD_HOME_LENDER) : undefined }) },
+    { id: "plan", label: "Surface", text: surfacePrompt({ computer: roomTeamComputer ? "cloud" : roomVmTarget ? "vm" : surfaceOfComputerKind(roomComputerKind), browser: Boolean(integrations.browser) }, { note: roomPlan.note + (roomWithoutCloud ? WITHOUT_CLOUD_COMPUTER_NOTE : ""), cloudHome: Boolean(CLOUD_HOME), ownComputer: CLOUD_HOME && integrations.agents && lendingEnabled() ? sharedComputers.known(CLOUD_HOME_LENDER) : undefined }) },
     { id: "cloud-home", label: "My Cloud", text: CLOUD_HOME ? cloudHomePrompt(Boolean(integrations.agents) && lendingEnabled(), syncedFolders(DATA_DIR), sharedComputers.known(CLOUD_HOME_LENDER), CLOUD_PERSONAL) : "" }, phoneLinkPart(),
     { id: "browser", label: "Browser", text: integrations.browser ? browserPromptFor(bot, Boolean(integrations.agents)) : "" },
     { id: "data", label: "Data", text: integrations.data ? dataPrompt(readyBot.id, threadId, `${roomContext}\n${latestUser?.text ?? ""}`) : "" },

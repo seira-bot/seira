@@ -494,8 +494,8 @@ export interface WireMessage extends ServerTextLine, HelperIntroField, SetupCard
     clipped?: boolean;
     /** Words the harness wrote for what the call did, shown in place of `name`; `name` stays the tool's own. */
     label?: string;
-    /** error rows: the reply came back; only a step the turn ran failed or wasn't allowed. */
-    partial?: boolean;
+    /** error rows: the reply came back (partial), or the turn ran and the row only says what it ran without (notice). */
+    partial?: boolean; notice?: true;
   };
   /** A bot line a "post" webhook wrote: whoever called the webhook chose
    * its words. On a room line this also carries `from`, so the room renders

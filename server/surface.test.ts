@@ -1,15 +1,18 @@
 import { describe, expect, it } from "vitest";
 
+import { placeRowText } from "../shared/place-view.ts";
 import englishCatalog from "../src/locales/en.json" with { type: "json" };
 import {
   browserIsThePlace,
   chosenPin,
+  cloudPickWithoutComputer,
   cloudPlaceRefusal,
   computerSelectionPrompt,
   computerSkippedNote,
   computerToolsRefusal,
   handoffUsesOwnCloud,
   failedOnHostPath,
+  withoutCloudComputerRow,
   isHandedWork,
   namesHostPath,
   openBrowserBeside,
@@ -624,5 +627,31 @@ describe("a vm_exec command that names this computer's own paths", () => {
     expect(failedOnHostPath("ls /Users/ana/Desktop", { exitCode: 124, timedOut: true }, "darwin")).toBe(false);
     expect(failedOnHostPath("ls /nope", failed, "darwin")).toBe(false);
     expect(failedOnHostPath("ls /Users/ana/Desktop", failed, "linux")).toBe(false);
+  });
+});
+
+describe("a Cloud pick with no cloud computer behind it", () => {
+  const base = { wants: "cloud", backend: "box", boatConfigured: false, teamComputer: false, routine: false, cloudHome: false } as const;
+
+  it("goes on without a computer", () => {
+    expect(cloudPickWithoutComputer(base)).toBe(true);
+  });
+
+  it("leaves every other case to its own rule", () => {
+    expect(cloudPickWithoutComputer({ ...base, boatConfigured: true })).toBe(false);
+    expect(cloudPickWithoutComputer({ ...base, backend: "vps" })).toBe(false);
+    expect(cloudPickWithoutComputer({ ...base, teamComputer: true })).toBe(false);
+    expect(cloudPickWithoutComputer({ ...base, routine: true })).toBe(false);
+    expect(cloudPickWithoutComputer({ ...base, cloudHome: true })).toBe(false);
+    for (const wants of ["vm", "local", "off", undefined] as const) {
+      expect(cloudPickWithoutComputer({ ...base, wants })).toBe(false);
+    }
+  });
+
+  it("words its notice without naming a vendor", () => {
+    const row = withoutCloudComputerRow("Scout", "pin");
+    expect(row).toEqual({ state: "cc-not-set-up", params: { bot: "Scout" }, source: "pin" });
+    expect(placeRowText(row)).toMatch(/^Scout answered without a computer.*own server/);
+    expect(placeRowText(row)).not.toMatch(/boat/i);
   });
 });
