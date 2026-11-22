@@ -8542,6 +8542,7 @@
   "activity.tool.team.listThreads": "列出對話",
   "activity.tool.team.listTriggerEvents": "列出自動化事件",
   "activity.tool.team.listTriggers": "列出自動化",
+  "activity.tool.team.machineBudget": "記憶體與處理器",
   "activity.tool.team.manageRoom": "管理房間",
   "activity.tool.team.manageTrigger": "管理自動化",
   "activity.tool.team.mcpServer": "MCP 伺服器",
