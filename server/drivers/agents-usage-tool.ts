@@ -14,3 +14,18 @@ export const USAGE_LIMITS_TOOL_DEFINITION = {
   description: "Each AI account's usage limits: percent used, reset time, when checked. status: ok, unknown (no data now; see why) or unsupported.",
   inputSchema: { type: "object", additionalProperties: false, properties: {} },
 };
+
+// The machine_budget tool: what this computer has free for a heavy job right now. The internal route
+// (server/routes/machine-budget.ts) reads it; the rules for using it ride the system prompt (server/heavy-work-prompt.ts).
+export const MACHINE_BUDGET_TOOL = "machine_budget";
+
+export async function callMachineBudgetTool(context: ToolCallContext): Promise<ToolCallResult> {
+  const { ok, body } = await context.client.apiResponse("/api/internal/machine-budget");
+  return ok ? { text: String(body.text ?? "") } : { text: String(body.error ?? "The computer's free memory could not be read. Run the job with one worker."), isError: true };
+}
+
+export const MACHINE_BUDGET_TOOL_DEFINITION = {
+  name: MACHINE_BUDGET_TOOL,
+  description: "Memory (GB), CPUs and suggested parallel workers free for bots now, memory pressure, and heavy work already running. Call before a test suite, build, docker, ffmpeg, a local model or large data. unknown means not readable.",
+  inputSchema: { type: "object", additionalProperties: false, properties: {} },
+};
