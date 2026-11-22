@@ -15,9 +15,11 @@
 import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 
 import { boxMemory } from "./box-memory.ts";
+import { botMemoryStatusOf, currentBotBudget, machineMemoryBytes, savedBotMemoryGb, type BotMemoryStatus } from "./bot-memory-budget.ts";
 import { noticeFailure } from "./chat-notices.ts";
 import { newEventId, type ProviderAdapter, type ProviderInstance, type RuntimeEvent } from "./contracts.ts";
 import { BROWSER_BYTES, ENGINE_DEFAULT_BYTES } from "./engine-memory.ts";
+import { memoryFence } from "./memory-fence.ts";
 import { attributeRows, type BotTally, type FootprintOwner, type FootprintUnit } from "./perf/bot-footprint.ts";
 import type { ProcessRow } from "./perf/process-buckets.ts";
 import type { GateHost } from "./process-room.ts";
@@ -60,18 +62,23 @@ export interface CapInputs {
 /** "log": watch and write down only (the default); "enforce": act, set by a number in SEIRA_BOT_MEMORY_MAX_MB. */
 export type CapMode = "log" | "enforce";
 /** The memory one engine of a bot may use: a bot with several engines running (several conversations) may use that many. */
-export interface CapSetting { mode: CapMode; bytes: number }
+export interface CapSetting {
+  mode: CapMode; bytes: number;
+  /** The cap covers all of a bot's work together, not one engine, and a bot over it is under pressure: the fallback for a computer without the kernel limit. */
+  whole?: boolean;
+}
 
 /** SEIRA_BOT_MEMORY_MAX_MB: a number of MB to enforce (any Linux host, desktop included: the watchdog reads /proc); "off" or 0 for no watchdog at all;
  * unset or "auto" to only write down where a bot goes over the default, which is computed wherever turns wait for room
  * (never on the desktop): twice one bot's fair share of the memory (the memory over the turns that may run at once), at
  * least an engine at its largest with its browser, at most 80% of the memory. */
-export function botMemoryCap(env: NodeJS.ProcessEnv, inputs: CapInputs, warn: (line: string) => void = () => undefined): CapSetting | null {
+export function botMemoryCap(env: NodeJS.ProcessEnv, inputs: CapInputs, warn: (line: string) => void = () => undefined, wholeBudget: number | null = null): CapSetting | null {
   const raw = env[BOT_MEMORY_ENV]?.trim().toLowerCase();
   if (raw === "off" || raw === "0") return null;
   if (raw && /^\d+$/.test(raw)) return { mode: "enforce", bytes: Math.max(SMALLEST_CAP_BYTES, Number(raw) * MB) };
   if (raw && raw !== "auto") warn(`${BOT_MEMORY_ENV}=${JSON.stringify(env[BOT_MEMORY_ENV])} is not a number of MB, "auto" or "off", so the default (watch only) is used`);
-  if (inputs.gate === null || !(inputs.memoryBytes > 0)) return null;
+  if (wholeBudget !== null) return { mode: "enforce", bytes: wholeBudget, whole: true };
+  if (inputs.gate === null || inputs.gate === "desktop" || !(inputs.memoryBytes > 0)) return null;
   const turns = Math.max(1, inputs.turns ?? Math.floor(inputs.memoryBytes / ENGINE_DEFAULT_BYTES));
   const fair = (FAIR_SHARES * inputs.memoryBytes) / turns;
   return { mode: "log", bytes: Math.round(Math.min(inputs.memoryBytes * CAP_SHARE, Math.max(BOT_CAP_FLOOR_BYTES, fair))) };
@@ -209,7 +216,7 @@ export class BotMemoryWatchdog {
     /** The bot over its cap using the most, due or not: the opt-in cap acts on no other. */
     let largest: { id: string; used: number } | null = null;
     for (const [id, tally] of bots) {
-      const cap = setting.bytes * Math.max(1, tally.engines);
+      const cap = setting.whole ? setting.bytes : setting.bytes * Math.max(1, tally.engines);
       if (tally.rssBytes <= cap) { this.#over.delete(id); continue; }
       // Resident pages count what several processes share once each; their proportional share counts it once. Where a
       // process's share can't be read (another user's, a sandboxed one), its resident pages stand in; they err high, so
@@ -234,7 +241,7 @@ export class BotMemoryWatchdog {
       if (long || critical) due.push({ id, tally, used, estimated, cap, sizes });
     }
     if (!due.length || pressure === null) return [];
-    const pressed = pressure.short || pressure.room < PRESSURE_ROOM;
+    const pressed = pressure.short || pressure.room < PRESSURE_ROOM || setting.whole === true;
     const event = (bot: (typeof due)[number], action: CapEvent["action"]): CapEvent => ({
       at: now, botId: bot.id, usedMB: mb(bot.used), measured: bot.estimated ? "estimated" : "pss", capMB: mb(bot.cap), engines: bot.tally.engines,
       room: Math.round(pressure!.room * 100) / 100, freeMB: pressure!.freeBytes === null ? null : mb(pressure!.freeBytes), pressure: pressed, action,
@@ -423,11 +430,24 @@ export function withBotMemoryCap(instance: ProviderInstance, dog: () => BotMemor
 
 export interface CapReport {
   mb: number | null; mode: CapMode | null; rung: CapRung; offered: CapRung[];
+  protection: BotMemoryStatus["protection"];
+  /** All bots' budget in GB where one limit covers them together (slice or watchdog fallback). */
+  budgetGb: number | null;
   /** Steps the opt-in cap took, and bots written down as over with nothing stopped, since the server started. */
   stops: number; flagged: number;
   events: CapEvent[];
 }
-let report: () => CapReport = () => ({ mb: null, mode: null, rung: "none", offered: [], stops: 0, flagged: 0, events: [] });
+let report: () => CapReport = () => ({ mb: null, mode: null, rung: "none", offered: [], protection: "none", budgetGb: null, stops: 0, flagged: 0, events: [] });
+
+/** The protection in force: the kernel's limit, the watchdog standing in for it, or none. */
+export const botMemoryProtection = (): BotMemoryStatus["protection"] => memoryFence.protection();
+
+/** What Settings shows of the memory limit for bots; undefined where nothing protects bot memory on this computer. */
+export function botMemoryStatus(cfg: { botMemoryGb?: number | null }, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): BotMemoryStatus | undefined {
+  const protection = botMemoryProtection();
+  if (protection === "none" && !(platform === "win32" && env.SEIRA_DESKTOP_PARENT === "1" && currentBotBudget(env) !== null)) return undefined;
+  return botMemoryStatusOf({ savedGb: cfg.botMemoryGb ?? savedBotMemoryGb(), env, totalBytes: machineMemoryBytes(), protection });
+}
 
 /** Starts the server's watchdog where a cap is set and a process list can be read (Linux): the cap is worked out again
  * each look, as the most turns at once may change (a plan's limit arrives after start). */
@@ -438,13 +458,17 @@ export function startBotMemoryCap(deps: {
 }): BotMemoryWatchdog | null {
   const env = deps.env ?? process.env, log = deps.log ?? ((line: string) => console.warn(line));
   let warned = false;
-  const cap = () => botMemoryCap(env, { gate: deps.gate, memoryBytes: deps.memoryBytes ?? boxMemory().bytes, ...(deps.turns() === undefined ? {} : { turns: deps.turns() }) },
-    (line) => { if (!warned) { warned = true; log(`memory: ${line}`); } });
+  const fenced = memoryFence.protection() === "slice";
+  const cap = () => fenced ? null : botMemoryCap(env, { gate: deps.gate, memoryBytes: deps.memoryBytes ?? boxMemory().bytes, ...(deps.turns() === undefined ? {} : { turns: deps.turns() }) },
+    (line) => { if (!warned) { warned = true; log(`memory: ${line}`); } }, memoryFence.protection() === "watchdog" ? currentBotBudget(env)?.bytes ?? null : null);
   const first = cap(), ladder = capLadder(first, { platform: deps.platform ?? process.platform });
   const dog = ladder.rung === "watchdog" ? new BotMemoryWatchdog({ cap, list: deps.list, owners: deps.owners, pressure: deps.pressure, pss: (pid) => pssBytes(pid), closeBrowsers: deps.closeBrowsers, startOf: deps.startOf, log }) : null;
   report = () => {
     const now = dog ? cap() : null;
-    return { mb: now ? mb(now.bytes) : null, mode: now?.mode ?? null, rung: dog ? ladder.rung : "none", offered: ladder.offered, stops: dog?.stops() ?? 0, flagged: dog?.flagged() ?? 0, events: dog?.events() ?? [] };
+    const protection = fenced ? "slice" : dog && now ? "watchdog" : "none";
+    const budget = fenced ? currentBotBudget(env)?.bytes ?? null : now?.whole ? now.bytes : null;
+    return { mb: now ? mb(now.bytes) : null, mode: now?.mode ?? null, rung: dog ? ladder.rung : "none", offered: ladder.offered, protection, budgetGb: budget === null ? null : Math.round((budget / 1024 ** 3) * 10) / 10,
+      stops: dog?.stops() ?? 0, flagged: dog?.flagged() ?? 0, events: dog?.events() ?? [] };
   };
   useBotMemoryWatchdog(dog, deps.botName);
   if (dog && first) {
