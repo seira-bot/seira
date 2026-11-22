@@ -36,12 +36,24 @@ describe("the slice's properties", () => {
 });
 
 describe("finding the system programs", () => {
-  it("looks in PATH first, then in the fixed folders", () => {
-    const has = new Set(["/opt/bin/systemd-run", "/usr/bin/systemctl"]);
+  it("never takes a program from PATH, only from the system folders", () => {
+    const has = new Set(["/home/bot/.local/bin/systemd-run", "/usr/bin/systemd-run", "/usr/bin/systemctl", "/usr/local/bin/env", "/run/current-system/sw/bin/true"]);
     const exists = (path: string) => has.has(path);
-    expect(findProgram("systemd-run", "/opt/bin:/usr/bin", exists)).toBe("/opt/bin/systemd-run");
-    expect(findProgram("systemctl", "/only/node", exists)).toBe("/usr/bin/systemctl");
-    expect(findProgram("env", "/only/node", exists)).toBeNull();
+    expect(findProgram("systemd-run", exists)).toBe("/usr/bin/systemd-run");
+    expect(findProgram("systemctl", exists)).toBe("/usr/bin/systemctl");
+    expect(findProgram("true", exists)).toBe("/run/current-system/sw/bin/true");
+    expect(findProgram("env", exists)).toBeNull();
+  });
+
+  it("does not run a program that a PATH folder holds", () => {
+    const f = fakeDeps({ env: { SEIRA_DESKTOP_PARENT: "1", PATH: "/home/bot/.local/bin:/usr/bin" } });
+    const planted = new Set(["/home/bot/.local/bin/systemd-run", "/home/bot/.local/bin/systemctl", "/home/bot/.local/bin/env", "/home/bot/.local/bin/true"]);
+    const base = f.deps.exists!;
+    f.deps.exists = (path) => planted.has(path) || base(path);
+    const fence = new MemoryFence(f.deps);
+    expect(fence.active()).toBe(true);
+    expect(f.runs.every((run) => run.file.startsWith("/usr/bin/"))).toBe(true);
+    expect(fence.argv("engine", [], {})?.command).toBe("/usr/bin/systemd-run");
   });
 });
 
@@ -69,10 +81,14 @@ describe("the fenced command", () => {
 });
 
 interface Run { file: string; args: readonly string[] }
-function fakeDeps(options: { failures?: (run: Run) => boolean; budget?: () => number | null; env?: NodeJS.ProcessEnv } = {}) {
+const CGROUP_DIR = `/sys/fs/cgroup/user.slice/user-1.slice/user@1.service/app.slice/${SLICE}`;
+
+/** `memoryMax`: what the kernel reports for the slice's limit; the budget by default, null for no file. */
+function fakeDeps(options: { failures?: (run: Run) => boolean; budget?: () => number | null; env?: NodeJS.ProcessEnv; memoryMax?: string | null } = {}) {
   const runs: Run[] = [];
   const logs: string[] = [];
   const files = new Map<string, string>();
+  const clock = { at: 0 };
   const deps: Partial<FenceDeps> = {
     env: options.env ?? { SEIRA_DESKTOP_PARENT: "1", PATH: "/only/node", XDG_RUNTIME_DIR: "/run/user/1" },
     platform: "linux",
@@ -81,7 +97,14 @@ function fakeDeps(options: { failures?: (run: Run) => boolean; budget?: () => nu
     budget: options.budget ?? (() => 5 * GIB),
     slice: () => SLICE,
     log: (line) => logs.push(line),
-    read: (path) => files.get(path) ?? null,
+    now: () => clock.at,
+    read: (path) => {
+      if (path === `${CGROUP_DIR}/memory.max` && !files.has(path)) {
+        if (options.memoryMax === null) return null;
+        return options.memoryMax ?? String(options.budget?.() ?? 5 * GIB);
+      }
+      return files.get(path) ?? null;
+    },
     run: (file, args) => {
       const run = { file, args };
       runs.push(run);
@@ -89,7 +112,7 @@ function fakeDeps(options: { failures?: (run: Run) => boolean; budget?: () => nu
       return { status: 0, stdout: args.includes("ControlGroup") ? "/user.slice/user-1.slice/user@1.service/app.slice/" + SLICE + "\n" : "" };
     },
   };
-  return { deps, runs, logs, files };
+  return { deps, runs, logs, files, clock };
 }
 
 describe("the probe", () => {
@@ -128,6 +151,78 @@ describe("the probe", () => {
     expect(f.logs[0]).not.toMatch(/systemctl|cgroup|\/sys\//);
   });
 
+  it("is unavailable when the kernel reports no memory limit for the slice", () => {
+    for (const memoryMax of [null, "max", "garbage", String(2 * GIB)]) {
+      const f = fakeDeps({ memoryMax });
+      const fence = new MemoryFence(f.deps);
+      expect(fence.active()).toBe(false);
+      expect(fence.protection()).toBe("watchdog");
+      expect(f.logs).toHaveLength(1);
+      expect(f.logs[0]).toContain("memory controller");
+    }
+  });
+
+  it("takes a limit that the kernel rounded to its page size", () => {
+    const f = fakeDeps({ memoryMax: String(5 * GIB - 4096) });
+    expect(new MemoryFence(f.deps).protection()).toBe("slice");
+  });
+
+  it("checks that the user manager answers at most every 10 seconds, and stops the fence when it does not", () => {
+    const f = fakeDeps({ failures: (run) => run.args.includes("Version") || (probeAgain && run.args.includes("set-property")) });
+    let probeAgain = false;
+    const fence = new MemoryFence(f.deps);
+    const checks = () => f.runs.filter((run) => run.args.includes("Version")).length;
+    expect(fence.argv("a", [], {})).not.toBeNull();
+    expect(checks()).toBe(0);
+    f.clock.at = 9_999;
+    expect(fence.argv("b", [], {})).not.toBeNull();
+    expect(checks()).toBe(0);
+    f.clock.at = 10_000;
+    probeAgain = true;
+    expect(fence.argv("c", [], {})).toBeNull();
+    expect(checks()).toBe(1);
+    expect(fence.protection()).toBe("watchdog");
+    expect(f.logs).toHaveLength(1);
+    const runs = f.runs.length;
+    f.clock.at = 60_000;
+    expect(fence.argv("d", [], {})).toBeNull();
+    expect(f.runs).toHaveLength(runs);
+  });
+
+  it("keeps the fence when the user manager answers the check, with a version", () => {
+    const f = fakeDeps();
+    const fence = new MemoryFence({ ...f.deps, run: (file, args) => (args.includes("Version") ? { status: 0, stdout: "257\n" } : f.deps.run!(file, args)) });
+    expect(fence.argv("a", [], {})).not.toBeNull();
+    f.clock.at = 10_000;
+    expect(fence.argv("b", [], {})).not.toBeNull();
+    expect(fence.protection()).toBe("slice");
+  });
+
+  it("probes again after a failed check and goes on when that works", () => {
+    let down = true;
+    const f = fakeDeps();
+    const fence = new MemoryFence({ ...f.deps, run: (file, args) => (args.includes("Version") ? { status: down ? 1 : 0, stdout: down ? "" : "257\n" } : f.deps.run!(file, args)) });
+    expect(fence.argv("a", [], {})).not.toBeNull();
+    f.clock.at = 10_000;
+    down = false;
+    fence.recheck();
+    expect(fence.argv("b", [], {})).not.toBeNull();
+    down = true;
+    f.clock.at = 20_000;
+    expect(fence.argv("c", [], {})).not.toBeNull();
+    expect(f.runs.filter((run) => run.args.includes("set-property"))).toHaveLength(2);
+  });
+
+  it("checks at once after recheck, inside the 10 seconds", () => {
+    const f = fakeDeps({ failures: (run) => run.args.includes("Version") });
+    const fence = new MemoryFence(f.deps);
+    expect(fence.argv("a", [], {})).not.toBeNull();
+    fence.recheck();
+    f.clock.at = 1_000;
+    expect(fence.argv("b", [], {})).not.toBeNull();
+    expect(f.runs.filter((run) => run.args.includes("Version"))).toHaveLength(1);
+  });
+
   it("does nothing where the fence is not wanted", () => {
     const f = fakeDeps({ env: {} });
     const fence = new MemoryFence(f.deps);
@@ -163,6 +258,10 @@ describe("the probe", () => {
     expect(fence.active()).toBe(true);
     expect(fence.sliceKills()).toBe(2);
     expect(fence.sliceCurrent()).toBe(12345);
+    f.files.set(`/sys/fs/cgroup${dir}/memory.stat`, "anon 100\ninactive_file 2345\nactive_file 7\n");
+    expect(fence.sliceCurrent()).toBe(10000);
+    f.files.set(`/sys/fs/cgroup${dir}/memory.stat`, "inactive_file 99999\n");
+    expect(fence.sliceCurrent()).toBe(0);
     expect(fence.scopeKills(10)).toBe(1);
     expect(fence.scopeKills(11)).toBeNull();
     expect(fence.scopeKills(12)).toBeNull();
@@ -172,11 +271,11 @@ describe("the probe", () => {
 function fakeEngine() {
   const listeners = new Set<RuntimeEventListener>();
   const steers: string[] = [];
-  const state = { pid: undefined as number | undefined, steer: "steered" as "steered" | "refused" | "none" };
+  const state = { pid: undefined as number | undefined, pids: undefined as Map<string, number> | undefined, steer: "steered" as "steered" | "refused" | "none" };
   const adapter = {
     onEvent: (listener: RuntimeEventListener) => { listeners.add(listener); return () => listeners.delete(listener); },
     sendTurn: async () => ({}),
-    enginePid: () => state.pid,
+    enginePid: (threadId: string) => (state.pids ? state.pids.get(threadId) : state.pid),
     steer: async (_thread: string, text: string) => { steers.push(text); return state.steer as "steered"; },
   } as unknown as ProviderAdapter;
   const instance = { driverKind: "claudeAgent", adapter } as unknown as ProviderInstance;
@@ -265,6 +364,8 @@ describe("telling a turn that a program ran out of memory", () => {
     w.poll();
     await settle();
     expect(notices(w.seen)).toHaveLength(1);
+    expect(notices(w.seen)[0]!.text).toEqual({ key: "chat.notice.memoryFenceStopUntold", params: { gb: "5" } });
+    expect(notices(w.seen)[0]!.message).toBe("A program in this task used all the memory set aside for bots on this computer (5 GB), so it was stopped. Your other apps kept running.");
     expect(w.logs).toHaveLength(1);
   });
 
@@ -288,6 +389,7 @@ describe("telling a turn that a program ran out of memory", () => {
     w.fence.state.scopes.set(10, 1);
     w.engine.emit({ type: "turn.completed", threadId: "t1", turnId: "u", ok: false });
     expect(w.seen.map((event) => event.type)).toEqual(["runtime.notice", "turn.completed"]);
+    expect(notices(w.seen)[0]!.text?.key).toBe("chat.notice.memoryFenceStopUntold");
     expect(w.engine.steers).toEqual([]);
     expect(w.logs).toHaveLength(1);
   });
@@ -306,6 +408,62 @@ describe("telling a turn that a program ran out of memory", () => {
     w.engine.emit({ type: "turn.completed", threadId: "t1", turnId: "u", ok: true });
     expect(notices(w.seen)).toHaveLength(1);
     expect(w.logs).toEqual([]);
+  });
+
+  it("tells a turn that ended with its engine gone by the pid it learned while it ran", async () => {
+    const w = watch();
+    w.engine.state.pid = 10;
+    w.fence.state.scopes.set(10, 0);
+    await w.wrapped.adapter.sendTurn({ threadId: "t1" } as never);
+    w.poll();
+    w.engine.state.pid = undefined;
+    w.fence.state.scopes.set(10, 1);
+    w.engine.emit({ type: "turn.completed", threadId: "t1", turnId: "u", ok: false });
+    expect(w.seen.map((event) => event.type)).toEqual(["runtime.notice", "turn.completed"]);
+    expect(notices(w.seen)[0]!.text?.key).toBe("chat.notice.memoryFenceStopUntold");
+  });
+
+  it("learns the pid from an event or a poll of a turn that began before its engine", async () => {
+    const w = watch();
+    await w.wrapped.adapter.sendTurn({ threadId: "t1" } as never);
+    w.engine.state.pid = 10;
+    w.fence.state.scopes.set(10, 0);
+    w.poll();
+    w.engine.state.pid = undefined;
+    w.fence.state.scopes.set(10, 1);
+    w.fence.state.slice = 1;
+    w.engine.emit({ type: "turn.completed", threadId: "t1", turnId: "u", ok: false });
+    expect(notices(w.seen)).toHaveLength(1);
+  });
+
+  it("does not tell the turn that was not hit, when two run and the other one's engine is gone at its end", async () => {
+    const w = watch();
+    w.engine.state.pids = new Map([["a", 10], ["b", 11]]);
+    w.fence.state.scopes.set(10, 0);
+    w.fence.state.scopes.set(11, 0);
+    await w.wrapped.adapter.sendTurn({ threadId: "a" } as never);
+    await w.wrapped.adapter.sendTurn({ threadId: "b" } as never);
+    w.fence.state.slice = 1;
+    w.fence.state.scopes.set(10, 1);
+    w.poll();
+    await settle();
+    const told = notices(w.seen);
+    expect(told).toHaveLength(1);
+    expect(told[0]!.threadId).toBe("a");
+    w.engine.state.pids.delete("b");
+    w.engine.emit({ type: "turn.completed", threadId: "b", turnId: "u", ok: true });
+    expect(notices(w.seen)).toHaveLength(1);
+    expect(w.engine.steers).toHaveLength(1);
+  });
+
+  it("does not tell either of two turns from the slice alone", async () => {
+    const w = watch();
+    await w.wrapped.adapter.sendTurn({ threadId: "a" } as never);
+    await w.wrapped.adapter.sendTurn({ threadId: "b" } as never);
+    w.fence.state.slice = 1;
+    w.poll();
+    w.engine.emit({ type: "turn.completed", threadId: "a", turnId: "u", ok: true });
+    expect(notices(w.seen)).toEqual([]);
   });
 
   it("watches nothing where the fence is not active", async () => {
