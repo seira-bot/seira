@@ -2,12 +2,13 @@
 // The seira headless verbs for verifying an isolated fixture. A verb that
 // changes something never runs on a server it merely found.
 import { spawn, type ChildProcess } from "node:child_process";
-import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
 
+import { whichOnPath } from "../server/bot-box/detect.ts";
 import { EXIT, HeadlessError } from "../server/headless/args.ts";
 import { runHeadlessCommand } from "../server/headless/main.ts";
 import type { handleToolCall, request } from "./mcp-server.ts";
@@ -119,6 +120,17 @@ export async function runControlSeira(
     requireExplicitForMutations: true,
     defaultWaitMs: 30_000,
   });
+}
+
+/** A folder with only bubblewrap in it, so a Linux fixture starts the bot box for the bots limited to chosen folders
+ * while its PATH stays sealed. */
+function boxToolsFolder(parentEnv: NodeJS.ProcessEnv, dataDir: string): string {
+  const bwrap = process.platform === "linux" ? whichOnPath("bwrap", parentEnv) : null;
+  if (!bwrap) throw new ControlSeiraError("SEIRA_VERIFY_BOT_BOX=1 needs Linux with bubblewrap on PATH");
+  const folder = join(dataDir, "box-tools");
+  mkdirSync(folder);
+  symlinkSync(bwrap, join(folder, "bwrap"));
+  return folder;
 }
 
 export interface VerificationServer {
@@ -387,6 +399,7 @@ export async function launchVerificationServer(
   });
   if (boatFixtureApi) childEnv.SEIRA_BOAT_API = boatFixtureApi;
   if (staticDir) childEnv.SEIRA_STATIC_DIR = staticDir;
+  if (parentEnv.SEIRA_VERIFY_BOT_BOX === "1") childEnv.PATH = [childEnv.PATH, boxToolsFolder(parentEnv, dataDir)].join(delimiter);
   const child = spawn(process.execPath, verificationServerArgs(childEnv), {
     cwd: ROOT,
     env: childEnv,
