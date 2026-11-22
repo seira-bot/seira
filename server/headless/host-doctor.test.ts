@@ -31,7 +31,7 @@ function probe(overrides: { files?: Record<string, string | null>; lists?: Recor
   };
   const { files: _files, lists: _lists, commands: _commands, ...rest } = overrides;
   return {
-    platform: "linux", arch: "x64", kernel: "6.8.0-45-generic", cpus: 8, memoryBytes: 32 * 2 ** 30,
+    platform: "linux", arch: "x64", kernel: "6.8.0-45-generic", cpus: 8, euid: 1000, memoryBytes: 32 * 2 ** 30,
     read: (path) => files[path] ?? null,
     list: (path) => lists[path] ?? [],
     run: async (command) => ({ ok: false, stdout: "", stderr: "", missing: false, ...commands[command] }),
@@ -52,6 +52,7 @@ describe("doctor --host", () => {
     expect(report.human).toEqual([
       "ok    Ubuntu 24.04.1 LTS, kernel 6.8.0-45-generic",
       "ok    x86_64",
+      "ok    Runs as a normal user",
       "ok    Docker 27.3.1",
       "ok    Unprivileged user namespaces are allowed",
       "ok    seccomp is available",
@@ -126,6 +127,20 @@ describe("doctor --host", () => {
     expect(report.exitCode).toBe(0);
     expect(report.human.at(-1)).toBe("Ready, with 7 warnings.");
     expect(byId(checks, "clock")!.message).toBe("Clock is 45 s ahead of network time");
+  });
+
+  it("warns, and still passes, when the CLI runs as root", async () => {
+    const checks = await checkHost(probe({ euid: 0 }), OPTIONS);
+    expect(byId(checks, "user")).toMatchObject({ status: "warn", message: expect.stringContaining("Full access"), fix: expect.stringContaining("normal user") });
+    expect(hostReport(checks).exitCode).toBe(0);
+    expect(byId(await checkHost(probe({ euid: null }), OPTIONS), "user")!.status).toBe("ok");
+  });
+
+  it("says that tailscale serve needs port 443, and never that Tailscale needs no port 443", async () => {
+    const web = byId(await checkHost(probe({ files: { "/proc/net/tcp": tcp(22, 443) } }), OPTIONS), "web-ports")!;
+    expect(web.message).toContain("`tailscale serve` needs 443");
+    expect(web.message).not.toMatch(/Tailscale does not/);
+    expect(byId(await checkHost(probe({ files: { "/proc/net/tcp": tcp(22, 80) } }), OPTIONS), "web-ports")!.message).not.toContain("tailscale");
   });
 
   it("needs ports 80 and 443 for --domain, unless this server already answers", async () => {
