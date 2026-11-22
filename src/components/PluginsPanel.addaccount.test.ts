@@ -57,7 +57,9 @@ const byLabel = (scope: ParentNode, label: string) =>
   Array.from(scope.querySelectorAll("button")).find((candidate) => candidate.textContent === label || candidate.getAttribute("aria-label") === label);
 const deletes = () => vi.mocked(api).mock.calls.filter((call) => (call[1] as RequestInit | undefined)?.method === "DELETE");
 
+const tick = (ms = 10) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 const addAccount = async (alias: string) => {
+  vi.useFakeTimers();
   await act(async () => { byLabel(tile(), "Add account")!.click(); });
   const input = tile().querySelector<HTMLInputElement>("input")!;
   await act(async () => {
@@ -65,7 +67,7 @@ const addAccount = async (alias: string) => {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
   await act(async () => { tile().querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
-  await flush();
+  await tick();
 };
 
 beforeEach(() => {
@@ -93,10 +95,7 @@ describe("adding a second account", () => {
       { id: "ca_old", alias: "work", displayName: "octo", status: "ACTIVE" },
       { id: "ca_new", alias: "second", displayName: "octo", status: "ACTIVE", duplicateOf: "ca_old" },
     ] } };
-    vi.useFakeTimers();
-    await act(async () => { await vi.advanceTimersByTimeAsync(5_100); });
-    vi.useRealTimers();
-    await flush();
+    await tick(5_100);
     expect(deletes()).toEqual([["/api/connectors/apollo/accounts/ca_new", { method: "DELETE" }]]);
     expect(host.textContent).toContain("This account is already connected. Sign in with a different account to add another one.");
   });
@@ -108,10 +107,7 @@ describe("adding a second account", () => {
       { id: "ca_old", alias: "work", displayName: "octo", status: "ACTIVE" },
       { id: "ca_new", alias: "second", displayName: "hubot", status: "ACTIVE" },
     ] } };
-    vi.useFakeTimers();
-    await act(async () => { await vi.advanceTimersByTimeAsync(5_100); });
-    vi.useRealTimers();
-    await flush();
+    await tick(5_100);
     expect(deletes()).toEqual([]);
   });
 
