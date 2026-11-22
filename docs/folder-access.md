@@ -43,7 +43,7 @@ server writes one log line for it.
 
 | Layer | Read-only folder | Can change folder | Only chosen folders |
 |---|---|---|---|
-| Bot box (Linux, when on; [bot-box.md](bot-box.md#chosen-folders)) | Bound read-only, also inside a folder bound read-write | Bound read-write | `HOME` is an empty private folder. Engine sign-ins come back read-write, program installs and git settings read-only |
+| Bot box (Linux: a Cloud home for every bot, a computer for limited bots; [bot-box.md](bot-box.md#chosen-folders)) | Bound read-only, also inside a folder bound read-write | Bound read-write | Every command the engine runs sees only these folders. `HOME` is an empty private folder. Engine sign-ins come back read-write, program installs and git settings read-only |
 | Claude Code | `--add-dir` and `permissions.additionalDirectories`; `Edit`, `Write` and `NotebookEdit` denied under it | `--add-dir` and `permissions.additionalDirectories` | Reads and writes outside the working folders blocked. Claude Code 2.1.330 or later; an older known version refuses the turn with "Update Claude Code to let this bot use only its chosen folders." |
 | Codex | Not a writable root | Added to `writableRoots` of a workspace-write sandbox | Full access runs in workspace-write with network on, so only the working folder and Can change folders are writable |
 | OpenCode | Allowed in `external_directory`; `edit` denied under it | Allowed in `external_directory` | Every other outside folder denied |
@@ -55,11 +55,17 @@ A kept engine process starts again on the bot's next turn when its folders chang
 
 ## What it does not do
 
-- **Commands with the bot box off.** On a desktop the box is off by default. A shell command that the engine runs can
-  then open any file the computer's user can open. Claude Code and OpenCode stop their own edit tools in a read-only
-  folder, not a command such as `bash`. The folder card says so and points to **Ask for approval**, which shows each
-  command first.
-- **Reads on Codex, Gemini and other ACP engines with the box off.** These engines have no read setting per folder.
+- **Commands where the bot box does not run.** On a Linux computer the box runs the turns of a bot with **Only chosen
+  folders** on, when unprivileged bubblewrap works ([bot-box.md](bot-box.md#on-a-linux-computer)). It does not run for
+  a bot without that limit, on macOS, on Windows, in the Flatpak, or where the kernel refuses user namespaces. There a
+  shell command that the engine runs can open any file the computer's user can open. Claude Code and OpenCode stop
+  their own edit tools in a read-only folder, not a command such as `bash`. The folder card says so and points to
+  **Ask for approval**, which shows each command first. Where the box runs, the card says that commands also see only
+  these folders.
+- **Reads on Codex, Gemini and other ACP engines where the box does not run.** These engines have no read setting per
+  folder.
+- **The engines' sign-in folders in a box on a computer.** They stay shared and read-write, so a limited bot can change
+  settings that the person's own CLI runs ([bot-box.md](bot-box.md#what-it-does-not-do-yet)).
 - **Codex: a read-only folder inside a writable one.** A read-only folder inside the working folder or inside a Can
   change folder stays writable. Codex 0.171.0 has no read-only subfolder in its sandbox policy.
 - **Claude Code: a Can change folder inside a read-only one.** The deny rules of the read-only folder also cover the
@@ -69,6 +75,5 @@ A kept engine process starts again on the bot's next turn when its folders chang
 - **A folder swap during a call.** Seira's file tools check a path and then use it. A folder swapped between the two
   steps is not caught. The bot box binds real paths when the process starts.
 - **More than one working folder per conversation.** A conversation still has one working folder.
-- **A bot box on desktops.** Turning the box on for limited bots on Linux desktops is a separate change.
 - **Team Cloud and hosted workspaces.** The setting is refused there in this version.
 - **Bot creation and copies.** A new bot starts with no folder setting, and a copy of a bot does not take its folders.
