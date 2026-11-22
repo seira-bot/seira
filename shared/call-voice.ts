@@ -137,3 +137,18 @@ export function callLanguageInstruction(saved: string | undefined): string | und
   const language = callLanguage(saved);
   return language ? `Speak ${language.english} for the whole call, even when the person uses another language.` : undefined;
 }
+
+export const CALL_VOICE_PREVIEW_TEXT_MAX = 200;
+
+/**
+ * Body of a Live voice sample request. The server answers with audio, or 404 when it cannot
+ * speak that voice outside a call; the client then hides the play button for that voice.
+ */
+export interface CallVoicePreviewRequest {
+  provider: LiveProvider;
+  voice: string;
+  /** The sample sentence in the app language, at most `CALL_VOICE_PREVIEW_TEXT_MAX` characters. */
+  text: string;
+  /** 0.5–2.0; the server clamps it to the provider range. Absent: 1. */
+  speed?: number;
+}
