@@ -15,6 +15,7 @@ import { BOX_PROBE_SCRIPT, BoxRunner, BOX_BROKER_PORT, BOX_EGRESS_PORT, defaultC
 import { closeSync, existsSync } from "node:fs";
 import type { BridgeTools } from "./bridge.ts";
 import { openCredentialBroker } from "./broker.ts";
+import { whichOnPath } from "./detect.ts";
 import { openBoxEgressGate } from "./egress-gate.ts";
 import { openHarnessGate } from "./harness-gate.ts";
 import type { BoxBridge, BoxMutation } from "./plan.ts";
@@ -115,6 +116,7 @@ export async function runBoxSelfCheck(options: SelfCheckOptions): Promise<SelfCh
   const skipped: string[] = [];
   let publicTarget: string | null = options.publicTarget === undefined ? "example.com:443" : options.publicTarget;
   if (publicTarget && (await hostConnect(egressSocket, publicTarget)) !== "200") { skipped.push("egress-public-allowed"); publicTarget = null; }
+  if (options.seccompFile && !whichOnPath("python3")) skipped.push("keyring-denied");
 
   const bridges: BoxBridge[] = [
     { name: "egress", port: BOX_EGRESS_PORT, socket: egressSocket },
@@ -134,7 +136,7 @@ export async function runBoxSelfCheck(options: SelfCheckOptions): Promise<SelfCh
     canaryStart: canary.pid ? processStart(canary.pid) : null, serverStart: processStart("self"),
     harnessPort: serverPort, egressPort: BOX_EGRESS_PORT, privatePort, publicTarget, isolatedNet,
     // Checked whenever a filter is in the setup: the no-seccomp mutation leaves it out of the box, so the check must fail.
-    seccomp: Boolean(options.seccompFile),
+    seccomp: Boolean(options.seccompFile) && !skipped.includes("keyring-denied"),
     cpuList: existsSync("/sys/devices/system/cpu/possible"),
   };
   const wrapped = runner.wrap({
