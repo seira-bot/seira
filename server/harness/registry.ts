@@ -4,7 +4,8 @@ import { installNpmEngine, npmAvailable, serverInstallFor, standaloneLookupPath 
 import { installStandaloneEngine, isAppStandaloneCopy, type StandaloneInstalled } from "../engine-standalone.ts";
 import { pinnedNpmVersion } from "../engine-versions.ts";
 import { withBotMemoryCap } from "../bot-memory-cap.ts";
-import { withMemoryFence } from "../memory-fence.ts";
+import { botMemoryGuard } from "../bot-memory-guard.ts";
+import { memoryFence, withMemoryFence } from "../memory-fence.ts";
 import { withEngineMemory } from "../engine-memory.ts";
 import { withEngineHomes } from "../engine-homes/engine-homes.ts";
 import { withLocalContext } from "../drivers/local-inject.ts";
@@ -202,7 +203,7 @@ export class ProviderRegistry {
         environment: entry.environment ?? {},
         enabled: entry.enabled ?? true,
         config,
-      }))))))));
+      })))), { fence: process.platform === "linux" ? memoryFence : botMemoryGuard }))));
       this.shareSnapshot(live);
       return { instanceId, live: decorate ? decorate(live) : live };
     } catch (e) {

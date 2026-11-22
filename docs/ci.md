@@ -2,7 +2,8 @@
 
 Seira has one CI workflow, `.github/workflows/ci.yml`. It runs on every pull
 request, on every merge queue entry, on every push to `main`, and on a manual
-start. A run does its work on Linux. There is no nightly run. Two rules cut the
+start. A run does its work on Linux, except the `native` job (see
+[Jobs](#jobs)). There is no nightly run. Two rules cut the
 number of runners that a run uses (see [Fewer runners](#fewer-runners)).
 
 The repository also has package workflows, `.github/workflows/package-*.yml`.
@@ -17,10 +18,11 @@ A maintainer starts them by hand to build a desktop package (see
 | `build` | `pnpm typecheck`, `pnpm check:electron`, the Electron unit tests (`pnpm test:electron`), and a production web build (`pnpm exec vite build`) |
 | `vitest (linux, shard n/8)` | The whole Vitest suite in 8 shards, 4 files at once per shard. |
 | `worker (<name>)` | One job for each Cloudflare Worker in scope: `pnpm install --frozen-lockfile`, the type check of the Worker, and its tests. The Worker list is `WORKERS` in `scripts/ci-heavy.mjs`. No job deploys a Worker. |
+| `native (<runner>)` | One job on Windows and one on macOS for the code in `native/`. On Windows it builds the bot memory helper and its test program (`node scripts/prepare-job-fence.mjs --test`). On both it runs `node --test "native/**/*.test.mjs"`. It installs no packages. |
 | `server image` | The image build and boot check of `server-image-smoke.yml`: build the server image on `linux/amd64` and `linux/arm64`, start it, and check the server, the UI, and the user. |
 | `CI` | The gate. It passes only when every job before it passed or was skipped for an allowed reason. See [Skipped jobs](#skipped-jobs). |
 
-`build`, the shards, `worker`, and `server image` start after `checks` passes.
+`build`, the shards, `worker`, `native`, and `server image` start after `checks` passes.
 
 ## Fewer runners
 
@@ -45,6 +47,10 @@ from waiting for a free runner:
   `paths` of the Worker in `scripts/ci-heavy.mjs`), or a file that every Worker
   reads (`WORKER_INPUTS`: the dependencies and the CI files). When no Worker is
   in scope, no `worker` job runs.
+- **Native code in scope.** A pull request runs the `native` jobs only when it
+  changes a file in `native/`, a file that a native test imports, or a file in
+  `NATIVE_INPUTS` in `scripts/ci-heavy.mjs`. The macOS runners are few, so the
+  jobs are short and run only when they can find a fault.
 - **Server image.** The `server image` job runs when the heavy jobs run. The
   `Dockerfile` builds the server and the web app, so any code change can break
   the image.
@@ -60,6 +66,7 @@ allowed. It fails on any other skip.
 | --- | --- |
 | `build`, `vitest`, `server image` | The pull request is a draft, or `checks` found documentation and pictures only |
 | `worker` | The pull request is a draft, or no Worker is in scope |
+| `native` | The pull request is a draft, or no native code is in scope |
 | `checks` | Never |
 
 A job that ends as `failure` or `cancelled` fails the gate. A failed `checks`

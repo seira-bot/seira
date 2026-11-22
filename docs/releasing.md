@@ -240,6 +240,9 @@ uploads anything:
   `publisherName`;
 - it makes sure that `latest.yml` names the installer with the correct
   SHA-512 and size.
+- it builds the bot memory helper `seira-job-fence.exe` with MinGW-w64
+  (`pnpm build:job-fence`), and makes sure that the app folder and the Store
+  package contain it, and that it passes an exit code on.
 
 It uploads the five Windows assets as one workflow artifact. It uploads the
 Microsoft Store package as a second artifact (see
@@ -277,6 +280,10 @@ Seira has no Windows code-signing certificate. When a person opens the
 installer, Microsoft Defender SmartScreen shows "Windows protected your PC"
 and "Unknown publisher". To continue, the person selects **More info**, then
 **Run anyway**. Say this in the release notes.
+
+The bot memory helper `resources/job-fence/seira-job-fence.exe` is not
+signed either. It is inside the installer and the Store package, not a
+separate release asset. The Store signs the whole package.
 
 Do not add `publisherName` or signing settings to `electron-builder.yml`
 without a certificate. electron-updater checks the update signature only when

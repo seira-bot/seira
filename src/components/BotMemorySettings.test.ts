@@ -55,6 +55,15 @@ describe("BotMemorySettings", () => {
     expect(host.innerHTML).toBe("");
   });
 
+  it("shows the row where the Windows job or the watchdog enforces the limit", () => {
+    for (const protection of ["job", "watchdog"]) {
+      fixture.config = { ...base, botMemory: memory({ protection }) };
+      render();
+      expect(host.textContent).toContain("Memory for bots");
+      expect(input().disabled).toBe(false);
+    }
+  });
+
   it("shows an empty field with the Auto size as placeholder", () => {
     render();
     expect(input().value).toBe("");

@@ -188,6 +188,8 @@ win:
   extraResources:
     - from: dist-native/cloudflared/win32-x64/cloudflared.exe
       to: cloudflared/cloudflared.exe
+    - from: dist-native/job-fence/win32-x64/seira-job-fence.exe
+      to: job-fence/seira-job-fence.exe
     - from: dist-native/browser/win32-x64
       to: browser-engine
     - from: dist-native/duckdb/win32-x64/node_modules

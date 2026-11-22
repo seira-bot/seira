@@ -33,9 +33,13 @@ export function fenceSliceName(dataDir: string = defaultDataDir()): string {
   return `seira_bots_${createHash("sha256").update(resolve(dataDir)).digest("hex").slice(0, 10)}.slice`;
 }
 
-/** Off Linux never; `off` or a budget of `off`/0 never; `on` always; else only in the desktop app's server. */
+/** Off Linux never; else as `memoryLimitWanted`. */
 export function fenceWanted(env: NodeJS.ProcessEnv, platform: NodeJS.Platform = process.platform): boolean {
-  if (platform !== "linux") return false;
+  return platform === "linux" && memoryLimitWanted(env);
+}
+
+/** `off` or a budget of `off`/0 never; `on` always; else only in the desktop app's server. */
+export function memoryLimitWanted(env: NodeJS.ProcessEnv): boolean {
   const fence = env[FENCE_ENV]?.trim().toLowerCase();
   if (fence === "off") return false;
   const budget = env.SEIRA_BOT_MEMORY_MAX_MB?.trim().toLowerCase();
@@ -250,6 +254,8 @@ export interface FenceView {
   sliceKills(): number | null;
   scopeKills(pid: number): number | null;
   budgetBytes(): number | null;
+  /** True when a stop can be counted after the end of the turn that it ended. */
+  lateStops?(): boolean;
 }
 
 export interface FenceWatchOptions {
@@ -265,14 +271,18 @@ const everyMs = (ms: number, fn: () => void): (() => void) => {
   return () => clearInterval(timer);
 };
 
-interface TurnMark { scope: number; slice: number; toldScope: number; toldSlice: number; pid?: number }
+interface TurnMark {
+  scope: number; slice: number; toldScope: number; toldSlice: number; pid?: number;
+  /** The turn ended with an error while a stop can be counted late: its id ("" for none), and the checks since. */
+  ending?: string; endChecks?: number;
+}
 
 /**
  * Every engine's adapter: while a turn runs under the fence, a program the kernel stopped for memory is told to the bot
  * in the same turn and, in one line, to the person. The instance is changed in place.
  */
 export function withMemoryFence(instance: ProviderInstance, options: FenceWatchOptions = {}): ProviderInstance {
-  const fence = options.fence ?? memoryFence, every = options.every ?? everyMs, log = options.log ?? ((line: string) => console.warn(`memory: ${line}`));
+  const fence: FenceView = options.fence ?? memoryFence, every = options.every ?? everyMs, log = options.log ?? ((line: string) => console.warn(`memory: ${line}`));
   const adapter = instance.adapter;
   const listeners = new Set<RuntimeEventListener>();
   const turns = new Map<string, TurnMark>();
@@ -323,14 +333,23 @@ export function withMemoryFence(instance: ProviderInstance, options: FenceWatchO
       if (outcome !== "steered") log(`a program of a running turn ran out of memory (limit ${gb} GB); the bot could not be told`);
     });
   };
+  const finish = (threadId: string, mark: TurnMark) => { tell(threadId, true, mark.ending || undefined); end(threadId); };
   const poll = () => {
-    for (const [threadId, mark] of turns) learn(threadId, mark);
+    for (const [threadId, mark] of turns) {
+      if (mark.ending === undefined) { learn(threadId, mark); continue; }
+      // The last check of a turn that ended with an error: at once when its stop was counted, else after two polls.
+      mark.endChecks = (mark.endChecks ?? 0) + 1;
+      const scope = scopeOf(threadId, mark);
+      if (mark.endChecks >= 2 || (scope !== null && scope > Math.max(mark.scope, mark.toldScope))) finish(threadId, mark);
+    }
     const slice = fence.sliceKills();
     if (slice === null || slice <= lastSlice) return;
     lastSlice = slice;
-    for (const threadId of turns.keys()) tell(threadId, false);
+    for (const [threadId, mark] of turns) if (mark.ending === undefined) tell(threadId, false);
   };
   const begin = (threadId: string) => {
+    const prior = turns.get(threadId);
+    if (prior?.ending !== undefined) finish(threadId, prior);
     if (!fence.active()) return;
     const slice = fence.sliceKills() ?? 0, mark: TurnMark = { scope: 0, slice, toldScope: 0, toldSlice: 0 };
     turns.set(threadId, mark);
@@ -347,7 +366,8 @@ export function withMemoryFence(instance: ProviderInstance, options: FenceWatchO
     const mark = turns.get(item.threadId);
     if (!mark) return;
     learn(item.threadId, mark);
-    if (item.type !== "turn.completed") return;
+    if (item.type !== "turn.completed" || mark.ending !== undefined) return;
+    if (!item.ok && fence.lateStops?.()) { mark.ending = item.turnId ?? ""; return; }
     tell(item.threadId, true, item.turnId);
     end(item.threadId);
   });

@@ -62,7 +62,7 @@ export interface ConfigStatus {
   /** The memory all bot work on this computer shares. Absent where the server
    * offers no protection. `gb` null means Auto; `envGb` not null means the
    * limit was fixed when the app started. */
-  botMemory?: { gb: number | null; autoGb: number; machineGb: number; protection: "slice" | "watchdog" | "none"; envGb: number | null };
+  botMemory?: { gb: number | null; autoGb: number; machineGb: number; protection: "slice" | "job" | "watchdog" | "none"; envGb: number | null };
   /** Workspace defaults for new bots; absent effort = no level is sent. */
   newBots?: { effort?: EffortLevel };
   /** This Cloud is on the Starter plan, as the Admin last said; absent or false otherwise. */
