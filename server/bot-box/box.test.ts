@@ -173,7 +173,7 @@ describe("BotBox", () => {
     box.noteChecks({ passed: 20, total: 21, failed: ["egress-public-allowed"], at: 1 });
     expect(box.report().checks).toEqual({ passed: 20, total: 21, failed: ["egress-public-allowed"], at: 1 });
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(/^bot box: on \(bubblewrap, node bridges, credential broker, seccomp (on|unsupported here)\)$/);
+    expect(lines[0]).toMatch(/^bot box: on \(every bot; bubblewrap, node bridges, credential broker, seccomp (on|unsupported here)\)$/);
     const relay = (await box.openRelay())!;
     expect(relay.socketPath.startsWith(join(dataDir, "box", "relay-"))).toBe(true);
     expect(existsSync(relay.socketPath)).toBe(true);
