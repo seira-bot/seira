@@ -284,15 +284,18 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
   if (ownHome) rw(ownHome);
   // Code the lines above hid is bound again read-only: an AppImage's mount in /tmp whole, of an install or checkout in a
   // limited box's HOME only LIMITED_CODE_PARTS; never a root that holds HOME or the data folder.
+  // Security: HOME is checked before /tmp and /run, because HOME itself can sit under one of them.
   for (const root of setup.codeRoots) {
     const code = resolve(root);
     if (holdsHome(code) || holdsHome(realPathOf(code)) || under(code, dataDir)) continue;
-    if (PRIVATE_INSIDE.some((base) => under(code, base) && code !== base)) mounts.push({ kind: "ro", source: code, target: code });
-    else if (limited && (under(code, home) || under(code, realHome))) {
+    const inHome = under(code, home) || under(code, realHome);
+    if (limited && inHome) {
       for (const part of LIMITED_CODE_PARTS) {
         const real = boundAsNamed(code, realPathOf(code), part);
         if (real) mounts.push({ kind: "ro", source: real, target: join(code, part) });
       }
+    } else if ((!inHome || ownHome) && PRIVATE_INSIDE.some((base) => under(code, base) && code !== base)) {
+      mounts.push({ kind: "ro", source: code, target: code });
     }
   }
   const dataHidden = !mutate.has("bind-data");

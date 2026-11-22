@@ -566,6 +566,24 @@ linuxBox("a bot's folder list", () => {
       expect(visibleInBox(plan, join(inHome, "skills", ".ssh", "id_ed25519"))).toBe("none");
     });
 
+    it("gives a code root in a HOME under /tmp only its parts, and a box of every bot keeps HOME writable (AC-12)", () => {
+      const tmpRoot = realpathSync(mkdtempSync(join("/tmp", "seira-home-in-tmp-")));
+      try {
+        const tmpHome = join(tmpRoot, "home"), tmpData = join(tmpHome, ".seira"), checkout = join(tmpHome, "src", "seira");
+        for (const dir of [join(checkout, "server"), join(checkout, ".git"), join(tmpData, "workspaces")]) mkdirSync(dir, { recursive: true });
+        writeFileSync(join(checkout, ".env.local"), "");
+        const ask = (given?: BoxRequest["folders"]) => planBox({ ...setup(), codeRoots: [checkout], dataDir: tmpData, home: tmpHome, engineRoots: engineInstallRoots(tmpData) }, {
+          command: "/usr/local/bin/claude", args: [], cwd: join(tmpData, "task-workspaces", "bot-a", "t"), env: { HOME: tmpHome }, ...(given ? { folders: given } : {}),
+        });
+        const plan = ask(folders(true));
+        expect(visibleInBox(plan, join(checkout, "server", "index.ts"))).toBe("ro");
+        for (const secret of [".env.local", ".git/config"]) expect(visibleInBox(plan, join(checkout, secret)), secret).toBe("none");
+        expect(visibleInBox(ask(), join(checkout, ".env.local"))).toBe("rw");
+      } finally {
+        rmSync(tmpRoot, { recursive: true, force: true });
+      }
+    });
+
     it("gives a limited box nothing more through a configured server's command line", () => {
       const key = join(fakeHome, "Documents", "brief.md");
       const ask = (configured: boolean) => planBox({ ...setup(), dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
