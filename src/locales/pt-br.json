@@ -11806,6 +11806,7 @@
   "serverInstall.fail.keyUnreadable": "Não foi possível ler esse arquivo de chave.",
   "serverInstall.fail.keyNeedsPassphrase": "Essa chave precisa da senha dela.",
   "serverInstall.fail.keyPassphrase": "A senha da chave está incorreta.",
+  "serverInstall.fail.keyOldFormat": "Essa chave usa um tipo antigo de proteção por senha. Execute este comando no seu computador para atualizar a chave e depois escolha-a de novo.",
   "serverInstall.fail.unreachable": "Não foi possível acessar o servidor. Verifique o endereço.",
   "serverInstall.fail.timeout": "O servidor não respondeu a tempo.",
   "serverInstall.fail.hostKeyChanged": "Este servidor parece diferente da última vez, então nada foi instalado.",

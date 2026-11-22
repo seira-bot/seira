@@ -7164,9 +7164,25 @@ ${formatted}-----END ${type} KEY-----`;
     }
     OpenSSH_Old_Private.prototype = BaseKey;
     {
-      const regexp = /^-----BEGIN (RSA|DSA|EC) PRIVATE KEY-----(?:\r\n|\n)((?:[^:]+:\s*[\S].*(?:\r\n|\n))*)([\s\S]+)(?:\r\n|\n)-----END (RSA|DSA|EC) PRIVATE KEY-----$/;
+      const OLD_PEM_TYPES = ["RSA", "DSA", "EC"];
+      const matchOldPEM = (str) => {
+        const lines = str.split("\n").map((line) => line.endsWith("\r") ? line.slice(0, -1) : line);
+        if (lines.length < 3)
+          return null;
+        const type = OLD_PEM_TYPES.find((name) => lines[0] === "-----BEGIN " + name + " PRIVATE KEY-----");
+        const endType = OLD_PEM_TYPES.find((name) => lines[lines.length - 1] === "-----END " + name + " PRIVATE KEY-----");
+        if (type === void 0 || endType === void 0)
+          return null;
+        let body = 1;
+        while (body < lines.length - 1 && lines[body].indexOf(":") > 0)
+          ++body;
+        const base64 = lines.slice(body, -1).join("\n");
+        if (base64.length === 0)
+          return null;
+        return [str, type, lines.slice(1, body).map((line) => line + "\n").join(""), base64, endType];
+      };
       OpenSSH_Old_Private.parse = (str, passphrase) => {
-        const m = regexp.exec(str);
+        const m = matchOldPEM(str);
         if (m === null)
           return null;
         let privBlob = Buffer.from(m[3], "base64");
@@ -7202,27 +7218,7 @@ ${formatted}-----END ${type} KEY-----`;
                   "Encrypted OpenSSH private key detected, but no passphrase given"
                 );
               }
-              const ivSlice = bufferSlice(cipherIV, 0, 8);
-              let cipherKey = createHash("md5").update(passphrase).update(ivSlice).digest();
-              while (cipherKey.length < encInfo.keyLen) {
-                cipherKey = combineBuffers(
-                  cipherKey,
-                  createHash("md5").update(cipherKey).update(passphrase).update(ivSlice).digest()
-                );
-              }
-              if (cipherKey.length > encInfo.keyLen)
-                cipherKey = bufferSlice(cipherKey, 0, encInfo.keyLen);
-              try {
-                const decipher = createDecipheriv(cipherName, cipherKey, cipherIV);
-                decipher.setAutoPadding(false);
-                privBlob = combineBuffers(
-                  decipher.update(privBlob),
-                  decipher.final()
-                );
-                decrypted = true;
-              } catch (ex) {
-                return ex;
-              }
+              return new Error("Encrypted old PEM private key is not supported");
             }
           }
         }

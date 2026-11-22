@@ -3,7 +3,7 @@
 // installs, passes the emailed sign-in code, then hands the pairing link to the app's add-a-server path.
 // Password, passphrase, key and emailed code live only in the fields of a session. They are never written, logged or sent
 // to the page.
-import { createHash } from "node:crypto";
+import { createHash, createPrivateKey } from "node:crypto";
 import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync, realpathSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
@@ -30,6 +30,36 @@ export function readKeyFile(file) {
     return buffer.subarray(0, count);
   } finally { closeSync(fd); }
 }
+const OLD_PEM_EXPORT = { RSA: { type: "pkcs1", kind: "rsa" }, EC: { type: "sec1", kind: "ec" } };
+const OLD_PEM_CIPHERS = new Set(["aes-128-cbc", "aes-192-cbc", "aes-256-cbc", "des-ede3-cbc"]);
+
+/**
+ * The bundled ssh2 refuses an encrypted old PEM key ("BEGIN RSA|DSA|EC PRIVATE KEY" with "Proc-Type: 4,ENCRYPTED"),
+ * because that format derives its key with MD5. Node crypto opens it here, and ssh2 gets the unencrypted key without
+ * a passphrase. Any other key comes back as it is.
+ */
+export function openOldPemKey(key, passphrase) {
+  const lines = key.toString("utf8").trim().split("\n").map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
+  const kind = ["RSA", "DSA", "EC"].find((name) => lines[0] === `-----BEGIN ${name} PRIVATE KEY-----`);
+  if (!kind) return key;
+  const headers = [];
+  for (let index = 1; index < lines.length && lines[index].indexOf(":") > 0; index += 1) headers.push(lines[index].replaceAll(" ", ""));
+  const dek = headers.find((line) => line.startsWith("DEK-Info:"));
+  if (!dek && !headers.includes("Proc-Type:4,ENCRYPTED")) return key;
+  if (!passphrase) throw new InstallFailure("keyNeedsPassphrase");
+  const target = OLD_PEM_EXPORT[kind];
+  if (!target) throw new InstallFailure("keyOldFormat");
+  let opened;
+  try {
+    opened = createPrivateKey({ key, format: "pem", passphrase });
+  } catch {
+    const cipher = (dek ?? "").slice("DEK-Info:".length).split(",")[0].toLowerCase();
+    throw new InstallFailure(OLD_PEM_CIPHERS.has(cipher) ? "keyPassphrase" : "keyOldFormat");
+  }
+  if (opened.asymmetricKeyType !== target.kind) throw new InstallFailure("keyOldFormat");
+  return Buffer.from(opened.export({ type: target.type, format: "pem" }));
+}
+
 const NO_TERMINAL = /must have a tty|requiretty|no tty present|a terminal is required/i;
 const WINDOWS_AGENT_PIPE = "\\\\.\\pipe\\openssh-ssh-agent";
 const TEMP_DIR = /^\/(?:[A-Za-z0-9._-]+\/)*seira-install\.[A-Za-z0-9]+$/;
@@ -215,13 +245,20 @@ export function createInstallSession(deps) {
     const passphrase = typeof request.passphrase === "string" ? request.passphrase : "";
     const sudoPassword = typeof request.sudoPassword === "string" && request.sudoPassword ? request.sudoPassword : password;
     let key = null;
+    let sshPassphrase = passphrase;
     if (method === "password" && !password) throw new InstallFailure("auth");
     if (method === "agent" && !agent) throw new InstallFailure("auth");
     if (method === "key") {
       try {
         key = readKeyFile(String(request.keyPath ?? ""));
       } catch { throw new InstallFailure("keyUnreadable"); }
-      const parsed = ssh2Utils().parseKey(key, passphrase || undefined);
+      const opened = openOldPemKey(key, passphrase);
+      if (opened !== key) {
+        key.fill(0);
+        key = opened;
+        sshPassphrase = "";
+      }
+      const parsed = ssh2Utils().parseKey(key, sshPassphrase || undefined);
       const first = Array.isArray(parsed) ? parsed[0] : parsed;
       if (first instanceof Error) {
         if (/passphrase/i.test(first.message)) throw new InstallFailure(passphrase ? "keyPassphrase" : "keyNeedsPassphrase");
@@ -229,7 +266,7 @@ export function createInstallSession(deps) {
       }
       if (typeof first?.isPrivateKey === "function" && !first.isPrivateKey()) throw new InstallFailure("keyUnreadable");
     }
-    return { address, user, account, method, password, passphrase, sudoPassword, key };
+    return { address, user, account, method, password, passphrase, sshPassphrase, sudoPassword, key };
   }
 
   function connect() {
@@ -271,7 +308,7 @@ export function createInstallSession(deps) {
         flags.source = sourceOf(held.system, held.saved);
       }
       if (secrets.method === "password") config.password = secrets.password;
-      else if (secrets.method === "key") { config.privateKey = secrets.key; if (secrets.passphrase) config.passphrase = secrets.passphrase; }
+      else if (secrets.method === "key") { config.privateKey = secrets.key; if (secrets.sshPassphrase) config.passphrase = secrets.sshPassphrase; }
       else config.agent = agent;
       link.on("keyboard-interactive", (_name, _instructions, _lang, prompts, finish) => finish(prompts.map(() => secrets?.password ?? "")));
       link.on("ready", () => { ready = true; clearTimeout(timer); resolve(); });
@@ -468,7 +505,7 @@ export function createInstallSession(deps) {
         const prepared = prepare(request);
         target = prepared.address;
         email = prepared.account;
-        secrets = { user: prepared.user, method: prepared.method, password: prepared.password, passphrase: prepared.passphrase, sudoPassword: prepared.sudoPassword, key: prepared.key };
+        secrets = { user: prepared.user, method: prepared.method, password: prepared.password, passphrase: prepared.passphrase, sshPassphrase: prepared.sshPassphrase, sudoPassword: prepared.sudoPassword, key: prepared.key };
         emit({ type: "phase", phase: "connecting" });
         await connect();
         await detectAdministrator();

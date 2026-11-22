@@ -25,6 +25,7 @@ const PHASE_KEY: Record<string, LocaleKey> = {
 const FAILURE_KEY: Record<string, LocaleKey> = {
   address: "serverInstall.fail.address", user: "serverInstall.fail.user", email: "serverInstall.fail.email", auth: "serverInstall.fail.auth",
   keyUnreadable: "serverInstall.fail.keyUnreadable", keyNeedsPassphrase: "serverInstall.fail.keyNeedsPassphrase", keyPassphrase: "serverInstall.fail.keyPassphrase",
+  keyOldFormat: "serverInstall.fail.keyOldFormat",
   unreachable: "serverInstall.fail.unreachable", timeout: "serverInstall.fail.timeout", hostKeyChanged: "serverInstall.fail.hostKeyChanged",
   hostKeyDeclined: "serverInstall.fail.hostKeyDeclined", notAdmin: "serverInstall.fail.notAdmin", sudoPassword: "serverInstall.fail.sudoPassword",
   upload: "serverInstall.fail.upload", dropped: "serverInstall.fail.dropped", installer: "serverInstall.fail.installer", pairFailed: "serverInstall.fail.pairFailed",
@@ -40,6 +41,7 @@ const STEP_KEY: Record<string, LocaleKey> = {
   signin: "serverInstall.step.signin", start: "serverInstall.step.start", health: "serverInstall.step.health", tunnel: "serverInstall.step.tunnel",
   pair: "serverInstall.step.pair",
 };
+const shellWord = (word: string) => (/^[\w.@%+=:,/-]+$/.test(word) ? word : `'${word.replaceAll("'", `'\\''`)}'`);
 const own = (map: Record<string, LocaleKey>, id: string) => (Object.hasOwn(map, id) ? map[id] : undefined);
 const checkLabel = (id: string) => t(own(CHECK_KEY, id) ?? "serverInstall.check.unknown");
 const stepLabel = (id: string) => t(own(STEP_KEY, id) ?? "serverInstall.step.unknown");
@@ -209,6 +211,7 @@ export function ServerInstallSheet({ onBack, onConnected }: { onBack: (() => voi
   return <div data-server-install="failed" className={frame}>
     {head}
     <p role="alert" data-install-problem className="text-[13px] text-danger">{t(FAILURE_KEY[screen.reason] ?? "serverInstall.fail.installer")}</p>
+    {screen.reason === "keyOldFormat" && keyFile && <code data-install-key-convert className="break-all rounded-md bg-inset px-2 py-1.5 font-mono text-[12px] text-ink">{`ssh-keygen -p -f ${shellWord(keyFile.name)}`}</code>}
     {screen.step && own(STEP_KEY, screen.step) && <p data-install-failed-step className="text-[13px] text-ink-secondary">{t("serverInstall.failedStep", { step: stepLabel(screen.step) })}</p>}
     <Details sentences={screen.sentence ? [screen.sentence] : []} />
     {screen.reason === "hostKeyChanged" && screen.source === "saved" && <>

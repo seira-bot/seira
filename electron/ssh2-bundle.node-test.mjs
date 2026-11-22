@@ -1,6 +1,7 @@
-// Host keys that a server announces must never reach the private-key parsers of ssh2, whose old PEM pattern backtracks.
+// Host keys that a server announces must never reach the private-key parsers of ssh2. The old PEM reader must take linear
+// time, and an encrypted old PEM key must never be opened with the MD5 key derivation of that format.
 import assert from "node:assert/strict";
-import { generateKeyPairSync } from "node:crypto";
+import { createPrivateKey, generateKeyPairSync } from "node:crypto";
 import { createRequire } from "node:module";
 import test from "node:test";
 
@@ -76,4 +77,46 @@ test("drops a host key blob whose type length runs past its end", async () => {
   } finally {
     close();
   }
+});
+
+function oldPem(type, options, cipher) {
+  const encoding = type === "rsa" ? "pkcs1" : "sec1";
+  const plain = pem(type, { ...options, privateKeyEncoding: { type: encoding, format: "pem" } });
+  return { plain, encrypted: createPrivateKey(plain).export({ type: encoding, format: "pem", cipher, passphrase: "pw" }) };
+}
+
+test("reads a long old PEM header block in linear time", () => {
+  const input = `-----BEGIN EC PRIVATE KEY-----\n${"9:\n".repeat(20_000)}`;
+  const started = performance.now();
+  const parsed = utils.parseKey(input);
+  const elapsed = performance.now() - started;
+  assert.ok(parsed instanceof Error);
+  assert.ok(elapsed < 50, `took ${elapsed.toFixed(1)} ms`);
+});
+
+test("reads a plain old RSA and EC PEM key with LF or CRLF lines and a trailing line break", () => {
+  for (const [type, options, sshType] of [["rsa", { modulusLength: 2048 }, "ssh-rsa"], ["ec", { namedCurve: "prime256v1" }, "ecdsa-sha2-nistp256"]]) {
+    const { plain } = oldPem(type, options, "aes-128-cbc");
+    for (const text of [plain, plain.trim(), plain.replaceAll("\n", "\r\n")]) {
+      const parsed = utils.parseKey(text);
+      assert.equal(parsed.type, sshType);
+      assert.equal(parsed.isPrivateKey(), true);
+    }
+  }
+});
+
+test("refuses an encrypted old PEM key instead of opening it, with or without a passphrase", () => {
+  const { encrypted } = oldPem("rsa", { modulusLength: 2048 }, "aes-128-cbc");
+  assert.match(utils.parseKey(encrypted, "pw").message, /not supported/);
+  assert.match(utils.parseKey(encrypted).message, /no passphrase given/);
+});
+
+test("still reads an old DSA PEM header, and keys in the new OpenSSH format with and without a passphrase", () => {
+  const dsa = "-----BEGIN DSA PRIVATE KEY-----\nAAAA\n-----END DSA PRIVATE KEY-----";
+  assert.match(utils.parseKey(dsa).message, /Malformed OpenSSH private key/);
+  const plain = utils.generateKeyPairSync("ecdsa", { bits: 256 });
+  assert.equal(utils.parseKey(plain.private).type, "ecdsa-sha2-nistp256");
+  const locked = utils.generateKeyPairSync("ecdsa", { bits: 256, passphrase: "pw", cipher: "aes256-ctr", rounds: 16 });
+  assert.equal(utils.parseKey(locked.private, "pw").type, "ecdsa-sha2-nistp256");
+  assert.ok(utils.parseKey(locked.private) instanceof Error);
 });

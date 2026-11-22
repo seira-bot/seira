@@ -11806,6 +11806,7 @@
   "serverInstall.fail.keyUnreadable": "That key file could not be read.",
   "serverInstall.fail.keyNeedsPassphrase": "That key needs its password.",
   "serverInstall.fail.keyPassphrase": "That key password is not right.",
+  "serverInstall.fail.keyOldFormat": "That key uses an old kind of password protection. Run this command on your computer to update the key, then choose it again.",
   "serverInstall.fail.unreachable": "Could not reach the server. Check the address.",
   "serverInstall.fail.timeout": "The server did not answer in time.",
   "serverInstall.fail.hostKeyChanged": "This server looks different from last time, so nothing was installed.",

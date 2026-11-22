@@ -2,7 +2,7 @@
 // in a scratch folder, with a stub `id` and `sudo` first on PATH, and the bundled installer is a fake script.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { timingSafeEqual } from "node:crypto";
+import { createPrivateKey, generateKeyPairSync, timingSafeEqual } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import net from "node:net";
@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { createInstallSession, CONNECT_TIMEOUT_MS, installerPath, installVpsInstall, parseAddress, parseSeiraLine, readKeyFile, shellQuote } from "./vps-install.mjs";
+import { createInstallSession, CONNECT_TIMEOUT_MS, installerPath, installVpsInstall, openOldPemKey, parseAddress, parseSeiraLine, readKeyFile, shellQuote } from "./vps-install.mjs";
 import { createSavedHosts, fingerprint } from "./vps-install-hosts.mjs";
 
 const require = createRequire(import.meta.url);
@@ -116,7 +116,7 @@ async function world(options = {}) {
     client.on("authentication", (ctx) => {
       state.authMethods.push(ctx.method);
       if (ctx.username === "alice" && ctx.method === "password" && options.password !== undefined && ctx.password === options.password) return ctx.accept();
-      if (ctx.username === "alice" && ctx.method === "publickey" && accountKey && ctx.key.algo === accountKey.type && timingSafeEqual(ctx.key.data, accountKey.getPublicSSH())) {
+      if (ctx.username === "alice" && ctx.method === "publickey" && accountKey && (ctx.key.algo === accountKey.type || (accountKey.type === "ssh-rsa" && ["rsa-sha2-256", "rsa-sha2-512"].includes(ctx.key.algo))) && timingSafeEqual(ctx.key.data, accountKey.getPublicSSH())) {
         if (!ctx.signature || accountKey.verify(ctx.blob, ctx.signature, ctx.hashAlgo) === true) return ctx.accept();
       }
       return ctx.reject(["password", "publickey"]);
@@ -847,4 +847,67 @@ test("a key sign-in with no administrator password says so, and a server that wa
     g.session.acceptHostKey();
     assert.equal((await g.wait("failed")).reason, "sudoRefused");
   } finally { await w.close(); await t.close(); }
+});
+
+const OLD_PASS = "old-pem-pass";
+function oldPem(kind, cipher) {
+  const type = kind === "rsa" ? "pkcs1" : "sec1";
+  const { privateKey } = generateKeyPairSync(kind, { ...(kind === "rsa" ? { modulusLength: 2048 } : { namedCurve: "prime256v1" }),
+    publicKeyEncoding: { type: "spki", format: "pem" }, privateKeyEncoding: { type, format: "pem" } });
+  return { plain: privateKey, encrypted: cipher ? createPrivateKey(privateKey).export({ type, format: "pem", cipher, passphrase: OLD_PASS }) : null };
+}
+const reasonOf = (open) => { try { open(); } catch (error) { return error.reason; } return null; };
+
+test("an encrypted old PEM key opens with Node crypto into a plain key that ssh2 reads without a passphrase", () => {
+  for (const [kind, cipher, label, sshType] of [["rsa", "aes-256-cbc", "RSA", "ssh-rsa"], ["rsa", "des-ede3-cbc", "RSA", "ssh-rsa"], ["ec", "aes-128-cbc", "EC", "ecdsa-sha2-nistp256"]]) {
+    const { plain, encrypted } = oldPem(kind, cipher);
+    assert.match(encrypted, /^Proc-Type: 4,ENCRYPTED$/m);
+    for (const text of [encrypted, encrypted.replaceAll("\n", "\r\n")]) {
+      const opened = openOldPemKey(Buffer.from(text), OLD_PASS).toString();
+      assert.ok(opened.startsWith(`-----BEGIN ${label} PRIVATE KEY-----\n`), opened.slice(0, 40));
+      assert.equal(opened.includes("ENCRYPTED"), false);
+      const parsed = utils.parseKey(opened);
+      assert.equal(parsed.type, sshType);
+      assert.deepEqual(parsed.getPublicSSH(), utils.parseKey(plain).getPublicSSH());
+    }
+  }
+});
+
+test("an encrypted old PEM key with a wrong or missing password, a DSA key or an old cipher gets its own reason", () => {
+  const { encrypted } = oldPem("rsa", "aes-128-cbc");
+  assert.equal(reasonOf(() => openOldPemKey(Buffer.from(encrypted), "not-it")), "keyPassphrase");
+  assert.equal(reasonOf(() => openOldPemKey(Buffer.from(encrypted), "")), "keyNeedsPassphrase");
+  const fake = (label, cipher) => Buffer.from(`-----BEGIN ${label} PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: ${cipher},00112233445566778899AABBCCDDEEFF\n\nAAAA\n-----END ${label} PRIVATE KEY-----\n`);
+  assert.equal(reasonOf(() => openOldPemKey(fake("DSA", "AES-128-CBC"), OLD_PASS)), "keyOldFormat");
+  assert.equal(reasonOf(() => openOldPemKey(fake("RSA", "DES-CBC"), OLD_PASS)), "keyOldFormat");
+});
+
+test("a plain old PEM key and a key in the new format pass through unchanged", () => {
+  const legacy = Buffer.from(oldPem("rsa").plain);
+  assert.equal(openOldPemKey(legacy, "anything"), legacy);
+  const modern = Buffer.from(keyPair("ecdsa", { bits: 256, passphrase: OLD_PASS, cipher: "aes256-ctr", rounds: 16 }).private);
+  assert.equal(openOldPemKey(modern, OLD_PASS), modern);
+});
+
+test("an encrypted old RSA or EC PEM key signs in with its password, a wrong password says so, and a plain one signs in", async () => {
+  for (const kind of ["rsa", "ec"]) {
+    const { plain, encrypted } = oldPem(kind, "aes-256-cbc");
+    const w = await world({ publicKey: plain });
+    try {
+      for (const [name, body, passphrase] of [["encrypted", encrypted, OLD_PASS], ["plain", plain, ""]]) {
+        const keyFile = path.join(w.root, `id_${name}`);
+        writeFileSync(keyFile, body, { mode: 0o600 });
+        const h = harness(w);
+        void h.session.start({ ...request(w), method: "key", keyPath: keyFile, passphrase, password: "" });
+        const first = await until(() => h.events.find((event) => ["hostKey", "checks", "failed"].includes(event.type)), `${kind} ${name}: the host key or the checks`);
+        if (first.type === "hostKey") h.session.acceptHostKey();
+        assert.equal((await h.wait("checks")).type, "checks", `${kind} ${name}`);
+        await h.session.cancel();
+      }
+      const keyFile = path.join(w.root, "id_encrypted");
+      const wrong = harness(w);
+      void wrong.session.start({ ...request(w), method: "key", keyPath: keyFile, passphrase: "not-it", password: "" });
+      assert.equal((await wrong.wait("failed")).reason, "keyPassphrase");
+    } finally { await w.close(); }
+  }
 });

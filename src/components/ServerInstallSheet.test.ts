@@ -91,6 +91,26 @@ it("a failure says what happened in plain words and Try again returns to an empt
   expect(document.querySelector<HTMLInputElement>("[data-install-address]")!.value).toBe("203.0.113.9");
 });
 
+const failKey = async (name: string) => {
+  window.ogb!.serverInstall!.pickKey = async () => ({ name });
+  await act(async () => { document.querySelector<HTMLInputElement>("[data-install-method=key]")!.click(); });
+  await act(async () => { document.querySelector<HTMLButtonElement>("[data-install-pick-key]")!.click(); });
+  await act(async () => { set("[data-install-address]", "203.0.113.9"); set("[data-install-email]", "me@example.com"); });
+  await act(async () => { document.querySelector<HTMLFormElement>("[data-server-install=form]")!.requestSubmit(); });
+  await act(async () => { emit({ type: "failed", reason: "keyOldFormat", step: null, sentence: null }); });
+};
+
+it("a key with old protection shows the command that updates it, with the key file name", async () => {
+  await failKey("id_rsa");
+  expect(document.querySelector("[data-install-problem]")!.textContent).toBe("That key uses an old kind of password protection. Run this command on your computer to update the key, then choose it again.");
+  expect(document.querySelector("[data-install-key-convert]")!.textContent).toBe("ssh-keygen -p -f id_rsa");
+});
+
+it("the update command quotes a key file name that a shell would split", async () => {
+  await failKey("old key's.pem");
+  expect(document.querySelector("[data-install-key-convert]")!.textContent).toBe("ssh-keygen -p -f 'old key'\\''s.pem'");
+});
+
 it("connected closes the sheet", async () => {
   await fill();
   await act(async () => { emit({ type: "connected" }); });

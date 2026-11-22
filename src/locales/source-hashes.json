@@ -37927,6 +37927,7 @@
       "serverInstall.fail.keyUnreadable": "e9913ca61e6296a8abee0a7e9eab659dc5d6f324f32eb1be4e3b36efa1646363",
       "serverInstall.fail.keyNeedsPassphrase": "f81d644eb068a6dd11d089368a20f363b6ae79cd1e007cdfd07c661b5f109ac1",
       "serverInstall.fail.keyPassphrase": "3359da0ff85d631add78063656af1acc51c65447546842a6100f664886823af0",
+      "serverInstall.fail.keyOldFormat": "af268538eeaa3cf51c7549d6b195c6311966266155943d786c307e21dc564c6b",
       "serverInstall.fail.unreachable": "ab5089057fec62982c06b38cba99f4eb77b293b75554f7c0f39be35b311478f7",
       "serverInstall.fail.timeout": "8392b0448963e4b732dfc27d7ec9d28c151d9618cab154123cc371a4ad569869",
       "serverInstall.fail.hostKeyChanged": "83f4a6b3d390f68019b9e7b15e5843594e4ed8c1d6b8a3e9652229f44c7b4ee9",
