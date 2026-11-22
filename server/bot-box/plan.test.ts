@@ -509,6 +509,8 @@ linuxBox("a bot's folder list", () => {
 
     it("keeps the code readable when it runs from under HOME, /tmp or /run, and never gives back /tmp, HOME or the data folder (AC-12)", () => {
       const checkout = join(fakeHome, "src", "seira"), appImage = "/tmp/.mount_SeiraX1/resources", runtime = "/run/user/1000/seira";
+      for (const dir of ["server", "shared", "node_modules/ajv", "packages/p", "skills/s", ".git", "internal/plan", "brand"]) mkdirSync(join(checkout, dir), { recursive: true });
+      for (const file of ["package.json", ".env.local", "AGENTS.local.md", "brand/.env.local"]) writeFileSync(join(checkout, file), "");
       const roots = [checkout, appImage, runtime, "/tmp", fakeHome, fakeData, "/app"];
       const plan = planBox({ ...setup(), codeRoots: roots, dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
         command: "/usr/local/bin/claude", args: [], cwd: fakeCwd, env: { HOME: fakeHome }, folders: folders(true),
@@ -528,6 +530,7 @@ linuxBox("a bot's folder list", () => {
 
     it("reads only a Node install's programs of a code root in HOME, never the rest of it (AC-12)", () => {
       const prefix = join(fakeHome, ".local");
+      for (const dir of ["bin", "lib/node_modules/npm", "share/keyrings", "state"]) mkdirSync(join(prefix, dir), { recursive: true });
       const plan = planBox({ ...setup(), codeRoots: [prefix], dataDir: fakeData, home: fakeHome, engineRoots: engineInstallRoots(fakeData) }, {
         command: "/usr/local/bin/claude", args: [], cwd: fakeCwd, env: { HOME: fakeHome }, folders: folders(true),
       });
