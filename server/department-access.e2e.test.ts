@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -17,7 +17,6 @@ const BOSS = "boss@example.test";
 const ADA = "ada@example.test";
 const BOB = "bob@example.test";
 const CAPABILITY_KEY = "bot-visibility-fixture-capability";
-const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
 
 let child: ChildProcess;
 let home: string;
@@ -32,7 +31,6 @@ const api = async (method: string, path: string, body?: unknown, as?: string): P
   const res = await fetch(`${BASE}${path}`, { method, headers: headers(as, body !== undefined), body: body === undefined ? undefined : JSON.stringify(body) });
   return { status: res.status, body: await res.json().catch(() => ({})) };
 };
-const status = async (method: string, path: string, as?: string, body?: unknown) => (await api(method, path, body, as)).status;
 
 async function start() {
   const port = await freePortBlock([0, 1]);
