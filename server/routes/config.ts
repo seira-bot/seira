@@ -94,7 +94,7 @@ export interface ConfigRouteDeps {
   localVmModeChanging(): () => void;
   providerConfigBusy: BusyFlag;
   computerProviderConfigTransitions: Pick<Set<RemoteComputerProvider>, "add" | "delete">;
-  managedBoatOwners(): boat.ManagedBoatOwner[];
+  managedComputerOwners(): vps.ManagedVpsOwner[];
   providerOperationConflict(provider: RemoteComputerProvider): string | null;
   perBotLocalVmCountForModeChange(): Promise<number | null>;
   checkedModelSelection(raw: unknown, current?: { selection: ModelSelection; busy: boolean }, requireAvailableModel?: boolean): ModelSelectionCheck;
@@ -121,7 +121,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
     store, cfg, registry, sessions, browserCleanup, browserLive, browserRuntime, usedBrowserSessions, decider,
     closeBrowser, browserEngineSwitched, sharedComputers, sharedComputerControl, hostedModels, cloudHome: CLOUD_HOME, sharedMembership, lendingEnabled, providerConfigs,
     localVmIdleMs, localVmIdles, localVmActiveThreads, localVmLifecycleBusy, localVmImageBusy, localVmModeChangeBusy, localVmModeChanging,
-    providerConfigBusy, computerProviderConfigTransitions, managedBoatOwners, providerOperationConflict,
+    providerConfigBusy, computerProviderConfigTransitions, managedComputerOwners, providerOperationConflict,
     perBotLocalVmCountForModeChange, checkedModelSelection, policyModelRefusal, browserSessionSpec, configStatus,
     configForAccess, resyncOpenCodeProviderKeys, revokeEngineCapabilities, reloadProviders, broadcast, drainQueuedSends, ownProfile, ownHints,
   } = deps;
@@ -288,7 +288,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
         if (changingVpsAlias && currentVpsAlias) {
           const inventory = await vps.listManagedVpsComputers(
             { vps: { sshAlias: currentVpsAlias } },
-            managedBoatOwners(),
+            managedComputerOwners(),
           );
           if (!inventory.available) {
             return json(res, 503, {
@@ -328,7 +328,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
         if (changingBoatToken && currentBoatToken) {
           currentBoatInventory = await boat.listManagedBoats(
             { box: { token: currentBoatToken } },
-            managedBoatOwners(),
+            managedComputerOwners(),
           );
           if (!currentBoatInventory.available) {
             replacingRejectedBoatToken = currentBoatInventory.credentialRejected === true && Boolean(nextBoatToken);
@@ -409,7 +409,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
       if (replacingRejectedBoatToken) {
         // An expired credential cannot authorize its own replacement: probe without adopting or retiring identities.
         const replacement = await boat.listManagedBoats(
-          { box: { token: nextBoatToken } }, managedBoatOwners(), { adoptLegacy: false },
+          { box: { token: nextBoatToken } }, managedComputerOwners(), { adoptLegacy: false },
         );
         if (!replacement.available) return json(res, 503, { error: replacement.problem ?? "Could not verify the replacement Boat key. Your saved key and computers are unchanged." });
       }
@@ -438,7 +438,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
         if (nextBoatToken) {
           const replacementInventory = await boat.listManagedBoats(
             { box: { token: nextBoatToken } },
-            managedBoatOwners(),
+            managedComputerOwners(),
             { adoptLegacy: false },
           );
           if (!replacementInventory.available) {

@@ -50,7 +50,7 @@ describe("cloud backend switching", () => {
 });
 
 describe("vpsNotChosenReason", () => {
-  it("points a Boat bot at the saved VPS it could use instead", () => {
+  it("points a bot without a cloud computer at the saved VPS it could use instead", () => {
     const reason = vpsNotChosenReason("Scout", "production-vps");
     expect(reason).toContain("production-vps");
     expect(reason).toContain("Self-hosted VPS");

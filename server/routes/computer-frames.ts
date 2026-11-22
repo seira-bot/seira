@@ -21,7 +21,7 @@ export interface ComputerFramesRouteDeps {
   teamComputers: Pick<TeamComputers, "list">;
   computerControl: Pick<ComputerControl, "snapshot">;
   computerProviderConfigTransitions: Pick<Set<RemoteComputerProvider>, "has">;
-  managedBoatOwners(): boat.ManagedBoatOwner[];
+  managedComputerOwners(): boat.ManagedBoatOwner[];
   botHasActiveTurn(botId: string): boolean;
   teamComputerInUse(computer: TeamComputerRecord): boolean;
 }
@@ -90,7 +90,7 @@ export function createComputerFramesRoutes(deps: ComputerFramesRouteDeps, frames
   };
   const cache = frames ?? createComputerFrames({
     listMachines: async () => {
-      const inventory = await boat.listManagedBoats(cfg, deps.managedBoatOwners(), { adoptLegacy: false });
+      const inventory = await boat.listManagedBoats(cfg, deps.managedComputerOwners(), { adoptLegacy: false });
       if (!inventory.available) return null;
       return inventory.instances.flatMap((instance) => instance.ownerBotId && instance.state !== "removing"
         ? [{ owner: instance.ownerBotId, boxId: instance.boxId, state: boatHealth.notRespondingSince(instance.boxId) === null ? instance.state : "error" }] : []);

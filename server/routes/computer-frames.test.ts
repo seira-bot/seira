@@ -60,7 +60,7 @@ describe("GET /api/computers/frames", () => {
     const handler = createComputerFramesRoutes({
       cfg: {} as any, store: { bots } as any, teamComputers: { list: () => teamComputers as any },
       computerControl: { snapshot: () => ({ held: false }) } as any, computerProviderConfigTransitions: new Set(),
-      managedBoatOwners: () => [], botHasActiveTurn: () => false, teamComputerInUse: () => false,
+      managedComputerOwners: () => [], botHasActiveTurn: () => false, teamComputerInUse: () => false,
     }, frames);
     expect((await request(handler, "/api/other")).out).toBe(PASS);
     const { body } = await request(handler);

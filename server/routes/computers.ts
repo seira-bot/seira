@@ -46,7 +46,7 @@ export interface ComputerRouteDeps {
   computerControl: Pick<ComputerControl, "snapshot" | "take" | "release" | "acquireLease" | "releaseLease" | "beat">;
   routines(): Pick<RoutineManager, "activeRunForBot"> | null;
   controlLeaseIdSchema: ZodString;
-  boatLifecycleBusyBots: Pick<Set<string>, "has">;
+  computerLifecycleBusyBots: Pick<Set<string>, "has">;
   computerProviderConfigTransitions: Pick<Set<RemoteComputerProvider>, "has">;
   localVmActiveThreads: Pick<Map<string, string>, "has">;
   localVmLifecycleBusy: Pick<Set<string>, "has" | "add" | "delete">;
@@ -65,7 +65,7 @@ export interface ComputerRouteDeps {
   existingPerBotLocalVmCount(runtime: Runtime): Promise<number>;
   teamComputersPayload(): Promise<unknown>;
   teamComputerInUse(computer: TeamComputerRecord): boolean;
-  managedBoatOwners(): boat.ManagedBoatOwner[];
+  managedComputerOwners(): vps.ManagedVpsOwner[];
   providerTransitionMessage(provider: RemoteComputerProvider): string;
   botHasActiveTurn(botId: string): boolean;
   /** The control key whose lease opens this conversation's Local VM to a phone. */
@@ -88,11 +88,11 @@ export interface ComputerRouteDeps {
 
 export function createComputerRoutes(deps: ComputerRouteDeps): RouteHandler {
   const {
-    store, cfg, sessions, teamComputers, computerControl, controlLeaseIdSchema, boatLifecycleBusyBots,
+    store, cfg, sessions, teamComputers, computerControl, controlLeaseIdSchema, computerLifecycleBusyBots,
     computerProviderConfigTransitions, localVmActiveThreads, localVmLifecycleBusy, localVmSeen, localVmImageBusy,
     localVmProvisionBusy, localVmModeChangeBusy, localVmOwnerBusy, localVmIdleMs, localVmLeaseFor, localVmIdleFor,
     localVmTargetForBot, localVmTargetForStatus, localVmPayload, localVmInventoryPayload, existingPerBotLocalVmCount,
-    teamComputersPayload, teamComputerInUse, managedBoatOwners, providerTransitionMessage, botHasActiveTurn,
+    teamComputersPayload, teamComputerInUse, managedComputerOwners, providerTransitionMessage, botHasActiveTurn,
     localVmLeaseKey, botComputerControlSnapshot, computerPreviewBot, computerPreviewSurface,
     claimTeamComputerLifecycle, claimBotComputerLifecycle, claimBoatInventoryRequest, claimManagedBoatMutation,
     claimManagedVpsMutation, cloudComputerUsed,
@@ -137,7 +137,7 @@ export function createComputerRoutes(deps: ComputerRouteDeps): RouteHandler {
         const parsed = z.object({ action: z.enum(["take", "release"]), controlLeaseId: controlLeaseIdSchema.optional() }).strict().safeParse(body);
         if (!parsed.success) return json(res, 400, { error: "Choose take or release with a valid optional controlLeaseId" });
         const key = teamComputerOwner(found.id);
-        if (parsed.data.action === "take" && boatLifecycleBusyBots.has(key)) return json(res, 409, { error: "Wait for this computer's action to finish before taking control" });
+        if (parsed.data.action === "take" && computerLifecycleBusyBots.has(key)) return json(res, 409, { error: "Wait for this computer's action to finish before taking control" });
         if (parsed.data.controlLeaseId) {
           const result = parsed.data.action === "take"
             ? computerControl.acquireLease(key, parsed.data.controlLeaseId)
@@ -154,7 +154,7 @@ export function createComputerRoutes(deps: ComputerRouteDeps): RouteHandler {
           assertCurrentOwner();
           if (section !== null && section !== "" && !store.sections.includes(section)) throw Object.assign(new Error("Create the team before assigning a computer"), { status: 404 });
           if (section !== null && store.bots.some(bot => sectionKey(bot.section) === section && (
-            botHasActiveTurn(bot.id) || routines?.activeRunForBot(bot.id) || botComputerControlSnapshot(bot.id).held || boatLifecycleBusyBots.has(bot.id)
+            botHasActiveTurn(bot.id) || routines?.activeRunForBot(bot.id) || botComputerControlSnapshot(bot.id).held || computerLifecycleBusyBots.has(bot.id)
           ))) throw Object.assign(new Error("Stop the target team's work and release computer control before assigning this computer"), { status: 409 });
         };
         checkAssignment();
@@ -187,7 +187,7 @@ export function createComputerRoutes(deps: ComputerRouteDeps): RouteHandler {
         // A ready-only join never wakes, provisions or steals an agent's turn: human control takes its own lease first.
         if (action === "join") {
           const key = teamComputerOwner(found.id);
-          if (boatLifecycleBusyBots.has(key)) return json(res, 409, { error: "Wait for this computer's action to finish" });
+          if (computerLifecycleBusyBots.has(key)) return json(res, 409, { error: "Wait for this computer's action to finish" });
           if (!computerControl.snapshot(key).held) return json(res, 409, { error: "Take control before opening this shared desktop" });
           const release = claimBotComputerLifecycle(key, true);
           try { return json(res, 200, await boat.joinReadyBoat(cfg, key)); }
@@ -211,7 +211,7 @@ export function createComputerRoutes(deps: ComputerRouteDeps): RouteHandler {
     // Read-only; lifecycle changes are revalidated against a fresh provider listing. The path keeps its historical /boxes segment.
     if (method === "GET" && path === "/api/computers/boxes") {
       res.setHeader("cache-control", "private, no-store");
-      const inventory = await boat.listManagedBoats(cfg, managedBoatOwners());
+      const inventory = await boat.listManagedBoats(cfg, managedComputerOwners());
       // A computer that stopped answering is not shown running, whatever the provider still says.
       return json(res, 200, { ...inventory, instances: inventory.instances.map((instance) =>
         boatHealth.notRespondingSince(instance.boxId) === null ? instance : { ...instance, state: "error" }) });
@@ -227,7 +227,7 @@ export function createComputerRoutes(deps: ComputerRouteDeps): RouteHandler {
       }
       const releaseInventoryRequest = claimBoatInventoryRequest(m[1]);
       try {
-        const owners = managedBoatOwners();
+        const owners = managedComputerOwners();
         if (m[2] === "sleep") {
           return json(res, 200, await boat.sleepManagedBoat(cfg, owners, m[1], claimManagedBoatMutation));
         }
@@ -250,7 +250,7 @@ export function createComputerRoutes(deps: ComputerRouteDeps): RouteHandler {
       // Computers live on the default server and on each bot's own: list them all, tagged by alias.
       return json(res, 200, await vps.listManagedVpsComputers(
         cfg,
-        managedBoatOwners(),
+        managedComputerOwners(),
         undefined,
         vpsAliasesInPlay(cfg, store.bots),
       ));
@@ -280,7 +280,7 @@ export function createComputerRoutes(deps: ComputerRouteDeps): RouteHandler {
       try {
         return json(res, 200, await vps.removeManagedVpsComputer(
           alias ? { vps: { sshAlias: alias } } : cfg,
-          managedBoatOwners(),
+          managedComputerOwners(),
           m[1],
           body.confirmName,
         ));
@@ -363,7 +363,7 @@ export function createComputerRoutes(deps: ComputerRouteDeps): RouteHandler {
       }
       const bot = store.bot(m[1]);
       if (!bot) return json(res, 404, { error: "no such bot" });
-      if (boatLifecycleBusyBots.has(bot.id)) {
+      if (computerLifecycleBusyBots.has(bot.id)) {
         return json(res, 409, { error: "this bot's computer is being changed or deleted — wait for it to finish" });
       }
       const action = z.enum(["run", "start", "stop", "remove"]).parse(m[2]);

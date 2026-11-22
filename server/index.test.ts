@@ -110,9 +110,9 @@ async function sealPhoneSecretForTest(
 }
 
 let child: ChildProcess;
-/** stands in for the boat provider so config saving never touches the network */
-let boatStub: Server;
-let boatStubPort = 0;
+/** Stands in for the provider APIs so config saving never touches the network. */
+let providerStub: Server;
+let providerStubPort = 0;
 const boatRouteCalls: Array<{ method: string; path: string }> = [];
 const boatPromptBodies: Array<Record<string, unknown>> = [];
 let boatSlowRequestCount = 0;
@@ -891,7 +891,7 @@ beforeAll(async () => {
     }),
   );
 
-  boatStub = createServer(async (req, res) => {
+  providerStub = createServer(async (req, res) => {
     if (req.url?.startsWith("/v1/capabilities/")) {
       let raw = "";
       for await (const chunk of req) raw += chunk;
@@ -1221,8 +1221,8 @@ beforeAll(async () => {
           : { ok: false, code: "unauthorized" },
     ));
   });
-  await new Promise<void>((r) => boatStub.listen(0, "127.0.0.1", r));
-  boatStubPort = (boatStub.address() as { port: number }).port;
+  await new Promise<void>((r) => providerStub.listen(0, "127.0.0.1", r));
+  providerStubPort = (providerStub.address() as { port: number }).port;
 
   // Emulates only our temporary browser executable (also on Windows, where the marker is not executable).
   const browserPrelude = `data:text/javascript,${encodeURIComponent(`
@@ -1268,11 +1268,11 @@ beforeAll(async () => {
       SEIRA_PORT: String(PORT),
       SEIRA_WEBHOOK_PORT: String(WEBHOOK_PORT),
       SEIRA_EXTRA_PATH: fakeDockerDir,
-      SEIRA_BOAT_API: `http://127.0.0.1:${boatStubPort}`,
-      SEIRA_COMPOSIO_API: `http://127.0.0.1:${boatStubPort}/api/v3.1`,
-      SEIRA_COMPOSIO_TOOLKITS_API: `http://127.0.0.1:${boatStubPort}/api/v3`,
+      SEIRA_BOAT_API: `http://127.0.0.1:${providerStubPort}`,
+      SEIRA_COMPOSIO_API: `http://127.0.0.1:${providerStubPort}/api/v3.1`,
+      SEIRA_COMPOSIO_TOOLKITS_API: `http://127.0.0.1:${providerStubPort}/api/v3`,
       // A managed connected-apps broker on the stub, so relayed MCP frames are observable without any network.
-      SEIRA_COMPOSIO_BROKER_URL: `http://127.0.0.1:${boatStubPort}/broker`,
+      SEIRA_COMPOSIO_BROKER_URL: `http://127.0.0.1:${providerStubPort}/broker`,
       SEIRA_COMPOSIO_BROKER_TOKEN: "a".repeat(64),
       SEIRA_STATIC_DIR: staticDir,
       // A stand-in binary the fake engines never run: the turn only has to mount it.
@@ -1310,7 +1310,7 @@ beforeAll(async () => {
 }, 30_000);
 
 afterAll(async () => {
-  boatStub?.close();
+  providerStub?.close();
   await waitForExit(child, { signal: "SIGTERM" });
   await removeTempDir(home);
 });
@@ -3808,7 +3808,7 @@ describe("harness HTTP API", () => {
         SEIRA_PORT: String(isolatedPort),
         SEIRA_WEBHOOK_PORT: String(isolatedPort + 1),
         SEIRA_STATIC_DIR: isolatedStatic,
-        SEIRA_BOAT_API: `http://127.0.0.1:${boatStubPort}`,
+        SEIRA_BOAT_API: `http://127.0.0.1:${providerStubPort}`,
         FAKE_CLAUDE_MODE: "hang",
         FAKE_CLAUDE_USES_CLOUD_COMPUTER: "1",
         FAKE_CLAUDE_PROMPTS: join(isolatedHome, "desktop-prompts.jsonl"),
@@ -4040,7 +4040,7 @@ describe("harness HTTP API", () => {
         SEIRA_PORT: String(isolatedPort),
         SEIRA_WEBHOOK_PORT: String(isolatedPort + 1),
         SEIRA_STATIC_DIR: isolatedStatic,
-        SEIRA_BOAT_API: `http://127.0.0.1:${boatStubPort}`,
+        SEIRA_BOAT_API: `http://127.0.0.1:${providerStubPort}`,
         SEIRA_COMPUTER_WAIT_MAX_MS: "2000",
         SEIRA_COMPUTER_CALL_WAIT_MS: "500",
       },

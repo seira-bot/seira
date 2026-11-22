@@ -61,7 +61,7 @@ async function usage(cfg: AppConfig, options: { owners?: Array<{ botId: string; 
   const res = { setHeader: (name: string, value: string) => { headers[name] = value; } } as unknown as ServerResponse;
   const handler = routes.createComputerUsageRoutes({
     cfg,
-    managedBoatOwners: () => options.owners ?? [],
+    managedComputerOwners: () => options.owners ?? [],
     teamComputers: { list: () => Array.from({ length: options.teams ?? 0 }, (_, index) => ({ id: `team-${index}` })) as never },
     computerProviderConfigTransitions: new Set(options.changing ?? []),
   });
@@ -81,7 +81,7 @@ describe("GET /api/computers/usage", () => {
 
   it("answers only its own path", async () => {
     const handler = routes.createComputerUsageRoutes({
-      cfg: {}, managedBoatOwners: () => [], teamComputers: { list: () => [] }, computerProviderConfigTransitions: new Set(),
+      cfg: {}, managedComputerOwners: () => [], teamComputers: { list: () => [] }, computerProviderConfigTransitions: new Set(),
     });
     for (const [method, path] of [["POST", "/api/computers/usage"], ["GET", "/api/computers/boxes"], ["GET", "/api/computers/usage/x"]]) {
       expect(await handler({ method, path } as RouteContext)).toBe(PASS);
