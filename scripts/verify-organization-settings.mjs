@@ -153,6 +153,8 @@ if (process.versions.electron && process.argv.includes(flag)) {
     assert.ok(grantsApplied > 0);
     await until(() => evaluate("document.querySelector('img[alt=\"Organization logo\"]')?.naturalWidth > 0"), "organization logo decoded");
     await win.loadURL(`${url}?branding=1`);
+    await until(() => evaluate("Boolean(document.querySelector('[data-avatar-tab=\"upload\"]'))"), "avatar editor");
+    await evaluate("document.querySelector('[data-avatar-tab=\"upload\"]').click()");
     await until(() => evaluate("Boolean(document.querySelector('[aria-label=\"Use Studio helper icon\"]'))"), "organization icon library");
     await evaluate("document.querySelector('[aria-label=\"Use Studio helper icon\"]').click()");
     await until(() => evaluate("Boolean(window.fixtureBot?.avatarUrl?.startsWith('/api/'))"), "icon saved as local avatar attachment");

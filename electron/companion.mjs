@@ -163,6 +163,13 @@ export function setCompanionE2EHooks(hooks) {
   e2eHooks = { ...e2eHooks, ...hooks };
 }
 
+let workspaceHooks = { initialMessage: () => null, receive: () => false };
+
+/** The workspaces a paired phone lists: the facts go to every new sidecar over the port, and its requests come back the same way. */
+export function setCompanionWorkspaceHooks(hooks) {
+  workspaceHooks = { ...workspaceHooks, ...hooks };
+}
+
 /** In-memory port only. False when no sidecar runs. */
 export function postCompanionMessage(message) {
   if (!proc) return false;
@@ -249,6 +256,8 @@ async function start({ resourcesPath, harnessPort, mutationToken, hostedUrl = nu
       child.postMessage({ type: "seira:companion-mutation-token", token: mutationToken, controlToken });
       const e2e = e2eHooks.initialMessage();
       if (e2e) child.postMessage(e2e);
+      const workspaces = workspaceHooks.initialMessage();
+      if (workspaces) child.postMessage(workspaces);
     } catch {
       log?.("companion authorization could not be initialized");
       child.kill();
@@ -256,6 +265,7 @@ async function start({ resourcesPath, harnessPort, mutationToken, hostedUrl = nu
   });
   child.on("message", (message) => {
     if (message?.type === "seira:companion-e2e-token-rejected") e2eHooks.tokenRejected();
+    else workspaceHooks.receive(message);
   });
   child.stdout?.on("data", (d) => log?.(`[companion] ${String(d).trimEnd()}`));
   child.stderr?.on("data", (d) => log?.(`[companion err] ${String(d).trimEnd()}`));
