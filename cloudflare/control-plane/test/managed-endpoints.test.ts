@@ -4582,6 +4582,35 @@ describe("endpoints per account and blocked accounts", () => {
     expect((await provision(d, owned[3]!.credential)).status).toBe(200);
   });
 
+  it("holds the limit when ten installations of one account ask for their first endpoint at the same time", async () => {
+    const d = deployment();
+    const owned = [];
+    for (let index = 0; index < 10; index += 1) owned.push(await register(d, TOKEN_A, `parallel-${index}`));
+    const slowCreate: CloudflareFetch = async (input, init = {}) => {
+      const url = new URL(input instanceof Request ? input.url : input.toString());
+      if ((init.method ?? "GET") === "POST" && url.pathname.endsWith("/cfd_tunnel")) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      return d.cloudflare.fetch(input, init);
+    };
+    const slow = { ...d, worker: createWorker(slowCreate) };
+
+    const responses = await Promise.all(owned.map((each) => provision(slow, each.credential)));
+
+    const statuses = responses.map((each) => each.status);
+    expect(statuses.filter((status) => status === 200)).toHaveLength(3);
+    expect(statuses.filter((status) => status === 429)).toHaveLength(7);
+    for (const response of responses.filter((each) => each.status === 429)) {
+      expect(await response.json()).toEqual({ error: "endpoint_limit" });
+    }
+    const creates = d.cloudflare.calls.filter((each) => (
+      each.method === "POST" && new URL(each.url).pathname.endsWith("/cfd_tunnel")
+    ));
+    expect(creates).toHaveLength(3);
+    expect(d.cloudflare.tunnels.size).toBe(3);
+    expect(d.cloudflare.dns.size).toBe(3);
+  });
+
   it("lets an installation take back its own endpoint after a release, even with the account at its limit", async () => {
     const d = deployment({ SEIRA_ENDPOINTS_PER_ACCOUNT: "2" });
     const first = await register(d, TOKEN_A, "back-one");
