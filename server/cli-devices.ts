@@ -1,4 +1,3 @@
-// How a laptop that has no address for this server reaches it: an SSH tunnel, then one browser sign-in.
 import { hostname, userInfo } from "node:os";
 
 export function laptopLines(input: { port: number; user: string; host: string; prefix: string }): string[] {
@@ -9,7 +8,6 @@ export function laptopLines(input: { port: number; user: string; host: string; p
   ];
 }
 
-/** The lines for the machine that runs the server; none when the user name cannot be read. */
 export function laptopLinesHere(port: number, prefix: string): string[] {
   try {
     return laptopLines({ port, user: userInfo().username, host: hostname(), prefix });
