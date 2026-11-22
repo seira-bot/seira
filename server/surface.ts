@@ -2,6 +2,7 @@ import type { Surface } from "../shared/wire.ts";
 import { canWorkOnCloud, type CloudEngine } from "../shared/cloud-computer.ts";
 import { canUseMcpServer } from "../shared/tool-scope.ts";
 import { placeRowText, type PlaceRow, type PlaceSource } from "../shared/place-view.ts";
+import { failedTurnTool } from "../shared/failed-turn.ts";
 import { PLAIN_WORDS } from "./local-computer-guidance.ts";
 import { theirComputer, type LentPlatform } from "./lent-computers.ts";
 export type { Surface, PlaceSource };
@@ -157,6 +158,36 @@ export class PlaceUnavailableError extends Error {
 export function placeUnavailable(place: Surface, row: PlaceRow, cloudHome = false): PlaceUnavailableError {
   return new PlaceUnavailableError(place, row, cloudHome);
 }
+
+/** A Cloud pick with no cloud computer behind it. The turn goes on with no computer; it is never moved to this one or a VM. */
+export function cloudPickWithoutComputer(input: {
+  wants: ComputerWant;
+  backend: "box" | "vps";
+  boatConfigured: boolean;
+  teamComputer: boolean;
+  routine: boolean;
+  cloudHome: boolean;
+}): boolean {
+  return input.wants === "cloud" && input.backend === "box" && !input.boatConfigured
+    && !input.teamComputer && !input.routine && !input.cloudHome;
+}
+
+export function withoutCloudComputerRow(bot: string, source: PlaceSource): PlaceRow {
+  return { state: "cc-not-set-up", params: { bot }, source };
+}
+
+/** One notice a conversation: a turn that went on without a computer says so, and a restart does not repeat it. */
+export function noticeWithoutCloudComputer(
+  thread: { messagesFor(threadId: string): Array<{ tool?: { notice?: true; place?: { state?: string } } }>; appendMessage(threadId: string, message: any): unknown },
+  bot: string, threadId: string, source: PlaceSource,
+): void {
+  const row = withoutCloudComputerRow(bot, source);
+  if (thread.messagesFor(threadId).some((message) => message.tool?.notice && message.tool.place?.state === row.state)) return;
+  thread.appendMessage(threadId, { role: "bot", kind: "activity", tool: failedTurnTool(placeRowText(row), { place: row, notice: true }) });
+}
+
+export const WITHOUT_CLOUD_COMPUTER_NOTE =
+  " This bot is set to a cloud computer, but none is set up, so no desktop computer is mounted this turn and this stays so for the whole request: do not offer, select or switch to another computer; the person moves a conversation only by their own choice in the place control. You cannot open, click or check anything on a computer's screen. The built-in browser is the only screen you may have, and only when its tools are listed this turn. Work that needs no screen can go ahead. If the request needs a desktop, do not claim to have used one: say that no cloud computer is set up and that the person can connect their own server or change where this bot works.";
 
 export function surfaceLabel(surface: Surface): string {
   switch (surface) {

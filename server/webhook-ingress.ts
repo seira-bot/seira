@@ -142,7 +142,11 @@ export function createWebhookIngressHandler(manager: WebhookManager, claimReques
       return json(res, 202, { accepted: true, ...result });
     } catch (error) {
       const parsedError = statusErrorSchema.safeParse(error);
-      const status = parsedError.success ? parsedError.data.status ?? 500 : 500;
+      const status = parsedError.success ? parsedError.data.status : undefined;
+      if (status === undefined) {
+        console.error("webhooks: request failed", error);
+        return json(res, 500, { error: "Webhook receiver failed" });
+      }
       const message = error instanceof Error ? error.message : String(error);
       if (status === 400 || status === 413) {
         manager.recordRejected(match[1], status, message, {

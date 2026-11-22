@@ -36,6 +36,7 @@ import { CODEX_USAGE_URL, codexUsageLimitReached } from "../../shared/codex-usag
 import { ClaudeUpdatePrompt } from "./ClaudeUpdatePrompt";
 import { MacCuaRecoveryActions } from "./MacCuaRecoveryActions";
 import { macCuaPermissionMessage, missingMacCuaPermissions } from "@/lib/mac-cua-permissions";
+import { PlaceNoteRow } from "./PlaceNoteRow";
 import { claudeUpdateTarget, failedTurnCause, failedTurnNotice, signedOutEngine } from "@/lib/failed-turn";
 import { plainErrorLine } from "@/lib/plain-error";
 import { openPlaceAction, placeRowViewFor, usePlaceSeat, worksOnSimpleLabel } from "@/lib/place-view";
@@ -243,7 +244,9 @@ export function ErrorRow({
   );
 }
 
-function PlaceFailedRow({ place, botId, threadId, onRetry }: {
+function PlaceFailedRow({ place, botId, threadId, onRetry, notice }: {
+  /** The turn ran; the row only says what it ran without: a neutral note, no Retry. */
+  notice?: boolean;
   place: PlaceRow;
   botId: string;
   threadId?: string;
@@ -258,7 +261,8 @@ function PlaceFailedRow({ place, botId, threadId, onRetry }: {
   const onClick = !id ? undefined
     : id === "try-again" ? onRetry
     : () => { openPlaceAction(id, { botId, threadId }, dispatch); };
-  return <ErrorRow message={view.line} action={view.action && onClick ? { label: view.action.label, onClick } : null} />;
+  const action = view.action && onClick ? { label: view.action.label, onClick } : null;
+  return notice ? <PlaceNoteRow message={view.line} action={action} /> : <ErrorRow message={view.line} action={action} />;
 }
 
 const TRIAL_CREDIT_LINE: Record<"paused" | "too_low", LocaleKey> = { paused: "engines.trialCreditPaused", too_low: "engines.trialCreditTooLow" };
@@ -273,7 +277,7 @@ export function FailedTurnRow({ tool, engine, onRetry, botId, threadId, messageA
   const viewer = useReactor();
   const resume = useLimitResetContinue(botId, threadId, tool.limitResetsAt), fix = useFailedTurnFix(tool, botId, threadId);
   const past = usePastLimitNotice(tool, messageAt);
-  if (tool.place && botId) return <PlaceFailedRow place={tool.place} botId={botId} threadId={threadId} onRetry={onRetry} />;
+  if (tool.place && botId) return <PlaceFailedRow place={tool.place} botId={botId} threadId={threadId} onRetry={onRetry} notice={tool.notice} />;
   const credit = trialCreditKind(failedTurnCause(tool.name) ?? "");
   if (credit) return <TrialCreditFailedRow kind={credit} onRetry={onRetry} />;
   const { cause, notice } = failedTurnNotice(tool);

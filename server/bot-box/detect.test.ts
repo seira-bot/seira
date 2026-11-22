@@ -15,10 +15,21 @@ describe("deciding whether turns are boxed", () => {
     expect(cloudRole({ SEIRA_CLOUD_ROLE: "team" })).toBe(true);
     expect(cloudRole({})).toBe(false);
     const working = { platform: "linux" as const, probe: () => true, which: tools({ bwrap: "/usr/bin/bwrap", socat: "/usr/bin/socat" }) };
-    expect(detectBox({ env: {}, ...working })).toEqual({ box: "off", reason: "not-cloud", tools: null });
-    expect(detectBox({ env: { SEIRA_CLOUD_ROLE: "home" }, ...working })).toEqual({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: "/usr/bin/socat" } });
+    expect(detectBox({ env: { SEIRA_CLOUD_ROLE: "home" }, ...working })).toEqual({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: "/usr/bin/socat" }, scope: "all" });
     expect(detectBox({ env: { SEIRA_CLOUD_ROLE: "home", SEIRA_BOT_BOX: "0" }, ...working })).toEqual({ box: "off", reason: "switched-off", tools: null });
-    expect(detectBox({ env: { SEIRA_BOT_BOX: "1" }, ...working }).box).toBe("bwrap");
+    expect(detectBox({ env: { SEIRA_BOT_BOX: "1" }, ...working })).toMatchObject({ box: "bwrap", scope: "all" });
+  });
+
+  it("boxes only bots limited to chosen folders on a Linux computer that is not a Cloud home", () => {
+    const working = { platform: "linux" as const, probe: () => true, which: tools({ bwrap: "/usr/bin/bwrap", socat: "/usr/bin/socat" }) };
+    expect(detectBox({ env: {}, ...working })).toEqual({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: "/usr/bin/socat" }, scope: "limited" });
+    expect(detectBox({ env: { SEIRA_BOT_BOX: "0" }, ...working })).toEqual({ box: "off", reason: "switched-off", tools: null });
+    expect(detectBox({ env: { SEIRA_BOT_BOX: "off" }, ...working })).toEqual({ box: "off", reason: "switched-off", tools: null });
+    expect(detectBox({ env: {}, ...working, platform: "darwin" })).toEqual({ box: "off", reason: "not-cloud", tools: null });
+    expect(detectBox({ env: {}, ...working, platform: "win32" })).toEqual({ box: "off", reason: "not-cloud", tools: null });
+    expect(detectBox({ env: { FLATPAK_ID: "bot.seira.Seira" }, ...working })).toEqual({ box: "off", reason: "flatpak", tools: null });
+    expect(detectBox({ env: {}, ...working, which: tools({}) })).toEqual({ box: "off", reason: "no-bwrap", tools: null });
+    expect(detectBox({ env: {}, ...working, probe: () => false })).toEqual({ box: "off", reason: "userns-refused", tools: null });
   });
 
   it("never runs unboxed turns by surprise: no bwrap, a refusing kernel or another platform report off with the reason", () => {

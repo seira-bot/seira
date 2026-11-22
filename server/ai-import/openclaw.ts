@@ -2,7 +2,7 @@ import { basename, join } from "node:path";
 
 import { emptyAgent, type ImportAgent, type ImportConversation, type ImportEvent, type ImportLeftover } from "../../shared/ai-import/bundle.ts";
 import { userHome } from "../env-path.ts";
-import { collectSkills, everySchedule, markdownEntries, routineFrom, textSchedule, toolFromConfig } from "./local-agent.ts";
+import { collectSkills, everySchedule, markdownEntries, routineFrom, stripHtmlComments, textSchedule, toolFromConfig } from "./local-agent.ts";
 import { databaseConversations, decodeMessageBody, jsonlConversation, openDatabaseCopy, type JsonlEntry } from "./local-chats.ts";
 import { isFile, isRecord, listNames, readText, sourceId, toMillis } from "./local-fs.ts";
 import { openclawConfigPath, openclawStateDirOf } from "./locate.ts";
@@ -107,7 +107,7 @@ async function* readOpenclaw(input: ImportInput, ctx: ReaderContext): AsyncGener
   if (markdownEntries(heartbeat).length > 0) {
     const defaults = isRecord(config?.agents) && isRecord(config.agents.defaults) ? config.agents.defaults : {};
     const every = isRecord(defaults.heartbeat) && typeof defaults.heartbeat.every === "string" ? textSchedule(`every ${defaults.heartbeat.every}`) : null;
-    agent.routines.push({ ref: "HEARTBEAT.md", name: "Heartbeat", schedule: every ?? "every 30m", prompt: heartbeat.replace(/<!--[\s\S]*?-->/g, "").trim() });
+    agent.routines.push({ ref: "HEARTBEAT.md", name: "Heartbeat", schedule: every ?? "every 30m", prompt: stripHtmlComments(heartbeat).trim() });
   }
 
   yield { type: "agent", agent };

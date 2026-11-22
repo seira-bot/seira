@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { DepartmentFolders } from "../department-folders.ts";
 import type { RequestAuth } from "../request-auth.ts";
-import { createDepartmentFolderRoutes, FOLDER_ACCESS_SET_ELSEWHERE } from "./department-folders.ts";
+import { createDepartmentFolderRoutes, FOLDER_ACCESS_SET_ELSEWHERE, type FolderEnforcement } from "./department-folders.ts";
 import { PASS, type RouteContext } from "./table.ts";
 
 let root = "";
@@ -24,10 +24,10 @@ afterAll(() => rmSync(root, { recursive: true, force: true }));
 const admin = { kind: "loopback", scopes: ["admin", "client"] } as RequestAuth;
 const client = { kind: "loopback", scopes: ["client"] } as RequestAuth;
 
-function fixture(flags: { elsewhere?: boolean; box?: boolean } = {}) {
+function fixture(flags: { elsewhere?: boolean; enforcement?: FolderEnforcement } = {}) {
   const folders = new DepartmentFolders(join(root, `dept-${Math.random()}.json`));
   const handler = createDepartmentFolderRoutes({
-    store: { sections: ["Sales"] }, folders, dataDir, home, setElsewhere: () => flags.elsewhere === true, boxOn: () => flags.box === true,
+    store: { sections: ["Sales"] }, folders, dataDir, home, setElsewhere: () => flags.elsewhere === true, enforcement: () => flags.enforcement ?? "ai",
   });
   const call = async (method: string, query: string, body?: unknown, auth: RequestAuth = admin) => {
     const sent: Array<{ status: number; body: any }> = [];
@@ -46,7 +46,7 @@ function fixture(flags: { elsewhere?: boolean; box?: boolean } = {}) {
 describe("/api/department-folders", () => {
   it("passes other paths", async () => {
     const { folders } = fixture();
-    const handler = createDepartmentFolderRoutes({ store: { sections: [] }, folders, dataDir, home, setElsewhere: () => false, boxOn: () => false });
+    const handler = createDepartmentFolderRoutes({ store: { sections: [] }, folders, dataDir, home, setElsewhere: () => false, enforcement: () => "ai" });
     const out = await handler({ path: "/api/other", method: "GET" } as RouteContext);
     expect(out).toBe(PASS);
   });
@@ -58,12 +58,13 @@ describe("/api/department-folders", () => {
   });
 
   it("stores a valid list and reports it with the way it is enforced", async () => {
-    const { call } = fixture({ box: false });
+    const { call } = fixture({ enforcement: "ai" });
     const put = await call("PUT", "?section=Sales", { limited: true, folders: [{ path: join(root, "docs"), write: true }] });
     expect(put).toEqual({ status: 200, body: { access: { limited: true, folders: [{ path: join(root, "docs"), write: true }] } } });
     const got = await call("GET", "");
     expect(got.body).toEqual({ departments: { Sales: put.body.access }, enforcement: "ai", setHere: true });
-    expect((await fixture({ box: true }).call("GET", "")).body.enforcement).toBe("box");
+    expect((await fixture({ enforcement: "box" }).call("GET", "")).body.enforcement).toBe("box");
+    expect((await fixture({ enforcement: "limited" }).call("GET", "")).body.enforcement).toBe("limited");
   });
 
   it("clears a department on null", async () => {

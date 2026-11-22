@@ -1,14 +1,16 @@
+import { replaceUntilStable } from "../../shared/replace-until-stable";
+
 /** The GitHub update provider gives release notes as HTML; a generic feed often gives Markdown. */
 export function releaseHighlights(notes: string | undefined, max = 4): string[] {
   if (!notes?.trim()) return [];
-  const markdown = notes
+  const tagged = notes
     .replace(/\r\n?/g, "\n")
     .replace(/<\s*(strong|b)\s*>/gi, "**")
     .replace(/<\s*\/\s*(strong|b)\s*>/gi, "**")
     .replace(/<\s*li[^>]*>/gi, "\n- ")
     .replace(/<\s*\/\s*(li|p|h[1-6]|ul|ol)\s*>|<\s*br\s*\/?>/gi, "\n")
-    .replace(/<\s*h[1-6][^>]*>/gi, "\n# ")
-    .replace(/<[^>]+>/g, "")
+    .replace(/<\s*h[1-6][^>]*>/gi, "\n# ");
+  const markdown = replaceUntilStable(tagged, /<[^>]+>/g, "")
     .replace(/&nbsp;/g, " ")
     .replace(/&quot;/g, '"')
     .replace(/&#39;|&apos;/g, "'")
