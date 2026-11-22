@@ -22,6 +22,7 @@ import {
   isMessageFileDownload,
 } from "./routes.ts";
 import { createJsonScrubber } from "./json-scrub.ts";
+import { answerWorkspaces, workspaceRoute, type WorkspaceChannel } from "./workspaces.ts";
 import { acceptsGzip, gzipCandidate, sendTunnelJson, varyOnEncoding } from "./tunnel-gzip.ts";
 import { CompanionViewerRelay, requestTarget } from "./viewer-relay.ts";
 import { createSseScrubber, isJson, scrub } from "./wire.ts";
@@ -61,6 +62,8 @@ export interface ProxyOptions {
   e2eDescriptor?: (deviceId: string | null) => E2EDescriptor | null;
   /** A phone paired through an encrypted session keyed by the pairing token: the session is now that device's. */
   e2ePaired?: (context: E2EContext, deviceId: string) => void;
+  /** The computer's workspaces, answered here and never sent to the harness. */
+  workspaces?: WorkspaceChannel;
 }
 
 /** Which listener a request reached. Only `lan` (port 8810, plain HTTP) refuses a device that has gone end-to-end;
@@ -538,6 +541,13 @@ export function createProxyHandler(options: ProxyOptions) {
     // checks, never sent to the harness.
     if (method === "GET" && path === "/api/companion/endpoints") {
       return sendJson(res, 200, endpointsFor(device?.id ?? null, device?.routes));
+    }
+
+    const workspaces = workspaceRoute(method, path);
+    if (workspaces) {
+      void answerWorkspaces(options.workspaces, workspaces, method, path, () => readJson(req, 1024))
+        .then((reply) => sendJson(res, reply.status, reply.body));
+      return;
     }
 
     const mutationToken = device ? options.mutationToken?.() : undefined;

@@ -73,9 +73,10 @@ export function ComposerAttachments({
     };
     const onDrop = async (e: DragEvent) => {
       if (!carriesFiles(e)) return;
-      e.preventDefault();
       depth.current = 0;
       setDragging(false);
+      if (e.defaultPrevented) return;
+      e.preventDefault();
       const files = Array.from(e.dataTransfer?.files ?? []);
       const operation = Symbol("attachment-drop");
       pendingDrops.current.add(operation);

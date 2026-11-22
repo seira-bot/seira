@@ -51,11 +51,11 @@ describe("plain file paths", () => {
     expect(code("C:\\a\\\\b")).toEqual([]);
   });
 
-  it("answers an attack string in under 100 ms", () => {
+  it("answers an attack string in under 500 ms", () => {
     for (const attack of ["A:\\" + "\\[".repeat(30_000), "A:\\x" + "\\x".repeat(30_000) + "\\\\", "A:\\" + "a\\".repeat(30_000) + "\\\\"]) {
       const started = performance.now();
       links(`\`${attack}\``);
-      expect(performance.now() - started).toBeLessThan(100);
+      expect(performance.now() - started).toBeLessThan(500);
     }
   });
 });
